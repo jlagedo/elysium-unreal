@@ -116,6 +116,30 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::InvestigateSound:        return TEXT("INVESTIGATE_SOUND");
 	case EElysiumNpcCond::HearFlankSound:          return TEXT("HEAR_FLANK_SOUND");
 	case EElysiumNpcCond::SeeSoundSource:          return TEXT("SEE_SOUND_SOURCE");
+	// Retail 0x77; its human-readable name is unrecovered, so the number is the name.
+	case EElysiumNpcCond::CanTeleport:             return TEXT("COND_0x77_CAN_TELEPORT");
+	// Story 29c-1, family Schedule.
+	case EElysiumNpcCond::TooFarForMelee:          return TEXT("TOO_FAR_FOR_MELEE");
+	case EElysiumNpcCond::InterruptTime:           return TEXT("INTERRUPT_TIME");
+	case EElysiumNpcCond::PassOut:                 return TEXT("PASS_OUT");
+	case EElysiumNpcCond::OnFire:                  return TEXT("ON_FIRE");
+	case EElysiumNpcCond::ShouldCharge:            return TEXT("SHOULD_CHARGE");
+	case EElysiumNpcCond::EnemyBlocked:            return TEXT("ENEMY_BLOCKED");
+	case EElysiumNpcCond::SeeCorpseFriend:         return TEXT("SEE_CORPSE_FRIEND");
+	case EElysiumNpcCond::FloatingOffGround:       return TEXT("FLOATING_OFF_GROUND");
+	// Story 29c-1, family Conditions.
+	case EElysiumNpcCond::TooCloseForRanged:       return TEXT("TOO_CLOSE_FOR_RANGED");
+	case EElysiumNpcCond::BeingAttacked:           return TEXT("BEING_ATTACKED");
+	case EElysiumNpcCond::ExtendedBlockedByFriend: return TEXT("EXTENDED_BLOCKED_BY_FRIEND");
+	case EElysiumNpcCond::EnemyTooFar:             return TEXT("ENEMY_TOO_FAR");
+	case EElysiumNpcCond::NotFacingAttack:         return TEXT("NOT_FACING_ATTACK");
+	case EElysiumNpcCond::WeaponHasLos:            return TEXT("WEAPON_HAS_LOS");
+	case EElysiumNpcCond::WeaponPlayerInSpread:    return TEXT("WEAPON_PLAYER_IN_SPREAD");
+	case EElysiumNpcCond::WeaponPlayerNearTarget:  return TEXT("WEAPON_PLAYER_NEAR_TARGET");
+	// Story 29c-1, family Dialogue.
+	case EElysiumNpcCond::ShouldInteract:          return TEXT("SHOULD_INTERACT");
+	case EElysiumNpcCond::CrosswalkWalk:           return TEXT("CROSSWALK_WALK");
+	case EElysiumNpcCond::CrosswalkDontWalk:       return TEXT("CROSSWALK_DONTWALK");
 	}
 	return TEXT("COND_?");
 }
@@ -1023,6 +1047,34 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 	{
 		// `ENEMY_DEAD` / `LOST_ENEMY` already describe this; range against a corpse is not a fact.
 		return;
+	}
+
+	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`, slot 561) — the ONE species override of
+	// the gather, and a SUPPRESSION rather than an addition. With the werewolf standing in a zone the
+	// two bits of `m_iZoneFlags` (`+0x66e8`) name — `0x4` or `0x100` — and a live enemy whose ORIGIN Z
+	// differs from the werewolf's by strictly more than `_DAT_10462950` = **40.0** Source units, it
+	// CLEARS `CAN_MELEE_ATTACK1` (0x51) and `CAN_MELEE_ATTACK2` (0x52) and RETURNS: the base gather
+	// (`CAI_BaseNPC::GatherAttackConditions` 0x1026dd10) never runs that pass. Otherwise it is a plain
+	// forward.
+	//
+	// Story 29c's row read `thunk_FUN_10269b50` as "force"; it is `ClearCondition` — so the arm takes
+	// melee away from a werewolf on a different floor of a zoned room rather than granting it.
+	//
+	// The Z terms are read fresh from both origins, as retail reads them off `GetAbsOrigin` (`+0x364`)
+	// rather than off the cached `m_flEnemyHeightDiff`.
+	if (Npc.IsRetailClass(TEXT("CNPC_VWerewolf")))
+	{
+		constexpr double WerewolfZoneHeightUnits = 40.0;   // `_DAT_10462950`
+		constexpr uint32 WerewolfZoneMeleeSuppressBits = 0x4u | 0x100u;
+		const double HeightDeltaUnits =
+			FMath::Abs(Npc.Origin.Z - Enemy->Origin.Z) / ElysiumMove::U;
+		if ((Npc.WerewolfHintFlags & WerewolfZoneMeleeSuppressBits) != 0
+			&& HeightDeltaUnits > WerewolfZoneHeightUnits)
+		{
+			Out.Clear(EElysiumNpcCond::CanMeleeAttack1);
+			Out.Clear(EElysiumNpcCond::CanMeleeAttack2);
+			return;
+		}
 	}
 
 	// SEAM (plumbed, never set): `SHOULD_DODGE` (0x0c), `SHOULD_BLOCK` (0x0d), `SHOULD_STEPBACK`

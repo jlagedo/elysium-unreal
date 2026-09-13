@@ -372,6 +372,61 @@ clears that byte and fires `OnEndCopAlertMode` when the deadline expires. The in
 police-response admission while non-zero. Dialogue predicates read these pursuit/alert states, so they
 cannot be reduced to the criminal activity level or to whether a cop actor currently exists.
 
+#### The producer side of those fields — `0x1017ed00`, `0x1017f6e0`, `0x1017f9c0`, `0x1017fd60`, `0x1017ddd0`
+
+_Recovered 2026-09-13, story 29c-1 (family EntityChain)._ The prose above was read from the CONSUMER
+side — `PlayerRuleUpdate` and the spawn path. These five are the bodies that WRITE the same fields,
+walked from the decompiled C, and `vtmb_fields CBasePlayer` supplies their retail names.
+
+`0x1017ed00` records a delayed police response. It refuses outright while `m_iHuntersInPursuitCount`
+(`+0x1d14`, read through `0x1017f8b0`) is 1 or more. `m_flSpawnResponseCopsTimer` (`+0x1cf8`) is
+`FIELD_TIME` and its CLEAR value is the `0x7f7fffff` sentinel — `FLT_MAX`, which is the marker the
+body tests first. On the sentinel it stores `m_iSpawnResponseCopsLevel` (`+0x1cfc`),
+`m_hSpawnResponseCopsNPC` (`+0x1d00`, or -1 for a null source), the three floats of
+`m_vecSpawnResponseCopsLocation` (`+0x1d04`), and a timer of `curtime + RandomFloat(lo, hi)` over two
+ConVars. On an ARMED record it upgrades the level, the handle and the location **only when the new
+level strictly exceeds the stored one**, and **does not reschedule the timer** — which is what makes
+a burst of incidents one response landing at the first one's deadline.
+
+`0x1017f6e0` removes a cop from the pursuit. The decrement of `m_iCopsInPursuitCount` (`+0x1d10`) is
+unconditional and unclamped, so the count can go negative, and the edge test is `== 0` rather than
+`<= 0` — a count driven below zero never fires the alert again. On exactly zero it runs `0x10370630`
+and then `0x1017f9c0`. Its trailing `DevMsg` reads `"CSActs:    %6.1f - OnCopPursuitStart - %d in
+pursuit"`: retail prints **"Start" from the REMOVE path**, sharing the format string verbatim with
+the add at `0x1017f650`. A shipped copy-paste, recorded rather than corrected.
+
+`0x1017f9c0` arms the heightened alert, in this order: fire the `+0x498` output off the singleton
+`0x1023dcd0` (`OnStartCopAlertMode`); read `DAT_10725f74`
+(`debug_heightened_alert_expire_time`); set `m_bInHeightenedAlert` (`+0x1d18`) and
+`m_flHeightenedAlertExpireTimer` (`+0x1d1c`) to `<duration> + curtime`; call `0x1017f900`. Its
+counterpart `0x1017f980` fires the `+0x480` output (`OnEndCopAlertMode`) and then **zeroes the timer
+only**: it does not clear `m_bInHeightenedAlert`. The predicate `0x1017f8d0` reads
+`curtime < m_flHeightenedAlertExpireTimer` and **not** the byte, so after an end the byte is stale
+and nothing notices. That asymmetry is retail's.
+
+`0x1017fd60` inserts a 16-byte scare record into the array at `+0x1d90`, keyed by the scaring NPC's
+ENTITY INDEX (fetched through the engine from `npc+0x2e0`) compared against word 2 of each record. On
+a hit, word 3 takes the GREATER of the two priorities — retail writes only when the new one is larger
+— and word 0, the timestamp, is refreshed to curtime **whether or not the priority was taken**. On a
+miss it grows the array and appends, then logs `"Scared NPC: %d (dist:%.2f)"` with the index and the
+NPC's own `+0x6264`.
+
+`0x1017ddd0` is the criminal-activity level getter, and the odd one of the three level getters. All
+three share a shape — `IsCommand()` false plus a NEGATIVE `m_nValue` reads the stored field,
+`IsCommand()` true answers 0, otherwise the ConVar's own value, with `IsCommand()` dispatched twice
+rather than cached — but this one's stored word at `+0x1cd8` is OBFUSCATED, folded through
+`(((stored & 0x8a66e35) ^ 0x793f90) + 0x8b10412) & 0x175991ca ^ stored ^ 0x783682a9` and then
+`thunk_FUN_1042fd40`. That is why the datamap types `+0x1cd0 m_LevelCriminalAct` as a record rather
+than as an `int`, while `m_LevelSupernaturalAct` (`+0x1ccc`, read by `0x1017dd80`) and
+`m_LevelInvestigateAct` (`+0x1cdc`, read by `0x1017de60`) are plain ints read straight.
+
+**Unrecovered:** `thunk_FUN_1042fd40`, so the obfuscation's final transform is unknown and the fold
+cannot be inverted; `0x10370630` and `0x1017f900`; the two response-delay ConVars `DAT_10725894` and
+`DAT_107257bc`, the developer ConVar `DAT_107258dc`, and the three act-level override ConVars
+`DAT_10724ffc` / `DAT_1072594c` / `DAT_107250d4`, none of which is named in the image; the two
+unattributable words of the appended scare record (they arrive in registers the decompilation cannot
+attribute); and `npc+0x6264`, the float the scare message calls a distance.
+
 ### Recovered `PostThink` body
 
 `CBasePlayer::PostThink` is vtable slot 437 (`0x1016be10`). It first expires pending client state,

@@ -147,6 +147,19 @@ public:
 	bool Has(EElysiumNpcFlag Flag) const { return (Word1 & static_cast<uint32>(Flag)) != 0; }
 	bool Has(EElysiumNpcFlag2 Flag) const { return (Word2 & static_cast<uint32>(Flag)) != 0; }
 
+	// --- Story 29c-1, family Schedule: `m_bfAINPCFlags2` bit 31 ----------------------------------
+	//
+	// The comment above says bit 31 is the schedule compiler's ROUTING marker rather than a flag,
+	// and for `TASK_SET_NPC_FLAG` it is. It is NOT the whole story: `0x102ae840` (the scripted-order
+	// push) ORs `0x82000000` straight into the word and `0x102b7690` (the cover selector) both sets
+	// `0x80000100` and clears it again with `&= 0x7ffffeff`. So retail carries a real bit there
+	// whose NAME is unrecovered — the `0x1030cbd0` table has no entry that resolves to it. These two
+	// accessors let a recovered body write the word retail writes without inventing a name for it.
+	static constexpr uint32 Word2UnnamedBit31 = 0x80000000u;
+	void SetRawWord2Bits(uint32 Mask) { Word2 |= Mask; }
+	void ClearRawWord2Bits(uint32 Mask) { Word2 &= ~Mask; }
+	bool HasRawWord2Bits(uint32 Mask) const { return (Word2 & Mask) != 0; }
+
 	void Set(EElysiumNpcFlag Flag) { Word1 |= static_cast<uint32>(Flag); }
 	void Set(EElysiumNpcFlag2 Flag) { Word2 |= static_cast<uint32>(Flag); }
 	void Clear(EElysiumNpcFlag Flag) { Word1 &= ~static_cast<uint32>(Flag); }

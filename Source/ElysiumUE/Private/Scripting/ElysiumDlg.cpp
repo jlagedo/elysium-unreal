@@ -48,6 +48,15 @@ int32 ElysiumDlgClan::OffsetFromSheetClan(int32 SheetClan)
 	// Nosferatu 5, Toreador 6, Tremere 7, Ventrue 8). `CDialog::clan_offset` is a DIFFERENT order —
 	// the one the seven `.dlg` clan columns are written in — so the two are joined here rather than
 	// anywhere a caller might assume they coincide.
+	//
+	// **This function IS `CDialog::clan_offset` (`0x100e65d0`)**, arm for arm — story 29c-1, family
+	// Lifecycle. Retail lazily hashes the seven `Player_<Clan>` template names into per-clan caches
+	// on first use (`DAT_106e866c`'s seven init bits) and then compares the speaker's own
+	// `GetCharTemplate` hash (`+0x32f4`) against each cache IN THIS ORDER, answering the index of
+	// the first match and `-1` when none matches. The order, the seven clans and the `-1` are the
+	// whole game-visible body; the hashing is a tamper-check (`thunk_FUN_1042ffe0`) over a name this
+	// runtime already carries as a decoded clan number, so the lookup lands as this switch rather
+	// than as seven string hashes. A non-vampire speaker answers `-1` here exactly as it does there.
 	switch (SheetClan)
 	{
 	case 2: return Brujah;

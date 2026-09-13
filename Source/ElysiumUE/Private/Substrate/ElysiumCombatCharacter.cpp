@@ -1244,6 +1244,17 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 
 void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 {
+	// **Slot 292's species gate, ahead of everything else** (story 29c-1, family Damage). Retail's
+	// `CNPC_VGargoyle` (`0x10378cb0`) and `CNPC_VHengeyokai` (`0x103802a0`) answer slot 292 with a
+	// body that tests the hit BEFORE it calls `CBaseCombatCharacter::DamageFlinch` at all: a hit
+	// carrying `DMG_BULLET | DMG_BUCKSHOT` (`0x4000002`) or measuring exactly zero never reaches the
+	// base body. So it is asked here, in front of the embodiment test, and not inside it — the
+	// refusal must not be a function of whether this character happens to have a visual.
+	if (SuppressesDamageFlinch(Dmg))
+	{
+		return;
+	}
+
 	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	if (Embodiment == nullptr || Visual == nullptr)
 	{

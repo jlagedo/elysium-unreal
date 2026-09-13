@@ -495,3 +495,254 @@ state bit 6 ("The think cadence, decoded", closed items); **`m_iMySquadSlot` is 
 (`datamap_CAI_BaseNPC`, `FIELD_INTEGER`, between `m_SquadName +0x5da8` and `m_vecLastPosition
 +0x5db8`; zero code readers, save-only); `m_bfNPCStateFlags` bit 3 is the PVS/LOS force ("The
 think cadence, decoded").
+
+## Story 29c-1, family Squad — the layer 0–9 bodies walked
+
+### Slot 546 `SquadSlotName`, all 57 bodies (`0x101a6c00` + 56 species)
+
+One behaviour written 57 times. The Troika line (`0x101a6c00`) is
+`IdToSymbol(&DAT_10936c74, slotEN)`; every species override is
+`IdToSymbol(&DAT_10936c74, SquadSlotLocalToGlobal(&DAT_<own id space>, slotEN))` — 29 bytes each,
+identical but for the id-space global. The 56 spaces, in census order:
+`CGenericSabbat_NPC 0x1093a350`, `CGeneric_NPC 0x1093a234`, `CGeneric_NPC_bathack 0x1093a314`,
+`CNPC_Crow 0x1093a070`, `CNPC_VAndreiBlood 0x1093a470`, `CNPC_VAnimal 0x1093a4f4`,
+`CNPC_VAsianVampire 0x1093a578`, `CNPC_VBach 0x1093a608`, `CNPC_VBatSwarm 0x1093a6d0`,
+`CNPC_VBrujah 0x1093a788`, `CNPC_VCamera 0x1093a7bc` (shared by `CNPC_VCameraSecurity`),
+`CNPC_VChangBros 0x1093aa70`, `CNPC_VChangBrosBlade 0x1093a8d8`, `CNPC_VChangBrosClaw 0x1093aa10`,
+`CNPC_VCombatman 0x1093abb0`, `CNPC_VCop 0x1093ac40`, `CNPC_VDog 0x1093ad64`,
+`CNPC_VFrenzyShadow 0x1093ae28`, `CNPC_VGangrel 0x1093aed8`, `CNPC_VGargoyle 0x1093b038`,
+`CNPC_VGhoulCroucher 0x1093b0e0`, `CNPC_VGuard1 0x1093b1b4`, `CNPC_VHengeyokai 0x1093b27c`,
+`CNPC_VHuman 0x1093b3c4`, `CNPC_VHumanCombatant 0x1093b47c` (shared by `CNPC_ProneDialog`),
+`CNPC_VHumanCombatPatrol 0x1093b580`, `CNPC_VHunter 0x1093b5e8`, `CNPC_VLasombra 0x1093b680`,
+`CNPC_VMalkavian 0x1093b6fc`, `CNPC_VManBat 0x1093b89c`, `CNPC_VMingXiao 0x1093bacc`,
+`CNPC_VMingXiaoTentacle 0x1093bd80`, `CNPC_VMoleman 0x1093bdb8`, `CNPC_VNosferatu 0x1093bf30`,
+`CNPC_VPedestrian 0x1093bffc`, `CNPC_VPlaceholder 0x1093c08c`, `CNPC_VSabbatGunman 0x1093c1d8`,
+`CNPC_VSabbatLeader 0x1093c3d4`, `CNPC_VScurrying 0x1093c4e0` (shared by `CNPC_VRat`),
+`CNPC_VSheriffMan 0x1093c568`, `CNPC_VSheriffSwarm 0x1093c680`, `CNPC_VStalker 0x1093c738`,
+`CNPC_VTaxiDriver 0x1093c7f0`, `CNPC_VTest 0x1093c8bc`, `CNPC_VToreador 0x1093c948`,
+`CNPC_VTremere 0x1093c9c8`, `CNPC_VTzimisce 0x1093ccc4`, `CNPC_VTzimisceHeadClaw 0x1093d1ac`,
+`CNPC_VTzimisceRunner 0x1093d224`, `CNPC_VVampire 0x1093d2a4` (shared by
+`CNPC_VPlayerController`), `CNPC_VVampireBoss 0x1093d30c`, `CNPC_VVentrue 0x1093d394`,
+`CNPC_VWerewolf 0x1093d6d4`, `CNPC_VWolfMorph 0x1094028c`, `CNPC_VYukie 0x10940314`,
+`CNPC_VZombie 0x109403e0`.
+
+**Every one of those id spaces is empty, so every species answers `<<null>>` for every id.**
+`CAI_ClassScheduleIdSpace`'s constructor (`0x102ea090`) takes an `isRoot` flag: true leaves
+`{globalBase 0, localBase 0, localTop -1}`, false leaves `{-1, 9999, -1}`. Exactly one space in the
+image is constructed true — the root `DAT_10920484` (`staticinit_10265660`); all 56 species
+static-inits pass `0`. `Init` (`0x102ea0e0`) rewrites the range only when `+0x0c != -1`, which at
+static-init time it is, so it binds the namespace and the parent and leaves the range alone.
+`SquadSlotLocalToGlobal` (`0x102ea2d0`) walks the chain testing `localBase != 9999 && localBase <=
+id <= localTop`; 9999 refuses at every species level and `localTop == -1` refuses at the root, so
+the answer is -1 and `IdToSymbol` (`0x102ea020`) answers the literal `<<null>>` for -1. The global
+namespace itself holds two symbols and no more — `SQUAD_SLOT_ATTACK1` = 1000000000 and
+`SQUAD_SLOT_ATTACK2` = 1000000001, both from `0x10316e80`, and those two strings are the only
+`SQUAD_SLOT` strings in `vampire.dll`. This confirms "Strategy slots ship dead" above from the
+other side: not only is there no consumer, there is no species id to consume.
+
+### `0x10273d30` / `0x10369bd0` — `InitSquad`, the Troika line and the camera
+
+`0x10273d30`: with `m_pSquad == NULL` and `CapabilitiesGet() & 0x4000000` (`bits_CAP_SQUAD`, slot
+513), an unset `m_SquadName` DevMsgs `"WARNING: Found %s that isn't in a squad but not supposed to
+be solo"` and returns; otherwise `m_pSquad = FindCreateSquad(this, m_SquadName)` (`0x10315800`)
+then slot 542 `SetSquadEnemies` (`0x10273dd0`). Both exits return `m_pSquad != NULL`, so an NPC
+without the capability answers false without warning. `CNPC_VCamera` / `CNPC_VCameraSecurity`
+(`0x10369bd0`) replace only the middle: `FindSquad(name)` (`0x10315790`) first, and on a miss
+`FindCreateSquad` followed **immediately** by `RemoveFromSquad(squad, this)` (`0x103158f0`) — the
+camera wants the squad object for the shared memory and not membership in it. Slot 542 runs on both
+arms.
+
+### `0x1029a930` — `CAI_BaseNPCTroika::SetSquad`
+
+The `SQUAD` tweak param's move, in two halves. First the old ownership: already squadded →
+`RemoveFromSquad(m_pSquad, this)` and `m_pEnemies = NULL`; not squadded → destroy the private
+`AI_Enemies` (`0x102e0730` then `operator delete`). Then the new one: `FindCreateSquad(this,
+name[0] ? name : NULL)`; a hit writes `m_pSquad` and points `m_pEnemies` at `squad + 8`, a miss
+clears `m_pSquad` and gives the NPC a fresh private `AI_Enemies` (`operator new(0x14)` +
+`0x102e06f0`). Finally `m_iSquadDisconnected > 0 && m_pSquad` calls `LeaveSquad` (`0x10316700`),
+which is `RET 4` and does nothing. `SetSquad` never writes `m_SquadName` (`+0x5da8`): the keyfield
+and the object are separate words.
+
+### `0x1028ae60` — vacate the squad slot
+
+Gates in order: `m_iMySquadSlot != -1`, `m_iSquadDisconnected < 1`, `m_pSquad != 0`. Then it reads
+the squad's `m_squadSlotsUsed` word for `slot >> 5` and DevMsgs `"ERROR: Vacating an empty slot!"`
+when the bit is already clear, re-tests the disconnect count (a second read that would yield NULL
+if it could ever be reached, which the first gate prevents), clears the bit and writes
+`m_iMySquadSlot = -1`. -1 is therefore the field's "no slot" sentinel. Retail name unrecovered.
+
+### `0x102781a0` — same-squad test
+
+`if (!other) return false; if (!m_pSquad) return false; return m_pSquad == other->m_pSquad;` — the
+two refusals are separate arms, so **two squadless NPCs do not share a squad**. Retail name
+unrecovered.
+
+### `0x1036e2f0` — `CNPC_VChangBros::GetOtherBrother`
+
+`m_iSquadDisconnected < 1` and a live `m_pSquad`, then a walk of `0 .. NumMembers()` re-reading
+`NumMembers()` (`0x103160a0`) every iteration, `GetMember(i)` (`0x103160c0`), `RTDynamicCast` to
+`CNPC_VChangBros` and the first hit that is not `this`. Otherwise 0. The disconnect gate is first,
+so a brainwiped brother finds nobody even while the squad still holds him.
+
+### `0x1036e820` — `CNPC_VChangBros::ReadyForUnited`
+
+`GetCurSchedule()` (`0x1028a150`) and its id word (`CAI_Schedule+0x00`) against `0x15a` or `0x15b`;
+false when there is no schedule. Nothing else.
+
+### `0x1036d100` — `CNPC_VChangBros::SelectUnitedNode`
+
+Walks the global `CAI_Hint` list from `DAT_10925450` following `+0x5d8`, counting nodes whose
+`m_nHintType` (`+0x5dc`) is 18000. `m_ChangType == 0` returns the first match; `m_ChangType == 1`
+returns a match only once the counter is already above zero, that is the second. Any other
+`m_ChangType` walks the whole list and returns 0, so only the two brothers can ever claim a united
+node.
+
+### `0x10399610` — `CNPC_VMingXiao::CoordinateTroops`
+
+One index per call and no loop: `id = m_iCoordinateTentacleID` (`+0x6740`); a live
+`m_rhSeveredTentacles[id]` (`+0x66a8`) goes to `0x103998d0` and a live `m_rhProxies[id]`
+(`+0x668c`) to `0x103999f0`; then `++id`, wrapping to 0 past 5. Both arrays are six `EHANDLE`s, so
+the boss touches one tentacle and one proxy per think and comes back round every six.
+`0x103998d0` re-aims a tentacle that is neither running schedule `0x163`/`0x165` nor out of state
+2, gated on a distance and a 2-D dot against `+0x6290`/`+0x6294`; `0x103999f0` toggles a proxy pair
+through `0x1039aaf0(x, 0|1)` on two distance/dot tests against the enemy. Both are rows of their
+own.
+
+### `0x102bf5d0` — alert a nearby ally to an attacker
+
+**Corrects story 29c's one-line walk**, which read `vtable+0x650` as a not-dead test: `0x650 / 4`
+is slot 404, `IRelationType`, and the constant compared is `D_LI` (3). The body, arm by arm, with
+`this` the ally being told and the argument the attacker: the attacker is non-null; `m_NPCState`
+(`+0x5cc0`) is 1 (IDLE), 3 (COMBAT) or the custom `0xb` — **ALERT (2) is not admitted**;
+`attacker->m_pCombatCharacter` (`+0x9c`) is non-null; `IRelationType(attacker) != D_LI`; and either
+the squared distance between the two `GetAbsOrigin`s is under `_DAT_1049aea0` or `FVisible(attacker,
+0x2804091, 0, 0)` (slot 201) **and** `FInViewCone(attacker)` (slot 363) both pass. The effect is
+`0x102bf560`: unless `m_bIgnoreDetectedAttack` (`+0x65f5`), store the attacker in
+`m_hDetectedAttacker` (`+0x65c0`) and set `m_flDetectedAttackExpireTime` (`+0x65c4`) to curtime
+plus `_DAT_10454110`. **Unrecovered:** the literals `_DAT_1049aea0` and `_DAT_10454110`
+(`docs/vtmb/combat-and-damage.md` recovers the radius as 150 Source units and the retention as five
+seconds from the same chain); retail's `0xb` state has no counterpart in this port's state set.
+
+### `0x103a48b0` — `IRelationType` for `CNPC_VFrenzyShadow` / `CNPC_VPlayerController` / `CNPC_VWolfMorph`
+
+Four answers, in order: a null target is `D_ER` (0); a target equal to the resolved
+`m_hFriendPlayer` (`+0x60ac`) is `D_LI` (3); a target whose `m_pCombatCharacter` (`+0x9c`) is
+non-null, whose `m_bIsBCCTargetable` (`+0x1480`) is set and whose `m_bScriptHidden` (`+0x00f4`,
+read through `0x100b5190`) is clear is `D_HT` (1); anything else is `D_NU` (4). No relationship
+table, no disposition and no squad term — these three classes hate everything they can see except
+the one player they were told to like.
+
+### `0x102c4470` — name the follower boss
+
+`name = boss->m_pPlayer (+0xa8) ? "!player" : boss->m_iName (+0x26c)`, then
+`SetFollowerBoss(name)` (`0x102c44e0`) and `m_sFollowerBoss (+0x6478) = name[0] ? name : NULL`, so
+an unnamed boss stores NULL rather than the empty string. The argument is dereferenced without a
+null test.
+
+### `0x102c4680` — resolve and clamp the follower distances
+
+`0x101e8c90(&DAT_10739d08, type, &m_flFollowerDistanceBackAway +0x6484, &…WalkTo +0x6488,
+&…RunTo +0x648c)` reads the `Npc_Follower_Info` row of `Rules.txt`, then two clamps with four
+DevMsgs each: `walkTo < backAway + 10.0` raises `walkTo` to `backAway + 10.0`, and `runTo < walkTo
++ 10.0` raises `runTo` to **the clamped** `walkTo + 10.0`. The overlap constant is
+`_DAT_1044e664 = 10.0`. `SetFollowerType` (`0x102c4640`) is this call followed by
+`m_sFollowerType (+0x6480) = type[0] ? type : NULL`.
+
+### `0x101a8130` — the named-master lookup
+
+`name = *(char**)(this + 0x5f5c)`; `gEntList.FindEntityByName(NULL, name, 0, 0)` (`0x100f7770` over
+`DAT_106eb5d8`); the hit must have a non-null `m_pBaseNPC` (`+0x94`, the `CAI_BaseNPC` self-downcast
+cache), that is, be an NPC; then `RTDynamicCast(hit, 0, 0x10538764, 0x105947c8, 0)` and the cast
+result is the answer. **Unrecovered:** the RTTI type descriptor `0x105947c8` has exactly one
+referrer in the whole image — this body — so the class the cast admits is not named anywhere in the
+corpus; the corpus records no call site either, so the receiver class is unconfirmed; and `+0x5f5c`
+is the second `COutputEvent` of the NPC's output block in `layout.md`, which does not hold a
+`char*`.
+
+## The melee coordinator (story 29c-1, family TroikaHelpers)
+
+### The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slots 599–602 are one behaviour written twice. `CAI_BaseNPCTroika` fills all four for 18 classes and
+a `CNPC_VAndreiBlood`-line copy fills them for 38–40 more; six species replace each slot outright.
+599 and 600 are byte-identical between the two lines, and their copies are `0x10385ab0` and
+`0x10385c30`.
+
+Slot 599 decides melee ENTRY from an enemy already committed. `m_bfNPCFrenziedFlags & 2` or a live
+`GetFollowerBoss()` (slot 293) enters outright and sets `m_bInMelee`. Otherwise `curtime <
+m_flMeleeCanEnterTimer` (`+0x6070`) refuses and clears the latch. Past the timer, three terms must
+all hold: the enemy is within twice the melee range (`DAT_10924a1c`) OR this body has no usable
+ranged weapon (slot 308); `m_flEnemyHeightDiff` (`+0x626c`) is at or below `_DAT_10451acc` OR
+`COND_ENEMY_UNREACHABLE` (0x59) does not stand; and either `m_bfNPCFrenziedFlags & 0x1000` bypasses
+the coordinator or `0x1025db70` admits this NPC. On entry it sets `m_bInMelee`, arms
+`m_flMeleeMustLeaveTimer` (`+0x6074`) with `curtime + RandomFloat(7.5, 15.0)` — the immediates are
+`0x40f00000` and `0x41700000` — and fires the global melee event `(*DAT_10924edc)->vfunc1()`.
+
+Slot 600 is the attacker-side entry, reached from slot 322 (`0x102a0910`) when this NPC swings. It
+requires the active weapon's capability word (slot 360, `+0x5a0`) to carry `0x18000` and
+`m_bInMelee` to be clear; then `0x1025dca0` admits or refuses. The entry write is the same triple as
+599's, with the same 7.5–15.0 draw.
+
+Slot 601 is the exit. It fires the SAME global event FIRST, clears `m_bInMelee`, and — only when
+slot 308 answers a usable ranged weapon — arms `m_flMeleeCanEnterTimer` with `curtime +
+RandomFloat(5.0, 10.0)`. It then releases the coordinator slot (`0x1025ddd0`). **The Troika body
+guards that release on `m_pAttackCoordinator != 0`; the `CNPC_VAndreiBlood` copy `0x10385cf0` does
+not.** That is the whole of the difference between the two: both fire the event first.
+
+Slot 602 asks whether to LEAVE. `m_bfNPCFrenziedFlags & 2` refuses, a live `GetFollowerBoss()`
+refuses, and **on the Troika line only** a null `m_pAttackCoordinator` refuses. `0x10385d70`, the
+`CNPC_VAndreiBlood` copy, drops that third test and nothing else, so the two bodies diverge on
+exactly one instruction sequence. Past the gates: with no usable ranged weapon, an enemy at or
+beyond twice the melee range plus a full coordinator (`0x1025db50`, `coord[4] < coord[0]`) answers
+true; with one, `m_flMeleeMustLeaveTimer <= curtime` answers true. Everything else falls through to
+`0x1025de90`, a linear scan of the coordinator's handle array that answers "this NPC is not
+registered".
+
+**Unrecovered:** `DAT_10924a1c`'s name and default and `_DAT_10451acc`'s value, both of which live in
+uninitialised `.data`; the names of frenzied bits `0x2` and `0x1000`; and what `DAT_10924edc`'s
+`vfunc1` does with the event, which is fired on both entry and exit and so is one event and not two.
+
+### Binding an attack coordinator by name `0x102c48b0`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 608 takes a name and walks three global coordinator pointers — `DAT_1090fbec`, `DAT_1090fbf0`,
+`DAT_1090fbf4` — in that order, skipping a null. Each candidate's name comes from
+`thunk_FUN_1025e120`, and the comparison is an inlined two-bytes-at-a-time `strcmp`. The first match
+caches the pointer at `m_pAttackCoordinator` (`+0x65e8`) and the name at
+`m_sAttackCoordinatorName` (`+0x65ec`), storing NULL for an empty name, and answers true. A null or
+empty argument is refused before the walk.
+
+**Unrecovered:** what a coordinator object is beyond the three fields its five entry points read — a
+cap at `+0x00`, a handle array at `+0x04` and a live count at `+0x10`.
+
+### The follower-distance ladder `0x102b93c0`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 607 answers a schedule number for a follower's distance from `m_hFollowerBoss` (`+0x647c`). An
+unresolvable handle answers 0. Otherwise it squares the distance between the two abs-origins and
+walks three rings **in this order**: inside `m_flFollowerDistanceBackAway` (`+0x6484`) it stamps
+`m_vSavePosition` (`+0x5dd0`) with the boss's origin and answers `0x10c`, having first — behind the
+cvar `DAT_10924f74` — queued a facing target at the boss through slot 517 with `(1.0, 1.0, 0)`;
+beyond `m_flFollowerDistanceRunTo` (`+0x648c`) it calls `SetTarget(boss)` and answers `0x113`;
+beyond `m_flFollowerDistanceWalkTo` (`+0x6488`) the same and `0x112`; otherwise the same and `0x115`.
+Each miss branch stamps the selector trace at `+0x1b30`/`+0x1b34` with lines `0x6090`, `0x6097`,
+`0x609d` and `0x60a2`.
+
+**Unrecovered:** `DAT_10924f74`'s name and default (shared with the whole facing-target family), and
+what the four returned numbers name — they are schedule ids the registry does not carry.
+
+### Forgetting a removed enemy `0x102b5120`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 56 takes an entity, two vectors and a string and reads only the entity. A null argument returns.
+The entity's `+0x200` must be non-zero; then, if the entity is the one `m_hLastEnemy` (`+0x1a94`)
+resolves to, `thunk_FUN_10279b70(this, NULL)` invalidates the handle to `0xffffffff`. The three
+trailing arguments are never read.
+
+**Unrecovered:** the word at `entity+0x200`, which no other body in layers 0–9 reads, and therefore
+what makes an entity eligible to be forgotten.

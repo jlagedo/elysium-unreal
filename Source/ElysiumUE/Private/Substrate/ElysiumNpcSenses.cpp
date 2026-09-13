@@ -434,6 +434,13 @@ void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
 		// same authored data, one think later.
 		ResolveTuning(Npc);
 	}
+	// `CAI_Senses::PerformSensing` (`0x10310710`) — its whole body, past the VProf scope, is this
+	// gate and then `Look(m_LookDist)` followed by `Listen()`, in that order. Story 29c-1, family
+	// Lifecycle. The gate stood unported: this pass ran unconditionally.
+	if (!bCanPerformSenses)
+	{
+		return;
+	}
 	TickSight(Npc, Now);
 	GatherEnemyLos(Npc, Now);
 	TickHearing(Npc, Now);
@@ -815,6 +822,9 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 {
 	HeardConditions.Reset();
+	// `CAI_Senses::Listen` rebuilds the sound list every pass, and `GetClosestSound`
+	// (`0x103105d0`) walks exactly that list. Story 29c-1, family Senses.
+	HeardThisPass.Reset();
 	FElysiumEntityWorld* World = Npc.World;
 	if (!World) return;
 	const auto& Bus = World->GameSounds();
@@ -876,6 +886,9 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 		case ElysiumGameSounds::Carcass: Condition = EElysiumNpcCond::Smell; break;
 		default: continue;
 		}
+		// The record joins `CAI_Senses`'s list here, which is where retail's `Listen` inserts it:
+		// after the audibility gates and before the delayed-condition queue. Story 29c-1.
+		HeardThisPass.Add(Event);
 		if (Record)
 		{
 			// CAI_Senses::GetClosestSound 0x103105d0: prefer my enemy, else nearest in this Listen.
@@ -889,8 +902,13 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 		Memory.LastHeardCategory = Event.Category.ToString();
 		Memory.LastHeardTime = Event.Time;
 		const bool Flinch = Condition == EElysiumNpcCond::HearFlinch;
-		const double At = Now + ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(
-			Flinch ? 0.f : 0.2f, Flinch ? 0.5f : 0.9f);
+		// Slot 471 `GetReactionDelay` (`0x1026a8a0`) IS the non-flinch draw, `RandomFloat(0.2, 0.9)`
+		// — story 29c-1, family Lifecycle landed the slot, and this site dispatches it rather than
+		// keeping a second copy. `HEAR_FLINCH`'s `RandomFloat(0, 0.5)` is NOT that slot and stays
+		// here. Exactly one draw either way, so the stream's position is unchanged.
+		const double At = Now + (Flinch
+			? ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.f, 0.5f)
+			: static_cast<double>(Npc.GetReactionDelay()));
 		// The eight-entry retail list (0x102cc6c0) min-updates a duplicate deadline (0x102cc590).
 		// The capacity check precedes even the duplicate lookup.
 		if (PendingSounds.Num() < 8)
@@ -954,6 +972,69 @@ void FElysiumNpcSenses::CommitBestSound(const FElysiumNpcConditions& Conditions)
 		}
 	}
 }
+
+// --- Story 29c-1, family Senses -----------------------------------------------------------------
+
+const FElysiumGameSoundEvent* FElysiumNpcSenses::ClosestSound(const FElysiumNpc& Npc,
+	uint32 TypeMask) const
+{
+	// `CAI_Senses::GetClosestSound` (`0x103105d0`), arm for arm.
+	//
+	// Retail asks its owner for `GetEnemy()` (slot 167, vtable `+0x29c`) ONCE, before the walk, and
+	// for `EarPosition()` (slot 196, vtable `+0x310`) once beside it. Then, for every record whose
+	// type word (`sound+0x04`) equals the requested one: if there IS an enemy and this record's
+	// owner handle resolves to it, RETURN IMMEDIATELY — the enemy's sound outranks a nearer one and
+	// ends the walk. Otherwise keep the smallest squared distance from the ear to the record's
+	// stored origin (`sound+0x20..0x28`), seeded at `0x4d800000` (2.68e8), and answer that.
+	const FElysiumEntity* Enemy = Npc.World != nullptr ? Npc.World->Resolve(Memory.Enemy) : nullptr;
+	const FVector EarCm = const_cast<FElysiumNpc&>(Npc).EarPosition();
+	const FElysiumGameSoundEvent* Best = nullptr;
+	double BestDistanceSq = TNumericLimits<double>::Max();
+	for (const FElysiumGameSoundEvent& Record : HeardThisPass)
+	{
+		if (Record.TypeMask != TypeMask)
+		{
+			continue;
+		}
+		if (Enemy != nullptr && Record.Source == Enemy->Handle)
+		{
+			return &Record;
+		}
+		const double DistanceSq = FVector::DistSquared(EarCm, Record.Position);
+		if (DistanceSq < BestDistanceSq)
+		{
+			BestDistanceSq = DistanceSq;
+			Best = &Record;
+		}
+	}
+	return Best;
+}
+
+float FElysiumNpcSenses::EffectiveVisionDistanceCm(const FElysiumNpc& Npc, double Now) const
+{
+	// `0x1029c970`, 83 bytes and four reads. The default is `m_flVisionDistance` (`+0x63b8`), the
+	// resolved authored channel; TWO independent overrides replace it with `m_pSenses->m_LookDist`
+	// (`+0x5cdc` then `+0x10`), and the answer is then clamped UP to `_DAT_104454c4` = 0.0.
+	//
+	//   1. `curtime < m_flStealthVisionOverrideTime` (`+0x6604`) — the damage/sound override window.
+	//   2. `m_NPCState == 2` (COMBAT) **and** `m_bEnemyWentOccluded` (`+0x5bc5`) is CLEAR.
+	//
+	// The second arm reads the occlusion EDGE (`+0x5bc5`), not the ten-failure debounce
+	// `m_bEnemyOccluded`. `FElysiumNpcSenses::TickSight`'s own `bRangeBypass` reads the debounce for
+	// the same retail arm, which is a divergence this story RECORDS and does not silently change:
+	// the sight pass is not this row and rewriting it here would put two readings of the same arm
+	// in the tree. This body is the recovered one.
+	float Distance = Perception.VisionDistanceCm;
+	const bool bStealthOverride = Now < Memory.StealthVisionOverrideUntil;
+	const bool bCombatUnoccluded = Npc.GetMind().State() == EElysiumNpcState::Combat
+		&& !Memory.bEnemyWentOccluded;
+	if (bStealthOverride || bCombatUnoccluded)
+	{
+		Distance = LookDistCm;
+	}
+	return FMath::Max(Distance, 0.f);
+}
+
 void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc)
 {
 	Memory.Serialize(Ar);

@@ -136,6 +136,13 @@ struct FElysiumScriptedScheduleOrder
 	// the next one either, and this is a director's mistake rather than a per-think event.
 	bool bWarnedRoute = false;
 
+	// Story 29c-1, family Schedule. `0x102ae840` writes a bare `int` into `+0x65cc` — the offset
+	// the shape map binds to THIS struct ("the forced state travels with the pushed order") — beside
+	// `m_bForceStateChange` and `CHOOSE_NEW_SCHEDULE`. It is the director's own order id, not a
+	// schedule number and not this struct's `Mode`, so it is recorded by its retail offset and read
+	// by nothing yet.
+	int32 RetailOrderId = 0;  // +0x65cc, the word `0x102ae840` stamps
+
 	bool IsSet() const { return Mode != 0; }
 	void Reset() { *this = FElysiumScriptedScheduleOrder(); }
 };

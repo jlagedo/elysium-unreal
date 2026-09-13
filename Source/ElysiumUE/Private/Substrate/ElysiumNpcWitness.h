@@ -259,6 +259,22 @@ struct FElysiumNpcWitness
 	// the reason stated in `Serialize`; 0 is "nothing consumed yet".
 	uint64 GlobalCursor = 0;
 
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	// +0x63a4 m_flCriminalWitnessedTimer (datamap) — FIELD_TIME; the stamp beside the retained
+	// criminal record
+	double CriminalWitnessedTime = 0.0;
+	// +0x63a8 m_flSupernaturalWitnessedTimer (datamap) — FIELD_TIME; the stamp beside the retained
+	// supernatural record
+	double SupernaturalWitnessedTime = 0.0;
+	// +0x65f8 m_bAllowCriminalSuspicion (datamap) — the criminal lane's own admission gate
+	bool bAllowCriminalSuspicion = false;
+
 	FElysiumNpcWitnessChannel& Channel(ElysiumNpcWitness::EChannel C)
 	{
 		return Channels[static_cast<int32>(C)];

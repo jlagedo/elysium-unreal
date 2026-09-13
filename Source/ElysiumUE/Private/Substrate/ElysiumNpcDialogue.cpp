@@ -379,3 +379,72 @@ bool FElysiumNpcDialogue::OpenConversation(FElysiumNpc& Npc, const FElysiumEntit
 		*Npc.DebugString(), *DialogName, DlgFile->Lines.Num());
 	return true;
 }
+
+// `CDialog::PlayWhisper` (`0x100e0a40`), story 29c-1 family Sounds.
+//
+// Retail, statement for statement past its VPROF scope:
+//
+//     if (m_szWhisper[0] == '\0') return;                       // 100e0a7c
+//     CBasePlayer* p = EHANDLE_Get(this->m_hPlayer /* +0x4 */); // 100e0a8b, null when dead
+//     ShowWhisper(p, m_szWhisper, pszSoundName);                // thunk_FUN_10182c40
+//     m_szWhisper[0] = '\0';                                    // one-shot
+//
+// The clear is UNCONDITIONAL once the text was non-empty: a whisper queued while the player handle
+// is dead is consumed and lost, not retried.
+//
+// SEAM: `ShowWhisper` (`0x10182c40`) writes the HUD's whisper caption — the text into a global
+// buffer, the player's `+0x1ca4` pointer at it, the display deadline `+0x1ca8` from the named
+// sound's duration (`IEngineSound` slot 12) or a fixed fallback, and bit 0 of `+0x1cac`. This
+// runtime has no whisper caption surface at all: `CBasePlayer::InputWhisper` (`0x10171da0`) is a
+// different producer and lands on the audio bus, not on a caption. The forward is made and answers
+// nothing; the day a caption surface exists it is the one thing this body has to call.
+//
+// UNRECOVERED: the two float constants `ShowWhisper` adds to `curtime` (`_DAT_10449270` and
+// `_DAT_10471720`), and therefore how long a whisper with no sound stays up.
+void FElysiumNpcDialogue::PlayWhisper(FElysiumNpc& Npc, const FString& SoundName)
+{
+	if (PendingWhisper.IsEmpty())
+	{
+		return;
+	}
+	const FElysiumPlayer* Player = Npc.World != nullptr ? Npc.World->FindPlayer() : nullptr;
+	UE_LOG(LogElysiumNpcEnt, Verbose,
+		TEXT("%s whisper '%s' (sound '%s') %s"), *Npc.DebugString(), *PendingWhisper, *SoundName,
+		Player != nullptr
+			? TEXT("has no caption surface to show it on (retail 0x10182c40)")
+			: TEXT("dropped: no player (retail's EHANDLE resolves null and the text is cleared "
+				"anyway)"));
+	PendingWhisper.Reset();
+}
+
+// --- `0x102c0aa0`, story 29c-1 family Anim ------------------------------------------------------
+
+bool FElysiumNpcDialogue::DialogSceneReportsDone(const FElysiumNpc& Npc) const
+{
+	// The bound speech scene's `+0x498` byte. **SEAM**: the port's `logic_choreographed_scene`
+	// carries completion on `FElysiumScenePlayer` rather than as a byte the kernel reads by offset,
+	// so the answer is "no scene is reporting done" and the clock arm decides on its own.
+	// The handle half is real — retail's first test is that `m_hDialogScene` resolves at all — and
+	// only the byte behind it is the seam, which is why the resolve is still performed.
+	if (!DialogScene.IsSet() || Npc.World == nullptr
+		|| Npc.World->Resolve(DialogScene) == nullptr)
+	{
+		return false;
+	}
+	// SEAM: `+0x498` has no port member; false is "this scene is not reporting done".
+	return false;
+}
+
+bool FElysiumNpcDialogue::IsTalking(const FElysiumNpc& Npc, double Now) const
+{
+	// `0x102c0aa0`, both arms in retail's order. The scene arm short-circuits: a scene that reports
+	// done answers true whatever the clock says, and only when there is no such scene does the
+	// talk-end stamp decide. The comparison is STRICTLY less, so the stamp's own instant is already
+	// "finished" — which is what lets `UpdateCharacter`'s `FinishTalking` fire on the frame the
+	// deadline lands rather than one frame later.
+	if (DialogSceneReportsDone(Npc))
+	{
+		return true;
+	}
+	return Now < Npc.TalkingUntil;
+}

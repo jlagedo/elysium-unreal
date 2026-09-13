@@ -8,9 +8,9 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | Class | Direct base | vtable | Slots | Own bodies | Entity classnames |
 |---|---|---|---|---|---|
 | `CAI_BaseHumanoid` | `CAI_BaseActor` | `0x10497d04` | 590 | 23 | — |
-| `CAI_BaseNPC` | `CBaseCombatCharacter` | `0x104995c4` | 583 | 287 | — |
-| `CAI_BaseNPCTroika` | `CAI_BaseNPC` | `0x1049a25c` | 617 | 167 | — |
-| `CAI_ExpressiveNPC` | `CAI_BaseNPC` | `0x1049885c` | 585 | 1 | `npc_TestBaseHumanoid` |
+| `CAI_BaseNPC` | `CBaseCombatCharacter` | `0x104995c4` | 583 | 285 | — |
+| `CAI_BaseNPCTroika` | `CAI_BaseNPC` | `0x1049a25c` | 617 | 170 | — |
+| `CAI_ExpressiveNPC` | `CAI_BaseNPC` | `0x1049885c` | 585 | 2 | `npc_TestBaseHumanoid` |
 | `CAI_TestHull` | `CAI_BaseNPC` | `0x1049be5c` | 583 | 6 | — |
 | `CCineAI` | `CCineNPC` | `0x10477d1c` | 587 | 5 | — |
 | `CCineAISchedule` | `CCineNPC` | `0x10478854` | 587 | 14 | — |
@@ -28,8 +28,8 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | `CNPC_VAndreiBlood` | `CNPC_VVampireBoss` | `0x104a6fc4` | 620 | 25 | `npc_VAndreiBlood` |
 | `CNPC_VAnimal` | `CAI_BaseNPCTroika` | `0x104a876c` | 617 | 20 | `npc_VAnimal` |
 | `CNPC_VAsianVampire` | `CNPC_VVampireBoss` | `0x104a935c` | 620 | 22 | `npc_VAsianVampire` |
-| `CNPC_VBach` | `CNPC_VVampire` | `0x104a9f2c` | 617 | 24 | `npc_VBach` |
-| `CNPC_VBaseBoss` | `CAI_BaseNPCTroika` | `0x104bd2cc` | 618 | 4 | `npc_VMingXiao`, `npc_VTzimisce`, `npc_VTzimisceHeadClaw`, `npc_VTzimisceRunner` |
+| `CNPC_VBach` | `CNPC_VVampire` | `0x104a9f2c` | 617 | 26 | `npc_VBach` |
+| `CNPC_VBaseBoss` | `CAI_BaseNPCTroika` | `0x104bd2cc` | 618 | 5 | `npc_VMingXiao`, `npc_VTzimisce`, `npc_VTzimisceHeadClaw`, `npc_VTzimisceRunner` |
 | `CNPC_VBatSwarm` | `CNPC_VVampire` | `0x104aab04` | 617 | 16 | `npc_VBatSwarm` |
 | `CNPC_VBrujah` | `CNPC_VVampire` | `0x104ab6cc` | 617 | 6 | `npc_VBrujah` |
 | `CNPC_VCamera` | `CAI_BaseNPCTroika` | `0x104ac294` | 617 | 54 | `npc_VCamera` |
@@ -42,18 +42,18 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | `CNPC_VDog` | `CNPC_VAnimal` | `0x104b15bc` | 617 | 19 | `npc_VDog` |
 | `CNPC_VFrenzyShadow` | `CNPC_VPlayerController` | `0x104b2184` | 617 | 31 | `npc_VFrenzyShadow` |
 | `CNPC_VGangrel` | `CNPC_VVampire` | `0x104b3914` | 617 | 6 | `npc_VGangrel` |
-| `CNPC_VGargoyle` | `CNPC_VVampire` | `0x104b44dc` | 619 | 34 | `npc_VGargoyle` |
+| `CNPC_VGargoyle` | `CNPC_VVampire` | `0x104b44dc` | 619 | 35 | `npc_VGargoyle` |
 | `CNPC_VGhoulCroucher` | `CNPC_VHumanCombatant` | `0x104b50ac` | 617 | 24 | — |
 | `CNPC_VGuard1` | `CNPC_VHuman` | `0x104b5c74` | 617 | 15 | `npc_VGuard1` |
-| `CNPC_VHengeyokai` | `CNPC_VVampire` | `0x104b683c` | 619 | 34 | `npc_VHengeyokai` |
-| `CNPC_VHuman` | `CAI_BaseNPCTroika` | `0x104b742c` | 617 | 17 | `npc_VHuman` |
+| `CNPC_VHengeyokai` | `CNPC_VVampire` | `0x104b683c` | 619 | 35 | `npc_VHengeyokai` |
+| `CNPC_VHuman` | `CAI_BaseNPCTroika` | `0x104b742c` | 617 | 19 | `npc_VHuman` |
 | `CNPC_VHumanCombatPatrol` | `CNPC_VHumanCombatant` | `0x104b8bbc` | 617 | 8 | `npc_VHumanCombatPatrol` |
 | `CNPC_VHumanCombatant` | `CNPC_VHuman` | `0x104b7ff4` | 617 | 12 | `npc_VHumanCombatant` |
 | `CNPC_VHunter` | `CNPC_VHumanCombatant` | `0x104b9784` | 617 | 16 | `npc_VHunter` |
 | `CNPC_VLasombra` | `CNPC_VVampire` | `0x104ba34c` | 617 | 8 | `npc_VLasombra` |
 | `CNPC_VMalkavian` | `CNPC_VVampire` | `0x104baf14` | 617 | 6 | `npc_VMalkavian` |
 | `CNPC_VManBat` | `CNPC_VVampire` | `0x104bbaec` | 617 | 22 | `npc_VManBat` |
-| `CNPC_VMingXiao` | `CNPC_VBaseBoss` | `0x104bc704` | 618 | 48 | `npc_VMingXiao` |
+| `CNPC_VMingXiao` | `CNPC_VBaseBoss` | `0x104bc704` | 618 | 50 | `npc_VMingXiao` |
 | `CNPC_VMingXiaoTentacle` | `CAI_BaseNPCTroika` | `0x104bdea4` | 617 | 38 | `npc_VMingXiaoTentacle` |
 | `CNPC_VMoleman` | `CNPC_VHuman` | `0x104bea6c` | 617 | 10 | `npc_VMoleman` |
 | `CNPC_VNewscaster` | `CAI_BaseNPCTroika` | `0x104bf634` | 617 | 27 | `npc_VNewscaster` |
@@ -61,7 +61,7 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | `CNPC_VPedestrian` | `CNPC_VHuman` | `0x104c0dc4` | 617 | 20 | `npc_VDialogPedestrian`, `npc_VPedestrian` |
 | `CNPC_VPlaceholder` | `CAI_BaseNPCTroika` | `0x104c198c` | 617 | 24 | — |
 | `CNPC_VPlayerController` | `CNPC_VVampire` | `0x104b2d4c` | 617 | 11 | `npc_VFrenzyShadow`, `npc_VPlayerController`, `npc_VWolfMorph` |
-| `CNPC_VRat` | `CNPC_VScurrying` | `0x104c558c` | 617 | 17 | `npc_VRat` |
+| `CNPC_VRat` | `CNPC_VScurrying` | `0x104c558c` | 617 | 18 | `npc_VRat` |
 | `CNPC_VSabbatGunman` | `CNPC_VHumanCombatant` | `0x104c311c` | 617 | 8 | `npc_VSabbatGunman` |
 | `CNPC_VSabbatLeader` | `CNPC_VVampireBoss` | `0x104c3d64` | 622 | 36 | `npc_VSabbatLeader` |
 | `CNPC_VScurrying` | `CNPC_VAnimal` | `0x104c4944` | 617 | 14 | `npc_VScurrying` |
@@ -74,15 +74,15 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | `CNPC_VTremere` | `CNPC_VVampire` | `0x104cad6c` | 617 | 6 | `npc_VTremere` |
 | `CNPC_VTzimisce` | `CNPC_VBaseBoss` | `0x104cb934` | 628 | 61 | `npc_VTzimisce` |
 | `CNPC_VTzimisceHeadClaw` | `CNPC_VBaseBoss` | `0x104cc564` | 620 | 26 | `npc_VTzimisceHeadClaw` |
-| `CNPC_VTzimisceRunner` | `CNPC_VBaseBoss` | `0x104cd144` | 620 | 30 | `npc_VTzimisceRunner` |
+| `CNPC_VTzimisceRunner` | `CNPC_VBaseBoss` | `0x104cd144` | 620 | 31 | `npc_VTzimisceRunner` |
 | `CNPC_VVampire` | `CNPC_VHuman` | `0x104cdd24` | 617 | 9 | `npc_VVampire` |
 | `CNPC_VVampireBoss` | `CNPC_VVampire` | `0x104a7b94` | 619 | 14 | `npc_VAndreiBlood`, `npc_VAsianVampire`, `npc_VChangBros`, `npc_VChangBrosBlade`, `npc_VChangBrosClaw`, `npc_VSabbatLeader`, +1 more |
 | `CNPC_VVentrue` | `CNPC_VVampire` | `0x104ce8fc` | 617 | 6 | `npc_VVentrue` |
-| `CNPC_VWerewolf` | `CNPC_VBaseBoss` | `0x104cf4d4` | 621 | 48 | — |
+| `CNPC_VWerewolf` | `CNPC_VBaseBoss` | `0x104cf4d4` | 621 | 49 | — |
 | `CNPC_VWolfMorph` | `CNPC_VPlayerController` | `0x104d05a4` | 617 | 14 | `npc_VWolfMorph` |
 | `CNPC_VYukie` | `CNPC_VHumanCombatant` | `0x104d116c` | 617 | 15 | `npc_VYukie` |
 | `CNPC_VZombie` | `CNPC_VAnimal` | `0x104d1d3c` | 617 | 30 | — |
-| `CPayphone` | `CAI_BaseNPCTroika` | `0x10479814` | 618 | 22 | `npc_payphone` |
+| `CPayphone` | `CAI_BaseNPCTroika` | `0x10479814` | 618 | 23 | `npc_payphone` |
 | `CScriptedTarget` | `CAI_BaseNPC` | `0x104a1794` | 583 | 8 | — |
 
 ## Helper classes

@@ -25,8 +25,8 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100265b0` CAISound::FUN_100265b0 |  |  |
 | `0x100265d0` CAISound::FUN_100265d0 |  |  |
 | `0x100265f0` CAISound::FUN_100265f0 |  |  |
-| `0x10026610` CAISound::FUN_10026610 |  |  |
-| `0x10026630` CAISound::FUN_10026630 |  |  |
+| `0x10026610` CBaseEntity::GetStealthVisionScalar |  |  |
+| `0x10026630` CBaseEntity::GetStealthVisionCone |  |  |
 | `0x10026650` CAISound::FUN_10026650 |  |  |
 | `0x10026670` CAISound::FUN_10026670 |  |  |
 | `0x10026690` CAISound::FUN_10026690 |  |  |
@@ -73,7 +73,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10026d30` CAISound::FUN_10026d30 |  |  |
 | `0x10026d50` CAISound::FUN_10026d50 |  |  |
 | `0x10026d70` CAISound::FUN_10026d70 |  |  |
-| `0x10026d90` CAISound::FUN_10026d90 |  |  |
+| `0x10026d90` CBaseEntity::BloodColor |  |  |
 | `0x10026db0` CAISound::FUN_10026db0 |  |  |
 | `0x10026dd0` CAISound::FUN_10026dd0 |  |  |
 | `0x10026df0` CAISound::FUN_10026df0 |  |  |
@@ -106,10 +106,10 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10027450` CAISound::FUN_10027450 |  |  |
 | `0x10027470` CBaseEntity::GetRefEHandle |  |  |
 | `0x10027490` CAISound::FUN_10027490 |  |  |
-| `0x100274b0` CAISound::FUN_100274b0 |  |  |
+| `0x100274b0` CBaseEntity::GetLocalVelocity |  |  |
 | `0x100274d0` CBaseEntity::GetSolidFlags |  |  |
 | `0x10027570` CBaseEntity::GetSolid |  |  |
-| `0x10027610` CAISound::FUN_10027610 |  |  |
+| `0x10027610` CBaseEntity::GetCollideable |  |  |
 | `0x10027630` CAISound::FUN_10027630 |  |  |
 | `0x10027650` CAISound::FUN_10027650 |  |  |
 | `0x100290c0` FUN_100290c0 |  |  |
@@ -430,15 +430,15 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100b4dc0` CAISound::FUN_100b4dc0 |  |  |
 | `0x100b4de0` CAISound::FUN_100b4de0 |  |  |
 | `0x100b4ea0` CAISound::FUN_100b4ea0 ‼ | `+0x016c` ← 0x10147960, 0x102695d0, 0x103805d0 |  |
-| `0x100b4ef0` CAISound::FUN_100b4ef0 |  |  |
-| `0x100b4f10` CAISound::FUN_100b4f10 |  |  |
+| `0x100b4ef0` CBaseEntity::GetEFlags |  |  |
+| `0x100b4f10` CBaseEntity::SetEFlags |  |  |
 | `0x100b5080` CAISound::FUN_100b5080 |  |  |
 | `0x100b5110` FUN_100b5110 |  |  |
 | `0x100b5190` FUN_100b5190 |  |  |
 | `0x100b5340` FUN_100b5340 |  |  |
 | `0x100b5ab0` CBaseFlex::SetModel | `+0x045c` ← 0x100fb1f0, 0x102d0b60 |  |
 | `0x100b5b00` CAI_BaseNPC::FUN_100b5b00 |  | `+0x0848` |
-| `0x100b5b40` CAI_BaseNPC::FUN_100b5b40 |  | `+0x0848` |
+| `0x100b5b40` CBaseFlex::GetViewtarget |  | `+0x0848` |
 | `0x100b5ce0` CBaseFlex::Blink | `+0x0854` ← 0x1025fa50 |  |
 | `0x100b6510` FUN_100b6510 |  |  |
 | `0x100b68d0` FUN_100b68d0 |  |  |
@@ -590,7 +590,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1014f950` CAI_BaseNPC::FUN_1014f950 |  |  |
 | `0x1014f9d0` CAI_BaseNPC::FUN_1014f9d0 |  |  |
 | `0x1014f9f0` CAI_BaseNPC::FUN_1014f9f0 |  |  |
-| `0x1014fa10` CAI_BaseNPC::FUN_1014fa10 |  |  |
+| `0x1014fa10` CBaseCombatCharacter::BloodColor |  |  |
 | `0x1014fa30` CAI_BaseNPC::FUN_1014fa30 |  |  |
 | `0x1014fa50` CAI_BaseNPC::FUN_1014fa50 |  |  |
 | `0x10156ce0` FUN_10156ce0 |  |  |
@@ -647,8 +647,8 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a5290` FUN_101a5290 |  |  |
 | `0x101a5db0` CCineNPC::FUN_101a5db0 |  |  |
 | `0x101a6420` CAI_BaseNPC::FUN_101a6420 |  |  |
-| `0x101a64c0` CAI_BaseNPC::FUN_101a64c0 |  |  |
-| `0x101a64e0` CAI_BaseNPC::FUN_101a64e0 |  |  |
+| `0x101a64c0` CAI_BaseNPC::SetForceFrequentThink |  |  |
+| `0x101a64e0` CAI_BaseNPC::GetForceFrequentThink |  |  |
 | `0x101a6500` CAI_BaseNPC::FUN_101a6500 |  |  |
 | `0x101a6520` CAI_BaseNPC::ShouldSavePhysics |  |  |
 | `0x101a6540` CAI_BaseNPC::PostNPCInit |  |  |
@@ -660,7 +660,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a66c0` CAI_BaseNPC::FUN_101a66c0 |  |  |
 | `0x101a66e0` CAI_BaseNPC::FUN_101a66e0 |  |  |
 | `0x101a6700` CAI_BaseNPC::ShouldGoToIdleState |  |  |
-| `0x101a6720` CAI_BaseNPC::FUN_101a6720 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x101a6720` CAI_BaseNPC::GetState | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x101a6740` CAI_BaseNPC::OnChangeActivity |  |  |
 | `0x101a6760` CAI_BaseNPC::QueryHearSound |  |  |
 | `0x101a6780` CAI_BaseNPC::FUN_101a6780 |  |  |
@@ -690,7 +690,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a6ac0` CAI_BaseNPC::FUN_101a6ac0 |  |  |
 | `0x101a6ae0` CAI_BaseNPC::FUN_101a6ae0 |  |  |
 | `0x101a6b00` CAI_BaseNPC::FUN_101a6b00 |  |  |
-| `0x101a6b20` CAI_BaseNPC::FUN_101a6b20 |  |  |
+| `0x101a6b20` CAI_BaseNPC::GetExpresser |  |  |
 | `0x101a6b40` CAI_BaseNPC::StepHeight |  |  |
 | `0x101a6b60` CAI_BaseNPC::GetMaxJumpSpeed |  |  |
 | `0x101a6b80` CAI_BaseNPC::GetJumpGravity |  |  |
@@ -720,18 +720,18 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a9770` CCineAISchedule::vfunc585 |  |  |
 | `0x101aa5d0` CAI_BaseNPCTroika::FUN_101aa5d0 |  |  |
 | `0x101aa5f0` CAI_BaseNPCTroika::FUN_101aa5f0 |  |  |
-| `0x101aa610` CAI_BaseNPCTroika::FUN_101aa610 |  |  |
-| `0x101aa630` CAI_BaseNPCTroika::FUN_101aa630 |  |  |
+| `0x101aa610` CAI_BaseNPCTroika::GetStealthVisionScalar |  |  |
+| `0x101aa630` CAI_BaseNPCTroika::GetStealthVisionCone |  |  |
 | `0x101aa650` CAI_BaseNPCTroika::FUN_101aa650 |  |  |
 | `0x101aa670` CAI_BaseNPCTroika::GetMaxJumpSpeed |  |  |
 | `0x101aa690` CAI_BaseNPCTroika::FUN_101aa690 |  |  |
 | `0x101aa6b0` CAI_BaseNPCTroika::ShouldGoToIdleState | `+0x63fc` ← 0x1029a0b0, 0x102ae140, 0x102af660 |  |
-| `0x101aa6d0` CAI_BaseNPCTroika::FUN_101aa6d0 | `+0x6254` ← 0x1028d910, 0x10290720, 0x1029a0b0 |  |
-| `0x101aa6f0` CAI_BaseNPCTroika::FUN_101aa6f0 | `+0x6258` ← 0x1028d910, 0x10290b60, 0x1029a0b0 |  |
-| `0x101aa710` CAI_BaseNPCTroika::FUN_101aa710 |  |  |
+| `0x101aa6d0` CAI_BaseNPCTroika::GetLastUpdateThink | `+0x6254` ← 0x1028d910, 0x10290720, 0x1029a0b0 |  |
+| `0x101aa6f0` CAI_BaseNPCTroika::GetLastNormalThink | `+0x6258` ← 0x1028d910, 0x10290b60, 0x1029a0b0 |  |
+| `0x101aa710` CAI_BaseNPCTroika::GetLastMoveThink |  |  |
 | `0x101aa730` CAI_BaseNPCTroika::FUN_101aa730 |  |  |
-| `0x101aa750` CAI_BaseNPCTroika::FUN_101aa750 |  |  |
-| `0x101aa770` CAI_BaseNPCTroika::FUN_101aa770 |  |  |
+| `0x101aa750` CAI_BaseNPCTroika::SetForceFrequentThink |  |  |
+| `0x101aa770` CAI_BaseNPCTroika::GetForceFrequentThink |  |  |
 | `0x101aa790` CAI_BaseNPCTroika::FUN_101aa790 |  |  |
 | `0x101aa7b0` CAI_BaseNPCTroika::GetSchedulingErrorName |  |  |
 | `0x101aa850` CPayphone::FInViewCone |  |  |
@@ -739,7 +739,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101aa890` CPayphone::vfunc365 |  |  |
 | `0x101aa8b0` CPayphone::vfunc364 |  |  |
 | `0x101aa8d0` CPayphone::IsValidStealthKillTarget |  |  |
-| `0x101aa8f0` FUN_101aa8f0 |  |  |
+| `0x101aa8f0` CPayphone::CanBeSetOnFire |  |  |
 | `0x101aa910` FUN_101aa910 |  |  |
 | `0x101aa930` CPayphone::vfunc72 |  |  |
 | `0x101aabd0` CPayphone::Classify |  |  |
@@ -965,7 +965,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10260750` FUN_10260750 |  |  |
 | `0x10260870` FUN_10260870 |  |  |
 | `0x10260980` FUN_10260980 |  |  |
-| `0x10260da0` FUN_10260da0 |  |  |
+| `0x10260da0` CAI_ExpressiveNPC::GetExpresser |  |  |
 | `0x102623a0` CAI_Motor::FUN_102623a0 ‼ |  |  |
 | `0x102623e0` CAI_Motor::FUN_102623e0 |  |  |
 | `0x102624b0` CAI_BaseHumanoid::MaxYawSpeed |  |  |
@@ -998,7 +998,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10270aa0` FUN_10270aa0 |  |  |
 | `0x102718e0` FUN_102718e0 |  |  |
 | `0x10271f50` CAI_BaseNPC::NPC_EarlyTranslateActivity |  |  |
-| `0x10272900` CAI_BaseNPC::FUN_10272900 | `+0x5ccc` ← 0x10272400, 0x102c0f70 |  |
+| `0x10272900` CAI_BaseNPC::IsActivityFinished | `+0x5ccc` ← 0x10272400, 0x102c0f70 |  |
 | `0x10273e10` CAI_BaseNPC::FUN_10273e10 |  |  |
 | `0x10273f90` TaskIsRunning |  |  |
 | `0x102781a0` FUN_102781a0 |  |  |
@@ -1701,7 +1701,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103771b0` CNPC_VGangrel::LoadedSchedules |  |  |
 | `0x10377700` CNPC_VGangrel::Classify |  |  |
 | `0x10377910` CNPC_VGargoyle::vfunc82 |  |  |
-| `0x10377ae0` FUN_10377ae0 |  |  |
+| `0x10377ae0` CNPC_VGargoyle::CanBeSetOnFire |  |  |
 | `0x10377b00` CNPC_VGargoyle::vfunc378 |  |  |
 | `0x10377b20` CNPC_VGargoyle::vfunc580 |  |  |
 | `0x10377b40` CNPC_VGargoyle::GetSchedulingErrorName |  |  |
@@ -1732,7 +1732,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1037c7a0` CNPC_VGuard1::LoadedSchedules |  |  |
 | `0x1037cdd0` CNPC_VGuard1::Classify |  |  |
 | `0x1037e4f0` CNPC_VHengeyokai::vfunc82 |  |  |
-| `0x1037e7f0` FUN_1037e7f0 |  |  |
+| `0x1037e7f0` CNPC_VHengeyokai::CanBeSetOnFire |  |  |
 | `0x1037e810` CNPC_VHengeyokai::vfunc378 |  |  |
 | `0x1037e830` CNPC_VHengeyokai::vfunc580 |  |  |
 | `0x1037e850` CNPC_VHengeyokai::GetSchedulingErrorName |  |  |
@@ -1794,7 +1794,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1038f290` FUN_1038f290 |  |  |
 | `0x1038f600` FUN_1038f600 |  |  |
 | `0x1038f640` FUN_1038f640 |  |  |
-| `0x1038fb00` CNPC_VManBat::vfunc464 |  |  |
+| `0x1038fb00` CNPC_VManBat::GetState |  |  |
 | `0x10390040` FUN_10390040 |  |  |
 | `0x10390890` FUN_10390890 |  |  |
 | `0x103908c0` FUN_103908c0 |  |  |
@@ -1940,7 +1940,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103aca60` CNPC_VScurrying::FUN_103aca60 |  |  |
 | `0x103ad660` CNPC_VRat::Classify |  |  |
 | `0x103ad680` CNPC_VRat::IsValidStealthKillTarget |  |  |
-| `0x103ad790` FUN_103ad790 |  |  |
+| `0x103ad790` CNPC_VRat::CanBeSetOnFire |  |  |
 | `0x103ad7b0` CNPC_VRat::CanTalk |  |  |
 | `0x103ad7d0` CNPC_VRat::MaintainEyeDirection |  |  |
 | `0x103ad850` CNPC_VRat::vfunc316 |  |  |
@@ -2059,7 +2059,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103c9ed0` CHintData_WW::CHintData_WW |  |  |
 | `0x103c9fc0` CHintData_WW::Init |  |  |
 | `0x103ca690` FUN_103ca690 |  |  |
-| `0x103ca6b0` FUN_103ca6b0 |  |  |
+| `0x103ca6b0` CNPC_VWerewolf::CanBeSetOnFire |  |  |
 | `0x103ca6d0` CNPC_VWerewolf::vfunc316 |  |  |
 | `0x103ca6f0` CNPC_VWerewolf::PlayerDefenderBlockReaction |  |  |
 | `0x103ca710` CNPC_VWerewolf::PlayerAttackerBlockedReaction |  |  |
@@ -2136,7 +2136,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10430fa0` FUN_10430fa0 |  |  |
 | `0x104312f0` __alloca_probe ‼ |  |  |
 | `0x10431320` __ftol |  |  |
-| `0x10431351` FUN_10431351 |  |  |
+| `0x10431351` _rand |  |  |
 | `0x10431510` _strstr |  |  |
 | `0x1043190e` _strtod |  |  |
 | `0x104319a8` _strtol |  |  |
@@ -2163,29 +2163,29 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10436900` _get_int_arg |  |  |
 | `0x1043690d` _get_int64_arg |  |  |
 | `0x1043691d` _get_short_arg |  |  |
-| `0x10436d85` FUN_10436d85 |  |  |
-| `0x10436d9c` FUN_10436d9c |  |  |
-| `0x10436df8` FUN_10436df8 |  |  |
-| `0x1043893c` FUN_1043893c |  |  |
-| `0x10438962` FUN_10438962 |  |  |
-| `0x10438987` FUN_10438987 |  |  |
+| `0x10436d85` __load_CW |  |  |
+| `0x10436d9c` __convertTOStoQNaN |  |  |
+| `0x10436df8` __checkTOS_withFB |  |  |
+| `0x1043893c` __set_errno |  |  |
+| `0x10438962` __get_fname |  |  |
+| `0x10438987` __errcode |  |  |
 | `0x104389b4` __frnd |  |  |
-| `0x104389c6` FUN_104389c6 |  |  |
-| `0x10438a53` FUN_10438a53 |  |  |
-| `0x10438b6e` FUN_10438b6e |  |  |
-| `0x10438b7c` FUN_10438b7c |  |  |
-| `0x10438b8b` FUN_10438b8b |  |  |
-| `0x10438bae` FUN_10438bae |  |  |
+| `0x104389c6` __set_exp |  |  |
+| `0x10438a53` __sptype |  |  |
+| `0x10438b6e` __statfp |  |  |
+| `0x10438b7c` __clrfp |  |  |
+| `0x10438b8b` __ctrlfp |  |  |
+| `0x10438bae` __set_statfp |  |  |
 | `0x10438c10` FUN_10438c10 |  |  |
 | `0x10439dc0` FUN_10439dc0 |  |  |
 | `0x10439dd0` _strcat |  |  |
 | `0x1043a151` _strncnt |  |  |
-| `0x1043ab2b` FUN_1043ab2b |  |  |
-| `0x1043ab74` FUN_1043ab74 |  |  |
-| `0x1043ac56` FUN_1043ac56 |  |  |
-| `0x1043ac71` FUN_1043ac71 |  |  |
-| `0x1043ac7d` FUN_1043ac7d |  |  |
-| `0x1043ac98` FUN_1043ac98 |  |  |
+| `0x1043ab2b` __ZeroTail |  |  |
+| `0x1043ab74` __IncMan |  |  |
+| `0x1043ac56` __CopyMan |  |  |
+| `0x1043ac71` __FillZeroMan |  |  |
+| `0x1043ac7d` __IsZeroMan |  |  |
+| `0x1043ac98` __ShrMan |  |  |
 | `0x1043ba9e` __isatty |  |  |
 | `0x1043bac4` _wctomb |  |  |
 | `0x1043bb30` __aulldiv |  |  |
@@ -2194,9 +2194,9 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1043c2f9` _mbtowc |  |  |
 | `0x1043c3d0` __allshl |  |  |
 | `0x1043cb98` ___crtMessageBoxA |  |  |
-| `0x1043cda5` FUN_1043cda5 |  |  |
-| `0x1043ce24` FUN_1043ce24 |  |  |
-| `0x1043ce52` FUN_1043ce52 |  |  |
+| `0x1043cda5` ___addl |  |  |
+| `0x1043ce24` ___shl_12 |  |  |
+| `0x1043ce52` ___shr_12 |  |  |
 | `0x1043d581` __dosmaperr |  |  |
 | `0x1043d76e` __get_osfhandle |  |  |
 
@@ -2341,9 +2341,9 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102dc3e0` FUN_102dc3e0 |  |  |
 | `0x1034d5b0` FUN_1034d5b0 |  |  |
 | `0x103eeee0` FUN_103eeee0 |  |  |
-| `0x101a6440` CAI_BaseNPC::FUN_101a6440 |  |  |
-| `0x101a6460` CAI_BaseNPC::FUN_101a6460 |  |  |
-| `0x101a6480` CAI_BaseNPC::FUN_101a6480 |  |  |
+| `0x101a6440` CAI_BaseNPC::GetLastUpdateThink |  |  |
+| `0x101a6460` CAI_BaseNPC::GetLastNormalThink |  |  |
+| `0x101a6480` CAI_BaseNPC::GetLastMoveThink |  |  |
 | `0x101a64a0` CAI_BaseNPC::FUN_101a64a0 |  |  |
 | `0x1033cb90` CBaseCombatCharacter::Kill |  |  |
 | `0x1034aa40` CGenericNPC::Precache |  |  |
@@ -2732,22 +2732,22 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10430d40` ?FindMITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z |  |  |
 | `0x10430e39` ?FindVITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z |  |  |
 | `0x104348e8` ___sbh_free_block |  |  |
-| `0x10439f2d` FUN_10439f2d |  |  |
-| `0x1043b6ca` FUN_1043b6ca |  |  |
-| `0x1043c536` FUN_1043c536 |  |  |
+| `0x10439f2d` ___crtLCMapStringA |  |  |
+| `0x1043b6ca` ___crtGetStringTypeA |  |  |
+| `0x1043c536` ___crtGetStringTypeW |  |  |
 | `0x1043a7bb` __NMSG_WRITE |  |  |
 | `0x10433e92` __exit |  |  |
 | `0x10433f74` __msize |  |  |
 | `0x10435ad6` ___old_sbh_alloc_block ‼ |  |  |
 | `0x10434c11` ___sbh_alloc_block |  |  |
 | `0x10435978` ___old_sbh_decommit_pages |  |  |
-| `0x104383ea` FUN_104383ea |  |  |
-| `0x104388b4` FUN_104388b4 |  |  |
-| `0x10438aad` FUN_10438aad |  |  |
-| `0x1043abca` FUN_1043abca |  |  |
+| `0x104383ea` __raise_exc |  |  |
+| `0x104388b4` __umatherr |  |  |
+| `0x10438aad` __decomp |  |  |
+| `0x1043abca` __RoundMan |  |  |
 | `0x1043b813` __lseek |  |  |
 | `0x1043cdc6` ___add_12 |  |  |
-| `0x1043d2e5` FUN_1043d2e5 |  |  |
+| `0x1043d2e5` ___ld12mul |  |  |
 
 ## Layer 2 — 296 functions
 
@@ -2974,7 +2974,7 @@ Cycles (1):
 | `0x10281430` FUN_10281430 |  |  |
 | `0x1028e700` FUN_1028e700 | `+0x62c8` ← 0x10292de0, 0x1029a0b0, 0x103692c0 |  |
 | `0x102953e0` CAI_BaseNPCTroika::FUN_102953e0 | `+0x607c` ← 0x1029a0b0, 0x102ad340, 0x103692c0 |  |
-| `0x102ad0c0` FUN_102ad0c0 |  |  |
+| `0x102ad0c0` CAI_BaseNPCTroika::CanBeSetOnFire |  |  |
 | `0x102b6fe0` FUN_102b6fe0 |  |  |
 | `0x102b8320` FUN_102b8320 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x6420` ← 0x10298d30, 0x103c1b90, 0x103c3b30, `+0x6424` ← 0x10298d30, 0x103c1b90, 0x103c3b30, `+0x6428` ← 0x10298d30, 0x103c1b90, 0x103c3b30, +1 more |  |
 | `0x102b8a60` FUN_102b8a60 |  |  |
@@ -3044,13 +3044,13 @@ Cycles (1):
 | `0x10432135` __heap_alloc |  |  |
 | `0x1043a782` __FF_MSGBANNER |  |  |
 | `0x10435a91` ___old_sbh_free_block |  |  |
-| `0x104381fb` FUN_104381fb |  |  |
-| `0x1043869d` FUN_1043869d |  |  |
-| `0x1043ad25` FUN_1043ad25 |  |  |
+| `0x104381fb` __handle_qnan1 |  |  |
+| `0x1043869d` __handle_exc |  |  |
+| `0x1043ad25` __ld12cvt |  |  |
 | `0x1043b8ad` __write |  |  |
 | `0x1043dadb` __read |  |  |
-| `0x1043ce7f` FUN_1043ce7f |  |  |
-| `0x1043d505` FUN_1043d505 |  |  |
+| `0x1043ce7f` ___mtold12 |  |  |
+| `0x1043d505` ___multtenpow12 |  |  |
 
 ## Layer 3 — 207 functions
 
@@ -3227,7 +3227,7 @@ Cycles (1):
 | `0x1028e790` FUN_1028e790 |  |  |
 | `0x103893c0` CNPC_VLasombra::vfunc592 |  |  |
 | `0x1037c420` CNPC_VGhoulCroucher::CanBeSetOnFire |  |  |
-| `0x102b6c30` FUN_102b6c30 | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
+| `0x102b6c30` CAI_BaseNPCTroika::SelectScheduleMeleeCombat | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
 | `0x10364280` FUN_10364280 |  |  |
 | `0x103bca20` FUN_103bca20 |  |  |
 | `0x103bcc00` FUN_103bcc00 |  |  |
@@ -3256,12 +3256,12 @@ Cycles (1):
 | `0x104313bc` _atol |  |  |
 | `0x1043177d` _isspace |  |  |
 | `0x1043996a` __hextodec |  |  |
-| `0x1043b1bd` FUN_1043b1bd |  |  |
+| `0x1043b1bd` ___strgtold12 |  |  |
 | `0x10432bab` _iswspace |  |  |
 | `0x10432109` __nh_malloc |  |  |
 | `0x104338e0` __amsg_exit |  |  |
-| `0x104382ad` FUN_104382ad |  |  |
-| `0x1043bc15` FUN_1043bc15 |  |  |
+| `0x104382ad` __except1 |  |  |
+| `0x1043bc15` __87except |  |  |
 | `0x1043ae91` FUN_1043ae91 |  |  |
 
 ## Layer 4 — 174 functions
@@ -3310,7 +3310,7 @@ Cycles (1):
 | `0x103021b0` FUN_103021b0 |  |  |
 | `0x10348d00` FUN_10348d00 |  |  |
 | `0x10357e50` FUN_10357e50 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
-| `0x10366510` FUN_10366510 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
+| `0x10366510` CNPC_VBaseBoss::EnemyCouldSeeHull | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
 | `0x103796a0` FUN_103796a0 |  | `+0x0374`, `+0x0828` |
 | `0x10380fc0` FUN_10380fc0 |  | `+0x0374`, `+0x0828` |
 | `0x10381460` FUN_10381460 |  |  |
@@ -3436,10 +3436,10 @@ Cycles (1):
 | `0x10432740` __strnicmp |  |  |
 | `0x1043e780` __strcmpi |  |  |
 | `0x10431447` _atoi |  |  |
-| `0x104342d6` FUN_104342d6 |  |  |
-| `0x10432028` FUN_10432028 |  |  |
+| `0x104342d6` __fltin |  |  |
+| `0x10432028` _ceil |  |  |
 | `0x104320f7` _malloc |  |  |
-| `0x10432449` FUN_10432449 |  |  |
+| `0x10432449` _floor |  |  |
 | `0x1043b150` __fptrap |  |  |
 | `0x10436d27` __startOneArgErrorHandling |  |  |
 
@@ -3470,7 +3470,7 @@ Cycles (1):
 | `0x1030f7b0` CanHearSound |  |  |
 | `0x10271f70` CAI_BaseNPC::NPC_TranslateActivity |  | `+0x0804` |
 | `0x1036d800` CNPC_VChangBros::SelectScheduleMeleeCombat | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
-| `0x103c4430` FUN_103c4430 | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
+| `0x103c4430` CNPC_VTzimisceRunner::SelectScheduleMeleeCombat | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
 | `0x10392c40` CNPC_VMingXiao::TranslateEnemyChasePosition | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
 | `0x103ba640` CNPC_VTzimisce::TranslateEnemyChasePosition | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
 | `0x103be8e0` FUN_103be8e0 |  | `+0x0374` |
@@ -4123,8 +4123,8 @@ Cycles (1):
 | `0x10310cf0` FUN_10310cf0 |  |  |
 | `0x10369fb0` CNPC_VCameraSecurity::FInViewCone |  |  |
 | `0x103d6390` CNPC_VWerewolf::GetHintEndEntity |  |  |
-| `0x10385e40` FUN_10385e40 | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
-| `0x10396050` FUN_10396050 | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
+| `0x10385e40` CNPC_VHuman::SelectScheduleMeleeCombat | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
+| `0x10396050` CNPC_VMingXiao::SelectScheduleMeleeCombat | `+0x6268` ← 0x10292de0, `+0x626c` ← 0x10292de0 |  |
 | `0x102b7cf0` FUN_102b7cf0 |  | `+0x6435` |
 | `0x10311c10` FUN_10311c10 |  |  |
 | `0x100e8b90` CDialog::pc_charge_dependency |  |  |
@@ -4197,7 +4197,7 @@ Cycles (1):
 | `0x103d6650` CNPC_VWerewolf::GetHintEndpoint |  |  |
 | `0x103d7090` CNPC_VWerewolf::GetForwardHintForHint |  |  |
 | `0x103d8300` CNPC_VWerewolf::IsValidTeleportHint |  |  |
-| `0x10364080` FUN_10364080 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x10364080` CNPC_VBach::SelectScheduleMeleeCombat | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x10260dc0` FUN_10260dc0 |  |  |
 | `0x101b0c10` FUN_101b0c10 |  |  |
 | `0x1004fbb0` CAI_BaseNPC::FUN_1004fbb0 |  |  |
@@ -4524,8 +4524,8 @@ Cycles (2):
 | `0x1026fbe0` CAI_BaseNPC::FUN_1026fbe0 |  | `+0x0804` |
 | `0x1029d4e0` CAI_BaseNPCTroika::DrawDebugTextOverlays | `+0x6264` ← 0x10292de0 |  |
 | `0x10358f90` CNPC_Crow::DrawDebugTextOverlays |  |  |
-| `0x10386560` FUN_10386560 |  |  |
-| `0x103967d0` FUN_103967d0 |  |  |
+| `0x10386560` CNPC_VHuman::SelectScheduleRangedCombat |  |  |
+| `0x103967d0` CNPC_VMingXiao::SelectScheduleRangedCombat |  |  |
 | `0x103afdb0` CNPC_VSheriffMan::SelectScheduleRangedCombat |  |  |
 | `0x10272490` CAI_BaseNPC::SetActivityAndSequence | `+0x5cd8` ← 0x10273390, 0x10295750, 0x103692c0 |  |
 | `0x103e0fa0` CNPC_VZombie::vfunc509 |  | `+0x06fc`, `+0x07ec`, `+0x07f8` |
@@ -4543,7 +4543,7 @@ Cycles (2):
 | `0x10295590` CAI_BaseNPCTroika::NPC_EarlyTranslateActivity | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0 | `+0x0804` |
 | `0x101db410` FUN_101db410 |  |  |
 | `0x103cb2a0` CNPC_VWerewolf::Precache |  |  |
-| `0x102b7fc0` FUN_102b7fc0 |  |  |
+| `0x102b7fc0` CAI_BaseNPCTroika::SelectScheduleRangedCombat |  |  |
 | `0x103620d0` CNPC_VAsianVampire::SelectScheduleRangedCombat |  |  |
 | `0x102c4a60` CAI_BaseNPCTroika::CanBeFedUponBy | `+0x63d8` ← 0x102a0940, 0x102a1910, 0x10395c70 |  |
 | `0x1029e750` CAI_BaseNPCTroika::FUN_1029e750 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
@@ -4614,7 +4614,7 @@ Cycles (2):
 | `0x103a1250` CNPC_VNewscaster::DrawDebugTextOverlays |  |  |
 | `0x103c08d0` CNPC_VTzimisce::DrawDebugTextOverlays |  |  |
 | `0x103e0e80` CNPC_VZombie::DrawDebugTextOverlays |  |  |
-| `0x103642f0` FUN_103642f0 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x103642f0` CNPC_VBach::SelectScheduleRangedCombat | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x102725d0` CAI_BaseNPC::SetActivity |  |  |
 | `0x102726a0` AdvanceToIdealActivity |  | `+0x04d8` |
 | `0x102c0220` CAI_BaseNPCTroika::FUN_102c0220 |  | `+0x049c` |

@@ -691,3 +691,406 @@ reset `0x1027a700` (no flag word): `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_Expre
 `CAI_TestHull`, `CCineNPC`, `CCineAI`, `CCineAISchedule`, `CGenericNPC`, `CGenericSabbat_NPC`,
 `CGeneric_NPC_bathack`, `CNPC_Bullseye`, `CNPC_Crow`, `CScriptedTarget`; `CGeneric_NPC`,
 `CNPC_ProneDialog`, `CPayphone` and the makers carry the Troika body.
+
+## The schedule host and the task surface, walked (2026-09-13, story 29c-1)
+
+Family **Schedule** of story 29c-1: the 64 `rule` rows of `order.md` layers 0–9 whose behaviour is
+the schedule host, the task surface and the melee/cover selectors. The port is
+`Substrate/ElysiumNpcKernelSchedule.cpp`, `Substrate/ElysiumNpcScheduleHost.cpp` and the two arms
+added to `FElysiumNpc::BuildScheduleTestBits` / `SelectSchedule`; the tests are
+`Elysium.Substrate.NpcKernelSchedule.*`.
+
+**The standing fact of the whole family.** Retail gives every NPC class a
+`CAI_ClassScheduleIdSpace` and fills it by PARSING that class's schedule text.
+`CNPC_VBrujah::InitCustomSchedules` (`0x10367a40`) is the worked example: it calls
+`CAI_LocalIdSpace::Init` (`0x102ea0e0`) on `DAT_1093a740` (schedule), `DAT_1093a758` (task) and
+`DAT_1093a770` (condition) with the three global namespaces `0x109203cc`/`d4`/`dc` and
+`CNPC_VVampire`'s spaces as parents, registers `SCHED_VBRUJAH_WALK` 0x158 and `SCHED_VBRUJAH_WATCH`
+0x159 through `0x102ea130`, and then runs the schedule-text parser `0x1030d850` in a loop that seeds
+itself from `DAT_1062f278`, breaks on the first failure and stores the answer back. That one byte is
+what slot 452 `LoadedSchedules` returns, so **the flag ships `true` and only a malformed schedule
+text clears it**. The four spaces are `0x18` apart, which is how family Squad's slot-546 table
+reaches the same class's squadslot space at `+0x48`. This port registers its programs by identity
+and parses no text, so the id spaces stay at the empty range `0x102ea090(isRoot = false)` left
+(`m_localBase = 9999`, `m_localTop = -1`), every translation answers -1, and `LoadedSchedules`
+answers the shipped `true`. `[VtMB]`
+
+### `0x101aa790` slot 580 and `0x102b97f0` slot 452 — the per-class spaces and their flag
+
+Fourteen of the slot-580 bodies are one line, `return &DAT_<class schedule id space>;`
+(`CNPC_VBrujah` `0x10367870` -> `DAT_1093a740`, `CNPC_VCamera` `0x103683b0` -> `DAT_1093a7d8`
+shared with `CNPC_VCameraSecurity`, `CNPC_VChangBros` `0x1036a1b0` -> `DAT_1093a888`, `…Blade`
+`0x1036eab0` -> `DAT_1093a8f0`, `…Claw` `0x1036f2b0` -> `DAT_1093a938`, `CNPC_VCombatman`
+`0x1036fb10` -> `DAT_1093ab68`, `CNPC_VCop` `0x10370930` -> `DAT_1093ac60`, `CNPC_VDog`
+`0x10373530` -> `DAT_1093acd8`, `CNPC_VFrenzyShadow` `0x10375240` -> `DAT_1093ae48`,
+`CNPC_VGangrel` `0x10377070` -> `DAT_1093aef8`, `CNPC_VGargoyle` `0x10377b20` -> `DAT_1093aff0`,
+`CNPC_VVampire` `0x103750e0` -> `DAT_1093d258` shared with `CNPC_VPlayerController`, and the Troika
+line `0x101aa790` -> `DAT_10924248`). The slot-452 bodies are the same shape over the parse flag
+(`CAI_BaseNPCTroika` `DAT_105d1058`, `CNPC_VBrujah` `DAT_1062f278`, `CNPC_VCamera` `DAT_1062f668`,
+`CNPC_VChangBros` `DAT_1062fe14`, `…Blade` `DAT_1062fe38`, `…Claw` `DAT_1062fe5c`,
+`CNPC_VCombatman` `DAT_10631678`, `CNPC_VCop` `DAT_10631ba8`, `CNPC_VDog` `DAT_106368a8`,
+`CNPC_VFrenzyShadow` `DAT_10637b44`, `CNPC_VGangrel` `DAT_10639090`, `CNPC_VGargoyle`
+`DAT_106395c0`). `CAI_BaseNPC`'s own slot 452 (`0x1027c2e0`) is a literal `true`; the Troika
+override replaces it with the global. `CAI_BaseNPC::Precache` (`0x1027bb50`) is the only reader:
+a false return is `"ERROR: Rejecting spawn of %s as error in NPC's schedules"`. `[VtMB]`
+
+**A census fact this family's tests had to learn, recorded once.** `CNPC_VCop` is a census class with
+its own slot-580 and slot-452 bodies, but **its classname list is empty — no census class claims the
+entity classname `npc_VCop`**. `ElysiumNpcClasses.cpp` does register an `npc_VCop` leaf, so one
+spawns; `FElysiumNpc::RetailClass()` answers null for it, and every per-species lookup in this
+family correctly falls through to the Troika line. Family Squad found the same thing. The converse
+also holds and is not the same gap: the census claims `npc_VCamera`, `npc_VMingXiaoTentacle` and
+`npc_VPlaceholder`, and this runtime registers no leaf for any of them, so their species arms are
+reachable only by retail class name. `[port]`
+
+**Unrecovered:** nothing in the bodies. What the port cannot reproduce is the id-space RANGE, which
+only the schedule-text parser writes.
+
+### `0x10280de0` — `SetSchedule(int)`, and the ideal-schedule stamp
+
+`if (id < 0x3b9aca00 || id == -1) id = ScheduleLocalToGlobal(GetClassScheduleIdSpace(), id);`
+(slot 580 then `0x102ea2d0`), `m_IdealSchedule (+0x5c3c) = id`, then `SetSchedule(int)`
+(`0x102cc1f0`: slot 440 `TranslateSchedule`, slot 446 `GetScheduleOfType`, the
+`"GetScheduleOfType(): No CASE for %d"` miss arm installing base 1) and finally
+`CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`). So an id at or above 1,000,000,000 is
+stamped unchanged and everything else — the -1 sentinel included — is translated first. **The
+stamp is the only thing this body adds** over the install chain story 25 already ported; nothing in
+the port wrote `+0x5c3c` before.
+
+Slot 619's five species overrides (`CNPC_VAndreiBlood` `0x1035dba0`, `CNPC_VAsianVampire`
+`0x10361530`, `CNPC_VChangBros` and its two leaves `0x1036c760`, `CNPC_VSabbatLeader` `0x103a9fd0`,
+`CNPC_VSheriffMan` `0x103af8d0`) are 100 bytes each and identical: push a literal name onto
+`g_ScopeTraceStack`, call `0x10280de0`, pop. They carry no class-specific logic, so the whole of
+what they add is the name they push. `[VtMB]`
+
+**Unrecovered:** `0x102b7690`'s `GetScheduleOfType(0x9e)` comparison decompiles as
+`thunk_FUN_102cc1f0`; the comparison needs a `CAI_Schedule*`, so it is slot 446 and the thunk label
+is wrong there.
+
+### `0x10280f40` `NextScheduledTask` and `0x10280db0`
+
+`fTaskStatus (+0x5c44) = 0`, `m_iScheduleIndex (+0x5c40) += 1`, then `0x10280db0`, whose whole body
+is `m_iScheduleIndex == m_pSchedule->[+0x24]` — the schedule record's task COUNT. So the recovered
+name reads "is the task index current" and what the body tests is "the program is exhausted". On
+true: `m_failedSchedule (+0x5f38) = m_interuptSchedule (+0x5f3c) = 0` (the listing zeroes `EDX` at
+`0x10280f43` and never rewrites it, so both stores are literal zero), one call through the global
+`DAT_10924a6c`'s slot 1, and `SetCondition(COND_SCHEDULE_DONE 0x5d)`.
+
+`0x10273e80 TaskComplete(bool)` is its neighbour: `if (!ignore && HasCondition(COND_TASK_FAILED))
+return;` then `fTaskStatus = 4`. `CAI_Motor` slot 2 (`0x102623c0`) forwards to it through
+`m_pOuter (+0x4)` and `CAI_Motor` slot 1 (`0x102623a0`) is `JMP [[m_pOuter] + 0x700]` — the owner's
+slot 448 `TaskFail`, unchanged. `[VtMB]`
+
+**Unrecovered:** `DAT_10924a6c` and its slot 1.
+
+### `0x102a18a0` — the `TASK_WAIT` deadline
+
+`if (0.0 < task->flTaskData) m_flWaitFinished (+0x5db4) = curtime + flTaskData; else
+m_flWaitFinished = curtime + _DAT_10447ee0;` — an operand at or below zero waits a retail default
+rather than not at all. `[VtMB]`
+
+**Unrecovered:** `_DAT_10447ee0`'s value.
+
+### `0x1028a2a0` — `CAI_BaseNPC::PreSelectSchedule`
+
+`field_0x1b2c = 1` (the file/line selector trace), then: `COND_FLOATING_OFF_GROUND` (0x73) sets
+`m_flGravity = 1.0` and dispatches slot 208 `SetGroundEntity(NULL)` and **falls through**;
+`COND_NPC_FREEZE` (0x75) -> 0x3a; `COND_ON_FIRE` (0x30) -> 0x151; `COND_FLOATING_OFF_GROUND` again
+-> 0x3e; else 0. The trace writes are `AI_BaseNPC.cpp` lines 3627 / 3634 / 3639. This is the
+slot-437 body for `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_ExpressiveNPC` and ten more — **not** the
+Troika line's `0x102ae920`, which is story 29e's.
+
+Three species overrides of the same slot are constants with a trace write: `CNPC_VCamera` /
+`CNPC_VCameraSecurity` (`0x10368f20`) writes tag 9 and answers 0x156; `CNPC_VMingXiaoTentacle`
+(`0x1039de00`) writes tag 0x1a and answers 0; `CNPC_VPlaceholder` (`0x103a43f0`) writes tag 0x1e and
+answers 0x157. `[VtMB]`
+
+### `0x102bf6e0` — `ResolveTaskDistance`, slot 418
+
+A four-entry jump table on `(int)param + 1000008`: -1000008 -> `m_flFollowerDistanceBackAway`
+(`+0x6484`), -1000007 -> `+0x6488`, -1000006 -> `+0x648c`, -1000005 -> the fixed `_DAT_1044e664`
+(10.0, the follower-distance overlap story 16a recovered). Anything else falls to
+`CAI_BaseNPC::ResolveTaskDistance` (`0x102702d0`), which splits -1000003 (through a global's
+slot 1), -1000002 and -1000000 and otherwise answers the truncated value.
+
+Two species overrides sit in front of it and only then delegate: `CNPC_VMingXiao` (`0x10392a10`)
+answers `m_flIdealRange` (`+0x6748`) for -1000004, `CNPC_VTzimisce` (`0x103b9120`) answers
+`_DAT_10457f60` for -1000001. `[VtMB]`
+
+**Unrecovered:** `_DAT_10457f60`; the base body's three sentinel answers.
+
+### `0x102ae840` — the scripted-schedule order push
+
+`if (m_NPCState != 7 && m_IdealNPCState != 7)` (7 is dead) and `if (IsAlive() || force)` (slot 158):
+record the order id at `+0x65cc`, `m_bForceStateChange (+0x1b28) = 1`, and
+`m_bfAINPCFlags2 (+0x14bc) |= 0x82000000`. That mask is `CHOOSE_NEW_SCHEDULE` **plus bit 31** —
+which `ElysiumNpcFlags.h` records as the schedule compiler's routing marker rather than a flag.
+`0x102b7690` writes and clears the same bit (`|= 0x80000100`, `&= 0x7ffffeff`), so retail really
+does carry a flag there. `[VtMB]`
+
+**Unrecovered:** the name of `m_bfAINPCFlags2` bit 31; `0x1030cbd0` has no entry that resolves to it.
+
+### `0x102b6fe0` — the melee selector's failure gate
+
+`COND_ENEMY_OCCLUDED` (0x48) first, then `COND_ENEMY_BLOCKED` (0x3a), each with the same shape:
+`if (HasUsableRangedWeapon())` (slot 308) — with `m_bInMelee` set, dispatch slot 601 with the enemy
+first — answer 0xe9; otherwise answer 0xcd for the occluded arm and 0xce for the blocked one. Zero
+is "no opinion". Trace lines `AI_BaseNPCTroika.cpp` 23135 / 23145 / 23159 / 23169. `[VtMB]`
+
+### `0x102b6c30` slot 604 and its five species overrides
+
+`CAI_BaseNPCTroika::SelectScheduleMeleeCombat` and `CNPC_VAsianVampire` (`0x10361be0`),
+`CNPC_VChangBros` + its two leaves (`0x1036d800`), `CNPC_VSabbatLeader` (`0x103aa060`),
+`CNPC_VSheriffMan` (`0x103af960`), `CNPC_VTzimisceRunner` (`0x103c4430`) are ONE shape with six
+different arm orders and six different schedule-id sets — they are not a table, and the port keeps
+all six arm for arm.
+
+The shape. **Head**: not in melee and slot 599 refusing the enemy, or in melee and slot 602
+accepting, is the "should I be fighting at this range at all" branch; the in-melee side dispatches
+slot 601 with the enemy before answering. The Troika line answers 0xe4 there (after the gate above),
+`CNPC_VSabbatLeader` splits on `m_flEnemyDist <= 2 * range` into 0x15f / 0xe7,
+`CNPC_VChangBros` / `CNPC_VTzimisceRunner` on `dist <= range + _DAT_104492b8` (200.0, the same
+constant `ElysiumFootsteps.h` names) into 0xe4 / 0xe7, `CNPC_VAsianVampire` and `CNPC_VSheriffMan`
+on `HasUsableRangedWeapon()`. **Tail**, in each body's own order: `COND_ENEMY_OCCLUDED` -> 0xcd
+(Chang/Tzimisce/Sabbat) or the gate (Troika/AsianVampire/SheriffMan); `COND_SHOULD_DODGE` as an
+INTERRUPT condition -> 0xd5 (Chang/Tzimisce only); `COND_CAN_MELEE_ATTACK1` -> 0xdc/0xdd;
+`COND_ENEMY_UNREACHABLE` -> 0x17 (Troika, Tzimisce), 0x15d (Chang), 0x15a (SheriffMan), 0x15b
+(Sabbat) or `GetJumpSchedule` (AsianVampire); the three-term break `TOO_FAR_FOR_MELEE (9) ||
+INTERRUPT_TIME (0x1a) || the height-diff timer` -> 0xe9/0x15c; neither `TOO_FAR_FOR_MELEE` nor
+`TOO_FAR_TO_ATTACK` (plus `!ENEMY_OCCLUDED` on AsianVampire and SheriffMan) -> 199; then 0xca/0xcb,
+with Chang and Tzimisce inserting a 0xd2 arm gated on `dist <= range && !heightArmed` and a
+0x15a/0xe1 arm gated on `0x102a11d0`.
+
+**The height-difference timer is byte-identical in all six**:
+`if (m_flEnemyHeightDiff <= _DAT_10451acc) m_flMeleeHeightDiffTimer = -1.0f; else if (timer ==
+-1.0f) timer = curtime + RandomFloat(3.0, 4.0); else if (timer <= curtime) armed = true;`.
+`CNPC_VSabbatLeader` runs its first two arms and never reads the answer. `[VtMB]`
+
+**Unrecovered:** the melee-range convar `DAT_10924a1c` (its bool selects between `0.0` and its float
+at `+0x28`), `_DAT_10451acc`, `_DAT_104c3cd4` (SabbatLeader's `TOO_FAR_TO_ATTACK` bound), and the
+semantics of slots 599 / 601 / 602.
+
+### `0x102b7690` — the entrenched cover / kick-prop selector
+
+Completes the UNRECOVERED note in `authored-control.md`. Four `bool` parameters build a four-bit
+hint-search mask; their names are not recovered, only their bits.
+
+1. **The kick-prop refresh.** With parameter 4 set, `m_bAllowKickHintUse (+0x6436)` set, no hint
+   node (`+0x5ddc`), `DODGING` (flags1 0x800) clear, no live `m_hKickProp (+0x643c)` and
+   `m_flKickPhysicsPropSearchTimer (+0x6438) <= curtime`: rearm the timer at
+   `curtime + RandomFloat(2.0, 2.0)` — a draw whose bounds are equal, so exactly two seconds, and
+   the draw still advances the stream — and run the prop search `0x102b6650`.
+2. **A live kick prop returns 0xa9 immediately**, ahead of any hint search.
+3. **The hint search.** Under "no hint node, not dodging, no kick prop": store `GetEnemy()` in
+   `m_hHintCoverObject (+0x6448)`, build `mask = p1 | (p2 << 1) | (p3 && allowKick) << 2 |
+   (p4 && allowKick) << 3` and call `0x102b7110`.
+4. **The hint-type table.** `0x283c` -> 0xa7, `0x283d` -> 0xa8, and hint types 100 / 0x65 / 0x27d8 —
+   the same three family Hints found on the five activity lookups — enter the cover tail. Anything
+   else, and no hint node at all, answers 0.
+5. **The cover tail.** `AT_COVER_HINT` (flags1 0x2000) clear -> clear flags2 `0x80000100` and answer
+   0x9b. Otherwise compute "does my enemy carry a ranged threat" from its own active weapon's
+   capability word `& 0x6000`, and if `m_pShootAtHint (+0x6444)` is empty ask slot 609. On a miss
+   there: if `0x102b5de0` refuses, `m_iPeekOutCount (+0x640c) += 1` and answer 0x9d while the count
+   is under **5** and `ENEMY_OCCLUDED` is clear, else clear flags2 `0x80000100` and answer 0x9e when
+   `m_bStayEntrenched (+0x6435)` is set or `ClearHintNode(60.0)` and no schedule when it is not. If
+   `0x102b5de0` passes, the peek-out count decays by two with a floor at zero and the answer is
+   0xa3 / 0xa0 / 0xa1 (ranged threat) or 0xa4 / 0xa5 (none), split on "am I already running 0x9e"
+   and `COVER_VS_MELEE_MODE` (flags2 0x100), with a `RandomInt(0, 99) > 0x1d` coin on the 0xa0/0xa1
+   pair. A hint that already has a shoot-at hint answers 0xa2.
+
+Trace lines `AI_BaseNPCTroika.cpp` 23725, 23743, 23747, 23769, 23792, 23797, 23805, 23812, 23818.
+`[VtMB]`
+
+**Unrecovered:** the four parameter names.
+
+### `0x1037cdf0` and `0x10387520` — the slot-453 species overlays
+
+Four classes override `BuildScheduleTestBits`, and **one of them does not compose**.
+`CNPC_VHumanCombatant` (`0x10387520`, nine census classes), `CNPC_VPedestrian` (`0x103a2980`) and
+`CNPC_VTzimisceHeadClaw` (`0x103c16f0`) all open by calling the Troika line `0x102ad140` and then
+add one condition: `SEE_CORPSE_FRIEND` (0x3e) when `IsAlive()` and `GetState() == 1` (idle) and not
+(`m_edtDerivedType` bit 7 AND `m_bCameFromSpawner`); `PASS_OUT` (0x24) when not busy with a
+discipline; `SHOULD_CHARGE` (0x35) unconditionally. `CNPC_VGuard1` (`0x1037cdf0`) instead calls the
+EMPTY base `CAI_BaseNPC::BuildScheduleTestBits` (`0x10280fb0`), so **the Troika overlay does not run
+for a Guard1 at all**, and then branches on `m_NPCState`: state 1 adds `COMFORT` (0x27) and falls
+into the state-3 tail; state 3 tests the five `pl_*` thresholds against `m_hClosestPlayer`'s current
+investigate / criminal / supernatural levels (`0x1017de60`, `0x1017ddd0`, `0x1017dd80`) and on a
+pass adds `INVESTIGATE_LEVEL`, `CRIMINAL_FLEE_LEVEL`, `CRIMINAL_ATTACK_LEVEL`,
+`SUPERNATURAL_FLEE_LEVEL` and `SUPERNATURAL_ATTACK_LEVEL`, otherwise clears `HEAR_PLAYER` (0x6f)
+alone; state 0xb (hunt) runs the same five-threshold test plus `m_fHatesPlayer` and sets or clears
+`SEE_PLAYER` (0x5a) and `HEAR_PLAYER` together. Every other state returns untouched. `[VtMB]`
+
+**Unrecovered:** nothing in the bodies. The port cannot reach the hunt arm — `EElysiumNpcState` has
+no member for retail state 0xb — and `m_edtDerivedType` (`+0x004c`) has no port member, so bit 7
+reads clear.
+
+### `0x1035d010`, `0x1038e340`, `0x1039de20` — three species `SelectSchedule` bodies
+
+`CNPC_VAndreiBlood` (`0x1035d010`) is a strict ladder under trace tag 4: not `m_bActivated` ->
+0x15b, `m_bDead` -> 0x15e, else if not `m_bForceTeleport` and `m_iHitCounter < m_iHitMax` then
+`0x1035e920` splits 0x15d / 0x15c, else 0x15a. **That last split is the fleshpile's runner budget**
+(family Species landed the body): `0x1035e920` is twenty-five bytes of
+`return m_iActiveRunnerCount (+0x66b8) < 2.0` — `_DAT_10452dc4` is 2.0f — and the rest of the same
+counter is `CNPCMaker_Fleshpile::MakeNPC` (`0x1034c2d0`, refusing at `2 <= count` and adding 1) and
+its `DeathNotice` (`0x1034c8e0`, subtracting 1). So Andrei's fleshpile may have at most TWO runners
+alive at once, and 0x15d is the arm he takes while there is room for another.
+
+`CNPC_VManBat` (`0x1038e340`): the navigator probe `0x1027d990` answering anything but 2 writes
+`m_iMoveGoalNodeID (+0x6674) = 1` and answers 0x158; then an obfuscated equality on `+0x6670`
+(`Hash((f & 0x710935 ^ 0x148739) + 0x4094ab & 0x18ef6ca ^ f ^ 0x412a96ec) == Hash(0xfa0b0694)`,
+hash `0x1042fbf0`) failing does the same and answers 0x159; then `HasInterruptCondition(0x4d
+HEAVY_DAMAGE)` -> 0x15f; then a global's bool and eleventh word gate a `RandomInt(1, 10)` over
+0x15c / 0x15d / 0x161 / 0x163 / 0x159.
+
+`CNPC_VMingXiaoTentacle` (`0x1039de20`): a four-phase machine on `m_ePhase` under trace tag 0x1a.
+An unset `m_flPhaseExpireTimer` is armed per phase (`_DAT_10450aa0`, `_DAT_10449270`,
+`_DAT_1044e664` = 10.0, `_DAT_104bea38`). Phase 0/default splits on the timer into 0x156 / 0x157;
+phase 1 into 0x158 / 0x159; phase 3 asks `0x1039ee20` against `GetAbsOrigin()` for 0x160 / 0x161.
+Phase 2 is the body: in state 1 (idle) an expired timer plus `0x1039eee0` gives 0x160 / 0x161 and
+otherwise 0x15a; in state 2 (combat) it clears `m_bCondTookDamage`, consumes condition 0x78 into
+0x165, repeats the expired-timer pair, then on an expired `m_flFailedEvadeTimer` splits
+`m_flEnemyDist < _DAT_1044ddb0` -> 0x15b, `m_flHideReadyTimer <= curtime && RandomInt(0, 99) < 50`
+-> 0x163, else 0x15f; a live evade timer instead asks slot 604 with the active weapon's capability
+word and answers 0x164 on zero. Any other state answers 0x164.
+
+`CNPC_VCamera` / `CNPC_VCameraSecurity` (`0x10368f40`) and `CNPC_VPlaceholder` (`0x103a4410`) are
+the same write-and-return constants as their slot-437 bodies (tag 9 -> 0x156, tag 0x1e -> 0x157).
+`[VtMB]`
+
+**Unrecovered:** `m_bActivated`, `m_bDead`, `m_bForceTeleport`, `m_iHitCounter`,
+`CNPC_VManBat +0x6670`, `m_ePhase` and the three tentacle timers are species words above `+0x665c`
+with no port member and no producer (`m_iActiveRunnerCount` and `m_iHitMax` are no longer among
+them — family Species declared both); `DAT_1093b814`; the three tentacle phase durations;
+condition 0x78, which is above the base registrar's 0x76 and belongs to a derived table that was
+not dumped.
+
+### `0x103a9d00` — `CNPC_VSabbatLeader::FlipFailureType`
+
+Inside a scope-trace push/pop, the whole body is `m_FailureType (+0x66c0) = 1 - m_FailureType`.
+`[VtMB]`
+
+### `0x1027db30` — retargeted: the navigator node-index guard, not `StartTaskByIndex`
+
+29c's row named this `FElysiumNpc::StartTaskByIndex` over a `‼` row with no recovered callers. The
+disassembly reads the NAVIGATOR at `+0x5d34`, takes its node list at `+0x2c` (count at `+0x00`,
+array at `+0x04`), bumps the global error counter `0x106c994c` and answers false for an index below
+zero or at/past the count, answers false for a null node, and otherwise tail-jumps to
+`[[this] + 0x83c]` — slot 527, which `signatures.tsv` names `bool IsUnusableNode(CAI_Node*)`. It is
+a node guard; the port carries it as `FElysiumNpc::IsUnusableNodeIndex`. `[VtMB]`
+
+**Unrecovered:** the retail name.
+
+### `0x101a95d0` — `CCineAI::FixScriptNPCSchedule`, slot 586
+
+`m_iFinishSchedule` (`CCineAI +0x5f64`, the director's own word) 0 clears the NPC's schedule
+(`0x10280d30`); 1 calls `SetSchedule(0x2a)` (`0x10280de0`) with **no** clear; anything else is
+`DevMsg(2, "FixScriptNPCSchedule - no case!")` and then the clear. `[VtMB]`
+
+## The three hint validators — `0x10295ed0`, `0x102961a0`, `0x10296c40` (2026-09-13)
+
+Three bodies that ask "is this hint node still somewhere I can stand", over the same five hint words
+— `m_flTargetAngleRangeDot` (`+0x458`), `m_flTargetDistMin` (`+0x45c`), `m_flTargetDistMax`
+(`+0x460`), `m_nHintType` (`+0x5dc`) and `m_iDisabled` (`+0x5e8`) — and each with its own tail.
+
+`0x10295ed0` (562 bytes) is the quiet one. A null or disabled hint fails; `m_hHintCoverObject`
+(`+0x6448`) must resolve; the 2-D distance from the hint to that cover object must lie in
+`[min, max]`, widened by `_DAT_10451acc` (**64** units) on **both** ends when the hint being tested
+is already `m_pHintNode` (`+0x5ddc`). The delta is then normalised by `1 / (dist + eps)` and dotted
+with the hint's own facing (`0x102d12e0` for the yaw, `0x101d2f40` for its 2-D basis), and the
+projection must be **strictly** greater than `m_flTargetAngleRangeDot`. The current hint accepts
+there. Any other hint must additionally be within `_DAT_10483aac` (**512** units) of me, and — only
+for hint type **0x283d** — the forward projection of `(hint - me)` on the hint's facing must exceed
+`_DAT_104454d0`; then `0x102968f0` decides on line of sight.
+
+`0x102961a0` (1326 bytes) is the verbose twin and is **not** the same body. It runs a
+`m_strTargetName` (`+0x468`) gate in **front** of everything — an empty name admits everyone, a set
+one is compared case-insensitively against my own `m_iName` (`+0x26c`) and a mismatch is
+`"Target name mismatch (%s)"` — then the same band (one shared reason,
+`"Distance (%d) < %d or > %d"`, for both tolerance policies) and the same projection
+(`"Enemy outside of good range (%.2f) <= %.2f"`). Instead of `0x102968f0` it casts its own ray, from
+my origin raised by `m_Collision->OBBMaxs().z` to a point on the hint (`0x102d1180`), and requires
+`fraction >= 1.0` with neither `allsolid` nor `startsolid`, else `"Failed LOS check (%s)"` naming the
+blocker. Every reason string is built only when `DAT_10925444` — the `ai_debug_npc` handle —
+resolves to *this* NPC.
+
+`0x10296c40` (1614 bytes) validates an **attack** position against an enemy and an active weapon. Its
+first arm is a **pass**, not a fail: my own hint while `m_bStayEntrenched` (`+0x6435`) stands, or a
+null enemy, accepts before any test at all. Otherwise: no active weapon fails; a height difference
+over `_DAT_1049ae28` fails; the hint-to-enemy 2-D distance below `m_flTargetDistMin` fails; unless
+`m_bStayEntrenched`, a distance over **either** the weapon's own maximum range (`weapon +0x8c0`) or
+`m_flTargetDistMax` fails; a hint that is not already mine needs
+`dot(normalize2D(hint - enemy), normalize2D(me - enemy)) >= _DAT_10451ab4` — and retail's own message
+gives that literal away, `"Projection (%.2f) < 0.2"`. The facing projection is then tested against
+**two** caller-supplied bounds that are not symmetric: `<= flGoodRange` is
+`"Enemy outside of good range"` and `>= flBadRange` is `"Enemy inside of bad range"`. Last, and only
+under `m_bForceCoverLOSCheck` (`+0x6408`), `0x102968f0` must pass or the answer is
+`"Failed hint LOS"`.
+
+**Unrecovered:** `_DAT_1049ae28` (the height limit), `_DAT_1046a51c` (the normalise epsilon) and
+what `_DAT_104454d0` means as `0x10295ed0`'s forward floor; and `0x102968f0` itself is walked only as
+"the hint LOS check" here.
+
+## The face-anim turn ladder — `0x10297a20` (2026-09-13)
+
+A **third** turn-in-place ladder beside `CAI_BaseNPC::SetTurnActivity` (`0x10289d10`) and the Troika
+line's (`0x10297640`), and it is not a slot. It reads the motor's yaw delta (`CAI_Motor::DeltaIdealYaw`,
+`0x102e1f90`) and walks four rungs, each gated on the body actually authoring the activity
+(`SelectWeightedSequence(act) != -1`): outside `[_DAT_1049ae3c, _DAT_1049ae38]` (**-140**, **140** —
+the same pair the Troika ladder reads) it picks activity `0x10ff`; at or below `_DAT_104704b4` it
+picks `0x10fd`; at or above `_DAT_10462950` (**40**) it picks `0x10fa`; otherwise `0x10f8`. Each rung
+writes `m_eFaceAnim` (`+0x63e4`) — **8**, **6**, **3**, **1** in that order — and
+`m_flFaceYawDiff` (`+0x63e8`), and the three upper rungs write a *drawn* value (`__ftol` of a random,
+masked to 16 bits and scaled by `_DAT_1044ffdc`) where `0x10f8` writes the yaw delta itself. A body
+authoring none of the four falls to `ACT_IDLE` with `m_eFaceAnim = 0` and `m_flFaceYawDiff` still the
+delta.
+
+**Unrecovered:** `_DAT_104704b4` (the second rung's edge) and `_DAT_1044ffdc` (the duration scale);
+and the body's retail name — it has one direct caller and no slot.
+
+## The scripted custom move and the patrol interest draw — `0x10289fe0`, `0x1029f650`, `0x1029f730` (2026-09-13)
+
+`0x10289fe0` is `CAI_BaseNPC::GetScriptCustomMoveActivity`, SDK 2013's function arm for arm. It
+answers `ACT_WALK` (**9**) unless `m_hCine` (`+0x5d74`) resolves and its `m_iszCustomMove`
+(`+0x5f50`) is set; then `LookupActivity(name)`, and on a miss `LookupSequence(name)` — a name that
+is a raw sequence answers `ACT_SCRIPT_CUSTOM_MOVE` (**0x18**) and one that is neither falls back to
+`ACT_WALK`. Retail re-resolves the cine handle at each of the four reads.
+
+`0x1029f650` and `0x1029f730` are the write and read halves of one draw over a patrol node's
+interesting-place record (`0x1029f6c0`). The write half **first** clears `m_bPatrolPathUseHint`
+(`+0x65a0`) unconditionally — so a node with no record clears a flag that was standing — then, with
+a record, rolls `RandomInt(0, 99)` against its `m_iIPPercent` (`+0x46c`) and sets the flag when the
+roll comes in under it, returning the flag. The read half answers 0 unless the flag stands, and
+otherwise returns the record cached at `+0x659c`, resolving it on the first ask.
+
+**Unrecovered:** both bodies' retail names, and what `0x1029f6c0` returns beyond its `+0x46c` chance
+word.
+
+### The occlusion reaction ladder `0x102b8320`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 606 answers what to do about an occluded enemy, and every arm stamps the selector trace at
+`+0x1b30`/`+0x1b34` with its own source line. Without `COND_ENEMY_OCCLUDED` (0x48) it answers 0.
+`COND_ENEMY_UNREACHABLE` (0x59) answers `0xaa` (line `0x5e1b`). `m_bfNPCFrenziedFlags & 0x100`
+answers `0xb4` (`0x5e20`). `m_bfAINPCFlags2 & D_POSSESSED` (`0x40000`) rolls `RandomInt(0, 99)` and
+answers `0xb6` under 0x46, else `0xb4` (`0x5e28` / `0x5e2c`). `m_bfAINPCFlags & FORCED_OCCLUDE`
+(`0x10000000`) **clears the bit** and rolls the same draw against 0x50 (`0x5e37` / `0x5e3b`). What
+remains is one `RandomInt(0, 99)` against four per-instance thresholds — `m_iPercentOccludedWait`,
+`Cover`, `Walk` and `Flank` (`+0x6420`..`+0x642c`) — with `COND_SQUAD_SEE_ENEMY` (0x31) selecting
+between two answer tables: `0xab / 0xb0 / 0xb3 / 0xb2 / 0xb2` with the squad condition and
+`0xaa / 0xaf / 0xb5 / 0xb6 / 0xb4` without. The squad table's last two buckets answer the same
+number. `m_iPercentOccludedChase` (`+0x6430`) is NOT read by this body.
+
+**Unrecovered:** the name of frenzied bit `0x100`, and what the eight returned numbers name.
+
+### The task-argument helper `0x102aa9e0`
+
+_Recovered 2026-09-13, story 29c-1._
+
+One direct caller, no slot. When the argument and its `+0x04` member are both non-null it tests
+`thunk_FUN_10307b80(arg->+0x4)` and conditionally clears through `thunk_FUN_1029f5d0(arg)`, forwards
+to `thunk_FUN_1029f650(this, arg)`, and calls `TaskComplete(false)` (`0x10273e80`). Otherwise it
+stamps the ASSERT file/line pair at `+0x1b44`/`+0x1b48` with line `0x3d9c` and raises through the
+entity's own vtable `+0x700` — slot 448, `TaskFail` — with code `0x1d`.
+
+**Unrecovered:** the argument's type, and therefore what `+0x04` is and what the two middle calls do.

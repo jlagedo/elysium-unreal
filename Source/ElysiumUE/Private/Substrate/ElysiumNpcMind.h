@@ -46,8 +46,38 @@ public:
 	// the mind's trace so a single read shows stimulus, state, owner and schedule in order.
 	void RecordExternal(const FString& Row) { Record(Row); }
 
+	// --- Story 29c-1, family Schedule: `m_bForceStateChange` (`+0x1b28`) --------------------------
+	//
+	// `0x102ae840`, the scripted-schedule order push, stamps this word directly beside the order id
+	// and the `CHOOSE_NEW_SCHEDULE` flag. It is not a transition request — nothing is arbitrated —
+	// so it is a plain set/consume pair rather than a `RequestState` call. NOT CONSUMED yet: the
+	// state machine that reads it is story 29e's.
+	void ForceStateChange() { bForceStateChange = true; }
+	bool IsStateChangeForced() const { return bForceStateChange; }
+
 	static bool IsSupportedState(EElysiumNpcState State);
 	static bool IsResumableOwner(EElysiumBodyOwner Owner);
+
+	// --- Story 29c-1, family Conditions: `RequestDesiredState` -----------------------------------
+	//
+	// `FUN_102ad260` and `FUN_102ad2d0`, the two identical flee arms `PreSelectIdealState` (slot 460,
+	// `0x102ad340`) calls, write `m_IdealNPCState` (`+0x5cc4`) DIRECTLY — not through `SetState` and
+	// not through any admission or support test. This is the write side of that, and it is separate
+	// from `RequestState` for exactly that reason: `RequestState` is this runtime's arbitrated
+	// transition and would refuse where retail simply stores.
+	//
+	// `RetailIdealState` is retail's RAW `NPC_STATE` id (`0x1026e3e0`'s cases: 1 idle, 2 combat,
+	// 3 alert, 4 script, 7 dead, **8 flee**, 0xb hunt). Both callers pass 8.
+	//
+	// NOT BUILT — this runtime's `EElysiumNpcState` has no member for retail state 8, so the raw id
+	// is all that is stored and `DesiredState` is LEFT ALONE. `DesiredRetailState()` is the read side;
+	// the day a flee state exists, the mapping lands here and nothing else moves.
+	void RequestDesiredState(int32 RetailIdealState, int32 RetailSourceLine);
+
+	// `m_IdealNPCState` (`+0x5cc4`) as the raw retail id the write above stored, or 0 for "never
+	// written". `IdealState()` beside it is this runtime's typed ideal and is the one every other
+	// system reads.
+	int32 DesiredRetailState() const { return PendingRetailIdealState; }
 
 private:
 	bool IsAcquisitionAllowed(EElysiumBodyOwner Requested) const;
@@ -63,4 +93,21 @@ private:
 	FString Last;
 	TArray<FString> Transitions;
 	static constexpr int32 MaxTraceRows = 16;
+
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	// The SAME retail word as `DesiredState` above (`+0x5cc4 m_IdealNPCState`), held a second time as
+	// the raw retail id — NOT a new offset. `EElysiumNpcState` has no member for retail 8 (FLEE),
+	// 0xb (HUNT) or 0xe, so a body that writes one of those has nowhere to put it; this is where it
+	// goes until the vocabulary grows, and `RequestDesiredState` is its only writer. Session state:
+	// the two flee arms rewrite it every pass they fire, and no save carries an ideal state.
+	int32 PendingRetailIdealState = 0;
+	bool bForceStateChange = false;  // +0x1b28 m_bForceStateChange (datamap)
+	// +0x5cc8 m_flLastStateChangeTime (datamap) — an absolute curtime stamp, carried as double
+	double LastStateChangeTime = 0.0;
 };

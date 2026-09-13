@@ -73,12 +73,166 @@ def test_declared_member_reads_the_next_declaration():
     assert kl.Ledger._declared_member(["\t// +0x1234", "\tvirtual void Foo();"], 0) == ""
 
 
+def test_parse_band_reads_a_range_and_a_single_layer():
+    assert kl.parse_band("0-9") == (0, 9)
+    assert kl.parse_band("19-99") == (19, 99)
+    assert kl.parse_band("7") == (7, 7)
+    with pytest.raises(SystemExit):
+        kl.parse_band("low-high")
+
+
+def _verdict_file(tmp_path, body: str) -> Path:
+    path = tmp_path / kl.VERDICTS_TSV
+    path.write_text("# a comment the loader skips\n"
+                    + "\t".join(kl.VERDICT_COLUMNS) + "\n" + body, encoding="utf-8")
+    return path
+
+
+def test_load_verdicts_reads_the_overlay(tmp_path):
+    rows = kl.load_verdicts(_verdict_file(tmp_path, (
+        "0x10026530\trule\t0-4\tdefault:void\tslot 21's whole body is `return;`\n"
+        "\n"
+        "10430964\tmechanism\t0-4\tCRT:operator delete\tthe scalar deleting destructor\n"
+        "1027db30\tdead\t5-9\t-\tno closure caller and no slot\n")))
+    assert set(rows) == {"10026530", "10430964", "1027db30"}
+    assert rows["10026530"].verdict == "rule"
+    assert rows["10026530"].target == "default:void"      # the `0x` prefix is stripped from the key
+    assert rows["1027db30"].band == "5-9"
+
+
+def test_load_verdicts_refuses_a_malformed_row(tmp_path):
+    # An unknown word, a duplicate address, a missing target, a missing reason and a short row are
+    # each fatal: the overlay is a record, and a silently dropped row would empty a verdict.
+    for body in ("10026530\tported\t0-4\tx\ty\n",
+                 "10026530\trule\t0-4\tx\ty\n10026530\trule\t0-4\tx\ty\n",
+                 "10026530\trule\t0-4\t\ty\n",
+                 "10026530\tdead\t0-4\t-\t\n",
+                 "10026530\trule\t0-4\n"):
+        with pytest.raises(SystemExit):
+            kl.load_verdicts(_verdict_file(tmp_path, body))
+
+
+def test_load_verdicts_requires_the_header(tmp_path):
+    path = tmp_path / kl.VERDICTS_TSV
+    path.write_text("10026530\trule\t0-4\tx\ty\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        kl.load_verdicts(path)
+
+
 def test_citation_regexes_match_the_two_spellings():
     line = "// `EnterGrappleState` `0x10329760` (slot 379) writes `+0x5ce4` and +0x14b8 bit 8"
     assert [m.group(1) for m in kl.ADDRESS_RE.finditer(line)] == ["10329760"]
     assert [int(m.group(1), 16) for m in kl.OFFSET_RE.finditer(line)] == [0x5CE4, 0x14B8]
     assert kl.SEAM_RE.search("// SEAM: retail's third arm") is not None
     assert kl.SEAM_RE.search("// CHOSEN, NOT RECOVERED — the position") is not None
+
+
+# --- the checklist, on a hand-built band ------------------------------------------------------
+
+
+class _FixtureLedger(kl.Ledger):
+    """A ledger with no corpus behind it: the checklist's own derivations, on four functions.
+
+    `core()` is the one method that asks the database (for the offset `CBaseCombatCharacter`'s
+    layout ends at), so the fixture states the core set instead of deriving it. Everything the
+    checklist renders below that is arithmetic over the tables set here.
+    """
+
+    def __init__(self, functions, layers, verdicts, port=(), oracle=()):
+        self.module = "vampire.dll"
+        self.depth = 6
+        self.meta = {"sha256": "c0ffee" * 8, "dumped_at": 0}
+        self.functions = functions
+        self.layer_of = layers
+        self.verdicts = verdicts
+        self.checklists = ("0-9",)
+        self.closure = {a: 0 for a in functions}
+        self.closure_edges = set()
+        self.all_callers = {}
+        self.family = {"CAI_BaseNPC"}
+        self.helpers = ["CAISound"]
+        self.interior = {}
+        self.port_addr = {a: [kl.Citation("ElysiumNpc.cpp", 1, False, "")] for a in port}
+        self.oracle_addr = {a: [kl.Citation("docs/vtmb/npc-ai/senses.md", 1, False, "")]
+                            for a in oracle}
+
+    def core(self):
+        return sorted(self.functions)
+
+
+def _band_fixture(verdicts):
+    def fn(addr, name, size=8, ns="CAI_BaseNPC"):
+        return kl.Function(addr, name, ns, size, False, "", "")
+
+    functions = {
+        "10000001": fn("10000001", "Empty", 3),
+        "10000002": fn("10000002", "Getter"),
+        "10000003": fn("10000003", "Rule", 200),
+        "10000004": fn("10000004", "High", 40),
+    }
+    layers = {"10000001": 0, "10000002": 3, "10000003": 7, "10000004": 12}
+    return _FixtureLedger(functions, layers, verdicts, port=["10000002"], oracle=["10000004"])
+
+
+def test_band_stats_counts_a_verdict_as_a_citation():
+    verdicts = {"10000001": kl.Verdict("10000001", "rule", "0-4", "default:void", "slot 21")}
+    ledger = _band_fixture(verdicts)
+
+    low = ledger.band_stats(0, 4)
+    assert low["core"] == 2                 # layers 0 and 3
+    assert low["rule"] == 1 and low["empty"] == 1
+    assert low["port"] == 1 and low["oracle"] == 0
+    # 10000001 is verdicted and 10000002 is port-cited, so nothing in the band is uncited.
+    assert low["neither"] == 0
+
+    high = ledger.band_stats(5, 9)
+    assert high["core"] == 1 and high["empty"] == 1
+    assert high["neither"] == 1             # unverdicted and cited by nobody
+
+    # The band bounds are the `order.md` layer, so layer 12 is in neither of the two.
+    assert ledger.band_stats(10, 18)["core"] == 1
+
+
+def test_band_stats_counts_unsettled_apart_from_the_four_verdicts():
+    ledger = _band_fixture(
+        {"10000003": kl.Verdict("10000003", "unsettled", "5-9", "-", "the jump table is lost")})
+    stats = ledger.band_stats(5, 9)
+    assert stats["unsettled"] == 1
+    assert stats["verdicted"] == 0          # a recorded failure is not a verdict
+    assert stats["rule"] == stats["mechanism"] == stats["present"] == stats["dead"] == 0
+    assert stats["empty"] == 0              # but the row is not empty either
+    assert stats["neither"] == 0            # and it counts as read
+
+
+def test_render_checklist_joins_the_overlay_and_survives_regeneration():
+    verdicts = {
+        "10000001": kl.Verdict("10000001", "rule", "0-4", "default:void", "slot 21 does nothing"),
+        "10000002": kl.Verdict("10000002", "present", "0-4", "FElysiumNpc::Sleeping",
+                               "+0x5bb4 | the bound word"),
+    }
+    text = _band_fixture(verdicts)._render_checklist("0-9")
+    assert kl.GENERATED_BANNER in text
+    assert "| Core functions, layers 0–9 | 3 |" in text
+    assert "`0x10000001` | CAI_BaseNPC::Empty | 3 | 0 | — | — | — | 0d/0v/0c | `rule` | default:void" in text
+    # A pipe inside an overlay cell would end the table row early.
+    assert "FElysiumNpc::Sleeping | +0x5bb4 ¦ the bound word |" in text
+    # A row with no overlay entry renders an empty verdict rather than being dropped.
+    assert "`0x10000003` | CAI_BaseNPC::Rule | 200 | 7 | — | — | — | 0d/0v/0c |  |  |  |" in text
+    # Out of band.
+    assert "0x10000004" not in text
+
+
+def test_bodies_packs_split_on_rows_and_on_size():
+    ledger = _band_fixture({})
+    ledger.functions["10000003"].code = "x" * (kl.PACK_BUDGET + 10)
+    packs = ledger.bodies("0-9", per_pack=120)
+    # The third row alone passes the character budget, so the fourth would open a new pack; with
+    # only three rows in band the split is after it.
+    assert list(packs) == ["band-0-9-pack-01.md"]
+    assert "## 0x10000001  CAI_BaseNPC::Empty" in packs["band-0-9-pack-01.md"]
+
+    packs = ledger.bodies("0-9", per_pack=1)
+    assert list(packs) == [f"band-0-9-pack-{n:02d}.md" for n in (1, 2, 3)]
 
 
 # --- against the real corpus -----------------------------------------------------------------

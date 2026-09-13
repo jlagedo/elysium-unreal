@@ -1590,8 +1590,9 @@ Five reaction concepts are independent:
 
 ### Damage flinch
 
-`CBaseCombatCharacter::DamageFlinch` (`0x103229d0`) is vtable slot 292 (`vt +0x490`) and **no leaf
-class overrides it**, so every combat character flinches the same way.
+`CBaseCombatCharacter::DamageFlinch` (`0x103229d0`) is vtable slot 292 (`vt +0x490`). **Two of the
+254 classes that fill that slot replace it** — see "The two species flinch gates" below; every other
+combat character flinches the same way.
 
 **The rule.** The activity is `0x74 - (RandomInt(0,1) != 0)` — `ACT_HIT_TORSO` or `ACT_HIT_HEAD`, an
 even coin. `hit_yaw` is `actorYaw - atan2(incoming) in degrees + RandomFloat(-30, +30)`, where the
@@ -1755,6 +1756,163 @@ schedule choice recorded in
   (`kRenderFxRagdoll`), and — because both call sites pass `0` for the third argument —
   `FSOLID_NOT_SOLID` is added, move type becomes `MOVETYPE_NONE`, velocity is zeroed and the think
   is cleared.
+
+## The NPC damage kernel, body by body (story 29c-1)
+
+Story 29c-1's family **Damage** walked the layer 0–9 bodies of the `CAI_BaseNPC` family that carry
+damage, death and the effects the two spawn. What is above this section is the pipeline; what is
+below is each recovered body's own arms, thresholds and writes. The port is
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDamage.cpp`.
+
+### `CAI_BaseNPC::TraceAttack` — `0x10266780`
+
+676 bytes; the argument layout (`RET 0xc`, `info` / `vecDir` / `trace` at `ESP+0x60/0x64/0x68`) came
+off the listing, because the decompiler lost all three to `unaff_retaddr` and `unaff_EBP`. It is SDK
+2013's `CAI_BaseNPC::TraceAttack` with this fork's `CVDmg_t` bolted into it, and its arms in order
+are: clear `m_fNoDamageDecal` (`+0x5df0`) — **before** the `m_takedamage` (`+0x1fc`) test, so a body
+that takes no damage still has the flag cleared; refuse on `m_takedamage == 0`; refuse on
+`CVDmg_t::EvadeCheck`; copy the whole `0x4c`-byte packet into a sub-packet (`REP MOVSD`, `0x13`
+dwords); write `m_LastHitGroup` (`+0x1594`) and `m_nForceBone` (`+0x660`, sign-extended from a
+`short`); call `CVDmg_t::Apply`; scale a LOCAL float by the hitgroup; test that float; spawn blood
+and bleed; flinch; and hand the sub-packet to `AddMultiDamage`.
+
+**The hitgroup multiplier is not a damage multiplier.** The jump table at `0x10266a24` is indexed by
+`hitgroup - 1` and selects one of five cvars — `DAT_109201ac` head, `DAT_1090fe74` chest,
+`DAT_109204f4` stomach, `DAT_1090fdc4` arms, `DAT_1092023c` legs, SDK's `sk_npc_head` family — whose
+value multiplies the `Apply` result **into a stack local that is never written back into either
+packet**. `HITGROUP_GEAR` (10) discards the `Apply` result outright (`FSTP ST0`), substitutes the
+flat `0.01` at `_DAT_10450aa4` and **rewrites `ptr->hitgroup` to 0**; hitgroup 0 and 8–9 take no
+scale at all. So the scale reaches exactly three decisions — the `>= 1.0` gate (`_DAT_10449280`, a
+double), the survived-headshot test, and `SpawnBlood`'s amount — and committed health damage is
+`CVDmg_t::Apply`'s own number. A reproduction that multiplies damage by a hitgroup factor invents a
+mechanic this fork moved into the descriptor.
+
+**`+0x5df0` is `m_fNoDamageDecal`.** It is raised on one arm only: `ptr->hitgroup == HITGROUP_HEAD`
+**and** `m_iHealth - damage > 0` — a head hit the victim SURVIVES — and that arm also skips the
+blood, the bleed and nothing else. A hit under `1.0`, or one carrying `DMG_SHOCK` (`0x100`, tested
+against the sub-packet's `m_bdmgTypes | m_bitsDamageType`), skips the same two and leaves the flag
+clear. `DamageFlinch` runs on every path past the two entry gates, including both of those, and it
+takes the ORIGINAL packet rather than the sub-packet.
+
+**Unrecovered:** the five hitgroup cvars' names and defaults. Their pointer cells live past `.data`'s
+raw size in the pinned image and no function in the corpus constructs them; retail's inlined read is
+`if (cvar->IsCommand()) 0.0f else cvar->m_flValue`, and an unconstructed cvar answers `0.0f`, which
+is what the port's seam answers.
+
+### The three `TraceAttack` prologues — `0x10356f60`, `0x103ccbf0`, `0x103e0430`
+
+`vtmb_slot 141` lists 74 classes on the Troika body and exactly three that replace it, and all three
+are prologues that fall into `0x10266780` afterwards.
+
+`CNPC_Bullseye` (`0x10356f60`): spawnflag `0x40000` restricts the hit to the entity that the
+`info[0xb]` → `+0x94` → `+0x29c` chain reports as its owner, returning outright otherwise; spawnflag
+`0x80000` **with `m_takedamage == 0`** calls slot 146 (`TraceBleed`) on the packet's own descriptor
+before falling through anyway.
+
+`CNPC_VWerewolf` (`0x103ccbf0`): `SetDamageType(info, 0)` and nothing else.
+
+`CNPC_VZombie` (`0x103e0430`): reads two cvar-backed ammo-type cells (`DAT_10940404`,
+`DAT_1094044c`) **unconditionally and first**, then raises `m_bShouldGib`'s adjacent byte
+(`&m_bShouldGib + 1`, `+0x66e1`) and forces the SECOND cvar's type when the hitgroup is 1; otherwise
+it clears that byte and forces the FIRST cvar's type only when the attacker's active weapon's
+capability mask intersects `0x18000` — the same melee-block capability the player's block resolver
+uses. The swap `iStack_4 = iStack_8` sits inside the capability test's own expression, which is what
+makes the head arm take the second cell and the melee arm the first.
+
+**Unrecovered:** both zombie cvars' names and defaults, for the same reason as the hitgroup five.
+
+### `CAISound::TraceBleed` — `0x10268ef0`
+
+779 bytes, and it is SDK 2013's `CBaseEntity::TraceBleed` with every constant read out of `.rdata`.
+`BloodColor()` (slot 145) answering `DONT_BLEED` (-1) or `BLOOD_COLOR_MECH` (`0x14`) refuses; the
+descriptor's **word 1** — its authored base damage, not the applied result — being exactly `0.0`
+refuses; and `m_bdmgTypes & 0xc7` being zero refuses. That mask is tested as a BYTE
+(`*(byte*)(param_1 + 0x10) & 199`), so `DMG_BUCKSHOT` (`0x04000000`) does not admit a bleed on its
+own. The noise/count table is `< 10` → `0.1` and one trace, `< 25` → `0.2` and two, else `0.3` and
+four (`_DAT_1044e664` = 10.0, `_DAT_10462994` = 25.0). Each trace flips the incoming direction by
+`_DAT_104492dc` = -1.0, jitters all three axes by an independent `RandomFloat(-noise, +noise)`, and
+traces from `ptr->endpos` to `endpos + dir * -172` (`_DAT_10499514`) with mask `0x400b` —
+`MASK_SOLID_BRUSHONLY` minus `CONTENTS_GRATE`, which is what keeps blood off a grate — painting
+`UTIL_BloodDecalTrace` on any fraction below 1.0.
+
+This fork adds one thing SDK 2013 does not have: a per-entity decal budget at `+0x208`, spent one
+unit per call and refusing outright at zero, gated on slot 158 answering false. **Unrecovered:** slot
+158's meaning; the port's seam takes the arm that spends nothing.
+
+### `CBaseEntity::DamageDecal` — `0x100b4ea0`
+
+63 bytes and the decompiler lost its tail. Off the listing: `m_nRenderMode` (`+0x16c`) equal to 4
+(`kRenderTransAlpha`) answers `-1`; any other non-zero render mode with `gameMaterial == 0x47`
+(`'G'`, glass) answers the fixed index `0x34`; otherwise it rewrites its own two stack arguments to
+`(0, 4)` and tail-jumps through `*DAT_1070b244` slot 2. That object is `IUniformRandomStream` — its
+slot 1 is the `RandomFloat` `TraceBleed` draws from — so the ordinary answer is a uniform decal index
+in `[0, 4]` and NEITHER argument reaches it.
+
+### `CAI_BaseNPC::OnTakeDamage_Dead` — `0x102664c0`
+
+282 bytes, read off the listing. It answers a flat `1` on every path. With a live `m_hAttacker`
+(`+0x28`) it overwrites the global death-throw impulse `_DAT_1070ba40/44/48` with the normalized
+vector from this body's world-space centre to the attacker's, the attacker's Z first lowered by
+`_DAT_1044e664` = 10.0 — a **file-static triple**, one per level rather than one per body, with seven
+writers and eight readers image-wide. Then `(m_bdmgTypes | m_bitsDamageType) & 0xe1`, tested as a
+BYTE, must be non-zero and `m_takedamage` must not be 1, and only then does it write
+`m_iHealth = (int)(m_iHealth - GetDmg() * 0.1)` (`_DAT_104493d0`, a double). **A corpse takes a tenth
+of the incoming damage into its engine-space health**, and `DMG_BULLET` is not in `0xe1`, so a
+gunshot into a body takes none of it.
+
+### The two species flinch gates — `0x10378cb0`, `0x103802a0`
+
+`CNPC_VGargoyle` and `CNPC_VHengeyokai` are the only two of slot 292's 254 classes that replace
+`CBaseCombatCharacter::DamageFlinch`, and their bodies are byte-identical: no flinch at all when
+`(dmg->m_bdmgTypes | info.m_bitsDamageType)` intersects `0x4000002` — `DMG_BULLET | DMG_BUCKSHOT`,
+which is exactly the firearm mask the Kindred lethal→bashing conversion uses — and none for a hit
+whose magnitude is EXACTLY zero (`GetDmg()` with a descriptor, `m_flDamage` without). Neither is a
+threshold: the mask test is first and the magnitude test is an exact inequality. **A gargoyle and a
+hengeyokai do not flinch from gunfire.**
+
+### `CAI_BaseNPCTroika::PlayerAttackerBlockedReaction` — `0x1029fdb0`
+
+94 bytes. It sets the ideal activity from `CBaseCombatCharacter::GetBlockReactionActivity`, then
+`m_flNextAttack` (`+0x1564`) `= curtime + lerp(0.5, 1.5, t)` where `t` is 1.0 only when a
+`melee_dice_roll_result` is present AND `thunk_FUN_10349830` answers exactly 2. `_DAT_1049a1b8` =
+0.5 and `_DAT_1049a1bc` = 1.5, read out of `.rdata`: an ordinary block re-arms the attacker in half a
+second and a dice-roll-type-2 block in one and a half. It returns a flat 1.
+
+### `CAI_BaseNPC::GiveAmmo` — `0x10334180`
+
+493 bytes, most of it the scope-trace prologue and the sound filter. The gates, in order and each
+answering 0: `count <= 0`; the game rules' `+0xd4` "is ammo enabled" predicate; `index < 0`;
+`index >= 0x20`; and finally `min(count, GetAmmoDef()->MaxCarry(index) - m_iAmmo[index]) < 1`. The
+cue `weapons/misc/ammo_pickup.wav` plays only past that clamp and only when the third argument
+(`byte [ESP+0x54]`, `bSuppressSound`) is clear — channel 3, volume 1.0, attenuation 0.8, flags 0,
+pitch 100, through a `CPASAttenuationFilter` at this body's ear position. Then
+`m_iAmmo[index] += add` and `return add`. A full pool is silent as well as fruitless.
+
+**Unrecovered:** the `CAmmoDef` index order, so nothing joins retail's 0..31 index to this runtime's
+authored ammo-type names; the port's `MaxCarry` seam answers 0, which closes the clamp.
+
+### `CAI_BaseNPCTroika::CanBeSetOnFire` — `0x102ad0c0`, and `0x1037c420`
+
+52 bytes: `HasCondition(0x30)` — `COND_ON_FIRE` — refuses, and otherwise the answer is
+`m_flNextBurnTime (+0x65bc) < curtime`, strictly. `CNPC_VGhoulCroucher` is the only class in the
+family tree that replaces it (`0x1037c420`, 143 bytes): it refuses outright while its authored
+`on_fire` keyfield `m_bSpawnBurning` (`+0x6665`) is set, and otherwise delegates to the Troika body
+unchanged.
+
+### The took-damage schedule arm — `0x102b8c40`
+
+101 bytes, an unnamed `AI_BaseNPCTroika.cpp` line-`0x5f8b` selector arm. Nothing happens unless
+`COND_LIGHT_DAMAGE` (`0x4c`) or `COND_HEAVY_DAMAGE` (`0x4d`) is set; then it clears
+`m_bCondTookDamage` (`+0x5b80`), copies `m_vecLastDamageAttackPos` (`+0x5b9c`) into
+`m_vSavePosition` (`+0x5dd0`), stamps the selector trace and answers schedule `0x8a`. The latch is
+spent HERE, not where the damage landed.
+
+### `IsLightDamage` / `IsHeavyDamage` — `0x10266630`, `0x10266660`
+
+Thirty-two bytes each and one comparison apiece: `damage > 0.0f` (`_DAT_104454c4`) and
+`damage > 20.0f` (`_DAT_1044eb0c`), both strict, neither reading its `bitsDamageType` argument. SDK
+2013's `CAI_BaseNPC::IsHeavyDamage` returns a flat false; **the 20.0 threshold is this fork's**, and
+it is what separates `SCHED_SMALL_FLINCH` from the heavier reactions.
 
 ## Faithful implementation seams
 

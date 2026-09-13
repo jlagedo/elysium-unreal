@@ -37,6 +37,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcLoadout.h"
+#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
 #include "Debug/ElysiumNpcDebugLogging.h"
@@ -113,6 +114,13 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 
 bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 {
+	// Story 29c-1, family Anim: `CNPC_VCamera::HandleAnimEvent` (`0x10368ec0`) is an EMPTY body —
+	// three bytes — and it fills slot 259 for `CNPC_VCamera` and `CNPC_VCameraSecurity`. A retail
+	// camera swallows every animation event, footsteps included, and this is that arm.
+	if (SwallowsAnimEvents())
+	{
+		return true;
+	}
 	if (ElysiumFootsteps::IsFootstepEvent(Event.Event))
 	{
 		// 2050/2051 -> `0x1026d460(this, 0)` "normal"; 2052/2053 -> mode 1 "heavy". The left/right in
@@ -363,7 +371,7 @@ void FElysiumNpc::OnKilled()
 	{
 		// The paired death already supplied its terminal pose. The existing corpse handoff
 		// consumes that pose now; a second generic death clip would overwrite the action.
-		Schedule.Clear();
+		ClearSchedule();
 		CompleteDeathHandoff();
 		ArmThinkNow(World ? World->NowSeconds() : 0.0);
 		return;
@@ -373,7 +381,7 @@ void FElysiumNpc::OnKilled()
 		// Unreachable in a correct build: `Start` falls back to `IDLE_STAND` and answers false only
 		// when that program itself is missing. The handoff still has to happen, and the dead think
 		// below is what runs it.
-		Schedule.Clear();
+		ClearSchedule();
 	}
 	// No clock reset: `Event_Killed` (`0x10265ad0`) is not a slot-614 site. A corpse is on no
 	// clock -- `ThinkDead` polls the death program at its own 0.1 s ahead of the cadence -- and
@@ -973,6 +981,14 @@ bool FElysiumNpc::RunAlternateAi(double Now)
 	{
 		return true;
 	}
+	// The recovered `switch (m_eAlternateAI)` this dispatcher ends in (`0x1028fd80` cases 1-4).
+	// Story 29c-1, family Conditions ported case 1, the door-opening transaction (`0x10290040`);
+	// cases 2 (`0x10290200`), 3 (`0x102902e0`) and 4 (`0x10290350`) are not this family's rows and
+	// are named here rather than folded into a default.
+	if (AlternateAi == 1)
+	{
+		return RunAlternateAiOpeningDoor(Now);
+	}
 	return false;
 }
 
@@ -1058,7 +1074,7 @@ FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
 		NextThink = static_cast<float>(Now + ElysiumNpcThink::DeadProgramPollSeconds);
 		return EDeadThink::Running;
 	}
-	Schedule.Clear();
+	ClearSchedule();
 	// The solid-body policy, re-asserted on EVERY terminal pass rather than once with the handoff.
 	// Anything that hands a corpse's body back un-freezes it and re-arms this think — the feed
 	// pair's release is the live one, and it runs `EndFeedVictimRole` on a victim the same
@@ -1440,6 +1456,24 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	{
 		return EElysiumScheduleId::None;
 	}
+	// Story 29c-1, family Schedule: the species half of slot 438. Five classes replace the WHOLE
+	// selector — `CNPC_VAndreiBlood`, `CNPC_VCamera`/`CNPC_VCameraSecurity`, `CNPC_VManBat`,
+	// `CNPC_VMingXiaoTentacle` and `CNPC_VPlaceholder` — so the species answer is asked ahead of
+	// everything the base selector does, the chosen law position included. Each answers a RAW
+	// retail schedule number; a number this runtime registers no program for falls through to the
+	// base branch with the miss tallied, which is the rule `TranslateSchedule` already applies to
+	// an unported id rather than installing some other program under a recovered number.
+	if (const int32 SpeciesRetailId = SpeciesSelectSchedule(); SpeciesRetailId != 0)
+	{
+		const EElysiumScheduleId Species = ScheduleFromRetailNumber(SpeciesRetailId);
+		if (Species != EElysiumScheduleId::None)
+		{
+			return Species;
+		}
+		ElysiumStub::Fired(TEXT("schedule"), TEXT("slot 438 species SelectSchedule"), DebugString(),
+			FString::Printf(TEXT("0x%x"), SpeciesRetailId),
+			TEXT("0002/29c-1: the species schedule is not registered"));
+	}
 	// The law branch of schedule selection.
 	// "Schedule branches, not condition gathering, call the two player incident consumers." This is
 	// the only place in the runtime that reaches them from an NPC.
@@ -1627,9 +1661,13 @@ void FElysiumNpc::PumpStateChange()
 	{
 		return;
 	}
+	const EElysiumNpcState Previous = LastStateChange;
 	bStateChangeSeen = true;
 	LastStateChange = Now;
-	ApplyStateWeaponVisibility(Now);
+	// Story 29c-1, family Conditions: the edge dispatches slot 463 WHOLE, not just the weapon half.
+	// `OnStateChange` is the species pre-step (of which `ApplyStateWeaponVisibility` is one shape)
+	// followed by `CAI_BaseNPCTroika::OnStateChange` (`0x102ae140`) and the base body under it.
+	OnStateChange(Previous, Now);
 }
 
 void FElysiumNpc::UpdateIdealState(double Now)
@@ -1644,6 +1682,24 @@ void FElysiumNpc::UpdateIdealState(double Now)
 		// A scripted owner or a dead body owns the state outright; the ideal-state pass does not
 		// compete with either.
 		return;
+	}
+
+	// Story 29c-1, family Conditions: the three SPECIES overrides of slot 461 are complete
+	// REPLACEMENTS — `CNPC_VCamera` (`0x10369060`), `CNPC_VMingXiao` (`0x103945a0`) and
+	// `CNPC_VMingXiaoTentacle` (`0x1039e310`) each write `m_IdealNPCState` and return without ever
+	// reaching `CAI_BaseNPCTroika::SelectIdealState`. No registered classname resolves to one of the
+	// three today, so this is the arm nothing takes; it sits ahead of the two-layer rule because that
+	// is where retail's vtable puts it.
+	{
+		EElysiumNpcState SpeciesIdeal = Current;
+		if (SelectIdealStateForSpecies(SpeciesIdeal))
+		{
+			if (SpeciesIdeal != Current)
+			{
+				Mind.RequestState(SpeciesIdeal, TEXT("SelectIdealState (species)"));
+			}
+			return;
+		}
 	}
 
 	ElysiumNpcCond::FIdealStateInput In;
@@ -1687,7 +1743,7 @@ void FElysiumNpc::UpdateIdealState(double Now)
 	// A state change reselects. The running program was chosen by the state that has just been left
 	// — an idle stance under an NPC that just acquired an enemy — so it ends here rather than
 	// finishing on behalf of a state that no longer holds.
-	Schedule.Clear();
+	ClearSchedule();
 	// The discarded program's movement claim goes with it. Releasing after `RequestState` is
 	// deliberate: the arbiter's own state refresh runs on the release, and it must see the state
 	// this pass decided rather than the one the program was chosen under.
@@ -1812,7 +1868,7 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 		FElysiumInterestingPlace* Spot = static_cast<FElysiumInterestingPlace*>(Candidate.Get());
 		const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
 		if (!Spot->IsAvailable() || FailedSpotIndices.Contains(Spot->Handle.Index)
-			|| !AcceptsAmbientGroup(Spot->GroupId)
+			|| !AcceptsAmbientGroup(Spot->GroupMask)
 			|| !TypeRow || TypeRow->Activities.IsEmpty()
 			|| !TypeRow->Accepts(Def->Classname, StatTemplate))
 		{
@@ -1844,19 +1900,62 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 	return nullptr;
 }
 
-bool FElysiumNpc::AcceptsAmbientGroup(int32 GroupId)
+uint32 FElysiumNpc::ParseGroupMask(const FString& Groups, bool bEmptyIsEveryGroup)
 {
-	if (!bAmbientGroupsParsed)
+	// `0x102989e0` (hint groups) and `0x10298910` (interesting-place groups), which are the same
+	// body but for the empty answer. Retail copies the string into a 256-byte stack buffer and
+	// walks it: skip runs of `' '`, `atoi` the token, and if `id - 1` is in `[0, 0x20)` set that
+	// bit. A token that is not a number is `atoi`'s 0, so it sets no bit; an id past 32 is
+	// dropped in silence. The 256-byte copy is unbounded in retail and a longer key overruns it;
+	// the port does not reproduce the overrun, and no map authors one.
+	if (Groups.IsEmpty())
 	{
-		bAmbientGroupsParsed = true;
-		TArray<FString> Tokens;
-		InterestingPlaceGroups.ParseIntoArrayWS(Tokens);
-		for (const FString& Token : Tokens)
+		return bEmptyIsEveryGroup ? 0xffffffffu : 0u;
+	}
+	uint32 Mask = 0;
+	TArray<FString> Tokens;
+	// Retail splits on `' '` only, so a tab is part of the token and `atoi` stops at it — which
+	// lands on the same bit. Whitespace splitting is the same answer with one fewer special case.
+	Groups.ParseIntoArrayWS(Tokens);
+	for (const FString& Token : Tokens)
+	{
+		const int32 Bit = FCString::Atoi(*Token) - 1;
+		if (Bit >= 0 && Bit < 32)
 		{
-			AmbientGroups.Add(FCString::Atoi(*Token));
+			Mask |= 1u << static_cast<uint32>(Bit);
 		}
 	}
-	return AmbientGroups.IsEmpty() || AmbientGroups.Contains(GroupId);
+	return Mask;
+}
+
+void FElysiumNpc::SetHintGroups(const FString& Groups)
+{
+	ScheduleHost.HintGroups = Groups;
+	ScheduleHost.HintGroupMask = ParseGroupMask(Groups, /*bEmptyIsEveryGroup=*/true);
+}
+
+void FElysiumNpc::SetInterestingPlaceGroups(const FString& Groups)
+{
+	InterestingPlaceGroups = Groups;
+	InterestingPlaceGroupMask = ParseGroupMask(Groups, /*bEmptyIsEveryGroup=*/false);
+	// Retail's writer is `0x10298910`, and `0x102dad60` is the reader: see `AcceptsAmbientGroup`.
+}
+
+bool FElysiumNpc::AcceptsAmbientGroup(int32 PlaceGroupMask) const
+{
+	// `0x102dad60`, the group half of the eligibility test, verbatim:
+	//
+	//     if ((*(uint *)(place + 0x574) & npc[0x18b7]) != 0) { ... }
+	//
+	// `+0x0574` is the place's own `m_iGroupID` AFTER `CAI_InterestingPlace::Spawn` (`0x102d9c20`)
+	// folded it — `1 << (id - 1)` for an id in 1..32, the literal `1` otherwise — and `npc[0x18b7]`
+	// is `m_iInterestingPlaceGroups +0x62dc`, which `0x10298910` parsed with an empty or `"0"` list
+	// leaving it ZERO. So an NPC that authors nothing, or authors `"0"` as 1005 shipped NPCs do,
+	// matches NO place, and a place whose fold is zero is matched by nobody.
+	//
+	// This replaces the port's own "an empty list admits every group" rule, which 29c left standing
+	// as a named divergence. It is closed: the walked retail rule is what runs.
+	return (static_cast<uint32>(PlaceGroupMask) & InterestingPlaceGroupMask) != 0;
 }
 
 bool FElysiumNpc::PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choices, bool bLoop,
@@ -2260,6 +2359,15 @@ float FElysiumNpc::RandomSeconds(float Max)
 	return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.1f, Max);
 }
 
+void FElysiumNpc::ClearSchedule()
+{
+	// `CAI_BaseNPC::ClearSchedule` (`0x10280d30`), reached by every site that drops a running
+	// program. The six schedule words, `PRESERVE_PATH` and the slot-435 dispatch are
+	// `ElysiumSchedule::ClearSchedule`'s; what this adds is the name, so no site clears the
+	// schedule record directly and skips the release the dispatch performs.
+	ElysiumSchedule::ClearSchedule(Schedule, *this);
+}
+
 bool FElysiumNpc::TakeClearScheduleRequest()
 {
 	const bool bRequested = bClearScheduleRequested;
@@ -2496,7 +2604,7 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 		// The running program was chosen by an NPC that did not have this enemy. It ends here rather
 		// than finishing on behalf of a decision the director has just overruled.
-		Schedule.Clear();
+		ClearSchedule();
 		ReleaseScheduleBody(TEXT("aiscripted_schedule assigned an enemy"));
 		RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode 3: enemy := %s"),
 			World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
@@ -2520,7 +2628,7 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 	}
 	// An ordinary combat claim gives way to the director. Releasing before the new claim keeps the
 	// arbiter's parked-owner slot holding the PATROL route rather than the schedule that displaced it.
-	Schedule.Clear();
+	ClearSchedule();
 	ReleaseScheduleBody(TEXT("aiscripted_schedule took the body"));
 
 	ScriptedScheduleOrder = Order;
@@ -2559,7 +2667,7 @@ void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
 	{
 		// The program and the order are one thing. A scripted program left running with no order
 		// behind it would fail its next leg by name for a reason no reader could act on.
-		Schedule.Clear();
+		ClearSchedule();
 	}
 	ReleaseScriptedScheduleBody(Reason);
 }
@@ -2825,8 +2933,24 @@ void FElysiumNpc::DisconnectFromSquad()
 
 void FElysiumNpc::ReconnectToSquad()
 {
-	// 0x1026d0c0. At zero R17 rejoins the squad's shared CAI_Memory.
+	// 0x1026d0c0 (reached through the jump thunk 0x10009601), read whole in story 29c-1:
+	//
+	//   if (--m_iSquadDisconnected < 1) {
+	//       if (m_pSquad) AddSelfToSquadMemory(m_pSquad, this);   // 0x10316720
+	//       m_iSquadDisconnected = 0;
+	//   }
+	//   m_bfAINPCFlags2 &= 0x7f7fffff;
+	//
+	// The clamp below is retail's `< 1 -> 0` arm; the mask clears D_DISCONNECT_SQUAD (0x00800000)
+	// and bit 31, which `docs/vtmb/npc-ai/schedule-kernel.md` records as the flag-name resolver's
+	// word-two routing marker and not a flag, so the one named bit is the whole observable clear.
+	const bool bReachedZero = ScheduleHost.SquadDisconnected - 1 < 1;
 	ScheduleHost.SquadDisconnected = FMath::Max(0, ScheduleHost.SquadDisconnected - 1);
+	if (bReachedZero)
+	{
+		// The squad seam (`ElysiumNpcKernelSquad.cpp`): no `CAI_Squad`, so nothing to rejoin.
+		AddSelfToSquadMemory(const_cast<void*>(ConnectedSquad()));
+	}
 	NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
 }
 
@@ -3188,6 +3312,24 @@ void FElysiumNpc::OnScheduleChange()
 
 void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 {
+	// Story 29c-1, family Schedule: the species half of slot 453, and the one class that does NOT
+	// compose with the Troika line. `CNPC_VGuard1` (`0x1037cdf0`) opens by calling the EMPTY base
+	// `CAI_BaseNPC::BuildScheduleTestBits` (`0x10280fb0`) rather than `0x102ad140`, so its state
+	// ladder REPLACES the overlay below instead of adding to it; the other three overrides
+	// (`0x10387520`, `0x103a2980`, `0x103c16f0`) call `0x102ad140` first and add, which is the tail
+	// call at the bottom of this body.
+	const FElysiumNpcClassSlot* SpeciesSlot = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 453);
+	const bool bSpeciesReplacesTroikaOverlay = SpeciesSlot != nullptr
+		&& FCString::Strcmp(SpeciesSlot->Address, TEXT("0x1037cdf0")) == 0;
+	if (bSpeciesReplacesTroikaOverlay)
+	{
+		SpeciesBuildScheduleTestBits(InOutMask);
+		// `CacheInterruptConditions` (`0x1026a0f0`) adds this one unconditionally after the virtual,
+		// whichever body filled it.
+		InOutMask.Set(EElysiumNpcCond::NpcFreeze);
+		return;
+	}
+
 	// `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), transcribed. The base
 	// (`0x10280fb0`) is empty.
 	if (!NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE) && !NpcFlags.Has(EElysiumNpcFlag::IN_FLEE_SCHED))
@@ -3224,6 +3366,9 @@ void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 	{
 		InOutMask.Clear(EElysiumNpcCond::SquadSeeEnemy);
 	}
+	// The three species overrides that COMPOSE with the body above, in the place their own bodies
+	// put them: after the `0x102ad140` call they open with (story 29c-1, family Schedule).
+	SpeciesBuildScheduleTestBits(InOutMask);
 	// `CacheInterruptConditions` (`0x1026a0f0`) adds this one unconditionally after the virtual.
 	InOutMask.Set(EElysiumNpcCond::NpcFreeze);
 }
@@ -3667,6 +3812,11 @@ void FElysiumNpc::Spawn()
 
 void FElysiumNpc::Activate()
 {
+	// `CAI_BaseNPCTroika::Activate` (`0x1028e310`), slot 113: after `CBaseEntity::Activate`, an NPC
+	// whose `Classify()` is non-zero applies `m_sDefaultDisposition` through `SetDisposition(name, 1)`.
+	// FIRST, as retail does, so everything below sees the stance the disposition selected. Story
+	// 29c-1, family Lifecycle; the body is `ApplyDefaultDispositionOnActivate`.
+	ApplyDefaultDispositionOnActivate();
 	SeedPlayerRelationship();
 	// `InitPerceptionDistances` runs once, on authored data that is already applied, and
 	// the hearing cursor starts at the live head so an NPC never hears the map's own load.
@@ -3772,7 +3922,7 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
 	EndScriptedSchedule(Reason);
 	ReleaseScheduleBody(Reason);
-	Schedule.Clear();
+	ClearSchedule();
 	CombatSelector.Reset();
 	Mind.Invalidate(Reason, bDeadMind);
 	PatrolOwner.Reset();
@@ -4046,6 +4196,11 @@ void FElysiumNpc::SerializeScheduleBlock(FElysiumSaveArchive& Ar)
 		Ar << SavedSchedule;
 		if (Ar.IsLoading())
 		{
+			// The one site that resets the schedule record without being `ClearSchedule`
+			// (`0x10280d30`), and deliberately: nothing is running here — the record is being
+			// replaced by the payload's. Dispatching slot 435 would release the NPC flag word the
+			// line above has just restored, and a program that does not restart below would come
+			// back conversable and un-oblivious.
 			Schedule.Clear();
 			const EElysiumScheduleId Restored = static_cast<EElysiumScheduleId>(SavedSchedule);
 			if (ElysiumAiScriptedSchedule::IsScriptedProgram(Restored))
@@ -4240,8 +4395,9 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	FElysiumCombatCharacter::GetDebugState(Out);
 	Out.Emplace(TEXT("UseInteresting"), bUseInteresting ? TEXT("yes") : TEXT("no"));
+	// An empty list is retail's ZERO mask, which matches no place at all — not "every group".
 	Out.Emplace(TEXT("Interesting groups"), InterestingPlaceGroups.IsEmpty()
-		? TEXT("(all)") : InterestingPlaceGroups);
+		? TEXT("(none)") : InterestingPlaceGroups);
 	Out.Emplace(TEXT("In dialog"), Dialogue.bInDialog
 		? FString::Printf(TEXT("YES (%s raw=%d decoded=%d)"),
 			ElysiumDialogueCamera::LexToString(Dialogue.DialogOpener), Dialogue.DialogFlags,

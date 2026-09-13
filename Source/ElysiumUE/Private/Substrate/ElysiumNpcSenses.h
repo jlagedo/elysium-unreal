@@ -232,6 +232,33 @@ struct FElysiumNpcMemory
 	// pass and answers `LOST_UNKNOWN` once `Now` reaches it.
 	double SeeUnknownGraceUntil = -1.0;
 
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	int32 EnemyOccludedCheck = 0;  // +0x5b98 m_eEnemyOccludedCheck (datamap)
+	// +0x5b9c m_vecLastDamageAttackPos (datamap)
+	FVector LastDamageAttackPosition = FVector::ZeroVector;
+	// +0x5bc5 m_bEnemyWentOccluded (datamap) — the occlusion edge, distinct from bEnemyOccluded
+	// which is the ten-failure debounce
+	bool bEnemyWentOccluded = false;
+	// +0x5bc8 m_vecEnemyWentOccluded (datamap)
+	FVector EnemyWentOccludedPosition = FVector::ZeroVector;
+	// +0x5ce8 m_flSoundWaitTime (datamap) — an absolute curtime deadline, beside the other two
+	// sound clocks
+	double SoundWaitTime = 0.0;
+	FElysiumEntityHandle EnemyOccluder;  // +0x5d90 m_hEnemyOccluder (sdk-order)
+	FElysiumGameSoundEvent InvestigateSound;  // +0x60dc m_InvestigateSound (datamap)
+	// +0x6288 m_flNextCheckEnterPVSTime (datamap) — an absolute curtime deadline, carried as
+	// double
+	double NextCheckEnterPvsTime = 0.0;
+	// +0x641c m_flNextFleeSoundTime (datamap) — FIELD_TIME; the third sound clock beside the two
+	// already carried
+	double NextFleeSoundTime = 0.0;
+
 	void Reset();
 	void Serialize(FElysiumSaveArchive& Ar);
 	void Rebase(const FElysiumEntityWorld& World);
@@ -254,6 +281,57 @@ public:
 	float ViewConeBodyOffsetCm = 0.f;
 	FElysiumNpcConditions HeardConditions;
 	bool bSeeUnknownThisPass = false;
+
+	// `CAI_Senses::m_bCanPerformSenses`, `senses+0x80` — the gate `CAI_Senses::PerformSensing`
+	// (`0x10310710`) puts in front of `Look(m_LookDist)` and `Listen()`, and the ONLY content of
+	// that body besides the VProf scope (`docs/vtmb/npc-ai/senses.md` -> "The sense pass for a hated
+	// player, walked"). Story 29c-1, family Lifecycle.
+	//
+	// An OFFSET ON `CAI_Senses`, not on the NPC, which is why it is not in the NPC shape map.
+	// It ships TRUE — the sense pass runs for every NPC — and nothing in this runtime writes it yet:
+	// its retail writer is `SetCanPerformSenses`, which no ported producer calls. It is a real gate
+	// with a real default, not a seam that answers nothing.
+	bool bCanPerformSenses = true;
+
+	// `CAI_Senses::m_LookDist`, `senses+0x10` — the radius `PerformSensing` hands `Look()`, and the
+	// SECOND vision distance in this object: `0x1029c970` picks between it and the resolved
+	// `m_flVisionDistance` (`+0x63b8`, `Perception.VisionDistanceCm`) per think. Its one writer is
+	// `SetDistLook` (`0x1026a2a0`, `FElysiumNpc::SetDistLook`); story 29c-1, family Senses.
+	//
+	// An OFFSET ON `CAI_Senses`, like `bCanPerformSenses` above, which is why neither is in the NPC
+	// shape map. CENTIMETRES here; Source units in retail.
+	float LookDistCm = 0.f;
+
+	// The sounds THIS Listen accepted — `CAI_Senses`'s own `CSound` list, which is what
+	// `CAI_Senses::GetClosestSound` (`0x103105d0`) walks and what `CAI_BaseNPCTroika::OnListened`
+	// (`0x102b39e0`) snapshots out of. Session state, rebuilt every `TickHearing` and never saved:
+	// retail's list is rebuilt by `Listen()` on the same cadence. Story 29c-1, family Senses.
+	TArray<FElysiumGameSoundEvent> HeardThisPass;
+
+	// `CAI_Senses::GetClosestSound(senses, typeMask)` (`0x103105d0`), verbatim: walk this Listen's
+	// accepted list, take the first record of that type whose owner IS this NPC's `GetEnemy()`
+	// (slot 167) outright, and otherwise the one nearest the owner's `EarPosition()` (slot 196,
+	// vtable `+0x310`) by SQUARED distance. Null when no record of that type was heard.
+	const FElysiumGameSoundEvent* ClosestSound(const FElysiumNpc& Npc, uint32 TypeMask) const;
+
+	// `0x1029c970` — the effective look distance, which is NOT `Perception.VisionDistanceCm` on
+	// every pass. Story 29c-1, family Senses; walked at `docs/vtmb/npc-ai/senses.md`.
+	float EffectiveVisionDistanceCm(const FElysiumNpc& Npc, double Now) const;
+
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	bool bKeepSound = false;  // +0x5cd8 m_bKeepSound (datamap)
+	// +0x63c4 m_flStealthVisionScalar (datamap) — this body's own stealth surface, which an
+	// observer's cone test multiplies in
+	float StealthVisionScalar = 0.f;
+	// +0x63c8 m_flStealthVisionCone (datamap) — the target cone scalar of the same surface
+	float StealthVisionCone = 0.f;
+	float StealthHearingDist = 0.f;  // +0x63cc m_flStealthHearingDist (datamap)
 
 	// Resolve `vision`/`hearing`/`npc_perception` into the effective pair. Called from Activate,
 	// and idempotent: the resolution is authored data, not runtime state.

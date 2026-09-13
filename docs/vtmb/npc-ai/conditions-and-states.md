@@ -730,3 +730,644 @@ supports an **inverted `!COND_*` form** (mask at `CAI_Schedule+0x00`, evaluated 
 no shipped schedule uses it), and the mask an NPC actually runs against is **not** the authored one
 — `CacheInterruptConditions` copies the schedule's mask onto the NPC each think and then lets
 `BuildScheduleTestBits` (`CAI_BaseNPCTroika::0x102ad140`) add and remove conditions per NPC. `[VtMB]`
+
+## The sound gate — `0x1027a5c0`, `0x102b4c10`, `0x1027a640`, `0x102b4c40`, `0x103b9f10`
+
+"May I make a sound now" is slot 486 `FOkToMakeSound`, and "I just did" is slot 487
+`JustMadeSound`, which arms the clock the first one reads. Each has a base body and a Troika one,
+and the **Troika bodies are replacements, not extensions** — neither calls up.
+
+`CAI_BaseNPC::FOkToMakeSound` (`0x1027a5c0`, 88 bytes) is three refusals in order. First
+`curtime <= m_flSoundWaitTime` (`+0x5ce8`): the comparison carries the equal bit (`FNSTSW` masked
+`0x4100` at `1027a5d8`), so a sound at exactly the deadline is refused. Then, when the NPC is
+squad-connected (`m_iSquadDisconnected +0x5bb0 < 1` and `m_pSquad +0x5da4` non-null), the same test
+against the **squad's own copy** of the clock at `squad+0x60` — either clock can gag this NPC. Last
+`SF_NPC_GAG` (`m_spawnflags & 2`) with `m_NPCState != NPC_STATE_COMBAT`: a gagged NPC is silent
+outside combat and vocal inside it. Otherwise true.
+
+`CAI_BaseNPCTroika::FOkToMakeSound` (`0x102b4c10`, 24 bytes) throws all three away:
+`return !IsInDialog()`. Every `npc_V*` class in the family descends from `CAI_BaseNPCTroika`, so on
+a shipped NPC the sound-wait clock and `SF_NPC_GAG` **do not gate vocalisation at all** — the only
+reason a Troika body stays quiet is that it is talking (`IsInDialog` `0x102c1170`: `m_bIsTalking`
+`+0x64c0`, a queued dialogue string `+0x64ec`, the dialogue partner `+0xfe8`, the bound speech scene
+`+0x6554`).
+
+`JustMadeSound` writes `m_flSoundWaitTime = curtime + RandomFloat(min, max)` and, when the squad is
+connected, a **second independent draw** into `squad+0x60`. The two clocks therefore drift apart;
+retail does not reuse the first number. The three bodies differ only in the window and in whether
+the squad half exists: base `0x1027a640` draws `(1.5, 2.0)`, Troika `0x102b4c40` draws
+`(0.25, 0.75)`, and `CNPC_VTzimisce::vfunc487` (`0x103b9f10`, 41 bytes — the only species override
+of the slot) draws `(0.5, 0.75)` and writes **no squad copy at all**.
+
+**Unrecovered:** nothing. **Not built:** `m_pSquad`. This substrate has no squad object, so the
+squad arm of all five bodies is asked and never answers; the port's `FElysiumNpc::ConnectedSquad()`
+is where it lands the day a squad layer exists.
+
+## The idle-sound gate — `0x1027a420`, `0x10294040`
+
+Slot 509 `ShouldPlayIdleSound` is what `GatherConditions` asks before it dispatches an idle
+vocalisation. `CAI_BaseNPCTroika` (`0x10294040`, 24 bytes) is the dialogue gate and a delegation:
+`IsInDialog() ? false : CAI_BaseNPC::ShouldPlayIdleSound()`.
+
+`CAI_BaseNPC::ShouldPlayIdleSound` (`0x1027a420`, 201 bytes) has to be read off the listing — the
+decompiled C hides the order of the last two arms. Five refusals: `m_NPCState` not in
+{ `NPC_STATE_IDLE` 1, `NPC_STATE_ALERT` 3 }; `SF_NPC_GAG`; a clear `m_bIsBCCTargetable`; a LIVE
+`m_hDialogPartner` (`+0xfe8`); `IsBusyWithDiscipline()`. Then a weight, and this is the arm the
+slot's one-line summary misses:
+
+* the weight is `999`, **unless** a schedule is installed (`m_pSchedule +0x5c38`) and slot 447
+  `GetLocalScheduleId(m_pSchedule->id)` answers `0x12f` `SCHED_TROIKA_COMFORT`, in which case it is
+  `0x14` (20) and the float-sound arm below is **skipped entirely**;
+* otherwise the body asks slot 510 `ShouldPlayFloatSound()` (vtable `+0x7f8`) FIRST, and when that
+  says yes it plays slot 507 `FloatSound()` (`+0x7ec`) and **returns false**. The float sound is
+  played *instead of* an idle sound, never beside it;
+* only then `RandomInt(0, weight) == 0`.
+
+So a comforting NPC vocalises roughly fifty times as often as an ordinary one and never floats while
+it comforts — the two facts the `0x12f` special case buys.
+
+**Unrecovered:** nothing in the body. **Not built:** `m_bIsBCCTargetable` (`+0x7ec` on
+`CBaseCombatCharacter`) has no port member and its arm is not tested; slot 447 is a declared stub;
+and no registered program in the port is `0x12f` yet (story 10i), so the comfort weight is
+unreachable.
+
+## The float-sound gate — `0x1027a530`, `0x10294070`
+
+Slot 510 `ShouldPlayFloatSound` decides whether an idle body plays the "float" ambience instead of
+speaking. The Troika body (`0x10294070`, 410 bytes) is eight gates and a distance, in the listing's
+order:
+
+1. `IsInDialog()` (`10294075`);
+2. a **live grapple** — `+0x1538` resolves through the handle table AND `+0x153c != -1`
+   (`10294082`), the same pair the move solver reads as "a live grapple partner";
+3. `IsUnconscious()` — `m_iMiscFlags & 1` (`102940be`);
+4. `m_bfAINPCFlags & 0x20000`, the `SLEEPING` bit (`102940cb`);
+5. `m_IdealNPCState != NPC_STATE_IDLE(1)` (`102940db`);
+6. `m_NPCState != NPC_STATE_IDLE(1)` (`102940ee`);
+7. `m_hClosestPlayer` (`+0x628c`) not live (`102940fa`);
+8. that **player's own** `+0xfe8` dialogue partner being live (`10294161`) — an NPC does not float
+   while the player nearest it is in a conversation.
+
+Then the threshold: a magic-static lazy load (guard `DAT_10924d1c`) of the `Float_Sound_Info` rule
+table into `DAT_10924290`, whose **row 0** — `FloatSoundDistance`, authored `50.0` Source units —
+is cached in `_DAT_1092483c`, and `m_flPlayerDist (+0x6264) <= threshold` with the equal bit
+carried (`AND 0x4100` at `102941f3`). Only then the tail call into the base body.
+
+Note gates 5 and 6: **both** the ideal and the current state must be IDLE. `0x1027e660`'s name
+table orders retail's enum None(0) Idle(1) Combat(2) Alert(3), so the `CMP …,1` pair is idle and not
+alert.
+
+`CAI_BaseNPC::ShouldPlayFloatSound` (`0x1027a530`, 109 bytes) is the roll itself:
+`m_iFloatSoundFrequency` (`+0x10e8`, keyfield `floatfreq`) equal to `0` refuses, equal to `8`
+refuses — two **separate** equalities, so 8 is a hole in the middle of the range rather than a
+ceiling and 7 and 9 both roll — then `engine->Time() < m_flNextFloatSoundTime` (`+0x10ec`) refuses,
+and finally `RandomInt(0, m_iFloatSoundFrequency) == 0`, the authored "plays 1 time in X".
+
+**Unrecovered:** nothing. **Not built:** `m_flNextFloatSoundTime` has one writer, slot 507
+`FloatSound` (`0x10294f40`, layer 14), so until that body lands nothing re-arms the window and the
+third refusal never fires.
+
+## The condition clears — `0x1026dc80`, `0x1026e5c0`, `0x1026d7f0`, `0x101a89a0` (2026-09-13)
+
+Four slot bodies, all of them fixed lists rather than rules.
+
+**`ClearAttackConditions` (`0x1026dc80`, slot 560)** is eleven `ClearCondition` calls and nothing
+else: `CAN_RANGE_ATTACK1` `0x4f`, `CAN_RANGE_ATTACK2` `0x50`, `CAN_MELEE_ATTACK1` `0x51`,
+`CAN_MELEE_ATTACK2` `0x52`, `EXTENDED_BLOCKED_BY_FRIEND` `0x2e`, `WAITING_ATTACK_TIME` `0x2f`,
+`WEAPON_HAS_LOS` `0x62`, `WEAPON_BLOCKED_BY_FRIEND` `0x63`, `WEAPON_PLAYER_IN_SPREAD` `0x64`,
+`WEAPON_PLAYER_NEAR_TARGET` `0x65`, `WEAPON_SIGHT_OCCLUDED` `0x66`. Nothing about it depends on the
+weapon, the state or the capability word; `TOO_CLOSE_TO_ATTACK`, `TOO_FAR_TO_ATTACK` and
+`NOT_FACING_ATTACK` are deliberately NOT in the list and survive the clear.
+
+**`ClearSenseConditions` (`0x1026e5c0`, slot 477)** is `ClearConditions(0x105c97dc, 0xe)`. The table
+was read out of retail's `.rdata` and is fourteen dwords:
+`43 45 46 44 5b 5a 6a 6d 6e 6f 6b 6c 71 5e` — `SEE_HATE`, `SEE_DISLIKE`, `SEE_ENEMY`, `SEE_FEAR`,
+`SEE_NEMESIS`, `SEE_PLAYER`, `HEAR_DANGER`, `HEAR_COMBAT`, `HEAR_WORLD`, `HEAR_PLAYER`,
+`HEAR_THUMPER`, `HEAR_BUGBAIT`, `HEAR_PHYSICS_DANGER`, `SMELL`. It is the SEE family table
+(`0x105c979c`, 6) plus eight of the ten HEAR entries; `HEAR_BULLET_IMPACT` `0x70` and `HEAR_FLINCH`
+`0x72` are the two the HEAR sweep owns that a sense clear does **not** take away.
+
+**`RemoveIgnoredConditions` (`0x1026d7f0`, slot 459)**, read off the listing because the decompiler
+drops its jump table, is a guard and a dispatch: while `m_NPCState` is 4 (SCRIPT) **and** `m_hCine`
+(`+0x5d74`) still resolves through the entity table, it calls THAT entity's own slot 459. Outside
+state 4, and with a dead cine handle, it writes nothing at all.
+
+**`CCineAISchedule::RemoveIgnoredConditions` (`0x101a89a0`)** is the body the dispatch reaches. It
+first refuses when `0x101a8930` says the scene is already in this state, then walks `m_hTargetEnt`
+through `+0x94` to the scene's NPC and clears fourteen conditions on **that** NPC, in this order:
+`LIGHT_DAMAGE` `0x4c`, `HEAVY_DAMAGE` `0x4d`, `REPEATED_DAMAGE` `0x4e`, then the
+`m_bCondTookDamage` byte at `+0x5b80`, then `INVESTIGATE_LEVEL` `0x1e`, `CRIMINAL_FLEE_LEVEL` `0x1f`,
+`SUPERNATURAL_FLEE_LEVEL` `0x21`, `HEAR_FLINCH` `0x72`, `CRIMINAL_ATTACK_LEVEL` `0x20`,
+`SUPERNATURAL_ATTACK_LEVEL` `0x22`, `INVESTIGATE_SOUND` `0x25`, `INVESTIGATE_SIGHT` `0x26`,
+`COMFORT` `0x27`, `BEING_ATTACKED` `0x0a`. The order is not sorted and the damage byte sits in the
+middle of it.
+
+**Unrecovered:** nothing in the four bodies. **Not built:** the cine chain. This substrate carries
+`FElysiumEntity::ScriptOwner` but no scripted-scene object with a target entity, and `0x101a8930`
+has no counterpart, so slot 459 reaches its guard and stops.
+
+## The two ranged attack bands — `0x1026d890`, `0x1026d920` (2026-09-13)
+
+Slots 553 and 554 take `(flDot, flDist)` and **return** a condition number; they set nothing.
+`GatherAttackConditions` (`0x1026dd10`, slot 561) is what calls `SetCondition` on the answer, after
+routing to the weapon's own `+0x5b4` / `+0x5bc` when one is held. Every distance comparison is
+strict; the dot comparison carries the equal bit (`TEST AH,0x5 / JNP`).
+
+`RangeAttack1Conditions` (`0x1026d890`): under 100 gives `TOO_CLOSE_FOR_RANGED` `0x08`; under 200
+gives `TOO_CLOSE_TO_ATTACK` `0x5f`; over 1024 gives `TOO_FAR_TO_ATTACK` `0x60`; else `flDot >= 0.5`
+gives `CAN_RANGE_ATTACK1` `0x4f`, otherwise `NOT_FACING_ATTACK` `0x61`.
+
+`RangeAttack2Conditions` (`0x1026d920`) is the same shape with its own numbers and **one fewer
+band** — there is no close-to-attack rung: under 64 gives `0x08`; over 512 gives `0x60`; else
+`flDot >= 0.5` gives `CAN_RANGE_ATTACK2` `0x50`, otherwise `0x61`.
+
+The constants were read out of retail `vampire.dll`'s `.rdata` (image base `0x10000000`):
+`_DAT_10450564` = `100.0f`, `_DAT_104492b8` = `200.0f`, `_DAT_1045d650` = `1024.0f`,
+`_DAT_10451acc` = `64.0f`, `_DAT_10483aac` = `512.0f`, and `_DAT_10449270` = **`0.5` as a double**
+(`FCOMP double ptr`), not the float the overlapping symbol at that address reads as.
+
+`CNPC_VBatSwarm` (`0x103675e0` / `0x10367610`) and `CNPC_VSheriffSwarm` (`0x103b2590` /
+`0x103b25c0`) are the only overrides of either slot and all four are unmodified forwards, so the
+base answer is every class's answer. **Unrecovered:** nothing.
+
+## `FCanCheckAttacks` — `0x10270840`, `0x102953a0` (2026-09-13)
+
+Slot 564's base body (`0x10270840`) is Source's own, verbatim: `GetNavType()` neither `NAV_CLIMB`
+(3) nor `NAV_JUMP` (1), `COND_SEE_ENEMY` `0x46` standing and `COND_ENEMY_TOO_FAR` `0x55` clear. The
+two nav refusals come first, so a climbing or jumping body never evaluates its conditions.
+
+The Troika body (`0x102953a0`) that every `npc_V*` classname actually reaches puts one suppression
+in front of it: when `CapabilitiesGet()` carries `bits_CAP_WEAPON_MELEE_ATTACK1` **`0x8000`** — the
+listing tests `AH`'s sign bit, which is EAX bit 15, not bit 31 — and `GetActiveWeapon()` is non-null
+and `m_bInMelee` (`+0x6078`) is clear, it returns false outright. Otherwise it tail-calls the base.
+
+**Unrecovered:** nothing. **Not built:** `GetNavType`. The nav type lives on `CAI_Navigator`
+(`+0x5d34` then `+0x18`) and this substrate's motor seam carries no such word, so the port answers
+`NAV_GROUND` — the value that does not suppress — and the two refusals are unreachable.
+
+## `OnStateChange`, slot 463 — `0x102ae140`, `0x1026e3e0`, `0x10260630`, `0x10368ea0`, `0x103ba2c0` (2026-09-13)
+
+Slot 463 is called on the state EDGE with `(old, new)`. The chain is species body, Troika body, base
+body, and three of the four species shapes chain while one does not.
+
+**`CAI_BaseNPCTroika::OnStateChange` (`0x102ae140`)** is two halves, and the split is the point: an
+entry `goto` skips the first half whenever `old == new`.
+
+The CHANGED half: slot 610 `0x102adfe0` (the default-expression selector) with the new state; then
+`0x102ae310`, the Troika-line weapon show/hide; then a switch on the new state —
+
+* `2` COMBAT and `3` ALERT fall through to the tail write;
+* `7` DEAD releases `m_sppPatrolPath` (`+0x6590`) through `0x1029f5d0` and **skips** the tail write;
+* `8` FLEE fires `m_OnStateFleeing` with `GetEnemy()` as activator, substituting `this` when there
+  is no enemy — the output is never skipped;
+* `0xb` HUNT sets `m_flHuntExpireTimer = curtime + RandomFloat(10, 20)`;
+* `0xe` (the criminal window) sets `m_flCriminalIgnoreTimer` (`+0x6398`) to `curtime + 2.0` and
+  **falls through** to the tail write;
+* every other state skips the tail write.
+
+The tail write is `m_bReturnToInitialPos = 1` (`+0x6494`). Then, still inside the changed half,
+`m_afMemory &= 0x07ffffff` (the top FIVE bits go) and, unless the nav type is `NAV_CLIMB` or
+`NAV_JUMP`, `m_bfAINPCFlags &= ~PRESERVE_PATH` (`0x8`).
+
+The UNCONDITIONAL half runs on every call, including a no-op transition: clear `MADE_HUNT_PATH`
+(`0x1000`), release `m_sppPatrolPathHunt` (`+0x6594`), clear `AT_CROSSWALK` (`0x4`),
+`m_bGoToIdleState = 0` (`+0x63fc`), `ClearHintNode(this, 5.0)` (`0x10295ab0`),
+`m_bCondTookDamage = 0` (`+0x5b80`), then `CAI_BaseNPC::OnStateChange`.
+
+**`CAI_BaseNPC::OnStateChange` (`0x1026e3e0`)** assigns `m_bfNPCStateFlags` whole from the new
+state; that table is already recorded on `FElysiumNpcFlags::NpcStateFlagsForRetailState`.
+
+The four species shapes: **`CNPC_VGuard1`** (`0x1037d020`), **`CNPC_VHunter`** (`0x10388880`) and
+**`CNPC_VGhoulCroucher`** (`0x103871c0`, shared by `CNPC_VHumanCombatant`,
+`CNPC_VHumanCombatPatrol`, `CNPC_VSabbatGunman`, `CNPC_VStalker`, `CNPC_VYukie`, `CNPC_ProneDialog`)
+hide or unhide the active weapon and chain. **`CNPC_VTzimisce`** (`0x103ba2c0`) maps the new state,
+only on a real transition, to an index into `PTR_s_normal_10653120` — whose four entries read out of
+`.rdata` are `normal`, `angry`, `scream`, `dead` — stores the looked-up index at
+`m_idxDefExpression` (`+0x10b4`) and blends to it over `1.0` (`0x103b9f50` then `0x103b9f90`); idle
+maps to 0, alert/combat/hunt to 1, dead to 3, and **`scream` is reached by no state**. It then
+chains. **`CNPC_VCamera`** and **`CNPC_VCameraSecurity`** (`0x10368ea0`) have an **empty** body: a
+camera's state change writes nothing at all, not even the base state-flag byte.
+**`CAI_BaseHumanoid`** (`0x10260630`) runs a two-call pre-step (vtable `+0x934` with the new state,
+then `0x10260670` with the result) and chains **straight to the base**, skipping the Troika body
+entirely.
+
+**Unrecovered:** `CAI_BaseHumanoid`'s pre-step — both calls are HL2-line bodies outside this
+closure; and `0x102ae310`, the Troika weapon show/hide, which is not one of story 29c-1's rows.
+**Not built:** retail states 8, 0xb and 0xe have no member of this runtime's state vocabulary, so
+those three arms are recovered and unreachable; and this runtime has no `SetExpression`, so the
+Tzimisce arm records the expression NAME and blends nothing.
+
+## The species `SelectIdealState` overrides — `0x10369060`, `0x103945a0`, `0x1039e310` (2026-09-13)
+
+Slot 461 has exactly three species overrides and all three are complete **replacements** — none of
+them chains into `CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`). All three also write the
+file/line ideal-state trace at `+0x1b38` / `+0x1b3c` / `+0x1b40`, which the shape map records ABSENT.
+
+* **`CNPC_VCamera`** (`0x10369060`, shared with `CNPC_VCameraSecurity`): `m_IdealNPCState = 3`
+  (ALERT) with **no test of any kind**. A camera's ideal state is a constant.
+* **`CNPC_VMingXiao`** (`0x103945a0`): unless `IsAlive()` (slot 158) and `GetState() != 7`, it writes
+  `m_IdealNPCState = 7` at source line `0x5da` — and then **unconditionally overwrites it** from
+  `GetEnemy() ? 2 : 1` (lines `0x5e0` / `0x5e4`). The dead-state write cannot survive the same call;
+  it is retail's own dead code.
+* **`CNPC_VMingXiaoTentacle`** (`0x1039e310`): here the dead arm is real — `m_NPCState == 7` **or**
+  `m_IdealNPCState == 7` short-circuits to 7 (line `0x486`) and never reaches the enemy test, which
+  is otherwise the same `GetEnemy() ? 2 : 1` (lines `0x48d` / `0x491`).
+
+Retail's `NPC_STATE` ordinals here are the ones `0x1027e660`'s name table and `0x1026e3e0`'s switch
+give: 1 IDLE, **2 COMBAT, 3 ALERT**, 7 DEAD. The camera's `3` is therefore alert, not combat.
+
+**Unrecovered:** nothing. **Not built:** no registered `npc_*` classname in this runtime resolves to
+any of the three classes, so the species arm is recovered and never taken.
+
+## The two flee requests — `0x102ad260`, `0x102ad2d0` (2026-09-13)
+
+Two bodies `PreSelectIdealState` (slot 460, `0x102ad340`) calls, identical but for their gate and
+their source line. Each: `HasInterruptCondition(cond)` — `0x10269d30`, which needs an INSTALLED
+schedule whose mask lists the condition **and** the condition standing, not the bare `HasCondition`;
+then, when `m_NPCState != 8`, `m_bfAINPCFlags |= 0x100` (`INITIAL_FLEE`); then the file/line trace
+(`AI_BaseNPCTroika.cpp` line `0x4468` / `0x447d`); then `m_IdealNPCState = 8` and `return 8`. A
+failed gate returns 0 and writes nothing.
+
+`0x102ad260` gates on `SUPERNATURAL_FLEE_LEVEL` `0x21`; `0x102ad2d0` on `CRIMINAL_FLEE_LEVEL` `0x1f`.
+The interrupt form is load-bearing: a gathered law level with no program asking for it does not make
+an NPC flee. `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`) is what puts both conditions
+into the mask of every non-busy, non-investigating NPC.
+
+**Unrecovered:** nothing. **Not built:** retail state 8 (FLEE). This runtime's `EElysiumNpcState`
+has no member for it, so the write stores the raw retail id and the typed ideal state is left alone;
+the `m_NPCState != 8` test can therefore never be false and `INITIAL_FLEE` is always armed.
+
+## The combat-condition refreshers — `0x102b2570`, `0x1028e700` (2026-09-13)
+
+**`0x102b2570`** is the only producer of `SHOULD_STEPBACK` `0x0e`, `SHOULD_KICK` `0x0f` and
+`TOO_FAR_FOR_MELEE` `0x09` in the whole closure. In order:
+
+1. Clear `0x0e` and `0x0f` **unconditionally**, before any gate.
+2. `m_bInMelee` (`+0x6078`) clear: return. A body out of melee ends the pass with neither.
+3. `COND_ENEMY_TOO_FAR` `0x55` standing (plain `HasCondition`): set `TOO_FAR_FOR_MELEE` `0x09` and
+   **return**; no draw is taken.
+4. The stepback window: `m_flLastMeleeStepbackTime (+0x606c) < m_flLastAttackTime (+0x5d9c)` **or**
+   `m_flLastMeleeStepbackTime + 3.0 / m_flSpeedScale (+0x1488) < curtime` (`_DAT_10449258` = `3.0f`).
+   Inside it, two arms: `TOO_CLOSE_TO_ATTACK` `0x5f` with `RandomInt(0,99) < 20`; **or** the frenzy
+   bit `m_bfNPCFrenziedFlags & 0x400` clear, `TOO_FAR_FOR_MELEE` `0x09`, `TOO_FAR_TO_ATTACK` `0x60`
+   and `CAN_MELEE_ATTACK1` `0x51` all clear, and `RandomInt(0,10) == 0`. Either sets `0x0e`.
+5. The kick arm, evaluated whether or not step 4 fired, four terms in order:
+   `ConditionInterruptsCurrentSchedule(SHOULD_KICK)` (`0x10269c70` — the MASK alone, never the
+   condition); `m_flNextAttack (+0x1564) < curtime`; `TOO_CLOSE_TO_ATTACK` standing; and an active
+   weapon whose flag word (weapon vtable `+0x5a0`) carries bit 30. Then set `0x0f`.
+
+**`0x1028e700`** is the occlusion debounce and it is a **suppressor**, not a producer. Given a
+condition and a caller-owned float: the condition not standing resets the float to the sentinel
+`_DAT_104454c4` = `0.0f`; standing with the sentinel in place arms it to
+`m_flOccludedDelay (+0x62c8) + curtime`; and while `curtime` is below that stamp the condition is
+**cleared again**. So a raise only survives once it has persisted for the authored delay, and
+exactly at the deadline it stands (the compare is strict).
+
+**Unrecovered:** the name of weapon flag bit 30. **Not built:** `m_flNextAttack` has no writer in
+this runtime, and `FElysiumWeapon` carries no retail flag word at all — the capability answer is two
+named bits and deliberately not a register — so `SHOULD_KICK` can never be raised here.
+
+## The disturbed latch — `0x1037bb20`, `0x1037b6e0` (2026-09-13)
+
+`CNPC_VGhoulCroucher::IsDisturbed` (`0x1037bb20`) is 121 bytes of AI scope-trace push and pop around
+one read: `return m_bWasDisturbed` (`+0x6666`). It is the producer the stealth-kill gate names as
+absent.
+
+`CNPC_VGhoulCroucher::OnDisturbed` (`0x1037b6e0`) is the whole of the write side, and every line of
+it is under one latch — a second disturbance writes nothing and fires nothing. On the first:
+`m_bWasDisturbed = 1`, `m_bUnawareExited = 0` (`+0x6667`), then a split on the disturber's cached
+`CBasePlayer*` (`+0xa8`). A **non**-player runs `SetClosestPlayer` (`0x10293a80`, the nearest live
+player within 20000 units, or `-1`) and fires `m_OnDisturbed` (`+0x6674`); a player instead writes
+its own handle straight into `m_hClosestPlayer` (`+0x628c`) and fires `m_OnDisturbedByPlayer`
+(`+0x668c`). Then, and only when `m_hClosestPlayer` now resolves to a live entity,
+`AddEntityRelationship(player, D_HT, 10)`.
+
+Note the re-read: on the non-player arm the relationship is written against whatever player the
+sweep just found, which need not have anything to do with the disturbance. **Unrecovered:** nothing.
+
+## The cop and hunter pursuit counters — `0x1017f650`, `0x1017f7b0`, `0x1017f830` (2026-09-13)
+
+These three are `CSActs` bodies on the **player**, not on the NPC: `CNPC_VCop::vfunc597`
+(`0x10372cc0`) calls `0x1017f650(player + 0xa8)`, and the counters are `+0x1d10`
+(`m_iCopsInPursuitCount`) and `+0x1d14` (`m_iHuntersInPursuitCount`).
+
+`OnCopPursuitStart` (`0x1017f650`) tests the **pre-increment** count against zero and, on that
+edge, runs two hooks before incrementing: `0x103705e0`, which walks the global NPC list and puts
+every body whose `GetState()` is **14** into state 2 via `0x102ae840(npc, 2, false)`; and
+`0x1017f980`, which fires the game-rules output at `+0x480` with the player as activator and caller
+and then zeroes `player + 0x1d1c`. `OnHunterPursuitStart` (`0x1017f7b0`) is the same shape with one
+hook, `0x1017fa40` (game-rules output `+0x4e0`).
+
+`OnHunterPursuitStop` (`0x1017f830`) is **not** symmetric: it decrements FIRST and tests the
+post-decrement count, calling `0x1017fa70` (game-rules output `+0x4f8`) on reaching zero. Retail
+does not clamp, so an unbalanced stop drives the counter negative and the next start then has no
+zero-to-one edge to fire. All three end in a `DevMsg` under dev logging.
+
+**Unrecovered:** `player + 0x1d1c`, which the census does not name. **Not built:** retail state 14,
+so `0x103705e0`'s sweep has no body it can find.
+
+## The alternate-AI door transaction — `0x10298800`, `0x10290040` (2026-09-13)
+
+`CAI_BaseNPCTroika::RunAlternateAI` (`0x1028fd80`) ends in `switch (m_eAlternateAI)` over four
+modes. **Mode 1 is the door-opening transaction**, and `0x10298800` is what enters it:
+`m_bShouldMove = 0` (`+0x1a40`), stop the motor chain (`0x102ee2a0` on `m_pNavigator +0x5d34`),
+`m_eAlternateAI = 1` (`+0x644c`).
+
+`0x10290040` is the mode-1 arm. A dead `m_hOpeningDoor` (`+0x5d24`) is the ONE place the transaction
+lets go: it resets the mode to 0 and answers false. Otherwise it asks the door's own vtable `+0x3d8`
+for a facing point, passing `m_bOpeningDoorWait` (`+0x5d30`); a refusal (`iStack_10 == -1`) answers
+false **without** clearing the mode, so it asks again next think. With a point in hand it resets
+steering (`0x102e0b40`), turns the direction into a yaw (`0x101d2c70`) and sets the motor's ideal
+yaw with an unlimited rate (`0x102e1c10(motor, yaw, -1.0)`). Only once `FacingIdeal` (`0x10278c80`)
+agrees does it advance: with `m_bOpeningDoorWait` set it goes to mode 2 with
+`m_flAlternateAIExpireTimer = curtime + 1.0` (`_DAT_104454c0`); otherwise it runs `0x10298840` (the
+open itself) and, if that succeeds, mode 2 with `curtime + 5.0` (`_DAT_10454110`). Either way it
+answers true — the transaction still owns the body.
+
+**Unrecovered:** nothing in the body. **Not built:** the door's NPC-open point (`+0x3d8`), the motor
+yaw pair, and `0x10298840`'s own four calls. The **door query is what stops it**, and it runs first:
+the transaction is entered, asks the door where to stand, is refused, and answers true again next
+think for as long as the mode stands. The facing gate below it is not the obstacle —
+`FacingIdeal` is a real ported body whose motor seam stands at retail's aligned `0`, so it answers
+**true** on a body that has not turned. Neither mode-2 advance can therefore be reached until a door
+carries an NPC-open point, whatever the yaw says.
+
+## The Werewolf's two condition bodies — `0x103d02b0`, `0x103cc890` (2026-09-13)
+
+**`CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)** is the only species override of slot 561,
+and it is a **suppression**, not an addition — `thunk_FUN_10269b50` is `ClearCondition`. With
+`m_iZoneFlags` (`+0x66e8`) carrying bit `0x4` **or** bit `0x100`, a live enemy (`GetEnemy()`
+`+0x29c`) and the absolute difference between the two origins' Z strictly greater than
+`_DAT_10462950` = **`40.0`** Source units, it clears `CAN_MELEE_ATTACK1` `0x51` and
+`CAN_MELEE_ATTACK2` `0x52` and **returns**: the base gather (`0x1026dd10`) does not run that pass.
+Otherwise it is a plain forward. The Z terms are read fresh off `GetAbsOrigin` (`+0x364`), not off
+the cached `m_flEnemyHeightDiff`.
+
+**`CNPC_VWerewolf::UpdateConditionDeathTriggered` (`0x103cc890`)** reads as a one-shot latch and is
+not one. The body opens with an **unconditional** `ClearCondition(0x7a)`; the
+`if (!HasCondition(0x7a))` that guards the output therefore always passes, so
+`m_OnConditionDeathTriggered` fires on **every** pass while `m_Activity` (`+0xfec`) is `0x11d` and
+`m_DoorState` (`+0x6680`) is `1`, not once. The output carries `GetEnemy()` as activator after a
+`0x10265a90` self-reference write, and the body always ends by setting `0x7a` again.
+
+Condition `0x7a` is above the base registrar's `0x76` and belongs to a Werewolf-line table the census
+has not decoded.
+
+**Unrecovered:** condition `0x7a`'s name, and the `0x4` / `0x100` zone bits' names. **Not built:**
+`m_Activity`'s retail id — this runtime names activities — so the death-triggered gate cannot pass
+here; and no registered classname is a werewolf, so neither body is reached in play.
+
+## The two melee attack bands — `0x1026d9a0`, `0x1026da90` (2026-09-13)
+
+Slots 555 and 556, `MeleeAttack1Conditions(flDot, flDist)` and `MeleeAttack2Conditions`. Both open
+by dispatching `GetEnemy()` (slot 167) and caching the enemy's `m_pCombatCharacter` (`+0x9c`), then
+run a three-rung distance ladder: past an outer band the answer is `COND_TOO_FAR_FOR_MELEE` (`0x09`),
+past `_DAT_10451acc` (**64** Source units) it is `COND_TOO_FAR_TO_ATTACK` (`0x60`), and inside it a
+dot below `_DAT_104492d0` — read as a **double**, and SDK 2013's twin states the literal **0.7** —
+answers `COND_NONE`. A body that gets past the dot asks the enemy's combat character slot 327
+(vtable `+0x51c`, base body `0x10345460`, `return 1`) and refuses when it says no.
+
+The two differ in exactly three places. The outer band is `_DAT_1044ddb0` for attack 1 and
+`_DAT_1044c3a8` (**180**) for attack 2. Attack 1 re-dispatches `GetEnemy()` a second time as a null
+gate *after* the dot and refuses when there is none; attack 2 has no such gate and answers
+`COND_CAN_MELEE_ATTACK2` (`0x52`) with no enemy at all. Attack 1 then dispatches `GetEnemy()` a
+*third* time and reads `GetFlags() & FL_ONGROUND`, answering `COND_CAN_MELEE_ATTACK1` (`0x51`) only
+for a grounded enemy and `0` otherwise — retail computes that branchlessly as `-(flags & 1) & 0x51`.
+Attack 2 never reads the ground flag.
+
+**Unrecovered:** `_DAT_1044ddb0`, attack 1's outer band. It must exceed 64 for the `0x60` rung below
+it to be reachable at all, and nothing in the corpus or the oracle pins it.
+
+## The victim-side reaction slots — `0x1029f800`, `0x1029f850`, `0x1029f890`, `0x1029f8f0`, `0x1029fb70` (2026-09-13)
+
+Five Troika-line bodies filling slots 21, 22, 23, 27 and 317, and four of them are one shape. Each
+calls the detected-attack notice `0x102bf5d0` with the argument entity as the attacker, then **sets**
+condition `0x0a` `COND_BEING_ATTACKED` through `SetCondition` (`0x10269a20`). The bare
+`(*DAT_10924a6c)->vtable+4` call that sits beside every `SetCondition` in the decompiled C is the
+AI-debug ConVar the setter consults, **not** a game event — a `.data` object with 130 readers, no
+writer and one dispatched slot.
+
+Slot 21 additionally increments `m_iHitBuildupCount` (`+0x6064`), and it is the only one of the four
+that does; the ranged hit path `0x10267b60` dispatches it on the victim immediately before the
+attacker's slot 24. Slot 22 is the same body without the increment and `CBasePlayer::Replenish`
+(`0x10168320`) dispatches it on a feed target with the player as the argument. Slot 23 is
+byte-identical to slot 22 and has no dispatch site in the decompiled corpus at all. Slot 27 adds a
+fourth step after the condition: slot 600 (vtable `+0x960`) on **itself** with the attacker, the
+melee-coordinator slot request.
+
+Slot 317 (`0x1029fb70`) is the odd one. It never reads its argument, sets `COND_BEING_ATTACKED`, and
+then asks `ConditionInterruptsCurrentSchedule(0x0c)` (`0x10269c70`) — "does the running program's
+interrupt mask list `COND_SHOULD_DODGE`". Only if it does are the dodge bit set and `true` reported;
+otherwise the body answers `false` and the dodge bit is never raised. So the dodge is a property of
+the installed program's mask and not of the hit.
+
+**Unrecovered:** what distinguishes slots 21, 22 and 23 — three slots carrying one body, with a
+dispatch site for only two of them — and slot 317's parameter type, which no call site observes.
+
+## Story 29c-1, family TroikaHelpers
+
+### The alert-level rungs and their grade letters `0x102b8980`
+
+_Recovered 2026-09-13, story 29c-1._
+
+A three-rung ladder over `m_eAlertLevel` (`+0x63f4`), written through the bare setter `0x102b5dc0`
+and answering a single character. `m_bFullInvestigate` (`+0x6340`) forces the level to 3 **before**
+the switch reads it, so a full-investigate NPC always lands on the top rung. The switch: any level
+other than 1, 2 or 3 writes 1 and answers `'L'`; level 1 writes 2 and answers `'M'`; levels 2 and 3
+write 3 and answer `'Q'` plus one when `m_afMemory & 0x8000000` (`+0x5d8c`) stands, i.e. `'R'`.
+
+**Unrecovered:** what the letters are a grade OF — no reader of the return is in the corpus — and the
+name of memory bit `0x8000000`.
+
+### The discipline cooldown gate `0x10330020`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 334 asks whether a discipline may be cast. `m_iCurFrenzyCount` (`+0x0ec0`) above zero refuses
+outright, before anything else; note the return there is `count & 0xffffff00`, whose low byte is
+zero, so it answers **false** and not the count. Otherwise the global byte `DAT_10937cf2` is cleared,
+the discipline id and its level are looked up in `DAT_10739a4c` (`0x101e1250`), and a miss answers
+true. On a hit it compares the record's cooldown float (`+0x2c`) against `curtime -
+m_fDisciplineTimers[row]` (`+0x146c`): a cooldown still greater than the elapsed time sets
+`DAT_10937cf2` and answers **false**; an elapsed one answers true with the global left clear.
+
+**Unrecovered:** what reads `DAT_10937cf2`, and the layout of `DAT_10739a4c`'s records beyond the
+cooldown at `+0x2c`.
+
+### The state expression pairs `0x102adfe0`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 610 is called with the new `NPC_STATE` and resolves two facial expressions plus a blend weight.
+State 2 (COMBAT) resolves `"Anger"` into `m_idxDefExpression` (`+0x10b4`) and `"Anger_No_Deform"`
+into `m_idxNoDeformExpression` (`+0x64d0`) with weight `1.0`. States 3, 0xb and 0xe resolve **the
+same pair** with weight `0.5` — the weight is the entire difference between the two Anger arms.
+States 8 and 10 resolve `"Fear"` / `"Fear_NoDeform"` at `1.0`. Every other state reads the
+disposition table `DAT_10924980` keyed on `m_nCurrDisposition` (`+0x64d4`) through `0x100ec360`,
+`0x100ec2e0` and `0x100ec3d0`, taking the row's own two indices and its own weight.
+
+**Unrecovered:** what consumes `+0x10b8`; the four names are literals in `.rdata` and are exact.
+
+
+### `0x102953e0` — `CanSeekCover`, and `CNPC_VLasombra`'s `0x103893c0`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 592's Troika-line body is three arms in order, and the order is the whole of it. First,
+`HasCondition(COND_ENEMY_OCCLUDED 0x48)` answers **true** on its own, before the clock is read at
+all — an NPC whose enemy is behind something may always look for cover. Second,
+`m_flCanSeekCoverTimer` (`+0x607c`) at or before `curtime` answers true. Third, a slop window: if
+`m_flCanSeekCoverTimer - 1.0f <= curtime` **and** `COND_CAN_RANGE_ATTACK1` (`0x4f`) is **clear**,
+true; otherwise false.
+
+**The slop window is one second, not five.** `0x10295414` is `FSUB dword ptr [0x104454c0]` and
+`_DAT_104454c0` is the image's shared `1.0f` — the same cell `animation_and_movers.md:659` reads out
+of the listing as `1.0f`. Story 29c's one-line walk called it "a retail 5-second slop window";
+that is wrong and the port carries one second. The last arm's `(a < b) != (a == b)` is the FPU flag
+pair for `a <= b`, so a timer exactly one second out is still inside the window.
+
+`CNPC_VLasombra::vfunc592` (`0x103893c0`) prefixes one arm: `if (curtime < m_flCoverDisableOverride
+(+0x6664)) return TRUE`, else delegate to the Troika body. **The polarity is the permissive one** —
+the body returns the FPU flag word for `curtime < override`, which puts the comparison result in AL
+— so while the override stands a Lasombra may always seek cover without consulting the rule above.
+29c's walk reads it as a refusal; corrected here. The field name is `m_flCoverDisableOverride` and
+what it disables is the *rule*, not the seeking.
+
+### `0x1029f940` — `OkToInterruptForMelee`, its gate `0x1028a190`, and `0x103ab400`
+
+_Recovered 2026-09-13, story 29c-1._
+
+Slot 590 is a gate then a whitelist. The gate is `0x1028a190`, shared with the knockback start
+(`0x102a01b0`); its decompilation is damaged (an unrecovered jump table) and it is walked off the
+listing: if `GetState()` (slot 464) is `4` (`NPC_STATE_SCRIPT`) **and** `m_hCine` (`+0x5d74`)
+resolves, then `CCineNPC::CanInterrupt` (`0x101a8930`) on that cine must answer true; then
+`m_bInChoreoScene` (`+0x5bc4`) must be clear; then `m_bfAINPCFlags2 & 0x1000` must be clear; and the
+body tail-calls slot 158 `IsAlive` (`JMP [EDX+0x278]` at `0x1028a21d`).
+
+**`0x1028a190` is a reader of `MADE_OBLIVIOUS`.** `TEST AH,0x10` at `0x1028a213` against
+`[ESI+0x14bc]` is bit `0x1000` of `m_bfAINPCFlags2`. `Source/ElysiumUE/Private/Substrate/
+ElysiumNpcFlags.h` records that bit as having "ZERO readers anywhere in retail — a scan of every
+access to `+0x14bc` finds no test of `0x1000`"; this address is the counter-example, and the bit
+therefore does have a behaviour of its own: an oblivious body cannot be disturbed for melee and
+cannot be knocked back.
+
+Past the gate, the body whitelists `m_Activity` (`+0xfec`). The compiler split the set three ways —
+a jump table below `0x52`, a `< 0xd26` band and a tail — and the members are `1`, `9`, `0x13`,
+`0x30`, `0x4b`, `0x4d`, `0x51`, `0x73`..`0x8a`, `0xcb5`, `0xd25`, `0x1121`, `0x1157`..`0x1158`.
+**`0x51` is a member**: the hoisted `if (uVar1 != 0x51)` guards entry to the jump table and falls
+*through* to the accept when the activity is `0x51`. 29c's walk lists the set without it.
+
+`CNPC_VSabbatLeader::OkToInterruptForMelee` (`0x103ab400`) is an exception, not a replacement:
+activity `0x1141` answers true outright — **skipping the gate entirely**, so a Sabbat leader in a
+choreographed scene is still interruptible in that one activity — and every other activity forwards
+to the Troika body above.
+
+## Story 29c-1, family Dialogue — the payphone gate and the pedestrian crosswalk
+
+### `CPayphone::CanTalk` — `0x101aaee0` (2026-09-13)
+
+Slot 295's `CPayphone` override, 119 bytes: seven arms, every one a refusal, and the answer is the
+last arm's negation.
+
+1. the activator is null;
+2. `m_iDialog` (`+0x0128`, keyfield `dialogname`) is zero — the phone authors no conversation;
+3. `m_bScriptHidden` (`+0x00f4`), read through the seven-byte getter `0x100b5190`;
+4. `m_bWillTalk` (`+0x1088`) is clear, whose only writer is `InputWillTalk` (`0x103418f0`);
+5. `m_bfNPCStateFlags` (`+0x5b64`) bit 2 is set — the per-state busy bit `0x1026e3e0` gives to
+   retail states 2, 7, 8, 9, `0xa`, `0xb`, `0xd` and `0xe`;
+6. `m_bfAINPCFlags & 0x00080000` — `NO_DIALOG`;
+7. `IsInDialog` (`0x102c1170`).
+
+29c's walk calls arm 3 "the alive test". It is not: `docs/vtmb/npc-kernel/fields.md` names `+0x00f4`
+`m_bScriptHidden`, written by `ScriptHide` (`0x100a8710`) and `ScriptUnhide` (`0x100a8990`). A
+script-hidden payphone refuses conversation; a *dead* one is never asked, because the payphone
+override tests no liveness at all.
+
+**What the payphone does not test**, against the Troika-line body `0x102c21c0`: the two `IsAlive`
+dispatches, `IsUnconscious`, the player-side `0x10175180` and `0x10146b20`, `IsBusyWithDiscipline`,
+`NO_DIALOG_PERSISTENT` (word two, `0x10000000`), the menu global's `+0x4ac` and slot 406
+(`+0x650`). Seven arms against fourteen — a payphone is a simpler gate than a person, and
+`HasDialogSuppressFlag`'s two-bit reading is the Troika line's, not this one's.
+
+### The pedestrian crosswalk — `0x102a0d20`, `0x102a0bc0`, `0x102a0b90` (2026-09-13)
+
+Three bodies and one rule. The signal is four bits in a navigation link's flags word (`link+0x64`),
+`0x10`, `0x20`, `0x40` and `0x80`, and the live phase is `0x10 << (((int)curtime >> 4) & 3)` — a
+64-second cycle in four 16-second phases, shared verbatim by the first two bodies. It is not a
+per-crossing timer: every crosswalk in a map changes on the same global clock.
+
+`CAI_BaseNPCTroika::UpdatePedestrianInfo` (`0x102a0d20`, 313 bytes) runs from `RunAI`
+(`0x1028fcc0`) and is the whole rule. Its only outer gate is `GetPathType(m_pNavigator +0x5d34) == 8`
+(through `0x102ee620`, itself `path+0x30`). Past it, `SHOULD_INTERACT` (`0x10`), `CROSSWALK_WALK`
+(`0x12`) and `CROSSWALK_DONTWALK` (`0x13`) are cleared **on every pedestrian pass**, whether or not
+the NPC is at a crossing — so none of the three survives into the next one. Then `AT_CROSSWALK`
+(`m_bfAINPCFlags & 0x4`) must be set and `m_flNextCrosswalkUpdateTime` (`+0x6318`) must be strictly
+below `curtime`; the stamp is re-armed at `curtime + _DAT_104454c0` = **1.0 s** *before* the signal
+is read, so the throttle applies to both arms equally. 29c's walk says 5 s; the listing shows
+`FADD float ptr [0x104454c0]` at `102a0deb`.
+
+The two arms read the right way round. The phase bit **set** in `m_pCrosswalkLink (+0x630c)->+0x64`
+raises `CROSSWALK_DONTWALK` and **leaves `AT_CROSSWALK` standing** — the pedestrian keeps waiting.
+The bit **clear** raises `CROSSWALK_WALK` and clears `AT_CROSSWALK` — the pedestrian is released and
+the crossing is given up. Each arm is preceded by the discarded `(*DAT_10924a6c)->vfunc1()` read
+that stands in front of every `SetCondition` in this family.
+
+`0x102a0bc0` (178 bytes) is the other end: the navigator's waypoint-advance (`FUN_102f0400`) hands
+it `path->CurWaypoint` and it decides whether that waypoint *is* a live crossing. Six gates, all
+required — a non-null waypoint, `waypoint+0x10 >= 0` (an entity index), `waypoint+0x30 != NULL` (a
+hint record), `waypoint+0x28 & 0x4`, the same path type `8`, and a path node found by
+`0x102f96e0(entity[index], hint->+0x10)` whose `+0x64` carries the live phase bit. Only then
+`0x102a0b90`, which is two statements and no gate: `m_bfAINPCFlags |= 0x4` and
+`m_pCrosswalkLink = node`. The waypoint's own bit 2 at `+0x28` and `AT_CROSSWALK`'s bit 2 share a
+number by coincidence; the second is written only on success.
+
+**Unrecovered:** `DAT_10924a6c`; the meaning of the waypoint's `+0x28` bit 2; whether the four phase
+bits are authored per link or written by a traffic-light entity. **Not built:** this runtime has no
+navigator path type, no node graph and no navigation link, so all three bodies refuse at the seam
+that answers for them, and `RunAI` (slot 432) is still a generated stub, so nothing calls the rule.
+
+### Naming a condition, long and short — `0x102cc300`, `0x1027ede0`, `0x1027e7f0` (2026-09-13)
+
+Retail names a condition twice, through two different tables, and story 29c-1 read both out of
+`.rdata` rather than out of a decompiled summary.
+
+`CAI_BaseNPC::ConditionName` (slot 458, `0x102cc300`, 52 bytes) is two steps. An id below
+1,000,000,000 — or -1 — is a CLASS-LOCAL id and is translated through this class's
+`CAI_ClassScheduleIdSpace` condition sub-space at `+0x30` (`0x102ea2d0`); an id at or above that
+constant is already global and skips the translation. The global id is then handed to
+`CAI_GlobalNamespace::IdToSymbol` over the one condition namespace `DAT_109203dc` (`0x102ea020`),
+which answers `"<<null>>"` for -1 and a NULL pointer for an id it does not carry — which retail
+then passes to `printf` as a `%s`. `CAI_BaseNPC::TaskName` (slot 449, `0x102cc350`) is the same 52
+bytes against the TASK sub-space at `+0x18` and the task namespace `DAT_109203d4`.
+
+The condition namespace's contents are static: `0x102c8ce0` registers exactly **119** symbols at
+local ids `0x00`..`0x76` into `DAT_1090ff38`, which is `CAI_BaseNPC`'s id space `DAT_1090ff08` plus
+`0x30`. `COND_NONE` is registered first at 0, so `0x102ea130`'s "expand an empty space" arm sets the
+local base to 0 and the last registration raises the local top to `0x76`; the space is its
+namespace's root (`0x1030c4e0` constructs it with `isRoot = 0` against `DAT_109203dc`), so the
+global base is 0 and **the translation is the identity for every base condition**. The registrar
+calls two ids out of sequence — `COND_ENEMY_TOO_FAR` (`0x55`) between `0x49` and `0x4c`, and
+`COND_HEAR_BUGBAIT` (`0x6c`) between `0x6b` and `0x6e` — and the namespace is a red-black tree
+keyed by id (`0x10249c70`), so call order does not shift any name.
+
+`CAI_BaseNPC::GetShortConditionName` (slot 408, `0x1027ede0`, 16 bytes) forwards to `0x1027e7f0`, a
+dense switch over the same 119 ids answering a **three-letter** abbreviation each, with `"***"`
+(`0x105cd454`) as the `default:`. The strings sit four bytes apart descending from `0x105cd62c`
+(id 0, `"non"`) to `0x105cd458` (id `0x76`, `"ufz"`); the single outlier is id `0x73`, whose
+`"fog"` lives at `0x1058b0a0`. Each abbreviation is its `COND_*` name compressed — `fai` is
+`COND_TASK_FAILED`, `bmp` is `COND_WAS_BUMPED`, `piv`/`pcf`/`pca`/`psf`/`psa` are the five
+player-level rungs — which is what confirms the two tables against each other. Unlike the
+navigation-type table beside it, `0x1027e7f0` has **no** -1 case, so -1 takes the `"***"` arm.
+
+Three classes override slot 408, and all three are the same shape: a contiguous block starting at
+`0x77`, the id straight above the base table's last, and a `default:` forwarding to
+`0x1027ede0`. `CNPC_VMingXiao` (`0x103951d0`) adds eight, `0x77`..`0x7e`:
+`xfr xfl xmr xml xbr xbl xsp xmh`. `CNPC_VMingXiaoTentacle` (`0x1039ece0`) adds three,
+`tfl tsc tpe` — and its three strings ASCEND in memory where every other block descends.
+`CNPC_VWerewolf` (`0x103d0640`) adds five, `ww0`..`ww4`, and is the only one of the three that
+wraps itself in a scope-trace push keyed on `m_iName`, popped on every arm including the forward.
+
+**Unrecovered:** the task namespace's 441 `TASK_*` symbols (`0x10316ff0` registers them at runtime)
+and therefore the base task sub-space's own range; what each species condition `0x77`+ MEANS, since
+only the abbreviation survives. **Not built:** this runtime's task vocabulary carries no registered
+numbers, so `TaskName` translates nothing and answers `"<<null>>"` for every id.

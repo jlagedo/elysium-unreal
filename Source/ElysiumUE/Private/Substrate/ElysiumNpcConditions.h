@@ -148,6 +148,60 @@ enum class EElysiumNpcCond : uint8
 	// "I can see whatever made the sound I last committed." Read by the sound selector and the hunt
 	// ladder, both 10d.
 	SeeSoundSource   = 0x2d,
+
+	// `CNPC_VWerewolf::UpdateConditionCanTeleport` (`0x103cc0d0`, story 29c-1 family Positions) is
+	// this condition's only producer: it CLEARS it at the top of every pass and sets it again only
+	// when the werewolf has been out of its enemy's sight for long enough and the player is further
+	// away than its two stored distance terms plus 100 units. The CONSUMER is a Werewolf schedule
+	// this port does not register yet, so nothing reads it — the producer is recovered and the
+	// interrupt mask that would name it is not.
+	CanTeleport      = 0x77,
+
+	// --- Story 29c-1, family Schedule: the eight identities its layer 0–9 bodies name ------------
+	// Every one is read straight off the registrar's dump above (`FUN_102c8ce0`,
+	// `docs/vtmb/npc-ai/conditions-and-states.md` § "The base condition table"). They are spelled
+	// here because a schedule selector that tests a condition it cannot name would be a selector
+	// silently dropping an arm; none of them has a producer in this runtime yet, and the bodies
+	// that read them say so at the call site.
+	TooFarForMelee    = 0x09,   // `CAI_BaseNPCTroika::SelectScheduleMeleeCombat` 0x102b6c30
+	InterruptTime     = 0x1a,   // the same body's second melee-break term
+	PassOut           = 0x24,   // `CNPC_VPedestrian::BuildScheduleTestBits` 0x103a2980
+	OnFire            = 0x30,   // `CAI_BaseNPC::PreSelectSchedule` 0x1028a2a0
+	ShouldCharge      = 0x35,   // `CNPC_VTzimisceHeadClaw::BuildScheduleTestBits` 0x103c16f0
+	EnemyBlocked      = 0x3a,   // `0x102b6fe0`, the melee failure gate's fallback term
+	SeeCorpseFriend   = 0x3e,   // `CNPC_VHumanCombatant::BuildScheduleTestBits` 0x10387520
+	FloatingOffGround = 0x73,   // `CAI_BaseNPC::PreSelectSchedule` 0x1028a2a0
+
+	// --- Story 29c-1, family Conditions: the attack-band and weapon-line identities ---------------
+	// Read off the same registrar dump. They are spelled here because this family's bodies push them
+	// BY NUMBER — a `static_cast` at the call site would make the registry a comment. Producers:
+	//   `CAI_BaseNPC::RangeAttack1Conditions` (`0x1026d890`, slot 553) answers 0x08 / 0x5f / 0x60 /
+	//   0x61 / 0x4f, and `RangeAttack2Conditions` (`0x1026d920`, slot 554) answers 0x08 / 0x60 /
+	//   0x61 / 0x50; `GatherAttackConditions` (`0x1026dd10`, slot 561) is the ONE producer of 0x2e,
+	//   off `m_flExtendedBlockedByFriendTimer`; 0x62 / 0x64 / 0x65 have no producer here and are
+	//   carried because `ClearAttackConditions` (`0x1026dc80`, slot 560) clears all three by name;
+	//   `CAI_BaseNPC::FCanCheckAttacks` (`0x10270840`, slot 564) READS 0x55.
+	// --- Story 29c-1, family Dialogue: the pedestrian crosswalk triple ----------------------------
+	// Read off the same registrar dump. `CAI_BaseNPCTroika::UpdatePedestrianInfo` (`0x102a0d20`)
+	// clears all three at the top of every pedestrian pass and is the ONE producer of the last two:
+	// the crosswalk link's signal bit SET raises `CROSSWALK_DONTWALK` and leaves the NPC latched at
+	// the crossing, CLEAR raises `CROSSWALK_WALK` and releases it. `SHOULD_INTERACT` is cleared by
+	// the same body and produced by the pedestrian interaction pass (`+0x631c
+	// m_flNextPedInteractTime`), which is not a layer 0–9 row — so it is cleared here and never set.
+	ShouldInteract      = 0x10,
+	CrosswalkWalk       = 0x12,
+	CrosswalkDontWalk   = 0x13,
+
+	TooCloseForRanged       = 0x08,
+	// `CCineAISchedule::RemoveIgnoredConditions` (`0x101a89a0`, slot 459) clears it on its scene
+	// partner, and it is the LAST of that body's fourteen. No producer in this runtime.
+	BeingAttacked           = 0x0a,
+	ExtendedBlockedByFriend = 0x2e,
+	EnemyTooFar             = 0x55,
+	NotFacingAttack         = 0x61,
+	WeaponHasLos            = 0x62,
+	WeaponPlayerInSpread    = 0x64,
+	WeaponPlayerNearTarget  = 0x65,
 };
 
 // `investigate_mode` / `investigate_mode_combat`, the two authored keyfields the interest predicate
@@ -295,6 +349,25 @@ struct FElysiumNpcCognition
 	// The retail-shaped starvation warning is latched per NPC *per schedule*: a different schedule
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
 	int32 StarvedScheduleNumber = -1;
+
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	// +0x1a9c m_DelayedConditionList (datamap) — retail's eight-slot CAI_DelayedConditionList: a
+	// condition number and its promote stamp
+	TArray<TPair<int32, double>> DelayedConditions;
+	bool bCondTookDamage = false;  // +0x5b80 m_bCondTookDamage (datamap)
+	// +0x5c74 m_CustomInterruptConditions (sdk-order) — retail's cached mask; today recomputed
+	// each think by ElysiumSchedule::EffectiveInterrupts
+	FElysiumNpcConditions CustomInterruptConditions;
+	// +0x5c8c m_InverseInterruptConditions (walked) — the inverted !COND mask retail keeps as a
+	// second word
+	FElysiumNpcConditions InverseInterruptConditions;
+
 
 };
 

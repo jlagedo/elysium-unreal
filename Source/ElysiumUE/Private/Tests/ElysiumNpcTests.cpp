@@ -87,6 +87,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
@@ -1496,6 +1497,99 @@ bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 	if (TestNotNull(TEXT("fused spawn returned a live entity"), E2))
 	{
 		TestTrue(TEXT("fused path is spawned on return"), E2->bSpawnCalled);
+	}
+
+	return true;
+}
+
+
+// Story 29c, the authored group lists. Retail parses `hint_groups` with `0x102989e0` and
+// `interesting_place_groups` with `0x10298910` — one routine, differing only in what an unset
+// string answers — into a 32-bit SET, which is the shape `FValidateHintType 0x10295c20` ANDs a
+// hint node's own group against. Every assertion below is read off those two bodies: the
+// `id - 1` bit position, the silent drop outside 1..32, `atoi`'s zero for a non-number, and the
+// two empty answers.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcGroupMaskTest, "Elysium.Substrate.NpcGroupMask",
+	GElysiumTestFlags)
+bool FElysiumNpcGroupMaskTest::RunTest(const FString&)
+{
+	auto Hint = [](const TCHAR* Text) { return FElysiumNpc::ParseGroupMask(Text, true); };
+	auto Place = [](const TCHAR* Text) { return FElysiumNpc::ParseGroupMask(Text, false); };
+
+	// `id - 1` is the bit, so the lowest authored id is 1 and it is bit 0.
+	TestEqual(TEXT("group 1 is bit 0"), Hint(TEXT("1")), 0x00000001u);
+	TestEqual(TEXT("group 32 is bit 31"), Hint(TEXT("32")), 0x80000000u);
+	TestEqual(TEXT("a list sets one bit each"), Hint(TEXT("1 3 5")), 0x00000015u);
+	TestEqual(TEXT("runs of spaces are skipped, as retail's space loop does"),
+		Hint(TEXT("   2    4   ")), 0x0000000au);
+
+	// `if (-1 < id - 1 && id - 1 < 0x20)`: 0 and 33 fall outside and are dropped in silence, with
+	// the rest of the list still parsed.
+	TestEqual(TEXT("group 0 is dropped"), Hint(TEXT("0")), 0u);
+	TestEqual(TEXT("group 33 is dropped"), Hint(TEXT("33")), 0u);
+	TestEqual(TEXT("a dropped id does not stop the walk"), Hint(TEXT("0 2 33 3")), 0x00000006u);
+	// A negative id would shift by a negative count; retail's range test is what stops it.
+	TestEqual(TEXT("a negative id is dropped"), Hint(TEXT("-4 2")), 0x00000002u);
+	// `atoi` answers 0 for a token that is not a number, and 0 - 1 is out of range.
+	TestEqual(TEXT("a non-numeric token contributes nothing"), Hint(TEXT("alpha 7")), 0x00000040u);
+	// Retail ORs, so a repeat is idempotent rather than a count.
+	TestEqual(TEXT("a repeated id is the same bit"), Hint(TEXT("9 9 9")), 0x00000100u);
+
+	// The one difference between the two bodies: an unset hint list admits every group, an unset
+	// interesting-place list is empty.
+	TestEqual(TEXT("an empty hint list is every group"), Hint(TEXT("")), 0xffffffffu);
+	TestEqual(TEXT("an empty interesting-place list is no group"), Place(TEXT("")), 0u);
+	TestEqual(TEXT("a non-empty list parses the same either way"), Place(TEXT("1 3 5")),
+		Hint(TEXT("1 3 5")));
+
+	// And the field pairs: each authored list is one keyfield whose write parses, because retail
+	// parses off the KeyValue rather than on the first read.
+	FElysiumNpcWorldBuilder Builder(TEXT("group_mask"), 29031u);
+	Builder.AddNpc(TEXT("unset"));
+	{
+		FElysiumEntityDef& Def = Builder.AddNpc(TEXT("listed"));
+		Def.Keys.Add(TEXT("hint_groups"), TEXT("2 4"));
+		Def.Keys.Add(TEXT("interesting_place_groups"), TEXT("1 32"));
+	}
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Unset = Fixture.Npc(TEXT("unset"));
+	FElysiumNpc* Listed = Fixture.Npc(TEXT("listed"));
+	if (TestNotNull(TEXT("the unset NPC stood up"), Unset)
+		&& TestNotNull(TEXT("the listed NPC stood up"), Listed))
+	{
+		TestEqual(TEXT("an NPC with no hint_groups key admits every group"),
+			static_cast<int64>(Unset->ScheduleHost.HintGroupMask), int64(0xffffffff));
+		TestEqual(TEXT("the authored key lands as its bits"), static_cast<int64>(Listed->ScheduleHost.HintGroupMask),
+			int64(0x0000000a));
+		TestEqual(TEXT("and the authored string is kept beside it"), Listed->ScheduleHost.HintGroups,
+			FString(TEXT("2 4")));
+		// The interesting-place sibling, whose unset answer is the other one: zero, so in retail
+		// no place matches. 1005 shipped NPCs author `"0"`, which parses to the same zero.
+		TestEqual(TEXT("an NPC with no interesting_place_groups key has an empty set"),
+			static_cast<int64>(Unset->InterestingPlaceGroupMask), int64(0));
+		TestEqual(TEXT("the authored key lands as its bits"),
+			static_cast<int64>(Listed->InterestingPlaceGroupMask), int64(0x80000001));
+		TestEqual(TEXT("and `0` is the empty set, not group zero"),
+			static_cast<int64>(FElysiumNpc::ParseGroupMask(TEXT("0"), false)), int64(0));
+
+		// The admission rule those bits feed, `0x102dad60`: `place->m_iGroupID +0x574 &
+		// npc->m_iInterestingPlaceGroups +0x62dc`. A zero mask on the NPC side matches NOTHING —
+		// this is the retail rule, and it is what an unset list and the authored `"0"` both mean.
+		// `CAI_InterestingPlace::Spawn` (`0x102d9c20`) folds the place's own id first, so the
+		// masks below are `1 << (id - 1)` and not the raw ids.
+		TestFalse(TEXT("a zero mask matches no place, not every place"),
+			Unset->AcceptsAmbientGroup(1 << 0));
+		TestFalse(TEXT("not even the place whose fold is the out-of-range literal 1"),
+			Unset->AcceptsAmbientGroup(1));
+		TestTrue(TEXT("the listed NPC matches group 1, which is bit 0"),
+			Listed->AcceptsAmbientGroup(1 << 0));
+		TestTrue(TEXT("and group 32, which is bit 31"),
+			Listed->AcceptsAmbientGroup(static_cast<int32>(1u << 31)));
+		TestFalse(TEXT("but not a group it did not author"),
+			Listed->AcceptsAmbientGroup(1 << 4));
+		TestFalse(TEXT("and a place whose own mask is zero is matched by nobody"),
+			Listed->AcceptsAmbientGroup(0));
 	}
 
 	return true;

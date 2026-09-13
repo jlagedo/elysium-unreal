@@ -1216,6 +1216,15 @@ public:
 	// last of those.
 	void StartDamageFlinch(const FElysiumDmg& Dmg);
 
+	// Slot 292's species gate, story 29c-1 family **Damage**. `CNPC_VGargoyle` (`0x10378cb0`) and
+	// `CNPC_VHengeyokai` (`0x103802a0`) are the only two classes in the family tree that replace
+	// `CBaseCombatCharacter::DamageFlinch` (`0x103229d0`), and both replace it with the same gate:
+	// no flinch at all when the hit's combined `DMG_` bits intersect `0x4000002`
+	// (`ElysiumDamage::FirearmMask`), and none for a zero-magnitude hit. It is asked BEFORE every
+	// other test in `StartDamageFlinch` because retail asks it before it enters the base body at
+	// all. The base character stands no species and answers false, so nothing else changes.
+	virtual bool SuppressesDamageFlinch(const FElysiumDmg& /*Dmg*/) const { return false; }
+
 	// The one Reaction-band producer: fill the translation context, resolve one `ACT_*`
 	// through the embodiment seam, and play the resolved cell on the graph's reaction branch. Every
 	// combat reaction is this transaction, which is why it is one function rather than one per family
@@ -2284,15 +2293,29 @@ public:
 	// TODO(dialogue-plan): recover what `+0x1cf8` counts and who writes it.
 	float DialogRefusalFloat = TNumericLimits<float>::Max();
 
-	// The threat count the predicate reads (`0x1017f770` / `0x1017f8b0`).
-	// SEAM: this runtime has no player-side threat/enemy tally — NPC enemy memory is per-NPC and
-	// there is no aggregate — so it answers 0. TODO(dialogue-plan): wire it to the combat tracker
-	// when one exists.
-	int32 DialogThreatCount() const { return 0; }
+	// The two threat counts the predicate reads, RECOVERED (story 29c-1, family Dialogue). Both
+	// retail bodies are seven-byte getters and `vtmb_fields CBasePlayer` names both words, so
+	// neither is a seam any longer:
+	//
+	//   `0x1017f770` -> `+0x1d10 m_iCopsInPursuitCount`
+	//   `0x1017f8b0` -> `+0x1d14 m_iHuntersInPursuitCount`
+	//
+	// `FUN_10178170` tests them as two SEPARATE arms in that order (`if (cops >= 1) refuse; else if
+	// (hunters >= 1) refuse;`), not as a sum, and `DialogRefusalReason` reproduces that order. This
+	// runtime already carries both on `Police` — `0x1017ed00 SetSpawnResponseCops` reads the hunter
+	// count through the second getter — so they are read there rather than answered 0.
+	int32 DialogThreatCount() const { return Police.CopsInPursuit; }
+	int32 DialogHunterThreatCount() const { return Police.HuntersInPursuit; }
 
-	// `0x10175180` — blocks while the entity at `player+0x1db0` (the dialogue/companion partner) is
-	// in state 3. SEAM: the port has no partner slot on the player yet, so it answers false.
-	// TODO(dialogue-plan): recover `player+0x1db0` and the state-3 enum.
+	// `0x10175180` — blocks while the entity at `player+0x1db0` is in state 3. That word is
+	// `m_hControllerNPC` (`vtmb_fields CBasePlayer`), the `npc_VPlayerController` driving this body,
+	// NOT a dialogue partner; the predicate is ported as `FElysiumNpc::ControllerNpcBusy`
+	// (`Substrate/ElysiumNpcKernelDialogue.cpp`), over the `ControllerNpc` handle family EntityChain
+	// declared on `FElysiumNpc`.
+	//
+	// SEAM, and a SHAPE gap rather than a missing rule: retail's `+0x1db0` is a `CBasePlayer` word
+	// and this port carries it on the NPC, so the player-side predicate has no route to it. It
+	// answers false — the not-busy value — until the word moves or a back-reference exists.
 	bool DialogPartnerBlocks() const { return false; }
 
 	// The whole predicate, as one readable reason or nullptr when the player may talk. The string

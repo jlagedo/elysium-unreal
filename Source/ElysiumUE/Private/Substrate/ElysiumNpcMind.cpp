@@ -52,6 +52,21 @@ bool FElysiumNpcMind::IsResumableOwner(EElysiumBodyOwner Owner)
 		|| Owner == EElysiumBodyOwner::Ambient;
 }
 
+void FElysiumNpcMind::RequestDesiredState(int32 RetailIdealState, int32 RetailSourceLine)
+{
+	// `FUN_102ad260` / `FUN_102ad2d0`, the write half. Retail's body is three stores and a return:
+	// the file/line ideal-state trace (`+0x1b3c` / `+0x1b40`, which the shape map records ABSENT and
+	// the transition trace below stands in for), then `m_IdealNPCState = 8`.
+	//
+	// The typed `DesiredState` is deliberately NOT touched: no member of `EElysiumNpcState` is retail
+	// state 8, and mapping it onto Alert or Combat would be a different behaviour wearing this one's
+	// name. The raw id is stored so a reader — and the test — can see the request that was made.
+	PendingRetailIdealState = RetailIdealState;
+	Record(FString::Printf(
+		TEXT("ideal state requested: retail %d (AI_BaseNPCTroika.cpp:%d); no port state carries it"),
+		RetailIdealState, RetailSourceLine));
+}
+
 bool FElysiumNpcMind::RequestState(EElysiumNpcState NewState, const TCHAR* Reason)
 {
 	DesiredState = NewState;

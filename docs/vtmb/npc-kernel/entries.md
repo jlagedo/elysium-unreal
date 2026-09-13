@@ -38,7 +38,6 @@ Seeds and their direct callees (depth ≤ 1) that something outside the closure 
 | `0x1029f300` FUN_1029f300 | 3 | `0x10081ed0` FUN_10081ed0, `0x100847e0` FUN_100847e0, `0x1029f2a0` CAI_BaseNPCTroika::InputDisableThink |
 | `0x10026c50` CAISound::FUN_10026c50 ‼ | 2 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10026d10` CAISound::FUN_10026d10 | 2 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
-| `0x1014fa10` CAI_BaseNPC::FUN_1014fa10 | 2 | `0x10162c30` CBasePlayer::TraceAttack, `0x10162fa0` CBasePlayer::FUN_10162fa0 |
 | `0x101a7210` CCineNPC::vfunc585 | 2 | `0x101a72b0` CCineNPC::InputMoveToPosition, `0x101a7390` CCineNPC::InputBeginSequence |
 | `0x101a7880` CCineNPC::vfunc583 | 2 | `0x101a72b0` CCineNPC::InputMoveToPosition, `0x101a7390` CCineNPC::InputBeginSequence |
 | `0x101a8c30` FUN_101a8c30 | 2 | `0x101a8070` FUN_101a8070, `0x102c0270` FUN_102c0270 |

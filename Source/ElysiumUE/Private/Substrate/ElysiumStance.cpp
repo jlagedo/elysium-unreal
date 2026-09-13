@@ -61,6 +61,13 @@ FElysiumStanceChoice ElysiumStance::ChangeStance(const FElysiumStanceClips& Clip
 		return Choice;
 	}
 
+	// `CAI_BaseNPCTroika::ChangeStance` `0x102c1230` (story 29c-1, family Anim), the whole 70-byte
+	// body: the draw below, the disposition table's transition lookup (`0x100ecfc0`), the new stance
+	// into `m_CurrStance` (+0x64c8) and `curtime` into `m_flStanceTime` (+0x64e4). Retail declares
+	// it void and LEAVES the transition sequence in `EAX`, which `CAI_BaseNPCTroika::AddSceneEvent`'s
+	// Silence arm (`0x102c1680`) reads back as a sequence index; this runtime answers by clip name
+	// instead, and `FElysiumNpc::ChangeStanceForReaction` is where that hop happens.
+	//
 	// `do { new = RandomInt(0,2) } while (new == m_CurrStance)` -- uniform over the two stances that
 	// are not current. Drawn once from the offset instead of looping: the retry loop and a single
 	// draw over the other two have the same distribution, and this one cannot spin.

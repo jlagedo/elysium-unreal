@@ -136,6 +136,38 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Recovered on the way: slot 437 is `PreSelectSchedule` (the image's string; the oracle called
   `0x102ae920` `GetSchedule`); slot 439 is `SelectFailSchedule` inside `GetFailSchedule`
   `0x10281730`.
+- [x] **29a-1. The last two evidence sources: CRT bytes and accessors.**
+  Retail: after 29a the backlog had two sources no pass read. The C runtime: `crt_fid` named 207
+  bodies through Function ID, and missed the ones whose archive object and linked image analyse
+  to different extents (`memcpy` at `0x10430fa0`, 285 callers; `rand`; `strchr`; the `_fpclass`
+  / `_control87` family). The recovered layout: a leaf body that reads or writes one word of
+  `layout.tsv` and nothing else is named by that word. Everything else in the backlog has no
+  external source (314 no-SDK-twin slots, Troika's `NPC_V*.cpp` units, ~1,800 bodies under 64
+  bytes): those names are coined from a walk, which is 29c–29e's job.
+  Job (landed 2026-09-13): `corpus harvest` gained `crt` (`crt_match.py`: every symbol extent of
+  the staged VC6 SP5 `LIBC.LIB`/`LIBCMT.LIB` objects, relocation sites masked, searched at the
+  image's function entries; tier `binary`, the archive's own statement) and `accessor`
+  (`name_passes.accessor_pass`: shape from the decompiled C, word from `layout.tsv`, receiver
+  from the typed access, the slot's holder or the typed callers; tier `accessor` when coined,
+  `inferred` when an SDK header or `.cpp` defines that one-line body, the virtual preferred for a
+  slot body). Slot identity propagates a coined name as `accessor`. `NAME_TIERS` gained
+  `accessor`. Tests: `test_crt_match.py`, `test_accessor_pass.py`.
+  Result: 145 names applied, 83 inside the closure (41 CRT, 24 inferred, 18 accessor); closure
+  unnamed 3,350 → 3,267, core unnamed 1,428 → 1,392, `CAI_BaseNPC` unnamed slots 315 → 299. The
+  CRT pass reproduces 185 of FID's names and disagrees with none; 8 bodies VC6 links under two
+  symbols (`memcpy`/`memmove`, `__CIsqrt` and its siblings, `_atodbl`/`_atoflt`) are `unsettled`
+  with the reason, `0x10430fa0` among them. Recovered on the way: `CAI_BaseNPC#2` is
+  `GetCollideable` (`IServerUnknown`'s virtual, `&m_Collision`), `#145` is `BloodColor`, `#251`
+  is `IsActivityFinished`, `#464` is `GetState`, `#198` is `GetLocalVelocity`; slots 604/605/615
+  (`SelectScheduleMeleeCombat`, `SelectScheduleRangedCombat`, `CanBeSetOnFire`) named across the
+  species now that the vtable dump walks past 600. Measured and rejected: client.dll byte twins
+  (2 names), constructor shapes (12), SDK 2013 BSim. Two accessor refusals worth knowing:
+  `#158` `0x100b4dc0` is `m_lifeState == 0` (`IsAlive` by shape, no SDK body states it), and
+  `0x10027490` is `m_iEFlags & 1` (`IsMarkedForDeletion` by shape, a flag test). The second
+  harvest round proposes nothing but two rows the overlay already refuses (`CBaseDoor::Spawn`
+  and `CBaseEntity::Remove`, both names another body carries).
+  Unrecovered: the 1,392 core bodies with no source; the tracked number is now "core unnamed
+  with an unread evidence source", which is zero. Size: S. Effort: Fable / high.
 - [x] **29b-0. The shape's recovery: every word typed, every slot's signature.**
   Retail: a declaration needs what the ledger did not state. `fields.md` typed all 312 NPC-range
   words `undefined4`/`undefined1`; 929 offsets touched through `this` had no record; 315 base slots
@@ -169,7 +201,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   rows and 9 slots, each `unsettled` with its reason (the un-named members of retail
   `CTakeDamageInfo`; constructor defaults nothing reads; empty bodies with no NPC call site).
   Size: L. Effort: Opus / high, readers in parallel.
-- [ ] **29b. The shape: every field and every slot declared.**
+- [x] **29b. The shape: every field and every slot declared.**
   Retail: `layout.md` — the flattened `CAI_BaseNPCTroika` layout typed word by word (the 835
   datamap offsets, their interiors, and every word no datamap saves, to `+0x665c`), then each
   species class's own words; `signatures.md` — 617 Troika-line slots and the per-branch virtuals
@@ -200,7 +232,68 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: `npc-kernel/layout.md`, `signatures.md`, `slots.md`, `classes.md`; the census file is
   the record. Unrecovered: nothing new — 29b-0's `unsettled` rows carry over as recorded. Size: L.
   Effort: Opus / high.
-- [ ] **29c. The primitives: layers 0–9, in bulk.**
+  Landed (2026-09-13). `uv run elysium research gen_kernel_shape`
+  (`research/tooling/gen_kernel_shape.py`, over `kernel_shape.build`) writes three committed files
+  and `--check` verifies them byte for byte. **The census** (`Substrate/ElysiumNpcKernelShape.cpp`,
+  6.6k lines): 1,141 top-level words — 756 of the flattened `CAI_BaseNPCTroika` table and 385 a
+  species' own, with 391 interior rows collapsed onto the aggregate that owns them, because the port
+  declares one member per retail aggregate; 666 slot rows (617 Troika-line plus the 49 per-branch
+  virtuals past 583/617); the 77-class tree with its direct bases, vtables and the 77 entity
+  classnames it claims; and 2,344 species slot overrides as rows keyed on the retail class, not
+  subclasses. Every count is stored beside an FNV-1a 64 digest of the row stream the generator
+  hashed. **The slot surface**: `ElysiumNpcKernelSlots.inl` declares 585 `virtual`s on
+  `FElysiumNpc`, one per Troika-line slot the port does not already implement, each carrying `//
+  slot N 0x…… (tier)` and its `order.md` layer; `ElysiumNpcKernelSlots.cpp` defines them as named
+  stubs that tally `elysium.stubs` with the retail address and the owning story (466 `29c`, 91
+  `29d`, 28 `29e`). The 32 slots the port already runs are a reviewed table in the generator
+  (`SLOT_PORT_MAP`), and a generated name that would shadow anything in the port's entity chain —
+  methods *and data members*, because a member function hides a base's field silently and MSVC does
+  not warn — fails generation until a row decides it. That rule caught slot 534 `EyeLookTarget`,
+  which would have hidden `FElysiumCombatCharacter::EyeLookTarget` and broken the gaze tests. **The
+  shape**: the NPC's own 388 words (the `CAI_BaseNPC` and `CAI_BaseNPCTroika` layers) all have a
+  home — 144 mapped to members the port already had, 180 newly declared, default-initialised and
+  unwritten, on the struct that owns the concern (`FElysiumNpcScheduleHost` 26, `FElysiumNpcMemory`
+  9 and `FElysiumNpcSenses` 4, `FElysiumNpcCognition` 4, `FElysiumNpcMind` 2, `FElysiumNpcWitness`
+  3, `FElysiumNpcDialogue` 4, the leaf 128); 23 carried by the entity chain below the NPC; 28
+  implicit (the vtable pointer, the per-state capability byte this runtime derives, the schedule
+  loader and the alignment tail, and the 24 `COutputEvent`s the port fires by name through
+  `FElysiumEntity::FireOutput`); and 13 `absent` with a stated reason — retail's 16 KB debug ring
+  and its three cursors, the file/line selector/ideal-state/`TaskFail` stamps,
+  `CAI_MoveAndShootOverlay`, the squad pointer, `MeleeMoveRecord_t`, the nav link, the cached
+  `surfacedata_t`. `m_NPCState +0x5cc0` and `m_IdealNPCState +0x5cc4` are declared, on
+  `FElysiumNpcMind`, where they belong. `Substrate/ElysiumNpcKernelShapeMap.cpp` binds all 388 by
+  offset **in a form the compiler checks**: `ELYSIUM_NPC_WORD(0x60a8, FElysiumNpc, EnemySightings)`
+  compiles the member's type and identifier and stores its `sizeof`, so a rename or a deletion is a
+  build error instead of a stale comment; a private member takes the string form and says why.
+  `Tests/ElysiumNpcKernelShapeTests.cpp` (`Elysium.Substrate.NpcKernelShape.Census` and `.Map`)
+  walks both tables and requires the counts, the digest, the gapless 0–616 slot line and a binding
+  per NPC word back; `pipeline/tests/test_gen_kernel_shape.py` holds the generator's derivations.
+  `ClearSchedule`: eight of the nine substrate `Schedule.Clear()` sites became
+  `FElysiumNpc::ClearSchedule` (`0x10280d30`), so `PRESERVE_PATH` and the slot-435 dispatch now run
+  wherever a program is dropped. The ninth is the save-load reset and is deliberately still raw,
+  with the reason on it: nothing is running there, and the dispatch would release the NPC flag word
+  the payload has just restored. The test-side clears were reviewed and left: they set up a
+  fixture's record rather than ending a program. `ElysiumStub` gained an `FSurface` argument struct
+  with `Address` and `Story`, carried into `FTally` and the `elysium.stubs` readout, so the tally
+  joins `functions.md` by address; the five-argument `Fired` stays for the surfaces with no
+  recovered address. Decisions taken, none with a precedent to follow: (0) the census *header* is
+  hand-written and only the `.cpp`/`.inl` are generated, which is the `ElysiumActionTables`
+  convention: a header declares the shape and is reviewed, a generated file carries the rows; (1)
+  the 585 slot declarations are **generated** into an `.inl` included inside the class rather than
+  hand-typed — a surface that can drift from `signatures.tsv` is exactly what this story exists to
+  end, and a virtual can only be declared inside its class; (2) the 368 entity-chain words below
+  `CAI_BaseNPC` are census rows carrying their owning layer but not binding rows — they are
+  `CBaseEntity`'s, `CBaseAnimating`'s and `CBaseCombatCharacter`'s concerns and re-homing them is
+  those classes' story, not the kernel's; (3) a retail `float` holding an absolute curtime lands as
+  `double`, which every other stamp in this runtime already is; (4) every entity pointer lowers to
+  `FElysiumEntity*` because this port stands one leaf per classname, and a type with no port
+  counterpart lowers to `void*` or `int32` with the retail spelling in the comment and the arity
+  unchanged; (5) slots 442 and 444, whose declarations the ledger cannot tell from 441's and 443's,
+  land as `StartTaskSlot442` / `RunTaskSlot444` with "which body is which is unrecovered" on them;
+  (6) `FElysiumNpc` stays `final` — a virtual here declares the surface retail dispatches through,
+  not an extension point. Unrecovered, as 29b-0 left it: seven top-level words and seven Troika-line
+  slots are `unsettled`, and each landed with its recorded type and arity rather than being dropped.
+- [x] **29c. The primitives: layers 0–9, in bulk.**
   Retail: 1,695 core functions in the first ten layers of `order.md` — 1,156 are ≤ 64 bytes
   (accessors, predicates, one-field setters), 924 touch no NPC field, 1,325 fill a family slot
   (mostly species overrides of tiny virtuals: `IsX()`, `GetY()`), 21 are damaged decompilations.
@@ -221,6 +314,107 @@ the retail contract the code must match, the job, what it consumes or provides, 
   paragraph in the subsystem file its fields belong to.
   Unrecovered: the 21 damaged bodies until read from the listing. Size: XL — bulk, each row
   trivial. Effort: Sonnet / medium in bulk; Opus for the damaged rows and any verdict argued.
+  Landed (2026-09-13), **split**: the checklist, every verdict, and the port of every `rule` row
+  whose retail body is a *value* land here; the 915 `rule` rows whose body is code go to **29c-1**
+  below, with their size measured rather than guessed. The premise "each row trivial" did not
+  survive the reading — 582 of the 1,732 bodies are over 64 bytes and 347 are more than 25
+  statements, so the bulk half and the body half are two different jobs and are now two stories.
+  **The instrument.** `kernel_ledger` gained `--checklist <band>`, `--bodies <band>` and a verdict
+  overlay: `research/tooling/ghidra/driver/kernel_verdicts.tsv` (`address / verdict / band /
+  target / evidence`) is the record, `docs/vtmb/npc-kernel/checklist-0-9.md` is the ledger joined
+  with it and is regenerated from the corpus on every run, so no reading can be lost by a
+  regeneration; `--check` verifies it like the other ten tables. `--bodies` writes the decompiled
+  bodies as 23 reading packs under `$ELYSIUM_WORK_ROOT` (never committed, `research/CLAUDE.md`),
+  closing on whichever of 120 rows or 70 KB it reaches first, because 120 three-byte accessors and
+  120 bodies off the top of the band are not the same reading. `merge_verdicts` folds batches in
+  with later sources winning, refuses an address outside the band, is idempotent, and `--audit`
+  prints every band's standing. `coverage.md` gained `## Verdicts by layer band`: **a verdict is a
+  citation** — it says the body was read and what was done with it — so the table measures each
+  band's core against port citations, oracle citations *and* verdicts, and its **Neither** column
+  is the acceptance measure of 29c, 29d and 29e.
+  **The reading.** 1,732 core functions, every one verdicted, in 23 Sonnet batches over the packs
+  with the rubric and the exact row format, reviewed here: **1,471 `rule`** (915 whose target is a
+  port method, 417 `registry:<slot>`, 139 `default:<literal>`), **150 `present`**, **108
+  `mechanism`**, **3 `unsettled`**, and — the one count the story's premise got wrong — **0
+  `dead`**: every core function of the first ten layers either fills a family vtable slot or has a
+  caller inside the closure. `coverage.md`'s *Neither* for layers 0–4 and 5–9 is **0** and **0**.
+  Review found four systematic batch errors and corrected all of them: slots 580, 452 and 451 (the
+  class's own schedule id space, its load-once gate and its scheduling-error name) had been called
+  `mechanism` by some batches and `rule` by others — they are species data and are now 42 uniform
+  `registry:` rows; `AutoMovement 0x10280a50` was called `mechanism` for Unreal's root motion, but
+  it applies the interval movement only under `GetMoveType() == 4` and a clear `0x400`, and a gate
+  is the retail contract a modernization keeps; and one `present` (`CPayphone::CanTalk
+  0x101aaee0`) was downgraded because the port carries one of its seven arms.
+  **The port.** Three decisions, each recorded because none had a precedent. (1) *A constant body
+  is data.* A Troika-line slot whose whole retail body is `return;` or `return <literal>;` is a
+  recovered fact, not a behaviour someone wrote, so the generator emits that body rather than a
+  stub — the same argument the story already makes for a species override — and
+  `gen_kernel_shape` now reads the overlay: `default:<literal>` emits the body **and** verifies the
+  recorded literal against the decompiled C, so a misread constant fails generation instead of
+  compiling. **86 slots stopped being stubs** (499 remain), each with a generated probe that calls
+  the virtual with value-initialised arguments; `Elysium.Substrate.NpcKernelSlots.Defaults` walks
+  all 86, requires retail's own literal back, and requires that the call tallied **no** stub —
+  that second half is what proves the body replaced the stub rather than sitting beside it. (2)
+  *A species override of a constant is a registry row.* The census's 2,344 override rows gained
+  `Verdict` and `Default`; 1,463 carry a verdict and **451 carry the literal that species
+  answers**, read mechanically off the body under a regex strict enough that only a one-statement
+  body matches. The base virtual that *reads* that table is not built: nothing in this runtime
+  dispatches through these virtuals yet, and standing a species dispatcher before a caller exists
+  is the seam-by-guess 29b existed to end. (3) *`hand:<PortMethod>`* is the third target spelling:
+  the generator declares the virtual and emits no definition, so an unwritten body is a link error
+  rather than a silent stub. It has no user yet and is covered by the generator's own tests.
+  **The two bodies ported by hand** are the authored group lists, which `authored-control.md`
+  § "The navigation and reaction keyfields (2026-09-08)" had already walked and nothing had
+  claimed: `FElysiumNpc::ParseGroupMask` is `0x102989e0` and `0x10298910` — space-separated
+  decimal ids, `id - 1` is the bit, anything outside 1..32 dropped in silence, `atoi`'s zero for a
+  non-number — with the one difference between them as its only parameter, an unset `hint_groups`
+  answering `0xffffffff` and an unset `interesting_place_groups` answering `0`.
+  `FElysiumNpcScheduleHost::HintGroupMask +0x62e4` replaced 29b's unwritten `TSet<int32>` with
+  retail's own 32-bit set (which is what `FValidateHintType 0x10295c20` ANDs a hint node against),
+  both keyfields now parse on the write as retail's KeyValue does, and
+  `Elysium.Substrate.NpcGroupMask` is the test. It also surfaced a **named divergence**:
+  `AcceptsAmbientGroup` treated an empty interesting-place list as "every group" where retail's zero
+  mask matches nothing, and 1,005 shipped NPCs author `"0"`. **Closed in 29c-1**: the admission rule
+  is now `0x102dad60`'s own, `place->m_iGroupID +0x574 & npc->m_iInterestingPlaceGroups +0x62dc`
+  against the mask `CAI_InterestingPlace::Spawn 0x102d9c20` folded, so an unset or `"0"` list
+  matches no place — retail's answer, including its consequence for those 1,005 NPCs.
+  **The damaged rows.** All 21 read from `corpus asm` one at a time and walked into `npc-ai/shape.md`
+  § "The damaged bodies of layers 0–9, read from the listing (2026-09-13)". Thirteen are one
+  `JMP [vtable + 0xNNN]` — a forward to slot `0xNNN / 4` of the same object, which is a fact about
+  the table rather than a missing body — and the table names each pair (`Kill` on a hint node is
+  `ScriptHide`; `OnRestore(bool)` replaces its own argument with `0` before calling
+  `SetCheckUntouch`; `CAI_Motor`'s slot 1 is its owner's `TaskFail`). Six carry a rule and are
+  walked in full. `CDialog::message_send 0x100e58e0` turns out to reach the closure through a
+  numeric offset collision and belongs to 0004's dialogue session, not to this kernel.
+  Unrecovered, and counted as such: **3 `unsettled`** — `0x102702d0` (an `__ftol` compared against
+  x87 status-word artifacts, the same folded sequence in the listing), `0x1028e870` (the float at
+  `+0x62cc` bound to the return-storage pointer, the comparison lost) and `0x102623e0` (returns an
+  unassigned register, no caller of any kind). Also unrecovered: slot 37's float constant at
+  `0x104454c8` and slot 240's global `DAT_1072b360`, which are `return <one word>;` bodies whose
+  word the corpus does not hold, so neither is a `default:` the generator will emit.
+  Verification: `uv run elysium build` clean; `uv run elysium test Elysium.` 658/658 (656 after
+  29b, plus the two suites above); `uv run pytest pipeline/tests -q` green with 11 new cases;
+  `kernel_ledger --check`, `kernel_shape --check` and `gen_kernel_shape --check` all pass.
+- [ ] **29c-1. The primitives: the bodies.**
+  Retail: the 915 `rule` rows of `checklist-0-9.md` whose `target` is a port method — the layer
+  0–9 bodies that are code rather than a value. 582 of the band's 1,732 are over 64 bytes; the
+  heavy families are the per-species `SquadSlotName` translations (slot 546), the sound hooks
+  (slots 488–510), the `Create*` component factories (424–430), the turn-activity ladders (572),
+  the facing-target queue, the tactical-position validators, and the `CAI_Motor`/`CAI_Navigator`
+  helpers the port has no seam for.
+  Gap: each row already names the port method that will carry it and carries a one-line walk in
+  the checklist's *evidence*; what is missing is the body, its test, and — for the 582 over 64
+  bytes — its walked paragraph in the subsystem file its fields belong to.
+  Job: port them by owning struct, not by address, so a family lands together with one fixture:
+  the sound hooks, the component factories, the squad-slot id spaces, the turn ladder, the facing
+  queue, the hint validators. A row whose port seam does not exist yet (squad, motor, navigator)
+  builds the seam and leaves it answering nothing with the retail field named, per `CLAUDE.md`.
+  Acceptance: every `rule` row of layers 0–9 has a body and a test; every body over 64 bytes has a
+  walked paragraph; `gen_kernel_shape`'s stub count for the band reaches zero, with each slot's
+  overlay row spelled `hand:<PortMethod>` so the linker is what checks the claim.
+  Consumes: 29c. Provides: the leaves 29d and 29e's bodies call. Oracle: the subsystem files;
+  `checklist-0-9.md` stays the index. Unrecovered: 29c's three `unsettled` rows and the two
+  unrecovered constants. Size: XL. Effort: Opus / high, by family, in parallel.
 - [ ] **29d. The middle: layers 10–18.**
   Retail: 347 core functions — the three `GatherConditions` sweeps (10a–10c, landed), the
   see-unknown sweep's neighbours, `CAI_Memory` and the sense helpers, hint and navigator
@@ -1324,9 +1518,12 @@ the argument for building the kernel bottom-up in bulk rather than feature by fe
 two bands are shape and accessors, the top two are the interpreter, and every feature story
 today re-walks pieces of both. So:
 
-1. **29a → 29b-0 → 29b → 29c → 29d → 29e**, in that order. Each is a layer band; each enters
-   implementation with its checklist generated from the ledger and leaves with its
-   `coverage.md` count at zero for its band.
+1. **29a → 29a-1 → 29b-0 → 29b → 29c → 29c-1 → 29d → 29e**, in that order. Each is a layer band;
+   each enters implementation with its checklist generated from the ledger and leaves with its
+   `coverage.md` count at zero for its band. 29c is the band's *reading* — every function
+   verdicted, so the band's **Neither** reaches zero — and 29c-1 is the band's *bodies*; the split
+   is 29c's landed paragraph. 29d and 29e are expected to split the same way, and their checklists
+   are `kernel_ledger --checklist 10-18` / `19-99` on the same overlay.
 2. The open feature stories shrink to what sits **above** the bands already built. The split of
    each story's cited functions between layers ≤ 9 (29c's) and > 9, from the ledger today:
    25a 3/9 · 25b 1/21 · 25c 1/0 · 24 1/1 · 10g 2/3 · 11 6/1 · 27 8/0 · 26 6/8 · 28 0/1 ·

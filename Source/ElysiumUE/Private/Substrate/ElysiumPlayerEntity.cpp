@@ -55,6 +55,10 @@ bool FElysiumPlayer::CanAttemptStealthKill() const
 {
 	// `0x101681a0`. Other handles (`+0xfe8`, `+0x1040`, `+0x1eb8`, `+0x19c0`, `+0x19cc`,
 	// menu `0x1023bd00`) and the `0x10175180` skip have no producer here and answer not-busy.
+	// `0x10175180` is now ported — it is `m_hControllerNPC` (`+0x1db0`) in state 3, not a dialogue
+	// partner, and lands as `FElysiumNpc::ControllerNpcBusy` (story 29c-1, family Dialogue) over the
+	// handle `FElysiumNpc` carries. It stays a skip HERE only because that word sits on the NPC in
+	// this port, which `DialogPartnerBlocks` states as a shape gap.
 	if (!IsAlive() || IsInert())
 	{
 		return false;
@@ -1448,8 +1452,15 @@ const TCHAR* FElysiumPlayer::DialogRefusalReason() const
 	{
 		return TEXT("a combat timer is running");
 	}
-	// The threat count (`0x1017f770` / `0x1017f8b0`). Seam: answers 0.
-	if (DialogThreatCount() > 0)
+	// The two threat counts, as `FUN_10178170` tests them: `0x1017f770` (`+0x1d10
+	// m_iCopsInPursuitCount`) first, and only when that is below 1 does it read `0x1017f8b0`
+	// (`+0x1d14 m_iHuntersInPursuitCount`). Two arms, not a sum — both recovered by story 29c-1,
+	// family Dialogue, and both now read off `Police` instead of a seam.
+	if (DialogThreatCount() >= 1)
+	{
+		return TEXT("the police are still in pursuit");
+	}
+	if (DialogHunterThreatCount() >= 1)
 	{
 		return TEXT("something is still hunting the player");
 	}

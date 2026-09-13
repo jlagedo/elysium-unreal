@@ -30,6 +30,35 @@ namespace ElysiumEntityCaps
 	// clears it and returns 0 outright, which is retail saying a live scripted shot is never carried
 	// across a `trigger_changelevel`.
 	inline constexpr int32 AcrossTransition = 0x2;
+
+	// `0x8`, the bit `CGeneric_NPC_bathack::ObjectCaps` (`0x1035ad50`) ORs in. The port reads only
+	// `AcrossTransition`, so this bit is RECORDED and unread; the Source name for it is
+	// `FCAP_NOTIFY_ON_TRANSITION`, which this does not claim to have recovered from `vampire.dll`.
+	inline constexpr int32 Bit3 = 0x8;
+
+	// --- Story 29c-1, family Lifecycle: the four slot-117 species overrides -------------------------
+	//
+	// Four classes on the `CAI_BaseNPC` line override `ObjectCaps` and none of them has a port class
+	// of its own, so they land as the census-keyed table retail's override set really is. Each row
+	// carries the retail class and the address of the body that fills slot 117 for it, so a reader
+	// can check it against `docs/vtmb/npc-kernel/slots.md`. Every one of them chains the base first
+	// (`CBaseEntity::ObjectCaps` `0x100b4320`) and then applies one mask.
+	struct FSpeciesRow
+	{
+		const TCHAR* RetailClass = nullptr;
+		const TCHAR* Body = nullptr;
+		int32 AndMask = ~0;   // applied first
+		int32 OrMask = 0;     // then this
+	};
+
+	// The four rows, for a test that exercises each by name.
+	const FSpeciesRow* SpeciesRows(int32& OutCount);
+
+	// The row for a retail class, or null when that class overrides nothing.
+	const FSpeciesRow* SpeciesRowOf(const TCHAR* RetailClass);
+
+	// `BaseCaps` put through `RetailClass`'s override, or unchanged when it has none.
+	int32 SpeciesObjectCaps(int32 BaseCaps, const TCHAR* RetailClass);
 }
 
 // How a `scripted_sequence` sends its NPC to the mark — `m_fMoveTo`'s travelling values. 0 ("No")
@@ -684,6 +713,19 @@ public:
 
 	// `#<idx> <targetname>(<classname>)` — the canonical debug string, used everywhere.
 	FString DebugString() const;
+
+	// +0x0224 `m_debugOverlays` — CBaseEntity's debug-draw bit field, set by retail's `ent_text` /
+	// `npc_*` console commands and read by every `DrawDebugGeometryOverlays` /
+	// `DrawDebugTextOverlays` body (story 29c-1, family Debug). The bits those bodies gate on, with
+	// the retail name where it is recovered: `0x1` text overlays, `0x4` and `0x20`
+	// (`CScriptedTarget`'s pair), `0x1000` collision box, `0x2000` nearest nav node, `0x4000`
+	// navigator route, `0x10000` OVERLAY_NPC_ZAP (drop weapon and remove), `0x20000` enemy-memory
+	// labels, `0x200000` enemy/target lines, `0x400000` view cone.
+	//
+	// Nothing in this runtime SETS it yet — there is no `ent_text` console command here — so every
+	// arm is off until a test or a future debug surface writes it. That is the recovered default,
+	// not a gap: retail's word is zero on a freshly spawned entity too.
+	int32 DebugOverlays = 0;
 
 protected:
 	void NotifyOwnerOfTermination(EElysiumOwnedEntityTermination Reason);

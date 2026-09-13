@@ -1,7 +1,7 @@
 slot	class	method	return	params	const	tier	retail_words	sdk_words
 0		SetRefEHandle	void	const CBaseHandle&		walked	1	
 1		GetRefEHandle	CBaseHandle&		const	sdk	0	0
-2		GetCollideable	ICollideable*			walked	0	
+2		GetCollideable	ICollideable*			walked	0	0
 3		GetNetworkable	IServerNetworkable*			walked	0	
 4		GetBaseEntity	CBaseEntity*			walked	0	
 5		~CBaseEntity	void*	unsigned int		walked	1	
@@ -82,8 +82,8 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 80		GetServerClass	ServerClass*			walked	0	
 81		YouForgotToImplementOrDeclareServerClass	int			walked	0	
 82		GetDataDescMap	datamap_t*			walked	0	
-83		GetEFlags	int			walked	0	
-84		SetEFlags	void	int		walked	1	
+83		GetEFlags	int			walked	0	0
+84		SetEFlags	void	int		walked	1	1
 85		GetEdict	edict_t*			walked	0	
 86		ShouldTransmit	bool	int, const edict_t*, const void*, int, int		walked	5	1
 87		SetTransmit	void	CCheckTransmitInfo*		walked	1	2
@@ -144,7 +144,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 142		OnTakeDamage	int	CTakeDamageInfo&		sdk	1	1
 143		TakeHealth	int	float, int		sdk	2	2
 144		Event_Killed	void	CTakeDamageInfo&		sdk	1	1
-145		BloodColor	int			walked	0	
+145		BloodColor	int			walked	0	0
 146		TraceBleed	void	CVDmg_t*, const Vector&, trace_t*		walked	3	
 147		IsTriggered	bool	CBaseEntity*		walked	1	
 148		AddPoints	void	int, bool		walked	2	
@@ -197,7 +197,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 195		LocalEyeAngles	const QAngle&			walked		
 196		EarPosition	Vector			walked	1	
 197		BodyTarget	Vector	const Vector&, bool, bool		walked	4	
-198			const Vector&			walked	0	
+198		GetLocalVelocity	const Vector&			walked	0	0
 199		GetVelocity	void	Vector*, AngularImpulse*		sdk	2	2
 200		Illumination	int			walked	0	
 201		FVisible	bool	CBaseEntity*, int, CBaseEntity**, int		walked	4	3
@@ -250,7 +250,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 248		GetIdealSpeed	float		const	sdk	0	0
 249		GetIdealAccel	float		const	sdk	0	0
 250		StudioFrameAdvance	float	float		walked	1	0
-251		IsActivityFinished	bool			walked	0	
+251		IsActivityFinished	bool			walked	0	0
 252		SelectWeightedSequenceForStat	int	Activity, int, int		walked	3	
 253		SelectHeaviestSequenceForStat	int	Activity, int, int		walked	3	
 254		SelectSameSequenceForStat	int	Activity, int, int		walked	3	
@@ -277,7 +277,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 275		RemoveAllGestures	void			walked	0	
 276		Blink	void			sdk	0	0
 277		SetViewtarget	void	const Vector&		walked	1	
-278		GetViewtarget	const Vector&		const	walked	0	
+278		GetViewtarget	const Vector&		const	walked	0	0
 279		SetFlexWeight	void	int, float		walked	2	
 280		SetFlexWeight	void	char*, float		walked	2	
 281		GetFlexWeight	float	int		walked	1	
@@ -463,7 +463,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 461		SelectIdealState	NPC_STATE			walked	0	
 462		ShouldGoToIdleState	bool			sdk	0	0
 463		OnStateChange	void	NPC_STATE, NPC_STATE		sdk	2	2
-464		GetState	NPC_STATE			walked	0	
+464		GetState	NPC_STATE			walked	0	0
 465		OnChangeActivity	void	Activity		sdk	1	1
 466		ShouldMaintainActivity	bool			walked	0	
 467		QueryHearSound	bool	CSound*		sdk	1	1
@@ -511,7 +511,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 509		ShouldPlayIdleSound	bool			walked	0	
 510		ShouldPlayFloatSound	bool			walked	0	
 511		StopLoopingSounds	void			walked	0	
-512		GetExpresser	CAI_Expresser*			walked	0	
+512		GetExpresser	CAI_Expresser*			walked	0	0
 513		CapabilitiesGet	int		const	sdk	0	0
 514		MovementCost	bool	int, const Vector&, const Vector&, float*		walked	4	
 515		CalcIdealYaw	float	const Vector&		walked	1	

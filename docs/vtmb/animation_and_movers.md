@@ -3979,6 +3979,52 @@ slot, so the two live ranges do not intersect. What the span between `0xae4` and
 **not established** — no `C_AnimationLayer` constructor states the element's real size — and no
 observed behavior depends on it.
 
+### The layer table's own bookkeeping — `0x10099020`, `0x100994c0`, `0x10099470`, `0x10099540`, `0x100995e0`, `0x10099630`, `0x10099660`, `0x10099570`, `0x100991b0` [VtMB — decompiled]
+
+The six virtuals that fill, search and clear the four records above, walked for story 29c-1.
+`GetFirstGestureLayer` (slot 267, `0x10098a40`) answers `0` for every class in the hierarchy, so no
+slot is reserved and every scan below starts there.
+
+`SetLayer` (slot 268, `0x10099020`) writes eleven of the twelve fields in one pass —
+`m_nActivity`, `m_flCycle = 0`, `m_flPlaybackRate = 1.0`, `m_nSequence`, `m_flBlendIn = 0.2`,
+`m_flBlendOut = 0.2`, `m_flWeight = 0.1`, `m_flWeightMax = 1.0`, `m_bAutoKillWhenFinished`,
+`m_fSequenceFinished = 0`, `m_flLastEventCheck = 0` — and then zeroes both blend fractions when
+`GetSeqDesc(seq)->flags & 0x2` (SNAP) is set. `m_fFlags` (`+0x00`) is the one field it does not
+touch. The seed weight is load-bearing rather than cosmetic: occupancy *is* the zero-weight test,
+so a layer pushed this frame has to read as held before anything has advanced it.
+
+`FindGestureLayer` (slot 271, `0x100994c0`) scans the four records for `m_flWeight != 0 &&
+m_nActivity != -1 && m_nActivity == activity` — in that order — and answers `-1` on a miss.
+`AllocateLayer` (slot 272, `0x10099470`) answers the lowest record whose `m_flWeight` is exactly
+zero, or `-1`; there is no eviction and no priority displacement, and `AddGesture` propagates the
+refusal to its caller.
+
+`HasLayer` (slot 270, `0x10099540`) is the lookup and a `!= -1`, nothing more.
+`RemoveLayer` (slot 269, `0x10099660`) writes exactly two fields — the weight first, then the
+sequence — and leaves `m_nActivity` standing, so a freed slot still remembers what it was pushed
+for and only the liveness term keeps the lookup from finding it.
+`RemoveLayerByOwner` (slot 274, `0x100995e0`) inlines that same pair behind the lookup.
+`RemoveAllGestures` (slot 275, `0x10099630`) loops the stride four times writing the same two
+fields, and touches no cycle.
+
+`RestartGesture` (slot 273, `0x10099570`) finds the layer and rewinds `m_flCycle` to 0, keeping the
+weight and the envelope; when nothing holds it AND `addifmissing` is set it calls `AddGesture`
+(`0x100991b0`), which re-tests `HasLayer`, draws `SelectWeightedSequence(activity)` and treats a
+result of **1 or less** as the refusal — not just `-1` — then allocates, calls `SetLayer` and writes
+the owner activity into `+0x758` a second time. The decompiler binds the `addifmissing` test to the
+activity argument; the listing (`MOV AL, [ESP+0x10]`) shows it is the second parameter.
+
+`AddFlinchGesture` (slot 265, `0x10099690`) refuses on `!IsAlive()` (slot 158) and then on
+`m_bNoFlinch` (`+0x0730`), scans records 1 and 2 against a running best that starts at 0 and takes a
+**strictly** earlier `flExpireTime`, and only then draws `SelectWeightedSequence(activity)` — a miss
+leaves the chosen record entirely untouched, stamp included. The write order is sequence, fade-out,
+`nPoseParamIndex = 0x18`, fade-in, `nLatch = (nLatch + 1) & 3`, then
+`flExpireTime = fadeIn + curtime + fadeOut`. The pose parameter is the optional tail: a name that
+`LookupPoseParameter` cannot resolve leaves the seeded `0x18` standing.
+
+**Unrecovered:** what `m_fFlags` (`+0x00`) and `m_flLastEventCheck` (`+0x2c`) are read by — no body
+in the `CAI_BaseNPC` closure reads either — and what `nLatch`'s two bits select.
+
 ## A.5 Skinning [data-verified + VtMB decompiled]
 
 All character models are `VertexListType==0` (SKINNED, 44B `StudioVertex`); the

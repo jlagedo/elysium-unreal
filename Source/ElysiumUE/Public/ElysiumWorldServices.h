@@ -291,6 +291,23 @@ public:
 	// pull would desynchronise the moment the next command lands. An NPC has no user command, so
 	// there is nothing to desynchronise against.
 	virtual FElysiumLocomotionSample SampleLocomotion() const = 0;
+
+	// `CAI_Motor`'s own vtable slot 16 (`0x102e1300`, story 29c-1 family Motor) — how far ahead of a
+	// stop this body has to begin braking, SOURCE units, which is what retail's navigator asks its
+	// motor before it decides to slow for a goal. Retail's body, arm for arm:
+	//
+	//     float decel = GetOuter()->vtable[0x3e4]();              // the deceleration magnitude
+	//     if (decel > 0.0f) {                                     // _DAT_1044fab0 = 0.0
+	//         float v = Length(m_vecVelocity);                    // motor +0x3c/+0x40/+0x44
+	//         float t = v / decel;
+	//         float d = v * t - decel * t * t * 0.5f;             // _DAT_10449270 = 0.5
+	//         if (d > 10.0) return d;                             // _DAT_1044fac0 = 10.0
+	//     }
+	//     return 10.0f;                                           // _DAT_1044e664 = 10.0
+	//
+	// **10.0 is the default and it is retail's own floor**, not a port invention: a motor with no
+	// deceleration source reaches exactly the `decel <= 0` arm, and that arm returns this number.
+	virtual float MinStoppingDistanceUnits() const { return 10.0f; }
 };
 
 // The substrate's outbound seam.
@@ -1424,6 +1441,18 @@ public:
 	// empty `Rel`, an owner that does not resolve, no audio device).
 	virtual FElysiumAudioVoiceHandle PlayBodySound(const FElysiumEntityHandle& Owner,
 		const FElysiumBodySound& Sound) = 0;
+
+	// SEAM (story 29c-1, family Sounds): retail's `CAI_BaseNPC::StopLoopingSounds` (`0x1027caa0`)
+	// is one call — `IEngineSound::vfunc5(engine->IndexOfEdict(edict()), 1)`, "stop what this
+	// entity is playing". Nothing in this substrate is addressable by entity: `PlayBodySound`
+	// returns a voice handle the PRODUCER keeps and the map actor's `(Owner, Channel)` pool is what
+	// holds the live voice, so a caller that only has the entity has nothing to stop.
+	//
+	// Declared with a do-nothing default rather than as a pure virtual, because every existing
+	// implementation honestly answers nothing: the verb exists so the ported body asks for exactly
+	// what retail asks for, and the day the map actor keeps a per-owner voice index it answers.
+	// `Channel` is retail's own second argument, carried through as the recovered literal.
+	virtual void StopEntitySounds(const FElysiumEntityHandle& Owner, int32 Channel) {}
 
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) = 0;
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) = 0;

@@ -22,6 +22,53 @@ headers, and the two reading overlays beside the tool (`kernel_fields.tsv`,
 edges and counts — the category `docs/vtmb/` already commits — and never a decompiled body.
 The provenance line at the top of each file names the module hash and the corpus dump date.
 
+One table is not written from the corpus alone. `checklist-<band>.md` is the ledger joined with a
+**verdict overlay**, `research/tooling/ghidra/driver/kernel_verdicts.tsv`:
+
+    uv run elysium research kernel_ledger --checklist 10-18   # render one more band's checklist
+    uv run elysium research kernel_ledger --bodies 0-9        # the reading packs, out of repo
+    uv run elysium research merge_verdicts --from <dir>/verdicts-*.tsv --band 0-9
+    uv run elysium research merge_verdicts --audit            # what each band still owes
+
+A verdict is one word a porting story wrote against one retail function after reading its
+decompiled body, plus the port target and the one-line reason: **rule** (a formula, a threshold,
+an ordering or a state write; ported verbatim onto the port's virtual with a test), **mechanism**
+(Unreal supplies it; the target names the service seam and nothing is ported), **present** (the
+port already runs it; the target names the port function), **dead** (no closure caller and no
+slot), **unsettled** (read and not settled, with the reason — counted apart, because it is a
+recorded failure to reach a verdict rather than a verdict).
+
+The overlay is the record and the rendered checklist is a view of it, which is the whole point: the
+checklist is regenerated from the corpus on every run, and a verdict has to survive that. A row
+with no overlay entry renders an empty verdict. **A verdict counts as a citation** — it says the
+body was read and what was done with it — so `coverage.md`'s `## Verdicts by layer band` table
+measures each band's core functions against port citations, oracle citations *and* verdicts, and
+its **Neither** column is the acceptance measure of stories 29c, 29d and 29e.
+
+A `rule` row's target is one of four spellings, and the last two are read by `gen_kernel_shape`:
+`FElysiumSomething::Method` (the port method that carries the body), `registry:<slot>` (a species
+override of a constant-returning virtual: a row in the class registry, not code),
+`default:<literal>` / `default:void` (retail's whole body is one literal, so the generator emits
+that body and the automation suite calls it), and `hand:<PortMethod>` (the body is written by hand
+in the substrate, so the generator emits no definition and the linker checks the claim).
+
+The reading packs under `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/` carry decompiled
+bodies and are never committed, the same rule the rest of `research/` follows.
+
+The tables have one consumer that is not a reader:
+
+    uv run elysium research gen_kernel_shape          # regenerate
+    uv run elysium research gen_kernel_shape --check  # verify the committed C++, write nothing
+    uv run elysium research gen_kernel_shape --report # the census summary, writing nothing
+
+`research/tooling/gen_kernel_shape.py` transcribes `layout`, `signatures`, `classes` and the slot
+bodies into project source — `Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelShape.cpp` (the
+census the runtime asserts its own shape against), `ElysiumNpcKernelSlots.inl` (one `virtual` per
+Troika-line slot the port has no body for) and `ElysiumNpcKernelSlots.cpp` (their stubs, each
+tallying `elysium.stubs` with the retail address and the story that owns it). It reads the corpus
+through `kernel_shape.build`, so a table that drifts from the ledger fails generation rather than
+being emitted. Nothing in `uv run elysium build` runs it.
+
 ## How to read it
 
 Start from the question:
@@ -38,6 +85,7 @@ Start from the question:
 | Which kernel functions does the rest of the game call — the producers other subsystems own? | `entries.md` |
 | What has neither the port nor the oracle mentioned yet; which bodies are damaged? | `coverage.md` |
 | Which functions still have no name? | `unnamed.md` |
+| What did the porting story decide about every function of layers 0–9, and why? | `checklist-0-9.md` |
 | Which `docs/vtmb` section walks address `0x10……`? | `index.md` |
 | The raw call graph inside the closure | `graph.tsv` |
 
@@ -93,7 +141,9 @@ entity base classes (`CBaseEntity`, `CBaseAnimating`, `CBaseFlex`, `CBaseCombatW
   layout, and offsets a species adds are listed in a second table with their owning class.
 - It does not name functions. `unnamed.md` is the backlog (a `FUN_` or the dump's `vfuncN`); a
   recovered name lands in `corpus names` with its evidence (`corpus harvest` proposes them) and
-  the next regeneration picks it up. An `unsettled` overlay row's reason is shown in
+  the next regeneration picks it up. A name's tier travels with it: `binary` (the image, or the
+  VC6 SP5 archive's bytes), `doc`, `inferred`, `accessor` (coined from the one word the body
+  touches -- the member is the fact, the spelling is convention). An `unsettled` overlay row's reason is shown in
   `unnamed.md` and in `coverage.md`'s `CAI_BaseNPC` slot list. *Core* in `coverage.md` is a
   family or helper class method, or a body touching an offset past `CBaseCombatCharacter`'s
   layout, so a name that moves a body into `CBaseEntity`'s namespace also moves it out of the

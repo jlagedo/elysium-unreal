@@ -132,7 +132,32 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera, EElysiumField::Key);
 	ElysiumAddClassField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction, EElysiumField::Key);
 	ElysiumAddClassField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
-	ElysiumAddClassField(D, TEXT("interesting_place_groups"), &FElysiumNpc::InterestingPlaceGroups);
+	// `interesting_place_groups` -> `m_sInterestingPlaceGroups +0x62d8`, parsed into
+	// `m_iInterestingPlaceGroups +0x62dc` on the write, as `0x10298910` is.
+	{
+		FElysiumFieldAccessor Acc;
+		Acc.ApplyFlags(ElysiumFieldDefault);
+		Acc.Type = EElysiumVariantType::String;
+		Acc.Get = [](const FElysiumEntity& E)
+		{ return FElysiumVariant::String(static_cast<const FElysiumNpc&>(E).InterestingPlaceGroups); };
+		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{ static_cast<FElysiumNpc&>(E).SetInterestingPlaceGroups(V.ToString()); };
+		D.Fields.Add(FName(TEXT("interesting_place_groups")), MoveTemp(Acc));
+	}
+	// `hint_groups` -> `m_sHintGroups +0x62e0`, and its parse into `m_iHintGroups +0x62e4`. The
+	// pair is one field and not two, because retail parses on the write (`0x102989e0` off the
+	// KeyValue) rather than on the first read; an NPC whose key never arrives keeps the all-ones
+	// default and admits every hint group, which is retail's answer for an unset list.
+	{
+		FElysiumFieldAccessor Acc;
+		Acc.ApplyFlags(EElysiumField::Key | EElysiumField::Save);
+		Acc.Type = EElysiumVariantType::String;
+		Acc.Get = [](const FElysiumEntity& E)
+		{ return FElysiumVariant::String(static_cast<const FElysiumNpc&>(E).ScheduleHost.HintGroups); };
+		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{ static_cast<FElysiumNpc&>(E).SetHintGroups(V.ToString()); };
+		D.Fields.Add(FName(TEXT("hint_groups")), MoveTemp(Acc));
+	}
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
 	// value instead of raising AttributeError. The dialogue runner drives the count; it stays 0 until a conversation closes.
@@ -182,6 +207,10 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// `teleport_move_timer` -> `m_flTeleportMoveTimer` (+0x65dc): the third arm of
 	// `ShouldThinkFrequently()`. A keyfield with no code writer; see the member.
 	ElysiumAddClassField(D, TEXT("teleport_move_timer"), &FElysiumNpc::TeleportMoveTimer, EElysiumField::Save);
+	// `floatfreq` -> `m_iFloatSoundFrequency` (`CBaseCombatCharacter +0x10e8`, `fieldType 0`): the
+	// authored "the float sound plays 1 time in X" frequency both halves of slot 510 roll against
+	// (`Substrate/ElysiumNpcKernelSounds.cpp`). 0 and 8 disable the hook.
+	ElysiumAddClassField(D, TEXT("floatfreq"), &FElysiumNpc::FloatSoundFrequency, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);
@@ -269,6 +298,12 @@ static void BuildNpcMakerClass(FElysiumClassDesc& D)
 // One shared leaf per living-NPC classname (a class-for-class registration, so the registry's exact
 // case-folded Find resolves each). npc_VCamera is a camera control entity with no model — left as an
 // inert record for now. The two maker classnames share the maker leaf.
+//
+// This is the registration of the classnames a map may spawn. The other half of "species are data"
+// — which retail class each classname is, what it derives from, which vtable slots it overrides and
+// with which body — is the class registry in `Substrate/ElysiumNpcKernelShape.cpp`
+// (`ElysiumNpcKernelShape::Classes()` and `::Overrides()`, 77 classes and 2,344 override rows,
+// generated from the kernel ledger). Neither is a subclass and neither ever becomes one.
 struct FElysiumNpcRegistrar
 {
 	FElysiumNpcRegistrar()

@@ -1943,6 +1943,16 @@ struct FElysiumRecordingServices final
 	// a volume without parsing one out of a string.
 	TArray<FElysiumBodySound> BodySounds;
 	TArray<FElysiumEntityHandle> BodySoundOwners;
+	// `StopLoopingSounds` (slot 511) asks the substrate to stop what an entity is playing. The live
+	// seam answers nothing; this double records that it was ASKED, which is what the refusal case
+	// in `Elysium.Substrate.NpcKernelSounds.*` asserts.
+	virtual void StopEntitySounds(const FElysiumEntityHandle& Owner, int32 Channel) override
+	{
+		Record(FString::Printf(TEXT("StopEntitySounds %u:%d chan=%d"),
+			Owner.Epoch, Owner.Index, Channel));
+		StopEntitySoundRequests.Emplace(Owner, Channel);
+	}
+	TArray<TPair<FElysiumEntityHandle, int32>> StopEntitySoundRequests;
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override
 	{
 		Record(FString::Printf(TEXT("StopVoice %u:%u fade=%.2f"),

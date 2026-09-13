@@ -15,6 +15,56 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityBase, Log, All);
 
+// --- Story 29c-1, family Lifecycle: slot 117's four species overrides -----------------------------
+
+namespace ElysiumEntityCaps
+{
+	namespace
+	{
+		// `& 0xfffffffd` is `& ~FCAP_ACROSS_TRANSITION`: three classes say "I am never carried
+		// across a level change". Since the base answers `AcrossTransition` and nothing else, all
+		// three answer **0** — the same thing `CBaseCineCam::ObjectCaps` answers, for the same
+		// reason. `CGeneric_NPC_bathack` is the odd one: it ORs bit 3 in instead of clearing bit 1.
+		constexpr FSpeciesRow GSpeciesRows[] =
+		{
+			{ TEXT("CAI_Hint"),             TEXT("0x102d2ee0"), ~AcrossTransition, 0 },
+			{ TEXT("CAI_TestHull"),         TEXT("0x102d7290"), ~AcrossTransition, 0 },
+			{ TEXT("CScriptedTarget"),      TEXT("0x1034d410"), ~AcrossTransition, 0 },
+			{ TEXT("CGeneric_NPC_bathack"), TEXT("0x1035ad50"), ~0,                Bit3 },
+		};
+	}
+
+	const FSpeciesRow* SpeciesRows(int32& OutCount)
+	{
+		OutCount = UE_ARRAY_COUNT(GSpeciesRows);
+		return GSpeciesRows;
+	}
+
+	const FSpeciesRow* SpeciesRowOf(const TCHAR* RetailClass)
+	{
+		if (RetailClass == nullptr)
+		{
+			return nullptr;
+		}
+		for (const FSpeciesRow& Row : GSpeciesRows)
+		{
+			if (FCString::Strcmp(Row.RetailClass, RetailClass) == 0)
+			{
+				return &Row;
+			}
+		}
+		return nullptr;
+	}
+
+	int32 SpeciesObjectCaps(int32 BaseCaps, const TCHAR* RetailClass)
+	{
+		const FSpeciesRow* Row = SpeciesRowOf(RetailClass);
+		// No row means "this class does not override slot 117", which is the base's own answer and
+		// not a refusal.
+		return Row ? ((BaseCaps & Row->AndMask) | Row->OrMask) : BaseCaps;
+	}
+}
+
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
 {
 	Def = &InDef;

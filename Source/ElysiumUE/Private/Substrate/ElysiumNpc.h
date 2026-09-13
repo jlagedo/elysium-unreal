@@ -6,6 +6,7 @@
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumDamage.h"   // the deferred death packet and the queued burn ticks
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
@@ -22,6 +23,7 @@
 
 struct FElysiumClanTemplate;
 struct FElysiumDmg;
+struct FElysiumNpcClass;   // Substrate/ElysiumNpcKernelShape.h — the census row for a retail class
 struct FElysiumSaveArchive;
 struct FElysiumStatTable;
 class FElysiumPlayer;
@@ -209,6 +211,10 @@ public:
 	FElysiumNpcWitness Witness;
 
 	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
+	// +0x62dc m_iInterestingPlaceGroups — the allowlist above as retail carries it: a 32-bit set,
+	// one bit per group id, parsed by `0x10298910`, ZERO for an empty or `"0"` list. `0x102dad60`
+	// reads it against the place's own folded mask, which `AcceptsAmbientGroup` is.
+	uint32 InterestingPlaceGroupMask = 0;
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names
 	int32 PatrolIndex = 0;            // next point in the looping authored sequence
@@ -475,7 +481,26 @@ public:
 
 	FElysiumInterestingPlace* ClaimAmbientSpot();
 
-	bool AcceptsAmbientGroup(int32 GroupId);
+	// `0x102dad60`'s group gate: the place's own folded mask (`+0x0574`, `CAI_InterestingPlace::
+	// Spawn 0x102d9c20`) ANDed with this NPC's `m_iInterestingPlaceGroups` (`+0x62dc`). A zero on
+	// either side matches nothing, which is what an unset or `"0"` list means.
+	bool AcceptsAmbientGroup(int32 PlaceGroupMask) const;
+
+	// Retail's authored group list, parsed the way retail parses it: `0x102989e0` for the hint
+	// list (`hint_groups` -> `m_iHintGroups +0x62e4`) and `0x10298910` for the interesting-place
+	// list (`interesting_place_groups` -> `m_iInterestingPlaceGroups +0x62dc`). Space-separated
+	// decimal ids; id `N` sets bit `N - 1`; anything outside 1..32 is dropped without a
+	// diagnostic. The two bodies are the same routine but for their answer to an unset or empty
+	// string: the hint list becomes `0xffffffff` (every group) and the interesting-place list
+	// stays `0`, so `bEmptyIsEveryGroup` is the one parameter that tells them apart.
+	static uint32 ParseGroupMask(const FString& Groups, bool bEmptyIsEveryGroup);
+
+	// `hint_groups` and `interesting_place_groups`: keep each authored string and its parsed mask
+	// together, because retail's KeyValue does — `0x102989e0` and `0x10298910` run off the write,
+	// not off a later pass, so an NPC whose key never arrives keeps the unset answer rather than
+	// an unparsed one.
+	void SetHintGroups(const FString& Groups);
+	void SetInterestingPlaceGroups(const FString& Groups);
 
 	bool PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choices, bool bLoop,
 		double Now, double& OutEnd);
@@ -519,6 +544,20 @@ public:
 	virtual float PlayDeathActivity(const FString& Activity) override;
 
 	virtual float RandomSeconds(float Max) override;
+
+	/**
+	 * `ClearSchedule` (`0x10280d30`) — the one door out of a running program.
+	 *
+	 * Retail has no raw clear: everything that drops a program calls this, and what it does is
+	 * zero the six schedule words `+0x5c38..+0x5c4c`, clear `PRESERVE_PATH` and dispatch slot 435
+	 * `OnScheduleChange` with `NULL`. `m_failSchedule` (`+0x5c54`) is deliberately not among them.
+	 * The body is `ElysiumSchedule::ClearSchedule`; this is the name its callers see, because the
+	 * retail call is on the NPC and a site that reached into the schedule record instead would
+	 * skip the flag release the slot-435 dispatch performs.
+	 *
+	 * NOT a vtable slot: `0x10280d30` is a non-virtual the kernel calls directly.
+	 */
+	void ClearSchedule();
 
 	// `ClearSchedule` (`0x10280d30`) asked for by a body. SEAM: the task-body callers are 0003's
 	// scripted family, the non-task callers 25a's; no body in this runtime asks yet, so the request
@@ -913,6 +952,293 @@ public:
 	bool IsPatrolActiveForDebug() const { return bPatrolActive; }
 	int32 NumPatrolPointsForDebug() const { return PatrolPoints.Num(); }
 
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	int32 CollisionMask = 0;  // +0x1a44 m_iCollisionMask (datamap)
+	// +0x1a48 m_DeferredDeathInfo (doc) — CTakeDamageInfo is this port's typed damage packet
+	FElysiumDmg DeferredDeathInfo;
+	// +0x1b4d m_bUnknown1b4d (unsettled) — unsettled in 29b-0; carried by offset name with its
+	// recorded type
+	bool bUnknown1b4d = false;
+	// +0x5b58 m_iUnknown5b58 (unsettled) — unsettled in 29b-0; carried by offset name with its
+	// recorded type
+	int32 Unknown5b58 = 0;
+	// +0x5b5c m_flNPCInitTime (walked) — an absolute curtime stamp, carried as double like every
+	// other stamp here
+	double NpcInitTime = 0.0;
+	// +0x5b60 m_flNextDoorUseTime (datamap) — an absolute curtime stamp, carried as double
+	double NextDoorUseTime = 0.0;
+	// +0x5b88 m_flWeaponBlockedByFriendTimer (datamap) — an absolute curtime deadline, carried as
+	// double
+	double WeaponBlockedByFriendTimer = 0.0;
+	// +0x5b8c m_flExtendedBlockedByFriendTimer (datamap) — an absolute curtime deadline, carried
+	// as double
+	double ExtendedBlockedByFriendTimer = 0.0;
+	int32 RelativeEyeTarget = 0;  // +0x5b94 m_RelativeEyeTarget (datamap)
+	FElysiumEntityHandle ShootTargetOverride;  // +0x5ba8 m_hShootTargetOverride (datamap)
+	float SpecialDistanceAccum = 0.f;  // +0x5bac m_flSpecialDistanceAccum (datamap)
+	float BurstShootPauseMin = 0.f;  // +0x5bbc m_flBurstShootPauseMin (datamap)
+	float BurstShootPauseMax = 0.f;  // +0x5bc0 m_flBurstShootPauseMax (datamap)
+	bool bInChoreoScene = false;  // +0x5bc4 m_bInChoreoScene (datamap)
+	// +0x5ccc m_nIdealSequence (datamap) — retail's resolved sequence index; this runtime's ideal
+	// is the clip identity beside it
+	int32 IdealSequence = 0;
+	// +0x5cd0 m_IdealTranslatedActivity (datamap) — an activity enum with no port counterpart, so
+	// the registered number
+	int32 IdealTranslatedActivity = 0;
+	// +0x5cd4 m_IdealWeaponActivity (datamap) — an activity enum with no port counterpart, so the
+	// registered number
+	int32 IdealWeaponActivity = 0;
+	// +0x5cec m_afCapability (datamap) — the whole capability word; ElysiumNpcCond::ECapability is
+	// only the two bits combat selection reads
+	int32 CapabilityWord = 0;
+	FElysiumEntityHandle OpeningDoor;  // +0x5d24 m_hOpeningDoor (datamap)
+	bool bOpeningDoorWait = false;  // +0x5d30 m_bOpeningDoorWait (datamap)
+	// +0x5d5c m_flCheckOnGroundTime (walked) — an absolute curtime deadline, carried as double
+	double CheckOnGroundTime = 0.0;
+	// +0x5d7c m_ScriptArrivalActivity (sdk-order) — an activity enum with no port counterpart, so
+	// the registered number
+	int32 ScriptArrivalActivity = 0;
+	FString ScriptArrivalSequence;  // +0x5d80 m_strScriptArrivalSequence (sdk-order)
+	// +0x5d9c m_flLastAttackTime (datamap) — an absolute curtime stamp, carried as double
+	double LastAttackTime = 0.0;
+	// +0x5da0 m_flNextWeaponSearchTime (datamap) — an absolute curtime stamp, carried as double
+	double NextWeaponSearchTime = 0.0;
+	FString SquadName;  // +0x5da8 m_SquadName (datamap)
+	int32 MySquadSlot = 0;  // +0x5dac m_iMySquadSlot (datamap)
+	FVector LastPosition = FVector::ZeroVector;  // +0x5db8 m_vecLastPosition (datamap)
+	// +0x5dc4 m_qaLastFacing (datamap) — retail types it Vector though it holds angles, as the
+	// chain stores Angles as FVector
+	FVector LastFacing = FVector::ZeroVector;
+	float DistTooFar = 0.f;  // +0x5de4 m_flDistTooFar (datamap)
+	bool bNoDamageDecal = false;  // +0x5df0 m_fNoDamageDecal (sdk-order)
+	bool bWantsLargeHull = false;  // +0x5f2c m_bWantsLargeHull (datamap)
+	bool bIsUsingSmallHull = false;  // +0x5f2d m_fIsUsingSmallHull (sdk-order)
+	FVector KnockbackVelocity = FVector::ZeroVector;  // +0x6004 m_KnockbackVelocity (datamap)
+	FElysiumEntityHandle KnockbackHitEntity;  // +0x6010 m_hKnockbackHitEntity (datamap)
+	// +0x6014 m_fKnockbackWallHitFallTime (datamap) — an absolute curtime stamp, carried as double
+	double KnockbackWallHitFallTime = 0.0;
+	// +0x6018 m_fFinishingMoveBoneTrackLastTime (datamap) — an absolute curtime stamp, carried as
+	// double
+	double FinishingMoveBoneTrackLastTime = 0.0;
+	// +0x601c m_vFinishingMoveBoneTrackLastPos (datamap)
+	FVector FinishingMoveBoneTrackLastPos = FVector::ZeroVector;
+	// +0x6068 m_knockbackType (datamap) — retail's raw type word; the port's classification is
+	// ElysiumReactions' size/height/direction triple
+	int32 KnockbackType = 0;
+	// +0x606c m_flLastMeleeStepbackTime (datamap) — an absolute curtime stamp, carried as double
+	double LastMeleeStepbackTime = 0.0;
+	// +0x6070 m_flMeleeCanEnterTimer (datamap) — an absolute curtime deadline, carried as double
+	double MeleeCanEnterTimer = 0.0;
+	// +0x6074 m_flMeleeMustLeaveTimer (datamap) — an absolute curtime deadline, carried as double
+	double MeleeMustLeaveTimer = 0.0;
+	bool bInMelee = false;  // +0x6078 m_bInMelee (datamap)
+	// +0x607c m_flCanSeekCoverTimer (datamap) — an absolute curtime deadline, carried as double
+	double CanSeekCoverTimer = 0.0;
+	FElysiumEntityHandle FriendPlayer;  // +0x60ac m_hFriendPlayer (datamap)
+	// +0x6274 m_flMeleeHeightDiffTimer (datamap) — an absolute curtime deadline, carried as double
+	double MeleeHeightDiffTimer = 0.0;
+	// +0x6290 m_vecForward (datamap) — retail's cached facing basis; this runtime recomputes it
+	// per query
+	FVector Forward = FVector::ZeroVector;
+	FVector Right = FVector::ZeroVector;  // +0x629c m_vecRight (datamap)
+	FVector InitialPosition = FVector::ZeroVector;  // +0x62a8 m_vecInitialPosition (datamap)
+	// +0x62b4 m_qaInitialAngles (datamap) — angles carried as FVector, as FElysiumEntity::Angles
+	// already is
+	FVector InitialAngles = FVector::ZeroVector;
+	float OccludedDelayNormal = 0.f;  // +0x62c0 m_flOccludedDelayNormal (datamap)
+	float OccludedDelayCover = 0.f;  // +0x62c4 m_flOccludedDelayCover (datamap)
+	float OccludedDelay = 0.f;  // +0x62c8 m_flOccludedDelay (datamap)
+	// +0x62cc m_flOccludedReportTimeE (datamap) — FIELD_TIME; an absolute stamp, carried as double
+	// like every other stamp here
+	double OccludedReportTimeE = 0.0;
+	// +0x62d0 m_flOccludedReportTimeT (datamap) — FIELD_TIME; an absolute stamp
+	double OccludedReportTimeT = 0.0;
+	// +0x62d4 m_flOccludedReportTimeW (datamap) — FIELD_TIME; an absolute stamp
+	double OccludedReportTimeW = 0.0;
+	// +0x62f0 m_vecInterestingPlace (datamap)
+	FVector InterestingPlacePosition = FVector::ZeroVector;
+	// +0x62fc m_pLastInterestingPlace (walked) — a place index; there is no interesting-place
+	// pointer in this runtime
+	int32 LastSpotIndex = 0;
+	int32 InterestingDeathActivity = 0;  // +0x6308 m_iInterestingDeathActivity (datamap)
+	int32 RestorePedLinkNode = 0;  // +0x6310 m_iRestorePedLinkNode (walked)
+	int32 RestorePedLinkDestNode = 0;  // +0x6314 m_iRestorePedLinkDestNode (walked)
+	// +0x6318 m_flNextCrosswalkUpdateTime (datamap) — FIELD_TIME; an absolute stamp
+	double NextCrosswalkUpdateTime = 0.0;
+	// +0x631c m_flNextPedInteractTime (datamap) — FIELD_TIME; an absolute stamp
+	double NextPedInteractTime = 0.0;
+	int32 BrightRoutePenalty = 0;  // +0x6344 m_iBrightRoutePenalty (datamap)
+	bool bForceNpcCheck = false;  // +0x63da m_bForceNPCCheck (datamap)
+	// +0x63dc m_flWeaponScareTime (datamap) — FIELD_TIME; an absolute stamp
+	double WeaponScareTime = 0.0;
+	int32 FaceAnim = 0;  // +0x63e4 m_eFaceAnim (datamap)
+	float FaceYawDiff = 0.f;  // +0x63e8 m_flFaceYawDiff (datamap)
+	int32 AlertLevel = 0;  // +0x63f4 m_eAlertLevel (datamap)
+	int32 SubState = 0;  // +0x63f8 m_iSubState (datamap)
+	bool bGoToIdleState = false;  // +0x63fc m_bGoToIdleState (datamap)
+	bool bLeaningLeft = false;  // +0x63fd m_bLeaningLeft (datamap)
+	int32 PeekOutCount = 0;  // +0x640c m_iPeekOutCount (datamap)
+	bool bAggressiveAnims = false;  // +0x6410 m_bAggressiveAnims (datamap)
+	int32 CowerAnimOffset = 0;  // +0x6414 m_iCowerAnimOffset (datamap)
+	int32 PercentOccludedWait = 0;  // +0x6420 m_iPercentOccludedWait (datamap)
+	int32 PercentOccludedCover = 0;  // +0x6424 m_iPercentOccludedCover (datamap)
+	int32 PercentOccludedWalk = 0;  // +0x6428 m_iPercentOccludedWalk (datamap)
+	int32 PercentOccludedFlank = 0;  // +0x642c m_iPercentOccludedFlank (datamap)
+	int32 PercentOccludedChase = 0;  // +0x6430 m_iPercentOccludedChase (datamap)
+	// +0x6435 m_bStayEntrenched (datamap) — step 2 of the interest predicate, whose keyfield is
+	// not parsed yet
+	bool bStayEntrenched = false;
+	// +0x644c m_eAlternateAI (datamap) — RunAlternateAi has no stored mode yet
+	int32 AlternateAi = 0;
+	// +0x6450 m_flAlternateAIExpireTimer (datamap) — FIELD_TIME; an absolute stamp
+	double AlternateAiExpireTime = 0.0;
+	int32 PreOpenDoorActivity = 0;  // +0x6454 m_actPreOpenDoor (datamap)
+	// +0x6458 m_flIgnoreCollisionTimer (datamap) — FIELD_TIME; an absolute stamp
+	double IgnoreCollisionUntil = 0.0;
+	FVector HuntPatrolTarget = FVector::ZeroVector;  // +0x645c m_vecHuntPatrolTarget (datamap)
+	FVector HeldPosition = FVector::ZeroVector;  // +0x6468 m_vecHeldPosition (datamap)
+	// +0x6474 m_flHuntExpireTimer (datamap) — FIELD_TIME; an absolute stamp
+	double HuntExpireTime = 0.0;
+	FString FollowerBossName;  // +0x6478 m_sFollowerBoss (datamap) — the authored follower-boss key
+	// +0x647c m_hFollowerBoss (doc) — the interest predicate's step 4 reads it; no follower
+	// subsystem writes it yet
+	FElysiumEntityHandle FollowerBoss;
+	FString FollowerType;  // +0x6480 m_sFollowerType (datamap)
+	// +0x6484 m_flFollowerDistanceBackAway (doc) — resolved from the rulebook's follower row
+	float FollowerDistanceBackAway = 0.f;
+	float FollowerDistanceWalkTo = 0.f;  // +0x6488 m_flFollowerDistanceWalkTo (doc)
+	float FollowerDistanceRunTo = 0.f;  // +0x648c m_flFollowerDistanceRunTo (doc)
+	int32 BurstFireCount = 0;  // +0x6490 m_iBurstFireCount (datamap)
+	bool bReturnToInitialPos = false;  // +0x6494 m_bReturnToInitialPos (datamap)
+	bool bIsBossMonster = false;  // +0x6496 m_bIsBossMonster (datamap)
+	bool bInBossRegistry = false;  // +0x6497 m_bInBossRegistry (doc)
+	// +0x6498 m_bJumping (datamap) — the cadence tail's hard-deadline clamp already names this
+	// word
+	bool bJumping = false;
+	FVector JumpOrigin = FVector::ZeroVector;  // +0x649c m_vJumpOrigin (datamap)
+	FVector JumpTarget = FVector::ZeroVector;  // +0x64a8 m_vJumpTarget (datamap)
+	float JumpHeight = 0.f;  // +0x64b4 m_fJumpHeight (datamap)
+	float JumpGravity = 0.f;  // +0x64b8 m_fJumpGravity (datamap)
+	// +0x64d0 m_idxNoDeformExpression (walked) — the port names expressions rather than indexing
+	// the disposition table
+	FString NoDeformExpression;
+	float TargetLeadMin = 0.f;  // +0x655c m_flTargetLeadMin (walked)
+	float TargetLeadMax = 0.f;  // +0x6560 m_flTargetLeadMax (walked)
+	float TargetLeadCurrentWeight = 0.f;  // +0x6564 m_flTargetLeadCurrentWeight (walked)
+	float TargetLeadPredictedWeight = 0.f;  // +0x6568 m_flTargetLeadPredictedWeight (walked)
+	float TargetLeadWeightScale = 0.f;  // +0x656c m_flTargetLeadWeightScale (walked)
+	// +0x6574 m_flLoudExpressionTime (datamap) — FIELD_TIME; the loud-line expression cooldown
+	double LoudExpressionTime = 0.0;
+	// +0x6594 m_sppPatrolPathHunt (datamap) — the hunt sibling of the patrol route, in the same
+	// resolved-points form
+	TArray<FVector> HuntPatrolPoints;
+	// +0x65a4 m_fNextDodgeTimer (datamap) — FIELD_TIME; an absolute stamp
+	double NextDodgeTime = 0.0;
+	// +0x65a8 m_QueuedBurnDamage (doc) — CTakeDamageInfo maps to this port's damage packet
+	TArray<FElysiumDmg> QueuedBurnDamage;
+	// +0x65bc m_flNextBurnTime (datamap) — FIELD_TIME; an absolute stamp
+	double NextBurnTime = 0.0;
+	// +0x65e0 m_sCombatStartActivity (datamap) — the authored combat-start activity key
+	FString CombatStartActivity;
+	// +0x65e4 m_iCombatStartActivity (doc) — the resolved activity id
+	int32 CombatStartActivityId = 0;
+	// +0x65e8 m_pAttackCoordinator (walked) — the index of the three global coordinators; this
+	// runtime has no coordinator object to point at
+	int32 AttackCoordinator = 0;
+	FString AttackCoordinatorName;  // +0x65ec m_sAttackCoordinatorName (datamap)
+	int32 FakeReloadCount = 0;  // +0x65f0 m_iFakeReloadCount (datamap)
+	bool bCameFromSpawner = false;  // +0x65f4 m_bCameFromSpawner (datamap)
+	bool bIgnoreDetectedAttack = false;  // +0x65f5 m_bIgnoreDetectedAttack (datamap)
+	bool bNavIgnorePhysicsProps = false;  // +0x65f7 m_bNavIgnorePhysicsProps (datamap)
+	bool bAllowTurningAnims = false;  // +0x65f9 m_bAllowTurningAnims (datamap)
+	bool bForceMaintainActivity = false;  // +0x65fa m_bForceMaintainActivity (datamap)
+	// +0x65fc m_flStandingOnHeadTimer (datamap) — FIELD_FLOAT in retail's datamap, so a duration
+	// rather than a stamp
+	float StandingOnHeadTimer = 0.f;
+	// +0x6600 m_flWeaponThroughWallTime (datamap) — FIELD_TIME; an absolute stamp
+	double WeaponThroughWallTime = 0.0;
+	// +0x6608 m_flCorpseConditionTimer (datamap) — FIELD_TIME; an absolute stamp
+	double CorpseConditionTime = 0.0;
+	// +0x6658 m_bUnread6658 (unsettled) — unsettled in 29b-0: a constructor-zeroed byte with no
+	// reader; declared so the census stays whole
+	bool bUnread6658 = false;
+
+	// --- Which retail class this NPC IS (story 29c-1) ---------------------------------------------
+	/**
+	 * The census row for the retail family class this NPC's authored classname resolves to
+	 * (`Substrate/ElysiumNpcKernelClassLookup.h`), or null for a classname retail stands no NPC class
+	 * for.
+	 *
+	 * This is the species dispatcher 29c declined to build and 29c-1 needs: 355 of the band's bodies
+	 * are one behaviour written once per species, and a leaf that is `final` answers them from the
+	 * class registry rather than from an override. Resolved once — `Def` is bound at `Construct` and
+	 * is immutable — so a body on the think path may ask freely.
+	 */
+	const FElysiumNpcClass* RetailClass() const;
+
+	// `RetailClass()` is `CNPC_VVampireBoss` or below, `CNPC_VBaseBoss` or below, … The chain walk a
+	// species body's "am I one of these" arm performs, so no body compares classnames by hand.
+	bool IsRetailClass(const TCHAR* RetailClassName) const;
+
+	// --- The retail vtable surface (`docs/vtmb/npc-kernel/signatures.md`) -------------------------
+	//
+	// One `virtual` per Troika-line slot the port does not already implement under a mapped name —
+	// 586 of the 617 — each carrying its slot index, the body's address and the ledger's tier. The
+	// declarations are generated from `signatures.tsv` rather than typed, because a surface that
+	// can drift from the ledger is the thing this story exists to end; the file is data, included
+	// here because a virtual can only be declared inside its class.
+	//
+	// This class stays `final`. A virtual here declares the surface retail dispatches through, not
+	// an extension point: species are rows in the class registry
+	// (`ElysiumNpcKernelShape.cpp`), as they are everywhere else in this runtime.
+	//
+	// The bodies are in `ElysiumNpcKernelSlots.cpp`: a named stub that tallies `elysium.stubs` with
+	// the retail address and the story that owns it (29c/29d/29e). A story replaces a stub with the
+	// recovered body in place; nothing about the shape moves when it does.
+	#include "Substrate/ElysiumNpcKernelSlots.inl"
+
+	// --- Story 29c-1: the layer 0–9 bodies that are NOT vtable slots ------------------------------
+	//
+	// The 915 `rule` rows of `checklist-0-9.md` whose target is a port method were ported by owning
+	// family, and roughly four in five of them fill no Troika-line slot: they are retail's own
+	// helpers, free functions and non-virtual methods, so the class has to declare them. One `.inl`
+	// per family, in the same public section as the generated slot surface and for the same reason —
+	// this IS the surface retail dispatches and calls through, and a fixture has to be able to state
+	// one arm of a body without driving a whole think.
+	//
+	// One file per family rather than 915 declarations appended to this header: 21 families landed in
+	// parallel, the family boundary is what the story ports by, and a reader looking for the sound
+	// hooks should not have to scroll past the navigator's. The definitions are in the matching
+	// `Substrate/ElysiumNpcKernel<Family>.cpp` and the tests in `Tests/ElysiumNpcKernel<Family>Tests.cpp`.
+	#include "Substrate/ElysiumNpcKernelAnim.inl"
+	#include "Substrate/ElysiumNpcKernelBaseHelpers.inl"
+	#include "Substrate/ElysiumNpcKernelBosses.inl"
+	#include "Substrate/ElysiumNpcKernelClosure.inl"
+	#include "Substrate/ElysiumNpcKernelConditions.inl"
+	#include "Substrate/ElysiumNpcKernelDamage.inl"
+	#include "Substrate/ElysiumNpcKernelDebug.inl"
+	#include "Substrate/ElysiumNpcKernelDialogue.inl"
+	#include "Substrate/ElysiumNpcKernelEntityChain.inl"
+	#include "Substrate/ElysiumNpcKernelFacing.inl"
+	#include "Substrate/ElysiumNpcKernelGeometry.inl"
+	#include "Substrate/ElysiumNpcKernelHints.inl"
+	#include "Substrate/ElysiumNpcKernelLifecycle.inl"
+	#include "Substrate/ElysiumNpcKernelMisc.inl"
+	#include "Substrate/ElysiumNpcKernelMotor.inl"
+	#include "Substrate/ElysiumNpcKernelPositions.inl"
+	#include "Substrate/ElysiumNpcKernelSchedule.inl"
+	#include "Substrate/ElysiumNpcKernelSenses.inl"
+	#include "Substrate/ElysiumNpcKernelSounds.inl"
+	#include "Substrate/ElysiumNpcKernelSpecies.inl"
+	#include "Substrate/ElysiumNpcKernelSquad.inl"
+	#include "Substrate/ElysiumNpcKernelTroikaHelpers.inl"
+
 private:
 	// --- Think(), phase by phase, in `NPCThink`'s (`0x10292de0`) order ---------------------------
 	//
@@ -1101,8 +1427,12 @@ private:
 	int32 AmbientActivityCycle = 0;
 	bool bAmbientArrived = false;
 	TSet<int32> FailedSpotIndices;
-	TSet<int32> AmbientGroups;
-	bool bAmbientGroupsParsed = false;
+
+	// `RetailClass()`'s latch. Mutable because the answer is a property of the immutable `Def`, not
+	// of this NPC's state: a const body on the think path asks it and must not have to be non-const
+	// to do so.
+	mutable const FElysiumNpcClass* RetailClassRow = nullptr;
+	mutable bool bRetailClassResolved = false;
 };
 
 // npc_VPlayerController — the scene-owned duplicate of the player. It shares only the authored

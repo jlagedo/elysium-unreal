@@ -45,12 +45,17 @@ section E), the script API surface, and the choreographed scenes.
 | `ApplyFid.java`  | ✅ | names a program's CRT functions from the database, for programs analyzed before it existed |
 | `parse_datamap_builder.py` | ✅ | reconstructs a `datamap_t` from its **decompiled builder** (the half an image read misses) |
 | `crt_fid.py`     | ✅ | builds the VC6 SP5 CRT database and applies it: `stage`, `build`, `apply` |
+| `crt_match.py`   | ✅ | the `crt` harvest pass: names CRT bodies FID missed by exact byte match against the staged archives' COFF symbols, relocations masked |
 | `symbol_sweep.py` | ✅ | drives `NameFromStrings`: `survey`, `apply`, `clear` |
 | `datamap_types.py` | ✅ | drives `ApplyDatamapTypes`: `report`, `apply` |
 | `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables`, `DumpExternals`, `DumpListing` and `ApplyPythonApi`, loads SQLite, resolves the named-interface graph, and answers every corpus query |
 | `repair.py`      | ✅ | drives the repair passes: `boundaries`, `jumptables`, `thiscall`, `signatures`, each `report` then `apply` |
 | `pyapi.py`       | ✅ | extracts the CPython 2.1.2 C API from `Include/*.h` into the prototype file `ApplyPythonApi` applies |
 | `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus` |
+| `kernel_ledger.py` | ✅ | the NPC kernel as tables (`docs/vtmb/npc-kernel/`): classes, slots, fields, functions, build order, coverage, and a porting checklist per layer band; `--bodies` writes the reading packs out of repo |
+| `kernel_shape.py` + `kernel_fields.tsv` / `kernel_signatures.tsv` | ✅ | the same kernel's *shape*: `layout.md` and `signatures.md`, from the datamaps, SDK 2013's headers and the two reading overlays |
+| `kernel_verdicts.tsv` | ✅ | one row per retail function a porting story has read: `address / verdict / band / target / evidence`. The record `checklist-<band>.md` is rendered from, so a regeneration cannot lose a reading |
+| `merge_verdicts.py` | ✅ | folds reading batches into that overlay (later source wins, refuses an out-of-band address, idempotent); `--audit` prints every band's standing |
 | `run.ps1`        | ✅ | headless runner (import + post-script) |
 | `crt/`, `crtfid/`, `fid/` | ❌ gitignored | the staged Microsoft archives, their import projects, and the built `.fidb` |
 | `project/`       | ❌ gitignored | the analyzed Ghidra project DB (derived from the user's own binary) |
@@ -628,7 +633,7 @@ the survey reports that count per module, and `MakeFuncs` is the answer when it 
 ### Names the corpus proposes after the dump: `corpus harvest`
 
 `corpus harvest` writes a proposal file, never the overlay; `names.tsv` is edited by a reader and
-`corpus names --apply` writes it. Five passes (`--passes`, all by default):
+`corpus names --apply` writes it. Seven passes (`--passes`, all by default):
 
 - **docs** pairs an address with a backticked name the docs write beside it. It is proximity and
   the noisiest source: run it with `--max-distance 6` (the `Name` (`0x…`) template) and read each
@@ -639,7 +644,23 @@ the survey reports that count per module, and `MakeFuncs` is the answer when it 
 - **tu** does the same over address order inside a translation unit an `E:\Vampire\main\dlls\`
   stamp pins, against the SDK `.cpp`'s definition order.
 - **message** takes a `Class::Method:` prefix of a string exactly one body references.
-- **identity** names every unnamed override at a slot whose named bodies state one method.
+- **crt** (`crt_match.py`) reads the staged VC6 SP5 archives (`crt_fid stage`) as COFF: every
+  symbol's extent in a code section, relocation sites masked, searched for at the image's
+  function entries. A hit is the archive's own statement (tier `binary`); a symbol whose bytes
+  stand at two entries (`memcpy`/`memmove`, VC6 links one body under both) or two members with one
+  body (`strtol`/`wcstol`) is recorded `unsettled`. Names the 95 bodies Function ID missed
+  because the object and the linked image analyse to different extents; agrees with FID's 185.
+- **accessor** names a leaf body that reads or writes exactly one word of
+  `docs/vtmb/npc-kernel/layout.tsv` and nothing else: `Get<Member>` / `Set<Member>` under tier
+  `accessor` (coined -- the member is the fact, the spelling is convention), or the SDK's own name
+  under `inferred` where a header or its `.cpp` defines that very one-line body (`GetEFlags`,
+  `BloodColor`, `GetCollideable` -- of two SDK bodies the virtual wins for a slot body). The
+  receiver's class is the typed access, the slot's holder, or the class every typed caller
+  passes its own `this` from. Refused with a reason: a derived expression (`m_iEFlags & 1`), an
+  interior word, a zero test of a non-bool word with no SDK body (`m_lifeState == 0` at
+  `CAI_BaseNPC#158` is `IsAlive` by shape, and stays unnamed until a source states it).
+- **identity** names every unnamed override at a slot whose named bodies state one method; a
+  method whose only witnesses are coined propagates as `accessor`.
 
 **The SDK on disk is 2013's**, `$ELYSIUM_WORK_ROOT/research/sources/source-sdk-2013/src`; the
 Bloodlines SDK tree carries no `dlls/` headers. So a stretch of slots whose length differs was

@@ -427,6 +427,9 @@ verbatim; ANIMATION). None appears in any vdata pack; they are map-only.
   reader `CAI_BaseNPCTroika::FValidateHintType` (`0x10295c20`, slot 566): `(hint->m_iGroupID
   +0x470 & m_iHintGroups) == 0` → reject, then a switch on `m_nHintType`. `CAI_Hint::Spawn`
   (`0x102d0b60`) converts the hint's `group_id` `1..32` to `1 << (id−1)`, anything else to
+  **Ported (29c)**: `FElysiumNpc::ParseGroupMask` is the parser, `SetHintGroups` the write, and
+  `FElysiumNpcScheduleHost::HintGroupMask +0x62e4` the set; `Elysium.Substrate.NpcGroupMask` is the
+  test. The reader, `FValidateHintType`, is layer 5–9's and is not ported yet.
   `0xFFFFFFFF`, and assigns a category bit at `+0x474` per type: `100 info_node_cover_med` 1,
   `101 _cover_low` 1, `10000 info_node_hint`/`info_node_patrol_point` none, **`10100 (0x2774)
   info_hint` none**, `10200 _cover_corner` 1, `10300 info_node_kick_over` 4, `10301
@@ -476,3 +479,11 @@ verbatim; ANIMATION). None appears in any vdata pack; they are map-only.
   place keeps the raw integer the seven-node pool stands — **decided: it converts**
   (`CAI_InterestingPlace::Spawn` `0x102d9c20`), so `thug_1`'s pool is `pt1` alone; the
   interesting-places section above is corrected.
+  **Ported (29c, admission closed in 29c-1)**: the same `FElysiumNpc::ParseGroupMask` fills
+  `InterestingPlaceGroupMask +0x62dc` on the keyfield write, and `FElysiumNpc::AcceptsAmbientGroup`
+  is now `0x102dad60`'s own gate — `place->m_iGroupID +0x574 & npc->m_iInterestingPlaceGroups
+  +0x62dc`, against the mask `CAI_InterestingPlace::Spawn` (`0x102d9c20`) folded, so an unset or
+  `"0"` list matches NO place. 29c had left the port's "an empty list is every group" rule standing
+  as a named divergence; that divergence is closed, and the consequence is retail's: the 1005
+  shipped NPCs that author `"0"` do not wander to interesting places at all.
+  `Elysium.Substrate.NpcGroupMask` asserts the zero-mask case by name.

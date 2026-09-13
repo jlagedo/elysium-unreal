@@ -416,3 +416,309 @@ on `0x<offset/4>]`.
   `Player_Nosferatu`, 512-unit sphere, nearest passer → SendProp **`m_idxNosferatuRadarNPC`**
   at player `+0x1ED0`, consumed by `hud/Context_Icons/Nosferatu_Warning`). Its authored name is
   UNRECOVERED; `CanWitnessSupernatural()` stays the project name.
+
+## The sound and scent memory readers — `0x102b4520`, `0x1026aef0`, `0x1026af30`
+
+Slots 474 `GetBestSound` and 475 `GetBestScent` are what a schedule, a condition sweep or a
+species body asks for "the sound I am acting on". They are NOT the same kind of answer.
+
+`CAI_BaseNPC::GetBestSound` (`0x1026aef0`, 38 bytes) is the base reading: `m_pSenses`
+(`+0x5cdc`)`->GetClosestSound(bScent = 0)` — `PUSH 0x0` at `1026aef7` — with a
+`"Warning: NULL Return from GetBestSound\n"` dev message when the list is empty. It walks the live
+retained sound list and picks the nearest audible member, so it answers about the current pass.
+
+`CAI_BaseNPCTroika::GetBestSound` (`0x102b4520`) replaces it with **seven bytes**:
+`return &this->m_BestSound;` (`+0x60b0`). Every shipped NPC therefore reads the **committed**
+record — the one `CommitBestSound` wrote one sweep earlier — and not the senses object's live
+answer. The address, not a copy: a caller mutating it mutates the NPC's memory.
+
+`CAI_BaseNPC::GetBestScent` (`0x1026af30`, 38 bytes) is `GetBestSound`'s base body byte for byte
+with `PUSH 0x1` at `1026af37` and its own `"Warning: NULL Return from GetBestScent\n"` string, and
+**the Troika line does not override it** (`CAI_BaseHumanoid#475`, `CAI_BaseNPC#475`,
+`CAI_BaseNPCTroika#475`, +74 more all hold `0x1026af30`), so this IS the dispatched body on every
+`npc_V*`. The scent channel and the sound channel are the same retained list read with a different
+filter flag.
+
+**Not built:** the port has no "closest of the live list" accessor — `FElysiumNpcSenses` retains one
+record per CSound family and commits a winner — and no producer emits a scent at all, so both base
+bodies answer null and warn, which is retail's own answer on a map with no scents.
+
+## The point-visibility test and `CAI_BaseActor::ValidHeadTarget` — `0x1028ebc0`, `0x1025ea00` (2026-09-13)
+
+`0x1028ebc0` is 674 bytes and three gates. It takes a struct whose `+0x08..+0x10` is a position,
+calls `EyePosition()` (slot 193, vtable `+0x304`), and asks
+`CBaseCombatCharacter::FInViewCone` (`0x103268e0`, which picks `FinViewCone2d` or `FinViewCone3dNew`
+off the ConVar `DAT_10936f74` and passes `m_flFieldOfView` at `+0x1574`). If the cone admits the
+point, the squared eye-to-point distance is compared against `m_flVisionDistance` (`+0x63b8`)
+squared — retail computes the *beyond* predicate and takes the failing path when it is true. Inside
+the band it builds a ray from the eye to the point, traces it, runs a ConVar-gated debug-overlay
+pass (`thunk_FUN_10143d80` / `thunk_FUN_10142e90`) that changes nothing the trace answered, and
+reports pass only when the fraction equals `_DAT_10449280` (**1.0**). So: in my cone, within my
+vision distance, and with a clear line.
+
+`0x1025ea00` fills `CAI_BaseHumanoid#588` and is `CAI_BaseActor::ValidHeadTarget(const Vector&)`,
+which `PickLookTarget` (`0x1025f1c0`) applies to a candidate's eye point before adding a look
+target. It dots `HeadDirection3D()` (slot 369, vtable `+0x5c4`) with the normalised direction from
+`EyePosition()` to the argument, requires the dot **strictly** above `_DAT_10497ca0`, and then
+requires the absolute height difference below `_DAT_104492d0`. Both results are packed into the
+return byte. It is NOT the Troika line's slot 588 (`0x10293e50`, the `ACT_DISPOSITION` restart), and
+it is NOT `CBaseCombatCharacter`'s own 149-byte `ValidHeadTarget` at `0x10325da0` that
+`PickLookTarget` dispatches through vtable `+0x930`.
+
+**Unrecovered:** `0x1028ebc0` has **no caller** in the decompiled corpus and fills no vtable slot, so
+what asks it is not recovered; `_DAT_10497ca0` (`ValidHeadTarget`'s dot floor) is unpinned, and
+`_DAT_104492d0` is read here as a height where the melee ladder reads it as a dot, which the
+decompiler flags as an overlap.
+
+### The detected-attack notice `0x102bf560`
+
+_Recovered 2026-09-13, story 29c-1._
+
+`m_bIgnoreDetectedAttack` (`+0x65f5`) refuses the whole body. Otherwise the candidate is put through
+the type-3 redirect `0x102707d0` — an entity whose `+0x98` combat-character pointer answers `3` at
+vtable `+0x228` is replaced by its vtable `+0x184`, and everything else passes through — and the
+result's `GetRefEHandle()` lands in `m_hDetectedAttacker` (`+0x65c0`), or `0xffffffff` for a null.
+`m_flDetectedAttackTime` (`+0x65c4`) is then stamped with `curtime + _DAT_10454110` on **both** arms,
+so a refused notice still opens the window.
+
+**Unrecovered:** what a type-3 entity is. `_DAT_10454110` is **5.0f** — it is at `.rdata` file
+offset `0x454110`, not past `.data`'s raw size, and story 29c-1 family Senses read it there while
+porting `OnDoorBlocked` (`0x1027de00`), which reads the same cell.
+
+## `CAI_BaseActor::ValidEyeTarget` — `0x1025e920` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+`CAI_BaseHumanoid#587`, 164 bytes, and the sibling of `ValidHeadTarget` (`0x1025ea00`, `#588`)
+above. It is **not** the Troika line's slot 587 — that index carries `CanWitnessSupernatural`
+(`0x1028ef20`) past `CAI_BaseActor`, and the two branches declare unrelated virtuals there.
+
+The listing: `HeadDirection3D()` (slot 371, vtable `+0x5cc`) into a local, `EyePosition()` (slot 193,
+`+0x304`) into another, `d = point - eye` component by component (`1025e948`–`1025e960`), a 3-D
+`VectorNormalize` of `d` through `PTR_thunk_FUN_10137220`, and `dot(d, head)` compared with
+`FCOMP double ptr [0x10449270]` — **0.5 as a double**, a 60-degree half-angle, strictly exceeded.
+Unlike slot 364 below there is no Z zeroing: this cone is three-dimensional.
+
+## The two aim cones — `0x10326bd0`, `0x10326ae0` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+Slot 364, `bool FInAimCone(const Vector&)` (`0x10326bd0`, 283 bytes): `d = target - GetAbsOrigin()`
+(slot 217, `+0x364`), then **`d.z = 0` before the normalise** (`10326c83  MOV [ESP+0xc],0x0`), then
+`VectorNormalize(&d)`, then `dot(d, EyeDirection2D())` (slot 372, `+0x5d0`) against
+`FCOMP double ptr [0x1049e0c8]` = **0.994**, strictly exceeded. `_DAT_1049e0c8` has exactly one
+reader in the image and is a double; read as a float it is 2.18e-25 and the cone admits everything.
+0.994 is a **6.28-degree** half-angle — an order of magnitude tighter than the view cone's `0.2`
+(`FinViewCone3dNew`, `0x103264d0`), which is what separates "I can see you" from "my weapon is on
+you". The dot's third term is `eyeDir.z * 0` and is computed anyway. The planar normalise is the
+correction this pass makes to the earlier one-line reading, and it is what decides a target directly
+above or below the shooter.
+
+Slot 365, `bool FInAimCone(CBaseEntity*)` (`0x10326ae0`, 181 bytes), is three dispatches past the
+scope trace: `eye = EyePosition()`, `aim = target->BodyTarget(eye, true, false)` (slot 197, `+0x314`
+— the two literal booleans are pushed at `10326b0c`/`10326b0e`, before the eye call, which is why
+the decompiler attached them to the wrong callee), then `FInAimCone(aim)` through this object's own
+vtable `+0x5b0`. The cone is measured to the target's **body target**, not its origin.
+
+## The enemy accessors and the `CAI_Enemies` store — `0x101a67e0`, `0x102b5360`, `0x10027020`, `0x10273e10`, `0x10273e40` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+Slot 167 `CBaseEntity* GetEnemy() const` (`0x101a67e0`) resolves `m_hEnemy` (`+0x5ce0`) through the
+handle table at `PTR_DAT_10566458` — index `& 0x1fff`, serial `>> 0xd` — and answers 0 on a stale
+handle. 126 real callers, the most-called body in this family.
+
+Slot 168, the mutable overload, has **two lines**. The base (`0x10027020`, 18 classes) is two
+instructions, `MOV EAX,[ECX]` / `JMP [EAX+0x29c]` — a tail jump to slot 167 and nothing else. The
+Troika line (`0x102b5360`, 64 classes) adds one arm: when slot 167 answers null **and**
+`m_bfNPCStateFlags` (`+0x5b64`) bit 6 is set, it resolves `m_hLastEnemy` (`+0x1a94`) instead. That
+byte is a pure function of `m_NPCState` (`0x1026e3e0`), and bit 6 (`0x40`) belongs to retail states
+`0xb` (HUNT) and `0xe` alone — so the last-enemy fallback is reachable only from a hunt state.
+
+Slot 541 `GetEnemies()` (`0x10273e10`) answers `m_pMemory` (`+0x5d88`) when
+`m_iSquadDisconnected < 1` and the single global `DAT_109203f0` otherwise. The test is `< 1`, not
+`== 0` — the counter is incremented on disconnect and decremented on reconnect, so a negative value
+reads as connected — and it is the COUNTER that decides, never `m_pSquad`. Slot 543 `RemoveMemory()`
+(`0x10273e40`) frees `m_pMemory` only when `m_pSquad` (`+0x5da4`) is null: an NPC in a squad does not
+own the store it was handed.
+
+## `OnListened`, the Troika half — `0x102b39e0` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+740 bytes, and four steps. It first chains `CAI_BaseNPC::OnListened` (`0x1026a5e0`), which clears
+`m_HeardConditions` (`+0x5ca8`), walks the sense list mapping each raw `CSound` type to its
+condition — `1`→`0x6d` COMBAT, `2`→`0x6e` WORLD, `4`→`0x6f` PLAYER, `8`→`0x6a` DANGER,
+`0x10`→`0x70` BULLET_IMPACT, `0x100`→`0x6b`, `0x200`→`0x6c`, `0x400`→`0x71` PHYSICS_DANGER,
+`0x800`→`0x72` FLINCH, anything else `0x5e` with a `DevMsg` — queues each on
+`m_DelayedSoundConditionList` with slot 471's `GetReactionDelay()` (`RandomFloat(0, 0.5)` for
+FLINCH), promotes the expired ones, and fires `OnHearWorld`, `OnHearPlayer` and `OnHearCombat`.
+
+The Troika half then snapshots **seven** records, each gated on its own `m_HeardConditions` bit read
+directly out of the word (`+0x5cb4 >> 0xe` is bit 110 = `0x6e`, `>> 0x11` is `0x71`, `>> 10` is
+`0x6a`, `>> 0xf` is `0x6f`, `>> 0xd` is `0x6d`; `+0x5cb6 & 1` is bit 112 = `0x70`; FLINCH `0x72`
+goes through the bit helper `0x102c66b0`). Each snapshot copies whatever
+`CAI_Senses::GetClosestSound` (`0x103105d0`) answers for that raw type into the matching
+`m_LastSound*` record — `m_LastSoundWorld` `+0x61e4`, `PhysicsDanger` `+0x6134`, `Danger` `+0x6108`,
+`Player` `+0x61b8`, `BulletImpact` `+0x618c`, `Combat` `+0x6160`, `Flinch` `+0x6210`.
+
+`GetClosestSound` itself asks its owner for `GetEnemy()` (slot 167) and `EarPosition()` (slot 196,
+vtable `+0x310`) once, then walks the list: a record whose owner IS the enemy returns immediately
+and ends the walk, and otherwise the nearest to the **ear** by squared distance wins, seeded at
+`0x4d800000`.
+
+The tail reads `m_Conditions` (`+0x5c5c`) rather than `m_HeardConditions` — `HasCondition`
+(`0x10269aa0`) is indexed off `+0x5c5c` — and for `HEAR_COMBAT` (`0x6d`) and `HEAR_BULLET_IMPACT`
+(`0x70`) feeds the corresponding record's resolved owner into `0x1028e8b0` with strength `1.0`, the
+stealth-vision override extension. So a sound still inside its reaction delay snapshots its record
+but does not extend the override.
+
+## Slot 196 `EarPosition` — `0x100b4c00` (2026-09-13)
+
+20 bytes: a call through this object's own vtable `+0x304` (slot 193, `EyePosition`) for the side
+effect of filling the out-vector, and the same pointer returned. 82 classes fill slot 196 and every
+one of them with this body — **the ear is the eye** everywhere in the family.
+
+## The species sense overrides — `0x103cb810`, `0x103ddaf0`, `0x103ddaa0`, `0x1036a030` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+Three of these four are **not senses at all, they are the two debug ConVars**. `DAT_10924fba`
+(`npc_ignore_senses`) and `DAT_10924fb9` (`npc_ignore_player`) form a shared three-test gate — a null
+candidate fails, `npc_ignore_senses` set fails, `npc_ignore_player` set and the candidate carrying a
+non-null `m_pPlayer` (`+0x00a8`) fails — and past it:
+
+- `CNPC_VWerewolf::FVisible` (`0x103cb810`, `#201`) returns **true unconditionally**. No range, no
+  cone, no trace, no `m_pSenses`. The 700-byte base slot-201 body it replaces is exactly the checks
+  it drops. On the vetoed arm it zeroes the blocker out-parameter; on a null candidate it does not.
+- `CNPC_VYukie::FInViewCone` (`0x103ddaa0`, `#363`) returns `1`. Yukie has no view cone.
+- `CNPC_VYukie::FVisible` (`0x103ddaf0`, `#201`) chains the base check through vtable `+0x948`
+  (slot 594, `0x102b4760`) instead of answering true, and zeroes the blocker on **both** veto arms.
+
+`CNPC_VCameraSecurity::vfunc468` (`0x1036a030`, `#468`, `QuerySeeEntity`) is 18 bytes and the whole
+body is `return *(int*)(candidate + 0xa8) != 0` — `CBaseEntity::m_pPlayer`, the self-downcast cache
+the `CBasePlayer` constructor fills. A security camera's sense admission is "is this the player",
+and it **replaces** the base Troika `QuerySeeEntity` (`0x102b38b0`) rather than adding to it: there
+is no call in the eighteen bytes. Its own base `CNPC_VCamera` fills slot 468 with nothing of its own.
+
+## `PassesFindEntityFOVTrace`, the two species bodies — `0x101aaf80`, `0x103a4bb0` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+`CPayphone#45` (`0x101aaf80`, 165 bytes) runs **no cone and no trace**. It sums the per-component
+absolute differences of the two entities' `EyePosition()`s — a MANHATTAN distance — compares it with
+`_DAT_1047a3b0` = **85.0** Source units, and under that calls `0x10240250` with the two `m_Collision`
+objects' `+0x4`/`+0x8` accessors. `0x10240250` is six `FCOMP` pairs, `otherMax >= myMin` and
+`otherMin <= myMax` per axis: an **AABB overlap**, not a field-of-view test. The slot's
+`Vector, Vector, int` tail is ignored entirely; only the entity argument is read.
+
+`CNPC_ProneDialog#45` (`0x103a4bb0`, 306 bytes) is almost all `Ray_t` construction: start from the
+first `Vector` argument, delta to the second, `m_IsRay = (delta.LengthSquared() != _DAT_104454c4)`,
+`m_IsSwept = 1`, every other field zero, then `enginetrace->TraceRay(&ray, mask, this, &tr)` through
+`(*DAT_1070b254 + 8)`. The answer is true only when `tr.m_pEnt == this`, or when `tr.m_pEnt` is null
+**and** `tr.fraction == _DAT_10449280` (**1.0**). "The ray reaches me, or reaches nothing at all."
+
+## The witness records — `0x1028ea60`, `0x1028eb30` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+Two setters, one per law channel, and they are **not symmetrical**.
+
+`0x1028ea60` writes the criminal record: `+0x6360` and `+0x6361` (below), then the witnessed level
+scrambled into `+0x6364`, then the three-float location at `+0x6380`, then the offender's
+`GetRefEHandle()` at `+0x638c` or `0xffffffff` for a null entity. `m_iPLCriminalLevelWitnessed`
+(`+0x635c`) is a `custom` datamap type — a `CSecureType` whose payload is the scrambled word — and
+the pair is recovered in both directions: the write is
+`h = 0x1042fde0(level); stored = (((h & 0x068d8635) ^ 0x0ae8746f) + 0x0ffa91d8) & 0x197279ca ^ h ^ 0xa641cacd`,
+and `CNPC_VPedestrian::vfunc461` (`0x103a2e30`) reads it back with the same shape but
+`^ 0x0ce9f66a`, followed by `0x1042fe90`. The two XOR immediates genuinely differ; both are in their
+listings.
+
+`+0x6360` and `+0x6361` are a **retail defect**. `1028ea72` reads `[ESP+0x8]` and `1028eaa9` reads
+`[ESP+0x5]`; both are inside the eight bytes `SUB ESP,0x8` allocated at entry and nothing in the
+body ever writes them. They are uninitialised stack, and the two bytes the record carries are
+whatever the previous frame left there.
+
+`0x1028eb30` writes the supernatural record and its level is **plain**: `+0x6368` takes the argument
+directly, the location goes to `+0x6374`, the offender to `+0x6390` (or `-1`), and
+`m_bPLSupernaturalActFleeOnly` (`+0x6394`) is written on **both** arms.
+
+## The occlusion edge and the effective look distance — `0x10270180`, `0x1029c970`, `0x1026a2a0` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+`0x10270180` (205 bytes) is the state machine behind `m_bEnemyWentOccluded` (`+0x5bc5`) and
+`m_vecEnemyWentOccluded` (`+0x5bc8`). Three arms on `(enemy, hasLos)`, none of which falls through:
+
+- **null enemy** — copy `DAT_1070d1b0..b8` (`vec3_origin`, read as three dwords) into `+0x5bc8` and
+  store the **LOS byte itself** into `+0x5bc5`. Retail writes `param_2` here, not `0`, so a null
+  enemy with the byte set leaves the flag raised.
+- **`hasLos == 0`** — snapshot the enemy's current `GetAbsOrigin()` (slot 217) into `+0x5bc8` and
+  CLEAR the flag: "I have just lost sight; remember where it was".
+- **`hasLos != 0` and the flag is clear** — set the flag once the enemy has moved more than
+  `_DAT_104563b0` = **4096.0** from that snapshot. The comparison is against a **squared** distance,
+  so the edge trips at 64 Source units of drift. A flag already set is never re-tested.
+
+`0x1029c970` (83 bytes) is the effective look distance, and it is not `m_flVisionDistance` on every
+pass. The default is `m_flVisionDistance` (`+0x63b8`); two independent overrides replace it with
+`m_pSenses->m_LookDist` — `curtime < m_flStealthVisionOverrideTime` (`+0x6604`), or
+`m_NPCState == 2` (COMBAT) **with `m_bEnemyWentOccluded` clear** — and the answer is then clamped up
+to `_DAT_104454c4` = 0.0. The second arm reads the occlusion **edge** (`+0x5bc5`), not the
+ten-failure debounce.
+
+`0x1026a2a0` (16 bytes) is `SetDistLook`: `*(m_pSenses + 0x10) = value`. `CAI_Senses+0x10` is
+`m_LookDist` — `vtmb_fields CAI_Senses` declares exactly two fields and this is one of them — so the
+inner word `0x1029c970` reads is the same one this writes, and neither is unrecovered.
+
+## The door-blocked notice — `0x1027de00` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+336 bytes, and it is **not** an enemy setter. Its two callers are `0x10298840` (the alternate-AI door
+transaction, when `0x100eec70` refuses the NPC/door pair) and `0x1027dfb0` (the hit-by-door handler,
+when the door that struck this NPC is the one it was opening); it writes `m_hBlockedDoor`
+(`+0x5d28`); and `npc-kernel/signatures.md`'s slot-532 row already names the reason word it
+dispatches. Seven arms, in order:
+
+1. `IsAlive()` (slot 158, vtable `+0x278`) and a non-null door, or return.
+2. If the door is the resolved `m_hOpeningDoor` (`+0x5d24`), dispatch slot 532 with **2** — the
+   door-blocked reason, beside `1` (fully open, `0x1027dd10`), `4` (`0x1027dfb0`) and `8`
+   (`OnScheduleChange`).
+3. `door+0x644 & 0x10` skips the whole retry block. The word's retail name is **unrecovered**.
+4. `door+0x644 & 0x40` selects `_DAT_10454110` = **5.0 s** over `_DAT_1044eb0c` = **20.0 s**. Under
+   the navigator guard `0x102ee6a0` (a network with a node list), `0x102f1fa0` stamps the door's nav
+   node unreachable for that long; unconditionally, `0x100f0e30` MAX-writes `curtime + seconds` into
+   `door+0x640`.
+5. When `m_iSquadDisconnected < 1` and `m_pSquad` (`+0x5da4`) is live, `GetSquadFocus`
+   (`0x103166b0`) is compared with the door and `SetSquadFocus` (`0x10316660`) called only when they
+   differ — which also stamps `squad+0x74 = curtime + _DAT_10463584` (**15.0**).
+6. `m_hBlockedDoor = door->GetRefEHandle()`.
+7. `this+0x98` is `m_pBaseNPCTroika`, `CBaseEntity`'s **self**-downcast cache — non-null exactly when
+   this entity is a `CAI_BaseNPCTroika`, not a pointer to another NPC. When it is live and
+   `m_eAlternateAI` (`+0x644c`) is 1 or 2, the mode advances to **3** and
+   `m_flAlternateAIExpireTimer` (`+0x6450`) is armed with `curtime + _DAT_104454c0` (**1.0 s**).
+
+## `CNPC_VWerewolf::ShouldPursueEnemy` and `CNPC_VYukie`'s melee exit — `0x103cf5f0`, `0x103dda10` (2026-09-13)
+
+_Recovered 2026-09-13, story 29c-1, family Senses._
+
+`0x103cf5f0` (292 bytes with the scope trace): unless `+0x66e8 & 4` is set — the werewolf's hint-gate
+bit word — it computes `elapsed = curtime - +0x66ec` (the `ScriptUnhide` stamp) clamped up to
+`_DAT_104454c4` = 0.0, and then requires **both** of two gates to fail before it gives up:
+`DAT_1093f8ec`'s radius against `elapsed`, and `DAT_1093d574`'s against `m_flPlayerDist`
+(`+0x6264`). Each global is read the way this band reads every ConVar — `vfunc1() ? 0.0 : +0x28` —
+and a single passing gate falls through to `return true`.
+
+`0x103dda10` (`CNPC_VYukie#602`, 103 bytes) replaces the Troika melee-leave decision with two arms on
+slot 308 `HasUsableRangedWeapon()` (vtable `+0x4d0`): with no ranged weapon, leave when
+`2 * meleeRange * _DAT_1044f02c` (**1.5**) is `<=` `m_flEnemyDist` (`+0x6268`); with one, leave when
+`m_flMeleeMustLeaveTimer` (`+0x6074`) has expired. Retail spells the first as
+`(a < b) != (a == b)`, the FPU flag pair for `a <= b`. The frenzy gate, the follower-boss gate and
+both attack-coordinator terms the Troika body (`0x102b5900`) spends its first half on are simply
+absent.
+
+**Unrecovered:** `DAT_1093f8ec` and `DAT_1093d574` (names and defaults; both objects live in
+uninitialised `.data`), `CBaseDoor+0x640`/`+0x644`'s retail names, and the hint-type vocabulary
+behind `CAI_Hint::IsViewable`'s literal `13` (`0x102d1320`: a set `m_iDisabled` refuses — the
+returned `m_iDisabled & 0xffffff00` has a zero low byte whatever the field holds — and otherwise the
+answer is `m_nHintType == 0xd`).
