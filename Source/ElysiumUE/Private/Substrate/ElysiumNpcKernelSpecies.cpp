@@ -39,7 +39,7 @@ namespace
 
 	// Slot 323's `UTIL_AngleMod`: `(360/65536) * (ftol(a * 65536/360) & 0xffff)`.
 	constexpr float AngleModScale = 0.0054931640625f;       // _DAT_1044ffdc  (= 360 / 65536)
-	constexpr float DegreesPerTurn = 360.0f;                // _DAT_10450568
+	constexpr float GSpeciesDegreesPerTurn = 360.0f;                // _DAT_10450568
 
 	// Slot 323's four band boundaries. **316, not 315** — read out of the image; the bands are 89,
 	// 90, 90 and 91 degrees wide and that asymmetry is retail's.
@@ -100,7 +100,7 @@ namespace
 			static_cast<float>(FMath::Atan2(-PortDelta.Y, PortDelta.X)));
 		if (Yaw < SpeciesZero)
 		{
-			Yaw += DegreesPerTurn;
+			Yaw += GSpeciesDegreesPerTurn;
 		}
 		return Yaw;
 	}
@@ -117,7 +117,7 @@ namespace
 		// cannot produce a negative, and reproduced because retail carries it.
 		if (Modded < SpeciesZero)
 		{
-			Modded += DegreesPerTurn;
+			Modded += GSpeciesDegreesPerTurn;
 		}
 		return Modded;
 	}

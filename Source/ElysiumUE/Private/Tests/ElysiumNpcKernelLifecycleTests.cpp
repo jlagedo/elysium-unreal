@@ -991,10 +991,10 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 			FElysiumNpc::StandoffSelect(V, D, true, true, nullptr, 0.0), INDEX_NONE);
 		FConds E = C;
 		E.bCond0x51 = true;
-		FWords U;
-		U.ReactionsLeft = 2;
+		FWords W51;
+		W51.ReactionsLeft = 2;
 		TestEqual(TEXT("and so does 0x51"),
-			FElysiumNpc::StandoffSelect(U, E, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpc::StandoffSelect(W51, E, true, true, nullptr, 0.0), INDEX_NONE);
 	}
 	// 9. Nothing standing: the base.
 	{

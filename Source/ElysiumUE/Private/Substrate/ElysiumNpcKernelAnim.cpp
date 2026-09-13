@@ -61,10 +61,10 @@ namespace
 	constexpr double GAnimTimeEpsilon = 0.0001;
 
 	// The three retail activity numbers this family compares against, named once.
-	constexpr int32 GActIdle = 9;                  // the sequence fallback both misses take
-	constexpr int32 GActRun = 0x13;                // rewritten to `GActIdle` by the run-to-walk rung
-	constexpr int32 GActDisposition = 0xf1;        // ACT_DISPOSITION, the whole-request retry
-	constexpr int32 GActScriptCustomMove = 0x18;   // ACT_SCRIPT_CUSTOM_MOVE
+	constexpr int32 GAnimActIdle = 9;                  // the sequence fallback both misses take
+	constexpr int32 GAnimActRun = 0x13;                // rewritten to `GAnimActIdle` by the run-to-walk rung
+	constexpr int32 GAnimActDisposition = 0xf1;        // ACT_DISPOSITION, the whole-request retry
+	constexpr int32 GAnimActScriptCustomMove = 0x18;   // ACT_SCRIPT_CUSTOM_MOVE
 
 	// `0x102b8a10`'s two constants: the activity it probes for and the schedule number it answers.
 	constexpr int32 GIdleGateActivity = 0x61;
@@ -1008,8 +1008,8 @@ void FElysiumNpc::AddSceneEvent(void* Scene, void* Event)
 		ResetSequenceInfo();                      // 0x10090950
 		SequenceCycle = 0.f;                      // +0x06f8
 		AnimTime = static_cast<float>(World != nullptr ? World->NowSeconds() : 0.0);   // +0x0174
-		IdealActivityNumber = GActDisposition;    // +0x0ff0
-		ActivityNumber = GActDisposition;         // +0x0fec
+		IdealActivityNumber = GAnimActDisposition;    // +0x0ff0
+		ActivityNumber = GAnimActDisposition;         // +0x0fec
 		Stance.bInFidget = false;                 // +0x64e0
 		Stance.bInChange = true;                  // +0x64e1
 		return;
@@ -1187,7 +1187,7 @@ void FElysiumNpc::ResolveDispositionActivity(int32& OutSequence, int32& OutTrans
 	// answers by CLIP NAME and has no sequence index to give back. The sequence is left at -1 and the
 	// ladder falls through to retail's own `"has no sequence for act ACT_DISPOSITION"` arm.
 	OutSequence = INDEX_NONE;
-	OutTranslatedActivity = GActDisposition;
+	OutTranslatedActivity = GAnimActDisposition;
 }
 
 FString FElysiumNpc::ScriptCustomMoveSequenceName() const
@@ -1223,7 +1223,7 @@ void FElysiumNpc::ResolveActivityToSequence(int32 Activity, int32& OutSequence,
 		OutTranslatedActivity = TranslateActivityNumber(Request, OutWeaponActivity);
 
 		bool bTookCustomMoveTail = false;
-		if (Request == GActScriptCustomMove && ScriptOwnerIsLive())
+		if (Request == GAnimActScriptCustomMove && ScriptOwnerIsLive())
 		{
 			const FString CustomMove = ScriptCustomMoveSequenceName();
 			OutSequence = LookupSequenceByName(*CustomMove);
@@ -1236,7 +1236,7 @@ void FElysiumNpc::ResolveActivityToSequence(int32 Activity, int32& OutSequence,
 				TEXT("SCRIPT_CUSTOM_MOVE: %s has no sequence"), *DebugString());
 			bTookCustomMoveTail = true;
 		}
-		else if (Request == GActDisposition)
+		else if (Request == GAnimActDisposition)
 		{
 			// Retail's guard is `m_pBaseNPCTroika != nullptr` (+0x98), the self-downcast cache every
 			// spawned `CAI_BaseNPCTroika` fills in its own constructor — so for this runtime's one
@@ -1262,10 +1262,10 @@ void FElysiumNpc::ResolveActivityToSequence(int32 Activity, int32& OutSequence,
 			// globals; the port logs on `Verbose`, which is this runtime's own rate limiter.
 			UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s has no sequence for act %d"), *DebugString(),
 				OutTranslatedActivity);
-			if (OutTranslatedActivity == GActRun)
+			if (OutTranslatedActivity == GAnimActRun)
 			{
-				OutTranslatedActivity = GActIdle;
-				OutSequence = SelectWeightedSequenceForActivity(GActIdle);
+				OutTranslatedActivity = GAnimActIdle;
+				OutSequence = SelectWeightedSequenceForActivity(GAnimActIdle);
 				if (OutSequence != INDEX_NONE)
 				{
 					LastResolveActivityRung = EResolveActivityRung::RunToWalk;
@@ -1276,7 +1276,7 @@ void FElysiumNpc::ResolveActivityToSequence(int32 Activity, int32& OutSequence,
 
 		if (bTookCustomMoveTail)
 		{
-			OutSequence = SelectWeightedSequenceForActivity(GActIdle);
+			OutSequence = SelectWeightedSequenceForActivity(GAnimActIdle);
 			if (OutSequence != INDEX_NONE)
 			{
 				LastResolveActivityRung = EResolveActivityRung::CustomMoveIdle;
@@ -1284,14 +1284,14 @@ void FElysiumNpc::ResolveActivityToSequence(int32 Activity, int32& OutSequence,
 			}
 		}
 
-		if (Request == GActDisposition)
+		if (Request == GAnimActDisposition)
 		{
 			// The retry has already happened and missed: sequence zero is the floor.
 			OutSequence = 0;
 			LastResolveActivityRung = EResolveActivityRung::SequenceZero;
 			return;
 		}
-		Request = GActDisposition;
+		Request = GAnimActDisposition;
 		LastResolveActivityRung = EResolveActivityRung::DispositionRetry;
 	}
 }

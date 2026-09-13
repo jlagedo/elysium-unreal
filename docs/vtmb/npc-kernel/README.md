@@ -52,6 +52,12 @@ override of a constant-returning virtual: a row in the class registry, not code)
 that body and the automation suite calls it), and `hand:<PortMethod>` (the body is written by hand
 in the substrate, so the generator emits no definition and the linker checks the claim).
 
+Story 29c-1 made `hand:` the common case — 235 slots carry it — and widened it from `rule` and
+`present` to `mechanism` as well, because a mechanism routed through a named service seam is a
+written body like any other. `--report` prints the remaining stubs **broken down by story band**
+with their verdicts, which is what makes "the stub count for this band" a measure a story can be
+held to rather than a single number over the whole vtable.
+
 The reading packs under `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/` carry decompiled
 bodies and are never committed, the same rule the rest of `research/` follows.
 

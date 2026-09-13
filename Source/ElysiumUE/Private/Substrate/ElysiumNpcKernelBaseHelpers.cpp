@@ -93,11 +93,11 @@ namespace
 
 	// The retail `Activity` numbers this family's bodies name. Spelled here because the port has no
 	// retail activity table (family Hints' `RestartIdealActivityId` says why).
-	constexpr int32 GActIdle = 1;                // ACT_IDLE — the tail of the face-anim ladder
-	constexpr int32 GActWalk = 9;                // ACT_WALK
-	constexpr int32 GActRun = 0x13;              // ACT_RUN
-	constexpr int32 GActScriptCustomMove = 0x18; // ACT_SCRIPT_CUSTOM_MOVE
-	constexpr int32 GActDisposition = 0xf1;      // ACT_DISPOSITION, slot 588's restart
+	constexpr int32 GBaseHelpersActIdle = 1;                // ACT_IDLE — the tail of the face-anim ladder
+	constexpr int32 GBaseHelpersActWalk = 9;                // ACT_WALK
+	constexpr int32 GBaseHelpersActRun = 0x13;              // ACT_RUN
+	constexpr int32 GBaseHelpersActScriptCustomMove = 0x18; // ACT_SCRIPT_CUSTOM_MOVE
+	constexpr int32 GBaseHelpersActDisposition = 0xf1;      // ACT_DISPOSITION, slot 588's restart
 
 	// `0x10297a20`'s four turn programs, in ladder order.
 	constexpr int32 GFaceAnimAct180 = 0x10ff;
@@ -504,7 +504,7 @@ int32 FElysiumNpc::GetScriptCustomMoveActivity() const
 	if (World == nullptr || !ScriptOwner.IsSet()
 		|| const_cast<FElysiumEntityWorld*>(World)->Resolve(ScriptOwner) == nullptr)
 	{
-		return GActWalk;
+		return GBaseHelpersActWalk;
 	}
 	// SEAM: `m_iszCustomMove` (`+0x5f50` on the cine) has no port field — `FElysiumAiScriptedSchedule`
 	// carries the beat's named clips, not the scripted-sequence custom move — so the key reads
@@ -512,7 +512,7 @@ int32 FElysiumNpc::GetScriptCustomMoveActivity() const
 	const FString& CustomMove = GUnrecoveredCustomMove;
 	if (CustomMove.IsEmpty())
 	{
-		return GActWalk;
+		return GBaseHelpersActWalk;
 	}
 	const int32 Activity = ActivityIdForName(CustomMove);   // `LookupActivity`
 	if (Activity != INDEX_NONE)
@@ -523,7 +523,7 @@ int32 FElysiumNpc::GetScriptCustomMoveActivity() const
 	// answer is then `ACT_SCRIPT_CUSTOM_MOVE`. SEAM — this runtime resolves clips by name through
 	// the clip identity and carries no retail sequence index, so the lookup answers "not found"
 	// and the body takes its `ACT_WALK` tail. That is retail's own arm for an unknown name.
-	return GActWalk;
+	return GBaseHelpersActWalk;
 }
 
 // 0x1028ebc0 — can I see this point? Retail name unrecovered; no caller in the corpus.
@@ -999,7 +999,7 @@ FElysiumNpc::FFaceAnimPick FElysiumNpc::FaceAnimLadder(float YawDelta,
 	{
 		return FFaceAnimPick{ GFaceAnimActSmall, 1, false };
 	}
-	return FFaceAnimPick{ GActIdle, 0, false };
+	return FFaceAnimPick{ GBaseHelpersActIdle, 0, false };
 }
 
 void FElysiumNpc::FUN_10297a20()
@@ -1147,7 +1147,7 @@ int32 FElysiumNpc::Slot571(float Distance)
 	//
 	// `_DAT_1049a17c` is UNRECOVERED; at the 0.0 stand-in every non-negative distance answers
 	// `ACT_RUN`, which is the arm the task takes for any real separation.
-	return Distance >= GDatFollowRunDistanceUnits ? GActRun : GActWalk;
+	return Distance >= GDatFollowRunDistanceUnits ? GBaseHelpersActRun : GBaseHelpersActWalk;
 }
 
 // slot 588 0x10293e50 `void vfunc588()`
@@ -1160,7 +1160,7 @@ void FElysiumNpc::Slot588()
 	// one-word body of another table, ported above under its own name.
 	if (IsActivityFinished())
 	{
-		RestartIdealActivityId(GActDisposition);
+		RestartIdealActivityId(GBaseHelpersActDisposition);
 	}
 }
 

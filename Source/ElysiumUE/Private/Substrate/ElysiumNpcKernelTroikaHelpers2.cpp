@@ -28,7 +28,7 @@ namespace
 	const double TroikaIgnoreCollisionNever = static_cast<double>(TNumericLimits<float>::Max());
 
 	// `_DAT_10454110` — `RecordDetectedAttack`'s window. **UNRECOVERED** (past `.data`'s raw size).
-	constexpr float TroikaDetectedAttackWindowSeconds = 0.0f;
+	constexpr float GTroikaTailDetectedAttackWindowSeconds = 0.0f;
 
 	// The lean hint's type, the one literal `ApplyHintLeanOffset` and `FindTacticalHintNode` both
 	// switch on. Family **Schedule** reads the same `0x27d8` as `GScheduleHintTypeLean`.
@@ -420,7 +420,7 @@ void FElysiumNpc::RecordDetectedAttack(const FElysiumEntity* Attacker)
 	Senses.Memory.DetectedAttackAttacker =
 		Redirected != nullptr ? Redirected->Handle : FElysiumEntityHandle();
 	Senses.Memory.DetectedAttackTime = (World != nullptr ? World->NowSeconds() : 0.0)
-		+ static_cast<double>(TroikaDetectedAttackWindowSeconds);
+		+ static_cast<double>(GTroikaTailDetectedAttackWindowSeconds);
 }
 
 // -------------------------------------------------------------------------------------------------

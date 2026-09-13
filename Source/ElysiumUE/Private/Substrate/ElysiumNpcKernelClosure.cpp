@@ -52,43 +52,43 @@ namespace
 	// `_DAT_1049adfc` = 4194304.0f = 2048², the SQUARED Source-unit radius slot 583 (`0x1028d860`)
 	// compares a distance against. The comparison is the decompiler's
 	// `(d < c) != (d == c)` spelling of `<=`, so a body exactly on the radius IS woken.
-	constexpr double GWakeRadiusUnits = 2048.0;
+	constexpr double GClosureWakeRadiusUnits = 2048.0;
 
 	// `_DAT_10452dc4` = 2.0f — the seconds `CAI_BaseNPCTroika::MaintainEyeDirection` (`0x102bff20`)
 	// pushes the gaze re-scan stamp `+0x5d6c` out by on every think with a live dialogue partner.
-	constexpr float GDialogueReScanSeconds = 2.0f;
+	constexpr float GClosureDialogueReScanSeconds = 2.0f;
 
 	// `CAI_BaseNPCTroika::NPC_TranslateActivity` (`0x10295710`): `ACT_IDLE` becomes `ACT_LAUGH_IDLE`
 	// under `m_bfAINPCFlags2 & 0x80000`. The two ids are carried by the port's own
 	// `ClassTranslate_Troika` row and are read off it rather than spelled again here; the bit is
 	// `EElysiumNpcFlag2::D_MILDLY_CRAZY` and the static assert is what pins that reading.
-	constexpr uint32 GLaughIdleFlag2Bit = 0x00080000u;
-	static_assert(static_cast<uint32>(EElysiumNpcFlag2::D_MILDLY_CRAZY) == GLaughIdleFlag2Bit,
+	constexpr uint32 GClosureLaughIdleFlag2Bit = 0x00080000u;
+	static_assert(static_cast<uint32>(EElysiumNpcFlag2::D_MILDLY_CRAZY) == GClosureLaughIdleFlag2Bit,
 		"0x10295710 gates on m_bfAINPCFlags2 & 0x80000");
 
 	// `CAI_BaseNPCTroika::Cover_Troika` (`0x10297560`) and `Reload_Troika` (`0x102954b0`), and the
 	// base body `Cover_Base` (`0x10274aa0`) the first of them falls through to. Every one of these
 	// is a retail `Activity` id, and they are the numbers the port's `GCoverTroikaRules` /
 	// `GReloadTroikaRules` / `GCoverBaseRules` rows carry.
-	constexpr int32 GActIdle = 1;                   // ACT_IDLE
-	constexpr int32 GActCover = 6;                  // ACT_COVER
-	constexpr int32 GActCoverMed = 7;               // ACT_COVER_MED
-	constexpr int32 GActCoverLow = 8;               // ACT_COVER_LOW  (retail `'\b'`)
-	constexpr int32 GActReloadFast = 85;            // ACT_RELOAD_FAST (retail `0x55`)
-	constexpr int32 GActReloadLow = 87;             // ACT_RELOAD_LOW  (retail `0x57`)
-	constexpr int32 GActCrunchIdle = 0x110d;        // ACT_CRUNCH_IDLE      4365, retail `'\r'`
-	constexpr int32 GActMidCrunchIdle = 0x1111;     // ACT_MIDCRUNCH_IDLE   4369, retail `'\x11'`
-	constexpr int32 GActCornerCoverIdle = 0x1118;   // ACT_CORNER_COVER_IDLE 4376, retail `'\x18'`
+	constexpr int32 GClosureActIdle = 1;                   // ACT_IDLE
+	constexpr int32 GClosureActCover = 6;                  // ACT_COVER
+	constexpr int32 GClosureActCoverMed = 7;               // ACT_COVER_MED
+	constexpr int32 GClosureActCoverLow = 8;               // ACT_COVER_LOW  (retail `'\b'`)
+	constexpr int32 GClosureActReloadFast = 85;            // ACT_RELOAD_FAST (retail `0x55`)
+	constexpr int32 GClosureActReloadLow = 87;             // ACT_RELOAD_LOW  (retail `0x57`)
+	constexpr int32 GClosureActCrunchIdle = 0x110d;        // ACT_CRUNCH_IDLE      4365, retail `'\r'`
+	constexpr int32 GClosureActMidCrunchIdle = 0x1111;     // ACT_MIDCRUNCH_IDLE   4369, retail `'\x11'`
+	constexpr int32 GClosureActCornerCoverIdle = 0x1118;   // ACT_CORNER_COVER_IDLE 4376, retail `'\x18'`
 
 	// The three `CAI_Hint::m_nHintType` (`+0x5dc`) values the two activity delegates switch on.
-	constexpr int32 GHintTypeCoverMed = 100;
-	constexpr int32 GHintTypeCoverLow = 101;      // retail `0x65`
-	constexpr int32 GHintTypeCoverCorner = 10200;  // retail `0x27d8`
+	constexpr int32 GClosureHintTypeCoverMed = 100;
+	constexpr int32 GClosureHintTypeCoverLow = 101;      // retail `0x65`
+	constexpr int32 GClosureHintTypeCoverCorner = 10200;  // retail `0x27d8`
 
 	// `m_bfAINPCFlags & 0x200` — `EElysiumNpcFlag::COWER_PATH`, the bit `Cover_Troika` short-circuits
 	// on. Named through the enum at the call site; the assert is what pins the reading.
-	constexpr uint32 GForcedLowCoverFlagBit = 0x00000200u;
-	static_assert(static_cast<uint32>(EElysiumNpcFlag::COWER_PATH) == GForcedLowCoverFlagBit,
+	constexpr uint32 GClosureForcedLowCoverFlagBit = 0x00000200u;
+	static_assert(static_cast<uint32>(EElysiumNpcFlag::COWER_PATH) == GClosureForcedLowCoverFlagBit,
 		"0x10297560 short-circuits on m_bfAINPCFlags & 0x200");
 
 	// `CAI_Hint*` reaching slot 569 / 570, resolved through family Hints' seam.
@@ -466,7 +466,7 @@ void FElysiumNpc::MaintainEyeDirection(float DeltaSeconds)
 	// Arm 2 — `+0x5d6c m_flNextEyeLookTime := curtime + 2.0` while a partner is live.
 	if (HasLiveDialogPartner())
 	{
-		NextEyeLookTime = static_cast<float>(Now) + GDialogueReScanSeconds;
+		NextEyeLookTime = static_cast<float>(Now) + GClosureDialogueReScanSeconds;
 	}
 
 	// Arms 3 and 4, named rather than called: their inputs are the engine tier's.
@@ -877,46 +877,46 @@ int32 FElysiumNpc::GetCoverActivity(void* Hint)
 	//     return Cover_Base(hint);                                                 // 0x10274aa0
 	if (NpcFlags.Has(EElysiumNpcFlag::COWER_PATH))
 	{
-		return GActCoverLow;
+		return GClosureActCoverLow;
 	}
 
 	FHintWords Words;
 	const int32 HintType = ClosureHintTypeOf(*this, Hint, Words);
-	if (HintType == GHintTypeCoverMed
-		&& SelectWeightedSequenceForActivity(GActMidCrunchIdle) != INDEX_NONE)
+	if (HintType == GClosureHintTypeCoverMed
+		&& SelectWeightedSequenceForActivity(GClosureActMidCrunchIdle) != INDEX_NONE)
 	{
-		return GActMidCrunchIdle;
+		return GClosureActMidCrunchIdle;
 	}
-	if (HintType == GHintTypeCoverLow
-		&& SelectWeightedSequenceForActivity(GActCrunchIdle) != INDEX_NONE)
+	if (HintType == GClosureHintTypeCoverLow
+		&& SelectWeightedSequenceForActivity(GClosureActCrunchIdle) != INDEX_NONE)
 	{
-		return GActCrunchIdle;
+		return GClosureActCrunchIdle;
 	}
-	if (HintType == GHintTypeCoverCorner
-		&& SelectWeightedSequenceForActivity(GActCornerCoverIdle) != INDEX_NONE)
+	if (HintType == GClosureHintTypeCoverCorner
+		&& SelectWeightedSequenceForActivity(GClosureActCornerCoverIdle) != INDEX_NONE)
 	{
-		return GActCornerCoverIdle;
+		return GClosureActCornerCoverIdle;
 	}
 
 	// `CAI_BaseNPC::Cover_Base` (`0x10274aa0`), the body the Troika line falls through to. It is not
 	// a slot of its own — 13 classes carry it AT slot 569 and the Troika override calls it
 	// statically — so it is inlined here rather than given a second symbol. The port's
 	// `GCoverBaseRules` encodes the identical four rows.
-	if (HintType == GHintTypeCoverMed
-		&& SelectWeightedSequenceForActivity(GActCoverMed) != INDEX_NONE)
+	if (HintType == GClosureHintTypeCoverMed
+		&& SelectWeightedSequenceForActivity(GClosureActCoverMed) != INDEX_NONE)
 	{
-		return GActCoverMed;
+		return GClosureActCoverMed;
 	}
-	if (HintType == GHintTypeCoverLow
-		&& SelectWeightedSequenceForActivity(GActCoverLow) != INDEX_NONE)
+	if (HintType == GClosureHintTypeCoverLow
+		&& SelectWeightedSequenceForActivity(GClosureActCoverLow) != INDEX_NONE)
 	{
-		return GActCoverLow;
+		return GClosureActCoverLow;
 	}
-	if (SelectWeightedSequenceForActivity(GActCover) != INDEX_NONE)
+	if (SelectWeightedSequenceForActivity(GClosureActCover) != INDEX_NONE)
 	{
-		return GActCover;
+		return GClosureActCover;
 	}
-	return GActIdle;
+	return GClosureActIdle;
 }
 
 int32 FElysiumNpc::GetReloadActivity(void* Hint)
@@ -939,19 +939,19 @@ int32 FElysiumNpc::GetReloadActivity(void* Hint)
 	// caller's, not this slot's, and this slot returns the id retail returns.
 	FHintWords Words;
 	const int32 HintType = ClosureHintTypeOf(*this, Hint, Words);
-	if (HintType == GHintTypeCoverMed || HintType == GHintTypeCoverLow)
+	if (HintType == GClosureHintTypeCoverMed || HintType == GClosureHintTypeCoverLow)
 	{
-		if (SelectWeightedSequenceForActivity(GActReloadLow) != INDEX_NONE)
+		if (SelectWeightedSequenceForActivity(GClosureActReloadLow) != INDEX_NONE)
 		{
-			return GActReloadLow;
+			return GClosureActReloadLow;
 		}
-		const int32 Crunch = HintType == GHintTypeCoverMed ? GActMidCrunchIdle : GActCrunchIdle;
+		const int32 Crunch = HintType == GClosureHintTypeCoverMed ? GClosureActMidCrunchIdle : GClosureActCrunchIdle;
 		if (SelectWeightedSequenceForActivity(Crunch) != INDEX_NONE)
 		{
 			return Crunch;
 		}
 	}
-	return GActReloadFast;
+	return GClosureActReloadFast;
 }
 
 // =================================================================================================
@@ -976,7 +976,7 @@ void FElysiumNpc::Slot583(const FVector& PointCm)
 	// the same radius, ending in the same `ResetThinkTimers`. The two are asserted equal by name in
 	// `Elysium.Substrate.NpcKernelClosure.Slot583ProximityWake`.
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const double RadiusCm = GWakeRadiusUnits * ElysiumMove::U;
+	const double RadiusCm = GClosureWakeRadiusUnits * ElysiumMove::U;
 	if (FVector::DistSquared(Origin, PointCm) <= RadiusCm * RadiusCm)
 	{
 		ResetThinkTimers(Now);

@@ -3850,3 +3850,106 @@ Anim-event ids 2..8 copy a fixed name into the caller's buffer — `START_IDLE`,
 `START_RUN`, `START_LANDHARD`, `START_ATTACK`, `START_ATTACKBIG`, `START_POUNCE`, at `0x1065c87c`
 down to `0x1065c818` — and every other id tail-calls `CBaseAnimating::GetEventName`. The ids are
 read from the `animevent_t`'s first word, not from the buffer pointer, which is the first argument.
+
+## Story 29c-1, family Closure — the slots the port already answered, wired to the slot
+
+_Recovered 2026-09-13._ The 41 Troika-line slots of layers 0–9 whose 29c verdict is `present` (the
+port already runs the body somewhere) or `mechanism` (the engine supplies it). Each of them was a
+generated stub, so the slot the kernel dispatches through answered a tally rather than the port's own
+answer; the family is the wire. Ported in `Substrate/ElysiumNpcKernelClosure.inl` / `.cpp`, tested by
+`Elysium.Substrate.NpcKernelClosure.*`. The sections below are the bodies over 64 bytes that had no
+walked paragraph; the eye maintainer and the point view cone are in `senses.md` and the feed-end
+output is in `lifecycle.md`.
+
+### Slots 192 and 215 `WorldSpaceCenter` — `0x10027160`, `0x100b4c30`
+
+**One body compiled twice.** The decompiled C of the two is identical instruction for instruction
+except for how the answer leaves: `0x10027160` (slot 192, 334 bytes, 496 classes) writes three floats
+through the hidden struct-return pointer, `0x100b4c30` (slot 215) returns a pointer. Both allocate
+**two** entries from the image's rotating temp-vector ring (`DAT_109f0cc0`, 128 entries, index
+`DAT_106b856c` advanced with `& 0x7f` — so one call consumes two slots of the ring), write the local
+midpoint `mins + (maxs - mins) * 0.5` (`m_Collision +0x274` and `+0x280`, `_DAT_104454d0` = 0.5) into
+the second, and then take one of two arms: if the entity is solid, `m_nSolidType` (`+0x2b0`) is
+neither 0 nor 2, and `m_Collision`'s angles (vfunc `+0x24`) differ from `vec3_angle`
+(`DAT_1070d9d0`), transform the midpoint by the entity-to-world matrix (vfunc `+0x28`) through
+`VectorTransform`; otherwise add the collision origin (vfunc `+0x20`) componentwise. So it is the
+collision OBB's centre with an axis-aligned fast path, which is the quantity Unreal's
+`UPrimitiveComponent::Bounds` carries.
+
+The `const Vector&` overload's return value is a pointer INTO the ring, which is Source's way of
+returning a reference from a value computation: the reference is valid until 64 further calls have
+wrapped the index around.
+
+**Unrecovered:** nothing in the body. What the port cannot reproduce is the ring's aliasing — it
+caches one centre per entity instead (`FElysiumNpc::WorldSpaceCentreCacheCm`, a named modernization
+stated at its declaration), which is strictly more stable. No call site in layers 0–9 holds the
+reference across another call.
+
+### Slots 569 and 570, the cover and reload activity delegates — `0x10297560`, `0x102954b0`
+
+`CAI_BaseNPCTroika::Cover_Troika` (161 bytes, 64 classes) and `Reload_Troika` (141 bytes, 64
+classes). Both are reached with `m_pHintNode` (`+0x5ddc`) as their only argument — every call site
+passes that and nothing else: `NPC_EarlyTranslateActivity` (`0x10295590`) at both its delegate arms
+(`vtable +0x8e8` for `ACT_RELOAD_FAST`, `+0x8e4` for `ACT_COVER` and for `ACT_IDLE` under
+`m_afMemory & 2`), and `StartTask` (`0x102a1910`). Both switch on the hint's `m_nHintType`
+(`+0x5dc`) over exactly 100, 101 (`0x65`) and, for cover only, 10200 (`0x27d8`), and both probe each
+candidate with a weighted-sequence lookup before answering it.
+
+Cover's first line is **unconditional and precedes everything**: `if ((m_bfAINPCFlags & 0x200) ==
+0x200) return 8` — `ACT_COVER_LOW`, with no probe, no hint read and no fall-through. `0x200` is
+`COWER_PATH`. Past it, hint type 100 offers `ACT_MIDCRUNCH_IDLE` (`0x1111`), 101 offers
+`ACT_CRUNCH_IDLE` (`0x110d`) and 10200 offers `ACT_CORNER_COVER_IDLE` (`0x1118`), each taken only if
+`thunk_FUN_10295460` (the Troika line's stat-filtered `SelectWeightedSequence`) answers something
+other than -1; everything else falls to `CAI_BaseNPC::Cover_Base` (`0x10274aa0`), which offers
+`ACT_COVER_MED` for 100, `ACT_COVER_LOW` for 101, then `ACT_COVER`, then an unconditional `ACT_IDLE`.
+
+Reload has **no base fall-through and no `ACT_RELOAD`** anywhere in it. For hint types 100 and 101 it
+tries `ACT_RELOAD_LOW` (`0x57`) through `CBaseAnimating::SelectWeightedSequence` and then the
+matching crunch idle through the stat-filtered twin; every miss, and every other hint type, answers
+`ACT_RELOAD_FAST` (`0x55`). The base body `CAI_BaseNPC::Reload_Base` (`0x10274820`, 13 classes)
+answers `ACT_RELOAD` instead, and the Troika line never reaches it.
+
+**Unrecovered:** nothing in either body. The port's committed activity table
+(`Visual/ElysiumNpcActivityTables.cpp`) models cover's forced-low arm as a cover-CONTEXT force rather
+than as the unconditional return it is, which is a divergence in the table rather than in the reading
+— the slot answers the body.
+
+### Slot 346 `SetPoseParameter(int, float, bool)` — `0x1032fc50`
+
+413 bytes, 85 classes, and the stock SDK looping pose-parameter setter. Past the crash-report
+breadcrumb push, it walks the two-entry registry at `m_flSet_PoseParameters`, comparing the asked-for
+index against each entry's third word. On a hit it stores the value; then, if the `bool` is set and
+`GetModelPtr()` resolves, it looks the pose parameter's descriptor up (`thunk_FUN_100c73b0`) and,
+when the descriptor's `+0x10` (the loop span) is not `_DAT_104454c4` (0.0), wraps the value as
+`(span - (span + desc+0xc + desc+0x8) * _DAT_10449270 + value) / span`. An index that is not one of
+the two registered entries falls out of the loop into `CBaseAnimating::SetPoseParameter02` (slot 260,
+`0x10091fe0`), the ordinary non-looping setter, which resolves the model, refuses a negative index,
+and writes `m_flPoseParameter[index]` through `thunk_FUN_100c43e0`.
+
+**Unrecovered:** the value of `_DAT_10449270` (the SDK wrap fraction) and the retail names of the
+two registry entries. Neither is reachable from this runtime, which stands no `studiohdr_t` and
+therefore no pose-parameter descriptors, so every call takes the fall-through — which is retail's own
+answer for an index the registry does not carry.
+
+### Slots 102 and 184, the two trace-shaped mechanisms — `0x100ab450`, `0x10267260`
+
+Both fill about 496 classes, most of them props and triggers rather than NPCs, which is what says
+they are engine plumbing rather than an NPC rule.
+
+`Physics_TraceEntity` (`0x100ab450`, 121 bytes) is 100 bytes of crash-report breadcrumb around one
+call: it pushes `"Physics_TraceEntity"` onto the scope-trace stack, calls `thunk_FUN_101cd110` with
+all five arguments unchanged — the entity, the start, the end, the content mask and the `trace_t*` —
+and pops. `0x101cd110` issues the trace through the engine trace service's own vtable
+(`DAT_1070b254 + 0x14`). There is nothing else in the body.
+
+`MakeTracer` (`0x10267260`, 186 bytes) builds a `CPASFilter` around its first argument (the tracer's
+start) through `thunk_FUN_1019ce00` / `thunk_FUN_1019d280`, and **only when the third argument is 1**
+(`TRACER_LINE`) fires the bullet-tracer temp entity from that point to the trace's `endpos`
+(`param_2 + 0xc`) with this entity's index (`+0x2e0`) as the attachment owner; the rest of the body is
+the filter's heap unwind. Every other tracer type builds the filter and fires nothing. Nothing
+downstream reads anything either body writes except the `trace_t` itself.
+
+**Unrecovered:** the `trace_t` layout. The port stands no counterpart for it, so the generated
+parameter is `void*` and both slots refuse rather than fill a buffer whose shape they do not know —
+`Physics_TraceEntity` leaves the caller's buffer byte-for-byte untouched, which its case asserts with
+a sentinel fill.

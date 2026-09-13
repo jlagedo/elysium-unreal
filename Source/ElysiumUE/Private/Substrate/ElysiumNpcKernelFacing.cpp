@@ -31,7 +31,7 @@ namespace
 	// `UTIL_AngleDiff` `0x1013d580`: `a - b` walked back into `[-180, 180]` by whole turns, with
 	// `_DAT_10462948 = -180.0f` and `_DAT_1044c3a8 = 180.0f`. Retail wraps only on the side the
 	// `a <= b` test selects, and reproducing that is free.
-	float RetailAngleDiff(float A, float B)
+	float FacingRetailAngleDiff(float A, float B)
 	{
 		float Delta = A - B;
 		if (A <= B)
@@ -65,7 +65,7 @@ namespace
 	}
 
 	// `VectorAngles` `0x10139970`: Source `[pitch yaw roll]` for a direction in this world's axes.
-	FVector RetailVectorAngles(const FVector& PortDir)
+	FVector FacingRetailVectorAngles(const FVector& PortDir)
 	{
 		const double Y = -PortDir.Y;   // back into Source's Y
 		if (PortDir.X == 0.0 && Y == 0.0)
@@ -139,7 +139,7 @@ namespace
 	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s own playback-tuning record, read by
 	// field offset. **SEAM**: this substrate holds no such table, so every field answers 0 and the
 	// non-discipline arm's blend lands on its floor.
-	float MingXiaoTuningField(int32)
+	float FacingMingXiaoTuningField(int32)
 	{
 		return 0.f;
 	}
@@ -314,7 +314,7 @@ void FElysiumNpc::SetAim(const FVector& AimDirection)
 	//     SetPoseParameter( "aim_yaw",   0.0f );
 	// The yaw argument is a hard zero in the listing (`uVar1 = 0` pushed as the float), not the
 	// computed yaw: retail aims the pitch pose and pins the yaw pose at neutral.
-	const FVector AimAngles = RetailVectorAngles(AimDirection);
+	const FVector AimAngles = FacingRetailVectorAngles(AimDirection);
 	SetPoseParameterByName(TEXT("aim_pitch"), static_cast<float>(AimAngles.X));
 	SetPoseParameterByName(TEXT("aim_yaw"), 0.f);
 }
@@ -337,7 +337,7 @@ void FElysiumNpc::SetHeadDirection(FVector& LookTarget, float Interval)
 	// The yaw half, from GetOrigin (slot 220) and GetAngles (slot 221).
 	const float BodyYaw = static_cast<float>(Angles.Y);
 	const FVector YawDelta = LookTarget - Origin;
-	const float TargetYaw = RetailAngleDiff(RetailYawOf(YawDelta, BodyYaw), BodyYaw);
+	const float TargetYaw = FacingRetailAngleDiff(RetailYawOf(YawDelta, BodyYaw), BodyYaw);
 	if (Interval > 0.0f)
 	{
 		// A do/while: an interval at or under one step still integrates once.
@@ -831,7 +831,7 @@ void FElysiumNpc::OnChangeActivitySpecies(int32 Activity)
 		// lands on its 0.1 floor. The two tails `0x1039ab30` and `0x1039aca0` are MingXiao's own and
 		// are named here rather than invented.
 		const FMingXiaoPlayback Pick = MingXiaoPlaybackScalar(Activity, /*bDisciplineArm*/ false,
-			/*TentacleCount*/ 0, [](int32 Field) { return MingXiaoTuningField(Field); });
+			/*TentacleCount*/ 0, [](int32 Field) { return FacingMingXiaoTuningField(Field); });
 		(void)Pick;   // SetPlaybackAndSpeedScalar has no kernel-tier seam in this substrate
 	}
 	else if (FCString::Strcmp(BodyAddress, TEXT("0x103a56f0")) == 0)
@@ -991,8 +991,8 @@ void FElysiumNpc::UpdateFacingTimer()
 			Flat = Flat.GetSafeNormal();
 			if (Length < 150.0f * ElysiumMove::U && 1e-05f * ElysiumMove::U < Length)
 			{
-				const FVector FlatAngles = RetailVectorAngles(Flat);
-				const float YawDelta = RetailAngleDiff(static_cast<float>(Player->Angles.Y),
+				const FVector FlatAngles = FacingRetailVectorAngles(Flat);
+				const float YawDelta = FacingRetailAngleDiff(static_cast<float>(Player->Angles.Y),
 					static_cast<float>(FlatAngles.Y));
 				if (FMath::Abs(YawDelta) < 70.0f)
 				{

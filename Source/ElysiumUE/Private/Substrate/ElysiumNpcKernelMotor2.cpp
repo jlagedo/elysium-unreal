@@ -25,8 +25,8 @@ namespace
 	constexpr float GSuperJumpNearRise = 50.0f;     // _DAT_104ada1c
 	constexpr float GSuperJumpFarRise = 150.0f;     // _DAT_104ada20
 	constexpr float GSuperJumpSplit = 40.0f;        // _DAT_104ada3c
-	constexpr float GAsianJumpRise = 100.0f;        // _DAT_104a9310
-	constexpr float GSheriffJumpRise = 400.0f;      // _DAT_104c614c
+	constexpr float GMotorTailAsianJumpRise = 100.0f;        // _DAT_104a9310
+	constexpr float GMotorTailSheriffJumpRise = 400.0f;      // _DAT_104c614c
 	constexpr float GAsianJumpScheduleDrop = 40.0f; // _DAT_104a9314
 	constexpr float GAsianJumpNear = 30.0f;         // _DAT_104a9308
 	constexpr float GAsianStationaryTime = 3.0f;    // _DAT_104a9318
@@ -38,8 +38,8 @@ namespace
 	// `vec3_invalid` — `DAT_10713de0/de4/de8`, which `staticinit_101371a0` fills with `0x7f7fffff`.
 	// `GetGroundpoint`'s no-hit answer, and `CNPC_VWerewolf::GetForwardYawForHint`'s sentinel.
 	constexpr float GVecInvalid = 3.4028234663852886e+38f;
-	constexpr float GTraceClearFraction = 1.0f;     // _DAT_10449280
-	constexpr int32 GGroundTraceMask = 0x202400b;
+	constexpr float GMotorTailTraceClearFraction = 1.0f;     // _DAT_10449280
+	constexpr int32 GMotorTailGroundTraceMask = 0x202400b;
 	constexpr int32 GJumpbaseHintType = 18000;
 	constexpr int32 GNoJumpHintType = 0x3e84;
 	constexpr float GStuckDegenerate = 9.999999974752427e-07f;  // _DAT_104c3d14
@@ -63,7 +63,7 @@ namespace
 
 	// This world's centimetres into retail's Source units, and back. Stated once per file, for the
 	// reason given at the top of `ElysiumNpcKernelMotor.cpp`.
-	FVector SourceOf(const FVector& Cm)
+	FVector MotorTailSourceOf(const FVector& Cm)
 	{
 		return FVector(Cm.X / ElysiumMove::U, -Cm.Y / ElysiumMove::U, Cm.Z / ElysiumMove::U);
 	}
@@ -108,11 +108,11 @@ bool FElysiumNpc::CheckForJumpAttack()
 	{
 		return false;
 	}
-	if (ChangBrosSector(SourceOf(Player->Origin)) == 4)
+	if (ChangBrosSector(MotorTailSourceOf(Player->Origin)) == 4)
 	{
 		return false;
 	}
-	if (ChangBrosSector(SourceOf(Origin)) == 4)
+	if (ChangBrosSector(MotorTailSourceOf(Origin)) == 4)
 	{
 		return false;
 	}
@@ -170,7 +170,7 @@ void FElysiumNpc::SetupSuperJump(float Enabled)
 	{
 		return;
 	}
-	const FVector SelfUnits = SourceOf(Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
 	FVector HintUnits = FVector::ZeroVector;
 	if (!NavHintNodeOrigin(ScheduleHost.HintNode, HintUnits))
 	{
@@ -215,13 +215,13 @@ void FElysiumNpc::SetupJump(float Enabled)
 	{
 		return;
 	}
-	float Rise = GAsianJumpRise;
+	float Rise = GMotorTailAsianJumpRise;
 	if (IsRetailClass(TEXT("CNPC_VSheriffMan")))
 	{
 		const FSetupJumpSpecies* Row = SetupJumpSpeciesOf(TEXT("CNPC_VSheriffMan"));
-		Rise = Row != nullptr ? Row->Rise : GSheriffJumpRise;
+		Rise = Row != nullptr ? Row->Rise : GMotorTailSheriffJumpRise;
 	}
-	const FVector SelfUnits = SourceOf(Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
 	FVector HintUnits = FVector::ZeroVector;
 	if (!NavHintNodeOrigin(ScheduleHost.HintNode, HintUnits))
 	{
@@ -253,7 +253,7 @@ int32 FElysiumNpc::GetJumpSchedule() const
 	if (Player != nullptr && !Player->IsInert()
 		&& Player->Handle == Senses.Memory.ClosestPlayer)
 	{
-		const float DeltaZ = static_cast<float>(SourceOf(Player->Origin).Z - SourceOf(Origin).Z);
+		const float DeltaZ = static_cast<float>(MotorTailSourceOf(Player->Origin).Z - MotorTailSourceOf(Origin).Z);
 		if (DeltaZ < -GAsianJumpScheduleDrop)
 		{
 			return GSchedJumpDown;
@@ -296,7 +296,7 @@ void FElysiumNpc::UpdateMovedTimeStamp()
 	//     }
 	// The distance is 3-D, and the write order is stamp first, position second — which matters
 	// because retail re-reads `GetAbsOrigin()` for the second write.
-	const FVector SelfUnits = SourceOf(Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
 	const FVector Delta = SelfUnits - MovedPosition;
 	if (GAsianMovedEpsilon < Length3D(Delta))
 	{
@@ -326,7 +326,7 @@ int32 FElysiumNpc::SelectJumpbaseNode()
 	float BestDistance = TNumericLimits<float>::Max();
 	TArray<int32> Hints;
 	NavAllHintNodes(Hints);
-	const FVector SelfUnits = SourceOf(Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
 	for (int32 Hint : Hints)
 	{
 		int32 Type = 0;
@@ -385,12 +385,12 @@ void FElysiumNpc::SetJumpVelocityTowardPlayer()
 	{
 		return;
 	}
-	const FVector SelfUnits = SourceOf(Origin);
-	const FVector PlayerUnits = SourceOf(Player->Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
+	const FVector PlayerUnits = MotorTailSourceOf(Player->Origin);
 	const FVector Lead(GSabbatLeadScale * (PlayerUnits.X - SelfUnits.X),
 		(PlayerUnits.Y - SelfUnits.Y) * GSabbatLeadScale, GSabbatLeadScale * 0.0);
 	const FVector ToUnits = PlayerUnits - Lead;
-	FVector VelocityUnits = SourceOf(Velocity);
+	FVector VelocityUnits = MotorTailSourceOf(Velocity);
 	if (!SolveJumpArc(SelfUnits, ToUnits, VelocityUnits))
 	{
 		// **SEAM**: with no solver retail's out-parameter is untouched, and it then assigns that
@@ -423,8 +423,8 @@ bool FElysiumNpc::PlayerInNoJumpZone() const
 	}
 	TArray<int32> Hints;
 	NavAllHintNodes(Hints);
-	const FVector PlayerUnits = SourceOf(Player->Origin);
-	const FVector SelfUnits = SourceOf(Origin);
+	const FVector PlayerUnits = MotorTailSourceOf(Player->Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
 	for (int32 Hint : Hints)
 	{
 		int32 Type = 0;
@@ -504,8 +504,8 @@ void FElysiumNpc::CheckStuck()
 	{
 		return;
 	}
-	const FVector PlayerUnits = SourceOf(Player->Origin);
-	const FVector SelfUnits = SourceOf(Origin);
+	const FVector PlayerUnits = MotorTailSourceOf(Player->Origin);
+	const FVector SelfUnits = MotorTailSourceOf(Origin);
 
 	const float PlayerRadius = Length2D(PlayerMaxs - PlayerMins) * GStuckHalf;
 	const float PlayerTop = static_cast<float>(PlayerUnits.Z + PlayerMaxs.Z);
@@ -579,8 +579,8 @@ FVector FElysiumNpc::GetGroundpoint(const FVector& PointUnits) const
 	RetailHullExtents(HullKind, Mins, Maxs);
 	const FVector EndUnits(PointUnits.X, PointUnits.Y, PointUnits.Z - GGroundpointDrop);
 	FKernelHullTrace Trace;
-	if (KernelHullTrace(PointUnits, EndUnits, Mins, Maxs, GGroundTraceMask, Trace)
-		&& Trace.Fraction < GTraceClearFraction)
+	if (KernelHullTrace(PointUnits, EndUnits, Mins, Maxs, GMotorTailGroundTraceMask, Trace)
+		&& Trace.Fraction < GMotorTailTraceClearFraction)
 	{
 		return FVector(PointUnits.X, PointUnits.Y,
 			PointUnits.Z + Trace.Fraction * -GGroundpointDrop);

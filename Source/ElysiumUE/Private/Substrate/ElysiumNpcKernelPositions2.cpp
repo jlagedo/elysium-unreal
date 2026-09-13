@@ -20,8 +20,8 @@
 
 namespace
 {
-	constexpr float RetailOne = 1.0f;             // _DAT_104454c0
-	constexpr float RetailZero = 0.0f;            // _DAT_104454c4
+	constexpr float GPositionsTailRetailOne = 1.0f;             // _DAT_104454c0
+	constexpr float GPositionsTailRetailZero = 0.0f;            // _DAT_104454c4
 	constexpr float RetailHalf = 0.5f;            // _DAT_104454d0
 	constexpr double ValidCoverDrop = 0.01;       // _DAT_1044e658, a DOUBLE
 
@@ -37,15 +37,15 @@ namespace
 	constexpr int32 MaskBlockLos = 0x4081;          // `EnemyCouldSeeHull`'s sight trace
 
 	// `CNPC_VWerewolf::TeleportIn`/`TeleportOut`'s effects and solid bits.
-	constexpr uint32 EffectNoDraw = 0x20;           // m_fEffects |= / &= ~
-	constexpr uint32 SolidNotSolid = 0x4;           // m_Collision's +0x2b4 |= / &= ~
+	constexpr uint32 GPositionsTailEffectNoDraw = 0x20;           // m_fEffects |= / &= ~
+	constexpr uint32 GPositionsTailSolidNotSolid = 0x4;           // m_Collision's +0x2b4 |= / &= ~
 
 	// Retail condition 0x77. This runtime's `EElysiumNpcCond` gained the enumerator with this
 	// story; the numeric value is retail's own and is what `SetCondition`/`ClearCondition`
 	// (`0x10269a20` / `0x10269b50`) index the 256-bit set with.
 	constexpr EElysiumNpcCond CondCanTeleport = EElysiumNpcCond::CanTeleport;
 
-	constexpr float U = ElysiumMove::U;
+	constexpr float GPositionsTailU = ElysiumMove::U;
 
 	// `AngleVectors` `0x10139550` — forward, right and up for Source `[pitch yaw roll]`, each
 	// returned in THIS world's axes (`bsp.source_to_unreal` negates Y). Family Facing carries the
@@ -106,7 +106,7 @@ bool FElysiumNpc::IsUnreachable(FElysiumEntity* Unreachable)
 		{
 			const double DistSq =
 				(Unreachable->Origin - UnreachableEnts[Index].PositionCm).SizeSquared();
-			if (DistSq <= static_cast<double>(UnreachableDistSq) * U * U)
+			if (DistSq <= static_cast<double>(UnreachableDistSq) * GPositionsTailU * GPositionsTailU)
 			{
 				return true;
 			}
@@ -174,7 +174,7 @@ bool FElysiumNpc::IsValidCover(const FVector& CoverCm, void* Hint)
 	FVector HullMaxs = FVector::ZeroVector;
 	RetailHullExtents(HullKind, HullMins, HullMaxs);   // family Motor's seam: the zero box
 	const FVector EndCm(CoverCm.X, CoverCm.Y,
-		CoverCm.Z - HullMins.Z * U + ValidCoverDrop * U);
+		CoverCm.Z - HullMins.Z * GPositionsTailU + ValidCoverDrop * GPositionsTailU);
 
 	FVector ObbMins = FVector::ZeroVector;
 	FVector ObbMaxs = FVector::ZeroVector;
@@ -184,7 +184,7 @@ bool FElysiumNpc::IsValidCover(const FVector& CoverCm, void* Hint)
 	// **SEAM**, family Motor's `KernelHullTrace`, in SOURCE units. It carries a fraction and a hit
 	// entity and NOT retail's `startsolid`, so the start-solid arm below can never fire; a seam that
 	// cannot answer reads as "not in solid", which is the arm that admits the cover.
-	KernelHullTrace(CoverCm / U, EndCm / U, ObbMins, ObbMaxs, MaskValidCover, Trace);
+	KernelHullTrace(CoverCm / GPositionsTailU, EndCm / GPositionsTailU, ObbMins, ObbMaxs, MaskValidCover, Trace);
 
 	const FHintWords* HintNode = static_cast<const FHintWords*>(Hint);
 	if (!ScheduleHost.HintGroup.IsEmpty()
@@ -237,12 +237,12 @@ bool FElysiumNpc::IsAreaClear(const FVector& FromCm, int32 Mask)
 
 	bForceNpcCheck = true;
 	FKernelHullTrace Trace;
-	KernelHullTrace(FromCm / U, FromCm / U, ObbMins, ObbMaxs, Mask, Trace);
+	KernelHullTrace(FromCm / GPositionsTailU, FromCm / GPositionsTailU, ObbMins, ObbMaxs, Mask, Trace);
 	bForceNpcCheck = false;
 
 	// The seam answers `Fraction = 1` when it cannot trace and carries neither solid flag, so an
 	// unanswered query reads CLEAR — retail's own answer for a trace that hit nothing.
-	return Trace.Fraction >= RetailOne;
+	return Trace.Fraction >= GPositionsTailRetailOne;
 }
 
 // --- `EnemyCouldSeeHull`, slot 617's boss branch -------------------------------------------------
@@ -357,8 +357,8 @@ bool FElysiumNpc::EnemyCouldSeeHull(const FVector& OriginCm, bool bSkipViewCone,
 		FVector HullMins = FVector::ZeroVector;
 		FVector HullMaxs = FVector::ZeroVector;
 		RetailHullExtents(HullKind, HullMins, HullMaxs);   // family Motor's seam: the zero box
-		BoxMin = OriginCm + HullMins * U;
-		BoxMax = OriginCm + HullMaxs * U;
+		BoxMin = OriginCm + HullMins * GPositionsTailU;
+		BoxMax = OriginCm + HullMaxs * GPositionsTailU;
 	}
 
 	// `(**(code **)(*DAT_1070b244 + 4))(mins.z, maxs.z)` — `VEngineRandom001::RandomFloat`. Named
@@ -536,7 +536,7 @@ void FElysiumNpc::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& Ch
 		FVector HullMaxs = FVector::ZeroVector;
 		RetailHullExtents(HullKind, HullMins, HullMaxs);
 		// `NAI_Hull::Width` is `FUN_102d61b0` — `maxs.y - mins.y`, the Y span, not a radius.
-		*ToleranceOut = static_cast<float>(HullMaxs.Y - HullMins.Y) * U;
+		*ToleranceOut = static_cast<float>(HullMaxs.Y - HullMins.Y) * GPositionsTailU;
 	}
 }
 
@@ -564,7 +564,7 @@ void FElysiumNpc::TranslateEnemyChasePositionSpecies(FElysiumEntity* Enemy,
 			FVector HullMins = FVector::ZeroVector;
 			FVector HullMaxs = FVector::ZeroVector;
 			RetailHullExtents(HullKind, HullMins, HullMaxs);
-			Tolerance = static_cast<float>(HullMaxs.Y - HullMins.Y) * U;
+			Tolerance = static_cast<float>(HullMaxs.Y - HullMins.Y) * GPositionsTailU;
 		}
 		// `CNPC_VAnimal` (`0x1035f5c0`, with `CNPC_VDog` and `CNPC_VRat` beside it) and
 		// `CNPC_VHuman` (`0x10384760`, covering 42 classes) stop at the offset: neither writes the
@@ -661,8 +661,8 @@ void FElysiumNpc::TeleportOut()
 	// is fighting. Single-player makes that the player, which is why the wav is audible at all.
 	WerewolfTimeTeleportedOut = World != nullptr ? World->NowSeconds() : 0.0;
 	Hide();                                     // slot 66, the generated virtual
-	EffectsWord |= EffectNoDraw;
-	SolidFlagsWord |= SolidNotSolid;
+	EffectsWord |= GPositionsTailEffectNoDraw;
+	SolidFlagsWord |= GPositionsTailSolidNotSolid;
 	// `CBaseEntity::Relink` — this runtime has no spatial partition to relink into; the visibility
 	// and solidity the two words above stand for are the visual layer's, and nothing reads them yet.
 	WerewolfWord66ac = 0;
@@ -697,8 +697,8 @@ void FElysiumNpc::TeleportIn()
 		PositionAtHint(Hint);                   // family Hints' `0x103d6280`
 	}
 	Unhide();                                   // slot 67, the generated virtual
-	EffectsWord &= ~EffectNoDraw;
-	SolidFlagsWord &= ~SolidNotSolid;
+	EffectsWord &= ~GPositionsTailEffectNoDraw;
+	SolidFlagsWord &= ~GPositionsTailSolidNotSolid;
 	WerewolfLastSeenTime = World != nullptr ? World->NowSeconds() : 0.0;
 	FireOutput(FName(TEXT("OnTeleportIn")), Senses.Memory.Enemy);
 	if (WerewolfTeleportSoundConVar())
@@ -721,7 +721,7 @@ void FElysiumNpc::PlayTeleportSound(const TCHAR* Rel)
 	}
 	FElysiumBodySound Sound;
 	Sound.Rel = Rel;
-	Sound.Volume = RetailOne;
+	Sound.Volume = GPositionsTailRetailOne;
 	Sound.SoundLevelDb = 100;
 	Sound.Channel = EElysiumSoundChannel::Auto;
 	Audio->PlayBodySound(Handle, Sound);
@@ -788,7 +788,7 @@ void FElysiumNpc::UpdateConditionCanTeleport()
 		return;
 	}
 	const float PlayerDist = Senses.Memory.ClosestPlayerDistanceCm;
-	const bool bPlayerClose = PlayerDist < WerewolfCloseEnough * U;
+	const bool bPlayerClose = PlayerDist < WerewolfCloseEnough * GPositionsTailU;
 
 	// `CBaseAnimating::GetBonePosition01("Bip01", &pos, &ang)`. **SEAM**: no bone sampling reaches
 	// the kernel here, so the sight point is this body's own origin — the bone's parent transform
@@ -804,13 +804,13 @@ void FElysiumNpc::UpdateConditionCanTeleport()
 
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	float Since = static_cast<float>(Now - WerewolfLastSeenTime);
-	if (Since < RetailZero)
+	if (Since < GPositionsTailRetailZero)
 	{
 		Since = 0.f;
 	}
 	if (WerewolfTeleportDelayConVar() < Since
 		&& WerewolfTeleportDistanceB + WerewolfTeleportDistanceA
-			+ WerewolfTeleportDistanceFloor * U < PlayerDist)
+			+ WerewolfTeleportDistanceFloor * GPositionsTailU < PlayerDist)
 	{
 		// `(**(code **)(*DAT_10924a6c + 4))()` with its result discarded — a `ConVar` read whose
 		// only consumer the compiler folded away, almost certainly a `DevMsg` gate. Reproduced as

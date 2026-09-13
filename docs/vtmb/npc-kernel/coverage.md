@@ -11,9 +11,9 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5185 |
-| … cited by the port | 1525 |
-| … cited by the oracle | 1690 |
-| … cited by neither | 3240 |
+| … cited by the port | 1554 |
+| … cited by the oracle | 1696 |
+| … cited by neither | 3215 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3267 |
 | Core functions (family or helper method, or an NPC-range offset) | 2544 |
@@ -25,7 +25,7 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | `CAI_BaseNPC` slots whose body is unnamed | 299 |
 | … with the naming pass's reason recorded (`unsettled`) | 299 |
 | Troika fields | 835 |
-| … cited by the port | 403 |
+| … cited by the port | 409 |
 | … with a guessed port member | 196 |
 | Closure edges | 17552 |
 | Build layers | 30 |
@@ -39,8 +39,8 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by port | Cited by oracle | **Neither** |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1474 | 1264 | 85 | 122 | 0 | 3 | 0 | 805 | 697 | **0** |
-| 5–9 | 258 | 206 | 23 | 29 | 0 | 0 | 0 | 223 | 223 | **0** |
+| 0–4 | 1474 | 1264 | 85 | 122 | 0 | 3 | 0 | 825 | 698 | **0** |
+| 5–9 | 258 | 206 | 23 | 29 | 0 | 0 | 0 | 227 | 226 | **0** |
 | 10–18 | 344 | 0 | 0 | 0 | 0 | 0 | 344 | 51 | 72 | **266** |
 | 19–29 | 468 | 0 | 0 | 0 | 0 | 0 | 468 | 109 | 121 | **298** |
 
@@ -594,7 +594,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1026d3f0` | FUN_1026d3f0 | Source/ElysiumUE/Private/Audio/ElysiumFootstepTuning.cpp:8, Source/ElysiumUE/Private/Player/ElysiumCommandBus.cpp:55, Source/ElysiumUE/Public/ElysiumFootstepTuning.h:30 |
 | `0x1027dd10` | FUN_1027dd10 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSenses.cpp:88 |
 | `0x1027dfb0` | FUN_1027dfb0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSenses.cpp:88, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSenses.cpp:857 |
-| `0x1028d820` | FUN_1028d820 | Source/ElysiumUE/Private/Player/ElysiumCommands.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1774, Source/ElysiumUE/Private/Substrate/ElysiumLogicClasses.cpp:641, +2 more |
+| `0x1028d820` | FUN_1028d820 | Source/ElysiumUE/Private/Player/ElysiumCommands.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1774, Source/ElysiumUE/Private/Substrate/ElysiumLogicClasses.cpp:641, +3 more |
 | `0x1029ef80` | CAI_BaseNPCTroika::InputStartPlayerDialog | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3627, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3706 |
 | `0x1029f060` | CAI_BaseNPCTroika::InputStartPlayerDialogRemote | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3628 |
 | `0x1029f120` | CAI_BaseNPCTroika::InputStartPlayerDialogUnforced | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3628 |
@@ -661,7 +661,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10026530` CAISound::FUN_10026530 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10026550` CAISound::FUN_10026550 | `0x10168320` CBasePlayer::Replenish |
 | `0x10026590` CBaseEntity::OnVictimHitByMe | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x10026a10` CAISound::FUN_10026a10 | `0x100fb110` CEnvParticle::AttachToEntity |
 | `0x10026b90` CBaseEntity::Precache | `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1010d0d0` CFuncAreaPortalWindow::Spawn, `0x1012e580` CHudCounter::FUN_1012e580, +2 more |
 | `0x10026d10` CAISound::FUN_10026d10 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x100274d0` CBaseEntity::GetSolidFlags | `0x1004e500` CPhysBox::vfunc241, `0x101da2f0` CDisciplineProjectile::PhysicsPushEntity |
@@ -822,7 +821,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100b2300` CBaseEntity::SetAbsOrigin | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003a610` CBaseEntity::PhysicsStepTroika, +5 more |
 | `0x100b2510` CBaseEntity::SetAbsAngles | `0x100568a0` CDynamicLight::vfunc110, `0x101303c0` CLight::vfunc110 |
 | `0x100b2770` CBaseEntity::SetAbsVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, +13 more |
-| `0x100b2be0` CBaseEntity::SetOrigin | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100f14a0` CBaseDoor::Blocked, `0x1016be10` CBasePlayer::PostThink, +6 more |
 | `0x100b2d00` CBaseEntity::SetAngles | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100bf760` CFuncIllusionary::Spawn, +17 more |
 | `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::Spawn, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
@@ -837,8 +835,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100b39c0` CBaseEntity::GetFlags2 | `0x1004e3e0` CPhysBox::ShouldIgnoreCollision, `0x10082520` FUN_10082520, `0x101914a0` CPhysicsProp::ShouldIgnoreCollision, `0x101ccf10` CTraceFilterPlayerMovement::ShouldHitEntity, +1 more |
 | `0x100b3b00` CBaseEntity::Relink | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1006e8e0` FUN_1006e8e0, +73 more |
 | `0x100b4340` CAISound::FUN_100b4340 | `0x1004ea30` CPhysExplosion::vfunc117, `0x1004ee90` CPhysImpact::vfunc117, `0x10051630` CDisciplineParticle::FUN_10051630, `0x101a9d40` CScriptedSentence::vfunc117, +1 more |
-| `0x100b4c30` CAISound::FUN_100b4c30 | `0x1010e750` CBreakable::FUN_1010e750 |
-| `0x100b5040` CAISound::FUN_100b5040 | `0x1009df20` CBaseEntity::~CBaseEntity, `0x100a5ad0` CBaseEntity::VPhysicsInitSetup, `0x1010e750` CBreakable::FUN_1010e750, `0x1017be50` CBasePlayer::vfunc468, +5 more |
 | `0x100b5340` FUN_100b5340 | `0x100b2970` CBaseEntity::ApplyLocalVelocityImpulse |
 | `0x100b62a0` FUN_100b62a0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x100b6480` FUN_100b6480 | `0x100b5970` FUN_100b5970 |
@@ -966,7 +962,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10146150` FUN_10146150 | `0x10145980` FUN_10145980, `0x1014cbf0` FUN_1014cbf0, `0x102407f0` FUN_102407f0, `0x102630b0` FUN_102630b0, +3 more |
 | `0x10146190` FUN_10146190 | `0x10145980` FUN_10145980 |
 | `0x10146570` FUN_10146570 | `0x10035030` FUN_10035030, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004f030` CPhysImpact::InputImpact, `0x1005eee0` CTEBSPDecal::vfunc3, +99 more |
-| `0x10146700` FUN_10146700 | `0x101ab450` CServerNetworkProperty::vfunc10 |
 | `0x10147710` FUN_10147710 | `0x101467b0` FUN_101467b0 |
 | `0x1014f750` CBaseCombatCharacter::PlayerDefenderBlockReaction | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x1014f770` CBaseCombatCharacter::PlayerAttackerBlockedReaction | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
@@ -1054,7 +1049,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101ccd40` FUN_101ccd40 | `0x10128850` FUN_10128850, `0x1014a4f0` FUN_1014a4f0, `0x1016e0c0` FUN_1016e0c0, `0x101807d0` FUN_101807d0, +6 more |
 | `0x101ccd70` FUN_101ccd70 | `0x10124630` FUN_10124630, `0x10165790` FUN_10165790, `0x1032a490` FUN_1032a490, `0x1040f940` FUN_1040f940 |
 | `0x101cd070` FUN_101cd070 | `0x101ccfe0` CTraceFilterEntity::ShouldHitEntity |
-| `0x101cd110` FUN_101cd110 | `0x100d3860` FUN_100d3860, `0x10129700` FUN_10129700, `0x1027e140` FUN_1027e140, `0x1027e250` FUN_1027e250 |
 | `0x101cd250` FUN_101cd250 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
 | `0x101cdba0` FUN_101cdba0 | `0x10032180` FUN_10032180, `0x10102dd0` FUN_10102dd0, `0x10103370` FUN_10103370, `0x10104730` FUN_10104730, +7 more |
 | `0x101cdfa0` FUN_101cdfa0 | `0x101ce210` FUN_101ce210 |

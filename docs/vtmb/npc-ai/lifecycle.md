@@ -1092,3 +1092,29 @@ a position that is already current.
 
 **Unrecovered:** what `AddFlag2`'s `0x10` bit means on `m_fFlags2`, and what `0x1034d5b0` does past
 arming the think.
+
+## Story 29c-1, family Closure — slot 355, the grapple-end callback — `0x1026cf90` (2026-09-13)
+
+143 bytes, filled by all 77 classes of the family with the same body, and no call site in the corpus
+names it — it is reached only through a vtable index. With the census's names for the three words it
+touches (`+0x1538 m_GrapplePartner`, an EHANDLE; `+0x153c m_GrappleRole`, an int; `+0x1540
+m_GrappleType`, an int) the whole of it is:
+
+```
+ent = m_GrapplePartner.Get();                        // null when the handle is stale
+if (!(ent && m_GrappleRole != -1 && m_GrappleType == 8))
+    m_OnFedUponEnd.FireOutput(ent, this, 0);         // +0x5c20, activator = the partner
+FUN_10007ea0(this);
+```
+
+Two readings matter. The output fires on **`this`** — the fed-upon body — with the partner as
+activator, so it is the victim's own `m_OnFedUponEnd` a map wire reaches. And the suppression is a
+conjunction of all three words: a stale partner handle, an unset role, or any grapple type other than
+8 all still fire. Feeding is grapple mode 0 (`CBasePlayer::Replenish` `0x10168320` reaches
+`StartGrappleAttack(victim, 0)`), so an ordinary feed is not type 8 and does fire. Since the grapple
+block is entered on BOTH parties, the slot is dispatchable on both.
+
+**Unrecovered:** which grapple type 8 is, and what `FUN_10007ea0` does. The port fires
+`OnFedUponEnd` from one place only — `FElysiumCombatCharacter::CompleteFeedTransaction`, on the
+feeder, onto the victim — because a map that wires the output counts the fires; the slot forwards
+there rather than becoming a second producer.

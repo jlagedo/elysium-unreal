@@ -47,7 +47,7 @@ namespace
 	constexpr float GEnemyWentOccludedDistanceSqUnits = 4096.0f;
 
 	// `_DAT_10449280` = 1.0 (a double) — the engine's CLEAR trace fraction.
-	constexpr float GTraceClearFraction = 1.0f;
+	constexpr float GSensesTraceClearFraction = 1.0f;
 
 	// `_DAT_104454c4` = 0.0f, the image's shared zero: `EffectiveVisionDistanceCm`'s floor and the
 	// `!= 0.0` test on the prone-dialog ray's squared length.
@@ -573,7 +573,7 @@ bool FElysiumNpc::ProneDialogPassesFindEntityFovTrace(const FVector& FromCm, con
 	if (Embodiment == nullptr)
 	{
 		// A headless world traces nothing, which is the CLEAR arm — `fraction == 1.0`, no entity.
-		return GTraceClearFraction == 1.0f;
+		return GSensesTraceClearFraction == 1.0f;
 	}
 	return Embodiment->QueryLineOfSight(FromCm, ToCm);
 }

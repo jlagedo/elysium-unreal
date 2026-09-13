@@ -722,3 +722,54 @@ uninitialised `.data`), `CBaseDoor+0x640`/`+0x644`'s retail names, and the hint-
 behind `CAI_Hint::IsViewable`'s literal `13` (`0x102d1320`: a set `m_iDisabled` refuses — the
 returned `m_iDisabled & 0xffffff00` has a zero low byte whatever the field holds — and otherwise the
 answer is `m_nHintType == 0xd`).
+
+## Story 29c-1, family Closure — the eye maintainer and the point view cone — `0x102bff20`, `0x10326a20` (2026-09-13)
+
+Two of family Closure's bodies read senses; the rest of the family is in `shape.md` and
+`lifecycle.md`. Ported in `Substrate/ElysiumNpcKernelClosure.cpp`, tested by
+`Elysium.Substrate.NpcKernelClosure.MaintainEyeDirection` and `.ViewCone`.
+
+### Slot 333 `CAI_BaseNPCTroika::MaintainEyeDirection` — `0x102bff20`
+
+182 bytes, filled by 63 classes — every shipped `CNPC_V*`. Four arms in this order.
+
+**1. The blink cadence, and its gate is one test around the whole thing.**
+`if (m_flPlayerDist < _DAT_10483aac && (m_blinkTimer -= dt) < _DAT_104454c4)` then dispatch
+`vtable +0x450` (`CBaseFlex::Blink`) and reseed `m_blinkTimer = RandomFloat(m_flMinBlink,
+m_flMaxBlink)`. The decrement is INSIDE the distance test, so a body far from the player neither
+blinks nor runs its countdown down — the timer is frozen, not merely unread, which is why walking up
+to a distant NPC does not fire a backlog of blinks. `m_flPlayerDist` is `+0x6264`, `m_blinkTimer` is
+`+0x6570`, `m_flMinBlink` / `m_flMaxBlink` are `+0x64d8` / `+0x64dc`.
+
+**2. The dialogue re-scan stamp.** When `m_hDialogPartner` (`+0x0fe8`) resolves to a live entity,
+`+0x5d6c` (`m_flNextEyeLookTime`) is written `curtime + _DAT_10452dc4` (2.0) — **every think**, not
+once, so the autonomous eye scan is suppressed for the whole conversation and the gaze cascade's
+fall-through becomes terminal. This is the wrapper's only write.
+
+**3.** `thunk_FUN_102c0010`, the disposition fidget driver, which rewrites `m_flEyeIntegRate`
+(`+0x0e3c`) from the disposition table before the base body integrates with it.
+
+**4.** `CAI_BaseNPC::MaintainEyeDirection` (`0x1026b810`), unchanged — the selection cascade itself.
+
+**Unrecovered:** the value of `_DAT_10483aac`, the image's single "the player is close enough to
+matter" radius. It has eighteen readers (`SetPlayerLOS` `0x10291610`, `SelectSchedule` `0x102af660`,
+`CNPC_Crow::vfunc481` `0x10357680`, `CNPC_VPedestrian::vfunc461` `0x103a2e30` and this one among
+them) and no writer, and no read of the image has settled its value;
+`ElysiumEyes::BlinkPlayerDistance` carries a stated placeholder of 1024 Source units.
+
+### Slot 362 `CAI_BaseNPC::FInViewCone(const Vector&)` — `0x10326a20`
+
+134 bytes, 71 classes, and 100 of them are the crash-report breadcrumb: the body pushes
+`"CBaseCombatCharacter::FInViewCone"` and the entity's `m_iName` onto the scope-trace stack, calls
+`thunk_FUN_103268e0(this, point, m_flFieldOfView)`, and pops. `0x103268e0` is a ConVar gate that
+selects between `FinViewCone2d` (`0x103261f0`) and `FinViewCone3dNew` (`0x103264d0`); the 3-D branch
+is the body `FElysiumNpcSenses::IsInViewCone` already ports. The point overload reads no stealth cone
+scalar — a point carries no stealth surface — which is why the port's cone scalar is an argument with
+a default of 1.0 rather than a read.
+
+This is NOT slot 363. That one is `CAI_BaseNPCTroika::FInViewCone(CBaseEntity*)` (`0x102b4540`), the
+Troika override, which adds a null guard, the `npc_ignore_senses` / `npc_ignore_player` ConVars and
+the follower any-angle bypass before it reaches the base body at the target's EYE.
+
+**Unrecovered:** the name and default of the 2-D/3-D ConVar behind `0x103268e0`. The port takes the
+3-D branch unconditionally.

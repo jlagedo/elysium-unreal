@@ -50,7 +50,7 @@ namespace
 
 	// `_DAT_104454c4` = 0.0f, the image's shared zero. `ResolveStandingOnHead` tests the XY delta
 	// against it for EXACT equality, which is what selects the four-diagonal arm.
-	constexpr float GSharedZero = 0.f;
+	constexpr float GGeometrySharedZero = 0.f;
 
 	// `_DAT_1049aea8` = +0.707f and `_DAT_1049aea4` = -0.707f, with the immediates `0x3f34fdf4` and
 	// `0xbf34fdf4` (the same two numbers) stored to the X slot. Not 1/sqrt(2) to full precision —
@@ -72,7 +72,7 @@ namespace
 
 	// `_DAT_104454c0` = 1.0f, read twice as a CLEAR trace fraction (`ResolveStandingOnHead`) and
 	// once as a one-second interval (`UpdateFakeHull`'s damage gate).
-	constexpr float GTraceClearFraction = 1.0f;
+	constexpr float GGeometryTraceClearFraction = 1.0f;
 	constexpr double GFakeHullPushIntervalSeconds = 1.0;
 
 	// `0x202400b` — the trace mask both of `ResolveStandingOnHead`'s hull traces use, the same one
@@ -589,7 +589,7 @@ FElysiumNpc::FStandingOnHeadStep FElysiumNpc::StandingOnHeadStep(const FVector& 
 	FVector Direction = MyOriginCm - GroundOriginCm;
 	Direction.Z = 0.0;
 
-	if (Direction.X == GSharedZero && Direction.Y == GSharedZero)
+	if (Direction.X == GGeometrySharedZero && Direction.Y == GGeometrySharedZero)
 	{
 		// Exactly co-located in XY — `FCOMP` against `_DAT_104454c4`, an exact float compare, on
 		// both axes. Retail picks one of four diagonals rather than dividing by zero.
@@ -677,7 +677,7 @@ void FElysiumNpc::ResolveStandingOnHead(float IntervalSeconds)
 	// `102bfb7a`: a blocked or solid first trace and retail tries the OPPOSITE direction — the same
 	// start, the delta SUBTRACTED. It does not renormalise and it does not redraw; it simply pushes
 	// the other way.
-	if (Trace.Fraction < GTraceClearFraction)
+	if (Trace.Fraction < GGeometryTraceClearFraction)
 	{
 		EndCm = Step.StartCm - Step.DeltaCm;
 		KernelHullTrace(Step.StartCm, EndCm, MyMinsUnits, MyMaxsUnits, GStandingOnHeadTraceMask,
@@ -686,7 +686,7 @@ void FElysiumNpc::ResolveStandingOnHead(float IntervalSeconds)
 
 	// `102bfc4d`: the second gate reads the SAME trace result slot, so an unblocked first trace
 	// passes here without a second one having run.
-	if (Trace.Fraction < GTraceClearFraction)
+	if (Trace.Fraction < GGeometryTraceClearFraction)
 	{
 		StandingOnHeadTimer = 0.f;
 		return;

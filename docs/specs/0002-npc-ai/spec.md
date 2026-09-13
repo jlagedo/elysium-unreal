@@ -395,7 +395,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Verification: `uv run elysium build` clean; `uv run elysium test Elysium.` 658/658 (656 after
   29b, plus the two suites above); `uv run pytest pipeline/tests -q` green with 11 new cases;
   `kernel_ledger --check`, `kernel_shape --check` and `gen_kernel_shape --check` all pass.
-- [ ] **29c-1. The primitives: the bodies.**
+- [x] **29c-1. The primitives: the bodies.**
   Retail: the 915 `rule` rows of `checklist-0-9.md` whose `target` is a port method — the layer
   0–9 bodies that are code rather than a value. 582 of the band's 1,732 are over 64 bytes; the
   heavy families are the per-species `SquadSlotName` translations (slot 546), the sound hooks
@@ -415,6 +415,67 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 29c. Provides: the leaves 29d and 29e's bodies call. Oracle: the subsystem files;
   `checklist-0-9.md` stays the index. Unrecovered: 29c's three `unsettled` rows and the two
   unrecovered constants. Size: XL. Effort: Opus / high, by family, in parallel.
+  Landed (2026-09-13). All 915 rows are ported, in **22 families** dispatched as parallel agents in
+  eight waves of three, each family owning one `ElysiumNpcKernel<Family>.inl` (declarations, included
+  inside `class FElysiumNpc`), one `.cpp` (split at ~1,500 lines) and one `Elysium.Substrate.
+  NpcKernel<Family>.` suite: squad 74, motor 73, schedule 64, species 60, lifecycle 59, entitychain
+  57, sounds 57, damage 47, troikahelpers 45, facing 44, positions 42, basehelpers 40, hints 38,
+  misc 37, anim 35, conditions 32, bosses 28, senses 26, geometry 22, debug 21, dialogue 14, plus
+  **closure 41** — the Troika-line slots 29c had verdicted `present` or `mechanism`, which were
+  still stubs answering a tally instead of the port's own answer.
+  **The instrument changed twice, and both changes are the acceptance.** `hand:<PortMethod>` was
+  29c's unused third target spelling; it is now what 235 slot rows carry, so a slot whose body was
+  claimed and not written is an unresolved external rather than a silent stub — five families hit
+  exactly that and found out at the link, which is the point. `gen_kernel_shape` gained a
+  per-story-band stub breakdown in `--report`, because "the stub count" is only an acceptance
+  measure if it can be read per band; and `hand:` was widened from `rule`/`present` to `mechanism`,
+  since a mechanism that goes through a named service seam is a written body like any other.
+  **The dispatcher 29c declined to build.** 29c left the species-override table unread on the
+  argument that standing a dispatcher before a caller exists is seam-by-guess. 915 callers arrived,
+  so `Substrate/ElysiumNpcKernelClassLookup.h` is the reader: `RetailClass()` (latched),
+  `IsRetailClass()` (the chain walk, never a name compare), `OverrideOf`, `BodyOf`, `SlotRow`.
+  `FElysiumNpc` stays `final` — every species difference is a data table keyed on the retail class,
+  each row carrying the retail address of the body it came from and exercised by name in a test. The
+  recovered fact that makes it work: a classname appears on *every* class in its chain, so the
+  lookup takes the **most derived** claimant. Two tables disagree and both are right —
+  `CNPC_VCop`'s census classname list is null (a spawned cop's `RetailClass()` is null and every
+  species lookup correctly falls through to the Troika line) and `npc_VCamera` is claimed by the
+  census but is not a registered spawn leaf. Four families lost time to that before it was written
+  down.
+  **What the reading changed.** More than thirty-five of 29c's one-line walks were wrong and are
+  corrected in the code and the prose, each from the listing or the decompiled C — 29c's own
+  premise, that a one-line walk is a summary and not the body, held. Slot 601 clears `m_bInMelee`
+  (so `SelectSchedule`'s unreachable-enemy arm leaves melee and the next selection re-enters through
+  599); slots 599/600 draw `RandomFloat(7.5, 15.0)`, not 4–15; the three Tzimisce slot-337 bodies
+  *do* add a species bit (`OR AH,imm`, which the decompiler dropped); `_DAT_10449260` is a **double**
+  and reads 0.25, so the tentacle scatter cone is 75.5° and not the whole forward half-plane;
+  `0x1027de00` is not `SetEnemy` but the door-blocked notice; `0x1034b430` is not an NPC body at all
+  but `CNPCMaker::IsDepleted`, and is re-verdicted `present` against the maker. **Forty-two `.rdata`
+  cells were read out of the pinned image rather than left unrecovered**, including the two 29c
+  recorded as not in the corpus: slot 37's `_DAT_104454c8` is **80.0** and slot 550's `_DAT_1045d650`
+  is **1024.0**.
+  **The seams.** Every retail input this substrate has no source for is a seam that answers nothing
+  and names the retail call — the attack coordinator's five entry points, the node graph, the squad
+  object, `CAI_Motor`/`CAI_Navigator`/`CAI_StandoffBehavior`, `datamap_t`/`ServerClass`/`trace_t`,
+  the studio header, the physics object. Each answers the *admitting* value where retail's own
+  refusal arm is the admitting one, so nothing is silently refused, and each is asserted as the
+  recovered refusal rather than worked around.
+  **Divergences, all named.** Slot 602 applies the null-coordinator guard on both species lines
+  (retail would fault, and the arm is unreachable in retail); `PositionAtHint` declines the move on
+  `vec3_invalid` rather than teleporting a Werewolf out of the world; slot 215's temp-vector ring is
+  one-deep per entity rather than 128-deep global; `goto_line_for_response` refuses an out-of-range
+  index retail reads past; the entity-chain walk is in world order rather than edict order. And one
+  divergence was **closed** rather than added: `AcceptsAmbientGroup` now runs `0x102dad60`'s own
+  gate (see 29c above).
+  **The measure.** `gen_kernel_shape --report` gives the 29c band **145** stubs, every one of them
+  `no verdict`: the band's verdicted slots are all `hand:` and all defined, and the 145 that remain
+  are non-core `CBaseEntity`/`CBaseAnimating` slots that 29c's closure never read and never
+  verdicted. They are `CBaseEntity`'s story, not this one, and this is the one place the acceptance
+  is met by argument rather than by the number reaching zero.
+  Verification: `uv run elysium build` clean; `uv run elysium test Elysium.` **933/933** (658 after
+  29c, plus 275 new cases in 22 suites); `uv run pytest pipeline/tests -q` 4,047 passed;
+  `kernel_ledger --check`, `kernel_shape --check` and `gen_kernel_shape --check` all pass;
+  `merge_verdicts --audit` reports layers 0–9 with **0** core functions still unverdicted.
 - [ ] **29d. The middle: layers 10–18.**
   Retail: 347 core functions — the three `GatherConditions` sweeps (10a–10c, landed), the
   see-unknown sweep's neighbours, `CAI_Memory` and the sense helpers, hint and navigator
