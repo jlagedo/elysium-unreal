@@ -9,7 +9,7 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 |---|---|---|---|---|---|
 | `CAI_BaseHumanoid` | `CAI_BaseActor` | `0x10497d04` | 590 | 23 | — |
 | `CAI_BaseNPC` | `CBaseCombatCharacter` | `0x104995c4` | 583 | 287 | — |
-| `CAI_BaseNPCTroika` | `CAI_BaseNPC` | `0x1049a25c` | 600 | 167 | — |
+| `CAI_BaseNPCTroika` | `CAI_BaseNPC` | `0x1049a25c` | 617 | 167 | — |
 | `CAI_ExpressiveNPC` | `CAI_BaseNPC` | `0x1049885c` | 585 | 1 | `npc_TestBaseHumanoid` |
 | `CAI_TestHull` | `CAI_BaseNPC` | `0x1049be5c` | 583 | 6 | — |
 | `CCineAI` | `CCineNPC` | `0x10477d1c` | 587 | 5 | — |
@@ -17,72 +17,72 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | `CCineNPC` | `CAI_BaseNPC` | `0x104771e4` | 587 | 12 | — |
 | `CGenericNPC` | `CAI_BaseNPC` | `0x1049e8e4` | 583 | 7 | `monster_generic` |
 | `CGenericSabbat_NPC` | `CAI_BaseNPC` | `0x104a648c` | 583 | 17 | `npc_sabbat` |
-| `CGeneric_NPC` | `CAI_BaseNPCTroika` | `0x104a4da4` | 600 | 17 | `npc_generic` |
+| `CGeneric_NPC` | `CAI_BaseNPCTroika` | `0x104a4da4` | 617 | 17 | `npc_generic` |
 | `CGeneric_NPC_bathack` | `CAI_BaseNPC` | `0x104a596c` | 583 | 16 | `npc_generic_bathack` |
-| `CNPCMaker` | `CAI_BaseNPCTroika` | `0x1049f404` | 600 | 17 | — |
-| `CNPCMaker_Fleshpile` | `CNPCMaker` | `0x1049ffe4` | 600 | 12 | `npc_maker_fleshpile` |
-| `CNPCMaker_Zombie` | `CNPCMaker` | `0x104a0bbc` | 600 | 10 | `npc_maker_zombie` |
+| `CNPCMaker` | `CAI_BaseNPCTroika` | `0x1049f404` | 621 | 17 | — |
+| `CNPCMaker_Fleshpile` | `CNPCMaker` | `0x1049ffe4` | 621 | 12 | `npc_maker_fleshpile` |
+| `CNPCMaker_Zombie` | `CNPCMaker` | `0x104a0bbc` | 621 | 10 | `npc_maker_zombie` |
 | `CNPC_Bullseye` | `CAI_BaseNPC` | `0x104a374c` | 583 | 7 | `npc_bullseye` |
 | `CNPC_Crow` | `CAI_BaseNPC` | `0x104a426c` | 583 | 30 | `npc_crow` |
-| `CNPC_ProneDialog` | `CNPC_VHumanCombatant` | `0x104c2554` | 600 | 2 | `npc_VMercurio`, `npc_VProneDialog` |
-| `CNPC_VAndreiBlood` | `CNPC_VVampireBoss` | `0x104a6fc4` | 600 | 24 | `npc_VAndreiBlood` |
-| `CNPC_VAnimal` | `CAI_BaseNPCTroika` | `0x104a876c` | 600 | 20 | `npc_VAnimal` |
-| `CNPC_VAsianVampire` | `CNPC_VVampireBoss` | `0x104a935c` | 600 | 19 | `npc_VAsianVampire` |
-| `CNPC_VBach` | `CNPC_VVampire` | `0x104a9f2c` | 600 | 24 | `npc_VBach` |
-| `CNPC_VBaseBoss` | `CAI_BaseNPCTroika` | `0x104bd2cc` | 600 | 4 | `npc_VMingXiao`, `npc_VTzimisce`, `npc_VTzimisceHeadClaw`, `npc_VTzimisceRunner` |
-| `CNPC_VBatSwarm` | `CNPC_VVampire` | `0x104aab04` | 600 | 16 | `npc_VBatSwarm` |
-| `CNPC_VBrujah` | `CNPC_VVampire` | `0x104ab6cc` | 600 | 6 | `npc_VBrujah` |
-| `CNPC_VCamera` | `CAI_BaseNPCTroika` | `0x104ac294` | 600 | 54 | `npc_VCamera` |
-| `CNPC_VCameraSecurity` | `CNPC_VCamera` | `0x104ace5c` | 600 | 5 | `npc_VCameraSecurity` |
-| `CNPC_VChangBros` | `CNPC_VVampireBoss` | `0x104adabc` | 600 | 22 | `npc_VChangBros`, `npc_VChangBrosBlade`, `npc_VChangBrosClaw` |
-| `CNPC_VChangBrosBlade` | `CNPC_VChangBros` | `0x104ae68c` | 600 | 7 | `npc_VChangBrosBlade` |
-| `CNPC_VChangBrosClaw` | `CNPC_VChangBros` | `0x104af25c` | 600 | 7 | `npc_VChangBrosClaw` |
-| `CNPC_VCombatman` | `CNPC_VHuman` | `0x104afe2c` | 600 | 10 | `npc_VCombatman` |
-| `CNPC_VCop` | `CNPC_VHumanCombatant` | `0x104b09f4` | 600 | 23 | — |
-| `CNPC_VDog` | `CNPC_VAnimal` | `0x104b15bc` | 600 | 19 | `npc_VDog` |
-| `CNPC_VFrenzyShadow` | `CNPC_VPlayerController` | `0x104b2184` | 600 | 31 | `npc_VFrenzyShadow` |
-| `CNPC_VGangrel` | `CNPC_VVampire` | `0x104b3914` | 600 | 6 | `npc_VGangrel` |
-| `CNPC_VGargoyle` | `CNPC_VVampire` | `0x104b44dc` | 600 | 34 | `npc_VGargoyle` |
-| `CNPC_VGhoulCroucher` | `CNPC_VHumanCombatant` | `0x104b50ac` | 600 | 23 | — |
-| `CNPC_VGuard1` | `CNPC_VHuman` | `0x104b5c74` | 600 | 15 | `npc_VGuard1` |
-| `CNPC_VHengeyokai` | `CNPC_VVampire` | `0x104b683c` | 600 | 34 | `npc_VHengeyokai` |
-| `CNPC_VHuman` | `CAI_BaseNPCTroika` | `0x104b742c` | 600 | 17 | `npc_VHuman` |
-| `CNPC_VHumanCombatPatrol` | `CNPC_VHumanCombatant` | `0x104b8bbc` | 600 | 8 | `npc_VHumanCombatPatrol` |
-| `CNPC_VHumanCombatant` | `CNPC_VHuman` | `0x104b7ff4` | 600 | 12 | `npc_VHumanCombatant` |
-| `CNPC_VHunter` | `CNPC_VHumanCombatant` | `0x104b9784` | 600 | 16 | `npc_VHunter` |
-| `CNPC_VLasombra` | `CNPC_VVampire` | `0x104ba34c` | 600 | 8 | `npc_VLasombra` |
-| `CNPC_VMalkavian` | `CNPC_VVampire` | `0x104baf14` | 600 | 6 | `npc_VMalkavian` |
-| `CNPC_VManBat` | `CNPC_VVampire` | `0x104bbaec` | 600 | 22 | `npc_VManBat` |
-| `CNPC_VMingXiao` | `CNPC_VBaseBoss` | `0x104bc704` | 600 | 48 | `npc_VMingXiao` |
-| `CNPC_VMingXiaoTentacle` | `CAI_BaseNPCTroika` | `0x104bdea4` | 600 | 38 | `npc_VMingXiaoTentacle` |
-| `CNPC_VMoleman` | `CNPC_VHuman` | `0x104bea6c` | 600 | 10 | `npc_VMoleman` |
-| `CNPC_VNewscaster` | `CAI_BaseNPCTroika` | `0x104bf634` | 600 | 27 | `npc_VNewscaster` |
-| `CNPC_VNosferatu` | `CNPC_VVampire` | `0x104c01fc` | 600 | 6 | `npc_VNosferatu` |
-| `CNPC_VPedestrian` | `CNPC_VHuman` | `0x104c0dc4` | 600 | 20 | `npc_VDialogPedestrian`, `npc_VPedestrian` |
-| `CNPC_VPlaceholder` | `CAI_BaseNPCTroika` | `0x104c198c` | 600 | 24 | — |
-| `CNPC_VPlayerController` | `CNPC_VVampire` | `0x104b2d4c` | 600 | 11 | `npc_VFrenzyShadow`, `npc_VPlayerController`, `npc_VWolfMorph` |
-| `CNPC_VRat` | `CNPC_VScurrying` | `0x104c558c` | 600 | 17 | `npc_VRat` |
-| `CNPC_VSabbatGunman` | `CNPC_VHumanCombatant` | `0x104c311c` | 600 | 8 | `npc_VSabbatGunman` |
-| `CNPC_VSabbatLeader` | `CNPC_VVampireBoss` | `0x104c3d64` | 600 | 31 | `npc_VSabbatLeader` |
-| `CNPC_VScurrying` | `CNPC_VAnimal` | `0x104c4944` | 600 | 14 | `npc_VScurrying` |
-| `CNPC_VSheriffMan` | `CNPC_VVampireBoss` | `0x104c619c` | 600 | 22 | — |
-| `CNPC_VSheriffSwarm` | `CNPC_VVampire` | `0x104c7284` | 600 | 16 | `npc_VSheriffSwarm` |
-| `CNPC_VStalker` | `CNPC_VHumanCombatant` | `0x104c7e4c` | 600 | 7 | `npc_VStalker` |
-| `CNPC_VTaxiDriver` | `CNPC_VHuman` | `0x104c8a14` | 600 | 16 | `npc_VTaxiDriver` |
-| `CNPC_VTest` | `CNPC_VVampire` | `0x104c95dc` | 600 | 20 | `npc_VTest` |
-| `CNPC_VToreador` | `CNPC_VVampire` | `0x104ca1a4` | 600 | 6 | `npc_VToreador` |
-| `CNPC_VTremere` | `CNPC_VVampire` | `0x104cad6c` | 600 | 6 | `npc_VTremere` |
-| `CNPC_VTzimisce` | `CNPC_VBaseBoss` | `0x104cb934` | 600 | 61 | `npc_VTzimisce` |
-| `CNPC_VTzimisceHeadClaw` | `CNPC_VBaseBoss` | `0x104cc564` | 600 | 26 | `npc_VTzimisceHeadClaw` |
-| `CNPC_VTzimisceRunner` | `CNPC_VBaseBoss` | `0x104cd144` | 600 | 30 | `npc_VTzimisceRunner` |
-| `CNPC_VVampire` | `CNPC_VHuman` | `0x104cdd24` | 600 | 9 | `npc_VVampire` |
-| `CNPC_VVampireBoss` | `CNPC_VVampire` | `0x104a7b94` | 600 | 12 | `npc_VAndreiBlood`, `npc_VAsianVampire`, `npc_VChangBros`, `npc_VChangBrosBlade`, `npc_VChangBrosClaw`, `npc_VSabbatLeader`, +1 more |
-| `CNPC_VVentrue` | `CNPC_VVampire` | `0x104ce8fc` | 600 | 6 | `npc_VVentrue` |
-| `CNPC_VWerewolf` | `CNPC_VBaseBoss` | `0x104cf4d4` | 600 | 46 | — |
-| `CNPC_VWolfMorph` | `CNPC_VPlayerController` | `0x104d05a4` | 600 | 14 | `npc_VWolfMorph` |
-| `CNPC_VYukie` | `CNPC_VHumanCombatant` | `0x104d116c` | 600 | 15 | `npc_VYukie` |
-| `CNPC_VZombie` | `CNPC_VAnimal` | `0x104d1d3c` | 600 | 30 | — |
-| `CPayphone` | `CAI_BaseNPCTroika` | `0x10479814` | 600 | 22 | `npc_payphone` |
+| `CNPC_ProneDialog` | `CNPC_VHumanCombatant` | `0x104c2554` | 617 | 2 | `npc_VMercurio`, `npc_VProneDialog` |
+| `CNPC_VAndreiBlood` | `CNPC_VVampireBoss` | `0x104a6fc4` | 620 | 25 | `npc_VAndreiBlood` |
+| `CNPC_VAnimal` | `CAI_BaseNPCTroika` | `0x104a876c` | 617 | 20 | `npc_VAnimal` |
+| `CNPC_VAsianVampire` | `CNPC_VVampireBoss` | `0x104a935c` | 620 | 22 | `npc_VAsianVampire` |
+| `CNPC_VBach` | `CNPC_VVampire` | `0x104a9f2c` | 617 | 24 | `npc_VBach` |
+| `CNPC_VBaseBoss` | `CAI_BaseNPCTroika` | `0x104bd2cc` | 618 | 4 | `npc_VMingXiao`, `npc_VTzimisce`, `npc_VTzimisceHeadClaw`, `npc_VTzimisceRunner` |
+| `CNPC_VBatSwarm` | `CNPC_VVampire` | `0x104aab04` | 617 | 16 | `npc_VBatSwarm` |
+| `CNPC_VBrujah` | `CNPC_VVampire` | `0x104ab6cc` | 617 | 6 | `npc_VBrujah` |
+| `CNPC_VCamera` | `CAI_BaseNPCTroika` | `0x104ac294` | 617 | 54 | `npc_VCamera` |
+| `CNPC_VCameraSecurity` | `CNPC_VCamera` | `0x104ace5c` | 617 | 5 | `npc_VCameraSecurity` |
+| `CNPC_VChangBros` | `CNPC_VVampireBoss` | `0x104adabc` | 620 | 24 | `npc_VChangBros`, `npc_VChangBrosBlade`, `npc_VChangBrosClaw` |
+| `CNPC_VChangBrosBlade` | `CNPC_VChangBros` | `0x104ae68c` | 620 | 7 | `npc_VChangBrosBlade` |
+| `CNPC_VChangBrosClaw` | `CNPC_VChangBros` | `0x104af25c` | 620 | 7 | `npc_VChangBrosClaw` |
+| `CNPC_VCombatman` | `CNPC_VHuman` | `0x104afe2c` | 617 | 10 | `npc_VCombatman` |
+| `CNPC_VCop` | `CNPC_VHumanCombatant` | `0x104b09f4` | 617 | 23 | — |
+| `CNPC_VDog` | `CNPC_VAnimal` | `0x104b15bc` | 617 | 19 | `npc_VDog` |
+| `CNPC_VFrenzyShadow` | `CNPC_VPlayerController` | `0x104b2184` | 617 | 31 | `npc_VFrenzyShadow` |
+| `CNPC_VGangrel` | `CNPC_VVampire` | `0x104b3914` | 617 | 6 | `npc_VGangrel` |
+| `CNPC_VGargoyle` | `CNPC_VVampire` | `0x104b44dc` | 619 | 34 | `npc_VGargoyle` |
+| `CNPC_VGhoulCroucher` | `CNPC_VHumanCombatant` | `0x104b50ac` | 617 | 24 | — |
+| `CNPC_VGuard1` | `CNPC_VHuman` | `0x104b5c74` | 617 | 15 | `npc_VGuard1` |
+| `CNPC_VHengeyokai` | `CNPC_VVampire` | `0x104b683c` | 619 | 34 | `npc_VHengeyokai` |
+| `CNPC_VHuman` | `CAI_BaseNPCTroika` | `0x104b742c` | 617 | 17 | `npc_VHuman` |
+| `CNPC_VHumanCombatPatrol` | `CNPC_VHumanCombatant` | `0x104b8bbc` | 617 | 8 | `npc_VHumanCombatPatrol` |
+| `CNPC_VHumanCombatant` | `CNPC_VHuman` | `0x104b7ff4` | 617 | 12 | `npc_VHumanCombatant` |
+| `CNPC_VHunter` | `CNPC_VHumanCombatant` | `0x104b9784` | 617 | 16 | `npc_VHunter` |
+| `CNPC_VLasombra` | `CNPC_VVampire` | `0x104ba34c` | 617 | 8 | `npc_VLasombra` |
+| `CNPC_VMalkavian` | `CNPC_VVampire` | `0x104baf14` | 617 | 6 | `npc_VMalkavian` |
+| `CNPC_VManBat` | `CNPC_VVampire` | `0x104bbaec` | 617 | 22 | `npc_VManBat` |
+| `CNPC_VMingXiao` | `CNPC_VBaseBoss` | `0x104bc704` | 618 | 48 | `npc_VMingXiao` |
+| `CNPC_VMingXiaoTentacle` | `CAI_BaseNPCTroika` | `0x104bdea4` | 617 | 38 | `npc_VMingXiaoTentacle` |
+| `CNPC_VMoleman` | `CNPC_VHuman` | `0x104bea6c` | 617 | 10 | `npc_VMoleman` |
+| `CNPC_VNewscaster` | `CAI_BaseNPCTroika` | `0x104bf634` | 617 | 27 | `npc_VNewscaster` |
+| `CNPC_VNosferatu` | `CNPC_VVampire` | `0x104c01fc` | 617 | 6 | `npc_VNosferatu` |
+| `CNPC_VPedestrian` | `CNPC_VHuman` | `0x104c0dc4` | 617 | 20 | `npc_VDialogPedestrian`, `npc_VPedestrian` |
+| `CNPC_VPlaceholder` | `CAI_BaseNPCTroika` | `0x104c198c` | 617 | 24 | — |
+| `CNPC_VPlayerController` | `CNPC_VVampire` | `0x104b2d4c` | 617 | 11 | `npc_VFrenzyShadow`, `npc_VPlayerController`, `npc_VWolfMorph` |
+| `CNPC_VRat` | `CNPC_VScurrying` | `0x104c558c` | 617 | 17 | `npc_VRat` |
+| `CNPC_VSabbatGunman` | `CNPC_VHumanCombatant` | `0x104c311c` | 617 | 8 | `npc_VSabbatGunman` |
+| `CNPC_VSabbatLeader` | `CNPC_VVampireBoss` | `0x104c3d64` | 622 | 36 | `npc_VSabbatLeader` |
+| `CNPC_VScurrying` | `CNPC_VAnimal` | `0x104c4944` | 617 | 14 | `npc_VScurrying` |
+| `CNPC_VSheriffMan` | `CNPC_VVampireBoss` | `0x104c619c` | 620 | 25 | — |
+| `CNPC_VSheriffSwarm` | `CNPC_VVampire` | `0x104c7284` | 617 | 16 | `npc_VSheriffSwarm` |
+| `CNPC_VStalker` | `CNPC_VHumanCombatant` | `0x104c7e4c` | 617 | 7 | `npc_VStalker` |
+| `CNPC_VTaxiDriver` | `CNPC_VHuman` | `0x104c8a14` | 617 | 16 | `npc_VTaxiDriver` |
+| `CNPC_VTest` | `CNPC_VVampire` | `0x104c95dc` | 617 | 20 | `npc_VTest` |
+| `CNPC_VToreador` | `CNPC_VVampire` | `0x104ca1a4` | 617 | 6 | `npc_VToreador` |
+| `CNPC_VTremere` | `CNPC_VVampire` | `0x104cad6c` | 617 | 6 | `npc_VTremere` |
+| `CNPC_VTzimisce` | `CNPC_VBaseBoss` | `0x104cb934` | 628 | 61 | `npc_VTzimisce` |
+| `CNPC_VTzimisceHeadClaw` | `CNPC_VBaseBoss` | `0x104cc564` | 620 | 26 | `npc_VTzimisceHeadClaw` |
+| `CNPC_VTzimisceRunner` | `CNPC_VBaseBoss` | `0x104cd144` | 620 | 30 | `npc_VTzimisceRunner` |
+| `CNPC_VVampire` | `CNPC_VHuman` | `0x104cdd24` | 617 | 9 | `npc_VVampire` |
+| `CNPC_VVampireBoss` | `CNPC_VVampire` | `0x104a7b94` | 619 | 14 | `npc_VAndreiBlood`, `npc_VAsianVampire`, `npc_VChangBros`, `npc_VChangBrosBlade`, `npc_VChangBrosClaw`, `npc_VSabbatLeader`, +1 more |
+| `CNPC_VVentrue` | `CNPC_VVampire` | `0x104ce8fc` | 617 | 6 | `npc_VVentrue` |
+| `CNPC_VWerewolf` | `CNPC_VBaseBoss` | `0x104cf4d4` | 621 | 48 | — |
+| `CNPC_VWolfMorph` | `CNPC_VPlayerController` | `0x104d05a4` | 617 | 14 | `npc_VWolfMorph` |
+| `CNPC_VYukie` | `CNPC_VHumanCombatant` | `0x104d116c` | 617 | 15 | `npc_VYukie` |
+| `CNPC_VZombie` | `CNPC_VAnimal` | `0x104d1d3c` | 617 | 30 | — |
+| `CPayphone` | `CAI_BaseNPCTroika` | `0x10479814` | 618 | 22 | `npc_payphone` |
 | `CScriptedTarget` | `CAI_BaseNPC` | `0x104a1794` | 583 | 8 | — |
 
 ## Helper classes
@@ -107,9 +107,9 @@ The 77 classes whose primary vtable spans the NPC slot range (≥ 580 slots), pl
 | `CAI_DelayedCondition` | 0 | 1 |
 | `CAI_DelayedConditionList` | 0 | 8 |
 | `CAI_MoveAndShootOverlay` | 3 | 8 |
-| `CNPCMaker` | 600 | 853 |
-| `CNPCMaker_Fleshpile` | 600 | 853 |
-| `CNPCMaker_Zombie` | 600 | 856 |
+| `CNPCMaker` | 621 | 853 |
+| `CNPCMaker_Fleshpile` | 621 | 853 |
+| `CNPCMaker_Zombie` | 621 | 856 |
 | `CCineNPC` | 587 | 652 |
 | `CCineAI` | 587 | 0 |
 | `CCineAISchedule` | 587 | 655 |

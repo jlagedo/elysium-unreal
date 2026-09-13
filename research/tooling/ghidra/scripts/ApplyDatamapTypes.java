@@ -567,7 +567,7 @@ public class ApplyDatamapTypes extends GhidraScript {
             // when the value leaves executable memory is the opposite failure: the walk runs
             // into the next class's table and claims its methods.
             long limit = nextTableAfter(table.getOffset());
-            for (int i = 0; i < 600; i++) {
+            for (int i = 0; i < 4096; i++) {   // a runaway guard; the next table ends the walk
                 if (table.getOffset() + i * 4L >= limit) break;
                 long value;
                 try { value = u32(table.getOffset() + i * 4L); }

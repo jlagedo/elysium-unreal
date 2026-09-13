@@ -16,46 +16,42 @@ Seeds and their direct callees (depth ≤ 1) that something outside the closure 
 | `0x100b5040` CAISound::FUN_100b5040 | 9 | `0x1009df20` CBaseEntity::~CBaseEntity, `0x100a5ad0` CBaseEntity::VPhysicsInitSetup, `0x1010e750` CBreakable::FUN_1010e750, `0x1017be50` CBasePlayer::vfunc468, `0x10209350` CItemContainer::Spawn, `0x10213ae0` CPropHaunted::Spawn, +3 more |
 | `0x1017cf90` GetActiveCameraEntity | 9 | `0x10070780` FUN_10070780, `0x1011c730` CServerGameClients::vfunc7, `0x10174580` FUN_10174580, `0x10174f80` CBasePlayer::GetSaveBlockedReason, `0x10178400` CBasePlayer::FUN_10178400, `0x1017d020` FUN_1017d020, +3 more |
 | `0x101618a0` FUN_101618a0 | 8 | `0x10083cd0` CSceneEntity::FindNamedEntity, `0x10167470` FUN_10167470, `0x10174580` FUN_10174580, `0x10174f80` CBasePlayer::GetSaveBlockedReason, `0x1017b8a0` CBasePlayer::VPhysicsShadowUpdate, `0x10182550` CBasePlayer::FUN_10182550, +2 more |
-| `0x10280de0` FUN_10280de0 | 8 | `0x10081620` CSceneEntity::FUN_10081620, `0x1027fc90` FUN_1027fc90, `0x1027ffe0` FUN_1027ffe0, `0x1035dba0` CNPC_VAndreiBlood::SetSchedule, `0x10361530` CNPC_VAsianVampire::SetSchedule, `0x1036c760` CNPC_VChangBros::SetSchedule, +2 more |
 | `0x100a5030` CAISound::FUN_100a5030 | 7 | `0x10115300` CFuncMonitor::vfunc42, `0x10208c90` CItemContainer::InputUse, `0x1020adc0` CBaseVampireSkillEntity::vfunc42, `0x10211410` CTriggerBombSite::vfunc42, `0x10211e70` CPropSign::vfunc42, `0x10212d70` CGameSign::vfunc42, +1 more |
 | `0x100aa5a0` CAISound::FUN_100aa5a0 ‼ | 7 | `0x10027740` CPhysForce::FUN_10027740, `0x100ef5f0` CBaseDoor::FUN_100ef5f0, `0x100fdac0` CEnvPlayerSurfaceTrigger::vfunc130, `0x1010fef0` CBreakableSurface::vfunc130, `0x10130d40` CLogicAuto::vfunc130, `0x1020f270` CFuncElevator::vfunc130, +1 more |
 | `0x1017e6f0` FUN_1017e6f0 | 7 | `0x101707c0` FUN_101707c0, `0x1017e680` CBasePlayer::InputSetInvestigateLevel, `0x1019a980` FUN_1019a980, `0x1019ab40` FUN_1019ab40, `0x102108e0` CTriggerPlayerActivityLevel::Touch, `0x102109b0` CTriggerPlayerActivityLevel::EndTouch, +1 more |
 | `0x1017f770` FUN_1017f770 | 7 | `0x100f26b0` CRotDoor::DoorActivate, `0x10162340` CBasePlayer::DrawDebugGeometryOverlays, `0x10178170` FUN_10178170, `0x1017f170` FUN_1017f170, `0x1017f600` FUN_1017f600, `0x1017faa0` FUN_1017faa0, +1 more |
 | `0x100a4fe0` CAISound::FUN_100a4fe0 | 6 | `0x10115260` CFuncMonitor::vfunc39, `0x1020acb0` CBaseVampireSkillEntity::vfunc39, `0x102113c0` CTriggerBombSite::vfunc39, `0x10211db0` CPropSign::vfunc39, `0x10212ca0` CGameSign::vfunc39, `0x10231640` CTriggerElectricBugaloo::vfunc39 |
-| `0x10279cc0` SetTarget | 6 | `0x100818d0` CSceneEntity::vfunc261, `0x101a7760` FUN_101a7760, `0x1027c300` FUN_1027c300, `0x102b93c0` FUN_102b93c0, `0x1034d800` FUN_1034d800, `0x1034dd70` FUN_1034dd70 |
+| `0x102c23f0` FUN_102c23f0 | 6 | `0x1029ef80` CAI_BaseNPCTroika::InputStartPlayerDialog, `0x1029f060` CAI_BaseNPCTroika::InputStartPlayerDialogRemote, `0x1029f120` CAI_BaseNPCTroika::InputStartPlayerDialogUnforced, `0x1029f210` CAI_BaseNPCTroika::InputFleeAndDie, `0x1029f250` CAI_BaseNPCTroika::InputFaint, `0x102c24a0` CAI_BaseNPCTroika::InputTeleportToEntity |
 | `0x10027490` CAISound::FUN_10027490 | 5 | `0x10033de0` CBaseEntity::PhysicsRunSpecificThink, `0x10034590` CBaseEntity::PhysicsTryMove, `0x1003daa0` CBaseEntity::PhysicsTouch, `0x1003db80` CBaseEntity::PhysicsStartTouch, `0x10351e10` CHL2_Player::vfunc470 |
 | `0x100b4340` CAISound::FUN_100b4340 | 5 | `0x1004ea30` CPhysExplosion::vfunc117, `0x1004ee90` CPhysImpact::vfunc117, `0x10051630` CDisciplineParticle::FUN_10051630, `0x101a9d40` CScriptedSentence::vfunc117, `0x101af370` CSpeaker::vfunc117 |
 | `0x100b4b40` CAISound::FUN_100b4b40 | 5 | `0x100b7f70` CBasePlayer::FUN_100b7f70, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x1018dc00` CPointTeleport::InputTeleport, `0x10326360` CBaseCombatCharacter::FinViewCone3d |
 | `0x100b4f30` CAISound::FUN_100b4f30 | 5 | `0x1004e7c0` CPhysBox::vfunc226, `0x1004fa10` CSimplePhysicsBrush::vfunc226, `0x1004fd90` CSimplePhysicsProp::vfunc226, `0x1014fac0` CPhysicsCannister::vfunc226, `0x101912a0` CPhysicsProp::FUN_101912a0 |
 | `0x10175180` FUN_10175180 | 5 | `0x10174f80` CBasePlayer::GetSaveBlockedReason, `0x10175220` FUN_10175220, `0x10178170` FUN_10178170, `0x10182780` FUN_10182780, `0x10228a80` FUN_10228a80 |
 | `0x1017f8d0` FUN_1017f8d0 | 5 | `0x10178170` FUN_10178170, `0x1017f170` FUN_1017f170, `0x1017f600` FUN_1017f600, `0x1017faa0` FUN_1017faa0, `0x10228a80` FUN_10228a80 |
+| `0x10279cc0` SetTarget | 5 | `0x100818d0` CSceneEntity::vfunc261, `0x101a7760` FUN_101a7760, `0x1027c300` FUN_1027c300, `0x1034d800` FUN_1034d800, `0x1034dd70` FUN_1034dd70 |
 | `0x100b4dc0` CAISound::FUN_100b4dc0 | 4 | `0x100f0c00` CBaseDoor::IsCloseBlocked, `0x10163020` CBasePlayer::OnTakeDamage, `0x1016be10` CBasePlayer::PostThink, `0x10351e10` CHL2_Player::vfunc470 |
-| `0x10269d30` HasInterruptCondition | 4 | `0x1036d800` CNPC_VChangBros::SelectScheduleMeleeCombat, `0x10385e40` FUN_10385e40, `0x10396050` FUN_10396050, `0x103c4430` FUN_103c4430 |
-| `0x1028fb70` InitPerceptionDistances | 4 | `0x10087fb0` FUN_10087fb0, `0x100881c0` FUN_100881c0, `0x10088380` FUN_10088380, `0x1034b7b0` FUN_1034b7b0 |
 | `0x102c0ca0` CAI_BaseNPCTroika::FinishTalking | 4 | `0x1029ef80` CAI_BaseNPCTroika::InputStartPlayerDialog, `0x1029f060` CAI_BaseNPCTroika::InputStartPlayerDialogRemote, `0x1029f120` CAI_BaseNPCTroika::InputStartPlayerDialogUnforced, `0x102c0270` FUN_102c0270 |
 | `0x101c1720` CAI_BaseNPC::FUN_101c1720 ‼ | 3 | `0x10116bf0` CFuncMoveLinear::vfunc133, `0x10209090` CItemContainer::FUN_10209090, `0x10223a10` CBaseKeyframedMover::FUN_10223a10 |
-| `0x10272650` CAI_BaseNPC::SetIdealActivity ‼ | 3 | `0x102ef6a0` FUN_102ef6a0, `0x102ef760` FUN_102ef760, `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
-| `0x10273070` FUN_10273070 | 3 | `0x1016e0c0` FUN_1016e0c0, `0x102d7730` FUN_102d7730, `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
 | `0x10280d30` ClearSchedule | 3 | `0x10084260` FUN_10084260, `0x10265820` FUN_10265820, `0x102ae8e0` FUN_102ae8e0 |
-| `0x102b7690` FUN_102b7690 | 3 | `0x102b7cf0` FUN_102b7cf0, `0x10385e40` FUN_10385e40, `0x10396050` FUN_10396050 |
+| `0x10280de0` FUN_10280de0 | 3 | `0x10081620` CSceneEntity::FUN_10081620, `0x1027fc90` FUN_1027fc90, `0x1027ffe0` FUN_1027ffe0 |
+| `0x1028fb70` InitPerceptionDistances | 3 | `0x10087fb0` FUN_10087fb0, `0x100881c0` FUN_100881c0, `0x10088380` FUN_10088380 |
+| `0x1029f300` FUN_1029f300 | 3 | `0x10081ed0` FUN_10081ed0, `0x100847e0` FUN_100847e0, `0x1029f2a0` CAI_BaseNPCTroika::InputDisableThink |
 | `0x10026c50` CAISound::FUN_10026c50 ‼ | 2 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10026d10` CAISound::FUN_10026d10 | 2 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x1014fa10` CAI_BaseNPC::FUN_1014fa10 | 2 | `0x10162c30` CBasePlayer::TraceAttack, `0x10162fa0` CBasePlayer::FUN_10162fa0 |
-| `0x101a67e0` CAI_BaseNPC::FUN_101a67e0 | 2 | `0x1036d800` CNPC_VChangBros::SelectScheduleMeleeCombat, `0x103da230` CNPC_VWerewolf::EnemyCouldSeeHull |
 | `0x101a7210` CCineNPC::vfunc585 | 2 | `0x101a72b0` CCineNPC::InputMoveToPosition, `0x101a7390` CCineNPC::InputBeginSequence |
 | `0x101a7880` CCineNPC::vfunc583 | 2 | `0x101a72b0` CCineNPC::InputMoveToPosition, `0x101a7390` CCineNPC::InputBeginSequence |
 | `0x101a8c30` FUN_101a8c30 | 2 | `0x101a8070` FUN_101a8070, `0x102c0270` FUN_102c0270 |
 | `0x101c1480` CAI_BaseNPC::FUN_101c1480 | 2 | `0x10158cd0` CFuncPlat::FUN_10158cd0, `0x101c73d0` CChangeLevel::vfunc110 |
+| `0x10272650` CAI_BaseNPC::SetIdealActivity ‼ | 2 | `0x102ef6a0` FUN_102ef6a0, `0x102ef760` FUN_102ef760 |
+| `0x10273070` FUN_10273070 | 2 | `0x1016e0c0` FUN_1016e0c0, `0x102d7730` FUN_102d7730 |
 | `0x10273e80` TaskComplete | 2 | `0x10367680` FUN_10367680, `0x103b2630` FUN_103b2630 |
 | `0x1027a6c0` FUN_1027a6c0 | 2 | `0x102ef6a0` FUN_102ef6a0, `0x102ef760` FUN_102ef760 |
-| `0x1029f2e0` FUN_1029f2e0 | 2 | `0x10081ed0` FUN_10081ed0, `0x1034b7b0` FUN_1034b7b0 |
 | `0x102c0f70` SetDisposition | 2 | `0x10089550` FUN_10089550, `0x10197e50` FUN_10197e50 |
-| `0x102c1230` FUN_102c1230 | 2 | `0x100896c0` FUN_100896c0, `0x102c12a0` FUN_102c12a0 |
 | `0x1032d0c0` CAI_BaseNPC::FUN_1032d0c0 | 2 | `0x100da230` FUN_100da230, `0x101777e0` CBasePlayer::FUN_101777e0 |
 | `0x103482e0` CAI_BaseNPC::FUN_103482e0 | 2 | `0x1016eb20` CBasePlayer::FUN_1016eb20, `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x1034b430` FUN_1034b430 | 2 | `0x1034b490` FUN_1034b490, `0x1034b7b0` FUN_1034b7b0 |
-| `0x10362430` CNPC_VAsianVampire::GetJumpSchedule | 2 | `0x10361be0` CNPC_VAsianVampire::SelectScheduleMeleeCombat, `0x103620d0` CNPC_VAsianVampire::SelectScheduleRangedCombat |
 | `0x10398000` FUN_10398000 | 2 | `0x103954e0` FUN_103954e0, `0x1039a256` FUN_1039a256 |
+| `0x103e0980` FUN_103e0980 | 2 | `0x1034cf20` FUN_1034cf20, `0x103e0e30` CNPC_VZombie::InputSetZombieAIType |
 | `0x10026530` CAISound::FUN_10026530 | 1 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10026550` CAISound::FUN_10026550 | 1 | `0x10168320` CBasePlayer::Replenish |
 | `0x10026a10` CAISound::FUN_10026a10 | 1 | `0x100fb110` CEnvParticle::AttachToEntity |
@@ -86,20 +82,20 @@ Seeds and their direct callees (depth ≤ 1) that something outside the closure 
 | `0x1026dc30` CAI_BaseNPC::CapabilitiesRemove | 1 | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
 | `0x1026e340` FUN_1026e340 | 1 | `0x10310c10` FUN_10310c10 |
 | `0x10271ff0` CAI_BaseNPC::TranslateActivity | 1 | `0x102ee430` FUN_102ee430 |
+| `0x102781e0` FUN_102781e0 | 1 | `0x101c9b60` CAI_ChangeHintGroup::InputActivate |
 | `0x10279a50` SetEnemy | 1 | `0x1019ab40` FUN_1019ab40 |
 | `0x10279b70` FUN_10279b70 | 1 | `0x1019ab40` FUN_1019ab40 |
 | `0x1027ef20` FUN_1027ef20 | 1 | `0x1027ee90` FUN_1027ee90 |
 | `0x1027efb0` FUN_1027efb0 | 1 | `0x100b0df0` FUN_100b0df0 |
 | `0x1028ae60` FUN_1028ae60 | 1 | `0x1028ad20` FUN_1028ad20 |
-| `0x1028fc90` FUN_1028fc90 | 1 | `0x1034b7b0` FUN_1034b7b0 |
 | `0x10295ab0` CAI_BaseNPCTroika::ClearHintNode | 1 | `0x103893f0` CNPC_VLasombra::InputDisableCover |
-| `0x10298ce0` CAI_BaseNPCTroika::SetModel | 1 | `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
 | `0x1029aa10` CAI_BaseNPCTroika::ProcessTweakParam | 1 | `0x1029ea40` CAI_BaseNPCTroika::InputTweakParam |
+| `0x1029f2e0` FUN_1029f2e0 | 1 | `0x10081ed0` FUN_10081ed0 |
 | `0x102ae7f0` FUN_102ae7f0 | 1 | `0x102c33f0` CAI_BaseNPCTroika::InputChangeSchedule |
 | `0x102b52a0` FUN_102b52a0 | 1 | `0x1019a980` FUN_1019a980 |
+| `0x102c1230` FUN_102c1230 | 1 | `0x100896c0` FUN_100896c0 |
 | `0x102c2ec0` CAI_BaseNPCTroika::FUN_102c2ec0 | 1 | `0x102c2c50` CAI_BaseNPCTroika::InputSetScriptedDiscipline |
 | `0x102c4430` FUN_102c4430 | 1 | `0x102c3350` CAI_BaseNPCTroika::InputSetFollowerBoss |
-| `0x102c54c0` FUN_102c54c0 | 1 | `0x102b8620` FUN_102b8620 |
 | `0x102cc350` CAI_BaseNPC::TaskName | 1 | `0x1036c810` CNPC_VChangBros::PrintTask |
 | `0x102e1440` CAI_Motor::vfunc10 | 1 | `0x10264650` CAI_HumanoidMotor::vfunc10 |
 | `0x102e19e0` CAI_Motor::FUN_102e19e0 | 1 | `0x10264680` CAI_HumanoidMotor::vfunc19 |
@@ -109,8 +105,9 @@ Seeds and their direct callees (depth ≤ 1) that something outside the closure 
 | `0x10330020` CAI_BaseNPC::FUN_10330020 | 1 | `0x10182550` CBasePlayer::FUN_10182550 |
 | `0x10334180` CAI_BaseNPC::FUN_10334180 | 1 | `0x10352cd0` CHL2_Player::vfunc374 |
 | `0x1033b5f0` CAI_BaseNPC::FUN_1033b5f0 | 1 | `0x1016be10` CBasePlayer::PostThink |
+| `0x1034b430` FUN_1034b430 | 1 | `0x1034b490` FUN_1034b490 |
+| `0x1034b7b0` FUN_1034b7b0 | 1 | `0x1034b500` CNPCMaker::InputSpawn ‼ |
 | `0x1035d150` CNPC_VAndreiBlood::vfunc461 | 1 | `0x1035dd00` CNPC_VAndreiBlood::InputTriggerCombat |
-| `0x10385ab0` CNPC_VAndreiBlood::FUN_10385ab0 | 1 | `0x1036d800` CNPC_VChangBros::SelectScheduleMeleeCombat |
 | `0x10398870` FUN_10398870 | 1 | `0x1039a256` FUN_1039a256 |
 | `0x103c6df0` CNPC_VVampireBoss::SetBodyEmitterName | 1 | `0x103c6e80` FUN_103c6e80 |
-| `0x103cf5f0` CNPC_VWerewolf::ShouldPursueEnemy | 1 | `0x103d5050` CNPC_VWerewolf::DrawBBoxOverlay |
+| `0x103c75f0` CNPC_VVampireBoss::InputTransformModel | 1 | `0x103c76b0` CNPC_VVampireBoss::InputTransformModel ‼ |

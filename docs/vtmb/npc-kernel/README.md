@@ -8,7 +8,17 @@ re-discovery. Everything else in this directory is written by
     uv run elysium research kernel_ledger --check  # verify the committed tables, write nothing
 
 from the whole-body corpus (`research/tooling/ghidra/driver/corpus.py`; the SQLite under
-`$ELYSIUM_WORK_ROOT/research/ghidra/corpus/`). The tables carry addresses, names, offsets,
+`$ELYSIUM_WORK_ROOT/research/ghidra/corpus/`). The shape tables — `layout.md`, `layout.tsv`,
+`signatures.md`, `signatures.tsv` — are written by
+
+    uv run elysium research kernel_shape          # regenerate
+    uv run elysium research kernel_shape --check  # verify, write nothing
+    uv run elysium research kernel_shape --residue <path>   # the rows no reading has settled
+
+from the same corpus, the datamap records `datamap_types` replays
+(`$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json`), Source SDK 2013's
+headers, and the two reading overlays beside the tool (`kernel_fields.tsv`,
+`kernel_signatures.tsv`). The tables carry addresses, names, offsets,
 edges and counts — the category `docs/vtmb/` already commits — and never a decompiled body.
 The provenance line at the top of each file names the module hash and the corpus dump date.
 
@@ -21,6 +31,8 @@ Start from the question:
 | Which classes are NPCs, what do they derive from, which entity classnames spawn them? | `classes.md` |
 | Who fills vtable slot *N* — base, Troika, which species override — and does the port cite it? | `slots.md` |
 | What is `+0xNNNN`, who writes it, who reads it, what does the port call it? | `fields.md` |
+| What type is `+0xNNNN`, what fills the words no datamap declares, what does a species add? | `layout.md` |
+| What does slot *N* take and return? | `signatures.md` |
 | What does function `0x10……` touch, fill, call, and where is it already cited? | `functions.md` |
 | In what order do the kernel's functions depend on each other? | `order.md` |
 | Which kernel functions does the rest of the game call — the producers other subsystems own? | `entries.md` |
@@ -51,6 +63,15 @@ entity base classes (`CBaseEntity`, `CBaseAnimating`, `CBaseFlex`, `CBaseCombatW
   writes an offset appears in both columns. Offsets reached through `param_1` in a body that
   never names `this` are marked `?` — the receiver is guessed. The port-member column in
   `fields.md` is the identifier declared where a header cites the offset, a guess too.
+- **Shape tiers.** `layout.md` and `signatures.md` say per row where the answer came from:
+  `datamap` (a record states name, type, count), `interior` (SDK 2013's sub-layout of an output,
+  a `CUtlVector`, a `Vector`, an array element), `sdk` (SDK 2013 declares the slot's method and
+  the image pops the words it declares), `sdk-order` / `doc` / `walked` (a reading, with the
+  addresses it read, from the overlays), `evidence` (no reading: the width and kind every untyped
+  access agrees on, or the image's `RET n` arity with the prototypes' kinds), `open` /
+  `unsettled` (nothing settles it, and why). A body's `this` counts as an NPC only when it fills
+  a family vtable or is typed on a family class; a closure body with an untyped receiver can add
+  to a word others establish but never makes one.
 - **Not trusted.** A body marked ‼ has a damaged decompilation; its edges and touches are
   partial. Read it with `corpus asm <addr>`.
 

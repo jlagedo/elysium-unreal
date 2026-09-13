@@ -1,0 +1,667 @@
+slot	class	method	return	params	const	tier	retail_words	sdk_words
+0		SetRefEHandle	void	const CBaseHandle&		walked	1	
+1		GetRefEHandle	CBaseHandle&		const	sdk	0	0
+2		GetCollideable	ICollideable*			walked	0	
+3		GetNetworkable	IServerNetworkable*			walked	0	
+4		GetBaseEntity	CBaseEntity*			walked	0	
+5		~CBaseEntity	void*	unsigned int		walked	1	
+6		SetCheckUntouch	void	bool		sdk	1	1
+7		SetSentLastFrame	void	bool		walked	1	
+8		GetModelIndex	int		const	sdk	0	0
+9		GetModelName	string_t		const	sdk	1	0
+10		SetModelIndex	void	int		sdk	1	1
+11		DebugSetEntityName	void	const char*		walked	1	
+12		DebugGetEntityName	const char*			walked	0	
+13		DebugSetClassName	void	const char*		walked	1	
+14		DebugGetClassName	const char*			walked	0	
+15		SetAttackExtents	void	const Vector&		walked	1	
+16		GetAttackExtents	Vector			walked	1	
+17		TraceMessage	void	const char*, int	const	walked	2	
+18		TraceMessage	void	const char*, int		walked	2	
+19		TraceMessageBare	void	const char*	const	walked	1	
+20		TraceMessageBare	void	const char*		walked	1	
+21			void	CBaseEntity*		walked	1	
+22			void	CBaseEntity*		walked	1	
+23			void	CBaseEntity*		walked	1	
+24		OnVictimHitByMe	void	CBaseEntity*		walked	1	
+25			void	CBaseEntity*		walked	1	
+26			void	CBaseEntity*		walked	1	
+27			void	CBaseEntity*		walked	1	
+28		GetStealthVisionScalar	float			walked	0	
+29		GetStealthVisionCone	float			walked	0	
+30		GetStealthHearingDist	float			walked	0	
+31		Dump	void	int		walked	1	
+32		CanBeInteractiveUsed	bool	CBaseEntity*		walked	1	
+33			int			walked	0	
+34		GetHighlightMaterial	int	CBaseEntity*		walked	1	
+35			int	CBaseEntity*		walked	1	
+36			const char*			walked	0	
+37			float			walked	0	
+38			CBaseEntity*	CBaseEntity*		walked	1	
+39		OnUseBegin	void	CBaseEntity*		walked	1	
+40			void	CBaseEntity*		walked	1	
+41			void	CBaseEntity*		walked	1	
+42		OnUseEnd	void	CBaseEntity*		walked	1	
+43			void	CBaseEntity*		walked	1	
+44			bool	CBaseEntity*		walked	1	
+45		PassesFindEntityFOVTrace	bool	CBaseEntity*, Vector, Vector, int		walked	8	
+46			void			walked	0	
+47			void			walked	0	
+48			float			walked	0	
+49			float			walked	0	
+50		GetCameraViewpointPosition	void	Vector&		walked	1	
+51		GetCameraTargetPosition	void	const Vector&, Vector&		walked	2	
+52		GetCameraFadeInTime	float			walked	0	
+53		GetCameraFadeOutTime	float			walked	0	
+54			bool	CBaseEntity*		walked	1	
+55			void	CBaseEntity*, Vector, Vector		walked	7	
+56			void	CBaseEntity*, Vector, Vector, const char*		walked	8	
+57			void	CBaseEntity*, Vector, Vector		walked	7	
+58			void	CBaseEntity*		walked	1	
+59			void	CSceneEntity*		walked	1	
+60			void	CSceneEntity*		walked	1	
+61			void	CSceneEntity*		walked	1	
+62		SetOrigin	void	const Vector&		walked	1	
+63		SetOrigin	void	float, float, float		walked	3	
+64		SetAngles	void	const QAngle&		walked	1	
+65		SetAngles	void	float, float, float		walked	3	
+66		Hide	void			walked	0	
+67		Unhide	void			walked	0	
+68		ShouldIgnoreCollision	bool	CBaseEntity*		walked	1	
+69		NavIgnoreCollision	bool	CBaseEntity*		walked	1	
+70		IsMonster	bool			walked	0	
+71		PrecacheSoundTable	void			walked	0	
+72			bool	int		walked	1	
+73		CausesImpactDamage	bool	CBaseEntity*		walked	1	
+74		ReceivesImpactDamage	bool	CBaseEntity*		walked	1	
+75		TakeDamageFromCollision	void	int, gamevcollisionevent_t*		walked	2	
+76		DrawDebugStatOverlays	void			walked	0	
+77		ScriptHide	void			walked	0	
+78		ScriptUnhide	void			walked	0	
+79		GetPredDescMap	datamap_t*			walked	0	
+80		GetServerClass	ServerClass*			walked	0	
+81		YouForgotToImplementOrDeclareServerClass	int			walked	0	
+82		GetDataDescMap	datamap_t*			walked	0	
+83		GetEFlags	int			walked	0	
+84		SetEFlags	void	int		walked	1	
+85		GetEdict	edict_t*			walked	0	
+86		ShouldTransmit	bool	int, const edict_t*, const void*, int, int		walked	5	1
+87		SetTransmit	void	CCheckTransmitInfo*		walked	1	2
+88			bool			walked		
+89			void			walked		
+90		IsTransparent	bool		const	sdk	0	0
+91		ShouldCollide	bool	int, int	const	walked	2	
+92		GetSolid	SolidType_t		const	sdk	0	0
+93		SetMoveType	void	MoveType_t, MoveCollide_t		sdk	2	2
+94		GetMoveType	MoveType_t		const	sdk	0	0
+95		GetMoveCollide	MoveCollide_t		const	sdk	0	0
+96		GetAimEntEdict	edict_t*			walked	0	
+97		GetOwnerEntity	CBaseEntity*		const	sdk	0	0
+98		CalcAbsolutePosition	void			sdk	0	0
+99		TestCollision	bool	Ray_t&, unsignedint, trace_t&		sdk	3	3
+100		TestHitboxes	bool	Ray_t&, unsignedint, trace_t&		sdk	3	3
+101		ComputeWorldSpaceSurroundingBox	void	Vector*, Vector*		walked	2	
+102		Physics_TraceEntity	void	CBaseEntity*, const Vector&, const Vector&, unsigned int, trace_t*		walked	5	
+103		Spawn	void			sdk	0	0
+104		Precache	void			sdk	0	0
+105		SetModel	void	char*		sdk	1	1
+106		PostConstructor	void	char*		sdk	1	1
+107		ParseMapData	void	CEntityMapData*		sdk	1	1
+108		KeyValue	bool	const char*, Vector		walked	4	
+109		KeyValue	bool	const char*, float		walked		
+110		KeyValue	bool	const char*, const char*		walked	2	
+111		MemberSync	void			walked	0	
+112			void	int, int		walked	2	
+113		Activate	void			sdk	0	0
+114		PostClientMessagesSent	void			walked	0	
+115			void	CBaseEntity*		walked	1	
+116		IsMarkedForDeletion	bool			walked	0	
+117		ObjectCaps	int			walked	0	
+118		AcceptInput	bool	char*, CBaseEntity*, CBaseEntity*, variant_t, int		sdk	9	9
+119		Kill	void			walked	0	
+120		GetInputDispatchEffectPosition	void	char*, Vector&, QAngle&		sdk	3	3
+121		ReadKeyField	bool	char*, variant_t*		sdk	2	2
+122		SetClassname	void	char*		sdk	1	1
+123		DrawDebugGeometryOverlays	void			sdk	0	0
+124		DrawDebugTextOverlays	int			sdk	0	0
+125		DrawMuzzleOverlay	void			walked	0	
+126		Save	int	ISave&		sdk	1	1
+127		Restore	int	IRestore&		walked	1	
+128		ShouldSavePhysics	bool			sdk	0	0
+129		OnSave	void			walked	0	1
+130		OnRestore	void	bool		walked	1	0
+131		RequiredEdictIndex	int			walked	0	
+132			void			walked	0	
+133		MoveDone	void			walked	0	
+134		Think	void			walked	0	
+135			float	float		walked	1	
+136			bool			walked	0	
+137		GetBaseAnimating	CBaseAnimating*			walked	0	
+138		Classify	Class_T			sdk	0	0
+139		DeathNotice	void	CBaseEntity*		walked	1	
+140		PassesDamageFilter	bool	CTakeDamageInfo&		sdk	1	1
+141		TraceAttack	void	const CTakeDamageInfo&, const Vector&, trace_t*		walked	3	4
+142		OnTakeDamage	int	CTakeDamageInfo&		sdk	1	1
+143		TakeHealth	int	float, int		sdk	2	2
+144		Event_Killed	void	CTakeDamageInfo&		sdk	1	1
+145		BloodColor	int			walked	0	
+146		TraceBleed	void	CVDmg_t*, const Vector&, trace_t*		walked	3	
+147		IsTriggered	bool	CBaseEntity*		walked	1	
+148		AddPoints	void	int, bool		walked	2	
+149		AddPointsToTeam	void	int, bool		walked	2	
+150		AddPlayerItem	bool	CBaseCombatWeapon*		walked	1	
+151		RemovePlayerItem	bool	CBaseCombatWeapon*		walked	1	
+152		GetDelay	float			walked	0	
+153		IsMoving	bool			walked	0	
+154		DamageDecal	int	int, int		walked	2	
+155		DecalTrace	void	trace_t*, int, bool, int, CBaseEntity*, int, bool		walked	7	2
+156			void	int		unsettled	1	
+157		OnControls	bool	CBaseEntity*		walked	1	
+158		IsAlive	bool			walked	0	
+159		ReflectGauss	bool			walked	0	
+160		HasTarget	bool	string_t		sdk	1	1
+161		HasLinkedDoor	bool	string_t		walked	1	
+162		IsPlayer	bool			walked	0	
+163		IsViewable	bool			sdk	0	0
+164		IsStandable	bool			walked	0	
+165		CanStandOn	bool	edict_t*		walked	1	
+166		CanStandOn	bool	CBaseEntity*		walked	1	
+167		GetEnemy	CBaseEntity*		const	walked	0	
+168		GetEnemy	CBaseEntity*			walked	0	
+169		ViewPunch	void	const QAngle&		walked	1	
+170		VelocityPunch	void	const Vector&		walked	1	
+171		SetMovedir	void			walked	0	
+172		GetNextTarget	CBaseEntity*			sdk	0	0
+173		Use	void	CBaseEntity*, CBaseEntity*, USE_TYPE, float		sdk	4	4
+174		StartTouch	void	CBaseEntity*		sdk	1	1
+175		Touch	void	CBaseEntity*		sdk	1	1
+176		EndTouch	void	CBaseEntity*		sdk	1	1
+177		StartBlocked	void	CBaseEntity*		sdk	1	1
+178		Blocked	void	CBaseEntity*		sdk	1	1
+179		EndBlocked	void			walked	0	
+180		UpdateOnRemove	void			sdk	0	0
+181		Teleport	void	Vector*, QAngle*, Vector*		sdk	3	3
+182			void	int, int, int, int		unsettled	4	
+183		NotifySystemEvent	void	CBaseEntity*, notify_system_event_t, const notify_system_event_params_t&		walked	3	
+184		MakeTracer	void	const Vector&, const trace_t&, int		walked	3	
+185		FireBullets	void	const FireBulletsInfo_t&		walked	1	
+186			bool			walked	0	
+187		Respawn	CBaseEntity*			walked	0	
+188		IsLockedByMaster	bool			walked	0	
+189		GetDamageType	int		const	sdk	0	0
+190		GetDamage	float			walked	0	
+191		SetDamage	void	float		walked	1	
+192		WorldSpaceCenter	Vector			walked	1	
+193		EyePosition	Vector			walked	1	
+194		EyeAngles	const QAngle&			walked		
+195		LocalEyeAngles	const QAngle&			walked		
+196		EarPosition	Vector			walked	1	
+197		BodyTarget	Vector	const Vector&, bool, bool		walked	4	
+198			const Vector&			walked	0	
+199		GetVelocity	void	Vector*, AngularImpulse*		sdk	2	2
+200		Illumination	int			walked	0	
+201		FVisible	bool	CBaseEntity*, int, CBaseEntity**, int		walked	4	3
+202		SetOwnerEntity	void	CBaseEntity*		sdk	1	1
+203		GetAttackDamageScale	float			walked	0	1
+204		GetReceivedDamageScale	float			walked	0	1
+205			bool			walked	0	
+206			bool	int, int, int, int, int		unsettled	5	
+207		IsCurrentlyTouching	bool		const	sdk	0	0
+208		SetGroundEntity	void	CBaseEntity*		sdk	1	1
+209		GetGroundEntity	CBaseEntity*			walked	0	0
+210		GetGroundVelocityToApply	void	Vector&		walked	1	
+211		GetSolidFlags	int		const	sdk	0	0
+212		SetModelName	void	string_t		sdk	1	1
+213		SetSize	void	const Vector&		walked	1	
+214		GetSize	const Vector&			walked	0	
+215		WorldSpaceCenter	const Vector&		const	walked	0	
+216		SetAbsOrigin	void	Vector&		sdk	1	1
+217		GetAbsOrigin	Vector&		const	sdk	0	0
+218		SetAbsAngles	void	QAngle&		sdk	1	1
+219		GetAbsAngles	QAngle&		const	sdk	0	0
+220		GetOrigin	const Vector&			walked	0	
+221		GetAngles	const QAngle&			walked	0	
+222		GetSoundEmissionOrigin	Vector		const	sdk	1	1
+223		CreateVPhysics	bool			walked	0	
+224		ForceVPhysicsCollide	bool	CBaseEntity*		walked	1	
+225		VPhysicsDestroyObject	void			walked	0	
+226		VPhysicsUpdate	void	IPhysicsObject*		walked	1	
+227		VPhysicsTakeDamage	int	CTakeDamageInfo&		sdk	1	1
+228		VPhysicsShadowCollision	void	int, gamevcollisionevent_t*		sdk	2	2
+229		VPhysicsShadowUpdate	void	IPhysicsObject*		sdk	1	1
+230		VPhysicsCollision	void	int, gamevcollisionevent_t*		sdk	2	2
+231		VPhysicsFriction	void	IPhysicsObject*, float, int, int		sdk	4	4
+232		UpdatePhysicsShadowToCurrentPosition	void	float		sdk	1	1
+233		VPhysicsGetObjectList	int	IPhysicsObject**, int		sdk	2	2
+234		PhysicsPushEntity	void	Vector&, trace_t*		sdk	2	2
+235		OnPhysGunPickup	void	CBasePlayer*		walked	1	
+236		OnPhysGunDrop	void	CBasePlayer*, bool		walked	2	
+237		PhysicsSolidMaskForEntity	unsignedint		const	sdk	0	0
+238		PerformCustomPhysics	void	Vector*, Vector*, QAngle*, QAngle*		sdk	4	4
+239		PhysicsPushRotate	CBaseEntity*	float		sdk	1	1
+240			PyObject*			walked	0	
+241		GetEventName	void	char*, animevent_t*		walked	2	1
+242		GetIdealYawSpeed	float			walked	0	
+243		BurnModel	void	const char*, bool		walked	2	
+244		GetSkeletonModelName	const char*			walked	0	
+245		AddExtraAnimationModels	void	CBaseEntity*, const char*, const char*, int, int		walked	5	
+246		RemoveExtraAnimationModels	void			walked	0	
+247		SetAttackExtentsForSequence	void	int		walked	1	
+248		GetIdealSpeed	float		const	sdk	0	0
+249		GetIdealAccel	float		const	sdk	0	0
+250		StudioFrameAdvance	float	float		walked	1	0
+251		IsActivityFinished	bool			walked	0	
+252		SelectWeightedSequenceForStat	int	Activity, int, int		walked	3	
+253		SelectHeaviestSequenceForStat	int	Activity, int, int		walked	3	
+254		SelectSameSequenceForStat	int	Activity, int, int		walked	3	
+255		GetSkeleton	void	Vector*, Quaternion*, int		walked	3	
+256		GetBoneTransform	void	int, matrix3x4_t&		sdk	2	2
+257		SetupBones	void	matrix3x4_t*, int		sdk	2	2
+258		DispatchAnimEvents	void	float, CBaseAnimating*		walked	2	1
+259		HandleAnimEvent	void	animevent_t*		sdk	1	1
+260		SetPoseParameter02	float	int, float		walked	2	
+261		SetPoseParameter01	float	const char*, float		walked	2	
+262		GetAttachment03	bool	int, matrix3x4_t&		walked	2	
+263		GetGroundSpeedVelocity	Vector			sdk	1	1
+264		DrawServerHitboxes	void			walked	0	2
+265		AddFlinchGesture	void	Activity, float, float, const char*, float		walked	5	
+266			void			walked	0	
+267		GetFirstGestureLayer	int			walked	0	
+268		SetLayer	void	int, Activity, int, bool		walked	4	
+269		RemoveLayer	void	int		walked	1	
+270		HasLayer	bool	Activity		walked	1	
+271		FindLayerByOwner	int	Activity		walked	1	
+272		AllocateLayer	int			walked	0	1
+273		RestartGesture	void	Activity, bool, bool		walked	3	
+274		RemoveLayerByOwner	void	Activity		walked	1	
+275		RemoveAllGestures	void			walked	0	
+276		Blink	void			sdk	0	0
+277		SetViewtarget	void	const Vector&		walked	1	
+278		GetViewtarget	const Vector&		const	walked	0	
+279		SetFlexWeight	void	int, float		walked	2	
+280		SetFlexWeight	void	char*, float		walked	2	
+281		GetFlexWeight	float	int		walked	1	
+282		GetFlexWeight	float	char*		walked	1	
+283		ProcessSceneEvents	void			walked		
+284		AddSceneExpressions	void			walked	0	
+285		ClearSceneEvents	void	CChoreoScene*		walked	1	
+286		AddSceneEvent	void	CChoreoScene*, CChoreoEvent*		walked	2	
+287		RemoveSceneEvent	void	CChoreoEvent*		walked	1	
+288		AddFlexSetting	void	const char*, float, const flexsettinghdr_t*, const flexsettinghdr_t*, bool		walked	5	
+289		AddFlexAnimation	void	CSceneEventInfo*		walked	1	
+290		ProcessSequenceSceneEvent	void	CSceneEventInfo*		walked	1	
+291		ProcessGestureSceneEvent	void	CSceneEventInfo*		walked	1	
+292		DamageFlinch	void	const CTakeDamageInfo&, const Vector&, trace_t*		walked	3	
+293		GetFollowerBoss	CBaseEntity*			walked	0	
+294		IsValidStealthKillTarget	bool	CBaseEntity*		walked	1	
+295		CanTalk	bool	CBaseEntity*		walked	1	
+296			bool	int		walked	1	
+297		AdjustDialogReaction	void	CBaseEntity*, int, const char*		walked	3	
+298		GetMaxInvenSlotsPerSection	int	int		walked	1	
+299		CreateDamageEffects	void	const CTakeDamageInfo&, bool*		walked	2	
+300		Event_TookLife	void	CBaseCombatCharacter*, bool, bool		walked	3	
+301		CreateCorpse	void	const Vector&, const CTakeDamageInfo&		walked	2	
+302		Inventory_ShouldAllow_Autopickup	bool	CBaseCombatWeapon*, bool		walked	2	
+303		Inventory_ShouldAllow_AutopickupAmmo	bool	CBaseCombatWeapon*		walked	1	
+304		GiveBaseFightingItems	void			walked	0	
+305		RemoveBaseFightingItems	void			walked	0	
+306		LookAtEntity	void	CBaseEntity*, bool		walked	2	
+307		HasUsableMeleeWeapon	bool			walked	0	
+308		HasUsableRangedWeapon	bool			walked	0	
+309		GetBestRangedWeapon	CBaseCombatWeapon*			walked	0	
+310		SetActivity	void	Activity		sdk	1	1
+311		ForcePreTranslatedSequenceAndActivity	void	Activity, Activity, int		walked	3	
+312		UpdateCharacter	void	float		walked	1	
+313		UpdatePresenceEffect	void			walked	0	
+314		UpdatePoseParameters	void	float		walked	1	
+315		MeleeSwingUpdate	void			walked	0	
+316			void	CBaseCombatCharacter*, bool, bool		walked	3	
+317			bool	CBaseEntity*		unsettled	1	
+318		PlayerDefenderBlockReaction	bool	CBaseCombatCharacter*, melee_dice_roll_result*, CVDmg_t*		walked	3	
+319		PlayerAttackerBlockedReaction	bool	CBaseCombatCharacter*, melee_dice_roll_result*, CVDmg_t*		walked	3	
+320		PlayerKnockbackReaction	bool	CBaseCombatCharacter*, Activity		walked	2	
+321			bool	CBaseCombatCharacter*		walked	1	
+322			void	CBaseEntity*		walked	1	
+323			int	const Vector&		walked	1	
+324			bool			walked	0	
+325			bool			walked	0	
+326			bool	void*, CBaseCombatCharacter*		walked	2	
+327			bool			walked	0	
+328			bool			walked	0	
+329			bool			walked	0	
+330			void	float, const FireBulletsInfo_t*		walked	2	
+331		ChooseMeleeAttackSequence	bool	CBaseCombatWeapon*, CBaseEntity*, Activity, int*		walked	4	
+332			void	CBaseEntity*		walked	1	
+333		MaintainEyeDirection	void	float		walked	1	
+334			bool	int, int		walked	2	
+335		NotifyChangeSizeSmall	void			walked	0	
+336		NotifyChangeSizeNormal	void			walked	0	
+337		GetUsedHullBits	int			walked	0	
+338		AddPreDisciplineEffect	void	int, int, int		unsettled	3	
+339		AddDisciplineEffect	void	int, int, int		unsettled	3	
+340		RemovePreDisciplineEffects	void	int, int, int		unsettled	3	
+341		RemoveDisciplineEffects	void	int, int		walked	2	
+342		CanBeFedUponBy	bool	CBaseCombatCharacter*		walked	1	
+343		SetShakyHands	void	float, float, int		walked	3	
+344		GetShakyHandsIntensity	float			walked	0	
+345		SetPoseParameter	float	const char*, float, bool		walked	3	
+346		SetPoseParameter	float	int, float, bool		walked	3	
+347		GetExpressionEventParams	bool	int, char*, float*, float*, float*, float*		walked	6	
+348		HealthToPercent	int			walked	0	
+349		InputBarterBegin	void	inputdata_t&		walked	1	
+350		InputBarterEnd	void	inputdata_t&		walked	1	
+351		FeedBegin	void	CBaseCombatCharacter*		walked	1	
+352		Feed	void			walked	0	
+353		FeedInterrupt	void			walked	0	
+354			void			walked	0	
+355			void			walked		
+356		PrayerBegin	void			walked	0	
+357			void			walked	0	
+358		PrayerEnd	void			walked	0	
+359			int	CBaseEntity*		walked	1	
+360			bool			walked	0	
+361			bool			walked	0	
+362		FInViewCone	bool	const Vector&		walked	1	
+363		FInViewCone	bool	CBaseEntity*		walked	1	1
+364		FInAimCone	bool	const Vector&		walked	1	
+365		FInAimCone	bool	CBaseEntity*		walked	1	
+366		HandleInteraction	bool	int, void*, CBaseCombatCharacter*		sdk	3	3
+367		BodyAngles	QAngle			sdk	1	1
+368		BodyDirection2D	Vector			sdk	1	1
+369		BodyDirection3D	Vector			sdk	1	1
+370		HeadDirection2D	Vector			sdk	1	1
+371		HeadDirection3D	Vector			sdk	1	1
+372		EyeDirection2D	Vector			walked	1	
+373		EyeDirection3D	Vector			walked	1	
+374		GiveAmmo	int	int, int, bool		walked	3	
+375		NPC_EarlyTranslateActivity	Activity	Activity		walked	1	
+376		NPC_TranslateActivity	Activity	Activity		sdk	1	1
+377			bool	CBaseCombatCharacter*, int		walked	2	
+378			bool	CBaseCombatCharacter*, int		walked	2	
+379		EnterGrappleState	bool	CBaseCombatCharacter*, int, int, int, const Vector&, float, bool		walked	7	
+380		LeaveGrappleState	void			walked		
+381		Weapon_TranslateActivity	Activity	Activity		walked	1	2
+382		Weapon_CanUse	bool	CBaseCombatWeapon*		sdk	1	1
+383		Weapon_Equip	void	CBaseCombatWeapon*, bool		walked	2	1
+384		Weapon_EquipAmmoOnly	bool	CBaseCombatWeapon*		sdk	1	1
+385		Weapon_Drop	void	CBaseCombatWeapon*, const Vector*, bool		walked	3	
+386		Weapon_Drop	void			walked	0	
+387		Weapon_Drop_All	void			walked	0	
+388		Weapon_Switch	bool	CBaseCombatWeapon*, int		sdk	2	2
+389		Weapon_ShootPosition	Vector	const Vector&		walked	2	1
+390		OnTakeDamage_Alive	int	const CTakeDamageInfo&		walked	1	
+391		OnTakeDamage_Dying	int	CTakeDamageInfo&		sdk	1	1
+392		OnTakeDamage_Dead	int	CTakeDamageInfo&		sdk	1	1
+393		GetDeathActivity	Activity			sdk	0	0
+394		CorpseGib	bool			walked	0	1
+395		CorpseFade	void			sdk	0	0
+396		HasHumanGibs	bool			sdk	0	0
+397		HasAlienGibs	bool			sdk	0	0
+398		HasExplosiveGibs	bool			walked	0	
+399			bool			walked	0	
+400		AllowsKnockbackBypass	bool			walked	0	
+401		KnockbackActivity_Default	Activity	int		walked	1	
+402		Event_Gibbed	bool			walked	0	
+403		Event_Dying	void			sdk	0	0
+404		IRelationType	Disposition_t	CBaseEntity*		sdk	1	1
+405		IRelationPriority	int	CBaseEntity*		sdk	1	1
+406		GetStateName	const char*	NPC_STATE		walked	1	
+407		GetNavTypeName	const char*	Navigation_t		walked	1	
+408		GetShortConditionName	const char*	int		walked	1	
+409		GetLastSharedCondition	int			walked	0	
+410		TranslateNavGoalPosition	const Vector*	const Vector*		walked	1	
+411			void			walked	0	
+412		GetLastUpdateThink	float			walked	0	
+413		GetLastNormalThink	float			walked	0	
+414		GetLastMoveThink	float			walked	0	
+415		GetLastAIThink	float			walked	0	
+416		SetForceFrequentThink	void	bool		walked	1	
+417		GetForceFrequentThink	bool			walked	0	
+418		ResolveTaskDistance	float	float		walked	1	
+419		UpdateBurstShootPause	void			walked	0	
+420		NPCInit	void			sdk	0	0
+421		PostNPCInit	void			sdk	0	0
+422		StartNPC	void			walked	0	
+423		IsTemplate	bool			walked	0	
+424		CreateComponents	bool			walked	0	
+425		CreateSenses	CAI_Senses*			walked	0	
+426		CreateMoveProbe	CAI_MoveProbe*			walked	0	
+427		CreateMotor	CAI_Motor*			walked	0	
+428		CreateLocalNavigator	CAI_LocalNavigator*			walked	0	
+429		CreateNavigator	CAI_Navigator*			walked	0	
+430		CreatePathfinder	CAI_Pathfinder*			walked	0	
+431		NPCThink	void			sdk	0	0
+432		RunAI	void	bool		walked	1	0
+433		GatherConditions	void			sdk	0	0
+434		PrescheduleThink	void			sdk	0	0
+435		OnScheduleChange	void	CAI_Schedule*		walked	1	0
+436		OnStartSchedule	void	int		walked	1	
+437		PreSelectSchedule	int			walked	0	
+438		SelectSchedule	int			sdk	0	0
+439		SelectFailSchedule	int	int, int, AI_TaskFailureCode_t		sdk	3	3
+440		TranslateSchedule	int	int		sdk	1	1
+441		StartTask	int	Task_t*		walked	1	
+442		StartTask	int	Task_t*		sdk	1	1
+443		RunTask	int	Task_t*		walked	1	
+444		RunTask	int	Task_t*		sdk	1	1
+445		StartTaskOverlay	void			walked	0	
+446		GetScheduleOfType	CAI_Schedule*	int		sdk	1	1
+447		GetLocalScheduleId	int	int		walked		
+448		TaskFail	void	AI_TaskFailureCode_t		sdk	1	1
+449		TaskName	char*	int		sdk	1	1
+450		GetLocalTaskId	int	int		walked		
+451		GetSchedulingErrorName	char*			sdk	0	0
+452		LoadedSchedules	bool			sdk	0	0
+453		BuildScheduleTestBits	void			sdk	0	0
+454		GetRunningBehavior	CAI_BehaviorBase*			walked	0	
+455		OnBehaviorChangeStatus	bool	CAI_BehaviorBase*, bool		walked	2	
+456		AccessBehaviors	CAI_BehaviorBase**			walked	0	
+457		NumBehaviors	int			walked	0	
+458		ConditionName	const char*	int		walked	1	
+459		RemoveIgnoredConditions	void			walked	0	
+460		PreSelectIdealState	NPC_STATE			walked	0	
+461		SelectIdealState	NPC_STATE			walked	0	
+462		ShouldGoToIdleState	bool			sdk	0	0
+463		OnStateChange	void	NPC_STATE, NPC_STATE		sdk	2	2
+464		GetState	NPC_STATE			walked	0	
+465		OnChangeActivity	void	Activity		sdk	1	1
+466		ShouldMaintainActivity	bool			walked	0	
+467		QueryHearSound	bool	CSound*		sdk	1	1
+468		QuerySeeEntity	bool	CBaseEntity*		walked	1	2
+469		OnLooked	void	int		sdk	1	1
+470		OnListened	void			sdk	0	0
+471		GetReactionDelay	float			walked	0	
+472		OnSeeEntity	void	CBaseEntity*		walked	1	
+473		GetSoundInterests	int			walked	0	
+474		GetBestSound	CSound*			walked	0	
+475		GetBestScent	CSound*			walked	0	
+476		HearingSensitivity	float			walked	0	
+477		ClearSenseConditions	void			sdk	0	0
+478		BestEnemy	CBaseEntity*			sdk	0	0
+479		IsValidEnemy	bool	CBaseEntity*		walked	1	
+480		ShouldChooseNewEnemy	bool			sdk	0	0
+481		GatherEnemyConditions	void	CBaseEntity*		sdk	1	1
+482		CanPlaySequence	CanPlaySequence_t	bool, int		walked	2	
+483		CanPlaySentence	bool	bool		walked	1	
+484		PlaySentence	int	const char*, float, float, soundlevel_t, CBaseEntity*		walked	5	
+485		PlayScriptedSentence	int	const char*, float, float, soundlevel_t, bool, CBaseEntity*		walked	6	
+486		FOkToMakeSound	bool			walked	0	
+487		JustMadeSound	void			walked	0	
+488		DeathSound	void			walked	0	
+489		AlertSound	void			walked	0	
+490		IdleSound	void			walked	0	
+491		PainSound	void			walked	0	
+492		FearSound	void			walked	0	
+493		LostEnemySound	void			walked	0	
+494		FoundEnemySound	void			walked	0	
+495		SurprisedSound	void			walked	0	
+496		TargetAcquiredSound	void			walked	0	
+497			void			walked	0	
+498		FleeSound	void			walked	0	
+499		IdleAgitatedSound	void			walked	0	
+500		ExertHvySound	void			walked	0	
+501		ExertLightSound	void			walked	0	
+502		RiledSound	void			walked	0	
+503		ComfortSound	void			walked	0	
+504		UpsetSound	void			walked	0	
+505		TargetGiveUpSound	void			walked	0	
+506			void			walked	0	
+507		FloatSound	void			walked	0	
+508		SpeakSentence	void	int		walked	1	
+509		ShouldPlayIdleSound	bool			walked	0	
+510		ShouldPlayFloatSound	bool			walked	0	
+511		StopLoopingSounds	void			walked	0	
+512		GetExpresser	CAI_Expresser*			walked	0	
+513		CapabilitiesGet	int		const	sdk	0	0
+514		MovementCost	bool	int, const Vector&, const Vector&, float*		walked	4	
+515		CalcIdealYaw	float	const Vector&		walked	1	
+516		MaxYawSpeed	float			sdk	0	0
+517		AddFacingTarget	void	CBaseEntity*, const Vector&, float, float, float		walked	5	
+518		AddFacingTarget	void	const Vector&, float, float, float		walked	4	
+519		AddFacingTarget	void	CBaseEntity*, float, float, float		walked	4	
+520		GetFacingDirection	float	Vector&		sdk	1	1
+521		IsJumpLegal	bool	Vector&, Vector&, Vector&	const	sdk	3	3
+522		StepHeight	float		const	sdk	0	0
+523		GetMaxJumpSpeed	float		const	sdk	0	0
+524		GetJumpGravity	float		const	sdk	0	0
+525		OverrideMove	bool	float		sdk	1	1
+526		OverrideMoveFacing	bool	AILocalMoveGoal_t&, float		sdk	2	2
+527		IsUnusableNode	bool	CAI_Node*		walked	1	
+528		ValidateNavGoal	bool			walked	0	
+529		IsCurTaskContinuousMove	bool			walked	0	
+530		IsUnreachable	bool	CBaseEntity*		sdk	1	1
+531		OnObstructingDoor	bool	AILocalMoveGoal_t*, CBaseDoor*, float, AIMoveResult_t*		walked	4	
+532			void	int		walked	1	
+533		EyeOffset	Vector	Activity, Activity		walked	3	
+534		EyeLookTarget	CBaseEntity*			walked	0	
+535		AddLookTarget	void	const Vector&, float, float, float		walked	4	
+536		AddLookTarget	void	CBaseEntity*, float, float, float		walked	4	
+537		SetHeadDirection	void	Vector&, float		sdk	2	2
+538		AimGun	void			walked	0	
+539		SetAim	void	const Vector&		walked	1	
+540		PlayScene	float	const char*		walked	1	
+541		GetEnemies	CAI_Enemies*			walked	0	
+542			void			walked	0	
+543		RemoveMemory	void			walked	0	
+544		UpdateEnemyMemory	bool	CBaseEntity*, const Vector&, CBaseEntity*		walked	3	
+545		InitSquad	bool			sdk	0	0
+546		SquadSlotName	const char*	int		walked		
+547		GetSlotSchedule	int	int		walked	1	
+548		IsValidCover	bool	const Vector&, const CAI_Hint*		walked	2	
+549		IsValidShootPosition	bool	const Vector&, const CAI_Hint*		walked	2	
+550		CoverRadius	float			walked	0	
+551		OnChangeHintGroup	void	string_t, string_t		walked	2	
+552		ShouldFadeOnDeath	bool			walked	0	
+553		RangeAttack1Conditions	int	float, float		walked	2	
+554		RangeAttack2Conditions	int	float, float		walked	2	
+555		MeleeAttack1Conditions	int	float, float		walked	2	
+556		MeleeAttack2Conditions	int	float, float		walked	2	
+557		OnBeginMoveAndShoot	bool			walked	0	
+558		OnEndMoveAndShoot	void			walked	0	
+559		FindNamedEntity	CBaseEntity*	const char*		walked	1	
+560		ClearAttackConditions	void			sdk	0	0
+561		GatherAttackConditions	void	CBaseEntity*, float		sdk	2	2
+562		WeaponLOSCondition	bool	const Vector&, const Vector&, bool		walked	3	
+563		TranslateEnemyChasePosition	void	CBaseEntity*, Vector&, float&, float*		walked	4	
+564		FCanCheckAttacks	bool			walked	0	
+565		CheckAmmo	void			walked	0	
+566		FValidateHintType	bool	CAI_Hint*		sdk	1	1
+567		GetHintActivity	Activity	short		walked	1	
+568		GetHintDelay	float	short		walked	1	
+569		GetCoverActivity	Activity	CAI_Hint*		walked	1	
+570		GetReloadActivity	Activity	CAI_Hint*		walked	1	
+571			Activity	float		walked	1	
+572		SetTurnActivity	void			walked	0	
+573		InnateWeaponLOSCondition	bool	const Vector&, const Vector&, bool		walked	3	
+574		GetShootEnemyDir	Vector	const Vector&, int, int		walked	4	
+575		ShouldMoveAndShoot	bool			walked	0	
+576		IsLightDamage	bool	float, int		walked	2	
+577		IsHeavyDamage	bool	float, int		walked	2	
+578		NotifyDeadFriend	void	CBaseEntity*		walked	1	
+579			bool	int		walked	1	
+580		GetClassScheduleIdSpace	CAI_ClassScheduleIdSpace*			walked	0	
+581		ReportAIState	void			walked	0	
+582		ReportOverThinkLimit	void	float		walked	1	
+583			void	const Vector&		walked	1	
+583	CAI_BaseActor	CreateExpresser	CAI_Expresser*			walked	0	
+583	CAI_ExpressiveNPC	CreateExpresser	CAI_Expresser*			walked	0	
+583	CCineNPC	PossessEntity	void			walked	0	
+584			void	int		walked	1	
+584	CAI_BaseActor	Speak	bool	AIConcept_t, const char*		walked		
+584	CAI_ExpressiveNPC	Speak	bool	AIConcept_t, const char*		walked		
+584	CCineNPC	StartSequence	bool	CAI_BaseNPC*, string_t, bool		walked	3	
+585		ProcessTweakParam	void	const char*, const char*		walked	2	
+585	CAI_BaseActor	PickLookTarget	void	bool, float, float		walked	3	
+585	CCineNPC	FCanOverrideState	bool			walked	0	
+586		GetBestSeeUnknown	EHANDLE			walked	1	
+586	CAI_BaseActor	HasActiveLookTargets	bool			walked	0	
+586	CCineNPC	FixScriptNPCSchedule	void	CAI_BaseNPC*		walked	1	
+587		CanWitnessSupernatural	bool	int		walked	1	
+587	CAI_BaseActor	ValidEyeTarget	bool	const Vector&		walked	1	
+588			void			walked	0	
+588	CAI_BaseActor	ValidHeadTarget	bool	const Vector&		walked	1	
+589		SetScriptedDiscipline	void	int, int		walked	2	
+589	CAI_BaseActor	SelectRandomExpressionForState	const char*	NPC_STATE		walked	1	
+590		OkToInterruptForMelee	bool			walked	0	
+591			bool			walked	0	
+592		CanSeekCover	bool			walked	0	
+593			void			walked	0	
+594			bool	CBaseEntity*, int, CBaseEntity**, int		walked	4	
+595		AcquireNearestHatedTarget	void			walked	0	
+596			void	CBaseEntity*		walked	1	
+597			void	CBaseEntity*, int		walked	2	
+598			void	CBaseEntity*		walked	1	
+599			bool	int		walked	1	
+600			bool	CBaseEntity*		walked	1	
+601			void	CBaseEntity*		walked	1	
+602			bool			walked	0	
+603			float	float*, const float*		walked		
+604		SelectScheduleMeleeCombat	int	int		walked	1	
+605		SelectScheduleRangedCombat	int	int		walked	1	
+606			int	int		walked	1	
+607			int			walked	0	
+608			bool	const char*		walked	1	
+609			CAI_Hint*	bool		walked	1	
+610			void	NPC_STATE		walked	1	
+611			int			walked	0	
+612			int			walked	0	
+613			bool			walked	0	
+614		ResetThinkTimers	void			walked	0	
+615		CanBeSetOnFire	bool			walked	0	
+616			void			walked	0	
+617	CNPCMaker	MakeNPC	void	bool		walked	1	
+617	CNPC_VBaseBoss	EnemyCouldSeeHull	bool	Vector, bool, bool, Vector		walked	8	
+617	CNPC_VGargoyle		void			walked	0	
+617	CNPC_VHengeyokai		void			walked	0	
+617	CNPC_VVampireBoss	InputTransformModel	void	inputdata_t&		walked	1	
+617	CPayphone		bool			walked	0	
+618	CNPCMaker	CanMakeNPC	bool	bool		walked	1	
+618	CNPC_VGargoyle		void			walked	0	
+618	CNPC_VHengeyokai		void			walked	0	
+618	CNPC_VTzimisce		void			walked	0	
+618	CNPC_VTzimisceHeadClaw		void			walked	0	
+618	CNPC_VTzimisceRunner		void			walked	0	
+618	CNPC_VVampireBoss	TransformationStart	void			walked	0	
+618	CNPC_VWerewolf		bool	int, int, int, int		unsettled	4	
+619	CNPCMaker	ChildPreSpawn	void	CAI_BaseNPCTroika*		walked	1	
+619	CNPC_VAndreiBlood	SetSchedule	void	int		walked	1	
+619	CNPC_VAsianVampire	SetSchedule	void	int		walked	1	
+619	CNPC_VChangBros	SetSchedule	void	int		walked	1	
+619	CNPC_VSabbatLeader	SetSchedule	void	int		walked	1	
+619	CNPC_VSheriffMan	SetSchedule	void	int		walked	1	
+619	CNPC_VTzimisce		void			walked	0	
+619	CNPC_VTzimisceHeadClaw		void	bool		walked	1	
+619	CNPC_VTzimisceRunner		void	bool		walked	1	
+619	CNPC_VWerewolf		int	int		unsettled	1	
+620	CNPCMaker	ChildPostSpawn	void	CAI_BaseNPCTroika*		walked	1	
+620	CNPC_VSabbatLeader	FootstepSound	void			walked	0	
+620	CNPC_VTzimisce		void			walked	0	
+620	CNPC_VWerewolf	DrawBBoxOverlay	void			walked	0	
+621	CNPC_VSabbatLeader	AttackSound	void			walked	0	
+621	CNPC_VTzimisce		void			walked	0	
+622	CNPC_VTzimisce		void			walked	0	
+623	CNPC_VTzimisce		void			walked	0	
+624	CNPC_VTzimisce		void			walked	0	
+625	CNPC_VTzimisce		void			walked	0	
+626	CNPC_VTzimisce		void			walked	0	
+627	CNPC_VTzimisce		void			walked	0	

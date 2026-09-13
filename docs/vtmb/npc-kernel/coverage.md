@@ -8,26 +8,26 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Measure | Count |
 |---|---|
 | Family classes | 77 |
-| Slots | 600 |
-| Slots with a single body across the family | 347 |
-| Closure functions | 5050 |
-| … cited by the port | 358 |
-| … cited by the oracle | 762 |
-| … cited by neither | 4220 |
-| … damaged decompilation | 78 |
-| … still unnamed (`FUN_` / `vfuncN`) | 3235 |
-| Core functions (family or helper method, or an NPC-range offset) | 2471 |
-| … core still unnamed | 1371 |
-| … core still unnamed, layers 0–4 | 928 |
-| … core still unnamed, layers 5–9 | 152 |
-| … core still unnamed, layers 10–18 | 169 |
+| Slots | 628 |
+| Slots with a single body across the family | 358 |
+| Closure functions | 5185 |
+| … cited by the port | 367 |
+| … cited by the oracle | 788 |
+| … cited by neither | 4329 |
+| … damaged decompilation | 80 |
+| … still unnamed (`FUN_` / `vfuncN`) | 3350 |
+| Core functions (family or helper method, or an NPC-range offset) | 2547 |
+| … core still unnamed | 1428 |
+| … core still unnamed, layers 0–4 | 966 |
+| … core still unnamed, layers 5–9 | 160 |
+| … core still unnamed, layers 10–18 | 180 |
 | … core still unnamed, layers 19–29 | 122 |
 | `CAI_BaseNPC` slots whose body is unnamed | 315 |
 | … with the naming pass's reason recorded (`unsettled`) | 315 |
 | Troika fields | 835 |
 | … cited by the port | 148 |
 | … with a guessed port member | 59 |
-| Closure edges | 16559 |
+| Closure edges | 17552 |
 | Build layers | 30 |
 | Port-cited addresses inside a function body | 256 |
 | Port-cited addresses that are globals / strings / vtables | 14 / 30 / 0 |
@@ -583,10 +583,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1029f060` | CAI_BaseNPCTroika::InputStartPlayerDialogRemote | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3483 |
 | `0x1029f120` | CAI_BaseNPCTroika::InputStartPlayerDialogUnforced | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3483 |
 | `0x1029f2a0` | CAI_BaseNPCTroika::InputDisableThink | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2171, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:617, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:96, +2 more |
-| `0x1029f300` | FUN_1029f300 | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:542, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:28, +1 more |
 | `0x102ae8e0` | FUN_102ae8e0 | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:456 |
-| `0x102c12a0` | FUN_102c12a0 | Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4308, Source/ElysiumUE/Private/Visual/ElysiumAnimationDriver.cpp:778, Source/ElysiumUE/Private/Visual/ElysiumAnimationDriver.h:272 |
-| `0x102c23f0` | FUN_102c23f0 | Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:128, Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.h:15, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3721, +3 more |
 | `0x102c2890` | CAI_BaseNPCTroika::InputPlayDialogFile | Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp:164 |
 | `0x102c8ce0` | FUN_102c8ce0 | Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:1215 |
 | `0x1030cbd0` | FUN_1030cbd0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.cpp:49, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:17, +3 more |
@@ -605,18 +602,12 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1033cb00` | FUN_1033cb00 | Source/ElysiumUE/Private/Substrate/ElysiumMiscFlags.h:6 |
 | `0x103418f0` | CBaseCombatCharacter::InputWillTalk | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:39, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.h:16, +2 more |
 | `0x10342590` | FUN_10342590 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:747, Source/ElysiumUE/Private/Tests/ElysiumTerminalPinTests.cpp:169, Source/ElysiumUE/Public/ElysiumEntity.h:268 |
-| `0x1034b7b0` | FUN_1034b7b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:148, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:27 |
 | `0x10350270` | CHL2_Player::MaintainEyeDirection | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:155, Source/ElysiumUE/Public/ElysiumPlayer.h:2350 |
 | `0x10350830` | CHL2_Player::vfunc436 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1462, Source/ElysiumUE/Public/ElysiumPlayer.h:2416 |
 | `0x103516e0` | FUN_103516e0 | Source/ElysiumUE/Private/Substrate/ElysiumStealth.h:43 |
 | `0x10351770` | FUN_10351770 | Source/ElysiumUE/Private/Substrate/ElysiumStealth.h:43 |
 | `0x10352120` | CHL2_Player::vfunc430 | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.cpp:338, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:21, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:237 |
 | `0x10352ed0` | FUN_10352ed0 | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1377, Source/ElysiumUE/Public/ElysiumPlayer.h:2052 |
-| `0x103817f0` | FUN_103817f0 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:86, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:192 |
-| `0x10385e40` | FUN_10385e40 | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1507, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.cpp:474, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.h:58 |
-| `0x10386560` | FUN_10386560 | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1508, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.cpp:569, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.h:66 |
-| `0x103aa5e0` | CNPC_VSabbatLeader::FootstepSound | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:122 |
-| `0x103c4160` | FUN_103c4160 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:100, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:192, +1 more |
 | `0x103d8ba0` | FUN_103d8ba0 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:247, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:221 |
 | `0x103e8be0` | CWeaponMelee_TzimisceMelee::vfunc370 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:245 |
 | `0x103e9ac0` | FUN_103e9ac0 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:643 |
@@ -644,7 +635,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10026590` CBaseEntity::OnVictimHitByMe | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10026a10` CAISound::FUN_10026a10 | `0x100fb110` CEnvParticle::AttachToEntity |
 | `0x10026b90` CBaseEntity::Precache | `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1010d0d0` CFuncAreaPortalWindow::Spawn, `0x1012e580` CHudCounter::FUN_1012e580, +2 more |
-| `0x10026bb0` CBaseEntity::MemberSync | `0x1034b7b0` FUN_1034b7b0 |
 | `0x10026c50` CAISound::FUN_10026c50 ‼ | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10026d10` CAISound::FUN_10026d10 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10026f80` CAISound::FUN_10026f80 | `0x10034590` CBaseEntity::PhysicsTryMove |
@@ -655,22 +645,24 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100290c0` FUN_100290c0 | `0x10028d20` CPhysMotor::vfunc113, `0x10037380` CPushBlockerEnum::vfunc0, `0x1003aca0` CBaseEntity::PhysicsStep, `0x1003dc70` CBaseEntity::PhysicsMarkEntityAsTouched, +73 more |
 | `0x1002c920` FUN_1002c920 | `0x1002c570` CPhysPulley::vfunc241, `0x1011c8c0` CServerGameClients::vfunc8 |
 | `0x1002ca10` FUN_1002ca10 | `0x1002c990` CPhysConstraintEvents::vfunc0, `0x100afb90` FUN_100afb90, `0x100cae20` FUN_100cae20, `0x100cebb0` FUN_100cebb0, +34 more |
-| `0x1002cbd0` FUN_1002cbd0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +51 more |
-| `0x1002cca0` FUN_1002cca0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ac40` CPASAttenuationFilter::vfunc0, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +64 more |
+| `0x1002cbd0` FUN_1002cbd0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +49 more |
+| `0x1002cca0` FUN_1002cca0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ac40` CPASAttenuationFilter::vfunc0, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +54 more |
 | `0x1002ee60` FUN_1002ee60 | `0x100a68f0` CBaseEntity::VPhysicsSwapObject, `0x10162120` CBasePlayer::UpdateOnRemove, `0x1034f9e0` FUN_1034f9e0 |
-| `0x10032b00` FUN_10032b00 | `0x1002cd50` FUN_1002cd50, `0x100d1650` FUN_100d1650, `0x100df590` CDialog::~CDialog, `0x1010dea0` CBreakable::FUN_1010dea0, +23 more |
+| `0x10032b00` FUN_10032b00 | `0x1002cd50` FUN_1002cd50, `0x100d1650` FUN_100d1650, `0x100df590` CDialog::~CDialog, `0x1010dea0` CBreakable::FUN_1010dea0, +21 more |
 | `0x100335e0` FUN_100335e0 | `0x100332c0` CBaseEntity::PhysicsCarried, `0x10033f60` CBaseEntity::PhysicsRunThink, `0x100379e0` CPhysicsPushedEntities::SetupAllInHierarchy, `0x10037c10` CPhysicsPushedEntities::RotateRootEntity, +22 more |
 | `0x100353c0` FUN_100353c0 | `0x10034590` CBaseEntity::PhysicsTryMove, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10122cd0` CGameMovement::vfunc19 |
 | `0x10035780` CBaseEntity::PhysicsPushEntity | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x1003f920` CBaseEntity::PhysicsToss |
 | `0x10037300` FUN_10037300 | `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList, `0x1003c660` CDataObjectAccessSystem::Init, `0x1003dc70` CBaseEntity::PhysicsMarkEntityAsTouched, `0x1006db10` FUN_1006db10, +7 more |
 | `0x100389e0` CBaseEntity::PhysicsPushRotate | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10039ff0` CBaseEntity::PerformCustomPhysics | `0x1003a090` CBaseEntity::PhysicsCustom |
+| `0x1003c1c0` FUN_1003c1c0 | `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList |
+| `0x1003c1e0` FUN_1003c1e0 | `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList |
 | `0x1003e250` CBaseEntity::GetTouchTrace | `0x1029ff40` FUN_1029ff40, `0x1042a750` FUN_1042a750 |
 | `0x1003e4b0` FUN_1003e4b0 | `0x1003e2e0` CBaseEntity::PhysicsMarkEntitiesAsTouching, `0x1003e4e0` CBaseEntity::PhysicsMarkEntitiesAsTouchingEventDriven, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10043c70` CPhysSaveRestoreBlockHandler::vfunc2, +16 more |
 | `0x1003e7a0` CBaseEntity::PhysicsSolidMaskForEntity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035a70` CBaseEntity::PhysicsTestEntityPosition, `0x1003a610` CBaseEntity::PhysicsStepTroika, `0x1003aca0` CBaseEntity::PhysicsStep, +2 more |
-| `0x1003ff80` FUN_1003ff80 | `0x1003f920` CBaseEntity::PhysicsToss, `0x10120ba0` FUN_10120ba0, `0x1012bae0` FUN_1012bae0, `0x1013f090` CMoveHelperServer::vfunc2, +9 more |
-| `0x1004f7a0` FUN_1004f7a0 | `0x1004f030` CPhysImpact::InputImpact, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100ffce0` FUN_100ffce0, +36 more |
-| `0x1004f860` FUN_1004f860 | `0x1004f030` CPhysImpact::InputImpact, `0x1006db10` FUN_1006db10, `0x101001e0` FUN_101001e0, `0x10120ba0` FUN_10120ba0, +10 more |
+| `0x1003ff80` FUN_1003ff80 | `0x1003f920` CBaseEntity::PhysicsToss, `0x10120ba0` FUN_10120ba0, `0x1012bae0` FUN_1012bae0, `0x1013f090` CMoveHelperServer::vfunc2, +8 more |
+| `0x1004f7a0` FUN_1004f7a0 | `0x1004f030` CPhysImpact::InputImpact, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100ffce0` FUN_100ffce0, +33 more |
+| `0x1004f860` FUN_1004f860 | `0x1004f030` CPhysImpact::InputImpact, `0x1006db10` FUN_1006db10, `0x101001e0` FUN_101001e0, `0x10120ba0` FUN_10120ba0, +9 more |
 | `0x10050d90` FUN_10050d90 | `0x1017fb30` CBasePlayer::Event_TookLife, `0x1022ee50` FUN_1022ee50, `0x1033bb60` CBaseCombatCharacter::BloodHealBegin |
 | `0x10051810` CDisciplineParticle::RemoveFromUser | `0x10051a40` CDisciplineParticle::~CDisciplineParticle, `0x1022f140` FUN_1022f140 |
 | `0x100544f0` CBaseCombatCharacter::CreateSecondaryDiscParticles | `0x100546b0` FUN_100546b0, `0x100548b0` FUN_100548b0, `0x1022f640` FUN_1022f640 |
@@ -678,14 +670,14 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10055ec0` FUN_10055ec0 | `0x100999c0` FUN_100999c0, `0x10115660` FUN_10115660, `0x1011a580` FUN_1011a580, `0x1017c070` FUN_1017c070, +4 more |
 | `0x100576a0` FUN_100576a0 | `0x100577d0` FUN_100577d0, `0x10057820` FUN_10057820, `0x100579b0` FUN_100579b0, `0x10132980` CEnvGlobal::Spawn, +7 more |
 | `0x10057740` FUN_10057740 | `0x100578e0` FUN_100578e0, `0x10132980` CEnvGlobal::Spawn, `0x10132a00` CEnvGlobal::InputTurnOn, `0x10132a70` CEnvGlobal::InputTurnOff, +4 more |
-| `0x1005f190` FUN_1005f190 | `0x1005eee0` CTEBSPDecal::vfunc3, `0x10060410` CTEDecal::vfunc3, `0x10063090` CTEShatterSurface::vfunc3, `0x100640f0` FUN_100640f0, +55 more |
+| `0x1005f190` FUN_1005f190 | `0x1005eee0` CTEBSPDecal::vfunc3, `0x10060410` CTEDecal::vfunc3, `0x10063090` CTEShatterSurface::vfunc3, `0x100640f0` FUN_100640f0, +52 more |
 | `0x1006c770` FUN_1006c770 | `0x1006cd90` FUN_1006cd90 |
 | `0x1006c9d0` FUN_1006c9d0 | `0x1014d7c0` FUN_1014d7c0, `0x102304b0` FUN_102304b0, `0x10259230` WeaponModeDataLoader, `0x10326de0` FUN_10326de0, +2 more |
 | `0x1006caa0` FUN_1006caa0 | `0x1006cb10` FUN_1006cb10, `0x102305a0` FUN_102305a0, `0x10257280` FUN_10257280, `0x102573a0` FUN_102573a0, +1 more |
 | `0x1006cba0` FUN_1006cba0 | `0x102306d0` FUN_102306d0 |
 | `0x1006cf30` FUN_1006cf30 | `0x1014d7c0` FUN_1014d7c0, `0x101f1750` FUN_101f1750, `0x102059a0` FUN_102059a0, `0x10205ac0` FUN_10205ac0, +7 more |
 | `0x1006cff0` FUN_1006cff0 | `0x1014d7c0` FUN_1014d7c0, `0x10205ba0` FUN_10205ba0, `0x102304b0` FUN_102304b0, `0x102304e0` FUN_102304e0, +11 more |
-| `0x1006dec0` FUN_1006dec0 | `0x1006db10` FUN_1006db10, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10120ba0` FUN_10120ba0, +30 more |
+| `0x1006dec0` FUN_1006dec0 | `0x1006db10` FUN_1006db10, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10120ba0` FUN_10120ba0, +29 more |
 | `0x1006edb0` FUN_1006edb0 | `0x1006e8e0` FUN_1006e8e0, `0x1006f670` FUN_1006f670, `0x1006f8f0` FUN_1006f8f0 |
 | `0x10071ae0` FUN_10071ae0 | `0x1006e4c0` FUN_1006e4c0, `0x100c6370` FUN_100c6370, `0x100e2ad0` CDialog::accumulate_stats, `0x101bdc80` _03__H__HV__CUtlMemory__V__CUtlVector____CUtlVectorDataOps::vfunc1 |
 | `0x10071ba0` FUN_10071ba0 | `0x1006e4c0` FUN_1006e4c0, `0x100c6370` FUN_100c6370, `0x100e2ad0` CDialog::accumulate_stats, `0x101bdc80` _03__H__HV__CUtlMemory__V__CUtlVector____CUtlVectorDataOps::vfunc1 |
@@ -708,7 +700,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1007dfa0` FUN_1007dfa0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x1008bc50` FUN_1008bc50 | `0x1014d140` FUN_1014d140 |
 | `0x1008bfe0` CBaseAnimating::ShouldIgnoreCollision | `0x101914a0` CPhysicsProp::ShouldIgnoreCollision, `0x10213fe0` CPropHaunted::ShouldIgnoreCollision |
-| `0x1008d990` CBaseAnimating::GetSeqDesc | `0x10090e30` CBaseAnimating::IsValidSequence, `0x10092460` CBaseAnimating::HasPoseParameter02, `0x100938a0` CBaseAnimating::GetEntryNode, `0x10093970` CBaseAnimating::GetExitNode, +10 more |
+| `0x1008d990` CBaseAnimating::GetSeqDesc | `0x10090e30` CBaseAnimating::IsValidSequence, `0x10092460` CBaseAnimating::HasPoseParameter02, `0x100938a0` CBaseAnimating::GetEntryNode, `0x10093970` CBaseAnimating::GetExitNode, +9 more |
 | `0x1008dac0` CBaseAnimating::GetSequencesForActivity | `0x10160f90` CBasePlayer::ChooseMeleeAttackSequence, `0x103e9e00` CWeaponMelee::RequestActivity, `0x103ea7e0` FUN_103ea7e0 ‼ |
 | `0x1008df10` CBaseAnimating::OnRestore | `0x10154fa0` CRagdollProp::FUN_10154fa0, `0x101ee7b0` CDisciplineProjectile::FUN_101ee7b0, `0x1020ac70` CBaseTerminal::FUN_1020ac70, `0x1020e100` CPropSwitch::vfunc130, +1 more |
 | `0x1008e310` CBaseAnimating::RemoveExtraAnimationModels | `0x1008b230` CBaseAnimating::CBaseAnimating |
@@ -731,7 +723,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10095cb0` FUN_10095cb0 | `0x102e2770` FUN_102e2770, `0x1034fa80` CHL2_Player::vfunc469 |
 | `0x100963d0` CBaseAnimating::ResetClientsideFrame | `0x10190750` FUN_10190750, `0x10190850` FUN_10190850, `0x10190a00` CDynamicProp::InputSetAnimation, `0x101efa30` CDisciplineProjectile::FUN_101efa30, +3 more |
 | `0x10096980` CBaseAnimating::DrawServerHitboxes | `0x10155120` CRagdollProp::DrawDebugGeometryOverlays |
-| `0x10097310` CBaseAnimating::CopyAnimationDataFrom | `0x10156a80` FUN_10156a80, `0x10157260` FUN_10157260, `0x103c60a0` CNPC_VVampireBoss::TransformationStart |
+| `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox | `0x100dd600` FUN_100dd600 |
+| `0x10097310` CBaseAnimating::CopyAnimationDataFrom | `0x10156a80` FUN_10156a80, `0x10157260` FUN_10157260 |
 | `0x100990f0` FUN_100990f0 | `0x10099140` FUN_10099140 |
 | `0x100997f0` CAI_BaseNPC::FUN_100997f0 | `0x101606e0` CBasePlayer::PlayerKnockbackReaction |
 | `0x1009b640` CBaseEntity::DumpString | `0x1009b7d0` CBaseEntity::DumpChar, `0x1009bd10` CBaseEntity::DumpQangle, `0x1009bef0` CBaseEntity::DumpColor32, `0x1009c1e0` CBaseEntity::DumpSerialEntity, +1 more |
@@ -748,17 +741,17 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1009d5e0` CBaseEntity::GetVSoundTableIdx | `0x101f58e0` FUN_101f58e0 |
 | `0x1009d6a0` CBaseEntity::GetVSoundGroup | `0x101f58e0` FUN_101f58e0 |
 | `0x1009e120` CBaseEntity::PostConstructor | `0x10027bb0` FUN_10027bb0, `0x100281f0` FUN_100281f0, `0x100289e0` FUN_100289e0, `0x10029ea0` FUN_10029ea0, +346 more |
-| `0x1009e280` CBaseEntity::ParseMapData | `0x102d7890` CNodeEnt::ParseMapData, `0x1034b7b0` FUN_1034b7b0 |
+| `0x1009e280` CBaseEntity::ParseMapData | `0x102d7890` CNodeEnt::ParseMapData |
 | `0x1009e430` CAISound::FUN_1009e430 | `0x100568a0` CDynamicLight::vfunc110, `0x100bf9b0` CFuncRotating::vfunc110, `0x101017e0` CEnvLaser::vfunc110, `0x1010c560` CAreaPortal::vfunc110, +15 more |
 | `0x1009edc0` CBaseEntity::SetCollisionBounds | `0x1009d980` FUN_1009d980, `0x100bbbf0` FUN_100bbbf0, `0x10129960` FUN_10129960, `0x10155fb0` CRagdollProp::FUN_10155fb0, +3 more |
-| `0x1009f120` CBaseEntity::SetClassname | `0x1016d260` CBasePlayer::Spawn, `0x101905e0` CDynamicProp::Spawn ‼, `0x10190f20` COrnamentProp::Spawn, `0x1034b7b0` FUN_1034b7b0 |
-| `0x1009f200` CBaseEntity::GetClassname | `0x1002f100` CCollisionEvent::vfunc4, `0x10032720` FUN_10032720, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1003eb50` CBaseEntity::PhysicsCheckVelocity, +23 more |
+| `0x1009f120` CBaseEntity::SetClassname | `0x1016d260` CBasePlayer::Spawn, `0x101905e0` CDynamicProp::Spawn ‼, `0x10190f20` COrnamentProp::Spawn |
+| `0x1009f200` CBaseEntity::GetClassname | `0x1002f100` CCollisionEvent::vfunc4, `0x10032720` FUN_10032720, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1003eb50` CBaseEntity::PhysicsCheckVelocity, +21 more |
 | `0x1009f380` FUN_1009f380 | `0x1011f140` FUN_1011f140, `0x10121ce0` CGameMovement::vfunc12, `0x101269e0` FinishUnDuck, `0x10126cb0` FinishDuck ‼, +1 more |
 | `0x1009f3c0` CBaseEntity::AddTimedOverlay | `0x1002fc30` FUN_1002fc30, `0x100ab5c0` CBaseEntity::DrawInputOverlay |
-| `0x1009f4e0` CBaseEntity::DrawBBoxOverlay | `0x10119980` FUN_10119980, `0x103d5050` CNPC_VWerewolf::DrawBBoxOverlay |
+| `0x1009f4e0` CBaseEntity::DrawBBoxOverlay | `0x10119980` FUN_10119980 |
 | `0x100a0130` CBaseEntity::DrawDebugGeometryOverlays | `0x1002b920` CPhysHinge::DrawDebugGeometryOverlays, `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1004d420` CPhysicsSpring::DrawDebugGeometryOverlays, `0x10109a60` CFire::DrawDebugGeometryOverlays, +4 more |
 | `0x100a02b0` CBaseEntity::DrawDebugTextOverlays | `0x1004d290` CPhysicsSpring::DrawDebugTextOverlays, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100bc200` CBeam::DrawDebugTextOverlays, `0x100c0d10` CFuncRotating::DrawDebugTextOverlays, +12 more |
-| `0x100a0420` CBaseEntity::SetName | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100af010` FUN_100af010, `0x1010e750` CBreakable::FUN_1010e750, `0x101978b0` FUN_101978b0, +3 more |
+| `0x100a0420` CBaseEntity::SetName | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100af010` FUN_100af010, `0x1010e750` CBreakable::FUN_1010e750, `0x101978b0` FUN_101978b0, +1 more |
 | `0x100a0ae0` FUN_100a0ae0 | `0x101213b0` CGameMovement::vfunc11, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3470` FUN_101a3470, `0x1020fad0` FUN_1020fad0, +3 more |
 | `0x100a0e40` CBaseEntity::OnTakeDamage | `0x10155920` CRagdollProp::OnTakeDamage, `0x1018f400` CBreakableProp::OnTakeDamage |
 | `0x100a1250` CBaseEntity::TakeDamage | `0x10030e40` CCollisionEvent::UpdateDamageEvents, `0x10032720` FUN_10032720, `0x1004ec60` FUN_1004ec60, `0x100b0980` FUN_100b0980, +18 more |
@@ -788,20 +781,20 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100a9800` CBaseEntity::IsViewable | `0x101c5f40` FUN_101c5f40 |
 | `0x100a9ab0` CBaseEntity::CreateNoSpawn | `0x10056ba0` FUN_10056ba0, `0x10084ab0` FUN_10084ab0, `0x100f59e0` CEnvShooter::vfunc242, `0x100fbd50` FUN_100fbd50, +4 more |
 | `0x100a9c90` CBaseEntity::GetOwnerEntity | `0x100baf00` CBeam::Precache, `0x101716b0` CSprayCan::Remove, `0x10171aa0` CBloodSplat::Remove, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
-| `0x100a9eb0` CBaseEntity::GetSoundEmissionOrigin | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, `0x10102030` CMessage::InputShowMessage, +15 more |
+| `0x100a9eb0` CBaseEntity::GetSoundEmissionOrigin | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, `0x10102030` CMessage::InputShowMessage, +13 more |
 | `0x100aa140` CBaseEntity::Restore | `0x10057510` CFireSmoke::Restore, `0x1018d340` CPointAngleSensor::vfunc127, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101ba840` CSoundEnt::Restore |
 | `0x100aa4e0` CBaseEntity::OnSave | `0x10154f70` CRagdollProp::FUN_10154f70, `0x1022a350` CSoundScheme::vfunc129 |
 | `0x100aa5a0` CAISound::FUN_100aa5a0 ‼ | `0x10027740` CPhysForce::FUN_10027740, `0x100ef5f0` CBaseDoor::FUN_100ef5f0, `0x100fdac0` CEnvPlayerSurfaceTrigger::vfunc130, `0x1010fef0` CBreakableSurface::vfunc130, +3 more |
 | `0x100aa680` CBaseEntity::ShouldSavePhysics | `0x10045790` CPhysObjSaveRestoreOps::vfunc0 |
 | `0x100aa7b0` FUN_100aa7b0 | `0x10027690` CPhysForce::vfunc5, `0x10028c00` CPhysMotor::vfunc5, `0x10029680` CKeepUpright::vfunc5, `0x10029b50` CPhysThruster::vfunc5, +411 more |
 | `0x100aaa40` CBaseEntity::SetCollisionGroup | `0x1004e260` CPhysBox::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x100f4b90` FUN_100f4b90, `0x1010d6a0` CBreakable::Spawn, +20 more |
-| `0x100aab10` CBaseEntity::SetOwnerEntity | `0x1009d980` FUN_1009d980, `0x101efa30` CDisciplineProjectile::FUN_101efa30, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, `0x10252ea0` CBaseCombatWeapon::FUN_10252ea0, +3 more |
+| `0x100aab10` CBaseEntity::SetOwnerEntity | `0x1009d980` FUN_1009d980, `0x101efa30` CDisciplineProjectile::FUN_101efa30, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, `0x10252ea0` CBaseCombatWeapon::FUN_10252ea0 |
 | `0x100aac30` CBaseEntity::GetMoveType | `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x1004ec60` FUN_1004ec60, `0x100fbdc0` CEnvParticle::FUN_100fbdc0, +5 more |
 | `0x100aacd0` CBaseEntity::GetMoveCollide | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution |
 | `0x100aad70` CBaseEntity::SetMoveType | `0x10029700` CKeepUpright::Spawn, `0x100332c0` CBaseEntity::PhysicsCarried, `0x10039470` CBaseEntity::PhysicsFollow, `0x1004e260` CPhysBox::Spawn, +58 more |
 | `0x100ab250` FUN_100ab250 ‼ | `0x100d1650` FUN_100d1650, `0x10102030` CMessage::InputShowMessage, `0x1011c060` CServerGameClients::vfunc3, `0x1011c8c0` CServerGameClients::vfunc8, +13 more |
 | `0x100ab280` CBaseEntity::SetTransmit | `0x100bc130` CBeam::FUN_100bc130 |
-| `0x100ac4e0` CBaseEntity::ThinkSet | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x1006bb30` CTestTraceline::Spawn, `0x1006e770` FUN_1006e770, +176 more |
+| `0x100ac4e0` CBaseEntity::ThinkSet | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x1006bb30` CTestTraceline::Spawn, `0x1006e770` FUN_1006e770, +175 more |
 | `0x100ac610` CBaseEntity::SetNextThink | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x10028b20` FUN_10028b20 ‼, `0x10028b80` CPhysMotor::InputTurnOff, +8 more |
 | `0x100ac720` CBaseEntity::GetLastThink | `0x1003aca0` CBaseEntity::PhysicsStep, `0x10081020` CSceneEntity::FUN_10081020, `0x10084c80` CInstancedSceneEntity::Remove ‼ |
 | `0x100ad320` CBaseEntity::GetVectors | `0x10029700` CKeepUpright::Spawn, `0x1009fb80` CBaseEntity::SendDebugPivotOverlay, `0x1018cf20` FUN_1018cf20, `0x101b06a0` FUN_101b06a0 |
@@ -826,9 +819,9 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::Spawn, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
 | `0x100b3070` CBaseEntity::GetOrigin | `0x10028c30` CPhysMotor::Spawn, `0x10028d20` CPhysMotor::vfunc113, `0x10029f10` CConstraintAnchor::Spawn, `0x1002b9f0` CPhysHinge::Spawn, +56 more |
-| `0x100b3110` CBaseEntity::GetAngles | `0x10027de0` CPhysThruster::vfunc241, `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, +35 more |
-| `0x100b31b0` CBaseEntity::GetAbsOrigin | `0x10027cb0` CPhysThruster::vfunc242, `0x10028260` CPhysTorque::Spawn, `0x1002bb90` CPhysBallSocket::vfunc241, `0x1002bdc0` CPhysSlideConstraint::vfunc241, +58 more |
-| `0x100b3280` CBaseEntity::GetAbsAngles | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent, `0x100568a0` CDynamicLight::vfunc110, `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox, +15 more |
+| `0x100b3110` CBaseEntity::GetAngles | `0x10027de0` CPhysThruster::vfunc241, `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, +34 more |
+| `0x100b31b0` CBaseEntity::GetAbsOrigin | `0x10027cb0` CPhysThruster::vfunc242, `0x10028260` CPhysTorque::Spawn, `0x1002bb90` CPhysBallSocket::vfunc241, `0x1002bdc0` CPhysSlideConstraint::vfunc241, +56 more |
+| `0x100b3280` CBaseEntity::GetAbsAngles | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent, `0x100568a0` CDynamicLight::vfunc110, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, +14 more |
 | `0x100b3580` CBaseEntity::AddFlag | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10040220` CBaseEntity::UpdateBaseVelocity, `0x10071220` FUN_10071220, `0x10071660` FUN_10071660, +37 more |
 | `0x100b3640` CBaseEntity::RemoveFlag | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x10071550` FUN_10071550, +33 more |
 | `0x100b3840` CBaseEntity::AddFlag2 | `0x1004e260` CPhysBox::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::Spawn, `0x10191450` CPhysicsProp::Spawn ‼, +5 more |
@@ -857,7 +850,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100c2ce0` FUN_100c2ce0 | `0x10095fe0` CBaseAnimating::GetSkeleton, `0x100c3440` FUN_100c3440 |
 | `0x100c32e0` FUN_100c32e0 | `0x10095fe0` CBaseAnimating::GetSkeleton, `0x100c3440` FUN_100c3440 |
 | `0x100c4340` FUN_100c4340 | `0x100c4390` FUN_100c4390 |
-| `0x100c4600` FUN_100c4600 | `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox |
 | `0x100c6520` FUN_100c6520 | `0x1019c9f0` FUN_1019c9f0 |
 | `0x100c73b0` FUN_100c73b0 | `0x100c4500` FUN_100c4500 |
 | `0x100c7480` FUN_100c7480 | `0x104279a0` FUN_104279a0, `0x104285d0` FUN_104285d0, `0x10428690` FUN_10428690, `0x10428750` FUN_10428750, +3 more |
@@ -865,7 +857,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100cd2d0` FUN_100cd2d0 | `0x1002b130` FUN_1002b130, `0x1004e130` CPhysBox::vfunc5, `0x10050240` CPhysConvert::vfunc5, `0x1006d950` CBaseCineCam::vfunc5, +111 more |
 | `0x100cd300` FUN_100cd300 | `0x100cae20` FUN_100cae20, `0x10102890` CEnvMicrophone::Remove, `0x1010db90` CBreakable::InputAddHealth, `0x1010dc50` CBreakable::InputRemoveHealth, +20 more |
 | `0x100cd640` FUN_100cd640 | `0x100cebb0` FUN_100cebb0 |
-| `0x100cd660` FUN_100cd660 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1004e7c0` CPhysBox::vfunc226, `0x1004e910` CPhysBox::vfunc242, +150 more |
+| `0x100cd660` FUN_100cd660 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1004e7c0` CPhysBox::vfunc226, `0x1004e910` CPhysBox::vfunc242, +148 more |
 | `0x100cddf0` FUN_100cddf0 | `0x100afb90` FUN_100afb90 |
 | `0x100cdf10` FUN_100cdf10 | `0x1033bb60` CBaseCombatCharacter::BloodHealBegin, `0x1033be10` CBaseCombatCharacter::BloodHealIn, `0x1033f270` CBaseCombatCharacter::InputFrenzyTrigger, `0x1033f590` CBaseCombatCharacter::InputFrenzyUpdate |
 | `0x100ce040` FUN_100ce040 | `0x10131260` FUN_10131260, `0x101510c0` FUN_101510c0, `0x1020e4f0` CGameText::InputDisplayWindow |
@@ -898,9 +890,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100eb280` FUN_100eb280 | `0x100e2ad0` CDialog::accumulate_stats, `0x101b2b30` FUN_101b2b30, `0x101bb990` FUN_101bb990, `0x101bd010` CCopyRecipientFilter::vfunc8, +2 more |
 | `0x100eb3d0` FUN_100eb3d0 | `0x10054360` FUN_10054360 |
 | `0x100eb420` FUN_100eb420 | `0x101dc8a0` FUN_101dc8a0 |
-| `0x100ec2e0` FUN_100ec2e0 | `0x102adfe0` FUN_102adfe0 |
-| `0x100ec360` FUN_100ec360 | `0x102adfe0` FUN_102adfe0 |
-| `0x100ec3d0` FUN_100ec3d0 | `0x102adfe0` FUN_102adfe0 |
 | `0x100ed2c0` FUN_100ed2c0 | `0x100eb870` FUN_100eb870, `0x100eba00` FUN_100eba00 |
 | `0x100ee950` FUN_100ee950 | `0x100eedf0` CBaseDoor::FUN_100eedf0 ‼, `0x100eef50` FUN_100eef50, `0x100ef030` CBaseDoor::FUN_100ef030 |
 | `0x100eec70` FUN_100eec70 | `0x100f0170` CBaseDoor::InputOpen, `0x100f0210` CBaseDoor::InputToggle |
@@ -911,7 +900,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100f6d80` FUN_100f6d80 | `0x10044020` CPhysSaveRestoreBlockHandler::vfunc5, `0x100f8960` FUN_100f8960, `0x100f8fb0` CEntityListSystem::LevelInitPreEntity, `0x102ea450` CNavPropertyDatabase::Init |
 | `0x100f6e40` FUN_100f6e40 | `0x100447f0` CPhysSaveRestoreBlockHandler::vfunc8, `0x100f89a0` FUN_100f89a0, `0x100f90a0` CEntityListSystem::LevelShutdownPostEntity, `0x1014eba0` FUN_1014eba0, +1 more |
 | `0x100f7060` FUN_100f7060 | `0x1003bdd0` FUN_1003bdd0, `0x100826b0` FUN_100826b0, `0x10086e50` FUN_10086e50, `0x10086fb0` FUN_10086fb0, +30 more |
-| `0x100f7380` FUN_100f7380 | `0x1006e130` FUN_1006e130, `0x10071970` FUN_10071970, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, +21 more |
+| `0x100f7380` FUN_100f7380 | `0x1006e130` FUN_1006e130, `0x10071970` FUN_10071970, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, +20 more |
 | `0x100f79b0` FUN_100f79b0 | `0x1004ebb0` FUN_1004ebb0, `0x10196f30` FUN_10196f30, `0x101c9b60` CAI_ChangeHintGroup::InputActivate, `0x101eff70` FUN_101eff70 |
 | `0x100f7b20` FUN_100f7b20 | `0x10380470` FUN_10380470 |
 | `0x100f7c30` FUN_100f7c30 | `0x100f7f70` FUN_100f7f70 |
@@ -922,11 +911,10 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100fb980` FUN_100fb980 | `0x100fb850` CEnvParticle::InputSetRateScale, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270 |
 | `0x100fba40` FUN_100fba40 | `0x100fb8a0` CEnvParticle::InputSetRampTime |
 | `0x100fbac0` FUN_100fbac0 | `0x100fbc50` FUN_100fbc50, `0x10169960` CBasePlayer::FUN_10169960 |
-| `0x100fbaf0` FUN_100fbaf0 | `0x10213b70` CPropHaunted::UpdateOnRemove, `0x10214a20` FUN_10214a20, `0x1034d140` FUN_1034d140 |
+| `0x100fbaf0` FUN_100fbaf0 | `0x10213b70` CPropHaunted::UpdateOnRemove, `0x10214a20` FUN_10214a20 |
 | `0x100fbbb0` FUN_100fbbb0 | `0x100fbc20` FUN_100fbc20, `0x100fbc50` FUN_100fbc50, `0x10169960` CBasePlayer::FUN_10169960, `0x101ee7d0` FUN_101ee7d0, +3 more |
-| `0x100fbc90` FUN_100fbc90 | `0x100b9f80` CBatSwarm::FUN_100b9f80, `0x1015f150` CBasePlayer::InputPlayHUDParticle, `0x10163f70` FUN_10163f70, `0x10214cc0` FUN_10214cc0, +4 more |
+| `0x100fbc90` FUN_100fbc90 | `0x100b9f80` CBatSwarm::FUN_100b9f80, `0x1015f150` CBasePlayer::InputPlayHUDParticle, `0x10163f70` FUN_10163f70, `0x10214cc0` FUN_10214cc0, +3 more |
 | `0x101067e0` CBaseCombatCharacter::AddScriptedExpression | `0x10089860` FUN_10089860 |
-| `0x10106a40` CBaseCombatCharacter::LookupExpressionIndex | `0x102adfe0` FUN_102adfe0 |
 | `0x10107480` FUN_10107480 | `0x103274d0` CBaseCombatCharacter::~CBaseCombatCharacter |
 | `0x1010e530` FUN_1010e530 | `0x1010e100` CBreakable::OnTakeDamage, `0x10151150` FUN_10151150 |
 | `0x10116970` FUN_10116970 | `0x10116570` FUN_10116570 |
@@ -947,9 +935,9 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1012c7f0` FUN_1012c7f0 | `0x1012c900` FUN_1012c900 |
 | `0x1012c840` FUN_1012c840 | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100a0b20` CBaseEntity::ClearParent, `0x100ad100` CBaseEntity::InputClearParent |
 | `0x1012c9c0` FUN_1012c9c0 | `0x1002f1e0` CCollisionEvent::ShouldCollide, `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList, `0x10037380` CPushBlockerEnum::vfunc0, `0x101d13a0` FUN_101d13a0 |
-| `0x10136580` FUN_10136580 ‼ | `0x1004ff40` FUN_1004ff40, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100aff90` FUN_100aff90, +35 more |
+| `0x10136580` FUN_10136580 ‼ | `0x1004ff40` FUN_1004ff40, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100aff90` FUN_100aff90, +31 more |
 | `0x10136ec0` FUN_10136ec0 | `0x102d7890` CNodeEnt::ParseMapData |
-| `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004ec60` FUN_1004ec60, +120 more |
+| `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004ec60` FUN_1004ec60, +119 more |
 | `0x10137220` FUN_10137220 | `0x10028260` CPhysTorque::Spawn, `0x10028c30` CPhysMotor::Spawn, `0x10029940` CKeepUpright::vfunc0, `0x1002b9f0` CPhysHinge::Spawn, +143 more |
 | `0x10137e40` FUN_10137e40 | `0x100c3240` FUN_100c3240, `0x100c3ce0` FUN_100c3ce0, `0x1019c810` FUN_1019c810 |
 | `0x10137ed0` FUN_10137ed0 | `0x1002a210` FUN_1002a210, `0x100932a0` CBaseAnimating::GetAttachmentLocal02, `0x100934e0` CBaseAnimating::GetEyeballs, `0x100b3490` CBaseEntity::SetLocalTransform, +15 more |
@@ -976,7 +964,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1013b0d0` FUN_1013b0d0 | `0x1013b240` FUN_1013b240, `0x1013b5a0` FUN_1013b5a0 |
 | `0x1013b390` FUN_1013b390 | `0x1013b1f0` FUN_1013b1f0 |
 | `0x1013bd20` FUN_1013bd20 | `0x100781e0` FUN_100781e0 |
-| `0x1013c0e0` FUN_1013c0e0 | `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
+| `0x1013c0e0` FUN_1013c0e0 | `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x1013c8c0` FUN_1013c8c0 | `0x100dd1b0` FUN_100dd1b0, `0x1014a4f0` FUN_1014a4f0, `0x10167e00` FUN_10167e00, `0x10342910` CBaseCombatCharacter::HitboxesInAABB |
 | `0x1013cb80` FUN_1013cb80 | `0x1013cc40` FUN_1013cc40, `0x1013ccc0` FUN_1013ccc0 |
 | `0x1013d450` FUN_1013d450 | `0x10164870` CBasePlayer::FUN_10164870, `0x101cab60` FUN_101cab60, `0x102627e0` FUN_102627e0 |
@@ -986,7 +974,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1013dce0` FUN_1013dce0 | `0x1003d770` CBaseEntity::PhysicsRemoveToucher, `0x1003d8f0` CBaseEntity::PhysicsRemoveTouchedList, `0x100cdc80` FUN_100cdc80, `0x101bc8e0` CSoundControllerImp::vfunc1, +3 more |
 | `0x10142aa0` FUN_10142aa0 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x1009f850` CBaseEntity::DrawAbsBoxOverlay, `0x10109a60` CFire::DrawDebugGeometryOverlays, +12 more |
 | `0x10142af0` FUN_10142af0 | `0x10119980` FUN_10119980, `0x10162340` CBasePlayer::DrawDebugGeometryOverlays, `0x102d31c0` FUN_102d31c0, `0x102f7e60` FUN_102f7e60 |
-| `0x10142b80` FUN_10142b80 | `0x10142e20` FUN_10142e20, `0x1027fc90` FUN_1027fc90 |
+| `0x10142b80` FUN_10142b80 | `0x1027fc90` FUN_1027fc90 |
 | `0x10142e90` FUN_10142e90 | `0x1002b920` CPhysHinge::DrawDebugGeometryOverlays, `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1004d420` CPhysicsSpring::DrawDebugGeometryOverlays, `0x1004f030` CPhysImpact::InputImpact, +18 more |
 | `0x101434b0` FUN_101434b0 | `0x1004d290` CPhysicsSpring::DrawDebugTextOverlays, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x1009fe40` CBaseEntity::DrawTimedOverlays, `0x100bc200` CBeam::DrawDebugTextOverlays, +24 more |
 | `0x10143710` FUN_10143710 | `0x1006ff40` CBaseCineCam::DrawDebugGeometryOverlays, `0x10135650` CLogicNPCCondition::vfunc113, `0x10135b00` CLogicSquadCondition::vfunc113, `0x10145300` FUN_10145300, +8 more |
@@ -999,7 +987,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10144db0` FUN_10144db0 | `0x102e8b80` FUN_102e8b80 |
 | `0x10146150` FUN_10146150 | `0x10145980` FUN_10145980, `0x1014cbf0` FUN_1014cbf0, `0x102407f0` FUN_102407f0, `0x102630b0` FUN_102630b0, +3 more |
 | `0x10146190` FUN_10146190 | `0x10145980` FUN_10145980 |
-| `0x10146570` FUN_10146570 | `0x10035030` FUN_10035030, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004f030` CPhysImpact::InputImpact, `0x1005eee0` CTEBSPDecal::vfunc3, +103 more |
+| `0x10146570` FUN_10146570 | `0x10035030` FUN_10035030, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004f030` CPhysImpact::InputImpact, `0x1005eee0` CTEBSPDecal::vfunc3, +99 more |
 | `0x10146700` FUN_10146700 | `0x101ab450` CServerNetworkProperty::vfunc10 |
 | `0x10146790` FUN_10146790 | `0x101ab470` CServerNetworkProperty::vfunc11 |
 | `0x10147710` FUN_10147710 | `0x101467b0` FUN_101467b0 |
@@ -1055,18 +1043,17 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10191ac0` FUN_10191ac0 | `0x101506a0` CPhysicsCannister::Precache, `0x1018fb50` CBreakableProp::Precache |
 | `0x10191cc0` FUN_10191cc0 | `0x10192130` FUN_10192130 |
 | `0x1019bfd0` FUN_1019bfd0 ‼ | `0x10156e10` FUN_10156e10 |
-| `0x1019ce00` FUN_1019ce00 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +183 more |
-| `0x1019cf50` FUN_1019cf50 | `0x100c01d0` FUN_100c01d0, `0x100c0420` FUN_100c0420, `0x100d1650` FUN_100d1650, `0x10104730` FUN_10104730, +67 more |
+| `0x1019ce00` FUN_1019ce00 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +171 more |
+| `0x1019cf50` FUN_1019cf50 | `0x100c01d0` FUN_100c01d0, `0x100c0420` FUN_100c0420, `0x100d1650` FUN_100d1650, `0x10104730` FUN_10104730, +55 more |
 | `0x1019cff0` FUN_1019cff0 | `0x100508c0` CBaseTempEntity::Test, `0x10059ea0` FUN_10059ea0, `0x1005acb0` CTEBeamEntPoint::vfunc3, `0x1005b3f0` CTEBeamEnts::vfunc3, +69 more |
 | `0x1019d130` FUN_1019d130 | `0x100582f0` CTempEntsSystem::vfunc2, `0x10058380` CTempEntsSystem::vfunc3, `0x10058410` CTempEntsSystem::vfunc4, `0x100584a0` CTempEntsSystem::vfunc5, +47 more |
 | `0x1019d210` FUN_1019d210 | `0x100f5e80` CEffectsServer::vfunc2, `0x100f6050` CEffectsServer::vfunc3, `0x100f6170` CEffectsServer::vfunc4, `0x100f6290` CEffectsServer::vfunc5, +15 more |
-| `0x1019d280` FUN_1019d280 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +64 more |
+| `0x1019d280` FUN_1019d280 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +52 more |
 | `0x1019d2f0` FUN_1019d2f0 | `0x1010ff40` FUN_1010ff40, `0x101104c0` FUN_101104c0, `0x10110da0` CBreakableSurface::vfunc141, `0x10111ba0` FUN_10111ba0, +15 more |
 | `0x101a5290` FUN_101a5290 | `0x101a3470` FUN_101a3470 |
-| `0x101a67e0` CAI_BaseNPC::FUN_101a67e0 | `0x1036d800` CNPC_VChangBros::SelectScheduleMeleeCombat, `0x103da230` CNPC_VWerewolf::EnemyCouldSeeHull |
 | `0x101a7170` FUN_101a7170 | `0x101a7500` CCineNPC::InputCancelSequence |
 | `0x101a7210` CCineNPC::vfunc585 | `0x101a72b0` CCineNPC::InputMoveToPosition, `0x101a7390` CCineNPC::InputBeginSequence |
-| `0x101aeb60` FUN_101aeb60 | `0x101af650` FUN_101af650, `0x103b9440` FUN_103b9440, `0x103b9980` FUN_103b9980, `0x103b9a50` FUN_103b9a50, +5 more |
+| `0x101aeb60` FUN_101aeb60 | `0x101af650` FUN_101af650 |
 | `0x101af070` FUN_101af070 | `0x101ae940` FUN_101ae940, `0x101aedc0` FUN_101aedc0, `0x101b1a00` FUN_101b1a00, `0x101cdac0` FUN_101cdac0 |
 | `0x101b0c10` FUN_101b0c10 | `0x101b06a0` FUN_101b06a0, `0x10279040` FUN_10279040 |
 | `0x101b0dc0` FUN_101b0dc0 | `0x1013f520` CMoveHelperServer::vfunc16 |
@@ -1101,7 +1088,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101c2c60` FUN_101c2c60 | `0x100bbef0` FUN_100bbef0, `0x100d9ec0` FUN_100d9ec0, `0x10128850` FUN_10128850, `0x102579f0` CBaseCombatWeapon::FUN_102579f0, +4 more |
 | `0x101c2d20` FUN_101c2d20 | `0x100d9ec0` FUN_100d9ec0, `0x10162c30` CBasePlayer::TraceAttack |
 | `0x101c7b80` FUN_101c7b80 | `0x10081e00` CSceneEntity::InputStart |
-| `0x101cca80` FUN_101cca80 | `0x10102dd0` FUN_10102dd0, `0x1010ab80` CFire::vfunc241, `0x1010e620` FUN_1010e620, `0x101cb7d0` CTriggerCheckVolume::vfunc251, +6 more |
+| `0x101cca80` FUN_101cca80 | `0x10102dd0` FUN_10102dd0, `0x1010ab80` CFire::vfunc241, `0x1010e620` FUN_1010e620, `0x101cb7d0` CTriggerCheckVolume::vfunc251, +4 more |
 | `0x101ccc80` FUN_101ccc80 | `0x10376d00` FUN_10376d00 |
 | `0x101cccf0` FUN_101cccf0 | `0x10128850` FUN_10128850, `0x1014a4f0` FUN_1014a4f0, `0x1016e0c0` FUN_1016e0c0, `0x101807d0` FUN_101807d0, +6 more |
 | `0x101ccd40` FUN_101ccd40 | `0x10128850` FUN_10128850, `0x1014a4f0` FUN_1014a4f0, `0x1016e0c0` FUN_1016e0c0, `0x101807d0` FUN_101807d0, +6 more |
@@ -1112,7 +1099,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101cd250` FUN_101cd250 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
 | `0x101cd970` FUN_101cd970 | `0x10130460` CLight::Spawn, `0x10136600` FUN_10136600, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3470` FUN_101a3470, +4 more |
 | `0x101cd9e0` FUN_101cd9e0 ‼ | `0x1003bad0` FUN_1003bad0, `0x1003bdd0` FUN_1003bdd0, `0x1006e130` FUN_1006e130, `0x1006e8e0` FUN_1006e8e0, +86 more |
-| `0x101cda50` FUN_101cda50 | `0x100843d0` FUN_100843d0, `0x100ba000` CBatSwarm::FUN_100ba000, `0x10183470` FUN_10183470, `0x10208c90` CItemContainer::InputUse, +6 more |
+| `0x101cda50` FUN_101cda50 | `0x100843d0` FUN_100843d0, `0x100ba000` CBatSwarm::FUN_100ba000, `0x10183470` FUN_10183470, `0x10208c90` CItemContainer::InputUse, +4 more |
 | `0x101cdba0` FUN_101cdba0 | `0x10032180` FUN_10032180, `0x10102dd0` FUN_10102dd0, `0x10103370` FUN_10103370, `0x10104730` FUN_10104730, +7 more |
 | `0x101cdfa0` FUN_101cdfa0 | `0x101ce210` FUN_101ce210 |
 | `0x101ce060` FUN_101ce060 | `0x101ce210` FUN_101ce210 |
@@ -1127,7 +1114,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101cf390` FUN_101cf390 | `0x10056a90` CDynamicLight::Spawn, `0x100940d0` CBaseAnimating::SetSequenceBox, `0x100adf10` FUN_100adf10, `0x100d2eb0` FUN_100d2eb0, +15 more |
 | `0x101cf3c0` FUN_101cf3c0 | `0x101cf4a0` FUN_101cf4a0 |
 | `0x101cf5c0` FUN_101cf5c0 | `0x100adbd0` FUN_100adbd0, `0x100d3270` FUN_100d3270, `0x100ef260` CBaseDoor::vfunc103, `0x100ef630` CBaseDoor::vfunc250, +21 more |
-| `0x101cf600` FUN_101cf600 | `0x1002d580` CObjectEvent::vfunc1, `0x100502b0` CPhysConvert::InputConvertTarget, `0x100d2eb0` FUN_100d2eb0, `0x100f49e0` FUN_100f49e0, +19 more |
+| `0x101cf600` FUN_101cf600 | `0x1002d580` CObjectEvent::vfunc1, `0x100502b0` CPhysConvert::InputConvertTarget, `0x100d2eb0` FUN_100d2eb0, `0x100f49e0` FUN_100f49e0, +18 more |
 | `0x101cf720` FUN_101cf720 | `0x100af340` FUN_100af340, `0x100aff90` FUN_100aff90, `0x100d2d80` FUN_100d2d80, `0x100d3e90` FUN_100d3e90, +1 more |
 | `0x101cf9b0` FUN_101cf9b0 | `0x101cfa40` FUN_101cfa40 |
 | `0x101cfe10` FUN_101cfe10 | `0x1012a9b0` FUN_1012a9b0, `0x1012ad20` FUN_1012ad20, `0x10171aa0` CBloodSplat::Remove, `0x102692d0` FUN_102692d0 |
@@ -1147,7 +1134,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101d2850` FUN_101d2850 | `0x10081e00` CSceneEntity::InputStart, `0x1019a4e0` PyServerSystem::LevelInitPostEntity, `0x101c7890` FUN_101c7890, `0x10212200` CPropSign::LoadSignData, +2 more |
 | `0x101d2c70` FUN_101d2c70 | `0x10164870` CBasePlayer::FUN_10164870, `0x102627e0` FUN_102627e0, `0x10262c20` FUN_10262c20, `0x102debe0` FUN_102debe0, +7 more |
 | `0x101d2f40` FUN_101d2f40 | `0x100f2bd0` CRotDoor::GetNPCOpenData, `0x10172e60` CBasePlayer::vfunc451, `0x10262590` FUN_10262590, `0x10264680` CAI_HumanoidMotor::vfunc19, +7 more |
-| `0x101d3190` FUN_101d3190 | `0x10035030` FUN_10035030, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004f030` CPhysImpact::InputImpact, `0x1005eee0` CTEBSPDecal::vfunc3, +107 more |
+| `0x101d3190` FUN_101d3190 | `0x10035030` FUN_10035030, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004f030` CPhysImpact::InputImpact, `0x1005eee0` CTEBSPDecal::vfunc3, +103 more |
 | `0x101d3730` FUN_101d3730 | `0x1006ff40` CBaseCineCam::DrawDebugGeometryOverlays, `0x10080b00` FUN_10080b00, `0x100dfd30` CDialog::CheckNameCollisions, `0x100dffa0` CDialog::LogAutoendFloats, +45 more |
 | `0x101d3850` FUN_101d3850 | `0x101d5530` FUN_101d5530 |
 | `0x101d4e70` FUN_101d4e70 | `0x100d1d50` FUN_100d1d50 |
@@ -1177,7 +1164,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101e12f0` FUN_101e12f0 | `0x10164040` FUN_10164040, `0x10198310` FUN_10198310 ‼, `0x101e4380` FUN_101e4380 |
 | `0x101e1a60` FUN_101e1a60 | `0x101e2910` FUN_101e2910, `0x101e3400` FUN_101e3400 |
 | `0x101e3c80` FUN_101e3c80 | `0x10147a60` DisciplineGlobalTeardown |
-| `0x101e3f50` FUN_101e3f50 | `0x102b7fc0` FUN_102b7fc0, `0x1033d940` FUN_1033d940, `0x10386560` FUN_10386560 |
+| `0x101e3f50` FUN_101e3f50 | `0x1033d940` FUN_1033d940 |
 | `0x101e4f30` FUN_101e4f30 | `0x100d4e50` FUN_100d4e50, `0x100d5510` FUN_100d5510, `0x100d56b0` FUN_100d56b0, `0x100e9760` CDialogDependency::TestSimple, +18 more |
 | `0x101e56e0` FUN_101e56e0 | `0x100e9760` CDialogDependency::TestSimple, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x10108360` CFilterFeat::vfunc241, +24 more |
 | `0x101e5b30` FUN_101e5b30 | `0x101e5e60` FUN_101e5e60 |
@@ -1325,8 +1312,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10259de0` FUN_10259de0 | `0x10259f80` FUN_10259f80 |
 | `0x1025d730` FUN_1025d730 | `0x10146e20` FUN_10146e20, `0x10161460` CBasePlayer::DrawDebugTextOverlays, `0x101812f0` FUN_101812f0, `0x102ee430` FUN_102ee430, +1 more |
 | `0x1025d760` FUN_1025d760 | `0x101810f0` FUN_101810f0, `0x1030d850` FUN_1030d850 |
-| `0x1025dca0` FUN_1025dca0 | `0x102b57c0` FUN_102b57c0, `0x10385c30` FUN_10385c30, `0x103c1a60` FUN_103c1a60, `0x103c39e0` FUN_103c39e0 |
-| `0x1025ddd0` FUN_1025ddd0 | `0x102b5880` FUN_102b5880, `0x10385cf0` FUN_10385cf0, `0x103c1ad0` FUN_103c1ad0, `0x103c3a70` FUN_103c3a70 |
 | `0x10260670` FUN_10260670 | `0x10260790` CAI_BaseActor::InputSetExpressionOverride |
 | `0x10260a50` FUN_10260a50 | `0x1018e330` FUN_1018e330, `0x10194160` CPropDestructable::InputPlayAnimation, `0x10214780` FUN_10214780, `0x102148f0` FUN_102148f0, +5 more |
 | `0x102652d0` FUN_102652d0 | `0x10309230` FUN_10309230, `0x1030bfd0` CAI_SaveRestoreBlockHandler::vfunc2, `0x1030c210` CAI_SaveRestoreBlockHandler::vfunc7 |
@@ -1338,31 +1323,25 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1026dc30` CAI_BaseNPC::CapabilitiesRemove | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
 | `0x1026e940` FUN_1026e940 | `0x102e7e80` FUN_102e7e80 |
 | `0x102729d0` FUN_102729d0 | `0x10307ef0` FUN_10307ef0 |
-| `0x10273070` FUN_10273070 | `0x1016e0c0` FUN_1016e0c0, `0x102d7730` FUN_102d7730, `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
+| `0x10273070` FUN_10273070 | `0x1016e0c0` FUN_1016e0c0, `0x102d7730` FUN_102d7730 |
 | `0x10273760` FUN_10273760 | `0x1019ab40` FUN_1019ab40 |
+| `0x102781e0` FUN_102781e0 | `0x101c9b60` CAI_ChangeHintGroup::InputActivate |
 | `0x10279b70` FUN_10279b70 | `0x1019ab40` FUN_1019ab40 |
 | `0x1027a6c0` FUN_1027a6c0 | `0x102ef6a0` FUN_102ef6a0, `0x102ef760` FUN_102ef760 |
 | `0x1027bb20` CAI_BaseNPC::PostConstructor | `0x101a8fe0` FUN_101a8fe0, `0x101a96b0` FUN_101a96b0, `0x101aa550` FUN_101aa550, `0x102d7210` FUN_102d7210, +16 more |
 | `0x1027de00` FUN_1027de00 | `0x100f1340` CBaseDoor::StartBlocked, `0x1027dfb0` FUN_1027dfb0 |
 | `0x1027e590` FUN_1027e590 | `0x102ee430` FUN_102ee430 |
 | `0x1027e7f0` FUN_1027e7f0 | `0x102c9c30` FUN_102c9c30 |
-| `0x1027ef20` FUN_1027ef20 | `0x1027ee90` FUN_1027ee90 |
-| `0x1027efb0` FUN_1027efb0 | `0x100b0df0` FUN_100b0df0 |
 | `0x1027f610` FUN_1027f610 | `0x1027c300` FUN_1027c300 |
 | `0x1027f990` FUN_1027f990 | `0x1027f770` _08__UUnreachableEnt_t__V__CUtlMemory__UUnreachableEnt_t__V__CUtlVector____CUtlVectorDataOps::vfunc1 |
 | `0x1027fa50` FUN_1027fa50 | `0x1027f770` _08__UUnreachableEnt_t__V__CUtlMemory__UUnreachableEnt_t__V__CUtlVector____CUtlVectorDataOps::vfunc1 |
 | `0x1028ae60` FUN_1028ae60 | `0x1028ad20` FUN_1028ad20 |
 | `0x1028b160` FUN_1028b160 | `0x1028d230` FUN_1028d230 |
 | `0x1028e830` FUN_1028e830 | `0x1028e890` FUN_1028e890 |
-| `0x1028fc90` FUN_1028fc90 | `0x1034b7b0` FUN_1034b7b0 |
-| `0x10298ce0` CAI_BaseNPCTroika::SetModel | `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
 | `0x102a0bc0` FUN_102a0bc0 | `0x10298340` FUN_10298340 |
 | `0x102ae7f0` FUN_102ae7f0 | `0x102c33f0` CAI_BaseNPCTroika::InputChangeSchedule |
-| `0x102ae840` FUN_102ae840 | `0x103e0980` FUN_103e0980 |
-| `0x102b7f40` FUN_102b7f40 | `0x102b7fc0` FUN_102b7fc0, `0x10386560` FUN_10386560 |
 | `0x102c2ec0` CAI_BaseNPCTroika::FUN_102c2ec0 | `0x102c2c50` CAI_BaseNPCTroika::InputSetScriptedDiscipline |
 | `0x102c4430` FUN_102c4430 | `0x102c3350` CAI_BaseNPCTroika::InputSetFollowerBoss |
-| `0x102c54c0` FUN_102c54c0 | `0x102b8620` FUN_102b8620 |
 | `0x102c73b0` FUN_102c73b0 | `0x102c7100` FUN_102c7100, `0x102c8280` CAI_StandoffGoal::InputSetAggressiveness |
 | `0x102ca460` FUN_102ca460 | `0x102ca630` FUN_102ca630 |
 | `0x102cadb0` FUN_102cadb0 | `0x102c47e0` FUN_102c47e0, `0x1030d850` FUN_1030d850 |
@@ -1373,8 +1352,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x102d1180` FUN_102d1180 | `0x102d1fe0` FUN_102d1fe0 |
 | `0x102d14c0` FUN_102d14c0 | `0x102d1fe0` FUN_102d1fe0, `0x102d31c0` FUN_102d31c0 |
 | `0x102d3e60` FUN_102d3e60 | `0x102d0a50` CAI_Hint::InputWalk, `0x102d0a80` CAI_Hint::InputDontWalk |
-| `0x102d6100` FUN_102d6100 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1027fc90` FUN_1027fc90, +6 more |
-| `0x102d6120` FUN_102d6120 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1027fc90` FUN_1027fc90, +6 more |
+| `0x102d6100` FUN_102d6100 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1027fc90` FUN_1027fc90, +5 more |
+| `0x102d6120` FUN_102d6120 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1027fc90` FUN_1027fc90, +5 more |
 | `0x102d61b0` FUN_102d61b0 | `0x102ef1a0` FUN_102ef1a0, `0x1030a650` FUN_1030a650 |
 | `0x102d6210` FUN_102d6210 | `0x102f7a10` FUN_102f7a10, `0x102f7a90` FUN_102f7a90, `0x102f7e60` FUN_102f7e60, `0x102fa170` FUN_102fa170, +2 more |
 | `0x102d6230` FUN_102d6230 | `0x10085a80` FUN_10085a80, `0x1016e820` CBasePlayer::Precache, `0x102f7ca0` FUN_102f7ca0, `0x102fa510` FUN_102fa510, +1 more |
@@ -1473,9 +1452,9 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1032c580` CBaseCombatCharacter::Event_TookLife | `0x1017fb30` CBasePlayer::Event_TookLife |
 | `0x1032cbe0` CBaseCombatCharacter::Weapon_Detach | `0x101743f0` CBasePlayer::FUN_101743f0 |
 | `0x1032d0c0` CAI_BaseNPC::FUN_1032d0c0 | `0x100da230` FUN_100da230, `0x101777e0` CBasePlayer::FUN_101777e0 |
-| `0x1032d890` CBaseCombatCharacter::Weapon_OwnsThisType | `0x100da230` FUN_100da230, `0x10171f50` CBasePlayer::FUN_10171f50, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::Weapon_CanUse, +1 more |
+| `0x1032d890` CBaseCombatCharacter::Weapon_OwnsThisType | `0x100da230` FUN_100da230, `0x10171f50` CBasePlayer::FUN_10171f50, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::Weapon_CanUse |
 | `0x1032e120` CBaseCombatCharacter::Weapon_Create | `0x1016de10` CBasePlayer::FUN_1016de10, `0x101772b0` CBasePlayer::Weapon_Switch, `0x10177900` CBasePlayer::FUN_10177900, `0x1021fc90` FUN_1021fc90, +1 more |
-| `0x1032e7b0` CBaseCombatCharacter::GetActiveWeapon | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d3160` FUN_100d3160 ‼, `0x100d5e30` FUN_100d5e30, `0x100d5f10` FUN_100d5f10 ‼, +60 more |
+| `0x1032e7b0` CBaseCombatCharacter::GetActiveWeapon | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d3160` FUN_100d3160 ‼, `0x100d5e30` FUN_100d5e30, `0x100d5f10` FUN_100d5f10 ‼, +53 more |
 | `0x1032e890` FUN_1032e890 | `0x103228c0` CBaseCombatCharacter::UpdateOccultPowers |
 | `0x1032e8b0` CBaseCombatCharacter::GetWeapon | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d5be0` FUN_100d5be0, `0x100d5d10` FUN_100d5d10, `0x100d8220` FUN_100d8220, +18 more |
 | `0x1032e9f0` CBaseCombatCharacter::SetWeapon | `0x1032ead0` CBaseCombatCharacter::RemoveAllWeapons, `0x10335780` CBaseCombatCharacter::Inventory_MoveToFront |
@@ -1490,14 +1469,12 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x103327f0` CBaseCombatCharacter::EndSlowEntity | `0x103f1840` FUN_103f1840, `0x103f1b60` CVampireProjectile_MingXiaoSpit::Remove |
 | `0x10332fc0` CBaseCombatCharacter::GetDialogReactionModifier | `0x10227da0` FUN_10227da0 |
 | `0x10334180` CAI_BaseNPC::FUN_10334180 | `0x10352cd0` CHL2_Player::vfunc374 |
-| `0x103346c0` FUN_103346c0 | `0x10128370` FUN_10128370, `0x10163630` CBasePlayer::FUN_10163630, `0x101989b0` FUN_101989b0, `0x102524f0` FUN_102524f0, +11 more |
+| `0x103346c0` FUN_103346c0 | `0x10128370` FUN_10128370, `0x10163630` CBasePlayer::FUN_10163630, `0x101989b0` FUN_101989b0, `0x102524f0` FUN_102524f0, +10 more |
 | `0x10334b10` CBaseCombatCharacter::Inventory_Destroy | `0x10208fa0` CItemContainer::InputDeleteItems |
 | `0x10334c20` CBaseCombatCharacter::Inventory_Can_Insert | `0x100da230` FUN_100da230, `0x10173f90` FUN_10173f90, `0x1021fc90` FUN_1021fc90, `0x1022d780` FUN_1022d780 |
 | `0x10335470` CBaseCombatCharacter::Inventory_Remove | `0x10199240` FUN_10199240, `0x1021fb50` FUN_1021fb50, `0x1022d8a0` FUN_1022d8a0, `0x103352b0` CBaseCombatCharacter::InputInventory_Remove, +3 more |
 | `0x10335950` CBaseCombatCharacter::Inventory_Find | `0x100d2b30` FUN_100d2b30, `0x100d5f10` FUN_100d5f10 ‼, `0x100d8220` FUN_100d8220, `0x10108130` CFilterInventory::vfunc241, +31 more |
 | `0x10335ea0` CBaseCombatCharacter::Inventory_Unwield | `0x10253ca0` CBaseCombatWeapon::FUN_10253ca0 |
-| `0x10336cd0` CBaseCombatCharacter::HasUsableMeleeWeapon | `0x103620d0` CNPC_VAsianVampire::SelectScheduleRangedCombat, `0x103afdb0` CNPC_VSheriffMan::SelectScheduleRangedCombat |
-| `0x10336d70` CBaseCombatCharacter::HasUsableRangedWeapon | `0x10361be0` CNPC_VAsianVampire::SelectScheduleMeleeCombat, `0x103af960` CNPC_VSheriffMan::SelectScheduleMeleeCombat |
 | `0x10337860` CBaseCombatCharacter::GetCharTemplate | `0x100d6680` FUN_100d6680, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x1016d260` CBasePlayer::Spawn, +13 more |
 | `0x10337980` CBaseCombatCharacter::SetVHistory | `0x100d6d40` FUN_100d6d40 |
 | `0x10337ca0` CBaseCombatCharacter::MemberSync | `0x10326de0` FUN_10326de0 |
@@ -1546,12 +1523,10 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x103498b0` FUN_103498b0 | `0x10160bc0` CBasePlayer::PlayerDefenderBlockReaction, `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10349970` FUN_10349970 | `0x10345ab0` CBaseCombatCharacter::WasMeleeBlocked |
 | `0x103499a0` FUN_103499a0 | `0x10345ab0` CBaseCombatCharacter::WasMeleeBlocked |
-| `0x1034b430` FUN_1034b430 | `0x1034b490` FUN_1034b490, `0x1034b7b0` FUN_1034b7b0 |
+| `0x1034b430` FUN_1034b430 | `0x1034b490` FUN_1034b490 |
 | `0x1034d5b0` FUN_1034d5b0 | `0x1034d570` CScriptedTarget::InputEnable, `0x1034d800` FUN_1034d800 |
 | `0x1035d150` CNPC_VAndreiBlood::vfunc461 | `0x1035dd00` CNPC_VAndreiBlood::InputTriggerCombat |
-| `0x10362430` CNPC_VAsianVampire::GetJumpSchedule | `0x10361be0` CNPC_VAsianVampire::SelectScheduleMeleeCombat, `0x103620d0` CNPC_VAsianVampire::SelectScheduleRangedCombat |
 | `0x103706b0` FUN_103706b0 | `0x10370680` FUN_10370680 |
-| `0x10385ab0` CNPC_VAndreiBlood::FUN_10385ab0 | `0x1036d800` CNPC_VChangBros::SelectScheduleMeleeCombat |
 | `0x1038c170` FUN_1038c170 | `0x1038fa90` CNPC_VManBat::InputManBatFlyBegin |
 | `0x10390890` FUN_10390890 | `0x10390060` MvsnSec__2__H__MvsnSec__UCPfnTraits0__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits0__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits0____CSecureTypeBase::vfunc0 |
 | `0x103908c0` FUN_103908c0 | `0x10389cc0` FUN_10389cc0, `0x10390060` MvsnSec__2__H__MvsnSec__UCPfnTraits0__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits0__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits0____CSecureTypeBase::vfunc0 |
@@ -1559,11 +1534,11 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10398000` FUN_10398000 | `0x103954e0` FUN_103954e0, `0x1039a256` FUN_1039a256 |
 | `0x10398630` FUN_10398630 | `0x1039a256` FUN_1039a256 |
 | `0x10398870` FUN_10398870 | `0x1039a256` FUN_1039a256 |
-| `0x103b9f90` FUN_103b9f90 | `0x103b9980` FUN_103b9980, `0x103b9a50` FUN_103b9a50, `0x103b9d60` FUN_103b9d60 |
 | `0x103c6df0` CNPC_VVampireBoss::SetBodyEmitterName | `0x103c6e80` FUN_103c6e80 |
-| `0x103cf5f0` CNPC_VWerewolf::ShouldPursueEnemy | `0x103d5050` CNPC_VWerewolf::DrawBBoxOverlay |
+| `0x103c75f0` CNPC_VVampireBoss::InputTransformModel | `0x103c76b0` CNPC_VVampireBoss::InputTransformModel ‼ |
 | `0x103d0db0` CNPC_VWerewolf::HasPath | `0x103d7420` CNPC_VWerewolf::InitPathableHints |
 | `0x103d6390` CNPC_VWerewolf::GetHintEndEntity | `0x103d7420` CNPC_VWerewolf::InitPathableHints |
+| `0x103e0980` FUN_103e0980 | `0x1034cf20` FUN_1034cf20, `0x103e0e30` CNPC_VZombie::InputSetZombieAIType |
 | `0x10407c40` FUN_10407c40 | `0x10408920` CItemKeyGeneric::vfunc341 |
 | `0x104081e0` FUN_104081e0 | `0x1016be10` CBasePlayer::PostThink |
 | `0x10408220` FUN_10408220 | `0x1016de10` CBasePlayer::FUN_1016de10, `0x101784c0` FUN_101784c0 |
@@ -1580,12 +1555,12 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10430130` FUN_10430130 | `0x103835f0` MvsnSec__2__H__MvsnSec__UCPfnTraits4__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits4__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits4____CSecureTypeBase::vfunc0, `0x1042f680` CSafeDiscSaveRestoreOps_4::vfunc0 |
 | `0x10430923` _atexit | `0x10029d60` FUN_10029d60, `0x1002d200` FUN_1002d200, `0x1002d290` FUN_1002d290, `0x1002d320` FUN_1002d320, +1561 more |
 | `0x10430964` FUN_10430964 | `0x10029e10` CAnchorList::vfunc8, `0x1002ab80` CPASFilter::vfunc0, `0x1002ac10` IRecipientFilter::vfunc0, `0x1002ac40` CPASAttenuationFilter::vfunc0, +330 more |
-| `0x10430b64` ___RTDynamicCast | `0x1002b450` FUN_1002b450, `0x1004ff40` FUN_1004ff40, `0x10071970` FUN_10071970, `0x10081ed0` FUN_10081ed0, +110 more |
+| `0x10430b64` ___RTDynamicCast | `0x1002b450` FUN_1002b450, `0x1004ff40` FUN_1004ff40, `0x10071970` FUN_10071970, `0x10081ed0` FUN_10081ed0, +107 more |
 | `0x10430ccc` ?FindCompleteObject@@YAPAXPAPAX@Z | `0x1043096f` ___RTCastToVoid |
-| `0x10430fa0` FUN_10430fa0 | `0x1002cc10` FUN_1002cc10, `0x1002d070` FUN_1002d070, `0x10032b20` FUN_10032b20, `0x10032bb0` FUN_10032bb0, +201 more |
+| `0x10430fa0` FUN_10430fa0 | `0x1002cc10` FUN_1002cc10, `0x1002d070` FUN_1002d070, `0x10032b20` FUN_10032b20, `0x10032bb0` FUN_10032bb0, +200 more |
 | `0x104312d5` operator_new | `0x1002d930` CPhysicsHook::LevelInitPreEntity, `0x1003c660` CDataObjectAccessSystem::Init, `0x10040970` Utouchlink_t____CEntityDataInstantiator::vfunc2, `0x10040d50` Ugroundlink_t____CEntityDataInstantiator::vfunc2, +144 more |
-| `0x104312f0` __alloca_probe ‼ | `0x1002ea40` FUN_1002ea40, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x10081190` FUN_10081190, `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox, +34 more |
-| `0x10431320` __ftol | `0x1002fc30` FUN_1002fc30, `0x10058150` CSteamJet::Use, `0x100586e0` CTempEntsSystem::vfunc8, `0x100587d0` CTempEntsSystem::vfunc9, +132 more |
+| `0x104312f0` __alloca_probe ‼ | `0x1002ea40` FUN_1002ea40, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x10081190` FUN_10081190, `0x100c2bd0` FUN_100c2bd0, +33 more |
+| `0x10431320` __ftol | `0x1002fc30` FUN_1002fc30, `0x10058150` CSteamJet::Use, `0x100586e0` CTempEntsSystem::vfunc8, `0x100587d0` CTempEntsSystem::vfunc9, +131 more |
 | `0x10431351` FUN_10431351 | `0x10032380` FUN_10032380, `0x100b87a0` CBatSwarm::Spawn, `0x100b8d50` FUN_100b8d50, `0x1010f8b0` FUN_1010f8b0, +7 more |
 | `0x1043136f` _atof | `0x10032880` FUN_10032880, `0x100568a0` CDynamicLight::vfunc110, `0x10071cd0` FUN_10071cd0, `0x1007a390` FUN_1007a390, +36 more |
 | `0x104313bc` _atol | `0x10432f1a` __tzset |
@@ -1659,7 +1634,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1043d581` __dosmaperr | `0x1043d7ab` __open_osfhandle, `0x1043e1d6` __close |
 | `0x1043d76e` __get_osfhandle | `0x1043da2e` __commit, `0x1043e1d6` __close |
 | `0x1043e327` __strdup | `0x1043e158` _copy_environ |
-| `0x1043e780` __strcmpi | `0x1002b1e0` FUN_1002b1e0, `0x1002e210` FUN_1002e210, `0x1002e580` FUN_1002e580, `0x100568a0` CDynamicLight::vfunc110, +267 more |
+| `0x1043e780` __strcmpi | `0x1002b1e0` FUN_1002b1e0, `0x1002e210` FUN_1002e210, `0x1002e580` FUN_1002e580, `0x100568a0` CDynamicLight::vfunc110, +265 more |
 
 ## Stale port citations
 
@@ -1829,6 +1804,7 @@ Read these with `corpus asm <addr>`; their READ/WRITE and edges are partial.
 | `0x102a9710` | FUN_102a9710 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102a9730` | FUN_102a9730 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102ae310` | FUN_102ae310 | Could not recover jumptable; Treating indirect jump as call |
+| `0x102b59e0` | FUN_102b59e0 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102b5d90` | CAI_BaseNPCTroika::LeaveGrappleState | Could not recover jumptable; Treating indirect jump as call |
 | `0x102c1ce0` | CAI_BaseNPCTroika::ScriptHide | Could not recover jumptable; Treating indirect jump as call |
 | `0x102c6db0` | _0BIGKA__VCAI_BaseNPC____CAI_Behavior::vfunc10 | Could not recover jumptable; Treating indirect jump as call |
@@ -1858,6 +1834,7 @@ Read these with `corpus asm <addr>`; their READ/WRITE and edges are partial.
 | `0x1037e240` | CNPC_VGuard1::NPCInit | Could not recover jumptable; Treating indirect jump as call |
 | `0x10387140` | CNPC_VHumanCombatant::NPCInit | Could not recover jumptable; Treating indirect jump as call |
 | `0x10388b30` | CNPC_VHunter::NPCInit | Could not recover jumptable; Treating indirect jump as call |
+| `0x10395e70` | FUN_10395e70 | Could not recover jumptable; Treating indirect jump as call |
 | `0x103a07f0` | FUN_103a07f0 | Removing unreachable block |
 | `0x103a4700` | CNPC_VPlayerController::NPCThink | Could not recover jumptable; Treating indirect jump as call |
 | `0x103a4a60` | CNPC_VPlayerController::RemoveExtraAnimationModels | Could not recover jumptable; Treating indirect jump as call |

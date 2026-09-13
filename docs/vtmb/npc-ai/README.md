@@ -16,6 +16,7 @@ has been *walked*. `../npc-kernel/index.md` maps an address to the section that 
 | [`social.md`](./social.md) | Relationships, enemies, squads and reactions |
 | [`authored-control.md`](./authored-control.md) | Authored control: outputs, scripts, keyfields |
 | [`rebuild.md`](./rebuild.md) | What the rebuild needs |
+| [`shape.md`](./shape.md) | The object's shape: the layout past the datamaps, the vtable tail, retail signatures |
 
 Conventions for new sections: a walked retail function is a `###` whose header carries
 the address (`### \`MaintainSchedule\` \`0x102817c0\``); provenance is a one-line

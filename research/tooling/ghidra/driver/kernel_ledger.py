@@ -75,8 +75,9 @@ sys.path.insert(0, str(_HERE))
 sys.path.insert(0, str(_HERE.parents[1]))   # research/tooling, for `probes`
 sys.path.insert(0, str(_HERE.parents[3]))   # the repository, for `research.tooling.probes`
 import corpus  # noqa: E402  -- `_severe`, `_corpus_dir`: the corpus's own reading of itself
+import datamap_layout  # noqa: E402  -- the datamap records' types, which the corpus's `fields` drops
 
-from elysium_pipeline.paths import repo_root  # noqa: E402
+from elysium_pipeline.paths import repo_root, research_root  # noqa: E402
 
 MODULE = "vampire.dll"
 # A class belongs to the family when its primary vtable reaches the NPC slot range. The goal and
@@ -210,6 +211,7 @@ class Ledger:
         self.this_dispatch: dict[str, set[int]] = collections.defaultdict(set)
         self.slot_dispatch_sites: dict[int, int] = collections.Counter()
         self.fields: dict[int, sqlite3.Row] = {}
+        self.field_types: dict[int, str] = {}   # offset -> Source type from the datamap record
         self.class_fields: dict[str, dict[str, int]] = collections.defaultdict(dict)
         self.species_fields: dict[str, list[sqlite3.Row]] = collections.defaultdict(list)
         self.closure: dict[str, int] = {}
@@ -361,6 +363,21 @@ class Ledger:
                 "SELECT * FROM fields WHERE module = ? AND cls = 'CAI_BaseNPCTroika' ORDER BY off",
                 (self.module,)):
             self.fields[row["off"]] = row
+        records = datamap_layout.load(research_root(), self.module)
+        if records is not None:
+            def flat(name: str) -> str:
+                return re.sub(r"_+", "_", re.sub(r"\W", "_", name)).strip("_")
+
+            for member in datamap_layout.flatten(records, "CAI_BaseNPCTroika"):
+                if member.off in self.fields and flat(member.name) == flat(self.fields[member.off]["name"]):
+                    count = f"[{member.count}]" if member.count > 1 else ""
+                    self.field_types[member.off] = f"{member.source_type}{count}"
+        for off, row in self.fields.items():
+            # A record the builder replay does not hold but the image's static table does.
+            code = datamap_layout.FIELD_TYPE_CODE_RE.search(row["note"] or "")
+            name = datamap_layout.type_from_code(int(code.group(1))) if code else ""
+            if off not in self.field_types and name not in ("", "void", "embedded", "custom"):
+                self.field_types[off] = datamap_layout.FIELD_TYPES[name][1]
         for cls in self.family + self.helpers:
             for row in self.db.execute(
                     "SELECT * FROM fields WHERE module = ? AND cls = ? ORDER BY off",
@@ -753,7 +770,9 @@ class Ledger:
     def _render_fields(self) -> str:
         out = self._head("NPC kernel — fields",
                          "One row per offset of the flattened `CAI_BaseNPCTroika` layout (the "
-                         "`CAI_BaseNPC` layout is its prefix). *Writers* assign the offset; *Readers* "
+                         "`CAI_BaseNPC` layout is its prefix). *Type* is the datamap record's "
+                         "(`datamap_layout.py`; `layout.md` has count, flags, key and the words no "
+                         "record declares). *Writers* assign the offset; *Readers* "
                          "touch it without assigning. Direction is a regex over the decompiled C. "
                          "*Outside touches* are bodies outside the closure that the corpus saw touch "
                          "the offset through an untyped receiver — candidates, since another "
@@ -770,7 +789,8 @@ class Ledger:
             for off in fn.reads:
                 readers[off].append(addr)
         for off, row in sorted(self.fields.items()):
-            out.append(f"| `{_fmt_off(off)}` | `{row['name']}` | `{row['type']}`[{row['len']}] "
+            typ = self.field_types.get(off) or f"{row['type']}[{row['len']}]"
+            out.append(f"| `{_fmt_off(off)}` | `{row['name']}` | `{typ}` "
                        f"| {self._list_cell([self._fn_cell(a, off) for a in writers.get(off, [])], 6)} "
                        f"| {self._list_cell([self._fn_cell(a, off) for a in readers.get(off, [])], 6)} "
                        f"| {self._list_cell([self._fn_cell(a) for a in sorted(self.other_touches.get(off, []))], 4)} "

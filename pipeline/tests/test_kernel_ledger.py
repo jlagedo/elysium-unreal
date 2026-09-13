@@ -151,6 +151,24 @@ def test_family_and_layers(ledger):
     assert sum(len(c) for layer in ledger.layers for c in layer) == len(ledger.closure)
 
 
+def test_vtable_tail_past_the_dump_bound(ledger):
+    # `DumpVtables.java` used to stop at 600; Troika's primary table holds 617 and
+    # CNPC_VTzimisce's 628. The tail entries are JMP thunks the dump resolves to their bodies.
+    assert ledger.slot_count["CAI_BaseNPCTroika"] == 617
+    assert ledger.slot_count["CNPC_VTzimisce"] == 628
+    assert ledger.slot_bodies[614]["CAI_BaseNPCTroika"] == "102c23f0"
+    assert ledger.slot_bodies[616]["CAI_BaseNPCTroika"] == "102ad110"
+    assert ("CAI_BaseNPCTroika", 614) in ledger.functions["102c23f0"].slots
+
+
+def test_field_types_come_from_the_datamap(ledger):
+    if not ledger.field_types:
+        pytest.skip("the datamap records are not on this machine")
+    assert ledger.field_types[0x5CC0] == "int"          # m_NPCState: VtMB code 4 is FIELD_INTEGER
+    assert ledger.field_types[0x5C40] == "AIScheduleState_t"
+    assert ledger.field_types[0x159C] == "int"          # an image record the builder replay lacks
+
+
 def test_check_mode_matches_committed_tables(ledger):
     out = REPO / "docs" / "vtmb" / "npc-kernel"
     if not (out / "functions.md").is_file():

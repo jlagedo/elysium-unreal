@@ -1,0 +1,1770 @@
+table	offset	size	member	type	field_type	count	flags	layer	tier	writers	readers
+CAI_BaseNPCTroika	0x0000		vftable	vftable*		1		CAI_BaseNPCTroika	walked	67	2
+CAI_BaseNPCTroika	0x0004		m_szDebugEntityName	char		32		CAI_BaseNPCTroika	walked	0	3
+CAI_BaseNPCTroika	0x0008		m_szDebugEntityName[4]	char		1		CAI_BaseNPCTroika	walked	0	1
+CAI_BaseNPCTroika	0x0024		m_szDebugClassName	char		32		CAI_BaseNPCTroika	walked	26	17
+CAI_BaseNPCTroika	0x004c	0x4	m_edtDerivedType	int	FIELD_INTEGER	1		CBaseEntity	datamap	14	13
+CAI_BaseNPCTroika	0x0050		m_vecAttackExtents	Vector		1		CBaseEntity	walked	6	5
+CAI_BaseNPCTroika	0x0054		m_vecAttackExtents.y	float		1		CBaseEntity	walked	10	9
+CAI_BaseNPCTroika	0x0058		m_vecAttackExtents.z	float		1		CBaseEntity	walked	5	3
+CAI_BaseNPCTroika	0x005c	0x18	m_OnUseBegin	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnUseBegin	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0074	0x18	m_OnUseEnd	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnUseEnd	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x008c		m_hUseActivator	EHANDLE		1		CBaseEntity	walked	3	0
+CAI_BaseNPCTroika	0x0090		m_flForceTransmitUntil	float		1		CBaseEntity	walked	3	3
+CAI_BaseNPCTroika	0x0094		m_pBaseNPC	CAI_BaseNPC*		1		CBaseEntity	walked	2	5
+CAI_BaseNPCTroika	0x0098		m_pBaseNPCTroika	CAI_BaseNPCTroika*		1		CBaseEntity	walked	2	30
+CAI_BaseNPCTroika	0x009c		m_pCombatCharacter	CBaseCombatCharacter*		1		CBaseEntity	walked	2	5
+CAI_BaseNPCTroika	0x00a0		m_pCombatWeapon	CBaseCombatWeapon*		1		CBaseEntity	walked	1	1
+CAI_BaseNPCTroika	0x00a8		m_pPlayer	CBasePlayer*		1		CBaseEntity	walked	1	41
+CAI_BaseNPCTroika	0x00ac		m_pAnimal	CNPC_VAnimal*		1		CBaseEntity	walked	2	2
+CAI_BaseNPCTroika	0x00b4		m_iVSoundGroup	int		1		CBaseEntity	walked	4	3
+CAI_BaseNPCTroika	0x00b8		m_iVSoundGroupFemale	int		1		CBaseEntity	walked	1	1
+CAI_BaseNPCTroika	0x00bc		m_iVSoundTableIdx	int		1		CBaseEntity	walked	6	1
+CAI_BaseNPCTroika	0x00c0	0x4	m_iszVSoundGroup	string_t	FIELD_STRING	1	KEY key=soundgroup	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00dc	0x4	m_impactEnergyScale	float	FIELD_FLOAT	1	KEY INPUT key=physdamagescale	CBaseCombatCharacter	datamap	1	2
+CAI_BaseNPCTroika	0x00e0	0x1	m_bStartHidden	bool	FIELD_BOOLEAN	1	KEY key=StartHidden	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00e4	0x4	m_pfnScriptSavedThink	BASEPTR	FIELD_FUNCTION	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00e8	0x4	m_ScriptSavedSolid	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00ec	0x4	m_ScriptSavedMoveType	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00f0	0x4	m_ScriptSavedMoveCollide	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00f4	0x1	m_bScriptHidden	bool	FIELD_BOOLEAN	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00f6	0x2	m_ScriptSavedSolidFlags	short	FIELD_SHORT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00f8	0x4	m_fScriptSavedEffects	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00fc	0x1	m_bNPCTransparent	bool	FIELD_BOOLEAN	1	KEY key=npc_transparent	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00fd	0x1	m_bBlocksTraces	bool	FIELD_BOOLEAN	1	KEY key=blocks_traces	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x00fe	0x1	m_bOccludesSound	bool	FIELD_BOOLEAN	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0100	0x4	m_hSoundOverrideEnt	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0104	0x1	m_bFakeSilence	bool	FIELD_BOOLEAN	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0108	0x4	m_iszScriptedSoundOverrideEnt	string_t	FIELD_STRING	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x010c	0x4	m_hLastInputActivator	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0110	0x4	m_hLastInputCaller	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0114		m_pfnMoveDone	BASEPTR		1		CBaseEntity	sdk-order	1	2
+CAI_BaseNPCTroika	0x0118	0x4	m_pfnThink	BASEPTR	FIELD_FUNCTION	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x011c	0x4	m_iClassname	string_t	FIELD_STRING	1	KEY key=classname	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0120	0x4	m_iGlobalname	string_t	FIELD_STRING	1	GLOBAL KEY key=globalname	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0124	0x4	m_iParent	string_t	FIELD_STRING	1	KEY key=parentname	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0128	0x4	m_iDialog	string_t	FIELD_STRING	1	KEY key=dialogname	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x012c	0x1	m_bBlocked	bool	FIELD_BOOLEAN	1	KEY key=blocked	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0130	0x30	m_rgflCoordinateFrame	float	FIELD_FLOAT	12		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0160	0x4	m_flStartFrameLocalTime	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0164	0x4	m_flSpeed	float	FIELD_FLOAT	1	KEY key=speed	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0168	0x4	m_nRenderFX	int	FIELD_INTEGER	1	KEY key=renderfx	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x016c	0x4	m_nRenderMode	int	FIELD_INTEGER	1	KEY key=rendermode	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0170	0x4	m_flPrevAnimTime	float	FIELD_TIME	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0174	0x4	m_flAnimTime	float	FIELD_TIME	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0178	0x4	m_flLastThink	float	FIELD_TIME	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x017c	0x4	m_flNextThink	float	FIELD_TIME	1	KEY key=nextthink	CBaseEntity	datamap	7	0
+CAI_BaseNPCTroika	0x0180	0x4	m_flNextThinkSR	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0184	0xc	m_vecViewOffset	Vector	FIELD_VECTOR	1	KEY key=view_ofs	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0190	0xc	m_vecMoveDir	Vector	FIELD_VECTOR	1	KEY key=movedir	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x019c	0x4	m_fEffects	int	FIELD_INTEGER	1	KEY key=effects	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x01a0	0x4	m_clrRender	color32	FIELD_COLOR32	1	KEY key=rendercolor	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x01a4	0x4	m_nModelIndex	int	FIELD_INTEGER	1	KEY key=modelindex	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x01ac		touchStamp	int		1		CBaseEntity	sdk-order	1	3
+CAI_BaseNPCTroika	0x01b0		m_NetworkChangeState	CEntityNetworkChangeState		1		CBaseEntity	walked	0	2
+CAI_BaseNPCTroika	0x01b1		m_NetworkChangeState.m_bChanged	bool		1		CBaseEntity	walked	12	0
+CAI_BaseNPCTroika	0x01b8	0x34	m_aThinkFunctions	custom	FIELD_CUSTOM	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x01bc		m_aThinkFunctions.m_Memory.m_nAllocationCount	int		1		CBaseEntity	sdk-order	2	1
+CAI_BaseNPCTroika	0x01c0		m_aThinkFunctions.m_Memory.m_nGrowSize	int		1		CBaseEntity	sdk-order	0	2
+CAI_BaseNPCTroika	0x01c4		m_aThinkFunctions.m_Size	int		1		CBaseEntity	sdk-order	1	3
+CAI_BaseNPCTroika	0x01c8		m_aThinkFunctions.m_pElements	thinkfunc_t*		1		CBaseEntity	sdk-order	3	0
+CAI_BaseNPCTroika	0x01cc		m_iCurrentThinkContext	int		1		CBaseEntity	sdk-order	1	2
+CAI_BaseNPCTroika	0x01d0		m_ResponseContexts	CUtlVector<ResponseContext_t>		1		CBaseEntity	sdk-order	0	1
+CAI_BaseNPCTroika	0x01d4		m_ResponseContexts.m_Memory.m_nAllocationCount	int		1		CBaseEntity	sdk-order	2	0
+CAI_BaseNPCTroika	0x01d8		m_ResponseContexts.m_Memory.m_nGrowSize	int		1		CBaseEntity	sdk-order	0	2
+CAI_BaseNPCTroika	0x01e0		m_ResponseContexts.m_pElements	ResponseContext_t*		1		CBaseEntity	sdk-order	2	0
+CAI_BaseNPCTroika	0x01e4		m_iszResponseContext	string_t		1		CBaseEntity	sdk-order	0	1
+CAI_BaseNPCTroika	0x01ec	0x4	m_pfnTouch	BASEPTR	FIELD_FUNCTION	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x01f0	0x4	m_pfnUse	BASEPTR	FIELD_FUNCTION	1		CBaseEntity	datamap	1	0
+CAI_BaseNPCTroika	0x01f4	0x4	m_pfnBlocked	BASEPTR	FIELD_FUNCTION	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x01f8		m_pLink	CBaseEntity*		1		CBaseEntity	walked	0	1
+CAI_BaseNPCTroika	0x01fc	0x4	m_takedamage	int	FIELD_INTEGER	1		CBaseEntity	datamap	2	0
+CAI_BaseNPCTroika	0x0200	0x4	m_lifeState	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0204	0x4	m_spawnflags	int	FIELD_INTEGER	1	KEY key=spawnflags	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0208	0x4	m_iMaxHealth	int	FIELD_INTEGER	1	KEY key=max_health	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x020c	0x4	m_target	string_t	FIELD_STRING	1	KEY key=target	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0210	0x4	m_iHealth	int	FIELD_INTEGER	1	KEY key=health	CBaseEntity	datamap	1	0
+CAI_BaseNPCTroika	0x0214	0x4	m_iszUseFilterName	string_t	FIELD_STRING	1	KEY key=use_filter_name	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0218	0x4	m_hUseFilter	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x021c	0x4	m_iszDamageFilterName	string_t	FIELD_STRING	1	KEY key=dmg_filter_name	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0220	0x4	m_hDamageFilter	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0224	0x4	m_debugOverlays	int	FIELD_INTEGER	1		CBaseEntity	datamap	0	4
+CAI_BaseNPCTroika	0x0228		m_pTimedOverlay	TimedOverlay_t*		1		CBaseEntity	sdk-order	2	2
+CAI_BaseNPCTroika	0x022c	0x4	m_nSimulationTick	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0230		m_DamageModifiers	CUtlLinkedList<CDamageModifier*,int>		1		CBaseEntity	sdk-order	0	3
+CAI_BaseNPCTroika	0x0234		m_DamageModifiers.m_Memory.m_nAllocationCount	int		1		CBaseEntity	sdk-order	2	0
+CAI_BaseNPCTroika	0x0238		m_DamageModifiers.m_Memory.m_nGrowSize	int		1		CBaseEntity	sdk-order	0	2
+CAI_BaseNPCTroika	0x023c		m_DamageModifiers.m_Head	int		1		CBaseEntity	sdk-order	0	2
+CAI_BaseNPCTroika	0x0254	0x4	m_pParent	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0258	0x1	m_iParentAttachment	char	FIELD_CHARACTER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x025c	0x4	m_pMoveParent	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0260	0x4	m_pMoveChild	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0264	0x4	m_pMovePeer	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0268	0x4	m_iEFlags	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x026c	0x4	m_iName	string_t	FIELD_STRING	1	KEY key=targetname	CBaseEntity	datamap	1	19
+CAI_BaseNPCTroika	0x0270	0x64	m_Collision	CCollisionProperty	FIELD_EMBEDDED	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0274	0xc	m_Collision.m_vecMins	Vector	FIELD_VECTOR	1	GLOBAL	CBaseEntity	datamap	0	5
+CAI_BaseNPCTroika	0x0278		m_Collision.m_vecMins.y	float		1		CBaseEntity	interior	0	3
+CAI_BaseNPCTroika	0x027c		m_Collision.m_vecMins.z	float		1		CBaseEntity	interior	0	3
+CAI_BaseNPCTroika	0x0280	0xc	m_Collision.m_vecMaxs	Vector	FIELD_VECTOR	1	GLOBAL	CBaseEntity	datamap	0	4
+CAI_BaseNPCTroika	0x0284		m_Collision.m_vecMaxs.y	float		1		CBaseEntity	interior	0	3
+CAI_BaseNPCTroika	0x0288		m_Collision.m_vecMaxs.z	float		1		CBaseEntity	interior	0	3
+CAI_BaseNPCTroika	0x028c	0x1	m_Collision.m_nSurroundType	char	FIELD_CHARACTER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0290	0x4	m_Collision.m_flTriggerBloat	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0294	0xc	m_Collision.m_vecSpecifiedSurroundingMins	Vector	FIELD_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x02a0	0xc	m_Collision.m_vecSpecifiedSurroundingMaxs	Vector	FIELD_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x02b0	0x4	m_Collision.m_Solid	int	FIELD_INTEGER	1	KEY key=solid	CBaseEntity	datamap	0	4
+CAI_BaseNPCTroika	0x02b4	0x2	m_Collision.m_usSolidFlags	short	FIELD_SHORT	1		CBaseEntity	datamap	0	24
+CAI_BaseNPCTroika	0x02b5		m_Collision.m_usSolidFlags.hibyte	unsigned char		1		CBaseEntity	walked	0	1
+CAI_BaseNPCTroika	0x02b8	0x4	m_Collision.m_flRadius	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x02bc	0xc	m_Collision.m_vecSurroundingMins	Vector	FIELD_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x02c8	0xc	m_Collision.m_vecSurroundingMaxs	Vector	FIELD_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x02d4		m_Network	CServerNetworkProperty		1		CBaseEntity	sdk-order	0	4
+CAI_BaseNPCTroika	0x02e0		m_Network.m_pPev	edict_t*		1		CBaseEntity	walked	0	86
+CAI_BaseNPCTroika	0x035c	0x4	m_MoveType	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0360	0x4	m_MoveCollide	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0364	0x4	m_hOwnerEntity	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0368	0x4	m_CollisionGroup	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x036c	0x4	m_pPhysicsObject	custom	FIELD_CUSTOM	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0370	0x4	m_flElasticity	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0374	0x4	m_iszUseScript	string_t	FIELD_STRING	1	KEY key=usescript	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0378		m_pPythonObject	PyObject*		1		CBaseEntity	walked	0	3
+CAI_BaseNPCTroika	0x037c	0x4	m_hAimEnt	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0380		m_bSentLastFrame	bool		1		CBaseEntity	walked	1	1
+CAI_BaseNPCTroika	0x0384	0x4	m_hGroundEntity	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0388	0x4	m_ModelName	string_t	FIELD_MODELNAME	1	GLOBAL KEY key=model	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x038c	0xc	m_vecSize	Vector	FIELD_VECTOR	1	GLOBAL KEY key=size	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0390		m_vecSize.y	float		1		CBaseEntity	interior	2	0
+CAI_BaseNPCTroika	0x0394		m_vecSize.z	float		1		CBaseEntity	interior	2	0
+CAI_BaseNPCTroika	0x03b0	0xc	m_vecBaseVelocity	Vector	FIELD_VECTOR	1	KEY key=basevelocity	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03bc		m_vecAbsVelocity	Vector		1		CBaseEntity	sdk-order	3	17
+CAI_BaseNPCTroika	0x03c0		m_vecAbsVelocity.y	float		1		CBaseEntity	sdk-order	3	15
+CAI_BaseNPCTroika	0x03c4		m_vecAbsVelocity.z	float		1		CBaseEntity	sdk-order	3	16
+CAI_BaseNPCTroika	0x03c8	0xc	m_vecAngVelocity	Vector	FIELD_VECTOR	1	KEY key=avelocity	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03d4	0xc	m_vecVelocity	Vector	FIELD_VECTOR	1	KEY key=velocity	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03e0	0x4	m_nWaterLevel	int	FIELD_INTEGER	1	KEY key=waterlevel	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03e4	0x4	m_nWaterType	int	FIELD_INTEGER	1	KEY key=watertype	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03ec	0x4	m_flGravity	float	FIELD_FLOAT	1	KEY key=gravity	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03f0	0x4	m_flFriction	float	FIELD_FLOAT	1	KEY key=friction	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03f4	0x4	m_flLocalTime	float	FIELD_FLOAT	1	KEY key=ltime	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03f8	0x4	m_flVPhysicsUpdateLocalTime	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x03fc	0x4	m_flMoveDoneTime	float	FIELD_FLOAT	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0404	0xc	m_vecAbsOrigin	Vector	FIELD_POSITION_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0410	0xc	m_angAbsRotation	Vector	FIELD_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0414		m_angAbsRotation.y	float		1		CBaseEntity	interior	2	0
+CAI_BaseNPCTroika	0x0418		m_angAbsRotation.z	float		1		CBaseEntity	interior	2	0
+CAI_BaseNPCTroika	0x041c	0xc	m_vecOrigin	Vector	FIELD_VECTOR	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0420		m_vecOrigin.y	float		1		CBaseEntity	interior	3	4
+CAI_BaseNPCTroika	0x0424		m_vecOrigin.z	float		1		CBaseEntity	interior	3	4
+CAI_BaseNPCTroika	0x0428	0xc	m_angRotation	Vector	FIELD_VECTOR	1	KEY key=angles	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x042c		m_angRotation.y	float		1		CBaseEntity	interior	2	3
+CAI_BaseNPCTroika	0x0430		m_angRotation.z	float		1		CBaseEntity	interior	2	6
+CAI_BaseNPCTroika	0x0434	0x4	m_fFlags	int	FIELD_INTEGER	1	KEY key=flags	CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0438	0x4	m_fFlags2	int	FIELD_INTEGER	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x043c		m_bIsPlayerSimulated	bool		1		CBaseEntity	sdk-order	1	0
+CAI_BaseNPCTroika	0x0440	0x4	m_hPlayerSimulationOwner	EHANDLE	FIELD_EHANDLE	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0444		m_fDataObjectTypes	int		1		CBaseEntity	sdk-order	2	3
+CAI_BaseNPCTroika	0x0448		m_RefEHandle	CBaseHandle		1		CBaseEntity	sdk-order	1	1
+CAI_BaseNPCTroika	0x044c	0x1	m_bHasCalledMakerDeathNotice	bool	FIELD_BOOLEAN	1		CBaseEntity	datamap		
+CAI_BaseNPCTroika	0x0450	0xc	MoverData.vecMovePos1	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x045c	0xc	MoverData.vecMovePos2	Vector	FIELD_VECTOR	1	KEY key=move_dest	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0468	0xc	MoverData.angMoveAngle1	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0474	0xc	MoverData.angMoveAngle2	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0480	0x4	MoverData.flMoveSpeed	float	FIELD_FLOAT	1	KEY key=move_speed	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0484	0x4	MoverData.Rot	int	FIELD_INTEGER	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0488	0x4	MoverData.Axis	int	FIELD_INTEGER	1	KEY key=rot_axis	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x048c	0x4	MoverData.flRotDist	float	FIELD_FLOAT	1	KEY key=rot_dist	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0490	0x4	MoverData.flRotSpeed	float	FIELD_FLOAT	1	KEY key=rot_speed	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0494	0x4	MoverData.TargetPos	int	FIELD_INTEGER	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0498	0x4	MoverData.CurrPos	int	FIELD_INTEGER	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x049c	0x4	MoverData.UseType	int	FIELD_INTEGER	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04a0	0x4	m_MoverMoveType	int	FIELD_INTEGER	1	KEY key=use_pref	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04a4	0x18	m_OnLinearMoveDone	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnLinearMoveDone	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04bc	0x18	m_OnAngularMoveDone	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnAngularMoveDone	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04d4	0x4	m_flMoveReboundDuration	float	FIELD_FLOAT	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04d8	0x4	m_flMoveReboundAmount	float	FIELD_FLOAT	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04dc	0x4	m_flMoveReboundStartTime	float	FIELD_FLOAT	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04e0	0xc	m_flMoveReboundVelocity	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04ec	0xc	m_flMoveReboundAngVelocity	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04f8	0x4	m_toggle_state	int	FIELD_INTEGER	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x04fc	0x4	m_flMoveDistance	float	FIELD_FLOAT	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0500	0x4	m_flWait	float	FIELD_FLOAT	1	KEY key=wait	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0504	0x4	m_flLip	float	FIELD_FLOAT	1	KEY key=lip	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0508	0xc	m_vecPosition1	Vector	FIELD_POSITION_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0514	0xc	m_vecPosition2	Vector	FIELD_POSITION_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0520	0xc	m_vecAngle1	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x052c	0xc	m_vecAngle2	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0538	0x4	m_flHeight	float	FIELD_FLOAT	1	KEY key=height	CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x053c	0x4	m_hActivator	EHANDLE	FIELD_EHANDLE	1		CBaseToggle	datamap	1	0
+CAI_BaseNPCTroika	0x0540	0xc	m_vecFinalDest	Vector	FIELD_POSITION_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x054c	0xc	m_vecFinalAngle	Vector	FIELD_VECTOR	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x0558	0x4	m_movementType	int	FIELD_INTEGER	1		CBaseToggle	datamap		
+CAI_BaseNPCTroika	0x055c	0x4	m_hIgnoreCollisionEntity	EHANDLE	FIELD_EHANDLE	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0560	0x4	m_flYawSpeed	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0564	0x4	m_flGroundSpeedScalar	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0568	0x1	m_fSequencePastHalf	bool	FIELD_BOOLEAN	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x056c	0x4	m_bForceLatch	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0570	0x4	m_bSavedForceLatch	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0574	0x10	m_nRagDollRootBone	int	FIELD_INTEGER	4		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0584	0x10	m_flRagDollBeginFadeTime	float	FIELD_FLOAT	4		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0594	0x10	m_flRagDollFadeDuration	float	FIELD_FLOAT	4		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x05a4	0x4	m_flEffectStartTime	float	FIELD_TIME	1	KEY key=fx_start	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x05a8	0x4	m_hAnimFollowModel	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	1
+CAI_BaseNPCTroika	0x05ac		m_bGroundSpeedFromIntervalMovement	bool		1		CBaseCombatCharacter	walked	1	1
+CAI_BaseNPCTroika	0x05b0	0x4	m_fEffectsNextSequence	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x05b4	0x1	m_bRepositionToAnimationExit	bool	FIELD_BOOLEAN	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x05b8		m_hExtraAnimationEntity	EHANDLE		1		CBaseAnimating	walked	3	3
+CAI_BaseNPCTroika	0x05bc		m_nExtraAnimModelIndex	int		2		CBaseAnimating	walked	1	2
+CAI_BaseNPCTroika	0x05c0		m_nExtraAnimModelIndex[1]	int		1		CBaseAnimating	walked	1	1
+CAI_BaseNPCTroika	0x05c4		m_ExtraAnimSequenceMap	CUtlVector<ExtraAnimSequenceMap_t>		2		CBaseAnimating	walked	0	5
+CAI_BaseNPCTroika	0x05ec		m_szExtraAnimSeqPrefix	char		40		CBaseAnimating	walked	1	5
+CAI_BaseNPCTroika	0x0614		m_szExtraAnimSeqReplacePrefix	char		40		CBaseAnimating	walked	0	4
+CAI_BaseNPCTroika	0x063c	0x4	m_hWindSourceEntity	EHANDLE	FIELD_EHANDLE	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0640	0x4	m_flWindAngle	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0644	0x4	m_flWindChangesPerSecond	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0648	0x4	m_flWindMinSpeed	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x064c	0x4	m_flWindMaxSpeed	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0654	0x4	m_flGroundSpeed	float	FIELD_FLOAT	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0658	0x4	m_flLastEventCheck	float	FIELD_TIME	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x065c	0x1	m_bSequenceFinished	bool	FIELD_BOOLEAN	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x065d	0x1	m_bSequenceLoops	bool	FIELD_BOOLEAN	1		CBaseAnimating	datamap	0	2
+CAI_BaseNPCTroika	0x0660	0x4	m_nForceBone	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0664	0xc	m_vecForce	Vector	FIELD_VECTOR	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0670	0x4	m_nSkin	int	FIELD_INTEGER	1	KEY INPUT key=skin	CBaseAnimating	datamap	0	1
+CAI_BaseNPCTroika	0x0674	0x4	m_nSkinCrossfade	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0678	0x4	m_flSkinCrossfadeTime	float	FIELD_FLOAT	1	KEY key=crossfade_skin_time	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x067c	0x4	m_nBody	int	FIELD_INTEGER	1	KEY key=body	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0680	0x4	m_nHitboxSet	int	FIELD_INTEGER	1	KEY key=hitboxset	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0684	0x4	m_flModelScale	float	FIELD_FLOAT	1	KEY key=scale	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0688	0x4	m_nTopColor	int	FIELD_INTEGER	1	KEY key=topcolor	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x068c	0x4	m_nBottomColor	int	FIELD_INTEGER	1	KEY key=bottomcolor	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0690	0x60	m_flPoseParameter	float	FIELD_FLOAT	24		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x06f0	0x4	m_nSequence	int	FIELD_INTEGER	1	KEY key=sequence	CBaseAnimating	datamap	4	5
+CAI_BaseNPCTroika	0x06f4	0x4	m_flPlaybackRate	float	FIELD_FLOAT	1	KEY key=playbackrate	CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x06f8	0x4	m_flCycle	float	FIELD_FLOAT	1	KEY key=cycle	CBaseAnimating	datamap	4	0
+CAI_BaseNPCTroika	0x06fc	0x10	m_flEncodedController	float	FIELD_FLOAT	4		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x070c	0x1	m_bClientSideAnimation	bool	FIELD_BOOLEAN	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0710	0x4	m_nClientSideFrameReset	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0714	0xc	m_vecPrevSeqOrigin	Vector	FIELD_VECTOR	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0720	0xc	m_angPrevSeqAngles	Vector	FIELD_VECTOR	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x072c	0x4	m_nPhysicsChainDisableMask	int	FIELD_INTEGER	1		CBaseAnimating	datamap		
+CAI_BaseNPCTroika	0x0730	0x1	m_bNoFlinch	bool	FIELD_BOOLEAN	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0734	0x4	m_AnimOverlay[0].m_fFlags	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0738	0x4	m_AnimOverlay[0].m_fSequenceFinished	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x073c	0x4	m_AnimOverlay[0].m_nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0740	0x4	m_AnimOverlay[0].m_flCycle	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0744	0x4	m_AnimOverlay[0].m_flPlaybackRate	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0748	0x4	m_AnimOverlay[0].m_flWeight	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x074c	0x4	m_AnimOverlay[0].m_flWeightMax	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0750	0x4	m_AnimOverlay[0].m_flBlendIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0754	0x4	m_AnimOverlay[0].m_flBlendOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0758	0x4	m_AnimOverlay[0].m_nActivity	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x075c	0x1	m_AnimOverlay[0].m_bAutoKillWhenFinished	bool	FIELD_BOOLEAN	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0760	0x4	m_AnimOverlay[0].m_flLastEventCheck	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0764	0x4	m_AnimOverlay[1].m_fFlags	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0768	0x4	m_AnimOverlay[1].m_fSequenceFinished	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x076c	0x4	m_AnimOverlay[1].m_nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0770	0x4	m_AnimOverlay[1].m_flCycle	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0774	0x4	m_AnimOverlay[1].m_flPlaybackRate	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0778	0x4	m_AnimOverlay[1].m_flWeight	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x077c	0x4	m_AnimOverlay[1].m_flWeightMax	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0780	0x4	m_AnimOverlay[1].m_flBlendIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0784	0x4	m_AnimOverlay[1].m_flBlendOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0788	0x4	m_AnimOverlay[1].m_nActivity	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x078c	0x1	m_AnimOverlay[1].m_bAutoKillWhenFinished	bool	FIELD_BOOLEAN	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0790	0x4	m_AnimOverlay[1].m_flLastEventCheck	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0794	0x4	m_AnimOverlay[2].m_fFlags	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0798	0x4	m_AnimOverlay[2].m_fSequenceFinished	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x079c	0x4	m_AnimOverlay[2].m_nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07a0	0x4	m_AnimOverlay[2].m_flCycle	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07a4	0x4	m_AnimOverlay[2].m_flPlaybackRate	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07a8	0x4	m_AnimOverlay[2].m_flWeight	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07ac	0x4	m_AnimOverlay[2].m_flWeightMax	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07b0	0x4	m_AnimOverlay[2].m_flBlendIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07b4	0x4	m_AnimOverlay[2].m_flBlendOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07b8	0x4	m_AnimOverlay[2].m_nActivity	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07bc	0x1	m_AnimOverlay[2].m_bAutoKillWhenFinished	bool	FIELD_BOOLEAN	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07c0	0x4	m_AnimOverlay[2].m_flLastEventCheck	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07c4	0x4	m_AnimOverlay[3].m_fFlags	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07c8	0x4	m_AnimOverlay[3].m_fSequenceFinished	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07cc	0x4	m_AnimOverlay[3].m_nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07d0	0x4	m_AnimOverlay[3].m_flCycle	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07d4	0x4	m_AnimOverlay[3].m_flPlaybackRate	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07d8	0x4	m_AnimOverlay[3].m_flWeight	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07dc	0x4	m_AnimOverlay[3].m_flWeightMax	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07e0	0x4	m_AnimOverlay[3].m_flBlendIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07e4	0x4	m_AnimOverlay[3].m_flBlendOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07e8	0x4	m_AnimOverlay[3].m_nActivity	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07ec	0x1	m_AnimOverlay[3].m_bAutoKillWhenFinished	bool	FIELD_BOOLEAN	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07f0	0x4	m_AnimOverlay[3].m_flLastEventCheck	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07f4	0x4	m_Flinch[0].nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07f8	0x4	m_Flinch[0].nLatch	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x07fc	0x4	m_Flinch[0].flFadeIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0800	0x4	m_Flinch[0].flFadeOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0804	0x4	m_Flinch[0].nPoseParamIndex	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0808	0x4	m_Flinch[0].flPoseParamValue	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x080c	0x4	m_Flinch[0].flExpireTime	float	FIELD_TIME	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0810	0x4	m_Flinch[1].nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0814	0x4	m_Flinch[1].nLatch	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0818	0x4	m_Flinch[1].flFadeIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x081c	0x4	m_Flinch[1].flFadeOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0820	0x4	m_Flinch[1].nPoseParamIndex	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0824	0x4	m_Flinch[1].flPoseParamValue	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0828	0x4	m_Flinch[1].flExpireTime	float	FIELD_TIME	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x082c	0x4	m_Flinch[2].nSequence	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0830	0x4	m_Flinch[2].nLatch	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0834	0x4	m_Flinch[2].flFadeIn	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0838	0x4	m_Flinch[2].flFadeOut	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x083c	0x4	m_Flinch[2].nPoseParamIndex	int	FIELD_INTEGER	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0840	0x4	m_Flinch[2].flPoseParamValue	float	FIELD_FLOAT	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0844	0x4	m_Flinch[2].flExpireTime	float	FIELD_TIME	1		CBaseAnimatingOverlay	datamap		
+CAI_BaseNPCTroika	0x0848	0xc	m_viewtarget	Vector	FIELD_POSITION_VECTOR	1		CBaseFlex	datamap		
+CAI_BaseNPCTroika	0x0854	0x4	m_blinktoggle	int	FIELD_INTEGER	1		CBaseFlex	datamap		
+CAI_BaseNPCTroika	0x0858	0x200	m_flexWeight	float	FIELD_FLOAT	128		CBaseFlex	datamap		
+CAI_BaseNPCTroika	0x0a58		m_SceneEvents	CUtlVector<CSceneEventInfo>		1		CBaseFlex	walked	1	4
+CAI_BaseNPCTroika	0x0a5c		m_SceneEvents.m_Memory.m_nAllocationCount	int		1		CBaseFlex	walked	1	1
+CAI_BaseNPCTroika	0x0a60		m_SceneEvents.m_Memory.m_nGrowSize	int		1		CBaseFlex	walked	0	1
+CAI_BaseNPCTroika	0x0a64		m_SceneEvents.m_Size	int		1		CBaseFlex	walked	3	4
+CAI_BaseNPCTroika	0x0a68		m_SceneEvents.m_pElements	CSceneEventInfo*		1		CBaseFlex	walked	1	0
+CAI_BaseNPCTroika	0x0a80	0x4	m_flLastBCCUpdate	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0a84	0x4	m_flLastBloodHealHOTUpdate	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0a88		m_MeleeDiceRolls	CUtlVector<MeleeDiceRoll_t>		1		CBaseCombatCharacter	walked	0	5
+CAI_BaseNPCTroika	0x0a94		m_MeleeDiceRolls.m_Size	int		1		CBaseCombatCharacter	walked	2	3
+CAI_BaseNPCTroika	0x0a98		m_MeleeDiceRolls.m_pElements	MeleeDiceRoll_t*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x0a9c		m_flUnknown_a9c	float		1		CBaseCombatCharacter	unsettled	2	0
+CAI_BaseNPCTroika	0x0aa0		m_bDidPlayMeleeImpactEffect	bool		1		CBaseCombatCharacter	walked	1	0
+CAI_BaseNPCTroika	0x0aa1	0x1	m_bMeleeSwingIsLive	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0aa2	0x1	m_bDidSendIncomingSwingNotice	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0aa3		m_bDidSendSwingActiveEvent	bool		1		CBaseCombatCharacter	walked	2	1
+CAI_BaseNPCTroika	0x0aa4	0x4	m_flLastMeleeSwingUpdate	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0aa8	0xc	m_vecLastMeleeSwingPosition	Vector	FIELD_POSITION_VECTOR	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0ab4	0xc	m_angLastMeleeSwingAngles	Vector	FIELD_POSITION_VECTOR	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e30	0x4	m_iVendorIndex	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e34	0x4	m_iVendorRestrictFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e38	0x4	m_iOccultPowerFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e3c	0x4	m_flEyeIntegRate	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	3	0
+CAI_BaseNPCTroika	0x0e40	0x4	m_flNextEyeLookTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e44	0xc	m_vEyeLookTarget	Vector	FIELD_POSITION_VECTOR	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e50	0xc	m_vCurEyeTarget	Vector	FIELD_POSITION_VECTOR	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e5c	0x4	m_flHeadYaw	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e60	0x4	m_flHeadPitch	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e64	0x4	m_hEyeLookTarget	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e68		m_iScriptedEyeLookType	int		1		CBaseCombatCharacter	walked	3	2
+CAI_BaseNPCTroika	0x0e6c	0x1	m_bAimWeaponAtTarget	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e70	0x4	m_hWeaponAimTarget	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e74	0xc	m_vWeaponAimOffset	Vector	FIELD_VECTOR	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e80	0x4	m_iFriendPresenceEffect	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e84	0x4	m_flEnemeyPresencePercent	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e88	0x4	m_iEnemyPresenceEffect	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e8c	0x4	m_flNextPresenceCheckTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e90	0x4	m_flNextComfortCheckTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e94	0x4	m_iComfortingCount	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0e98	0x4	m_bitsDamageType	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0e9c	0x8	m_rgbTimeBasedDamage	char	FIELD_CHARACTER	8		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0ea4	0x4	m_hLastWeapon	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0ea8	0x4	m_hLastMeleeWeapon	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0eac	0x4	m_iDisciplineContextTgtFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0eb0	0x4	m_iDisciplineFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	2
+CAI_BaseNPCTroika	0x0eb4	0x4	m_iDisciplineFlags2	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	2
+CAI_BaseNPCTroika	0x0eb8	0x4	m_iDisciplinePreFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	1
+CAI_BaseNPCTroika	0x0ebc	0x4	m_iDisciplinePreFlags2	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	1
+CAI_BaseNPCTroika	0x0ec0	0xf0	m_fDisciplineTimers	float	FIELD_TIME	60		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0fb0	0x4	m_iDisciplineCastCounter	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0fb4	0x14	m_aDisciplineSrcBCCs	CUtlVector<DisciplineSrc>	FIELD_CUSTOM	1		CBaseCombatCharacter	datamap	1	3
+CAI_BaseNPCTroika	0x0fb8		m_aDisciplineSrcBCCs.m_Memory.m_nAllocationCount	int		1		CBaseCombatCharacter	interior	3	1
+CAI_BaseNPCTroika	0x0fbc		m_aDisciplineSrcBCCs.m_Memory.m_nGrowSize	int		1		CBaseCombatCharacter	interior	1	2
+CAI_BaseNPCTroika	0x0fc0		m_aDisciplineSrcBCCs.m_Size	int		1		CBaseCombatCharacter	interior	3	5
+CAI_BaseNPCTroika	0x0fc4		m_aDisciplineSrcBCCs.m_pElements	T*		1		CBaseCombatCharacter	interior	4	0
+CAI_BaseNPCTroika	0x0fc8	0x1	m_bIsUnkillable	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0fcc	0x4	m_flMoveStartTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0fd0	0x4	m_vDiscBloodType	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	2	0
+CAI_BaseNPCTroika	0x0fd4	0x4	m_iLastDisciplineHitBy	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0fd8	0x1	m_bLastDisciplineResist	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0fdc	0x4	m_iLastStoredDmg	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0fe0	0x1	m_bAllowsInterpenetratingAttacks	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x0fe4	0x4	m_iMiscFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x0fe8	0x4	m_hDialogPartner	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	5
+CAI_BaseNPCTroika	0x0fec	0x4	m_Activity	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	3	8
+CAI_BaseNPCTroika	0x0ff0	0x4	m_IdealActivity	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	2	0
+CAI_BaseNPCTroika	0x0ff4	0x4	m_TranslatedActivity	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	1
+CAI_BaseNPCTroika	0x0ff8	0x48	m_hBodyFireParticles	EHANDLE	FIELD_EHANDLE	18		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1040	0x4	m_hInteractiveUseTarget	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1044	0x4	m_ShakyType	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1048	0x4	m_flShakyHandsTimer	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x104c	0x4	m_flShakyHandsLastPose	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	2	0
+CAI_BaseNPCTroika	0x1050	0x4	m_flShakyHandsIntensity	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1054	0x8	m_flShakyHands_PoseOffset	float	FIELD_FLOAT	2		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x105c	0x8	m_flIdeal_PoseParameters	float	FIELD_FLOAT	2		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1064	0x8	m_flSet_PoseParameters	float	FIELD_FLOAT	2		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1068		m_flSet_PoseParameters[1]	float		1		CBaseCombatCharacter	interior	1	0
+CAI_BaseNPCTroika	0x106c	0x8	m_idxPoseParameter	int	FIELD_INTEGER	2		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1070		m_idxPoseParameter[1]	int		1		CBaseCombatCharacter	interior	1	0
+CAI_BaseNPCTroika	0x1074	0xc	m_vecHeadLocalForward	Vector	FIELD_VECTOR	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1078		m_vecHeadLocalForward.y	float		1		CBaseCombatCharacter	interior	1	0
+CAI_BaseNPCTroika	0x107c		m_vecHeadLocalForward.z	float		1		CBaseCombatCharacter	interior	1	0
+CAI_BaseNPCTroika	0x1080	0x4	m_idxHeadBone	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1084	0x4	m_nStealthBonus	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1088	0x1	m_bWillTalk	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x108c		m_iLookDataFrame	int		1		CBaseCombatCharacter	walked	1	2
+CAI_BaseNPCTroika	0x1090		m_vecLookDataHeadPosition	Vector		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x1094		m_vecLookDataHeadPosition.y	float		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x1098		m_vecLookDataHeadPosition.z	float		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x109c		m_vecLookDataHeadForward	Vector		1		CBaseCombatCharacter	walked	0	2
+CAI_BaseNPCTroika	0x10a0		m_vecLookDataHeadForward.y	float		1		CBaseCombatCharacter	walked	0	2
+CAI_BaseNPCTroika	0x10a4		m_vecLookDataHeadForward.z	float		1		CBaseCombatCharacter	walked	0	2
+CAI_BaseNPCTroika	0x10a8	0x4	m_flDebugSlowedScale	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10ac	0x4	m_sTeamName	string_t	FIELD_STRING	1	KEY key=team_name	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10b0		m_TeamSymbol	unsigned short		1		CBaseCombatCharacter	walked	1	0
+CAI_BaseNPCTroika	0x10b4	0x4	m_idxDefExpression	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	3	0
+CAI_BaseNPCTroika	0x10b8	0x4	m_flDefExpressionIntensity	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	2	0
+CAI_BaseNPCTroika	0x10bc		m_Expressions	CUtlVector<ScriptedExpression_t>		1		CBaseCombatCharacter	doc	4	8
+CAI_BaseNPCTroika	0x10c0		m_Expressions.m_Memory.m_nAllocationCount	int		1		CBaseCombatCharacter	walked	6	2
+CAI_BaseNPCTroika	0x10c4		m_Expressions.m_Memory.m_nGrowSize	int		1		CBaseCombatCharacter	walked	1	5
+CAI_BaseNPCTroika	0x10c8		m_Expressions.m_Size	int		1		CBaseCombatCharacter	walked	6	5
+CAI_BaseNPCTroika	0x10cc		m_Expressions.m_pElements	ScriptedExpression_t*		1		CBaseCombatCharacter	walked	8	0
+CAI_BaseNPCTroika	0x10d0	0x4	m_flCameraOverrideFadeTime	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10d4	0x1	m_bCameraTargetIsHead	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10d8		m_hUnreadHandle10d8	EHANDLE		1		CBaseCombatCharacter	unsettled	1	0
+CAI_BaseNPCTroika	0x10dc	0x4	m_hActiveIArmor	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x10e0	0x4	m_hLastIArmor	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x10e4	0x4	m_statTemplate	string_t	FIELD_STRING	1	KEY key=stattemplate	CBaseCombatCharacter	datamap	1	1
+CAI_BaseNPCTroika	0x10e8	0x4	m_iFloatSoundFrequency	int	FIELD_INTEGER	1	KEY key=floatfreq	CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x10ec	0x4	m_flNextFloatSoundTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x10f0	0x4	m_iVAttributesBase[ v_attribute_attrib_order ]	int	FIELD_INTEGER	1	KEY key=base_attrib_order	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10f4	0x4	m_iVAttributesBase[ v_attribute_strength ]	int	FIELD_INTEGER	1	KEY key=base_strength	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10f8	0x4	m_iVAttributesBase[ v_attribute_dexterity ]	int	FIELD_INTEGER	1	KEY key=base_dexterity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x10fc	0x4	m_iVAttributesBase[ v_attribute_stamina ]	int	FIELD_INTEGER	1	KEY key=base_stamina	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1100	0x4	m_iVAttributesBase[ v_attribute_charisma ]	int	FIELD_INTEGER	1	KEY key=base_charisma	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1104	0x4	m_iVAttributesBase[ v_attribute_manipulation ]	int	FIELD_INTEGER	1	KEY key=base_manipulation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1108	0x4	m_iVAttributesBase[ v_attribute_appearance ]	int	FIELD_INTEGER	1	KEY key=base_appearance	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x110c	0x4	m_iVAttributesBase[ v_attribute_perception ]	int	FIELD_INTEGER	1	KEY key=base_perception	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1110	0x4	m_iVAttributesBase[ v_attribute_intelligence ]	int	FIELD_INTEGER	1	KEY key=base_intelligence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1114	0x4	m_iVAttributesBase[ v_attribute_wits ]	int	FIELD_INTEGER	1	KEY key=base_wits	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1118	0x4	m_iVAttributesBase[ v_attribute_clan ]	int	FIELD_INTEGER	1	KEY key=base_clan	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x111c	0x4	m_iVAttributesBase[ v_attribute_gender ]	int	FIELD_INTEGER	1	KEY key=base_gender_	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1120	0x4	m_iVAttributesBase[ v_attribute_bloodpool ]	int	FIELD_INTEGER	1	KEY key=base_bloodpool	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1124	0x4	m_iVAttributesBase[ v_attribute_bloodpool_max ]	int	FIELD_INTEGER	1	KEY key=base_bloodpool_max	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1128	0x4	m_iVAttributesBase[ v_attribute_faithpoints ]	int	FIELD_INTEGER	1	KEY key=base_faithpoints	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x112c	0x4	m_iVAttributesBase[ v_attribute_health ]	int	FIELD_INTEGER	1	KEY key=base_vhealth	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1130	0x4	m_iVAttributesBase[ v_attribute_health_aggravated_dmg ]	int	FIELD_INTEGER	1	KEY key=base_health_aggravated_dmg	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1134	0x4	m_iVAttributesBase[ v_attribute_max_health ]	int	FIELD_INTEGER	1	KEY key=base_vmax_health	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1138	0x4	m_iVAttributesBase[ v_attribute_generation ]	int	FIELD_INTEGER	1	KEY key=base_generation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x113c	0x4	m_iVAttributesBase[ v_attribute_armor_rating ]	int	FIELD_INTEGER	1	KEY key=base_armor_rating	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1140	0x4	m_iVAttributesBase[ v_attribute_level ]	int	FIELD_INTEGER	1	KEY key=base_level	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1144	0x4	m_iVAttributesBase[ v_attribute_frenzy_check_mod ]	int	FIELD_INTEGER	1	KEY key=base_frenzy_check_mod	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1148	0x4	m_iVAttributesBase[ v_attribute_soak_pool ]	int	FIELD_INTEGER	1	KEY key=base_soak_pool	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x114c	0x4	m_iVAttributesBase[ v_attribute_automatic_soak_successes ]	int	FIELD_INTEGER	1	KEY key=base_automatic_soak_successes	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1150	0x4	m_iVAttributesBase[ v_attribute_automatic_str_successes ]	int	FIELD_INTEGER	1	KEY key=base_automatic_str_successes	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1154	0x4	m_iVAttributesBase[ v_attribute_health_buffer ]	int	FIELD_INTEGER	1	KEY key=base_health_buffer	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1158	0x4	m_iVAttributesBase[ v_attribute_encumbrance ]	int	FIELD_INTEGER	1	KEY key=base_encumbrance	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x115c	0x4	m_iVAttributesBase[ v_attribute_humanity ]	int	FIELD_INTEGER	1	KEY key=base_humanity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1160	0x4	m_iVAttributesBase[ v_attribute_masquerade ]	int	FIELD_INTEGER	1	KEY key=base_masquerade	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1164	0x4	m_iVAttributesBase[ v_attribute_experience_modifier ]	int	FIELD_INTEGER	1	KEY key=base_experience_modifier	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1168	0x4	m_iVAttributesBase[ v_attribute_starting_equipment ]	int	FIELD_INTEGER	1	KEY key=base_starting_equipment	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x116c	0x4	m_iVAttributesBase[ v_attribute_excluded_equipment ]	int	FIELD_INTEGER	1	KEY key=base_excluded_equipment	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1170	0x4	m_iVAttributesBase[ v_attribute_vampheal_type ]	int	FIELD_INTEGER	1	KEY key=base_vampheal_type	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1174	0x4	m_iVAttributesBase[ v_attribute_autolevel_template ]	int	FIELD_INTEGER	1	KEY key=base_autolevel_template	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1178	0x4	m_iVAttributesBase[ v_attribute_experience ]	int	FIELD_INTEGER	1	KEY key=base_experience	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x117c	0x4	m_iVAttributesCurrent[ v_attribute_attrib_order ]	int	FIELD_INTEGER	1	KEY key=attrib_order	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1180	0x4	m_iVAttributesCurrent[ v_attribute_strength ]	int	FIELD_INTEGER	1	KEY key=strength	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1184	0x4	m_iVAttributesCurrent[ v_attribute_dexterity ]	int	FIELD_INTEGER	1	KEY key=dexterity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1188	0x4	m_iVAttributesCurrent[ v_attribute_stamina ]	int	FIELD_INTEGER	1	KEY key=stamina	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x118c	0x4	m_iVAttributesCurrent[ v_attribute_charisma ]	int	FIELD_INTEGER	1	KEY key=charisma	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1190	0x4	m_iVAttributesCurrent[ v_attribute_manipulation ]	int	FIELD_INTEGER	1	KEY key=manipulation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1194	0x4	m_iVAttributesCurrent[ v_attribute_appearance ]	int	FIELD_INTEGER	1	KEY key=appearance	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1198	0x4	m_iVAttributesCurrent[ v_attribute_perception ]	int	FIELD_INTEGER	1	KEY key=perception	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x119c	0x4	m_iVAttributesCurrent[ v_attribute_intelligence ]	int	FIELD_INTEGER	1	KEY key=intelligence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11a0	0x4	m_iVAttributesCurrent[ v_attribute_wits ]	int	FIELD_INTEGER	1	KEY key=wits	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11a4	0x4	m_iVAttributesCurrent[ v_attribute_clan ]	int	FIELD_INTEGER	1	KEY key=clan	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11a8	0x4	m_iVAttributesCurrent[ v_attribute_gender ]	int	FIELD_INTEGER	1	KEY key=gender	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11ac	0x4	m_iVAttributesCurrent[ v_attribute_bloodpool ]	int	FIELD_INTEGER	1	KEY key=bloodpool	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11b0	0x4	m_iVAttributesCurrent[ v_attribute_bloodpool_max ]	int	FIELD_INTEGER	1	KEY key=bloodpool_max	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11b4	0x4	m_iVAttributesCurrent[ v_attribute_faithpoints ]	int	FIELD_INTEGER	1	KEY key=faithpoints	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11b8	0x4	m_iVAttributesCurrent[ v_attribute_health ]	int	FIELD_INTEGER	1	KEY key=vhealth	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11bc	0x4	m_iVAttributesCurrent[ v_attribute_health_aggravated_dmg ]	int	FIELD_INTEGER	1	KEY key=health_aggravated_dmg	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11c0	0x4	m_iVAttributesCurrent[ v_attribute_max_health ]	int	FIELD_INTEGER	1	KEY key=vmax_health	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11c4	0x4	m_iVAttributesCurrent[ v_attribute_generation ]	int	FIELD_INTEGER	1	KEY key=generation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11c8	0x4	m_iVAttributesCurrent[ v_attribute_armor_rating ]	int	FIELD_INTEGER	1	KEY key=armor_rating	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11cc	0x4	m_iVAttributesCurrent[ v_attribute_level ]	int	FIELD_INTEGER	1	KEY key=level	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11d0	0x4	m_iVAttributesCurrent[ v_attribute_frenzy_check_mod ]	int	FIELD_INTEGER	1	KEY key=frenzy_check_mod	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11d4	0x4	m_iVAttributesCurrent[ v_attribute_soak_pool ]	int	FIELD_INTEGER	1	KEY key=soak_pool	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11d8	0x4	m_iVAttributesCurrent[ v_attribute_automatic_soak_successes ]	int	FIELD_INTEGER	1	KEY key=automatic_soak_successes	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11dc	0x4	m_iVAttributesCurrent[ v_attribute_automatic_str_successes ]	int	FIELD_INTEGER	1	KEY key=automatic_str_successes	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11e0	0x4	m_iVAttributesCurrent[ v_attribute_health_buffer ]	int	FIELD_INTEGER	1	KEY key=health_buffer	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11e4	0x4	m_iVAttributesCurrent[ v_attribute_encumbrance ]	int	FIELD_INTEGER	1	KEY key=encumbrance	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11e8	0x4	m_iVAttributesCurrent[ v_attribute_humanity ]	int	FIELD_INTEGER	1	KEY key=humanity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11ec	0x4	m_iVAttributesCurrent[ v_attribute_masquerade ]	int	FIELD_INTEGER	1	KEY key=masquerade	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11f0	0x4	m_iVAttributesCurrent[ v_attribute_experience_modifier ]	int	FIELD_INTEGER	1	KEY key=experience_modifier	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11f4	0x4	m_iVAttributesCurrent[ v_attribute_starting_equipment ]	int	FIELD_INTEGER	1	KEY key=starting_equipment	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11f8	0x4	m_iVAttributesCurrent[ v_attribute_excluded_equipment ]	int	FIELD_INTEGER	1	KEY key=excluded_equipment	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x11fc	0x4	m_iVAttributesCurrent[ v_attribute_vampheal_type ]	int	FIELD_INTEGER	1	KEY key=vampheal_type	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1200	0x4	m_iVAttributesCurrent[ v_attribute_autolevel_template ]	int	FIELD_INTEGER	1	KEY key=autolevel_template	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1204	0x4	m_iVAttributesCurrent[ v_attribute_experience ]	int	FIELD_INTEGER	1	KEY key=experience	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1208		m_pVAttributesBase	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x120c		m_pVAttributesCurrent	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x1210	0x4	m_iVAbilitiesBase[ v_ability_ability_order ]	int	FIELD_INTEGER	1	KEY key=base_ability_order	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1214	0x4	m_iVAbilitiesBase[ v_ability_brawl ]	int	FIELD_INTEGER	1	KEY key=base_brawl	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1218	0x4	m_iVAbilitiesBase[ v_ability_dodge ]	int	FIELD_INTEGER	1	KEY key=base_dodge	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x121c	0x4	m_iVAbilitiesBase[ v_ability_intimidate ]	int	FIELD_INTEGER	1	KEY key=base_intimidate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1220	0x4	m_iVAbilitiesBase[ v_ability_subterfuge ]	int	FIELD_INTEGER	1	KEY key=base_subterfuge	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1224	0x4	m_iVAbilitiesBase[ v_ability_firearms ]	int	FIELD_INTEGER	1	KEY key=base_firearms	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1228	0x4	m_iVAbilitiesBase[ v_ability_melee ]	int	FIELD_INTEGER	1	KEY key=base_melee	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x122c	0x4	m_iVAbilitiesBase[ v_ability_security ]	int	FIELD_INTEGER	1	KEY key=base_security	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1230	0x4	m_iVAbilitiesBase[ v_ability_stealth ]	int	FIELD_INTEGER	1	KEY key=base_stealth	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1234	0x4	m_iVAbilitiesBase[ v_ability_computers ]	int	FIELD_INTEGER	1	KEY key=base_computers	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1238	0x4	m_iVAbilitiesBase[ v_ability_finance ]	int	FIELD_INTEGER	1	KEY key=base_finance	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x123c	0x4	m_iVAbilitiesBase[ v_ability_investigation ]	int	FIELD_INTEGER	1	KEY key=base_investigation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1240	0x4	m_iVAbilitiesBase[ v_ability_academics ]	int	FIELD_INTEGER	1	KEY key=base_academics	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1244	0x4	m_iVAbilitiesCurrent[ v_ability_ability_order ]	int	FIELD_INTEGER	1	KEY key=ability_order	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1248	0x4	m_iVAbilitiesCurrent[ v_ability_brawl ]	int	FIELD_INTEGER	1	KEY key=brawl	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x124c	0x4	m_iVAbilitiesCurrent[ v_ability_dodge ]	int	FIELD_INTEGER	1	KEY key=dodge	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1250	0x4	m_iVAbilitiesCurrent[ v_ability_intimidate ]	int	FIELD_INTEGER	1	KEY key=intimidate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1254	0x4	m_iVAbilitiesCurrent[ v_ability_subterfuge ]	int	FIELD_INTEGER	1	KEY key=subterfuge	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1258	0x4	m_iVAbilitiesCurrent[ v_ability_firearms ]	int	FIELD_INTEGER	1	KEY key=firearms	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x125c	0x4	m_iVAbilitiesCurrent[ v_ability_melee ]	int	FIELD_INTEGER	1	KEY key=melee	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1260	0x4	m_iVAbilitiesCurrent[ v_ability_security ]	int	FIELD_INTEGER	1	KEY key=security	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1264	0x4	m_iVAbilitiesCurrent[ v_ability_stealth ]	int	FIELD_INTEGER	1	KEY key=stealth	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1268	0x4	m_iVAbilitiesCurrent[ v_ability_computers ]	int	FIELD_INTEGER	1	KEY key=computers	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x126c	0x4	m_iVAbilitiesCurrent[ v_ability_finance ]	int	FIELD_INTEGER	1	KEY key=finance	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1270	0x4	m_iVAbilitiesCurrent[ v_ability_investigation ]	int	FIELD_INTEGER	1	KEY key=investigation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1274	0x4	m_iVAbilitiesCurrent[ v_ability_academics ]	int	FIELD_INTEGER	1	KEY key=academics	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1278		m_pVAbilitiesBase	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x127c		m_pVAbilitiesCurrent	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x1280	0x4	m_iVDisciplinesBase[ v_discipline_animalism ]	int	FIELD_INTEGER	1	KEY key=base_animalism	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1284	0x4	m_iVDisciplinesBase[ v_discipline_auspex ]	int	FIELD_INTEGER	1	KEY key=base_auspex	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1288	0x4	m_iVDisciplinesBase[ v_discipline_blood_healing ]	int	FIELD_INTEGER	1	KEY key=base_blood_healing	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x128c	0x4	m_iVDisciplinesBase[ v_discipline_celerity ]	int	FIELD_INTEGER	1	KEY key=base_celerity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1290	0x4	m_iVDisciplinesBase[ v_discipline_corpus_vampirus ]	int	FIELD_INTEGER	1	KEY key=base_corpus_vampirus	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1294	0x4	m_iVDisciplinesBase[ v_discipline_dementation ]	int	FIELD_INTEGER	1	KEY key=base_dementation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1298	0x4	m_iVDisciplinesBase[ v_discipline_dominate ]	int	FIELD_INTEGER	1	KEY key=base_dominate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x129c	0x4	m_iVDisciplinesBase[ v_discipline_fortitude ]	int	FIELD_INTEGER	1	KEY key=base_fortitude	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12a0	0x4	m_iVDisciplinesBase[ v_discipline_obfuscate ]	int	FIELD_INTEGER	1	KEY key=base_obfuscate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12a4	0x4	m_iVDisciplinesBase[ v_discipline_potence ]	int	FIELD_INTEGER	1	KEY key=base_potence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12a8	0x4	m_iVDisciplinesBase[ v_discipline_presence ]	int	FIELD_INTEGER	1	KEY key=base_presence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12ac	0x4	m_iVDisciplinesBase[ v_discipline_protean ]	int	FIELD_INTEGER	1	KEY key=base_protean	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12b0	0x4	m_iVDisciplinesBase[ v_discipline_thaumaturgy ]	int	FIELD_INTEGER	1	KEY key=base_thaumaturgy	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12c4	0x4	m_iVDisciplinesCurrent[ v_discipline_animalism ]	int	FIELD_INTEGER	1	KEY key=animalism	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12c8	0x4	m_iVDisciplinesCurrent[ v_discipline_auspex ]	int	FIELD_INTEGER	1	KEY key=auspex	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12cc	0x4	m_iVDisciplinesCurrent[ v_discipline_blood_healing ]	int	FIELD_INTEGER	1	KEY key=blood_healing	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12d0	0x4	m_iVDisciplinesCurrent[ v_discipline_celerity ]	int	FIELD_INTEGER	1	KEY key=celerity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12d4	0x4	m_iVDisciplinesCurrent[ v_discipline_corpus_vampirus ]	int	FIELD_INTEGER	1	KEY key=corpus_vampirus	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12d8	0x4	m_iVDisciplinesCurrent[ v_discipline_dementation ]	int	FIELD_INTEGER	1	KEY key=dementation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12dc	0x4	m_iVDisciplinesCurrent[ v_discipline_dominate ]	int	FIELD_INTEGER	1	KEY key=dominate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12e0	0x4	m_iVDisciplinesCurrent[ v_discipline_fortitude ]	int	FIELD_INTEGER	1	KEY key=fortitude	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12e4	0x4	m_iVDisciplinesCurrent[ v_discipline_obfuscate ]	int	FIELD_INTEGER	1	KEY key=obfuscate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12e8	0x4	m_iVDisciplinesCurrent[ v_discipline_potence ]	int	FIELD_INTEGER	1	KEY key=potence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12ec	0x4	m_iVDisciplinesCurrent[ v_discipline_presence ]	int	FIELD_INTEGER	1	KEY key=presence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12f0	0x4	m_iVDisciplinesCurrent[ v_discipline_protean ]	int	FIELD_INTEGER	1	KEY key=protean	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x12f4	0x4	m_iVDisciplinesCurrent[ v_discipline_thaumaturgy ]	int	FIELD_INTEGER	1	KEY key=thaumaturgy	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1308		m_pVDisciplinesBase	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x130c		m_pVDisciplinesCurrent	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x1310	0x4	m_iVActiveDisciplinesBase[ v_discipline_animalism ]	int	FIELD_INTEGER	1	KEY key=base_active_animalism	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1314	0x4	m_iVActiveDisciplinesBase[ v_discipline_auspex ]	int	FIELD_INTEGER	1	KEY key=base_active_auspex	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1318	0x4	m_iVActiveDisciplinesBase[ v_discipline_blood_healing ]	int	FIELD_INTEGER	1	KEY key=base_active_blood_healing	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x131c	0x4	m_iVActiveDisciplinesBase[ v_discipline_celerity ]	int	FIELD_INTEGER	1	KEY key=base_active_celerity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1320	0x4	m_iVActiveDisciplinesBase[ v_discipline_corpus_vampirus ]	int	FIELD_INTEGER	1	KEY key=base_active_corpus_vampirus	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1324	0x4	m_iVActiveDisciplinesBase[ v_discipline_dementation ]	int	FIELD_INTEGER	1	KEY key=base_active_dementation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1328	0x4	m_iVActiveDisciplinesBase[ v_discipline_dominate ]	int	FIELD_INTEGER	1	KEY key=base_active_active_active_dominate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x132c	0x4	m_iVActiveDisciplinesBase[ v_discipline_fortitude ]	int	FIELD_INTEGER	1	KEY key=base_active_fortitude	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1330	0x4	m_iVActiveDisciplinesBase[ v_discipline_obfuscate ]	int	FIELD_INTEGER	1	KEY key=base_active_obfuscate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1334	0x4	m_iVActiveDisciplinesBase[ v_discipline_potence ]	int	FIELD_INTEGER	1	KEY key=base_active_potence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1338	0x4	m_iVActiveDisciplinesBase[ v_discipline_presence ]	int	FIELD_INTEGER	1	KEY key=base_active_presence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x133c	0x4	m_iVActiveDisciplinesBase[ v_discipline_protean ]	int	FIELD_INTEGER	1	KEY key=base_active_protean	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1340	0x4	m_iVActiveDisciplinesBase[ v_discipline_thaumaturgy ]	int	FIELD_INTEGER	1	KEY key=base_active_thaumaturgy	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1354	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_animalism ]	int	FIELD_INTEGER	1	KEY key=active_animalism	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1358	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_auspex ]	int	FIELD_INTEGER	1	KEY key=active_auspex	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x135c	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_blood_healing ]	int	FIELD_INTEGER	1	KEY key=active_blood_healing	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1360	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_celerity ]	int	FIELD_INTEGER	1	KEY key=active_celerity	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1364	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_corpus_vampirus ]	int	FIELD_INTEGER	1	KEY key=active_corpus_vampirus	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1368	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_dementation ]	int	FIELD_INTEGER	1	KEY key=active_dementation	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x136c	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_dominate ]	int	FIELD_INTEGER	1	KEY key=active_dominate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1370	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_fortitude ]	int	FIELD_INTEGER	1	KEY key=active_fortitude	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1374	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_obfuscate ]	int	FIELD_INTEGER	1	KEY key=active_obfuscate	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1378	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_potence ]	int	FIELD_INTEGER	1	KEY key=active_potence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x137c	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_presence ]	int	FIELD_INTEGER	1	KEY key=active_presence	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1380	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_protean ]	int	FIELD_INTEGER	1	KEY key=active_protean	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1384	0x4	m_iVActiveDisciplinesCurrent[ v_discipline_thaumaturgy ]	int	FIELD_INTEGER	1	KEY key=active_thaumaturgy	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1398		m_pVActiveDisciplinesBase	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x139c		m_pVActiveDisciplinesCurrent	int*		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x13a0	0x4	m_iVHistoryID	int	FIELD_INTEGER	1	KEY key=vhistory	CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x13a4		m_iUpdateFlags	int		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x13a8		m_StatListManager	CVStatListManager_t		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x13ac		m_StatListManager.m_nNextListId	int		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x13b8		m_StatListManager.m_nAllocated	int		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x13bc		m_StatListManager.m_nCount	int		1		CBaseCombatCharacter	walked	3	52
+CAI_BaseNPCTroika	0x13c0		m_StatListManager.m_ppLists	CVStatList_t**		1		CBaseCombatCharacter	walked	3	52
+CAI_BaseNPCTroika	0x13cc	0x4	m_iGender	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x13d0	0x4	m_flLastFaithShieldHealTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x13d4	0x4	m_flHolyLightEndTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x13d8	0x4	m_iMoney	int	FIELD_INTEGER	1	KEY key=money	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x13dc	0x8c	m_tEffectList	custom	FIELD_CUSTOM	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1460		m_ReactionIds	CVReactionIdList_t		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x1468	0x4	m_iCurVReaction	int	FIELD_INTEGER	1	KEY key=cur_reaction	CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x146c	0x4	m_iCurFrenzyCount	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1470	0x4	m_flNextFrenzyTimeThreshhold	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1474	0x1	m_bFrenzyHunger	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1475	0x1	m_bCantBreakGrapple	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1476	0x1	m_bIsFrenzyGrapple	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1478	0x4	m_flBreakGrappleTimer	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	1
+CAI_BaseNPCTroika	0x147c	0x4	m_flGrappleDamageTimer	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1480	0x1	m_bIsBCCTargetable	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1481	0x1	m_bIsAlive	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1482	0x1	m_bNeverMeleeOpponent	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1484	0x4	m_nMotionTrail	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1488	0x4	m_flSpeedScale	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap	1	2
+CAI_BaseNPCTroika	0x148c	0x4	m_flJumpStartTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1490	0x4	m_flNextFeedPulse	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1494	0x4	m_flNextFeedDuration	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1498	0x4	m_flFeedStartTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x149c		m_hFeedTarget	EHANDLE		1		CBaseCombatCharacter	doc	3	4
+CAI_BaseNPCTroika	0x14a0	0x4	m_iBloodStolen	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x14a4	0x4	m_iCurBloodStolenMod	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x14a8		m_bFeedContinuation	bool		1		CBaseCombatCharacter	doc	2	0
+CAI_BaseNPCTroika	0x14a9		m_bInFeedInterrupt	bool		1		CBaseCombatCharacter	doc	2	1
+CAI_BaseNPCTroika	0x14aa		m_bPrayerHasTarget	bool		1		CBaseCombatCharacter	walked	2	0
+CAI_BaseNPCTroika	0x14ac		m_hPrayerTarget	EHANDLE		1		CBaseCombatCharacter	walked	2	0
+CAI_BaseNPCTroika	0x14b0	0x4	m_aCurWpnActivity	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x14b4	0x4	m_aNextWpnActivity	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x14b8	0x4	m_bfAINPCFlags	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	13	18
+CAI_BaseNPCTroika	0x14bc	0x4	m_bfAINPCFlags2	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	7	10
+CAI_BaseNPCTroika	0x14c0	0x14	m_disciplineVisuals	CUtlVector<CHandle<CBaseEntity>>	FIELD_CUSTOM	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x14c4		m_disciplineVisuals.m_Memory.m_nAllocationCount	int		1		CBaseCombatCharacter	interior	4	0
+CAI_BaseNPCTroika	0x14c8		m_disciplineVisuals.m_Memory.m_nGrowSize	int		1		CBaseCombatCharacter	interior	1	3
+CAI_BaseNPCTroika	0x14cc		m_disciplineVisuals.m_Size	int		1		CBaseCombatCharacter	interior	3	3
+CAI_BaseNPCTroika	0x14d0		m_disciplineVisuals.m_pElements	T*		1		CBaseCombatCharacter	interior	4	0
+CAI_BaseNPCTroika	0x14d4	0x4	m_nLastObfuscateLevel	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x14d8	0x4	m_bitsObfuscateRules	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x14dc	0x1	m_bMeetsObfuscateRules	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x14e0	0x4	m_flObfBrokeSafeTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap	2	1
+CAI_BaseNPCTroika	0x14e4	0x20	m_clientAuraCount	char	FIELD_CHARACTER	32		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1504	0x18	m_OnBarterClose	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnBarterClose	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x151c	0x18	m_OnSellWeapon	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnSellWeapon	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1534		m_GrappleSavedMoveType	int		1		CBaseCombatCharacter	walked	1	1
+CAI_BaseNPCTroika	0x1538		m_GrapplePartner	EHANDLE		1		CBaseCombatCharacter	walked	3	25
+CAI_BaseNPCTroika	0x153c		m_GrappleRole	int		1		CBaseCombatCharacter	walked	3	24
+CAI_BaseNPCTroika	0x1540		m_GrappleType	int		1		CBaseCombatCharacter	walked	2	10
+CAI_BaseNPCTroika	0x1544		m_GrapplePosition	int		1		CBaseCombatCharacter	walked	2	2
+CAI_BaseNPCTroika	0x1548		m_vecGrappleSavedOrigin	Vector		1		CBaseCombatCharacter	walked	1	1
+CAI_BaseNPCTroika	0x154c		m_vecGrappleSavedOrigin.y	float		1		CBaseCombatCharacter	walked	1	0
+CAI_BaseNPCTroika	0x1550		m_vecGrappleSavedOrigin.z	float		1		CBaseCombatCharacter	walked	1	1
+CAI_BaseNPCTroika	0x1554		m_bGrappleHolsteredWeapon	bool		1		CBaseCombatCharacter	walked	1	1
+CAI_BaseNPCTroika	0x1558		m_hGrappleAnimDriver	EHANDLE		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x155c	0x4	m_hProteanTransformOther	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x1560	0x4	m_flProteanTransformStartTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1564	0x4	m_flNextAttack	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1568	0x4	m_eHull	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	16	7
+CAI_BaseNPCTroika	0x156c		m_eDefaultHull	int		1		CBaseCombatCharacter	walked	19	1
+CAI_BaseNPCTroika	0x1570	0x4	m_bloodColor	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1574	0x4	m_flFieldOfView	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1578	0xc	m_HackedGunPos	Vector	FIELD_VECTOR	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x157c		m_HackedGunPos.y	float		1		CBaseCombatCharacter	interior	1	0
+CAI_BaseNPCTroika	0x1580		m_HackedGunPos.z	float		1		CBaseCombatCharacter	interior	1	0
+CAI_BaseNPCTroika	0x1584	0x4	m_RelationshipString	string_t	FIELD_STRING	1	KEY key=Relationship	CBaseCombatCharacter	datamap	0	2
+CAI_BaseNPCTroika	0x1588	0x1	m_bCanSwitchWeapons	bool	FIELD_BOOLEAN	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1589	0x1	m_bCantDropWeapons	bool	FIELD_BOOLEAN	1	KEY key=cantdropweapons	CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x158c	0x4	m_LootableType	int	FIELD_INTEGER	1	KEY key=lootable_type	CBaseCombatCharacter	datamap	2	0
+CAI_BaseNPCTroika	0x1590		m_bCutsceneForceLOD	bool		1		CBaseCombatCharacter	walked	3	0
+CAI_BaseNPCTroika	0x1594	0x4	m_LastHitGroup	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1598	0xc	m_Relationship	custom	FIELD_CUSTOM	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x159c	0x4	m_nMaxRelationships	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x15a0	0x4	m_nNumRelationships	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x15a4	0x80	m_iAmmo	int	FIELD_INTEGER	32		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x1624	0x380	m_hMyWeapons	EHANDLE	FIELD_EHANDLE	224		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x19a4	0x4	m_hActiveWeapon	EHANDLE	FIELD_EHANDLE	1		CBaseCombatCharacter	datamap	1	0
+CAI_BaseNPCTroika	0x19a8	0x4	m_flMeltExpansionTime	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x19ac	0x4	m_flMeltMaxExpand	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
+CAI_BaseNPCTroika	0x19b0		CAI_DefMovementSink::vftable	vftable*		1		CBaseCombatCharacter	walked	62	0
+CAI_BaseNPCTroika	0x19b4		m_ExtendedSaveHeader	AIExtendedSaveHeader_t		1		CBaseCombatCharacter	walked	1	2
+CAI_BaseNPCTroika	0x19b4		m_ExtendedSaveHeader.version	short		1		CBaseCombatCharacter	walked		
+CAI_BaseNPCTroika	0x19b8		m_ExtendedSaveHeader.flags	unsigned int		1		CBaseCombatCharacter	walked	1	1
+CAI_BaseNPCTroika	0x19bc		m_ExtendedSaveHeader.szSchedule	char[128]		128		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x1a3c		m_ExtendedSaveHeader.scheduleCrc	CRC32_t		1		CBaseCombatCharacter	walked	0	1
+CAI_BaseNPCTroika	0x1a40	0x1	m_bShouldMove	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x1a44	0x4	m_iCollisionMask	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1a48		m_DeferredDeathInfo	CTakeDamageInfo		1		CAI_BaseNPC	doc	1	0
+CAI_BaseNPCTroika	0x1a48		m_DeferredDeathInfo.m_pVDmg	CVDmg_t*		1		CAI_BaseNPC	walked		
+CAI_BaseNPCTroika	0x1a4c		m_DeferredDeathInfo.m_flScale04	float		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a50		m_DeferredDeathInfo.m_flScale08	float		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a54		m_DeferredDeathInfo.m_flScale0C	float		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a58		m_DeferredDeathInfo.m_vecDamageForce	Vector		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x1a64		m_DeferredDeathInfo.m_vecDamagePosition	Vector		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x1a70		m_DeferredDeathInfo.m_pInflictor	CBaseEntity*		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a74		m_DeferredDeathInfo.m_pAttacker	CBaseEntity*		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a78		m_DeferredDeathInfo.m_flDamage	float		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a7c		m_DeferredDeathInfo.m_flMaxDamage	float		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a80		m_DeferredDeathInfo.m_bitsDamageType	int		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a84		m_DeferredDeathInfo.m_iDamageCustom	int		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a88		m_DeferredDeathInfo.m_iAmmoType	int		1		CAI_BaseNPC	walked	1	0
+CAI_BaseNPCTroika	0x1a8c		m_DeferredDeathInfo.m_flScale44	float		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a90		m_DeferredDeathInfo.m_bFlag48	bool		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a91		m_DeferredDeathInfo.m_bFlag49	bool		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a92		m_DeferredDeathInfo.m_bFlag4A	bool		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1a94	0x4	m_hLastEnemy	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	2	0
+CAI_BaseNPCTroika	0x1a98	0x4	m_altEquipment	string_t	FIELD_STRING	1	KEY key=alternateequipment	CAI_BaseNPC	datamap	4	1
+CAI_BaseNPCTroika	0x1a9c	0x44	m_DelayedConditionList	CAI_DelayedConditionList	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1a9c	0x8	m_DelayedConditionList.m_dcList[0]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1a9c	0x4	m_DelayedConditionList.m_dcList[0].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aa0	0x4	m_DelayedConditionList.m_dcList[0].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aa4	0x8	m_DelayedConditionList.m_dcList[1]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aa4	0x4	m_DelayedConditionList.m_dcList[1].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aa8	0x4	m_DelayedConditionList.m_dcList[1].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aac	0x8	m_DelayedConditionList.m_dcList[2]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aac	0x4	m_DelayedConditionList.m_dcList[2].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ab0	0x4	m_DelayedConditionList.m_dcList[2].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ab4	0x8	m_DelayedConditionList.m_dcList[3]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ab4	0x4	m_DelayedConditionList.m_dcList[3].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ab8	0x4	m_DelayedConditionList.m_dcList[3].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1abc	0x8	m_DelayedConditionList.m_dcList[4]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1abc	0x4	m_DelayedConditionList.m_dcList[4].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ac0	0x4	m_DelayedConditionList.m_dcList[4].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ac4	0x8	m_DelayedConditionList.m_dcList[5]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ac4	0x4	m_DelayedConditionList.m_dcList[5].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ac8	0x4	m_DelayedConditionList.m_dcList[5].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1acc	0x8	m_DelayedConditionList.m_dcList[6]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1acc	0x4	m_DelayedConditionList.m_dcList[6].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ad0	0x4	m_DelayedConditionList.m_dcList[6].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ad4	0x8	m_DelayedConditionList.m_dcList[7]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ad4	0x4	m_DelayedConditionList.m_dcList[7].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ad8	0x4	m_DelayedConditionList.m_dcList[7].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1adc	0x4	m_DelayedConditionList.m_iCount	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ae0	0x44	m_DelayedSoundConditionList	CAI_DelayedConditionList	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ae0	0x8	m_DelayedSoundConditionList.m_dcList[0]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ae0	0x4	m_DelayedSoundConditionList.m_dcList[0].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ae4	0x4	m_DelayedSoundConditionList.m_dcList[0].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ae8	0x8	m_DelayedSoundConditionList.m_dcList[1]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1ae8	0x4	m_DelayedSoundConditionList.m_dcList[1].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1aec	0x4	m_DelayedSoundConditionList.m_dcList[1].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1af0	0x8	m_DelayedSoundConditionList.m_dcList[2]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1af0	0x4	m_DelayedSoundConditionList.m_dcList[2].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1af4	0x4	m_DelayedSoundConditionList.m_dcList[2].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1af8	0x8	m_DelayedSoundConditionList.m_dcList[3]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1af8	0x4	m_DelayedSoundConditionList.m_dcList[3].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1afc	0x4	m_DelayedSoundConditionList.m_dcList[3].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b00	0x8	m_DelayedSoundConditionList.m_dcList[4]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b00	0x4	m_DelayedSoundConditionList.m_dcList[4].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b04	0x4	m_DelayedSoundConditionList.m_dcList[4].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b08	0x8	m_DelayedSoundConditionList.m_dcList[5]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b08	0x4	m_DelayedSoundConditionList.m_dcList[5].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b0c	0x4	m_DelayedSoundConditionList.m_dcList[5].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b10	0x8	m_DelayedSoundConditionList.m_dcList[6]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b10	0x4	m_DelayedSoundConditionList.m_dcList[6].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b14	0x4	m_DelayedSoundConditionList.m_dcList[6].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b18	0x8	m_DelayedSoundConditionList.m_dcList[7]	CAI_DelayedCondition	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b18	0x4	m_DelayedSoundConditionList.m_dcList[7].m_iCondition	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b1c	0x4	m_DelayedSoundConditionList.m_dcList[7].m_flTriggerTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b20	0x4	m_DelayedSoundConditionList.m_iCount	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b24	0x4	m_flCacheInterruptTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b28	0x1	m_bForceStateChange	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x1b2c		m_SelectScheduleTrace	AIDebugTrace_t		1		CAI_BaseNPC	walked	39	0
+CAI_BaseNPCTroika	0x1b2c		m_SelectScheduleTrace.m_iSelector	int		1		CAI_BaseNPC	walked		
+CAI_BaseNPCTroika	0x1b30		m_SelectScheduleTrace.m_pszFile	const char*		1		CAI_BaseNPC	walked	69	0
+CAI_BaseNPCTroika	0x1b34		m_SelectScheduleTrace.m_iLine	int		1		CAI_BaseNPC	walked	69	0
+CAI_BaseNPCTroika	0x1b38		m_SelectIdealStateTrace	AIDebugTrace_t		1		CAI_BaseNPC	walked	28	0
+CAI_BaseNPCTroika	0x1b38		m_SelectIdealStateTrace.m_iSelector	int		1		CAI_BaseNPC	walked		
+CAI_BaseNPCTroika	0x1b3c		m_SelectIdealStateTrace.m_pszFile	const char*		1		CAI_BaseNPC	walked	28	0
+CAI_BaseNPCTroika	0x1b40		m_SelectIdealStateTrace.m_iLine	int		1		CAI_BaseNPC	walked	28	0
+CAI_BaseNPCTroika	0x1b44		m_TaskFailTrace	AIDebugFileLine_t		1		CAI_BaseNPC	walked	33	0
+CAI_BaseNPCTroika	0x1b44		m_TaskFailTrace.m_pszFile	const char*		1		CAI_BaseNPC	walked		
+CAI_BaseNPCTroika	0x1b48		m_TaskFailTrace.m_iLine	int		1		CAI_BaseNPC	walked	33	0
+CAI_BaseNPCTroika	0x1b4c		m_bRanAI	bool		1		CAI_BaseNPC	walked	2	0
+CAI_BaseNPCTroika	0x1b4d		m_bUnknown1b4d	bool		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x1b4e		m_szDebugBuffer	char[16384]		16384		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5b50		m_iDebugBufferPos	int		1		CAI_BaseNPC	walked	2	1
+CAI_BaseNPCTroika	0x5b54		m_bDebugBufferWrapped	bool		1		CAI_BaseNPC	walked		
+CAI_BaseNPCTroika	0x5b55		m_bDumpDebugBuffer	bool		1		CAI_BaseNPC	walked	4	3
+CAI_BaseNPCTroika	0x5b58		m_iUnknown5b58	int		1		CAI_BaseNPC	unsettled	2	0
+CAI_BaseNPCTroika	0x5b5c		m_flNPCInitTime	float		1		CAI_BaseNPC	walked	2	0
+CAI_BaseNPCTroika	0x5b60	0x4	m_flNextDoorUseTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5b64	0x4	m_bfNPCStateFlags	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5b68	0x4	m_hLastSeenHateEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5b6c	0x4	m_hLastSeenFearEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5b70	0x4	m_hLastSeenDislikeEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5b74	0x4	m_hLastSeenNemesisEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5b78	0x4	m_hLastHeardEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5b7c	0x4	m_hLastDamageEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5b80	0x1	m_bCondTookDamage	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5b84	0x4	m_bfNPCFrenziedFlags	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	3	6
+CAI_BaseNPCTroika	0x5b88	0x4	m_flWeaponBlockedByFriendTimer	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5b8c	0x4	m_flExtendedBlockedByFriendTimer	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5b90		m_pSurfaceData	surfacedata_t*		1		CAI_BaseNPC	doc	4	1
+CAI_BaseNPCTroika	0x5b94	0x4	m_RelativeEyeTarget	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	2	0
+CAI_BaseNPCTroika	0x5b98	0x4	m_eEnemyOccludedCheck	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5b9c	0xc	m_vecLastDamageAttackPos	Vector	FIELD_VECTOR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5ba8	0x4	m_hShootTargetOverride	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	2
+CAI_BaseNPCTroika	0x5bac	0x4	m_flSpecialDistanceAccum	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bb0	0x4	m_iSquadDisconnected	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	0	4
+CAI_BaseNPCTroika	0x5bb4	0x4	m_iIsOblivious	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bb8	0x1	m_bDidMaintainSchedule	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bbc	0x4	m_flBurstShootPauseMin	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5bc0	0x4	m_flBurstShootPauseMax	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5bc4	0x1	m_bInChoreoScene	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bc5	0x1	m_bEnemyWentOccluded	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bc8	0xc	m_vecEnemyWentOccluded	Vector	FIELD_VECTOR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bd8	0x18	m_OnGrappleBegin	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnGrappleBegin	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5bf0	0x18	m_OnGrappleEnd	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnGrappleEnd	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c08	0x18	m_OnFedUponBegin	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnFedUponBegin	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c20	0x18	m_OnFedUponEnd	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnFedUponEnd	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c38		m_pSchedule	CAI_Schedule*		1		CAI_BaseNPC	doc	3	30
+CAI_BaseNPCTroika	0x5c3c	0x4	m_IdealSchedule	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	3	0
+CAI_BaseNPCTroika	0x5c40	0x14	m_ScheduleState	AIScheduleState_t	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c40	0x4	m_ScheduleState.iCurTask	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c44	0x4	m_ScheduleState.fTaskStatus	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c48	0x4	m_ScheduleState.timeStarted	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c4c	0x4	m_ScheduleState.timeCurTaskStarted	float	FIELD_TIME	1		CAI_BaseNPC	datamap	2	3
+CAI_BaseNPCTroika	0x5c50	0x4	m_ScheduleState.taskFailureCode	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	3	1
+CAI_BaseNPCTroika	0x5c54	0x4	m_failSchedule	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5c58		m_bDoPostRestoreRefindPath	bool		1		CAI_BaseNPC	doc	1	1
+CAI_BaseNPCTroika	0x5c5c		m_Conditions	CAI_ScheduleBits		1		CAI_BaseNPC	doc	0	5
+CAI_BaseNPCTroika	0x5c60		m_Conditions.m_ints[1]	int		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5c64		m_Conditions.m_ints[2]	int		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5c68		m_Conditions.m_ints[3]	int		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5c6c		m_Conditions.m_ints[4]	int		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5c70		m_Conditions.m_ints[5]	int		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5c74		m_CustomInterruptConditions	CAI_ScheduleBits		1		CAI_BaseNPC	sdk-order	1	3
+CAI_BaseNPCTroika	0x5c78		m_CustomInterruptConditions.m_ints[1]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c7c		m_CustomInterruptConditions.m_ints[2]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c80		m_CustomInterruptConditions.m_ints[3]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c84		m_CustomInterruptConditions.m_ints[4]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c88		m_CustomInterruptConditions.m_ints[5]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c8c		m_InverseInterruptConditions	CAI_ScheduleBits		1		CAI_BaseNPC	walked	1	3
+CAI_BaseNPCTroika	0x5c90		m_InverseInterruptConditions.m_ints[1]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c94		m_InverseInterruptConditions.m_ints[2]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c98		m_InverseInterruptConditions.m_ints[3]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5c9c		m_InverseInterruptConditions.m_ints[4]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5ca0		m_InverseInterruptConditions.m_ints[5]	int		1		CAI_BaseNPC	walked	1	2
+CAI_BaseNPCTroika	0x5ca4	0x1	m_bConditionsGathered	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5ca8		m_HeardConditions	CAI_ScheduleBits		1		CAI_BaseNPC	walked	0	2
+CAI_BaseNPCTroika	0x5cb4		m_HeardConditions.m_ints[3]	int		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5cb6		m_HeardConditions.m_ints[3]+2	unsigned char		1		CAI_BaseNPC	walked	0	1
+CAI_BaseNPCTroika	0x5cc0	0x4	m_NPCState	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	1	12
+CAI_BaseNPCTroika	0x5cc4	0x4	m_IdealNPCState	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5cc8	0x4	m_flLastStateChangeTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5ccc	0x4	m_nIdealSequence	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	1	1
+CAI_BaseNPCTroika	0x5cd0	0x4	m_IdealTranslatedActivity	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	0	1
+CAI_BaseNPCTroika	0x5cd4	0x4	m_IdealWeaponActivity	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	0	1
+CAI_BaseNPCTroika	0x5cd8	0x1	m_bKeepSound	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap	0	1
+CAI_BaseNPCTroika	0x5cdc	0x4	m_pSenses	CAI_Senses*	FIELD_EMBEDDED	1	PTR	CAI_BaseNPC	datamap	1	2
+CAI_BaseNPCTroika	0x5ce0	0x4	m_hEnemy	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	2	1
+CAI_BaseNPCTroika	0x5ce4	0x4	m_hTargetEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	2	2
+CAI_BaseNPCTroika	0x5ce8	0x4	m_flSoundWaitTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5cec	0x4	m_afCapability	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	3	2
+CAI_BaseNPCTroika	0x5cf0	0x4	m_flMoveWaitFinished	float	FIELD_TIME	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5cf4	0x30	m_MoveAndShootOverlay	CAI_MoveAndShootOverlay	FIELD_EMBEDDED	1		CAI_BaseNPC	datamap	2	0
+CAI_BaseNPCTroika	0x5cf8		m_MoveAndShootOverlay.m_pOuter	CAI_BaseNPC*		1		CAI_BaseNPC	sdk-order	2	0
+CAI_BaseNPCTroika	0x5d00		m_MoveAndShootOverlay.m_iUnread0c	int		1		CAI_BaseNPC	unsettled	1	0
+CAI_BaseNPCTroika	0x5d04	0x1	m_MoveAndShootOverlay.m_bMovingAndShooting	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5d08	0x4	m_MoveAndShootOverlay.m_nMoveShots	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d0c	0x4	m_MoveAndShootOverlay.m_flNextMoveShootTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d10	0x4	m_MoveAndShootOverlay.m_minBurst	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d14	0x4	m_MoveAndShootOverlay.m_maxBurst	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d18	0x4	m_MoveAndShootOverlay.m_minPause	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d1c	0x4	m_MoveAndShootOverlay.m_maxPause	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d20	0x4	m_MoveAndShootOverlay.m_initialDelay	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d24	0x4	m_hOpeningDoor	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	1
+CAI_BaseNPCTroika	0x5d28	0x4	m_hBlockedDoor	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	3	1
+CAI_BaseNPCTroika	0x5d2c	0x4	m_hCondHitByDoor	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d30	0x1	m_bOpeningDoorWait	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5d34	0x4	m_pNavigator	CAI_Navigator*	FIELD_EMBEDDED	1	PTR	CAI_BaseNPC	datamap	1	18
+CAI_BaseNPCTroika	0x5d38		m_pLocalNavigator	CAI_LocalNavigator*		1		CAI_BaseNPC	sdk-order	2	2
+CAI_BaseNPCTroika	0x5d3c	0x4	m_pPathfinder	CAI_Pathfinder*	FIELD_EMBEDDED	1	PTR	CAI_BaseNPC	datamap	1	1
+CAI_BaseNPCTroika	0x5d40		m_pMoveProbe	CAI_MoveProbe*		1		CAI_BaseNPC	sdk-order	2	11
+CAI_BaseNPCTroika	0x5d44	0x4	m_pMotor	CAI_Motor*	FIELD_EMBEDDED	1	PTR	CAI_BaseNPC	datamap	1	7
+CAI_BaseNPCTroika	0x5d48	0x18	m_UnreachableEnts	CUtlVector<UnreachableEnt_t>	FIELD_CUSTOM	1		CAI_BaseNPC	datamap	1	1
+CAI_BaseNPCTroika	0x5d4c		m_UnreachableEnts.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPC	interior	2	0
+CAI_BaseNPCTroika	0x5d50		m_UnreachableEnts.m_Memory.m_nGrowSize	int		1		CAI_BaseNPC	interior	1	1
+CAI_BaseNPCTroika	0x5d54		m_UnreachableEnts.m_Size	int		1		CAI_BaseNPC	interior	3	2
+CAI_BaseNPCTroika	0x5d58		m_UnreachableEnts.m_pElements	T*		1		CAI_BaseNPC	interior	2	0
+CAI_BaseNPCTroika	0x5d5c		m_flCheckOnGroundTime	float		1		CAI_BaseNPC	walked	2	1
+CAI_BaseNPCTroika	0x5d60	0xc	m_vDefaultEyeOffset	Vector	FIELD_VECTOR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5d6c		m_flNextEyeLookTime	float		1		CAI_BaseNPC	sdk-order	5	2
+CAI_BaseNPCTroika	0x5d70	0x4	m_scriptState	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5d74	0x4	m_hCine	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPC	datamap	1	2
+CAI_BaseNPCTroika	0x5d78	0x1	m_bCineScriptHidden	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5d7c		m_ScriptArrivalActivity	Activity		1		CAI_BaseNPC	sdk-order	3	1
+CAI_BaseNPCTroika	0x5d80		m_strScriptArrivalSequence	string_t		1		CAI_BaseNPC	sdk-order	3	1
+CAI_BaseNPCTroika	0x5d88		m_pEnemies	CAI_Enemies*		1		CAI_BaseNPC	doc	5	6
+CAI_BaseNPCTroika	0x5d8c	0x4	m_afMemory	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5d90		m_hEnemyOccluder	EHANDLE		1		CAI_BaseNPC	sdk-order	2	1
+CAI_BaseNPCTroika	0x5d94	0x4	m_flSumDamage	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d98	0x4	m_flLastDamageTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5d9c	0x4	m_flLastAttackTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap	1	1
+CAI_BaseNPCTroika	0x5da0	0x4	m_flNextWeaponSearchTime	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5da4		m_pSquad	CAI_Squad*		1		CAI_BaseNPC	doc	4	24
+CAI_BaseNPCTroika	0x5da8	0x4	m_SquadName	string_t	FIELD_STRING	1	KEY key=squadname	CAI_BaseNPC	datamap	0	1
+CAI_BaseNPCTroika	0x5dac	0x4	m_iMySquadSlot	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5db0	0x4	m_strHintGroup	string_t	FIELD_STRING	1	KEY key=hintgroup	CAI_BaseNPC	datamap	1	2
+CAI_BaseNPCTroika	0x5db4	0x4	m_flWaitFinished	float	FIELD_TIME	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5db8	0xc	m_vecLastPosition	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5dbc		m_vecLastPosition.y	float		1		CAI_BaseNPC	interior	1	1
+CAI_BaseNPCTroika	0x5dc0		m_vecLastPosition.z	float		1		CAI_BaseNPC	interior	1	1
+CAI_BaseNPCTroika	0x5dc4	0xc	m_qaLastFacing	Vector	FIELD_VECTOR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5dd0	0xc	m_vSavePosition	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPC	datamap	1	0
+CAI_BaseNPCTroika	0x5dd4		m_vSavePosition.y	float		1		CAI_BaseNPC	interior	9	5
+CAI_BaseNPCTroika	0x5dd8		m_vSavePosition.z	float		1		CAI_BaseNPC	interior	9	5
+CAI_BaseNPCTroika	0x5ddc	0x4	m_pHintNode	CBaseEntity*	FIELD_CLASSPTR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5de0	0x4	m_cAmmoLoaded	int	FIELD_INTEGER	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5de4	0x4	m_flDistTooFar	float	FIELD_FLOAT	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5de8	0x4	m_pGoalEnt	CBaseEntity*	FIELD_CLASSPTR	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5dec	0x4	m_spawnEquipment	string_t	FIELD_STRING	1	KEY key=additionalequipment	CAI_BaseNPC	datamap	4	1
+CAI_BaseNPCTroika	0x5df0		m_fNoDamageDecal	bool		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseNPCTroika	0x5df4		m_hStoredPathTarget	EHANDLE		1		CAI_BaseNPC	sdk-order	1	1
+CAI_BaseNPCTroika	0x5df8		m_vecStoredPathGoal	Vector		1		CAI_BaseNPC	sdk-order	1	1
+CAI_BaseNPCTroika	0x5dfc		m_vecStoredPathGoal.y	float		1		CAI_BaseNPC	sdk-order	1	1
+CAI_BaseNPCTroika	0x5e00		m_vecStoredPathGoal.z	float		1		CAI_BaseNPC	sdk-order	1	1
+CAI_BaseNPCTroika	0x5e04		m_nStoredPathType	GoalType_t		1		CAI_BaseNPC	sdk-order	1	1
+CAI_BaseNPCTroika	0x5e08		m_fStoredPathFlags	int		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseNPCTroika	0x5e0c	0x18	m_OnDamaged	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnDamaged	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5e24	0x18	m_OnDeath	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnDeath	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5e3c	0x18	m_OnHalfHealth	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnHalfHealth	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5e54	0x18	m_OnFoundEnemy	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnFoundEnemy	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5e6c	0x18	m_OnLostEnemyLOS	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnLostEnemyLOS	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5e84	0x18	m_OnLostEnemy	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnLostEnemy	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5e9c	0x18	m_OnFoundPlayer	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnFoundPlayer	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5eb4	0x18	m_OnLostPlayerLOS	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnLostPlayerLOS	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5ecc	0x18	m_OnLostPlayer	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnLostPlayer	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5ee4	0x18	m_OnHearWorld	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnHearWorld	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5efc	0x18	m_OnHearPlayer	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnHearPlayer	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5f14	0x18	m_OnHearCombat	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnHearCombat	CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5f2c	0x1	m_bWantsLargeHull	bool	FIELD_BOOLEAN	1		CAI_BaseNPC	datamap		
+CAI_BaseNPCTroika	0x5f2d		m_fIsUsingSmallHull	bool		1		CAI_BaseNPC	sdk-order	3	4
+CAI_BaseNPCTroika	0x5f30		m_failText	const char*		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseNPCTroika	0x5f34		m_interruptText	const char*		1		CAI_BaseNPC	sdk-order	2	1
+CAI_BaseNPCTroika	0x5f38		m_failedSchedule	CAI_Schedule*		1		CAI_BaseNPC	sdk-order	2	0
+CAI_BaseNPCTroika	0x5f3c		m_interuptSchedule	CAI_Schedule*		1		CAI_BaseNPC	sdk-order	2	0
+CAI_BaseNPCTroika	0x5f44	0x18	m_OnDialogBegin	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnDialogBegin	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5f5c	0x18	m_OnDialogEnd	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnDialogEnd	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5f74	0x18	m_OnInterestingPlaceArrived	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnInterestingPlaceArrived	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5f8c	0x18	m_OnInterestingPlaceLeft	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnInterestingPlaceLeft	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5fa4	0x18	m_OnUnknownVisionPlayer	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnUnknownVisionPlayer	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5fbc	0x18	m_OnStateFleeing	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnStateFleeing	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5fd4	0x18	m_OnIncapacitatedStart	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnIncapacitatedStart	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x5fec	0x18	m_OnIncapacitatedEnd	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnIncapacitatedEnd	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6004	0xc	m_KnockbackVelocity	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6010	0x4	m_hKnockbackHitEntity	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6014	0x4	m_fKnockbackWallHitFallTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6018	0x4	m_fFinishingMoveBoneTrackLastTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x601c	0xc	m_vFinishingMoveBoneTrackLastPos	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6028		m_MeleeMoveHistory	MeleeMoveRecord_t		5		CAI_BaseNPCTroika	walked	0	1
+CAI_BaseNPCTroika	0x6064	0x4	m_iHitBuildupCount	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6068	0x4	m_knockbackType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x606c	0x4	m_flLastMeleeStepbackTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6070	0x4	m_flMeleeCanEnterTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	3	0
+CAI_BaseNPCTroika	0x6074	0x4	m_flMeleeMustLeaveTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	3	3
+CAI_BaseNPCTroika	0x6078	0x1	m_bInMelee	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap	18	13
+CAI_BaseNPCTroika	0x607c	0x4	m_flCanSeekCoverTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6080	0x1	m_bDisableAI	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6081		m_bSeenInOuterBand	bool		1		CAI_BaseNPCTroika	doc	1	3
+CAI_BaseNPCTroika	0x6084	0x4	m_flSeeUnknownCheatVisionTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6088	0x4	m_hBestSeeUnknown	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x608c	0x4	m_hLastSeeUnknown	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6090	0xc	m_vecLastSeeUnknownPos	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x609c	0x4	m_flSeeUnknownRunTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60a0	0x4	m_flSeeUnknownStartTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60a4	0x4	m_iSeeUnknownRepeatSightings	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60a8	0x4	m_iEnemySightings	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60ac	0x4	m_hFriendPlayer	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	3	0
+CAI_BaseNPCTroika	0x60b0	0x2c	m_BestSound	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x60b0	0x4	m_BestSound.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x60b4	0x4	m_BestSound.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x60b8	0x4	m_BestSound.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60bc	0x4	m_BestSound.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60c0	0x4	m_BestSound.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60c8	0x4	m_BestSound.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60cc	0x4	m_BestSound.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60d0	0xc	m_BestSound.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x60d4		m_BestSound.m_vecOrigin.y	float		1		CAI_BaseNPCTroika	interior	0	1
+CAI_BaseNPCTroika	0x60d8		m_BestSound.m_vecOrigin.z	float		1		CAI_BaseNPCTroika	interior	0	1
+CAI_BaseNPCTroika	0x60dc	0x2c	m_InvestigateSound	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x60dc	0x4	m_InvestigateSound.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x60e0	0x4	m_InvestigateSound.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60e4	0x4	m_InvestigateSound.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60e8	0x4	m_InvestigateSound.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60ec	0x4	m_InvestigateSound.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60f4	0x4	m_InvestigateSound.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60f8	0x4	m_InvestigateSound.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x60fc	0xc	m_InvestigateSound.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6108	0x2c	m_LastSoundDanger	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6108	0x4	m_LastSoundDanger.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x610c	0x4	m_LastSoundDanger.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6110	0x4	m_LastSoundDanger.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6114	0x4	m_LastSoundDanger.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6118	0x4	m_LastSoundDanger.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x611c		m_LastSoundDanger.m_bNoExpirationTime	bool		1		CAI_BaseNPCTroika	sdk-order	1	0
+CAI_BaseNPCTroika	0x6120	0x4	m_LastSoundDanger.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6124	0x4	m_LastSoundDanger.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6128	0xc	m_LastSoundDanger.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6134	0x2c	m_LastSoundPhysicsDanger	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6134	0x4	m_LastSoundPhysicsDanger.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6138	0x4	m_LastSoundPhysicsDanger.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x613c	0x4	m_LastSoundPhysicsDanger.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6140	0x4	m_LastSoundPhysicsDanger.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6144	0x4	m_LastSoundPhysicsDanger.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6148		m_LastSoundPhysicsDanger.m_bNoExpirationTime	bool		1		CAI_BaseNPCTroika	sdk-order	1	0
+CAI_BaseNPCTroika	0x614c	0x4	m_LastSoundPhysicsDanger.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6150	0x4	m_LastSoundPhysicsDanger.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6154	0xc	m_LastSoundPhysicsDanger.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6160	0x2c	m_LastSoundCombat	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6160	0x4	m_LastSoundCombat.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6164	0x4	m_LastSoundCombat.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6168	0x4	m_LastSoundCombat.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x616c	0x4	m_LastSoundCombat.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6170	0x4	m_LastSoundCombat.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6178	0x4	m_LastSoundCombat.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x617c	0x4	m_LastSoundCombat.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6180	0xc	m_LastSoundCombat.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x618c	0x2c	m_LastSoundBulletImpact	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x618c	0x4	m_LastSoundBulletImpact.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6190	0x4	m_LastSoundBulletImpact.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6194	0x4	m_LastSoundBulletImpact.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6198	0x4	m_LastSoundBulletImpact.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x619c	0x4	m_LastSoundBulletImpact.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61a0		m_LastSoundBulletImpact.m_bNoExpirationTime	bool		1		CAI_BaseNPCTroika	sdk-order	1	0
+CAI_BaseNPCTroika	0x61a4	0x4	m_LastSoundBulletImpact.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61a8	0x4	m_LastSoundBulletImpact.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61ac	0xc	m_LastSoundBulletImpact.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x61b8	0x2c	m_LastSoundPlayer	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61b8	0x4	m_LastSoundPlayer.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61bc	0x4	m_LastSoundPlayer.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61c0	0x4	m_LastSoundPlayer.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61c4	0x4	m_LastSoundPlayer.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61c8	0x4	m_LastSoundPlayer.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61cc		m_LastSoundPlayer.m_bNoExpirationTime	bool		1		CAI_BaseNPCTroika	sdk-order	1	0
+CAI_BaseNPCTroika	0x61d0	0x4	m_LastSoundPlayer.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61d4	0x4	m_LastSoundPlayer.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61d8	0xc	m_LastSoundPlayer.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x61e4	0x2c	m_LastSoundWorld	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61e4	0x4	m_LastSoundWorld.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61e8	0x4	m_LastSoundWorld.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61ec	0x4	m_LastSoundWorld.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61f0	0x4	m_LastSoundWorld.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61f4	0x4	m_LastSoundWorld.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x61f8		m_LastSoundWorld.m_bNoExpirationTime	bool		1		CAI_BaseNPCTroika	sdk-order	1	0
+CAI_BaseNPCTroika	0x61fc	0x4	m_LastSoundWorld.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6200	0x4	m_LastSoundWorld.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6204	0xc	m_LastSoundWorld.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6210	0x2c	m_LastSoundFlinch	CSound	FIELD_EMBEDDED	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6210	0x4	m_LastSoundFlinch.m_hOwner	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6214	0x4	m_LastSoundFlinch.m_iType	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6218	0x4	m_LastSoundFlinch.m_iVolume	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x621c	0x4	m_LastSoundFlinch.m_flStartTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6220	0x4	m_LastSoundFlinch.m_flExpireTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6228	0x4	m_LastSoundFlinch.m_iNext	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x622c	0x4	m_LastSoundFlinch.m_iNextAudible	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6230	0xc	m_LastSoundFlinch.m_vecOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x623c	0x4	m_flNextInvestigateSoundTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6240	0x4	m_hMoveTargetEnt	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6244	0x4	m_flNextUpdateThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	2	1
+CAI_BaseNPCTroika	0x6248	0x4	m_flNextNormalThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	2	1
+CAI_BaseNPCTroika	0x624c	0x4	m_flNextMoveThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	2	1
+CAI_BaseNPCTroika	0x6250	0x4	m_flNextAIThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	2	1
+CAI_BaseNPCTroika	0x6254	0x4	m_flLastUpdateThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6258	0x4	m_flLastNormalThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x625c	0x4	m_flLastMoveThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6260	0x4	m_flLastAIThink	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6264	0x4	m_flPlayerDist	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6268	0x4	m_flEnemyDist	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap	0	9
+CAI_BaseNPCTroika	0x626c	0x4	m_flEnemyHeightDiff	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap	0	4
+CAI_BaseNPCTroika	0x6270	0x4	m_flEnemyLastKnownDist	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6274	0x4	m_flMeleeHeightDiffTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	4	4
+CAI_BaseNPCTroika	0x6278	0x1	m_bInPlayerPVS	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6279	0x1	m_bInPlayerLOS	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x627c	0x4	m_flLastInPlayerPVS	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6280	0x4	m_flLastInPlayerLOS	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6284	0x4	m_flNextPlayerLOS	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6288	0x4	m_flNextCheckEnterPVSTime	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x628c	0x4	m_hClosestPlayer	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	1	4
+CAI_BaseNPCTroika	0x6290	0xc	m_vecForward	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x629c	0xc	m_vecRight	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62a8	0xc	m_vecInitialPosition	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62b4	0xc	m_qaInitialAngles	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62c0	0x4	m_flOccludedDelayNormal	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62c4	0x4	m_flOccludedDelayCover	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62c8	0x4	m_flOccludedDelay	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62cc	0x4	m_flOccludedReportTimeE	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62d0	0x4	m_flOccludedReportTimeT	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62d4	0x4	m_flOccludedReportTimeW	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62d8	0x4	m_sInterestingPlaceGroups	string_t	FIELD_STRING	1	KEY key=interesting_place_groups	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x62dc	0x4	m_iInterestingPlaceGroups	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62e0	0x4	m_sHintGroups	string_t	FIELD_STRING	1	KEY key=hint_groups	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62e4	0x4	m_iHintGroups	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62e8	0x1	m_bInterestingPlaceArrived	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62e9		m_bInitialized	bool		1		CAI_BaseNPCTroika	walked	3	0
+CAI_BaseNPCTroika	0x62ec		m_pInterestingPlace	CAI_InterestingPlace*		1		CAI_BaseNPCTroika	doc	5	6
+CAI_BaseNPCTroika	0x62f0	0xc	m_vecInterestingPlace	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x62fc		m_pLastInterestingPlace	CAI_InterestingPlace*		1		CAI_BaseNPCTroika	walked	2	0
+CAI_BaseNPCTroika	0x6300		m_pPatrolInterestPlace	CAI_InterestingPlace*		1		CAI_BaseNPCTroika	doc	7	2
+CAI_BaseNPCTroika	0x6304	0x4	m_eInterestingPlaceMode	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6308	0x4	m_iInterestingDeathActivity	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x630c		m_pPedestrianLink	CAI_Link*		1		CAI_BaseNPCTroika	walked	3	2
+CAI_BaseNPCTroika	0x6310		m_iRestorePedLinkNode	int		1		CAI_BaseNPCTroika	walked	1	2
+CAI_BaseNPCTroika	0x6314		m_iRestorePedLinkDestNode	int		1		CAI_BaseNPCTroika	walked	1	2
+CAI_BaseNPCTroika	0x6318	0x4	m_flNextCrosswalkUpdateTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x631c	0x4	m_flNextPedInteractTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6320	0x4	m_flGoalTolerance	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6324	0x4	m_flInsideInterruptDistanceSqr	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6328	0x4	m_flOutsideInterruptDistanceSqr	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x632c	0x4	m_flInterruptTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6330	0x4	m_flWaitFinishedDelta	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6334	0x1	m_bWaitFinishedSet	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6338	0x4	m_eInvestigateMode	int	FIELD_INTEGER	1	KEY key=investigate_mode	CAI_BaseNPCTroika	datamap	1	2
+CAI_BaseNPCTroika	0x633c	0x4	m_eInvestigateModeCombat	int	FIELD_INTEGER	1	KEY key=investigate_mode_combat	CAI_BaseNPCTroika	datamap	1	2
+CAI_BaseNPCTroika	0x6340	0x1	m_bFullInvestigate	bool	FIELD_BOOLEAN	1	KEY key=full_investigate	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6344	0x4	m_iBrightRoutePenalty	int	FIELD_INTEGER	1	KEY key=bright_route_penalty	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6348	0x4	m_iPLInvestigateLevel	int	FIELD_INTEGER	1	KEY INPUT key=pl_investigate	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x634c	0x4	m_iPLCriminalFleeLevel	int	FIELD_INTEGER	1	KEY INPUT key=pl_criminal_flee	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6350	0x4	m_iPLCriminalAttackLevel	int	FIELD_INTEGER	1	KEY INPUT key=pl_criminal_attack	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6354	0x4	m_iPLSupernaturalFleeLevel	int	FIELD_INTEGER	1	KEY INPUT key=pl_supernatural_flee	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6358	0x4	m_iPLSupernaturalAttackLevel	int	FIELD_INTEGER	1	KEY INPUT key=pl_supernatural_attack	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x635c	0xc	m_iPLCriminalLevelWitnessed	custom	FIELD_CUSTOM	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6360		m_iPLCriminalLevelWitnessed.m_CoderBase	unsigned char		1		CAI_BaseNPCTroika	walked	3	0
+CAI_BaseNPCTroika	0x6361		m_iPLCriminalLevelWitnessed.m_TraitsBase	unsigned char		1		CAI_BaseNPCTroika	walked	3	0
+CAI_BaseNPCTroika	0x6364		m_iPLCriminalLevelWitnessed.m_iEncoded	int		1		CAI_BaseNPCTroika	doc	4	4
+CAI_BaseNPCTroika	0x6368	0x4	m_iPLSupernaturalLevelWitnessed	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x636c	0x4	m_iPLCriminalActProcessed	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6370	0x4	m_iPLSupernaturalActProcessed	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6374	0xc	m_vecPLSupernaturalLocation	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6380	0xc	m_vecPLCriminalLocation	Vector	FIELD_POSITION_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x638c	0x4	m_hCriminalOffender	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	2	0
+CAI_BaseNPCTroika	0x6390	0x4	m_hSupernaturalOffender	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	2	0
+CAI_BaseNPCTroika	0x6394	0x1	m_bPLSupernaturalActFleeOnly	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6398	0x4	m_flCriminalIgnoreTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x639c	0x4	m_flSupernaturalIgnoreTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63a0	0x4	m_flNosferatuIgnoreTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63a4	0x4	m_flCriminalWitnessedTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63a8	0x4	m_flSupernaturalWitnessedTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63ac	0x4	m_sPlayerReaction	string_t	FIELD_STRING	1	KEY key=player_reaction	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x63b0	0x4	m_iNPCPerception	int	FIELD_INTEGER	1	KEY key=npc_perception	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x63b4	0x4	m_flSeekDistBase	float	FIELD_FLOAT	1	KEY key=vision	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x63b8	0x4	m_flSeekDistInspection	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63bc	0x4	m_flHearingScalarBase	float	FIELD_FLOAT	1	KEY key=hearing	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x63c0	0x4	m_flHearingScalarInspection	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63c4	0x4	m_flStealthVisionScalar	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63c8	0x4	m_flStealthVisionCone	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63cc	0x4	m_flStealthHearingDist	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63d0	0x4	m_flNextListenTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63d4	0x4	m_flNextInterestChangeTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63d8	0x1	m_bInvincible	bool	FIELD_BOOLEAN	1	KEY key=invincible	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63d9	0x1	m_bUseInteresting	bool	FIELD_BOOLEAN	1	KEY key=use_interesting	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x63da	0x1	m_bForceNPCCheck	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63dc	0x4	m_flWeaponScareTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63e0	0x1	m_fSavePositionWalk	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63e4	0x4	m_eFaceAnim	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63e8	0x4	m_flFaceYawDiff	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63ec	0x4	m_flDesiredMoveYaw	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63f0	0x1	m_bForceFrequentThink	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63f4	0x4	m_eAlertLevel	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63f8	0x4	m_iSubState	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63fc	0x1	m_bGoToIdleState	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x63fd	0x1	m_bLeaningLeft	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6400	0x4	m_flNextCoverLOSCheck	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6404	0x4	m_iFailedCoverLOSChecks	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6408	0x1	m_bForceCoverLOSCheck	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x640c	0x4	m_iPeekOutCount	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6410	0x1	m_bAggressiveAnims	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6414	0x4	m_iCowerAnimOffset	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6418	0x4	m_flNextSeeSoundSourceTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x641c	0x4	m_flNextFleeSoundTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6420	0x4	m_iPercentOccludedWait	int	FIELD_INTEGER	1	KEY key=percent_occluded_wait	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x6424	0x4	m_iPercentOccludedCover	int	FIELD_INTEGER	1	KEY key=percent_occluded_cover	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x6428	0x4	m_iPercentOccludedWalk	int	FIELD_INTEGER	1	KEY key=percent_occluded_walk	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x642c	0x4	m_iPercentOccludedFlank	int	FIELD_INTEGER	1	KEY key=percent_occluded_flank	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x6430	0x4	m_iPercentOccludedChase	int	FIELD_INTEGER	1	KEY key=percent_occluded_chase	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6434	0x1	m_bAllowAlertLookaround	bool	FIELD_BOOLEAN	1	KEY key=allow_alert_lookaround	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x6435	0x1	m_bStayEntrenched	bool	FIELD_BOOLEAN	1	KEY key=stay_entrenched	CAI_BaseNPCTroika	datamap	0	5
+CAI_BaseNPCTroika	0x6436	0x1	m_bAllowKickHintUse	bool	FIELD_BOOLEAN	1	KEY key=allow_kick_hint_use	CAI_BaseNPCTroika	datamap	0	2
+CAI_BaseNPCTroika	0x6438	0x4	m_flKickPhysicsPropSearchTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x643c	0x4	m_hKickPhysicsProp	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	2	1
+CAI_BaseNPCTroika	0x6440		m_flNextShootAtHintSearchTime	float		1		CAI_BaseNPCTroika	doc	4	1
+CAI_BaseNPCTroika	0x6444		m_pShootAtHint	CAI_Hint*		1		CAI_BaseNPCTroika	walked	12	6
+CAI_BaseNPCTroika	0x6448	0x4	m_hHintCoverObject	EHANDLE	FIELD_EHANDLE	1		CAI_BaseNPCTroika	datamap	2	5
+CAI_BaseNPCTroika	0x644c	0x4	m_eAlternateAI	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6450	0x4	m_flAlternateAIExpireTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6454	0x4	m_actPreOpenDoor	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6458	0x4	m_flIgnoreCollisionTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x645c	0xc	m_vecHuntPatrolTarget	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6468	0xc	m_vecHeldPosition	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6474	0x4	m_flHuntExpireTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6478	0x4	m_sFollowerBoss	string_t	FIELD_STRING	1	KEY key=follower_boss	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x647c		m_hFollowerBoss	EHANDLE		1		CAI_BaseNPCTroika	doc	2	7
+CAI_BaseNPCTroika	0x6480	0x4	m_sFollowerType	string_t	FIELD_STRING	1	KEY key=follower_type	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6484		m_flFollowerDistanceBackAway	float		1		CAI_BaseNPCTroika	doc	0	3
+CAI_BaseNPCTroika	0x6488		m_flFollowerDistanceWalkTo	float		1		CAI_BaseNPCTroika	doc	0	3
+CAI_BaseNPCTroika	0x648c		m_flFollowerDistanceRunTo	float		1		CAI_BaseNPCTroika	doc	0	2
+CAI_BaseNPCTroika	0x6490	0x4	m_iBurstFireCount	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6494	0x1	m_bReturnToInitialPos	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6495	0x1	m_bForceDialogStart	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6496	0x1	m_bIsBossMonster	bool	FIELD_BOOLEAN	1	KEY key=is_bossmonster	CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6497		m_bInBossRegistry	bool		1		CAI_BaseNPCTroika	doc	2	1
+CAI_BaseNPCTroika	0x6498	0x1	m_bJumping	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x649c	0xc	m_vJumpOrigin	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x64a8	0xc	m_vJumpTarget	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x64b4	0x4	m_fJumpHeight	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x64b8	0x4	m_fJumpGravity	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x64bc	0x4	m_nTimesTalked	int	FIELD_INTEGER	1	KEY key=times_talked	CAI_BaseNPCTroika	datamap	0	1
+CAI_BaseNPCTroika	0x64c0	0x1	m_bIsTalking	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64c4	0x4	m_sDefaultCamera	string_t	FIELD_STRING	1	KEY key=default_camera	CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64c8	0x4	m_CurrStance	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64cc	0x4	m_flTalkTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x64d0		m_idxNoDeformExpression	int		1		CAI_BaseNPCTroika	walked	2	0
+CAI_BaseNPCTroika	0x64d4	0x4	m_nCurrDisposition	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	2
+CAI_BaseNPCTroika	0x64d8	0x4	m_flMinBlink	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64dc	0x4	m_flMaxBlink	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x64e0	0x1	m_bInDispositionFidget	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64e1	0x1	m_bInStanceChange	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64e4	0x4	m_flStanceTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x64e8		m_iDispositionModelIndex	int		1		CAI_BaseNPCTroika	walked	2	0
+CAI_BaseNPCTroika	0x64ec	0x60	m_szDialogQue	char	FIELD_CHARACTER	96		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x654c		m_bDialogQueIsFinal	bool		1		CAI_BaseNPCTroika	walked	1	2
+CAI_BaseNPCTroika	0x6550	0x4	m_flSpeechVol	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x6554		m_hDialogScene	EHANDLE		1		CAI_BaseNPCTroika	doc	2	5
+CAI_BaseNPCTroika	0x6558	0x4	m_sDefaultDisposition	string_t	FIELD_STRING	1	KEY key=default_disposition	CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x655c		m_flTargetLeadMin	float		1		CAI_BaseNPCTroika	walked	2	1
+CAI_BaseNPCTroika	0x6560		m_flTargetLeadMax	float		1		CAI_BaseNPCTroika	walked	2	1
+CAI_BaseNPCTroika	0x6564		m_flTargetLeadCurrentWeight	float		1		CAI_BaseNPCTroika	walked	2	1
+CAI_BaseNPCTroika	0x6568		m_flTargetLeadPredictedWeight	float		1		CAI_BaseNPCTroika	walked	2	1
+CAI_BaseNPCTroika	0x656c		m_flTargetLeadWeightScale	float		1		CAI_BaseNPCTroika	walked	2	1
+CAI_BaseNPCTroika	0x6570	0x4	m_blinkTimer	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6574	0x4	m_flLoudExpressionTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6578	0x4	m_nEyeFidgetStep	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x657c	0x4	m_flEyeFidgetTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x6580	0x4	m_flEyeFidgetStepTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6584	0x4	m_flMinEyeFidget	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6588	0x4	m_flMaxEyeFidget	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x658c	0x8	m_sppPatrolPath	custom	FIELD_CUSTOM	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6590		m_sppPatrolPath.m_pPath	CAI_PatrolPath*		1		CAI_BaseNPCTroika	doc	1	7
+CAI_BaseNPCTroika	0x6594	0xc	m_sppPatrolPathHunt	custom	FIELD_CUSTOM	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6598		m_sppPatrolPathHunt.m_pPath	CAI_PatrolPath*		1		CAI_BaseNPCTroika	doc	1	1
+CAI_BaseNPCTroika	0x659c		m_pPatrolInterestHint	CAI_Hint*		1		CAI_BaseNPCTroika	walked	7	1
+CAI_BaseNPCTroika	0x65a0	0x1	m_bPatrolPathUseHint	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65a4	0x4	m_fNextDodgeTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65a8		m_QueuedBurnDamage	CUtlVector<CTakeDamageInfo>		1		CAI_BaseNPCTroika	doc	1	2
+CAI_BaseNPCTroika	0x65ac		m_QueuedBurnDamage.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	1	0
+CAI_BaseNPCTroika	0x65b0		m_QueuedBurnDamage.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	1	0
+CAI_BaseNPCTroika	0x65b4		m_QueuedBurnDamage.m_Size	int		1		CAI_BaseNPCTroika	doc	2	2
+CAI_BaseNPCTroika	0x65b8		m_QueuedBurnDamage.m_pElements	CTakeDamageInfo*		1		CAI_BaseNPCTroika	walked	1	0
+CAI_BaseNPCTroika	0x65bc	0x4	m_flNextBurnTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x65c0		m_hDetectedAttacker	EHANDLE		1		CAI_BaseNPCTroika	walked	3	4
+CAI_BaseNPCTroika	0x65c4		m_flDetectedAttackExpireTime	float		1		CAI_BaseNPCTroika	walked	3	1
+CAI_BaseNPCTroika	0x65c8	0x4	m_iForcedSchedule	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65cc	0x4	m_eForcedState	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65d0	0xc	m_vecSavedAttackExtents	Vector	FIELD_VECTOR	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65dc	0x4	m_flTeleportMoveTimer	float	FIELD_TIME	1	KEY key=teleport_move_timer	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65e0	0x4	m_sCombatStartActivity	string_t	FIELD_STRING	1	KEY key=combat_start_activity	CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65e4		m_iCombatStartActivity	int		1		CAI_BaseNPCTroika	doc	2	2
+CAI_BaseNPCTroika	0x65e8		m_pAttackCoordinator	CAI_AttackCoordinator*		1		CAI_BaseNPCTroika	walked	1	18
+CAI_BaseNPCTroika	0x65ec	0x4	m_sAttackCoordinatorName	string_t	FIELD_STRING	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x65f0	0x4	m_iFakeReloadCount	int	FIELD_INTEGER	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65f4	0x1	m_bCameFromSpawner	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65f5	0x1	m_bIgnoreDetectedAttack	bool	FIELD_BOOLEAN	1	KEY key=ignore_detected_attack	CAI_BaseNPCTroika	datamap	1	1
+CAI_BaseNPCTroika	0x65f6	0x1	m_bNoAlertState	bool	FIELD_BOOLEAN	1	KEY key=no_alert_state	CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x65f7	0x1	m_bNavIgnorePhysicsProps	bool	FIELD_BOOLEAN	1	KEY key=nav_ignore_physics_props	CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x65f8	0x1	m_bAllowCriminalSuspicion	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x65f9	0x1	m_bAllowTurningAnims	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap	2	0
+CAI_BaseNPCTroika	0x65fa	0x1	m_bForceMaintainActivity	bool	FIELD_BOOLEAN	1		CAI_BaseNPCTroika	datamap	1	0
+CAI_BaseNPCTroika	0x65fc	0x4	m_flStandingOnHeadTimer	float	FIELD_FLOAT	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6600	0x4	m_flWeaponThroughWallTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6604	0x4	m_flStealthVisionOverrideTime	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x6608	0x4	m_flCorpseConditionTimer	float	FIELD_TIME	1		CAI_BaseNPCTroika	datamap		
+CAI_BaseNPCTroika	0x660c		m_LastTakeDamageInfo	CTakeDamageInfo		1		CAI_BaseNPCTroika	walked		
+CAI_BaseNPCTroika	0x6658		m_bUnread6658	bool		1		CAI_BaseNPCTroika	unsettled		
+CAI_BaseNPCTroika	0x6659		m_ScheduleLoader	CAI_BaseNPCTroika::CScheduleLoader		1		CAI_BaseNPCTroika	walked	0	1
+CAI_BaseNPCTroika	0x665a		pad_665a	char[2]		2		CAI_BaseNPCTroika	walked		
+CAI_BaseActor	0x5f44		CAI_ExpresserSink::vftable	vftable*		1		CAI_BaseNPC	walked	1	0
+CAI_BaseActor	0x5f48		m_pExpresser	CAI_Expresser*		1		CAI_BaseNPC	walked	1	0
+CAI_BaseActor	0x5f4c		m_fLatchedPositions	int		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f50		m_latchedEyeOrigin	Vector		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f54		m_latchedEyeOrigin.y	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f58		m_latchedEyeOrigin.z	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f5c		m_latchedEyeDirection	Vector		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f60		m_latchedEyeDirection.y	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f64		m_latchedEyeDirection.z	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f68		m_latchedHeadDirection	Vector		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f6c		m_latchedHeadDirection.y	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f70		m_latchedHeadDirection.z	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f80		m_flBlinktime	float		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f84		m_hLookTarget	EHANDLE		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f88		m_lookQueue	CAI_InterestTarget		1		CAI_BaseNPC	sdk-order	0	1
+CAI_BaseActor	0x5f94		m_lookQueue.m_Size	int		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f98		m_lookQueue.m_pElements	CAI_InterestTarget_t*		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5f9c		m_iszExpressionScene	string_t		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5fa0		m_hExpressionSceneEnt	EHANDLE		1		CAI_BaseNPC	sdk-order	1	0
+CAI_BaseActor	0x5fa4	0x4	m_iszExpressionOverride	string_t	FIELD_STRING	1	KEY key=ExpressionOverride	CAI_BaseActor	datamap	1	0
+CAI_BaseHumanoid	0x5fa8		m_iszIdleExpression	string_t		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x5fac		m_iszCombatExpression	string_t		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x5fb0		m_iszAlertExpression	string_t		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x5fb4		m_iszDeathExpression	string_t		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6024		m_scriptMove	CUtlVector<AI_Movementscript_t>		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6028		m_scriptMove.m_Memory.m_nAllocationCount	int		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x602c		m_scriptMove.m_Memory.m_nGrowSize	int		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6030		m_scriptMove.m_Size	int		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6034		m_scriptMove.m_pElements	AI_Movementscript_t*		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6038		m_scriptTurn	CUtlVector<AI_Movementscript_t>		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x603c		m_scriptTurn.m_Memory.m_nAllocationCount	int		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6040		m_scriptTurn.m_Memory.m_nGrowSize	int		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6044		m_scriptTurn.m_Size	int		1		CAI_BaseActor	walked	1	0
+CAI_BaseHumanoid	0x6048		m_scriptTurn.m_pElements	AI_Movementscript_t*		1		CAI_BaseActor	walked	1	0
+CAI_ExpressiveNPC	0x5f44		CAI_ExpresserSink::vftable	vftable*		1		CAI_BaseNPC	walked	1	1
+CAI_ExpressiveNPC	0x5f48		m_pExpresser	CAI_Expresser*		1		CAI_BaseNPC	walked	1	4
+CCineNPC	0x5f44	0x4	m_iszPreIdle	string_t	FIELD_STRING	1	KEY key=m_iszIdle	CCineNPC	datamap		
+CCineNPC	0x5f48	0x4	m_iszPlay	string_t	FIELD_STRING	1	KEY key=m_iszPlay	CCineNPC	datamap		
+CCineNPC	0x5f4c	0x4	m_iszPostIdle	string_t	FIELD_STRING	1	KEY key=m_iszPostIdle	CCineNPC	datamap		
+CCineNPC	0x5f50	0x4	m_iszCustomMove	string_t	FIELD_STRING	1	KEY key=m_iszCustomMove	CCineNPC	datamap		
+CCineNPC	0x5f54	0x4	m_iszEntity	string_t	FIELD_STRING	1	KEY key=m_iszEntity	CCineNPC	datamap		
+CCineNPC	0x5f58	0x4	m_iszNextScript	string_t	FIELD_STRING	1	KEY key=m_iszNextScript	CCineNPC	datamap		
+CCineNPC	0x5f5c	0x4	m_iszLinkedSequence	string_t	FIELD_STRING	1	KEY key=m_iszLinkedSequence	CCineNPC	datamap		
+CCineNPC	0x5f60	0x4	m_fMoveTo	int	FIELD_INTEGER	1	KEY key=m_fMoveTo	CCineNPC	datamap		
+CCineNPC	0x5f64	0x4	m_iFinishSchedule	int	FIELD_INTEGER	1	KEY key=m_iFinishSchedule	CCineNPC	datamap		
+CCineNPC	0x5f68	0x4	m_flRadius	float	FIELD_FLOAT	1	KEY key=m_flRadius	CCineNPC	datamap		
+CCineNPC	0x5f6c	0x4	m_flRepeat	float	FIELD_FLOAT	1	KEY key=m_flRepeat	CCineNPC	datamap		
+CCineNPC	0x5f70	0x4	m_iDelay	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f74	0x4	m_startTime	float	FIELD_TIME	1		CCineNPC	datamap		
+CCineNPC	0x5f78	0x4	m_saved_movetype	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f7c	0x4	m_saved_movecollide	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f80	0x4	m_saved_solid	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f84	0x4	m_saved_solidflags	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f88	0x4	m_saved_effects	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f8c	0x4	m_saved_troika_flags	int	FIELD_INTEGER	1		CCineNPC	datamap		
+CCineNPC	0x5f90	0x1	m_interruptable	bool	FIELD_BOOLEAN	1		CCineNPC	datamap		
+CCineNPC	0x5f91	0x1	m_sequenceStarted	bool	FIELD_BOOLEAN	1		CCineNPC	datamap		
+CCineNPC	0x5f94	0x4	m_hNextCine	EHANDLE	FIELD_EHANDLE	1		CCineNPC	datamap	1	0
+CCineNPC	0x5f98		m_pLastFoundEntity	CBaseEntity*		1		CCineNPC	walked	1	0
+CCineNPC	0x5f9c	0x18	m_OnBeginSequence	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnBeginSequence	CCineNPC	datamap		
+CCineNPC	0x5fb4	0x18	m_OnEndSequence	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnEndSequence	CCineNPC	datamap		
+CCineNPC	0x5fcc	0x18	m_OnScriptEvent[0]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent01	CCineNPC	datamap		
+CCineNPC	0x5fe4	0x18	m_OnScriptEvent[1]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent02	CCineNPC	datamap		
+CCineNPC	0x5ffc	0x18	m_OnScriptEvent[2]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent03	CCineNPC	datamap		
+CCineNPC	0x6014	0x18	m_OnScriptEvent[3]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent04	CCineNPC	datamap		
+CCineNPC	0x602c	0x18	m_OnScriptEvent[4]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent05	CCineNPC	datamap		
+CCineNPC	0x6044	0x18	m_OnScriptEvent[5]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent06	CCineNPC	datamap		
+CCineNPC	0x605c	0x18	m_OnScriptEvent[6]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent07	CCineNPC	datamap		
+CCineNPC	0x6074	0x18	m_OnScriptEvent[7]	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnScriptEvent08	CCineNPC	datamap		
+CNPCMaker	0x665c	0x4	m_iszNPCClassname	string_t	FIELD_STRING	1	KEY key=NPCType	CNPCMaker	datamap	0	2
+CNPCMaker	0x6660	0x4	m_iMaxNumNPCs	int	FIELD_INTEGER	1	KEY key=MaxNPCCount	CNPCMaker	datamap	1	1
+CNPCMaker	0x6664	0x4	m_flSpawnFrequency	float	FIELD_FLOAT	1	KEY key=SpawnFrequency	CNPCMaker	datamap		
+CNPCMaker	0x6668	0x18	m_OnSpawnNPC	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnSpawnNPC	CNPCMaker	datamap	0	2
+CNPCMaker	0x6680	0x18	m_OnNPCDied	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnNPCDied	CNPCMaker	datamap		
+CNPCMaker	0x6698	0x18	m_OnLastNPCDied	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnLastNPCDied	CNPCMaker	datamap		
+CNPCMaker	0x66b0	0x4	m_cLiveChildren	int	FIELD_INTEGER	1		CNPCMaker	datamap	1	2
+CNPCMaker	0x66b4	0x4	m_iMaxLiveChildren	int	FIELD_INTEGER	1	KEY key=MaxLiveChildren	CNPCMaker	datamap	0	1
+CNPCMaker	0x66b8	0x4	m_flGround	float	FIELD_FLOAT	1		CNPCMaker	datamap	2	2
+CNPCMaker	0x66bc	0x4	m_ChildTargetName	string_t	FIELD_STRING	1	KEY key=NPCTargetname	CNPCMaker	datamap	0	2
+CNPCMaker	0x66c0	0x1	m_bDisabled	bool	FIELD_BOOLEAN	1	KEY key=Flag_StartDisabled	CNPCMaker	datamap		
+CNPCMaker	0x66c1	0x1	m_bNPCClip	bool	FIELD_BOOLEAN	1	KEY key=Flag_NPCClip	CNPCMaker	datamap	0	1
+CNPCMaker	0x66c2	0x1	m_bFade	bool	FIELD_BOOLEAN	1	KEY key=Flag_Fade	CNPCMaker	datamap	0	2
+CNPCMaker	0x66c3	0x1	m_bInfChild	bool	FIELD_BOOLEAN	1	KEY key=Flag_InfChild	CNPCMaker	datamap	0	1
+CNPCMaker	0x66c4	0x1	m_bNoDrop	bool	FIELD_BOOLEAN	1	KEY key=Flag_NoDrop	CNPCMaker	datamap	0	1
+CNPCMaker	0x66c5	0x1	m_bViewCone	bool	FIELD_BOOLEAN	1	KEY key=Flag_ViewCone	CNPCMaker	datamap	0	1
+CNPCMaker	0x66c8	0x4	m_iMinPCDistance	int	FIELD_INTEGER	1	KEY key=MinPCDistance	CNPCMaker	datamap	0	1
+CNPCMaker	0x66cc		m_szMapDataBuffer	char		4096		CNPCMaker	walked	0	2
+CNPCMaker	0x76cc	0x4	m_sRefMapDataBuffer	string_t	FIELD_STRING	1		CNPCMaker	datamap	0	1
+CNPCMaker_Zombie	0x76d0	0x4	m_iZombieAISpawnType	int	FIELD_INTEGER	1	KEY key=Flag_ZombieAIType	CNPCMaker_Zombie	datamap	0	1
+CNPCMaker_Zombie	0x76d4	0x1	m_bShouldRagdoll	bool	FIELD_BOOLEAN	1	KEY key=should_ragdoll	CNPCMaker_Zombie	datamap		
+CNPCMaker_Zombie	0x76d8	0x4	m_flRemoveDist	float	FIELD_FLOAT	1	KEY key=remove_distance	CNPCMaker_Zombie	datamap	1	1
+CNPC_Bullseye	0x5f44	0x4	m_hPainPartner	EHANDLE	FIELD_EHANDLE	1		CNPC_Bullseye	datamap	1	0
+CNPC_Bullseye	0x5f48	0x18	m_OnTargeted	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnTargeted	CNPC_Bullseye	datamap		
+CNPC_Bullseye	0x5f60	0x18	m_OnReleased	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnReleased	CNPC_Bullseye	datamap		
+CNPC_Crow	0x5f48	0x4	m_flGroundIdleMoveTime	float	FIELD_TIME	1		CNPC_Crow	datamap		
+CNPC_Crow	0x5f4c		m_flEnemyDist	float		1		CNPC_Crow	sdk-order	1	3
+CNPC_Crow	0x5f50	0x4	m_nMorale	int	FIELD_INTEGER	1		CNPC_Crow	datamap		
+CNPC_Crow	0x5f54	0x1	m_bReachedMoveGoal	bool	FIELD_BOOLEAN	1		CNPC_Crow	datamap		
+CNPC_Crow	0x5f58	0x4	m_flHopStartZ	float	FIELD_FLOAT	1		CNPC_Crow	datamap		
+CNPC_VAnimal	0x665c	0x4	m_iPlayerFriendshipState	int	FIELD_INTEGER	1		CNPC_VAnimal	datamap	1	0
+CNPC_VAnimal	0x6660	0x1	m_bPlayerAttackedMe	bool	FIELD_BOOLEAN	1		CNPC_VAnimal	datamap		
+CNPC_VAnimal	0x6664	0x4	m_iFriendshipLevel	int	FIELD_INTEGER	1	KEY key=friendship_level	CNPC_VAnimal	datamap		
+CNPC_VAnimal	0x6668	0x4	m_flWarnRange	float	FIELD_FLOAT	1	KEY key=warn_range	CNPC_VAnimal	datamap		
+CNPC_VAnimal	0x666c	0x4	m_flConflictRange	float	FIELD_FLOAT	1	KEY key=conflict_range	CNPC_VAnimal	datamap		
+CNPC_VBach	0x6664	0xc	m_vecLastOccludeOrigin	Vector	FIELD_VECTOR	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6670	0x4	m_flOccludeEnterTime	float	FIELD_TIME	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6674	0x4	m_iWasOccluded	int	FIELD_INTEGER	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6678	0x4	m_iReusedOccludeCount	int	FIELD_INTEGER	1		CNPC_VBach	datamap		
+CNPC_VBach	0x667c	0x4	m_iGrenadeActive	int	FIELD_INTEGER	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6680	0x4	m_flLastGrenadeTime	float	FIELD_TIME	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6684	0x4	m_flShieldTime	float	FIELD_TIME	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6688	0x4	m_flNextShieldTime	float	FIELD_TIME	1		CNPC_VBach	datamap		
+CNPC_VBach	0x668c	0x4	m_flNextWeaponSwitchTime	float	FIELD_TIME	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6690	0x4	m_flNextHolyLightTime	float	FIELD_TIME	1		CNPC_VBach	datamap	2	0
+CNPC_VBach	0x6694	0x4	m_flWarningTime	float	FIELD_TIME	1		CNPC_VBach	datamap		
+CNPC_VBach	0x6698	0x4	m_flSkipToWarningTime	float	FIELD_FLOAT	1		CNPC_VBach	datamap		
+CNPC_VBach	0x669c	0x4	m_iBachTeleportState	int	FIELD_INTEGER	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a0	0x1	m_bCamperFlag	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a1	0x1	m_bBachInStartingPosition	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a2	0x1	m_bSkipToWarning	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a3	0x1	m_bFireOccluded	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap	1	1
+CNPC_VBach	0x66a4		m_bAimedShotReady	bool		1		CNPC_VBach	walked	3	1
+CNPC_VBach	0x66a5	0x1	m_bShieldActive	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a6		m_bTookDamageSinceGather	bool		1		CNPC_VBach	walked	3	0
+CNPC_VBach	0x66a7	0x1	m_bMovementSpot	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a8	0x1	m_bCanFightYet	bool	FIELD_BOOLEAN	1		CNPC_VBach	datamap		
+CNPC_VBach	0x66a9		m_ScheduleLoader	CNPC_VBach::CScheduleLoader		1		CNPC_VBach	walked	0	1
+CNPC_VCameraSecurity	0x6660	0x4	m_iszLinkedCamera	string_t	FIELD_STRING	1	KEY key=linked_camera	CNPC_VCameraSecurity	datamap	1	0
+CNPC_VCameraSecurity	0x6664		m_hLinkedCamera	EHANDLE		1		CNPC_VCameraSecurity	walked	1	0
+CNPC_VCop	0x6664	0x4	m_hPursuitPlayer	EHANDLE	FIELD_EHANDLE	1		CNPC_VCop	datamap	1	0
+CNPC_VCop	0x6668	0x4	m_eOldPlayerRelationType	int	FIELD_INTEGER	1		CNPC_VCop	datamap		
+CNPC_VCop	0x666c	0x4	m_iOldPlayerRelationPriority	int	FIELD_INTEGER	1		CNPC_VCop	datamap		
+CNPC_VCop	0x6670	0x1	m_bWasEverInCombat	bool	FIELD_BOOLEAN	1		CNPC_VCop	datamap		
+CNPC_VCop	0x6671	0x1	m_bCountedAlive	bool	FIELD_BOOLEAN	1		CNPC_VCop	datamap		
+CNPC_VCop	0x6673		m_ScheduleLoader	CNPC_VCop::CScheduleLoader		1		CNPC_VCop	walked	0	1
+CNPC_VGargoyle	0x6664	0x18	m_OnGibDeath	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnGibDeath	CNPC_VGargoyle	datamap		
+CNPC_VGargoyle	0x667c	0x4	m_hPillarTarget	EHANDLE	FIELD_EHANDLE	1		CNPC_VGargoyle	datamap	1	0
+CNPC_VGargoyle	0x6680	0x4	m_iShunnedFindPillar	int	FIELD_INTEGER	1		CNPC_VGargoyle	datamap		
+CNPC_VGargoyle	0x6684	0x4	m_iDoingGibDeath	int	FIELD_INTEGER	1		CNPC_VGargoyle	datamap		
+CNPC_VGargoyle	0x6688	0x4	m_iCanKnockback	int	FIELD_INTEGER	1		CNPC_VGargoyle	datamap		
+CNPC_VGuard1	0x6660	0x1	m_fHatesPlayer	bool	FIELD_BOOLEAN	1		CNPC_VGuard1	datamap		
+CNPC_VGuard1	0x6661		m_ScheduleLoader	CNPC_VGuard1::CScheduleLoader		1		CNPC_VGuard1	walked	0	1
+CNPC_VHengeyokai	0x6664	0x4	m_hPickupTarget	EHANDLE	FIELD_EHANDLE	1		CNPC_VHengeyokai	datamap	1	0
+CNPC_VHengeyokai	0x6668	0x4	m_iPickupTargetGrabBone	int	FIELD_INTEGER	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x666c	0x4	m_flFishTimer	float	FIELD_TIME	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x6670	0x4	m_flShunnedFishTimer	float	FIELD_TIME	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x6674	0x4	m_flTaskFailTimer	float	FIELD_TIME	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x6678	0x4	m_iShunnedFindFish	int	FIELD_INTEGER	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x667c	0x1	m_bJustFoundFish	bool	FIELD_BOOLEAN	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x667d	0x1	m_bDidFakeThrow	bool	FIELD_BOOLEAN	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x6680		m_ePathMode	int		1		CNPC_VHengeyokai	walked	3	0
+CNPC_VHengeyokai	0x6684	0xc	m_vecPickupTargetPos	Vector	FIELD_POSITION_VECTOR	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x6690	0x4	m_hPhysicsAnimlink	EHANDLE	FIELD_EHANDLE	1		CNPC_VHengeyokai	datamap	1	0
+CNPC_VHengeyokai	0x6694	0x1	m_bInSharkForm	bool	FIELD_BOOLEAN	1		CNPC_VHengeyokai	datamap		
+CNPC_VHengeyokai	0x6698		m_SecurePickupParam	CSecureType<int>		1		CNPC_VHengeyokai	unsettled	1	0
+CNPC_VHengeyokai	0x669d		m_SecurePickupParam.m_nKey1	unsigned char		1		CNPC_VHengeyokai	walked	1	0
+CNPC_VHengeyokai	0x66a0		m_SecurePickupParam.m_nEncoded	int		1		CNPC_VHengeyokai	walked	1	0
+CNPC_VHengeyokai	0x66a4		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CNPC_VHengeyokai	walked	1	1
+CNPC_VHengeyokai	0x66a8		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CNPC_VHengeyokai	walked	1	1
+CNPC_VHengeyokai	0x66ac		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CNPC_VHengeyokai	walked	1	0
+CNPC_VHengeyokai	0x66b0		m_BlacklistedEntities.m_Size	int		1		CNPC_VHengeyokai	walked	1	0
+CNPC_VHengeyokai	0x66b4		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CNPC_VHengeyokai	walked	1	0
+CNPC_VHunter	0x6664	0x4	m_hPursuitPlayer	EHANDLE	FIELD_EHANDLE	1		CNPC_VHunter	datamap	1	0
+CNPC_VManBat	0x6664	0x1	m_bReachedMoveGoal	bool	FIELD_BOOLEAN	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x6668	0xc	m_iMoveGoalNodeMode	MvsnSec::CSecureType<int>	FIELD_CUSTOM	1		CNPC_VManBat	datamap	1	0
+CNPC_VManBat	0x666c		m_iMoveGoalNodeMode.m_Coded.m_Salt[0]	unsigned char		1		CNPC_VManBat	walked	1	0
+CNPC_VManBat	0x666d		m_iMoveGoalNodeMode.m_Coded.m_Salt[1]	unsigned char		1		CNPC_VManBat	walked	2	0
+CNPC_VManBat	0x6670		m_iMoveGoalNodeMode.m_Coded.m_nEncoded	int		1		CNPC_VManBat	walked	2	4
+CNPC_VManBat	0x6674	0x4	m_iMoveGoalNodeID	int	FIELD_INTEGER	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x6678	0x4	m_flFlapTimer	float	FIELD_TIME	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x667c	0x4	m_flFlyTimer	float	FIELD_TIME	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x6680	0x4	m_hSlowedEntity	EHANDLE	FIELD_EHANDLE	1		CNPC_VManBat	datamap	1	0
+CNPC_VManBat	0x6684	0x4	m_flSlowedExpire	float	FIELD_TIME	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x6688	0x4	m_pFlyNode	CBaseEntity*	FIELD_CLASSPTR	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x668c	0x4	m_hPickupTarget	EHANDLE	FIELD_EHANDLE	1		CNPC_VManBat	datamap	1	0
+CNPC_VManBat	0x6690	0x4	m_hPhysicsAnimlink	EHANDLE	FIELD_EHANDLE	1		CNPC_VManBat	datamap	1	0
+CNPC_VManBat	0x6694	0x1	m_bPickupTargetBreakable	bool	FIELD_BOOLEAN	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x6698	0x4	m_iMaxScriptNode	int	FIELD_INTEGER	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x669c		m_hPlayerEmitter	EHANDLE		1		CNPC_VManBat	walked	1	0
+CNPC_VManBat	0x66a0		m_hHUDEmitter	EHANDLE		1		CNPC_VManBat	walked	1	0
+CNPC_VManBat	0x66a4		m_hScreechConeEmitter	EHANDLE		1		CNPC_VManBat	walked	2	1
+CNPC_VManBat	0x66a8		m_hBlastPlayerEmitter	EHANDLE		1		CNPC_VManBat	walked	1	0
+CNPC_VManBat	0x66ac	0x4	m_hFlyByTarget	EHANDLE	FIELD_EHANDLE	1		CNPC_VManBat	datamap	1	0
+CNPC_VManBat	0x66b0	0x1	m_bHasScaredMinions	bool	FIELD_BOOLEAN	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x66b4	0x4	m_flCoastTimer	float	FIELD_TIME	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x66b8	0x1	m_bHasPlayedFlyBySound	bool	FIELD_BOOLEAN	1		CNPC_VManBat	datamap		
+CNPC_VManBat	0x66b9		m_ScheduleLoader	CNPC_VManBat::CScheduleLoader		1		CNPC_VManBat	walked	0	1
+CNPC_VMingXiao	0x665c		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CAI_BaseNPCTroika	walked	1	2
+CNPC_VMingXiao	0x665c		m_BlacklistedEntities.m_Memory.m_pMemory	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		
+CNPC_VMingXiao	0x6660		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VMingXiao	0x6664		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	0	1
+CNPC_VMingXiao	0x6668		m_BlacklistedEntities.m_Size	int		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VMingXiao	0x666c		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VMingXiao	0x6670	0x4	m_hParentMingZhao	EHANDLE	FIELD_EHANDLE	1		CNPC_VMingXiao	datamap	1	0
+CNPC_VMingXiao	0x6674	0x4	m_iTentacleID	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6678	0x1	m_bHasTransformed	bool	FIELD_BOOLEAN	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x667c	0x4	m_hMeleeWeapon	EHANDLE	FIELD_EHANDLE	1		CNPC_VMingXiao	datamap	1	0
+CNPC_VMingXiao	0x6680	0x4	m_hRangedWeapon	EHANDLE	FIELD_EHANDLE	1		CNPC_VMingXiao	datamap	1	0
+CNPC_VMingXiao	0x6684	0x6	m_rbProxyRegistered	bool	FIELD_BOOLEAN	6		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x668c	0x18	m_rhProxies	EHANDLE	FIELD_EHANDLE	6		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x66a4	0x4	m_flProxyReadyTimer	float	FIELD_TIME	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x66a8	0x18	m_rhSeveredTentacles	EHANDLE	FIELD_EHANDLE	6		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x66c0	0x4	m_flSpitAttackTimer	float	FIELD_TIME	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x66c4	0x18	m_rflAttackTimers	float	FIELD_TIME	6		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x66dc	0x18	m_rflHitPoints	float	FIELD_FLOAT	6		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x66f4	0x18	m_rflRegrowTimers	float	FIELD_TIME	6		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x670c	0x4	m_iConnectedTentacleCount	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6710	0x4	m_iSeveredTentacleMask	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6714	0x4	m_eLastLostTentacle	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6718	0x4	m_hThrowObject	EHANDLE	FIELD_EHANDLE	1		CNPC_VMingXiao	datamap	1	0
+CNPC_VMingXiao	0x671c	0x4	m_eThrowingTentacle	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6720	0xc	m_vecPickupTargetPos	Vector	FIELD_VECTOR	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x672c	0xc	m_vecPickupSavedForward	Vector	FIELD_VECTOR	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6738	0x4	m_hPhysicsAnimlink	EHANDLE	FIELD_EHANDLE	1		CNPC_VMingXiao	datamap	1	0
+CNPC_VMingXiao	0x673c	0x4	m_eThrowableObjectMode	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6740	0x4	m_iCoordinateTentacleID	int	FIELD_INTEGER	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6744	0x1	m_bPlayedDeathAnim	bool	FIELD_BOOLEAN	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6748	0x4	m_flIdealRange	float	FIELD_FLOAT	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x674c	0x4	m_flChargeReadyTime	float	FIELD_TIME	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6750	0x1	m_bBlockedByFriend	bool	FIELD_BOOLEAN	1		CNPC_VMingXiao	datamap		
+CNPC_VMingXiao	0x6751		m_ScheduleLoader	CNPC_VMingXiao::CScheduleLoader		1		CNPC_VMingXiao	walked	0	1
+CNPC_VMingXiaoTentacle	0x665c	0x4	m_hMingXiao	EHANDLE	FIELD_EHANDLE	1		CNPC_VMingXiaoTentacle	datamap	1	0
+CNPC_VMingXiaoTentacle	0x6660	0x4	m_iTentacleID	int	FIELD_INTEGER	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6664	0x4	m_iModeIndexTentacleToGrub	int	FIELD_INTEGER	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6668	0x4	m_iModeIndexGrub	int	FIELD_INTEGER	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x666c	0x4	m_iModeIndexGrubToProxy	int	FIELD_INTEGER	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6670	0x4	m_ePhase	int	FIELD_INTEGER	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6674	0x4	m_flPhaseExpireTimer	float	FIELD_TIME	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6678	0x4	m_flFailedEvadeTimer	float	FIELD_TIME	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x667c	0x4	m_flUpdateEvadeTimer	float	FIELD_TIME	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6680	0x4	m_flHideReadyTimer	float	FIELD_TIME	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6684	0x4	m_flIgnoreCollisionTimer	float	FIELD_TIME	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6688	0x1	m_bIgnoreCollision	bool	FIELD_BOOLEAN	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x668c	0xc	m_vecScatterCenter	Vector	FIELD_VECTOR	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6698	0x1	m_bHitGroundSound	bool	FIELD_BOOLEAN	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x6699	0x1	m_bPlayedDeathAnim	bool	FIELD_BOOLEAN	1		CNPC_VMingXiaoTentacle	datamap		
+CNPC_VMingXiaoTentacle	0x669a		m_ScheduleLoader	CNPC_VMingXiaoTentacle::CScheduleLoader		1		CNPC_VMingXiaoTentacle	walked	0	1
+CNPC_VNewscaster	0x665c		m_MainStories	CUtlVector<NewscasterStory_t>		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6660		m_MainStories.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6664		m_MainStories.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6668		m_MainStories.m_Size	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x666c		m_MainStories.m_pElements	NewscasterStory_t*		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6670		m_SideStories	CUtlVector<NewscasterStory_t>		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6674		m_SideStories.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6678		m_SideStories.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x667c		m_SideStories.m_Size	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6680		m_SideStories.m_pElements	NewscasterStory_t*		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6684		m_iMainStoryIndex	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x6688		m_iSideStoryIndex	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VNewscaster	0x668c		m_bPlayMainStory	int		1		CAI_BaseNPCTroika	walked		
+CNPC_VNewscaster	0x6690		m_bStoriesLoaded	bool		1		CAI_BaseNPCTroika	walked		
+CNPC_VPedestrian	0x6660	0xc	m_vecPreDeathMins	Vector	FIELD_VECTOR	1		CNPC_VPedestrian	datamap		
+CNPC_VPedestrian	0x666c	0xc	m_vecPreDeathMaxs	Vector	FIELD_VECTOR	1		CNPC_VPedestrian	datamap		
+CNPC_VPedestrian	0x6678	0x1	m_bFirstThink	bool	FIELD_BOOLEAN	1		CNPC_VPedestrian	datamap		
+CNPC_VPedestrian	0x667c	0x4	m_eLevelResetType	int	FIELD_INTEGER	1	KEY key=level_reset_type	CNPC_VPedestrian	datamap	1	0
+CNPC_VSabbatLeader	0x66b8	0x1	m_bActivated	bool	FIELD_BOOLEAN	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66bc	0x4	m_RouteFailCount	int	FIELD_INTEGER	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66c0	0x4	m_FailureType	int	FIELD_INTEGER	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66c4	0x4	m_nLastWaterLevel	int	FIELD_INTEGER	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66c8	0x4	m_fLastSplashTime	float	FIELD_TIME	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66cc	0x4	m_LastPlayerHealth	int	FIELD_INTEGER	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66d4	0x1	m_bTrackPlayer	bool	FIELD_BOOLEAN	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66d5	0x1	m_bDiving	bool	FIELD_BOOLEAN	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66d6	0x1	m_bLargeSplashSpawned	bool	FIELD_BOOLEAN	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66d8	0x4	m_JumpBloodBalanceCount	int	FIELD_INTEGER	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66dc	0x4	m_fWarningFinishTime	float	FIELD_TIME	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66e0	0x4	m_RoarAttackCount	int	FIELD_INTEGER	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66e4	0x1	m_bParticleSpawned	bool	FIELD_BOOLEAN	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66e5	0x1	m_bLastAttackWasNova	bool	FIELD_BOOLEAN	1		CNPC_VSabbatLeader	datamap		
+CNPC_VSabbatLeader	0x66e6		m_ScheduleLoader	CNPC_VSabbatLeader::CScheduleLoader		1		CNPC_VSabbatLeader	walked	0	1
+CNPC_VScurrying	0x6678		m_flNextDetectTime	float		1		CNPC_VAnimal	walked	1	1
+CNPC_VScurrying	0x667c		m_hDetectedEntity	EHANDLE		1		CNPC_VAnimal	walked	2	2
+CNPC_VScurrying	0x6680		m_vecFrightOrigin	Vector		1		CNPC_VAnimal	walked	1	1
+CNPC_VScurrying	0x6684		m_vecFrightOrigin.y	float		1		CNPC_VAnimal	walked	1	1
+CNPC_VScurrying	0x6688		m_vecFrightOrigin.z	float		1		CNPC_VAnimal	walked	1	1
+CNPC_VScurrying	0x668c		m_flFrightEndTime	float		1		CNPC_VAnimal	walked	2	2
+CNPC_VScurrying	0x6690	0x4	m_flDetectionDistance	float	FIELD_FLOAT	1	KEY key=detection_distance	CNPC_VScurrying	datamap	1	0
+CNPC_VScurrying	0x6694	0x1	m_fIgnoreNosferatu	bool	FIELD_BOOLEAN	1	KEY key=ignore_nosferatu	CNPC_VScurrying	datamap		
+CNPC_VScurrying	0x6695	0x1	m_fMustDetect	bool	FIELD_BOOLEAN	1	KEY key=must_detect	CNPC_VScurrying	datamap	1	0
+CNPC_VScurrying	0x6698	0x4	m_flFrightDistance	float	FIELD_FLOAT	1	KEY key=fright_distance	CNPC_VScurrying	datamap	1	0
+CNPC_VScurrying	0x669c	0x4	m_flFrightDurationSeconds	float	FIELD_TIME	1	KEY key=fright_duration	CNPC_VScurrying	datamap	1	0
+CNPC_VSheriffMan	0x66b8	0x18	m_OnFinishTransformation	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnFinishTransformation	CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66d0	0x4	m_hTeleportSwarm	EHANDLE	FIELD_EHANDLE	1		CNPC_VSheriffMan	datamap	1	0
+CNPC_VSheriffMan	0x66d4	0xc	m_vLastTeleportPosition	Vector	FIELD_VECTOR	1		CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66e0	0x4	m_fLastTeleportTime	float	FIELD_TIME	1		CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66e4	0x1	m_bTeleporting	bool	FIELD_BOOLEAN	1		CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66e5	0x1	m_bDead	bool	FIELD_BOOLEAN	1		CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66e6	0x1	m_bActivated	bool	FIELD_BOOLEAN	1		CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66e7		m_bFloorHeightsCached	bool		1		CNPC_VSheriffMan	walked	2	1
+CNPC_VSheriffMan	0x66e8		m_flCenterFloorHeight	float		1		CNPC_VSheriffMan	walked	1	1
+CNPC_VSheriffMan	0x66ec		m_flLedgeFloorHeight	float		1		CNPC_VSheriffMan	walked	1	1
+CNPC_VSheriffMan	0x66f0	0x4	m_fTeleportSpeed	float	FIELD_FLOAT	1		CNPC_VSheriffMan	datamap		
+CNPC_VSheriffMan	0x66f4	0x4	m_fTeleportStartTime	float	FIELD_TIME	1		CNPC_VSheriffMan	datamap		
+CNPC_VTzimisce	0x665c		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CAI_BaseNPCTroika	walked	1	2
+CNPC_VTzimisce	0x665c		m_BlacklistedEntities.m_Memory.m_pMemory	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		
+CNPC_VTzimisce	0x6660		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VTzimisce	0x6664		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	0	1
+CNPC_VTzimisce	0x6668		m_BlacklistedEntities.m_Size	int		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisce	0x666c		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisce	0x6670	0x4	m_hPickupTarget	EHANDLE	FIELD_EHANDLE	1		CNPC_VTzimisce	datamap	1	0
+CNPC_VTzimisce	0x6674	0xc	m_vecPickupTargetPos	Vector	FIELD_POSITION_VECTOR	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x6680	0x4	m_iPickupTargetGrabBone	int	FIELD_INTEGER	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x6684	0x4	m_hPhysicsAnimlink	EHANDLE	FIELD_EHANDLE	1		CNPC_VTzimisce	datamap	1	0
+CNPC_VTzimisce	0x6688	0x1	m_bHeavyBodyTarget	bool	FIELD_BOOLEAN	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x6689	0x1	m_bFirstEnemy	bool	FIELD_BOOLEAN	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x668c	0x4	m_ePathMode	int	FIELD_INTEGER	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x6690		m_FailedPickupTargets	CUtlVector<BlacklistedEntity_t>		1		CNPC_VTzimisce	walked	2	2
+CNPC_VTzimisce	0x6694		m_FailedPickupTargets.m_Memory.m_nAllocationCount	int		1		CNPC_VTzimisce	walked	2	1
+CNPC_VTzimisce	0x6698		m_FailedPickupTargets.m_Memory.m_nGrowSize	int		1		CNPC_VTzimisce	walked	1	1
+CNPC_VTzimisce	0x669c		m_FailedPickupTargets.m_Size	int		1		CNPC_VTzimisce	walked	2	0
+CNPC_VTzimisce	0x66a0		m_FailedPickupTargets.m_pElements	BlacklistedEntity_t*		1		CNPC_VTzimisce	walked	2	0
+CNPC_VTzimisce	0x66a4	0x4	m_flBodyTimer	float	FIELD_TIME	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66a8	0x4	m_flTaskFailTimer	float	FIELD_TIME	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66ac	0x4	m_flPounceCheckTimer	float	FIELD_TIME	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66b0	0x4	m_flShunnedBodyTimer	float	FIELD_TIME	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66b4	0x1	m_bDidFakeThrow	bool	FIELD_BOOLEAN	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66b8	0x4	m_iShunnedFindBody	int	FIELD_INTEGER	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66bc	0x1	m_bJustFoundBody	bool	FIELD_BOOLEAN	1		CNPC_VTzimisce	datamap		
+CNPC_VTzimisce	0x66bd		m_ScheduleLoader	CNPC_VTzimisce::CScheduleLoader		1		CNPC_VTzimisce	walked	0	1
+CNPC_VTzimisceHeadClaw	0x665c		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CAI_BaseNPCTroika	walked	2	1
+CNPC_VTzimisceHeadClaw	0x665c		m_BlacklistedEntities.m_Memory.m_pMemory	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		
+CNPC_VTzimisceHeadClaw	0x6660		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisceHeadClaw	0x6664		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	1	1
+CNPC_VTzimisceHeadClaw	0x6668		m_BlacklistedEntities.m_Size	int		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisceHeadClaw	0x666c		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisceHeadClaw	0x6674	0x4	m_hSlowedEntity	EHANDLE	FIELD_EHANDLE	1		CNPC_VTzimisceHeadClaw	datamap	1	0
+CNPC_VTzimisceHeadClaw	0x6678	0x4	m_flSlowedExpire	float	FIELD_TIME	1		CNPC_VTzimisceHeadClaw	datamap		
+CNPC_VTzimisceHeadClaw	0x667c		m_hPlayerEmitter	EHANDLE		1		CNPC_VTzimisceHeadClaw	walked	1	0
+CNPC_VTzimisceHeadClaw	0x6680		m_hHUDEmitter	EHANDLE		1		CNPC_VTzimisceHeadClaw	walked	1	0
+CNPC_VTzimisceRunner	0x665c		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CAI_BaseNPCTroika	walked	2	1
+CNPC_VTzimisceRunner	0x665c		m_BlacklistedEntities.m_Memory.m_pMemory	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		
+CNPC_VTzimisceRunner	0x6660		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisceRunner	0x6664		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	1	1
+CNPC_VTzimisceRunner	0x6668		m_BlacklistedEntities.m_Size	int		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisceRunner	0x666c		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked	2	0
+CNPC_VTzimisceRunner	0x6671	0x1	m_bDeathNoticeProcessed	bool	FIELD_BOOLEAN	1		CNPC_VTzimisceRunner	datamap	1	0
+CNPC_VTzimisceRunner	0x6672		m_bSmallSize	bool		1		CNPC_VTzimisceRunner	walked	3	2
+CNPC_VTzimisceRunner	0x6674		m_flSmallSizeEngineTime	float		1		CNPC_VTzimisceRunner	walked	1	1
+CNPC_VTzimisceRunner	0x6678	0x4	m_hPotentialEnemy	EHANDLE	FIELD_EHANDLE	1		CNPC_VTzimisceRunner	datamap	3	0
+CNPC_VVampireBoss	0x6664	0x18	m_OnTransformComplete	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnTransformComplete	CNPC_VVampireBoss	datamap		
+CNPC_VVampireBoss	0x667c	0x4	m_MorphModelName	string_t	FIELD_MODELNAME	1	KEY key=MorphModel	CNPC_VVampireBoss	datamap		
+CNPC_VVampireBoss	0x6680	0x4	m_pMonsterModelName	string_t	FIELD_STRING	1		CNPC_VVampireBoss	datamap		
+CNPC_VVampireBoss	0x6684	0x10	m_pBodyEmitterNames	string_t	FIELD_STRING	4		CNPC_VVampireBoss	datamap		
+CNPC_VVampireBoss	0x6694		m_pszMonsterClassname	const char*		1		CNPC_VVampireBoss	walked	7	1
+CNPC_VVampireBoss	0x6698	0x4	m_HealthPercentRecord	float	FIELD_FLOAT	1		CNPC_VVampireBoss	datamap		
+CNPC_VVampireBoss	0x669c	0x4	m_fTaskStartTime	float	FIELD_TIME	1		CNPC_VVampireBoss	datamap		
+CNPC_VVampireBoss	0x66a0	0x10	m_hParticleEmitters	EHANDLE	FIELD_EHANDLE	4		CNPC_VVampireBoss	datamap	2	0
+CNPC_VVampireBoss	0x66a4		m_hParticleEmitters[1]	EHANDLE		1		CNPC_VVampireBoss	interior	2	0
+CNPC_VVampireBoss	0x66a8		m_hParticleEmitters[2]	EHANDLE		1		CNPC_VVampireBoss	interior	2	0
+CNPC_VVampireBoss	0x66ac		m_hParticleEmitters[3]	EHANDLE		1		CNPC_VVampireBoss	interior	2	0
+CNPC_VVampireBoss	0x66b0	0x4	m_hTransformPartner	EHANDLE	FIELD_EHANDLE	1		CNPC_VVampireBoss	datamap	2	0
+CNPC_VWerewolf	0x665c		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CAI_BaseNPCTroika	walked	1	1
+CNPC_VWerewolf	0x665c		m_BlacklistedEntities.m_Memory.m_pMemory	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		
+CNPC_VWerewolf	0x6660		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VWerewolf	0x6664		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked	0	1
+CNPC_VWerewolf	0x6668		m_BlacklistedEntities.m_Size	int		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VWerewolf	0x666c		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked	1	0
+CNPC_VWerewolf	0x6680	0x4	m_DoorState	int	FIELD_INTEGER	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x6684		m_hRotDoor1	EHANDLE		1		CNPC_VWerewolf	walked	1	0
+CNPC_VWerewolf	0x6688		m_hRotDoor2	EHANDLE		1		CNPC_VWerewolf	walked	1	0
+CNPC_VWerewolf	0x668c		m_ScheduleHistory	CUtlVector<CAI_Schedule*>		1		CNPC_VWerewolf	doc	1	4
+CNPC_VWerewolf	0x668c		m_ScheduleHistory.m_Memory.m_pMemory	CAI_Schedule**		1		CNPC_VWerewolf	walked		
+CNPC_VWerewolf	0x6690		m_ScheduleHistory.m_Memory.m_nAllocationCount	int		1		CNPC_VWerewolf	walked	1	1
+CNPC_VWerewolf	0x6694		m_ScheduleHistory.m_Memory.m_nGrowSize	int		1		CNPC_VWerewolf	walked	0	1
+CNPC_VWerewolf	0x6698		m_ScheduleHistory.m_Size	int		1		CNPC_VWerewolf	walked	3	2
+CNPC_VWerewolf	0x669c		m_ScheduleHistory.m_pElements	CAI_Schedule**		1		CNPC_VWerewolf	walked	3	0
+CNPC_VWerewolf	0x66a0		m_bHintDataInitialized	bool		1		CNPC_VWerewolf	walked	1	1
+CNPC_VWerewolf	0x66a1		m_bEnemyUnreachable	bool		1		CNPC_VWerewolf	walked	2	1
+CNPC_VWerewolf	0x66a4		m_iEnemyUnreachableCheckTick	int		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66a8		m_bWasEnemyUnreachable	bool		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66a9		m_bPlayFrustration	bool		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66ac		m_pTeleportHintSearchStart	CAI_Hint*		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66b0	0x4	m_pTeleportHint	CBaseEntity*	FIELD_CLASSPTR	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66b4	0x4	m_pLastUsedTeleportHint	CBaseEntity*	FIELD_CLASSPTR	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66b8		m_pMoveHintSearchStart	CAI_Hint*		1		CNPC_VWerewolf	walked	4	2
+CNPC_VWerewolf	0x66bc	0x4	m_pMoveHint	CBaseEntity*	FIELD_CLASSPTR	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66c0	0x4	m_pLastUsedMoveHint	CBaseEntity*	FIELD_CLASSPTR	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66c4	0x4	m_pBreakHint	CBaseEntity*	FIELD_CLASSPTR	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66c8	0x1	m_bRandomHint	bool	FIELD_BOOLEAN	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66cc		m_flHullRadius	float		1		CNPC_VWerewolf	walked	0	3
+CNPC_VWerewolf	0x66d0		m_flTargetHullRadius	float		1		CNPC_VWerewolf	walked	0	3
+CNPC_VWerewolf	0x66d4		m_iLastHintSearchTick	int		1		CNPC_VWerewolf	walked	7	3
+CNPC_VWerewolf	0x66d8		m_flLastHintSearchTime	float		1		CNPC_VWerewolf	walked	7	3
+CNPC_VWerewolf	0x66dc		m_vecLastFakeHullOrigin	Vector		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66dc		m_vecLastFakeHullOrigin[0]	float		1		CNPC_VWerewolf	walked		
+CNPC_VWerewolf	0x66e0		m_vecLastFakeHullOrigin[1]	float		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66e4		m_vecLastFakeHullOrigin[2]	float		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x66e8		m_iZoneFlags	int		1		CNPC_VWerewolf	walked	4	14
+CNPC_VWerewolf	0x66ec		m_flLastSeenByPlayerTime	float		1		CNPC_VWerewolf	walked	5	4
+CNPC_VWerewolf	0x66f0	0x4	m_flTimeTeleportedOut	float	FIELD_TIME	1		CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x66f4		m_flLastFakeHullDamageTime	float		1		CNPC_VWerewolf	walked	1	1
+CNPC_VWerewolf	0x6708		m_iMoveHintNodeZone	int		1		CNPC_VWerewolf	walked	3	0
+CNPC_VWerewolf	0x670c		m_iRandomMoveHintNodeZone	int		1		CNPC_VWerewolf	walked	3	1
+CNPC_VWerewolf	0x6710		m_bPlayerIsMalkavian	bool		1		CNPC_VWerewolf	walked	1	0
+CNPC_VWerewolf	0x6714		m_HintData	CUtlVector<CHintData_WW>		1		CNPC_VWerewolf	walked	0	7
+CNPC_VWerewolf	0x6714		m_HintData.m_Memory.m_pMemory	CHintData_WW*		1		CNPC_VWerewolf	walked		
+CNPC_VWerewolf	0x6718		m_HintData.m_Memory.m_nAllocationCount	int		1		CNPC_VWerewolf	walked	1	0
+CNPC_VWerewolf	0x671c		m_HintData.m_Memory.m_nGrowSize	int		1		CNPC_VWerewolf	walked	0	1
+CNPC_VWerewolf	0x6720		m_HintData.m_Size	int		1		CNPC_VWerewolf	walked	2	8
+CNPC_VWerewolf	0x6724		m_HintData.m_pElements	CHintData_WW*		1		CNPC_VWerewolf	walked	2	0
+CNPC_VWerewolf	0x6728	0x18	m_OnConditionDeathTriggered	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnConditionDeathTriggered	CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x6740	0x18	m_OnBeginCrushAnimation	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnBeginCrushAnimation	CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x6758	0x18	m_OnFinishCrushAnimation	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnFinishCrushAnimation	CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x6770	0x18	m_OnTeleportOut	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnTeleportOut	CNPC_VWerewolf	datamap		
+CNPC_VWerewolf	0x6788	0x18	m_OnTeleportIn	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnTeleportIn	CNPC_VWerewolf	datamap		
+CNPC_VYukie	0x6664		m_hUnreadHandle6664	EHANDLE		1		CAI_BaseNPCTroika	unsettled	1	0
+CNPC_VZombie	0x6675	0x1	m_bShouldRagdoll	bool	FIELD_BOOLEAN	1	KEY key=should_ragdoll	CNPC_VZombie	datamap	1	0
+CNPC_VZombie	0x6678	0x4	m_iZombieAIType	int	FIELD_INTEGER	1	KEY key=ZombieAIType	CNPC_VZombie	datamap	1	0
+CNPC_VZombie	0x667c	0x1	m_iNeedsCrawlOutOfGround	bool	FIELD_BOOLEAN	1		CNPC_VZombie	datamap		
+CNPC_VZombie	0x6680	0xc	m_vecDeathForceVector	Vector	FIELD_VECTOR	1		CNPC_VZombie	datamap		
+CNPC_VZombie	0x668c		m_DeathDamageInfo	CTakeDamageInfo		1		CNPC_VZombie	walked	1	3
+CNPC_VZombie	0x668c		m_DeathDamageInfo.m_iUnknown00	int		1		CNPC_VZombie	unsettled		
+CNPC_VZombie	0x6690		m_DeathDamageInfo.m_flUnknownScale[0]	float		1		CNPC_VZombie	unsettled	1	0
+CNPC_VZombie	0x6694		m_DeathDamageInfo.m_flUnknownScale[1]	float		1		CNPC_VZombie	unsettled	1	0
+CNPC_VZombie	0x6698		m_DeathDamageInfo.m_flUnknownScale[2]	float		1		CNPC_VZombie	unsettled	1	0
+CNPC_VZombie	0x669c		m_DeathDamageInfo.m_vecDamageForce[0]	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66a0		m_DeathDamageInfo.m_vecDamageForce[1]	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66a4		m_DeathDamageInfo.m_vecDamageForce[2]	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66a8		m_DeathDamageInfo.m_vecDamagePosition[0]	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66ac		m_DeathDamageInfo.m_vecDamagePosition[1]	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66b0		m_DeathDamageInfo.m_vecDamagePosition[2]	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66b4		m_DeathDamageInfo.m_hInflictor	EHANDLE		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66b8		m_DeathDamageInfo.m_hAttacker	EHANDLE		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66bc		m_DeathDamageInfo.m_flDamage	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66c0		m_DeathDamageInfo.m_flMaxDamage	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66c4		m_DeathDamageInfo.m_bitsDamageType	int		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66c8		m_DeathDamageInfo.m_iDamageCustom	int		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66cc		m_DeathDamageInfo.m_iAmmoType	int		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66d0		m_DeathDamageInfo.m_flMultiplier	float		1		CNPC_VZombie	walked	1	0
+CNPC_VZombie	0x66d4		m_DeathDamageInfo.m_bUnknown48	bool		1		CNPC_VZombie	unsettled	1	0
+CNPC_VZombie	0x66d5		m_DeathDamageInfo.m_bUnknown49	bool		1		CNPC_VZombie	unsettled	1	0
+CNPC_VZombie	0x66d6		m_DeathDamageInfo.m_bUnknown4A	bool		1		CNPC_VZombie	unsettled	1	0
+CNPC_VZombie	0x66d8	0x4	m_flGrappleReadyTimer	float	FIELD_TIME	1		CNPC_VZombie	datamap		
+CNPC_VZombie	0x66dc	0x4	m_flRemoveDist	float	FIELD_FLOAT	1	KEY key=remove_distance	CNPC_VZombie	datamap	1	0
+CNPC_VZombie	0x66e0	0x1	m_bShouldGib	bool	FIELD_BOOLEAN	1		CNPC_VZombie	datamap		
+CNPC_VZombie	0x66e4		m_iActivityVariant	int		1		CNPC_VZombie	walked	1	1
+CNPC_VZombie	0x66e8	0x18	m_OnAttackedVictim	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnAttackedVictim	CNPC_VZombie	datamap		
+CCineAISchedule	0x608c	0x4	m_sGoalEnt	string_t	FIELD_STRING	1	KEY key=goalent	CCineAISchedule	datamap		
+CCineAISchedule	0x6090	0x4	m_nSchedule	int	FIELD_INTEGER	1	KEY key=schedule	CCineAISchedule	datamap		
+CCineAISchedule	0x6094	0x4	m_nForceState	int	FIELD_INTEGER	1	KEY key=forcestate	CCineAISchedule	datamap		
+CNPC_VAndreiBlood	0x66b8	0x4	m_iActiveRunnerCount	int	FIELD_INTEGER	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66bc	0x4	m_iKillCount	int	FIELD_INTEGER	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66c0	0xc	m_vLastTeleportPosition	Vector	FIELD_VECTOR	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66cc	0x1	m_bActivated	bool	FIELD_BOOLEAN	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66cd	0x1	m_bDead	bool	FIELD_BOOLEAN	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66ce	0x1	m_bTriggerUnhide	bool	FIELD_BOOLEAN	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66d0	0x4	m_fTeleportWaitStartTime	float	FIELD_TIME	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66d4	0x1	m_bForceTeleport	bool	FIELD_BOOLEAN	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66d8	0x4	m_iHitCounter	int	FIELD_INTEGER	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAndreiBlood	0x66dc	0x4	m_iHitMax	int	FIELD_INTEGER	1		CNPC_VAndreiBlood	datamap		
+CNPC_VAsianVampire	0x66b8	0x18	m_vLastJumpPosition	Vector	FIELD_VECTOR	2		CNPC_VAsianVampire	datamap		
+CNPC_VAsianVampire	0x66d0	0x4	m_iLastJumpPositionIdx	int	FIELD_INTEGER	1		CNPC_VAsianVampire	datamap		
+CNPC_VAsianVampire	0x66d4	0x1	m_bPathBlocked	bool	FIELD_BOOLEAN	1		CNPC_VAsianVampire	datamap		
+CNPC_VAsianVampire	0x66d8	0x4	m_fMovedTimeStamp	float	FIELD_FLOAT	1		CNPC_VAsianVampire	datamap		
+CNPC_VAsianVampire	0x66dc	0xc	m_vMovedPosition	Vector	FIELD_VECTOR	1		CNPC_VAsianVampire	datamap		
+CNPC_VAsianVampire	0x66e8	0x1	m_bSuppressRanged	bool	FIELD_BOOLEAN	1		CNPC_VAsianVampire	datamap		
+CNPC_VChangBros	0x66b8	0x4	m_ChangType	int	FIELD_INTEGER	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66bc	0xc	m_vLastTeleportPosition	Vector	FIELD_VECTOR	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66c8	0x4	m_fLastTeleportTime	float	FIELD_TIME	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66cc	0x4	m_fLastJumpTime	float	FIELD_TIME	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66d0	0x4	m_fFacingTime	float	FIELD_TIME	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66d4	0x4	m_fUnitedTime	float	FIELD_TIME	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66d8	0x4	m_bEnergyBallSpawned	float	FIELD_FLOAT	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66dc	0xc	m_vArenaCenter	Vector	FIELD_VECTOR	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66e8	0x1	m_bCenterStored	bool	FIELD_BOOLEAN	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66ec	0x4	m_fLastUnitedAttackTime	float	FIELD_TIME	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66f0	0x4	m_fEnergyChargeTime	float	FIELD_TIME	1		CNPC_VChangBros	datamap		
+CNPC_VChangBros	0x66f4	0x4	m_hCenterEmitter	EHANDLE	FIELD_EHANDLE	1		CNPC_VChangBros	datamap		
+CNPC_VFrenzyShadow	0x6664	0x4	m_iHostileEnemyCount	int	FIELD_INTEGER	1		CNPC_VFrenzyShadow	datamap		
+CNPC_VFrenzyShadow	0x6668	0x1	m_bFailedGrapple	bool	FIELD_BOOLEAN	1		CNPC_VFrenzyShadow	datamap		
+CNPC_VGhoulCroucher	0x6664	0x1	m_bSpawnDisturbed	bool	FIELD_BOOLEAN	1	KEY key=disturbed	CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x6665	0x1	m_bSpawnBurning	bool	FIELD_BOOLEAN	1	KEY key=on_fire	CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x6666	0x1	m_bWasDisturbed	bool	FIELD_BOOLEAN	1		CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x6667	0x1	m_bUnawareExited	bool	FIELD_BOOLEAN	1		CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x6668	0x4	m_nUnawareType	int	FIELD_INTEGER	1		CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x666c	0x4	m_flNextTouchBurnTime	float	FIELD_TIME	1		CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x6670	0x4	m_hBurningParticle	EHANDLE	FIELD_EHANDLE	1		CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x6674	0x18	m_OnDisturbed	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnDisturbed	CNPC_VGhoulCroucher	datamap		
+CNPC_VGhoulCroucher	0x668c	0x18	m_OnDisturbedByPlayer	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=OnDisturbedByPlayer	CNPC_VGhoulCroucher	datamap		
+CNPC_VLasombra	0x6664	0x4	m_flCoverDisableOverride	float	FIELD_FLOAT	1		CNPC_VLasombra	datamap		
+CNPC_VTaxiDriver	0x6660	0x1	m_bFirstThink	bool	FIELD_BOOLEAN	1		CNPC_VTaxiDriver	datamap		
+CNPC_VWolfMorph	0x6664	0x1	m_bFirstThink	bool	FIELD_BOOLEAN	1		CNPC_VWolfMorph	datamap		
+CNPC_VWolfMorph	0x6668	0x4	m_flNextFleeSoundTime	float	FIELD_TIME	1		CNPC_VWolfMorph	datamap		
+CScriptedTarget	0x5f44	0xc	m_vLastPosition	Vector	FIELD_POSITION_VECTOR	1		CScriptedTarget	datamap		
+CScriptedTarget	0x5f50	0x4	m_iDisabled	int	FIELD_INTEGER	1	KEY key=StartDisabled	CScriptedTarget	datamap		
+CScriptedTarget	0x5f54	0x4	m_iszEntity	string_t	FIELD_STRING	1	KEY key=m_iszEntity	CScriptedTarget	datamap		
+CScriptedTarget	0x5f58	0x4	m_flRadius	float	FIELD_FLOAT	1	KEY key=m_flRadius	CScriptedTarget	datamap		
+CScriptedTarget	0x5f5c	0x4	m_nMoveSpeed	int	FIELD_INTEGER	1	KEY key=MoveSpeed	CScriptedTarget	datamap		
+CScriptedTarget	0x5f60	0x4	m_flPauseDuration	float	FIELD_FLOAT	1	KEY key=PauseDuration	CScriptedTarget	datamap		
+CScriptedTarget	0x5f64	0x4	m_flPauseDoneTime	float	FIELD_TIME	1		CScriptedTarget	datamap		
+CScriptedTarget	0x5f68	0x4	m_flEffectDuration	float	FIELD_FLOAT	1	KEY key=EffectDuration	CScriptedTarget	datamap		
+CScriptedTarget	0x5f6c	0x18	m_AtTarget	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=AtTarget	CScriptedTarget	datamap		
+CScriptedTarget	0x5f84	0x18	m_LeaveTarget	COutputEvent	FIELD_CUSTOM	1	KEY OUTPUT key=LeaveTarget	CScriptedTarget	datamap		
+CNPC_VBaseBoss	0x665c		m_BlacklistedEntities	CUtlVector<BlacklistedEntity_t>		1		CAI_BaseNPCTroika	walked		
+CNPC_VBaseBoss	0x665c		m_BlacklistedEntities.m_Memory.m_pMemory	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		
+CNPC_VBaseBoss	0x6660		m_BlacklistedEntities.m_Memory.m_nAllocationCount	int		1		CAI_BaseNPCTroika	walked		
+CNPC_VBaseBoss	0x6664		m_BlacklistedEntities.m_Memory.m_nGrowSize	int		1		CAI_BaseNPCTroika	walked		
+CNPC_VBaseBoss	0x6668		m_BlacklistedEntities.m_Size	int		1		CAI_BaseNPCTroika	walked		
+CNPC_VBaseBoss	0x666c		m_BlacklistedEntities.m_pElements	BlacklistedEntity_t*		1		CAI_BaseNPCTroika	walked		

@@ -136,33 +136,70 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Recovered on the way: slot 437 is `PreSelectSchedule` (the image's string; the oracle called
   `0x102ae920` `GetSchedule`); slot 439 is `SelectFailSchedule` inside `GetFailSchedule`
   `0x10281730`.
+- [x] **29b-0. The shape's recovery: every word typed, every slot's signature.**
+  Retail: a declaration needs what the ledger did not state. `fields.md` typed all 312 NPC-range
+  words `undefined4`/`undefined1`; 929 offsets touched through `this` had no record; 315 base slots
+  were `unsettled` and none had a parameter list; and the vtable dump stopped at 600.
+  Job (landed 2026-09-13): `uv run elysium research kernel_shape` (`kernel_shape.py`, over
+  `datamap_layout.py`) writes `npc-kernel/layout.md`/`.tsv` and `signatures.md`/`.tsv`, `--check`
+  verifies them, `--residue` lists what no reading has settled. Types come from the datamap
+  builder replay (`datamap_records-vampire.dll.json`, VtMB's own `fieldtype_t`, no
+  `FIELD_QUATERNION`) and the image's static records; interiors of `COutputEvent`, `CUtlVector`,
+  `Vector` and arrays from SDK 2013; untyped accesses are read receiver-aware (a slot body of the
+  family, a method typed on it, or a constructor/destructor installing its vtable — a Global body
+  alone never makes a word); signatures from SDK 2013 where the image pops the declared words.
+  The rest was read, body by body, into the two overlays beside the tool
+  (`kernel_fields.tsv` 417 rows, `kernel_signatures.tsv` 531 rows, each with the addresses read).
+  `DumpVtables.java` (and `ApplyDatamapTypes.java`'s same walk) stopped at 600 slots; both now
+  walk to the next table, the vtable pass was re-run and `vampire.dll` rebuilt, and the ledger
+  types `fields.md` from the records.
+  Result: `layout.md` 1,769 rows — 1,284 datamap, 39 interior, 67 sdk-order, 28 doc, 329 walked,
+  22 unsettled, none open; `signatures.md` 666 rows (628 slots, one row per branch where a branch
+  declares its own virtual) — 135 sdk, 522 walked, 9 unsettled, none open.
+  Recovered on the way (`npc-ai/shape.md`): Troika's table is 617 slots, the deepest species' 628,
+  and past a base's table (583 on `CAI_BaseActor`/`CAI_ExpressiveNPC`/`CCineNPC`, 617 on the boss,
+  vampire-boss and maker branches) every branch declares unrelated virtuals at the same index;
+  slot 0 is `SetRefEHandle`, the deleting destructor is slot 5; retail condition sets are 192 bits
+  and three, plus a heard set; a 16 KB circular debug log and three selector/ideal-state/TaskFail
+  stamps sit at `+0x1b2c..+0x5b55`; Troika's words end at `+0x665c`, not `+0x660c`; retail
+  `CUtlVector` is 0x14; `RunAI(bool)`, `OnScheduleChange(CAI_Schedule*)`,
+  `QuerySeeEntity(CBaseEntity*)`, `SelectIdealState` returns `NPC_STATE`.
+  Consumes: 29, 29a. Provides: the typed layout and the signatures 29b transcribes.
+  Oracle: `npc-kernel/layout.md`, `signatures.md`, `npc-ai/shape.md`. Unrecovered: 22 layout
+  rows and 9 slots, each `unsettled` with its reason (the un-named members of retail
+  `CTakeDamageInfo`; constructor defaults nothing reads; empty bodies with no NPC call site).
+  Size: L. Effort: Opus / high, readers in parallel.
 - [ ] **29b. The shape: every field and every slot declared.**
-  Retail: `fields.md` — the 835-offset `CAI_BaseNPCTroika` layout (`CAI_BaseNPC`'s 620 are its
-  prefix), plus the species-only offsets and the undeclared `field_0x…` words the walk touches;
-  `slots.md` — 600 primary-vtable slots, 347 with a single body across the family, the rest with
-  a Troika body and up to 27 species overrides; `classes.md` — the 77-class tree and the entity
-  classnames each claims.
+  Retail: `layout.md` — the flattened `CAI_BaseNPCTroika` layout typed word by word (the 835
+  datamap offsets, their interiors, and every word no datamap saves, to `+0x665c`), then each
+  species class's own words; `signatures.md` — 617 Troika-line slots and the per-branch virtuals
+  past them, each with a declaration; `slots.md` — the bodies per class; `classes.md` — the
+  77-class tree and the entity classnames each claims.
   Gap: `FElysiumNpc` (`ElysiumNpc.h`) cites ~30 offsets and ~25 slots in comments only, nothing
   asserts them; `FElysiumNpcMind` has no retail counterpart at all (`m_NPCState +0x5cc0` /
   `m_IdealNPCState +0x5cc4` are not declared anywhere); nine sites call `Schedule.Clear()` where
   retail calls `ClearSchedule`; `ElysiumStub::Fired` keys on free text with no address or story
   field. `FElysiumNpc` is `final` and species are data (`ElysiumNpcClasses.cpp`), which is right
   and stays.
-  Job: a generator beside `gen_action_tables.py` reads the ledger tables and emits
-  `ElysiumNpcKernelShape.cpp` — the census (offset → member, slot → virtual, class → base) the
-  runtime asserts in an `ElysiumActionTableTests`-shaped test — and the shape itself lands by
-  hand from the census: every Troika offset a named member on the struct that owns its concern
+  Job: a generator beside `gen_action_tables.py` reads `layout.tsv`, `signatures.tsv` and the
+  ledger tables and emits `ElysiumNpcKernelShape.cpp` — the census (offset → member and type,
+  slot → virtual and declaration, class → base) the runtime asserts in an
+  `ElysiumActionTableTests`-shaped test — and the shape itself lands by hand from the census:
+  every word a named member of its recorded type on the struct that owns its concern
   (`ScheduleHost`, `Cognition`, `Senses`, `NpcFlags`, the leaf), existing members kept and
-  mapped, new ones default-initialised and unwritten; every slot a virtual on `FElysiumNpc` with
-  its address in the declaration comment and its base body as the default, or a named stub that
-  tallies `elysium.stubs` — which gains structured `Address` and `Story` columns so the tally
-  joins `functions.md`. Species overrides are rows in the class registry (class → slot →
-  address), not subclasses. The nine raw `Schedule.Clear()` sites become the one
-  `ClearSchedule` (25a's first job, done here because it is shape).
-  Consumes: 29, 29a. Provides: the object every later story fills instead of re-shaping — the
-  end of "seam shaped by guess, rewired by the next story".
-  Oracle: `npc-kernel/fields.md`, `slots.md`, `classes.md`; the census file is the record.
-  Unrecovered: nothing new — the shape is a transcription. Size: L. Effort: Opus / high.
+  mapped, new ones default-initialised and unwritten; every Troika-line slot a virtual on
+  `FElysiumNpc` with its address and tier in the declaration comment and its body as the default
+  only where the port already has it (29c decides the rest), or a named stub that tallies
+  `elysium.stubs` — which gains structured `Address` and `Story` columns so the tally joins
+  `functions.md`. Species overrides, and the per-branch virtuals past 583/617, are rows in the
+  class registry (class → slot → address → declaration), not subclasses. An `unsettled` row lands
+  as its recorded arity and type with the reason in the comment. The nine raw `Schedule.Clear()`
+  sites become the one `ClearSchedule` (25a's first job, done here because it is shape).
+  Consumes: 29, 29a, 29b-0. Provides: the object every later story fills instead of re-shaping —
+  the end of "seam shaped by guess, rewired by the next story".
+  Oracle: `npc-kernel/layout.md`, `signatures.md`, `slots.md`, `classes.md`; the census file is
+  the record. Unrecovered: nothing new — 29b-0's `unsettled` rows carry over as recorded. Size: L.
+  Effort: Opus / high.
 - [ ] **29c. The primitives: layers 0–9, in bulk.**
   Retail: 1,695 core functions in the first ten layers of `order.md` — 1,156 are ≤ 64 bytes
   (accessors, predicates, one-field setters), 924 touch no NPC field, 1,325 fill a family slot
@@ -1287,7 +1324,7 @@ the argument for building the kernel bottom-up in bulk rather than feature by fe
 two bands are shape and accessors, the top two are the interpreter, and every feature story
 today re-walks pieces of both. So:
 
-1. **29a → 29b → 29c → 29d → 29e**, in that order. Each is a layer band; each enters
+1. **29a → 29b-0 → 29b → 29c → 29d → 29e**, in that order. Each is a layer band; each enters
    implementation with its checklist generated from the ledger and leaves with its
    `coverage.md` count at zero for its band.
 2. The open feature stories shrink to what sits **above** the bands already built. The split of

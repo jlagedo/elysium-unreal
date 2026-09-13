@@ -7,3238 +7,3353 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 
 | Rank | Address | Slots | Callers | Writes | Reads | Strings | Port | Why unnamed |
 |---|---|---|---|---|---|---|---|---|
-| 1 | `0x101a67e0` | `CAI_BaseHumanoid#167`, `CAI_BaseNPC#167`, +75 more | 220 | 0 | 1 | — | — | `CAI_BaseNPC#167 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 2 | `0x101371d0` | — | 125 | 0 | 0 | — | — |  |
-| 3 | `0x10137220` | — | 95 | 0 | 0 | — | — |  |
-| 4 | `0x1019ce00` | — | 90 | 0 | 0 | — | — |  |
+| 1 | `0x101a67e0` | `CAI_BaseHumanoid#167`, `CAI_BaseNPC#167`, +75 more | 230 | 0 | 1 | — | — | `CAI_BaseNPC#167 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 2 | `0x101371d0` | — | 126 | 0 | 0 | — | — |  |
+| 3 | `0x1019ce00` | — | 102 | 0 | 0 | — | — |  |
+| 4 | `0x10137220` | — | 95 | 0 | 0 | — | — |  |
 | 5 | `0x10273e10` | `CAI_BaseHumanoid#541`, `CAI_BaseNPC#541`, +75 more | 81 | 0 | 2 | — | — | `CAI_BaseNPC#541 no SDK twin: stretch #537-#545 holds 7 retai…` |
 | 6 | `0x100aa7b0` | — | 82 | 0 | 0 | `CBaseEntity::operator delete` | — |  |
-| 7 | `0x10430fa0` | — | 78 | 0 | 0 | — | — |  |
+| 7 | `0x10430fa0` | — | 79 | 0 | 0 | — | — |  |
 | 8 | `0x100290c0` | — | 73 | 0 | 0 | — | — |  |
 | 9 | `0x102ea2d0` | — | 70 | 0 | 3 | — | — |  |
 | 10 | `0x1028d610` | — | 64 | 0 | 8 | — | — |  |
-| 11 | `0x10146570` | — | 66 | 0 | 0 | — | — |  |
-| 12 | `0x102ea020` | — | 60 | 0 | 0 | `<<null>>` | — |  |
-| 13 | `0x1019d280` | — | 59 | 0 | 0 | — | — |  |
-| 14 | `0x100b4dc0` | `CAISound#158`, `CAI_BaseHumanoid#158`, +463 more | 57 | 0 | 1 | — | — | `CAI_BaseNPC#158 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 15 | `0x1019d4b0` | — | 56 | 0 | 2 | `CBaseEntity::Instance` | Source/ElysiumUE/Public/ElysiumSoundLevel.h:102 |  |
-| 16 | `0x102518f0` | — | 1 | 46 | 10 | — | — |  |
-| 17 | `0x100cd660` | — | 51 | 0 | 0 | — | — |  |
-| 18 | `0x101d3190` | — | 48 | 2 | 0 | — | — |  |
-| 19 | `0x10272900` | `CAI_BaseHumanoid#251`, `CAI_BaseNPC#251`, +75 more | 47 | 0 | 3 | — | — | `CAI_BaseNPC#251 no SDK twin: stretch #249-#256 holds 6 retai…` |
-| 20 | `0x100b4b40` | `CAISound#193`, `CAI_BaseNPC#193`, +486 more | 46 | 0 | 2 | — | — | `CAI_BaseNPC#193 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 21 | `0x1019cf50` | — | 47 | 1 | 0 | — | — |  |
-| 22 | `0x10269b50` | — | 47 | 0 | 1 | — | — |  |
-| 23 | `0x1002cbd0` | — | 42 | 0 | 0 | — | — |  |
-| 24 | `0x1006dec0` | — | 16 | 16 | 10 | — | — |  |
-| 25 | `0x101d3850` | — | 2 | 39 | 0 | — | — |  |
-| 26 | `0x102dfed0` | — | 37 | 0 | 4 | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2124 |  |
-| 27 | `0x1004f7a0` | — | 21 | 16 | 3 | — | — |  |
-| 28 | `0x1005f190` | — | 39 | 0 | 1 | — | — |  |
-| 29 | `0x101cd940` | — | 40 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:887 |  |
-| 30 | `0x1002cca0` | — | 35 | 0 | 0 | — | — |  |
-| 31 | `0x102e0b40` | — | 34 | 1 | 0 | — | — |  |
-| 32 | `0x1019d040` | — | 27 | 2 | 4 | — | — |  |
-| 33 | `0x102b5360` | `CAI_BaseNPCTroika#168`, `CGeneric_NPC#168`, +62 more | 28 | 0 | 3 | — | — |  |
-| 34 | `0x100dc580` | — | 27 | 1 | 2 | — | — |  |
-| 35 | `0x1025e8e0` | `CAI_BaseHumanoid#193` | 27 | 0 | 3 | — | — |  |
-| 36 | `0x1027d990` | — | 29 | 0 | 1 | — | — |  |
-| 37 | `0x10027160` | `CAISound#192`, `CAI_BaseHumanoid#192`, +494 more | 20 | 0 | 9 | — | — | `CAI_BaseNPC#192 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 38 | `0x100dc480` | — | 25 | 1 | 3 | — | — |  |
-| 39 | `0x101ef540` | — | 2 | 23 | 4 | — | — |  |
-| 40 | `0x1027c820` | — | 13 | 0 | 16 | — | — |  |
-| 41 | `0x10032b00` | — | 27 | 1 | 0 | — | — |  |
-| 42 | `0x10139610` | — | 28 | 0 | 0 | — | — |  |
-| 43 | `0x1026e340` | — | 22 | 3 | 3 | `Stripped⏎` | — |  |
-| 44 | `0x102ae750` | — | 28 | 0 | 0 | — | — |  |
-| 45 | `0x103cac20` | — | 2 | 23 | 3 | — | — |  |
-| 46 | `0x100f7770` | — | 27 | 0 | 0 | — | — |  |
-| 47 | `0x101cd9e0` | — | 27 | 0 | 0 | — | — |  |
-| 48 | `0x101d3730` | — | 27 | 0 | 0 | — | — |  |
-| 49 | `0x101f5950` | — | 25 | 0 | 2 | `VSnd: Server Playing: %s⏎`, `ERROR: VSnd: Play: %s Table out of bound…` | — |  |
-| 50 | `0x100cd2d0` | — | 25 | 0 | 1 | — | — |  |
-| 51 | `0x101d2c70` | — | 26 | 0 | 0 | — | — |  |
-| 52 | `0x101de660` | — | 4 | 0 | 22 | `E:\Vampire\main\game_shared\v_discipline…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:994, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1092, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2676, +1 more |  |
-| 53 | `0x101a6720` | `CAI_BaseHumanoid#464`, `CAI_BaseNPC#464`, +74 more | 24 | 0 | 1 | — | — | `CAI_BaseNPC#464 no SDK twin: stretch #463-#465 holds 1 retai…` |
-| 54 | `0x101aae60` | `CPayphone#193` | 24 | 0 | 0 | `Phone_bone_01` | — |  |
-| 55 | `0x10297640` | `CAI_BaseNPCTroika#572`, `CGeneric_NPC#572`, +62 more | 20 | 1 | 3 | — | — |  |
-| 56 | `0x102e20b0` | — | 24 | 0 | 0 | — | — |  |
-| 57 | `0x101a6d00` | `CAI_BaseHumanoid#580`, `CAI_BaseNPC#580`, +8 more | 23 | 0 | 0 | — | — | `CAI_BaseNPC#580 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 58 | `0x102e2020` | — | 20 | 1 | 2 | — | — |  |
-| 59 | `0x102ee620` | — | 22 | 0 | 1 | — | — |  |
-| 60 | `0x10430964` | — | 23 | 0 | 0 | — | — |  |
-| 61 | `0x100b5190` | — | 21 | 0 | 1 | — | — |  |
-| 62 | `0x10273070` | — | 18 | 1 | 3 | `****ERROR***⏎⏎`, `Have the class responsible for spawning …`, +4 more | — |  |
-| 63 | `0x102e0900` | — | 2 | 20 | 0 | — | — |  |
-| 64 | `0x102b7690` | — | 1 | 8 | 12 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 65 | `0x10385a10` | `CNPC_VBrujah#432`, `CNPC_VChangBros#432`, +12 more | 21 | 0 | 0 | — | — |  |
-| 66 | `0x1038b370` | — | 3 | 2 | 16 | `sheriff_teleport_emitter` | — |  |
-| 67 | `0x101d0ec0` | — | 20 | 0 | 0 | `NULL Ent in UTIL_PrecacheOther: %s⏎` | — |  |
-| 68 | `0x101ddec0` | — | 1 | 10 | 9 | — | — |  |
-| 69 | `0x102517b0` | — | 19 | 0 | 1 | — | — |  |
-| 70 | `0x102eca50` | — | 2 | 18 | 0 | — | — |  |
-| 71 | `0x1030bb30` | — | 1 | 18 | 1 | — | — |  |
-| 72 | `0x103de2b0` | `CNPC_VZombie#580` | 20 | 0 | 0 | — | — |  |
-| 73 | `0x10142e90` | — | 19 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 74 | `0x101cf2f0` | — | 19 | 0 | 0 | — | — |  |
-| 75 | `0x101d88b0` | — | 3 | 14 | 2 | `Warning: Dice roll count out of bounds: …` | — |  |
-| 76 | `0x102517e0` | — | 18 | 0 | 1 | — | — |  |
-| 77 | `0x1027cae0` | `CAI_BaseNPC#424`, `CAI_BaseNPCTroika#424`, +73 more | 3 | 7 | 9 | — | — | `CAI_BaseNPC#424 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 78 | `0x10280360` | `CAI_BaseHumanoid#528`, `CAI_BaseNPC#528`, +75 more | 12 | 2 | 5 | `E:\Vampire\main\dlls\AI_BaseNPC_Movement…` | — | `CAI_BaseNPC#528 no SDK twin: stretch #526-#530 holds 3 retai…` |
-| 79 | `0x102e1e20` | — | 16 | 1 | 2 | — | — |  |
-| 80 | `0x102ee6a0` | — | 18 | 0 | 1 | — | — |  |
-| 81 | `0x100353c0` | — | 1 | 15 | 2 | — | — |  |
-| 82 | `0x101aa790` | `CAI_BaseNPCTroika#580`, `CNPCMaker#580`, +5 more | 18 | 0 | 0 | — | — |  |
-| 83 | `0x102ad340` | `CAI_BaseNPCTroika#460`, `CGeneric_NPC#460`, +59 more | 1 | 8 | 9 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 84 | `0x102cc1f0` | — | 16 | 0 | 2 | `GetScheduleOfType(): No CASE for Schedul…` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:665, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:691, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:463, +3 more |  |
-| 85 | `0x102d6100` | — | 18 | 0 | 0 | — | — |  |
-| 86 | `0x102dda40` | — | 16 | 0 | 2 | — | — |  |
-| 87 | `0x10357370` | `CNPC_Crow#580` | 18 | 0 | 0 | — | — |  |
-| 88 | `0x10359f00` | `CGeneric_NPC#580` | 18 | 0 | 0 | — | — |  |
-| 89 | `0x1035ad70` | `CGeneric_NPC_bathack#580` | 18 | 0 | 0 | — | — |  |
-| 90 | `0x1035b560` | `CGenericSabbat_NPC#580` | 18 | 0 | 0 | — | — |  |
-| 91 | `0x1035c1b0` | `CNPC_VVampireBoss#580` | 18 | 0 | 0 | — | — |  |
-| 92 | `0x1035c230` | `CNPC_VAndreiBlood#580` | 18 | 0 | 0 | — | — |  |
-| 93 | `0x1035ec10` | `CNPC_VAnimal#580` | 18 | 0 | 0 | — | — |  |
-| 94 | `0x103603d0` | `CNPC_VAsianVampire#580` | 18 | 0 | 0 | — | — |  |
-| 95 | `0x10362c50` | `CNPC_VBach#580` | 18 | 0 | 0 | — | — |  |
-| 96 | `0x10366c70` | `CNPC_VBatSwarm#580` | 18 | 0 | 0 | — | — |  |
-| 97 | `0x10367870` | `CNPC_VBrujah#580` | 18 | 0 | 0 | — | — |  |
-| 98 | `0x103683b0` | `CNPC_VCamera#580`, `CNPC_VCameraSecurity#580` | 18 | 0 | 0 | — | — |  |
-| 99 | `0x1036a1b0` | `CNPC_VChangBros#580` | 18 | 0 | 0 | — | — |  |
-| 100 | `0x1036eab0` | `CNPC_VChangBrosBlade#580` | 18 | 0 | 0 | — | — |  |
-| 101 | `0x1036f2b0` | `CNPC_VChangBrosClaw#580` | 18 | 0 | 0 | — | — |  |
-| 102 | `0x1036fb10` | `CNPC_VCombatman#580` | 18 | 0 | 0 | — | — |  |
-| 103 | `0x10370930` | `CNPC_VCop#580` | 18 | 0 | 0 | — | — |  |
-| 104 | `0x10373530` | `CNPC_VDog#580` | 18 | 0 | 0 | — | — |  |
-| 105 | `0x103750e0` | `CNPC_VPlayerController#580`, `CNPC_VVampire#580` | 18 | 0 | 0 | — | — |  |
-| 106 | `0x10375240` | `CNPC_VFrenzyShadow#580` | 18 | 0 | 0 | — | — |  |
-| 107 | `0x10377070` | `CNPC_VGangrel#580` | 18 | 0 | 0 | — | — |  |
-| 108 | `0x10377b20` | `CNPC_VGargoyle#580` | 18 | 0 | 0 | — | — |  |
-| 109 | `0x1037afb0` | `CNPC_VGhoulCroucher#580` | 18 | 0 | 0 | — | — |  |
-| 110 | `0x1037c660` | `CNPC_VGuard1#580` | 18 | 0 | 0 | — | — |  |
-| 111 | `0x1037e830` | `CNPC_VHengeyokai#580` | 18 | 0 | 0 | — | — |  |
-| 112 | `0x10384060` | `CNPC_VHuman#580` | 18 | 0 | 0 | — | — |  |
-| 113 | `0x10386ae0` | `CNPC_ProneDialog#580`, `CNPC_VHumanCombatant#580` | 18 | 0 | 0 | — | — |  |
-| 114 | `0x10387710` | `CNPC_VHumanCombatPatrol#580` | 18 | 0 | 0 | — | — |  |
-| 115 | `0x10388060` | `CNPC_VHunter#580` | 18 | 0 | 0 | — | — |  |
-| 116 | `0x10388de0` | `CNPC_VLasombra#580` | 18 | 0 | 0 | — | — |  |
-| 117 | `0x10389560` | `CNPC_VMalkavian#580` | 18 | 0 | 0 | — | — |  |
-| 118 | `0x10389db0` | `CNPC_VManBat#580` | 18 | 0 | 0 | — | — |  |
-| 119 | `0x10391070` | `CNPC_VMingXiao#580` | 18 | 0 | 0 | — | — |  |
-| 120 | `0x1039b090` | `CNPC_VMingXiaoTentacle#580` | 18 | 0 | 0 | — | — |  |
-| 121 | `0x1039f600` | `CNPC_VMoleman#580` | 18 | 0 | 0 | — | — |  |
-| 122 | `0x103a14a0` | `CNPC_VNosferatu#580` | 18 | 0 | 0 | — | — |  |
-| 123 | `0x103a1e00` | `CNPC_VPedestrian#580` | 18 | 0 | 0 | — | — |  |
-| 124 | `0x103a42e0` | `CNPC_VPlaceholder#580` | 18 | 0 | 0 | — | — |  |
-| 125 | `0x103a50a0` | `CNPC_VSabbatGunman#580` | 18 | 0 | 0 | — | — |  |
-| 126 | `0x103a5ca0` | `CNPC_VSabbatLeader#580` | 18 | 0 | 0 | — | — |  |
-| 127 | `0x103abba0` | `CNPC_VRat#580`, `CNPC_VScurrying#580` | 18 | 0 | 0 | — | — |  |
-| 128 | `0x103ae4b0` | `CNPC_VSheriffMan#580` | 18 | 0 | 0 | — | — |  |
-| 129 | `0x103b1c20` | `CNPC_VSheriffSwarm#580` | 18 | 0 | 0 | — | — |  |
-| 130 | `0x103b28b0` | `CNPC_VStalker#580` | 18 | 0 | 0 | — | — |  |
-| 131 | `0x103b2f70` | `CNPC_VTaxiDriver#580` | 18 | 0 | 0 | — | — |  |
-| 132 | `0x103b3b20` | `CNPC_VTest#580` | 18 | 0 | 0 | — | — |  |
-| 133 | `0x103b5330` | `CNPC_VToreador#580` | 18 | 0 | 0 | — | — |  |
-| 134 | `0x103b5ad0` | `CNPC_VTremere#580` | 18 | 0 | 0 | — | — |  |
-| 135 | `0x103b6e50` | `CNPC_VTzimisce#580` | 18 | 0 | 0 | — | — |  |
-| 136 | `0x103c1300` | `CNPC_VTzimisceHeadClaw#580` | 18 | 0 | 0 | — | — |  |
-| 137 | `0x103c30e0` | `CNPC_VTzimisceRunner#580` | 18 | 0 | 0 | — | — |  |
-| 138 | `0x103c77b0` | `CNPC_VVentrue#580` | 18 | 0 | 0 | — | — |  |
-| 139 | `0x103ca750` | `CNPC_VWerewolf#580` | 18 | 0 | 0 | — | — |  |
-| 140 | `0x103dc750` | `CNPC_VWolfMorph#580` | 18 | 0 | 0 | — | — |  |
-| 141 | `0x103dd050` | `CNPC_VYukie#580` | 18 | 0 | 0 | — | — |  |
-| 142 | `0x1013d580` | — | 17 | 0 | 0 | — | — |  |
-| 143 | `0x101644f0` | — | 2 | 4 | 11 | — | Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp:525, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4112, Source/ElysiumUE/Public/ElysiumAnimationIntent.h:67 |  |
-| 144 | `0x101a7880` | `CCineNPC#583` | 1 | 7 | 9 | `**UNKNOWN**`, `E:\Vampire\main\dlls\scripted.cpp`, +14 more | — |  |
-| 145 | `0x101e4f30` | — | 8 | 9 | 0 | — | — |  |
-| 146 | `0x10200370` | — | 15 | 0 | 2 | — | — |  |
-| 147 | `0x1024cef0` | — | 2 | 15 | 0 | — | — |  |
-| 148 | `0x1024ddf0` | — | 2 | 15 | 0 | — | — |  |
-| 149 | `0x102b3e00` | `CAI_BaseNPCTroika#472`, `CGeneric_NPC#472`, +60 more | 2 | 6 | 9 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:44 |  |
-| 150 | `0x1030bec0` | — | 1 | 16 | 0 | — | — |  |
-| 151 | `0x103a2e30` | `CNPC_VPedestrian#461` | 1 | 5 | 11 | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — |  |
-| 152 | `0x10027020` | `CAISound#168`, `CAI_BaseHumanoid#168`, +431 more | 15 | 0 | 1 | — | — | `CAI_BaseNPC#168 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 153 | `0x100274b0` | `CAISound#198`, `CAI_BaseHumanoid#198`, +493 more | 15 | 0 | 1 | — | — | `CAI_BaseNPC#198 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 154 | `0x1013dc60` | — | 9 | 3 | 4 | — | — |  |
-| 155 | `0x101e0520` | — | 1 | 10 | 5 | `ERROR: Overflowed targeted discipline fl…` | — |  |
-| 156 | `0x1024cf80` | — | 1 | 0 | 15 | — | — |  |
-| 157 | `0x1024da80` | — | 1 | 0 | 15 | — | — |  |
-| 158 | `0x10260de0` | `CAI_BaseHumanoid#5` | 0 | 11 | 5 | — | — |  |
-| 159 | `0x10273ad0` | `CAI_BaseHumanoid#422`, `CAI_BaseNPC#422`, +11 more | 1 | 6 | 9 | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…` | — | `CAI_BaseNPC#422 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 160 | `0x10289d10` | `CAI_BaseHumanoid#572`, `CAI_BaseNPC#572`, +11 more | 13 | 1 | 2 | — | — | `CAI_BaseNPC#572 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 161 | `0x1028a150` | — | 14 | 0 | 2 | — | — |  |
-| 162 | `0x102a9c80` | — | 1 | 15 | 0 | — | — |  |
-| 163 | `0x102a9d20` | — | 1 | 15 | 0 | — | — |  |
-| 164 | `0x102a9dc0` | — | 1 | 15 | 0 | — | — |  |
-| 165 | `0x102aa210` | — | 1 | 5 | 10 | `Bip01`, `Can not find interest activity '%s' in t…`, +4 more | — |  |
-| 166 | `0x102b4f60` | `CAI_BaseNPCTroika#596`, `CGeneric_NPC#596`, +61 more | 16 | 0 | 0 | — | — |  |
-| 167 | `0x102d6120` | — | 16 | 0 | 0 | — | — |  |
-| 168 | `0x102e0a80` | — | 14 | 0 | 2 | — | — |  |
-| 169 | `0x102e6d70` | — | 13 | 2 | 1 | — | — |  |
-| 170 | `0x10319df0` | — | 6 | 10 | 0 | — | — |  |
-| 171 | `0x103bd690` | `CNPC_VTzimisce#461` | 1 | 6 | 9 | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 172 | `0x103d9c90` | — | 7 | 3 | 6 | — | — |  |
-| 173 | `0x100bf6a0` | — | 12 | 1 | 2 | — | — |  |
-| 174 | `0x100fbc90` | — | 13 | 2 | 0 | `env_particle` | — |  |
-| 175 | `0x1014f210` | — | 4 | 9 | 2 | — | — |  |
-| 176 | `0x101c2890` | — | 1 | 14 | 0 | — | — |  |
-| 177 | `0x101d5e80` | — | 13 | 0 | 2 | — | — |  |
-| 178 | `0x101d8b40` | — | 1 | 5 | 9 | `Botched: %s ( %s )!⏎`, `                    `, +6 more | — |  |
-| 179 | `0x101f6910` | — | 4 | 10 | 1 | — | — |  |
-| 180 | `0x1023bd00` | — | 15 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:57 |  |
-| 181 | `0x1027cde0` | `CAI_Senses#0` | 0 | 9 | 6 | — | — |  |
-| 182 | `0x102b7110` | — | 2 | 8 | 5 | — | — |  |
-| 183 | `0x102c0520` | — | 2 | 2 | 11 | `scripted_scene`, `entity_debug_stats`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2177, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:601, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:80, +2 more |  |
-| 184 | `0x102c43b0` | — | 14 | 1 | 0 | — | — |  |
-| 185 | `0x102e1c10` | — | 11 | 2 | 2 | — | — |  |
-| 186 | `0x102ecc00` | — | 14 | 0 | 1 | — | — |  |
-| 187 | `0x102ee270` | — | 14 | 0 | 1 | — | — |  |
-| 188 | `0x102f3c10` | — | 15 | 0 | 0 | `Unaccounted`, `CAI_Network_NearestNodeToNPCAtPoint` | — |  |
-| 189 | `0x1037d290` | `CNPC_VGuard1#461` | 1 | 4 | 10 | `E:\Vampire\main\dlls\hl2_dll\NPC_VGuard1…` | — |  |
-| 190 | `0x1003e4b0` | — | 12 | 2 | 0 | — | — |  |
-| 191 | `0x1009e430` | `CAISound#110`, `CAI_ChangeHintGroup#110`, +135 more | 3 | 2 | 9 | `NULL ENTITY`, `FCVAR_NEVER_AS_STRING`, +14 more | — |  |
-| 192 | `0x100dd990` | — | 1 | 13 | 0 | — | — |  |
-| 193 | `0x10142aa0` | — | 14 | 0 | 0 | — | — |  |
-| 194 | `0x10146150` | — | 14 | 0 | 0 | — | — |  |
-| 195 | `0x10176520` | — | 1 | 4 | 9 | — | — |  |
-| 196 | `0x10176930` | — | 1 | 1 | 12 | `CBaseEntity::Instance` | — |  |
-| 197 | `0x101a9080` | `CCineAI#583` | 1 | 6 | 7 | `E:\Vampire\main\dlls\scripted.cpp`, `   Otherwise, talk to a programmer.⏎`, +11 more | — |  |
-| 198 | `0x101cf5c0` | — | 14 | 0 | 0 | — | — |  |
-| 199 | `0x101e1870` | — | 14 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1563 |  |
-| 200 | `0x1024b5e0` | — | 5 | 3 | 6 | — | — |  |
-| 201 | `0x102ce150` | — | 1 | 6 | 7 | — | — |  |
-| 202 | `0x10369930` | `CNPC_VCamera#422`, `CNPC_VCameraSecurity#422` | 0 | 4 | 10 | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…`, +1 more | — |  |
-| 203 | `0x10397410` | — | 1 | 6 | 7 | `Ming_xiao_tentacle_burst_emitter`, `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…`, +1 more | — |  |
-| 204 | `0x1006cff0` | — | 11 | 0 | 2 | — | — |  |
-| 205 | `0x10090950` | — | 9 | 3 | 1 | `NULL ENTITY`, `CBaseAnimating::ResetSequenceInfo ` | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:102, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:875, Source/ElysiumUE/Public/Visual/ElysiumBlendGrids.h:185 |  |
-| 206 | `0x101c26d0` | — | 13 | 0 | 0 | — | — |  |
-| 207 | `0x101d5f10` | — | 11 | 0 | 2 | — | — |  |
-| 208 | `0x10245fe0` | `ConVar#12` | 2 | 8 | 3 | — | — |  |
-| 209 | `0x1024b2d0` | — | 1 | 12 | 0 | — | — |  |
-| 210 | `0x10260a50` | — | 6 | 2 | 5 | `ResetSequence : %s: %s -> %s 	 (current …`, `ResetSequence : %s: %s -> %s 	 (current …` | — |  |
-| 211 | `0x102c0010` | — | 1 | 5 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:755, Source/ElysiumUE/Public/ElysiumPlayer.h:1746 |  |
-| 212 | `0x102c7600` | `CAI_StandoffBehavior#13` | 0 | 3 | 10 | — | — |  |
-| 213 | `0x102d14c0` | — | 10 | 0 | 3 | — | — |  |
-| 214 | `0x102ee1c0` | — | 12 | 0 | 1 | — | — |  |
-| 215 | `0x10326bd0` | `CAI_BaseHumanoid#364`, `CAI_BaseNPC#364`, +69 more | 10 | 0 | 3 | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | — | `CAI_BaseNPC#364 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 216 | `0x103a25a0` | `CNPC_VPedestrian#130` | 0 | 0 | 13 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +1 more | — |  |
-| 217 | `0x103dc5b0` | — | 1 | 8 | 4 | — | — |  |
-| 218 | `0x1002ca10` | — | 8 | 4 | 0 | — | — |  |
-| 219 | `0x100335e0` | — | 12 | 0 | 0 | — | — |  |
-| 220 | `0x100a0670` | — | 2 | 3 | 7 | `NULL ENTITY`, `CBaseEntity::SetParent`, +1 more | — |  |
-| 221 | `0x100a0990` | — | 1 | 11 | 0 | — | — |  |
-| 222 | `0x100a0a10` | — | 1 | 0 | 11 | — | — |  |
-| 223 | `0x10139970` | — | 12 | 0 | 0 | — | — |  |
-| 224 | `0x1013dce0` | — | 8 | 2 | 2 | — | — |  |
-| 225 | `0x101434b0` | — | 12 | 0 | 0 | — | — |  |
-| 226 | `0x101aa750` | `CAI_BaseNPCTroika#416`, `CGeneric_NPC#416`, +62 more | 11 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:598 |  |
-| 227 | `0x101cd970` | — | 12 | 0 | 0 | — | — |  |
-| 228 | `0x101d2f40` | — | 12 | 0 | 0 | — | — |  |
-| 229 | `0x101e8da0` | — | 12 | 0 | 0 | — | — |  |
-| 230 | `0x102779a0` | `CAI_BaseHumanoid#581`, `CAI_BaseNPC#581`, +75 more | 0 | 0 | 12 | `Unknown`, `State: %s, `, +13 more | — | `CAI_BaseNPC#581 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 231 | `0x102b3d90` | — | 2 | 10 | 0 | — | — |  |
-| 232 | `0x102c1680` | `CAI_BaseNPCTroika#286`, `CGeneric_NPC#286`, +61 more | 0 | 8 | 4 | — | — |  |
-| 233 | `0x102c36d0` | — | 5 | 0 | 7 | `UTIL_TraceHull` | — |  |
-| 234 | `0x102d12e0` | — | 11 | 0 | 1 | — | — |  |
-| 235 | `0x102d61b0` | — | 12 | 0 | 0 | — | — |  |
-| 236 | `0x102e30d0` | — | 10 | 2 | 0 | — | — |  |
-| 237 | `0x102ee140` | — | 11 | 0 | 1 | — | — |  |
-| 238 | `0x102f90e0` | — | 6 | 3 | 3 | — | — |  |
-| 239 | `0x10344f80` | — | 4 | 0 | 8 | — | — |  |
-| 240 | `0x103831c0` | — | 1 | 4 | 7 | `npc_VHengeyokai`, `models/character/monster/Hengeyokai/heng…`, +1 more | — |  |
-| 241 | `0x1038e9c0` | — | 1 | 4 | 7 | `Bip01 Spine`, `Manbat_blast_player`, +4 more | — |  |
-| 242 | `0x1038fb00` | `CNPC_VManBat#464` | 12 | 0 | 0 | — | — |  |
-| 243 | `0x1039a750` | — | 1 | 4 | 7 | `npc_VMingXiao`, `Ming_xiao_transform_emitter2`, +3 more | — |  |
-| 244 | `0x103a0270` | `CNPC_VNewscaster#5` | 0 | 8 | 4 | — | — |  |
-| 245 | `0x103a0670` | — | 1 | 3 | 8 | — | — |  |
-| 246 | `0x103a0ab0` | — | 1 | 5 | 6 | `vdata\system\`, `%sNewscaster_Side.txt`, +1 more | — |  |
-| 247 | `0x103b6e90` | `CNPC_VTzimisce#5` | 0 | 8 | 4 | — | — |  |
-| 248 | `0x103df850` | `CNPC_VZombie#432` | 3 | 2 | 7 | `zombie %s: player too far away, killing …` | — |  |
-| 249 | `0x100994c0` | `CAI_BaseHumanoid#271`, `CAI_BaseNPC#271`, +85 more | 9 | 0 | 2 | — | — | `CAI_BaseNPC#271 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 250 | `0x100b5e60` | `CAI_BaseHumanoid#286`, `CAI_BaseNPC#286`, +20 more | 1 | 4 | 6 | `CBaseFlex::AddExpression:  scene or even…`, `vcd error, gesture %s of model %s is mar…` | — | `CAI_BaseNPC#286 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 251 | `0x100fb1f0` | — | 3 | 3 | 5 | — | — |  |
-| 252 | `0x10137fe0` | — | 11 | 0 | 0 | — | — |  |
-| 253 | `0x101618e0` | — | 3 | 5 | 3 | — | — |  |
-| 254 | `0x1017d900` | — | 2 | 5 | 4 | — | — |  |
-| 255 | `0x1017e150` | — | 4 | 5 | 2 | `CSActs:    %6.1f - Criminal level %d -> …`, `CSActs:    %6.1f - Criminal level %d -> …`, +1 more | — |  |
-| 256 | `0x101a98c0` | `CCineAISchedule#586` | 7 | 0 | 4 | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:22, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2466, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:440 |  |
-| 257 | `0x101bf860` | — | 2 | 3 | 6 | — | — |  |
-| 258 | `0x101cdba0` | — | 10 | 0 | 1 | — | — |  |
-| 259 | `0x101cf250` | — | 11 | 0 | 0 | — | — |  |
-| 260 | `0x101cf390` | — | 11 | 0 | 0 | — | — |  |
-| 261 | `0x101e12a0` | — | 9 | 0 | 2 | — | — |  |
-| 262 | `0x102008b0` | — | 10 | 0 | 1 | — | — |  |
-| 263 | `0x10246160` | `ConVar#4` | 8 | 0 | 3 | — | — |  |
-| 264 | `0x1024f7b0` | — | 10 | 0 | 1 | — | — |  |
-| 265 | `0x102695d0` | — | 4 | 3 | 4 | `CBaseEntity::AddSolidFlags` | — |  |
-| 266 | `0x10270180` | — | 3 | 4 | 4 | — | — |  |
-| 267 | `0x10273180` | — | 7 | 1 | 3 | — | — |  |
-| 268 | `0x1027a420` | `CAI_BaseHumanoid#509`, `CAI_BaseNPC#509`, +11 more | 3 | 0 | 8 | — | — | `CAI_BaseNPC#509 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 269 | `0x1027a6c0` | — | 10 | 0 | 1 | — | — |  |
-| 270 | `0x1027de00` | — | 3 | 1 | 7 | — | — |  |
-| 271 | `0x102984a0` | `CAI_BaseNPCTroika#531`, `CGeneric_NPC#531`, +62 more | 0 | 3 | 8 | `⏎⏎**WARNING**⏎No door given to OnUpcomin…` | — |  |
-| 272 | `0x102b1cd0` | — | 1 | 0 | 10 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:589 |  |
-| 273 | `0x102b4760` | `CAI_BaseNPCTroika#594`, `CGeneric_NPC#594`, +62 more | 2 | 1 | 8 | — | — |  |
-| 274 | `0x102bf6e0` | `CAI_BaseNPCTroika#418`, `CGeneric_NPC#418`, +60 more | 11 | 0 | 0 | — | — |  |
-| 275 | `0x102ea280` | — | 8 | 0 | 3 | — | — |  |
-| 276 | `0x102f8f10` | — | 6 | 5 | 0 | — | — |  |
-| 277 | `0x102ff960` | — | 9 | 0 | 2 | — | — |  |
-| 278 | `0x1035fe80` | `CNPC_VAnimal#461`, `CNPC_VRat#461`, +1 more | 3 | 4 | 4 | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | — |  |
-| 279 | `0x103743c0` | `CNPC_VDog#461` | 1 | 6 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — |  |
-| 280 | `0x103a0ff0` | — | 2 | 0 | 9 | `not playing VCD`, `Side Stories: %d:`, +1 more | — |  |
-| 281 | `0x103dc280` | — | 5 | 3 | 3 | — | — |  |
-| 282 | `0x1042bff0` | — | 11 | 0 | 0 | — | — |  |
-| 283 | `0x10055050` | — | 1 | 4 | 5 | — | — |  |
-| 284 | `0x1006cf30` | — | 8 | 0 | 2 | — | — |  |
-| 285 | `0x100a0ae0` | — | 10 | 0 | 0 | — | — |  |
-| 286 | `0x100f7380` | — | 10 | 0 | 0 | — | — |  |
-| 287 | `0x10146190` | — | 8 | 0 | 2 | — | — |  |
-| 288 | `0x1017df50` | — | 5 | 3 | 2 | `CSActs:    %6.1f - Supernatural level %d…`, `CSActs:    %6.1f - Supernatural level %d…`, +1 more | — |  |
-| 289 | `0x1017ed00` | — | 2 | 6 | 2 | — | — |  |
-| 290 | `0x10194780` | — | 1 | 4 | 5 | — | — |  |
-| 291 | `0x101c10d0` | `CAI_BaseHumanoid#135`, `CAI_BaseNPC#135`, +334 more | 0 | 0 | 10 | — | — | `CAI_BaseNPC#135 no SDK twin: stretch #128-#138 holds 9 retai…` |
-| 292 | `0x101ccd70` | — | 7 | 3 | 0 | — | — |  |
-| 293 | `0x101cf600` | — | 10 | 0 | 0 | — | — |  |
-| 294 | `0x101df260` | — | 1 | 3 | 6 | — | — |  |
-| 295 | `0x101ed130` | — | 2 | 8 | 0 | — | — |  |
-| 296 | `0x101f1f50` | — | 2 | 5 | 3 | — | — |  |
-| 297 | `0x10205380` | — | 10 | 0 | 0 | — | — |  |
-| 298 | `0x1024b9e0` | — | 1 | 4 | 5 | — | — |  |
-| 299 | `0x1025db70` | — | 5 | 2 | 3 | — | — |  |
-| 300 | `0x1025f1c0` | `CAI_BaseHumanoid#585` | 2 | 0 | 8 | — | — |  |
-| 301 | `0x1026aef0` | `CAI_BaseHumanoid#474`, `CAI_BaseNPC#474`, +11 more | 9 | 0 | 1 | `Warning: NULL Return from GetBestSound⏎` | — | `CAI_BaseNPC#474 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 302 | `0x1028ea60` | — | 3 | 7 | 0 | — | — |  |
-| 303 | `0x1029a070` | `CAI_BaseNPCTroika#593`, `CGeneric_NPC#593`, +61 more | 5 | 5 | 0 | — | — |  |
-| 304 | `0x102a1650` | — | 2 | 0 | 8 | — | — |  |
-| 305 | `0x102ae840` | — | 3 | 3 | 4 | — | — |  |
-| 306 | `0x102b4520` | `CAI_BaseNPCTroika#474`, `CGeneric_NPC#474`, +62 more | 9 | 0 | 1 | — | — |  |
-| 307 | `0x102b52a0` | — | 4 | 4 | 2 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 308 | `0x102b53d0` | — | 8 | 1 | 1 | — | — |  |
-| 309 | `0x102b8c40` | — | 1 | 6 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 310 | `0x102bf5d0` | — | 5 | 0 | 5 | — | — |  |
-| 311 | `0x102c9da0` | — | 1 | 9 | 0 | — | — |  |
-| 312 | `0x102d1420` | — | 8 | 2 | 0 | — | — |  |
-| 313 | `0x102e0a60` | — | 9 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:1116 |  |
-| 314 | `0x102e1f90` | — | 8 | 0 | 2 | — | — |  |
-| 315 | `0x102f9000` | — | 8 | 1 | 1 | — | — |  |
-| 316 | `0x102fc910` | — | 6 | 2 | 2 | — | — |  |
-| 317 | `0x1030b950` | — | 3 | 4 | 3 | — | — |  |
-| 318 | `0x103134b0` | — | 1 | 4 | 5 | — | — |  |
-| 319 | `0x103164c0` | — | 1 | 4 | 5 | — | — |  |
-| 320 | `0x10357760` | `CNPC_Crow#192` | 9 | 0 | 1 | — | — |  |
-| 321 | `0x1035e980` | `CNPC_VAndreiBlood#432` | 3 | 3 | 4 | — | — |  |
-| 322 | `0x103662d0` | — | 2 | 4 | 4 | — | — |  |
-| 323 | `0x10372cc0` | `CNPC_VCop#597` | 6 | 1 | 3 | `Player D_HT 10` | — |  |
-| 324 | `0x1038f020` | — | 2 | 3 | 5 | — | — |  |
-| 325 | `0x1039ede0` | — | 9 | 0 | 1 | — | — |  |
-| 326 | `0x103c2230` | — | 2 | 4 | 4 | `Character/Monster/TC_FatGuy/Sluge_Affect…` | — |  |
-| 327 | `0x1006caa0` | — | 7 | 0 | 2 | — | — |  |
-| 328 | `0x100b4c30` | `CAISound#215`, `CAI_BaseHumanoid#215`, +492 more | 0 | 0 | 9 | — | — | `CAI_BaseNPC#215 no SDK twin: stretch #199-#222 holds 22 reta…` |
-| 329 | `0x100dbc60` | — | 1 | 4 | 4 | — | — |  |
-| 330 | `0x100f7060` | — | 7 | 0 | 2 | — | — |  |
-| 331 | `0x10136580` | — | 9 | 0 | 0 | `Can't create entity of class %s.⏎`, `**********⏎` | — |  |
-| 332 | `0x10147710` | — | 1 | 2 | 6 | `Bip01 Spine`, `D_ObfuscateBroke_Emitter` | — |  |
-| 333 | `0x101554a0` | — | 1 | 1 | 7 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |  |
-| 334 | `0x1015d680` | — | 9 | 0 | 0 | — | — |  |
-| 335 | `0x1019ced0` | — | 1 | 8 | 0 | — | — |  |
-| 336 | `0x101a8de0` | `CCineAI#113`, `CCineAISchedule#113`, +1 more | 1 | 2 | 6 | `**********⏎`, `Could not find NPC %s in CCineNPC::Activ…`, +1 more | — |  |
-| 337 | `0x101aa5d0` | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, +62 more | 8 | 0 | 1 | — | — |  |
-| 338 | `0x101b0c10` | — | 8 | 0 | 1 | — | — |  |
-| 339 | `0x101cebc0` | — | 9 | 0 | 0 | — | — |  |
-| 340 | `0x101e56e0` | — | 5 | 0 | 4 | `Invalid Character pointer for: Feats::Fe…` | — |  |
-| 341 | `0x10204900` | — | 8 | 0 | 1 | — | — |  |
-| 342 | `0x1026d130` | — | 7 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:772, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3095, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:168 |  |
-| 343 | `0x1026e940` | — | 9 | 0 | 0 | `UTIL_TraceHull` | — |  |
-| 344 | `0x102702d0` | `CAI_BaseHumanoid#418`, `CAI_BaseNPC#418`, +11 more | 9 | 0 | 0 | — | — | `CAI_BaseNPC#418 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 345 | `0x102709c0` | `CAI_BaseHumanoid#544`, `CAI_BaseNPC#544`, +75 more | 4 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemyMemory.h:31 | `CAI_BaseNPC#544 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 346 | `0x10274ca0` | — | 3 | 2 | 4 | `WARNING: %s has no eye offset in .qc!⏎` | — |  |
-| 347 | `0x1027d9b0` | — | 8 | 0 | 1 | — | — |  |
-| 348 | `0x1028e360` | — | 1 | 5 | 3 | — | — |  |
-| 349 | `0x10290570` | `CAI_BaseNPCTroika#532`, `CGeneric_NPC#532`, +62 more | 3 | 3 | 3 | — | — |  |
-| 350 | `0x10294070` | `CAI_BaseNPCTroika#510`, `CGeneric_NPC#510`, +59 more | 2 | 0 | 7 | `Float_Sound_Info` | — |  |
-| 351 | `0x10295460` | — | 9 | 0 | 0 | — | — |  |
-| 352 | `0x102a0290` | — | 1 | 3 | 5 | — | — |  |
-| 353 | `0x102a9f40` | — | 1 | 5 | 3 | `Can not find interest activity '%s' in t…`, `Can not find interest into activity '%s'…` | — |  |
-| 354 | `0x102b5650` | `CAI_BaseNPCTroika#599`, `CGeneric_NPC#599`, +16 more | 0 | 2 | 7 | — | — |  |
-| 355 | `0x102c1a80` | — | 1 | 4 | 4 | — | — |  |
-| 356 | `0x102c4ad0` | — | 1 | 7 | 1 | — | — |  |
-| 357 | `0x102da600` | — | 2 | 3 | 4 | — | — |  |
-| 358 | `0x102e1560` | — | 1 | 4 | 4 | — | — |  |
-| 359 | `0x102e8270` | — | 1 | 6 | 2 | — | — |  |
-| 360 | `0x102f2fe0` | — | 8 | 0 | 1 | — | — |  |
-| 361 | `0x1030b8a0` | — | 2 | 4 | 3 | — | — |  |
-| 362 | `0x103165f0` | — | 1 | 7 | 1 | — | — |  |
-| 363 | `0x1032ce40` | `CAI_BaseHumanoid#386`, `CAI_BaseNPC#386`, +83 more | 3 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | — | `CAI_BaseNPC#386 no SDK twin: stretch #384-#388 holds 3 retai…` |
-| 364 | `0x1032fe60` | `CAI_BaseHumanoid#348`, `CAI_BaseNPC#348`, +82 more | 5 | 0 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | — | `CAI_BaseNPC#348 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 365 | `0x10363b60` | `CNPC_VBach#432` | 3 | 1 | 5 | — | — |  |
-| 366 | `0x10368f80` | `CNPC_VCamera#460`, `CNPC_VCameraSecurity#460` | 0 | 5 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | — |  |
-| 367 | `0x103726c0` | `CNPC_VCop#461` | 1 | 4 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — |  |
-| 368 | `0x10372c50` | `CNPC_VCop#596` | 9 | 0 | 0 | — | — |  |
-| 369 | `0x10372dd0` | `CNPC_VCop#598` | 4 | 1 | 4 | `%s(%d) :`, `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…`, +1 more | — |  |
-| 370 | `0x10382970` | — | 1 | 4 | 4 | — | — |  |
-| 371 | `0x10385ab0` | `CNPC_ProneDialog#599`, `CNPC_VAndreiBlood#599`, +36 more | 0 | 2 | 7 | — | — |  |
-| 372 | `0x103937d0` | — | 1 | 0 | 8 | — | — |  |
-| 373 | `0x103945a0` | `CNPC_VMingXiao#461` | 1 | 4 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 374 | `0x10398000` | — | 8 | 0 | 1 | — | — |  |
-| 375 | `0x10398030` | — | 2 | 0 | 7 | — | — |  |
-| 376 | `0x103a0d50` | — | 2 | 3 | 4 | — | — |  |
-| 377 | `0x103b4ff0` | `CNPC_VTest#461` | 1 | 4 | 4 | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VTest.c…` | — |  |
-| 378 | `0x103bf200` | — | 1 | 4 | 4 | — | — |  |
-| 379 | `0x103df5f0` | `CNPC_VZombie#461` | 1 | 5 | 3 | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — |  |
-| 380 | `0x103e1080` | `CNPC_VZombie#510` | 3 | 1 | 5 | `Float_Sound_Info` | — |  |
-| 381 | `0x10407c40` | — | 1 | 4 | 4 | — | — |  |
-| 382 | `0x10007ea0` | — | 6 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:789 |  |
-| 383 | `0x1000f89e` | — | 2 | 0 | 6 | — | — |  |
-| 384 | `0x10037300` | — | 8 | 0 | 0 | — | — |  |
-| 385 | `0x10050e70` | — | 4 | 3 | 1 | `CDisciplineParticle::Create` | — |  |
-| 386 | `0x1007dfa0` | — | 7 | 0 | 1 | — | — |  |
-| 387 | `0x100b4790` | — | 8 | 0 | 0 | — | — |  |
-| 388 | `0x100dc770` | — | 1 | 7 | 0 | — | — |  |
-| 389 | `0x100dd000` | — | 2 | 0 | 6 | — | — |  |
-| 390 | `0x10139550` | — | 8 | 0 | 0 | — | — |  |
-| 391 | `0x10143b70` | — | 8 | 0 | 0 | — | — |  |
-| 392 | `0x1015fbb0` | — | 1 | 3 | 4 | — | — |  |
-| 393 | `0x1017fd60` | — | 2 | 3 | 3 | `Scared NPC: %d (dist:%.2f)⏎` | — |  |
-| 394 | `0x101a6620` | `CAI_BaseHumanoid#447`, `CAI_BaseNPC#447`, +75 more | 7 | 0 | 1 | — | — | `CAI_BaseNPC#447 no SDK twin: stretch #444-#448 holds 3 retai…` |
-| 395 | `0x101a8640` | — | 2 | 1 | 5 | `Post Idle %s finished⏎` | — |  |
-| 396 | `0x101a8c30` | — | 6 | 0 | 2 | `Cancelling script: %s⏎` | — |  |
-| 397 | `0x101cda50` | — | 8 | 0 | 0 | — | — |  |
-| 398 | `0x101f2090` | — | 2 | 6 | 0 | — | — |  |
-| 399 | `0x101f2c60` | — | 1 | 4 | 3 | — | — |  |
-| 400 | `0x101f8480` | — | 8 | 0 | 0 | — | — |  |
-| 401 | `0x10202060` | — | 7 | 0 | 1 | `CBaseEntity::Instance` | — |  |
-| 402 | `0x10227a30` | — | 5 | 1 | 2 | — | — |  |
-| 403 | `0x102455c0` | `ConCommand#2`, `ConCommandBase#2`, +1 more | 1 | 6 | 1 | — | — |  |
-| 404 | `0x102521f0` | — | 7 | 0 | 1 | — | — |  |
-| 405 | `0x1025f1a0` | `CAI_BaseHumanoid#586` | 7 | 0 | 1 | — | — |  |
-| 406 | `0x10260870` | — | 2 | 3 | 3 | — | — |  |
-| 407 | `0x10268ef0` | `CAISound#146`, `CAI_BaseHumanoid#146`, +495 more | 4 | 1 | 3 | — | — | `CAI_BaseNPC#146 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 408 | `0x10274db0` | `CAI_BaseHumanoid#533`, `CAI_BaseNPC#533`, +11 more | 6 | 0 | 2 | — | — | `CAI_BaseNPC#533 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 409 | `0x10278220` | — | 1 | 0 | 7 | — | — |  |
-| 410 | `0x10278650` | — | 4 | 0 | 4 | — | — |  |
-| 411 | `0x1027a5c0` | `CAI_BaseHumanoid#486`, `CAI_BaseNPC#486`, +11 more | 3 | 0 | 5 | — | — | `CAI_BaseNPC#486 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 412 | `0x10280de0` | — | 6 | 1 | 1 | — | — |  |
-| 413 | `0x1028ae60` | — | 4 | 1 | 3 | `ERROR! Vacating an empty slot!⏎` | — |  |
-| 414 | `0x1028d910` | `CAI_BaseNPCTroika#584`, `CGeneric_NPC#584`, +62 more | 2 | 5 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:568 |  |
-| 415 | `0x102c4e80` | — | 7 | 0 | 1 | — | — |  |
-| 416 | `0x102cd4a0` | — | 3 | 2 | 3 | — | — |  |
-| 417 | `0x102d1180` | — | 6 | 0 | 2 | — | — |  |
-| 418 | `0x102d1350` | — | 6 | 1 | 1 | — | — |  |
-| 419 | `0x102d1af0` | — | 8 | 0 | 0 | — | — |  |
-| 420 | `0x102d9fa0` | — | 1 | 0 | 7 | — | — |  |
-| 421 | `0x102dad60` | — | 1 | 0 | 7 | — | — |  |
-| 422 | `0x102ddab0` | — | 2 | 6 | 0 | — | — |  |
-| 423 | `0x102dfc10` | — | 3 | 1 | 4 | — | — |  |
-| 424 | `0x102ed430` | — | 1 | 3 | 4 | — | — |  |
-| 425 | `0x102edae0` | — | 5 | 2 | 1 | — | — |  |
-| 426 | `0x102ee250` | — | 7 | 0 | 1 | — | — |  |
-| 427 | `0x102ee2e0` | — | 7 | 0 | 1 | — | — |  |
-| 428 | `0x102ee9c0` | — | 6 | 0 | 2 | — | — |  |
-| 429 | `0x102eeb70` | — | 4 | 3 | 1 | — | — |  |
-| 430 | `0x102f13d0` | — | 2 | 2 | 4 | — | — |  |
-| 431 | `0x102f28a0` | — | 2 | 4 | 2 | — | — |  |
-| 432 | `0x102f9090` | — | 8 | 0 | 0 | — | — |  |
-| 433 | `0x1030b4d0` | — | 7 | 0 | 1 | — | — |  |
-| 434 | `0x103126e0` | — | 1 | 2 | 5 | — | — |  |
-| 435 | `0x1033b5f0` | `CAI_BaseHumanoid#357`, `CAI_BaseNPC#357`, +83 more | 0 | 2 | 6 | — | — | `CAI_BaseNPC#357 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 436 | `0x10381c80` | — | 7 | 0 | 1 | — | — |  |
-| 437 | `0x1038b1a0` | — | 1 | 2 | 5 | `E:\Vampire\main\dlls\hl2_dll\NPC_VManBat…` | — |  |
-| 438 | `0x10398870` | — | 7 | 0 | 1 | — | — |  |
-| 439 | `0x1039e310` | `CNPC_VMingXiaoTentacle#461` | 1 | 4 | 3 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 440 | `0x103a3670` | `CNPC_VPedestrian#432` | 3 | 1 | 4 | — | — |  |
-| 441 | `0x103be130` | — | 7 | 0 | 1 | — | — |  |
-| 442 | `0x10009601` | — | 2 | 2 | 3 | — | — |  |
-| 443 | `0x1004f860` | — | 7 | 0 | 0 | — | — |  |
-| 444 | `0x10055520` | — | 6 | 0 | 1 | — | — |  |
-| 445 | `0x10071ae0` | — | 1 | 3 | 3 | — | — |  |
-| 446 | `0x10076280` | — | 5 | 0 | 2 | — | — |  |
-| 447 | `0x10098cd0` | — | 1 | 2 | 4 | — | — |  |
-| 448 | `0x100ab250` | — | 7 | 0 | 0 | — | — |  |
-| 449 | `0x100b4320` | `CAI_BaseHumanoid#117`, `CAI_BaseNPC#117`, +134 more | 7 | 0 | 0 | — | — | `CAI_BaseNPC#117 no SDK twin: stretch #113-#118 holds 4 retai…` |
-| 450 | `0x100d0390` | — | 3 | 4 | 0 | — | — |  |
-| 451 | `0x100ddc40` | — | 3 | 0 | 4 | — | — |  |
-| 452 | `0x100f6d80` | — | 2 | 2 | 3 | — | — |  |
-| 453 | `0x100fbbb0` | — | 6 | 1 | 0 | — | — |  |
-| 454 | `0x1011e060` | — | 5 | 0 | 2 | — | — |  |
-| 455 | `0x10139500` | — | 7 | 0 | 0 | — | — |  |
-| 456 | `0x10143710` | — | 7 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 457 | `0x10161a70` | — | 2 | 1 | 4 | `GetControllerNPC() created NULL Entity f…`, `⏎GetControllerNPC() asked for NPC class:…` | — |  |
-| 458 | `0x101671a0` | — | 4 | 0 | 3 | — | — |  |
-| 459 | `0x1017e760` | — | 1 | 0 | 6 | `Celerity %d` | — |  |
-| 460 | `0x101828b0` | — | 2 | 3 | 2 | — | — |  |
-| 461 | `0x10182c40` | — | 1 | 3 | 3 | — | — |  |
-| 462 | `0x101a64c0` | `CAI_BaseHumanoid#416`, `CAI_BaseNPC#416`, +11 more | 7 | 0 | 0 | — | — | `CAI_BaseNPC#416 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 463 | `0x101a95d0` | `CCineAI#586` | 6 | 0 | 1 | `FixScriptNPCSchedule - no case!⏎` | — |  |
-| 464 | `0x101cc950` | — | 2 | 5 | 0 | — | — |  |
-| 465 | `0x101dd090` | — | 4 | 0 | 3 | `Discipline<%s>: Particle1st: <%s> Added …`, `Discipline<%s>: Particle3rd: <%s> Added …` | — |  |
-| 466 | `0x101dfc20` | — | 1 | 0 | 6 | `Discipline<%s>: HitGroup: <%s> Hit Trigg…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1075, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:64 |  |
-| 467 | `0x101e0410` | — | 5 | 0 | 2 | — | — |  |
-| 468 | `0x101e1520` | — | 5 | 0 | 2 | — | — |  |
-| 469 | `0x101e48f0` | — | 1 | 3 | 3 | — | — |  |
-| 470 | `0x101fdaf0` | — | 1 | 1 | 5 | `CVStatInfo_t::CVStatInfo_t` | — |  |
-| 471 | `0x10206400` | — | 2 | 5 | 0 | — | — |  |
-| 472 | `0x10207c40` | — | 7 | 0 | 0 | — | — |  |
-| 473 | `0x10217080` | — | 1 | 3 | 3 | — | — |  |
-| 474 | `0x10245d80` | `ConVar#11` | 1 | 2 | 4 | — | — |  |
-| 475 | `0x1024b830` | — | 5 | 0 | 2 | — | — |  |
-| 476 | `0x10260540` | `CAI_BaseHumanoid#589` | 2 | 0 | 5 | — | — |  |
-| 477 | `0x102658f0` | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, +75 more | 2 | 0 | 5 | — | — | `CAI_BaseNPC#402 no SDK twin: stretch #397-#404 holds 6 retai…` |
-| 478 | `0x10273dd0` | `CAI_BaseHumanoid#542`, `CAI_BaseNPC#542`, +75 more | 4 | 1 | 2 | — | — | `CAI_BaseNPC#542 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 479 | `0x1027a530` | `CAI_BaseHumanoid#510`, `CAI_BaseNPC#510`, +11 more | 5 | 0 | 2 | — | — | `CAI_BaseNPC#510 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 480 | `0x1027d0a0` | — | 2 | 3 | 2 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | — |  |
-| 481 | `0x1027efb0` | — | 4 | 1 | 2 | `** END BUFFER DUMP FOR %s⏎`, `** BEGIN BUFFER DUMP FOR %s⏎`, +1 more | — |  |
-| 482 | `0x1027f270` | — | 7 | 0 | 0 | — | — |  |
-| 483 | `0x1027f990` | — | 1 | 3 | 3 | — | — |  |
-| 484 | `0x1027fae0` | — | 1 | 3 | 3 | — | — |  |
-| 485 | `0x10288710` | `CAI_BaseHumanoid#445`, `CAI_BaseNPC#445`, +75 more | 1 | 0 | 6 | — | — | `CAI_BaseNPC#445 no SDK twin: stretch #444-#448 holds 3 retai…` |
-| 486 | `0x1028a190` | — | 5 | 0 | 2 | — | — |  |
-| 487 | `0x1028eb30` | — | 1 | 6 | 0 | — | — |  |
-| 488 | `0x1029c970` | — | 2 | 0 | 5 | — | — |  |
-| 489 | `0x102ad260` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 490 | `0x102ad2d0` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 491 | `0x102b2570` | — | 1 | 0 | 6 | — | — |  |
-| 492 | `0x102b4fb0` | `CAI_BaseNPCTroika#597`, `CGeneric_NPC#597`, +61 more | 7 | 0 | 0 | — | — |  |
-| 493 | `0x102c0bb0` | — | 4 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:15, Source/ElysiumUE/Private/UI/ElysiumDialogueScreen.h:30, Source/ElysiumUE/Private/UI/ElysiumDialogueWidget.h:136, +1 more |  |
-| 494 | `0x102c3b50` | — | 6 | 0 | 1 | `UTIL_TraceHull` | — |  |
-| 495 | `0x102c5570` | — | 3 | 0 | 4 | — | — |  |
-| 496 | `0x102c6c30` | — | 1 | 3 | 3 | — | — |  |
-| 497 | `0x102cea60` | — | 6 | 0 | 1 | — | — |  |
-| 498 | `0x102d4210` | — | 1 | 3 | 3 | — | — |  |
-| 499 | `0x102d9040` | — | 3 | 2 | 2 | — | — |  |
-| 500 | `0x102dcd30` | — | 1 | 3 | 3 | — | — |  |
-| 501 | `0x102dfd90` | — | 3 | 0 | 4 | `Asking MarkAsEluded for enemy that's not…` | — |  |
-| 502 | `0x102e3290` | — | 5 | 2 | 0 | — | — |  |
-| 503 | `0x102e8560` | — | 1 | 0 | 6 | `move_yaw`, `          The animation needs to be shor…`, +1 more | — |  |
-| 504 | `0x102ee3f0` | — | 6 | 0 | 1 | — | — |  |
-| 505 | `0x102f2fc0` | — | 6 | 0 | 1 | — | — |  |
-| 506 | `0x102fe9a0` | — | 5 | 2 | 0 | — | — |  |
-| 507 | `0x10307890` | — | 5 | 0 | 2 | — | — |  |
-| 508 | `0x10310290` | — | 1 | 1 | 5 | — | — |  |
-| 509 | `0x1032fb80` | `CAI_BaseHumanoid#345`, `CAI_BaseNPC#345`, +83 more | 6 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::SetPoseParameter` | — | `CAI_BaseNPC#345 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 510 | `0x10349d50` | — | 1 | 3 | 3 | — | — |  |
-| 511 | `0x1034a030` | — | 1 | 3 | 3 | — | — |  |
-| 512 | `0x1034bc90` | `CNPCMaker#139`, `CNPCMaker_Zombie#139` | 1 | 2 | 4 | — | — |  |
-| 513 | `0x10357be0` | — | 1 | 1 | 5 | — | — |  |
-| 514 | `0x10366400` | — | 4 | 1 | 2 | — | — |  |
-| 515 | `0x10369e70` | — | 2 | 2 | 3 | — | — |  |
-| 516 | `0x10381c00` | — | 3 | 3 | 1 | — | — |  |
-| 517 | `0x10392a10` | `CNPC_VMingXiao#418` | 6 | 0 | 1 | — | — |  |
-| 518 | `0x10395750` | — | 1 | 2 | 4 | `Ming_xiao_tentacle_damage_emitter`, `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 519 | `0x10395c70` | — | 2 | 5 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 520 | `0x10398890` | — | 1 | 0 | 6 | — | — |  |
-| 521 | `0x10398d90` | — | 6 | 1 | 0 | — | — |  |
-| 522 | `0x10398fd0` | — | 4 | 2 | 1 | — | — |  |
-| 523 | `0x103b9120` | `CNPC_VTzimisce#418` | 7 | 0 | 0 | — | — |  |
-| 524 | `0x103b9180` | `CNPC_VTzimisce#593` | 2 | 5 | 0 | — | — |  |
-| 525 | `0x103be0b0` | — | 3 | 3 | 1 | — | — |  |
-| 526 | `0x103d0bf0` | — | 1 | 2 | 4 | `GetNearestNodeToPlayer failed⏎` | — |  |
-| 527 | `0x103dc090` | — | 1 | 3 | 3 | — | — |  |
-| 528 | `0x103e0fa0` | `CNPC_VZombie#509` | 1 | 0 | 6 | — | — |  |
-| 529 | `0x10012805` | — | 5 | 0 | 1 | — | — |  |
-| 530 | `0x1006c9d0` | — | 4 | 0 | 2 | — | — |  |
-| 531 | `0x10075b70` | — | 6 | 0 | 0 | — | — |  |
-| 532 | `0x10075e70` | — | 5 | 0 | 1 | — | — |  |
-| 533 | `0x10090890` | — | 4 | 1 | 1 | `NULL ENTITY`, `CBaseAnimating :: MarkEffectStartTime` | — |  |
-| 534 | `0x1009b030` | `CAISound#16`, `CAI_BaseHumanoid#16`, +495 more | 3 | 0 | 3 | — | — | `CAI_BaseNPC#16 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 535 | `0x1009f380` | — | 3 | 3 | 0 | — | — |  |
-| 536 | `0x100a19c0` | — | 4 | 0 | 2 | — | — |  |
-| 537 | `0x100b5b00` | `CAI_BaseNPC#277`, `CAI_BaseNPCTroika#277`, +83 more | 5 | 0 | 1 | — | — | `CAI_BaseNPC#277 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 538 | `0x100b5c50` | `CAI_BaseHumanoid#281`, `CAI_BaseNPC#281`, +84 more | 6 | 0 | 0 | — | — | `CAI_BaseNPC#281 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 539 | `0x100b6f80` | — | 2 | 0 | 4 | — | — |  |
-| 540 | `0x100dcd90` | — | 1 | 0 | 5 | — | — |  |
-| 541 | `0x100ddd90` | — | 2 | 0 | 4 | — | — |  |
-| 542 | `0x100dfaf0` | — | 6 | 0 | 0 | — | — |  |
-| 543 | `0x100ec410` | — | 3 | 0 | 3 | — | — |  |
-| 544 | `0x100eccf0` | — | 3 | 0 | 3 | — | — |  |
-| 545 | `0x100fb980` | — | 2 | 2 | 2 | `%s rate scale set to %.2f, must be >=0⏎` | — |  |
-| 546 | `0x10129870` | — | 2 | 0 | 4 | — | — |  |
-| 547 | `0x1012b080` | — | 2 | 1 | 3 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |  |
-| 548 | `0x10143d80` | — | 6 | 0 | 0 | — | — |  |
-| 549 | `0x10146a80` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Public/ElysiumPlayer.h:439 |  |
-| 550 | `0x101578d0` | — | 4 | 1 | 1 | — | — |  |
-| 551 | `0x101681a0` | — | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:56 |  |
-| 552 | `0x1017ff40` | — | 1 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:335, Source/ElysiumUE/Public/ElysiumPlayer.h:2113 |  |
-| 553 | `0x1019cff0` | — | 5 | 1 | 0 | — | — |  |
-| 554 | `0x101a8840` | `CCineNPC#586` | 6 | 0 | 0 | `E:\Vampire\main\dlls\scripted.cpp` | — |  |
-| 555 | `0x101aeb60` | — | 6 | 0 | 0 | `No such sentence group %s⏎` | — |  |
-| 556 | `0x101b99d0` | — | 6 | 0 | 0 | — | — |  |
-| 557 | `0x101bab50` | — | 2 | 2 | 2 | `Free Sound List is empty!⏎` | — |  |
-| 558 | `0x101c2a10` | — | 5 | 1 | 0 | — | — |  |
-| 559 | `0x101c2a50` | — | 5 | 1 | 0 | — | — |  |
-| 560 | `0x101ccb60` | — | 1 | 5 | 0 | — | — |  |
-| 561 | `0x101d5bd0` | — | 4 | 0 | 2 | — | — |  |
-| 562 | `0x101db430` | — | 1 | 0 | 5 | — | — |  |
-| 563 | `0x101dd620` | — | 1 | 0 | 5 | `vdisciplineprojectile`, `ERROR: Couldn't create discipline projec…` | — |  |
-| 564 | `0x101def10` | — | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:889, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:902, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1117, +1 more |  |
-| 565 | `0x101e11c0` | — | 4 | 0 | 2 | — | — |  |
-| 566 | `0x101e12f0` | — | 4 | 0 | 2 | — | — |  |
-| 567 | `0x101e4a00` | — | 3 | 1 | 2 | — | — |  |
-| 568 | `0x101f3b00` | — | 1 | 0 | 5 | — | — |  |
-| 569 | `0x101f75a0` | — | 3 | 0 | 3 | — | — |  |
-| 570 | `0x101ff060` | — | 3 | 0 | 3 | — | — |  |
-| 571 | `0x102029c0` | — | 2 | 4 | 0 | — | — |  |
-| 572 | `0x10202a10` | — | 5 | 0 | 1 | — | — |  |
-| 573 | `0x10203190` | — | 4 | 0 | 2 | — | — |  |
-| 574 | `0x10204270` | — | 6 | 0 | 0 | — | — |  |
-| 575 | `0x1023dcd0` | — | 6 | 0 | 0 | — | — |  |
-| 576 | `0x10245f50` | `ConVar#9` | 1 | 2 | 3 | — | — |  |
-| 577 | `0x1025e7b0` | — | 3 | 0 | 3 | — | — |  |
-| 578 | `0x1025f0b0` | `CAI_BaseHumanoid#373` | 3 | 0 | 3 | — | — |  |
-| 579 | `0x10265a90` | — | 3 | 1 | 2 | — | — |  |
-| 580 | `0x1026b210` | `CAI_BaseNPC#372`, `CAI_BaseNPCTroika#372`, +74 more | 5 | 0 | 1 | — | — | `CAI_BaseNPC#372 no SDK twin: stretch #371-#376 holds 4 retai…` |
-| 581 | `0x1026c540` | — | 1 | 0 | 5 | `Unaccounted`, `CAI_BaseNPC_RunAnimation` | — |  |
-| 582 | `0x1026d7f0` | `CAI_BaseHumanoid#459`, `CAI_BaseNPC#459`, +72 more | 4 | 0 | 2 | — | — | `CAI_BaseNPC#459 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 583 | `0x1026f590` | `CAI_BaseHumanoid#460`, `CAI_BaseNPC#460`, +11 more | 0 | 1 | 5 | — | — | `CAI_BaseNPC#460 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 584 | `0x102729d0` | — | 2 | 0 | 4 | — | — |  |
-| 585 | `0x10272f40` | — | 3 | 0 | 3 | — | — |  |
-| 586 | `0x10273720` | `CAI_BaseHumanoid#223`, `CAI_BaseNPC#223`, +75 more | 4 | 0 | 2 | — | — | `CAI_BaseNPC#223 no SDK twin: stretch #222-#227 holds 4 retai…` |
-| 587 | `0x10273ec0` | — | 1 | 2 | 3 | `Movement completed twice!⏎` | — |  |
-| 588 | `0x10277d90` | `CAI_BaseHumanoid#582`, `CAI_BaseNPC#582`, +75 more | 0 | 0 | 6 | `unknown`, `Slow %.1f, %s %.1f `, +6 more | — | `CAI_BaseNPC#582 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 589 | `0x10279b70` | — | 5 | 1 | 0 | — | — |  |
-| 590 | `0x1027e740` | `CAI_BaseHumanoid#406`, `CAI_BaseNPC#406`, +75 more | 6 | 0 | 0 | — | — | `CAI_BaseNPC#406 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 591 | `0x1028a260` | — | 4 | 0 | 2 | — | — |  |
-| 592 | `0x1028d990` | — | 2 | 0 | 4 | `%-20s  %6.2f : %*s %s⏎%s%s %s%s %s⏎⏎`, `%6.2f : %*s %s⏎`, +7 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:23 |  |
-| 593 | `0x1028ef20` | `CAI_BaseNPCTroika#587`, `CGeneric_NPC#587`, +46 more | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:709 |  |
-| 594 | `0x10290040` | — | 1 | 2 | 3 | — | — |  |
-| 595 | `0x102961a0` | — | 1 | 0 | 5 | `**UNKNOWN**`, `Distance (%d) < %d or > %d`, +4 more | — |  |
-| 596 | `0x10296c40` | — | 2 | 0 | 4 | `Disabled`, `Enemy outside of good range (%.2f) <= %.…`, +7 more | — |  |
-| 597 | `0x1029c4a0` | — | 1 | 0 | 5 | — | — |  |
-| 598 | `0x1029f460` | — | 2 | 2 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `Failed to create patrol path for %s⏎` | — |  |
-| 599 | `0x1029fa50` | `CAI_BaseNPCTroika#316`, `CGeneric_NPC#316`, +59 more | 0 | 2 | 4 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 600 | `0x102aa640` | — | 1 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `%s can't reach patrol point⏎` | — |  |
-| 601 | `0x102aa860` | — | 1 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 602 | `0x102ae310` | — | 3 | 0 | 3 | — | — |  |
-| 603 | `0x102b4ab0` | `CAI_BaseNPCTroika#533`, `CGeneric_NPC#533`, +61 more | 3 | 0 | 3 | — | — |  |
-| 604 | `0x102b4c10` | `CAI_BaseNPCTroika#486`, `CGeneric_NPC#486`, +62 more | 6 | 0 | 0 | — | — |  |
-| 605 | `0x102b4fe0` | `CAI_BaseNPCTroika#598`, `CGeneric_NPC#598`, +61 more | 3 | 0 | 3 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 606 | `0x102b5dc0` | — | 5 | 1 | 0 | — | — |  |
-| 607 | `0x102bf770` | — | 2 | 2 | 2 | — | — |  |
-| 608 | `0x102bf7e0` | — | 4 | 1 | 1 | — | — |  |
-| 609 | `0x102c0aa0` | — | 4 | 0 | 2 | — | — |  |
-| 610 | `0x102c4cc0` | — | 5 | 0 | 1 | — | — |  |
-| 611 | `0x102c73b0` | — | 2 | 3 | 1 | — | — |  |
-| 612 | `0x102c7490` | `CAI_StandoffBehavior#4` | 0 | 3 | 3 | — | — |  |
-| 613 | `0x102c88c0` | `CAI_StandoffGoal#5` | 0 | 4 | 2 | — | — |  |
-| 614 | `0x102cd3b0` | — | 3 | 1 | 2 | — | — |  |
-| 615 | `0x102dbbc0` | `CAI_InterestingPlaceConverstation#5` | 0 | 0 | 6 | — | — |  |
-| 616 | `0x102dd470` | — | 6 | 0 | 0 | — | — |  |
-| 617 | `0x102ddc00` | — | 1 | 3 | 2 | — | — |  |
-| 618 | `0x102dfa20` | — | 5 | 0 | 1 | — | — |  |
-| 619 | `0x102dfaa0` | — | 2 | 0 | 4 | — | — |  |
-| 620 | `0x102e0290` | — | 2 | 0 | 4 | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | — |  |
-| 621 | `0x102e0bd0` | — | 2 | 2 | 2 | — | — |  |
-| 622 | `0x102e7270` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull`, +2 more | — |  |
-| 623 | `0x102e7880` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | — |  |
-| 624 | `0x102edc80` | — | 3 | 2 | 1 | — | — |  |
-| 625 | `0x102eeba0` | — | 5 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:74 |  |
-| 626 | `0x102f1dc0` | — | 4 | 0 | 2 | — | — |  |
-| 627 | `0x102f8f50` | — | 1 | 5 | 0 | — | — |  |
-| 628 | `0x102f91b0` | — | 6 | 0 | 0 | — | — |  |
-| 629 | `0x10304130` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildLocalRoute` | — |  |
-| 630 | `0x1030b5e0` | — | 2 | 4 | 0 | — | — |  |
-| 631 | `0x1030ff10` | — | 1 | 2 | 3 | — | — |  |
-| 632 | `0x10312b20` | — | 2 | 4 | 0 | — | — |  |
-| 633 | `0x1032d0c0` | `CAI_BaseHumanoid#385`, `CAI_BaseNPC#385`, +81 more | 0 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | — | `CAI_BaseNPC#385 no SDK twin: stretch #384-#388 holds 3 retai…` |
-| 634 | `0x10334180` | `CAI_BaseHumanoid#374`, `CAI_BaseNPC#374`, +82 more | 2 | 0 | 4 | `NULL ENTITY`, `weapons/misc/ammo_pickup.wav`, +1 more | — | `CAI_BaseNPC#374 no SDK twin: stretch #371-#376 holds 4 retai…` |
-| 635 | `0x10365a90` | — | 1 | 1 | 4 | `Character/Boss/Bach/bach_camp_warn.wav`, `Character/Boss/Bach/bach_grenade.wav`, +7 more | — |  |
-| 636 | `0x103747e0` | `CNPC_VDog#432` | 3 | 0 | 3 | — | — |  |
-| 637 | `0x10381ba0` | — | 4 | 1 | 1 | — | — |  |
-| 638 | `0x10381e90` | — | 1 | 4 | 1 | `Bone04`, `Bone01` | — |  |
-| 639 | `0x103822a0` | — | 3 | 0 | 3 | — | — |  |
-| 640 | `0x10383090` | `CNPC_VHengeyokai#435` | 2 | 2 | 2 | — | — |  |
-| 641 | `0x10387500` | `CNPC_ProneDialog#432`, `CNPC_VGhoulCroucher#432`, +4 more | 6 | 0 | 0 | — | — |  |
-| 642 | `0x1038bec0` | — | 1 | 1 | 4 | `UTIL_TraceHull` | — |  |
-| 643 | `0x1038c170` | — | 4 | 0 | 2 | — | — |  |
-| 644 | `0x1038f790` | — | 1 | 1 | 4 | — | — |  |
-| 645 | `0x103910b0` | `CNPC_VMingXiao#5` | 0 | 4 | 2 | — | — |  |
-| 646 | `0x10391170` | `CNPC_VBaseBoss#5` | 0 | 4 | 2 | — | — |  |
-| 647 | `0x10396bc0` | — | 1 | 0 | 5 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 648 | `0x103989b0` | — | 1 | 0 | 5 | — | — |  |
-| 649 | `0x103990c0` | — | 2 | 0 | 4 | — | — |  |
-| 650 | `0x103acac0` | — | 2 | 0 | 4 | — | — |  |
-| 651 | `0x103b9380` | `CNPC_VTzimisce#490` | 4 | 0 | 2 | `SPI_IDLE` | — |  |
-| 652 | `0x103be050` | — | 4 | 1 | 1 | — | — |  |
-| 653 | `0x103be3d0` | — | 1 | 4 | 1 | `Bip01 L Forearm`, `Bip01 R Forearm` | — |  |
-| 654 | `0x103be8e0` | — | 3 | 0 | 3 | — | — |  |
-| 655 | `0x103bf610` | `CNPC_VTzimisce#435` | 2 | 2 | 2 | — | — |  |
-| 656 | `0x103c1340` | `CNPC_VTzimisceHeadClaw#5` | 0 | 4 | 2 | — | — |  |
-| 657 | `0x103c3120` | `CNPC_VTzimisceRunner#5` | 0 | 4 | 2 | — | — |  |
-| 658 | `0x103c6a00` | — | 5 | 1 | 0 | — | — |  |
-| 659 | `0x103dc260` | — | 5 | 1 | 0 | — | — |  |
-| 660 | `0x103dc340` | — | 5 | 0 | 1 | — | — |  |
-| 661 | `0x10412520` | — | 6 | 0 | 0 | — | — |  |
-| 662 | `0x10438b8b` | — | 6 | 0 | 0 | — | — |  |
-| 663 | `0x1000cb8a` | — | 5 | 0 | 0 | — | — |  |
-| 664 | `0x100113d8` | — | 4 | 0 | 1 | — | — |  |
-| 665 | `0x10026a50` | `CAISound#65`, `CAI_BaseHumanoid#65`, +495 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#65 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 666 | `0x1003ff80` | — | 5 | 0 | 0 | — | — |  |
-| 667 | `0x10054c00` | — | 1 | 2 | 2 | — | — |  |
-| 668 | `0x10055170` | — | 1 | 2 | 2 | — | — |  |
-| 669 | `0x100561a0` | — | 1 | 2 | 2 | — | — |  |
-| 670 | `0x1006c770` | — | 1 | 3 | 1 | — | — |  |
-| 671 | `0x10074110` | — | 3 | 0 | 2 | — | — |  |
-| 672 | `0x100741f0` | — | 2 | 0 | 3 | — | — |  |
-| 673 | `0x10074a50` | — | 4 | 0 | 1 | — | — |  |
-| 674 | `0x10075f10` | — | 4 | 0 | 1 | — | — |  |
-| 675 | `0x10099690` | `CAI_BaseHumanoid#265`, `CAI_BaseNPC#265`, +85 more | 1 | 0 | 4 | — | — | `CAI_BaseNPC#265 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 676 | `0x100b5ba0` | `CAI_BaseHumanoid#279`, `CAI_BaseNPC#279`, +84 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#279 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 677 | `0x100bf5b0` | — | 4 | 1 | 0 | — | — |  |
-| 678 | `0x100ce210` | — | 3 | 1 | 1 | — | — |  |
-| 679 | `0x100ce630` | — | 1 | 2 | 2 | — | — |  |
-| 680 | `0x100dc430` | — | 2 | 0 | 3 | — | — |  |
-| 681 | `0x100dda20` | — | 4 | 0 | 1 | — | — |  |
-| 682 | `0x100ecdf0` | — | 2 | 0 | 3 | — | — |  |
-| 683 | `0x1012a1d0` | — | 1 | 1 | 3 | `CBaseEntity::SetSolid` | — |  |
-| 684 | `0x10138130` | — | 5 | 0 | 0 | — | — |  |
-| 685 | `0x10138720` | — | 5 | 0 | 0 | — | — |  |
-| 686 | `0x10144a30` | — | 5 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 687 | `0x10157da0` | — | 1 | 1 | 3 | `prop_ragdoll_special` | — |  |
-| 688 | `0x1017a2b0` | — | 1 | 2 | 2 | — | — |  |
-| 689 | `0x1017c6d0` | — | 1 | 2 | 2 | `CBaseEntity::Instance` | — |  |
-| 690 | `0x1017f770` | — | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1451, Source/ElysiumUE/Public/ElysiumPlayer.h:2287 |  |
-| 691 | `0x10183880` | — | 3 | 0 | 2 | — | — |  |
-| 692 | `0x1018e2a0` | — | 2 | 3 | 0 | — | — |  |
-| 693 | `0x1018e910` | — | 4 | 0 | 1 | `activity_copy_prop` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2813 |  |
-| 694 | `0x101948c0` | — | 1 | 2 | 2 | — | — |  |
-| 695 | `0x1019d210` | — | 5 | 0 | 0 | — | — |  |
-| 696 | `0x101a68c0` | `CAI_BaseHumanoid#490`, `CAI_BaseNPC#490`, +10 more | 5 | 0 | 0 | — | — | `CAI_BaseNPC#490 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 697 | `0x101a6c20` | `CAI_BaseHumanoid#550`, `CAI_BaseNPC#550`, +73 more | 5 | 0 | 0 | — | — | `CAI_BaseNPC#550 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 698 | `0x101a6e00` | `CCineAI#364`, `CCineAISchedule#364`, +1 more | 5 | 0 | 0 | — | — |  |
-| 699 | `0x101a8890` | — | 1 | 1 | 3 | — | — |  |
-| 700 | `0x101a8ac0` | — | 5 | 0 | 0 | `%s is a priority script and cannot be ki…`, `%s is specified as the 'Next Script' and…` | — |  |
-| 701 | `0x101aa8b0` | `CPayphone#364` | 5 | 0 | 0 | — | — |  |
-| 702 | `0x101b2f60` | — | 1 | 0 | 4 | — | — |  |
-| 703 | `0x101b33f0` | — | 4 | 0 | 1 | `sound/%s`, `CSoundEmitterSystemBase::GetParametersFo…`, +3 more | — |  |
-| 704 | `0x101b9a50` | — | 2 | 0 | 3 | `deaf zone min depth: %.2f` | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:559 |  |
-| 705 | `0x101bfd60` | — | 1 | 2 | 2 | — | — |  |
-| 706 | `0x101c01c0` | — | 4 | 0 | 1 | — | — |  |
-| 707 | `0x101c1720` | `CAI_BaseHumanoid#133`, `CAI_BaseNPC#133`, +326 more | 0 | 2 | 3 | — | — | `CAI_BaseNPC#133 no SDK twin: stretch #128-#138 holds 9 retai…` |
-| 708 | `0x101c29e0` | — | 2 | 3 | 0 | — | — |  |
-| 709 | `0x101c2a30` | — | 4 | 0 | 1 | — | — |  |
-| 710 | `0x101c4dd0` | — | 1 | 1 | 3 | `NULL ENTITY`, `CBaseEntity::IsSolidFlagSet`, +1 more | — |  |
-| 711 | `0x101d1800` | — | 5 | 0 | 0 | — | — |  |
-| 712 | `0x101d1a90` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2080, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:507, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:614, +4 more |  |
-| 713 | `0x101daad0` | — | 2 | 0 | 3 | — | — |  |
-| 714 | `0x101dc790` | — | 3 | 0 | 2 | — | — |  |
-| 715 | `0x101dd480` | — | 1 | 2 | 2 | — | — |  |
-| 716 | `0x101dfe80` | — | 1 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:889, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:4176 |  |
-| 717 | `0x101e1590` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1563 |  |
-| 718 | `0x101e1610` | — | 3 | 0 | 2 | — | — |  |
-| 719 | `0x101e1720` | — | 4 | 0 | 1 | `ERROR: DiscFlag Lookup Failed!⏎` | — |  |
-| 720 | `0x101e3560` | — | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1345, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:65, Source/ElysiumUE/Public/ElysiumPlayer.h:459 |  |
-| 721 | `0x101f7310` | — | 1 | 4 | 0 | — | — |  |
-| 722 | `0x101f9a00` | — | 5 | 0 | 0 | — | — |  |
-| 723 | `0x101f9a40` | — | 5 | 0 | 0 | — | — |  |
-| 724 | `0x101ff010` | — | 2 | 0 | 3 | — | — |  |
-| 725 | `0x102042a0` | — | 3 | 2 | 0 | — | — |  |
-| 726 | `0x1020cc60` | — | 2 | 0 | 3 | — | — |  |
-| 727 | `0x1021fe50` | — | 5 | 0 | 0 | — | — |  |
-| 728 | `0x1024b400` | — | 3 | 0 | 2 | — | — |  |
-| 729 | `0x1024bb20` | — | 1 | 2 | 2 | — | — |  |
-| 730 | `0x1024bf80` | — | 4 | 0 | 1 | — | — |  |
-| 731 | `0x1025e780` | `CAI_BaseHumanoid#277` | 3 | 1 | 1 | — | — |  |
-| 732 | `0x1025f760` | `CAI_BaseHumanoid#536` | 2 | 1 | 2 | — | — |  |
-| 733 | `0x10269f30` | — | 4 | 0 | 1 | — | — |  |
-| 734 | `0x1026b270` | `CAI_BaseHumanoid#534`, `CAI_BaseNPC#534`, +75 more | 0 | 2 | 3 | — | — | `CAI_BaseNPC#534 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 735 | `0x1026fcf0` | `CAI_BaseHumanoid#573`, `CAI_BaseNPC#573`, +75 more | 2 | 0 | 3 | — | — | `CAI_BaseNPC#573 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 736 | `0x102707d0` | — | 5 | 0 | 0 | — | — |  |
-| 737 | `0x10272790` | `CAI_BaseHumanoid#466`, `CAI_BaseNPC#466`, +11 more | 3 | 0 | 2 | — | — | `CAI_BaseNPC#466 no SDK twin: stretch #465-#467 holds 1 retai…` |
-| 738 | `0x10274080` | — | 2 | 1 | 2 | — | — |  |
-| 739 | `0x10278e30` | `CAI_BaseNPC#484`, `CAI_BaseNPCTroika#484`, +73 more | 2 | 0 | 3 | — | — | `CAI_BaseNPC#484 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 740 | `0x1027a400` | `CAI_BaseHumanoid#552`, `CAI_BaseNPC#552`, +75 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#552 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 741 | `0x1027a640` | `CAI_BaseHumanoid#487`, `CAI_BaseNPC#487`, +11 more | 2 | 1 | 2 | — | — | `CAI_BaseNPC#487 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 742 | `0x1027a700` | `CAI_BaseHumanoid#435`, `CAI_BaseNPC#435`, +11 more | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3143 | `CAI_BaseNPC#435 no SDK twin: stretch #434-#438 holds 3 retai…` |
-| 743 | `0x1027caa0` | `CAI_BaseHumanoid#511`, `CAI_BaseNPC#511`, +74 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#511 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 744 | `0x1027e0f0` | `CAI_BaseHumanoid#532`, `CAI_BaseNPC#532`, +11 more | 3 | 2 | 0 | — | — | `CAI_BaseNPC#532 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 745 | `0x1027ef20` | — | 2 | 2 | 1 | — | — |  |
-| 746 | `0x10288670` | — | 2 | 1 | 2 | — | — |  |
-| 747 | `0x1028e310` | `CAI_BaseNPCTroika#113`, `CGeneric_NPC#113`, +57 more | 3 | 0 | 2 | — | — |  |
-| 748 | `0x1028ebc0` | — | 2 | 0 | 3 | — | — |  |
-| 749 | `0x1028fc90` | — | 2 | 3 | 0 | — | — |  |
-| 750 | `0x10290350` | — | 1 | 2 | 2 | — | — |  |
-| 751 | `0x10294400` | `CAI_BaseNPCTroika#492`, `CGeneric_NPC#492`, +54 more | 5 | 0 | 0 | `Fear_Start` | — |  |
-| 752 | `0x10294f40` | `CAI_BaseNPCTroika#507`, `CGeneric_NPC#507`, +60 more | 3 | 1 | 1 | `Float_Sound_Info`, `Float` | — |  |
-| 753 | `0x1029f5d0` | — | 5 | 0 | 0 | — | — |  |
-| 754 | `0x1029f650` | — | 3 | 1 | 1 | — | — |  |
-| 755 | `0x1029f730` | — | 2 | 1 | 2 | — | — |  |
-| 756 | `0x102b4c40` | `CAI_BaseNPCTroika#487`, `CGeneric_NPC#487`, +61 more | 2 | 1 | 2 | — | — |  |
-| 757 | `0x102b4cc0` | `CAI_BaseNPCTroika#595`, `CGeneric_NPC#595`, +62 more | 2 | 0 | 3 | — | — |  |
-| 758 | `0x102b5de0` | — | 2 | 0 | 3 | — | — |  |
-| 759 | `0x102b6120` | — | 2 | 0 | 3 | — | — |  |
-| 760 | `0x102b9060` | — | 3 | 2 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 761 | `0x102c0360` | — | 2 | 1 | 2 | `entity_debug_stats` | — |  |
-| 762 | `0x102c1400` | — | 5 | 0 | 0 | `%s could not look up disposition sequenc…` | — |  |
-| 763 | `0x102c41b0` | — | 5 | 0 | 0 | — | — |  |
-| 764 | `0x102c41d0` | — | 3 | 0 | 2 | — | — |  |
-| 765 | `0x102c42a0` | — | 4 | 0 | 1 | — | — |  |
-| 766 | `0x102c4380` | — | 4 | 1 | 0 | — | — |  |
-| 767 | `0x102c43f0` | — | 3 | 1 | 1 | — | — |  |
-| 768 | `0x102c4680` | — | 2 | 0 | 3 | `          Changing FollowerDistanceRunTo…`, `WARNING:  FollowerDistanceWalkTo(%f) + o…`, +4 more | — |  |
-| 769 | `0x102ca2a0` | — | 3 | 1 | 1 | `Unknown`, `Supernatural`, +2 more | — |  |
-| 770 | `0x102ce7f0` | — | 1 | 2 | 2 | — | — |  |
-| 771 | `0x102cea20` | — | 1 | 2 | 2 | — | — |  |
-| 772 | `0x102ceae0` | — | 1 | 2 | 2 | — | — |  |
-| 773 | `0x102cef30` | — | 2 | 1 | 2 | — | — |  |
-| 774 | `0x102cfd20` | — | 2 | 1 | 2 | — | — |  |
-| 775 | `0x102d1450` | — | 4 | 0 | 1 | — | — |  |
-| 776 | `0x102d8bc0` | — | 1 | 0 | 4 | — | — |  |
-| 777 | `0x102da860` | — | 1 | 1 | 3 | `**UNKNOWN**`, `AddMarker failed to add NPC '%s'⏎` | — |  |
-| 778 | `0x102dd530` | — | 3 | 0 | 2 | — | — |  |
-| 779 | `0x102e0150` | — | 4 | 0 | 1 | `Asking LastTimeSeen for enemy that's not…` | — |  |
-| 780 | `0x102e12c0` | — | 4 | 0 | 1 | — | — |  |
-| 781 | `0x102e1760` | `CAI_HumanoidMotor#20`, `CAI_Motor#20` | 0 | 1 | 4 | — | — |  |
-| 782 | `0x102e19e0` | `CAI_HumanoidMotor#18`, `CAI_Motor#18` | 2 | 0 | 3 | `move_yaw` | — |  |
-| 783 | `0x102e23a0` | — | 1 | 1 | 3 | `Unaccounted`, `CAI_Motor_MoveNormalExecute` | — |  |
-| 784 | `0x102e2690` | — | 4 | 0 | 1 | — | — |  |
-| 785 | `0x102ecb50` | `CAI_HumanoidNavigator#3`, `CAI_Navigator#3` | 0 | 4 | 1 | — | — |  |
-| 786 | `0x102ed310` | — | 3 | 0 | 2 | — | — |  |
-| 787 | `0x102ed940` | — | 2 | 2 | 1 | — | — |  |
-| 788 | `0x102ed9c0` | — | 2 | 2 | 1 | — | — |  |
-| 789 | `0x102ee380` | — | 2 | 2 | 1 | — | — |  |
-| 790 | `0x102eebc0` | `CAI_HumanoidNavigator#13`, `CAI_Navigator#13` | 1 | 0 | 4 | — | — |  |
-| 791 | `0x102efd50` | — | 1 | 1 | 3 | `Warning: NPC appears to have wrong nav t…` | — |  |
-| 792 | `0x102f1fa0` | — | 2 | 0 | 3 | — | — |  |
-| 793 | `0x102f2060` | — | 1 | 0 | 4 | — | — |  |
-| 794 | `0x102f2ea0` | — | 4 | 0 | 1 | — | — |  |
-| 795 | `0x102f8fc0` | — | 1 | 4 | 0 | — | — |  |
-| 796 | `0x102f96e0` | — | 2 | 0 | 3 | — | — |  |
-| 797 | `0x102fcbd0` | — | 3 | 0 | 2 | — | — |  |
-| 798 | `0x102fce80` | — | 1 | 1 | 3 | — | — |  |
-| 799 | `0x103059d0` | — | 2 | 0 | 3 | `Unaccounted`, `CAI_Pathfinder_Triangulate` | — |  |
-| 800 | `0x1030b900` | — | 1 | 4 | 0 | — | — |  |
-| 801 | `0x1030bd50` | — | 4 | 0 | 1 | — | — |  |
-| 802 | `0x1030be20` | — | 1 | 4 | 0 | — | — |  |
-| 803 | `0x103109a0` | — | 1 | 2 | 2 | — | — |  |
-| 804 | `0x10311490` | — | 1 | 4 | 0 | — | — |  |
-| 805 | `0x10312aa0` | — | 1 | 4 | 0 | `NULL Listener in BeginMonolog()!⏎` | — |  |
-| 806 | `0x10313620` | — | 1 | 2 | 2 | — | — |  |
-| 807 | `0x10313aa0` | — | 4 | 0 | 1 | — | — |  |
-| 808 | `0x10315170` | — | 1 | 2 | 2 | — | — |  |
-| 809 | `0x103153a0` | — | 1 | 2 | 2 | — | — |  |
-| 810 | `0x103160a0` | — | 4 | 0 | 1 | — | — |  |
-| 811 | `0x103160c0` | — | 3 | 0 | 2 | — | — |  |
-| 812 | `0x103169a0` | — | 3 | 0 | 2 | — | — |  |
-| 813 | `0x1031a000` | — | 4 | 0 | 1 | — | — |  |
-| 814 | `0x1031a050` | — | 5 | 0 | 0 | — | — |  |
-| 815 | `0x103268e0` | — | 4 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | — |  |
-| 816 | `0x1033d330` | — | 1 | 0 | 4 | — | — |  |
-| 817 | `0x1033d380` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1565 |  |
-| 818 | `0x1033d410` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1565 |  |
-| 819 | `0x10344da0` | — | 5 | 0 | 0 | — | — |  |
-| 820 | `0x103498b0` | — | 5 | 0 | 0 | — | — |  |
-| 821 | `0x1034aeb0` | `CNPCMaker#364` | 5 | 0 | 0 | — | — |  |
-| 822 | `0x1034bf50` | `CNPCMaker_Fleshpile#364` | 5 | 0 | 0 | — | — |  |
-| 823 | `0x1034cb90` | `CNPCMaker_Zombie#364` | 5 | 0 | 0 | — | — |  |
-| 824 | `0x103580d0` | — | 4 | 0 | 1 | — | — |  |
-| 825 | `0x10360160` | `CNPC_VAnimal#432`, `CNPC_VRat#432`, +1 more | 5 | 0 | 0 | — | — |  |
-| 826 | `0x10363c70` | `CNPC_VBach#390` | 0 | 3 | 2 | — | — |  |
-| 827 | `0x10365780` | — | 1 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VBach.c…` | — |  |
-| 828 | `0x10369060` | `CNPC_VCamera#461`, `CNPC_VCameraSecurity#461` | 1 | 4 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | — |  |
-| 829 | `0x10375180` | `CNPC_VPlayerController#364`, `CNPC_VWolfMorph#364` | 5 | 0 | 0 | — | — |  |
-| 830 | `0x10378fc0` | `CNPC_VGargoyle#435` | 2 | 1 | 2 | — | — |  |
-| 831 | `0x103796a0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | — |  |
-| 832 | `0x10380fc0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | — |  |
-| 833 | `0x1038e720` | — | 3 | 0 | 2 | — | — |  |
-| 834 | `0x1038f600` | — | 3 | 1 | 1 | — | — |  |
-| 835 | `0x10396dc0` | — | 1 | 2 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 836 | `0x10397380` | — | 2 | 0 | 3 | — | — |  |
-| 837 | `0x10398800` | — | 3 | 1 | 1 | — | — |  |
-| 838 | `0x1039ef90` | — | 2 | 3 | 0 | — | — |  |
-| 839 | `0x103a0190` | `CNPC_VNewscaster#364` | 5 | 0 | 0 | — | — |  |
-| 840 | `0x103a42c0` | `CNPC_VPlaceholder#364` | 5 | 0 | 0 | — | — |  |
-| 841 | `0x103acba0` | — | 1 | 0 | 4 | — | — |  |
-| 842 | `0x103b4600` | `CNPC_VTest#490` | 3 | 0 | 2 | — | — |  |
-| 843 | `0x103b9500` | `CNPC_VTzimisce#491` | 2 | 0 | 3 | `SPI_TAKE_DAMAGE` | — |  |
-| 844 | `0x103b9f10` | `CNPC_VTzimisce#487` | 4 | 1 | 0 | — | — |  |
-| 845 | `0x103bc820` | — | 3 | 0 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 846 | `0x103bea90` | — | 1 | 1 | 3 | — | — |  |
-| 847 | `0x103bf170` | — | 2 | 2 | 1 | — | — |  |
-| 848 | `0x103d1e50` | — | 2 | 0 | 3 | — | — |  |
-| 849 | `0x103dbf00` | — | 1 | 4 | 0 | — | — |  |
-| 850 | `0x103dc3c0` | — | 5 | 0 | 0 | — | — |  |
-| 851 | `0x103dc520` | — | 2 | 1 | 2 | — | — |  |
-| 852 | `0x103f9160` | — | 1 | 2 | 2 | — | — |  |
-| 853 | `0x1040b120` | — | 2 | 1 | 2 | — | — |  |
-| 854 | `0x1042fbf0` | — | 5 | 0 | 0 | — | — |  |
-| 855 | `0x1042fde0` | — | 5 | 0 | 0 | — | — |  |
-| 856 | `0x1002c920` | — | 2 | 2 | 0 | — | — |  |
-| 857 | `0x10050d90` | — | 4 | 0 | 0 | `disc_particle`, `CDisciplineParticle::Create` | — |  |
-| 858 | `0x10055590` | — | 1 | 1 | 2 | — | — |  |
-| 859 | `0x10055ec0` | — | 1 | 1 | 2 | — | — |  |
-| 860 | `0x10055f50` | — | 1 | 1 | 2 | — | — |  |
-| 861 | `0x1008bc50` | — | 1 | 1 | 2 | `NULL ENTITY`, `CBaseAnimating::StopIgnoringCollision` | — |  |
-| 862 | `0x10095cb0` | — | 3 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::SetBoneController ` | — |  |
-| 863 | `0x10098a40` | `CAI_BaseHumanoid#267`, `CAI_BaseNPC#267`, +85 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#267 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 864 | `0x100995e0` | `CAI_BaseHumanoid#274`, `CAI_BaseNPC#274`, +85 more | 2 | 0 | 2 | — | — | `CAI_BaseNPC#274 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 865 | `0x100b1890` | `CAISound#213`, `CAI_BaseHumanoid#213`, +495 more | 0 | 3 | 1 | `NULL ENTITY`, `CBaseEntity::SetSize` | — | `CAI_BaseNPC#213 no SDK twin: stretch #199-#222 holds 22 reta…` |
-| 866 | `0x100b5040` | `CAISound#225`, `CAI_BaseHumanoid#225`, +495 more | 2 | 1 | 1 | — | — | `CAI_BaseNPC#225 no SDK twin: stretch #222-#227 holds 4 retai…` |
-| 867 | `0x100b5110` | — | 2 | 0 | 2 | — | — |  |
-| 868 | `0x100b5340` | — | 1 | 1 | 2 | — | — |  |
-| 869 | `0x100b6250` | `CAI_BaseHumanoid#283`, `CAI_BaseNPC#283`, +84 more | 2 | 0 | 2 | — | — | `CAI_BaseNPC#283 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 870 | `0x100b6480` | — | 1 | 1 | 2 | — | — |  |
-| 871 | `0x100b7130` | — | 1 | 1 | 2 | — | — |  |
-| 872 | `0x100cd300` | — | 2 | 1 | 1 | `output: (%s,%s) -> (%s,%s)⏎`, `output: (%s,%s) -> (%s,%s,%.1f)⏎`, +1 more | — |  |
-| 873 | `0x100ce450` | — | 1 | 1 | 2 | — | — |  |
-| 874 | `0x100eb280` | — | 1 | 1 | 2 | — | — |  |
-| 875 | `0x100ec2e0` | — | 1 | 0 | 3 | — | — |  |
-| 876 | `0x100ec360` | — | 1 | 0 | 3 | — | — |  |
-| 877 | `0x100ec450` | — | 1 | 0 | 3 | — | — |  |
-| 878 | `0x100ec5d0` | — | 1 | 0 | 3 | — | — |  |
-| 879 | `0x100ecc10` | — | 2 | 0 | 2 | `Neutral`, `bad disposition index in CDispositionTab…` | — |  |
-| 880 | `0x100ecc60` | — | 1 | 0 | 3 | — | — |  |
-| 881 | `0x100ecd30` | — | 1 | 0 | 3 | — | — |  |
-| 882 | `0x100ece60` | — | 1 | 0 | 3 | — | — |  |
-| 883 | `0x100ed500` | — | 1 | 1 | 2 | — | — |  |
-| 884 | `0x100eec70` | — | 2 | 0 | 2 | — | — |  |
-| 885 | `0x100f0e90` | — | 2 | 1 | 1 | — | — |  |
-| 886 | `0x100f2f90` | — | 2 | 2 | 0 | — | — |  |
-| 887 | `0x100f6e40` | — | 1 | 1 | 2 | — | — |  |
-| 888 | `0x100f7b20` | — | 4 | 0 | 0 | — | — |  |
-| 889 | `0x100f8370` | — | 4 | 0 | 0 | — | — |  |
-| 890 | `0x100f8490` | — | 4 | 0 | 0 | — | — |  |
-| 891 | `0x100f9940` | — | 1 | 1 | 2 | — | — |  |
-| 892 | `0x100faf60` | — | 1 | 0 | 3 | — | — |  |
-| 893 | `0x100fbaf0` | — | 3 | 1 | 0 | — | — |  |
-| 894 | `0x10105830` | — | 1 | 0 | 3 | — | — |  |
-| 895 | `0x101074c0` | — | 1 | 1 | 2 | — | — |  |
-| 896 | `0x10107550` | — | 1 | 1 | 2 | — | — |  |
-| 897 | `0x1010e530` | — | 2 | 2 | 0 | — | — |  |
-| 898 | `0x10119750` | — | 4 | 0 | 0 | — | — |  |
-| 899 | `0x1011d6a0` | — | 1 | 1 | 2 | — | — |  |
-| 900 | `0x1013dbb0` | — | 1 | 1 | 2 | — | — |  |
-| 901 | `0x10146700` | — | 1 | 1 | 2 | — | — |  |
-| 902 | `0x10146b20` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Public/ElysiumPlayer.h:440 |  |
-| 903 | `0x10147960` | — | 1 | 2 | 1 | `D_ObfuscateOut_Emitter`, `D_ObfuscateIn_Emitter` | — |  |
-| 904 | `0x1014ebd0` | — | 1 | 3 | 0 | — | — |  |
-| 905 | `0x10155380` | — | 1 | 3 | 0 | — | — |  |
-| 906 | `0x101618a0` | — | 3 | 0 | 1 | — | — |  |
-| 907 | `0x10175180` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:57, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1461, Source/ElysiumUE/Public/ElysiumPlayer.h:2293 |  |
-| 908 | `0x10178120` | — | 3 | 0 | 1 | — | — |  |
-| 909 | `0x1017c600` | — | 1 | 2 | 1 | `showloot⏎`, `showbarter⏎` | — |  |
-| 910 | `0x1017e720` | — | 3 | 0 | 1 | — | — |  |
-| 911 | `0x1017e740` | — | 3 | 0 | 1 | — | — |  |
-| 912 | `0x1017f6e0` | — | 2 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | — |  |
-| 913 | `0x1017f8d0` | — | 3 | 0 | 1 | — | — |  |
-| 914 | `0x10181680` | — | 2 | 1 | 1 | — | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:173 |  |
-| 915 | `0x10183120` | — | 1 | 0 | 3 | — | — |  |
-| 916 | `0x10185910` | — | 1 | 1 | 2 | — | — |  |
-| 917 | `0x10191170` | — | 1 | 0 | 3 | `%s could not find entity to attach to, d…` | — |  |
-| 918 | `0x10194d20` | — | 3 | 0 | 1 | — | — |  |
-| 919 | `0x10194da0` | — | 1 | 1 | 2 | — | — |  |
-| 920 | `0x10194f30` | — | 1 | 1 | 2 | — | — |  |
-| 921 | `0x10195160` | — | 1 | 1 | 2 | — | — |  |
-| 922 | `0x1019d130` | — | 1 | 1 | 2 | — | — |  |
-| 923 | `0x101a6820` | `CAI_BaseHumanoid#479`, `CAI_BaseNPC#479`, +75 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#479 no SDK twin: stretch #478-#480 holds 1 retai…` |
-| 924 | `0x101a6880` | `CAI_BaseHumanoid#488`, `CAI_BaseNPC#488`, +8 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#488 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 925 | `0x101a68e0` | `CAI_BaseHumanoid#491`, `CAI_BaseNPC#491`, +8 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#491 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 926 | `0x101a6900` | `CAI_BaseHumanoid#492`, `CAI_BaseNPC#492`, +11 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#492 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 927 | `0x101a82d0` | `CCineAISchedule#584`, `CCineNPC#584` | 2 | 1 | 1 | `**UNKNOWN**`, `Sequence %s targeting %s is starting⏎`, +1 more | — |  |
-| 928 | `0x101a8930` | — | 2 | 0 | 2 | — | — |  |
-| 929 | `0x101a9790` | `CCineAISchedule#583` | 1 | 0 | 3 | `   Otherwise, talk to a programmer.⏎`, `   scripted sequence.⏎`, +8 more | — |  |
-| 930 | `0x101b30d0` | — | 1 | 3 | 0 | `SNDLVL_NORM`, `PITCH_NORM`, +2 more | — |  |
-| 931 | `0x101c0240` | — | 1 | 1 | 2 | — | — |  |
-| 932 | `0x101c03c0` | — | 1 | 1 | 2 | — | — |  |
-| 933 | `0x101c05f0` | — | 1 | 1 | 2 | — | — |  |
-| 934 | `0x101c29b0` | — | 3 | 0 | 1 | — | — |  |
-| 935 | `0x101c2a90` | — | 3 | 1 | 0 | — | — |  |
-| 936 | `0x101c2af0` | — | 3 | 0 | 1 | — | — |  |
-| 937 | `0x101c2b10` | — | 3 | 1 | 0 | — | — |  |
-| 938 | `0x101c2c30` | — | 4 | 0 | 0 | — | — |  |
-| 939 | `0x101c2c60` | — | 4 | 0 | 0 | — | — |  |
-| 940 | `0x101cca80` | — | 4 | 0 | 0 | — | — |  |
-| 941 | `0x101cccf0` | — | 3 | 1 | 0 | — | — |  |
-| 942 | `0x101d4f20` | — | 3 | 0 | 1 | — | — |  |
-| 943 | `0x101d8a70` | — | 4 | 0 | 0 | `v_printrolls` | — |  |
-| 944 | `0x101db870` | — | 2 | 0 | 2 | — | — |  |
-| 945 | `0x101dcb20` | — | 3 | 0 | 1 | — | — |  |
-| 946 | `0x101dd3a0` | — | 3 | 0 | 1 | — | — |  |
-| 947 | `0x101e1250` | — | 2 | 0 | 2 | — | — |  |
-| 948 | `0x101e3730` | — | 3 | 0 | 1 | `Discipline<%s> Triggered⏎` | — |  |
-| 949 | `0x101e3d70` | — | 2 | 0 | 2 | — | — |  |
-| 950 | `0x101e3ff0` | — | 4 | 0 | 0 | — | — |  |
-| 951 | `0x101e8ef0` | — | 2 | 0 | 2 | — | — |  |
-| 952 | `0x101ef880` | — | 1 | 3 | 0 | — | — |  |
-| 953 | `0x101f0b50` | — | 1 | 3 | 0 | — | — |  |
-| 954 | `0x101f18f0` | — | 3 | 0 | 1 | — | — |  |
-| 955 | `0x101f1be0` | — | 2 | 1 | 1 | — | — |  |
-| 956 | `0x101f1c70` | — | 2 | 1 | 1 | — | — |  |
-| 957 | `0x101f39d0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:106, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:30, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:192 |  |
-| 958 | `0x101f4600` | — | 2 | 0 | 2 | `%s\%s_%d.wav`, `%s\%s.wav`, +1 more | — |  |
-| 959 | `0x101f55a0` | — | 3 | 0 | 1 | `func_button`, `func_rot_button`, +2 more | — |  |
-| 960 | `0x101f5b60` | — | 2 | 0 | 2 | `ERROR: VSnd: Play: %s Table out of bound…` | — |  |
-| 961 | `0x101f82d0` | — | 3 | 0 | 1 | — | — |  |
-| 962 | `0x102030a0` | — | 2 | 0 | 2 | — | — |  |
-| 963 | `0x10204c20` | — | 3 | 0 | 1 | — | — |  |
-| 964 | `0x102053a0` | — | 4 | 0 | 0 | — | — |  |
-| 965 | `0x10205430` | — | 2 | 0 | 2 | — | — |  |
-| 966 | `0x10205730` | — | 3 | 0 | 1 | — | — |  |
-| 967 | `0x10205e60` | — | 1 | 0 | 3 | `Bad TraitDependencyValue Type⏎` | — |  |
-| 968 | `0x10206140` | — | 2 | 0 | 2 | — | — |  |
-| 969 | `0x1021fee0` | — | 4 | 0 | 0 | — | — |  |
-| 970 | `0x1024c050` | — | 1 | 1 | 2 | — | — |  |
-| 971 | `0x1024c1d0` | — | 1 | 1 | 2 | — | — |  |
-| 972 | `0x1024c400` | — | 1 | 1 | 2 | — | — |  |
-| 973 | `0x10255cf0` | — | 4 | 0 | 0 | `Bad inventory section for '%s'⏎` | — |  |
-| 974 | `0x10258290` | — | 3 | 0 | 1 | `Total Lethality for %s: Base Lethality (…` | — |  |
-| 975 | `0x10258620` | — | 3 | 0 | 1 | — | — |  |
-| 976 | `0x1025ddd0` | — | 1 | 1 | 2 | — | — |  |
-| 977 | `0x1025e140` | — | 1 | 1 | 2 | — | — |  |
-| 978 | `0x1025e4e0` | `CAI_BaseHumanoid#250` | 2 | 1 | 1 | — | — |  |
-| 979 | `0x1025e920` | `CAI_BaseHumanoid#587` | 2 | 0 | 2 | — | — |  |
-| 980 | `0x1025f040` | `CAI_BaseHumanoid#372` | 3 | 0 | 1 | — | — |  |
-| 981 | `0x10260670` | — | 1 | 1 | 2 | — | — |  |
-| 982 | `0x10269bd0` | — | 3 | 0 | 1 | — | — |  |
-| 983 | `0x1026c3d0` | — | 3 | 0 | 1 | `A.I. Disabled...⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:890, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:459, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:499, +2 more |  |
-| 984 | `0x1026cec0` | `CAI_BaseHumanoid#354`, `CAI_BaseNPC#354`, +75 more | 0 | 0 | 4 | — | — | `CAI_BaseNPC#354 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 985 | `0x1026cf90` | `CAI_BaseHumanoid#355`, `CAI_BaseNPC#355`, +75 more | 0 | 0 | 4 | — | — | `CAI_BaseNPC#355 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 986 | `0x1026d460` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:18, +32 more |  |
-| 987 | `0x1026d890` | `CAI_BaseHumanoid#553`, `CAI_BaseNPC#553`, +72 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#553 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 988 | `0x1026f4d0` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | — |  |
-| 989 | `0x1026ff00` | — | 1 | 0 | 3 | — | — |  |
-| 990 | `0x10273aa0` | — | 2 | 0 | 2 | — | — |  |
-| 991 | `0x10278090` | `CAI_BaseHumanoid#482`, `CAI_BaseNPC#482`, +24 more | 0 | 0 | 4 | — | — | `CAI_BaseNPC#482 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 992 | `0x102784a0` | — | 2 | 0 | 2 | — | — |  |
-| 993 | `0x10278c60` | `CAI_BaseHumanoid#575`, `CAI_BaseNPC#575`, +11 more | 3 | 0 | 1 | — | — | `CAI_BaseNPC#575 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 994 | `0x1027db30` | — | 2 | 0 | 2 | — | — |  |
-| 995 | `0x1027e7d0` | `CAI_BaseHumanoid#407`, `CAI_BaseNPC#407`, +75 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#407 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 996 | `0x1028af20` | `CAI_BaseHumanoid#548`, `CAI_BaseNPC#548`, +75 more | 1 | 0 | 3 | — | — | `CAI_BaseNPC#548 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 997 | `0x1028e480` | — | 1 | 0 | 3 | — | — |  |
-| 998 | `0x1028e790` | — | 1 | 0 | 3 | — | — |  |
-| 999 | `0x10290200` | — | 1 | 1 | 2 | — | — |  |
-| 1000 | `0x102953e0` | `CAI_BaseNPCTroika#592`, `CGeneric_NPC#592`, +61 more | 3 | 0 | 1 | — | — |  |
-| 1001 | `0x10295ed0` | — | 1 | 0 | 3 | — | — |  |
-| 1002 | `0x10297940` | — | 1 | 1 | 2 | — | — |  |
-| 1003 | `0x10297a20` | — | 1 | 2 | 1 | — | — |  |
-| 1004 | `0x10298800` | — | 1 | 2 | 1 | — | — |  |
-| 1005 | `0x10298910` | — | 2 | 1 | 1 | — | — |  |
-| 1006 | `0x102989e0` | — | 2 | 1 | 1 | — | — |  |
-| 1007 | `0x1029e750` | `CAI_BaseNPCTroika#359`, `CGeneric_NPC#359`, +60 more | 0 | 0 | 4 | — | — |  |
-| 1008 | `0x1029f780` | — | 2 | 1 | 1 | — | — |  |
-| 1009 | `0x102a0b90` | — | 1 | 2 | 1 | — | — |  |
-| 1010 | `0x102a13d0` | — | 2 | 0 | 2 | — | — |  |
-| 1011 | `0x102a96b0` | — | 1 | 3 | 0 | — | — |  |
-| 1012 | `0x102aa9e0` | — | 1 | 2 | 1 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 1013 | `0x102ae780` | — | 1 | 0 | 3 | — | — |  |
-| 1014 | `0x102ae7f0` | — | 3 | 1 | 0 | — | — |  |
-| 1015 | `0x102b11c0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2282, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2289, Source/ElysiumUE/Private/Tests/ElysiumScheduleTests.cpp:1095 |  |
-| 1016 | `0x102b15c0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:406, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1117 |  |
-| 1017 | `0x102b6890` | — | 1 | 0 | 3 | — | — |  |
-| 1018 | `0x102b8d20` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 1019 | `0x102bf560` | — | 1 | 2 | 1 | — | — |  |
-| 1020 | `0x102c1230` | — | 1 | 2 | 1 | — | — |  |
-| 1021 | `0x102c4310` | — | 3 | 0 | 1 | — | — |  |
-| 1022 | `0x102c4eb0` | — | 1 | 0 | 3 | — | — |  |
-| 1023 | `0x102c6b30` | — | 2 | 2 | 0 | — | — |  |
-| 1024 | `0x102c7360` | — | 2 | 1 | 1 | — | — |  |
-| 1025 | `0x102c7dd0` | `CAI_StandoffBehavior#26` | 0 | 3 | 1 | — | — |  |
-| 1026 | `0x102c8690` | `CAI_StandoffGoal#245` | 1 | 0 | 3 | — | — |  |
-| 1027 | `0x102cc300` | `CAI_BaseHumanoid#458`, `CAI_BaseNPC#458`, +75 more | 3 | 0 | 1 | — | — | `CAI_BaseNPC#458 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 1028 | `0x102cd650` | — | 1 | 0 | 3 | — | — |  |
-| 1029 | `0x102cf0b0` | — | 1 | 1 | 2 | — | — |  |
-| 1030 | `0x102cfaf0` | — | 1 | 1 | 2 | — | — |  |
-| 1031 | `0x102d0ab0` | — | 3 | 1 | 0 | `Unknown failure` | — |  |
-| 1032 | `0x102d3e60` | — | 3 | 0 | 1 | — | — |  |
-| 1033 | `0x102d9170` | — | 1 | 1 | 2 | — | — |  |
-| 1034 | `0x102da9a0` | — | 2 | 0 | 2 | — | — |  |
-| 1035 | `0x102daea0` | — | 2 | 0 | 2 | — | — |  |
-| 1036 | `0x102dcec0` | — | 1 | 1 | 2 | — | — |  |
-| 1037 | `0x102e0a40` | — | 3 | 1 | 0 | — | — |  |
-| 1038 | `0x102e0ba0` | — | 1 | 2 | 1 | — | — |  |
-| 1039 | `0x102e1cf0` | — | 2 | 1 | 1 | — | — |  |
-| 1040 | `0x102e2d70` | — | 4 | 0 | 0 | — | — |  |
-| 1041 | `0x102e4f50` | — | 2 | 0 | 2 | `Unaccounted`, `CAI_MoveProbe_TestGroundMove` | — |  |
-| 1042 | `0x102e84a0` | — | 1 | 1 | 2 | — | — |  |
-| 1043 | `0x102ecc40` | — | 2 | 0 | 2 | — | — |  |
-| 1044 | `0x102ed610` | — | 1 | 0 | 3 | — | — |  |
-| 1045 | `0x102edbb0` | — | 1 | 2 | 1 | — | — |  |
-| 1046 | `0x102edd50` | — | 1 | 2 | 1 | — | — |  |
-| 1047 | `0x102ee160` | — | 3 | 0 | 1 | — | — |  |
-| 1048 | `0x102ee1a0` | — | 3 | 0 | 1 | — | — |  |
-| 1049 | `0x102ee220` | — | 3 | 0 | 1 | — | — |  |
-| 1050 | `0x102ee2c0` | — | 3 | 0 | 1 | — | — |  |
-| 1051 | `0x102ee300` | — | 1 | 2 | 1 | — | — |  |
-| 1052 | `0x102ee6d0` | — | 1 | 0 | 3 | — | — |  |
-| 1053 | `0x102eee40` | `CAI_HumanoidNavigator#17`, `CAI_Navigator#17` | 0 | 0 | 4 | — | — |  |
-| 1054 | `0x102ef510` | `CAI_HumanoidNavigator#16`, `CAI_Navigator#16` | 0 | 0 | 4 | — | — |  |
-| 1055 | `0x102f0400` | — | 4 | 0 | 0 | `InPass`, `%s trying to open a door that has been d…` | — |  |
-| 1056 | `0x102f05d0` | — | 2 | 0 | 2 | — | — |  |
-| 1057 | `0x102f0e80` | — | 1 | 0 | 3 | — | — |  |
-| 1058 | `0x102f1860` | — | 3 | 0 | 1 | — | — |  |
-| 1059 | `0x102f1900` | — | 1 | 0 | 3 | `CanFitAtNode() called with no network!⏎` | — |  |
-| 1060 | `0x102f1a20` | — | 2 | 0 | 2 | — | — |  |
-| 1061 | `0x102f1cf0` | — | 1 | 0 | 3 | — | — |  |
-| 1062 | `0x102f3270` | — | 4 | 0 | 0 | — | — |  |
-| 1063 | `0x102f37d0` | — | 1 | 3 | 0 | — | — |  |
-| 1064 | `0x102f41b0` | — | 3 | 0 | 1 | — | — |  |
-| 1065 | `0x102f45f0` | — | 2 | 1 | 1 | `AI NearestNode Cache is full⏎` | — |  |
-| 1066 | `0x102f9400` | — | 1 | 0 | 3 | — | — |  |
-| 1067 | `0x102f9750` | — | 1 | 1 | 2 | — | — |  |
-| 1068 | `0x102f9780` | — | 1 | 0 | 3 | — | — |  |
-| 1069 | `0x102f9950` | — | 4 | 0 | 0 | — | — |  |
-| 1070 | `0x102fd240` | — | 2 | 0 | 2 | — | — |  |
-| 1071 | `0x103005f0` | — | 2 | 0 | 2 | — | — |  |
-| 1072 | `0x103007e0` | — | 2 | 0 | 2 | — | — |  |
-| 1073 | `0x10306f60` | — | 1 | 2 | 1 | `FindHuntPatrolTarget() - %s has no neare…` | — |  |
-| 1074 | `0x1030ba50` | — | 2 | 2 | 0 | — | — |  |
-| 1075 | `0x1030ba90` | — | 2 | 1 | 1 | `!!ERROR!! Force end of route with no goa…` | — |  |
-| 1076 | `0x1030bc00` | — | 3 | 0 | 1 | — | — |  |
-| 1077 | `0x1030fe50` | — | 3 | 0 | 1 | — | — |  |
-| 1078 | `0x1030fe70` | — | 3 | 0 | 1 | — | — |  |
-| 1079 | `0x10310440` | — | 3 | 0 | 1 | — | — |  |
-| 1080 | `0x103118e0` | — | 1 | 0 | 3 | — | — |  |
-| 1081 | `0x103121a0` | — | 2 | 1 | 1 | — | — |  |
-| 1082 | `0x10312cd0` | `CAI_BaseHumanoid#424`, `CAI_ExpressiveNPC#424` | 1 | 1 | 2 | — | — |  |
-| 1083 | `0x10316bc0` | — | 2 | 0 | 2 | — | — |  |
-| 1084 | `0x10319ee0` | — | 4 | 0 | 0 | — | — |  |
-| 1085 | `0x1032fc50` | `CAI_BaseHumanoid#346`, `CAI_BaseNPC#346`, +83 more | 2 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::SetPoseParameter` | — | `CAI_BaseNPC#346 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 1086 | `0x103300c0` | — | 2 | 0 | 2 | — | — |  |
-| 1087 | `0x103346c0` | — | 3 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::GetAmmoCount` | — |  |
-| 1088 | `0x103482e0` | `CAI_BaseHumanoid#326`, `CAI_BaseNPC#326`, +17 more | 1 | 0 | 3 | — | — | `CAI_BaseNPC#326 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 1089 | `0x1034a1a0` | — | 1 | 1 | 2 | — | — |  |
-| 1090 | `0x1035fd40` | `CNPC_VAnimal#482`, `CNPC_VDog#482`, +3 more | 0 | 0 | 4 | — | — |  |
-| 1091 | `0x10365860` | — | 1 | 2 | 1 | `item_w_grenade_frag`, `No physics data for grenade⏎` | — |  |
-| 1092 | `0x10366490` | — | 2 | 0 | 2 | — | — |  |
-| 1093 | `0x103690e0` | `CNPC_VCamera#432`, `CNPC_VCameraSecurity#432` | 4 | 0 | 0 | — | — |  |
-| 1094 | `0x103723f0` | — | 1 | 1 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — |  |
-| 1095 | `0x10374d80` | `CNPC_VDog#460` | 0 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — |  |
-| 1096 | `0x10379000` | — | 2 | 1 | 1 | — | — |  |
-| 1097 | `0x10379e80` | — | 1 | 0 | 3 | — | — |  |
-| 1098 | `0x103816e0` | — | 1 | 0 | 3 | — | — |  |
-| 1099 | `0x10382400` | — | 1 | 1 | 2 | — | — |  |
-| 1100 | `0x10382aa0` | — | 1 | 1 | 2 | — | — |  |
-| 1101 | `0x103830e0` | — | 2 | 2 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VHengey…` | — |  |
-| 1102 | `0x103850a0` | `CNPC_ProneDialog#482`, `CNPC_VAndreiBlood#482`, +40 more | 0 | 0 | 4 | — | — |  |
-| 1103 | `0x1038c250` | — | 1 | 0 | 3 | — | — |  |
-| 1104 | `0x1038e640` | — | 3 | 1 | 0 | — | — |  |
-| 1105 | `0x1038f2c0` | — | 2 | 1 | 1 | `prop_physics`, `ManBat is throwing model %s⏎` | — |  |
-| 1106 | `0x1038fe30` | — | 1 | 1 | 2 | — | — |  |
-| 1107 | `0x10396e90` | `CNPC_VMingXiao#482` | 0 | 0 | 4 | — | — |  |
-| 1108 | `0x103970d0` | `CNPC_VMingXiao#348` | 1 | 0 | 3 | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | — |  |
-| 1109 | `0x10397dd0` | — | 3 | 1 | 0 | — | — |  |
-| 1110 | `0x103983d0` | — | 2 | 0 | 2 | — | — |  |
-| 1111 | `0x103998d0` | — | 1 | 0 | 3 | — | — |  |
-| 1112 | `0x1039e970` | — | 2 | 2 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 1113 | `0x103a1320` | — | 1 | 1 | 2 | — | — |  |
-| 1114 | `0x103a3850` | `CNPC_VPedestrian#27` | 0 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — |  |
-| 1115 | `0x103b48f0` | `CNPC_VTest#492` | 3 | 0 | 1 | — | — |  |
-| 1116 | `0x103b92a0` | `CNPC_VTzimisce#488` | 2 | 0 | 2 | `SPI_DIES` | — |  |
-| 1117 | `0x103ba250` | `CNPC_VTzimisce#533` | 3 | 0 | 1 | — | — |  |
-| 1118 | `0x103bd270` | `CNPC_VTzimisce#482` | 0 | 0 | 4 | — | — |  |
-| 1119 | `0x103bf330` | — | 1 | 1 | 2 | — | — |  |
-| 1120 | `0x103bf580` | `CNPC_VTzimisce#410` | 0 | 0 | 4 | — | — |  |
-| 1121 | `0x103c0160` | — | 1 | 0 | 3 | `UTIL_TraceHull` | — |  |
-| 1122 | `0x103c0860` | — | 1 | 0 | 3 | — | — |  |
-| 1123 | `0x103c1d80` | `CNPC_VTzimisceHeadClaw#332` | 0 | 2 | 2 | `Bip01 Spine`, `Character/Monster/TC_FatGuy/Sluge_Affect…`, +3 more | — |  |
-| 1124 | `0x103c6a20` | — | 3 | 0 | 1 | — | — |  |
-| 1125 | `0x103d8df0` | — | 1 | 0 | 3 | `%s could not look up sound for activity:…`, `Character/Monster/Werewolf/Air_Sniff_1.w…`, +14 more | — |  |
-| 1126 | `0x103dc490` | — | 1 | 1 | 2 | — | — |  |
-| 1127 | `0x10408060` | — | 2 | 0 | 2 | — | — |  |
-| 1128 | `0x1042fe90` | — | 4 | 0 | 0 | — | — |  |
-| 1129 | `0x10439dc0` | — | 4 | 0 | 0 | — | — |  |
-| 1130 | `0x10007b4e` | — | 3 | 0 | 0 | — | — |  |
-| 1131 | `0x10027630` | `CAISound#3`, `CAI_BaseHumanoid#3`, +495 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#3 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
-| 1132 | `0x10054ad0` | — | 1 | 0 | 2 | — | — |  |
-| 1133 | `0x10057740` | — | 1 | 1 | 1 | — | — |  |
-| 1134 | `0x10072b10` | — | 1 | 0 | 2 | `Invalid camera shot index⏎` | — |  |
-| 1135 | `0x10077430` | — | 2 | 0 | 1 | — | — |  |
-| 1136 | `0x1007a2f0` | — | 2 | 0 | 1 | — | — |  |
-| 1137 | `0x10084b40` | — | 3 | 0 | 0 | `instanced_scripted_scene`, `Unknown scene specified: "%s"⏎` | — |  |
-| 1138 | `0x1008bd30` | — | 1 | 0 | 2 | `NULL ENTITY`, `CBaseAnimating::StopIgnoringCollision` | — |  |
-| 1139 | `0x1008f540` | — | 2 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::ResetActivityIndexes ` | — |  |
-| 1140 | `0x100990f0` | — | 1 | 0 | 2 | — | — |  |
-| 1141 | `0x10099540` | `CAI_BaseHumanoid#270`, `CAI_BaseNPC#270`, +85 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#270 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1142 | `0x100997f0` | `CAI_BaseHumanoid#266`, `CAI_BaseNPC#266`, +85 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#266 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1143 | `0x1009b5a0` | `CAISound#19`, `CAI_BaseHumanoid#19`, +431 more | 2 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessageBare` | — | `CAI_BaseNPC#19 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 1144 | `0x1009ebb0` | `CAISound#109`, `CAI_ChangeHintGroup#109`, +159 more | 1 | 0 | 2 | `NULL ENTITY`, `CBaseEntity::KeyValue` | — |  |
-| 1145 | `0x1009eca0` | `CAISound#108`, `CAI_ChangeHintGroup#108`, +159 more | 1 | 0 | 2 | `NULL ENTITY`, `%f %f %f`, +1 more | — |  |
-| 1146 | `0x100a5030` | `CAISound#42`, `CAI_BaseHumanoid#42`, +474 more | 1 | 1 | 1 | — | — | `CAI_BaseNPC#42 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 1147 | `0x100aa5a0` | `CAISound#130`, `CAI_ChangeHintGroup#130`, +183 more | 2 | 0 | 1 | — | — |  |
-| 1148 | `0x100b4c00` | `CAISound#196`, `CAI_BaseHumanoid#196`, +494 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#196 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 1149 | `0x100b4f30` | `CAISound#226`, `CAI_BaseHumanoid#226`, +483 more | 0 | 0 | 3 | `Infinite values from vphysics!⏎` | — | `CAI_BaseNPC#226 no SDK twin: stretch #222-#227 holds 4 retai…` |
-| 1150 | `0x100b5d80` | `CAI_BaseHumanoid#285`, `CAI_BaseNPC#285`, +84 more | 0 | 1 | 2 | — | — | `CAI_BaseNPC#285 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 1151 | `0x100b6180` | `CAI_BaseHumanoid#287`, `CAI_BaseNPC#287`, +84 more | 0 | 1 | 2 | — | — | `CAI_BaseNPC#287 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 1152 | `0x100b62a0` | — | 1 | 0 | 2 | — | — |  |
-| 1153 | `0x100b6960` | `CAI_BaseHumanoid#289`, `CAI_BaseNPC#289`, +84 more | 1 | 0 | 2 | `left_`, `right_` | — | `CAI_BaseNPC#289 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 1154 | `0x100b6f10` | — | 2 | 0 | 1 | — | — |  |
-| 1155 | `0x100d13d0` | — | 1 | 1 | 1 | — | — |  |
-| 1156 | `0x100e58b0` | — | 1 | 0 | 2 | — | — |  |
-| 1157 | `0x100eb420` | — | 2 | 0 | 1 | — | — |  |
-| 1158 | `0x100ec3d0` | — | 1 | 0 | 2 | — | — |  |
-| 1159 | `0x100ec530` | — | 1 | 0 | 2 | — | — |  |
-| 1160 | `0x100ecfc0` | — | 1 | 0 | 2 | — | — |  |
-| 1161 | `0x100ed2c0` | — | 3 | 0 | 0 | — | — |  |
-| 1162 | `0x100ee950` | — | 1 | 0 | 2 | — | — |  |
-| 1163 | `0x100f0e30` | — | 1 | 1 | 1 | — | — |  |
-| 1164 | `0x100f79b0` | — | 3 | 0 | 0 | — | — |  |
-| 1165 | `0x100f7f20` | — | 3 | 0 | 0 | — | — |  |
-| 1166 | `0x100fba40` | — | 1 | 2 | 0 | `%s ramp time set to %.2f, must be >=0⏎` | — |  |
-| 1167 | `0x100fbb40` | — | 1 | 2 | 0 | — | — |  |
-| 1168 | `0x10119900` | — | 3 | 0 | 0 | — | — |  |
-| 1169 | `0x1011d2e0` | — | 1 | 2 | 0 | — | — |  |
-| 1170 | `0x10137ed0` | — | 3 | 0 | 0 | — | — |  |
-| 1171 | `0x101381b0` | — | 3 | 0 | 0 | — | — |  |
-| 1172 | `0x1013a9f0` | — | 3 | 0 | 0 | — | — |  |
-| 1173 | `0x10142af0` | — | 3 | 0 | 0 | — | — |  |
-| 1174 | `0x10142b80` | — | 3 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 1175 | `0x10146790` | — | 1 | 2 | 0 | — | — |  |
-| 1176 | `0x1014fa10` | `CAI_BaseHumanoid#145`, `CAI_BaseNPC#145`, +82 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#145 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 1177 | `0x10155010` | — | 1 | 0 | 2 | — | — |  |
-| 1178 | `0x101563b0` | — | 1 | 0 | 2 | — | — |  |
-| 1179 | `0x10161f10` | — | 2 | 1 | 0 | — | — |  |
-| 1180 | `0x10170090` | — | 1 | 0 | 2 | `Can't change levels while in dialog!⏎` | — |  |
-| 1181 | `0x1017b330` | — | 1 | 0 | 2 | — | — |  |
-| 1182 | `0x1017dd80` | — | 2 | 0 | 1 | — | — |  |
-| 1183 | `0x1017ddd0` | — | 2 | 0 | 1 | — | — |  |
-| 1184 | `0x1017de60` | — | 2 | 0 | 1 | — | — |  |
-| 1185 | `0x1017e6f0` | — | 2 | 1 | 0 | — | — |  |
-| 1186 | `0x1017f650` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | — |  |
-| 1187 | `0x1017f7b0` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | — |  |
-| 1188 | `0x1017f830` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | — |  |
-| 1189 | `0x1017f9c0` | — | 1 | 2 | 0 | — | — |  |
-| 1190 | `0x10182a90` | — | 1 | 0 | 2 | — | — |  |
-| 1191 | `0x101841f0` | — | 1 | 2 | 0 | — | — |  |
-| 1192 | `0x10194330` | — | 1 | 0 | 2 | — | — |  |
-| 1193 | `0x101945f0` | — | 1 | 0 | 2 | — | — |  |
-| 1194 | `0x1019d2f0` | — | 1 | 2 | 0 | — | — |  |
-| 1195 | `0x101a5290` | — | 3 | 0 | 0 | — | — |  |
-| 1196 | `0x101a68a0` | `CAI_BaseHumanoid#489`, `CAI_BaseNPC#489`, +8 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#489 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1197 | `0x101a6ae0` | `CAI_BaseHumanoid#507`, `CAI_BaseNPC#507`, +11 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#507 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1198 | `0x101a6ec0` | — | 3 | 0 | 0 | `         ⏎` | — |  |
-| 1199 | `0x101a7540` | — | 1 | 0 | 2 | — | — |  |
-| 1200 | `0x101a81a0` | — | 1 | 1 | 1 | — | — |  |
-| 1201 | `0x101a89a0` | `CCineAI#459`, `CCineAISchedule#459`, +1 more | 2 | 0 | 1 | — | — |  |
-| 1202 | `0x101ab0e0` | `CCineAISchedule#5` | 0 | 0 | 3 | — | — |  |
-| 1203 | `0x101af070` | — | 3 | 0 | 0 | — | — |  |
-| 1204 | `0x101b3730` | — | 1 | 0 | 2 | — | — |  |
-| 1205 | `0x101b9860` | — | 2 | 0 | 1 | — | — |  |
-| 1206 | `0x101b9920` | — | 2 | 0 | 1 | — | — |  |
-| 1207 | `0x101c19e0` | — | 1 | 0 | 2 | — | — |  |
-| 1208 | `0x101c2910` | — | 3 | 0 | 0 | — | — |  |
-| 1209 | `0x101c2ab0` | — | 2 | 0 | 1 | — | — |  |
-| 1210 | `0x101c2ad0` | — | 2 | 1 | 0 | — | — |  |
-| 1211 | `0x101c2b30` | — | 2 | 0 | 1 | — | — |  |
-| 1212 | `0x101c2bc0` | — | 2 | 1 | 0 | — | — |  |
-| 1213 | `0x101ccd40` | — | 3 | 0 | 0 | — | — |  |
-| 1214 | `0x101ccf50` | — | 2 | 1 | 0 | — | — |  |
-| 1215 | `0x101cd110` | — | 3 | 0 | 0 | — | — |  |
-| 1216 | `0x101d0f10` | — | 3 | 0 | 0 | `%s/%s`, `*%s/%s`, +1 more | — |  |
-| 1217 | `0x101d26b0` | — | 3 | 0 | 0 | — | — |  |
-| 1218 | `0x101d2ce0` | — | 3 | 0 | 0 | — | — |  |
-| 1219 | `0x101d4e70` | — | 2 | 0 | 1 | — | — |  |
-| 1220 | `0x101d4eb0` | — | 2 | 0 | 1 | — | — |  |
-| 1221 | `0x101d8820` | — | 2 | 0 | 1 | — | — |  |
-| 1222 | `0x101dbc10` | — | 1 | 0 | 2 | — | — |  |
-| 1223 | `0x101dbe10` | — | 3 | 0 | 0 | — | — |  |
-| 1224 | `0x101dc1c0` | — | 3 | 0 | 0 | — | — |  |
-| 1225 | `0x101dc810` | — | 1 | 0 | 2 | — | — |  |
-| 1226 | `0x101ddcd0` | — | 1 | 0 | 2 | `ERROR: CVTriggerCasting_t SrcType Error!…` | — |  |
-| 1227 | `0x101dfb80` | — | 1 | 0 | 2 | `Discipline<%s>: HitGroup: <%s> Instant T…` | — |  |
-| 1228 | `0x101e1a60` | — | 2 | 1 | 0 | `Thaumaturgy_BloodShot`, `Thaumaturgy_Blood_Salvo` | — |  |
-| 1229 | `0x101e3cf0` | — | 1 | 0 | 2 | — | — |  |
-| 1230 | `0x101e3df0` | — | 1 | 0 | 2 | — | — |  |
-| 1231 | `0x101e5b30` | — | 1 | 0 | 2 | — | — |  |
-| 1232 | `0x101e5e10` | — | 1 | 0 | 2 | `Invalid Character pointer for: Feats::We…` | — |  |
-| 1233 | `0x101e8a90` | — | 2 | 0 | 1 | — | — |  |
-| 1234 | `0x101e8ab0` | — | 2 | 0 | 1 | — | — |  |
-| 1235 | `0x101e8c30` | — | 2 | 0 | 1 | — | — |  |
-| 1236 | `0x101e8c90` | — | 1 | 0 | 2 | `Failed to load follower info type (%s). …`, `**NULL**` | — |  |
-| 1237 | `0x101e8ec0` | — | 1 | 0 | 2 | — | — |  |
-| 1238 | `0x101e9290` | — | 1 | 0 | 2 | — | — |  |
-| 1239 | `0x101e9570` | — | 1 | 1 | 1 | — | — |  |
-| 1240 | `0x101eb000` | — | 1 | 2 | 0 | — | — |  |
-| 1241 | `0x101ecae0` | — | 3 | 0 | 0 | — | — |  |
-| 1242 | `0x101ecb10` | — | 3 | 0 | 0 | — | — |  |
-| 1243 | `0x101f2cf0` | — | 1 | 1 | 1 | — | — |  |
-| 1244 | `0x101f4c80` | — | 1 | 2 | 0 | — | — |  |
-| 1245 | `0x101f6c50` | — | 1 | 0 | 2 | `Unable to Calculate TraitEffect!⏎` | — |  |
-| 1246 | `0x101f6e70` | — | 1 | 0 | 2 | — | — |  |
-| 1247 | `0x101f7690` | — | 1 | 0 | 2 | — | — |  |
-| 1248 | `0x10201540` | — | 1 | 0 | 2 | — | — |  |
-| 1249 | `0x10202ac0` | — | 1 | 0 | 2 | — | — |  |
-| 1250 | `0x10203240` | — | 1 | 0 | 2 | — | — |  |
-| 1251 | `0x10204c60` | — | 3 | 0 | 0 | — | — |  |
-| 1252 | `0x10205400` | — | 2 | 1 | 0 | — | — |  |
-| 1253 | `0x10205840` | — | 2 | 0 | 1 | — | — |  |
-| 1254 | `0x1020a0a0` | — | 1 | 1 | 1 | `debug_entity` | — |  |
-| 1255 | `0x1020cd30` | — | 1 | 0 | 2 | — | — |  |
-| 1256 | `0x1023f3d0` | — | 3 | 0 | 0 | — | — |  |
-| 1257 | `0x102454e0` | — | 2 | 1 | 0 | — | — |  |
-| 1258 | `0x10245660` | — | 3 | 0 | 0 | — | — |  |
-| 1259 | `0x10245e60` | `ConVar#10` | 1 | 0 | 2 | — | — |  |
-| 1260 | `0x10249aa0` | — | 2 | 0 | 1 | — | — |  |
-| 1261 | `0x10249c70` | — | 2 | 0 | 1 | — | — |  |
-| 1262 | `0x10249fc0` | — | 2 | 0 | 1 | — | — |  |
-| 1263 | `0x1024a2e0` | — | 2 | 0 | 1 | — | — |  |
-| 1264 | `0x1024a900` | — | 2 | 0 | 1 | — | — |  |
-| 1265 | `0x1024b590` | — | 1 | 0 | 2 | — | — |  |
-| 1266 | `0x10252450` | — | 3 | 0 | 0 | — | — |  |
-| 1267 | `0x1025d730` | — | 3 | 0 | 0 | — | — |  |
-| 1268 | `0x1025dca0` | — | 1 | 0 | 2 | — | — |  |
-| 1269 | `0x1025df40` | — | 1 | 0 | 2 | — | — |  |
-| 1270 | `0x1025ea00` | `CAI_BaseHumanoid#588` | 1 | 0 | 2 | — | — |  |
-| 1271 | `0x1025f8e0` | `CAI_BaseHumanoid#535` | 0 | 1 | 2 | — | — |  |
-| 1272 | `0x10260930` | — | 2 | 0 | 1 | — | — |  |
-| 1273 | `0x10260980` | — | 2 | 1 | 0 | — | — |  |
-| 1274 | `0x10260dc0` | `CAI_BaseHumanoid#584`, `CAI_ExpressiveNPC#584` | 2 | 0 | 1 | — | — |  |
-| 1275 | `0x102653f0` | — | 1 | 1 | 1 | — | — |  |
-| 1276 | `0x10268900` | `CAISound#185`, `CAI_BaseHumanoid#185`, +495 more | 0 | 0 | 3 | — | — | `CAI_BaseNPC#185 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 1277 | `0x1026a2a0` | — | 2 | 0 | 1 | — | — |  |
-| 1278 | `0x1026a8f0` | `CAI_BaseHumanoid#567`, `CAI_BaseNPC#567`, +74 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#567 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1279 | `0x1026ab50` | — | 1 | 0 | 2 | — | — |  |
-| 1280 | `0x1026af30` | `CAI_BaseHumanoid#475`, `CAI_BaseNPC#475`, +75 more | 2 | 0 | 1 | `Warning: NULL Return from GetBestScent⏎` | — | `CAI_BaseNPC#475 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 1281 | `0x1026b240` | `CAI_BaseNPC#373`, `CAI_BaseNPCTroika#373`, +74 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#373 no SDK twin: stretch #371-#376 holds 4 retai…` |
-| 1282 | `0x1026b480` | `CAI_BaseHumanoid#539`, `CAI_BaseNPC#539`, +75 more | 2 | 0 | 1 | `aim_pitch`, `aim_yaw` | — | `CAI_BaseNPC#539 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 1283 | `0x1026b4f0` | `CAI_BaseHumanoid#538`, `CAI_BaseNPC#538`, +75 more | 0 | 0 | 3 | — | — | `CAI_BaseNPC#538 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 1284 | `0x1026b7a0` | — | 1 | 0 | 2 | — | — |  |
-| 1285 | `0x1026d9a0` | `CAI_BaseHumanoid#555`, `CAI_BaseNPC#555`, +75 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#555 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 1286 | `0x102703f0` | — | 2 | 0 | 1 | — | — |  |
-| 1287 | `0x10270840` | `CAI_BaseHumanoid#564`, `CAI_BaseNPC#564`, +11 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#564 no SDK twin: stretch #560-#566 holds 5 retai…` |
-| 1288 | `0x10270890` | — | 1 | 0 | 2 | — | — |  |
-| 1289 | `0x10270aa0` | — | 2 | 1 | 0 | — | — |  |
-| 1290 | `0x10273760` | — | 2 | 0 | 1 | — | — |  |
-| 1291 | `0x10273e40` | `CAI_BaseHumanoid#543`, `CAI_BaseNPC#543`, +75 more | 1 | 0 | 2 | — | — | `CAI_BaseNPC#543 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 1292 | `0x102789c0` | `CAI_BaseHumanoid#197`, `CAI_BaseNPC#197`, +74 more | 0 | 0 | 3 | — | — | `CAI_BaseNPC#197 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 1293 | `0x10278d20` | `CAI_BaseHumanoid#518`, `CAI_BaseNPC#518`, +75 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#518 no SDK twin: the SDK name it lines up with w…` |
-| 1294 | `0x10278d90` | `CAI_BaseHumanoid#517`, `CAI_BaseNPC#517`, +75 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:880 | `CAI_BaseNPC#517 no SDK twin: the SDK name it lines up with w…` |
-| 1295 | `0x10279420` | — | 1 | 0 | 2 | — | — |  |
-| 1296 | `0x10279bb0` | — | 1 | 0 | 2 | — | — |  |
-| 1297 | `0x1027db80` | — | 2 | 0 | 1 | — | — |  |
-| 1298 | `0x1027f550` | — | 2 | 0 | 1 | — | — |  |
-| 1299 | `0x1027f8f0` | — | 1 | 2 | 0 | — | — |  |
-| 1300 | `0x1027f940` | — | 1 | 2 | 0 | — | — |  |
-| 1301 | `0x10280300` | `CAI_BaseHumanoid#153`, `CAI_BaseNPC#153`, +75 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#153 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 1302 | `0x10280330` | `CAI_BaseHumanoid#529`, `CAI_BaseNPC#529`, +75 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#529 no SDK twin: stretch #526-#530 holds 3 retai…` |
-| 1303 | `0x10280db0` | — | 1 | 0 | 2 | — | — |  |
-| 1304 | `0x10281430` | — | 1 | 1 | 1 | — | — |  |
-| 1305 | `0x102885d0` | — | 2 | 0 | 1 | — | — |  |
-| 1306 | `0x102885f0` | — | 2 | 0 | 1 | — | — |  |
-| 1307 | `0x10288630` | — | 2 | 0 | 1 | — | — |  |
-| 1308 | `0x10288650` | — | 2 | 0 | 1 | — | — |  |
-| 1309 | `0x1028d860` | `CAI_BaseNPCTroika#583`, `CGeneric_NPC#583`, +62 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1774 |  |
-| 1310 | `0x1028e090` | — | 2 | 0 | 1 | — | — |  |
-| 1311 | `0x1028e8b0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:306, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:930 |  |
-| 1312 | `0x1028e940` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:306 |  |
-| 1313 | `0x102902e0` | — | 1 | 1 | 1 | — | — |  |
-| 1314 | `0x102906a0` | — | 2 | 0 | 1 | — | — |  |
-| 1315 | `0x102906c0` | — | 2 | 0 | 1 | — | — |  |
-| 1316 | `0x10290700` | — | 2 | 0 | 1 | — | — |  |
-| 1317 | `0x10293d70` | — | 1 | 1 | 1 | — | — |  |
-| 1318 | `0x10293d90` | — | 2 | 1 | 0 | — | — |  |
-| 1319 | `0x10293e50` | `CAI_BaseNPCTroika#588`, `CGeneric_NPC#588`, +60 more | 2 | 0 | 1 | — | — |  |
-| 1320 | `0x10294280` | `CAI_BaseNPCTroika#490`, `CGeneric_NPC#490`, +54 more | 3 | 0 | 0 | `Idle_Calm` | — |  |
-| 1321 | `0x102953a0` | `CAI_BaseNPCTroika#564`, `CGeneric_NPC#564`, +60 more | 1 | 0 | 2 | — | — |  |
-| 1322 | `0x102968f0` | — | 2 | 0 | 1 | — | — |  |
-| 1323 | `0x10299a80` | — | 2 | 0 | 1 | `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…`, `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…` | — |  |
-| 1324 | `0x1029a8b0` | `CAI_BaseNPCTroika#422`, `CGeneric_NPC#422`, +59 more | 1 | 0 | 2 | — | — |  |
-| 1325 | `0x1029f2e0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:540, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:28 |  |
-| 1326 | `0x1029f6c0` | — | 2 | 0 | 1 | — | — |  |
-| 1327 | `0x102a0870` | — | 1 | 0 | 2 | — | — |  |
-| 1328 | `0x102a1470` | — | 1 | 0 | 2 | — | — |  |
-| 1329 | `0x102a14c0` | — | 1 | 0 | 2 | — | — |  |
-| 1330 | `0x102a1510` | — | 2 | 0 | 1 | — | — |  |
-| 1331 | `0x102a9570` | — | 1 | 0 | 2 | — | — |  |
-| 1332 | `0x102a97a0` | — | 1 | 1 | 1 | — | — |  |
-| 1333 | `0x102a97d0` | — | 1 | 1 | 1 | — | — |  |
-| 1334 | `0x102a9800` | — | 1 | 1 | 1 | — | — |  |
-| 1335 | `0x102a9830` | — | 1 | 1 | 1 | — | — |  |
-| 1336 | `0x102a98e0` | — | 1 | 1 | 1 | — | — |  |
-| 1337 | `0x102a9910` | — | 1 | 0 | 2 | — | — |  |
-| 1338 | `0x102a99e0` | — | 2 | 0 | 1 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
-| 1339 | `0x102b1a20` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Tests/ElysiumNpcComfortSweepTests.cpp:6 |  |
-| 1340 | `0x102b62e0` | — | 1 | 0 | 2 | — | — |  |
-| 1341 | `0x102b6650` | — | 1 | 0 | 2 | — | — |  |
-| 1342 | `0x102b8980` | — | 1 | 0 | 2 | — | — |  |
-| 1343 | `0x102b8a10` | — | 1 | 2 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 1344 | `0x102b8a60` | — | 3 | 0 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
-| 1345 | `0x102b8cd0` | — | 2 | 0 | 1 | — | — |  |
-| 1346 | `0x102bf4a0` | `CAI_BaseNPCTroika#575`, `CGeneric_NPC#575`, +62 more | 1 | 0 | 2 | — | — |  |
-| 1347 | `0x102c2ec0` | `CAI_BaseNPCTroika#589`, `CGeneric_NPC#589`, +62 more | 1 | 0 | 2 | — | — |  |
-| 1348 | `0x102c5500` | `CAI_BaseNPCTroika#419`, `CGeneric_NPC#419`, +62 more | 1 | 2 | 0 | — | — |  |
-| 1349 | `0x102c75c0` | `CAI_StandoffBehavior#10` | 0 | 1 | 2 | — | — |  |
-| 1350 | `0x102c79e0` | `CAI_StandoffBehavior#22` | 0 | 1 | 2 | `NPC in standoff lacks needed low aim act…`, `no weapon`, +2 more | — |  |
-| 1351 | `0x102c7bd0` | `CAI_StandoffBehavior#15` | 0 | 1 | 2 | `E:\Vampire\main\dlls\ai_behavior_standof…` | — |  |
-| 1352 | `0x102c7e10` | — | 1 | 1 | 1 | — | — |  |
-| 1353 | `0x102c8830` | `CAI_StandoffGoal#243` | 1 | 1 | 1 | `Invalid aggressiveness value %d⏎` | — |  |
-| 1354 | `0x102ca460` | — | 1 | 1 | 1 | `Unknown`, `Supernatural`, +2 more | — |  |
-| 1355 | `0x102ca780` | — | 1 | 0 | 2 | — | — |  |
-| 1356 | `0x102cc590` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:894 |  |
-| 1357 | `0x102cc6c0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:894 |  |
-| 1358 | `0x102cc730` | — | 1 | 1 | 1 | — | — |  |
-| 1359 | `0x102cc760` | — | 2 | 0 | 1 | — | — |  |
-| 1360 | `0x102cd740` | `CAI_StandoffGoal#242` | 0 | 0 | 3 | — | — |  |
-| 1361 | `0x102cdb70` | — | 1 | 0 | 2 | — | — |  |
-| 1362 | `0x102cdd10` | — | 1 | 0 | 2 | — | — |  |
-| 1363 | `0x102ce550` | — | 2 | 0 | 1 | — | — |  |
-| 1364 | `0x102ce640` | — | 1 | 0 | 2 | — | — |  |
-| 1365 | `0x102ce7a0` | — | 1 | 2 | 0 | — | — |  |
-| 1366 | `0x102cefc0` | — | 2 | 0 | 1 | — | — |  |
-| 1367 | `0x102d1220` | — | 1 | 0 | 2 | — | — |  |
-| 1368 | `0x102d1540` | — | 1 | 0 | 2 | — | — |  |
-| 1369 | `0x102d41a0` | — | 1 | 2 | 0 | — | — |  |
-| 1370 | `0x102d41f0` | — | 2 | 1 | 0 | — | — |  |
-| 1371 | `0x102d6140` | — | 3 | 0 | 0 | — | — |  |
-| 1372 | `0x102d6160` | — | 3 | 0 | 0 | — | — |  |
-| 1373 | `0x102d61e0` | — | 3 | 0 | 0 | — | — |  |
-| 1374 | `0x102d6230` | — | 3 | 0 | 0 | — | — |  |
-| 1375 | `0x102d8cf0` | — | 1 | 1 | 1 | — | — |  |
-| 1376 | `0x102d8e50` | — | 1 | 1 | 1 | — | — |  |
-| 1377 | `0x102d8f20` | — | 1 | 1 | 1 | — | — |  |
-| 1378 | `0x102d9b10` | — | 1 | 0 | 2 | — | — |  |
-| 1379 | `0x102d9ed0` | — | 1 | 1 | 1 | — | — |  |
-| 1380 | `0x102da9e0` | — | 1 | 0 | 2 | — | — |  |
-| 1381 | `0x102daac0` | — | 1 | 0 | 2 | `E:\Vampire\main\dlls\AI_InterestingPlace…` | — |  |
-| 1382 | `0x102dcc20` | — | 1 | 0 | 2 | — | — |  |
-| 1383 | `0x102dd500` | — | 1 | 0 | 2 | — | — |  |
-| 1384 | `0x102dd550` | — | 1 | 0 | 2 | — | — |  |
-| 1385 | `0x102dd580` | — | 1 | 0 | 2 | — | — |  |
-| 1386 | `0x102dd5b0` | — | 1 | 0 | 2 | — | — |  |
-| 1387 | `0x102dd5e0` | — | 1 | 0 | 2 | — | — |  |
-| 1388 | `0x102ddc40` | — | 2 | 0 | 1 | — | — |  |
-| 1389 | `0x102df1b0` | — | 3 | 0 | 0 | — | — |  |
-| 1390 | `0x102e06f0` | — | 2 | 1 | 0 | — | — |  |
-| 1391 | `0x102e0730` | — | 3 | 0 | 0 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_Memory.cpp` | — |  |
-| 1392 | `0x102e0b80` | — | 2 | 0 | 1 | — | — |  |
-| 1393 | `0x102e0f90` | `CAI_HumanoidMotor#4`, `CAI_Motor#4` | 0 | 1 | 2 | — | — |  |
-| 1394 | `0x102e14a0` | `CAI_Motor#19` | 0 | 0 | 3 | — | — |  |
-| 1395 | `0x102e2180` | `CAI_HumanoidMotor#15`, `CAI_Motor#15` | 1 | 0 | 2 | — | — |  |
-| 1396 | `0x102e2750` | — | 2 | 0 | 1 | — | — |  |
-| 1397 | `0x102e2840` | — | 2 | 0 | 1 | — | — |  |
-| 1398 | `0x102e3450` | — | 2 | 0 | 1 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
-| 1399 | `0x102e7e00` | — | 2 | 0 | 1 | — | — |  |
-| 1400 | `0x102e7e20` | — | 2 | 0 | 1 | — | — |  |
-| 1401 | `0x102e7e40` | — | 2 | 0 | 1 | — | — |  |
-| 1402 | `0x102e8250` | — | 2 | 1 | 0 | — | — |  |
-| 1403 | `0x102e8ac0` | — | 2 | 0 | 1 | — | — |  |
-| 1404 | `0x102ee2a0` | — | 2 | 0 | 1 | — | — |  |
-| 1405 | `0x102ee410` | — | 2 | 0 | 1 | — | — |  |
-| 1406 | `0x102ee530` | — | 2 | 0 | 1 | — | — |  |
-| 1407 | `0x102ee5e0` | — | 2 | 0 | 1 | — | — |  |
-| 1408 | `0x102ee660` | — | 2 | 0 | 1 | — | — |  |
-| 1409 | `0x102ee680` | — | 2 | 0 | 1 | — | — |  |
-| 1410 | `0x102ee940` | — | 3 | 0 | 0 | — | — |  |
-| 1411 | `0x102eea90` | `CAI_HumanoidNavigator#8`, `CAI_Navigator#8` | 2 | 1 | 0 | — | — |  |
-| 1412 | `0x102f06e0` | — | 2 | 0 | 1 | — | — |  |
-| 1413 | `0x102f0ab0` | — | 1 | 0 | 2 | — | — |  |
-| 1414 | `0x102f0e00` | — | 2 | 0 | 1 | — | — |  |
-| 1415 | `0x102f0fe0` | — | 1 | 0 | 2 | — | — |  |
-| 1416 | `0x102f28e0` | — | 1 | 0 | 2 | — | — |  |
-| 1417 | `0x102f32f0` | — | 2 | 0 | 1 | `Unaccounted`, `CAI_Network_ListNodesInBox` | — |  |
-| 1418 | `0x102f4520` | — | 2 | 0 | 1 | — | — |  |
-| 1419 | `0x102f8ef0` | — | 2 | 1 | 0 | — | — |  |
-| 1420 | `0x102f9040` | — | 3 | 0 | 0 | — | — |  |
-| 1421 | `0x102f9920` | — | 3 | 0 | 0 | — | — |  |
-| 1422 | `0x102fcab0` | — | 1 | 0 | 2 | `Note: Strange link found between nodes i…` | — |  |
-| 1423 | `0x102fcd00` | — | 1 | 0 | 2 | — | — |  |
-| 1424 | `0x102fe150` | — | 1 | 0 | 2 | `Unaccounted`, `CAI_Pathfinder_HasPathInner` | — |  |
-| 1425 | `0x102fe9f0` | — | 1 | 0 | 2 | — | — |  |
-| 1426 | `0x102ffbd0` | — | 2 | 0 | 1 | — | — |  |
-| 1427 | `0x10300140` | — | 2 | 0 | 1 | — | — |  |
-| 1428 | `0x103008f0` | — | 1 | 0 | 2 | `FindBackAwayNode() - %s has no nearest n…`, `Graph not ready for FindBackAwayNode!⏎` | — |  |
-| 1429 | `0x10300b50` | — | 1 | 0 | 2 | — | — |  |
-| 1430 | `0x10301010` | — | 1 | 0 | 2 | `FindBackAwayNodeAStar() - %s has no near…`, `Graph not ready for FindBackAwayNodeASta…` | — |  |
-| 1431 | `0x10301720` | — | 1 | 0 | 2 | `FindCover() - %s has no nearest node (%f…` | — |  |
-| 1432 | `0x10302320` | — | 1 | 0 | 2 | `FindCover() - %s has no nearest node (%f…` | — |  |
-| 1433 | `0x10303740` | — | 2 | 0 | 1 | — | — |  |
-| 1434 | `0x10303850` | — | 2 | 0 | 1 | — | — |  |
-| 1435 | `0x10304e00` | — | 2 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildNodeRoute` | — |  |
-| 1436 | `0x103058c0` | — | 1 | 0 | 2 | — | — |  |
-| 1437 | `0x10306700` | — | 2 | 0 | 1 | `CreateHuntPatrolList() - %s has no neare…` | — |  |
-| 1438 | `0x10307ac0` | — | 1 | 0 | 2 | — | — |  |
-| 1439 | `0x10307bf0` | — | 1 | 1 | 1 | — | — |  |
-| 1440 | `0x1030b550` | — | 2 | 0 | 1 | — | — |  |
-| 1441 | `0x1030b8e0` | — | 2 | 0 | 1 | — | — |  |
-| 1442 | `0x1030f300` | — | 2 | 0 | 1 | `Couldn't find schedule %d (%s)⏎` | — |  |
-| 1443 | `0x1030fc90` | — | 2 | 0 | 1 | — | — |  |
-| 1444 | `0x1030ffa0` | — | 3 | 0 | 0 | — | — |  |
-| 1445 | `0x10310480` | — | 3 | 0 | 0 | — | — |  |
-| 1446 | `0x103104f0` | — | 2 | 0 | 1 | — | — |  |
-| 1447 | `0x10310cf0` | — | 2 | 0 | 1 | `Failed to spawn with NPCMaker( %s )⏎` | — |  |
-| 1448 | `0x10311b90` | — | 2 | 0 | 1 | — | — |  |
-| 1449 | `0x10311f50` | — | 2 | 0 | 1 | — | — |  |
-| 1450 | `0x10312c20` | — | 1 | 1 | 1 | — | — |  |
-| 1451 | `0x10312f70` | — | 1 | 2 | 0 | — | — |  |
-| 1452 | `0x10315a80` | — | 1 | 0 | 2 | — | — |  |
-| 1453 | `0x10315ec0` | — | 1 | 0 | 2 | — | — |  |
-| 1454 | `0x10316760` | — | 1 | 0 | 2 | — | — |  |
-| 1455 | `0x103167f0` | — | 1 | 0 | 2 | — | — |  |
-| 1456 | `0x10316890` | — | 1 | 0 | 2 | — | — |  |
-| 1457 | `0x10316ab0` | — | 1 | 0 | 2 | — | — |  |
-| 1458 | `0x1031a0e0` | — | 3 | 0 | 0 | — | — |  |
-| 1459 | `0x10323930` | — | 3 | 0 | 0 | — | — |  |
-| 1460 | `0x10323a70` | — | 2 | 0 | 1 | — | — |  |
-| 1461 | `0x10323b60` | `CBaseCombatCharacter#130`, `CBaseGrenade#130`, +4 more | 1 | 0 | 2 | — | — |  |
-| 1462 | `0x10324080` | — | 1 | 1 | 1 | — | — |  |
-| 1463 | `0x10325da0` | — | 3 | 0 | 0 | — | — |  |
-| 1464 | `0x10330220` | — | 3 | 0 | 0 | — | — |  |
-| 1465 | `0x1033d460` | — | 1 | 0 | 2 | — | — |  |
-| 1466 | `0x10344dd0` | `CAI_BaseHumanoid#323`, `CAI_BaseNPC#323`, +83 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#323 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 1467 | `0x10345480` | — | 2 | 0 | 1 | — | — |  |
-| 1468 | `0x10348d00` | — | 1 | 0 | 2 | — | — |  |
-| 1469 | `0x1034af70` | `CNPCMaker#5` | 0 | 0 | 3 | — | — |  |
-| 1470 | `0x1034b430` | — | 1 | 0 | 2 | — | — |  |
-| 1471 | `0x1034bfb0` | `CNPCMaker_Fleshpile#5` | 0 | 0 | 3 | — | — |  |
-| 1472 | `0x1034cbf0` | `CNPCMaker_Zombie#5` | 0 | 0 | 3 | — | — |  |
-| 1473 | `0x10356770` | — | 1 | 0 | 2 | — | — |  |
-| 1474 | `0x10356f60` | `CNPC_Bullseye#141` | 0 | 0 | 3 | — | — |  |
-| 1475 | `0x10357e50` | — | 1 | 0 | 2 | — | — |  |
-| 1476 | `0x10358ef0` | `CNPC_Crow#490` | 3 | 0 | 0 | `NPC_Crow.Idle` | — |  |
-| 1477 | `0x10358f10` | `CNPC_Crow#489` | 3 | 0 | 0 | `NPC_Crow.Alert` | — |  |
-| 1478 | `0x1035a390` | `CGeneric_NPC#489` | 2 | 0 | 1 | — | — |  |
-| 1479 | `0x1035a500` | `CGeneric_NPC#488` | 2 | 0 | 1 | — | — |  |
-| 1480 | `0x1035a670` | `CGeneric_NPC#491` | 2 | 0 | 1 | — | — |  |
-| 1481 | `0x1035a900` | `CGeneric_NPC#432` | 3 | 0 | 0 | — | — |  |
-| 1482 | `0x1035b160` | `CGeneric_NPC_bathack#432` | 3 | 0 | 0 | — | — |  |
-| 1483 | `0x1035ba00` | `CGenericSabbat_NPC#489` | 2 | 0 | 1 | — | — |  |
-| 1484 | `0x1035bb70` | `CGenericSabbat_NPC#488` | 2 | 0 | 1 | — | — |  |
-| 1485 | `0x1035bce0` | `CGenericSabbat_NPC#491` | 2 | 0 | 1 | — | — |  |
-| 1486 | `0x1035bf70` | `CGenericSabbat_NPC#432` | 3 | 0 | 0 | — | — |  |
-| 1487 | `0x1035d150` | `CNPC_VAndreiBlood#461` | 1 | 1 | 1 | — | — |  |
-| 1488 | `0x103656a0` | — | 1 | 0 | 2 | `Error: Couldn't find space in inventory …`, `item_d_holy_light` | — |  |
-| 1489 | `0x103674c0` | `CNPC_VBatSwarm#432` | 3 | 0 | 0 | — | — |  |
-| 1490 | `0x103680f0` | `CNPC_VCamera#490`, `CNPC_VCameraSecurity#490` | 3 | 0 | 0 | — | — |  |
-| 1491 | `0x10368130` | `CNPC_VCamera#492`, `CNPC_VCameraSecurity#492` | 3 | 0 | 0 | — | — |  |
-| 1492 | `0x1036c7f0` | — | 2 | 1 | 0 | — | — |  |
-| 1493 | `0x10370340` | `CNPC_VCombatman#432` | 3 | 0 | 0 | — | — |  |
-| 1494 | `0x103706b0` | — | 1 | 0 | 2 | — | — |  |
-| 1495 | `0x10372aa0` | `CNPC_VCop#432` | 3 | 0 | 0 | — | — |  |
-| 1496 | `0x10374f40` | — | 1 | 0 | 2 | — | — |  |
-| 1497 | `0x10378b80` | `CNPC_VGargoyle#432` | 3 | 0 | 0 | — | — |  |
-| 1498 | `0x1037e1e0` | `CNPC_VGuard1#432` | 3 | 0 | 0 | — | — |  |
-| 1499 | `0x1037e2d0` | — | 2 | 1 | 0 | `player D_HT 10` | — |  |
-| 1500 | `0x10380120` | `CNPC_VHengeyokai#432` | 3 | 0 | 0 | — | — |  |
-| 1501 | `0x10381be0` | — | 2 | 0 | 1 | — | — |  |
-| 1502 | `0x10382020` | — | 1 | 0 | 2 | — | — |  |
-| 1503 | `0x10382670` | — | 1 | 1 | 1 | `Bip01 R Hand`, `phys_animlink` | — |  |
-| 1504 | `0x10382b30` | — | 1 | 0 | 2 | — | — |  |
-| 1505 | `0x10382bb0` | — | 1 | 0 | 2 | — | — |  |
-| 1506 | `0x10382f60` | — | 1 | 0 | 2 | — | — |  |
-| 1507 | `0x10388ad0` | `CNPC_VHunter#432` | 3 | 0 | 0 | — | — |  |
-| 1508 | `0x1038e990` | `CNPC_VManBat#432` | 3 | 0 | 0 | — | — |  |
-| 1509 | `0x1038f430` | — | 1 | 2 | 0 | `phys_animlink`, `Bip01 R Foot` | — |  |
-| 1510 | `0x1038fd40` | — | 2 | 0 | 1 | `ManBat_Minion` | — |  |
-| 1511 | `0x10390890` | — | 1 | 2 | 0 | — | — |  |
-| 1512 | `0x10394970` | `CNPC_VMingXiao#432` | 3 | 0 | 0 | — | — |  |
-| 1513 | `0x10395ce0` | — | 2 | 0 | 1 | — | — |  |
-| 1514 | `0x10397a50` | — | 1 | 1 | 1 | — | — |  |
-| 1515 | `0x10397b40` | — | 1 | 0 | 2 | — | — |  |
-| 1516 | `0x10397f70` | — | 2 | 0 | 1 | — | — |  |
-| 1517 | `0x103986b0` | — | 3 | 0 | 0 | — | — |  |
-| 1518 | `0x10398b20` | — | 1 | 0 | 2 | `Pedestal` | — |  |
-| 1519 | `0x103999f0` | — | 1 | 0 | 2 | — | — |  |
-| 1520 | `0x1039ab10` | — | 2 | 0 | 1 | — | — |  |
-| 1521 | `0x1039e890` | `CNPC_VMingXiaoTentacle#390` | 0 | 3 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
-| 1522 | `0x1039ea60` | — | 2 | 0 | 1 | — | — |  |
-| 1523 | `0x1039f310` | — | 2 | 0 | 1 | — | — |  |
-| 1524 | `0x1039fe30` | `CNPC_VMoleman#432` | 3 | 0 | 0 | — | — |  |
-| 1525 | `0x103a0030` | `CNPC_VNewscaster#490` | 3 | 0 | 0 | — | — |  |
-| 1526 | `0x103a0070` | `CNPC_VNewscaster#492` | 3 | 0 | 0 | — | — |  |
-| 1527 | `0x103a1de0` | `CNPC_VPedestrian#550` | 3 | 0 | 0 | — | — |  |
-| 1528 | `0x103a4770` | `CNPC_VFrenzyShadow#490`, `CNPC_VPlayerController#490`, +1 more | 3 | 0 | 0 | — | — |  |
-| 1529 | `0x103a47b0` | `CNPC_VFrenzyShadow#492`, `CNPC_VPlayerController#492`, +1 more | 3 | 0 | 0 | — | — |  |
-| 1530 | `0x103a4870` | `CNPC_VFrenzyShadow#432`, `CNPC_VPlayerController#432`, +1 more | 3 | 0 | 0 | — | — |  |
-| 1531 | `0x103ae7f0` | `CNPC_VSheriffMan#127` | 0 | 3 | 0 | `npc_VSheriffMan`, `models/character/monster/manbat/manbat.m…` | — |  |
-| 1532 | `0x103b2470` | `CNPC_VSheriffSwarm#432` | 3 | 0 | 0 | — | — |  |
-| 1533 | `0x103b3650` | `CNPC_VTaxiDriver#432` | 3 | 0 | 0 | — | — |  |
-| 1534 | `0x103b4320` | `CNPC_VTest#488` | 2 | 0 | 1 | — | — |  |
-| 1535 | `0x103b4490` | `CNPC_VTest#489` | 2 | 0 | 1 | — | — |  |
-| 1536 | `0x103b4780` | `CNPC_VTest#491` | 2 | 0 | 1 | — | — |  |
-| 1537 | `0x103b51a0` | `CNPC_VTest#432` | 3 | 0 | 0 | — | — |  |
-| 1538 | `0x103b6e30` | `CNPC_VTzimisce#550` | 3 | 0 | 0 | — | — |  |
-| 1539 | `0x103b95e0` | `CNPC_VTzimisce#492` | 3 | 0 | 0 | — | — |  |
-| 1540 | `0x103b9f50` | — | 2 | 1 | 0 | — | — |  |
-| 1541 | `0x103bdef0` | `CNPC_VTzimisce#432` | 3 | 0 | 0 | — | — |  |
-| 1542 | `0x103be090` | — | 2 | 0 | 1 | — | — |  |
-| 1543 | `0x103be150` | — | 2 | 0 | 1 | — | — |  |
-| 1544 | `0x103be530` | — | 1 | 2 | 0 | — | — |  |
-| 1545 | `0x103be630` | — | 1 | 0 | 2 | — | — |  |
-| 1546 | `0x103bef20` | — | 1 | 1 | 1 | `phys_animlink`, `Bip01 R Finger1` | — |  |
-| 1547 | `0x103bf3c0` | — | 1 | 0 | 2 | — | — |  |
-| 1548 | `0x103bf440` | — | 1 | 0 | 2 | — | — |  |
-| 1549 | `0x103bf660` | — | 3 | 0 | 0 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
-| 1550 | `0x103bfc20` | — | 3 | 0 | 0 | — | — |  |
-| 1551 | `0x103bfd80` | `CNPC_VTzimisce#389` | 1 | 0 | 2 | — | — |  |
-| 1552 | `0x103c19e0` | `CNPC_VTzimisceHeadClaw#599` | 0 | 2 | 1 | — | — |  |
-| 1553 | `0x103c1d20` | `CNPC_VTzimisceHeadClaw#432` | 3 | 0 | 0 | — | — |  |
-| 1554 | `0x103c24a0` | — | 2 | 0 | 1 | — | — |  |
-| 1555 | `0x103c3960` | `CNPC_VTzimisceRunner#599` | 0 | 2 | 1 | — | — |  |
-| 1556 | `0x103c67f0` | — | 2 | 0 | 1 | — | — |  |
-| 1557 | `0x103cade0` | — | 1 | 2 | 0 | `rotdoor2`, `rotdoor1`, +1 more | — |  |
-| 1558 | `0x103d0ad0` | — | 3 | 0 | 0 | `GetNearestNode failed⏎` | — |  |
-| 1559 | `0x103d87a0` | `CNPC_VWerewolf#491` | 2 | 0 | 1 | `NULL ENTITY`, `CNPC_VWerewolf::ExertHvySound` | — |  |
-| 1560 | `0x103dc1d0` | — | 1 | 2 | 0 | — | — |  |
-| 1561 | `0x103dc390` | — | 3 | 0 | 0 | — | — |  |
-| 1562 | `0x103dd7a0` | `CNPC_VYukie#432` | 3 | 0 | 0 | — | — |  |
-| 1563 | `0x10408220` | — | 1 | 0 | 2 | — | — |  |
-| 1564 | `0x10411f90` | — | 3 | 0 | 0 | `// *⏎`, `// **⏎`, +10 more | — |  |
-| 1565 | `0x10432449` | — | 3 | 0 | 0 | — | — |  |
-| 1566 | `0x10432520` | — | 3 | 0 | 0 | — | — |  |
-| 1567 | `0x1043893c` | — | 3 | 0 | 0 | — | — |  |
-| 1568 | `0x10439f2d` | — | 3 | 0 | 0 | — | — |  |
-| 1569 | `0x10026a10` | `CAISound#63`, `CAI_BaseHumanoid#63`, +495 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#63 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 1570 | `0x10026bd0` | `CAISound#112`, `CAI_BaseHumanoid#112`, +493 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#112 no SDK twin: stretch #107-#113 holds 5 retai…` |
-| 1571 | `0x10026c70` | `CAISound#134`, `CAI_BaseHumanoid#134`, +468 more | 0 | 0 | 2 | `CBaseEntity::Think`, `NULL ENTITY` | — | `CAI_BaseNPC#134 slot identity: CBaseEntity#134 is Remove, bu…` |
-| 1572 | `0x10026e70` | `CAISound#153`, `CAI_ChangeHintGroup#153`, +417 more | 1 | 0 | 1 | — | — |  |
-| 1573 | `0x10027000` | `CAISound#167`, `CAI_ChangeHintGroup#167`, +416 more | 2 | 0 | 0 | — | — |  |
-| 1574 | `0x10027610` | `CAISound#2`, `CAI_BaseHumanoid#2`, +495 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#2 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
-| 1575 | `0x10055000` | — | 1 | 0 | 1 | — | — |  |
-| 1576 | `0x1006ca50` | — | 1 | 0 | 1 | — | — |  |
-| 1577 | `0x1006cba0` | — | 1 | 0 | 1 | — | — |  |
-| 1578 | `0x1006edb0` | — | 1 | 0 | 1 | — | — |  |
-| 1579 | `0x10071ba0` | — | 1 | 0 | 1 | — | — |  |
-| 1580 | `0x10073b00` | — | 1 | 0 | 1 | — | — |  |
-| 1581 | `0x10074050` | — | 1 | 0 | 1 | — | — |  |
-| 1582 | `0x10074070` | — | 2 | 0 | 0 | — | — |  |
-| 1583 | `0x100740d0` | — | 1 | 0 | 1 | — | — |  |
-| 1584 | `0x10074160` | — | 1 | 0 | 1 | — | — |  |
-| 1585 | `0x100742b0` | — | 1 | 0 | 1 | — | — |  |
-| 1586 | `0x100749a0` | — | 1 | 0 | 1 | — | — |  |
-| 1587 | `0x10075c50` | — | 2 | 0 | 0 | — | — |  |
-| 1588 | `0x10075ca0` | — | 2 | 0 | 0 | — | — |  |
-| 1589 | `0x100766d0` | — | 1 | 0 | 1 | — | — |  |
-| 1590 | `0x10077710` | — | 1 | 0 | 1 | — | — |  |
-| 1591 | `0x10077730` | — | 1 | 1 | 0 | — | — |  |
-| 1592 | `0x10077ac0` | — | 2 | 0 | 0 | — | — |  |
-| 1593 | `0x10077f10` | — | 2 | 0 | 0 | — | — |  |
-| 1594 | `0x10078630` | — | 1 | 0 | 1 | — | — |  |
-| 1595 | `0x10081980` | — | 1 | 0 | 1 | — | — |  |
-| 1596 | `0x10082e40` | — | 1 | 0 | 1 | — | — |  |
-| 1597 | `0x10095be0` | — | 1 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::InitBoneControllers ` | — |  |
-| 1598 | `0x10099020` | `CAI_BaseHumanoid#268`, `CAI_BaseNPC#268`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#268 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1599 | `0x10099250` | — | 2 | 0 | 0 | — | — |  |
-| 1600 | `0x10099570` | `CAI_BaseHumanoid#273`, `CAI_BaseNPC#273`, +85 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#273 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1601 | `0x10099630` | `CAI_BaseHumanoid#275`, `CAI_BaseNPC#275`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#275 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1602 | `0x10099660` | `CAI_BaseHumanoid#269`, `CAI_BaseNPC#269`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#269 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1603 | `0x1009b500` | `CAISound#20`, `CAI_BaseHumanoid#20`, +431 more | 1 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessageBare` | — | `CAI_BaseNPC#20 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 1604 | `0x1009c390` | — | 1 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::` | — |  |
-| 1605 | `0x100a4fe0` | `CAISound#39`, `CAI_BaseHumanoid#39`, +474 more | 0 | 1 | 1 | — | — | `CAI_BaseNPC#39 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 1606 | `0x100b50a0` | `CAISound#164`, `CAI_BaseHumanoid#164`, +495 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#164 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 1607 | `0x100b5b40` | `CAI_BaseHumanoid#278`, `CAI_BaseNPC#278`, +84 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#278 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 1608 | `0x100b5b60` | `CAI_BaseHumanoid#280`, `CAI_BaseNPC#280`, +84 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#280 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 1609 | `0x100b68d0` | — | 2 | 0 | 0 | — | — |  |
-| 1610 | `0x100c1230` | — | 2 | 0 | 0 | — | — |  |
-| 1611 | `0x100c13a0` | — | 2 | 0 | 0 | — | — |  |
-| 1612 | `0x100c1c60` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:105, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:878, Source/ElysiumUE/Private/Visual/ElysiumBlendGrids.cpp:635, +2 more |  |
-| 1613 | `0x100c73b0` | — | 2 | 0 | 0 | — | — |  |
-| 1614 | `0x100c7480` | — | 2 | 0 | 0 | — | — |  |
-| 1615 | `0x100c7f30` | — | 1 | 0 | 1 | — | — |  |
-| 1616 | `0x100cd240` | — | 2 | 0 | 0 | — | — |  |
-| 1617 | `0x100cd260` | — | 1 | 0 | 1 | — | — |  |
-| 1618 | `0x100cd640` | — | 2 | 0 | 0 | — | — |  |
-| 1619 | `0x100cdf10` | — | 2 | 0 | 0 | — | — |  |
-| 1620 | `0x100ce600` | — | 1 | 0 | 1 | — | — |  |
-| 1621 | `0x100d1590` | — | 2 | 0 | 0 | — | — |  |
-| 1622 | `0x100d15d0` | — | 2 | 0 | 0 | — | — |  |
-| 1623 | `0x100ddbd0` | — | 1 | 1 | 0 | — | — |  |
-| 1624 | `0x100ddd20` | — | 1 | 0 | 1 | — | — |  |
-| 1625 | `0x100df030` | — | 2 | 0 | 0 | — | — |  |
-| 1626 | `0x100df240` | — | 2 | 0 | 0 | `starting_condition`, `starting-condition`, +1 more | — |  |
-| 1627 | `0x100e1580` | — | 2 | 0 | 0 | — | — |  |
-| 1628 | `0x100e49b0` | — | 1 | 0 | 1 | `Dialog_Dementation_Victim_Emitter`, `Dialog_Domination_Victim_Emitter`, +1 more | — |  |
-| 1629 | `0x100e4ef0` | — | 1 | 0 | 1 | — | — |  |
-| 1630 | `0x100eb3d0` | — | 1 | 0 | 1 | — | — |  |
-| 1631 | `0x100ec640` | — | 2 | 0 | 0 | `stance_%s_trans_%d_%d`, `stance_%s_fidget_%d`, +5 more | — |  |
-| 1632 | `0x100ed460` | — | 1 | 0 | 1 | — | — |  |
-| 1633 | `0x100eef10` | — | 1 | 0 | 1 | — | — |  |
-| 1634 | `0x100f0e70` | — | 1 | 1 | 0 | — | — |  |
-| 1635 | `0x100f0ec0` | — | 1 | 0 | 1 | — | — |  |
-| 1636 | `0x100f7d50` | — | 2 | 0 | 0 | — | — |  |
-| 1637 | `0x100fb7d0` | `CAuspexAura#242`, `CDisciplineParticle#242`, +5 more | 2 | 0 | 0 | — | — |  |
-| 1638 | `0x100fbac0` | — | 2 | 0 | 0 | — | — |  |
-| 1639 | `0x1011e010` | — | 2 | 0 | 0 | — | — |  |
-| 1640 | `0x10129dc0` | — | 1 | 0 | 1 | `models/gibs/hgibs.mdl`, `CBaseEntity::Instance`, +2 more | — |  |
-| 1641 | `0x10138460` | — | 2 | 0 | 0 | — | — |  |
-| 1642 | `0x10138600` | — | 2 | 0 | 0 | — | — |  |
-| 1643 | `0x10138760` | — | 2 | 0 | 0 | — | — |  |
-| 1644 | `0x10138a90` | — | 2 | 0 | 0 | — | — |  |
-| 1645 | `0x10138df0` | — | 2 | 0 | 0 | — | — |  |
-| 1646 | `0x10139a90` | — | 2 | 0 | 0 | — | — |  |
-| 1647 | `0x10139b50` | — | 2 | 0 | 0 | — | — |  |
-| 1648 | `0x1013aab0` | — | 2 | 0 | 0 | — | — |  |
-| 1649 | `0x1013ad40` | — | 2 | 0 | 0 | — | — |  |
-| 1650 | `0x1013b090` | — | 2 | 0 | 0 | — | — |  |
-| 1651 | `0x1013b390` | — | 2 | 0 | 0 | — | — |  |
-| 1652 | `0x1013bd20` | — | 2 | 0 | 0 | — | — |  |
-| 1653 | `0x1013d650` | — | 2 | 0 | 0 | — | — |  |
-| 1654 | `0x10144db0` | — | 2 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 1655 | `0x1014f7f0` | `CAI_BaseHumanoid#324`, `CAI_BaseNPC#324`, +80 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#324 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 1656 | `0x1014f810` | `CAI_BaseHumanoid#325`, `CAI_BaseNPC#325`, +80 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#325 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 1657 | `0x1014f970` | `CBaseCombatCharacter#372`, `CBaseGrenade#372`, +5 more | 1 | 0 | 1 | — | — |  |
-| 1658 | `0x1014f9a0` | `CBaseCombatCharacter#373`, `CBaseGrenade#373`, +5 more | 1 | 0 | 1 | — | — |  |
-| 1659 | `0x10155460` | — | 1 | 1 | 0 | — | — |  |
-| 1660 | `0x10157890` | — | 1 | 1 | 0 | — | — |  |
-| 1661 | `0x101578b0` | — | 1 | 0 | 1 | — | — |  |
-| 1662 | `0x10157910` | — | 1 | 1 | 0 | — | — |  |
-| 1663 | `0x10160680` | — | 1 | 0 | 1 | — | — |  |
-| 1664 | `0x10161ed0` | — | 1 | 0 | 1 | — | — |  |
-| 1665 | `0x10167fd0` | — | 1 | 0 | 1 | — | — |  |
-| 1666 | `0x10172710` | — | 2 | 0 | 0 | — | — |  |
-| 1667 | `0x10175400` | — | 1 | 0 | 1 | — | — |  |
-| 1668 | `0x101764d0` | — | 2 | 0 | 0 | — | — |  |
-| 1669 | `0x1017d630` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:151 |  |
-| 1670 | `0x1017d680` | — | 1 | 0 | 1 | — | — |  |
-| 1671 | `0x1017deb0` | — | 2 | 0 | 0 | — | — |  |
-| 1672 | `0x1017f8b0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1451, Source/ElysiumUE/Public/ElysiumPlayer.h:2287 |  |
-| 1673 | `0x1017f980` | — | 1 | 1 | 0 | — | — |  |
-| 1674 | `0x101800a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:764, Source/ElysiumUE/Public/ElysiumPlayer.h:2114 |  |
-| 1675 | `0x10182e00` | — | 2 | 0 | 0 | — | — |  |
-| 1676 | `0x1018e790` | — | 1 | 0 | 1 | `activity_copy_prop` | — |  |
-| 1677 | `0x1018f690` | — | 1 | 1 | 0 | `Invalid collision type %d set on : %s⏎` | — |  |
-| 1678 | `0x1018f700` | — | 1 | 1 | 0 | — | — |  |
-| 1679 | `0x10190e50` | — | 1 | 0 | 1 | `prop_dynamic_ornament`, `Could not create ornament prop model: %s…` | Source/ElysiumUE/Private/Visual/ElysiumNpcVisual.cpp:573 |  |
-| 1680 | `0x10194e40` | — | 1 | 0 | 1 | — | — |  |
-| 1681 | `0x1019d1c0` | — | 2 | 0 | 0 | — | — |  |
-| 1682 | `0x101a6500` | `CAI_BaseHumanoid#419`, `CAI_BaseNPC#419`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#419 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 1683 | `0x101a6780` | `CAI_BaseHumanoid#468`, `CAI_BaseNPC#468`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#468 no SDK twin: stretch #467-#469 holds 1 retai…` |
-| 1684 | `0x101a6920` | `CAI_BaseHumanoid#493`, `CAI_BaseNPC#493`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#493 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1685 | `0x101a6940` | `CAI_BaseHumanoid#494`, `CAI_BaseNPC#494`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#494 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1686 | `0x101a69e0` | `CAI_BaseHumanoid#499`, `CAI_BaseNPC#499`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#499 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1687 | `0x101a6a60` | `CAI_BaseHumanoid#503`, `CAI_BaseNPC#503`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#503 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1688 | `0x101a6a80` | `CAI_BaseHumanoid#504`, `CAI_BaseNPC#504`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#504 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1689 | `0x101a6c00` | `CAI_BaseHumanoid#546`, `CAI_BaseNPC#546`, +15 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#546 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 1690 | `0x101a6ca0` | `CAI_BaseHumanoid#565`, `CAI_BaseNPC#565`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#565 no SDK twin: stretch #560-#566 holds 5 retai…` |
-| 1691 | `0x101a6e40` | `CCineNPC#5` | 0 | 0 | 2 | — | — |  |
-| 1692 | `0x101a7170` | — | 2 | 0 | 0 | — | — |  |
-| 1693 | `0x101a7210` | `CCineNPC#585` | 1 | 0 | 1 | — | — |  |
-| 1694 | `0x101a7230` | — | 1 | 0 | 1 | — | — |  |
-| 1695 | `0x101a77a0` | — | 2 | 0 | 0 | `I like story time.⏎`, `Like story time.⏎`, +7 more | — |  |
-| 1696 | `0x101a8130` | — | 1 | 0 | 1 | — | — |  |
-| 1697 | `0x101a9510` | `CCineAI#584` | 2 | 0 | 0 | `%s: unknown aiscripted sequence "%s"⏎` | — |  |
-| 1698 | `0x101aa5f0` | `CAI_BaseNPCTroika#476`, `CGeneric_NPC#476`, +62 more | 2 | 0 | 0 | — | — |  |
-| 1699 | `0x101aa690` | `CAI_BaseNPCTroika#591`, `CGeneric_NPC#591`, +62 more | 2 | 0 | 0 | — | — |  |
-| 1700 | `0x101aa6f0` | `CAI_BaseNPCTroika#413`, `CGeneric_NPC#413`, +62 more | 1 | 0 | 1 | — | — |  |
-| 1701 | `0x101ab060` | `CCineAI#5` | 0 | 0 | 2 | — | — |  |
-| 1702 | `0x101b0d80` | — | 1 | 0 | 1 | — | — |  |
-| 1703 | `0x101b3b90` | — | 2 | 0 | 0 | — | — |  |
-| 1704 | `0x101b78f0` | — | 1 | 0 | 1 | — | — |  |
-| 1705 | `0x101b9840` | — | 1 | 0 | 1 | — | — |  |
-| 1706 | `0x101b9880` | — | 1 | 1 | 0 | — | — |  |
-| 1707 | `0x101b99a0` | — | 1 | 0 | 1 | — | — |  |
-| 1708 | `0x101babc0` | — | 2 | 0 | 0 | `Could not AllocSound() for InsertSound()…` | — |  |
-| 1709 | `0x101beed0` | — | 2 | 0 | 0 | — | — |  |
-| 1710 | `0x101c02d0` | — | 1 | 0 | 1 | — | — |  |
-| 1711 | `0x101c1480` | `CAI_BaseHumanoid#110`, `CAI_BaseNPC#110`, +331 more | 0 | 2 | 0 | `distance` | — | `CAI_BaseNPC#110 no SDK twin: stretch #107-#113 holds 5 retai…` |
-| 1712 | `0x101c1790` | — | 1 | 0 | 1 | — | — |  |
-| 1713 | `0x101c2690` | — | 2 | 0 | 0 | — | — |  |
-| 1714 | `0x101c2a70` | — | 1 | 0 | 1 | — | — |  |
-| 1715 | `0x101ccc80` | — | 2 | 0 | 0 | — | — |  |
-| 1716 | `0x101ccec0` | — | 1 | 1 | 0 | — | — |  |
-| 1717 | `0x101cd8c0` | — | 1 | 0 | 1 | — | — |  |
-| 1718 | `0x101ce290` | — | 2 | 0 | 0 | — | — |  |
-| 1719 | `0x101ce620` | — | 2 | 0 | 0 | — | — |  |
-| 1720 | `0x101cee20` | — | 2 | 0 | 0 | — | — |  |
-| 1721 | `0x101cf9b0` | — | 2 | 0 | 0 | `violence_ablood`, `violence_hblood` | — |  |
-| 1722 | `0x101cfef0` | — | 2 | 0 | 0 | — | — |  |
-| 1723 | `0x101d03e0` | — | 2 | 0 | 0 | — | — |  |
-| 1724 | `0x101d0630` | — | 2 | 0 | 0 | — | — |  |
-| 1725 | `0x101d08e0` | — | 2 | 0 | 0 | — | — |  |
-| 1726 | `0x101d1120` | — | 2 | 0 | 0 | — | — |  |
-| 1727 | `0x101d2850` | — | 2 | 0 | 0 | `__main__` | — |  |
-| 1728 | `0x101d8720` | — | 1 | 0 | 1 | — | — |  |
-| 1729 | `0x101d8770` | — | 1 | 0 | 1 | — | — |  |
-| 1730 | `0x101d9610` | — | 1 | 0 | 1 | — | — |  |
-| 1731 | `0x101d9640` | — | 1 | 0 | 1 | — | — |  |
-| 1732 | `0x101d96a0` | — | 1 | 0 | 1 | — | — |  |
-| 1733 | `0x101d96d0` | — | 1 | 0 | 1 | — | — |  |
-| 1734 | `0x101da980` | — | 2 | 0 | 0 | — | — |  |
-| 1735 | `0x101daf60` | — | 1 | 0 | 1 | — | — |  |
-| 1736 | `0x101db410` | — | 1 | 0 | 1 | — | — |  |
-| 1737 | `0x101db960` | — | 1 | 0 | 1 | — | — |  |
-| 1738 | `0x101dbed0` | — | 1 | 0 | 1 | `Discipline<%s>: Sound Play: '%s' on %s (…` | — |  |
-| 1739 | `0x101dc0b0` | — | 1 | 0 | 1 | — | — |  |
-| 1740 | `0x101dda30` | — | 2 | 0 | 0 | — | — |  |
-| 1741 | `0x101ddaf0` | — | 2 | 0 | 0 | — | — |  |
-| 1742 | `0x101de2f0` | — | 1 | 0 | 1 | `Discipline<> DoDamage (%d) on %s (%s)⏎` | — |  |
-| 1743 | `0x101dfe20` | — | 1 | 0 | 1 | — | — |  |
-| 1744 | `0x101dfe50` | — | 1 | 0 | 1 | — | — |  |
-| 1745 | `0x101e22b0` | — | 1 | 0 | 1 | — | — |  |
-| 1746 | `0x101e3310` | — | 1 | 0 | 1 | `ERROR: ActivateEffect_Trigger Failed: Co…` | — |  |
-| 1747 | `0x101e34c0` | — | 1 | 0 | 1 | — | — |  |
-| 1748 | `0x101e3850` | — | 1 | 0 | 1 | `Discipline<%s> Hit⏎` | — |  |
-| 1749 | `0x101e3910` | — | 1 | 0 | 1 | `Discipline<%s> CallbackHit⏎` | Source/ElysiumUE/Private/Substrate/ElysiumAnimEvents.h:57, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1564 |  |
-| 1750 | `0x101e3be0` | — | 2 | 0 | 0 | — | — |  |
-| 1751 | `0x101e3c10` | — | 1 | 0 | 1 | `ERROR: RemoveTgtEffect Failed -- FX: %s!…` | — |  |
-| 1752 | `0x101e3ee0` | — | 1 | 0 | 1 | — | — |  |
-| 1753 | `0x101e3f50` | — | 2 | 0 | 0 | — | — |  |
-| 1754 | `0x101e4220` | — | 1 | 0 | 1 | `CVTgt_DisciplineFXMgr_t::UpdateSupernatu…`, `Thaumaturgy_Bloodshield` | — |  |
-| 1755 | `0x101e44c0` | — | 1 | 0 | 1 | — | — |  |
-| 1756 | `0x101e49b0` | — | 1 | 0 | 1 | — | — |  |
-| 1757 | `0x101e8b30` | — | 1 | 0 | 1 | — | — |  |
-| 1758 | `0x101e8bf0` | — | 1 | 0 | 1 | — | — |  |
-| 1759 | `0x101e8c10` | — | 1 | 0 | 1 | — | — |  |
-| 1760 | `0x101e8c50` | — | 1 | 0 | 1 | — | — |  |
-| 1761 | `0x101e8c70` | — | 1 | 0 | 1 | — | — |  |
-| 1762 | `0x101e8dc0` | — | 1 | 0 | 1 | — | — |  |
-| 1763 | `0x101e8de0` | — | 1 | 0 | 1 | — | — |  |
-| 1764 | `0x101e8e00` | — | 1 | 0 | 1 | — | — |  |
-| 1765 | `0x101e8e20` | — | 1 | 0 | 1 | — | — |  |
-| 1766 | `0x101e8e40` | — | 1 | 0 | 1 | — | — |  |
-| 1767 | `0x101e8e60` | — | 1 | 0 | 1 | — | — |  |
-| 1768 | `0x101e8fe0` | — | 1 | 0 | 1 | — | — |  |
-| 1769 | `0x101e9000` | — | 1 | 0 | 1 | — | — |  |
-| 1770 | `0x101e9040` | — | 1 | 0 | 1 | — | — |  |
-| 1771 | `0x101e9060` | — | 1 | 0 | 1 | — | — |  |
-| 1772 | `0x101e90f0` | — | 1 | 0 | 1 | — | — |  |
-| 1773 | `0x101e9170` | — | 1 | 0 | 1 | — | — |  |
-| 1774 | `0x101e9470` | — | 1 | 0 | 1 | — | — |  |
-| 1775 | `0x101e9f10` | — | 1 | 0 | 1 | — | — |  |
-| 1776 | `0x101ea0b0` | — | 2 | 0 | 0 | — | — |  |
-| 1777 | `0x101eb190` | — | 1 | 0 | 1 | — | — |  |
-| 1778 | `0x101ef900` | — | 2 | 0 | 0 | `vampireprojectile` | — |  |
-| 1779 | `0x101f1d80` | — | 2 | 0 | 0 | — | — |  |
-| 1780 | `0x101f2cd0` | — | 1 | 1 | 0 | — | — |  |
-| 1781 | `0x101f2f30` | — | 2 | 0 | 0 | — | — |  |
-| 1782 | `0x101f2f70` | — | 2 | 0 | 0 | — | — |  |
-| 1783 | `0x101f42a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:121, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:34, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:193 |  |
-| 1784 | `0x101f42d0` | — | 1 | 0 | 1 | — | — |  |
-| 1785 | `0x101f4530` | — | 1 | 0 | 1 | — | — |  |
-| 1786 | `0x101f9a80` | — | 2 | 0 | 0 | — | — |  |
-| 1787 | `0x101f9af0` | — | 2 | 0 | 0 | — | — |  |
-| 1788 | `0x101f9bf0` | — | 2 | 0 | 0 | — | — |  |
-| 1789 | `0x10204250` | — | 2 | 0 | 0 | — | — |  |
-| 1790 | `0x10204ad0` | — | 1 | 0 | 1 | — | — |  |
-| 1791 | `0x10207dd0` | — | 2 | 0 | 0 | — | — |  |
-| 1792 | `0x10207e60` | — | 2 | 0 | 0 | — | — |  |
-| 1793 | `0x10224100` | — | 1 | 0 | 1 | — | — |  |
-| 1794 | `0x102271d0` | — | 1 | 0 | 1 | — | — |  |
-| 1795 | `0x10230260` | — | 2 | 0 | 0 | — | — |  |
-| 1796 | `0x10230880` | — | 1 | 0 | 1 | — | — |  |
-| 1797 | `0x1023b570` | — | 1 | 0 | 1 | — | — |  |
-| 1798 | `0x1023e4b0` | — | 2 | 0 | 0 | — | — |  |
-| 1799 | `0x1023f040` | — | 2 | 0 | 0 | — | — |  |
-| 1800 | `0x1023f060` | — | 2 | 0 | 0 | — | — |  |
-| 1801 | `0x1023f0c0` | — | 2 | 0 | 0 | — | — |  |
-| 1802 | `0x10240250` | — | 2 | 0 | 0 | — | — |  |
-| 1803 | `0x10240cb0` | — | 2 | 0 | 0 | — | — |  |
-| 1804 | `0x10245700` | — | 1 | 0 | 1 | — | — |  |
-| 1805 | `0x102457b0` | — | 1 | 0 | 1 | — | — |  |
-| 1806 | `0x10246270` | — | 1 | 0 | 1 | — | — |  |
-| 1807 | `0x1024c000` | — | 1 | 0 | 1 | — | — |  |
-| 1808 | `0x1024c0e0` | — | 1 | 0 | 1 | — | — |  |
-| 1809 | `0x1024c630` | — | 2 | 0 | 0 | — | — |  |
-| 1810 | `0x10252240` | — | 1 | 0 | 1 | — | — |  |
-| 1811 | `0x10252470` | — | 1 | 1 | 0 | — | — |  |
-| 1812 | `0x102525e0` | — | 1 | 0 | 1 | — | — |  |
-| 1813 | `0x10256200` | — | 1 | 0 | 1 | — | — |  |
-| 1814 | `0x10256280` | — | 2 | 0 | 0 | — | — |  |
-| 1815 | `0x102577e0` | — | 2 | 0 | 0 | — | — |  |
-| 1816 | `0x10258270` | — | 2 | 0 | 0 | — | — |  |
-| 1817 | `0x102585c0` | — | 2 | 0 | 0 | — | — |  |
-| 1818 | `0x1025efc0` | — | 1 | 0 | 1 | — | — |  |
-| 1819 | `0x10260750` | — | 1 | 1 | 0 | — | — |  |
-| 1820 | `0x10260820` | — | 1 | 0 | 1 | — | — |  |
-| 1821 | `0x10260da0` | `CAI_BaseHumanoid#512`, `CAI_ExpressiveNPC#512` | 1 | 0 | 1 | — | — |  |
-| 1822 | `0x102652f0` | — | 1 | 0 | 1 | — | — |  |
-| 1823 | `0x10265970` | — | 1 | 0 | 1 | — | — |  |
-| 1824 | `0x10266630` | `CAI_BaseHumanoid#576`, `CAI_BaseNPC#576`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#576 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1825 | `0x10266660` | `CAI_BaseHumanoid#577`, `CAI_BaseNPC#577`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#577 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1826 | `0x10268170` | — | 1 | 0 | 1 | — | — |  |
-| 1827 | `0x1026a8a0` | `CAI_BaseHumanoid#471`, `CAI_BaseNPC#471`, +73 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#471 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 1828 | `0x1026d920` | `CAI_BaseHumanoid#554`, `CAI_BaseNPC#554`, +72 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#554 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 1829 | `0x1026fb40` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:516, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:520 |  |
-| 1830 | `0x1026fbe0` | `CAI_BaseHumanoid#562`, `CAI_BaseNPC#562`, +75 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#562 no SDK twin: stretch #560-#566 holds 5 retai…` |
-| 1831 | `0x10270290` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:488, Source/ElysiumUE/Private/Visual/ElysiumNpcBody.h:175, Source/ElysiumUE/Public/ElysiumLocomotionSample.h:102 |  |
-| 1832 | `0x102718e0` | — | 2 | 0 | 0 | — | — |  |
-| 1833 | `0x10274b30` | `CAI_BaseHumanoid#515`, `CAI_BaseNPC#515`, +75 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#515 no SDK twin: stretch #513-#516 holds 2 retai…` |
-| 1834 | `0x102781a0` | — | 1 | 0 | 1 | — | — |  |
-| 1835 | `0x10278900` | `CAI_BaseHumanoid#574`, `CAI_BaseNPC#574`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#574 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1836 | `0x10279090` | `CAI_BaseHumanoid#559`, `CAI_BaseNPC#559`, +75 more | 1 | 0 | 1 | `Player`, `!target1`, +8 more | — | `CAI_BaseNPC#559 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 1837 | `0x1027be60` | — | 1 | 0 | 1 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Scripted Sequence stripped on level tran…` | — |  |
-| 1838 | `0x1027cc10` | `CAI_BaseHumanoid#425`, `CAI_BaseNPC#425`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#425 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 1839 | `0x1027cd50` | — | 1 | 1 | 0 | — | — |  |
-| 1840 | `0x1027cda0` | — | 1 | 1 | 0 | — | — |  |
-| 1841 | `0x1027cec0` | `CAI_BaseNPC#427`, `CAI_BaseNPCTroika#427`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#427 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 1842 | `0x1027cef0` | `CAI_BaseHumanoid#426`, `CAI_BaseNPC#426`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#426 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 1843 | `0x1027cf60` | `CAI_BaseHumanoid#428`, `CAI_BaseNPC#428`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#428 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 1844 | `0x1027cf90` | `CAI_BaseNPC#429`, `CAI_BaseNPCTroika#429`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#429 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 1845 | `0x1027cfc0` | `CAI_BaseHumanoid#430`, `CAI_BaseNPC#430`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#430 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 1846 | `0x1027ee20` | — | 2 | 0 | 0 | — | — |  |
-| 1847 | `0x1027fa50` | — | 1 | 0 | 1 | — | — |  |
-| 1848 | `0x1027fba0` | — | 1 | 0 | 1 | — | — |  |
-| 1849 | `0x1027fc10` | — | 1 | 1 | 0 | — | — |  |
-| 1850 | `0x10280790` | — | 2 | 0 | 0 | — | — |  |
-| 1851 | `0x10280a20` | — | 1 | 0 | 1 | — | — |  |
-| 1852 | `0x10280fd0` | `CAI_BaseHumanoid#411`, `CAI_BaseNPC#411`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#411 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 1853 | `0x10288590` | — | 2 | 0 | 0 | — | — |  |
-| 1854 | `0x10288610` | — | 1 | 0 | 1 | — | — |  |
-| 1855 | `0x102886f0` | — | 1 | 1 | 0 | — | — |  |
-| 1856 | `0x10289ce0` | `CAI_BaseHumanoid#571`, `CAI_BaseNPC#571`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#571 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1857 | `0x10289fe0` | — | 1 | 0 | 1 | — | — |  |
-| 1858 | `0x1028ac10` | — | 2 | 0 | 0 | — | — |  |
-| 1859 | `0x1028ac80` | — | 2 | 0 | 0 | — | — |  |
-| 1860 | `0x1028b160` | — | 1 | 0 | 1 | — | — |  |
-| 1861 | `0x1028b190` | — | 1 | 0 | 1 | — | — |  |
-| 1862 | `0x1028b420` | — | 1 | 0 | 1 | — | — |  |
-| 1863 | `0x1028dfb0` | `CAI_BaseNPCTroika#19`, `CGeneric_NPC#19`, +62 more | 2 | 0 | 0 | — | — |  |
-| 1864 | `0x1028e700` | — | 1 | 0 | 1 | — | — |  |
-| 1865 | `0x1028e870` | — | 1 | 0 | 1 | — | — |  |
-| 1866 | `0x1028e980` | — | 1 | 0 | 1 | — | — |  |
-| 1867 | `0x1028fa50` | — | 1 | 0 | 1 | — | — |  |
-| 1868 | `0x10293dc0` | — | 1 | 1 | 0 | — | — |  |
-| 1869 | `0x10293df0` | — | 1 | 1 | 0 | — | — |  |
-| 1870 | `0x10293e20` | — | 2 | 0 | 0 | — | — |  |
-| 1871 | `0x10293ec0` | `CAI_BaseNPCTroika#488`, `CNPCMaker#488`, +53 more | 2 | 0 | 0 | `Death` | — |  |
-| 1872 | `0x10293f80` | `CAI_BaseNPCTroika#489`, `CNPCMaker#489`, +53 more | 2 | 0 | 0 | `Target_Suspect` | — |  |
-| 1873 | `0x10294340` | `CAI_BaseNPCTroika#491`, `CNPCMaker#491`, +52 more | 2 | 0 | 0 | — | — |  |
-| 1874 | `0x10294660` | `CAI_BaseNPCTroika#495`, `CNPCMaker#495`, +53 more | 2 | 0 | 0 | `Surprised` | — |  |
-| 1875 | `0x10294870` | `CAI_BaseNPCTroika#498`, `CGeneric_NPC#498`, +60 more | 2 | 0 | 0 | — | — |  |
-| 1876 | `0x10295a80` | — | 1 | 0 | 1 | — | — |  |
-| 1877 | `0x10296820` | — | 1 | 1 | 0 | — | — |  |
-| 1878 | `0x10297430` | — | 1 | 0 | 1 | — | — |  |
-| 1879 | `0x102974f0` | — | 1 | 0 | 1 | — | — |  |
-| 1880 | `0x10298840` | — | 2 | 0 | 0 | — | — |  |
-| 1881 | `0x1029bd40` | — | 1 | 0 | 1 | — | — |  |
-| 1882 | `0x1029c9f0` | — | 2 | 0 | 0 | — | — |  |
-| 1883 | `0x1029ca30` | — | 2 | 0 | 0 | — | — |  |
-| 1884 | `0x1029f340` | — | 2 | 0 | 0 | — | — |  |
-| 1885 | `0x1029f370` | — | 1 | 0 | 1 | `ERROR: %s - Could not convert schedule '…`, `ERROR: %s - Could not find schedule '%s'…`, +2 more | — |  |
-| 1886 | `0x1029f610` | — | 1 | 0 | 1 | — | — |  |
-| 1887 | `0x1029f800` | `CAI_BaseNPCTroika#21`, `CGeneric_NPC#21`, +61 more | 0 | 1 | 1 | — | — |  |
-| 1888 | `0x1029f8f0` | `CAI_BaseNPCTroika#27`, `CGeneric_NPC#27`, +61 more | 1 | 0 | 1 | — | — |  |
-| 1889 | `0x102a0490` | — | 1 | 0 | 1 | — | — |  |
-| 1890 | `0x102a0bc0` | — | 1 | 0 | 1 | — | — |  |
-| 1891 | `0x102a1420` | — | 1 | 0 | 1 | — | — |  |
-| 1892 | `0x102a15c0` | — | 2 | 0 | 0 | — | — |  |
-| 1893 | `0x102a1620` | — | 2 | 0 | 0 | — | — |  |
-| 1894 | `0x102a18a0` | — | 1 | 1 | 0 | — | — |  |
-| 1895 | `0x102a9640` | — | 1 | 0 | 1 | — | — |  |
-| 1896 | `0x102a9690` | — | 1 | 1 | 0 | — | — |  |
-| 1897 | `0x102a96f0` | — | 1 | 0 | 1 | — | — |  |
-| 1898 | `0x102a9710` | — | 1 | 0 | 1 | — | — |  |
-| 1899 | `0x102a9730` | — | 1 | 0 | 1 | — | — |  |
-| 1900 | `0x102a9750` | — | 1 | 1 | 0 | — | — |  |
-| 1901 | `0x102a9770` | — | 1 | 0 | 1 | — | — |  |
-| 1902 | `0x102a9860` | — | 1 | 0 | 1 | — | — |  |
-| 1903 | `0x102a98c0` | — | 1 | 0 | 1 | — | — |  |
-| 1904 | `0x102a9940` | — | 1 | 1 | 0 | — | — |  |
-| 1905 | `0x102a9960` | — | 1 | 0 | 1 | — | — |  |
-| 1906 | `0x102a99a0` | — | 1 | 1 | 0 | — | — |  |
-| 1907 | `0x102a99c0` | — | 1 | 1 | 0 | — | — |  |
-| 1908 | `0x102a9c40` | — | 1 | 0 | 1 | — | — |  |
-| 1909 | `0x102a9c60` | — | 1 | 0 | 1 | — | — |  |
-| 1910 | `0x102a9e60` | — | 1 | 0 | 1 | — | — |  |
-| 1911 | `0x102a9e80` | — | 1 | 0 | 1 | — | — |  |
-| 1912 | `0x102a9ee0` | — | 1 | 0 | 1 | — | — |  |
-| 1913 | `0x102a9f20` | — | 1 | 0 | 1 | — | — |  |
-| 1914 | `0x102aaa60` | — | 1 | 0 | 1 | — | — |  |
-| 1915 | `0x102b50b0` | `CAI_BaseNPCTroika#54`, `CGeneric_NPC#54`, +62 more | 0 | 0 | 2 | — | — |  |
-| 1916 | `0x102b51e0` | `CAI_BaseNPCTroika#59`, `CGeneric_NPC#59`, +62 more | 0 | 2 | 0 | — | — |  |
-| 1917 | `0x102b5220` | `CAI_BaseNPCTroika#60`, `CGeneric_NPC#60`, +62 more | 0 | 2 | 0 | — | — |  |
-| 1918 | `0x102b5260` | `CAI_BaseNPCTroika#61`, `CGeneric_NPC#61`, +62 more | 0 | 2 | 0 | — | — |  |
-| 1919 | `0x102bf310` | — | 1 | 0 | 1 | `move_yaw` | — |  |
-| 1920 | `0x102bf510` | `CAI_BaseNPCTroika#466`, `CGeneric_NPC#466`, +62 more | 1 | 0 | 1 | — | — |  |
-| 1921 | `0x102bfe10` | — | 1 | 0 | 1 | `%s got below the ground by %f units.⏎`, `I'm floating....  Me llamo %s⏎` | — |  |
-| 1922 | `0x102c0470` | — | 1 | 1 | 0 | — | — |  |
-| 1923 | `0x102c4430` | — | 1 | 1 | 0 | — | — |  |
-| 1924 | `0x102c4470` | — | 1 | 1 | 0 | `!player` | — |  |
-| 1925 | `0x102c4c50` | — | 1 | 0 | 1 | — | — |  |
-| 1926 | `0x102c4e30` | — | 1 | 0 | 1 | — | — |  |
-| 1927 | `0x102c54c0` | — | 1 | 1 | 0 | — | — |  |
-| 1928 | `0x102c6bd0` | — | 1 | 1 | 0 | — | — |  |
-| 1929 | `0x102c6cf0` | — | 1 | 0 | 1 | — | — |  |
-| 1930 | `0x102c6db0` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#10` | 1 | 0 | 1 | — | — |  |
-| 1931 | `0x102c6eb0` | `CAI_StandoffBehavior#18`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#18` | 0 | 0 | 2 | `ERROR: %s missing schedule!⏎` | — |  |
-| 1932 | `0x102c6f70` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#22` | 1 | 0 | 1 | — | — |  |
-| 1933 | `0x102c6ff0` | — | 1 | 0 | 1 | — | — |  |
-| 1934 | `0x102c7390` | — | 1 | 1 | 0 | — | — |  |
-| 1935 | `0x102c7530` | `CAI_StandoffBehavior#5` | 0 | 0 | 2 | — | — |  |
-| 1936 | `0x102c87a0` | `CAI_StandoffGoal#241` | 0 | 1 | 1 | `Invalid aggressiveness value %d⏎` | — |  |
-| 1937 | `0x102c9d70` | — | 1 | 1 | 0 | — | — |  |
-| 1938 | `0x102ca6c0` | — | 1 | 0 | 1 | — | — |  |
-| 1939 | `0x102cabd0` | — | 1 | 0 | 1 | — | — |  |
-| 1940 | `0x102cc560` | — | 1 | 1 | 0 | — | — |  |
-| 1941 | `0x102cc5d0` | — | 1 | 1 | 0 | — | — |  |
-| 1942 | `0x102cc7e0` | — | 1 | 1 | 0 | — | — |  |
-| 1943 | `0x102d0910` | — | 1 | 0 | 1 | — | — |  |
-| 1944 | `0x102d09b0` | — | 2 | 0 | 0 | — | — |  |
-| 1945 | `0x102d0b20` | — | 1 | 1 | 0 | — | — |  |
-| 1946 | `0x102d11f0` | — | 2 | 0 | 0 | — | — |  |
-| 1947 | `0x102d1760` | — | 2 | 0 | 0 | — | — |  |
-| 1948 | `0x102d40e0` | — | 1 | 0 | 1 | — | — |  |
-| 1949 | `0x102d42d0` | — | 1 | 0 | 1 | — | — |  |
-| 1950 | `0x102d4350` | — | 2 | 0 | 0 | — | — |  |
-| 1951 | `0x102d6180` | — | 2 | 0 | 0 | — | — |  |
-| 1952 | `0x102d6210` | — | 2 | 0 | 0 | — | — |  |
-| 1953 | `0x102d9150` | — | 1 | 1 | 0 | — | — |  |
-| 1954 | `0x102d9dd0` | `CAI_InterestingPlace#130` | 0 | 1 | 1 | `Could not find InterestingPlaceType for …` | — |  |
-| 1955 | `0x102d9eb0` | — | 2 | 0 | 0 | — | — |  |
-| 1956 | `0x102dae70` | — | 1 | 0 | 1 | — | — |  |
-| 1957 | `0x102daef0` | — | 1 | 0 | 1 | — | — |  |
-| 1958 | `0x102daf20` | — | 1 | 0 | 1 | — | — |  |
-| 1959 | `0x102daf50` | — | 1 | 0 | 1 | — | — |  |
-| 1960 | `0x102db740` | — | 1 | 1 | 0 | — | — |  |
-| 1961 | `0x102db760` | — | 1 | 0 | 1 | — | — |  |
-| 1962 | `0x102dbde0` | `CAI_InterestingPlaceConverstation#113` | 0 | 1 | 1 | `%s(%s) is not a valid target for %s. Mus…` | — |  |
-| 1963 | `0x102dc3e0` | — | 1 | 1 | 0 | — | — |  |
-| 1964 | `0x102dce10` | — | 1 | 1 | 0 | — | — |  |
-| 1965 | `0x102dce30` | — | 1 | 0 | 1 | — | — |  |
-| 1966 | `0x102dd610` | — | 1 | 0 | 1 | — | — |  |
-| 1967 | `0x102dd9c0` | — | 2 | 0 | 0 | — | — |  |
-| 1968 | `0x102e0b60` | — | 1 | 0 | 1 | — | — |  |
-| 1969 | `0x102e11f0` | `CAI_HumanoidMotor#7`, `CAI_Motor#7` | 0 | 1 | 1 | — | — |  |
-| 1970 | `0x102e12e0` | — | 1 | 0 | 1 | — | — |  |
-| 1971 | `0x102e1440` | `CAI_Motor#10` | 0 | 0 | 2 | — | — |  |
-| 1972 | `0x102e2580` | `CAI_HumanoidMotor#17`, `CAI_Motor#17` | 0 | 0 | 2 | — | — |  |
-| 1973 | `0x102e2610` | — | 1 | 0 | 1 | — | — |  |
-| 1974 | `0x102e26b0` | — | 1 | 0 | 1 | — | — |  |
-| 1975 | `0x102e26f0` | — | 1 | 0 | 1 | — | — |  |
-| 1976 | `0x102e2790` | — | 1 | 0 | 1 | — | — |  |
-| 1977 | `0x102e27d0` | — | 1 | 0 | 1 | — | — |  |
-| 1978 | `0x102e2820` | — | 1 | 0 | 1 | — | — |  |
-| 1979 | `0x102e2b10` | — | 1 | 0 | 1 | — | — |  |
-| 1980 | `0x102e37b0` | — | 1 | 0 | 1 | — | — |  |
-| 1981 | `0x102e4160` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Motor_CheckStep_Stand`, +5 more | — |  |
-| 1982 | `0x102e4f20` | — | 1 | 1 | 0 | — | — |  |
-| 1983 | `0x102e5d00` | — | 2 | 0 | 0 | — | — |  |
-| 1984 | `0x102e6090` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | — |  |
-| 1985 | `0x102e6290` | — | 1 | 0 | 1 | `Unaccounted`, `CBaseEntity::Instance`, +1 more | — |  |
-| 1986 | `0x102e6be0` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | — |  |
-| 1987 | `0x102e7ba0` | — | 2 | 0 | 0 | `Unaccounted`, `CAI_MoveProbe_IterativeFloorPoint` | — |  |
-| 1988 | `0x102e7e60` | — | 1 | 0 | 1 | — | — |  |
-| 1989 | `0x102e8aa0` | — | 1 | 0 | 1 | — | — |  |
-| 1990 | `0x102eccc0` | — | 1 | 0 | 1 | — | — |  |
-| 1991 | `0x102ecd00` | — | 1 | 0 | 1 | — | — |  |
-| 1992 | `0x102edaa0` | — | 2 | 0 | 0 | — | — |  |
-| 1993 | `0x102ee510` | — | 1 | 0 | 1 | — | — |  |
-| 1994 | `0x102ee550` | — | 1 | 0 | 1 | — | — |  |
-| 1995 | `0x102ee640` | — | 1 | 0 | 1 | — | — |  |
-| 1996 | `0x102f05b0` | — | 1 | 0 | 1 | — | — |  |
-| 1997 | `0x102f09a0` | — | 1 | 0 | 1 | — | — |  |
-| 1998 | `0x102f2330` | — | 2 | 0 | 0 | `Unaccounted`, `CAI_Navigator_DoFindPath` | — |  |
-| 1999 | `0x102f39a0` | — | 2 | 0 | 0 | — | — |  |
-| 2000 | `0x102f46d0` | — | 1 | 0 | 1 | — | — |  |
-| 2001 | `0x102f47b0` | — | 1 | 0 | 1 | — | — |  |
-| 2002 | `0x102f48b0` | — | 1 | 0 | 1 | `IsConnected called with invalid node IDs…` | — |  |
-| 2003 | `0x102f9970` | — | 2 | 0 | 0 | — | — |  |
-| 2004 | `0x102fdcc0` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_HasPathOuter` | — |  |
-| 2005 | `0x102ff3e0` | — | 1 | 0 | 1 | — | — |  |
-| 2006 | `0x10300700` | — | 2 | 0 | 0 | — | — |  |
-| 2007 | `0x103021b0` | — | 2 | 0 | 0 | — | — |  |
-| 2008 | `0x10302e50` | — | 1 | 0 | 1 | `FindShootNode() - %s has no nearest node…` | — |  |
-| 2009 | `0x10303fd0` | — | 1 | 0 | 1 | — | — |  |
-| 2010 | `0x103048d0` | — | 1 | 0 | 1 | — | — |  |
-| 2011 | `0x10304a40` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_CheckStaleRoute` | — |  |
-| 2012 | `0x103055b0` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildExtrapolationNodeRou…` | — |  |
-| 2013 | `0x103061e0` | — | 1 | 0 | 1 | — | — |  |
-| 2014 | `0x103078d0` | — | 2 | 0 | 0 | — | — |  |
-| 2015 | `0x10307c20` | — | 2 | 0 | 0 | — | — |  |
-| 2016 | `0x1030b520` | — | 1 | 0 | 1 | — | — |  |
-| 2017 | `0x1030b5b0` | — | 1 | 0 | 1 | — | — |  |
-| 2018 | `0x1030b880` | — | 1 | 0 | 1 | — | — |  |
-| 2019 | `0x1030ba30` | — | 2 | 0 | 0 | — | — |  |
-| 2020 | `0x1030bc40` | — | 1 | 0 | 1 | — | — |  |
-| 2021 | `0x1030be80` | — | 1 | 1 | 0 | — | — |  |
-| 2022 | `0x1030bea0` | — | 1 | 1 | 0 | — | — |  |
-| 2023 | `0x1030bf50` | — | 1 | 0 | 1 | — | — |  |
-| 2024 | `0x1030f350` | — | 1 | 0 | 1 | — | — |  |
-| 2025 | `0x1030fa00` | — | 1 | 0 | 1 | — | — |  |
-| 2026 | `0x1030faa0` | — | 1 | 0 | 1 | — | — |  |
-| 2027 | `0x1030fb10` | — | 2 | 0 | 0 | — | — |  |
-| 2028 | `0x1030fb90` | — | 1 | 0 | 1 | — | — |  |
-| 2029 | `0x1030fc50` | — | 1 | 0 | 1 | — | — |  |
-| 2030 | `0x1030fd20` | — | 2 | 0 | 0 | — | — |  |
-| 2031 | `0x10310bc0` | — | 1 | 1 | 0 | `Could not find NPCMaker( %s )⏎` | — |  |
-| 2032 | `0x10311c10` | — | 1 | 0 | 1 | `scene:` | — |  |
-| 2033 | `0x10311ee0` | — | 1 | 0 | 1 | — | — |  |
-| 2034 | `0x10312340` | — | 1 | 0 | 1 | — | — |  |
-| 2035 | `0x10312c80` | — | 2 | 0 | 0 | — | — |  |
-| 2036 | `0x10312ef0` | `CAI_BaseHumanoid#484`, `CAI_ExpressiveNPC#484` | 1 | 0 | 1 | — | — |  |
-| 2037 | `0x10313430` | — | 1 | 0 | 1 | — | — |  |
-| 2038 | `0x10314000` | — | 1 | 0 | 1 | — | — |  |
-| 2039 | `0x10315790` | — | 2 | 0 | 0 | — | — |  |
-| 2040 | `0x10316fa0` | — | 2 | 0 | 0 | — | — |  |
-| 2041 | `0x10319fe0` | — | 2 | 0 | 0 | — | — |  |
-| 2042 | `0x10326a20` | `CAI_BaseHumanoid#362`, `CAI_BaseNPC#362`, +69 more | 0 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | — | `CAI_BaseNPC#362 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2043 | `0x1032b960` | — | 2 | 0 | 0 | — | — |  |
-| 2044 | `0x10330020` | `CAI_BaseHumanoid#334`, `CAI_BaseNPC#334`, +81 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#334 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2045 | `0x1033f6d0` | — | 2 | 0 | 0 | — | — |  |
-| 2046 | `0x103454c0` | — | 1 | 0 | 1 | — | — |  |
-| 2047 | `0x10348ba0` | `CAI_BaseHumanoid#296`, `CAI_BaseNPC#296`, +83 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#296 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2048 | `0x10349e10` | — | 1 | 0 | 1 | — | — |  |
-| 2049 | `0x1034a100` | — | 1 | 0 | 1 | — | — |  |
-| 2050 | `0x1034a310` | — | 1 | 0 | 1 | — | — |  |
-| 2051 | `0x1034d5b0` | — | 1 | 0 | 1 | — | — |  |
-| 2052 | `0x1034e3b0` | `CScriptedTarget#5` | 0 | 0 | 2 | — | — |  |
-| 2053 | `0x10357800` | `CNPC_Crow#511` | 2 | 0 | 0 | `NPC_Crow.Flap` | — |  |
-| 2054 | `0x103581b0` | — | 1 | 0 | 1 | — | — |  |
-| 2055 | `0x10358c40` | `CNPC_Crow#394` | 2 | 0 | 0 | `NPC_Crow.Gib` | — |  |
-| 2056 | `0x10358f30` | `CNPC_Crow#491` | 2 | 0 | 0 | `NPC_Crow.Pain` | — |  |
-| 2057 | `0x10358f50` | `CNPC_Crow#488` | 2 | 0 | 0 | `NPC_Crow.Die` | — |  |
-| 2058 | `0x1035a220` | `CGeneric_NPC#495` | 1 | 0 | 1 | — | — |  |
-| 2059 | `0x1035b000` | `CGeneric_NPC_bathack#489` | 2 | 0 | 0 | — | — |  |
-| 2060 | `0x1035b020` | `CGeneric_NPC_bathack#488` | 2 | 0 | 0 | — | — |  |
-| 2061 | `0x1035b040` | `CGeneric_NPC_bathack#491` | 2 | 0 | 0 | — | — |  |
-| 2062 | `0x1035b890` | `CGenericSabbat_NPC#495` | 1 | 0 | 1 | — | — |  |
-| 2063 | `0x1035e920` | — | 1 | 0 | 1 | — | — |  |
-| 2064 | `0x1035e950` | — | 1 | 1 | 0 | — | — |  |
-| 2065 | `0x10363b40` | `CNPC_VBach#461` | 1 | 1 | 0 | — | — |  |
-| 2066 | `0x103674a0` | `CNPC_VBatSwarm#461` | 1 | 1 | 0 | — | — |  |
-| 2067 | `0x103680b0` | `CNPC_VCamera#488`, `CNPC_VCameraSecurity#488` | 2 | 0 | 0 | — | — |  |
-| 2068 | `0x103680d0` | `CNPC_VCamera#489`, `CNPC_VCameraSecurity#489` | 2 | 0 | 0 | — | — |  |
-| 2069 | `0x10368110` | `CNPC_VCamera#491`, `CNPC_VCameraSecurity#491` | 2 | 0 | 0 | — | — |  |
-| 2070 | `0x10368310` | `CNPC_VCamera#507`, `CNPC_VCameraSecurity#507` | 2 | 0 | 0 | — | — |  |
-| 2071 | `0x10368370` | `CNPC_VCamera#510`, `CNPC_VCameraSecurity#510` | 2 | 0 | 0 | — | — |  |
-| 2072 | `0x10370320` | `CNPC_VCombatman#461` | 1 | 1 | 0 | — | — |  |
-| 2073 | `0x103705e0` | — | 1 | 0 | 1 | — | — |  |
-| 2074 | `0x10371ae0` | `CNPC_VCop#472` | 0 | 0 | 2 | — | — |  |
-| 2075 | `0x10378b60` | `CNPC_VGargoyle#461` | 1 | 1 | 0 | — | — |  |
-| 2076 | `0x10378c10` | `CNPC_VGargoyle#390` | 0 | 1 | 1 | — | — |  |
-| 2077 | `0x10378ec0` | — | 1 | 0 | 1 | `pillar` | — |  |
-| 2078 | `0x10379040` | — | 1 | 0 | 1 | — | — |  |
-| 2079 | `0x10379b40` | — | 1 | 0 | 1 | `prop_dynamic` | — |  |
-| 2080 | `0x1037aff0` | `CNPC_VGhoulCroucher#5` | 0 | 0 | 2 | — | — |  |
-| 2081 | `0x1037b870` | — | 1 | 0 | 1 | — | — |  |
-| 2082 | `0x1037b890` | — | 1 | 0 | 1 | — | — |  |
-| 2083 | `0x10380100` | `CNPC_VHengeyokai#461` | 1 | 1 | 0 | — | — |  |
-| 2084 | `0x10381460` | — | 1 | 0 | 1 | — | — |  |
-| 2085 | `0x10381ca0` | — | 1 | 0 | 1 | — | — |  |
-| 2086 | `0x10381cd0` | — | 1 | 0 | 1 | — | — |  |
-| 2087 | `0x103828a0` | — | 2 | 0 | 0 | — | — |  |
-| 2088 | `0x10382d20` | — | 1 | 0 | 1 | — | — |  |
-| 2089 | `0x10383130` | — | 2 | 0 | 0 | `Hengeyokai_freeze_emitter` | — |  |
-| 2090 | `0x103887d0` | `CNPC_VHunter#472` | 0 | 0 | 2 | — | — |  |
-| 2091 | `0x10388ab0` | `CNPC_VHunter#461` | 1 | 1 | 0 | — | — |  |
-| 2092 | `0x103893c0` | `CNPC_VLasombra#592` | 1 | 0 | 1 | — | — |  |
-| 2093 | `0x1038e670` | — | 1 | 1 | 0 | — | — |  |
-| 2094 | `0x1038e6a0` | — | 1 | 1 | 0 | — | — |  |
-| 2095 | `0x1038e6e0` | — | 1 | 1 | 0 | — | — |  |
-| 2096 | `0x1038f290` | — | 1 | 0 | 1 | — | — |  |
-| 2097 | `0x1038f640` | — | 1 | 0 | 1 | — | — |  |
-| 2098 | `0x1038f660` | — | 2 | 0 | 0 | — | — |  |
-| 2099 | `0x1038fc80` | — | 1 | 0 | 1 | `ManBat_Minion` | — |  |
-| 2100 | `0x10390040` | — | 1 | 1 | 0 | — | — |  |
-| 2101 | `0x103908c0` | — | 2 | 0 | 0 | — | — |  |
-| 2102 | `0x103952b0` | — | 1 | 0 | 1 | — | — |  |
-| 2103 | `0x10395650` | — | 1 | 0 | 1 | — | — |  |
-| 2104 | `0x10397930` | — | 2 | 0 | 0 | — | — |  |
-| 2105 | `0x10397c70` | — | 1 | 0 | 1 | — | — |  |
-| 2106 | `0x10397e00` | — | 1 | 0 | 1 | — | — |  |
-| 2107 | `0x10397e90` | — | 1 | 0 | 1 | — | — |  |
-| 2108 | `0x10397f00` | — | 1 | 0 | 1 | — | — |  |
-| 2109 | `0x10398630` | — | 2 | 0 | 0 | — | — |  |
-| 2110 | `0x10398680` | — | 2 | 0 | 0 | `Bip01 R Forearm` | — |  |
-| 2111 | `0x10398db0` | — | 2 | 0 | 0 | `phys_animlink`, `Bone01`, +2 more | — |  |
-| 2112 | `0x1039aaf0` | — | 1 | 1 | 0 | — | — |  |
-| 2113 | `0x1039ab30` | — | 1 | 0 | 1 | — | — |  |
-| 2114 | `0x1039aca0` | — | 1 | 0 | 1 | — | — |  |
-| 2115 | `0x1039ee20` | — | 2 | 0 | 0 | — | — |  |
-| 2116 | `0x1039f030` | — | 1 | 0 | 1 | — | — |  |
-| 2117 | `0x1039f1a0` | — | 1 | 0 | 1 | — | — |  |
-| 2118 | `0x1039fe10` | `CNPC_VMoleman#461` | 1 | 1 | 0 | — | — |  |
-| 2119 | `0x1039fff0` | `CNPC_VNewscaster#488` | 2 | 0 | 0 | — | — |  |
-| 2120 | `0x103a0010` | `CNPC_VNewscaster#489` | 2 | 0 | 0 | — | — |  |
-| 2121 | `0x103a0050` | `CNPC_VNewscaster#491` | 2 | 0 | 0 | — | — |  |
-| 2122 | `0x103a0eb0` | — | 1 | 0 | 1 | — | — |  |
-| 2123 | `0x103a4730` | `CNPC_VFrenzyShadow#488`, `CNPC_VPlayerController#488`, +1 more | 2 | 0 | 0 | — | — |  |
-| 2124 | `0x103a4750` | `CNPC_VFrenzyShadow#489`, `CNPC_VPlayerController#489`, +1 more | 2 | 0 | 0 | — | — |  |
-| 2125 | `0x103a4790` | `CNPC_VFrenzyShadow#491`, `CNPC_VPlayerController#491`, +1 more | 2 | 0 | 0 | — | — |  |
-| 2126 | `0x103a6e80` | `CNPC_VSabbatLeader#127` | 0 | 2 | 0 | `npc_VSabbatLeader`, `Andrei_powerup_emitter`, +1 more | — |  |
-| 2127 | `0x103ad540` | — | 1 | 1 | 0 | — | — |  |
-| 2128 | `0x103ae4f0` | `CNPC_VSheriffMan#5` | 0 | 0 | 2 | — | — |  |
-| 2129 | `0x103b2450` | `CNPC_VSheriffSwarm#461` | 1 | 1 | 0 | — | — |  |
-| 2130 | `0x103b4a60` | `CNPC_VTest#493` | 1 | 0 | 1 | — | — |  |
-| 2131 | `0x103b4bd0` | `CNPC_VTest#494` | 1 | 0 | 1 | — | — |  |
-| 2132 | `0x103b4d40` | `CNPC_VTest#495` | 1 | 0 | 1 | — | — |  |
-| 2133 | `0x103b9360` | `CNPC_VTzimisce#489` | 2 | 0 | 0 | — | — |  |
-| 2134 | `0x103b9f90` | — | 2 | 0 | 0 | — | — |  |
-| 2135 | `0x103bdfc0` | — | 1 | 0 | 1 | — | — |  |
-| 2136 | `0x103be180` | — | 1 | 0 | 1 | — | — |  |
-| 2137 | `0x103bf560` | — | 1 | 0 | 1 | — | — |  |
-| 2138 | `0x103bfa50` | — | 1 | 1 | 0 | — | — |  |
-| 2139 | `0x103c05e0` | — | 1 | 0 | 1 | — | — |  |
-| 2140 | `0x103ceb60` | — | 2 | 0 | 0 | `%s (%s)`, `HINT_UNKNOWN`, +19 more | — |  |
-| 2141 | `0x103d3a40` | — | 1 | 0 | 1 | — | — |  |
-| 2142 | `0x103d8c10` | — | 1 | 0 | 1 | — | — |  |
-| 2143 | `0x103dd780` | `CNPC_VYukie#461` | 1 | 1 | 0 | — | — |  |
-| 2144 | `0x103eec60` | — | 1 | 1 | 0 | — | — |  |
-| 2145 | `0x104081e0` | — | 1 | 0 | 1 | — | — |  |
-| 2146 | `0x10408480` | — | 1 | 0 | 1 | — | — |  |
-| 2147 | `0x10427620` | — | 2 | 0 | 0 | — | — |  |
-| 2148 | `0x104276a0` | — | 2 | 0 | 0 | — | — |  |
-| 2149 | `0x10427dc0` | — | 2 | 0 | 0 | — | — |  |
-| 2150 | `0x1042fb50` | — | 2 | 0 | 0 | — | — |  |
-| 2151 | `0x1042fd40` | — | 2 | 0 | 0 | — | — |  |
-| 2152 | `0x10431f30` | — | 2 | 0 | 0 | — | — |  |
-| 2153 | `0x10432028` | — | 2 | 0 | 0 | — | — |  |
-| 2154 | `0x10436d85` | — | 2 | 0 | 0 | — | — |  |
-| 2155 | `0x10436d9c` | — | 2 | 0 | 0 | — | — |  |
-| 2156 | `0x10436df8` | — | 2 | 0 | 0 | — | — |  |
-| 2157 | `0x104381fb` | — | 2 | 0 | 0 | — | — |  |
-| 2158 | `0x104382ad` | — | 2 | 0 | 0 | — | — |  |
-| 2159 | `0x104383ea` | — | 2 | 0 | 0 | — | — |  |
-| 2160 | `0x1043869d` | — | 2 | 0 | 0 | — | — |  |
-| 2161 | `0x104388b4` | — | 2 | 0 | 0 | — | — |  |
-| 2162 | `0x10438a53` | — | 2 | 0 | 0 | — | — |  |
-| 2163 | `0x1043c2f6` | — | 2 | 0 | 0 | — | — |  |
-| 2164 | `0x1043cda5` | — | 2 | 0 | 0 | — | — |  |
-| 2165 | `0x1043ce24` | — | 2 | 0 | 0 | — | — |  |
-| 2166 | `0x100078c4` | — | 1 | 0 | 0 | — | — |  |
-| 2167 | `0x10026b50` | `CAISound#88`, `CAI_BaseHumanoid#88`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#88 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2168 | `0x10026b70` | `CAISound#89`, `CAI_BaseHumanoid#89`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#89 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2169 | `0x10026c50` | `CAISound#133`, `CAI_ChangeHintGroup#133`, +158 more | 0 | 0 | 1 | — | — |  |
-| 2170 | `0x10026d90` | `CAISound#145`, `CAI_ChangeHintGroup#145`, +410 more | 1 | 0 | 0 | — | — |  |
-| 2171 | `0x10026f20` | `CAISound#159`, `CAI_BaseHumanoid#159`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#159 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2172 | `0x10026f80` | `CAISound#166`, `CAI_BaseHumanoid#166`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#166 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 2173 | `0x10026fb0` | `CAISound#165`, `CAI_BaseHumanoid#165`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#165 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 2174 | `0x10027040` | `CAISound#169`, `CAI_BaseHumanoid#169`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#169 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 2175 | `0x10027060` | `CAISound#170`, `CAI_BaseHumanoid#170`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#170 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 2176 | `0x100270c0` | `CAISound#186`, `CAI_BaseHumanoid#186`, +495 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#186 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 2177 | `0x10027140` | `CAISound#191`, `CAI_BaseHumanoid#191`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#191 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 2178 | `0x10027450` | `CAISound#0`, `CAI_BaseHumanoid#0`, +495 more | 0 | 1 | 0 | — | — | `CAI_BaseNPC#0 no SDK twin: no bracketing names; slot identit…` |
-| 2179 | `0x10027490` | `CAISound#116`, `CAI_BaseHumanoid#116`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#116 no SDK twin: stretch #113-#118 holds 4 retai…` |
-| 2180 | `0x1002c900` | — | 1 | 0 | 0 | — | — |  |
-| 2181 | `0x1002ee60` | — | 1 | 0 | 0 | `PhysRemoveShadow` | — |  |
-| 2182 | `0x1004fc50` | `CAI_BaseHumanoid#137`, `CAI_BaseNPC#137`, +298 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#137 no SDK twin: stretch #128-#138 holds 9 retai…` |
-| 2183 | `0x10050b90` | — | 1 | 0 | 0 | `CDisciplineParticle::Create` | — |  |
-| 2184 | `0x10050c70` | — | 1 | 0 | 0 | `CDisciplineParticle::Create` | — |  |
-| 2185 | `0x100576a0` | — | 1 | 0 | 0 | — | — |  |
-| 2186 | `0x10074090` | — | 1 | 0 | 0 | — | — |  |
-| 2187 | `0x100745b0` | — | 1 | 0 | 0 | — | — |  |
-| 2188 | `0x100745d0` | — | 1 | 0 | 0 | — | — |  |
-| 2189 | `0x10074610` | — | 1 | 0 | 0 | — | — |  |
-| 2190 | `0x10074a00` | — | 1 | 0 | 0 | — | — |  |
-| 2191 | `0x10077450` | — | 1 | 0 | 0 | — | — |  |
-| 2192 | `0x10077af0` | — | 1 | 0 | 0 | — | — |  |
-| 2193 | `0x10077e80` | — | 1 | 0 | 0 | — | — |  |
-| 2194 | `0x1007a310` | — | 1 | 0 | 0 | — | — |  |
-| 2195 | `0x1007a340` | — | 1 | 0 | 0 | — | — |  |
-| 2196 | `0x1007bef0` | — | 1 | 0 | 0 | — | — |  |
-| 2197 | `0x1009af00` | `CAISound#14`, `CAI_BaseHumanoid#14`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#14 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2198 | `0x1009b2c0` | `CAISound#18`, `CAI_BaseHumanoid#18`, +431 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessage` | — | `CAI_BaseNPC#18 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2199 | `0x1009b380` | `CAISound#17`, `CAI_BaseHumanoid#17`, +431 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessage` | — | `CAI_BaseNPC#17 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2200 | `0x100b4bc0` | `CAISound#194`, `CAI_BaseHumanoid#194`, +493 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#194 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 2201 | `0x100b4be0` | `CAISound#195`, `CAI_BaseHumanoid#195`, +493 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#195 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 2202 | `0x100b4de0` | `CAISound#91`, `CAI_BaseHumanoid#91`, +494 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#91 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2203 | `0x100b4ea0` | `CAISound#154`, `CAI_BaseHumanoid#154`, +492 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#154 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2204 | `0x100b4ef0` | `CAISound#83`, `CAI_BaseHumanoid#83`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#83 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2205 | `0x100b4f10` | `CAISound#84`, `CAI_BaseHumanoid#84`, +495 more | 0 | 1 | 0 | — | — | `CAI_BaseNPC#84 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2206 | `0x100b6510` | — | 1 | 0 | 0 | — | — |  |
-| 2207 | `0x100b6850` | — | 1 | 0 | 0 | — | — |  |
-| 2208 | `0x100b6cf0` | `CAI_BaseHumanoid#288`, `CAI_BaseNPC#288`, +84 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#288 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 2209 | `0x100b7040` | `CAI_BaseHumanoid#291`, `CAI_BaseNPC#291`, +84 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#291 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 2210 | `0x100c0e50` | — | 1 | 0 | 0 | — | — |  |
-| 2211 | `0x100c1070` | — | 1 | 0 | 0 | — | — |  |
-| 2212 | `0x100c12b0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Editor/ElysiumSkeletalBuild.cpp:1682, Source/ElysiumUE/Private/Visual/ElysiumPostAdditiveNode.cpp:91, Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h:14 |  |
-| 2213 | `0x100c17e0` | — | 1 | 0 | 0 | — | — |  |
-| 2214 | `0x100c1870` | — | 1 | 0 | 0 | — | — |  |
-| 2215 | `0x100c1990` | — | 1 | 0 | 0 | — | — |  |
-| 2216 | `0x100c1e20` | — | 1 | 0 | 0 | — | — |  |
-| 2217 | `0x100c1f40` | — | 1 | 0 | 0 | — | — |  |
-| 2218 | `0x100c2420` | — | 1 | 0 | 0 | — | — |  |
-| 2219 | `0x100c25c0` | — | 1 | 0 | 0 | — | — |  |
-| 2220 | `0x100c2ce0` | — | 1 | 0 | 0 | — | — |  |
-| 2221 | `0x100c2f30` | — | 1 | 0 | 0 | — | — |  |
-| 2222 | `0x100c32e0` | — | 1 | 0 | 0 | — | — |  |
-| 2223 | `0x100c3600` | — | 1 | 0 | 0 | — | — |  |
-| 2224 | `0x100c4160` | — | 1 | 0 | 0 | — | — |  |
-| 2225 | `0x100c4340` | — | 1 | 0 | 0 | — | — |  |
-| 2226 | `0x100c43e0` | — | 1 | 0 | 0 | — | — |  |
-| 2227 | `0x100c4600` | — | 1 | 0 | 0 | — | — |  |
-| 2228 | `0x100c4a40` | — | 1 | 0 | 0 | `bone_setup.cpp SweepBoxToStudio()` | — |  |
-| 2229 | `0x100c4d50` | — | 1 | 0 | 0 | `bone_setup.cpp TraceToStudio()` | — |  |
-| 2230 | `0x100c5020` | — | 1 | 0 | 0 | — | — |  |
-| 2231 | `0x100c5400` | — | 1 | 0 | 0 | — | — |  |
-| 2232 | `0x100c57e0` | — | 1 | 0 | 0 | — | — |  |
-| 2233 | `0x100c6020` | — | 1 | 0 | 0 | — | — |  |
-| 2234 | `0x100c6520` | — | 1 | 0 | 0 | — | — |  |
-| 2235 | `0x100c65b0` | — | 1 | 0 | 0 | — | — |  |
-| 2236 | `0x100c7650` | — | 1 | 0 | 0 | — | — |  |
-| 2237 | `0x100c77d0` | — | 1 | 0 | 0 | — | — |  |
-| 2238 | `0x100c80d0` | — | 1 | 0 | 0 | — | — |  |
-| 2239 | `0x100cddf0` | — | 1 | 0 | 0 | — | — |  |
-| 2240 | `0x100ce040` | — | 1 | 0 | 0 | — | — |  |
-| 2241 | `0x100ce810` | — | 1 | 0 | 0 | — | — |  |
-| 2242 | `0x100d1210` | — | 1 | 0 | 0 | — | — |  |
-| 2243 | `0x100df010` | — | 1 | 0 | 0 | — | — |  |
-| 2244 | `0x100df120` | — | 1 | 0 | 0 | `auto end`, `auto_end`, +1 more | — |  |
-| 2245 | `0x100df1b0` | — | 1 | 0 | 0 | `auto link`, `auto_link`, +1 more | — |  |
-| 2246 | `0x100df7b0` | — | 1 | 0 | 0 | `-log_speech_files`, `-dialog_debug` | — |  |
-| 2247 | `0x100df850` | — | 1 | 0 | 0 | `logs/dialog_recent.txt`, `Loaded map: %s version: %d⏎`, +2 more | — |  |
-| 2248 | `0x100e8060` | — | 1 | 0 | 0 | ` ... `, `. . . `, +1 more | — |  |
-| 2249 | `0x100e84e0` | — | 1 | 0 | 0 | — | — |  |
-| 2250 | `0x100ecb10` | — | 1 | 0 | 0 | — | — |  |
-| 2251 | `0x100ed4d0` | — | 1 | 0 | 0 | — | — |  |
-| 2252 | `0x100f6bb0` | — | 1 | 0 | 0 | — | — |  |
-| 2253 | `0x100f7460` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `picker`, +6 more | — |  |
-| 2254 | `0x100f7c30` | — | 1 | 0 | 0 | — | — |  |
-| 2255 | `0x100f7fe0` | — | 1 | 0 | 0 | — | — |  |
-| 2256 | `0x100f81f0` | — | 1 | 0 | 0 | `worldspawn`, `soundent` | — |  |
-| 2257 | `0x100f8420` | — | 1 | 0 | 0 | — | — |  |
-| 2258 | `0x100f8580` | — | 1 | 0 | 0 | — | — |  |
-| 2259 | `0x10107480` | — | 1 | 0 | 0 | — | — |  |
-| 2260 | `0x101075e0` | — | 1 | 0 | 0 | — | — |  |
-| 2261 | `0x10116970` | — | 1 | 0 | 0 | — | — |  |
-| 2262 | `0x10119390` | — | 1 | 0 | 0 | — | — |  |
-| 2263 | `0x101193b0` | — | 1 | 0 | 0 | — | — |  |
-| 2264 | `0x10119940` | — | 1 | 0 | 0 | — | — |  |
-| 2265 | `0x1012a6e0` | — | 1 | 0 | 0 | `models/gibs/hgibs.mdl`, `classname %s used to create wrong class …`, +2 more | — |  |
-| 2266 | `0x1012c6c0` | — | 1 | 0 | 0 | — | — |  |
-| 2267 | `0x1012c7a0` | — | 1 | 0 | 0 | — | — |  |
-| 2268 | `0x1012c7f0` | — | 1 | 0 | 0 | — | — |  |
-| 2269 | `0x1012c840` | — | 1 | 0 | 0 | — | — |  |
-| 2270 | `0x1012c9c0` | — | 1 | 0 | 0 | — | — |  |
-| 2271 | `0x1012f700` | — | 1 | 0 | 0 | — | — |  |
-| 2272 | `0x10136ec0` | — | 1 | 0 | 0 | — | — |  |
-| 2273 | `0x10137e40` | — | 1 | 0 | 0 | — | — |  |
-| 2274 | `0x10138630` | — | 1 | 0 | 0 | — | — |  |
-| 2275 | `0x10139b90` | — | 1 | 0 | 0 | — | — |  |
-| 2276 | `0x1013ab00` | — | 1 | 0 | 0 | — | — |  |
-| 2277 | `0x1013ab70` | — | 1 | 0 | 0 | — | — |  |
-| 2278 | `0x1013abc0` | — | 1 | 0 | 0 | — | — |  |
-| 2279 | `0x1013b0d0` | — | 1 | 0 | 0 | — | — |  |
-| 2280 | `0x1013b610` | — | 1 | 0 | 0 | — | — |  |
-| 2281 | `0x1013c0e0` | — | 1 | 0 | 0 | — | — |  |
-| 2282 | `0x1013c8c0` | — | 1 | 0 | 0 | — | — |  |
-| 2283 | `0x1013c940` | — | 1 | 0 | 0 | — | — |  |
-| 2284 | `0x1013cb80` | — | 1 | 0 | 0 | — | — |  |
-| 2285 | `0x1013d450` | — | 1 | 0 | 0 | — | — |  |
-| 2286 | `0x1013d900` | — | 1 | 0 | 0 | — | — |  |
-| 2287 | `0x1013dc40` | — | 1 | 0 | 0 | — | — |  |
-| 2288 | `0x10143920` | — | 1 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 2289 | `0x10144290` | — | 1 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 2290 | `0x10144790` | — | 1 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 2291 | `0x10144cd0` | — | 1 | 0 | 0 | — | — |  |
-| 2292 | `0x1014f830` | `CAI_BaseHumanoid#328`, `CAI_BaseNPC#328`, +80 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#328 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2293 | `0x1014f870` | `CAI_BaseHumanoid#330`, `CAI_BaseNPC#330`, +16 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#330 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2294 | `0x1014f910` | `CAI_BaseHumanoid#359`, `CAI_BaseNPC#359`, +17 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#359 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2295 | `0x1014f930` | `CAI_BaseHumanoid#360`, `CAI_BaseNPC#360`, +81 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#360 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2296 | `0x1014fa30` | `CAI_BaseHumanoid#399`, `CAI_BaseNPC#399`, +82 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#399 no SDK twin: stretch #397-#404 holds 6 retai…` |
-| 2297 | `0x1014fa50` | `CAI_BaseHumanoid#400`, `CAI_BaseNPC#400`, +82 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#400 no SDK twin: stretch #397-#404 holds 6 retai…` |
-| 2298 | `0x10156ce0` | — | 1 | 0 | 0 | — | — |  |
-| 2299 | `0x10158520` | — | 1 | 0 | 0 | — | — |  |
-| 2300 | `0x10158ab0` | — | 1 | 0 | 0 | — | — |  |
-| 2301 | `0x10158af0` | — | 1 | 0 | 0 | — | — |  |
-| 2302 | `0x10158c00` | — | 1 | 0 | 0 | — | — |  |
-| 2303 | `0x1015f9e0` | — | 1 | 0 | 0 | — | — |  |
-| 2304 | `0x10160560` | — | 1 | 0 | 0 | — | — |  |
-| 2305 | `0x101672d0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:70 |  |
-| 2306 | `0x10172410` | — | 1 | 0 | 0 | — | — |  |
-| 2307 | `0x1017e840` | — | 1 | 0 | 0 | `Protean 5`, `Protean 4`, +3 more | — |  |
-| 2308 | `0x1017f900` | — | 1 | 0 | 0 | — | — |  |
-| 2309 | `0x1017fa40` | — | 1 | 0 | 0 | — | — |  |
-| 2310 | `0x1017fa70` | — | 1 | 0 | 0 | — | — |  |
-| 2311 | `0x101800e0` | — | 1 | 0 | 0 | — | — |  |
-| 2312 | `0x10180100` | — | 1 | 0 | 0 | — | — |  |
-| 2313 | `0x10182160` | — | 1 | 0 | 0 | — | — |  |
-| 2314 | `0x10182dd0` | — | 1 | 0 | 0 | — | — |  |
-| 2315 | `0x10184220` | — | 1 | 0 | 0 | — | — |  |
-| 2316 | `0x10185100` | — | 1 | 0 | 0 | — | — |  |
-| 2317 | `0x1018e9d0` | — | 1 | 0 | 0 | — | — |  |
-| 2318 | `0x1018eab0` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
-| 2319 | `0x1018eb50` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
-| 2320 | `0x1018ec20` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
-| 2321 | `0x1018ecf0` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
-| 2322 | `0x10191ac0` | — | 1 | 0 | 0 | `WARNING:  Empty model name in PropBreaka…`, `****************************************…` | — |  |
-| 2323 | `0x10191cc0` | — | 1 | 0 | 0 | `break` | — |  |
-| 2324 | `0x10194750` | — | 1 | 0 | 0 | — | — |  |
-| 2325 | `0x1019bfd0` | — | 1 | 0 | 0 | — | — |  |
-| 2326 | `0x1019c0b0` | — | 1 | 0 | 0 | — | — |  |
-| 2327 | `0x1019c330` | — | 1 | 0 | 0 | `solid`, `default`, +2 more | — |  |
-| 2328 | `0x1019c6f0` | — | 1 | 0 | 0 | — | — |  |
-| 2329 | `0x101a5a80` | — | 1 | 0 | 0 | `Bad field in entity!!⏎` | — |  |
-| 2330 | `0x101a6460` | `CAI_BaseHumanoid#413`, `CAI_BaseNPC#413`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#413 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 2331 | `0x101a6580` | `CAI_BaseHumanoid#436`, `CAI_BaseNPC#436`, +75 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#436 no SDK twin: stretch #434-#438 holds 3 retai…` |
-| 2332 | `0x101a65a0` | `CAI_BaseHumanoid#441`, `CAI_BaseNPC#441`, +75 more | 0 | 0 | 1 | `Called wrong StartTask()⏎` | — | `CAI_BaseNPC#441 no SDK twin: stretch #440-#442 holds 1 retai…` |
-| 2333 | `0x101a65e0` | `CAI_BaseHumanoid#443`, `CAI_BaseNPC#443`, +75 more | 0 | 0 | 1 | `Called wrong RunTask()⏎` | — | `CAI_BaseNPC#443 no SDK twin: stretch #442-#444 holds 1 retai…` |
-| 2334 | `0x101a6640` | `CAI_BaseHumanoid#450`, `CAI_BaseNPC#450`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#450 no SDK twin confirmed: #450 lines up with CA…` |
-| 2335 | `0x101a67c0` | `CAI_BaseHumanoid#476`, `CAI_BaseNPC#476`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#476 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 2336 | `0x101a6840` | `CAI_BaseHumanoid#483`, `CAI_BaseNPC#483`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#483 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2337 | `0x101a6960` | `CAI_BaseHumanoid#495`, `CAI_BaseNPC#495`, +9 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#495 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2338 | `0x101a69c0` | `CAI_BaseHumanoid#498`, `CAI_BaseNPC#498`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#498 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2339 | `0x101a6b20` | `CAI_BaseNPC#512`, `CAI_BaseNPCTroika#512`, +73 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#512 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2340 | `0x101a6ba0` | `CAI_BaseHumanoid#527`, `CAI_BaseNPC#527`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#527 no SDK twin: stretch #526-#530 holds 3 retai…` |
-| 2341 | `0x101a6bc0` | `CAI_BaseNPC#536`, `CAI_BaseNPCTroika#536`, +74 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#536 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 2342 | `0x101a6ce0` | `CAI_BaseHumanoid#579`, `CAI_BaseNPC#579`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#579 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 2343 | `0x101a9060` | `CCineAI#585` | 1 | 0 | 0 | — | — |  |
-| 2344 | `0x101a9770` | `CCineAISchedule#585` | 1 | 0 | 0 | — | — |  |
-| 2345 | `0x101aa610` | `CAI_BaseNPCTroika#28`, `CGeneric_NPC#28`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2346 | `0x101aa630` | `CAI_BaseNPCTroika#29`, `CGeneric_NPC#29`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2347 | `0x101aa6d0` | `CAI_BaseNPCTroika#412`, `CGeneric_NPC#412`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2348 | `0x101aa710` | `CAI_BaseNPCTroika#414`, `CGeneric_NPC#414`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2349 | `0x101aa770` | `CAI_BaseNPCTroika#417`, `CGeneric_NPC#417`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2350 | `0x101aa950` | `CPayphone#35` | 0 | 0 | 1 | — | — |  |
-| 2351 | `0x101af2d0` | — | 1 | 0 | 0 | — | — |  |
-| 2352 | `0x101b0dc0` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `EmitSound:  '%s' emitted as '%s' (ent %i…`, +1 more | — |  |
-| 2353 | `0x101b1040` | — | 1 | 0 | 0 | `StopSound:  '%s' stopped as '%s' (ent %i…` | — |  |
-| 2354 | `0x101b14d0` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `EmitSound:  '%s' emitted as '%s' (ent %i…`, +2 more | — |  |
-| 2355 | `0x101b19e0` | — | 1 | 0 | 0 | — | — |  |
-| 2356 | `0x101b3240` | — | 1 | 0 | 0 | — | — |  |
-| 2357 | `0x101b36f0` | — | 1 | 0 | 0 | — | — |  |
-| 2358 | `0x101b4170` | — | 1 | 0 | 0 | — | — |  |
-| 2359 | `0x101b6120` | — | 1 | 0 | 0 | — | — |  |
-| 2360 | `0x101b65e0` | — | 1 | 0 | 0 | — | — |  |
-| 2361 | `0x101b6b90` | — | 1 | 0 | 0 | — | — |  |
-| 2362 | `0x101bb0f0` | — | 1 | 0 | 0 | — | — |  |
-| 2363 | `0x101bb4a0` | `CAISound#82` | 1 | 0 | 0 | — | — |  |
-| 2364 | `0x101c2d20` | — | 1 | 0 | 0 | — | — |  |
-| 2365 | `0x101c7b80` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `info_landmark`, +2 more | — |  |
-| 2366 | `0x101ccaf0` | — | 1 | 0 | 0 | — | — |  |
-| 2367 | `0x101cd070` | — | 1 | 0 | 0 | — | — |  |
-| 2368 | `0x101cd250` | — | 1 | 0 | 0 | — | — |  |
-| 2369 | `0x101cdfa0` | — | 1 | 0 | 0 | — | — |  |
-| 2370 | `0x101ce060` | — | 1 | 0 | 0 | — | — |  |
-| 2371 | `0x101ce2e0` | — | 1 | 0 | 0 | — | — |  |
-| 2372 | `0x101ce3d0` | — | 1 | 0 | 0 | — | — |  |
-| 2373 | `0x101cecf0` | — | 1 | 0 | 0 | — | — |  |
-| 2374 | `0x101ceef0` | — | 1 | 0 | 0 | — | — |  |
-| 2375 | `0x101cf3c0` | — | 1 | 0 | 0 | `backwards mins/maxs` | — |  |
-| 2376 | `0x101cf640` | — | 1 | 0 | 0 | — | — |  |
-| 2377 | `0x101cf720` | — | 1 | 0 | 0 | `UTIL_VarArgs` | — |  |
-| 2378 | `0x101cfb30` | — | 1 | 0 | 0 | — | — |  |
-| 2379 | `0x101cfe10` | — | 1 | 0 | 0 | — | — |  |
-| 2380 | `0x101cfea0` | — | 1 | 0 | 0 | — | — |  |
-| 2381 | `0x101d0310` | — | 1 | 0 | 0 | — | — |  |
-| 2382 | `0x101d0570` | — | 1 | 0 | 0 | — | — |  |
-| 2383 | `0x101d0b70` | — | 1 | 0 | 0 | — | — |  |
-| 2384 | `0x101d0e90` | — | 1 | 0 | 0 | — | — |  |
-| 2385 | `0x101d1070` | — | 1 | 0 | 0 | — | — |  |
-| 2386 | `0x101d1240` | — | 1 | 0 | 0 | — | — |  |
-| 2387 | `0x101d1530` | — | 1 | 0 | 0 | — | — |  |
-| 2388 | `0x101d15f0` | — | 1 | 0 | 0 | — | — |  |
-| 2389 | `0x101d1960` | — | 1 | 0 | 0 | — | — |  |
-| 2390 | `0x101d2530` | — | 1 | 0 | 0 | — | — |  |
-| 2391 | `0x101d2560` | — | 1 | 0 | 0 | — | — |  |
-| 2392 | `0x101d2640` | — | 1 | 0 | 0 | — | — |  |
-| 2393 | `0x101d4ef0` | — | 1 | 0 | 0 | — | — |  |
-| 2394 | `0x101d8670` | — | 1 | 0 | 0 | — | — |  |
-| 2395 | `0x101d9190` | — | 1 | 0 | 0 | — | — |  |
-| 2396 | `0x101d9840` | — | 1 | 0 | 0 | — | — |  |
-| 2397 | `0x101d9870` | — | 1 | 0 | 0 | — | — |  |
-| 2398 | `0x101da880` | — | 1 | 0 | 0 | — | — |  |
-| 2399 | `0x101db5f0` | — | 1 | 0 | 0 | — | — |  |
-| 2400 | `0x101dc120` | — | 1 | 0 | 0 | — | — |  |
-| 2401 | `0x101dd4f0` | — | 1 | 0 | 0 | — | — |  |
-| 2402 | `0x101ddbe0` | — | 1 | 0 | 0 | — | — |  |
-| 2403 | `0x101e0040` | — | 1 | 0 | 0 | — | — |  |
-| 2404 | `0x101e1770` | — | 1 | 0 | 0 | `ERROR: DiscFlag Lookup Failed!⏎` | — |  |
-| 2405 | `0x101e1850` | — | 1 | 0 | 0 | — | — |  |
-| 2406 | `0x101e18c0` | — | 1 | 0 | 0 | — | — |  |
-| 2407 | `0x101e22d0` | — | 1 | 0 | 0 | — | — |  |
-| 2408 | `0x101e28e0` | — | 1 | 0 | 0 | — | — |  |
-| 2409 | `0x101e2990` | — | 1 | 0 | 0 | `ERROR: GetTargetEntities AffectsType Err…`, `ERROR: GetTargetEntities SrcType Error!⏎` | — |  |
-| 2410 | `0x101e2f50` | — | 1 | 0 | 0 | `%s (%d)⏎`, `CVTgt_DisciplineFXMgr_t::ActivateEffect_…` | — |  |
-| 2411 | `0x101e33c0` | — | 1 | 0 | 0 | — | — |  |
-| 2412 | `0x101e3c80` | — | 1 | 0 | 0 | — | — |  |
-| 2413 | `0x101e3e70` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1583 |  |
-| 2414 | `0x101e40b0` | — | 1 | 0 | 0 | — | — |  |
-| 2415 | `0x101e45b0` | — | 1 | 0 | 0 | ` %s(%d)`, `Disciplines:`, +2 more | — |  |
-| 2416 | `0x101e48b0` | — | 1 | 0 | 0 | — | — |  |
-| 2417 | `0x101e8430` | — | 1 | 0 | 0 | — | — |  |
-| 2418 | `0x101ec450` | — | 1 | 0 | 0 | — | — |  |
-| 2419 | `0x101ec480` | — | 1 | 0 | 0 | — | — |  |
-| 2420 | `0x101ec4b0` | — | 1 | 0 | 0 | — | — |  |
-| 2421 | `0x101f1aa0` | — | 1 | 0 | 0 | — | — |  |
-| 2422 | `0x101f1da0` | — | 1 | 0 | 0 | `%d-%s` | — |  |
-| 2423 | `0x101f2180` | — | 1 | 0 | 0 | `ERROR: parsing KeyValue in file %s, expe…`, `(NULL)` | — |  |
-| 2424 | `0x101f2360` | — | 1 | 0 | 0 | — | — |  |
-| 2425 | `0x101f2e20` | — | 1 | 0 | 0 | — | — |  |
-| 2426 | `0x101f2ec0` | — | 1 | 0 | 0 | — | — |  |
-| 2427 | `0x101f2f00` | — | 1 | 0 | 0 | — | — |  |
-| 2428 | `0x101f6010` | — | 1 | 0 | 0 | ` CVSoundActivityTable_t::Play !!!!!!!!!!…` | — |  |
-| 2429 | `0x101f69a0` | — | 1 | 0 | 0 | — | — |  |
-| 2430 | `0x101f8510` | — | 1 | 0 | 0 | — | — |  |
-| 2431 | `0x101f8620` | — | 1 | 0 | 0 | `Bip01 Spine2`, `models/%s`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:837 |  |
-| 2432 | `0x101f8e20` | — | 1 | 0 | 0 | — | — |  |
-| 2433 | `0x101f8f30` | — | 1 | 0 | 0 | `Bip01 Spine2`, `D_ProteanTransform_Emitter`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:837 |  |
-| 2434 | `0x101f96b0` | — | 1 | 0 | 0 | `ERROR: Ran out of TraitEffect slots!!!⏎` | — |  |
-| 2435 | `0x101f9830` | — | 1 | 0 | 0 | — | — |  |
-| 2436 | `0x101f9d60` | — | 1 | 0 | 0 | — | — |  |
-| 2437 | `0x101f9df0` | — | 1 | 0 | 0 | — | — |  |
-| 2438 | `0x10202780` | — | 1 | 0 | 0 | — | — |  |
-| 2439 | `0x10203dd0` | — | 1 | 0 | 0 | — | — |  |
-| 2440 | `0x10203ed0` | — | 1 | 0 | 0 | — | — |  |
-| 2441 | `0x10204100` | — | 1 | 0 | 0 | — | — |  |
-| 2442 | `0x102043a0` | — | 1 | 0 | 0 | `<None>`, `ObfuscateCanInc`, +1 more | — |  |
-| 2443 | `0x102056d0` | — | 1 | 0 | 0 | — | — |  |
-| 2444 | `0x10206300` | — | 1 | 0 | 0 | — | — |  |
-| 2445 | `0x10206aa0` | — | 1 | 0 | 0 | `item_w_unarmed`, `item_w_lt_cloth` | — |  |
-| 2446 | `0x10206c30` | — | 1 | 0 | 0 | — | — |  |
-| 2447 | `0x10206da0` | — | 1 | 0 | 0 | — | — |  |
-| 2448 | `0x10207680` | — | 1 | 0 | 0 | — | — |  |
-| 2449 | `0x10207c70` | — | 1 | 0 | 0 | — | — |  |
-| 2450 | `0x10207df0` | — | 1 | 0 | 0 | — | — |  |
-| 2451 | `0x1020cd00` | — | 1 | 0 | 0 | — | — |  |
-| 2452 | `0x1021e750` | — | 1 | 0 | 0 | — | — |  |
-| 2453 | `0x1021e7e0` | — | 1 | 0 | 0 | — | — |  |
-| 2454 | `0x10228350` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:44, Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:93, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:246, +7 more |  |
-| 2455 | `0x1022dea0` | — | 1 | 0 | 0 | `vloadtips "%s" %d %d %d`, `__main__.G.Story_State`, +4 more | — |  |
-| 2456 | `0x1022f4f0` | — | 1 | 0 | 0 | — | — |  |
-| 2457 | `0x10230ed0` | — | 1 | 0 | 0 | — | — |  |
-| 2458 | `0x10230f00` | — | 1 | 0 | 0 | — | — |  |
-| 2459 | `0x1023fd00` | — | 1 | 0 | 0 | — | — |  |
-| 2460 | `0x1023ffa0` | — | 1 | 0 | 0 | — | — |  |
-| 2461 | `0x10241100` | — | 1 | 0 | 0 | — | — |  |
-| 2462 | `0x10241620` | — | 1 | 0 | 0 | — | — |  |
-| 2463 | `0x102456b0` | — | 1 | 0 | 0 | — | — |  |
-| 2464 | `0x10245a40` | — | 1 | 0 | 0 | — | — |  |
-| 2465 | `0x10245ac0` | — | 1 | 0 | 0 | — | — |  |
-| 2466 | `0x10247280` | — | 1 | 0 | 0 | — | — |  |
-| 2467 | `0x10249940` | — | 1 | 0 | 0 | — | — |  |
-| 2468 | `0x10251790` | — | 1 | 0 | 0 | — | — |  |
-| 2469 | `0x10252410` | — | 1 | 0 | 0 | — | — |  |
-| 2470 | `0x10256220` | — | 1 | 0 | 0 | — | — |  |
-| 2471 | `0x10256250` | — | 1 | 0 | 0 | — | — |  |
-| 2472 | `0x102562b0` | — | 1 | 0 | 0 | — | — |  |
-| 2473 | `0x10256300` | — | 1 | 0 | 0 | — | — |  |
-| 2474 | `0x10258230` | — | 1 | 0 | 0 | — | — |  |
-| 2475 | `0x10259de0` | — | 1 | 0 | 0 | — | — |  |
-| 2476 | `0x1025b610` | — | 1 | 0 | 0 | — | — |  |
-| 2477 | `0x1025d760` | — | 1 | 0 | 0 | — | — |  |
-| 2478 | `0x1025d840` | — | 1 | 0 | 0 | — | — |  |
-| 2479 | `0x10260f40` | `CAI_BaseHumanoid#427` | 1 | 0 | 0 | — | — |  |
-| 2480 | `0x102623a0` | `CAI_Component#1`, `CAI_Expresser#1`, +12 more | 0 | 0 | 1 | — | — |  |
-| 2481 | `0x102623c0` | `CAI_Component#2`, `CAI_Expresser#2`, +12 more | 0 | 0 | 1 | — | — |  |
-| 2482 | `0x10262430` | `CAI_BaseHumanoid#429` | 1 | 0 | 0 | — | — |  |
-| 2483 | `0x10264330` | — | 1 | 0 | 0 | — | — |  |
-| 2484 | `0x102652d0` | — | 1 | 0 | 0 | — | — |  |
-| 2485 | `0x10266b10` | — | 1 | 0 | 0 | — | — |  |
-| 2486 | `0x10266c80` | — | 1 | 0 | 0 | — | — |  |
-| 2487 | `0x10266ef0` | — | 1 | 0 | 0 | — | — |  |
-| 2488 | `0x10267260` | `CAISound#184`, `CAI_BaseHumanoid#184`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#184 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 2489 | `0x10267b60` | — | 1 | 0 | 0 | `muzzleflash`, `Starting Ranged Attack Damage Calculatio…` | — |  |
-| 2490 | `0x102699e0` | — | 1 | 0 | 0 | — | — |  |
-| 2491 | `0x10269b30` | — | 1 | 0 | 0 | — | — |  |
-| 2492 | `0x1026b580` | — | 1 | 0 | 0 | — | — |  |
-| 2493 | `0x1026da90` | `CAI_BaseHumanoid#556`, `CAI_BaseNPC#556`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#556 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 2494 | `0x1026ff80` | — | 1 | 0 | 0 | — | — |  |
-| 2495 | `0x10278cb0` | `CAI_BaseHumanoid#519`, `CAI_BaseNPC#519`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#519 no SDK twin: the SDK name it lines up with w…` |
-| 2496 | `0x10279000` | `CAI_BaseHumanoid#485`, `CAI_BaseNPC#485`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#485 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2497 | `0x10279c20` | — | 1 | 0 | 0 | — | — |  |
-| 2498 | `0x1027e120` | `CAI_BaseHumanoid#423`, `CAI_BaseNPC#423`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#423 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 2499 | `0x1027e590` | — | 1 | 0 | 0 | `<unnamed>`, `%s (%s: %s)`, +1 more | — |  |
-| 2500 | `0x1027e660` | — | 1 | 0 | 0 | `**UNKNOWN**`, `Alert`, +11 more | — |  |
-| 2501 | `0x1027e760` | — | 1 | 0 | 0 | `**UNKNOWN**`, `Climb`, +1 more | — |  |
-| 2502 | `0x1027e7f0` | — | 1 | 0 | 0 | — | — |  |
-| 2503 | `0x1027f5d0` | — | 1 | 0 | 0 | — | — |  |
-| 2504 | `0x1027f610` | — | 1 | 0 | 0 | — | — |  |
-| 2505 | `0x1027faa0` | — | 1 | 0 | 0 | — | — |  |
-| 2506 | `0x10280c80` | — | 1 | 0 | 0 | `   %32s -- select %5.2f, start %5.2f, ru…`, ` Tasks timings:⏎` | — |  |
-| 2507 | `0x102814d0` | — | 1 | 0 | 0 | `Unaccounted`, `CAI_BaseNPC_SelectSchedule` | — |  |
-| 2508 | `0x10288510` | — | 1 | 0 | 0 | — | — |  |
-| 2509 | `0x10288540` | — | 1 | 0 | 0 | — | — |  |
-| 2510 | `0x10288560` | — | 1 | 0 | 0 | — | — |  |
-| 2511 | `0x1028acc0` | — | 1 | 0 | 0 | — | — |  |
-| 2512 | `0x1028b0b0` | `CAI_BaseHumanoid#549`, `CAI_BaseNPC#549`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#549 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 2513 | `0x1028b300` | — | 1 | 0 | 0 | — | — |  |
-| 2514 | `0x1028b460` | — | 1 | 0 | 0 | — | — |  |
-| 2515 | `0x1028df30` | `CAI_BaseNPCTroika#20`, `CGeneric_NPC#20`, +62 more | 1 | 0 | 0 | — | — |  |
-| 2516 | `0x1028e030` | — | 1 | 0 | 0 | — | — |  |
-| 2517 | `0x1028e060` | — | 1 | 0 | 0 | — | — |  |
-| 2518 | `0x1028e830` | — | 1 | 0 | 0 | — | — |  |
-| 2519 | `0x1028efc0` | — | 1 | 0 | 0 | `Player_Nosferatu` | — |  |
-| 2520 | `0x102906e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:16 |  |
-| 2521 | `0x10293e80` | `CAI_BaseNPCTroika#527`, `CGeneric_NPC#527`, +62 more | 1 | 0 | 0 | — | — |  |
-| 2522 | `0x10294040` | `CAI_BaseNPCTroika#509`, `CGeneric_NPC#509`, +58 more | 1 | 0 | 0 | — | — |  |
-| 2523 | `0x102944c0` | `CAI_BaseNPCTroika#493`, `CGeneric_NPC#493`, +54 more | 1 | 0 | 0 | `Target_Lost` | — |  |
-| 2524 | `0x10294590` | `CAI_BaseNPCTroika#494`, `CGeneric_NPC#494`, +54 more | 1 | 0 | 0 | `Target_Reacquired` | — |  |
-| 2525 | `0x10294930` | `CAI_BaseNPCTroika#499`, `CGeneric_NPC#499`, +60 more | 1 | 0 | 0 | `Idle_Agitated` | — |  |
-| 2526 | `0x10294c30` | `CAI_BaseNPCTroika#503`, `CGeneric_NPC#503`, +60 more | 1 | 0 | 0 | `Comfort` | — |  |
-| 2527 | `0x10294cf0` | `CAI_BaseNPCTroika#504`, `CGeneric_NPC#504`, +60 more | 1 | 0 | 0 | `Upset` | — |  |
-| 2528 | `0x1029fbe0` | `CAI_BaseNPCTroika#330`, `CGeneric_NPC#330`, +59 more | 0 | 0 | 1 | — | — |  |
-| 2529 | `0x1029fec0` | `CAI_BaseNPCTroika#326`, `CGeneric_NPC#326`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2530 | `0x102a0910` | `CAI_BaseNPCTroika#322`, `CGeneric_NPC#322`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2531 | `0x102a1560` | — | 1 | 0 | 0 | — | — |  |
-| 2532 | `0x102a1590` | — | 1 | 0 | 0 | — | — |  |
-| 2533 | `0x102a15f0` | — | 1 | 0 | 0 | — | — |  |
-| 2534 | `0x102a9540` | — | 1 | 0 | 0 | — | — |  |
-| 2535 | `0x102a95c0` | — | 1 | 0 | 0 | — | — |  |
-| 2536 | `0x102a95e0` | — | 1 | 0 | 0 | — | — |  |
-| 2537 | `0x102a9600` | — | 1 | 0 | 0 | — | — |  |
-| 2538 | `0x102a9620` | — | 1 | 0 | 0 | — | — |  |
-| 2539 | `0x102a9670` | — | 1 | 0 | 0 | — | — |  |
-| 2540 | `0x102a9890` | — | 1 | 0 | 0 | — | — |  |
-| 2541 | `0x102a9ea0` | — | 1 | 0 | 0 | — | — |  |
-| 2542 | `0x102a9ec0` | — | 1 | 0 | 0 | — | — |  |
-| 2543 | `0x102a9f00` | — | 1 | 0 | 0 | — | — |  |
-| 2544 | `0x102aab70` | — | 1 | 0 | 0 | — | — |  |
-| 2545 | `0x102b2730` | — | 1 | 0 | 0 | — | — |  |
-| 2546 | `0x102b5120` | `CAI_BaseNPCTroika#56`, `CGeneric_NPC#56`, +62 more | 0 | 0 | 1 | — | — |  |
-| 2547 | `0x102b7f40` | — | 1 | 0 | 0 | — | — |  |
-| 2548 | `0x102bfdf0` | — | 1 | 0 | 0 | — | — |  |
-| 2549 | `0x102c0220` | `CAI_BaseNPCTroika#35`, `CGeneric_NPC#35`, +61 more | 0 | 0 | 1 | — | — |  |
-| 2550 | `0x102c5730` | — | 1 | 0 | 0 | — | — |  |
-| 2551 | `0x102c5780` | — | 1 | 0 | 0 | — | — |  |
-| 2552 | `0x102c57c0` | — | 1 | 0 | 0 | — | — |  |
-| 2553 | `0x102c6370` | — | 1 | 0 | 0 | — | — |  |
-| 2554 | `0x102c63b0` | — | 1 | 0 | 0 | — | — |  |
-| 2555 | `0x102c6420` | — | 1 | 0 | 0 | — | — |  |
-| 2556 | `0x102c6460` | — | 1 | 0 | 0 | — | — |  |
-| 2557 | `0x102c64d0` | — | 1 | 0 | 0 | — | — |  |
-| 2558 | `0x102c66b0` | — | 1 | 0 | 0 | — | — |  |
-| 2559 | `0x102c6bf0` | — | 1 | 0 | 0 | — | — |  |
-| 2560 | `0x102c6d40` | — | 1 | 0 | 0 | — | — |  |
-| 2561 | `0x102c6e10` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#13` | 1 | 0 | 0 | — | — |  |
-| 2562 | `0x102c6e30` | `CAI_StandoffBehavior#14`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#14` | 0 | 1 | 0 | — | — |  |
-| 2563 | `0x102c6e50` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#15` | 1 | 0 | 0 | — | — |  |
-| 2564 | `0x102c6e70` | `CAI_StandoffBehavior#16`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#16` | 0 | 1 | 0 | — | — |  |
-| 2565 | `0x102c6e90` | `CAI_StandoffBehavior#17`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#17` | 0 | 0 | 1 | — | — |  |
-| 2566 | `0x102c6f90` | `CAI_StandoffBehavior#23`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#23` | 0 | 1 | 0 | — | — |  |
-| 2567 | `0x102c6fb0` | `CAI_StandoffBehavior#24`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#24` | 0 | 1 | 0 | — | — |  |
-| 2568 | `0x102c7410` | `CAI_StandoffBehavior#3` | 0 | 0 | 1 | — | — |  |
-| 2569 | `0x102c7960` | `CAI_StandoffBehavior#20` | 0 | 0 | 1 | — | — |  |
-| 2570 | `0x102c79a0` | `CAI_StandoffBehavior#21` | 0 | 0 | 1 | — | — |  |
-| 2571 | `0x102c8570` | `CAI_StandoffGoal#244` | 0 | 0 | 1 | — | — |  |
-| 2572 | `0x102cadb0` | — | 1 | 0 | 0 | — | — |  |
-| 2573 | `0x102cc6a0` | — | 1 | 0 | 0 | — | — |  |
-| 2574 | `0x102ce130` | — | 1 | 0 | 0 | — | — |  |
-| 2575 | `0x102ce9f0` | — | 1 | 0 | 0 | — | — |  |
-| 2576 | `0x102d24b0` | — | 1 | 0 | 0 | — | — |  |
-| 2577 | `0x102d2980` | — | 1 | 0 | 0 | — | — |  |
-| 2578 | `0x102d3040` | — | 1 | 0 | 0 | — | — |  |
-| 2579 | `0x102d3ec0` | `CAI_Hint#130` | 0 | 0 | 1 | `Warning: AI hint has incorrect or no AI …` | — |  |
-| 2580 | `0x102d4320` | — | 1 | 0 | 0 | — | — |  |
-| 2581 | `0x102d77a0` | — | 1 | 0 | 0 | — | — |  |
-| 2582 | `0x102d8a90` | — | 1 | 0 | 0 | — | — |  |
-| 2583 | `0x102d8b50` | — | 1 | 0 | 0 | — | — |  |
-| 2584 | `0x102db3e0` | — | 1 | 0 | 0 | — | — |  |
-| 2585 | `0x102db5e0` | — | 1 | 0 | 0 | — | — |  |
-| 2586 | `0x102dbda0` | `CAI_InterestingPlaceConverstation#127` | 0 | 0 | 1 | — | — |  |
-| 2587 | `0x102dce80` | — | 1 | 0 | 0 | — | — |  |
-| 2588 | `0x102df130` | — | 1 | 0 | 0 | — | — |  |
-| 2589 | `0x102e09c0` | — | 1 | 0 | 0 | — | — |  |
-| 2590 | `0x102e0ea0` | `CAI_HumanoidMotor#3`, `CAI_Motor#3` | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::SetSolid` | — |  |
-| 2591 | `0x102e1110` | `CAI_HumanoidMotor#5`, `CAI_Motor#5` | 0 | 0 | 1 | — | — |  |
-| 2592 | `0x102e1180` | `CAI_HumanoidMotor#6`, `CAI_Motor#6` | 0 | 0 | 1 | — | — |  |
-| 2593 | `0x102e1270` | `CAI_HumanoidMotor#8`, `CAI_Motor#8` | 0 | 0 | 1 | — | — |  |
-| 2594 | `0x102e1300` | `CAI_HumanoidMotor#16`, `CAI_Motor#16` | 1 | 0 | 0 | — | — |  |
-| 2595 | `0x102e1d10` | — | 1 | 0 | 0 | — | — |  |
-| 2596 | `0x102e20f0` | `CAI_HumanoidMotor#14`, `CAI_Motor#14` | 0 | 0 | 1 | — | — |  |
-| 2597 | `0x102e2120` | `CAI_HumanoidMotor#13`, `CAI_Motor#13` | 0 | 0 | 1 | — | — |  |
-| 2598 | `0x102e2150` | `CAI_HumanoidMotor#12`, `CAI_Motor#12` | 0 | 0 | 1 | — | — |  |
-| 2599 | `0x102e5d80` | — | 1 | 0 | 0 | `Unaccounted`, `CAI_Motor_GroundMoveLimit` | — |  |
-| 2600 | `0x102e7060` | — | 1 | 0 | 0 | — | — |  |
-| 2601 | `0x102e83e0` | — | 1 | 0 | 0 | — | — |  |
-| 2602 | `0x102ea050` | — | 1 | 0 | 0 | — | — |  |
-| 2603 | `0x102ecb90` | — | 1 | 0 | 0 | — | — |  |
-| 2604 | `0x102ed540` | — | 1 | 0 | 0 | — | — |  |
-| 2605 | `0x102ee1e0` | — | 1 | 0 | 0 | — | — |  |
-| 2606 | `0x102eea70` | `CAI_HumanoidNavigator#7`, `CAI_Navigator#7` | 0 | 1 | 0 | — | — |  |
-| 2607 | `0x102eeac0` | `CAI_HumanoidNavigator#11`, `CAI_Navigator#11` | 0 | 1 | 0 | — | — |  |
-| 2608 | `0x102eeb50` | `CAI_HumanoidNavigator#9`, `CAI_Navigator#9` | 0 | 0 | 1 | — | — |  |
-| 2609 | `0x102f13a0` | — | 1 | 0 | 0 | — | — |  |
-| 2610 | `0x102f2d10` | — | 1 | 0 | 0 | — | — |  |
-| 2611 | `0x102f2de0` | — | 1 | 0 | 0 | — | — |  |
-| 2612 | `0x102f3770` | — | 1 | 0 | 0 | — | — |  |
-| 2613 | `0x102f3900` | — | 1 | 0 | 0 | — | — |  |
-| 2614 | `0x102f99d0` | — | 1 | 0 | 0 | — | — |  |
-| 2615 | `0x102f9c70` | — | 1 | 0 | 0 | — | — |  |
-| 2616 | `0x102fca40` | — | 1 | 0 | 0 | — | — |  |
-| 2617 | `0x102fcfe0` | — | 1 | 0 | 0 | — | — |  |
-| 2618 | `0x10300010` | — | 1 | 0 | 0 | — | — |  |
-| 2619 | `0x103000a0` | — | 1 | 0 | 0 | — | — |  |
-| 2620 | `0x10300e60` | — | 1 | 0 | 0 | — | — |  |
-| 2621 | `0x10303c90` | — | 1 | 0 | 0 | — | — |  |
-| 2622 | `0x10303cd0` | — | 1 | 0 | 0 | — | — |  |
-| 2623 | `0x10303d10` | — | 1 | 0 | 0 | `Unaccounted`, `CAI_Pathfinder_BuildGroundRoute` | — |  |
-| 2624 | `0x10303f80` | — | 1 | 0 | 0 | — | — |  |
-| 2625 | `0x10304020` | — | 1 | 0 | 0 | — | — |  |
-| 2626 | `0x10306200` | — | 1 | 0 | 0 | — | — |  |
-| 2627 | `0x10306520` | — | 1 | 0 | 0 | — | — |  |
-| 2628 | `0x10306550` | — | 1 | 0 | 0 | — | — |  |
-| 2629 | `0x10307aa0` | — | 1 | 0 | 0 | — | — |  |
-| 2630 | `0x10307b40` | — | 1 | 0 | 0 | — | — |  |
-| 2631 | `0x10307b60` | — | 1 | 0 | 0 | — | — |  |
-| 2632 | `0x10307d30` | — | 1 | 0 | 0 | `Patrol path pool is dry.  It will store …` | — |  |
-| 2633 | `0x10307db0` | — | 1 | 0 | 0 | — | — |  |
-| 2634 | `0x10312d40` | `CAI_BaseHumanoid#583`, `CAI_ExpressiveNPC#583` | 1 | 0 | 0 | — | — |  |
-| 2635 | `0x10319f30` | — | 1 | 0 | 0 | — | — |  |
-| 2636 | `0x10326ae0` | `CAI_BaseHumanoid#365`, `CAI_BaseNPC#365`, +69 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | — | `CAI_BaseNPC#365 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2637 | `0x1032e890` | — | 1 | 0 | 0 | — | — |  |
-| 2638 | `0x1033d970` | — | 1 | 0 | 0 | — | — |  |
-| 2639 | `0x1033d990` | — | 1 | 0 | 0 | — | — |  |
-| 2640 | `0x10345890` | — | 1 | 0 | 0 | `AngleInterp` | — |  |
-| 2641 | `0x10348100` | — | 1 | 0 | 0 | `ChooseSequenceFromList` | — |  |
-| 2642 | `0x10349830` | — | 1 | 0 | 0 | — | — |  |
-| 2643 | `0x10349970` | — | 1 | 0 | 0 | — | — |  |
-| 2644 | `0x103499a0` | — | 1 | 0 | 0 | — | — |  |
-| 2645 | `0x1034a170` | — | 1 | 0 | 0 | — | — |  |
-| 2646 | `0x1034aed0` | `CNPCMaker#587`, `CNPCMaker_Fleshpile#587`, +1 more | 1 | 0 | 0 | — | — |  |
-| 2647 | `0x1034b140` | `CNPCMaker#113`, `CNPCMaker_Fleshpile#113`, +1 more | 1 | 0 | 0 | — | — |  |
-| 2648 | `0x10356f30` | `CNPC_Bullseye#576` | 1 | 0 | 0 | — | — |  |
-| 2649 | `0x103577d0` | `CNPC_Crow#197` | 0 | 0 | 1 | — | — |  |
-| 2650 | `0x10358c90` | `CNPC_Crow#567` | 1 | 0 | 0 | — | — |  |
-| 2651 | `0x10358f70` | — | 1 | 0 | 0 | `NPC_Crow.Flap` | — |  |
-| 2652 | `0x10359240` | `CNPC_Crow#546` | 1 | 0 | 0 | — | — |  |
-| 2653 | `0x10359e90` | `CGeneric_NPC#546` | 1 | 0 | 0 | — | — |  |
-| 2654 | `0x1035a7e0` | `CGeneric_NPC#473` | 0 | 0 | 1 | — | — |  |
-| 2655 | `0x1035ace0` | `CGeneric_NPC_bathack#546` | 1 | 0 | 0 | — | — |  |
-| 2656 | `0x1035afe0` | `CGeneric_NPC_bathack#495` | 1 | 0 | 0 | — | — |  |
-| 2657 | `0x1035b4f0` | `CGenericSabbat_NPC#546` | 1 | 0 | 0 | — | — |  |
-| 2658 | `0x1035be50` | `CGenericSabbat_NPC#473` | 0 | 0 | 1 | — | — |  |
-| 2659 | `0x1035c1f0` | `CNPC_VVampireBoss#5` | 0 | 0 | 1 | — | — |  |
-| 2660 | `0x1035c460` | `CNPC_VAndreiBlood#546` | 1 | 0 | 0 | — | — |  |
-| 2661 | `0x1035ebf0` | `CNPC_VAnimal#587`, `CNPC_VDog#587`, +3 more | 1 | 0 | 0 | — | — |  |
-| 2662 | `0x1035edb0` | `CNPC_VAnimal#546` | 1 | 0 | 0 | — | — |  |
-| 2663 | `0x103601a0` | `CNPC_VAnimal#390`, `CNPC_VDog#390`, +3 more | 0 | 1 | 0 | — | — |  |
-| 2664 | `0x10360410` | `CNPC_VAsianVampire#5` | 0 | 0 | 1 | — | — |  |
-| 2665 | `0x10360610` | `CNPC_VAsianVampire#546` | 1 | 0 | 0 | — | — |  |
-| 2666 | `0x10362df0` | `CNPC_VBach#546` | 1 | 0 | 0 | — | — |  |
-| 2667 | `0x10364500` | `CNPC_VBach#553` | 1 | 0 | 0 | — | — |  |
-| 2668 | `0x10365840` | — | 1 | 0 | 0 | — | — |  |
-| 2669 | `0x10366e10` | `CNPC_VBatSwarm#546` | 1 | 0 | 0 | — | — |  |
-| 2670 | `0x103675e0` | `CNPC_VBatSwarm#553` | 1 | 0 | 0 | — | — |  |
-| 2671 | `0x10367a10` | `CNPC_VBrujah#546` | 1 | 0 | 0 | — | — |  |
-| 2672 | `0x10368150` | `CNPC_VCamera#493`, `CNPC_VCameraSecurity#493` | 1 | 0 | 0 | — | — |  |
-| 2673 | `0x10368170` | `CNPC_VCamera#494`, `CNPC_VCameraSecurity#494` | 1 | 0 | 0 | — | — |  |
-| 2674 | `0x10368190` | `CNPC_VCamera#495`, `CNPC_VCameraSecurity#495` | 1 | 0 | 0 | — | — |  |
-| 2675 | `0x103681f0` | `CNPC_VCamera#498`, `CNPC_VCameraSecurity#498` | 1 | 0 | 0 | — | — |  |
-| 2676 | `0x10368210` | `CNPC_VCamera#499`, `CNPC_VCameraSecurity#499` | 1 | 0 | 0 | — | — |  |
-| 2677 | `0x10368290` | `CNPC_VCamera#503`, `CNPC_VCameraSecurity#503` | 1 | 0 | 0 | — | — |  |
-| 2678 | `0x103682b0` | `CNPC_VCamera#504`, `CNPC_VCameraSecurity#504` | 1 | 0 | 0 | — | — |  |
-| 2679 | `0x10368350` | `CNPC_VCamera#509`, `CNPC_VCameraSecurity#509` | 1 | 0 | 0 | — | — |  |
-| 2680 | `0x10368550` | `CNPC_VCamera#546`, `CNPC_VCameraSecurity#546` | 1 | 0 | 0 | — | — |  |
-| 2681 | `0x10368f00` | `CNPC_VCamera#564`, `CNPC_VCameraSecurity#564` | 1 | 0 | 0 | — | — |  |
-| 2682 | `0x1036a030` | `CNPC_VCameraSecurity#468` | 1 | 0 | 0 | — | — |  |
-| 2683 | `0x1036a1f0` | `CNPC_VChangBros#5` | 0 | 0 | 1 | — | — |  |
-| 2684 | `0x1036a3f0` | `CNPC_VChangBros#546` | 1 | 0 | 0 | — | — |  |
-| 2685 | `0x1036eaf0` | `CNPC_VChangBrosBlade#5` | 0 | 0 | 1 | — | — |  |
-| 2686 | `0x1036ecf0` | `CNPC_VChangBrosBlade#546` | 1 | 0 | 0 | — | — |  |
-| 2687 | `0x1036f2f0` | `CNPC_VChangBrosClaw#5` | 0 | 0 | 1 | — | — |  |
-| 2688 | `0x1036f4f0` | `CNPC_VChangBrosClaw#546` | 1 | 0 | 0 | — | — |  |
-| 2689 | `0x1036fcb0` | `CNPC_VCombatman#546` | 1 | 0 | 0 | — | — |  |
-| 2690 | `0x10370560` | — | 1 | 0 | 0 | — | — |  |
-| 2691 | `0x103705b0` | — | 1 | 0 | 0 | — | — |  |
-| 2692 | `0x10370630` | — | 1 | 0 | 0 | — | — |  |
-| 2693 | `0x10370650` | — | 1 | 0 | 0 | `OnHeightenedAlertModeStart` | — |  |
-| 2694 | `0x10370ad0` | `CNPC_VCop#546` | 1 | 0 | 0 | — | — |  |
-| 2695 | `0x103736d0` | `CNPC_VDog#546` | 1 | 0 | 0 | — | — |  |
-| 2696 | `0x103747c0` | — | 1 | 0 | 0 | — | — |  |
-| 2697 | `0x10374e50` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — |  |
-| 2698 | `0x10375440` | `CNPC_VFrenzyShadow#546` | 1 | 0 | 0 | — | — |  |
-| 2699 | `0x10376b10` | `CNPC_VFrenzyShadow#390` | 0 | 0 | 1 | — | — |  |
-| 2700 | `0x10376b70` | `CNPC_VFrenzyShadow#599` | 0 | 1 | 0 | — | — |  |
-| 2701 | `0x10376c10` | — | 1 | 0 | 0 | — | — |  |
-| 2702 | `0x10377210` | `CNPC_VGangrel#546` | 1 | 0 | 0 | — | — |  |
-| 2703 | `0x10377b60` | `CNPC_VGargoyle#5` | 0 | 0 | 1 | — | — |  |
-| 2704 | `0x10377cd0` | `CNPC_VGargoyle#546` | 1 | 0 | 0 | — | — |  |
-| 2705 | `0x10378f80` | — | 1 | 0 | 0 | — | — |  |
-| 2706 | `0x10379ef0` | `CNPC_VGargoyle#599` | 0 | 1 | 0 | — | — |  |
-| 2707 | `0x1037a950` | `CNPC_VGhoulCroucher#546` | 1 | 0 | 0 | — | — |  |
-| 2708 | `0x1037c800` | `CNPC_VGuard1#546` | 1 | 0 | 0 | — | — |  |
-| 2709 | `0x1037ea60` | `CNPC_VHengeyokai#546` | 1 | 0 | 0 | — | — |  |
-| 2710 | `0x10381750` | `CNPC_VHengeyokai#599` | 0 | 1 | 0 | — | — |  |
-| 2711 | `0x10382d40` | — | 1 | 0 | 0 | — | — |  |
-| 2712 | `0x10383470` | — | 1 | 0 | 0 | — | — |  |
-| 2713 | `0x10384200` | `CNPC_VHuman#546` | 1 | 0 | 0 | — | — |  |
-| 2714 | `0x10386c80` | `CNPC_ProneDialog#546`, `CNPC_VHumanCombatant#546` | 1 | 0 | 0 | — | — |  |
-| 2715 | `0x103878b0` | `CNPC_VHumanCombatPatrol#546` | 1 | 0 | 0 | — | — |  |
-| 2716 | `0x10387fd0` | — | 1 | 0 | 0 | — | — |  |
-| 2717 | `0x10388200` | `CNPC_VHunter#546` | 1 | 0 | 0 | — | — |  |
-| 2718 | `0x10388c40` | — | 1 | 0 | 0 | `player D_HT 10` | — |  |
-| 2719 | `0x10388f80` | `CNPC_VLasombra#546` | 1 | 0 | 0 | — | — |  |
-| 2720 | `0x10389700` | `CNPC_VMalkavian#546` | 1 | 0 | 0 | — | — |  |
-| 2721 | `0x10389f50` | `CNPC_VManBat#546` | 1 | 0 | 0 | — | — |  |
-| 2722 | `0x1038e880` | `CNPC_VManBat#390` | 0 | 0 | 1 | — | — |  |
-| 2723 | `0x10391010` | `CNPC_VBaseBoss#587`, `CNPC_VMingXiao#587`, +4 more | 1 | 0 | 0 | — | — |  |
-| 2724 | `0x10391390` | `CNPC_VMingXiao#546` | 1 | 0 | 0 | — | — |  |
-| 2725 | `0x10395d00` | `CNPC_VMingXiao#574` | 1 | 0 | 0 | — | — |  |
-| 2726 | `0x10395dc0` | `CNPC_VMingXiao#599` | 0 | 1 | 0 | — | — |  |
-| 2727 | `0x10396000` | `CNPC_VMingXiao#127` | 0 | 0 | 1 | — | — |  |
-| 2728 | `0x10397000` | `CNPC_VMingXiao#166` | 0 | 0 | 1 | — | — |  |
-| 2729 | `0x103979d0` | — | 1 | 0 | 0 | — | — |  |
-| 2730 | `0x10399ef0` | — | 1 | 0 | 0 | `**studio**` | — |  |
-| 2731 | `0x1039aa20` | — | 1 | 0 | 0 | — | — |  |
-| 2732 | `0x1039b230` | `CNPC_VMingXiaoTentacle#546` | 1 | 0 | 0 | — | — |  |
-| 2733 | `0x1039ea80` | `CNPC_VMingXiaoTentacle#599` | 0 | 1 | 0 | — | — |  |
-| 2734 | `0x1039eda0` | `CNPC_VMingXiaoTentacle#127` | 0 | 0 | 1 | — | — |  |
-| 2735 | `0x1039eee0` | — | 1 | 0 | 0 | — | — |  |
-| 2736 | `0x1039ef10` | — | 1 | 0 | 0 | — | — |  |
-| 2737 | `0x1039ef60` | — | 1 | 0 | 0 | — | — |  |
-| 2738 | `0x1039f7a0` | `CNPC_VMoleman#546` | 1 | 0 | 0 | — | — |  |
-| 2739 | `0x103a0090` | `CNPC_VNewscaster#493` | 1 | 0 | 0 | — | — |  |
-| 2740 | `0x103a00b0` | `CNPC_VNewscaster#494` | 1 | 0 | 0 | — | — |  |
-| 2741 | `0x103a00d0` | `CNPC_VNewscaster#495` | 1 | 0 | 0 | — | — |  |
-| 2742 | `0x103a01d0` | `CNPC_VNewscaster#587` | 1 | 0 | 0 | — | — |  |
-| 2743 | `0x103a07f0` | — | 1 | 0 | 0 | `filename`, `dependency`, +5 more | — |  |
-| 2744 | `0x103a1640` | `CNPC_VNosferatu#546` | 1 | 0 | 0 | — | — |  |
-| 2745 | `0x103a1fa0` | `CNPC_VPedestrian#546` | 1 | 0 | 0 | — | — |  |
-| 2746 | `0x103a3c50` | `CNPC_VPlaceholder#546` | 1 | 0 | 0 | — | — |  |
-| 2747 | `0x103a4220` | `CNPC_VPlaceholder#587` | 1 | 0 | 0 | — | — |  |
-| 2748 | `0x103a47d0` | `CNPC_VFrenzyShadow#493`, `CNPC_VPlayerController#493`, +1 more | 1 | 0 | 0 | — | — |  |
-| 2749 | `0x103a47f0` | `CNPC_VFrenzyShadow#494`, `CNPC_VPlayerController#494`, +1 more | 1 | 0 | 0 | — | — |  |
-| 2750 | `0x103a4810` | `CNPC_VFrenzyShadow#495`, `CNPC_VPlayerController#495`, +1 more | 1 | 0 | 0 | — | — |  |
-| 2751 | `0x103a5240` | `CNPC_VSabbatGunman#546` | 1 | 0 | 0 | — | — |  |
-| 2752 | `0x103a5ce0` | `CNPC_VSabbatLeader#5` | 0 | 0 | 1 | — | — |  |
-| 2753 | `0x103a5e50` | `CNPC_VSabbatLeader#546` | 1 | 0 | 0 | — | — |  |
-| 2754 | `0x103abd40` | `CNPC_VRat#546`, `CNPC_VScurrying#546` | 1 | 0 | 0 | — | — |  |
-| 2755 | `0x103aca60` | `CNPC_VRat#471`, `CNPC_VScurrying#471` | 1 | 0 | 0 | — | — |  |
-| 2756 | `0x103aca80` | — | 1 | 0 | 0 | — | — |  |
-| 2757 | `0x103ad0a0` | — | 1 | 0 | 0 | — | — |  |
-| 2758 | `0x103ad0f0` | — | 1 | 0 | 0 | `Player_Nosferatu` | — |  |
-| 2759 | `0x103ad6a0` | `CNPC_VRat#428` | 1 | 0 | 0 | — | — |  |
-| 2760 | `0x103adcb0` | `CNPC_VSheriffMan#546` | 1 | 0 | 0 | — | — |  |
-| 2761 | `0x103b1dc0` | `CNPC_VSheriffSwarm#546` | 1 | 0 | 0 | — | — |  |
-| 2762 | `0x103b2590` | `CNPC_VSheriffSwarm#553` | 1 | 0 | 0 | — | — |  |
-| 2763 | `0x103b2a50` | `CNPC_VStalker#546` | 1 | 0 | 0 | — | — |  |
-| 2764 | `0x103b3170` | `CNPC_VTaxiDriver#546` | 1 | 0 | 0 | — | — |  |
-| 2765 | `0x103b3cc0` | `CNPC_VTest#546` | 1 | 0 | 0 | — | — |  |
-| 2766 | `0x103b54d0` | `CNPC_VToreador#546` | 1 | 0 | 0 | — | — |  |
-| 2767 | `0x103b5c70` | `CNPC_VTremere#546` | 1 | 0 | 0 | — | — |  |
-| 2768 | `0x103b6d90` | `CNPC_VTzimisce#325` | 1 | 0 | 0 | — | — |  |
-| 2769 | `0x103b6db0` | `CNPC_VTzimisce#324` | 1 | 0 | 0 | — | — |  |
-| 2770 | `0x103b70f0` | `CNPC_VTzimisce#546` | 1 | 0 | 0 | — | — |  |
-| 2771 | `0x103b9600` | `CNPC_VTzimisce#493` | 1 | 0 | 0 | — | — |  |
-| 2772 | `0x103b9620` | `CNPC_VTzimisce#494` | 1 | 0 | 0 | — | — |  |
-| 2773 | `0x103b9640` | `CNPC_VTzimisce#495` | 1 | 0 | 0 | — | — |  |
-| 2774 | `0x103b9ef0` | `CNPC_VTzimisce#509` | 1 | 0 | 0 | — | — |  |
-| 2775 | `0x103bc4e0` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 2776 | `0x103bca20` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 2777 | `0x103bcaf0` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 2778 | `0x103bcb60` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 2779 | `0x103bcc00` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
-| 2780 | `0x103c0c90` | `CNPC_VTzimisceHeadClaw#546` | 1 | 0 | 0 | — | — |  |
-| 2781 | `0x103c12c0` | `CNPC_VTzimisceHeadClaw#325` | 1 | 0 | 0 | — | — |  |
-| 2782 | `0x103c12e0` | `CNPC_VTzimisceHeadClaw#324` | 1 | 0 | 0 | — | — |  |
-| 2783 | `0x103c2860` | `CNPC_VTzimisceHeadClaw#127` | 0 | 0 | 1 | — | — |  |
-| 2784 | `0x103c2a60` | `CNPC_VTzimisceRunner#546` | 1 | 0 | 0 | — | — |  |
-| 2785 | `0x103c3060` | `CNPC_VTzimisceRunner#400` | 1 | 0 | 0 | — | — |  |
-| 2786 | `0x103c3080` | `CNPC_VTzimisceRunner#325` | 1 | 0 | 0 | — | — |  |
-| 2787 | `0x103c30a0` | `CNPC_VTzimisceRunner#324` | 1 | 0 | 0 | — | — |  |
-| 2788 | `0x103c3fd0` | `CNPC_VTzimisceRunner#588` | 1 | 0 | 0 | — | — |  |
-| 2789 | `0x103c43b0` | `CNPC_VTzimisceRunner#330` | 0 | 0 | 1 | — | — |  |
-| 2790 | `0x103c4a80` | `CNPC_VPlayerController#546`, `CNPC_VVampire#546` | 1 | 0 | 0 | — | — |  |
-| 2791 | `0x103c5270` | `CNPC_VVampireBoss#546` | 1 | 0 | 0 | — | — |  |
-| 2792 | `0x103c7950` | `CNPC_VVentrue#546` | 1 | 0 | 0 | — | — |  |
-| 2793 | `0x103c8ed0` | `CNPC_VWerewolf#546` | 1 | 0 | 0 | — | — |  |
-| 2794 | `0x103cb4b0` | — | 1 | 0 | 0 | — | — |  |
-| 2795 | `0x103d0e70` | — | 1 | 0 | 0 | — | — |  |
-| 2796 | `0x103d8660` | `CNPC_VWerewolf#500` | 0 | 0 | 1 | `NULL ENTITY`, `Exert_Heavy`, +1 more | — |  |
-| 2797 | `0x103dbad0` | — | 1 | 0 | 0 | `think_limit`, `entity_debug_stats`, +11 more | — |  |
-| 2798 | `0x103dbe70` | — | 1 | 0 | 0 | — | — |  |
-| 2799 | `0x103dc220` | — | 1 | 0 | 0 | — | — |  |
-| 2800 | `0x103dc950` | `CNPC_VWolfMorph#546` | 1 | 0 | 0 | — | — |  |
-| 2801 | `0x103dcf00` | `CNPC_VWolfMorph#588` | 1 | 0 | 0 | — | — |  |
-| 2802 | `0x103dd1f0` | `CNPC_VYukie#546` | 1 | 0 | 0 | — | — |  |
-| 2803 | `0x103dd8b0` | `CNPC_VYukie#599` | 0 | 1 | 0 | — | — |  |
-| 2804 | `0x103de2f0` | `CNPC_VZombie#5` | 0 | 0 | 1 | — | — |  |
-| 2805 | `0x103de4d0` | `CNPC_VZombie#546` | 1 | 0 | 0 | — | — |  |
-| 2806 | `0x103e0430` | `CNPC_VZombie#141` | 0 | 0 | 1 | — | — |  |
-| 2807 | `0x103e05e0` | — | 1 | 0 | 0 | — | — |  |
-| 2808 | `0x103e0a00` | — | 1 | 0 | 0 | — | — |  |
-| 2809 | `0x103e12c0` | `CNPC_VZombie#25` | 0 | 0 | 1 | — | — |  |
-| 2810 | `0x103e12f0` | `CNPC_VZombie#26` | 0 | 0 | 1 | — | — |  |
-| 2811 | `0x103eeee0` | — | 1 | 0 | 0 | — | — |  |
-| 2812 | `0x10412420` | — | 1 | 0 | 0 | `ERROR: Activity Lookup went out of range…` | — |  |
-| 2813 | `0x10412470` | — | 1 | 0 | 0 | — | — |  |
-| 2814 | `0x104124b0` | — | 1 | 0 | 0 | `***⏎Shared<->Private Activity collision!…` | — |  |
-| 2815 | `0x10412550` | — | 1 | 0 | 0 | — | — |  |
-| 2816 | `0x104126a0` | — | 1 | 0 | 0 | — | — |  |
-| 2817 | `0x104276d0` | — | 1 | 0 | 0 | — | — |  |
-| 2818 | `0x10427a70` | — | 1 | 0 | 0 | `***⏎Model %s tried to reference unregist…`, `***⏎Model %s tried to reference unregist…`, +2 more | — |  |
-| 2819 | `0x10427d90` | — | 1 | 0 | 0 | — | — |  |
-| 2820 | `0x10427df0` | — | 1 | 0 | 0 | — | — |  |
-| 2821 | `0x104280f0` | — | 1 | 0 | 0 | — | — |  |
-| 2822 | `0x10428280` | — | 1 | 0 | 0 | — | — |  |
-| 2823 | `0x10428310` | — | 1 | 0 | 0 | `GetEyePosition() Can't get pstudiohdr pt…` | — |  |
-| 2824 | `0x10428360` | — | 1 | 0 | 0 | — | — |  |
-| 2825 | `0x10428470` | — | 1 | 0 | 0 | — | — |  |
-| 2826 | `0x104284c0` | — | 1 | 0 | 0 | — | — |  |
-| 2827 | `0x104287d0` | — | 1 | 0 | 0 | `Unknown`, `Null model in GetSequenceActivityName() …`, +1 more | — |  |
-| 2828 | `0x10428850` | — | 1 | 0 | 0 | — | — |  |
-| 2829 | `0x10428880` | — | 1 | 0 | 0 | `Bad sound event %d in sequence %s :: %s …` | — |  |
-| 2830 | `0x1042fc90` | — | 1 | 0 | 0 | — | — |  |
-| 2831 | `0x10430130` | — | 1 | 0 | 0 | — | — |  |
-| 2832 | `0x10431351` | — | 1 | 0 | 0 | — | — |  |
-| 2833 | `0x1043253d` | — | 1 | 0 | 0 | — | — |  |
-| 2834 | `0x104325f0` | — | 1 | 0 | 0 | — | — |  |
-| 2835 | `0x1043260d` | — | 1 | 0 | 0 | — | — |  |
-| 2836 | `0x104342d6` | — | 1 | 0 | 0 | — | — |  |
-| 2837 | `0x10438962` | — | 1 | 0 | 0 | — | — |  |
-| 2838 | `0x10438987` | — | 1 | 0 | 0 | — | — |  |
-| 2839 | `0x104389c6` | — | 1 | 0 | 0 | — | — |  |
-| 2840 | `0x10438aad` | — | 1 | 0 | 0 | — | — |  |
-| 2841 | `0x10438b6e` | — | 1 | 0 | 0 | — | — |  |
-| 2842 | `0x10438b7c` | — | 1 | 0 | 0 | — | — |  |
-| 2843 | `0x10438bae` | — | 1 | 0 | 0 | — | — |  |
-| 2844 | `0x10438c10` | — | 1 | 0 | 0 | — | — |  |
-| 2845 | `0x1043ab2b` | — | 1 | 0 | 0 | — | — |  |
-| 2846 | `0x1043ab74` | — | 1 | 0 | 0 | — | — |  |
-| 2847 | `0x1043abca` | — | 1 | 0 | 0 | — | — |  |
-| 2848 | `0x1043ac56` | — | 1 | 0 | 0 | — | — |  |
-| 2849 | `0x1043ac71` | — | 1 | 0 | 0 | — | — |  |
-| 2850 | `0x1043ac7d` | — | 1 | 0 | 0 | — | — |  |
-| 2851 | `0x1043ac98` | — | 1 | 0 | 0 | — | — |  |
-| 2852 | `0x1043ad25` | — | 1 | 0 | 0 | — | — |  |
-| 2853 | `0x1043ae91` | — | 1 | 0 | 0 | — | — |  |
-| 2854 | `0x1043b1bd` | — | 1 | 0 | 0 | — | — |  |
-| 2855 | `0x1043b6ca` | — | 1 | 0 | 0 | — | — |  |
-| 2856 | `0x1043bc15` | — | 1 | 0 | 0 | — | — |  |
-| 2857 | `0x1043c536` | — | 1 | 0 | 0 | — | — |  |
-| 2858 | `0x1043ce52` | — | 1 | 0 | 0 | — | — |  |
-| 2859 | `0x1043ce7f` | — | 1 | 0 | 0 | — | — |  |
-| 2860 | `0x1043d2e5` | — | 1 | 0 | 0 | — | — |  |
-| 2861 | `0x1043d505` | — | 1 | 0 | 0 | — | — |  |
-| 2862 | `0x10026530` | `CAISound#21`, `CAI_BaseHumanoid#21`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#21 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2863 | `0x10026550` | `CAISound#22`, `CAI_BaseHumanoid#22`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#22 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2864 | `0x10026570` | `CAISound#23`, `CAI_BaseHumanoid#23`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#23 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2865 | `0x100265b0` | `CAISound#25`, `CAI_BaseHumanoid#25`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#25 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2866 | `0x100265d0` | `CAISound#26`, `CAI_BaseHumanoid#26`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#26 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2867 | `0x100265f0` | `CAISound#27`, `CAI_BaseHumanoid#27`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#27 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2868 | `0x10026610` | `CAISound#28`, `CAI_BaseHumanoid#28`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#28 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2869 | `0x10026630` | `CAISound#29`, `CAI_BaseHumanoid#29`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#29 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2870 | `0x10026650` | `CAISound#30`, `CAI_BaseHumanoid#30`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#30 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2871 | `0x10026670` | `CAISound#32`, `CAI_BaseHumanoid#32`, +475 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#32 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2872 | `0x10026690` | `CAISound#33`, `CAI_BaseHumanoid#33`, +486 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#33 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2873 | `0x100266d0` | `CAISound#35`, `CAI_BaseHumanoid#35`, +238 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#35 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2874 | `0x100266f0` | `CAISound#36`, `CAI_BaseHumanoid#36`, +482 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#36 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2875 | `0x10026710` | `CAISound#37`, `CAI_BaseHumanoid#37`, +489 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#37 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2876 | `0x10026730` | `CAISound#38`, `CAI_BaseHumanoid#38`, +490 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#38 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2877 | `0x10026750` | `CAISound#40`, `CAI_BaseHumanoid#40`, +491 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#40 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2878 | `0x10026770` | `CAISound#41`, `CAI_BaseHumanoid#41`, +476 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#41 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2879 | `0x10026790` | `CAISound#43`, `CAI_BaseHumanoid#43`, +488 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#43 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2880 | `0x100267b0` | `CAISound#44`, `CAI_BaseHumanoid#44`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#44 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2881 | `0x100267d0` | `CAISound#46`, `CAI_BaseHumanoid#46`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#46 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2882 | `0x100267f0` | `CAISound#47`, `CAI_BaseHumanoid#47`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#47 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2883 | `0x10026810` | `CAISound#48`, `CAI_BaseHumanoid#48`, +494 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:43 | `CAI_BaseNPC#48 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2884 | `0x10026830` | `CAISound#49`, `CAI_BaseHumanoid#49`, +494 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Player/ElysiumCameraSolve.cpp:467, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:44, Source/ElysiumUE/Public/ElysiumCameraSolve.h:51 | `CAI_BaseNPC#49 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2885 | `0x10026910` | `CAISound#54`, `CAI_BaseHumanoid#54`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#54 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2886 | `0x10026930` | `CAISound#55`, `CAI_BaseHumanoid#55`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#55 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2887 | `0x10026950` | `CAISound#56`, `CAI_BaseHumanoid#56`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#56 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2888 | `0x10026970` | `CAISound#57`, `CAI_BaseHumanoid#57`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#57 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2889 | `0x10026990` | `CAISound#58`, `CAI_BaseHumanoid#58`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#58 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2890 | `0x100269b0` | `CAISound#59`, `CAI_BaseHumanoid#59`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#59 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2891 | `0x100269d0` | `CAISound#60`, `CAI_BaseHumanoid#60`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#60 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2892 | `0x100269f0` | `CAISound#61`, `CAI_BaseHumanoid#61`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#61 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2893 | `0x10026ad0` | `CAISound#72`, `CAI_ChangeHintGroup#72`, +410 more | 0 | 0 | 0 | — | — |  |
-| 2894 | `0x10026bf0` | `CAISound#115`, `CAI_BaseHumanoid#115`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#115 no SDK twin: stretch #113-#118 holds 4 retai…` |
-| 2895 | `0x10026c10` | `CAISound#131`, `CAI_BaseHumanoid#131`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#131 no SDK twin: stretch #128-#138 holds 9 retai…` |
-| 2896 | `0x10026c30` | `CAISound#132`, `CAI_BaseHumanoid#132`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#132 no SDK twin: stretch #128-#138 holds 9 retai…` |
-| 2897 | `0x10026d10` | `CAISound#135`, `CAI_ChangeHintGroup#135`, +158 more | 0 | 0 | 0 | — | — |  |
-| 2898 | `0x10026d30` | `CAISound#136`, `CAI_ChangeHintGroup#136`, +417 more | 0 | 0 | 0 | — | — |  |
-| 2899 | `0x10026d50` | `CAISound#137`, `CAI_ChangeHintGroup#137`, +195 more | 0 | 0 | 0 | — | — |  |
-| 2900 | `0x10026d70` | `CAISound#139`, `CAI_BaseHumanoid#139`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#139 no SDK twin: stretch #138-#140 holds 1 retai…` |
-| 2901 | `0x10026db0` | `CAISound#147`, `CAI_BaseHumanoid#147`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#147 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2902 | `0x10026dd0` | `CAISound#148`, `CAI_BaseHumanoid#148`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#148 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2903 | `0x10026df0` | `CAISound#149`, `CAI_BaseHumanoid#149`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#149 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2904 | `0x10026e10` | `CAISound#150`, `CAI_BaseHumanoid#150`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#150 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2905 | `0x10026e30` | `CAISound#151`, `CAI_BaseHumanoid#151`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#151 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2906 | `0x10026e50` | `CAISound#152`, `CAI_ChangeHintGroup#152`, +157 more | 0 | 0 | 0 | — | — |  |
-| 2907 | `0x10026ee0` | `CAISound#156`, `CAI_BaseHumanoid#156`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#156 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2908 | `0x10026f00` | `CAISound#157`, `CAI_BaseHumanoid#157`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#157 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2909 | `0x10026f60` | `CAISound#162`, `CAI_BaseHumanoid#162`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#162 no SDK twin: stretch #160-#163 holds 2 retai…` |
-| 2910 | `0x100270a0` | `CAISound#179`, `CAI_BaseHumanoid#179`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#179 no SDK twin: stretch #178-#180 holds 1 retai…` |
-| 2911 | `0x100270e0` | `CAISound#187`, `CAI_BaseHumanoid#187`, +326 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#187 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 2912 | `0x10027100` | `CAISound#188`, `CAI_BaseHumanoid#188`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#188 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 2913 | `0x10027120` | `CAISound#190`, `CAI_BaseHumanoid#190`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#190 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 2914 | `0x10027330` | `CAISound#205`, `CAI_BaseHumanoid#205`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#205 no SDK twin: stretch #199-#222 holds 22 reta…` |
-| 2915 | `0x10027350` | `CAISound#206`, `CAI_BaseHumanoid#206`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#206 no SDK twin: stretch #199-#222 holds 22 reta…` |
-| 2916 | `0x10027370` | `CAISound#210`, `CAI_BaseHumanoid#210`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#210 no SDK twin: stretch #199-#222 holds 22 reta…` |
-| 2917 | `0x100273b0` | `CAISound#224`, `CAI_BaseHumanoid#224`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#224 no SDK twin: stretch #222-#227 holds 4 retai…` |
-| 2918 | `0x100273f0` | `CAISound#235`, `CAI_BaseHumanoid#235`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#235 no SDK twin: stretch #233-#237 holds 3 retai…` |
-| 2919 | `0x10027410` | `CAISound#236`, `CAI_BaseHumanoid#236`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#236 no SDK twin: stretch #233-#237 holds 3 retai…` |
-| 2920 | `0x10027430` | `CAISound#240`, `CAI_ChangeHintGroup#240`, +410 more | 0 | 0 | 0 | — | — |  |
-| 2921 | `0x10027650` | `CAISound#4`, `CAI_BaseHumanoid#4`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#4 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
-| 2922 | `0x1004fbb0` | `CAI_BaseHumanoid#108`, `CAI_BaseNPC#108`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#108 no SDK twin: stretch #107-#113 holds 5 retai…` |
-| 2923 | `0x1004fbf0` | `CAI_BaseHumanoid#109`, `CAI_BaseNPC#109`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#109 no SDK twin: stretch #107-#113 holds 5 retai…` |
-| 2924 | `0x1004fc10` | `CAI_BaseHumanoid#152`, `CAI_BaseNPC#152`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#152 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2925 | `0x10098eb0` | `CAI_BaseHumanoid#255`, `CAI_BaseNPC#255`, +85 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#255 no SDK twin: stretch #249-#256 holds 6 retai…` |
-| 2926 | `0x1009a660` | `CAISound#80`, `CAI_ChangeHintGroup#80`, +160 more | 0 | 0 | 0 | — | — |  |
-| 2927 | `0x1009a680` | `CAISound#81`, `CAI_ChangeHintGroup#81`, +160 more | 0 | 0 | 0 | — | — |  |
-| 2928 | `0x1009e100` | `CAISound#79`, `CAI_ChangeHintGroup#79`, +192 more | 0 | 0 | 0 | — | — |  |
-| 2929 | `0x100ab430` | `CAISound#101`, `CAI_BaseHumanoid#101`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#101 no SDK twin: stretch #100-#103 holds 2 retai…` |
-| 2930 | `0x100ab450` | `CAISound#102`, `CAI_BaseHumanoid#102`, +494 more | 0 | 0 | 0 | `Physics_TraceEntity` | — | `CAI_BaseNPC#102 no SDK twin: stretch #100-#103 holds 2 retai…` |
-| 2931 | `0x100ad8f0` | `CAISound#182`, `CAI_BaseHumanoid#182`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#182 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 2932 | `0x100ad910` | `CAISound#183`, `CAI_BaseHumanoid#183`, +489 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#183 no SDK twin: stretch #181-#189 holds 7 retai…` |
-| 2933 | `0x100b4340` | `CAISound#117`, `CAI_DynamicLink#117`, +50 more | 0 | 0 | 0 | — | — |  |
-| 2934 | `0x100b5080` | `CAISound#223`, `CAI_ChangeHintGroup#223`, +395 more | 0 | 0 | 0 | — | — |  |
-| 2935 | `0x100b5c20` | `CAI_BaseHumanoid#282`, `CAI_BaseNPC#282`, +84 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#282 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 2936 | `0x100b70e0` | `CAI_BaseHumanoid#290`, `CAI_BaseNPC#290`, +84 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#290 no SDK twin: stretch #276-#292 holds 15 reta…` |
-| 2937 | `0x1014f710` | `CAI_BaseHumanoid#316`, `CAI_BaseNPC#316`, +14 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#316 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2938 | `0x1014f730` | `CAI_BaseHumanoid#317`, `CAI_BaseNPC#317`, +16 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#317 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2939 | `0x1014f7b0` | `CAI_BaseHumanoid#321`, `CAI_BaseNPC#321`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#321 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2940 | `0x1014f7d0` | `CAI_BaseHumanoid#322`, `CAI_BaseNPC#322`, +19 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#322 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2941 | `0x1014f850` | `CAI_BaseHumanoid#329`, `CAI_BaseNPC#329`, +82 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#329 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2942 | `0x1014f890` | `CAI_BaseHumanoid#332`, `CAI_BaseNPC#332`, +82 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#332 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2943 | `0x1014f8b0` | `CAI_BaseHumanoid#240`, `CAI_BaseNPC#240`, +83 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#240 no SDK twin: stretch #238-#241 holds 2 retai…` |
-| 2944 | `0x1014f950` | `CAI_BaseHumanoid#361`, `CAI_BaseNPC#361`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#361 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2945 | `0x1014f9d0` | `CAI_BaseHumanoid#377`, `CAI_BaseNPC#377`, +79 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#377 no SDK twin: stretch #376-#382 holds 5 retai…` |
-| 2946 | `0x1014f9f0` | `CAI_BaseHumanoid#378`, `CAI_BaseNPC#378`, +68 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#378 no SDK twin: stretch #376-#382 holds 5 retai…` |
-| 2947 | `0x1015dc20` | `CAI_BaseHumanoid#72`, `CAI_BaseNPC#72`, +63 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#72 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2948 | `0x101a5db0` | `CCineAI#82`, `CCineNPC#82` | 0 | 0 | 0 | — | — |  |
-| 2949 | `0x101a6420` | `CAI_BaseHumanoid#410`, `CAI_BaseNPC#410`, +74 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#410 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 2950 | `0x101a6440` | `CAI_BaseHumanoid#412`, `CAI_BaseNPC#412`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#412 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 2951 | `0x101a6480` | `CAI_BaseHumanoid#414`, `CAI_BaseNPC#414`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#414 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 2952 | `0x101a64a0` | `CAI_BaseHumanoid#415`, `CAI_BaseNPC#415`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#415 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 2953 | `0x101a64e0` | `CAI_BaseHumanoid#417`, `CAI_BaseNPC#417`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#417 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 2954 | `0x101a6680` | `CAI_BaseHumanoid#454`, `CAI_BaseNPC#454`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#454 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 2955 | `0x101a66a0` | `CAI_BaseHumanoid#455`, `CAI_BaseNPC#455`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#455 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 2956 | `0x101a66c0` | `CAI_BaseHumanoid#456`, `CAI_BaseNPC#456`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#456 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 2957 | `0x101a66e0` | `CAI_BaseHumanoid#457`, `CAI_BaseNPC#457`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#457 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 2958 | `0x101a67a0` | `CAI_BaseHumanoid#472`, `CAI_BaseNPC#472`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#472 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 2959 | `0x101a6860` | `CAI_BaseHumanoid#136`, `CAI_BaseNPC#136`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#136 no SDK twin: stretch #128-#138 holds 9 retai…` |
-| 2960 | `0x101a6980` | `CAI_BaseHumanoid#496`, `CAI_BaseNPC#496`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#496 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2961 | `0x101a69a0` | `CAI_BaseHumanoid#497`, `CAI_BaseNPC#497`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#497 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2962 | `0x101a6a00` | `CAI_BaseHumanoid#500`, `CAI_BaseNPC#500`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#500 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2963 | `0x101a6a20` | `CAI_BaseHumanoid#501`, `CAI_BaseNPC#501`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#501 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2964 | `0x101a6a40` | `CAI_BaseHumanoid#502`, `CAI_BaseNPC#502`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#502 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2965 | `0x101a6aa0` | `CAI_BaseHumanoid#505`, `CAI_BaseNPC#505`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#505 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2966 | `0x101a6ac0` | `CAI_BaseHumanoid#506`, `CAI_BaseNPC#506`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#506 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2967 | `0x101a6b00` | `CAI_BaseHumanoid#508`, `CAI_BaseNPC#508`, +73 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#508 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 2968 | `0x101a6be0` | `CAI_BaseNPC#535`, `CAI_BaseNPCTroika#535`, +74 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#535 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 2969 | `0x101a6c40` | `CAI_BaseHumanoid#551`, `CAI_BaseNPC#551`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#551 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 2970 | `0x101a6c60` | `CAI_BaseHumanoid#557`, `CAI_BaseNPC#557`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#557 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 2971 | `0x101a6c80` | `CAI_BaseHumanoid#558`, `CAI_BaseNPC#558`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#558 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 2972 | `0x101a6cc0` | `CAI_BaseHumanoid#578`, `CAI_BaseNPC#578`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#578 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 2973 | `0x101a6d20` | `CCineAI#117`, `CCineAISchedule#117`, +1 more | 0 | 0 | 0 | — | — |  |
-| 2974 | `0x101a6dc0` | `CCineAI#362`, `CCineAISchedule#362`, +1 more | 0 | 0 | 0 | — | — |  |
-| 2975 | `0x101a6de0` | `CCineAI#365`, `CCineAISchedule#365`, +1 more | 0 | 0 | 0 | — | — |  |
-| 2976 | `0x101a6e20` | `CCineAI#72`, `CCineAISchedule#72`, +1 more | 0 | 0 | 0 | — | — |  |
-| 2977 | `0x101a9620` | `CCineAISchedule#82` | 0 | 0 | 0 | — | — |  |
-| 2978 | `0x101aa650` | `CAI_BaseNPCTroika#30`, `CGeneric_NPC#30`, +62 more | 0 | 0 | 0 | — | — |  |
-| 2979 | `0x101aa730` | `CAI_BaseNPCTroika#415`, `CGeneric_NPC#415`, +62 more | 0 | 0 | 0 | — | — |  |
-| 2980 | `0x101aa7d0` | `CPayphone#117` | 0 | 0 | 0 | — | — |  |
-| 2981 | `0x101aa870` | `CPayphone#362` | 0 | 0 | 0 | — | — |  |
-| 2982 | `0x101aa890` | `CPayphone#365` | 0 | 0 | 0 | — | — |  |
-| 2983 | `0x101aa930` | `CPayphone#72` | 0 | 0 | 0 | — | — |  |
-| 2984 | `0x101aad90` | `CPayphone#286` | 0 | 0 | 0 | — | — |  |
-| 2985 | `0x101aae20` | `CPayphone#359` | 0 | 0 | 0 | — | — |  |
-| 2986 | `0x101aae40` | `CPayphone#37` | 0 | 0 | 0 | — | — |  |
-| 2987 | `0x101ab1b0` | `CPayphone#5` | 0 | 0 | 0 | — | — |  |
-| 2988 | `0x101bb5b0` | `CAISound#5` | 0 | 0 | 0 | — | — |  |
-| 2989 | `0x1025e450` | `CAI_BaseHumanoid#82` | 0 | 0 | 0 | — | — |  |
-| 2990 | `0x10260d70` | `CAI_ExpressiveNPC#5` | 0 | 0 | 0 | — | — |  |
-| 2991 | `0x102623e0` | `CAI_HumanoidMotor#11`, `CAI_Motor#11` | 0 | 0 | 0 | — | — |  |
-| 2992 | `0x1026a910` | `CAI_BaseHumanoid#568`, `CAI_BaseNPC#568`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#568 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 2993 | `0x1026ae90` | `CAI_BaseHumanoid#473`, `CAI_BaseNPC#473`, +8 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#473 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 2994 | `0x10279060` | `CAI_BaseHumanoid#540`, `CAI_BaseNPC#540`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#540 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 2995 | `0x1027a7c0` | `CAI_BaseNPC#82`, `CAI_ExpressiveNPC#82`, +4 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#82 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2996 | `0x1027c790` | `CAI_MoveAndShootOverlay#0` | 0 | 0 | 0 | — | — |  |
-| 2997 | `0x1027c7f0` | `CAI_BaseNPC#5` | 0 | 0 | 0 | — | — | `CAI_BaseNPC#5 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
-| 2998 | `0x1027d000` | `CAI_Pathfinder#0` | 0 | 0 | 0 | — | — |  |
-| 2999 | `0x1027d9d0` | `CAI_BaseHumanoid#514`, `CAI_BaseNPC#514`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#514 no SDK twin: stretch #513-#516 holds 2 retai…` |
-| 3000 | `0x1027dc80` | `CAI_BaseHumanoid#531`, `CAI_BaseNPC#531`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 3001 | `0x1028b0f0` | `CAI_BaseHumanoid#547`, `CAI_BaseNPC#547`, +75 more | 0 | 0 | 0 | `ERROR! Subclass missing GetSlotSchedule …` | — | `CAI_BaseNPC#547 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 3002 | `0x1028cd10` | `CAI_BaseNPCTroika#82`, `CGeneric_NPC#82`, +3 more | 0 | 0 | 0 | — | — |  |
-| 3003 | `0x1028d5e0` | `CAI_BaseNPCTroika#5` | 0 | 0 | 0 | — | — |  |
-| 3004 | `0x1028de10` | `CAI_BaseNPCTroika#18`, `CGeneric_NPC#18`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3005 | `0x1028de90` | `CAI_BaseNPCTroika#17`, `CGeneric_NPC#17`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3006 | `0x10294720` | `CAI_BaseNPCTroika#496`, `CGeneric_NPC#496`, +55 more | 0 | 0 | 0 | `Target_Acquired` | — |  |
-| 3007 | `0x102947e0` | `CAI_BaseNPCTroika#497`, `CGeneric_NPC#497`, +55 more | 0 | 0 | 0 | — | — |  |
-| 3008 | `0x102949f0` | `CAI_BaseNPCTroika#500`, `CGeneric_NPC#500`, +59 more | 0 | 0 | 0 | `Exert_Heavy` | — |  |
-| 3009 | `0x10294ab0` | `CAI_BaseNPCTroika#501`, `CGeneric_NPC#501`, +60 more | 0 | 0 | 0 | `Exert_Light` | — |  |
-| 3010 | `0x10294b70` | `CAI_BaseNPCTroika#502`, `CGeneric_NPC#502`, +60 more | 0 | 0 | 0 | `Riled` | — |  |
-| 3011 | `0x10294db0` | `CAI_BaseNPCTroika#505`, `CGeneric_NPC#505`, +60 more | 0 | 0 | 0 | `Target_GiveUp` | — |  |
-| 3012 | `0x10294e70` | `CAI_BaseNPCTroika#506`, `CGeneric_NPC#506`, +60 more | 0 | 0 | 0 | `Target_Reacquired` | — |  |
-| 3013 | `0x1029f850` | `CAI_BaseNPCTroika#22`, `CGeneric_NPC#22`, +61 more | 0 | 0 | 0 | — | — |  |
-| 3014 | `0x1029f890` | `CAI_BaseNPCTroika#23`, `CGeneric_NPC#23`, +61 more | 0 | 0 | 0 | — | — |  |
-| 3015 | `0x1029fb70` | `CAI_BaseNPCTroika#317`, `CGeneric_NPC#317`, +60 more | 0 | 0 | 0 | — | — |  |
-| 3016 | `0x102b4070` | `CAI_BaseNPCTroika#473`, `CNPCMaker#473`, +8 more | 0 | 0 | 0 | — | — |  |
-| 3017 | `0x102b5100` | `CAI_BaseNPCTroika#55`, `CGeneric_NPC#55`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3018 | `0x102b51a0` | `CAI_BaseNPCTroika#57`, `CGeneric_NPC#57`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3019 | `0x102b51c0` | `CAI_BaseNPCTroika#58`, `CGeneric_NPC#58`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3020 | `0x102c0420` | `CAI_BaseNPCTroika#86`, `CGeneric_NPC#86`, +59 more | 0 | 0 | 0 | — | — |  |
-| 3021 | `0x102c5870` | `CAI_BaseNPCTroika#80`, `CGeneric_NPC#80`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3022 | `0x102c5890` | `CAI_BaseNPCTroika#81`, `CGeneric_NPC#81`, +62 more | 0 | 0 | 0 | — | — |  |
-| 3023 | `0x102c6dd0` | `CAI_StandoffBehavior#11`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#11` | 0 | 0 | 0 | — | — |  |
-| 3024 | `0x102c6df0` | `CAI_StandoffBehavior#12`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#12` | 0 | 0 | 0 | — | — |  |
-| 3025 | `0x102c6fd0` | `CAI_StandoffBehavior#25`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#25` | 0 | 0 | 0 | — | — |  |
-| 3026 | `0x102c7230` | `CAI_StandoffBehavior#7`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#7` | 0 | 0 | 0 | — | — |  |
-| 3027 | `0x102c7270` | `CAI_StandoffBehavior#9`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#9` | 0 | 0 | 0 | — | — |  |
-| 3028 | `0x102c72f0` | `CAI_StandoffBehavior#6` | 0 | 0 | 0 | — | — |  |
-| 3029 | `0x102c7310` | `CAI_StandoffBehavior#19` | 0 | 0 | 0 | `CAI_StandoffBehavior` | — |  |
-| 3030 | `0x102c7330` | `CAI_StandoffBehavior#0` | 0 | 0 | 0 | — | — |  |
-| 3031 | `0x102c73f0` | `CAI_StandoffBehavior#8` | 0 | 0 | 0 | — | — |  |
-| 3032 | `0x102c7ef0` | `CAI_StandoffBehavior#28` | 0 | 0 | 0 | — | — |  |
-| 3033 | `0x102c8980` | `CAI_StandoffGoal#82` | 0 | 0 | 0 | — | — |  |
-| 3034 | `0x102c8a30` | `CAI_StandoffBehavior#27`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#27` | 0 | 0 | 0 | — | — |  |
-| 3035 | `0x102d0370` | `CAI_Hint#82` | 0 | 0 | 0 | — | — |  |
-| 3036 | `0x102d2ee0` | `CAI_Hint#117` | 0 | 0 | 0 | — | — |  |
-| 3037 | `0x102d2f00` | `CAI_Hint#5` | 0 | 0 | 0 | — | — |  |
-| 3038 | `0x102d7290` | `CAI_TestHull#117` | 0 | 0 | 0 | — | — |  |
-| 3039 | `0x102d77d0` | `CAI_TestHull#5` | 0 | 0 | 0 | — | — |  |
-| 3040 | `0x102d9500` | `CAI_InterestingPlace#82` | 0 | 0 | 0 | — | — |  |
-| 3041 | `0x102d9ae0` | `CAI_InterestingPlace#5` | 0 | 0 | 0 | — | — |  |
-| 3042 | `0x102db7f0` | `CAI_InterestingPlaceConverstation#82` | 0 | 0 | 0 | — | — |  |
-| 3043 | `0x102e0990` | `CAI_Motor#0` | 0 | 0 | 0 | — | — |  |
-| 3044 | `0x102e1420` | `CAI_HumanoidMotor#9`, `CAI_Motor#9` | 0 | 0 | 0 | — | — |  |
-| 3045 | `0x102ecb20` | `CAI_Navigator#0` | 0 | 0 | 0 | — | — |  |
-| 3046 | `0x102eea30` | `CAI_HumanoidNavigator#4`, `CAI_Navigator#4` | 0 | 0 | 0 | — | — |  |
-| 3047 | `0x102eea50` | `CAI_HumanoidNavigator#6`, `CAI_Navigator#6` | 0 | 0 | 0 | — | — |  |
-| 3048 | `0x10321670` | `CAI_BaseHumanoid#79`, `CAI_BaseNPC#79`, +80 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#79 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 3049 | `0x10321960` | `CAI_BaseHumanoid#80`, `CAI_BaseNPC#80`, +16 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#80 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 3050 | `0x10321980` | `CAI_BaseHumanoid#81`, `CAI_BaseNPC#81`, +16 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#81 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 3051 | `0x10345460` | `CAI_BaseHumanoid#327`, `CAI_BaseNPC#327`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#327 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 3052 | `0x1034a6b0` | `CGenericNPC#473` | 0 | 0 | 0 | — | — |  |
-| 3053 | `0x1034aab0` | `CGenericNPC#5` | 0 | 0 | 0 | — | — |  |
-| 3054 | `0x1034ab50` | `CNPCMaker#82` | 0 | 0 | 0 | — | — |  |
-| 3055 | `0x1034ae70` | `CNPCMaker#362` | 0 | 0 | 0 | — | — |  |
-| 3056 | `0x1034ae90` | `CNPCMaker#365` | 0 | 0 | 0 | — | — |  |
-| 3057 | `0x1034aef0` | `CNPCMaker#72`, `CNPCMaker_Fleshpile#72`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3058 | `0x1034af10` | `CNPCMaker#86`, `CNPCMaker_Fleshpile#86`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3059 | `0x1034bdc0` | `CNPCMaker_Fleshpile#82` | 0 | 0 | 0 | — | — |  |
-| 3060 | `0x1034bf10` | `CNPCMaker_Fleshpile#362` | 0 | 0 | 0 | — | — |  |
-| 3061 | `0x1034bf30` | `CNPCMaker_Fleshpile#365` | 0 | 0 | 0 | — | — |  |
-| 3062 | `0x1034c260` | `CNPCMaker_Fleshpile#130` | 0 | 0 | 0 | `npc_VAndreiBlood` | — |  |
-| 3063 | `0x1034c8e0` | `CNPCMaker_Fleshpile#139` | 0 | 0 | 0 | — | — |  |
-| 3064 | `0x1034c9f0` | `CNPCMaker_Zombie#82` | 0 | 0 | 0 | — | — |  |
-| 3065 | `0x1034cb50` | `CNPCMaker_Zombie#362` | 0 | 0 | 0 | — | — |  |
-| 3066 | `0x1034cb70` | `CNPCMaker_Zombie#365` | 0 | 0 | 0 | — | — |  |
-| 3067 | `0x1034d410` | `CScriptedTarget#117` | 0 | 0 | 0 | — | — |  |
-| 3068 | `0x1034d430` | `CScriptedTarget#82` | 0 | 0 | 0 | — | — |  |
-| 3069 | `0x103564f0` | `CNPC_Bullseye#82` | 0 | 0 | 0 | — | — |  |
-| 3070 | `0x10356740` | `CNPC_Bullseye#5` | 0 | 0 | 0 | — | — |  |
-| 3071 | `0x103573b0` | `CNPC_Crow#82` | 0 | 0 | 0 | — | — |  |
-| 3072 | `0x103590f0` | `CNPC_Crow#473` | 0 | 0 | 0 | — | — |  |
-| 3073 | `0x10359b70` | `CNPC_Crow#5` | 0 | 0 | 0 | — | — |  |
-| 3074 | `0x10359f40` | `CGeneric_NPC#5` | 0 | 0 | 0 | — | — |  |
-| 3075 | `0x1035ad50` | `CGeneric_NPC_bathack#117` | 0 | 0 | 0 | — | — |  |
-| 3076 | `0x1035adb0` | `CGeneric_NPC_bathack#5` | 0 | 0 | 0 | — | — |  |
-| 3077 | `0x1035b5a0` | `CGenericSabbat_NPC#5` | 0 | 0 | 0 | — | — |  |
-| 3078 | `0x1035c190` | `CNPC_VAndreiBlood#378`, `CNPC_VAsianVampire#378`, +6 more | 0 | 0 | 0 | — | — |  |
-| 3079 | `0x1035c270` | `CNPC_VAndreiBlood#5` | 0 | 0 | 0 | — | — |  |
-| 3080 | `0x1035c2a0` | `CNPC_VAndreiBlood#82` | 0 | 0 | 0 | — | — |  |
-| 3081 | `0x1035eb10` | `CNPC_VAnimal#82`, `CNPC_VDog#82` | 0 | 0 | 0 | — | — |  |
-| 3082 | `0x1035ec50` | `CNPC_VAnimal#5` | 0 | 0 | 0 | — | — |  |
-| 3083 | `0x1035f540` | `CNPC_VAnimal#473`, `CNPC_VDog#473`, +2 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:827 |  |
-| 3084 | `0x10360450` | `CNPC_VAsianVampire#82` | 0 | 0 | 0 | — | — |  |
-| 3085 | `0x10362c90` | `CNPC_VBach#5` | 0 | 0 | 0 | — | — |  |
-| 3086 | `0x10363720` | `CNPC_VBach#82` | 0 | 0 | 0 | — | — |  |
-| 3087 | `0x10363970` | `CNPC_VBach#473` | 0 | 0 | 0 | — | — |  |
-| 3088 | `0x10364550` | `CNPC_VBach#554` | 0 | 0 | 0 | — | — |  |
-| 3089 | `0x10366cb0` | `CNPC_VBatSwarm#5` | 0 | 0 | 0 | — | — |  |
-| 3090 | `0x103672d0` | `CNPC_VBatSwarm#82` | 0 | 0 | 0 | — | — |  |
-| 3091 | `0x103673e0` | `CNPC_VBatSwarm#473` | 0 | 0 | 0 | — | — |  |
-| 3092 | `0x10367610` | `CNPC_VBatSwarm#554` | 0 | 0 | 0 | — | — |  |
-| 3093 | `0x103678b0` | `CNPC_VBrujah#5` | 0 | 0 | 0 | — | — |  |
-| 3094 | `0x10367f60` | `CNPC_VCamera#82` | 0 | 0 | 0 | — | — |  |
-| 3095 | `0x103681b0` | `CNPC_VCamera#496`, `CNPC_VCameraSecurity#496` | 0 | 0 | 0 | — | — |  |
-| 3096 | `0x103681d0` | `CNPC_VCamera#497`, `CNPC_VCameraSecurity#497` | 0 | 0 | 0 | — | — |  |
-| 3097 | `0x10368230` | `CNPC_VCamera#500`, `CNPC_VCameraSecurity#500` | 0 | 0 | 0 | — | — |  |
-| 3098 | `0x10368250` | `CNPC_VCamera#501`, `CNPC_VCameraSecurity#501` | 0 | 0 | 0 | — | — |  |
-| 3099 | `0x10368270` | `CNPC_VCamera#502`, `CNPC_VCameraSecurity#502` | 0 | 0 | 0 | — | — |  |
-| 3100 | `0x103682d0` | `CNPC_VCamera#505`, `CNPC_VCameraSecurity#505` | 0 | 0 | 0 | — | — |  |
-| 3101 | `0x103682f0` | `CNPC_VCamera#506`, `CNPC_VCameraSecurity#506` | 0 | 0 | 0 | — | — |  |
-| 3102 | `0x10368330` | `CNPC_VCamera#508`, `CNPC_VCameraSecurity#508` | 0 | 0 | 0 | — | — |  |
-| 3103 | `0x10368390` | `CNPC_VCamera#72`, `CNPC_VCameraSecurity#72` | 0 | 0 | 0 | — | — |  |
-| 3104 | `0x103683f0` | `CNPC_VCamera#5` | 0 | 0 | 0 | — | — |  |
-| 3105 | `0x10368f60` | `CNPC_VCamera#482`, `CNPC_VCameraSecurity#482` | 0 | 0 | 0 | — | — |  |
-| 3106 | `0x10369240` | `CNPC_VCamera#390`, `CNPC_VCameraSecurity#390` | 0 | 0 | 0 | — | — |  |
-| 3107 | `0x103692a0` | `CNPC_VCamera#473`, `CNPC_VCameraSecurity#473` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 |  |
-| 3108 | `0x10369cf0` | `CNPC_VCameraSecurity#82` | 0 | 0 | 0 | — | — |  |
-| 3109 | `0x10369e40` | `CNPC_VCameraSecurity#5` | 0 | 0 | 0 | — | — |  |
-| 3110 | `0x1036a230` | `CNPC_VChangBros#82` | 0 | 0 | 0 | — | — |  |
-| 3111 | `0x1036eb30` | `CNPC_VChangBrosBlade#82` | 0 | 0 | 0 | — | — |  |
-| 3112 | `0x1036f330` | `CNPC_VChangBrosClaw#82` | 0 | 0 | 0 | — | — |  |
-| 3113 | `0x1036fb50` | `CNPC_VCombatman#5` | 0 | 0 | 0 | — | — |  |
-| 3114 | `0x10370460` | `CNPC_VCop#82` | 0 | 0 | 0 | — | — |  |
-| 3115 | `0x10370970` | `CNPC_VCop#5` | 0 | 0 | 0 | — | — |  |
-| 3116 | `0x10373570` | `CNPC_VDog#5` | 0 | 0 | 0 | — | — |  |
-| 3117 | `0x10375140` | `CNPC_VPlayerController#362`, `CNPC_VWolfMorph#362` | 0 | 0 | 0 | — | — |  |
-| 3118 | `0x10375160` | `CNPC_VPlayerController#365`, `CNPC_VWolfMorph#365` | 0 | 0 | 0 | — | — |  |
-| 3119 | `0x103751a0` | `CNPC_VFrenzyShadow#72`, `CNPC_VPlayerController#72`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3120 | `0x10375280` | `CNPC_VFrenzyShadow#82` | 0 | 0 | 0 | — | — |  |
-| 3121 | `0x10376f20` | `CNPC_VFrenzyShadow#5` | 0 | 0 | 0 | — | — |  |
-| 3122 | `0x10376f50` | `CNPC_VPlayerController#5` | 0 | 0 | 0 | — | — |  |
-| 3123 | `0x103770b0` | `CNPC_VGangrel#5` | 0 | 0 | 0 | — | — |  |
-| 3124 | `0x10377910` | `CNPC_VGargoyle#82` | 0 | 0 | 0 | — | — |  |
-| 3125 | `0x10377b00` | `CNPC_VGargoyle#378` | 0 | 0 | 0 | — | — |  |
-| 3126 | `0x10378640` | `CNPC_VGargoyle#473` | 0 | 0 | 0 | — | — |  |
-| 3127 | `0x1037a5f0` | `CNPC_VGargoyle#359` | 0 | 0 | 0 | — | — |  |
-| 3128 | `0x1037a6e0` | `CNPC_VGhoulCroucher#82` | 0 | 0 | 0 | — | — |  |
-| 3129 | `0x1037c520` | `CNPC_VGuard1#82` | 0 | 0 | 0 | — | — |  |
-| 3130 | `0x1037c6a0` | `CNPC_VGuard1#5` | 0 | 0 | 0 | — | — |  |
-| 3131 | `0x1037e4f0` | `CNPC_VHengeyokai#82` | 0 | 0 | 0 | — | — |  |
-| 3132 | `0x1037e810` | `CNPC_VHengeyokai#378` | 0 | 0 | 0 | — | — |  |
-| 3133 | `0x1037e870` | `CNPC_VHengeyokai#5` | 0 | 0 | 0 | — | — |  |
-| 3134 | `0x1037fae0` | `CNPC_VHengeyokai#473` | 0 | 0 | 0 | — | — |  |
-| 3135 | `0x103801d0` | `CNPC_VHengeyokai#390` | 0 | 0 | 0 | `point_explosion` | — |  |
-| 3136 | `0x10383f10` | `CNPC_VCombatman#82`, `CNPC_VHuman#82`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3137 | `0x103840a0` | `CNPC_VHuman#5` | 0 | 0 | 0 | — | — |  |
-| 3138 | `0x103846e0` | `CNPC_VAndreiBlood#473`, `CNPC_VAsianVampire#473`, +24 more | 0 | 0 | 0 | — | — |  |
-| 3139 | `0x103869a0` | `CNPC_ProneDialog#82`, `CNPC_VHumanCombatant#82`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3140 | `0x10386b20` | `CNPC_VHumanCombatant#5` | 0 | 0 | 0 | — | — |  |
-| 3141 | `0x10387180` | `CNPC_ProneDialog#473`, `CNPC_VCop#473`, +7 more | 0 | 0 | 0 | — | — |  |
-| 3142 | `0x103875d0` | `CNPC_VHumanCombatPatrol#82` | 0 | 0 | 0 | — | — |  |
-| 3143 | `0x10387750` | `CNPC_VHumanCombatPatrol#5` | 0 | 0 | 0 | — | — |  |
-| 3144 | `0x10387ed0` | `CNPC_VHunter#82` | 0 | 0 | 0 | — | — |  |
-| 3145 | `0x103880a0` | `CNPC_VHunter#5` | 0 | 0 | 0 | — | — |  |
-| 3146 | `0x10388ca0` | `CNPC_VLasombra#82` | 0 | 0 | 0 | — | — |  |
-| 3147 | `0x10388e20` | `CNPC_VLasombra#5` | 0 | 0 | 0 | — | — |  |
-| 3148 | `0x103895a0` | `CNPC_VMalkavian#5` | 0 | 0 | 0 | — | — |  |
-| 3149 | `0x10389df0` | `CNPC_VManBat#5` | 0 | 0 | 0 | — | — |  |
-| 3150 | `0x1038ac80` | `CNPC_VManBat#82` | 0 | 0 | 0 | — | — |  |
-| 3151 | `0x1038fb20` | `CNPC_VManBat#102` | 0 | 0 | 0 | — | — |  |
-| 3152 | `0x10390de0` | `CNPC_VMingXiao#82` | 0 | 0 | 0 | — | — |  |
-| 3153 | `0x103929d0` | `CNPC_VMingXiao#473` | 0 | 0 | 0 | — | — |  |
-| 3154 | `0x10395ae0` | `CNPC_VMingXiao#390` | 0 | 0 | 0 | — | — |  |
-| 3155 | `0x1039aea0` | `CNPC_VMingXiaoTentacle#82` | 0 | 0 | 0 | — | — |  |
-| 3156 | `0x1039b0d0` | `CNPC_VMingXiaoTentacle#5` | 0 | 0 | 0 | — | — |  |
-| 3157 | `0x1039c440` | `CNPC_VMingXiaoTentacle#473` | 0 | 0 | 0 | — | — |  |
-| 3158 | `0x1039e800` | `CNPC_VMingXiaoTentacle#21` | 0 | 0 | 0 | — | — |  |
-| 3159 | `0x1039e830` | `CNPC_VMingXiaoTentacle#22` | 0 | 0 | 0 | — | — |  |
-| 3160 | `0x1039e860` | `CNPC_VMingXiaoTentacle#23` | 0 | 0 | 0 | — | — |  |
-| 3161 | `0x1039ebd0` | `CNPC_VMingXiaoTentacle#166` | 0 | 0 | 0 | — | — |  |
-| 3162 | `0x1039f000` | `CNPC_VMingXiaoTentacle#130` | 0 | 0 | 0 | — | — |  |
-| 3163 | `0x1039f640` | `CNPC_VMoleman#5` | 0 | 0 | 0 | — | — |  |
-| 3164 | `0x103a00f0` | `CNPC_VNewscaster#496` | 0 | 0 | 0 | — | — |  |
-| 3165 | `0x103a0110` | `CNPC_VNewscaster#497` | 0 | 0 | 0 | — | — |  |
-| 3166 | `0x103a0150` | `CNPC_VNewscaster#362` | 0 | 0 | 0 | — | — |  |
-| 3167 | `0x103a0170` | `CNPC_VNewscaster#365` | 0 | 0 | 0 | — | — |  |
-| 3168 | `0x103a01f0` | `CNPC_VNewscaster#473` | 0 | 0 | 0 | — | — |  |
-| 3169 | `0x103a0210` | `CNPC_VNewscaster#377` | 0 | 0 | 0 | — | — |  |
-| 3170 | `0x103a0230` | `CNPC_VNewscaster#378` | 0 | 0 | 0 | — | — |  |
-| 3171 | `0x103a0250` | `CNPC_VNewscaster#72` | 0 | 0 | 0 | — | — |  |
-| 3172 | `0x103a14e0` | `CNPC_VNosferatu#5` | 0 | 0 | 0 | — | — |  |
-| 3173 | `0x103a1c20` | `CNPC_VPedestrian#82` | 0 | 0 | 0 | — | — |  |
-| 3174 | `0x103a1e40` | `CNPC_VPedestrian#5` | 0 | 0 | 0 | — | — |  |
-| 3175 | `0x103a28f0` | `CNPC_VPedestrian#473` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 |  |
-| 3176 | `0x103a3a90` | `CNPC_VPlaceholder#82` | 0 | 0 | 0 | — | — |  |
-| 3177 | `0x103a4100` | `CNPC_VPlaceholder#378` | 0 | 0 | 0 | — | — |  |
-| 3178 | `0x103a4140` | `CNPC_VPlaceholder#316` | 0 | 0 | 0 | — | — |  |
-| 3179 | `0x103a4160` | `CNPC_VPlaceholder#317` | 0 | 0 | 0 | — | — |  |
-| 3180 | `0x103a4200` | `CNPC_VPlaceholder#330` | 0 | 0 | 0 | — | — |  |
-| 3181 | `0x103a4240` | `CNPC_VPlaceholder#72` | 0 | 0 | 0 | — | — |  |
-| 3182 | `0x103a4280` | `CNPC_VPlaceholder#362` | 0 | 0 | 0 | — | — |  |
-| 3183 | `0x103a42a0` | `CNPC_VPlaceholder#365` | 0 | 0 | 0 | — | — |  |
-| 3184 | `0x103a4320` | `CNPC_VPlaceholder#5` | 0 | 0 | 0 | — | — |  |
-| 3185 | `0x103a4830` | `CNPC_VFrenzyShadow#496`, `CNPC_VPlayerController#496`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3186 | `0x103a4850` | `CNPC_VFrenzyShadow#497`, `CNPC_VPlayerController#497`, +1 more | 0 | 0 | 0 | — | — |  |
-| 3187 | `0x103a4d40` | `CNPC_ProneDialog#5` | 0 | 0 | 0 | — | — |  |
-| 3188 | `0x103a4f60` | `CNPC_VSabbatGunman#82` | 0 | 0 | 0 | — | — |  |
-| 3189 | `0x103a50e0` | `CNPC_VSabbatGunman#5` | 0 | 0 | 0 | — | — |  |
-| 3190 | `0x103a5b50` | `CNPC_VSabbatLeader#82` | 0 | 0 | 0 | — | — |  |
-| 3191 | `0x103aba70` | `CNPC_VRat#82`, `CNPC_VScurrying#82` | 0 | 0 | 0 | — | — |  |
-| 3192 | `0x103abbe0` | `CNPC_VScurrying#5` | 0 | 0 | 0 | — | — |  |
-| 3193 | `0x103ad850` | `CNPC_VRat#316` | 0 | 0 | 0 | — | — |  |
-| 3194 | `0x103ad870` | `CNPC_VRat#317` | 0 | 0 | 0 | — | — |  |
-| 3195 | `0x103ad910` | `CNPC_VRat#330` | 0 | 0 | 0 | — | — |  |
-| 3196 | `0x103ad930` | `CNPC_VRat#5` | 0 | 0 | 0 | — | — |  |
-| 3197 | `0x103adaa0` | `CNPC_VSheriffMan#82` | 0 | 0 | 0 | — | — |  |
-| 3198 | `0x103b1c60` | `CNPC_VSheriffSwarm#5` | 0 | 0 | 0 | — | — |  |
-| 3199 | `0x103b2280` | `CNPC_VSheriffSwarm#82` | 0 | 0 | 0 | — | — |  |
-| 3200 | `0x103b2390` | `CNPC_VSheriffSwarm#473` | 0 | 0 | 0 | — | — |  |
-| 3201 | `0x103b25c0` | `CNPC_VSheriffSwarm#554` | 0 | 0 | 0 | — | — |  |
-| 3202 | `0x103b2770` | `CNPC_VStalker#82` | 0 | 0 | 0 | — | — |  |
-| 3203 | `0x103b28f0` | `CNPC_VStalker#5` | 0 | 0 | 0 | — | — |  |
-| 3204 | `0x103b2f50` | `CNPC_VTaxiDriver#72` | 0 | 0 | 0 | — | — |  |
-| 3205 | `0x103b2fb0` | `CNPC_VTaxiDriver#82` | 0 | 0 | 0 | — | — |  |
-| 3206 | `0x103b3930` | `CNPC_VTaxiDriver#390` | 0 | 0 | 0 | — | — |  |
-| 3207 | `0x103b3970` | `CNPC_VTaxiDriver#5` | 0 | 0 | 0 | — | — |  |
-| 3208 | `0x103b3b60` | `CNPC_VTest#5` | 0 | 0 | 0 | — | — |  |
-| 3209 | `0x103b4eb0` | `CNPC_VTest#473` | 0 | 0 | 0 | — | — |  |
-| 3210 | `0x103b5370` | `CNPC_VToreador#5` | 0 | 0 | 0 | — | — |  |
-| 3211 | `0x103b5b10` | `CNPC_VTremere#5` | 0 | 0 | 0 | — | — |  |
-| 3212 | `0x103b6b60` | `CNPC_VTzimisce#82` | 0 | 0 | 0 | — | — |  |
-| 3213 | `0x103b9270` | `CNPC_VTzimisce#422` | 0 | 0 | 0 | — | — |  |
-| 3214 | `0x103b9660` | `CNPC_VTzimisce#496` | 0 | 0 | 0 | — | — |  |
-| 3215 | `0x103b9680` | `CNPC_VTzimisce#497` | 0 | 0 | 0 | — | — |  |
-| 3216 | `0x103ba000` | `CNPC_VTzimisce#473` | 0 | 0 | 0 | — | — |  |
-| 3217 | `0x103c0ad0` | `CNPC_VTzimisceHeadClaw#82` | 0 | 0 | 0 | — | — |  |
-| 3218 | `0x103c28a0` | `CNPC_VTzimisceRunner#82` | 0 | 0 | 0 | — | — |  |
-| 3219 | `0x103c3040` | `CNPC_VTzimisceRunner#399` | 0 | 0 | 0 | — | — |  |
-| 3220 | `0x103c30c0` | `CNPC_VTzimisceRunner#329` | 0 | 0 | 0 | — | — |  |
-| 3221 | `0x103c3c40` | `CNPC_VTzimisceRunner#130` | 0 | 0 | 0 | — | — |  |
-| 3222 | `0x103c47e0` | `CNPC_VBrujah#82`, `CNPC_VGangrel#82`, +8 more | 0 | 0 | 0 | — | — |  |
-| 3223 | `0x103c4920` | `CNPC_VVampire#5` | 0 | 0 | 0 | — | — |  |
-| 3224 | `0x103c5060` | `CNPC_VVampireBoss#82` | 0 | 0 | 0 | — | — |  |
-| 3225 | `0x103c77f0` | `CNPC_VVentrue#5` | 0 | 0 | 0 | — | — |  |
-| 3226 | `0x103c87d0` | `CNPC_VWerewolf#82` | 0 | 0 | 0 | — | — |  |
-| 3227 | `0x103ca6d0` | `CNPC_VWerewolf#316` | 0 | 0 | 0 | — | — |  |
-| 3228 | `0x103ca730` | `CNPC_VWerewolf#328` | 0 | 0 | 0 | — | — |  |
-| 3229 | `0x103ca790` | `CNPC_VWerewolf#5` | 0 | 0 | 0 | — | — |  |
-| 3230 | `0x103cabf0` | `CNPC_VWerewolf#130` | 0 | 0 | 0 | — | — |  |
-| 3231 | `0x103dc790` | `CNPC_VWolfMorph#82` | 0 | 0 | 0 | — | — |  |
-| 3232 | `0x103dcf20` | `CNPC_VWolfMorph#5` | 0 | 0 | 0 | — | — |  |
-| 3233 | `0x103dd090` | `CNPC_VYukie#5` | 0 | 0 | 0 | — | — |  |
-| 3234 | `0x103ddde0` | `CNPC_VZombie#82` | 0 | 0 | 0 | — | — |  |
-| 3235 | `0x103df260` | `CNPC_VZombie#473` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 |  |
+| 11 | `0x1019d280` | — | 71 | 0 | 0 | — | — |  |
+| 12 | `0x10146570` | — | 70 | 0 | 0 | — | — |  |
+| 13 | `0x1019d4b0` | — | 68 | 0 | 2 | `CBaseEntity::Instance` | Source/ElysiumUE/Public/ElysiumSoundLevel.h:102 |  |
+| 14 | `0x1019cf50` | — | 59 | 1 | 0 | — | — |  |
+| 15 | `0x102ea020` | — | 60 | 0 | 0 | `<<null>>` | — |  |
+| 16 | `0x100b4dc0` | `CAISound#158`, `CAI_BaseHumanoid#158`, +463 more | 57 | 0 | 1 | — | — | `CAI_BaseNPC#158 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 17 | `0x102518f0` | — | 1 | 46 | 10 | — | — |  |
+| 18 | `0x101d3190` | — | 52 | 2 | 0 | — | — |  |
+| 19 | `0x100cd660` | — | 53 | 0 | 0 | — | — |  |
+| 20 | `0x10272900` | `CAI_BaseHumanoid#251`, `CAI_BaseNPC#251`, +75 more | 47 | 0 | 3 | — | — | `CAI_BaseNPC#251 no SDK twin: stretch #249-#256 holds 6 retai…` |
+| 21 | `0x100b4b40` | `CAISound#193`, `CAI_BaseNPC#193`, +486 more | 47 | 0 | 2 | — | — | `CAI_BaseNPC#193 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 22 | `0x10269b50` | — | 48 | 0 | 1 | — | — |  |
+| 23 | `0x1002cca0` | — | 45 | 0 | 0 | — | — |  |
+| 24 | `0x1034c2d0` | `CNPCMaker_Fleshpile#617` | 9 | 1 | 35 | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎`, +1 more | — |  |
+| 25 | `0x1002cbd0` | — | 44 | 0 | 0 | — | — |  |
+| 26 | `0x1004f7a0` | — | 24 | 16 | 3 | — | — |  |
+| 27 | `0x1005f190` | — | 42 | 0 | 1 | — | — |  |
+| 28 | `0x1006dec0` | — | 17 | 16 | 10 | — | — |  |
+| 29 | `0x101cd940` | — | 41 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:887 |  |
+| 30 | `0x101d3850` | — | 2 | 39 | 0 | — | — |  |
+| 31 | `0x102dfed0` | — | 37 | 0 | 4 | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2124 |  |
+| 32 | `0x1034b7b0` | `CNPCMaker#617` | 10 | 4 | 27 | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:148, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:27 |  |
+| 33 | `0x102e0b40` | — | 34 | 1 | 0 | — | — |  |
+| 34 | `0x1019d040` | — | 27 | 2 | 4 | — | — |  |
+| 35 | `0x1025e8e0` | `CAI_BaseHumanoid#193` | 28 | 0 | 3 | — | — |  |
+| 36 | `0x102b5360` | `CAI_BaseNPCTroika#168`, `CGeneric_NPC#168`, +62 more | 28 | 0 | 3 | — | — |  |
+| 37 | `0x10032b00` | — | 29 | 1 | 0 | — | — |  |
+| 38 | `0x100dc580` | — | 27 | 1 | 2 | — | — |  |
+| 39 | `0x1027d990` | — | 29 | 0 | 1 | — | — |  |
+| 40 | `0x102ae750` | — | 30 | 0 | 0 | — | — |  |
+| 41 | `0x102c23f0` | `CAI_BaseNPCTroika#614`, `CGeneric_NPC#614`, +62 more | 25 | 5 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:128, Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.h:15, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3721, +3 more |  |
+| 42 | `0x10027160` | `CAISound#192`, `CAI_BaseHumanoid#192`, +494 more | 20 | 0 | 9 | — | — | `CAI_BaseNPC#192 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 43 | `0x100dc480` | — | 25 | 1 | 3 | — | — |  |
+| 44 | `0x101ef540` | — | 2 | 23 | 4 | — | — |  |
+| 45 | `0x1027c820` | — | 13 | 0 | 16 | — | — |  |
+| 46 | `0x10139610` | — | 28 | 0 | 0 | — | — |  |
+| 47 | `0x1026e340` | — | 22 | 3 | 3 | `Stripped⏎` | — |  |
+| 48 | `0x103cac20` | — | 2 | 23 | 3 | — | — |  |
+| 49 | `0x100f7770` | — | 27 | 0 | 0 | — | — |  |
+| 50 | `0x101cd9e0` | — | 27 | 0 | 0 | — | — |  |
+| 51 | `0x101d3730` | — | 27 | 0 | 0 | — | — |  |
+| 52 | `0x101f5950` | — | 25 | 0 | 2 | `VSnd: Server Playing: %s⏎`, `ERROR: VSnd: Play: %s Table out of bound…` | — |  |
+| 53 | `0x100cd2d0` | — | 25 | 0 | 1 | — | — |  |
+| 54 | `0x101d2c70` | — | 26 | 0 | 0 | — | — |  |
+| 55 | `0x101de660` | — | 4 | 0 | 22 | `E:\Vampire\main\game_shared\v_discipline…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:994, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1092, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2676, +1 more |  |
+| 56 | `0x101a6720` | `CAI_BaseHumanoid#464`, `CAI_BaseNPC#464`, +74 more | 24 | 0 | 1 | — | — | `CAI_BaseNPC#464 no SDK twin: stretch #463-#465 holds 1 retai…` |
+| 57 | `0x101aae60` | `CPayphone#193` | 25 | 0 | 0 | `Phone_bone_01` | — |  |
+| 58 | `0x10385e40` | `CNPC_ProneDialog#604`, `CNPC_VAndreiBlood#604`, +33 more | 13 | 3 | 9 | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1507, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.cpp:474, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.h:58 |  |
+| 59 | `0x10297640` | `CAI_BaseNPCTroika#572`, `CGeneric_NPC#572`, +62 more | 20 | 1 | 3 | — | — |  |
+| 60 | `0x102b7690` | — | 4 | 8 | 12 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 61 | `0x102e20b0` | — | 24 | 0 | 0 | — | — |  |
+| 62 | `0x101a6d00` | `CAI_BaseHumanoid#580`, `CAI_BaseNPC#580`, +8 more | 23 | 0 | 0 | — | — | `CAI_BaseNPC#580 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 63 | `0x10273070` | — | 19 | 1 | 3 | `****ERROR***⏎⏎`, `Have the class responsible for spawning …`, +4 more | — |  |
+| 64 | `0x102e2020` | — | 20 | 1 | 2 | — | — |  |
+| 65 | `0x102ee620` | — | 22 | 0 | 1 | — | — |  |
+| 66 | `0x10430964` | — | 23 | 0 | 0 | — | — |  |
+| 67 | `0x100b5190` | — | 21 | 0 | 1 | — | — |  |
+| 68 | `0x102b6c30` | `CAI_BaseNPCTroika#604`, `CGeneric_NPC#604`, +18 more | 10 | 3 | 9 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 69 | `0x102e0900` | — | 2 | 20 | 0 | — | — |  |
+| 70 | `0x10385a10` | `CNPC_VBrujah#432`, `CNPC_VChangBros#432`, +12 more | 21 | 0 | 0 | — | — |  |
+| 71 | `0x1038b370` | — | 3 | 2 | 16 | `sheriff_teleport_emitter` | — |  |
+| 72 | `0x101d0ec0` | — | 20 | 0 | 0 | `NULL Ent in UTIL_PrecacheOther: %s⏎` | — |  |
+| 73 | `0x101ddec0` | — | 1 | 10 | 9 | — | — |  |
+| 74 | `0x102517b0` | — | 19 | 0 | 1 | — | — |  |
+| 75 | `0x102eca50` | — | 2 | 18 | 0 | — | — |  |
+| 76 | `0x1030bb30` | — | 1 | 18 | 1 | — | — |  |
+| 77 | `0x10386560` | `CNPC_ProneDialog#605`, `CNPC_VAndreiBlood#605`, +37 more | 11 | 3 | 6 | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1508, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.cpp:569, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombatSchedules.h:66 |  |
+| 78 | `0x103de2b0` | `CNPC_VZombie#580` | 20 | 0 | 0 | — | — |  |
+| 79 | `0x10142e90` | — | 19 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 80 | `0x101cf2f0` | — | 19 | 0 | 0 | — | — |  |
+| 81 | `0x101d88b0` | — | 3 | 14 | 2 | `Warning: Dice roll count out of bounds: …` | — |  |
+| 82 | `0x102517e0` | — | 18 | 0 | 1 | — | — |  |
+| 83 | `0x1027cae0` | `CAI_BaseNPC#424`, `CAI_BaseNPCTroika#424`, +73 more | 3 | 7 | 9 | — | — | `CAI_BaseNPC#424 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 84 | `0x10280360` | `CAI_BaseHumanoid#528`, `CAI_BaseNPC#528`, +75 more | 12 | 2 | 5 | `E:\Vampire\main\dlls\AI_BaseNPC_Movement…` | — | `CAI_BaseNPC#528 no SDK twin: stretch #526-#530 holds 3 retai…` |
+| 85 | `0x102d6100` | — | 19 | 0 | 0 | — | — |  |
+| 86 | `0x102e1e20` | — | 16 | 1 | 2 | — | — |  |
+| 87 | `0x102ee6a0` | — | 18 | 0 | 1 | — | — |  |
+| 88 | `0x100353c0` | — | 1 | 15 | 2 | — | — |  |
+| 89 | `0x101aa790` | `CAI_BaseNPCTroika#580`, `CNPCMaker#580`, +5 more | 18 | 0 | 0 | — | — |  |
+| 90 | `0x102ad340` | `CAI_BaseNPCTroika#460`, `CGeneric_NPC#460`, +59 more | 1 | 8 | 9 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 91 | `0x102cc1f0` | — | 16 | 0 | 2 | `GetScheduleOfType(): No CASE for Schedul…` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:665, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:691, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:463, +3 more |  |
+| 92 | `0x102dda40` | — | 16 | 0 | 2 | — | — |  |
+| 93 | `0x10357370` | `CNPC_Crow#580` | 18 | 0 | 0 | — | — |  |
+| 94 | `0x10359f00` | `CGeneric_NPC#580` | 18 | 0 | 0 | — | — |  |
+| 95 | `0x1035ad70` | `CGeneric_NPC_bathack#580` | 18 | 0 | 0 | — | — |  |
+| 96 | `0x1035b560` | `CGenericSabbat_NPC#580` | 18 | 0 | 0 | — | — |  |
+| 97 | `0x1035c1b0` | `CNPC_VVampireBoss#580` | 18 | 0 | 0 | — | — |  |
+| 98 | `0x1035c230` | `CNPC_VAndreiBlood#580` | 18 | 0 | 0 | — | — |  |
+| 99 | `0x1035ec10` | `CNPC_VAnimal#580` | 18 | 0 | 0 | — | — |  |
+| 100 | `0x103603d0` | `CNPC_VAsianVampire#580` | 18 | 0 | 0 | — | — |  |
+| 101 | `0x10362c50` | `CNPC_VBach#580` | 18 | 0 | 0 | — | — |  |
+| 102 | `0x10366c70` | `CNPC_VBatSwarm#580` | 18 | 0 | 0 | — | — |  |
+| 103 | `0x10367870` | `CNPC_VBrujah#580` | 18 | 0 | 0 | — | — |  |
+| 104 | `0x103683b0` | `CNPC_VCamera#580`, `CNPC_VCameraSecurity#580` | 18 | 0 | 0 | — | — |  |
+| 105 | `0x1036a1b0` | `CNPC_VChangBros#580` | 18 | 0 | 0 | — | — |  |
+| 106 | `0x1036eab0` | `CNPC_VChangBrosBlade#580` | 18 | 0 | 0 | — | — |  |
+| 107 | `0x1036f2b0` | `CNPC_VChangBrosClaw#580` | 18 | 0 | 0 | — | — |  |
+| 108 | `0x1036fb10` | `CNPC_VCombatman#580` | 18 | 0 | 0 | — | — |  |
+| 109 | `0x10370930` | `CNPC_VCop#580` | 18 | 0 | 0 | — | — |  |
+| 110 | `0x10373530` | `CNPC_VDog#580` | 18 | 0 | 0 | — | — |  |
+| 111 | `0x103750e0` | `CNPC_VPlayerController#580`, `CNPC_VVampire#580` | 18 | 0 | 0 | — | — |  |
+| 112 | `0x10375240` | `CNPC_VFrenzyShadow#580` | 18 | 0 | 0 | — | — |  |
+| 113 | `0x10377070` | `CNPC_VGangrel#580` | 18 | 0 | 0 | — | — |  |
+| 114 | `0x10377b20` | `CNPC_VGargoyle#580` | 18 | 0 | 0 | — | — |  |
+| 115 | `0x1037afb0` | `CNPC_VGhoulCroucher#580` | 18 | 0 | 0 | — | — |  |
+| 116 | `0x1037c660` | `CNPC_VGuard1#580` | 18 | 0 | 0 | — | — |  |
+| 117 | `0x1037e830` | `CNPC_VHengeyokai#580` | 18 | 0 | 0 | — | — |  |
+| 118 | `0x10384060` | `CNPC_VHuman#580` | 18 | 0 | 0 | — | — |  |
+| 119 | `0x10386ae0` | `CNPC_ProneDialog#580`, `CNPC_VHumanCombatant#580` | 18 | 0 | 0 | — | — |  |
+| 120 | `0x10387710` | `CNPC_VHumanCombatPatrol#580` | 18 | 0 | 0 | — | — |  |
+| 121 | `0x10388060` | `CNPC_VHunter#580` | 18 | 0 | 0 | — | — |  |
+| 122 | `0x10388de0` | `CNPC_VLasombra#580` | 18 | 0 | 0 | — | — |  |
+| 123 | `0x10389560` | `CNPC_VMalkavian#580` | 18 | 0 | 0 | — | — |  |
+| 124 | `0x10389db0` | `CNPC_VManBat#580` | 18 | 0 | 0 | — | — |  |
+| 125 | `0x10391070` | `CNPC_VMingXiao#580` | 18 | 0 | 0 | — | — |  |
+| 126 | `0x10396050` | `CNPC_VMingXiao#604` | 8 | 3 | 7 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 127 | `0x1039b090` | `CNPC_VMingXiaoTentacle#580` | 18 | 0 | 0 | — | — |  |
+| 128 | `0x1039f600` | `CNPC_VMoleman#580` | 18 | 0 | 0 | — | — |  |
+| 129 | `0x103a14a0` | `CNPC_VNosferatu#580` | 18 | 0 | 0 | — | — |  |
+| 130 | `0x103a1e00` | `CNPC_VPedestrian#580` | 18 | 0 | 0 | — | — |  |
+| 131 | `0x103a42e0` | `CNPC_VPlaceholder#580` | 18 | 0 | 0 | — | — |  |
+| 132 | `0x103a50a0` | `CNPC_VSabbatGunman#580` | 18 | 0 | 0 | — | — |  |
+| 133 | `0x103a5ca0` | `CNPC_VSabbatLeader#580` | 18 | 0 | 0 | — | — |  |
+| 134 | `0x103abba0` | `CNPC_VRat#580`, `CNPC_VScurrying#580` | 18 | 0 | 0 | — | — |  |
+| 135 | `0x103ae4b0` | `CNPC_VSheriffMan#580` | 18 | 0 | 0 | — | — |  |
+| 136 | `0x103b1c20` | `CNPC_VSheriffSwarm#580` | 18 | 0 | 0 | — | — |  |
+| 137 | `0x103b28b0` | `CNPC_VStalker#580` | 18 | 0 | 0 | — | — |  |
+| 138 | `0x103b2f70` | `CNPC_VTaxiDriver#580` | 18 | 0 | 0 | — | — |  |
+| 139 | `0x103b3b20` | `CNPC_VTest#580` | 18 | 0 | 0 | — | — |  |
+| 140 | `0x103b5330` | `CNPC_VToreador#580` | 18 | 0 | 0 | — | — |  |
+| 141 | `0x103b5ad0` | `CNPC_VTremere#580` | 18 | 0 | 0 | — | — |  |
+| 142 | `0x103b6e50` | `CNPC_VTzimisce#580` | 18 | 0 | 0 | — | — |  |
+| 143 | `0x103c1300` | `CNPC_VTzimisceHeadClaw#580` | 18 | 0 | 0 | — | — |  |
+| 144 | `0x103c30e0` | `CNPC_VTzimisceRunner#580` | 18 | 0 | 0 | — | — |  |
+| 145 | `0x103c4430` | `CNPC_VTzimisceRunner#604` | 9 | 3 | 6 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 146 | `0x103c77b0` | `CNPC_VVentrue#580` | 18 | 0 | 0 | — | — |  |
+| 147 | `0x103ca750` | `CNPC_VWerewolf#580` | 18 | 0 | 0 | — | — |  |
+| 148 | `0x103dc750` | `CNPC_VWolfMorph#580` | 18 | 0 | 0 | — | — |  |
+| 149 | `0x103dd050` | `CNPC_VYukie#580` | 18 | 0 | 0 | — | — |  |
+| 150 | `0x1013d580` | — | 17 | 0 | 0 | — | — |  |
+| 151 | `0x101644f0` | — | 2 | 4 | 11 | — | Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp:525, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4112, Source/ElysiumUE/Public/ElysiumAnimationIntent.h:67 |  |
+| 152 | `0x101a7880` | `CCineNPC#583` | 1 | 7 | 9 | `**UNKNOWN**`, `E:\Vampire\main\dlls\scripted.cpp`, +14 more | — |  |
+| 153 | `0x101e4f30` | — | 8 | 9 | 0 | — | — |  |
+| 154 | `0x10200370` | — | 15 | 0 | 2 | — | — |  |
+| 155 | `0x1024cef0` | — | 2 | 15 | 0 | — | — |  |
+| 156 | `0x1024ddf0` | — | 2 | 15 | 0 | — | — |  |
+| 157 | `0x102b3e00` | `CAI_BaseNPCTroika#472`, `CGeneric_NPC#472`, +60 more | 2 | 6 | 9 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:44 |  |
+| 158 | `0x102d6120` | — | 17 | 0 | 0 | — | — |  |
+| 159 | `0x1030bec0` | — | 1 | 16 | 0 | — | — |  |
+| 160 | `0x103a2e30` | `CNPC_VPedestrian#461` | 1 | 5 | 11 | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — |  |
+| 161 | `0x10027020` | `CAISound#168`, `CAI_BaseHumanoid#168`, +431 more | 15 | 0 | 1 | — | — | `CAI_BaseNPC#168 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 162 | `0x100274b0` | `CAISound#198`, `CAI_BaseHumanoid#198`, +493 more | 15 | 0 | 1 | — | — | `CAI_BaseNPC#198 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 163 | `0x100fbc90` | — | 14 | 2 | 0 | `env_particle` | — |  |
+| 164 | `0x1013dc60` | — | 9 | 3 | 4 | — | — |  |
+| 165 | `0x101e0520` | — | 1 | 10 | 5 | `ERROR: Overflowed targeted discipline fl…` | — |  |
+| 166 | `0x1024cf80` | — | 1 | 0 | 15 | — | — |  |
+| 167 | `0x1024da80` | — | 1 | 0 | 15 | — | — |  |
+| 168 | `0x10260de0` | `CAI_BaseHumanoid#5` | 0 | 11 | 5 | — | — |  |
+| 169 | `0x10273ad0` | `CAI_BaseHumanoid#422`, `CAI_BaseNPC#422`, +11 more | 1 | 6 | 9 | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…` | — | `CAI_BaseNPC#422 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 170 | `0x10289d10` | `CAI_BaseHumanoid#572`, `CAI_BaseNPC#572`, +11 more | 13 | 1 | 2 | — | — | `CAI_BaseNPC#572 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 171 | `0x1028a150` | — | 14 | 0 | 2 | — | — |  |
+| 172 | `0x102a9c80` | — | 1 | 15 | 0 | — | — |  |
+| 173 | `0x102a9d20` | — | 1 | 15 | 0 | — | — |  |
+| 174 | `0x102a9dc0` | — | 1 | 15 | 0 | — | — |  |
+| 175 | `0x102aa210` | — | 1 | 5 | 10 | `Bip01`, `Can not find interest activity '%s' in t…`, +4 more | — |  |
+| 176 | `0x102b4f60` | `CAI_BaseNPCTroika#596`, `CGeneric_NPC#596`, +61 more | 16 | 0 | 0 | — | — |  |
+| 177 | `0x102e0a80` | — | 14 | 0 | 2 | — | — |  |
+| 178 | `0x102e6d70` | — | 13 | 2 | 1 | — | — |  |
+| 179 | `0x10319df0` | — | 6 | 10 | 0 | — | — |  |
+| 180 | `0x103bd690` | `CNPC_VTzimisce#461` | 1 | 6 | 9 | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 181 | `0x103d9c90` | — | 7 | 3 | 6 | — | — |  |
+| 182 | `0x100bf6a0` | — | 12 | 1 | 2 | — | — |  |
+| 183 | `0x1014f210` | — | 4 | 9 | 2 | — | — |  |
+| 184 | `0x101c2890` | — | 1 | 14 | 0 | — | — |  |
+| 185 | `0x101d5e80` | — | 13 | 0 | 2 | — | — |  |
+| 186 | `0x101d8b40` | — | 1 | 5 | 9 | `Botched: %s ( %s )!⏎`, `                    `, +6 more | — |  |
+| 187 | `0x101f6910` | — | 4 | 10 | 1 | — | — |  |
+| 188 | `0x1023bd00` | — | 15 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:57 |  |
+| 189 | `0x1027cde0` | `CAI_Senses#0` | 0 | 9 | 6 | — | — |  |
+| 190 | `0x102b7110` | — | 2 | 8 | 5 | — | — |  |
+| 191 | `0x102c0520` | — | 2 | 2 | 11 | `scripted_scene`, `entity_debug_stats`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2177, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:601, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:80, +2 more |  |
+| 192 | `0x102c43b0` | — | 14 | 1 | 0 | — | — |  |
+| 193 | `0x102e1c10` | — | 11 | 2 | 2 | — | — |  |
+| 194 | `0x102ecc00` | — | 14 | 0 | 1 | — | — |  |
+| 195 | `0x102ee270` | — | 14 | 0 | 1 | — | — |  |
+| 196 | `0x102f3c10` | — | 15 | 0 | 0 | `Unaccounted`, `CAI_Network_NearestNodeToNPCAtPoint` | — |  |
+| 197 | `0x1037d290` | `CNPC_VGuard1#461` | 1 | 4 | 10 | `E:\Vampire\main\dlls\hl2_dll\NPC_VGuard1…` | — |  |
+| 198 | `0x1003e4b0` | — | 12 | 2 | 0 | — | — |  |
+| 199 | `0x1009e430` | `CAISound#110`, `CAI_ChangeHintGroup#110`, +135 more | 3 | 2 | 9 | `NULL ENTITY`, `FCVAR_NEVER_AS_STRING`, +14 more | — |  |
+| 200 | `0x100dd990` | — | 1 | 13 | 0 | — | — |  |
+| 201 | `0x10142aa0` | — | 14 | 0 | 0 | — | — |  |
+| 202 | `0x10146150` | — | 14 | 0 | 0 | — | — |  |
+| 203 | `0x10176520` | — | 1 | 4 | 9 | — | — |  |
+| 204 | `0x10176930` | — | 1 | 1 | 12 | `CBaseEntity::Instance` | — |  |
+| 205 | `0x101a9080` | `CCineAI#583` | 1 | 6 | 7 | `E:\Vampire\main\dlls\scripted.cpp`, `   Otherwise, talk to a programmer.⏎`, +11 more | — |  |
+| 206 | `0x101aeb60` | — | 14 | 0 | 0 | `No such sentence group %s⏎` | — |  |
+| 207 | `0x101cf5c0` | — | 14 | 0 | 0 | — | — |  |
+| 208 | `0x101e1870` | — | 14 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1563 |  |
+| 209 | `0x1024b5e0` | — | 5 | 3 | 6 | — | — |  |
+| 210 | `0x102b8320` | `CAI_BaseNPCTroika#606`, `CGeneric_NPC#606`, +61 more | 4 | 3 | 7 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 211 | `0x102ce150` | — | 1 | 6 | 7 | — | — |  |
+| 212 | `0x1034b580` | `CNPCMaker#618`, `CNPCMaker_Fleshpile#618` | 8 | 0 | 6 | — | — |  |
+| 213 | `0x10364080` | `CNPC_VBach#604` | 8 | 4 | 2 | `item_w_katana`, `item_w_rem_m_700_bach`, +1 more | — |  |
+| 214 | `0x10369930` | `CNPC_VCamera#422`, `CNPC_VCameraSecurity#422` | 0 | 4 | 10 | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…`, +1 more | — |  |
+| 215 | `0x10385ab0` | `CNPC_ProneDialog#599`, `CNPC_VAndreiBlood#599`, +36 more | 5 | 2 | 7 | — | — |  |
+| 216 | `0x103967d0` | `CNPC_VMingXiao#605` | 6 | 3 | 5 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 217 | `0x10397410` | — | 1 | 6 | 7 | `Ming_xiao_tentacle_burst_emitter`, `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…`, +1 more | — |  |
+| 218 | `0x1006cff0` | — | 11 | 0 | 2 | — | — |  |
+| 219 | `0x10090950` | — | 9 | 3 | 1 | `NULL ENTITY`, `CBaseAnimating::ResetSequenceInfo ` | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:102, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:875, Source/ElysiumUE/Public/Visual/ElysiumBlendGrids.h:185 |  |
+| 220 | `0x10136580` | — | 13 | 0 | 0 | `Can't create entity of class %s.⏎`, `**********⏎` | — |  |
+| 221 | `0x101c26d0` | — | 13 | 0 | 0 | — | — |  |
+| 222 | `0x101d5f10` | — | 11 | 0 | 2 | — | — |  |
+| 223 | `0x10245fe0` | `ConVar#12` | 2 | 8 | 3 | — | — |  |
+| 224 | `0x1024b2d0` | — | 1 | 12 | 0 | — | — |  |
+| 225 | `0x10260a50` | — | 6 | 2 | 5 | `ResetSequence : %s: %s -> %s 	 (current …`, `ResetSequence : %s: %s -> %s 	 (current …` | — |  |
+| 226 | `0x10280de0` | — | 11 | 1 | 1 | — | — |  |
+| 227 | `0x102b5650` | `CAI_BaseNPCTroika#599`, `CGeneric_NPC#599`, +16 more | 4 | 2 | 7 | — | — |  |
+| 228 | `0x102b93c0` | `CAI_BaseNPCTroika#607`, `CGeneric_NPC#607`, +62 more | 2 | 5 | 6 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 229 | `0x102c0010` | — | 1 | 5 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:755, Source/ElysiumUE/Public/ElysiumPlayer.h:1746 |  |
+| 230 | `0x102c7600` | `CAI_StandoffBehavior#13` | 0 | 3 | 10 | — | — |  |
+| 231 | `0x102d14c0` | — | 10 | 0 | 3 | — | — |  |
+| 232 | `0x102ee1c0` | — | 12 | 0 | 1 | — | — |  |
+| 233 | `0x10326bd0` | `CAI_BaseHumanoid#364`, `CAI_BaseNPC#364`, +69 more | 10 | 0 | 3 | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | — | `CAI_BaseNPC#364 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 234 | `0x1034d140` | `CNPCMaker_Zombie#617` | 9 | 0 | 4 | `item_w_zombie_fists`, `Zombies_spawning_emitter` | — |  |
+| 235 | `0x10366510` | `CNPC_VBaseBoss#617`, `CNPC_VMingXiao#617`, +3 more | 10 | 0 | 3 | — | — |  |
+| 236 | `0x10385d70` | `CNPC_ProneDialog#602`, `CNPC_VAndreiBlood#602`, +36 more | 7 | 0 | 6 | — | — |  |
+| 237 | `0x103a25a0` | `CNPC_VPedestrian#130` | 0 | 0 | 13 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +1 more | — |  |
+| 238 | `0x103dc5b0` | — | 1 | 8 | 4 | — | — |  |
+| 239 | `0x1002ca10` | — | 8 | 4 | 0 | — | — |  |
+| 240 | `0x100335e0` | — | 12 | 0 | 0 | — | — |  |
+| 241 | `0x100a0670` | — | 2 | 3 | 7 | `NULL ENTITY`, `CBaseEntity::SetParent`, +1 more | — |  |
+| 242 | `0x100a0990` | — | 1 | 11 | 0 | — | — |  |
+| 243 | `0x100a0a10` | — | 1 | 0 | 11 | — | — |  |
+| 244 | `0x10139970` | — | 12 | 0 | 0 | — | — |  |
+| 245 | `0x1013dce0` | — | 8 | 2 | 2 | — | — |  |
+| 246 | `0x101434b0` | — | 12 | 0 | 0 | — | — |  |
+| 247 | `0x101aa750` | `CAI_BaseNPCTroika#416`, `CGeneric_NPC#416`, +62 more | 11 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:598 |  |
+| 248 | `0x101cd970` | — | 12 | 0 | 0 | — | — |  |
+| 249 | `0x101d2f40` | — | 12 | 0 | 0 | — | — |  |
+| 250 | `0x101e8da0` | — | 12 | 0 | 0 | — | — |  |
+| 251 | `0x102779a0` | `CAI_BaseHumanoid#581`, `CAI_BaseNPC#581`, +75 more | 0 | 0 | 12 | `Unknown`, `State: %s, `, +13 more | — | `CAI_BaseNPC#581 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 252 | `0x102b3d90` | — | 2 | 10 | 0 | — | — |  |
+| 253 | `0x102b7fc0` | `CAI_BaseNPCTroika#605`, `CGeneric_NPC#605`, +19 more | 7 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 254 | `0x102c1680` | `CAI_BaseNPCTroika#286`, `CGeneric_NPC#286`, +61 more | 0 | 8 | 4 | — | — |  |
+| 255 | `0x102c36d0` | — | 5 | 0 | 7 | `UTIL_TraceHull` | — |  |
+| 256 | `0x102d12e0` | — | 11 | 0 | 1 | — | — |  |
+| 257 | `0x102d61b0` | — | 12 | 0 | 0 | — | — |  |
+| 258 | `0x102e30d0` | — | 10 | 2 | 0 | — | — |  |
+| 259 | `0x102ee140` | — | 11 | 0 | 1 | — | — |  |
+| 260 | `0x102f90e0` | — | 6 | 3 | 3 | — | — |  |
+| 261 | `0x10344f80` | — | 4 | 0 | 8 | — | — |  |
+| 262 | `0x103642f0` | `CNPC_VBach#605` | 6 | 4 | 2 | `item_w_katana`, `item_w_rem_m_700_bach`, +1 more | — |  |
+| 263 | `0x103831c0` | — | 1 | 4 | 7 | `npc_VHengeyokai`, `models/character/monster/Hengeyokai/heng…`, +1 more | — |  |
+| 264 | `0x1038e9c0` | — | 1 | 4 | 7 | `Bip01 Spine`, `Manbat_blast_player`, +4 more | — |  |
+| 265 | `0x1038fb00` | `CNPC_VManBat#464` | 12 | 0 | 0 | — | — |  |
+| 266 | `0x1039a750` | — | 1 | 4 | 7 | `npc_VMingXiao`, `Ming_xiao_transform_emitter2`, +3 more | — |  |
+| 267 | `0x103a0270` | `CNPC_VNewscaster#5` | 0 | 8 | 4 | — | — |  |
+| 268 | `0x103a0670` | — | 1 | 3 | 8 | — | — |  |
+| 269 | `0x103a0ab0` | — | 1 | 5 | 6 | `vdata\system\`, `%sNewscaster_Side.txt`, +1 more | — |  |
+| 270 | `0x103b6e90` | `CNPC_VTzimisce#5` | 0 | 8 | 4 | — | — |  |
+| 271 | `0x103df850` | `CNPC_VZombie#432` | 3 | 2 | 7 | `zombie %s: player too far away, killing …` | — |  |
+| 272 | `0x100994c0` | `CAI_BaseHumanoid#271`, `CAI_BaseNPC#271`, +85 more | 9 | 0 | 2 | — | — | `CAI_BaseNPC#271 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 273 | `0x100b5e60` | `CAI_BaseHumanoid#286`, `CAI_BaseNPC#286`, +20 more | 1 | 4 | 6 | `CBaseFlex::AddExpression:  scene or even…`, `vcd error, gesture %s of model %s is mar…` | — | `CAI_BaseNPC#286 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 274 | `0x100f7380` | — | 11 | 0 | 0 | — | — |  |
+| 275 | `0x100fb1f0` | — | 3 | 3 | 5 | — | — |  |
+| 276 | `0x10137fe0` | — | 11 | 0 | 0 | — | — |  |
+| 277 | `0x101618e0` | — | 3 | 5 | 3 | — | — |  |
+| 278 | `0x1017d900` | — | 2 | 5 | 4 | — | — |  |
+| 279 | `0x1017e150` | — | 4 | 5 | 2 | `CSActs:    %6.1f - Criminal level %d -> …`, `CSActs:    %6.1f - Criminal level %d -> …`, +1 more | — |  |
+| 280 | `0x101a98c0` | `CCineAISchedule#586` | 7 | 0 | 4 | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:22, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2466, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:440 |  |
+| 281 | `0x101bf860` | — | 2 | 3 | 6 | — | — |  |
+| 282 | `0x101cdba0` | — | 10 | 0 | 1 | — | — |  |
+| 283 | `0x101cf250` | — | 11 | 0 | 0 | — | — |  |
+| 284 | `0x101cf390` | — | 11 | 0 | 0 | — | — |  |
+| 285 | `0x101cf600` | — | 11 | 0 | 0 | — | — |  |
+| 286 | `0x101e12a0` | — | 9 | 0 | 2 | — | — |  |
+| 287 | `0x102008b0` | — | 10 | 0 | 1 | — | — |  |
+| 288 | `0x10246160` | `ConVar#4` | 8 | 0 | 3 | — | — |  |
+| 289 | `0x1024f7b0` | — | 10 | 0 | 1 | — | — |  |
+| 290 | `0x102695d0` | — | 4 | 3 | 4 | `CBaseEntity::AddSolidFlags` | — |  |
+| 291 | `0x10270180` | — | 3 | 4 | 4 | — | — |  |
+| 292 | `0x10273180` | — | 7 | 1 | 3 | — | — |  |
+| 293 | `0x1027a420` | `CAI_BaseHumanoid#509`, `CAI_BaseNPC#509`, +11 more | 3 | 0 | 8 | — | — | `CAI_BaseNPC#509 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 294 | `0x1027a6c0` | — | 10 | 0 | 1 | — | — |  |
+| 295 | `0x1027de00` | — | 3 | 1 | 7 | — | — |  |
+| 296 | `0x102984a0` | `CAI_BaseNPCTroika#531`, `CGeneric_NPC#531`, +62 more | 0 | 3 | 8 | `⏎⏎**WARNING**⏎No door given to OnUpcomin…` | — |  |
+| 297 | `0x102ae840` | — | 4 | 3 | 4 | — | — |  |
+| 298 | `0x102b1cd0` | — | 1 | 0 | 10 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:589 |  |
+| 299 | `0x102b4760` | `CAI_BaseNPCTroika#594`, `CGeneric_NPC#594`, +62 more | 2 | 1 | 8 | — | — |  |
+| 300 | `0x102b5880` | `CAI_BaseNPCTroika#601`, `CGeneric_NPC#601`, +16 more | 7 | 2 | 2 | — | — |  |
+| 301 | `0x102b5900` | `CAI_BaseNPCTroika#602`, `CGeneric_NPC#602`, +16 more | 5 | 0 | 6 | — | — |  |
+| 302 | `0x102bf6e0` | `CAI_BaseNPCTroika#418`, `CGeneric_NPC#418`, +60 more | 11 | 0 | 0 | — | — |  |
+| 303 | `0x102ea280` | — | 8 | 0 | 3 | — | — |  |
+| 304 | `0x102f8f10` | — | 6 | 5 | 0 | — | — |  |
+| 305 | `0x102ff960` | — | 9 | 0 | 2 | — | — |  |
+| 306 | `0x1035fe80` | `CNPC_VAnimal#461`, `CNPC_VRat#461`, +1 more | 3 | 4 | 4 | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | — |  |
+| 307 | `0x103743c0` | `CNPC_VDog#461` | 1 | 6 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — |  |
+| 308 | `0x10379f90` | `CNPC_VGargoyle#617` | 10 | 0 | 1 | — | — |  |
+| 309 | `0x103817f0` | `CNPC_VHengeyokai#617` | 10 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:86, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:192 |  |
+| 310 | `0x103a0ff0` | — | 2 | 0 | 9 | `not playing VCD`, `Side Stories: %d:`, +1 more | — |  |
+| 311 | `0x103dc280` | — | 5 | 3 | 3 | — | — |  |
+| 312 | `0x1042bff0` | — | 11 | 0 | 0 | — | — |  |
+| 313 | `0x10055050` | — | 1 | 4 | 5 | — | — |  |
+| 314 | `0x1006cf30` | — | 8 | 0 | 2 | — | — |  |
+| 315 | `0x100a0ae0` | — | 10 | 0 | 0 | — | — |  |
+| 316 | `0x10146190` | — | 8 | 0 | 2 | — | — |  |
+| 317 | `0x1017df50` | — | 5 | 3 | 2 | `CSActs:    %6.1f - Supernatural level %d…`, `CSActs:    %6.1f - Supernatural level %d…`, +1 more | — |  |
+| 318 | `0x1017ed00` | — | 2 | 6 | 2 | — | — |  |
+| 319 | `0x10194780` | — | 1 | 4 | 5 | — | — |  |
+| 320 | `0x101c10d0` | `CAI_BaseHumanoid#135`, `CAI_BaseNPC#135`, +334 more | 0 | 0 | 10 | — | — | `CAI_BaseNPC#135 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 321 | `0x101ccd70` | — | 7 | 3 | 0 | — | — |  |
+| 322 | `0x101cda50` | — | 10 | 0 | 0 | — | — |  |
+| 323 | `0x101df260` | — | 1 | 3 | 6 | — | — |  |
+| 324 | `0x101ed130` | — | 2 | 8 | 0 | — | — |  |
+| 325 | `0x101f1f50` | — | 2 | 5 | 3 | — | — |  |
+| 326 | `0x10205380` | — | 10 | 0 | 0 | — | — |  |
+| 327 | `0x1024b9e0` | — | 1 | 4 | 5 | — | — |  |
+| 328 | `0x1025db70` | — | 5 | 2 | 3 | — | — |  |
+| 329 | `0x1025f1c0` | `CAI_BaseHumanoid#585` | 2 | 0 | 8 | — | — |  |
+| 330 | `0x1026aef0` | `CAI_BaseHumanoid#474`, `CAI_BaseNPC#474`, +11 more | 9 | 0 | 1 | `Warning: NULL Return from GetBestSound⏎` | — | `CAI_BaseNPC#474 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 331 | `0x1027a5c0` | `CAI_BaseHumanoid#486`, `CAI_BaseNPC#486`, +11 more | 5 | 0 | 5 | — | — | `CAI_BaseNPC#486 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 332 | `0x1028ea60` | — | 3 | 7 | 0 | — | — |  |
+| 333 | `0x1029a070` | `CAI_BaseNPCTroika#593`, `CGeneric_NPC#593`, +61 more | 5 | 5 | 0 | — | — |  |
+| 334 | `0x102a1650` | — | 2 | 0 | 8 | — | — |  |
+| 335 | `0x102b4520` | `CAI_BaseNPCTroika#474`, `CGeneric_NPC#474`, +62 more | 9 | 0 | 1 | — | — |  |
+| 336 | `0x102b52a0` | — | 4 | 4 | 2 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 337 | `0x102b53d0` | — | 8 | 1 | 1 | — | — |  |
+| 338 | `0x102b6b50` | `CAI_BaseNPCTroika#609`, `CGeneric_NPC#609`, +59 more | 6 | 1 | 3 | — | — |  |
+| 339 | `0x102b8c40` | — | 1 | 6 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 340 | `0x102bf5d0` | — | 5 | 0 | 5 | — | — |  |
+| 341 | `0x102c12a0` | `CAI_BaseNPCTroika#611`, `CGeneric_NPC#611`, +61 more | 2 | 2 | 6 | — | Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4308, Source/ElysiumUE/Private/Visual/ElysiumAnimationDriver.cpp:778, Source/ElysiumUE/Private/Visual/ElysiumAnimationDriver.h:272 |  |
+| 342 | `0x102c9da0` | — | 1 | 9 | 0 | — | — |  |
+| 343 | `0x102d1420` | — | 8 | 2 | 0 | — | — |  |
+| 344 | `0x102e0a60` | — | 9 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:1116 |  |
+| 345 | `0x102e1f90` | — | 8 | 0 | 2 | — | — |  |
+| 346 | `0x102f9000` | — | 8 | 1 | 1 | — | — |  |
+| 347 | `0x102fc910` | — | 6 | 2 | 2 | — | — |  |
+| 348 | `0x1030b950` | — | 3 | 4 | 3 | — | — |  |
+| 349 | `0x103134b0` | — | 1 | 4 | 5 | — | — |  |
+| 350 | `0x103164c0` | — | 1 | 4 | 5 | — | — |  |
+| 351 | `0x10357760` | `CNPC_Crow#192` | 9 | 0 | 1 | — | — |  |
+| 352 | `0x1035e980` | `CNPC_VAndreiBlood#432` | 3 | 3 | 4 | — | — |  |
+| 353 | `0x103662d0` | — | 2 | 4 | 4 | — | — |  |
+| 354 | `0x10372cc0` | `CNPC_VCop#597` | 6 | 1 | 3 | `Player D_HT 10` | — |  |
+| 355 | `0x1038f020` | — | 2 | 3 | 5 | — | — |  |
+| 356 | `0x1039ede0` | — | 9 | 0 | 1 | — | — |  |
+| 357 | `0x103b9440` | `CNPC_VTzimisce#618` | 8 | 0 | 2 | `SPI_FIDGET` | — |  |
+| 358 | `0x103c2230` | — | 2 | 4 | 4 | `Character/Monster/TC_FatGuy/Sluge_Affect…` | — |  |
+| 359 | `0x1006caa0` | — | 7 | 0 | 2 | — | — |  |
+| 360 | `0x100b4c30` | `CAISound#215`, `CAI_BaseHumanoid#215`, +492 more | 0 | 0 | 9 | — | — | `CAI_BaseNPC#215 no SDK twin: stretch #199-#222 holds 22 reta…` |
+| 361 | `0x100dbc60` | — | 1 | 4 | 4 | — | — |  |
+| 362 | `0x100f7060` | — | 7 | 0 | 2 | — | — |  |
+| 363 | `0x10147710` | — | 1 | 2 | 6 | `Bip01 Spine`, `D_ObfuscateBroke_Emitter` | — |  |
+| 364 | `0x101554a0` | — | 1 | 1 | 7 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |  |
+| 365 | `0x1015d680` | — | 9 | 0 | 0 | — | — |  |
+| 366 | `0x1019ced0` | — | 1 | 8 | 0 | — | — |  |
+| 367 | `0x101a8de0` | `CCineAI#113`, `CCineAISchedule#113`, +1 more | 1 | 2 | 6 | `**********⏎`, `Could not find NPC %s in CCineNPC::Activ…`, +1 more | — |  |
+| 368 | `0x101aa5d0` | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, +62 more | 8 | 0 | 1 | — | — |  |
+| 369 | `0x101aa910` | `CPayphone#617` | 9 | 0 | 0 | — | — |  |
+| 370 | `0x101b0c10` | — | 8 | 0 | 1 | — | — |  |
+| 371 | `0x101cebc0` | — | 9 | 0 | 0 | — | — |  |
+| 372 | `0x101d3430` | — | 1 | 4 | 4 | — | — |  |
+| 373 | `0x101e56e0` | — | 5 | 0 | 4 | `Invalid Character pointer for: Feats::Fe…` | — |  |
+| 374 | `0x10204900` | — | 8 | 0 | 1 | — | — |  |
+| 375 | `0x1026d130` | — | 7 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:772, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3095, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:168 |  |
+| 376 | `0x1026e940` | — | 9 | 0 | 0 | `UTIL_TraceHull` | — |  |
+| 377 | `0x102702d0` | `CAI_BaseHumanoid#418`, `CAI_BaseNPC#418`, +11 more | 9 | 0 | 0 | — | — | `CAI_BaseNPC#418 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 378 | `0x102709c0` | `CAI_BaseHumanoid#544`, `CAI_BaseNPC#544`, +75 more | 4 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemyMemory.h:31 | `CAI_BaseNPC#544 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 379 | `0x10274ca0` | — | 3 | 2 | 4 | `WARNING: %s has no eye offset in .qc!⏎` | — |  |
+| 380 | `0x1027d9b0` | — | 8 | 0 | 1 | — | — |  |
+| 381 | `0x1028e360` | — | 1 | 5 | 3 | — | — |  |
+| 382 | `0x10290570` | `CAI_BaseNPCTroika#532`, `CGeneric_NPC#532`, +62 more | 3 | 3 | 3 | — | — |  |
+| 383 | `0x10294070` | `CAI_BaseNPCTroika#510`, `CGeneric_NPC#510`, +59 more | 2 | 0 | 7 | `Float_Sound_Info` | — |  |
+| 384 | `0x10295460` | — | 9 | 0 | 0 | — | — |  |
+| 385 | `0x102a0290` | — | 1 | 3 | 5 | — | — |  |
+| 386 | `0x102a9f40` | — | 1 | 5 | 3 | `Can not find interest activity '%s' in t…`, `Can not find interest into activity '%s'…` | — |  |
+| 387 | `0x102b57c0` | `CAI_BaseNPCTroika#600`, `CGeneric_NPC#600`, +15 more | 5 | 2 | 2 | — | — |  |
+| 388 | `0x102c1a80` | — | 1 | 4 | 4 | — | — |  |
+| 389 | `0x102c4ad0` | — | 1 | 7 | 1 | — | — |  |
+| 390 | `0x102da600` | — | 2 | 3 | 4 | — | — |  |
+| 391 | `0x102e1560` | — | 1 | 4 | 4 | — | — |  |
+| 392 | `0x102e8270` | — | 1 | 6 | 2 | — | — |  |
+| 393 | `0x102f2fe0` | — | 8 | 0 | 1 | — | — |  |
+| 394 | `0x1030b8a0` | — | 2 | 4 | 3 | — | — |  |
+| 395 | `0x103165f0` | — | 1 | 7 | 1 | — | — |  |
+| 396 | `0x1032ce40` | `CAI_BaseHumanoid#386`, `CAI_BaseNPC#386`, +83 more | 3 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | — | `CAI_BaseNPC#386 no SDK twin: stretch #384-#388 holds 3 retai…` |
+| 397 | `0x1032fe60` | `CAI_BaseHumanoid#348`, `CAI_BaseNPC#348`, +82 more | 5 | 0 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | — | `CAI_BaseNPC#348 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 398 | `0x1034d0a0` | `CNPCMaker_Zombie#618` | 7 | 0 | 2 | — | — |  |
+| 399 | `0x10363b60` | `CNPC_VBach#432` | 3 | 1 | 5 | — | — |  |
+| 400 | `0x10368f80` | `CNPC_VCamera#460`, `CNPC_VCameraSecurity#460` | 0 | 5 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | — |  |
+| 401 | `0x103726c0` | `CNPC_VCop#461` | 1 | 4 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — |  |
+| 402 | `0x10372c50` | `CNPC_VCop#596` | 9 | 0 | 0 | — | — |  |
+| 403 | `0x10372dd0` | `CNPC_VCop#598` | 4 | 1 | 4 | `%s(%d) :`, `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…`, +1 more | — |  |
+| 404 | `0x1037a100` | `CNPC_VGargoyle#618` | 8 | 0 | 1 | — | — |  |
+| 405 | `0x10381960` | `CNPC_VHengeyokai#618` | 8 | 0 | 1 | — | — |  |
+| 406 | `0x10382970` | — | 1 | 4 | 4 | — | — |  |
+| 407 | `0x10385cf0` | `CNPC_ProneDialog#601`, `CNPC_VAndreiBlood#601`, +36 more | 5 | 2 | 2 | — | — |  |
+| 408 | `0x103937d0` | — | 1 | 0 | 8 | — | — |  |
+| 409 | `0x103945a0` | `CNPC_VMingXiao#461` | 1 | 4 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 410 | `0x10398000` | — | 8 | 0 | 1 | — | — |  |
+| 411 | `0x10398030` | — | 2 | 0 | 7 | — | — |  |
+| 412 | `0x103a0d50` | — | 2 | 3 | 4 | — | — |  |
+| 413 | `0x103b4ff0` | `CNPC_VTest#461` | 1 | 4 | 4 | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VTest.c…` | — |  |
+| 414 | `0x103bf200` | — | 1 | 4 | 4 | — | — |  |
+| 415 | `0x103c24d0` | `CNPC_VTzimisceHeadClaw#618` | 8 | 0 | 1 | — | — |  |
+| 416 | `0x103c3ff0` | `CNPC_VTzimisceRunner#618` | 8 | 0 | 1 | — | — |  |
+| 417 | `0x103df5f0` | `CNPC_VZombie#461` | 1 | 5 | 3 | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — |  |
+| 418 | `0x103e1080` | `CNPC_VZombie#510` | 3 | 1 | 5 | `Float_Sound_Info` | — |  |
+| 419 | `0x10407c40` | — | 1 | 4 | 4 | — | — |  |
+| 420 | `0x10007ea0` | — | 6 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:789 |  |
+| 421 | `0x1000f89e` | — | 2 | 0 | 6 | — | — |  |
+| 422 | `0x10037300` | — | 8 | 0 | 0 | — | — |  |
+| 423 | `0x1004f860` | — | 8 | 0 | 0 | — | — |  |
+| 424 | `0x10050e70` | — | 4 | 3 | 1 | `CDisciplineParticle::Create` | — |  |
+| 425 | `0x1007dfa0` | — | 7 | 0 | 1 | — | — |  |
+| 426 | `0x100b4790` | — | 8 | 0 | 0 | — | — |  |
+| 427 | `0x100dc770` | — | 1 | 7 | 0 | — | — |  |
+| 428 | `0x100dd000` | — | 2 | 0 | 6 | — | — |  |
+| 429 | `0x10139550` | — | 8 | 0 | 0 | — | — |  |
+| 430 | `0x10143b70` | — | 8 | 0 | 0 | — | — |  |
+| 431 | `0x1015fbb0` | — | 1 | 3 | 4 | — | — |  |
+| 432 | `0x1017fd60` | — | 2 | 3 | 3 | `Scared NPC: %d (dist:%.2f)⏎` | — |  |
+| 433 | `0x101a6620` | `CAI_BaseHumanoid#447`, `CAI_BaseNPC#447`, +75 more | 7 | 0 | 1 | — | — | `CAI_BaseNPC#447 no SDK twin: stretch #444-#448 holds 3 retai…` |
+| 434 | `0x101a8640` | — | 2 | 1 | 5 | `Post Idle %s finished⏎` | — |  |
+| 435 | `0x101a8c30` | — | 6 | 0 | 2 | `Cancelling script: %s⏎` | — |  |
+| 436 | `0x101f2090` | — | 2 | 6 | 0 | — | — |  |
+| 437 | `0x101f2c60` | — | 1 | 4 | 3 | — | — |  |
+| 438 | `0x101f8480` | — | 8 | 0 | 0 | — | — |  |
+| 439 | `0x10202060` | — | 7 | 0 | 1 | `CBaseEntity::Instance` | — |  |
+| 440 | `0x10227a30` | — | 5 | 1 | 2 | — | — |  |
+| 441 | `0x102455c0` | `ConCommand#2`, `ConCommandBase#2`, +1 more | 1 | 6 | 1 | — | — |  |
+| 442 | `0x102521f0` | — | 7 | 0 | 1 | — | — |  |
+| 443 | `0x1025ddd0` | — | 5 | 1 | 2 | — | — |  |
+| 444 | `0x1025f1a0` | `CAI_BaseHumanoid#586` | 7 | 0 | 1 | — | — |  |
+| 445 | `0x10260870` | — | 2 | 3 | 3 | — | — |  |
+| 446 | `0x10268ef0` | `CAISound#146`, `CAI_BaseHumanoid#146`, +495 more | 4 | 1 | 3 | — | — | `CAI_BaseNPC#146 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 447 | `0x10274db0` | `CAI_BaseHumanoid#533`, `CAI_BaseNPC#533`, +11 more | 6 | 0 | 2 | — | — | `CAI_BaseNPC#533 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 448 | `0x10278220` | — | 1 | 0 | 7 | — | — |  |
+| 449 | `0x10278650` | — | 4 | 0 | 4 | — | — |  |
+| 450 | `0x1028ae60` | — | 4 | 1 | 3 | `ERROR! Vacating an empty slot!⏎` | — |  |
+| 451 | `0x1028d910` | `CAI_BaseNPCTroika#584`, `CGeneric_NPC#584`, +62 more | 2 | 5 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:568 |  |
+| 452 | `0x102b4c10` | `CAI_BaseNPCTroika#486`, `CGeneric_NPC#486`, +62 more | 8 | 0 | 0 | — | — |  |
+| 453 | `0x102c4e80` | — | 7 | 0 | 1 | — | — |  |
+| 454 | `0x102cd4a0` | — | 3 | 2 | 3 | — | — |  |
+| 455 | `0x102d1180` | — | 6 | 0 | 2 | — | — |  |
+| 456 | `0x102d1350` | — | 6 | 1 | 1 | — | — |  |
+| 457 | `0x102d1af0` | — | 8 | 0 | 0 | — | — |  |
+| 458 | `0x102d9fa0` | — | 1 | 0 | 7 | — | — |  |
+| 459 | `0x102dad60` | — | 1 | 0 | 7 | — | — |  |
+| 460 | `0x102ddab0` | — | 2 | 6 | 0 | — | — |  |
+| 461 | `0x102dfc10` | — | 3 | 1 | 4 | — | — |  |
+| 462 | `0x102ed430` | — | 1 | 3 | 4 | — | — |  |
+| 463 | `0x102edae0` | — | 5 | 2 | 1 | — | — |  |
+| 464 | `0x102ee250` | — | 7 | 0 | 1 | — | — |  |
+| 465 | `0x102ee2e0` | — | 7 | 0 | 1 | — | — |  |
+| 466 | `0x102ee9c0` | — | 6 | 0 | 2 | — | — |  |
+| 467 | `0x102eeb70` | — | 4 | 3 | 1 | — | — |  |
+| 468 | `0x102f13d0` | — | 2 | 2 | 4 | — | — |  |
+| 469 | `0x102f28a0` | — | 2 | 4 | 2 | — | — |  |
+| 470 | `0x102f9090` | — | 8 | 0 | 0 | — | — |  |
+| 471 | `0x1030b4d0` | — | 7 | 0 | 1 | — | — |  |
+| 472 | `0x103126e0` | — | 1 | 2 | 5 | — | — |  |
+| 473 | `0x1033b5f0` | `CAI_BaseHumanoid#357`, `CAI_BaseNPC#357`, +83 more | 0 | 2 | 6 | — | — | `CAI_BaseNPC#357 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 474 | `0x10381c80` | — | 7 | 0 | 1 | — | — |  |
+| 475 | `0x1038b1a0` | — | 1 | 2 | 5 | `E:\Vampire\main\dlls\hl2_dll\NPC_VManBat…` | — |  |
+| 476 | `0x10398870` | — | 7 | 0 | 1 | — | — |  |
+| 477 | `0x1039e310` | `CNPC_VMingXiaoTentacle#461` | 1 | 4 | 3 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 478 | `0x103a3670` | `CNPC_VPedestrian#432` | 3 | 1 | 4 | — | — |  |
+| 479 | `0x103be130` | — | 7 | 0 | 1 | — | — |  |
+| 480 | `0x103c3a70` | `CNPC_VTzimisceRunner#601` | 5 | 2 | 1 | — | — |  |
+| 481 | `0x103c4160` | `CNPC_VTzimisceRunner#619` | 6 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:100, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:192, +1 more |  |
+| 482 | `0x103dd9a0` | `CNPC_VYukie#601` | 5 | 2 | 1 | — | — |  |
+| 483 | `0x103dda10` | `CNPC_VYukie#602` | 5 | 0 | 3 | — | — |  |
+| 484 | `0x10009601` | — | 2 | 2 | 3 | — | — |  |
+| 485 | `0x10055520` | — | 6 | 0 | 1 | — | — |  |
+| 486 | `0x10071ae0` | — | 1 | 3 | 3 | — | — |  |
+| 487 | `0x10076280` | — | 5 | 0 | 2 | — | — |  |
+| 488 | `0x10098cd0` | — | 1 | 2 | 4 | — | — |  |
+| 489 | `0x100ab250` | — | 7 | 0 | 0 | — | — |  |
+| 490 | `0x100b4320` | `CAI_BaseHumanoid#117`, `CAI_BaseNPC#117`, +134 more | 7 | 0 | 0 | — | — | `CAI_BaseNPC#117 no SDK twin: stretch #113-#118 holds 4 retai…` |
+| 491 | `0x100d0390` | — | 3 | 4 | 0 | — | — |  |
+| 492 | `0x100ddc40` | — | 3 | 0 | 4 | — | — |  |
+| 493 | `0x100f6d80` | — | 2 | 2 | 3 | — | — |  |
+| 494 | `0x100fbbb0` | — | 6 | 1 | 0 | — | — |  |
+| 495 | `0x1011e060` | — | 5 | 0 | 2 | — | — |  |
+| 496 | `0x10139500` | — | 7 | 0 | 0 | — | — |  |
+| 497 | `0x10143710` | — | 7 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 498 | `0x10161a70` | — | 2 | 1 | 4 | `GetControllerNPC() created NULL Entity f…`, `⏎GetControllerNPC() asked for NPC class:…` | — |  |
+| 499 | `0x101671a0` | — | 4 | 0 | 3 | — | — |  |
+| 500 | `0x1017e760` | — | 1 | 0 | 6 | `Celerity %d` | — |  |
+| 501 | `0x101828b0` | — | 2 | 3 | 2 | — | — |  |
+| 502 | `0x10182c40` | — | 1 | 3 | 3 | — | — |  |
+| 503 | `0x101a64c0` | `CAI_BaseHumanoid#416`, `CAI_BaseNPC#416`, +11 more | 7 | 0 | 0 | — | — | `CAI_BaseNPC#416 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 504 | `0x101a95d0` | `CCineAI#586` | 6 | 0 | 1 | `FixScriptNPCSchedule - no case!⏎` | — |  |
+| 505 | `0x101cc950` | — | 2 | 5 | 0 | — | — |  |
+| 506 | `0x101dd090` | — | 4 | 0 | 3 | `Discipline<%s>: Particle1st: <%s> Added …`, `Discipline<%s>: Particle3rd: <%s> Added …` | — |  |
+| 507 | `0x101dfc20` | — | 1 | 0 | 6 | `Discipline<%s>: HitGroup: <%s> Hit Trigg…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1075, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:64 |  |
+| 508 | `0x101e0410` | — | 5 | 0 | 2 | — | — |  |
+| 509 | `0x101e1520` | — | 5 | 0 | 2 | — | — |  |
+| 510 | `0x101e48f0` | — | 1 | 3 | 3 | — | — |  |
+| 511 | `0x101fdaf0` | — | 1 | 1 | 5 | `CVStatInfo_t::CVStatInfo_t` | — |  |
+| 512 | `0x10206400` | — | 2 | 5 | 0 | — | — |  |
+| 513 | `0x10207c40` | — | 7 | 0 | 0 | — | — |  |
+| 514 | `0x10217080` | — | 1 | 3 | 3 | — | — |  |
+| 515 | `0x10245d80` | `ConVar#11` | 1 | 2 | 4 | — | — |  |
+| 516 | `0x1024b830` | — | 5 | 0 | 2 | — | — |  |
+| 517 | `0x1025dca0` | — | 5 | 0 | 2 | — | — |  |
+| 518 | `0x10260540` | `CAI_BaseHumanoid#589` | 2 | 0 | 5 | — | — |  |
+| 519 | `0x102658f0` | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, +75 more | 2 | 0 | 5 | — | — | `CAI_BaseNPC#402 no SDK twin: stretch #397-#404 holds 6 retai…` |
+| 520 | `0x10273dd0` | `CAI_BaseHumanoid#542`, `CAI_BaseNPC#542`, +75 more | 4 | 1 | 2 | — | — | `CAI_BaseNPC#542 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 521 | `0x1027a530` | `CAI_BaseHumanoid#510`, `CAI_BaseNPC#510`, +11 more | 5 | 0 | 2 | — | — | `CAI_BaseNPC#510 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 522 | `0x1027d0a0` | — | 2 | 3 | 2 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | — |  |
+| 523 | `0x1027efb0` | — | 4 | 1 | 2 | `** END BUFFER DUMP FOR %s⏎`, `** BEGIN BUFFER DUMP FOR %s⏎`, +1 more | — |  |
+| 524 | `0x1027f270` | — | 7 | 0 | 0 | — | — |  |
+| 525 | `0x1027f990` | — | 1 | 3 | 3 | — | — |  |
+| 526 | `0x1027fae0` | — | 1 | 3 | 3 | — | — |  |
+| 527 | `0x10288710` | `CAI_BaseHumanoid#445`, `CAI_BaseNPC#445`, +75 more | 1 | 0 | 6 | — | — | `CAI_BaseNPC#445 no SDK twin: stretch #444-#448 holds 3 retai…` |
+| 528 | `0x1028a190` | — | 5 | 0 | 2 | — | — |  |
+| 529 | `0x1028eb30` | — | 1 | 6 | 0 | — | — |  |
+| 530 | `0x1029c970` | — | 2 | 0 | 5 | — | — |  |
+| 531 | `0x102ad260` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 532 | `0x102ad2d0` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 533 | `0x102b2570` | — | 1 | 0 | 6 | — | — |  |
+| 534 | `0x102b4fb0` | `CAI_BaseNPCTroika#597`, `CGeneric_NPC#597`, +61 more | 7 | 0 | 0 | — | — |  |
+| 535 | `0x102b6fe0` | — | 2 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 536 | `0x102b8620` | — | 5 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 537 | `0x102c0bb0` | — | 4 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:15, Source/ElysiumUE/Private/UI/ElysiumDialogueScreen.h:30, Source/ElysiumUE/Private/UI/ElysiumDialogueWidget.h:136, +1 more |  |
+| 538 | `0x102c3b50` | — | 6 | 0 | 1 | `UTIL_TraceHull` | — |  |
+| 539 | `0x102c5570` | — | 3 | 0 | 4 | — | — |  |
+| 540 | `0x102c6c30` | — | 1 | 3 | 3 | — | — |  |
+| 541 | `0x102cea60` | — | 6 | 0 | 1 | — | — |  |
+| 542 | `0x102d4210` | — | 1 | 3 | 3 | — | — |  |
+| 543 | `0x102d9040` | — | 3 | 2 | 2 | — | — |  |
+| 544 | `0x102dcd30` | — | 1 | 3 | 3 | — | — |  |
+| 545 | `0x102dfd90` | — | 3 | 0 | 4 | `Asking MarkAsEluded for enemy that's not…` | — |  |
+| 546 | `0x102e3290` | — | 5 | 2 | 0 | — | — |  |
+| 547 | `0x102e8560` | — | 1 | 0 | 6 | `move_yaw`, `          The animation needs to be shor…`, +1 more | — |  |
+| 548 | `0x102ee3f0` | — | 6 | 0 | 1 | — | — |  |
+| 549 | `0x102f2fc0` | — | 6 | 0 | 1 | — | — |  |
+| 550 | `0x102fe9a0` | — | 5 | 2 | 0 | — | — |  |
+| 551 | `0x10307890` | — | 5 | 0 | 2 | — | — |  |
+| 552 | `0x10310290` | — | 1 | 1 | 5 | — | — |  |
+| 553 | `0x1032fb80` | `CAI_BaseHumanoid#345`, `CAI_BaseNPC#345`, +83 more | 6 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::SetPoseParameter` | — | `CAI_BaseNPC#345 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 554 | `0x10349d50` | — | 1 | 3 | 3 | — | — |  |
+| 555 | `0x1034a030` | — | 1 | 3 | 3 | — | — |  |
+| 556 | `0x1034bc90` | `CNPCMaker#139`, `CNPCMaker_Zombie#139` | 1 | 2 | 4 | — | — |  |
+| 557 | `0x10357be0` | — | 1 | 1 | 5 | — | — |  |
+| 558 | `0x10366400` | — | 4 | 1 | 2 | — | — |  |
+| 559 | `0x10369e70` | — | 2 | 2 | 3 | — | — |  |
+| 560 | `0x10381c00` | — | 3 | 3 | 1 | — | — |  |
+| 561 | `0x10385c30` | `CNPC_ProneDialog#600`, `CNPC_VAndreiBlood#600`, +36 more | 3 | 2 | 2 | — | — |  |
+| 562 | `0x10392a10` | `CNPC_VMingXiao#418` | 6 | 0 | 1 | — | — |  |
+| 563 | `0x10395750` | — | 1 | 2 | 4 | `Ming_xiao_tentacle_damage_emitter`, `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 564 | `0x10395c70` | — | 2 | 5 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 565 | `0x10398890` | — | 1 | 0 | 6 | — | — |  |
+| 566 | `0x10398d90` | — | 6 | 1 | 0 | — | — |  |
+| 567 | `0x10398fd0` | — | 4 | 2 | 1 | — | — |  |
+| 568 | `0x103b9120` | `CNPC_VTzimisce#418` | 7 | 0 | 0 | — | — |  |
+| 569 | `0x103b9180` | `CNPC_VTzimisce#593` | 2 | 5 | 0 | — | — |  |
+| 570 | `0x103b96a0` | `CNPC_VTzimisce#619` | 6 | 0 | 1 | — | — |  |
+| 571 | `0x103be0b0` | — | 3 | 3 | 1 | — | — |  |
+| 572 | `0x103c19e0` | `CNPC_VTzimisceHeadClaw#599` | 4 | 2 | 1 | — | — |  |
+| 573 | `0x103c1ad0` | `CNPC_VTzimisceHeadClaw#601` | 5 | 1 | 1 | — | — |  |
+| 574 | `0x103c1b10` | `CNPC_VTzimisceHeadClaw#602` | 5 | 0 | 2 | — | — |  |
+| 575 | `0x103c2640` | `CNPC_VTzimisceHeadClaw#619` | 6 | 0 | 1 | — | — |  |
+| 576 | `0x103c3960` | `CNPC_VTzimisceRunner#599` | 4 | 2 | 1 | — | — |  |
+| 577 | `0x103c39e0` | `CNPC_VTzimisceRunner#600` | 3 | 2 | 2 | — | — |  |
+| 578 | `0x103c3ab0` | `CNPC_VTzimisceRunner#602` | 5 | 0 | 2 | — | — |  |
+| 579 | `0x103ca690` | `CNPC_VWerewolf#618` | 7 | 0 | 0 | — | — |  |
+| 580 | `0x103d0bf0` | — | 1 | 2 | 4 | `GetNearestNodeToPlayer failed⏎` | — |  |
+| 581 | `0x103dc090` | — | 1 | 3 | 3 | — | — |  |
+| 582 | `0x103e0fa0` | `CNPC_VZombie#509` | 1 | 0 | 6 | — | — |  |
+| 583 | `0x10012805` | — | 5 | 0 | 1 | — | — |  |
+| 584 | `0x1003ff80` | — | 6 | 0 | 0 | — | — |  |
+| 585 | `0x1006c9d0` | — | 4 | 0 | 2 | — | — |  |
+| 586 | `0x10075b70` | — | 6 | 0 | 0 | — | — |  |
+| 587 | `0x10075e70` | — | 5 | 0 | 1 | — | — |  |
+| 588 | `0x10090890` | — | 4 | 1 | 1 | `NULL ENTITY`, `CBaseAnimating :: MarkEffectStartTime` | — |  |
+| 589 | `0x1009b030` | `CAISound#16`, `CAI_BaseHumanoid#16`, +495 more | 3 | 0 | 3 | — | — | `CAI_BaseNPC#16 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 590 | `0x1009f380` | — | 3 | 3 | 0 | — | — |  |
+| 591 | `0x100a19c0` | — | 4 | 0 | 2 | — | — |  |
+| 592 | `0x100b5b00` | `CAI_BaseNPC#277`, `CAI_BaseNPCTroika#277`, +83 more | 5 | 0 | 1 | — | — | `CAI_BaseNPC#277 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 593 | `0x100b5c50` | `CAI_BaseHumanoid#281`, `CAI_BaseNPC#281`, +84 more | 6 | 0 | 0 | — | — | `CAI_BaseNPC#281 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 594 | `0x100b6f80` | — | 2 | 0 | 4 | — | — |  |
+| 595 | `0x100dcd90` | — | 1 | 0 | 5 | — | — |  |
+| 596 | `0x100ddd90` | — | 2 | 0 | 4 | — | — |  |
+| 597 | `0x100dfaf0` | — | 6 | 0 | 0 | — | — |  |
+| 598 | `0x100ec410` | — | 3 | 0 | 3 | — | — |  |
+| 599 | `0x100eccf0` | — | 3 | 0 | 3 | — | — |  |
+| 600 | `0x100ecee0` | — | 1 | 0 | 5 | — | — |  |
+| 601 | `0x100fb980` | — | 2 | 2 | 2 | `%s rate scale set to %.2f, must be >=0⏎` | — |  |
+| 602 | `0x10129870` | — | 2 | 0 | 4 | — | — |  |
+| 603 | `0x1012b080` | — | 2 | 1 | 3 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |  |
+| 604 | `0x10143d80` | — | 6 | 0 | 0 | — | — |  |
+| 605 | `0x10146a80` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Public/ElysiumPlayer.h:439 |  |
+| 606 | `0x101578d0` | — | 4 | 1 | 1 | — | — |  |
+| 607 | `0x101681a0` | — | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:56 |  |
+| 608 | `0x1017ff40` | — | 1 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:335, Source/ElysiumUE/Public/ElysiumPlayer.h:2113 |  |
+| 609 | `0x1019cff0` | — | 5 | 1 | 0 | — | — |  |
+| 610 | `0x101a8840` | `CCineNPC#586` | 6 | 0 | 0 | `E:\Vampire\main\dlls\scripted.cpp` | — |  |
+| 611 | `0x101b99d0` | — | 6 | 0 | 0 | — | — |  |
+| 612 | `0x101bab50` | — | 2 | 2 | 2 | `Free Sound List is empty!⏎` | — |  |
+| 613 | `0x101c2a10` | — | 5 | 1 | 0 | — | — |  |
+| 614 | `0x101c2a50` | — | 5 | 1 | 0 | — | — |  |
+| 615 | `0x101cca80` | — | 6 | 0 | 0 | — | — |  |
+| 616 | `0x101ccb60` | — | 1 | 5 | 0 | — | — |  |
+| 617 | `0x101d1a90` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2080, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:507, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:614, +4 more |  |
+| 618 | `0x101d33a0` | — | 1 | 5 | 0 | — | — |  |
+| 619 | `0x101d5bd0` | — | 4 | 0 | 2 | — | — |  |
+| 620 | `0x101db430` | — | 1 | 0 | 5 | — | — |  |
+| 621 | `0x101dd620` | — | 1 | 0 | 5 | `vdisciplineprojectile`, `ERROR: Couldn't create discipline projec…` | — |  |
+| 622 | `0x101def10` | — | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:889, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:902, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1117, +1 more |  |
+| 623 | `0x101e11c0` | — | 4 | 0 | 2 | — | — |  |
+| 624 | `0x101e12f0` | — | 4 | 0 | 2 | — | — |  |
+| 625 | `0x101e4a00` | — | 3 | 1 | 2 | — | — |  |
+| 626 | `0x101f3b00` | — | 1 | 0 | 5 | — | — |  |
+| 627 | `0x101f75a0` | — | 3 | 0 | 3 | — | — |  |
+| 628 | `0x101ff060` | — | 3 | 0 | 3 | — | — |  |
+| 629 | `0x102029c0` | — | 2 | 4 | 0 | — | — |  |
+| 630 | `0x10202a10` | — | 5 | 0 | 1 | — | — |  |
+| 631 | `0x10203190` | — | 4 | 0 | 2 | — | — |  |
+| 632 | `0x10204270` | — | 6 | 0 | 0 | — | — |  |
+| 633 | `0x1023dcd0` | — | 6 | 0 | 0 | — | — |  |
+| 634 | `0x10245f50` | `ConVar#9` | 1 | 2 | 3 | — | — |  |
+| 635 | `0x1025de90` | — | 4 | 0 | 2 | — | — |  |
+| 636 | `0x1025e7b0` | — | 3 | 0 | 3 | — | — |  |
+| 637 | `0x1025f0b0` | `CAI_BaseHumanoid#373` | 3 | 0 | 3 | — | — |  |
+| 638 | `0x10265a90` | — | 3 | 1 | 2 | — | — |  |
+| 639 | `0x1026b210` | `CAI_BaseNPC#372`, `CAI_BaseNPCTroika#372`, +74 more | 5 | 0 | 1 | — | — | `CAI_BaseNPC#372 no SDK twin: stretch #371-#376 holds 4 retai…` |
+| 640 | `0x1026c540` | — | 1 | 0 | 5 | `Unaccounted`, `CAI_BaseNPC_RunAnimation` | — |  |
+| 641 | `0x1026d7f0` | `CAI_BaseHumanoid#459`, `CAI_BaseNPC#459`, +72 more | 4 | 0 | 2 | — | — | `CAI_BaseNPC#459 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 642 | `0x1026f590` | `CAI_BaseHumanoid#460`, `CAI_BaseNPC#460`, +11 more | 0 | 1 | 5 | — | — | `CAI_BaseNPC#460 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 643 | `0x102729d0` | — | 2 | 0 | 4 | — | — |  |
+| 644 | `0x10272f40` | — | 3 | 0 | 3 | — | — |  |
+| 645 | `0x10273720` | `CAI_BaseHumanoid#223`, `CAI_BaseNPC#223`, +75 more | 4 | 0 | 2 | — | — | `CAI_BaseNPC#223 no SDK twin: stretch #222-#227 holds 4 retai…` |
+| 646 | `0x10273ec0` | — | 1 | 2 | 3 | `Movement completed twice!⏎` | — |  |
+| 647 | `0x10277d90` | `CAI_BaseHumanoid#582`, `CAI_BaseNPC#582`, +75 more | 0 | 0 | 6 | `unknown`, `Slow %.1f, %s %.1f `, +6 more | — | `CAI_BaseNPC#582 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 648 | `0x10279b70` | — | 5 | 1 | 0 | — | — |  |
+| 649 | `0x1027e740` | `CAI_BaseHumanoid#406`, `CAI_BaseNPC#406`, +75 more | 6 | 0 | 0 | — | — | `CAI_BaseNPC#406 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 650 | `0x1028a260` | — | 4 | 0 | 2 | — | — |  |
+| 651 | `0x1028d990` | — | 2 | 0 | 4 | `%-20s  %6.2f : %*s %s⏎%s%s %s%s %s⏎⏎`, `%6.2f : %*s %s⏎`, +7 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:23 |  |
+| 652 | `0x1028ef20` | `CAI_BaseNPCTroika#587`, `CGeneric_NPC#587`, +46 more | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:709 |  |
+| 653 | `0x1028fc90` | — | 3 | 3 | 0 | — | — |  |
+| 654 | `0x10290040` | — | 1 | 2 | 3 | — | — |  |
+| 655 | `0x102961a0` | — | 1 | 0 | 5 | `**UNKNOWN**`, `Distance (%d) < %d or > %d`, +4 more | — |  |
+| 656 | `0x10296c40` | — | 2 | 0 | 4 | `Disabled`, `Enemy outside of good range (%.2f) <= %.…`, +7 more | — |  |
+| 657 | `0x1029c4a0` | — | 1 | 0 | 5 | — | — |  |
+| 658 | `0x1029f460` | — | 2 | 2 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `Failed to create patrol path for %s⏎` | — |  |
+| 659 | `0x1029fa50` | `CAI_BaseNPCTroika#316`, `CGeneric_NPC#316`, +59 more | 0 | 2 | 4 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 660 | `0x102a11d0` | — | 4 | 0 | 2 | — | — |  |
+| 661 | `0x102aa640` | — | 1 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `%s can't reach patrol point⏎` | — |  |
+| 662 | `0x102aa860` | — | 1 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 663 | `0x102adfe0` | `CAI_BaseNPCTroika#610`, `CGeneric_NPC#610`, +62 more | 2 | 3 | 1 | `Anger_No Deform`, `Anger`, +1 more | — |  |
+| 664 | `0x102ae310` | — | 3 | 0 | 3 | — | — |  |
+| 665 | `0x102b4ab0` | `CAI_BaseNPCTroika#533`, `CGeneric_NPC#533`, +61 more | 3 | 0 | 3 | — | — |  |
+| 666 | `0x102b4fe0` | `CAI_BaseNPCTroika#598`, `CGeneric_NPC#598`, +61 more | 3 | 0 | 3 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 667 | `0x102b5dc0` | — | 5 | 1 | 0 | — | — |  |
+| 668 | `0x102b7cf0` | — | 3 | 0 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 669 | `0x102bf770` | — | 2 | 2 | 2 | — | — |  |
+| 670 | `0x102bf7e0` | — | 4 | 1 | 1 | — | — |  |
+| 671 | `0x102c0aa0` | — | 4 | 0 | 2 | — | — |  |
+| 672 | `0x102c4cc0` | — | 5 | 0 | 1 | — | — |  |
+| 673 | `0x102c73b0` | — | 2 | 3 | 1 | — | — |  |
+| 674 | `0x102c7490` | `CAI_StandoffBehavior#4` | 0 | 3 | 3 | — | — |  |
+| 675 | `0x102c88c0` | `CAI_StandoffGoal#5` | 0 | 4 | 2 | — | — |  |
+| 676 | `0x102cd3b0` | — | 3 | 1 | 2 | — | — |  |
+| 677 | `0x102dbbc0` | `CAI_InterestingPlaceConverstation#5` | 0 | 0 | 6 | — | — |  |
+| 678 | `0x102dd470` | — | 6 | 0 | 0 | — | — |  |
+| 679 | `0x102ddc00` | — | 1 | 3 | 2 | — | — |  |
+| 680 | `0x102dfa20` | — | 5 | 0 | 1 | — | — |  |
+| 681 | `0x102dfaa0` | — | 2 | 0 | 4 | — | — |  |
+| 682 | `0x102e0290` | — | 2 | 0 | 4 | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | — |  |
+| 683 | `0x102e0bd0` | — | 2 | 2 | 2 | — | — |  |
+| 684 | `0x102e7270` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull`, +2 more | — |  |
+| 685 | `0x102e7880` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | — |  |
+| 686 | `0x102edc80` | — | 3 | 2 | 1 | — | — |  |
+| 687 | `0x102eeba0` | — | 5 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:74 |  |
+| 688 | `0x102f1dc0` | — | 4 | 0 | 2 | — | — |  |
+| 689 | `0x102f8f50` | — | 1 | 5 | 0 | — | — |  |
+| 690 | `0x102f91b0` | — | 6 | 0 | 0 | — | — |  |
+| 691 | `0x10304130` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildLocalRoute` | — |  |
+| 692 | `0x1030b5e0` | — | 2 | 4 | 0 | — | — |  |
+| 693 | `0x1030ff10` | — | 1 | 2 | 3 | — | — |  |
+| 694 | `0x10312b20` | — | 2 | 4 | 0 | — | — |  |
+| 695 | `0x1032d0c0` | `CAI_BaseHumanoid#385`, `CAI_BaseNPC#385`, +81 more | 0 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | — | `CAI_BaseNPC#385 no SDK twin: stretch #384-#388 holds 3 retai…` |
+| 696 | `0x10334180` | `CAI_BaseHumanoid#374`, `CAI_BaseNPC#374`, +82 more | 2 | 0 | 4 | `NULL ENTITY`, `weapons/misc/ammo_pickup.wav`, +1 more | — | `CAI_BaseNPC#374 no SDK twin: stretch #371-#376 holds 4 retai…` |
+| 697 | `0x10365a90` | — | 1 | 1 | 4 | `Character/Boss/Bach/bach_camp_warn.wav`, `Character/Boss/Bach/bach_grenade.wav`, +7 more | — |  |
+| 698 | `0x103747e0` | `CNPC_VDog#432` | 3 | 0 | 3 | — | — |  |
+| 699 | `0x10381ba0` | — | 4 | 1 | 1 | — | — |  |
+| 700 | `0x10381e90` | — | 1 | 4 | 1 | `Bone04`, `Bone01` | — |  |
+| 701 | `0x103822a0` | — | 3 | 0 | 3 | — | — |  |
+| 702 | `0x10383090` | `CNPC_VHengeyokai#435` | 2 | 2 | 2 | — | — |  |
+| 703 | `0x10387500` | `CNPC_ProneDialog#432`, `CNPC_VGhoulCroucher#432`, +4 more | 6 | 0 | 0 | — | — |  |
+| 704 | `0x1038bec0` | — | 1 | 1 | 4 | `UTIL_TraceHull` | — |  |
+| 705 | `0x1038c170` | — | 4 | 0 | 2 | — | — |  |
+| 706 | `0x1038f790` | — | 1 | 1 | 4 | — | — |  |
+| 707 | `0x103910b0` | `CNPC_VMingXiao#5` | 0 | 4 | 2 | — | — |  |
+| 708 | `0x10391170` | `CNPC_VBaseBoss#5` | 0 | 4 | 2 | — | — |  |
+| 709 | `0x10395e20` | `CNPC_VMingXiao#601` | 5 | 1 | 0 | — | — |  |
+| 710 | `0x10396bc0` | — | 1 | 0 | 5 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 711 | `0x103989b0` | — | 1 | 0 | 5 | — | — |  |
+| 712 | `0x103990c0` | — | 2 | 0 | 4 | — | — |  |
+| 713 | `0x1039eae0` | `CNPC_VMingXiaoTentacle#601` | 5 | 1 | 0 | — | — |  |
+| 714 | `0x103acac0` | — | 2 | 0 | 4 | — | — |  |
+| 715 | `0x103b9380` | `CNPC_VTzimisce#490` | 4 | 0 | 2 | `SPI_IDLE` | — |  |
+| 716 | `0x103b9810` | `CNPC_VTzimisce#620` | 5 | 0 | 1 | — | — |  |
+| 717 | `0x103be050` | — | 4 | 1 | 1 | — | — |  |
+| 718 | `0x103be3d0` | — | 1 | 4 | 1 | `Bip01 L Forearm`, `Bip01 R Forearm` | — |  |
+| 719 | `0x103be8e0` | — | 3 | 0 | 3 | — | — |  |
+| 720 | `0x103bf610` | `CNPC_VTzimisce#435` | 2 | 2 | 2 | — | — |  |
+| 721 | `0x103c1340` | `CNPC_VTzimisceHeadClaw#5` | 0 | 4 | 2 | — | — |  |
+| 722 | `0x103c1a60` | `CNPC_VTzimisceHeadClaw#600` | 3 | 1 | 2 | — | — |  |
+| 723 | `0x103c3120` | `CNPC_VTzimisceRunner#5` | 0 | 4 | 2 | — | — |  |
+| 724 | `0x103c6a00` | — | 5 | 1 | 0 | — | — |  |
+| 725 | `0x103dc260` | — | 5 | 1 | 0 | — | — |  |
+| 726 | `0x103dc340` | — | 5 | 0 | 1 | — | — |  |
+| 727 | `0x103dd900` | `CNPC_VYukie#600` | 3 | 2 | 1 | — | — |  |
+| 728 | `0x10412520` | — | 6 | 0 | 0 | — | — |  |
+| 729 | `0x10438b8b` | — | 6 | 0 | 0 | — | — |  |
+| 730 | `0x1000cb8a` | — | 5 | 0 | 0 | — | — |  |
+| 731 | `0x100113d8` | — | 4 | 0 | 1 | — | — |  |
+| 732 | `0x10026a50` | `CAISound#65`, `CAI_BaseHumanoid#65`, +495 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#65 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 733 | `0x10054c00` | — | 1 | 2 | 2 | — | — |  |
+| 734 | `0x10055170` | — | 1 | 2 | 2 | — | — |  |
+| 735 | `0x100561a0` | — | 1 | 2 | 2 | — | — |  |
+| 736 | `0x1006c770` | — | 1 | 3 | 1 | — | — |  |
+| 737 | `0x10074110` | — | 3 | 0 | 2 | — | — |  |
+| 738 | `0x100741f0` | — | 2 | 0 | 3 | — | — |  |
+| 739 | `0x10074a50` | — | 4 | 0 | 1 | — | — |  |
+| 740 | `0x10075f10` | — | 4 | 0 | 1 | — | — |  |
+| 741 | `0x10099690` | `CAI_BaseHumanoid#265`, `CAI_BaseNPC#265`, +85 more | 1 | 0 | 4 | — | — | `CAI_BaseNPC#265 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 742 | `0x100b5ba0` | `CAI_BaseHumanoid#279`, `CAI_BaseNPC#279`, +84 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#279 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 743 | `0x100bf5b0` | — | 4 | 1 | 0 | — | — |  |
+| 744 | `0x100ce210` | — | 3 | 1 | 1 | — | — |  |
+| 745 | `0x100ce630` | — | 1 | 2 | 2 | — | — |  |
+| 746 | `0x100dc430` | — | 2 | 0 | 3 | — | — |  |
+| 747 | `0x100dda20` | — | 4 | 0 | 1 | — | — |  |
+| 748 | `0x100ec2e0` | — | 2 | 0 | 3 | — | — |  |
+| 749 | `0x100ec360` | — | 2 | 0 | 3 | — | — |  |
+| 750 | `0x100ecdf0` | — | 2 | 0 | 3 | — | — |  |
+| 751 | `0x100fbaf0` | — | 4 | 1 | 0 | — | — |  |
+| 752 | `0x1012a1d0` | — | 1 | 1 | 3 | `CBaseEntity::SetSolid` | — |  |
+| 753 | `0x10138130` | — | 5 | 0 | 0 | — | — |  |
+| 754 | `0x10138720` | — | 5 | 0 | 0 | — | — |  |
+| 755 | `0x10144a30` | — | 5 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 756 | `0x10157da0` | — | 1 | 1 | 3 | `prop_ragdoll_special` | — |  |
+| 757 | `0x1017a2b0` | — | 1 | 2 | 2 | — | — |  |
+| 758 | `0x1017c6d0` | — | 1 | 2 | 2 | `CBaseEntity::Instance` | — |  |
+| 759 | `0x1017f770` | — | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1451, Source/ElysiumUE/Public/ElysiumPlayer.h:2287 |  |
+| 760 | `0x10183880` | — | 3 | 0 | 2 | — | — |  |
+| 761 | `0x1018e2a0` | — | 2 | 3 | 0 | — | — |  |
+| 762 | `0x1018e910` | — | 4 | 0 | 1 | `activity_copy_prop` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2813 |  |
+| 763 | `0x101948c0` | — | 1 | 2 | 2 | — | — |  |
+| 764 | `0x1019d210` | — | 5 | 0 | 0 | — | — |  |
+| 765 | `0x101a68c0` | `CAI_BaseHumanoid#490`, `CAI_BaseNPC#490`, +10 more | 5 | 0 | 0 | — | — | `CAI_BaseNPC#490 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 766 | `0x101a6c20` | `CAI_BaseHumanoid#550`, `CAI_BaseNPC#550`, +73 more | 5 | 0 | 0 | — | — | `CAI_BaseNPC#550 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 767 | `0x101a6e00` | `CCineAI#364`, `CCineAISchedule#364`, +1 more | 5 | 0 | 0 | — | — |  |
+| 768 | `0x101a8890` | — | 1 | 1 | 3 | — | — |  |
+| 769 | `0x101a8ac0` | — | 5 | 0 | 0 | `%s is a priority script and cannot be ki…`, `%s is specified as the 'Next Script' and…` | — |  |
+| 770 | `0x101aa8b0` | `CPayphone#364` | 5 | 0 | 0 | — | — |  |
+| 771 | `0x101b2f60` | — | 1 | 0 | 4 | — | — |  |
+| 772 | `0x101b33f0` | — | 4 | 0 | 1 | `sound/%s`, `CSoundEmitterSystemBase::GetParametersFo…`, +3 more | — |  |
+| 773 | `0x101b9a50` | — | 2 | 0 | 3 | `deaf zone min depth: %.2f` | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:559 |  |
+| 774 | `0x101bfd60` | — | 1 | 2 | 2 | — | — |  |
+| 775 | `0x101c01c0` | — | 4 | 0 | 1 | — | — |  |
+| 776 | `0x101c1720` | `CAI_BaseHumanoid#133`, `CAI_BaseNPC#133`, +326 more | 0 | 2 | 3 | — | — | `CAI_BaseNPC#133 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 777 | `0x101c29e0` | — | 2 | 3 | 0 | — | — |  |
+| 778 | `0x101c2a30` | — | 4 | 0 | 1 | — | — |  |
+| 779 | `0x101c4dd0` | — | 1 | 1 | 3 | `NULL ENTITY`, `CBaseEntity::IsSolidFlagSet`, +1 more | — |  |
+| 780 | `0x101d1800` | — | 5 | 0 | 0 | — | — |  |
+| 781 | `0x101daad0` | — | 2 | 0 | 3 | — | — |  |
+| 782 | `0x101dc790` | — | 3 | 0 | 2 | — | — |  |
+| 783 | `0x101dd480` | — | 1 | 2 | 2 | — | — |  |
+| 784 | `0x101dfe80` | — | 1 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:889, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:4176 |  |
+| 785 | `0x101e1590` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1563 |  |
+| 786 | `0x101e1610` | — | 3 | 0 | 2 | — | — |  |
+| 787 | `0x101e1720` | — | 4 | 0 | 1 | `ERROR: DiscFlag Lookup Failed!⏎` | — |  |
+| 788 | `0x101e3560` | — | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1345, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:65, Source/ElysiumUE/Public/ElysiumPlayer.h:459 |  |
+| 789 | `0x101f7310` | — | 1 | 4 | 0 | — | — |  |
+| 790 | `0x101f9a00` | — | 5 | 0 | 0 | — | — |  |
+| 791 | `0x101f9a40` | — | 5 | 0 | 0 | — | — |  |
+| 792 | `0x101ff010` | — | 2 | 0 | 3 | — | — |  |
+| 793 | `0x102042a0` | — | 3 | 2 | 0 | — | — |  |
+| 794 | `0x1020cc60` | — | 2 | 0 | 3 | — | — |  |
+| 795 | `0x1021fe50` | — | 5 | 0 | 0 | — | — |  |
+| 796 | `0x1024b400` | — | 3 | 0 | 2 | — | — |  |
+| 797 | `0x1024bb20` | — | 1 | 2 | 2 | — | — |  |
+| 798 | `0x1024bf80` | — | 4 | 0 | 1 | — | — |  |
+| 799 | `0x1025e780` | `CAI_BaseHumanoid#277` | 3 | 1 | 1 | — | — |  |
+| 800 | `0x1025f760` | `CAI_BaseHumanoid#536` | 2 | 1 | 2 | — | — |  |
+| 801 | `0x10269f30` | — | 4 | 0 | 1 | — | — |  |
+| 802 | `0x1026b270` | `CAI_BaseHumanoid#534`, `CAI_BaseNPC#534`, +75 more | 0 | 2 | 3 | — | — | `CAI_BaseNPC#534 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 803 | `0x1026fcf0` | `CAI_BaseHumanoid#573`, `CAI_BaseNPC#573`, +75 more | 2 | 0 | 3 | — | — | `CAI_BaseNPC#573 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 804 | `0x102707d0` | — | 5 | 0 | 0 | — | — |  |
+| 805 | `0x10272790` | `CAI_BaseHumanoid#466`, `CAI_BaseNPC#466`, +11 more | 3 | 0 | 2 | — | — | `CAI_BaseNPC#466 no SDK twin: stretch #465-#467 holds 1 retai…` |
+| 806 | `0x10274080` | — | 2 | 1 | 2 | — | — |  |
+| 807 | `0x10278e30` | `CAI_BaseNPC#484`, `CAI_BaseNPCTroika#484`, +73 more | 2 | 0 | 3 | — | — | `CAI_BaseNPC#484 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 808 | `0x1027a400` | `CAI_BaseHumanoid#552`, `CAI_BaseNPC#552`, +75 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#552 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 809 | `0x1027a640` | `CAI_BaseHumanoid#487`, `CAI_BaseNPC#487`, +11 more | 2 | 1 | 2 | — | — | `CAI_BaseNPC#487 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 810 | `0x1027a700` | `CAI_BaseHumanoid#435`, `CAI_BaseNPC#435`, +11 more | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3143 | `CAI_BaseNPC#435 no SDK twin: stretch #434-#438 holds 3 retai…` |
+| 811 | `0x1027caa0` | `CAI_BaseHumanoid#511`, `CAI_BaseNPC#511`, +74 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#511 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 812 | `0x1027e0f0` | `CAI_BaseHumanoid#532`, `CAI_BaseNPC#532`, +11 more | 3 | 2 | 0 | — | — | `CAI_BaseNPC#532 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 813 | `0x1027ef20` | — | 2 | 2 | 1 | — | — |  |
+| 814 | `0x10288670` | — | 2 | 1 | 2 | — | — |  |
+| 815 | `0x1028e310` | `CAI_BaseNPCTroika#113`, `CGeneric_NPC#113`, +57 more | 3 | 0 | 2 | — | — |  |
+| 816 | `0x1028ebc0` | — | 2 | 0 | 3 | — | — |  |
+| 817 | `0x10290350` | — | 1 | 2 | 2 | — | — |  |
+| 818 | `0x10294400` | `CAI_BaseNPCTroika#492`, `CGeneric_NPC#492`, +54 more | 5 | 0 | 0 | `Fear_Start` | — |  |
+| 819 | `0x10294f40` | `CAI_BaseNPCTroika#507`, `CGeneric_NPC#507`, +60 more | 3 | 1 | 1 | `Float_Sound_Info`, `Float` | — |  |
+| 820 | `0x1029f300` | — | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:542, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:28, +1 more |  |
+| 821 | `0x1029f5d0` | — | 5 | 0 | 0 | — | — |  |
+| 822 | `0x1029f650` | — | 3 | 1 | 1 | — | — |  |
+| 823 | `0x1029f730` | — | 2 | 1 | 2 | — | — |  |
+| 824 | `0x102b4c40` | `CAI_BaseNPCTroika#487`, `CGeneric_NPC#487`, +61 more | 2 | 1 | 2 | — | — |  |
+| 825 | `0x102b4cc0` | `CAI_BaseNPCTroika#595`, `CGeneric_NPC#595`, +62 more | 2 | 0 | 3 | — | — |  |
+| 826 | `0x102b5de0` | — | 2 | 0 | 3 | — | — |  |
+| 827 | `0x102b6120` | — | 2 | 0 | 3 | — | — |  |
+| 828 | `0x102b9060` | — | 3 | 2 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 829 | `0x102c0360` | — | 2 | 1 | 2 | `entity_debug_stats` | — |  |
+| 830 | `0x102c1230` | — | 2 | 2 | 1 | — | — |  |
+| 831 | `0x102c1400` | — | 5 | 0 | 0 | `%s could not look up disposition sequenc…` | — |  |
+| 832 | `0x102c41b0` | — | 5 | 0 | 0 | — | — |  |
+| 833 | `0x102c41d0` | — | 3 | 0 | 2 | — | — |  |
+| 834 | `0x102c42a0` | — | 4 | 0 | 1 | — | — |  |
+| 835 | `0x102c4380` | — | 4 | 1 | 0 | — | — |  |
+| 836 | `0x102c43f0` | — | 3 | 1 | 1 | — | — |  |
+| 837 | `0x102c4680` | — | 2 | 0 | 3 | `          Changing FollowerDistanceRunTo…`, `WARNING:  FollowerDistanceWalkTo(%f) + o…`, +4 more | — |  |
+| 838 | `0x102ca2a0` | — | 3 | 1 | 1 | `Unknown`, `Supernatural`, +2 more | — |  |
+| 839 | `0x102ce7f0` | — | 1 | 2 | 2 | — | — |  |
+| 840 | `0x102cea20` | — | 1 | 2 | 2 | — | — |  |
+| 841 | `0x102ceae0` | — | 1 | 2 | 2 | — | — |  |
+| 842 | `0x102cef30` | — | 2 | 1 | 2 | — | — |  |
+| 843 | `0x102cfd20` | — | 2 | 1 | 2 | — | — |  |
+| 844 | `0x102d1450` | — | 4 | 0 | 1 | — | — |  |
+| 845 | `0x102d8bc0` | — | 1 | 0 | 4 | — | — |  |
+| 846 | `0x102da860` | — | 1 | 1 | 3 | `**UNKNOWN**`, `AddMarker failed to add NPC '%s'⏎` | — |  |
+| 847 | `0x102dd530` | — | 3 | 0 | 2 | — | — |  |
+| 848 | `0x102e0150` | — | 4 | 0 | 1 | `Asking LastTimeSeen for enemy that's not…` | — |  |
+| 849 | `0x102e12c0` | — | 4 | 0 | 1 | — | — |  |
+| 850 | `0x102e1760` | `CAI_HumanoidMotor#20`, `CAI_Motor#20` | 0 | 1 | 4 | — | — |  |
+| 851 | `0x102e19e0` | `CAI_HumanoidMotor#18`, `CAI_Motor#18` | 2 | 0 | 3 | `move_yaw` | — |  |
+| 852 | `0x102e23a0` | — | 1 | 1 | 3 | `Unaccounted`, `CAI_Motor_MoveNormalExecute` | — |  |
+| 853 | `0x102e2690` | — | 4 | 0 | 1 | — | — |  |
+| 854 | `0x102ecb50` | `CAI_HumanoidNavigator#3`, `CAI_Navigator#3` | 0 | 4 | 1 | — | — |  |
+| 855 | `0x102ed310` | — | 3 | 0 | 2 | — | — |  |
+| 856 | `0x102ed940` | — | 2 | 2 | 1 | — | — |  |
+| 857 | `0x102ed9c0` | — | 2 | 2 | 1 | — | — |  |
+| 858 | `0x102ee380` | — | 2 | 2 | 1 | — | — |  |
+| 859 | `0x102eebc0` | `CAI_HumanoidNavigator#13`, `CAI_Navigator#13` | 1 | 0 | 4 | — | — |  |
+| 860 | `0x102efd50` | — | 1 | 1 | 3 | `Warning: NPC appears to have wrong nav t…` | — |  |
+| 861 | `0x102f1fa0` | — | 2 | 0 | 3 | — | — |  |
+| 862 | `0x102f2060` | — | 1 | 0 | 4 | — | — |  |
+| 863 | `0x102f2ea0` | — | 4 | 0 | 1 | — | — |  |
+| 864 | `0x102f8fc0` | — | 1 | 4 | 0 | — | — |  |
+| 865 | `0x102f96e0` | — | 2 | 0 | 3 | — | — |  |
+| 866 | `0x102fcbd0` | — | 3 | 0 | 2 | — | — |  |
+| 867 | `0x102fce80` | — | 1 | 1 | 3 | — | — |  |
+| 868 | `0x103059d0` | — | 2 | 0 | 3 | `Unaccounted`, `CAI_Pathfinder_Triangulate` | — |  |
+| 869 | `0x1030b900` | — | 1 | 4 | 0 | — | — |  |
+| 870 | `0x1030bd50` | — | 4 | 0 | 1 | — | — |  |
+| 871 | `0x1030be20` | — | 1 | 4 | 0 | — | — |  |
+| 872 | `0x103109a0` | — | 1 | 2 | 2 | — | — |  |
+| 873 | `0x10311490` | — | 1 | 4 | 0 | — | — |  |
+| 874 | `0x10312aa0` | — | 1 | 4 | 0 | `NULL Listener in BeginMonolog()!⏎` | — |  |
+| 875 | `0x10313620` | — | 1 | 2 | 2 | — | — |  |
+| 876 | `0x10313aa0` | — | 4 | 0 | 1 | — | — |  |
+| 877 | `0x10315170` | — | 1 | 2 | 2 | — | — |  |
+| 878 | `0x103153a0` | — | 1 | 2 | 2 | — | — |  |
+| 879 | `0x103160a0` | — | 4 | 0 | 1 | — | — |  |
+| 880 | `0x103160c0` | — | 3 | 0 | 2 | — | — |  |
+| 881 | `0x103169a0` | — | 3 | 0 | 2 | — | — |  |
+| 882 | `0x1031a000` | — | 4 | 0 | 1 | — | — |  |
+| 883 | `0x1031a050` | — | 5 | 0 | 0 | — | — |  |
+| 884 | `0x103268e0` | — | 4 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | — |  |
+| 885 | `0x103346c0` | — | 4 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::GetAmmoCount` | — |  |
+| 886 | `0x1033d330` | — | 1 | 0 | 4 | — | — |  |
+| 887 | `0x1033d380` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1565 |  |
+| 888 | `0x1033d410` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1565 |  |
+| 889 | `0x10344da0` | — | 5 | 0 | 0 | — | — |  |
+| 890 | `0x103498b0` | — | 5 | 0 | 0 | — | — |  |
+| 891 | `0x1034aeb0` | `CNPCMaker#364` | 5 | 0 | 0 | — | — |  |
+| 892 | `0x1034af30` | `CNPCMaker#619` | 5 | 0 | 0 | — | — |  |
+| 893 | `0x1034bf50` | `CNPCMaker_Fleshpile#364` | 5 | 0 | 0 | — | — |  |
+| 894 | `0x1034bf70` | `CNPCMaker_Fleshpile#619` | 5 | 0 | 0 | — | — |  |
+| 895 | `0x1034cb90` | `CNPCMaker_Zombie#364` | 5 | 0 | 0 | — | — |  |
+| 896 | `0x1034cbb0` | `CNPCMaker_Zombie#619` | 5 | 0 | 0 | — | — |  |
+| 897 | `0x103580d0` | — | 4 | 0 | 1 | — | — |  |
+| 898 | `0x10360160` | `CNPC_VAnimal#432`, `CNPC_VRat#432`, +1 more | 5 | 0 | 0 | — | — |  |
+| 899 | `0x10363c70` | `CNPC_VBach#390` | 0 | 3 | 2 | — | — |  |
+| 900 | `0x10364280` | `CNPC_VBach#606` | 3 | 1 | 1 | — | — |  |
+| 901 | `0x10365780` | — | 1 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VBach.c…` | — |  |
+| 902 | `0x103661f0` | `CNPC_VBach#609` | 3 | 1 | 1 | — | — |  |
+| 903 | `0x10367740` | `CNPC_VBatSwarm#609` | 3 | 1 | 1 | — | — |  |
+| 904 | `0x10369060` | `CNPC_VCamera#461`, `CNPC_VCameraSecurity#461` | 1 | 4 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | — |  |
+| 905 | `0x10375180` | `CNPC_VPlayerController#364`, `CNPC_VWolfMorph#364` | 5 | 0 | 0 | — | — |  |
+| 906 | `0x10376b70` | `CNPC_VFrenzyShadow#599` | 4 | 1 | 0 | — | — |  |
+| 907 | `0x10376bd0` | `CNPC_VFrenzyShadow#601` | 5 | 0 | 0 | — | — |  |
+| 908 | `0x10376bf0` | `CNPC_VFrenzyShadow#602` | 5 | 0 | 0 | — | — |  |
+| 909 | `0x10378fc0` | `CNPC_VGargoyle#435` | 2 | 1 | 2 | — | — |  |
+| 910 | `0x103796a0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | — |  |
+| 911 | `0x10379ef0` | `CNPC_VGargoyle#599` | 4 | 1 | 0 | — | — |  |
+| 912 | `0x10379f50` | `CNPC_VGargoyle#601` | 5 | 0 | 0 | — | — |  |
+| 913 | `0x10379f70` | `CNPC_VGargoyle#602` | 5 | 0 | 0 | — | — |  |
+| 914 | `0x10380fc0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | — |  |
+| 915 | `0x10381750` | `CNPC_VHengeyokai#599` | 4 | 1 | 0 | — | — |  |
+| 916 | `0x103817b0` | `CNPC_VHengeyokai#601` | 5 | 0 | 0 | — | — |  |
+| 917 | `0x103817d0` | `CNPC_VHengeyokai#602` | 5 | 0 | 0 | — | — |  |
+| 918 | `0x1038e720` | — | 3 | 0 | 2 | — | — |  |
+| 919 | `0x1038f600` | — | 3 | 1 | 1 | — | — |  |
+| 920 | `0x10395dc0` | `CNPC_VMingXiao#599` | 4 | 1 | 0 | — | — |  |
+| 921 | `0x10395e50` | `CNPC_VMingXiao#602` | 5 | 0 | 0 | — | — |  |
+| 922 | `0x10396dc0` | — | 1 | 2 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 923 | `0x10397380` | — | 2 | 0 | 3 | — | — |  |
+| 924 | `0x10398800` | — | 3 | 1 | 1 | — | — |  |
+| 925 | `0x1039ea80` | `CNPC_VMingXiaoTentacle#599` | 4 | 1 | 0 | — | — |  |
+| 926 | `0x1039eb10` | `CNPC_VMingXiaoTentacle#602` | 5 | 0 | 0 | — | — |  |
+| 927 | `0x1039ef90` | — | 2 | 3 | 0 | — | — |  |
+| 928 | `0x103a0190` | `CNPC_VNewscaster#364` | 5 | 0 | 0 | — | — |  |
+| 929 | `0x103a42c0` | `CNPC_VPlaceholder#364` | 5 | 0 | 0 | — | — |  |
+| 930 | `0x103acba0` | — | 1 | 0 | 4 | — | — |  |
+| 931 | `0x103b26f0` | `CNPC_VSheriffSwarm#609` | 3 | 1 | 1 | — | — |  |
+| 932 | `0x103b4600` | `CNPC_VTest#490` | 3 | 0 | 2 | — | — |  |
+| 933 | `0x103b9500` | `CNPC_VTzimisce#491` | 2 | 0 | 3 | `SPI_TAKE_DAMAGE` | — |  |
+| 934 | `0x103b9f10` | `CNPC_VTzimisce#487` | 4 | 1 | 0 | — | — |  |
+| 935 | `0x103b9f90` | — | 5 | 0 | 0 | — | — |  |
+| 936 | `0x103bc820` | — | 3 | 0 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 937 | `0x103bea90` | — | 1 | 1 | 3 | — | — |  |
+| 938 | `0x103bf170` | — | 2 | 2 | 1 | — | — |  |
+| 939 | `0x103cb7f0` | `CNPC_VWerewolf#600` | 4 | 1 | 0 | — | — |  |
+| 940 | `0x103cb900` | `CNPC_VWerewolf#619` | 5 | 0 | 0 | — | — |  |
+| 941 | `0x103d1e50` | — | 2 | 0 | 3 | — | — |  |
+| 942 | `0x103dbf00` | — | 1 | 4 | 0 | — | — |  |
+| 943 | `0x103dc3c0` | — | 5 | 0 | 0 | — | — |  |
+| 944 | `0x103dc520` | — | 2 | 1 | 2 | — | — |  |
+| 945 | `0x103dd8b0` | `CNPC_VYukie#599` | 4 | 1 | 0 | — | — |  |
+| 946 | `0x103f9160` | — | 1 | 2 | 2 | — | — |  |
+| 947 | `0x1040b120` | — | 2 | 1 | 2 | — | — |  |
+| 948 | `0x1042fbf0` | — | 5 | 0 | 0 | — | — |  |
+| 949 | `0x1042fde0` | — | 5 | 0 | 0 | — | — |  |
+| 950 | `0x1002c920` | — | 2 | 2 | 0 | — | — |  |
+| 951 | `0x10050d90` | — | 4 | 0 | 0 | `disc_particle`, `CDisciplineParticle::Create` | — |  |
+| 952 | `0x10055590` | — | 1 | 1 | 2 | — | — |  |
+| 953 | `0x10055ec0` | — | 1 | 1 | 2 | — | — |  |
+| 954 | `0x10055f50` | — | 1 | 1 | 2 | — | — |  |
+| 955 | `0x1008bc50` | — | 1 | 1 | 2 | `NULL ENTITY`, `CBaseAnimating::StopIgnoringCollision` | — |  |
+| 956 | `0x10095cb0` | — | 3 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::SetBoneController ` | — |  |
+| 957 | `0x10098a40` | `CAI_BaseHumanoid#267`, `CAI_BaseNPC#267`, +85 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#267 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 958 | `0x100995e0` | `CAI_BaseHumanoid#274`, `CAI_BaseNPC#274`, +85 more | 2 | 0 | 2 | — | — | `CAI_BaseNPC#274 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 959 | `0x100b1890` | `CAISound#213`, `CAI_BaseHumanoid#213`, +495 more | 0 | 3 | 1 | `NULL ENTITY`, `CBaseEntity::SetSize` | — | `CAI_BaseNPC#213 no SDK twin: stretch #199-#222 holds 22 reta…` |
+| 960 | `0x100b5040` | `CAISound#225`, `CAI_BaseHumanoid#225`, +495 more | 2 | 1 | 1 | — | — | `CAI_BaseNPC#225 no SDK twin: stretch #222-#227 holds 4 retai…` |
+| 961 | `0x100b5110` | — | 2 | 0 | 2 | — | — |  |
+| 962 | `0x100b5340` | — | 1 | 1 | 2 | — | — |  |
+| 963 | `0x100b6250` | `CAI_BaseHumanoid#283`, `CAI_BaseNPC#283`, +84 more | 2 | 0 | 2 | — | — | `CAI_BaseNPC#283 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 964 | `0x100b6480` | — | 1 | 1 | 2 | — | — |  |
+| 965 | `0x100b7130` | — | 1 | 1 | 2 | — | — |  |
+| 966 | `0x100cd300` | — | 2 | 1 | 1 | `output: (%s,%s) -> (%s,%s)⏎`, `output: (%s,%s) -> (%s,%s,%.1f)⏎`, +1 more | — |  |
+| 967 | `0x100ce450` | — | 1 | 1 | 2 | — | — |  |
+| 968 | `0x100eb280` | — | 1 | 1 | 2 | — | — |  |
+| 969 | `0x100ec3d0` | — | 2 | 0 | 2 | — | — |  |
+| 970 | `0x100ec450` | — | 1 | 0 | 3 | — | — |  |
+| 971 | `0x100ec5d0` | — | 1 | 0 | 3 | — | — |  |
+| 972 | `0x100ecc10` | — | 2 | 0 | 2 | `Neutral`, `bad disposition index in CDispositionTab…` | — |  |
+| 973 | `0x100ecc60` | — | 1 | 0 | 3 | — | — |  |
+| 974 | `0x100ecd30` | — | 1 | 0 | 3 | — | — |  |
+| 975 | `0x100ece60` | — | 1 | 0 | 3 | — | — |  |
+| 976 | `0x100ed500` | — | 1 | 1 | 2 | — | — |  |
+| 977 | `0x100eec70` | — | 2 | 0 | 2 | — | — |  |
+| 978 | `0x100f0e90` | — | 2 | 1 | 1 | — | — |  |
+| 979 | `0x100f2f90` | — | 2 | 2 | 0 | — | — |  |
+| 980 | `0x100f6e40` | — | 1 | 1 | 2 | — | — |  |
+| 981 | `0x100f7b20` | — | 4 | 0 | 0 | — | — |  |
+| 982 | `0x100f8370` | — | 4 | 0 | 0 | — | — |  |
+| 983 | `0x100f8490` | — | 4 | 0 | 0 | — | — |  |
+| 984 | `0x100f9940` | — | 1 | 1 | 2 | — | — |  |
+| 985 | `0x100faf60` | — | 1 | 0 | 3 | — | — |  |
+| 986 | `0x10105830` | — | 1 | 0 | 3 | — | — |  |
+| 987 | `0x101074c0` | — | 1 | 1 | 2 | — | — |  |
+| 988 | `0x10107550` | — | 1 | 1 | 2 | — | — |  |
+| 989 | `0x1010e530` | — | 2 | 2 | 0 | — | — |  |
+| 990 | `0x10119750` | — | 4 | 0 | 0 | — | — |  |
+| 991 | `0x1011d6a0` | — | 1 | 1 | 2 | — | — |  |
+| 992 | `0x1013dbb0` | — | 1 | 1 | 2 | — | — |  |
+| 993 | `0x10142b80` | — | 4 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 994 | `0x10146700` | — | 1 | 1 | 2 | — | — |  |
+| 995 | `0x10146b20` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Public/ElysiumPlayer.h:440 |  |
+| 996 | `0x10147960` | — | 1 | 2 | 1 | `D_ObfuscateOut_Emitter`, `D_ObfuscateIn_Emitter` | — |  |
+| 997 | `0x1014ebd0` | — | 1 | 3 | 0 | — | — |  |
+| 998 | `0x10155380` | — | 1 | 3 | 0 | — | — |  |
+| 999 | `0x101618a0` | — | 3 | 0 | 1 | — | — |  |
+| 1000 | `0x10175180` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:57, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1461, Source/ElysiumUE/Public/ElysiumPlayer.h:2293 |  |
+| 1001 | `0x10178120` | — | 3 | 0 | 1 | — | — |  |
+| 1002 | `0x1017c600` | — | 1 | 2 | 1 | `showloot⏎`, `showbarter⏎` | — |  |
+| 1003 | `0x1017e720` | — | 3 | 0 | 1 | — | — |  |
+| 1004 | `0x1017e740` | — | 3 | 0 | 1 | — | — |  |
+| 1005 | `0x1017f6e0` | — | 2 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | — |  |
+| 1006 | `0x1017f8d0` | — | 3 | 0 | 1 | — | — |  |
+| 1007 | `0x10181680` | — | 2 | 1 | 1 | — | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:173 |  |
+| 1008 | `0x10183120` | — | 1 | 0 | 3 | — | — |  |
+| 1009 | `0x10185910` | — | 1 | 1 | 2 | — | — |  |
+| 1010 | `0x10191170` | — | 1 | 0 | 3 | `%s could not find entity to attach to, d…` | — |  |
+| 1011 | `0x10194d20` | — | 3 | 0 | 1 | — | — |  |
+| 1012 | `0x10194da0` | — | 1 | 1 | 2 | — | — |  |
+| 1013 | `0x10194f30` | — | 1 | 1 | 2 | — | — |  |
+| 1014 | `0x10195160` | — | 1 | 1 | 2 | — | — |  |
+| 1015 | `0x1019d130` | — | 1 | 1 | 2 | — | — |  |
+| 1016 | `0x101a6820` | `CAI_BaseHumanoid#479`, `CAI_BaseNPC#479`, +75 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#479 no SDK twin: stretch #478-#480 holds 1 retai…` |
+| 1017 | `0x101a6880` | `CAI_BaseHumanoid#488`, `CAI_BaseNPC#488`, +8 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#488 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1018 | `0x101a68e0` | `CAI_BaseHumanoid#491`, `CAI_BaseNPC#491`, +8 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#491 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1019 | `0x101a6900` | `CAI_BaseHumanoid#492`, `CAI_BaseNPC#492`, +11 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#492 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1020 | `0x101a82d0` | `CCineAISchedule#584`, `CCineNPC#584` | 2 | 1 | 1 | `**UNKNOWN**`, `Sequence %s targeting %s is starting⏎`, +1 more | — |  |
+| 1021 | `0x101a8930` | — | 2 | 0 | 2 | — | — |  |
+| 1022 | `0x101a9790` | `CCineAISchedule#583` | 1 | 0 | 3 | `   Otherwise, talk to a programmer.⏎`, `   scripted sequence.⏎`, +8 more | — |  |
+| 1023 | `0x101b30d0` | — | 1 | 3 | 0 | `SNDLVL_NORM`, `PITCH_NORM`, +2 more | — |  |
+| 1024 | `0x101c0240` | — | 1 | 1 | 2 | — | — |  |
+| 1025 | `0x101c03c0` | — | 1 | 1 | 2 | — | — |  |
+| 1026 | `0x101c05f0` | — | 1 | 1 | 2 | — | — |  |
+| 1027 | `0x101c29b0` | — | 3 | 0 | 1 | — | — |  |
+| 1028 | `0x101c2a90` | — | 3 | 1 | 0 | — | — |  |
+| 1029 | `0x101c2af0` | — | 3 | 0 | 1 | — | — |  |
+| 1030 | `0x101c2b10` | — | 3 | 1 | 0 | — | — |  |
+| 1031 | `0x101c2c30` | — | 4 | 0 | 0 | — | — |  |
+| 1032 | `0x101c2c60` | — | 4 | 0 | 0 | — | — |  |
+| 1033 | `0x101cccf0` | — | 3 | 1 | 0 | — | — |  |
+| 1034 | `0x101d4f20` | — | 3 | 0 | 1 | — | — |  |
+| 1035 | `0x101d8a70` | — | 4 | 0 | 0 | `v_printrolls` | — |  |
+| 1036 | `0x101db870` | — | 2 | 0 | 2 | — | — |  |
+| 1037 | `0x101dcb20` | — | 3 | 0 | 1 | — | — |  |
+| 1038 | `0x101dd3a0` | — | 3 | 0 | 1 | — | — |  |
+| 1039 | `0x101e1250` | — | 2 | 0 | 2 | — | — |  |
+| 1040 | `0x101e3730` | — | 3 | 0 | 1 | `Discipline<%s> Triggered⏎` | — |  |
+| 1041 | `0x101e3d70` | — | 2 | 0 | 2 | — | — |  |
+| 1042 | `0x101e3f50` | — | 4 | 0 | 0 | — | — |  |
+| 1043 | `0x101e3ff0` | — | 4 | 0 | 0 | — | — |  |
+| 1044 | `0x101e8ef0` | — | 2 | 0 | 2 | — | — |  |
+| 1045 | `0x101ef880` | — | 1 | 3 | 0 | — | — |  |
+| 1046 | `0x101f0b50` | — | 1 | 3 | 0 | — | — |  |
+| 1047 | `0x101f18f0` | — | 3 | 0 | 1 | — | — |  |
+| 1048 | `0x101f1be0` | — | 2 | 1 | 1 | — | — |  |
+| 1049 | `0x101f1c70` | — | 2 | 1 | 1 | — | — |  |
+| 1050 | `0x101f39d0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:106, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:30, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:192 |  |
+| 1051 | `0x101f4600` | — | 2 | 0 | 2 | `%s\%s_%d.wav`, `%s\%s.wav`, +1 more | — |  |
+| 1052 | `0x101f55a0` | — | 3 | 0 | 1 | `func_button`, `func_rot_button`, +2 more | — |  |
+| 1053 | `0x101f5b60` | — | 2 | 0 | 2 | `ERROR: VSnd: Play: %s Table out of bound…` | — |  |
+| 1054 | `0x101f82d0` | — | 3 | 0 | 1 | — | — |  |
+| 1055 | `0x102030a0` | — | 2 | 0 | 2 | — | — |  |
+| 1056 | `0x10204c20` | — | 3 | 0 | 1 | — | — |  |
+| 1057 | `0x102053a0` | — | 4 | 0 | 0 | — | — |  |
+| 1058 | `0x10205430` | — | 2 | 0 | 2 | — | — |  |
+| 1059 | `0x10205730` | — | 3 | 0 | 1 | — | — |  |
+| 1060 | `0x10205e60` | — | 1 | 0 | 3 | `Bad TraitDependencyValue Type⏎` | — |  |
+| 1061 | `0x10206140` | — | 2 | 0 | 2 | — | — |  |
+| 1062 | `0x1021fee0` | — | 4 | 0 | 0 | — | — |  |
+| 1063 | `0x1024c050` | — | 1 | 1 | 2 | — | — |  |
+| 1064 | `0x1024c1d0` | — | 1 | 1 | 2 | — | — |  |
+| 1065 | `0x1024c400` | — | 1 | 1 | 2 | — | — |  |
+| 1066 | `0x10255cf0` | — | 4 | 0 | 0 | `Bad inventory section for '%s'⏎` | — |  |
+| 1067 | `0x10258290` | — | 3 | 0 | 1 | `Total Lethality for %s: Base Lethality (…` | — |  |
+| 1068 | `0x10258620` | — | 3 | 0 | 1 | — | — |  |
+| 1069 | `0x1025db50` | — | 4 | 0 | 0 | — | — |  |
+| 1070 | `0x1025e140` | — | 1 | 1 | 2 | — | — |  |
+| 1071 | `0x1025e4e0` | `CAI_BaseHumanoid#250` | 2 | 1 | 1 | — | — |  |
+| 1072 | `0x1025e920` | `CAI_BaseHumanoid#587` | 2 | 0 | 2 | — | — |  |
+| 1073 | `0x1025f040` | `CAI_BaseHumanoid#372` | 3 | 0 | 1 | — | — |  |
+| 1074 | `0x10260670` | — | 1 | 1 | 2 | — | — |  |
+| 1075 | `0x10269bd0` | — | 3 | 0 | 1 | — | — |  |
+| 1076 | `0x1026c3d0` | — | 3 | 0 | 1 | `A.I. Disabled...⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:890, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:459, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:499, +2 more |  |
+| 1077 | `0x1026cec0` | `CAI_BaseHumanoid#354`, `CAI_BaseNPC#354`, +75 more | 0 | 0 | 4 | — | — | `CAI_BaseNPC#354 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1078 | `0x1026cf90` | `CAI_BaseHumanoid#355`, `CAI_BaseNPC#355`, +75 more | 0 | 0 | 4 | — | — | `CAI_BaseNPC#355 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1079 | `0x1026d460` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:18, +32 more |  |
+| 1080 | `0x1026d890` | `CAI_BaseHumanoid#553`, `CAI_BaseNPC#553`, +72 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#553 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1081 | `0x1026f4d0` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | — |  |
+| 1082 | `0x1026ff00` | — | 1 | 0 | 3 | — | — |  |
+| 1083 | `0x10273aa0` | — | 2 | 0 | 2 | — | — |  |
+| 1084 | `0x10278090` | `CAI_BaseHumanoid#482`, `CAI_BaseNPC#482`, +24 more | 0 | 0 | 4 | — | — | `CAI_BaseNPC#482 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1085 | `0x102781e0` | — | 1 | 1 | 2 | — | — |  |
+| 1086 | `0x102784a0` | — | 2 | 0 | 2 | — | — |  |
+| 1087 | `0x10278c60` | `CAI_BaseHumanoid#575`, `CAI_BaseNPC#575`, +11 more | 3 | 0 | 1 | — | — | `CAI_BaseNPC#575 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1088 | `0x10278d90` | `CAI_BaseHumanoid#517`, `CAI_BaseNPC#517`, +75 more | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:880 | `CAI_BaseNPC#517 no SDK twin: the SDK name it lines up with w…` |
+| 1089 | `0x1027db30` | — | 2 | 0 | 2 | — | — |  |
+| 1090 | `0x1027e7d0` | `CAI_BaseHumanoid#407`, `CAI_BaseNPC#407`, +75 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#407 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 1091 | `0x1028af20` | `CAI_BaseHumanoid#548`, `CAI_BaseNPC#548`, +75 more | 1 | 0 | 3 | — | — | `CAI_BaseNPC#548 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1092 | `0x1028e480` | — | 1 | 0 | 3 | — | — |  |
+| 1093 | `0x1028e790` | — | 1 | 0 | 3 | — | — |  |
+| 1094 | `0x10290200` | — | 1 | 1 | 2 | — | — |  |
+| 1095 | `0x102953e0` | `CAI_BaseNPCTroika#592`, `CGeneric_NPC#592`, +61 more | 3 | 0 | 1 | — | — |  |
+| 1096 | `0x10295ed0` | — | 1 | 0 | 3 | — | — |  |
+| 1097 | `0x10297940` | — | 1 | 1 | 2 | — | — |  |
+| 1098 | `0x10297a20` | — | 1 | 2 | 1 | — | — |  |
+| 1099 | `0x10298800` | — | 1 | 2 | 1 | — | — |  |
+| 1100 | `0x10298910` | — | 2 | 1 | 1 | — | — |  |
+| 1101 | `0x102989e0` | — | 2 | 1 | 1 | — | — |  |
+| 1102 | `0x1029e750` | `CAI_BaseNPCTroika#359`, `CGeneric_NPC#359`, +60 more | 0 | 0 | 4 | — | — |  |
+| 1103 | `0x1029f2e0` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:540, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:28 |  |
+| 1104 | `0x1029f780` | — | 2 | 1 | 1 | — | — |  |
+| 1105 | `0x102a0b90` | — | 1 | 2 | 1 | — | — |  |
+| 1106 | `0x102a13d0` | — | 2 | 0 | 2 | — | — |  |
+| 1107 | `0x102a96b0` | — | 1 | 3 | 0 | — | — |  |
+| 1108 | `0x102aa9e0` | — | 1 | 2 | 1 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 1109 | `0x102ae780` | — | 1 | 0 | 3 | — | — |  |
+| 1110 | `0x102ae7f0` | — | 3 | 1 | 0 | — | — |  |
+| 1111 | `0x102b11c0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2282, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2289, Source/ElysiumUE/Private/Tests/ElysiumScheduleTests.cpp:1095 |  |
+| 1112 | `0x102b15c0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:406, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1117 |  |
+| 1113 | `0x102b6890` | — | 1 | 0 | 3 | — | — |  |
+| 1114 | `0x102b8d20` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 1115 | `0x102bf560` | — | 1 | 2 | 1 | — | — |  |
+| 1116 | `0x102c4310` | — | 3 | 0 | 1 | — | — |  |
+| 1117 | `0x102c48b0` | `CAI_BaseNPCTroika#608`, `CGeneric_NPC#608`, +62 more | 2 | 2 | 0 | — | — |  |
+| 1118 | `0x102c4eb0` | — | 1 | 0 | 3 | — | — |  |
+| 1119 | `0x102c6b30` | — | 2 | 2 | 0 | — | — |  |
+| 1120 | `0x102c7360` | — | 2 | 1 | 1 | — | — |  |
+| 1121 | `0x102c7dd0` | `CAI_StandoffBehavior#26` | 0 | 3 | 1 | — | — |  |
+| 1122 | `0x102c8690` | `CAI_StandoffGoal#245` | 1 | 0 | 3 | — | — |  |
+| 1123 | `0x102cc300` | `CAI_BaseHumanoid#458`, `CAI_BaseNPC#458`, +75 more | 3 | 0 | 1 | — | — | `CAI_BaseNPC#458 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 1124 | `0x102cd650` | — | 1 | 0 | 3 | — | — |  |
+| 1125 | `0x102cf0b0` | — | 1 | 1 | 2 | — | — |  |
+| 1126 | `0x102cfaf0` | — | 1 | 1 | 2 | — | — |  |
+| 1127 | `0x102d0ab0` | — | 3 | 1 | 0 | `Unknown failure` | — |  |
+| 1128 | `0x102d3e60` | — | 3 | 0 | 1 | — | — |  |
+| 1129 | `0x102d9170` | — | 1 | 1 | 2 | — | — |  |
+| 1130 | `0x102da9a0` | — | 2 | 0 | 2 | — | — |  |
+| 1131 | `0x102daea0` | — | 2 | 0 | 2 | — | — |  |
+| 1132 | `0x102dcec0` | — | 1 | 1 | 2 | — | — |  |
+| 1133 | `0x102e0a40` | — | 3 | 1 | 0 | — | — |  |
+| 1134 | `0x102e0ba0` | — | 1 | 2 | 1 | — | — |  |
+| 1135 | `0x102e1cf0` | — | 2 | 1 | 1 | — | — |  |
+| 1136 | `0x102e2d70` | — | 4 | 0 | 0 | — | — |  |
+| 1137 | `0x102e4f50` | — | 2 | 0 | 2 | `Unaccounted`, `CAI_MoveProbe_TestGroundMove` | — |  |
+| 1138 | `0x102e84a0` | — | 1 | 1 | 2 | — | — |  |
+| 1139 | `0x102ecc40` | — | 2 | 0 | 2 | — | — |  |
+| 1140 | `0x102ed610` | — | 1 | 0 | 3 | — | — |  |
+| 1141 | `0x102edbb0` | — | 1 | 2 | 1 | — | — |  |
+| 1142 | `0x102edd50` | — | 1 | 2 | 1 | — | — |  |
+| 1143 | `0x102ee160` | — | 3 | 0 | 1 | — | — |  |
+| 1144 | `0x102ee1a0` | — | 3 | 0 | 1 | — | — |  |
+| 1145 | `0x102ee220` | — | 3 | 0 | 1 | — | — |  |
+| 1146 | `0x102ee2c0` | — | 3 | 0 | 1 | — | — |  |
+| 1147 | `0x102ee300` | — | 1 | 2 | 1 | — | — |  |
+| 1148 | `0x102ee6d0` | — | 1 | 0 | 3 | — | — |  |
+| 1149 | `0x102eee40` | `CAI_HumanoidNavigator#17`, `CAI_Navigator#17` | 0 | 0 | 4 | — | — |  |
+| 1150 | `0x102ef510` | `CAI_HumanoidNavigator#16`, `CAI_Navigator#16` | 0 | 0 | 4 | — | — |  |
+| 1151 | `0x102f0400` | — | 4 | 0 | 0 | `InPass`, `%s trying to open a door that has been d…` | — |  |
+| 1152 | `0x102f05d0` | — | 2 | 0 | 2 | — | — |  |
+| 1153 | `0x102f0e80` | — | 1 | 0 | 3 | — | — |  |
+| 1154 | `0x102f1860` | — | 3 | 0 | 1 | — | — |  |
+| 1155 | `0x102f1900` | — | 1 | 0 | 3 | `CanFitAtNode() called with no network!⏎` | — |  |
+| 1156 | `0x102f1a20` | — | 2 | 0 | 2 | — | — |  |
+| 1157 | `0x102f1cf0` | — | 1 | 0 | 3 | — | — |  |
+| 1158 | `0x102f3270` | — | 4 | 0 | 0 | — | — |  |
+| 1159 | `0x102f37d0` | — | 1 | 3 | 0 | — | — |  |
+| 1160 | `0x102f41b0` | — | 3 | 0 | 1 | — | — |  |
+| 1161 | `0x102f45f0` | — | 2 | 1 | 1 | `AI NearestNode Cache is full⏎` | — |  |
+| 1162 | `0x102f9400` | — | 1 | 0 | 3 | — | — |  |
+| 1163 | `0x102f9750` | — | 1 | 1 | 2 | — | — |  |
+| 1164 | `0x102f9780` | — | 1 | 0 | 3 | — | — |  |
+| 1165 | `0x102f9950` | — | 4 | 0 | 0 | — | — |  |
+| 1166 | `0x102fd240` | — | 2 | 0 | 2 | — | — |  |
+| 1167 | `0x103005f0` | — | 2 | 0 | 2 | — | — |  |
+| 1168 | `0x103007e0` | — | 2 | 0 | 2 | — | — |  |
+| 1169 | `0x10306f60` | — | 1 | 2 | 1 | `FindHuntPatrolTarget() - %s has no neare…` | — |  |
+| 1170 | `0x1030ba50` | — | 2 | 2 | 0 | — | — |  |
+| 1171 | `0x1030ba90` | — | 2 | 1 | 1 | `!!ERROR!! Force end of route with no goa…` | — |  |
+| 1172 | `0x1030bc00` | — | 3 | 0 | 1 | — | — |  |
+| 1173 | `0x1030fe50` | — | 3 | 0 | 1 | — | — |  |
+| 1174 | `0x1030fe70` | — | 3 | 0 | 1 | — | — |  |
+| 1175 | `0x10310440` | — | 3 | 0 | 1 | — | — |  |
+| 1176 | `0x103118e0` | — | 1 | 0 | 3 | — | — |  |
+| 1177 | `0x103121a0` | — | 2 | 1 | 1 | — | — |  |
+| 1178 | `0x10312cd0` | `CAI_BaseHumanoid#424`, `CAI_ExpressiveNPC#424` | 1 | 1 | 2 | — | — |  |
+| 1179 | `0x10316bc0` | — | 2 | 0 | 2 | — | — |  |
+| 1180 | `0x10319ee0` | — | 4 | 0 | 0 | — | — |  |
+| 1181 | `0x1032fc50` | `CAI_BaseHumanoid#346`, `CAI_BaseNPC#346`, +83 more | 2 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::SetPoseParameter` | — | `CAI_BaseNPC#346 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1182 | `0x103300c0` | — | 2 | 0 | 2 | — | — |  |
+| 1183 | `0x103482e0` | `CAI_BaseHumanoid#326`, `CAI_BaseNPC#326`, +17 more | 1 | 0 | 3 | — | — | `CAI_BaseNPC#326 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1184 | `0x1034a1a0` | — | 1 | 1 | 2 | — | — |  |
+| 1185 | `0x1034af50` | `CNPCMaker#620` | 4 | 0 | 0 | — | — |  |
+| 1186 | `0x1034b430` | — | 2 | 0 | 2 | — | — |  |
+| 1187 | `0x1034bf90` | `CNPCMaker_Fleshpile#620` | 4 | 0 | 0 | — | — |  |
+| 1188 | `0x1034cbd0` | `CNPCMaker_Zombie#620` | 4 | 0 | 0 | — | — |  |
+| 1189 | `0x1035fd40` | `CNPC_VAnimal#482`, `CNPC_VDog#482`, +3 more | 0 | 0 | 4 | — | — |  |
+| 1190 | `0x10365860` | — | 1 | 2 | 1 | `item_w_grenade_frag`, `No physics data for grenade⏎` | — |  |
+| 1191 | `0x10366490` | — | 2 | 0 | 2 | — | — |  |
+| 1192 | `0x103690e0` | `CNPC_VCamera#432`, `CNPC_VCameraSecurity#432` | 4 | 0 | 0 | — | — |  |
+| 1193 | `0x103723f0` | — | 1 | 1 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — |  |
+| 1194 | `0x10374d80` | `CNPC_VDog#460` | 0 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — |  |
+| 1195 | `0x10376ba0` | `CNPC_VFrenzyShadow#600` | 3 | 1 | 0 | — | — |  |
+| 1196 | `0x10379000` | — | 2 | 1 | 1 | — | — |  |
+| 1197 | `0x10379e80` | — | 1 | 0 | 3 | — | — |  |
+| 1198 | `0x10379f20` | `CNPC_VGargoyle#600` | 3 | 1 | 0 | — | — |  |
+| 1199 | `0x103816e0` | — | 1 | 0 | 3 | — | — |  |
+| 1200 | `0x10381780` | `CNPC_VHengeyokai#600` | 3 | 1 | 0 | — | — |  |
+| 1201 | `0x10382400` | — | 1 | 1 | 2 | — | — |  |
+| 1202 | `0x10382aa0` | — | 1 | 1 | 2 | — | — |  |
+| 1203 | `0x103830e0` | — | 2 | 2 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VHengey…` | — |  |
+| 1204 | `0x103850a0` | `CNPC_ProneDialog#482`, `CNPC_VAndreiBlood#482`, +40 more | 0 | 0 | 4 | — | — |  |
+| 1205 | `0x1038c250` | — | 1 | 0 | 3 | — | — |  |
+| 1206 | `0x1038e640` | — | 3 | 1 | 0 | — | — |  |
+| 1207 | `0x1038f2c0` | — | 2 | 1 | 1 | `prop_physics`, `ManBat is throwing model %s⏎` | — |  |
+| 1208 | `0x1038fe30` | — | 1 | 1 | 2 | — | — |  |
+| 1209 | `0x10395df0` | `CNPC_VMingXiao#600` | 3 | 1 | 0 | — | — |  |
+| 1210 | `0x10396e90` | `CNPC_VMingXiao#482` | 0 | 0 | 4 | — | — |  |
+| 1211 | `0x103970d0` | `CNPC_VMingXiao#348` | 1 | 0 | 3 | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | — |  |
+| 1212 | `0x10397dd0` | — | 3 | 1 | 0 | — | — |  |
+| 1213 | `0x103983d0` | — | 2 | 0 | 2 | — | — |  |
+| 1214 | `0x103998d0` | — | 1 | 0 | 3 | — | — |  |
+| 1215 | `0x1039e970` | — | 2 | 2 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 1216 | `0x1039eab0` | `CNPC_VMingXiaoTentacle#600` | 3 | 1 | 0 | — | — |  |
+| 1217 | `0x103a1320` | — | 1 | 1 | 2 | — | — |  |
+| 1218 | `0x103a3850` | `CNPC_VPedestrian#27` | 0 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — |  |
+| 1219 | `0x103b48f0` | `CNPC_VTest#492` | 3 | 0 | 1 | — | — |  |
+| 1220 | `0x103b92a0` | `CNPC_VTzimisce#488` | 2 | 0 | 2 | `SPI_DIES` | — |  |
+| 1221 | `0x103b9980` | `CNPC_VTzimisce#621` | 3 | 0 | 1 | `SPI_ATTACK_HIT` | — |  |
+| 1222 | `0x103b9e30` | `CNPC_VTzimisce#627` | 2 | 0 | 2 | `SPI_FIDGET` | — |  |
+| 1223 | `0x103ba250` | `CNPC_VTzimisce#533` | 3 | 0 | 1 | — | — |  |
+| 1224 | `0x103bd270` | `CNPC_VTzimisce#482` | 0 | 0 | 4 | — | — |  |
+| 1225 | `0x103bf330` | — | 1 | 1 | 2 | — | — |  |
+| 1226 | `0x103bf580` | `CNPC_VTzimisce#410` | 0 | 0 | 4 | — | — |  |
+| 1227 | `0x103c0160` | — | 1 | 0 | 3 | `UTIL_TraceHull` | — |  |
+| 1228 | `0x103c0860` | — | 1 | 0 | 3 | — | — |  |
+| 1229 | `0x103c1d80` | `CNPC_VTzimisceHeadClaw#332` | 0 | 2 | 2 | `Bip01 Spine`, `Character/Monster/TC_FatGuy/Sluge_Affect…`, +3 more | — |  |
+| 1230 | `0x103c6a20` | — | 3 | 0 | 1 | — | — |  |
+| 1231 | `0x103d8df0` | — | 1 | 0 | 3 | `%s could not look up sound for activity:…`, `Character/Monster/Werewolf/Air_Sniff_1.w…`, +14 more | — |  |
+| 1232 | `0x103dc490` | — | 1 | 1 | 2 | — | — |  |
+| 1233 | `0x10408060` | — | 2 | 0 | 2 | — | — |  |
+| 1234 | `0x1042fe90` | — | 4 | 0 | 0 | — | — |  |
+| 1235 | `0x10439dc0` | — | 4 | 0 | 0 | — | — |  |
+| 1236 | `0x10007b4e` | — | 3 | 0 | 0 | — | — |  |
+| 1237 | `0x10027630` | `CAISound#3`, `CAI_BaseHumanoid#3`, +495 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#3 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
+| 1238 | `0x10054ad0` | — | 1 | 0 | 2 | — | — |  |
+| 1239 | `0x10057740` | — | 1 | 1 | 1 | — | — |  |
+| 1240 | `0x10072b10` | — | 1 | 0 | 2 | `Invalid camera shot index⏎` | — |  |
+| 1241 | `0x10077430` | — | 2 | 0 | 1 | — | — |  |
+| 1242 | `0x1007a2f0` | — | 2 | 0 | 1 | — | — |  |
+| 1243 | `0x10084b40` | — | 3 | 0 | 0 | `instanced_scripted_scene`, `Unknown scene specified: "%s"⏎` | — |  |
+| 1244 | `0x1008bd30` | — | 1 | 0 | 2 | `NULL ENTITY`, `CBaseAnimating::StopIgnoringCollision` | — |  |
+| 1245 | `0x1008f540` | — | 2 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::ResetActivityIndexes ` | — |  |
+| 1246 | `0x100990f0` | — | 1 | 0 | 2 | — | — |  |
+| 1247 | `0x10099540` | `CAI_BaseHumanoid#270`, `CAI_BaseNPC#270`, +85 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#270 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1248 | `0x100997f0` | `CAI_BaseHumanoid#266`, `CAI_BaseNPC#266`, +85 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#266 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1249 | `0x1009b5a0` | `CAISound#19`, `CAI_BaseHumanoid#19`, +431 more | 2 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessageBare` | — | `CAI_BaseNPC#19 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1250 | `0x1009ebb0` | `CAISound#109`, `CAI_ChangeHintGroup#109`, +159 more | 1 | 0 | 2 | `NULL ENTITY`, `CBaseEntity::KeyValue` | — |  |
+| 1251 | `0x1009eca0` | `CAISound#108`, `CAI_ChangeHintGroup#108`, +159 more | 1 | 0 | 2 | `NULL ENTITY`, `%f %f %f`, +1 more | — |  |
+| 1252 | `0x100a5030` | `CAISound#42`, `CAI_BaseHumanoid#42`, +474 more | 1 | 1 | 1 | — | — | `CAI_BaseNPC#42 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1253 | `0x100aa5a0` | `CAISound#130`, `CAI_ChangeHintGroup#130`, +183 more | 2 | 0 | 1 | — | — |  |
+| 1254 | `0x100b4c00` | `CAISound#196`, `CAI_BaseHumanoid#196`, +494 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#196 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 1255 | `0x100b4f30` | `CAISound#226`, `CAI_BaseHumanoid#226`, +483 more | 0 | 0 | 3 | `Infinite values from vphysics!⏎` | — | `CAI_BaseNPC#226 no SDK twin: stretch #222-#227 holds 4 retai…` |
+| 1256 | `0x100b5d80` | `CAI_BaseHumanoid#285`, `CAI_BaseNPC#285`, +84 more | 0 | 1 | 2 | — | — | `CAI_BaseNPC#285 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 1257 | `0x100b6180` | `CAI_BaseHumanoid#287`, `CAI_BaseNPC#287`, +84 more | 0 | 1 | 2 | — | — | `CAI_BaseNPC#287 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 1258 | `0x100b62a0` | — | 1 | 0 | 2 | — | — |  |
+| 1259 | `0x100b6960` | `CAI_BaseHumanoid#289`, `CAI_BaseNPC#289`, +84 more | 1 | 0 | 2 | `left_`, `right_` | — | `CAI_BaseNPC#289 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 1260 | `0x100b6f10` | — | 2 | 0 | 1 | — | — |  |
+| 1261 | `0x100d13d0` | — | 1 | 1 | 1 | — | — |  |
+| 1262 | `0x100e58b0` | — | 1 | 0 | 2 | — | — |  |
+| 1263 | `0x100eb420` | — | 2 | 0 | 1 | — | — |  |
+| 1264 | `0x100ec530` | — | 1 | 0 | 2 | — | — |  |
+| 1265 | `0x100ecfc0` | — | 1 | 0 | 2 | — | — |  |
+| 1266 | `0x100ed2c0` | — | 3 | 0 | 0 | — | — |  |
+| 1267 | `0x100ee950` | — | 1 | 0 | 2 | — | — |  |
+| 1268 | `0x100f0e30` | — | 1 | 1 | 1 | — | — |  |
+| 1269 | `0x100f79b0` | — | 3 | 0 | 0 | — | — |  |
+| 1270 | `0x100f7f20` | — | 3 | 0 | 0 | — | — |  |
+| 1271 | `0x100fba40` | — | 1 | 2 | 0 | `%s ramp time set to %.2f, must be >=0⏎` | — |  |
+| 1272 | `0x100fbb40` | — | 1 | 2 | 0 | — | — |  |
+| 1273 | `0x10119900` | — | 3 | 0 | 0 | — | — |  |
+| 1274 | `0x1011d2e0` | — | 1 | 2 | 0 | — | — |  |
+| 1275 | `0x10137ed0` | — | 3 | 0 | 0 | — | — |  |
+| 1276 | `0x101381b0` | — | 3 | 0 | 0 | — | — |  |
+| 1277 | `0x1013a9f0` | — | 3 | 0 | 0 | — | — |  |
+| 1278 | `0x10142af0` | — | 3 | 0 | 0 | — | — |  |
+| 1279 | `0x10146790` | — | 1 | 2 | 0 | — | — |  |
+| 1280 | `0x1014fa10` | `CAI_BaseHumanoid#145`, `CAI_BaseNPC#145`, +82 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#145 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 1281 | `0x10155010` | — | 1 | 0 | 2 | — | — |  |
+| 1282 | `0x101563b0` | — | 1 | 0 | 2 | — | — |  |
+| 1283 | `0x10161f10` | — | 2 | 1 | 0 | — | — |  |
+| 1284 | `0x10170090` | — | 1 | 0 | 2 | `Can't change levels while in dialog!⏎` | — |  |
+| 1285 | `0x1017b330` | — | 1 | 0 | 2 | — | — |  |
+| 1286 | `0x1017dd80` | — | 2 | 0 | 1 | — | — |  |
+| 1287 | `0x1017ddd0` | — | 2 | 0 | 1 | — | — |  |
+| 1288 | `0x1017de60` | — | 2 | 0 | 1 | — | — |  |
+| 1289 | `0x1017e6f0` | — | 2 | 1 | 0 | — | — |  |
+| 1290 | `0x1017f650` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | — |  |
+| 1291 | `0x1017f7b0` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | — |  |
+| 1292 | `0x1017f830` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | — |  |
+| 1293 | `0x1017f9c0` | — | 1 | 2 | 0 | — | — |  |
+| 1294 | `0x10182a90` | — | 1 | 0 | 2 | — | — |  |
+| 1295 | `0x101841f0` | — | 1 | 2 | 0 | — | — |  |
+| 1296 | `0x10194330` | — | 1 | 0 | 2 | — | — |  |
+| 1297 | `0x101945f0` | — | 1 | 0 | 2 | — | — |  |
+| 1298 | `0x1019d2f0` | — | 1 | 2 | 0 | — | — |  |
+| 1299 | `0x101a5290` | — | 3 | 0 | 0 | — | — |  |
+| 1300 | `0x101a68a0` | `CAI_BaseHumanoid#489`, `CAI_BaseNPC#489`, +8 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#489 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1301 | `0x101a6ae0` | `CAI_BaseHumanoid#507`, `CAI_BaseNPC#507`, +11 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#507 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1302 | `0x101a6ec0` | — | 3 | 0 | 0 | `         ⏎` | — |  |
+| 1303 | `0x101a7540` | — | 1 | 0 | 2 | — | — |  |
+| 1304 | `0x101a81a0` | — | 1 | 1 | 1 | — | — |  |
+| 1305 | `0x101a89a0` | `CCineAI#459`, `CCineAISchedule#459`, +1 more | 2 | 0 | 1 | — | — |  |
+| 1306 | `0x101aad20` | `CPayphone#611` | 2 | 0 | 1 | — | — |  |
+| 1307 | `0x101ab0e0` | `CCineAISchedule#5` | 0 | 0 | 3 | — | — |  |
+| 1308 | `0x101af070` | — | 3 | 0 | 0 | — | — |  |
+| 1309 | `0x101b3730` | — | 1 | 0 | 2 | — | — |  |
+| 1310 | `0x101b9860` | — | 2 | 0 | 1 | — | — |  |
+| 1311 | `0x101b9920` | — | 2 | 0 | 1 | — | — |  |
+| 1312 | `0x101c19e0` | — | 1 | 0 | 2 | — | — |  |
+| 1313 | `0x101c2910` | — | 3 | 0 | 0 | — | — |  |
+| 1314 | `0x101c2ab0` | — | 2 | 0 | 1 | — | — |  |
+| 1315 | `0x101c2ad0` | — | 2 | 1 | 0 | — | — |  |
+| 1316 | `0x101c2b30` | — | 2 | 0 | 1 | — | — |  |
+| 1317 | `0x101c2bc0` | — | 2 | 1 | 0 | — | — |  |
+| 1318 | `0x101ccd40` | — | 3 | 0 | 0 | — | — |  |
+| 1319 | `0x101ccf50` | — | 2 | 1 | 0 | — | — |  |
+| 1320 | `0x101cd110` | — | 3 | 0 | 0 | — | — |  |
+| 1321 | `0x101d0f10` | — | 3 | 0 | 0 | `%s/%s`, `*%s/%s`, +1 more | — |  |
+| 1322 | `0x101d26b0` | — | 3 | 0 | 0 | — | — |  |
+| 1323 | `0x101d2ce0` | — | 3 | 0 | 0 | — | — |  |
+| 1324 | `0x101d4e70` | — | 2 | 0 | 1 | — | — |  |
+| 1325 | `0x101d4eb0` | — | 2 | 0 | 1 | — | — |  |
+| 1326 | `0x101d8820` | — | 2 | 0 | 1 | — | — |  |
+| 1327 | `0x101dbc10` | — | 1 | 0 | 2 | — | — |  |
+| 1328 | `0x101dbe10` | — | 3 | 0 | 0 | — | — |  |
+| 1329 | `0x101dc1c0` | — | 3 | 0 | 0 | — | — |  |
+| 1330 | `0x101dc810` | — | 1 | 0 | 2 | — | — |  |
+| 1331 | `0x101ddcd0` | — | 1 | 0 | 2 | `ERROR: CVTriggerCasting_t SrcType Error!…` | — |  |
+| 1332 | `0x101dfb80` | — | 1 | 0 | 2 | `Discipline<%s>: HitGroup: <%s> Instant T…` | — |  |
+| 1333 | `0x101e1a60` | — | 2 | 1 | 0 | `Thaumaturgy_BloodShot`, `Thaumaturgy_Blood_Salvo` | — |  |
+| 1334 | `0x101e3cf0` | — | 1 | 0 | 2 | — | — |  |
+| 1335 | `0x101e3df0` | — | 1 | 0 | 2 | — | — |  |
+| 1336 | `0x101e5b30` | — | 1 | 0 | 2 | — | — |  |
+| 1337 | `0x101e5e10` | — | 1 | 0 | 2 | `Invalid Character pointer for: Feats::We…` | — |  |
+| 1338 | `0x101e8a90` | — | 2 | 0 | 1 | — | — |  |
+| 1339 | `0x101e8ab0` | — | 2 | 0 | 1 | — | — |  |
+| 1340 | `0x101e8c30` | — | 2 | 0 | 1 | — | — |  |
+| 1341 | `0x101e8c90` | — | 1 | 0 | 2 | `Failed to load follower info type (%s). …`, `**NULL**` | — |  |
+| 1342 | `0x101e8ec0` | — | 1 | 0 | 2 | — | — |  |
+| 1343 | `0x101e9290` | — | 1 | 0 | 2 | — | — |  |
+| 1344 | `0x101e9570` | — | 1 | 1 | 1 | — | — |  |
+| 1345 | `0x101eb000` | — | 1 | 2 | 0 | — | — |  |
+| 1346 | `0x101ecae0` | — | 3 | 0 | 0 | — | — |  |
+| 1347 | `0x101ecb10` | — | 3 | 0 | 0 | — | — |  |
+| 1348 | `0x101f2cf0` | — | 1 | 1 | 1 | — | — |  |
+| 1349 | `0x101f4c80` | — | 1 | 2 | 0 | — | — |  |
+| 1350 | `0x101f6c50` | — | 1 | 0 | 2 | `Unable to Calculate TraitEffect!⏎` | — |  |
+| 1351 | `0x101f6e70` | — | 1 | 0 | 2 | — | — |  |
+| 1352 | `0x101f7690` | — | 1 | 0 | 2 | — | — |  |
+| 1353 | `0x10201540` | — | 1 | 0 | 2 | — | — |  |
+| 1354 | `0x10202ac0` | — | 1 | 0 | 2 | — | — |  |
+| 1355 | `0x10203240` | — | 1 | 0 | 2 | — | — |  |
+| 1356 | `0x10204c60` | — | 3 | 0 | 0 | — | — |  |
+| 1357 | `0x10205400` | — | 2 | 1 | 0 | — | — |  |
+| 1358 | `0x10205840` | — | 2 | 0 | 1 | — | — |  |
+| 1359 | `0x1020a0a0` | — | 1 | 1 | 1 | `debug_entity` | — |  |
+| 1360 | `0x1020cd30` | — | 1 | 0 | 2 | — | — |  |
+| 1361 | `0x1023f3d0` | — | 3 | 0 | 0 | — | — |  |
+| 1362 | `0x102454e0` | — | 2 | 1 | 0 | — | — |  |
+| 1363 | `0x10245660` | — | 3 | 0 | 0 | — | — |  |
+| 1364 | `0x10245e60` | `ConVar#10` | 1 | 0 | 2 | — | — |  |
+| 1365 | `0x10249aa0` | — | 2 | 0 | 1 | — | — |  |
+| 1366 | `0x10249c70` | — | 2 | 0 | 1 | — | — |  |
+| 1367 | `0x10249fc0` | — | 2 | 0 | 1 | — | — |  |
+| 1368 | `0x1024a2e0` | — | 2 | 0 | 1 | — | — |  |
+| 1369 | `0x1024a900` | — | 2 | 0 | 1 | — | — |  |
+| 1370 | `0x1024b590` | — | 1 | 0 | 2 | — | — |  |
+| 1371 | `0x10252450` | — | 3 | 0 | 0 | — | — |  |
+| 1372 | `0x1025d730` | — | 3 | 0 | 0 | — | — |  |
+| 1373 | `0x1025df40` | — | 1 | 0 | 2 | — | — |  |
+| 1374 | `0x1025ea00` | `CAI_BaseHumanoid#588` | 1 | 0 | 2 | — | — |  |
+| 1375 | `0x1025f8e0` | `CAI_BaseHumanoid#535` | 0 | 1 | 2 | — | — |  |
+| 1376 | `0x10260930` | — | 2 | 0 | 1 | — | — |  |
+| 1377 | `0x10260980` | — | 2 | 1 | 0 | — | — |  |
+| 1378 | `0x10260dc0` | `CAI_BaseHumanoid#584`, `CAI_ExpressiveNPC#584` | 2 | 0 | 1 | — | — |  |
+| 1379 | `0x102653f0` | — | 1 | 1 | 1 | — | — |  |
+| 1380 | `0x10268900` | `CAISound#185`, `CAI_BaseHumanoid#185`, +495 more | 0 | 0 | 3 | — | — | `CAI_BaseNPC#185 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 1381 | `0x1026a2a0` | — | 2 | 0 | 1 | — | — |  |
+| 1382 | `0x1026a8f0` | `CAI_BaseHumanoid#567`, `CAI_BaseNPC#567`, +74 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#567 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1383 | `0x1026ab50` | — | 1 | 0 | 2 | — | — |  |
+| 1384 | `0x1026af30` | `CAI_BaseHumanoid#475`, `CAI_BaseNPC#475`, +75 more | 2 | 0 | 1 | `Warning: NULL Return from GetBestScent⏎` | — | `CAI_BaseNPC#475 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 1385 | `0x1026b240` | `CAI_BaseNPC#373`, `CAI_BaseNPCTroika#373`, +74 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#373 no SDK twin: stretch #371-#376 holds 4 retai…` |
+| 1386 | `0x1026b480` | `CAI_BaseHumanoid#539`, `CAI_BaseNPC#539`, +75 more | 2 | 0 | 1 | `aim_pitch`, `aim_yaw` | — | `CAI_BaseNPC#539 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 1387 | `0x1026b4f0` | `CAI_BaseHumanoid#538`, `CAI_BaseNPC#538`, +75 more | 0 | 0 | 3 | — | — | `CAI_BaseNPC#538 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 1388 | `0x1026b7a0` | — | 1 | 0 | 2 | — | — |  |
+| 1389 | `0x1026d9a0` | `CAI_BaseHumanoid#555`, `CAI_BaseNPC#555`, +75 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#555 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1390 | `0x102703f0` | — | 2 | 0 | 1 | — | — |  |
+| 1391 | `0x10270840` | `CAI_BaseHumanoid#564`, `CAI_BaseNPC#564`, +11 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#564 no SDK twin: stretch #560-#566 holds 5 retai…` |
+| 1392 | `0x10270890` | — | 1 | 0 | 2 | — | — |  |
+| 1393 | `0x10270aa0` | — | 2 | 1 | 0 | — | — |  |
+| 1394 | `0x10273760` | — | 2 | 0 | 1 | — | — |  |
+| 1395 | `0x10273e40` | `CAI_BaseHumanoid#543`, `CAI_BaseNPC#543`, +75 more | 1 | 0 | 2 | — | — | `CAI_BaseNPC#543 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 1396 | `0x102789c0` | `CAI_BaseHumanoid#197`, `CAI_BaseNPC#197`, +74 more | 0 | 0 | 3 | — | — | `CAI_BaseNPC#197 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 1397 | `0x10278d20` | `CAI_BaseHumanoid#518`, `CAI_BaseNPC#518`, +75 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#518 no SDK twin: the SDK name it lines up with w…` |
+| 1398 | `0x10279420` | — | 1 | 0 | 2 | — | — |  |
+| 1399 | `0x10279bb0` | — | 1 | 0 | 2 | — | — |  |
+| 1400 | `0x1027db80` | — | 2 | 0 | 1 | — | — |  |
+| 1401 | `0x1027f550` | — | 2 | 0 | 1 | — | — |  |
+| 1402 | `0x1027f8f0` | — | 1 | 2 | 0 | — | — |  |
+| 1403 | `0x1027f940` | — | 1 | 2 | 0 | — | — |  |
+| 1404 | `0x10280300` | `CAI_BaseHumanoid#153`, `CAI_BaseNPC#153`, +75 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#153 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 1405 | `0x10280330` | `CAI_BaseHumanoid#529`, `CAI_BaseNPC#529`, +75 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#529 no SDK twin: stretch #526-#530 holds 3 retai…` |
+| 1406 | `0x10280db0` | — | 1 | 0 | 2 | — | — |  |
+| 1407 | `0x10281430` | — | 1 | 1 | 1 | — | — |  |
+| 1408 | `0x102885d0` | — | 2 | 0 | 1 | — | — |  |
+| 1409 | `0x102885f0` | — | 2 | 0 | 1 | — | — |  |
+| 1410 | `0x10288630` | — | 2 | 0 | 1 | — | — |  |
+| 1411 | `0x10288650` | — | 2 | 0 | 1 | — | — |  |
+| 1412 | `0x1028d860` | `CAI_BaseNPCTroika#583`, `CGeneric_NPC#583`, +62 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1774 |  |
+| 1413 | `0x1028e090` | — | 2 | 0 | 1 | — | — |  |
+| 1414 | `0x1028e8b0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:306, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:930 |  |
+| 1415 | `0x1028e940` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:306 |  |
+| 1416 | `0x102902e0` | — | 1 | 1 | 1 | — | — |  |
+| 1417 | `0x102906a0` | — | 2 | 0 | 1 | — | — |  |
+| 1418 | `0x102906c0` | — | 2 | 0 | 1 | — | — |  |
+| 1419 | `0x10290700` | — | 2 | 0 | 1 | — | — |  |
+| 1420 | `0x10293d70` | — | 1 | 1 | 1 | — | — |  |
+| 1421 | `0x10293d90` | — | 2 | 1 | 0 | — | — |  |
+| 1422 | `0x10293e50` | `CAI_BaseNPCTroika#588`, `CGeneric_NPC#588`, +60 more | 2 | 0 | 1 | — | — |  |
+| 1423 | `0x10294280` | `CAI_BaseNPCTroika#490`, `CGeneric_NPC#490`, +54 more | 3 | 0 | 0 | `Idle_Calm` | — |  |
+| 1424 | `0x102953a0` | `CAI_BaseNPCTroika#564`, `CGeneric_NPC#564`, +60 more | 1 | 0 | 2 | — | — |  |
+| 1425 | `0x102968f0` | — | 2 | 0 | 1 | — | — |  |
+| 1426 | `0x10299a80` | — | 2 | 0 | 1 | `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…`, `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…` | — |  |
+| 1427 | `0x1029a8b0` | `CAI_BaseNPCTroika#422`, `CGeneric_NPC#422`, +59 more | 1 | 0 | 2 | — | — |  |
+| 1428 | `0x1029f6c0` | — | 2 | 0 | 1 | — | — |  |
+| 1429 | `0x102a0870` | — | 1 | 0 | 2 | — | — |  |
+| 1430 | `0x102a1470` | — | 1 | 0 | 2 | — | — |  |
+| 1431 | `0x102a14c0` | — | 1 | 0 | 2 | — | — |  |
+| 1432 | `0x102a1510` | — | 2 | 0 | 1 | — | — |  |
+| 1433 | `0x102a9570` | — | 1 | 0 | 2 | — | — |  |
+| 1434 | `0x102a97a0` | — | 1 | 1 | 1 | — | — |  |
+| 1435 | `0x102a97d0` | — | 1 | 1 | 1 | — | — |  |
+| 1436 | `0x102a9800` | — | 1 | 1 | 1 | — | — |  |
+| 1437 | `0x102a9830` | — | 1 | 1 | 1 | — | — |  |
+| 1438 | `0x102a98e0` | — | 1 | 1 | 1 | — | — |  |
+| 1439 | `0x102a9910` | — | 1 | 0 | 2 | — | — |  |
+| 1440 | `0x102a99e0` | — | 2 | 0 | 1 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
+| 1441 | `0x102ad110` | `CAI_BaseNPCTroika#616`, `CGeneric_NPC#616`, +62 more | 2 | 1 | 0 | — | — |  |
+| 1442 | `0x102b1a20` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Tests/ElysiumNpcComfortSweepTests.cpp:6 |  |
+| 1443 | `0x102b62e0` | — | 1 | 0 | 2 | — | — |  |
+| 1444 | `0x102b6650` | — | 1 | 0 | 2 | — | — |  |
+| 1445 | `0x102b7f40` | — | 3 | 0 | 0 | — | — |  |
+| 1446 | `0x102b8980` | — | 1 | 0 | 2 | — | — |  |
+| 1447 | `0x102b8a10` | — | 1 | 2 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 1448 | `0x102b8a60` | — | 3 | 0 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — |  |
+| 1449 | `0x102b8cd0` | — | 2 | 0 | 1 | — | — |  |
+| 1450 | `0x102bf4a0` | `CAI_BaseNPCTroika#575`, `CGeneric_NPC#575`, +62 more | 1 | 0 | 2 | — | — |  |
+| 1451 | `0x102c04b0` | `CAI_BaseNPCTroika#612`, `CGeneric_NPC#612`, +61 more | 1 | 0 | 2 | — | — |  |
+| 1452 | `0x102c2ec0` | `CAI_BaseNPCTroika#589`, `CGeneric_NPC#589`, +62 more | 1 | 0 | 2 | — | — |  |
+| 1453 | `0x102c54c0` | — | 2 | 1 | 0 | — | — |  |
+| 1454 | `0x102c5500` | `CAI_BaseNPCTroika#419`, `CGeneric_NPC#419`, +62 more | 1 | 2 | 0 | — | — |  |
+| 1455 | `0x102c75c0` | `CAI_StandoffBehavior#10` | 0 | 1 | 2 | — | — |  |
+| 1456 | `0x102c79e0` | `CAI_StandoffBehavior#22` | 0 | 1 | 2 | `NPC in standoff lacks needed low aim act…`, `no weapon`, +2 more | — |  |
+| 1457 | `0x102c7bd0` | `CAI_StandoffBehavior#15` | 0 | 1 | 2 | `E:\Vampire\main\dlls\ai_behavior_standof…` | — |  |
+| 1458 | `0x102c7e10` | — | 1 | 1 | 1 | — | — |  |
+| 1459 | `0x102c8830` | `CAI_StandoffGoal#243` | 1 | 1 | 1 | `Invalid aggressiveness value %d⏎` | — |  |
+| 1460 | `0x102ca460` | — | 1 | 1 | 1 | `Unknown`, `Supernatural`, +2 more | — |  |
+| 1461 | `0x102ca780` | — | 1 | 0 | 2 | — | — |  |
+| 1462 | `0x102cc590` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:894 |  |
+| 1463 | `0x102cc6c0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:894 |  |
+| 1464 | `0x102cc730` | — | 1 | 1 | 1 | — | — |  |
+| 1465 | `0x102cc760` | — | 2 | 0 | 1 | — | — |  |
+| 1466 | `0x102cd740` | `CAI_StandoffGoal#242` | 0 | 0 | 3 | — | — |  |
+| 1467 | `0x102cdb70` | — | 1 | 0 | 2 | — | — |  |
+| 1468 | `0x102cdd10` | — | 1 | 0 | 2 | — | — |  |
+| 1469 | `0x102ce550` | — | 2 | 0 | 1 | — | — |  |
+| 1470 | `0x102ce640` | — | 1 | 0 | 2 | — | — |  |
+| 1471 | `0x102ce7a0` | — | 1 | 2 | 0 | — | — |  |
+| 1472 | `0x102cefc0` | — | 2 | 0 | 1 | — | — |  |
+| 1473 | `0x102d1220` | — | 1 | 0 | 2 | — | — |  |
+| 1474 | `0x102d1540` | — | 1 | 0 | 2 | — | — |  |
+| 1475 | `0x102d41a0` | — | 1 | 2 | 0 | — | — |  |
+| 1476 | `0x102d41f0` | — | 2 | 1 | 0 | — | — |  |
+| 1477 | `0x102d6140` | — | 3 | 0 | 0 | — | — |  |
+| 1478 | `0x102d6160` | — | 3 | 0 | 0 | — | — |  |
+| 1479 | `0x102d61e0` | — | 3 | 0 | 0 | — | — |  |
+| 1480 | `0x102d6230` | — | 3 | 0 | 0 | — | — |  |
+| 1481 | `0x102d8cf0` | — | 1 | 1 | 1 | — | — |  |
+| 1482 | `0x102d8e50` | — | 1 | 1 | 1 | — | — |  |
+| 1483 | `0x102d8f20` | — | 1 | 1 | 1 | — | — |  |
+| 1484 | `0x102d9b10` | — | 1 | 0 | 2 | — | — |  |
+| 1485 | `0x102d9ed0` | — | 1 | 1 | 1 | — | — |  |
+| 1486 | `0x102da9e0` | — | 1 | 0 | 2 | — | — |  |
+| 1487 | `0x102daac0` | — | 1 | 0 | 2 | `E:\Vampire\main\dlls\AI_InterestingPlace…` | — |  |
+| 1488 | `0x102dcc20` | — | 1 | 0 | 2 | — | — |  |
+| 1489 | `0x102dd500` | — | 1 | 0 | 2 | — | — |  |
+| 1490 | `0x102dd550` | — | 1 | 0 | 2 | — | — |  |
+| 1491 | `0x102dd580` | — | 1 | 0 | 2 | — | — |  |
+| 1492 | `0x102dd5b0` | — | 1 | 0 | 2 | — | — |  |
+| 1493 | `0x102dd5e0` | — | 1 | 0 | 2 | — | — |  |
+| 1494 | `0x102ddc40` | — | 2 | 0 | 1 | — | — |  |
+| 1495 | `0x102df1b0` | — | 3 | 0 | 0 | — | — |  |
+| 1496 | `0x102e06f0` | — | 2 | 1 | 0 | — | — |  |
+| 1497 | `0x102e0730` | — | 3 | 0 | 0 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_Memory.cpp` | — |  |
+| 1498 | `0x102e0b80` | — | 2 | 0 | 1 | — | — |  |
+| 1499 | `0x102e0f90` | `CAI_HumanoidMotor#4`, `CAI_Motor#4` | 0 | 1 | 2 | — | — |  |
+| 1500 | `0x102e14a0` | `CAI_Motor#19` | 0 | 0 | 3 | — | — |  |
+| 1501 | `0x102e2180` | `CAI_HumanoidMotor#15`, `CAI_Motor#15` | 1 | 0 | 2 | — | — |  |
+| 1502 | `0x102e2750` | — | 2 | 0 | 1 | — | — |  |
+| 1503 | `0x102e2840` | — | 2 | 0 | 1 | — | — |  |
+| 1504 | `0x102e3450` | — | 2 | 0 | 1 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
+| 1505 | `0x102e7e00` | — | 2 | 0 | 1 | — | — |  |
+| 1506 | `0x102e7e20` | — | 2 | 0 | 1 | — | — |  |
+| 1507 | `0x102e7e40` | — | 2 | 0 | 1 | — | — |  |
+| 1508 | `0x102e8250` | — | 2 | 1 | 0 | — | — |  |
+| 1509 | `0x102e8ac0` | — | 2 | 0 | 1 | — | — |  |
+| 1510 | `0x102ee2a0` | — | 2 | 0 | 1 | — | — |  |
+| 1511 | `0x102ee410` | — | 2 | 0 | 1 | — | — |  |
+| 1512 | `0x102ee530` | — | 2 | 0 | 1 | — | — |  |
+| 1513 | `0x102ee5e0` | — | 2 | 0 | 1 | — | — |  |
+| 1514 | `0x102ee660` | — | 2 | 0 | 1 | — | — |  |
+| 1515 | `0x102ee680` | — | 2 | 0 | 1 | — | — |  |
+| 1516 | `0x102ee940` | — | 3 | 0 | 0 | — | — |  |
+| 1517 | `0x102eea90` | `CAI_HumanoidNavigator#8`, `CAI_Navigator#8` | 2 | 1 | 0 | — | — |  |
+| 1518 | `0x102f06e0` | — | 2 | 0 | 1 | — | — |  |
+| 1519 | `0x102f0ab0` | — | 1 | 0 | 2 | — | — |  |
+| 1520 | `0x102f0e00` | — | 2 | 0 | 1 | — | — |  |
+| 1521 | `0x102f0fe0` | — | 1 | 0 | 2 | — | — |  |
+| 1522 | `0x102f28e0` | — | 1 | 0 | 2 | — | — |  |
+| 1523 | `0x102f32f0` | — | 2 | 0 | 1 | `Unaccounted`, `CAI_Network_ListNodesInBox` | — |  |
+| 1524 | `0x102f4520` | — | 2 | 0 | 1 | — | — |  |
+| 1525 | `0x102f8ef0` | — | 2 | 1 | 0 | — | — |  |
+| 1526 | `0x102f9040` | — | 3 | 0 | 0 | — | — |  |
+| 1527 | `0x102f9920` | — | 3 | 0 | 0 | — | — |  |
+| 1528 | `0x102fcab0` | — | 1 | 0 | 2 | `Note: Strange link found between nodes i…` | — |  |
+| 1529 | `0x102fcd00` | — | 1 | 0 | 2 | — | — |  |
+| 1530 | `0x102fe150` | — | 1 | 0 | 2 | `Unaccounted`, `CAI_Pathfinder_HasPathInner` | — |  |
+| 1531 | `0x102fe9f0` | — | 1 | 0 | 2 | — | — |  |
+| 1532 | `0x102ffbd0` | — | 2 | 0 | 1 | — | — |  |
+| 1533 | `0x10300140` | — | 2 | 0 | 1 | — | — |  |
+| 1534 | `0x103008f0` | — | 1 | 0 | 2 | `FindBackAwayNode() - %s has no nearest n…`, `Graph not ready for FindBackAwayNode!⏎` | — |  |
+| 1535 | `0x10300b50` | — | 1 | 0 | 2 | — | — |  |
+| 1536 | `0x10301010` | — | 1 | 0 | 2 | `FindBackAwayNodeAStar() - %s has no near…`, `Graph not ready for FindBackAwayNodeASta…` | — |  |
+| 1537 | `0x10301720` | — | 1 | 0 | 2 | `FindCover() - %s has no nearest node (%f…` | — |  |
+| 1538 | `0x10302320` | — | 1 | 0 | 2 | `FindCover() - %s has no nearest node (%f…` | — |  |
+| 1539 | `0x10303740` | — | 2 | 0 | 1 | — | — |  |
+| 1540 | `0x10303850` | — | 2 | 0 | 1 | — | — |  |
+| 1541 | `0x10304e00` | — | 2 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildNodeRoute` | — |  |
+| 1542 | `0x103058c0` | — | 1 | 0 | 2 | — | — |  |
+| 1543 | `0x10306700` | — | 2 | 0 | 1 | `CreateHuntPatrolList() - %s has no neare…` | — |  |
+| 1544 | `0x10307ac0` | — | 1 | 0 | 2 | — | — |  |
+| 1545 | `0x10307bf0` | — | 1 | 1 | 1 | — | — |  |
+| 1546 | `0x1030b550` | — | 2 | 0 | 1 | — | — |  |
+| 1547 | `0x1030b8e0` | — | 2 | 0 | 1 | — | — |  |
+| 1548 | `0x1030f300` | — | 2 | 0 | 1 | `Couldn't find schedule %d (%s)⏎` | — |  |
+| 1549 | `0x1030fc90` | — | 2 | 0 | 1 | — | — |  |
+| 1550 | `0x1030ffa0` | — | 3 | 0 | 0 | — | — |  |
+| 1551 | `0x10310480` | — | 3 | 0 | 0 | — | — |  |
+| 1552 | `0x103104f0` | — | 2 | 0 | 1 | — | — |  |
+| 1553 | `0x10310cf0` | — | 2 | 0 | 1 | `Failed to spawn with NPCMaker( %s )⏎` | — |  |
+| 1554 | `0x10311b90` | — | 2 | 0 | 1 | — | — |  |
+| 1555 | `0x10311f50` | — | 2 | 0 | 1 | — | — |  |
+| 1556 | `0x10312c20` | — | 1 | 1 | 1 | — | — |  |
+| 1557 | `0x10312f70` | — | 1 | 2 | 0 | — | — |  |
+| 1558 | `0x10315a80` | — | 1 | 0 | 2 | — | — |  |
+| 1559 | `0x10315ec0` | — | 1 | 0 | 2 | — | — |  |
+| 1560 | `0x10316760` | — | 1 | 0 | 2 | — | — |  |
+| 1561 | `0x103167f0` | — | 1 | 0 | 2 | — | — |  |
+| 1562 | `0x10316890` | — | 1 | 0 | 2 | — | — |  |
+| 1563 | `0x10316ab0` | — | 1 | 0 | 2 | — | — |  |
+| 1564 | `0x1031a0e0` | — | 3 | 0 | 0 | — | — |  |
+| 1565 | `0x10323930` | — | 3 | 0 | 0 | — | — |  |
+| 1566 | `0x10323a70` | — | 2 | 0 | 1 | — | — |  |
+| 1567 | `0x10323b60` | `CBaseCombatCharacter#130`, `CBaseGrenade#130`, +4 more | 1 | 0 | 2 | — | — |  |
+| 1568 | `0x10324080` | — | 1 | 1 | 1 | — | — |  |
+| 1569 | `0x10325da0` | — | 3 | 0 | 0 | — | — |  |
+| 1570 | `0x10330220` | — | 3 | 0 | 0 | — | — |  |
+| 1571 | `0x1033d460` | — | 1 | 0 | 2 | — | — |  |
+| 1572 | `0x10344dd0` | `CAI_BaseHumanoid#323`, `CAI_BaseNPC#323`, +83 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#323 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1573 | `0x10345480` | — | 2 | 0 | 1 | — | — |  |
+| 1574 | `0x10348d00` | — | 1 | 0 | 2 | — | — |  |
+| 1575 | `0x1034af70` | `CNPCMaker#5` | 0 | 0 | 3 | — | — |  |
+| 1576 | `0x1034bfb0` | `CNPCMaker_Fleshpile#5` | 0 | 0 | 3 | — | — |  |
+| 1577 | `0x1034cbf0` | `CNPCMaker_Zombie#5` | 0 | 0 | 3 | — | — |  |
+| 1578 | `0x10356770` | — | 1 | 0 | 2 | — | — |  |
+| 1579 | `0x10356f60` | `CNPC_Bullseye#141` | 0 | 0 | 3 | — | — |  |
+| 1580 | `0x10357e50` | — | 1 | 0 | 2 | — | — |  |
+| 1581 | `0x10358ef0` | `CNPC_Crow#490` | 3 | 0 | 0 | `NPC_Crow.Idle` | — |  |
+| 1582 | `0x10358f10` | `CNPC_Crow#489` | 3 | 0 | 0 | `NPC_Crow.Alert` | — |  |
+| 1583 | `0x1035a390` | `CGeneric_NPC#489` | 2 | 0 | 1 | — | — |  |
+| 1584 | `0x1035a500` | `CGeneric_NPC#488` | 2 | 0 | 1 | — | — |  |
+| 1585 | `0x1035a670` | `CGeneric_NPC#491` | 2 | 0 | 1 | — | — |  |
+| 1586 | `0x1035a900` | `CGeneric_NPC#432` | 3 | 0 | 0 | — | — |  |
+| 1587 | `0x1035b160` | `CGeneric_NPC_bathack#432` | 3 | 0 | 0 | — | — |  |
+| 1588 | `0x1035ba00` | `CGenericSabbat_NPC#489` | 2 | 0 | 1 | — | — |  |
+| 1589 | `0x1035bb70` | `CGenericSabbat_NPC#488` | 2 | 0 | 1 | — | — |  |
+| 1590 | `0x1035bce0` | `CGenericSabbat_NPC#491` | 2 | 0 | 1 | — | — |  |
+| 1591 | `0x1035bf70` | `CGenericSabbat_NPC#432` | 3 | 0 | 0 | — | — |  |
+| 1592 | `0x1035d150` | `CNPC_VAndreiBlood#461` | 1 | 1 | 1 | — | — |  |
+| 1593 | `0x103656a0` | — | 1 | 0 | 2 | `Error: Couldn't find space in inventory …`, `item_d_holy_light` | — |  |
+| 1594 | `0x103674c0` | `CNPC_VBatSwarm#432` | 3 | 0 | 0 | — | — |  |
+| 1595 | `0x103680f0` | `CNPC_VCamera#490`, `CNPC_VCameraSecurity#490` | 3 | 0 | 0 | — | — |  |
+| 1596 | `0x10368130` | `CNPC_VCamera#492`, `CNPC_VCameraSecurity#492` | 3 | 0 | 0 | — | — |  |
+| 1597 | `0x1036c7f0` | — | 2 | 1 | 0 | — | — |  |
+| 1598 | `0x10370340` | `CNPC_VCombatman#432` | 3 | 0 | 0 | — | — |  |
+| 1599 | `0x103706b0` | — | 1 | 0 | 2 | — | — |  |
+| 1600 | `0x10372aa0` | `CNPC_VCop#432` | 3 | 0 | 0 | — | — |  |
+| 1601 | `0x10374f40` | — | 1 | 0 | 2 | — | — |  |
+| 1602 | `0x10378b80` | `CNPC_VGargoyle#432` | 3 | 0 | 0 | — | — |  |
+| 1603 | `0x1037e1e0` | `CNPC_VGuard1#432` | 3 | 0 | 0 | — | — |  |
+| 1604 | `0x1037e2d0` | — | 2 | 1 | 0 | `player D_HT 10` | — |  |
+| 1605 | `0x10380120` | `CNPC_VHengeyokai#432` | 3 | 0 | 0 | — | — |  |
+| 1606 | `0x10381be0` | — | 2 | 0 | 1 | — | — |  |
+| 1607 | `0x10382020` | — | 1 | 0 | 2 | — | — |  |
+| 1608 | `0x10382670` | — | 1 | 1 | 1 | `Bip01 R Hand`, `phys_animlink` | — |  |
+| 1609 | `0x10382b30` | — | 1 | 0 | 2 | — | — |  |
+| 1610 | `0x10382bb0` | — | 1 | 0 | 2 | — | — |  |
+| 1611 | `0x10382f60` | — | 1 | 0 | 2 | — | — |  |
+| 1612 | `0x10388ad0` | `CNPC_VHunter#432` | 3 | 0 | 0 | — | — |  |
+| 1613 | `0x1038e990` | `CNPC_VManBat#432` | 3 | 0 | 0 | — | — |  |
+| 1614 | `0x1038f430` | — | 1 | 2 | 0 | `phys_animlink`, `Bip01 R Foot` | — |  |
+| 1615 | `0x1038fd40` | — | 2 | 0 | 1 | `ManBat_Minion` | — |  |
+| 1616 | `0x10390890` | — | 1 | 2 | 0 | — | — |  |
+| 1617 | `0x10394970` | `CNPC_VMingXiao#432` | 3 | 0 | 0 | — | — |  |
+| 1618 | `0x10395ce0` | — | 2 | 0 | 1 | — | — |  |
+| 1619 | `0x10397a50` | — | 1 | 1 | 1 | — | — |  |
+| 1620 | `0x10397b40` | — | 1 | 0 | 2 | — | — |  |
+| 1621 | `0x10397f70` | — | 2 | 0 | 1 | — | — |  |
+| 1622 | `0x103986b0` | — | 3 | 0 | 0 | — | — |  |
+| 1623 | `0x10398b20` | — | 1 | 0 | 2 | `Pedestal` | — |  |
+| 1624 | `0x103999f0` | — | 1 | 0 | 2 | — | — |  |
+| 1625 | `0x1039ab10` | — | 2 | 0 | 1 | — | — |  |
+| 1626 | `0x1039e890` | `CNPC_VMingXiaoTentacle#390` | 0 | 3 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — |  |
+| 1627 | `0x1039ea60` | — | 2 | 0 | 1 | — | — |  |
+| 1628 | `0x1039f310` | — | 2 | 0 | 1 | — | — |  |
+| 1629 | `0x1039fe30` | `CNPC_VMoleman#432` | 3 | 0 | 0 | — | — |  |
+| 1630 | `0x103a0030` | `CNPC_VNewscaster#490` | 3 | 0 | 0 | — | — |  |
+| 1631 | `0x103a0070` | `CNPC_VNewscaster#492` | 3 | 0 | 0 | — | — |  |
+| 1632 | `0x103a1de0` | `CNPC_VPedestrian#550` | 3 | 0 | 0 | — | — |  |
+| 1633 | `0x103a4770` | `CNPC_VFrenzyShadow#490`, `CNPC_VPlayerController#490`, +1 more | 3 | 0 | 0 | — | — |  |
+| 1634 | `0x103a47b0` | `CNPC_VFrenzyShadow#492`, `CNPC_VPlayerController#492`, +1 more | 3 | 0 | 0 | — | — |  |
+| 1635 | `0x103a4870` | `CNPC_VFrenzyShadow#432`, `CNPC_VPlayerController#432`, +1 more | 3 | 0 | 0 | — | — |  |
+| 1636 | `0x103ae7f0` | `CNPC_VSheriffMan#127` | 0 | 3 | 0 | `npc_VSheriffMan`, `models/character/monster/manbat/manbat.m…` | — |  |
+| 1637 | `0x103b2470` | `CNPC_VSheriffSwarm#432` | 3 | 0 | 0 | — | — |  |
+| 1638 | `0x103b3650` | `CNPC_VTaxiDriver#432` | 3 | 0 | 0 | — | — |  |
+| 1639 | `0x103b4320` | `CNPC_VTest#488` | 2 | 0 | 1 | — | — |  |
+| 1640 | `0x103b4490` | `CNPC_VTest#489` | 2 | 0 | 1 | — | — |  |
+| 1641 | `0x103b4780` | `CNPC_VTest#491` | 2 | 0 | 1 | — | — |  |
+| 1642 | `0x103b51a0` | `CNPC_VTest#432` | 3 | 0 | 0 | — | — |  |
+| 1643 | `0x103b6e30` | `CNPC_VTzimisce#550` | 3 | 0 | 0 | — | — |  |
+| 1644 | `0x103b95e0` | `CNPC_VTzimisce#492` | 3 | 0 | 0 | — | — |  |
+| 1645 | `0x103b9a50` | `CNPC_VTzimisce#622` | 2 | 0 | 1 | `SPI_ATTACK_HIT_MASSIVE` | — |  |
+| 1646 | `0x103b9b20` | `CNPC_VTzimisce#623` | 2 | 0 | 1 | `SPI_RUNNING` | — |  |
+| 1647 | `0x103b9be0` | `CNPC_VTzimisce#624` | 2 | 0 | 1 | `SPI_LAND_HARD` | — |  |
+| 1648 | `0x103b9ca0` | `CNPC_VTzimisce#625` | 2 | 0 | 1 | `SPI_JUMP_ATTACK` | — |  |
+| 1649 | `0x103b9d60` | `CNPC_VTzimisce#626` | 2 | 0 | 1 | `SPI_AGGRO` | — |  |
+| 1650 | `0x103b9f50` | — | 2 | 1 | 0 | — | — |  |
+| 1651 | `0x103bdef0` | `CNPC_VTzimisce#432` | 3 | 0 | 0 | — | — |  |
+| 1652 | `0x103be090` | — | 2 | 0 | 1 | — | — |  |
+| 1653 | `0x103be150` | — | 2 | 0 | 1 | — | — |  |
+| 1654 | `0x103be530` | — | 1 | 2 | 0 | — | — |  |
+| 1655 | `0x103be630` | — | 1 | 0 | 2 | — | — |  |
+| 1656 | `0x103bef20` | — | 1 | 1 | 1 | `phys_animlink`, `Bip01 R Finger1` | — |  |
+| 1657 | `0x103bf3c0` | — | 1 | 0 | 2 | — | — |  |
+| 1658 | `0x103bf440` | — | 1 | 0 | 2 | — | — |  |
+| 1659 | `0x103bf660` | — | 3 | 0 | 0 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
+| 1660 | `0x103bfc20` | — | 3 | 0 | 0 | — | — |  |
+| 1661 | `0x103bfd80` | `CNPC_VTzimisce#389` | 1 | 0 | 2 | — | — |  |
+| 1662 | `0x103c1d20` | `CNPC_VTzimisceHeadClaw#432` | 3 | 0 | 0 | — | — |  |
+| 1663 | `0x103c24a0` | — | 2 | 0 | 1 | — | — |  |
+| 1664 | `0x103c67f0` | — | 2 | 0 | 1 | — | — |  |
+| 1665 | `0x103cade0` | — | 1 | 2 | 0 | `rotdoor2`, `rotdoor1`, +1 more | — |  |
+| 1666 | `0x103d0ad0` | — | 3 | 0 | 0 | `GetNearestNode failed⏎` | — |  |
+| 1667 | `0x103d87a0` | `CNPC_VWerewolf#491` | 2 | 0 | 1 | `NULL ENTITY`, `CNPC_VWerewolf::ExertHvySound` | — |  |
+| 1668 | `0x103dc1d0` | — | 1 | 2 | 0 | — | — |  |
+| 1669 | `0x103dc390` | — | 3 | 0 | 0 | — | — |  |
+| 1670 | `0x103dd7a0` | `CNPC_VYukie#432` | 3 | 0 | 0 | — | — |  |
+| 1671 | `0x10408220` | — | 1 | 0 | 2 | — | — |  |
+| 1672 | `0x10411f90` | — | 3 | 0 | 0 | `// *⏎`, `// **⏎`, +10 more | — |  |
+| 1673 | `0x10432449` | — | 3 | 0 | 0 | — | — |  |
+| 1674 | `0x10432520` | — | 3 | 0 | 0 | — | — |  |
+| 1675 | `0x1043893c` | — | 3 | 0 | 0 | — | — |  |
+| 1676 | `0x10439f2d` | — | 3 | 0 | 0 | — | — |  |
+| 1677 | `0x10026a10` | `CAISound#63`, `CAI_BaseHumanoid#63`, +495 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#63 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1678 | `0x10026bd0` | `CAISound#112`, `CAI_BaseHumanoid#112`, +493 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#112 no SDK twin: stretch #107-#113 holds 5 retai…` |
+| 1679 | `0x10026c70` | `CAISound#134`, `CAI_BaseHumanoid#134`, +468 more | 0 | 0 | 2 | `CBaseEntity::Think`, `NULL ENTITY` | — | `CAI_BaseNPC#134 slot identity: CBaseEntity#134 is Remove, bu…` |
+| 1680 | `0x10026e70` | `CAISound#153`, `CAI_ChangeHintGroup#153`, +417 more | 1 | 0 | 1 | — | — |  |
+| 1681 | `0x10027000` | `CAISound#167`, `CAI_ChangeHintGroup#167`, +416 more | 2 | 0 | 0 | — | — |  |
+| 1682 | `0x10027610` | `CAISound#2`, `CAI_BaseHumanoid#2`, +495 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#2 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
+| 1683 | `0x1003c1c0` | — | 1 | 1 | 0 | — | — |  |
+| 1684 | `0x10055000` | — | 1 | 0 | 1 | — | — |  |
+| 1685 | `0x1006ca50` | — | 1 | 0 | 1 | — | — |  |
+| 1686 | `0x1006cba0` | — | 1 | 0 | 1 | — | — |  |
+| 1687 | `0x1006edb0` | — | 1 | 0 | 1 | — | — |  |
+| 1688 | `0x10071ba0` | — | 1 | 0 | 1 | — | — |  |
+| 1689 | `0x10073b00` | — | 1 | 0 | 1 | — | — |  |
+| 1690 | `0x10074050` | — | 1 | 0 | 1 | — | — |  |
+| 1691 | `0x10074070` | — | 2 | 0 | 0 | — | — |  |
+| 1692 | `0x100740d0` | — | 1 | 0 | 1 | — | — |  |
+| 1693 | `0x10074160` | — | 1 | 0 | 1 | — | — |  |
+| 1694 | `0x100742b0` | — | 1 | 0 | 1 | — | — |  |
+| 1695 | `0x100749a0` | — | 1 | 0 | 1 | — | — |  |
+| 1696 | `0x10075c50` | — | 2 | 0 | 0 | — | — |  |
+| 1697 | `0x10075ca0` | — | 2 | 0 | 0 | — | — |  |
+| 1698 | `0x100766d0` | — | 1 | 0 | 1 | — | — |  |
+| 1699 | `0x10077710` | — | 1 | 0 | 1 | — | — |  |
+| 1700 | `0x10077730` | — | 1 | 1 | 0 | — | — |  |
+| 1701 | `0x10077ac0` | — | 2 | 0 | 0 | — | — |  |
+| 1702 | `0x10077f10` | — | 2 | 0 | 0 | — | — |  |
+| 1703 | `0x10078630` | — | 1 | 0 | 1 | — | — |  |
+| 1704 | `0x10081980` | — | 1 | 0 | 1 | — | — |  |
+| 1705 | `0x10082e40` | — | 1 | 0 | 1 | — | — |  |
+| 1706 | `0x10095be0` | — | 1 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::InitBoneControllers ` | — |  |
+| 1707 | `0x10099020` | `CAI_BaseHumanoid#268`, `CAI_BaseNPC#268`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#268 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1708 | `0x10099250` | — | 2 | 0 | 0 | — | — |  |
+| 1709 | `0x10099570` | `CAI_BaseHumanoid#273`, `CAI_BaseNPC#273`, +85 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#273 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1710 | `0x10099630` | `CAI_BaseHumanoid#275`, `CAI_BaseNPC#275`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#275 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1711 | `0x10099660` | `CAI_BaseHumanoid#269`, `CAI_BaseNPC#269`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#269 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1712 | `0x1009b500` | `CAISound#20`, `CAI_BaseHumanoid#20`, +431 more | 1 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessageBare` | — | `CAI_BaseNPC#20 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1713 | `0x1009c390` | — | 1 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::` | — |  |
+| 1714 | `0x100a4fe0` | `CAISound#39`, `CAI_BaseHumanoid#39`, +474 more | 0 | 1 | 1 | — | — | `CAI_BaseNPC#39 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1715 | `0x100b50a0` | `CAISound#164`, `CAI_BaseHumanoid#164`, +495 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#164 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 1716 | `0x100b5b40` | `CAI_BaseHumanoid#278`, `CAI_BaseNPC#278`, +84 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#278 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 1717 | `0x100b5b60` | `CAI_BaseHumanoid#280`, `CAI_BaseNPC#280`, +84 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#280 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 1718 | `0x100b68d0` | — | 2 | 0 | 0 | — | — |  |
+| 1719 | `0x100c1230` | — | 2 | 0 | 0 | — | — |  |
+| 1720 | `0x100c13a0` | — | 2 | 0 | 0 | — | — |  |
+| 1721 | `0x100c1c60` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:105, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:878, Source/ElysiumUE/Private/Visual/ElysiumBlendGrids.cpp:635, +2 more |  |
+| 1722 | `0x100c73b0` | — | 2 | 0 | 0 | — | — |  |
+| 1723 | `0x100c7480` | — | 2 | 0 | 0 | — | — |  |
+| 1724 | `0x100c7f30` | — | 1 | 0 | 1 | — | — |  |
+| 1725 | `0x100cd240` | — | 2 | 0 | 0 | — | — |  |
+| 1726 | `0x100cd260` | — | 1 | 0 | 1 | — | — |  |
+| 1727 | `0x100cd640` | — | 2 | 0 | 0 | — | — |  |
+| 1728 | `0x100cdf10` | — | 2 | 0 | 0 | — | — |  |
+| 1729 | `0x100ce600` | — | 1 | 0 | 1 | — | — |  |
+| 1730 | `0x100d1590` | — | 2 | 0 | 0 | — | — |  |
+| 1731 | `0x100d15d0` | — | 2 | 0 | 0 | — | — |  |
+| 1732 | `0x100ddbd0` | — | 1 | 1 | 0 | — | — |  |
+| 1733 | `0x100ddd20` | — | 1 | 0 | 1 | — | — |  |
+| 1734 | `0x100df030` | — | 2 | 0 | 0 | — | — |  |
+| 1735 | `0x100df240` | — | 2 | 0 | 0 | `starting_condition`, `starting-condition`, +1 more | — |  |
+| 1736 | `0x100e1580` | — | 2 | 0 | 0 | — | — |  |
+| 1737 | `0x100e49b0` | — | 1 | 0 | 1 | `Dialog_Dementation_Victim_Emitter`, `Dialog_Domination_Victim_Emitter`, +1 more | — |  |
+| 1738 | `0x100e4ef0` | — | 1 | 0 | 1 | — | — |  |
+| 1739 | `0x100eb3d0` | — | 1 | 0 | 1 | — | — |  |
+| 1740 | `0x100ec640` | — | 2 | 0 | 0 | `stance_%s_trans_%d_%d`, `stance_%s_fidget_%d`, +5 more | — |  |
+| 1741 | `0x100ed460` | — | 1 | 0 | 1 | — | — |  |
+| 1742 | `0x100eef10` | — | 1 | 0 | 1 | — | — |  |
+| 1743 | `0x100f0e70` | — | 1 | 1 | 0 | — | — |  |
+| 1744 | `0x100f0ec0` | — | 1 | 0 | 1 | — | — |  |
+| 1745 | `0x100f7d50` | — | 2 | 0 | 0 | — | — |  |
+| 1746 | `0x100fb7d0` | `CAuspexAura#242`, `CDisciplineParticle#242`, +5 more | 2 | 0 | 0 | — | — |  |
+| 1747 | `0x100fbac0` | — | 2 | 0 | 0 | — | — |  |
+| 1748 | `0x1011e010` | — | 2 | 0 | 0 | — | — |  |
+| 1749 | `0x10129dc0` | — | 1 | 0 | 1 | `models/gibs/hgibs.mdl`, `CBaseEntity::Instance`, +2 more | — |  |
+| 1750 | `0x10138460` | — | 2 | 0 | 0 | — | — |  |
+| 1751 | `0x10138600` | — | 2 | 0 | 0 | — | — |  |
+| 1752 | `0x10138760` | — | 2 | 0 | 0 | — | — |  |
+| 1753 | `0x10138a90` | — | 2 | 0 | 0 | — | — |  |
+| 1754 | `0x10138df0` | — | 2 | 0 | 0 | — | — |  |
+| 1755 | `0x10139a90` | — | 2 | 0 | 0 | — | — |  |
+| 1756 | `0x10139b50` | — | 2 | 0 | 0 | — | — |  |
+| 1757 | `0x1013aab0` | — | 2 | 0 | 0 | — | — |  |
+| 1758 | `0x1013ad40` | — | 2 | 0 | 0 | — | — |  |
+| 1759 | `0x1013b090` | — | 2 | 0 | 0 | — | — |  |
+| 1760 | `0x1013b390` | — | 2 | 0 | 0 | — | — |  |
+| 1761 | `0x1013bd20` | — | 2 | 0 | 0 | — | — |  |
+| 1762 | `0x1013d650` | — | 2 | 0 | 0 | — | — |  |
+| 1763 | `0x10144db0` | — | 2 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 1764 | `0x1014f7f0` | `CAI_BaseHumanoid#324`, `CAI_BaseNPC#324`, +80 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#324 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1765 | `0x1014f810` | `CAI_BaseHumanoid#325`, `CAI_BaseNPC#325`, +80 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#325 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1766 | `0x1014f970` | `CBaseCombatCharacter#372`, `CBaseGrenade#372`, +5 more | 1 | 0 | 1 | — | — |  |
+| 1767 | `0x1014f9a0` | `CBaseCombatCharacter#373`, `CBaseGrenade#373`, +5 more | 1 | 0 | 1 | — | — |  |
+| 1768 | `0x10155460` | — | 1 | 1 | 0 | — | — |  |
+| 1769 | `0x10157890` | — | 1 | 1 | 0 | — | — |  |
+| 1770 | `0x101578b0` | — | 1 | 0 | 1 | — | — |  |
+| 1771 | `0x10157910` | — | 1 | 1 | 0 | — | — |  |
+| 1772 | `0x10160680` | — | 1 | 0 | 1 | — | — |  |
+| 1773 | `0x10161ed0` | — | 1 | 0 | 1 | — | — |  |
+| 1774 | `0x10167fd0` | — | 1 | 0 | 1 | — | — |  |
+| 1775 | `0x10172710` | — | 2 | 0 | 0 | — | — |  |
+| 1776 | `0x10175400` | — | 1 | 0 | 1 | — | — |  |
+| 1777 | `0x101764d0` | — | 2 | 0 | 0 | — | — |  |
+| 1778 | `0x1017d630` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:151 |  |
+| 1779 | `0x1017d680` | — | 1 | 0 | 1 | — | — |  |
+| 1780 | `0x1017deb0` | — | 2 | 0 | 0 | — | — |  |
+| 1781 | `0x1017f8b0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1451, Source/ElysiumUE/Public/ElysiumPlayer.h:2287 |  |
+| 1782 | `0x1017f980` | — | 1 | 1 | 0 | — | — |  |
+| 1783 | `0x101800a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:764, Source/ElysiumUE/Public/ElysiumPlayer.h:2114 |  |
+| 1784 | `0x10182e00` | — | 2 | 0 | 0 | — | — |  |
+| 1785 | `0x1018e790` | — | 1 | 0 | 1 | `activity_copy_prop` | — |  |
+| 1786 | `0x1018f690` | — | 1 | 1 | 0 | `Invalid collision type %d set on : %s⏎` | — |  |
+| 1787 | `0x1018f700` | — | 1 | 1 | 0 | — | — |  |
+| 1788 | `0x10190e50` | — | 1 | 0 | 1 | `prop_dynamic_ornament`, `Could not create ornament prop model: %s…` | Source/ElysiumUE/Private/Visual/ElysiumNpcVisual.cpp:573 |  |
+| 1789 | `0x10194e40` | — | 1 | 0 | 1 | — | — |  |
+| 1790 | `0x1019d1c0` | — | 2 | 0 | 0 | — | — |  |
+| 1791 | `0x101a6500` | `CAI_BaseHumanoid#419`, `CAI_BaseNPC#419`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#419 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 1792 | `0x101a6780` | `CAI_BaseHumanoid#468`, `CAI_BaseNPC#468`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#468 no SDK twin: stretch #467-#469 holds 1 retai…` |
+| 1793 | `0x101a6920` | `CAI_BaseHumanoid#493`, `CAI_BaseNPC#493`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#493 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1794 | `0x101a6940` | `CAI_BaseHumanoid#494`, `CAI_BaseNPC#494`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#494 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1795 | `0x101a69e0` | `CAI_BaseHumanoid#499`, `CAI_BaseNPC#499`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#499 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1796 | `0x101a6a60` | `CAI_BaseHumanoid#503`, `CAI_BaseNPC#503`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#503 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1797 | `0x101a6a80` | `CAI_BaseHumanoid#504`, `CAI_BaseNPC#504`, +11 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#504 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 1798 | `0x101a6c00` | `CAI_BaseHumanoid#546`, `CAI_BaseNPC#546`, +15 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#546 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1799 | `0x101a6ca0` | `CAI_BaseHumanoid#565`, `CAI_BaseNPC#565`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#565 no SDK twin: stretch #560-#566 holds 5 retai…` |
+| 1800 | `0x101a6e40` | `CCineNPC#5` | 0 | 0 | 2 | — | — |  |
+| 1801 | `0x101a7170` | — | 2 | 0 | 0 | — | — |  |
+| 1802 | `0x101a7210` | `CCineNPC#585` | 1 | 0 | 1 | — | — |  |
+| 1803 | `0x101a7230` | — | 1 | 0 | 1 | — | — |  |
+| 1804 | `0x101a77a0` | — | 2 | 0 | 0 | `I like story time.⏎`, `Like story time.⏎`, +7 more | — |  |
+| 1805 | `0x101a8130` | — | 1 | 0 | 1 | — | — |  |
+| 1806 | `0x101a9510` | `CCineAI#584` | 2 | 0 | 0 | `%s: unknown aiscripted sequence "%s"⏎` | — |  |
+| 1807 | `0x101aa5f0` | `CAI_BaseNPCTroika#476`, `CGeneric_NPC#476`, +62 more | 2 | 0 | 0 | — | — |  |
+| 1808 | `0x101aa690` | `CAI_BaseNPCTroika#591`, `CGeneric_NPC#591`, +62 more | 2 | 0 | 0 | — | — |  |
+| 1809 | `0x101aa6f0` | `CAI_BaseNPCTroika#413`, `CGeneric_NPC#413`, +62 more | 1 | 0 | 1 | — | — |  |
+| 1810 | `0x101aadb0` | `CPayphone#612` | 1 | 0 | 1 | — | — |  |
+| 1811 | `0x101ab060` | `CCineAI#5` | 0 | 0 | 2 | — | — |  |
+| 1812 | `0x101b0d80` | — | 1 | 0 | 1 | — | — |  |
+| 1813 | `0x101b3b90` | — | 2 | 0 | 0 | — | — |  |
+| 1814 | `0x101b78f0` | — | 1 | 0 | 1 | — | — |  |
+| 1815 | `0x101b9840` | — | 1 | 0 | 1 | — | — |  |
+| 1816 | `0x101b9880` | — | 1 | 1 | 0 | — | — |  |
+| 1817 | `0x101b99a0` | — | 1 | 0 | 1 | — | — |  |
+| 1818 | `0x101babc0` | — | 2 | 0 | 0 | `Could not AllocSound() for InsertSound()…` | — |  |
+| 1819 | `0x101beed0` | — | 2 | 0 | 0 | — | — |  |
+| 1820 | `0x101c02d0` | — | 1 | 0 | 1 | — | — |  |
+| 1821 | `0x101c1480` | `CAI_BaseHumanoid#110`, `CAI_BaseNPC#110`, +331 more | 0 | 2 | 0 | `distance` | — | `CAI_BaseNPC#110 no SDK twin: stretch #107-#113 holds 5 retai…` |
+| 1822 | `0x101c1790` | — | 1 | 0 | 1 | — | — |  |
+| 1823 | `0x101c2690` | — | 2 | 0 | 0 | — | — |  |
+| 1824 | `0x101c2a70` | — | 1 | 0 | 1 | — | — |  |
+| 1825 | `0x101ccc80` | — | 2 | 0 | 0 | — | — |  |
+| 1826 | `0x101ccec0` | — | 1 | 1 | 0 | — | — |  |
+| 1827 | `0x101cd8c0` | — | 1 | 0 | 1 | — | — |  |
+| 1828 | `0x101ce290` | — | 2 | 0 | 0 | — | — |  |
+| 1829 | `0x101ce620` | — | 2 | 0 | 0 | — | — |  |
+| 1830 | `0x101cee20` | — | 2 | 0 | 0 | — | — |  |
+| 1831 | `0x101cf9b0` | — | 2 | 0 | 0 | `violence_ablood`, `violence_hblood` | — |  |
+| 1832 | `0x101cfef0` | — | 2 | 0 | 0 | — | — |  |
+| 1833 | `0x101d03e0` | — | 2 | 0 | 0 | — | — |  |
+| 1834 | `0x101d0630` | — | 2 | 0 | 0 | — | — |  |
+| 1835 | `0x101d08e0` | — | 2 | 0 | 0 | — | — |  |
+| 1836 | `0x101d1120` | — | 2 | 0 | 0 | — | — |  |
+| 1837 | `0x101d2850` | — | 2 | 0 | 0 | `__main__` | — |  |
+| 1838 | `0x101d8720` | — | 1 | 0 | 1 | — | — |  |
+| 1839 | `0x101d8770` | — | 1 | 0 | 1 | — | — |  |
+| 1840 | `0x101d9610` | — | 1 | 0 | 1 | — | — |  |
+| 1841 | `0x101d9640` | — | 1 | 0 | 1 | — | — |  |
+| 1842 | `0x101d96a0` | — | 1 | 0 | 1 | — | — |  |
+| 1843 | `0x101d96d0` | — | 1 | 0 | 1 | — | — |  |
+| 1844 | `0x101da980` | — | 2 | 0 | 0 | — | — |  |
+| 1845 | `0x101daf60` | — | 1 | 0 | 1 | — | — |  |
+| 1846 | `0x101db410` | — | 1 | 0 | 1 | — | — |  |
+| 1847 | `0x101db960` | — | 1 | 0 | 1 | — | — |  |
+| 1848 | `0x101dbed0` | — | 1 | 0 | 1 | `Discipline<%s>: Sound Play: '%s' on %s (…` | — |  |
+| 1849 | `0x101dc0b0` | — | 1 | 0 | 1 | — | — |  |
+| 1850 | `0x101dda30` | — | 2 | 0 | 0 | — | — |  |
+| 1851 | `0x101ddaf0` | — | 2 | 0 | 0 | — | — |  |
+| 1852 | `0x101de2f0` | — | 1 | 0 | 1 | `Discipline<> DoDamage (%d) on %s (%s)⏎` | — |  |
+| 1853 | `0x101dfe20` | — | 1 | 0 | 1 | — | — |  |
+| 1854 | `0x101dfe50` | — | 1 | 0 | 1 | — | — |  |
+| 1855 | `0x101e22b0` | — | 1 | 0 | 1 | — | — |  |
+| 1856 | `0x101e3310` | — | 1 | 0 | 1 | `ERROR: ActivateEffect_Trigger Failed: Co…` | — |  |
+| 1857 | `0x101e34c0` | — | 1 | 0 | 1 | — | — |  |
+| 1858 | `0x101e3850` | — | 1 | 0 | 1 | `Discipline<%s> Hit⏎` | — |  |
+| 1859 | `0x101e3910` | — | 1 | 0 | 1 | `Discipline<%s> CallbackHit⏎` | Source/ElysiumUE/Private/Substrate/ElysiumAnimEvents.h:57, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1564 |  |
+| 1860 | `0x101e3be0` | — | 2 | 0 | 0 | — | — |  |
+| 1861 | `0x101e3c10` | — | 1 | 0 | 1 | `ERROR: RemoveTgtEffect Failed -- FX: %s!…` | — |  |
+| 1862 | `0x101e3ee0` | — | 1 | 0 | 1 | — | — |  |
+| 1863 | `0x101e4220` | — | 1 | 0 | 1 | `CVTgt_DisciplineFXMgr_t::UpdateSupernatu…`, `Thaumaturgy_Bloodshield` | — |  |
+| 1864 | `0x101e44c0` | — | 1 | 0 | 1 | — | — |  |
+| 1865 | `0x101e49b0` | — | 1 | 0 | 1 | — | — |  |
+| 1866 | `0x101e8b30` | — | 1 | 0 | 1 | — | — |  |
+| 1867 | `0x101e8bf0` | — | 1 | 0 | 1 | — | — |  |
+| 1868 | `0x101e8c10` | — | 1 | 0 | 1 | — | — |  |
+| 1869 | `0x101e8c50` | — | 1 | 0 | 1 | — | — |  |
+| 1870 | `0x101e8c70` | — | 1 | 0 | 1 | — | — |  |
+| 1871 | `0x101e8dc0` | — | 1 | 0 | 1 | — | — |  |
+| 1872 | `0x101e8de0` | — | 1 | 0 | 1 | — | — |  |
+| 1873 | `0x101e8e00` | — | 1 | 0 | 1 | — | — |  |
+| 1874 | `0x101e8e20` | — | 1 | 0 | 1 | — | — |  |
+| 1875 | `0x101e8e40` | — | 1 | 0 | 1 | — | — |  |
+| 1876 | `0x101e8e60` | — | 1 | 0 | 1 | — | — |  |
+| 1877 | `0x101e8fe0` | — | 1 | 0 | 1 | — | — |  |
+| 1878 | `0x101e9000` | — | 1 | 0 | 1 | — | — |  |
+| 1879 | `0x101e9040` | — | 1 | 0 | 1 | — | — |  |
+| 1880 | `0x101e9060` | — | 1 | 0 | 1 | — | — |  |
+| 1881 | `0x101e90f0` | — | 1 | 0 | 1 | — | — |  |
+| 1882 | `0x101e9170` | — | 1 | 0 | 1 | — | — |  |
+| 1883 | `0x101e9470` | — | 1 | 0 | 1 | — | — |  |
+| 1884 | `0x101e9f10` | — | 1 | 0 | 1 | — | — |  |
+| 1885 | `0x101ea0b0` | — | 2 | 0 | 0 | — | — |  |
+| 1886 | `0x101eb190` | — | 1 | 0 | 1 | — | — |  |
+| 1887 | `0x101ef900` | — | 2 | 0 | 0 | `vampireprojectile` | — |  |
+| 1888 | `0x101f1d80` | — | 2 | 0 | 0 | — | — |  |
+| 1889 | `0x101f2cd0` | — | 1 | 1 | 0 | — | — |  |
+| 1890 | `0x101f2f30` | — | 2 | 0 | 0 | — | — |  |
+| 1891 | `0x101f2f70` | — | 2 | 0 | 0 | — | — |  |
+| 1892 | `0x101f42a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:121, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:34, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:193 |  |
+| 1893 | `0x101f42d0` | — | 1 | 0 | 1 | — | — |  |
+| 1894 | `0x101f4530` | — | 1 | 0 | 1 | — | — |  |
+| 1895 | `0x101f9a80` | — | 2 | 0 | 0 | — | — |  |
+| 1896 | `0x101f9af0` | — | 2 | 0 | 0 | — | — |  |
+| 1897 | `0x101f9bf0` | — | 2 | 0 | 0 | — | — |  |
+| 1898 | `0x10204250` | — | 2 | 0 | 0 | — | — |  |
+| 1899 | `0x10204ad0` | — | 1 | 0 | 1 | — | — |  |
+| 1900 | `0x10207dd0` | — | 2 | 0 | 0 | — | — |  |
+| 1901 | `0x10207e60` | — | 2 | 0 | 0 | — | — |  |
+| 1902 | `0x10224100` | — | 1 | 0 | 1 | — | — |  |
+| 1903 | `0x102271d0` | — | 1 | 0 | 1 | — | — |  |
+| 1904 | `0x10230260` | — | 2 | 0 | 0 | — | — |  |
+| 1905 | `0x10230880` | — | 1 | 0 | 1 | — | — |  |
+| 1906 | `0x1023b570` | — | 1 | 0 | 1 | — | — |  |
+| 1907 | `0x1023e4b0` | — | 2 | 0 | 0 | — | — |  |
+| 1908 | `0x1023f040` | — | 2 | 0 | 0 | — | — |  |
+| 1909 | `0x1023f060` | — | 2 | 0 | 0 | — | — |  |
+| 1910 | `0x1023f0c0` | — | 2 | 0 | 0 | — | — |  |
+| 1911 | `0x10240250` | — | 2 | 0 | 0 | — | — |  |
+| 1912 | `0x10240cb0` | — | 2 | 0 | 0 | — | — |  |
+| 1913 | `0x10245700` | — | 1 | 0 | 1 | — | — |  |
+| 1914 | `0x102457b0` | — | 1 | 0 | 1 | — | — |  |
+| 1915 | `0x10246270` | — | 1 | 0 | 1 | — | — |  |
+| 1916 | `0x1024c000` | — | 1 | 0 | 1 | — | — |  |
+| 1917 | `0x1024c0e0` | — | 1 | 0 | 1 | — | — |  |
+| 1918 | `0x1024c630` | — | 2 | 0 | 0 | — | — |  |
+| 1919 | `0x10252240` | — | 1 | 0 | 1 | — | — |  |
+| 1920 | `0x10252470` | — | 1 | 1 | 0 | — | — |  |
+| 1921 | `0x102525e0` | — | 1 | 0 | 1 | — | — |  |
+| 1922 | `0x10256200` | — | 1 | 0 | 1 | — | — |  |
+| 1923 | `0x10256280` | — | 2 | 0 | 0 | — | — |  |
+| 1924 | `0x102577e0` | — | 2 | 0 | 0 | — | — |  |
+| 1925 | `0x10258270` | — | 2 | 0 | 0 | — | — |  |
+| 1926 | `0x102585c0` | — | 2 | 0 | 0 | — | — |  |
+| 1927 | `0x1025efc0` | — | 1 | 0 | 1 | — | — |  |
+| 1928 | `0x10260750` | — | 1 | 1 | 0 | — | — |  |
+| 1929 | `0x10260820` | — | 1 | 0 | 1 | — | — |  |
+| 1930 | `0x10260da0` | `CAI_BaseHumanoid#512`, `CAI_ExpressiveNPC#512` | 1 | 0 | 1 | — | — |  |
+| 1931 | `0x102652f0` | — | 1 | 0 | 1 | — | — |  |
+| 1932 | `0x10265970` | — | 1 | 0 | 1 | — | — |  |
+| 1933 | `0x10266630` | `CAI_BaseHumanoid#576`, `CAI_BaseNPC#576`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#576 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1934 | `0x10266660` | `CAI_BaseHumanoid#577`, `CAI_BaseNPC#577`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#577 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1935 | `0x10268170` | — | 1 | 0 | 1 | — | — |  |
+| 1936 | `0x1026a8a0` | `CAI_BaseHumanoid#471`, `CAI_BaseNPC#471`, +73 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#471 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 1937 | `0x1026d920` | `CAI_BaseHumanoid#554`, `CAI_BaseNPC#554`, +72 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#554 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1938 | `0x1026fb40` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:516, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:520 |  |
+| 1939 | `0x1026fbe0` | `CAI_BaseHumanoid#562`, `CAI_BaseNPC#562`, +75 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#562 no SDK twin: stretch #560-#566 holds 5 retai…` |
+| 1940 | `0x10270290` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:488, Source/ElysiumUE/Private/Visual/ElysiumNpcBody.h:175, Source/ElysiumUE/Public/ElysiumLocomotionSample.h:102 |  |
+| 1941 | `0x102718e0` | — | 2 | 0 | 0 | — | — |  |
+| 1942 | `0x10274b30` | `CAI_BaseHumanoid#515`, `CAI_BaseNPC#515`, +75 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#515 no SDK twin: stretch #513-#516 holds 2 retai…` |
+| 1943 | `0x102781a0` | — | 1 | 0 | 1 | — | — |  |
+| 1944 | `0x10278900` | `CAI_BaseHumanoid#574`, `CAI_BaseNPC#574`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#574 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1945 | `0x10279090` | `CAI_BaseHumanoid#559`, `CAI_BaseNPC#559`, +75 more | 1 | 0 | 1 | `Player`, `!target1`, +8 more | — | `CAI_BaseNPC#559 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1946 | `0x1027be60` | — | 1 | 0 | 1 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Scripted Sequence stripped on level tran…` | — |  |
+| 1947 | `0x1027cc10` | `CAI_BaseHumanoid#425`, `CAI_BaseNPC#425`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#425 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 1948 | `0x1027cd50` | — | 1 | 1 | 0 | — | — |  |
+| 1949 | `0x1027cda0` | — | 1 | 1 | 0 | — | — |  |
+| 1950 | `0x1027cec0` | `CAI_BaseNPC#427`, `CAI_BaseNPCTroika#427`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#427 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 1951 | `0x1027cef0` | `CAI_BaseHumanoid#426`, `CAI_BaseNPC#426`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#426 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 1952 | `0x1027cf60` | `CAI_BaseHumanoid#428`, `CAI_BaseNPC#428`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#428 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 1953 | `0x1027cf90` | `CAI_BaseNPC#429`, `CAI_BaseNPCTroika#429`, +74 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#429 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 1954 | `0x1027cfc0` | `CAI_BaseHumanoid#430`, `CAI_BaseNPC#430`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#430 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 1955 | `0x1027ee20` | — | 2 | 0 | 0 | — | — |  |
+| 1956 | `0x1027fa50` | — | 1 | 0 | 1 | — | — |  |
+| 1957 | `0x1027fba0` | — | 1 | 0 | 1 | — | — |  |
+| 1958 | `0x1027fc10` | — | 1 | 1 | 0 | — | — |  |
+| 1959 | `0x10280790` | — | 2 | 0 | 0 | — | — |  |
+| 1960 | `0x10280a20` | — | 1 | 0 | 1 | — | — |  |
+| 1961 | `0x10280fd0` | `CAI_BaseHumanoid#411`, `CAI_BaseNPC#411`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#411 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 1962 | `0x10288590` | — | 2 | 0 | 0 | — | — |  |
+| 1963 | `0x10288610` | — | 1 | 0 | 1 | — | — |  |
+| 1964 | `0x102886f0` | — | 1 | 1 | 0 | — | — |  |
+| 1965 | `0x10289ce0` | `CAI_BaseHumanoid#571`, `CAI_BaseNPC#571`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#571 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1966 | `0x10289fe0` | — | 1 | 0 | 1 | — | — |  |
+| 1967 | `0x1028ac10` | — | 2 | 0 | 0 | — | — |  |
+| 1968 | `0x1028ac80` | — | 2 | 0 | 0 | — | — |  |
+| 1969 | `0x1028b160` | — | 1 | 0 | 1 | — | — |  |
+| 1970 | `0x1028b190` | — | 1 | 0 | 1 | — | — |  |
+| 1971 | `0x1028b420` | — | 1 | 0 | 1 | — | — |  |
+| 1972 | `0x1028dfb0` | `CAI_BaseNPCTroika#19`, `CGeneric_NPC#19`, +62 more | 2 | 0 | 0 | — | — |  |
+| 1973 | `0x1028e700` | — | 1 | 0 | 1 | — | — |  |
+| 1974 | `0x1028e870` | — | 1 | 0 | 1 | — | — |  |
+| 1975 | `0x1028e980` | — | 1 | 0 | 1 | — | — |  |
+| 1976 | `0x1028fa50` | — | 1 | 0 | 1 | — | — |  |
+| 1977 | `0x10293dc0` | — | 1 | 1 | 0 | — | — |  |
+| 1978 | `0x10293df0` | — | 1 | 1 | 0 | — | — |  |
+| 1979 | `0x10293e20` | — | 2 | 0 | 0 | — | — |  |
+| 1980 | `0x10293ec0` | `CAI_BaseNPCTroika#488`, `CNPCMaker#488`, +53 more | 2 | 0 | 0 | `Death` | — |  |
+| 1981 | `0x10293f80` | `CAI_BaseNPCTroika#489`, `CNPCMaker#489`, +53 more | 2 | 0 | 0 | `Target_Suspect` | — |  |
+| 1982 | `0x10294340` | `CAI_BaseNPCTroika#491`, `CNPCMaker#491`, +52 more | 2 | 0 | 0 | — | — |  |
+| 1983 | `0x10294660` | `CAI_BaseNPCTroika#495`, `CNPCMaker#495`, +53 more | 2 | 0 | 0 | `Surprised` | — |  |
+| 1984 | `0x10294870` | `CAI_BaseNPCTroika#498`, `CGeneric_NPC#498`, +60 more | 2 | 0 | 0 | — | — |  |
+| 1985 | `0x10295a80` | — | 1 | 0 | 1 | — | — |  |
+| 1986 | `0x10296820` | — | 1 | 1 | 0 | — | — |  |
+| 1987 | `0x10297430` | — | 1 | 0 | 1 | — | — |  |
+| 1988 | `0x102974f0` | — | 1 | 0 | 1 | — | — |  |
+| 1989 | `0x10298840` | — | 2 | 0 | 0 | — | — |  |
+| 1990 | `0x1029bd40` | — | 1 | 0 | 1 | — | — |  |
+| 1991 | `0x1029c9f0` | — | 2 | 0 | 0 | — | — |  |
+| 1992 | `0x1029ca30` | — | 2 | 0 | 0 | — | — |  |
+| 1993 | `0x1029f340` | — | 2 | 0 | 0 | — | — |  |
+| 1994 | `0x1029f370` | — | 1 | 0 | 1 | `ERROR: %s - Could not convert schedule '…`, `ERROR: %s - Could not find schedule '%s'…`, +2 more | — |  |
+| 1995 | `0x1029f610` | — | 1 | 0 | 1 | — | — |  |
+| 1996 | `0x1029f800` | `CAI_BaseNPCTroika#21`, `CGeneric_NPC#21`, +61 more | 0 | 1 | 1 | — | — |  |
+| 1997 | `0x1029f8f0` | `CAI_BaseNPCTroika#27`, `CGeneric_NPC#27`, +61 more | 1 | 0 | 1 | — | — |  |
+| 1998 | `0x102a0490` | — | 1 | 0 | 1 | — | — |  |
+| 1999 | `0x102a0bc0` | — | 1 | 0 | 1 | — | — |  |
+| 2000 | `0x102a1420` | — | 1 | 0 | 1 | — | — |  |
+| 2001 | `0x102a15c0` | — | 2 | 0 | 0 | — | — |  |
+| 2002 | `0x102a1620` | — | 2 | 0 | 0 | — | — |  |
+| 2003 | `0x102a18a0` | — | 1 | 1 | 0 | — | — |  |
+| 2004 | `0x102a9640` | — | 1 | 0 | 1 | — | — |  |
+| 2005 | `0x102a9690` | — | 1 | 1 | 0 | — | — |  |
+| 2006 | `0x102a96f0` | — | 1 | 0 | 1 | — | — |  |
+| 2007 | `0x102a9710` | — | 1 | 0 | 1 | — | — |  |
+| 2008 | `0x102a9730` | — | 1 | 0 | 1 | — | — |  |
+| 2009 | `0x102a9750` | — | 1 | 1 | 0 | — | — |  |
+| 2010 | `0x102a9770` | — | 1 | 0 | 1 | — | — |  |
+| 2011 | `0x102a9860` | — | 1 | 0 | 1 | — | — |  |
+| 2012 | `0x102a98c0` | — | 1 | 0 | 1 | — | — |  |
+| 2013 | `0x102a9940` | — | 1 | 1 | 0 | — | — |  |
+| 2014 | `0x102a9960` | — | 1 | 0 | 1 | — | — |  |
+| 2015 | `0x102a99a0` | — | 1 | 1 | 0 | — | — |  |
+| 2016 | `0x102a99c0` | — | 1 | 1 | 0 | — | — |  |
+| 2017 | `0x102a9c40` | — | 1 | 0 | 1 | — | — |  |
+| 2018 | `0x102a9c60` | — | 1 | 0 | 1 | — | — |  |
+| 2019 | `0x102a9e60` | — | 1 | 0 | 1 | — | — |  |
+| 2020 | `0x102a9e80` | — | 1 | 0 | 1 | — | — |  |
+| 2021 | `0x102a9ee0` | — | 1 | 0 | 1 | — | — |  |
+| 2022 | `0x102a9f20` | — | 1 | 0 | 1 | — | — |  |
+| 2023 | `0x102aaa60` | — | 1 | 0 | 1 | — | — |  |
+| 2024 | `0x102ad0c0` | `CAI_BaseNPCTroika#615`, `CGeneric_NPC#615`, +56 more | 1 | 0 | 1 | — | — |  |
+| 2025 | `0x102b50b0` | `CAI_BaseNPCTroika#54`, `CGeneric_NPC#54`, +62 more | 0 | 0 | 2 | — | — |  |
+| 2026 | `0x102b51e0` | `CAI_BaseNPCTroika#59`, `CGeneric_NPC#59`, +62 more | 0 | 2 | 0 | — | — |  |
+| 2027 | `0x102b5220` | `CAI_BaseNPCTroika#60`, `CGeneric_NPC#60`, +62 more | 0 | 2 | 0 | — | — |  |
+| 2028 | `0x102b5260` | `CAI_BaseNPCTroika#61`, `CGeneric_NPC#61`, +62 more | 0 | 2 | 0 | — | — |  |
+| 2029 | `0x102b59e0` | `CAI_BaseNPCTroika#603`, `CGeneric_NPC#603`, +61 more | 2 | 0 | 0 | — | — |  |
+| 2030 | `0x102bf310` | — | 1 | 0 | 1 | `move_yaw` | — |  |
+| 2031 | `0x102bf510` | `CAI_BaseNPCTroika#466`, `CGeneric_NPC#466`, +62 more | 1 | 0 | 1 | — | — |  |
+| 2032 | `0x102bfe10` | — | 1 | 0 | 1 | `%s got below the ground by %f units.⏎`, `I'm floating....  Me llamo %s⏎` | — |  |
+| 2033 | `0x102c0470` | — | 1 | 1 | 0 | — | — |  |
+| 2034 | `0x102c4430` | — | 1 | 1 | 0 | — | — |  |
+| 2035 | `0x102c4470` | — | 1 | 1 | 0 | `!player` | — |  |
+| 2036 | `0x102c4c50` | — | 1 | 0 | 1 | — | — |  |
+| 2037 | `0x102c4e30` | — | 1 | 0 | 1 | — | — |  |
+| 2038 | `0x102c6bd0` | — | 1 | 1 | 0 | — | — |  |
+| 2039 | `0x102c6cf0` | — | 1 | 0 | 1 | — | — |  |
+| 2040 | `0x102c6db0` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#10` | 1 | 0 | 1 | — | — |  |
+| 2041 | `0x102c6eb0` | `CAI_StandoffBehavior#18`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#18` | 0 | 0 | 2 | `ERROR: %s missing schedule!⏎` | — |  |
+| 2042 | `0x102c6f70` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#22` | 1 | 0 | 1 | — | — |  |
+| 2043 | `0x102c6ff0` | — | 1 | 0 | 1 | — | — |  |
+| 2044 | `0x102c7390` | — | 1 | 1 | 0 | — | — |  |
+| 2045 | `0x102c7530` | `CAI_StandoffBehavior#5` | 0 | 0 | 2 | — | — |  |
+| 2046 | `0x102c87a0` | `CAI_StandoffGoal#241` | 0 | 1 | 1 | `Invalid aggressiveness value %d⏎` | — |  |
+| 2047 | `0x102c9d70` | — | 1 | 1 | 0 | — | — |  |
+| 2048 | `0x102ca6c0` | — | 1 | 0 | 1 | — | — |  |
+| 2049 | `0x102cabd0` | — | 1 | 0 | 1 | — | — |  |
+| 2050 | `0x102cc560` | — | 1 | 1 | 0 | — | — |  |
+| 2051 | `0x102cc5d0` | — | 1 | 1 | 0 | — | — |  |
+| 2052 | `0x102cc7e0` | — | 1 | 1 | 0 | — | — |  |
+| 2053 | `0x102d0910` | — | 1 | 0 | 1 | — | — |  |
+| 2054 | `0x102d09b0` | — | 2 | 0 | 0 | — | — |  |
+| 2055 | `0x102d0b20` | — | 1 | 1 | 0 | — | — |  |
+| 2056 | `0x102d11f0` | — | 2 | 0 | 0 | — | — |  |
+| 2057 | `0x102d1760` | — | 2 | 0 | 0 | — | — |  |
+| 2058 | `0x102d2980` | — | 2 | 0 | 0 | — | — |  |
+| 2059 | `0x102d40e0` | — | 1 | 0 | 1 | — | — |  |
+| 2060 | `0x102d42d0` | — | 1 | 0 | 1 | — | — |  |
+| 2061 | `0x102d4350` | — | 2 | 0 | 0 | — | — |  |
+| 2062 | `0x102d6180` | — | 2 | 0 | 0 | — | — |  |
+| 2063 | `0x102d6210` | — | 2 | 0 | 0 | — | — |  |
+| 2064 | `0x102d9150` | — | 1 | 1 | 0 | — | — |  |
+| 2065 | `0x102d9dd0` | `CAI_InterestingPlace#130` | 0 | 1 | 1 | `Could not find InterestingPlaceType for …` | — |  |
+| 2066 | `0x102d9eb0` | — | 2 | 0 | 0 | — | — |  |
+| 2067 | `0x102dae70` | — | 1 | 0 | 1 | — | — |  |
+| 2068 | `0x102daef0` | — | 1 | 0 | 1 | — | — |  |
+| 2069 | `0x102daf20` | — | 1 | 0 | 1 | — | — |  |
+| 2070 | `0x102daf50` | — | 1 | 0 | 1 | — | — |  |
+| 2071 | `0x102db740` | — | 1 | 1 | 0 | — | — |  |
+| 2072 | `0x102db760` | — | 1 | 0 | 1 | — | — |  |
+| 2073 | `0x102dbde0` | `CAI_InterestingPlaceConverstation#113` | 0 | 1 | 1 | `%s(%s) is not a valid target for %s. Mus…` | — |  |
+| 2074 | `0x102dc3e0` | — | 1 | 1 | 0 | — | — |  |
+| 2075 | `0x102dce10` | — | 1 | 1 | 0 | — | — |  |
+| 2076 | `0x102dce30` | — | 1 | 0 | 1 | — | — |  |
+| 2077 | `0x102dd610` | — | 1 | 0 | 1 | — | — |  |
+| 2078 | `0x102dd9c0` | — | 2 | 0 | 0 | — | — |  |
+| 2079 | `0x102e0b60` | — | 1 | 0 | 1 | — | — |  |
+| 2080 | `0x102e11f0` | `CAI_HumanoidMotor#7`, `CAI_Motor#7` | 0 | 1 | 1 | — | — |  |
+| 2081 | `0x102e12e0` | — | 1 | 0 | 1 | — | — |  |
+| 2082 | `0x102e1440` | `CAI_Motor#10` | 0 | 0 | 2 | — | — |  |
+| 2083 | `0x102e2580` | `CAI_HumanoidMotor#17`, `CAI_Motor#17` | 0 | 0 | 2 | — | — |  |
+| 2084 | `0x102e2610` | — | 1 | 0 | 1 | — | — |  |
+| 2085 | `0x102e26b0` | — | 1 | 0 | 1 | — | — |  |
+| 2086 | `0x102e26f0` | — | 1 | 0 | 1 | — | — |  |
+| 2087 | `0x102e2790` | — | 1 | 0 | 1 | — | — |  |
+| 2088 | `0x102e27d0` | — | 1 | 0 | 1 | — | — |  |
+| 2089 | `0x102e2820` | — | 1 | 0 | 1 | — | — |  |
+| 2090 | `0x102e2b10` | — | 1 | 0 | 1 | — | — |  |
+| 2091 | `0x102e37b0` | — | 1 | 0 | 1 | — | — |  |
+| 2092 | `0x102e4160` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Motor_CheckStep_Stand`, +5 more | — |  |
+| 2093 | `0x102e4f20` | — | 1 | 1 | 0 | — | — |  |
+| 2094 | `0x102e5d00` | — | 2 | 0 | 0 | — | — |  |
+| 2095 | `0x102e6090` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | — |  |
+| 2096 | `0x102e6290` | — | 1 | 0 | 1 | `Unaccounted`, `CBaseEntity::Instance`, +1 more | — |  |
+| 2097 | `0x102e6be0` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | — |  |
+| 2098 | `0x102e7ba0` | — | 2 | 0 | 0 | `Unaccounted`, `CAI_MoveProbe_IterativeFloorPoint` | — |  |
+| 2099 | `0x102e7e60` | — | 1 | 0 | 1 | — | — |  |
+| 2100 | `0x102e8aa0` | — | 1 | 0 | 1 | — | — |  |
+| 2101 | `0x102eccc0` | — | 1 | 0 | 1 | — | — |  |
+| 2102 | `0x102ecd00` | — | 1 | 0 | 1 | — | — |  |
+| 2103 | `0x102edaa0` | — | 2 | 0 | 0 | — | — |  |
+| 2104 | `0x102ee510` | — | 1 | 0 | 1 | — | — |  |
+| 2105 | `0x102ee550` | — | 1 | 0 | 1 | — | — |  |
+| 2106 | `0x102ee640` | — | 1 | 0 | 1 | — | — |  |
+| 2107 | `0x102f05b0` | — | 1 | 0 | 1 | — | — |  |
+| 2108 | `0x102f09a0` | — | 1 | 0 | 1 | — | — |  |
+| 2109 | `0x102f2330` | — | 2 | 0 | 0 | `Unaccounted`, `CAI_Navigator_DoFindPath` | — |  |
+| 2110 | `0x102f39a0` | — | 2 | 0 | 0 | — | — |  |
+| 2111 | `0x102f46d0` | — | 1 | 0 | 1 | — | — |  |
+| 2112 | `0x102f47b0` | — | 1 | 0 | 1 | — | — |  |
+| 2113 | `0x102f48b0` | — | 1 | 0 | 1 | `IsConnected called with invalid node IDs…` | — |  |
+| 2114 | `0x102f9970` | — | 2 | 0 | 0 | — | — |  |
+| 2115 | `0x102fdcc0` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_HasPathOuter` | — |  |
+| 2116 | `0x102ff3e0` | — | 1 | 0 | 1 | — | — |  |
+| 2117 | `0x10300700` | — | 2 | 0 | 0 | — | — |  |
+| 2118 | `0x103021b0` | — | 2 | 0 | 0 | — | — |  |
+| 2119 | `0x10302e50` | — | 1 | 0 | 1 | `FindShootNode() - %s has no nearest node…` | — |  |
+| 2120 | `0x10303fd0` | — | 1 | 0 | 1 | — | — |  |
+| 2121 | `0x103048d0` | — | 1 | 0 | 1 | — | — |  |
+| 2122 | `0x10304a40` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_CheckStaleRoute` | — |  |
+| 2123 | `0x103055b0` | — | 1 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildExtrapolationNodeRou…` | — |  |
+| 2124 | `0x103061e0` | — | 1 | 0 | 1 | — | — |  |
+| 2125 | `0x103078d0` | — | 2 | 0 | 0 | — | — |  |
+| 2126 | `0x10307c20` | — | 2 | 0 | 0 | — | — |  |
+| 2127 | `0x1030b520` | — | 1 | 0 | 1 | — | — |  |
+| 2128 | `0x1030b5b0` | — | 1 | 0 | 1 | — | — |  |
+| 2129 | `0x1030b880` | — | 1 | 0 | 1 | — | — |  |
+| 2130 | `0x1030ba30` | — | 2 | 0 | 0 | — | — |  |
+| 2131 | `0x1030bc40` | — | 1 | 0 | 1 | — | — |  |
+| 2132 | `0x1030be80` | — | 1 | 1 | 0 | — | — |  |
+| 2133 | `0x1030bea0` | — | 1 | 1 | 0 | — | — |  |
+| 2134 | `0x1030bf50` | — | 1 | 0 | 1 | — | — |  |
+| 2135 | `0x1030f350` | — | 1 | 0 | 1 | — | — |  |
+| 2136 | `0x1030fa00` | — | 1 | 0 | 1 | — | — |  |
+| 2137 | `0x1030faa0` | — | 1 | 0 | 1 | — | — |  |
+| 2138 | `0x1030fb10` | — | 2 | 0 | 0 | — | — |  |
+| 2139 | `0x1030fb90` | — | 1 | 0 | 1 | — | — |  |
+| 2140 | `0x1030fc50` | — | 1 | 0 | 1 | — | — |  |
+| 2141 | `0x1030fd20` | — | 2 | 0 | 0 | — | — |  |
+| 2142 | `0x10310bc0` | — | 1 | 1 | 0 | `Could not find NPCMaker( %s )⏎` | — |  |
+| 2143 | `0x10311c10` | — | 1 | 0 | 1 | `scene:` | — |  |
+| 2144 | `0x10311ee0` | — | 1 | 0 | 1 | — | — |  |
+| 2145 | `0x10312340` | — | 1 | 0 | 1 | — | — |  |
+| 2146 | `0x10312c80` | — | 2 | 0 | 0 | — | — |  |
+| 2147 | `0x10312ef0` | `CAI_BaseHumanoid#484`, `CAI_ExpressiveNPC#484` | 1 | 0 | 1 | — | — |  |
+| 2148 | `0x10313430` | — | 1 | 0 | 1 | — | — |  |
+| 2149 | `0x10314000` | — | 1 | 0 | 1 | — | — |  |
+| 2150 | `0x10315790` | — | 2 | 0 | 0 | — | — |  |
+| 2151 | `0x10316fa0` | — | 2 | 0 | 0 | — | — |  |
+| 2152 | `0x10319fe0` | — | 2 | 0 | 0 | — | — |  |
+| 2153 | `0x10326a20` | `CAI_BaseHumanoid#362`, `CAI_BaseNPC#362`, +69 more | 0 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | — | `CAI_BaseNPC#362 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2154 | `0x1032b960` | — | 2 | 0 | 0 | — | — |  |
+| 2155 | `0x10330020` | `CAI_BaseHumanoid#334`, `CAI_BaseNPC#334`, +81 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#334 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2156 | `0x1033f6d0` | — | 2 | 0 | 0 | — | — |  |
+| 2157 | `0x103454c0` | — | 1 | 0 | 1 | — | — |  |
+| 2158 | `0x10348ba0` | `CAI_BaseHumanoid#296`, `CAI_BaseNPC#296`, +83 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#296 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2159 | `0x10349e10` | — | 1 | 0 | 1 | — | — |  |
+| 2160 | `0x1034a100` | — | 1 | 0 | 1 | — | — |  |
+| 2161 | `0x1034a310` | — | 1 | 0 | 1 | — | — |  |
+| 2162 | `0x1034d5b0` | — | 1 | 0 | 1 | — | — |  |
+| 2163 | `0x1034e3b0` | `CScriptedTarget#5` | 0 | 0 | 2 | — | — |  |
+| 2164 | `0x10357800` | `CNPC_Crow#511` | 2 | 0 | 0 | `NPC_Crow.Flap` | — |  |
+| 2165 | `0x103581b0` | — | 1 | 0 | 1 | — | — |  |
+| 2166 | `0x10358c40` | `CNPC_Crow#394` | 2 | 0 | 0 | `NPC_Crow.Gib` | — |  |
+| 2167 | `0x10358f30` | `CNPC_Crow#491` | 2 | 0 | 0 | `NPC_Crow.Pain` | — |  |
+| 2168 | `0x10358f50` | `CNPC_Crow#488` | 2 | 0 | 0 | `NPC_Crow.Die` | — |  |
+| 2169 | `0x1035a220` | `CGeneric_NPC#495` | 1 | 0 | 1 | — | — |  |
+| 2170 | `0x1035b000` | `CGeneric_NPC_bathack#489` | 2 | 0 | 0 | — | — |  |
+| 2171 | `0x1035b020` | `CGeneric_NPC_bathack#488` | 2 | 0 | 0 | — | — |  |
+| 2172 | `0x1035b040` | `CGeneric_NPC_bathack#491` | 2 | 0 | 0 | — | — |  |
+| 2173 | `0x1035b890` | `CGenericSabbat_NPC#495` | 1 | 0 | 1 | — | — |  |
+| 2174 | `0x1035e920` | — | 1 | 0 | 1 | — | — |  |
+| 2175 | `0x1035e950` | — | 1 | 1 | 0 | — | — |  |
+| 2176 | `0x10363b40` | `CNPC_VBach#461` | 1 | 1 | 0 | — | — |  |
+| 2177 | `0x103674a0` | `CNPC_VBatSwarm#461` | 1 | 1 | 0 | — | — |  |
+| 2178 | `0x103680b0` | `CNPC_VCamera#488`, `CNPC_VCameraSecurity#488` | 2 | 0 | 0 | — | — |  |
+| 2179 | `0x103680d0` | `CNPC_VCamera#489`, `CNPC_VCameraSecurity#489` | 2 | 0 | 0 | — | — |  |
+| 2180 | `0x10368110` | `CNPC_VCamera#491`, `CNPC_VCameraSecurity#491` | 2 | 0 | 0 | — | — |  |
+| 2181 | `0x10368310` | `CNPC_VCamera#507`, `CNPC_VCameraSecurity#507` | 2 | 0 | 0 | — | — |  |
+| 2182 | `0x10368370` | `CNPC_VCamera#510`, `CNPC_VCameraSecurity#510` | 2 | 0 | 0 | — | — |  |
+| 2183 | `0x10370320` | `CNPC_VCombatman#461` | 1 | 1 | 0 | — | — |  |
+| 2184 | `0x103705e0` | — | 1 | 0 | 1 | — | — |  |
+| 2185 | `0x10371ae0` | `CNPC_VCop#472` | 0 | 0 | 2 | — | — |  |
+| 2186 | `0x10378b60` | `CNPC_VGargoyle#461` | 1 | 1 | 0 | — | — |  |
+| 2187 | `0x10378c10` | `CNPC_VGargoyle#390` | 0 | 1 | 1 | — | — |  |
+| 2188 | `0x10378ec0` | — | 1 | 0 | 1 | `pillar` | — |  |
+| 2189 | `0x10379040` | — | 1 | 0 | 1 | — | — |  |
+| 2190 | `0x10379b40` | — | 1 | 0 | 1 | `prop_dynamic` | — |  |
+| 2191 | `0x1037aff0` | `CNPC_VGhoulCroucher#5` | 0 | 0 | 2 | — | — |  |
+| 2192 | `0x1037b870` | — | 1 | 0 | 1 | — | — |  |
+| 2193 | `0x1037b890` | — | 1 | 0 | 1 | — | — |  |
+| 2194 | `0x10380100` | `CNPC_VHengeyokai#461` | 1 | 1 | 0 | — | — |  |
+| 2195 | `0x10381460` | — | 1 | 0 | 1 | — | — |  |
+| 2196 | `0x10381ca0` | — | 1 | 0 | 1 | — | — |  |
+| 2197 | `0x10381cd0` | — | 1 | 0 | 1 | — | — |  |
+| 2198 | `0x103828a0` | — | 2 | 0 | 0 | — | — |  |
+| 2199 | `0x10382d20` | — | 1 | 0 | 1 | — | — |  |
+| 2200 | `0x10383130` | — | 2 | 0 | 0 | `Hengeyokai_freeze_emitter` | — |  |
+| 2201 | `0x103887d0` | `CNPC_VHunter#472` | 0 | 0 | 2 | — | — |  |
+| 2202 | `0x10388ab0` | `CNPC_VHunter#461` | 1 | 1 | 0 | — | — |  |
+| 2203 | `0x103893c0` | `CNPC_VLasombra#592` | 1 | 0 | 1 | — | — |  |
+| 2204 | `0x1038e670` | — | 1 | 1 | 0 | — | — |  |
+| 2205 | `0x1038e6a0` | — | 1 | 1 | 0 | — | — |  |
+| 2206 | `0x1038e6e0` | — | 1 | 1 | 0 | — | — |  |
+| 2207 | `0x1038f290` | — | 1 | 0 | 1 | — | — |  |
+| 2208 | `0x1038f640` | — | 1 | 0 | 1 | — | — |  |
+| 2209 | `0x1038f660` | — | 2 | 0 | 0 | — | — |  |
+| 2210 | `0x1038fc80` | — | 1 | 0 | 1 | `ManBat_Minion` | — |  |
+| 2211 | `0x10390040` | — | 1 | 1 | 0 | — | — |  |
+| 2212 | `0x103908c0` | — | 2 | 0 | 0 | — | — |  |
+| 2213 | `0x103952b0` | — | 1 | 0 | 1 | — | — |  |
+| 2214 | `0x10395650` | — | 1 | 0 | 1 | — | — |  |
+| 2215 | `0x10397930` | — | 2 | 0 | 0 | — | — |  |
+| 2216 | `0x10397c70` | — | 1 | 0 | 1 | — | — |  |
+| 2217 | `0x10397e00` | — | 1 | 0 | 1 | — | — |  |
+| 2218 | `0x10397e90` | — | 1 | 0 | 1 | — | — |  |
+| 2219 | `0x10397f00` | — | 1 | 0 | 1 | — | — |  |
+| 2220 | `0x10398630` | — | 2 | 0 | 0 | — | — |  |
+| 2221 | `0x10398680` | — | 2 | 0 | 0 | `Bip01 R Forearm` | — |  |
+| 2222 | `0x10398db0` | — | 2 | 0 | 0 | `phys_animlink`, `Bone01`, +2 more | — |  |
+| 2223 | `0x1039aaf0` | — | 1 | 1 | 0 | — | — |  |
+| 2224 | `0x1039ab30` | — | 1 | 0 | 1 | — | — |  |
+| 2225 | `0x1039aca0` | — | 1 | 0 | 1 | — | — |  |
+| 2226 | `0x1039ee20` | — | 2 | 0 | 0 | — | — |  |
+| 2227 | `0x1039f030` | — | 1 | 0 | 1 | — | — |  |
+| 2228 | `0x1039f1a0` | — | 1 | 0 | 1 | — | — |  |
+| 2229 | `0x1039fe10` | `CNPC_VMoleman#461` | 1 | 1 | 0 | — | — |  |
+| 2230 | `0x1039fff0` | `CNPC_VNewscaster#488` | 2 | 0 | 0 | — | — |  |
+| 2231 | `0x103a0010` | `CNPC_VNewscaster#489` | 2 | 0 | 0 | — | — |  |
+| 2232 | `0x103a0050` | `CNPC_VNewscaster#491` | 2 | 0 | 0 | — | — |  |
+| 2233 | `0x103a0eb0` | — | 1 | 0 | 1 | — | — |  |
+| 2234 | `0x103a4730` | `CNPC_VFrenzyShadow#488`, `CNPC_VPlayerController#488`, +1 more | 2 | 0 | 0 | — | — |  |
+| 2235 | `0x103a4750` | `CNPC_VFrenzyShadow#489`, `CNPC_VPlayerController#489`, +1 more | 2 | 0 | 0 | — | — |  |
+| 2236 | `0x103a4790` | `CNPC_VFrenzyShadow#491`, `CNPC_VPlayerController#491`, +1 more | 2 | 0 | 0 | — | — |  |
+| 2237 | `0x103a6e80` | `CNPC_VSabbatLeader#127` | 0 | 2 | 0 | `npc_VSabbatLeader`, `Andrei_powerup_emitter`, +1 more | — |  |
+| 2238 | `0x103ad540` | — | 1 | 1 | 0 | — | — |  |
+| 2239 | `0x103ae4f0` | `CNPC_VSheriffMan#5` | 0 | 0 | 2 | — | — |  |
+| 2240 | `0x103b2450` | `CNPC_VSheriffSwarm#461` | 1 | 1 | 0 | — | — |  |
+| 2241 | `0x103b4a60` | `CNPC_VTest#493` | 1 | 0 | 1 | — | — |  |
+| 2242 | `0x103b4bd0` | `CNPC_VTest#494` | 1 | 0 | 1 | — | — |  |
+| 2243 | `0x103b4d40` | `CNPC_VTest#495` | 1 | 0 | 1 | — | — |  |
+| 2244 | `0x103b9360` | `CNPC_VTzimisce#489` | 2 | 0 | 0 | — | — |  |
+| 2245 | `0x103bdfc0` | — | 1 | 0 | 1 | — | — |  |
+| 2246 | `0x103be180` | — | 1 | 0 | 1 | — | — |  |
+| 2247 | `0x103bf560` | — | 1 | 0 | 1 | — | — |  |
+| 2248 | `0x103bfa50` | — | 1 | 1 | 0 | — | — |  |
+| 2249 | `0x103c05e0` | — | 1 | 0 | 1 | — | — |  |
+| 2250 | `0x103ceb60` | — | 2 | 0 | 0 | `%s (%s)`, `HINT_UNKNOWN`, +19 more | — |  |
+| 2251 | `0x103d3a40` | — | 1 | 0 | 1 | — | — |  |
+| 2252 | `0x103d8c10` | — | 1 | 0 | 1 | — | — |  |
+| 2253 | `0x103dd780` | `CNPC_VYukie#461` | 1 | 1 | 0 | — | — |  |
+| 2254 | `0x103e0980` | — | 1 | 1 | 0 | — | — |  |
+| 2255 | `0x103eec60` | — | 1 | 1 | 0 | — | — |  |
+| 2256 | `0x104081e0` | — | 1 | 0 | 1 | — | — |  |
+| 2257 | `0x10408480` | — | 1 | 0 | 1 | — | — |  |
+| 2258 | `0x10427620` | — | 2 | 0 | 0 | — | — |  |
+| 2259 | `0x104276a0` | — | 2 | 0 | 0 | — | — |  |
+| 2260 | `0x10427dc0` | — | 2 | 0 | 0 | — | — |  |
+| 2261 | `0x1042fb50` | — | 2 | 0 | 0 | — | — |  |
+| 2262 | `0x1042fd40` | — | 2 | 0 | 0 | — | — |  |
+| 2263 | `0x10431f30` | — | 2 | 0 | 0 | — | — |  |
+| 2264 | `0x10432028` | — | 2 | 0 | 0 | — | — |  |
+| 2265 | `0x10436d85` | — | 2 | 0 | 0 | — | — |  |
+| 2266 | `0x10436d9c` | — | 2 | 0 | 0 | — | — |  |
+| 2267 | `0x10436df8` | — | 2 | 0 | 0 | — | — |  |
+| 2268 | `0x104381fb` | — | 2 | 0 | 0 | — | — |  |
+| 2269 | `0x104382ad` | — | 2 | 0 | 0 | — | — |  |
+| 2270 | `0x104383ea` | — | 2 | 0 | 0 | — | — |  |
+| 2271 | `0x1043869d` | — | 2 | 0 | 0 | — | — |  |
+| 2272 | `0x104388b4` | — | 2 | 0 | 0 | — | — |  |
+| 2273 | `0x10438a53` | — | 2 | 0 | 0 | — | — |  |
+| 2274 | `0x1043c2f6` | — | 2 | 0 | 0 | — | — |  |
+| 2275 | `0x1043cda5` | — | 2 | 0 | 0 | — | — |  |
+| 2276 | `0x1043ce24` | — | 2 | 0 | 0 | — | — |  |
+| 2277 | `0x100078c4` | — | 1 | 0 | 0 | — | — |  |
+| 2278 | `0x10026b50` | `CAISound#88`, `CAI_BaseHumanoid#88`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#88 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2279 | `0x10026b70` | `CAISound#89`, `CAI_BaseHumanoid#89`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#89 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2280 | `0x10026c50` | `CAISound#133`, `CAI_ChangeHintGroup#133`, +158 more | 0 | 0 | 1 | — | — |  |
+| 2281 | `0x10026d90` | `CAISound#145`, `CAI_ChangeHintGroup#145`, +410 more | 1 | 0 | 0 | — | — |  |
+| 2282 | `0x10026f20` | `CAISound#159`, `CAI_BaseHumanoid#159`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#159 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 2283 | `0x10026f80` | `CAISound#166`, `CAI_BaseHumanoid#166`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#166 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 2284 | `0x10026fb0` | `CAISound#165`, `CAI_BaseHumanoid#165`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#165 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 2285 | `0x10027040` | `CAISound#169`, `CAI_BaseHumanoid#169`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#169 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 2286 | `0x10027060` | `CAISound#170`, `CAI_BaseHumanoid#170`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#170 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 2287 | `0x100270c0` | `CAISound#186`, `CAI_BaseHumanoid#186`, +495 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#186 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 2288 | `0x10027140` | `CAISound#191`, `CAI_BaseHumanoid#191`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#191 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 2289 | `0x10027450` | `CAISound#0`, `CAI_BaseHumanoid#0`, +495 more | 0 | 1 | 0 | — | — | `CAI_BaseNPC#0 no SDK twin: no bracketing names; slot identit…` |
+| 2290 | `0x10027490` | `CAISound#116`, `CAI_BaseHumanoid#116`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#116 no SDK twin: stretch #113-#118 holds 4 retai…` |
+| 2291 | `0x1002c900` | — | 1 | 0 | 0 | — | — |  |
+| 2292 | `0x1002ee60` | — | 1 | 0 | 0 | `PhysRemoveShadow` | — |  |
+| 2293 | `0x1003c1e0` | — | 1 | 0 | 0 | — | — |  |
+| 2294 | `0x1004fc50` | `CAI_BaseHumanoid#137`, `CAI_BaseNPC#137`, +298 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#137 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 2295 | `0x10050b90` | — | 1 | 0 | 0 | `CDisciplineParticle::Create` | — |  |
+| 2296 | `0x10050c70` | — | 1 | 0 | 0 | `CDisciplineParticle::Create` | — |  |
+| 2297 | `0x100576a0` | — | 1 | 0 | 0 | — | — |  |
+| 2298 | `0x10074090` | — | 1 | 0 | 0 | — | — |  |
+| 2299 | `0x100745b0` | — | 1 | 0 | 0 | — | — |  |
+| 2300 | `0x100745d0` | — | 1 | 0 | 0 | — | — |  |
+| 2301 | `0x10074610` | — | 1 | 0 | 0 | — | — |  |
+| 2302 | `0x10074a00` | — | 1 | 0 | 0 | — | — |  |
+| 2303 | `0x10077450` | — | 1 | 0 | 0 | — | — |  |
+| 2304 | `0x10077af0` | — | 1 | 0 | 0 | — | — |  |
+| 2305 | `0x10077e80` | — | 1 | 0 | 0 | — | — |  |
+| 2306 | `0x1007a310` | — | 1 | 0 | 0 | — | — |  |
+| 2307 | `0x1007a340` | — | 1 | 0 | 0 | — | — |  |
+| 2308 | `0x1007bef0` | — | 1 | 0 | 0 | — | — |  |
+| 2309 | `0x1009af00` | `CAISound#14`, `CAI_BaseHumanoid#14`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#14 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2310 | `0x1009b2c0` | `CAISound#18`, `CAI_BaseHumanoid#18`, +431 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessage` | — | `CAI_BaseNPC#18 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2311 | `0x1009b380` | `CAISound#17`, `CAI_BaseHumanoid#17`, +431 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessage` | — | `CAI_BaseNPC#17 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2312 | `0x100b4bc0` | `CAISound#194`, `CAI_BaseHumanoid#194`, +493 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#194 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 2313 | `0x100b4be0` | `CAISound#195`, `CAI_BaseHumanoid#195`, +493 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#195 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 2314 | `0x100b4de0` | `CAISound#91`, `CAI_BaseHumanoid#91`, +494 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#91 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2315 | `0x100b4ea0` | `CAISound#154`, `CAI_BaseHumanoid#154`, +492 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#154 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 2316 | `0x100b4ef0` | `CAISound#83`, `CAI_BaseHumanoid#83`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#83 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2317 | `0x100b4f10` | `CAISound#84`, `CAI_BaseHumanoid#84`, +495 more | 0 | 1 | 0 | — | — | `CAI_BaseNPC#84 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2318 | `0x100b6510` | — | 1 | 0 | 0 | — | — |  |
+| 2319 | `0x100b6850` | — | 1 | 0 | 0 | — | — |  |
+| 2320 | `0x100b6cf0` | `CAI_BaseHumanoid#288`, `CAI_BaseNPC#288`, +84 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#288 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 2321 | `0x100b7040` | `CAI_BaseHumanoid#291`, `CAI_BaseNPC#291`, +84 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#291 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 2322 | `0x100c0e50` | — | 1 | 0 | 0 | — | — |  |
+| 2323 | `0x100c1070` | — | 1 | 0 | 0 | — | — |  |
+| 2324 | `0x100c12b0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Editor/ElysiumSkeletalBuild.cpp:1682, Source/ElysiumUE/Private/Visual/ElysiumPostAdditiveNode.cpp:91, Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h:14 |  |
+| 2325 | `0x100c17e0` | — | 1 | 0 | 0 | — | — |  |
+| 2326 | `0x100c1870` | — | 1 | 0 | 0 | — | — |  |
+| 2327 | `0x100c1990` | — | 1 | 0 | 0 | — | — |  |
+| 2328 | `0x100c1e20` | — | 1 | 0 | 0 | — | — |  |
+| 2329 | `0x100c1f40` | — | 1 | 0 | 0 | — | — |  |
+| 2330 | `0x100c2420` | — | 1 | 0 | 0 | — | — |  |
+| 2331 | `0x100c25c0` | — | 1 | 0 | 0 | — | — |  |
+| 2332 | `0x100c2ce0` | — | 1 | 0 | 0 | — | — |  |
+| 2333 | `0x100c2f30` | — | 1 | 0 | 0 | — | — |  |
+| 2334 | `0x100c32e0` | — | 1 | 0 | 0 | — | — |  |
+| 2335 | `0x100c3600` | — | 1 | 0 | 0 | — | — |  |
+| 2336 | `0x100c4160` | — | 1 | 0 | 0 | — | — |  |
+| 2337 | `0x100c4340` | — | 1 | 0 | 0 | — | — |  |
+| 2338 | `0x100c43e0` | — | 1 | 0 | 0 | — | — |  |
+| 2339 | `0x100c4600` | — | 1 | 0 | 0 | — | — |  |
+| 2340 | `0x100c4a40` | — | 1 | 0 | 0 | `bone_setup.cpp SweepBoxToStudio()` | — |  |
+| 2341 | `0x100c4d50` | — | 1 | 0 | 0 | `bone_setup.cpp TraceToStudio()` | — |  |
+| 2342 | `0x100c5020` | — | 1 | 0 | 0 | — | — |  |
+| 2343 | `0x100c5400` | — | 1 | 0 | 0 | — | — |  |
+| 2344 | `0x100c57e0` | — | 1 | 0 | 0 | — | — |  |
+| 2345 | `0x100c6020` | — | 1 | 0 | 0 | — | — |  |
+| 2346 | `0x100c6520` | — | 1 | 0 | 0 | — | — |  |
+| 2347 | `0x100c65b0` | — | 1 | 0 | 0 | — | — |  |
+| 2348 | `0x100c7650` | — | 1 | 0 | 0 | — | — |  |
+| 2349 | `0x100c77d0` | — | 1 | 0 | 0 | — | — |  |
+| 2350 | `0x100c80d0` | — | 1 | 0 | 0 | — | — |  |
+| 2351 | `0x100cddf0` | — | 1 | 0 | 0 | — | — |  |
+| 2352 | `0x100ce040` | — | 1 | 0 | 0 | — | — |  |
+| 2353 | `0x100ce810` | — | 1 | 0 | 0 | — | — |  |
+| 2354 | `0x100d1210` | — | 1 | 0 | 0 | — | — |  |
+| 2355 | `0x100df010` | — | 1 | 0 | 0 | — | — |  |
+| 2356 | `0x100df120` | — | 1 | 0 | 0 | `auto end`, `auto_end`, +1 more | — |  |
+| 2357 | `0x100df1b0` | — | 1 | 0 | 0 | `auto link`, `auto_link`, +1 more | — |  |
+| 2358 | `0x100df7b0` | — | 1 | 0 | 0 | `-log_speech_files`, `-dialog_debug` | — |  |
+| 2359 | `0x100df850` | — | 1 | 0 | 0 | `logs/dialog_recent.txt`, `Loaded map: %s version: %d⏎`, +2 more | — |  |
+| 2360 | `0x100e8060` | — | 1 | 0 | 0 | ` ... `, `. . . `, +1 more | — |  |
+| 2361 | `0x100e84e0` | — | 1 | 0 | 0 | — | — |  |
+| 2362 | `0x100ecb10` | — | 1 | 0 | 0 | — | — |  |
+| 2363 | `0x100ed4d0` | — | 1 | 0 | 0 | — | — |  |
+| 2364 | `0x100f6bb0` | — | 1 | 0 | 0 | — | — |  |
+| 2365 | `0x100f7460` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `picker`, +6 more | — |  |
+| 2366 | `0x100f7c30` | — | 1 | 0 | 0 | — | — |  |
+| 2367 | `0x100f7fe0` | — | 1 | 0 | 0 | — | — |  |
+| 2368 | `0x100f81f0` | — | 1 | 0 | 0 | `worldspawn`, `soundent` | — |  |
+| 2369 | `0x100f8420` | — | 1 | 0 | 0 | — | — |  |
+| 2370 | `0x100f8580` | — | 1 | 0 | 0 | — | — |  |
+| 2371 | `0x10107480` | — | 1 | 0 | 0 | — | — |  |
+| 2372 | `0x101075e0` | — | 1 | 0 | 0 | — | — |  |
+| 2373 | `0x10116970` | — | 1 | 0 | 0 | — | — |  |
+| 2374 | `0x10119390` | — | 1 | 0 | 0 | — | — |  |
+| 2375 | `0x101193b0` | — | 1 | 0 | 0 | — | — |  |
+| 2376 | `0x10119940` | — | 1 | 0 | 0 | — | — |  |
+| 2377 | `0x1012a6e0` | — | 1 | 0 | 0 | `models/gibs/hgibs.mdl`, `classname %s used to create wrong class …`, +2 more | — |  |
+| 2378 | `0x1012c6c0` | — | 1 | 0 | 0 | — | — |  |
+| 2379 | `0x1012c7a0` | — | 1 | 0 | 0 | — | — |  |
+| 2380 | `0x1012c7f0` | — | 1 | 0 | 0 | — | — |  |
+| 2381 | `0x1012c840` | — | 1 | 0 | 0 | — | — |  |
+| 2382 | `0x1012c9c0` | — | 1 | 0 | 0 | — | — |  |
+| 2383 | `0x1012f700` | — | 1 | 0 | 0 | — | — |  |
+| 2384 | `0x10136ec0` | — | 1 | 0 | 0 | — | — |  |
+| 2385 | `0x10137e40` | — | 1 | 0 | 0 | — | — |  |
+| 2386 | `0x10138630` | — | 1 | 0 | 0 | — | — |  |
+| 2387 | `0x10139b90` | — | 1 | 0 | 0 | — | — |  |
+| 2388 | `0x1013ab00` | — | 1 | 0 | 0 | — | — |  |
+| 2389 | `0x1013ab70` | — | 1 | 0 | 0 | — | — |  |
+| 2390 | `0x1013abc0` | — | 1 | 0 | 0 | — | — |  |
+| 2391 | `0x1013b0d0` | — | 1 | 0 | 0 | — | — |  |
+| 2392 | `0x1013b610` | — | 1 | 0 | 0 | — | — |  |
+| 2393 | `0x1013c0e0` | — | 1 | 0 | 0 | — | — |  |
+| 2394 | `0x1013c8c0` | — | 1 | 0 | 0 | — | — |  |
+| 2395 | `0x1013c940` | — | 1 | 0 | 0 | — | — |  |
+| 2396 | `0x1013cb80` | — | 1 | 0 | 0 | — | — |  |
+| 2397 | `0x1013d450` | — | 1 | 0 | 0 | — | — |  |
+| 2398 | `0x1013d900` | — | 1 | 0 | 0 | — | — |  |
+| 2399 | `0x1013dc40` | — | 1 | 0 | 0 | — | — |  |
+| 2400 | `0x10142e20` | — | 1 | 0 | 0 | — | — |  |
+| 2401 | `0x10143920` | — | 1 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 2402 | `0x10144290` | — | 1 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 2403 | `0x10144790` | — | 1 | 0 | 0 | `CBaseEntity::Instance` | — |  |
+| 2404 | `0x10144cd0` | — | 1 | 0 | 0 | — | — |  |
+| 2405 | `0x1014f830` | `CAI_BaseHumanoid#328`, `CAI_BaseNPC#328`, +80 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#328 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2406 | `0x1014f870` | `CAI_BaseHumanoid#330`, `CAI_BaseNPC#330`, +16 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#330 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2407 | `0x1014f910` | `CAI_BaseHumanoid#359`, `CAI_BaseNPC#359`, +17 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#359 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2408 | `0x1014f930` | `CAI_BaseHumanoid#360`, `CAI_BaseNPC#360`, +81 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#360 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2409 | `0x1014fa30` | `CAI_BaseHumanoid#399`, `CAI_BaseNPC#399`, +82 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#399 no SDK twin: stretch #397-#404 holds 6 retai…` |
+| 2410 | `0x1014fa50` | `CAI_BaseHumanoid#400`, `CAI_BaseNPC#400`, +82 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#400 no SDK twin: stretch #397-#404 holds 6 retai…` |
+| 2411 | `0x10156ce0` | — | 1 | 0 | 0 | — | — |  |
+| 2412 | `0x10158520` | — | 1 | 0 | 0 | — | — |  |
+| 2413 | `0x10158ab0` | — | 1 | 0 | 0 | — | — |  |
+| 2414 | `0x10158af0` | — | 1 | 0 | 0 | — | — |  |
+| 2415 | `0x10158c00` | — | 1 | 0 | 0 | — | — |  |
+| 2416 | `0x1015f9e0` | — | 1 | 0 | 0 | — | — |  |
+| 2417 | `0x10160560` | — | 1 | 0 | 0 | — | — |  |
+| 2418 | `0x101672d0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:70 |  |
+| 2419 | `0x10172410` | — | 1 | 0 | 0 | — | — |  |
+| 2420 | `0x1017e840` | — | 1 | 0 | 0 | `Protean 5`, `Protean 4`, +3 more | — |  |
+| 2421 | `0x1017f900` | — | 1 | 0 | 0 | — | — |  |
+| 2422 | `0x1017fa40` | — | 1 | 0 | 0 | — | — |  |
+| 2423 | `0x1017fa70` | — | 1 | 0 | 0 | — | — |  |
+| 2424 | `0x101800e0` | — | 1 | 0 | 0 | — | — |  |
+| 2425 | `0x10180100` | — | 1 | 0 | 0 | — | — |  |
+| 2426 | `0x10182160` | — | 1 | 0 | 0 | — | — |  |
+| 2427 | `0x10182dd0` | — | 1 | 0 | 0 | — | — |  |
+| 2428 | `0x10184220` | — | 1 | 0 | 0 | — | — |  |
+| 2429 | `0x10185100` | — | 1 | 0 | 0 | — | — |  |
+| 2430 | `0x1018e9d0` | — | 1 | 0 | 0 | — | — |  |
+| 2431 | `0x1018eab0` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
+| 2432 | `0x1018eb50` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
+| 2433 | `0x1018ec20` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
+| 2434 | `0x1018ecf0` | — | 1 | 0 | 0 | `activity_copy_prop` | — |  |
+| 2435 | `0x10191ac0` | — | 1 | 0 | 0 | `WARNING:  Empty model name in PropBreaka…`, `****************************************…` | — |  |
+| 2436 | `0x10191cc0` | — | 1 | 0 | 0 | `break` | — |  |
+| 2437 | `0x10194750` | — | 1 | 0 | 0 | — | — |  |
+| 2438 | `0x1019bfd0` | — | 1 | 0 | 0 | — | — |  |
+| 2439 | `0x1019c0b0` | — | 1 | 0 | 0 | — | — |  |
+| 2440 | `0x1019c330` | — | 1 | 0 | 0 | `solid`, `default`, +2 more | — |  |
+| 2441 | `0x1019c6f0` | — | 1 | 0 | 0 | — | — |  |
+| 2442 | `0x101a5a80` | — | 1 | 0 | 0 | `Bad field in entity!!⏎` | — |  |
+| 2443 | `0x101a6460` | `CAI_BaseHumanoid#413`, `CAI_BaseNPC#413`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#413 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 2444 | `0x101a6580` | `CAI_BaseHumanoid#436`, `CAI_BaseNPC#436`, +75 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#436 no SDK twin: stretch #434-#438 holds 3 retai…` |
+| 2445 | `0x101a65a0` | `CAI_BaseHumanoid#441`, `CAI_BaseNPC#441`, +75 more | 0 | 0 | 1 | `Called wrong StartTask()⏎` | — | `CAI_BaseNPC#441 no SDK twin: stretch #440-#442 holds 1 retai…` |
+| 2446 | `0x101a65e0` | `CAI_BaseHumanoid#443`, `CAI_BaseNPC#443`, +75 more | 0 | 0 | 1 | `Called wrong RunTask()⏎` | — | `CAI_BaseNPC#443 no SDK twin: stretch #442-#444 holds 1 retai…` |
+| 2447 | `0x101a6640` | `CAI_BaseHumanoid#450`, `CAI_BaseNPC#450`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#450 no SDK twin confirmed: #450 lines up with CA…` |
+| 2448 | `0x101a67c0` | `CAI_BaseHumanoid#476`, `CAI_BaseNPC#476`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#476 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 2449 | `0x101a6840` | `CAI_BaseHumanoid#483`, `CAI_BaseNPC#483`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#483 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2450 | `0x101a6960` | `CAI_BaseHumanoid#495`, `CAI_BaseNPC#495`, +9 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#495 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2451 | `0x101a69c0` | `CAI_BaseHumanoid#498`, `CAI_BaseNPC#498`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#498 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2452 | `0x101a6b20` | `CAI_BaseNPC#512`, `CAI_BaseNPCTroika#512`, +73 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#512 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2453 | `0x101a6ba0` | `CAI_BaseHumanoid#527`, `CAI_BaseNPC#527`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#527 no SDK twin: stretch #526-#530 holds 3 retai…` |
+| 2454 | `0x101a6bc0` | `CAI_BaseNPC#536`, `CAI_BaseNPCTroika#536`, +74 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#536 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 2455 | `0x101a6c40` | `CAI_BaseHumanoid#551`, `CAI_BaseNPC#551`, +75 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#551 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 2456 | `0x101a6ce0` | `CAI_BaseHumanoid#579`, `CAI_BaseNPC#579`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#579 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 2457 | `0x101a9060` | `CCineAI#585` | 1 | 0 | 0 | — | — |  |
+| 2458 | `0x101a9770` | `CCineAISchedule#585` | 1 | 0 | 0 | — | — |  |
+| 2459 | `0x101aa610` | `CAI_BaseNPCTroika#28`, `CGeneric_NPC#28`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2460 | `0x101aa630` | `CAI_BaseNPCTroika#29`, `CGeneric_NPC#29`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2461 | `0x101aa6d0` | `CAI_BaseNPCTroika#412`, `CGeneric_NPC#412`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2462 | `0x101aa710` | `CAI_BaseNPCTroika#414`, `CGeneric_NPC#414`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2463 | `0x101aa770` | `CAI_BaseNPCTroika#417`, `CGeneric_NPC#417`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2464 | `0x101aa950` | `CPayphone#35` | 0 | 0 | 1 | — | — |  |
+| 2465 | `0x101af2d0` | — | 1 | 0 | 0 | — | — |  |
+| 2466 | `0x101b0dc0` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `EmitSound:  '%s' emitted as '%s' (ent %i…`, +1 more | — |  |
+| 2467 | `0x101b1040` | — | 1 | 0 | 0 | `StopSound:  '%s' stopped as '%s' (ent %i…` | — |  |
+| 2468 | `0x101b14d0` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `EmitSound:  '%s' emitted as '%s' (ent %i…`, +2 more | — |  |
+| 2469 | `0x101b19e0` | — | 1 | 0 | 0 | — | — |  |
+| 2470 | `0x101b3240` | — | 1 | 0 | 0 | — | — |  |
+| 2471 | `0x101b36f0` | — | 1 | 0 | 0 | — | — |  |
+| 2472 | `0x101b4170` | — | 1 | 0 | 0 | — | — |  |
+| 2473 | `0x101b6120` | — | 1 | 0 | 0 | — | — |  |
+| 2474 | `0x101b65e0` | — | 1 | 0 | 0 | — | — |  |
+| 2475 | `0x101b6b90` | — | 1 | 0 | 0 | — | — |  |
+| 2476 | `0x101bb0f0` | — | 1 | 0 | 0 | — | — |  |
+| 2477 | `0x101bb4a0` | `CAISound#82` | 1 | 0 | 0 | — | — |  |
+| 2478 | `0x101c2d20` | — | 1 | 0 | 0 | — | — |  |
+| 2479 | `0x101c7b80` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `info_landmark`, +2 more | — |  |
+| 2480 | `0x101ccaf0` | — | 1 | 0 | 0 | — | — |  |
+| 2481 | `0x101cd070` | — | 1 | 0 | 0 | — | — |  |
+| 2482 | `0x101cd250` | — | 1 | 0 | 0 | — | — |  |
+| 2483 | `0x101cdfa0` | — | 1 | 0 | 0 | — | — |  |
+| 2484 | `0x101ce060` | — | 1 | 0 | 0 | — | — |  |
+| 2485 | `0x101ce2e0` | — | 1 | 0 | 0 | — | — |  |
+| 2486 | `0x101ce3d0` | — | 1 | 0 | 0 | — | — |  |
+| 2487 | `0x101cecf0` | — | 1 | 0 | 0 | — | — |  |
+| 2488 | `0x101ceef0` | — | 1 | 0 | 0 | — | — |  |
+| 2489 | `0x101cf3c0` | — | 1 | 0 | 0 | `backwards mins/maxs` | — |  |
+| 2490 | `0x101cf640` | — | 1 | 0 | 0 | — | — |  |
+| 2491 | `0x101cf720` | — | 1 | 0 | 0 | `UTIL_VarArgs` | — |  |
+| 2492 | `0x101cfb30` | — | 1 | 0 | 0 | — | — |  |
+| 2493 | `0x101cfe10` | — | 1 | 0 | 0 | — | — |  |
+| 2494 | `0x101cfea0` | — | 1 | 0 | 0 | — | — |  |
+| 2495 | `0x101d0310` | — | 1 | 0 | 0 | — | — |  |
+| 2496 | `0x101d0570` | — | 1 | 0 | 0 | — | — |  |
+| 2497 | `0x101d0b70` | — | 1 | 0 | 0 | — | — |  |
+| 2498 | `0x101d0e90` | — | 1 | 0 | 0 | — | — |  |
+| 2499 | `0x101d1070` | — | 1 | 0 | 0 | — | — |  |
+| 2500 | `0x101d1240` | — | 1 | 0 | 0 | — | — |  |
+| 2501 | `0x101d1530` | — | 1 | 0 | 0 | — | — |  |
+| 2502 | `0x101d15f0` | — | 1 | 0 | 0 | — | — |  |
+| 2503 | `0x101d1960` | — | 1 | 0 | 0 | — | — |  |
+| 2504 | `0x101d2530` | — | 1 | 0 | 0 | — | — |  |
+| 2505 | `0x101d2560` | — | 1 | 0 | 0 | — | — |  |
+| 2506 | `0x101d2640` | — | 1 | 0 | 0 | — | — |  |
+| 2507 | `0x101d4ef0` | — | 1 | 0 | 0 | — | — |  |
+| 2508 | `0x101d8670` | — | 1 | 0 | 0 | — | — |  |
+| 2509 | `0x101d9190` | — | 1 | 0 | 0 | — | — |  |
+| 2510 | `0x101d9840` | — | 1 | 0 | 0 | — | — |  |
+| 2511 | `0x101d9870` | — | 1 | 0 | 0 | — | — |  |
+| 2512 | `0x101da880` | — | 1 | 0 | 0 | — | — |  |
+| 2513 | `0x101db5f0` | — | 1 | 0 | 0 | — | — |  |
+| 2514 | `0x101dc120` | — | 1 | 0 | 0 | — | — |  |
+| 2515 | `0x101dd4f0` | — | 1 | 0 | 0 | — | — |  |
+| 2516 | `0x101ddbe0` | — | 1 | 0 | 0 | — | — |  |
+| 2517 | `0x101e0040` | — | 1 | 0 | 0 | — | — |  |
+| 2518 | `0x101e1770` | — | 1 | 0 | 0 | `ERROR: DiscFlag Lookup Failed!⏎` | — |  |
+| 2519 | `0x101e1850` | — | 1 | 0 | 0 | — | — |  |
+| 2520 | `0x101e18c0` | — | 1 | 0 | 0 | — | — |  |
+| 2521 | `0x101e22d0` | — | 1 | 0 | 0 | — | — |  |
+| 2522 | `0x101e28e0` | — | 1 | 0 | 0 | — | — |  |
+| 2523 | `0x101e2990` | — | 1 | 0 | 0 | `ERROR: GetTargetEntities AffectsType Err…`, `ERROR: GetTargetEntities SrcType Error!⏎` | — |  |
+| 2524 | `0x101e2f50` | — | 1 | 0 | 0 | `%s (%d)⏎`, `CVTgt_DisciplineFXMgr_t::ActivateEffect_…` | — |  |
+| 2525 | `0x101e33c0` | — | 1 | 0 | 0 | — | — |  |
+| 2526 | `0x101e3c80` | — | 1 | 0 | 0 | — | — |  |
+| 2527 | `0x101e3e70` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1583 |  |
+| 2528 | `0x101e40b0` | — | 1 | 0 | 0 | — | — |  |
+| 2529 | `0x101e45b0` | — | 1 | 0 | 0 | ` %s(%d)`, `Disciplines:`, +2 more | — |  |
+| 2530 | `0x101e48b0` | — | 1 | 0 | 0 | — | — |  |
+| 2531 | `0x101e8430` | — | 1 | 0 | 0 | — | — |  |
+| 2532 | `0x101ec450` | — | 1 | 0 | 0 | — | — |  |
+| 2533 | `0x101ec480` | — | 1 | 0 | 0 | — | — |  |
+| 2534 | `0x101ec4b0` | — | 1 | 0 | 0 | — | — |  |
+| 2535 | `0x101f1aa0` | — | 1 | 0 | 0 | — | — |  |
+| 2536 | `0x101f1da0` | — | 1 | 0 | 0 | `%d-%s` | — |  |
+| 2537 | `0x101f2180` | — | 1 | 0 | 0 | `ERROR: parsing KeyValue in file %s, expe…`, `(NULL)` | — |  |
+| 2538 | `0x101f2360` | — | 1 | 0 | 0 | — | — |  |
+| 2539 | `0x101f2e20` | — | 1 | 0 | 0 | — | — |  |
+| 2540 | `0x101f2ec0` | — | 1 | 0 | 0 | — | — |  |
+| 2541 | `0x101f2f00` | — | 1 | 0 | 0 | — | — |  |
+| 2542 | `0x101f6010` | — | 1 | 0 | 0 | ` CVSoundActivityTable_t::Play !!!!!!!!!!…` | — |  |
+| 2543 | `0x101f69a0` | — | 1 | 0 | 0 | — | — |  |
+| 2544 | `0x101f8510` | — | 1 | 0 | 0 | — | — |  |
+| 2545 | `0x101f8620` | — | 1 | 0 | 0 | `Bip01 Spine2`, `models/%s`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:837 |  |
+| 2546 | `0x101f8e20` | — | 1 | 0 | 0 | — | — |  |
+| 2547 | `0x101f8f30` | — | 1 | 0 | 0 | `Bip01 Spine2`, `D_ProteanTransform_Emitter`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:837 |  |
+| 2548 | `0x101f96b0` | — | 1 | 0 | 0 | `ERROR: Ran out of TraitEffect slots!!!⏎` | — |  |
+| 2549 | `0x101f9830` | — | 1 | 0 | 0 | — | — |  |
+| 2550 | `0x101f9d60` | — | 1 | 0 | 0 | — | — |  |
+| 2551 | `0x101f9df0` | — | 1 | 0 | 0 | — | — |  |
+| 2552 | `0x10202780` | — | 1 | 0 | 0 | — | — |  |
+| 2553 | `0x10203dd0` | — | 1 | 0 | 0 | — | — |  |
+| 2554 | `0x10203ed0` | — | 1 | 0 | 0 | — | — |  |
+| 2555 | `0x10204100` | — | 1 | 0 | 0 | — | — |  |
+| 2556 | `0x102043a0` | — | 1 | 0 | 0 | `<None>`, `ObfuscateCanInc`, +1 more | — |  |
+| 2557 | `0x102056d0` | — | 1 | 0 | 0 | — | — |  |
+| 2558 | `0x10206300` | — | 1 | 0 | 0 | — | — |  |
+| 2559 | `0x10206aa0` | — | 1 | 0 | 0 | `item_w_unarmed`, `item_w_lt_cloth` | — |  |
+| 2560 | `0x10206c30` | — | 1 | 0 | 0 | — | — |  |
+| 2561 | `0x10206da0` | — | 1 | 0 | 0 | — | — |  |
+| 2562 | `0x10207680` | — | 1 | 0 | 0 | — | — |  |
+| 2563 | `0x10207c70` | — | 1 | 0 | 0 | — | — |  |
+| 2564 | `0x10207df0` | — | 1 | 0 | 0 | — | — |  |
+| 2565 | `0x1020cd00` | — | 1 | 0 | 0 | — | — |  |
+| 2566 | `0x1021e750` | — | 1 | 0 | 0 | — | — |  |
+| 2567 | `0x1021e7e0` | — | 1 | 0 | 0 | — | — |  |
+| 2568 | `0x10228350` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:44, Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:93, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:246, +7 more |  |
+| 2569 | `0x1022dea0` | — | 1 | 0 | 0 | `vloadtips "%s" %d %d %d`, `__main__.G.Story_State`, +4 more | — |  |
+| 2570 | `0x1022f4f0` | — | 1 | 0 | 0 | — | — |  |
+| 2571 | `0x10230ed0` | — | 1 | 0 | 0 | — | — |  |
+| 2572 | `0x10230f00` | — | 1 | 0 | 0 | — | — |  |
+| 2573 | `0x1023fd00` | — | 1 | 0 | 0 | — | — |  |
+| 2574 | `0x1023ffa0` | — | 1 | 0 | 0 | — | — |  |
+| 2575 | `0x10241100` | — | 1 | 0 | 0 | — | — |  |
+| 2576 | `0x10241620` | — | 1 | 0 | 0 | — | — |  |
+| 2577 | `0x102456b0` | — | 1 | 0 | 0 | — | — |  |
+| 2578 | `0x10245a40` | — | 1 | 0 | 0 | — | — |  |
+| 2579 | `0x10245ac0` | — | 1 | 0 | 0 | — | — |  |
+| 2580 | `0x10247280` | — | 1 | 0 | 0 | — | — |  |
+| 2581 | `0x10249940` | — | 1 | 0 | 0 | — | — |  |
+| 2582 | `0x10251790` | — | 1 | 0 | 0 | — | — |  |
+| 2583 | `0x10252410` | — | 1 | 0 | 0 | — | — |  |
+| 2584 | `0x10256220` | — | 1 | 0 | 0 | — | — |  |
+| 2585 | `0x10256250` | — | 1 | 0 | 0 | — | — |  |
+| 2586 | `0x102562b0` | — | 1 | 0 | 0 | — | — |  |
+| 2587 | `0x10256300` | — | 1 | 0 | 0 | — | — |  |
+| 2588 | `0x10258230` | — | 1 | 0 | 0 | — | — |  |
+| 2589 | `0x10259de0` | — | 1 | 0 | 0 | — | — |  |
+| 2590 | `0x1025b610` | — | 1 | 0 | 0 | — | — |  |
+| 2591 | `0x1025d760` | — | 1 | 0 | 0 | — | — |  |
+| 2592 | `0x1025d840` | — | 1 | 0 | 0 | — | — |  |
+| 2593 | `0x1025e120` | — | 1 | 0 | 0 | — | — |  |
+| 2594 | `0x10260f40` | `CAI_BaseHumanoid#427` | 1 | 0 | 0 | — | — |  |
+| 2595 | `0x102623a0` | `CAI_Component#1`, `CAI_Expresser#1`, +12 more | 0 | 0 | 1 | — | — |  |
+| 2596 | `0x102623c0` | `CAI_Component#2`, `CAI_Expresser#2`, +12 more | 0 | 0 | 1 | — | — |  |
+| 2597 | `0x10262430` | `CAI_BaseHumanoid#429` | 1 | 0 | 0 | — | — |  |
+| 2598 | `0x10264330` | — | 1 | 0 | 0 | — | — |  |
+| 2599 | `0x102652d0` | — | 1 | 0 | 0 | — | — |  |
+| 2600 | `0x10266b10` | — | 1 | 0 | 0 | — | — |  |
+| 2601 | `0x10266c80` | — | 1 | 0 | 0 | — | — |  |
+| 2602 | `0x10266ef0` | — | 1 | 0 | 0 | — | — |  |
+| 2603 | `0x10267260` | `CAISound#184`, `CAI_BaseHumanoid#184`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#184 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 2604 | `0x10267b60` | — | 1 | 0 | 0 | `muzzleflash`, `Starting Ranged Attack Damage Calculatio…` | — |  |
+| 2605 | `0x102699e0` | — | 1 | 0 | 0 | — | — |  |
+| 2606 | `0x10269b30` | — | 1 | 0 | 0 | — | — |  |
+| 2607 | `0x1026b580` | — | 1 | 0 | 0 | — | — |  |
+| 2608 | `0x1026da90` | `CAI_BaseHumanoid#556`, `CAI_BaseNPC#556`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#556 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 2609 | `0x1026ff80` | — | 1 | 0 | 0 | — | — |  |
+| 2610 | `0x10278cb0` | `CAI_BaseHumanoid#519`, `CAI_BaseNPC#519`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#519 no SDK twin: the SDK name it lines up with w…` |
+| 2611 | `0x10279000` | `CAI_BaseHumanoid#485`, `CAI_BaseNPC#485`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#485 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2612 | `0x10279c20` | — | 1 | 0 | 0 | — | — |  |
+| 2613 | `0x1027e120` | `CAI_BaseHumanoid#423`, `CAI_BaseNPC#423`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#423 no SDK twin: stretch #421-#431 holds 9 retai…` |
+| 2614 | `0x1027e590` | — | 1 | 0 | 0 | `<unnamed>`, `%s (%s: %s)`, +1 more | — |  |
+| 2615 | `0x1027e660` | — | 1 | 0 | 0 | `**UNKNOWN**`, `Alert`, +11 more | — |  |
+| 2616 | `0x1027e760` | — | 1 | 0 | 0 | `**UNKNOWN**`, `Climb`, +1 more | — |  |
+| 2617 | `0x1027e7f0` | — | 1 | 0 | 0 | — | — |  |
+| 2618 | `0x1027f5d0` | — | 1 | 0 | 0 | — | — |  |
+| 2619 | `0x1027f610` | — | 1 | 0 | 0 | — | — |  |
+| 2620 | `0x1027faa0` | — | 1 | 0 | 0 | — | — |  |
+| 2621 | `0x10280c80` | — | 1 | 0 | 0 | `   %32s -- select %5.2f, start %5.2f, ru…`, ` Tasks timings:⏎` | — |  |
+| 2622 | `0x102814d0` | — | 1 | 0 | 0 | `Unaccounted`, `CAI_BaseNPC_SelectSchedule` | — |  |
+| 2623 | `0x10288510` | — | 1 | 0 | 0 | — | — |  |
+| 2624 | `0x10288540` | — | 1 | 0 | 0 | — | — |  |
+| 2625 | `0x10288560` | — | 1 | 0 | 0 | — | — |  |
+| 2626 | `0x1028acc0` | — | 1 | 0 | 0 | — | — |  |
+| 2627 | `0x1028b0b0` | `CAI_BaseHumanoid#549`, `CAI_BaseNPC#549`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#549 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 2628 | `0x1028b300` | — | 1 | 0 | 0 | — | — |  |
+| 2629 | `0x1028b460` | — | 1 | 0 | 0 | — | — |  |
+| 2630 | `0x1028df30` | `CAI_BaseNPCTroika#20`, `CGeneric_NPC#20`, +62 more | 1 | 0 | 0 | — | — |  |
+| 2631 | `0x1028e030` | — | 1 | 0 | 0 | — | — |  |
+| 2632 | `0x1028e060` | — | 1 | 0 | 0 | — | — |  |
+| 2633 | `0x1028e830` | — | 1 | 0 | 0 | — | — |  |
+| 2634 | `0x1028efc0` | — | 1 | 0 | 0 | `Player_Nosferatu` | — |  |
+| 2635 | `0x102906e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:16 |  |
+| 2636 | `0x10293e80` | `CAI_BaseNPCTroika#527`, `CGeneric_NPC#527`, +62 more | 1 | 0 | 0 | — | — |  |
+| 2637 | `0x10294040` | `CAI_BaseNPCTroika#509`, `CGeneric_NPC#509`, +58 more | 1 | 0 | 0 | — | — |  |
+| 2638 | `0x102944c0` | `CAI_BaseNPCTroika#493`, `CGeneric_NPC#493`, +54 more | 1 | 0 | 0 | `Target_Lost` | — |  |
+| 2639 | `0x10294590` | `CAI_BaseNPCTroika#494`, `CGeneric_NPC#494`, +54 more | 1 | 0 | 0 | `Target_Reacquired` | — |  |
+| 2640 | `0x10294930` | `CAI_BaseNPCTroika#499`, `CGeneric_NPC#499`, +60 more | 1 | 0 | 0 | `Idle_Agitated` | — |  |
+| 2641 | `0x10294c30` | `CAI_BaseNPCTroika#503`, `CGeneric_NPC#503`, +60 more | 1 | 0 | 0 | `Comfort` | — |  |
+| 2642 | `0x10294cf0` | `CAI_BaseNPCTroika#504`, `CGeneric_NPC#504`, +60 more | 1 | 0 | 0 | `Upset` | — |  |
+| 2643 | `0x1029fbe0` | `CAI_BaseNPCTroika#330`, `CGeneric_NPC#330`, +59 more | 0 | 0 | 1 | — | — |  |
+| 2644 | `0x1029fec0` | `CAI_BaseNPCTroika#326`, `CGeneric_NPC#326`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2645 | `0x102a0910` | `CAI_BaseNPCTroika#322`, `CGeneric_NPC#322`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2646 | `0x102a1560` | — | 1 | 0 | 0 | — | — |  |
+| 2647 | `0x102a1590` | — | 1 | 0 | 0 | — | — |  |
+| 2648 | `0x102a15f0` | — | 1 | 0 | 0 | — | — |  |
+| 2649 | `0x102a9540` | — | 1 | 0 | 0 | — | — |  |
+| 2650 | `0x102a95c0` | — | 1 | 0 | 0 | — | — |  |
+| 2651 | `0x102a95e0` | — | 1 | 0 | 0 | — | — |  |
+| 2652 | `0x102a9600` | — | 1 | 0 | 0 | — | — |  |
+| 2653 | `0x102a9620` | — | 1 | 0 | 0 | — | — |  |
+| 2654 | `0x102a9670` | — | 1 | 0 | 0 | — | — |  |
+| 2655 | `0x102a9890` | — | 1 | 0 | 0 | — | — |  |
+| 2656 | `0x102a9ea0` | — | 1 | 0 | 0 | — | — |  |
+| 2657 | `0x102a9ec0` | — | 1 | 0 | 0 | — | — |  |
+| 2658 | `0x102a9f00` | — | 1 | 0 | 0 | — | — |  |
+| 2659 | `0x102aab70` | — | 1 | 0 | 0 | — | — |  |
+| 2660 | `0x102b2730` | — | 1 | 0 | 0 | — | — |  |
+| 2661 | `0x102b5120` | `CAI_BaseNPCTroika#56`, `CGeneric_NPC#56`, +62 more | 0 | 0 | 1 | — | — |  |
+| 2662 | `0x102bfdf0` | — | 1 | 0 | 0 | — | — |  |
+| 2663 | `0x102c0220` | `CAI_BaseNPCTroika#35`, `CGeneric_NPC#35`, +61 more | 0 | 0 | 1 | — | — |  |
+| 2664 | `0x102c0b60` | `CAI_BaseNPCTroika#613`, `CGeneric_NPC#613`, +61 more | 0 | 0 | 1 | — | — |  |
+| 2665 | `0x102c5730` | — | 1 | 0 | 0 | — | — |  |
+| 2666 | `0x102c5780` | — | 1 | 0 | 0 | — | — |  |
+| 2667 | `0x102c57c0` | — | 1 | 0 | 0 | — | — |  |
+| 2668 | `0x102c6370` | — | 1 | 0 | 0 | — | — |  |
+| 2669 | `0x102c63b0` | — | 1 | 0 | 0 | — | — |  |
+| 2670 | `0x102c6420` | — | 1 | 0 | 0 | — | — |  |
+| 2671 | `0x102c6460` | — | 1 | 0 | 0 | — | — |  |
+| 2672 | `0x102c64d0` | — | 1 | 0 | 0 | — | — |  |
+| 2673 | `0x102c66b0` | — | 1 | 0 | 0 | — | — |  |
+| 2674 | `0x102c6bf0` | — | 1 | 0 | 0 | — | — |  |
+| 2675 | `0x102c6d40` | — | 1 | 0 | 0 | — | — |  |
+| 2676 | `0x102c6e10` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#13` | 1 | 0 | 0 | — | — |  |
+| 2677 | `0x102c6e30` | `CAI_StandoffBehavior#14`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#14` | 0 | 1 | 0 | — | — |  |
+| 2678 | `0x102c6e50` | `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#15` | 1 | 0 | 0 | — | — |  |
+| 2679 | `0x102c6e70` | `CAI_StandoffBehavior#16`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#16` | 0 | 1 | 0 | — | — |  |
+| 2680 | `0x102c6e90` | `CAI_StandoffBehavior#17`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#17` | 0 | 0 | 1 | — | — |  |
+| 2681 | `0x102c6f90` | `CAI_StandoffBehavior#23`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#23` | 0 | 1 | 0 | — | — |  |
+| 2682 | `0x102c6fb0` | `CAI_StandoffBehavior#24`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#24` | 0 | 1 | 0 | — | — |  |
+| 2683 | `0x102c7410` | `CAI_StandoffBehavior#3` | 0 | 0 | 1 | — | — |  |
+| 2684 | `0x102c7960` | `CAI_StandoffBehavior#20` | 0 | 0 | 1 | — | — |  |
+| 2685 | `0x102c79a0` | `CAI_StandoffBehavior#21` | 0 | 0 | 1 | — | — |  |
+| 2686 | `0x102c8570` | `CAI_StandoffGoal#244` | 0 | 0 | 1 | — | — |  |
+| 2687 | `0x102cadb0` | — | 1 | 0 | 0 | — | — |  |
+| 2688 | `0x102cc6a0` | — | 1 | 0 | 0 | — | — |  |
+| 2689 | `0x102ce130` | — | 1 | 0 | 0 | — | — |  |
+| 2690 | `0x102ce9f0` | — | 1 | 0 | 0 | — | — |  |
+| 2691 | `0x102d24b0` | — | 1 | 0 | 0 | — | — |  |
+| 2692 | `0x102d3040` | — | 1 | 0 | 0 | — | — |  |
+| 2693 | `0x102d3ec0` | `CAI_Hint#130` | 0 | 0 | 1 | `Warning: AI hint has incorrect or no AI …` | — |  |
+| 2694 | `0x102d4320` | — | 1 | 0 | 0 | — | — |  |
+| 2695 | `0x102d77a0` | — | 1 | 0 | 0 | — | — |  |
+| 2696 | `0x102d8a90` | — | 1 | 0 | 0 | — | — |  |
+| 2697 | `0x102d8b50` | — | 1 | 0 | 0 | — | — |  |
+| 2698 | `0x102db3e0` | — | 1 | 0 | 0 | — | — |  |
+| 2699 | `0x102db5e0` | — | 1 | 0 | 0 | — | — |  |
+| 2700 | `0x102dbda0` | `CAI_InterestingPlaceConverstation#127` | 0 | 0 | 1 | — | — |  |
+| 2701 | `0x102dce80` | — | 1 | 0 | 0 | — | — |  |
+| 2702 | `0x102df130` | — | 1 | 0 | 0 | — | — |  |
+| 2703 | `0x102e09c0` | — | 1 | 0 | 0 | — | — |  |
+| 2704 | `0x102e0ea0` | `CAI_HumanoidMotor#3`, `CAI_Motor#3` | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::SetSolid` | — |  |
+| 2705 | `0x102e1110` | `CAI_HumanoidMotor#5`, `CAI_Motor#5` | 0 | 0 | 1 | — | — |  |
+| 2706 | `0x102e1180` | `CAI_HumanoidMotor#6`, `CAI_Motor#6` | 0 | 0 | 1 | — | — |  |
+| 2707 | `0x102e1270` | `CAI_HumanoidMotor#8`, `CAI_Motor#8` | 0 | 0 | 1 | — | — |  |
+| 2708 | `0x102e1300` | `CAI_HumanoidMotor#16`, `CAI_Motor#16` | 1 | 0 | 0 | — | — |  |
+| 2709 | `0x102e1d10` | — | 1 | 0 | 0 | — | — |  |
+| 2710 | `0x102e20f0` | `CAI_HumanoidMotor#14`, `CAI_Motor#14` | 0 | 0 | 1 | — | — |  |
+| 2711 | `0x102e2120` | `CAI_HumanoidMotor#13`, `CAI_Motor#13` | 0 | 0 | 1 | — | — |  |
+| 2712 | `0x102e2150` | `CAI_HumanoidMotor#12`, `CAI_Motor#12` | 0 | 0 | 1 | — | — |  |
+| 2713 | `0x102e5d80` | — | 1 | 0 | 0 | `Unaccounted`, `CAI_Motor_GroundMoveLimit` | — |  |
+| 2714 | `0x102e7060` | — | 1 | 0 | 0 | — | — |  |
+| 2715 | `0x102e83e0` | — | 1 | 0 | 0 | — | — |  |
+| 2716 | `0x102ea050` | — | 1 | 0 | 0 | — | — |  |
+| 2717 | `0x102ecb90` | — | 1 | 0 | 0 | — | — |  |
+| 2718 | `0x102ed540` | — | 1 | 0 | 0 | — | — |  |
+| 2719 | `0x102ee1e0` | — | 1 | 0 | 0 | — | — |  |
+| 2720 | `0x102eea70` | `CAI_HumanoidNavigator#7`, `CAI_Navigator#7` | 0 | 1 | 0 | — | — |  |
+| 2721 | `0x102eeac0` | `CAI_HumanoidNavigator#11`, `CAI_Navigator#11` | 0 | 1 | 0 | — | — |  |
+| 2722 | `0x102eeb50` | `CAI_HumanoidNavigator#9`, `CAI_Navigator#9` | 0 | 0 | 1 | — | — |  |
+| 2723 | `0x102f13a0` | — | 1 | 0 | 0 | — | — |  |
+| 2724 | `0x102f2d10` | — | 1 | 0 | 0 | — | — |  |
+| 2725 | `0x102f2de0` | — | 1 | 0 | 0 | — | — |  |
+| 2726 | `0x102f3770` | — | 1 | 0 | 0 | — | — |  |
+| 2727 | `0x102f3900` | — | 1 | 0 | 0 | — | — |  |
+| 2728 | `0x102f99d0` | — | 1 | 0 | 0 | — | — |  |
+| 2729 | `0x102f9c70` | — | 1 | 0 | 0 | — | — |  |
+| 2730 | `0x102fca40` | — | 1 | 0 | 0 | — | — |  |
+| 2731 | `0x102fcfe0` | — | 1 | 0 | 0 | — | — |  |
+| 2732 | `0x10300010` | — | 1 | 0 | 0 | — | — |  |
+| 2733 | `0x103000a0` | — | 1 | 0 | 0 | — | — |  |
+| 2734 | `0x10300e60` | — | 1 | 0 | 0 | — | — |  |
+| 2735 | `0x10303c90` | — | 1 | 0 | 0 | — | — |  |
+| 2736 | `0x10303cd0` | — | 1 | 0 | 0 | — | — |  |
+| 2737 | `0x10303d10` | — | 1 | 0 | 0 | `Unaccounted`, `CAI_Pathfinder_BuildGroundRoute` | — |  |
+| 2738 | `0x10303f80` | — | 1 | 0 | 0 | — | — |  |
+| 2739 | `0x10304020` | — | 1 | 0 | 0 | — | — |  |
+| 2740 | `0x10306200` | — | 1 | 0 | 0 | — | — |  |
+| 2741 | `0x10306520` | — | 1 | 0 | 0 | — | — |  |
+| 2742 | `0x10306550` | — | 1 | 0 | 0 | — | — |  |
+| 2743 | `0x10307aa0` | — | 1 | 0 | 0 | — | — |  |
+| 2744 | `0x10307b40` | — | 1 | 0 | 0 | — | — |  |
+| 2745 | `0x10307b60` | — | 1 | 0 | 0 | — | — |  |
+| 2746 | `0x10307d30` | — | 1 | 0 | 0 | `Patrol path pool is dry.  It will store …` | — |  |
+| 2747 | `0x10307db0` | — | 1 | 0 | 0 | — | — |  |
+| 2748 | `0x10312d40` | `CAI_BaseHumanoid#583`, `CAI_ExpressiveNPC#583` | 1 | 0 | 0 | — | — |  |
+| 2749 | `0x10319f30` | — | 1 | 0 | 0 | — | — |  |
+| 2750 | `0x10326ae0` | `CAI_BaseHumanoid#365`, `CAI_BaseNPC#365`, +69 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | — | `CAI_BaseNPC#365 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2751 | `0x1032e890` | — | 1 | 0 | 0 | — | — |  |
+| 2752 | `0x1033d970` | — | 1 | 0 | 0 | — | — |  |
+| 2753 | `0x1033d990` | — | 1 | 0 | 0 | — | — |  |
+| 2754 | `0x10345890` | — | 1 | 0 | 0 | `AngleInterp` | — |  |
+| 2755 | `0x10348100` | — | 1 | 0 | 0 | `ChooseSequenceFromList` | — |  |
+| 2756 | `0x10349830` | — | 1 | 0 | 0 | — | — |  |
+| 2757 | `0x10349970` | — | 1 | 0 | 0 | — | — |  |
+| 2758 | `0x103499a0` | — | 1 | 0 | 0 | — | — |  |
+| 2759 | `0x1034a170` | — | 1 | 0 | 0 | — | — |  |
+| 2760 | `0x1034aed0` | `CNPCMaker#587`, `CNPCMaker_Fleshpile#587`, +1 more | 1 | 0 | 0 | — | — |  |
+| 2761 | `0x1034b140` | `CNPCMaker#113`, `CNPCMaker_Fleshpile#113`, +1 more | 1 | 0 | 0 | — | — |  |
+| 2762 | `0x10356f30` | `CNPC_Bullseye#576` | 1 | 0 | 0 | — | — |  |
+| 2763 | `0x103577d0` | `CNPC_Crow#197` | 0 | 0 | 1 | — | — |  |
+| 2764 | `0x10358c90` | `CNPC_Crow#567` | 1 | 0 | 0 | — | — |  |
+| 2765 | `0x10358f70` | — | 1 | 0 | 0 | `NPC_Crow.Flap` | — |  |
+| 2766 | `0x10359240` | `CNPC_Crow#546` | 1 | 0 | 0 | — | — |  |
+| 2767 | `0x10359e90` | `CGeneric_NPC#546` | 1 | 0 | 0 | — | — |  |
+| 2768 | `0x1035a7e0` | `CGeneric_NPC#473` | 0 | 0 | 1 | — | — |  |
+| 2769 | `0x1035ace0` | `CGeneric_NPC_bathack#546` | 1 | 0 | 0 | — | — |  |
+| 2770 | `0x1035afe0` | `CGeneric_NPC_bathack#495` | 1 | 0 | 0 | — | — |  |
+| 2771 | `0x1035b4f0` | `CGenericSabbat_NPC#546` | 1 | 0 | 0 | — | — |  |
+| 2772 | `0x1035be50` | `CGenericSabbat_NPC#473` | 0 | 0 | 1 | — | — |  |
+| 2773 | `0x1035c1f0` | `CNPC_VVampireBoss#5` | 0 | 0 | 1 | — | — |  |
+| 2774 | `0x1035c460` | `CNPC_VAndreiBlood#546` | 1 | 0 | 0 | — | — |  |
+| 2775 | `0x1035ebf0` | `CNPC_VAnimal#587`, `CNPC_VDog#587`, +3 more | 1 | 0 | 0 | — | — |  |
+| 2776 | `0x1035edb0` | `CNPC_VAnimal#546` | 1 | 0 | 0 | — | — |  |
+| 2777 | `0x103601a0` | `CNPC_VAnimal#390`, `CNPC_VDog#390`, +3 more | 0 | 1 | 0 | — | — |  |
+| 2778 | `0x10360410` | `CNPC_VAsianVampire#5` | 0 | 0 | 1 | — | — |  |
+| 2779 | `0x10360610` | `CNPC_VAsianVampire#546` | 1 | 0 | 0 | — | — |  |
+| 2780 | `0x10362df0` | `CNPC_VBach#546` | 1 | 0 | 0 | — | — |  |
+| 2781 | `0x10364500` | `CNPC_VBach#553` | 1 | 0 | 0 | — | — |  |
+| 2782 | `0x10365840` | — | 1 | 0 | 0 | — | — |  |
+| 2783 | `0x10366b30` | — | 1 | 0 | 0 | — | — |  |
+| 2784 | `0x10366e10` | `CNPC_VBatSwarm#546` | 1 | 0 | 0 | — | — |  |
+| 2785 | `0x103675e0` | `CNPC_VBatSwarm#553` | 1 | 0 | 0 | — | — |  |
+| 2786 | `0x10367a10` | `CNPC_VBrujah#546` | 1 | 0 | 0 | — | — |  |
+| 2787 | `0x10368150` | `CNPC_VCamera#493`, `CNPC_VCameraSecurity#493` | 1 | 0 | 0 | — | — |  |
+| 2788 | `0x10368170` | `CNPC_VCamera#494`, `CNPC_VCameraSecurity#494` | 1 | 0 | 0 | — | — |  |
+| 2789 | `0x10368190` | `CNPC_VCamera#495`, `CNPC_VCameraSecurity#495` | 1 | 0 | 0 | — | — |  |
+| 2790 | `0x103681f0` | `CNPC_VCamera#498`, `CNPC_VCameraSecurity#498` | 1 | 0 | 0 | — | — |  |
+| 2791 | `0x10368210` | `CNPC_VCamera#499`, `CNPC_VCameraSecurity#499` | 1 | 0 | 0 | — | — |  |
+| 2792 | `0x10368290` | `CNPC_VCamera#503`, `CNPC_VCameraSecurity#503` | 1 | 0 | 0 | — | — |  |
+| 2793 | `0x103682b0` | `CNPC_VCamera#504`, `CNPC_VCameraSecurity#504` | 1 | 0 | 0 | — | — |  |
+| 2794 | `0x10368350` | `CNPC_VCamera#509`, `CNPC_VCameraSecurity#509` | 1 | 0 | 0 | — | — |  |
+| 2795 | `0x10368550` | `CNPC_VCamera#546`, `CNPC_VCameraSecurity#546` | 1 | 0 | 0 | — | — |  |
+| 2796 | `0x10368f00` | `CNPC_VCamera#564`, `CNPC_VCameraSecurity#564` | 1 | 0 | 0 | — | — |  |
+| 2797 | `0x1036a030` | `CNPC_VCameraSecurity#468` | 1 | 0 | 0 | — | — |  |
+| 2798 | `0x1036a1f0` | `CNPC_VChangBros#5` | 0 | 0 | 1 | — | — |  |
+| 2799 | `0x1036a3f0` | `CNPC_VChangBros#546` | 1 | 0 | 0 | — | — |  |
+| 2800 | `0x1036eaf0` | `CNPC_VChangBrosBlade#5` | 0 | 0 | 1 | — | — |  |
+| 2801 | `0x1036ecf0` | `CNPC_VChangBrosBlade#546` | 1 | 0 | 0 | — | — |  |
+| 2802 | `0x1036f2f0` | `CNPC_VChangBrosClaw#5` | 0 | 0 | 1 | — | — |  |
+| 2803 | `0x1036f4f0` | `CNPC_VChangBrosClaw#546` | 1 | 0 | 0 | — | — |  |
+| 2804 | `0x1036fcb0` | `CNPC_VCombatman#546` | 1 | 0 | 0 | — | — |  |
+| 2805 | `0x10370560` | — | 1 | 0 | 0 | — | — |  |
+| 2806 | `0x103705b0` | — | 1 | 0 | 0 | — | — |  |
+| 2807 | `0x10370630` | — | 1 | 0 | 0 | — | — |  |
+| 2808 | `0x10370650` | — | 1 | 0 | 0 | `OnHeightenedAlertModeStart` | — |  |
+| 2809 | `0x10370ad0` | `CNPC_VCop#546` | 1 | 0 | 0 | — | — |  |
+| 2810 | `0x103736d0` | `CNPC_VDog#546` | 1 | 0 | 0 | — | — |  |
+| 2811 | `0x103747c0` | — | 1 | 0 | 0 | — | — |  |
+| 2812 | `0x10374e50` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — |  |
+| 2813 | `0x10375440` | `CNPC_VFrenzyShadow#546` | 1 | 0 | 0 | — | — |  |
+| 2814 | `0x10376b10` | `CNPC_VFrenzyShadow#390` | 0 | 0 | 1 | — | — |  |
+| 2815 | `0x10376c10` | — | 1 | 0 | 0 | — | — |  |
+| 2816 | `0x10377210` | `CNPC_VGangrel#546` | 1 | 0 | 0 | — | — |  |
+| 2817 | `0x10377b60` | `CNPC_VGargoyle#5` | 0 | 0 | 1 | — | — |  |
+| 2818 | `0x10377cd0` | `CNPC_VGargoyle#546` | 1 | 0 | 0 | — | — |  |
+| 2819 | `0x10378f80` | — | 1 | 0 | 0 | — | — |  |
+| 2820 | `0x1037a950` | `CNPC_VGhoulCroucher#546` | 1 | 0 | 0 | — | — |  |
+| 2821 | `0x1037c800` | `CNPC_VGuard1#546` | 1 | 0 | 0 | — | — |  |
+| 2822 | `0x1037ea60` | `CNPC_VHengeyokai#546` | 1 | 0 | 0 | — | — |  |
+| 2823 | `0x10382d40` | — | 1 | 0 | 0 | — | — |  |
+| 2824 | `0x10383470` | — | 1 | 0 | 0 | — | — |  |
+| 2825 | `0x10384200` | `CNPC_VHuman#546` | 1 | 0 | 0 | — | — |  |
+| 2826 | `0x10386c80` | `CNPC_ProneDialog#546`, `CNPC_VHumanCombatant#546` | 1 | 0 | 0 | — | — |  |
+| 2827 | `0x103878b0` | `CNPC_VHumanCombatPatrol#546` | 1 | 0 | 0 | — | — |  |
+| 2828 | `0x10387fd0` | — | 1 | 0 | 0 | — | — |  |
+| 2829 | `0x10388200` | `CNPC_VHunter#546` | 1 | 0 | 0 | — | — |  |
+| 2830 | `0x10388c40` | — | 1 | 0 | 0 | `player D_HT 10` | — |  |
+| 2831 | `0x10388f80` | `CNPC_VLasombra#546` | 1 | 0 | 0 | — | — |  |
+| 2832 | `0x10389700` | `CNPC_VMalkavian#546` | 1 | 0 | 0 | — | — |  |
+| 2833 | `0x10389f50` | `CNPC_VManBat#546` | 1 | 0 | 0 | — | — |  |
+| 2834 | `0x1038e880` | `CNPC_VManBat#390` | 0 | 0 | 1 | — | — |  |
+| 2835 | `0x10391010` | `CNPC_VBaseBoss#587`, `CNPC_VMingXiao#587`, +4 more | 1 | 0 | 0 | — | — |  |
+| 2836 | `0x10391390` | `CNPC_VMingXiao#546` | 1 | 0 | 0 | — | — |  |
+| 2837 | `0x10395d00` | `CNPC_VMingXiao#574` | 1 | 0 | 0 | — | — |  |
+| 2838 | `0x10395e70` | `CNPC_VMingXiao#603` | 1 | 0 | 0 | — | — |  |
+| 2839 | `0x10396000` | `CNPC_VMingXiao#127` | 0 | 0 | 1 | — | — |  |
+| 2840 | `0x10397000` | `CNPC_VMingXiao#166` | 0 | 0 | 1 | — | — |  |
+| 2841 | `0x103979d0` | — | 1 | 0 | 0 | — | — |  |
+| 2842 | `0x10399ef0` | — | 1 | 0 | 0 | `**studio**` | — |  |
+| 2843 | `0x1039aa20` | — | 1 | 0 | 0 | — | — |  |
+| 2844 | `0x1039b230` | `CNPC_VMingXiaoTentacle#546` | 1 | 0 | 0 | — | — |  |
+| 2845 | `0x1039eda0` | `CNPC_VMingXiaoTentacle#127` | 0 | 0 | 1 | — | — |  |
+| 2846 | `0x1039eee0` | — | 1 | 0 | 0 | — | — |  |
+| 2847 | `0x1039ef10` | — | 1 | 0 | 0 | — | — |  |
+| 2848 | `0x1039ef60` | — | 1 | 0 | 0 | — | — |  |
+| 2849 | `0x1039f7a0` | `CNPC_VMoleman#546` | 1 | 0 | 0 | — | — |  |
+| 2850 | `0x103a0090` | `CNPC_VNewscaster#493` | 1 | 0 | 0 | — | — |  |
+| 2851 | `0x103a00b0` | `CNPC_VNewscaster#494` | 1 | 0 | 0 | — | — |  |
+| 2852 | `0x103a00d0` | `CNPC_VNewscaster#495` | 1 | 0 | 0 | — | — |  |
+| 2853 | `0x103a01d0` | `CNPC_VNewscaster#587` | 1 | 0 | 0 | — | — |  |
+| 2854 | `0x103a07f0` | — | 1 | 0 | 0 | `filename`, `dependency`, +5 more | — |  |
+| 2855 | `0x103a1640` | `CNPC_VNosferatu#546` | 1 | 0 | 0 | — | — |  |
+| 2856 | `0x103a1fa0` | `CNPC_VPedestrian#546` | 1 | 0 | 0 | — | — |  |
+| 2857 | `0x103a3c50` | `CNPC_VPlaceholder#546` | 1 | 0 | 0 | — | — |  |
+| 2858 | `0x103a4220` | `CNPC_VPlaceholder#587` | 1 | 0 | 0 | — | — |  |
+| 2859 | `0x103a47d0` | `CNPC_VFrenzyShadow#493`, `CNPC_VPlayerController#493`, +1 more | 1 | 0 | 0 | — | — |  |
+| 2860 | `0x103a47f0` | `CNPC_VFrenzyShadow#494`, `CNPC_VPlayerController#494`, +1 more | 1 | 0 | 0 | — | — |  |
+| 2861 | `0x103a4810` | `CNPC_VFrenzyShadow#495`, `CNPC_VPlayerController#495`, +1 more | 1 | 0 | 0 | — | — |  |
+| 2862 | `0x103a5240` | `CNPC_VSabbatGunman#546` | 1 | 0 | 0 | — | — |  |
+| 2863 | `0x103a5ce0` | `CNPC_VSabbatLeader#5` | 0 | 0 | 1 | — | — |  |
+| 2864 | `0x103a5e50` | `CNPC_VSabbatLeader#546` | 1 | 0 | 0 | — | — |  |
+| 2865 | `0x103abd40` | `CNPC_VRat#546`, `CNPC_VScurrying#546` | 1 | 0 | 0 | — | — |  |
+| 2866 | `0x103aca60` | `CNPC_VRat#471`, `CNPC_VScurrying#471` | 1 | 0 | 0 | — | — |  |
+| 2867 | `0x103aca80` | — | 1 | 0 | 0 | — | — |  |
+| 2868 | `0x103ad0a0` | — | 1 | 0 | 0 | — | — |  |
+| 2869 | `0x103ad0f0` | — | 1 | 0 | 0 | `Player_Nosferatu` | — |  |
+| 2870 | `0x103ad6a0` | `CNPC_VRat#428` | 1 | 0 | 0 | — | — |  |
+| 2871 | `0x103adcb0` | `CNPC_VSheriffMan#546` | 1 | 0 | 0 | — | — |  |
+| 2872 | `0x103b1dc0` | `CNPC_VSheriffSwarm#546` | 1 | 0 | 0 | — | — |  |
+| 2873 | `0x103b2590` | `CNPC_VSheriffSwarm#553` | 1 | 0 | 0 | — | — |  |
+| 2874 | `0x103b2a50` | `CNPC_VStalker#546` | 1 | 0 | 0 | — | — |  |
+| 2875 | `0x103b3170` | `CNPC_VTaxiDriver#546` | 1 | 0 | 0 | — | — |  |
+| 2876 | `0x103b3cc0` | `CNPC_VTest#546` | 1 | 0 | 0 | — | — |  |
+| 2877 | `0x103b54d0` | `CNPC_VToreador#546` | 1 | 0 | 0 | — | — |  |
+| 2878 | `0x103b5c70` | `CNPC_VTremere#546` | 1 | 0 | 0 | — | — |  |
+| 2879 | `0x103b6d90` | `CNPC_VTzimisce#325` | 1 | 0 | 0 | — | — |  |
+| 2880 | `0x103b6db0` | `CNPC_VTzimisce#324` | 1 | 0 | 0 | — | — |  |
+| 2881 | `0x103b70f0` | `CNPC_VTzimisce#546` | 1 | 0 | 0 | — | — |  |
+| 2882 | `0x103b9600` | `CNPC_VTzimisce#493` | 1 | 0 | 0 | — | — |  |
+| 2883 | `0x103b9620` | `CNPC_VTzimisce#494` | 1 | 0 | 0 | — | — |  |
+| 2884 | `0x103b9640` | `CNPC_VTzimisce#495` | 1 | 0 | 0 | — | — |  |
+| 2885 | `0x103b9ef0` | `CNPC_VTzimisce#509` | 1 | 0 | 0 | — | — |  |
+| 2886 | `0x103bc4e0` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 2887 | `0x103bca20` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 2888 | `0x103bcaf0` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 2889 | `0x103bcb60` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 2890 | `0x103bcc00` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — |  |
+| 2891 | `0x103c0c90` | `CNPC_VTzimisceHeadClaw#546` | 1 | 0 | 0 | — | — |  |
+| 2892 | `0x103c12c0` | `CNPC_VTzimisceHeadClaw#325` | 1 | 0 | 0 | — | — |  |
+| 2893 | `0x103c12e0` | `CNPC_VTzimisceHeadClaw#324` | 1 | 0 | 0 | — | — |  |
+| 2894 | `0x103c2860` | `CNPC_VTzimisceHeadClaw#127` | 0 | 0 | 1 | — | — |  |
+| 2895 | `0x103c2a60` | `CNPC_VTzimisceRunner#546` | 1 | 0 | 0 | — | — |  |
+| 2896 | `0x103c3060` | `CNPC_VTzimisceRunner#400` | 1 | 0 | 0 | — | — |  |
+| 2897 | `0x103c3080` | `CNPC_VTzimisceRunner#325` | 1 | 0 | 0 | — | — |  |
+| 2898 | `0x103c30a0` | `CNPC_VTzimisceRunner#324` | 1 | 0 | 0 | — | — |  |
+| 2899 | `0x103c3fd0` | `CNPC_VTzimisceRunner#588` | 1 | 0 | 0 | — | — |  |
+| 2900 | `0x103c43b0` | `CNPC_VTzimisceRunner#330` | 0 | 0 | 1 | — | — |  |
+| 2901 | `0x103c4a80` | `CNPC_VPlayerController#546`, `CNPC_VVampire#546` | 1 | 0 | 0 | — | — |  |
+| 2902 | `0x103c5270` | `CNPC_VVampireBoss#546` | 1 | 0 | 0 | — | — |  |
+| 2903 | `0x103c7950` | `CNPC_VVentrue#546` | 1 | 0 | 0 | — | — |  |
+| 2904 | `0x103c8ed0` | `CNPC_VWerewolf#546` | 1 | 0 | 0 | — | — |  |
+| 2905 | `0x103cb4b0` | — | 1 | 0 | 0 | — | — |  |
+| 2906 | `0x103d0e70` | — | 1 | 0 | 0 | — | — |  |
+| 2907 | `0x103d8660` | `CNPC_VWerewolf#500` | 0 | 0 | 1 | `NULL ENTITY`, `Exert_Heavy`, +1 more | — |  |
+| 2908 | `0x103dbad0` | — | 1 | 0 | 0 | `think_limit`, `entity_debug_stats`, +11 more | — |  |
+| 2909 | `0x103dbe70` | — | 1 | 0 | 0 | — | — |  |
+| 2910 | `0x103dc220` | — | 1 | 0 | 0 | — | — |  |
+| 2911 | `0x103dc950` | `CNPC_VWolfMorph#546` | 1 | 0 | 0 | — | — |  |
+| 2912 | `0x103dcf00` | `CNPC_VWolfMorph#588` | 1 | 0 | 0 | — | — |  |
+| 2913 | `0x103dd1f0` | `CNPC_VYukie#546` | 1 | 0 | 0 | — | — |  |
+| 2914 | `0x103de2f0` | `CNPC_VZombie#5` | 0 | 0 | 1 | — | — |  |
+| 2915 | `0x103de4d0` | `CNPC_VZombie#546` | 1 | 0 | 0 | — | — |  |
+| 2916 | `0x103e0430` | `CNPC_VZombie#141` | 0 | 0 | 1 | — | — |  |
+| 2917 | `0x103e05e0` | — | 1 | 0 | 0 | — | — |  |
+| 2918 | `0x103e0a00` | — | 1 | 0 | 0 | — | — |  |
+| 2919 | `0x103e12c0` | `CNPC_VZombie#25` | 0 | 0 | 1 | — | — |  |
+| 2920 | `0x103e12f0` | `CNPC_VZombie#26` | 0 | 0 | 1 | — | — |  |
+| 2921 | `0x103eeee0` | — | 1 | 0 | 0 | — | — |  |
+| 2922 | `0x10412420` | — | 1 | 0 | 0 | `ERROR: Activity Lookup went out of range…` | — |  |
+| 2923 | `0x10412470` | — | 1 | 0 | 0 | — | — |  |
+| 2924 | `0x104124b0` | — | 1 | 0 | 0 | `***⏎Shared<->Private Activity collision!…` | — |  |
+| 2925 | `0x10412550` | — | 1 | 0 | 0 | — | — |  |
+| 2926 | `0x104126a0` | — | 1 | 0 | 0 | — | — |  |
+| 2927 | `0x104276d0` | — | 1 | 0 | 0 | — | — |  |
+| 2928 | `0x10427a70` | — | 1 | 0 | 0 | `***⏎Model %s tried to reference unregist…`, `***⏎Model %s tried to reference unregist…`, +2 more | — |  |
+| 2929 | `0x10427d90` | — | 1 | 0 | 0 | — | — |  |
+| 2930 | `0x10427df0` | — | 1 | 0 | 0 | — | — |  |
+| 2931 | `0x104280f0` | — | 1 | 0 | 0 | — | — |  |
+| 2932 | `0x10428280` | — | 1 | 0 | 0 | — | — |  |
+| 2933 | `0x10428310` | — | 1 | 0 | 0 | `GetEyePosition() Can't get pstudiohdr pt…` | — |  |
+| 2934 | `0x10428360` | — | 1 | 0 | 0 | — | — |  |
+| 2935 | `0x10428470` | — | 1 | 0 | 0 | — | — |  |
+| 2936 | `0x104284c0` | — | 1 | 0 | 0 | — | — |  |
+| 2937 | `0x104287d0` | — | 1 | 0 | 0 | `Unknown`, `Null model in GetSequenceActivityName() …`, +1 more | — |  |
+| 2938 | `0x10428850` | — | 1 | 0 | 0 | — | — |  |
+| 2939 | `0x10428880` | — | 1 | 0 | 0 | `Bad sound event %d in sequence %s :: %s …` | — |  |
+| 2940 | `0x1042fc90` | — | 1 | 0 | 0 | — | — |  |
+| 2941 | `0x10430130` | — | 1 | 0 | 0 | — | — |  |
+| 2942 | `0x10431351` | — | 1 | 0 | 0 | — | — |  |
+| 2943 | `0x1043253d` | — | 1 | 0 | 0 | — | — |  |
+| 2944 | `0x104325f0` | — | 1 | 0 | 0 | — | — |  |
+| 2945 | `0x1043260d` | — | 1 | 0 | 0 | — | — |  |
+| 2946 | `0x104342d6` | — | 1 | 0 | 0 | — | — |  |
+| 2947 | `0x10438962` | — | 1 | 0 | 0 | — | — |  |
+| 2948 | `0x10438987` | — | 1 | 0 | 0 | — | — |  |
+| 2949 | `0x104389c6` | — | 1 | 0 | 0 | — | — |  |
+| 2950 | `0x10438aad` | — | 1 | 0 | 0 | — | — |  |
+| 2951 | `0x10438b6e` | — | 1 | 0 | 0 | — | — |  |
+| 2952 | `0x10438b7c` | — | 1 | 0 | 0 | — | — |  |
+| 2953 | `0x10438bae` | — | 1 | 0 | 0 | — | — |  |
+| 2954 | `0x10438c10` | — | 1 | 0 | 0 | — | — |  |
+| 2955 | `0x1043ab2b` | — | 1 | 0 | 0 | — | — |  |
+| 2956 | `0x1043ab74` | — | 1 | 0 | 0 | — | — |  |
+| 2957 | `0x1043abca` | — | 1 | 0 | 0 | — | — |  |
+| 2958 | `0x1043ac56` | — | 1 | 0 | 0 | — | — |  |
+| 2959 | `0x1043ac71` | — | 1 | 0 | 0 | — | — |  |
+| 2960 | `0x1043ac7d` | — | 1 | 0 | 0 | — | — |  |
+| 2961 | `0x1043ac98` | — | 1 | 0 | 0 | — | — |  |
+| 2962 | `0x1043ad25` | — | 1 | 0 | 0 | — | — |  |
+| 2963 | `0x1043ae91` | — | 1 | 0 | 0 | — | — |  |
+| 2964 | `0x1043b1bd` | — | 1 | 0 | 0 | — | — |  |
+| 2965 | `0x1043b6ca` | — | 1 | 0 | 0 | — | — |  |
+| 2966 | `0x1043bc15` | — | 1 | 0 | 0 | — | — |  |
+| 2967 | `0x1043c536` | — | 1 | 0 | 0 | — | — |  |
+| 2968 | `0x1043ce52` | — | 1 | 0 | 0 | — | — |  |
+| 2969 | `0x1043ce7f` | — | 1 | 0 | 0 | — | — |  |
+| 2970 | `0x1043d2e5` | — | 1 | 0 | 0 | — | — |  |
+| 2971 | `0x1043d505` | — | 1 | 0 | 0 | — | — |  |
+| 2972 | `0x10026530` | `CAISound#21`, `CAI_BaseHumanoid#21`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#21 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2973 | `0x10026550` | `CAISound#22`, `CAI_BaseHumanoid#22`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#22 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2974 | `0x10026570` | `CAISound#23`, `CAI_BaseHumanoid#23`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#23 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2975 | `0x100265b0` | `CAISound#25`, `CAI_BaseHumanoid#25`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#25 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2976 | `0x100265d0` | `CAISound#26`, `CAI_BaseHumanoid#26`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#26 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2977 | `0x100265f0` | `CAISound#27`, `CAI_BaseHumanoid#27`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#27 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2978 | `0x10026610` | `CAISound#28`, `CAI_BaseHumanoid#28`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#28 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2979 | `0x10026630` | `CAISound#29`, `CAI_BaseHumanoid#29`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#29 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2980 | `0x10026650` | `CAISound#30`, `CAI_BaseHumanoid#30`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#30 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2981 | `0x10026670` | `CAISound#32`, `CAI_BaseHumanoid#32`, +475 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#32 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2982 | `0x10026690` | `CAISound#33`, `CAI_BaseHumanoid#33`, +486 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#33 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2983 | `0x100266d0` | `CAISound#35`, `CAI_BaseHumanoid#35`, +238 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#35 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2984 | `0x100266f0` | `CAISound#36`, `CAI_BaseHumanoid#36`, +482 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#36 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2985 | `0x10026710` | `CAISound#37`, `CAI_BaseHumanoid#37`, +489 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#37 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2986 | `0x10026730` | `CAISound#38`, `CAI_BaseHumanoid#38`, +490 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#38 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2987 | `0x10026750` | `CAISound#40`, `CAI_BaseHumanoid#40`, +491 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#40 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2988 | `0x10026770` | `CAISound#41`, `CAI_BaseHumanoid#41`, +476 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#41 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2989 | `0x10026790` | `CAISound#43`, `CAI_BaseHumanoid#43`, +488 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#43 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2990 | `0x100267b0` | `CAISound#44`, `CAI_BaseHumanoid#44`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#44 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2991 | `0x100267d0` | `CAISound#46`, `CAI_BaseHumanoid#46`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#46 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2992 | `0x100267f0` | `CAISound#47`, `CAI_BaseHumanoid#47`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#47 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2993 | `0x10026810` | `CAISound#48`, `CAI_BaseHumanoid#48`, +494 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:43 | `CAI_BaseNPC#48 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2994 | `0x10026830` | `CAISound#49`, `CAI_BaseHumanoid#49`, +494 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Player/ElysiumCameraSolve.cpp:467, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:44, Source/ElysiumUE/Public/ElysiumCameraSolve.h:51 | `CAI_BaseNPC#49 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2995 | `0x10026910` | `CAISound#54`, `CAI_BaseHumanoid#54`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#54 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2996 | `0x10026930` | `CAISound#55`, `CAI_BaseHumanoid#55`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#55 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2997 | `0x10026950` | `CAISound#56`, `CAI_BaseHumanoid#56`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#56 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2998 | `0x10026970` | `CAISound#57`, `CAI_BaseHumanoid#57`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#57 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2999 | `0x10026990` | `CAISound#58`, `CAI_BaseHumanoid#58`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#58 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3000 | `0x100269b0` | `CAISound#59`, `CAI_BaseHumanoid#59`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#59 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3001 | `0x100269d0` | `CAISound#60`, `CAI_BaseHumanoid#60`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#60 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3002 | `0x100269f0` | `CAISound#61`, `CAI_BaseHumanoid#61`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#61 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3003 | `0x10026ad0` | `CAISound#72`, `CAI_ChangeHintGroup#72`, +410 more | 0 | 0 | 0 | — | — |  |
+| 3004 | `0x10026bf0` | `CAISound#115`, `CAI_BaseHumanoid#115`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#115 no SDK twin: stretch #113-#118 holds 4 retai…` |
+| 3005 | `0x10026c10` | `CAISound#131`, `CAI_BaseHumanoid#131`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#131 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 3006 | `0x10026c30` | `CAISound#132`, `CAI_BaseHumanoid#132`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#132 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 3007 | `0x10026d10` | `CAISound#135`, `CAI_ChangeHintGroup#135`, +158 more | 0 | 0 | 0 | — | — |  |
+| 3008 | `0x10026d30` | `CAISound#136`, `CAI_ChangeHintGroup#136`, +417 more | 0 | 0 | 0 | — | — |  |
+| 3009 | `0x10026d50` | `CAISound#137`, `CAI_ChangeHintGroup#137`, +195 more | 0 | 0 | 0 | — | — |  |
+| 3010 | `0x10026d70` | `CAISound#139`, `CAI_BaseHumanoid#139`, +492 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#139 no SDK twin: stretch #138-#140 holds 1 retai…` |
+| 3011 | `0x10026db0` | `CAISound#147`, `CAI_BaseHumanoid#147`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#147 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3012 | `0x10026dd0` | `CAISound#148`, `CAI_BaseHumanoid#148`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#148 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3013 | `0x10026df0` | `CAISound#149`, `CAI_BaseHumanoid#149`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#149 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3014 | `0x10026e10` | `CAISound#150`, `CAI_BaseHumanoid#150`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#150 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3015 | `0x10026e30` | `CAISound#151`, `CAI_BaseHumanoid#151`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#151 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3016 | `0x10026e50` | `CAISound#152`, `CAI_ChangeHintGroup#152`, +157 more | 0 | 0 | 0 | — | — |  |
+| 3017 | `0x10026ee0` | `CAISound#156`, `CAI_BaseHumanoid#156`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#156 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3018 | `0x10026f00` | `CAISound#157`, `CAI_BaseHumanoid#157`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#157 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3019 | `0x10026f60` | `CAISound#162`, `CAI_BaseHumanoid#162`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#162 no SDK twin: stretch #160-#163 holds 2 retai…` |
+| 3020 | `0x100270a0` | `CAISound#179`, `CAI_BaseHumanoid#179`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#179 no SDK twin: stretch #178-#180 holds 1 retai…` |
+| 3021 | `0x100270e0` | `CAISound#187`, `CAI_BaseHumanoid#187`, +326 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#187 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 3022 | `0x10027100` | `CAISound#188`, `CAI_BaseHumanoid#188`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#188 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 3023 | `0x10027120` | `CAISound#190`, `CAI_BaseHumanoid#190`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#190 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 3024 | `0x10027330` | `CAISound#205`, `CAI_BaseHumanoid#205`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#205 no SDK twin: stretch #199-#222 holds 22 reta…` |
+| 3025 | `0x10027350` | `CAISound#206`, `CAI_BaseHumanoid#206`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#206 no SDK twin: stretch #199-#222 holds 22 reta…` |
+| 3026 | `0x10027370` | `CAISound#210`, `CAI_BaseHumanoid#210`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#210 no SDK twin: stretch #199-#222 holds 22 reta…` |
+| 3027 | `0x100273b0` | `CAISound#224`, `CAI_BaseHumanoid#224`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#224 no SDK twin: stretch #222-#227 holds 4 retai…` |
+| 3028 | `0x100273f0` | `CAISound#235`, `CAI_BaseHumanoid#235`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#235 no SDK twin: stretch #233-#237 holds 3 retai…` |
+| 3029 | `0x10027410` | `CAISound#236`, `CAI_BaseHumanoid#236`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#236 no SDK twin: stretch #233-#237 holds 3 retai…` |
+| 3030 | `0x10027430` | `CAISound#240`, `CAI_ChangeHintGroup#240`, +410 more | 0 | 0 | 0 | — | — |  |
+| 3031 | `0x10027650` | `CAISound#4`, `CAI_BaseHumanoid#4`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#4 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
+| 3032 | `0x1004fbb0` | `CAI_BaseHumanoid#108`, `CAI_BaseNPC#108`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#108 no SDK twin: stretch #107-#113 holds 5 retai…` |
+| 3033 | `0x1004fbf0` | `CAI_BaseHumanoid#109`, `CAI_BaseNPC#109`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#109 no SDK twin: stretch #107-#113 holds 5 retai…` |
+| 3034 | `0x1004fc10` | `CAI_BaseHumanoid#152`, `CAI_BaseNPC#152`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#152 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 3035 | `0x10098eb0` | `CAI_BaseHumanoid#255`, `CAI_BaseNPC#255`, +85 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#255 no SDK twin: stretch #249-#256 holds 6 retai…` |
+| 3036 | `0x1009a660` | `CAISound#80`, `CAI_ChangeHintGroup#80`, +160 more | 0 | 0 | 0 | — | — |  |
+| 3037 | `0x1009a680` | `CAISound#81`, `CAI_ChangeHintGroup#81`, +160 more | 0 | 0 | 0 | — | — |  |
+| 3038 | `0x1009e100` | `CAISound#79`, `CAI_ChangeHintGroup#79`, +192 more | 0 | 0 | 0 | — | — |  |
+| 3039 | `0x100ab430` | `CAISound#101`, `CAI_BaseHumanoid#101`, +493 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#101 no SDK twin: stretch #100-#103 holds 2 retai…` |
+| 3040 | `0x100ab450` | `CAISound#102`, `CAI_BaseHumanoid#102`, +494 more | 0 | 0 | 0 | `Physics_TraceEntity` | — | `CAI_BaseNPC#102 no SDK twin: stretch #100-#103 holds 2 retai…` |
+| 3041 | `0x100ad8f0` | `CAISound#182`, `CAI_BaseHumanoid#182`, +494 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#182 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 3042 | `0x100ad910` | `CAISound#183`, `CAI_BaseHumanoid#183`, +489 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#183 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 3043 | `0x100b4340` | `CAISound#117`, `CAI_DynamicLink#117`, +50 more | 0 | 0 | 0 | — | — |  |
+| 3044 | `0x100b5080` | `CAISound#223`, `CAI_ChangeHintGroup#223`, +395 more | 0 | 0 | 0 | — | — |  |
+| 3045 | `0x100b5c20` | `CAI_BaseHumanoid#282`, `CAI_BaseNPC#282`, +84 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#282 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 3046 | `0x100b70e0` | `CAI_BaseHumanoid#290`, `CAI_BaseNPC#290`, +84 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#290 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 3047 | `0x1014f710` | `CAI_BaseHumanoid#316`, `CAI_BaseNPC#316`, +14 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#316 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3048 | `0x1014f730` | `CAI_BaseHumanoid#317`, `CAI_BaseNPC#317`, +16 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#317 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3049 | `0x1014f7b0` | `CAI_BaseHumanoid#321`, `CAI_BaseNPC#321`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#321 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3050 | `0x1014f7d0` | `CAI_BaseHumanoid#322`, `CAI_BaseNPC#322`, +19 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#322 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3051 | `0x1014f850` | `CAI_BaseHumanoid#329`, `CAI_BaseNPC#329`, +82 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#329 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3052 | `0x1014f890` | `CAI_BaseHumanoid#332`, `CAI_BaseNPC#332`, +82 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#332 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3053 | `0x1014f8b0` | `CAI_BaseHumanoid#240`, `CAI_BaseNPC#240`, +83 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#240 no SDK twin: stretch #238-#241 holds 2 retai…` |
+| 3054 | `0x1014f950` | `CAI_BaseHumanoid#361`, `CAI_BaseNPC#361`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#361 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3055 | `0x1014f9d0` | `CAI_BaseHumanoid#377`, `CAI_BaseNPC#377`, +79 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#377 no SDK twin: stretch #376-#382 holds 5 retai…` |
+| 3056 | `0x1014f9f0` | `CAI_BaseHumanoid#378`, `CAI_BaseNPC#378`, +68 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#378 no SDK twin: stretch #376-#382 holds 5 retai…` |
+| 3057 | `0x1015dc20` | `CAI_BaseHumanoid#72`, `CAI_BaseNPC#72`, +63 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#72 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3058 | `0x101a5db0` | `CCineAI#82`, `CCineNPC#82` | 0 | 0 | 0 | — | — |  |
+| 3059 | `0x101a6420` | `CAI_BaseHumanoid#410`, `CAI_BaseNPC#410`, +74 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#410 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 3060 | `0x101a6440` | `CAI_BaseHumanoid#412`, `CAI_BaseNPC#412`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#412 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 3061 | `0x101a6480` | `CAI_BaseHumanoid#414`, `CAI_BaseNPC#414`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#414 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 3062 | `0x101a64a0` | `CAI_BaseHumanoid#415`, `CAI_BaseNPC#415`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#415 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 3063 | `0x101a64e0` | `CAI_BaseHumanoid#417`, `CAI_BaseNPC#417`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#417 no SDK twin: stretch #405-#420 holds 14 reta…` |
+| 3064 | `0x101a6680` | `CAI_BaseHumanoid#454`, `CAI_BaseNPC#454`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#454 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 3065 | `0x101a66a0` | `CAI_BaseHumanoid#455`, `CAI_BaseNPC#455`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#455 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 3066 | `0x101a66c0` | `CAI_BaseHumanoid#456`, `CAI_BaseNPC#456`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#456 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 3067 | `0x101a66e0` | `CAI_BaseHumanoid#457`, `CAI_BaseNPC#457`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#457 no SDK twin: stretch #453-#461 holds 7 retai…` |
+| 3068 | `0x101a67a0` | `CAI_BaseHumanoid#472`, `CAI_BaseNPC#472`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#472 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 3069 | `0x101a6860` | `CAI_BaseHumanoid#136`, `CAI_BaseNPC#136`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#136 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 3070 | `0x101a6980` | `CAI_BaseHumanoid#496`, `CAI_BaseNPC#496`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#496 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3071 | `0x101a69a0` | `CAI_BaseHumanoid#497`, `CAI_BaseNPC#497`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#497 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3072 | `0x101a6a00` | `CAI_BaseHumanoid#500`, `CAI_BaseNPC#500`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#500 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3073 | `0x101a6a20` | `CAI_BaseHumanoid#501`, `CAI_BaseNPC#501`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#501 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3074 | `0x101a6a40` | `CAI_BaseHumanoid#502`, `CAI_BaseNPC#502`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#502 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3075 | `0x101a6aa0` | `CAI_BaseHumanoid#505`, `CAI_BaseNPC#505`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#505 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3076 | `0x101a6ac0` | `CAI_BaseHumanoid#506`, `CAI_BaseNPC#506`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#506 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3077 | `0x101a6b00` | `CAI_BaseHumanoid#508`, `CAI_BaseNPC#508`, +73 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#508 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 3078 | `0x101a6be0` | `CAI_BaseNPC#535`, `CAI_BaseNPCTroika#535`, +74 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#535 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 3079 | `0x101a6c60` | `CAI_BaseHumanoid#557`, `CAI_BaseNPC#557`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#557 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 3080 | `0x101a6c80` | `CAI_BaseHumanoid#558`, `CAI_BaseNPC#558`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#558 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 3081 | `0x101a6cc0` | `CAI_BaseHumanoid#578`, `CAI_BaseNPC#578`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#578 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 3082 | `0x101a6d20` | `CCineAI#117`, `CCineAISchedule#117`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3083 | `0x101a6dc0` | `CCineAI#362`, `CCineAISchedule#362`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3084 | `0x101a6de0` | `CCineAI#365`, `CCineAISchedule#365`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3085 | `0x101a6e20` | `CCineAI#72`, `CCineAISchedule#72`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3086 | `0x101a9620` | `CCineAISchedule#82` | 0 | 0 | 0 | — | — |  |
+| 3087 | `0x101aa650` | `CAI_BaseNPCTroika#30`, `CGeneric_NPC#30`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3088 | `0x101aa730` | `CAI_BaseNPCTroika#415`, `CGeneric_NPC#415`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3089 | `0x101aa7d0` | `CPayphone#117` | 0 | 0 | 0 | — | — |  |
+| 3090 | `0x101aa870` | `CPayphone#362` | 0 | 0 | 0 | — | — |  |
+| 3091 | `0x101aa890` | `CPayphone#365` | 0 | 0 | 0 | — | — |  |
+| 3092 | `0x101aa8f0` | `CPayphone#615` | 0 | 0 | 0 | — | — |  |
+| 3093 | `0x101aa930` | `CPayphone#72` | 0 | 0 | 0 | — | — |  |
+| 3094 | `0x101aad00` | `CPayphone#613` | 0 | 0 | 0 | — | — |  |
+| 3095 | `0x101aad90` | `CPayphone#286` | 0 | 0 | 0 | — | — |  |
+| 3096 | `0x101aae20` | `CPayphone#359` | 0 | 0 | 0 | — | — |  |
+| 3097 | `0x101aae40` | `CPayphone#37` | 0 | 0 | 0 | — | — |  |
+| 3098 | `0x101ab1b0` | `CPayphone#5` | 0 | 0 | 0 | — | — |  |
+| 3099 | `0x101bb5b0` | `CAISound#5` | 0 | 0 | 0 | — | — |  |
+| 3100 | `0x1025e450` | `CAI_BaseHumanoid#82` | 0 | 0 | 0 | — | — |  |
+| 3101 | `0x10260d70` | `CAI_ExpressiveNPC#5` | 0 | 0 | 0 | — | — |  |
+| 3102 | `0x102623e0` | `CAI_HumanoidMotor#11`, `CAI_Motor#11` | 0 | 0 | 0 | — | — |  |
+| 3103 | `0x1026a910` | `CAI_BaseHumanoid#568`, `CAI_BaseNPC#568`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#568 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 3104 | `0x1026ae90` | `CAI_BaseHumanoid#473`, `CAI_BaseNPC#473`, +8 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#473 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 3105 | `0x10279060` | `CAI_BaseHumanoid#540`, `CAI_BaseNPC#540`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#540 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 3106 | `0x1027a7c0` | `CAI_BaseNPC#82`, `CAI_ExpressiveNPC#82`, +4 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#82 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3107 | `0x1027c790` | `CAI_MoveAndShootOverlay#0` | 0 | 0 | 0 | — | — |  |
+| 3108 | `0x1027c7f0` | `CAI_BaseNPC#5` | 0 | 0 | 0 | — | — | `CAI_BaseNPC#5 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
+| 3109 | `0x1027d000` | `CAI_Pathfinder#0` | 0 | 0 | 0 | — | — |  |
+| 3110 | `0x1027d9d0` | `CAI_BaseHumanoid#514`, `CAI_BaseNPC#514`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#514 no SDK twin: stretch #513-#516 holds 2 retai…` |
+| 3111 | `0x1027dc80` | `CAI_BaseHumanoid#531`, `CAI_BaseNPC#531`, +11 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 3112 | `0x1028b0f0` | `CAI_BaseHumanoid#547`, `CAI_BaseNPC#547`, +75 more | 0 | 0 | 0 | `ERROR! Subclass missing GetSlotSchedule …` | — | `CAI_BaseNPC#547 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 3113 | `0x1028cd10` | `CAI_BaseNPCTroika#82`, `CGeneric_NPC#82`, +3 more | 0 | 0 | 0 | — | — |  |
+| 3114 | `0x1028d5e0` | `CAI_BaseNPCTroika#5` | 0 | 0 | 0 | — | — |  |
+| 3115 | `0x1028de10` | `CAI_BaseNPCTroika#18`, `CGeneric_NPC#18`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3116 | `0x1028de90` | `CAI_BaseNPCTroika#17`, `CGeneric_NPC#17`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3117 | `0x10294720` | `CAI_BaseNPCTroika#496`, `CGeneric_NPC#496`, +55 more | 0 | 0 | 0 | `Target_Acquired` | — |  |
+| 3118 | `0x102947e0` | `CAI_BaseNPCTroika#497`, `CGeneric_NPC#497`, +55 more | 0 | 0 | 0 | — | — |  |
+| 3119 | `0x102949f0` | `CAI_BaseNPCTroika#500`, `CGeneric_NPC#500`, +59 more | 0 | 0 | 0 | `Exert_Heavy` | — |  |
+| 3120 | `0x10294ab0` | `CAI_BaseNPCTroika#501`, `CGeneric_NPC#501`, +60 more | 0 | 0 | 0 | `Exert_Light` | — |  |
+| 3121 | `0x10294b70` | `CAI_BaseNPCTroika#502`, `CGeneric_NPC#502`, +60 more | 0 | 0 | 0 | `Riled` | — |  |
+| 3122 | `0x10294db0` | `CAI_BaseNPCTroika#505`, `CGeneric_NPC#505`, +60 more | 0 | 0 | 0 | `Target_GiveUp` | — |  |
+| 3123 | `0x10294e70` | `CAI_BaseNPCTroika#506`, `CGeneric_NPC#506`, +60 more | 0 | 0 | 0 | `Target_Reacquired` | — |  |
+| 3124 | `0x1029f850` | `CAI_BaseNPCTroika#22`, `CGeneric_NPC#22`, +61 more | 0 | 0 | 0 | — | — |  |
+| 3125 | `0x1029f890` | `CAI_BaseNPCTroika#23`, `CGeneric_NPC#23`, +61 more | 0 | 0 | 0 | — | — |  |
+| 3126 | `0x1029fb70` | `CAI_BaseNPCTroika#317`, `CGeneric_NPC#317`, +60 more | 0 | 0 | 0 | — | — |  |
+| 3127 | `0x102b4070` | `CAI_BaseNPCTroika#473`, `CNPCMaker#473`, +8 more | 0 | 0 | 0 | — | — |  |
+| 3128 | `0x102b5100` | `CAI_BaseNPCTroika#55`, `CGeneric_NPC#55`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3129 | `0x102b51a0` | `CAI_BaseNPCTroika#57`, `CGeneric_NPC#57`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3130 | `0x102b51c0` | `CAI_BaseNPCTroika#58`, `CGeneric_NPC#58`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3131 | `0x102c0420` | `CAI_BaseNPCTroika#86`, `CGeneric_NPC#86`, +59 more | 0 | 0 | 0 | — | — |  |
+| 3132 | `0x102c5870` | `CAI_BaseNPCTroika#80`, `CGeneric_NPC#80`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3133 | `0x102c5890` | `CAI_BaseNPCTroika#81`, `CGeneric_NPC#81`, +62 more | 0 | 0 | 0 | — | — |  |
+| 3134 | `0x102c6dd0` | `CAI_StandoffBehavior#11`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#11` | 0 | 0 | 0 | — | — |  |
+| 3135 | `0x102c6df0` | `CAI_StandoffBehavior#12`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#12` | 0 | 0 | 0 | — | — |  |
+| 3136 | `0x102c6fd0` | `CAI_StandoffBehavior#25`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#25` | 0 | 0 | 0 | — | — |  |
+| 3137 | `0x102c7230` | `CAI_StandoffBehavior#7`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#7` | 0 | 0 | 0 | — | — |  |
+| 3138 | `0x102c7270` | `CAI_StandoffBehavior#9`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#9` | 0 | 0 | 0 | — | — |  |
+| 3139 | `0x102c72f0` | `CAI_StandoffBehavior#6` | 0 | 0 | 0 | — | — |  |
+| 3140 | `0x102c7310` | `CAI_StandoffBehavior#19` | 0 | 0 | 0 | `CAI_StandoffBehavior` | — |  |
+| 3141 | `0x102c7330` | `CAI_StandoffBehavior#0` | 0 | 0 | 0 | — | — |  |
+| 3142 | `0x102c73f0` | `CAI_StandoffBehavior#8` | 0 | 0 | 0 | — | — |  |
+| 3143 | `0x102c7ef0` | `CAI_StandoffBehavior#28` | 0 | 0 | 0 | — | — |  |
+| 3144 | `0x102c8980` | `CAI_StandoffGoal#82` | 0 | 0 | 0 | — | — |  |
+| 3145 | `0x102c8a30` | `CAI_StandoffBehavior#27`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#27` | 0 | 0 | 0 | — | — |  |
+| 3146 | `0x102d0370` | `CAI_Hint#82` | 0 | 0 | 0 | — | — |  |
+| 3147 | `0x102d2ee0` | `CAI_Hint#117` | 0 | 0 | 0 | — | — |  |
+| 3148 | `0x102d2f00` | `CAI_Hint#5` | 0 | 0 | 0 | — | — |  |
+| 3149 | `0x102d7290` | `CAI_TestHull#117` | 0 | 0 | 0 | — | — |  |
+| 3150 | `0x102d77d0` | `CAI_TestHull#5` | 0 | 0 | 0 | — | — |  |
+| 3151 | `0x102d9500` | `CAI_InterestingPlace#82` | 0 | 0 | 0 | — | — |  |
+| 3152 | `0x102d9ae0` | `CAI_InterestingPlace#5` | 0 | 0 | 0 | — | — |  |
+| 3153 | `0x102db7f0` | `CAI_InterestingPlaceConverstation#82` | 0 | 0 | 0 | — | — |  |
+| 3154 | `0x102e0990` | `CAI_Motor#0` | 0 | 0 | 0 | — | — |  |
+| 3155 | `0x102e1420` | `CAI_HumanoidMotor#9`, `CAI_Motor#9` | 0 | 0 | 0 | — | — |  |
+| 3156 | `0x102ecb20` | `CAI_Navigator#0` | 0 | 0 | 0 | — | — |  |
+| 3157 | `0x102eea30` | `CAI_HumanoidNavigator#4`, `CAI_Navigator#4` | 0 | 0 | 0 | — | — |  |
+| 3158 | `0x102eea50` | `CAI_HumanoidNavigator#6`, `CAI_Navigator#6` | 0 | 0 | 0 | — | — |  |
+| 3159 | `0x10321670` | `CAI_BaseHumanoid#79`, `CAI_BaseNPC#79`, +80 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#79 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3160 | `0x10321960` | `CAI_BaseHumanoid#80`, `CAI_BaseNPC#80`, +16 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#80 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3161 | `0x10321980` | `CAI_BaseHumanoid#81`, `CAI_BaseNPC#81`, +16 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#81 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 3162 | `0x10345460` | `CAI_BaseHumanoid#327`, `CAI_BaseNPC#327`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#327 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 3163 | `0x1034a6b0` | `CGenericNPC#473` | 0 | 0 | 0 | — | — |  |
+| 3164 | `0x1034aab0` | `CGenericNPC#5` | 0 | 0 | 0 | — | — |  |
+| 3165 | `0x1034ab50` | `CNPCMaker#82` | 0 | 0 | 0 | — | — |  |
+| 3166 | `0x1034ae70` | `CNPCMaker#362` | 0 | 0 | 0 | — | — |  |
+| 3167 | `0x1034ae90` | `CNPCMaker#365` | 0 | 0 | 0 | — | — |  |
+| 3168 | `0x1034aef0` | `CNPCMaker#72`, `CNPCMaker_Fleshpile#72`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3169 | `0x1034af10` | `CNPCMaker#86`, `CNPCMaker_Fleshpile#86`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3170 | `0x1034bdc0` | `CNPCMaker_Fleshpile#82` | 0 | 0 | 0 | — | — |  |
+| 3171 | `0x1034bf10` | `CNPCMaker_Fleshpile#362` | 0 | 0 | 0 | — | — |  |
+| 3172 | `0x1034bf30` | `CNPCMaker_Fleshpile#365` | 0 | 0 | 0 | — | — |  |
+| 3173 | `0x1034c260` | `CNPCMaker_Fleshpile#130` | 0 | 0 | 0 | `npc_VAndreiBlood` | — |  |
+| 3174 | `0x1034c8e0` | `CNPCMaker_Fleshpile#139` | 0 | 0 | 0 | — | — |  |
+| 3175 | `0x1034c9f0` | `CNPCMaker_Zombie#82` | 0 | 0 | 0 | — | — |  |
+| 3176 | `0x1034cb50` | `CNPCMaker_Zombie#362` | 0 | 0 | 0 | — | — |  |
+| 3177 | `0x1034cb70` | `CNPCMaker_Zombie#365` | 0 | 0 | 0 | — | — |  |
+| 3178 | `0x1034d410` | `CScriptedTarget#117` | 0 | 0 | 0 | — | — |  |
+| 3179 | `0x1034d430` | `CScriptedTarget#82` | 0 | 0 | 0 | — | — |  |
+| 3180 | `0x103564f0` | `CNPC_Bullseye#82` | 0 | 0 | 0 | — | — |  |
+| 3181 | `0x10356740` | `CNPC_Bullseye#5` | 0 | 0 | 0 | — | — |  |
+| 3182 | `0x103573b0` | `CNPC_Crow#82` | 0 | 0 | 0 | — | — |  |
+| 3183 | `0x103590f0` | `CNPC_Crow#473` | 0 | 0 | 0 | — | — |  |
+| 3184 | `0x10359b70` | `CNPC_Crow#5` | 0 | 0 | 0 | — | — |  |
+| 3185 | `0x10359f40` | `CGeneric_NPC#5` | 0 | 0 | 0 | — | — |  |
+| 3186 | `0x1035ad50` | `CGeneric_NPC_bathack#117` | 0 | 0 | 0 | — | — |  |
+| 3187 | `0x1035adb0` | `CGeneric_NPC_bathack#5` | 0 | 0 | 0 | — | — |  |
+| 3188 | `0x1035b5a0` | `CGenericSabbat_NPC#5` | 0 | 0 | 0 | — | — |  |
+| 3189 | `0x1035c190` | `CNPC_VAndreiBlood#378`, `CNPC_VAsianVampire#378`, +6 more | 0 | 0 | 0 | — | — |  |
+| 3190 | `0x1035c270` | `CNPC_VAndreiBlood#5` | 0 | 0 | 0 | — | — |  |
+| 3191 | `0x1035c2a0` | `CNPC_VAndreiBlood#82` | 0 | 0 | 0 | — | — |  |
+| 3192 | `0x1035eb10` | `CNPC_VAnimal#82`, `CNPC_VDog#82` | 0 | 0 | 0 | — | — |  |
+| 3193 | `0x1035ec50` | `CNPC_VAnimal#5` | 0 | 0 | 0 | — | — |  |
+| 3194 | `0x1035f540` | `CNPC_VAnimal#473`, `CNPC_VDog#473`, +2 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:827 |  |
+| 3195 | `0x10360450` | `CNPC_VAsianVampire#82` | 0 | 0 | 0 | — | — |  |
+| 3196 | `0x10362c90` | `CNPC_VBach#5` | 0 | 0 | 0 | — | — |  |
+| 3197 | `0x10363720` | `CNPC_VBach#82` | 0 | 0 | 0 | — | — |  |
+| 3198 | `0x10363970` | `CNPC_VBach#473` | 0 | 0 | 0 | — | — |  |
+| 3199 | `0x10364550` | `CNPC_VBach#554` | 0 | 0 | 0 | — | — |  |
+| 3200 | `0x10366cb0` | `CNPC_VBatSwarm#5` | 0 | 0 | 0 | — | — |  |
+| 3201 | `0x103672d0` | `CNPC_VBatSwarm#82` | 0 | 0 | 0 | — | — |  |
+| 3202 | `0x103673e0` | `CNPC_VBatSwarm#473` | 0 | 0 | 0 | — | — |  |
+| 3203 | `0x10367610` | `CNPC_VBatSwarm#554` | 0 | 0 | 0 | — | — |  |
+| 3204 | `0x103678b0` | `CNPC_VBrujah#5` | 0 | 0 | 0 | — | — |  |
+| 3205 | `0x10367f60` | `CNPC_VCamera#82` | 0 | 0 | 0 | — | — |  |
+| 3206 | `0x103681b0` | `CNPC_VCamera#496`, `CNPC_VCameraSecurity#496` | 0 | 0 | 0 | — | — |  |
+| 3207 | `0x103681d0` | `CNPC_VCamera#497`, `CNPC_VCameraSecurity#497` | 0 | 0 | 0 | — | — |  |
+| 3208 | `0x10368230` | `CNPC_VCamera#500`, `CNPC_VCameraSecurity#500` | 0 | 0 | 0 | — | — |  |
+| 3209 | `0x10368250` | `CNPC_VCamera#501`, `CNPC_VCameraSecurity#501` | 0 | 0 | 0 | — | — |  |
+| 3210 | `0x10368270` | `CNPC_VCamera#502`, `CNPC_VCameraSecurity#502` | 0 | 0 | 0 | — | — |  |
+| 3211 | `0x103682d0` | `CNPC_VCamera#505`, `CNPC_VCameraSecurity#505` | 0 | 0 | 0 | — | — |  |
+| 3212 | `0x103682f0` | `CNPC_VCamera#506`, `CNPC_VCameraSecurity#506` | 0 | 0 | 0 | — | — |  |
+| 3213 | `0x10368330` | `CNPC_VCamera#508`, `CNPC_VCameraSecurity#508` | 0 | 0 | 0 | — | — |  |
+| 3214 | `0x10368390` | `CNPC_VCamera#72`, `CNPC_VCameraSecurity#72` | 0 | 0 | 0 | — | — |  |
+| 3215 | `0x103683f0` | `CNPC_VCamera#5` | 0 | 0 | 0 | — | — |  |
+| 3216 | `0x10368f60` | `CNPC_VCamera#482`, `CNPC_VCameraSecurity#482` | 0 | 0 | 0 | — | — |  |
+| 3217 | `0x10369240` | `CNPC_VCamera#390`, `CNPC_VCameraSecurity#390` | 0 | 0 | 0 | — | — |  |
+| 3218 | `0x103692a0` | `CNPC_VCamera#473`, `CNPC_VCameraSecurity#473` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 |  |
+| 3219 | `0x10369cf0` | `CNPC_VCameraSecurity#82` | 0 | 0 | 0 | — | — |  |
+| 3220 | `0x10369e40` | `CNPC_VCameraSecurity#5` | 0 | 0 | 0 | — | — |  |
+| 3221 | `0x1036a230` | `CNPC_VChangBros#82` | 0 | 0 | 0 | — | — |  |
+| 3222 | `0x1036eb30` | `CNPC_VChangBrosBlade#82` | 0 | 0 | 0 | — | — |  |
+| 3223 | `0x1036f330` | `CNPC_VChangBrosClaw#82` | 0 | 0 | 0 | — | — |  |
+| 3224 | `0x1036fb50` | `CNPC_VCombatman#5` | 0 | 0 | 0 | — | — |  |
+| 3225 | `0x10370460` | `CNPC_VCop#82` | 0 | 0 | 0 | — | — |  |
+| 3226 | `0x10370970` | `CNPC_VCop#5` | 0 | 0 | 0 | — | — |  |
+| 3227 | `0x10373570` | `CNPC_VDog#5` | 0 | 0 | 0 | — | — |  |
+| 3228 | `0x10375140` | `CNPC_VPlayerController#362`, `CNPC_VWolfMorph#362` | 0 | 0 | 0 | — | — |  |
+| 3229 | `0x10375160` | `CNPC_VPlayerController#365`, `CNPC_VWolfMorph#365` | 0 | 0 | 0 | — | — |  |
+| 3230 | `0x103751a0` | `CNPC_VFrenzyShadow#72`, `CNPC_VPlayerController#72`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3231 | `0x10375280` | `CNPC_VFrenzyShadow#82` | 0 | 0 | 0 | — | — |  |
+| 3232 | `0x10376f20` | `CNPC_VFrenzyShadow#5` | 0 | 0 | 0 | — | — |  |
+| 3233 | `0x10376f50` | `CNPC_VPlayerController#5` | 0 | 0 | 0 | — | — |  |
+| 3234 | `0x103770b0` | `CNPC_VGangrel#5` | 0 | 0 | 0 | — | — |  |
+| 3235 | `0x10377910` | `CNPC_VGargoyle#82` | 0 | 0 | 0 | — | — |  |
+| 3236 | `0x10377ae0` | `CNPC_VGargoyle#615` | 0 | 0 | 0 | — | — |  |
+| 3237 | `0x10377b00` | `CNPC_VGargoyle#378` | 0 | 0 | 0 | — | — |  |
+| 3238 | `0x10378640` | `CNPC_VGargoyle#473` | 0 | 0 | 0 | — | — |  |
+| 3239 | `0x1037a5f0` | `CNPC_VGargoyle#359` | 0 | 0 | 0 | — | — |  |
+| 3240 | `0x1037a6e0` | `CNPC_VGhoulCroucher#82` | 0 | 0 | 0 | — | — |  |
+| 3241 | `0x1037c520` | `CNPC_VGuard1#82` | 0 | 0 | 0 | — | — |  |
+| 3242 | `0x1037c6a0` | `CNPC_VGuard1#5` | 0 | 0 | 0 | — | — |  |
+| 3243 | `0x1037e4f0` | `CNPC_VHengeyokai#82` | 0 | 0 | 0 | — | — |  |
+| 3244 | `0x1037e7f0` | `CNPC_VHengeyokai#615` | 0 | 0 | 0 | — | — |  |
+| 3245 | `0x1037e810` | `CNPC_VHengeyokai#378` | 0 | 0 | 0 | — | — |  |
+| 3246 | `0x1037e870` | `CNPC_VHengeyokai#5` | 0 | 0 | 0 | — | — |  |
+| 3247 | `0x1037fae0` | `CNPC_VHengeyokai#473` | 0 | 0 | 0 | — | — |  |
+| 3248 | `0x103801d0` | `CNPC_VHengeyokai#390` | 0 | 0 | 0 | `point_explosion` | — |  |
+| 3249 | `0x10383f10` | `CNPC_VCombatman#82`, `CNPC_VHuman#82`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3250 | `0x103840a0` | `CNPC_VHuman#5` | 0 | 0 | 0 | — | — |  |
+| 3251 | `0x103846e0` | `CNPC_VAndreiBlood#473`, `CNPC_VAsianVampire#473`, +24 more | 0 | 0 | 0 | — | — |  |
+| 3252 | `0x103869a0` | `CNPC_ProneDialog#82`, `CNPC_VHumanCombatant#82`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3253 | `0x10386b20` | `CNPC_VHumanCombatant#5` | 0 | 0 | 0 | — | — |  |
+| 3254 | `0x10387180` | `CNPC_ProneDialog#473`, `CNPC_VCop#473`, +7 more | 0 | 0 | 0 | — | — |  |
+| 3255 | `0x103875d0` | `CNPC_VHumanCombatPatrol#82` | 0 | 0 | 0 | — | — |  |
+| 3256 | `0x10387750` | `CNPC_VHumanCombatPatrol#5` | 0 | 0 | 0 | — | — |  |
+| 3257 | `0x10387ed0` | `CNPC_VHunter#82` | 0 | 0 | 0 | — | — |  |
+| 3258 | `0x103880a0` | `CNPC_VHunter#5` | 0 | 0 | 0 | — | — |  |
+| 3259 | `0x10388ca0` | `CNPC_VLasombra#82` | 0 | 0 | 0 | — | — |  |
+| 3260 | `0x10388e20` | `CNPC_VLasombra#5` | 0 | 0 | 0 | — | — |  |
+| 3261 | `0x103895a0` | `CNPC_VMalkavian#5` | 0 | 0 | 0 | — | — |  |
+| 3262 | `0x10389df0` | `CNPC_VManBat#5` | 0 | 0 | 0 | — | — |  |
+| 3263 | `0x1038ac80` | `CNPC_VManBat#82` | 0 | 0 | 0 | — | — |  |
+| 3264 | `0x1038fb20` | `CNPC_VManBat#102` | 0 | 0 | 0 | — | — |  |
+| 3265 | `0x10390de0` | `CNPC_VMingXiao#82` | 0 | 0 | 0 | — | — |  |
+| 3266 | `0x103929d0` | `CNPC_VMingXiao#473` | 0 | 0 | 0 | — | — |  |
+| 3267 | `0x10395ae0` | `CNPC_VMingXiao#390` | 0 | 0 | 0 | — | — |  |
+| 3268 | `0x1039aea0` | `CNPC_VMingXiaoTentacle#82` | 0 | 0 | 0 | — | — |  |
+| 3269 | `0x1039b0d0` | `CNPC_VMingXiaoTentacle#5` | 0 | 0 | 0 | — | — |  |
+| 3270 | `0x1039c440` | `CNPC_VMingXiaoTentacle#473` | 0 | 0 | 0 | — | — |  |
+| 3271 | `0x1039e800` | `CNPC_VMingXiaoTentacle#21` | 0 | 0 | 0 | — | — |  |
+| 3272 | `0x1039e830` | `CNPC_VMingXiaoTentacle#22` | 0 | 0 | 0 | — | — |  |
+| 3273 | `0x1039e860` | `CNPC_VMingXiaoTentacle#23` | 0 | 0 | 0 | — | — |  |
+| 3274 | `0x1039ebd0` | `CNPC_VMingXiaoTentacle#166` | 0 | 0 | 0 | — | — |  |
+| 3275 | `0x1039f000` | `CNPC_VMingXiaoTentacle#130` | 0 | 0 | 0 | — | — |  |
+| 3276 | `0x1039f640` | `CNPC_VMoleman#5` | 0 | 0 | 0 | — | — |  |
+| 3277 | `0x103a00f0` | `CNPC_VNewscaster#496` | 0 | 0 | 0 | — | — |  |
+| 3278 | `0x103a0110` | `CNPC_VNewscaster#497` | 0 | 0 | 0 | — | — |  |
+| 3279 | `0x103a0150` | `CNPC_VNewscaster#362` | 0 | 0 | 0 | — | — |  |
+| 3280 | `0x103a0170` | `CNPC_VNewscaster#365` | 0 | 0 | 0 | — | — |  |
+| 3281 | `0x103a01f0` | `CNPC_VNewscaster#473` | 0 | 0 | 0 | — | — |  |
+| 3282 | `0x103a0210` | `CNPC_VNewscaster#377` | 0 | 0 | 0 | — | — |  |
+| 3283 | `0x103a0230` | `CNPC_VNewscaster#378` | 0 | 0 | 0 | — | — |  |
+| 3284 | `0x103a0250` | `CNPC_VNewscaster#72` | 0 | 0 | 0 | — | — |  |
+| 3285 | `0x103a14e0` | `CNPC_VNosferatu#5` | 0 | 0 | 0 | — | — |  |
+| 3286 | `0x103a1c20` | `CNPC_VPedestrian#82` | 0 | 0 | 0 | — | — |  |
+| 3287 | `0x103a1e40` | `CNPC_VPedestrian#5` | 0 | 0 | 0 | — | — |  |
+| 3288 | `0x103a28f0` | `CNPC_VPedestrian#473` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 |  |
+| 3289 | `0x103a3a90` | `CNPC_VPlaceholder#82` | 0 | 0 | 0 | — | — |  |
+| 3290 | `0x103a4100` | `CNPC_VPlaceholder#378` | 0 | 0 | 0 | — | — |  |
+| 3291 | `0x103a4140` | `CNPC_VPlaceholder#316` | 0 | 0 | 0 | — | — |  |
+| 3292 | `0x103a4160` | `CNPC_VPlaceholder#317` | 0 | 0 | 0 | — | — |  |
+| 3293 | `0x103a4200` | `CNPC_VPlaceholder#330` | 0 | 0 | 0 | — | — |  |
+| 3294 | `0x103a4240` | `CNPC_VPlaceholder#72` | 0 | 0 | 0 | — | — |  |
+| 3295 | `0x103a4280` | `CNPC_VPlaceholder#362` | 0 | 0 | 0 | — | — |  |
+| 3296 | `0x103a42a0` | `CNPC_VPlaceholder#365` | 0 | 0 | 0 | — | — |  |
+| 3297 | `0x103a4320` | `CNPC_VPlaceholder#5` | 0 | 0 | 0 | — | — |  |
+| 3298 | `0x103a4830` | `CNPC_VFrenzyShadow#496`, `CNPC_VPlayerController#496`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3299 | `0x103a4850` | `CNPC_VFrenzyShadow#497`, `CNPC_VPlayerController#497`, +1 more | 0 | 0 | 0 | — | — |  |
+| 3300 | `0x103a4d40` | `CNPC_ProneDialog#5` | 0 | 0 | 0 | — | — |  |
+| 3301 | `0x103a4f60` | `CNPC_VSabbatGunman#82` | 0 | 0 | 0 | — | — |  |
+| 3302 | `0x103a50e0` | `CNPC_VSabbatGunman#5` | 0 | 0 | 0 | — | — |  |
+| 3303 | `0x103a5b50` | `CNPC_VSabbatLeader#82` | 0 | 0 | 0 | — | — |  |
+| 3304 | `0x103aba70` | `CNPC_VRat#82`, `CNPC_VScurrying#82` | 0 | 0 | 0 | — | — |  |
+| 3305 | `0x103abbe0` | `CNPC_VScurrying#5` | 0 | 0 | 0 | — | — |  |
+| 3306 | `0x103ad790` | `CNPC_VRat#615` | 0 | 0 | 0 | — | — |  |
+| 3307 | `0x103ad850` | `CNPC_VRat#316` | 0 | 0 | 0 | — | — |  |
+| 3308 | `0x103ad870` | `CNPC_VRat#317` | 0 | 0 | 0 | — | — |  |
+| 3309 | `0x103ad910` | `CNPC_VRat#330` | 0 | 0 | 0 | — | — |  |
+| 3310 | `0x103ad930` | `CNPC_VRat#5` | 0 | 0 | 0 | — | — |  |
+| 3311 | `0x103adaa0` | `CNPC_VSheriffMan#82` | 0 | 0 | 0 | — | — |  |
+| 3312 | `0x103b1c60` | `CNPC_VSheriffSwarm#5` | 0 | 0 | 0 | — | — |  |
+| 3313 | `0x103b2280` | `CNPC_VSheriffSwarm#82` | 0 | 0 | 0 | — | — |  |
+| 3314 | `0x103b2390` | `CNPC_VSheriffSwarm#473` | 0 | 0 | 0 | — | — |  |
+| 3315 | `0x103b25c0` | `CNPC_VSheriffSwarm#554` | 0 | 0 | 0 | — | — |  |
+| 3316 | `0x103b2770` | `CNPC_VStalker#82` | 0 | 0 | 0 | — | — |  |
+| 3317 | `0x103b28f0` | `CNPC_VStalker#5` | 0 | 0 | 0 | — | — |  |
+| 3318 | `0x103b2f50` | `CNPC_VTaxiDriver#72` | 0 | 0 | 0 | — | — |  |
+| 3319 | `0x103b2fb0` | `CNPC_VTaxiDriver#82` | 0 | 0 | 0 | — | — |  |
+| 3320 | `0x103b3930` | `CNPC_VTaxiDriver#390` | 0 | 0 | 0 | — | — |  |
+| 3321 | `0x103b3970` | `CNPC_VTaxiDriver#5` | 0 | 0 | 0 | — | — |  |
+| 3322 | `0x103b3b60` | `CNPC_VTest#5` | 0 | 0 | 0 | — | — |  |
+| 3323 | `0x103b4eb0` | `CNPC_VTest#473` | 0 | 0 | 0 | — | — |  |
+| 3324 | `0x103b5370` | `CNPC_VToreador#5` | 0 | 0 | 0 | — | — |  |
+| 3325 | `0x103b5b10` | `CNPC_VTremere#5` | 0 | 0 | 0 | — | — |  |
+| 3326 | `0x103b6b60` | `CNPC_VTzimisce#82` | 0 | 0 | 0 | — | — |  |
+| 3327 | `0x103b9270` | `CNPC_VTzimisce#422` | 0 | 0 | 0 | — | — |  |
+| 3328 | `0x103b9660` | `CNPC_VTzimisce#496` | 0 | 0 | 0 | — | — |  |
+| 3329 | `0x103b9680` | `CNPC_VTzimisce#497` | 0 | 0 | 0 | — | — |  |
+| 3330 | `0x103ba000` | `CNPC_VTzimisce#473` | 0 | 0 | 0 | — | — |  |
+| 3331 | `0x103c0ad0` | `CNPC_VTzimisceHeadClaw#82` | 0 | 0 | 0 | — | — |  |
+| 3332 | `0x103c28a0` | `CNPC_VTzimisceRunner#82` | 0 | 0 | 0 | — | — |  |
+| 3333 | `0x103c3040` | `CNPC_VTzimisceRunner#399` | 0 | 0 | 0 | — | — |  |
+| 3334 | `0x103c30c0` | `CNPC_VTzimisceRunner#329` | 0 | 0 | 0 | — | — |  |
+| 3335 | `0x103c3c40` | `CNPC_VTzimisceRunner#130` | 0 | 0 | 0 | — | — |  |
+| 3336 | `0x103c47e0` | `CNPC_VBrujah#82`, `CNPC_VGangrel#82`, +8 more | 0 | 0 | 0 | — | — |  |
+| 3337 | `0x103c4920` | `CNPC_VVampire#5` | 0 | 0 | 0 | — | — |  |
+| 3338 | `0x103c5060` | `CNPC_VVampireBoss#82` | 0 | 0 | 0 | — | — |  |
+| 3339 | `0x103c77f0` | `CNPC_VVentrue#5` | 0 | 0 | 0 | — | — |  |
+| 3340 | `0x103c87d0` | `CNPC_VWerewolf#82` | 0 | 0 | 0 | — | — |  |
+| 3341 | `0x103ca6b0` | `CNPC_VWerewolf#615` | 0 | 0 | 0 | — | — |  |
+| 3342 | `0x103ca6d0` | `CNPC_VWerewolf#316` | 0 | 0 | 0 | — | — |  |
+| 3343 | `0x103ca730` | `CNPC_VWerewolf#328` | 0 | 0 | 0 | — | — |  |
+| 3344 | `0x103ca790` | `CNPC_VWerewolf#5` | 0 | 0 | 0 | — | — |  |
+| 3345 | `0x103cabf0` | `CNPC_VWerewolf#130` | 0 | 0 | 0 | — | — |  |
+| 3346 | `0x103dc790` | `CNPC_VWolfMorph#82` | 0 | 0 | 0 | — | — |  |
+| 3347 | `0x103dcf20` | `CNPC_VWolfMorph#5` | 0 | 0 | 0 | — | — |  |
+| 3348 | `0x103dd090` | `CNPC_VYukie#5` | 0 | 0 | 0 | — | — |  |
+| 3349 | `0x103ddde0` | `CNPC_VZombie#82` | 0 | 0 | 0 | — | — |  |
+| 3350 | `0x103df260` | `CNPC_VZombie#473` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 |  |

@@ -47,6 +47,8 @@ import java.util.TreeSet;
 //   report=<path> human-readable summary
 public class DumpVtables extends GhidraScript {
 
+    private static final int MAX_SLOTS = 4096;
+
     private TreeSet<Long> tableAddresses;
 
     public void run() throws Exception {
@@ -108,7 +110,10 @@ public class DumpVtables extends GhidraScript {
             }
             long base = table.getAddress().getOffset();
             long limit = nextTableAfter(base);
-            for (int slot = 0; slot < 600; slot++) {
+            // The next table and the first non-code entry end the walk; the count is only a
+            // runaway guard. It was 600, which cut every NPC table short: Troika's holds 617 and
+            // CNPC_VTzimisce's 628 (docs/vtmb/npc-ai/shape.md -> "The tables").
+            for (int slot = 0; slot < MAX_SLOTS; slot++) {
                 long entry = base + slot * 4L;
                 if (entry >= limit) break;
                 long value;
