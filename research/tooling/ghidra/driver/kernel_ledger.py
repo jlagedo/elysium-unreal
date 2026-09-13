@@ -24,7 +24,7 @@ What it answers, once, for the whole kernel instead of once per story:
                    reads and after every function it calls.
 * `coverage.md`  — what the port and the oracle already cite, what nothing does, stale citations,
                    damaged bodies, and the counts a commit message quotes.
-* `unnamed.md`   — closure functions still named `FUN_`, ranked: the naming backlog.
+* `unnamed.md`   — closure functions still named `FUN_` / `vfuncN`, ranked: the naming backlog.
 * `index.md`     — address → the `docs/vtmb` file and section that walks it.
 
 Two caveats, stated in the tables' README: READ/WRITE is a regex over the decompiled C (the
@@ -122,6 +122,9 @@ DEREF_ASSIGN_TAIL_RE = re.compile(r"^\s*\)\s*(?:=(?!=)|\+\+|--|[-+*/%|&^]=|<<=|>
 COPY_CALLEE_RE = re.compile(r"(?:memcpy|memset|strcpy|strncpy|_strncpy|Q_strncpy|V_strncpy)$")
 CAST_NOISE_RE = re.compile(
     r"[()\s*&]|\b(?:void|int|char|undefined\d*|float|uint|byte|short|ushort|longlong)\b")
+PLACEHOLDER_RE = re.compile(r"^(thunk_)?(FUN_[0-9a-fA-F]+|vfunc\d+)$")
+# The build-order bands `docs/specs/0002-npc-ai/spec.md` sizes stories 29c-29e by.
+CORE_BANDS = ((0, 4), (5, 9), (10, 18), (19, 99))
 JMP_RE = re.compile(r"\bJMP\s+0x([0-9a-fA-F]{8})\b")
 CLASSNAMES_RE = re.compile(
     r"const TCHAR\* (\w+)_Classnames\[\] = \{([^}]*)\}", re.S)
@@ -166,7 +169,8 @@ class Function:
 
     @property
     def unnamed(self) -> bool:
-        return self.name.startswith("FUN_") or self.name.startswith("thunk_FUN_")
+        # `vfuncN` is the dump's label for a slot body it could not name: a position, not a name.
+        return bool(PLACEHOLDER_RE.match(self.name))
 
 
 @dataclass
@@ -230,6 +234,7 @@ class Ledger:
         self.ranges: list[tuple[int, int, str]] = []
         self.interior: dict[str, list[Citation]] = collections.defaultdict(list)
         self.stale_kinds: dict[str, str] = {}
+        self.unsettled: dict[str, str] = {}   # addr -> why the naming pass left it unnamed
 
     # -- loading -------------------------------------------------------------------------------
 
@@ -250,7 +255,10 @@ class Ledger:
                 row["addr"], row["name"], row["ns"] or "", row["size"] or 0,
                 bool(row["thunk"]), row["warn"] or "", row["code"] or "", cc=row["cc"] or "")
         for row in self.db.execute(
-                "SELECT addr, name FROM names WHERE module = ?", (self.module,)):
+                "SELECT addr, name, tier, evidence FROM names WHERE module = ?", (self.module,)):
+            if row["tier"] == "unsettled":
+                self.unsettled[row["addr"]] = row["evidence"]
+                continue
             fn = self.functions.get(row["addr"])
             if fn and fn.unnamed:
                 fn.name = row["name"]
@@ -671,6 +679,14 @@ class Ledger:
     def touches_npc(self, fn: Function, start: int) -> bool:
         return any(o >= start for o in fn.reads | fn.writes)
 
+    def core(self) -> list[str]:
+        """The closure's core: a family or helper class method, or a body touching an offset past
+        `CBaseCombatCharacter`'s layout. The set the spec's build order counts."""
+        start = self.npc_range_start()
+        owned = set(self.family) | set(self.helpers)
+        return [a for a in sorted(self.closure)
+                if self.functions[a].ns in owned or self.touches_npc(self.functions[a], start)]
+
     @staticmethod
     def _list_cell(items: list[str], limit: int = 8) -> str:
         if not items:
@@ -852,6 +868,11 @@ class Ledger:
         kinds = collections.Counter(self.stale_kinds[a] for a in self.port_addr if a in self.stale_kinds)
         damaged = [a for a in closure if self.functions[a].damaged]
         unnamed = [a for a in closure if self.functions[a].unnamed]
+        core = self.core()
+        core_unnamed = [a for a in core if self.functions[a].unnamed]
+        base_unnamed = [(s, b["CAI_BaseNPC"]) for s, b in sorted(self.slot_bodies.items())
+                        if b.get("CAI_BaseNPC") in self.functions
+                        and self.functions[b["CAI_BaseNPC"]].unnamed]
         member = [o for o in self.fields if o in self.port_member]
         f_cited = [o for o in self.fields if o in self.port_off]
         no_override = [s for s, b in self.slot_bodies.items() if len(set(b.values())) == 1]
@@ -868,7 +889,15 @@ class Ledger:
             f"| … cited by the oracle | {len(walked)} |",
             f"| … cited by neither | {len(neither)} |",
             f"| … damaged decompilation | {len(damaged)} |",
-            f"| … still `FUN_` | {len(unnamed)} |",
+            f"| … still unnamed (`FUN_` / `vfuncN`) | {len(unnamed)} |",
+            f"| Core functions (family or helper method, or an NPC-range offset) | {len(core)} |",
+            f"| … core still unnamed | {len(core_unnamed)} |",
+            *[f"| … core still unnamed, layers {lo}–{min(hi, len(self.layers) - 1)} "
+              f"| {sum(1 for a in core_unnamed if lo <= self.layer_of.get(a, -1) <= hi)} |"
+              for lo, hi in CORE_BANDS],
+            f"| `CAI_BaseNPC` slots whose body is unnamed | {len(base_unnamed)} |",
+            f"| … with the naming pass's reason recorded (`unsettled`) "
+            f"| {sum(1 for _, a in base_unnamed if a in self.unsettled)} |",
             f"| Troika fields | {len(self.fields)} |",
             f"| … cited by the port | {len(f_cited)} |",
             f"| … with a guessed port member | {len(member)} |",
@@ -878,6 +907,14 @@ class Ledger:
             f"| Port-cited addresses that are globals / strings / vtables | {kinds['global']} / {kinds['string']} / {kinds['vtable']} |",
             f"| Stale port citations (address the corpus does not know) | {len(self.stale_port)} |",
         ]
+        out += ["", "## `CAI_BaseNPC` slots without a name", "",
+                "Every slot of the base table whose body is still a placeholder, with the reason "
+                "the naming pass recorded (`corpus harvest`, tier `unsettled` in the overlay). A "
+                "row without a reason is a slot no pass has looked at.", "",
+                "| Slot | Body | Why |", "|---|---|---|"]
+        for slot, addr in base_unnamed:
+            why = self.unsettled.get(addr, "").replace("|", "¦")
+            out.append(f"| {slot} | {self._fn_cell(addr)} | {why or '—'} |")
         out += ["", "## Port citations of addresses outside the closure", "",
                 "Cited by `Source/**`, present in the corpus, not reached by the walk: either the "
                 "walk's boundary or a citation of something that is not the kernel's.", "",
@@ -914,17 +951,19 @@ class Ledger:
                 rows.append((callers[addr] + len(fn.writes) + len(fn.reads), addr))
         rows.sort(key=lambda r: (-r[0], r[1]))
         out = self._head("NPC kernel — unnamed functions",
-                         "Closure functions the image does not name and no `docs/vtmb` naming pass "
-                         "has claimed, ranked by callers plus fields touched. The naming backlog: a "
-                         "name here lands in `corpus names` with its evidence.")
-        out += ["| Rank | Address | Slots | Callers | Writes | Reads | Strings | Port |",
-                "|---|---|---|---|---|---|---|---|"]
+                         "Closure functions the image does not name and no naming pass has claimed "
+                         "(`FUN_`, or the dump's `vfuncN`), ranked by callers plus fields touched. "
+                         "The naming backlog: a name here lands in `corpus names` with its evidence; "
+                         "*Why unnamed* is the reason a pass recorded (overlay tier `unsettled`).")
+        out += ["| Rank | Address | Slots | Callers | Writes | Reads | Strings | Port | Why unnamed |",
+                "|---|---|---|---|---|---|---|---|---|"]
         for rank, (_, addr) in enumerate(rows, 1):
             fn = self.functions[addr]
             out.append(f"| {rank} | `{_hex(addr)}` "
                        f"| {self._list_cell([f'`{c}#{s}`' for c, s in sorted(fn.slots)], 2)} | {callers[addr]} "
                        f"| {len(fn.writes)} | {len(fn.reads)} | {self._list_cell([_short(s) for s in fn.strings], 2)} "
-                       f"| {self._cite_cell(self.port_addr.get(addr, []))} |")
+                       f"| {self._cite_cell(self.port_addr.get(addr, []))} "
+                       f"| {_short(self.unsettled[addr], 60) if addr in self.unsettled else ''} |")
         return "\n".join(out) + "\n"
 
     def _render_entries(self) -> str:

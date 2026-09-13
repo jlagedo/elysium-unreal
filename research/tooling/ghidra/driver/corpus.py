@@ -32,7 +32,8 @@ Phases and queries:
     suggest                  unnamed functions only one class ever calls
 
     names [--apply]          the tracked names overlay: what it states, what it changes
-    harvest                  propose overlay rows from the addresses `docs/` already names
+    harvest                  propose overlay rows: addresses `docs/` names, SDK slot order,
+                             translation-unit order, message prefixes
 
 Usage:
     uv run elysium research corpus dump
@@ -305,8 +306,9 @@ def _migrate(connection: sqlite3.Connection) -> None:
 # wrong fact enters a document. `binary` is a name the image itself states -- a VProf scope, an
 # RTTI method, an export. `doc` is one a `docs/` topic file states beside the address, which is
 # this project's own recovered record. `inferred` is argued from call sites or slot position and
-# nothing else.
-NAME_TIERS = ("binary", "doc", "inferred")
+# nothing else. `unsettled` is the record of a question the evidence could not answer: the row
+# names the function's current placeholder, states why no name was given, and changes nothing.
+NAME_TIERS = ("binary", "doc", "inferred", "unsettled")
 
 NAMES_HEADER = "\t".join(("module", "addr", "name", "tier", "evidence"))
 
@@ -361,7 +363,8 @@ def _load_names(connection: sqlite3.Connection) -> int:
 
 
 def _is_unnamed(name: str) -> bool:
-    return bool(re.match(r"(thunk_)?(FUN|SUB)_[0-9a-fA-F]+$", name or ""))
+    # `vfuncN` is the dump's label for a slot body it could not name: a position, not a name.
+    return bool(re.match(r"(thunk_)?((FUN|SUB)_[0-9a-fA-F]+|vfunc\d+)$", name or ""))
 
 
 def _apply_names(connection: sqlite3.Connection, write: bool = True,
@@ -373,13 +376,13 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
     disagreement into a fact.
     """
     tally = {"applied": 0, "agreed": 0, "conflict": 0, "collision": 0, "absent": 0,
-             "reverted": 0}
+             "reverted": 0, "unsettled": 0}
     # A name deleted from the overlay has to come back off the function, or the file stops being
     # the record of what the corpus states. `name_dump` is what the dump called it.
     for module, addr, dumped in connection.execute(
             "SELECT module, addr, name_dump FROM functions WHERE name_src != '' AND "
             "NOT EXISTS (SELECT 1 FROM names n WHERE n.module = functions.module "
-            "AND n.addr = lower(functions.addr))").fetchall():
+            "AND n.addr = lower(functions.addr) AND n.tier != 'unsettled')").fetchall():
         # `name_dump` always carries its namespace, so an empty or `Global` one round-trips as
         # well as a named one. A row written before that shape reverts to the neutral namespace,
         # which is what a bare dumped name meant.
@@ -395,6 +398,9 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
     claimed: dict[tuple[str, str, str], str] = {}
     for module, addr, name, tier, evidence in connection.execute(
             "SELECT module, addr, name, tier, evidence FROM names ORDER BY module, addr"):
+        if tier == "unsettled":
+            tally["unsettled"] += 1
+            continue
         row = connection.execute(
             "SELECT name, ns, name_src, name_dump, thunk FROM functions "
             "WHERE module = ? AND lower(addr) = ?", (module, addr)).fetchone()
@@ -2073,7 +2079,8 @@ def command_names(apply: bool) -> int:
     print(f"{'applied' if apply else 'would apply'} {tally['applied']}, "
           f"{tally['agreed']} already agree, {tally['conflict']} conflict with the dump, "
           f"{tally['collision']} collide with a name already in use, "
-          f"{tally['absent']} name no function entry point, {tally['reverted']} reverted")
+          f"{tally['absent']} name no function entry point, {tally['reverted']} reverted, "
+          f"{tally['unsettled']} recorded as unsettled")
     if not apply:
         print("nothing was written; pass --apply")
     return 0
@@ -2118,7 +2125,11 @@ def _plausible(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Z][A-Za-z0-9]*", name)) and bool(re.search(r"[a-z][A-Z]", name))
 
 
-def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
+HARVEST_PASSES = ("docs", "slots", "tu", "message", "identity")
+
+
+def command_harvest(out: Path | None, limit: int, max_distance: int,
+                    passes: tuple[str, ...] = HARVEST_PASSES) -> int:
     """Propose overlay rows from the addresses `docs/` already names.
 
     The output is a candidate file for review, never the overlay itself. Proximity is evidence
@@ -2133,7 +2144,10 @@ def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
             print(f"harvest: no {name}/ in this checkout - skipped")
             continue
         for pattern in patterns:
-            files.extend((path, is_code) for path in root.rglob(pattern))
+            # The kernel ledger's tables are generated from the corpus's own names; reading them
+            # back pairs every address with whatever section heading sits nearest.
+            files.extend((path, is_code) for path in root.rglob(pattern)
+                         if "npc-kernel" not in path.parts)
     if not files:
         print("harvest: nothing to read")
         return 1
@@ -2210,6 +2224,18 @@ def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
                      [one for one, _ in ranked[1:4]]))
 
     rows.sort(key=lambda one: (-one[5], one[0], one[1]))
+    if "docs" not in passes:
+        rows = []
+    evidence_rows, report = _evidence_passes(connection, passes)
+    # Proximity is the weakest evidence in the file: where a structural pass names the same
+    # address, the docs row is dropped and the disagreement, if any, reported.
+    stated = {(r.module, r.addr): r.name for r in evidence_rows if r.tier != "unsettled"}
+    overruled = [r for r in rows if (r[0], r[1]) in stated
+                 and r[2].split("::")[-1] != stated[r[0], r[1]].split("::")[-1]]
+    rows = [r for r in rows if (r[0], r[1]) not in stated]
+    if overruled:
+        report.append(f"harvest: {len(overruled)} docs row(s) overruled by a structural pass:")
+        report += [f"  {r[1]} docs {r[2]} -> {stated[r[0], r[1]]}" for r in overruled[:limit]]
     target = out or (research_root() / "ghidra" / "names" / "harvest.tsv")
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", encoding="utf-8", newline="\n") as stream:
@@ -2221,14 +2247,90 @@ def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
             if alternates:
                 stream.write(f"# alt: {', '.join(alternates)}\n")
             stream.write("\t".join((module, addr, name, tier, evidence)) + "\n")
+        for source, title in (("slots", "slot order"), ("tu", "translation-unit order"),
+                              ("message", "message prefix"), ("identity", "slot identity"),
+                              ("unsettled", "unsettled")):
+            chosen = [r for r in evidence_rows if r.source == source]
+            if not chosen:
+                continue
+            stream.write(f"\n# ==== {title}: {len(chosen)} row(s) ====\n")
+            for r in chosen:
+                stream.write("\t".join((r.module, r.addr, r.name, r.tier, r.evidence)) + "\n")
 
     print(f"{len(seen)} address(es) across {len(files)} file(s) carry a plausible name nearby")
     print(f"{len(rows)} of them are an unnamed function in exactly one module -> {target}")
+    for line in report:
+        print(line)
     if conflicts:
         print(f"{len(conflicts)} already carry a different name in the dump:")
         for module, addr, current, proposed in conflicts[:limit]:
             print(f"  {module:18} {addr}  dump {current}  docs {proposed}")
     return 0
+
+
+def _evidence_passes(connection: sqlite3.Connection,
+                     passes: tuple[str, ...]) -> tuple[list, list[str]]:
+    """The slot-order, unit-order, message-prefix and slot-identity passes (`name_passes.py`),
+    vampire.dll only: it is the module whose classes the SDK declares."""
+    wanted = tuple(p for p in passes if p != "docs")
+    if not wanted:
+        return [], []
+    import name_passes  # noqa: WPS433 -- beside this file; imported late, it reads the SDK tree
+    module = "vampire.dll"
+    meta = connection.execute("SELECT binary FROM meta WHERE module = ?", (module,)).fetchone()
+    binary = Path(meta["binary"]) if meta and meta["binary"] else None
+    if binary is None or not binary.is_file():
+        return [], [f"harvest: {module} binary not found; evidence passes skipped"]
+    rows, report = name_passes.run(connection, _listing_connection(), module, binary,
+                                   research_root(), wanted)
+    lines = [f"harvest: SDK declarations from {report.get('sdk', report.get('error'))}"]
+    kept = list(rows)
+    slots = report.get("slots")
+    if slots:
+        verify = slots["verify"]
+        lines.append(f"slot order: {sum(1 for r in kept if r.source == 'slots')} proposed; "
+                     f"leave-one-out over CAI_BaseNPC's named slots: {verify['agree']} agree, "
+                     f"{verify['disagree']} disagree, {verify['unreachable']} not reachable")
+        lines += [f"  disagrees: {one}" for one in slots["verify_misses"]]
+        if slots["disputed"]:
+            lines.append(f"slot order: {len(slots['disputed'])} body(ies) offered two names, "
+                         "none proposed")
+        proposed = {r.addr for r in kept}
+        table = [r["func"] for r in connection.execute(
+            "SELECT func FROM vtables WHERE module = ? AND cls = 'CAI_BaseNPC' AND sub = 0 "
+            "ORDER BY slot", (module,))]
+        clashes = set(report.get("clashes", []))
+        recorded: set[str] = set()
+        for slot, func in enumerate(table):
+            current = connection.execute(
+                "SELECT name FROM functions WHERE module = ? AND addr = ?", (module, func)).fetchone()
+            if func in proposed or func in recorded or current is None \
+                    or not _is_unnamed(current["name"]):
+                continue
+            why = slots["focus"].get(slot) or (
+                "no SDK twin: the SDK name it lines up with was offered to two bodies"
+                if clashes else "no SDK twin")
+            identity = report.get("identity", {}).get("reasons", {}).get(func)
+            if identity:
+                why = f"{why}; slot identity: {identity}"
+            recorded.add(func)
+            kept.append(name_passes.Proposal(module, func, current["name"], "unsettled",
+                                             f"CAI_BaseNPC#{slot} {why}", "unsettled"))
+    if report.get("tu"):
+        for unit, state in sorted(report["tu"]["units"].items()):
+            lines.append(f"unit order: {unit}: {state}")
+    if report.get("message"):
+        lines.append(f"message prefix: {report['message']['proposed']} proposed, "
+                     f"{report['message']['ambiguous']} ambiguous")
+    if report.get("identity"):
+        identity = report["identity"]
+        lines.append("slot identity: " + ", ".join(
+            f"{identity.get(k, 0)} {k}" for k in ("proposed", "disagree", "arity", "sdk arity",
+                                                  "folded", "two names")))
+        lines += [f"  disagree: {one}" for one in identity["disagreements"]]
+    if report.get("clashes"):
+        lines.append(f"harvest: {len(report['clashes'])} name(s) offered to two bodies, dropped")
+    return kept, lines
 
 
 def command_twin(reference: str) -> int:
@@ -2528,6 +2630,8 @@ def main() -> int:
         "harvest", help="propose overlay rows from the addresses docs/ already names")
     harvest_parser.add_argument("--out", type=Path, default=None)
     harvest_parser.add_argument("--limit", type=int, default=2000)
+    harvest_parser.add_argument("--passes", default=",".join(HARVEST_PASSES),
+                                help="comma list of docs, slots, tu, message, identity")
     harvest_parser.add_argument("--max-distance", type=int, default=HARVEST_WINDOW,
                                 help="how far from the address a name may stand; 6 keeps only "
                                      "the adjacent pairings the docs use as a template")
@@ -2600,7 +2704,8 @@ def main() -> int:
     if args.command == "names":
         return command_names(args.apply)
     if args.command == "harvest":
-        return command_harvest(args.out, args.limit, args.max_distance)
+        return command_harvest(args.out, args.limit, args.max_distance,
+                               tuple(p.strip() for p in args.passes.split(",") if p.strip()))
     if args.command in ("callers", "callees"):
         return command_hop(args.reference, args.command)
     if args.command == "grep":

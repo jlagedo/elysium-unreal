@@ -8,17 +8,17 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | Address | Function | Size | Depth | Layer | Slots | Callers | Writes | Reads | Strings | Port | Oracle | Seam |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `0x100078c4` | FUN_100078c4 | 5 | 2 | 0 | — | 1d/0v/0c +5 outside | — | — | — | — | — |  |
-| `0x10007b4e` | FUN_10007b4e | 5 | 2 | 0 | — | 3d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:458 |  |
+| `0x10007b4e` | FUN_10007b4e | 5 | 2 | 0 | — | 3d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:461 |  |
 | `0x10007ea0` | FUN_10007ea0 | 5 | 1 | 0 | — | 6d/0v/0c | `+0x5bb4`? | `+0x5bb4`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:789 | docs/vtmb/stealth.md:442 |  |
 | `0x10009601` | FUN_10009601 | 5 | 2 | 0 | — | 2d/0v/0c +1 outside | `+0x14bc`?, `+0x5bb0`? | `+0x14bc`?, `+0x5bb0`?, `+0x5da4`? | — | — | docs/vtmb/npc-ai/authored-control.md:343, docs/vtmb/npc-ai/population.md:225 |  |
 | `0x1000cb8a` | FUN_1000cb8a | 5 | 1 | 0 | — | 5d/0v/0c +174 outside | — | — | — | — | — |  |
 | `0x1000f89e` | FUN_1000f89e | 5 | 2 | 0 | — | 2d/0v/0c | — | `+0x0034`?, `+0x0038`?, `+0x003c`?, `+0x004c`?, `+0x0050`?, `+0x0054`? | — | — | — |  |
-| `0x100113d8` | FUN_100113d8 | 5 | 1 | 0 | — | 4d/0v/0c | — | `+0x005c`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:455 |  |
+| `0x100113d8` | FUN_100113d8 | 5 | 1 | 0 | — | 4d/0v/0c | — | `+0x005c`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:458 |  |
 | `0x10012805` | FUN_10012805 | 5 | 1 | 0 | — | 5d/0v/0c +1 outside | — | `+0x0024`? | — | — | — |  |
 | `0x10026530` | CAISound::FUN_10026530 | 3 | 0 | 0 | `CAISound#21`, `CAI_BaseHumanoid#21`, `CAI_BaseNPC#21`, +15 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x10026550` | CAISound::FUN_10026550 | 3 | 0 | 0 | `CAISound#22`, `CAI_BaseHumanoid#22`, `CAI_BaseNPC#22`, +15 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x10026570` | CAISound::FUN_10026570 | 3 | 0 | 0 | `CAISound#23`, `CAI_BaseHumanoid#23`, `CAI_BaseNPC#23`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10026590` | CAISound::FUN_10026590 | 3 | 0 | 0 | `CAISound#24`, `CAI_BaseHumanoid#24`, `CAI_BaseNPC#24`, +15 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
+| `0x10026590` | CBaseEntity::OnVictimHitByMe | 3 | 0 | 0 | `CAISound#24`, `CAI_BaseHumanoid#24`, `CAI_BaseNPC#24`, +15 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x100265b0` | CAISound::FUN_100265b0 | 3 | 0 | 0 | `CAISound#25`, `CAI_BaseHumanoid#25`, `CAI_BaseNPC#25`, +78 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100265d0` | CAISound::FUN_100265d0 | 3 | 0 | 0 | `CAISound#26`, `CAI_BaseHumanoid#26`, `CAI_BaseNPC#26`, +78 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100265f0` | CAISound::FUN_100265f0 | 3 | 0 | 0 | `CAISound#27`, `CAI_BaseHumanoid#27`, `CAI_BaseNPC#27`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
@@ -27,7 +27,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10026650` | CAISound::FUN_10026650 | 7 | 0 | 0 | `CAISound#30`, `CAI_BaseHumanoid#30`, `CAI_BaseNPC#30`, +15 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x10026670` | CAISound::FUN_10026670 | 5 | 0 | 0 | `CAISound#32`, `CAI_BaseHumanoid#32`, `CAI_BaseNPC#32`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026690` | CAISound::FUN_10026690 | 4 | 0 | 0 | `CAISound#33`, `CAI_BaseHumanoid#33`, `CAI_BaseNPC#33`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x100266b0` | CAISound::FUN_100266b0 | 5 | 0 | 0 | `CAISound#34`, `CAI_Hint#34`, `CAI_InterestingPlace#34`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x100266b0` | CBaseEntity::GetHighlightMaterial | 5 | 0 | 0 | `CAISound#34`, `CAI_Hint#34`, `CAI_InterestingPlace#34`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100266d0` | CAISound::FUN_100266d0 | 5 | 0 | 0 | `CAISound#35`, `CAI_BaseHumanoid#35`, `CAI_BaseNPC#35`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100266f0` | CAISound::FUN_100266f0 | 3 | 0 | 0 | `CAISound#36`, `CAI_BaseHumanoid#36`, `CAI_BaseNPC#36`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026710` | CAISound::FUN_10026710 | 7 | 0 | 0 | `CAISound#37`, `CAI_BaseHumanoid#37`, `CAI_BaseNPC#37`, +78 more | 0d/0v/0c | — | — | — | — | — |  |
@@ -40,10 +40,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100267f0` | CAISound::FUN_100267f0 | 1 | 0 | 0 | `CAISound#47`, `CAI_BaseHumanoid#47`, `CAI_BaseNPC#47`, +79 more | 0d/0v/0c | — | — | — | — | docs/vtmb/camera-view-modes.md:2883 |  |
 | `0x10026810` | CAISound::FUN_10026810 | 7 | 0 | 0 | `CAISound#48`, `CAI_BaseHumanoid#48`, `CAI_BaseNPC#48`, +79 more | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:43 | docs/vtmb/camera-view-modes.md:2884 |  |
 | `0x10026830` | CAISound::FUN_10026830 | 7 | 0 | 0 | `CAISound#49`, `CAI_BaseHumanoid#49`, `CAI_BaseNPC#49`, +79 more | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Player/ElysiumCameraSolve.cpp:467, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:44, Source/ElysiumUE/Public/ElysiumCameraSolve.h:51 | docs/vtmb/camera-view-modes.md:2885 |  |
-| `0x10026850` | CAISound::FUN_10026850 | 42 | 0 | 9 | `CAISound#50`, `CAI_Hint#50`, `CAI_InterestingPlace#50`, +2 more | 0d/0v/0c | — | `+0x0300` | — | — | docs/vtmb/camera-view-modes.md:2886 |  |
-| `0x10026890` | CAISound::FUN_10026890 | 42 | 0 | 9 | `CAISound#51`, `CAI_Hint#51`, `CAI_InterestingPlace#51`, +2 more | 0d/0v/0c | — | `+0x0300` | — | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:99 | docs/vtmb/camera-view-modes.md:2887 |  |
-| `0x100268d0` | CAISound::FUN_100268d0 | 7 | 0 | 0 | `CAISound#52`, `CAI_Hint#52`, `CAI_InterestingPlace#52`, +2 more | 0d/0v/0c | — | — | — | — | docs/vtmb/camera-view-modes.md:2888 |  |
-| `0x100268f0` | CAISound::FUN_100268f0 | 7 | 0 | 0 | `CAISound#53`, `CAI_Hint#53`, `CAI_InterestingPlace#53`, +2 more | 0d/0v/0c | — | — | — | — | docs/vtmb/camera-view-modes.md:2889 |  |
+| `0x10026850` | CBaseEntity::GetCameraViewpointPosition | 42 | 0 | 0 | `CAISound#50`, `CAI_Hint#50`, `CAI_InterestingPlace#50`, +2 more | 0d/0v/0c | — | `+0x0300` | — | — | docs/vtmb/camera-view-modes.md:2886 |  |
+| `0x10026890` | CBaseEntity::GetCameraTargetPosition | 42 | 0 | 0 | `CAISound#51`, `CAI_Hint#51`, `CAI_InterestingPlace#51`, +2 more | 0d/0v/0c | — | `+0x0300` | — | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:99 | docs/vtmb/camera-view-modes.md:2887 |  |
+| `0x100268d0` | CBaseEntity::GetCameraFadeInTime | 7 | 0 | 0 | `CAISound#52`, `CAI_Hint#52`, `CAI_InterestingPlace#52`, +2 more | 0d/0v/0c | — | — | — | — | docs/vtmb/camera-view-modes.md:2888 |  |
+| `0x100268f0` | CBaseEntity::GetCameraFadeOutTime | 7 | 0 | 0 | `CAISound#53`, `CAI_Hint#53`, `CAI_InterestingPlace#53`, +2 more | 0d/0v/0c | — | — | — | — | docs/vtmb/camera-view-modes.md:2889 |  |
 | `0x10026910` | CAISound::FUN_10026910 | 5 | 0 | 0 | `CAISound#54`, `CAI_BaseHumanoid#54`, `CAI_BaseNPC#54`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026930` | CAISound::FUN_10026930 | 3 | 0 | 0 | `CAISound#55`, `CAI_BaseHumanoid#55`, `CAI_BaseNPC#55`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026950` | CAISound::FUN_10026950 | 3 | 0 | 0 | `CAISound#56`, `CAI_BaseHumanoid#56`, `CAI_BaseNPC#56`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
@@ -54,16 +54,16 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100269f0` | CAISound::FUN_100269f0 | 3 | 0 | 0 | `CAISound#61`, `CAI_BaseHumanoid#61`, `CAI_BaseNPC#61`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026a10` | CAISound::FUN_10026a10 | 46 | 0 | 1 | `CAISound#63`, `CAI_BaseHumanoid#63`, `CAI_BaseNPC#63`, +79 more | 0d/0v/1c +1 outside | — | `+0x00f8` | — | — | — |  |
 | `0x10026a50` | CAISound::FUN_10026a50 | 46 | 0 | 1 | `CAISound#65`, `CAI_BaseHumanoid#65`, `CAI_BaseNPC#65`, +79 more | 0d/4v/0c +1 outside | — | `+0x0100` | — | — | — |  |
-| `0x10026a90` | CAISound::FUN_10026a90 | 5 | 0 | 0 | `CAISound#68`, `CAI_Hint#68`, `CAI_InterestingPlace#68`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10026ab0` | CAISound::FUN_10026ab0 | 5 | 0 | 0 | `CAISound#69`, `CAI_BaseHumanoid#69`, `CAI_BaseNPC#69`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10026a90` | CBaseEntity::ShouldIgnoreCollision | 5 | 0 | 0 | `CAISound#68`, `CAI_Hint#68`, `CAI_InterestingPlace#68`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10026ab0` | CBaseEntity::NavIgnoreCollision | 5 | 0 | 0 | `CAISound#69`, `CAI_BaseHumanoid#69`, `CAI_BaseNPC#69`, +15 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026ad0` | CAISound::FUN_10026ad0 | 5 | 0 | 0 | `CAISound#72`, `CAI_Hint#72`, `CAI_InterestingPlace#72`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10026af0` | CAISound::FUN_10026af0 | 5 | 0 | 0 | `CAISound#73`, `CAI_Hint#73`, `CAI_InterestingPlace#73`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10026b10` | CAISound::FUN_10026b10 | 5 | 0 | 0 | `CAISound#74`, `CAI_Hint#74`, `CAI_InterestingPlace#74`, +2 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
-| `0x10026b30` | CAISound::FUN_10026b30 | 1 | 0 | 0 | `CAISound#76`, `CAI_Hint#76`, `CAI_InterestingPlace#76`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10026af0` | CBaseEntity::CausesImpactDamage | 5 | 0 | 0 | `CAISound#73`, `CAI_Hint#73`, `CAI_InterestingPlace#73`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10026b10` | CBaseEntity::ReceivesImpactDamage | 5 | 0 | 0 | `CAISound#74`, `CAI_Hint#74`, `CAI_InterestingPlace#74`, +2 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
+| `0x10026b30` | CBaseEntity::DrawDebugStatOverlays | 1 | 0 | 0 | `CAISound#76`, `CAI_Hint#76`, `CAI_InterestingPlace#76`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026b50` | CAISound::FUN_10026b50 | 11 | 0 | 2 | `CAISound#88`, `CAI_BaseHumanoid#88`, `CAI_BaseNPC#88`, +79 more | 0d/0v/0c | — | `+0x01b0` | — | — | — |  |
 | `0x10026b70` | CAISound::FUN_10026b70 | 11 | 0 | 1 | `CAISound#89`, `CAI_BaseHumanoid#89`, `CAI_BaseNPC#89`, +79 more | 0d/0v/0c | — | `+0x01b0` | — | — | — |  |
-| `0x10026b90` | CAISound::FUN_10026b90 | 1 | 0 | 0 | `CAISound#104`, `CAI_Hint#104`, `CAI_InterestingPlace#104`, +1 more | 0d/0v/0c +6 outside | — | — | — | — | — |  |
-| `0x10026bb0` | CAISound::FUN_10026bb0 | 1 | 0 | 0 | `CAISound#111`, `CAI_Hint#111`, `CAI_InterestingPlace#111`, +2 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
+| `0x10026b90` | CBaseEntity::Precache | 1 | 0 | 0 | `CAISound#104`, `CAI_Hint#104`, `CAI_InterestingPlace#104`, +1 more | 0d/0v/0c +6 outside | — | — | — | — | — |  |
+| `0x10026bb0` | CBaseEntity::MemberSync | 1 | 0 | 0 | `CAISound#111`, `CAI_Hint#111`, `CAI_InterestingPlace#111`, +2 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x10026bd0` | CAISound::FUN_10026bd0 | 3 | 0 | 0 | `CAISound#112`, `CAI_BaseHumanoid#112`, `CAI_BaseNPC#112`, +79 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x10026bf0` | CAISound::FUN_10026bf0 | 3 | 0 | 0 | `CAISound#115`, `CAI_BaseHumanoid#115`, `CAI_BaseNPC#115`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10026c10` | CAISound::FUN_10026c10 | 4 | 0 | 0 | `CAISound#131`, `CAI_BaseHumanoid#131`, `CAI_BaseNPC#131`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
@@ -92,19 +92,19 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10027020` | CAISound::FUN_10027020 ‼ | 8 | 0 | 1 | `CAISound#168`, `CAI_BaseHumanoid#168`, `CAI_BaseNPC#168`, +15 more | 0d/0v/15c | — | `+0x029c` | — | — | — |  |
 | `0x10027040` | CAISound::FUN_10027040 | 3 | 0 | 0 | `CAISound#169`, `CAI_BaseHumanoid#169`, `CAI_BaseNPC#169`, +79 more | 0d/1v/0c | — | — | — | — | — |  |
 | `0x10027060` | CAISound::FUN_10027060 | 3 | 0 | 0 | `CAISound#170`, `CAI_BaseHumanoid#170`, `CAI_BaseNPC#170`, +79 more | 0d/1v/0c | — | — | — | — | — |  |
-| `0x10027080` | CAISound::FUN_10027080 | 3 | 0 | 0 | `CAISound#177`, `CAI_BaseHumanoid#177`, `CAI_BaseNPC#177`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10027080` | CBaseEntity::StartBlocked | 3 | 0 | 0 | `CAISound#177`, `CAI_BaseHumanoid#177`, `CAI_BaseNPC#177`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100270a0` | CAISound::FUN_100270a0 | 1 | 0 | 0 | `CAISound#179`, `CAI_BaseHumanoid#179`, `CAI_BaseNPC#179`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100270c0` | CAISound::FUN_100270c0 | 3 | 0 | 0 | `CAISound#186`, `CAI_BaseHumanoid#186`, `CAI_BaseNPC#186`, +79 more | 0d/1v/0c | — | — | — | — | — |  |
 | `0x100270e0` | CAISound::FUN_100270e0 | 3 | 0 | 0 | `CAISound#187`, `CAI_BaseHumanoid#187`, `CAI_BaseNPC#187`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027100` | CAISound::FUN_10027100 | 3 | 0 | 0 | `CAISound#188`, `CAI_BaseHumanoid#188`, `CAI_BaseNPC#188`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027120` | CAISound::FUN_10027120 | 7 | 0 | 0 | `CAISound#190`, `CAI_BaseHumanoid#190`, `CAI_BaseNPC#190`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027140` | CAISound::FUN_10027140 | 3 | 0 | 0 | `CAISound#191`, `CAI_BaseHumanoid#191`, `CAI_BaseNPC#191`, +79 more | 0d/1v/0c | — | — | — | — | — |  |
-| `0x10027160` | CAISound::FUN_10027160 | 334 | 0 | 8 | `CAISound#192`, `CAI_BaseHumanoid#192`, `CAI_BaseNPC#192`, +78 more | 0d/14v/8c +19 outside | — | `+0x0270`, `+0x0274`, `+0x0278`, `+0x027c`, `+0x0280`, `+0x0284`, +3 more | — | — | docs/vtmb/stealth.md:703 |  |
+| `0x10027160` | CAISound::FUN_10027160 | 334 | 0 | 8 | `CAISound#192`, `CAI_BaseHumanoid#192`, `CAI_BaseNPC#192`, +78 more | 0d/12v/8c +21 outside | — | `+0x0270`, `+0x0274`, `+0x0278`, `+0x027c`, `+0x0280`, `+0x0284`, +3 more | — | — | docs/vtmb/stealth.md:703 |  |
 | `0x10027330` | CAISound::FUN_10027330 | 3 | 0 | 0 | `CAISound#205`, `CAI_BaseHumanoid#205`, `CAI_BaseNPC#205`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027350` | CAISound::FUN_10027350 | 5 | 0 | 0 | `CAISound#206`, `CAI_BaseHumanoid#206`, `CAI_BaseNPC#206`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027370` | CAISound::FUN_10027370 | 33 | 0 | 0 | `CAISound#210`, `CAI_BaseHumanoid#210`, `CAI_BaseNPC#210`, +79 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x100273b0` | CAISound::FUN_100273b0 | 5 | 0 | 0 | `CAISound#224`, `CAI_BaseHumanoid#224`, `CAI_BaseNPC#224`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x100273d0` | CAISound::FUN_100273d0 | 3 | 0 | 0 | `CAISound#229`, `CAI_BaseHumanoid#229`, `CAI_BaseNPC#229`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x100273d0` | CBaseEntity::VPhysicsShadowUpdate | 3 | 0 | 0 | `CAISound#229`, `CAI_BaseHumanoid#229`, `CAI_BaseNPC#229`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100273f0` | CAISound::FUN_100273f0 | 3 | 0 | 0 | `CAISound#235`, `CAI_BaseHumanoid#235`, `CAI_BaseNPC#235`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027410` | CAISound::FUN_10027410 | 3 | 0 | 0 | `CAISound#236`, `CAI_BaseHumanoid#236`, `CAI_BaseNPC#236`, +79 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10027430` | CAISound::FUN_10027430 | 6 | 0 | 0 | `CAISound#240`, `CAI_Hint#240`, `CAI_InterestingPlace#240`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
@@ -203,10 +203,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10075ca0` | FUN_10075ca0 | 7 | 1 | 0 | — | 2d/0v/0c +6 outside | — | — | — | — | docs/vtmb/choreographed_scenes.md:931, docs/vtmb/choreographed_scenes.md:1116 |  |
 | `0x10075e70` | FUN_10075e70 | 7 | 1 | 0 | — | 5d/0v/0c +16 outside | — | `+0x0184`? | — | — | docs/vtmb/choreographed_scenes.md:932, docs/vtmb/choreographed_scenes.md:1116 |  |
 | `0x10075f10` | FUN_10075f10 | 7 | 2 | 0 | — | 4d/0v/0c +9 outside | — | `+0x0188`? | — | — | docs/vtmb/choreographed_scenes.md:933, docs/vtmb/choreographed_scenes.md:1116 |  |
-| `0x10075f30` | FUN_10075f30 | 18 | 1 | 0 | — | 6d/0v/0c +9 outside | — | `+0x0188`? | — | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.h:105 | docs/vtmb/choreographed_scenes.md:256, docs/vtmb/choreographed_scenes.md:937, docs/vtmb/choreographed_scenes.md:1116 |  |
+| `0x10075f30` | HasEndTime | 18 | 1 | 0 | — | 6d/0v/0c +9 outside | — | `+0x0188`? | — | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.h:105 | docs/vtmb/choreographed_scenes.md:256, docs/vtmb/choreographed_scenes.md:937, docs/vtmb/choreographed_scenes.md:1116 |  |
 | `0x10076280` | FUN_10076280 | 195 | 1 | 1 | — | 5d/0v/0c +3 outside | — | `+0x0184`, `+0x0188` | — | — | — |  |
 | `0x100766d0` | FUN_100766d0 | 7 | 1 | 0 | — | 1d/0v/0c +1 outside | — | `+0x02b8`? | — | — | — |  |
-| `0x10076b30` | FUN_10076b30 | 29 | 1 | 1 | — | 3d/0v/0c +8 outside | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.h:104, Source/ElysiumUE/Private/Tests/ElysiumSceneTests.cpp:1299 | — |  |
+| `0x10076b30` | CChoreoEvent::GetDuration | 29 | 1 | 1 | — | 3d/0v/0c +8 outside | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.h:104, Source/ElysiumUE/Private/Tests/ElysiumSceneTests.cpp:1299 | — |  |
 | `0x10077430` | FUN_10077430 | 7 | 1 | 0 | — | 2d/0v/0c +5 outside | — | `+0x0318`? | — | — | — |  |
 | `0x10077450` | FUN_10077450 | 34 | 1 | 1 | — | 1d/0v/0c +4 outside | — | — | — | — | — |  |
 | `0x10077710` | FUN_10077710 | 7 | 1 | 0 | — | 1d/0v/0c | — | `+0x0320`? | — | — | — |  |
@@ -308,23 +308,23 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10097000` | CBaseAnimating::GetBoneHitbox | 199 | 1 | 0 | — | 1d/0v/0c | — | `+0x026c`, `+0x0680` | `NULL ENTITY`, `CBaseAnimating::GetBoneHitbox` | — | — |  |
 | `0x10097310` | CBaseAnimating::CopyAnimationDataFrom | 278 | 2 | 0 | — | 5d/0v/0c +3 outside | `+0x0174`, `+0x019c`, `+0x0670`, `+0x067c`, `+0x0688`, `+0x068c`, +3 more | `+0x026c`, `+0x0350` | `NULL ENTITY`, `CBaseAnimating::CopyAnimationDataFrom` | — | — |  |
 | `0x100976e0` | CBaseAnimating::BlendTransformWithNextSequenceChange | 202 | 2 | 0 | — | 4d/0v/0c | `+0x019c` | `+0x019c`, `+0x026c`, `+0x0364`, `+0x036c`, `+0x0714`, `+0x0720` | `NULL ENTITY`, `CBaseAnimating::BlendTransformWithNextSe…` | — | — |  |
-| `0x10098830` | FUN_10098830 | 349 | 1 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x000c`, `+0x0014` | `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, `+0x001c`, +1 more | — | — | docs/vtmb/animation_and_movers.md:3892, docs/vtmb/animation_and_movers.md:3895, docs/vtmb/animation_rig_resolution.md:583 |  |
+| `0x10098830` | CAnimationLayer::StudioFrameAdvance | 349 | 1 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x000c`, `+0x0014` | `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, `+0x001c`, +1 more | — | — | docs/vtmb/animation_and_movers.md:3892, docs/vtmb/animation_and_movers.md:3895, docs/vtmb/animation_rig_resolution.md:583 |  |
 | `0x10098a40` | CAI_BaseNPC::FUN_10098a40 | 3 | 0 | 0 | `CAI_BaseHumanoid#267`, `CAI_BaseNPC#267`, `CAI_BaseNPCTroika#267`, +74 more | 0d/2v/2c | — | — | — | — | — |  |
-| `0x10098a90` | CBaseAnimatingOverlay::FUN_10098a90 | 224 | 1 | 1 | — | 1d/0v/0c | — | `+0x0730`, `+0x0738` | `m_bNoFlinch`, `  m_bAutoKillWhenFinished`, +8 more | — | docs/vtmb/animation_rig_resolution.md:782 |  |
-| `0x10098bb0` | CAI_BaseNPC::FUN_10098bb0 | 112 | 0 | 2 | `CAI_BaseNPC#250`, `CAI_BaseNPCTroika#250`, `CAI_ExpressiveNPC#250`, +73 more | 1d/2v/2c +1 outside | — | `+0x01c0`, `+0x0738` | — | — | docs/vtmb/animation_and_movers.md:3889, docs/vtmb/animation_rig_resolution.md:604 |  |
-| `0x10098c80` | CAI_BaseNPC::FUN_10098c80 | 59 | 0 | 2 | `CAI_BaseHumanoid#258`, `CAI_BaseNPC#258`, `CAI_BaseNPCTroika#258`, +74 more | 0d/0v/0c +1 outside | — | `+0x0734` | — | — | docs/vtmb/animation_events.md:94 |  |
+| `0x10098a90` | CBaseAnimatingOverlay::Dump | 224 | 1 | 1 | — | 1d/0v/0c | — | `+0x0730`, `+0x0738` | `m_bNoFlinch`, `  m_bAutoKillWhenFinished`, +8 more | — | docs/vtmb/animation_rig_resolution.md:782 |  |
+| `0x10098bb0` | CBaseAnimatingOverlay::StudioFrameAdvance | 112 | 0 | 2 | `CAI_BaseNPC#250`, `CAI_BaseNPCTroika#250`, `CAI_ExpressiveNPC#250`, +73 more | 1d/2v/2c +1 outside | — | `+0x01c0`, `+0x0738` | — | — | docs/vtmb/animation_and_movers.md:3889, docs/vtmb/animation_rig_resolution.md:604 |  |
+| `0x10098c80` | CBaseAnimatingOverlay::DispatchAnimEvents | 59 | 0 | 2 | `CAI_BaseHumanoid#258`, `CAI_BaseNPC#258`, `CAI_BaseNPCTroika#258`, +74 more | 0d/0v/0c +1 outside | — | `+0x0734` | — | — | docs/vtmb/animation_events.md:94 |  |
 | `0x10098cd0` | FUN_10098cd0 | 380 | 1 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x002c` | `+0x0008`, `+0x000c`, `+0x0010`, `+0x002c` | — | — | docs/vtmb/animation_events.md:95, docs/vtmb/animation_events.md:115 |  |
 | `0x10098eb0` | CAI_BaseNPC::FUN_10098eb0 | 285 | 0 | 13 | `CAI_BaseHumanoid#255`, `CAI_BaseNPC#255`, `CAI_BaseNPCTroika#255`, +74 more | 0d/0v/0c | — | — | — | — | docs/vtmb/animation_rig_resolution.md:717 |  |
 | `0x10099020` | CAI_BaseNPC::FUN_10099020 | 152 | 0 | 1 | `CAI_BaseHumanoid#268`, `CAI_BaseNPC#268`, `CAI_BaseNPCTroika#268`, +74 more | 0d/0v/1c | — | `+0x0720` | — | — | docs/vtmb/animation_and_movers.md:3925, docs/vtmb/animation_rig_resolution.md:575 |  |
 | `0x100990f0` | FUN_100990f0 | 49 | 2 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0430`, `+0x0440` | — | — | — |  |
-| `0x100991b0` | FUN_100991b0 | 114 | 1 | 3 | — | 4d/0v/0c | — | `+0x0438`, `+0x043c` | `CBaseAnimatingOverlay::AddGesture:  mode…` | — | docs/vtmb/animation_rig_resolution.md:622 |  |
+| `0x100991b0` | CBaseAnimatingOverlay::AddGesture | 114 | 1 | 3 | — | 4d/0v/0c | — | `+0x0438`, `+0x043c` | `CBaseAnimatingOverlay::AddGesture:  mode…` | — | docs/vtmb/animation_rig_resolution.md:622 |  |
 | `0x10099250` | FUN_10099250 | 89 | 1 | 4 | — | 2d/0v/0c | — | — | — | — | — |  |
-| `0x10099470` | CAI_BaseNPC::FUN_10099470 | 64 | 0 | 1 | `CAI_BaseHumanoid#272`, `CAI_BaseNPC#272`, `CAI_BaseNPCTroika#272`, +74 more | 0d/0v/1c | — | `+0x042c`, `+0x0720` | — | — | docs/vtmb/animation_rig_resolution.md:569 |  |
+| `0x10099470` | CAI_BaseNPC::AllocateLayer | 64 | 0 | 1 | `CAI_BaseHumanoid#272`, `CAI_BaseNPC#272`, `CAI_BaseNPCTroika#272`, +74 more | 0d/0v/1c | — | `+0x042c`, `+0x0720` | — | — | docs/vtmb/animation_rig_resolution.md:569 |  |
 | `0x100994c0` | CAI_BaseNPC::FUN_100994c0 | 84 | 0 | 1 | `CAI_BaseHumanoid#271`, `CAI_BaseNPC#271`, `CAI_BaseNPCTroika#271`, +74 more | 0d/4v/5c | — | `+0x042c`, `+0x0720` | — | — | — |  |
 | `0x10099540` | CAI_BaseNPC::FUN_10099540 | 22 | 0 | 2 | `CAI_BaseHumanoid#270`, `CAI_BaseNPC#270`, `CAI_BaseNPCTroika#270`, +74 more | 0d/0v/2c | — | `+0x043c` | — | — | — |  |
 | `0x10099570` | CAI_BaseNPC::FUN_10099570 | 70 | 0 | 4 | `CAI_BaseHumanoid#273`, `CAI_BaseNPC#273`, `CAI_BaseNPCTroika#273`, +74 more | 0d/0v/0c | — | `+0x043c`, `+0x0720` | — | — | — |  |
 | `0x100995e0` | CAI_BaseNPC::FUN_100995e0 | 50 | 0 | 2 | `CAI_BaseHumanoid#274`, `CAI_BaseNPC#274`, `CAI_BaseNPCTroika#274`, +74 more | 0d/1v/1c | — | `+0x043c`, `+0x0720` | — | — | — |  |
-| `0x10099630` | CAI_BaseNPC::FUN_10099630 | 25 | 0 | 0 | `CAI_BaseHumanoid#275`, `CAI_BaseNPC#275`, `CAI_BaseNPCTroika#275`, +74 more | 0d/0v/1c | — | `+0x073c` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:608 |  |
+| `0x10099630` | CAI_BaseNPC::FUN_10099630 | 25 | 0 | 0 | `CAI_BaseHumanoid#275`, `CAI_BaseNPC#275`, `CAI_BaseNPCTroika#275`, +74 more | 0d/0v/1c | — | `+0x073c` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:610 |  |
 | `0x10099660` | CAI_BaseNPC::FUN_10099660 | 29 | 0 | 0 | `CAI_BaseHumanoid#269`, `CAI_BaseNPC#269`, `CAI_BaseNPCTroika#269`, +74 more | 0d/0v/1c | — | `+0x0720` | — | — | — |  |
 | `0x10099690` | CAI_BaseNPC::FUN_10099690 | 272 | 0 | 6 | `CAI_BaseHumanoid#265`, `CAI_BaseNPC#265`, `CAI_BaseNPCTroika#265`, +74 more | 0d/1v/0c | — | `+0x0278`, `+0x0730`, `+0x0828`, `+0x0848` | — | — | — |  |
 | `0x100997f0` | CAI_BaseNPC::FUN_100997f0 | 43 | 0 | 0 | `CAI_BaseHumanoid#266`, `CAI_BaseNPC#266`, `CAI_BaseNPCTroika#266`, +74 more | 0d/1v/1c +1 outside | — | `+0x07f4` | — | — | — |  |
@@ -364,7 +364,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1009d5e0` | CBaseEntity::GetVSoundTableIdx | 142 | 2 | 0 | — | 3d/0v/0c +1 outside | — | `+0x00bc`, `+0x011c`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetVSoundTableIdx` | — | — |  |
 | `0x1009d6a0` | CBaseEntity::GetVSoundGroup | 143 | 3 | 0 | — | 1d/0v/0c +1 outside | — | `+0x00b4`, `+0x011c`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetVSoundGroup` | — | — |  |
 | `0x1009d760` | CBaseEntity::GetVSoundGroupFemale | 143 | 3 | 0 | — | 1d/0v/0c | — | `+0x00b8`, `+0x011c`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetVSoundGroupFemale` | — | — |  |
-| `0x1009d820` | CAISound::FUN_1009d820 | 31 | 0 | 13 | `CAISound#70`, `CAI_BaseHumanoid#70`, `CAI_BaseNPC#70`, +70 more | 0d/1v/0c +1 outside | — | `+0x009c` | — | — | — |  |
+| `0x1009d820` | CBaseEntity::IsMonster | 31 | 0 | 0 | `CAISound#70`, `CAI_BaseHumanoid#70`, `CAI_BaseNPC#70`, +70 more | 0d/1v/0c +1 outside | — | `+0x009c` | — | — | — |  |
 | `0x1009d850` | CBaseEntity::AdjustSoundDistForStealth | 177 | 1 | 0 | — | 3d/0v/0c | — | `+0x0078`, `+0x00a8`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::AdjustSoundDistForStealth` | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:554 | docs/vtmb/footsteps.md:706, docs/vtmb/npc-ai/senses.md:212, docs/vtmb/stealth.md:192 |  |
 | `0x1009e100` | CAISound::FUN_1009e100 | 6 | 0 | 0 | `CAISound#79`, `CAI_Hint#79`, `CAI_InterestingPlace#79`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1009e120` | CBaseEntity::PostConstructor | 261 | 0 | 0 | `CAISound#106`, `CAI_Hint#106`, `CAI_InterestingPlace#106`, +2 more | 1d/0v/0c +350 outside | — | `+0x01e8`, `+0x0268`, `+0x026c`, `+0x02d4`, `+0x02e0` | `NULL ENTITY`, `CBaseEntity::PostConstructor` | — | — |  |
@@ -422,7 +422,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100a6ad0` | CBaseEntity::VPhysicsGetObjectList | 163 | 0 | 0 | `CAISound#233`, `CAI_BaseHumanoid#233`, `CAI_BaseNPC#233`, +79 more | 0d/0v/0c | — | `+0x026c`, `+0x036c` | `NULL ENTITY`, `CBaseEntity::VPhysicsGetObjectList` | — | — |  |
 | `0x100a6c50` | CBaseEntity::DecalTrace | 662 | 0 | 0 | `CAISound#155`, `CAI_BaseHumanoid#155`, `CAI_BaseNPC#155`, +79 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseEntity::DecalTrace` | — | — |  |
 | `0x100a6fa0` | CBaseEntity::FVisible | 643 | 0 | 0 | `CAISound#201`, `CAI_BaseHumanoid#201`, `CAI_BaseNPC#201`, +15 more | 3d/4v/7c | — | `+0x026c`, `+0x0304`, `+0x03e0` | `NULL ENTITY`, `CBaseEntity::FVisible` | — | — |  |
-| `0x100a7a80` | CAISound::FUN_100a7a80 | 3 | 0 | 0 | `CAISound#138`, `CAI_BaseHumanoid#138`, `CAI_BaseNPC#138`, +11 more | 0d/2v/1c +3 outside | — | — | — | — | — |  |
+| `0x100a7a80` | CBaseEntity::Classify | 3 | 0 | 0 | `CAISound#138`, `CAI_BaseHumanoid#138`, `CAI_BaseNPC#138`, +11 more | 0d/2v/1c +3 outside | — | — | — | — | — |  |
 | `0x100a7aa0` | CBaseEntity::PassesDamageFilter | 239 | 0 | 0 | `CAISound#140`, `CAI_BaseHumanoid#140`, `CAI_BaseNPC#140`, +79 more | 0d/0v/0c +2 outside | — | `+0x0220`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::PassesDamageFilter` | — | — |  |
 | `0x100a7d00` | CBaseEntity::DispatchTraceAttack | 162 | 2 | 0 | — | 1d/0v/0c +8 outside | — | `+0x0230`, `+0x0234`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::DispatchTraceAttack` | — | docs/vtmb/combat-and-damage.md:1817 |  |
 | `0x100a7de0` | CBaseEntity::TraceAttack | 512 | 0 | 0 | `CAISound#141`, `CAI_Hint#141`, `CAI_InterestingPlace#141`, +2 more | 0d/0v/0c +4 outside | — | `+0x01fc`, `+0x0244`, `+0x0248`, `+0x026c`, `+0x036c` | `NULL ENTITY`, `CBaseEntity::TraceAttack` | — | — |  |
@@ -529,15 +529,15 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100b5110` | FUN_100b5110 | 91 | 1 | 0 | — | 2d/0v/0c +4 outside | — | `+0x0020`?, `+0x0170`? | — | — | — |  |
 | `0x100b5190` | FUN_100b5190 | 7 | 1 | 0 | — | 21d/0v/0c +16 outside | — | `+0x00f4`? | — | — | docs/vtmb/npc-ai/lifecycle.md:194, docs/vtmb/npc-ai/senses.md:46 |  |
 | `0x100b5340` | FUN_100b5340 | 141 | 5 | 0 | — | 1d/0v/0c +8 outside | `+0x0268` | `+0x0260`, `+0x0268` | — | — | — |  |
-| `0x100b5ab0` | CBaseFlex::vfunc105 | 57 | 1 | 0 | — | 1d/0v/0c | — | `+0x045c` | — | — | — |  |
+| `0x100b5ab0` | CBaseFlex::SetModel | 57 | 1 | 0 | — | 1d/0v/0c | — | `+0x045c` | — | — | — |  |
 | `0x100b5b00` | CAI_BaseNPC::FUN_100b5b00 | 33 | 0 | 0 | `CAI_BaseNPC#277`, `CAI_BaseNPCTroika#277`, `CAI_ExpressiveNPC#277`, +73 more | 1d/2v/2c +1 outside | — | `+0x0848` | — | — | — |  |
 | `0x100b5b40` | CAI_BaseNPC::FUN_100b5b40 | 7 | 0 | 0 | `CAI_BaseHumanoid#278`, `CAI_BaseNPC#278`, `CAI_BaseNPCTroika#278`, +74 more | 0d/1v/0c | — | `+0x0848` | — | — | — |  |
 | `0x100b5b60` | CAI_BaseNPC::FUN_100b5b60 | 37 | 0 | 6 | `CAI_BaseHumanoid#280`, `CAI_BaseNPC#280`, `CAI_BaseNPCTroika#280`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x100b5ba0` | CAI_BaseNPC::FUN_100b5ba0 | 88 | 0 | 1 | `CAI_BaseHumanoid#279`, `CAI_BaseNPC#279`, `CAI_BaseNPCTroika#279`, +74 more | 0d/2v/2c +1 outside | — | `+0x0858` | — | — | docs/vtmb/facial_animation.md:1044 |  |
 | `0x100b5c20` | CAI_BaseNPC::FUN_100b5c20 | 30 | 0 | 6 | `CAI_BaseHumanoid#282`, `CAI_BaseNPC#282`, `CAI_BaseNPCTroika#282`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x100b5c50` | CAI_BaseNPC::FUN_100b5c50 | 105 | 0 | 1 | `CAI_BaseHumanoid#281`, `CAI_BaseNPC#281`, `CAI_BaseNPCTroika#281`, +74 more | 0d/3v/3c | — | — | — | — | docs/vtmb/facial_animation.md:1049 |  |
-| `0x100b5ce0` | CAI_BaseNPC::FUN_100b5ce0 | 20 | 0 | 0 | `CAI_BaseHumanoid#276`, `CAI_BaseNPC#276`, `CAI_BaseNPCTroika#276`, +74 more | 0d/1v/1c | `+0x0854` | `+0x0854` | — | — | docs/vtmb/facial_animation.md:1143 |  |
-| `0x100b5d10` | FUN_100b5d10 | 70 | 1 | 5 | — | 5d/0v/0c | — | — | — | — | docs/vtmb/facial_animation.md:1061 |  |
+| `0x100b5ce0` | CBaseFlex::Blink | 20 | 0 | 0 | `CAI_BaseHumanoid#276`, `CAI_BaseNPC#276`, `CAI_BaseNPCTroika#276`, +74 more | 0d/1v/1c | `+0x0854` | `+0x0854` | — | — | docs/vtmb/facial_animation.md:1143 |  |
+| `0x100b5d10` | LookupFlexController | 70 | 1 | 5 | — | 5d/0v/0c | — | — | — | — | docs/vtmb/facial_animation.md:1061 |  |
 | `0x100b5d80` | CAI_BaseNPC::FUN_100b5d80 | 167 | 0 | 1 | `CAI_BaseHumanoid#285`, `CAI_BaseNPC#285`, `CAI_BaseNPCTroika#285`, +74 more | 0d/0v/0c | `+0x0a64` | `+0x0a58`, `+0x0a64` | — | — | — |  |
 | `0x100b5e60` | CAI_BaseNPC::FUN_100b5e60 | 626 | 0 | 3 | `CAI_BaseHumanoid#286`, `CAI_BaseNPC#286`, `CAI_ExpressiveNPC#286`, +10 more | 1d/0v/0c | `+0x0a58`, `+0x0a5c`, `+0x0a64`, `+0x0a68` | `+0x0024`, `+0x0174`, `+0x0a58`, `+0x0a5c`, `+0x0a60`, `+0x0a64` | `CBaseFlex::AddExpression:  scene or even…`, `vcd error, gesture %s of model %s is mar…` | — | — |  |
 | `0x100b6180` | CAI_BaseNPC::FUN_100b6180 | 148 | 0 | 1 | `CAI_BaseHumanoid#287`, `CAI_BaseNPC#287`, `CAI_BaseNPCTroika#287`, +74 more | 0d/0v/0c | `+0x0a64` | `+0x0a58`, `+0x0a64` | — | — | — |  |
@@ -741,7 +741,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10105e20` | CBaseCombatCharacter::MakeFlexweightsFromExpression | 205 | 2 | 0 | — | 1d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `ERROR: MakeFlexweightsFromExpression got…`, +1 more | — | — |  |
 | `0x10105f30` | CBaseCombatCharacter::AddSceneExpressions | 213 | 0 | 8 | `CAI_BaseHumanoid#284`, `CAI_BaseNPC#284`, `CAI_BaseNPCTroika#284`, +74 more | 0d/1v/1c | — | `+0x026c`, `+0x0484`, `+0x0a58`, `+0x0a64` | `NULL ENTITY`, `CBaseCombatCharacter::AddSceneExpression…` | — | — |  |
 | `0x10106050` | CBaseCombatCharacter::UpdateExpressions | 659 | 1 | 2 | — | 1d/0v/0c | `+0x10c8`, `+0x10cc` | `+0x0098`, `+0x026c`, `+0x0858`, `+0x10b4`, `+0x10b8`, `+0x10bc`, +1 more | `NULL ENTITY`, `CBaseCombatCharacter::UpdateExpressions` | — | docs/vtmb/facial_animation.md:1103 |  |
-| `0x101063a0` | CBaseCombatCharacter::FadeoutExpressions | 191 | 2 | 0 | — | 3d/0v/0c | — | `+0x026c`, `+0x10bc`, `+0x10c8` | `NULL ENTITY`, `CBaseCombatCharacter::FadeoutExpressions` | — | docs/vtmb/facial_animation.md:1125, docs/vtmb/npc-ai/schedule-kernel.md:608 |  |
+| `0x101063a0` | CBaseCombatCharacter::FadeoutExpressions | 191 | 2 | 0 | — | 3d/0v/0c | — | `+0x026c`, `+0x10bc`, `+0x10c8` | `NULL ENTITY`, `CBaseCombatCharacter::FadeoutExpressions` | — | docs/vtmb/facial_animation.md:1125, docs/vtmb/npc-ai/schedule-kernel.md:610 |  |
 | `0x10106580` | CBaseCombatCharacter::SetExpression | 473 | 1 | 5 | — | 3d/0v/0c +3 outside | — | `+0x026c`, `+0x02e0`, `+0x0fe8` | `NULL ENTITY`, `CBaseCombatCharacter::SetExpression` | — | docs/vtmb/facial_animation.md:1122 |  |
 | `0x101067e0` | CBaseCombatCharacter::AddScriptedExpression | 471 | 1 | 4 | — | 3d/0v/0c +1 outside | `+0x10c8`, `+0x10cc` | `+0x026c`, `+0x10bc`, `+0x10c0`, `+0x10c8` | `NULL ENTITY`, `NPC %s has %d expressions, max: %d`, +1 more | — | — |  |
 | `0x10106a40` | CBaseCombatCharacter::LookupExpressionIndex | 191 | 2 | 3 | — | 6d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::LookupExpressionIn…` | — | — |  |
@@ -809,8 +809,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1013ab70` | FUN_1013ab70 | 53 | 3 | 9 | — | 1d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x1013abc0` | FUN_1013abc0 | 298 | 4 | 8 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x1013ad40` | FUN_1013ad40 | 97 | 3 | 0 | — | 2d/0v/0c +3 outside | — | — | — | — | — |  |
-| `0x1013add0` | FUN_1013add0 | 169 | 3 | 8 | — | 2d/0v/0c +3 outside | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumPostAdditiveNode.cpp:84, Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h:28 | docs/vtmb/animation_rig_resolution.md:706 |  |
-| `0x1013af60` | FUN_1013af60 | 237 | 3 | 1 | — | 2d/0v/0c +2 outside | — | — | — | Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h:30 | — |  |
+| `0x1013add0` | QuaternionScale | 169 | 3 | 8 | — | 2d/0v/0c +3 outside | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumPostAdditiveNode.cpp:84, Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h:28 | docs/vtmb/animation_rig_resolution.md:706 |  |
+| `0x1013af60` | QuaternionMult | 237 | 3 | 1 | — | 2d/0v/0c +2 outside | — | — | — | Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h:30 | — |  |
 | `0x1013b090` | FUN_1013b090 | 42 | 3 | 1 | — | 2d/0v/0c +4 outside | — | — | — | — | — |  |
 | `0x1013b0d0` | FUN_1013b0d0 | 219 | 4 | 0 | — | 1d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x1013b390` | FUN_1013b390 | 252 | 2 | 0 | — | 2d/0v/0c +1 outside | — | — | — | — | — |  |
@@ -847,18 +847,18 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10146570` | FUN_10146570 | 147 | 1 | 3 | — | 66d/0v/0c +110 outside | — | — | — | — | — |  |
 | `0x10146700` | FUN_10146700 | 99 | 1 | 1 | — | 1d/0v/0c +1 outside | `+0x0006`? | `+0x0004`?, `+0x0006`? | — | — | — |  |
 | `0x10146790` | FUN_10146790 | 9 | 1 | 0 | — | 1d/0v/0c +1 outside | `+0x0001`?, `+0x0002`? | — | — | — | — |  |
-| `0x10146a80` | FUN_10146a80 | 127 | 1 | 11 | — | 6d/0v/0c +3 outside | — | — | — | Source/ElysiumUE/Public/ElysiumPlayer.h:439 | docs/vtmb/npc-ai/conditions-and-states.md:283 |  |
+| `0x10146a80` | FUN_10146a80 | 127 | 1 | 11 | — | 6d/0v/0c +3 outside | — | — | — | Source/ElysiumUE/Public/ElysiumPlayer.h:439 | docs/vtmb/npc-ai/conditions-and-states.md:286 |  |
 | `0x10146b20` | FUN_10146b20 | 437 | 1 | 13 | — | 3d/0v/0c +1 outside | — | `+0x0364` | — | Source/ElysiumUE/Public/ElysiumPlayer.h:440 | docs/vtmb/npc-ai/senses.md:106, docs/vtmb/npc-ai/senses.md:217, docs/vtmb/npc-ai/senses.md:280 |  |
 | `0x10147710` | FUN_10147710 | 452 | 2 | 11 | — | 1d/0v/0c +1 outside | `+0x14dc`, `+0x14e0` | `+0x00a8`, `+0x13bc`, `+0x13c0`, `+0x14d8`, `+0x14dc`, `+0x14e0` | `Bip01 Spine`, `D_ObfuscateBroke_Emitter` | — | — |  |
 | `0x10147960` | FUN_10147960 | 155 | 2 | 10 | — | 1d/0v/0c | `+0x016c`, `+0x14d4` | `+0x14d4` | `D_ObfuscateOut_Emitter`, `D_ObfuscateIn_Emitter` | — | — |  |
 | `0x1014ebd0` | FUN_1014ebd0 | 87 | 3 | 2 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c` | — | — | — | — |  |
 | `0x1014f210` | FUN_1014f210 | 273 | 2 | 3 | — | 4d/0v/0c +2 outside | `+0x017c`, `+0x0478`, `+0x047c`, `+0x04b0`, `+0x04b4`, `+0x04b8`, +3 more | `+0x0480`, `+0x04c8` | — | — | — |  |
-| `0x1014f6f0` | CAI_BaseNPC::FUN_1014f6f0 | 3 | 0 | 0 | `CAI_BaseHumanoid#293`, `CAI_BaseNPC#293`, `CAI_ExpressiveNPC#293`, +10 more | 0d/0v/6c | — | — | — | — | — |  |
+| `0x1014f6f0` | CBaseCombatCharacter::GetFollowerBoss | 3 | 0 | 0 | `CAI_BaseHumanoid#293`, `CAI_BaseNPC#293`, `CAI_ExpressiveNPC#293`, +10 more | 0d/0v/6c | — | — | — | — | — |  |
 | `0x1014f710` | CAI_BaseNPC::FUN_1014f710 | 3 | 0 | 0 | `CAI_BaseHumanoid#316`, `CAI_BaseNPC#316`, `CAI_ExpressiveNPC#316`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1014f730` | CAI_BaseNPC::FUN_1014f730 | 5 | 0 | 0 | `CAI_BaseHumanoid#317`, `CAI_BaseNPC#317`, `CAI_ExpressiveNPC#317`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1014f750` | CAI_BaseNPC::FUN_1014f750 | 5 | 0 | 0 | `CAI_BaseHumanoid#318`, `CAI_BaseNPC#318`, `CAI_ExpressiveNPC#318`, +10 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
-| `0x1014f770` | CAI_BaseNPC::FUN_1014f770 | 5 | 0 | 0 | `CAI_BaseHumanoid#319`, `CAI_BaseNPC#319`, `CAI_ExpressiveNPC#319`, +10 more | 0d/1v/0c +1 outside | — | — | — | — | — |  |
-| `0x1014f790` | CAI_BaseNPC::FUN_1014f790 | 5 | 0 | 0 | `CAI_BaseHumanoid#320`, `CAI_BaseNPC#320`, `CAI_ExpressiveNPC#320`, +10 more | 0d/0v/3c +1 outside | — | — | — | — | — |  |
+| `0x1014f750` | CBaseCombatCharacter::PlayerDefenderBlockReaction | 5 | 0 | 0 | `CAI_BaseHumanoid#318`, `CAI_BaseNPC#318`, `CAI_ExpressiveNPC#318`, +10 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
+| `0x1014f770` | CBaseCombatCharacter::PlayerAttackerBlockedReaction | 5 | 0 | 0 | `CAI_BaseHumanoid#319`, `CAI_BaseNPC#319`, `CAI_ExpressiveNPC#319`, +10 more | 0d/1v/0c +1 outside | — | — | — | — | — |  |
+| `0x1014f790` | CBaseCombatCharacter::PlayerKnockbackReaction | 5 | 0 | 0 | `CAI_BaseHumanoid#320`, `CAI_BaseNPC#320`, `CAI_ExpressiveNPC#320`, +10 more | 0d/0v/3c +1 outside | — | — | — | — | — |  |
 | `0x1014f7b0` | CAI_BaseNPC::FUN_1014f7b0 | 5 | 0 | 0 | `CAI_BaseHumanoid#321`, `CAI_BaseNPC#321`, `CAI_BaseNPCTroika#321`, +74 more | 0d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x1014f7d0` | CAI_BaseNPC::FUN_1014f7d0 | 3 | 0 | 0 | `CAI_BaseHumanoid#322`, `CAI_BaseNPC#322`, `CAI_ExpressiveNPC#322`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1014f7f0` | CAI_BaseNPC::FUN_1014f7f0 | 3 | 0 | 0 | `CAI_BaseHumanoid#324`, `CAI_BaseNPC#324`, `CAI_BaseNPCTroika#324`, +71 more | 0d/1v/1c | — | — | — | — | — |  |
@@ -906,7 +906,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10161f10` | FUN_10161f10 | 99 | 2 | 1 | — | 2d/0v/0c +1 outside | `+0x017c` | — | — | — | — |  |
 | `0x101644f0` | FUN_101644f0 | 541 | 5 | 5 | — | 2d/0v/0c +11 outside | `+0x06f0`, `+0x06f4`, `+0x06f8`, `+0x1c68` | `+0x03d4`, `+0x03d8`, `+0x0434`, `+0x04d8`, `+0x05e0`, `+0x05f4`, +5 more | — | Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp:525, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4112, Source/ElysiumUE/Public/ElysiumAnimationIntent.h:67 | docs/vtmb/activity_enum.md:441, docs/vtmb/animation_and_movers.md:874, docs/vtmb/animation_and_movers.md:981, +5 more |  |
 | `0x101671a0` | FUN_101671a0 | 115 | 1 | 12 | — | 4d/0v/0c +5 outside | — | `+0x1538`?, `+0x153c`?, `+0x1540`? | — | — | docs/vtmb/npc-ai/senses.md:134, docs/vtmb/stealth.md:350, docs/vtmb/stealth.md:572, +1 more |  |
-| `0x101672d0` | FUN_101672d0 | 58 | 2 | 1 | — | 1d/0v/0c +1 outside | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:70 | docs/vtmb/npc-ai/conditions-and-states.md:284, docs/vtmb/npc-ai/senses.md:135, docs/vtmb/stealth.md:350, +1 more |  |
+| `0x101672d0` | FUN_101672d0 | 58 | 2 | 1 | — | 1d/0v/0c +1 outside | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:70 | docs/vtmb/npc-ai/conditions-and-states.md:287, docs/vtmb/npc-ai/senses.md:135, docs/vtmb/stealth.md:350, +1 more |  |
 | `0x10167fd0` | FUN_10167fd0 | 362 | 5 | 5 | — | 1d/0v/0c +18 outside | — | `+0x04cc` | — | — | — |  |
 | `0x101681a0` | FUN_101681a0 | 293 | 2 | 1 | — | 1d/0v/0c +5 outside | — | `+0x0fe8`?, `+0x1040`?, `+0x19c0`?, `+0x19cc`?, `+0x1eb8`? | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:56 | docs/vtmb/stealth.md:349 |  |
 | `0x10170090` | FUN_10170090 | 537 | 4 | 21 | — | 1d/0v/0c +1 outside | — | `+0x03fe`?, `+0x067c`? | `Can't change levels while in dialog!⏎` | — | docs/vtmb/computer-terminals.md:685, docs/vtmb/stealth.md:573 |  |
@@ -922,8 +922,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1017b330` | FUN_1017b330 | 717 | 4 | 14 | — | 1d/0v/0c | — | `+0x0034`, `+0x0038` | — | — | — |  |
 | `0x1017c600` | FUN_1017c600 | 119 | 2 | 12 | — | 1d/0v/0c +1 outside | `+0x1eb8`, `+0x1ec0` | `+0x02e0` | `showloot⏎`, `showbarter⏎` | — | — |  |
 | `0x1017c6d0` | FUN_1017c6d0 | 268 | 2 | 1 | — | 1d/0v/0c +3 outside | `+0x1eb8`?, `+0x1ec0`? | `+0x1eb8`?, `+0x1ec0`? | `CBaseEntity::Instance` | — | — |  |
-| `0x1017cef0` | FUN_1017cef0 | 121 | 5 | 4 | — | 1d/0v/0c +18 outside | `+0x19b4`, `+0x1ec4` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:295, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:159 | docs/vtmb/footsteps.md:932 |  |
-| `0x1017cf90` | FUN_1017cf90 | 111 | 1 | 0 | — | 4d/0v/0c +9 outside | — | `+0x19b4`?, `+0x1ec4`? | — | — | docs/vtmb/entity_io.md:935, docs/vtmb/stealth.md:349 |  |
+| `0x1017cef0` | SetCineCamera | 121 | 5 | 4 | — | 1d/0v/0c +18 outside | `+0x19b4`, `+0x1ec4` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:295, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:159 | docs/vtmb/footsteps.md:932 |  |
+| `0x1017cf90` | GetActiveCameraEntity | 111 | 1 | 0 | — | 4d/0v/0c +9 outside | — | `+0x19b4`?, `+0x1ec4`? | — | — | docs/vtmb/entity_io.md:935, docs/vtmb/stealth.md:349 |  |
 | `0x1017d630` | FUN_1017d630 | 56 | 2 | 1 | — | 1d/0v/0c +5 outside | — | `+0x19c0`? | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:151 | docs/vtmb/footsteps.md:63 |  |
 | `0x1017d680` | FUN_1017d680 | 56 | 2 | 1 | — | 1d/0v/0c +2 outside | — | `+0x19cc`? | — | — | — |  |
 | `0x1017d900` | FUN_1017d900 | 416 | 3 | 0 | — | 2d/0v/0c +4 outside | `+0x19b8`?, `+0x19bc`?, `+0x19c0`?, `+0x19cc`?, `+0x19e4`? | `+0x19b8`?, `+0x19bc`?, `+0x19c0`?, `+0x19cc`? | — | — | — |  |
@@ -935,12 +935,12 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1017e150` | FUN_1017e150 | 827 | 1 | 8 | — | 4d/0v/0c +15 outside | `+0x1cd4`, `+0x1cd5`, `+0x1cd8`, `+0x1ce0`, `+0x1ce8` | `+0x1cd8`, `+0x1ce8` | `CSActs:    %6.1f - Criminal level %d -> …`, `CSActs:    %6.1f - Criminal level %d -> …`, +1 more | — | — |  |
 | `0x1017e6f0` | FUN_1017e6f0 | 29 | 1 | 8 | — | 2d/0v/0c +7 outside | `+0x1cdc` | — | — | — | — |  |
 | `0x1017e720` | FUN_1017e720 | 7 | 1 | 0 | — | 3d/0v/0c | — | `+0x1ce8`? | — | — | — |  |
-| `0x1017e740` | FUN_1017e740 | 7 | 1 | 0 | — | 3d/0v/0c | — | `+0x1cec`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:77 |  |
+| `0x1017e740` | FUN_1017e740 | 7 | 1 | 0 | — | 3d/0v/0c | — | `+0x1cec`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:80 |  |
 | `0x1017e760` | FUN_1017e760 | 161 | 2 | 9 | — | 1d/0v/0c | — | `+0x03c8`, `+0x03cc`, `+0x03d0`, `+0x03d4`, `+0x03d8`, `+0x03dc` | `Celerity %d` | — | — |  |
 | `0x1017e840` | FUN_1017e840 | 117 | 2 | 9 | — | 1d/0v/0c | — | — | `Protean 5`, `Protean 4`, +3 more | — | — |  |
-| `0x1017ed00` | FUN_1017ed00 | 298 | 2 | 1 | — | 2d/0v/0c | `+0x1cf8`, `+0x1cfc`, `+0x1d00`, `+0x1d04`, `+0x1d08`, `+0x1d0c` | `+0x1cf8`, `+0x1cfc` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:611 |  |
-| `0x1017f2a0` | PlayerCriminalIncident | 169 | 1 | 3 | — | 3d/0v/0c | — | — | `**UNKNOWN**`, `CSActs:    %6.1f - Criminal act witnesse…` | — | docs/vtmb/npc-ai/conditions-and-states.md:79, docs/vtmb/npc-ai/programs.md:716, docs/vtmb/npc-ai/schedule-kernel.md:611, +1 more |  |
-| `0x1017f4a0` | PlayerSupernaturalIncident | 267 | 1 | 24 | — | 2d/0v/0c +1 outside | `+0x1dbc` | `+0x1dbc` | `**UNKNOWN**`, `CSActs:    %6.1f - Supernatural act witn…` | — | docs/vtmb/npc-ai/conditions-and-states.md:76, docs/vtmb/npc-ai/programs.md:713, docs/vtmb/npc-ai/schedule-kernel.md:611, +1 more |  |
+| `0x1017ed00` | FUN_1017ed00 | 298 | 2 | 1 | — | 2d/0v/0c | `+0x1cf8`, `+0x1cfc`, `+0x1d00`, `+0x1d04`, `+0x1d08`, `+0x1d0c` | `+0x1cf8`, `+0x1cfc` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:613 |  |
+| `0x1017f2a0` | PlayerCriminalIncident | 169 | 1 | 3 | — | 3d/0v/0c | — | — | `**UNKNOWN**`, `CSActs:    %6.1f - Criminal act witnesse…` | — | docs/vtmb/npc-ai/conditions-and-states.md:82, docs/vtmb/npc-ai/programs.md:716, docs/vtmb/npc-ai/schedule-kernel.md:613, +1 more |  |
+| `0x1017f4a0` | PlayerSupernaturalIncident | 267 | 1 | 24 | — | 2d/0v/0c +1 outside | `+0x1dbc` | `+0x1dbc` | `**UNKNOWN**`, `CSActs:    %6.1f - Supernatural act witn…` | — | docs/vtmb/npc-ai/conditions-and-states.md:79, docs/vtmb/npc-ai/programs.md:713, docs/vtmb/npc-ai/schedule-kernel.md:613, +1 more |  |
 | `0x1017f650` | FUN_1017f650 | 107 | 1 | 9 | — | 1d/0v/0c | `+0x1d10`? | `+0x1d10`? | `CSActs:    %6.1f - OnCopPursuitStart - %…` | — | — |  |
 | `0x1017f6e0` | FUN_1017f6e0 | 99 | 1 | 8 | — | 2d/0v/0c | `+0x1d10`? | `+0x1d10`? | `CSActs:    %6.1f - OnCopPursuitStart - %…` | — | — |  |
 | `0x1017f770` | FUN_1017f770 | 7 | 1 | 0 | — | 4d/0v/0c +7 outside | — | `+0x1d10`? | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1451, Source/ElysiumUE/Public/ElysiumPlayer.h:2287 | — |  |
@@ -1022,23 +1022,23 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101a64c0` | CAI_BaseNPC::FUN_101a64c0 | 3 | 0 | 0 | `CAI_BaseHumanoid#416`, `CAI_BaseNPC#416`, `CAI_ExpressiveNPC#416`, +10 more | 0d/1v/6c | — | — | — | — | — |  |
 | `0x101a64e0` | CAI_BaseNPC::FUN_101a64e0 | 3 | 0 | 0 | `CAI_BaseHumanoid#417`, `CAI_BaseNPC#417`, `CAI_ExpressiveNPC#417`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6500` | CAI_BaseNPC::FUN_101a6500 | 1 | 0 | 0 | `CAI_BaseHumanoid#419`, `CAI_BaseNPC#419`, `CAI_ExpressiveNPC#419`, +10 more | 0d/1v/1c | — | — | — | — | — |  |
-| `0x101a6520` | CAI_BaseNPC::FUN_101a6520 | 3 | 0 | 0 | `CAI_BaseHumanoid#128`, `CAI_BaseNPC#128`, `CAI_BaseNPCTroika#128`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a6540` | CAI_BaseNPC::FUN_101a6540 | 1 | 0 | 0 | `CAI_BaseHumanoid#421`, `CAI_BaseNPC#421`, `CAI_BaseNPCTroika#421`, +73 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/lifecycle.md:89 |  |
-| `0x101a6560` | CAI_BaseNPC::FUN_101a6560 | 1 | 0 | 0 | `CAI_BaseHumanoid#434`, `CAI_BaseNPC#434`, `CAI_BaseNPCTroika#434`, +18 more | 0d/1v/1c | — | — | — | — | docs/vtmb/npc-ai/senses.md:403 |  |
+| `0x101a6520` | CAI_BaseNPC::ShouldSavePhysics | 3 | 0 | 0 | `CAI_BaseHumanoid#128`, `CAI_BaseNPC#128`, `CAI_BaseNPCTroika#128`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101a6540` | CAI_BaseNPC::PostNPCInit | 1 | 0 | 0 | `CAI_BaseHumanoid#421`, `CAI_BaseNPC#421`, `CAI_BaseNPCTroika#421`, +73 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/lifecycle.md:89 |  |
+| `0x101a6560` | CAI_BaseNPC::PrescheduleThink | 1 | 0 | 0 | `CAI_BaseHumanoid#434`, `CAI_BaseNPC#434`, `CAI_BaseNPCTroika#434`, +18 more | 0d/1v/1c | — | — | — | — | docs/vtmb/npc-ai/senses.md:403 |  |
 | `0x101a6580` | CAI_BaseNPC::FUN_101a6580 | 3 | 0 | 0 | `CAI_BaseHumanoid#436`, `CAI_BaseNPC#436`, `CAI_BaseNPCTroika#436`, +74 more | 0d/0v/1c | — | — | — | — | docs/vtmb/npc-ai/senses.md:405 |  |
 | `0x101a65a0` | CAI_BaseNPC::FUN_101a65a0 | 38 | 0 | 25 | `CAI_BaseHumanoid#441`, `CAI_BaseNPC#441`, `CAI_BaseNPCTroika#441`, +74 more | 0d/0v/0c | — | `+0x06e8` | `Called wrong StartTask()⏎` | — | — |  |
 | `0x101a65e0` | CAI_BaseNPC::FUN_101a65e0 | 38 | 0 | 23 | `CAI_BaseHumanoid#443`, `CAI_BaseNPC#443`, `CAI_BaseNPCTroika#443`, +74 more | 0d/0v/0c | — | `+0x06f0` | `Called wrong RunTask()⏎` | — | — |  |
 | `0x101a6620` | CAI_BaseNPC::FUN_101a6620 | 15 | 0 | 1 | `CAI_BaseHumanoid#447`, `CAI_BaseNPC#447`, `CAI_BaseNPCTroika#447`, +74 more | 0d/3v/4c | — | `+0x0910` | — | — | docs/vtmb/npc-ai/senses.md:408 |  |
 | `0x101a6640` | CAI_BaseNPC::FUN_101a6640 | 16 | 0 | 1 | `CAI_BaseHumanoid#450`, `CAI_BaseNPC#450`, `CAI_BaseNPCTroika#450`, +74 more | 0d/0v/0c | — | `+0x0910` | — | — | — |  |
-| `0x101a6660` | CAI_BaseNPC::FUN_101a6660 | 6 | 0 | 0 | `CAI_BaseHumanoid#451`, `CAI_BaseNPC#451`, `CAI_ExpressiveNPC#451`, +7 more | 0d/1v/1c | — | — | `CAI_BaseNPC` | — | — |  |
+| `0x101a6660` | CAI_BaseNPC::GetSchedulingErrorName | 6 | 0 | 0 | `CAI_BaseHumanoid#451`, `CAI_BaseNPC#451`, `CAI_ExpressiveNPC#451`, +7 more | 0d/1v/1c | — | — | `CAI_BaseNPC` | — | — |  |
 | `0x101a6680` | CAI_BaseNPC::FUN_101a6680 | 3 | 0 | 0 | `CAI_BaseHumanoid#454`, `CAI_BaseNPC#454`, `CAI_BaseNPCTroika#454`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a66a0` | CAI_BaseNPC::FUN_101a66a0 | 5 | 0 | 0 | `CAI_BaseHumanoid#455`, `CAI_BaseNPC#455`, `CAI_BaseNPCTroika#455`, +74 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:615 |  |
+| `0x101a66a0` | CAI_BaseNPC::FUN_101a66a0 | 5 | 0 | 0 | `CAI_BaseHumanoid#455`, `CAI_BaseNPC#455`, `CAI_BaseNPCTroika#455`, +74 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:617 |  |
 | `0x101a66c0` | CAI_BaseNPC::FUN_101a66c0 | 3 | 0 | 0 | `CAI_BaseHumanoid#456`, `CAI_BaseNPC#456`, `CAI_BaseNPCTroika#456`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a66e0` | CAI_BaseNPC::FUN_101a66e0 | 3 | 0 | 0 | `CAI_BaseHumanoid#457`, `CAI_BaseNPC#457`, `CAI_BaseNPCTroika#457`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a6700` | CAI_BaseNPC::FUN_101a6700 | 3 | 0 | 0 | `CAI_BaseHumanoid#462`, `CAI_BaseNPC#462`, `CAI_ExpressiveNPC#462`, +10 more | 0d/1v/8c | — | — | — | — | — |  |
+| `0x101a6700` | CAI_BaseNPC::ShouldGoToIdleState | 3 | 0 | 0 | `CAI_BaseHumanoid#462`, `CAI_BaseNPC#462`, `CAI_ExpressiveNPC#462`, +10 more | 0d/1v/8c | — | — | — | — | — |  |
 | `0x101a6720` | CAI_BaseNPC::FUN_101a6720 | 7 | 0 | 0 | `CAI_BaseHumanoid#464`, `CAI_BaseNPC#464`, `CAI_BaseNPCTroika#464`, +73 more | 0d/12v/12c | — | `+0x5cc0` | — | — | — |  |
-| `0x101a6740` | CAI_BaseNPC::FUN_101a6740 | 3 | 0 | 0 | `CAI_BaseHumanoid#465`, `CAI_BaseNPC#465`, `CAI_ExpressiveNPC#465`, +9 more | 0d/1v/2c | — | — | — | — | — |  |
-| `0x101a6760` | CAI_BaseNPC::FUN_101a6760 | 5 | 0 | 0 | `CAI_BaseHumanoid#467`, `CAI_BaseNPC#467`, `CAI_ExpressiveNPC#467`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101a6740` | CAI_BaseNPC::OnChangeActivity | 3 | 0 | 0 | `CAI_BaseHumanoid#465`, `CAI_BaseNPC#465`, `CAI_ExpressiveNPC#465`, +9 more | 0d/1v/2c | — | — | — | — | — |  |
+| `0x101a6760` | CAI_BaseNPC::QueryHearSound | 5 | 0 | 0 | `CAI_BaseHumanoid#467`, `CAI_BaseNPC#467`, `CAI_ExpressiveNPC#467`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6780` | CAI_BaseNPC::FUN_101a6780 | 5 | 0 | 0 | `CAI_BaseHumanoid#468`, `CAI_BaseNPC#468`, `CAI_ExpressiveNPC#468`, +10 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x101a67a0` | CAI_BaseNPC::FUN_101a67a0 | 3 | 0 | 0 | `CAI_BaseHumanoid#472`, `CAI_BaseNPC#472`, `CAI_ExpressiveNPC#472`, +10 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a67c0` | CAI_BaseNPC::FUN_101a67c0 | 7 | 0 | 0 | `CAI_BaseHumanoid#476`, `CAI_BaseNPC#476`, `CAI_ExpressiveNPC#476`, +10 more | 0d/0v/1c | — | — | — | — | — |  |
@@ -1068,9 +1068,9 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101a6ae0` | CAI_BaseNPC::FUN_101a6ae0 | 1 | 0 | 0 | `CAI_BaseHumanoid#507`, `CAI_BaseNPC#507`, `CAI_ExpressiveNPC#507`, +10 more | 0d/1v/2c | — | — | — | — | — |  |
 | `0x101a6b00` | CAI_BaseNPC::FUN_101a6b00 | 3 | 0 | 0 | `CAI_BaseHumanoid#508`, `CAI_BaseNPC#508`, `CAI_BaseNPCTroika#508`, +72 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6b20` | CAI_BaseNPC::FUN_101a6b20 | 3 | 0 | 0 | `CAI_BaseNPC#512`, `CAI_BaseNPCTroika#512`, `CAI_TestHull#512`, +72 more | 0d/0v/1c | — | — | — | — | — |  |
-| `0x101a6b40` | CAI_BaseNPC::FUN_101a6b40 | 7 | 0 | 0 | `CAI_BaseHumanoid#522`, `CAI_BaseNPC#522`, `CAI_BaseNPCTroika#522`, +70 more | 0d/1v/3c | — | — | — | — | — |  |
-| `0x101a6b60` | CAI_BaseNPC::FUN_101a6b60 | 7 | 0 | 0 | `CAI_BaseHumanoid#523`, `CAI_BaseNPC#523`, `CAI_ExpressiveNPC#523`, +9 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a6b80` | CAI_BaseNPC::FUN_101a6b80 | 7 | 0 | 0 | `CAI_BaseHumanoid#524`, `CAI_BaseNPC#524`, `CAI_BaseNPCTroika#524`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101a6b40` | CAI_BaseNPC::StepHeight | 7 | 0 | 0 | `CAI_BaseHumanoid#522`, `CAI_BaseNPC#522`, `CAI_BaseNPCTroika#522`, +70 more | 0d/1v/3c | — | — | — | — | — |  |
+| `0x101a6b60` | CAI_BaseNPC::GetMaxJumpSpeed | 7 | 0 | 0 | `CAI_BaseHumanoid#523`, `CAI_BaseNPC#523`, `CAI_ExpressiveNPC#523`, +9 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101a6b80` | CAI_BaseNPC::GetJumpGravity | 7 | 0 | 0 | `CAI_BaseHumanoid#524`, `CAI_BaseNPC#524`, `CAI_BaseNPCTroika#524`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6ba0` | CAI_BaseNPC::FUN_101a6ba0 | 5 | 0 | 0 | `CAI_BaseHumanoid#527`, `CAI_BaseNPC#527`, `CAI_ExpressiveNPC#527`, +10 more | 0d/0v/1c | — | — | — | — | — |  |
 | `0x101a6bc0` | CAI_BaseNPC::FUN_101a6bc0 | 3 | 0 | 0 | `CAI_BaseNPC#536`, `CAI_BaseNPCTroika#536`, `CAI_ExpressiveNPC#536`, +73 more | 0d/0v/1c | — | — | — | — | — |  |
 | `0x101a6be0` | CAI_BaseNPC::FUN_101a6be0 | 3 | 0 | 0 | `CAI_BaseNPC#535`, `CAI_BaseNPCTroika#535`, `CAI_ExpressiveNPC#535`, +73 more | 0d/0v/0c | — | — | — | — | — |  |
@@ -1084,55 +1084,55 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101a6ce0` | CAI_BaseNPC::FUN_101a6ce0 | 16 | 0 | 1 | `CAI_BaseHumanoid#579`, `CAI_BaseNPC#579`, `CAI_BaseNPCTroika#579`, +74 more | 0d/0v/0c | — | `+0x0278` | — | — | — |  |
 | `0x101a6d00` | CAI_BaseNPC::FUN_101a6d00 | 6 | 0 | 0 | `CAI_BaseHumanoid#580`, `CAI_BaseNPC#580`, `CAI_ExpressiveNPC#580`, +7 more | 0d/5v/18c | — | — | — | — | — |  |
 | `0x101a6d20` | CCineAISchedule::FUN_101a6d20 | 8 | 0 | 1 | `CCineAI#117`, `CCineAISchedule#117`, `CCineNPC#117` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a6d40` | CCineAISchedule::FUN_101a6d40 | 20 | 0 | 4 | `CCineAI#370`, `CCineAISchedule#370`, `CCineNPC#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
-| `0x101a6d70` | CCineAISchedule::FUN_101a6d70 | 20 | 0 | 3 | `CCineAI#371`, `CCineAISchedule#371`, `CCineNPC#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
-| `0x101a6da0` | CCineAISchedule::FUN_101a6da0 | 5 | 0 | 0 | `CCineAI#363`, `CCineAISchedule#363`, `CCineNPC#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x101a6d40` | CCineNPC::HeadDirection2D | 20 | 0 | 4 | `CCineAI#370`, `CCineAISchedule#370`, `CCineNPC#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
+| `0x101a6d70` | CCineNPC::HeadDirection3D | 20 | 0 | 3 | `CCineAI#371`, `CCineAISchedule#371`, `CCineNPC#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
+| `0x101a6da0` | CCineNPC::FInViewCone | 5 | 0 | 0 | `CCineAI#363`, `CCineAISchedule#363`, `CCineNPC#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x101a6dc0` | CCineAISchedule::FUN_101a6dc0 | 5 | 0 | 0 | `CCineAI#362`, `CCineAISchedule#362`, `CCineNPC#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6de0` | CCineAISchedule::FUN_101a6de0 | 5 | 0 | 0 | `CCineAI#365`, `CCineAISchedule#365`, `CCineNPC#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6e00` | CCineAISchedule::FUN_101a6e00 | 5 | 0 | 0 | `CCineAI#364`, `CCineAISchedule#364`, `CCineNPC#364` | 0d/0v/5c | — | — | — | — | — |  |
 | `0x101a6e20` | CCineAISchedule::FUN_101a6e20 | 5 | 0 | 0 | `CCineAI#72`, `CCineAISchedule#72`, `CCineNPC#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a6e40` | CCineNPC::vfunc5 | 82 | 0 | 7 | `CCineNPC#5` | 0d/0v/0c | — | `+0x5f9c`, `+0x5fb4` | — | — | — |  |
 | `0x101a6ec0` | FUN_101a6ec0 | 53 | 1 | 0 | — | 3d/0v/0c | — | — | `         ⏎` | — | — |  |
-| `0x101a6f10` | CCineNPC::FUN_101a6f10 | 435 | 0 | 5 | `CCineAI#103`, `CCineNPC#103` | 1d/0v/0c | `+0x017c`, `+0x1480`, `+0x1481`, `+0x5f74`, `+0x5f90`, `+0x5f91`, +2 more | `+0x0174`, `+0x0204`, `+0x026c`, `+0x0270`, `+0x02b4` | `NULL ENTITY`, `CBaseEntity::SetSolid`, +1 more | — | docs/vtmb/npc-ai/lifecycle.md:522 |  |
-| `0x101a7140` | CCineAISchedule::FUN_101a7140 | 19 | 0 | 20 | `CCineAI#180`, `CCineAISchedule#180`, `CCineNPC#180` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x101a6f10` | CCineNPC::Spawn | 435 | 0 | 5 | `CCineAI#103`, `CCineNPC#103` | 1d/0v/0c | `+0x017c`, `+0x1480`, `+0x1481`, `+0x5f74`, `+0x5f90`, `+0x5f91`, +2 more | `+0x0174`, `+0x0204`, `+0x026c`, `+0x0270`, `+0x02b4` | `NULL ENTITY`, `CBaseEntity::SetSolid`, +1 more | — | docs/vtmb/npc-ai/lifecycle.md:522 |  |
+| `0x101a7140` | CCineNPC::UpdateOnRemove | 19 | 0 | 20 | `CCineAI#180`, `CCineAISchedule#180`, `CCineNPC#180` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x101a7170` | FUN_101a7170 | 120 | 1 | 19 | — | 2d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x101a7210` | CCineNPC::vfunc585 | 12 | 0 | 0 | `CCineNPC#585` | 0d/0v/1c +2 outside | — | `+0x0204` | — | — | — |  |
 | `0x101a7230` | FUN_101a7230 | 88 | 1 | 8 | — | 1d/0v/0c | — | `+0x010c` | — | — | — |  |
-| `0x101a7540` | FUN_101a7540 | 42 | 1 | 0 | — | 1d/0v/0c | — | `+0x5f70`?, `+0x5f74`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:613 |  |
-| `0x101a7580` | CCineAISchedule::FUN_101a7580 | 3 | 0 | 0 | `CCineAI#178`, `CCineAISchedule#178`, `CCineNPC#178` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a75a0` | CCineAISchedule::FUN_101a75a0 | 3 | 0 | 0 | `CCineAI#175`, `CCineAISchedule#175`, `CCineNPC#175` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101a7540` | FUN_101a7540 | 42 | 1 | 0 | — | 1d/0v/0c | — | `+0x5f70`?, `+0x5f74`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:615 |  |
+| `0x101a7580` | CCineNPC::Blocked | 3 | 0 | 0 | `CCineAI#178`, `CCineAISchedule#178`, `CCineNPC#178` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101a75a0` | CCineNPC::Touch | 3 | 0 | 0 | `CCineAI#175`, `CCineAISchedule#175`, `CCineNPC#175` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101a77a0` | FUN_101a77a0 | 162 | 1 | 1 | — | 2d/0v/0c | — | — | `I like story time.⏎`, `Like story time.⏎`, +7 more | — | — |  |
 | `0x101a7880` | CCineNPC::vfunc583 | 1577 | 0 | 21 | `CCineNPC#583` | 0d/0v/1c +2 outside | `+0x5f78`, `+0x5f7c`, `+0x5f80`, `+0x5f84`, `+0x5f88`, `+0x5f8c`, +1 more | `+0x0004`, `+0x019c`, `+0x0204`, `+0x0370`, `+0x0374`, `+0x5ce4`, +3 more | `**UNKNOWN**`, `E:\Vampire\main\dlls\scripted.cpp`, +14 more | — | docs/vtmb/npc-ai/lifecycle.md:273 |  |
 | `0x101a8130` | FUN_101a8130 | 68 | 2 | 9 | — | 1d/0v/0c | — | `+0x5f5c`? | — | — | — |  |
-| `0x101a81a0` | FUN_101a81a0 | 231 | 1 | 10 | — | 1d/0v/0c | `+0x06f4` | `+0x065c` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:613 |  |
+| `0x101a81a0` | FUN_101a81a0 | 231 | 1 | 10 | — | 1d/0v/0c | `+0x06f4` | `+0x065c` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:615 |  |
 | `0x101a82d0` | CCineAISchedule::FUN_101a82d0 | 315 | 0 | 22 | `CCineAISchedule#584`, `CCineNPC#584` | 0d/0v/2c | `+0x5f91` | `+0x5ce4` | `**UNKNOWN**`, `Sequence %s targeting %s is starting⏎`, +1 more | — | docs/vtmb/animation_and_movers.md:2106 |  |
-| `0x101a8460` | FUN_101a8460 | 371 | 1 | 21 | — | 3d/0v/0c | — | `+0x010c`, `+0x0920`, `+0x5ce4`, `+0x5f4c`, `+0x5f94`, `+0x5fb4` | `**UNKNOWN**`, `Sequence %s targeting %s is done⏎` | — | docs/vtmb/npc-ai/lifecycle.md:303 |  |
-| `0x101a8640` | FUN_101a8640 | 396 | 1 | 20 | — | 2d/0v/0c | `+0x017c` | `+0x0204`, `+0x0920`, `+0x0928`, `+0x5f4c`, `+0x5f94` | `Post Idle %s finished⏎` | — | docs/vtmb/npc-ai/lifecycle.md:303, docs/vtmb/npc-ai/schedule-kernel.md:612 |  |
-| `0x101a8840` | CCineNPC::vfunc586 | 51 | 0 | 1 | `CCineNPC#586` | 0d/0v/6c | — | — | `E:\Vampire\main\dlls\scripted.cpp` | — | docs/vtmb/npc-ai/schedule-kernel.md:612 |  |
+| `0x101a8460` | SequenceDone | 371 | 1 | 21 | — | 3d/0v/0c | — | `+0x010c`, `+0x0920`, `+0x5ce4`, `+0x5f4c`, `+0x5f94`, `+0x5fb4` | `**UNKNOWN**`, `Sequence %s targeting %s is done⏎` | — | docs/vtmb/npc-ai/lifecycle.md:303 |  |
+| `0x101a8640` | FUN_101a8640 | 396 | 1 | 20 | — | 2d/0v/0c | `+0x017c` | `+0x0204`, `+0x0920`, `+0x0928`, `+0x5f4c`, `+0x5f94` | `Post Idle %s finished⏎` | — | docs/vtmb/npc-ai/lifecycle.md:303, docs/vtmb/npc-ai/schedule-kernel.md:614 |  |
+| `0x101a8840` | CCineNPC::vfunc586 | 51 | 0 | 1 | `CCineNPC#586` | 0d/0v/6c | — | — | `E:\Vampire\main\dlls\scripted.cpp` | — | docs/vtmb/npc-ai/schedule-kernel.md:614 |  |
 | `0x101a8890` | FUN_101a8890 | 123 | 1 | 21 | — | 1d/0v/0c | `+0x5f90` | `+0x0204`, `+0x5ce4`, `+0x5f90` | — | — | — |  |
 | `0x101a8930` | FUN_101a8930 | 75 | 1 | 0 | — | 2d/0v/0c | — | `+0x5ce4`?, `+0x5f90`? | — | — | — |  |
 | `0x101a89a0` | CCineAISchedule::FUN_101a89a0 | 209 | 0 | 2 | `CCineAI#459`, `CCineAISchedule#459`, `CCineNPC#459` | 0d/0v/2c | — | `+0x5ce4` | — | — | — |  |
 | `0x101a8ac0` | FUN_101a8ac0 | 278 | 1 | 1 | — | 5d/0v/0c | — | — | `%s is a priority script and cannot be ki…`, `%s is specified as the 'Next Script' and…` | — | — |  |
-| `0x101a8c30` | FUN_101a8c30 | 130 | 1 | 19 | — | 6d/0v/0c +2 outside | — | `+0x026c`?, `+0x5f48`? | `Cancelling script: %s⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:608, docs/vtmb/npc-ai/social.md:394, docs/vtmb/stealth.md:452 |  |
-| `0x101a8cf0` | FUN_101a8cf0 | 192 | 1 | 9 | — | 2d/0v/0c | — | `+0x026c` | `scripted_sequence` | — | — |  |
+| `0x101a8c30` | FUN_101a8c30 | 130 | 1 | 19 | — | 6d/0v/0c +2 outside | — | `+0x026c`?, `+0x5f48`? | `Cancelling script: %s⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:610, docs/vtmb/npc-ai/social.md:394, docs/vtmb/stealth.md:452 |  |
+| `0x101a8cf0` | DelayStart | 192 | 1 | 9 | — | 2d/0v/0c | — | `+0x026c` | `scripted_sequence` | — | — |  |
 | `0x101a8de0` | CCineAISchedule::FUN_101a8de0 | 390 | 0 | 15 | `CCineAI#113`, `CCineAISchedule#113`, `CCineNPC#113` | 0d/0v/1c | `+0x5f58`, `+0x5f94` | `+0x5f44`, `+0x5f48`, `+0x5f4c`, `+0x5f54`, `+0x5f58`, `+0x5f94` | `**********⏎`, `Could not find NPC %s in CCineNPC::Activ…`, +1 more | — | — |  |
 | `0x101a9060` | CCineAI::vfunc585 | 3 | 0 | 0 | `CCineAI#585` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x101a9080` | CCineAI::vfunc583 | 899 | 0 | 21 | `CCineAI#583` | 0d/0v/1c | `+0x5f78`, `+0x5f7c`, `+0x5f80`, `+0x5f84`, `+0x5f88`, `+0x5f8c` | `+0x0004`, `+0x019c`, `+0x0204`, `+0x0370`, `+0x0374`, `+0x5ce4`, +1 more | `E:\Vampire\main\dlls\scripted.cpp`, `   Otherwise, talk to a programmer.⏎`, +11 more | — | docs/vtmb/animation_and_movers.md:1658, docs/vtmb/npc-ai/lifecycle.md:273 |  |
 | `0x101a9510` | CCineAI::vfunc584 | 139 | 0 | 22 | `CCineAI#584` | 0d/0v/2c | — | — | `%s: unknown aiscripted sequence "%s"⏎` | — | docs/vtmb/animation_and_movers.md:2106 |  |
-| `0x101a95d0` | CCineAI::vfunc586 | 56 | 0 | 8 | `CCineAI#586` | 0d/0v/6c | — | `+0x5f64` | `FixScriptNPCSchedule - no case!⏎` | — | docs/vtmb/entity_io.md:1864, docs/vtmb/npc-ai/schedule-kernel.md:612 |  |
+| `0x101a95d0` | CCineAI::vfunc586 | 56 | 0 | 8 | `CCineAI#586` | 0d/0v/6c | — | `+0x5f64` | `FixScriptNPCSchedule - no case!⏎` | — | docs/vtmb/entity_io.md:1864, docs/vtmb/npc-ai/schedule-kernel.md:614 |  |
 | `0x101a9620` | CCineAISchedule::vfunc82 | 6 | 0 | 0 | `CCineAISchedule#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101a9730` | CCineAISchedule::vfunc103 | 46 | 0 | 6 | `CCineAISchedule#103` | 0d/0v/0c | — | `+0x6090`, `+0x6094` | `aiscripted_schedule - no schedule or sta…` | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:266, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:22 | docs/vtmb/npc-ai/authored-control.md:248 |  |
+| `0x101a9730` | CCineAISchedule::Spawn | 46 | 0 | 6 | `CCineAISchedule#103` | 0d/0v/0c | — | `+0x6090`, `+0x6094` | `aiscripted_schedule - no schedule or sta…` | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:266, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:22 | docs/vtmb/npc-ai/authored-control.md:248 |  |
 | `0x101a9770` | CCineAISchedule::vfunc585 | 3 | 0 | 0 | `CCineAISchedule#585` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x101a9790` | CCineAISchedule::vfunc583 | 233 | 0 | 23 | `CCineAISchedule#583` | 0d/0v/1c | — | `+0x0928`, `+0x5ce4`, `+0x5f90` | `   Otherwise, talk to a programmer.⏎`, `   scripted sequence.⏎`, +8 more | — | — |  |
-| `0x101a98c0` | CCineAISchedule::vfunc586 | 473 | 0 | 22 | `CCineAISchedule#586` | 0d/1v/6c | — | `+0x0204`, `+0x608c`, `+0x6090`, `+0x6094` | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:22, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2466, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:440 | docs/vtmb/npc-ai/authored-control.md:248, docs/vtmb/npc-ai/lifecycle.md:289, docs/vtmb/npc-ai/schedule-kernel.md:612 |  |
-| `0x101aa5d0` | CAI_BaseNPCTroika::FUN_101aa5d0 | 15 | 0 | 0 | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, `CNPCMaker#586`, +61 more | 0d/2v/6c | — | `+0x6088` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:273 |  |
+| `0x101a98c0` | CCineAISchedule::vfunc586 | 473 | 0 | 22 | `CCineAISchedule#586` | 0d/1v/6c | — | `+0x0204`, `+0x608c`, `+0x6090`, `+0x6094` | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:22, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2466, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:440 | docs/vtmb/npc-ai/authored-control.md:248, docs/vtmb/npc-ai/lifecycle.md:289, docs/vtmb/npc-ai/schedule-kernel.md:614 |  |
+| `0x101aa5d0` | CAI_BaseNPCTroika::FUN_101aa5d0 | 15 | 0 | 0 | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, `CNPCMaker#586`, +61 more | 0d/2v/6c | — | `+0x6088` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:276 |  |
 | `0x101aa5f0` | CAI_BaseNPCTroika::FUN_101aa5f0 | 7 | 0 | 0 | `CAI_BaseNPCTroika#476`, `CGeneric_NPC#476`, `CNPCMaker#476`, +61 more | 0d/1v/1c | — | — | — | — | docs/vtmb/npc-ai/senses.md:210 |  |
 | `0x101aa610` | CAI_BaseNPCTroika::FUN_101aa610 | 7 | 0 | 0 | `CAI_BaseNPCTroika#28`, `CGeneric_NPC#28`, `CNPCMaker#28`, +61 more | 0d/0v/0c | — | `+0x63c4` | — | — | — |  |
 | `0x101aa630` | CAI_BaseNPCTroika::FUN_101aa630 | 7 | 0 | 0 | `CAI_BaseNPCTroika#29`, `CGeneric_NPC#29`, `CNPCMaker#29`, +61 more | 0d/0v/0c | — | `+0x63c8` | — | — | — |  |
 | `0x101aa650` | CAI_BaseNPCTroika::FUN_101aa650 | 7 | 0 | 0 | `CAI_BaseNPCTroika#30`, `CGeneric_NPC#30`, `CNPCMaker#30`, +61 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101aa670` | CAI_BaseNPCTroika::FUN_101aa670 | 7 | 0 | 0 | `CAI_BaseNPCTroika#523`, `CGeneric_NPC#523`, `CNPCMaker#523`, +58 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101aa670` | CAI_BaseNPCTroika::GetMaxJumpSpeed | 7 | 0 | 0 | `CAI_BaseNPCTroika#523`, `CGeneric_NPC#523`, `CNPCMaker#523`, +58 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aa690` | CAI_BaseNPCTroika::FUN_101aa690 | 3 | 0 | 0 | `CAI_BaseNPCTroika#591`, `CGeneric_NPC#591`, `CNPCMaker#591`, +61 more | 0d/1v/1c | — | — | — | — | — |  |
-| `0x101aa6b0` | CAI_BaseNPCTroika::FUN_101aa6b0 | 7 | 0 | 0 | `CAI_BaseNPCTroika#462`, `CGeneric_NPC#462`, `CNPCMaker#462`, +61 more | 0d/7v/8c | — | `+0x63fc` | — | — | — |  |
+| `0x101aa6b0` | CAI_BaseNPCTroika::ShouldGoToIdleState | 7 | 0 | 0 | `CAI_BaseNPCTroika#462`, `CGeneric_NPC#462`, `CNPCMaker#462`, +61 more | 0d/7v/8c | — | `+0x63fc` | — | — | — |  |
 | `0x101aa6d0` | CAI_BaseNPCTroika::FUN_101aa6d0 | 7 | 0 | 0 | `CAI_BaseNPCTroika#412`, `CGeneric_NPC#412`, `CNPCMaker#412`, +61 more | 0d/0v/0c | — | `+0x6254` | — | — | — |  |
 | `0x101aa6f0` | CAI_BaseNPCTroika::FUN_101aa6f0 | 7 | 0 | 0 | `CAI_BaseNPCTroika#413`, `CGeneric_NPC#413`, `CNPCMaker#413`, +61 more | 0d/0v/1c | — | `+0x6258` | — | — | — |  |
 | `0x101aa710` | CAI_BaseNPCTroika::FUN_101aa710 | 7 | 0 | 0 | `CAI_BaseNPCTroika#414`, `CGeneric_NPC#414`, `CNPCMaker#414`, +61 more | 0d/0v/0c | — | `+0x625c` | — | — | — |  |
@@ -1140,28 +1140,28 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101aa750` | CAI_BaseNPCTroika::FUN_101aa750 | 13 | 0 | 0 | `CAI_BaseNPCTroika#416`, `CGeneric_NPC#416`, `CNPCMaker#416`, +61 more | 0d/5v/6c | `+0x63f0` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:598 | docs/vtmb/npc-ai/lifecycle.md:512 |  |
 | `0x101aa770` | CAI_BaseNPCTroika::FUN_101aa770 | 7 | 0 | 0 | `CAI_BaseNPCTroika#417`, `CGeneric_NPC#417`, `CNPCMaker#417`, +61 more | 0d/0v/0c | — | `+0x63f0` | — | — | — |  |
 | `0x101aa790` | CAI_BaseNPCTroika::FUN_101aa790 | 6 | 0 | 0 | `CAI_BaseNPCTroika#580`, `CNPCMaker#580`, `CNPCMaker_Fleshpile#580`, +4 more | 0d/0v/18c | — | — | — | — | — |  |
-| `0x101aa7b0` | CAI_BaseNPCTroika::FUN_101aa7b0 | 6 | 0 | 0 | `CAI_BaseNPCTroika#451`, `CNPCMaker#451`, `CNPCMaker_Fleshpile#451`, +4 more | 0d/0v/1c | — | — | `CAI_BaseNPCTroika` | — | — |  |
+| `0x101aa7b0` | CAI_BaseNPCTroika::GetSchedulingErrorName | 6 | 0 | 0 | `CAI_BaseNPCTroika#451`, `CNPCMaker#451`, `CNPCMaker_Fleshpile#451`, +4 more | 0d/0v/1c | — | — | `CAI_BaseNPCTroika` | — | — |  |
 | `0x101aa7d0` | CPayphone::vfunc117 | 8 | 0 | 1 | `CPayphone#117` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101aa7f0` | CPayphone::vfunc370 | 20 | 0 | 4 | `CPayphone#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
-| `0x101aa820` | CPayphone::vfunc371 | 20 | 0 | 3 | `CPayphone#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
-| `0x101aa850` | CPayphone::vfunc363 | 5 | 0 | 0 | `CPayphone#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x101aa7f0` | CPayphone::HeadDirection2D | 20 | 0 | 4 | `CPayphone#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
+| `0x101aa820` | CPayphone::HeadDirection3D | 20 | 0 | 3 | `CPayphone#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
+| `0x101aa850` | CPayphone::FInViewCone | 5 | 0 | 0 | `CPayphone#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x101aa870` | CPayphone::vfunc362 | 5 | 0 | 0 | `CPayphone#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aa890` | CPayphone::vfunc365 | 5 | 0 | 0 | `CPayphone#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aa8b0` | CPayphone::vfunc364 | 5 | 0 | 0 | `CPayphone#364` | 0d/0v/5c | — | — | — | — | — |  |
-| `0x101aa8d0` | CPayphone::vfunc294 | 5 | 0 | 0 | `CPayphone#294` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x101aa8d0` | CPayphone::IsValidStealthKillTarget | 5 | 0 | 0 | `CPayphone#294` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aa930` | CPayphone::vfunc72 | 5 | 0 | 0 | `CPayphone#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aa950` | CPayphone::vfunc35 | 23 | 0 | 2 | `CPayphone#35` | 0d/0v/0c | — | `+0x049c` | — | — | — |  |
-| `0x101aa9c0` | CPayphone::vfunc103 | 357 | 0 | 25 | `CPayphone#103` | 0d/0v/0c | `+0x017c`, `+0x01fc`, `+0x0210`, `+0x06f0`, `+0x06f8` | `+0x0174`, `+0x026c`, `+0x02b4` | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — | — |  |
-| `0x101aab90` | CPayphone::vfunc420 | 44 | 0 | 23 | `CPayphone#420` | 0d/0v/8c | — | `+0x5cdc` | — | — | — |  |
-| `0x101aabd0` | CPayphone::vfunc138 | 3 | 0 | 0 | `CPayphone#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x101aabf0` | CPayphone::vfunc431 | 205 | 0 | 16 | `CPayphone#431` | 0d/0v/0c | `+0x017c`, `+0x06f0`, `+0x06f8` | `+0x03e8`, `+0x0fe8`, `+0x0ff0` | — | — | — |  |
+| `0x101aa9c0` | CPayphone::Spawn | 357 | 0 | 25 | `CPayphone#103` | 0d/0v/0c | `+0x017c`, `+0x01fc`, `+0x0210`, `+0x06f0`, `+0x06f8` | `+0x0174`, `+0x026c`, `+0x02b4` | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — | — |  |
+| `0x101aab90` | CPayphone::NPCInit | 44 | 0 | 23 | `CPayphone#420` | 0d/0v/8c | — | `+0x5cdc` | — | — | — |  |
+| `0x101aabd0` | CPayphone::Classify | 3 | 0 | 0 | `CPayphone#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x101aabf0` | CPayphone::NPCThink | 205 | 0 | 16 | `CPayphone#431` | 0d/0v/0c | `+0x017c`, `+0x06f0`, `+0x06f8` | `+0x03e8`, `+0x0fe8`, `+0x0ff0` | — | — | — |  |
 | `0x101aad90` | CPayphone::vfunc286 | 3 | 0 | 0 | `CPayphone#286` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x101aade0` | CPayphone::vfunc379 | 48 | 0 | 22 | `CPayphone#379` | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:294 | docs/vtmb/camera-view-modes.md:2254, docs/vtmb/camera-view-modes.md:2414, docs/vtmb/stealth.md:501 |  |
+| `0x101aade0` | CPayphone::EnterGrappleState | 48 | 0 | 22 | `CPayphone#379` | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:294 | docs/vtmb/camera-view-modes.md:2254, docs/vtmb/camera-view-modes.md:2414, docs/vtmb/stealth.md:501 |  |
 | `0x101aae20` | CPayphone::vfunc359 | 6 | 0 | 0 | `CPayphone#359` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aae40` | CPayphone::vfunc37 | 7 | 0 | 0 | `CPayphone#37` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x101aae60` | CPayphone::vfunc193 | 95 | 0 | 2 | `CPayphone#193` | 0d/1v/23c | — | — | `Phone_bone_01` | — | — |  |
-| `0x101aaee0` | CPayphone::vfunc295 | 119 | 0 | 1 | `CPayphone#295` | 0d/1v/3c | — | `+0x0128`, `+0x14b8`, `+0x5b64` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:808, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:46 | docs/vtmb/npc-ai/schedule-kernel.md:229 |  |
-| `0x101aaf80` | CPayphone::vfunc45 | 165 | 0 | 3 | `CPayphone#45` | 0d/0v/0c | — | `+0x0270`, `+0x0304` | — | — | — |  |
+| `0x101aaee0` | CPayphone::CanTalk | 119 | 0 | 1 | `CPayphone#295` | 0d/1v/3c | — | `+0x0128`, `+0x14b8`, `+0x5b64` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:808, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:46 | docs/vtmb/npc-ai/schedule-kernel.md:229 |  |
+| `0x101aaf80` | CPayphone::PassesFindEntityFOVTrace | 165 | 0 | 3 | `CPayphone#45` | 0d/0v/0c | — | `+0x0270`, `+0x0304` | — | — | — |  |
 | `0x101ab060` | CCineAI::vfunc5 | 82 | 0 | 7 | `CCineAI#5` | 0d/0v/0c | — | `+0x5f9c`, `+0x5fb4` | — | — | — |  |
 | `0x101ab0e0` | CCineAISchedule::vfunc5 | 82 | 0 | 7 | `CCineAISchedule#5` | 0d/0v/0c | — | `+0x5f9c`, `+0x5fb4`, `+0x608c` | — | — | — |  |
 | `0x101ab1b0` | CPayphone::vfunc5 | 30 | 0 | 17 | `CPayphone#5` | 0d/0v/0c | — | — | — | — | — |  |
@@ -1188,14 +1188,14 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101b78f0` | FUN_101b78f0 | 88 | 5 | 0 | — | 1d/0v/0c +10 outside | — | `+0x0004` | — | — | — |  |
 | `0x101b9840` | FUN_101b9840 | 15 | 1 | 1 | — | 1d/0v/0c +1 outside | — | `+0x0010`? | — | — | — |  |
 | `0x101b9860` | FUN_101b9860 | 15 | 1 | 1 | — | 2d/0v/0c +2 outside | — | `+0x0010`? | — | — | — |  |
-| `0x101b9880` | FUN_101b9880 | 59 | 1 | 0 | — | 1d/0v/0c +2 outside | `+0x0005`? | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:68 |  |
+| `0x101b9880` | FUN_101b9880 | 59 | 1 | 0 | — | 1d/0v/0c +2 outside | `+0x0005`? | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:71 |  |
 | `0x101b9920` | FUN_101b9920 | 60 | 1 | 0 | — | 2d/0v/0c | — | `+0x0004`? | — | — | docs/vtmb/npc-ai/senses.md:226 |  |
 | `0x101b99a0` | FUN_101b99a0 | 24 | 2 | 0 | — | 1d/0v/0c | — | `+0x0004`? | — | — | — |  |
 | `0x101b99d0` | FUN_101b99d0 ‼ | 84 | 1 | 0 | — | 6d/0v/0c | — | — | — | — | — |  |
 | `0x101b9a50` | FUN_101b9a50 | 2352 | 2 | 13 | — | 2d/0v/0c +1 outside | — | `+0x0004`?, `+0x0008`?, `+0x0014`? | `deaf zone min depth: %.2f` | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:559 | docs/vtmb/footsteps.md:709 |  |
 | `0x101bab50` | FUN_101bab50 | 72 | 2 | 0 | — | 2d/0v/0c +1 outside | `+0x0450`?, `+0x0454`? | `+0x0450`?, `+0x0454`? | `Free Sound List is empty!⏎` | — | — |  |
 | `0x101babc0` | FUN_101babc0 | 156 | 1 | 14 | — | 2d/0v/0c +5 outside | — | — | `Could not AllocSound() for InsertSound()…` | — | — |  |
-| `0x101bac90` | FUN_101bac90 | 534 | 1 | 14 | — | 8d/0v/0c +10 outside | — | — | `PLAYER`, `BULLET_IMPACT`, +11 more | — | docs/vtmb/footsteps.md:158, docs/vtmb/npc-ai/senses.md:190, docs/vtmb/npc-ai/senses.md:194 |  |
+| `0x101bac90` | CSoundEnt::InsertSound | 534 | 1 | 14 | — | 8d/0v/0c +10 outside | — | — | `PLAYER`, `BULLET_IMPACT`, +11 more | — | docs/vtmb/footsteps.md:158, docs/vtmb/npc-ai/senses.md:190, docs/vtmb/npc-ai/senses.md:194 |  |
 | `0x101bb0f0` | FUN_101bb0f0 | 20 | 4 | 0 | — | 1d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x101bb150` | CSoundEnt::SoundPointerForIndex | 157 | 2 | 0 | — | 3d/0v/0c +5 outside | — | — | `SoundPointerForIndex() - Index < 0!⏎`, `SoundPointerForIndex() - Index too large…`, +1 more | — | — |  |
 | `0x101bb4a0` | CAISound::vfunc82 | 6 | 0 | 0 | `CAISound#82` | 0d/1v/0c | — | — | — | — | — |  |
@@ -1213,7 +1213,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101c02d0` | FUN_101c02d0 | 189 | 4 | 0 | — | 1d/0v/0c | — | `+0x0004` | — | — | — |  |
 | `0x101c03c0` | FUN_101c03c0 | 444 | 4 | 1 | — | 1d/0v/0c | `+0x0010` | `+0x0004`, `+0x0010` | — | — | — |  |
 | `0x101c05f0` | FUN_101c05f0 | 448 | 4 | 1 | — | 1d/0v/0c | `+0x0010` | `+0x0004`, `+0x0010` | — | — | — |  |
-| `0x101c0820` | CAISound::FUN_101c0820 | 137 | 0 | 5 | `CAISound#103` | 1d/0v/0c +5 outside | — | `+0x026c`, `+0x0270` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
+| `0x101c0820` | CPointEntity::Spawn | 137 | 0 | 5 | `CAISound#103` | 1d/0v/0c +5 outside | — | `+0x026c`, `+0x0270` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
 | `0x101c10d0` | CAI_BaseNPC::FUN_101c10d0 | 745 | 0 | 1 | `CAI_BaseHumanoid#135`, `CAI_BaseNPC#135`, `CAI_BaseNPCTroika#135`, +74 more | 0d/0v/0c | — | `+0x0370`, `+0x0374`, `+0x03f4`, `+0x03fc`, `+0x04d4`, `+0x04dc`, +4 more | — | — | — |  |
 | `0x101c1480` | CAI_BaseNPC::FUN_101c1480 | 114 | 0 | 10 | `CAI_BaseHumanoid#110`, `CAI_BaseNPC#110`, `CAI_BaseNPCTroika#110`, +74 more | 0d/0v/0c +2 outside | `+0x04fc`, `+0x0504` | — | `distance` | — | — |  |
 | `0x101c1720` | CAI_BaseNPC::FUN_101c1720 ‼ | 68 | 0 | 9 | `CAI_BaseHumanoid#133`, `CAI_BaseNPC#133`, `CAI_BaseNPCTroika#133`, +74 more | 0d/0v/0c +3 outside | `+0x0498`, `+0x0558` | `+0x0114`, `+0x0494`, `+0x0558` | — | — | — |  |
@@ -1225,7 +1225,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101c2910` | FUN_101c2910 | 80 | 2 | 1 | — | 3d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x101c29b0` | FUN_101c29b0 | 25 | 1 | 0 | — | 3d/0v/0c +2 outside | — | `+0x002c`? | — | — | — |  |
 | `0x101c29e0` | FUN_101c29e0 | 29 | 2 | 0 | — | 2d/0v/0c +3 outside | `+0x001c`, `+0x0020`, `+0x0024` | — | — | — | — |  |
-| `0x101c2a10` | FUN_101c2a10 | 10 | 1 | 0 | — | 5d/0v/0c +3 outside | `+0x0040` | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:608 |  |
+| `0x101c2a10` | FUN_101c2a10 | 10 | 1 | 0 | — | 5d/0v/0c +3 outside | `+0x0040` | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:610 |  |
 | `0x101c2a30` | FUN_101c2a30 | 4 | 1 | 0 | — | 4d/0v/0c | — | `+0x0040`? | — | — | — |  |
 | `0x101c2a50` | FUN_101c2a50 | 10 | 1 | 0 | — | 5d/0v/0c | `+0x0044` | — | — | — | — |  |
 | `0x101c2a70` | FUN_101c2a70 | 13 | 2 | 0 | — | 1d/0v/0c +1 outside | — | `+0x003c`? | — | — | — |  |
@@ -1318,7 +1318,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101d4f20` | FUN_101d4f20 | 12 | 1 | 0 | — | 3d/0v/0c | — | `+0x0078` | — | — | — |  |
 | `0x101d5bd0` | FUN_101d5bd0 | 77 | 1 | 5 | — | 4d/0v/0c +15 outside | — | `+0x0004`, `+0x0008` | — | — | — |  |
 | `0x101d5e80` | FUN_101d5e80 | 75 | 1 | 8 | — | 13d/0v/0c +11 outside | — | `+0x0004`, `+0x0008` | — | — | — |  |
-| `0x101d5f10` | FUN_101d5f10 | 85 | 1 | 12 | — | 12d/0v/0c +5 outside | — | `+0x0004`, `+0x0008` | — | — | — |  |
+| `0x101d5f10` | FUN_101d5f10 | 85 | 1 | 12 | — | 11d/0v/0c +6 outside | — | `+0x0004`, `+0x0008` | — | — | — |  |
 | `0x101d8670` | FUN_101d8670 | 14 | 4 | 10 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x101d8720` | FUN_101d8720 | 56 | 5 | 11 | — | 1d/0v/0c +1 outside | — | `+0x001c` | — | — | — |  |
 | `0x101d8770` | FUN_101d8770 | 48 | 3 | 9 | — | 1d/0v/0c +2 outside | — | `+0x001c` | — | — | — |  |
@@ -1398,16 +1398,16 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101e3730` | FUN_101e3730 | 212 | 2 | 19 | — | 3d/0v/0c +2 outside | — | `+0x0008` | `Discipline<%s> Triggered⏎` | — | docs/vtmb/npc-ai/authored-control.md:293 |  |
 | `0x101e3850` | FUN_101e3850 | 134 | 3 | 19 | — | 1d/0v/0c +1 outside | — | `+0x0008` | `Discipline<%s> Hit⏎` | — | docs/vtmb/npc-ai/authored-control.md:294 |  |
 | `0x101e3910` | FUN_101e3910 | 119 | 3 | 21 | — | 1d/0v/0c | — | `+0x0008` | `Discipline<%s> CallbackHit⏎` | Source/ElysiumUE/Private/Substrate/ElysiumAnimEvents.h:57, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1564 | docs/vtmb/animation_events.md:428 |  |
-| `0x101e3a30` | FUN_101e3a30 | 133 | 2 | 21 | — | 1d/0v/0c | — | `+0x0008` | `Discipline<%s> InterruptSchedule⏎` | — | docs/vtmb/npc-ai/conditions-and-states.md:116 |  |
-| `0x101e3af0` | FUN_101e3af0 | 186 | 1 | 19 | — | 9d/0v/0c +1 outside | — | `+0x0008` | `Discipline<%s> RemoveEffect⏎` | — | docs/vtmb/npc-ai/conditions-and-states.md:113 |  |
+| `0x101e3a30` | InterruptSchedule | 133 | 2 | 21 | — | 1d/0v/0c | — | `+0x0008` | `Discipline<%s> InterruptSchedule⏎` | — | docs/vtmb/npc-ai/conditions-and-states.md:119 |  |
+| `0x101e3af0` | RemoveEffect | 186 | 1 | 19 | — | 9d/0v/0c +1 outside | — | `+0x0008` | `Discipline<%s> RemoveEffect⏎` | — | docs/vtmb/npc-ai/conditions-and-states.md:116 |  |
 | `0x101e3be0` | FUN_101e3be0 | 26 | 2 | 20 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x101e3c10` | FUN_101e3c10 | 66 | 2 | 21 | — | 1d/0v/0c | — | `+0x0008` | `ERROR: RemoveTgtEffect Failed -- FX: %s!…` | — | — |  |
 | `0x101e3c80` | FUN_101e3c80 | 71 | 1 | 20 | — | 1d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x101e3cf0` | FUN_101e3cf0 | 89 | 2 | 20 | — | 1d/0v/0c | — | `+0x0008`, `+0x0018` | — | — | docs/vtmb/animation_and_movers.md:3384, docs/vtmb/vtmb-animation-reverse-engineering.md:2252 |  |
 | `0x101e3d70` | FUN_101e3d70 | 89 | 1 | 19 | — | 2d/0v/0c | — | `+0x0008`, `+0x0018` | — | — | — |  |
-| `0x101e3df0` | FUN_101e3df0 | 89 | 1 | 20 | — | 1d/0v/0c | — | `+0x0008`, `+0x0018` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:73, docs/vtmb/npc-ai/conditions-and-states.md:112 |  |
+| `0x101e3df0` | FUN_101e3df0 | 89 | 1 | 20 | — | 1d/0v/0c | — | `+0x0008`, `+0x0018` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:76, docs/vtmb/npc-ai/conditions-and-states.md:115 |  |
 | `0x101e3e70` | FUN_101e3e70 | 78 | 2 | 22 | — | 1d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1583 | — |  |
-| `0x101e3ee0` | FUN_101e3ee0 | 70 | 1 | 22 | — | 1d/0v/0c | — | `+0x0008` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:74, docs/vtmb/npc-ai/conditions-and-states.md:115 |  |
+| `0x101e3ee0` | FUN_101e3ee0 | 70 | 1 | 22 | — | 1d/0v/0c | — | `+0x0008` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:77, docs/vtmb/npc-ai/conditions-and-states.md:118 |  |
 | `0x101e3f50` | FUN_101e3f50 | 117 | 1 | 1 | — | 2d/0v/0c +3 outside | — | — | — | — | — |  |
 | `0x101e3ff0` | FUN_101e3ff0 | 134 | 1 | 20 | — | 4d/0v/0c | — | — | — | — | — |  |
 | `0x101e40b0` | FUN_101e40b0 | 128 | 5 | 19 | — | 1d/0v/0c | — | — | — | — | — |  |
@@ -1546,7 +1546,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10200ea0` | CVStatList_t::DecBase | 216 | 2 | 11 | — | 2d/0v/0c +4 outside | — | `+0x0008`, `+0x000c` | `CVStatList_t::DecBase` | Source/ElysiumUE/Private/Tests/ElysiumHUDTests.cpp:429, Source/ElysiumUE/Public/ElysiumPlayer.h:1554 | docs/vtmb/game_runtime.md:938 |  |
 | `0x10200fc0` | CVStatList_t::AddBase | 250 | 1 | 13 | — | 5d/0v/0c +8 outside | — | `+0x0008`, `+0x000c` | `CVStatList_t::AddBase` | — | — |  |
 | `0x10201100` | CVStatList_t::SubBase | 108 | 1 | 14 | — | 6d/0v/0c +10 outside | — | — | `CVStatList_t::SubBase` | — | — |  |
-| `0x102012d0` | FUN_102012d0 | 151 | 1 | 10 | — | 60d/0v/0c +75 outside | — | `+0x0008`, `+0x000c`, `+0x0020` | — | — | — |  |
+| `0x102012d0` | GetValue | 151 | 1 | 10 | — | 60d/0v/0c +75 outside | — | `+0x0008`, `+0x000c`, `+0x0020` | — | — | — |  |
 | `0x102013a0` | CVStatList_t::GetBaseValueName | 151 | 3 | 9 | — | 1d/0v/0c | — | `+0x000c` | `CVStatList_t::GetBaseValueName` | — | — |  |
 | `0x10201470` | CVStatList_t::GetValueName | 151 | 3 | 11 | — | 1d/0v/0c +1 outside | — | `+0x000c` | `CVStatList_t::GetValueName` | — | — |  |
 | `0x10201540` | FUN_10201540 | 58 | 2 | 11 | — | 1d/0v/0c | — | `+0x0004`?, `+0x0008`? | — | — | — |  |
@@ -1701,25 +1701,25 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1025e140` | FUN_1025e140 | 103 | 2 | 0 | — | 1d/0v/0c | `+0x0004` | `+0x0004`, `+0x0008` | — | — | — |  |
 | `0x1025e450` | CAI_BaseHumanoid::vfunc82 | 6 | 0 | 0 | `CAI_BaseHumanoid#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1025e4e0` | CAI_BaseHumanoid::vfunc250 | 27 | 0 | 3 | `CAI_BaseHumanoid#250` | 0d/0v/2c | `+0x5f4c` | `+0x5f4c` | — | — | — |  |
-| `0x1025e510` | CAI_BaseHumanoid::vfunc105 | 485 | 0 | 11 | `CAI_BaseHumanoid#105` | 0d/0v/14c | `+0x5fb8`, `+0x5fbc`, `+0x5fc0`, `+0x5fc4`, `+0x5fc8`, `+0x5fcc`, +20 more | — | `body_pitch`, `head_tilt`, +24 more | — | — |  |
+| `0x1025e510` | CAI_BaseHumanoid::SetModel | 485 | 0 | 11 | `CAI_BaseHumanoid#105` | 0d/0v/14c | `+0x5fb8`, `+0x5fbc`, `+0x5fc0`, `+0x5fc4`, `+0x5fc8`, `+0x5fcc`, +20 more | — | `body_pitch`, `head_tilt`, +24 more | — | — |  |
 | `0x1025e780` | CAI_BaseHumanoid::vfunc277 | 19 | 0 | 1 | `CAI_BaseHumanoid#277` | 0d/1v/2c | `+0x5f4c` | `+0x5f4c` | — | — | — |  |
 | `0x1025e7b0` | FUN_1025e7b0 | 225 | 1 | 2 | — | 3d/0v/0c | — | `+0x0374`?, `+0x0458`?, `+0x17da`? | — | — | — |  |
 | `0x1025e8e0` | CAI_BaseHumanoid::vfunc193 | 40 | 0 | 3 | `CAI_BaseHumanoid#193` | 0d/4v/23c | — | `+0x5f50`, `+0x5f54`, `+0x5f58` | — | — | — |  |
 | `0x1025e920` | CAI_BaseHumanoid::vfunc587 | 164 | 0 | 4 | `CAI_BaseHumanoid#587` | 0d/1v/1c | — | `+0x0304`, `+0x05cc` | — | — | — |  |
 | `0x1025ea00` | CAI_BaseHumanoid::vfunc588 | 183 | 0 | 4 | `CAI_BaseHumanoid#588` | 0d/0v/1c | — | `+0x0304`, `+0x05c4` | — | — | — |  |
-| `0x1025eaf0` | CAI_BaseHumanoid::vfunc537 | 972 | 0 | 6 | `CAI_BaseHumanoid#537` | 0d/1v/2c | `+0x5f4c` | `+0x0464`, `+0x0568`, `+0x0804`, `+0x5f4c`, `+0x5fb8`, `+0x5fbc`, +24 more | — | — | — |  |
+| `0x1025eaf0` | CAI_BaseHumanoid::SetHeadDirection | 972 | 0 | 6 | `CAI_BaseHumanoid#537` | 0d/1v/2c | `+0x5f4c` | `+0x0464`, `+0x0568`, `+0x0804`, `+0x5f4c`, `+0x5fb8`, `+0x5fbc`, +24 more | — | — | — |  |
 | `0x1025efc0` | FUN_1025efc0 | 95 | 1 | 1 | — | 1d/0v/0c | — | `+0x0568`? | — | — | — |  |
 | `0x1025f040` | CAI_BaseHumanoid::vfunc372 | 68 | 0 | 4 | `CAI_BaseHumanoid#372` | 0d/0v/3c | — | `+0x05d4` | — | — | — |  |
 | `0x1025f0b0` | CAI_BaseHumanoid::vfunc373 | 40 | 0 | 3 | `CAI_BaseHumanoid#373` | 0d/1v/2c | — | `+0x5f5c`, `+0x5f60`, `+0x5f64` | — | — | — |  |
-| `0x1025f0f0` | CAI_BaseHumanoid::vfunc370 | 68 | 0 | 4 | `CAI_BaseHumanoid#370` | 0d/0v/1c | — | `+0x05cc` | — | — | — |  |
-| `0x1025f160` | CAI_BaseHumanoid::vfunc371 | 40 | 0 | 3 | `CAI_BaseHumanoid#371` | 0d/3v/4c | — | `+0x5f68`, `+0x5f6c`, `+0x5f70` | — | — | — |  |
+| `0x1025f0f0` | CAI_BaseHumanoid::HeadDirection2D | 68 | 0 | 4 | `CAI_BaseHumanoid#370` | 0d/0v/1c | — | `+0x05cc` | — | — | — |  |
+| `0x1025f160` | CAI_BaseHumanoid::HeadDirection3D | 40 | 0 | 3 | `CAI_BaseHumanoid#371` | 0d/3v/4c | — | `+0x5f68`, `+0x5f6c`, `+0x5f70` | — | — | — |  |
 | `0x1025f1a0` | CAI_BaseHumanoid::vfunc586 | 14 | 0 | 0 | `CAI_BaseHumanoid#586` | 0d/1v/6c | — | `+0x5f94` | — | — | — |  |
 | `0x1025f1c0` | CAI_BaseHumanoid::vfunc585 | 1138 | 0 | 4 | `CAI_BaseHumanoid#585` | 0d/1v/1c | — | `+0x029c`, `+0x0304`, `+0x0324`, `+0x0364`, `+0x0370`, `+0x0740`, +2 more | — | — | — |  |
 | `0x1025f760` | CAI_BaseHumanoid::vfunc536 | 293 | 0 | 2 | `CAI_BaseHumanoid#536` | 0d/1v/1c | `+0x5f94` | `+0x5f88`, `+0x5f94` | — | — | — |  |
 | `0x1025f8e0` | CAI_BaseHumanoid::vfunc535 | 275 | 0 | 2 | `CAI_BaseHumanoid#535` | 0d/0v/0c | `+0x5f94` | `+0x5f88`, `+0x5f94` | — | — | — |  |
-| `0x1025fa50` | CAI_BaseHumanoid::vfunc333 | 2226 | 0 | 10 | `CAI_BaseHumanoid#333` | 0d/0v/0c | `+0x0854`, `+0x5f74`, `+0x5f78`, `+0x5f7c`, `+0x5f80`, `+0x5f94` | `+0x011c`, `+0x0304`, `+0x0454`, `+0x046c`, `+0x05cc`, `+0x0740`, +12 more | `cycler_actor` | — | — |  |
+| `0x1025fa50` | CAI_BaseHumanoid::MaintainEyeDirection | 2226 | 0 | 10 | `CAI_BaseHumanoid#333` | 0d/0v/0c | `+0x0854`, `+0x5f74`, `+0x5f78`, `+0x5f7c`, `+0x5f80`, `+0x5f94` | `+0x011c`, `+0x0304`, `+0x0454`, `+0x046c`, `+0x05cc`, `+0x0740`, +12 more | `cycler_actor` | — | — |  |
 | `0x10260540` | CAI_BaseHumanoid::vfunc589 | 153 | 0 | 0 | `CAI_BaseHumanoid#589` | 0d/1v/1c | — | `+0x5fa4`, `+0x5fa8`, `+0x5fac`, `+0x5fb0`, `+0x5fb4` | — | — | — |  |
-| `0x10260630` | CAI_BaseHumanoid::vfunc463 | 43 | 0 | 9 | `CAI_BaseHumanoid#463` | 0d/0v/1c | — | `+0x0934` | — | — | — |  |
+| `0x10260630` | CAI_BaseHumanoid::OnStateChange | 43 | 0 | 9 | `CAI_BaseHumanoid#463` | 0d/0v/1c | — | `+0x0934` | — | — | — |  |
 | `0x10260670` | FUN_10260670 | 169 | 1 | 8 | — | 1d/0v/0c +1 outside | `+0x5f9c` | `+0x5f9c`, `+0x5fa0` | — | — | — |  |
 | `0x10260750` | FUN_10260750 | 11 | 2 | 0 | — | 1d/0v/0c | `+0x5f9c`? | — | — | — | — |  |
 | `0x10260820` | FUN_10260820 | 62 | 1 | 1 | — | 1d/0v/0c | — | `+0x000c` | — | — | — |  |
@@ -1736,21 +1736,21 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102623c0` | CAI_Motor::FUN_102623c0 | 16 | 0 | 3 | `CAI_Motor#2`, `CAI_MoveAndShootOverlay#2`, `CAI_Navigator#2`, +3 more | 0d/0v/0c | — | `+0x0004` | — | — | — |  |
 | `0x102623e0` | CAI_Motor::FUN_102623e0 | 9 | 0 | 0 | `CAI_Motor#11` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10262430` | CAI_BaseHumanoid::vfunc429 | 55 | 0 | 6 | `CAI_BaseHumanoid#429` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x102624b0` | CAI_BaseHumanoid::vfunc516 | 50 | 0 | 0 | `CAI_BaseHumanoid#516` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x102624b0` | CAI_BaseHumanoid::MaxYawSpeed | 50 | 0 | 0 | `CAI_BaseHumanoid#516` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10264330` | FUN_10264330 | 40 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102652d0` | FUN_102652d0 | 13 | 5 | 0 | — | 1d/0v/0c +3 outside | — | — | — | — | — |  |
 | `0x102652f0` | FUN_102652f0 | 4 | 5 | 0 | — | 1d/0v/0c +3 outside | — | `+0x000c`? | — | — | — |  |
 | `0x102653f0` | FUN_102653f0 | 81 | 2 | 1 | — | 1d/0v/0c | `+0x000c` | `+0x000c` | — | — | — |  |
-| `0x10265680` | FUN_10265680 ‼ | 292 | 1 | 2 | — | 2d/0v/0c +4 outside | — | — | `AI Disabled.⏎`, `AI Already Disabled.⏎`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1742, Source/ElysiumUE/Private/Substrate/ElysiumEventClasses.cpp:241, Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:765, +5 more | docs/vtmb/npc-ai/lifecycle.md:276 |  |
-| `0x10265800` | FUN_10265800 | 10 | 1 | 0 | — | 1d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:897 | — |  |
-| `0x102658f0` | CAI_BaseNPC::FUN_102658f0 | 96 | 0 | 16 | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, `CAI_BaseNPCTroika#402`, +74 more | 0d/1v/1c | — | `+0x0134`, `+0x0628`, `+0x062c`, `+0x0638`, `+0x0fd0` | — | — | — |  |
+| `0x10265680` | SetAIEnabled ‼ | 292 | 1 | 2 | — | 2d/0v/0c +4 outside | — | — | `AI Disabled.⏎`, `AI Already Disabled.⏎`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1742, Source/ElysiumUE/Private/Substrate/ElysiumEventClasses.cpp:241, Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:765, +5 more | docs/vtmb/npc-ai/lifecycle.md:276 |  |
+| `0x10265800` | IsAIEnabled | 10 | 1 | 0 | — | 1d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:897 | — |  |
+| `0x102658f0` | CAI_BaseNPC::FUN_102658f0 | 96 | 0 | 15 | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, `CAI_BaseNPCTroika#402`, +74 more | 0d/1v/1c | — | `+0x0134`, `+0x0628`, `+0x062c`, `+0x0638`, `+0x0fd0` | — | — | — |  |
 | `0x10265970` | FUN_10265970 | 127 | 1 | 1 | — | 1d/0v/0c | — | `+0x0374`? | — | — | — |  |
-| `0x10265a40` | FUN_10265a40 | 50 | 1 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0174`? | — | — | docs/vtmb/combat-and-damage.md:1724 |  |
+| `0x10265a40` | BecomeDead | 50 | 1 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0174`? | — | — | docs/vtmb/combat-and-damage.md:1724 |  |
 | `0x10265a90` | FUN_10265a90 | 43 | 1 | 8 | — | 3d/0v/0c | `+0x5bd4` | `+0x5bd4`, `+0x5e24` | — | — | — |  |
 | `0x10265ad0` | CAI_BaseNPC::Event_Killed | 759 | 0 | 20 | `CAI_BaseHumanoid#144`, `CAI_BaseNPC#144`, `CAI_ExpressiveNPC#144`, +8 more | 3d/0v/3c | `+0x01ec`, `+0x1a48`, `+0x1a4c`, `+0x1a50`, `+0x1a54`, `+0x1a70`, +15 more | `+0x0364`, `+0x036c`, `+0x041c`, `+0x07a0`, `+0x07fc`, `+0x08a0`, +8 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:378, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:254 | docs/vtmb/combat-and-damage.md:1639, docs/vtmb/npc-ai/social.md:334, docs/vtmb/npc-ai/social.md:453 |  |
-| `0x10265e90` | CAI_BaseNPC::FUN_10265e90 | 33 | 0 | 24 | `CAI_BaseHumanoid#142`, `CAI_BaseNPC#142`, `CAI_ExpressiveNPC#142`, +9 more | 2d/0v/1c | — | `+0x072c` | — | — | — |  |
-| `0x10265ed0` | CAI_BaseNPC::OnTakeDamageAlive | 1184 | 0 | 23 | `CAI_BaseHumanoid#390`, `CAI_BaseNPC#390`, `CAI_ExpressiveNPC#390`, +10 more | 1d/0v/0c | `+0x5b7c`, `+0x5b80`, `+0x5d8c`, `+0x5d94`, `+0x5d98` | `+0x0208`, `+0x0210`, `+0x029c`, `+0x0324`, `+0x0364`, `+0x05ac`, +12 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:304, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:37 | docs/vtmb/combat-and-damage.md:1544, docs/vtmb/combat-and-damage.md:1566, docs/vtmb/npc-ai/social.md:295 |  |
-| `0x102664c0` | CAI_BaseNPC::FUN_102664c0 | 282 | 0 | 9 | `CAI_BaseHumanoid#392`, `CAI_BaseNPC#392`, `CAI_BaseNPCTroika#392`, +74 more | 0d/0v/0c | `+0x0210` | `+0x01fc`, `+0x0300` | — | — | — |  |
+| `0x10265e90` | CAI_BaseNPC::OnTakeDamage | 33 | 0 | 24 | `CAI_BaseHumanoid#142`, `CAI_BaseNPC#142`, `CAI_ExpressiveNPC#142`, +9 more | 2d/0v/1c | — | `+0x072c` | — | — | — |  |
+| `0x10265ed0` | CAI_BaseNPC::OnTakeDamage_Alive | 1184 | 0 | 23 | `CAI_BaseHumanoid#390`, `CAI_BaseNPC#390`, `CAI_ExpressiveNPC#390`, +10 more | 1d/0v/0c | `+0x5b7c`, `+0x5b80`, `+0x5d8c`, `+0x5d94`, `+0x5d98` | `+0x0208`, `+0x0210`, `+0x029c`, `+0x0324`, `+0x0364`, `+0x05ac`, +12 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:304, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:37 | docs/vtmb/combat-and-damage.md:1544, docs/vtmb/combat-and-damage.md:1566, docs/vtmb/npc-ai/social.md:295 |  |
+| `0x102664c0` | CAI_BaseNPC::OnTakeDamage_Dead | 282 | 0 | 9 | `CAI_BaseHumanoid#392`, `CAI_BaseNPC#392`, `CAI_BaseNPCTroika#392`, +74 more | 0d/0v/0c | `+0x0210` | `+0x01fc`, `+0x0300` | — | — | — |  |
 | `0x10266630` | CAI_BaseNPC::FUN_10266630 | 32 | 0 | 0 | `CAI_BaseHumanoid#576`, `CAI_BaseNPC#576`, `CAI_BaseNPCTroika#576`, +73 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x10266660` | CAI_BaseNPC::FUN_10266660 | 32 | 0 | 0 | `CAI_BaseHumanoid#577`, `CAI_BaseNPC#577`, `CAI_BaseNPCTroika#577`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x10266780` | CAI_BaseNPC::TraceAttack | 676 | 0 | 8 | `CAI_BaseHumanoid#141`, `CAI_BaseNPC#141`, `CAI_BaseNPCTroika#141`, +71 more | 3d/0v/0c | `+0x0660`, `+0x1594`, `+0x5df0` | `+0x01fc`, `+0x0210`, `+0x0244`, `+0x0248`, `+0x02e0`, `+0x0490` | — | — | docs/vtmb/combat-and-damage.md:1617, docs/vtmb/combat-and-damage.md:1817 |  |
@@ -1765,21 +1765,21 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10268ef0` | CAISound::FUN_10268ef0 | 779 | 0 | 4 | `CAISound#146`, `CAI_BaseHumanoid#146`, `CAI_BaseNPC#146`, +79 more | 0d/2v/2c +2 outside | `+0x0208` | `+0x0208`, `+0x0244`, `+0x0278` | — | — | — |  |
 | `0x102695d0` | FUN_102695d0 | 210 | 1 | 5 | — | 4d/0v/0c | `+0x016c`?, `+0x017c`?, `+0x01a3`? | `+0x016c`?, `+0x026c`?, `+0x0270`?, `+0x02b4`? | `CBaseEntity::AddSolidFlags` | — | docs/vtmb/combat-and-damage.md:1732 |  |
 | `0x102699e0` | FUN_102699e0 | 34 | 1 | 5 | — | 1d/0v/0c +3 outside | — | — | — | — | — |  |
-| `0x10269a20` | FUN_10269a20 | 89 | 1 | 1 | — | 66d/0v/0c +10 outside | — | `+0x0910` | — | Source/ElysiumUE/Private/Tests/ElysiumAiScriptedScheduleTests.cpp:852 | docs/vtmb/npc-ai/conditions-and-states.md:719, docs/vtmb/npc-ai/lifecycle.md:392 |  |
-| `0x10269aa0` | FUN_10269aa0 | 98 | 1 | 1 | — | 112d/0v/0c +26 outside | — | `+0x0910` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:582 | docs/vtmb/npc-ai/conditions-and-states.md:65, docs/vtmb/npc-ai/conditions-and-states.md:240, docs/vtmb/npc-ai/conditions-and-states.md:501, +3 more |  |
+| `0x10269a20` | SetCondition | 89 | 1 | 1 | — | 66d/0v/0c +10 outside | — | `+0x0910` | — | Source/ElysiumUE/Private/Tests/ElysiumAiScriptedScheduleTests.cpp:852 | docs/vtmb/npc-ai/conditions-and-states.md:722, docs/vtmb/npc-ai/lifecycle.md:392 |  |
+| `0x10269aa0` | HasCondition | 98 | 1 | 1 | — | 112d/0v/0c +26 outside | — | `+0x0910` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:582 | docs/vtmb/npc-ai/conditions-and-states.md:68, docs/vtmb/npc-ai/conditions-and-states.md:243, docs/vtmb/npc-ai/conditions-and-states.md:504, +3 more |  |
 | `0x10269b30` | FUN_10269b30 | 13 | 4 | 2 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10269b50` | FUN_10269b50 | 95 | 1 | 1 | — | 47d/0v/0c +2 outside | — | `+0x0910` | — | — | docs/vtmb/npc-ai/lifecycle.md:398 |  |
 | `0x10269bd0` | FUN_10269bd0 | 122 | 1 | 1 | — | 3d/0v/0c | — | `+0x0910` | — | — | — |  |
-| `0x10269c70` | FUN_10269c70 | 134 | 1 | 1 | — | 10d/0v/0c +1 outside | — | `+0x0910`, `+0x5c38` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1202, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:673, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:579, +1 more | docs/vtmb/npc-ai/conditions-and-states.md:243, docs/vtmb/npc-ai/conditions-and-states.md:496, docs/vtmb/npc-ai/conditions-and-states.md:503, +1 more |  |
-| `0x10269d30` | FUN_10269d30 | 133 | 1 | 1 | — | 35d/0v/0c +4 outside | — | `+0x0910`, `+0x5c38` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:584, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:605, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:611 | docs/vtmb/npc-ai/conditions-and-states.md:66, docs/vtmb/npc-ai/conditions-and-states.md:502, docs/vtmb/npc-ai/lifecycle.md:395, +1 more |  |
-| `0x10269eb0` | FUN_10269eb0 | 89 | 1 | 1 | — | 6d/0v/0c | — | `+0x0910` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:600 | — |  |
+| `0x10269c70` | ConditionInterruptsCurrentSchedule | 134 | 1 | 1 | — | 10d/0v/0c +1 outside | — | `+0x0910`, `+0x5c38` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1202, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:673, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:579, +1 more | docs/vtmb/npc-ai/conditions-and-states.md:246, docs/vtmb/npc-ai/conditions-and-states.md:499, docs/vtmb/npc-ai/conditions-and-states.md:506, +1 more |  |
+| `0x10269d30` | HasInterruptCondition | 133 | 1 | 1 | — | 35d/0v/0c +4 outside | — | `+0x0910`, `+0x5c38` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:584, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:605, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:611 | docs/vtmb/npc-ai/conditions-and-states.md:69, docs/vtmb/npc-ai/conditions-and-states.md:505, docs/vtmb/npc-ai/lifecycle.md:395, +1 more |  |
+| `0x10269eb0` | SetScheduleTestBits | 89 | 1 | 1 | — | 6d/0v/0c | — | `+0x0910` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:600 | — |  |
 | `0x10269f30` | FUN_10269f30 | 95 | 1 | 1 | — | 4d/0v/0c | — | `+0x0910` | — | — | — |  |
-| `0x1026a0f0` | CAI_BaseNPC::CacheInterruptConditions | 323 | 1 | 2 | — | 4d/0v/0c | `+0x1b24`, `+0x5c74`, `+0x5c78`, `+0x5c7c`, `+0x5c80`, `+0x5c84`, +7 more | `+0x026c`, `+0x066c`, `+0x0714`, `+0x5c38`, `+0x5c74`, `+0x5c8c` | `NULL ENTITY`, `CAI_BaseNPC::CacheInterruptConditions` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3227, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:677, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:473, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:675 |  |
+| `0x1026a0f0` | CAI_BaseNPC::CacheInterruptConditions | 323 | 1 | 2 | — | 4d/0v/0c | `+0x1b24`, `+0x5c74`, `+0x5c78`, `+0x5c7c`, `+0x5c80`, `+0x5c84`, +7 more | `+0x026c`, `+0x066c`, `+0x0714`, `+0x5c38`, `+0x5c74`, `+0x5c8c` | `NULL ENTITY`, `CAI_BaseNPC::CacheInterruptConditions` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3227, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:677, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:473, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:678 |  |
 | `0x1026a2a0` | FUN_1026a2a0 | 16 | 1 | 0 | — | 2d/0v/0c | — | `+0x5cdc` | — | — | — |  |
-| `0x1026a2c0` | CAI_BaseNPC::FUN_1026a2c0 | 624 | 0 | 14 | `CAI_BaseHumanoid#469`, `CAI_BaseNPC#469`, `CAI_ExpressiveNPC#469`, +10 more | 1d/0v/0c | `+0x5b68`, `+0x5b6c`, `+0x5b70`, `+0x5b74` | `+0x0098`, `+0x029c`, `+0x0650`, `+0x0654`, `+0x1480`, `+0x14bc`, +1 more | `%s can't assess %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:328, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:370, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:804, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:561, docs/vtmb/npc-ai/senses.md:87, docs/vtmb/npc-ai/senses.md:118, +3 more |  |
-| `0x1026a5e0` | CAI_BaseNPC::FUN_1026a5e0 | 513 | 0 | 8 | `CAI_BaseHumanoid#470`, `CAI_BaseNPC#470`, `CAI_ExpressiveNPC#470`, +10 more | 1d/0v/0c | — | `+0x075c`, `+0x1ae0`, `+0x5ca8`, `+0x5cdc`, `+0x5ee4`, `+0x5efc`, +1 more | `**ERROR: Monster %s hearing sound of unk…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:862 | docs/vtmb/npc-ai/senses.md:222, docs/vtmb/npc-ai/senses.md:289 |  |
+| `0x1026a2c0` | CAI_BaseNPC::OnLooked | 624 | 0 | 14 | `CAI_BaseHumanoid#469`, `CAI_BaseNPC#469`, `CAI_ExpressiveNPC#469`, +10 more | 1d/0v/0c | `+0x5b68`, `+0x5b6c`, `+0x5b70`, `+0x5b74` | `+0x0098`, `+0x029c`, `+0x0650`, `+0x0654`, `+0x1480`, `+0x14bc`, +1 more | `%s can't assess %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:328, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:370, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:804, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:564, docs/vtmb/npc-ai/senses.md:87, docs/vtmb/npc-ai/senses.md:118, +3 more |  |
+| `0x1026a5e0` | CAI_BaseNPC::OnListened | 513 | 0 | 8 | `CAI_BaseHumanoid#470`, `CAI_BaseNPC#470`, `CAI_ExpressiveNPC#470`, +10 more | 1d/0v/0c | — | `+0x075c`, `+0x1ae0`, `+0x5ca8`, `+0x5cdc`, `+0x5ee4`, `+0x5efc`, +1 more | `**ERROR: Monster %s hearing sound of unk…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:862 | docs/vtmb/npc-ai/senses.md:222, docs/vtmb/npc-ai/senses.md:289 |  |
 | `0x1026a8a0` | CAI_BaseNPC::FUN_1026a8a0 | 22 | 0 | 0 | `CAI_BaseHumanoid#471`, `CAI_BaseNPC#471`, `CAI_BaseNPCTroika#471`, +72 more | 0d/1v/1c | — | — | — | — | docs/vtmb/npc-ai/senses.md:228 |  |
-| `0x1026a8d0` | CAI_BaseNPC::FUN_1026a8d0 | 5 | 0 | 0 | `CAI_BaseHumanoid#566`, `CAI_BaseNPC#566`, `CAI_ExpressiveNPC#566`, +9 more | 0d/0v/4c | — | — | — | — | — |  |
+| `0x1026a8d0` | CAI_BaseNPC::FValidateHintType | 5 | 0 | 0 | `CAI_BaseHumanoid#566`, `CAI_BaseNPC#566`, `CAI_ExpressiveNPC#566`, +9 more | 0d/0v/4c | — | — | — | — | — |  |
 | `0x1026a8f0` | CAI_BaseNPC::FUN_1026a8f0 | 8 | 0 | 0 | `CAI_BaseHumanoid#567`, `CAI_BaseNPC#567`, `CAI_BaseNPCTroika#567`, +73 more | 1d/1v/1c | — | — | — | — | — |  |
 | `0x1026a910` | CAI_BaseNPC::FUN_1026a910 | 9 | 0 | 0 | `CAI_BaseHumanoid#568`, `CAI_BaseNPC#568`, `CAI_BaseNPCTroika#568`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1026ab50` | FUN_1026ab50 | 641 | 1 | 14 | — | 1d/0v/0c | — | `+0x0364`?, `+0x5f2d`? | — | — | docs/vtmb/npc-ai/lifecycle.md:376 |  |
@@ -1794,18 +1794,18 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1026b4f0` | CAI_BaseNPC::FUN_1026b4f0 | 108 | 0 | 13 | `CAI_BaseHumanoid#538`, `CAI_BaseNPC#538`, `CAI_BaseNPCTroika#538`, +74 more | 0d/0v/0c | — | `+0x029c`, `+0x086c`, `+0x08f8` | — | — | — |  |
 | `0x1026b580` | FUN_1026b580 | 432 | 1 | 3 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x1026b7a0` | FUN_1026b7a0 | 67 | 2 | 0 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | — | — | — |  |
-| `0x1026b810` | CAI_BaseNPC::FUN_1026b810 | 1847 | 0 | 4 | `CAI_BaseNPC#333`, `CAI_ExpressiveNPC#333`, `CAI_TestHull#333`, +9 more | 1d/0v/0c | `+0x0e64`, `+0x5d6c` | `+0x029c`, `+0x0304`, `+0x0370`, `+0x0454`, `+0x05c0`, `+0x0768`, +10 more | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:748, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:797, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:835, +7 more | docs/vtmb/npc-ai/conditions-and-states.md:390 |  |
+| `0x1026b810` | CAI_BaseNPC::MaintainEyeDirection | 1847 | 0 | 4 | `CAI_BaseNPC#333`, `CAI_ExpressiveNPC#333`, `CAI_TestHull#333`, +9 more | 1d/0v/0c | `+0x0e64`, `+0x5d6c` | `+0x029c`, `+0x0304`, `+0x0370`, `+0x0454`, `+0x05c0`, `+0x0768`, +10 more | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:748, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:797, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:835, +7 more | docs/vtmb/npc-ai/conditions-and-states.md:393 |  |
 | `0x1026c120` | CAI_BaseNPC::PerformMovement | 536 | 1 | 0 | — | 2d/0v/0c | — | `+0x026c`, `+0x5d34` | `NULL ENTITY`, `Unaccounted`, +2 more | — | — |  |
 | `0x1026c3d0` | FUN_1026c3d0 | 287 | 1 | 4 | — | 3d/0v/0c | — | `+0x04d8`? | `A.I. Disabled...⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:890, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:459, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:499, +2 more | docs/vtmb/npc-ai/lifecycle.md:185, docs/vtmb/npc-ai/lifecycle.md:278, docs/vtmb/npc-ai/lifecycle.md:358, +1 more |  |
 | `0x1026c540` | FUN_1026c540 | 498 | 2 | 6 | — | 1d/0v/0c | — | `+0x03e8`?, `+0x03ec`?, `+0x065d`?, `+0x0804`?, `+0x0868`? | `Unaccounted`, `CAI_BaseNPC_RunAnimation` | — | — |  |
 | `0x1026c7c0` | CAI_BaseNPC::PostRun | 552 | 1 | 7 | — | 2d/0v/0c | — | — | `NULL ENTITY`, `Unaccounted`, +2 more | — | — |  |
 | `0x1026ca80` | CAI_BaseNPC::NPCThink | 643 | 0 | 25 | `CAI_BaseHumanoid#431`, `CAI_BaseNPC#431`, `CAI_ExpressiveNPC#431`, +10 more | 0d/0v/0c | `+0x017c`, `+0x5b55` | `+0x026c`, `+0x06c0`, `+0x1538`, `+0x153c`, `+0x5b55` | `NULL ENTITY`, `Unaccounted`, +2 more | — | docs/vtmb/npc-ai/lifecycle.md:379 |  |
-| `0x1026cdc0` | CAI_BaseNPC::FUN_1026cdc0 | 71 | 0 | 21 | `CAI_BaseHumanoid#379`, `CAI_BaseNPC#379`, `CAI_ExpressiveNPC#379`, +10 more | 2d/0v/0c | — | `+0x5bd8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:772 | docs/vtmb/npc-ai/schedule-kernel.md:246, docs/vtmb/npc-ai/schedule-kernel.md:608, docs/vtmb/stealth.md:396, +2 more |  |
-| `0x1026ce30` | CAI_BaseNPC::FUN_1026ce30 | 100 | 0 | 12 | `CAI_BaseHumanoid#380`, `CAI_BaseNPC#380`, `CAI_ExpressiveNPC#380`, +10 more | 1d/0v/0c | — | `+0x0680`, `+0x1538`, `+0x153c`, `+0x5bf0` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:789 | docs/vtmb/npc-ai/lifecycle.md:237, docs/vtmb/stealth.md:441 |  |
+| `0x1026cdc0` | CAI_BaseNPC::EnterGrappleState | 71 | 0 | 21 | `CAI_BaseHumanoid#379`, `CAI_BaseNPC#379`, `CAI_ExpressiveNPC#379`, +10 more | 2d/0v/0c | — | `+0x5bd8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:772 | docs/vtmb/npc-ai/schedule-kernel.md:246, docs/vtmb/npc-ai/schedule-kernel.md:610, docs/vtmb/stealth.md:396, +2 more |  |
+| `0x1026ce30` | CAI_BaseNPC::LeaveGrappleState | 100 | 0 | 12 | `CAI_BaseHumanoid#380`, `CAI_BaseNPC#380`, `CAI_ExpressiveNPC#380`, +10 more | 1d/0v/0c | — | `+0x0680`, `+0x1538`, `+0x153c`, `+0x5bf0` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:789 | docs/vtmb/npc-ai/lifecycle.md:237, docs/vtmb/stealth.md:441 |  |
 | `0x1026cec0` | CAI_BaseNPC::FUN_1026cec0 | 156 | 0 | 21 | `CAI_BaseHumanoid#354`, `CAI_BaseNPC#354`, `CAI_BaseNPCTroika#354`, +74 more | 0d/0v/0c | — | `+0x1538`, `+0x153c`, `+0x1540`, `+0x5c08` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:246 |  |
 | `0x1026cf90` | CAI_BaseNPC::FUN_1026cf90 | 143 | 0 | 8 | `CAI_BaseHumanoid#355`, `CAI_BaseNPC#355`, `CAI_BaseNPCTroika#355`, +74 more | 0d/0v/0c | — | `+0x1538`, `+0x153c`, `+0x1540`, `+0x5c20` | — | — | — |  |
-| `0x1026d050` | FUN_1026d050 | 79 | 1 | 3 | — | 5d/0v/0c | `+0x5bb0`? | `+0x5bb0`?, `+0x5da4`? | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2820, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3102 | docs/vtmb/npc-ai/authored-control.md:298, docs/vtmb/npc-ai/lifecycle.md:245, docs/vtmb/npc-ai/schedule-kernel.md:239, +1 more |  |
-| `0x1026d130` | FUN_1026d130 | 32 | 1 | 20 | — | 7d/0v/0c | `+0x5bb4`? | `+0x5bb4`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:772, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3095, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:168 | docs/vtmb/npc-ai/schedule-kernel.md:238, docs/vtmb/npc-ai/schedule-kernel.md:608, docs/vtmb/npc-ai/social.md:466, +3 more |  |
+| `0x1026d050` | DisconnectFromSquad | 79 | 1 | 3 | — | 5d/0v/0c | `+0x5bb0`? | `+0x5bb0`?, `+0x5da4`? | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2820, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3102 | docs/vtmb/npc-ai/authored-control.md:298, docs/vtmb/npc-ai/lifecycle.md:245, docs/vtmb/npc-ai/schedule-kernel.md:239, +1 more |  |
+| `0x1026d130` | FUN_1026d130 | 32 | 1 | 20 | — | 7d/0v/0c | `+0x5bb4`? | `+0x5bb4`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:772, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3095, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:168 | docs/vtmb/npc-ai/schedule-kernel.md:238, docs/vtmb/npc-ai/schedule-kernel.md:610, docs/vtmb/npc-ai/social.md:466, +3 more |  |
 | `0x1026d460` | FUN_1026d460 | 668 | 1 | 13 | — | 1d/0v/0c | — | `+0x02e0`, `+0x0378`, `+0x5b90` | — | Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:18, +34 more | docs/vtmb/animation_events.md:203, docs/vtmb/animation_events.md:297, docs/vtmb/animation_events.md:446, +23 more |  |
 | `0x1026d7f0` | CAI_BaseNPC::FUN_1026d7f0 ‼ | 117 | 0 | 0 | `CAI_BaseHumanoid#459`, `CAI_BaseNPC#459`, `CAI_BaseNPCTroika#459`, +71 more | 0d/2v/2c | — | `+0x5cc0`, `+0x5d74` | — | — | — |  |
 | `0x1026d890` | CAI_BaseNPC::FUN_1026d890 | 107 | 0 | 0 | `CAI_BaseHumanoid#553`, `CAI_BaseNPC#553`, `CAI_BaseNPCTroika#553`, +71 more | 2d/1v/1c | — | — | — | — | — |  |
@@ -1813,22 +1813,22 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1026d9a0` | CAI_BaseNPC::FUN_1026d9a0 | 183 | 0 | 1 | `CAI_BaseHumanoid#555`, `CAI_BaseNPC#555`, `CAI_BaseNPCTroika#555`, +74 more | 0d/1v/1c | — | `+0x029c` | — | — | — |  |
 | `0x1026da90` | CAI_BaseNPC::FUN_1026da90 | 127 | 0 | 1 | `CAI_BaseHumanoid#556`, `CAI_BaseNPC#556`, `CAI_BaseNPCTroika#556`, +74 more | 0d/0v/0c | — | `+0x029c` | — | — | — |  |
 | `0x1026db30` | CAI_BaseNPC::CapabilitiesGet | 158 | 0 | 1 | `CAI_BaseHumanoid#513`, `CAI_BaseNPC#513`, `CAI_BaseNPCTroika#513`, +74 more | 0d/19v/20c | — | `+0x026c`, `+0x5cec` | `NULL ENTITY`, `CAI_BaseNPC::CapabilitiesGet` | — | — |  |
-| `0x1026dc00` | FUN_1026dc00 | 23 | 1 | 0 | — | 38d/0v/0c +1 outside | `+0x5cec` | `+0x5cec` | — | — | — |  |
-| `0x1026dc30` | FUN_1026dc30 | 25 | 1 | 0 | — | 4d/0v/0c +1 outside | `+0x5cec` | `+0x5cec` | — | — | — |  |
-| `0x1026dc60` | FUN_1026dc60 | 11 | 1 | 0 | — | 1d/0v/0c | `+0x5cec`? | — | — | — | — |  |
-| `0x1026dc80` | CAI_BaseNPC::FUN_1026dc80 | 102 | 0 | 2 | `CAI_BaseHumanoid#560`, `CAI_BaseNPC#560`, `CAI_BaseNPCTroika#560`, +74 more | 0d/2v/4c | — | — | — | — | — |  |
-| `0x1026dd10` | CAI_BaseNPC::FUN_1026dd10 | 1255 | 0 | 4 | `CAI_BaseHumanoid#561`, `CAI_BaseNPC#561`, `CAI_BaseNPCTroika#561`, +70 more | 4d/0v/0c | `+0x5b88`, `+0x5b8c` | `+0x0364`, `+0x05c0`, `+0x0804`, `+0x08a4`, `+0x08ac`, `+0x08c0`, +3 more | `Unaccounted`, `CAI_BaseNPC_GatherAttackConditions` | — | — |  |
-| `0x1026e340` | FUN_1026e340 | 125 | 1 | 19 | — | 22d/0v/0c +1 outside | `+0x5cc0`, `+0x5cc4`, `+0x5cc8` | `+0x029c`, `+0x073c`, `+0x5cc0` | `Stripped⏎` | — | docs/vtmb/npc-ai/conditions-and-states.md:81, docs/vtmb/npc-ai/lifecycle.md:247, docs/vtmb/npc-ai/lifecycle.md:290, +3 more |  |
-| `0x1026e3e0` | CAI_BaseNPC::FUN_1026e3e0 | 133 | 0 | 0 | `CAI_BaseNPC#463`, `CAI_ExpressiveNPC#463`, `CAI_TestHull#463`, +9 more | 2d/0v/1c | `+0x5b64` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2102, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3205, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:607, +4 more | docs/vtmb/npc-ai/rebuild.md:258, docs/vtmb/npc-ai/schedule-kernel.md:406 |  |
+| `0x1026dc00` | CAI_BaseNPC::CapabilitiesAdd | 23 | 1 | 0 | — | 38d/0v/0c +1 outside | `+0x5cec` | `+0x5cec` | — | — | — |  |
+| `0x1026dc30` | CAI_BaseNPC::CapabilitiesRemove | 25 | 1 | 0 | — | 4d/0v/0c +1 outside | `+0x5cec` | `+0x5cec` | — | — | — |  |
+| `0x1026dc60` | CAI_BaseNPC::CapabilitiesClear | 11 | 1 | 0 | — | 1d/0v/0c | `+0x5cec`? | — | — | — | — |  |
+| `0x1026dc80` | CAI_BaseNPC::ClearAttackConditions | 102 | 0 | 2 | `CAI_BaseHumanoid#560`, `CAI_BaseNPC#560`, `CAI_BaseNPCTroika#560`, +74 more | 0d/2v/4c | — | — | — | — | — |  |
+| `0x1026dd10` | CAI_BaseNPC::GatherAttackConditions | 1255 | 0 | 4 | `CAI_BaseHumanoid#561`, `CAI_BaseNPC#561`, `CAI_BaseNPCTroika#561`, +70 more | 4d/0v/0c | `+0x5b88`, `+0x5b8c` | `+0x0364`, `+0x05c0`, `+0x0804`, `+0x08a4`, `+0x08ac`, `+0x08c0`, +3 more | `Unaccounted`, `CAI_BaseNPC_GatherAttackConditions` | — | — |  |
+| `0x1026e340` | FUN_1026e340 | 125 | 1 | 19 | — | 22d/0v/0c +1 outside | `+0x5cc0`, `+0x5cc4`, `+0x5cc8` | `+0x029c`, `+0x073c`, `+0x5cc0` | `Stripped⏎` | — | docs/vtmb/npc-ai/conditions-and-states.md:84, docs/vtmb/npc-ai/lifecycle.md:247, docs/vtmb/npc-ai/lifecycle.md:290, +3 more |  |
+| `0x1026e3e0` | CAI_BaseNPC::OnStateChange | 133 | 0 | 0 | `CAI_BaseNPC#463`, `CAI_ExpressiveNPC#463`, `CAI_TestHull#463`, +9 more | 2d/0v/1c | `+0x5b64` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2102, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3205, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:607, +4 more | docs/vtmb/npc-ai/rebuild.md:258, docs/vtmb/npc-ai/schedule-kernel.md:406 |  |
 | `0x1026e4f0` | CAI_BaseNPC::PerformSensing | 146 | 1 | 8 | — | 1d/0v/0c | — | `+0x026c`, `+0x072c`, `+0x5bb4`, `+0x5cdc` | `NULL ENTITY`, `CAI_BaseNPC::PerformSensing` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1165, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:707, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:300 | docs/vtmb/npc-ai/schedule-kernel.md:252, docs/vtmb/npc-ai/senses.md:36, docs/vtmb/stealth.md:397 |  |
-| `0x1026e5c0` | CAI_BaseNPC::FUN_1026e5c0 | 13 | 0 | 2 | `CAI_BaseHumanoid#477`, `CAI_BaseNPC#477`, `CAI_BaseNPCTroika#477`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
+| `0x1026e5c0` | CAI_BaseNPC::ClearSenseConditions | 13 | 0 | 2 | `CAI_BaseHumanoid#477`, `CAI_BaseNPC#477`, `CAI_BaseNPCTroika#477`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x1026e5e0` | CAI_BaseNPC::CheckOnGround | 678 | 1 | 5 | — | 1d/0v/0c | `+0x5d5c` | `+0x0178`, `+0x026c`, `+0x0270`, `+0x0340`, `+0x0344`, `+0x0364`, +2 more | `NULL ENTITY`, `Unaccounted`, +2 more | — | — |  |
 | `0x1026e940` | FUN_1026e940 | 577 | 2 | 4 | — | 9d/0v/0c +1 outside | — | — | `UTIL_TraceHull` | — | — |  |
-| `0x1026ec30` | CAI_BaseNPC::GatherConditions | 987 | 0 | 23 | `CAI_BaseHumanoid#433`, `CAI_BaseNPC#433`, `CAI_ExpressiveNPC#433`, +10 more | 1d/1v/2c | `+0x5ca4` | `+0x0098`, `+0x0204`, `+0x026c`, `+0x029c`, `+0x06fc`, `+0x0774`, +13 more | `NULL ENTITY`, `Unaccounted`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:456, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:45 | docs/vtmb/npc-ai/conditions-and-states.md:385, docs/vtmb/npc-ai/conditions-and-states.md:441, docs/vtmb/npc-ai/lifecycle.md:108, +3 more |  |
+| `0x1026ec30` | CAI_BaseNPC::GatherConditions | 987 | 0 | 23 | `CAI_BaseHumanoid#433`, `CAI_BaseNPC#433`, `CAI_ExpressiveNPC#433`, +10 more | 1d/1v/2c | `+0x5ca4` | `+0x0098`, `+0x0204`, `+0x026c`, `+0x029c`, `+0x06fc`, `+0x0774`, +13 more | `NULL ENTITY`, `Unaccounted`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:456, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:45 | docs/vtmb/npc-ai/conditions-and-states.md:388, docs/vtmb/npc-ai/conditions-and-states.md:444, docs/vtmb/npc-ai/lifecycle.md:108, +3 more |  |
 | `0x1026f110` | CAI_BaseNPC::RunAI | 756 | 0 | 24 | `CAI_BaseHumanoid#432`, `CAI_BaseNPC#432`, `CAI_ExpressiveNPC#432`, +8 more | 3d/1v/3c | `+0x1b4c`, `+0x5ca4` | `+0x026c`, `+0x06c4`, `+0x06c8`, `+0x0fe8`, `+0x5ca4`, `+0x5d34` | `NULL ENTITY`, `Unaccounted`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:981, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1156, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:939, +1 more | docs/vtmb/npc-ai/lifecycle.md:105, docs/vtmb/npc-ai/lifecycle.md:375, docs/vtmb/npc-ai/schedule-kernel.md:448, +2 more |  |
 | `0x1026f4d0` | FUN_1026f4d0 | 134 | 2 | 0 | — | 2d/0v/0c | — | `+0x0730`?, `+0x0734`? | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | — | docs/vtmb/npc-ai/schedule-kernel.md:538 |  |
 | `0x1026f590` | CAI_BaseNPC::FUN_1026f590 | 150 | 0 | 21 | `CAI_BaseHumanoid#460`, `CAI_BaseNPC#460`, `CAI_ExpressiveNPC#460`, +10 more | 0d/0v/0c | `+0x1b38` | `+0x0098`, `+0x029c`, `+0x5bb0`, `+0x5cc0`, `+0x5da4` | — | — | docs/vtmb/npc-ai/social.md:474 |  |
-| `0x1026f660` | CAI_BaseNPC::SelectIdealState | 953 | 0 | 21 | `CAI_BaseHumanoid#461`, `CAI_BaseNPC#461`, `CAI_ExpressiveNPC#461`, +10 more | 1d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x0768`, `+0x0874`, `+0x5cc0`, `+0x5cc4`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `***Combat state with no enemy!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:621 | docs/vtmb/npc-ai/conditions-and-states.md:199, docs/vtmb/npc-ai/lifecycle.md:130, docs/vtmb/npc-ai/senses.md:240 |  |
+| `0x1026f660` | CAI_BaseNPC::SelectIdealState | 953 | 0 | 21 | `CAI_BaseHumanoid#461`, `CAI_BaseNPC#461`, `CAI_ExpressiveNPC#461`, +10 more | 1d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x0768`, `+0x0874`, `+0x5cc0`, `+0x5cc4`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `***Combat state with no enemy!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:621 | docs/vtmb/npc-ai/conditions-and-states.md:202, docs/vtmb/npc-ai/lifecycle.md:130, docs/vtmb/npc-ai/senses.md:240 |  |
 | `0x1026fb40` | FUN_1026fb40 | 123 | 1 | 9 | — | 1d/0v/0c | — | `+0x0804`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:516, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:520 | docs/vtmb/npc-ai/social.md:71 |  |
 | `0x1026fbe0` | CAI_BaseNPC::FUN_1026fbe0 | 198 | 0 | 15 | `CAI_BaseHumanoid#562`, `CAI_BaseNPC#562`, `CAI_BaseNPCTroika#562`, +74 more | 0d/0v/0c | — | `+0x0804`, `+0x08f4` | — | — | — |  |
 | `0x1026fcf0` | CAI_BaseNPC::FUN_1026fcf0 | 405 | 0 | 14 | `CAI_BaseHumanoid#573`, `CAI_BaseNPC#573`, `CAI_BaseNPCTroika#573`, +74 more | 0d/1v/1c | — | `+0x0184`, `+0x029c`, `+0x0650` | — | — | — |  |
@@ -1839,24 +1839,24 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102702d0` | CAI_BaseNPC::FUN_102702d0 | 99 | 0 | 1 | `CAI_BaseHumanoid#418`, `CAI_BaseNPC#418`, `CAI_ExpressiveNPC#418`, +10 more | 1d/2v/6c | — | — | — | — | — |  |
 | `0x102703f0` | FUN_102703f0 | 734 | 3 | 4 | — | 2d/0v/0c | — | `+0x0304` | — | — | docs/vtmb/npc-ai/senses.md:213 |  |
 | `0x102707d0` | FUN_102707d0 | 57 | 1 | 0 | — | 5d/0v/0c | — | — | — | — | — |  |
-| `0x10270820` | CAI_BaseNPC::FUN_10270820 | 8 | 0 | 1 | `CAI_BaseHumanoid#337`, `CAI_BaseNPC#337`, `CAI_ExpressiveNPC#337`, +10 more | 1d/0v/1c | — | — | — | — | — |  |
+| `0x10270820` | CAI_BaseNPC::GetUsedHullBits | 8 | 0 | 1 | `CAI_BaseHumanoid#337`, `CAI_BaseNPC#337`, `CAI_ExpressiveNPC#337`, +10 more | 1d/0v/1c | — | — | — | — | — |  |
 | `0x10270840` | CAI_BaseNPC::FUN_10270840 | 59 | 0 | 2 | `CAI_BaseHumanoid#564`, `CAI_BaseNPC#564`, `CAI_ExpressiveNPC#564`, +10 more | 1d/1v/1c | — | — | — | — | — |  |
 | `0x10270890` | FUN_10270890 | 233 | 1 | 1 | — | 1d/0v/0c | — | `+0x0270`, `+0x0364` | — | — | — |  |
 | `0x102709c0` | CAI_BaseNPC::FUN_102709c0 | 175 | 0 | 10 | `CAI_BaseHumanoid#544`, `CAI_BaseNPC#544`, `CAI_BaseNPCTroika#544`, +74 more | 0d/2v/2c | — | `+0x07b8`, `+0x0874`, `+0x5bb0`, `+0x5d34`, `+0x5da4` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemyMemory.h:31 | docs/vtmb/combat-and-damage.md:1567 |  |
 | `0x10270aa0` | FUN_10270aa0 | 42 | 1 | 0 | — | 2d/0v/0c | `+0x5d90` | — | — | — | — |  |
 | `0x10270b20` | CAI_BaseNPC::GatherEnemyConditions | 2807 | 0 | 22 | `CAI_BaseHumanoid#481`, `CAI_BaseNPC#481`, `CAI_BaseNPCTroika#481`, +73 more | 1d/0v/0c | `+0x5b98`, `+0x5d8c` | `+0x0098`, `+0x029c`, `+0x0304`, `+0x0324`, `+0x0364`, `+0x05ac`, +14 more | `Unaccounted`, `CAI_BaseNPC_GatherEnemyConditions_SeeEne…`, +2 more | Source/ElysiumUE/Private/Tests/ElysiumCameraTests.cpp:1902, Source/ElysiumUE/Public/ElysiumCameraSolve.h:892 | docs/vtmb/camera-view-modes.md:2654, docs/vtmb/stealth.md:174 |  |
 | `0x102718e0` | FUN_102718e0 | 13 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | — |  |
-| `0x10271900` | FUN_10271900 | 410 | 1 | 21 | — | 1d/0v/0c | — | — | — | — | — |  |
-| `0x10271b10` | FUN_10271b10 | 392 | 2 | 21 | — | 1d/0v/0c | — | `+0x5ce4`?, `+0x5d34`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:389, docs/vtmb/npc-ai/conditions-and-states.md:407, docs/vtmb/npc-ai/conditions-and-states.md:454 |  |
-| `0x10271d10` | FUN_10271d10 | 418 | 1 | 22 | — | 1d/0v/0c | — | `+0x0324` | `Unaccounted`, `CAI_Memory_CheckTarget` | — | docs/vtmb/npc-ai/conditions-and-states.md:388, docs/vtmb/npc-ai/conditions-and-states.md:452 |  |
-| `0x10271f50` | CAI_BaseNPC::PreTranslate_Base | 7 | 0 | 0 | `CAI_BaseHumanoid#375`, `CAI_BaseNPC#375`, `CAI_ExpressiveNPC#375`, +10 more | 0d/2v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:272 | docs/vtmb/animation_and_movers.md:1488 |  |
-| `0x10271f70` | CAI_BaseNPC::ClassTranslate_Base | 88 | 0 | 5 | `CAI_BaseHumanoid#376`, `CAI_BaseNPC#376`, `CAI_ExpressiveNPC#376`, +10 more | 0d/2v/8c | — | `+0x0804`, `+0x08e4`, `+0x08e8`, `+0x5d8c`, `+0x5ddc` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:154, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:305 | docs/vtmb/animation_and_movers.md:1492 |  |
+| `0x10271900` | CAI_BaseNPC::UpdateEnemyPos | 410 | 1 | 21 | — | 1d/0v/0c | — | — | — | — | — |  |
+| `0x10271b10` | CAI_BaseNPC::UpdateTargetPos | 392 | 2 | 21 | — | 1d/0v/0c | — | `+0x5ce4`?, `+0x5d34`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:392, docs/vtmb/npc-ai/conditions-and-states.md:410, docs/vtmb/npc-ai/conditions-and-states.md:457 |  |
+| `0x10271d10` | CAI_BaseNPC::CheckTarget | 418 | 1 | 22 | — | 1d/0v/0c | — | `+0x0324` | `Unaccounted`, `CAI_Memory_CheckTarget` | — | docs/vtmb/npc-ai/conditions-and-states.md:391, docs/vtmb/npc-ai/conditions-and-states.md:455 |  |
+| `0x10271f50` | CAI_BaseNPC::NPC_EarlyTranslateActivity | 7 | 0 | 0 | `CAI_BaseHumanoid#375`, `CAI_BaseNPC#375`, `CAI_ExpressiveNPC#375`, +10 more | 0d/2v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:272 | docs/vtmb/animation_and_movers.md:1488 |  |
+| `0x10271f70` | CAI_BaseNPC::NPC_TranslateActivity | 88 | 0 | 5 | `CAI_BaseHumanoid#376`, `CAI_BaseNPC#376`, `CAI_ExpressiveNPC#376`, +10 more | 0d/2v/8c | — | `+0x0804`, `+0x08e4`, `+0x08e8`, `+0x5d8c`, `+0x5ddc` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:154, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:305 | docs/vtmb/animation_and_movers.md:1492 |  |
 | `0x10271ff0` | CAI_BaseNPC::TranslateActivity | 247 | 1 | 1 | — | 7d/0v/0c +1 outside | — | `+0x05dc`, `+0x05e0`, `+0x05f4` | — | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:20, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:841, Source/ElysiumUE/Private/Visual/ElysiumAnimationResolve.cpp:601, +1 more | docs/vtmb/activity_enum.md:352, docs/vtmb/activity_enum.md:376, docs/vtmb/animation_and_movers.md:1438, +1 more |  |
 | `0x10272130` | ResolveActivityToSequence | 576 | 1 | 3 | — | 5d/0v/0c | — | `+0x0024`, `+0x0098`, `+0x5d74` | `%s has no sequence for act:%s (%s)⏎`, `%s has no sequence for act:ACT_DISPOSITI…`, +1 more | Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4309, Source/ElysiumUE/Private/Visual/ElysiumAnimationDriver.cpp:330, Source/ElysiumUE/Private/Visual/ElysiumAnimationDriver.cpp:779, +1 more | docs/vtmb/animation_and_movers.md:1439, docs/vtmb/animation_and_movers.md:1839, docs/vtmb/animation_and_movers.md:1842, +1 more |  |
-| `0x10272400` | CAI_BaseNPC::FUN_10272400 | 110 | 0 | 6 | `CAI_BaseHumanoid#311`, `CAI_BaseNPC#311`, `CAI_BaseNPCTroika#311`, +74 more | 0d/3v/4c | `+0x0170`, `+0x06f8`, `+0x0fec`, `+0x0ff0`, `+0x0ff4`, `+0x5ccc`, +2 more | `+0x0744`, `+0x0fec` | — | — | — |  |
+| `0x10272400` | CAI_BaseNPC::ForcePreTranslatedSequenceAndActivity | 110 | 0 | 6 | `CAI_BaseHumanoid#311`, `CAI_BaseNPC#311`, `CAI_BaseNPCTroika#311`, +74 more | 0d/3v/4c | `+0x0170`, `+0x06f8`, `+0x0fec`, `+0x0ff0`, `+0x0ff4`, `+0x5ccc`, +2 more | `+0x0744`, `+0x0fec` | — | — | — |  |
 | `0x10272490` | CAI_BaseNPC::SetActivityAndSequence | 243 | 1 | 15 | — | 2d/0v/0c | `+0x06f8`, `+0x0fec`, `+0x0ff4` | `+0x065d`, `+0x06f0`, `+0x0744`, `+0x0854`, `+0x0fec`, `+0x0ff4`, +2 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:893 | docs/vtmb/animation_and_movers.md:961, docs/vtmb/animation_and_movers.md:1440, docs/vtmb/npc-ai/lifecycle.md:361 |  |
 | `0x102725d0` | CAI_BaseNPC::SetActivity | 95 | 0 | 16 | `CAI_BaseHumanoid#310`, `CAI_BaseNPC#310`, `CAI_ExpressiveNPC#310`, +10 more | 1d/2v/14c | `+0x0ff0` | `+0x0fec`, `+0x0ff0`, `+0x5ccc`, `+0x5cd0`, `+0x5cd4` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:893 | docs/vtmb/animation_and_movers.md:1441, docs/vtmb/npc-ai/lifecycle.md:360 |  |
-| `0x10272650` | CAI_BaseNPC::SetIdealActivity ‼ | 60 | 1 | 4 | — | 31d/0v/0c +3 outside | `+0x0ff0` | `+0x04d8`, `+0x5ccc`, `+0x5cd0`, `+0x5cd4` | — | — | docs/vtmb/animation_and_movers.md:1442, docs/vtmb/npc-ai/conditions-and-states.md:425, docs/vtmb/npc-ai/conditions-and-states.md:434 |  |
+| `0x10272650` | CAI_BaseNPC::SetIdealActivity ‼ | 60 | 1 | 4 | — | 31d/0v/0c +3 outside | `+0x0ff0` | `+0x04d8`, `+0x5ccc`, `+0x5cd0`, `+0x5cd4` | — | — | docs/vtmb/animation_and_movers.md:1442, docs/vtmb/npc-ai/conditions-and-states.md:428, docs/vtmb/npc-ai/conditions-and-states.md:437 |  |
 | `0x102726a0` | AdvanceToIdealActivity | 183 | 1 | 16 | — | 2d/0v/0c | — | `+0x04d8`? | — | — | docs/vtmb/animation_and_movers.md:1443, docs/vtmb/animation_and_movers.md:1790 |  |
 | `0x10272790` | CAI_BaseNPC::FUN_10272790 | 33 | 0 | 1 | `CAI_BaseHumanoid#466`, `CAI_BaseNPC#466`, `CAI_ExpressiveNPC#466`, +10 more | 1d/1v/1c | — | `+0x0740`, `+0x0fec` | — | — | — |  |
 | `0x102727d0` | CAI_BaseNPC::MaintainActivity | 230 | 2 | 17 | — | 4d/0v/0c | — | `+0x026c`, `+0x065c`, `+0x06f0`, `+0x0748`, `+0x0fec`, `+0x0ff0`, +3 more | `NULL ENTITY`, `CAI_BaseNPC::MaintainActivity` | — | docs/vtmb/animation_and_movers.md:1444 |  |
@@ -1866,32 +1866,32 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10273070` | FUN_10273070 | 207 | 1 | 13 | — | 18d/0v/0c +3 outside | `+0x5f2d` | `+0x036c`, `+0x1568`, `+0x5f2d` | `****ERROR***⏎⏎`, `Have the class responsible for spawning …`, +4 more | — | — |  |
 | `0x10273180` | FUN_10273180 | 92 | 1 | 13 | — | 7d/0v/0c | `+0x5f2d` | `+0x036c`, `+0x1568`, `+0x5f2d` | — | — | — |  |
 | `0x10273200` | CAI_BaseNPC::Spawn | 312 | 0 | 22 | `CAI_BaseHumanoid#103`, `CAI_BaseNPC#103`, `CAI_ExpressiveNPC#103` | 2d/0v/0c | — | `+0x0098`, `+0x026c`, `+0x037c`, `+0x05fc`, `+0x0804`, `+0x5dec` | `NULL ENTITY`, `item_w_unarmed`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:79 | docs/vtmb/npc-ai/lifecycle.md:76, docs/vtmb/wielded_weapons.md:926 |  |
-| `0x10273390` | CAI_BaseNPC::FUN_10273390 | 705 | 0 | 20 | `CAI_BaseHumanoid#420`, `CAI_BaseNPC#420`, `CAI_ExpressiveNPC#420`, +10 more | 1d/4v/8c | `+0x017c`, `+0x01f0`, `+0x01fc`, `+0x0200`, `+0x0208`, `+0x03ec`, +30 more | `+0x0204`, `+0x0374`, `+0x1a9c`, `+0x1ae0`, `+0x5c5c`, `+0x5d34`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:456, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:5, +5 more | docs/vtmb/footsteps.md:133, docs/vtmb/npc-ai/schedule-kernel.md:607, docs/vtmb/npc-ai/senses.md:351 |  |
+| `0x10273390` | CAI_BaseNPC::NPCInit | 705 | 0 | 20 | `CAI_BaseHumanoid#420`, `CAI_BaseNPC#420`, `CAI_ExpressiveNPC#420`, +10 more | 1d/4v/8c | `+0x017c`, `+0x01f0`, `+0x01fc`, `+0x0200`, `+0x0208`, `+0x03ec`, +30 more | `+0x0204`, `+0x0374`, `+0x1a9c`, `+0x1ae0`, `+0x5c5c`, `+0x5d34`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:456, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:5, +5 more | docs/vtmb/footsteps.md:133, docs/vtmb/npc-ai/schedule-kernel.md:609, docs/vtmb/npc-ai/senses.md:351 |  |
 | `0x10273720` | CAI_BaseNPC::FUN_10273720 | 36 | 0 | 13 | `CAI_BaseHumanoid#223`, `CAI_BaseNPC#223`, `CAI_BaseNPCTroika#223`, +74 more | 0d/2v/2c | — | `+0x0278`, `+0x036c` | — | — | — |  |
 | `0x10273760` | FUN_10273760 | 24 | 2 | 10 | — | 2d/0v/0c +1 outside | — | `+0x1584`? | — | — | — |  |
 | `0x10273790` | InputSetRelationship | 617 | 1 | 9 | — | 10d/0v/0c +1 outside | — | — | `player`, `Bad relationship type (%s) to unknown en…`, +3 more | — | docs/vtmb/npc-ai/authored-control.md:300, docs/vtmb/npc-ai/social.md:8 |  |
 | `0x10273aa0` | FUN_10273aa0 ‼ | 29 | 1 | 11 | — | 2d/0v/0c | — | `+0x0694`?, `+0x0698`? | — | — | docs/vtmb/npc-ai/lifecycle.md:82 |  |
-| `0x10273ad0` | CAI_BaseNPC::FUN_10273ad0 | 472 | 0 | 20 | `CAI_BaseHumanoid#422`, `CAI_BaseNPC#422`, `CAI_ExpressiveNPC#422`, +10 more | 1d/0v/0c | `+0x017c`, `+0x1b4c`, `+0x5bb8`, `+0x5d7c`, `+0x5d80`, `+0x5de8` | `+0x00f8`, `+0x0178`, `+0x0204`, `+0x020c`, `+0x0370`, `+0x04d8`, +3 more | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…` | — | docs/vtmb/npc-ai/conditions-and-states.md:701, docs/vtmb/npc-ai/lifecycle.md:84 |  |
-| `0x10273d30` | CAI_BaseNPC::FUN_10273d30 | 124 | 0 | 8 | `CAI_BaseHumanoid#545`, `CAI_BaseNPC#545`, `CAI_BaseNPCTroika#545`, +72 more | 0d/1v/2c | `+0x5da4` | `+0x0804`, `+0x0878`, `+0x5da4`, `+0x5da8` | `WARNING: Found %s that isn't in a squad⏎` | — | docs/vtmb/npc-ai/social.md:446 |  |
+| `0x10273ad0` | CAI_BaseNPC::FUN_10273ad0 | 472 | 0 | 20 | `CAI_BaseHumanoid#422`, `CAI_BaseNPC#422`, `CAI_ExpressiveNPC#422`, +10 more | 1d/0v/0c | `+0x017c`, `+0x1b4c`, `+0x5bb8`, `+0x5d7c`, `+0x5d80`, `+0x5de8` | `+0x00f8`, `+0x0178`, `+0x0204`, `+0x020c`, `+0x0370`, `+0x04d8`, +3 more | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…` | — | docs/vtmb/npc-ai/conditions-and-states.md:704, docs/vtmb/npc-ai/lifecycle.md:84 |  |
+| `0x10273d30` | CAI_BaseNPC::InitSquad | 124 | 0 | 8 | `CAI_BaseHumanoid#545`, `CAI_BaseNPC#545`, `CAI_BaseNPCTroika#545`, +72 more | 0d/1v/2c | `+0x5da4` | `+0x0804`, `+0x0878`, `+0x5da4`, `+0x5da8` | `WARNING: Found %s that isn't in a squad⏎` | — | docs/vtmb/npc-ai/social.md:446 |  |
 | `0x10273dd0` | CAI_BaseNPC::FUN_10273dd0 | 48 | 0 | 5 | `CAI_BaseHumanoid#542`, `CAI_BaseNPC#542`, `CAI_BaseNPCTroika#542`, +74 more | 0d/2v/2c | `+0x5d88` | `+0x5d88`, `+0x5da4` | — | — | docs/vtmb/npc-ai/social.md:448 |  |
 | `0x10273e10` | CAI_BaseNPC::FUN_10273e10 | 22 | 0 | 0 | `CAI_BaseHumanoid#541`, `CAI_BaseNPC#541`, `CAI_BaseNPCTroika#541`, +74 more | 0d/38v/43c | — | `+0x5bb0`, `+0x5d88` | — | — | docs/vtmb/npc-ai/senses.md:155, docs/vtmb/npc-ai/social.md:445 |  |
 | `0x10273e40` | CAI_BaseNPC::FUN_10273e40 | 39 | 0 | 5 | `CAI_BaseHumanoid#543`, `CAI_BaseNPC#543`, `CAI_BaseNPCTroika#543`, +74 more | 1d/0v/0c | — | `+0x5d88`, `+0x5da4` | — | — | — |  |
-| `0x10273e80` | FUN_10273e80 | 36 | 1 | 2 | — | 61d/0v/0c +2 outside | `+0x5c44` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:565, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:396 | docs/vtmb/npc-ai/authored-control.md:345, docs/vtmb/npc-ai/conditions-and-states.md:357, docs/vtmb/npc-ai/schedule-kernel.md:109, +2 more |  |
-| `0x10273ec0` | FUN_10273ec0 | 139 | 2 | 20 | — | 1d/0v/0c | `+0x1a40`?, `+0x5c44`? | `+0x5c44`?, `+0x5d34`?, `+0x5d70`? | `Movement completed twice!⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:570 |  |
-| `0x10273f90` | FUN_10273f90 | 25 | 2 | 0 | — | 1d/0v/0c | — | `+0x5c44`? | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:960 | docs/vtmb/npc-ai/schedule-kernel.md:570, docs/vtmb/npc-ai/schedule-kernel.md:593 |  |
-| `0x10273fc0` | CAI_BaseNPC::FUN_10273fc0 | 142 | 0 | 2 | `CAI_BaseHumanoid#448`, `CAI_BaseNPC#448`, `CAI_ExpressiveNPC#448`, +10 more | 1d/5v/43c | `+0x1a40`, `+0x5c50` | `+0x0224`, `+0x5c38` | `   TaskFail -> %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2741, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:460, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:958, +2 more | docs/vtmb/npc-ai/schedule-kernel.md:284, docs/vtmb/npc-ai/schedule-kernel.md:302, docs/vtmb/npc-ai/schedule-kernel.md:568 |  |
+| `0x10273e80` | TaskComplete | 36 | 1 | 2 | — | 61d/0v/0c +2 outside | `+0x5c44` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:565, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:396 | docs/vtmb/npc-ai/authored-control.md:345, docs/vtmb/npc-ai/conditions-and-states.md:360, docs/vtmb/npc-ai/schedule-kernel.md:109, +2 more |  |
+| `0x10273ec0` | FUN_10273ec0 | 139 | 2 | 20 | — | 1d/0v/0c | `+0x1a40`?, `+0x5c44`? | `+0x5c44`?, `+0x5d34`?, `+0x5d70`? | `Movement completed twice!⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:572 |  |
+| `0x10273f90` | TaskIsRunning | 25 | 2 | 0 | — | 1d/0v/0c | — | `+0x5c44`? | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:960 | docs/vtmb/npc-ai/schedule-kernel.md:572, docs/vtmb/npc-ai/schedule-kernel.md:595 |  |
+| `0x10273fc0` | CAI_BaseNPC::TaskFail | 142 | 0 | 2 | `CAI_BaseHumanoid#448`, `CAI_BaseNPC#448`, `CAI_ExpressiveNPC#448`, +10 more | 1d/5v/43c | `+0x1a40`, `+0x5c50` | `+0x0224`, `+0x5c38` | `   TaskFail -> %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2741, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:460, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:958, +2 more | docs/vtmb/npc-ai/schedule-kernel.md:284, docs/vtmb/npc-ai/schedule-kernel.md:302, docs/vtmb/npc-ai/schedule-kernel.md:570 |  |
 | `0x10274080` | FUN_10274080 | 262 | 1 | 2 | — | 2d/0v/0c | `+0x5d48` | `+0x5d48`, `+0x5d54` | — | — | — |  |
-| `0x102741e0` | CAI_BaseNPC::FUN_102741e0 | 375 | 0 | 1 | `CAI_BaseHumanoid#530`, `CAI_BaseNPC#530`, `CAI_BaseNPCTroika#530`, +71 more | 1d/7v/7c | `+0x5d54` | `+0x5d48`, `+0x5d54` | — | — | — |  |
+| `0x102741e0` | CAI_BaseNPC::IsUnreachable | 375 | 0 | 1 | `CAI_BaseHumanoid#530`, `CAI_BaseNPC#530`, `CAI_BaseNPCTroika#530`, +71 more | 1d/7v/7c | `+0x5d54` | `+0x5d48`, `+0x5d54` | — | — | — |  |
 | `0x102743c0` | CAI_BaseNPC::BestEnemy | 884 | 0 | 14 | `CAI_BaseHumanoid#478`, `CAI_BaseNPC#478`, `CAI_BaseNPCTroika#478`, +73 more | 0d/1v/2c | — | `+0x0324`, `+0x0364`, `+0x0650`, `+0x0654`, `+0x077c`, `+0x0848`, +2 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:282, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:79 | docs/vtmb/npc-ai/senses.md:176, docs/vtmb/npc-ai/social.md:84 |  |
 | `0x10274820` | CAI_BaseNPC::Reload_Base | 498 | 0 | 4 | `CAI_BaseHumanoid#570`, `CAI_BaseNPC#570`, `CAI_ExpressiveNPC#570`, +10 more | 0d/1v/2c | — | `+0x029c`, `+0x0364`, `+0x0854` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:235, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:329 | docs/vtmb/animation_and_movers.md:1591 |  |
 | `0x10274aa0` | CAI_BaseNPC::Cover_Base | 100 | 0 | 1 | `CAI_BaseHumanoid#569`, `CAI_BaseNPC#569`, `CAI_ExpressiveNPC#569`, +10 more | 1d/3v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:207, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:321 | docs/vtmb/animation_and_movers.md:1591 |  |
 | `0x10274b30` | CAI_BaseNPC::FUN_10274b30 | 286 | 0 | 1 | `CAI_BaseHumanoid#515`, `CAI_BaseNPC#515`, `CAI_BaseNPCTroika#515`, +74 more | 0d/0v/0c | — | `+0x0370`, `+0x5d34` | — | — | — |  |
-| `0x10274ca0` | FUN_10274ca0 | 199 | 1 | 1 | — | 3d/0v/0c | `+0x5d64`?, `+0x5d68`? | `+0x0270`?, `+0x5d60`?, `+0x5d64`?, `+0x5d68`? | `WARNING: %s has no eye offset in .qc!⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:607 |  |
+| `0x10274ca0` | FUN_10274ca0 | 199 | 1 | 1 | — | 3d/0v/0c | `+0x5d64`?, `+0x5d68`? | `+0x0270`?, `+0x5d60`?, `+0x5d64`?, `+0x5d68`? | `WARNING: %s has no eye offset in .qc!⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:609 |  |
 | `0x10274db0` | CAI_BaseNPC::FUN_10274db0 | 92 | 0 | 2 | `CAI_BaseHumanoid#533`, `CAI_BaseNPC#533`, `CAI_ExpressiveNPC#533`, +10 more | 1d/2v/3c | — | `+0x0804`, `+0x5d60` | — | — | — |  |
-| `0x10274e30` | CAI_BaseNPC::FUN_10274e30 | 1706 | 0 | 24 | `CAI_BaseHumanoid#259`, `CAI_BaseNPC#259`, `CAI_ExpressiveNPC#259`, +8 more | 3d/0v/0c | `+0x019c`, `+0x0200`, `+0x0210`, `+0x1b44`, `+0x1b48`, `+0x5d8c` | `+0x0098`, `+0x019c`, `+0x0208`, `+0x02e0`, `+0x0364`, `+0x036c`, +10 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Weapon stolen by someone else`, +6 more | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:89, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:104, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:110, +3 more | docs/vtmb/animation_and_movers.md:2181, docs/vtmb/animation_events.md:364, docs/vtmb/animation_events.md:444, +6 more |  |
-| `0x10275760` | CAI_BaseNPC::FUN_10275760 | 3359 | 0 | 8 | `CAI_BaseHumanoid#123`, `CAI_BaseNPC#123`, `CAI_ExpressiveNPC#123`, +9 more | 1d/0v/0c | — | `+0x0098`, `+0x0224`, `+0x0270`, `+0x029c`, `+0x0304`, `+0x0364`, +9 more | ` (Eluded)`, ` (Unreachable)`, +3 more | — | — |  |
-| `0x102767d0` | CAI_BaseNPC::FUN_102767d0 | 2872 | 0 | 14 | `CAI_BaseHumanoid#124`, `CAI_BaseNPC#124`, `CAI_ExpressiveNPC#124`, +8 more | 2d/0v/0c | — | `+0x0224`, `+0x0268`, `+0x029c`, `+0x02e0`, `+0x03bc`, `+0x03c0`, +15 more | `Unknown`, `Actv: INVALID`, +21 more | — | — |  |
-| `0x102775e0` | CAI_BaseNPC::FUN_102775e0 | 759 | 0 | 6 | `CAI_BaseHumanoid#76`, `CAI_BaseNPC#76`, `CAI_ExpressiveNPC#76`, +10 more | 2d/0v/0c | — | `+0x05dc`, `+0x05e0`, `+0x05f4`, `+0x0658`, `+0x065c`, `+0x06f0`, +7 more | `Unknown`, `Actv: INVALID`, +13 more | — | — |  |
+| `0x10274e30` | CAI_BaseNPC::HandleAnimEvent | 1706 | 0 | 24 | `CAI_BaseHumanoid#259`, `CAI_BaseNPC#259`, `CAI_ExpressiveNPC#259`, +8 more | 3d/0v/0c | `+0x019c`, `+0x0200`, `+0x0210`, `+0x1b44`, `+0x1b48`, `+0x5d8c` | `+0x0098`, `+0x019c`, `+0x0208`, `+0x02e0`, `+0x0364`, `+0x036c`, +10 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Weapon stolen by someone else`, +6 more | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:89, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:104, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:110, +3 more | docs/vtmb/animation_and_movers.md:2181, docs/vtmb/animation_events.md:364, docs/vtmb/animation_events.md:444, +6 more |  |
+| `0x10275760` | CAI_BaseNPC::DrawDebugGeometryOverlays | 3359 | 0 | 8 | `CAI_BaseHumanoid#123`, `CAI_BaseNPC#123`, `CAI_ExpressiveNPC#123`, +9 more | 1d/0v/0c | — | `+0x0098`, `+0x0224`, `+0x0270`, `+0x029c`, `+0x0304`, `+0x0364`, +9 more | ` (Eluded)`, ` (Unreachable)`, +3 more | — | — |  |
+| `0x102767d0` | CAI_BaseNPC::DrawDebugTextOverlays | 2872 | 0 | 14 | `CAI_BaseHumanoid#124`, `CAI_BaseNPC#124`, `CAI_ExpressiveNPC#124`, +8 more | 2d/0v/0c | — | `+0x0224`, `+0x0268`, `+0x029c`, `+0x02e0`, `+0x03bc`, `+0x03c0`, +15 more | `Unknown`, `Actv: INVALID`, +21 more | — | — |  |
+| `0x102775e0` | CAI_BaseNPC::DrawDebugStatOverlays | 759 | 0 | 6 | `CAI_BaseHumanoid#76`, `CAI_BaseNPC#76`, `CAI_ExpressiveNPC#76`, +10 more | 2d/0v/0c | — | `+0x05dc`, `+0x05e0`, `+0x05f4`, `+0x0658`, `+0x065c`, `+0x06f0`, +7 more | `Unknown`, `Actv: INVALID`, +13 more | — | — |  |
 | `0x102779a0` | CAI_BaseNPC::FUN_102779a0 | 568 | 0 | 4 | `CAI_BaseHumanoid#581`, `CAI_BaseNPC#581`, `CAI_BaseNPCTroika#581`, +74 more | 0d/0v/0c | — | `+0x0210`, `+0x0264`, `+0x029c`, `+0x0344`, `+0x0658`, `+0x0fec`, +6 more | `Unknown`, `State: %s, `, +13 more | — | — |  |
 | `0x10277d90` | CAI_BaseNPC::FUN_10277d90 | 608 | 0 | 12 | `CAI_BaseHumanoid#582`, `CAI_BaseNPC#582`, `CAI_BaseNPCTroika#582`, +74 more | 0d/0v/0c | — | `+0x0270`, `+0x0274`, `+0x0280`, `+0x0370`, `+0x0704`, `+0x5c38` | `unknown`, `Slow %.1f, %s %.1f `, +6 more | — | — |  |
 | `0x10278090` | CAI_BaseNPC::FUN_10278090 | 199 | 0 | 2 | `CAI_BaseHumanoid#482`, `CAI_BaseNPC#482`, `CAI_BaseNPCTroika#482`, +23 more | 0d/0v/0c | — | `+0x0278`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | — | — | — |  |
@@ -1902,42 +1902,42 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10278900` | CAI_BaseNPC::FUN_10278900 | 130 | 0 | 12 | `CAI_BaseHumanoid#574`, `CAI_BaseNPC#574`, `CAI_BaseNPCTroika#574`, +73 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x102789c0` | CAI_BaseNPC::FUN_102789c0 | 518 | 0 | 9 | `CAI_BaseHumanoid#197`, `CAI_BaseNPC#197`, `CAI_BaseNPCTroika#197`, +73 more | 0d/0v/0c | — | `+0x0300`, `+0x0304`, `+0x0364` | — | — | — |  |
 | `0x10278c60` | CAI_BaseNPC::FUN_10278c60 | 15 | 0 | 2 | `CAI_BaseHumanoid#575`, `CAI_BaseNPC#575`, `CAI_ExpressiveNPC#575`, +10 more | 1d/1v/1c | — | `+0x0804` | — | — | — |  |
-| `0x10278c80` | FUN_10278c80 | 32 | 1 | 2 | — | 11d/0v/0c | — | `+0x5d44`? | — | — | docs/vtmb/npc-ai/programs.md:532 |  |
+| `0x10278c80` | FacingIdeal | 32 | 1 | 2 | — | 11d/0v/0c | — | `+0x5d44`? | — | — | docs/vtmb/npc-ai/programs.md:532 |  |
 | `0x10278cb0` | CAI_BaseNPC::FUN_10278cb0 ‼ | 71 | 0 | 0 | `CAI_BaseHumanoid#519`, `CAI_BaseNPC#519`, `CAI_BaseNPCTroika#519`, +74 more | 0d/0v/0c | — | `+0x5d44` | — | — | docs/vtmb/npc-ai/senses.md:344 |  |
 | `0x10278d20` | CAI_BaseNPC::FUN_10278d20 ‼ | 71 | 0 | 0 | `CAI_BaseHumanoid#518`, `CAI_BaseNPC#518`, `CAI_BaseNPCTroika#518`, +74 more | 0d/1v/1c | — | `+0x5d44` | — | — | — |  |
 | `0x10278d90` | CAI_BaseNPC::FUN_10278d90 ‼ | 71 | 0 | 0 | `CAI_BaseHumanoid#517`, `CAI_BaseNPC#517`, `CAI_BaseNPCTroika#517`, +74 more | 0d/1v/1c | — | `+0x5d44` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:880 | docs/vtmb/npc-ai/lifecycle.md:542, docs/vtmb/npc-ai/senses.md:345 |  |
-| `0x10278e00` | CAI_BaseNPC::FUN_10278e00 | 19 | 0 | 0 | `CAI_BaseHumanoid#520`, `CAI_BaseNPC#520`, `CAI_BaseNPCTroika#520`, +74 more | 0d/0v/0c | — | `+0x5d44` | — | — | — |  |
+| `0x10278e00` | CAI_BaseNPC::GetFacingDirection | 19 | 0 | 0 | `CAI_BaseHumanoid#520`, `CAI_BaseNPC#520`, `CAI_BaseNPCTroika#520`, +74 more | 0d/0v/0c | — | `+0x5d44` | — | — | — |  |
 | `0x10278e30` | CAI_BaseNPC::FUN_10278e30 | 353 | 0 | 5 | `CAI_BaseNPC#484`, `CAI_BaseNPCTroika#484`, `CAI_TestHull#484`, +72 more | 0d/1v/1c | — | `+0x0278`, `+0x02e0`, `+0x0378` | — | — | — |  |
 | `0x10279000` | CAI_BaseNPC::FUN_10279000 | 33 | 0 | 6 | `CAI_BaseHumanoid#485`, `CAI_BaseNPC#485`, `CAI_BaseNPCTroika#485`, +74 more | 0d/0v/0c | — | `+0x0790` | — | — | — |  |
 | `0x10279060` | CAI_BaseNPC::FUN_10279060 | 19 | 0 | 4 | `CAI_BaseHumanoid#540`, `CAI_BaseNPC#540`, `CAI_BaseNPCTroika#540`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10279090` | CAI_BaseNPC::FUN_10279090 | 366 | 0 | 9 | `CAI_BaseHumanoid#559`, `CAI_BaseNPC#559`, `CAI_BaseNPCTroika#559`, +74 more | 0d/0v/1c | — | `+0x029c` | `Player`, `!target1`, +8 more | — | — |  |
 | `0x10279420` | FUN_10279420 | 1250 | 1 | 4 | — | 1d/0v/0c | — | `+0x0358`?, `+0x0364`? | — | — | — |  |
-| `0x10279a50` | SetEnemy | 213 | 1 | 19 | — | 22d/0v/0c +1 outside | `+0x5ce0` | `+0x08c0`, `+0x5ce0` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:95 | docs/vtmb/npc-ai/schedule-kernel.md:607, docs/vtmb/npc-ai/social.md:110 |  |
+| `0x10279a50` | SetEnemy | 213 | 1 | 19 | — | 22d/0v/0c +1 outside | `+0x5ce0` | `+0x08c0`, `+0x5ce0` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:95 | docs/vtmb/npc-ai/schedule-kernel.md:609, docs/vtmb/npc-ai/social.md:110 |  |
 | `0x10279b70` | FUN_10279b70 | 42 | 1 | 0 | — | 5d/0v/0c +1 outside | `+0x1a94` | — | — | — | — |  |
 | `0x10279bb0` | FUN_10279bb0 | 42 | 4 | 2 | — | 1d/0v/0c | — | `+0x029c`, `+0x0874` | — | — | — |  |
 | `0x10279c20` | FUN_10279c20 | 31 | 2 | 2 | — | 1d/0v/0c | — | — | — | — | — |  |
-| `0x10279cc0` | FUN_10279cc0 | 42 | 1 | 0 | — | 10d/0v/0c +6 outside | `+0x5ce4` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:656 | docs/vtmb/npc-ai/conditions-and-states.md:368, docs/vtmb/npc-ai/conditions-and-states.md:413, docs/vtmb/npc-ai/lifecycle.md:247 |  |
+| `0x10279cc0` | SetTarget | 42 | 1 | 0 | — | 10d/0v/0c +6 outside | `+0x5ce4` | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:656 | docs/vtmb/npc-ai/conditions-and-states.md:371, docs/vtmb/npc-ai/conditions-and-states.md:416, docs/vtmb/npc-ai/lifecycle.md:247 |  |
 | `0x10279d00` | CAI_BaseNPC::ShouldChooseNewEnemy | 160 | 0 | 2 | `CAI_BaseHumanoid#480`, `CAI_BaseNPC#480`, `CAI_BaseNPCTroika#480`, +74 more | 0d/1v/1c | — | `+0x029c`, `+0x0874`, `+0x14bc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:53 | docs/vtmb/npc-ai/social.md:95 |  |
 | `0x10279dd0` | CAI_BaseNPC::ChooseEnemy | 1068 | 1 | 20 | — | 3d/0v/0c | `+0x5d8c` | `+0x026c`, `+0x029c`, `+0x0778`, `+0x0780`, `+0x07b4`, `+0x0874`, +4 more | `NULL ENTITY`, `Unaccounted`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:192, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:203, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:102 | docs/vtmb/npc-ai/social.md:70 |  |
 | `0x1027a400` | CAI_BaseNPC::FUN_1027a400 | 13 | 0 | 0 | `CAI_BaseHumanoid#552`, `CAI_BaseNPC#552`, `CAI_BaseNPCTroika#552`, +74 more | 0d/2v/2c | — | `+0x0204` | — | — | — |  |
-| `0x1027a420` | CAI_BaseNPC::FUN_1027a420 | 201 | 0 | 2 | `CAI_BaseHumanoid#509`, `CAI_BaseNPC#509`, `CAI_ExpressiveNPC#509`, +10 more | 1d/1v/1c | — | `+0x0204`, `+0x06fc`, `+0x07ec`, `+0x07f8`, `+0x0fe8`, `+0x1480`, +2 more | — | — | docs/vtmb/npc-ai/conditions-and-states.md:386, docs/vtmb/npc-ai/conditions-and-states.md:442 |  |
+| `0x1027a420` | CAI_BaseNPC::FUN_1027a420 | 201 | 0 | 2 | `CAI_BaseHumanoid#509`, `CAI_BaseNPC#509`, `CAI_ExpressiveNPC#509`, +10 more | 1d/1v/1c | — | `+0x0204`, `+0x06fc`, `+0x07ec`, `+0x07f8`, `+0x0fe8`, `+0x1480`, +2 more | — | — | docs/vtmb/npc-ai/conditions-and-states.md:389, docs/vtmb/npc-ai/conditions-and-states.md:445 |  |
 | `0x1027a530` | CAI_BaseNPC::FUN_1027a530 | 109 | 0 | 0 | `CAI_BaseHumanoid#510`, `CAI_BaseNPC#510`, `CAI_ExpressiveNPC#510`, +10 more | 2d/1v/2c | — | `+0x10e8`, `+0x10ec` | — | — | — |  |
 | `0x1027a5c0` | CAI_BaseNPC::FUN_1027a5c0 | 88 | 0 | 0 | `CAI_BaseHumanoid#486`, `CAI_BaseNPC#486`, `CAI_ExpressiveNPC#486`, +10 more | 0d/0v/3c | — | `+0x0204`, `+0x5bb0`, `+0x5cc0`, `+0x5ce8`, `+0x5da4` | — | — | — |  |
 | `0x1027a640` | CAI_BaseNPC::FUN_1027a640 | 93 | 0 | 0 | `CAI_BaseHumanoid#487`, `CAI_BaseNPC#487`, `CAI_ExpressiveNPC#487`, +10 more | 0d/0v/2c | `+0x5ce8` | `+0x5bb0`, `+0x5da4` | — | — | — |  |
 | `0x1027a6c0` | FUN_1027a6c0 | 41 | 1 | 3 | — | 10d/0v/0c +2 outside | — | `+0x5d34`? | — | — | — |  |
-| `0x1027a700` | CAI_BaseNPC::FUN_1027a700 | 40 | 0 | 1 | `CAI_BaseHumanoid#435`, `CAI_BaseNPC#435`, `CAI_ExpressiveNPC#435`, +10 more | 1d/0v/2c | `+0x5cf0` | `+0x5d34` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3143 | docs/vtmb/npc-ai/schedule-kernel.md:688 |  |
+| `0x1027a700` | CAI_BaseNPC::FUN_1027a700 | 40 | 0 | 1 | `CAI_BaseHumanoid#435`, `CAI_BaseNPC#435`, `CAI_ExpressiveNPC#435`, +10 more | 1d/0v/2c | `+0x5cf0` | `+0x5d34` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3143 | docs/vtmb/npc-ai/schedule-kernel.md:690 |  |
 | `0x1027a7c0` | CAI_BaseNPC::FUN_1027a7c0 | 6 | 0 | 0 | `CAI_BaseNPC#82`, `CAI_ExpressiveNPC#82`, `CAI_TestHull#82`, +3 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1027bb20` | CAI_BaseNPC::FUN_1027bb20 | 27 | 0 | 15 | `CAI_BaseHumanoid#106`, `CAI_BaseNPC#106`, `CAI_BaseNPCTroika#106`, +74 more | 0d/0v/0c +20 outside | — | `+0x06a0` | — | — | — |  |
-| `0x1027bb50` | CAI_BaseNPC::FUN_1027bb50 | 118 | 0 | 13 | `CAI_BaseHumanoid#104`, `CAI_BaseNPC#104`, `CAI_ExpressiveNPC#104`, +6 more | 7d/1v/11c | — | `+0x0710`, `+0x5dec` | `ERROR: Rejecting spawn of %s as error in…` | — | docs/vtmb/npc-ai/schedule-kernel.md:484 |  |
-| `0x1027bc60` | CAI_BaseNPC::FUN_1027bc60 | 386 | 0 | 15 | `CAI_BaseHumanoid#126`, `CAI_BaseNPC#126`, `CAI_ExpressiveNPC#126`, +9 more | 2d/0v/0c | — | `+0x029c`, `+0x5b8c`, `+0x5c38`, `+0x5ce4`, `+0x5cf4`, `+0x5d34`, +2 more | — | — | docs/vtmb/npc-ai/schedule-kernel.md:609, docs/vtmb/savegame_format.md:585, docs/vtmb/savegame_format.md:654 |  |
-| `0x1027be60` | FUN_1027be60 | 181 | 1 | 20 | — | 1d/0v/0c | — | `+0x029c`? | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Scripted Sequence stripped on level tran…` | — | docs/vtmb/npc-ai/schedule-kernel.md:609, docs/vtmb/savegame_format.md:595 |  |
-| `0x1027bf50` | CAI_BaseNPC::FUN_1027bf50 | 411 | 0 | 21 | `CAI_BaseHumanoid#130`, `CAI_BaseNPC#130`, `CAI_ExpressiveNPC#130`, +10 more | 1d/0v/0c | `+0x5b90`, `+0x5c38`, `+0x5c50`, `+0x5c58` | `+0x029c`, `+0x19b4`, `+0x19b8`, `+0x19bc`, `+0x1a3c`, `+0x5c38`, +6 more | — | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:132, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:5, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:274, +4 more | docs/vtmb/footsteps.md:134, docs/vtmb/npc-ai/schedule-kernel.md:609, docs/vtmb/savegame_format.md:591 |  |
-| `0x1027c160` | CAI_BaseNPC::FUN_1027c160 | 101 | 0 | 9 | `CAI_BaseHumanoid#127`, `CAI_BaseNPC#127`, `CAI_ExpressiveNPC#127`, +9 more | 2d/0v/0c | — | `+0x19b4`, `+0x5b8c`, `+0x5cf4`, `+0x5d44`, `+0x5db4` | — | — | docs/vtmb/savegame_format.md:588 |  |
-| `0x1027c2e0` | CAI_BaseNPC::FUN_1027c2e0 | 3 | 0 | 0 | `CAI_BaseHumanoid#452`, `CAI_BaseNPC#452`, `CAI_ExpressiveNPC#452`, +7 more | 0d/1v/2c | — | — | — | — | — |  |
+| `0x1027bb20` | CAI_BaseNPC::PostConstructor | 27 | 0 | 15 | `CAI_BaseHumanoid#106`, `CAI_BaseNPC#106`, `CAI_BaseNPCTroika#106`, +74 more | 0d/0v/0c +20 outside | — | `+0x06a0` | — | — | — |  |
+| `0x1027bb50` | CAI_BaseNPC::Precache | 118 | 0 | 13 | `CAI_BaseHumanoid#104`, `CAI_BaseNPC#104`, `CAI_ExpressiveNPC#104`, +6 more | 7d/1v/11c | — | `+0x0710`, `+0x5dec` | `ERROR: Rejecting spawn of %s as error in…` | — | docs/vtmb/npc-ai/schedule-kernel.md:484 |  |
+| `0x1027bc60` | CAI_BaseNPC::Save | 386 | 0 | 15 | `CAI_BaseHumanoid#126`, `CAI_BaseNPC#126`, `CAI_ExpressiveNPC#126`, +9 more | 2d/0v/0c | — | `+0x029c`, `+0x5b8c`, `+0x5c38`, `+0x5ce4`, `+0x5cf4`, `+0x5d34`, +2 more | — | — | docs/vtmb/npc-ai/schedule-kernel.md:611, docs/vtmb/savegame_format.md:585, docs/vtmb/savegame_format.md:654 |  |
+| `0x1027be60` | FUN_1027be60 | 181 | 1 | 20 | — | 1d/0v/0c | — | `+0x029c`? | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Scripted Sequence stripped on level tran…` | — | docs/vtmb/npc-ai/schedule-kernel.md:611, docs/vtmb/savegame_format.md:595 |  |
+| `0x1027bf50` | CAI_BaseNPC::OnRestore | 411 | 0 | 21 | `CAI_BaseHumanoid#130`, `CAI_BaseNPC#130`, `CAI_ExpressiveNPC#130`, +10 more | 1d/0v/0c | `+0x5b90`, `+0x5c38`, `+0x5c50`, `+0x5c58` | `+0x029c`, `+0x19b4`, `+0x19b8`, `+0x19bc`, `+0x1a3c`, `+0x5c38`, +6 more | — | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:132, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:5, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:274, +4 more | docs/vtmb/footsteps.md:134, docs/vtmb/npc-ai/schedule-kernel.md:611, docs/vtmb/savegame_format.md:591 |  |
+| `0x1027c160` | CAI_BaseNPC::Restore | 101 | 0 | 9 | `CAI_BaseHumanoid#127`, `CAI_BaseNPC#127`, `CAI_ExpressiveNPC#127`, +9 more | 2d/0v/0c | — | `+0x19b4`, `+0x5b8c`, `+0x5cf4`, `+0x5d44`, `+0x5db4` | — | — | docs/vtmb/savegame_format.md:588 |  |
+| `0x1027c2e0` | CAI_BaseNPC::LoadedSchedules | 3 | 0 | 0 | `CAI_BaseHumanoid#452`, `CAI_BaseNPC#452`, `CAI_ExpressiveNPC#452`, +7 more | 0d/1v/2c | — | — | — | — | — |  |
 | `0x1027c790` | CAI_MoveAndShootOverlay::vfunc0 | 32 | 0 | 5 | `CAI_MoveAndShootOverlay#0` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1027c7f0` | CAI_BaseNPC::vfunc5 | 30 | 0 | 7 | `CAI_BaseNPC#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1027c820` | FUN_1027c820 | 411 | 1 | 6 | — | 13d/0v/0c | — | `+0x16f6`?, `+0x16fc`?, `+0x1702`?, `+0x1708`?, `+0x1783`?, `+0x1789`?, +10 more | — | — | — |  |
-| `0x1027ca30` | CAI_BaseNPC::FUN_1027ca30 | 80 | 0 | 6 | `CAI_BaseHumanoid#180`, `CAI_BaseNPC#180`, `CAI_ExpressiveNPC#180`, +7 more | 2d/0v/1c | `+0x5ddc` | `+0x07fc`, `+0x5da4`, `+0x5ddc` | — | — | docs/vtmb/npc-ai/social.md:453 |  |
+| `0x1027ca30` | CAI_BaseNPC::UpdateOnRemove | 80 | 0 | 6 | `CAI_BaseHumanoid#180`, `CAI_BaseNPC#180`, `CAI_ExpressiveNPC#180`, +7 more | 2d/0v/1c | `+0x5ddc` | `+0x07fc`, `+0x5da4`, `+0x5ddc` | — | — | docs/vtmb/npc-ai/social.md:453 |  |
 | `0x1027caa0` | CAI_BaseNPC::FUN_1027caa0 | 44 | 0 | 0 | `CAI_BaseHumanoid#511`, `CAI_BaseNPC#511`, `CAI_BaseNPCTroika#511`, +73 more | 0d/2v/2c | — | `+0x02e0` | — | — | — |  |
 | `0x1027cae0` | CAI_BaseNPC::FUN_1027cae0 | 231 | 0 | 7 | `CAI_BaseNPC#424`, `CAI_BaseNPCTroika#424`, `CAI_TestHull#424`, +72 more | 1d/1v/1c | `+0x5cdc`, `+0x5cf8`, `+0x5d34`, `+0x5d38`, `+0x5d3c`, `+0x5d40`, +1 more | `+0x06a4`, `+0x06a8`, `+0x06ac`, `+0x06b0`, `+0x06b4`, `+0x06b8`, +3 more | — | — | — |  |
 | `0x1027cc10` | CAI_BaseNPC::FUN_1027cc10 | 248 | 0 | 5 | `CAI_BaseHumanoid#425`, `CAI_BaseNPC#425`, `CAI_BaseNPCTroika#425`, +74 more | 0d/1v/1c | — | — | — | — | docs/vtmb/npc-ai/senses.md:40 |  |
@@ -1951,8 +1951,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1027cfc0` | CAI_BaseNPC::FUN_1027cfc0 | 47 | 0 | 5 | `CAI_BaseHumanoid#430`, `CAI_BaseNPC#430`, `CAI_BaseNPCTroika#430`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x1027d000` | CAI_Pathfinder::vfunc0 | 32 | 0 | 5 | `CAI_Pathfinder#0` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1027d0a0` | FUN_1027d0a0 | 153 | 1 | 20 | — | 2d/0v/0c | `+0x1b3c`?, `+0x1b40`?, `+0x5cc4`? | `+0x0200`?, `+0x5d74`? | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | — | — |  |
-| `0x1027d170` | FUN_1027d170 | 1492 | 1 | 19 | — | 5d/0v/0c | — | — | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +3 more | — | docs/vtmb/entity_io.md:1806, docs/vtmb/npc-ai/conditions-and-states.md:158, docs/vtmb/npc-ai/conditions-and-states.md:414, +2 more |  |
-| `0x1027d990` | FUN_1027d990 | 10 | 1 | 0 | — | 29d/0v/0c | — | `+0x5d34`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:94 |  |
+| `0x1027d170` | CineCleanup | 1492 | 1 | 19 | — | 5d/0v/0c | — | — | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +3 more | — | docs/vtmb/entity_io.md:1806, docs/vtmb/npc-ai/conditions-and-states.md:161, docs/vtmb/npc-ai/conditions-and-states.md:417, +2 more |  |
+| `0x1027d990` | FUN_1027d990 | 10 | 1 | 0 | — | 29d/0v/0c | — | `+0x5d34`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:97 |  |
 | `0x1027d9b0` | FUN_1027d9b0 | 11 | 1 | 1 | — | 8d/0v/0c | — | `+0x5d34` | — | — | — |  |
 | `0x1027d9d0` | CAI_BaseNPC::FUN_1027d9d0 | 5 | 0 | 0 | `CAI_BaseHumanoid#514`, `CAI_BaseNPC#514`, `CAI_BaseNPCTroika#514`, +74 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1027d9f0` | CAI_BaseNPC::OverrideMoveFacing | 118 | 0 | 0 | `CAI_BaseHumanoid#526`, `CAI_BaseNPC#526`, `CAI_BaseNPCTroika#526`, +74 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CAI_BaseNPC::OverrideMoveFacing` | — | — |  |
@@ -1969,8 +1969,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1027e760` | FUN_1027e760 | 53 | 1 | 0 | — | 1d/0v/0c | — | — | `**UNKNOWN**`, `Climb`, +1 more | — | — |  |
 | `0x1027e7d0` | CAI_BaseNPC::FUN_1027e7d0 | 16 | 0 | 1 | `CAI_BaseHumanoid#407`, `CAI_BaseNPC#407`, `CAI_BaseNPCTroika#407`, +74 more | 0d/2v/2c | — | — | — | — | — |  |
 | `0x1027e7f0` | FUN_1027e7f0 | 740 | 1 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — | — |  |
-| `0x1027ede0` | CAI_BaseNPC::FUN_1027ede0 | 16 | 0 | 1 | `CAI_BaseHumanoid#408`, `CAI_BaseNPC#408`, `CAI_BaseNPCTroika#408`, +71 more | 3d/1v/2c | — | — | — | — | — |  |
-| `0x1027ee00` | CAI_BaseNPC::FUN_1027ee00 | 6 | 0 | 0 | `CAI_BaseHumanoid#409`, `CAI_BaseNPC#409`, `CAI_BaseNPCTroika#409`, +71 more | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1027ede0` | CAI_BaseNPC::GetShortConditionName | 16 | 0 | 1 | `CAI_BaseHumanoid#408`, `CAI_BaseNPC#408`, `CAI_BaseNPCTroika#408`, +71 more | 3d/1v/2c | — | — | — | — | — |  |
+| `0x1027ee00` | CAI_BaseNPC::GetLastSharedCondition | 6 | 0 | 0 | `CAI_BaseHumanoid#409`, `CAI_BaseNPC#409`, `CAI_BaseNPCTroika#409`, +71 more | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1027ee20` | FUN_1027ee20 | 79 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x1027ef20` | FUN_1027ef20 | 111 | 1 | 11 | — | 2d/0v/0c +1 outside | `+0x5b50`, `+0x5b54` | `+0x5b50` | — | — | — |  |
 | `0x1027efb0` | FUN_1027efb0 | 445 | 1 | 1 | — | 4d/0v/0c +1 outside | `+0x5b50`? | `+0x5b50`?, `+0x5b54`? | `** END BUFFER DUMP FOR %s⏎`, `** BEGIN BUFFER DUMP FOR %s⏎`, +1 more | — | — |  |
@@ -1986,29 +1986,29 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1027fae0` | FUN_1027fae0 | 140 | 1 | 0 | — | 1d/0v/0c | `+0x0004`, `+0x000c`, `+0x0010` | `+0x0004`, `+0x0008`, `+0x000c` | — | — | — |  |
 | `0x1027fba0` | FUN_1027fba0 | 52 | 1 | 1 | — | 1d/0v/0c | — | `+0x000c` | — | — | — |  |
 | `0x1027fc10` | FUN_1027fc10 | 19 | 1 | 0 | — | 1d/0v/0c | `+0x0004` | — | — | — | — |  |
-| `0x102800c0` | FUN_102800c0 | 213 | 1 | 21 | — | 1d/0v/0c | `+0x5de8` | `+0x08cc`, `+0x5d34` | — | — | docs/vtmb/npc-ai/lifecycle.md:291 |  |
-| `0x102801e0` | FUN_102801e0 | 213 | 1 | 21 | — | 1d/0v/0c | `+0x5de8` | `+0x08cc`, `+0x5d34` | — | — | docs/vtmb/npc-ai/lifecycle.md:292 |  |
+| `0x102800c0` | ScheduledMoveToGoalEntity | 213 | 1 | 21 | — | 1d/0v/0c | `+0x5de8` | `+0x08cc`, `+0x5d34` | — | — | docs/vtmb/npc-ai/lifecycle.md:291 |  |
+| `0x102801e0` | ScheduledFollowPath | 213 | 1 | 21 | — | 1d/0v/0c | `+0x5de8` | `+0x08cc`, `+0x5d34` | — | — | docs/vtmb/npc-ai/lifecycle.md:292 |  |
 | `0x10280300` | CAI_BaseNPC::FUN_10280300 | 17 | 0 | 2 | `CAI_BaseHumanoid#153`, `CAI_BaseNPC#153`, `CAI_BaseNPCTroika#153`, +74 more | 0d/1v/1c | — | `+0x5d34` | — | — | — |  |
 | `0x10280330` | CAI_BaseNPC::FUN_10280330 | 32 | 0 | 1 | `CAI_BaseHumanoid#529`, `CAI_BaseNPC#529`, `CAI_BaseNPCTroika#529`, +74 more | 0d/1v/2c | — | — | — | — | — |  |
 | `0x10280360` | CAI_BaseNPC::FUN_10280360 | 576 | 0 | 6 | `CAI_BaseHumanoid#528`, `CAI_BaseNPC#528`, `CAI_BaseNPCTroika#528`, +74 more | 0d/6v/6c | `+0x1b44`, `+0x1b48` | `+0x029c`, `+0x0700`, `+0x0854`, `+0x08e4`, `+0x5d34` | `E:\Vampire\main\dlls\AI_BaseNPC_Movement…` | — | — |  |
 | `0x10280790` | FUN_10280790 | 184 | 1 | 1 | — | 2d/0v/0c | — | — | — | — | — |  |
-| `0x10280880` | CAI_BaseNPC::FUN_10280880 | 38 | 0 | 2 | `CAI_BaseHumanoid#521`, `CAI_BaseNPC#521`, `CAI_BaseNPCTroika#521`, +73 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10280880` | CAI_BaseNPC::IsJumpLegal | 38 | 0 | 2 | `CAI_BaseHumanoid#521`, `CAI_BaseNPC#521`, `CAI_BaseNPCTroika#521`, +73 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10280a20` | FUN_10280a20 | 32 | 1 | 0 | — | 1d/0v/0c | — | `+0x5cf0`? | — | — | — |  |
 | `0x10280a50` | CAI_BaseNPC::AutoMovement | 270 | 1 | 9 | — | 17d/0v/0c | — | `+0x0170`, `+0x0174`, `+0x0178`, `+0x026c`, `+0x03e8`, `+0x5d44` | `NULL ENTITY`, `CAI_BaseNPC::AutoMovement` | — | — |  |
-| `0x10280bb0` | CAI_BaseNPC::FUN_10280bb0 | 7 | 0 | 0 | `CAI_BaseNPC#516`, `CAI_ExpressiveNPC#516`, `CAI_TestHull#516`, +5 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10280bb0` | CAI_BaseNPC::MaxYawSpeed | 7 | 0 | 0 | `CAI_BaseNPC#516`, `CAI_ExpressiveNPC#516`, `CAI_TestHull#516`, +5 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10280c80` | FUN_10280c80 | 99 | 1 | 0 | — | 1d/0v/0c | — | — | `   %32s -- select %5.2f, start %5.2f, ru…`, ` Tasks timings:⏎` | — | — |  |
-| `0x10280d30` | FUN_10280d30 | 81 | 1 | 0 | — | 9d/0v/0c +3 outside | `+0x5c38`?, `+0x5c3c`?, `+0x5c40`?, `+0x5c44`?, `+0x5c48`?, `+0x5c4c`? | `+0x0098`?, `+0x5c38`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:523, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:736, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:448, +1 more | docs/vtmb/entity_io.md:1817, docs/vtmb/npc-ai/schedule-kernel.md:579, docs/vtmb/npc-ai/schedule-kernel.md:603, +1 more | yes |
+| `0x10280d30` | ClearSchedule | 81 | 1 | 0 | — | 9d/0v/0c +3 outside | `+0x5c38`?, `+0x5c3c`?, `+0x5c40`?, `+0x5c44`?, `+0x5c48`?, `+0x5c4c`? | `+0x0098`?, `+0x5c38`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:523, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:736, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:448, +1 more | docs/vtmb/entity_io.md:1817, docs/vtmb/npc-ai/schedule-kernel.md:581, docs/vtmb/npc-ai/schedule-kernel.md:605, +1 more | yes |
 | `0x10280db0` | FUN_10280db0 | 19 | 3 | 0 | — | 1d/0v/0c | — | `+0x5c38`?, `+0x5c40`? | — | — | — |  |
-| `0x10280de0` | FUN_10280de0 | 70 | 1 | 7 | — | 6d/0v/0c +8 outside | `+0x5c3c` | `+0x0910` | — | — | docs/vtmb/entity_io.md:1815, docs/vtmb/npc-ai/lifecycle.md:292, docs/vtmb/npc-ai/schedule-kernel.md:612 |  |
-| `0x10280e50` | FUN_10280e50 | 186 | 1 | 6 | — | 4d/0v/0c | `+0x5bb8`, `+0x5c38`, `+0x5c40`, `+0x5c44`, `+0x5c48`, `+0x5c4c`, +1 more | `+0x0098`, `+0x0224`, `+0x06cc`, `+0x5c5c`, `+0x5d34` | `Schedule: %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2468, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:457, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:710, +5 more | docs/vtmb/npc-ai/conditions-and-states.md:702, docs/vtmb/npc-ai/conditions-and-states.md:718, docs/vtmb/npc-ai/lifecycle.md:292, +4 more |  |
-| `0x10280f40` | FUN_10280f40 | 67 | 2 | 2 | — | 1d/0v/0c | `+0x5c40`?, `+0x5c44`?, `+0x5f38`?, `+0x5f3c`? | `+0x5c40`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:354 |  |
-| `0x10280fb0` | CAI_BaseNPC::FUN_10280fb0 | 1 | 0 | 0 | `CAI_BaseHumanoid#453`, `CAI_BaseNPC#453`, `CAI_ExpressiveNPC#453`, +10 more | 2d/1v/1c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3192 | docs/vtmb/npc-ai/schedule-kernel.md:387 |  |
+| `0x10280de0` | FUN_10280de0 | 70 | 1 | 7 | — | 6d/0v/0c +8 outside | `+0x5c3c` | `+0x0910` | — | — | docs/vtmb/entity_io.md:1815, docs/vtmb/npc-ai/lifecycle.md:292, docs/vtmb/npc-ai/schedule-kernel.md:614 |  |
+| `0x10280e50` | SetSchedule | 186 | 1 | 6 | — | 4d/0v/0c | `+0x5bb8`, `+0x5c38`, `+0x5c40`, `+0x5c44`, `+0x5c48`, `+0x5c4c`, +1 more | `+0x0098`, `+0x0224`, `+0x06cc`, `+0x5c5c`, `+0x5d34` | `Schedule: %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2468, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:457, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:710, +5 more | docs/vtmb/npc-ai/conditions-and-states.md:705, docs/vtmb/npc-ai/conditions-and-states.md:721, docs/vtmb/npc-ai/lifecycle.md:292, +4 more |  |
+| `0x10280f40` | NextScheduledTask | 67 | 2 | 2 | — | 1d/0v/0c | `+0x5c40`?, `+0x5c44`?, `+0x5f38`?, `+0x5f3c`? | `+0x5c40`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:354 |  |
+| `0x10280fb0` | CAI_BaseNPC::BuildScheduleTestBits | 1 | 0 | 0 | `CAI_BaseHumanoid#453`, `CAI_BaseNPC#453`, `CAI_ExpressiveNPC#453`, +10 more | 2d/1v/1c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3192 | docs/vtmb/npc-ai/schedule-kernel.md:387 |  |
 | `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 1 | 0 | 0 | `CAI_BaseHumanoid#411`, `CAI_BaseNPC#411`, `CAI_BaseNPCTroika#411`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
-| `0x10280ff0` | FUN_10280ff0 | 860 | 2 | 2 | — | 1d/0v/0c | `+0x1a40`, `+0x5f34`, `+0x5f38`, `+0x5f3c` | `+0x0098`, `+0x0224`, `+0x0728`, `+0x0910`, `+0x5c38`, `+0x5c5c`, +18 more | `ERROR: Unknown condition!`, `   Break condition -> %s⏎`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:462, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:797, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:822, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:686, docs/vtmb/npc-ai/schedule-kernel.md:536, docs/vtmb/npc-ai/schedule-kernel.md:588 |  |
+| `0x10280ff0` | CAI_BaseNPC::IsScheduleValid | 860 | 2 | 2 | — | 1d/0v/0c | `+0x1a40`, `+0x5f34`, `+0x5f38`, `+0x5f3c` | `+0x0098`, `+0x0224`, `+0x0728`, `+0x0910`, `+0x5c38`, `+0x5c5c`, +18 more | `ERROR: Unknown condition!`, `   Break condition -> %s⏎`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:462, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:797, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:822, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:689, docs/vtmb/npc-ai/schedule-kernel.md:536, docs/vtmb/npc-ai/schedule-kernel.md:590 |  |
 | `0x10281430` | FUN_10281430 | 124 | 2 | 2 | — | 1d/0v/0c | `+0x06ca`? | `+0x029c`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:537 |  |
-| `0x102814d0` | FUN_102814d0 | 478 | 2 | 3 | — | 1d/0v/0c | — | — | `Unaccounted`, `CAI_BaseNPC_SelectSchedule` | — | docs/vtmb/npc-ai/lifecycle.md:112, docs/vtmb/npc-ai/schedule-kernel.md:559, docs/vtmb/npc-ai/schedule-kernel.md:592 |  |
-| `0x10281730` | FUN_10281730 | 109 | 2 | 1 | — | 1d/0v/0c | — | `+0x06dc`?, `+0x06fc`? | `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:663 | docs/vtmb/npc-ai/schedule-kernel.md:541, docs/vtmb/npc-ai/schedule-kernel.md:589 |  |
-| `0x102817c0` | FUN_102817c0 | 3277 | 1 | 22 | — | 1d/0v/0c | `+0x06f4`, `+0x5bb8`, `+0x5c3c`, `+0x5c44`, `+0x5c4c`, `+0x5c50`, +3 more | `+0x0098`, `+0x0224`, `+0x026c`, `+0x04d8`, `+0x06d0`, `+0x06e8`, +15 more | `NULL ENTITY`, `Unaccounted`, +6 more | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:796, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:855, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:856, +7 more | docs/vtmb/npc-ai/README.md:21, docs/vtmb/npc-ai/conditions-and-states.md:687, docs/vtmb/npc-ai/conditions-and-states.md:703, +17 more |  |
+| `0x102814d0` | FUN_102814d0 | 478 | 2 | 3 | — | 1d/0v/0c | — | — | `Unaccounted`, `CAI_BaseNPC_SelectSchedule` | — | docs/vtmb/npc-ai/lifecycle.md:112, docs/vtmb/npc-ai/schedule-kernel.md:561, docs/vtmb/npc-ai/schedule-kernel.md:594 |  |
+| `0x10281730` | GetFailSchedule | 109 | 2 | 1 | — | 1d/0v/0c | — | `+0x06dc`?, `+0x06fc`? | `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:663 | docs/vtmb/npc-ai/schedule-kernel.md:541, docs/vtmb/npc-ai/schedule-kernel.md:545, docs/vtmb/npc-ai/schedule-kernel.md:591 |  |
+| `0x102817c0` | MaintainSchedule | 3277 | 1 | 22 | — | 1d/0v/0c | `+0x06f4`, `+0x5bb8`, `+0x5c3c`, `+0x5c44`, `+0x5c4c`, `+0x5c50`, +3 more | `+0x0098`, `+0x0224`, `+0x026c`, `+0x04d8`, `+0x06d0`, `+0x06e8`, +15 more | `NULL ENTITY`, `Unaccounted`, +6 more | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:796, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:855, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:856, +7 more | docs/vtmb/npc-ai/README.md:21, docs/vtmb/npc-ai/conditions-and-states.md:690, docs/vtmb/npc-ai/conditions-and-states.md:706, +17 more |  |
 | `0x102827f0` | CAI_BaseNPC::StartTask | 18330 | 0 | 24 | `CAI_BaseHumanoid#442`, `CAI_BaseNPC#442`, `CAI_ExpressiveNPC#442`, +9 more | 2d/1v/2c | `+0x0200`, `+0x06f4`, `+0x0fec`, `+0x1a40`, `+0x1b2c`, `+0x1b30`, +28 more | `+0x0178`, `+0x0184`, `+0x020c`, `+0x029c`, `+0x0304`, `+0x0370`, +47 more | `!player`, `move_yaw`, +9 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2258, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2721, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:37, +2 more | docs/vtmb/animation_and_movers.md:1851, docs/vtmb/animation_and_movers.md:1852, docs/vtmb/animation_and_movers.md:1994, +14 more |  |
 | `0x10288510` | FUN_10288510 | 22 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10288540` | FUN_10288540 | 9 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
@@ -2023,18 +2023,18 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102886f0` | FUN_102886f0 | 10 | 1 | 0 | — | 1d/0v/0c | `+0x0040` | — | — | — | — |  |
 | `0x10288710` | CAI_BaseNPC::FUN_10288710 | 78 | 0 | 10 | `CAI_BaseHumanoid#445`, `CAI_BaseNPC#445`, `CAI_BaseNPCTroika#445`, +74 more | 0d/0v/1c | — | `+0x068c`, `+0x0844`, `+0x08fc`, `+0x5bbc`, `+0x5bc0`, `+0x5cf4` | — | — | docs/vtmb/npc-ai/senses.md:406, docs/vtmb/sky-ambience.md:625 |  |
 | `0x10288780` | CAI_BaseNPC::RunTask | 4002 | 0 | 22 | `CAI_BaseHumanoid#444`, `CAI_BaseNPC#444`, `CAI_ExpressiveNPC#444`, +9 more | 3d/1v/2c | `+0x0200`, `+0x06f4`, `+0x1a40`, `+0x1b44`, `+0x1b48` | `+0x0204`, `+0x0270`, `+0x029c`, `+0x0318`, `+0x0370`, `+0x03ec`, +22 more | `CBaseEntity::Instance`, `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2700, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:55, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:455, +2 more | docs/vtmb/animation_and_movers.md:1994, docs/vtmb/npc-ai/programs.md:434, docs/vtmb/npc-ai/programs.md:749, +5 more |  |
-| `0x10289c90` | FUN_10289c90 | 29 | 2 | 21 | — | 1d/0v/0c | — | `+0x0844`?, `+0x173d`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:598, docs/vtmb/npc-ai/schedule-kernel.md:619, docs/vtmb/npc-ai/senses.md:407 |  |
+| `0x10289c90` | RunTaskOverlay | 29 | 2 | 21 | — | 1d/0v/0c | — | `+0x0844`?, `+0x173d`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:600, docs/vtmb/npc-ai/schedule-kernel.md:621, docs/vtmb/npc-ai/senses.md:407 |  |
 | `0x10289ce0` | CAI_BaseNPC::FUN_10289ce0 | 30 | 0 | 0 | `CAI_BaseHumanoid#571`, `CAI_BaseNPC#571`, `CAI_BaseNPCTroika#571`, +74 more | 0d/1v/1c | — | — | — | — | — |  |
 | `0x10289d10` | CAI_BaseNPC::FUN_10289d10 | 359 | 0 | 5 | `CAI_BaseHumanoid#572`, `CAI_BaseNPC#572`, `CAI_ExpressiveNPC#572`, +10 more | 0d/2v/11c | `+0x5d8c` | `+0x5d44`, `+0x5d8c` | — | — | docs/vtmb/animation_and_movers.md:1881 |  |
 | `0x10289ee0` | RestartIdealActivity | 33 | 1 | 5 | — | 38d/0v/0c | `+0x0fec` | `+0x0fec` | — | Source/ElysiumUE/Private/Tests/ElysiumActionTableTests.cpp:1231, Source/ElysiumUE/Private/Visual/ElysiumActionTables.h:809 | docs/vtmb/animation_and_movers.md:1864, docs/vtmb/npc-ai/programs.md:880, docs/vtmb/npc-ai/schedule-kernel.md:107 |  |
-| `0x10289f20` | CAI_BaseNPC::FUN_10289f20 | 142 | 0 | 1 | `CAI_BaseHumanoid#563`, `CAI_BaseNPC#563`, `CAI_ExpressiveNPC#563`, +10 more | 0d/1v/5c | — | `+0x1568` | — | — | — |  |
+| `0x10289f20` | CAI_BaseNPC::TranslateEnemyChasePosition | 142 | 0 | 1 | `CAI_BaseHumanoid#563`, `CAI_BaseNPC#563`, `CAI_ExpressiveNPC#563`, +10 more | 0d/1v/5c | — | `+0x1568` | — | — | — |  |
 | `0x10289fe0` | FUN_10289fe0 | 283 | 1 | 1 | — | 1d/0v/0c | — | `+0x5d74`? | — | — | — |  |
 | `0x1028a150` | FUN_1028a150 | 35 | 1 | 0 | — | 14d/0v/0c | — | `+0x5c38`?, `+0x5c40`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:542 |  |
 | `0x1028a190` | FUN_1028a190 ‼ | 151 | 1 | 1 | — | 5d/0v/0c | — | `+0x0278`?, `+0x0740`? | — | — | docs/vtmb/npc-ai/lifecycle.md:229 |  |
-| `0x1028a260` | FUN_1028a260 ‼ | 38 | 1 | 0 | — | 4d/0v/0c | — | `+0x06d4`?, `+0x06d8`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:62, docs/vtmb/npc-ai/schedule-kernel.md:560 |  |
-| `0x1028a2a0` | CAI_BaseNPC::FUN_1028a2a0 | 170 | 0 | 2 | `CAI_BaseHumanoid#437`, `CAI_BaseNPC#437`, `CAI_ExpressiveNPC#437`, +10 more | 1d/0v/0c | `+0x03ec`, `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0340` | `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…` | — | docs/vtmb/npc-ai/conditions-and-states.md:90, docs/vtmb/npc-ai/conditions-and-states.md:150 |  |
-| `0x1028a380` | CAI_BaseNPC::FUN_1028a380 | 1650 | 0 | 21 | `CAI_BaseHumanoid#438`, `CAI_BaseNPC#438`, `CAI_ExpressiveNPC#438`, +9 more | 2d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80` | `+0x07b0`, `+0x1574`, `+0x5cc0`, `+0x5d34`, `+0x5d44`, `+0x5d74`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…`, `Invalid State for SelectSchedule!⏎`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:408, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:122 | docs/vtmb/npc-ai/conditions-and-states.md:153, docs/vtmb/npc-ai/conditions-and-states.md:404, docs/vtmb/npc-ai/conditions-and-states.md:448, +2 more |  |
-| `0x1028abe0` | CAI_BaseNPC::FUN_1028abe0 | 18 | 0 | 0 | `CAI_BaseHumanoid#439`, `CAI_BaseNPC#439`, `CAI_BaseNPCTroika#439`, +74 more | 0d/0v/0c | — | `+0x5c54` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:663, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:798, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:196 | docs/vtmb/npc-ai/programs.md:337, docs/vtmb/npc-ai/schedule-kernel.md:543 |  |
+| `0x1028a260` | FUN_1028a260 ‼ | 38 | 1 | 0 | — | 4d/0v/0c | — | `+0x06d4`?, `+0x06d8`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:62, docs/vtmb/npc-ai/schedule-kernel.md:562 |  |
+| `0x1028a2a0` | CAI_BaseNPC::PreSelectSchedule | 170 | 0 | 2 | `CAI_BaseHumanoid#437`, `CAI_BaseNPC#437`, `CAI_ExpressiveNPC#437`, +10 more | 1d/0v/0c | `+0x03ec`, `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0340` | `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…` | — | docs/vtmb/npc-ai/conditions-and-states.md:93, docs/vtmb/npc-ai/conditions-and-states.md:153 |  |
+| `0x1028a380` | CAI_BaseNPC::SelectSchedule | 1650 | 0 | 21 | `CAI_BaseHumanoid#438`, `CAI_BaseNPC#438`, `CAI_ExpressiveNPC#438`, +9 more | 2d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80` | `+0x07b0`, `+0x1574`, `+0x5cc0`, `+0x5d34`, `+0x5d44`, `+0x5d74`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC_Schedule…`, `Invalid State for SelectSchedule!⏎`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:408, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:122 | docs/vtmb/npc-ai/conditions-and-states.md:156, docs/vtmb/npc-ai/conditions-and-states.md:407, docs/vtmb/npc-ai/conditions-and-states.md:451, +2 more |  |
+| `0x1028abe0` | CAI_BaseNPC::SelectFailSchedule | 18 | 0 | 0 | `CAI_BaseHumanoid#439`, `CAI_BaseNPC#439`, `CAI_BaseNPCTroika#439`, +74 more | 0d/0v/0c | — | `+0x5c54` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:663, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:798, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:196 | docs/vtmb/npc-ai/programs.md:337, docs/vtmb/npc-ai/schedule-kernel.md:543 |  |
 | `0x1028ac10` | FUN_1028ac10 | 71 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x1028ac80` | FUN_1028ac80 | 38 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x1028acc0` | FUN_1028acc0 | 41 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
@@ -2050,7 +2050,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1028cd10` | CAI_BaseNPCTroika::FUN_1028cd10 | 6 | 0 | 0 | `CAI_BaseNPCTroika#82`, `CGeneric_NPC#82`, `CNPC_VBaseBoss#82`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1028d5e0` | CAI_BaseNPCTroika::vfunc5 | 30 | 0 | 17 | `CAI_BaseNPCTroika#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1028d610` | FUN_1028d610 | 154 | 1 | 16 | — | 64d/0v/0c | — | `+0x17d1`?, `+0x17d7`?, `+0x17dd`?, `+0x17e3`?, `+0x17e9`?, `+0x17ef`?, +2 more | — | — | — |  |
-| `0x1028d6e0` | CAI_BaseNPCTroika::FUN_1028d6e0 | 102 | 0 | 15 | `CAI_BaseNPCTroika#180`, `CGeneric_NPC#180`, `CNPCMaker#180`, +58 more | 4d/0v/1c | — | `+0x0964`, `+0x658c`, `+0x6594`, `+0x65e8` | `Leaving interesting place (UpdateOnRemov…` | — | — |  |
+| `0x1028d6e0` | CAI_BaseNPCTroika::UpdateOnRemove | 102 | 0 | 15 | `CAI_BaseNPCTroika#180`, `CGeneric_NPC#180`, `CNPCMaker#180`, +58 more | 4d/0v/1c | — | `+0x0964`, `+0x658c`, `+0x6594`, `+0x65e8` | `Leaving interesting place (UpdateOnRemov…` | — | — |  |
 | `0x1028d860` | CAI_BaseNPCTroika::FUN_1028d860 | 80 | 0 | 1 | `CAI_BaseNPCTroika#583`, `CGeneric_NPC#583`, `CNPCMaker#583`, +61 more | 0d/0v/1c | — | `+0x0364`, `+0x0998` | — | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1774 | docs/vtmb/npc-ai/lifecycle.md:167, docs/vtmb/npc-ai/lifecycle.md:305 |  |
 | `0x1028d910` | CAI_BaseNPCTroika::FUN_1028d910 | 88 | 0 | 0 | `CAI_BaseNPCTroika#584`, `CGeneric_NPC#584`, `CNPCMaker#584`, +61 more | 0d/0v/2c | `+0x0178`, `+0x6254`, `+0x6258`, `+0x625c`, `+0x6260` | `+0x0998` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:568 | docs/vtmb/npc-ai/lifecycle.md:169, docs/vtmb/npc-ai/lifecycle.md:305 |  |
 | `0x1028d990` | FUN_1028d990 | 906 | 1 | 11 | — | 2d/0v/0c | — | `+0x0660`, `+0x0664`, `+0x14b8`, `+0x5d8c` | `%-20s  %6.2f : %*s %s⏎%s%s %s%s %s⏎⏎`, `%6.2f : %*s %s⏎`, +7 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:23 | docs/vtmb/npc-ai/schedule-kernel.md:217 |  |
@@ -2062,7 +2062,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1028e060` | FUN_1028e060 | 31 | 2 | 4 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x1028e090` | FUN_1028e090 | 511 | 3 | 3 | — | 2d/0v/0c | — | `+0x0400` | — | — | — |  |
 | `0x1028e310` | CAI_BaseNPCTroika::FUN_1028e310 | 49 | 0 | 6 | `CAI_BaseNPCTroika#113`, `CGeneric_NPC#113`, `CNPC_ProneDialog#113`, +56 more | 2d/0v/1c | — | `+0x0228`, `+0x6558` | — | — | — |  |
-| `0x1028e360` | FUN_1028e360 | 215 | 2 | 0 | — | 1d/0v/0c | `+0x6084`?, `+0x6088`?, `+0x6090`?, `+0x6094`?, `+0x6098`? | `+0x6084`?, `+0x6088`?, `+0x608c`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:438 | docs/vtmb/npc-ai/conditions-and-states.md:263, docs/vtmb/npc-ai/conditions-and-states.md:264 |  |
+| `0x1028e360` | FUN_1028e360 | 215 | 2 | 0 | — | 1d/0v/0c | `+0x6084`?, `+0x6088`?, `+0x6090`?, `+0x6094`?, `+0x6098`? | `+0x6084`?, `+0x6088`?, `+0x608c`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:438 | docs/vtmb/npc-ai/conditions-and-states.md:266, docs/vtmb/npc-ai/conditions-and-states.md:267 |  |
 | `0x1028e480` | FUN_1028e480 | 501 | 1 | 21 | — | 1d/0v/0c | — | `+0x0364`, `+0x08cc`, `+0x5d34` | — | — | — |  |
 | `0x1028e700` | FUN_1028e700 | 99 | 2 | 2 | — | 1d/0v/0c | — | `+0x62c8` | — | — | — |  |
 | `0x1028e790` | FUN_1028e790 | 126 | 1 | 3 | — | 1d/0v/0c | — | `+0x029c`?, `+0x18b3`?, `+0x18b4`? | — | — | — |  |
@@ -2077,7 +2077,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1028ef20` | CAI_BaseNPCTroika::FUN_1028ef20 | 118 | 0 | 13 | `CAI_BaseNPCTroika#587`, `CGeneric_NPC#587`, `CNPC_ProneDialog#587`, +45 more | 0d/0v/1c | — | `+0x0128`, `+0x5b84`, `+0x5bb4`, `+0x6354`, `+0x6358` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:709 | docs/vtmb/npc-ai/schedule-kernel.md:253, docs/vtmb/npc-ai/schedule-kernel.md:469, docs/vtmb/npc-ai/senses.md:411 |  |
 | `0x1028efc0` | FUN_1028efc0 | 2153 | 1 | 12 | — | 1d/0v/0c | — | — | `Player_Nosferatu` | — | docs/vtmb/npc-ai/programs.md:772, docs/vtmb/npc-ai/schedule-kernel.md:473, docs/vtmb/npc-ai/senses.md:357 |  |
 | `0x1028fa50` | FUN_1028fa50 | 205 | 1 | 10 | — | 1d/0v/0c | — | `+0x0650`? | — | — | — |  |
-| `0x1028fb70` | InitPerceptionDistances | 209 | 1 | 9 | — | 5d/0v/0c +4 outside | `+0x63b8`?, `+0x63c0`? | `+0x63b0`?, `+0x63b4`?, `+0x63bc`? | `Inspection_Hearing_Scalars`, `Inspection_Vision_Distances` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:166, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:78, Source/ElysiumUE/Private/Substrate/ElysiumNpcWitness.h:89 | docs/vtmb/npc-ai/conditions-and-states.md:204, docs/vtmb/stealth.md:105 |  |
+| `0x1028fb70` | InitPerceptionDistances | 209 | 1 | 9 | — | 5d/0v/0c +4 outside | `+0x63b8`?, `+0x63c0`? | `+0x63b0`?, `+0x63b4`?, `+0x63bc`? | `Inspection_Hearing_Scalars`, `Inspection_Vision_Distances` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:166, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:78, Source/ElysiumUE/Private/Substrate/ElysiumNpcWitness.h:89 | docs/vtmb/npc-ai/conditions-and-states.md:207, docs/vtmb/stealth.md:105 |  |
 | `0x1028fc90` | FUN_1028fc90 | 28 | 1 | 0 | — | 2d/0v/0c +1 outside | `+0x63c4`?, `+0x63c8`?, `+0x63cc`? | — | — | — | — |  |
 | `0x1028fcc0` | CAI_BaseNPCTroika::RunAI | 141 | 0 | 25 | `CAI_BaseNPCTroika#432`, `CNPCMaker#432`, `CNPCMaker_Fleshpile#432`, +7 more | 8d/1v/3c | — | `+0x026c` | `NULL ENTITY`, `CAI_BaseNPCTroika::RunAI` | — | — |  |
 | `0x1028fd80` | CAI_BaseNPCTroika::RunAlternateAI | 337 | 1 | 19 | — | 1d/0v/0c | — | `+0x026c`, `+0x0ff0`, `+0x1538`, `+0x153c`, `+0x644c` | `NULL ENTITY`, `CAI_BaseNPCTroika::RunAlternateAI` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:955, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:934 | docs/vtmb/feeding.md:445, docs/vtmb/npc-ai/lifecycle.md:366 |  |
@@ -2086,15 +2086,15 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102902e0` | FUN_102902e0 | 73 | 2 | 18 | — | 1d/0v/0c | `+0x174c`? | `+0x0700`? | — | — | — |  |
 | `0x10290350` | FUN_10290350 | 421 | 2 | 18 | — | 1d/0v/0c | `+0x174c`?, `+0x65fa`? | `+0x0364`?, `+0x0700`? | — | — | — |  |
 | `0x10290570` | CAI_BaseNPCTroika::FUN_10290570 | 145 | 0 | 11 | `CAI_BaseNPCTroika#532`, `CGeneric_NPC#532`, `CNPCMaker#532`, +61 more | 0d/1v/2c | `+0x5d24`, `+0x5d30`, `+0x644c` | `+0x0700`, `+0x5d34`, `+0x644c` | — | — | — |  |
-| `0x10290660` | FUN_10290660 | 35 | 2 | 0 | — | 3d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:35, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:7, Source/ElysiumUE/Public/ElysiumEntityWorld.h:713 | docs/vtmb/npc-ai/lifecycle.md:148 |  |
+| `0x10290660` | IsThinkDue | 35 | 2 | 0 | — | 3d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:35, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:7, Source/ElysiumUE/Public/ElysiumEntityWorld.h:713 | docs/vtmb/npc-ai/lifecycle.md:148 |  |
 | `0x102906a0` | FUN_102906a0 | 13 | 1 | 1 | — | 2d/0v/0c | — | `+0x6244`? | — | — | docs/vtmb/npc-ai/lifecycle.md:149, docs/vtmb/npc-ai/lifecycle.md:386 |  |
 | `0x102906c0` | FUN_102906c0 | 13 | 1 | 1 | — | 2d/0v/0c | — | `+0x6248`? | — | — | docs/vtmb/npc-ai/lifecycle.md:149 |  |
 | `0x102906e0` | FUN_102906e0 | 3 | 1 | 0 | — | 1d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:16 | docs/vtmb/npc-ai/lifecycle.md:150 |  |
 | `0x10290700` | FUN_10290700 | 13 | 1 | 1 | — | 2d/0v/0c | — | `+0x6250`? | — | — | docs/vtmb/npc-ai/lifecycle.md:150 |  |
-| `0x10290720` | FUN_10290720 | 861 | 1 | 2 | — | 1d/0v/0c | `+0x6244`, `+0x6254` | `+0x6244`, `+0x6254`, `+0x6264`, `+0x6278`, `+0x6279`, `+0x628c` | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextUpdateThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:95, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:6, Source/ElysiumUE/Public/ElysiumRng.h:43 | docs/vtmb/npc-ai/lifecycle.md:143 |  |
-| `0x10290b60` | FUN_10290b60 | 881 | 1 | 2 | — | 1d/0v/0c | `+0x6248`, `+0x6258` | `+0x14bc`, `+0x5b84`, `+0x6248`, `+0x6258`, `+0x6264`, `+0x6278`, +2 more | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextNormalThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:118, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:133, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:6, +1 more | docs/vtmb/npc-ai/lifecycle.md:144, docs/vtmb/npc-ai/senses.md:355 |  |
-| `0x10290fc0` | FUN_10290fc0 | 482 | 1 | 0 | — | 1d/0v/0c | `+0x624c`, `+0x625c` | `+0x624c`, `+0x625c` | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextMoveThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:196, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:68, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:6 | docs/vtmb/npc-ai/lifecycle.md:144 |  |
-| `0x10291230` | FUN_10291230 | 783 | 1 | 2 | — | 1d/0v/0c | `+0x6250`, `+0x6260` | `+0x14bc`, `+0x5b84`, `+0x6250`, `+0x6260`, `+0x6264`, `+0x6279`, +1 more | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextAIThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:150, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:7, Source/ElysiumUE/Public/ElysiumRng.h:45 | docs/vtmb/npc-ai/lifecycle.md:144, docs/vtmb/npc-ai/senses.md:356 |  |
+| `0x10290720` | CalcNextUpdateThink | 861 | 1 | 2 | — | 1d/0v/0c | `+0x6244`, `+0x6254` | `+0x6244`, `+0x6254`, `+0x6264`, `+0x6278`, `+0x6279`, `+0x628c` | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextUpdateThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:95, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:6, Source/ElysiumUE/Public/ElysiumRng.h:43 | docs/vtmb/npc-ai/lifecycle.md:143 |  |
+| `0x10290b60` | CalcNextNormalThink | 881 | 1 | 2 | — | 1d/0v/0c | `+0x6248`, `+0x6258` | `+0x14bc`, `+0x5b84`, `+0x6248`, `+0x6258`, `+0x6264`, `+0x6278`, +2 more | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextNormalThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:118, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:133, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:6, +1 more | docs/vtmb/npc-ai/lifecycle.md:144, docs/vtmb/npc-ai/senses.md:355 |  |
+| `0x10290fc0` | CalcNextMoveThink | 482 | 1 | 0 | — | 1d/0v/0c | `+0x624c`, `+0x625c` | `+0x624c`, `+0x625c` | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextMoveThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:196, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:68, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:6 | docs/vtmb/npc-ai/lifecycle.md:144 |  |
+| `0x10291230` | CalcNextAIThink | 783 | 1 | 2 | — | 1d/0v/0c | `+0x6250`, `+0x6260` | `+0x14bc`, `+0x5b84`, `+0x6250`, `+0x6260`, `+0x6264`, `+0x6279`, +1 more | `Unaccounted`, `CAI_BaseNPCTroika_CalcNextAIThink` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:150, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:7, Source/ElysiumUE/Public/ElysiumRng.h:45 | docs/vtmb/npc-ai/lifecycle.md:144, docs/vtmb/npc-ai/senses.md:356 |  |
 | `0x10291610` | CAI_BaseNPCTroika::SetPlayerLOS | 1043 | 1 | 9 | — | 1d/0v/0c | `+0x6278`, `+0x6279`, `+0x627c`, `+0x6280`, `+0x6284` | `+0x026c`, `+0x0270`, `+0x0364`, `+0x5b64`, `+0x5b84`, `+0x6264`, +5 more | `NULL ENTITY`, `Unaccounted`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:859, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:241, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:496, +9 more | docs/vtmb/facial_animation.md:1342, docs/vtmb/npc-ai/lifecycle.md:145, docs/vtmb/npc-ai/senses.md:96, +2 more |  |
 | `0x10292500` | CAI_BaseNPCTroika::NPCThinkDebugPre ‼ | 1782 | 1 | 12 | — | 1d/0v/0c | `+0x5b55` | `+0x026c`, `+0x0270`, `+0x0304`, `+0x0364`, `+0x0370`, `+0x0614`, +5 more | `NULL ENTITY`, `**UNKNOWN**`, +2 more | — | — |  |
 | `0x10292de0` | CAI_BaseNPCTroika::NPCThink | 2552 | 0 | 26 | `CAI_BaseNPCTroika#431`, `CGeneric_NPC#431`, `CNPCMaker#431`, +41 more | 8d/0v/0c | `+0x017c`, `+0x14bc`, `+0x5ba8`, `+0x6264`, `+0x6268`, `+0x626c`, +3 more | `+0x026c`, `+0x029c`, `+0x0364`, `+0x0374`, `+0x04e0`, `+0x06c0`, +22 more | `NULL ENTITY`, `Unaccounted`, +6 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:800, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:842, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:867, +6 more | docs/vtmb/feeding.md:445, docs/vtmb/npc-ai/authored-control.md:390, docs/vtmb/npc-ai/authored-control.md:453, +3 more |  |
@@ -2128,15 +2128,15 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10294db0` | CAI_BaseNPCTroika::FUN_10294db0 | 138 | 0 | 14 | `CAI_BaseNPCTroika#505`, `CGeneric_NPC#505`, `CNPCMaker#505`, +59 more | 0d/0v/0c | — | — | `Target_GiveUp` | — | — |  |
 | `0x10294e70` | CAI_BaseNPCTroika::FUN_10294e70 | 147 | 0 | 14 | `CAI_BaseNPCTroika#506`, `CGeneric_NPC#506`, `CNPCMaker#506`, +59 more | 0d/0v/0c | — | — | `Target_Reacquired` | — | — |  |
 | `0x10294f40` | CAI_BaseNPCTroika::FUN_10294f40 | 302 | 0 | 14 | `CAI_BaseNPCTroika#507`, `CGeneric_NPC#507`, `CNPCMaker#507`, +59 more | 0d/1v/2c | `+0x10ec` | `+0x0128` | `Float_Sound_Info`, `Float` | — | — |  |
-| `0x10295300` | CAI_BaseNPCTroika::FUN_10295300 | 125 | 0 | 1 | `CAI_BaseNPCTroika#563`, `CGeneric_NPC#563`, `CNPCMaker#563`, +9 more | 0d/1v/5c | — | `+0x1568` | — | — | — |  |
+| `0x10295300` | CAI_BaseNPCTroika::TranslateEnemyChasePosition | 125 | 0 | 1 | `CAI_BaseNPCTroika#563`, `CGeneric_NPC#563`, `CNPCMaker#563`, +9 more | 0d/1v/5c | — | `+0x1568` | — | — | — |  |
 | `0x102953a0` | CAI_BaseNPCTroika::FUN_102953a0 | 48 | 0 | 3 | `CAI_BaseNPCTroika#564`, `CGeneric_NPC#564`, `CNPCMaker#564`, +59 more | 0d/0v/1c | — | `+0x0804`, `+0x6078` | — | — | — |  |
 | `0x102953e0` | CAI_BaseNPCTroika::FUN_102953e0 | 89 | 0 | 2 | `CAI_BaseNPCTroika#592`, `CGeneric_NPC#592`, `CNPCMaker#592`, +60 more | 1d/1v/1c | — | `+0x607c` | — | — | docs/vtmb/npc-ai/programs.md:788 |  |
 | `0x10295460` | FUN_10295460 | 60 | 1 | 2 | — | 9d/0v/0c | — | — | — | — | — |  |
 | `0x102954b0` | CAI_BaseNPCTroika::Reload_Troika | 141 | 0 | 3 | `CAI_BaseNPCTroika#570`, `CGeneric_NPC#570`, `CNPCMaker#570`, +61 more | 0d/1v/2c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:247, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:333 | docs/vtmb/animation_and_movers.md:1593 |  |
-| `0x10295590` | CAI_BaseNPCTroika::PreTranslate_Troika | 295 | 0 | 15 | `CAI_BaseNPCTroika#375`, `CGeneric_NPC#375`, `CNPCMaker#375`, +14 more | 4d/0v/5c | — | `+0x0804`, `+0x08e4`, `+0x08e8`, `+0x5b84`, `+0x5d8c`, `+0x5ddc` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:32, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:275 | docs/vtmb/animation_and_movers.md:1489 |  |
-| `0x10295710` | CAI_BaseNPCTroika::ClassTranslate_Troika | 37 | 0 | 0 | `CAI_BaseNPCTroika#376`, `CGeneric_NPC#376`, `CNPCMaker#376`, +16 more | 2d/2v/8c | — | `+0x14bc` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:164, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:308 | docs/vtmb/animation_and_movers.md:1493 |  |
-| `0x10295750` | CAI_BaseNPCTroika::FUN_10295750 | 612 | 0 | 17 | `CAI_BaseNPCTroika#310`, `CGeneric_NPC#310`, `CNPCMaker#310`, +59 more | 2d/9v/14c | `+0x5cd8` | `+0x02a0`, `+0x0364`, `+0x03ec`, `+0x0874`, `+0x0fec`, `+0x5b84` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:893 | docs/vtmb/npc-ai/lifecycle.md:360 |  |
-| `0x10295a60` | CAI_BaseNPCTroika::FUN_10295a60 | 3 | 0 | 0 | `CAI_BaseNPCTroika#465`, `CGeneric_NPC#465`, `CNPCMaker#465`, +58 more | 3d/0v/2c | — | — | — | — | — |  |
+| `0x10295590` | CAI_BaseNPCTroika::NPC_EarlyTranslateActivity | 295 | 0 | 15 | `CAI_BaseNPCTroika#375`, `CGeneric_NPC#375`, `CNPCMaker#375`, +14 more | 4d/0v/5c | — | `+0x0804`, `+0x08e4`, `+0x08e8`, `+0x5b84`, `+0x5d8c`, `+0x5ddc` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:32, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:275 | docs/vtmb/animation_and_movers.md:1489 |  |
+| `0x10295710` | CAI_BaseNPCTroika::NPC_TranslateActivity | 37 | 0 | 0 | `CAI_BaseNPCTroika#376`, `CGeneric_NPC#376`, `CNPCMaker#376`, +16 more | 2d/2v/8c | — | `+0x14bc` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:164, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:308 | docs/vtmb/animation_and_movers.md:1493 |  |
+| `0x10295750` | CAI_BaseNPCTroika::SetActivity | 612 | 0 | 17 | `CAI_BaseNPCTroika#310`, `CGeneric_NPC#310`, `CNPCMaker#310`, +59 more | 2d/9v/14c | `+0x5cd8` | `+0x02a0`, `+0x0364`, `+0x03ec`, `+0x0874`, `+0x0fec`, `+0x5b84` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:893 | docs/vtmb/npc-ai/lifecycle.md:360 |  |
+| `0x10295a60` | CAI_BaseNPCTroika::OnChangeActivity | 3 | 0 | 0 | `CAI_BaseNPCTroika#465`, `CGeneric_NPC#465`, `CNPCMaker#465`, +58 more | 3d/0v/2c | — | — | — | — | — |  |
 | `0x10295a80` | FUN_10295a80 | 17 | 2 | 0 | — | 1d/0v/0c | — | `+0x098c` | — | — | docs/vtmb/animation_and_movers.md:1840 |  |
 | `0x10295ab0` | CAI_BaseNPCTroika::ClearHintNode | 273 | 1 | 1 | — | 9d/0v/0c +1 outside | `+0x14b8`, `+0x5ddc`, `+0x6404` | `+0x026c`, `+0x14b8`, `+0x5ddc`, `+0x65d0` | `NULL ENTITY`, `WARNING: %s called ClearHintNode but nev…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2797 | docs/vtmb/npc-ai/programs.md:816, docs/vtmb/npc-ai/schedule-kernel.md:331 |  |
 | `0x10295c20` | CAI_BaseNPCTroika::FValidateHintType | 544 | 0 | 11 | `CAI_BaseNPCTroika#566`, `CGeneric_NPC#566`, `CNPCMaker#566`, +48 more | 1d/1v/4c | — | `+0x026c`, `+0x62e4` | `NULL ENTITY`, `Hint group id %s usable %s`, +1 more | — | docs/vtmb/npc-ai/authored-control.md:427, docs/vtmb/npc-ai/programs.md:841 |  |
@@ -2151,40 +2151,40 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10297640` | CAI_BaseNPCTroika::FUN_10297640 | 593 | 0 | 5 | `CAI_BaseNPCTroika#572`, `CGeneric_NPC#572`, `CNPCMaker#572`, +61 more | 0d/9v/11c | `+0x5d8c` | `+0x5d44`, `+0x5d8c`, `+0x65f9` | — | — | — |  |
 | `0x10297940` | FUN_10297940 | 176 | 1 | 6 | — | 1d/0v/0c | `+0x0034` | `+0x001c`, `+0x0028` | — | — | — |  |
 | `0x10297a20` | FUN_10297a20 | 443 | 2 | 5 | — | 1d/0v/0c | `+0x63e4`?, `+0x63e8`? | `+0x5d44`? | — | — | — |  |
-| `0x10297ce0` | CAI_BaseNPCTroika::FUN_10297ce0 | 471 | 0 | 8 | `CAI_BaseNPCTroika#516`, `CNPCMaker#516`, `CNPCMaker_Fleshpile#516`, +56 more | 1d/0v/0c | — | — | `debug_slow_walk_yaw_speed`, `debug_slow_idle_yaw_speed` | — | — |  |
+| `0x10297ce0` | CAI_BaseNPCTroika::MaxYawSpeed | 471 | 0 | 8 | `CAI_BaseNPCTroika#516`, `CNPCMaker#516`, `CNPCMaker_Fleshpile#516`, +56 more | 1d/0v/0c | — | — | `debug_slow_walk_yaw_speed`, `debug_slow_idle_yaw_speed` | — | — |  |
 | `0x10298070` | CAI_BaseNPCTroika::UpdateCharacter | 574 | 0 | 24 | `CAI_BaseNPCTroika#312`, `CGeneric_NPC#312`, `CNPCMaker#312`, +61 more | 0d/1v/1c | `+0x6497` | `+0x0004`, `+0x026c`, `+0x0740`, `+0x6496`, `+0x6497` | `NULL ENTITY`, `CAI_BaseNPCTroika::UpdateCharacter` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1008 | docs/vtmb/npc-ai/lifecycle.md:145, docs/vtmb/npc-ai/lifecycle.md:513 |  |
 | `0x102984a0` | CAI_BaseNPCTroika::FUN_102984a0 | 674 | 0 | 15 | `CAI_BaseNPCTroika#531`, `CGeneric_NPC#531`, `CNPCMaker#531`, +61 more | 0d/0v/0c | `+0x5d30`, `+0x644c`, `+0x6450` | `+0x0364`, `+0x0740`, `+0x0804`, `+0x5bb0`, `+0x5d24`, `+0x5d34`, +2 more | `⏎⏎**WARNING**⏎No door given to OnUpcomin…` | — | — |  |
 | `0x10298800` | FUN_10298800 | 36 | 2 | 2 | — | 1d/0v/0c | `+0x1a40`?, `+0x644c`? | `+0x5d34`? | — | — | — |  |
 | `0x10298840` | FUN_10298840 | 147 | 1 | 6 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x10298910` | FUN_10298910 | 159 | 1 | 5 | — | 2d/0v/0c | `+0x62dc` | `+0x62dc` | — | — | — |  |
 | `0x102989e0` | FUN_102989e0 | 184 | 1 | 5 | — | 2d/0v/0c | `+0x62e4` | `+0x62e4` | — | — | — |  |
-| `0x10298ad0` | CAI_BaseNPCTroika::FUN_10298ad0 | 413 | 0 | 14 | `CAI_BaseNPCTroika#104`, `CNPC_ProneDialog#104`, `CNPC_VAnimal#104`, +34 more | 20d/1v/11c | `+0x64e8` | `+0x0024`, `+0x0128`, `+0x0350`, `+0x0980`, `+0x1a98` | `item_w_unarmed`, `sound/character/%s`, +2 more | — | — |  |
-| `0x10298ce0` | CAI_BaseNPCTroika::FUN_10298ce0 | 50 | 0 | 14 | `CAI_BaseNPCTroika#105`, `CGeneric_NPC#105`, `CNPCMaker#105`, +59 more | 2d/7v/14c +1 outside | `+0x64e8` | — | — | — | — |  |
-| `0x10298d30` | CAI_BaseNPCTroika::FUN_10298d30 | 1336 | 0 | 24 | `CAI_BaseNPCTroika#103`, `CNPC_VBaseBoss#103`, `CNPC_VNewscaster#103`, +1 more | 9d/0v/0c | `+0x1570`, `+0x1574`, `+0x62e8`, `+0x62e9`, `+0x62ec`, `+0x6348`, +10 more | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0270`, +22 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +7 more | — | docs/vtmb/npc-ai/authored-control.md:406, docs/vtmb/npc-ai/lifecycle.md:75, docs/vtmb/npc-ai/senses.md:57 |  |
-| `0x102993c0` | CAI_BaseNPCTroika::FUN_102993c0 | 656 | 0 | 16 | `CAI_BaseNPCTroika#126`, `CGeneric_NPC#126`, `CNPCMaker#126`, +58 more | 3d/0v/0c | — | `+0x607c`, `+0x6084`, `+0x60b0`, `+0x60dc`, `+0x6108`, `+0x6134`, +15 more | — | — | docs/vtmb/npc-ai/senses.md:257, docs/vtmb/npc-ai/senses.md:393, docs/vtmb/savegame_format.md:655 |  |
-| `0x10299700` | CAI_BaseNPCTroika::FUN_10299700 | 344 | 0 | 10 | `CAI_BaseNPCTroika#127`, `CGeneric_NPC#127`, `CNPCMaker#127`, +50 more | 4d/0v/0c | — | `+0x607c`, `+0x6084`, `+0x60b0`, `+0x60dc`, `+0x6108`, `+0x6134`, +16 more | — | — | docs/vtmb/npc-ai/senses.md:257, docs/vtmb/npc-ai/senses.md:393 |  |
-| `0x102998c0` | CAI_BaseNPCTroika::FUN_102998c0 | 346 | 0 | 22 | `CAI_BaseNPCTroika#130`, `CGeneric_NPC#130`, `CNPCMaker#130`, +56 more | 5d/0v/0c | `+0x017c`, `+0x62e9`, `+0x62ec`, `+0x630c`, `+0x6440`, `+0x6444`, +1 more | `+0x0944`, `+0x5d34`, `+0x6310`, `+0x6314`, `+0x6478`, `+0x6480`, +3 more | — | — | docs/vtmb/npc-ai/lifecycle.md:193, docs/vtmb/savegame_format.md:599 |  |
+| `0x10298ad0` | CAI_BaseNPCTroika::Precache | 413 | 0 | 14 | `CAI_BaseNPCTroika#104`, `CNPC_ProneDialog#104`, `CNPC_VAnimal#104`, +34 more | 20d/1v/11c | `+0x64e8` | `+0x0024`, `+0x0128`, `+0x0350`, `+0x0980`, `+0x1a98` | `item_w_unarmed`, `sound/character/%s`, +2 more | — | — |  |
+| `0x10298ce0` | CAI_BaseNPCTroika::SetModel | 50 | 0 | 14 | `CAI_BaseNPCTroika#105`, `CGeneric_NPC#105`, `CNPCMaker#105`, +59 more | 2d/7v/14c +1 outside | `+0x64e8` | — | — | — | — |  |
+| `0x10298d30` | CAI_BaseNPCTroika::Spawn | 1336 | 0 | 24 | `CAI_BaseNPCTroika#103`, `CNPC_VBaseBoss#103`, `CNPC_VNewscaster#103`, +1 more | 9d/0v/0c | `+0x1570`, `+0x1574`, `+0x62e8`, `+0x62e9`, `+0x62ec`, `+0x6348`, +10 more | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0270`, +22 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +7 more | — | docs/vtmb/npc-ai/authored-control.md:406, docs/vtmb/npc-ai/lifecycle.md:75, docs/vtmb/npc-ai/senses.md:57 |  |
+| `0x102993c0` | CAI_BaseNPCTroika::Save | 656 | 0 | 16 | `CAI_BaseNPCTroika#126`, `CGeneric_NPC#126`, `CNPCMaker#126`, +58 more | 3d/0v/0c | — | `+0x607c`, `+0x6084`, `+0x60b0`, `+0x60dc`, `+0x6108`, `+0x6134`, +15 more | — | — | docs/vtmb/npc-ai/senses.md:257, docs/vtmb/npc-ai/senses.md:393, docs/vtmb/savegame_format.md:655 |  |
+| `0x10299700` | CAI_BaseNPCTroika::Restore | 344 | 0 | 10 | `CAI_BaseNPCTroika#127`, `CGeneric_NPC#127`, `CNPCMaker#127`, +50 more | 4d/0v/0c | — | `+0x607c`, `+0x6084`, `+0x60b0`, `+0x60dc`, `+0x6108`, `+0x6134`, +16 more | — | — | docs/vtmb/npc-ai/senses.md:257, docs/vtmb/npc-ai/senses.md:393 |  |
+| `0x102998c0` | CAI_BaseNPCTroika::OnRestore | 346 | 0 | 22 | `CAI_BaseNPCTroika#130`, `CGeneric_NPC#130`, `CNPCMaker#130`, +56 more | 5d/0v/0c | `+0x017c`, `+0x62e9`, `+0x62ec`, `+0x630c`, `+0x6440`, `+0x6444`, +1 more | `+0x0944`, `+0x5d34`, `+0x6310`, `+0x6314`, `+0x6478`, `+0x6480`, +3 more | — | — | docs/vtmb/npc-ai/lifecycle.md:193, docs/vtmb/savegame_format.md:599 |  |
 | `0x10299a80` | FUN_10299a80 | 372 | 1 | 1 | — | 2d/0v/0c | — | `+0x0584` | `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…`, `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…` | — | — |  |
-| `0x10299d80` | CAI_BaseNPCTroika::FUN_10299d80 | 6 | 0 | 0 | `CAI_BaseNPCTroika#138`, `CNPCMaker#138`, `CNPCMaker_Fleshpile#138`, +5 more | 0d/1v/1c | — | — | — | — | — |  |
-| `0x10299da0` | CAI_BaseNPCTroika::FUN_10299da0 | 541 | 0 | 14 | `CAI_BaseNPCTroika#404`, `CGeneric_NPC#404`, `CNPCMaker#404`, +53 more | 5d/9v/22c | — | `+0x02a0`, `+0x0650`, `+0x628c`, `+0x647c` | — | Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:109 | docs/vtmb/feeding.md:411, docs/vtmb/npc-ai/social.md:50 |  |
-| `0x1029a050` | CAI_BaseNPCTroika::FUN_1029a050 | 8 | 0 | 2 | `CAI_BaseNPCTroika#337`, `CGeneric_NPC#337`, `CNPCMaker#337`, +47 more | 5d/0v/1c | — | — | — | — | — |  |
+| `0x10299d80` | CAI_BaseNPCTroika::Classify | 6 | 0 | 0 | `CAI_BaseNPCTroika#138`, `CNPCMaker#138`, `CNPCMaker_Fleshpile#138`, +5 more | 0d/1v/1c | — | — | — | — | — |  |
+| `0x10299da0` | CAI_BaseNPCTroika::IRelationType | 541 | 0 | 14 | `CAI_BaseNPCTroika#404`, `CGeneric_NPC#404`, `CNPCMaker#404`, +53 more | 5d/9v/22c | — | `+0x02a0`, `+0x0650`, `+0x628c`, `+0x647c` | — | Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:109 | docs/vtmb/feeding.md:411, docs/vtmb/npc-ai/social.md:50 |  |
+| `0x1029a050` | CAI_BaseNPCTroika::GetUsedHullBits | 8 | 0 | 2 | `CAI_BaseNPCTroika#337`, `CGeneric_NPC#337`, `CNPCMaker#337`, +47 more | 5d/0v/1c | — | — | — | — | — |  |
 | `0x1029a070` | CAI_BaseNPCTroika::FUN_1029a070 | 48 | 0 | 0 | `CAI_BaseNPCTroika#593`, `CGeneric_NPC#593`, `CNPCMaker#593`, +60 more | 1d/2v/2c | `+0x655c`, `+0x6560`, `+0x6564`, `+0x6568`, `+0x656c` | — | — | — | — |  |
-| `0x1029a0b0` | CAI_BaseNPCTroika::FUN_1029a0b0 | 1632 | 0 | 22 | `CAI_BaseNPCTroika#420`, `CGeneric_NPC#420`, `CNPCMaker#420`, +23 more | 19d/2v/8c | `+0x019c`, `+0x01ec`, `+0x0210`, `+0x0e64`, `+0x0eb0`, `+0x0eb4`, +95 more | `+0x05fc`, `+0x0804`, `+0x0944`, `+0x10e4`, `+0x13bc`, `+0x13c0`, +10 more | `item_w_unarmed`, `Player %s`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3676, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:79, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.h:28, +5 more | docs/vtmb/game_runtime.md:958, docs/vtmb/npc-ai/conditions-and-states.md:172, docs/vtmb/npc-ai/conditions-and-states.md:412, +7 more |  |
+| `0x1029a0b0` | CAI_BaseNPCTroika::NPCInit | 1632 | 0 | 22 | `CAI_BaseNPCTroika#420`, `CGeneric_NPC#420`, `CNPCMaker#420`, +23 more | 19d/2v/8c | `+0x019c`, `+0x01ec`, `+0x0210`, `+0x0e64`, `+0x0eb0`, `+0x0eb4`, +95 more | `+0x05fc`, `+0x0804`, `+0x0944`, `+0x10e4`, `+0x13bc`, `+0x13c0`, +10 more | `item_w_unarmed`, `Player %s`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3676, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:79, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.h:28, +5 more | docs/vtmb/game_runtime.md:958, docs/vtmb/npc-ai/conditions-and-states.md:175, docs/vtmb/npc-ai/conditions-and-states.md:415, +7 more |  |
 | `0x1029a8b0` | CAI_BaseNPCTroika::FUN_1029a8b0 | 81 | 0 | 21 | `CAI_BaseNPCTroika#422`, `CGeneric_NPC#422`, `CNPCMaker#422`, +58 more | 1d/0v/0c | — | `+0x6478`, `+0x6480` | — | — | docs/vtmb/npc-ai/lifecycle.md:87 |  |
-| `0x1029a930` | FUN_1029a930 | 167 | 1 | 8 | — | 1d/0v/0c | `+0x5d88`, `+0x5da4` | `+0x5bb0`, `+0x5d88`, `+0x5da4` | — | — | docs/vtmb/npc-ai/social.md:449 |  |
-| `0x1029aa10` | CAI_BaseNPCTroika::FUN_1029aa10 | 735 | 0 | 10 | `CAI_BaseNPCTroika#585`, `CGeneric_NPC#585`, `CNPCMaker#585`, +61 more | 0d/0v/1c +1 outside | `+0x63b0`, `+0x63b4`, `+0x63bc`, `+0x65dc`, `+0x65f5`, `+0x65f6` | `+0x63b0` | `NOALERTSTATE`, `IGNOREATTACK`, +15 more | — | docs/vtmb/npc-ai/authored-control.md:425 |  |
-| `0x1029adb0` | CAI_BaseNPCTroika::FUN_1029adb0 | 410 | 0 | 10 | `CAI_BaseNPCTroika#448`, `CGeneric_NPC#448`, `CNPCMaker#448`, +50 more | 9d/20v/43c | `+0x14b8`, `+0x14bc`, `+0x5d8c`, `+0x6244`, `+0x6248`, `+0x624c`, +10 more | `+0x003c`, `+0x14b8`, `+0x14bc`, `+0x5d44`, `+0x5d8c`, `+0x6240`, +2 more | `Leaving interesting place (TaskFail)` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2741, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2750, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2770, +3 more | docs/vtmb/npc-ai/conditions-and-states.md:412, docs/vtmb/npc-ai/lifecycle.md:161, docs/vtmb/npc-ai/programs.md:827, +3 more |  |
-| `0x1029afc0` | CAI_BaseNPCTroika::FUN_1029afc0 | 351 | 0 | 1 | `CAI_BaseNPCTroika#68`, `CGeneric_NPC#68`, `CNPCMaker#68`, +58 more | 3d/0v/0c | — | `+0x14b8`, `+0x1538`, `+0x153c`, `+0x5ddc`, `+0x63da`, `+0x643c` | — | — | — |  |
-| `0x1029b180` | CAI_BaseNPCTroika::FUN_1029b180 | 206 | 0 | 1 | `CAI_BaseNPCTroika#69`, `CGeneric_NPC#69`, `CNPCMaker#69`, +55 more | 6d/0v/0c | — | `+0x14b8`, `+0x63da`, `+0x643c`, `+0x65f7` | — | — | — |  |
-| `0x1029b290` | CAI_BaseNPCTroika::FUN_1029b290 | 1771 | 0 | 25 | `CAI_BaseNPCTroika#259`, `CGeneric_NPC#259`, `CNPCMaker#259`, +49 more | 10d/0v/0c | — | `+0x0240`, `+0x0378`, `+0x05f8`, `+0x05fc`, `+0x064c`, `+0x06f0`, +6 more | `%s %f %f %f`, `female`, +6 more | — | docs/vtmb/animation_and_movers.md:2182 |  |
+| `0x1029a930` | CAI_BaseNPCTroika::SetSquad | 167 | 1 | 8 | — | 1d/0v/0c | `+0x5d88`, `+0x5da4` | `+0x5bb0`, `+0x5d88`, `+0x5da4` | — | — | docs/vtmb/npc-ai/social.md:449 |  |
+| `0x1029aa10` | CAI_BaseNPCTroika::ProcessTweakParam | 735 | 0 | 10 | `CAI_BaseNPCTroika#585`, `CGeneric_NPC#585`, `CNPCMaker#585`, +61 more | 0d/0v/1c +1 outside | `+0x63b0`, `+0x63b4`, `+0x63bc`, `+0x65dc`, `+0x65f5`, `+0x65f6` | `+0x63b0` | `NOALERTSTATE`, `IGNOREATTACK`, +15 more | — | docs/vtmb/npc-ai/authored-control.md:425 |  |
+| `0x1029adb0` | CAI_BaseNPCTroika::TaskFail | 410 | 0 | 10 | `CAI_BaseNPCTroika#448`, `CGeneric_NPC#448`, `CNPCMaker#448`, +50 more | 9d/20v/43c | `+0x14b8`, `+0x14bc`, `+0x5d8c`, `+0x6244`, `+0x6248`, `+0x624c`, +10 more | `+0x003c`, `+0x14b8`, `+0x14bc`, `+0x5d44`, `+0x5d8c`, `+0x6240`, +2 more | `Leaving interesting place (TaskFail)` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2741, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2750, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2770, +3 more | docs/vtmb/npc-ai/conditions-and-states.md:415, docs/vtmb/npc-ai/lifecycle.md:161, docs/vtmb/npc-ai/programs.md:827, +3 more |  |
+| `0x1029afc0` | CAI_BaseNPCTroika::ShouldIgnoreCollision | 351 | 0 | 1 | `CAI_BaseNPCTroika#68`, `CGeneric_NPC#68`, `CNPCMaker#68`, +58 more | 3d/0v/0c | — | `+0x14b8`, `+0x1538`, `+0x153c`, `+0x5ddc`, `+0x63da`, `+0x643c` | — | — | — |  |
+| `0x1029b180` | CAI_BaseNPCTroika::NavIgnoreCollision | 206 | 0 | 1 | `CAI_BaseNPCTroika#69`, `CGeneric_NPC#69`, `CNPCMaker#69`, +55 more | 6d/0v/0c | — | `+0x14b8`, `+0x63da`, `+0x643c`, `+0x65f7` | — | — | — |  |
+| `0x1029b290` | CAI_BaseNPCTroika::HandleAnimEvent | 1771 | 0 | 25 | `CAI_BaseNPCTroika#259`, `CGeneric_NPC#259`, `CNPCMaker#259`, +49 more | 10d/0v/0c | — | `+0x0240`, `+0x0378`, `+0x05f8`, `+0x05fc`, `+0x064c`, `+0x06f0`, +6 more | `%s %f %f %f`, `female`, +6 more | — | docs/vtmb/animation_and_movers.md:2182 |  |
 | `0x1029bd40` | FUN_1029bd40 | 571 | 1 | 11 | — | 1d/0v/0c | — | `+0x0364`? | — | — | docs/vtmb/npc-ai/lifecycle.md:146 |  |
-| `0x1029c010` | CAI_BaseNPCTroika::FUN_1029c010 | 925 | 0 | 7 | `CAI_BaseNPCTroika#76`, `CGeneric_NPC#76`, `CNPCMaker#76`, +55 more | 0d/0v/0c | — | `+0x0128`, `+0x06f0`, `+0x0748`, `+0x0e64`, `+0x10b4`, `+0x10bc`, +4 more | `Talk Time Remaining: %.2f`, `Qued Dialog: %s`, +11 more | — | — |  |
+| `0x1029c010` | CAI_BaseNPCTroika::DrawDebugStatOverlays | 925 | 0 | 7 | `CAI_BaseNPCTroika#76`, `CGeneric_NPC#76`, `CNPCMaker#76`, +55 more | 0d/0v/0c | — | `+0x0128`, `+0x06f0`, `+0x0748`, `+0x0e64`, `+0x10b4`, `+0x10bc`, +4 more | `Talk Time Remaining: %.2f`, `Qued Dialog: %s`, +11 more | — | — |  |
 | `0x1029c4a0` | FUN_1029c4a0 ‼ | 964 | 1 | 8 | — | 1d/0v/0c | — | `+0x0304`, `+0x0364`, `+0x05d0`, `+0x05d4`, `+0x0928` | — | — | docs/vtmb/npc-ai/programs.md:858 |  |
 | `0x1029c970` | FUN_1029c970 | 83 | 1 | 0 | — | 2d/0v/0c | — | `+0x5bc5`?, `+0x5cc0`?, `+0x5cdc`?, `+0x63b8`?, `+0x6604`? | — | — | — |  |
 | `0x1029c9f0` | FUN_1029c9f0 | 42 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | docs/vtmb/stealth.md:713 |  |
 | `0x1029ca30` | FUN_1029ca30 | 13 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | — |  |
-| `0x1029ca50` | CAI_BaseNPCTroika::FUN_1029ca50 | 2129 | 0 | 15 | `CAI_BaseNPCTroika#123`, `CGeneric_NPC#123`, `CNPC_ProneDialog#123`, +56 more | 2d/0v/0c | — | `+0x0050`, `+0x0054`, `+0x0058`, `+0x0224`, `+0x0270`, `+0x029c`, +13 more | `Bip01` | — | — |  |
-| `0x1029d4e0` | CAI_BaseNPCTroika::FUN_1029d4e0 | 3754 | 0 | 15 | `CAI_BaseNPCTroika#124`, `CGeneric_NPC#124`, `CNPCMaker#124`, +57 more | 4d/0v/0c | — | `+0x0001`, `+0x0224`, `+0x02e0`, `+0x0364`, `+0x036c`, `+0x0654`, +20 more | `aim_pitch`, `aim_yaw`, +23 more | — | docs/vtmb/animation_and_movers.md:582 |  |
+| `0x1029ca50` | CAI_BaseNPCTroika::DrawDebugGeometryOverlays | 2129 | 0 | 15 | `CAI_BaseNPCTroika#123`, `CGeneric_NPC#123`, `CNPC_ProneDialog#123`, +56 more | 2d/0v/0c | — | `+0x0050`, `+0x0054`, `+0x0058`, `+0x0224`, `+0x0270`, `+0x029c`, +13 more | `Bip01` | — | — |  |
+| `0x1029d4e0` | CAI_BaseNPCTroika::DrawDebugTextOverlays | 3754 | 0 | 15 | `CAI_BaseNPCTroika#124`, `CGeneric_NPC#124`, `CNPCMaker#124`, +57 more | 4d/0v/0c | — | `+0x0001`, `+0x0224`, `+0x02e0`, `+0x0364`, `+0x036c`, `+0x0654`, +20 more | `aim_pitch`, `aim_yaw`, +23 more | — | docs/vtmb/animation_and_movers.md:582 |  |
 | `0x1029e750` | CAI_BaseNPCTroika::FUN_1029e750 | 156 | 0 | 15 | `CAI_BaseNPCTroika#359`, `CGeneric_NPC#359`, `CNPCMaker#359`, +59 more | 0d/0v/0c | — | `+0x0650`, `+0x146c`, `+0x14bc`, `+0x5cc0` | — | — | — |  |
 | `0x1029f2e0` | FUN_1029f2e0 | 7 | 1 | 0 | — | 2d/0v/0c +2 outside | — | `+0x6080`? | — | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:540, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:28 | — |  |
 | `0x1029f340` | FUN_1029f340 | 26 | 1 | 9 | — | 2d/0v/0c | — | — | — | — | — |  |
@@ -2199,21 +2199,21 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1029f800` | CAI_BaseNPCTroika::FUN_1029f800 | 50 | 0 | 3 | `CAI_BaseNPCTroika#21`, `CGeneric_NPC#21`, `CNPCMaker#21`, +60 more | 0d/0v/0c | `+0x6064` | `+0x6064` | — | — | — |  |
 | `0x1029f850` | CAI_BaseNPCTroika::FUN_1029f850 | 37 | 0 | 3 | `CAI_BaseNPCTroika#22`, `CGeneric_NPC#22`, `CNPCMaker#22`, +60 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1029f890` | CAI_BaseNPCTroika::FUN_1029f890 | 37 | 0 | 3 | `CAI_BaseNPCTroika#23`, `CGeneric_NPC#23`, `CNPCMaker#23`, +60 more | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1029f8d0` | CAI_BaseNPCTroika::FUN_1029f8d0 | 14 | 0 | 1 | `CAI_BaseNPCTroika#24`, `CGeneric_NPC#24`, `CNPCMaker#24`, +57 more | 2d/0v/0c | — | `+0x6028` | — | — | — |  |
+| `0x1029f8d0` | CAI_BaseNPCTroika::OnVictimHitByMe | 14 | 0 | 1 | `CAI_BaseNPCTroika#24`, `CGeneric_NPC#24`, `CNPCMaker#24`, +57 more | 2d/0v/0c | — | `+0x6028` | — | — | — |  |
 | `0x1029f8f0` | CAI_BaseNPCTroika::FUN_1029f8f0 | 50 | 0 | 3 | `CAI_BaseNPCTroika#27`, `CGeneric_NPC#27`, `CNPCMaker#27`, +60 more | 1d/0v/0c | — | `+0x0960` | — | — | — |  |
-| `0x1029f940` | CAI_BaseNPCTroika::FUN_1029f940 | 105 | 0 | 2 | `CAI_BaseNPCTroika#590`, `CGeneric_NPC#590`, `CNPCMaker#590`, +58 more | 1d/1v/1c | — | `+0x0fec` | — | — | — |  |
+| `0x1029f940` | CAI_BaseNPCTroika::OkToInterruptForMelee | 105 | 0 | 2 | `CAI_BaseNPCTroika#590`, `CGeneric_NPC#590`, `CNPCMaker#590`, +58 more | 1d/1v/1c | — | `+0x0fec` | — | — | — |  |
 | `0x1029fa50` | CAI_BaseNPCTroika::FUN_1029fa50 | 217 | 0 | 20 | `CAI_BaseNPCTroika#316`, `CGeneric_NPC#316`, `CNPCMaker#316`, +58 more | 0d/0v/0c | `+0x1b30`, `+0x1b34` | `+0x0364`, `+0x0510`, `+0x0514`, `+0x0938` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
 | `0x1029fb70` | CAI_BaseNPCTroika::FUN_1029fb70 | 68 | 0 | 2 | `CAI_BaseNPCTroika#317`, `CGeneric_NPC#317`, `CNPCMaker#317`, +59 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1029fbe0` | CAI_BaseNPCTroika::FUN_1029fbe0 | 205 | 0 | 14 | `CAI_BaseNPCTroika#330`, `CGeneric_NPC#330`, `CNPCMaker#330`, +58 more | 0d/0v/0c | — | `+0x0364` | — | — | — |  |
-| `0x1029fcf0` | CAI_BaseNPCTroika::FUN_1029fcf0 | 137 | 0 | 20 | `CAI_BaseNPCTroika#318`, `CGeneric_NPC#318`, `CNPCMaker#318`, +58 more | 0d/0v/0c | `+0x1564`, `+0x1b30`, `+0x1b34` | — | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
-| `0x1029fdb0` | CAI_BaseNPCTroika::FUN_1029fdb0 | 94 | 0 | 5 | `CAI_BaseNPCTroika#319`, `CGeneric_NPC#319`, `CNPCMaker#319`, +58 more | 0d/0v/0c | `+0x1564` | — | — | — | — |  |
+| `0x1029fcf0` | CAI_BaseNPCTroika::PlayerDefenderBlockReaction | 137 | 0 | 20 | `CAI_BaseNPCTroika#318`, `CGeneric_NPC#318`, `CNPCMaker#318`, +58 more | 0d/0v/0c | `+0x1564`, `+0x1b30`, `+0x1b34` | — | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
+| `0x1029fdb0` | CAI_BaseNPCTroika::PlayerAttackerBlockedReaction | 94 | 0 | 5 | `CAI_BaseNPCTroika#319`, `CGeneric_NPC#319`, `CNPCMaker#319`, +58 more | 0d/0v/0c | `+0x1564` | — | — | — | — |  |
 | `0x1029fec0` | CAI_BaseNPCTroika::FUN_1029fec0 | 81 | 0 | 14 | `CAI_BaseNPCTroika#326`, `CGeneric_NPC#326`, `CNPCMaker#326`, +61 more | 0d/0v/0c | — | `+0x6064` | — | — | — |  |
-| `0x102a01b0` | CAI_BaseNPCTroika::FUN_102a01b0 | 170 | 0 | 20 | `CAI_BaseNPCTroika#320`, `CGeneric_NPC#320`, `CNPCMaker#320`, +56 more | 3d/0v/3c | `+0x1b30`, `+0x1b34`, `+0x6068` | `+0x0998` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/combat-and-damage.md:1246, docs/vtmb/npc-ai/lifecycle.md:228 |  |
+| `0x102a01b0` | CAI_BaseNPCTroika::PlayerKnockbackReaction | 170 | 0 | 20 | `CAI_BaseNPCTroika#320`, `CGeneric_NPC#320`, `CNPCMaker#320`, +56 more | 3d/0v/3c | `+0x1b30`, `+0x1b34`, `+0x6068` | `+0x0998` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/combat-and-damage.md:1246, docs/vtmb/npc-ai/lifecycle.md:228 |  |
 | `0x102a0290` | FUN_102a0290 | 400 | 1 | 12 | — | 1d/0v/0c | `+0x6004`, `+0x6008`, `+0x600c` | `+0x0364`, `+0x036c`, `+0x6004`, `+0x6008`, `+0x600c` | — | — | — |  |
 | `0x102a0490` | FUN_102a0490 | 770 | 1 | 4 | — | 1d/0v/0c | — | `+0x0364` | — | — | — |  |
 | `0x102a0870` | FUN_102a0870 | 128 | 1 | 10 | — | 1d/0v/0c | — | `+0x0500`, `+0x0fec` | — | — | — |  |
 | `0x102a0910` | CAI_BaseNPCTroika::FUN_102a0910 | 30 | 0 | 3 | `CAI_BaseNPCTroika#322`, `CGeneric_NPC#322`, `CNPCMaker#322`, +61 more | 0d/0v/0c | — | `+0x0960` | — | — | — |  |
-| `0x102a0940` | CAI_BaseNPCTroika::FUN_102a0940 | 455 | 0 | 21 | `CAI_BaseNPCTroika#435`, `CGeneric_NPC#435`, `CNPCMaker#435`, +57 more | 4d/0v/2c | `+0x14b8`, `+0x14bc`, `+0x1a40`, `+0x5d8c`, `+0x6300`, `+0x6320`, +7 more | `+0x003c`, `+0x0850`, `+0x14b8`, `+0x14bc`, `+0x5d24`, `+0x5d34`, +4 more | `Leaving interesting place (OnScheduleCha…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.h:132, Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:70, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:178, +3 more | docs/vtmb/npc-ai/authored-control.md:349, docs/vtmb/npc-ai/conditions-and-states.md:412, docs/vtmb/npc-ai/schedule-kernel.md:262, +2 more |  |
+| `0x102a0940` | CAI_BaseNPCTroika::OnScheduleChange | 455 | 0 | 21 | `CAI_BaseNPCTroika#435`, `CGeneric_NPC#435`, `CNPCMaker#435`, +57 more | 4d/0v/2c | `+0x14b8`, `+0x14bc`, `+0x1a40`, `+0x5d8c`, `+0x6300`, `+0x6320`, +7 more | `+0x003c`, `+0x0850`, `+0x14b8`, `+0x14bc`, `+0x5d24`, `+0x5d34`, +4 more | `Leaving interesting place (OnScheduleCha…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.h:132, Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:70, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:178, +3 more | docs/vtmb/npc-ai/authored-control.md:349, docs/vtmb/npc-ai/conditions-and-states.md:415, docs/vtmb/npc-ai/schedule-kernel.md:262, +2 more |  |
 | `0x102a0b90` | FUN_102a0b90 | 27 | 3 | 0 | — | 1d/0v/0c | `+0x14b8`, `+0x630c` | `+0x14b8` | — | — | — |  |
 | `0x102a0bc0` | FUN_102a0bc0 | 178 | 2 | 2 | — | 1d/0v/0c +1 outside | — | `+0x5d34` | — | — | — |  |
 | `0x102a0d20` | CAI_BaseNPCTroika::UpdatePedestrianInfo | 313 | 1 | 2 | — | 1d/0v/0c | `+0x14b8`, `+0x6318` | `+0x026c`, `+0x14b8`, `+0x5d34`, `+0x630c`, `+0x6318` | `NULL ENTITY`, `CAI_BaseNPCTroika::UpdatePedestrianInfo` | — | docs/vtmb/npc-ai/programs.md:163 |  |
@@ -2274,47 +2274,47 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102a9f00` | FUN_102a9f00 | 3 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102a9f20` | FUN_102a9f20 | 4 | 1 | 0 | — | 1d/0v/0c | — | `+0x0024`? | — | — | — |  |
 | `0x102a9f40` | FUN_102a9f40 | 572 | 1 | 9 | — | 1d/0v/0c | `+0x14b8`, `+0x5db4`, `+0x62e8`, `+0x6304`, `+0x63d4` | `+0x14b8`, `+0x5d44`, `+0x5f74` | `Can not find interest activity '%s' in t…`, `Can not find interest into activity '%s'…` | — | docs/vtmb/npc-ai/programs.md:198, docs/vtmb/npc-ai/programs.md:533 |  |
-| `0x102aa210` | FUN_102aa210 | 843 | 1 | 9 | — | 1d/0v/0c | `+0x14b8`, `+0x14bc`, `+0x5db4`, `+0x6304`, `+0x63d4` | `+0x03ec`, `+0x065c`, `+0x065d`, `+0x0fec`, `+0x14b8`, `+0x14bc`, +4 more | `Bip01`, `Can not find interest activity '%s' in t…`, +4 more | — | docs/vtmb/npc-ai/conditions-and-states.md:416, docs/vtmb/npc-ai/programs.md:535 |  |
+| `0x102aa210` | FUN_102aa210 | 843 | 1 | 9 | — | 1d/0v/0c | `+0x14b8`, `+0x14bc`, `+0x5db4`, `+0x6304`, `+0x63d4` | `+0x03ec`, `+0x065c`, `+0x065d`, `+0x0fec`, `+0x14b8`, `+0x14bc`, +4 more | `Bip01`, `Can not find interest activity '%s' in t…`, +4 more | — | docs/vtmb/npc-ai/conditions-and-states.md:419, docs/vtmb/npc-ai/programs.md:535 |  |
 | `0x102aa640` | FUN_102aa640 | 432 | 1 | 21 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48` | `+0x0700`, `+0x1568`, `+0x5d34` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `%s can't reach patrol point⏎` | — | docs/vtmb/npc-ai/programs.md:507 |  |
 | `0x102aa860` | FUN_102aa860 | 299 | 1 | 21 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48` | `+0x0700`, `+0x1568`, `+0x5d34` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/npc-ai/programs.md:514 |  |
 | `0x102aa9e0` | FUN_102aa9e0 | 95 | 1 | 3 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48` | `+0x0700` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/npc-ai/programs.md:517 |  |
 | `0x102aaa60` | FUN_102aaa60 | 204 | 1 | 6 | — | 1d/0v/0c | — | `+0x63fd`? | — | — | — |  |
 | `0x102aab70` | FUN_102aab70 | 294 | 1 | 5 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102aacf0` | CAI_BaseNPCTroika::RunTask | 6767 | 0 | 23 | `CAI_BaseNPCTroika#444`, `CGeneric_NPC#444`, `CNPCMaker#444`, +9 more | 7d/0v/2c | `+0x0178`, `+0x0200`, `+0x14b8`, `+0x1a40`, `+0x1b44`, `+0x1b48`, +12 more | `+0x0134`, `+0x0200`, `+0x0204`, `+0x0240`, `+0x0268`, `+0x0278`, +52 more | `Bip01 Spine2`, `Bip01`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2073, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2093, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:506, +7 more | docs/vtmb/animation_and_movers.md:1855, docs/vtmb/animation_and_movers.md:1857, docs/vtmb/animation_and_movers.md:1858, +28 more |  |
-| `0x102ad140` | CAI_BaseNPCTroika::FUN_102ad140 | 224 | 0 | 2 | `CAI_BaseNPCTroika#453`, `CGeneric_NPC#453`, `CNPCMaker#453`, +49 more | 3d/0v/1c | — | `+0x029c`, `+0x14b8`, `+0x14bc`, `+0x5b64`, `+0x5ddc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3191, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:129, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:256, +1 more | docs/vtmb/npc-ai/conditions-and-states.md:729, docs/vtmb/npc-ai/schedule-kernel.md:383 |  |
+| `0x102ad140` | CAI_BaseNPCTroika::BuildScheduleTestBits | 224 | 0 | 2 | `CAI_BaseNPCTroika#453`, `CGeneric_NPC#453`, `CNPCMaker#453`, +49 more | 3d/0v/1c | — | `+0x029c`, `+0x14b8`, `+0x14bc`, `+0x5b64`, `+0x5ddc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3191, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:129, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:256, +1 more | docs/vtmb/npc-ai/conditions-and-states.md:732, docs/vtmb/npc-ai/schedule-kernel.md:383 |  |
 | `0x102ad260` | FUN_102ad260 | 76 | 1 | 2 | — | 1d/0v/0c | `+0x14b8`?, `+0x1b3c`?, `+0x1b40`?, `+0x5cc4`? | `+0x14b8`?, `+0x5cc0`? | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
 | `0x102ad2d0` | FUN_102ad2d0 | 76 | 1 | 2 | — | 1d/0v/0c | `+0x14b8`?, `+0x1b3c`?, `+0x1b40`?, `+0x5cc4`? | `+0x14b8`?, `+0x5cc0`? | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
 | `0x102ad340` | CAI_BaseNPCTroika::FUN_102ad340 | 629 | 0 | 15 | `CAI_BaseNPCTroika#460`, `CGeneric_NPC#460`, `CNPCMaker#460`, +58 more | 1d/0v/0c | `+0x14b8`, `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4`, `+0x607c`, +2 more | `+0x0650`, `+0x14b8`, `+0x5cc0`, `+0x5cc4`, `+0x607c`, `+0x6364`, +3 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
-| `0x102ad660` | CAI_BaseNPCTroika::SelectIdealState | 1887 | 0 | 22 | `CAI_BaseNPCTroika#461`, `CGeneric_NPC#461`, `CNPCMaker#461`, +8 more | 4d/0v/1c | `+0x14b8`, `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x07bc`, `+0x14b8`, `+0x5b7c`, `+0x5cc0`, +2 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:632 | docs/vtmb/npc-ai/conditions-and-states.md:193, docs/vtmb/npc-ai/conditions-and-states.md:198, docs/vtmb/npc-ai/programs.md:702 |  |
-| `0x102ae140` | CAI_BaseNPCTroika::OnStateChange | 325 | 0 | 8 | `CAI_BaseNPCTroika#463`, `CGeneric_NPC#463`, `CNPCMaker#463`, +46 more | 5d/0v/1c | `+0x14b8`, `+0x5b80`, `+0x5d8c`, `+0x63fc`, `+0x6474`, `+0x6494` | `+0x029c`, `+0x0988`, `+0x14b8`, `+0x5d8c`, `+0x5fbc`, `+0x658c`, +2 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1423, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1589, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:434, +2 more | docs/vtmb/animation_and_movers.md:1568, docs/vtmb/npc-ai/conditions-and-states.md:175, docs/vtmb/npc-ai/rebuild.md:239 |  |
+| `0x102ad660` | CAI_BaseNPCTroika::SelectIdealState | 1887 | 0 | 22 | `CAI_BaseNPCTroika#461`, `CGeneric_NPC#461`, `CNPCMaker#461`, +8 more | 4d/0v/1c | `+0x14b8`, `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x07bc`, `+0x14b8`, `+0x5b7c`, `+0x5cc0`, +2 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:632 | docs/vtmb/npc-ai/conditions-and-states.md:196, docs/vtmb/npc-ai/conditions-and-states.md:201, docs/vtmb/npc-ai/programs.md:702 |  |
+| `0x102ae140` | CAI_BaseNPCTroika::OnStateChange | 325 | 0 | 8 | `CAI_BaseNPCTroika#463`, `CGeneric_NPC#463`, `CNPCMaker#463`, +46 more | 5d/0v/1c | `+0x14b8`, `+0x5b80`, `+0x5d8c`, `+0x63fc`, `+0x6474`, `+0x6494` | `+0x029c`, `+0x0988`, `+0x14b8`, `+0x5d8c`, `+0x5fbc`, `+0x658c`, +2 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1423, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1589, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:434, +2 more | docs/vtmb/animation_and_movers.md:1568, docs/vtmb/npc-ai/conditions-and-states.md:178, docs/vtmb/npc-ai/rebuild.md:239 |  |
 | `0x102ae310` | FUN_102ae310 ‼ | 304 | 1 | 1 | — | 3d/0v/0c | — | `+0x029c`?, `+0x0650`?, `+0x0740`? | — | — | — |  |
-| `0x102ae490` | FUN_102ae490 | 558 | 3 | 19 | — | 1d/0v/0c | `+0x14b8` | `+0x0278`, `+0x06cc`, `+0x14b8`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | `who is in an uninterruptable script '%s'…`, `who is dead or dying.⏎`, +5 more | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:439 | docs/vtmb/npc-ai/lifecycle.md:293, docs/vtmb/npc-ai/programs.md:488, docs/vtmb/npc-ai/schedule-kernel.md:261 |  |
-| `0x102ae750` | FUN_102ae750 | 30 | 1 | 19 | — | 28d/0v/0c +14 outside | — | — | — | — | docs/vtmb/npc-ai/lifecycle.md:256, docs/vtmb/npc-ai/programs.md:486, docs/vtmb/npc-ai/schedule-kernel.md:608 |  |
+| `0x102ae490` | ForceScheduleChange | 558 | 3 | 19 | — | 1d/0v/0c | `+0x14b8` | `+0x0278`, `+0x06cc`, `+0x14b8`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | `who is in an uninterruptable script '%s'…`, `who is dead or dying.⏎`, +5 more | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:439 | docs/vtmb/npc-ai/lifecycle.md:293, docs/vtmb/npc-ai/programs.md:488, docs/vtmb/npc-ai/schedule-kernel.md:261 |  |
+| `0x102ae750` | FUN_102ae750 | 30 | 1 | 19 | — | 28d/0v/0c +14 outside | — | — | — | — | docs/vtmb/npc-ai/lifecycle.md:256, docs/vtmb/npc-ai/programs.md:486, docs/vtmb/npc-ai/schedule-kernel.md:610 |  |
 | `0x102ae780` | FUN_102ae780 | 73 | 2 | 19 | — | 1d/0v/0c | — | `+0x0278`, `+0x5cc0`, `+0x5cc4` | — | — | docs/vtmb/npc-ai/programs.md:486 |  |
 | `0x102ae7f0` | FUN_102ae7f0 | 13 | 1 | 0 | — | 3d/0v/0c +1 outside | `+0x65c8` | — | — | — | — |  |
 | `0x102ae840` | FUN_102ae840 | 84 | 2 | 0 | — | 3d/0v/0c +1 outside | `+0x14bc`, `+0x1b28`, `+0x65cc` | `+0x0278`, `+0x14bc`, `+0x5cc0`, `+0x5cc4` | — | — | — |  |
-| `0x102ae920` | CAI_BaseNPCTroika::FUN_102ae920 | 2687 | 0 | 25 | `CAI_BaseNPCTroika#437`, `CGeneric_NPC#437`, `CNPCMaker#437`, +52 more | 2d/0v/0c | `+0x14b8`, `+0x14bc`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x636c`, +3 more | `+0x029c`, `+0x0940`, `+0x0950`, `+0x0954`, `+0x0fe8`, `+0x14b8`, +19 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:381 | docs/vtmb/npc-ai/authored-control.md:388, docs/vtmb/npc-ai/authored-control.md:392, docs/vtmb/npc-ai/authored-control.md:447, +14 more |  |
+| `0x102ae920` | CAI_BaseNPCTroika::PreSelectSchedule | 2687 | 0 | 25 | `CAI_BaseNPCTroika#437`, `CGeneric_NPC#437`, `CNPCMaker#437`, +52 more | 2d/0v/0c | `+0x14b8`, `+0x14bc`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x636c`, +3 more | `+0x029c`, `+0x0940`, `+0x0950`, `+0x0954`, `+0x0fe8`, `+0x14b8`, +19 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:381 | docs/vtmb/npc-ai/authored-control.md:388, docs/vtmb/npc-ai/authored-control.md:392, docs/vtmb/npc-ai/authored-control.md:447, +15 more |  |
 | `0x102af660` | CAI_BaseNPCTroika::SelectSchedule | 5520 | 0 | 25 | `CAI_BaseNPCTroika#438`, `CGeneric_NPC#438`, `CNPCMaker#438`, +5 more | 7d/0v/0c | `+0x14b8`, `+0x1b28`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, +10 more | `+0x02a0`, `+0x07b0`, `+0x07c8`, `+0x0950`, `+0x097c`, `+0x14b8`, +30 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `WARNING:  Patrol path for '%s' has no sc…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1376, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1447, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:42 | docs/vtmb/feeding.md:452, docs/vtmb/npc-ai/conditions-and-states.md:10, docs/vtmb/npc-ai/conditions-and-states.md:13, +8 more | yes |
-| `0x102b11c0` | FUN_102b11c0 | 97 | 1 | 0 | — | 2d/0v/0c | — | `+0x02a0`, `+0x14b8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2282, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2289, Source/ElysiumUE/Private/Tests/ElysiumScheduleTests.cpp:1095 | docs/vtmb/npc-ai/schedule-kernel.md:553 |  |
-| `0x102b12f0` | CAI_BaseNPCTroika::FUN_102b12f0 | 344 | 0 | 21 | `CAI_BaseNPCTroika#440`, `CGeneric_NPC#440`, `CNPCMaker#440`, +38 more | 20d/0v/2c | — | `+0x0494`, `+0x14bc`, `+0x5b84`, `+0x5ddc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2277, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:531, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:201, +2 more | docs/vtmb/npc-ai/programs.md:717, docs/vtmb/npc-ai/schedule-kernel.md:519, docs/vtmb/npc-ai/schedule-kernel.md:549, +1 more |  |
-| `0x102b15c0` | FUN_102b15c0 | 885 | 1 | 13 | — | 1d/0v/0c | — | `+0x0364`?, `+0x0928`?, `+0x14bb`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:406, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1117 | docs/vtmb/npc-ai/conditions-and-states.md:214, docs/vtmb/npc-ai/conditions-and-states.md:234 |  |
-| `0x102b1a20` | FUN_102b1a20 | 542 | 1 | 3 | — | 1d/0v/0c | — | `+0x0370`?, `+0x06fc`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:585, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:586, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:598, +3 more | docs/vtmb/npc-ai/conditions-and-states.md:222, docs/vtmb/npc-ai/conditions-and-states.md:335, docs/vtmb/npc-ai/conditions-and-states.md:339, +4 more |  |
-| `0x102b1cd0` | FUN_102b1cd0 | 1757 | 1 | 2 | — | 1d/0v/0c | — | `+0x029c`?, `+0x0324`?, `+0x0364`?, `+0x05ac`?, `+0x1842`?, `+0x184d`?, +4 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:589 | docs/vtmb/npc-ai/conditions-and-states.md:226, docs/vtmb/npc-ai/conditions-and-states.md:467, docs/vtmb/npc-ai/conditions-and-states.md:491, +1 more |  |
+| `0x102b11c0` | FUN_102b11c0 | 97 | 1 | 0 | — | 2d/0v/0c | — | `+0x02a0`, `+0x14b8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2282, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2289, Source/ElysiumUE/Private/Tests/ElysiumScheduleTests.cpp:1095 | docs/vtmb/npc-ai/schedule-kernel.md:555 |  |
+| `0x102b12f0` | CAI_BaseNPCTroika::TranslateSchedule | 344 | 0 | 21 | `CAI_BaseNPCTroika#440`, `CGeneric_NPC#440`, `CNPCMaker#440`, +38 more | 20d/0v/2c | — | `+0x0494`, `+0x14bc`, `+0x5b84`, `+0x5ddc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2277, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:531, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:201, +2 more | docs/vtmb/npc-ai/programs.md:717, docs/vtmb/npc-ai/schedule-kernel.md:519, docs/vtmb/npc-ai/schedule-kernel.md:551, +1 more |  |
+| `0x102b15c0` | FUN_102b15c0 | 885 | 1 | 13 | — | 1d/0v/0c | — | `+0x0364`?, `+0x0928`?, `+0x14bb`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:406, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1117 | docs/vtmb/npc-ai/conditions-and-states.md:217, docs/vtmb/npc-ai/conditions-and-states.md:237 |  |
+| `0x102b1a20` | FUN_102b1a20 | 542 | 1 | 3 | — | 1d/0v/0c | — | `+0x0370`?, `+0x06fc`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:585, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:586, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:598, +3 more | docs/vtmb/npc-ai/conditions-and-states.md:225, docs/vtmb/npc-ai/conditions-and-states.md:338, docs/vtmb/npc-ai/conditions-and-states.md:342, +4 more |  |
+| `0x102b1cd0` | FUN_102b1cd0 | 1757 | 1 | 2 | — | 1d/0v/0c | — | `+0x029c`?, `+0x0324`?, `+0x0364`?, `+0x05ac`?, `+0x1842`?, `+0x184d`?, +4 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:476, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:589 | docs/vtmb/npc-ai/conditions-and-states.md:229, docs/vtmb/npc-ai/conditions-and-states.md:470, docs/vtmb/npc-ai/conditions-and-states.md:494, +1 more |  |
 | `0x102b2570` | FUN_102b2570 | 350 | 1 | 2 | — | 1d/0v/0c | — | `+0x1488`?, `+0x1564`?, `+0x5b84`?, `+0x5d9c`?, `+0x606c`?, `+0x6078`? | — | — | — |  |
 | `0x102b2730` | FUN_102b2730 | 140 | 1 | 2 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/social.md:468 |  |
-| `0x102b27f0` | CAI_BaseNPCTroika::GatherConditions | 2133 | 0 | 24 | `CAI_BaseNPCTroika#433`, `CGeneric_NPC#433`, `CNPCMaker#433`, +40 more | 18d/0v/2c | `+0x5b80`, `+0x5d28`, `+0x65c4`, `+0x6600` | `+0x026c`, `+0x02a0`, `+0x0304`, `+0x0364`, `+0x0370`, `+0x0494`, +12 more | `NULL ENTITY`, `CAI_BaseNPCTroika::GatherConditions` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:414, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:475, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:52 | docs/vtmb/npc-ai/conditions-and-states.md:211, docs/vtmb/npc-ai/conditions-and-states.md:512 |  |
-| `0x102b3270` | FUN_102b3270 | 626 | 1 | 1 | — | 3d/0v/0c | — | `+0x02a0`, `+0x0364`, `+0x0650`, `+0x14b8`, `+0x60e0`, `+0x6338`, +3 more | `Hey FOO!!!  I don't recognize your inves…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:197, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:154, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:304, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:295, docs/vtmb/npc-ai/conditions-and-states.md:584, docs/vtmb/npc-ai/schedule-kernel.md:230, +1 more |  |
-| `0x102b35b0` | CAI_BaseNPCTroika::FUN_102b35b0 | 605 | 0 | 14 | `CAI_BaseNPCTroika#467`, `CGeneric_NPC#467`, `CNPCMaker#467`, +61 more | 0d/0v/0c | — | `+0x0310`, `+0x0770`, `+0x14b8`, `+0x5b84`, `+0x60ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:841, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:555 | docs/vtmb/footsteps.md:707, docs/vtmb/npc-ai/senses.md:78, docs/vtmb/npc-ai/senses.md:214 |  |
-| `0x102b38b0` | CAI_BaseNPCTroika::FUN_102b38b0 | 159 | 0 | 15 | `CAI_BaseNPCTroika#468`, `CGeneric_NPC#468`, `CNPCMaker#468`, +60 more | 0d/0v/1c | — | `+0x0650`, `+0x5b84`, `+0x60ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:636 | docs/vtmb/npc-ai/senses.md:46, docs/vtmb/npc-ai/senses.md:78 |  |
-| `0x102b39a0` | CAI_BaseNPCTroika::FUN_102b39a0 | 36 | 0 | 15 | `CAI_BaseNPCTroika#469`, `CGeneric_NPC#469`, `CNPCMaker#469`, +61 more | 0d/0v/0c | `+0x60a8` | `+0x60a8` | — | — | docs/vtmb/npc-ai/senses.md:116 |  |
-| `0x102b39e0` | CAI_BaseNPCTroika::FUN_102b39e0 | 740 | 0 | 9 | `CAI_BaseNPCTroika#470`, `CGeneric_NPC#470`, `CNPCMaker#470`, +61 more | 0d/0v/0c | `+0x6108`, `+0x610c`, `+0x6110`, `+0x6114`, `+0x6118`, `+0x611c`, +34 more | `+0x5ca8`, `+0x5cb4`, `+0x5cb6`, `+0x5cdc`, `+0x6128`, `+0x6154`, +6 more | — | — | docs/vtmb/npc-ai/senses.md:230 |  |
+| `0x102b27f0` | CAI_BaseNPCTroika::GatherConditions | 2133 | 0 | 24 | `CAI_BaseNPCTroika#433`, `CGeneric_NPC#433`, `CNPCMaker#433`, +40 more | 18d/0v/2c | `+0x5b80`, `+0x5d28`, `+0x65c4`, `+0x6600` | `+0x026c`, `+0x02a0`, `+0x0304`, `+0x0364`, `+0x0370`, `+0x0494`, +12 more | `NULL ENTITY`, `CAI_BaseNPCTroika::GatherConditions` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:414, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:475, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:52 | docs/vtmb/npc-ai/conditions-and-states.md:214, docs/vtmb/npc-ai/conditions-and-states.md:515 |  |
+| `0x102b3270` | ShouldInvestigate | 626 | 1 | 1 | — | 3d/0v/0c | — | `+0x02a0`, `+0x0364`, `+0x0650`, `+0x14b8`, `+0x60e0`, `+0x6338`, +3 more | `Hey FOO!!!  I don't recognize your inves…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:197, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:154, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:304, +2 more | docs/vtmb/npc-ai/conditions-and-states.md:298, docs/vtmb/npc-ai/conditions-and-states.md:587, docs/vtmb/npc-ai/schedule-kernel.md:230, +1 more |  |
+| `0x102b35b0` | CAI_BaseNPCTroika::QueryHearSound | 605 | 0 | 14 | `CAI_BaseNPCTroika#467`, `CGeneric_NPC#467`, `CNPCMaker#467`, +61 more | 0d/0v/0c | — | `+0x0310`, `+0x0770`, `+0x14b8`, `+0x5b84`, `+0x60ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:841, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:555 | docs/vtmb/footsteps.md:707, docs/vtmb/npc-ai/senses.md:78, docs/vtmb/npc-ai/senses.md:214 |  |
+| `0x102b38b0` | CAI_BaseNPCTroika::QuerySeeEntity | 159 | 0 | 15 | `CAI_BaseNPCTroika#468`, `CGeneric_NPC#468`, `CNPCMaker#468`, +60 more | 0d/0v/1c | — | `+0x0650`, `+0x5b84`, `+0x60ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:636 | docs/vtmb/npc-ai/senses.md:46, docs/vtmb/npc-ai/senses.md:78 |  |
+| `0x102b39a0` | CAI_BaseNPCTroika::OnLooked | 36 | 0 | 15 | `CAI_BaseNPCTroika#469`, `CGeneric_NPC#469`, `CNPCMaker#469`, +61 more | 0d/0v/0c | `+0x60a8` | `+0x60a8` | — | — | docs/vtmb/npc-ai/senses.md:116 |  |
+| `0x102b39e0` | CAI_BaseNPCTroika::OnListened | 740 | 0 | 9 | `CAI_BaseNPCTroika#470`, `CGeneric_NPC#470`, `CNPCMaker#470`, +61 more | 0d/0v/0c | `+0x6108`, `+0x610c`, `+0x6110`, `+0x6114`, `+0x6118`, `+0x611c`, +34 more | `+0x5ca8`, `+0x5cb4`, `+0x5cb6`, `+0x5cdc`, `+0x6128`, `+0x6154`, +6 more | — | — | docs/vtmb/npc-ai/senses.md:230 |  |
 | `0x102b3d90` | FUN_102b3d90 | 73 | 1 | 0 | — | 2d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +4 more | — | — | — | — |  |
-| `0x102b3e00` | CAI_BaseNPCTroika::FUN_102b3e00 | 485 | 0 | 13 | `CAI_BaseNPCTroika#472`, `CGeneric_NPC#472`, `CNPCMaker#472`, +59 more | 2d/0v/0c | `+0x14b8`, `+0x6088`, `+0x609c`, `+0x60a0`, `+0x60a4`, `+0x60a8` | `+0x14b8`, `+0x14bc`, `+0x5fa4`, `+0x6081`, `+0x6088`, `+0x608c`, +3 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:122, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:44, Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:1030 | docs/vtmb/npc-ai/conditions-and-states.md:275, docs/vtmb/npc-ai/senses.md:48, docs/vtmb/npc-ai/senses.md:132, +2 more |  |
+| `0x102b3e00` | CAI_BaseNPCTroika::FUN_102b3e00 | 485 | 0 | 13 | `CAI_BaseNPCTroika#472`, `CGeneric_NPC#472`, `CNPCMaker#472`, +59 more | 2d/0v/0c | `+0x14b8`, `+0x6088`, `+0x609c`, `+0x60a0`, `+0x60a4`, `+0x60a8` | `+0x14b8`, `+0x14bc`, `+0x5fa4`, `+0x6081`, `+0x6088`, `+0x608c`, +3 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:122, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:44, Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:1030 | docs/vtmb/npc-ai/conditions-and-states.md:278, docs/vtmb/npc-ai/senses.md:48, docs/vtmb/npc-ai/senses.md:132, +2 more |  |
 | `0x102b4070` | CAI_BaseNPCTroika::FUN_102b4070 | 6 | 0 | 0 | `CAI_BaseNPCTroika#473`, `CNPCMaker#473`, `CNPCMaker_Fleshpile#473`, +7 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:298 |  |
-| `0x102b4090` | FUN_102b4090 | 919 | 1 | 2 | — | 4d/0v/0c | `+0x5b78`?, `+0x60b0`?, `+0x60b4`?, `+0x60b8`?, `+0x60bc`?, `+0x60c0`?, +6 more | `+0x60b0`?, `+0x60d0`?, `+0x60dc`?, `+0x6108`?, `+0x610c`?, `+0x6110`?, +58 more | — | — | docs/vtmb/npc-ai/senses.md:244 |  |
+| `0x102b4090` | CommitBestSound | 919 | 1 | 2 | — | 4d/0v/0c | `+0x5b78`?, `+0x60b0`?, `+0x60b4`?, `+0x60b8`?, `+0x60bc`?, `+0x60c0`?, +6 more | `+0x60b0`?, `+0x60d0`?, `+0x60dc`?, `+0x6108`?, `+0x610c`?, `+0x6110`?, +58 more | — | — | docs/vtmb/npc-ai/senses.md:244 |  |
 | `0x102b4520` | CAI_BaseNPCTroika::FUN_102b4520 | 7 | 0 | 0 | `CAI_BaseNPCTroika#474`, `CGeneric_NPC#474`, `CNPCMaker#474`, +61 more | 0d/3v/6c | — | `+0x60b0` | — | — | docs/vtmb/npc-ai/senses.md:248 |  |
-| `0x102b4540` | CAI_BaseNPCTroika::FUN_102b4540 | 180 | 0 | 8 | `CAI_BaseNPCTroika#363`, `CGeneric_NPC#363`, `CNPC_ProneDialog#363`, +51 more | 0d/0v/3c | — | `+0x0494`, `+0x628c` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:405, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:303 | docs/vtmb/npc-ai/conditions-and-states.md:553, docs/vtmb/npc-ai/senses.md:47, docs/vtmb/npc-ai/senses.md:61 |  |
-| `0x102b4630` | CAI_BaseNPCTroika::FUN_102b4630 | 232 | 0 | 15 | `CAI_BaseNPCTroika#201`, `CGeneric_NPC#201`, `CNPCMaker#201`, +56 more | 2d/1v/7c | — | `+0x0948` | `Dominate_BrainWipe` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:444 | docs/vtmb/npc-ai/conditions-and-states.md:551, docs/vtmb/npc-ai/senses.md:47, docs/vtmb/npc-ai/senses.md:79, +2 more |  |
+| `0x102b4540` | CAI_BaseNPCTroika::FInViewCone | 180 | 0 | 8 | `CAI_BaseNPCTroika#363`, `CGeneric_NPC#363`, `CNPC_ProneDialog#363`, +51 more | 0d/0v/3c | — | `+0x0494`, `+0x628c` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:405, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:303 | docs/vtmb/npc-ai/conditions-and-states.md:556, docs/vtmb/npc-ai/senses.md:47, docs/vtmb/npc-ai/senses.md:61 |  |
+| `0x102b4630` | CAI_BaseNPCTroika::FVisible | 232 | 0 | 15 | `CAI_BaseNPCTroika#201`, `CGeneric_NPC#201`, `CNPCMaker#201`, +56 more | 2d/1v/7c | — | `+0x0948` | `Dominate_BrainWipe` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:444 | docs/vtmb/npc-ai/conditions-and-states.md:554, docs/vtmb/npc-ai/senses.md:47, docs/vtmb/npc-ai/senses.md:79, +2 more |  |
 | `0x102b4760` | CAI_BaseNPCTroika::FUN_102b4760 | 668 | 0 | 14 | `CAI_BaseNPCTroika#594`, `CGeneric_NPC#594`, `CNPCMaker#594`, +61 more | 0d/1v/1c | `+0x6081` | `+0x0224`, `+0x0270`, `+0x0304`, `+0x0370`, `+0x5bc5`, `+0x5cc0`, +2 more | — | — | docs/vtmb/combat-and-damage.md:1561, docs/vtmb/npc-ai/senses.md:100, docs/vtmb/npc-ai/senses.md:400, +1 more |  |
 | `0x102b4ab0` | CAI_BaseNPCTroika::FUN_102b4ab0 | 241 | 0 | 5 | `CAI_BaseNPCTroika#533`, `CGeneric_NPC#533`, `CNPCMaker#533`, +60 more | 0d/0v/3c | — | `+0x0364`, `+0x5d60`, `+0x5ddc` | — | — | — |  |
 | `0x102b4c10` | CAI_BaseNPCTroika::FUN_102b4c10 | 24 | 0 | 1 | `CAI_BaseNPCTroika#486`, `CGeneric_NPC#486`, `CNPCMaker#486`, +61 more | 0d/3v/3c | — | — | — | — | — |  |
@@ -2335,10 +2335,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102b5360` | CAI_BaseNPCTroika::FUN_102b5360 | 75 | 0 | 1 | `CAI_BaseNPCTroika#168`, `CGeneric_NPC#168`, `CNPCMaker#168`, +61 more | 0d/13v/15c | — | `+0x029c`, `+0x1a94`, `+0x5b64` | — | — | docs/vtmb/npc-ai/lifecycle.md:533 |  |
 | `0x102b53d0` | FUN_102b53d0 | 500 | 1 | 9 | — | 8d/0v/0c | `+0x18ba`? | `+0x0378`? | — | — | docs/vtmb/npc-ai/programs.md:211, docs/vtmb/npc-ai/schedule-kernel.md:311 |  |
 | `0x102b5650` | CAI_BaseNPCTroika::FUN_102b5650 | 288 | 0 | 3 | `CAI_BaseNPCTroika#599`, `CGeneric_NPC#599`, `CNPCMaker#599`, +15 more | 0d/0v/0c | `+0x6074`, `+0x6078` | `+0x0494`, `+0x04d0`, `+0x5b84`, `+0x6070`, `+0x6268`, `+0x626c`, +1 more | — | — | — |  |
-| `0x102b5b20` | CAI_BaseNPCTroika::FUN_102b5b20 | 56 | 0 | 11 | `CAI_BaseNPCTroika#304`, `CGeneric_NPC#304`, `CNPCMaker#304`, +55 more | 0d/1v/4c | — | `+0x04cc`, `+0x04d0` | `item_w_fists` | — | docs/vtmb/npc-ai/programs.md:901 |  |
-| `0x102b5b70` | CAI_BaseNPCTroika::FUN_102b5b70 | 37 | 0 | 11 | `CAI_BaseNPCTroika#305`, `CGeneric_NPC#305`, `CNPCMaker#305`, +55 more | 0d/0v/0c | — | — | `item_w_fists` | — | — |  |
-| `0x102b5c00` | CAI_BaseNPCTroika::FUN_102b5c00 | 305 | 0 | 22 | `CAI_BaseNPCTroika#379`, `CGeneric_NPC#379`, `CNPCMaker#379`, +59 more | 1d/0v/0c | — | `+0x5cc0`, `+0x5cc4`, `+0x5d74`, `+0x65a8`, `+0x65b4` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:456 | docs/vtmb/npc-ai/schedule-kernel.md:608, docs/vtmb/stealth.md:446 |  |
-| `0x102b5d90` | CAI_BaseNPCTroika::FUN_102b5d90 ‼ | 19 | 0 | 13 | `CAI_BaseNPCTroika#380`, `CGeneric_NPC#380`, `CNPCMaker#380`, +61 more | 0d/0v/0c | — | `+0x0998` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:793, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:386 | docs/vtmb/npc-ai/lifecycle.md:236, docs/vtmb/npc-ai/lifecycle.md:480 |  |
+| `0x102b5b20` | CAI_BaseNPCTroika::GiveBaseFightingItems | 56 | 0 | 11 | `CAI_BaseNPCTroika#304`, `CGeneric_NPC#304`, `CNPCMaker#304`, +55 more | 0d/1v/4c | — | `+0x04cc`, `+0x04d0` | `item_w_fists` | — | docs/vtmb/npc-ai/programs.md:901 |  |
+| `0x102b5b70` | CAI_BaseNPCTroika::RemoveBaseFightingItems | 37 | 0 | 11 | `CAI_BaseNPCTroika#305`, `CGeneric_NPC#305`, `CNPCMaker#305`, +55 more | 0d/0v/0c | — | — | `item_w_fists` | — | — |  |
+| `0x102b5c00` | CAI_BaseNPCTroika::EnterGrappleState | 305 | 0 | 22 | `CAI_BaseNPCTroika#379`, `CGeneric_NPC#379`, `CNPCMaker#379`, +59 more | 1d/0v/0c | — | `+0x5cc0`, `+0x5cc4`, `+0x5d74`, `+0x65a8`, `+0x65b4` | — | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:456 | docs/vtmb/npc-ai/schedule-kernel.md:610, docs/vtmb/stealth.md:446 |  |
+| `0x102b5d90` | CAI_BaseNPCTroika::LeaveGrappleState ‼ | 19 | 0 | 13 | `CAI_BaseNPCTroika#380`, `CGeneric_NPC#380`, `CNPCMaker#380`, +61 more | 0d/0v/0c | — | `+0x0998` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:793, Source/ElysiumUE/Private/Tests/ElysiumNpcThinkCadenceTests.cpp:386 | docs/vtmb/npc-ai/lifecycle.md:236, docs/vtmb/npc-ai/lifecycle.md:480 |  |
 | `0x102b5dc0` | FUN_102b5dc0 | 13 | 1 | 0 | — | 5d/0v/0c | `+0x63f4` | — | — | — | — |  |
 | `0x102b5de0` | FUN_102b5de0 | 652 | 2 | 4 | — | 2d/0v/0c | — | `+0x02a0`?, `+0x0300`?, `+0x0650`? | — | — | docs/vtmb/npc-ai/programs.md:810 |  |
 | `0x102b6120` | FUN_102b6120 | 338 | 1 | 4 | — | 2d/0v/0c | — | `+0x0358`, `+0x5ddc`, `+0x63fd` | — | — | — |  |
@@ -2350,18 +2350,18 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102b7690` | FUN_102b7690 | 1281 | 1 | 9 | — | 1d/0v/0c +3 outside | `+0x14bc`, `+0x1b30`, `+0x1b34`, `+0x640c`, `+0x6438`, `+0x643c`, +2 more | `+0x029c`, `+0x0984`, `+0x14b8`, `+0x14bc`, `+0x5c38`, `+0x5ddc`, +6 more | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/npc-ai/authored-control.md:389, docs/vtmb/npc-ai/authored-control.md:390, docs/vtmb/npc-ai/authored-control.md:457, +1 more |  |
 | `0x102b7f40` | FUN_102b7f40 | 93 | 1 | 2 | — | 1d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x102b8980` | FUN_102b8980 | 89 | 2 | 1 | — | 1d/0v/0c | — | `+0x6340`?, `+0x63f4`? | — | — | — |  |
-| `0x102b8a10` | FUN_102b8a10 | 61 | 1 | 2 | — | 1d/0v/0c | `+0x1b30`?, `+0x1b34`? | — | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/npc-ai/conditions-and-states.md:100 |  |
+| `0x102b8a10` | FUN_102b8a10 | 61 | 1 | 2 | — | 1d/0v/0c | `+0x1b30`?, `+0x1b34`? | — | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/npc-ai/conditions-and-states.md:103 |  |
 | `0x102b8a60` | FUN_102b8a60 | 381 | 1 | 2 | — | 3d/0v/0c | — | — | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
 | `0x102b8c40` | FUN_102b8c40 | 101 | 1 | 2 | — | 1d/0v/0c | `+0x1b30`?, `+0x1b34`?, `+0x5b80`?, `+0x5dd0`?, `+0x5dd4`?, `+0x5dd8`? | `+0x5b9c`?, `+0x5ba0`?, `+0x5ba4`? | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
 | `0x102b8cd0` | FUN_102b8cd0 | 56 | 2 | 0 | — | 2d/0v/0c | — | `+0x0650` | — | — | — |  |
 | `0x102b8d20` | FUN_102b8d20 | 647 | 1 | 2 | — | 2d/0v/0c | — | `+0x0650`?, `+0x16de`? | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | — |  |
 | `0x102b9060` | FUN_102b9060 | 681 | 1 | 3 | — | 3d/0v/0c | `+0x1831`?, `+0x183c`? | — | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | — | docs/vtmb/sky-ambience.md:464 |  |
-| `0x102b97f0` | CAI_BaseNPCTroika::FUN_102b97f0 | 6 | 0 | 0 | `CAI_BaseNPCTroika#452`, `CNPCMaker#452`, `CNPCMaker_Fleshpile#452`, +4 more | 0d/0v/2c | — | — | — | — | — |  |
+| `0x102b97f0` | CAI_BaseNPCTroika::LoadedSchedules | 6 | 0 | 0 | `CAI_BaseNPCTroika#452`, `CNPCMaker#452`, `CNPCMaker_Fleshpile#452`, +4 more | 0d/0v/2c | — | — | — | — | — |  |
 | `0x102bed30` | CNPC_VVampire::OnTakeDamage | 66 | 0 | 25 | `CAI_BaseNPCTroika#142`, `CGeneric_NPC#142`, `CNPCMaker#142`, +57 more | 2d/1v/1c | `+0x5d98` | `+0x5d98`, `+0x5e0c`, `+0x63d8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:114, Source/ElysiumUE/Public/ElysiumPlayer.h:1190 | docs/vtmb/combat-and-damage.md:1798 |  |
-| `0x102beda0` | CAI_BaseNPCTroika::FUN_102beda0 | 535 | 0 | 24 | `CAI_BaseNPCTroika#390`, `CGeneric_NPC#390`, `CNPCMaker#390`, +42 more | 11d/0v/0c | `+0x0001`, `+0x1b30`, `+0x1b34`, `+0x5b7c`, `+0x5b80`, `+0x6308` | `+0x0240`, `+0x14b8`, `+0x62ec`, `+0x6308` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `Can not find interest death activity '%s…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:306 | docs/vtmb/combat-and-damage.md:1556, docs/vtmb/npc-ai/programs.md:742, docs/vtmb/npc-ai/senses.md:110, +1 more |  |
-| `0x102bf070` | CAI_BaseNPCTroika::FUN_102bf070 | 528 | 0 | 12 | `CAI_BaseNPCTroika#314`, `CGeneric_NPC#314`, `CNPCMaker#314`, +61 more | 0d/0v/0c | `+0x0e6c`, `+0x0e70`, `+0x1064`, `+0x1068` | `+0x029c`, `+0x0304`, `+0x036c`, `+0x0e74`, `+0x5ba8`, `+0x5bb4` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:708 | docs/vtmb/npc-ai/schedule-kernel.md:254, docs/vtmb/npc-ai/schedule-kernel.md:461 |  |
+| `0x102beda0` | CAI_BaseNPCTroika::OnTakeDamage | 535 | 0 | 24 | `CAI_BaseNPCTroika#390`, `CGeneric_NPC#390`, `CNPCMaker#390`, +42 more | 11d/0v/0c | `+0x0001`, `+0x1b30`, `+0x1b34`, `+0x5b7c`, `+0x5b80`, `+0x6308` | `+0x0240`, `+0x14b8`, `+0x62ec`, `+0x6308` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `Can not find interest death activity '%s…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:306 | docs/vtmb/combat-and-damage.md:1556, docs/vtmb/npc-ai/programs.md:742, docs/vtmb/npc-ai/senses.md:110, +1 more |  |
+| `0x102bf070` | CAI_BaseNPCTroika::UpdatePoseParameters | 528 | 0 | 12 | `CAI_BaseNPCTroika#314`, `CGeneric_NPC#314`, `CNPCMaker#314`, +61 more | 0d/0v/0c | `+0x0e6c`, `+0x0e70`, `+0x1064`, `+0x1068` | `+0x029c`, `+0x0304`, `+0x036c`, `+0x0e74`, `+0x5ba8`, `+0x5bb4` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:708 | docs/vtmb/npc-ai/schedule-kernel.md:254, docs/vtmb/npc-ai/schedule-kernel.md:461 |  |
 | `0x102bf310` | FUN_102bf310 | 30 | 1 | 0 | — | 1d/0v/0c | — | `+0x0564`? | `move_yaw` | — | — |  |
-| `0x102bf340` | CAI_BaseNPCTroika::FUN_102bf340 | 261 | 0 | 21 | `CAI_BaseNPCTroika#144`, `CNPCMaker#144`, `CNPCMaker_Fleshpile#144`, +50 more | 9d/3v/3c | — | `+0x026c`, `+0x0364`, `+0x0964`, `+0x628c` | `MarkAsDead("%s")`, `Leaving interesting place (Event_Killed)` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:255 | docs/vtmb/combat-and-damage.md:1651, docs/vtmb/npc-ai/social.md:344 |  |
+| `0x102bf340` | CAI_BaseNPCTroika::Event_Killed | 261 | 0 | 21 | `CAI_BaseNPCTroika#144`, `CNPCMaker#144`, `CNPCMaker_Fleshpile#144`, +50 more | 9d/3v/3c | — | `+0x026c`, `+0x0364`, `+0x0964`, `+0x628c` | `MarkAsDead("%s")`, `Leaving interesting place (Event_Killed)` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:255 | docs/vtmb/combat-and-damage.md:1651, docs/vtmb/npc-ai/social.md:344 |  |
 | `0x102bf4a0` | CAI_BaseNPCTroika::FUN_102bf4a0 | 80 | 0 | 3 | `CAI_BaseNPCTroika#575`, `CGeneric_NPC#575`, `CNPCMaker#575`, +61 more | 0d/0v/1c | — | `+0x029c`, `+0x14bc` | — | — | — |  |
 | `0x102bf510` | CAI_BaseNPCTroika::FUN_102bf510 | 53 | 0 | 2 | `CAI_BaseNPCTroika#466`, `CGeneric_NPC#466`, `CNPCMaker#466`, +61 more | 0d/0v/1c | — | `+0x65fa` | — | — | — |  |
 | `0x102bf560` | FUN_102bf560 | 79 | 2 | 1 | — | 1d/0v/0c | `+0x65c0`, `+0x65c4` | `+0x65f5` | — | — | — |  |
@@ -2372,7 +2372,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102bf820` | CAI_BaseNPCTroika::ResolveStandingOnHead | 1179 | 1 | 5 | — | 1d/0v/0c | `+0x65fc` | `+0x026c`, `+0x0270`, `+0x0360`, `+0x0364`, `+0x0384`, `+0x5d40`, +1 more | `NULL ENTITY`, `Unaccounted`, +2 more | — | — |  |
 | `0x102bfdf0` | FUN_102bfdf0 | 3 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102bfe10` | FUN_102bfe10 | 202 | 1 | 6 | — | 1d/0v/0c | — | `+0x0364`? | `%s got below the ground by %f units.⏎`, `I'm floating....  Me llamo %s⏎` | — | — |  |
-| `0x102bff20` | CAI_BaseNPCTroika::FUN_102bff20 | 182 | 0 | 5 | `CAI_BaseNPCTroika#333`, `CGeneric_NPC#333`, `CNPCMaker#333`, +60 more | 0d/0v/0c | `+0x5d6c`, `+0x6570` | `+0x0450`, `+0x0fe8`, `+0x6264`, `+0x64d8`, `+0x64dc`, `+0x6570` | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:749 | docs/vtmb/facial_animation.md:649, docs/vtmb/facial_animation.md:1144 |  |
+| `0x102bff20` | CAI_BaseNPCTroika::MaintainEyeDirection | 182 | 0 | 5 | `CAI_BaseNPCTroika#333`, `CGeneric_NPC#333`, `CNPCMaker#333`, +60 more | 0d/0v/0c | `+0x5d6c`, `+0x6570` | `+0x0450`, `+0x0fe8`, `+0x6264`, `+0x64d8`, `+0x64dc`, `+0x6570` | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:749 | docs/vtmb/facial_animation.md:649, docs/vtmb/facial_animation.md:1144 |  |
 | `0x102c0010` | FUN_102c0010 | 405 | 1 | 1 | — | 1d/0v/0c | `+0x0e3c`?, `+0x5b94`?, `+0x6578`?, `+0x657c`?, `+0x6580`? | `+0x5b94`?, `+0x64d4`?, `+0x6578`?, `+0x657c`?, `+0x6580`?, `+0x6584`?, +1 more | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:755, Source/ElysiumUE/Public/ElysiumPlayer.h:1746 | — |  |
 | `0x102c0220` | CAI_BaseNPCTroika::FUN_102c0220 | 57 | 0 | 16 | `CAI_BaseNPCTroika#35`, `CGeneric_NPC#35`, `CNPCMaker#35`, +60 more | 0d/0v/0c | — | `+0x049c` | — | — | — |  |
 | `0x102c0360` | FUN_102c0360 | 144 | 2 | 8 | — | 2d/0v/0c | `+0x1590`? | `+0x0fe8`?, `+0x5f5c`? | `entity_debug_stats` | — | docs/vtmb/game_runtime.md:1349 |  |
@@ -2380,20 +2380,20 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102c0470` | FUN_102c0470 | 40 | 5 | 0 | — | 1d/0v/0c | `+0x654c` | — | — | — | — |  |
 | `0x102c0520` | FUN_102c0520 | 1108 | 2 | 8 | — | 2d/0v/0c +3 outside | `+0x64c0`, `+0x64cc` | `+0x026c`, `+0x02e0`, `+0x0364`, `+0x036c`, `+0x0378`, `+0x044c`, +5 more | `scripted_scene`, `entity_debug_stats`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2177, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:601, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:80, +2 more | docs/vtmb/animation_and_movers.md:1935, docs/vtmb/npc-ai/lifecycle.md:238, docs/vtmb/npc-ai/lifecycle.md:483 |  |
 | `0x102c0aa0` | FUN_102c0aa0 | 137 | 1 | 0 | — | 4d/0v/0c | — | `+0x64cc`?, `+0x6554`? | — | — | docs/vtmb/game_runtime.md:1508, docs/vtmb/npc-ai/lifecycle.md:369 |  |
-| `0x102c0bb0` | FUN_102c0bb0 | 184 | 1 | 14 | — | 4d/0v/0c +1 outside | — | `+0x044c`?, `+0x098c`?, `+0x0994`? | — | Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:15, Source/ElysiumUE/Private/UI/ElysiumDialogueScreen.h:30, Source/ElysiumUE/Private/UI/ElysiumDialogueWidget.h:136, +1 more | docs/vtmb/game_runtime.md:1516, docs/vtmb/npc-ai/schedule-kernel.md:608, docs/vtmb/stealth.md:451 |  |
-| `0x102c0ca0` | CAI_BaseNPCTroika::FinishTalking | 573 | 1 | 14 | — | 3d/0v/0c +4 outside | `+0x64c0`, `+0x64cc`, `+0x6554` | `+0x026c`, `+0x64c0`, `+0x64ec`, `+0x6554` | `NULL ENTITY`, `CAI_BaseNPCTroika::FinishTalking` | — | docs/vtmb/animation_and_movers.md:1936, docs/vtmb/npc-ai/schedule-kernel.md:608 |  |
+| `0x102c0bb0` | FUN_102c0bb0 | 184 | 1 | 14 | — | 4d/0v/0c +1 outside | — | `+0x044c`?, `+0x098c`?, `+0x0994`? | — | Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:15, Source/ElysiumUE/Private/UI/ElysiumDialogueScreen.h:30, Source/ElysiumUE/Private/UI/ElysiumDialogueWidget.h:136, +1 more | docs/vtmb/game_runtime.md:1516, docs/vtmb/npc-ai/schedule-kernel.md:610, docs/vtmb/stealth.md:451 |  |
+| `0x102c0ca0` | CAI_BaseNPCTroika::FinishTalking | 573 | 1 | 14 | — | 3d/0v/0c +4 outside | `+0x64c0`, `+0x64cc`, `+0x6554` | `+0x026c`, `+0x64c0`, `+0x64ec`, `+0x6554` | `NULL ENTITY`, `CAI_BaseNPCTroika::FinishTalking` | — | docs/vtmb/animation_and_movers.md:1936, docs/vtmb/npc-ai/schedule-kernel.md:610 |  |
 | `0x102c0f70` | SetDisposition | 387 | 1 | 5 | — | 1d/0v/0c +2 outside | `+0x0174`, `+0x06f0`, `+0x06f8`, `+0x0e3c`, `+0x0fec`, `+0x0ff0`, +6 more | `+0x098c`, `+0x6080`, `+0x64d4`, `+0x64d8`, `+0x6584`, `+0x6588` | `Neutral`, `Could not find disposition for %s  ( %s …` | — | docs/vtmb/animation_and_movers.md:1848, docs/vtmb/animation_and_movers.md:1907 |  |
-| `0x102c1170` | FUN_102c1170 | 133 | 1 | 0 | — | 18d/0v/0c | — | `+0x0fe8`?, `+0x64c0`?, `+0x64ec`?, `+0x6554`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:77 | docs/vtmb/npc-ai/lifecycle.md:333, docs/vtmb/npc-ai/lifecycle.md:370, docs/vtmb/npc-ai/schedule-kernel.md:608, +1 more |  |
+| `0x102c1170` | IsInDialog | 133 | 1 | 0 | — | 18d/0v/0c | — | `+0x0fe8`?, `+0x64c0`?, `+0x64ec`?, `+0x6554`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:77 | docs/vtmb/npc-ai/lifecycle.md:333, docs/vtmb/npc-ai/lifecycle.md:370, docs/vtmb/npc-ai/schedule-kernel.md:610, +1 more |  |
 | `0x102c1230` | FUN_102c1230 | 70 | 1 | 1 | — | 1d/0v/0c +2 outside | `+0x64c8`?, `+0x64e4`? | `+0x64c8`? | — | — | docs/vtmb/animation_and_movers.md:1924 |  |
 | `0x102c1400` | FUN_102c1400 | 506 | 1 | 15 | — | 5d/0v/0c | — | — | `%s could not look up disposition sequenc…` | — | docs/vtmb/animation_and_movers.md:1848, docs/vtmb/animation_and_movers.md:1936 |  |
 | `0x102c1680` | CAI_BaseNPCTroika::FUN_102c1680 | 801 | 0 | 7 | `CAI_BaseNPCTroika#286`, `CGeneric_NPC#286`, `CNPCMaker#286`, +60 more | 0d/0v/0c | `+0x0174`, `+0x06f0`, `+0x06f8`, `+0x0fec`, `+0x0ff0`, `+0x64e0`, +2 more | `+0x04dc`, `+0x0fe8`, `+0x64d4`, `+0x6574` | — | — | docs/vtmb/animation_and_movers.md:1849, docs/vtmb/animation_and_movers.md:1956, docs/vtmb/animation_and_movers.md:1958 |  |
 | `0x102c1a80` | FUN_102c1a80 | 309 | 1 | 4 | — | 1d/0v/0c | `+0x10bc`, `+0x10c0`, `+0x10c8`, `+0x10cc` | `+0x10bc`, `+0x10c0`, `+0x10c4`, `+0x10c8` | — | — | — |  |
-| `0x102c1c10` | CAI_BaseNPCTroika::FUN_102c1c10 | 150 | 0 | 1 | `CAI_BaseNPCTroika#347`, `CGeneric_NPC#347`, `CNPCMaker#347`, +61 more | 0d/0v/0c | — | `+0x6068` | `Knockback` | — | — |  |
-| `0x102c1ce0` | CAI_BaseNPCTroika::FUN_102c1ce0 ‼ | 369 | 0 | 20 | `CAI_BaseNPCTroika#77`, `CGeneric_NPC#77`, `CNPCMaker#77`, +60 more | 1d/1v/2c | — | `+0x5cc0`, `+0x5d74` | `**UNKNOWN**`, `Cancelling script...⏎`, +1 more | — | — |  |
-| `0x102c1ec0` | CAI_BaseNPCTroika::FUN_102c1ec0 | 597 | 0 | 1 | `CAI_BaseNPCTroika#78`, `CGeneric_NPC#78`, `CNPCMaker#78`, +59 more | 2d/0v/0c | `+0x5d78` | `+0x0170`, `+0x0178`, `+0x017c`, `+0x019c`, `+0x034c`, `+0x0998`, +3 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3804 | docs/vtmb/npc-ai/lifecycle.md:194, docs/vtmb/npc-ai/lifecycle.md:239, docs/vtmb/npc-ai/lifecycle.md:481 |  |
-| `0x102c21c0` | CAI_BaseNPCTroika::FUN_102c21c0 | 244 | 0 | 15 | `CAI_BaseNPCTroika#295`, `CGeneric_NPC#295`, `CNPCMaker#295`, +59 more | 0d/2v/3c | — | `+0x0128`, `+0x0278`, `+0x0650`, `+0x1088`, `+0x14b8`, `+0x14bc`, +1 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:807, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:45 | docs/vtmb/npc-ai/schedule-kernel.md:228, docs/vtmb/npc-ai/schedule-kernel.md:229 |  |
-| `0x102c2300` | CAI_BaseNPCTroika::FUN_102c2300 | 192 | 0 | 2 | `CAI_BaseNPCTroika#294`, `CGeneric_NPC#294`, `CNPCMaker#294`, +58 more | 1d/0v/0c | — | `+0x0128`, `+0x0278`, `+0x0740`, `+0x63d8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3578, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:714 | docs/vtmb/stealth.md:356 |  |
-| `0x102c2430` | FUN_102c2430 | 67 | 1 | 1 | — | 3d/0v/0c | — | `+0x5d70`?, `+0x63f0`?, `+0x65dc`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1259, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:582, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:592, +2 more | docs/vtmb/npc-ai/lifecycle.md:333, docs/vtmb/npc-ai/lifecycle.md:507, docs/vtmb/npc-ai/schedule-kernel.md:639 |  |
+| `0x102c1c10` | CAI_BaseNPCTroika::GetExpressionEventParams | 150 | 0 | 1 | `CAI_BaseNPCTroika#347`, `CGeneric_NPC#347`, `CNPCMaker#347`, +61 more | 0d/0v/0c | — | `+0x6068` | `Knockback` | — | — |  |
+| `0x102c1ce0` | CAI_BaseNPCTroika::ScriptHide ‼ | 369 | 0 | 20 | `CAI_BaseNPCTroika#77`, `CGeneric_NPC#77`, `CNPCMaker#77`, +60 more | 1d/1v/2c | — | `+0x5cc0`, `+0x5d74` | `**UNKNOWN**`, `Cancelling script...⏎`, +1 more | — | — |  |
+| `0x102c1ec0` | CAI_BaseNPCTroika::ScriptUnhide | 597 | 0 | 1 | `CAI_BaseNPCTroika#78`, `CGeneric_NPC#78`, `CNPCMaker#78`, +59 more | 2d/0v/0c | `+0x5d78` | `+0x0170`, `+0x0178`, `+0x017c`, `+0x019c`, `+0x034c`, `+0x0998`, +3 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3804 | docs/vtmb/npc-ai/lifecycle.md:194, docs/vtmb/npc-ai/lifecycle.md:239, docs/vtmb/npc-ai/lifecycle.md:481 |  |
+| `0x102c21c0` | CAI_BaseNPCTroika::CanTalk | 244 | 0 | 15 | `CAI_BaseNPCTroika#295`, `CGeneric_NPC#295`, `CNPCMaker#295`, +59 more | 0d/2v/3c | — | `+0x0128`, `+0x0278`, `+0x0650`, `+0x1088`, `+0x14b8`, `+0x14bc`, +1 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:807, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:45 | docs/vtmb/npc-ai/schedule-kernel.md:228, docs/vtmb/npc-ai/schedule-kernel.md:229 |  |
+| `0x102c2300` | CAI_BaseNPCTroika::IsValidStealthKillTarget | 192 | 0 | 2 | `CAI_BaseNPCTroika#294`, `CGeneric_NPC#294`, `CNPCMaker#294`, +58 more | 1d/0v/0c | — | `+0x0128`, `+0x0278`, `+0x0740`, `+0x63d8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3578, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:714 | docs/vtmb/stealth.md:356 |  |
+| `0x102c2430` | ShouldThinkFrequently | 67 | 1 | 1 | — | 3d/0v/0c | — | `+0x5d70`?, `+0x63f0`?, `+0x65dc`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1259, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:582, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:592, +2 more | docs/vtmb/npc-ai/lifecycle.md:333, docs/vtmb/npc-ai/lifecycle.md:507, docs/vtmb/npc-ai/schedule-kernel.md:641 |  |
 | `0x102c2ec0` | CAI_BaseNPCTroika::FUN_102c2ec0 | 830 | 0 | 15 | `CAI_BaseNPCTroika#589`, `CGeneric_NPC#589`, `CNPCMaker#589`, +61 more | 0d/0v/1c +1 outside | — | `+0x13bc`, `+0x13c0` | — | — | — |  |
 | `0x102c36d0` | FUN_102c36d0 | 909 | 1 | 4 | — | 5d/0v/0c | — | `+0x0270`, `+0x0874`, `+0x655c`, `+0x6560`, `+0x6564`, `+0x6568`, +1 more | `UTIL_TraceHull` | — | — |  |
 | `0x102c3b50` | FUN_102c3b50 | 1290 | 1 | 4 | — | 6d/0v/0c | — | `+0x0270` | `UTIL_TraceHull` | — | — |  |
@@ -2406,19 +2406,19 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102c43f0` | FUN_102c43f0 | 43 | 1 | 4 | — | 3d/0v/0c | `+0x6458`? | `+0x6458`? | — | — | — |  |
 | `0x102c4430` | FUN_102c4430 | 33 | 1 | 21 | — | 1d/0v/0c +1 outside | `+0x6478` | — | — | — | — |  |
 | `0x102c4470` | FUN_102c4470 | 67 | 6 | 0 | — | 1d/0v/0c | `+0x6478` | — | `!player` | — | docs/vtmb/npc-ai/authored-control.md:301 |  |
-| `0x102c44e0` | FUN_102c44e0 | 263 | 1 | 20 | — | 3d/0v/0c +1 outside | `+0x5b84`, `+0x647c` | `+0x08bc`, `+0x5b84`, `+0x5bb0`, `+0x5da4`, `+0x647c` | `%s - Followers can not be in squads.  Th…` | — | docs/vtmb/npc-ai/authored-control.md:302, docs/vtmb/npc-ai/senses.md:354, docs/vtmb/npc-ai/social.md:162, +1 more |  |
-| `0x102c4640` | FUN_102c4640 | 33 | 6 | 0 | — | 1d/0v/0c +1 outside | `+0x6480` | — | — | — | docs/vtmb/npc-ai/authored-control.md:302, docs/vtmb/npc-ai/social.md:200 |  |
+| `0x102c44e0` | SetFollowerBoss | 263 | 1 | 20 | — | 3d/0v/0c +1 outside | `+0x5b84`, `+0x647c` | `+0x08bc`, `+0x5b84`, `+0x5bb0`, `+0x5da4`, `+0x647c` | `%s - Followers can not be in squads.  Th…` | — | docs/vtmb/npc-ai/authored-control.md:302, docs/vtmb/npc-ai/senses.md:354, docs/vtmb/npc-ai/social.md:162, +1 more |  |
+| `0x102c4640` | SetFollowerType | 33 | 6 | 0 | — | 1d/0v/0c +1 outside | `+0x6480` | — | — | — | docs/vtmb/npc-ai/authored-control.md:302, docs/vtmb/npc-ai/social.md:200 |  |
 | `0x102c4680` | FUN_102c4680 | 264 | 1 | 6 | — | 2d/0v/0c +1 outside | — | `+0x6484`, `+0x6488`, `+0x648c` | `          Changing FollowerDistanceRunTo…`, `WARNING:  FollowerDistanceWalkTo(%f) + o…`, +4 more | — | docs/vtmb/npc-ai/authored-control.md:303, docs/vtmb/npc-ai/social.md:200 |  |
-| `0x102c4a60` | CAI_BaseNPCTroika::FUN_102c4a60 | 77 | 0 | 15 | `CAI_BaseNPCTroika#342`, `CGeneric_NPC#342`, `CNPCMaker#342`, +61 more | 0d/0v/0c | — | `+0x0494`, `+0x63d8` | — | — | — |  |
+| `0x102c4a60` | CAI_BaseNPCTroika::CanBeFedUponBy | 77 | 0 | 15 | `CAI_BaseNPCTroika#342`, `CGeneric_NPC#342`, `CNPCMaker#342`, +61 more | 0d/0v/0c | — | `+0x0494`, `+0x63d8` | — | — | — |  |
 | `0x102c4ad0` | FUN_102c4ad0 | 303 | 1 | 1 | — | 1d/0v/0c | `+0x649c`, `+0x64a0`, `+0x64a4`, `+0x64a8`, `+0x64ac`, `+0x64b0`, +1 more | `+0x0364` | — | — | — |  |
 | `0x102c4c50` | FUN_102c4c50 | 78 | 1 | 2 | — | 1d/0v/0c | — | `+0x03ec` | — | — | — |  |
 | `0x102c4cc0` | FUN_102c4cc0 | 281 | 1 | 1 | — | 5d/0v/0c | — | `+0x03ec` | — | — | — |  |
 | `0x102c4e30` | FUN_102c4e30 | 51 | 1 | 1 | — | 1d/0v/0c | — | `+0x0174`? | — | — | — |  |
 | `0x102c4e80` | FUN_102c4e80 | 29 | 1 | 0 | — | 7d/0v/0c | — | `+0x0174`? | — | — | — |  |
 | `0x102c4eb0` | FUN_102c4eb0 | 577 | 1 | 4 | — | 1d/0v/0c | — | `+0x0340`?, `+0x0364`?, `+0x03b4`? | — | — | — |  |
-| `0x102c51a0` | FUN_102c51a0 | 281 | 5 | 19 | — | 1d/0v/0c | `+0x14bc`, `+0x1b3c`, `+0x1b40`, `+0x5b84`, `+0x5cc4`, `+0x60ac` | `+0x029c`, `+0x04c0`, `+0x0650`, `+0x094c`, `+0x0998`, `+0x14bc` | `Combat`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:228 | docs/vtmb/npc-ai/authored-control.md:297, docs/vtmb/npc-ai/conditions-and-states.md:415, docs/vtmb/npc-ai/lifecycle.md:241, +2 more |  |
-| `0x102c5310` | FUN_102c5310 | 260 | 5 | 19 | — | 1d/0v/0c | `+0x14bc`, `+0x1b3c`, `+0x1b40`, `+0x5b84`, `+0x5cc4`, `+0x60ac`, +2 more | `+0x029c`, `+0x04c0`, `+0x0650`, `+0x094c`, `+0x14bc` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `player D_LI 99` | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:228 | docs/vtmb/npc-ai/authored-control.md:306, docs/vtmb/npc-ai/lifecycle.md:244, docs/vtmb/npc-ai/lifecycle.md:249 |  |
-| `0x102c5470` | CAI_BaseNPCTroika::FUN_102c5470 | 56 | 0 | 0 | `CAI_BaseNPCTroika#293`, `CGeneric_NPC#293`, `CNPCMaker#293`, +61 more | 0d/6v/6c | — | `+0x647c` | — | — | — |  |
+| `0x102c51a0` | DoPossession | 281 | 5 | 19 | — | 1d/0v/0c | `+0x14bc`, `+0x1b3c`, `+0x1b40`, `+0x5b84`, `+0x5cc4`, `+0x60ac` | `+0x029c`, `+0x04c0`, `+0x0650`, `+0x094c`, `+0x0998`, `+0x14bc` | `Combat`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:228 | docs/vtmb/npc-ai/authored-control.md:297, docs/vtmb/npc-ai/conditions-and-states.md:418, docs/vtmb/npc-ai/lifecycle.md:241, +2 more |  |
+| `0x102c5310` | DoFrenzy | 260 | 5 | 19 | — | 1d/0v/0c | `+0x14bc`, `+0x1b3c`, `+0x1b40`, `+0x5b84`, `+0x5cc4`, `+0x60ac`, +2 more | `+0x029c`, `+0x04c0`, `+0x0650`, `+0x094c`, `+0x14bc` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `player D_LI 99` | Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:228 | docs/vtmb/npc-ai/authored-control.md:306, docs/vtmb/npc-ai/lifecycle.md:244, docs/vtmb/npc-ai/lifecycle.md:249 |  |
+| `0x102c5470` | CAI_BaseNPCTroika::GetFollowerBoss | 56 | 0 | 0 | `CAI_BaseNPCTroika#293`, `CGeneric_NPC#293`, `CNPCMaker#293`, +61 more | 0d/6v/6c | — | `+0x647c` | — | — | — |  |
 | `0x102c54c0` | FUN_102c54c0 | 43 | 1 | 13 | — | 1d/0v/0c +1 outside | `+0x65f0`? | — | — | — | — |  |
 | `0x102c5500` | CAI_BaseNPCTroika::FUN_102c5500 | 69 | 0 | 10 | `CAI_BaseNPCTroika#419`, `CGeneric_NPC#419`, `CNPCMaker#419`, +61 more | 0d/0v/1c | `+0x5bbc`, `+0x5bc0` | — | — | — | — |  |
 | `0x102c5570` | FUN_102c5570 | 338 | 2 | 2 | — | 3d/0v/0c | — | `+0x029c`, `+0x0364`, `+0x0874`, `+0x5ba8` | — | — | — |  |
@@ -2452,13 +2452,13 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102c6f90` | FUN_102c6f90 | 7 | 0 | 0 | `CAI_StandoffBehavior#23` | 0d/0v/0c | `+0x0010` | — | — | — | — |  |
 | `0x102c6fb0` | FUN_102c6fb0 | 9 | 0 | 0 | `CAI_StandoffBehavior#24` | 0d/0v/0c | `+0x0010` | — | — | — | — |  |
 | `0x102c6fd0` | _0BIGKA__VCAI_BaseNPC____CAI_Behavior::vfunc25 | 9 | 0 | 0 | `CAI_StandoffBehavior#25` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x102c6ff0` | FUN_102c6ff0 | 159 | 2 | 20 | — | 1d/0v/0c | — | `+0x0004` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:615 |  |
+| `0x102c6ff0` | FUN_102c6ff0 | 159 | 2 | 20 | — | 1d/0v/0c | — | `+0x0004` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:617 |  |
 | `0x102c7230` | FUN_102c7230 | 1 | 0 | 0 | `CAI_StandoffBehavior#7` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102c7270` | FUN_102c7270 | 1 | 0 | 0 | `CAI_StandoffBehavior#9` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102c72f0` | CAI_StandoffBehavior::vfunc6 | 6 | 0 | 0 | `CAI_StandoffBehavior#6` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102c7310` | CAI_StandoffBehavior::vfunc19 | 6 | 0 | 0 | `CAI_StandoffBehavior#19` | 0d/0v/0c | — | — | `CAI_StandoffBehavior` | — | — |  |
 | `0x102c7330` | CAI_StandoffBehavior::vfunc0 | 32 | 0 | 5 | `CAI_StandoffBehavior#0` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x102c7360` | FUN_102c7360 | 30 | 1 | 21 | — | 2d/0v/0c | `+0x0019` | `+0x0019` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:615 |  |
+| `0x102c7360` | FUN_102c7360 | 30 | 1 | 21 | — | 2d/0v/0c | `+0x0019` | `+0x0019` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:617 |  |
 | `0x102c7390` | FUN_102c7390 | 10 | 1 | 0 | — | 1d/0v/0c | `+0x001a` | — | — | — | — |  |
 | `0x102c73b0` | FUN_102c73b0 | 44 | 1 | 0 | — | 2d/0v/0c +2 outside | `+0x003c`, `+0x0040`, `+0x0044` | `+0x0020` | — | — | — |  |
 | `0x102c73f0` | CAI_StandoffBehavior::vfunc8 | 1 | 0 | 0 | `CAI_StandoffBehavior#8` | 0d/0v/0c | — | — | — | — | — |  |
@@ -2489,11 +2489,11 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102ca780` | FUN_102ca780 | 868 | 2 | 9 | — | 1d/0v/0c | — | `+0x0004`, `+0x0a04` | — | — | — |  |
 | `0x102cabd0` | FUN_102cabd0 | 136 | 2 | 9 | — | 1d/0v/0c | — | `+0x0a04` | — | — | — |  |
 | `0x102cadb0` | FUN_102cadb0 | 16 | 5 | 1 | — | 1d/0v/0c +2 outside | — | — | — | — | — |  |
-| `0x102cc080` | CAI_BaseNPC::FUN_102cc080 | 259 | 0 | 20 | `CAI_BaseHumanoid#440`, `CAI_BaseNPC#440`, `CAI_ExpressiveNPC#440`, +10 more | 1d/0v/2c | — | `+0x06e0`, `+0x5d74` | `Script failed for %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2313, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:462 | docs/vtmb/animation_and_movers.md:1659, docs/vtmb/npc-ai/schedule-kernel.md:555 |  |
-| `0x102cc1f0` | FUN_102cc1f0 | 68 | 1 | 0 | — | 16d/0v/0c +2 outside | — | `+0x06e0`, `+0x06f8` | `GetScheduleOfType(): No CASE for Schedul…` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:665, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:691, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:463, +5 more | docs/vtmb/npc-ai/conditions-and-states.md:118, docs/vtmb/npc-ai/schedule-kernel.md:522, docs/vtmb/npc-ai/schedule-kernel.md:545, +1 more |  |
-| `0x102cc260` | CAI_BaseNPC::FUN_102cc260 | 114 | 0 | 4 | `CAI_BaseHumanoid#446`, `CAI_BaseNPC#446`, `CAI_BaseNPCTroika#446`, +74 more | 0d/0v/1c | — | `+0x070c`, `+0x0910` | `ERROR: %s missing schedule!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:691 | docs/vtmb/npc-ai/schedule-kernel.md:546 |  |
+| `0x102cc080` | CAI_BaseNPC::TranslateSchedule | 259 | 0 | 20 | `CAI_BaseHumanoid#440`, `CAI_BaseNPC#440`, `CAI_ExpressiveNPC#440`, +10 more | 1d/0v/2c | — | `+0x06e0`, `+0x5d74` | `Script failed for %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2313, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:462 | docs/vtmb/animation_and_movers.md:1659, docs/vtmb/npc-ai/schedule-kernel.md:557 |  |
+| `0x102cc1f0` | FUN_102cc1f0 | 68 | 1 | 0 | — | 16d/0v/0c +2 outside | — | `+0x06e0`, `+0x06f8` | `GetScheduleOfType(): No CASE for Schedul…` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:665, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:691, Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:463, +5 more | docs/vtmb/npc-ai/conditions-and-states.md:121, docs/vtmb/npc-ai/schedule-kernel.md:522, docs/vtmb/npc-ai/schedule-kernel.md:547, +1 more |  |
+| `0x102cc260` | CAI_BaseNPC::GetScheduleOfType | 114 | 0 | 4 | `CAI_BaseHumanoid#446`, `CAI_BaseNPC#446`, `CAI_BaseNPCTroika#446`, +74 more | 0d/0v/1c | — | `+0x070c`, `+0x0910` | `ERROR: %s missing schedule!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:691 | docs/vtmb/npc-ai/schedule-kernel.md:548 |  |
 | `0x102cc300` | CAI_BaseNPC::FUN_102cc300 | 52 | 0 | 3 | `CAI_BaseHumanoid#458`, `CAI_BaseNPC#458`, `CAI_BaseNPCTroika#458`, +74 more | 0d/1v/2c | — | `+0x0910` | — | — | — |  |
-| `0x102cc350` | CAI_BaseNPC::FUN_102cc350 | 52 | 0 | 3 | `CAI_BaseHumanoid#449`, `CAI_BaseNPC#449`, `CAI_BaseNPCTroika#449`, +74 more | 0d/8v/10c +1 outside | — | `+0x0910` | — | — | — |  |
+| `0x102cc350` | CAI_BaseNPC::TaskName | 52 | 0 | 3 | `CAI_BaseHumanoid#449`, `CAI_BaseNPC#449`, `CAI_BaseNPCTroika#449`, +74 more | 0d/8v/10c +1 outside | — | `+0x0910` | — | — | — |  |
 | `0x102cc560` | FUN_102cc560 | 18 | 2 | 0 | — | 1d/0v/0c | `+0x0004` | — | — | — | — |  |
 | `0x102cc590` | FUN_102cc590 | 33 | 2 | 0 | — | 1d/0v/0c | `+0x0004` | `+0x0004` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:894 | docs/vtmb/npc-ai/senses.md:293 |  |
 | `0x102cc5d0` | FUN_102cc5d0 | 17 | 3 | 0 | — | 1d/0v/0c | `+0x0004` | — | — | — | — |  |
@@ -2501,14 +2501,14 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102cc6c0` | FUN_102cc6c0 | 76 | 1 | 1 | — | 2d/0v/0c | — | `+0x0040` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:894 | docs/vtmb/npc-ai/senses.md:292 |  |
 | `0x102cc730` | FUN_102cc730 | 32 | 2 | 1 | — | 1d/0v/0c | `+0x0040` | `+0x0040` | — | — | — |  |
 | `0x102cc760` | FUN_102cc760 | 96 | 1 | 2 | — | 2d/0v/0c | — | `+0x0040` | — | — | docs/vtmb/npc-ai/senses.md:228 |  |
-| `0x102cc7e0` | FUN_102cc7e0 | 8 | 1 | 0 | — | 1d/0v/0c | `+0x0040`? | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:607 |  |
-| `0x102cd2d0` | CAI_StandoffGoal::vfunc103 | 39 | 0 | 1 | `CAI_StandoffGoal#103` | 0d/0v/0c | `+0x017c` | — | — | — | — |  |
+| `0x102cc7e0` | FUN_102cc7e0 | 8 | 1 | 0 | — | 1d/0v/0c | `+0x0040`? | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:609 |  |
+| `0x102cd2d0` | CAI_StandoffGoal::Spawn | 39 | 0 | 1 | `CAI_StandoffGoal#103` | 0d/0v/0c | `+0x017c` | — | — | — | — |  |
 | `0x102cd3b0` | FUN_102cd3b0 | 185 | 1 | 1 | — | 3d/0v/0c +1 outside | `+0x0474`? | `+0x0468`?, `+0x0474`? | — | — | — |  |
 | `0x102cd4a0` | FUN_102cd4a0 | 336 | 1 | 9 | — | 3d/0v/0c +1 outside | `+0x0474`?, `+0x0478`? | `+0x0468`?, `+0x046c`?, `+0x0474`? | — | — | — |  |
 | `0x102cd650` | FUN_102cd650 | 178 | 1 | 10 | — | 1d/0v/0c | — | `+0x0114`?, `+0x0120`?, `+0x03d0`? | — | — | — |  |
 | `0x102cd740` | CAI_StandoffGoal::vfunc242 | 839 | 0 | 23 | `CAI_StandoffGoal#242` | 0d/0v/0c | — | `+0x03d4`, `+0x0468`, `+0x0474` | — | — | — |  |
 | `0x102cdb70` | FUN_102cdb70 | 170 | 1 | 10 | — | 1d/0v/0c | — | `+0x0114`?, `+0x03d4`? | — | — | — |  |
-| `0x102cdc50` | CAI_StandoffGoal::vfunc180 | 60 | 0 | 12 | `CAI_StandoffGoal#180` | 0d/0v/0c | — | `+0x03cc`, `+0x0480` | — | — | — |  |
+| `0x102cdc50` | CAI_StandoffGoal::UpdateOnRemove | 60 | 0 | 12 | `CAI_StandoffGoal#180` | 0d/0v/0c | — | `+0x03cc`, `+0x0480` | — | — | — |  |
 | `0x102cdd10` | FUN_102cdd10 | 265 | 1 | 0 | — | 1d/0v/0c | — | `+0x0004`, `+0x0010` | — | — | — |  |
 | `0x102ce130` | FUN_102ce130 | 14 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102ce150` | FUN_102ce150 | 801 | 1 | 2 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x0010`, `+0x0012`, `+0x0014`, `+0x0016` | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0012`, `+0x0014`, +1 more | — | — | — |  |
@@ -2526,25 +2526,25 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102cfaf0` | FUN_102cfaf0 | 444 | 2 | 1 | — | 1d/0v/0c | `+0x0010` | `+0x0004`, `+0x0010` | — | — | — |  |
 | `0x102cfd20` | FUN_102cfd20 | 448 | 2 | 1 | — | 2d/0v/0c | `+0x0010` | `+0x0004`, `+0x0010` | — | — | — |  |
 | `0x102d0370` | CAI_Hint::vfunc82 | 6 | 0 | 0 | `CAI_Hint#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x102d0860` | CAI_Hint::vfunc77 | 20 | 0 | 1 | `CAI_Hint#77` | 0d/1v/0c | `+0x05e8` | — | — | — | — |  |
-| `0x102d0890` | CAI_Hint::vfunc78 | 20 | 0 | 1 | `CAI_Hint#78` | 0d/0v/0c | `+0x05e8` | — | — | — | — |  |
-| `0x102d08c0` | CAI_Hint::vfunc119 ‼ | 8 | 0 | 2 | `CAI_Hint#119` | 0d/0v/0c | — | `+0x0134` | — | — | — |  |
+| `0x102d0860` | CAI_Hint::ScriptHide | 20 | 0 | 1 | `CAI_Hint#77` | 0d/1v/0c | `+0x05e8` | — | — | — | — |  |
+| `0x102d0890` | CAI_Hint::ScriptUnhide | 20 | 0 | 1 | `CAI_Hint#78` | 0d/0v/0c | `+0x05e8` | — | — | — | — |  |
+| `0x102d08c0` | CAI_Hint::Kill ‼ | 8 | 0 | 2 | `CAI_Hint#119` | 0d/0v/0c | — | `+0x0134` | — | — | — |  |
 | `0x102d0910` | FUN_102d0910 | 124 | 1 | 8 | — | 1d/0v/0c | — | `+0x0134`? | — | — | — |  |
 | `0x102d09b0` | FUN_102d09b0 | 40 | 1 | 8 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x102d0ab0` | FUN_102d0ab0 | 72 | 1 | 0 | — | 3d/0v/0c | `+0x04f8` | — | `Unknown failure` | — | — |  |
 | `0x102d0b20` | FUN_102d0b20 | 36 | 3 | 0 | — | 1d/0v/0c +1 outside | `+0x04f8`? | — | — | — | — |  |
-| `0x102d0b60` | CAI_Hint::vfunc103 | 1241 | 0 | 9 | `CAI_Hint#103` | 0d/0v/0c | `+0x0454`, `+0x0458`, `+0x045c`, `+0x0460`, `+0x0464`, `+0x0470`, +1 more | `+0x026c`, `+0x0270`, `+0x0454`, `+0x045c`, `+0x0460`, `+0x0464`, +2 more | `NULL ENTITY`, `CBaseEntity::SetSolid`, +1 more | — | docs/vtmb/npc-ai/authored-control.md:429 |  |
+| `0x102d0b60` | CAI_Hint::Spawn | 1241 | 0 | 9 | `CAI_Hint#103` | 0d/0v/0c | `+0x0454`, `+0x0458`, `+0x045c`, `+0x0460`, `+0x0464`, `+0x0470`, +1 more | `+0x026c`, `+0x0270`, `+0x0454`, `+0x045c`, `+0x0460`, `+0x0464`, +2 more | `NULL ENTITY`, `CBaseEntity::SetSolid`, +1 more | — | docs/vtmb/npc-ai/authored-control.md:429 |  |
 | `0x102d1180` | FUN_102d1180 | 72 | 1 | 3 | — | 6d/0v/0c +1 outside | — | `+0x0364`, `+0x05e4` | — | — | — |  |
 | `0x102d11f0` | FUN_102d11f0 | 29 | 1 | 2 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x102d1220` | FUN_102d1220 | 144 | 3 | 5 | — | 1d/0v/0c | — | `+0x026c`, `+0x05dc` | — | — | — |  |
 | `0x102d12e0` | FUN_102d12e0 | 36 | 1 | 1 | — | 11d/0v/0c +1 outside | — | `+0x0374`? | — | — | docs/vtmb/npc-ai/programs.md:530 |  |
-| `0x102d1320` | CAI_Hint::vfunc163 | 24 | 0 | 0 | `CAI_Hint#163` | 0d/0v/0c | — | `+0x05dc`, `+0x05e8` | — | — | — |  |
+| `0x102d1320` | CAI_Hint::IsViewable | 24 | 0 | 0 | `CAI_Hint#163` | 0d/0v/0c | — | `+0x05dc`, `+0x05e8` | — | — | — |  |
 | `0x102d1350` | FUN_102d1350 | 148 | 1 | 0 | — | 6d/0v/0c | `+0x05e0` | `+0x05e0` | — | — | docs/vtmb/npc-ai/programs.md:801 |  |
 | `0x102d1420` | FUN_102d1420 | 31 | 1 | 0 | — | 8d/0v/0c | `+0x05e0`, `+0x05ec` | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:333 |  |
 | `0x102d1450` | FUN_102d1450 | 75 | 1 | 0 | — | 4d/0v/0c | — | `+0x05e0` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:332 |  |
 | `0x102d14c0` | FUN_102d14c0 | 86 | 1 | 0 | — | 10d/0v/0c +2 outside | — | `+0x05e0`?, `+0x05e8`?, `+0x05ec`? | — | — | — |  |
 | `0x102d1540` | FUN_102d1540 | 139 | 1 | 0 | — | 1d/0v/0c | — | `+0x05e0`, `+0x05ec` | — | — | — |  |
-| `0x102d1600` | CAI_Hint::vfunc124 | 260 | 0 | 4 | `CAI_Hint#124` | 0d/0v/0c | — | `+0x0224`, `+0x02e0`, `+0x05dc`, `+0x05ec` | `delay %f` | — | — |  |
+| `0x102d1600` | CAI_Hint::DrawDebugTextOverlays | 260 | 0 | 4 | `CAI_Hint#124` | 0d/0v/0c | — | `+0x0224`, `+0x02e0`, `+0x05dc`, `+0x05ec` | `delay %f` | — | — |  |
 | `0x102d1760` | FUN_102d1760 | 705 | 2 | 4 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x102d1af0` | FUN_102d1af0 | 1002 | 1 | 5 | — | 8d/0v/0c +2 outside | — | — | — | — | docs/vtmb/npc-ai/authored-control.md:436 |  |
 | `0x102d24b0` | FUN_102d24b0 | 716 | 2 | 5 | — | 1d/0v/0c | — | — | — | — | — |  |
@@ -2571,10 +2571,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102d6210` | FUN_102d6210 | 14 | 1 | 0 | — | 2d/0v/0c +6 outside | — | — | — | — | — |  |
 | `0x102d6230` | FUN_102d6230 | 15 | 1 | 0 | — | 3d/0v/0c +5 outside | — | — | — | — | — |  |
 | `0x102d7290` | CAI_TestHull::vfunc117 | 8 | 0 | 1 | `CAI_TestHull#117` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x102d72b0` | CAI_TestHull::vfunc522 | 7 | 0 | 0 | `CAI_TestHull#522` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x102d72d0` | CAI_TestHull::vfunc523 | 7 | 0 | 0 | `CAI_TestHull#523` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x102d72f0` | CAI_TestHull::vfunc103 ‼ | 363 | 0 | 14 | `CAI_TestHull#103` | 0d/0v/0c | `+0x0210`, `+0x1568` | `+0x0108`, `+0x0174`, `+0x026c`, `+0x02b4` | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — | — |  |
-| `0x102d7760` | CAI_TestHull::vfunc521 | 38 | 0 | 2 | `CAI_TestHull#521` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x102d72b0` | CAI_TestHull::StepHeight | 7 | 0 | 0 | `CAI_TestHull#522` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x102d72d0` | CAI_TestHull::GetMaxJumpSpeed | 7 | 0 | 0 | `CAI_TestHull#523` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x102d72f0` | CAI_TestHull::Spawn ‼ | 363 | 0 | 14 | `CAI_TestHull#103` | 0d/0v/0c | `+0x0210`, `+0x1568` | `+0x0108`, `+0x0174`, `+0x026c`, `+0x02b4` | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — | — |  |
+| `0x102d7760` | CAI_TestHull::IsJumpLegal | 38 | 0 | 2 | `CAI_TestHull#521` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102d77a0` | FUN_102d77a0 | 31 | 1 | 7 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102d77d0` | CAI_TestHull::vfunc5 | 30 | 0 | 8 | `CAI_TestHull#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102d8a90` | FUN_102d8a90 | 133 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
@@ -2589,14 +2589,14 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102d9500` | CAI_InterestingPlace::vfunc82 | 6 | 0 | 0 | `CAI_InterestingPlace#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102d9ae0` | CAI_InterestingPlace::vfunc5 | 30 | 0 | 6 | `CAI_InterestingPlace#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102d9b10` | FUN_102d9b10 | 195 | 1 | 5 | — | 1d/0v/0c | — | `+0x0114`?, `+0x011a`? | — | — | — |  |
-| `0x102d9c20` | CAI_InterestingPlace::vfunc103 | 336 | 0 | 6 | `CAI_InterestingPlace#103` | 0d/0v/0c | `+0x0548`, `+0x0574`, `+0x0578`, `+0x0580`, `+0x0588` | `+0x0544`, `+0x0574`, `+0x0578`, `+0x0584` | `Warning:  Possible speed issues with an …`, `Could not find InterestingPlaceType for …` | — | docs/vtmb/npc-ai/authored-control.md:477, docs/vtmb/npc-ai/programs.md:190 |  |
+| `0x102d9c20` | CAI_InterestingPlace::Spawn | 336 | 0 | 6 | `CAI_InterestingPlace#103` | 0d/0v/0c | `+0x0548`, `+0x0574`, `+0x0578`, `+0x0580`, `+0x0588` | `+0x0544`, `+0x0574`, `+0x0578`, `+0x0584` | `Warning:  Possible speed issues with an …`, `Could not find InterestingPlaceType for …` | — | docs/vtmb/npc-ai/authored-control.md:477, docs/vtmb/npc-ai/programs.md:190 |  |
 | `0x102d9dd0` | CAI_InterestingPlace::vfunc130 | 171 | 0 | 6 | `CAI_InterestingPlace#130` | 0d/0v/0c | `+0x0548` | `+0x0544` | `Could not find InterestingPlaceType for …` | — | — |  |
 | `0x102d9eb0` | FUN_102d9eb0 | 1 | 1 | 0 | — | 2d/0v/0c | — | — | — | — | — |  |
 | `0x102d9ed0` | FUN_102d9ed0 | 156 | 2 | 0 | — | 1d/0v/0c | `+0x0604` | `+0x0604` | — | — | — |  |
 | `0x102d9fa0` | FUN_102d9fa0 | 226 | 2 | 0 | — | 1d/0v/0c | — | `+0x0370`, `+0x054c`, `+0x0550`, `+0x0554`, `+0x0558`, `+0x055c`, +1 more | — | — | — |  |
 | `0x102da0d0` | PickSpotFor | 1044 | 1 | 6 | — | 1d/0v/0c | `+0x058c` | `+0x0370`, `+0x057c`, `+0x0584`, `+0x0588`, `+0x058c` | `Interesting Place at (%d, %d, %d) is cro…`, `Trouble choosing an unoccupied location …`, +1 more | — | docs/vtmb/npc-ai/programs.md:50 |  |
 | `0x102da600` | FUN_102da600 | 337 | 1 | 8 | — | 2d/0v/0c | `+0x0564`, `+0x0580`, `+0x0588` | `+0x0468`, `+0x0564`, `+0x0580`, `+0x0588` | — | — | docs/vtmb/npc-ai/programs.md:537 |  |
-| `0x102da7c0` | FUN_102da7c0 | 128 | 2 | 8 | — | 1d/0v/0c | `+0x0564` | `+0x0450`, `+0x0564`, `+0x0580`, `+0x0588` | — | — | docs/vtmb/npc-ai/programs.md:200 |  |
+| `0x102da7c0` | ClaimMarker | 128 | 2 | 8 | — | 1d/0v/0c | `+0x0564` | `+0x0450`, `+0x0564`, `+0x0580`, `+0x0588` | — | — | docs/vtmb/npc-ai/programs.md:200 |  |
 | `0x102da860` | FUN_102da860 | 241 | 2 | 1 | — | 1d/0v/0c | `+0x0588` | `+0x0580`, `+0x0584`, `+0x0588` | `**UNKNOWN**`, `AddMarker failed to add NPC '%s'⏎` | — | — |  |
 | `0x102da9a0` | FUN_102da9a0 | 46 | 2 | 0 | — | 2d/0v/0c | — | `+0x0580`, `+0x0588` | — | — | — |  |
 | `0x102da9e0` | FUN_102da9e0 | 161 | 2 | 0 | — | 1d/0v/0c | — | `+0x0580`, `+0x0588` | — | — | — |  |
@@ -2615,9 +2615,9 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102db760` | FUN_102db760 | 7 | 2 | 0 | — | 1d/0v/0c | — | `+0x0608`? | — | — | — |  |
 | `0x102db7f0` | CAI_InterestingPlaceConverstation::vfunc82 | 6 | 0 | 0 | `CAI_InterestingPlaceConverstation#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x102dbbc0` | CAI_InterestingPlaceConverstation::vfunc5 | 132 | 0 | 3 | `CAI_InterestingPlaceConverstation#5` | 0d/0v/0c | — | `+0x046c`, `+0x0484`, `+0x049c`, `+0x04b4`, `+0x04cc`, `+0x04e4` | — | — | — |  |
-| `0x102dbc80` | CAI_InterestingPlaceConverstation::vfunc103 ‼ | 19 | 0 | 6 | `CAI_InterestingPlaceConverstation#103` | 0d/0v/0c | — | `+0x01a0` | — | — | — |  |
-| `0x102dbcb0` | CAI_InterestingPlaceConverstation::vfunc104 | 123 | 0 | 1 | `CAI_InterestingPlaceConverstation#104` | 0d/1v/0c | — | `+0x0454`, `+0x0458` | `%s has an invalid sound file⏎` | — | — |  |
-| `0x102dbd50` | CAI_InterestingPlaceConverstation::vfunc126 | 53 | 0 | 1 | `CAI_InterestingPlaceConverstation#126` | 0d/0v/0c | — | `+0x0460` | — | — | — |  |
+| `0x102dbc80` | CAI_InterestingPlaceConverstation::Spawn ‼ | 19 | 0 | 6 | `CAI_InterestingPlaceConverstation#103` | 0d/0v/0c | — | `+0x01a0` | — | — | — |  |
+| `0x102dbcb0` | CAI_InterestingPlaceConverstation::Precache | 123 | 0 | 1 | `CAI_InterestingPlaceConverstation#104` | 0d/1v/0c | — | `+0x0454`, `+0x0458` | `%s has an invalid sound file⏎` | — | — |  |
+| `0x102dbd50` | CAI_InterestingPlaceConverstation::Save | 53 | 0 | 1 | `CAI_InterestingPlaceConverstation#126` | 0d/0v/0c | — | `+0x0460` | — | — | — |  |
 | `0x102dbda0` | CAI_InterestingPlaceConverstation::vfunc127 | 40 | 0 | 1 | `CAI_InterestingPlaceConverstation#127` | 0d/0v/0c | — | `+0x0460` | — | — | — |  |
 | `0x102dbde0` | CAI_InterestingPlaceConverstation::vfunc113 | 353 | 0 | 9 | `CAI_InterestingPlaceConverstation#113` | 0d/0v/0c | `+0x04fc` | `+0x0450` | `%s(%s) is not a valid target for %s. Mus…` | — | — |  |
 | `0x102dc3e0` | FUN_102dc3e0 | 39 | 1 | 1 | — | 1d/0v/0c +2 outside | `+0x017c`? | — | — | — | — |  |
@@ -2643,14 +2643,14 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102df130` | FUN_102df130 | 83 | 2 | 8 | — | 1d/0v/0c +1 outside | — | — | — | — | docs/vtmb/npc-ai/senses.md:159 |  |
 | `0x102df1b0` | FUN_102df1b0 | 16 | 2 | 1 | — | 3d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x102df320` | CAI_Memory::RefreshMemories | 778 | 1 | 2 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x00d8`, `+0x00e0` | `Unaccounted`, `CAI_Memory_RefreshMemories`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:304, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemyMemory.h:40 | docs/vtmb/combat-and-damage.md:1569, docs/vtmb/npc-ai/senses.md:173 |  |
-| `0x102df700` | FUN_102df700 | 627 | 1 | 9 | — | 1d/0v/0c | `+0x000c` | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00dc` | — | — | docs/vtmb/npc-ai/senses.md:157 |  |
+| `0x102df700` | CAI_Memory::UpdateMemory | 627 | 1 | 9 | — | 1d/0v/0c | `+0x000c` | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00dc` | — | — | docs/vtmb/npc-ai/senses.md:157 |  |
 | `0x102dfa20` | FUN_102dfa20 | 87 | 1 | 0 | — | 5d/0v/0c | — | `+0x000c` | — | — | — |  |
 | `0x102dfaa0` | FUN_102dfaa0 | 276 | 1 | 2 | — | 2d/0v/0c +2 outside | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00e0` | — | — | — |  |
 | `0x102dfc10` | FUN_102dfc10 | 289 | 2 | 2 | — | 3d/0v/0c +1 outside | `+0x000c` | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00e0` | — | — | docs/vtmb/npc-ai/social.md:461 |  |
 | `0x102dfd90` | FUN_102dfd90 | 250 | 1 | 1 | — | 3d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00e4` | `Asking MarkAsEluded for enemy that's not…` | — | — |  |
 | `0x102dfed0` | FUN_102dfed0 | 352 | 1 | 1 | — | 37d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00e8` | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2124 | — |  |
 | `0x102e0150` | FUN_102e0150 | 144 | 1 | 0 | — | 4d/0v/0c +1 outside | — | `+0x000c` | `Asking LastTimeSeen for enemy that's not…` | — | — |  |
-| `0x102e0210` | FUN_102e0210 | 88 | 1 | 0 | — | 6d/0v/0c +1 outside | — | `+0x000c` | — | — | docs/vtmb/npc-ai/senses.md:156, docs/vtmb/npc-ai/social.md:78 |  |
+| `0x102e0210` | IsEluded | 88 | 1 | 0 | — | 6d/0v/0c +1 outside | — | `+0x000c` | — | — | docs/vtmb/npc-ai/senses.md:156, docs/vtmb/npc-ai/social.md:78 |  |
 | `0x102e0290` | FUN_102e0290 | 371 | 1 | 1 | — | 2d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x00e8` | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | — | — |  |
 | `0x102e06f0` | FUN_102e06f0 | 33 | 2 | 1 | — | 2d/0v/0c +4 outside | `+0x0002`? | — | — | — | — |  |
 | `0x102e0730` | FUN_102e0730 | 36 | 1 | 3 | — | 3d/0v/0c +2 outside | — | — | `%s(%d) :`, `E:\Vampire\main\dlls\AI_Memory.cpp` | — | — |  |
@@ -2744,8 +2744,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102ecc40` | FUN_102ecc40 | 96 | 1 | 3 | — | 2d/0v/0c +1 outside | — | `+0x0004`?, `+0x0030`? | — | — | — |  |
 | `0x102eccc0` | FUN_102eccc0 | 8 | 1 | 21 | — | 1d/0v/0c | — | `+0x0004`? | — | — | — |  |
 | `0x102ecd00` | FUN_102ecd00 | 16 | 3 | 0 | — | 1d/0v/0c | — | `+0x0004` | — | — | — |  |
-| `0x102ecd20` | FUN_102ecd20 | 1213 | 1 | 20 | — | 15d/0v/0c | `+0x0008`, `+0x000c` | `+0x0004`, `+0x0008`, `+0x001c`, `+0x0020`, `+0x002c`, `+0x0030` | — | — | docs/vtmb/navigation-jump-links.md:87, docs/vtmb/npc-ai/programs.md:210, docs/vtmb/npc-ai/programs.md:335, +1 more |  |
-| `0x102ed310` | FUN_102ed310 | 90 | 2 | 20 | — | 3d/0v/0c | — | `+0x001c`, `+0x0030` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:459 |  |
+| `0x102ecd20` | SetGoal | 1213 | 1 | 20 | — | 15d/0v/0c | `+0x0008`, `+0x000c` | `+0x0004`, `+0x0008`, `+0x001c`, `+0x0020`, `+0x002c`, `+0x0030` | — | — | docs/vtmb/navigation-jump-links.md:87, docs/vtmb/npc-ai/programs.md:210, docs/vtmb/npc-ai/programs.md:335, +1 more |  |
+| `0x102ed310` | FUN_102ed310 | 90 | 2 | 20 | — | 3d/0v/0c | — | `+0x001c`, `+0x0030` | — | — | docs/vtmb/npc-ai/conditions-and-states.md:462 |  |
 | `0x102ed430` | FUN_102ed430 | 199 | 2 | 16 | — | 1d/0v/0c | `+0x0008`, `+0x000c`, `+0x0014` | `+0x0004`, `+0x001c`, `+0x002c`, `+0x0030` | — | — | — |  |
 | `0x102ed540` | FUN_102ed540 | 155 | 1 | 22 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102ed610` | FUN_102ed610 | 401 | 2 | 21 | — | 1d/0v/0c +1 outside | — | `+0x0004`, `+0x0018`, `+0x0024` | — | — | — |  |
@@ -2756,14 +2756,14 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102edbb0` | FUN_102edbb0 | 146 | 1 | 16 | — | 1d/0v/0c | `+0x0008`, `+0x000c` | `+0x0004` | — | — | docs/vtmb/npc-ai/social.md:244 |  |
 | `0x102edc80` | FUN_102edc80 | 156 | 1 | 9 | — | 3d/0v/0c | `+0x0008`, `+0x000c` | `+0x0004` | — | — | — |  |
 | `0x102edd50` | FUN_102edd50 | 161 | 1 | 9 | — | 1d/0v/0c | `+0x0008`, `+0x000c` | `+0x0004` | — | — | — |  |
-| `0x102ee140` | FUN_102ee140 | 8 | 1 | 1 | — | 11d/0v/0c | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:457 |  |
-| `0x102ee160` | FUN_102ee160 | 48 | 2 | 0 | — | 3d/0v/0c | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:455 |  |
+| `0x102ee140` | FUN_102ee140 | 8 | 1 | 1 | — | 11d/0v/0c | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:460 |  |
+| `0x102ee160` | FUN_102ee160 | 48 | 2 | 0 | — | 3d/0v/0c | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:458 |  |
 | `0x102ee1a0` | FUN_102ee1a0 | 7 | 2 | 0 | — | 3d/0v/0c +1 outside | — | `+0x0030`? | — | — | — |  |
 | `0x102ee1c0` | FUN_102ee1c0 | 13 | 1 | 0 | — | 12d/0v/0c | — | `+0x0030` | — | — | — |  |
-| `0x102ee1e0` | FUN_102ee1e0 | 15 | 1 | 20 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:609 |  |
+| `0x102ee1e0` | FUN_102ee1e0 | 15 | 1 | 20 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:611 |  |
 | `0x102ee220` | FUN_102ee220 | 31 | 1 | 20 | — | 3d/0v/0c | — | `+0x0030` | — | — | — |  |
 | `0x102ee250` | FUN_102ee250 | 13 | 1 | 0 | — | 7d/0v/0c +2 outside | — | `+0x0030` | — | — | — |  |
-| `0x102ee270` | FUN_102ee270 | 19 | 1 | 5 | — | 14d/0v/0c +1 outside | — | `+0x001c`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:341, docs/vtmb/npc-ai/schedule-kernel.md:607 |  |
+| `0x102ee270` | FUN_102ee270 | 19 | 1 | 5 | — | 14d/0v/0c +1 outside | — | `+0x001c`? | — | — | docs/vtmb/npc-ai/schedule-kernel.md:341, docs/vtmb/npc-ai/schedule-kernel.md:609 |  |
 | `0x102ee2a0` | FUN_102ee2a0 | 8 | 2 | 1 | — | 2d/0v/0c | — | `+0x0030`? | — | — | — |  |
 | `0x102ee2c0` | FUN_102ee2c0 | 8 | 1 | 1 | — | 3d/0v/0c +1 outside | — | `+0x0030`? | — | — | — |  |
 | `0x102ee2e0` | FUN_102ee2e0 | 7 | 1 | 0 | — | 7d/0v/0c +1 outside | — | `+0x0030`? | — | — | — |  |
@@ -2775,8 +2775,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102ee530` | FUN_102ee530 | 8 | 1 | 1 | — | 2d/0v/0c | — | `+0x0030` | — | — | — |  |
 | `0x102ee550` | FUN_102ee550 | 44 | 1 | 1 | — | 1d/0v/0c | — | `+0x0030` | — | — | — |  |
 | `0x102ee5e0` | FUN_102ee5e0 | 8 | 1 | 1 | — | 2d/0v/0c +3 outside | — | `+0x0030`? | — | — | — |  |
-| `0x102ee620` | FUN_102ee620 | 8 | 1 | 1 | — | 22d/0v/0c +1 outside | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:455 |  |
-| `0x102ee640` | FUN_102ee640 | 8 | 3 | 1 | — | 1d/0v/0c | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:456 |  |
+| `0x102ee620` | FUN_102ee620 | 8 | 1 | 1 | — | 22d/0v/0c +1 outside | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:458 |  |
+| `0x102ee640` | FUN_102ee640 | 8 | 3 | 1 | — | 1d/0v/0c | — | `+0x0030`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:459 |  |
 | `0x102ee660` | FUN_102ee660 | 8 | 1 | 1 | — | 2d/0v/0c +1 outside | — | `+0x0030`? | — | — | — |  |
 | `0x102ee680` | FUN_102ee680 | 15 | 1 | 1 | — | 2d/0v/0c +1 outside | — | `+0x0030`? | — | — | — |  |
 | `0x102ee6a0` | FUN_102ee6a0 | 23 | 1 | 0 | — | 18d/0v/0c +3 outside | — | `+0x0030`? | — | — | — |  |
@@ -2788,15 +2788,15 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102eea70` | CAI_Navigator::FUN_102eea70 | 14 | 0 | 2 | `CAI_Navigator#7` | 0d/0v/0c | `+0x001c` | — | — | — | — |  |
 | `0x102eea90` | CAI_Navigator::FUN_102eea90 | 21 | 0 | 22 | `CAI_Navigator#8` | 0d/2v/0c | `+0x001c` | — | — | — | — |  |
 | `0x102eeac0` | CAI_Navigator::FUN_102eeac0 | 16 | 0 | 2 | `CAI_Navigator#11` | 0d/0v/0c | `+0x001c` | — | — | — | — |  |
-| `0x102eeae0` | CAI_Navigator::FUN_102eeae0 | 75 | 0 | 5 | `CAI_Navigator#10` | 0d/2v/0c | `+0x001c` | `+0x0004` | `E:\Vampire\main\dlls\ai_navigator.cpp` | — | docs/vtmb/npc-ai/schedule-kernel.md:293 |  |
+| `0x102eeae0` | CAI_Navigator::OnNavFailed | 75 | 0 | 5 | `CAI_Navigator#10` | 0d/2v/0c | `+0x001c` | `+0x0004` | `E:\Vampire\main\dlls\ai_navigator.cpp` | — | docs/vtmb/npc-ai/schedule-kernel.md:293 |  |
 | `0x102eeb50` | CAI_Navigator::FUN_102eeb50 ‼ | 13 | 0 | 6 | `CAI_Navigator#9` | 0d/0v/0c | — | `+0x0028` | — | — | — |  |
 | `0x102eeb70` | FUN_102eeb70 | 26 | 1 | 1 | — | 4d/0v/0c | `+0x0054`?, `+0x0058`?, `+0x0060`? | `+0x0028`? | — | — | — |  |
 | `0x102eeba0` | FUN_102eeba0 | 10 | 1 | 0 | — | 5d/0v/0c | `+0x0018` | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:74 | docs/vtmb/navigation-jump-links.md:65 |  |
 | `0x102eebc0` | CAI_Navigator::FUN_102eebc0 | 218 | 0 | 20 | `CAI_Navigator#13` | 0d/1v/0c | — | `+0x0004`, `+0x0018`, `+0x0020`, `+0x0030` | — | — | — |  |
-| `0x102eece0` | CAI_Navigator::FUN_102eece0 | 266 | 0 | 23 | `CAI_Navigator#14` | 0d/1v/0c | — | `+0x0004`, `+0x0018`, `+0x0020`, `+0x0024`, `+0x0030` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:65, Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:74 | docs/vtmb/navigation-jump-links.md:64 |  |
+| `0x102eece0` | CAI_Navigator::MoveJump | 266 | 0 | 23 | `CAI_Navigator#14` | 0d/1v/0c | — | `+0x0004`, `+0x0018`, `+0x0020`, `+0x0024`, `+0x0030` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:65, Source/ElysiumUE/Private/Visual/ElysiumNpcBodyNavigation.cpp:74 | docs/vtmb/navigation-jump-links.md:64 |  |
 | `0x102eee40` | CAI_Navigator::FUN_102eee40 | 285 | 0 | 4 | `CAI_Navigator#17` | 0d/0v/0c | — | `+0x0004`, `+0x0018`, `+0x0020`, `+0x0030` | — | — | — |  |
 | `0x102ef510` | CAI_Navigator::FUN_102ef510 | 308 | 0 | 23 | `CAI_Navigator#16` | 0d/0v/0c | — | `+0x0004`, `+0x0018`, `+0x0020`, `+0x0030` | — | — | — |  |
-| `0x102ef870` | CAI_Navigator::FUN_102ef870 | 436 | 0 | 1 | `CAI_Navigator#15` | 0d/0v/0c | — | `+0x0004`, `+0x0010`, `+0x0020`, `+0x0028` | `Unaccounted`, `CAI_Navigator_MoveEnact` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:207, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:5, Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:96, +5 more | docs/vtmb/footsteps.md:132 |  |
+| `0x102ef870` | CAI_Navigator::MoveEnact | 436 | 0 | 1 | `CAI_Navigator#15` | 0d/0v/0c | — | `+0x0004`, `+0x0010`, `+0x0020`, `+0x0028` | `Unaccounted`, `CAI_Navigator_MoveEnact` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:207, Source/ElysiumUE/Private/Tests/ElysiumFootstepSenseTests.cpp:5, Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:96, +5 more | docs/vtmb/footsteps.md:132 |  |
 | `0x102efaa0` | CAI_Navigator::MoveNormal | 538 | 0 | 18 | `CAI_Navigator#12` | 0d/1v/0c | — | — | `CAI_Navigator::MoveNormal` | — | — |  |
 | `0x102efd50` | FUN_102efd50 | 104 | 1 | 17 | — | 1d/0v/0c +1 outside | `+0x0051`? | `+0x0018`?, `+0x0020`?, `+0x0030`? | `Warning: NPC appears to have wrong nav t…` | — | — |  |
 | `0x102eff40` | CAI_Navigator::Move | 660 | 0 | 24 | `CAI_Navigator#5` | 0d/0v/0c | `+0x0008`, `+0x000c`, `+0x001c` | `+0x0004`, `+0x0018`, `+0x001c`, `+0x0020`, `+0x0024`, `+0x0028`, +3 more | `ERROR: AI navigation not terminating. Po…`, `Bogus route move type!`, +2 more | — | — |  |
@@ -2815,7 +2815,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102f1900` | FUN_102f1900 | 210 | 2 | 6 | — | 1d/0v/0c +2 outside | — | `+0x0008`, `+0x0024`, `+0x002c` | `CanFitAtNode() called with no network!⏎` | — | docs/vtmb/navigation-jump-links.md:124 |  |
 | `0x102f1a20` | FUN_102f1a20 | 573 | 2 | 4 | — | 2d/0v/0c | — | `+0x0004`, `+0x0008` | — | — | — |  |
 | `0x102f1cf0` | FUN_102f1cf0 | 120 | 5 | 1 | — | 1d/0v/0c +2 outside | — | `+0x0004`?, `+0x0018`?, `+0x0030`? | — | — | — |  |
-| `0x102f1dc0` | FUN_102f1dc0 | 384 | 2 | 19 | — | 4d/0v/0c +1 outside | — | `+0x0008`?, `+0x0028`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:458 |  |
+| `0x102f1dc0` | FUN_102f1dc0 | 384 | 2 | 19 | — | 4d/0v/0c +1 outside | — | `+0x0008`?, `+0x0028`? | — | — | docs/vtmb/npc-ai/conditions-and-states.md:461 |  |
 | `0x102f1fa0` | FUN_102f1fa0 | 144 | 1 | 2 | — | 2d/0v/0c | — | `+0x002c`, `+0x0030`, `+0x0050` | — | — | — |  |
 | `0x102f2060` | FUN_102f2060 | 563 | 3 | 17 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x0018`, `+0x0030` | — | — | — |  |
 | `0x102f2330` | FUN_102f2330 | 1061 | 2 | 18 | — | 2d/0v/0c | — | — | `Unaccounted`, `CAI_Navigator_DoFindPath` | — | — |  |
@@ -2857,7 +2857,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102f9970` | FUN_102f9970 | 6 | 1 | 0 | — | 2d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x102f99d0` | FUN_102f99d0 | 522 | 2 | 4 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102f9c70` | FUN_102f9c70 | 19 | 1 | 5 | — | 1d/0v/0c +3 outside | — | — | — | — | — |  |
-| `0x102fb0d0` | FUN_102fb0d0 | 619 | 1 | 1 | — | 28d/0v/0c +14 outside | — | `+0x0008`, `+0x000c`, `+0x0010`, `+0x006c`, `+0x0070`, `+0x0074` | — | — | docs/vtmb/navigation-jump-links.md:35, docs/vtmb/npc-ai/programs.md:334, docs/vtmb/npc-ai/programs.md:511 |  |
+| `0x102fb0d0` | CAI_Node::GetPosition | 619 | 1 | 1 | — | 28d/0v/0c +14 outside | — | `+0x0008`, `+0x000c`, `+0x0010`, `+0x006c`, `+0x0070`, `+0x0074` | — | — | docs/vtmb/navigation-jump-links.md:35, docs/vtmb/npc-ai/programs.md:334, docs/vtmb/npc-ai/programs.md:511 |  |
 | `0x102fc910` | FUN_102fc910 | 84 | 2 | 6 | — | 6d/0v/0c +3 outside | `+0x0002`, `+0x0008` | `+0x0002`, `+0x0008` | — | — | — |  |
 | `0x102fca40` | FUN_102fca40 | 42 | 5 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x102fcab0` | FUN_102fcab0 | 221 | 4 | 1 | — | 1d/0v/0c +1 outside | — | `+0x0004`, `+0x0008` | `Note: Strange link found between nodes i…` | — | — |  |
@@ -2914,7 +2914,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10307ac0` | FUN_10307ac0 | 85 | 2 | 0 | — | 1d/0v/0c | — | `+0x000c`, `+0x0014` | — | — | — |  |
 | `0x10307b40` | FUN_10307b40 | 9 | 3 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10307b60` | FUN_10307b60 | 13 | 3 | 1 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/programs.md:484 |  |
-| `0x10307b80` | FUN_10307b80 | 71 | 2 | 1 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/programs.md:469 |  |
+| `0x10307b80` | NextPoint | 71 | 2 | 1 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/programs.md:469 |  |
 | `0x10307bf0` | FUN_10307bf0 | 21 | 3 | 0 | — | 1d/0v/0c | `+0x000c` | `+0x000c` | — | — | — |  |
 | `0x10307c20` | FUN_10307c20 | 23 | 3 | 0 | — | 2d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/programs.md:470 |  |
 | `0x10307d30` | FUN_10307d30 | 84 | 3 | 0 | — | 1d/0v/0c +1 outside | — | — | `Patrol path pool is dry.  It will store …` | — | docs/vtmb/npc-ai/programs.md:458 |  |
@@ -2941,10 +2941,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1030bea0` | FUN_1030bea0 | 5 | 2 | 0 | — | 1d/0v/0c | `+0x0010`? | — | — | — | — |  |
 | `0x1030bec0` | FUN_1030bec0 | 105 | 2 | 0 | — | 1d/0v/0c | `+0x0011`?, `+0x0014`?, `+0x0018`?, `+0x001c`?, `+0x0024`?, `+0x0028`?, +10 more | — | — | — | — |  |
 | `0x1030bf50` | FUN_1030bf50 | 11 | 2 | 2 | — | 1d/0v/0c | — | `+0x0024`? | — | — | — |  |
-| `0x1030f300` | FUN_1030f300 | 57 | 1 | 3 | — | 2d/0v/0c | — | `+0x0004` | `Couldn't find schedule %d (%s)⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:547 |  |
+| `0x1030f300` | FUN_1030f300 | 57 | 1 | 3 | — | 2d/0v/0c | — | `+0x0004` | `Couldn't find schedule %d (%s)⏎` | — | docs/vtmb/npc-ai/schedule-kernel.md:549 |  |
 | `0x1030f350` | FUN_1030f350 | 51 | 1 | 5 | — | 1d/0v/0c +1 outside | — | `+0x0004` | — | — | docs/vtmb/savegame_format.md:593 |  |
-| `0x1030f7b0` | FUN_1030f7b0 | 306 | 4 | 5 | — | 1d/0v/0c | — | `+0x0004`, `+0x0084` | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:555 | docs/vtmb/footsteps.md:707, docs/vtmb/npc-ai/senses.md:206 |  |
-| `0x1030f940` | FUN_1030f940 | 133 | 3 | 6 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:38, docs/vtmb/npc-ai/senses.md:205 |  |
+| `0x1030f7b0` | CanHearSound | 306 | 4 | 5 | — | 1d/0v/0c | — | `+0x0004`, `+0x0084` | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:555 | docs/vtmb/footsteps.md:707, docs/vtmb/npc-ai/senses.md:206 |  |
+| `0x1030f940` | CAI_Senses::Listen | 133 | 3 | 6 | — | 1d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:38, docs/vtmb/npc-ai/senses.md:205 |  |
 | `0x1030fa00` | FUN_1030fa00 | 117 | 6 | 0 | — | 1d/0v/0c | — | `+0x0004` | — | — | docs/vtmb/npc-ai/senses.md:44 |  |
 | `0x1030faa0` | FUN_1030faa0 | 66 | 6 | 0 | — | 1d/0v/0c | — | `+0x0004` | — | — | — |  |
 | `0x1030fb10` | FUN_1030fb10 | 59 | 1 | 1 | — | 2d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:180 |  |
@@ -2956,14 +2956,14 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1030fe70` | FUN_1030fe70 | 119 | 5 | 1 | — | 3d/0v/0c | — | `+0x0004` | — | — | — |  |
 | `0x1030ff10` | FUN_1030ff10 | 100 | 3 | 3 | — | 1d/0v/0c | `+0x0014`, `+0x0018` | `+0x0004`, `+0x0014`, `+0x0018` | — | — | docs/vtmb/npc-ai/senses.md:38 |  |
 | `0x1030ffa0` | FUN_1030ffa0 | 62 | 5 | 1 | — | 3d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:44 |  |
-| `0x1030fff0` | FUN_1030fff0 | 245 | 4 | 2 | — | 1d/0v/0c | `+0x0068` | `+0x0004`, `+0x0020`, `+0x002c`, `+0x0068`, `+0x006c` | — | — | docs/vtmb/npc-ai/senses.md:42 |  |
-| `0x10310130` | FUN_10310130 | 267 | 4 | 2 | — | 1d/0v/0c | `+0x0070` | `+0x0004`, `+0x0034`, `+0x0040`, `+0x0070`, `+0x0074` | — | — | docs/vtmb/npc-ai/senses.md:43 |  |
+| `0x1030fff0` | LookForPlayers | 245 | 4 | 2 | — | 1d/0v/0c | `+0x0068` | `+0x0004`, `+0x0020`, `+0x002c`, `+0x0068`, `+0x006c` | — | — | docs/vtmb/npc-ai/senses.md:42 |  |
+| `0x10310130` | LookForNPCs | 267 | 4 | 2 | — | 1d/0v/0c | `+0x0070` | `+0x0004`, `+0x0034`, `+0x0040`, `+0x0070`, `+0x0074` | — | — | docs/vtmb/npc-ai/senses.md:43 |  |
 | `0x10310290` | FUN_10310290 | 327 | 4 | 2 | — | 1d/0v/0c | `+0x0078` | `+0x0004`, `+0x0048`, `+0x0054`, `+0x0078`, `+0x007c` | — | — | — |  |
 | `0x10310440` | FUN_10310440 | 41 | 1 | 1 | — | 3d/0v/0c | — | `+0x001c` | — | — | — |  |
 | `0x10310480` | FUN_10310480 | 76 | 1 | 1 | — | 3d/0v/0c | — | — | — | — | — |  |
 | `0x103104f0` | FUN_103104f0 | 173 | 1 | 2 | — | 2d/0v/0c | — | `+0x0004`? | — | — | — |  |
-| `0x103105d0` | FUN_103105d0 | 241 | 1 | 2 | — | 1d/0v/0c | — | `+0x0004`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:881 | docs/vtmb/npc-ai/senses.md:294 |  |
-| `0x10310710` | FUN_10310710 | 460 | 2 | 7 | — | 1d/0v/0c | — | `+0x0080`? | `Unaccounted`, `CAI_BaseNPC_PerformSensing` | — | docs/vtmb/npc-ai/senses.md:37 |  |
+| `0x103105d0` | CAI_Senses::GetClosestSound | 241 | 1 | 2 | — | 1d/0v/0c | — | `+0x0004`? | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:881 | docs/vtmb/npc-ai/senses.md:294 |  |
+| `0x10310710` | CAI_Senses::PerformSensing | 460 | 2 | 7 | — | 1d/0v/0c | — | `+0x0080`? | `Unaccounted`, `CAI_BaseNPC_PerformSensing` | — | docs/vtmb/npc-ai/senses.md:37 |  |
 | `0x103109a0` | FUN_103109a0 | 183 | 6 | 0 | — | 1d/0v/0c | `+0x000c`, `+0x0010` | `+0x0004`, `+0x000c` | — | — | — |  |
 | `0x10310bc0` | FUN_10310bc0 | 51 | 4 | 9 | — | 1d/0v/0c +1 outside | `+0x0028`? | — | `Could not find NPCMaker( %s )⏎` | — | — |  |
 | `0x10310cf0` | FUN_10310cf0 | 84 | 3 | 10 | — | 2d/0v/0c | — | `+0x0028`? | `Failed to spawn with NPCMaker( %s )⏎` | — | — |  |
@@ -2992,18 +2992,18 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10315170` | FUN_10315170 | 434 | 4 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x0010` | `+0x0004`, `+0x0010` | — | — | — |  |
 | `0x103153a0` | FUN_103153a0 | 437 | 4 | 1 | — | 1d/0v/0c +1 outside | `+0x0004`, `+0x0010` | `+0x0004`, `+0x0010` | — | — | — |  |
 | `0x10315790` | FUN_10315790 | 69 | 1 | 5 | — | 2d/0v/0c +2 outside | — | — | — | — | — |  |
-| `0x10315800` | FUN_10315800 | 183 | 1 | 7 | — | 3d/0v/0c | — | — | `Error!! Squad %s is too big!!! Replacing…` | — | docs/vtmb/npc-ai/social.md:447 |  |
-| `0x103158f0` | FUN_103158f0 | 171 | 1 | 1 | — | 4d/0v/0c | `+0x005c` | `+0x001c`, `+0x005c` | `ERROR: Attempting to remove non-existing…` | — | docs/vtmb/npc-ai/conditions-and-states.md:365, docs/vtmb/npc-ai/social.md:452 |  |
+| `0x10315800` | FindCreateSquad | 183 | 1 | 7 | — | 3d/0v/0c | — | — | `Error!! Squad %s is too big!!! Replacing…` | — | docs/vtmb/npc-ai/social.md:447 |  |
+| `0x103158f0` | RemoveFromSquad | 171 | 1 | 1 | — | 4d/0v/0c | `+0x005c` | `+0x001c`, `+0x005c` | `ERROR: Attempting to remove non-existing…` | — | docs/vtmb/npc-ai/conditions-and-states.md:368, docs/vtmb/npc-ai/social.md:452 |  |
 | `0x10315a80` | FUN_10315a80 | 227 | 3 | 1 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | — | — |  |
 | `0x10315ec0` | FUN_10315ec0 | 113 | 1 | 0 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | — | — |  |
 | `0x103160a0` | FUN_103160a0 | 4 | 2 | 0 | — | 4d/0v/0c +1 outside | — | `+0x005c`? | — | — | — |  |
 | `0x103160c0` | FUN_103160c0 | 170 | 2 | 0 | — | 3d/0v/0c +1 outside | — | `+0x001c`, `+0x005c` | — | — | docs/vtmb/npc-ai/social.md:451 |  |
-| `0x103161a0` | FUN_103161a0 | 236 | 1 | 20 | — | 7d/0v/0c | — | `+0x0008`, `+0x001c`, `+0x005c` | `ERROR: SquadNewEnemy() - pEnemy is NULL!…` | — | docs/vtmb/npc-ai/authored-control.md:467, docs/vtmb/npc-ai/conditions-and-states.md:72, docs/vtmb/npc-ai/conditions-and-states.md:365, +1 more |  |
+| `0x103161a0` | SquadNewEnemy | 236 | 1 | 20 | — | 7d/0v/0c | — | `+0x0008`, `+0x001c`, `+0x005c` | `ERROR: SquadNewEnemy() - pEnemy is NULL!…` | — | docs/vtmb/npc-ai/authored-control.md:467, docs/vtmb/npc-ai/conditions-and-states.md:75, docs/vtmb/npc-ai/conditions-and-states.md:368, +1 more |  |
 | `0x103164c0` | FUN_103164c0 | 115 | 2 | 6 | — | 1d/0v/0c | `+0x0064`, `+0x0066`, `+0x006c`, `+0x0070` | `+0x0008`, `+0x001c`, `+0x0064`, `+0x0066`, `+0x006c` | — | — | docs/vtmb/npc-ai/social.md:435 |  |
 | `0x103165f0` | FUN_103165f0 | 76 | 3 | 0 | — | 1d/0v/0c +1 outside | `+0x0004`, `+0x000c`, `+0x0010`, `+0x005c`, `+0x0060`, `+0x0070`, +1 more | `+0x001c` | — | — | docs/vtmb/npc-ai/social.md:435 |  |
-| `0x10316660` | FUN_10316660 | 52 | 3 | 0 | — | 1d/0v/0c +1 outside | `+0x0070`, `+0x0074` | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:365, docs/vtmb/npc-ai/social.md:455 |  |
-| `0x103166b0` | FUN_103166b0 | 59 | 1 | 0 | — | 3d/0v/0c | — | `+0x0070`?, `+0x0074`? | — | — | docs/vtmb/npc-ai/social.md:455 |  |
-| `0x10316700` | FUN_10316700 | 3 | 2 | 0 | — | 2d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/population.md:224, docs/vtmb/npc-ai/social.md:458 |  |
+| `0x10316660` | SetSquadFocus | 52 | 3 | 0 | — | 1d/0v/0c +1 outside | `+0x0070`, `+0x0074` | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:368, docs/vtmb/npc-ai/social.md:455 |  |
+| `0x103166b0` | GetSquadFocus | 59 | 1 | 0 | — | 3d/0v/0c | — | `+0x0070`?, `+0x0074`? | — | — | docs/vtmb/npc-ai/social.md:455 |  |
+| `0x10316700` | LeaveSquad | 3 | 2 | 0 | — | 2d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/population.md:224, docs/vtmb/npc-ai/social.md:458 |  |
 | `0x10316760` | FUN_10316760 | 97 | 2 | 0 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | — | — |  |
 | `0x103167f0` | FUN_103167f0 | 114 | 2 | 0 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | — | — |  |
 | `0x10316890` | FUN_10316890 | 203 | 2 | 0 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | — | docs/vtmb/npc-ai/social.md:491 |  |
@@ -3029,8 +3029,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103232b0` | CBaseCombatCharacter::GetShakyHandsPenalty | 140 | 2 | 1 | — | 1d/0v/0c +1 outside | — | `+0x026c`, `+0x0560`, `+0x0e88` | `NULL ENTITY`, `CBaseCombatCharacter::GetShakyHandsPenal…` | — | — |  |
 | `0x10323370` | CBaseCombatCharacter::AddToPresenceList | 232 | 2 | 1 | — | 2d/0v/0c | — | `+0x0004`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::AddToPresenceList` | — | — |  |
 | `0x103234a0` | CBaseCombatCharacter::RemoveFromPresenceList | 317 | 2 | 1 | — | 3d/0v/0c | — | `+0x0004`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::RemoveFromPresence…` | — | — |  |
-| `0x10323630` | CBaseCombatCharacter::AddToComfortList | 247 | 4 | 1 | — | 1d/0v/0c | `+0x0e94` | `+0x0004`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::AddToComfortList` | Source/ElysiumUE/Public/ElysiumEntityWorld.h:217, Source/ElysiumUE/Public/ElysiumPlayer.h:1078 | docs/vtmb/npc-ai/authored-control.md:334, docs/vtmb/npc-ai/conditions-and-states.md:224, docs/vtmb/npc-ai/conditions-and-states.md:345 |  |
-| `0x10323770` | CBaseCombatCharacter::RemoveFromComfortList | 347 | 2 | 1 | — | 3d/0v/0c | `+0x0e94` | `+0x0004`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::RemoveFromComfortL…` | Source/ElysiumUE/Public/ElysiumEntityWorld.h:217, Source/ElysiumUE/Public/ElysiumPlayer.h:1078 | docs/vtmb/npc-ai/authored-control.md:335, docs/vtmb/npc-ai/conditions-and-states.md:224, docs/vtmb/npc-ai/conditions-and-states.md:345 |  |
+| `0x10323630` | CBaseCombatCharacter::AddToComfortList | 247 | 4 | 1 | — | 1d/0v/0c | `+0x0e94` | `+0x0004`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::AddToComfortList` | Source/ElysiumUE/Public/ElysiumEntityWorld.h:217, Source/ElysiumUE/Public/ElysiumPlayer.h:1078 | docs/vtmb/npc-ai/authored-control.md:334, docs/vtmb/npc-ai/conditions-and-states.md:227, docs/vtmb/npc-ai/conditions-and-states.md:348 |  |
+| `0x10323770` | CBaseCombatCharacter::RemoveFromComfortList | 347 | 2 | 1 | — | 3d/0v/0c | `+0x0e94` | `+0x0004`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::RemoveFromComfortL…` | Source/ElysiumUE/Public/ElysiumEntityWorld.h:217, Source/ElysiumUE/Public/ElysiumPlayer.h:1078 | docs/vtmb/npc-ai/authored-control.md:335, docs/vtmb/npc-ai/conditions-and-states.md:227, docs/vtmb/npc-ai/conditions-and-states.md:348 |  |
 | `0x10323930` | FUN_10323930 | 72 | 1 | 1 | — | 3d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x103239a0` | CBaseCombatCharacter::AddToTeam | 153 | 1 | 7 | — | 3d/0v/0c +2 outside | `+0x10b0` | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::AddToTeam` | — | — |  |
 | `0x10323a70` | FUN_10323a70 | 8 | 2 | 0 | — | 2d/0v/0c | — | `+0x10b0`? | — | — | — |  |
@@ -3057,7 +3057,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10326040` | CBaseCombatCharacter::CorpseFade | 200 | 0 | 6 | `CAI_BaseHumanoid#395`, `CAI_BaseNPC#395`, `CAI_BaseNPCTroika#395`, +74 more | 0d/2v/1c | `+0x0174`, `+0x019c`, `+0x06f4` | `+0x0174`, `+0x019c`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::CorpseFade` | — | — |  |
 | `0x103261f0` | CBaseCombatCharacter::FinViewCone2d | 288 | 1 | 6 | — | 2d/0v/0c | — | `+0x026c`, `+0x0304`, `+0x05d0` | `NULL ENTITY`, `CBaseCombatCharacter::FinViewCone2d` | — | — |  |
 | `0x103264d0` | CBaseCombatCharacter::FinViewCone3dNew | 506 | 1 | 5 | — | 2d/0v/0c | — | `+0x026c`, `+0x0304`, `+0x05d4` | `NULL ENTITY`, `CBaseCombatCharacter::FinViewCone3dNew` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:391, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:394, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:397, +3 more | docs/vtmb/npc-ai/programs.md:852, docs/vtmb/npc-ai/senses.md:54, docs/vtmb/npc-ai/senses.md:59, +2 more |  |
-| `0x10326750` | CBaseCombatCharacter::FInViewCone | 306 | 0 | 7 | `CAI_BaseHumanoid#363`, `CAI_BaseNPC#363`, `CAI_ExpressiveNPC#363`, +7 more | 1d/2v/3c | — | `+0x026c`, `+0x1574` | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:289 | docs/vtmb/npc-ai/conditions-and-states.md:555, docs/vtmb/npc-ai/programs.md:852, docs/vtmb/npc-ai/senses.md:53, +1 more |  |
+| `0x10326750` | CBaseCombatCharacter::FInViewCone | 306 | 0 | 7 | `CAI_BaseHumanoid#363`, `CAI_BaseNPC#363`, `CAI_ExpressiveNPC#363`, +7 more | 1d/2v/3c | — | `+0x026c`, `+0x1574` | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:289 | docs/vtmb/npc-ai/conditions-and-states.md:558, docs/vtmb/npc-ai/programs.md:852, docs/vtmb/npc-ai/senses.md:53, +1 more |  |
 | `0x103268e0` | FUN_103268e0 | 241 | 1 | 7 | — | 4d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | — | — |  |
 | `0x10326a20` | CAI_BaseNPC::FUN_10326a20 | 134 | 0 | 8 | `CAI_BaseHumanoid#362`, `CAI_BaseNPC#362`, `CAI_BaseNPCTroika#362`, +63 more | 0d/0v/0c | — | `+0x026c`, `+0x1574` | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | — | — |  |
 | `0x10326ae0` | CAI_BaseNPC::FUN_10326ae0 | 181 | 0 | 0 | `CAI_BaseHumanoid#365`, `CAI_BaseNPC#365`, `CAI_BaseNPCTroika#365`, +63 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | — | — |  |
@@ -3065,7 +3065,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10326d40` | CBaseCombatCharacter::HandleInteraction | 118 | 0 | 0 | `CAI_BaseHumanoid#366`, `CAI_BaseNPC#366`, `CAI_BaseNPCTroika#366`, +23 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::HandleInteraction` | — | — |  |
 | `0x10327790` | CBaseCombatCharacter::UpdateOnRemove | 353 | 1 | 5 | — | 1d/0v/0c +1 outside | `+0x1598`, `+0x159c`, `+0x15a0` | `+0x0184`, `+0x026c`, `+0x05a8`, `+0x1598`, `+0x15a0` | `NULL ENTITY`, `CBaseCombatCharacter::UpdateOnRemove` | Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp:112 | docs/vtmb/npc-ai/authored-control.md:338 |  |
 | `0x10327960` | CBaseCombatCharacter::SetBloodColor | 126 | 1 | 0 | — | 2d/0v/0c +1 outside | `+0x1570` | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::SetBloodColor` | — | — |  |
-| `0x10327a90` | CBaseCombatCharacter::CorpseGib | 718 | 0 | 15 | `CAI_BaseHumanoid#394`, `CAI_BaseNPC#394`, `CAI_BaseNPCTroika#394`, +73 more | 0d/3v/2c | — | `+0x0268`, `+0x026c`, `+0x0300`, `+0x0364`, `+0x036c`, `+0x03bc`, +5 more | `NULL ENTITY`, `prop_physics`, +2 more | — | — |  |
+| `0x10327a90` | CBaseCombatCharacter::CorpseGib | 718 | 0 | 14 | `CAI_BaseHumanoid#394`, `CAI_BaseNPC#394`, `CAI_BaseNPCTroika#394`, +73 more | 0d/3v/2c | — | `+0x0268`, `+0x026c`, `+0x0300`, `+0x0364`, `+0x036c`, `+0x03bc`, +5 more | `NULL ENTITY`, `prop_physics`, +2 more | — | — |  |
 | `0x10327e20` | CBaseCombatCharacter::GetDeathActivity | 119 | 0 | 0 | `CAI_BaseHumanoid#393`, `CAI_BaseNPC#393`, `CAI_BaseNPCTroika#393`, +74 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::GetDeathActivity` | — | — |  |
 | `0x10327ec0` | CBaseCombatCharacter::Weapon_TranslateActivity | 288 | 0 | 0 | `CAI_BaseHumanoid#381`, `CAI_BaseNPC#381`, `CAI_BaseNPCTroika#381`, +74 more | 0d/4v/7c +4 outside | — | `+0x026c`, `+0x19a4` | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_TranslateAc…` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:531, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:698, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:625, +1 more | docs/vtmb/activity_enum.md:348, docs/vtmb/animation_and_movers.md:1178, docs/vtmb/animation_and_movers.md:4602 |  |
 | `0x10328030` | CBaseCombatCharacter::NPC_EarlyTranslateActivity | 165 | 1 | 14 | — | 1d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::NPC_EarlyTranslate…` | Source/ElysiumUE/Private/Visual/ElysiumActionTables.h:461, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:261, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:337 | docs/vtmb/activity_enum.md:346, docs/vtmb/animation_and_movers.md:1504, docs/vtmb/animation_and_movers.md:1601 |  |
@@ -3074,11 +3074,11 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103282e0` | CBaseCombatCharacter::GetGrappleSize | 126 | 3 | 12 | — | 1d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::GetGrappleSize` | Source/ElysiumUE/Private/Substrate/ElysiumGrapple.cpp:21 | docs/vtmb/stealth.md:426 |  |
 | `0x10328380` | CBaseCombatCharacter::TranslateBaseGrappleActivity | 420 | 2 | 13 | — | 1d/0v/0c +3 outside | — | `+0x026c`, `+0x1538`, `+0x153c`, `+0x1544` | `NULL ENTITY`, `CBaseCombatCharacter::TranslateBaseGrapp…` | Source/ElysiumUE/Private/Substrate/ElysiumGrapple.cpp:20 | docs/vtmb/animation_and_movers.md:1604, docs/vtmb/stealth.md:385 |  |
 | `0x10329560` | CBaseCombatCharacter::EndGrapple | 393 | 5 | 12 | — | 1d/0v/0c +7 outside | — | `+0x00a8`, `+0x026c`, `+0x05f0`, `+0x1538`, `+0x153c`, `+0x1540` | `NULL ENTITY`, `%s EndGrapple with %s`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1808, Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:408, Source/ElysiumUE/Public/ElysiumPlayer.h:1621 | docs/vtmb/animation_and_movers.md:1257, docs/vtmb/npc-ai/lifecycle.md:238, docs/vtmb/stealth.md:509 |  |
-| `0x10329760` | CBaseCombatCharacter::EnterGrappleState | 624 | 1 | 13 | — | 1d/0v/0c +2 outside | `+0x1534`, `+0x1538`, `+0x153c`, `+0x1540`, `+0x1544`, `+0x1548`, +4 more | `+0x00a8`, `+0x0104`, `+0x0174`, `+0x0178`, `+0x026c`, `+0x0370`, +3 more | `NULL ENTITY`, `%s EnterGrappleState with %s : role=%d t…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1674, Source/ElysiumUE/Private/UI/ElysiumPresentationSubsystem.cpp:659, Source/ElysiumUE/Public/ElysiumPlayer.h:344, +3 more | docs/vtmb/feeding.md:567, docs/vtmb/game_runtime.md:956, docs/vtmb/npc-ai/schedule-kernel.md:608, +2 more |  |
+| `0x10329760` | CBaseCombatCharacter::EnterGrappleState | 624 | 1 | 13 | — | 1d/0v/0c +2 outside | `+0x1534`, `+0x1538`, `+0x153c`, `+0x1540`, `+0x1544`, `+0x1548`, +4 more | `+0x00a8`, `+0x0104`, `+0x0174`, `+0x0178`, `+0x026c`, `+0x0370`, +3 more | `NULL ENTITY`, `%s EnterGrappleState with %s : role=%d t…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1674, Source/ElysiumUE/Private/UI/ElysiumPresentationSubsystem.cpp:659, Source/ElysiumUE/Public/ElysiumPlayer.h:344, +3 more | docs/vtmb/feeding.md:567, docs/vtmb/game_runtime.md:956, docs/vtmb/npc-ai/schedule-kernel.md:610, +2 more |  |
 | `0x10329a70` | CBaseCombatCharacter::LeaveGrappleState | 1336 | 1 | 11 | — | 1d/1v/0c +2 outside | `+0x0a9c`, `+0x1538`, `+0x153c`, `+0x1540`, `+0x1544`, `+0x1558` | `+0x00a8`, `+0x00f8`, `+0x0104`, `+0x0174`, `+0x0178`, `+0x026c`, +9 more | `NULL ENTITY`, `Bip01`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1675, Source/ElysiumUE/Public/ElysiumPlayer.h:345, Source/ElysiumUE/Public/ElysiumPlayer.h:1606 | docs/vtmb/stealth.md:502 |  |
 | `0x1032a910` | CBaseCombatCharacter::Weapon_SetActivity | 227 | 1 | 0 | — | 3d/0v/0c | — | `+0x026c`, `+0x19a4` | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_SetActivity` | — | — |  |
 | `0x1032aa40` | CBaseCombatCharacter::Weapon_FrameUpdate | 215 | 2 | 0 | — | 1d/0v/0c | — | `+0x026c`, `+0x19a4` | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_FrameUpdate` | — | — |  |
-| `0x1032af40` | CBaseCombatCharacter::Event_Gibbed | 439 | 2 | 16 | — | 0d/1v/0c | `+0x01fc`, `+0x0200` | `+0x0108`, `+0x026c`, `+0x0270`, `+0x02b4`, `+0x0628`, `+0x062c`, +2 more | `NULL ENTITY`, `CBaseEntity::AddSolidFlags`, +3 more | — | — |  |
+| `0x1032af40` | CBaseCombatCharacter::Event_Gibbed | 439 | 2 | 15 | — | 0d/1v/0c | `+0x01fc`, `+0x0200` | `+0x0108`, `+0x026c`, `+0x0270`, `+0x02b4`, `+0x0628`, `+0x062c`, +2 more | `NULL ENTITY`, `CBaseEntity::AddSolidFlags`, +3 more | — | — |  |
 | `0x1032b290` | CBaseCombatCharacter::CalcDamageForceVector | 1380 | 2 | 11 | — | 1d/0v/0c | — | `+0x026c`, `+0x0274`, `+0x0278`, `+0x027c`, `+0x0280`, `+0x0284`, +5 more | `NULL ENTITY`, `CBaseCombatCharacter::CalcDamageForceVec…` | — | docs/vtmb/combat-and-damage.md:1695 |  |
 | `0x1032b960` | FUN_1032b960 | 60 | 2 | 8 | — | 2d/0v/0c +1 outside | — | — | — | — | — |  |
 | `0x1032b9b0` | CBaseCombatCharacter::Event_Killed | 854 | 1 | 15 | — | 1d/2v/0c +1 outside | `+0x0200`, `+0x146c` | `+0x0184`, `+0x0268`, `+0x026c`, `+0x02e0`, `+0x036c`, `+0x03bc`, +6 more | `NULL ENTITY`, `Clamping ragdoll force from %.2f to %.2f…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1853, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1268 | docs/vtmb/camera-view-modes.md:3039, docs/vtmb/combat-and-damage.md:1637, docs/vtmb/npc-ai/authored-control.md:338, +1 more |  |
@@ -3116,7 +3116,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103300c0` | FUN_103300c0 | 257 | 2 | 13 | — | 2d/0v/0c +1 outside | — | `+0x13bc`?, `+0x13c0`? | — | — | — |  |
 | `0x10330220` | FUN_10330220 | 139 | 1 | 13 | — | 3d/0v/0c +3 outside | — | — | — | — | — |  |
 | `0x103302e0` | CBaseCombatCharacter::OnTakeDamage_Alive | 2039 | 1 | 22 | — | 1d/1v/0c +1 outside | `+0x0168`, `+0x0210`, `+0x0e98` | `+0x0098`, `+0x0168`, `+0x01fc`, `+0x026c`, `+0x02e0`, `+0x0300`, +8 more | `NULL ENTITY`, `Thaumaturgy_Bloodshield`, +1 more | — | docs/vtmb/combat-and-damage.md:1618, docs/vtmb/combat-and-damage.md:1817, docs/vtmb/combat-and-damage.md:1836, +1 more |  |
-| `0x10330d00` | CBaseCombatCharacter::CreateDamageEffects | 1796 | 0 | 20 | `CAI_BaseHumanoid#299`, `CAI_BaseNPC#299`, `CAI_BaseNPCTroika#299`, +74 more | 0d/1v/0c | — | `+0x0098`, `+0x00a8`, `+0x026c`, `+0x02a8`, `+0x02e0`, `+0x0300`, +3 more | `NULL ENTITY`, `environmental/fire/fire_hit.wav`, +9 more | — | docs/vtmb/npc-ai/schedule-kernel.md:608, docs/vtmb/stealth.md:448 |  |
+| `0x10330d00` | CBaseCombatCharacter::CreateDamageEffects | 1796 | 0 | 20 | `CAI_BaseHumanoid#299`, `CAI_BaseNPC#299`, `CAI_BaseNPCTroika#299`, +74 more | 0d/1v/0c | — | `+0x0098`, `+0x00a8`, `+0x026c`, `+0x02a8`, `+0x02e0`, `+0x0300`, +3 more | `NULL ENTITY`, `environmental/fire/fire_hit.wav`, +9 more | — | docs/vtmb/npc-ai/schedule-kernel.md:610, docs/vtmb/stealth.md:448 |  |
 | `0x103315e0` | CBaseCombatCharacter::OnTakeDamage_Dying | 121 | 0 | 0 | `CAI_BaseHumanoid#391`, `CAI_BaseNPC#391`, `CAI_BaseNPCTroika#391`, +74 more | 0d/1v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::OnTakeDamage_Dying` | — | — |  |
 | `0x10331680` | CBaseCombatCharacter::OnTakeDamage_Dead | 185 | 2 | 1 | — | 0d/1v/0c | `+0x0210` | `+0x01fc`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::OnTakeDamage_Dead` | — | — |  |
 | `0x10331880` | CBaseCombatCharacter::BodyAngles | 151 | 0 | 1 | `CAI_BaseHumanoid#367`, `CAI_BaseNPC#367`, `CAI_BaseNPCTroika#367`, +74 more | 0d/2v/0c | — | `+0x026c`, `+0x036c` | `NULL ENTITY`, `CBaseCombatCharacter::BodyAngles` | — | — |  |
@@ -3166,7 +3166,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10337980` | CBaseCombatCharacter::SetVHistory | 167 | 3 | 21 | — | 1d/0v/0c +1 outside | `+0x13a0` | `+0x026c`, `+0x13a0` | `NULL ENTITY`, `CBaseCombatCharacter::SetVHistory` | — | — |  |
 | `0x10337ca0` | CBaseCombatCharacter::MemberSync | 166 | 0 | 13 | `CAI_BaseHumanoid#111`, `CAI_BaseNPC#111`, `CAI_BaseNPCTroika#111`, +74 more | 0d/4v/0c +1 outside | `+0x13cc` | `+0x026c`, `+0x02e0`, `+0x13a8` | `NULL ENTITY`, `CBaseCombatCharacter::MemberSync` | — | — |  |
 | `0x10337d80` | CBaseCombatCharacter::PostConstructor | 139 | 1 | 14 | — | 1d/0v/0c +1 outside | — | `+0x01bc`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::PostConstructor` | — | — |  |
-| `0x10337e40` | CBaseCombatCharacter::IsKine | 190 | 1 | 14 | — | 2d/0v/0c +1 outside | — | `+0x00ac`, `+0x0118`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::IsKine` | — | — |  |
+| `0x10337e40` | CBaseCombatCharacter::IsKine | 190 | 1 | 13 | — | 2d/0v/0c +1 outside | — | `+0x00ac`, `+0x0118`, `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::IsKine` | — | — |  |
 | `0x10337f30` | CBaseCombatCharacter::IsKindred | 134 | 1 | 12 | — | 17d/0v/0c +6 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::IsKindred` | — | — |  |
 | `0x10337ff0` | CBaseCombatCharacter::IsSupernatural | 162 | 5 | 13 | — | 1d/0v/0c +2 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::IsSupernatural` | — | — |  |
 | `0x103380d0` | CBaseCombatCharacter::IsBossMonster | 134 | 2 | 12 | — | 2d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::IsBossMonster` | — | — |  |
@@ -3198,7 +3198,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1033cef0` | CBaseCombatCharacter::RemoveDisciplineEffects | 134 | 0 | 20 | `CAI_BaseHumanoid#341`, `CAI_BaseNPC#341`, `CAI_BaseNPCTroika#341`, +74 more | 0d/1v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::RemoveDisciplineEf…` | — | — |  |
 | `0x1033cfb0` | CBaseCombatCharacter::AddDiscFlag | 374 | 5 | 3 | — | 2d/0v/0c | `+0x0fc0`, `+0x0fc4` | `+0x026c`, `+0x0eb0`, `+0x0eb4`, `+0x0ec0`, `+0x0fb4`, `+0x0fb8`, +1 more | `NULL ENTITY`, `CBaseCombatCharacter::AddDiscFlag` | — | — |  |
 | `0x1033d190` | CBaseCombatCharacter::RemoveDiscFlag | 265 | 2 | 1 | — | 1d/0v/0c | `+0x0eb0`, `+0x0eb4`, `+0x0fc0` | `+0x026c`, `+0x0eb0`, `+0x0eb4`, `+0x0fb4`, `+0x0fc0` | `NULL ENTITY`, `CBaseCombatCharacter::RemoveDiscFlag` | — | — |  |
-| `0x1033d2f0` | FUN_1033d2f0 | 42 | 1 | 0 | — | 5d/0v/0c +1 outside | — | `+0x0eb0`, `+0x0eb4` | — | — | docs/vtmb/npc-ai/senses.md:114 |  |
+| `0x1033d2f0` | HasStatusEffect | 42 | 1 | 0 | — | 5d/0v/0c +1 outside | — | `+0x0eb0`, `+0x0eb4` | — | — | docs/vtmb/npc-ai/senses.md:114 |  |
 | `0x1033d330` | FUN_1033d330 | 61 | 3 | 0 | — | 1d/0v/0c | — | `+0x0eb0`, `+0x0eb4`, `+0x0eb8`, `+0x0ebc` | — | — | — |  |
 | `0x1033d380` | FUN_1033d380 | 105 | 3 | 0 | — | 3d/0v/0c | — | `+0x0fb4`, `+0x0fc0` | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1565 | docs/vtmb/animation_events.md:430 |  |
 | `0x1033d410` | FUN_1033d410 | 58 | 2 | 0 | — | 3d/0v/0c | — | `+0x0fb4`, `+0x0fc0` | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1565 | docs/vtmb/animation_events.md:430 |  |
@@ -3210,7 +3210,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1033deb0` | CBaseCombatCharacter::RemoveBaseFightingItems | 146 | 0 | 11 | `CAI_BaseHumanoid#305`, `CAI_BaseNPC#305`, `CAI_ExpressiveNPC#305`, +10 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `item_w_fists`, +1 more | — | — |  |
 | `0x1033df80` | CBaseCombatCharacter::ApplyDisciplineSpawnFlags | 219 | 1 | 0 | — | 2d/0v/0c +1 outside | `+0x0eac` | `+0x0204`, `+0x026c`, `+0x0eac` | `NULL ENTITY`, `CBaseCombatCharacter::ApplyDisciplineSpa…` | — | — |  |
 | `0x1033e0a0` | CBaseCombatCharacter::AddFakedDisciplineEffect | 406 | 5 | 9 | — | 1d/0v/0c | — | `+0x026c`, `+0x02e0`, `+0x0378` | `NULL ENTITY`, `CBaseCombatCharacter::AddFakedDiscipline…` | — | — |  |
-| `0x1033e2b0` | CBaseCombatCharacter::IsBusyWithDiscipline | 135 | 1 | 0 | — | 14d/0v/0c +3 outside | — | `+0x026c`, `+0x14b8` | `NULL ENTITY`, `CBaseCombatCharacter::IsBusyWithDiscipli…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:692, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:40, Source/ElysiumUE/Public/ElysiumPlayer.h:1130 | docs/vtmb/npc-ai/conditions-and-states.md:17, docs/vtmb/npc-ai/conditions-and-states.md:353, docs/vtmb/npc-ai/schedule-kernel.md:228 |  |
+| `0x1033e2b0` | CBaseCombatCharacter::IsBusyWithDiscipline | 135 | 1 | 0 | — | 14d/0v/0c +3 outside | — | `+0x026c`, `+0x14b8` | `NULL ENTITY`, `CBaseCombatCharacter::IsBusyWithDiscipli…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:692, Source/ElysiumUE/Private/Substrate/ElysiumNpcFlags.h:40, Source/ElysiumUE/Public/ElysiumPlayer.h:1130 | docs/vtmb/npc-ai/conditions-and-states.md:17, docs/vtmb/npc-ai/conditions-and-states.md:356, docs/vtmb/npc-ai/schedule-kernel.md:228 |  |
 | `0x1033e370` | CBaseCombatCharacter::LookAtEntity | 234 | 0 | 5 | `CAI_BaseHumanoid#306`, `CAI_BaseNPC#306`, `CAI_BaseNPCTroika#306`, +74 more | 0d/0v/0c | — | `+0x0094`, `+0x026c`, `+0x0304` | `NULL ENTITY`, `CBaseCombatCharacter::LookAtEntity` | — | — |  |
 | `0x1033e4a0` | CBaseCombatCharacter::DrawDebugTextOverlays | 655 | 1 | 13 | — | 1d/0v/0c +1 outside | — | `+0x0094`, `+0x009c`, `+0x0224`, `+0x026c`, `+0x02e0` | `NULL ENTITY`, `NPC: %s`, +2 more | — | — |  |
 | `0x1033e7e0` | CBaseCombatCharacter::DrawMuzzleOverlay | 289 | 0 | 4 | `CAI_BaseHumanoid#125`, `CAI_BaseNPC#125`, `CAI_BaseNPCTroika#125`, +74 more | 0d/0v/0c | — | `+0x026c`, `+0x0364` | `NULL ENTITY`, `muzzleflash`, +1 more | — | docs/vtmb/wielded_weapons.md:475 |  |
@@ -3277,18 +3277,18 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1034a100` | FUN_1034a100 | 73 | 1 | 1 | — | 1d/0v/0c | — | `+0x000c` | — | — | — |  |
 | `0x1034a170` | FUN_1034a170 | 24 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x1034a1a0` | FUN_1034a1a0 | 103 | 6 | 0 | — | 1d/0v/0c | `+0x0004` | `+0x0004`, `+0x0008` | — | — | — |  |
-| `0x1034a2d0` | CGenericNPC::vfunc138 | 3 | 0 | 0 | `CGenericNPC#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1034a2f0` | CGenericNPC::vfunc516 | 7 | 0 | 0 | `CGenericNPC#516` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1034a2d0` | CGenericNPC::Classify | 3 | 0 | 0 | `CGenericNPC#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1034a2f0` | CGenericNPC::MaxYawSpeed | 7 | 0 | 0 | `CGenericNPC#516` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034a310` | FUN_1034a310 | 695 | 1 | 4 | — | 1d/0v/0c | — | `+0x0378`? | — | — | — |  |
-| `0x1034a680` | CGenericNPC::vfunc259 | 26 | 0 | 25 | `CGenericNPC#259` | 0d/0v/0c | — | — | — | — | docs/vtmb/animation_and_movers.md:2184 |  |
+| `0x1034a680` | CGenericNPC::HandleAnimEvent | 26 | 0 | 25 | `CGenericNPC#259` | 0d/0v/0c | — | — | — | — | docs/vtmb/animation_and_movers.md:2184 |  |
 | `0x1034a6b0` | CGenericNPC::vfunc473 | 3 | 0 | 0 | `CGenericNPC#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1034a6d0` | CGenericNPC::vfunc103 | 700 | 0 | 21 | `CGenericNPC#103` | 0d/0v/0c | `+0x01fc`, `+0x0210`, `+0x1570`, `+0x1574`, `+0x5cc0` | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x02b4`, +2 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +2 more | — | — |  |
-| `0x1034aa40` | CGenericNPC::vfunc104 | 75 | 0 | 1 | `CGenericNPC#104` | 0d/1v/11c | — | `+0x0024` | `weapons/ar2/ar2_fire2.wav`, `weapons/ar2/ar2_fire1.wav` | — | — |  |
+| `0x1034a6d0` | CGenericNPC::Spawn | 700 | 0 | 21 | `CGenericNPC#103` | 0d/0v/0c | `+0x01fc`, `+0x0210`, `+0x1570`, `+0x1574`, `+0x5cc0` | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x02b4`, +2 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +2 more | — | — |  |
+| `0x1034aa40` | CGenericNPC::Precache | 75 | 0 | 1 | `CGenericNPC#104` | 0d/1v/11c | — | `+0x0024` | `weapons/ar2/ar2_fire2.wav`, `weapons/ar2/ar2_fire1.wav` | — | — |  |
 | `0x1034aab0` | CGenericNPC::vfunc5 | 30 | 0 | 7 | `CGenericNPC#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034ab50` | CNPCMaker::vfunc82 | 6 | 0 | 0 | `CNPCMaker#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1034adf0` | CNPCMaker::vfunc370 | 20 | 0 | 4 | `CNPCMaker#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
-| `0x1034ae20` | CNPCMaker::vfunc371 | 20 | 0 | 3 | `CNPCMaker#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
-| `0x1034ae50` | CNPCMaker::vfunc363 | 5 | 0 | 0 | `CNPCMaker#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x1034adf0` | CNPCMaker::HeadDirection2D | 20 | 0 | 4 | `CNPCMaker#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
+| `0x1034ae20` | CNPCMaker::HeadDirection3D | 20 | 0 | 3 | `CNPCMaker#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
+| `0x1034ae50` | CNPCMaker::FInViewCone | 5 | 0 | 0 | `CNPCMaker#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x1034ae70` | CNPCMaker::vfunc362 | 5 | 0 | 0 | `CNPCMaker#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034ae90` | CNPCMaker::vfunc365 | 5 | 0 | 0 | `CNPCMaker#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034aeb0` | CNPCMaker::vfunc364 | 5 | 0 | 0 | `CNPCMaker#364` | 0d/0v/5c | — | — | — | — | — |  |
@@ -3296,158 +3296,158 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1034aef0` | CNPCMaker::FUN_1034aef0 | 5 | 0 | 0 | `CNPCMaker#72`, `CNPCMaker_Fleshpile#72`, `CNPCMaker_Zombie#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034af10` | CNPCMaker::FUN_1034af10 | 5 | 0 | 0 | `CNPCMaker#86`, `CNPCMaker_Fleshpile#86`, `CNPCMaker_Zombie#86` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034af70` | CNPCMaker::vfunc5 | 65 | 0 | 17 | `CNPCMaker#5` | 0d/0v/0c | — | `+0x6668`, `+0x6680`, `+0x6698` | — | — | — |  |
-| `0x1034afe0` | CNPCMaker::vfunc103 | 261 | 0 | 15 | `CNPCMaker#103` | 0d/0v/0c | `+0x017c`, `+0x66b0`, `+0x66b8`, `+0x66c2` | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
+| `0x1034afe0` | CNPCMaker::Spawn | 261 | 0 | 15 | `CNPCMaker#103` | 0d/0v/0c | `+0x017c`, `+0x66b0`, `+0x66b8`, `+0x66c2` | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
 | `0x1034b140` | CNPCMaker::FUN_1034b140 | 1 | 0 | 0 | `CNPCMaker#113`, `CNPCMaker_Fleshpile#113`, `CNPCMaker_Zombie#113` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1034b160` | CNPCMaker::vfunc104 | 468 | 0 | 14 | `CNPCMaker#104` | 0d/1v/11c | — | `+0x0024`, `+0x0270`, `+0x036c`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎`, `%s: BAD MODEL NAME`, +2 more | — | — |  |
-| `0x1034b3c0` | CNPCMaker::FUN_1034b3c0 | 76 | 0 | 1 | `CNPCMaker#107`, `CNPCMaker_Fleshpile#107`, `CNPCMaker_Zombie#107` | 0d/0v/0c | `+0x76cc` | `+0x66cc` | — | — | — |  |
+| `0x1034b160` | CNPCMaker::Precache | 468 | 0 | 14 | `CNPCMaker#104` | 0d/1v/11c | — | `+0x0024`, `+0x0270`, `+0x036c`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎`, `%s: BAD MODEL NAME`, +2 more | — | — |  |
+| `0x1034b3c0` | CNPCMaker::ParseMapData | 76 | 0 | 1 | `CNPCMaker#107`, `CNPCMaker_Fleshpile#107`, `CNPCMaker_Zombie#107` | 0d/0v/0c | `+0x76cc` | `+0x66cc` | — | — | — |  |
 | `0x1034b430` | FUN_1034b430 | 26 | 1 | 0 | — | 1d/0v/0c +2 outside | — | `+0x6660`?, `+0x66c3`? | — | — | — |  |
 | `0x1034bc90` | CNPCMaker::FUN_1034bc90 | 116 | 0 | 8 | `CNPCMaker#139`, `CNPCMaker_Zombie#139` | 1d/0v/0c | `+0x6660`, `+0x66b0` | `+0x6660`, `+0x6680`, `+0x6698`, `+0x66b0` | — | — | — |  |
-| `0x1034bd30` | CNPCMaker::FUN_1034bd30 | 1 | 0 | 0 | `CNPCMaker#123`, `CNPCMaker_Fleshpile#123`, `CNPCMaker_Zombie#123` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1034bd30` | CNPCMaker::DrawDebugGeometryOverlays | 1 | 0 | 0 | `CNPCMaker#123`, `CNPCMaker_Fleshpile#123`, `CNPCMaker_Zombie#123` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034bdc0` | CNPCMaker_Fleshpile::vfunc82 | 6 | 0 | 0 | `CNPCMaker_Fleshpile#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1034be90` | CNPCMaker_Fleshpile::vfunc370 | 20 | 0 | 4 | `CNPCMaker_Fleshpile#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
-| `0x1034bec0` | CNPCMaker_Fleshpile::vfunc371 | 20 | 0 | 3 | `CNPCMaker_Fleshpile#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
-| `0x1034bef0` | CNPCMaker_Fleshpile::vfunc363 | 5 | 0 | 0 | `CNPCMaker_Fleshpile#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x1034be90` | CNPCMaker_Fleshpile::HeadDirection2D | 20 | 0 | 4 | `CNPCMaker_Fleshpile#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
+| `0x1034bec0` | CNPCMaker_Fleshpile::HeadDirection3D | 20 | 0 | 3 | `CNPCMaker_Fleshpile#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
+| `0x1034bef0` | CNPCMaker_Fleshpile::FInViewCone | 5 | 0 | 0 | `CNPCMaker_Fleshpile#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x1034bf10` | CNPCMaker_Fleshpile::vfunc362 | 5 | 0 | 0 | `CNPCMaker_Fleshpile#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034bf30` | CNPCMaker_Fleshpile::vfunc365 | 5 | 0 | 0 | `CNPCMaker_Fleshpile#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034bf50` | CNPCMaker_Fleshpile::vfunc364 | 5 | 0 | 0 | `CNPCMaker_Fleshpile#364` | 0d/0v/5c | — | — | — | — | — |  |
 | `0x1034bfb0` | CNPCMaker_Fleshpile::vfunc5 | 65 | 0 | 17 | `CNPCMaker_Fleshpile#5` | 0d/0v/0c | — | `+0x6668`, `+0x6680`, `+0x6698` | — | — | — |  |
-| `0x1034c020` | CNPCMaker_Fleshpile::vfunc103 | 261 | 0 | 15 | `CNPCMaker_Fleshpile#103` | 0d/0v/0c | `+0x017c`, `+0x66b0`, `+0x66b8`, `+0x66c2` | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
-| `0x1034c180` | CNPCMaker_Fleshpile::vfunc104 | 169 | 0 | 14 | `CNPCMaker_Fleshpile#104` | 0d/1v/11c | — | `+0x0024`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎` | — | — |  |
+| `0x1034c020` | CNPCMaker_Fleshpile::Spawn | 261 | 0 | 15 | `CNPCMaker_Fleshpile#103` | 0d/0v/0c | `+0x017c`, `+0x66b0`, `+0x66b8`, `+0x66c2` | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
+| `0x1034c180` | CNPCMaker_Fleshpile::Precache | 169 | 0 | 14 | `CNPCMaker_Fleshpile#104` | 0d/1v/11c | — | `+0x0024`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎` | — | — |  |
 | `0x1034c260` | CNPCMaker_Fleshpile::vfunc130 | 68 | 0 | 23 | `CNPCMaker_Fleshpile#130` | 0d/0v/0c | — | — | `npc_VAndreiBlood` | — | — |  |
 | `0x1034c8e0` | CNPCMaker_Fleshpile::vfunc139 | 122 | 0 | 9 | `CNPCMaker_Fleshpile#139` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034c9f0` | CNPCMaker_Zombie::vfunc82 | 6 | 0 | 0 | `CNPCMaker_Zombie#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1034cad0` | CNPCMaker_Zombie::vfunc370 | 20 | 0 | 4 | `CNPCMaker_Zombie#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
-| `0x1034cb00` | CNPCMaker_Zombie::vfunc371 | 20 | 0 | 3 | `CNPCMaker_Zombie#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
-| `0x1034cb30` | CNPCMaker_Zombie::vfunc363 | 5 | 0 | 0 | `CNPCMaker_Zombie#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x1034cad0` | CNPCMaker_Zombie::HeadDirection2D | 20 | 0 | 4 | `CNPCMaker_Zombie#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
+| `0x1034cb00` | CNPCMaker_Zombie::HeadDirection3D | 20 | 0 | 3 | `CNPCMaker_Zombie#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
+| `0x1034cb30` | CNPCMaker_Zombie::FInViewCone | 5 | 0 | 0 | `CNPCMaker_Zombie#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x1034cb50` | CNPCMaker_Zombie::vfunc362 | 5 | 0 | 0 | `CNPCMaker_Zombie#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034cb70` | CNPCMaker_Zombie::vfunc365 | 5 | 0 | 0 | `CNPCMaker_Zombie#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034cb90` | CNPCMaker_Zombie::vfunc364 | 5 | 0 | 0 | `CNPCMaker_Zombie#364` | 0d/0v/5c | — | — | — | — | — |  |
 | `0x1034cbf0` | CNPCMaker_Zombie::vfunc5 | 65 | 0 | 17 | `CNPCMaker_Zombie#5` | 0d/0v/0c | — | `+0x6668`, `+0x6680`, `+0x6698` | — | — | — |  |
-| `0x1034cc60` | CNPCMaker_Zombie::vfunc103 | 295 | 0 | 15 | `CNPCMaker_Zombie#103` | 0d/0v/0c | `+0x017c`, `+0x6348`, `+0x634c`, `+0x6350`, `+0x6354`, `+0x6358`, +3 more | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
-| `0x1034cde0` | CNPCMaker_Zombie::vfunc104 | 199 | 0 | 14 | `CNPCMaker_Zombie#104` | 0d/1v/11c | `+0x1a98`, `+0x5dec` | `+0x0024`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎`, `item_w_zombie_fists` | — | — |  |
+| `0x1034cc60` | CNPCMaker_Zombie::Spawn | 295 | 0 | 15 | `CNPCMaker_Zombie#103` | 0d/0v/0c | `+0x017c`, `+0x6348`, `+0x634c`, `+0x6350`, `+0x6354`, `+0x6358`, +3 more | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
+| `0x1034cde0` | CNPCMaker_Zombie::Precache | 199 | 0 | 14 | `CNPCMaker_Zombie#104` | 0d/1v/11c | `+0x1a98`, `+0x5dec` | `+0x0024`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎`, `item_w_zombie_fists` | — | — |  |
 | `0x1034d410` | CScriptedTarget::vfunc117 | 8 | 0 | 1 | `CScriptedTarget#117` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034d430` | CScriptedTarget::vfunc82 | 6 | 0 | 0 | `CScriptedTarget#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1034d5b0` | FUN_1034d5b0 | 80 | 1 | 1 | — | 1d/0v/0c +2 outside | — | `+0x0364`? | — | — | — |  |
-| `0x1034d6e0` | CScriptedTarget::vfunc103 | 219 | 0 | 5 | `CScriptedTarget#103` | 0d/0v/0c | — | `+0x026c`, `+0x0270`, `+0x0364`, `+0x5f44`, `+0x5f50` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
-| `0x1034ddf0` | CScriptedTarget::vfunc124 | 497 | 0 | 4 | `CScriptedTarget#124` | 0d/0v/0c | — | `+0x0224`, `+0x02b0`, `+0x02e0`, `+0x5ce4`, `+0x5f50` | `User: -LOOKING-`, `User: -NONE-`, +5 more | — | — |  |
-| `0x1034e070` | CScriptedTarget::vfunc123 | 541 | 0 | 4 | `CScriptedTarget#123` | 0d/0v/0c | — | `+0x0224`, `+0x02b0`, `+0x0364`, `+0x5ce4`, `+0x5f44`, `+0x5f50` | — | — | — |  |
-| `0x1034e320` | CScriptedTarget::vfunc126 | 53 | 0 | 16 | `CScriptedTarget#126` | 0d/0v/0c | — | `+0x5f64` | — | — | — |  |
-| `0x1034e370` | CScriptedTarget::vfunc127 | 40 | 0 | 10 | `CScriptedTarget#127` | 0d/0v/0c | — | `+0x5f64` | — | — | — |  |
+| `0x1034d6e0` | CScriptedTarget::Spawn | 219 | 0 | 5 | `CScriptedTarget#103` | 0d/0v/0c | — | `+0x026c`, `+0x0270`, `+0x0364`, `+0x5f44`, `+0x5f50` | `NULL ENTITY`, `CBaseEntity::SetSolid` | — | — |  |
+| `0x1034ddf0` | CScriptedTarget::DrawDebugTextOverlays | 497 | 0 | 4 | `CScriptedTarget#124` | 0d/0v/0c | — | `+0x0224`, `+0x02b0`, `+0x02e0`, `+0x5ce4`, `+0x5f50` | `User: -LOOKING-`, `User: -NONE-`, +5 more | — | — |  |
+| `0x1034e070` | CScriptedTarget::DrawDebugGeometryOverlays | 541 | 0 | 4 | `CScriptedTarget#123` | 0d/0v/0c | — | `+0x0224`, `+0x02b0`, `+0x0364`, `+0x5ce4`, `+0x5f44`, `+0x5f50` | — | — | — |  |
+| `0x1034e320` | CScriptedTarget::Save | 53 | 0 | 16 | `CScriptedTarget#126` | 0d/0v/0c | — | `+0x5f64` | — | — | — |  |
+| `0x1034e370` | CScriptedTarget::Restore | 40 | 0 | 10 | `CScriptedTarget#127` | 0d/0v/0c | — | `+0x5f64` | — | — | — |  |
 | `0x1034e3b0` | CScriptedTarget::vfunc5 | 65 | 0 | 7 | `CScriptedTarget#5` | 0d/0v/0c | — | `+0x5f6c`, `+0x5f84` | — | — | — |  |
 | `0x103564f0` | CNPC_Bullseye::vfunc82 | 6 | 0 | 0 | `CNPC_Bullseye#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10356740` | CNPC_Bullseye::vfunc5 | 30 | 0 | 8 | `CNPC_Bullseye#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10356770` | FUN_10356770 | 49 | 1 | 7 | — | 1d/0v/0c | — | `+0x17d2`?, `+0x17d8`? | — | — | — |  |
-| `0x103567e0` | CNPC_Bullseye::vfunc103 | 662 | 0 | 14 | `CNPC_Bullseye#103` | 0d/0v/0c | `+0x017c`, `+0x019c`, `+0x01fc`, `+0x03ec`, `+0x1574` | `+0x0174`, `+0x019c`, `+0x01a0`, `+0x0204`, `+0x026c`, `+0x0270`, +1 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — | — |  |
-| `0x10356b50` | CNPC_Bullseye::vfunc144 | 169 | 0 | 21 | `CNPC_Bullseye#144` | 0d/0v/3c | — | `+0x0174`, `+0x026c`, `+0x0270`, `+0x02b4` | `CBaseEntity::AddSolidFlags` | — | — |  |
+| `0x103567e0` | CNPC_Bullseye::Spawn | 662 | 0 | 14 | `CNPC_Bullseye#103` | 0d/0v/0c | `+0x017c`, `+0x019c`, `+0x01fc`, `+0x03ec`, `+0x1574` | `+0x0174`, `+0x019c`, `+0x01a0`, `+0x0204`, `+0x026c`, `+0x0270`, +1 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — | — |  |
+| `0x10356b50` | CNPC_Bullseye::Event_Killed | 169 | 0 | 21 | `CNPC_Bullseye#144` | 0d/0v/3c | — | `+0x0174`, `+0x026c`, `+0x0270`, `+0x02b4` | `CBaseEntity::AddSolidFlags` | — | — |  |
 | `0x10356f30` | CNPC_Bullseye::vfunc576 | 32 | 0 | 0 | `CNPC_Bullseye#576` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10356f60` | CNPC_Bullseye::vfunc141 | 110 | 0 | 9 | `CNPC_Bullseye#141` | 0d/0v/0c | — | `+0x01fc`, `+0x0204`, `+0x0248` | — | — | — |  |
-| `0x10356ff0` | CNPC_Bullseye::vfunc142 | 223 | 0 | 25 | `CNPC_Bullseye#142` | 0d/0v/1c | — | `+0x0204`, `+0x5f44` | — | — | — |  |
-| `0x10357350` | CNPC_Crow::vfunc516 | 7 | 0 | 0 | `CNPC_Crow#516` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10356ff0` | CNPC_Bullseye::OnTakeDamage | 223 | 0 | 25 | `CNPC_Bullseye#142` | 0d/0v/1c | — | `+0x0204`, `+0x5f44` | — | — | — |  |
+| `0x10357350` | CNPC_Crow::MaxYawSpeed | 7 | 0 | 0 | `CNPC_Crow#516` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10357370` | CNPC_Crow::vfunc580 | 6 | 0 | 0 | `CNPC_Crow#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10357390` | CNPC_Crow::vfunc451 | 6 | 0 | 0 | `CNPC_Crow#451` | 0d/0v/1c | — | — | `CNPC_Crow` | — | — |  |
+| `0x10357390` | CNPC_Crow::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_Crow#451` | 0d/0v/1c | — | — | `CNPC_Crow` | — | — |  |
 | `0x103573b0` | CNPC_Crow::vfunc82 | 6 | 0 | 0 | `CNPC_Crow#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10357440` | CNPC_Crow::vfunc103 | 422 | 0 | 23 | `CNPC_Crow#103` | 0d/0v/0c | `+0x0210`, `+0x1568`, `+0x156c`, `+0x1574`, `+0x5cc0`, `+0x5f48`, +1 more | `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x0204`, `+0x026c`, `+0x0270`, +1 more | `CBaseEntity::SetSolid`, `models/crow.mdl` | — | — |  |
-| `0x10357660` | CNPC_Crow::vfunc138 | 6 | 0 | 0 | `CNPC_Crow#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10357680` | CNPC_Crow::vfunc481 | 172 | 0 | 23 | `CNPC_Crow#481` | 0d/0v/0c | `+0x5f4c` | `+0x0370`, `+0x5f4c` | — | Source/ElysiumUE/Public/Visual/ElysiumEyeRig.h:244 | docs/vtmb/facial_animation.md:1342 |  |
+| `0x10357440` | CNPC_Crow::Spawn | 422 | 0 | 23 | `CNPC_Crow#103` | 0d/0v/0c | `+0x0210`, `+0x1568`, `+0x156c`, `+0x1574`, `+0x5cc0`, `+0x5f48`, +1 more | `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x0204`, `+0x026c`, `+0x0270`, +1 more | `CBaseEntity::SetSolid`, `models/crow.mdl` | — | — |  |
+| `0x10357660` | CNPC_Crow::Classify | 6 | 0 | 0 | `CNPC_Crow#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10357680` | CNPC_Crow::GatherEnemyConditions | 172 | 0 | 23 | `CNPC_Crow#481` | 0d/0v/0c | `+0x5f4c` | `+0x0370`, `+0x5f4c` | — | Source/ElysiumUE/Public/Visual/ElysiumEyeRig.h:244 | docs/vtmb/facial_animation.md:1342 |  |
 | `0x10357760` | CNPC_Crow::vfunc192 | 69 | 0 | 1 | `CNPC_Crow#192` | 0d/1v/8c | — | `+0x0370` | — | — | — |  |
 | `0x103577d0` | CNPC_Crow::vfunc197 | 20 | 0 | 2 | `CNPC_Crow#197` | 0d/0v/0c | — | `+0x0300` | — | — | — |  |
 | `0x10357800` | CNPC_Crow::vfunc511 | 11 | 0 | 11 | `CNPC_Crow#511` | 0d/0v/2c | — | — | `NPC_Crow.Flap` | — | — |  |
-| `0x10357820` | CNPC_Crow::vfunc259 | 611 | 0 | 25 | `CNPC_Crow#259` | 0d/0v/0c | `+0x5f50` | `+0x0370`, `+0x04d8`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x5ddc`, +1 more | `NPC_Crow.Hop` | — | docs/vtmb/animation_and_movers.md:2185 |  |
-| `0x10357b30` | CNPC_Crow::vfunc465 | 40 | 0 | 0 | `CNPC_Crow#465` | 0d/0v/2c | `+0x06f8` | — | — | — | — |  |
-| `0x10357ba0` | CNPC_Crow::vfunc525 | 37 | 0 | 6 | `CNPC_Crow#525` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10357820` | CNPC_Crow::HandleAnimEvent | 611 | 0 | 25 | `CNPC_Crow#259` | 0d/0v/0c | `+0x5f50` | `+0x0370`, `+0x04d8`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x5ddc`, +1 more | `NPC_Crow.Hop` | — | docs/vtmb/animation_and_movers.md:2185 |  |
+| `0x10357b30` | CNPC_Crow::OnChangeActivity | 40 | 0 | 0 | `CNPC_Crow#465` | 0d/0v/2c | `+0x06f8` | — | — | — | — |  |
+| `0x10357ba0` | CNPC_Crow::OverrideMove | 37 | 0 | 6 | `CNPC_Crow#525` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10357be0` | FUN_10357be0 | 481 | 1 | 5 | — | 1d/0v/0c | `+0x5f54` | `+0x0100`, `+0x0370`, `+0x0374`, `+0x5d44`, `+0x5ddc` | — | — | — |  |
 | `0x10357e50` | FUN_10357e50 | 505 | 2 | 4 | — | 1d/0v/0c | — | `+0x0364`, `+0x1568` | — | — | — |  |
 | `0x103580d0` | FUN_103580d0 | 175 | 1 | 2 | — | 4d/0v/0c | — | `+0x0174` | — | — | — |  |
 | `0x103581b0` | FUN_103581b0 | 270 | 1 | 3 | — | 1d/0v/0c | — | `+0x0370` | — | — | — |  |
-| `0x10358310` | CNPC_Crow::vfunc434 | 1 | 0 | 0 | `CNPC_Crow#434` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10358330` | CNPC_Crow::vfunc442 | 898 | 0 | 25 | `CNPC_Crow#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x5ddc`, +2 more | `+0x029c`, `+0x0370`, `+0x0700`, `+0x07a4`, `+0x5d44`, `+0x5dd0`, +3 more | `E:\Vampire\main\dlls\hl2_dll\npc_crow.cp…`, `No enemy` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:806 | — |  |
-| `0x103587b0` | CNPC_Crow::vfunc444 | 888 | 0 | 23 | `CNPC_Crow#444` | 0d/0v/2c | `+0x5ddc`, `+0x5f58` | `+0x0268`, `+0x0364`, `+0x03bc`, `+0x03c0`, `+0x03c4`, `+0x03ec`, +4 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:835 | — |  |
+| `0x10358310` | CNPC_Crow::PrescheduleThink | 1 | 0 | 0 | `CNPC_Crow#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10358330` | CNPC_Crow::StartTask | 898 | 0 | 25 | `CNPC_Crow#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x5ddc`, +2 more | `+0x029c`, `+0x0370`, `+0x0700`, `+0x07a4`, `+0x5d44`, `+0x5dd0`, +3 more | `E:\Vampire\main\dlls\hl2_dll\npc_crow.cp…`, `No enemy` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:806 | — |  |
+| `0x103587b0` | CNPC_Crow::RunTask | 888 | 0 | 23 | `CNPC_Crow#444` | 0d/0v/2c | `+0x5ddc`, `+0x5f58` | `+0x0268`, `+0x0364`, `+0x03bc`, `+0x03c0`, `+0x03c4`, `+0x03ec`, +4 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:835 | — |  |
 | `0x10358c40` | CNPC_Crow::vfunc394 | 13 | 0 | 12 | `CNPC_Crow#394` | 0d/0v/2c | — | — | `NPC_Crow.Gib` | — | — |  |
-| `0x10358c60` | CNPC_Crow::vfunc566 | 22 | 0 | 0 | `CNPC_Crow#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x10358c60` | CNPC_Crow::FValidateHintType | 22 | 0 | 0 | `CNPC_Crow#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x10358c90` | CNPC_Crow::vfunc567 | 27 | 0 | 1 | `CNPC_Crow#567` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10358ce0` | CNPC_Crow::vfunc438 | 378 | 0 | 22 | `CNPC_Crow#438` | 0d/0v/0c | `+0x5f48`, `+0x5f50` | `+0x5cc0`, `+0x5f48`, `+0x5f4c`, `+0x5f50` | — | — | — |  |
-| `0x10358ec0` | CNPC_Crow::vfunc104 | 24 | 0 | 14 | `CNPC_Crow#104` | 0d/1v/11c | — | — | `models/crow.mdl` | — | — |  |
+| `0x10358ce0` | CNPC_Crow::SelectSchedule | 378 | 0 | 22 | `CNPC_Crow#438` | 0d/0v/0c | `+0x5f48`, `+0x5f50` | `+0x5cc0`, `+0x5f48`, `+0x5f4c`, `+0x5f50` | — | — | — |  |
+| `0x10358ec0` | CNPC_Crow::Precache | 24 | 0 | 14 | `CNPC_Crow#104` | 0d/1v/11c | — | — | `models/crow.mdl` | — | — |  |
 | `0x10358ef0` | CNPC_Crow::vfunc490 | 11 | 0 | 12 | `CNPC_Crow#490` | 0d/0v/3c | — | — | `NPC_Crow.Idle` | — | — |  |
 | `0x10358f10` | CNPC_Crow::vfunc489 | 11 | 0 | 12 | `CNPC_Crow#489` | 0d/1v/2c | — | — | `NPC_Crow.Alert` | — | — |  |
 | `0x10358f30` | CNPC_Crow::vfunc491 | 11 | 0 | 12 | `CNPC_Crow#491` | 0d/0v/2c | — | — | `NPC_Crow.Pain` | — | — |  |
 | `0x10358f50` | CNPC_Crow::vfunc488 | 11 | 0 | 12 | `CNPC_Crow#488` | 0d/0v/2c | — | — | `NPC_Crow.Die` | — | — |  |
 | `0x10358f70` | FUN_10358f70 | 11 | 1 | 12 | — | 1d/0v/0c | — | — | `NPC_Crow.Flap` | — | — |  |
-| `0x10358f90` | CNPC_Crow::vfunc124 | 259 | 0 | 15 | `CNPC_Crow#124` | 0d/0v/0c | — | `+0x0224`, `+0x029c`, `+0x02e0`, `+0x5f4c`, `+0x5f50` | `enemy (dist): %s (%g)`, `morale: %d` | — | — |  |
+| `0x10358f90` | CNPC_Crow::DrawDebugTextOverlays | 259 | 0 | 15 | `CNPC_Crow#124` | 0d/0v/0c | — | `+0x0224`, `+0x029c`, `+0x02e0`, `+0x5f4c`, `+0x5f50` | `enemy (dist): %s (%g)`, `morale: %d` | — | — |  |
 | `0x103590f0` | CNPC_Crow::vfunc473 | 6 | 0 | 0 | `CNPC_Crow#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103591e0` | CNPC_Crow::vfunc452 | 6 | 0 | 0 | `CNPC_Crow#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103591e0` | CNPC_Crow::LoadedSchedules | 6 | 0 | 0 | `CNPC_Crow#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10359240` | CNPC_Crow::vfunc546 | 29 | 0 | 3 | `CNPC_Crow#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10359b70` | CNPC_Crow::vfunc5 | 30 | 0 | 7 | `CNPC_Crow#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10359e30` | CGeneric_NPC::vfunc452 | 6 | 0 | 0 | `CGeneric_NPC#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10359e30` | CGeneric_NPC::LoadedSchedules | 6 | 0 | 0 | `CGeneric_NPC#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10359e90` | CGeneric_NPC::vfunc546 | 29 | 0 | 3 | `CGeneric_NPC#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10359f00` | CGeneric_NPC::vfunc580 | 6 | 0 | 0 | `CGeneric_NPC#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10359f20` | CGeneric_NPC::vfunc451 | 6 | 0 | 0 | `CGeneric_NPC#451` | 0d/0v/1c | — | — | `CGeneric_NPC` | — | — |  |
+| `0x10359f20` | CGeneric_NPC::GetSchedulingErrorName | 6 | 0 | 0 | `CGeneric_NPC#451` | 0d/0v/1c | — | — | `CGeneric_NPC` | — | — |  |
 | `0x10359f40` | CGeneric_NPC::vfunc5 | 30 | 0 | 17 | `CGeneric_NPC#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10359f70` | CGeneric_NPC::vfunc104 | 223 | 0 | 15 | `CGeneric_NPC#104` | 0d/1v/11c | — | `+0x0024`, `+0x0350` | `npc/citizen/pain2.wav`, `npc/citizen/pain1.wav`, +4 more | — | — |  |
-| `0x1035a090` | CGeneric_NPC::vfunc103 | 318 | 0 | 23 | `CGeneric_NPC#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x1568`, `+0x156c`, `+0x1570`, `+0x1574`, +1 more | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0690` | `CBaseEntity::SetSolid` | — | — |  |
+| `0x10359f70` | CGeneric_NPC::Precache | 223 | 0 | 15 | `CGeneric_NPC#104` | 0d/1v/11c | — | `+0x0024`, `+0x0350` | `npc/citizen/pain2.wav`, `npc/citizen/pain1.wav`, +4 more | — | — |  |
+| `0x1035a090` | CGeneric_NPC::Spawn | 318 | 0 | 23 | `CGeneric_NPC#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x1568`, `+0x156c`, `+0x1570`, `+0x1574`, +1 more | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0690` | `CBaseEntity::SetSolid` | — | — |  |
 | `0x1035a220` | CGeneric_NPC::vfunc495 | 283 | 0 | 4 | `CGeneric_NPC#495` | 0d/0v/1c | — | `+0x0378` | — | — | — |  |
 | `0x1035a390` | CGeneric_NPC::vfunc489 | 283 | 0 | 4 | `CGeneric_NPC#489` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x1035a500` | CGeneric_NPC::vfunc488 | 283 | 0 | 4 | `CGeneric_NPC#488` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x1035a670` | CGeneric_NPC::vfunc491 | 284 | 0 | 4 | `CGeneric_NPC#491` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x1035a7e0` | CGeneric_NPC::vfunc473 | 20 | 0 | 0 | `CGeneric_NPC#473` | 0d/0v/0c | — | `+0x5cc0` | — | — | — |  |
-| `0x1035a810` | CGeneric_NPC::vfunc516 | 42 | 0 | 0 | `CGeneric_NPC#516` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1035a850` | CGeneric_NPC::vfunc138 | 6 | 0 | 0 | `CGeneric_NPC#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035a810` | CGeneric_NPC::MaxYawSpeed | 42 | 0 | 0 | `CGeneric_NPC#516` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1035a850` | CGeneric_NPC::Classify | 6 | 0 | 0 | `CGeneric_NPC#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035a900` | CGeneric_NPC::vfunc432 | 13 | 0 | 26 | `CGeneric_NPC#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x1035a920` | CGeneric_NPC::vfunc434 | 1 | 0 | 0 | `CGeneric_NPC#434` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1035a980` | CGeneric_NPC::vfunc144 | 104 | 0 | 22 | `CGeneric_NPC#144` | 0d/0v/3c | — | `+0x0370` | — | — | — |  |
-| `0x1035ac80` | CGeneric_NPC_bathack::vfunc452 | 6 | 0 | 0 | `CGeneric_NPC_bathack#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1035a920` | CGeneric_NPC::PrescheduleThink | 1 | 0 | 0 | `CGeneric_NPC#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035a980` | CGeneric_NPC::Event_Killed | 104 | 0 | 22 | `CGeneric_NPC#144` | 0d/0v/3c | — | `+0x0370` | — | — | — |  |
+| `0x1035ac80` | CGeneric_NPC_bathack::LoadedSchedules | 6 | 0 | 0 | `CGeneric_NPC_bathack#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035ace0` | CGeneric_NPC_bathack::vfunc546 | 29 | 0 | 3 | `CGeneric_NPC_bathack#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035ad50` | CGeneric_NPC_bathack::vfunc117 | 8 | 0 | 1 | `CGeneric_NPC_bathack#117` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1035ad70` | CGeneric_NPC_bathack::vfunc580 | 6 | 0 | 0 | `CGeneric_NPC_bathack#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1035ad90` | CGeneric_NPC_bathack::vfunc451 | 6 | 0 | 0 | `CGeneric_NPC_bathack#451` | 0d/0v/1c | — | — | `CGeneric_NPC_bathack` | — | — |  |
+| `0x1035ad90` | CGeneric_NPC_bathack::GetSchedulingErrorName | 6 | 0 | 0 | `CGeneric_NPC_bathack#451` | 0d/0v/1c | — | — | `CGeneric_NPC_bathack` | — | — |  |
 | `0x1035adb0` | CGeneric_NPC_bathack::vfunc5 | 30 | 0 | 7 | `CGeneric_NPC_bathack#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1035ade0` | CGeneric_NPC_bathack::vfunc104 | 114 | 0 | 14 | `CGeneric_NPC_bathack#104` | 0d/1v/11c | — | — | `npc/citizen/pain2.wav`, `npc/citizen/pain1.wav`, +4 more | — | — |  |
-| `0x1035ae80` | CGeneric_NPC_bathack::vfunc103 ‼ | 272 | 0 | 21 | `CGeneric_NPC_bathack#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x1568`, `+0x156c`, `+0x1570`, `+0x1574`, +1 more | `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0690` | `CBaseEntity::SetSolid`, `models/bats.mdl` | — | — |  |
+| `0x1035ade0` | CGeneric_NPC_bathack::Precache | 114 | 0 | 14 | `CGeneric_NPC_bathack#104` | 0d/1v/11c | — | — | `npc/citizen/pain2.wav`, `npc/citizen/pain1.wav`, +4 more | — | — |  |
+| `0x1035ae80` | CGeneric_NPC_bathack::Spawn ‼ | 272 | 0 | 21 | `CGeneric_NPC_bathack#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x1568`, `+0x156c`, `+0x1570`, `+0x1574`, +1 more | `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0690` | `CBaseEntity::SetSolid`, `models/bats.mdl` | — | — |  |
 | `0x1035afe0` | CGeneric_NPC_bathack::vfunc495 | 1 | 0 | 0 | `CGeneric_NPC_bathack#495` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035b000` | CGeneric_NPC_bathack::vfunc489 | 1 | 0 | 0 | `CGeneric_NPC_bathack#489` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035b020` | CGeneric_NPC_bathack::vfunc488 | 1 | 0 | 0 | `CGeneric_NPC_bathack#488` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035b040` | CGeneric_NPC_bathack::vfunc491 | 1 | 0 | 0 | `CGeneric_NPC_bathack#491` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x1035b080` | CGeneric_NPC_bathack::vfunc516 | 42 | 0 | 0 | `CGeneric_NPC_bathack#516` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1035b0c0` | CGeneric_NPC_bathack::vfunc138 | 6 | 0 | 0 | `CGeneric_NPC_bathack#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035b080` | CGeneric_NPC_bathack::MaxYawSpeed | 42 | 0 | 0 | `CGeneric_NPC_bathack#516` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1035b0c0` | CGeneric_NPC_bathack::Classify | 6 | 0 | 0 | `CGeneric_NPC_bathack#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035b160` | CGeneric_NPC_bathack::vfunc432 | 13 | 0 | 25 | `CGeneric_NPC_bathack#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x1035b1a0` | CGeneric_NPC_bathack::vfunc434 | 1 | 0 | 0 | `CGeneric_NPC_bathack#434` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1035b490` | CGenericSabbat_NPC::vfunc452 | 6 | 0 | 0 | `CGenericSabbat_NPC#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1035b1a0` | CGeneric_NPC_bathack::PrescheduleThink | 1 | 0 | 0 | `CGeneric_NPC_bathack#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035b490` | CGenericSabbat_NPC::LoadedSchedules | 6 | 0 | 0 | `CGenericSabbat_NPC#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035b4f0` | CGenericSabbat_NPC::vfunc546 | 29 | 0 | 3 | `CGenericSabbat_NPC#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035b560` | CGenericSabbat_NPC::vfunc580 | 6 | 0 | 0 | `CGenericSabbat_NPC#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1035b580` | CGenericSabbat_NPC::vfunc451 | 6 | 0 | 0 | `CGenericSabbat_NPC#451` | 0d/0v/1c | — | — | `CGenericSabbat_NPC` | — | — |  |
+| `0x1035b580` | CGenericSabbat_NPC::GetSchedulingErrorName | 6 | 0 | 0 | `CGenericSabbat_NPC#451` | 0d/0v/1c | — | — | `CGenericSabbat_NPC` | — | — |  |
 | `0x1035b5a0` | CGenericSabbat_NPC::vfunc5 | 30 | 0 | 7 | `CGenericSabbat_NPC#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1035b5d0` | CGenericSabbat_NPC::vfunc104 | 233 | 0 | 14 | `CGenericSabbat_NPC#104` | 0d/1v/11c | — | `+0x0024`, `+0x0350` | `npc/citizen/pain2.wav`, `npc/citizen/pain1.wav`, +4 more | — | — |  |
-| `0x1035b700` | CGenericSabbat_NPC::vfunc103 | 306 | 0 | 21 | `CGenericSabbat_NPC#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x1568`, `+0x156c`, `+0x1570`, `+0x1574`, +1 more | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0690` | `CBaseEntity::SetSolid` | — | — |  |
+| `0x1035b5d0` | CGenericSabbat_NPC::Precache | 233 | 0 | 14 | `CGenericSabbat_NPC#104` | 0d/1v/11c | — | `+0x0024`, `+0x0350` | `npc/citizen/pain2.wav`, `npc/citizen/pain1.wav`, +4 more | — | — |  |
+| `0x1035b700` | CGenericSabbat_NPC::Spawn | 306 | 0 | 21 | `CGenericSabbat_NPC#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x1568`, `+0x156c`, `+0x1570`, `+0x1574`, +1 more | `+0x0024`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, `+0x0690` | `CBaseEntity::SetSolid` | — | — |  |
 | `0x1035b890` | CGenericSabbat_NPC::vfunc495 | 287 | 0 | 4 | `CGenericSabbat_NPC#495` | 0d/0v/1c | — | `+0x0378` | — | — | — |  |
 | `0x1035ba00` | CGenericSabbat_NPC::vfunc489 | 287 | 0 | 4 | `CGenericSabbat_NPC#489` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x1035bb70` | CGenericSabbat_NPC::vfunc488 | 287 | 0 | 4 | `CGenericSabbat_NPC#488` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x1035bce0` | CGenericSabbat_NPC::vfunc491 | 288 | 0 | 4 | `CGenericSabbat_NPC#491` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x1035be50` | CGenericSabbat_NPC::vfunc473 | 20 | 0 | 0 | `CGenericSabbat_NPC#473` | 0d/0v/0c | — | `+0x5cc0` | — | — | — |  |
-| `0x1035be80` | CGenericSabbat_NPC::vfunc516 | 42 | 0 | 0 | `CGenericSabbat_NPC#516` | 0d/0v/0c | — | `+0x0fec` | — | — | — |  |
-| `0x1035bec0` | CGenericSabbat_NPC::vfunc138 | 6 | 0 | 0 | `CGenericSabbat_NPC#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035be80` | CGenericSabbat_NPC::MaxYawSpeed | 42 | 0 | 0 | `CGenericSabbat_NPC#516` | 0d/0v/0c | — | `+0x0fec` | — | — | — |  |
+| `0x1035bec0` | CGenericSabbat_NPC::Classify | 6 | 0 | 0 | `CGenericSabbat_NPC#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035bf70` | CGenericSabbat_NPC::vfunc432 | 13 | 0 | 25 | `CGenericSabbat_NPC#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x1035bfb0` | CGenericSabbat_NPC::vfunc434 | 1 | 0 | 0 | `CGenericSabbat_NPC#434` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1035c010` | CGenericSabbat_NPC::vfunc144 | 26 | 0 | 21 | `CGenericSabbat_NPC#144` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x1035bfb0` | CGenericSabbat_NPC::PrescheduleThink | 1 | 0 | 0 | `CGenericSabbat_NPC#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035c010` | CGenericSabbat_NPC::Event_Killed | 26 | 0 | 21 | `CGenericSabbat_NPC#144` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x1035c190` | CNPC_VAndreiBlood::FUN_1035c190 | 5 | 0 | 0 | `CNPC_VAndreiBlood#378`, `CNPC_VAsianVampire#378`, `CNPC_VChangBros#378`, +5 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1035c1b0` | CNPC_VVampireBoss::vfunc580 | 6 | 0 | 0 | `CNPC_VVampireBoss#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1035c1d0` | CNPC_VVampireBoss::vfunc451 | 6 | 0 | 0 | `CNPC_VVampireBoss#451` | 0d/0v/1c | — | — | `CNPC_VVampireBoss` | — | — |  |
+| `0x1035c1d0` | CNPC_VVampireBoss::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VVampireBoss#451` | 0d/0v/1c | — | — | `CNPC_VVampireBoss` | — | — |  |
 | `0x1035c1f0` | CNPC_VVampireBoss::vfunc5 | 43 | 0 | 17 | `CNPC_VVampireBoss#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
 | `0x1035c230` | CNPC_VAndreiBlood::vfunc580 | 6 | 0 | 0 | `CNPC_VAndreiBlood#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1035c250` | CNPC_VAndreiBlood::vfunc451 | 6 | 0 | 0 | `CNPC_VAndreiBlood#451` | 0d/0v/1c | — | — | `CNPC_VAndreiBlood` | — | — |  |
+| `0x1035c250` | CNPC_VAndreiBlood::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VAndreiBlood#451` | 0d/0v/1c | — | — | `CNPC_VAndreiBlood` | — | — |  |
 | `0x1035c270` | CNPC_VAndreiBlood::vfunc5 | 30 | 0 | 18 | `CNPC_VAndreiBlood#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1035c2a0` | CNPC_VAndreiBlood::vfunc82 | 6 | 0 | 0 | `CNPC_VAndreiBlood#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1035c400` | CNPC_VAndreiBlood::vfunc452 | 6 | 0 | 0 | `CNPC_VAndreiBlood#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1035c400` | CNPC_VAndreiBlood::LoadedSchedules | 6 | 0 | 0 | `CNPC_VAndreiBlood#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035c460` | CNPC_VAndreiBlood::vfunc546 | 29 | 0 | 3 | `CNPC_VAndreiBlood#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1035cb90` | CNPC_VAndreiBlood::vfunc104 | 111 | 0 | 15 | `CNPC_VAndreiBlood#104` | 0d/0v/11c | — | — | `Andrei_Summon-Emitter`, `Andrei_Teleport_In-Emitter`, +4 more | — | — |  |
+| `0x1035cb90` | CNPC_VAndreiBlood::Precache | 111 | 0 | 15 | `CNPC_VAndreiBlood#104` | 0d/0v/11c | — | — | `Andrei_Summon-Emitter`, `Andrei_Teleport_In-Emitter`, +4 more | — | — |  |
 | `0x1035cc20` | CNPC_VAndreiBlood::Spawn | 176 | 0 | 27 | `CNPC_VAndreiBlood#103` | 0d/0v/0c | `+0x66b8`, `+0x66bc`, `+0x66cc`, `+0x66cd`, `+0x66ce`, `+0x66d0`, +2 more | — | `CNPC_VAndreiBlood::Spawn` | — | — |  |
 | `0x1035cd00` | CNPC_VAndreiBlood::Destructor | 342 | 1 | 17 | — | 1d/0v/0c | `+0x0001`, `+0x19b0` | `+0x0001`, `+0x6664` | `CNPC_VAndreiBlood::Destructor` | — | — |  |
 | `0x1035cec0` | CNPC_VAndreiBlood::NPCInit | 129 | 0 | 24 | `CNPC_VAndreiBlood#420` | 0d/0v/8c | — | `+0x66c0` | `CNPC_VAndreiBlood::NPCInit` | — | — |  |
 | `0x1035cf80` | CNPC_VAndreiBlood::Restore | 101 | 0 | 12 | `CNPC_VAndreiBlood#127` | 0d/0v/0c | — | — | `CNPC_VAndreiBlood::Restore` | — | — |  |
 | `0x1035d010` | CNPC_VAndreiBlood::SelectSchedule | 218 | 0 | 1 | `CNPC_VAndreiBlood#438` | 0d/0v/0c | `+0x1b2c` | `+0x66cc`, `+0x66cd`, `+0x66d4`, `+0x66d8`, `+0x66dc` | `CNPC_VAndreiBlood::SelectSchedule` | — | — |  |
 | `0x1035d150` | CNPC_VAndreiBlood::vfunc461 | 25 | 0 | 0 | `CNPC_VAndreiBlood#461` | 0d/0v/1c +1 outside | `+0x1b38` | `+0x66cc` | — | — | — |  |
-| `0x1035d180` | CNPC_VAndreiBlood::vfunc433 | 19 | 0 | 25 | `CNPC_VAndreiBlood#433` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1035d180` | CNPC_VAndreiBlood::GatherConditions | 19 | 0 | 25 | `CNPC_VAndreiBlood#433` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035d1b0` | CNPC_VAndreiBlood::StartTask | 1366 | 0 | 29 | `CNPC_VAndreiBlood#442` | 0d/0v/2c | `+0x019c`, `+0x1b44`, `+0x1b48`, `+0x5ddc`, `+0x66ce`, `+0x66d0` | `+0x00f8`, `+0x019c`, `+0x026c`, `+0x0270`, `+0x02b4`, `+0x02d4`, +8 more | `CBaseEntity::RemoveSolidFlags`, `npc_maker_fleshpile`, +8 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:807 | — |  |
 | `0x1035d8b0` | CNPC_VAndreiBlood::RunTask | 430 | 0 | 26 | `CNPC_VAndreiBlood#444` | 0d/0v/2c | `+0x01fc`, `+0x66ce`, `+0x66d4`, `+0x66d8` | `+0x010c`, `+0x03ec`, `+0x06f8`, `+0x66ce`, `+0x66d0`, `+0x66d4`, +2 more | `CNPC_VAndreiBlood::RunTask` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:836 | — |  |
-| `0x1035db00` | CNPC_VAndreiBlood::vfunc566 | 5 | 0 | 0 | `CNPC_VAndreiBlood#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x1035db00` | CNPC_VAndreiBlood::FValidateHintType | 5 | 0 | 0 | `CNPC_VAndreiBlood#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x1035db20` | CNPC_VAndreiBlood::NPCThink | 90 | 0 | 28 | `CNPC_VAndreiBlood#431` | 0d/0v/0c | — | — | `CNPC_VAndreiBlood::NPCThink` | — | — |  |
 | `0x1035dc30` | CNPC_VAndreiBlood::Activate | 145 | 0 | 20 | `CNPC_VAndreiBlood#113` | 0d/0v/1c | `+0x1b30`, `+0x1b34`, `+0x5cc0`, `+0x5cc4` | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VAndrei…`, `CNPC_VAndreiBlood::Activate` | — | — |  |
 | `0x1035ddd0` | CNPC_VAndreiBlood::SelectTeleportNode | 470 | 1 | 2 | — | 1d/0v/0c | — | `+0x628c`, `+0x66c0` | `CNPC_VAndreiBlood::SelectTeleportNode` | — | — |  |
@@ -3462,28 +3462,28 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1035eb10` | CNPC_VAnimal::FUN_1035eb10 | 6 | 0 | 0 | `CNPC_VAnimal#82`, `CNPC_VDog#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1035ebf0` | CNPC_VAnimal::FUN_1035ebf0 | 5 | 0 | 0 | `CNPC_VAnimal#587`, `CNPC_VDog#587`, `CNPC_VRat#587`, +2 more | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1035ec10` | CNPC_VAnimal::vfunc580 | 6 | 0 | 0 | `CNPC_VAnimal#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1035ec30` | CNPC_VAnimal::vfunc451 | 6 | 0 | 0 | `CNPC_VAnimal#451` | 0d/0v/1c | — | — | `CNPC_VAnimal` | — | — |  |
+| `0x1035ec30` | CNPC_VAnimal::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VAnimal#451` | 0d/0v/1c | — | — | `CNPC_VAnimal` | — | — |  |
 | `0x1035ec50` | CNPC_VAnimal::vfunc5 | 30 | 0 | 17 | `CNPC_VAnimal#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1035ed50` | CNPC_VAnimal::vfunc452 | 6 | 0 | 0 | `CNPC_VAnimal#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1035ed50` | CNPC_VAnimal::LoadedSchedules | 6 | 0 | 0 | `CNPC_VAnimal#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1035edb0` | CNPC_VAnimal::vfunc546 | 29 | 0 | 3 | `CNPC_VAnimal#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1035f510` | CNPC_VAnimal::vfunc103 | 21 | 0 | 25 | `CNPC_VAnimal#103` | 3d/0v/0c | — | — | — | — | — |  |
+| `0x1035f510` | CNPC_VAnimal::Spawn | 21 | 0 | 25 | `CNPC_VAnimal#103` | 3d/0v/0c | — | — | — | — | — |  |
 | `0x1035f540` | CNPC_VAnimal::FUN_1035f540 | 6 | 0 | 0 | `CNPC_VAnimal#473`, `CNPC_VDog#473`, `CNPC_VRat#473`, +1 more | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:827 | docs/vtmb/npc-ai/senses.md:299 |  |
-| `0x1035f560` | CNPC_VAnimal::vfunc138 | 6 | 0 | 0 | `CNPC_VAnimal#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1035f5c0` | CNPC_VAnimal::FUN_1035f5c0 | 100 | 0 | 1 | `CNPC_VAnimal#563`, `CNPC_VDog#563`, `CNPC_VRat#563`, +2 more | 0d/0v/5c | — | — | — | — | — |  |
-| `0x1035f650` | CNPC_VAnimal::vfunc442 | 527 | 0 | 27 | `CNPC_VAnimal#442` | 3d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c` | `+0x0700`, `+0x1568`, `+0x5d34`, `+0x62ec`, `+0x62f0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:808 | — |  |
-| `0x1035f940` | CNPC_VAnimal::FUN_1035f940 | 308 | 0 | 24 | `CNPC_VAnimal#444`, `CNPC_VRat#444`, `CNPC_VScurrying#444` | 2d/0v/2c | — | `+0x029c`, `+0x03ec`, `+0x0874`, `+0x5d44`, `+0x5d9c` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:837 | — |  |
-| `0x1035fb50` | CNPC_VAnimal::vfunc438 | 213 | 0 | 26 | `CNPC_VAnimal#438` | 3d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x14b8`, `+0x5cc0`, `+0x5d34`, `+0x62ec`, `+0x63d9`, `+0x6590` | `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | — | — |  |
+| `0x1035f560` | CNPC_VAnimal::Classify | 6 | 0 | 0 | `CNPC_VAnimal#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1035f5c0` | CNPC_VAnimal::TranslateEnemyChasePosition | 100 | 0 | 1 | `CNPC_VAnimal#563`, `CNPC_VDog#563`, `CNPC_VRat#563`, +2 more | 0d/0v/5c | — | — | — | — | — |  |
+| `0x1035f650` | CNPC_VAnimal::StartTask | 527 | 0 | 27 | `CNPC_VAnimal#442` | 3d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c` | `+0x0700`, `+0x1568`, `+0x5d34`, `+0x62ec`, `+0x62f0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:808 | — |  |
+| `0x1035f940` | CNPC_VAnimal::RunTask | 308 | 0 | 24 | `CNPC_VAnimal#444`, `CNPC_VRat#444`, `CNPC_VScurrying#444` | 2d/0v/2c | — | `+0x029c`, `+0x03ec`, `+0x0874`, `+0x5d44`, `+0x5d9c` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:837 | — |  |
+| `0x1035fb50` | CNPC_VAnimal::SelectSchedule | 213 | 0 | 26 | `CNPC_VAnimal#438` | 3d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x14b8`, `+0x5cc0`, `+0x5d34`, `+0x62ec`, `+0x63d9`, `+0x6590` | `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | — | — |  |
 | `0x1035fd40` | CNPC_VAnimal::FUN_1035fd40 | 210 | 0 | 2 | `CNPC_VAnimal#482`, `CNPC_VDog#482`, `CNPC_VRat#482`, +2 more | 0d/0v/0c | — | `+0x0278`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | — | — | — |  |
 | `0x1035fe80` | CNPC_VAnimal::FUN_1035fe80 | 516 | 0 | 23 | `CNPC_VAnimal#461`, `CNPC_VRat#461`, `CNPC_VScurrying#461` | 2d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x029c`, `+0x5cc0`, `+0x5cc4`, `+0x65f6` | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VAnimal…` | — | — |  |
 | `0x10360160` | CNPC_VAnimal::FUN_10360160 | 13 | 0 | 26 | `CNPC_VAnimal#432`, `CNPC_VRat#432`, `CNPC_VScurrying#432` | 2d/0v/3c | — | — | — | — | — |  |
-| `0x10360180` | CNPC_VAnimal::FUN_10360180 | 1 | 0 | 0 | `CNPC_VAnimal#434`, `CNPC_VDog#434`, `CNPC_VRat#434`, +2 more | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10360180` | CNPC_VAnimal::PrescheduleThink | 1 | 0 | 0 | `CNPC_VAnimal#434`, `CNPC_VDog#434`, `CNPC_VRat#434`, +2 more | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103601a0` | CNPC_VAnimal::FUN_103601a0 | 48 | 0 | 25 | `CNPC_VAnimal#390`, `CNPC_VDog#390`, `CNPC_VRat#390`, +2 more | 0d/0v/0c | `+0x6660` | — | — | — | — |  |
-| `0x103601e0` | CNPC_VAnimal::FUN_103601e0 | 5 | 0 | 0 | `CNPC_VAnimal#366`, `CNPC_VDog#366`, `CNPC_VRat#366`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103601e0` | CNPC_VAnimal::HandleInteraction | 5 | 0 | 0 | `CNPC_VAnimal#366`, `CNPC_VDog#366`, `CNPC_VRat#366`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103603d0` | CNPC_VAsianVampire::vfunc580 | 6 | 0 | 0 | `CNPC_VAsianVampire#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103603f0` | CNPC_VAsianVampire::vfunc451 | 6 | 0 | 0 | `CNPC_VAsianVampire#451` | 0d/0v/1c | — | — | `CNPC_VAsianVampire` | — | — |  |
+| `0x103603f0` | CNPC_VAsianVampire::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VAsianVampire#451` | 0d/0v/1c | — | — | `CNPC_VAsianVampire` | — | — |  |
 | `0x10360410` | CNPC_VAsianVampire::vfunc5 | 43 | 0 | 17 | `CNPC_VAsianVampire#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
 | `0x10360450` | CNPC_VAsianVampire::vfunc82 | 6 | 0 | 0 | `CNPC_VAsianVampire#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103605b0` | CNPC_VAsianVampire::vfunc452 | 6 | 0 | 0 | `CNPC_VAsianVampire#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103605b0` | CNPC_VAsianVampire::LoadedSchedules | 6 | 0 | 0 | `CNPC_VAsianVampire#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10360610` | CNPC_VAsianVampire::vfunc546 | 29 | 0 | 3 | `CNPC_VAsianVampire#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10360bc0` | CNPC_VAsianVampire::Precache | 106 | 0 | 15 | `CNPC_VAsianVampire#104` | 0d/0v/11c | — | — | `item_w_avamp_blade`, `CNPC_VAsianVampire::Precache` | — | — |  |
 | `0x10360c50` | CNPC_VAsianVampire::Spawn | 109 | 0 | 27 | `CNPC_VAsianVampire#103` | 0d/0v/0c | — | — | `CNPC_VAsianVampire::Spawn` | — | — |  |
@@ -3494,7 +3494,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10361110` | CNPC_VAsianVampire::RunAI | 111 | 0 | 27 | `CNPC_VAsianVampire#432` | 0d/0v/3c | — | — | `CNPC_VAsianVampire::RunAI` | — | — |  |
 | `0x103611a0` | CNPC_VAsianVampire::StartTask | 243 | 0 | 29 | `CNPC_VAsianVampire#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5ddc` | `+0x0700` | `E:\Vampire\main\dlls\hl2_dll\NPC_VAsianV…`, `CNPC_VAsianVampire::StartTask` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:809 | — |  |
 | `0x103612e0` | CNPC_VAsianVampire::RunTask | 272 | 0 | 26 | `CNPC_VAsianVampire#444` | 0d/0v/2c | `+0x66d4` | `+0x0318`, `+0x0fec`, `+0x5ddc` | `CNPC_VAsianVampire::RunTask` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:838 | — |  |
-| `0x10361470` | CNPC_VAsianVampire::vfunc566 | 5 | 0 | 0 | `CNPC_VAsianVampire#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x10361470` | CNPC_VAsianVampire::FValidateHintType | 5 | 0 | 0 | `CNPC_VAsianVampire#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x10361490` | CNPC_VAsianVampire::NPCThink | 114 | 0 | 28 | `CNPC_VAsianVampire#431` | 0d/0v/0c | `+0x017c` | — | `CNPC_VAsianVampire::NPCThink` | — | — |  |
 | `0x103615c0` | CNPC_VAsianVampire::SelectLedgeNode | 287 | 1 | 3 | — | 1d/0v/0c | — | `+0x0364` | `CNPC_VAsianVampire::SelectLedgeNode` | — | — |  |
 | `0x10361730` | CNPC_VAsianVampire::SelectJumpbaseNode | 287 | 1 | 3 | — | 1d/0v/0c | — | `+0x0364` | `CNPC_VAsianVampire::SelectJumpbaseNode` | — | — |  |
@@ -3509,60 +3509,60 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10362910` | CNPC_VAsianVampire::TranslateSchedule | 131 | 0 | 22 | `CNPC_VAsianVampire#440` | 0d/0v/2c | — | — | `CNPC_VAsianVampire::TranslateSchedule` | — | — |  |
 | `0x103629d0` | CNPC_VAsianVampire::PositionClearForTeleport | 318 | 2 | 2 | — | 2d/0v/0c | — | `+0x0364`, `+0x628c` | `CNPC_VAsianVampire::PositionClearForTele…` | — | — |  |
 | `0x10362c50` | CNPC_VBach::vfunc580 | 6 | 0 | 0 | `CNPC_VBach#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10362c70` | CNPC_VBach::vfunc451 | 6 | 0 | 0 | `CNPC_VBach#451` | 0d/0v/1c | — | — | `CNPC_VBach` | — | — |  |
+| `0x10362c70` | CNPC_VBach::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VBach#451` | 0d/0v/1c | — | — | `CNPC_VBach` | — | — |  |
 | `0x10362c90` | CNPC_VBach::vfunc5 | 30 | 0 | 17 | `CNPC_VBach#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10362d90` | CNPC_VBach::vfunc452 | 6 | 0 | 0 | `CNPC_VBach#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10362d90` | CNPC_VBach::LoadedSchedules | 6 | 0 | 0 | `CNPC_VBach#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10362df0` | CNPC_VBach::vfunc546 | 29 | 0 | 3 | `CNPC_VBach#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10363720` | CNPC_VBach::vfunc82 | 6 | 0 | 0 | `CNPC_VBach#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103637b0` | CNPC_VBach::vfunc104 | 124 | 0 | 15 | `CNPC_VBach#104` | 0d/0v/11c | — | — | `item_w_katana`, `item_w_rem_m_700_bach`, +6 more | — | — |  |
-| `0x10363850` | CNPC_VBach::vfunc103 | 184 | 0 | 27 | `CNPC_VBach#103` | 0d/0v/0c | `+0x5db4`, `+0x6670`, `+0x6674`, `+0x6678`, `+0x667c`, `+0x6680`, +16 more | `+0x6664` | — | — | — |  |
-| `0x10363940` | CNPC_VBach::vfunc420 | 20 | 0 | 23 | `CNPC_VBach#420` | 0d/0v/8c | `+0x5de4` | — | — | — | — |  |
+| `0x103637b0` | CNPC_VBach::Precache | 124 | 0 | 15 | `CNPC_VBach#104` | 0d/0v/11c | — | — | `item_w_katana`, `item_w_rem_m_700_bach`, +6 more | — | — |  |
+| `0x10363850` | CNPC_VBach::Spawn | 184 | 0 | 27 | `CNPC_VBach#103` | 0d/0v/0c | `+0x5db4`, `+0x6670`, `+0x6674`, `+0x6678`, `+0x667c`, `+0x6680`, +16 more | `+0x6664` | — | — | — |  |
+| `0x10363940` | CNPC_VBach::NPCInit | 20 | 0 | 23 | `CNPC_VBach#420` | 0d/0v/8c | `+0x5de4` | — | — | — | — |  |
 | `0x10363970` | CNPC_VBach::vfunc473 | 6 | 0 | 0 | `CNPC_VBach#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10363990` | CNPC_VBach::vfunc138 | 6 | 0 | 0 | `CNPC_VBach#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103639b0` | CNPC_VBach::vfunc463 | 46 | 0 | 20 | `CNPC_VBach#463` | 0d/0v/1c | — | `+0x66a8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1549 | docs/vtmb/npc-ai/rebuild.md:269 |  |
-| `0x10363a10` | CNPC_VBach::vfunc438 | 15 | 0 | 27 | `CNPC_VBach#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x10363a30` | CNPC_VBach::vfunc440 | 202 | 0 | 22 | `CNPC_VBach#440` | 0d/0v/2c | — | `+0x66a7` | `item_w_katana` | — | — |  |
+| `0x10363990` | CNPC_VBach::Classify | 6 | 0 | 0 | `CNPC_VBach#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103639b0` | CNPC_VBach::OnStateChange | 46 | 0 | 20 | `CNPC_VBach#463` | 0d/0v/1c | — | `+0x66a8` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1549 | docs/vtmb/npc-ai/rebuild.md:269 |  |
+| `0x10363a10` | CNPC_VBach::SelectSchedule | 15 | 0 | 27 | `CNPC_VBach#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x10363a30` | CNPC_VBach::TranslateSchedule | 202 | 0 | 22 | `CNPC_VBach#440` | 0d/0v/2c | — | `+0x66a7` | `item_w_katana` | — | — |  |
 | `0x10363b40` | CNPC_VBach::vfunc461 | 15 | 0 | 24 | `CNPC_VBach#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x10363b60` | CNPC_VBach::vfunc432 | 186 | 0 | 27 | `CNPC_VBach#432` | 0d/0v/3c | `+0x66a5` | `+0x13bc`, `+0x13c0`, `+0x6684`, `+0x66a5`, `+0x66a8` | — | — | — |  |
 | `0x10363c70` | CNPC_VBach::vfunc390 | 165 | 0 | 25 | `CNPC_VBach#390` | 0d/0v/0c | `+0x6688`, `+0x6690`, `+0x66a6` | `+0x66a5`, `+0x66a8` | — | — | — |  |
-| `0x10363db0` | CNPC_VBach::vfunc561 | 573 | 0 | 10 | `CNPC_VBach#561` | 0d/0v/0c | `+0x5b80`, `+0x6684`, `+0x6688`, `+0x66a5`, `+0x66a6` | `+0x02e0`, `+0x0378`, `+0x13bc`, `+0x13c0`, `+0x6688`, `+0x668c`, +2 more | `Character/Boss/Bach/bach_shield.wav` | — | — |  |
+| `0x10363db0` | CNPC_VBach::GatherAttackConditions | 573 | 0 | 10 | `CNPC_VBach#561` | 0d/0v/0c | `+0x5b80`, `+0x6684`, `+0x6688`, `+0x66a5`, `+0x66a6` | `+0x02e0`, `+0x0378`, `+0x13bc`, `+0x13c0`, `+0x6688`, `+0x668c`, +2 more | `Character/Boss/Bach/bach_shield.wav` | — | — |  |
 | `0x10364500` | CNPC_VBach::vfunc553 | 49 | 0 | 0 | `CNPC_VBach#553` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10364550` | CNPC_VBach::vfunc554 | 49 | 0 | 0 | `CNPC_VBach#554` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103645a0` | CNPC_VBach::vfunc442 | 2504 | 0 | 28 | `CNPC_VBach#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5db4`, `+0x6678`, `+0x6684`, `+0x6688`, +10 more | `+0x00f8`, `+0x029c`, `+0x02d4`, `+0x02e0`, `+0x0370`, `+0x0378`, +14 more | `item_w_katana`, `item_w_rem_m_700_bach`, +3 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:810 | — |  |
-| `0x103652b0` | CNPC_VBach::vfunc444 | 789 | 0 | 25 | `CNPC_VBach#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5db4`, `+0x6678`, `+0x6694`, `+0x66a0`, +1 more | `+0x029c`, `+0x02e0`, `+0x0378`, `+0x0700`, `+0x0874`, `+0x5ba8`, +6 more | `item_w_rem_m_700_bach`, `Character/Boss/Bach/snipe_warn6.wav`, +1 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:839 | — |  |
+| `0x103645a0` | CNPC_VBach::StartTask | 2504 | 0 | 28 | `CNPC_VBach#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5db4`, `+0x6678`, `+0x6684`, `+0x6688`, +10 more | `+0x00f8`, `+0x029c`, `+0x02d4`, `+0x02e0`, `+0x0370`, `+0x0378`, +14 more | `item_w_katana`, `item_w_rem_m_700_bach`, +3 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:810 | — |  |
+| `0x103652b0` | CNPC_VBach::RunTask | 789 | 0 | 25 | `CNPC_VBach#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5db4`, `+0x6678`, `+0x6694`, `+0x66a0`, +1 more | `+0x029c`, `+0x02e0`, `+0x0378`, `+0x0700`, `+0x0874`, `+0x5ba8`, +6 more | `item_w_rem_m_700_bach`, `Character/Boss/Bach/snipe_warn6.wav`, +1 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:839 | — |  |
 | `0x103656a0` | FUN_103656a0 | 165 | 1 | 10 | — | 1d/0v/0c | — | `+0x05fc`?, `+0x0610`? | `Error: Couldn't find space in inventory …`, `item_d_holy_light` | — | — |  |
 | `0x10365780` | FUN_10365780 | 92 | 1 | 6 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48`, `+0x5ddc` | `+0x0700` | `E:\Vampire\main\dlls\hl2_dll\NPC_VBach.c…` | — | — |  |
-| `0x10365800` | CNPC_VBach::vfunc566 | 38 | 0 | 12 | `CNPC_VBach#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x10365800` | CNPC_VBach::FValidateHintType | 38 | 0 | 12 | `CNPC_VBach#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x10365840` | FUN_10365840 | 1 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10365860` | FUN_10365860 | 413 | 2 | 9 | — | 1d/0v/0c | `+0x6680`, `+0x66a0` | `+0x6680` | `item_w_grenade_frag`, `No physics data for grenade⏎` | — | — |  |
-| `0x10365a70` | CNPC_VBach::vfunc433 | 16 | 0 | 25 | `CNPC_VBach#433` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10365a70` | CNPC_VBach::GatherConditions | 16 | 0 | 25 | `CNPC_VBach#433` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10365a90` | FUN_10365a90 | 1314 | 1 | 20 | — | 1d/0v/0c | `+0x19a8`? | `+0x029c`?, `+0x0324`?, `+0x0378`?, `+0x66a1`? | `Character/Boss/Bach/bach_camp_warn.wav`, `Character/Boss/Bach/bach_grenade.wav`, +7 more | — | — |  |
-| `0x10366290` | CNPC_VMingXiao::FUN_10366290 | 36 | 0 | 7 | `CNPC_VBaseBoss#76`, `CNPC_VMingXiao#76`, `CNPC_VTzimisce#76`, +2 more | 1d/0v/0c | — | — | `Dist to player: %.3f` | — | — |  |
+| `0x10366290` | CNPC_VBaseBoss::DrawDebugStatOverlays | 36 | 0 | 7 | `CNPC_VBaseBoss#76`, `CNPC_VMingXiao#76`, `CNPC_VTzimisce#76`, +2 more | 1d/0v/0c | — | — | `Dist to player: %.3f` | — | — |  |
 | `0x103662d0` | FUN_103662d0 | 235 | 1 | 1 | — | 2d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c` | `+0x665c`, `+0x6660`, `+0x6664`, `+0x6668` | — | — | — |  |
 | `0x10366400` | FUN_10366400 | 105 | 1 | 1 | — | 4d/0v/0c | `+0x6668` | `+0x665c`, `+0x6668` | — | — | — |  |
 | `0x10366490` | FUN_10366490 | 91 | 1 | 0 | — | 2d/0v/0c | — | `+0x665c`, `+0x6668` | — | — | — |  |
 | `0x10366c70` | CNPC_VBatSwarm::vfunc580 | 6 | 0 | 0 | `CNPC_VBatSwarm#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10366c90` | CNPC_VBatSwarm::vfunc451 | 6 | 0 | 0 | `CNPC_VBatSwarm#451` | 0d/0v/1c | — | — | `CNPC_VBatSwarm` | — | — |  |
+| `0x10366c90` | CNPC_VBatSwarm::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VBatSwarm#451` | 0d/0v/1c | — | — | `CNPC_VBatSwarm` | — | — |  |
 | `0x10366cb0` | CNPC_VBatSwarm::vfunc5 | 30 | 0 | 17 | `CNPC_VBatSwarm#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10366db0` | CNPC_VBatSwarm::vfunc452 | 6 | 0 | 0 | `CNPC_VBatSwarm#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10366db0` | CNPC_VBatSwarm::LoadedSchedules | 6 | 0 | 0 | `CNPC_VBatSwarm#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10366e10` | CNPC_VBatSwarm::vfunc546 | 29 | 0 | 3 | `CNPC_VBatSwarm#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103672d0` | CNPC_VBatSwarm::vfunc82 | 6 | 0 | 0 | `CNPC_VBatSwarm#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10367380` | CNPC_VBatSwarm::vfunc103 | 21 | 0 | 27 | `CNPC_VBatSwarm#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103673b0` | CNPC_VBatSwarm::vfunc420 | 20 | 0 | 23 | `CNPC_VBatSwarm#420` | 0d/0v/8c | `+0x5de4` | — | — | — | — |  |
+| `0x10367380` | CNPC_VBatSwarm::Spawn | 21 | 0 | 27 | `CNPC_VBatSwarm#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103673b0` | CNPC_VBatSwarm::NPCInit | 20 | 0 | 23 | `CNPC_VBatSwarm#420` | 0d/0v/8c | `+0x5de4` | — | — | — | — |  |
 | `0x103673e0` | CNPC_VBatSwarm::vfunc473 | 6 | 0 | 0 | `CNPC_VBatSwarm#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10367400` | CNPC_VBatSwarm::vfunc138 | 6 | 0 | 0 | `CNPC_VBatSwarm#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10367460` | CNPC_VBatSwarm::vfunc438 | 15 | 0 | 27 | `CNPC_VBatSwarm#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x10367400` | CNPC_VBatSwarm::Classify | 6 | 0 | 0 | `CNPC_VBatSwarm#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10367460` | CNPC_VBatSwarm::SelectSchedule | 15 | 0 | 27 | `CNPC_VBatSwarm#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
 | `0x103674a0` | CNPC_VBatSwarm::vfunc461 | 15 | 0 | 24 | `CNPC_VBatSwarm#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x103674c0` | CNPC_VBatSwarm::vfunc432 | 13 | 0 | 27 | `CNPC_VBatSwarm#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x10367580` | CNPC_VBatSwarm::vfunc561 | 13 | 0 | 5 | `CNPC_VBatSwarm#561` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10367580` | CNPC_VBatSwarm::GatherAttackConditions | 13 | 0 | 5 | `CNPC_VBatSwarm#561` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103675e0` | CNPC_VBatSwarm::vfunc553 | 21 | 0 | 1 | `CNPC_VBatSwarm#553` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10367610` | CNPC_VBatSwarm::vfunc554 | 21 | 0 | 1 | `CNPC_VBatSwarm#554` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10367870` | CNPC_VBrujah::vfunc580 | 6 | 0 | 0 | `CNPC_VBrujah#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10367890` | CNPC_VBrujah::vfunc451 | 6 | 0 | 0 | `CNPC_VBrujah#451` | 0d/0v/1c | — | — | `CNPC_VBrujah` | — | — |  |
+| `0x10367890` | CNPC_VBrujah::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VBrujah#451` | 0d/0v/1c | — | — | `CNPC_VBrujah` | — | — |  |
 | `0x103678b0` | CNPC_VBrujah::vfunc5 | 30 | 0 | 17 | `CNPC_VBrujah#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103679b0` | CNPC_VBrujah::vfunc452 | 6 | 0 | 0 | `CNPC_VBrujah#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103679b0` | CNPC_VBrujah::LoadedSchedules | 6 | 0 | 0 | `CNPC_VBrujah#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10367a10` | CNPC_VBrujah::vfunc546 | 29 | 0 | 3 | `CNPC_VBrujah#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10367f00` | CNPC_VBrujah::vfunc138 | 6 | 0 | 0 | `CNPC_VBrujah#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10367f00` | CNPC_VBrujah::Classify | 6 | 0 | 0 | `CNPC_VBrujah#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10367f60` | CNPC_VCamera::vfunc82 | 6 | 0 | 0 | `CNPC_VCamera#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103680b0` | CNPC_VCamera::FUN_103680b0 | 1 | 0 | 0 | `CNPC_VCamera#488`, `CNPC_VCameraSecurity#488` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103680d0` | CNPC_VCamera::FUN_103680d0 | 1 | 0 | 0 | `CNPC_VCamera#489`, `CNPC_VCameraSecurity#489` | 0d/0v/2c | — | — | — | — | — |  |
@@ -3589,46 +3589,46 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10368370` | CNPC_VCamera::FUN_10368370 | 3 | 0 | 0 | `CNPC_VCamera#510`, `CNPC_VCameraSecurity#510` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10368390` | CNPC_VCamera::FUN_10368390 | 5 | 0 | 0 | `CNPC_VCamera#72`, `CNPC_VCameraSecurity#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103683b0` | CNPC_VCamera::FUN_103683b0 | 6 | 0 | 0 | `CNPC_VCamera#580`, `CNPC_VCameraSecurity#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103683d0` | CNPC_VCamera::FUN_103683d0 | 6 | 0 | 0 | `CNPC_VCamera#451`, `CNPC_VCameraSecurity#451` | 0d/0v/1c | — | — | `CNPC_VCamera` | — | — |  |
+| `0x103683d0` | CNPC_VCamera::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VCamera#451`, `CNPC_VCameraSecurity#451` | 0d/0v/1c | — | — | `CNPC_VCamera` | — | — |  |
 | `0x103683f0` | CNPC_VCamera::vfunc5 | 30 | 0 | 17 | `CNPC_VCamera#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103684f0` | CNPC_VCamera::FUN_103684f0 | 6 | 0 | 0 | `CNPC_VCamera#452`, `CNPC_VCameraSecurity#452` | 0d/1v/2c | — | — | — | — | — |  |
+| `0x103684f0` | CNPC_VCamera::LoadedSchedules | 6 | 0 | 0 | `CNPC_VCamera#452`, `CNPC_VCameraSecurity#452` | 0d/1v/2c | — | — | — | — | — |  |
 | `0x10368550` | CNPC_VCamera::FUN_10368550 | 29 | 0 | 3 | `CNPC_VCamera#546`, `CNPC_VCameraSecurity#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103689c0` | CNPC_VCamera::FUN_103689c0 | 330 | 0 | 4 | `CNPC_VCamera#104`, `CNPC_VCameraSecurity#104` | 0d/1v/11c | `+0x62dc` | `+0x0024`, `+0x0350`, `+0x0544`, `+0x0710`, `+0x1568` | `****ERROR***⏎⏎`, `Have the class responsible for spawning …`, +6 more | — | — |  |
-| `0x10368b70` | CNPC_VCamera::FUN_10368b70 | 589 | 0 | 23 | `CNPC_VCamera#103`, `CNPC_VCameraSecurity#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x0e64`, `+0x1570`, `+0x1574`, `+0x5b94`, +8 more | `+0x0024`, `+0x0108`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, +8 more | `CBaseEntity::SetSolid`, `CBaseEntity::SetSolidFlags`, +5 more | — | — |  |
-| `0x10368e60` | CNPC_VCamera::FUN_10368e60 | 3 | 0 | 0 | `CNPC_VCamera#138`, `CNPC_VCameraSecurity#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10368e80` | CNPC_VCamera::FUN_10368e80 | 6 | 0 | 0 | `CNPC_VCamera#337`, `CNPC_VCameraSecurity#337` | 0d/1v/1c | — | — | — | — | — |  |
-| `0x10368ea0` | CNPC_VCamera::FUN_10368ea0 | 3 | 0 | 0 | `CNPC_VCamera#463`, `CNPC_VCameraSecurity#463` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10368ec0` | CNPC_VCamera::FUN_10368ec0 | 3 | 0 | 0 | `CNPC_VCamera#259`, `CNPC_VCameraSecurity#259` | 0d/0v/0c | — | — | — | — | docs/vtmb/animation_and_movers.md:2186 |  |
-| `0x10368ee0` | CNPC_VCamera::FUN_10368ee0 | 3 | 0 | 0 | `CNPC_VCamera#563`, `CNPC_VCameraSecurity#563` | 0d/0v/5c | — | — | — | — | — |  |
+| `0x103689c0` | CNPC_VCamera::Precache | 330 | 0 | 4 | `CNPC_VCamera#104`, `CNPC_VCameraSecurity#104` | 0d/1v/11c | `+0x62dc` | `+0x0024`, `+0x0350`, `+0x0544`, `+0x0710`, `+0x1568` | `****ERROR***⏎⏎`, `Have the class responsible for spawning …`, +6 more | — | — |  |
+| `0x10368b70` | CNPC_VCamera::Spawn | 589 | 0 | 23 | `CNPC_VCamera#103`, `CNPC_VCameraSecurity#103` | 0d/0v/0c | `+0x019c`, `+0x0210`, `+0x0e64`, `+0x1570`, `+0x1574`, `+0x5b94`, +8 more | `+0x0024`, `+0x0108`, `+0x0174`, `+0x01a0`, `+0x01a4`, `+0x026c`, +8 more | `CBaseEntity::SetSolid`, `CBaseEntity::SetSolidFlags`, +5 more | — | — |  |
+| `0x10368e60` | CNPC_VCamera::Classify | 3 | 0 | 0 | `CNPC_VCamera#138`, `CNPC_VCameraSecurity#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10368e80` | CNPC_VCamera::GetUsedHullBits | 6 | 0 | 0 | `CNPC_VCamera#337`, `CNPC_VCameraSecurity#337` | 0d/1v/1c | — | — | — | — | — |  |
+| `0x10368ea0` | CNPC_VCamera::OnStateChange | 3 | 0 | 0 | `CNPC_VCamera#463`, `CNPC_VCameraSecurity#463` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10368ec0` | CNPC_VCamera::HandleAnimEvent | 3 | 0 | 0 | `CNPC_VCamera#259`, `CNPC_VCameraSecurity#259` | 0d/0v/0c | — | — | — | — | docs/vtmb/animation_and_movers.md:2186 |  |
+| `0x10368ee0` | CNPC_VCamera::TranslateEnemyChasePosition | 3 | 0 | 0 | `CNPC_VCamera#563`, `CNPC_VCameraSecurity#563` | 0d/0v/5c | — | — | — | — | — |  |
 | `0x10368f00` | CNPC_VCamera::FUN_10368f00 | 3 | 0 | 0 | `CNPC_VCamera#564`, `CNPC_VCameraSecurity#564` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10368f20` | CNPC_VCamera::FUN_10368f20 | 16 | 0 | 0 | `CNPC_VCamera#437`, `CNPC_VCameraSecurity#437` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x10368f40` | CNPC_VCamera::FUN_10368f40 | 16 | 0 | 0 | `CNPC_VCamera#438`, `CNPC_VCameraSecurity#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x10368f20` | CNPC_VCamera::PreSelectSchedule | 16 | 0 | 0 | `CNPC_VCamera#437`, `CNPC_VCameraSecurity#437` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x10368f40` | CNPC_VCamera::SelectSchedule | 16 | 0 | 0 | `CNPC_VCamera#438`, `CNPC_VCameraSecurity#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
 | `0x10368f60` | CNPC_VCamera::FUN_10368f60 | 5 | 0 | 0 | `CNPC_VCamera#482`, `CNPC_VCameraSecurity#482` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10368f80` | CNPC_VCamera::FUN_10368f80 | 167 | 0 | 21 | `CNPC_VCamera#460`, `CNPC_VCameraSecurity#460` | 0d/0v/0c | `+0x14bc`, `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x029c`, `+0x14bc`, `+0x5bb0`, `+0x5da4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | — | — |  |
 | `0x10369060` | CNPC_VCamera::FUN_10369060 | 42 | 0 | 0 | `CNPC_VCamera#461`, `CNPC_VCameraSecurity#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | — | — |  |
-| `0x103690a0` | CNPC_VCamera::PreTranslate_Camera | 7 | 0 | 0 | `CNPC_VCamera#375`, `CNPC_VCameraSecurity#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:281 | docs/vtmb/animation_and_movers.md:1491 |  |
-| `0x103690c0` | CNPC_VCamera::ClassTranslate_Camera | 7 | 0 | 0 | `CNPC_VCamera#376`, `CNPC_VCameraSecurity#376` | 0d/0v/8c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:315 | docs/vtmb/animation_and_movers.md:1495 |  |
+| `0x103690a0` | CNPC_VCamera::NPC_EarlyTranslateActivity | 7 | 0 | 0 | `CNPC_VCamera#375`, `CNPC_VCameraSecurity#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:281 | docs/vtmb/animation_and_movers.md:1491 |  |
+| `0x103690c0` | CNPC_VCamera::NPC_TranslateActivity | 7 | 0 | 0 | `CNPC_VCamera#376`, `CNPC_VCameraSecurity#376` | 0d/0v/8c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:315 | docs/vtmb/animation_and_movers.md:1495 |  |
 | `0x103690e0` | CNPC_VCamera::FUN_103690e0 | 13 | 0 | 26 | `CNPC_VCamera#432`, `CNPC_VCameraSecurity#432` | 0d/1v/3c | — | — | — | — | — |  |
-| `0x10369100` | CNPC_VCamera::FUN_10369100 | 1 | 0 | 0 | `CNPC_VCamera#434`, `CNPC_VCameraSecurity#434` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10369120` | CNPC_VCamera::FUN_10369120 | 210 | 0 | 27 | `CNPC_VCamera#431`, `CNPC_VCameraSecurity#431` | 0d/0v/0c | `+0x017c`, `+0x5b55`, `+0x6244`, `+0x6248`, `+0x624c`, `+0x6250`, +4 more | `+0x017c`, `+0x06c0`, `+0x5b55`, `+0x6244`, `+0x6248`, `+0x624c`, +1 more | — | — | docs/vtmb/npc-ai/lifecycle.md:184, docs/vtmb/npc-ai/lifecycle.md:191, docs/vtmb/npc-ai/lifecycle.md:193 |  |
+| `0x10369100` | CNPC_VCamera::PrescheduleThink | 1 | 0 | 0 | `CNPC_VCamera#434`, `CNPC_VCameraSecurity#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10369120` | CNPC_VCamera::NPCThink | 210 | 0 | 27 | `CNPC_VCamera#431`, `CNPC_VCameraSecurity#431` | 0d/0v/0c | `+0x017c`, `+0x5b55`, `+0x6244`, `+0x6248`, `+0x624c`, `+0x6250`, +4 more | `+0x017c`, `+0x06c0`, `+0x5b55`, `+0x6244`, `+0x6248`, `+0x624c`, +1 more | — | — | docs/vtmb/npc-ai/lifecycle.md:184, docs/vtmb/npc-ai/lifecycle.md:191, docs/vtmb/npc-ai/lifecycle.md:193 |  |
 | `0x10369240` | CNPC_VCamera::FUN_10369240 | 5 | 0 | 0 | `CNPC_VCamera#390`, `CNPC_VCameraSecurity#390` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10369260` | CNPC_VCamera::FUN_10369260 | 5 | 0 | 0 | `CNPC_VCamera#366`, `CNPC_VCameraSecurity#366` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10369260` | CNPC_VCamera::HandleInteraction | 5 | 0 | 0 | `CNPC_VCamera#366`, `CNPC_VCameraSecurity#366` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103692a0` | CNPC_VCamera::FUN_103692a0 | 3 | 0 | 0 | `CNPC_VCamera#473`, `CNPC_VCameraSecurity#473` | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 | docs/vtmb/npc-ai/senses.md:299 |  |
-| `0x103692c0` | CNPC_VCamera::FUN_103692c0 | 1306 | 0 | 22 | `CNPC_VCamera#420`, `CNPC_VCameraSecurity#420` | 0d/1v/8c | `+0x017c`, `+0x01fc`, `+0x0200`, `+0x0208`, `+0x1480`, `+0x1481`, +73 more | `+0x0370`, `+0x0374`, `+0x05fc`, `+0x0804`, `+0x1a98`, `+0x5c5c`, +9 more | `item_w_unarmed`, `Player %s`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:457 | docs/vtmb/npc-ai/lifecycle.md:183, docs/vtmb/npc-ai/lifecycle.md:191, docs/vtmb/npc-ai/lifecycle.md:522, +2 more |  |
+| `0x103692c0` | CNPC_VCamera::NPCInit | 1306 | 0 | 22 | `CNPC_VCamera#420`, `CNPC_VCameraSecurity#420` | 0d/1v/8c | `+0x017c`, `+0x01fc`, `+0x0200`, `+0x0208`, `+0x1480`, `+0x1481`, +73 more | `+0x0370`, `+0x0374`, `+0x05fc`, `+0x0804`, `+0x1a98`, `+0x5c5c`, +9 more | `item_w_unarmed`, `Player %s`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:457 | docs/vtmb/npc-ai/lifecycle.md:183, docs/vtmb/npc-ai/lifecycle.md:191, docs/vtmb/npc-ai/lifecycle.md:522, +2 more |  |
 | `0x10369930` | CNPC_VCamera::FUN_10369930 | 520 | 0 | 20 | `CNPC_VCamera#422`, `CNPC_VCameraSecurity#422` | 0d/0v/0c | `+0x017c`, `+0x5d7c`, `+0x5d80`, `+0x5de8` | `+0x0024`, `+0x00f8`, `+0x0178`, `+0x0204`, `+0x020c`, `+0x0370`, +4 more | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…`, +1 more | — | — |  |
-| `0x10369bd0` | CNPC_VCamera::FUN_10369bd0 | 165 | 0 | 8 | `CNPC_VCamera#545`, `CNPC_VCameraSecurity#545` | 0d/1v/2c | `+0x5da4` | `+0x0804`, `+0x0878`, `+0x5da4`, `+0x5da8` | `WARNING: Found %s that isn't in a squad⏎` | — | — |  |
+| `0x10369bd0` | CNPC_VCamera::InitSquad | 165 | 0 | 8 | `CNPC_VCamera#545`, `CNPC_VCameraSecurity#545` | 0d/1v/2c | `+0x5da4` | `+0x0804`, `+0x0878`, `+0x5da4`, `+0x5da8` | `WARNING: Found %s that isn't in a squad⏎` | — | — |  |
 | `0x10369cf0` | CNPC_VCameraSecurity::vfunc82 | 6 | 0 | 0 | `CNPC_VCameraSecurity#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10369e40` | CNPC_VCameraSecurity::vfunc5 | 30 | 0 | 17 | `CNPC_VCameraSecurity#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10369e70` | FUN_10369e70 | 252 | 1 | 9 | — | 2d/0v/0c | `+0x6664`?, `+0x6668`? | `+0x6660`?, `+0x6664`?, `+0x6668`? | — | — | — |  |
-| `0x10369fb0` | CNPC_VCameraSecurity::vfunc363 | 45 | 0 | 10 | `CNPC_VCameraSecurity#363` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x10369ff0` | CNPC_VCameraSecurity::vfunc201 | 44 | 0 | 14 | `CNPC_VCameraSecurity#201` | 0d/0v/7c | — | — | — | — | — |  |
+| `0x10369fb0` | CNPC_VCameraSecurity::FInViewCone | 45 | 0 | 10 | `CNPC_VCameraSecurity#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x10369ff0` | CNPC_VCameraSecurity::FVisible | 44 | 0 | 14 | `CNPC_VCameraSecurity#201` | 0d/0v/7c | — | — | — | — | — |  |
 | `0x1036a030` | CNPC_VCameraSecurity::vfunc468 | 18 | 0 | 0 | `CNPC_VCameraSecurity#468` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1036a190` | CNPC_VChangBros::FUN_1036a190 | 6 | 0 | 0 | `CNPC_VChangBros#138`, `CNPC_VChangBrosBlade#138`, `CNPC_VChangBrosClaw#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1036a190` | CNPC_VChangBros::Classify | 6 | 0 | 0 | `CNPC_VChangBros#138`, `CNPC_VChangBrosBlade#138`, `CNPC_VChangBrosClaw#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1036a1b0` | CNPC_VChangBros::vfunc580 | 6 | 0 | 0 | `CNPC_VChangBros#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1036a1d0` | CNPC_VChangBros::vfunc451 | 6 | 0 | 0 | `CNPC_VChangBros#451` | 0d/0v/1c | — | — | `CNPC_VChangBros` | — | — |  |
+| `0x1036a1d0` | CNPC_VChangBros::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VChangBros#451` | 0d/0v/1c | — | — | `CNPC_VChangBros` | — | — |  |
 | `0x1036a1f0` | CNPC_VChangBros::vfunc5 | 43 | 0 | 17 | `CNPC_VChangBros#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
 | `0x1036a230` | CNPC_VChangBros::vfunc82 | 6 | 0 | 0 | `CNPC_VChangBros#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1036a390` | CNPC_VChangBros::vfunc452 | 6 | 0 | 0 | `CNPC_VChangBros#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1036a390` | CNPC_VChangBros::LoadedSchedules | 6 | 0 | 0 | `CNPC_VChangBros#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1036a3f0` | CNPC_VChangBros::vfunc546 | 29 | 0 | 3 | `CNPC_VChangBros#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1036ae60` | CNPC_VChangBros::Precache | 262 | 0 | 15 | `CNPC_VChangBros#104`, `CNPC_VChangBrosBlade#104`, `CNPC_VChangBrosClaw#104` | 0d/0v/11c | — | — | `item_w_chang_ghost`, `item_w_chang_energy_ball`, +10 more | — | — |  |
 | `0x1036afc0` | CNPC_VChangBros::Spawn | 109 | 0 | 27 | `CNPC_VChangBros#103`, `CNPC_VChangBrosBlade#103`, `CNPC_VChangBrosClaw#103` | 0d/0v/0c | — | — | `CNPC_VChangBros::Spawn` | — | — |  |
@@ -3641,7 +3641,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1036b6b0` | CNPC_VChangBros::SectorIsInPit | 121 | 1 | 0 | — | 1d/0v/0c | — | — | `CNPC_VChangBros::SectorIsInPit` | — | — |  |
 | `0x1036b750` | CNPC_VChangBros::StartTask | 1617 | 0 | 29 | `CNPC_VChangBros#442`, `CNPC_VChangBrosBlade#442`, `CNPC_VChangBrosClaw#442` | 0d/0v/2c | `+0x14bc`, `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x5ddc`, `+0x6498`, +6 more | `+0x026c`, `+0x0270`, `+0x02b4`, `+0x0364`, `+0x0700`, `+0x14bc`, +6 more | `NULL ENTITY`, `CBaseEntity::AddSolidFlags`, +7 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:811 | — |  |
 | `0x1036bfc0` | CNPC_VChangBros::RunTask | 1159 | 0 | 26 | `CNPC_VChangBros#444`, `CNPC_VChangBrosBlade#444`, `CNPC_VChangBrosClaw#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x66d4`, `+0x66d8`, `+0x66f4` | `+0x029c`, `+0x0318`, `+0x03ec`, `+0x06f8`, `+0x0700`, `+0x0874`, +8 more | `chang_center_emitter`, `chang_spine_emitter`, +3 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:840 | — |  |
-| `0x1036c6a0` | CNPC_VChangBros::FUN_1036c6a0 | 5 | 0 | 0 | `CNPC_VChangBros#566`, `CNPC_VChangBrosBlade#566`, `CNPC_VChangBrosClaw#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x1036c6a0` | CNPC_VChangBros::FValidateHintType | 5 | 0 | 0 | `CNPC_VChangBros#566`, `CNPC_VChangBrosBlade#566`, `CNPC_VChangBrosClaw#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x1036c6c0` | CNPC_VChangBros::NPCThink | 114 | 0 | 28 | `CNPC_VChangBros#431`, `CNPC_VChangBrosBlade#431`, `CNPC_VChangBrosClaw#431` | 0d/0v/0c | `+0x017c` | — | `CNPC_VChangBros::NPCThink` | — | — |  |
 | `0x1036c7f0` | FUN_1036c7f0 | 13 | 1 | 0 | — | 2d/0v/0c | `+0x66b8` | — | — | — | — |  |
 | `0x1036c8d0` | CNPC_VChangBros::CheckForJumpAttack | 375 | 1 | 8 | — | 1d/0v/0c | — | `+0x0364`, `+0x5bb0`, `+0x5da4`, `+0x628c`, `+0x66b8`, `+0x66cc` | `CNPC_VChangBros::CheckForJumpAttack` | — | — |  |
@@ -3665,167 +3665,167 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1036e820` | CNPC_VChangBros::ReadyForUnited | 128 | 1 | 1 | — | 1d/0v/0c | — | — | `CNPC_VChangBros::ReadyForUnited` | — | — |  |
 | `0x1036e8c0` | CNPC_VChangBros::KillCenterEmitter | 156 | 1 | 2 | — | 1d/0v/0c | — | `+0x66f4` | `CNPC_VChangBros::KillCenterEmitter` | — | — |  |
 | `0x1036eab0` | CNPC_VChangBrosBlade::vfunc580 | 6 | 0 | 0 | `CNPC_VChangBrosBlade#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1036ead0` | CNPC_VChangBrosBlade::vfunc451 | 6 | 0 | 0 | `CNPC_VChangBrosBlade#451` | 0d/0v/1c | — | — | `CNPC_VChangBrosBlade` | — | — |  |
+| `0x1036ead0` | CNPC_VChangBrosBlade::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VChangBrosBlade#451` | 0d/0v/1c | — | — | `CNPC_VChangBrosBlade` | — | — |  |
 | `0x1036eaf0` | CNPC_VChangBrosBlade::vfunc5 | 43 | 0 | 17 | `CNPC_VChangBrosBlade#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
 | `0x1036eb30` | CNPC_VChangBrosBlade::vfunc82 | 6 | 0 | 0 | `CNPC_VChangBrosBlade#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1036ec90` | CNPC_VChangBrosBlade::vfunc452 | 6 | 0 | 0 | `CNPC_VChangBrosBlade#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1036ec90` | CNPC_VChangBrosBlade::LoadedSchedules | 6 | 0 | 0 | `CNPC_VChangBrosBlade#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1036ecf0` | CNPC_VChangBrosBlade::vfunc546 | 29 | 0 | 3 | `CNPC_VChangBrosBlade#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1036f100` | CNPC_VChangBrosBlade::NPCInit | 97 | 0 | 25 | `CNPC_VChangBrosBlade#420` | 0d/0v/8c | — | — | `CNPC_VChangBrosBlade::NPCInit` | — | — |  |
 | `0x1036f2b0` | CNPC_VChangBrosClaw::vfunc580 | 6 | 0 | 0 | `CNPC_VChangBrosClaw#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1036f2d0` | CNPC_VChangBrosClaw::vfunc451 | 6 | 0 | 0 | `CNPC_VChangBrosClaw#451` | 0d/0v/1c | — | — | `CNPC_VChangBrosClaw` | — | — |  |
+| `0x1036f2d0` | CNPC_VChangBrosClaw::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VChangBrosClaw#451` | 0d/0v/1c | — | — | `CNPC_VChangBrosClaw` | — | — |  |
 | `0x1036f2f0` | CNPC_VChangBrosClaw::vfunc5 | 43 | 0 | 17 | `CNPC_VChangBrosClaw#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
 | `0x1036f330` | CNPC_VChangBrosClaw::vfunc82 | 6 | 0 | 0 | `CNPC_VChangBrosClaw#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1036f490` | CNPC_VChangBrosClaw::vfunc452 | 6 | 0 | 0 | `CNPC_VChangBrosClaw#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1036f490` | CNPC_VChangBrosClaw::LoadedSchedules | 6 | 0 | 0 | `CNPC_VChangBrosClaw#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1036f4f0` | CNPC_VChangBrosClaw::vfunc546 | 29 | 0 | 3 | `CNPC_VChangBrosClaw#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1036f900` | CNPC_VChangBrosClaw::NPCInit | 97 | 0 | 25 | `CNPC_VChangBrosClaw#420` | 0d/0v/8c | — | — | `CNPC_VChangBrosClaw::NPCInit` | — | — |  |
 | `0x1036fb10` | CNPC_VCombatman::vfunc580 | 6 | 0 | 0 | `CNPC_VCombatman#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1036fb30` | CNPC_VCombatman::vfunc451 | 6 | 0 | 0 | `CNPC_VCombatman#451` | 0d/0v/1c | — | — | `CNPC_VCombatman` | — | — |  |
+| `0x1036fb30` | CNPC_VCombatman::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VCombatman#451` | 0d/0v/1c | — | — | `CNPC_VCombatman` | — | — |  |
 | `0x1036fb50` | CNPC_VCombatman::vfunc5 | 30 | 0 | 17 | `CNPC_VCombatman#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1036fc50` | CNPC_VCombatman::vfunc452 | 6 | 0 | 0 | `CNPC_VCombatman#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1036fc50` | CNPC_VCombatman::LoadedSchedules | 6 | 0 | 0 | `CNPC_VCombatman#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1036fcb0` | CNPC_VCombatman::vfunc546 | 29 | 0 | 3 | `CNPC_VCombatman#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103701a0` | CNPC_VCombatman::vfunc103 | 31 | 0 | 26 | `CNPC_VCombatman#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103701d0` | CNPC_VCombatman::vfunc138 | 6 | 0 | 0 | `CNPC_VCombatman#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10370230` | CNPC_VCombatman::vfunc438 | 157 | 0 | 27 | `CNPC_VCombatman#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c` | `+0x14b8`, `+0x5cc0`, `+0x5d34`, `+0x62ec` | — | — | — |  |
+| `0x103701a0` | CNPC_VCombatman::Spawn | 31 | 0 | 26 | `CNPC_VCombatman#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103701d0` | CNPC_VCombatman::Classify | 6 | 0 | 0 | `CNPC_VCombatman#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10370230` | CNPC_VCombatman::SelectSchedule | 157 | 0 | 27 | `CNPC_VCombatman#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c` | `+0x14b8`, `+0x5cc0`, `+0x5d34`, `+0x62ec` | — | — | — |  |
 | `0x10370320` | CNPC_VCombatman::vfunc461 | 15 | 0 | 24 | `CNPC_VCombatman#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x10370340` | CNPC_VCombatman::vfunc432 | 13 | 0 | 27 | `CNPC_VCombatman#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x10370460` | CNPC_VCop::vfunc82 | 6 | 0 | 0 | `CNPC_VCop#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10370560` | FUN_10370560 | 51 | 1 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:611 |  |
+| `0x10370560` | FUN_10370560 | 51 | 1 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:613 |  |
 | `0x103705b0` | FUN_103705b0 | 21 | 6 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x103705e0` | FUN_103705e0 | 63 | 2 | 2 | — | 1d/0v/0c | — | `+0x0740` | — | — | — |  |
 | `0x10370630` | FUN_10370630 | 1 | 2 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10370650` | FUN_10370650 | 21 | 4 | 8 | — | 1d/0v/0c | — | — | `OnHeightenedAlertModeStart` | — | — |  |
 | `0x103706b0` | FUN_103706b0 | 233 | 5 | 8 | — | 1d/0v/0c +1 outside | — | `+0x0740`, `+0x0958` | — | — | — |  |
 | `0x10370930` | CNPC_VCop::vfunc580 | 6 | 0 | 0 | `CNPC_VCop#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10370950` | CNPC_VCop::vfunc451 | 6 | 0 | 0 | `CNPC_VCop#451` | 0d/0v/1c | — | — | `CNPC_VCop` | — | — |  |
+| `0x10370950` | CNPC_VCop::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VCop#451` | 0d/0v/1c | — | — | `CNPC_VCop` | — | — |  |
 | `0x10370970` | CNPC_VCop::vfunc5 | 30 | 0 | 17 | `CNPC_VCop#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10370a70` | CNPC_VCop::vfunc452 | 6 | 0 | 0 | `CNPC_VCop#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10370a70` | CNPC_VCop::LoadedSchedules | 6 | 0 | 0 | `CNPC_VCop#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10370ad0` | CNPC_VCop::vfunc546 | 29 | 0 | 3 | `CNPC_VCop#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10371a20` | CNPC_VCop::vfunc103 | 57 | 0 | 27 | `CNPC_VCop#103` | 0d/0v/0c | `+0x0001`, `+0x6668`, `+0x6671` | — | — | — | — |  |
-| `0x10371a90` | CNPC_VCop::vfunc180 | 51 | 0 | 16 | `CNPC_VCop#180` | 0d/0v/1c | `+0x0001`, `+0x6671` | `+0x0001`, `+0x6671` | — | — | — |  |
+| `0x10371a20` | CNPC_VCop::Spawn | 57 | 0 | 27 | `CNPC_VCop#103` | 0d/0v/0c | `+0x0001`, `+0x6668`, `+0x6671` | — | — | — | — |  |
+| `0x10371a90` | CNPC_VCop::UpdateOnRemove | 51 | 0 | 16 | `CNPC_VCop#180` | 0d/0v/1c | `+0x0001`, `+0x6671` | `+0x0001`, `+0x6671` | — | — | — |  |
 | `0x10371ae0` | CNPC_VCop::vfunc472 | 54 | 0 | 16 | `CNPC_VCop#472` | 0d/0v/0c | — | `+0x0650`, `+0x6081` | — | — | docs/vtmb/npc-ai/senses.md:402 |  |
-| `0x10371b50` | CNPC_VCop::vfunc138 | 6 | 0 | 0 | `CNPC_VCop#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10371b70` | CNPC_VCop::vfunc442 ‼ | 101 | 0 | 28 | `CNPC_VCop#442` | 0d/0v/2c | — | `+0x0958` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:812 | — |  |
-| `0x10371c20` | CNPC_VCop::vfunc463 | 487 | 0 | 22 | `CNPC_VCop#463` | 0d/0v/1c | `+0x0001`, `+0x6664`, `+0x6670` | `+0x0001`, `+0x029c`, `+0x02a0`, `+0x0680`, `+0x0954`, `+0x0958`, +3 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1548 | docs/vtmb/npc-ai/rebuild.md:269 |  |
-| `0x10371ee0` | CNPC_VCop::vfunc438 | 482 | 0 | 28 | `CNPC_VCop#438` | 0d/0v/0c | `+0x0001`, `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0001`, `+0x5cc0`, `+0x628c`, `+0x6590`, `+0x65f4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — | — |  |
-| `0x10372150` | CNPC_VCop::vfunc440 | 238 | 0 | 22 | `CNPC_VCop#440` | 0d/0v/2c | — | `+0x14bc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2279 | — |  |
+| `0x10371b50` | CNPC_VCop::Classify | 6 | 0 | 0 | `CNPC_VCop#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10371b70` | CNPC_VCop::StartTask ‼ | 101 | 0 | 28 | `CNPC_VCop#442` | 0d/0v/2c | — | `+0x0958` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:812 | — |  |
+| `0x10371c20` | CNPC_VCop::OnStateChange | 487 | 0 | 22 | `CNPC_VCop#463` | 0d/0v/1c | `+0x0001`, `+0x6664`, `+0x6670` | `+0x0001`, `+0x029c`, `+0x02a0`, `+0x0680`, `+0x0954`, `+0x0958`, +3 more | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1548 | docs/vtmb/npc-ai/rebuild.md:269 |  |
+| `0x10371ee0` | CNPC_VCop::SelectSchedule | 482 | 0 | 28 | `CNPC_VCop#438` | 0d/0v/0c | `+0x0001`, `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0001`, `+0x5cc0`, `+0x628c`, `+0x6590`, `+0x65f4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — | — |  |
+| `0x10372150` | CNPC_VCop::TranslateSchedule | 238 | 0 | 22 | `CNPC_VCop#440` | 0d/0v/2c | — | `+0x14bc` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2279 | — |  |
 | `0x103723f0` | FUN_103723f0 | 566 | 1 | 2 | — | 1d/0v/0c | `+0x16e0`? | `+0x0950`?, `+0x0954`? | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — | — |  |
 | `0x103726c0` | CNPC_VCop::vfunc461 | 770 | 0 | 25 | `CNPC_VCop#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x0950`, `+0x0954`, `+0x5cc0`, `+0x628c` | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — | — |  |
 | `0x10372aa0` | CNPC_VCop::vfunc432 | 13 | 0 | 28 | `CNPC_VCop#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x10372b00` | CNPC_VCop::vfunc420 | 17 | 0 | 24 | `CNPC_VCop#420` | 0d/0v/8c | `+0x6670` | — | — | — | — |  |
-| `0x10372b70` | CNPC_VCop::vfunc404 | 170 | 0 | 15 | `CNPC_VCop#404` | 0d/2v/22c | — | — | — | — | — |  |
+| `0x10372b00` | CNPC_VCop::NPCInit | 17 | 0 | 24 | `CNPC_VCop#420` | 0d/0v/8c | `+0x6670` | — | — | — | — |  |
+| `0x10372b70` | CNPC_VCop::IRelationType | 170 | 0 | 15 | `CNPC_VCop#404` | 0d/2v/22c | — | — | — | — | — |  |
 | `0x10372c50` | CNPC_VCop::vfunc596 | 72 | 0 | 21 | `CNPC_VCop#596` | 0d/1v/8c | — | — | — | — | — |  |
 | `0x10372cc0` | CNPC_VCop::vfunc597 | 201 | 0 | 10 | `CNPC_VCop#597` | 0d/2v/4c | `+0x6664` | `+0x0740`, `+0x628c`, `+0x6664` | `Player D_HT 10` | — | — |  |
 | `0x10372dd0` | CNPC_VCop::vfunc598 | 238 | 0 | 21 | `CNPC_VCop#598` | 0d/2v/2c | `+0x6668` | `+0x029c`, `+0x0874`, `+0x1a94`, `+0x628c` | `%s(%d) :`, `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…`, +1 more | — | — |  |
-| `0x10372f00` | CNPC_VCop::vfunc123 | 1020 | 0 | 16 | `CNPC_VCop#123` | 0d/0v/0c | — | `+0x0224`, `+0x0270`, `+0x0364`, `+0x0650`, `+0x628c`, `+0x6664` | `  %d  %d`, ` Pursuit`, +3 more | — | — |  |
+| `0x10372f00` | CNPC_VCop::DrawDebugGeometryOverlays | 1020 | 0 | 16 | `CNPC_VCop#123` | 0d/0v/0c | — | `+0x0224`, `+0x0270`, `+0x0364`, `+0x0650`, `+0x628c`, `+0x6664` | `  %d  %d`, ` Pursuit`, +3 more | — | — |  |
 | `0x10373530` | CNPC_VDog::vfunc580 | 6 | 0 | 0 | `CNPC_VDog#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10373550` | CNPC_VDog::vfunc451 | 6 | 0 | 0 | `CNPC_VDog#451` | 0d/0v/1c | — | — | `CNPC_VDog` | — | — |  |
+| `0x10373550` | CNPC_VDog::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VDog#451` | 0d/0v/1c | — | — | `CNPC_VDog` | — | — |  |
 | `0x10373570` | CNPC_VDog::vfunc5 | 30 | 0 | 17 | `CNPC_VDog#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10373670` | CNPC_VDog::vfunc452 | 6 | 0 | 0 | `CNPC_VDog#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10373670` | CNPC_VDog::LoadedSchedules | 6 | 0 | 0 | `CNPC_VDog#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103736d0` | CNPC_VDog::vfunc546 | 29 | 0 | 3 | `CNPC_VDog#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10374000` | CNPC_VDog::vfunc103 | 90 | 0 | 26 | `CNPC_VDog#103` | 0d/0v/0c | `+0x6674`, `+0x6688` | — | — | — | — |  |
-| `0x10374080` | CNPC_VDog::vfunc138 | 6 | 0 | 0 | `CNPC_VDog#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10374130` | CNPC_VDog::vfunc516 | 237 | 0 | 1 | `CNPC_VDog#516` | 0d/0v/0c | — | `+0x03c8`, `+0x0fec`, `+0x14b8`, `+0x5d8c` | — | — | — |  |
-| `0x10374280` | CNPC_VDog::vfunc259 | 63 | 0 | 26 | `CNPC_VDog#259` | 0d/0v/0c | — | — | `Gots a doggie bite!⏎` | — | docs/vtmb/animation_and_movers.md:2187 |  |
-| `0x103742d0` | CNPC_VDog::vfunc438 | 128 | 0 | 27 | `CNPC_VDog#438` | 0d/0v/0c | `+0x1b2c` | `+0x5cc0`, `+0x6590` | — | — | — |  |
-| `0x10374370` | CNPC_VDog::vfunc440 | 54 | 0 | 22 | `CNPC_VDog#440` | 0d/0v/2c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2279 | — |  |
+| `0x10374000` | CNPC_VDog::Spawn | 90 | 0 | 26 | `CNPC_VDog#103` | 0d/0v/0c | `+0x6674`, `+0x6688` | — | — | — | — |  |
+| `0x10374080` | CNPC_VDog::Classify | 6 | 0 | 0 | `CNPC_VDog#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10374130` | CNPC_VDog::MaxYawSpeed | 237 | 0 | 1 | `CNPC_VDog#516` | 0d/0v/0c | — | `+0x03c8`, `+0x0fec`, `+0x14b8`, `+0x5d8c` | — | — | — |  |
+| `0x10374280` | CNPC_VDog::HandleAnimEvent | 63 | 0 | 26 | `CNPC_VDog#259` | 0d/0v/0c | — | — | `Gots a doggie bite!⏎` | — | docs/vtmb/animation_and_movers.md:2187 |  |
+| `0x103742d0` | CNPC_VDog::SelectSchedule | 128 | 0 | 27 | `CNPC_VDog#438` | 0d/0v/0c | `+0x1b2c` | `+0x5cc0`, `+0x6590` | — | — | — |  |
+| `0x10374370` | CNPC_VDog::TranslateSchedule | 54 | 0 | 22 | `CNPC_VDog#440` | 0d/0v/2c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2279 | — |  |
 | `0x103743c0` | CNPC_VDog::vfunc461 | 807 | 0 | 24 | `CNPC_VDog#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4`, `+0x6678`, `+0x6680` | `+0x0738`, `+0x5cc0`, `+0x5cc4`, `+0x667c` | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — | — |  |
 | `0x103747c0` | FUN_103747c0 | 5 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x103747e0` | CNPC_VDog::vfunc432 | 164 | 0 | 27 | `CNPC_VDog#432` | 0d/0v/3c | — | `+0x04d8`, `+0x0fec`, `+0x5cc0` | — | — | — |  |
-| `0x10374940` | CNPC_VDog::vfunc442 | 163 | 0 | 28 | `CNPC_VDog#442` | 0d/0v/2c | — | `+0x029c`, `+0x03ec`, `+0x04d8`, `+0x0874`, `+0x5d44` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:813 | — |  |
-| `0x10374a20` | CNPC_VDog::vfunc444 | 82 | 0 | 25 | `CNPC_VDog#444` | 0d/0v/2c | — | `+0x5cc0`, `+0x5d44` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:841 | — |  |
-| `0x10374aa0` | CNPC_VDog::vfunc566 | 20 | 0 | 0 | `CNPC_VDog#566` | 0d/0v/4c | — | — | — | — | — |  |
-| `0x10374ad0` | CNPC_VDog::vfunc375 | 21 | 0 | 16 | `CNPC_VDog#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:83, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:284 | docs/vtmb/animation_and_movers.md:1584 |  |
-| `0x10374b00` | CNPC_VDog::vfunc433 | 508 | 0 | 25 | `CNPC_VDog#433` | 0d/0v/2c | `+0x665c`, `+0x667c` | `+0x0370`, `+0x0fec`, `+0x665c`, `+0x6664`, `+0x6668`, `+0x666c` | — | — | — |  |
+| `0x10374940` | CNPC_VDog::StartTask | 163 | 0 | 28 | `CNPC_VDog#442` | 0d/0v/2c | — | `+0x029c`, `+0x03ec`, `+0x04d8`, `+0x0874`, `+0x5d44` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:813 | — |  |
+| `0x10374a20` | CNPC_VDog::RunTask | 82 | 0 | 25 | `CNPC_VDog#444` | 0d/0v/2c | — | `+0x5cc0`, `+0x5d44` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:841 | — |  |
+| `0x10374aa0` | CNPC_VDog::FValidateHintType | 20 | 0 | 0 | `CNPC_VDog#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x10374ad0` | CNPC_VDog::NPC_EarlyTranslateActivity | 21 | 0 | 16 | `CNPC_VDog#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:83, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:284 | docs/vtmb/animation_and_movers.md:1584 |  |
+| `0x10374b00` | CNPC_VDog::GatherConditions | 508 | 0 | 25 | `CNPC_VDog#433` | 0d/0v/2c | `+0x665c`, `+0x667c` | `+0x0370`, `+0x0fec`, `+0x665c`, `+0x6664`, `+0x6668`, `+0x666c` | — | — | — |  |
 | `0x10374d80` | CNPC_VDog::vfunc460 | 153 | 0 | 22 | `CNPC_VDog#460` | 0d/0v/0c | `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x5cc4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — | — |  |
 | `0x10374e50` | FUN_10374e50 | 185 | 1 | 21 | — | 1d/0v/0c | — | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | — | docs/vtmb/npc-ai/social.md:476 |  |
 | `0x10374f40` | FUN_10374f40 | 152 | 1 | 3 | — | 1d/0v/0c | — | `+0x029c`?, `+0x0364`? | — | — | — |  |
 | `0x103750e0` | CNPC_VVampire::FUN_103750e0 | 6 | 0 | 0 | `CNPC_VPlayerController#580`, `CNPC_VVampire#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10375100` | CNPC_VVampire::FUN_10375100 | 6 | 0 | 0 | `CNPC_VPlayerController#451`, `CNPC_VVampire#451` | 0d/0v/1c | — | — | `CNPC_VVampire` | — | — |  |
-| `0x10375120` | CNPC_VWolfMorph::FUN_10375120 | 5 | 0 | 0 | `CNPC_VPlayerController#363`, `CNPC_VWolfMorph#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x10375100` | CNPC_VVampire::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VPlayerController#451`, `CNPC_VVampire#451` | 0d/0v/1c | — | — | `CNPC_VVampire` | — | — |  |
+| `0x10375120` | CNPC_VPlayerController::FInViewCone | 5 | 0 | 0 | `CNPC_VPlayerController#363`, `CNPC_VWolfMorph#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x10375140` | CNPC_VWolfMorph::FUN_10375140 | 5 | 0 | 0 | `CNPC_VPlayerController#362`, `CNPC_VWolfMorph#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10375160` | CNPC_VWolfMorph::FUN_10375160 | 5 | 0 | 0 | `CNPC_VPlayerController#365`, `CNPC_VWolfMorph#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10375180` | CNPC_VWolfMorph::FUN_10375180 | 5 | 0 | 0 | `CNPC_VPlayerController#364`, `CNPC_VWolfMorph#364` | 0d/0v/5c | — | — | — | — | — |  |
 | `0x103751a0` | CNPC_VFrenzyShadow::FUN_103751a0 | 5 | 0 | 0 | `CNPC_VFrenzyShadow#72`, `CNPC_VPlayerController#72`, `CNPC_VWolfMorph#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10375240` | CNPC_VFrenzyShadow::vfunc580 | 6 | 0 | 0 | `CNPC_VFrenzyShadow#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10375260` | CNPC_VFrenzyShadow::vfunc451 | 6 | 0 | 0 | `CNPC_VFrenzyShadow#451` | 0d/0v/1c | — | — | `CNPC_VFrenzyShadow` | — | — |  |
+| `0x10375260` | CNPC_VFrenzyShadow::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VFrenzyShadow#451` | 0d/0v/1c | — | — | `CNPC_VFrenzyShadow` | — | — |  |
 | `0x10375280` | CNPC_VFrenzyShadow::vfunc82 | 6 | 0 | 0 | `CNPC_VFrenzyShadow#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103753e0` | CNPC_VFrenzyShadow::vfunc452 | 6 | 0 | 0 | `CNPC_VFrenzyShadow#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103753e0` | CNPC_VFrenzyShadow::LoadedSchedules | 6 | 0 | 0 | `CNPC_VFrenzyShadow#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10375440` | CNPC_VFrenzyShadow::vfunc546 | 29 | 0 | 3 | `CNPC_VFrenzyShadow#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10375c50` | CNPC_VFrenzyShadow::vfunc103 | 21 | 0 | 28 | `CNPC_VFrenzyShadow#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10375c80` | CNPC_VFrenzyShadow::vfunc420 | 181 | 0 | 24 | `CNPC_VFrenzyShadow#420` | 0d/0v/8c | `+0x1488`, `+0x1b3c`, `+0x1b40`, `+0x5b84`, `+0x5cc4`, `+0x65f7`, +2 more | `+0x05fc`, `+0x5cdc` | `item_w_fists`, `E:\Vampire\main\dlls\hl2_dll\NPC_VFrenzy…` | — | docs/vtmb/animation_and_movers.md:654 |  |
-| `0x10375d70` | CNPC_VFrenzyShadow::vfunc138 | 6 | 0 | 0 | `CNPC_VFrenzyShadow#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10375d90` | CNPC_VFrenzyShadow::vfunc438 | 136 | 0 | 27 | `CNPC_VFrenzyShadow#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80` | `+0x029c`, `+0x5cc0`, `+0x6664`, `+0x6668` | `E:\Vampire\main\dlls\hl2_dll\NPC_VFrenzy…` | — | — |  |
-| `0x10375e50` | CNPC_VFrenzyShadow::vfunc431 | 83 | 0 | 28 | `CNPC_VFrenzyShadow#431` | 0d/0v/0c | — | `+0x029c`, `+0x5cc0` | — | — | — |  |
-| `0x10375ed0` | CNPC_VFrenzyShadow::vfunc433 | 50 | 0 | 25 | `CNPC_VFrenzyShadow#433` | 0d/0v/2c | — | `+0x6664` | — | — | — |  |
-| `0x10375f20` | CNPC_VFrenzyShadow::vfunc440 | 31 | 0 | 22 | `CNPC_VFrenzyShadow#440` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x10375f50` | CNPC_VFrenzyShadow::vfunc442 | 1234 | 0 | 28 | `CNPC_VFrenzyShadow#442` | 0d/0v/2c | `+0x1474`, `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x5db4`, `+0x6320`, +2 more | `+0x0184`, `+0x02a0`, `+0x0364`, `+0x0370`, `+0x0688`, `+0x0700`, +6 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VFrenzy…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:814 | — |  |
-| `0x103766d0` | CNPC_VFrenzyShadow::vfunc478 | 793 | 0 | 16 | `CNPC_VFrenzyShadow#478` | 0d/0v/2c | `+0x6664`, `+0x6668` | `+0x029c`, `+0x0324`, `+0x0364`, `+0x0654`, `+0x077c`, `+0x0848`, +4 more | — | — | — |  |
-| `0x10376ae0` | CNPC_VFrenzyShadow::vfunc142 | 32 | 0 | 1 | `CNPC_VFrenzyShadow#142` | 0d/0v/1c | — | `+0x0184` | — | — | — |  |
+| `0x10375c50` | CNPC_VFrenzyShadow::Spawn | 21 | 0 | 28 | `CNPC_VFrenzyShadow#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10375c80` | CNPC_VFrenzyShadow::NPCInit | 181 | 0 | 24 | `CNPC_VFrenzyShadow#420` | 0d/0v/8c | `+0x1488`, `+0x1b3c`, `+0x1b40`, `+0x5b84`, `+0x5cc4`, `+0x65f7`, +2 more | `+0x05fc`, `+0x5cdc` | `item_w_fists`, `E:\Vampire\main\dlls\hl2_dll\NPC_VFrenzy…` | — | docs/vtmb/animation_and_movers.md:654 |  |
+| `0x10375d70` | CNPC_VFrenzyShadow::Classify | 6 | 0 | 0 | `CNPC_VFrenzyShadow#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10375d90` | CNPC_VFrenzyShadow::SelectSchedule | 136 | 0 | 27 | `CNPC_VFrenzyShadow#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80` | `+0x029c`, `+0x5cc0`, `+0x6664`, `+0x6668` | `E:\Vampire\main\dlls\hl2_dll\NPC_VFrenzy…` | — | — |  |
+| `0x10375e50` | CNPC_VFrenzyShadow::NPCThink | 83 | 0 | 28 | `CNPC_VFrenzyShadow#431` | 0d/0v/0c | — | `+0x029c`, `+0x5cc0` | — | — | — |  |
+| `0x10375ed0` | CNPC_VFrenzyShadow::GatherConditions | 50 | 0 | 25 | `CNPC_VFrenzyShadow#433` | 0d/0v/2c | — | `+0x6664` | — | — | — |  |
+| `0x10375f20` | CNPC_VFrenzyShadow::TranslateSchedule | 31 | 0 | 22 | `CNPC_VFrenzyShadow#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10375f50` | CNPC_VFrenzyShadow::StartTask | 1234 | 0 | 28 | `CNPC_VFrenzyShadow#442` | 0d/0v/2c | `+0x1474`, `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x5db4`, `+0x6320`, +2 more | `+0x0184`, `+0x02a0`, `+0x0364`, `+0x0370`, `+0x0688`, `+0x0700`, +6 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VFrenzy…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:814 | — |  |
+| `0x103766d0` | CNPC_VFrenzyShadow::BestEnemy | 793 | 0 | 16 | `CNPC_VFrenzyShadow#478` | 0d/0v/2c | `+0x6664`, `+0x6668` | `+0x029c`, `+0x0324`, `+0x0364`, `+0x0654`, `+0x077c`, `+0x0848`, +4 more | — | — | — |  |
+| `0x10376ae0` | CNPC_VFrenzyShadow::OnTakeDamage | 32 | 0 | 1 | `CNPC_VFrenzyShadow#142` | 0d/0v/1c | — | `+0x0184` | — | — | — |  |
 | `0x10376b10` | CNPC_VFrenzyShadow::vfunc390 | 36 | 0 | 1 | `CNPC_VFrenzyShadow#390` | 0d/0v/0c | — | `+0x0184` | — | — | — |  |
-| `0x10376b50` | CNPC_VFrenzyShadow::vfunc144 | 3 | 0 | 0 | `CNPC_VFrenzyShadow#144` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x10376b50` | CNPC_VFrenzyShadow::Event_Killed | 3 | 0 | 0 | `CNPC_VFrenzyShadow#144` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x10376b70` | CNPC_VFrenzyShadow::vfunc599 | 26 | 0 | 0 | `CNPC_VFrenzyShadow#599` | 0d/0v/0c | `+0x6078` | — | — | — | — |  |
 | `0x10376c10` | FUN_10376c10 | 179 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10376f20` | CNPC_VFrenzyShadow::vfunc5 | 30 | 0 | 17 | `CNPC_VFrenzyShadow#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10376f50` | CNPC_VPlayerController::vfunc5 | 30 | 0 | 17 | `CNPC_VPlayerController#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10377070` | CNPC_VGangrel::vfunc580 | 6 | 0 | 0 | `CNPC_VGangrel#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10377090` | CNPC_VGangrel::vfunc451 | 6 | 0 | 0 | `CNPC_VGangrel#451` | 0d/0v/1c | — | — | `CNPC_VGangrel` | — | — |  |
+| `0x10377090` | CNPC_VGangrel::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VGangrel#451` | 0d/0v/1c | — | — | `CNPC_VGangrel` | — | — |  |
 | `0x103770b0` | CNPC_VGangrel::vfunc5 | 30 | 0 | 17 | `CNPC_VGangrel#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103771b0` | CNPC_VGangrel::vfunc452 | 6 | 0 | 0 | `CNPC_VGangrel#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103771b0` | CNPC_VGangrel::LoadedSchedules | 6 | 0 | 0 | `CNPC_VGangrel#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10377210` | CNPC_VGangrel::vfunc546 | 29 | 0 | 3 | `CNPC_VGangrel#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10377700` | CNPC_VGangrel::vfunc138 | 6 | 0 | 0 | `CNPC_VGangrel#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10377700` | CNPC_VGangrel::Classify | 6 | 0 | 0 | `CNPC_VGangrel#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10377910` | CNPC_VGargoyle::vfunc82 | 6 | 0 | 0 | `CNPC_VGargoyle#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10377b00` | CNPC_VGargoyle::vfunc378 | 5 | 0 | 0 | `CNPC_VGargoyle#378` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10377b20` | CNPC_VGargoyle::vfunc580 | 6 | 0 | 0 | `CNPC_VGargoyle#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10377b40` | CNPC_VGargoyle::vfunc451 | 6 | 0 | 0 | `CNPC_VGargoyle#451` | 0d/0v/1c | — | — | `CNPC_VGargoyle` | — | — |  |
+| `0x10377b40` | CNPC_VGargoyle::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VGargoyle#451` | 0d/0v/1c | — | — | `CNPC_VGargoyle` | — | — |  |
 | `0x10377b60` | CNPC_VGargoyle::vfunc5 | 43 | 0 | 17 | `CNPC_VGargoyle#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
-| `0x10377c70` | CNPC_VGargoyle::vfunc452 | 6 | 0 | 0 | `CNPC_VGargoyle#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10377c70` | CNPC_VGargoyle::LoadedSchedules | 6 | 0 | 0 | `CNPC_VGargoyle#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10377cd0` | CNPC_VGargoyle::vfunc546 | 29 | 0 | 3 | `CNPC_VGargoyle#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10378470` | CNPC_VGargoyle::vfunc104 | 258 | 0 | 15 | `CNPC_VGargoyle#104` | 0d/0v/11c | — | — | `character/monster/gargoyle/exert_heavy_2…`, `character/monster/gargoyle/exert_heavy_1…`, +13 more | — | — |  |
-| `0x103785f0` | CNPC_VGargoyle::vfunc420 | 50 | 0 | 23 | `CNPC_VGargoyle#420` | 0d/0v/8c | `+0x667c`, `+0x6680`, `+0x6684`, `+0x6688` | — | — | — | — |  |
+| `0x10378470` | CNPC_VGargoyle::Precache | 258 | 0 | 15 | `CNPC_VGargoyle#104` | 0d/0v/11c | — | — | `character/monster/gargoyle/exert_heavy_2…`, `character/monster/gargoyle/exert_heavy_1…`, +13 more | — | — |  |
+| `0x103785f0` | CNPC_VGargoyle::NPCInit | 50 | 0 | 23 | `CNPC_VGargoyle#420` | 0d/0v/8c | `+0x667c`, `+0x6680`, `+0x6684`, `+0x6688` | — | — | — | — |  |
 | `0x10378640` | CNPC_VGargoyle::vfunc473 | 6 | 0 | 0 | `CNPC_VGargoyle#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10378660` | CNPC_VGargoyle::vfunc138 | 6 | 0 | 0 | `CNPC_VGargoyle#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10378680` | CNPC_VGargoyle::vfunc337 | 6 | 0 | 0 | `CNPC_VGargoyle#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103786c0` | CNPC_VGargoyle::vfunc259 | 405 | 0 | 26 | `CNPC_VGargoyle#259` | 0d/0v/0c | — | `+0x02e0`, `+0x0370`, `+0x0378`, `+0x09a4` | `character/monster/gargoyle/roar2.wav` | — | docs/vtmb/animation_and_movers.md:2188 |  |
-| `0x103788d0` | CNPC_VGargoyle::vfunc438 | 263 | 0 | 27 | `CNPC_VGargoyle#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x029c`, `+0x0364`, `+0x0848`, `+0x13bc`, `+0x13c0`, `+0x5cc0`, +1 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VGargoy…` | — | — |  |
-| `0x10378a30` | CNPC_VGargoyle::vfunc440 | 76 | 0 | 22 | `CNPC_VGargoyle#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10378660` | CNPC_VGargoyle::Classify | 6 | 0 | 0 | `CNPC_VGargoyle#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10378680` | CNPC_VGargoyle::GetUsedHullBits | 6 | 0 | 0 | `CNPC_VGargoyle#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103786c0` | CNPC_VGargoyle::HandleAnimEvent | 405 | 0 | 26 | `CNPC_VGargoyle#259` | 0d/0v/0c | — | `+0x02e0`, `+0x0370`, `+0x0378`, `+0x09a4` | `character/monster/gargoyle/roar2.wav` | — | docs/vtmb/animation_and_movers.md:2188 |  |
+| `0x103788d0` | CNPC_VGargoyle::SelectSchedule | 263 | 0 | 27 | `CNPC_VGargoyle#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x029c`, `+0x0364`, `+0x0848`, `+0x13bc`, `+0x13c0`, `+0x5cc0`, +1 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VGargoy…` | — | — |  |
+| `0x10378a30` | CNPC_VGargoyle::TranslateSchedule | 76 | 0 | 22 | `CNPC_VGargoyle#440` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10378b60` | CNPC_VGargoyle::vfunc461 | 15 | 0 | 24 | `CNPC_VGargoyle#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x10378b80` | CNPC_VGargoyle::vfunc432 | 80 | 0 | 27 | `CNPC_VGargoyle#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x10378c10` | CNPC_VGargoyle::vfunc390 | 124 | 0 | 25 | `CNPC_VGargoyle#390` | 0d/0v/0c | `+0x6688` | `+0x628c` | — | — | — |  |
-| `0x10378cb0` | CNPC_VGargoyle::vfunc292 | 92 | 0 | 8 | `CNPC_VGargoyle#292` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10378d30` | CNPC_VGargoyle::vfunc320 | 62 | 0 | 21 | `CNPC_VGargoyle#320` | 0d/0v/3c | — | `+0x6688` | — | — | — |  |
-| `0x10378da0` | CNPC_VGargoyle::vfunc144 | 50 | 0 | 22 | `CNPC_VGargoyle#144` | 0d/0v/3c | `+0x1b30`, `+0x1b34` | `+0x6684` | `E:\Vampire\main\dlls\hl2_dll\NPC_VGargoy…` | — | — |  |
-| `0x10378df0` | CNPC_VGargoyle::vfunc433 | 147 | 0 | 25 | `CNPC_VGargoyle#433` | 0d/0v/2c | — | `+0x029c`, `+0x0364` | — | — | — |  |
+| `0x10378cb0` | CNPC_VGargoyle::DamageFlinch | 92 | 0 | 8 | `CNPC_VGargoyle#292` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10378d30` | CNPC_VGargoyle::PlayerKnockbackReaction | 62 | 0 | 21 | `CNPC_VGargoyle#320` | 0d/0v/3c | — | `+0x6688` | — | — | — |  |
+| `0x10378da0` | CNPC_VGargoyle::Event_Killed | 50 | 0 | 22 | `CNPC_VGargoyle#144` | 0d/0v/3c | `+0x1b30`, `+0x1b34` | `+0x6684` | `E:\Vampire\main\dlls\hl2_dll\NPC_VGargoy…` | — | — |  |
+| `0x10378df0` | CNPC_VGargoyle::GatherConditions | 147 | 0 | 25 | `CNPC_VGargoyle#433` | 0d/0v/2c | — | `+0x029c`, `+0x0364` | — | — | — |  |
 | `0x10378ec0` | FUN_10378ec0 | 130 | 2 | 10 | — | 1d/0v/0c | — | `+0x029c`? | `pillar` | — | — |  |
 | `0x10378f80` | FUN_10378f80 | 42 | 1 | 11 | — | 1d/0v/0c | — | — | — | — | — |  |
-| `0x10378fc0` | CNPC_VGargoyle::vfunc435 | 47 | 0 | 22 | `CNPC_VGargoyle#435` | 0d/0v/2c | `+0x6680` | `+0x14b8`, `+0x6680` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:682 |  |
+| `0x10378fc0` | CNPC_VGargoyle::vfunc435 | 47 | 0 | 22 | `CNPC_VGargoyle#435` | 0d/0v/2c | `+0x6680` | `+0x14b8`, `+0x6680` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:684 |  |
 | `0x10379000` | FUN_10379000 | 36 | 1 | 0 | — | 2d/0v/0c | `+0x14b8` | `+0x14b8` | — | — | — |  |
 | `0x10379040` | FUN_10379040 | 12 | 1 | 0 | — | 1d/0v/0c | — | `+0x14b8`? | — | — | — |  |
-| `0x10379060` | CNPC_VGargoyle::vfunc448 | 77 | 0 | 11 | `CNPC_VGargoyle#448` | 0d/0v/43c | `+0x5d8c`, `+0x6680` | `+0x5cc0`, `+0x5d8c` | — | — | — |  |
-| `0x103790d0` | CNPC_VGargoyle::vfunc442 | 615 | 0 | 28 | `CNPC_VGargoyle#442` | 0d/0v/2c | `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x6684` | `+0x031c`, `+0x036c`, `+0x0374`, `+0x08f0`, `+0x09a8`, `+0x5d44`, +2 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:815 | — |  |
-| `0x103793e0` | CNPC_VGargoyle::vfunc444 | 103 | 0 | 25 | `CNPC_VGargoyle#444` | 0d/0v/2c | — | `+0x03ec`, `+0x08f0`, `+0x5d44`, `+0x5d8c` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:842 | — |  |
-| `0x10379470` | CNPC_VGargoyle::vfunc70 | 3 | 0 | 0 | `CNPC_VGargoyle#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10379490` | CNPC_VGargoyle::vfunc69 | 408 | 0 | 5 | `CNPC_VGargoyle#69` | 0d/0v/0c | — | — | `func_door_rotating`, `func_brush`, +1 more | — | — |  |
+| `0x10379060` | CNPC_VGargoyle::TaskFail | 77 | 0 | 11 | `CNPC_VGargoyle#448` | 0d/0v/43c | `+0x5d8c`, `+0x6680` | `+0x5cc0`, `+0x5d8c` | — | — | — |  |
+| `0x103790d0` | CNPC_VGargoyle::StartTask | 615 | 0 | 28 | `CNPC_VGargoyle#442` | 0d/0v/2c | `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x6684` | `+0x031c`, `+0x036c`, `+0x0374`, `+0x08f0`, `+0x09a8`, `+0x5d44`, +2 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:815 | — |  |
+| `0x103793e0` | CNPC_VGargoyle::RunTask | 103 | 0 | 25 | `CNPC_VGargoyle#444` | 0d/0v/2c | — | `+0x03ec`, `+0x08f0`, `+0x5d44`, `+0x5d8c` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:842 | — |  |
+| `0x10379470` | CNPC_VGargoyle::IsMonster | 3 | 0 | 0 | `CNPC_VGargoyle#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10379490` | CNPC_VGargoyle::NavIgnoreCollision | 408 | 0 | 5 | `CNPC_VGargoyle#69` | 0d/0v/0c | — | — | `func_door_rotating`, `func_brush`, +1 more | — | — |  |
 | `0x103796a0` | FUN_103796a0 | 944 | 1 | 4 | — | 1d/0v/0c | — | `+0x0114`?, `+0x0370`?, `+0x0374`?, `+0x0828`? | `UTIL_TraceHull` | — | — |  |
 | `0x10379b40` | FUN_10379b40 | 647 | 1 | 5 | — | 1d/0v/0c | — | `+0x031c` | `prop_dynamic` | — | — |  |
 | `0x10379e80` | FUN_10379e80 | 74 | 1 | 0 | — | 1d/0v/0c | — | `+0x00f8`?, `+0x0370`?, `+0x0828`? | — | — | — |  |
 | `0x10379ef0` | CNPC_VGargoyle::vfunc599 | 26 | 0 | 0 | `CNPC_VGargoyle#599` | 0d/0v/0c | `+0x6078` | — | — | — | — |  |
-| `0x1037a270` | CNPC_VGargoyle::vfunc175 | 372 | 0 | 12 | `CNPC_VGargoyle#175` | 0d/0v/0c | — | — | `pillar`, `central_pillar` | — | — |  |
-| `0x1037a450` | CNPC_VGargoyle::vfunc24 | 264 | 0 | 5 | `CNPC_VGargoyle#24` | 0d/0v/0c | — | — | `pillar`, `central_pillar` | — | — |  |
-| `0x1037a5b0` | CNPC_VGargoyle::vfunc313 | 36 | 0 | 21 | `CNPC_VGargoyle#313` | 0d/0v/0c | `+0x0e80`, `+0x0e84`, `+0x0e88` | — | — | — | — |  |
+| `0x1037a270` | CNPC_VGargoyle::Touch | 372 | 0 | 12 | `CNPC_VGargoyle#175` | 0d/0v/0c | — | — | `pillar`, `central_pillar` | — | — |  |
+| `0x1037a450` | CNPC_VGargoyle::OnVictimHitByMe | 264 | 0 | 5 | `CNPC_VGargoyle#24` | 0d/0v/0c | — | — | `pillar`, `central_pillar` | — | — |  |
+| `0x1037a5b0` | CNPC_VGargoyle::UpdatePresenceEffect | 36 | 0 | 21 | `CNPC_VGargoyle#313` | 0d/0v/0c | `+0x0e80`, `+0x0e84`, `+0x0e88` | — | — | — | — |  |
 | `0x1037a5f0` | CNPC_VGargoyle::vfunc359 | 8 | 0 | 0 | `CNPC_VGargoyle#359` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1037a610` | CNPC_VGargoyle::vfunc74 | 5 | 0 | 0 | `CNPC_VGargoyle#74` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1037a610` | CNPC_VGargoyle::ReceivesImpactDamage | 5 | 0 | 0 | `CNPC_VGargoyle#74` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1037a6e0` | CNPC_VGhoulCroucher::vfunc82 | 6 | 0 | 0 | `CNPC_VGhoulCroucher#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1037a8f0` | CNPC_VGhoulCroucher::vfunc452 | 6 | 0 | 0 | `CNPC_VGhoulCroucher#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1037a8f0` | CNPC_VGhoulCroucher::LoadedSchedules | 6 | 0 | 0 | `CNPC_VGhoulCroucher#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1037a950` | CNPC_VGhoulCroucher::vfunc546 | 29 | 0 | 3 | `CNPC_VGhoulCroucher#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1037afb0` | CNPC_VGhoulCroucher::vfunc580 | 6 | 0 | 0 | `CNPC_VGhoulCroucher#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1037afd0` | CNPC_VGhoulCroucher::vfunc451 | 6 | 0 | 0 | `CNPC_VGhoulCroucher#451` | 0d/0v/1c | — | — | `CNPC_VGhoulCroucher` | — | — |  |
+| `0x1037afd0` | CNPC_VGhoulCroucher::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VGhoulCroucher#451` | 0d/0v/1c | — | — | `CNPC_VGhoulCroucher` | — | — |  |
 | `0x1037aff0` | CNPC_VGhoulCroucher::vfunc5 | 54 | 0 | 17 | `CNPC_VGhoulCroucher#5` | 0d/0v/0c | — | `+0x6674`, `+0x668c` | — | — | — |  |
-| `0x1037b040` | CNPC_VGhoulCroucher::vfunc103 | 267 | 0 | 27 | `CNPC_VGhoulCroucher#103` | 0d/0v/0c | `+0x10e4`, `+0x1a98`, `+0x5dec`, `+0x6348`, `+0x634c`, `+0x6350`, +5 more | `+0x01a4`, `+0x6664`, `+0x6665` | `models/character/npc/unique/Malkavian_ma…`, `models/character/npc/unique/Malkavian_ma…`, +3 more | — | — |  |
-| `0x1037b1a0` | CNPC_VGhoulCroucher::vfunc104 | 55 | 0 | 15 | `CNPC_VGhoulCroucher#104` | 0d/0v/11c | — | — | `models/character/npc/unique/Malkavian_ma…`, `models/character/npc/unique/Malkavian_ma…`, +1 more | — | — |  |
-| `0x1037b1f0` | CNPC_VGhoulCroucher::vfunc105 | 119 | 0 | 15 | `CNPC_VGhoulCroucher#105` | 0d/1v/14c | `+0x00b4`, `+0x00bc`, `+0x00c0` | `+0x00c0` | `Zombie_Female`, `Zombie_Male` | — | — |  |
-| `0x1037b290` | CNPC_VGhoulCroucher::vfunc420 | 263 | 0 | 24 | `CNPC_VGhoulCroucher#420` | 0d/0v/8c | `+0x6670` | `+0x026c`, `+0x6664`, `+0x6665` | `NULL ENTITY`, `item_w_knife`, +3 more | — | — |  |
-| `0x1037b3f0` | CNPC_VGhoulCroucher::vfunc431 | 202 | 0 | 27 | `CNPC_VGhoulCroucher#431` | 0d/0v/0c | — | `+0x6264`, `+0x6665`, `+0x6670` | — | — | — |  |
-| `0x1037b500` | CNPC_VGhoulCroucher::vfunc379 | 69 | 0 | 23 | `CNPC_VGhoulCroucher#379` | 0d/0v/0c | — | `+0x6665` | — | — | docs/vtmb/stealth.md:452, docs/vtmb/stealth.md:501 |  |
+| `0x1037b040` | CNPC_VGhoulCroucher::Spawn | 267 | 0 | 27 | `CNPC_VGhoulCroucher#103` | 0d/0v/0c | `+0x10e4`, `+0x1a98`, `+0x5dec`, `+0x6348`, `+0x634c`, `+0x6350`, +5 more | `+0x01a4`, `+0x6664`, `+0x6665` | `models/character/npc/unique/Malkavian_ma…`, `models/character/npc/unique/Malkavian_ma…`, +3 more | — | — |  |
+| `0x1037b1a0` | CNPC_VGhoulCroucher::Precache | 55 | 0 | 15 | `CNPC_VGhoulCroucher#104` | 0d/0v/11c | — | — | `models/character/npc/unique/Malkavian_ma…`, `models/character/npc/unique/Malkavian_ma…`, +1 more | — | — |  |
+| `0x1037b1f0` | CNPC_VGhoulCroucher::SetModel | 119 | 0 | 15 | `CNPC_VGhoulCroucher#105` | 0d/1v/14c | `+0x00b4`, `+0x00bc`, `+0x00c0` | `+0x00c0` | `Zombie_Female`, `Zombie_Male` | — | — |  |
+| `0x1037b290` | CNPC_VGhoulCroucher::NPCInit | 263 | 0 | 24 | `CNPC_VGhoulCroucher#420` | 0d/0v/8c | `+0x6670` | `+0x026c`, `+0x6664`, `+0x6665` | `NULL ENTITY`, `item_w_knife`, +3 more | — | — |  |
+| `0x1037b3f0` | CNPC_VGhoulCroucher::NPCThink | 202 | 0 | 27 | `CNPC_VGhoulCroucher#431` | 0d/0v/0c | — | `+0x6264`, `+0x6665`, `+0x6670` | — | — | — |  |
+| `0x1037b500` | CNPC_VGhoulCroucher::EnterGrappleState | 69 | 0 | 23 | `CNPC_VGhoulCroucher#379` | 0d/0v/0c | — | `+0x6665` | — | — | docs/vtmb/stealth.md:452, docs/vtmb/stealth.md:501 |  |
 | `0x1037b570` | CNPC_VGhoulCroucher::GatherConditions | 288 | 0 | 25 | `CNPC_VGhoulCroucher#433` | 0d/0v/2c | — | `+0x026c`, `+0x029c`, `+0x5bb0`, `+0x5da4`, `+0x6666` | `NULL ENTITY`, `CNPC_VGhoulCroucher::GatherConditions` | — | — |  |
 | `0x1037b6e0` | CNPC_VGhoulCroucher::OnDisturbed | 306 | 1 | 8 | — | 3d/0v/0c | `+0x628c`, `+0x6666`, `+0x6667` | `+0x026c`, `+0x628c`, `+0x6666`, `+0x6674`, `+0x668c` | `NULL ENTITY`, `CNPC_VGhoulCroucher::OnDisturbed` | — | — |  |
 | `0x1037b870` | FUN_1037b870 | 14 | 1 | 0 | — | 1d/0v/0c | — | `+0x6668`? | — | — | — |  |
@@ -3843,54 +3843,54 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1037c2f0` | CNPC_VGhoulCroucher::ScriptUnhide | 232 | 0 | 2 | `CNPC_VGhoulCroucher#78` | 0d/0v/0c | — | `+0x026c`, `+0x6670` | `NULL ENTITY`, `CNPC_VGhoulCroucher::ScriptUnhide` | — | — |  |
 | `0x1037c520` | CNPC_VGuard1::vfunc82 | 6 | 0 | 0 | `CNPC_VGuard1#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1037c660` | CNPC_VGuard1::vfunc580 | 6 | 0 | 0 | `CNPC_VGuard1#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1037c680` | CNPC_VGuard1::vfunc451 | 6 | 0 | 0 | `CNPC_VGuard1#451` | 0d/0v/1c | — | — | `CNPC_VGuard1` | — | — |  |
+| `0x1037c680` | CNPC_VGuard1::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VGuard1#451` | 0d/0v/1c | — | — | `CNPC_VGuard1` | — | — |  |
 | `0x1037c6a0` | CNPC_VGuard1::vfunc5 | 30 | 0 | 17 | `CNPC_VGuard1#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1037c7a0` | CNPC_VGuard1::vfunc452 | 6 | 0 | 0 | `CNPC_VGuard1#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1037c7a0` | CNPC_VGuard1::LoadedSchedules | 6 | 0 | 0 | `CNPC_VGuard1#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1037c800` | CNPC_VGuard1::vfunc546 | 29 | 0 | 3 | `CNPC_VGuard1#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1037cda0` | CNPC_VGuard1::vfunc103 | 28 | 0 | 26 | `CNPC_VGuard1#103` | 0d/0v/0c | `+0x6660` | — | — | — | — |  |
-| `0x1037cdd0` | CNPC_VGuard1::vfunc138 | 6 | 0 | 0 | `CNPC_VGuard1#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1037cdf0` | CNPC_VGuard1::vfunc453 | 444 | 0 | 2 | `CNPC_VGuard1#453` | 0d/0v/1c | — | `+0x5cc0`, `+0x628c`, `+0x6348`, `+0x634c`, `+0x6350`, `+0x6354`, +2 more | — | — | — |  |
-| `0x1037d020` | CNPC_VGuard1::vfunc463 | 162 | 0 | 11 | `CNPC_VGuard1#463` | 0d/0v/1c | — | `+0x029c` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1554, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:438 | docs/vtmb/npc-ai/rebuild.md:246 |  |
-| `0x1037d130` | CNPC_VGuard1::vfunc438 | 203 | 0 | 27 | `CNPC_VGuard1#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c` | `+0x14b8`, `+0x5cc0`, `+0x628c` | — | — | — |  |
-| `0x1037d240` | CNPC_VGuard1::vfunc440 | 64 | 0 | 22 | `CNPC_VGuard1#440` | 0d/0v/2c | — | `+0x14bc` | — | — | — |  |
+| `0x1037cda0` | CNPC_VGuard1::Spawn | 28 | 0 | 26 | `CNPC_VGuard1#103` | 0d/0v/0c | `+0x6660` | — | — | — | — |  |
+| `0x1037cdd0` | CNPC_VGuard1::Classify | 6 | 0 | 0 | `CNPC_VGuard1#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1037cdf0` | CNPC_VGuard1::BuildScheduleTestBits | 444 | 0 | 2 | `CNPC_VGuard1#453` | 0d/0v/1c | — | `+0x5cc0`, `+0x628c`, `+0x6348`, `+0x634c`, `+0x6350`, `+0x6354`, +2 more | — | — | — |  |
+| `0x1037d020` | CNPC_VGuard1::OnStateChange | 162 | 0 | 11 | `CNPC_VGuard1#463` | 0d/0v/1c | — | `+0x029c` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1554, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:438 | docs/vtmb/npc-ai/rebuild.md:246 |  |
+| `0x1037d130` | CNPC_VGuard1::SelectSchedule | 203 | 0 | 27 | `CNPC_VGuard1#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c` | `+0x14b8`, `+0x5cc0`, `+0x628c` | — | — | — |  |
+| `0x1037d240` | CNPC_VGuard1::TranslateSchedule | 64 | 0 | 22 | `CNPC_VGuard1#440` | 0d/0v/2c | — | `+0x14bc` | — | — | — |  |
 | `0x1037d290` | CNPC_VGuard1::vfunc461 | 3098 | 0 | 24 | `CNPC_VGuard1#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x0738`, `+0x0768`, `+0x0950`, `+0x5cc0`, `+0x5cc4`, `+0x5d44`, +4 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VGuard1…` | — | — |  |
 | `0x1037e1e0` | CNPC_VGuard1::vfunc432 | 13 | 0 | 27 | `CNPC_VGuard1#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x1037e240` | CNPC_VGuard1::vfunc420 ‼ | 60 | 0 | 23 | `CNPC_VGuard1#420` | 0d/0v/8c | `+0x6660` | — | `player D_NU 0` | — | — |  |
+| `0x1037e240` | CNPC_VGuard1::NPCInit ‼ | 60 | 0 | 23 | `CNPC_VGuard1#420` | 0d/0v/8c | `+0x6660` | — | `player D_NU 0` | — | — |  |
 | `0x1037e2d0` | FUN_1037e2d0 | 20 | 1 | 10 | — | 2d/0v/0c | `+0x6660`? | — | `player D_HT 10` | — | — |  |
 | `0x1037e4f0` | CNPC_VHengeyokai::vfunc82 | 6 | 0 | 0 | `CNPC_VHengeyokai#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1037e810` | CNPC_VHengeyokai::vfunc378 | 5 | 0 | 0 | `CNPC_VHengeyokai#378` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1037e830` | CNPC_VHengeyokai::vfunc580 | 6 | 0 | 0 | `CNPC_VHengeyokai#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1037e850` | CNPC_VHengeyokai::vfunc451 | 6 | 0 | 0 | `CNPC_VHengeyokai#451` | 0d/0v/1c | — | — | `CNPC_VHengeyokai` | — | — |  |
+| `0x1037e850` | CNPC_VHengeyokai::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VHengeyokai#451` | 0d/0v/1c | — | — | `CNPC_VHengeyokai` | — | — |  |
 | `0x1037e870` | CNPC_VHengeyokai::vfunc5 | 134 | 0 | 17 | `CNPC_VHengeyokai#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1037ea00` | CNPC_VHengeyokai::vfunc452 | 6 | 0 | 0 | `CNPC_VHengeyokai#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1037ea00` | CNPC_VHengeyokai::LoadedSchedules | 6 | 0 | 0 | `CNPC_VHengeyokai#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1037ea60` | CNPC_VHengeyokai::vfunc546 | 29 | 0 | 3 | `CNPC_VHengeyokai#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1037f960` | CNPC_VHengeyokai::vfunc104 | 115 | 0 | 15 | `CNPC_VHengeyokai#104` | 0d/0v/11c | — | — | `character/monster/hengeyokai/exert_heavy…`, `character/monster/hengeyokai/exert_heavy…`, +5 more | — | — |  |
-| `0x1037fa00` | CNPC_VHengeyokai::vfunc103 | 70 | 0 | 27 | `CNPC_VHengeyokai#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1037fa70` | CNPC_VHengeyokai::vfunc420 | 77 | 0 | 23 | `CNPC_VHengeyokai#420` | 0d/0v/8c | `+0x6664`, `+0x6670`, `+0x6678`, `+0x667c`, `+0x6680`, `+0x6694` | — | — | — | — |  |
+| `0x1037f960` | CNPC_VHengeyokai::Precache | 115 | 0 | 15 | `CNPC_VHengeyokai#104` | 0d/0v/11c | — | — | `character/monster/hengeyokai/exert_heavy…`, `character/monster/hengeyokai/exert_heavy…`, +5 more | — | — |  |
+| `0x1037fa00` | CNPC_VHengeyokai::Spawn | 70 | 0 | 27 | `CNPC_VHengeyokai#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1037fa70` | CNPC_VHengeyokai::NPCInit | 77 | 0 | 23 | `CNPC_VHengeyokai#420` | 0d/0v/8c | `+0x6664`, `+0x6670`, `+0x6678`, `+0x667c`, `+0x6680`, `+0x6694` | — | — | — | — |  |
 | `0x1037fae0` | CNPC_VHengeyokai::vfunc473 | 6 | 0 | 0 | `CNPC_VHengeyokai#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1037fb00` | CNPC_VHengeyokai::vfunc138 | 6 | 0 | 0 | `CNPC_VHengeyokai#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1037fb20` | CNPC_VHengeyokai::vfunc337 | 6 | 0 | 0 | `CNPC_VHengeyokai#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1037fb60` | CNPC_VHengeyokai::vfunc259 | 243 | 0 | 26 | `CNPC_VHengeyokai#259` | 0d/0v/0c | — | `+0x029c`, `+0x0370`, `+0x09a4`, `+0x6664`, `+0x6668`, `+0x6694` | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:138, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:143, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:39, +1 more | docs/vtmb/animation_and_movers.md:2189, docs/vtmb/animation_events.md:462, docs/vtmb/footsteps.md:168, +1 more |  |
-| `0x1037fca0` | CNPC_VHengeyokai::vfunc438 | 604 | 0 | 27 | `CNPC_VHengeyokai#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x5b80`, `+0x6664`, `+0x667d` | `+0x029c`, `+0x14b8`, `+0x5cc0`, `+0x667d` | — | — | — |  |
-| `0x1037ffa0` | CNPC_VHengeyokai::vfunc440 | 108 | 0 | 22 | `CNPC_VHengeyokai#440` | 0d/0v/2c | — | `+0x0670` | — | — | — |  |
+| `0x1037fb00` | CNPC_VHengeyokai::Classify | 6 | 0 | 0 | `CNPC_VHengeyokai#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1037fb20` | CNPC_VHengeyokai::GetUsedHullBits | 6 | 0 | 0 | `CNPC_VHengeyokai#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1037fb60` | CNPC_VHengeyokai::HandleAnimEvent | 243 | 0 | 26 | `CNPC_VHengeyokai#259` | 0d/0v/0c | — | `+0x029c`, `+0x0370`, `+0x09a4`, `+0x6664`, `+0x6668`, `+0x6694` | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:138, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:143, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:39, +1 more | docs/vtmb/animation_and_movers.md:2189, docs/vtmb/animation_events.md:462, docs/vtmb/footsteps.md:168, +1 more |  |
+| `0x1037fca0` | CNPC_VHengeyokai::SelectSchedule | 604 | 0 | 27 | `CNPC_VHengeyokai#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x5b80`, `+0x6664`, `+0x667d` | `+0x029c`, `+0x14b8`, `+0x5cc0`, `+0x667d` | — | — | — |  |
+| `0x1037ffa0` | CNPC_VHengeyokai::TranslateSchedule | 108 | 0 | 22 | `CNPC_VHengeyokai#440` | 0d/0v/2c | — | `+0x0670` | — | — | — |  |
 | `0x10380100` | CNPC_VHengeyokai::vfunc461 | 15 | 0 | 24 | `CNPC_VHengeyokai#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x10380120` | CNPC_VHengeyokai::vfunc432 | 111 | 0 | 27 | `CNPC_VHengeyokai#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103801d0` | CNPC_VHengeyokai::vfunc390 | 154 | 0 | 25 | `CNPC_VHengeyokai#390` | 0d/0v/0c | — | — | `point_explosion` | — | — |  |
-| `0x103802a0` | CNPC_VHengeyokai::vfunc292 | 92 | 0 | 8 | `CNPC_VHengeyokai#292` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10380320` | CNPC_VHengeyokai::vfunc320 | 52 | 0 | 21 | `CNPC_VHengeyokai#320` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x10380390` | CNPC_VHengeyokai::vfunc144 | 35 | 0 | 22 | `CNPC_VHengeyokai#144` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103803d0` | CNPC_VHengeyokai::vfunc433 | 114 | 0 | 25 | `CNPC_VHengeyokai#433` | 0d/0v/2c | — | `+0x029c` | — | — | — |  |
-| `0x10380510` | CNPC_VHengeyokai::vfunc448 | 130 | 0 | 11 | `CNPC_VHengeyokai#448` | 0d/1v/43c | `+0x5d8c`, `+0x6664`, `+0x6678` | `+0x5cc0`, `+0x5d8c`, `+0x6664` | — | — | — |  |
-| `0x103805d0` | CNPC_VHengeyokai::vfunc442 | 1055 | 0 | 28 | `CNPC_VHengeyokai#442` | 0d/0v/2c | `+0x0168`, `+0x016c`, `+0x017c`, `+0x019c`, `+0x14bc`, `+0x1568`, +7 more | `+0x019c`, `+0x01a4`, `+0x029c`, `+0x02a0`, `+0x0700`, `+0x0874`, +7 more | `models/character/monster/Hengeyokai/heng…`, `E:\Vampire\main\dlls\hl2_dll\NPC_VHengey…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:817 | — |  |
-| `0x10380cb0` | CNPC_VHengeyokai::vfunc444 | 509 | 0 | 25 | `CNPC_VHengeyokai#444` | 0d/0v/2c | — | `+0x029c`, `+0x02a0`, `+0x03ec`, `+0x0874`, `+0x08f0`, `+0x5d44`, +2 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:844 | — |  |
-| `0x10380f70` | CNPC_VHengeyokai::vfunc70 | 3 | 0 | 0 | `CNPC_VHengeyokai#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10380f90` | CNPC_VHengeyokai::vfunc69 | 24 | 0 | 2 | `CNPC_VHengeyokai#69` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103802a0` | CNPC_VHengeyokai::DamageFlinch | 92 | 0 | 8 | `CNPC_VHengeyokai#292` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10380320` | CNPC_VHengeyokai::PlayerKnockbackReaction | 52 | 0 | 21 | `CNPC_VHengeyokai#320` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x10380390` | CNPC_VHengeyokai::Event_Killed | 35 | 0 | 22 | `CNPC_VHengeyokai#144` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103803d0` | CNPC_VHengeyokai::GatherConditions | 114 | 0 | 25 | `CNPC_VHengeyokai#433` | 0d/0v/2c | — | `+0x029c` | — | — | — |  |
+| `0x10380510` | CNPC_VHengeyokai::TaskFail | 130 | 0 | 11 | `CNPC_VHengeyokai#448` | 0d/1v/43c | `+0x5d8c`, `+0x6664`, `+0x6678` | `+0x5cc0`, `+0x5d8c`, `+0x6664` | — | — | — |  |
+| `0x103805d0` | CNPC_VHengeyokai::StartTask | 1055 | 0 | 28 | `CNPC_VHengeyokai#442` | 0d/0v/2c | `+0x0168`, `+0x016c`, `+0x017c`, `+0x019c`, `+0x14bc`, `+0x1568`, +7 more | `+0x019c`, `+0x01a4`, `+0x029c`, `+0x02a0`, `+0x0700`, `+0x0874`, +7 more | `models/character/monster/Hengeyokai/heng…`, `E:\Vampire\main\dlls\hl2_dll\NPC_VHengey…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:817 | — |  |
+| `0x10380cb0` | CNPC_VHengeyokai::RunTask | 509 | 0 | 25 | `CNPC_VHengeyokai#444` | 0d/0v/2c | — | `+0x029c`, `+0x02a0`, `+0x03ec`, `+0x0874`, `+0x08f0`, `+0x5d44`, +2 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:844 | — |  |
+| `0x10380f70` | CNPC_VHengeyokai::IsMonster | 3 | 0 | 0 | `CNPC_VHengeyokai#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10380f90` | CNPC_VHengeyokai::NavIgnoreCollision | 24 | 0 | 2 | `CNPC_VHengeyokai#69` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10380fc0` | FUN_10380fc0 | 944 | 1 | 4 | — | 1d/0v/0c | — | `+0x0114`?, `+0x0370`?, `+0x0374`?, `+0x0828`? | `UTIL_TraceHull` | — | — |  |
 | `0x10381460` | FUN_10381460 | 501 | 1 | 4 | — | 1d/0v/0c | — | `+0x031c` | — | — | — |  |
 | `0x103816e0` | FUN_103816e0 | 74 | 1 | 0 | — | 1d/0v/0c | — | `+0x00f8`?, `+0x0370`?, `+0x0828`? | — | — | — |  |
 | `0x10381750` | CNPC_VHengeyokai::vfunc599 | 26 | 0 | 0 | `CNPC_VHengeyokai#599` | 0d/0v/0c | `+0x6078` | — | — | — | — |  |
-| `0x10381b10` | CNPC_VHengeyokai::vfunc313 | 36 | 0 | 21 | `CNPC_VHengeyokai#313` | 0d/0v/0c | `+0x0e80`, `+0x0e84`, `+0x0e88` | — | — | — | — |  |
-| `0x10381b50` | CNPC_VHengeyokai::vfunc375 | 61 | 0 | 17 | `CNPC_VHengeyokai#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:91, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:288 | docs/vtmb/animation_and_movers.md:1585 |  |
+| `0x10381b10` | CNPC_VHengeyokai::UpdatePresenceEffect | 36 | 0 | 21 | `CNPC_VHengeyokai#313` | 0d/0v/0c | `+0x0e80`, `+0x0e84`, `+0x0e88` | — | — | — | — |  |
+| `0x10381b50` | CNPC_VHengeyokai::NPC_EarlyTranslateActivity | 61 | 0 | 17 | `CNPC_VHengeyokai#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:91, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:288 | docs/vtmb/animation_and_movers.md:1585 |  |
 | `0x10381ba0` | FUN_10381ba0 | 36 | 1 | 0 | — | 4d/0v/0c | `+0x14b8` | `+0x14b8` | — | — | — |  |
 | `0x10381be0` | FUN_10381be0 | 12 | 1 | 0 | — | 2d/0v/0c | — | `+0x14b8`? | — | — | — |  |
 | `0x10381c00` | FUN_10381c00 | 84 | 2 | 0 | — | 3d/0v/0c | `+0x14b8`, `+0x666c`, `+0x667d` | `+0x14b8` | — | — | — |  |
@@ -3910,117 +3910,117 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10382d20` | FUN_10382d20 | 14 | 1 | 3 | — | 1d/0v/0c | — | `+0x5d44`? | — | — | — |  |
 | `0x10382d40` | FUN_10382d40 | 418 | 1 | 11 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10382f60` | FUN_10382f60 | 238 | 1 | 2 | — | 1d/0v/0c | — | `+0x029c`?, `+0x0370`? | — | — | — |  |
-| `0x10383090` | CNPC_VHengeyokai::vfunc435 | 57 | 0 | 22 | `CNPC_VHengeyokai#435` | 0d/0v/2c | `+0x6678`, `+0x6680` | `+0x14b8`, `+0x6678` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:682 |  |
+| `0x10383090` | CNPC_VHengeyokai::vfunc435 | 57 | 0 | 22 | `CNPC_VHengeyokai#435` | 0d/0v/2c | `+0x6678`, `+0x6680` | `+0x14b8`, `+0x6678` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:684 |  |
 | `0x103830e0` | FUN_103830e0 | 55 | 1 | 20 | — | 2d/0v/0c | `+0x1b30`?, `+0x1b34`? | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VHengey…` | — | — |  |
 | `0x10383130` | FUN_10383130 | 40 | 1 | 6 | — | 2d/0v/0c | — | — | `Hengeyokai_freeze_emitter` | — | — |  |
 | `0x103831c0` | FUN_103831c0 | 535 | 1 | 20 | — | 1d/0v/0c | `+0x0168`, `+0x016c`, `+0x019c`, `+0x0204` | `+0x0004`, `+0x019c`, `+0x01a0`, `+0x01a4`, `+0x0204`, `+0x0328`, +1 more | `npc_VHengeyokai`, `models/character/monster/Hengeyokai/heng…`, +1 more | — | docs/vtmb/npc-ai/lifecycle.md:265 |  |
 | `0x10383470` | FUN_10383470 | 150 | 1 | 13 | — | 1d/0v/0c | — | — | — | — | — |  |
-| `0x10383540` | CNPC_VHengeyokai::vfunc74 | 5 | 0 | 0 | `CNPC_VHengeyokai#74` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10383560` | CNPC_VHengeyokai::vfunc124 | 106 | 0 | 16 | `CNPC_VHengeyokai#124` | 0d/0v/0c | — | `+0x0024`, `+0x0224`, `+0x02e0` | — | — | — |  |
+| `0x10383540` | CNPC_VHengeyokai::ReceivesImpactDamage | 5 | 0 | 0 | `CNPC_VHengeyokai#74` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10383560` | CNPC_VHengeyokai::DrawDebugTextOverlays | 106 | 0 | 16 | `CNPC_VHengeyokai#124` | 0d/0v/0c | — | `+0x0024`, `+0x0224`, `+0x02e0` | — | — | — |  |
 | `0x10383f10` | CNPC_VHuman::FUN_10383f10 | 6 | 0 | 0 | `CNPC_VCombatman#82`, `CNPC_VHuman#82`, `CNPC_VMoleman#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10384060` | CNPC_VHuman::vfunc580 | 6 | 0 | 0 | `CNPC_VHuman#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10384080` | CNPC_VHuman::vfunc451 | 6 | 0 | 0 | `CNPC_VHuman#451` | 0d/0v/1c | — | — | `CNPC_VHuman` | — | — |  |
+| `0x10384080` | CNPC_VHuman::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VHuman#451` | 0d/0v/1c | — | — | `CNPC_VHuman` | — | — |  |
 | `0x103840a0` | CNPC_VHuman::vfunc5 | 30 | 0 | 17 | `CNPC_VHuman#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103841a0` | CNPC_VHuman::vfunc452 | 6 | 0 | 0 | `CNPC_VHuman#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103841a0` | CNPC_VHuman::LoadedSchedules | 6 | 0 | 0 | `CNPC_VHuman#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10384200` | CNPC_VHuman::vfunc546 | 29 | 0 | 3 | `CNPC_VHuman#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10384690` | CNPC_VHuman::vfunc103 | 57 | 0 | 25 | `CNPC_VHuman#103`, `CNPC_VTaxiDriver#103` | 6d/0v/0c | — | — | — | — | — |  |
+| `0x10384690` | CNPC_VHuman::Spawn | 57 | 0 | 25 | `CNPC_VHuman#103`, `CNPC_VTaxiDriver#103` | 6d/0v/0c | — | — | — | — | — |  |
 | `0x103846e0` | CNPC_VAndreiBlood::FUN_103846e0 | 6 | 0 | 0 | `CNPC_VAndreiBlood#473`, `CNPC_VAsianVampire#473`, `CNPC_VBrujah#473`, +23 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:206, docs/vtmb/npc-ai/senses.md:298 |  |
-| `0x10384700` | CNPC_VHuman::vfunc138 | 6 | 0 | 0 | `CNPC_VHuman#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10384760` | CNPC_VAndreiBlood::FUN_10384760 | 100 | 0 | 1 | `CNPC_ProneDialog#563`, `CNPC_VAndreiBlood#563`, `CNPC_VAsianVampire#563`, +39 more | 0d/0v/5c | — | — | — | — | — |  |
-| `0x103847f0` | CNPC_VGuard1::FUN_103847f0 | 493 | 0 | 27 | `CNPC_ProneDialog#442`, `CNPC_VBatSwarm#442`, `CNPC_VBrujah#442`, +22 more | 10d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c` | `+0x029c`, `+0x0700`, `+0x0874`, `+0x1568`, `+0x5d34`, `+0x5d44` | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:818 | — |  |
-| `0x10384ab0` | CNPC_VCop::FUN_10384ab0 | 806 | 0 | 24 | `CNPC_ProneDialog#444`, `CNPC_VBatSwarm#444`, `CNPC_VBrujah#444`, +25 more | 6d/0v/2c | `+0x1b44`, `+0x1b48` | `+0x029c`, `+0x03ec`, `+0x06f8`, `+0x0700`, `+0x0874`, `+0x0ff0`, +3 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:845 | — |  |
+| `0x10384700` | CNPC_VHuman::Classify | 6 | 0 | 0 | `CNPC_VHuman#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10384760` | CNPC_VHuman::TranslateEnemyChasePosition | 100 | 0 | 1 | `CNPC_ProneDialog#563`, `CNPC_VAndreiBlood#563`, `CNPC_VAsianVampire#563`, +39 more | 0d/0v/5c | — | — | — | — | — |  |
+| `0x103847f0` | CNPC_VHuman::StartTask | 493 | 0 | 27 | `CNPC_ProneDialog#442`, `CNPC_VBatSwarm#442`, `CNPC_VBrujah#442`, +22 more | 10d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c` | `+0x029c`, `+0x0700`, `+0x0874`, `+0x1568`, `+0x5d34`, `+0x5d44` | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:818 | — |  |
+| `0x10384ab0` | CNPC_VHuman::RunTask | 806 | 0 | 24 | `CNPC_ProneDialog#444`, `CNPC_VBatSwarm#444`, `CNPC_VBrujah#444`, +25 more | 6d/0v/2c | `+0x1b44`, `+0x1b48` | `+0x029c`, `+0x03ec`, `+0x06f8`, `+0x0700`, `+0x0874`, `+0x0ff0`, +3 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:845 | — |  |
 | `0x10384ee0` | CNPC_VHuman::SelectSchedule | 340 | 0 | 26 | `CNPC_VBrujah#438`, `CNPC_VGangrel#438`, `CNPC_VHuman#438`, +9 more | 18d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80` | `+0x0874`, `+0x0970`, `+0x0974`, `+0x5cc0`, `+0x65c0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:420, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:508 | docs/vtmb/npc-ai/conditions-and-states.md:9, docs/vtmb/npc-ai/programs.md:75 |  |
 | `0x103850a0` | CNPC_VAndreiBlood::FUN_103850a0 | 210 | 0 | 2 | `CNPC_ProneDialog#482`, `CNPC_VAndreiBlood#482`, `CNPC_VAsianVampire#482`, +39 more | 0d/0v/0c | — | `+0x0278`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | — | — | — |  |
-| `0x103851e0` | CNPC_VHuman::SelectIdealState | 623 | 0 | 23 | `CNPC_VBrujah#461`, `CNPC_VFrenzyShadow#461`, `CNPC_VGangrel#461`, +13 more | 14d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4`, `+0x5d8c` | `+0x029c`, `+0x0738`, `+0x5cc0`, `+0x5cc4`, `+0x5d8c`, `+0x647c`, +1 more | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | — | docs/vtmb/animation_and_movers.md:1540, docs/vtmb/npc-ai/conditions-and-states.md:194, docs/vtmb/npc-ai/rebuild.md:257, +3 more |  |
-| `0x103854f0` | CNPC_VAndreiBlood::PreTranslate_Human | 565 | 0 | 16 | `CNPC_ProneDialog#375`, `CNPC_VAndreiBlood#375`, `CNPC_VAsianVampire#375`, +36 more | 1d/0v/5c | `+0x6410` | `+0x0804`, `+0x14b8`, `+0x14bc`, `+0x5b84`, `+0x5cc0`, `+0x5d8c`, +1 more | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:533, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:698, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:627, +7 more | docs/vtmb/activity_enum.md:389, docs/vtmb/animation_and_movers.md:1490, docs/vtmb/animation_and_movers.md:4605 |  |
-| `0x103858b0` | CNPC_VAndreiBlood::ClassTranslate_Human | 132 | 0 | 1 | `CNPC_ProneDialog#376`, `CNPC_VAndreiBlood#376`, `CNPC_VAsianVampire#376`, +39 more | 0d/0v/8c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:171, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:311 | docs/vtmb/animation_and_movers.md:1494 |  |
+| `0x103851e0` | CNPC_VHuman::SelectIdealState | 623 | 0 | 23 | `CNPC_VBrujah#461`, `CNPC_VFrenzyShadow#461`, `CNPC_VGangrel#461`, +13 more | 14d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4`, `+0x5d8c` | `+0x029c`, `+0x0738`, `+0x5cc0`, `+0x5cc4`, `+0x5d8c`, `+0x647c`, +1 more | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.…` | — | docs/vtmb/animation_and_movers.md:1540, docs/vtmb/npc-ai/conditions-and-states.md:197, docs/vtmb/npc-ai/rebuild.md:257, +3 more |  |
+| `0x103854f0` | CNPC_VHuman::NPC_EarlyTranslateActivity | 565 | 0 | 16 | `CNPC_ProneDialog#375`, `CNPC_VAndreiBlood#375`, `CNPC_VAsianVampire#375`, +36 more | 1d/0v/5c | `+0x6410` | `+0x0804`, `+0x14b8`, `+0x14bc`, `+0x5b84`, `+0x5cc0`, `+0x5d8c`, +1 more | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:533, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:698, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:627, +7 more | docs/vtmb/activity_enum.md:389, docs/vtmb/animation_and_movers.md:1490, docs/vtmb/animation_and_movers.md:4605 |  |
+| `0x103858b0` | CNPC_VHuman::NPC_TranslateActivity | 132 | 0 | 1 | `CNPC_ProneDialog#376`, `CNPC_VAndreiBlood#376`, `CNPC_VAsianVampire#376`, +39 more | 0d/0v/8c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:171, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:311 | docs/vtmb/animation_and_movers.md:1494 |  |
 | `0x10385a10` | CNPC_VChangBros::FUN_10385a10 | 13 | 0 | 26 | `CNPC_VBrujah#432`, `CNPC_VChangBros#432`, `CNPC_VChangBrosBlade#432`, +11 more | 18d/0v/3c | — | — | — | — | — |  |
-| `0x10385a30` | CNPC_VAndreiBlood::FUN_10385a30 | 1 | 0 | 0 | `CNPC_ProneDialog#434`, `CNPC_VAndreiBlood#434`, `CNPC_VAsianVampire#434`, +38 more | 1d/0v/1c | — | — | — | — | — |  |
-| `0x10385a70` | CNPC_VAndreiBlood::FUN_10385a70 | 5 | 0 | 0 | `CNPC_ProneDialog#366`, `CNPC_VAndreiBlood#366`, `CNPC_VAsianVampire#366`, +38 more | 1d/0v/0c | — | — | — | — | — |  |
+| `0x10385a30` | CNPC_VHuman::PrescheduleThink | 1 | 0 | 0 | `CNPC_ProneDialog#434`, `CNPC_VAndreiBlood#434`, `CNPC_VAsianVampire#434`, +38 more | 1d/0v/1c | — | — | — | — | — |  |
+| `0x10385a70` | CNPC_VHuman::HandleInteraction | 5 | 0 | 0 | `CNPC_ProneDialog#366`, `CNPC_VAndreiBlood#366`, `CNPC_VAsianVampire#366`, +38 more | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10385ab0` | CNPC_VAndreiBlood::FUN_10385ab0 | 300 | 0 | 3 | `CNPC_ProneDialog#599`, `CNPC_VAndreiBlood#599`, `CNPC_VAsianVampire#599`, +35 more | 0d/0v/0c +1 outside | `+0x6074`, `+0x6078` | `+0x0494`, `+0x04d0`, `+0x5b84`, `+0x6070`, `+0x6268`, `+0x626c`, +1 more | — | — | — |  |
 | `0x103869a0` | CNPC_VHumanCombatant::FUN_103869a0 | 6 | 0 | 0 | `CNPC_ProneDialog#82`, `CNPC_VHumanCombatant#82`, `CNPC_VYukie#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10386ae0` | CNPC_VHumanCombatant::FUN_10386ae0 | 6 | 0 | 0 | `CNPC_ProneDialog#580`, `CNPC_VHumanCombatant#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10386b00` | CNPC_VHumanCombatant::FUN_10386b00 | 6 | 0 | 0 | `CNPC_ProneDialog#451`, `CNPC_VHumanCombatant#451` | 0d/0v/1c | — | — | `CNPC_VHumanCombatant` | — | — |  |
+| `0x10386b00` | CNPC_VHumanCombatant::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_ProneDialog#451`, `CNPC_VHumanCombatant#451` | 0d/0v/1c | — | — | `CNPC_VHumanCombatant` | — | — |  |
 | `0x10386b20` | CNPC_VHumanCombatant::vfunc5 | 30 | 0 | 17 | `CNPC_VHumanCombatant#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10386c20` | CNPC_VHumanCombatant::FUN_10386c20 | 6 | 0 | 0 | `CNPC_ProneDialog#452`, `CNPC_VHumanCombatant#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10386c20` | CNPC_VHumanCombatant::LoadedSchedules | 6 | 0 | 0 | `CNPC_ProneDialog#452`, `CNPC_VHumanCombatant#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10386c80` | CNPC_VHumanCombatant::FUN_10386c80 | 29 | 0 | 3 | `CNPC_ProneDialog#546`, `CNPC_VHumanCombatant#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10387110` | CNPC_VHumanCombatPatrol::FUN_10387110 | 19 | 0 | 26 | `CNPC_ProneDialog#103`, `CNPC_VHumanCombatPatrol#103`, `CNPC_VHumanCombatant#103`, +2 more | 4d/0v/0c | — | — | — | — | — |  |
-| `0x10387140` | CNPC_VHumanCombatPatrol::FUN_10387140 ‼ | 39 | 0 | 23 | `CNPC_ProneDialog#420`, `CNPC_VHumanCombatPatrol#420`, `CNPC_VHumanCombatant#420`, +2 more | 4d/0v/8c | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:607 |  |
+| `0x10387110` | CNPC_VHumanCombatant::Spawn | 19 | 0 | 26 | `CNPC_ProneDialog#103`, `CNPC_VHumanCombatPatrol#103`, `CNPC_VHumanCombatant#103`, +2 more | 4d/0v/0c | — | — | — | — | — |  |
+| `0x10387140` | CNPC_VHumanCombatant::NPCInit ‼ | 39 | 0 | 23 | `CNPC_ProneDialog#420`, `CNPC_VHumanCombatPatrol#420`, `CNPC_VHumanCombatant#420`, +2 more | 4d/0v/8c | — | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:609 |  |
 | `0x10387180` | CNPC_VCop::FUN_10387180 | 6 | 0 | 0 | `CNPC_ProneDialog#473`, `CNPC_VCop#473`, `CNPC_VGhoulCroucher#473`, +6 more | 0d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/senses.md:299 |  |
-| `0x103871a0` | CNPC_VGhoulCroucher::FUN_103871a0 | 6 | 0 | 0 | `CNPC_ProneDialog#138`, `CNPC_VGhoulCroucher#138`, `CNPC_VHumanCombatPatrol#138`, +3 more | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103871c0` | CNPC_VGhoulCroucher::FUN_103871c0 | 123 | 0 | 9 | `CNPC_ProneDialog#463`, `CNPC_VGhoulCroucher#463`, `CNPC_VHumanCombatPatrol#463`, +4 more | 2d/0v/1c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1556, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1557, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1558, +6 more | docs/vtmb/npc-ai/rebuild.md:248 |  |
-| `0x103872d0` | CNPC_VHumanCombatant::FUN_103872d0 | 103 | 0 | 27 | `CNPC_ProneDialog#438`, `CNPC_VHumanCombatant#438`, `CNPC_VSabbatGunman#438`, +1 more | 5d/0v/0c | `+0x1b2c`, `+0x5b80` | `+0x0970`, `+0x0974`, `+0x5cc0` | — | — | docs/vtmb/npc-ai/programs.md:76 |  |
-| `0x10387380` | CNPC_VHumanCombatPatrol::SelectIdealState | 301 | 0 | 24 | `CNPC_ProneDialog#461`, `CNPC_VGhoulCroucher#461`, `CNPC_VHumanCombatPatrol#461`, +3 more | 3d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x0954`, `+0x5cc0`, `+0x628c`, `+0x65f6` | `la_empire_2`, `E:\Vampire\main\dlls\hl2_dll\NPC_VHumanC…` | — | docs/vtmb/npc-ai/conditions-and-states.md:195 |  |
+| `0x103871a0` | CNPC_VHumanCombatant::Classify | 6 | 0 | 0 | `CNPC_ProneDialog#138`, `CNPC_VGhoulCroucher#138`, `CNPC_VHumanCombatPatrol#138`, +3 more | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103871c0` | CNPC_VHumanCombatant::OnStateChange | 123 | 0 | 9 | `CNPC_ProneDialog#463`, `CNPC_VGhoulCroucher#463`, `CNPC_VHumanCombatPatrol#463`, +4 more | 2d/0v/1c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1556, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1557, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1558, +6 more | docs/vtmb/npc-ai/rebuild.md:248 |  |
+| `0x103872d0` | CNPC_VHumanCombatant::SelectSchedule | 103 | 0 | 27 | `CNPC_ProneDialog#438`, `CNPC_VHumanCombatant#438`, `CNPC_VSabbatGunman#438`, +1 more | 5d/0v/0c | `+0x1b2c`, `+0x5b80` | `+0x0970`, `+0x0974`, `+0x5cc0` | — | — | docs/vtmb/npc-ai/programs.md:76 |  |
+| `0x10387380` | CNPC_VHumanCombatPatrol::SelectIdealState | 301 | 0 | 24 | `CNPC_ProneDialog#461`, `CNPC_VGhoulCroucher#461`, `CNPC_VHumanCombatPatrol#461`, +3 more | 3d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x0954`, `+0x5cc0`, `+0x628c`, `+0x65f6` | `la_empire_2`, `E:\Vampire\main\dlls\hl2_dll\NPC_VHumanC…` | — | docs/vtmb/npc-ai/conditions-and-states.md:198 |  |
 | `0x10387500` | CNPC_VGhoulCroucher::FUN_10387500 | 13 | 0 | 27 | `CNPC_ProneDialog#432`, `CNPC_VGhoulCroucher#432`, `CNPC_VHumanCombatPatrol#432`, +3 more | 3d/0v/3c | — | — | — | — | — |  |
-| `0x10387520` | CNPC_VGhoulCroucher::FUN_10387520 | 68 | 0 | 3 | `CNPC_ProneDialog#453`, `CNPC_VCop#453`, `CNPC_VGhoulCroucher#453`, +6 more | 0d/0v/1c | — | `+0x004c`, `+0x0278`, `+0x0740`, `+0x65f4` | — | — | — |  |
+| `0x10387520` | CNPC_VHumanCombatant::BuildScheduleTestBits | 68 | 0 | 3 | `CNPC_ProneDialog#453`, `CNPC_VCop#453`, `CNPC_VGhoulCroucher#453`, +6 more | 0d/0v/1c | — | `+0x004c`, `+0x0278`, `+0x0740`, `+0x65f4` | — | — | — |  |
 | `0x103875d0` | CNPC_VHumanCombatPatrol::vfunc82 | 6 | 0 | 0 | `CNPC_VHumanCombatPatrol#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10387710` | CNPC_VHumanCombatPatrol::vfunc580 | 6 | 0 | 0 | `CNPC_VHumanCombatPatrol#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10387730` | CNPC_VHumanCombatPatrol::vfunc451 | 6 | 0 | 0 | `CNPC_VHumanCombatPatrol#451` | 0d/0v/1c | — | — | `CNPC_VHumanCombatPatrol` | — | — |  |
+| `0x10387730` | CNPC_VHumanCombatPatrol::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VHumanCombatPatrol#451` | 0d/0v/1c | — | — | `CNPC_VHumanCombatPatrol` | — | — |  |
 | `0x10387750` | CNPC_VHumanCombatPatrol::vfunc5 | 30 | 0 | 17 | `CNPC_VHumanCombatPatrol#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10387850` | CNPC_VHumanCombatPatrol::vfunc452 | 6 | 0 | 0 | `CNPC_VHumanCombatPatrol#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10387850` | CNPC_VHumanCombatPatrol::LoadedSchedules | 6 | 0 | 0 | `CNPC_VHumanCombatPatrol#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103878b0` | CNPC_VHumanCombatPatrol::vfunc546 | 29 | 0 | 3 | `CNPC_VHumanCombatPatrol#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10387d20` | CNPC_VHumanCombatPatrol::vfunc438 | 233 | 0 | 28 | `CNPC_VHumanCombatPatrol#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0970`, `+0x0974`, `+0x5cc0`, `+0x6590` | `E:\Vampire\main\dlls\hl2_dll\npc_VHumanC…` | — | — |  |
+| `0x10387d20` | CNPC_VHumanCombatPatrol::SelectSchedule | 233 | 0 | 28 | `CNPC_VHumanCombatPatrol#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0970`, `+0x0974`, `+0x5cc0`, `+0x6590` | `E:\Vampire\main\dlls\hl2_dll\npc_VHumanC…` | — | — |  |
 | `0x10387ed0` | CNPC_VHunter::vfunc82 | 6 | 0 | 0 | `CNPC_VHunter#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10387fd0` | FUN_10387fd0 | 41 | 1 | 0 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x10388060` | CNPC_VHunter::vfunc580 | 6 | 0 | 0 | `CNPC_VHunter#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10388080` | CNPC_VHunter::vfunc451 | 6 | 0 | 0 | `CNPC_VHunter#451` | 0d/0v/1c | — | — | `CNPC_VHunter` | — | — |  |
+| `0x10388080` | CNPC_VHunter::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VHunter#451` | 0d/0v/1c | — | — | `CNPC_VHunter` | — | — |  |
 | `0x103880a0` | CNPC_VHunter::vfunc5 | 30 | 0 | 17 | `CNPC_VHunter#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103881a0` | CNPC_VHunter::vfunc452 | 6 | 0 | 0 | `CNPC_VHunter#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103881a0` | CNPC_VHunter::LoadedSchedules | 6 | 0 | 0 | `CNPC_VHunter#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10388200` | CNPC_VHunter::vfunc546 | 29 | 0 | 3 | `CNPC_VHunter#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103887a0` | CNPC_VHunter::vfunc103 | 21 | 0 | 27 | `CNPC_VHunter#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103887a0` | CNPC_VHunter::Spawn | 21 | 0 | 27 | `CNPC_VHunter#103` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103887d0` | CNPC_VHunter::vfunc472 | 54 | 0 | 16 | `CNPC_VHunter#472` | 0d/0v/0c | — | `+0x0650`, `+0x6081` | — | — | docs/vtmb/npc-ai/senses.md:402 |  |
-| `0x10388820` | CNPC_VHunter::vfunc138 | 6 | 0 | 0 | `CNPC_VHunter#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10388880` | CNPC_VHunter::vfunc463 | 268 | 0 | 11 | `CNPC_VHunter#463` | 0d/0v/1c | `+0x6664` | `+0x029c`, `+0x6664` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1555, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:439 | docs/vtmb/npc-ai/rebuild.md:247 |  |
-| `0x10388a20` | CNPC_VHunter::vfunc438 | 15 | 0 | 28 | `CNPC_VHunter#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x10388a40` | CNPC_VHunter::vfunc440 | 64 | 0 | 22 | `CNPC_VHunter#440` | 0d/0v/2c | — | `+0x14bc` | — | — | — |  |
+| `0x10388820` | CNPC_VHunter::Classify | 6 | 0 | 0 | `CNPC_VHunter#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10388880` | CNPC_VHunter::OnStateChange | 268 | 0 | 11 | `CNPC_VHunter#463` | 0d/0v/1c | `+0x6664` | `+0x029c`, `+0x6664` | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1555, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:439 | docs/vtmb/npc-ai/rebuild.md:247 |  |
+| `0x10388a20` | CNPC_VHunter::SelectSchedule | 15 | 0 | 28 | `CNPC_VHunter#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x10388a40` | CNPC_VHunter::TranslateSchedule | 64 | 0 | 22 | `CNPC_VHunter#440` | 0d/0v/2c | — | `+0x14bc` | — | — | — |  |
 | `0x10388ab0` | CNPC_VHunter::vfunc461 | 15 | 0 | 25 | `CNPC_VHunter#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x10388ad0` | CNPC_VHunter::vfunc432 | 13 | 0 | 28 | `CNPC_VHunter#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x10388b30` | CNPC_VHunter::vfunc420 ‼ | 39 | 0 | 24 | `CNPC_VHunter#420` | 0d/0v/8c | — | — | — | — | — |  |
-| `0x10388bb0` | CNPC_VHunter::vfunc404 | 109 | 0 | 15 | `CNPC_VHunter#404` | 0d/1v/22c | — | — | — | — | — |  |
+| `0x10388b30` | CNPC_VHunter::NPCInit ‼ | 39 | 0 | 24 | `CNPC_VHunter#420` | 0d/0v/8c | — | — | — | — | — |  |
+| `0x10388bb0` | CNPC_VHunter::IRelationType | 109 | 0 | 15 | `CNPC_VHunter#404` | 0d/1v/22c | — | — | — | — | — |  |
 | `0x10388c40` | FUN_10388c40 | 13 | 1 | 10 | — | 1d/0v/0c | — | — | `player D_HT 10` | — | — |  |
 | `0x10388ca0` | CNPC_VLasombra::vfunc82 | 6 | 0 | 0 | `CNPC_VLasombra#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10388de0` | CNPC_VLasombra::vfunc580 | 6 | 0 | 0 | `CNPC_VLasombra#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10388e00` | CNPC_VLasombra::vfunc451 | 6 | 0 | 0 | `CNPC_VLasombra#451` | 0d/0v/1c | — | — | `CNPC_VLasombra` | — | — |  |
+| `0x10388e00` | CNPC_VLasombra::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VLasombra#451` | 0d/0v/1c | — | — | `CNPC_VLasombra` | — | — |  |
 | `0x10388e20` | CNPC_VLasombra::vfunc5 | 30 | 0 | 17 | `CNPC_VLasombra#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10388f20` | CNPC_VLasombra::vfunc452 | 6 | 0 | 0 | `CNPC_VLasombra#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10388f20` | CNPC_VLasombra::LoadedSchedules | 6 | 0 | 0 | `CNPC_VLasombra#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10388f80` | CNPC_VLasombra::vfunc546 | 29 | 0 | 3 | `CNPC_VLasombra#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10389390` | CNPC_VLasombra::vfunc103 | 20 | 0 | 27 | `CNPC_VLasombra#103` | 0d/0v/0c | `+0x6664` | — | — | — | — |  |
+| `0x10389390` | CNPC_VLasombra::Spawn | 20 | 0 | 27 | `CNPC_VLasombra#103` | 0d/0v/0c | `+0x6664` | — | — | — | — |  |
 | `0x103893c0` | CNPC_VLasombra::vfunc592 | 29 | 0 | 3 | `CNPC_VLasombra#592` | 0d/0v/1c | — | `+0x6664` | — | — | docs/vtmb/npc-ai/programs.md:791 |  |
 | `0x10389560` | CNPC_VMalkavian::vfunc580 | 6 | 0 | 0 | `CNPC_VMalkavian#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10389580` | CNPC_VMalkavian::vfunc451 | 6 | 0 | 0 | `CNPC_VMalkavian#451` | 0d/0v/1c | — | — | `CNPC_VMalkavian` | — | — |  |
+| `0x10389580` | CNPC_VMalkavian::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VMalkavian#451` | 0d/0v/1c | — | — | `CNPC_VMalkavian` | — | — |  |
 | `0x103895a0` | CNPC_VMalkavian::vfunc5 | 30 | 0 | 17 | `CNPC_VMalkavian#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103896a0` | CNPC_VMalkavian::vfunc452 | 6 | 0 | 0 | `CNPC_VMalkavian#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103896a0` | CNPC_VMalkavian::LoadedSchedules | 6 | 0 | 0 | `CNPC_VMalkavian#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10389700` | CNPC_VMalkavian::vfunc546 | 29 | 0 | 3 | `CNPC_VMalkavian#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10389bf0` | CNPC_VMalkavian::vfunc138 | 6 | 0 | 0 | `CNPC_VMalkavian#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10389bf0` | CNPC_VMalkavian::Classify | 6 | 0 | 0 | `CNPC_VMalkavian#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10389db0` | CNPC_VManBat::vfunc580 | 6 | 0 | 0 | `CNPC_VManBat#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10389dd0` | CNPC_VManBat::vfunc451 | 6 | 0 | 0 | `CNPC_VManBat#451` | 0d/0v/1c | — | — | `CNPC_VManBat` | — | — |  |
+| `0x10389dd0` | CNPC_VManBat::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VManBat#451` | 0d/0v/1c | — | — | `CNPC_VManBat` | — | — |  |
 | `0x10389df0` | CNPC_VManBat::vfunc5 | 30 | 0 | 17 | `CNPC_VManBat#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10389ef0` | CNPC_VManBat::vfunc452 | 6 | 0 | 0 | `CNPC_VManBat#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10389ef0` | CNPC_VManBat::LoadedSchedules | 6 | 0 | 0 | `CNPC_VManBat#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10389f50` | CNPC_VManBat::vfunc546 | 29 | 0 | 3 | `CNPC_VManBat#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1038ac80` | CNPC_VManBat::vfunc82 | 6 | 0 | 0 | `CNPC_VManBat#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1038aec0` | CNPC_VManBat::vfunc104 | 280 | 0 | 15 | `CNPC_VManBat#104` | 0d/0v/11c | — | — | `character/male/sheriff_manbat/fly_by_2.w…`, `character/male/sheriff_manbat/fly_by_1.w…`, +14 more | — | — |  |
-| `0x1038b030` | CNPC_VManBat::vfunc103 | 35 | 0 | 27 | `CNPC_VManBat#103` | 0d/0v/0c | — | `+0x0680` | — | — | — |  |
-| `0x1038b070` | CNPC_VManBat::vfunc420 | 71 | 0 | 23 | `CNPC_VManBat#420` | 0d/0v/8c | `+0x6678`, `+0x667c`, `+0x66b0`, `+0x66b8` | — | — | — | — |  |
-| `0x1038b0e0` | CNPC_VManBat::vfunc138 | 6 | 0 | 0 | `CNPC_VManBat#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1038b100` | CNPC_VManBat::vfunc337 | 6 | 0 | 0 | `CNPC_VManBat#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1038b120` | CNPC_VManBat::vfunc525 | 96 | 0 | 21 | `CNPC_VManBat#525` | 0d/0v/0c | — | `+0x6670` | — | — | — |  |
+| `0x1038aec0` | CNPC_VManBat::Precache | 280 | 0 | 15 | `CNPC_VManBat#104` | 0d/0v/11c | — | — | `character/male/sheriff_manbat/fly_by_2.w…`, `character/male/sheriff_manbat/fly_by_1.w…`, +14 more | — | — |  |
+| `0x1038b030` | CNPC_VManBat::Spawn | 35 | 0 | 27 | `CNPC_VManBat#103` | 0d/0v/0c | — | `+0x0680` | — | — | — |  |
+| `0x1038b070` | CNPC_VManBat::NPCInit | 71 | 0 | 23 | `CNPC_VManBat#420` | 0d/0v/8c | `+0x6678`, `+0x667c`, `+0x66b0`, `+0x66b8` | — | — | — | — |  |
+| `0x1038b0e0` | CNPC_VManBat::Classify | 6 | 0 | 0 | `CNPC_VManBat#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1038b100` | CNPC_VManBat::GetUsedHullBits | 6 | 0 | 0 | `CNPC_VManBat#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1038b120` | CNPC_VManBat::OverrideMove | 96 | 0 | 21 | `CNPC_VManBat#525` | 0d/0v/0c | — | `+0x6670` | — | — | — |  |
 | `0x1038b1a0` | FUN_1038b1a0 | 366 | 1 | 20 | — | 1d/0v/0c | `+0x1b30`, `+0x1b34` | `+0x0100`, `+0x0374`, `+0x0fec`, `+0x5d44`, `+0x6678` | `E:\Vampire\main\dlls\hl2_dll\NPC_VManBat…` | — | — |  |
 | `0x1038b370` | FUN_1038b370 | 2274 | 1 | 8 | — | 3d/0v/0c | `+0x6664`, `+0x6674` | `+0x0268`, `+0x0318`, `+0x0364`, `+0x0370`, `+0x03bc`, `+0x03c0`, +10 more | `sheriff_teleport_emitter` | — | — |  |
 | `0x1038bec0` | FUN_1038bec0 | 536 | 2 | 4 | — | 1d/0v/0c | `+0x6678` | `+0x0270`, `+0x0364`, `+0x0368`, `+0x0fec` | `UTIL_TraceHull` | — | — |  |
 | `0x1038c170` | FUN_1038c170 | 165 | 1 | 2 | — | 4d/0v/0c +1 outside | — | `+0x0174`, `+0x0340` | — | — | — |  |
 | `0x1038c250` | FUN_1038c250 | 251 | 1 | 3 | — | 1d/0v/0c | — | `+0x0100`, `+0x0370`, `+0x0374` | — | — | — |  |
-| `0x1038c390` | CNPC_VManBat::vfunc442 | 2673 | 0 | 28 | `CNPC_VManBat#442` | 0d/0v/2c | `+0x6664`, `+0x666c`, `+0x666d`, `+0x6670`, `+0x6674`, `+0x6688`, +2 more | `+0x0100`, `+0x0318`, `+0x0360`, `+0x0364`, `+0x0370`, `+0x0374`, +6 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:819 | docs/vtmb/animation_and_movers.md:1468 |  |
-| `0x1038d130` | CNPC_VManBat::vfunc444 | 2923 | 0 | 23 | `CNPC_VManBat#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x6664`, `+0x6674`, `+0x6688` | `+0x0268`, `+0x02e0`, `+0x0360`, `+0x0364`, `+0x0370`, `+0x0378`, +14 more | `Bip01 R Neck`, `character/male/sheriff_manbat/fall.wav`, +5 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:846 | docs/vtmb/animation_and_movers.md:1469 |  |
-| `0x1038e000` | CNPC_VManBat::vfunc259 | 641 | 0 | 26 | `CNPC_VManBat#259` | 0d/0v/0c | — | `+0x02e0`, `+0x0378` | `character/male/sheriff_manbat/screech.wa…` | — | docs/vtmb/animation_and_movers.md:2190 |  |
-| `0x1038e340` | CNPC_VManBat::vfunc438 | 224 | 0 | 2 | `CNPC_VManBat#438` | 0d/0v/0c | `+0x6674` | `+0x6670` | — | — | — |  |
-| `0x1038e480` | CNPC_VManBat::vfunc566 | 317 | 0 | 11 | `CNPC_VManBat#566` | 0d/0v/4c | — | `+0x6670` | `ManBat %d`, `ManBat Script Node %d`, +3 more | — | — |  |
+| `0x1038c390` | CNPC_VManBat::StartTask | 2673 | 0 | 28 | `CNPC_VManBat#442` | 0d/0v/2c | `+0x6664`, `+0x666c`, `+0x666d`, `+0x6670`, `+0x6674`, `+0x6688`, +2 more | `+0x0100`, `+0x0318`, `+0x0360`, `+0x0364`, `+0x0370`, `+0x0374`, +6 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:819 | docs/vtmb/animation_and_movers.md:1468 |  |
+| `0x1038d130` | CNPC_VManBat::RunTask | 2923 | 0 | 23 | `CNPC_VManBat#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x6664`, `+0x6674`, `+0x6688` | `+0x0268`, `+0x02e0`, `+0x0360`, `+0x0364`, `+0x0370`, `+0x0378`, +14 more | `Bip01 R Neck`, `character/male/sheriff_manbat/fall.wav`, +5 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:846 | docs/vtmb/animation_and_movers.md:1469 |  |
+| `0x1038e000` | CNPC_VManBat::HandleAnimEvent | 641 | 0 | 26 | `CNPC_VManBat#259` | 0d/0v/0c | — | `+0x02e0`, `+0x0378` | `character/male/sheriff_manbat/screech.wa…` | — | docs/vtmb/animation_and_movers.md:2190 |  |
+| `0x1038e340` | CNPC_VManBat::SelectSchedule | 224 | 0 | 2 | `CNPC_VManBat#438` | 0d/0v/0c | `+0x6674` | `+0x6670` | — | — | — |  |
+| `0x1038e480` | CNPC_VManBat::FValidateHintType | 317 | 0 | 11 | `CNPC_VManBat#566` | 0d/0v/4c | — | `+0x6670` | `ManBat %d`, `ManBat Script Node %d`, +3 more | — | — |  |
 | `0x1038e640` | FUN_1038e640 | 32 | 1 | 5 | — | 3d/0v/0c | `+0x6678`? | — | — | — | — |  |
 | `0x1038e670` | FUN_1038e670 | 32 | 2 | 5 | — | 1d/0v/0c | `+0x6678`? | — | — | — | — |  |
 | `0x1038e6a0` | FUN_1038e6a0 | 35 | 2 | 5 | — | 1d/0v/0c | `+0x6678`? | — | — | — | — |  |
 | `0x1038e6e0` | FUN_1038e6e0 | 35 | 2 | 5 | — | 1d/0v/0c | `+0x6678`? | — | — | — | — |  |
 | `0x1038e720` | FUN_1038e720 | 264 | 1 | 6 | — | 3d/0v/0c | — | `+0x0374`, `+0x0fec` | — | — | — |  |
 | `0x1038e880` | CNPC_VManBat::vfunc390 | 47 | 0 | 25 | `CNPC_VManBat#390` | 0d/0v/0c | — | `+0x0210` | — | — | — |  |
-| `0x1038e8c0` | CNPC_VManBat::vfunc144 | 159 | 0 | 22 | `CNPC_VManBat#144` | 0d/0v/3c | `+0x66a4` | `+0x66a4` | — | — | — |  |
+| `0x1038e8c0` | CNPC_VManBat::Event_Killed | 159 | 0 | 22 | `CNPC_VManBat#144` | 0d/0v/3c | `+0x66a4` | `+0x66a4` | — | — | — |  |
 | `0x1038e990` | CNPC_VManBat::vfunc432 | 26 | 0 | 27 | `CNPC_VManBat#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x1038e9c0` | FUN_1038e9c0 | 1283 | 1 | 15 | — | 1d/0v/0c | `+0x6680`, `+0x6684`, `+0x66a0`, `+0x66a8` | `+0x0364`, `+0x0370`, `+0x6684`, `+0x669c`, `+0x66a0`, `+0x66a4`, +1 more | `Bip01 Spine`, `Manbat_blast_player`, +4 more | — | — |  |
 | `0x1038f020` | FUN_1038f020 | 493 | 1 | 16 | — | 2d/0v/0c | `+0x6684`, `+0x66a0`, `+0x66a8` | `+0x6680`, `+0x6684`, `+0x669c`, `+0x66a0`, `+0x66a8` | — | — | — |  |
@@ -4040,60 +4040,60 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10390890` | FUN_10390890 | 25 | 2 | 0 | — | 1d/0v/0c +1 outside | `+0x0001`, `+0x0004` | — | — | — | — |  |
 | `0x103908c0` | FUN_103908c0 | 36 | 1 | 0 | — | 2d/0v/0c +2 outside | — | — | — | — | — |  |
 | `0x10390de0` | CNPC_VMingXiao::vfunc82 | 6 | 0 | 0 | `CNPC_VMingXiao#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10390fd0` | CNPC_VMingXiao::FUN_10390fd0 | 1 | 0 | 0 | `CNPC_VBaseBoss#304`, `CNPC_VMingXiao#304`, `CNPC_VTzimisce#304`, +2 more | 0d/0v/4c | — | — | — | — | — |  |
-| `0x10390ff0` | CNPC_VMingXiao::FUN_10390ff0 | 1 | 0 | 0 | `CNPC_VBaseBoss#305`, `CNPC_VMingXiao#305`, `CNPC_VTzimisce#305`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10390fd0` | CNPC_VBaseBoss::GiveBaseFightingItems | 1 | 0 | 0 | `CNPC_VBaseBoss#304`, `CNPC_VMingXiao#304`, `CNPC_VTzimisce#304`, +2 more | 0d/0v/4c | — | — | — | — | — |  |
+| `0x10390ff0` | CNPC_VBaseBoss::RemoveBaseFightingItems | 1 | 0 | 0 | `CNPC_VBaseBoss#305`, `CNPC_VMingXiao#305`, `CNPC_VTzimisce#305`, +2 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10391010` | CNPC_VMingXiao::FUN_10391010 | 5 | 0 | 0 | `CNPC_VBaseBoss#587`, `CNPC_VMingXiao#587`, `CNPC_VTzimisce#587`, +3 more | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10391030` | CNPC_VMingXiao::vfunc522 | 7 | 0 | 0 | `CNPC_VMingXiao#522` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x10391050` | CNPC_VMingXiao::vfunc523 | 7 | 0 | 0 | `CNPC_VMingXiao#523` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10391030` | CNPC_VMingXiao::StepHeight | 7 | 0 | 0 | `CNPC_VMingXiao#522` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x10391050` | CNPC_VMingXiao::GetMaxJumpSpeed | 7 | 0 | 0 | `CNPC_VMingXiao#523` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10391070` | CNPC_VMingXiao::vfunc580 | 6 | 0 | 0 | `CNPC_VMingXiao#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x10391090` | CNPC_VMingXiao::vfunc451 | 6 | 0 | 0 | `CNPC_VMingXiao#451` | 0d/0v/1c | — | — | `CNPC_VMingXiao` | — | — |  |
+| `0x10391090` | CNPC_VMingXiao::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VMingXiao#451` | 0d/0v/1c | — | — | `CNPC_VMingXiao` | — | — |  |
 | `0x103910b0` | CNPC_VMingXiao::vfunc5 | 134 | 0 | 17 | `CNPC_VMingXiao#5` | 0d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c` | `+0x665c`, `+0x6664` | — | — | — |  |
 | `0x10391170` | CNPC_VBaseBoss::vfunc5 | 134 | 0 | 17 | `CNPC_VBaseBoss#5` | 0d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c` | `+0x665c`, `+0x6664` | — | — | — |  |
-| `0x10391230` | CNPC_VMingXiao::vfunc180 | 26 | 0 | 16 | `CNPC_VMingXiao#180` | 0d/0v/1c | — | `+0x673c` | — | — | — |  |
-| `0x10391330` | CNPC_VMingXiao::vfunc452 | 6 | 0 | 0 | `CNPC_VMingXiao#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10391230` | CNPC_VMingXiao::UpdateOnRemove | 26 | 0 | 16 | `CNPC_VMingXiao#180` | 0d/0v/1c | — | `+0x673c` | — | — | — |  |
+| `0x10391330` | CNPC_VMingXiao::LoadedSchedules | 6 | 0 | 0 | `CNPC_VMingXiao#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x10391390` | CNPC_VMingXiao::vfunc546 | 29 | 0 | 3 | `CNPC_VMingXiao#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10392660` | CNPC_VMingXiao::vfunc104 | 255 | 0 | 15 | `CNPC_VMingXiao#104` | 0d/0v/11c | — | — | `item_w_mingxiao_spit`, `Ming_xiao_vomit_emitter`, +13 more | — | — |  |
-| `0x103927a0` | CNPC_VMingXiao::vfunc103 | 436 | 0 | 25 | `CNPC_VMingXiao#103` | 0d/0v/0c | `+0x1482`, `+0x1574`, `+0x6670`, `+0x6674`, `+0x6678`, `+0x667c`, +11 more | `+0x04d4`, `+0x0610`, `+0x6680`, `+0x6684`, `+0x668c` | — | — | — |  |
+| `0x10392660` | CNPC_VMingXiao::Precache | 255 | 0 | 15 | `CNPC_VMingXiao#104` | 0d/0v/11c | — | — | `item_w_mingxiao_spit`, `Ming_xiao_vomit_emitter`, +13 more | — | — |  |
+| `0x103927a0` | CNPC_VMingXiao::Spawn | 436 | 0 | 25 | `CNPC_VMingXiao#103` | 0d/0v/0c | `+0x1482`, `+0x1574`, `+0x6670`, `+0x6674`, `+0x6678`, `+0x667c`, +11 more | `+0x04d4`, `+0x0610`, `+0x6680`, `+0x6684`, `+0x668c` | — | — | — |  |
 | `0x103929d0` | CNPC_VMingXiao::vfunc473 | 6 | 0 | 0 | `CNPC_VMingXiao#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103929f0` | CNPC_VMingXiao::vfunc138 | 6 | 0 | 0 | `CNPC_VMingXiao#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103929f0` | CNPC_VMingXiao::Classify | 6 | 0 | 0 | `CNPC_VMingXiao#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10392a10` | CNPC_VMingXiao::vfunc418 | 45 | 0 | 3 | `CNPC_VMingXiao#418` | 0d/0v/6c | — | `+0x6748` | — | — | — |  |
-| `0x10392a50` | CNPC_VMingXiao::vfunc337 | 11 | 0 | 3 | `CNPC_VMingXiao#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10392a70` | CNPC_VMingXiao::vfunc259 | 286 | 0 | 26 | `CNPC_VMingXiao#259` | 0d/0v/0c | — | `+0x0370`, `+0x673c` | `Ming_xiao_vomit_emitter`, `WARNING: Ming Xiao is getting EVENT_WEAP…`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:129, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:37, +1 more | docs/vtmb/animation_and_movers.md:2191, docs/vtmb/animation_events.md:461, docs/vtmb/footsteps.md:167, +1 more |  |
-| `0x10392c40` | CNPC_VMingXiao::vfunc563 | 249 | 0 | 5 | `CNPC_VMingXiao#563` | 0d/0v/5c | — | `+0x0370`, `+0x0654`, `+0x6320` | — | — | — |  |
-| `0x10392d80` | CNPC_VMingXiao::vfunc442 | 1772 | 0 | 27 | `CNPC_VMingXiao#442` | 0d/0v/2c | `+0x0168`, `+0x016c`, `+0x017c`, `+0x019c`, `+0x1568`, `+0x1b44`, +4 more | `+0x019c`, `+0x01a4`, `+0x029c`, `+0x0364`, `+0x0374`, `+0x0564`, +11 more | `hit_yaw`, `Ming_xiao_death_proxy_emitter2`, +7 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:820 | — |  |
+| `0x10392a50` | CNPC_VMingXiao::GetUsedHullBits | 11 | 0 | 3 | `CNPC_VMingXiao#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10392a70` | CNPC_VMingXiao::HandleAnimEvent | 286 | 0 | 26 | `CNPC_VMingXiao#259` | 0d/0v/0c | — | `+0x0370`, `+0x673c` | `Ming_xiao_vomit_emitter`, `WARNING: Ming Xiao is getting EVENT_WEAP…`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:129, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:37, +1 more | docs/vtmb/animation_and_movers.md:2191, docs/vtmb/animation_events.md:461, docs/vtmb/footsteps.md:167, +1 more |  |
+| `0x10392c40` | CNPC_VMingXiao::TranslateEnemyChasePosition | 249 | 0 | 5 | `CNPC_VMingXiao#563` | 0d/0v/5c | — | `+0x0370`, `+0x0654`, `+0x6320` | — | — | — |  |
+| `0x10392d80` | CNPC_VMingXiao::StartTask | 1772 | 0 | 27 | `CNPC_VMingXiao#442` | 0d/0v/2c | `+0x0168`, `+0x016c`, `+0x017c`, `+0x019c`, `+0x1568`, `+0x1b44`, +4 more | `+0x019c`, `+0x01a4`, `+0x029c`, `+0x0364`, `+0x0374`, `+0x0564`, +11 more | `hit_yaw`, `Ming_xiao_death_proxy_emitter2`, +7 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:820 | — |  |
 | `0x103937d0` | FUN_103937d0 | 271 | 1 | 6 | — | 1d/0v/0c | — | `+0x029c`, `+0x04dc`, `+0x052c`, `+0x05e0`, `+0x0610`, `+0x0700`, +2 more | — | — | — |  |
-| `0x10393930` | CNPC_VMingXiao::vfunc444 | 1239 | 0 | 24 | `CNPC_VMingXiao#444` | 0d/0v/2c | — | `+0x029c`, `+0x03ec`, `+0x05b0`, `+0x0610`, `+0x0874`, `+0x5d44`, +5 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:847 | — |  |
-| `0x10394090` | CNPC_VMingXiao::vfunc448 | 88 | 0 | 11 | `CNPC_VMingXiao#448` | 0d/1v/43c | `+0x6718` | `+0x5d44`, `+0x673c` | — | — | — |  |
-| `0x10394120` | CNPC_VMingXiao::vfunc437 | 132 | 0 | 23 | `CNPC_VMingXiao#437` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0610`, `+0x5cc0`, `+0x6680` | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
-| `0x103941e0` | CNPC_VMingXiao::vfunc438 | 705 | 0 | 26 | `CNPC_VMingXiao#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, `+0x674c` | `+0x5cc0`, `+0x6268`, `+0x670c`, `+0x674c` | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
-| `0x10394570` | CNPC_VMingXiao::vfunc440 | 28 | 0 | 22 | `CNPC_VMingXiao#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10393930` | CNPC_VMingXiao::RunTask | 1239 | 0 | 24 | `CNPC_VMingXiao#444` | 0d/0v/2c | — | `+0x029c`, `+0x03ec`, `+0x05b0`, `+0x0610`, `+0x0874`, `+0x5d44`, +5 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:847 | — |  |
+| `0x10394090` | CNPC_VMingXiao::TaskFail | 88 | 0 | 11 | `CNPC_VMingXiao#448` | 0d/1v/43c | `+0x6718` | `+0x5d44`, `+0x673c` | — | — | — |  |
+| `0x10394120` | CNPC_VMingXiao::PreSelectSchedule | 132 | 0 | 23 | `CNPC_VMingXiao#437` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x0610`, `+0x5cc0`, `+0x6680` | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
+| `0x103941e0` | CNPC_VMingXiao::SelectSchedule | 705 | 0 | 26 | `CNPC_VMingXiao#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, `+0x674c` | `+0x5cc0`, `+0x6268`, `+0x670c`, `+0x674c` | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
+| `0x10394570` | CNPC_VMingXiao::TranslateSchedule | 28 | 0 | 22 | `CNPC_VMingXiao#440` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103945a0` | CNPC_VMingXiao::vfunc461 | 150 | 0 | 1 | `CNPC_VMingXiao#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x0278`, `+0x029c`, `+0x0740`, `+0x5cc4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
-| `0x10394690` | CNPC_VMingXiao::vfunc376 | 92 | 0 | 1 | `CNPC_VMingXiao#376` | 0d/0v/8c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:189, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:318 | docs/vtmb/animation_and_movers.md:1496 |  |
-| `0x103947b0` | CNPC_VMingXiao::vfunc465 | 303 | 0 | 5 | `CNPC_VMingXiao#465` | 0d/0v/2c | — | `+0x670c` | — | — | docs/vtmb/animation_and_movers.md:1694 |  |
-| `0x10394930` | CNPC_VMingXiao::vfunc516 | 48 | 0 | 1 | `CNPC_VMingXiao#516` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10394690` | CNPC_VMingXiao::NPC_TranslateActivity | 92 | 0 | 1 | `CNPC_VMingXiao#376` | 0d/0v/8c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:189, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:318 | docs/vtmb/animation_and_movers.md:1496 |  |
+| `0x103947b0` | CNPC_VMingXiao::OnChangeActivity | 303 | 0 | 5 | `CNPC_VMingXiao#465` | 0d/0v/2c | — | `+0x670c` | — | — | docs/vtmb/animation_and_movers.md:1694 |  |
+| `0x10394930` | CNPC_VMingXiao::MaxYawSpeed | 48 | 0 | 1 | `CNPC_VMingXiao#516` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10394970` | CNPC_VMingXiao::vfunc432 | 13 | 0 | 26 | `CNPC_VMingXiao#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x10394990` | CNPC_VMingXiao::NPCThink | 926 | 0 | 27 | `CNPC_VMingXiao#431` | 0d/0v/0c | `+0x14bc`, `+0x670c`, `+0x6710`, `+0x6748` | `+0x0170`, `+0x026c`, `+0x0364`, `+0x036c`, `+0x0818`, `+0x14bc`, +5 more | `NULL ENTITY`, `Unaccounted`, +11 more | — | docs/vtmb/animation_and_movers.md:1555 |  |
-| `0x10394e40` | CNPC_VMingXiao::vfunc433 | 719 | 0 | 25 | `CNPC_VMingXiao#433` | 0d/0v/2c | — | `+0x029c`, `+0x0364`, `+0x0740`, `+0x6264`, `+0x6680`, `+0x66c0` | — | — | — |  |
-| `0x103951d0` | CNPC_VMingXiao::vfunc408 | 92 | 0 | 2 | `CNPC_VMingXiao#408` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x10395270` | CNPC_VMingXiao::vfunc409 | 6 | 0 | 0 | `CNPC_VMingXiao#409` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x10395290` | CNPC_VMingXiao::vfunc434 | 1 | 0 | 0 | `CNPC_VMingXiao#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10394e40` | CNPC_VMingXiao::GatherConditions | 719 | 0 | 25 | `CNPC_VMingXiao#433` | 0d/0v/2c | — | `+0x029c`, `+0x0364`, `+0x0740`, `+0x6264`, `+0x6680`, `+0x66c0` | — | — | — |  |
+| `0x103951d0` | CNPC_VMingXiao::GetShortConditionName | 92 | 0 | 2 | `CNPC_VMingXiao#408` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x10395270` | CNPC_VMingXiao::GetLastSharedCondition | 6 | 0 | 0 | `CNPC_VMingXiao#409` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x10395290` | CNPC_VMingXiao::PrescheduleThink | 1 | 0 | 0 | `CNPC_VMingXiao#434` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103952b0` | FUN_103952b0 | 398 | 2 | 1 | — | 1d/0v/0c +1 outside | — | `+0x1594`? | — | — | — |  |
 | `0x10395650` | FUN_10395650 | 130 | 1 | 2 | — | 1d/0v/0c | — | `+0x1594` | — | — | — |  |
 | `0x10395750` | FUN_10395750 | 696 | 1 | 23 | — | 1d/0v/0c | `+0x1b30`, `+0x1b34` | `+0x036c`, `+0x63d8`, `+0x670c`, `+0x673c` | `Ming_xiao_tentacle_damage_emitter`, `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | docs/vtmb/npc-ai/lifecycle.md:268 |  |
 | `0x10395ae0` | CNPC_VMingXiao::vfunc390 | 117 | 0 | 25 | `CNPC_VMingXiao#390` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10395b80` | CNPC_VMingXiao::vfunc366 | 5 | 0 | 0 | `CNPC_VMingXiao#366` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10395ba0` | CNPC_VMingXiao::vfunc144 | 156 | 0 | 23 | `CNPC_VMingXiao#144` | 0d/0v/3c | `+0x0200` | `+0x6670`, `+0x6744` | — | — | — |  |
+| `0x10395b80` | CNPC_VMingXiao::HandleInteraction | 5 | 0 | 0 | `CNPC_VMingXiao#366` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10395ba0` | CNPC_VMingXiao::Event_Killed | 156 | 0 | 23 | `CNPC_VMingXiao#144` | 0d/0v/3c | `+0x0200` | `+0x6670`, `+0x6744` | — | — | — |  |
 | `0x10395c70` | FUN_10395c70 | 79 | 1 | 20 | — | 2d/0v/0c | `+0x0200`?, `+0x1b30`?, `+0x1b34`?, `+0x63d8`?, `+0x6744`? | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
 | `0x10395ce0` | FUN_10395ce0 | 16 | 1 | 21 | — | 2d/0v/0c | — | `+0x6744`? | — | — | — |  |
 | `0x10395d00` | CNPC_VMingXiao::vfunc574 | 144 | 0 | 12 | `CNPC_VMingXiao#574` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x10395dc0` | CNPC_VMingXiao::vfunc599 | 23 | 0 | 0 | `CNPC_VMingXiao#599` | 0d/0v/0c | `+0x6078` | — | — | — | — |  |
-| `0x10395f80` | CNPC_VMingXiao::vfunc126 | 81 | 0 | 17 | `CNPC_VMingXiao#126` | 0d/0v/0c | — | `+0x66f4` | — | — | — |  |
+| `0x10395f80` | CNPC_VMingXiao::Save | 81 | 0 | 17 | `CNPC_VMingXiao#126` | 0d/0v/0c | — | `+0x66f4` | — | — | — |  |
 | `0x10396000` | CNPC_VMingXiao::vfunc127 | 53 | 0 | 11 | `CNPC_VMingXiao#127` | 0d/0v/0c | — | `+0x66f4` | — | — | — |  |
 | `0x10396bc0` | FUN_10396bc0 | 385 | 1 | 6 | — | 1d/0v/0c | — | `+0x029c`?, `+0x0848`?, `+0x19c6`?, `+0x19c8`?, `+0x19cb`? | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
 | `0x10396dc0` | FUN_10396dc0 | 151 | 1 | 2 | — | 1d/0v/0c | `+0x1b30`?, `+0x1b34`? | `+0x6718`?, `+0x673c`? | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
 | `0x10396e90` | CNPC_VMingXiao::vfunc482 | 210 | 0 | 2 | `CNPC_VMingXiao#482` | 0d/0v/0c | — | `+0x0278`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | — | — | — |  |
-| `0x10396fb0` | CNPC_VMingXiao::vfunc70 | 3 | 0 | 0 | `CNPC_VMingXiao#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x10396fd0` | CNPC_VMingXiao::vfunc69 | 24 | 0 | 2 | `CNPC_VMingXiao#69` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10396fb0` | CNPC_VMingXiao::IsMonster | 3 | 0 | 0 | `CNPC_VMingXiao#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x10396fd0` | CNPC_VMingXiao::NavIgnoreCollision | 24 | 0 | 2 | `CNPC_VMingXiao#69` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x10397000` | CNPC_VMingXiao::vfunc166 | 152 | 0 | 0 | `CNPC_VMingXiao#166` | 0d/0v/0c | — | `+0x66a8` | — | — | — |  |
 | `0x103970d0` | CNPC_VMingXiao::vfunc348 | 532 | 0 | 11 | `CNPC_VMingXiao#348` | 0d/0v/1c | — | `+0x026c`, `+0x13bc`, `+0x13c0` | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | — | — |  |
 | `0x10397380` | FUN_10397380 | 98 | 3 | 21 | — | 2d/0v/0c | — | `+0x029c`, `+0x5bb0`, `+0x5da4` | — | — | docs/vtmb/npc-ai/social.md:476 |  |
@@ -4127,7 +4127,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103998d0` | FUN_103998d0 | 212 | 2 | 3 | — | 1d/0v/0c | — | `+0x0364`, `+0x6290`, `+0x6294` | — | — | — |  |
 | `0x103999f0` | FUN_103999f0 | 509 | 2 | 1 | — | 1d/0v/0c | — | `+0x029c`, `+0x0364` | — | — | — |  |
 | `0x10399c70` | CNPC_VMingXiao::PushPhysicsObjects | 149 | 1 | 0 | — | 1d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `Unaccounted`, +2 more | — | — |  |
-| `0x10399d40` | CNPC_VMingXiao::vfunc123 | 328 | 0 | 16 | `CNPC_VMingXiao#123` | 0d/0v/0c | — | `+0x0224`, `+0x0370` | — | — | — |  |
+| `0x10399d40` | CNPC_VMingXiao::DrawDebugGeometryOverlays | 328 | 0 | 16 | `CNPC_VMingXiao#123` | 0d/0v/0c | — | `+0x0224`, `+0x0370` | — | — | — |  |
 | `0x10399ef0` | FUN_10399ef0 | 181 | 1 | 6 | — | 1d/0v/0c | — | — | `**studio**` | — | — |  |
 | `0x10399fe0` | CNPC_VMingXiao::TestHitboxes | 383 | 0 | 7 | `CNPC_VMingXiao#100` | 0d/0v/0c | — | `+0x026c`, `+0x6678` | `NULL ENTITY`, `CNPC_VMingXiao::TestHitboxes` | — | — |  |
 | `0x1039a750` | FUN_1039a750 | 570 | 1 | 20 | — | 1d/0v/0c | `+0x0168`, `+0x016c`, `+0x019c`, `+0x0204` | `+0x0004`, `+0x019c`, `+0x01a0`, `+0x01a4`, `+0x0204`, `+0x0328`, +1 more | `npc_VMingXiao`, `Ming_xiao_transform_emitter2`, +3 more | — | docs/vtmb/npc-ai/lifecycle.md:266 |  |
@@ -4137,43 +4137,43 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1039ab30` | FUN_1039ab30 | 287 | 1 | 4 | — | 1d/0v/0c | — | `+0x0378`? | — | — | — |  |
 | `0x1039aca0` | FUN_1039aca0 | 288 | 1 | 4 | — | 1d/0v/0c | — | `+0x0378`? | — | — | — |  |
 | `0x1039aea0` | CNPC_VMingXiaoTentacle::vfunc82 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039b050` | CNPC_VMingXiaoTentacle::vfunc522 | 7 | 0 | 0 | `CNPC_VMingXiaoTentacle#522` | 0d/1v/3c | — | — | — | — | — |  |
-| `0x1039b070` | CNPC_VMingXiaoTentacle::vfunc523 | 7 | 0 | 0 | `CNPC_VMingXiaoTentacle#523` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1039b050` | CNPC_VMingXiaoTentacle::StepHeight | 7 | 0 | 0 | `CNPC_VMingXiaoTentacle#522` | 0d/1v/3c | — | — | — | — | — |  |
+| `0x1039b070` | CNPC_VMingXiaoTentacle::GetMaxJumpSpeed | 7 | 0 | 0 | `CNPC_VMingXiaoTentacle#523` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1039b090` | CNPC_VMingXiaoTentacle::vfunc580 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1039b0b0` | CNPC_VMingXiaoTentacle::vfunc451 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#451` | 0d/0v/1c | — | — | `CNPC_VMingXiaoTentacle` | — | — |  |
+| `0x1039b0b0` | CNPC_VMingXiaoTentacle::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#451` | 0d/0v/1c | — | — | `CNPC_VMingXiaoTentacle` | — | — |  |
 | `0x1039b0d0` | CNPC_VMingXiaoTentacle::vfunc5 | 30 | 0 | 17 | `CNPC_VMingXiaoTentacle#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039b1d0` | CNPC_VMingXiaoTentacle::vfunc452 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1039b1d0` | CNPC_VMingXiaoTentacle::LoadedSchedules | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1039b230` | CNPC_VMingXiaoTentacle::vfunc546 | 29 | 0 | 3 | `CNPC_VMingXiaoTentacle#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1039c220` | CNPC_VMingXiaoTentacle::vfunc104 | 262 | 0 | 15 | `CNPC_VMingXiaoTentacle#104` | 0d/0v/11c | `+0x6664`, `+0x6668`, `+0x666c` | `+0x0024`, `+0x0350` | `character/monster/ming xiao/tentacle_flo…`, `character/monster/ming xiao/tentacle_hit…`, +6 more | — | — |  |
-| `0x1039c380` | CNPC_VMingXiaoTentacle::vfunc103 | 134 | 0 | 25 | `CNPC_VMingXiaoTentacle#103` | 0d/0v/0c | `+0x63d8`, `+0x6670`, `+0x6674`, `+0x6678`, `+0x667c`, `+0x6680`, +4 more | — | — | — | — |  |
+| `0x1039c220` | CNPC_VMingXiaoTentacle::Precache | 262 | 0 | 15 | `CNPC_VMingXiaoTentacle#104` | 0d/0v/11c | `+0x6664`, `+0x6668`, `+0x666c` | `+0x0024`, `+0x0350` | `character/monster/ming xiao/tentacle_flo…`, `character/monster/ming xiao/tentacle_hit…`, +6 more | — | — |  |
+| `0x1039c380` | CNPC_VMingXiaoTentacle::Spawn | 134 | 0 | 25 | `CNPC_VMingXiaoTentacle#103` | 0d/0v/0c | `+0x63d8`, `+0x6670`, `+0x6674`, `+0x6678`, `+0x667c`, `+0x6680`, +4 more | — | — | — | — |  |
 | `0x1039c440` | CNPC_VMingXiaoTentacle::vfunc473 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039c460` | CNPC_VMingXiaoTentacle::vfunc138 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1039c480` | CNPC_VMingXiaoTentacle::vfunc337 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1039c4c0` | CNPC_VMingXiaoTentacle::vfunc442 | 3486 | 0 | 27 | `CNPC_VMingXiaoTentacle#442` | 0d/0v/2c | `+0x1568`, `+0x156c`, `+0x1b44`, `+0x1b48`, `+0x63d8`, `+0x6670`, +3 more | `+0x0028`, `+0x003c`, `+0x01a4`, `+0x029c`, `+0x0350`, `+0x0364`, +12 more | `Ming_xiao_baby_death_emitter`, `Ming_xiao_baby_transform_emitter`, +4 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:821 | — |  |
-| `0x1039d750` | CNPC_VMingXiaoTentacle::vfunc444 | 1127 | 0 | 24 | `CNPC_VMingXiaoTentacle#444` | 0d/0v/2c | `+0x019c` | `+0x019c`, `+0x029c`, `+0x03ec`, `+0x0460`, `+0x0680`, `+0x0874`, +2 more | `F%02d` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:848 | — |  |
-| `0x1039de00` | CNPC_VMingXiaoTentacle::vfunc437 | 13 | 0 | 0 | `CNPC_VMingXiaoTentacle#437` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x1039de20` | CNPC_VMingXiaoTentacle::vfunc438 | 921 | 0 | 7 | `CNPC_VMingXiaoTentacle#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, `+0x6674` | `+0x0364`, `+0x0970`, `+0x5cc0`, `+0x6268`, `+0x6670`, `+0x6674`, +2 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
-| `0x1039e2d0` | CNPC_VMingXiaoTentacle::vfunc440 | 43 | 0 | 22 | `CNPC_VMingXiaoTentacle#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1039c460` | CNPC_VMingXiaoTentacle::Classify | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1039c480` | CNPC_VMingXiaoTentacle::GetUsedHullBits | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1039c4c0` | CNPC_VMingXiaoTentacle::StartTask | 3486 | 0 | 27 | `CNPC_VMingXiaoTentacle#442` | 0d/0v/2c | `+0x1568`, `+0x156c`, `+0x1b44`, `+0x1b48`, `+0x63d8`, `+0x6670`, +3 more | `+0x0028`, `+0x003c`, `+0x01a4`, `+0x029c`, `+0x0350`, `+0x0364`, +12 more | `Ming_xiao_baby_death_emitter`, `Ming_xiao_baby_transform_emitter`, +4 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:821 | — |  |
+| `0x1039d750` | CNPC_VMingXiaoTentacle::RunTask | 1127 | 0 | 24 | `CNPC_VMingXiaoTentacle#444` | 0d/0v/2c | `+0x019c` | `+0x019c`, `+0x029c`, `+0x03ec`, `+0x0460`, `+0x0680`, `+0x0874`, +2 more | `F%02d` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:848 | — |  |
+| `0x1039de00` | CNPC_VMingXiaoTentacle::PreSelectSchedule | 13 | 0 | 0 | `CNPC_VMingXiaoTentacle#437` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x1039de20` | CNPC_VMingXiaoTentacle::SelectSchedule | 921 | 0 | 7 | `CNPC_VMingXiaoTentacle#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, `+0x6674` | `+0x0364`, `+0x0970`, `+0x5cc0`, `+0x6268`, `+0x6670`, `+0x6674`, +2 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
+| `0x1039e2d0` | CNPC_VMingXiaoTentacle::TranslateSchedule | 43 | 0 | 22 | `CNPC_VMingXiaoTentacle#440` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1039e310` | CNPC_VMingXiaoTentacle::vfunc461 | 144 | 0 | 1 | `CNPC_VMingXiaoTentacle#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x029c`, `+0x5cc0`, `+0x5cc4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
 | `0x1039e3d0` | CNPC_VMingXiaoTentacle::RunAI | 820 | 0 | 26 | `CNPC_VMingXiaoTentacle#432` | 0d/0v/3c | `+0x1b44`, `+0x1b48`, `+0x667c`, `+0x6684`, `+0x6688`, `+0x6698` | `+0x026c`, `+0x029c`, `+0x0344`, `+0x0364`, `+0x0700`, `+0x5d34`, +5 more | `NULL ENTITY`, `Unaccounted`, +3 more | — | — |  |
-| `0x1039e7e0` | CNPC_VMingXiaoTentacle::vfunc434 | 1 | 0 | 0 | `CNPC_VMingXiaoTentacle#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1039e7e0` | CNPC_VMingXiaoTentacle::PrescheduleThink | 1 | 0 | 0 | `CNPC_VMingXiaoTentacle#434` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x1039e800` | CNPC_VMingXiaoTentacle::vfunc21 | 29 | 0 | 1 | `CNPC_VMingXiaoTentacle#21` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1039e830` | CNPC_VMingXiaoTentacle::vfunc22 | 29 | 0 | 1 | `CNPC_VMingXiaoTentacle#22` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1039e860` | CNPC_VMingXiaoTentacle::vfunc23 | 29 | 0 | 1 | `CNPC_VMingXiaoTentacle#23` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x1039e890` | CNPC_VMingXiaoTentacle::vfunc390 | 61 | 0 | 25 | `CNPC_VMingXiaoTentacle#390` | 0d/0v/0c | `+0x1b30`, `+0x1b34`, `+0x6680` | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
-| `0x1039e8e0` | CNPC_VMingXiaoTentacle::vfunc366 | 5 | 0 | 0 | `CNPC_VMingXiaoTentacle#366` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039e900` | CNPC_VMingXiaoTentacle::vfunc144 | 65 | 0 | 22 | `CNPC_VMingXiaoTentacle#144` | 0d/0v/3c | `+0x0200` | `+0x6699` | — | — | — |  |
+| `0x1039e8e0` | CNPC_VMingXiaoTentacle::HandleInteraction | 5 | 0 | 0 | `CNPC_VMingXiaoTentacle#366` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1039e900` | CNPC_VMingXiaoTentacle::Event_Killed | 65 | 0 | 22 | `CNPC_VMingXiaoTentacle#144` | 0d/0v/3c | `+0x0200` | `+0x6699` | — | — | — |  |
 | `0x1039e970` | FUN_1039e970 | 171 | 1 | 20 | — | 2d/0v/0c | `+0x18f6`?, `+0x6699`? | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | — | — |  |
 | `0x1039ea60` | FUN_1039ea60 | 16 | 1 | 21 | — | 2d/0v/0c | — | `+0x6699`? | — | — | — |  |
 | `0x1039ea80` | CNPC_VMingXiaoTentacle::vfunc599 | 26 | 0 | 0 | `CNPC_VMingXiaoTentacle#599` | 0d/0v/0c | `+0x6078` | — | — | — | — |  |
-| `0x1039eb30` | CNPC_VMingXiaoTentacle::vfunc70 | 3 | 0 | 0 | `CNPC_VMingXiaoTentacle#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039eb50` | CNPC_VMingXiaoTentacle::vfunc68 | 42 | 0 | 2 | `CNPC_VMingXiaoTentacle#68` | 0d/0v/0c | — | `+0x6688` | — | — | — |  |
-| `0x1039eb90` | CNPC_VMingXiaoTentacle::vfunc69 | 42 | 0 | 2 | `CNPC_VMingXiaoTentacle#69` | 0d/0v/0c | — | `+0x6688` | — | — | — |  |
+| `0x1039eb30` | CNPC_VMingXiaoTentacle::IsMonster | 3 | 0 | 0 | `CNPC_VMingXiaoTentacle#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1039eb50` | CNPC_VMingXiaoTentacle::ShouldIgnoreCollision | 42 | 0 | 2 | `CNPC_VMingXiaoTentacle#68` | 0d/0v/0c | — | `+0x6688` | — | — | — |  |
+| `0x1039eb90` | CNPC_VMingXiaoTentacle::NavIgnoreCollision | 42 | 0 | 2 | `CNPC_VMingXiaoTentacle#69` | 0d/0v/0c | — | `+0x6688` | — | — | — |  |
 | `0x1039ebd0` | CNPC_VMingXiaoTentacle::vfunc166 | 42 | 0 | 1 | `CNPC_VMingXiaoTentacle#166` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039ec10` | CNPC_VMingXiaoTentacle::vfunc433 | 148 | 0 | 25 | `CNPC_VMingXiaoTentacle#433` | 0d/0v/2c | — | `+0x029c`, `+0x6268`, `+0x6674`, `+0x6678` | — | — | — |  |
-| `0x1039ece0` | CNPC_VMingXiaoTentacle::vfunc408 | 50 | 0 | 2 | `CNPC_VMingXiaoTentacle#408` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x1039ed30` | CNPC_VMingXiaoTentacle::vfunc409 | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#409` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1039ed50` | CNPC_VMingXiaoTentacle::vfunc126 | 53 | 0 | 17 | `CNPC_VMingXiaoTentacle#126` | 0d/0v/0c | — | `+0x6674` | — | — | — |  |
+| `0x1039ec10` | CNPC_VMingXiaoTentacle::GatherConditions | 148 | 0 | 25 | `CNPC_VMingXiaoTentacle#433` | 0d/0v/2c | — | `+0x029c`, `+0x6268`, `+0x6674`, `+0x6678` | — | — | — |  |
+| `0x1039ece0` | CNPC_VMingXiaoTentacle::GetShortConditionName | 50 | 0 | 2 | `CNPC_VMingXiaoTentacle#408` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1039ed30` | CNPC_VMingXiaoTentacle::GetLastSharedCondition | 6 | 0 | 0 | `CNPC_VMingXiaoTentacle#409` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1039ed50` | CNPC_VMingXiaoTentacle::Save | 53 | 0 | 17 | `CNPC_VMingXiaoTentacle#126` | 0d/0v/0c | — | `+0x6674` | — | — | — |  |
 | `0x1039eda0` | CNPC_VMingXiaoTentacle::vfunc127 | 40 | 0 | 11 | `CNPC_VMingXiaoTentacle#127` | 0d/0v/0c | — | `+0x6674` | — | — | — |  |
 | `0x1039ede0` | FUN_1039ede0 | 45 | 1 | 0 | — | 9d/0v/0c | — | `+0x665c`? | — | — | — |  |
 | `0x1039ee20` | FUN_1039ee20 | 137 | 1 | 6 | — | 2d/0v/0c | — | — | — | — | — |  |
@@ -4186,13 +4186,13 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1039f1a0` | FUN_1039f1a0 | 287 | 1 | 4 | — | 1d/0v/0c | — | `+0x0378`? | — | — | — |  |
 | `0x1039f310` | FUN_1039f310 | 288 | 1 | 4 | — | 2d/0v/0c | — | `+0x0378`? | — | — | — |  |
 | `0x1039f600` | CNPC_VMoleman::vfunc580 | 6 | 0 | 0 | `CNPC_VMoleman#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x1039f620` | CNPC_VMoleman::vfunc451 | 6 | 0 | 0 | `CNPC_VMoleman#451` | 0d/0v/1c | — | — | `CNPC_VMoleman` | — | — |  |
+| `0x1039f620` | CNPC_VMoleman::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VMoleman#451` | 0d/0v/1c | — | — | `CNPC_VMoleman` | — | — |  |
 | `0x1039f640` | CNPC_VMoleman::vfunc5 | 30 | 0 | 17 | `CNPC_VMoleman#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039f740` | CNPC_VMoleman::vfunc452 | 6 | 0 | 0 | `CNPC_VMoleman#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x1039f740` | CNPC_VMoleman::LoadedSchedules | 6 | 0 | 0 | `CNPC_VMoleman#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x1039f7a0` | CNPC_VMoleman::vfunc546 | 29 | 0 | 3 | `CNPC_VMoleman#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1039fc90` | CNPC_VMoleman::vfunc103 | 21 | 0 | 26 | `CNPC_VMoleman#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x1039fcc0` | CNPC_VMoleman::vfunc138 | 6 | 0 | 0 | `CNPC_VMoleman#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x1039fd20` | CNPC_VMoleman::vfunc438 | 157 | 0 | 27 | `CNPC_VMoleman#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c` | `+0x14b8`, `+0x5cc0`, `+0x5d34`, `+0x62ec` | — | — | — |  |
+| `0x1039fc90` | CNPC_VMoleman::Spawn | 21 | 0 | 26 | `CNPC_VMoleman#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x1039fcc0` | CNPC_VMoleman::Classify | 6 | 0 | 0 | `CNPC_VMoleman#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x1039fd20` | CNPC_VMoleman::SelectSchedule | 157 | 0 | 27 | `CNPC_VMoleman#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c` | `+0x14b8`, `+0x5cc0`, `+0x5d34`, `+0x62ec` | — | — | — |  |
 | `0x1039fe10` | CNPC_VMoleman::vfunc461 | 15 | 0 | 24 | `CNPC_VMoleman#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x1039fe30` | CNPC_VMoleman::vfunc432 | 13 | 0 | 27 | `CNPC_VMoleman#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x1039fff0` | CNPC_VNewscaster::vfunc488 | 1 | 0 | 0 | `CNPC_VNewscaster#488` | 0d/0v/2c | — | — | — | — | — |  |
@@ -4205,22 +4205,22 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103a00d0` | CNPC_VNewscaster::vfunc495 | 1 | 0 | 0 | `CNPC_VNewscaster#495` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a00f0` | CNPC_VNewscaster::vfunc496 | 1 | 0 | 0 | `CNPC_VNewscaster#496` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0110` | CNPC_VNewscaster::vfunc497 | 1 | 0 | 0 | `CNPC_VNewscaster#497` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a0130` | CNPC_VNewscaster::vfunc363 | 5 | 0 | 0 | `CNPC_VNewscaster#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103a0130` | CNPC_VNewscaster::FInViewCone | 5 | 0 | 0 | `CNPC_VNewscaster#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103a0150` | CNPC_VNewscaster::vfunc362 | 5 | 0 | 0 | `CNPC_VNewscaster#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0170` | CNPC_VNewscaster::vfunc365 | 5 | 0 | 0 | `CNPC_VNewscaster#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0190` | CNPC_VNewscaster::vfunc364 | 5 | 0 | 0 | `CNPC_VNewscaster#364` | 0d/0v/5c | — | — | — | — | — |  |
-| `0x103a01b0` | CNPC_VNewscaster::vfunc404 | 8 | 0 | 0 | `CNPC_VNewscaster#404` | 0d/0v/22c | — | — | — | — | — |  |
+| `0x103a01b0` | CNPC_VNewscaster::IRelationType | 8 | 0 | 0 | `CNPC_VNewscaster#404` | 0d/0v/22c | — | — | — | — | — |  |
 | `0x103a01d0` | CNPC_VNewscaster::vfunc587 | 5 | 0 | 0 | `CNPC_VNewscaster#587` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a01f0` | CNPC_VNewscaster::vfunc473 | 3 | 0 | 0 | `CNPC_VNewscaster#473` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0210` | CNPC_VNewscaster::vfunc377 | 5 | 0 | 0 | `CNPC_VNewscaster#377` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0230` | CNPC_VNewscaster::vfunc378 | 5 | 0 | 0 | `CNPC_VNewscaster#378` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0250` | CNPC_VNewscaster::vfunc72 | 5 | 0 | 0 | `CNPC_VNewscaster#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a0270` | CNPC_VNewscaster::vfunc5 | 225 | 0 | 17 | `CNPC_VNewscaster#5` | 0d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c`, `+0x6670`, `+0x6674`, +2 more | `+0x665c`, `+0x6664`, `+0x6670`, `+0x6678` | — | — | — |  |
-| `0x103a03a0` | CNPC_VNewscaster::vfunc180 | 16 | 0 | 16 | `CNPC_VNewscaster#180` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a03e0` | CNPC_VNewscaster::vfunc104 | 47 | 0 | 15 | `CNPC_VNewscaster#104` | 0d/0v/11c | — | — | `sound/character/conversations/news/tv` | — | — |  |
-| `0x103a0420` | CNPC_VNewscaster::vfunc420 | 172 | 0 | 23 | `CNPC_VNewscaster#420` | 0d/0v/8c | `+0x5b84`, `+0x6338`, `+0x633c`, `+0x6348`, `+0x634c`, `+0x6350`, +5 more | `+0x5cdc` | — | — | — |  |
-| `0x103a0500` | CNPC_VNewscaster::vfunc138 | 6 | 0 | 0 | `CNPC_VNewscaster#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a05b0` | CNPC_VNewscaster::vfunc431 | 136 | 0 | 27 | `CNPC_VNewscaster#431` | 0d/0v/0c | `+0x624c`, `+0x6250`, `+0x625c`, `+0x6260` | — | — | — | docs/vtmb/npc-ai/lifecycle.md:180, docs/vtmb/npc-ai/lifecycle.md:189, docs/vtmb/npc-ai/lifecycle.md:190 |  |
+| `0x103a03a0` | CNPC_VNewscaster::UpdateOnRemove | 16 | 0 | 16 | `CNPC_VNewscaster#180` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a03e0` | CNPC_VNewscaster::Precache | 47 | 0 | 15 | `CNPC_VNewscaster#104` | 0d/0v/11c | — | — | `sound/character/conversations/news/tv` | — | — |  |
+| `0x103a0420` | CNPC_VNewscaster::NPCInit | 172 | 0 | 23 | `CNPC_VNewscaster#420` | 0d/0v/8c | `+0x5b84`, `+0x6338`, `+0x633c`, `+0x6348`, `+0x634c`, `+0x6350`, +5 more | `+0x5cdc` | — | — | — |  |
+| `0x103a0500` | CNPC_VNewscaster::Classify | 6 | 0 | 0 | `CNPC_VNewscaster#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a05b0` | CNPC_VNewscaster::NPCThink | 136 | 0 | 27 | `CNPC_VNewscaster#431` | 0d/0v/0c | `+0x624c`, `+0x6250`, `+0x625c`, `+0x6260` | — | — | — | docs/vtmb/npc-ai/lifecycle.md:180, docs/vtmb/npc-ai/lifecycle.md:189, docs/vtmb/npc-ai/lifecycle.md:190 |  |
 | `0x103a0670` | FUN_103a0670 | 302 | 1 | 11 | — | 1d/0v/0c | `+0x6684`?, `+0x6688`?, `+0x668c`? | `+0x665c`?, `+0x6668`?, `+0x6670`?, `+0x667c`?, `+0x6684`?, `+0x6688`?, +2 more | — | — | — |  |
 | `0x103a07f0` | FUN_103a07f0 ‼ | 549 | 3 | 5 | — | 1d/0v/0c | — | — | `filename`, `dependency`, +5 more | — | — |  |
 | `0x103a0ab0` | FUN_103a0ab0 | 525 | 2 | 10 | — | 1d/0v/0c | `+0x6668`?, `+0x666c`?, `+0x667c`?, `+0x6680`?, `+0x6690`? | `+0x665c`?, `+0x6660`?, `+0x6668`?, `+0x6670`?, `+0x6674`?, `+0x667c`? | `vdata\system\`, `%sNewscaster_Side.txt`, +1 more | — | — |  |
@@ -4230,59 +4230,59 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103a1250` | CNPC_VNewscaster::DrawDebugTextOverlays | 151 | 0 | 16 | `CNPC_VNewscaster#124` | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CNPC_VNewscaster::DrawDebugTextOverlays` | — | — |  |
 | `0x103a1320` | FUN_103a1320 | 106 | 3 | 0 | — | 1d/0v/0c | `+0x0004` | `+0x0004`, `+0x0008` | — | — | — |  |
 | `0x103a14a0` | CNPC_VNosferatu::vfunc580 | 6 | 0 | 0 | `CNPC_VNosferatu#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103a14c0` | CNPC_VNosferatu::vfunc451 | 6 | 0 | 0 | `CNPC_VNosferatu#451` | 0d/0v/1c | — | — | `CNPC_VNosferatu` | — | — |  |
+| `0x103a14c0` | CNPC_VNosferatu::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VNosferatu#451` | 0d/0v/1c | — | — | `CNPC_VNosferatu` | — | — |  |
 | `0x103a14e0` | CNPC_VNosferatu::vfunc5 | 30 | 0 | 17 | `CNPC_VNosferatu#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a15e0` | CNPC_VNosferatu::vfunc452 | 6 | 0 | 0 | `CNPC_VNosferatu#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103a15e0` | CNPC_VNosferatu::LoadedSchedules | 6 | 0 | 0 | `CNPC_VNosferatu#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a1640` | CNPC_VNosferatu::vfunc546 | 29 | 0 | 3 | `CNPC_VNosferatu#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a1b30` | CNPC_VNosferatu::vfunc138 | 6 | 0 | 0 | `CNPC_VNosferatu#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a1b30` | CNPC_VNosferatu::Classify | 6 | 0 | 0 | `CNPC_VNosferatu#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a1c20` | CNPC_VPedestrian::vfunc82 | 6 | 0 | 0 | `CNPC_VPedestrian#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a1de0` | CNPC_VPedestrian::vfunc550 | 7 | 0 | 0 | `CNPC_VPedestrian#550` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103a1e00` | CNPC_VPedestrian::vfunc580 | 6 | 0 | 0 | `CNPC_VPedestrian#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103a1e20` | CNPC_VPedestrian::vfunc451 | 6 | 0 | 0 | `CNPC_VPedestrian#451` | 0d/0v/1c | — | — | `CNPC_VPedestrian` | — | — |  |
+| `0x103a1e20` | CNPC_VPedestrian::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VPedestrian#451` | 0d/0v/1c | — | — | `CNPC_VPedestrian` | — | — |  |
 | `0x103a1e40` | CNPC_VPedestrian::vfunc5 | 30 | 0 | 17 | `CNPC_VPedestrian#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a1f40` | CNPC_VPedestrian::vfunc452 | 6 | 0 | 0 | `CNPC_VPedestrian#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103a1f40` | CNPC_VPedestrian::LoadedSchedules | 6 | 0 | 0 | `CNPC_VPedestrian#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a1fa0` | CNPC_VPedestrian::vfunc546 | 29 | 0 | 3 | `CNPC_VPedestrian#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a2540` | CNPC_VPedestrian::vfunc103 | 21 | 0 | 26 | `CNPC_VPedestrian#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a2570` | CNPC_VPedestrian::vfunc420 | 24 | 0 | 23 | `CNPC_VPedestrian#420` | 0d/1v/8c | `+0x641c`, `+0x6678` | — | — | — | — |  |
+| `0x103a2540` | CNPC_VPedestrian::Spawn | 21 | 0 | 26 | `CNPC_VPedestrian#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103a2570` | CNPC_VPedestrian::NPCInit | 24 | 0 | 23 | `CNPC_VPedestrian#420` | 0d/1v/8c | `+0x641c`, `+0x6678` | — | — | — | — |  |
 | `0x103a25a0` | CNPC_VPedestrian::vfunc130 | 670 | 0 | 24 | `CNPC_VPedestrian#130` | 0d/0v/0c | — | `+0x0100`, `+0x0174`, `+0x026c`, `+0x0270`, `+0x0278`, `+0x02b4`, +7 more | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +1 more | — | — |  |
 | `0x103a28f0` | CNPC_VPedestrian::vfunc473 | 6 | 0 | 0 | `CNPC_VPedestrian#473` | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 | docs/vtmb/npc-ai/senses.md:300 |  |
-| `0x103a2910` | CNPC_VPedestrian::vfunc138 | 6 | 0 | 0 | `CNPC_VPedestrian#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a2930` | CNPC_VPedestrian::vfunc404 | 58 | 0 | 15 | `CNPC_VPedestrian#404` | 0d/0v/22c | — | — | — | — | — |  |
-| `0x103a2980` | CNPC_VPedestrian::vfunc453 | 30 | 0 | 3 | `CNPC_VPedestrian#453` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a29f0` | CNPC_VPedestrian::vfunc438 | 430 | 0 | 27 | `CNPC_VPedestrian#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x623c`, `+0x6678` | `+0x0370`, `+0x14b8`, `+0x5cc0`, `+0x60d0`, `+0x60d4`, `+0x60d8`, +1 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — | docs/vtmb/npc-ai/senses.md:385 |  |
-| `0x103a2c30` | CNPC_VPedestrian::vfunc433 | 399 | 0 | 25 | `CNPC_VPedestrian#433` | 0d/0v/2c | — | `+0x5b78`, `+0x6160`, `+0x618c`, `+0x634c` | — | — | — |  |
+| `0x103a2910` | CNPC_VPedestrian::Classify | 6 | 0 | 0 | `CNPC_VPedestrian#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a2930` | CNPC_VPedestrian::IRelationType | 58 | 0 | 15 | `CNPC_VPedestrian#404` | 0d/0v/22c | — | — | — | — | — |  |
+| `0x103a2980` | CNPC_VPedestrian::BuildScheduleTestBits | 30 | 0 | 3 | `CNPC_VPedestrian#453` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a29f0` | CNPC_VPedestrian::SelectSchedule | 430 | 0 | 27 | `CNPC_VPedestrian#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x623c`, `+0x6678` | `+0x0370`, `+0x14b8`, `+0x5cc0`, `+0x60d0`, `+0x60d4`, `+0x60d8`, +1 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — | docs/vtmb/npc-ai/senses.md:385 |  |
+| `0x103a2c30` | CNPC_VPedestrian::GatherConditions | 399 | 0 | 25 | `CNPC_VPedestrian#433` | 0d/0v/2c | — | `+0x5b78`, `+0x6160`, `+0x618c`, `+0x634c` | — | — | — |  |
 | `0x103a2e30` | CNPC_VPedestrian::vfunc461 | 1679 | 0 | 24 | `CNPC_VPedestrian#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x0370`, `+0x0950`, `+0x5b78`, `+0x5b7c`, `+0x5cc0`, `+0x6160`, +5 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — | — |  |
 | `0x103a3670` | CNPC_VPedestrian::vfunc432 | 257 | 0 | 27 | `CNPC_VPedestrian#432` | 0d/0v/3c | `+0x641c` | `+0x0370`, `+0x0374`, `+0x14b8`, `+0x641c` | — | — | — |  |
 | `0x103a3850` | CNPC_VPedestrian::vfunc27 | 72 | 0 | 21 | `CNPC_VPedestrian#27` | 0d/0v/0c | `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x0950` | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | — | — |  |
-| `0x103a38c0` | CNPC_VPedestrian::vfunc301 | 220 | 0 | 15 | `CNPC_VPedestrian#301` | 0d/0v/0c | — | `+0x026c`, `+0x0270`, `+0x6660`, `+0x666c` | `CBaseEntity::SetSolid` | — | — |  |
+| `0x103a38c0` | CNPC_VPedestrian::CreateCorpse | 220 | 0 | 15 | `CNPC_VPedestrian#301` | 0d/0v/0c | — | `+0x026c`, `+0x0270`, `+0x6660`, `+0x666c` | `CBaseEntity::SetSolid` | — | — |  |
 | `0x103a3a90` | CNPC_VPlaceholder::vfunc82 | 6 | 0 | 0 | `CNPC_VPlaceholder#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a3bf0` | CNPC_VPlaceholder::vfunc452 | 6 | 0 | 0 | `CNPC_VPlaceholder#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103a3bf0` | CNPC_VPlaceholder::LoadedSchedules | 6 | 0 | 0 | `CNPC_VPlaceholder#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a3c50` | CNPC_VPlaceholder::vfunc546 | 29 | 0 | 3 | `CNPC_VPlaceholder#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a4100` | CNPC_VPlaceholder::vfunc378 | 5 | 0 | 0 | `CNPC_VPlaceholder#378` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a4120` | CNPC_VPlaceholder::vfunc138 | 3 | 0 | 0 | `CNPC_VPlaceholder#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a4120` | CNPC_VPlaceholder::Classify | 3 | 0 | 0 | `CNPC_VPlaceholder#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a4140` | CNPC_VPlaceholder::vfunc316 | 3 | 0 | 0 | `CNPC_VPlaceholder#316` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a4160` | CNPC_VPlaceholder::vfunc317 | 5 | 0 | 0 | `CNPC_VPlaceholder#317` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a4180` | CNPC_VPlaceholder::vfunc318 | 5 | 0 | 0 | `CNPC_VPlaceholder#318` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a41a0` | CNPC_VPlaceholder::vfunc319 | 5 | 0 | 0 | `CNPC_VPlaceholder#319` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a41c0` | CNPC_VPlaceholder::vfunc320 | 5 | 0 | 0 | `CNPC_VPlaceholder#320` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103a41e0` | CNPC_VPlaceholder::vfunc590 | 3 | 0 | 0 | `CNPC_VPlaceholder#590` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a4180` | CNPC_VPlaceholder::PlayerDefenderBlockReaction | 5 | 0 | 0 | `CNPC_VPlaceholder#318` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103a41a0` | CNPC_VPlaceholder::PlayerAttackerBlockedReaction | 5 | 0 | 0 | `CNPC_VPlaceholder#319` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103a41c0` | CNPC_VPlaceholder::PlayerKnockbackReaction | 5 | 0 | 0 | `CNPC_VPlaceholder#320` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103a41e0` | CNPC_VPlaceholder::OkToInterruptForMelee | 3 | 0 | 0 | `CNPC_VPlaceholder#590` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a4200` | CNPC_VPlaceholder::vfunc330 | 3 | 0 | 0 | `CNPC_VPlaceholder#330` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a4220` | CNPC_VPlaceholder::vfunc587 | 5 | 0 | 0 | `CNPC_VPlaceholder#587` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a4240` | CNPC_VPlaceholder::vfunc72 | 5 | 0 | 0 | `CNPC_VPlaceholder#72` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a4260` | CNPC_VPlaceholder::vfunc363 | 5 | 0 | 0 | `CNPC_VPlaceholder#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103a4260` | CNPC_VPlaceholder::FInViewCone | 5 | 0 | 0 | `CNPC_VPlaceholder#363` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103a4280` | CNPC_VPlaceholder::vfunc362 | 5 | 0 | 0 | `CNPC_VPlaceholder#362` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a42a0` | CNPC_VPlaceholder::vfunc365 | 5 | 0 | 0 | `CNPC_VPlaceholder#365` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a42c0` | CNPC_VPlaceholder::vfunc364 | 5 | 0 | 0 | `CNPC_VPlaceholder#364` | 0d/0v/5c | — | — | — | — | — |  |
 | `0x103a42e0` | CNPC_VPlaceholder::vfunc580 | 6 | 0 | 0 | `CNPC_VPlaceholder#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103a4300` | CNPC_VPlaceholder::vfunc451 | 6 | 0 | 0 | `CNPC_VPlaceholder#451` | 0d/0v/1c | — | — | `CNPC_VPlaceholder` | — | — |  |
+| `0x103a4300` | CNPC_VPlaceholder::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VPlaceholder#451` | 0d/0v/1c | — | — | `CNPC_VPlaceholder` | — | — |  |
 | `0x103a4320` | CNPC_VPlaceholder::vfunc5 | 30 | 0 | 17 | `CNPC_VPlaceholder#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a4350` | CNPC_VPlaceholder::vfunc420 | 40 | 0 | 23 | `CNPC_VPlaceholder#420` | 0d/0v/8c | `+0x1480`, `+0x62ec` | — | — | — | — |  |
-| `0x103a43f0` | CNPC_VPlaceholder::vfunc437 | 16 | 0 | 0 | `CNPC_VPlaceholder#437` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x103a4410` | CNPC_VPlaceholder::vfunc438 | 16 | 0 | 0 | `CNPC_VPlaceholder#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x103a4510` | CNPC_VPlayerController::vfunc103 | 69 | 0 | 27 | `CNPC_VPlayerController#103`, `CNPC_VWolfMorph#103` | 1d/0v/0c | — | — | `playercontroller` | — | — |  |
-| `0x103a4580` | CNPC_VPlayerController::vfunc420 | 230 | 0 | 23 | `CNPC_VPlayerController#420` | 2d/0v/8c | `+0x5b84`, `+0x60ac`, `+0x6338`, `+0x633c`, `+0x6348`, `+0x634c`, +6 more | `+0x0184`, `+0x0680`, `+0x5cdc` | — | — | — |  |
-| `0x103a46b0` | CNPC_VFrenzyShadow::FUN_103a46b0 | 50 | 0 | 26 | `CNPC_VFrenzyShadow#437`, `CNPC_VPlayerController#437`, `CNPC_VWolfMorph#437` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x5cc0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VPlayer…` | — | — |  |
-| `0x103a4700` | CNPC_VWolfMorph::FUN_103a4700 ‼ | 19 | 0 | 27 | `CNPC_VPlayerController#431`, `CNPC_VWolfMorph#431` | 1d/0v/0c | — | `+0x0998` | — | — | docs/vtmb/npc-ai/lifecycle.md:203 |  |
+| `0x103a4350` | CNPC_VPlaceholder::NPCInit | 40 | 0 | 23 | `CNPC_VPlaceholder#420` | 0d/0v/8c | `+0x1480`, `+0x62ec` | — | — | — | — |  |
+| `0x103a43f0` | CNPC_VPlaceholder::PreSelectSchedule | 16 | 0 | 0 | `CNPC_VPlaceholder#437` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x103a4410` | CNPC_VPlaceholder::SelectSchedule | 16 | 0 | 0 | `CNPC_VPlaceholder#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x103a4510` | CNPC_VPlayerController::Spawn | 69 | 0 | 27 | `CNPC_VPlayerController#103`, `CNPC_VWolfMorph#103` | 1d/0v/0c | — | — | `playercontroller` | — | — |  |
+| `0x103a4580` | CNPC_VPlayerController::NPCInit | 230 | 0 | 23 | `CNPC_VPlayerController#420` | 2d/0v/8c | `+0x5b84`, `+0x60ac`, `+0x6338`, `+0x633c`, `+0x6348`, `+0x634c`, +6 more | `+0x0184`, `+0x0680`, `+0x5cdc` | — | — | — |  |
+| `0x103a46b0` | CNPC_VPlayerController::PreSelectSchedule | 50 | 0 | 26 | `CNPC_VFrenzyShadow#437`, `CNPC_VPlayerController#437`, `CNPC_VWolfMorph#437` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34` | `+0x5cc0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VPlayer…` | — | — |  |
+| `0x103a4700` | CNPC_VPlayerController::NPCThink ‼ | 19 | 0 | 27 | `CNPC_VPlayerController#431`, `CNPC_VWolfMorph#431` | 1d/0v/0c | — | `+0x0998` | — | — | docs/vtmb/npc-ai/lifecycle.md:203 |  |
 | `0x103a4730` | CNPC_VFrenzyShadow::FUN_103a4730 | 1 | 0 | 0 | `CNPC_VFrenzyShadow#488`, `CNPC_VPlayerController#488`, `CNPC_VWolfMorph#488` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a4750` | CNPC_VFrenzyShadow::FUN_103a4750 | 1 | 0 | 0 | `CNPC_VFrenzyShadow#489`, `CNPC_VPlayerController#489`, `CNPC_VWolfMorph#489` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a4770` | CNPC_VFrenzyShadow::FUN_103a4770 | 1 | 0 | 0 | `CNPC_VFrenzyShadow#490`, `CNPC_VPlayerController#490`, `CNPC_VWolfMorph#490` | 0d/0v/3c | — | — | — | — | — |  |
@@ -4294,27 +4294,27 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103a4830` | CNPC_VFrenzyShadow::FUN_103a4830 | 1 | 0 | 0 | `CNPC_VFrenzyShadow#496`, `CNPC_VPlayerController#496`, `CNPC_VWolfMorph#496` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a4850` | CNPC_VFrenzyShadow::FUN_103a4850 | 1 | 0 | 0 | `CNPC_VFrenzyShadow#497`, `CNPC_VPlayerController#497`, `CNPC_VWolfMorph#497` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a4870` | CNPC_VFrenzyShadow::FUN_103a4870 | 13 | 0 | 27 | `CNPC_VFrenzyShadow#432`, `CNPC_VPlayerController#432`, `CNPC_VWolfMorph#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103a4890` | CNPC_VPlayerController::vfunc138 | 6 | 0 | 0 | `CNPC_VPlayerController#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a48b0` | CNPC_VFrenzyShadow::FUN_103a48b0 | 116 | 0 | 1 | `CNPC_VFrenzyShadow#404`, `CNPC_VPlayerController#404`, `CNPC_VWolfMorph#404` | 0d/0v/22c | — | `+0x60ac` | — | — | — |  |
-| `0x103a4950` | CNPC_VFrenzyShadow::FUN_103a4950 | 76 | 0 | 9 | `CNPC_VFrenzyShadow#300`, `CNPC_VPlayerController#300`, `CNPC_VWolfMorph#300` | 0d/0v/0c | — | `+0x0184` | `UNKNOWN`, `CNPC_VPlayerController::Event_TookLife %…` | — | — |  |
-| `0x103a49c0` | CNPC_VFrenzyShadow::FUN_103a49c0 | 113 | 0 | 1 | `CNPC_VFrenzyShadow#245`, `CNPC_VPlayerController#245`, `CNPC_VWolfMorph#245` | 0d/0v/0c | — | `+0x0184` | `Player Controller NPC adding extra anima…` | — | — |  |
-| `0x103a4a60` | CNPC_VFrenzyShadow::FUN_103a4a60 ‼ | 56 | 0 | 1 | `CNPC_VFrenzyShadow#246`, `CNPC_VPlayerController#246`, `CNPC_VWolfMorph#246` | 0d/0v/0c | — | `+0x0184` | `Player Controller NPC removing extra ani…` | — | — |  |
-| `0x103a4bb0` | CNPC_ProneDialog::vfunc45 | 306 | 0 | 0 | `CNPC_ProneDialog#45` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103a4890` | CNPC_VPlayerController::Classify | 6 | 0 | 0 | `CNPC_VPlayerController#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103a48b0` | CNPC_VPlayerController::IRelationType | 116 | 0 | 1 | `CNPC_VFrenzyShadow#404`, `CNPC_VPlayerController#404`, `CNPC_VWolfMorph#404` | 0d/0v/22c | — | `+0x60ac` | — | — | — |  |
+| `0x103a4950` | CNPC_VPlayerController::Event_TookLife | 76 | 0 | 9 | `CNPC_VFrenzyShadow#300`, `CNPC_VPlayerController#300`, `CNPC_VWolfMorph#300` | 0d/0v/0c | — | `+0x0184` | `UNKNOWN`, `CNPC_VPlayerController::Event_TookLife %…` | — | — |  |
+| `0x103a49c0` | CNPC_VPlayerController::AddExtraAnimationModels | 113 | 0 | 1 | `CNPC_VFrenzyShadow#245`, `CNPC_VPlayerController#245`, `CNPC_VWolfMorph#245` | 0d/0v/0c | — | `+0x0184` | `Player Controller NPC adding extra anima…` | — | — |  |
+| `0x103a4a60` | CNPC_VPlayerController::RemoveExtraAnimationModels ‼ | 56 | 0 | 1 | `CNPC_VFrenzyShadow#246`, `CNPC_VPlayerController#246`, `CNPC_VWolfMorph#246` | 0d/0v/0c | — | `+0x0184` | `Player Controller NPC removing extra ani…` | — | — |  |
+| `0x103a4bb0` | CNPC_ProneDialog::PassesFindEntityFOVTrace | 306 | 0 | 0 | `CNPC_ProneDialog#45` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a4d40` | CNPC_ProneDialog::vfunc5 | 30 | 0 | 17 | `CNPC_ProneDialog#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a4f60` | CNPC_VSabbatGunman::vfunc82 | 6 | 0 | 0 | `CNPC_VSabbatGunman#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a50a0` | CNPC_VSabbatGunman::vfunc580 | 6 | 0 | 0 | `CNPC_VSabbatGunman#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103a50c0` | CNPC_VSabbatGunman::vfunc451 | 6 | 0 | 0 | `CNPC_VSabbatGunman#451` | 0d/0v/1c | — | — | `CNPC_VSabbatGunman` | — | — |  |
+| `0x103a50c0` | CNPC_VSabbatGunman::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VSabbatGunman#451` | 0d/0v/1c | — | — | `CNPC_VSabbatGunman` | — | — |  |
 | `0x103a50e0` | CNPC_VSabbatGunman::vfunc5 | 30 | 0 | 17 | `CNPC_VSabbatGunman#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a51e0` | CNPC_VSabbatGunman::vfunc452 | 6 | 0 | 0 | `CNPC_VSabbatGunman#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103a51e0` | CNPC_VSabbatGunman::LoadedSchedules | 6 | 0 | 0 | `CNPC_VSabbatGunman#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a5240` | CNPC_VSabbatGunman::vfunc546 | 29 | 0 | 3 | `CNPC_VSabbatGunman#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103a5650` | CNPC_VSabbatGunman::vfunc442 | 97 | 0 | 28 | `CNPC_VSabbatGunman#442` | 0d/0v/2c | `+0x6330` | `+0x6330` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:822 | — |  |
-| `0x103a56f0` | CNPC_VSabbatGunman::vfunc465 | 160 | 0 | 1 | `CNPC_VSabbatGunman#465` | 0d/0v/2c | `+0x1484` | `+0x0654` | — | — | docs/vtmb/animation_and_movers.md:1695 |  |
+| `0x103a5650` | CNPC_VSabbatGunman::StartTask | 97 | 0 | 28 | `CNPC_VSabbatGunman#442` | 0d/0v/2c | `+0x6330` | `+0x6330` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:822 | — |  |
+| `0x103a56f0` | CNPC_VSabbatGunman::OnChangeActivity | 160 | 0 | 1 | `CNPC_VSabbatGunman#465` | 0d/0v/2c | `+0x1484` | `+0x0654` | — | — | docs/vtmb/animation_and_movers.md:1695 |  |
 | `0x103a5b50` | CNPC_VSabbatLeader::vfunc82 | 6 | 0 | 0 | `CNPC_VSabbatLeader#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103a5c80` | CNPC_VSabbatLeader::vfunc70 | 3 | 0 | 0 | `CNPC_VSabbatLeader#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103a5c80` | CNPC_VSabbatLeader::IsMonster | 3 | 0 | 0 | `CNPC_VSabbatLeader#70` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103a5ca0` | CNPC_VSabbatLeader::vfunc580 | 6 | 0 | 0 | `CNPC_VSabbatLeader#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103a5cc0` | CNPC_VSabbatLeader::vfunc451 | 6 | 0 | 0 | `CNPC_VSabbatLeader#451` | 0d/0v/1c | — | — | `CNPC_VSabbatLeader` | — | — |  |
+| `0x103a5cc0` | CNPC_VSabbatLeader::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VSabbatLeader#451` | 0d/0v/1c | — | — | `CNPC_VSabbatLeader` | — | — |  |
 | `0x103a5ce0` | CNPC_VSabbatLeader::vfunc5 | 43 | 0 | 17 | `CNPC_VSabbatLeader#5` | 0d/0v/0c | — | `+0x6664` | — | — | — |  |
-| `0x103a5df0` | CNPC_VSabbatLeader::vfunc452 | 6 | 0 | 0 | `CNPC_VSabbatLeader#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103a5df0` | CNPC_VSabbatLeader::LoadedSchedules | 6 | 0 | 0 | `CNPC_VSabbatLeader#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103a5e50` | CNPC_VSabbatLeader::vfunc546 | 29 | 0 | 3 | `CNPC_VSabbatLeader#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103a6ab0` | CNPC_VSabbatLeader::Precache | 355 | 0 | 15 | `CNPC_VSabbatLeader#104` | 0d/0v/11c | — | — | `character/monster/andrei_transformed/exe…`, `character/monster/andrei_transformed/exe…`, +15 more | — | — |  |
 | `0x103a6c80` | CNPC_VSabbatLeader::Spawn | 129 | 0 | 27 | `CNPC_VSabbatLeader#103` | 0d/0v/0c | `+0x10e4` | — | `VampireSabbatLeader`, `CNPC_VSabbatLeader::Spawn` | — | — |  |
@@ -4343,7 +4343,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103a9e70` | CNPC_VSabbatLeader::PlayerInNoJumpZone | 261 | 1 | 3 | — | 1d/0v/0c | — | `+0x0364`, `+0x628c` | `CNPC_VSabbatLeader::PlayerInNoJumpZone` | — | — |  |
 | `0x103aa3b0` | CNPC_VSabbatLeader::StartTransformation | 146 | 1 | 20 | — | 1d/0v/0c | `+0x1b30`, `+0x1b34`, `+0x66b8` | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VSabbat…`, `CNPC_VSabbatLeader::StartTransformation` | — | — |  |
 | `0x103aa480` | CNPC_VSabbatLeader::OnTakeDamage_Alive | 101 | 0 | 25 | `CNPC_VSabbatLeader#390` | 0d/0v/0c | — | — | `CNPC_VSabbatLeader::OnTakeDamage_Alive` | — | — |  |
-| `0x103aa510` | CNPC_VSabbatLeader::PreSelectSchedule | 150 | 0 | 26 | `CNPC_VSabbatLeader#437` | 0d/0v/0c | `+0x1b2c`, `+0x5cc0`, `+0x5cc4` | `+0x029c`, `+0x5cc0` | `CNPC_VSabbatLeader::PreSelectSchedule` | — | — |  |
+| `0x103aa510` | CNPC_VSabbatLeader::PreSelectSchedule | 150 | 0 | 26 | `CNPC_VSabbatLeader#437` | 0d/0v/0c | `+0x1b2c`, `+0x5cc0`, `+0x5cc4` | `+0x029c`, `+0x5cc0` | `CNPC_VSabbatLeader::PreSelectSchedule` | — | docs/vtmb/npc-ai/conditions-and-states.md:66 |  |
 | `0x103aa960` | CNPC_VSabbatLeader::UpdateBloodSplash | 212 | 1 | 10 | — | 1d/0v/0c | `+0x66c4`, `+0x66c8` | `+0x03e0`, `+0x66c4`, `+0x66c8`, `+0x66d5` | `bloodsplash_emitter`, `bloodbigsplash_emitter`, +1 more | — | — |  |
 | `0x103aaa80` | CNPC_VSabbatLeader::RecordPlayerHealth | 255 | 1 | 11 | — | 2d/0v/0c | `+0x66cc` | `+0x628c` | `CNPC_VSabbatLeader::RecordPlayerHealth` | — | — |  |
 | `0x103aabc0` | CNPC_VSabbatLeader::PlayerDamagedEnoughThisRound | 301 | 2 | 11 | — | 1d/0v/0c | — | `+0x628c`, `+0x66cc` | `CNPC_VSabbatLeader::PlayerDamagedEnoughT…` | — | — |  |
@@ -4356,17 +4356,17 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103ab580` | CNPC_VSabbatLeader::CheckStuck | 864 | 1 | 1 | — | 1d/0v/0c | — | `+0x0270`, `+0x0360`, `+0x0364`, `+0x628c` | `CNPC_VSabbatLeader::CheckStuck` | — | — |  |
 | `0x103aba70` | CNPC_VScurrying::FUN_103aba70 | 6 | 0 | 0 | `CNPC_VRat#82`, `CNPC_VScurrying#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103abba0` | CNPC_VScurrying::FUN_103abba0 | 6 | 0 | 0 | `CNPC_VRat#580`, `CNPC_VScurrying#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103abbc0` | CNPC_VScurrying::FUN_103abbc0 | 6 | 0 | 0 | `CNPC_VRat#451`, `CNPC_VScurrying#451` | 0d/0v/1c | — | — | `CNPC_VScurrying` | — | — |  |
+| `0x103abbc0` | CNPC_VScurrying::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VRat#451`, `CNPC_VScurrying#451` | 0d/0v/1c | — | — | `CNPC_VScurrying` | — | — |  |
 | `0x103abbe0` | CNPC_VScurrying::vfunc5 | 30 | 0 | 17 | `CNPC_VScurrying#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103abce0` | CNPC_VScurrying::FUN_103abce0 | 6 | 0 | 0 | `CNPC_VRat#452`, `CNPC_VScurrying#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103abce0` | CNPC_VScurrying::LoadedSchedules | 6 | 0 | 0 | `CNPC_VRat#452`, `CNPC_VScurrying#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103abd40` | CNPC_VScurrying::FUN_103abd40 | 29 | 0 | 3 | `CNPC_VRat#546`, `CNPC_VScurrying#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103ac430` | CNPC_VScurrying::vfunc103 | 41 | 0 | 26 | `CNPC_VScurrying#103` | 1d/0v/0c | `+0x5b84`, `+0x668c` | `+0x5b84` | — | — | docs/vtmb/npc-ai/senses.md:353 |  |
-| `0x103ac470` | CNPC_VScurrying::vfunc138 | 6 | 0 | 0 | `CNPC_VScurrying#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103ac490` | CNPC_VScurrying::FUN_103ac490 | 54 | 0 | 22 | `CNPC_VRat#440`, `CNPC_VScurrying#440` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x103ac4e0` | CNPC_VScurrying::FUN_103ac4e0 | 11 | 0 | 3 | `CNPC_VRat#337`, `CNPC_VScurrying#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103ac500` | CNPC_VScurrying::FUN_103ac500 | 203 | 0 | 25 | `CNPC_VRat#433`, `CNPC_VScurrying#433` | 0d/0v/2c | `+0x667c` | `+0x6678`, `+0x667c` | — | — | — |  |
-| `0x103ac610` | CNPC_VScurrying::FUN_103ac610 | 238 | 0 | 27 | `CNPC_VRat#438`, `CNPC_VScurrying#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x6680`, `+0x6684`, `+0x6688`, +1 more | `+0x618c`, `+0x668c`, `+0x669c` | `E:\Vampire\main\dlls\hl2_dll\NPC_VScurry…` | — | — |  |
-| `0x103ac740` | CNPC_VScurrying::FUN_103ac740 | 635 | 0 | 28 | `CNPC_VRat#442`, `CNPC_VScurrying#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48` | `+0x04d8`, `+0x0700`, `+0x5d34`, `+0x667c`, `+0x6680`, `+0x6684`, +4 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VScurry…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:824 | — |  |
+| `0x103ac430` | CNPC_VScurrying::Spawn | 41 | 0 | 26 | `CNPC_VScurrying#103` | 1d/0v/0c | `+0x5b84`, `+0x668c` | `+0x5b84` | — | — | docs/vtmb/npc-ai/senses.md:353 |  |
+| `0x103ac470` | CNPC_VScurrying::Classify | 6 | 0 | 0 | `CNPC_VScurrying#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103ac490` | CNPC_VScurrying::TranslateSchedule | 54 | 0 | 22 | `CNPC_VRat#440`, `CNPC_VScurrying#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103ac4e0` | CNPC_VScurrying::GetUsedHullBits | 11 | 0 | 3 | `CNPC_VRat#337`, `CNPC_VScurrying#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103ac500` | CNPC_VScurrying::GatherConditions | 203 | 0 | 25 | `CNPC_VRat#433`, `CNPC_VScurrying#433` | 0d/0v/2c | `+0x667c` | `+0x6678`, `+0x667c` | — | — | — |  |
+| `0x103ac610` | CNPC_VScurrying::SelectSchedule | 238 | 0 | 27 | `CNPC_VRat#438`, `CNPC_VScurrying#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x6680`, `+0x6684`, `+0x6688`, +1 more | `+0x618c`, `+0x668c`, `+0x669c` | `E:\Vampire\main\dlls\hl2_dll\NPC_VScurry…` | — | — |  |
+| `0x103ac740` | CNPC_VScurrying::StartTask | 635 | 0 | 28 | `CNPC_VRat#442`, `CNPC_VScurrying#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48` | `+0x04d8`, `+0x0700`, `+0x5d34`, `+0x667c`, `+0x6680`, `+0x6684`, +4 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VScurry…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:824 | — |  |
 | `0x103aca60` | CNPC_VScurrying::FUN_103aca60 | 7 | 0 | 0 | `CNPC_VRat#471`, `CNPC_VScurrying#471` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103aca80` | FUN_103aca80 | 33 | 1 | 14 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x103acac0` | FUN_103acac0 | 161 | 1 | 13 | — | 2d/0v/0c | — | `+0x0364`, `+0x6690`, `+0x6694`, `+0x6695` | — | — | — |  |
@@ -4374,28 +4374,28 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103ad0a0` | FUN_103ad0a0 | 53 | 2 | 2 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x103ad0f0` | FUN_103ad0f0 | 59 | 2 | 12 | — | 1d/0v/0c | — | — | `Player_Nosferatu` | — | — |  |
 | `0x103ad540` | FUN_103ad540 | 32 | 1 | 1 | — | 1d/0v/0c | `+0x0010` | — | — | — | — |  |
-| `0x103ad630` | CNPC_VRat::vfunc103 | 25 | 0 | 27 | `CNPC_VRat#103` | 0d/0v/0c | `+0x10e4` | — | — | — | — |  |
-| `0x103ad660` | CNPC_VRat::vfunc138 | 6 | 0 | 0 | `CNPC_VRat#138` | 0d/0v/1c | — | — | — | — | docs/vtmb/stealth.md:762 |  |
-| `0x103ad680` | CNPC_VRat::vfunc294 | 5 | 0 | 0 | `CNPC_VRat#294` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ad630` | CNPC_VRat::Spawn | 25 | 0 | 27 | `CNPC_VRat#103` | 0d/0v/0c | `+0x10e4` | — | — | — | — |  |
+| `0x103ad660` | CNPC_VRat::Classify | 6 | 0 | 0 | `CNPC_VRat#138` | 0d/0v/1c | — | — | — | — | docs/vtmb/stealth.md:762 |  |
+| `0x103ad680` | CNPC_VRat::IsValidStealthKillTarget | 5 | 0 | 0 | `CNPC_VRat#294` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103ad6a0` | CNPC_VRat::vfunc428 | 31 | 0 | 5 | `CNPC_VRat#428` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103ad6d0` | CNPC_VRat::vfunc68 | 34 | 0 | 2 | `CNPC_VRat#68` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ad7b0` | CNPC_VRat::vfunc295 | 5 | 0 | 0 | `CNPC_VRat#295` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103ad7d0` | CNPC_VRat::vfunc333 | 3 | 0 | 0 | `CNPC_VRat#333` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ad7f0` | CNPC_VRat::vfunc370 | 20 | 0 | 4 | `CNPC_VRat#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
-| `0x103ad820` | CNPC_VRat::vfunc371 | 20 | 0 | 3 | `CNPC_VRat#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
+| `0x103ad6d0` | CNPC_VRat::ShouldIgnoreCollision | 34 | 0 | 2 | `CNPC_VRat#68` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ad7b0` | CNPC_VRat::CanTalk | 5 | 0 | 0 | `CNPC_VRat#295` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103ad7d0` | CNPC_VRat::MaintainEyeDirection | 3 | 0 | 0 | `CNPC_VRat#333` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ad7f0` | CNPC_VRat::HeadDirection2D | 20 | 0 | 4 | `CNPC_VRat#370` | 0d/0v/1c | — | `+0x05c0` | — | — | — |  |
+| `0x103ad820` | CNPC_VRat::HeadDirection3D | 20 | 0 | 3 | `CNPC_VRat#371` | 0d/0v/4c | — | `+0x05c4` | — | — | — |  |
 | `0x103ad850` | CNPC_VRat::vfunc316 | 3 | 0 | 0 | `CNPC_VRat#316` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103ad870` | CNPC_VRat::vfunc317 | 5 | 0 | 0 | `CNPC_VRat#317` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ad890` | CNPC_VRat::vfunc318 | 5 | 0 | 0 | `CNPC_VRat#318` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ad8b0` | CNPC_VRat::vfunc319 | 5 | 0 | 0 | `CNPC_VRat#319` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ad8d0` | CNPC_VRat::vfunc320 | 5 | 0 | 0 | `CNPC_VRat#320` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103ad8f0` | CNPC_VRat::vfunc590 | 3 | 0 | 0 | `CNPC_VRat#590` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103ad890` | CNPC_VRat::PlayerDefenderBlockReaction | 5 | 0 | 0 | `CNPC_VRat#318` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ad8b0` | CNPC_VRat::PlayerAttackerBlockedReaction | 5 | 0 | 0 | `CNPC_VRat#319` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ad8d0` | CNPC_VRat::PlayerKnockbackReaction | 5 | 0 | 0 | `CNPC_VRat#320` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103ad8f0` | CNPC_VRat::OkToInterruptForMelee | 3 | 0 | 0 | `CNPC_VRat#590` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103ad910` | CNPC_VRat::vfunc330 | 3 | 0 | 0 | `CNPC_VRat#330` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103ad930` | CNPC_VRat::vfunc5 | 30 | 0 | 17 | `CNPC_VRat#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103adaa0` | CNPC_VSheriffMan::vfunc82 | 6 | 0 | 0 | `CNPC_VSheriffMan#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103adc50` | CNPC_VSheriffMan::vfunc452 | 6 | 0 | 0 | `CNPC_VSheriffMan#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103adc50` | CNPC_VSheriffMan::LoadedSchedules | 6 | 0 | 0 | `CNPC_VSheriffMan#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103adcb0` | CNPC_VSheriffMan::vfunc546 | 29 | 0 | 3 | `CNPC_VSheriffMan#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103ae4b0` | CNPC_VSheriffMan::vfunc580 | 6 | 0 | 0 | `CNPC_VSheriffMan#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103ae4d0` | CNPC_VSheriffMan::vfunc451 | 6 | 0 | 0 | `CNPC_VSheriffMan#451` | 0d/0v/1c | — | — | `CNPC_VSheriffMan` | — | — |  |
+| `0x103ae4d0` | CNPC_VSheriffMan::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VSheriffMan#451` | 0d/0v/1c | — | — | `CNPC_VSheriffMan` | — | — |  |
 | `0x103ae4f0` | CNPC_VSheriffMan::vfunc5 | 54 | 0 | 17 | `CNPC_VSheriffMan#5` | 0d/0v/0c | — | `+0x6664`, `+0x66b8` | — | — | — |  |
 | `0x103ae540` | CNPC_VSheriffMan::Precache | 178 | 0 | 15 | `CNPC_VSheriffMan#104` | 0d/0v/11c | — | — | `sheriff_teleport_emitter`, `item_w_sheriff_sword`, +3 more | — | — |  |
 | `0x103ae630` | CNPC_VSheriffMan::Spawn | 109 | 0 | 27 | `CNPC_VSheriffMan#103` | 0d/0v/0c | — | — | `CNPC_VSheriffMan::Spawn` | — | — |  |
@@ -4408,7 +4408,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103aebd0` | CNPC_VSheriffMan::RunAI | 121 | 0 | 27 | `CNPC_VSheriffMan#432` | 0d/0v/3c | — | `+0x66e7` | `CNPC_VSheriffMan::RunAI` | — | — |  |
 | `0x103aec70` | CNPC_VSheriffMan::StartTask | 2170 | 0 | 29 | `CNPC_VSheriffMan#442` | 0d/0v/2c | `+0x019c`, `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x5ddc`, `+0x66e4` | `+0x00f8`, `+0x0108`, `+0x010c`, `+0x019c`, `+0x026c`, `+0x0270`, +7 more | `CBaseEntity::AddSolidFlags`, `UTIL_TraceHull`, +6 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:825 | — |  |
 | `0x103af780` | CNPC_VSheriffMan::RunTask | 108 | 0 | 26 | `CNPC_VSheriffMan#444` | 0d/0v/2c | — | — | `CNPC_VSheriffMan::RunTask` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:850 | — |  |
-| `0x103af810` | CNPC_VSheriffMan::vfunc566 | 5 | 0 | 0 | `CNPC_VSheriffMan#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x103af810` | CNPC_VSheriffMan::FValidateHintType | 5 | 0 | 0 | `CNPC_VSheriffMan#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x103af830` | CNPC_VSheriffMan::NPCThink | 114 | 0 | 28 | `CNPC_VSheriffMan#431` | 0d/0v/0c | `+0x017c` | — | `CNPC_VSheriffMan::NPCThink` | — | — |  |
 | `0x103b0290` | CNPC_VSheriffMan::TaskFail | 100 | 0 | 11 | `CNPC_VSheriffMan#448` | 0d/1v/43c | — | — | `CNPC_VSheriffMan::TaskFail` | — | — |  |
 | `0x103b0320` | CNPC_VSheriffMan::TranslateSchedule | 101 | 0 | 22 | `CNPC_VSheriffMan#440` | 0d/0v/2c | — | — | `CNPC_VSheriffMan::TranslateSchedule` | — | — |  |
@@ -4424,51 +4424,51 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103b1680` | CNPC_VSheriffMan::CategorizeHeights | 206 | 1 | 1 | — | 1d/0v/0c | — | `+0x0364`, `+0x628c` | `CNPC_VSheriffMan::CategorizeHeights` | — | — |  |
 | `0x103b1790` | CNPC_VSheriffMan::CategorizeHeight | 156 | 2 | 0 | — | 1d/0v/0c | — | `+0x66e8`, `+0x66ec` | `CNPC_VSheriffMan::CategorizeHeight` | — | — |  |
 | `0x103b1c20` | CNPC_VSheriffSwarm::vfunc580 | 6 | 0 | 0 | `CNPC_VSheriffSwarm#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b1c40` | CNPC_VSheriffSwarm::vfunc451 | 6 | 0 | 0 | `CNPC_VSheriffSwarm#451` | 0d/0v/1c | — | — | `CNPC_VSheriffSwarm` | — | — |  |
+| `0x103b1c40` | CNPC_VSheriffSwarm::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VSheriffSwarm#451` | 0d/0v/1c | — | — | `CNPC_VSheriffSwarm` | — | — |  |
 | `0x103b1c60` | CNPC_VSheriffSwarm::vfunc5 | 30 | 0 | 17 | `CNPC_VSheriffSwarm#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b1d60` | CNPC_VSheriffSwarm::vfunc452 | 6 | 0 | 0 | `CNPC_VSheriffSwarm#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b1d60` | CNPC_VSheriffSwarm::LoadedSchedules | 6 | 0 | 0 | `CNPC_VSheriffSwarm#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b1dc0` | CNPC_VSheriffSwarm::vfunc546 | 29 | 0 | 3 | `CNPC_VSheriffSwarm#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b2280` | CNPC_VSheriffSwarm::vfunc82 | 6 | 0 | 0 | `CNPC_VSheriffSwarm#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b2330` | CNPC_VSheriffSwarm::vfunc103 | 21 | 0 | 27 | `CNPC_VSheriffSwarm#103` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b2360` | CNPC_VSheriffSwarm::vfunc420 | 20 | 0 | 23 | `CNPC_VSheriffSwarm#420` | 0d/0v/8c | `+0x5de4` | — | — | — | — |  |
+| `0x103b2330` | CNPC_VSheriffSwarm::Spawn | 21 | 0 | 27 | `CNPC_VSheriffSwarm#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b2360` | CNPC_VSheriffSwarm::NPCInit | 20 | 0 | 23 | `CNPC_VSheriffSwarm#420` | 0d/0v/8c | `+0x5de4` | — | — | — | — |  |
 | `0x103b2390` | CNPC_VSheriffSwarm::vfunc473 | 6 | 0 | 0 | `CNPC_VSheriffSwarm#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b23b0` | CNPC_VSheriffSwarm::vfunc138 | 6 | 0 | 0 | `CNPC_VSheriffSwarm#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b2410` | CNPC_VSheriffSwarm::vfunc438 | 15 | 0 | 27 | `CNPC_VSheriffSwarm#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x103b23b0` | CNPC_VSheriffSwarm::Classify | 6 | 0 | 0 | `CNPC_VSheriffSwarm#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b2410` | CNPC_VSheriffSwarm::SelectSchedule | 15 | 0 | 27 | `CNPC_VSheriffSwarm#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
 | `0x103b2450` | CNPC_VSheriffSwarm::vfunc461 | 15 | 0 | 24 | `CNPC_VSheriffSwarm#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x103b2470` | CNPC_VSheriffSwarm::vfunc432 | 13 | 0 | 27 | `CNPC_VSheriffSwarm#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103b2530` | CNPC_VSheriffSwarm::vfunc561 | 13 | 0 | 5 | `CNPC_VSheriffSwarm#561` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b2530` | CNPC_VSheriffSwarm::GatherAttackConditions | 13 | 0 | 5 | `CNPC_VSheriffSwarm#561` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b2590` | CNPC_VSheriffSwarm::vfunc553 | 21 | 0 | 1 | `CNPC_VSheriffSwarm#553` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b25c0` | CNPC_VSheriffSwarm::vfunc554 | 21 | 0 | 1 | `CNPC_VSheriffSwarm#554` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b2770` | CNPC_VStalker::vfunc82 | 6 | 0 | 0 | `CNPC_VStalker#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b28b0` | CNPC_VStalker::vfunc580 | 6 | 0 | 0 | `CNPC_VStalker#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b28d0` | CNPC_VStalker::vfunc451 | 6 | 0 | 0 | `CNPC_VStalker#451` | 0d/0v/1c | — | — | `CNPC_VStalker` | — | — |  |
+| `0x103b28d0` | CNPC_VStalker::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VStalker#451` | 0d/0v/1c | — | — | `CNPC_VStalker` | — | — |  |
 | `0x103b28f0` | CNPC_VStalker::vfunc5 | 30 | 0 | 17 | `CNPC_VStalker#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b29f0` | CNPC_VStalker::vfunc452 | 6 | 0 | 0 | `CNPC_VStalker#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b29f0` | CNPC_VStalker::LoadedSchedules | 6 | 0 | 0 | `CNPC_VStalker#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b2a50` | CNPC_VStalker::vfunc546 | 29 | 0 | 3 | `CNPC_VStalker#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b2e60` | CNPC_VStalker::vfunc375 | 29 | 0 | 0 | `CNPC_VStalker#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:103, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:292 | docs/vtmb/animation_and_movers.md:1586 |  |
+| `0x103b2e60` | CNPC_VStalker::NPC_EarlyTranslateActivity | 29 | 0 | 0 | `CNPC_VStalker#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:103, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:292 | docs/vtmb/animation_and_movers.md:1586 |  |
 | `0x103b2f50` | CNPC_VTaxiDriver::vfunc72 | 5 | 0 | 0 | `CNPC_VTaxiDriver#72` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b2f70` | CNPC_VTaxiDriver::vfunc580 | 6 | 0 | 0 | `CNPC_VTaxiDriver#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b2f90` | CNPC_VTaxiDriver::vfunc451 | 6 | 0 | 0 | `CNPC_VTaxiDriver#451` | 0d/0v/1c | — | — | `CNPC_VTaxiDriver` | — | — |  |
+| `0x103b2f90` | CNPC_VTaxiDriver::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VTaxiDriver#451` | 0d/0v/1c | — | — | `CNPC_VTaxiDriver` | — | — |  |
 | `0x103b2fb0` | CNPC_VTaxiDriver::vfunc82 | 6 | 0 | 0 | `CNPC_VTaxiDriver#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b3110` | CNPC_VTaxiDriver::vfunc452 | 6 | 0 | 0 | `CNPC_VTaxiDriver#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b3110` | CNPC_VTaxiDriver::LoadedSchedules | 6 | 0 | 0 | `CNPC_VTaxiDriver#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b3170` | CNPC_VTaxiDriver::vfunc546 | 29 | 0 | 3 | `CNPC_VTaxiDriver#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b35c0` | CNPC_VTaxiDriver::vfunc420 | 69 | 0 | 23 | `CNPC_VTaxiDriver#420` | 0d/0v/8c | `+0x1b3c`, `+0x1b40`, `+0x5cc4`, `+0x6660` | `+0x5cdc` | `E:\Vampire\main\dlls\hl2_dll\NPC_VTaxiDr…` | — | — |  |
-| `0x103b3630` | CNPC_VTaxiDriver::vfunc138 | 6 | 0 | 0 | `CNPC_VTaxiDriver#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b35c0` | CNPC_VTaxiDriver::NPCInit | 69 | 0 | 23 | `CNPC_VTaxiDriver#420` | 0d/0v/8c | `+0x1b3c`, `+0x1b40`, `+0x5cc4`, `+0x6660` | `+0x5cdc` | `E:\Vampire\main\dlls\hl2_dll\NPC_VTaxiDr…` | — | — |  |
+| `0x103b3630` | CNPC_VTaxiDriver::Classify | 6 | 0 | 0 | `CNPC_VTaxiDriver#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b3650` | CNPC_VTaxiDriver::vfunc432 | 13 | 0 | 27 | `CNPC_VTaxiDriver#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103b3670` | CNPC_VTaxiDriver::vfunc438 | 15 | 0 | 27 | `CNPC_VTaxiDriver#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
-| `0x103b36d0` | CNPC_VTaxiDriver::vfunc442 | 101 | 0 | 28 | `CNPC_VTaxiDriver#442` | 0d/0v/2c | — | `+0x04d8` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:826 | — |  |
-| `0x103b38a0` | CNPC_VTaxiDriver::vfunc444 | 80 | 0 | 25 | `CNPC_VTaxiDriver#444` | 0d/0v/2c | `+0x6660` | `+0x04d8` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:851 | — |  |
-| `0x103b3910` | CNPC_VTaxiDriver::vfunc142 | 5 | 0 | 0 | `CNPC_VTaxiDriver#142` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b3670` | CNPC_VTaxiDriver::SelectSchedule | 15 | 0 | 27 | `CNPC_VTaxiDriver#438` | 0d/0v/0c | `+0x1b2c` | — | — | — | — |  |
+| `0x103b36d0` | CNPC_VTaxiDriver::StartTask | 101 | 0 | 28 | `CNPC_VTaxiDriver#442` | 0d/0v/2c | — | `+0x04d8` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:826 | — |  |
+| `0x103b38a0` | CNPC_VTaxiDriver::RunTask | 80 | 0 | 25 | `CNPC_VTaxiDriver#444` | 0d/0v/2c | `+0x6660` | `+0x04d8` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:851 | — |  |
+| `0x103b3910` | CNPC_VTaxiDriver::OnTakeDamage | 5 | 0 | 0 | `CNPC_VTaxiDriver#142` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b3930` | CNPC_VTaxiDriver::vfunc390 | 5 | 0 | 0 | `CNPC_VTaxiDriver#390` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b3950` | CNPC_VTaxiDriver::vfunc144 | 3 | 0 | 0 | `CNPC_VTaxiDriver#144` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103b3950` | CNPC_VTaxiDriver::Event_Killed | 3 | 0 | 0 | `CNPC_VTaxiDriver#144` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103b3970` | CNPC_VTaxiDriver::vfunc5 | 30 | 0 | 17 | `CNPC_VTaxiDriver#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b3b20` | CNPC_VTest::vfunc580 | 6 | 0 | 0 | `CNPC_VTest#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b3b40` | CNPC_VTest::vfunc451 | 6 | 0 | 0 | `CNPC_VTest#451` | 0d/0v/1c | — | — | `CNPC_VTest` | — | — |  |
+| `0x103b3b40` | CNPC_VTest::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VTest#451` | 0d/0v/1c | — | — | `CNPC_VTest` | — | — |  |
 | `0x103b3b60` | CNPC_VTest::vfunc5 | 30 | 0 | 17 | `CNPC_VTest#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b3c60` | CNPC_VTest::vfunc452 | 6 | 0 | 0 | `CNPC_VTest#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b3c60` | CNPC_VTest::LoadedSchedules | 6 | 0 | 0 | `CNPC_VTest#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b3cc0` | CNPC_VTest::vfunc546 | 29 | 0 | 3 | `CNPC_VTest#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b41e0` | CNPC_VTest::vfunc104 | 194 | 0 | 15 | `CNPC_VTest#104` | 0d/0v/11c | — | — | `character/npc/test/knockout1.wav`, `character/npc/test/surprise1.wav`, +8 more | — | — |  |
-| `0x103b42f0` | CNPC_VTest::vfunc103 | 21 | 0 | 27 | `CNPC_VTest#103` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b41e0` | CNPC_VTest::Precache | 194 | 0 | 15 | `CNPC_VTest#104` | 0d/0v/11c | — | — | `character/npc/test/knockout1.wav`, `character/npc/test/surprise1.wav`, +8 more | — | — |  |
+| `0x103b42f0` | CNPC_VTest::Spawn | 21 | 0 | 27 | `CNPC_VTest#103` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b4320` | CNPC_VTest::vfunc488 | 287 | 0 | 4 | `CNPC_VTest#488` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x103b4490` | CNPC_VTest::vfunc489 | 287 | 0 | 4 | `CNPC_VTest#489` | 0d/0v/2c | — | `+0x0378` | — | — | — |  |
 | `0x103b4600` | CNPC_VTest::vfunc490 | 303 | 0 | 4 | `CNPC_VTest#490` | 0d/0v/3c | — | `+0x0378`, `+0x0798` | — | — | — |  |
@@ -4478,42 +4478,42 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103b4bd0` | CNPC_VTest::vfunc494 | 287 | 0 | 4 | `CNPC_VTest#494` | 0d/0v/1c | — | `+0x0378` | — | — | — |  |
 | `0x103b4d40` | CNPC_VTest::vfunc495 | 287 | 0 | 4 | `CNPC_VTest#495` | 0d/0v/1c | — | `+0x0378` | — | — | — |  |
 | `0x103b4eb0` | CNPC_VTest::vfunc473 | 6 | 0 | 0 | `CNPC_VTest#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b4ed0` | CNPC_VTest::vfunc138 | 6 | 0 | 0 | `CNPC_VTest#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b4f30` | CNPC_VTest::vfunc438 | 119 | 0 | 27 | `CNPC_VTest#438` | 0d/0v/0c | `+0x1b2c` | `+0x5cc0` | — | — | — |  |
+| `0x103b4ed0` | CNPC_VTest::Classify | 6 | 0 | 0 | `CNPC_VTest#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b4f30` | CNPC_VTest::SelectSchedule | 119 | 0 | 27 | `CNPC_VTest#438` | 0d/0v/0c | `+0x1b2c` | `+0x5cc0` | — | — | — |  |
 | `0x103b4ff0` | CNPC_VTest::vfunc461 | 329 | 0 | 24 | `CNPC_VTest#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x5cc0`, `+0x5cc4` | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VTest.c…` | — | — |  |
 | `0x103b51a0` | CNPC_VTest::vfunc432 | 13 | 0 | 27 | `CNPC_VTest#432` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103b5330` | CNPC_VToreador::vfunc580 | 6 | 0 | 0 | `CNPC_VToreador#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b5350` | CNPC_VToreador::vfunc451 | 6 | 0 | 0 | `CNPC_VToreador#451` | 0d/0v/1c | — | — | `CNPC_VToreador` | — | — |  |
+| `0x103b5350` | CNPC_VToreador::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VToreador#451` | 0d/0v/1c | — | — | `CNPC_VToreador` | — | — |  |
 | `0x103b5370` | CNPC_VToreador::vfunc5 | 30 | 0 | 17 | `CNPC_VToreador#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b5470` | CNPC_VToreador::vfunc452 | 6 | 0 | 0 | `CNPC_VToreador#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b5470` | CNPC_VToreador::LoadedSchedules | 6 | 0 | 0 | `CNPC_VToreador#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b54d0` | CNPC_VToreador::vfunc546 | 29 | 0 | 3 | `CNPC_VToreador#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b59c0` | CNPC_VToreador::vfunc138 | 6 | 0 | 0 | `CNPC_VToreador#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b59c0` | CNPC_VToreador::Classify | 6 | 0 | 0 | `CNPC_VToreador#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b5ad0` | CNPC_VTremere::vfunc580 | 6 | 0 | 0 | `CNPC_VTremere#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b5af0` | CNPC_VTremere::vfunc451 | 6 | 0 | 0 | `CNPC_VTremere#451` | 0d/0v/1c | — | — | `CNPC_VTremere` | — | — |  |
+| `0x103b5af0` | CNPC_VTremere::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VTremere#451` | 0d/0v/1c | — | — | `CNPC_VTremere` | — | — |  |
 | `0x103b5b10` | CNPC_VTremere::vfunc5 | 30 | 0 | 17 | `CNPC_VTremere#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b5c10` | CNPC_VTremere::vfunc452 | 6 | 0 | 0 | `CNPC_VTremere#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b5c10` | CNPC_VTremere::LoadedSchedules | 6 | 0 | 0 | `CNPC_VTremere#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b5c70` | CNPC_VTremere::vfunc546 | 29 | 0 | 3 | `CNPC_VTremere#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b6160` | CNPC_VTremere::vfunc138 | 6 | 0 | 0 | `CNPC_VTremere#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b6160` | CNPC_VTremere::Classify | 6 | 0 | 0 | `CNPC_VTremere#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b6b60` | CNPC_VTzimisce::vfunc82 | 6 | 0 | 0 | `CNPC_VTzimisce#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b6d90` | CNPC_VTzimisce::vfunc325 | 3 | 0 | 0 | `CNPC_VTzimisce#325` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b6db0` | CNPC_VTzimisce::vfunc324 | 3 | 0 | 0 | `CNPC_VTzimisce#324` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b6dd0` | CNPC_VTzimisce::vfunc522 | 7 | 0 | 0 | `CNPC_VTzimisce#522` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103b6df0` | CNPC_VTzimisce::vfunc523 | 7 | 0 | 0 | `CNPC_VTzimisce#523` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b6e10` | CNPC_VTzimisce::vfunc244 | 3 | 0 | 0 | `CNPC_VTzimisce#244` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b6dd0` | CNPC_VTzimisce::StepHeight | 7 | 0 | 0 | `CNPC_VTzimisce#522` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103b6df0` | CNPC_VTzimisce::GetMaxJumpSpeed | 7 | 0 | 0 | `CNPC_VTzimisce#523` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b6e10` | CNPC_VTzimisce::GetSkeletonModelName | 3 | 0 | 0 | `CNPC_VTzimisce#244` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b6e30` | CNPC_VTzimisce::vfunc550 | 7 | 0 | 0 | `CNPC_VTzimisce#550` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103b6e50` | CNPC_VTzimisce::vfunc580 | 6 | 0 | 0 | `CNPC_VTzimisce#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103b6e70` | CNPC_VTzimisce::vfunc451 | 6 | 0 | 0 | `CNPC_VTzimisce#451` | 0d/0v/1c | — | — | `CNPC_VTzimisce` | — | — |  |
+| `0x103b6e70` | CNPC_VTzimisce::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VTzimisce#451` | 0d/0v/1c | — | — | `CNPC_VTzimisce` | — | — |  |
 | `0x103b6e90` | CNPC_VTzimisce::vfunc5 | 225 | 0 | 17 | `CNPC_VTzimisce#5` | 0d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c`, `+0x6690`, `+0x6694`, +2 more | `+0x665c`, `+0x6664`, `+0x6690`, `+0x6698` | — | — | — |  |
-| `0x103b7090` | CNPC_VTzimisce::vfunc452 | 6 | 0 | 0 | `CNPC_VTzimisce#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103b7090` | CNPC_VTzimisce::LoadedSchedules | 6 | 0 | 0 | `CNPC_VTzimisce#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103b70f0` | CNPC_VTzimisce::vfunc546 | 29 | 0 | 3 | `CNPC_VTzimisce#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103b8fa0` | CNPC_VTzimisce::vfunc104 | 84 | 0 | 15 | `CNPC_VTzimisce#104` | 0d/0v/11c | — | — | `character/monster/spiderchick/spi_attack…`, `character/monster/spiderchick/spi_attack…`, +3 more | — | docs/vtmb/footsteps.md:902 |  |
-| `0x103b9020` | CNPC_VTzimisce::vfunc70 | 3 | 0 | 0 | `CNPC_VTzimisce#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b9040` | CNPC_VTzimisce::vfunc431 | 16 | 0 | 27 | `CNPC_VTzimisce#431` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103b9060` | CNPC_VTzimisce::vfunc103 | 132 | 0 | 25 | `CNPC_VTzimisce#103` | 0d/0v/0c | `+0x1574`, `+0x6078` | `+0x1074` | — | Source/ElysiumUE/Private/Visual/ElysiumEyePass.cpp:151 | docs/vtmb/facial_animation.md:638 |  |
+| `0x103b8fa0` | CNPC_VTzimisce::Precache | 84 | 0 | 15 | `CNPC_VTzimisce#104` | 0d/0v/11c | — | — | `character/monster/spiderchick/spi_attack…`, `character/monster/spiderchick/spi_attack…`, +3 more | — | docs/vtmb/footsteps.md:902 |  |
+| `0x103b9020` | CNPC_VTzimisce::IsMonster | 3 | 0 | 0 | `CNPC_VTzimisce#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b9040` | CNPC_VTzimisce::NPCThink | 16 | 0 | 27 | `CNPC_VTzimisce#431` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103b9060` | CNPC_VTzimisce::Spawn | 132 | 0 | 25 | `CNPC_VTzimisce#103` | 0d/0v/0c | `+0x1574`, `+0x6078` | `+0x1074` | — | Source/ElysiumUE/Private/Visual/ElysiumEyePass.cpp:151 | docs/vtmb/facial_animation.md:638 |  |
 | `0x103b9120` | CNPC_VTzimisce::vfunc418 | 45 | 0 | 3 | `CNPC_VTzimisce#418` | 0d/1v/6c | — | — | — | — | — |  |
-| `0x103b9160` | CNPC_VTzimisce::vfunc337 | 9 | 0 | 3 | `CNPC_VTzimisce#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103b9160` | CNPC_VTzimisce::GetUsedHullBits | 9 | 0 | 3 | `CNPC_VTzimisce#337` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103b9180` | CNPC_VTzimisce::vfunc593 | 54 | 0 | 1 | `CNPC_VTzimisce#593` | 0d/0v/2c | `+0x655c`, `+0x6560`, `+0x6564`, `+0x6568`, `+0x656c` | — | — | — | — |  |
-| `0x103b91d0` | CNPC_VTzimisce::vfunc420 | 113 | 0 | 23 | `CNPC_VTzimisce#420` | 0d/0v/8c | `+0x6670`, `+0x6689`, `+0x668c`, `+0x66ac`, `+0x66b0`, `+0x66b8`, +1 more | — | — | — | — |  |
+| `0x103b91d0` | CNPC_VTzimisce::NPCInit | 113 | 0 | 23 | `CNPC_VTzimisce#420` | 0d/0v/8c | `+0x6670`, `+0x6689`, `+0x668c`, `+0x66ac`, `+0x66b0`, `+0x66b8`, +1 more | — | — | — | — |  |
 | `0x103b9270` | CNPC_VTzimisce::vfunc422 | 26 | 0 | 22 | `CNPC_VTzimisce#422` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103b92a0` | CNPC_VTzimisce::vfunc488 ‼ | 143 | 0 | 5 | `CNPC_VTzimisce#488` | 0d/0v/2c | — | `+0x02e0`, `+0x079c` | `SPI_DIES` | — | — |  |
 | `0x103b9360` | CNPC_VTzimisce::vfunc489 | 1 | 0 | 0 | `CNPC_VTzimisce#489` | 0d/0v/2c | — | — | — | — | — |  |
@@ -4530,34 +4530,34 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103b9f50` | FUN_103b9f50 | 45 | 1 | 7 | — | 2d/0v/0c | `+0x10b4` | — | — | — | — |  |
 | `0x103b9f90` | FUN_103b9f90 | 74 | 1 | 6 | — | 2d/0v/0c +3 outside | — | — | — | — | — |  |
 | `0x103ba000` | CNPC_VTzimisce::vfunc473 | 6 | 0 | 0 | `CNPC_VTzimisce#473` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ba020` | CNPC_VTzimisce::vfunc516 | 143 | 0 | 1 | `CNPC_VTzimisce#516` | 0d/0v/0c | — | `+0x03c8`, `+0x0fec`, `+0x5d8c` | — | — | — |  |
-| `0x103ba230` | CNPC_VTzimisce::vfunc138 | 6 | 0 | 0 | `CNPC_VTzimisce#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103ba020` | CNPC_VTzimisce::MaxYawSpeed | 143 | 0 | 1 | `CNPC_VTzimisce#516` | 0d/0v/0c | — | `+0x03c8`, `+0x0fec`, `+0x5d8c` | — | — | — |  |
+| `0x103ba230` | CNPC_VTzimisce::Classify | 6 | 0 | 0 | `CNPC_VTzimisce#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103ba250` | CNPC_VTzimisce::vfunc533 | 33 | 0 | 0 | `CNPC_VTzimisce#533` | 0d/0v/3c | — | `+0x5d60` | — | — | — |  |
-| `0x103ba290` | CNPC_VTzimisce::vfunc201 | 30 | 0 | 16 | `CNPC_VTzimisce#201` | 0d/0v/7c | — | — | — | — | — |  |
-| `0x103ba2c0` | CNPC_VTzimisce::vfunc463 | 72 | 0 | 9 | `CNPC_VTzimisce#463` | 0d/0v/1c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1549 | docs/vtmb/npc-ai/rebuild.md:269 |  |
-| `0x103ba350` | CNPC_VTzimisce::vfunc448 | 130 | 0 | 11 | `CNPC_VTzimisce#448` | 0d/2v/43c | `+0x5d8c`, `+0x6670`, `+0x66b8` | `+0x5cc0`, `+0x5d8c`, `+0x6670` | — | — | — |  |
-| `0x103ba410` | CNPC_VTzimisce::vfunc259 | 415 | 0 | 26 | `CNPC_VTzimisce#259` | 0d/0v/0c | — | `+0x029c`, `+0x0370`, `+0x07a8`, `+0x09a8`, `+0x09ac`, `+0x09b0`, +9 more | — | — | docs/vtmb/animation_and_movers.md:2193 |  |
-| `0x103ba640` | CNPC_VTzimisce::vfunc563 | 249 | 0 | 5 | `CNPC_VTzimisce#563` | 0d/0v/5c | — | `+0x0370`, `+0x0654`, `+0x6320` | — | — | — |  |
-| `0x103ba780` | CNPC_VTzimisce::vfunc566 | 38 | 0 | 0 | `CNPC_VTzimisce#566` | 0d/0v/4c | — | — | — | — | — |  |
-| `0x103ba7c0` | CNPC_VTzimisce::vfunc442 | 1759 | 0 | 27 | `CNPC_VTzimisce#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, +3 more | `+0x029c`, `+0x02a0`, `+0x03ec`, `+0x05dc`, `+0x05e0`, `+0x05f4`, +12 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:827 | — |  |
-| `0x103bb1e0` | CNPC_VTzimisce::vfunc444 | 1069 | 0 | 24 | `CNPC_VTzimisce#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48` | `+0x029c`, `+0x02a0`, `+0x03ec`, `+0x05dc`, `+0x05e0`, `+0x05f4`, +9 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:852 | — |  |
-| `0x103bb7c0` | CNPC_VTzimisce::vfunc438 | 2620 | 0 | 26 | `CNPC_VTzimisce#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, `+0x623c`, +3 more | `+0x029c`, `+0x02a0`, `+0x0874`, `+0x09cc`, `+0x14b8`, `+0x5c38`, +3 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | docs/vtmb/npc-ai/senses.md:386 |  |
+| `0x103ba290` | CNPC_VTzimisce::FVisible | 30 | 0 | 16 | `CNPC_VTzimisce#201` | 0d/0v/7c | — | — | — | — | — |  |
+| `0x103ba2c0` | CNPC_VTzimisce::OnStateChange | 72 | 0 | 9 | `CNPC_VTzimisce#463` | 0d/0v/1c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1549 | docs/vtmb/npc-ai/rebuild.md:269 |  |
+| `0x103ba350` | CNPC_VTzimisce::TaskFail | 130 | 0 | 11 | `CNPC_VTzimisce#448` | 0d/2v/43c | `+0x5d8c`, `+0x6670`, `+0x66b8` | `+0x5cc0`, `+0x5d8c`, `+0x6670` | — | — | — |  |
+| `0x103ba410` | CNPC_VTzimisce::HandleAnimEvent | 415 | 0 | 26 | `CNPC_VTzimisce#259` | 0d/0v/0c | — | `+0x029c`, `+0x0370`, `+0x07a8`, `+0x09a8`, `+0x09ac`, `+0x09b0`, +9 more | — | — | docs/vtmb/animation_and_movers.md:2193 |  |
+| `0x103ba640` | CNPC_VTzimisce::TranslateEnemyChasePosition | 249 | 0 | 5 | `CNPC_VTzimisce#563` | 0d/0v/5c | — | `+0x0370`, `+0x0654`, `+0x6320` | — | — | — |  |
+| `0x103ba780` | CNPC_VTzimisce::FValidateHintType | 38 | 0 | 0 | `CNPC_VTzimisce#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x103ba7c0` | CNPC_VTzimisce::StartTask | 1759 | 0 | 27 | `CNPC_VTzimisce#442` | 0d/0v/2c | `+0x1b44`, `+0x1b48`, `+0x5d9c`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, +3 more | `+0x029c`, `+0x02a0`, `+0x03ec`, `+0x05dc`, `+0x05e0`, `+0x05f4`, +12 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:827 | — |  |
+| `0x103bb1e0` | CNPC_VTzimisce::RunTask | 1069 | 0 | 24 | `CNPC_VTzimisce#444` | 0d/0v/2c | `+0x1b44`, `+0x1b48` | `+0x029c`, `+0x02a0`, `+0x03ec`, `+0x05dc`, `+0x05e0`, `+0x05f4`, +9 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:852 | — |  |
+| `0x103bb7c0` | CNPC_VTzimisce::SelectSchedule | 2620 | 0 | 26 | `CNPC_VTzimisce#438` | 0d/0v/0c | `+0x14b8`, `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x5b80`, `+0x623c`, +3 more | `+0x029c`, `+0x02a0`, `+0x0874`, `+0x09cc`, `+0x14b8`, `+0x5c38`, +3 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | docs/vtmb/npc-ai/senses.md:386 |  |
 | `0x103bc4e0` | FUN_103bc4e0 | 656 | 1 | 10 | — | 1d/0v/0c | — | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
 | `0x103bc820` | FUN_103bc820 | 395 | 1 | 2 | — | 3d/0v/0c | — | `+0x029c`?, `+0x0370`? | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
 | `0x103bca20` | FUN_103bca20 | 151 | 1 | 3 | — | 1d/0v/0c | — | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
 | `0x103bcaf0` | FUN_103bcaf0 | 76 | 1 | 2 | — | 1d/0v/0c | — | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
 | `0x103bcb60` | FUN_103bcb60 | 118 | 1 | 2 | — | 1d/0v/0c | — | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
 | `0x103bcc00` | FUN_103bcc00 | 136 | 1 | 3 | — | 1d/0v/0c | — | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
-| `0x103bce40` | CNPC_VTzimisce::vfunc433 | 833 | 0 | 25 | `CNPC_VTzimisce#433` | 0d/0v/2c | `+0x66ac`, `+0x66b0`, `+0x66b8` | `+0x029c`, `+0x02a0`, `+0x0364`, `+0x0874`, `+0x5ddc`, `+0x6670`, +2 more | — | — | — |  |
+| `0x103bce40` | CNPC_VTzimisce::GatherConditions | 833 | 0 | 25 | `CNPC_VTzimisce#433` | 0d/0v/2c | `+0x66ac`, `+0x66b0`, `+0x66b8` | `+0x029c`, `+0x02a0`, `+0x0364`, `+0x0874`, `+0x5ddc`, `+0x6670`, +2 more | — | — | — |  |
 | `0x103bd270` | CNPC_VTzimisce::vfunc482 | 210 | 0 | 2 | `CNPC_VTzimisce#482` | 0d/0v/0c | — | `+0x0278`, `+0x5cc0`, `+0x5cc4`, `+0x5d74` | — | — | — |  |
-| `0x103bd390` | CNPC_VTzimisce::vfunc440 | 477 | 0 | 22 | `CNPC_VTzimisce#440` | 0d/0v/2c | `+0x1b30`, `+0x1b34` | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
+| `0x103bd390` | CNPC_VTzimisce::TranslateSchedule | 477 | 0 | 22 | `CNPC_VTzimisce#440` | 0d/0v/2c | `+0x1b30`, `+0x1b34` | — | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
 | `0x103bd690` | CNPC_VTzimisce::vfunc461 | 1288 | 0 | 23 | `CNPC_VTzimisce#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4`, `+0x5d8c` | `+0x029c`, `+0x0738`, `+0x0768`, `+0x0874`, `+0x0928`, `+0x5cc0`, +3 more | `***Combat state with no enemy!⏎`, `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | — | — |  |
-| `0x103bdd10` | CNPC_VTzimisce::vfunc241 | 202 | 0 | 1 | `CNPC_VTzimisce#241` | 0d/0v/0c | — | — | `START_POUNCE`, `START_ATTACKBIG`, +5 more | — | — |  |
-| `0x103bde40` | CNPC_VTzimisce::vfunc375 | 102 | 0 | 16 | `CNPC_VTzimisce#375` | 0d/2v/5c | — | `+0x6688` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:115, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:295 | docs/vtmb/animation_and_movers.md:1587 |  |
+| `0x103bdd10` | CNPC_VTzimisce::GetEventName | 202 | 0 | 1 | `CNPC_VTzimisce#241` | 0d/0v/0c | — | — | `START_POUNCE`, `START_ATTACKBIG`, +5 more | — | — |  |
+| `0x103bde40` | CNPC_VTzimisce::NPC_EarlyTranslateActivity | 102 | 0 | 16 | `CNPC_VTzimisce#375` | 0d/2v/5c | — | `+0x6688` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:115, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:295 | docs/vtmb/animation_and_movers.md:1587 |  |
 | `0x103bdef0` | CNPC_VTzimisce::vfunc432 | 80 | 0 | 26 | `CNPC_VTzimisce#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103bdf60` | CNPC_VTzimisce::vfunc434 | 1 | 0 | 0 | `CNPC_VTzimisce#434` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103bdf60` | CNPC_VTzimisce::PrescheduleThink | 1 | 0 | 0 | `CNPC_VTzimisce#434` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103bdfc0` | FUN_103bdfc0 | 55 | 1 | 4 | — | 1d/0v/0c | — | `+0x0364`? | — | — | — |  |
-| `0x103be010` | CNPC_VTzimisce::vfunc144 | 42 | 0 | 22 | `CNPC_VTzimisce#144` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103be010` | CNPC_VTzimisce::Event_Killed | 42 | 0 | 22 | `CNPC_VTzimisce#144` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103be050` | FUN_103be050 | 36 | 1 | 0 | — | 4d/0v/0c | `+0x14b8` | `+0x14b8` | — | — | — |  |
 | `0x103be090` | FUN_103be090 | 12 | 1 | 0 | — | 2d/0v/0c | — | `+0x14b8`? | — | — | — |  |
 | `0x103be0b0` | FUN_103be0b0 | 84 | 2 | 0 | — | 3d/0v/0c | `+0x14b8`, `+0x66a4`, `+0x66b4` | `+0x14b8` | — | — | — |  |
@@ -4577,47 +4577,47 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103bf440` | FUN_103bf440 | 217 | 1 | 5 | — | 1d/0v/0c | — | `+0x029c`?, `+0x0374`? | — | — | — |  |
 | `0x103bf560` | FUN_103bf560 | 14 | 1 | 3 | — | 1d/0v/0c | — | `+0x5d44`? | — | — | — |  |
 | `0x103bf580` | CNPC_VTzimisce::vfunc410 | 112 | 0 | 1 | `CNPC_VTzimisce#410` | 0d/0v/0c | — | `+0x029c`, `+0x6670`, `+0x6674`, `+0x668c` | — | — | — |  |
-| `0x103bf610` | CNPC_VTzimisce::vfunc435 | 57 | 0 | 22 | `CNPC_VTzimisce#435` | 0d/0v/2c | `+0x668c`, `+0x66b8` | `+0x14b8`, `+0x66b8` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:683 |  |
+| `0x103bf610` | CNPC_VTzimisce::vfunc435 | 57 | 0 | 22 | `CNPC_VTzimisce#435` | 0d/0v/2c | `+0x668c`, `+0x66b8` | `+0x14b8`, `+0x66b8` | — | — | docs/vtmb/npc-ai/schedule-kernel.md:685 |  |
 | `0x103bf660` | FUN_103bf660 | 727 | 1 | 5 | — | 3d/0v/0c | — | — | `Unaccounted`, `UTIL_TraceHull`, +1 more | — | — |  |
-| `0x103bfa00` | CNPC_VTzimisce::vfunc69 | 24 | 0 | 2 | `CNPC_VTzimisce#69` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103bfa30` | CNPC_VTzimisce::vfunc228 | 3 | 0 | 0 | `CNPC_VTzimisce#228` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103bfa00` | CNPC_VTzimisce::NavIgnoreCollision | 24 | 0 | 2 | `CNPC_VTzimisce#69` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103bfa30` | CNPC_VTzimisce::VPhysicsShadowCollision | 3 | 0 | 0 | `CNPC_VTzimisce#228` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103bfa50` | FUN_103bfa50 | 358 | 1 | 6 | — | 1d/0v/0c | `+0x5ddc` | — | — | — | — |  |
 | `0x103bfc20` | FUN_103bfc20 | 261 | 1 | 2 | — | 3d/0v/0c | — | — | — | — | — |  |
 | `0x103bfd80` | CNPC_VTzimisce::vfunc389 | 782 | 0 | 2 | `CNPC_VTzimisce#389` | 0d/0v/1c | — | `+0x0374`, `+0x0fec` | — | — | — |  |
 | `0x103c0160` | FUN_103c0160 | 909 | 1 | 4 | — | 1d/0v/0c | — | `+0x0114`?, `+0x0370`?, `+0x0374`? | `UTIL_TraceHull` | — | — |  |
 | `0x103c05e0` | FUN_103c05e0 | 501 | 1 | 4 | — | 1d/0v/0c | — | `+0x031c` | — | — | — |  |
 | `0x103c0860` | FUN_103c0860 | 74 | 1 | 0 | — | 1d/0v/0c | — | `+0x00f8`?, `+0x0370`?, `+0x0828`? | — | — | — |  |
-| `0x103c08d0` | CNPC_VTzimisce::vfunc124 | 387 | 0 | 16 | `CNPC_VTzimisce#124` | 0d/0v/0c | — | `+0x0224`, `+0x02e0`, `+0x0364`, `+0x5c38`, `+0x6670` | `Body - %5.1f¦%5.1f¦%s` | — | — |  |
+| `0x103c08d0` | CNPC_VTzimisce::DrawDebugTextOverlays | 387 | 0 | 16 | `CNPC_VTzimisce#124` | 0d/0v/0c | — | `+0x0224`, `+0x02e0`, `+0x0364`, `+0x5c38`, `+0x6670` | `Body - %5.1f¦%5.1f¦%s` | — | — |  |
 | `0x103c0ad0` | CNPC_VTzimisceHeadClaw::vfunc82 | 6 | 0 | 0 | `CNPC_VTzimisceHeadClaw#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c0c30` | CNPC_VTzimisceHeadClaw::vfunc452 | 6 | 0 | 0 | `CNPC_VTzimisceHeadClaw#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c0c30` | CNPC_VTzimisceHeadClaw::LoadedSchedules | 6 | 0 | 0 | `CNPC_VTzimisceHeadClaw#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103c0c90` | CNPC_VTzimisceHeadClaw::vfunc546 | 29 | 0 | 3 | `CNPC_VTzimisceHeadClaw#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c12c0` | CNPC_VTzimisceHeadClaw::vfunc325 | 3 | 0 | 0 | `CNPC_VTzimisceHeadClaw#325` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c12e0` | CNPC_VTzimisceHeadClaw::vfunc324 | 3 | 0 | 0 | `CNPC_VTzimisceHeadClaw#324` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c1300` | CNPC_VTzimisceHeadClaw::vfunc580 | 6 | 0 | 0 | `CNPC_VTzimisceHeadClaw#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103c1320` | CNPC_VTzimisceHeadClaw::vfunc451 | 6 | 0 | 0 | `CNPC_VTzimisceHeadClaw#451` | 0d/0v/1c | — | — | `CNPC_VTzimisceHeadClaw` | — | — |  |
+| `0x103c1320` | CNPC_VTzimisceHeadClaw::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VTzimisceHeadClaw#451` | 0d/0v/1c | — | — | `CNPC_VTzimisceHeadClaw` | — | — |  |
 | `0x103c1340` | CNPC_VTzimisceHeadClaw::vfunc5 | 134 | 0 | 17 | `CNPC_VTzimisceHeadClaw#5` | 0d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c` | `+0x665c`, `+0x6664` | — | — | — |  |
-| `0x103c1400` | CNPC_VTzimisceHeadClaw::vfunc104 | 224 | 0 | 15 | `CNPC_VTzimisceHeadClaw#104` | 0d/0v/11c | — | — | `item_w_tzimisce2_head`, `character/monster/TC_FatGuy/Exert_Heavy_…`, +12 more | — | — |  |
-| `0x103c1520` | CNPC_VTzimisceHeadClaw::vfunc70 | 3 | 0 | 0 | `CNPC_VTzimisceHeadClaw#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c1540` | CNPC_VTzimisceHeadClaw::vfunc259 | 149 | 0 | 26 | `CNPC_VTzimisceHeadClaw#259` | 0d/0v/0c | — | `+0x0370`, `+0x09ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:150, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:153, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:40 | docs/vtmb/animation_and_movers.md:2194, docs/vtmb/animation_events.md:462, docs/vtmb/footsteps.md:169, +1 more |  |
-| `0x103c1610` | CNPC_VTzimisceHeadClaw::vfunc438 | 166 | 0 | 26 | `CNPC_VTzimisceHeadClaw#438` | 0d/0v/0c | `+0x5b80` | `+0x0970`, `+0x0974`, `+0x5cc0` | — | — | — |  |
-| `0x103c16f0` | CNPC_VTzimisceHeadClaw::vfunc453 | 19 | 0 | 3 | `CNPC_VTzimisceHeadClaw#453` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103c1720` | CNPC_VTzimisceHeadClaw::vfunc440 | 77 | 0 | 22 | `CNPC_VTzimisceHeadClaw#440` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x103c17f0` | CNPC_VTzimisceHeadClaw::vfunc433 | 28 | 0 | 25 | `CNPC_VTzimisceHeadClaw#433` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x103c1820` | CNPC_VTzimisceHeadClaw::vfunc442 | 100 | 0 | 27 | `CNPC_VTzimisceHeadClaw#442` | 0d/0v/2c | — | `+0x09a8` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:828 | — |  |
+| `0x103c1400` | CNPC_VTzimisceHeadClaw::Precache | 224 | 0 | 15 | `CNPC_VTzimisceHeadClaw#104` | 0d/0v/11c | — | — | `item_w_tzimisce2_head`, `character/monster/TC_FatGuy/Exert_Heavy_…`, +12 more | — | — |  |
+| `0x103c1520` | CNPC_VTzimisceHeadClaw::IsMonster | 3 | 0 | 0 | `CNPC_VTzimisceHeadClaw#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103c1540` | CNPC_VTzimisceHeadClaw::HandleAnimEvent | 149 | 0 | 26 | `CNPC_VTzimisceHeadClaw#259` | 0d/0v/0c | — | `+0x0370`, `+0x09ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:150, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:153, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:40 | docs/vtmb/animation_and_movers.md:2194, docs/vtmb/animation_events.md:462, docs/vtmb/footsteps.md:169, +1 more |  |
+| `0x103c1610` | CNPC_VTzimisceHeadClaw::SelectSchedule | 166 | 0 | 26 | `CNPC_VTzimisceHeadClaw#438` | 0d/0v/0c | `+0x5b80` | `+0x0970`, `+0x0974`, `+0x5cc0` | — | — | — |  |
+| `0x103c16f0` | CNPC_VTzimisceHeadClaw::BuildScheduleTestBits | 19 | 0 | 3 | `CNPC_VTzimisceHeadClaw#453` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103c1720` | CNPC_VTzimisceHeadClaw::TranslateSchedule | 77 | 0 | 22 | `CNPC_VTzimisceHeadClaw#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c17f0` | CNPC_VTzimisceHeadClaw::GatherConditions | 28 | 0 | 25 | `CNPC_VTzimisceHeadClaw#433` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c1820` | CNPC_VTzimisceHeadClaw::StartTask | 100 | 0 | 27 | `CNPC_VTzimisceHeadClaw#442` | 0d/0v/2c | — | `+0x09a8` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:828 | — |  |
 | `0x103c19e0` | CNPC_VTzimisceHeadClaw::vfunc599 | 91 | 0 | 3 | `CNPC_VTzimisceHeadClaw#599` | 0d/0v/0c | `+0x6074`, `+0x6078` | `+0x65e8` | — | — | — |  |
-| `0x103c1b90` | CNPC_VTzimisceHeadClaw::vfunc103 | 180 | 0 | 25 | `CNPC_VTzimisceHeadClaw#103` | 0d/0v/0c | `+0x10e4`, `+0x5b84`, `+0x63ac`, `+0x6420`, `+0x6424`, `+0x6428`, +2 more | `+0x5b84` | `D_HT 10`, `TzimisceCreation2` | — | — |  |
-| `0x103c1c80` | CNPC_VTzimisceHeadClaw::vfunc420 | 20 | 0 | 23 | `CNPC_VTzimisceHeadClaw#420` | 0d/0v/8c | `+0x6678` | — | — | — | — |  |
-| `0x103c1cb0` | CNPC_VTzimisceHeadClaw::vfunc337 | 9 | 0 | 3 | `CNPC_VTzimisceHeadClaw#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103c1cd0` | CNPC_VTzimisceHeadClaw::vfunc310 | 55 | 0 | 18 | `CNPC_VTzimisceHeadClaw#310` | 0d/0v/14c | — | `+0x029c` | — | — | — |  |
+| `0x103c1b90` | CNPC_VTzimisceHeadClaw::Spawn | 180 | 0 | 25 | `CNPC_VTzimisceHeadClaw#103` | 0d/0v/0c | `+0x10e4`, `+0x5b84`, `+0x63ac`, `+0x6420`, `+0x6424`, `+0x6428`, +2 more | `+0x5b84` | `D_HT 10`, `TzimisceCreation2` | — | — |  |
+| `0x103c1c80` | CNPC_VTzimisceHeadClaw::NPCInit | 20 | 0 | 23 | `CNPC_VTzimisceHeadClaw#420` | 0d/0v/8c | `+0x6678` | — | — | — | — |  |
+| `0x103c1cb0` | CNPC_VTzimisceHeadClaw::GetUsedHullBits | 9 | 0 | 3 | `CNPC_VTzimisceHeadClaw#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103c1cd0` | CNPC_VTzimisceHeadClaw::SetActivity | 55 | 0 | 18 | `CNPC_VTzimisceHeadClaw#310` | 0d/0v/14c | — | `+0x029c` | — | — | — |  |
 | `0x103c1d20` | CNPC_VTzimisceHeadClaw::vfunc432 | 26 | 0 | 26 | `CNPC_VTzimisceHeadClaw#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103c1d50` | CNPC_VTzimisceHeadClaw::vfunc144 | 26 | 0 | 22 | `CNPC_VTzimisceHeadClaw#144` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103c1d50` | CNPC_VTzimisceHeadClaw::Event_Killed | 26 | 0 | 22 | `CNPC_VTzimisceHeadClaw#144` | 0d/0v/3c | — | — | — | — | — |  |
 | `0x103c1d80` | CNPC_VTzimisceHeadClaw::vfunc332 | 956 | 0 | 15 | `CNPC_VTzimisceHeadClaw#332` | 0d/0v/0c | `+0x6674`, `+0x6678` | `+0x0364`, `+0x6678` | `Bip01 Spine`, `Character/Monster/TC_FatGuy/Sluge_Affect…`, +3 more | — | — |  |
 | `0x103c2230` | FUN_103c2230 | 494 | 1 | 16 | — | 2d/0v/0c | `+0x6674`, `+0x6678`, `+0x667c`, `+0x6680` | `+0x6674`, `+0x6678`, `+0x667c`, `+0x6680` | `Character/Monster/TC_FatGuy/Sluge_Affect…` | — | — |  |
 | `0x103c24a0` | FUN_103c24a0 | 30 | 1 | 0 | — | 2d/0v/0c | — | `+0x6678`? | — | — | — |  |
-| `0x103c2810` | CNPC_VTzimisceHeadClaw::vfunc126 | 53 | 0 | 17 | `CNPC_VTzimisceHeadClaw#126` | 0d/0v/0c | — | `+0x6678` | — | — | — |  |
+| `0x103c2810` | CNPC_VTzimisceHeadClaw::Save | 53 | 0 | 17 | `CNPC_VTzimisceHeadClaw#126` | 0d/0v/0c | — | `+0x6678` | — | — | — |  |
 | `0x103c2860` | CNPC_VTzimisceHeadClaw::vfunc127 | 40 | 0 | 11 | `CNPC_VTzimisceHeadClaw#127` | 0d/0v/0c | — | `+0x6678` | — | — | — |  |
 | `0x103c28a0` | CNPC_VTzimisceRunner::vfunc82 | 6 | 0 | 0 | `CNPC_VTzimisceRunner#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c2a00` | CNPC_VTzimisceRunner::vfunc452 | 6 | 0 | 0 | `CNPC_VTzimisceRunner#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c2a00` | CNPC_VTzimisceRunner::LoadedSchedules | 6 | 0 | 0 | `CNPC_VTzimisceRunner#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103c2a60` | CNPC_VTzimisceRunner::vfunc546 | 29 | 0 | 3 | `CNPC_VTzimisceRunner#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c3040` | CNPC_VTzimisceRunner::vfunc399 | 3 | 0 | 0 | `CNPC_VTzimisceRunner#399` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103c3060` | CNPC_VTzimisceRunner::vfunc400 | 3 | 0 | 0 | `CNPC_VTzimisceRunner#400` | 0d/0v/1c | — | — | — | — | — |  |
@@ -4625,42 +4625,42 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103c30a0` | CNPC_VTzimisceRunner::vfunc324 | 3 | 0 | 0 | `CNPC_VTzimisceRunner#324` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c30c0` | CNPC_VTzimisceRunner::vfunc329 | 3 | 0 | 0 | `CNPC_VTzimisceRunner#329` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103c30e0` | CNPC_VTzimisceRunner::vfunc580 | 6 | 0 | 0 | `CNPC_VTzimisceRunner#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103c3100` | CNPC_VTzimisceRunner::vfunc451 | 6 | 0 | 0 | `CNPC_VTzimisceRunner#451` | 0d/0v/1c | — | — | `CNPC_VTzimisceRunner` | — | — |  |
+| `0x103c3100` | CNPC_VTzimisceRunner::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VTzimisceRunner#451` | 0d/0v/1c | — | — | `CNPC_VTzimisceRunner` | — | — |  |
 | `0x103c3120` | CNPC_VTzimisceRunner::vfunc5 | 134 | 0 | 17 | `CNPC_VTzimisceRunner#5` | 0d/0v/0c | `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c` | `+0x665c`, `+0x6664` | — | — | — |  |
-| `0x103c31e0` | CNPC_VTzimisceRunner::vfunc104 | 137 | 0 | 15 | `CNPC_VTzimisceRunner#104` | 0d/0v/11c | — | — | `character/monster/TC_Runner/Exert_Heavy_…`, `character/monster/TC_Runner/Exert_Heavy_…`, +7 more | — | — |  |
-| `0x103c32a0` | CNPC_VTzimisceRunner::vfunc70 | 3 | 0 | 0 | `CNPC_VTzimisceRunner#70` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c32c0` | CNPC_VTzimisceRunner::vfunc259 ‼ | 57 | 0 | 26 | `CNPC_VTzimisceRunner#259` | 0d/0v/0c | — | `+0x09ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:160, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:163, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:42 | docs/vtmb/animation_and_movers.md:2195, docs/vtmb/animation_events.md:462, docs/vtmb/footsteps.md:170, +1 more |  |
-| `0x103c3310` | CNPC_VTzimisceRunner::vfunc438 | 299 | 0 | 26 | `CNPC_VTzimisceRunner#438` | 0d/0v/0c | `+0x5b80` | `+0x0364`, `+0x0970`, `+0x5cc0`, `+0x6678` | — | — | — |  |
-| `0x103c3560` | CNPC_VTzimisceRunner::vfunc440 | 43 | 0 | 22 | `CNPC_VTzimisceRunner#440` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x103c35a0` | CNPC_VTzimisceRunner::vfunc433 | 28 | 0 | 25 | `CNPC_VTzimisceRunner#433` | 0d/0v/2c | — | — | — | — | — |  |
-| `0x103c35d0` | CNPC_VTzimisceRunner::vfunc442 | 248 | 0 | 27 | `CNPC_VTzimisceRunner#442` | 0d/0v/2c | `+0x5db4`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8` | `+0x09a8`, `+0x6330`, `+0x6678` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:829 | — |  |
-| `0x103c3870` | CNPC_VTzimisceRunner::vfunc444 | 192 | 0 | 24 | `CNPC_VTzimisceRunner#444` | 0d/0v/2c | `+0x63ec` | `+0x029c`, `+0x5d44`, `+0x5db4` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:853 | — |  |
+| `0x103c31e0` | CNPC_VTzimisceRunner::Precache | 137 | 0 | 15 | `CNPC_VTzimisceRunner#104` | 0d/0v/11c | — | — | `character/monster/TC_Runner/Exert_Heavy_…`, `character/monster/TC_Runner/Exert_Heavy_…`, +7 more | — | — |  |
+| `0x103c32a0` | CNPC_VTzimisceRunner::IsMonster | 3 | 0 | 0 | `CNPC_VTzimisceRunner#70` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103c32c0` | CNPC_VTzimisceRunner::HandleAnimEvent ‼ | 57 | 0 | 26 | `CNPC_VTzimisceRunner#259` | 0d/0v/0c | — | `+0x09ac` | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:160, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:163, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:42 | docs/vtmb/animation_and_movers.md:2195, docs/vtmb/animation_events.md:462, docs/vtmb/footsteps.md:170, +1 more |  |
+| `0x103c3310` | CNPC_VTzimisceRunner::SelectSchedule | 299 | 0 | 26 | `CNPC_VTzimisceRunner#438` | 0d/0v/0c | `+0x5b80` | `+0x0364`, `+0x0970`, `+0x5cc0`, `+0x6678` | — | — | — |  |
+| `0x103c3560` | CNPC_VTzimisceRunner::TranslateSchedule | 43 | 0 | 22 | `CNPC_VTzimisceRunner#440` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c35a0` | CNPC_VTzimisceRunner::GatherConditions | 28 | 0 | 25 | `CNPC_VTzimisceRunner#433` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c35d0` | CNPC_VTzimisceRunner::StartTask | 248 | 0 | 27 | `CNPC_VTzimisceRunner#442` | 0d/0v/2c | `+0x5db4`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8` | `+0x09a8`, `+0x6330`, `+0x6678` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:829 | — |  |
+| `0x103c3870` | CNPC_VTzimisceRunner::RunTask | 192 | 0 | 24 | `CNPC_VTzimisceRunner#444` | 0d/0v/2c | `+0x63ec` | `+0x029c`, `+0x5d44`, `+0x5db4` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:853 | — |  |
 | `0x103c3960` | CNPC_VTzimisceRunner::vfunc599 | 88 | 0 | 3 | `CNPC_VTzimisceRunner#599` | 0d/0v/0c | `+0x6078`, `+0x6678` | `+0x65e8` | — | — | — |  |
-| `0x103c3b30` | CNPC_VTzimisceRunner::vfunc103 | 193 | 0 | 25 | `CNPC_VTzimisceRunner#103` | 0d/0v/0c | `+0x0fe0`, `+0x10e4`, `+0x5b84`, `+0x63ac`, `+0x6420`, `+0x6424`, +5 more | `+0x5b84` | `D_HT 10`, `TzimisceCreation3` | — | — |  |
+| `0x103c3b30` | CNPC_VTzimisceRunner::Spawn | 193 | 0 | 25 | `CNPC_VTzimisceRunner#103` | 0d/0v/0c | `+0x0fe0`, `+0x10e4`, `+0x5b84`, `+0x63ac`, `+0x6420`, `+0x6424`, +5 more | `+0x5b84` | `D_HT 10`, `TzimisceCreation3` | — | — |  |
 | `0x103c3c40` | CNPC_VTzimisceRunner::vfunc130 | 68 | 0 | 23 | `CNPC_VTzimisceRunner#130` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c3cb0` | CNPC_VTzimisceRunner::vfunc337 | 9 | 0 | 3 | `CNPC_VTzimisceRunner#337` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103c3cd0` | CNPC_VTzimisceRunner::vfunc335 | 48 | 0 | 14 | `CNPC_VTzimisceRunner#335` | 0d/0v/0c | `+0x5f2c`, `+0x6672`, `+0x6674` | — | — | — | — |  |
-| `0x103c3d10` | CNPC_VTzimisceRunner::vfunc336 | 71 | 0 | 14 | `CNPC_VTzimisceRunner#336` | 0d/0v/0c | `+0x5f2c`, `+0x6672` | `+0x6674` | — | — | — |  |
-| `0x103c3d80` | CNPC_VTzimisceRunner::vfunc310 | 110 | 0 | 18 | `CNPC_VTzimisceRunner#310` | 0d/0v/14c | — | `+0x6672` | — | — | — |  |
-| `0x103c3e10` | CNPC_VTzimisceRunner::vfunc375 | 82 | 0 | 16 | `CNPC_VTzimisceRunner#375` | 0d/0v/5c | — | `+0x6672` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:133, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:299 | docs/vtmb/animation_and_movers.md:1588 |  |
+| `0x103c3cb0` | CNPC_VTzimisceRunner::GetUsedHullBits | 9 | 0 | 3 | `CNPC_VTzimisceRunner#337` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103c3cd0` | CNPC_VTzimisceRunner::NotifyChangeSizeSmall | 48 | 0 | 14 | `CNPC_VTzimisceRunner#335` | 0d/0v/0c | `+0x5f2c`, `+0x6672`, `+0x6674` | — | — | — | — |  |
+| `0x103c3d10` | CNPC_VTzimisceRunner::NotifyChangeSizeNormal | 71 | 0 | 14 | `CNPC_VTzimisceRunner#336` | 0d/0v/0c | `+0x5f2c`, `+0x6672` | `+0x6674` | — | — | — |  |
+| `0x103c3d80` | CNPC_VTzimisceRunner::SetActivity | 110 | 0 | 18 | `CNPC_VTzimisceRunner#310` | 0d/0v/14c | — | `+0x6672` | — | — | — |  |
+| `0x103c3e10` | CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity | 82 | 0 | 16 | `CNPC_VTzimisceRunner#375` | 0d/0v/5c | — | `+0x6672` | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:133, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:299 | docs/vtmb/animation_and_movers.md:1588 |  |
 | `0x103c3fd0` | CNPC_VTzimisceRunner::vfunc588 | 8 | 0 | 6 | `CNPC_VTzimisceRunner#588` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c43b0` | CNPC_VTzimisceRunner::vfunc330 ‼ | 42 | 0 | 22 | `CNPC_VTzimisceRunner#330` | 0d/0v/0c | — | `+0x0500` | — | — | — |  |
-| `0x103c43f0` | CNPC_VTzimisceRunner::vfunc320 | 13 | 0 | 21 | `CNPC_VTzimisceRunner#320` | 0d/1v/3c | — | — | — | — | — |  |
+| `0x103c43f0` | CNPC_VTzimisceRunner::PlayerKnockbackReaction | 13 | 0 | 21 | `CNPC_VTzimisceRunner#320` | 0d/1v/3c | — | — | — | — | — |  |
 | `0x103c47e0` | CNPC_VVampire::FUN_103c47e0 | 6 | 0 | 0 | `CNPC_VBrujah#82`, `CNPC_VGangrel#82`, `CNPC_VMalkavian#82`, +7 more | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103c4920` | CNPC_VVampire::vfunc5 | 30 | 0 | 17 | `CNPC_VVampire#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c4a20` | CNPC_VVampire::FUN_103c4a20 | 6 | 0 | 0 | `CNPC_VPlayerController#452`, `CNPC_VVampire#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c4a20` | CNPC_VVampire::LoadedSchedules | 6 | 0 | 0 | `CNPC_VPlayerController#452`, `CNPC_VVampire#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103c4a80` | CNPC_VVampire::FUN_103c4a80 | 29 | 0 | 3 | `CNPC_VPlayerController#546`, `CNPC_VVampire#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c4ef0` | CNPC_VVampire::Spawn | 32 | 0 | 26 | `CNPC_VBrujah#103`, `CNPC_VGangrel#103`, `CNPC_VGargoyle#103`, +7 more | 13d/0v/0c | — | — | — | — | docs/vtmb/npc-ai/lifecycle.md:74 |  |
-| `0x103c4f20` | CNPC_VAndreiBlood::FUN_103c4f20 | 6 | 0 | 0 | `CNPC_VAndreiBlood#138`, `CNPC_VAsianVampire#138`, `CNPC_VLasombra#138`, +3 more | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103c4f20` | CNPC_VVampire::Classify | 6 | 0 | 0 | `CNPC_VAndreiBlood#138`, `CNPC_VAsianVampire#138`, `CNPC_VLasombra#138`, +3 more | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c5060` | CNPC_VVampireBoss::vfunc82 | 6 | 0 | 0 | `CNPC_VVampireBoss#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c5210` | CNPC_VVampireBoss::vfunc452 | 6 | 0 | 0 | `CNPC_VVampireBoss#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c5210` | CNPC_VVampireBoss::LoadedSchedules | 6 | 0 | 0 | `CNPC_VVampireBoss#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103c5270` | CNPC_VVampireBoss::vfunc546 | 29 | 0 | 3 | `CNPC_VVampireBoss#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c5840` | CNPC_VVampireBoss::NPCInit | 145 | 0 | 23 | `CNPC_VVampireBoss#420` | 5d/0v/8c | `+0x6498`, `+0x64b8`, `+0x6680`, `+0x6694` | — | `npc_VVampireBoss`, `CNPC_VVampireBoss::NPCInit` | — | — |  |
 | `0x103c5910` | CNPC_VVampireBoss::Restore | 140 | 0 | 11 | `CNPC_VVampireBoss#127` | 5d/0v/0c | `+0x6680`, `+0x6694` | — | `npc_VVampireBoss`, `CNPC_VVampireBoss::Restore` | — | — |  |
 | `0x103c59d0` | CNPC_VVampireBoss::SelectHintNode | 190 | 1 | 11 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48`, `+0x5ddc` | `+0x0700` | `E:\Vampire\main\dlls\hl2_dll\npc_VVampir…`, `CNPC_VVampireBoss::SelectHintNode` | — | — |  |
 | `0x103c5ac0` | CNPC_VVampireBoss::StartTask | 911 | 0 | 28 | `CNPC_VVampireBoss#442` | 5d/0v/2c | `+0x0168`, `+0x016c`, `+0x017c`, `+0x019c`, `+0x1568`, `+0x156c`, +3 more | `+0x00f8`, `+0x0108`, `+0x010c`, `+0x019c`, `+0x01a4`, `+0x026c`, +10 more | `bip01`, `CBaseEntity::RemoveSolidFlags`, +2 more | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:830 | — |  |
 | `0x103c5f40` | CNPC_VVampireBoss::RunTask | 123 | 0 | 25 | `CNPC_VVampireBoss#444` | 5d/0v/2c | — | — | `CNPC_VVampireBoss::RunTask` | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:854 | — |  |
-| `0x103c5fe0` | CNPC_VAndreiBlood::FUN_103c5fe0 | 14 | 0 | 0 | `CNPC_VAndreiBlood#525`, `CNPC_VAsianVampire#525`, `CNPC_VChangBros#525`, +5 more | 0d/0v/0c | — | `+0x6498` | — | — | — |  |
+| `0x103c5fe0` | CNPC_VVampireBoss::OverrideMove | 14 | 0 | 0 | `CNPC_VAndreiBlood#525`, `CNPC_VAsianVampire#525`, `CNPC_VChangBros#525`, +5 more | 0d/0v/0c | — | `+0x6498` | — | — | — |  |
 | `0x103c6000` | CNPC_VVampireBoss::NPCThink | 114 | 0 | 27 | `CNPC_VSabbatLeader#431`, `CNPC_VVampireBoss#431` | 4d/0v/0c | `+0x017c` | — | `CNPC_VVampireBoss::NPCThink` | — | — |  |
 | `0x103c63c0` | CNPC_VVampireBoss::WaitForTransformation | 333 | 1 | 13 | — | 1d/0v/0c | — | `+0x13bc`, `+0x13c0`, `+0x1560`, `+0x66b0` | `CNPC_VVampireBoss::WaitForTransformation` | — | — |  |
 | `0x103c6570` | CNPC_VVampireBoss::DistToHintCenterLine2D_2 | 208 | 2 | 2 | — | 1d/0v/0c | — | — | `CNPC_VVampireBoss::DistToHintCenterLine2…` | — | — |  |
@@ -4677,22 +4677,22 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103c7150` | CNPC_VVampireBoss::KillBodyEmitters | 170 | 1 | 2 | — | 3d/0v/0c | — | `+0x66a0` | `CNPC_VVampireBoss::KillBodyEmitters` | — | — |  |
 | `0x103c7230` | CNPC_VVampireBoss::CausePlayerAOEDamage | 753 | 1 | 5 | — | 3d/0v/0c | — | `+0x628c` | `CNPC_VVampireBoss::CausePlayerAOEDamage` | — | — |  |
 | `0x103c77b0` | CNPC_VVentrue::vfunc580 | 6 | 0 | 0 | `CNPC_VVentrue#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103c77d0` | CNPC_VVentrue::vfunc451 | 6 | 0 | 0 | `CNPC_VVentrue#451` | 0d/0v/1c | — | — | `CNPC_VVentrue` | — | — |  |
+| `0x103c77d0` | CNPC_VVentrue::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VVentrue#451` | 0d/0v/1c | — | — | `CNPC_VVentrue` | — | — |  |
 | `0x103c77f0` | CNPC_VVentrue::vfunc5 | 30 | 0 | 17 | `CNPC_VVentrue#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c78f0` | CNPC_VVentrue::vfunc452 | 6 | 0 | 0 | `CNPC_VVentrue#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c78f0` | CNPC_VVentrue::LoadedSchedules | 6 | 0 | 0 | `CNPC_VVentrue#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103c7950` | CNPC_VVentrue::vfunc546 | 29 | 0 | 3 | `CNPC_VVentrue#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103c7e40` | CNPC_VVentrue::vfunc138 | 6 | 0 | 0 | `CNPC_VVentrue#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103c7e40` | CNPC_VVentrue::Classify | 6 | 0 | 0 | `CNPC_VVentrue#138` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c87d0` | CNPC_VWerewolf::vfunc82 | 6 | 0 | 0 | `CNPC_VWerewolf#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103c8e70` | CNPC_VWerewolf::vfunc452 | 6 | 0 | 0 | `CNPC_VWerewolf#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103c8e70` | CNPC_VWerewolf::LoadedSchedules | 6 | 0 | 0 | `CNPC_VWerewolf#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103c8ed0` | CNPC_VWerewolf::vfunc546 | 29 | 0 | 3 | `CNPC_VWerewolf#546` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103c9ed0` | CHintData_WW::CHintData_WW | 181 | 3 | 0 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +11 more | — | `CHintData_WW::CHintData_WW` | — | — |  |
 | `0x103c9fc0` | CHintData_WW::Init | 201 | 2 | 0 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | `+0x0020`, `+0x0028`, `+0x0034`, `+0x003c` | `CHintData_WW::Init` | — | — |  |
 | `0x103ca6d0` | CNPC_VWerewolf::vfunc316 | 3 | 0 | 0 | `CNPC_VWerewolf#316` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ca6f0` | CNPC_VWerewolf::vfunc318 | 5 | 0 | 0 | `CNPC_VWerewolf#318` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103ca710` | CNPC_VWerewolf::vfunc319 | 5 | 0 | 0 | `CNPC_VWerewolf#319` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ca6f0` | CNPC_VWerewolf::PlayerDefenderBlockReaction | 5 | 0 | 0 | `CNPC_VWerewolf#318` | 0d/0v/0c | — | — | — | — | — |  |
+| `0x103ca710` | CNPC_VWerewolf::PlayerAttackerBlockedReaction | 5 | 0 | 0 | `CNPC_VWerewolf#319` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103ca730` | CNPC_VWerewolf::vfunc328 | 3 | 0 | 0 | `CNPC_VWerewolf#328` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103ca750` | CNPC_VWerewolf::vfunc580 | 6 | 0 | 0 | `CNPC_VWerewolf#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103ca770` | CNPC_VWerewolf::vfunc451 | 6 | 0 | 0 | `CNPC_VWerewolf#451` | 0d/0v/1c | — | — | `CNPC_VWerewolf` | — | — |  |
+| `0x103ca770` | CNPC_VWerewolf::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VWerewolf#451` | 0d/0v/1c | — | — | `CNPC_VWerewolf` | — | — |  |
 | `0x103ca790` | CNPC_VWerewolf::vfunc5 | 30 | 0 | 18 | `CNPC_VWerewolf#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103ca7c0` | CNPC_VWerewolf::~CNPC_VWerewolf | 484 | 1 | 17 | — | 1d/0v/0c | `+0x19b0`, `+0x665c`, `+0x6660`, `+0x6668`, `+0x666c`, `+0x668c`, +6 more | `+0x026c`, `+0x665c`, `+0x6664`, `+0x668c`, `+0x6694`, `+0x6714`, +7 more | `CNPC_VWerewolf::~CNPC_VWerewolf` | — | — |  |
 | `0x103caa30` | CNPC_VWerewolf::Spawn | 217 | 0 | 25 | `CNPC_VWerewolf#103` | 0d/0v/0c | `+0x10e4`, `+0x1480`, `+0x6680`, `+0x66a9`, `+0x66ac` | `+0x026c`, `+0x0270` | `NULL ENTITY`, `Werewolf`, +1 more | — | — |  |
@@ -4700,7 +4700,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103cabf0` | CNPC_VWerewolf::vfunc130 | 24 | 0 | 23 | `CNPC_VWerewolf#130` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103cac20` | FUN_103cac20 | 351 | 1 | 20 | — | 2d/0v/0c | `+0x628c`?, `+0x66a1`?, `+0x66a4`?, `+0x66a8`?, `+0x66a9`?, `+0x66ac`?, +17 more | `+0x1568`?, `+0x66cc`?, `+0x66d0`? | — | — | — |  |
 | `0x103cade0` | FUN_103cade0 | 204 | 1 | 9 | — | 1d/0v/0c | `+0x6684`?, `+0x6688`? | — | `rotdoor2`, `rotdoor1`, +1 more | — | — |  |
-| `0x103caef0` | CNPC_VWerewolf::vfunc420 | 498 | 0 | 23 | `CNPC_VWerewolf#420` | 0d/0v/8c | `+0x01fc`, `+0x10e4`, `+0x1574`, `+0x5ddc`, `+0x5de4`, `+0x6338`, +18 more | `+0x026c`, `+0x04c0` | `NULL ENTITY`, `CNPC_VWerewolf::NPCInit`, +1 more | — | — |  |
+| `0x103caef0` | CNPC_VWerewolf::NPCInit | 498 | 0 | 23 | `CNPC_VWerewolf#420` | 0d/0v/8c | `+0x01fc`, `+0x10e4`, `+0x1574`, `+0x5ddc`, `+0x5de4`, `+0x6338`, +18 more | `+0x026c`, `+0x04c0` | `NULL ENTITY`, `CNPC_VWerewolf::NPCInit`, +1 more | — | — |  |
 | `0x103cb170` | CNPC_VWerewolf::PostNPCInit | 111 | 0 | 0 | `CNPC_VWerewolf#421` | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CNPC_VWerewolf::PostNPCInit` | — | — |  |
 | `0x103cb200` | CNPC_VWerewolf::Activate | 116 | 0 | 7 | `CNPC_VWerewolf#113` | 0d/0v/1c | — | `+0x026c` | `NULL ENTITY`, `CNPC_VWerewolf::Activate` | — | — |  |
 | `0x103cb2a0` | CNPC_VWerewolf::Precache | 298 | 0 | 15 | `CNPC_VWerewolf#104` | 0d/0v/11c | `+0x00b4`, `+0x00bc`, `+0x00c0` | `+0x026c` | `NULL ENTITY`, `character/monster/TC_FatGuy/Foot_Step2.w…`, +8 more | — | — |  |
@@ -4723,7 +4723,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103ce750` | CNPC_VWerewolf::TaskFail | 479 | 0 | 14 | `CNPC_VWerewolf#448` | 0d/3v/43c | `+0x66a1`, `+0x66a4`, `+0x66c4`, `+0x66e8`, `+0x6708`, `+0x670c` | `+0x026c`, `+0x0704`, `+0x5c38`, `+0x66b0`, `+0x66bc`, `+0x66c4` | `NULL ENTITY`, `INVALID TASK`, +5 more | — | — |  |
 | `0x103ce9b0` | CNPC_VWerewolf::SelectScheduleForHint | 334 | 1 | 1 | — | 1d/0v/0c | — | `+0x026c`, `+0x0364`, `+0x5dd0`, `+0x5dd4`, `+0x5dd8`, `+0x6320` | `NULL ENTITY`, `CNPC_VWerewolf::SelectScheduleForHint` | — | — |  |
 | `0x103ceb60` | FUN_103ceb60 | 210 | 1 | 1 | — | 2d/0v/0c | — | — | `%s (%s)`, `HINT_UNKNOWN`, +19 more | — | — |  |
-| `0x103ced10` | CNPC_VWerewolf::OnScheduleChange | 268 | 0 | 22 | `CNPC_VWerewolf#435` | 0d/0v/2c | `+0x6698`, `+0x669c` | `+0x026c`, `+0x668c`, `+0x6690`, `+0x6698` | `NULL ENTITY`, `CNPC_VWerewolf::OnScheduleChange` | — | docs/vtmb/npc-ai/schedule-kernel.md:683 |  |
+| `0x103ced10` | CNPC_VWerewolf::OnScheduleChange | 268 | 0 | 22 | `CNPC_VWerewolf#435` | 0d/0v/2c | `+0x6698`, `+0x669c` | `+0x026c`, `+0x668c`, `+0x6690`, `+0x6698` | `NULL ENTITY`, `CNPC_VWerewolf::OnScheduleChange` | — | docs/vtmb/npc-ai/schedule-kernel.md:685 |  |
 | `0x103cee70` | CNPC_VWerewolf::SelectSchedule | 1481 | 0 | 27 | `CNPC_VWerewolf#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x66a9` | `+0x026c`, `+0x0278`, `+0x028c`, `+0x029c`, `+0x0734`, `+0x5cc0`, +3 more | `NULL ENTITY`, `E:\Vampire\main\dlls\hl2_dll\NPC_VWerewo…`, +1 more | — | — |  |
 | `0x103cf5f0` | CNPC_VWerewolf::ShouldPursueEnemy | 292 | 1 | 0 | — | 5d/0v/0c +1 outside | — | `+0x026c`, `+0x6264`, `+0x66e8`, `+0x66ec` | `NULL ENTITY`, `CNPC_VWerewolf::ShouldPursueEnemy` | — | — |  |
 | `0x103cf770` | CNPC_VWerewolf::CheckAllRandomMoveHints | 986 | 1 | 21 | — | 1d/0v/0c | `+0x66b8`, `+0x66d4`, `+0x66d8` | `+0x026c`, `+0x0364`, `+0x66bc` | `NULL ENTITY`, `CheckAllRandomMoveHints`, +1 more | — | — |  |
@@ -4756,12 +4756,12 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103d4690` | CNPC_VWerewolf::ClearMoveHint | 151 | 1 | 2 | — | 9d/0v/0c | `+0x66bc` | `+0x026c`, `+0x66bc` | `NULL ENTITY`, `CNPC_VWerewolf::ClearMoveHint` | — | — |  |
 | `0x103d4760` | CNPC_VWerewolf::ClearTeleportHint | 142 | 1 | 1 | — | 4d/0v/0c | `+0x66b0` | `+0x026c`, `+0x66b0` | `NULL ENTITY`, `CNPC_VWerewolf::ClearTeleportHint` | — | — |  |
 | `0x103d4820` | CNPC_VWerewolf::DrawDebugHullAtPoint | 398 | 2 | 4 | — | 1d/0v/0c | — | `+0x026c`, `+0x1568` | `NULL ENTITY`, `CNPC_VWerewolf::DrawDebugHullAtPoint` | — | — |  |
-| `0x103d4a20` | CNPC_VWerewolf::vfunc78 | 44 | 0 | 2 | `CNPC_VWerewolf#78` | 0d/0v/0c | `+0x66a4`, `+0x66d4`, `+0x66d8`, `+0x66ec` | — | — | — | — |  |
+| `0x103d4a20` | CNPC_VWerewolf::ScriptUnhide | 44 | 0 | 2 | `CNPC_VWerewolf#78` | 0d/0v/0c | `+0x66a4`, `+0x66d4`, `+0x66d8`, `+0x66ec` | — | — | — | — |  |
 | `0x103d4a60` | CNPC_VWerewolf::TeleportOut | 595 | 1 | 8 | — | 5d/0v/0c | `+0x019c`, `+0x66ac`, `+0x66e8`, `+0x66f0` | `+0x0108`, `+0x019c`, `+0x026c`, `+0x0270`, `+0x029c`, `+0x02b4`, +2 more | `NULL ENTITY`, `CBaseEntity::AddSolidFlags`, +3 more | — | docs/vtmb/npc-ai/lifecycle.md:312 |  |
 | `0x103d4d60` | CNPC_VWerewolf::TeleportIn | 582 | 1 | 8 | — | 1d/0v/0c | `+0x019c`, `+0x66ec` | `+0x010c`, `+0x019c`, `+0x026c`, `+0x0270`, `+0x029c`, `+0x02b4`, +3 more | `NULL ENTITY`, `CBaseEntity::RemoveSolidFlags`, +3 more | — | docs/vtmb/npc-ai/lifecycle.md:313 |  |
 | `0x103d5130` | CNPC_VWerewolf::DrawDebugStatOverlays | 888 | 0 | 13 | `CNPC_VWerewolf#76` | 0d/0v/0c | — | `+0x026c`, `+0x6680`, `+0x668c`, `+0x6698`, `+0x66b0`, `+0x66b4`, +3 more | `NULL ENTITY`, `COND_VWEREWOLF_SHOULD_BREAKHINT`, +20 more | — | — |  |
 | `0x103d5590` | CNPC_VWerewolf::DrawDebugHintInfo | 1719 | 1 | 12 | — | 2d/0v/0c | — | `+0x026c`, `+0x1568` | `NULL ENTITY`, `CNPC_VWerewolf::DrawDebugHintInfo` | — | — |  |
-| `0x103d5e00` | CNPC_VWerewolf::TranslateSchedule | 258 | 0 | 22 | `CNPC_VWerewolf#440` | 0d/0v/2c | `+0x1b30`, `+0x1b34` | `+0x026c` | `NULL ENTITY`, `E:\Vampire\main\dlls\hl2_dll\NPC_VWerewo…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2279 | docs/vtmb/npc-ai/schedule-kernel.md:556 |  |
+| `0x103d5e00` | CNPC_VWerewolf::TranslateSchedule | 258 | 0 | 22 | `CNPC_VWerewolf#440` | 0d/0v/2c | `+0x1b30`, `+0x1b34` | `+0x026c` | `NULL ENTITY`, `E:\Vampire\main\dlls\hl2_dll\NPC_VWerewo…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2279 | docs/vtmb/npc-ai/schedule-kernel.md:558 |  |
 | `0x103d5f60` | CNPC_VWerewolf::OnChangeActivity | 126 | 0 | 1 | `CNPC_VWerewolf#465` | 0d/0v/2c | — | `+0x026c` | `NULL ENTITY`, `CNPC_VWerewolf::OnChangeActivity` | — | — |  |
 | `0x103d6000` | CNPC_VWerewolf::SetHintActivity | 427 | 1 | 7 | — | 1d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CNPC_VWerewolf::SetHintActivity` | — | — |  |
 | `0x103d6280` | CNPC_VWerewolf::PositionAtHint | 206 | 1 | 6 | — | 3d/0v/0c | — | `+0x00f8`, `+0x026c`, `+0x0360` | `NULL ENTITY`, `CNPC_VWerewolf::PositionAtHint` | — | — |  |
@@ -4806,61 +4806,61 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x103dc520` | FUN_103dc520 | 106 | 2 | 0 | — | 2d/0v/0c | `+0x0004` | `+0x0004`, `+0x0008` | — | — | — |  |
 | `0x103dc5b0` | FUN_103dc5b0 | 158 | 2 | 5 | — | 1d/0v/0c | `+0x0020`, `+0x0024`, `+0x002c`, `+0x0030`, `+0x0034`, `+0x0038`, +2 more | `+0x0020`, `+0x0028`, `+0x0034`, `+0x003c` | — | — | — |  |
 | `0x103dc750` | CNPC_VWolfMorph::vfunc580 | 6 | 0 | 0 | `CNPC_VWolfMorph#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103dc770` | CNPC_VWolfMorph::vfunc451 | 6 | 0 | 0 | `CNPC_VWolfMorph#451` | 0d/0v/1c | — | — | `CNPC_VWolfMorph` | — | — |  |
+| `0x103dc770` | CNPC_VWolfMorph::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VWolfMorph#451` | 0d/0v/1c | — | — | `CNPC_VWolfMorph` | — | — |  |
 | `0x103dc790` | CNPC_VWolfMorph::vfunc82 | 6 | 0 | 0 | `CNPC_VWolfMorph#82` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103dc8f0` | CNPC_VWolfMorph::vfunc452 | 6 | 0 | 0 | `CNPC_VWolfMorph#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103dc8f0` | CNPC_VWolfMorph::LoadedSchedules | 6 | 0 | 0 | `CNPC_VWolfMorph#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103dc950` | CNPC_VWolfMorph::vfunc546 | 29 | 0 | 3 | `CNPC_VWolfMorph#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103dcdc0` | CNPC_VWolfMorph::vfunc375 | 8 | 0 | 0 | `CNPC_VWolfMorph#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:147, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:302 | docs/vtmb/animation_and_movers.md:1589 |  |
-| `0x103dce00` | CNPC_VWolfMorph::vfunc420 | 55 | 0 | 24 | `CNPC_VWolfMorph#420` | 0d/0v/8c | `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x04d8` | `E:\Vampire\main\dlls\hl2_dll\NPC_VWolfMo…` | — | — |  |
-| `0x103dce50` | CNPC_VWolfMorph::vfunc138 | 6 | 0 | 0 | `CNPC_VWolfMorph#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103dceb0` | CNPC_VWolfMorph::vfunc438 | 49 | 0 | 27 | `CNPC_VWolfMorph#438` | 0d/0v/0c | — | `+0x5c38` | `SCHED_VWOLFMORPH_MORPH` | — | — |  |
+| `0x103dcdc0` | CNPC_VWolfMorph::NPC_EarlyTranslateActivity | 8 | 0 | 0 | `CNPC_VWolfMorph#375` | 0d/0v/5c | — | — | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:147, Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:302 | docs/vtmb/animation_and_movers.md:1589 |  |
+| `0x103dce00` | CNPC_VWolfMorph::NPCInit | 55 | 0 | 24 | `CNPC_VWolfMorph#420` | 0d/0v/8c | `+0x1b3c`, `+0x1b40`, `+0x5cc4` | `+0x04d8` | `E:\Vampire\main\dlls\hl2_dll\NPC_VWolfMo…` | — | — |  |
+| `0x103dce50` | CNPC_VWolfMorph::Classify | 6 | 0 | 0 | `CNPC_VWolfMorph#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103dceb0` | CNPC_VWolfMorph::SelectSchedule | 49 | 0 | 27 | `CNPC_VWolfMorph#438` | 0d/0v/0c | — | `+0x5c38` | `SCHED_VWOLFMORPH_MORPH` | — | — |  |
 | `0x103dcf00` | CNPC_VWolfMorph::vfunc588 | 1 | 0 | 0 | `CNPC_VWolfMorph#588` | 0d/0v/1c | — | — | — | — | — |  |
 | `0x103dcf20` | CNPC_VWolfMorph::vfunc5 | 30 | 0 | 17 | `CNPC_VWolfMorph#5` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103dd050` | CNPC_VYukie::vfunc580 | 6 | 0 | 0 | `CNPC_VYukie#580` | 0d/0v/18c | — | — | — | — | — |  |
-| `0x103dd070` | CNPC_VYukie::vfunc451 | 6 | 0 | 0 | `CNPC_VYukie#451` | 0d/0v/1c | — | — | `CNPC_VYukie` | — | — |  |
+| `0x103dd070` | CNPC_VYukie::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VYukie#451` | 0d/0v/1c | — | — | `CNPC_VYukie` | — | — |  |
 | `0x103dd090` | CNPC_VYukie::vfunc5 | 30 | 0 | 17 | `CNPC_VYukie#5` | 0d/0v/0c | — | — | — | — | — |  |
-| `0x103dd190` | CNPC_VYukie::vfunc452 | 6 | 0 | 0 | `CNPC_VYukie#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103dd190` | CNPC_VYukie::LoadedSchedules | 6 | 0 | 0 | `CNPC_VYukie#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103dd1f0` | CNPC_VYukie::vfunc546 | 29 | 0 | 3 | `CNPC_VYukie#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103dd620` | CNPC_VYukie::vfunc103 | 32 | 0 | 27 | `CNPC_VYukie#103` | 0d/0v/0c | `+0x1574` | — | — | — | — |  |
-| `0x103dd650` | CNPC_VYukie::vfunc138 | 6 | 0 | 0 | `CNPC_VYukie#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103dd6b0` | CNPC_VYukie::vfunc438 | 103 | 0 | 28 | `CNPC_VYukie#438` | 0d/0v/0c | `+0x1b2c` | `+0x0970`, `+0x0974`, `+0x5cc0` | — | — | — |  |
+| `0x103dd620` | CNPC_VYukie::Spawn | 32 | 0 | 27 | `CNPC_VYukie#103` | 0d/0v/0c | `+0x1574` | — | — | — | — |  |
+| `0x103dd650` | CNPC_VYukie::Classify | 6 | 0 | 0 | `CNPC_VYukie#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103dd6b0` | CNPC_VYukie::SelectSchedule | 103 | 0 | 28 | `CNPC_VYukie#438` | 0d/0v/0c | `+0x1b2c` | `+0x0970`, `+0x0974`, `+0x5cc0` | — | — | — |  |
 | `0x103dd780` | CNPC_VYukie::vfunc461 | 15 | 0 | 25 | `CNPC_VYukie#461` | 0d/0v/1c | `+0x1b38` | — | — | — | — |  |
 | `0x103dd7a0` | CNPC_VYukie::vfunc432 | 13 | 0 | 28 | `CNPC_VYukie#432` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103dd800` | CNPC_VYukie::vfunc420 ‼ | 39 | 0 | 24 | `CNPC_VYukie#420` | 0d/0v/8c | — | — | — | — | — |  |
-| `0x103dd880` | CNPC_VYukie::vfunc404 | 20 | 0 | 15 | `CNPC_VYukie#404` | 0d/0v/22c | — | — | — | — | — |  |
+| `0x103dd800` | CNPC_VYukie::NPCInit ‼ | 39 | 0 | 24 | `CNPC_VYukie#420` | 0d/0v/8c | — | — | — | — | — |  |
+| `0x103dd880` | CNPC_VYukie::IRelationType | 20 | 0 | 15 | `CNPC_VYukie#404` | 0d/0v/22c | — | — | — | — | — |  |
 | `0x103dd8b0` | CNPC_VYukie::vfunc599 | 62 | 0 | 0 | `CNPC_VYukie#599` | 0d/0v/0c | `+0x6074` | — | — | — | — |  |
-| `0x103ddaa0` | CNPC_VYukie::vfunc363 | 58 | 0 | 0 | `CNPC_VYukie#363` | 0d/0v/3c | — | — | — | — | — |  |
-| `0x103ddaf0` | CNPC_VYukie::vfunc201 | 109 | 0 | 0 | `CNPC_VYukie#201` | 0d/0v/7c | — | — | — | — | — |  |
+| `0x103ddaa0` | CNPC_VYukie::FInViewCone | 58 | 0 | 0 | `CNPC_VYukie#363` | 0d/0v/3c | — | — | — | — | — |  |
+| `0x103ddaf0` | CNPC_VYukie::FVisible | 109 | 0 | 0 | `CNPC_VYukie#201` | 0d/0v/7c | — | — | — | — | — |  |
 | `0x103ddde0` | CNPC_VZombie::vfunc82 | 6 | 0 | 0 | `CNPC_VZombie#82` | 0d/0v/0c | — | — | — | — | — |  |
 | `0x103de2b0` | CNPC_VZombie::vfunc580 | 6 | 0 | 0 | `CNPC_VZombie#580` | 0d/2v/18c | — | — | — | — | — |  |
-| `0x103de2d0` | CNPC_VZombie::vfunc451 | 6 | 0 | 0 | `CNPC_VZombie#451` | 0d/0v/1c | — | — | `CNPC_VZombie` | — | — |  |
+| `0x103de2d0` | CNPC_VZombie::GetSchedulingErrorName | 6 | 0 | 0 | `CNPC_VZombie#451` | 0d/0v/1c | — | — | `CNPC_VZombie` | — | — |  |
 | `0x103de2f0` | CNPC_VZombie::vfunc5 | 43 | 0 | 17 | `CNPC_VZombie#5` | 0d/0v/0c | — | `+0x66e8` | — | — | — |  |
-| `0x103de470` | CNPC_VZombie::vfunc452 | 6 | 0 | 0 | `CNPC_VZombie#452` | 0d/0v/2c | — | — | — | — | — |  |
+| `0x103de470` | CNPC_VZombie::LoadedSchedules | 6 | 0 | 0 | `CNPC_VZombie#452` | 0d/0v/2c | — | — | — | — | — |  |
 | `0x103de4d0` | CNPC_VZombie::vfunc546 | 29 | 0 | 3 | `CNPC_VZombie#546` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103defc0` | CNPC_VZombie::vfunc420 | 260 | 0 | 23 | `CNPC_VZombie#420` | 0d/0v/8c | `+0x1b30`, `+0x1b34`, `+0x667c`, `+0x66d8` | `+0x0108`, `+0x05fc`, `+0x628c` | `item_w_zombie_fists`, `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | — |  |
-| `0x103df120` | CNPC_VZombie::vfunc104 | 53 | 0 | 15 | `CNPC_VZombie#104` | 0d/0v/11c | — | — | `item_w_zombie_fists`, `zombie_headshot_dmg_emitter`, +1 more | — | — |  |
-| `0x103df170` | CNPC_VZombie::vfunc103 | 183 | 0 | 26 | `CNPC_VZombie#103` | 0d/0v/0c | `+0x1a98`, `+0x5dec`, `+0x6348`, `+0x634c`, `+0x6350`, `+0x6354`, +6 more | — | — | — | — |  |
+| `0x103defc0` | CNPC_VZombie::NPCInit | 260 | 0 | 23 | `CNPC_VZombie#420` | 0d/0v/8c | `+0x1b30`, `+0x1b34`, `+0x667c`, `+0x66d8` | `+0x0108`, `+0x05fc`, `+0x628c` | `item_w_zombie_fists`, `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | — |  |
+| `0x103df120` | CNPC_VZombie::Precache | 53 | 0 | 15 | `CNPC_VZombie#104` | 0d/0v/11c | — | — | `item_w_zombie_fists`, `zombie_headshot_dmg_emitter`, +1 more | — | — |  |
+| `0x103df170` | CNPC_VZombie::Spawn | 183 | 0 | 26 | `CNPC_VZombie#103` | 0d/0v/0c | `+0x1a98`, `+0x5dec`, `+0x6348`, `+0x634c`, `+0x6350`, `+0x6354`, +6 more | — | — | — | — |  |
 | `0x103df260` | CNPC_VZombie::vfunc473 | 6 | 0 | 0 | `CNPC_VZombie#473` | 0d/0v/0c | — | — | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:828 | docs/vtmb/npc-ai/senses.md:300 |  |
-| `0x103df280` | CNPC_VZombie::vfunc138 | 6 | 0 | 0 | `CNPC_VZombie#138` | 0d/0v/1c | — | — | — | — | — |  |
-| `0x103df2e0` | CNPC_VZombie::vfunc438 | 524 | 0 | 27 | `CNPC_VZombie#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x6678` | `+0x010c`, `+0x019c`, `+0x0278`, `+0x029c`, `+0x5cc0`, `+0x6590`, +4 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | — |  |
-| `0x103df580` | CNPC_VZombie::vfunc440 | 68 | 0 | 22 | `CNPC_VZombie#440` | 0d/0v/2c | — | — | `npc_zombie: encountered schedule:[invest…` | — | — |  |
+| `0x103df280` | CNPC_VZombie::Classify | 6 | 0 | 0 | `CNPC_VZombie#138` | 0d/0v/1c | — | — | — | — | — |  |
+| `0x103df2e0` | CNPC_VZombie::SelectSchedule | 524 | 0 | 27 | `CNPC_VZombie#438` | 0d/0v/0c | `+0x1b2c`, `+0x1b30`, `+0x1b34`, `+0x6678` | `+0x010c`, `+0x019c`, `+0x0278`, `+0x029c`, `+0x5cc0`, `+0x6590`, +4 more | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | — |  |
+| `0x103df580` | CNPC_VZombie::TranslateSchedule | 68 | 0 | 22 | `CNPC_VZombie#440` | 0d/0v/2c | — | — | `npc_zombie: encountered schedule:[invest…` | — | — |  |
 | `0x103df5f0` | CNPC_VZombie::vfunc461 | 472 | 0 | 24 | `CNPC_VZombie#461` | 0d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x0738`, `+0x5cc0`, `+0x5cc4` | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | — |  |
 | `0x103df850` | CNPC_VZombie::vfunc432 | 364 | 0 | 27 | `CNPC_VZombie#432` | 0d/0v/3c | `+0x05ac`, `+0x66d8` | `+0x01dc`, `+0x0fec`, `+0x6264`, `+0x628c`, `+0x6678`, `+0x66d8`, +1 more | `zombie %s: player too far away, killing …` | — | — |  |
 | `0x103dfa20` | CNPC_VZombie::NPCThink | 197 | 0 | 27 | `CNPC_VZombie#431` | 0d/0v/0c | — | `+0x026c`, `+0x0998`, `+0x63b8`, `+0x6678` | `NULL ENTITY`, `CNPC_VZombie::NPCThink` | — | docs/vtmb/npc-ai/lifecycle.md:214 |  |
-| `0x103dfbb0` | CNPC_VZombie::vfunc301 | 363 | 0 | 20 | `CNPC_VZombie#301` | 1d/0v/0c | `+0x1b30`, `+0x1b34`, `+0x668c`, `+0x6690`, `+0x6694`, `+0x6698`, +17 more | `+0x0628`, `+0x0998`, `+0x6675`, `+0x6680`, `+0x668c`, `+0x66e0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | docs/vtmb/npc-ai/lifecycle.md:217 |  |
-| `0x103dfd80` | CNPC_VZombie::vfunc442 | 868 | 0 | 28 | `CNPC_VZombie#442` | 0d/0v/2c | `+0x1a40`, `+0x5db4`, `+0x667c` | `+0x010c`, `+0x029c`, `+0x0370`, `+0x03ec`, `+0x0700`, `+0x0874`, +8 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:832 | — |  |
-| `0x103e01d0` | CNPC_VZombie::vfunc444 | 347 | 0 | 25 | `CNPC_VZombie#444` | 0d/0v/2c | `+0x1a40` | `+0x03ec`, `+0x5d34`, `+0x5d44`, `+0x5db4`, `+0x628c`, `+0x6678`, +2 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:856 | — |  |
-| `0x103e03b0` | CNPC_VZombie::vfunc566 | 5 | 0 | 0 | `CNPC_VZombie#566` | 0d/0v/4c | — | — | — | — | — |  |
+| `0x103dfbb0` | CNPC_VZombie::CreateCorpse | 363 | 0 | 20 | `CNPC_VZombie#301` | 1d/0v/0c | `+0x1b30`, `+0x1b34`, `+0x668c`, `+0x6690`, `+0x6694`, `+0x6698`, +17 more | `+0x0628`, `+0x0998`, `+0x6675`, `+0x6680`, `+0x668c`, `+0x66e0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…` | — | docs/vtmb/npc-ai/lifecycle.md:217 |  |
+| `0x103dfd80` | CNPC_VZombie::StartTask | 868 | 0 | 28 | `CNPC_VZombie#442` | 0d/0v/2c | `+0x1a40`, `+0x5db4`, `+0x667c` | `+0x010c`, `+0x029c`, `+0x0370`, `+0x03ec`, `+0x0700`, `+0x0874`, +8 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:832 | — |  |
+| `0x103e01d0` | CNPC_VZombie::RunTask | 347 | 0 | 25 | `CNPC_VZombie#444` | 0d/0v/2c | `+0x1a40` | `+0x03ec`, `+0x5d34`, `+0x5d44`, `+0x5db4`, `+0x628c`, `+0x6678`, +2 more | — | Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp:856 | — |  |
+| `0x103e03b0` | CNPC_VZombie::FValidateHintType | 5 | 0 | 0 | `CNPC_VZombie#566` | 0d/0v/4c | — | — | — | — | — |  |
 | `0x103e0430` | CNPC_VZombie::vfunc141 | 195 | 0 | 9 | `CNPC_VZombie#141` | 0d/0v/0c | — | `+0x66e0` | — | — | — |  |
-| `0x103e0540` | CNPC_VZombie::vfunc105 | 119 | 0 | 15 | `CNPC_VZombie#105` | 0d/0v/14c | `+0x00b4`, `+0x00bc`, `+0x00c0` | `+0x00c0` | `Zombie_Female`, `Zombie_Male` | — | — |  |
+| `0x103e0540` | CNPC_VZombie::SetModel | 119 | 0 | 15 | `CNPC_VZombie#105` | 0d/0v/14c | `+0x00b4`, `+0x00bc`, `+0x00c0` | `+0x00c0` | `Zombie_Female`, `Zombie_Male` | — | — |  |
 | `0x103e05e0` | FUN_103e05e0 | 182 | 1 | 4 | — | 1d/0v/0c | — | — | — | — | — |  |
-| `0x103e06d0` | CNPC_VZombie::vfunc142 | 491 | 0 | 26 | `CNPC_VZombie#142` | 0d/0v/1c | `+0x1b30`, `+0x1b34`, `+0x66e0` | `+0x0910`, `+0x13bc`, `+0x13c0`, `+0x5c38`, `+0x6675`, `+0x66e0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…`, `zombie_headshot_dmg_emitter`, +1 more | — | — |  |
+| `0x103e06d0` | CNPC_VZombie::OnTakeDamage | 491 | 0 | 26 | `CNPC_VZombie#142` | 0d/0v/1c | `+0x1b30`, `+0x1b34`, `+0x66e0` | `+0x0910`, `+0x13bc`, `+0x13c0`, `+0x5c38`, `+0x6675`, `+0x66e0` | `E:\Vampire\main\dlls\hl2_dll\NPC_VZombie…`, `zombie_headshot_dmg_emitter`, +1 more | — | — |  |
 | `0x103e0a00` | FUN_103e0a00 | 347 | 1 | 20 | — | 1d/0v/0c | — | — | — | — | — |  |
 | `0x103e0bc0` | CNPC_VZombie::FVisible | 202 | 0 | 16 | `CNPC_VZombie#201` | 0d/0v/7c | — | `+0x026c`, `+0x029c` | `NULL ENTITY`, `CNPC_VZombie::FVisible` | — | — |  |
-| `0x103e0e80` | CNPC_VZombie::vfunc124 | 224 | 0 | 16 | `CNPC_VZombie#124` | 0d/0v/0c | — | `+0x0224`, `+0x02e0`, `+0x0728`, `+0x0910`, `+0x5c5c` | `Cond: %s⏎` | — | — |  |
+| `0x103e0e80` | CNPC_VZombie::DrawDebugTextOverlays | 224 | 0 | 16 | `CNPC_VZombie#124` | 0d/0v/0c | — | `+0x0224`, `+0x02e0`, `+0x0728`, `+0x0910`, `+0x5c5c` | `Cond: %s⏎` | — | — |  |
 | `0x103e0fa0` | CNPC_VZombie::vfunc509 | 166 | 0 | 15 | `CNPC_VZombie#509` | 0d/0v/1c | — | `+0x06fc`, `+0x07ec`, `+0x07f8`, `+0x0fe8`, `+0x1480`, `+0x5c38` | — | — | — |  |
 | `0x103e1080` | CNPC_VZombie::vfunc510 | 387 | 0 | 9 | `CNPC_VZombie#510` | 0d/1v/2c | `+0x10e8` | `+0x14b8`, `+0x1538`, `+0x153c`, `+0x6264`, `+0x628c` | `Float_Sound_Info` | — | — |  |
-| `0x103e1280` | CNPC_VZombie::vfunc24 | 34 | 0 | 8 | `CNPC_VZombie#24` | 0d/0v/0c | — | `+0x66e8` | — | — | — |  |
+| `0x103e1280` | CNPC_VZombie::OnVictimHitByMe | 34 | 0 | 8 | `CNPC_VZombie#24` | 0d/0v/0c | — | `+0x66e8` | — | — | — |  |
 | `0x103e12c0` | CNPC_VZombie::vfunc25 | 22 | 0 | 8 | `CNPC_VZombie#25` | 0d/0v/0c | — | `+0x66e8` | — | — | — |  |
 | `0x103e12f0` | CNPC_VZombie::vfunc26 | 22 | 0 | 8 | `CNPC_VZombie#26` | 0d/0v/0c | — | `+0x66e8` | — | — | — |  |
 | `0x103eec60` | FUN_103eec60 | 13 | 3 | 0 | — | 1d/0v/0c | `+0x0931` | — | — | — | — |  |

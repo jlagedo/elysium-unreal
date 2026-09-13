@@ -116,6 +116,25 @@ the retail contract the code must match, the job, what it consumes or provides, 
   by name. Oracle: `npc-kernel/unnamed.md` (the count is the record). Unrecovered: nothing —
   a name the evidence cannot settle stays `FUN_` and says why in the overlay's evidence column.
   Size: M. Effort: Sonnet / medium — mechanical, reviewed as text.
+  Landed (2026-09-13), acceptance half met. `corpus harvest` gained the slot-order,
+  translation-unit-order and message-prefix passes (`name_passes.py`, `sdk_layout.py`) and a
+  slot-identity pass (a named body at slot *N* names every override at *N*), all held to the
+  image's `RET n` arity; docs-proximity rows lose to them. The SDK premise did not hold: the
+  Bloodlines SDK tree has no `dlls/` headers, so the declarations are Source SDK 2013's
+  (`$ELYSIUM_WORK_ROOT/research/sources/source-sdk-2013/src`). Leave-one-out over
+  `CAI_BaseNPC`'s named slots: 112 agree, 0 disagree. The overlay went from 157 rows to 2,009
+  (1,455 inferred, 239 doc, 315 unsettled) through three harvest → apply rounds to a fixpoint.
+  `coverage.md` now counts `vfuncN` as unnamed; on that measure the closure went 4,064 → 3,235
+  unnamed and the core 2,155 → 1,371 (`FUN_` alone: 835). **Met:** every `CAI_BaseNPC` slot
+  0–582 is named or carries an `unsettled` reason (315 do). **Not met:** core unnamed under
+  200. Of the 1,371, 1,084 are slot bodies at slots where no body carries a name, the named
+  bodies disagree, the arity differs, or the body is folded; the other 287 fill no slot, and
+  no SDK definition run or message reaches them (Troika's units — `AI_BaseNPCTroika.cpp`,
+  `NPC_V*.cpp` — have no SDK source at all). What would move them: the 2003 headers, or a
+  walked body per name — 29c–29e's verdicts.
+  Recovered on the way: slot 437 is `PreSelectSchedule` (the image's string; the oracle called
+  `0x102ae920` `GetSchedule`); slot 439 is `SelectFailSchedule` inside `GetFailSchedule`
+  `0x10281730`.
 - [ ] **29b. The shape: every field and every slot declared.**
   Retail: `fields.md` — the 835-offset `CAI_BaseNPCTroika` layout (`CAI_BaseNPC`'s 620 are its
   prefix), plus the species-only offsets and the undeclared `field_0x…` words the walk touches;

@@ -541,7 +541,9 @@ blocked" local); then **`HasCondition(COND_TASK_FAILED 0x5c)` with the state unc
 block takes the fail route** — `0x10281730`: current local schedule id (slot 447), current task
 (`0x1028a150` = `&m_pSchedule->tasks[m_iCurTask]`, 8 bytes each), then **slot 439
 `GetFailSchedule(curSched, curTask, m_failSchedule)`** — `0x1028abe0` on all 79 classes, no
-override: `m_failSchedule (+0x5c54) ? m_failSchedule : 0x43` — then the selector trace
+override: `m_failSchedule (+0x5c54) ? m_failSchedule : 0x43`; by slot order and its 3-word
+`RET` the virtual is the SDK's `SelectFailSchedule`, and `0x10281730` is the non-virtual
+`GetFailSchedule` around it (story 29a) — then the selector trace
 (`+0x1b2c = 1`, file/line `AI_BaseNPC_Schedule.cpp:682`) and **`SetSchedule(int)` `0x102cc1f0`**:
 **slot 440 `TranslateSchedule`** on the answer, then slot 446 `GetScheduleOfType` (`0x102cc260` →
 `g_AI_SchedulesManager.GetScheduleFromID` `0x1030f300`, a linked-list walk on `sched+0x1c`); a

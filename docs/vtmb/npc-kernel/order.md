@@ -6,7 +6,7 @@ _vampire.dll sha256 `c546f4de2003624d…`, corpus dumped 2026-08-21; closure dep
 Strongly connected components of the closure's call graph (direct and resolved virtual edges), layered by Kahn's algorithm: a layer's functions call only earlier layers. A component with more than one function is a cycle and is listed as one unit. Field dependencies are annotations, not edges: *Producers later* names fields a function reads whose every writer sits in a later layer (port the writer first, or the seam answers nothing for a while); *Unwritten* names fields nothing in the closure writes — their producer is another subsystem's, see `fields.md` *Outside touches*.
 
 
-## Layer 0 — 2138 functions
+## Layer 0 — 2141 functions
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
@@ -21,7 +21,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10026530` CAISound::FUN_10026530 |  |  |
 | `0x10026550` CAISound::FUN_10026550 |  |  |
 | `0x10026570` CAISound::FUN_10026570 |  |  |
-| `0x10026590` CAISound::FUN_10026590 |  |  |
+| `0x10026590` CBaseEntity::OnVictimHitByMe |  |  |
 | `0x100265b0` CAISound::FUN_100265b0 |  |  |
 | `0x100265d0` CAISound::FUN_100265d0 |  |  |
 | `0x100265f0` CAISound::FUN_100265f0 |  |  |
@@ -30,7 +30,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10026650` CAISound::FUN_10026650 |  |  |
 | `0x10026670` CAISound::FUN_10026670 |  |  |
 | `0x10026690` CAISound::FUN_10026690 |  |  |
-| `0x100266b0` CAISound::FUN_100266b0 |  |  |
+| `0x100266b0` CBaseEntity::GetHighlightMaterial |  |  |
 | `0x100266d0` CAISound::FUN_100266d0 |  |  |
 | `0x100266f0` CAISound::FUN_100266f0 |  |  |
 | `0x10026710` CAISound::FUN_10026710 |  |  |
@@ -43,8 +43,10 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100267f0` CAISound::FUN_100267f0 |  |  |
 | `0x10026810` CAISound::FUN_10026810 |  |  |
 | `0x10026830` CAISound::FUN_10026830 |  |  |
-| `0x100268d0` CAISound::FUN_100268d0 |  |  |
-| `0x100268f0` CAISound::FUN_100268f0 |  |  |
+| `0x10026850` CBaseEntity::GetCameraViewpointPosition |  |  |
+| `0x10026890` CBaseEntity::GetCameraTargetPosition |  |  |
+| `0x100268d0` CBaseEntity::GetCameraFadeInTime |  |  |
+| `0x100268f0` CBaseEntity::GetCameraFadeOutTime |  |  |
 | `0x10026910` CAISound::FUN_10026910 |  |  |
 | `0x10026930` CAISound::FUN_10026930 |  |  |
 | `0x10026950` CAISound::FUN_10026950 |  |  |
@@ -53,14 +55,14 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100269b0` CAISound::FUN_100269b0 |  |  |
 | `0x100269d0` CAISound::FUN_100269d0 |  |  |
 | `0x100269f0` CAISound::FUN_100269f0 |  |  |
-| `0x10026a90` CAISound::FUN_10026a90 |  |  |
-| `0x10026ab0` CAISound::FUN_10026ab0 |  |  |
+| `0x10026a90` CBaseEntity::ShouldIgnoreCollision |  |  |
+| `0x10026ab0` CBaseEntity::NavIgnoreCollision |  |  |
 | `0x10026ad0` CAISound::FUN_10026ad0 |  |  |
-| `0x10026af0` CAISound::FUN_10026af0 |  |  |
-| `0x10026b10` CAISound::FUN_10026b10 |  |  |
-| `0x10026b30` CAISound::FUN_10026b30 |  |  |
-| `0x10026b90` CAISound::FUN_10026b90 |  |  |
-| `0x10026bb0` CAISound::FUN_10026bb0 |  |  |
+| `0x10026af0` CBaseEntity::CausesImpactDamage |  |  |
+| `0x10026b10` CBaseEntity::ReceivesImpactDamage |  |  |
+| `0x10026b30` CBaseEntity::DrawDebugStatOverlays |  |  |
+| `0x10026b90` CBaseEntity::Precache |  |  |
+| `0x10026bb0` CBaseEntity::MemberSync |  |  |
 | `0x10026bd0` CAISound::FUN_10026bd0 |  |  |
 | `0x10026bf0` CAISound::FUN_10026bf0 |  |  |
 | `0x10026c10` CAISound::FUN_10026c10 |  |  |
@@ -86,7 +88,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10027000` CAISound::FUN_10027000 |  |  |
 | `0x10027040` CAISound::FUN_10027040 |  |  |
 | `0x10027060` CAISound::FUN_10027060 |  |  |
-| `0x10027080` CAISound::FUN_10027080 |  |  |
+| `0x10027080` CBaseEntity::StartBlocked |  |  |
 | `0x100270a0` CAISound::FUN_100270a0 |  |  |
 | `0x100270c0` CAISound::FUN_100270c0 |  |  |
 | `0x100270e0` CAISound::FUN_100270e0 |  |  |
@@ -97,7 +99,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10027350` CAISound::FUN_10027350 |  |  |
 | `0x10027370` CAISound::FUN_10027370 |  |  |
 | `0x100273b0` CAISound::FUN_100273b0 |  |  |
-| `0x100273d0` CAISound::FUN_100273d0 |  |  |
+| `0x100273d0` CBaseEntity::VPhysicsShadowUpdate |  |  |
 | `0x100273f0` CAISound::FUN_100273f0 |  |  |
 | `0x10027410` CAISound::FUN_10027410 |  |  |
 | `0x10027430` CAISound::FUN_10027430 |  |  |
@@ -158,7 +160,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10075ca0` FUN_10075ca0 |  |  |
 | `0x10075e70` FUN_10075e70 |  |  |
 | `0x10075f10` FUN_10075f10 |  |  |
-| `0x10075f30` FUN_10075f30 |  |  |
+| `0x10075f30` HasEndTime |  |  |
 | `0x100766d0` FUN_100766d0 |  |  |
 | `0x10077430` FUN_10077430 |  |  |
 | `0x10077710` FUN_10077710 |  |  |
@@ -283,6 +285,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1009d5e0` CBaseEntity::GetVSoundTableIdx |  |  |
 | `0x1009d6a0` CBaseEntity::GetVSoundGroup |  |  |
 | `0x1009d760` CBaseEntity::GetVSoundGroupFemale |  |  |
+| `0x1009d820` CBaseEntity::IsMonster |  |  |
 | `0x1009d850` CBaseEntity::AdjustSoundDistForStealth |  |  |
 | `0x1009e100` CAISound::FUN_1009e100 |  |  |
 | `0x1009e120` CBaseEntity::PostConstructor |  |  |
@@ -334,7 +337,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100a6ad0` CBaseEntity::VPhysicsGetObjectList |  |  |
 | `0x100a6c50` CBaseEntity::DecalTrace |  |  |
 | `0x100a6fa0` CBaseEntity::FVisible |  |  |
-| `0x100a7a80` CAISound::FUN_100a7a80 |  |  |
+| `0x100a7a80` CBaseEntity::Classify |  |  |
 | `0x100a7aa0` CBaseEntity::PassesDamageFilter |  |  |
 | `0x100a7d00` CBaseEntity::DispatchTraceAttack |  |  |
 | `0x100a7de0` CBaseEntity::TraceAttack |  |  |
@@ -430,10 +433,10 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100b5110` FUN_100b5110 |  |  |
 | `0x100b5190` FUN_100b5190 |  |  |
 | `0x100b5340` FUN_100b5340 |  |  |
-| `0x100b5ab0` CBaseFlex::vfunc105 | `+0x045c` ← 0x100fb1f0, 0x102d0b60 |  |
+| `0x100b5ab0` CBaseFlex::SetModel | `+0x045c` ← 0x100fb1f0, 0x102d0b60 |  |
 | `0x100b5b00` CAI_BaseNPC::FUN_100b5b00 |  | `+0x0848` |
 | `0x100b5b40` CAI_BaseNPC::FUN_100b5b40 |  | `+0x0848` |
-| `0x100b5ce0` CAI_BaseNPC::FUN_100b5ce0 | `+0x0854` ← 0x1025fa50 |  |
+| `0x100b5ce0` CBaseFlex::Blink | `+0x0854` ← 0x1025fa50 |  |
 | `0x100b6510` FUN_100b6510 |  |  |
 | `0x100b68d0` FUN_100b68d0 |  |  |
 | `0x100b6f10` FUN_100b6f10 |  |  |
@@ -563,12 +566,12 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1013dce0` FUN_1013dce0 |  |  |
 | `0x10146190` FUN_10146190 |  |  |
 | `0x10146790` FUN_10146790 |  |  |
-| `0x1014f6f0` CAI_BaseNPC::FUN_1014f6f0 |  |  |
+| `0x1014f6f0` CBaseCombatCharacter::GetFollowerBoss |  |  |
 | `0x1014f710` CAI_BaseNPC::FUN_1014f710 |  |  |
 | `0x1014f730` CAI_BaseNPC::FUN_1014f730 |  |  |
-| `0x1014f750` CAI_BaseNPC::FUN_1014f750 |  |  |
-| `0x1014f770` CAI_BaseNPC::FUN_1014f770 |  |  |
-| `0x1014f790` CAI_BaseNPC::FUN_1014f790 |  |  |
+| `0x1014f750` CBaseCombatCharacter::PlayerDefenderBlockReaction |  |  |
+| `0x1014f770` CBaseCombatCharacter::PlayerAttackerBlockedReaction |  |  |
+| `0x1014f790` CBaseCombatCharacter::PlayerKnockbackReaction |  |  |
 | `0x1014f7b0` CAI_BaseNPC::FUN_1014f7b0 |  |  |
 | `0x1014f7d0` CAI_BaseNPC::FUN_1014f7d0 |  |  |
 | `0x1014f7f0` CAI_BaseNPC::FUN_1014f7f0 |  |  |
@@ -604,7 +607,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10175400` FUN_10175400 | `+0x1478` ← 0x1033a9e0, 0x1033b890 |  |
 | `0x101764d0` FUN_101764d0 |  |  |
 | `0x10178120` FUN_10178120 |  |  |
-| `0x1017cf90` FUN_1017cf90 |  |  |
+| `0x1017cf90` GetActiveCameraEntity |  |  |
 | `0x1017d900` FUN_1017d900 |  |  |
 | `0x1017dd80` FUN_1017dd80 |  |  |
 | `0x1017de60` FUN_1017de60 |  |  |
@@ -643,19 +646,19 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a64c0` CAI_BaseNPC::FUN_101a64c0 |  |  |
 | `0x101a64e0` CAI_BaseNPC::FUN_101a64e0 |  |  |
 | `0x101a6500` CAI_BaseNPC::FUN_101a6500 |  |  |
-| `0x101a6520` CAI_BaseNPC::FUN_101a6520 |  |  |
-| `0x101a6540` CAI_BaseNPC::FUN_101a6540 |  |  |
-| `0x101a6560` CAI_BaseNPC::FUN_101a6560 |  |  |
+| `0x101a6520` CAI_BaseNPC::ShouldSavePhysics |  |  |
+| `0x101a6540` CAI_BaseNPC::PostNPCInit |  |  |
+| `0x101a6560` CAI_BaseNPC::PrescheduleThink |  |  |
 | `0x101a6580` CAI_BaseNPC::FUN_101a6580 |  |  |
-| `0x101a6660` CAI_BaseNPC::FUN_101a6660 |  |  |
+| `0x101a6660` CAI_BaseNPC::GetSchedulingErrorName |  |  |
 | `0x101a6680` CAI_BaseNPC::FUN_101a6680 |  |  |
 | `0x101a66a0` CAI_BaseNPC::FUN_101a66a0 |  |  |
 | `0x101a66c0` CAI_BaseNPC::FUN_101a66c0 |  |  |
 | `0x101a66e0` CAI_BaseNPC::FUN_101a66e0 |  |  |
-| `0x101a6700` CAI_BaseNPC::FUN_101a6700 |  |  |
+| `0x101a6700` CAI_BaseNPC::ShouldGoToIdleState |  |  |
 | `0x101a6720` CAI_BaseNPC::FUN_101a6720 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
-| `0x101a6740` CAI_BaseNPC::FUN_101a6740 |  |  |
-| `0x101a6760` CAI_BaseNPC::FUN_101a6760 |  |  |
+| `0x101a6740` CAI_BaseNPC::OnChangeActivity |  |  |
+| `0x101a6760` CAI_BaseNPC::QueryHearSound |  |  |
 | `0x101a6780` CAI_BaseNPC::FUN_101a6780 |  |  |
 | `0x101a67a0` CAI_BaseNPC::FUN_101a67a0 |  |  |
 | `0x101a67c0` CAI_BaseNPC::FUN_101a67c0 |  |  |
@@ -684,9 +687,9 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a6ae0` CAI_BaseNPC::FUN_101a6ae0 |  |  |
 | `0x101a6b00` CAI_BaseNPC::FUN_101a6b00 |  |  |
 | `0x101a6b20` CAI_BaseNPC::FUN_101a6b20 |  |  |
-| `0x101a6b40` CAI_BaseNPC::FUN_101a6b40 |  |  |
-| `0x101a6b60` CAI_BaseNPC::FUN_101a6b60 |  |  |
-| `0x101a6b80` CAI_BaseNPC::FUN_101a6b80 |  |  |
+| `0x101a6b40` CAI_BaseNPC::StepHeight |  |  |
+| `0x101a6b60` CAI_BaseNPC::GetMaxJumpSpeed |  |  |
+| `0x101a6b80` CAI_BaseNPC::GetJumpGravity |  |  |
 | `0x101a6ba0` CAI_BaseNPC::FUN_101a6ba0 |  |  |
 | `0x101a6bc0` CAI_BaseNPC::FUN_101a6bc0 |  |  |
 | `0x101a6be0` CAI_BaseNPC::FUN_101a6be0 |  |  |
@@ -697,7 +700,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a6ca0` CAI_BaseNPC::FUN_101a6ca0 |  |  |
 | `0x101a6cc0` CAI_BaseNPC::FUN_101a6cc0 |  |  |
 | `0x101a6d00` CAI_BaseNPC::FUN_101a6d00 |  |  |
-| `0x101a6da0` CCineAISchedule::FUN_101a6da0 |  |  |
+| `0x101a6da0` CCineNPC::FInViewCone |  |  |
 | `0x101a6dc0` CCineAISchedule::FUN_101a6dc0 |  |  |
 | `0x101a6de0` CCineAISchedule::FUN_101a6de0 |  |  |
 | `0x101a6e00` CCineAISchedule::FUN_101a6e00 |  |  |
@@ -705,8 +708,8 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a6ec0` FUN_101a6ec0 |  |  |
 | `0x101a7210` CCineNPC::vfunc585 |  |  |
 | `0x101a7540` FUN_101a7540 | `+0x5f74` ← 0x101a6f10, 0x1025fa50 |  |
-| `0x101a7580` CCineAISchedule::FUN_101a7580 |  |  |
-| `0x101a75a0` CCineAISchedule::FUN_101a75a0 |  |  |
+| `0x101a7580` CCineNPC::Blocked |  |  |
+| `0x101a75a0` CCineNPC::Touch |  |  |
 | `0x101a8930` FUN_101a8930 |  |  |
 | `0x101a9060` CCineAI::vfunc585 |  |  |
 | `0x101a9620` CCineAISchedule::vfunc82 |  |  |
@@ -716,9 +719,9 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101aa610` CAI_BaseNPCTroika::FUN_101aa610 |  |  |
 | `0x101aa630` CAI_BaseNPCTroika::FUN_101aa630 |  |  |
 | `0x101aa650` CAI_BaseNPCTroika::FUN_101aa650 |  |  |
-| `0x101aa670` CAI_BaseNPCTroika::FUN_101aa670 |  |  |
+| `0x101aa670` CAI_BaseNPCTroika::GetMaxJumpSpeed |  |  |
 | `0x101aa690` CAI_BaseNPCTroika::FUN_101aa690 |  |  |
-| `0x101aa6b0` CAI_BaseNPCTroika::FUN_101aa6b0 | `+0x63fc` ← 0x1029a0b0, 0x102ae140, 0x102af660 |  |
+| `0x101aa6b0` CAI_BaseNPCTroika::ShouldGoToIdleState | `+0x63fc` ← 0x1029a0b0, 0x102ae140, 0x102af660 |  |
 | `0x101aa6d0` CAI_BaseNPCTroika::FUN_101aa6d0 |  |  |
 | `0x101aa6f0` CAI_BaseNPCTroika::FUN_101aa6f0 |  |  |
 | `0x101aa710` CAI_BaseNPCTroika::FUN_101aa710 |  |  |
@@ -726,14 +729,14 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101aa750` CAI_BaseNPCTroika::FUN_101aa750 |  |  |
 | `0x101aa770` CAI_BaseNPCTroika::FUN_101aa770 |  |  |
 | `0x101aa790` CAI_BaseNPCTroika::FUN_101aa790 |  |  |
-| `0x101aa7b0` CAI_BaseNPCTroika::FUN_101aa7b0 |  |  |
-| `0x101aa850` CPayphone::vfunc363 |  |  |
+| `0x101aa7b0` CAI_BaseNPCTroika::GetSchedulingErrorName |  |  |
+| `0x101aa850` CPayphone::FInViewCone |  |  |
 | `0x101aa870` CPayphone::vfunc362 |  |  |
 | `0x101aa890` CPayphone::vfunc365 |  |  |
 | `0x101aa8b0` CPayphone::vfunc364 |  |  |
-| `0x101aa8d0` CPayphone::vfunc294 |  |  |
+| `0x101aa8d0` CPayphone::IsValidStealthKillTarget |  |  |
 | `0x101aa930` CPayphone::vfunc72 |  |  |
-| `0x101aabd0` CPayphone::vfunc138 |  |  |
+| `0x101aabd0` CPayphone::Classify |  |  |
 | `0x101aad90` CPayphone::vfunc286 |  |  |
 | `0x101aae20` CPayphone::vfunc359 |  |  |
 | `0x101aae40` CPayphone::vfunc37 |  |  |
@@ -954,17 +957,17 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10260da0` FUN_10260da0 |  |  |
 | `0x102623a0` CAI_Motor::FUN_102623a0 ‼ |  |  |
 | `0x102623e0` CAI_Motor::FUN_102623e0 |  |  |
-| `0x102624b0` CAI_BaseHumanoid::vfunc516 |  |  |
+| `0x102624b0` CAI_BaseHumanoid::MaxYawSpeed |  |  |
 | `0x10264330` FUN_10264330 |  |  |
 | `0x102652d0` FUN_102652d0 |  |  |
 | `0x102652f0` FUN_102652f0 |  |  |
-| `0x10265800` FUN_10265800 |  |  |
-| `0x10265a40` FUN_10265a40 |  |  |
+| `0x10265800` IsAIEnabled |  |  |
+| `0x10265a40` BecomeDead |  |  |
 | `0x10266630` CAI_BaseNPC::FUN_10266630 |  |  |
 | `0x10266660` CAI_BaseNPC::FUN_10266660 |  |  |
 | `0x1026a2a0` FUN_1026a2a0 | `+0x5cdc` ← 0x1027cae0 |  |
 | `0x1026a8a0` CAI_BaseNPC::FUN_1026a8a0 |  |  |
-| `0x1026a8d0` CAI_BaseNPC::FUN_1026a8d0 |  |  |
+| `0x1026a8d0` CAI_BaseNPC::FValidateHintType |  |  |
 | `0x1026a8f0` CAI_BaseNPC::FUN_1026a8f0 |  |  |
 | `0x1026a910` CAI_BaseNPC::FUN_1026a910 |  |  |
 | `0x1026ae90` CAI_BaseNPC::FUN_1026ae90 |  |  |
@@ -973,33 +976,33 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1026d7f0` CAI_BaseNPC::FUN_1026d7f0 ‼ | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 | `+0x5d74` |
 | `0x1026d890` CAI_BaseNPC::FUN_1026d890 |  |  |
 | `0x1026d920` CAI_BaseNPC::FUN_1026d920 |  |  |
-| `0x1026dc00` FUN_1026dc00 |  |  |
-| `0x1026dc30` FUN_1026dc30 |  |  |
-| `0x1026dc60` FUN_1026dc60 |  |  |
-| `0x1026e3e0` CAI_BaseNPC::FUN_1026e3e0 |  |  |
+| `0x1026dc00` CAI_BaseNPC::CapabilitiesAdd |  |  |
+| `0x1026dc30` CAI_BaseNPC::CapabilitiesRemove |  |  |
+| `0x1026dc60` CAI_BaseNPC::CapabilitiesClear |  |  |
+| `0x1026e3e0` CAI_BaseNPC::OnStateChange |  |  |
 | `0x1026f4d0` FUN_1026f4d0 | `+0x0730` ← 0x1012a1d0, 0x1018e2a0 | `+0x0734` |
 | `0x10270180` FUN_10270180 |  |  |
 | `0x10270290` FUN_10270290 |  |  |
 | `0x102707d0` FUN_102707d0 |  |  |
 | `0x10270aa0` FUN_10270aa0 |  |  |
 | `0x102718e0` FUN_102718e0 |  |  |
-| `0x10271f50` CAI_BaseNPC::PreTranslate_Base |  |  |
+| `0x10271f50` CAI_BaseNPC::NPC_EarlyTranslateActivity |  |  |
 | `0x10272900` CAI_BaseNPC::FUN_10272900 | `+0x5ccc` ← 0x10272400, 0x102c0f70 |  |
 | `0x10273e10` CAI_BaseNPC::FUN_10273e10 |  |  |
-| `0x10273f90` FUN_10273f90 |  |  |
+| `0x10273f90` TaskIsRunning |  |  |
 | `0x102781a0` FUN_102781a0 |  |  |
 | `0x10278cb0` CAI_BaseNPC::FUN_10278cb0 ‼ | `+0x5d44` ← 0x1027cae0 |  |
 | `0x10278d20` CAI_BaseNPC::FUN_10278d20 ‼ | `+0x5d44` ← 0x1027cae0 |  |
 | `0x10278d90` CAI_BaseNPC::FUN_10278d90 ‼ | `+0x5d44` ← 0x1027cae0 |  |
-| `0x10278e00` CAI_BaseNPC::FUN_10278e00 | `+0x5d44` ← 0x1027cae0 |  |
+| `0x10278e00` CAI_BaseNPC::GetFacingDirection | `+0x5d44` ← 0x1027cae0 |  |
 | `0x10279b70` FUN_10279b70 |  |  |
-| `0x10279cc0` FUN_10279cc0 |  |  |
+| `0x10279cc0` SetTarget |  |  |
 | `0x1027a400` CAI_BaseNPC::FUN_1027a400 |  |  |
 | `0x1027a530` CAI_BaseNPC::FUN_1027a530 | `+0x10e8` ← 0x103e1080, `+0x10ec` ← 0x10294f40 |  |
 | `0x1027a5c0` CAI_BaseNPC::FUN_1027a5c0 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x1027a640` CAI_BaseNPC::FUN_1027a640 |  |  |
 | `0x1027a7c0` CAI_BaseNPC::FUN_1027a7c0 |  |  |
-| `0x1027c2e0` CAI_BaseNPC::FUN_1027c2e0 |  |  |
+| `0x1027c2e0` CAI_BaseNPC::LoadedSchedules |  |  |
 | `0x1027caa0` CAI_BaseNPC::FUN_1027caa0 |  |  |
 | `0x1027cd50` FUN_1027cd50 |  |  |
 | `0x1027cda0` FUN_1027cda0 |  |  |
@@ -1014,7 +1017,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1027e660` FUN_1027e660 |  |  |
 | `0x1027e760` FUN_1027e760 |  |  |
 | `0x1027e7f0` FUN_1027e7f0 |  |  |
-| `0x1027ee00` CAI_BaseNPC::FUN_1027ee00 |  |  |
+| `0x1027ee00` CAI_BaseNPC::GetLastSharedCondition |  |  |
 | `0x1027ee20` FUN_1027ee20 |  |  |
 | `0x1027f270` FUN_1027f270 |  |  |
 | `0x1027f610` FUN_1027f610 |  |  |
@@ -1025,11 +1028,11 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1027fae0` FUN_1027fae0 |  |  |
 | `0x1027fc10` FUN_1027fc10 |  |  |
 | `0x10280a20` FUN_10280a20 | `+0x5cf0` ← 0x1027a700, 0x102827f0, 0x102a1910 |  |
-| `0x10280bb0` CAI_BaseNPC::FUN_10280bb0 |  |  |
+| `0x10280bb0` CAI_BaseNPC::MaxYawSpeed |  |  |
 | `0x10280c80` FUN_10280c80 |  |  |
-| `0x10280d30` FUN_10280d30 |  |  |
+| `0x10280d30` ClearSchedule |  |  |
 | `0x10280db0` FUN_10280db0 |  |  |
-| `0x10280fb0` CAI_BaseNPC::FUN_10280fb0 |  |  |
+| `0x10280fb0` CAI_BaseNPC::BuildScheduleTestBits |  |  |
 | `0x10280fd0` CAI_BaseNPC::FUN_10280fd0 |  |  |
 | `0x10288510` FUN_10288510 |  |  |
 | `0x10288540` FUN_10288540 |  |  |
@@ -1042,7 +1045,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10289ce0` CAI_BaseNPC::FUN_10289ce0 |  |  |
 | `0x1028a150` FUN_1028a150 |  |  |
 | `0x1028a260` FUN_1028a260 ‼ |  |  |
-| `0x1028abe0` CAI_BaseNPC::FUN_1028abe0 | `+0x5c54` ← 0x10280e50, 0x102827f0, 0x1036d1d0 |  |
+| `0x1028abe0` CAI_BaseNPC::SelectFailSchedule | `+0x5c54` ← 0x10280e50, 0x102827f0, 0x1036d1d0 |  |
 | `0x1028ac10` FUN_1028ac10 |  |  |
 | `0x1028ac80` FUN_1028ac80 |  |  |
 | `0x1028acc0` FUN_1028acc0 |  |  |
@@ -1059,18 +1062,18 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1028e940` FUN_1028e940 | `+0x6604` ← 0x1029a0b0 |  |
 | `0x1028eb30` FUN_1028eb30 |  |  |
 | `0x1028fc90` FUN_1028fc90 |  |  |
-| `0x10290660` FUN_10290660 |  |  |
+| `0x10290660` IsThinkDue |  |  |
 | `0x102906e0` FUN_102906e0 |  |  |
-| `0x10290fc0` FUN_10290fc0 | `+0x624c` ← 0x1029a0b0, 0x1029adb0, 0x10369120 |  |
+| `0x10290fc0` CalcNextMoveThink | `+0x624c` ← 0x1029a0b0, 0x1029adb0, 0x10369120 |  |
 | `0x10293d70` FUN_10293d70 |  |  |
 | `0x10293d90` FUN_10293d90 |  |  |
 | `0x10293dc0` FUN_10293dc0 |  |  |
 | `0x10293df0` FUN_10293df0 |  |  |
-| `0x10295710` CAI_BaseNPCTroika::ClassTranslate_Troika |  |  |
-| `0x10295a60` CAI_BaseNPCTroika::FUN_10295a60 |  |  |
+| `0x10295710` CAI_BaseNPCTroika::NPC_TranslateActivity |  |  |
+| `0x10295a60` CAI_BaseNPCTroika::OnChangeActivity |  |  |
 | `0x10295a80` FUN_10295a80 |  |  |
 | `0x10296820` FUN_10296820 |  |  |
-| `0x10299d80` CAI_BaseNPCTroika::FUN_10299d80 |  |  |
+| `0x10299d80` CAI_BaseNPCTroika::Classify |  |  |
 | `0x1029a070` CAI_BaseNPCTroika::FUN_1029a070 |  |  |
 | `0x1029c970` FUN_1029c970 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x5cdc` ← 0x1027cae0, `+0x63b8` ← 0x1028fb70 |  |
 | `0x1029c9f0` FUN_1029c9f0 |  |  |
@@ -1137,16 +1140,16 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102b5260` CAI_BaseNPCTroika::FUN_102b5260 |  |  |
 | `0x102b5dc0` FUN_102b5dc0 |  |  |
 | `0x102b8cd0` FUN_102b8cd0 |  |  |
-| `0x102b97f0` CAI_BaseNPCTroika::FUN_102b97f0 |  |  |
+| `0x102b97f0` CAI_BaseNPCTroika::LoadedSchedules |  |  |
 | `0x102bf310` FUN_102bf310 | `+0x0564` ← 0x102da600, 0x102da7c0 |  |
 | `0x102bfdf0` FUN_102bfdf0 |  |  |
 | `0x102c0470` FUN_102c0470 |  |  |
 | `0x102c0aa0` FUN_102c0aa0 | `+0x64cc` ← 0x102c0520, 0x102c0ca0 |  |
-| `0x102c1170` FUN_102c1170 | `+0x64c0` ← 0x102c0520, 0x102c0ca0 | `+0x64ec` |
+| `0x102c1170` IsInDialog | `+0x64c0` ← 0x102c0520, 0x102c0ca0 | `+0x64ec` |
 | `0x102c4470` FUN_102c4470 |  |  |
-| `0x102c4640` FUN_102c4640 |  |  |
+| `0x102c4640` SetFollowerType |  |  |
 | `0x102c4e80` FUN_102c4e80 |  |  |
-| `0x102c5470` CAI_BaseNPCTroika::FUN_102c5470 |  |  |
+| `0x102c5470` CAI_BaseNPCTroika::GetFollowerBoss |  |  |
 | `0x102c5870` CAI_BaseNPCTroika::FUN_102c5870 |  |  |
 | `0x102c5890` CAI_BaseNPCTroika::FUN_102c5890 |  |  |
 | `0x102c6370` FUN_102c6370 |  |  |
@@ -1207,7 +1210,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102d0370` CAI_Hint::vfunc82 |  |  |
 | `0x102d0ab0` FUN_102d0ab0 |  |  |
 | `0x102d0b20` FUN_102d0b20 |  |  |
-| `0x102d1320` CAI_Hint::vfunc163 |  |  |
+| `0x102d1320` CAI_Hint::IsViewable |  |  |
 | `0x102d1350` FUN_102d1350 |  |  |
 | `0x102d1420` FUN_102d1420 |  |  |
 | `0x102d1450` FUN_102d1450 |  |  |
@@ -1228,8 +1231,8 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102d61e0` FUN_102d61e0 |  |  |
 | `0x102d6210` FUN_102d6210 |  |  |
 | `0x102d6230` FUN_102d6230 |  |  |
-| `0x102d72b0` CAI_TestHull::vfunc522 |  |  |
-| `0x102d72d0` CAI_TestHull::vfunc523 |  |  |
+| `0x102d72b0` CAI_TestHull::StepHeight |  |  |
+| `0x102d72d0` CAI_TestHull::GetMaxJumpSpeed |  |  |
 | `0x102d8a90` FUN_102d8a90 |  |  |
 | `0x102d8b50` FUN_102d8b50 |  |  |
 | `0x102d8bc0` FUN_102d8bc0 |  |  |
@@ -1257,7 +1260,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102ddc40` FUN_102ddc40 |  |  |
 | `0x102dfa20` FUN_102dfa20 |  |  |
 | `0x102e0150` FUN_102e0150 |  |  |
-| `0x102e0210` FUN_102e0210 |  |  |
+| `0x102e0210` IsEluded |  |  |
 | `0x102e0900` FUN_102e0900 |  |  |
 | `0x102e09c0` FUN_102e09c0 |  |  |
 | `0x102e0a40` FUN_102e0a40 |  |  |
@@ -1376,9 +1379,9 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103160a0` FUN_103160a0 |  |  |
 | `0x103160c0` FUN_103160c0 |  |  |
 | `0x103165f0` FUN_103165f0 |  |  |
-| `0x10316660` FUN_10316660 |  |  |
-| `0x103166b0` FUN_103166b0 |  |  |
-| `0x10316700` FUN_10316700 |  |  |
+| `0x10316660` SetSquadFocus |  |  |
+| `0x103166b0` GetSquadFocus |  |  |
+| `0x10316700` LeaveSquad |  |  |
 | `0x10316760` FUN_10316760 |  |  |
 | `0x103167f0` FUN_103167f0 |  |  |
 | `0x10316890` FUN_10316890 |  |  |
@@ -1433,7 +1436,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1033cc30` CBaseCombatCharacter::AddPreDisciplineEffect |  |  |
 | `0x1033ccd0` CBaseCombatCharacter::RemovePreDisciplineEffects |  |  |
 | `0x1033cd70` CBaseCombatCharacter::AddDisciplineEffect |  |  |
-| `0x1033d2f0` FUN_1033d2f0 | `+0x0eb0` ← 0x1029a0b0, 0x1033d190, `+0x0eb4` ← 0x1029a0b0, 0x1033d190 |  |
+| `0x1033d2f0` HasStatusEffect | `+0x0eb0` ← 0x1029a0b0, 0x1033d190, `+0x0eb4` ← 0x1029a0b0, 0x1033d190 |  |
 | `0x1033d330` FUN_1033d330 | `+0x0eb0` ← 0x1029a0b0, 0x1033d190, `+0x0eb4` ← 0x1029a0b0, 0x1033d190, `+0x0eb8` ← 0x1029a0b0, `+0x0ebc` ← 0x1029a0b0 |  |
 | `0x1033d380` FUN_1033d380 |  | `+0x0fb4` |
 | `0x1033d410` FUN_1033d410 |  | `+0x0fb4` |
@@ -1460,11 +1463,11 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1034a030` FUN_1034a030 |  |  |
 | `0x1034a170` FUN_1034a170 |  |  |
 | `0x1034a1a0` FUN_1034a1a0 |  |  |
-| `0x1034a2d0` CGenericNPC::vfunc138 |  |  |
-| `0x1034a2f0` CGenericNPC::vfunc516 |  |  |
+| `0x1034a2d0` CGenericNPC::Classify |  |  |
+| `0x1034a2f0` CGenericNPC::MaxYawSpeed |  |  |
 | `0x1034a6b0` CGenericNPC::vfunc473 |  |  |
 | `0x1034ab50` CNPCMaker::vfunc82 |  |  |
-| `0x1034ae50` CNPCMaker::vfunc363 |  |  |
+| `0x1034ae50` CNPCMaker::FInViewCone |  |  |
 | `0x1034ae70` CNPCMaker::vfunc362 |  |  |
 | `0x1034ae90` CNPCMaker::vfunc365 |  |  |
 | `0x1034aeb0` CNPCMaker::vfunc364 |  |  |
@@ -1473,101 +1476,101 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1034af10` CNPCMaker::FUN_1034af10 |  |  |
 | `0x1034b140` CNPCMaker::FUN_1034b140 |  |  |
 | `0x1034b430` FUN_1034b430 |  |  |
-| `0x1034bd30` CNPCMaker::FUN_1034bd30 |  |  |
+| `0x1034bd30` CNPCMaker::DrawDebugGeometryOverlays |  |  |
 | `0x1034bdc0` CNPCMaker_Fleshpile::vfunc82 |  |  |
-| `0x1034bef0` CNPCMaker_Fleshpile::vfunc363 |  |  |
+| `0x1034bef0` CNPCMaker_Fleshpile::FInViewCone |  |  |
 | `0x1034bf10` CNPCMaker_Fleshpile::vfunc362 |  |  |
 | `0x1034bf30` CNPCMaker_Fleshpile::vfunc365 |  |  |
 | `0x1034bf50` CNPCMaker_Fleshpile::vfunc364 |  |  |
 | `0x1034c9f0` CNPCMaker_Zombie::vfunc82 |  |  |
-| `0x1034cb30` CNPCMaker_Zombie::vfunc363 |  |  |
+| `0x1034cb30` CNPCMaker_Zombie::FInViewCone |  |  |
 | `0x1034cb50` CNPCMaker_Zombie::vfunc362 |  |  |
 | `0x1034cb70` CNPCMaker_Zombie::vfunc365 |  |  |
 | `0x1034cb90` CNPCMaker_Zombie::vfunc364 |  |  |
 | `0x1034d430` CScriptedTarget::vfunc82 |  |  |
 | `0x103564f0` CNPC_Bullseye::vfunc82 |  |  |
 | `0x10356f30` CNPC_Bullseye::vfunc576 |  |  |
-| `0x10357350` CNPC_Crow::vfunc516 |  |  |
+| `0x10357350` CNPC_Crow::MaxYawSpeed |  |  |
 | `0x10357370` CNPC_Crow::vfunc580 |  |  |
-| `0x10357390` CNPC_Crow::vfunc451 |  |  |
+| `0x10357390` CNPC_Crow::GetSchedulingErrorName |  |  |
 | `0x103573b0` CNPC_Crow::vfunc82 |  |  |
-| `0x10357660` CNPC_Crow::vfunc138 |  |  |
-| `0x10357b30` CNPC_Crow::vfunc465 |  |  |
-| `0x10358310` CNPC_Crow::vfunc434 |  |  |
-| `0x10358c60` CNPC_Crow::vfunc566 |  |  |
+| `0x10357660` CNPC_Crow::Classify |  |  |
+| `0x10357b30` CNPC_Crow::OnChangeActivity |  |  |
+| `0x10358310` CNPC_Crow::PrescheduleThink |  |  |
+| `0x10358c60` CNPC_Crow::FValidateHintType |  |  |
 | `0x103590f0` CNPC_Crow::vfunc473 |  |  |
-| `0x103591e0` CNPC_Crow::vfunc452 |  |  |
-| `0x10359e30` CGeneric_NPC::vfunc452 |  |  |
+| `0x103591e0` CNPC_Crow::LoadedSchedules |  |  |
+| `0x10359e30` CGeneric_NPC::LoadedSchedules |  |  |
 | `0x10359f00` CGeneric_NPC::vfunc580 |  |  |
-| `0x10359f20` CGeneric_NPC::vfunc451 |  |  |
+| `0x10359f20` CGeneric_NPC::GetSchedulingErrorName |  |  |
 | `0x1035a7e0` CGeneric_NPC::vfunc473 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
-| `0x1035a810` CGeneric_NPC::vfunc516 |  |  |
-| `0x1035a850` CGeneric_NPC::vfunc138 |  |  |
-| `0x1035a920` CGeneric_NPC::vfunc434 |  |  |
-| `0x1035ac80` CGeneric_NPC_bathack::vfunc452 |  |  |
+| `0x1035a810` CGeneric_NPC::MaxYawSpeed |  |  |
+| `0x1035a850` CGeneric_NPC::Classify |  |  |
+| `0x1035a920` CGeneric_NPC::PrescheduleThink |  |  |
+| `0x1035ac80` CGeneric_NPC_bathack::LoadedSchedules |  |  |
 | `0x1035ad70` CGeneric_NPC_bathack::vfunc580 |  |  |
-| `0x1035ad90` CGeneric_NPC_bathack::vfunc451 |  |  |
+| `0x1035ad90` CGeneric_NPC_bathack::GetSchedulingErrorName |  |  |
 | `0x1035afe0` CGeneric_NPC_bathack::vfunc495 |  |  |
 | `0x1035b000` CGeneric_NPC_bathack::vfunc489 |  |  |
 | `0x1035b020` CGeneric_NPC_bathack::vfunc488 |  |  |
 | `0x1035b040` CGeneric_NPC_bathack::vfunc491 |  |  |
-| `0x1035b080` CGeneric_NPC_bathack::vfunc516 |  |  |
-| `0x1035b0c0` CGeneric_NPC_bathack::vfunc138 |  |  |
-| `0x1035b1a0` CGeneric_NPC_bathack::vfunc434 |  |  |
-| `0x1035b490` CGenericSabbat_NPC::vfunc452 |  |  |
+| `0x1035b080` CGeneric_NPC_bathack::MaxYawSpeed |  |  |
+| `0x1035b0c0` CGeneric_NPC_bathack::Classify |  |  |
+| `0x1035b1a0` CGeneric_NPC_bathack::PrescheduleThink |  |  |
+| `0x1035b490` CGenericSabbat_NPC::LoadedSchedules |  |  |
 | `0x1035b560` CGenericSabbat_NPC::vfunc580 |  |  |
-| `0x1035b580` CGenericSabbat_NPC::vfunc451 |  |  |
+| `0x1035b580` CGenericSabbat_NPC::GetSchedulingErrorName |  |  |
 | `0x1035be50` CGenericSabbat_NPC::vfunc473 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
-| `0x1035be80` CGenericSabbat_NPC::vfunc516 | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
-| `0x1035bec0` CGenericSabbat_NPC::vfunc138 |  |  |
-| `0x1035bfb0` CGenericSabbat_NPC::vfunc434 |  |  |
+| `0x1035be80` CGenericSabbat_NPC::MaxYawSpeed | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
+| `0x1035bec0` CGenericSabbat_NPC::Classify |  |  |
+| `0x1035bfb0` CGenericSabbat_NPC::PrescheduleThink |  |  |
 | `0x1035c190` CNPC_VAndreiBlood::FUN_1035c190 |  |  |
 | `0x1035c1b0` CNPC_VVampireBoss::vfunc580 |  |  |
-| `0x1035c1d0` CNPC_VVampireBoss::vfunc451 |  |  |
+| `0x1035c1d0` CNPC_VVampireBoss::GetSchedulingErrorName |  |  |
 | `0x1035c230` CNPC_VAndreiBlood::vfunc580 |  |  |
-| `0x1035c250` CNPC_VAndreiBlood::vfunc451 |  |  |
+| `0x1035c250` CNPC_VAndreiBlood::GetSchedulingErrorName |  |  |
 | `0x1035c2a0` CNPC_VAndreiBlood::vfunc82 |  |  |
-| `0x1035c400` CNPC_VAndreiBlood::vfunc452 |  |  |
+| `0x1035c400` CNPC_VAndreiBlood::LoadedSchedules |  |  |
 | `0x1035d150` CNPC_VAndreiBlood::vfunc461 |  |  |
-| `0x1035db00` CNPC_VAndreiBlood::vfunc566 |  |  |
+| `0x1035db00` CNPC_VAndreiBlood::FValidateHintType |  |  |
 | `0x1035e920` FUN_1035e920 |  |  |
 | `0x1035e950` FUN_1035e950 |  |  |
 | `0x1035eb10` CNPC_VAnimal::FUN_1035eb10 |  |  |
 | `0x1035ebf0` CNPC_VAnimal::FUN_1035ebf0 |  |  |
 | `0x1035ec10` CNPC_VAnimal::vfunc580 |  |  |
-| `0x1035ec30` CNPC_VAnimal::vfunc451 |  |  |
-| `0x1035ed50` CNPC_VAnimal::vfunc452 |  |  |
+| `0x1035ec30` CNPC_VAnimal::GetSchedulingErrorName |  |  |
+| `0x1035ed50` CNPC_VAnimal::LoadedSchedules |  |  |
 | `0x1035f540` CNPC_VAnimal::FUN_1035f540 |  |  |
-| `0x1035f560` CNPC_VAnimal::vfunc138 |  |  |
-| `0x10360180` CNPC_VAnimal::FUN_10360180 |  |  |
-| `0x103601e0` CNPC_VAnimal::FUN_103601e0 |  |  |
+| `0x1035f560` CNPC_VAnimal::Classify |  |  |
+| `0x10360180` CNPC_VAnimal::PrescheduleThink |  |  |
+| `0x103601e0` CNPC_VAnimal::HandleInteraction |  |  |
 | `0x103603d0` CNPC_VAsianVampire::vfunc580 |  |  |
-| `0x103603f0` CNPC_VAsianVampire::vfunc451 |  |  |
+| `0x103603f0` CNPC_VAsianVampire::GetSchedulingErrorName |  |  |
 | `0x10360450` CNPC_VAsianVampire::vfunc82 |  |  |
-| `0x103605b0` CNPC_VAsianVampire::vfunc452 |  |  |
-| `0x10361470` CNPC_VAsianVampire::vfunc566 |  |  |
+| `0x103605b0` CNPC_VAsianVampire::LoadedSchedules |  |  |
+| `0x10361470` CNPC_VAsianVampire::FValidateHintType |  |  |
 | `0x10361990` CNPC_VAsianVampire::AddHintToStoredJumpPositions |  |  |
 | `0x10362670` CNPC_VAsianVampire::StationaryForTooLong |  |  |
 | `0x10362c50` CNPC_VBach::vfunc580 |  |  |
-| `0x10362c70` CNPC_VBach::vfunc451 |  |  |
-| `0x10362d90` CNPC_VBach::vfunc452 |  |  |
+| `0x10362c70` CNPC_VBach::GetSchedulingErrorName |  |  |
+| `0x10362d90` CNPC_VBach::LoadedSchedules |  |  |
 | `0x10363720` CNPC_VBach::vfunc82 |  |  |
 | `0x10363970` CNPC_VBach::vfunc473 |  |  |
-| `0x10363990` CNPC_VBach::vfunc138 |  |  |
+| `0x10363990` CNPC_VBach::Classify |  |  |
 | `0x10364500` CNPC_VBach::vfunc553 |  |  |
 | `0x10364550` CNPC_VBach::vfunc554 |  |  |
 | `0x10365840` FUN_10365840 |  |  |
 | `0x10366490` FUN_10366490 |  |  |
 | `0x10366c70` CNPC_VBatSwarm::vfunc580 |  |  |
-| `0x10366c90` CNPC_VBatSwarm::vfunc451 |  |  |
-| `0x10366db0` CNPC_VBatSwarm::vfunc452 |  |  |
+| `0x10366c90` CNPC_VBatSwarm::GetSchedulingErrorName |  |  |
+| `0x10366db0` CNPC_VBatSwarm::LoadedSchedules |  |  |
 | `0x103672d0` CNPC_VBatSwarm::vfunc82 |  |  |
 | `0x103673e0` CNPC_VBatSwarm::vfunc473 |  |  |
-| `0x10367400` CNPC_VBatSwarm::vfunc138 |  |  |
+| `0x10367400` CNPC_VBatSwarm::Classify |  |  |
 | `0x10367870` CNPC_VBrujah::vfunc580 |  |  |
-| `0x10367890` CNPC_VBrujah::vfunc451 |  |  |
-| `0x103679b0` CNPC_VBrujah::vfunc452 |  |  |
-| `0x10367f00` CNPC_VBrujah::vfunc138 |  |  |
+| `0x10367890` CNPC_VBrujah::GetSchedulingErrorName |  |  |
+| `0x103679b0` CNPC_VBrujah::LoadedSchedules |  |  |
+| `0x10367f00` CNPC_VBrujah::Classify |  |  |
 | `0x10367f60` CNPC_VCamera::vfunc82 |  |  |
 | `0x103680b0` CNPC_VCamera::FUN_103680b0 |  |  |
 | `0x103680d0` CNPC_VCamera::FUN_103680d0 |  |  |
@@ -1594,119 +1597,119 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10368370` CNPC_VCamera::FUN_10368370 |  |  |
 | `0x10368390` CNPC_VCamera::FUN_10368390 |  |  |
 | `0x103683b0` CNPC_VCamera::FUN_103683b0 |  |  |
-| `0x103683d0` CNPC_VCamera::FUN_103683d0 |  |  |
-| `0x103684f0` CNPC_VCamera::FUN_103684f0 |  |  |
-| `0x10368e60` CNPC_VCamera::FUN_10368e60 |  |  |
-| `0x10368e80` CNPC_VCamera::FUN_10368e80 |  |  |
-| `0x10368ea0` CNPC_VCamera::FUN_10368ea0 |  |  |
-| `0x10368ec0` CNPC_VCamera::FUN_10368ec0 |  |  |
-| `0x10368ee0` CNPC_VCamera::FUN_10368ee0 |  |  |
+| `0x103683d0` CNPC_VCamera::GetSchedulingErrorName |  |  |
+| `0x103684f0` CNPC_VCamera::LoadedSchedules |  |  |
+| `0x10368e60` CNPC_VCamera::Classify |  |  |
+| `0x10368e80` CNPC_VCamera::GetUsedHullBits |  |  |
+| `0x10368ea0` CNPC_VCamera::OnStateChange |  |  |
+| `0x10368ec0` CNPC_VCamera::HandleAnimEvent |  |  |
+| `0x10368ee0` CNPC_VCamera::TranslateEnemyChasePosition |  |  |
 | `0x10368f00` CNPC_VCamera::FUN_10368f00 |  |  |
-| `0x10368f20` CNPC_VCamera::FUN_10368f20 |  |  |
-| `0x10368f40` CNPC_VCamera::FUN_10368f40 |  |  |
+| `0x10368f20` CNPC_VCamera::PreSelectSchedule |  |  |
+| `0x10368f40` CNPC_VCamera::SelectSchedule |  |  |
 | `0x10368f60` CNPC_VCamera::FUN_10368f60 |  |  |
 | `0x10369060` CNPC_VCamera::FUN_10369060 |  |  |
-| `0x103690a0` CNPC_VCamera::PreTranslate_Camera |  |  |
-| `0x103690c0` CNPC_VCamera::ClassTranslate_Camera |  |  |
-| `0x10369100` CNPC_VCamera::FUN_10369100 |  |  |
+| `0x103690a0` CNPC_VCamera::NPC_EarlyTranslateActivity |  |  |
+| `0x103690c0` CNPC_VCamera::NPC_TranslateActivity |  |  |
+| `0x10369100` CNPC_VCamera::PrescheduleThink |  |  |
 | `0x10369240` CNPC_VCamera::FUN_10369240 |  |  |
-| `0x10369260` CNPC_VCamera::FUN_10369260 |  |  |
+| `0x10369260` CNPC_VCamera::HandleInteraction |  |  |
 | `0x103692a0` CNPC_VCamera::FUN_103692a0 |  |  |
 | `0x10369cf0` CNPC_VCameraSecurity::vfunc82 |  |  |
 | `0x1036a030` CNPC_VCameraSecurity::vfunc468 |  |  |
-| `0x1036a190` CNPC_VChangBros::FUN_1036a190 |  |  |
+| `0x1036a190` CNPC_VChangBros::Classify |  |  |
 | `0x1036a1b0` CNPC_VChangBros::vfunc580 |  |  |
-| `0x1036a1d0` CNPC_VChangBros::vfunc451 |  |  |
+| `0x1036a1d0` CNPC_VChangBros::GetSchedulingErrorName |  |  |
 | `0x1036a230` CNPC_VChangBros::vfunc82 |  |  |
-| `0x1036a390` CNPC_VChangBros::vfunc452 |  |  |
+| `0x1036a390` CNPC_VChangBros::LoadedSchedules |  |  |
 | `0x1036b6b0` CNPC_VChangBros::SectorIsInPit |  |  |
-| `0x1036c6a0` CNPC_VChangBros::FUN_1036c6a0 |  |  |
+| `0x1036c6a0` CNPC_VChangBros::FValidateHintType |  |  |
 | `0x1036c7f0` FUN_1036c7f0 |  |  |
 | `0x1036d100` CNPC_VChangBros::SelectUnitedNode |  |  |
 | `0x1036d270` CNPC_VChangBros::GetTeleportPosition |  |  |
 | `0x1036e400` CNPC_VChangBros::StoreArenaCenter |  |  |
 | `0x1036e580` CNPC_VChangBros::GetSector |  |  |
 | `0x1036eab0` CNPC_VChangBrosBlade::vfunc580 |  |  |
-| `0x1036ead0` CNPC_VChangBrosBlade::vfunc451 |  |  |
+| `0x1036ead0` CNPC_VChangBrosBlade::GetSchedulingErrorName |  |  |
 | `0x1036eb30` CNPC_VChangBrosBlade::vfunc82 |  |  |
-| `0x1036ec90` CNPC_VChangBrosBlade::vfunc452 |  |  |
+| `0x1036ec90` CNPC_VChangBrosBlade::LoadedSchedules |  |  |
 | `0x1036f2b0` CNPC_VChangBrosClaw::vfunc580 |  |  |
-| `0x1036f2d0` CNPC_VChangBrosClaw::vfunc451 |  |  |
+| `0x1036f2d0` CNPC_VChangBrosClaw::GetSchedulingErrorName |  |  |
 | `0x1036f330` CNPC_VChangBrosClaw::vfunc82 |  |  |
-| `0x1036f490` CNPC_VChangBrosClaw::vfunc452 |  |  |
+| `0x1036f490` CNPC_VChangBrosClaw::LoadedSchedules |  |  |
 | `0x1036fb10` CNPC_VCombatman::vfunc580 |  |  |
-| `0x1036fb30` CNPC_VCombatman::vfunc451 |  |  |
-| `0x1036fc50` CNPC_VCombatman::vfunc452 |  |  |
-| `0x103701d0` CNPC_VCombatman::vfunc138 |  |  |
+| `0x1036fb30` CNPC_VCombatman::GetSchedulingErrorName |  |  |
+| `0x1036fc50` CNPC_VCombatman::LoadedSchedules |  |  |
+| `0x103701d0` CNPC_VCombatman::Classify |  |  |
 | `0x10370460` CNPC_VCop::vfunc82 |  |  |
 | `0x10370560` FUN_10370560 |  |  |
 | `0x103705b0` FUN_103705b0 |  |  |
 | `0x10370630` FUN_10370630 |  |  |
 | `0x10370930` CNPC_VCop::vfunc580 |  |  |
-| `0x10370950` CNPC_VCop::vfunc451 |  |  |
-| `0x10370a70` CNPC_VCop::vfunc452 |  |  |
-| `0x10371b50` CNPC_VCop::vfunc138 |  |  |
+| `0x10370950` CNPC_VCop::GetSchedulingErrorName |  |  |
+| `0x10370a70` CNPC_VCop::LoadedSchedules |  |  |
+| `0x10371b50` CNPC_VCop::Classify |  |  |
 | `0x10373530` CNPC_VDog::vfunc580 |  |  |
-| `0x10373550` CNPC_VDog::vfunc451 |  |  |
-| `0x10373670` CNPC_VDog::vfunc452 |  |  |
-| `0x10374080` CNPC_VDog::vfunc138 |  |  |
+| `0x10373550` CNPC_VDog::GetSchedulingErrorName |  |  |
+| `0x10373670` CNPC_VDog::LoadedSchedules |  |  |
+| `0x10374080` CNPC_VDog::Classify |  |  |
 | `0x103747c0` FUN_103747c0 |  |  |
-| `0x10374aa0` CNPC_VDog::vfunc566 |  |  |
+| `0x10374aa0` CNPC_VDog::FValidateHintType |  |  |
 | `0x103750e0` CNPC_VVampire::FUN_103750e0 |  |  |
-| `0x10375100` CNPC_VVampire::FUN_10375100 |  |  |
-| `0x10375120` CNPC_VWolfMorph::FUN_10375120 |  |  |
+| `0x10375100` CNPC_VVampire::GetSchedulingErrorName |  |  |
+| `0x10375120` CNPC_VPlayerController::FInViewCone |  |  |
 | `0x10375140` CNPC_VWolfMorph::FUN_10375140 |  |  |
 | `0x10375160` CNPC_VWolfMorph::FUN_10375160 |  |  |
 | `0x10375180` CNPC_VWolfMorph::FUN_10375180 |  |  |
 | `0x103751a0` CNPC_VFrenzyShadow::FUN_103751a0 |  |  |
 | `0x10375240` CNPC_VFrenzyShadow::vfunc580 |  |  |
-| `0x10375260` CNPC_VFrenzyShadow::vfunc451 |  |  |
+| `0x10375260` CNPC_VFrenzyShadow::GetSchedulingErrorName |  |  |
 | `0x10375280` CNPC_VFrenzyShadow::vfunc82 |  |  |
-| `0x103753e0` CNPC_VFrenzyShadow::vfunc452 |  |  |
-| `0x10375d70` CNPC_VFrenzyShadow::vfunc138 |  |  |
-| `0x10376b50` CNPC_VFrenzyShadow::vfunc144 |  |  |
+| `0x103753e0` CNPC_VFrenzyShadow::LoadedSchedules |  |  |
+| `0x10375d70` CNPC_VFrenzyShadow::Classify |  |  |
+| `0x10376b50` CNPC_VFrenzyShadow::Event_Killed |  |  |
 | `0x10376b70` CNPC_VFrenzyShadow::vfunc599 |  |  |
 | `0x10376c10` FUN_10376c10 |  |  |
 | `0x10377070` CNPC_VGangrel::vfunc580 |  |  |
-| `0x10377090` CNPC_VGangrel::vfunc451 |  |  |
-| `0x103771b0` CNPC_VGangrel::vfunc452 |  |  |
-| `0x10377700` CNPC_VGangrel::vfunc138 |  |  |
+| `0x10377090` CNPC_VGangrel::GetSchedulingErrorName |  |  |
+| `0x103771b0` CNPC_VGangrel::LoadedSchedules |  |  |
+| `0x10377700` CNPC_VGangrel::Classify |  |  |
 | `0x10377910` CNPC_VGargoyle::vfunc82 |  |  |
 | `0x10377b00` CNPC_VGargoyle::vfunc378 |  |  |
 | `0x10377b20` CNPC_VGargoyle::vfunc580 |  |  |
-| `0x10377b40` CNPC_VGargoyle::vfunc451 |  |  |
-| `0x10377c70` CNPC_VGargoyle::vfunc452 |  |  |
+| `0x10377b40` CNPC_VGargoyle::GetSchedulingErrorName |  |  |
+| `0x10377c70` CNPC_VGargoyle::LoadedSchedules |  |  |
 | `0x10378640` CNPC_VGargoyle::vfunc473 |  |  |
-| `0x10378660` CNPC_VGargoyle::vfunc138 |  |  |
-| `0x10378680` CNPC_VGargoyle::vfunc337 |  |  |
+| `0x10378660` CNPC_VGargoyle::Classify |  |  |
+| `0x10378680` CNPC_VGargoyle::GetUsedHullBits |  |  |
 | `0x10379000` FUN_10379000 |  |  |
 | `0x10379040` FUN_10379040 |  |  |
-| `0x10379470` CNPC_VGargoyle::vfunc70 |  |  |
+| `0x10379470` CNPC_VGargoyle::IsMonster |  |  |
 | `0x10379e80` FUN_10379e80 | `+0x0370` ← 0x101df260 | `+0x0828` |
 | `0x10379ef0` CNPC_VGargoyle::vfunc599 |  |  |
 | `0x1037a5f0` CNPC_VGargoyle::vfunc359 |  |  |
-| `0x1037a610` CNPC_VGargoyle::vfunc74 |  |  |
+| `0x1037a610` CNPC_VGargoyle::ReceivesImpactDamage |  |  |
 | `0x1037a6e0` CNPC_VGhoulCroucher::vfunc82 |  |  |
-| `0x1037a8f0` CNPC_VGhoulCroucher::vfunc452 |  |  |
+| `0x1037a8f0` CNPC_VGhoulCroucher::LoadedSchedules |  |  |
 | `0x1037afb0` CNPC_VGhoulCroucher::vfunc580 |  |  |
-| `0x1037afd0` CNPC_VGhoulCroucher::vfunc451 |  |  |
+| `0x1037afd0` CNPC_VGhoulCroucher::GetSchedulingErrorName |  |  |
 | `0x1037b870` FUN_1037b870 |  |  |
 | `0x1037b890` FUN_1037b890 |  |  |
 | `0x1037bb20` CNPC_VGhoulCroucher::IsDisturbed |  |  |
 | `0x1037c520` CNPC_VGuard1::vfunc82 |  |  |
 | `0x1037c660` CNPC_VGuard1::vfunc580 |  |  |
-| `0x1037c680` CNPC_VGuard1::vfunc451 |  |  |
-| `0x1037c7a0` CNPC_VGuard1::vfunc452 |  |  |
-| `0x1037cdd0` CNPC_VGuard1::vfunc138 |  |  |
+| `0x1037c680` CNPC_VGuard1::GetSchedulingErrorName |  |  |
+| `0x1037c7a0` CNPC_VGuard1::LoadedSchedules |  |  |
+| `0x1037cdd0` CNPC_VGuard1::Classify |  |  |
 | `0x1037e4f0` CNPC_VHengeyokai::vfunc82 |  |  |
 | `0x1037e810` CNPC_VHengeyokai::vfunc378 |  |  |
 | `0x1037e830` CNPC_VHengeyokai::vfunc580 |  |  |
-| `0x1037e850` CNPC_VHengeyokai::vfunc451 |  |  |
-| `0x1037ea00` CNPC_VHengeyokai::vfunc452 |  |  |
+| `0x1037e850` CNPC_VHengeyokai::GetSchedulingErrorName |  |  |
+| `0x1037ea00` CNPC_VHengeyokai::LoadedSchedules |  |  |
 | `0x1037fae0` CNPC_VHengeyokai::vfunc473 |  |  |
-| `0x1037fb00` CNPC_VHengeyokai::vfunc138 |  |  |
-| `0x1037fb20` CNPC_VHengeyokai::vfunc337 |  |  |
-| `0x10380f70` CNPC_VHengeyokai::vfunc70 |  |  |
+| `0x1037fb00` CNPC_VHengeyokai::Classify |  |  |
+| `0x1037fb20` CNPC_VHengeyokai::GetUsedHullBits |  |  |
+| `0x10380f70` CNPC_VHengeyokai::IsMonster |  |  |
 | `0x103816e0` FUN_103816e0 | `+0x0370` ← 0x101df260 | `+0x0828` |
 | `0x10381750` CNPC_VHengeyokai::vfunc599 |  |  |
 | `0x10381ba0` FUN_10381ba0 |  |  |
@@ -1715,45 +1718,45 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10381c80` FUN_10381c80 |  |  |
 | `0x10381ca0` FUN_10381ca0 |  |  |
 | `0x10382b30` FUN_10382b30 |  |  |
-| `0x10383540` CNPC_VHengeyokai::vfunc74 |  |  |
+| `0x10383540` CNPC_VHengeyokai::ReceivesImpactDamage |  |  |
 | `0x10383f10` CNPC_VHuman::FUN_10383f10 |  |  |
 | `0x10384060` CNPC_VHuman::vfunc580 |  |  |
-| `0x10384080` CNPC_VHuman::vfunc451 |  |  |
-| `0x103841a0` CNPC_VHuman::vfunc452 |  |  |
+| `0x10384080` CNPC_VHuman::GetSchedulingErrorName |  |  |
+| `0x103841a0` CNPC_VHuman::LoadedSchedules |  |  |
 | `0x103846e0` CNPC_VAndreiBlood::FUN_103846e0 |  |  |
-| `0x10384700` CNPC_VHuman::vfunc138 |  |  |
-| `0x10385a30` CNPC_VAndreiBlood::FUN_10385a30 |  |  |
-| `0x10385a70` CNPC_VAndreiBlood::FUN_10385a70 |  |  |
+| `0x10384700` CNPC_VHuman::Classify |  |  |
+| `0x10385a30` CNPC_VHuman::PrescheduleThink |  |  |
+| `0x10385a70` CNPC_VHuman::HandleInteraction |  |  |
 | `0x103869a0` CNPC_VHumanCombatant::FUN_103869a0 |  |  |
 | `0x10386ae0` CNPC_VHumanCombatant::FUN_10386ae0 |  |  |
-| `0x10386b00` CNPC_VHumanCombatant::FUN_10386b00 |  |  |
-| `0x10386c20` CNPC_VHumanCombatant::FUN_10386c20 |  |  |
+| `0x10386b00` CNPC_VHumanCombatant::GetSchedulingErrorName |  |  |
+| `0x10386c20` CNPC_VHumanCombatant::LoadedSchedules |  |  |
 | `0x10387180` CNPC_VCop::FUN_10387180 |  |  |
-| `0x103871a0` CNPC_VGhoulCroucher::FUN_103871a0 |  |  |
+| `0x103871a0` CNPC_VHumanCombatant::Classify |  |  |
 | `0x103875d0` CNPC_VHumanCombatPatrol::vfunc82 |  |  |
 | `0x10387710` CNPC_VHumanCombatPatrol::vfunc580 |  |  |
-| `0x10387730` CNPC_VHumanCombatPatrol::vfunc451 |  |  |
-| `0x10387850` CNPC_VHumanCombatPatrol::vfunc452 |  |  |
+| `0x10387730` CNPC_VHumanCombatPatrol::GetSchedulingErrorName |  |  |
+| `0x10387850` CNPC_VHumanCombatPatrol::LoadedSchedules |  |  |
 | `0x10387ed0` CNPC_VHunter::vfunc82 |  |  |
 | `0x10387fd0` FUN_10387fd0 |  |  |
 | `0x10388060` CNPC_VHunter::vfunc580 |  |  |
-| `0x10388080` CNPC_VHunter::vfunc451 |  |  |
-| `0x103881a0` CNPC_VHunter::vfunc452 |  |  |
-| `0x10388820` CNPC_VHunter::vfunc138 |  |  |
+| `0x10388080` CNPC_VHunter::GetSchedulingErrorName |  |  |
+| `0x103881a0` CNPC_VHunter::LoadedSchedules |  |  |
+| `0x10388820` CNPC_VHunter::Classify |  |  |
 | `0x10388ca0` CNPC_VLasombra::vfunc82 |  |  |
 | `0x10388de0` CNPC_VLasombra::vfunc580 |  |  |
-| `0x10388e00` CNPC_VLasombra::vfunc451 |  |  |
-| `0x10388f20` CNPC_VLasombra::vfunc452 |  |  |
+| `0x10388e00` CNPC_VLasombra::GetSchedulingErrorName |  |  |
+| `0x10388f20` CNPC_VLasombra::LoadedSchedules |  |  |
 | `0x10389560` CNPC_VMalkavian::vfunc580 |  |  |
-| `0x10389580` CNPC_VMalkavian::vfunc451 |  |  |
-| `0x103896a0` CNPC_VMalkavian::vfunc452 |  |  |
-| `0x10389bf0` CNPC_VMalkavian::vfunc138 |  |  |
+| `0x10389580` CNPC_VMalkavian::GetSchedulingErrorName |  |  |
+| `0x103896a0` CNPC_VMalkavian::LoadedSchedules |  |  |
+| `0x10389bf0` CNPC_VMalkavian::Classify |  |  |
 | `0x10389db0` CNPC_VManBat::vfunc580 |  |  |
-| `0x10389dd0` CNPC_VManBat::vfunc451 |  |  |
-| `0x10389ef0` CNPC_VManBat::vfunc452 |  |  |
+| `0x10389dd0` CNPC_VManBat::GetSchedulingErrorName |  |  |
+| `0x10389ef0` CNPC_VManBat::LoadedSchedules |  |  |
 | `0x1038ac80` CNPC_VManBat::vfunc82 |  |  |
-| `0x1038b0e0` CNPC_VManBat::vfunc138 |  |  |
-| `0x1038b100` CNPC_VManBat::vfunc337 |  |  |
+| `0x1038b0e0` CNPC_VManBat::Classify |  |  |
+| `0x1038b100` CNPC_VManBat::GetUsedHullBits |  |  |
 | `0x1038f290` FUN_1038f290 |  |  |
 | `0x1038f600` FUN_1038f600 |  |  |
 | `0x1038f640` FUN_1038f640 |  |  |
@@ -1762,21 +1765,21 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10390890` FUN_10390890 |  |  |
 | `0x103908c0` FUN_103908c0 |  |  |
 | `0x10390de0` CNPC_VMingXiao::vfunc82 |  |  |
-| `0x10390fd0` CNPC_VMingXiao::FUN_10390fd0 |  |  |
-| `0x10390ff0` CNPC_VMingXiao::FUN_10390ff0 |  |  |
+| `0x10390fd0` CNPC_VBaseBoss::GiveBaseFightingItems |  |  |
+| `0x10390ff0` CNPC_VBaseBoss::RemoveBaseFightingItems |  |  |
 | `0x10391010` CNPC_VMingXiao::FUN_10391010 |  |  |
-| `0x10391030` CNPC_VMingXiao::vfunc522 |  |  |
-| `0x10391050` CNPC_VMingXiao::vfunc523 |  |  |
+| `0x10391030` CNPC_VMingXiao::StepHeight |  |  |
+| `0x10391050` CNPC_VMingXiao::GetMaxJumpSpeed |  |  |
 | `0x10391070` CNPC_VMingXiao::vfunc580 |  |  |
-| `0x10391090` CNPC_VMingXiao::vfunc451 |  |  |
-| `0x10391330` CNPC_VMingXiao::vfunc452 |  |  |
+| `0x10391090` CNPC_VMingXiao::GetSchedulingErrorName |  |  |
+| `0x10391330` CNPC_VMingXiao::LoadedSchedules |  |  |
 | `0x103929d0` CNPC_VMingXiao::vfunc473 |  |  |
-| `0x103929f0` CNPC_VMingXiao::vfunc138 |  |  |
-| `0x10395270` CNPC_VMingXiao::vfunc409 |  |  |
-| `0x10395290` CNPC_VMingXiao::vfunc434 |  |  |
-| `0x10395b80` CNPC_VMingXiao::vfunc366 |  |  |
+| `0x103929f0` CNPC_VMingXiao::Classify |  |  |
+| `0x10395270` CNPC_VMingXiao::GetLastSharedCondition |  |  |
+| `0x10395290` CNPC_VMingXiao::PrescheduleThink |  |  |
+| `0x10395b80` CNPC_VMingXiao::HandleInteraction |  |  |
 | `0x10395dc0` CNPC_VMingXiao::vfunc599 |  |  |
-| `0x10396fb0` CNPC_VMingXiao::vfunc70 |  |  |
+| `0x10396fb0` CNPC_VMingXiao::IsMonster |  |  |
 | `0x10397000` CNPC_VMingXiao::vfunc166 |  |  |
 | `0x10397b40` FUN_10397b40 |  |  |
 | `0x10397dd0` FUN_10397dd0 |  |  |
@@ -1790,25 +1793,25 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1039aaf0` FUN_1039aaf0 |  |  |
 | `0x1039ab10` FUN_1039ab10 |  |  |
 | `0x1039aea0` CNPC_VMingXiaoTentacle::vfunc82 |  |  |
-| `0x1039b050` CNPC_VMingXiaoTentacle::vfunc522 |  |  |
-| `0x1039b070` CNPC_VMingXiaoTentacle::vfunc523 |  |  |
+| `0x1039b050` CNPC_VMingXiaoTentacle::StepHeight |  |  |
+| `0x1039b070` CNPC_VMingXiaoTentacle::GetMaxJumpSpeed |  |  |
 | `0x1039b090` CNPC_VMingXiaoTentacle::vfunc580 |  |  |
-| `0x1039b0b0` CNPC_VMingXiaoTentacle::vfunc451 |  |  |
-| `0x1039b1d0` CNPC_VMingXiaoTentacle::vfunc452 |  |  |
+| `0x1039b0b0` CNPC_VMingXiaoTentacle::GetSchedulingErrorName |  |  |
+| `0x1039b1d0` CNPC_VMingXiaoTentacle::LoadedSchedules |  |  |
 | `0x1039c440` CNPC_VMingXiaoTentacle::vfunc473 |  |  |
-| `0x1039c460` CNPC_VMingXiaoTentacle::vfunc138 |  |  |
-| `0x1039c480` CNPC_VMingXiaoTentacle::vfunc337 |  |  |
-| `0x1039de00` CNPC_VMingXiaoTentacle::vfunc437 |  |  |
-| `0x1039e7e0` CNPC_VMingXiaoTentacle::vfunc434 |  |  |
-| `0x1039e8e0` CNPC_VMingXiaoTentacle::vfunc366 |  |  |
+| `0x1039c460` CNPC_VMingXiaoTentacle::Classify |  |  |
+| `0x1039c480` CNPC_VMingXiaoTentacle::GetUsedHullBits |  |  |
+| `0x1039de00` CNPC_VMingXiaoTentacle::PreSelectSchedule |  |  |
+| `0x1039e7e0` CNPC_VMingXiaoTentacle::PrescheduleThink |  |  |
+| `0x1039e8e0` CNPC_VMingXiaoTentacle::HandleInteraction |  |  |
 | `0x1039ea80` CNPC_VMingXiaoTentacle::vfunc599 |  |  |
-| `0x1039eb30` CNPC_VMingXiaoTentacle::vfunc70 |  |  |
-| `0x1039ed30` CNPC_VMingXiaoTentacle::vfunc409 |  |  |
+| `0x1039eb30` CNPC_VMingXiaoTentacle::IsMonster |  |  |
+| `0x1039ed30` CNPC_VMingXiaoTentacle::GetLastSharedCondition |  |  |
 | `0x1039ede0` FUN_1039ede0 |  |  |
 | `0x1039f600` CNPC_VMoleman::vfunc580 |  |  |
-| `0x1039f620` CNPC_VMoleman::vfunc451 |  |  |
-| `0x1039f740` CNPC_VMoleman::vfunc452 |  |  |
-| `0x1039fcc0` CNPC_VMoleman::vfunc138 |  |  |
+| `0x1039f620` CNPC_VMoleman::GetSchedulingErrorName |  |  |
+| `0x1039f740` CNPC_VMoleman::LoadedSchedules |  |  |
+| `0x1039fcc0` CNPC_VMoleman::Classify |  |  |
 | `0x1039fff0` CNPC_VNewscaster::vfunc488 |  |  |
 | `0x103a0010` CNPC_VNewscaster::vfunc489 |  |  |
 | `0x103a0030` CNPC_VNewscaster::vfunc490 |  |  |
@@ -1819,50 +1822,50 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103a00d0` CNPC_VNewscaster::vfunc495 |  |  |
 | `0x103a00f0` CNPC_VNewscaster::vfunc496 |  |  |
 | `0x103a0110` CNPC_VNewscaster::vfunc497 |  |  |
-| `0x103a0130` CNPC_VNewscaster::vfunc363 |  |  |
+| `0x103a0130` CNPC_VNewscaster::FInViewCone |  |  |
 | `0x103a0150` CNPC_VNewscaster::vfunc362 |  |  |
 | `0x103a0170` CNPC_VNewscaster::vfunc365 |  |  |
 | `0x103a0190` CNPC_VNewscaster::vfunc364 |  |  |
-| `0x103a01b0` CNPC_VNewscaster::vfunc404 |  |  |
+| `0x103a01b0` CNPC_VNewscaster::IRelationType |  |  |
 | `0x103a01d0` CNPC_VNewscaster::vfunc587 |  |  |
 | `0x103a01f0` CNPC_VNewscaster::vfunc473 |  |  |
 | `0x103a0210` CNPC_VNewscaster::vfunc377 |  |  |
 | `0x103a0230` CNPC_VNewscaster::vfunc378 |  |  |
 | `0x103a0250` CNPC_VNewscaster::vfunc72 |  |  |
-| `0x103a0500` CNPC_VNewscaster::vfunc138 |  |  |
+| `0x103a0500` CNPC_VNewscaster::Classify |  |  |
 | `0x103a1320` FUN_103a1320 |  |  |
 | `0x103a14a0` CNPC_VNosferatu::vfunc580 |  |  |
-| `0x103a14c0` CNPC_VNosferatu::vfunc451 |  |  |
-| `0x103a15e0` CNPC_VNosferatu::vfunc452 |  |  |
-| `0x103a1b30` CNPC_VNosferatu::vfunc138 |  |  |
+| `0x103a14c0` CNPC_VNosferatu::GetSchedulingErrorName |  |  |
+| `0x103a15e0` CNPC_VNosferatu::LoadedSchedules |  |  |
+| `0x103a1b30` CNPC_VNosferatu::Classify |  |  |
 | `0x103a1c20` CNPC_VPedestrian::vfunc82 |  |  |
 | `0x103a1de0` CNPC_VPedestrian::vfunc550 |  |  |
 | `0x103a1e00` CNPC_VPedestrian::vfunc580 |  |  |
-| `0x103a1e20` CNPC_VPedestrian::vfunc451 |  |  |
-| `0x103a1f40` CNPC_VPedestrian::vfunc452 |  |  |
+| `0x103a1e20` CNPC_VPedestrian::GetSchedulingErrorName |  |  |
+| `0x103a1f40` CNPC_VPedestrian::LoadedSchedules |  |  |
 | `0x103a28f0` CNPC_VPedestrian::vfunc473 |  |  |
-| `0x103a2910` CNPC_VPedestrian::vfunc138 |  |  |
+| `0x103a2910` CNPC_VPedestrian::Classify |  |  |
 | `0x103a3a90` CNPC_VPlaceholder::vfunc82 |  |  |
-| `0x103a3bf0` CNPC_VPlaceholder::vfunc452 |  |  |
+| `0x103a3bf0` CNPC_VPlaceholder::LoadedSchedules |  |  |
 | `0x103a4100` CNPC_VPlaceholder::vfunc378 |  |  |
-| `0x103a4120` CNPC_VPlaceholder::vfunc138 |  |  |
+| `0x103a4120` CNPC_VPlaceholder::Classify |  |  |
 | `0x103a4140` CNPC_VPlaceholder::vfunc316 |  |  |
 | `0x103a4160` CNPC_VPlaceholder::vfunc317 |  |  |
-| `0x103a4180` CNPC_VPlaceholder::vfunc318 |  |  |
-| `0x103a41a0` CNPC_VPlaceholder::vfunc319 |  |  |
-| `0x103a41c0` CNPC_VPlaceholder::vfunc320 |  |  |
-| `0x103a41e0` CNPC_VPlaceholder::vfunc590 |  |  |
+| `0x103a4180` CNPC_VPlaceholder::PlayerDefenderBlockReaction |  |  |
+| `0x103a41a0` CNPC_VPlaceholder::PlayerAttackerBlockedReaction |  |  |
+| `0x103a41c0` CNPC_VPlaceholder::PlayerKnockbackReaction |  |  |
+| `0x103a41e0` CNPC_VPlaceholder::OkToInterruptForMelee |  |  |
 | `0x103a4200` CNPC_VPlaceholder::vfunc330 |  |  |
 | `0x103a4220` CNPC_VPlaceholder::vfunc587 |  |  |
 | `0x103a4240` CNPC_VPlaceholder::vfunc72 |  |  |
-| `0x103a4260` CNPC_VPlaceholder::vfunc363 |  |  |
+| `0x103a4260` CNPC_VPlaceholder::FInViewCone |  |  |
 | `0x103a4280` CNPC_VPlaceholder::vfunc362 |  |  |
 | `0x103a42a0` CNPC_VPlaceholder::vfunc365 |  |  |
 | `0x103a42c0` CNPC_VPlaceholder::vfunc364 |  |  |
 | `0x103a42e0` CNPC_VPlaceholder::vfunc580 |  |  |
-| `0x103a4300` CNPC_VPlaceholder::vfunc451 |  |  |
-| `0x103a43f0` CNPC_VPlaceholder::vfunc437 |  |  |
-| `0x103a4410` CNPC_VPlaceholder::vfunc438 |  |  |
+| `0x103a4300` CNPC_VPlaceholder::GetSchedulingErrorName |  |  |
+| `0x103a43f0` CNPC_VPlaceholder::PreSelectSchedule |  |  |
+| `0x103a4410` CNPC_VPlaceholder::SelectSchedule |  |  |
 | `0x103a4730` CNPC_VFrenzyShadow::FUN_103a4730 |  |  |
 | `0x103a4750` CNPC_VFrenzyShadow::FUN_103a4750 |  |  |
 | `0x103a4770` CNPC_VFrenzyShadow::FUN_103a4770 |  |  |
@@ -1873,89 +1876,89 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103a4810` CNPC_VFrenzyShadow::FUN_103a4810 |  |  |
 | `0x103a4830` CNPC_VFrenzyShadow::FUN_103a4830 |  |  |
 | `0x103a4850` CNPC_VFrenzyShadow::FUN_103a4850 |  |  |
-| `0x103a4890` CNPC_VPlayerController::vfunc138 |  |  |
-| `0x103a4bb0` CNPC_ProneDialog::vfunc45 |  |  |
+| `0x103a4890` CNPC_VPlayerController::Classify |  |  |
+| `0x103a4bb0` CNPC_ProneDialog::PassesFindEntityFOVTrace |  |  |
 | `0x103a4f60` CNPC_VSabbatGunman::vfunc82 |  |  |
 | `0x103a50a0` CNPC_VSabbatGunman::vfunc580 |  |  |
-| `0x103a50c0` CNPC_VSabbatGunman::vfunc451 |  |  |
-| `0x103a51e0` CNPC_VSabbatGunman::vfunc452 |  |  |
+| `0x103a50c0` CNPC_VSabbatGunman::GetSchedulingErrorName |  |  |
+| `0x103a51e0` CNPC_VSabbatGunman::LoadedSchedules |  |  |
 | `0x103a5b50` CNPC_VSabbatLeader::vfunc82 |  |  |
-| `0x103a5c80` CNPC_VSabbatLeader::vfunc70 |  |  |
+| `0x103a5c80` CNPC_VSabbatLeader::IsMonster |  |  |
 | `0x103a5ca0` CNPC_VSabbatLeader::vfunc580 |  |  |
-| `0x103a5cc0` CNPC_VSabbatLeader::vfunc451 |  |  |
-| `0x103a5df0` CNPC_VSabbatLeader::vfunc452 |  |  |
+| `0x103a5cc0` CNPC_VSabbatLeader::GetSchedulingErrorName |  |  |
+| `0x103a5df0` CNPC_VSabbatLeader::LoadedSchedules |  |  |
 | `0x103a6ef0` CNPC_VSabbatLeader::Classify |  |  |
 | `0x103a9340` CNPC_VSabbatLeader::FValidateHintType |  |  |
 | `0x103a9d00` CNPC_VSabbatLeader::FlipFailureType |  |  |
 | `0x103ab4a0` CNPC_VSabbatLeader::OnVictimHitByMe | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
 | `0x103aba70` CNPC_VScurrying::FUN_103aba70 |  |  |
 | `0x103abba0` CNPC_VScurrying::FUN_103abba0 |  |  |
-| `0x103abbc0` CNPC_VScurrying::FUN_103abbc0 |  |  |
-| `0x103abce0` CNPC_VScurrying::FUN_103abce0 |  |  |
-| `0x103ac470` CNPC_VScurrying::vfunc138 |  |  |
+| `0x103abbc0` CNPC_VScurrying::GetSchedulingErrorName |  |  |
+| `0x103abce0` CNPC_VScurrying::LoadedSchedules |  |  |
+| `0x103ac470` CNPC_VScurrying::Classify |  |  |
 | `0x103aca60` CNPC_VScurrying::FUN_103aca60 |  |  |
-| `0x103ad660` CNPC_VRat::vfunc138 |  |  |
-| `0x103ad680` CNPC_VRat::vfunc294 |  |  |
-| `0x103ad7b0` CNPC_VRat::vfunc295 |  |  |
-| `0x103ad7d0` CNPC_VRat::vfunc333 |  |  |
+| `0x103ad660` CNPC_VRat::Classify |  |  |
+| `0x103ad680` CNPC_VRat::IsValidStealthKillTarget |  |  |
+| `0x103ad7b0` CNPC_VRat::CanTalk |  |  |
+| `0x103ad7d0` CNPC_VRat::MaintainEyeDirection |  |  |
 | `0x103ad850` CNPC_VRat::vfunc316 |  |  |
 | `0x103ad870` CNPC_VRat::vfunc317 |  |  |
-| `0x103ad890` CNPC_VRat::vfunc318 |  |  |
-| `0x103ad8b0` CNPC_VRat::vfunc319 |  |  |
-| `0x103ad8d0` CNPC_VRat::vfunc320 |  |  |
-| `0x103ad8f0` CNPC_VRat::vfunc590 |  |  |
+| `0x103ad890` CNPC_VRat::PlayerDefenderBlockReaction |  |  |
+| `0x103ad8b0` CNPC_VRat::PlayerAttackerBlockedReaction |  |  |
+| `0x103ad8d0` CNPC_VRat::PlayerKnockbackReaction |  |  |
+| `0x103ad8f0` CNPC_VRat::OkToInterruptForMelee |  |  |
 | `0x103ad910` CNPC_VRat::vfunc330 |  |  |
 | `0x103adaa0` CNPC_VSheriffMan::vfunc82 |  |  |
-| `0x103adc50` CNPC_VSheriffMan::vfunc452 |  |  |
+| `0x103adc50` CNPC_VSheriffMan::LoadedSchedules |  |  |
 | `0x103ae4b0` CNPC_VSheriffMan::vfunc580 |  |  |
-| `0x103ae4d0` CNPC_VSheriffMan::vfunc451 |  |  |
+| `0x103ae4d0` CNPC_VSheriffMan::GetSchedulingErrorName |  |  |
 | `0x103ae840` CNPC_VSheriffMan::GetUsedHullBits |  |  |
-| `0x103af810` CNPC_VSheriffMan::vfunc566 |  |  |
+| `0x103af810` CNPC_VSheriffMan::FValidateHintType |  |  |
 | `0x103b1790` CNPC_VSheriffMan::CategorizeHeight |  |  |
 | `0x103b1c20` CNPC_VSheriffSwarm::vfunc580 |  |  |
-| `0x103b1c40` CNPC_VSheriffSwarm::vfunc451 |  |  |
-| `0x103b1d60` CNPC_VSheriffSwarm::vfunc452 |  |  |
+| `0x103b1c40` CNPC_VSheriffSwarm::GetSchedulingErrorName |  |  |
+| `0x103b1d60` CNPC_VSheriffSwarm::LoadedSchedules |  |  |
 | `0x103b2280` CNPC_VSheriffSwarm::vfunc82 |  |  |
 | `0x103b2390` CNPC_VSheriffSwarm::vfunc473 |  |  |
-| `0x103b23b0` CNPC_VSheriffSwarm::vfunc138 |  |  |
+| `0x103b23b0` CNPC_VSheriffSwarm::Classify |  |  |
 | `0x103b2770` CNPC_VStalker::vfunc82 |  |  |
 | `0x103b28b0` CNPC_VStalker::vfunc580 |  |  |
-| `0x103b28d0` CNPC_VStalker::vfunc451 |  |  |
-| `0x103b29f0` CNPC_VStalker::vfunc452 |  |  |
-| `0x103b2e60` CNPC_VStalker::vfunc375 |  |  |
+| `0x103b28d0` CNPC_VStalker::GetSchedulingErrorName |  |  |
+| `0x103b29f0` CNPC_VStalker::LoadedSchedules |  |  |
+| `0x103b2e60` CNPC_VStalker::NPC_EarlyTranslateActivity |  |  |
 | `0x103b2f50` CNPC_VTaxiDriver::vfunc72 |  |  |
 | `0x103b2f70` CNPC_VTaxiDriver::vfunc580 |  |  |
-| `0x103b2f90` CNPC_VTaxiDriver::vfunc451 |  |  |
+| `0x103b2f90` CNPC_VTaxiDriver::GetSchedulingErrorName |  |  |
 | `0x103b2fb0` CNPC_VTaxiDriver::vfunc82 |  |  |
-| `0x103b3110` CNPC_VTaxiDriver::vfunc452 |  |  |
-| `0x103b3630` CNPC_VTaxiDriver::vfunc138 |  |  |
-| `0x103b3910` CNPC_VTaxiDriver::vfunc142 |  |  |
+| `0x103b3110` CNPC_VTaxiDriver::LoadedSchedules |  |  |
+| `0x103b3630` CNPC_VTaxiDriver::Classify |  |  |
+| `0x103b3910` CNPC_VTaxiDriver::OnTakeDamage |  |  |
 | `0x103b3930` CNPC_VTaxiDriver::vfunc390 |  |  |
-| `0x103b3950` CNPC_VTaxiDriver::vfunc144 |  |  |
+| `0x103b3950` CNPC_VTaxiDriver::Event_Killed |  |  |
 | `0x103b3b20` CNPC_VTest::vfunc580 |  |  |
-| `0x103b3b40` CNPC_VTest::vfunc451 |  |  |
-| `0x103b3c60` CNPC_VTest::vfunc452 |  |  |
+| `0x103b3b40` CNPC_VTest::GetSchedulingErrorName |  |  |
+| `0x103b3c60` CNPC_VTest::LoadedSchedules |  |  |
 | `0x103b4eb0` CNPC_VTest::vfunc473 |  |  |
-| `0x103b4ed0` CNPC_VTest::vfunc138 |  |  |
+| `0x103b4ed0` CNPC_VTest::Classify |  |  |
 | `0x103b5330` CNPC_VToreador::vfunc580 |  |  |
-| `0x103b5350` CNPC_VToreador::vfunc451 |  |  |
-| `0x103b5470` CNPC_VToreador::vfunc452 |  |  |
-| `0x103b59c0` CNPC_VToreador::vfunc138 |  |  |
+| `0x103b5350` CNPC_VToreador::GetSchedulingErrorName |  |  |
+| `0x103b5470` CNPC_VToreador::LoadedSchedules |  |  |
+| `0x103b59c0` CNPC_VToreador::Classify |  |  |
 | `0x103b5ad0` CNPC_VTremere::vfunc580 |  |  |
-| `0x103b5af0` CNPC_VTremere::vfunc451 |  |  |
-| `0x103b5c10` CNPC_VTremere::vfunc452 |  |  |
-| `0x103b6160` CNPC_VTremere::vfunc138 |  |  |
+| `0x103b5af0` CNPC_VTremere::GetSchedulingErrorName |  |  |
+| `0x103b5c10` CNPC_VTremere::LoadedSchedules |  |  |
+| `0x103b6160` CNPC_VTremere::Classify |  |  |
 | `0x103b6b60` CNPC_VTzimisce::vfunc82 |  |  |
 | `0x103b6d90` CNPC_VTzimisce::vfunc325 |  |  |
 | `0x103b6db0` CNPC_VTzimisce::vfunc324 |  |  |
-| `0x103b6dd0` CNPC_VTzimisce::vfunc522 |  |  |
-| `0x103b6df0` CNPC_VTzimisce::vfunc523 |  |  |
-| `0x103b6e10` CNPC_VTzimisce::vfunc244 |  |  |
+| `0x103b6dd0` CNPC_VTzimisce::StepHeight |  |  |
+| `0x103b6df0` CNPC_VTzimisce::GetMaxJumpSpeed |  |  |
+| `0x103b6e10` CNPC_VTzimisce::GetSkeletonModelName |  |  |
 | `0x103b6e30` CNPC_VTzimisce::vfunc550 |  |  |
 | `0x103b6e50` CNPC_VTzimisce::vfunc580 |  |  |
-| `0x103b6e70` CNPC_VTzimisce::vfunc451 |  |  |
-| `0x103b7090` CNPC_VTzimisce::vfunc452 |  |  |
-| `0x103b9020` CNPC_VTzimisce::vfunc70 |  |  |
+| `0x103b6e70` CNPC_VTzimisce::GetSchedulingErrorName |  |  |
+| `0x103b7090` CNPC_VTzimisce::LoadedSchedules |  |  |
+| `0x103b9020` CNPC_VTzimisce::IsMonster |  |  |
 | `0x103b9360` CNPC_VTzimisce::vfunc489 |  |  |
 | `0x103b95e0` CNPC_VTzimisce::vfunc492 |  |  |
 | `0x103b9600` CNPC_VTzimisce::vfunc493 |  |  |
@@ -1966,59 +1969,59 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103b9ef0` CNPC_VTzimisce::vfunc509 |  |  |
 | `0x103b9f10` CNPC_VTzimisce::vfunc487 |  |  |
 | `0x103ba000` CNPC_VTzimisce::vfunc473 |  |  |
-| `0x103ba230` CNPC_VTzimisce::vfunc138 |  |  |
+| `0x103ba230` CNPC_VTzimisce::Classify |  |  |
 | `0x103ba250` CNPC_VTzimisce::vfunc533 |  | `+0x5d60` |
-| `0x103ba780` CNPC_VTzimisce::vfunc566 |  |  |
-| `0x103bdf60` CNPC_VTzimisce::vfunc434 |  |  |
+| `0x103ba780` CNPC_VTzimisce::FValidateHintType |  |  |
+| `0x103bdf60` CNPC_VTzimisce::PrescheduleThink |  |  |
 | `0x103be050` FUN_103be050 |  |  |
 | `0x103be090` FUN_103be090 |  |  |
 | `0x103be0b0` FUN_103be0b0 |  |  |
 | `0x103be130` FUN_103be130 |  |  |
 | `0x103be150` FUN_103be150 |  |  |
 | `0x103bf3c0` FUN_103bf3c0 |  |  |
-| `0x103bfa30` CNPC_VTzimisce::vfunc228 |  |  |
+| `0x103bfa30` CNPC_VTzimisce::VPhysicsShadowCollision |  |  |
 | `0x103c0860` FUN_103c0860 | `+0x0370` ← 0x101df260 | `+0x0828` |
 | `0x103c0ad0` CNPC_VTzimisceHeadClaw::vfunc82 |  |  |
-| `0x103c0c30` CNPC_VTzimisceHeadClaw::vfunc452 |  |  |
+| `0x103c0c30` CNPC_VTzimisceHeadClaw::LoadedSchedules |  |  |
 | `0x103c12c0` CNPC_VTzimisceHeadClaw::vfunc325 |  |  |
 | `0x103c12e0` CNPC_VTzimisceHeadClaw::vfunc324 |  |  |
 | `0x103c1300` CNPC_VTzimisceHeadClaw::vfunc580 |  |  |
-| `0x103c1320` CNPC_VTzimisceHeadClaw::vfunc451 |  |  |
-| `0x103c1520` CNPC_VTzimisceHeadClaw::vfunc70 |  |  |
+| `0x103c1320` CNPC_VTzimisceHeadClaw::GetSchedulingErrorName |  |  |
+| `0x103c1520` CNPC_VTzimisceHeadClaw::IsMonster |  |  |
 | `0x103c24a0` FUN_103c24a0 |  |  |
 | `0x103c28a0` CNPC_VTzimisceRunner::vfunc82 |  |  |
-| `0x103c2a00` CNPC_VTzimisceRunner::vfunc452 |  |  |
+| `0x103c2a00` CNPC_VTzimisceRunner::LoadedSchedules |  |  |
 | `0x103c3040` CNPC_VTzimisceRunner::vfunc399 |  |  |
 | `0x103c3060` CNPC_VTzimisceRunner::vfunc400 |  |  |
 | `0x103c3080` CNPC_VTzimisceRunner::vfunc325 |  |  |
 | `0x103c30a0` CNPC_VTzimisceRunner::vfunc324 |  |  |
 | `0x103c30c0` CNPC_VTzimisceRunner::vfunc329 |  |  |
 | `0x103c30e0` CNPC_VTzimisceRunner::vfunc580 |  |  |
-| `0x103c3100` CNPC_VTzimisceRunner::vfunc451 |  |  |
-| `0x103c32a0` CNPC_VTzimisceRunner::vfunc70 |  |  |
+| `0x103c3100` CNPC_VTzimisceRunner::GetSchedulingErrorName |  |  |
+| `0x103c32a0` CNPC_VTzimisceRunner::IsMonster |  |  |
 | `0x103c47e0` CNPC_VVampire::FUN_103c47e0 |  |  |
-| `0x103c4a20` CNPC_VVampire::FUN_103c4a20 |  |  |
-| `0x103c4f20` CNPC_VAndreiBlood::FUN_103c4f20 |  |  |
+| `0x103c4a20` CNPC_VVampire::LoadedSchedules |  |  |
+| `0x103c4f20` CNPC_VVampire::Classify |  |  |
 | `0x103c5060` CNPC_VVampireBoss::vfunc82 |  |  |
-| `0x103c5210` CNPC_VVampireBoss::vfunc452 |  |  |
-| `0x103c5fe0` CNPC_VAndreiBlood::FUN_103c5fe0 |  |  |
+| `0x103c5210` CNPC_VVampireBoss::LoadedSchedules |  |  |
+| `0x103c5fe0` CNPC_VVampireBoss::OverrideMove |  |  |
 | `0x103c67f0` FUN_103c67f0 | `+0x5d9c` ← 0x10273390, 0x102827f0, 0x102a1910 |  |
 | `0x103c6df0` CNPC_VVampireBoss::SetBodyEmitterName |  |  |
 | `0x103c6eb0` CNPC_VVampireBoss::ClearBodyEmitterNames |  |  |
 | `0x103c77b0` CNPC_VVentrue::vfunc580 |  |  |
-| `0x103c77d0` CNPC_VVentrue::vfunc451 |  |  |
-| `0x103c78f0` CNPC_VVentrue::vfunc452 |  |  |
-| `0x103c7e40` CNPC_VVentrue::vfunc138 |  |  |
+| `0x103c77d0` CNPC_VVentrue::GetSchedulingErrorName |  |  |
+| `0x103c78f0` CNPC_VVentrue::LoadedSchedules |  |  |
+| `0x103c7e40` CNPC_VVentrue::Classify |  |  |
 | `0x103c87d0` CNPC_VWerewolf::vfunc82 |  |  |
-| `0x103c8e70` CNPC_VWerewolf::vfunc452 |  |  |
+| `0x103c8e70` CNPC_VWerewolf::LoadedSchedules |  |  |
 | `0x103c9ed0` CHintData_WW::CHintData_WW |  |  |
 | `0x103c9fc0` CHintData_WW::Init |  |  |
 | `0x103ca6d0` CNPC_VWerewolf::vfunc316 |  |  |
-| `0x103ca6f0` CNPC_VWerewolf::vfunc318 |  |  |
-| `0x103ca710` CNPC_VWerewolf::vfunc319 |  |  |
+| `0x103ca6f0` CNPC_VWerewolf::PlayerDefenderBlockReaction |  |  |
+| `0x103ca710` CNPC_VWerewolf::PlayerAttackerBlockedReaction |  |  |
 | `0x103ca730` CNPC_VWerewolf::vfunc328 |  |  |
 | `0x103ca750` CNPC_VWerewolf::vfunc580 |  |  |
-| `0x103ca770` CNPC_VWerewolf::vfunc451 |  |  |
+| `0x103ca770` CNPC_VWerewolf::GetSchedulingErrorName |  |  |
 | `0x103cab50` CNPC_VWerewolf::GetUsedHullBits |  |  |
 | `0x103cb170` CNPC_VWerewolf::PostNPCInit |  |  |
 | `0x103cb810` CNPC_VWerewolf::FVisible |  |  |
@@ -2041,26 +2044,26 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x103dc490` FUN_103dc490 |  |  |
 | `0x103dc520` FUN_103dc520 |  |  |
 | `0x103dc750` CNPC_VWolfMorph::vfunc580 |  |  |
-| `0x103dc770` CNPC_VWolfMorph::vfunc451 |  |  |
+| `0x103dc770` CNPC_VWolfMorph::GetSchedulingErrorName |  |  |
 | `0x103dc790` CNPC_VWolfMorph::vfunc82 |  |  |
-| `0x103dc8f0` CNPC_VWolfMorph::vfunc452 |  |  |
-| `0x103dcdc0` CNPC_VWolfMorph::vfunc375 |  |  |
-| `0x103dce50` CNPC_VWolfMorph::vfunc138 |  |  |
+| `0x103dc8f0` CNPC_VWolfMorph::LoadedSchedules |  |  |
+| `0x103dcdc0` CNPC_VWolfMorph::NPC_EarlyTranslateActivity |  |  |
+| `0x103dce50` CNPC_VWolfMorph::Classify |  |  |
 | `0x103dcf00` CNPC_VWolfMorph::vfunc588 |  |  |
 | `0x103dd050` CNPC_VYukie::vfunc580 |  |  |
-| `0x103dd070` CNPC_VYukie::vfunc451 |  |  |
-| `0x103dd190` CNPC_VYukie::vfunc452 |  |  |
-| `0x103dd650` CNPC_VYukie::vfunc138 |  |  |
+| `0x103dd070` CNPC_VYukie::GetSchedulingErrorName |  |  |
+| `0x103dd190` CNPC_VYukie::LoadedSchedules |  |  |
+| `0x103dd650` CNPC_VYukie::Classify |  |  |
 | `0x103dd8b0` CNPC_VYukie::vfunc599 |  |  |
-| `0x103ddaa0` CNPC_VYukie::vfunc363 |  |  |
-| `0x103ddaf0` CNPC_VYukie::vfunc201 |  |  |
+| `0x103ddaa0` CNPC_VYukie::FInViewCone |  |  |
+| `0x103ddaf0` CNPC_VYukie::FVisible |  |  |
 | `0x103ddde0` CNPC_VZombie::vfunc82 |  |  |
 | `0x103de2b0` CNPC_VZombie::vfunc580 |  |  |
-| `0x103de2d0` CNPC_VZombie::vfunc451 |  |  |
-| `0x103de470` CNPC_VZombie::vfunc452 |  |  |
+| `0x103de2d0` CNPC_VZombie::GetSchedulingErrorName |  |  |
+| `0x103de470` CNPC_VZombie::LoadedSchedules |  |  |
 | `0x103df260` CNPC_VZombie::vfunc473 |  |  |
-| `0x103df280` CNPC_VZombie::vfunc138 |  |  |
-| `0x103e03b0` CNPC_VZombie::vfunc566 |  |  |
+| `0x103df280` CNPC_VZombie::Classify |  |  |
+| `0x103e03b0` CNPC_VZombie::FValidateHintType |  |  |
 | `0x103eec60` FUN_103eec60 |  |  |
 | `0x1040b120` FUN_1040b120 |  |  |
 | `0x10412470` FUN_10412470 |  |  |
@@ -2171,7 +2174,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10323630` CBaseCombatCharacter::AddToComfortList |  |  |
 | `0x10323770` CBaseCombatCharacter::RemoveFromComfortList |  |  |
 | `0x100b50a0` CAISound::FUN_100b50a0 |  |  |
-| `0x102c1ec0` CAI_BaseNPCTroika::FUN_102c1ec0 | `+0x5d78` ← 0x10273390 | `+0x5d74` |
+| `0x102c1ec0` CAI_BaseNPCTroika::ScriptUnhide | `+0x5d78` ← 0x10273390 | `+0x5d74` |
 | `0x100ee950` FUN_100ee950 |  |  |
 | `0x10362730` CNPC_VAsianVampire::StandingOnPlayer | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
 | `0x103ab580` CNPC_VSabbatLeader::CheckStuck | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
@@ -2191,19 +2194,19 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x100749a0` FUN_100749a0 |  |  |
 | `0x100b5d80` CAI_BaseNPC::FUN_100b5d80 |  |  |
 | `0x100b6180` CAI_BaseNPC::FUN_100b6180 |  |  |
-| `0x10076b30` FUN_10076b30 |  |  |
+| `0x10076b30` CChoreoEvent::GetDuration |  |  |
 | `0x1007bef0` FUN_1007bef0 |  |  |
 | `0x10076280` FUN_10076280 |  |  |
 | `0x10077450` FUN_10077450 |  |  |
 | `0x1007a310` FUN_1007a310 |  |  |
-| `0x10098a90` CBaseAnimatingOverlay::FUN_10098a90 |  | `+0x0738` |
+| `0x10098a90` CBaseAnimatingOverlay::Dump |  | `+0x0738` |
 | `0x102c4380` FUN_102c4380 |  |  |
-| `0x1029afc0` CAI_BaseNPCTroika::FUN_1029afc0 | `+0x63da` ← 0x1029a0b0, 0x102a0ed0, 0x102a0fb0, `+0x643c` ← 0x1029a0b0, 0x102b7690, 0x103692c0 |  |
-| `0x1029b180` CAI_BaseNPCTroika::FUN_1029b180 | `+0x63da` ← 0x1029a0b0, 0x102a0ed0, 0x102a0fb0, `+0x643c` ← 0x1029a0b0, 0x102b7690, 0x103692c0, `+0x65f7` ← 0x10375c80 |  |
+| `0x1029afc0` CAI_BaseNPCTroika::ShouldIgnoreCollision | `+0x63da` ← 0x1029a0b0, 0x102a0ed0, 0x102a0fb0, `+0x643c` ← 0x1029a0b0, 0x102b7690, 0x103692c0 |  |
+| `0x1029b180` CAI_BaseNPCTroika::NavIgnoreCollision | `+0x63da` ← 0x1029a0b0, 0x102a0ed0, 0x102a0fb0, `+0x643c` ← 0x1029a0b0, 0x102b7690, 0x103692c0, `+0x65f7` ← 0x10375c80 |  |
 | `0x10340650` CBaseCombatCharacter::ShouldIgnoreCollision |  |  |
-| `0x103bdd10` CNPC_VTzimisce::vfunc241 |  |  |
+| `0x103bdd10` CNPC_VTzimisce::GetEventName |  |  |
 | `0x10098cd0` FUN_10098cd0 |  |  |
-| `0x103a56f0` CNPC_VSabbatGunman::vfunc465 |  |  |
+| `0x103a56f0` CNPC_VSabbatGunman::OnChangeActivity |  |  |
 | `0x10099020` CAI_BaseNPC::FUN_10099020 |  | `+0x0720` |
 | `0x1028b190` FUN_1028b190 |  |  |
 | `0x1028b300` FUN_1028b300 |  |  |
@@ -2218,17 +2221,17 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10274aa0` CAI_BaseNPC::Cover_Base |  |  |
 | `0x100ecb10` FUN_100ecb10 |  |  |
 | `0x10271ff0` CAI_BaseNPC::TranslateActivity |  |  |
-| `0x102c1c10` CAI_BaseNPCTroika::FUN_102c1c10 | `+0x6068` ← 0x102a01b0, 0x102a1910 |  |
+| `0x102c1c10` CAI_BaseNPCTroika::GetExpressionEventParams | `+0x6068` ← 0x102a01b0, 0x102a1910 |  |
 | `0x102c7410` CAI_StandoffBehavior::vfunc3 |  |  |
 | `0x1032d9b0` CBaseCombatCharacter::Weapon_CanUse |  |  |
-| `0x103a49c0` CNPC_VFrenzyShadow::FUN_103a49c0 |  |  |
-| `0x103a4a60` CNPC_VFrenzyShadow::FUN_103a4a60 ‼ |  |  |
+| `0x103a49c0` CNPC_VPlayerController::AddExtraAnimationModels |  |  |
+| `0x103a4a60` CNPC_VPlayerController::RemoveExtraAnimationModels ‼ |  |  |
 | `0x1008f540` FUN_1008f540 |  |  |
 | `0x10289fe0` FUN_10289fe0 |  | `+0x5d74` |
 | `0x102e2790` FUN_102e2790 |  |  |
-| `0x10098830` FUN_10098830 |  |  |
-| `0x10374130` CNPC_VDog::vfunc516 | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
-| `0x103ba020` CNPC_VTzimisce::vfunc516 | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
+| `0x10098830` CAnimationLayer::StudioFrameAdvance |  |  |
+| `0x10374130` CNPC_VDog::MaxYawSpeed | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
+| `0x103ba020` CNPC_VTzimisce::MaxYawSpeed | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
 | `0x1032fb80` CAI_BaseNPC::FUN_1032fb80 |  |  |
 | `0x102e2820` FUN_102e2820 |  |  |
 | `0x10398630` FUN_10398630 |  |  |
@@ -2239,26 +2242,26 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10106b30` CBaseCombatCharacter::GetExpressionOverrideFile |  |  |
 | `0x10274ca0` FUN_10274ca0 |  | `+0x5d60` |
 | `0x1025efc0` FUN_1025efc0 |  |  |
-| `0x10099470` CAI_BaseNPC::FUN_10099470 |  | `+0x0720` |
+| `0x10099470` CAI_BaseNPC::AllocateLayer |  | `+0x0720` |
 | `0x100994c0` CAI_BaseNPC::FUN_100994c0 |  | `+0x0720` |
 | `0x1009b2c0` CAISound::FUN_1009b2c0 |  |  |
 | `0x1009b380` CAISound::FUN_1009b380 |  |  |
 | `0x1009b500` CAISound::FUN_1009b500 |  |  |
 | `0x1009b5a0` CAISound::FUN_1009b5a0 |  |  |
-| `0x1034b3c0` CNPCMaker::FUN_1034b3c0 |  |  |
+| `0x1034b3c0` CNPCMaker::ParseMapData |  |  |
 | `0x101cf3c0` FUN_101cf3c0 |  |  |
 | `0x1032ebc0` CBaseCombatCharacter::TakeHealth |  |  |
-| `0x102fb0d0` FUN_102fb0d0 |  |  |
+| `0x102fb0d0` CAI_Node::GetPosition |  |  |
 | `0x101563b0` FUN_101563b0 |  | `+0x0a80` |
 | `0x101cf5c0` FUN_101cf5c0 |  |  |
 | `0x10325fa0` CBaseCombatCharacter::HasAlienGibs |  |  |
 | `0x10334a50` CBaseCombatCharacter::VPhysicsShadowCollision |  | `+0x012c` |
-| `0x102d0860` CAI_Hint::vfunc77 |  |  |
-| `0x102d0890` CAI_Hint::vfunc78 |  |  |
+| `0x102d0860` CAI_Hint::ScriptHide |  |  |
+| `0x102d0890` CAI_Hint::ScriptUnhide |  |  |
 | `0x1036dd20` CNPC_VChangBros::SpawnEnergyBall | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
-| `0x10376ae0` CNPC_VFrenzyShadow::vfunc142 |  |  |
+| `0x10376ae0` CNPC_VFrenzyShadow::OnTakeDamage |  |  |
 | `0x10376b10` CNPC_VFrenzyShadow::vfunc390 |  |  |
-| `0x102dbd50` CAI_InterestingPlaceConverstation::vfunc126 |  |  |
+| `0x102dbd50` CAI_InterestingPlaceConverstation::Save |  |  |
 | `0x102dbda0` CAI_InterestingPlaceConverstation::vfunc127 |  |  |
 | `0x100aa5a0` CAISound::FUN_100aa5a0 ‼ |  |  |
 | `0x1033b500` CBaseCombatCharacter::PrayerBegin |  |  |
@@ -2275,7 +2278,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102ca2a0` FUN_102ca2a0 |  |  |
 | `0x102ca460` FUN_102ca460 |  |  |
 | `0x102da860` FUN_102da860 |  | `+0x0584` |
-| `0x102dbcb0` CAI_InterestingPlaceConverstation::vfunc104 |  |  |
+| `0x102dbcb0` CAI_InterestingPlaceConverstation::Precache |  |  |
 | `0x102dfed0` FUN_102dfed0 |  |  |
 | `0x102e0290` FUN_102e0290 |  |  |
 | `0x103ceb60` FUN_103ceb60 |  |  |
@@ -2285,7 +2288,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101618e0` FUN_101618e0 |  | `+0x0734`, `+0x07f4` |
 | `0x10161f10` FUN_10161f10 |  |  |
 | `0x1018e2a0` FUN_1018e2a0 |  |  |
-| `0x102cd2d0` CAI_StandoffGoal::vfunc103 |  |  |
+| `0x102cd2d0` CAI_StandoffGoal::Spawn |  |  |
 | `0x102dc3e0` FUN_102dc3e0 |  |  |
 | `0x1034d5b0` FUN_1034d5b0 |  |  |
 | `0x103eeee0` FUN_103eeee0 |  |  |
@@ -2294,7 +2297,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a6480` CAI_BaseNPC::FUN_101a6480 |  |  |
 | `0x101a64a0` CAI_BaseNPC::FUN_101a64a0 |  |  |
 | `0x1033cb90` CBaseCombatCharacter::Kill |  |  |
-| `0x1034aa40` CGenericNPC::vfunc104 |  |  |
+| `0x1034aa40` CGenericNPC::Precache |  |  |
 | `0x10129870` FUN_10129870 |  |  |
 | `0x102c4e30` FUN_102c4e30 |  |  |
 | `0x102e2690` FUN_102e2690 |  |  |
@@ -2332,8 +2335,8 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101a6ce0` CAI_BaseNPC::FUN_101a6ce0 |  |  |
 | `0x103945a0` CNPC_VMingXiao::vfunc461 |  | `+0x0740` |
 | `0x100f8420` FUN_100f8420 |  |  |
-| `0x101aaee0` CPayphone::vfunc295 |  | `+0x0128` |
-| `0x103a48b0` CNPC_VFrenzyShadow::FUN_103a48b0 | `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 |  |
+| `0x101aaee0` CPayphone::CanTalk |  | `+0x0128` |
+| `0x103a48b0` CNPC_VPlayerController::IRelationType | `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 |  |
 | `0x1025e780` CAI_BaseHumanoid::vfunc277 |  |  |
 | `0x100c17e0` FUN_100c17e0 |  |  |
 | `0x1019c6f0` FUN_1019c6f0 |  |  |
@@ -2410,7 +2413,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10240cb0` FUN_10240cb0 |  |  |
 | `0x102ee550` FUN_102ee550 |  |  |
 | `0x1013aab0` FUN_1013aab0 |  |  |
-| `0x1013af60` FUN_1013af60 |  |  |
+| `0x1013af60` QuaternionMult |  |  |
 | `0x1013b090` FUN_1013b090 |  |  |
 | `0x1013bd20` FUN_1013bd20 |  |  |
 | `0x1013cb80` FUN_1013cb80 |  |  |
@@ -2480,7 +2483,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x101e28e0` FUN_101e28e0 |  |  |
 | `0x101e49b0` FUN_101e49b0 |  |  |
 | `0x102e06f0` FUN_102e06f0 |  |  |
-| `0x10394930` CNPC_VMingXiao::vfunc516 |  |  |
+| `0x10394930` CNPC_VMingXiao::MaxYawSpeed |  |  |
 | `0x103952b0` FUN_103952b0 | `+0x1594` ← 0x10266780 |  |
 | `0x10397f70` FUN_10397f70 |  |  |
 | `0x103983d0` FUN_103983d0 | `+0x6264` ← 0x10292de0 |  |
@@ -2512,13 +2515,13 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10260820` FUN_10260820 |  |  |
 | `0x10260930` FUN_10260930 |  |  |
 | `0x102653f0` FUN_102653f0 |  |  |
-| `0x10269a20` FUN_10269a20 |  |  |
-| `0x10269aa0` FUN_10269aa0 |  |  |
+| `0x10269a20` SetCondition |  |  |
+| `0x10269aa0` HasCondition |  |  |
 | `0x10269b50` FUN_10269b50 |  |  |
 | `0x10269bd0` FUN_10269bd0 |  |  |
-| `0x10269c70` FUN_10269c70 |  |  |
-| `0x10269d30` FUN_10269d30 |  |  |
-| `0x10269eb0` FUN_10269eb0 |  |  |
+| `0x10269c70` ConditionInterruptsCurrentSchedule |  |  |
+| `0x10269d30` HasInterruptCondition |  |  |
+| `0x10269eb0` SetScheduleTestBits |  |  |
 | `0x10269f30` FUN_10269f30 |  |  |
 | `0x10358c90` CNPC_Crow::vfunc567 |  |  |
 | `0x103675e0` CNPC_VBatSwarm::vfunc553 |  |  |
@@ -2526,31 +2529,31 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10367610` CNPC_VBatSwarm::vfunc554 |  |  |
 | `0x103b25c0` CNPC_VSheriffSwarm::vfunc554 |  |  |
 | `0x1026db30` CAI_BaseNPC::CapabilitiesGet |  |  |
-| `0x102ef870` CAI_Navigator::FUN_102ef870 |  |  |
+| `0x102ef870` CAI_Navigator::MoveEnact |  |  |
 | `0x102702d0` CAI_BaseNPC::FUN_102702d0 |  |  |
 | `0x102bf560` FUN_102bf560 | `+0x65f5` ← 0x1029aa10 |  |
-| `0x10270820` CAI_BaseNPC::FUN_10270820 |  |  |
-| `0x102741e0` CAI_BaseNPC::FUN_102741e0 | `+0x5d48` ← 0x10274080 |  |
+| `0x10270820` CAI_BaseNPC::GetUsedHullBits |  |  |
+| `0x102741e0` CAI_BaseNPC::IsUnreachable | `+0x5d48` ← 0x10274080 |  |
 | `0x102b5120` CAI_BaseNPCTroika::FUN_102b5120 |  |  |
 | `0x1027a700` CAI_BaseNPC::FUN_1027a700 | `+0x5d34` ← 0x1027cae0 |  |
-| `0x10289f20` CAI_BaseNPC::FUN_10289f20 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
-| `0x10295300` CAI_BaseNPCTroika::FUN_10295300 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
+| `0x10289f20` CAI_BaseNPC::TranslateEnemyChasePosition | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
+| `0x10295300` CAI_BaseNPCTroika::TranslateEnemyChasePosition | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
 | `0x10300700` FUN_10300700 |  |  |
-| `0x1035f5c0` CNPC_VAnimal::FUN_1035f5c0 |  |  |
-| `0x10384760` CNPC_VAndreiBlood::FUN_10384760 |  |  |
+| `0x1035f5c0` CNPC_VAnimal::TranslateEnemyChasePosition |  |  |
+| `0x10384760` CNPC_VHuman::TranslateEnemyChasePosition |  |  |
 | `0x1027d9b0` FUN_1027d9b0 | `+0x5d34` ← 0x1027cae0 |  |
 | `0x1027e740` CAI_BaseNPC::FUN_1027e740 |  |  |
 | `0x1027e7d0` CAI_BaseNPC::FUN_1027e7d0 |  |  |
-| `0x1027ede0` CAI_BaseNPC::FUN_1027ede0 |  |  |
+| `0x1027ede0` CAI_BaseNPC::GetShortConditionName |  |  |
 | `0x1028dfb0` CAI_BaseNPCTroika::FUN_1028dfb0 |  |  |
 | `0x1027fa50` FUN_1027fa50 |  |  |
 | `0x1027fba0` FUN_1027fba0 |  |  |
 | `0x10280330` CAI_BaseNPC::FUN_10280330 |  |  |
-| `0x10281730` FUN_10281730 |  | `+0x06fc` |
+| `0x10281730` GetFailSchedule |  | `+0x06fc` |
 | `0x10288590` FUN_10288590 |  |  |
 | `0x10288670` FUN_10288670 |  |  |
 | `0x1036e820` CNPC_VChangBros::ReadyForUnited |  |  |
-| `0x1029f8d0` CAI_BaseNPCTroika::FUN_1029f8d0 |  |  |
+| `0x1029f8d0` CAI_BaseNPCTroika::OnVictimHitByMe |  |  |
 | `0x1028e870` FUN_1028e870 | `+0x62cc` ← 0x1029a0b0, 0x103692c0 |  |
 | `0x1028e8b0` FUN_1028e8b0 |  |  |
 | `0x1028ea60` FUN_1028ea60 |  |  |
@@ -2559,8 +2562,8 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10290700` FUN_10290700 | `+0x6250` ← 0x10291230, 0x1029a0b0, 0x1029adb0 |  |
 | `0x10293e20` FUN_10293e20 |  |  |
 | `0x10293e80` CAI_BaseNPCTroika::FUN_10293e80 |  |  |
-| `0x103858b0` CNPC_VAndreiBlood::ClassTranslate_Human |  |  |
-| `0x10394690` CNPC_VMingXiao::vfunc376 |  |  |
+| `0x103858b0` CNPC_VHuman::NPC_TranslateActivity |  |  |
+| `0x10394690` CNPC_VMingXiao::NPC_TranslateActivity |  |  |
 | `0x103d5f60` CNPC_VWerewolf::OnChangeActivity |  |  |
 | `0x103b9180` CNPC_VTzimisce::vfunc593 |  |  |
 | `0x1029f5d0` FUN_1029f5d0 |  |  |
@@ -2568,10 +2571,10 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x1029f650` FUN_1029f650 | `+0x65a0` ← 0x1029a0b0, 0x1029adb0 |  |
 | `0x1029f730` FUN_1029f730 |  |  |
 | `0x102ae310` FUN_102ae310 ‼ |  | `+0x0740` |
-| `0x102b3270` FUN_102b3270 | `+0x6338` ← 0x102c5310, 0x103a0420, 0x103a4580, `+0x633c` ← 0x102c5310, 0x103a0420, 0x103a4580 | `+0x6435` |
+| `0x102b3270` ShouldInvestigate | `+0x6338` ← 0x102c5310, 0x103a0420, 0x103a4580, `+0x633c` ← 0x102c5310, 0x103a0420, 0x103a4580 | `+0x6435` |
 | `0x102b4c10` CAI_BaseNPCTroika::FUN_102b4c10 |  |  |
 | `0x102b8980` FUN_102b8980 |  | `+0x6340` |
-| `0x102c2430` FUN_102c2430 | `+0x5d70` ← 0x102827f0, `+0x65dc` ← 0x1029a0b0, 0x1029aa10 |  |
+| `0x102c2430` ShouldThinkFrequently | `+0x5d70` ← 0x102827f0, `+0x65dc` ← 0x1029a0b0, 0x1029aa10 |  |
 | `0x102c6cf0` FUN_102c6cf0 |  |  |
 | `0x102c7530` CAI_StandoffBehavior::vfunc5 |  |  |
 | `0x102cadb0` FUN_102cadb0 |  |  |
@@ -2614,7 +2617,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x102f9000` FUN_102f9000 |  |  |
 | `0x102f90e0` FUN_102f90e0 |  |  |
 | `0x10307b60` FUN_10307b60 |  |  |
-| `0x10307b80` FUN_10307b80 |  |  |
+| `0x10307b80` NextPoint |  |  |
 | `0x1030b4d0` FUN_1030b4d0 |  |  |
 | `0x1030b520` FUN_1030b520 |  |  |
 | `0x1030b550` FUN_1030b550 |  |  |
@@ -2628,7 +2631,7 @@ Strongly connected components of the closure's call graph (direct and resolved v
 | `0x10312aa0` FUN_10312aa0 |  |  |
 | `0x10315170` FUN_10315170 |  |  |
 | `0x103153a0` FUN_103153a0 |  |  |
-| `0x103158f0` FUN_103158f0 |  |  |
+| `0x103158f0` RemoveFromSquad |  |  |
 | `0x1036dc60` CNPC_VChangBros::GetFacingTimeToTeleport |  |  |
 | `0x10323930` FUN_10323930 |  |  |
 | `0x10336a50` CBaseCombatCharacter::HasMeleeWeapon |  |  |
@@ -2701,11 +2704,11 @@ Cycles (1):
 | `0x10280300` CAI_BaseNPC::FUN_10280300 | `+0x5d34` ← 0x1027cae0 |  |
 | `0x103281b0` CBaseCombatCharacter::MoveToBoneOriginAngles |  |  |
 | `0x10026b50` CAISound::FUN_10026b50 |  |  |
-| `0x10098bb0` CAI_BaseNPC::FUN_10098bb0 |  | `+0x0738` |
+| `0x10098bb0` CBaseAnimatingOverlay::StudioFrameAdvance |  | `+0x0738` |
 | `0x10051650` CDisciplineParticle::AddToUser |  |  |
 | `0x103aad40` CNPC_VSabbatLeader::SetJumpVelocityTowardPlayer | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
 | `0x1037c2f0` CNPC_VGhoulCroucher::ScriptUnhide |  |  |
-| `0x103d4a20` CNPC_VWerewolf::vfunc78 |  |  |
+| `0x103d4a20` CNPC_VWerewolf::ScriptUnhide |  |  |
 | `0x100a0670` FUN_100a0670 | `+0x0370` ← 0x101df260 | `+0x0100`, `+0x0254` |
 | `0x100eec70` FUN_100eec70 |  |  |
 | `0x102b8d20` FUN_102b8d20 |  |  |
@@ -2724,7 +2727,7 @@ Cycles (1):
 | `0x10144a30` FUN_10144a30 |  |  |
 | `0x10144db0` FUN_10144db0 |  |  |
 | `0x1019d4b0` FUN_1019d4b0 |  |  |
-| `0x102b4090` FUN_102b4090 | `+0x6108` ← 0x102b39e0, `+0x6134` ← 0x102b39e0, `+0x618c` ← 0x102b39e0, `+0x61b8` ← 0x102b39e0, +1 more | `+0x60dc`, `+0x6160`, `+0x6210` |
+| `0x102b4090` CommitBestSound | `+0x6108` ← 0x102b39e0, `+0x6134` ← 0x102b39e0, `+0x618c` ← 0x102b39e0, `+0x61b8` ← 0x102b39e0, +1 more | `+0x60dc`, `+0x6160`, `+0x6210` |
 | `0x103bfd80` CNPC_VTzimisce::vfunc389 | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 | `+0x0374` |
 | `0x10054060` CBaseCombatCharacter::UpdatePoseParameters | `+0x106c` ← 0x103409a0 | `+0x1054`, `+0x105c` |
 | `0x10054c00` FUN_10054c00 |  |  |
@@ -2738,15 +2741,15 @@ Cycles (1):
 | `0x10106050` CBaseCombatCharacter::UpdateExpressions | `+0x10b4` ← 0x102c0f70, 0x103b9f50, `+0x10b8` ← 0x102c0f70 | `+0x0858` |
 | `0x1007a340` FUN_1007a340 |  |  |
 | `0x1008bc50` FUN_1008bc50 |  |  |
-| `0x1039eb50` CNPC_VMingXiaoTentacle::vfunc68 |  |  |
-| `0x103ad6d0` CNPC_VRat::vfunc68 |  |  |
+| `0x1039eb50` CNPC_VMingXiaoTentacle::ShouldIgnoreCollision |  |  |
+| `0x103ad6d0` CNPC_VRat::ShouldIgnoreCollision |  |  |
 | `0x103d9ab0` CNPC_VWerewolf::ShouldIgnoreCollision |  |  |
-| `0x10380f90` CNPC_VHengeyokai::vfunc69 |  |  |
-| `0x10396fd0` CNPC_VMingXiao::vfunc69 |  |  |
-| `0x1039eb90` CNPC_VMingXiaoTentacle::vfunc69 |  |  |
-| `0x103bfa00` CNPC_VTzimisce::vfunc69 |  |  |
+| `0x10380f90` CNPC_VHengeyokai::NavIgnoreCollision |  |  |
+| `0x10396fd0` CNPC_VMingXiao::NavIgnoreCollision |  |  |
+| `0x1039eb90` CNPC_VMingXiaoTentacle::NavIgnoreCollision |  |  |
+| `0x103bfa00` CNPC_VTzimisce::NavIgnoreCollision |  |  |
 | `0x103d9ba0` CNPC_VWerewolf::NavIgnoreCollision |  |  |
-| `0x10098c80` CAI_BaseNPC::FUN_10098c80 |  | `+0x0734` |
+| `0x10098c80` CBaseAnimatingOverlay::DispatchAnimEvents |  | `+0x0734` |
 | `0x10295460` FUN_10295460 |  |  |
 | `0x102b7f40` FUN_102b7f40 |  |  |
 | `0x102b8a10` FUN_102b8a10 |  |  |
@@ -2765,7 +2768,7 @@ Cycles (1):
 | `0x101cd8c0` FUN_101cd8c0 |  |  |
 | `0x102ee9c0` FUN_102ee9c0 |  |  |
 | `0x102f46d0` FUN_102f46d0 |  |  |
-| `0x102d08c0` CAI_Hint::vfunc119 ‼ |  |  |
+| `0x102d08c0` CAI_Hint::Kill ‼ |  |  |
 | `0x102d3ec0` CAI_Hint::vfunc130 |  |  |
 | `0x102c0420` CAI_BaseNPCTroika::FUN_102c0420 |  |  |
 | `0x100fbac0` FUN_100fbac0 |  |  |
@@ -2778,7 +2781,7 @@ Cycles (1):
 | `0x102c5570` FUN_102c5570 | `+0x5ba8` ← 0x10273390, 0x10292de0, 0x103692c0 |  |
 | `0x1036e8c0` CNPC_VChangBros::KillCenterEmitter |  |  |
 | `0x103c7150` CNPC_VVampireBoss::KillBodyEmitters |  |  |
-| `0x1028a2a0` CAI_BaseNPC::FUN_1028a2a0 |  |  |
+| `0x1028a2a0` CAI_BaseNPC::PreSelectSchedule |  |  |
 | `0x102e1110` CAI_Motor::FUN_102e1110 |  |  |
 | `0x102e1270` CAI_Motor::FUN_102e1270 |  |  |
 | `0x103577d0` CNPC_Crow::vfunc197 |  |  |
@@ -2792,7 +2795,7 @@ Cycles (1):
 | `0x1038c170` FUN_1038c170 |  |  |
 | `0x101cdba0` FUN_101cdba0 |  |  |
 | `0x101d1800` FUN_101d1800 |  |  |
-| `0x102c2300` CAI_BaseNPCTroika::FUN_102c2300 | `+0x63d8` ← 0x102a0940, 0x102a1910, 0x10395c70 | `+0x0128`, `+0x0740` |
+| `0x102c2300` CAI_BaseNPCTroika::IsValidStealthKillTarget | `+0x63d8` ← 0x102a0940, 0x102a1910, 0x10395c70 | `+0x0128`, `+0x0740` |
 | `0x100f8580` FUN_100f8580 |  |  |
 | `0x101aa950` CPayphone::vfunc35 |  | `+0x049c` |
 | `0x100c0e50` FUN_100c0e50 |  |  |
@@ -2813,7 +2816,7 @@ Cycles (1):
 | `0x101cecf0` FUN_101cecf0 |  |  |
 | `0x1014ebd0` FUN_1014ebd0 |  |  |
 | `0x100f8490` FUN_100f8490 |  |  |
-| `0x10265680` FUN_10265680 ‼ |  |  |
+| `0x10265680` SetAIEnabled ‼ |  |  |
 | `0x103705e0` FUN_103705e0 |  | `+0x0740` |
 | `0x101073c0` CBaseCombatCharacter::GetExpressionName |  |  |
 | `0x10105870` CExpressionTable::LookupExpression |  |  |
@@ -2822,14 +2825,14 @@ Cycles (1):
 | `0x103a9ad0` CNPC_VSabbatLeader::SelectDiveOutPoint | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
 | `0x102ee6d0` FUN_102ee6d0 |  |  |
 | `0x1020cc60` FUN_1020cc60 | `+0x0798` ← 0x101ef540 | `+0x0374` |
-| `0x10280880` CAI_BaseNPC::FUN_10280880 |  |  |
-| `0x102d7760` CAI_TestHull::vfunc521 |  |  |
+| `0x10280880` CAI_BaseNPC::IsJumpLegal |  |  |
+| `0x102d7760` CAI_TestHull::IsJumpLegal |  |  |
 | `0x102e2580` CAI_Motor::FUN_102e2580 |  |  |
 | `0x103b1510` CNPC_VSheriffMan::CacheFloorHeights |  |  |
 | `0x103c6570` CNPC_VVampireBoss::DistToHintCenterLine2D_2 |  |  |
 | `0x102c4c50` FUN_102c4c50 |  |  |
 | `0x102e2180` CAI_Motor::FUN_102e2180 |  |  |
-| `0x10278c80` FUN_10278c80 | `+0x5d44` ← 0x1027cae0 |  |
+| `0x10278c80` FacingIdeal | `+0x5d44` ← 0x1027cae0 |  |
 | `0x103bfc20` FUN_103bfc20 |  |  |
 | `0x102df320` CAI_Memory::RefreshMemories |  | `+0x00e0` |
 | `0x102dfaa0` FUN_102dfaa0 |  | `+0x00e0` |
@@ -2838,18 +2841,18 @@ Cycles (1):
 | `0x1030bf50` FUN_1030bf50 |  |  |
 | `0x10319ee0` FUN_10319ee0 |  |  |
 | `0x10319f30` FUN_10319f30 |  |  |
-| `0x1037cdf0` CNPC_VGuard1::vfunc453 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x628c` ← 0x1037b6e0, 0x103cac20, `+0x6348` ← 0x10298d30, 0x1034cc60, 0x10368b70, `+0x634c` ← 0x10298d30, 0x1034cc60, 0x10368b70, +3 more |  |
+| `0x1037cdf0` CNPC_VGuard1::BuildScheduleTestBits | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x628c` ← 0x1037b6e0, 0x103cac20, `+0x6348` ← 0x10298d30, 0x1034cc60, 0x10368b70, `+0x634c` ← 0x10298d30, 0x1034cc60, 0x10368b70, +3 more |  |
 | `0x101948c0` FUN_101948c0 |  |  |
 | `0x1027a420` CAI_BaseNPC::FUN_1027a420 | `+0x1480` ← 0x101a6f10, 0x1029a0b0, 0x103692c0, `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 | `+0x06fc`, `+0x07ec`, `+0x07f8` |
 | `0x102bf510` CAI_BaseNPCTroika::FUN_102bf510 | `+0x65fa` ← 0x10290350 |  |
 | `0x10279d00` CAI_BaseNPC::ShouldChooseNewEnemy |  |  |
-| `0x102ad140` CAI_BaseNPCTroika::FUN_102ad140 |  |  |
+| `0x102ad140` CAI_BaseNPCTroika::BuildScheduleTestBits |  |  |
 | `0x102b50b0` CAI_BaseNPCTroika::FUN_102b50b0 |  |  |
 | `0x101a89a0` CCineAISchedule::FUN_101a89a0 |  |  |
-| `0x1029f940` CAI_BaseNPCTroika::FUN_1029f940 | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
+| `0x1029f940` CAI_BaseNPCTroika::OkToInterruptForMelee | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
 | `0x103104f0` FUN_103104f0 |  |  |
 | `0x102b1cd0` FUN_102b1cd0 |  |  |
-| `0x103105d0` FUN_103105d0 |  |  |
+| `0x103105d0` CAI_Senses::GetClosestSound |  |  |
 | `0x101bfd60` FUN_101bfd60 |  |  |
 | `0x101c2690` FUN_101c2690 |  |  |
 | `0x101c26d0` FUN_101c26d0 |  |  |
@@ -2858,7 +2861,7 @@ Cycles (1):
 | `0x101cccf0` FUN_101cccf0 |  |  |
 | `0x101cd110` FUN_101cd110 |  |  |
 | `0x1038fb20` CNPC_VManBat::vfunc102 |  |  |
-| `0x1030fff0` FUN_1030fff0 |  |  |
+| `0x1030fff0` LookForPlayers |  |  |
 | `0x102d11f0` FUN_102d11f0 |  |  |
 | `0x101dc120` FUN_101dc120 |  |  |
 | `0x101dd480` FUN_101dd480 |  |  |
@@ -2890,9 +2893,9 @@ Cycles (1):
 | `0x10342800` CBaseCombatCharacter::GetHighlightMaterial |  |  |
 | `0x1025f760` CAI_BaseHumanoid::vfunc536 |  |  |
 | `0x1025f8e0` CAI_BaseHumanoid::vfunc535 |  |  |
-| `0x10310130` FUN_10310130 |  |  |
-| `0x10273fc0` CAI_BaseNPC::FUN_10273fc0 |  |  |
-| `0x10280f40` FUN_10280f40 |  |  |
+| `0x10310130` LookForNPCs |  |  |
+| `0x10273fc0` CAI_BaseNPC::TaskFail |  |  |
+| `0x10280f40` NextScheduledTask |  |  |
 | `0x1029fb70` CAI_BaseNPCTroika::FUN_1029fb70 |  |  |
 | `0x102b2570` FUN_102b2570 | `+0x1488` ← 0x100521e0, 0x10375c80, `+0x1564` ← 0x1029fcf0, 0x1029fdb0, `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x5d9c` ← 0x10273390, 0x102827f0, 0x102a1910, +1 more |  |
 | `0x102b2730` FUN_102b2730 |  |  |
@@ -2900,8 +2903,8 @@ Cycles (1):
 | `0x1039ef90` FUN_1039ef90 |  |  |
 | `0x10269b30` FUN_10269b30 |  |  |
 | `0x10270840` CAI_BaseNPC::FUN_10270840 |  |  |
-| `0x10273e80` FUN_10273e80 |  |  |
-| `0x10280ff0` FUN_10280ff0 |  |  |
+| `0x10273e80` TaskComplete |  |  |
+| `0x10280ff0` CAI_BaseNPC::IsScheduleValid |  |  |
 | `0x10281430` FUN_10281430 |  |  |
 | `0x1028e700` FUN_1028e700 | `+0x62c8` ← 0x10292de0, 0x1029a0b0, 0x103692c0 |  |
 | `0x102953e0` CAI_BaseNPCTroika::FUN_102953e0 | `+0x607c` ← 0x1029a0b0, 0x102ad340, 0x103692c0 |  |
@@ -2914,14 +2917,14 @@ Cycles (1):
 | `0x103bc820` FUN_103bc820 | `+0x0370` ← 0x101df260 |  |
 | `0x103bcaf0` FUN_103bcaf0 |  |  |
 | `0x103bcb60` FUN_103bcb60 |  |  |
-| `0x1026dc80` CAI_BaseNPC::FUN_1026dc80 |  |  |
+| `0x1026dc80` CAI_BaseNPC::ClearAttackConditions |  |  |
 | `0x103d4690` CNPC_VWerewolf::ClearMoveHint |  |  |
-| `0x1026e5c0` CAI_BaseNPC::FUN_1026e5c0 |  |  |
+| `0x1026e5c0` CAI_BaseNPC::ClearSenseConditions |  |  |
 | `0x102ad260` FUN_102ad260 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x102ad2d0` FUN_102ad2d0 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x102b8c40` FUN_102b8c40 |  | `+0x5b9c` |
 | `0x10382f60` FUN_10382f60 | `+0x0370` ← 0x101df260 |  |
-| `0x1038e340` CNPC_VManBat::vfunc438 |  |  |
+| `0x1038e340` CNPC_VManBat::SelectSchedule |  |  |
 | `0x1026a0f0` CAI_BaseNPC::CacheInterruptConditions |  | `+0x0714` |
 | `0x102c7960` CAI_StandoffBehavior::vfunc20 |  |  |
 | `0x102c79a0` CAI_StandoffBehavior::vfunc21 |  |  |
@@ -2929,15 +2932,15 @@ Cycles (1):
 | `0x10278c60` CAI_BaseNPC::FUN_10278c60 |  | `+0x0804` |
 | `0x102bf6e0` CAI_BaseNPCTroika::FUN_102bf6e0 |  |  |
 | `0x102bf5d0` FUN_102bf5d0 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
-| `0x1029a050` CAI_BaseNPCTroika::FUN_1029a050 |  |  |
+| `0x1029a050` CAI_BaseNPCTroika::GetUsedHullBits |  |  |
 | `0x10274080` FUN_10274080 |  |  |
 | `0x10279c20` FUN_10279c20 |  |  |
-| `0x103951d0` CNPC_VMingXiao::vfunc408 |  |  |
-| `0x1039ece0` CNPC_VMingXiaoTentacle::vfunc408 |  |  |
+| `0x103951d0` CNPC_VMingXiao::GetShortConditionName |  |  |
+| `0x1039ece0` CNPC_VMingXiaoTentacle::GetShortConditionName |  |  |
 | `0x103d0640` CNPC_VWerewolf::GetShortConditionName |  |  |
-| `0x10290720` FUN_10290720 | `+0x6244` ← 0x1029a0b0, 0x1029adb0, 0x10369120, `+0x6264` ← 0x10292de0, `+0x6278` ← 0x10291610, 0x1029a0b0, 0x103692c0, `+0x6279` ← 0x10291610, 0x1029a0b0, 0x103692c0, +1 more |  |
-| `0x10290b60` FUN_10290b60 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x6248` ← 0x1029a0b0, 0x1029adb0, 0x10369120, `+0x6264` ← 0x10292de0, `+0x6278` ← 0x10291610, 0x1029a0b0, 0x103692c0, +2 more |  |
-| `0x10291230` FUN_10291230 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x6250` ← 0x1029a0b0, 0x1029adb0, 0x10369120, `+0x6264` ← 0x10292de0, `+0x6279` ← 0x10291610, 0x1029a0b0, 0x103692c0, +1 more |  |
+| `0x10290720` CalcNextUpdateThink | `+0x6244` ← 0x1029a0b0, 0x1029adb0, 0x10369120, `+0x6264` ← 0x10292de0, `+0x6278` ← 0x10291610, 0x1029a0b0, 0x103692c0, `+0x6279` ← 0x10291610, 0x1029a0b0, 0x103692c0, +1 more |  |
+| `0x10290b60` CalcNextNormalThink | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x6248` ← 0x1029a0b0, 0x1029adb0, 0x10369120, `+0x6264` ← 0x10292de0, `+0x6278` ← 0x10291610, 0x1029a0b0, 0x103692c0, +2 more |  |
+| `0x10291230` CalcNextAIThink | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x6250` ← 0x1029a0b0, 0x1029adb0, 0x10369120, `+0x6264` ← 0x10292de0, `+0x6279` ← 0x10291610, 0x1029a0b0, 0x103692c0, +1 more |  |
 | `0x10298800` FUN_10298800 | `+0x5d34` ← 0x1027cae0 |  |
 | `0x102bf7e0` FUN_102bf7e0 | `+0x5d34` ← 0x1027cae0 |  |
 | `0x102ce150` FUN_102ce150 |  |  |
@@ -3007,17 +3010,17 @@ Cycles (1):
 | `0x10084b40` FUN_10084b40 |  |  |
 | `0x1014f210` FUN_1014f210 |  | `+0x0480` |
 | `0x1008bd30` FUN_1008bd30 |  |  |
-| `0x100991b0` FUN_100991b0 |  |  |
+| `0x100991b0` CBaseAnimatingOverlay::AddGesture |  |  |
 | `0x10272130` ResolveActivityToSequence |  | `+0x5d74` |
 | `0x10297560` CAI_BaseNPCTroika::Cover_Troika |  |  |
 | `0x102954b0` CAI_BaseNPCTroika::Reload_Troika |  |  |
-| `0x101aaf80` CPayphone::vfunc45 |  |  |
+| `0x101aaf80` CPayphone::PassesFindEntityFOVTrace |  |  |
 | `0x10331b30` CBaseCombatCharacter::HeadDirection3D | `+0x1080` ← 0x103409a0 | `+0x1074` |
 | `0x10325da0` FUN_10325da0 |  |  |
 | `0x10332010` CBaseCombatCharacter::GetCameraViewpointPosition |  |  |
 | `0x1025e8e0` CAI_BaseHumanoid::vfunc193 |  |  |
 | `0x1025f0b0` CAI_BaseHumanoid::vfunc373 |  | `+0x5f5c` |
-| `0x1025f160` CAI_BaseHumanoid::vfunc371 |  |  |
+| `0x1025f160` CAI_BaseHumanoid::HeadDirection3D |  |  |
 | `0x10095be0` FUN_10095be0 |  |  |
 | `0x1026af70` CAI_BaseNPC::SetHeadDirection |  | `+0x0374`, `+0x0804` |
 | `0x10106a40` CBaseCombatCharacter::LookupExpressionIndex |  |  |
@@ -3031,15 +3034,15 @@ Cycles (1):
 | `0x103615c0` CNPC_VAsianVampire::SelectLedgeNode |  |  |
 | `0x10361730` CNPC_VAsianVampire::SelectJumpbaseNode |  |  |
 | `0x103a9e70` CNPC_VSabbatLeader::PlayerInNoJumpZone | `+0x628c` ← 0x1037b6e0, 0x103cac20 |  |
-| `0x101a6d70` CCineAISchedule::FUN_101a6d70 |  |  |
-| `0x101aa820` CPayphone::vfunc371 |  |  |
+| `0x101a6d70` CCineNPC::HeadDirection3D |  |  |
+| `0x101aa820` CPayphone::HeadDirection3D |  |  |
 | `0x10331950` CBaseCombatCharacter::BodyDirection2D |  |  |
-| `0x1034ae20` CNPCMaker::vfunc371 |  |  |
-| `0x1034bec0` CNPCMaker_Fleshpile::vfunc371 |  |  |
-| `0x1034cb00` CNPCMaker_Zombie::vfunc371 |  |  |
-| `0x103ad820` CNPC_VRat::vfunc371 |  |  |
+| `0x1034ae20` CNPCMaker::HeadDirection3D |  |  |
+| `0x1034bec0` CNPCMaker_Fleshpile::HeadDirection3D |  |  |
+| `0x1034cb00` CNPCMaker_Zombie::HeadDirection3D |  |  |
+| `0x103ad820` CNPC_VRat::HeadDirection3D |  |  |
 | `0x1037bbc0` CNPC_VGhoulCroucher::IsValidStealthKillTarget |  |  |
-| `0x10387520` CNPC_VGhoulCroucher::FUN_10387520 | `+0x65f4` ← 0x1029a0b0 | `+0x0740` |
+| `0x10387520` CNPC_VHumanCombatant::BuildScheduleTestBits | `+0x65f4` ← 0x1029a0b0 | `+0x0740` |
 | `0x100c2420` FUN_100c2420 |  |  |
 | `0x100dda20` FUN_100dda20 |  |  |
 | `0x100e82d0` CDialog::get_pc_responses |  |  |
@@ -3054,16 +3057,16 @@ Cycles (1):
 | `0x1027de00` FUN_1027de00 | `+0x5d34` ← 0x1027cae0 |  |
 | `0x10241620` FUN_10241620 |  |  |
 | `0x103998d0` FUN_103998d0 |  | `+0x6290` |
-| `0x1026d050` FUN_1026d050 |  |  |
+| `0x1026d050` DisconnectFromSquad |  |  |
 | `0x102e0730` FUN_102e0730 |  |  |
 | `0x1030bb30` FUN_1030bb30 |  |  |
 | `0x10294040` CAI_BaseNPCTroika::FUN_10294040 |  |  |
-| `0x103a2980` CNPC_VPedestrian::vfunc453 |  |  |
-| `0x103c16f0` CNPC_VTzimisceHeadClaw::vfunc453 |  |  |
+| `0x103a2980` CNPC_VPedestrian::BuildScheduleTestBits |  |  |
+| `0x103c16f0` CNPC_VTzimisceHeadClaw::BuildScheduleTestBits |  |  |
 | `0x102bf4a0` CAI_BaseNPCTroika::FUN_102bf4a0 |  |  |
 | `0x101a6c00` CAI_BaseNPC::FUN_101a6c00 |  |  |
 | `0x102cc300` CAI_BaseNPC::FUN_102cc300 |  |  |
-| `0x102cc350` CAI_BaseNPC::FUN_102cc350 |  |  |
+| `0x102cc350` CAI_BaseNPC::TaskName |  |  |
 | `0x103ab400` CNPC_VSabbatLeader::OkToInterruptForMelee | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0 |  |
 | `0x1026aef0` CAI_BaseNPC::FUN_1026aef0 | `+0x5cdc` ← 0x1027cae0 |  |
 | `0x1026af30` CAI_BaseNPC::FUN_1026af30 | `+0x5cdc` ← 0x1027cae0 |  |
@@ -3154,11 +3157,11 @@ Cycles (1):
 | `0x10392a10` CNPC_VMingXiao::vfunc418 |  |  |
 | `0x103b9120` CNPC_VTzimisce::vfunc418 |  |  |
 | `0x102a0910` CAI_BaseNPCTroika::FUN_102a0910 |  |  |
-| `0x10392a50` CNPC_VMingXiao::vfunc337 |  |  |
-| `0x103ac4e0` CNPC_VScurrying::FUN_103ac4e0 |  |  |
-| `0x103b9160` CNPC_VTzimisce::vfunc337 |  |  |
-| `0x103c1cb0` CNPC_VTzimisceHeadClaw::vfunc337 |  |  |
-| `0x103c3cb0` CNPC_VTzimisceRunner::vfunc337 |  |  |
+| `0x10392a50` CNPC_VMingXiao::GetUsedHullBits |  |  |
+| `0x103ac4e0` CNPC_VScurrying::GetUsedHullBits |  |  |
+| `0x103b9160` CNPC_VTzimisce::GetUsedHullBits |  |  |
+| `0x103c1cb0` CNPC_VTzimisceHeadClaw::GetUsedHullBits |  |  |
+| `0x103c3cb0` CNPC_VTzimisceRunner::GetUsedHullBits |  |  |
 | `0x1027a6c0` FUN_1027a6c0 | `+0x5d34` ← 0x1027cae0 |  |
 | `0x102ceae0` FUN_102ceae0 |  |  |
 | `0x102e20f0` CAI_Motor::FUN_102e20f0 |  |  |
@@ -3193,13 +3196,13 @@ Cycles (1):
 | `0x102eee40` CAI_Navigator::FUN_102eee40 |  |  |
 | `0x1025f1c0` CAI_BaseHumanoid::vfunc585 | `+0x5d34` ← 0x1027cae0 | `+0x0740` |
 | `0x102779a0` CAI_BaseNPC::FUN_102779a0 | `+0x0fec` ← 0x10272400, 0x10272490, 0x102827f0, `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x5d44` ← 0x1027cae0 |  |
-| `0x1026b810` CAI_BaseNPC::FUN_1026b810 | `+0x0768` ← 0x101ef540, `+0x5d34` ← 0x1027cae0 | `+0x0e44`, `+0x0e50` |
+| `0x1026b810` CAI_BaseNPC::MaintainEyeDirection | `+0x0768` ← 0x101ef540, `+0x5d34` ← 0x1027cae0 | `+0x0e44`, `+0x0e50` |
 | `0x10268ef0` CAISound::FUN_10268ef0 | `+0x0208` ← 0x10273390, 0x103692c0 |  |
 | `0x1026b270` CAI_BaseNPC::FUN_1026b270 |  |  |
 | `0x10191170` FUN_10191170 |  |  |
 | `0x10325620` CBaseCombatCharacter::MaintainScriptedEyeDirection |  | `+0x0e44`, `+0x0e50` |
 | `0x102fcfe0` FUN_102fcfe0 |  |  |
-| `0x1034e070` CScriptedTarget::vfunc123 |  | `+0x5f44` |
+| `0x1034e070` CScriptedTarget::DrawDebugGeometryOverlays |  | `+0x5f44` |
 | `0x103d4820` CNPC_VWerewolf::DrawDebugHullAtPoint | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
 | `0x1033e7e0` CBaseCombatCharacter::DrawMuzzleOverlay |  |  |
 | `0x102968f0` FUN_102968f0 |  |  |
@@ -3289,28 +3292,28 @@ Cycles (1):
 | `0x1025e920` CAI_BaseHumanoid::vfunc587 |  |  |
 | `0x1025ea00` CAI_BaseHumanoid::vfunc588 |  |  |
 | `0x1025f040` CAI_BaseHumanoid::vfunc372 |  |  |
-| `0x1025f0f0` CAI_BaseHumanoid::vfunc370 |  |  |
+| `0x1025f0f0` CAI_BaseHumanoid::HeadDirection2D |  |  |
 | `0x100ec2e0` FUN_100ec2e0 |  |  |
 | `0x100ec360` FUN_100ec360 |  |  |
 | `0x101067e0` CBaseCombatCharacter::AddScriptedExpression |  |  |
-| `0x102d1600` CAI_Hint::vfunc124 |  |  |
-| `0x1034ddf0` CScriptedTarget::vfunc124 |  |  |
-| `0x1017cef0` FUN_1017cef0 |  |  |
+| `0x102d1600` CAI_Hint::DrawDebugTextOverlays |  |  |
+| `0x1034ddf0` CScriptedTarget::DrawDebugTextOverlays |  |  |
+| `0x1017cef0` SetCineCamera |  |  |
 | `0x10334b10` CBaseCombatCharacter::Inventory_Destroy |  |  |
-| `0x103689c0` CNPC_VCamera::FUN_103689c0 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
+| `0x103689c0` CNPC_VCamera::Precache | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
 | `0x103b0560` CNPC_VSheriffMan::KillTeleportBats |  |  |
 | `0x103bdfc0` FUN_103bdfc0 |  |  |
 | `0x101c2c60` FUN_101c2c60 |  |  |
 | `0x102b6120` FUN_102b6120 | `+0x63fd` ← 0x1029a0b0, 0x102b7110, 0x103692c0 |  |
 | `0x102e0f90` CAI_Motor::FUN_102e0f90 |  |  |
 | `0x102e1180` CAI_Motor::FUN_102e1180 |  |  |
-| `0x1026dd10` CAI_BaseNPC::FUN_1026dd10 | `+0x1564` ← 0x1029fcf0, 0x1029fdb0, `+0x5b88` ← 0x10273390, 0x103692c0, `+0x5b8c` ← 0x10273390, 0x103692c0 | `+0x0804` |
-| `0x101a6d40` CCineAISchedule::FUN_101a6d40 |  |  |
-| `0x101aa7f0` CPayphone::vfunc370 |  |  |
-| `0x1034adf0` CNPCMaker::vfunc370 |  |  |
-| `0x1034be90` CNPCMaker_Fleshpile::vfunc370 |  |  |
-| `0x1034cad0` CNPCMaker_Zombie::vfunc370 |  |  |
-| `0x103ad7f0` CNPC_VRat::vfunc370 |  |  |
+| `0x1026dd10` CAI_BaseNPC::GatherAttackConditions | `+0x1564` ← 0x1029fcf0, 0x1029fdb0, `+0x5b88` ← 0x10273390, 0x103692c0, `+0x5b8c` ← 0x10273390, 0x103692c0 | `+0x0804` |
+| `0x101a6d40` CCineNPC::HeadDirection2D |  |  |
+| `0x101aa7f0` CPayphone::HeadDirection2D |  |  |
+| `0x1034adf0` CNPCMaker::HeadDirection2D |  |  |
+| `0x1034be90` CNPCMaker_Fleshpile::HeadDirection2D |  |  |
+| `0x1034cad0` CNPCMaker_Zombie::HeadDirection2D |  |  |
+| `0x103ad7f0` CNPC_VRat::HeadDirection2D |  |  |
 | `0x100bf6a0` FUN_100bf6a0 |  |  |
 | `0x100c4a40` FUN_100c4a40 |  |  |
 | `0x100dc480` FUN_100dc480 |  |  |
@@ -3328,7 +3331,7 @@ Cycles (1):
 | `0x104081e0` FUN_104081e0 |  |  |
 | `0x1026c3d0` FUN_1026c3d0 |  | `+0x04d8` |
 | `0x102f28a0` FUN_102f28a0 |  |  |
-| `0x102cc260` CAI_BaseNPC::FUN_102cc260 |  | `+0x070c` |
+| `0x102cc260` CAI_BaseNPC::GetScheduleOfType |  | `+0x070c` |
 | `0x101dd3a0` FUN_101dd3a0 |  |  |
 | `0x101f2c60` FUN_101f2c60 |  |  |
 | `0x102c6eb0` FUN_102c6eb0 |  |  |
@@ -3352,7 +3355,7 @@ Cycles (1):
 |---|---|---|
 | `0x101def10` FUN_101def10 |  |  |
 | `0x102d9b10` FUN_102d9b10 |  |  |
-| `0x102bff20` CAI_BaseNPCTroika::FUN_102bff20 | `+0x6264` ← 0x10292de0 | `+0x64d8`, `+0x64dc` |
+| `0x102bff20` CAI_BaseNPCTroika::MaintainEyeDirection | `+0x6264` ← 0x10292de0 | `+0x64d8`, `+0x64dc` |
 | `0x10327790` CBaseCombatCharacter::UpdateOnRemove | `+0x05a8` ← 0x1032c0e0, 0x1032e330, `+0x15a0` ← 0x10332aa0, 0x10332ca0, 0x103330f0 |  |
 | `0x101c2d20` FUN_101c2d20 |  |  |
 | `0x102961a0` FUN_102961a0 | `+0x6448` ← 0x102b7690 |  |
@@ -3370,10 +3373,10 @@ Cycles (1):
 | `0x102e6090` FUN_102e6090 |  |  |
 | `0x102e6be0` FUN_102e6be0 |  |  |
 | `0x1026ff00` FUN_1026ff00 |  |  |
-| `0x1030f7b0` FUN_1030f7b0 |  |  |
-| `0x10271f70` CAI_BaseNPC::ClassTranslate_Base |  | `+0x0804` |
-| `0x10392c40` CNPC_VMingXiao::vfunc563 | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
-| `0x103ba640` CNPC_VTzimisce::vfunc563 | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
+| `0x1030f7b0` CanHearSound |  |  |
+| `0x10271f70` CAI_BaseNPC::NPC_TranslateActivity |  | `+0x0804` |
+| `0x10392c40` CNPC_VMingXiao::TranslateEnemyChasePosition | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
+| `0x103ba640` CNPC_VTzimisce::TranslateEnemyChasePosition | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
 | `0x103be8e0` FUN_103be8e0 |  | `+0x0374` |
 | `0x103bf660` FUN_103bf660 |  |  |
 | `0x103d9c90` FUN_103d9c90 | `+0x6320` ← 0x1029a0b0, 0x1029adb0, 0x102a0940 |  |
@@ -3392,17 +3395,17 @@ Cycles (1):
 | `0x103b92a0` CNPC_VTzimisce::vfunc488 ‼ | `+0x079c` ← 0x101ef540 |  |
 | `0x103b9380` CNPC_VTzimisce::vfunc490 | `+0x0798` ← 0x101ef540 |  |
 | `0x101dc790` FUN_101dc790 |  |  |
-| `0x103947b0` CNPC_VMingXiao::vfunc465 |  |  |
+| `0x103947b0` CNPC_VMingXiao::OnChangeActivity |  |  |
 | `0x100576a0` FUN_100576a0 |  |  |
 | `0x1006cf30` FUN_1006cf30 |  |  |
 | `0x100745b0` FUN_100745b0 |  |  |
 | `0x100745d0` FUN_100745d0 |  |  |
 | `0x1038f430` FUN_1038f430 |  |  |
 | `0x102c43b0` FUN_102c43b0 |  |  |
-| `0x10379490` CNPC_VGargoyle::vfunc69 |  |  |
+| `0x10379490` CNPC_VGargoyle::NavIgnoreCollision |  |  |
 | `0x1032be80` CBaseCombatCharacter::SpawnStaticCorpse |  |  |
 | `0x10260a50` FUN_10260a50 |  |  |
-| `0x1029fdb0` CAI_BaseNPCTroika::FUN_1029fdb0 |  |  |
+| `0x1029fdb0` CAI_BaseNPCTroika::PlayerAttackerBlockedReaction |  |  |
 | `0x103979d0` FUN_103979d0 |  |  |
 | `0x10397a50` FUN_10397a50 |  |  |
 | `0x101644f0` FUN_101644f0 | `+0x1488` ← 0x100521e0, 0x10375c80 | `+0x04d8` |
@@ -3411,7 +3414,7 @@ Cycles (1):
 | `0x10297640` CAI_BaseNPCTroika::FUN_10297640 | `+0x5d44` ← 0x1027cae0 | `+0x65f9` |
 | `0x10297a20` FUN_10297a20 | `+0x5d44` ← 0x1027cae0 |  |
 | `0x102bf770` FUN_102bf770 | `+0x5d34` ← 0x1027cae0 |  |
-| `0x102eeae0` CAI_Navigator::FUN_102eeae0 |  |  |
+| `0x102eeae0` CAI_Navigator::OnNavFailed |  |  |
 | `0x1038e640` FUN_1038e640 |  |  |
 | `0x1038e670` FUN_1038e670 |  |  |
 | `0x1038e6a0` FUN_1038e6a0 |  |  |
@@ -3423,7 +3426,7 @@ Cycles (1):
 | `0x103264d0` CBaseCombatCharacter::FinViewCone3dNew |  |  |
 | `0x1014f970` CBaseCombatCharacter::FUN_1014f970 |  |  |
 | `0x1026b210` CAI_BaseNPC::FUN_1026b210 |  |  |
-| `0x100b5d10` FUN_100b5d10 |  |  |
+| `0x100b5d10` LookupFlexController |  |  |
 | `0x10106580` CBaseCombatCharacter::SetExpression |  |  |
 | `0x101072b0` CBaseCombatCharacter::AddExpressionForEvent |  | `+0x056c` |
 | `0x1012a1d0` FUN_1012a1d0 |  |  |
@@ -3432,15 +3435,15 @@ Cycles (1):
 | `0x102b4ab0` CAI_BaseNPCTroika::FUN_102b4ab0 |  | `+0x5d60` |
 | `0x101c4dd0` FUN_101c4dd0 |  |  |
 | `0x1032e120` CBaseCombatCharacter::Weapon_Create |  | `+0x0374` |
-| `0x101a6f10` CCineNPC::FUN_101a6f10 |  |  |
+| `0x101a6f10` CCineNPC::Spawn |  |  |
 | `0x102aab70` FUN_102aab70 |  |  |
 | `0x102695d0` FUN_102695d0 | `+0x016c` ← 0x10147960, 0x103805d0, 0x103831c0 |  |
-| `0x1034d6e0` CScriptedTarget::vfunc103 |  | `+0x5f44` |
+| `0x1034d6e0` CScriptedTarget::Spawn |  | `+0x5f44` |
 | `0x1033e370` CBaseCombatCharacter::LookAtEntity |  |  |
-| `0x10367580` CNPC_VBatSwarm::vfunc561 |  |  |
-| `0x103b2530` CNPC_VSheriffSwarm::vfunc561 |  |  |
+| `0x10367580` CNPC_VBatSwarm::GatherAttackConditions |  |  |
+| `0x103b2530` CNPC_VSheriffSwarm::GatherAttackConditions |  |  |
 | `0x103d02b0` CNPC_VWerewolf::GatherAttackConditions |  |  |
-| `0x101c0820` CAISound::FUN_101c0820 |  |  |
+| `0x101c0820` CPointEntity::Spawn |  |  |
 | `0x100b6480` FUN_100b6480 |  |  |
 | `0x100b6850` FUN_100b6850 |  |  |
 | `0x100bf5b0` FUN_100bf5b0 |  |  |
@@ -3511,7 +3514,7 @@ Cycles (1):
 | `0x1032d890` CBaseCombatCharacter::Weapon_OwnsThisType |  |  |
 | `0x10335950` CBaseCombatCharacter::Inventory_Find |  |  |
 | `0x10332930` CBaseCombatCharacter::ExpandRelationshipTable |  |  |
-| `0x1037a450` CNPC_VGargoyle::vfunc24 |  |  |
+| `0x1037a450` CNPC_VGargoyle::OnVictimHitByMe |  |  |
 | `0x103a0d50` FUN_103a0d50 |  |  |
 | `0x103d3a40` FUN_103d3a40 |  |  |
 | `0x103dc5b0` FUN_103dc5b0 |  |  |
@@ -3531,7 +3534,7 @@ Cycles (1):
 | `0x1027c820` FUN_1027c820 |  |  |
 | `0x102d9ae0` CAI_InterestingPlace::vfunc5 |  |  |
 | `0x10280360` CAI_BaseNPC::FUN_10280360 | `+0x5d34` ← 0x1027cae0 |  |
-| `0x1027ca30` CAI_BaseNPC::FUN_1027ca30 |  | `+0x07fc` |
+| `0x1027ca30` CAI_BaseNPC::UpdateOnRemove |  | `+0x07fc` |
 | `0x10298840` FUN_10298840 |  |  |
 | `0x100cd300` FUN_100cd300 |  |  |
 | `0x100ce040` FUN_100ce040 |  |  |
@@ -3546,13 +3549,13 @@ Cycles (1):
 | `0x10172710` FUN_10172710 |  |  |
 | `0x102da0d0` PickSpotFor |  | `+0x0584` |
 | `0x1039ee20` FUN_1039ee20 |  |  |
-| `0x1030f940` FUN_1030f940 |  |  |
-| `0x102775e0` CAI_BaseNPC::FUN_102775e0 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x1030f940` CAI_Senses::Listen |  |  |
+| `0x102775e0` CAI_BaseNPC::DrawDebugStatOverlays | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x102aaa60` FUN_102aaa60 |  |  |
 | `0x10365780` FUN_10365780 |  |  |
 | `0x103bfa50` FUN_103bfa50 |  |  |
 | `0x102b7370` SelectDoorObstructionSchedule |  |  |
-| `0x10357ba0` CNPC_Crow::vfunc525 |  |  |
+| `0x10357ba0` CNPC_Crow::OverrideMove |  |  |
 | `0x103d6280` CNPC_VWerewolf::PositionAtHint |  |  |
 | `0x10279000` CAI_BaseNPC::FUN_10279000 | `+0x0790` ← 0x101ef540 |  |
 | `0x10312ef0` FUN_10312ef0 |  | `+0x0800` |
@@ -3565,7 +3568,7 @@ Cycles (1):
 | `0x10383130` FUN_10383130 |  |  |
 | `0x10155380` FUN_10155380 |  |  |
 | `0x1026c540` FUN_1026c540 |  | `+0x0804` |
-| `0x10272400` CAI_BaseNPC::FUN_10272400 |  |  |
+| `0x10272400` CAI_BaseNPC::ForcePreTranslatedSequenceAndActivity |  |  |
 | `0x10099690` CAI_BaseNPC::FUN_10099690 |  | `+0x0828`, `+0x0848` |
 | `0x10293e50` CAI_BaseNPCTroika::FUN_10293e50 |  |  |
 | `0x102a1560` FUN_102a1560 |  |  |
@@ -3579,7 +3582,7 @@ Cycles (1):
 | `0x102eeb50` CAI_Navigator::FUN_102eeb50 ‼ |  |  |
 | `0x1038e720` FUN_1038e720 |  | `+0x0374` |
 | `0x1028e310` CAI_BaseNPCTroika::FUN_1028e310 |  | `+0x6558` |
-| `0x1025eaf0` CAI_BaseHumanoid::vfunc537 | `+0x5fbc` ← 0x1025e510, `+0x5fd4` ← 0x1025e510, `+0x5fec` ← 0x1025e510, `+0x6004` ← 0x1025e510, 0x102a0290, +4 more | `+0x0804` |
+| `0x1025eaf0` CAI_BaseHumanoid::SetHeadDirection | `+0x5fbc` ← 0x1025e510, `+0x5fd4` ← 0x1025e510, `+0x5fec` ← 0x1025e510, `+0x6004` ← 0x1025e510, 0x102a0290, +4 more | `+0x0804` |
 | `0x102c42a0` FUN_102c42a0 |  |  |
 | `0x103261f0` CBaseCombatCharacter::FinViewCone2d |  |  |
 | `0x10326bd0` CAI_BaseNPC::FUN_10326bd0 |  |  |
@@ -3589,9 +3592,9 @@ Cycles (1):
 | `0x100b62a0` FUN_100b62a0 |  |  |
 | `0x103b9f90` FUN_103b9f90 |  |  |
 | `0x102d9dd0` CAI_InterestingPlace::vfunc130 |  |  |
-| `0x101a9730` CCineAISchedule::vfunc103 |  |  |
+| `0x101a9730` CCineAISchedule::Spawn |  |  |
 | `0x10326040` CBaseCombatCharacter::CorpseFade |  |  |
-| `0x102dbc80` CAI_InterestingPlaceConverstation::vfunc103 ‼ | `+0x01a0` ← 0x1009e430 |  |
+| `0x102dbc80` CAI_InterestingPlaceConverstation::Spawn ‼ | `+0x01a0` ← 0x1009e430 |  |
 | `0x102fc910` FUN_102fc910 |  |  |
 | `0x102fe9a0` FUN_102fe9a0 |  |  |
 | `0x103164c0` FUN_103164c0 |  |  |
@@ -3607,10 +3610,10 @@ Cycles (1):
 | `0x103dbad0` FUN_103dbad0 |  |  |
 | `0x1013dc60` FUN_1013dc60 |  |  |
 | `0x102ecb20` CAI_Navigator::vfunc0 |  |  |
-| `0x10280e50` FUN_10280e50 | `+0x5d34` ← 0x1027cae0 |  |
+| `0x10280e50` SetSchedule | `+0x5d34` ← 0x1027cae0 |  |
 | `0x101b2f60` FUN_101b2f60 |  |  |
 | `0x101bf860` FUN_101bf860 |  |  |
-| `0x102d9c20` CAI_InterestingPlace::vfunc103 |  | `+0x0584` |
+| `0x102d9c20` CAI_InterestingPlace::Spawn |  | `+0x0584` |
 | `0x101d0310` FUN_101d0310 |  |  |
 | `0x101d0630` FUN_101d0630 |  |  |
 | `0x102c4680` FUN_102c4680 |  |  |
@@ -3659,10 +3662,10 @@ Cycles (1):
 | `0x102f3c10` FUN_102f3c10 |  |  |
 | `0x103d0e70` FUN_103d0e70 |  |  |
 | `0x100f7460` FUN_100f7460 |  |  |
-| `0x1039de20` CNPC_VMingXiaoTentacle::vfunc438 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x6268` ← 0x10292de0 |  |
-| `0x10310710` FUN_10310710 |  |  |
-| `0x1029c010` CAI_BaseNPCTroika::FUN_1029c010 |  | `+0x0128`, `+0x0748`, `+0x64ec` |
-| `0x10366290` CNPC_VMingXiao::FUN_10366290 |  |  |
+| `0x1039de20` CNPC_VMingXiaoTentacle::SelectSchedule | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x6268` ← 0x10292de0 |  |
+| `0x10310710` CAI_Senses::PerformSensing |  |  |
+| `0x1029c010` CAI_BaseNPCTroika::DrawDebugStatOverlays |  | `+0x0128`, `+0x0748`, `+0x64ec` |
+| `0x10366290` CNPC_VBaseBoss::DrawDebugStatOverlays |  |  |
 | `0x103d6000` CNPC_VWerewolf::SetHintActivity |  |  |
 | `0x103b9500` CNPC_VTzimisce::vfunc491 | `+0x0798` ← 0x101ef540, `+0x079c` ← 0x101ef540 |  |
 | `0x102c1680` CAI_BaseNPCTroika::FUN_102c1680 |  | `+0x04dc` |
@@ -3678,7 +3681,7 @@ Cycles (1):
 | `0x10399fe0` CNPC_VMingXiao::TestHitboxes |  |  |
 | `0x102fcbd0` FUN_102fcbd0 |  |  |
 | `0x102ffbd0` FUN_102ffbd0 |  |  |
-| `0x10315800` FUN_10315800 |  |  |
+| `0x10315800` FindCreateSquad |  |  |
 | `0x100c6020` FUN_100c6020 |  |  |
 | `0x1013dc40` FUN_1013dc40 |  |  |
 | `0x101f2180` FUN_101f2180 |  |  |
@@ -3716,7 +3719,7 @@ Cycles (1):
 | `0x10260de0` CAI_BaseHumanoid::vfunc5 |  |  |
 | `0x10356740` CNPC_Bullseye::vfunc5 |  |  |
 | `0x1026cf90` CAI_BaseNPC::FUN_1026cf90 |  | `+0x5c20` |
-| `0x10275760` CAI_BaseNPC::FUN_10275760 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 | `+0x0848` |
+| `0x10275760` CAI_BaseNPC::DrawDebugGeometryOverlays | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 | `+0x0848` |
 | `0x10266780` CAI_BaseNPC::TraceAttack |  |  |
 | `0x10027160` CAISound::FUN_10027160 |  |  |
 | `0x10050e70` FUN_10050e70 |  |  |
@@ -3740,19 +3743,19 @@ Cycles (1):
 | `0x101c19e0` FUN_101c19e0 |  | `+0x0100` |
 | `0x102271d0` FUN_102271d0 |  |  |
 | `0x10265a90` FUN_10265a90 |  | `+0x5e24` |
-| `0x1026a5e0` CAI_BaseNPC::FUN_1026a5e0 | `+0x075c` ← 0x101ef540 | `+0x1ae0`, `+0x5ee4`, `+0x5efc`, `+0x5f14` |
+| `0x1026a5e0` CAI_BaseNPC::OnListened | `+0x075c` ← 0x101ef540 | `+0x1ae0`, `+0x5ee4`, `+0x5efc`, `+0x5f14` |
 | `0x102ae140` CAI_BaseNPCTroika::OnStateChange | `+0x5fbc` ← 0x1025e510, `+0x658c` ← 0x1029a0b0, `+0x6594` ← 0x1029a0b0 |  |
 | `0x102c0360` FUN_102c0360 |  | `+0x5f5c` |
 | `0x102d0910` FUN_102d0910 |  |  |
 | `0x102d09b0` FUN_102d09b0 |  |  |
 | `0x102da600` FUN_102da600 |  |  |
-| `0x102da7c0` FUN_102da7c0 |  |  |
+| `0x102da7c0` ClaimMarker |  |  |
 | `0x102db3e0` FUN_102db3e0 |  |  |
 | `0x1034bc90` CNPCMaker::FUN_1034bc90 |  |  |
 | `0x1037b6e0` CNPC_VGhoulCroucher::OnDisturbed | `+0x628c` ← 0x103cac20 |  |
 | `0x103d4a60` CNPC_VWerewolf::TeleportOut |  |  |
 | `0x103d4d60` CNPC_VWerewolf::TeleportIn |  |  |
-| `0x103e1280` CNPC_VZombie::vfunc24 |  |  |
+| `0x103e1280` CNPC_VZombie::OnVictimHitByMe |  |  |
 | `0x103e12c0` CNPC_VZombie::vfunc25 |  |  |
 | `0x103e12f0` CNPC_VZombie::vfunc26 |  |  |
 | `0x102e0bd0` FUN_102e0bd0 ‼ |  |  |
@@ -3776,15 +3779,15 @@ Cycles (1):
 | `0x103bef20` FUN_103bef20 |  |  |
 | `0x10323a90` CBaseCombatCharacter::Spawn |  | `+0x10ac` |
 | `0x10157da0` FUN_10157da0 |  |  |
-| `0x10378cb0` CNPC_VGargoyle::vfunc292 |  |  |
-| `0x103802a0` CNPC_VHengeyokai::vfunc292 |  |  |
-| `0x102b4540` CAI_BaseNPCTroika::FUN_102b4540 |  |  |
+| `0x10378cb0` CNPC_VGargoyle::DamageFlinch |  |  |
+| `0x103802a0` CNPC_VHengeyokai::DamageFlinch |  |  |
+| `0x102b4540` CAI_BaseNPCTroika::FInViewCone |  |  |
 | `0x10326a20` CAI_BaseNPC::FUN_10326a20 | `+0x1574` ← 0x10298d30, 0x1034a6d0, 0x103567e0 |  |
 | `0x10106c40` CBaseCombatCharacter::ReloadExpressionsForMyModel |  |  |
 | `0x1012a6e0` FUN_1012a6e0 |  |  |
 | `0x10129dc0` FUN_10129dc0 |  |  |
-| `0x10273d30` CAI_BaseNPC::FUN_10273d30 |  | `+0x0804`, `+0x5da8` |
-| `0x10369bd0` CNPC_VCamera::FUN_10369bd0 |  | `+0x0804`, `+0x5da8` |
+| `0x10273d30` CAI_BaseNPC::InitSquad |  | `+0x0804`, `+0x5da8` |
+| `0x10369bd0` CNPC_VCamera::InitSquad |  | `+0x0804`, `+0x5da8` |
 | `0x1018e910` FUN_1018e910 |  |  |
 | `0x1018ecf0` FUN_1018ecf0 |  |  |
 | `0x10348890` CBaseCombatCharacter::Restore | `+0x13d0` ← 0x100521e0 | `+0x10ac` |
@@ -3792,13 +3795,13 @@ Cycles (1):
 | `0x1036e6f0` CNPC_VChangBros::IsUnreachable |  |  |
 | `0x101d1a90` FUN_101d1a90 |  |  |
 | `0x100b4c30` CAISound::FUN_100b4c30 |  |  |
-| `0x1029a930` FUN_1029a930 |  |  |
+| `0x1029a930` CAI_BaseNPCTroika::SetSquad |  |  |
 | `0x100c1f40` FUN_100c1f40 |  |  |
 | `0x1018eab0` FUN_1018eab0 |  |  |
 | `0x1018eb50` FUN_1018eb50 |  |  |
 | `0x1018ec20` FUN_1018ec20 |  |  |
 | `0x1013abc0` FUN_1013abc0 |  |  |
-| `0x1013add0` FUN_1013add0 |  |  |
+| `0x1013add0` QuaternionScale |  |  |
 | `0x102df130` FUN_102df130 |  |  |
 | `0x101a95d0` CCineAI::vfunc586 |  |  |
 | `0x1038f660` FUN_1038f660 |  |  |
@@ -3823,7 +3826,7 @@ Cycles (1):
 | `0x10203190` FUN_10203190 |  |  |
 | `0x10203240` FUN_10203240 |  |  |
 | `0x10324080` FUN_10324080 |  |  |
-| `0x10297ce0` CAI_BaseNPCTroika::FUN_10297ce0 |  |  |
+| `0x10297ce0` CAI_BaseNPCTroika::MaxYawSpeed |  |  |
 | `0x10412520` FUN_10412520 |  |  |
 | `0x10312cd0` FUN_10312cd0 |  |  |
 | `0x1036e2f0` CNPC_VChangBros::GetOtherBrother |  |  |
@@ -3834,7 +3837,7 @@ Cycles (1):
 | `0x10436897` _write_multi_char |  |  |
 | `0x104368c8` _write_string |  |  |
 
-## Layer 9 — 123 functions
+## Layer 9 — 121 functions
 
 Cycles (1):
 
@@ -3844,14 +3847,12 @@ Cycles (1):
 |---|---|---|
 | `0x1038fd40` FUN_1038fd40 |  |  |
 | `0x10280a50` CAI_BaseNPC::AutoMovement |  |  |
-| `0x10026850` CAISound::FUN_10026850 |  |  |
-| `0x10026890` CAISound::FUN_10026890 |  |  |
 | `0x102aa210` FUN_102aa210 |  |  |
 | `0x10356f60` CNPC_Bullseye::vfunc141 |  |  |
 | `0x103ccbf0` CNPC_VWerewolf::TraceAttack |  |  |
 | `0x103e0430` CNPC_VZombie::vfunc141 |  |  |
 | `0x1038f2c0` FUN_1038f2c0 |  |  |
-| `0x102664c0` CAI_BaseNPC::FUN_102664c0 |  |  |
+| `0x102664c0` CAI_BaseNPC::OnTakeDamage_Dead |  |  |
 | `0x102789c0` CAI_BaseNPC::FUN_102789c0 |  |  |
 | `0x103320b0` CBaseCombatCharacter::GetCameraTargetPosition |  | `+0x10d4` |
 | `0x10341c30` CBaseCombatCharacter::FindEntityFOV |  |  |
@@ -3863,7 +3864,7 @@ Cycles (1):
 | `0x101ef540` FUN_101ef540 |  | `+0x07ac`, `+0x0834` |
 | `0x1032ec90` CBaseCombatCharacter::CreatePotenceHitEffect |  |  |
 | `0x1032f550` CBaseCombatCharacter::GetFireParticleForHBox |  | `+0x0ff8` |
-| `0x102b39e0` CAI_BaseNPCTroika::FUN_102b39e0 |  | `+0x6160`, `+0x6210` |
+| `0x102b39e0` CAI_BaseNPCTroika::OnListened |  | `+0x6160`, `+0x6210` |
 | `0x103990c0` FUN_103990c0 |  | `+0x0374` |
 | `0x102edc80` FUN_102edc80 |  |  |
 | `0x102edd50` FUN_102edd50 |  |  |
@@ -3876,9 +3877,9 @@ Cycles (1):
 | `0x10227a30` FUN_10227a30 |  |  |
 | `0x103cc890` CNPC_VWerewolf::UpdateConditionDeathTriggered |  |  |
 | `0x102a9f40` FUN_102a9f40 |  |  |
-| `0x103871c0` CNPC_VGhoulCroucher::FUN_103871c0 |  |  |
+| `0x103871c0` CNPC_VHumanCombatant::OnStateChange |  |  |
 | `0x103a6f70` CNPC_VSabbatLeader::OnStateChange |  |  |
-| `0x103ba2c0` CNPC_VTzimisce::vfunc463 |  |  |
+| `0x103ba2c0` CNPC_VTzimisce::OnStateChange |  |  |
 | `0x102b53d0` FUN_102b53d0 |  |  |
 | `0x100e5240` CDialog::Release |  |  |
 | `0x1034c8e0` CNPCMaker_Fleshpile::vfunc139 |  |  |
@@ -3887,12 +3888,12 @@ Cycles (1):
 | `0x102ed9c0` FUN_102ed9c0 |  |  |
 | `0x102ca780` FUN_102ca780 |  |  |
 | `0x102cabd0` FUN_102cabd0 |  |  |
-| `0x102df700` FUN_102df700 |  |  |
+| `0x102df700` CAI_Memory::UpdateMemory |  |  |
 | `0x100f7b20` FUN_100f7b20 |  |  |
 | `0x100f7c30` FUN_100f7c30 |  |  |
 | `0x100f7f20` FUN_100f7f20 |  |  |
 | `0x101a8130` FUN_101a8130 |  | `+0x5f5c` |
-| `0x101a8cf0` FUN_101a8cf0 |  |  |
+| `0x101a8cf0` DelayStart |  |  |
 | `0x10273790` InputSetRelationship |  |  |
 | `0x10279090` CAI_BaseNPC::FUN_10279090 |  |  |
 | `0x1029f780` FUN_1029f780 |  |  |
@@ -3918,18 +3919,18 @@ Cycles (1):
 | `0x1018e790` FUN_1018e790 |  |  |
 | `0x1028fb70` InitPerceptionDistances | `+0x63b0` ← 0x1029aa10, `+0x63b4` ← 0x1029aa10, 0x103caef0, `+0x63bc` ← 0x1029aa10, 0x103caef0 |  |
 | `0x10294070` CAI_BaseNPCTroika::FUN_10294070 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x6264` ← 0x10292de0 |  |
-| `0x102d0b60` CAI_Hint::vfunc103 |  |  |
+| `0x102d0b60` CAI_Hint::Spawn |  |  |
 | `0x103e1080` CNPC_VZombie::vfunc510 | `+0x6264` ← 0x10292de0 |  |
 | `0x101b1040` FUN_101b1040 |  |  |
 | `0x101b4170` FUN_101b4170 |  |  |
 | `0x100b6250` CAI_BaseNPC::FUN_100b6250 ‼ |  |  |
-| `0x10260630` CAI_BaseHumanoid::vfunc463 |  |  |
+| `0x10260630` CAI_BaseHumanoid::OnStateChange |  |  |
 | `0x103be180` FUN_103be180 |  |  |
 | `0x102e8270` FUN_102e8270 |  |  |
 | `0x10335470` CBaseCombatCharacter::Inventory_Remove |  |  |
 | `0x1009e430` CAISound::FUN_1009e430 |  | `+0x0374` |
-| `0x103a4950` CNPC_VFrenzyShadow::FUN_103a4950 |  |  |
-| `0x1027c160` CAI_BaseNPC::FUN_1027c160 |  | `+0x5cf4` |
+| `0x103a4950` CNPC_VPlayerController::Event_TookLife |  |  |
+| `0x1027c160` CAI_BaseNPC::Restore |  | `+0x5cf4` |
 | `0x102c5730` FUN_102c5730 |  |  |
 | `0x102c5780` FUN_102c5780 |  |  |
 | `0x102c57c0` FUN_102c57c0 |  |  |
@@ -3968,11 +3969,11 @@ Cycles (1):
 
 Cycles (1):
 
-- 7 functions: `0x1006ca50` FUN_1006ca50, `0x101e56e0` FUN_101e56e0, `0x101ff010` FUN_101ff010, `0x101ff060` FUN_101ff060, `0x102012d0` FUN_102012d0, `0x10204900` FUN_10204900, `0x10205730` FUN_10205730
+- 7 functions: `0x1006ca50` FUN_1006ca50, `0x101e56e0` FUN_101e56e0, `0x101ff010` FUN_101ff010, `0x101ff060` FUN_101ff060, `0x102012d0` GetValue, `0x10204900` FUN_10204900, `0x10205730` FUN_10205730
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x1025fa50` CAI_BaseHumanoid::vfunc333 |  | `+0x0740` |
+| `0x1025fa50` CAI_BaseHumanoid::MaintainEyeDirection |  | `+0x0740` |
 | `0x102a0870` FUN_102a0870 |  | `+0x0500` |
 | `0x100544f0` CBaseCombatCharacter::CreateSecondaryDiscParticles |  |  |
 | `0x101dd090` FUN_101dd090 |  |  |
@@ -3980,7 +3981,7 @@ Cycles (1):
 | `0x101dd620` FUN_101dd620 |  |  |
 | `0x1032f770` CBaseCombatCharacter::BurnHitbox |  |  |
 | `0x102f06e0` FUN_102f06e0 |  |  |
-| `0x1029adb0` CAI_BaseNPCTroika::FUN_1029adb0 | `+0x6240` ← 0x1029a0b0, 0x103692c0 |  |
+| `0x1029adb0` CAI_BaseNPCTroika::TaskFail | `+0x6240` ← 0x1029a0b0, 0x103692c0 |  |
 | `0x10341450` CBaseCombatCharacter::InputBarterEnd |  |  |
 | `0x10372cc0` CNPC_VCop::vfunc597 |  | `+0x0740` |
 | `0x101a81a0` FUN_101a81a0 |  |  |
@@ -4001,14 +4002,14 @@ Cycles (1):
 | `0x102cd650` FUN_102cd650 |  | `+0x0120` |
 | `0x102cdb70` FUN_102cdb70 |  |  |
 | `0x10310cf0` FUN_10310cf0 |  |  |
-| `0x10369fb0` CNPC_VCameraSecurity::vfunc363 |  |  |
+| `0x10369fb0` CNPC_VCameraSecurity::FInViewCone |  |  |
 | `0x103d6390` CNPC_VWerewolf::GetHintEndEntity |  |  |
 | `0x10311c10` FUN_10311c10 |  |  |
 | `0x100e8b90` CDialog::pc_charge_dependency |  |  |
-| `0x10363db0` CNPC_VBach::vfunc561 |  |  |
+| `0x10363db0` CNPC_VBach::GatherAttackConditions |  |  |
 | `0x103aa960` CNPC_VSabbatLeader::UpdateBloodSplash |  |  |
 | `0x103c6f40` CNPC_VVampireBoss::SpawnBodyEmitters |  |  |
-| `0x1029aa10` CAI_BaseNPCTroika::FUN_1029aa10 |  |  |
+| `0x1029aa10` CAI_BaseNPCTroika::ProcessTweakParam |  |  |
 | `0x101b0d80` FUN_101b0d80 |  |  |
 | `0x101b19e0` FUN_101b19e0 |  |  |
 | `0x103bc4e0` FUN_103bc4e0 |  |  |
@@ -4023,8 +4024,8 @@ Cycles (1):
 | `0x101c1480` CAI_BaseNPC::FUN_101c1480 |  |  |
 | `0x101f9a80` FUN_101f9a80 |  |  |
 | `0x1021fe50` FUN_1021fe50 |  |  |
-| `0x10299700` CAI_BaseNPCTroika::FUN_10299700 | `+0x607c` ← 0x1029a0b0, 0x102ad340, 0x103692c0, `+0x6274` ← 0x1029a0b0, `+0x62cc` ← 0x1029a0b0, 0x103692c0, `+0x62d0` ← 0x1029a0b0, 0x103692c0, +2 more | `+0x60dc`, `+0x6160`, `+0x6210` |
-| `0x1034e370` CScriptedTarget::vfunc127 |  |  |
+| `0x10299700` CAI_BaseNPCTroika::Restore | `+0x607c` ← 0x1029a0b0, 0x102ad340, 0x103692c0, `+0x6274` ← 0x1029a0b0, `+0x62cc` ← 0x1029a0b0, 0x103692c0, `+0x62d0` ← 0x1029a0b0, 0x103692c0, +2 more | `+0x60dc`, `+0x6160`, `+0x6210` |
+| `0x1034e370` CScriptedTarget::Restore |  |  |
 | `0x102c5500` CAI_BaseNPCTroika::FUN_102c5500 |  |  |
 | `0x1036cfa0` CNPC_VChangBros::SelectLedgeNode |  |  |
 | `0x100c13a0` FUN_100c13a0 |  |  |
@@ -4050,16 +4051,16 @@ Cycles (1):
 | `0x10290570` CAI_BaseNPCTroika::FUN_10290570 |  |  |
 | `0x10362390` CNPC_VAsianVampire::TaskFail |  |  |
 | `0x1036d1d0` CNPC_VChangBros::TaskFail |  |  |
-| `0x10379060` CNPC_VGargoyle::vfunc448 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
-| `0x10380510` CNPC_VHengeyokai::vfunc448 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
-| `0x10394090` CNPC_VMingXiao::vfunc448 |  |  |
+| `0x10379060` CNPC_VGargoyle::TaskFail | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x10380510` CNPC_VHengeyokai::TaskFail | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x10394090` CNPC_VMingXiao::TaskFail |  |  |
 | `0x103b0290` CNPC_VSheriffMan::TaskFail |  |  |
-| `0x103ba350` CNPC_VTzimisce::vfunc448 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
+| `0x103ba350` CNPC_VTzimisce::TaskFail | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x103c59d0` CNPC_VVampireBoss::SelectHintNode |  |  |
 | `0x103a0670` FUN_103a0670 |  |  |
 | `0x10347180` CBaseCombatCharacter::ChooseMeleeAttackSequence |  |  |
-| `0x10388880` CNPC_VHunter::vfunc463 |  |  |
-| `0x1037d020` CNPC_VGuard1::vfunc463 |  |  |
+| `0x10388880` CNPC_VHunter::OnStateChange |  |  |
+| `0x1037d020` CNPC_VGuard1::OnStateChange |  |  |
 | `0x10303c90` FUN_10303c90 |  |  |
 | `0x10303cd0` FUN_10303cd0 |  |  |
 | `0x103048d0` FUN_103048d0 |  |  |
@@ -4113,17 +4114,17 @@ Cycles (1):
 | `0x10346070` CBaseCombatCharacter::GetRawAttackValue |  |  |
 | `0x101f1da0` FUN_101f1da0 |  |  |
 | `0x10357800` CNPC_Crow::vfunc511 |  |  |
-| `0x1025e510` CAI_BaseHumanoid::vfunc105 |  |  |
+| `0x1025e510` CAI_BaseHumanoid::SetModel |  |  |
 | `0x1009c390` FUN_1009c390 |  |  |
 | `0x101f8510` FUN_101f8510 |  |  |
 | `0x101f8e20` FUN_101f8e20 |  |  |
-| `0x102b5b70` CAI_BaseNPCTroika::FUN_102b5b70 |  |  |
+| `0x102b5b70` CAI_BaseNPCTroika::RemoveBaseFightingItems |  |  |
 | `0x1033deb0` CBaseCombatCharacter::RemoveBaseFightingItems |  |  |
 | `0x103cca80` CNPC_VWerewolf::RemoveBaseFightingItems |  |  |
 | `0x1032d0c0` CAI_BaseNPC::FUN_1032d0c0 |  |  |
 | `0x1032d2e0` CBaseCombatCharacter::Weapon_Drop_All |  |  |
 | `0x1027e590` FUN_1027e590 |  |  |
-| `0x102b5b20` CAI_BaseNPCTroika::FUN_102b5b20 |  |  |
+| `0x102b5b20` CAI_BaseNPCTroika::GiveBaseFightingItems |  |  |
 | `0x10323cc0` CBaseCombatCharacter::SyncVendorInventory |  |  |
 | `0x1033dde0` CBaseCombatCharacter::GiveBaseFightingItems |  |  |
 | `0x103cc9b0` CNPC_VWerewolf::GiveBaseFightingItems |  |  |
@@ -4140,26 +4141,26 @@ Cycles (1):
 | `0x10428360` FUN_10428360 |  |  |
 | `0x1027ef20` FUN_1027ef20 |  |  |
 | `0x1027f5d0` FUN_1027f5d0 |  |  |
-| `0x1038e480` CNPC_VManBat::vfunc566 |  |  |
+| `0x1038e480` CNPC_VManBat::FValidateHintType |  |  |
 
 ## Layer 12 — 68 functions
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x1026ce30` CAI_BaseNPC::FUN_1026ce30 |  | `+0x0680`, `+0x5bf0` |
+| `0x1026ce30` CAI_BaseNPC::LeaveGrappleState |  | `+0x0680`, `+0x5bf0` |
 | `0x102f0e00` FUN_102f0e00 |  |  |
 | `0x10329560` CBaseCombatCharacter::EndGrapple |  |  |
 | `0x1037be80` CNPC_VGhoulCroucher::OnVictimHitByMe |  |  |
 | `0x1037bf60` CNPC_VGhoulCroucher::StartTouch |  |  |
 | `0x1028efc0` FUN_1028efc0 |  |  |
-| `0x10365800` CNPC_VBach::vfunc566 |  |  |
-| `0x102bf070` CAI_BaseNPCTroika::FUN_102bf070 | `+0x5ba8` ← 0x10273390, 0x10292de0, 0x103692c0 | `+0x0e74` |
+| `0x10365800` CNPC_VBach::FValidateHintType |  |  |
+| `0x102bf070` CAI_BaseNPCTroika::UpdatePoseParameters | `+0x5ba8` ← 0x10273390, 0x10292de0, 0x103692c0 | `+0x0e74` |
 | `0x10303850` FUN_10303850 |  |  |
 | `0x10304a40` FUN_10304a40 |  |  |
 | `0x103d7dc0` CNPC_VWerewolf::IsValidRandomMoveHint |  |  |
 | `0x103d5590` CNPC_VWerewolf::DrawDebugHintInfo | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
 | `0x10292500` CAI_BaseNPCTroika::NPCThinkDebugPre ‼ | `+0x63a4` ← 0x1029a0b0, 0x103692c0, `+0x63a8` ← 0x1029a0b0, 0x103692c0 |  |
-| `0x102cdc50` CAI_StandoffGoal::vfunc180 |  | `+0x0480` |
+| `0x102cdc50` CAI_StandoffGoal::UpdateOnRemove |  | `+0x0480` |
 | `0x103d68d0` CNPC_VWerewolf::GetHintTargetGroundpoint |  |  |
 | `0x103d8060` CNPC_VWerewolf::IsValidMoveHint |  |  |
 | `0x103d7210` CNPC_VWerewolf::GetForwardYawForHint |  |  |
@@ -4196,7 +4197,7 @@ Cycles (1):
 | `0x103c6a20` FUN_103c6a20 |  |  |
 | `0x10200be0` CVStatList_t::Set |  |  |
 | `0x10206140` FUN_10206140 |  |  |
-| `0x1037a270` CNPC_VGargoyle::vfunc175 |  |  |
+| `0x1037a270` CNPC_VGargoyle::Touch |  |  |
 | `0x10160560` FUN_10160560 |  |  |
 | `0x10258230` FUN_10258230 |  |  |
 | `0x102a0290` FUN_102a0290 |  |  |
@@ -4219,7 +4220,7 @@ Cycles (1):
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x102b5d90` CAI_BaseNPCTroika::FUN_102b5d90 ‼ |  |  |
+| `0x102b5d90` CAI_BaseNPCTroika::LeaveGrappleState ‼ |  |  |
 | `0x102f0e80` FUN_102f0e80 |  |  |
 | `0x102f13a0` FUN_102f13a0 |  |  |
 | `0x10329760` CBaseCombatCharacter::EnterGrappleState |  |  |
@@ -4255,7 +4256,6 @@ Cycles (1):
 | `0x10273180` FUN_10273180 | `+0x1568` ← 0x102d72f0, 0x10357440, 0x1035a090 |  |
 | `0x10273720` CAI_BaseNPC::FUN_10273720 |  |  |
 | `0x10328380` CBaseCombatCharacter::TranslateBaseGrappleActivity |  |  |
-| `0x1009d820` CAISound::FUN_1009d820 |  |  |
 | `0x101f55a0` FUN_101f55a0 |  |  |
 | `0x10207df0` FUN_10207df0 |  |  |
 | `0x1015f9e0` FUN_1015f9e0 |  |  |
@@ -4267,9 +4267,10 @@ Cycles (1):
 | `0x1028ef20` CAI_BaseNPCTroika::FUN_1028ef20 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x6354` ← 0x10298d30, 0x1034cc60, 0x10368b70, `+0x6358` ← 0x10298d30, 0x1034cc60, 0x10368b70 | `+0x0128` |
 | `0x10324ad0` CBaseCombatCharacter::CanVampHeal_HOT |  |  |
 | `0x10333340` CBaseCombatCharacter::IRelationType | `+0x146c` ← 0x1032b9b0, 0x1033eb60 |  |
+| `0x10337e40` CBaseCombatCharacter::IsKine |  |  |
 | `0x10337ff0` CBaseCombatCharacter::IsSupernatural |  |  |
 | `0x103395f0` CBaseCombatCharacter::CanFeed |  |  |
-| `0x1027bb50` CAI_BaseNPC::FUN_1027bb50 | `+0x5dec` ← 0x1034cde0, 0x1037b040, 0x103df170 |  |
+| `0x1027bb50` CAI_BaseNPC::Precache | `+0x5dec` ← 0x1034cde0, 0x1037b040, 0x103df170 |  |
 | `0x103acac0` FUN_103acac0 |  |  |
 | `0x103a9d90` CNPC_VSabbatLeader::CheckForJumpCondition |  |  |
 | `0x1036cab0` CNPC_VChangBros::CheckForTeleport |  |  |
@@ -4290,19 +4291,20 @@ Cycles (2):
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x1026a2c0` CAI_BaseNPC::FUN_1026a2c0 |  |  |
+| `0x10327a90` CBaseCombatCharacter::CorpseGib |  |  |
+| `0x1026a2c0` CAI_BaseNPC::OnLooked |  |  |
 | `0x101babc0` FUN_101babc0 |  |  |
-| `0x101bac90` FUN_101bac90 |  |  |
-| `0x102b35b0` CAI_BaseNPCTroika::FUN_102b35b0 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 |  |
+| `0x101bac90` CSoundEnt::InsertSound |  |  |
+| `0x102b35b0` CAI_BaseNPCTroika::QueryHearSound | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 |  |
 | `0x1032c0e0` CBaseCombatCharacter::CreateCorpse | `+0x05a8` ← 0x1032e330 | `+0x0ff8` |
 | `0x102b4760` CAI_BaseNPCTroika::FUN_102b4760 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x10304130` FUN_10304130 |  |  |
 | `0x102ff960` FUN_102ff960 |  |  |
-| `0x10369ff0` CNPC_VCameraSecurity::vfunc201 |  |  |
+| `0x10369ff0` CNPC_VCameraSecurity::FVisible |  |  |
 | `0x101e2990` FUN_101e2990 |  |  |
 | `0x1026ab50` FUN_1026ab50 |  |  |
 | `0x1026fcf0` CAI_BaseNPC::FUN_1026fcf0 |  |  |
-| `0x102767d0` CAI_BaseNPC::FUN_102767d0 |  |  |
+| `0x102767d0` CAI_BaseNPC::DrawDebugTextOverlays |  |  |
 | `0x101f6010` FUN_101f6010 |  |  |
 | `0x10293ec0` CAI_BaseNPCTroika::FUN_10293ec0 |  |  |
 | `0x10293f80` CAI_BaseNPCTroika::FUN_10293f80 |  |  |
@@ -4325,7 +4327,7 @@ Cycles (2):
 | `0x10294f40` CAI_BaseNPCTroika::FUN_10294f40 |  | `+0x0128` |
 | `0x103d8660` CNPC_VWerewolf::vfunc500 |  |  |
 | `0x103d87a0` CNPC_VWerewolf::vfunc491 |  |  |
-| `0x103567e0` CNPC_Bullseye::vfunc103 |  |  |
+| `0x103567e0` CNPC_Bullseye::Spawn |  |  |
 | `0x1017b330` FUN_1017b330 |  |  |
 | `0x10201100` CVStatList_t::SubBase |  |  |
 | `0x103326b0` CBaseCombatCharacter::BeginSlowEntity | `+0x10a8` ← 0x103327f0 |  |
@@ -4337,41 +4339,41 @@ Cycles (2):
 | `0x10207c70` FUN_10207c70 |  |  |
 | `0x10324c80` CBaseCombatCharacter::VampHeal_HOT_Delay |  |  |
 | `0x101cfef0` FUN_101cfef0 |  |  |
-| `0x10298ce0` CAI_BaseNPCTroika::FUN_10298ce0 |  |  |
-| `0x102d72f0` CAI_TestHull::vfunc103 ‼ |  |  |
-| `0x103c3d10` CNPC_VTzimisceRunner::vfunc336 |  |  |
-| `0x103c3cd0` CNPC_VTzimisceRunner::vfunc335 |  |  |
+| `0x10298ce0` CAI_BaseNPCTroika::SetModel |  |  |
+| `0x102d72f0` CAI_TestHull::Spawn ‼ |  |  |
+| `0x103c3d10` CNPC_VTzimisceRunner::NotifyChangeSizeNormal |  |  |
+| `0x103c3cd0` CNPC_VTzimisceRunner::NotifyChangeSizeSmall |  |  |
 | `0x103d9f90` CNPC_VWerewolf::SnapToAnimationPoint |  |  |
 | `0x10328030` CBaseCombatCharacter::NPC_EarlyTranslateActivity |  |  |
-| `0x10337e40` CBaseCombatCharacter::IsKine |  |  |
 | `0x101daad0` FUN_101daad0 |  |  |
-| `0x1035b5d0` CGenericSabbat_NPC::vfunc104 |  |  |
+| `0x1035b5d0` CGenericSabbat_NPC::Precache |  |  |
 | `0x10339800` CBaseCombatCharacter::CanBeFedUponBy |  |  |
 | `0x1022f4f0` FUN_1022f4f0 |  |  |
 | `0x102743c0` CAI_BaseNPC::BestEnemy |  | `+0x0848` |
-| `0x10299da0` CAI_BaseNPCTroika::FUN_10299da0 |  |  |
+| `0x10299da0` CAI_BaseNPCTroika::IRelationType |  |  |
 | `0x103330f0` CBaseCombatCharacter::SetDialogReactionModifier |  |  |
-| `0x10298ad0` CAI_BaseNPCTroika::FUN_10298ad0 |  | `+0x0128` |
-| `0x1034b160` CNPCMaker::vfunc104 |  |  |
-| `0x1034c180` CNPCMaker_Fleshpile::vfunc104 |  |  |
-| `0x1034cde0` CNPCMaker_Zombie::vfunc104 |  |  |
-| `0x10358ec0` CNPC_Crow::vfunc104 |  |  |
-| `0x1035ade0` CGeneric_NPC_bathack::vfunc104 |  |  |
+| `0x10298ad0` CAI_BaseNPCTroika::Precache |  | `+0x0128` |
+| `0x1034b160` CNPCMaker::Precache |  |  |
+| `0x1034c180` CNPCMaker_Fleshpile::Precache |  |  |
+| `0x1034cde0` CNPCMaker_Zombie::Precache |  |  |
+| `0x10358ec0` CNPC_Crow::Precache |  |  |
+| `0x1035ade0` CGeneric_NPC_bathack::Precache |  |  |
 | `0x103aca80` FUN_103aca80 |  |  |
 | `0x1033b5f0` CAI_BaseNPC::FUN_1033b5f0 |  |  |
 | `0x103412b0` CBaseCombatCharacter::InputBarterBegin |  |  |
 | `0x10428880` FUN_10428880 |  |  |
 
-## Layer 15 — 77 functions
+## Layer 15 — 78 functions
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x1029ca50` CAI_BaseNPCTroika::FUN_1029ca50 |  | `+0x5d60`, `+0x6290` |
-| `0x10327a90` CBaseCombatCharacter::CorpseGib |  |  |
+| `0x1029ca50` CAI_BaseNPCTroika::DrawDebugGeometryOverlays |  | `+0x5d60`, `+0x6290` |
+| `0x102658f0` CAI_BaseNPC::FUN_102658f0 |  | `+0x0fd0` |
+| `0x1032af40` CBaseCombatCharacter::Event_Gibbed |  |  |
 | `0x101e3560` FUN_101e3560 |  |  |
 | `0x10268330` RangedDamagePerVictim |  |  |
-| `0x102b39a0` CAI_BaseNPCTroika::FUN_102b39a0 |  |  |
-| `0x1028d6e0` CAI_BaseNPCTroika::FUN_1028d6e0 | `+0x658c` ← 0x1029a0b0, `+0x6594` ← 0x1029a0b0 |  |
+| `0x102b39a0` CAI_BaseNPCTroika::OnLooked |  |  |
+| `0x1028d6e0` CAI_BaseNPCTroika::UpdateOnRemove | `+0x658c` ← 0x1029a0b0, `+0x6594` ← 0x1029a0b0 |  |
 | `0x1032b9b0` CBaseCombatCharacter::Event_Killed |  |  |
 | `0x1038e9c0` FUN_1038e9c0 |  |  |
 | `0x103c1d80` CNPC_VTzimisceHeadClaw::vfunc332 |  |  |
@@ -4380,8 +4382,8 @@ Cycles (2):
 | `0x10267b60` FUN_10267b60 |  |  |
 | `0x1033b100` CBaseCombatCharacter::GrappleSoundCmd |  |  |
 | `0x10343020` CBaseCombatCharacter::MeleeSwingStep |  |  |
-| `0x103a38c0` CNPC_VPedestrian::vfunc301 |  |  |
-| `0x102b4630` CAI_BaseNPCTroika::FUN_102b4630 |  |  |
+| `0x103a38c0` CNPC_VPedestrian::CreateCorpse |  |  |
+| `0x102b4630` CAI_BaseNPCTroika::FVisible |  |  |
 | `0x102f0fe0` FUN_102f0fe0 |  |  |
 | `0x103005f0` FUN_103005f0 |  |  |
 | `0x103007e0` FUN_103007e0 |  |  |
@@ -4394,57 +4396,57 @@ Cycles (2):
 | `0x10301010` FUN_10301010 ‼ |  |  |
 | `0x101a8de0` CCineAISchedule::FUN_101a8de0 |  | `+0x5f44` |
 | `0x1026fbe0` CAI_BaseNPC::FUN_1026fbe0 |  | `+0x0804` |
-| `0x1029d4e0` CAI_BaseNPCTroika::FUN_1029d4e0 | `+0x6264` ← 0x10292de0 |  |
-| `0x10358f90` CNPC_Crow::vfunc124 |  |  |
+| `0x1029d4e0` CAI_BaseNPCTroika::DrawDebugTextOverlays | `+0x6264` ← 0x10292de0 |  |
+| `0x10358f90` CNPC_Crow::DrawDebugTextOverlays |  |  |
 | `0x10272490` CAI_BaseNPC::SetActivityAndSequence | `+0x5cd8` ← 0x10273390, 0x10295750, 0x103692c0 |  |
 | `0x103e0fa0` CNPC_VZombie::vfunc509 |  | `+0x06fc`, `+0x07ec`, `+0x07f8` |
-| `0x102c21c0` CAI_BaseNPCTroika::FUN_102c21c0 |  | `+0x0128`, `+0x1088` |
+| `0x102c21c0` CAI_BaseNPCTroika::CanTalk |  | `+0x0128`, `+0x1088` |
 | `0x10346380` CBaseCombatCharacter::CalcAndStoreMeleeDiceRolls |  |  |
 | `0x102c2ec0` CAI_BaseNPCTroika::FUN_102c2ec0 |  |  |
 | `0x103327f0` CBaseCombatCharacter::EndSlowEntity |  |  |
 | `0x1033c340` CBaseCombatCharacter::HealthHeal |  | `+0x0570` |
-| `0x1027bb20` CAI_BaseNPC::FUN_1027bb20 |  |  |
-| `0x1027bc60` CAI_BaseNPC::FUN_1027bc60 |  | `+0x5cf4` |
+| `0x1027bb20` CAI_BaseNPC::PostConstructor |  |  |
+| `0x1027bc60` CAI_BaseNPC::Save |  | `+0x5cf4` |
 | `0x10207dd0` FUN_10207dd0 |  |  |
 | `0x10324ba0` CBaseCombatCharacter::BeginVampHeal_HOT |  |  |
-| `0x1037b1f0` CNPC_VGhoulCroucher::vfunc105 |  |  |
-| `0x103e0540` CNPC_VZombie::vfunc105 |  |  |
-| `0x10295590` CAI_BaseNPCTroika::PreTranslate_Troika | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0 | `+0x0804` |
+| `0x1037b1f0` CNPC_VGhoulCroucher::SetModel |  |  |
+| `0x103e0540` CNPC_VZombie::SetModel |  |  |
+| `0x10295590` CAI_BaseNPCTroika::NPC_EarlyTranslateActivity | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0 | `+0x0804` |
 | `0x101db410` FUN_101db410 |  |  |
 | `0x103cb2a0` CNPC_VWerewolf::Precache |  |  |
-| `0x102c4a60` CAI_BaseNPCTroika::FUN_102c4a60 | `+0x63d8` ← 0x102a0940, 0x102a1910, 0x10395c70 |  |
+| `0x102c4a60` CAI_BaseNPCTroika::CanBeFedUponBy | `+0x63d8` ← 0x102a0940, 0x102a1910, 0x10395c70 |  |
 | `0x1029e750` CAI_BaseNPCTroika::FUN_1029e750 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 |  |
 | `0x102ad340` CAI_BaseNPCTroika::FUN_102ad340 | `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0, `+0x607c` ← 0x1029a0b0, 0x103692c0 | `+0x65f8` |
-| `0x102b38b0` CAI_BaseNPCTroika::FUN_102b38b0 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 |  |
-| `0x10372b70` CNPC_VCop::vfunc404 |  |  |
-| `0x10388bb0` CNPC_VHunter::vfunc404 |  |  |
-| `0x103a2930` CNPC_VPedestrian::vfunc404 |  |  |
-| `0x103dd880` CNPC_VYukie::vfunc404 |  |  |
+| `0x102b38b0` CAI_BaseNPCTroika::QuerySeeEntity | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 |  |
+| `0x10372b70` CNPC_VCop::IRelationType |  |  |
+| `0x10388bb0` CNPC_VHunter::IRelationType |  |  |
+| `0x103a2930` CNPC_VPedestrian::IRelationType |  |  |
+| `0x103dd880` CNPC_VYukie::IRelationType |  |  |
 | `0x10332ef0` CBaseCombatCharacter::AdjustDialogReaction |  |  |
-| `0x10359f70` CGeneric_NPC::vfunc104 |  |  |
-| `0x1035cb90` CNPC_VAndreiBlood::vfunc104 |  |  |
+| `0x10359f70` CGeneric_NPC::Precache |  |  |
+| `0x1035cb90` CNPC_VAndreiBlood::Precache |  |  |
 | `0x10360bc0` CNPC_VAsianVampire::Precache |  |  |
-| `0x103637b0` CNPC_VBach::vfunc104 |  |  |
+| `0x103637b0` CNPC_VBach::Precache |  |  |
 | `0x1036ae60` CNPC_VChangBros::Precache |  |  |
-| `0x10378470` CNPC_VGargoyle::vfunc104 |  |  |
-| `0x1037b1a0` CNPC_VGhoulCroucher::vfunc104 |  |  |
-| `0x1037f960` CNPC_VHengeyokai::vfunc104 |  |  |
-| `0x1038aec0` CNPC_VManBat::vfunc104 |  |  |
-| `0x10392660` CNPC_VMingXiao::vfunc104 |  |  |
-| `0x1039c220` CNPC_VMingXiaoTentacle::vfunc104 |  |  |
-| `0x103a03e0` CNPC_VNewscaster::vfunc104 |  |  |
+| `0x10378470` CNPC_VGargoyle::Precache |  |  |
+| `0x1037b1a0` CNPC_VGhoulCroucher::Precache |  |  |
+| `0x1037f960` CNPC_VHengeyokai::Precache |  |  |
+| `0x1038aec0` CNPC_VManBat::Precache |  |  |
+| `0x10392660` CNPC_VMingXiao::Precache |  |  |
+| `0x1039c220` CNPC_VMingXiaoTentacle::Precache |  |  |
+| `0x103a03e0` CNPC_VNewscaster::Precache |  |  |
 | `0x103a6ab0` CNPC_VSabbatLeader::Precache |  |  |
 | `0x103ae540` CNPC_VSheriffMan::Precache |  |  |
-| `0x103b41e0` CNPC_VTest::vfunc104 |  |  |
-| `0x103b8fa0` CNPC_VTzimisce::vfunc104 |  |  |
-| `0x103c1400` CNPC_VTzimisceHeadClaw::vfunc104 |  |  |
-| `0x103c31e0` CNPC_VTzimisceRunner::vfunc104 |  |  |
-| `0x103df120` CNPC_VZombie::vfunc104 |  |  |
-| `0x1034afe0` CNPCMaker::vfunc103 |  |  |
-| `0x1034c020` CNPCMaker_Fleshpile::vfunc103 |  |  |
-| `0x1034cc60` CNPCMaker_Zombie::vfunc103 |  |  |
+| `0x103b41e0` CNPC_VTest::Precache |  |  |
+| `0x103b8fa0` CNPC_VTzimisce::Precache |  |  |
+| `0x103c1400` CNPC_VTzimisceHeadClaw::Precache |  |  |
+| `0x103c31e0` CNPC_VTzimisceRunner::Precache |  |  |
+| `0x103df120` CNPC_VZombie::Precache |  |  |
+| `0x1034afe0` CNPCMaker::Spawn |  |  |
+| `0x1034c020` CNPCMaker_Fleshpile::Spawn |  |  |
+| `0x1034cc60` CNPCMaker_Zombie::Spawn |  |  |
 
-## Layer 16 — 45 functions
+## Layer 16 — 43 functions
 
 Cycles (2):
 
@@ -4455,45 +4457,43 @@ Cycles (2):
 |---|---|---|
 | `0x1028d610` FUN_1028d610 |  |  |
 | `0x102ed430` FUN_102ed430 |  |  |
-| `0x10372f00` CNPC_VCop::vfunc123 |  |  |
-| `0x10399d40` CNPC_VMingXiao::vfunc123 |  |  |
+| `0x10372f00` CNPC_VCop::DrawDebugGeometryOverlays |  |  |
+| `0x10399d40` CNPC_VMingXiao::DrawDebugGeometryOverlays |  |  |
 | `0x102f13d0` FUN_102f13d0 |  |  |
-| `0x101aabf0` CPayphone::vfunc431 |  |  |
+| `0x101aabf0` CPayphone::NPCThink |  |  |
 | `0x10268900` CAISound::FUN_10268900 |  |  |
-| `0x102658f0` CAI_BaseNPC::FUN_102658f0 |  | `+0x0fd0` |
-| `0x1032af40` CBaseCombatCharacter::Event_Gibbed |  |  |
 | `0x101f8620` FUN_101f8620 |  |  |
-| `0x10371a90` CNPC_VCop::vfunc180 |  |  |
-| `0x10391230` CNPC_VMingXiao::vfunc180 |  |  |
-| `0x103a03a0` CNPC_VNewscaster::vfunc180 |  |  |
+| `0x10371a90` CNPC_VCop::UpdateOnRemove |  |  |
+| `0x10391230` CNPC_VMingXiao::UpdateOnRemove |  |  |
+| `0x103a03a0` CNPC_VNewscaster::UpdateOnRemove |  |  |
 | `0x103392c0` CBaseCombatCharacter::Die |  |  |
 | `0x10339d90` CBaseCombatCharacter::FeedBegin | `+0x14a4` ← 0x1033a400 | `+0x13dc` |
 | `0x10371ae0` CNPC_VCop::vfunc472 |  |  |
 | `0x103887d0` CNPC_VHunter::vfunc472 |  |  |
 | `0x1038f020` FUN_1038f020 |  |  |
 | `0x103c2230` FUN_103c2230 |  |  |
-| `0x103766d0` CNPC_VFrenzyShadow::vfunc478 | `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 | `+0x0848` |
-| `0x103ba290` CNPC_VTzimisce::vfunc201 |  |  |
+| `0x103766d0` CNPC_VFrenzyShadow::BestEnemy | `+0x60ac` ← 0x102c51a0, 0x102c5310, 0x103a4580 | `+0x0848` |
+| `0x103ba290` CNPC_VTzimisce::FVisible |  |  |
 | `0x103e0bc0` CNPC_VZombie::FVisible |  |  |
 | `0x102fdcc0` FUN_102fdcc0 |  |  |
 | `0x102ee300` FUN_102ee300 |  |  |
 | `0x103008f0` FUN_103008f0 |  |  |
 | `0x102edbb0` FUN_102edbb0 |  |  |
-| `0x10383560` CNPC_VHengeyokai::vfunc124 |  |  |
+| `0x10383560` CNPC_VHengeyokai::DrawDebugTextOverlays |  |  |
 | `0x103a1250` CNPC_VNewscaster::DrawDebugTextOverlays |  |  |
-| `0x103c08d0` CNPC_VTzimisce::vfunc124 |  |  |
-| `0x103e0e80` CNPC_VZombie::vfunc124 |  |  |
+| `0x103c08d0` CNPC_VTzimisce::DrawDebugTextOverlays |  |  |
+| `0x103e0e80` CNPC_VZombie::DrawDebugTextOverlays |  |  |
 | `0x102725d0` CAI_BaseNPC::SetActivity |  |  |
 | `0x102726a0` AdvanceToIdealActivity |  | `+0x04d8` |
 | `0x102c0220` CAI_BaseNPCTroika::FUN_102c0220 |  | `+0x049c` |
 | `0x10346910` CBaseCombatCharacter::MeleeRollAndSendNotice |  |  |
 | `0x10324ea0` CBaseCombatCharacter::UpdateVampHeal_HOT |  |  |
-| `0x102993c0` CAI_BaseNPCTroika::FUN_102993c0 | `+0x6274` ← 0x1029a0b0, `+0x62cc` ← 0x1029a0b0, 0x103692c0, `+0x62d0` ← 0x1029a0b0, 0x103692c0, `+0x62d4` ← 0x1029a0b0, 0x103692c0, +1 more | `+0x60dc`, `+0x6160`, `+0x6210` |
-| `0x1034e320` CScriptedTarget::vfunc126 |  |  |
-| `0x10374ad0` CNPC_VDog::vfunc375 |  |  |
-| `0x103854f0` CNPC_VAndreiBlood::PreTranslate_Human | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 | `+0x0804` |
-| `0x103bde40` CNPC_VTzimisce::vfunc375 |  |  |
-| `0x103c3e10` CNPC_VTzimisceRunner::vfunc375 |  |  |
+| `0x102993c0` CAI_BaseNPCTroika::Save | `+0x6274` ← 0x1029a0b0, `+0x62cc` ← 0x1029a0b0, 0x103692c0, `+0x62d0` ← 0x1029a0b0, 0x103692c0, `+0x62d4` ← 0x1029a0b0, 0x103692c0, +1 more | `+0x60dc`, `+0x6160`, `+0x6210` |
+| `0x1034e320` CScriptedTarget::Save |  |  |
+| `0x10374ad0` CNPC_VDog::NPC_EarlyTranslateActivity |  |  |
+| `0x103854f0` CNPC_VHuman::NPC_EarlyTranslateActivity | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0, `+0x5cc0` ← 0x1026e340, 0x1029a0b0, 0x1034a6d0 | `+0x0804` |
+| `0x103bde40` CNPC_VTzimisce::NPC_EarlyTranslateActivity |  |  |
+| `0x103c3e10` CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity |  |  |
 
 ## Layer 17 — 79 functions
 
@@ -4571,12 +4571,12 @@ Cycles (2):
 | `0x102f2060` FUN_102f2060 |  |  |
 | `0x102ee380` FUN_102ee380 |  |  |
 | `0x102edae0` FUN_102edae0 |  |  |
-| `0x10295750` CAI_BaseNPCTroika::FUN_10295750 | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0 |  |
+| `0x10295750` CAI_BaseNPCTroika::SetActivity | `+0x5b84` ← 0x10273390, 0x102c44e0, 0x102c51a0 |  |
 | `0x102727d0` CAI_BaseNPC::MaintainActivity |  | `+0x0748` |
-| `0x10395f80` CNPC_VMingXiao::vfunc126 |  |  |
-| `0x1039ed50` CNPC_VMingXiaoTentacle::vfunc126 |  |  |
-| `0x103c2810` CNPC_VTzimisceHeadClaw::vfunc126 |  |  |
-| `0x10381b50` CNPC_VHengeyokai::vfunc375 |  |  |
+| `0x10395f80` CNPC_VMingXiao::Save |  |  |
+| `0x1039ed50` CNPC_VMingXiaoTentacle::Save |  |  |
+| `0x103c2810` CNPC_VTzimisceHeadClaw::Save |  |  |
+| `0x10381b50` CNPC_VHengeyokai::NPC_EarlyTranslateActivity |  |  |
 | `0x101dbc10` FUN_101dbc10 |  |  |
 
 ## Layer 18 — 14 functions
@@ -4593,8 +4593,8 @@ Cycles (2):
 | `0x10290350` FUN_10290350 |  |  |
 | `0x103d0db0` CNPC_VWerewolf::HasPath |  |  |
 | `0x103acba0` FUN_103acba0 |  | `+0x0828` |
-| `0x103c1cd0` CNPC_VTzimisceHeadClaw::vfunc310 |  |  |
-| `0x103c3d80` CNPC_VTzimisceRunner::vfunc310 |  |  |
+| `0x103c1cd0` CNPC_VTzimisceHeadClaw::SetActivity |  |  |
+| `0x103c3d80` CNPC_VTzimisceRunner::SetActivity |  |  |
 | `0x10290200` FUN_10290200 |  | `+0x0840` |
 | `0x102902e0` FUN_102902e0 |  |  |
 
@@ -4625,7 +4625,7 @@ Cycles (1):
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x101a7140` CCineAISchedule::FUN_101a7140 |  |  |
+| `0x101a7140` CCineNPC::UpdateOnRemove |  |  |
 | `0x10265ad0` CAI_BaseNPC::Event_Killed |  | `+0x07fc`, `+0x5d74` |
 | `0x1027d0a0` FUN_1027d0a0 |  | `+0x5d74` |
 | `0x101e2f50` FUN_101e2f50 |  |  |
@@ -4638,15 +4638,15 @@ Cycles (1):
 | `0x10273ad0` CAI_BaseNPC::FUN_10273ad0 |  | `+0x020c`, `+0x04d8`, `+0x0804` |
 | `0x1027be60` FUN_1027be60 |  |  |
 | `0x102e8560` FUN_102e8560 |  |  |
-| `0x103639b0` CNPC_VBach::vfunc463 |  |  |
+| `0x103639b0` CNPC_VBach::OnStateChange |  |  |
 | `0x10369930` CNPC_VCamera::FUN_10369930 |  | `+0x020c`, `+0x04d8`, `+0x0804` |
-| `0x10273390` CAI_BaseNPC::FUN_10273390 |  | `+0x0374`, `+0x1a9c`, `+0x1ae0` |
+| `0x10273390` CAI_BaseNPC::NPCInit |  | `+0x0374`, `+0x1a9c`, `+0x1ae0` |
 | `0x10279dd0` CAI_BaseNPC::ChooseEnemy |  | `+0x07b4`, `+0x5e84`, `+0x5ecc` |
 | `0x102b4f60` CAI_BaseNPCTroika::FUN_102b4f60 |  |  |
 | `0x102b4fe0` CAI_BaseNPCTroika::FUN_102b4fe0 |  |  |
-| `0x102c44e0` FUN_102c44e0 |  |  |
+| `0x102c44e0` SetFollowerBoss |  |  |
 | `0x102c75c0` CAI_StandoffBehavior::vfunc10 |  |  |
-| `0x103161a0` FUN_103161a0 |  |  |
+| `0x103161a0` SquadNewEnemy |  |  |
 | `0x103a7450` CNPC_VSabbatLeader::SelectIdealState |  |  |
 | `0x103cac20` FUN_103cac20 |  |  |
 | `0x103e0a00` FUN_103e0a00 |  |  |
@@ -4659,8 +4659,8 @@ Cycles (1):
 | `0x1033cef0` CBaseCombatCharacter::RemoveDisciplineEffects |  |  |
 | `0x1029f460` FUN_1029f460 | `+0x658c` ← 0x1029a0b0 |  |
 | `0x1029fa50` CAI_BaseNPCTroika::FUN_1029fa50 |  | `+0x0514` |
-| `0x1029fcf0` CAI_BaseNPCTroika::FUN_1029fcf0 |  |  |
-| `0x102a01b0` CAI_BaseNPCTroika::FUN_102a01b0 |  |  |
+| `0x1029fcf0` CAI_BaseNPCTroika::PlayerDefenderBlockReaction |  |  |
+| `0x102a01b0` CAI_BaseNPCTroika::PlayerKnockbackReaction |  |  |
 | `0x10330d00` CBaseCombatCharacter::CreateDamageEffects |  |  |
 | `0x1033a9e0` CBaseCombatCharacter::FeedInterrupt |  |  |
 | `0x1035dc30` CNPC_VAndreiBlood::Activate |  |  |
@@ -4673,14 +4673,14 @@ Cycles (1):
 | `0x1039e970` FUN_1039e970 |  |  |
 | `0x103a9400` CNPC_VSabbatLeader::TaskFail |  |  |
 | `0x103aa3b0` CNPC_VSabbatLeader::StartTransformation |  |  |
-| `0x103dfbb0` CNPC_VZombie::vfunc301 |  |  |
-| `0x102c1ce0` CAI_BaseNPCTroika::FUN_102c1ce0 ‼ |  | `+0x5d74` |
+| `0x103dfbb0` CNPC_VZombie::CreateCorpse |  |  |
+| `0x102c1ce0` CAI_BaseNPCTroika::ScriptHide ‼ |  | `+0x5d74` |
 | `0x102c6ff0` FUN_102c6ff0 |  |  |
 | `0x101a8640` FUN_101a8640 |  |  |
-| `0x102cc080` CAI_BaseNPC::FUN_102cc080 |  | `+0x5d74` |
+| `0x102cc080` CAI_BaseNPC::TranslateSchedule |  | `+0x5d74` |
 | `0x102eebc0` CAI_Navigator::FUN_102eebc0 |  |  |
 | `0x10273ec0` FUN_10273ec0 | `+0x5d70` ← 0x102827f0 |  |
-| `0x102ecd20` FUN_102ecd20 |  |  |
+| `0x102ecd20` SetGoal |  |  |
 | `0x102ed310` FUN_102ed310 |  |  |
 | `0x102ee1e0` FUN_102ee1e0 |  |  |
 | `0x102ee220` FUN_102ee220 |  |  |
@@ -4697,31 +4697,31 @@ Cycles (1):
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x10271900` FUN_10271900 |  |  |
-| `0x10271b10` FUN_10271b10 |  |  |
+| `0x10271900` CAI_BaseNPC::UpdateEnemyPos |  |  |
+| `0x10271b10` CAI_BaseNPC::UpdateTargetPos |  |  |
 | `0x1028e480` FUN_1028e480 |  |  |
 | `0x101a8890` FUN_101a8890 |  |  |
-| `0x102bf340` CAI_BaseNPCTroika::FUN_102bf340 |  |  |
-| `0x10356b50` CNPC_Bullseye::vfunc144 |  |  |
-| `0x1035c010` CGenericSabbat_NPC::vfunc144 |  |  |
+| `0x102bf340` CAI_BaseNPCTroika::Event_Killed |  |  |
+| `0x10356b50` CNPC_Bullseye::Event_Killed |  |  |
+| `0x1035c010` CGenericSabbat_NPC::Event_Killed |  |  |
 | `0x1026f660` CAI_BaseNPC::SelectIdealState |  | `+0x0738` |
 | `0x101e3310` FUN_101e3310 |  |  |
 | `0x101e34c0` FUN_101e34c0 |  |  |
 | `0x101e3910` FUN_101e3910 |  |  |
-| `0x101e3a30` FUN_101e3a30 |  |  |
+| `0x101e3a30` InterruptSchedule |  |  |
 | `0x101e3c10` FUN_101e3c10 |  |  |
-| `0x102a0940` CAI_BaseNPCTroika::FUN_102a0940 | `+0x6240` ← 0x1029a0b0, 0x103692c0 |  |
+| `0x102a0940` CAI_BaseNPCTroika::OnScheduleChange | `+0x6240` ← 0x1029a0b0, 0x103692c0 |  |
 | `0x101a7880` CCineNPC::vfunc583 |  | `+0x0374` |
 | `0x101a9080` CCineAI::vfunc583 |  | `+0x0374` |
-| `0x1026cdc0` CAI_BaseNPC::FUN_1026cdc0 |  | `+0x5bd8` |
+| `0x1026cdc0` CAI_BaseNPC::EnterGrappleState |  | `+0x5bd8` |
 | `0x1026cec0` CAI_BaseNPC::FUN_1026cec0 |  | `+0x5c08` |
 | `0x1029a8b0` CAI_BaseNPCTroika::FUN_1029a8b0 |  |  |
-| `0x1027bf50` CAI_BaseNPC::FUN_1027bf50 |  | `+0x5d74` |
-| `0x1028a380` CAI_BaseNPC::FUN_1028a380 |  | `+0x07b0`, `+0x5d74` |
-| `0x10289c90` FUN_10289c90 |  | `+0x0844` |
-| `0x1034a6d0` CGenericNPC::vfunc103 |  | `+0x0690` |
-| `0x1035ae80` CGeneric_NPC_bathack::vfunc103 ‼ |  | `+0x0690` |
-| `0x1035b700` CGenericSabbat_NPC::vfunc103 |  | `+0x0690` |
+| `0x1027bf50` CAI_BaseNPC::OnRestore |  | `+0x5d74` |
+| `0x1028a380` CAI_BaseNPC::SelectSchedule |  | `+0x07b0`, `+0x5d74` |
+| `0x10289c90` RunTaskOverlay |  | `+0x0844` |
+| `0x1034a6d0` CGenericNPC::Spawn |  | `+0x0690` |
+| `0x1035ae80` CGeneric_NPC_bathack::Spawn ‼ |  | `+0x0690` |
+| `0x1035b700` CGenericSabbat_NPC::Spawn |  | `+0x0690` |
 | `0x102b4cc0` CAI_BaseNPCTroika::FUN_102b4cc0 |  |  |
 | `0x10372c50` CNPC_VCop::vfunc596 |  |  |
 | `0x103a3850` CNPC_VPedestrian::vfunc27 |  |  |
@@ -4731,8 +4731,8 @@ Cycles (1):
 | `0x10368f80` CNPC_VCamera::FUN_10368f80 |  |  |
 | `0x10374e50` FUN_10374e50 |  |  |
 | `0x10397380` FUN_10397380 |  |  |
-| `0x1037a5b0` CNPC_VGargoyle::vfunc313 |  |  |
-| `0x10381b10` CNPC_VHengeyokai::vfunc313 |  |  |
+| `0x1037a5b0` CNPC_VGargoyle::UpdatePresenceEffect |  |  |
+| `0x10381b10` CNPC_VHengeyokai::UpdatePresenceEffect |  |  |
 | `0x103ab270` CNPC_VSabbatLeader::UpdatePresenceEffect |  |  |
 | `0x10337980` CBaseCombatCharacter::SetVHistory |  |  |
 | `0x10335ea0` CBaseCombatCharacter::Inventory_Unwield |  |  |
@@ -4740,21 +4740,21 @@ Cycles (1):
 | `0x100521e0` CBaseCombatCharacter::UpdateDisciplineVisuals | `+0x1488` ← 0x10375c80 | `+0x0570`, `+0x0ec0` |
 | `0x10306700` FUN_10306700 |  |  |
 | `0x10306f60` FUN_10306f60 |  |  |
-| `0x10378d30` CNPC_VGargoyle::vfunc320 |  |  |
-| `0x10380320` CNPC_VHengeyokai::vfunc320 |  |  |
-| `0x103c43f0` CNPC_VTzimisceRunner::vfunc320 |  |  |
-| `0x1038b120` CNPC_VManBat::vfunc525 |  |  |
+| `0x10378d30` CNPC_VGargoyle::PlayerKnockbackReaction |  |  |
+| `0x10380320` CNPC_VHengeyokai::PlayerKnockbackReaction |  |  |
+| `0x103c43f0` CNPC_VTzimisceRunner::PlayerKnockbackReaction |  |  |
+| `0x1038b120` CNPC_VManBat::OverrideMove |  |  |
 | `0x10395ce0` FUN_10395ce0 |  |  |
 | `0x1039ea60` FUN_1039ea60 |  |  |
 | `0x1037c1c0` CNPC_VGhoulCroucher::ScriptHide |  |  |
 | `0x102c7360` FUN_102c7360 |  |  |
-| `0x101a8460` FUN_101a8460 |  |  |
-| `0x102b12f0` CAI_BaseNPCTroika::FUN_102b12f0 |  |  |
+| `0x101a8460` SequenceDone |  |  |
+| `0x102b12f0` CAI_BaseNPCTroika::TranslateSchedule |  |  |
 | `0x1028e980` FUN_1028e980 |  |  |
 | `0x102eccc0` FUN_102eccc0 |  |  |
 | `0x10278220` FUN_10278220 |  |  |
-| `0x102800c0` FUN_102800c0 |  |  |
-| `0x102801e0` FUN_102801e0 |  |  |
+| `0x102800c0` ScheduledMoveToGoalEntity |  |  |
+| `0x102801e0` ScheduledFollowPath |  |  |
 | `0x102aa640` FUN_102aa640 |  |  |
 | `0x102aa860` FUN_102aa860 |  |  |
 | `0x102c7bd0` CAI_StandoffBehavior::vfunc15 |  |  |
@@ -4769,15 +4769,15 @@ Cycles (1):
 | Function | Producers later | Unwritten reads |
 |---|---|---|
 | `0x10270b20` CAI_BaseNPC::GatherEnemyConditions |  | `+0x0750`, `+0x5e54`, `+0x5e6c`, `+0x5e9c`, `+0x5eb4` |
-| `0x10271d10` FUN_10271d10 |  |  |
-| `0x1035a980` CGeneric_NPC::vfunc144 |  |  |
-| `0x10378da0` CNPC_VGargoyle::vfunc144 |  |  |
-| `0x10380390` CNPC_VHengeyokai::vfunc144 |  |  |
-| `0x1038e8c0` CNPC_VManBat::vfunc144 |  |  |
-| `0x1039e900` CNPC_VMingXiaoTentacle::vfunc144 |  |  |
+| `0x10271d10` CAI_BaseNPC::CheckTarget |  |  |
+| `0x1035a980` CGeneric_NPC::Event_Killed |  |  |
+| `0x10378da0` CNPC_VGargoyle::Event_Killed |  |  |
+| `0x10380390` CNPC_VHengeyokai::Event_Killed |  |  |
+| `0x1038e8c0` CNPC_VManBat::Event_Killed |  |  |
+| `0x1039e900` CNPC_VMingXiaoTentacle::Event_Killed |  |  |
 | `0x103a7760` CNPC_VSabbatLeader::Event_Killed |  |  |
-| `0x103be010` CNPC_VTzimisce::vfunc144 |  |  |
-| `0x103c1d50` CNPC_VTzimisceHeadClaw::vfunc144 |  |  |
+| `0x103be010` CNPC_VTzimisce::Event_Killed |  |  |
+| `0x103c1d50` CNPC_VTzimisceHeadClaw::Event_Killed |  |  |
 | `0x102ad660` CAI_BaseNPCTroika::SelectIdealState |  | `+0x0738`, `+0x07bc` |
 | `0x1033d4b0` CBaseCombatCharacter::BloodExplode |  |  |
 | `0x10322b40` CBaseCombatCharacter::UpdatePresenceEffect |  |  |
@@ -4789,18 +4789,18 @@ Cycles (1):
 | `0x103bf610` CNPC_VTzimisce::vfunc435 |  |  |
 | `0x103ced10` CNPC_VWerewolf::OnScheduleChange |  |  |
 | `0x101a98c0` CCineAISchedule::vfunc586 |  | `+0x608c` |
-| `0x101aade0` CPayphone::vfunc379 |  |  |
-| `0x102b5c00` CAI_BaseNPCTroika::FUN_102b5c00 |  | `+0x5d74` |
+| `0x101aade0` CPayphone::EnterGrappleState |  |  |
+| `0x102b5c00` CAI_BaseNPCTroika::EnterGrappleState |  | `+0x5d74` |
 | `0x103b9270` CNPC_VTzimisce::vfunc422 |  |  |
-| `0x102998c0` CAI_BaseNPCTroika::FUN_102998c0 |  | `+0x65e0` |
-| `0x102817c0` FUN_102817c0 |  | `+0x04d8`, `+0x06fc`, `+0x0844` |
-| `0x10358ce0` CNPC_Crow::vfunc438 |  |  |
-| `0x1029a0b0` CAI_BaseNPCTroika::FUN_1029a0b0 | `+0x10e4` ← 0x1037b040, 0x103a6c80, 0x103ad630, `+0x63ac` ← 0x103c1b90, 0x103c3b30 | `+0x0804` |
-| `0x10371c20` CNPC_VCop::vfunc463 |  | `+0x0680` |
+| `0x102998c0` CAI_BaseNPCTroika::OnRestore |  | `+0x65e0` |
+| `0x102817c0` MaintainSchedule |  | `+0x04d8`, `+0x06fc`, `+0x0844` |
+| `0x10358ce0` CNPC_Crow::SelectSchedule |  |  |
+| `0x1029a0b0` CAI_BaseNPCTroika::NPCInit | `+0x10e4` ← 0x1037b040, 0x103a6c80, 0x103ad630, `+0x63ac` ← 0x103c1b90, 0x103c3b30 | `+0x0804` |
+| `0x10371c20` CNPC_VCop::OnStateChange |  | `+0x0680` |
 | `0x10374d80` CNPC_VDog::vfunc460 |  |  |
 | `0x10397410` FUN_10397410 |  |  |
 | `0x10397c70` FUN_10397c70 |  |  |
-| `0x103692c0` CNPC_VCamera::FUN_103692c0 | `+0x63ac` ← 0x103c1b90, 0x103c3b30 | `+0x0374`, `+0x0804`, `+0x62a8` |
+| `0x103692c0` CNPC_VCamera::NPCInit | `+0x63ac` ← 0x103c1b90, 0x103c3b30 | `+0x0374`, `+0x0804`, `+0x62a8` |
 | `0x10206aa0` FUN_10206aa0 |  |  |
 | `0x1032dde0` CBaseCombatCharacter::Weapon_Switch |  |  |
 | `0x101c7b80` FUN_101c7b80 |  |  |
@@ -4813,25 +4813,25 @@ Cycles (1):
 | `0x101a9510` CCineAI::vfunc584 |  |  |
 | `0x10288780` CAI_BaseNPC::RunTask |  | `+0x05b0`, `+0x0804`, `+0x0840`, `+0x5d74` |
 | `0x10362910` CNPC_VAsianVampire::TranslateSchedule |  |  |
-| `0x10363a30` CNPC_VBach::vfunc440 |  |  |
+| `0x10363a30` CNPC_VBach::TranslateSchedule |  |  |
 | `0x1036b460` CNPC_VChangBros::TranslateSchedule |  |  |
-| `0x10372150` CNPC_VCop::vfunc440 |  |  |
-| `0x10374370` CNPC_VDog::vfunc440 |  |  |
-| `0x10375f20` CNPC_VFrenzyShadow::vfunc440 |  |  |
-| `0x10378a30` CNPC_VGargoyle::vfunc440 |  |  |
-| `0x1037d240` CNPC_VGuard1::vfunc440 |  |  |
-| `0x1037ffa0` CNPC_VHengeyokai::vfunc440 |  |  |
-| `0x10388a40` CNPC_VHunter::vfunc440 |  |  |
-| `0x10394570` CNPC_VMingXiao::vfunc440 |  |  |
-| `0x1039e2d0` CNPC_VMingXiaoTentacle::vfunc440 |  |  |
+| `0x10372150` CNPC_VCop::TranslateSchedule |  |  |
+| `0x10374370` CNPC_VDog::TranslateSchedule |  |  |
+| `0x10375f20` CNPC_VFrenzyShadow::TranslateSchedule |  |  |
+| `0x10378a30` CNPC_VGargoyle::TranslateSchedule |  |  |
+| `0x1037d240` CNPC_VGuard1::TranslateSchedule |  |  |
+| `0x1037ffa0` CNPC_VHengeyokai::TranslateSchedule |  |  |
+| `0x10388a40` CNPC_VHunter::TranslateSchedule |  |  |
+| `0x10394570` CNPC_VMingXiao::TranslateSchedule |  |  |
+| `0x1039e2d0` CNPC_VMingXiaoTentacle::TranslateSchedule |  |  |
 | `0x103a7390` CNPC_VSabbatLeader::TranslateSchedule |  |  |
-| `0x103ac490` CNPC_VScurrying::FUN_103ac490 |  |  |
+| `0x103ac490` CNPC_VScurrying::TranslateSchedule |  |  |
 | `0x103b0320` CNPC_VSheriffMan::TranslateSchedule |  |  |
-| `0x103bd390` CNPC_VTzimisce::vfunc440 |  |  |
-| `0x103c1720` CNPC_VTzimisceHeadClaw::vfunc440 |  |  |
-| `0x103c3560` CNPC_VTzimisceRunner::vfunc440 |  |  |
+| `0x103bd390` CNPC_VTzimisce::TranslateSchedule |  |  |
+| `0x103c1720` CNPC_VTzimisceHeadClaw::TranslateSchedule |  |  |
+| `0x103c3560` CNPC_VTzimisceRunner::TranslateSchedule |  |  |
 | `0x103d5e00` CNPC_VWerewolf::TranslateSchedule |  |  |
-| `0x103df580` CNPC_VZombie::vfunc440 |  |  |
+| `0x103df580` CNPC_VZombie::TranslateSchedule |  |  |
 | `0x102ed540` FUN_102ed540 |  |  |
 | `0x102eea90` CAI_Navigator::FUN_102eea90 |  |  |
 | `0x102784a0` FUN_102784a0 |  | `+0x0374` |
@@ -4842,57 +4842,57 @@ Cycles (1):
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x10357680` CNPC_Crow::vfunc481 |  |  |
+| `0x10357680` CNPC_Crow::GatherEnemyConditions |  |  |
 | `0x1026ec30` CAI_BaseNPC::GatherConditions |  | `+0x06fc`, `+0x07cc`, `+0x07dc`, `+0x07e0`, `+0x07f4`, `+0x1a9c` |
 | `0x102aacf0` CAI_BaseNPCTroika::RunTask | `+0x6264` ← 0x10292de0, `+0x6490` ← 0x102a1910 | `+0x04d8`, `+0x04dc`, `+0x05b0`, `+0x0840`, `+0x0fd8`, `+0x0ff8` |
-| `0x10395ba0` CNPC_VMingXiao::vfunc144 |  |  |
+| `0x10395ba0` CNPC_VMingXiao::Event_Killed |  |  |
 | `0x1035fe80` CNPC_VAnimal::FUN_1035fe80 |  |  |
 | `0x103851e0` CNPC_VHuman::SelectIdealState |  | `+0x0738` |
 | `0x103bd690` CNPC_VTzimisce::vfunc461 |  | `+0x0738` |
 | `0x103246d0` CBaseCombatCharacter::UpdateCharacter |  | `+0x04ec` |
 | `0x1032e330` CBaseCombatCharacter::HandleAnimEvent |  | `+0x0584` |
-| `0x10265ed0` CAI_BaseNPC::OnTakeDamageAlive |  | `+0x07ac`, `+0x5b9c`, `+0x5e0c`, `+0x5e3c` |
+| `0x10265ed0` CAI_BaseNPC::OnTakeDamage_Alive |  | `+0x07ac`, `+0x5b9c`, `+0x5e0c`, `+0x5e3c` |
 | `0x1032ef60` CBaseCombatCharacter::OnTakeDamage |  | `+0x063c` |
 | `0x101a9790` CCineAISchedule::vfunc583 |  |  |
-| `0x1037b500` CNPC_VGhoulCroucher::vfunc379 |  |  |
+| `0x1037b500` CNPC_VGhoulCroucher::EnterGrappleState |  |  |
 | `0x1034c260` CNPCMaker_Fleshpile::vfunc130 |  |  |
 | `0x1039f000` CNPC_VMingXiaoTentacle::vfunc130 |  |  |
 | `0x103c3c40` CNPC_VTzimisceRunner::vfunc130 |  |  |
 | `0x103cabf0` CNPC_VWerewolf::vfunc130 |  |  |
-| `0x103b35c0` CNPC_VTaxiDriver::vfunc420 |  |  |
-| `0x101aab90` CPayphone::vfunc420 |  |  |
-| `0x1035a090` CGeneric_NPC::vfunc103 |  | `+0x0690` |
-| `0x10363940` CNPC_VBach::vfunc420 |  |  |
-| `0x103673b0` CNPC_VBatSwarm::vfunc420 |  |  |
-| `0x103785f0` CNPC_VGargoyle::vfunc420 |  |  |
-| `0x1037e240` CNPC_VGuard1::vfunc420 ‼ |  |  |
-| `0x1037fa70` CNPC_VHengeyokai::vfunc420 |  |  |
-| `0x10387140` CNPC_VHumanCombatPatrol::FUN_10387140 ‼ |  |  |
-| `0x1038b070` CNPC_VManBat::vfunc420 |  |  |
-| `0x103a0420` CNPC_VNewscaster::vfunc420 |  |  |
-| `0x103a2570` CNPC_VPedestrian::vfunc420 |  |  |
-| `0x103a4350` CNPC_VPlaceholder::vfunc420 |  |  |
-| `0x103a4580` CNPC_VPlayerController::vfunc420 |  | `+0x0680` |
-| `0x103b2360` CNPC_VSheriffSwarm::vfunc420 |  |  |
-| `0x103b91d0` CNPC_VTzimisce::vfunc420 |  |  |
-| `0x103c1c80` CNPC_VTzimisceHeadClaw::vfunc420 |  |  |
+| `0x103b35c0` CNPC_VTaxiDriver::NPCInit |  |  |
+| `0x101aab90` CPayphone::NPCInit |  |  |
+| `0x1035a090` CGeneric_NPC::Spawn |  | `+0x0690` |
+| `0x10363940` CNPC_VBach::NPCInit |  |  |
+| `0x103673b0` CNPC_VBatSwarm::NPCInit |  |  |
+| `0x103785f0` CNPC_VGargoyle::NPCInit |  |  |
+| `0x1037e240` CNPC_VGuard1::NPCInit ‼ |  |  |
+| `0x1037fa70` CNPC_VHengeyokai::NPCInit |  |  |
+| `0x10387140` CNPC_VHumanCombatant::NPCInit ‼ |  |  |
+| `0x1038b070` CNPC_VManBat::NPCInit |  |  |
+| `0x103a0420` CNPC_VNewscaster::NPCInit |  |  |
+| `0x103a2570` CNPC_VPedestrian::NPCInit |  |  |
+| `0x103a4350` CNPC_VPlaceholder::NPCInit |  |  |
+| `0x103a4580` CNPC_VPlayerController::NPCInit |  | `+0x0680` |
+| `0x103b2360` CNPC_VSheriffSwarm::NPCInit |  |  |
+| `0x103b91d0` CNPC_VTzimisce::NPCInit |  |  |
+| `0x103c1c80` CNPC_VTzimisceHeadClaw::NPCInit |  |  |
 | `0x103c5840` CNPC_VVampireBoss::NPCInit |  |  |
-| `0x103caef0` CNPC_VWerewolf::vfunc420 |  |  |
-| `0x103defc0` CNPC_VZombie::vfunc420 |  |  |
-| `0x10357440` CNPC_Crow::vfunc103 |  | `+0x0690` |
-| `0x1038d130` CNPC_VManBat::vfunc444 |  |  |
+| `0x103caef0` CNPC_VWerewolf::NPCInit |  |  |
+| `0x103defc0` CNPC_VZombie::NPCInit |  |  |
+| `0x10357440` CNPC_Crow::Spawn |  | `+0x0690` |
+| `0x1038d130` CNPC_VManBat::RunTask |  |  |
 | `0x10395750` FUN_10395750 |  |  |
 | `0x1039ef10` FUN_1039ef10 |  |  |
-| `0x10368b70` CNPC_VCamera::FUN_10368b70 |  | `+0x0690`, `+0x1578` |
+| `0x10368b70` CNPC_VCamera::Spawn |  | `+0x0690`, `+0x1578` |
 | `0x10206c30` FUN_10206c30 |  |  |
 | `0x10337230` CBaseCombatCharacter::ChooseBestMeleeWeapon |  |  |
 | `0x10337300` CBaseCombatCharacter::ChooseBestRangedWeapon |  | `+0x04d4` |
-| `0x10394120` CNPC_VMingXiao::vfunc437 |  |  |
+| `0x10394120` CNPC_VMingXiao::PreSelectSchedule |  |  |
 | `0x1022dea0` FUN_1022dea0 |  |  |
 | `0x102cd740` CAI_StandoffGoal::vfunc242 |  |  |
 | `0x101a65e0` CAI_BaseNPC::FUN_101a65e0 |  |  |
-| `0x103587b0` CNPC_Crow::vfunc444 |  |  |
-| `0x102eece0` CAI_Navigator::FUN_102eece0 |  |  |
+| `0x103587b0` CNPC_Crow::RunTask |  |  |
+| `0x102eece0` CAI_Navigator::MoveJump |  |  |
 | `0x102ef510` CAI_Navigator::FUN_102ef510 |  |  |
 
 ## Layer 24 — 45 functions
@@ -4901,15 +4901,15 @@ Cycles (1):
 |---|---|---|
 | `0x1026f110` CAI_BaseNPC::RunAI |  |  |
 | `0x102b27f0` CAI_BaseNPCTroika::GatherConditions |  | `+0x0ff8`, `+0x1a9c`, `+0x6290` |
-| `0x10274e30` CAI_BaseNPC::FUN_10274e30 |  | `+0x0374`, `+0x5d74` |
-| `0x1035f940` CNPC_VAnimal::FUN_1035f940 |  |  |
-| `0x10384ab0` CNPC_VCop::FUN_10384ab0 |  |  |
-| `0x10393930` CNPC_VMingXiao::vfunc444 |  | `+0x05b0` |
-| `0x1039d750` CNPC_VMingXiaoTentacle::vfunc444 |  | `+0x0680` |
-| `0x103bb1e0` CNPC_VTzimisce::vfunc444 |  |  |
-| `0x103c3870` CNPC_VTzimisceRunner::vfunc444 |  |  |
+| `0x10274e30` CAI_BaseNPC::HandleAnimEvent |  | `+0x0374`, `+0x5d74` |
+| `0x1035f940` CNPC_VAnimal::RunTask |  |  |
+| `0x10384ab0` CNPC_VHuman::RunTask |  |  |
+| `0x10393930` CNPC_VMingXiao::RunTask |  | `+0x05b0` |
+| `0x1039d750` CNPC_VMingXiaoTentacle::RunTask |  | `+0x0680` |
+| `0x103bb1e0` CNPC_VTzimisce::RunTask |  |  |
+| `0x103c3870` CNPC_VTzimisceRunner::RunTask |  |  |
 | `0x103cdfb0` CNPC_VWerewolf::RunTask |  | `+0x04ec`, `+0x0840` |
-| `0x102beda0` CAI_BaseNPCTroika::FUN_102beda0 | `+0x6308` ← 0x102a1910 |  |
+| `0x102beda0` CAI_BaseNPCTroika::OnTakeDamage | `+0x6308` ← 0x102a1910 |  |
 | `0x103743c0` CNPC_VDog::vfunc461 |  | `+0x0738` |
 | `0x103df5f0` CNPC_VZombie::vfunc461 |  | `+0x0738` |
 | `0x10361060` CNPC_VAsianVampire::SelectIdealState |  |  |
@@ -4927,15 +4927,15 @@ Cycles (1):
 | `0x103b2450` CNPC_VSheriffSwarm::vfunc461 |  |  |
 | `0x103b4ff0` CNPC_VTest::vfunc461 |  | `+0x0738` |
 | `0x10298070` CAI_BaseNPCTroika::UpdateCharacter | `+0x6496` ← 0x103a78c0 | `+0x0740` |
-| `0x10265e90` CAI_BaseNPC::FUN_10265e90 |  |  |
+| `0x10265e90` CAI_BaseNPC::OnTakeDamage |  |  |
 | `0x103a25a0` CNPC_VPedestrian::vfunc130 |  | `+0x0100`, `+0x0690`, `+0x62a8`, `+0x62b4` |
-| `0x10375c80` CNPC_VFrenzyShadow::vfunc420 |  |  |
-| `0x10298d30` CAI_BaseNPCTroika::FUN_10298d30 | `+0x6420` ← 0x103c1b90, 0x103c3b30, `+0x6424` ← 0x103c1b90, 0x103c3b30, `+0x6428` ← 0x103c1b90, 0x103c3b30, `+0x642c` ← 0x103c1b90, 0x103c3b30, +1 more | `+0x0690`, `+0x10ac`, `+0x1578`, `+0x62a8`, `+0x62b4`, `+0x62d8`, +2 more |
-| `0x10372b00` CNPC_VCop::vfunc420 |  |  |
-| `0x1037b290` CNPC_VGhoulCroucher::vfunc420 |  |  |
-| `0x10388b30` CNPC_VHunter::vfunc420 ‼ |  |  |
-| `0x103dd800` CNPC_VYukie::vfunc420 ‼ |  |  |
-| `0x103dce00` CNPC_VWolfMorph::vfunc420 |  | `+0x04d8` |
+| `0x10375c80` CNPC_VFrenzyShadow::NPCInit |  |  |
+| `0x10298d30` CAI_BaseNPCTroika::Spawn | `+0x6420` ← 0x103c1b90, 0x103c3b30, `+0x6424` ← 0x103c1b90, 0x103c3b30, `+0x6428` ← 0x103c1b90, 0x103c3b30, `+0x642c` ← 0x103c1b90, 0x103c3b30, +1 more | `+0x0690`, `+0x10ac`, `+0x1578`, `+0x62a8`, `+0x62b4`, `+0x62d8`, +2 more |
+| `0x10372b00` CNPC_VCop::NPCInit |  |  |
+| `0x1037b290` CNPC_VGhoulCroucher::NPCInit |  |  |
+| `0x10388b30` CNPC_VHunter::NPCInit ‼ |  |  |
+| `0x103dd800` CNPC_VYukie::NPCInit ‼ |  |  |
+| `0x103dce00` CNPC_VWolfMorph::NPCInit |  | `+0x04d8` |
 | `0x1035cec0` CNPC_VAndreiBlood::NPCInit |  |  |
 | `0x10360ce0` CNPC_VAsianVampire::NPCInit |  |  |
 | `0x1036b050` CNPC_VChangBros::NPCInit |  |  |
@@ -4953,34 +4953,34 @@ Cycles (1):
 | `0x1028fcc0` CAI_BaseNPCTroika::RunAI |  |  |
 | `0x1035b160` CGeneric_NPC_bathack::vfunc432 |  |  |
 | `0x1035bf70` CGenericSabbat_NPC::vfunc432 |  |  |
-| `0x1035d180` CNPC_VAndreiBlood::vfunc433 |  |  |
-| `0x10365a70` CNPC_VBach::vfunc433 |  |  |
+| `0x1035d180` CNPC_VAndreiBlood::GatherConditions |  |  |
+| `0x10365a70` CNPC_VBach::GatherConditions |  |  |
 | `0x1036b590` CNPC_VChangBros::GatherConditions |  |  |
-| `0x10374b00` CNPC_VDog::vfunc433 |  |  |
-| `0x10375ed0` CNPC_VFrenzyShadow::vfunc433 |  |  |
-| `0x10378df0` CNPC_VGargoyle::vfunc433 |  |  |
+| `0x10374b00` CNPC_VDog::GatherConditions |  |  |
+| `0x10375ed0` CNPC_VFrenzyShadow::GatherConditions |  |  |
+| `0x10378df0` CNPC_VGargoyle::GatherConditions |  |  |
 | `0x1037b570` CNPC_VGhoulCroucher::GatherConditions |  |  |
-| `0x103803d0` CNPC_VHengeyokai::vfunc433 |  |  |
-| `0x10394e40` CNPC_VMingXiao::vfunc433 | `+0x6264` ← 0x10292de0 | `+0x0740` |
-| `0x1039ec10` CNPC_VMingXiaoTentacle::vfunc433 | `+0x6268` ← 0x10292de0 |  |
-| `0x103a2c30` CNPC_VPedestrian::vfunc433 |  | `+0x6160` |
+| `0x103803d0` CNPC_VHengeyokai::GatherConditions |  |  |
+| `0x10394e40` CNPC_VMingXiao::GatherConditions | `+0x6264` ← 0x10292de0 | `+0x0740` |
+| `0x1039ec10` CNPC_VMingXiaoTentacle::GatherConditions | `+0x6268` ← 0x10292de0 |  |
+| `0x103a2c30` CNPC_VPedestrian::GatherConditions |  | `+0x6160` |
 | `0x103a77f0` CNPC_VSabbatLeader::GatherConditions |  |  |
-| `0x103ac500` CNPC_VScurrying::FUN_103ac500 |  |  |
+| `0x103ac500` CNPC_VScurrying::GatherConditions |  |  |
 | `0x103aeb50` CNPC_VSheriffMan::GatherConditions |  |  |
-| `0x103bce40` CNPC_VTzimisce::vfunc433 |  |  |
-| `0x103c17f0` CNPC_VTzimisceHeadClaw::vfunc433 |  |  |
-| `0x103c35a0` CNPC_VTzimisceRunner::vfunc433 |  |  |
+| `0x103bce40` CNPC_VTzimisce::GatherConditions |  |  |
+| `0x103c17f0` CNPC_VTzimisceHeadClaw::GatherConditions |  |  |
+| `0x103c35a0` CNPC_VTzimisceRunner::GatherConditions |  |  |
 | `0x103d0410` CNPC_VWerewolf::GatherConditions | `+0x6264` ← 0x10292de0 |  |
-| `0x1029b290` CAI_BaseNPCTroika::FUN_1029b290 |  |  |
-| `0x1034a680` CGenericNPC::vfunc259 |  |  |
-| `0x10357820` CNPC_Crow::vfunc259 |  | `+0x04d8` |
-| `0x10374a20` CNPC_VDog::vfunc444 |  |  |
-| `0x103e01d0` CNPC_VZombie::vfunc444 |  |  |
-| `0x103652b0` CNPC_VBach::vfunc444 |  |  |
-| `0x103793e0` CNPC_VGargoyle::vfunc444 |  |  |
+| `0x1029b290` CAI_BaseNPCTroika::HandleAnimEvent |  |  |
+| `0x1034a680` CGenericNPC::HandleAnimEvent |  |  |
+| `0x10357820` CNPC_Crow::HandleAnimEvent |  | `+0x04d8` |
+| `0x10374a20` CNPC_VDog::RunTask |  |  |
+| `0x103e01d0` CNPC_VZombie::RunTask |  |  |
+| `0x103652b0` CNPC_VBach::RunTask |  |  |
+| `0x103793e0` CNPC_VGargoyle::RunTask |  |  |
 | `0x1037b9f0` CNPC_VGhoulCroucher::RunTask |  |  |
-| `0x10380cb0` CNPC_VHengeyokai::vfunc444 |  |  |
-| `0x103b38a0` CNPC_VTaxiDriver::vfunc444 |  | `+0x04d8` |
+| `0x10380cb0` CNPC_VHengeyokai::RunTask |  |  |
+| `0x103b38a0` CNPC_VTaxiDriver::RunTask |  | `+0x04d8` |
 | `0x103c5f40` CNPC_VVampireBoss::RunTask |  |  |
 | `0x1035e6d0` CNPC_VAndreiBlood::OnTakeDamage_Alive |  |  |
 | `0x103601a0` CNPC_VAnimal::FUN_103601a0 |  |  |
@@ -4996,23 +4996,23 @@ Cycles (1):
 | `0x103726c0` CNPC_VCop::vfunc461 |  |  |
 | `0x10388ab0` CNPC_VHunter::vfunc461 |  |  |
 | `0x103dd780` CNPC_VYukie::vfunc461 |  |  |
-| `0x102ae920` CAI_BaseNPCTroika::FUN_102ae920 |  | `+0x60dc`, `+0x6435` |
+| `0x102ae920` CAI_BaseNPCTroika::PreSelectSchedule |  | `+0x60dc`, `+0x6435` |
 | `0x102bed30` CNPC_VVampire::OnTakeDamage |  | `+0x5e0c` |
-| `0x10356ff0` CNPC_Bullseye::vfunc142 |  | `+0x5f44` |
+| `0x10356ff0` CNPC_Bullseye::OnTakeDamage |  | `+0x5f44` |
 | `0x102af660` CAI_BaseNPCTroika::SelectSchedule | `+0x6264` ← 0x10292de0, `+0x6268` ← 0x10292de0 | `+0x07b0`, `+0x07c8`, `+0x5d2c`, `+0x63d9`, `+0x6434` |
-| `0x101aa9c0` CPayphone::vfunc103 |  |  |
-| `0x1035f510` CNPC_VAnimal::vfunc103 |  |  |
-| `0x10384690` CNPC_VHuman::vfunc103 |  |  |
-| `0x103927a0` CNPC_VMingXiao::vfunc103 |  | `+0x04d4` |
-| `0x1039c380` CNPC_VMingXiaoTentacle::vfunc103 |  |  |
-| `0x103b9060` CNPC_VTzimisce::vfunc103 |  | `+0x1074` |
-| `0x103c1b90` CNPC_VTzimisceHeadClaw::vfunc103 |  |  |
-| `0x103c3b30` CNPC_VTzimisceRunner::vfunc103 |  |  |
+| `0x101aa9c0` CPayphone::Spawn |  |  |
+| `0x1035f510` CNPC_VAnimal::Spawn |  |  |
+| `0x10384690` CNPC_VHuman::Spawn |  |  |
+| `0x103927a0` CNPC_VMingXiao::Spawn |  | `+0x04d4` |
+| `0x1039c380` CNPC_VMingXiaoTentacle::Spawn |  |  |
+| `0x103b9060` CNPC_VTzimisce::Spawn |  | `+0x1074` |
+| `0x103c1b90` CNPC_VTzimisceHeadClaw::Spawn |  |  |
+| `0x103c3b30` CNPC_VTzimisceRunner::Spawn |  |  |
 | `0x103caa30` CNPC_VWerewolf::Spawn |  |  |
 | `0x1036f100` CNPC_VChangBrosBlade::NPCInit |  |  |
 | `0x1036f900` CNPC_VChangBrosClaw::NPCInit |  |  |
 | `0x101a65a0` CAI_BaseNPC::FUN_101a65a0 |  |  |
-| `0x10358330` CNPC_Crow::vfunc442 |  |  |
+| `0x10358330` CNPC_Crow::StartTask |  |  |
 
 ## Layer 26 — 45 functions
 
@@ -5028,57 +5028,57 @@ Cycles (1):
 | `0x103bdef0` CNPC_VTzimisce::vfunc432 |  |  |
 | `0x103c1d20` CNPC_VTzimisceHeadClaw::vfunc432 |  |  |
 | `0x103d0820` CNPC_VWerewolf::SelectIdealState |  |  |
-| `0x10374280` CNPC_VDog::vfunc259 |  |  |
-| `0x103786c0` CNPC_VGargoyle::vfunc259 |  |  |
-| `0x1037fb60` CNPC_VHengeyokai::vfunc259 |  |  |
-| `0x1038e000` CNPC_VManBat::vfunc259 |  |  |
-| `0x10392a70` CNPC_VMingXiao::vfunc259 |  |  |
+| `0x10374280` CNPC_VDog::HandleAnimEvent |  |  |
+| `0x103786c0` CNPC_VGargoyle::HandleAnimEvent |  |  |
+| `0x1037fb60` CNPC_VHengeyokai::HandleAnimEvent |  |  |
+| `0x1038e000` CNPC_VManBat::HandleAnimEvent |  |  |
+| `0x10392a70` CNPC_VMingXiao::HandleAnimEvent |  |  |
 | `0x103a7000` CNPC_VSabbatLeader::HandleAnimEvent |  |  |
-| `0x103ba410` CNPC_VTzimisce::vfunc259 |  |  |
-| `0x103c1540` CNPC_VTzimisceHeadClaw::vfunc259 |  |  |
-| `0x103c32c0` CNPC_VTzimisceRunner::vfunc259 ‼ |  |  |
+| `0x103ba410` CNPC_VTzimisce::HandleAnimEvent |  |  |
+| `0x103c1540` CNPC_VTzimisceHeadClaw::HandleAnimEvent |  |  |
+| `0x103c32c0` CNPC_VTzimisceRunner::HandleAnimEvent ‼ |  |  |
 | `0x103d88e0` CNPC_VWerewolf::HandleAnimEvent |  |  |
 | `0x1035d8b0` CNPC_VAndreiBlood::RunTask |  |  |
 | `0x103612e0` CNPC_VAsianVampire::RunTask |  |  |
 | `0x1036bfc0` CNPC_VChangBros::RunTask |  |  |
 | `0x103a8990` CNPC_VSabbatLeader::RunTask |  |  |
 | `0x103af780` CNPC_VSheriffMan::RunTask |  |  |
-| `0x103a46b0` CNPC_VFrenzyShadow::FUN_103a46b0 |  |  |
+| `0x103a46b0` CNPC_VPlayerController::PreSelectSchedule |  |  |
 | `0x103aa510` CNPC_VSabbatLeader::PreSelectSchedule |  |  |
 | `0x102a1910` CAI_BaseNPCTroika::StartTask |  | `+0x049c`, `+0x04d8`, `+0x04dc`, `+0x05b0`, `+0x0740`, `+0x07b0`, +13 more |
 | `0x103cccc0` CNPC_VWerewolf::OnTakeDamage |  |  |
-| `0x103e06d0` CNPC_VZombie::vfunc142 |  |  |
-| `0x1035fb50` CNPC_VAnimal::vfunc438 |  | `+0x63d9` |
+| `0x103e06d0` CNPC_VZombie::OnTakeDamage |  |  |
+| `0x1035fb50` CNPC_VAnimal::SelectSchedule |  | `+0x63d9` |
 | `0x10384ee0` CNPC_VHuman::SelectSchedule |  |  |
-| `0x103941e0` CNPC_VMingXiao::vfunc438 |  |  |
-| `0x103bb7c0` CNPC_VTzimisce::vfunc438 |  |  |
-| `0x103c1610` CNPC_VTzimisceHeadClaw::vfunc438 |  |  |
-| `0x103c3310` CNPC_VTzimisceRunner::vfunc438 |  |  |
-| `0x10374000` CNPC_VDog::vfunc103 |  |  |
-| `0x103ac430` CNPC_VScurrying::vfunc103 |  |  |
-| `0x103df170` CNPC_VZombie::vfunc103 |  |  |
-| `0x103701a0` CNPC_VCombatman::vfunc103 |  |  |
-| `0x1037cda0` CNPC_VGuard1::vfunc103 |  |  |
-| `0x10387110` CNPC_VHumanCombatPatrol::FUN_10387110 |  |  |
-| `0x1039fc90` CNPC_VMoleman::vfunc103 |  |  |
-| `0x103a2540` CNPC_VPedestrian::vfunc103 |  |  |
+| `0x103941e0` CNPC_VMingXiao::SelectSchedule |  |  |
+| `0x103bb7c0` CNPC_VTzimisce::SelectSchedule |  |  |
+| `0x103c1610` CNPC_VTzimisceHeadClaw::SelectSchedule |  |  |
+| `0x103c3310` CNPC_VTzimisceRunner::SelectSchedule |  |  |
+| `0x10374000` CNPC_VDog::Spawn |  |  |
+| `0x103ac430` CNPC_VScurrying::Spawn |  |  |
+| `0x103df170` CNPC_VZombie::Spawn |  |  |
+| `0x103701a0` CNPC_VCombatman::Spawn |  |  |
+| `0x1037cda0` CNPC_VGuard1::Spawn |  |  |
+| `0x10387110` CNPC_VHumanCombatant::Spawn |  |  |
+| `0x1039fc90` CNPC_VMoleman::Spawn |  |  |
+| `0x103a2540` CNPC_VPedestrian::Spawn |  |  |
 | `0x103c4ef0` CNPC_VVampire::Spawn |  |  |
 
 ## Layer 27 — 77 functions
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x1037b3f0` CNPC_VGhoulCroucher::vfunc431 |  |  |
+| `0x1037b3f0` CNPC_VGhoulCroucher::NPCThink |  |  |
 | `0x10394990` CNPC_VMingXiao::NPCThink |  | `+0x0818` |
-| `0x103a05b0` CNPC_VNewscaster::vfunc431 |  |  |
-| `0x103a4700` CNPC_VWolfMorph::FUN_103a4700 ‼ |  |  |
-| `0x103b9040` CNPC_VTzimisce::vfunc431 |  |  |
+| `0x103a05b0` CNPC_VNewscaster::NPCThink |  |  |
+| `0x103a4700` CNPC_VPlayerController::NPCThink ‼ |  |  |
+| `0x103b9040` CNPC_VTzimisce::NPCThink |  |  |
 | `0x103c6000` CNPC_VVampireBoss::NPCThink |  |  |
 | `0x103cb590` CNPC_VWerewolf::NPCThink ‼ |  |  |
 | `0x103dfa20` CNPC_VZombie::NPCThink |  |  |
 | `0x103747e0` CNPC_VDog::vfunc432 |  | `+0x04d8` |
 | `0x103df850` CNPC_VZombie::vfunc432 |  |  |
-| `0x10369120` CNPC_VCamera::FUN_10369120 |  |  |
+| `0x10369120` CNPC_VCamera::NPCThink |  |  |
 | `0x1035e980` CNPC_VAndreiBlood::vfunc432 |  |  |
 | `0x10361110` CNPC_VAsianVampire::RunAI |  |  |
 | `0x10363b60` CNPC_VBach::vfunc432 |  |  |
@@ -5098,59 +5098,59 @@ Cycles (1):
 | `0x103b3650` CNPC_VTaxiDriver::vfunc432 |  |  |
 | `0x103b51a0` CNPC_VTest::vfunc432 |  |  |
 | `0x103cee70` CNPC_VWerewolf::SelectSchedule |  | `+0x0734` |
-| `0x1035f650` CNPC_VAnimal::vfunc442 |  | `+0x62f0` |
-| `0x103847f0` CNPC_VGuard1::FUN_103847f0 |  |  |
-| `0x10392d80` CNPC_VMingXiao::vfunc442 |  | `+0x0374` |
-| `0x1039c4c0` CNPC_VMingXiaoTentacle::vfunc442 |  | `+0x0680`, `+0x0828` |
-| `0x103ba7c0` CNPC_VTzimisce::vfunc442 |  |  |
-| `0x103c1820` CNPC_VTzimisceHeadClaw::vfunc442 |  |  |
-| `0x103c35d0` CNPC_VTzimisceRunner::vfunc442 |  |  |
+| `0x1035f650` CNPC_VAnimal::StartTask |  | `+0x62f0` |
+| `0x103847f0` CNPC_VHuman::StartTask |  |  |
+| `0x10392d80` CNPC_VMingXiao::StartTask |  | `+0x0374` |
+| `0x1039c4c0` CNPC_VMingXiaoTentacle::StartTask |  | `+0x0680`, `+0x0828` |
+| `0x103ba7c0` CNPC_VTzimisce::StartTask |  |  |
+| `0x103c1820` CNPC_VTzimisceHeadClaw::StartTask |  |  |
+| `0x103c35d0` CNPC_VTzimisceRunner::StartTask |  |  |
 | `0x103ccda0` CNPC_VWerewolf::StartTask |  | `+0x0840` |
-| `0x103742d0` CNPC_VDog::vfunc438 |  |  |
-| `0x103ac610` CNPC_VScurrying::FUN_103ac610 |  |  |
-| `0x103df2e0` CNPC_VZombie::vfunc438 |  |  |
+| `0x103742d0` CNPC_VDog::SelectSchedule |  |  |
+| `0x103ac610` CNPC_VScurrying::SelectSchedule |  |  |
+| `0x103df2e0` CNPC_VZombie::SelectSchedule |  |  |
 | `0x10360eb0` CNPC_VAsianVampire::SelectSchedule |  |  |
-| `0x10363a10` CNPC_VBach::vfunc438 |  |  |
-| `0x10367460` CNPC_VBatSwarm::vfunc438 |  |  |
+| `0x10363a10` CNPC_VBach::SelectSchedule |  |  |
+| `0x10367460` CNPC_VBatSwarm::SelectSchedule |  |  |
 | `0x1036b250` CNPC_VChangBros::SelectSchedule |  |  |
-| `0x10370230` CNPC_VCombatman::vfunc438 |  |  |
-| `0x10375d90` CNPC_VFrenzyShadow::vfunc438 |  |  |
-| `0x103788d0` CNPC_VGargoyle::vfunc438 |  | `+0x0848` |
-| `0x1037d130` CNPC_VGuard1::vfunc438 |  |  |
-| `0x1037fca0` CNPC_VHengeyokai::vfunc438 |  |  |
-| `0x103872d0` CNPC_VHumanCombatant::FUN_103872d0 |  |  |
-| `0x1039fd20` CNPC_VMoleman::vfunc438 |  |  |
-| `0x103a29f0` CNPC_VPedestrian::vfunc438 |  |  |
+| `0x10370230` CNPC_VCombatman::SelectSchedule |  |  |
+| `0x10375d90` CNPC_VFrenzyShadow::SelectSchedule |  |  |
+| `0x103788d0` CNPC_VGargoyle::SelectSchedule |  | `+0x0848` |
+| `0x1037d130` CNPC_VGuard1::SelectSchedule |  |  |
+| `0x1037fca0` CNPC_VHengeyokai::SelectSchedule |  |  |
+| `0x103872d0` CNPC_VHumanCombatant::SelectSchedule |  |  |
+| `0x1039fd20` CNPC_VMoleman::SelectSchedule |  |  |
+| `0x103a29f0` CNPC_VPedestrian::SelectSchedule |  |  |
 | `0x103a70c0` CNPC_VSabbatLeader::SelectSchedule |  |  |
 | `0x103ae8c0` CNPC_VSheriffMan::SelectSchedule |  |  |
-| `0x103b2410` CNPC_VSheriffSwarm::vfunc438 |  |  |
-| `0x103b3670` CNPC_VTaxiDriver::vfunc438 |  |  |
-| `0x103b4f30` CNPC_VTest::vfunc438 |  |  |
-| `0x103dceb0` CNPC_VWolfMorph::vfunc438 |  |  |
-| `0x103ad630` CNPC_VRat::vfunc103 |  |  |
-| `0x10371a20` CNPC_VCop::vfunc103 |  |  |
-| `0x1037b040` CNPC_VGhoulCroucher::vfunc103 |  |  |
-| `0x103887a0` CNPC_VHunter::vfunc103 |  |  |
-| `0x103dd620` CNPC_VYukie::vfunc103 |  |  |
+| `0x103b2410` CNPC_VSheriffSwarm::SelectSchedule |  |  |
+| `0x103b3670` CNPC_VTaxiDriver::SelectSchedule |  |  |
+| `0x103b4f30` CNPC_VTest::SelectSchedule |  |  |
+| `0x103dceb0` CNPC_VWolfMorph::SelectSchedule |  |  |
+| `0x103ad630` CNPC_VRat::Spawn |  |  |
+| `0x10371a20` CNPC_VCop::Spawn |  |  |
+| `0x1037b040` CNPC_VGhoulCroucher::Spawn |  |  |
+| `0x103887a0` CNPC_VHunter::Spawn |  |  |
+| `0x103dd620` CNPC_VYukie::Spawn |  |  |
 | `0x1035cc20` CNPC_VAndreiBlood::Spawn |  |  |
 | `0x10360c50` CNPC_VAsianVampire::Spawn |  |  |
-| `0x10363850` CNPC_VBach::vfunc103 |  |  |
-| `0x10367380` CNPC_VBatSwarm::vfunc103 |  |  |
+| `0x10363850` CNPC_VBach::Spawn |  |  |
+| `0x10367380` CNPC_VBatSwarm::Spawn |  |  |
 | `0x1036afc0` CNPC_VChangBros::Spawn |  |  |
-| `0x1037fa00` CNPC_VHengeyokai::vfunc103 |  |  |
-| `0x10389390` CNPC_VLasombra::vfunc103 |  |  |
-| `0x1038b030` CNPC_VManBat::vfunc103 |  | `+0x0680` |
-| `0x103a4510` CNPC_VPlayerController::vfunc103 |  |  |
+| `0x1037fa00` CNPC_VHengeyokai::Spawn |  |  |
+| `0x10389390` CNPC_VLasombra::Spawn |  |  |
+| `0x1038b030` CNPC_VManBat::Spawn |  | `+0x0680` |
+| `0x103a4510` CNPC_VPlayerController::Spawn |  |  |
 | `0x103a6c80` CNPC_VSabbatLeader::Spawn |  |  |
 | `0x103ae630` CNPC_VSheriffMan::Spawn |  |  |
-| `0x103b2330` CNPC_VSheriffSwarm::vfunc103 |  |  |
-| `0x103b42f0` CNPC_VTest::vfunc103 |  |  |
+| `0x103b2330` CNPC_VSheriffSwarm::Spawn |  |  |
+| `0x103b42f0` CNPC_VTest::Spawn |  |  |
 
 ## Layer 28 — 27 functions
 
 | Function | Producers later | Unwritten reads |
 |---|---|---|
-| `0x10375e50` CNPC_VFrenzyShadow::vfunc431 |  |  |
+| `0x10375e50` CNPC_VFrenzyShadow::NPCThink |  |  |
 | `0x1035db20` CNPC_VAndreiBlood::NPCThink |  |  |
 | `0x10361490` CNPC_VAsianVampire::NPCThink |  |  |
 | `0x1036c6c0` CNPC_VChangBros::NPCThink |  |  |
@@ -5158,25 +5158,25 @@ Cycles (1):
 | `0x10372aa0` CNPC_VCop::vfunc432 |  |  |
 | `0x10388ad0` CNPC_VHunter::vfunc432 |  |  |
 | `0x103dd7a0` CNPC_VYukie::vfunc432 |  |  |
-| `0x10374940` CNPC_VDog::vfunc442 |  | `+0x04d8` |
-| `0x103ac740` CNPC_VScurrying::FUN_103ac740 |  | `+0x04d8` |
-| `0x103dfd80` CNPC_VZombie::vfunc442 |  |  |
-| `0x103645a0` CNPC_VBach::vfunc442 |  |  |
-| `0x10371b70` CNPC_VCop::vfunc442 ‼ |  |  |
-| `0x10375f50` CNPC_VFrenzyShadow::vfunc442 |  | `+0x645c` |
-| `0x103790d0` CNPC_VGargoyle::vfunc442 |  | `+0x0374` |
+| `0x10374940` CNPC_VDog::StartTask |  | `+0x04d8` |
+| `0x103ac740` CNPC_VScurrying::StartTask |  | `+0x04d8` |
+| `0x103dfd80` CNPC_VZombie::StartTask |  |  |
+| `0x103645a0` CNPC_VBach::StartTask |  |  |
+| `0x10371b70` CNPC_VCop::StartTask ‼ |  |  |
+| `0x10375f50` CNPC_VFrenzyShadow::StartTask |  | `+0x645c` |
+| `0x103790d0` CNPC_VGargoyle::StartTask |  | `+0x0374` |
 | `0x1037b8b0` CNPC_VGhoulCroucher::StartTask |  |  |
-| `0x103805d0` CNPC_VHengeyokai::vfunc442 |  |  |
-| `0x1038c390` CNPC_VManBat::vfunc442 |  | `+0x0100`, `+0x0374` |
-| `0x103a5650` CNPC_VSabbatGunman::vfunc442 |  |  |
-| `0x103b36d0` CNPC_VTaxiDriver::vfunc442 |  | `+0x04d8` |
+| `0x103805d0` CNPC_VHengeyokai::StartTask |  |  |
+| `0x1038c390` CNPC_VManBat::StartTask |  | `+0x0100`, `+0x0374` |
+| `0x103a5650` CNPC_VSabbatGunman::StartTask |  |  |
+| `0x103b36d0` CNPC_VTaxiDriver::StartTask |  | `+0x04d8` |
 | `0x103c5ac0` CNPC_VVampireBoss::StartTask |  |  |
-| `0x10371ee0` CNPC_VCop::vfunc438 |  |  |
+| `0x10371ee0` CNPC_VCop::SelectSchedule |  |  |
 | `0x1037bd60` CNPC_VGhoulCroucher::SelectSchedule |  |  |
-| `0x10387d20` CNPC_VHumanCombatPatrol::vfunc438 |  |  |
-| `0x10388a20` CNPC_VHunter::vfunc438 |  |  |
-| `0x103dd6b0` CNPC_VYukie::vfunc438 |  |  |
-| `0x10375c50` CNPC_VFrenzyShadow::vfunc103 |  |  |
+| `0x10387d20` CNPC_VHumanCombatPatrol::SelectSchedule |  |  |
+| `0x10388a20` CNPC_VHunter::SelectSchedule |  |  |
+| `0x103dd6b0` CNPC_VYukie::SelectSchedule |  |  |
+| `0x10375c50` CNPC_VFrenzyShadow::Spawn |  |  |
 
 ## Layer 29 — 5 functions
 

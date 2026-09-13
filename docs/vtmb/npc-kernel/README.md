@@ -70,7 +70,12 @@ entity base classes (`CBaseEntity`, `CBaseAnimating`, `CBaseFlex`, `CBaseCombatW
 
 - It does not model inheritance in `fields`: the table is the flattened `CAI_BaseNPCTroika`
   layout, and offsets a species adds are listed in a second table with their owning class.
-- It does not name functions. `unnamed.md` is the backlog; a recovered name lands in
-  `corpus names` with its evidence and the next regeneration picks it up.
+- It does not name functions. `unnamed.md` is the backlog (a `FUN_` or the dump's `vfuncN`); a
+  recovered name lands in `corpus names` with its evidence (`corpus harvest` proposes them) and
+  the next regeneration picks it up. An `unsettled` overlay row's reason is shown in
+  `unnamed.md` and in `coverage.md`'s `CAI_BaseNPC` slot list. *Core* in `coverage.md` is a
+  family or helper class method, or a body touching an offset past `CBaseCombatCharacter`'s
+  layout, so a name that moves a body into `CBaseEntity`'s namespace also moves it out of the
+  core and behind the walk's boundary.
 - It does not decide what to port. It says what exists, who depends on what, and what is
   already cited; the spec's build order is derived from it, not stored in it.

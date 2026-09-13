@@ -12,18 +12,348 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Slots with a single body across the family | 347 |
 | Closure functions | 5050 |
 | … cited by the port | 358 |
-| … cited by the oracle | 761 |
-| … cited by neither | 4221 |
+| … cited by the oracle | 762 |
+| … cited by neither | 4220 |
 | … damaged decompilation | 78 |
-| … still `FUN_` | 2970 |
+| … still unnamed (`FUN_` / `vfuncN`) | 3235 |
+| Core functions (family or helper method, or an NPC-range offset) | 2471 |
+| … core still unnamed | 1371 |
+| … core still unnamed, layers 0–4 | 928 |
+| … core still unnamed, layers 5–9 | 152 |
+| … core still unnamed, layers 10–18 | 169 |
+| … core still unnamed, layers 19–29 | 122 |
+| `CAI_BaseNPC` slots whose body is unnamed | 315 |
+| … with the naming pass's reason recorded (`unsettled`) | 315 |
 | Troika fields | 835 |
 | … cited by the port | 148 |
 | … with a guessed port member | 59 |
-| Closure edges | 16562 |
+| Closure edges | 16559 |
 | Build layers | 30 |
 | Port-cited addresses inside a function body | 256 |
 | Port-cited addresses that are globals / strings / vtables | 14 / 30 / 0 |
 | Stale port citations (address the corpus does not know) | 118 |
+
+## `CAI_BaseNPC` slots without a name
+
+Every slot of the base table whose body is still a placeholder, with the reason the naming pass recorded (`corpus harvest`, tier `unsettled` in the overlay). A row without a reason is a slot no pass has looked at.
+
+| Slot | Body | Why |
+|---|---|---|
+| 0 | `0x10027450` CAISound::FUN_10027450 | CAI_BaseNPC#0 no SDK twin: no bracketing names; slot identity: IServerUnknown#0: no body at this slot carries a name in any of 500 classes |
+| 2 | `0x10027610` CAISound::FUN_10027610 | CAI_BaseNPC#2 no SDK twin: stretch #1-#8 holds 6 retail slots against 3 SDK 2013 virtuals; slot identity: IServerUnknown#2: no body at this slot carries a name in any of 500 classes |
+| 3 | `0x10027630` CAISound::FUN_10027630 | CAI_BaseNPC#3 no SDK twin: stretch #1-#8 holds 6 retail slots against 3 SDK 2013 virtuals; slot identity: IServerUnknown#3: no body at this slot carries a name in any of 500 classes |
+| 4 | `0x10027650` CAISound::FUN_10027650 | CAI_BaseNPC#4 no SDK twin: stretch #1-#8 holds 6 retail slots against 3 SDK 2013 virtuals; slot identity: IServerUnknown#4: no body at this slot carries a name in any of 500 classes |
+| 5 | `0x1027c7f0` CAI_BaseNPC::vfunc5 | CAI_BaseNPC#5 no SDK twin: stretch #1-#8 holds 6 retail slots against 3 SDK 2013 virtuals; slot identity: IServerEntity#5: destructor slot |
+| 14 | `0x1009af00` CAISound::FUN_1009af00 | CAI_BaseNPC#14 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#14: no body at this slot carries a name in any of 497 classes |
+| 16 | `0x1009b030` CAISound::FUN_1009b030 | CAI_BaseNPC#16 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#16: no body at this slot carries a name in any of 497 classes |
+| 17 | `0x1009b380` CAISound::FUN_1009b380 | CAI_BaseNPC#17 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#17: no body at this slot carries a name in any of 497 classes |
+| 18 | `0x1009b2c0` CAISound::FUN_1009b2c0 | CAI_BaseNPC#18 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#18: no body at this slot carries a name in any of 497 classes |
+| 19 | `0x1009b5a0` CAISound::FUN_1009b5a0 | CAI_BaseNPC#19 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#19: no body at this slot carries a name in any of 497 classes |
+| 20 | `0x1009b500` CAISound::FUN_1009b500 | CAI_BaseNPC#20 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#20: no body at this slot carries a name in any of 497 classes |
+| 21 | `0x10026530` CAISound::FUN_10026530 | CAI_BaseNPC#21 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#21: no body at this slot carries a name in any of 497 classes |
+| 22 | `0x10026550` CAISound::FUN_10026550 | CAI_BaseNPC#22 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#22: no body at this slot carries a name in any of 497 classes |
+| 23 | `0x10026570` CAISound::FUN_10026570 | CAI_BaseNPC#23 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#23: no body at this slot carries a name in any of 497 classes |
+| 25 | `0x100265b0` CAISound::FUN_100265b0 | CAI_BaseNPC#25 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#25: no body at this slot carries a name in any of 497 classes |
+| 26 | `0x100265d0` CAISound::FUN_100265d0 | CAI_BaseNPC#26 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#26: no body at this slot carries a name in any of 497 classes |
+| 27 | `0x100265f0` CAISound::FUN_100265f0 | CAI_BaseNPC#27 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#27: no body at this slot carries a name in any of 497 classes |
+| 28 | `0x10026610` CAISound::FUN_10026610 | CAI_BaseNPC#28 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#28: no body at this slot carries a name in any of 497 classes |
+| 29 | `0x10026630` CAISound::FUN_10026630 | CAI_BaseNPC#29 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#29: no body at this slot carries a name in any of 497 classes |
+| 30 | `0x10026650` CAISound::FUN_10026650 | CAI_BaseNPC#30 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#30: no body at this slot carries a name in any of 497 classes |
+| 32 | `0x10026670` CAISound::FUN_10026670 | CAI_BaseNPC#32 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#32: no body at this slot carries a name in any of 497 classes |
+| 33 | `0x10026690` CAISound::FUN_10026690 | CAI_BaseNPC#33 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#33: no body at this slot carries a name in any of 497 classes |
+| 35 | `0x100266d0` CAISound::FUN_100266d0 | CAI_BaseNPC#35 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#35: the named bodies disagree: GetUseIcon, ObjectCaps |
+| 36 | `0x100266f0` CAISound::FUN_100266f0 | CAI_BaseNPC#36 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#36: no body at this slot carries a name in any of 497 classes |
+| 37 | `0x10026710` CAISound::FUN_10026710 | CAI_BaseNPC#37 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#37: no body at this slot carries a name in any of 497 classes |
+| 38 | `0x10026730` CAISound::FUN_10026730 | CAI_BaseNPC#38 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#38: no body at this slot carries a name in any of 497 classes |
+| 39 | `0x100a4fe0` CAISound::FUN_100a4fe0 | CAI_BaseNPC#39 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#39: no body at this slot carries a name in any of 497 classes |
+| 40 | `0x10026750` CAISound::FUN_10026750 | CAI_BaseNPC#40 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#40: no body at this slot carries a name in any of 497 classes |
+| 41 | `0x10026770` CAISound::FUN_10026770 | CAI_BaseNPC#41 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#41: no body at this slot carries a name in any of 497 classes |
+| 42 | `0x100a5030` CAISound::FUN_100a5030 | CAI_BaseNPC#42 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#42: no body at this slot carries a name in any of 497 classes |
+| 43 | `0x10026790` CAISound::FUN_10026790 | CAI_BaseNPC#43 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#43: no body at this slot carries a name in any of 497 classes |
+| 44 | `0x100267b0` CAISound::FUN_100267b0 | CAI_BaseNPC#44 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#44: no body at this slot carries a name in any of 497 classes |
+| 46 | `0x100267d0` CAISound::FUN_100267d0 | CAI_BaseNPC#46 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#46: no body at this slot carries a name in any of 497 classes |
+| 47 | `0x100267f0` CAISound::FUN_100267f0 | CAI_BaseNPC#47 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#47: no body at this slot carries a name in any of 497 classes |
+| 48 | `0x10026810` CAISound::FUN_10026810 | CAI_BaseNPC#48 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#48: no body at this slot carries a name in any of 497 classes |
+| 49 | `0x10026830` CAISound::FUN_10026830 | CAI_BaseNPC#49 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#49: no body at this slot carries a name in any of 497 classes |
+| 54 | `0x10026910` CAISound::FUN_10026910 | CAI_BaseNPC#54 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#54: no body at this slot carries a name in any of 497 classes |
+| 55 | `0x10026930` CAISound::FUN_10026930 | CAI_BaseNPC#55 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#55: no body at this slot carries a name in any of 497 classes |
+| 56 | `0x10026950` CAISound::FUN_10026950 | CAI_BaseNPC#56 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#56: no body at this slot carries a name in any of 497 classes |
+| 57 | `0x10026970` CAISound::FUN_10026970 | CAI_BaseNPC#57 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#57: no body at this slot carries a name in any of 497 classes |
+| 58 | `0x10026990` CAISound::FUN_10026990 | CAI_BaseNPC#58 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#58: no body at this slot carries a name in any of 497 classes |
+| 59 | `0x100269b0` CAISound::FUN_100269b0 | CAI_BaseNPC#59 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#59: no body at this slot carries a name in any of 497 classes |
+| 60 | `0x100269d0` CAISound::FUN_100269d0 | CAI_BaseNPC#60 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#60: no body at this slot carries a name in any of 497 classes |
+| 61 | `0x100269f0` CAISound::FUN_100269f0 | CAI_BaseNPC#61 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#61: no body at this slot carries a name in any of 497 classes |
+| 63 | `0x10026a10` CAISound::FUN_10026a10 | CAI_BaseNPC#63 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#63: no body at this slot carries a name in any of 497 classes |
+| 65 | `0x10026a50` CAISound::FUN_10026a50 | CAI_BaseNPC#65 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#65: no body at this slot carries a name in any of 497 classes |
+| 72 | `0x1015dc20` CAI_BaseNPC::FUN_1015dc20 | CAI_BaseNPC#72 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#72: no body at this slot carries a name in any of 497 classes |
+| 79 | `0x10321670` CAI_BaseNPC::FUN_10321670 | CAI_BaseNPC#79 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#79: no body at this slot carries a name in any of 497 classes |
+| 80 | `0x10321960` CAI_BaseNPC::FUN_10321960 | CAI_BaseNPC#80 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#80: no body at this slot carries a name in any of 497 classes |
+| 81 | `0x10321980` CAI_BaseNPC::FUN_10321980 | CAI_BaseNPC#81 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#81: no body at this slot carries a name in any of 497 classes |
+| 82 | `0x1027a7c0` CAI_BaseNPC::FUN_1027a7c0 | CAI_BaseNPC#82 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#82: no body at this slot carries a name in any of 497 classes |
+| 83 | `0x100b4ef0` CAISound::FUN_100b4ef0 | CAI_BaseNPC#83 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#83: no body at this slot carries a name in any of 497 classes |
+| 84 | `0x100b4f10` CAISound::FUN_100b4f10 | CAI_BaseNPC#84 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#84: no body at this slot carries a name in any of 497 classes |
+| 88 | `0x10026b50` CAISound::FUN_10026b50 | CAI_BaseNPC#88 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#88: no body at this slot carries a name in any of 497 classes |
+| 89 | `0x10026b70` CAISound::FUN_10026b70 | CAI_BaseNPC#89 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#89: no body at this slot carries a name in any of 497 classes |
+| 91 | `0x100b4de0` CAISound::FUN_100b4de0 | CAI_BaseNPC#91 no SDK twin: stretch #11-#99 holds 87 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseEntity#91: no body at this slot carries a name in any of 497 classes |
+| 101 | `0x100ab430` CAISound::FUN_100ab430 | CAI_BaseNPC#101 no SDK twin: stretch #100-#103 holds 2 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#101: no body at this slot carries a name in any of 497 classes |
+| 102 | `0x100ab450` CAISound::FUN_100ab450 | CAI_BaseNPC#102 no SDK twin: stretch #100-#103 holds 2 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#102: no body at this slot carries a name in any of 497 classes |
+| 108 | `0x1004fbb0` CAI_BaseNPC::FUN_1004fbb0 | CAI_BaseNPC#108 no SDK twin: stretch #107-#113 holds 5 retail slots against 4 SDK 2013 virtuals; slot identity: CBaseEntity#108: no body at this slot carries a name in any of 497 classes |
+| 109 | `0x1004fbf0` CAI_BaseNPC::FUN_1004fbf0 | CAI_BaseNPC#109 no SDK twin: stretch #107-#113 holds 5 retail slots against 4 SDK 2013 virtuals; slot identity: CBaseEntity#109: no body at this slot carries a name in any of 497 classes |
+| 110 | `0x101c1480` CAI_BaseNPC::FUN_101c1480 | CAI_BaseNPC#110 no SDK twin: stretch #107-#113 holds 5 retail slots against 4 SDK 2013 virtuals; slot identity: CBaseEntity#110: no body at this slot carries a name in any of 497 classes |
+| 112 | `0x10026bd0` CAISound::FUN_10026bd0 | CAI_BaseNPC#112 no SDK twin: stretch #107-#113 holds 5 retail slots against 4 SDK 2013 virtuals; slot identity: CBaseEntity#112: no body at this slot carries a name in any of 497 classes |
+| 115 | `0x10026bf0` CAISound::FUN_10026bf0 | CAI_BaseNPC#115 no SDK twin: stretch #113-#118 holds 4 retail slots against 2 SDK 2013 virtuals; slot identity: CBaseEntity#115: no body at this slot carries a name in any of 497 classes |
+| 116 | `0x10027490` CAISound::FUN_10027490 | CAI_BaseNPC#116 no SDK twin: stretch #113-#118 holds 4 retail slots against 2 SDK 2013 virtuals; slot identity: CBaseEntity#116: no body at this slot carries a name in any of 497 classes |
+| 117 | `0x100b4320` CAI_BaseNPC::FUN_100b4320 | CAI_BaseNPC#117 no SDK twin: stretch #113-#118 holds 4 retail slots against 2 SDK 2013 virtuals; slot identity: CBaseEntity#117: no body at this slot carries a name in any of 497 classes |
+| 131 | `0x10026c10` CAISound::FUN_10026c10 | CAI_BaseNPC#131 no SDK twin: stretch #128-#138 holds 9 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#131: no body at this slot carries a name in any of 497 classes |
+| 132 | `0x10026c30` CAISound::FUN_10026c30 | CAI_BaseNPC#132 no SDK twin: stretch #128-#138 holds 9 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#132: no body at this slot carries a name in any of 497 classes |
+| 133 | `0x101c1720` CAI_BaseNPC::FUN_101c1720 ‼ | CAI_BaseNPC#133 no SDK twin: stretch #128-#138 holds 9 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#133: no body at this slot carries a name in any of 497 classes |
+| 134 | `0x10026c70` CAISound::FUN_10026c70 | CAI_BaseNPC#134 slot identity: CBaseEntity#134 is Remove, but CBaseEntity::Remove is already 0x100ae150 in the image -- the corpus refuses a second body of one name |
+| 135 | `0x101c10d0` CAI_BaseNPC::FUN_101c10d0 | CAI_BaseNPC#135 no SDK twin: stretch #128-#138 holds 9 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#135: no body at this slot carries a name in any of 497 classes |
+| 136 | `0x101a6860` CAI_BaseNPC::FUN_101a6860 | CAI_BaseNPC#136 no SDK twin: stretch #128-#138 holds 9 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#136: no body at this slot carries a name in any of 497 classes |
+| 137 | `0x1004fc50` CAI_BaseNPC::FUN_1004fc50 | CAI_BaseNPC#137 no SDK twin: stretch #128-#138 holds 9 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseEntity#137: no body at this slot carries a name in any of 497 classes |
+| 139 | `0x10026d70` CAISound::FUN_10026d70 | CAI_BaseNPC#139 no SDK twin: stretch #138-#140 holds 1 retail slots against 5 SDK 2013 virtuals; slot identity: CBaseEntity#139: no body at this slot carries a name in any of 497 classes |
+| 145 | `0x1014fa10` CAI_BaseNPC::FUN_1014fa10 | CAI_BaseNPC#145 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#145: no body at this slot carries a name in any of 497 classes |
+| 146 | `0x10268ef0` CAISound::FUN_10268ef0 | CAI_BaseNPC#146 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#146: no body at this slot carries a name in any of 497 classes |
+| 147 | `0x10026db0` CAISound::FUN_10026db0 | CAI_BaseNPC#147 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#147: no body at this slot carries a name in any of 497 classes |
+| 148 | `0x10026dd0` CAISound::FUN_10026dd0 | CAI_BaseNPC#148 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#148: no body at this slot carries a name in any of 497 classes |
+| 149 | `0x10026df0` CAISound::FUN_10026df0 | CAI_BaseNPC#149 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#149: no body at this slot carries a name in any of 497 classes |
+| 150 | `0x10026e10` CAISound::FUN_10026e10 | CAI_BaseNPC#150 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#150: no body at this slot carries a name in any of 497 classes |
+| 151 | `0x10026e30` CAISound::FUN_10026e30 | CAI_BaseNPC#151 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#151: no body at this slot carries a name in any of 497 classes |
+| 152 | `0x1004fc10` CAI_BaseNPC::FUN_1004fc10 | CAI_BaseNPC#152 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#152: no body at this slot carries a name in any of 497 classes |
+| 153 | `0x10280300` CAI_BaseNPC::FUN_10280300 | CAI_BaseNPC#153 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#153: no body at this slot carries a name in any of 497 classes |
+| 154 | `0x100b4ea0` CAISound::FUN_100b4ea0 ‼ | CAI_BaseNPC#154 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#154: no body at this slot carries a name in any of 497 classes |
+| 156 | `0x10026ee0` CAISound::FUN_10026ee0 | CAI_BaseNPC#156 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#156: no body at this slot carries a name in any of 497 classes |
+| 157 | `0x10026f00` CAISound::FUN_10026f00 | CAI_BaseNPC#157 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#157: no body at this slot carries a name in any of 497 classes |
+| 158 | `0x100b4dc0` CAISound::FUN_100b4dc0 | CAI_BaseNPC#158 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#158: no body at this slot carries a name in any of 497 classes |
+| 159 | `0x10026f20` CAISound::FUN_10026f20 | CAI_BaseNPC#159 no SDK twin: stretch #144-#160 holds 15 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#159: no body at this slot carries a name in any of 497 classes |
+| 162 | `0x10026f60` CAISound::FUN_10026f60 | CAI_BaseNPC#162 no SDK twin: stretch #160-#163 holds 2 retail slots against 10 SDK 2013 virtuals; slot identity: CBaseEntity#162: no body at this slot carries a name in any of 497 classes |
+| 164 | `0x100b50a0` CAISound::FUN_100b50a0 | CAI_BaseNPC#164 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#164: no body at this slot carries a name in any of 497 classes |
+| 165 | `0x10026fb0` CAISound::FUN_10026fb0 | CAI_BaseNPC#165 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#165: no body at this slot carries a name in any of 497 classes |
+| 166 | `0x10026f80` CAISound::FUN_10026f80 | CAI_BaseNPC#166 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#166: no body at this slot carries a name in any of 497 classes |
+| 167 | `0x101a67e0` CAI_BaseNPC::FUN_101a67e0 | CAI_BaseNPC#167 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#167: no body at this slot carries a name in any of 497 classes |
+| 168 | `0x10027020` CAISound::FUN_10027020 ‼ | CAI_BaseNPC#168 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#168: no body at this slot carries a name in any of 497 classes |
+| 169 | `0x10027040` CAISound::FUN_10027040 | CAI_BaseNPC#169 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#169: no body at this slot carries a name in any of 497 classes |
+| 170 | `0x10027060` CAISound::FUN_10027060 | CAI_BaseNPC#170 no SDK twin: stretch #163-#173 holds 9 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseEntity#170: no body at this slot carries a name in any of 497 classes |
+| 179 | `0x100270a0` CAISound::FUN_100270a0 | CAI_BaseNPC#179 no SDK twin: stretch #178-#180 holds 1 retail slots against 2 SDK 2013 virtuals; slot identity: CBaseEntity#179: no body at this slot carries a name in any of 497 classes |
+| 182 | `0x100ad8f0` CAISound::FUN_100ad8f0 | CAI_BaseNPC#182 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#182: no body at this slot carries a name in any of 497 classes |
+| 183 | `0x100ad910` CAISound::FUN_100ad910 | CAI_BaseNPC#183 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#183: no body at this slot carries a name in any of 497 classes |
+| 184 | `0x10267260` CAISound::FUN_10267260 | CAI_BaseNPC#184 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#184: no body at this slot carries a name in any of 497 classes |
+| 185 | `0x10268900` CAISound::FUN_10268900 | CAI_BaseNPC#185 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#185: no body at this slot carries a name in any of 497 classes |
+| 186 | `0x100270c0` CAISound::FUN_100270c0 | CAI_BaseNPC#186 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#186: no body at this slot carries a name in any of 497 classes |
+| 187 | `0x100270e0` CAISound::FUN_100270e0 | CAI_BaseNPC#187 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#187: no body at this slot carries a name in any of 497 classes |
+| 188 | `0x10027100` CAISound::FUN_10027100 | CAI_BaseNPC#188 no SDK twin: stretch #181-#189 holds 7 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseEntity#188: no body at this slot carries a name in any of 497 classes |
+| 190 | `0x10027120` CAISound::FUN_10027120 | CAI_BaseNPC#190 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#190: no body at this slot carries a name in any of 497 classes |
+| 191 | `0x10027140` CAISound::FUN_10027140 | CAI_BaseNPC#191 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#191: no body at this slot carries a name in any of 497 classes |
+| 192 | `0x10027160` CAISound::FUN_10027160 | CAI_BaseNPC#192 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#192: no body at this slot carries a name in any of 497 classes |
+| 193 | `0x100b4b40` CAISound::FUN_100b4b40 | CAI_BaseNPC#193 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#193: no body at this slot carries a name in any of 497 classes |
+| 194 | `0x100b4bc0` CAISound::FUN_100b4bc0 ‼ | CAI_BaseNPC#194 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#194: no body at this slot carries a name in any of 497 classes |
+| 195 | `0x100b4be0` CAISound::FUN_100b4be0 ‼ | CAI_BaseNPC#195 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#195: no body at this slot carries a name in any of 497 classes |
+| 196 | `0x100b4c00` CAISound::FUN_100b4c00 | CAI_BaseNPC#196 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#196: no body at this slot carries a name in any of 497 classes |
+| 197 | `0x102789c0` CAI_BaseNPC::FUN_102789c0 | CAI_BaseNPC#197 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#197: BodyTarget named, but the bodies pop 4 words and the SDK declares 3 |
+| 198 | `0x100274b0` CAISound::FUN_100274b0 | CAI_BaseNPC#198 no SDK twin: stretch #189-#199 holds 9 retail slots against 12 SDK 2013 virtuals; slot identity: CBaseEntity#198: no body at this slot carries a name in any of 497 classes |
+| 205 | `0x10027330` CAISound::FUN_10027330 | CAI_BaseNPC#205 no SDK twin: stretch #199-#222 holds 22 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseEntity#205: no body at this slot carries a name in any of 497 classes |
+| 206 | `0x10027350` CAISound::FUN_10027350 | CAI_BaseNPC#206 no SDK twin: stretch #199-#222 holds 22 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseEntity#206: no body at this slot carries a name in any of 497 classes |
+| 210 | `0x10027370` CAISound::FUN_10027370 | CAI_BaseNPC#210 no SDK twin: stretch #199-#222 holds 22 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseEntity#210: no body at this slot carries a name in any of 497 classes |
+| 213 | `0x100b1890` CAISound::FUN_100b1890 | CAI_BaseNPC#213 no SDK twin: stretch #199-#222 holds 22 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseEntity#213: no body at this slot carries a name in any of 497 classes |
+| 215 | `0x100b4c30` CAISound::FUN_100b4c30 | CAI_BaseNPC#215 no SDK twin: stretch #199-#222 holds 22 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseEntity#215: no body at this slot carries a name in any of 497 classes |
+| 223 | `0x10273720` CAI_BaseNPC::FUN_10273720 | CAI_BaseNPC#223 no SDK twin: stretch #222-#227 holds 4 retail slots against 7 SDK 2013 virtuals; slot identity: CBaseEntity#223: no body at this slot carries a name in any of 497 classes |
+| 224 | `0x100273b0` CAISound::FUN_100273b0 | CAI_BaseNPC#224 no SDK twin: stretch #222-#227 holds 4 retail slots against 7 SDK 2013 virtuals; slot identity: CBaseEntity#224: no body at this slot carries a name in any of 497 classes |
+| 225 | `0x100b5040` CAISound::FUN_100b5040 | CAI_BaseNPC#225 no SDK twin: stretch #222-#227 holds 4 retail slots against 7 SDK 2013 virtuals; slot identity: CBaseEntity#225: no body at this slot carries a name in any of 497 classes |
+| 226 | `0x100b4f30` CAISound::FUN_100b4f30 | CAI_BaseNPC#226 no SDK twin: stretch #222-#227 holds 4 retail slots against 7 SDK 2013 virtuals; slot identity: CBaseEntity#226: no body at this slot carries a name in any of 497 classes |
+| 235 | `0x100273f0` CAISound::FUN_100273f0 | CAI_BaseNPC#235 no SDK twin: stretch #233-#237 holds 3 retail slots against 2 SDK 2013 virtuals; slot identity: CBaseEntity#235: no body at this slot carries a name in any of 497 classes |
+| 236 | `0x10027410` CAISound::FUN_10027410 | CAI_BaseNPC#236 no SDK twin: stretch #233-#237 holds 3 retail slots against 2 SDK 2013 virtuals; slot identity: CBaseEntity#236: no body at this slot carries a name in any of 497 classes |
+| 240 | `0x1014f8b0` CAI_BaseNPC::FUN_1014f8b0 | CAI_BaseNPC#240 no SDK twin: stretch #238-#241 holds 2 retail slots against 7 SDK 2013 virtuals; slot identity: CBaseEntity#240: no body at this slot carries a name in any of 497 classes |
+| 251 | `0x10272900` CAI_BaseNPC::FUN_10272900 | CAI_BaseNPC#251 no SDK twin: stretch #249-#256 holds 6 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseAnimating#251: no body at this slot carries a name in any of 300 classes |
+| 255 | `0x10098eb0` CAI_BaseNPC::FUN_10098eb0 | CAI_BaseNPC#255 no SDK twin: stretch #249-#256 holds 6 retail slots against 9 SDK 2013 virtuals; slot identity: CBaseAnimating#255: GetSkeleton named, but the bodies pop 3 words and the SDK declares 4 |
+| 265 | `0x10099690` CAI_BaseNPC::FUN_10099690 | CAI_BaseNPC#265 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#265: no body at this slot carries a name in any of 87 classes |
+| 266 | `0x100997f0` CAI_BaseNPC::FUN_100997f0 | CAI_BaseNPC#266 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#266: no body at this slot carries a name in any of 87 classes |
+| 267 | `0x10098a40` CAI_BaseNPC::FUN_10098a40 | CAI_BaseNPC#267 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#267: no body at this slot carries a name in any of 87 classes |
+| 268 | `0x10099020` CAI_BaseNPC::FUN_10099020 | CAI_BaseNPC#268 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#268: no body at this slot carries a name in any of 87 classes |
+| 269 | `0x10099660` CAI_BaseNPC::FUN_10099660 | CAI_BaseNPC#269 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#269: no body at this slot carries a name in any of 87 classes |
+| 270 | `0x10099540` CAI_BaseNPC::FUN_10099540 | CAI_BaseNPC#270 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#270: no body at this slot carries a name in any of 87 classes |
+| 271 | `0x100994c0` CAI_BaseNPC::FUN_100994c0 | CAI_BaseNPC#271 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#271: no body at this slot carries a name in any of 87 classes |
+| 273 | `0x10099570` CAI_BaseNPC::FUN_10099570 | CAI_BaseNPC#273 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#273: no body at this slot carries a name in any of 87 classes |
+| 274 | `0x100995e0` CAI_BaseNPC::FUN_100995e0 | CAI_BaseNPC#274 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#274: no body at this slot carries a name in any of 87 classes |
+| 275 | `0x10099630` CAI_BaseNPC::FUN_10099630 | CAI_BaseNPC#275 no SDK twin: stretch #263-#276 holds 12 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseAnimatingOverlay#275: no body at this slot carries a name in any of 87 classes |
+| 277 | `0x100b5b00` CAI_BaseNPC::FUN_100b5b00 | CAI_BaseNPC#277 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#277: no body at this slot carries a name in any of 86 classes |
+| 278 | `0x100b5b40` CAI_BaseNPC::FUN_100b5b40 | CAI_BaseNPC#278 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#278: no body at this slot carries a name in any of 86 classes |
+| 279 | `0x100b5ba0` CAI_BaseNPC::FUN_100b5ba0 | CAI_BaseNPC#279 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#279: no body at this slot carries a name in any of 86 classes |
+| 280 | `0x100b5b60` CAI_BaseNPC::FUN_100b5b60 | CAI_BaseNPC#280 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#280: no body at this slot carries a name in any of 86 classes |
+| 281 | `0x100b5c50` CAI_BaseNPC::FUN_100b5c50 | CAI_BaseNPC#281 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#281: no body at this slot carries a name in any of 86 classes |
+| 282 | `0x100b5c20` CAI_BaseNPC::FUN_100b5c20 | CAI_BaseNPC#282 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#282: no body at this slot carries a name in any of 86 classes |
+| 283 | `0x100b6250` CAI_BaseNPC::FUN_100b6250 ‼ | CAI_BaseNPC#283 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#283: no body at this slot carries a name in any of 86 classes |
+| 285 | `0x100b5d80` CAI_BaseNPC::FUN_100b5d80 | CAI_BaseNPC#285 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#285: no body at this slot carries a name in any of 86 classes |
+| 286 | `0x100b5e60` CAI_BaseNPC::FUN_100b5e60 | CAI_BaseNPC#286 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#286: no body at this slot carries a name in any of 86 classes |
+| 287 | `0x100b6180` CAI_BaseNPC::FUN_100b6180 | CAI_BaseNPC#287 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#287: no body at this slot carries a name in any of 86 classes |
+| 288 | `0x100b6cf0` CAI_BaseNPC::FUN_100b6cf0 | CAI_BaseNPC#288 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#288: no body at this slot carries a name in any of 86 classes |
+| 289 | `0x100b6960` CAI_BaseNPC::FUN_100b6960 | CAI_BaseNPC#289 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#289: no body at this slot carries a name in any of 86 classes |
+| 290 | `0x100b70e0` CAI_BaseNPC::FUN_100b70e0 | CAI_BaseNPC#290 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#290: no body at this slot carries a name in any of 86 classes |
+| 291 | `0x100b7040` CAI_BaseNPC::FUN_100b7040 | CAI_BaseNPC#291 no SDK twin: stretch #276-#292 holds 15 retail slots against 8 SDK 2013 virtuals; slot identity: CBaseFlex#291: no body at this slot carries a name in any of 86 classes |
+| 296 | `0x10348ba0` CAI_BaseNPC::FUN_10348ba0 | CAI_BaseNPC#296 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#296: no body at this slot carries a name in any of 85 classes |
+| 316 | `0x1014f710` CAI_BaseNPC::FUN_1014f710 | CAI_BaseNPC#316 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#316: no body at this slot carries a name in any of 85 classes |
+| 317 | `0x1014f730` CAI_BaseNPC::FUN_1014f730 | CAI_BaseNPC#317 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#317: no body at this slot carries a name in any of 85 classes |
+| 321 | `0x1014f7b0` CAI_BaseNPC::FUN_1014f7b0 | CAI_BaseNPC#321 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#321: no body at this slot carries a name in any of 85 classes |
+| 322 | `0x1014f7d0` CAI_BaseNPC::FUN_1014f7d0 | CAI_BaseNPC#322 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#322: no body at this slot carries a name in any of 85 classes |
+| 323 | `0x10344dd0` CAI_BaseNPC::FUN_10344dd0 | CAI_BaseNPC#323 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#323: no body at this slot carries a name in any of 85 classes |
+| 324 | `0x1014f7f0` CAI_BaseNPC::FUN_1014f7f0 | CAI_BaseNPC#324 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#324: no body at this slot carries a name in any of 85 classes |
+| 325 | `0x1014f810` CAI_BaseNPC::FUN_1014f810 | CAI_BaseNPC#325 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#325: no body at this slot carries a name in any of 85 classes |
+| 326 | `0x103482e0` CAI_BaseNPC::FUN_103482e0 | CAI_BaseNPC#326 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#326: no body at this slot carries a name in any of 85 classes |
+| 327 | `0x10345460` CAI_BaseNPC::FUN_10345460 | CAI_BaseNPC#327 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#327: no body at this slot carries a name in any of 85 classes |
+| 328 | `0x1014f830` CAI_BaseNPC::FUN_1014f830 | CAI_BaseNPC#328 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#328: no body at this slot carries a name in any of 85 classes |
+| 329 | `0x1014f850` CAI_BaseNPC::FUN_1014f850 | CAI_BaseNPC#329 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#329: no body at this slot carries a name in any of 85 classes |
+| 330 | `0x1014f870` CAI_BaseNPC::FUN_1014f870 | CAI_BaseNPC#330 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#330: no body at this slot carries a name in any of 85 classes |
+| 332 | `0x1014f890` CAI_BaseNPC::FUN_1014f890 | CAI_BaseNPC#332 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#332: no body at this slot carries a name in any of 85 classes |
+| 334 | `0x10330020` CAI_BaseNPC::FUN_10330020 | CAI_BaseNPC#334 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#334: no body at this slot carries a name in any of 85 classes |
+| 345 | `0x1032fb80` CAI_BaseNPC::FUN_1032fb80 | CAI_BaseNPC#345 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#345: no body at this slot carries a name in any of 85 classes |
+| 346 | `0x1032fc50` CAI_BaseNPC::FUN_1032fc50 | CAI_BaseNPC#346 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#346: no body at this slot carries a name in any of 85 classes |
+| 348 | `0x1032fe60` CAI_BaseNPC::FUN_1032fe60 | CAI_BaseNPC#348 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#348: no body at this slot carries a name in any of 85 classes |
+| 354 | `0x1026cec0` CAI_BaseNPC::FUN_1026cec0 | CAI_BaseNPC#354 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#354: no body at this slot carries a name in any of 85 classes |
+| 355 | `0x1026cf90` CAI_BaseNPC::FUN_1026cf90 | CAI_BaseNPC#355 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#355: no body at this slot carries a name in any of 85 classes |
+| 357 | `0x1033b5f0` CAI_BaseNPC::FUN_1033b5f0 | CAI_BaseNPC#357 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#357: no body at this slot carries a name in any of 85 classes |
+| 359 | `0x1014f910` CAI_BaseNPC::FUN_1014f910 | CAI_BaseNPC#359 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#359: no body at this slot carries a name in any of 85 classes |
+| 360 | `0x1014f930` CAI_BaseNPC::FUN_1014f930 | CAI_BaseNPC#360 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#360: no body at this slot carries a name in any of 85 classes |
+| 361 | `0x1014f950` CAI_BaseNPC::FUN_1014f950 | CAI_BaseNPC#361 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#361: no body at this slot carries a name in any of 85 classes |
+| 362 | `0x10326a20` CAI_BaseNPC::FUN_10326a20 | CAI_BaseNPC#362 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#362: no body at this slot carries a name in any of 85 classes |
+| 364 | `0x10326bd0` CAI_BaseNPC::FUN_10326bd0 | CAI_BaseNPC#364 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#364: no body at this slot carries a name in any of 85 classes |
+| 365 | `0x10326ae0` CAI_BaseNPC::FUN_10326ae0 | CAI_BaseNPC#365 no SDK twin: stretch #292-#366 holds 73 retail slots against 6 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#365: no body at this slot carries a name in any of 85 classes |
+| 372 | `0x1026b210` CAI_BaseNPC::FUN_1026b210 | CAI_BaseNPC#372 no SDK twin: stretch #371-#376 holds 4 retail slots against 18 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#372: no body at this slot carries a name in any of 85 classes |
+| 373 | `0x1026b240` CAI_BaseNPC::FUN_1026b240 | CAI_BaseNPC#373 no SDK twin: stretch #371-#376 holds 4 retail slots against 18 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#373: no body at this slot carries a name in any of 85 classes |
+| 374 | `0x10334180` CAI_BaseNPC::FUN_10334180 | CAI_BaseNPC#374 no SDK twin: stretch #371-#376 holds 4 retail slots against 18 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#374: no body at this slot carries a name in any of 85 classes |
+| 377 | `0x1014f9d0` CAI_BaseNPC::FUN_1014f9d0 | CAI_BaseNPC#377 no SDK twin: stretch #376-#382 holds 5 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#377: no body at this slot carries a name in any of 85 classes |
+| 378 | `0x1014f9f0` CAI_BaseNPC::FUN_1014f9f0 | CAI_BaseNPC#378 no SDK twin: stretch #376-#382 holds 5 retail slots against 3 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#378: no body at this slot carries a name in any of 85 classes |
+| 385 | `0x1032d0c0` CAI_BaseNPC::FUN_1032d0c0 | CAI_BaseNPC#385 no SDK twin: stretch #384-#388 holds 3 retail slots against 1 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#385: no body at this slot carries a name in any of 85 classes |
+| 386 | `0x1032ce40` CAI_BaseNPC::FUN_1032ce40 | CAI_BaseNPC#386 no SDK twin: stretch #384-#388 holds 3 retail slots against 1 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#386: no body at this slot carries a name in any of 85 classes |
+| 399 | `0x1014fa30` CAI_BaseNPC::FUN_1014fa30 | CAI_BaseNPC#399 no SDK twin: stretch #397-#404 holds 6 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#399: no body at this slot carries a name in any of 85 classes |
+| 400 | `0x1014fa50` CAI_BaseNPC::FUN_1014fa50 | CAI_BaseNPC#400 no SDK twin: stretch #397-#404 holds 6 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#400: no body at this slot carries a name in any of 85 classes |
+| 402 | `0x102658f0` CAI_BaseNPC::FUN_102658f0 | CAI_BaseNPC#402 no SDK twin: stretch #397-#404 holds 6 retail slots against 11 SDK 2013 virtuals; slot identity: CBaseCombatCharacter#402: Event_Gibbed named, but the bodies pop 0 words and the SDK declares 1 |
+| 406 | `0x1027e740` CAI_BaseNPC::FUN_1027e740 | CAI_BaseNPC#406 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#406: no body at this slot carries a name in any of 77 classes |
+| 407 | `0x1027e7d0` CAI_BaseNPC::FUN_1027e7d0 | CAI_BaseNPC#407 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#407: no body at this slot carries a name in any of 77 classes |
+| 410 | `0x101a6420` CAI_BaseNPC::FUN_101a6420 | CAI_BaseNPC#410 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#410: no body at this slot carries a name in any of 77 classes |
+| 411 | `0x10280fd0` CAI_BaseNPC::FUN_10280fd0 | CAI_BaseNPC#411 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#411: no body at this slot carries a name in any of 77 classes |
+| 412 | `0x101a6440` CAI_BaseNPC::FUN_101a6440 | CAI_BaseNPC#412 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#412: no body at this slot carries a name in any of 77 classes |
+| 413 | `0x101a6460` CAI_BaseNPC::FUN_101a6460 | CAI_BaseNPC#413 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#413: no body at this slot carries a name in any of 77 classes |
+| 414 | `0x101a6480` CAI_BaseNPC::FUN_101a6480 | CAI_BaseNPC#414 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#414: no body at this slot carries a name in any of 77 classes |
+| 415 | `0x101a64a0` CAI_BaseNPC::FUN_101a64a0 | CAI_BaseNPC#415 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#415: no body at this slot carries a name in any of 77 classes |
+| 416 | `0x101a64c0` CAI_BaseNPC::FUN_101a64c0 | CAI_BaseNPC#416 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#416: no body at this slot carries a name in any of 77 classes |
+| 417 | `0x101a64e0` CAI_BaseNPC::FUN_101a64e0 | CAI_BaseNPC#417 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#417: no body at this slot carries a name in any of 77 classes |
+| 418 | `0x102702d0` CAI_BaseNPC::FUN_102702d0 | CAI_BaseNPC#418 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#418: no body at this slot carries a name in any of 77 classes |
+| 419 | `0x101a6500` CAI_BaseNPC::FUN_101a6500 | CAI_BaseNPC#419 no SDK twin: stretch #405-#420 holds 14 retail slots against 20 SDK 2013 virtuals; slot identity: CAI_BaseNPC#419: no body at this slot carries a name in any of 77 classes |
+| 422 | `0x10273ad0` CAI_BaseNPC::FUN_10273ad0 | CAI_BaseNPC#422 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#422: no body at this slot carries a name in any of 77 classes |
+| 423 | `0x1027e120` CAI_BaseNPC::FUN_1027e120 | CAI_BaseNPC#423 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#423: no body at this slot carries a name in any of 77 classes |
+| 424 | `0x1027cae0` CAI_BaseNPC::FUN_1027cae0 | CAI_BaseNPC#424 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#424: no body at this slot carries a name in any of 77 classes |
+| 425 | `0x1027cc10` CAI_BaseNPC::FUN_1027cc10 | CAI_BaseNPC#425 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#425: no body at this slot carries a name in any of 77 classes |
+| 426 | `0x1027cef0` CAI_BaseNPC::FUN_1027cef0 | CAI_BaseNPC#426 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#426: no body at this slot carries a name in any of 77 classes |
+| 427 | `0x1027cec0` CAI_BaseNPC::FUN_1027cec0 | CAI_BaseNPC#427 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#427: no body at this slot carries a name in any of 77 classes |
+| 428 | `0x1027cf60` CAI_BaseNPC::FUN_1027cf60 | CAI_BaseNPC#428 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#428: no body at this slot carries a name in any of 77 classes |
+| 429 | `0x1027cf90` CAI_BaseNPC::FUN_1027cf90 | CAI_BaseNPC#429 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#429: no body at this slot carries a name in any of 77 classes |
+| 430 | `0x1027cfc0` CAI_BaseNPC::FUN_1027cfc0 | CAI_BaseNPC#430 no SDK twin: stretch #421-#431 holds 9 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#430: no body at this slot carries a name in any of 77 classes |
+| 435 | `0x1027a700` CAI_BaseNPC::FUN_1027a700 | CAI_BaseNPC#435 no SDK twin: stretch #434-#438 holds 3 retail slots against 3 SDK 2013 virtuals; slot identity: CAI_BaseNPC#435: OnScheduleChange named, but the bodies pop 1 words and the SDK declares 0 |
+| 436 | `0x101a6580` CAI_BaseNPC::FUN_101a6580 | CAI_BaseNPC#436 no SDK twin: stretch #434-#438 holds 3 retail slots against 3 SDK 2013 virtuals; slot identity: CAI_BaseNPC#436: no body at this slot carries a name in any of 77 classes |
+| 441 | `0x101a65a0` CAI_BaseNPC::FUN_101a65a0 | CAI_BaseNPC#441 no SDK twin: stretch #440-#442 holds 1 retail slots against 0 SDK 2013 virtuals; slot identity: CAI_BaseNPC#441: no body at this slot carries a name in any of 77 classes |
+| 443 | `0x101a65e0` CAI_BaseNPC::FUN_101a65e0 | CAI_BaseNPC#443 no SDK twin: stretch #442-#444 holds 1 retail slots against 0 SDK 2013 virtuals; slot identity: CAI_BaseNPC#443: no body at this slot carries a name in any of 77 classes |
+| 445 | `0x10288710` CAI_BaseNPC::FUN_10288710 | CAI_BaseNPC#445 no SDK twin: stretch #444-#448 holds 3 retail slots against 11 SDK 2013 virtuals; slot identity: CAI_BaseNPC#445: no body at this slot carries a name in any of 77 classes |
+| 447 | `0x101a6620` CAI_BaseNPC::FUN_101a6620 | CAI_BaseNPC#447 no SDK twin: stretch #444-#448 holds 3 retail slots against 11 SDK 2013 virtuals; slot identity: CAI_BaseNPC#447: no body at this slot carries a name in any of 77 classes |
+| 450 | `0x101a6640` CAI_BaseNPC::FUN_101a6640 | CAI_BaseNPC#450 no SDK twin confirmed: #450 lines up with CAI_BaseNPC::GetLocalTaskId but its arity is unread on one side; slot identity: CAI_BaseNPC#450: no body at this slot carries a name in any of 77 classes |
+| 454 | `0x101a6680` CAI_BaseNPC::FUN_101a6680 | CAI_BaseNPC#454 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#454: no body at this slot carries a name in any of 77 classes |
+| 455 | `0x101a66a0` CAI_BaseNPC::FUN_101a66a0 | CAI_BaseNPC#455 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#455: no body at this slot carries a name in any of 77 classes |
+| 456 | `0x101a66c0` CAI_BaseNPC::FUN_101a66c0 | CAI_BaseNPC#456 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#456: no body at this slot carries a name in any of 77 classes |
+| 457 | `0x101a66e0` CAI_BaseNPC::FUN_101a66e0 | CAI_BaseNPC#457 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#457: no body at this slot carries a name in any of 77 classes |
+| 458 | `0x102cc300` CAI_BaseNPC::FUN_102cc300 | CAI_BaseNPC#458 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#458: no body at this slot carries a name in any of 77 classes |
+| 459 | `0x1026d7f0` CAI_BaseNPC::FUN_1026d7f0 ‼ | CAI_BaseNPC#459 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#459: no body at this slot carries a name in any of 77 classes |
+| 460 | `0x1026f590` CAI_BaseNPC::FUN_1026f590 | CAI_BaseNPC#460 no SDK twin: stretch #453-#461 holds 7 retail slots against 15 SDK 2013 virtuals; slot identity: CAI_BaseNPC#460: no body at this slot carries a name in any of 77 classes |
+| 464 | `0x101a6720` CAI_BaseNPC::FUN_101a6720 | CAI_BaseNPC#464 no SDK twin: stretch #463-#465 holds 1 retail slots against 4 SDK 2013 virtuals; slot identity: CAI_BaseNPC#464: no body at this slot carries a name in any of 77 classes |
+| 466 | `0x10272790` CAI_BaseNPC::FUN_10272790 | CAI_BaseNPC#466 no SDK twin: stretch #465-#467 holds 1 retail slots against 0 SDK 2013 virtuals; slot identity: CAI_BaseNPC#466: no body at this slot carries a name in any of 77 classes |
+| 468 | `0x101a6780` CAI_BaseNPC::FUN_101a6780 | CAI_BaseNPC#468 no SDK twin: stretch #467-#469 holds 1 retail slots against 1 SDK 2013 virtuals; slot identity: CAI_BaseNPC#468: QuerySeeEntity named, but the bodies pop 1 words and the SDK declares 2 |
+| 471 | `0x1026a8a0` CAI_BaseNPC::FUN_1026a8a0 | CAI_BaseNPC#471 no SDK twin: stretch #470-#477 holds 6 retail slots against 8 SDK 2013 virtuals; slot identity: CAI_BaseNPC#471: no body at this slot carries a name in any of 77 classes |
+| 472 | `0x101a67a0` CAI_BaseNPC::FUN_101a67a0 | CAI_BaseNPC#472 no SDK twin: stretch #470-#477 holds 6 retail slots against 8 SDK 2013 virtuals; slot identity: CAI_BaseNPC#472: no body at this slot carries a name in any of 77 classes |
+| 473 | `0x1026ae90` CAI_BaseNPC::FUN_1026ae90 | CAI_BaseNPC#473 no SDK twin: stretch #470-#477 holds 6 retail slots against 8 SDK 2013 virtuals; slot identity: CAI_BaseNPC#473: no body at this slot carries a name in any of 77 classes |
+| 474 | `0x1026aef0` CAI_BaseNPC::FUN_1026aef0 | CAI_BaseNPC#474 no SDK twin: stretch #470-#477 holds 6 retail slots against 8 SDK 2013 virtuals; slot identity: CAI_BaseNPC#474: no body at this slot carries a name in any of 77 classes |
+| 475 | `0x1026af30` CAI_BaseNPC::FUN_1026af30 | CAI_BaseNPC#475 no SDK twin: stretch #470-#477 holds 6 retail slots against 8 SDK 2013 virtuals; slot identity: CAI_BaseNPC#475: no body at this slot carries a name in any of 77 classes |
+| 476 | `0x101a67c0` CAI_BaseNPC::FUN_101a67c0 | CAI_BaseNPC#476 no SDK twin: stretch #470-#477 holds 6 retail slots against 8 SDK 2013 virtuals; slot identity: CAI_BaseNPC#476: no body at this slot carries a name in any of 77 classes |
+| 479 | `0x101a6820` CAI_BaseNPC::FUN_101a6820 | CAI_BaseNPC#479 no SDK twin: stretch #478-#480 holds 1 retail slots against 2 SDK 2013 virtuals; slot identity: CAI_BaseNPC#479: no body at this slot carries a name in any of 77 classes |
+| 482 | `0x10278090` CAI_BaseNPC::FUN_10278090 | CAI_BaseNPC#482 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#482: no body at this slot carries a name in any of 77 classes |
+| 483 | `0x101a6840` CAI_BaseNPC::FUN_101a6840 | CAI_BaseNPC#483 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#483: no body at this slot carries a name in any of 77 classes |
+| 484 | `0x10278e30` CAI_BaseNPC::FUN_10278e30 | CAI_BaseNPC#484 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#484: no body at this slot carries a name in any of 77 classes |
+| 485 | `0x10279000` CAI_BaseNPC::FUN_10279000 | CAI_BaseNPC#485 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#485: no body at this slot carries a name in any of 77 classes |
+| 486 | `0x1027a5c0` CAI_BaseNPC::FUN_1027a5c0 | CAI_BaseNPC#486 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#486: no body at this slot carries a name in any of 77 classes |
+| 487 | `0x1027a640` CAI_BaseNPC::FUN_1027a640 | CAI_BaseNPC#487 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#487: no body at this slot carries a name in any of 77 classes |
+| 488 | `0x101a6880` CAI_BaseNPC::FUN_101a6880 | CAI_BaseNPC#488 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#488: no body at this slot carries a name in any of 77 classes |
+| 489 | `0x101a68a0` CAI_BaseNPC::FUN_101a68a0 | CAI_BaseNPC#489 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#489: no body at this slot carries a name in any of 77 classes |
+| 490 | `0x101a68c0` CAI_BaseNPC::FUN_101a68c0 | CAI_BaseNPC#490 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#490: no body at this slot carries a name in any of 77 classes |
+| 491 | `0x101a68e0` CAI_BaseNPC::FUN_101a68e0 | CAI_BaseNPC#491 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#491: no body at this slot carries a name in any of 77 classes |
+| 492 | `0x101a6900` CAI_BaseNPC::FUN_101a6900 | CAI_BaseNPC#492 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#492: no body at this slot carries a name in any of 77 classes |
+| 493 | `0x101a6920` CAI_BaseNPC::FUN_101a6920 | CAI_BaseNPC#493 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#493: no body at this slot carries a name in any of 77 classes |
+| 494 | `0x101a6940` CAI_BaseNPC::FUN_101a6940 | CAI_BaseNPC#494 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#494: no body at this slot carries a name in any of 77 classes |
+| 495 | `0x101a6960` CAI_BaseNPC::FUN_101a6960 | CAI_BaseNPC#495 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#495: no body at this slot carries a name in any of 77 classes |
+| 496 | `0x101a6980` CAI_BaseNPC::FUN_101a6980 | CAI_BaseNPC#496 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#496: no body at this slot carries a name in any of 77 classes |
+| 497 | `0x101a69a0` CAI_BaseNPC::FUN_101a69a0 | CAI_BaseNPC#497 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#497: no body at this slot carries a name in any of 77 classes |
+| 498 | `0x101a69c0` CAI_BaseNPC::FUN_101a69c0 | CAI_BaseNPC#498 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#498: no body at this slot carries a name in any of 77 classes |
+| 499 | `0x101a69e0` CAI_BaseNPC::FUN_101a69e0 | CAI_BaseNPC#499 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#499: no body at this slot carries a name in any of 77 classes |
+| 500 | `0x101a6a00` CAI_BaseNPC::FUN_101a6a00 | CAI_BaseNPC#500 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#500: no body at this slot carries a name in any of 77 classes |
+| 501 | `0x101a6a20` CAI_BaseNPC::FUN_101a6a20 | CAI_BaseNPC#501 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#501: no body at this slot carries a name in any of 77 classes |
+| 502 | `0x101a6a40` CAI_BaseNPC::FUN_101a6a40 | CAI_BaseNPC#502 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#502: no body at this slot carries a name in any of 77 classes |
+| 503 | `0x101a6a60` CAI_BaseNPC::FUN_101a6a60 | CAI_BaseNPC#503 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#503: no body at this slot carries a name in any of 77 classes |
+| 504 | `0x101a6a80` CAI_BaseNPC::FUN_101a6a80 | CAI_BaseNPC#504 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#504: no body at this slot carries a name in any of 77 classes |
+| 505 | `0x101a6aa0` CAI_BaseNPC::FUN_101a6aa0 | CAI_BaseNPC#505 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#505: no body at this slot carries a name in any of 77 classes |
+| 506 | `0x101a6ac0` CAI_BaseNPC::FUN_101a6ac0 | CAI_BaseNPC#506 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#506: no body at this slot carries a name in any of 77 classes |
+| 507 | `0x101a6ae0` CAI_BaseNPC::FUN_101a6ae0 | CAI_BaseNPC#507 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#507: no body at this slot carries a name in any of 77 classes |
+| 508 | `0x101a6b00` CAI_BaseNPC::FUN_101a6b00 | CAI_BaseNPC#508 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#508: no body at this slot carries a name in any of 77 classes |
+| 509 | `0x1027a420` CAI_BaseNPC::FUN_1027a420 | CAI_BaseNPC#509 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#509: no body at this slot carries a name in any of 77 classes |
+| 510 | `0x1027a530` CAI_BaseNPC::FUN_1027a530 | CAI_BaseNPC#510 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#510: no body at this slot carries a name in any of 77 classes |
+| 511 | `0x1027caa0` CAI_BaseNPC::FUN_1027caa0 | CAI_BaseNPC#511 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#511: no body at this slot carries a name in any of 77 classes |
+| 512 | `0x101a6b20` CAI_BaseNPC::FUN_101a6b20 | CAI_BaseNPC#512 no SDK twin: stretch #481-#513 holds 31 retail slots against 43 SDK 2013 virtuals; slot identity: CAI_BaseNPC#512: no body at this slot carries a name in any of 77 classes |
+| 514 | `0x1027d9d0` CAI_BaseNPC::FUN_1027d9d0 | CAI_BaseNPC#514 no SDK twin: stretch #513-#516 holds 2 retail slots against 6 SDK 2013 virtuals; slot identity: CAI_BaseNPC#514: no body at this slot carries a name in any of 77 classes |
+| 515 | `0x10274b30` CAI_BaseNPC::FUN_10274b30 | CAI_BaseNPC#515 no SDK twin: stretch #513-#516 holds 2 retail slots against 6 SDK 2013 virtuals; slot identity: CAI_BaseNPC#515: no body at this slot carries a name in any of 77 classes |
+| 517 | `0x10278d90` CAI_BaseNPC::FUN_10278d90 ‼ | CAI_BaseNPC#517 no SDK twin: the SDK name it lines up with was offered to two bodies |
+| 518 | `0x10278d20` CAI_BaseNPC::FUN_10278d20 ‼ | CAI_BaseNPC#518 no SDK twin: the SDK name it lines up with was offered to two bodies |
+| 519 | `0x10278cb0` CAI_BaseNPC::FUN_10278cb0 ‼ | CAI_BaseNPC#519 no SDK twin: the SDK name it lines up with was offered to two bodies |
+| 527 | `0x101a6ba0` CAI_BaseNPC::FUN_101a6ba0 | CAI_BaseNPC#527 no SDK twin: stretch #526-#530 holds 3 retail slots against 6 SDK 2013 virtuals; slot identity: CAI_BaseNPC#527: no body at this slot carries a name in any of 77 classes |
+| 528 | `0x10280360` CAI_BaseNPC::FUN_10280360 | CAI_BaseNPC#528 no SDK twin: stretch #526-#530 holds 3 retail slots against 6 SDK 2013 virtuals; slot identity: CAI_BaseNPC#528: no body at this slot carries a name in any of 77 classes |
+| 529 | `0x10280330` CAI_BaseNPC::FUN_10280330 | CAI_BaseNPC#529 no SDK twin: stretch #526-#530 holds 3 retail slots against 6 SDK 2013 virtuals; slot identity: CAI_BaseNPC#529: no body at this slot carries a name in any of 77 classes |
+| 531 | `0x1027dc80` CAI_BaseNPC::FUN_1027dc80 | CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#531: no body at this slot carries a name in any of 77 classes |
+| 532 | `0x1027e0f0` CAI_BaseNPC::FUN_1027e0f0 | CAI_BaseNPC#532 no SDK twin: stretch #530-#537 holds 6 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#532: no body at this slot carries a name in any of 77 classes |
+| 533 | `0x10274db0` CAI_BaseNPC::FUN_10274db0 | CAI_BaseNPC#533 no SDK twin: stretch #530-#537 holds 6 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#533: no body at this slot carries a name in any of 77 classes |
+| 534 | `0x1026b270` CAI_BaseNPC::FUN_1026b270 | CAI_BaseNPC#534 no SDK twin: stretch #530-#537 holds 6 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#534: no body at this slot carries a name in any of 77 classes |
+| 535 | `0x101a6be0` CAI_BaseNPC::FUN_101a6be0 | CAI_BaseNPC#535 no SDK twin: stretch #530-#537 holds 6 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#535: no body at this slot carries a name in any of 77 classes |
+| 536 | `0x101a6bc0` CAI_BaseNPC::FUN_101a6bc0 | CAI_BaseNPC#536 no SDK twin: stretch #530-#537 holds 6 retail slots against 10 SDK 2013 virtuals; slot identity: CAI_BaseNPC#536: no body at this slot carries a name in any of 77 classes |
+| 538 | `0x1026b4f0` CAI_BaseNPC::FUN_1026b4f0 | CAI_BaseNPC#538 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#538: no body at this slot carries a name in any of 77 classes |
+| 539 | `0x1026b480` CAI_BaseNPC::FUN_1026b480 | CAI_BaseNPC#539 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#539: no body at this slot carries a name in any of 77 classes |
+| 540 | `0x10279060` CAI_BaseNPC::FUN_10279060 | CAI_BaseNPC#540 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#540: no body at this slot carries a name in any of 77 classes |
+| 541 | `0x10273e10` CAI_BaseNPC::FUN_10273e10 | CAI_BaseNPC#541 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#541: no body at this slot carries a name in any of 77 classes |
+| 542 | `0x10273dd0` CAI_BaseNPC::FUN_10273dd0 | CAI_BaseNPC#542 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#542: no body at this slot carries a name in any of 77 classes |
+| 543 | `0x10273e40` CAI_BaseNPC::FUN_10273e40 | CAI_BaseNPC#543 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#543: no body at this slot carries a name in any of 77 classes |
+| 544 | `0x102709c0` CAI_BaseNPC::FUN_102709c0 | CAI_BaseNPC#544 no SDK twin: stretch #537-#545 holds 7 retail slots against 22 SDK 2013 virtuals; slot identity: CAI_BaseNPC#544: no body at this slot carries a name in any of 77 classes |
+| 546 | `0x101a6c00` CAI_BaseNPC::FUN_101a6c00 | CAI_BaseNPC#546 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#546: no body at this slot carries a name in any of 77 classes |
+| 547 | `0x1028b0f0` CAI_BaseNPC::FUN_1028b0f0 | CAI_BaseNPC#547 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#547: no body at this slot carries a name in any of 77 classes |
+| 548 | `0x1028af20` CAI_BaseNPC::FUN_1028af20 | CAI_BaseNPC#548 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#548: no body at this slot carries a name in any of 77 classes |
+| 549 | `0x1028b0b0` CAI_BaseNPC::FUN_1028b0b0 | CAI_BaseNPC#549 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#549: no body at this slot carries a name in any of 77 classes |
+| 550 | `0x101a6c20` CAI_BaseNPC::FUN_101a6c20 | CAI_BaseNPC#550 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#550: no body at this slot carries a name in any of 77 classes |
+| 551 | `0x101a6c40` CAI_BaseNPC::FUN_101a6c40 | CAI_BaseNPC#551 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#551: no body at this slot carries a name in any of 77 classes |
+| 552 | `0x1027a400` CAI_BaseNPC::FUN_1027a400 | CAI_BaseNPC#552 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#552: no body at this slot carries a name in any of 77 classes |
+| 553 | `0x1026d890` CAI_BaseNPC::FUN_1026d890 | CAI_BaseNPC#553 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#553: no body at this slot carries a name in any of 77 classes |
+| 554 | `0x1026d920` CAI_BaseNPC::FUN_1026d920 | CAI_BaseNPC#554 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#554: no body at this slot carries a name in any of 77 classes |
+| 555 | `0x1026d9a0` CAI_BaseNPC::FUN_1026d9a0 | CAI_BaseNPC#555 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#555: no body at this slot carries a name in any of 77 classes |
+| 556 | `0x1026da90` CAI_BaseNPC::FUN_1026da90 | CAI_BaseNPC#556 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#556: no body at this slot carries a name in any of 77 classes |
+| 557 | `0x101a6c60` CAI_BaseNPC::FUN_101a6c60 | CAI_BaseNPC#557 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#557: no body at this slot carries a name in any of 77 classes |
+| 558 | `0x101a6c80` CAI_BaseNPC::FUN_101a6c80 | CAI_BaseNPC#558 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#558: no body at this slot carries a name in any of 77 classes |
+| 559 | `0x10279090` CAI_BaseNPC::FUN_10279090 | CAI_BaseNPC#559 no SDK twin: stretch #545-#560 holds 14 retail slots against 24 SDK 2013 virtuals; slot identity: CAI_BaseNPC#559: no body at this slot carries a name in any of 77 classes |
+| 562 | `0x1026fbe0` CAI_BaseNPC::FUN_1026fbe0 | CAI_BaseNPC#562 no SDK twin: stretch #560-#566 holds 5 retail slots against 11 SDK 2013 virtuals; slot identity: CAI_BaseNPC#562: no body at this slot carries a name in any of 77 classes |
+| 564 | `0x10270840` CAI_BaseNPC::FUN_10270840 | CAI_BaseNPC#564 no SDK twin: stretch #560-#566 holds 5 retail slots against 11 SDK 2013 virtuals; slot identity: CAI_BaseNPC#564: no body at this slot carries a name in any of 77 classes |
+| 565 | `0x101a6ca0` CAI_BaseNPC::FUN_101a6ca0 | CAI_BaseNPC#565 no SDK twin: stretch #560-#566 holds 5 retail slots against 11 SDK 2013 virtuals; slot identity: CAI_BaseNPC#565: no body at this slot carries a name in any of 77 classes |
+| 567 | `0x1026a8f0` CAI_BaseNPC::FUN_1026a8f0 | CAI_BaseNPC#567 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#567: no body at this slot carries a name in any of 77 classes |
+| 568 | `0x1026a910` CAI_BaseNPC::FUN_1026a910 | CAI_BaseNPC#568 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#568: no body at this slot carries a name in any of 77 classes |
+| 571 | `0x10289ce0` CAI_BaseNPC::FUN_10289ce0 | CAI_BaseNPC#571 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#571: no body at this slot carries a name in any of 77 classes |
+| 572 | `0x10289d10` CAI_BaseNPC::FUN_10289d10 | CAI_BaseNPC#572 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#572: no body at this slot carries a name in any of 77 classes |
+| 573 | `0x1026fcf0` CAI_BaseNPC::FUN_1026fcf0 | CAI_BaseNPC#573 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#573: no body at this slot carries a name in any of 77 classes |
+| 574 | `0x10278900` CAI_BaseNPC::FUN_10278900 | CAI_BaseNPC#574 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#574: no body at this slot carries a name in any of 77 classes |
+| 575 | `0x10278c60` CAI_BaseNPC::FUN_10278c60 | CAI_BaseNPC#575 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#575: no body at this slot carries a name in any of 77 classes |
+| 576 | `0x10266630` CAI_BaseNPC::FUN_10266630 | CAI_BaseNPC#576 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#576: no body at this slot carries a name in any of 77 classes |
+| 577 | `0x10266660` CAI_BaseNPC::FUN_10266660 | CAI_BaseNPC#577 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#577: no body at this slot carries a name in any of 77 classes |
+| 578 | `0x101a6cc0` CAI_BaseNPC::FUN_101a6cc0 | CAI_BaseNPC#578 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#578: no body at this slot carries a name in any of 77 classes |
+| 579 | `0x101a6ce0` CAI_BaseNPC::FUN_101a6ce0 | CAI_BaseNPC#579 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#579: no body at this slot carries a name in any of 77 classes |
+| 580 | `0x101a6d00` CAI_BaseNPC::FUN_101a6d00 | CAI_BaseNPC#580 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#580: no body at this slot carries a name in any of 77 classes |
+| 581 | `0x102779a0` CAI_BaseNPC::FUN_102779a0 | CAI_BaseNPC#581 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#581: no body at this slot carries a name in any of 77 classes |
+| 582 | `0x10277d90` CAI_BaseNPC::FUN_10277d90 | CAI_BaseNPC#582 no SDK twin: stretch #566-#583 holds 16 retail slots against 32 SDK 2013 virtuals; slot identity: CAI_BaseNPC#582: no body at this slot carries a name in any of 77 classes |
 
 ## Port citations of addresses outside the closure
 
@@ -48,17 +378,17 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10014ad3` | thunk_FUN_1017d680 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:152 |
 | `0x1006d5b0` | FUN_1006d5b0 | Source/ElysiumUE/Private/Player/ElysiumCommandBus.cpp:61, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:17, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:78 |
 | `0x1006d910` | CBaseCineCam::vfunc193 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:771, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:1068 |
-| `0x1006d9a0` | CBaseCineCam::vfunc103 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:154, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:66, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:194 |
+| `0x1006d9a0` | CBaseCineCam::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:154, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:66, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:194 |
 | `0x1006e6a0` | CBaseCineCam::vfunc86 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:453 |
 | `0x1006e8e0` | FUN_1006e8e0 | Source/ElysiumUE/Public/ElysiumCameraSolve.h:401 |
 | `0x1006f870` | FUN_1006f870 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:47 |
 | `0x1006f8f0` | FUN_1006f8f0 | Source/ElysiumUE/Private/Player/ElysiumCameraShots.cpp:1166, Source/ElysiumUE/Private/Player/ElysiumCameraShots.h:227, Source/ElysiumUE/Private/Player/ElysiumCameraShots.h:406, +8 more |
 | `0x1006fde0` | FUN_1006fde0 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:546, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:42, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:633 |
 | `0x1006fe00` | FUN_1006fe00 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:45 |
-| `0x1006ff40` | CBaseCineCam::vfunc123 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:461 |
+| `0x1006ff40` | CBaseCineCam::DrawDebugGeometryOverlays | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:461 |
 | `0x10070720` | CBaseCineCam::InputStartShot | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.cpp:1062, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:14, Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:219 |
 | `0x10070750` | CBaseCineCam::InputEndShot | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:223 |
-| `0x10071330` | CCameraAnimated::vfunc103 | Source/ElysiumUE/Private/Substrate/ElysiumCameraAnimated.cpp:26, Source/ElysiumUE/Private/Substrate/ElysiumCameraAnimated.h:71, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:1422 |
+| `0x10071330` | CCameraAnimated::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumCameraAnimated.cpp:26, Source/ElysiumUE/Private/Substrate/ElysiumCameraAnimated.h:71, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:1422 |
 | `0x10071440` | CCameraAnimated::InputStartCamera | Source/ElysiumUE/Private/Substrate/ElysiumCameraAnimated.h:78 |
 | `0x10071470` | CCameraAnimated::InputEndCamera | Source/ElysiumUE/Private/Substrate/ElysiumCameraAnimated.h:80 |
 | `0x10071550` | FUN_10071550 | Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:1304 |
@@ -66,7 +396,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10075ce0` | FUN_10075ce0 | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.cpp:281 |
 | `0x1007ab40` | FUN_1007ab40 | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.cpp:280 |
 | `0x1007c600` | FUN_1007c600 | Source/ElysiumUE/Private/Substrate/ElysiumSceneData.h:79, Source/ElysiumUE/Private/Tests/ElysiumSceneTests.cpp:1196 |
-| `0x10080a80` | CSceneEntity::FUN_10080a80 | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:903, Source/ElysiumUE/Private/Tests/ElysiumSceneTests.cpp:979 |
+| `0x10080a80` | CSceneEntity::UpdateOnRemove | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:903, Source/ElysiumUE/Private/Tests/ElysiumSceneTests.cpp:979 |
 | `0x10081700` | CSceneEntity::FUN_10081700 | Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp:165 |
 | `0x10081ed0` | FUN_10081ed0 | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:540 |
 | `0x10082b80` | CSceneEntity::InputCancelPlayback | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:904 |
@@ -80,11 +410,11 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100c67b0` | FUN_100c67b0 | Source/ElysiumUE/Private/Editor/ElysiumAnimGraphLibrary.cpp:934, Source/ElysiumUE/Private/Editor/ElysiumSkeletalBuild.cpp:1236, Source/ElysiumUE/Private/Visual/ElysiumBankRemap.cpp:59 |
 | `0x100c83a0` | FUN_100c83a0 | Source/ElysiumUE/Private/Substrate/ElysiumTerminalScreenBuffer.h:25 |
 | `0x100c8810` | CBaseButton::FUN_100c8810 | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:89 |
-| `0x100cbf30` | CCameraTrack::vfunc52 | Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:354 |
-| `0x100cbf70` | CCameraTrack::vfunc53 | Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:354 |
+| `0x100cbf30` | CCameraTrack::GetCameraFadeInTime | Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:354 |
+| `0x100cbf70` | CCameraTrack::GetCameraFadeOutTime | Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:354 |
 | `0x100cc1c0` | CCameraTrack::vfunc46 | Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:359 |
 | `0x100cc250` | CCameraTrack::vfunc47 | Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:359 |
-| `0x100cc320` | CCameraTrack::vfunc51 | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:99, Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:347 |
+| `0x100cc320` | CCameraTrack::GetCameraTargetPosition | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:99, Source/ElysiumUE/Private/Substrate/ElysiumCameraTrack.cpp:347 |
 | `0x100e05f0` | CDialog::Acquire | Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:278, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:337, Source/ElysiumUE/Private/Tests/ElysiumDialogueCameraRetailChainTests.cpp:11 |
 | `0x100e15c0` | FUN_100e15c0 | Source/ElysiumUE/Private/Audio/ElysiumLineService.cpp:64, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:82, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:3, +2 more |
 | `0x100e1ad0` | CDialog::get_display_text | Source/ElysiumUE/Public/ElysiumDlg.h:43, Source/ElysiumUE/Public/ElysiumDlg.h:122 |
@@ -116,10 +446,10 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10147690` | FUN_10147690 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1525, Source/ElysiumUE/Private/Substrate/ElysiumMiscFlags.h:11, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1199, +8 more |
 | `0x1015fdf0` | CBasePlayer::FUN_1015fdf0 | Source/ElysiumUE/Public/ElysiumPlayer.h:1379 |
 | `0x1015ff40` | CBasePlayer::IsInCombatStance | Source/ElysiumUE/Private/Visual/ElysiumActionTables.h:220 |
-| `0x101606a0` | CBasePlayer::FUN_101606a0 | Source/ElysiumUE/Public/ElysiumEntityWorld.h:735 |
+| `0x101606a0` | CBasePlayer::Teleport | Source/ElysiumUE/Public/ElysiumEntityWorld.h:735 |
 | `0x10160ec0` | FUN_10160ec0 | Source/ElysiumUE/Private/Tests/ElysiumBlockReactionTests.cpp:510, Source/ElysiumUE/Private/Tests/ElysiumPlayerAttackTests.cpp:377, Source/ElysiumUE/Public/ElysiumPlayer.h:2188, +1 more |
-| `0x10163020` | CBasePlayer::vfunc142 | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1487, Source/ElysiumUE/Private/Tests/ElysiumTerminalPinTests.cpp:435, Source/ElysiumUE/Public/ElysiumInteraction.h:50, +2 more |
-| `0x10163af0` | CBasePlayer::vfunc144 | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Tests/ElysiumCameraTests.cpp:3124, Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:188, +2 more |
+| `0x10163020` | CBasePlayer::OnTakeDamage | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1487, Source/ElysiumUE/Private/Tests/ElysiumTerminalPinTests.cpp:435, Source/ElysiumUE/Public/ElysiumInteraction.h:50, +2 more |
+| `0x10163af0` | CBasePlayer::Event_Killed | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Tests/ElysiumCameraTests.cpp:3124, Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:188, +2 more |
 | `0x10164240` | CBasePlayer::SetAnimation | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1240, Source/ElysiumUE/Public/ElysiumAnimationIntent.h:68 |
 | `0x101647a0` | CBasePlayer::NPC_TranslateActivity | Source/ElysiumUE/Private/Visual/ElysiumActionTables.h:332, Source/ElysiumUE/Private/Visual/ElysiumAnimationResolve.cpp:498 |
 | `0x10164870` | CBasePlayer::FUN_10164870 | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:4, Source/ElysiumUE/Public/ElysiumLocomotionSample.h:176, Source/ElysiumUE/Public/ElysiumPlayer.h:1377, +1 more |
@@ -133,24 +463,24 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10167850` | CBasePlayer::PlayerUse | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:722, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:789, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3484, +8 more |
 | `0x10168320` | CBasePlayer::Replenish | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:376, Source/ElysiumUE/Public/ElysiumPlayer.h:333 |
 | `0x10168700` | CBasePlayer::BeFedOnByZombie | Source/ElysiumUE/Public/ElysiumPlayer.h:341 |
-| `0x101695f0` | CBasePlayer::FUN_101695f0 | Source/ElysiumUE/Public/ElysiumPlayer.h:1634 |
-| `0x10169660` | CBasePlayer::FUN_10169660 | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1747, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:863, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:625, +2 more |
+| `0x101695f0` | CBasePlayer::EnterGrappleState | Source/ElysiumUE/Public/ElysiumPlayer.h:1634 |
+| `0x10169660` | CBasePlayer::LeaveGrappleState | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1747, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:863, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:625, +2 more |
 | `0x1016a870` | CBasePlayer::FUN_1016a870 | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:47, Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:181 |
 | `0x1016a9b0` | CBasePlayer::FUN_1016a9b0 | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:177 |
 | `0x1016aaf0` | CBasePlayer::ProcessUsercmds | Source/ElysiumUE/Private/Player/ElysiumPlayerController.cpp:144, Source/ElysiumUE/Public/ElysiumMoveSolve.h:227, Source/ElysiumUE/Public/ElysiumPlayer.h:2034 |
 | `0x1016b480` | FUN_1016b480 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:430, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:81, +6 more |
 | `0x1016be10` | CBasePlayer::PostThink | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1474 |
-| `0x1016d260` | CBasePlayer::vfunc103 | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1475, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:127, +4 more |
+| `0x1016d260` | CBasePlayer::Spawn | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1475, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:127, +4 more |
 | `0x1016eec0` | CBasePlayer::RetrieveGlobalEmailFlags | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1004, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1016, Source/ElysiumUE/Public/ElysiumPlayer.h:2079 |
 | `0x1016f0f0` | CBasePlayer::StoreGlobalEmailFlags | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1037, Source/ElysiumUE/Private/Tests/ElysiumTerminalEmailTests.cpp:701, Source/ElysiumUE/Public/ElysiumPlayer.h:2084 |
 | `0x10171f10` | CBasePlayer::InputRemoveCamera | Source/ElysiumUE/Public/ElysiumCameraSolve.h:747 |
 | `0x10174f80` | CBasePlayer::GetSaveBlockedReason | Source/ElysiumUE/Private/Session/ElysiumSessionSave.cpp:144 |
 | `0x101755d0` | CBasePlayer::UpdateClientActionState | Source/ElysiumUE/Private/UI/ElysiumPresentationSubsystem.cpp:625, Source/ElysiumUE/Public/ElysiumViewState.h:86 |
-| `0x101772b0` | CBasePlayer::FUN_101772b0 | Source/ElysiumUE/Private/Map/ElysiumMapActorModelPreparation.cpp:252 |
+| `0x101772b0` | CBasePlayer::Weapon_Switch | Source/ElysiumUE/Private/Map/ElysiumMapActorModelPreparation.cpp:252 |
 | `0x10178170` | FUN_10178170 | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:98, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:235, Source/ElysiumUE/Private/Tests/ElysiumDialogueEntryTests.cpp:7 |
 | `0x10178280` | CBasePlayer::FUN_10178280 | Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:276, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:301, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:335, +9 more |
 | `0x10178400` | CBasePlayer::FUN_10178400 | Source/ElysiumUE/Private/Player/ElysiumCameraService.cpp:99, Source/ElysiumUE/Private/Player/ElysiumDialogueCamera.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:291, +5 more |
-| `0x10178a10` | CBasePlayer::FUN_10178a10 | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:342, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:570, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:3, +1 more |
+| `0x10178a10` | CBasePlayer::HandleAnimEvent | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:342, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:570, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:3, +1 more |
 | `0x1017d0b0` | FUN_1017d0b0 | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.cpp:235, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.cpp:238 |
 | `0x101803a0` | FUN_101803a0 | Source/ElysiumUE/Private/Player/ElysiumCommands.cpp:54, Source/ElysiumUE/Public/ElysiumEntityWorld.h:736 |
 | `0x10181580` | FUN_10181580 | Source/ElysiumUE/Public/ElysiumPlayer.h:2004 |
@@ -187,13 +517,13 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1020acb0` | CBaseVampireSkillEntity::vfunc39 | Source/ElysiumUE/Private/Substrate/ElysiumLockable.cpp:218 |
 | `0x1020adc0` | CBaseVampireSkillEntity::vfunc42 | Source/ElysiumUE/Private/Substrate/ElysiumLockable.cpp:525 |
 | `0x1020e740` | FUN_1020e740 | Source/ElysiumUE/Private/Substrate/ElysiumElevator.cpp:1 |
-| `0x1020f220` | CFuncElevator::vfunc103 | Source/ElysiumUE/Private/Substrate/ElysiumElevator.cpp:23 |
+| `0x1020f220` | CFuncElevator::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumElevator.cpp:23 |
 | `0x10212430` | FUN_10212430 | Source/ElysiumUE/Private/Substrate/ElysiumSignClasses.cpp:9 |
 | `0x10212600` | CGameSign::vfunc44 | Source/ElysiumUE/Private/Tests/ElysiumInteractionTests.cpp:146, Source/ElysiumUE/Public/ElysiumEntity.h:304 |
 | `0x10212da0` | CGameSign::LoadSignData | Source/ElysiumUE/Private/Substrate/ElysiumSignClasses.cpp:8, Source/ElysiumUE/Private/Substrate/ElysiumSignData.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumSignData.h:11 |
 | `0x10214d60` | FUN_10214d60 | Source/ElysiumUE/Private/Substrate/ElysiumPropLeaves.h:10 |
 | `0x10214e30` | datamap_CPropButton_builder | Source/ElysiumUE/Private/Substrate/ElysiumPropLeaves.h:10 |
-| `0x10217880` | CBaseTerminal::FUN_10217880 | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:360, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:368, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:286, +4 more |
+| `0x10217880` | CBaseTerminal::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:360, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:368, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:286, +4 more |
 | `0x10217b30` | BeginInput | Source/ElysiumUE/Private/Substrate/ElysiumSkillClasses.h:63, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:2391, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:2459, +1 more |
 | `0x102180c0` | CBaseTerminal::FUN_102180c0 | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:556, Source/ElysiumUE/Private/Tests/ElysiumInteractionTests.cpp:1895 |
 | `0x102181a0` | CBaseTerminal::vfunc39 | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:611 |
@@ -201,7 +531,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x102182b0` | CBaseTerminal::FUN_102182b0 | Source/ElysiumUE/Private/Map/ElysiumMapActorEmbodiment.cpp:522, Source/ElysiumUE/Public/ElysiumWorldServices.h:931 |
 | `0x10218320` | CBaseTerminal::FUN_10218320 | Source/ElysiumUE/Private/Map/ElysiumMapActorEmbodiment.cpp:388, Source/ElysiumUE/Public/ElysiumWorldServices.h:909 |
 | `0x10218660` | CBaseTerminal::ObjectCaps | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:590, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:371 |
-| `0x10218690` | CBaseTerminal::FUN_10218690 | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:578, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:367 |
+| `0x10218690` | CBaseTerminal::GetHighlightMaterial | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:578, Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:367 |
 | `0x10219400` | FUN_10219400 | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:206 |
 | `0x1021a270` | CPropHacking::vfunc113 | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.h:562 |
 | `0x1021a2f0` | CPropHacking::LoadGlobalEmailState | Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp:1700 |
@@ -238,7 +568,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10253ab0` | CBaseCombatWeapon::FUN_10253ab0 | Source/ElysiumUE/Private/Substrate/ElysiumInventory.cpp:462 |
 | `0x10253b70` | FUN_10253b70 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:729, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:518, Source/ElysiumUE/Private/Tests/ElysiumWeaponTests.cpp:4408, +1 more |
 | `0x10253ca0` | CBaseCombatWeapon::FUN_10253ca0 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:752, Source/ElysiumUE/Private/Tests/ElysiumWeaponTests.cpp:4470 |
-| `0x10253ea0` | CBaseCombatWeapon::FUN_10253ea0 | Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:290 |
+| `0x10253ea0` | CBaseCombatWeapon::ItemPostFrame | Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:290 |
 | `0x10259f80` | FUN_10259f80 | Source/ElysiumUE/Private/Substrate/ElysiumWieldRules.h:10, Source/ElysiumUE/Private/Tests/ElysiumWieldRuleTests.cpp:225 |
 | `0x1025b740` | FUN_1025b740 | Source/ElysiumUE/Private/Substrate/ElysiumItemTable.h:152, Source/ElysiumUE/Private/Substrate/ElysiumWieldRules.cpp:14, Source/ElysiumUE/Private/Substrate/ElysiumWieldRules.h:11, +2 more |
 | `0x1026d0c0` | FUN_1026d0c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2828 |
@@ -276,7 +606,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x103418f0` | CBaseCombatCharacter::InputWillTalk | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:39, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.h:16, +2 more |
 | `0x10342590` | FUN_10342590 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:747, Source/ElysiumUE/Private/Tests/ElysiumTerminalPinTests.cpp:169, Source/ElysiumUE/Public/ElysiumEntity.h:268 |
 | `0x1034b7b0` | FUN_1034b7b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:148, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:27 |
-| `0x10350270` | CHL2_Player::vfunc333 | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:155, Source/ElysiumUE/Public/ElysiumPlayer.h:2350 |
+| `0x10350270` | CHL2_Player::MaintainEyeDirection | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:155, Source/ElysiumUE/Public/ElysiumPlayer.h:2350 |
 | `0x10350830` | CHL2_Player::vfunc436 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1462, Source/ElysiumUE/Public/ElysiumPlayer.h:2416 |
 | `0x103516e0` | FUN_103516e0 | Source/ElysiumUE/Private/Substrate/ElysiumStealth.h:43 |
 | `0x10351770` | FUN_10351770 | Source/ElysiumUE/Private/Substrate/ElysiumStealth.h:43 |
@@ -311,10 +641,10 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10012805` FUN_10012805 | `0x102f02a0` FUN_102f02a0 |
 | `0x10026530` CAISound::FUN_10026530 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10026550` CAISound::FUN_10026550 | `0x10168320` CBasePlayer::Replenish |
-| `0x10026590` CAISound::FUN_10026590 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x10026a10` CAISound::FUN_10026a10 | `0x100fb110` CDisciplineParticle::FUN_100fb110 |
-| `0x10026b90` CAISound::FUN_10026b90 | `0x1004e260` CPhysBox::vfunc103, `0x10056a90` CDynamicLight::vfunc103, `0x1010d0d0` CFuncAreaPortalWindow::vfunc103, `0x1012e580` CHudCounter::FUN_1012e580, +2 more |
-| `0x10026bb0` CAISound::FUN_10026bb0 | `0x1034b7b0` FUN_1034b7b0 |
+| `0x10026590` CBaseEntity::OnVictimHitByMe | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
+| `0x10026a10` CAISound::FUN_10026a10 | `0x100fb110` CEnvParticle::AttachToEntity |
+| `0x10026b90` CBaseEntity::Precache | `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1010d0d0` CFuncAreaPortalWindow::Spawn, `0x1012e580` CHudCounter::FUN_1012e580, +2 more |
+| `0x10026bb0` CBaseEntity::MemberSync | `0x1034b7b0` FUN_1034b7b0 |
 | `0x10026c50` CAISound::FUN_10026c50 ‼ | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10026d10` CAISound::FUN_10026d10 | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent |
 | `0x10026f80` CAISound::FUN_10026f80 | `0x10034590` CBaseEntity::PhysicsTryMove |
@@ -327,7 +657,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1002ca10` FUN_1002ca10 | `0x1002c990` CPhysConstraintEvents::vfunc0, `0x100afb90` FUN_100afb90, `0x100cae20` FUN_100cae20, `0x100cebb0` FUN_100cebb0, +34 more |
 | `0x1002cbd0` FUN_1002cbd0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +51 more |
 | `0x1002cca0` FUN_1002cca0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ac40` CPASAttenuationFilter::vfunc0, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +64 more |
-| `0x1002ee60` FUN_1002ee60 | `0x100a68f0` CBaseEntity::VPhysicsSwapObject, `0x10162120` CBasePlayer::FUN_10162120, `0x1034f9e0` FUN_1034f9e0 |
+| `0x1002ee60` FUN_1002ee60 | `0x100a68f0` CBaseEntity::VPhysicsSwapObject, `0x10162120` CBasePlayer::UpdateOnRemove, `0x1034f9e0` FUN_1034f9e0 |
 | `0x10032b00` FUN_10032b00 | `0x1002cd50` FUN_1002cd50, `0x100d1650` FUN_100d1650, `0x100df590` CDialog::~CDialog, `0x1010dea0` CBreakable::FUN_1010dea0, +23 more |
 | `0x100335e0` FUN_100335e0 | `0x100332c0` CBaseEntity::PhysicsCarried, `0x10033f60` CBaseEntity::PhysicsRunThink, `0x100379e0` CPhysicsPushedEntities::SetupAllInHierarchy, `0x10037c10` CPhysicsPushedEntities::RotateRootEntity, +22 more |
 | `0x100353c0` FUN_100353c0 | `0x10034590` CBaseEntity::PhysicsTryMove, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10122cd0` CGameMovement::vfunc19 |
@@ -341,13 +671,13 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1003ff80` FUN_1003ff80 | `0x1003f920` CBaseEntity::PhysicsToss, `0x10120ba0` FUN_10120ba0, `0x1012bae0` FUN_1012bae0, `0x1013f090` CMoveHelperServer::vfunc2, +9 more |
 | `0x1004f7a0` FUN_1004f7a0 | `0x1004f030` CPhysImpact::InputImpact, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100ffce0` FUN_100ffce0, +36 more |
 | `0x1004f860` FUN_1004f860 | `0x1004f030` CPhysImpact::InputImpact, `0x1006db10` FUN_1006db10, `0x101001e0` FUN_101001e0, `0x10120ba0` FUN_10120ba0, +10 more |
-| `0x10050d90` FUN_10050d90 | `0x1017fb30` CBasePlayer::FUN_1017fb30, `0x1022ee50` FUN_1022ee50, `0x1033bb60` CBaseCombatCharacter::BloodHealBegin |
+| `0x10050d90` FUN_10050d90 | `0x1017fb30` CBasePlayer::Event_TookLife, `0x1022ee50` FUN_1022ee50, `0x1033bb60` CBaseCombatCharacter::BloodHealBegin |
 | `0x10051810` CDisciplineParticle::RemoveFromUser | `0x10051a40` CDisciplineParticle::~CDisciplineParticle, `0x1022f140` FUN_1022f140 |
 | `0x100544f0` CBaseCombatCharacter::CreateSecondaryDiscParticles | `0x100546b0` FUN_100546b0, `0x100548b0` FUN_100548b0, `0x1022f640` FUN_1022f640 |
 | `0x10055000` FUN_10055000 | `0x100826b0` FUN_100826b0, `0x101c3c90` FUN_101c3c90, `0x101cc610` _0M__VCBaseEntity__V__CHandle__V__CUtlMemory__VCBaseEntity__V__CHandle__V__CUtlVector____CUtlVectorDataOps::vfunc1, `0x1020fad0` FUN_1020fad0 |
 | `0x10055ec0` FUN_10055ec0 | `0x100999c0` FUN_100999c0, `0x10115660` FUN_10115660, `0x1011a580` FUN_1011a580, `0x1017c070` FUN_1017c070, +4 more |
-| `0x100576a0` FUN_100576a0 | `0x100577d0` FUN_100577d0, `0x10057820` FUN_10057820, `0x100579b0` FUN_100579b0, `0x10132980` CEnvGlobal::vfunc103, +7 more |
-| `0x10057740` FUN_10057740 | `0x100578e0` FUN_100578e0, `0x10132980` CEnvGlobal::vfunc103, `0x10132a00` CEnvGlobal::InputTurnOn, `0x10132a70` CEnvGlobal::InputTurnOff, +4 more |
+| `0x100576a0` FUN_100576a0 | `0x100577d0` FUN_100577d0, `0x10057820` FUN_10057820, `0x100579b0` FUN_100579b0, `0x10132980` CEnvGlobal::Spawn, +7 more |
+| `0x10057740` FUN_10057740 | `0x100578e0` FUN_100578e0, `0x10132980` CEnvGlobal::Spawn, `0x10132a00` CEnvGlobal::InputTurnOn, `0x10132a70` CEnvGlobal::InputTurnOff, +4 more |
 | `0x1005f190` FUN_1005f190 | `0x1005eee0` CTEBSPDecal::vfunc3, `0x10060410` CTEDecal::vfunc3, `0x10063090` CTEShatterSurface::vfunc3, `0x100640f0` FUN_100640f0, +55 more |
 | `0x1006c770` FUN_1006c770 | `0x1006cd90` FUN_1006cd90 |
 | `0x1006c9d0` FUN_1006c9d0 | `0x1014d7c0` FUN_1014d7c0, `0x102304b0` FUN_102304b0, `0x10259230` WeaponModeDataLoader, `0x10326de0` FUN_10326de0, +2 more |
@@ -366,7 +696,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10074090` FUN_10074090 | `0x1007c280` FUN_1007c280 |
 | `0x100740d0` FUN_100740d0 | `0x1007c280` FUN_1007c280 |
 | `0x10074a50` FUN_10074a50 | `0x100749d0` FUN_100749d0, `0x1007c280` FUN_1007c280 |
-| `0x10076280` FUN_10076280 | `0x10082ee0` CSceneEntity::DispatchStartEvent, `0x10083ad0` CSceneEntity::FUN_10083ad0, `0x100b65b0` CBaseFlex::vfunc284 |
+| `0x10076280` FUN_10076280 | `0x10082ee0` CSceneEntity::DispatchStartEvent, `0x10083ad0` CSceneEntity::FUN_10083ad0, `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x100766d0` FUN_100766d0 | `0x1007d5a0` FUN_1007d5a0 |
 | `0x10077430` FUN_10077430 | `0x100773f0` FUN_100773f0, `0x10077650` FUN_10077650, `0x10077690` FUN_10077690, `0x1007c4f0` FUN_1007c4f0, +1 more |
 | `0x10077450` FUN_10077450 | `0x100773f0` FUN_100773f0, `0x100775d0` FUN_100775d0, `0x10077690` FUN_10077690, `0x1007c4f0` FUN_1007c4f0 |
@@ -375,16 +705,16 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10077af0` FUN_10077af0 | `0x1007c600` FUN_1007c600 |
 | `0x10077e80` FUN_10077e80 | `0x100781e0` FUN_100781e0 |
 | `0x10078630` FUN_10078630 | `0x10075fd0` FUN_10075fd0, `0x10078650` FUN_10078650, `0x100787f0` FUN_100787f0, `0x100789b0` FUN_100789b0, +4 more |
-| `0x1007dfa0` FUN_1007dfa0 | `0x100b65b0` CBaseFlex::vfunc284 |
+| `0x1007dfa0` FUN_1007dfa0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x1008bc50` FUN_1008bc50 | `0x1014d140` FUN_1014d140 |
-| `0x1008bfe0` CBaseAnimating::ShouldIgnoreCollision | `0x101914a0` CPhysicsProp::FUN_101914a0, `0x10213fe0` CPropHaunted::vfunc68 |
+| `0x1008bfe0` CBaseAnimating::ShouldIgnoreCollision | `0x101914a0` CPhysicsProp::ShouldIgnoreCollision, `0x10213fe0` CPropHaunted::ShouldIgnoreCollision |
 | `0x1008d990` CBaseAnimating::GetSeqDesc | `0x10090e30` CBaseAnimating::IsValidSequence, `0x10092460` CBaseAnimating::HasPoseParameter02, `0x100938a0` CBaseAnimating::GetEntryNode, `0x10093970` CBaseAnimating::GetExitNode, +10 more |
-| `0x1008dac0` CBaseAnimating::GetSequencesForActivity | `0x10160f90` CBasePlayer::FUN_10160f90, `0x103e9e00` CWeaponMelee::RequestActivity, `0x103ea7e0` FUN_103ea7e0 ‼ |
+| `0x1008dac0` CBaseAnimating::GetSequencesForActivity | `0x10160f90` CBasePlayer::ChooseMeleeAttackSequence, `0x103e9e00` CWeaponMelee::RequestActivity, `0x103ea7e0` FUN_103ea7e0 ‼ |
 | `0x1008df10` CBaseAnimating::OnRestore | `0x10154fa0` CRagdollProp::FUN_10154fa0, `0x101ee7b0` CDisciplineProjectile::FUN_101ee7b0, `0x1020ac70` CBaseTerminal::FUN_1020ac70, `0x1020e100` CPropSwitch::vfunc130, +1 more |
 | `0x1008e310` CBaseAnimating::RemoveExtraAnimationModels | `0x1008b230` CBaseAnimating::CBaseAnimating |
 | `0x1008e770` CBaseAnimating::CalcPose | `0x10095fe0` CBaseAnimating::GetSkeleton, `0x10328df0` CBaseCombatCharacter::StartGrappleAttack |
 | `0x1008eec0` CBaseAnimating::MatchOriginAnglesToAnimation | `0x100821f0` FUN_100821f0 |
-| `0x1008fe80` CBaseAnimating::GetSequenceName | `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100ed030` FUN_100ed030, `0x10161460` CBasePlayer::FUN_10161460 |
+| `0x1008fe80` CBaseAnimating::GetSequenceName | `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100ed030` FUN_100ed030, `0x10161460` CBasePlayer::DrawDebugTextOverlays |
 | `0x10090020` CBaseAnimating::GetSequenceActivity | `0x102506a0` FUN_102506a0 |
 | `0x10090890` FUN_10090890 | `0x103483c0` CBaseCombatCharacter::BeginMeltEffect, `0x10348490` CBaseCombatCharacter::BeginUnmeltEffect |
 | `0x10090ef0` CBaseAnimating::GetSequenceFlags | `0x10099430` FUN_10099430, `0x102143e0` FUN_102143e0 |
@@ -393,118 +723,118 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10092270` CBaseAnimating::LookupPoseParameter | `0x10164870` CBasePlayer::FUN_10164870, `0x10186c10` CPlayerMove::FinishMove |
 | `0x10092550` CBaseAnimating::LookupBone | `0x1006ef50` FUN_1006ef50, `0x10097980` CBaseAnimating::LookupPhysicsChain, `0x10237570` FUN_10237570, `0x10237a50` FUN_10237a50, +3 more |
 | `0x100926e0` CBaseAnimating::GetBonePosition02 | `0x1006f080` FUN_1006f080, `0x1032a490` FUN_1032a490, `0x10342910` CBaseCombatCharacter::HitboxesInAABB, `0x10342c80` CBaseCombatCharacter::HitboxesInSphere, +2 more |
-| `0x10092b50` CBaseAnimating::SetupBones | `0x10154e40` CRagdollProp::FUN_10154e40, `0x10156a80` FUN_10156a80 |
+| `0x10092b50` CBaseAnimating::SetupBones | `0x10154e40` CRagdollProp::Spawn, `0x10156a80` FUN_10156a80 |
 | `0x10092ef0` CBaseAnimating::GetAttachment02 | `0x1006f080` FUN_1006f080, `0x100b2150` CBaseEntity::GetParentToWorldTransform, `0x1019e110` SetupHangDistance, `0x1019e740` FUN_1019e740, +1 more |
 | `0x10094520` CBaseAnimating::GetNumFlexControllers | `0x100b5490` FUN_100b5490 |
-| `0x100956e0` CBaseAnimating::TestCollision | `0x1014fae0` CPhysicsCannister::vfunc99, `0x10155c20` CRagdollProp::FUN_10155c20 |
+| `0x100956e0` CBaseAnimating::TestCollision | `0x1014fae0` CPhysicsCannister::TestCollision, `0x10155c20` CRagdollProp::TestCollision |
 | `0x10095be0` FUN_10095be0 | `0x102792b0` FUN_102792b0 |
 | `0x10095cb0` FUN_10095cb0 | `0x102e2770` FUN_102e2770, `0x1034fa80` CHL2_Player::vfunc469 |
 | `0x100963d0` CBaseAnimating::ResetClientsideFrame | `0x10190750` FUN_10190750, `0x10190850` FUN_10190850, `0x10190a00` CDynamicProp::InputSetAnimation, `0x101efa30` CDisciplineProjectile::FUN_101efa30, +3 more |
-| `0x10096980` CBaseAnimating::DrawServerHitboxes | `0x10155120` CRagdollProp::FUN_10155120 |
+| `0x10096980` CBaseAnimating::DrawServerHitboxes | `0x10155120` CRagdollProp::DrawDebugGeometryOverlays |
 | `0x10097310` CBaseAnimating::CopyAnimationDataFrom | `0x10156a80` FUN_10156a80, `0x10157260` FUN_10157260, `0x103c60a0` CNPC_VVampireBoss::TransformationStart |
 | `0x100990f0` FUN_100990f0 | `0x10099140` FUN_10099140 |
 | `0x100997f0` CAI_BaseNPC::FUN_100997f0 | `0x101606e0` CBasePlayer::PlayerKnockbackReaction |
 | `0x1009b640` CBaseEntity::DumpString | `0x1009b7d0` CBaseEntity::DumpChar, `0x1009bd10` CBaseEntity::DumpQangle, `0x1009bef0` CBaseEntity::DumpColor32, `0x1009c1e0` CBaseEntity::DumpSerialEntity, +1 more |
 | `0x1009b700` CBaseEntity::DumpStringt | `0x1009c110` CBaseEntity::DumpEntity |
-| `0x1009b8a0` CBaseEntity::DumpBool | `0x1015e140` CBasePlayer::vfunc31 |
-| `0x1009ba60` CBaseEntity::DumpFloat | `0x1009c5f0` CBaseEntity::DumpFloatArray, `0x1015e140` CBasePlayer::vfunc31, `0x101c0ec0` CBaseButton::FUN_101c0ec0, `0x1034f7f0` CHL2_Player::vfunc31 |
-| `0x1009bb40` CBaseEntity::DumpBits32 | `0x1015e140` CBasePlayer::vfunc31 |
-| `0x1009bc30` CBaseEntity::DumpPtr | `0x1015e140` CBasePlayer::vfunc31 |
-| `0x1009be00` CBaseEntity::DumpVector | `0x1015e140` CBasePlayer::vfunc31, `0x101c0ec0` CBaseButton::FUN_101c0ec0 |
-| `0x1009c390` FUN_1009c390 | `0x1015e140` CBasePlayer::vfunc31 |
-| `0x1009c850` CBaseEntity::DumpEhandleArray | `0x1015e140` CBasePlayer::vfunc31 |
-| `0x1009c980` CBaseEntity::Dump | `0x101c0ec0` CBaseButton::FUN_101c0ec0 |
-| `0x1009d1e0` CBaseEntity::ForceTransmit | `0x100a8fc0` CBaseEntity::SetFakeSilence, `0x101772b0` CBasePlayer::FUN_101772b0, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3380` FUN_101a3380, +5 more |
+| `0x1009b8a0` CBaseEntity::DumpBool | `0x1015e140` CBasePlayer::Dump |
+| `0x1009ba60` CBaseEntity::DumpFloat | `0x1009c5f0` CBaseEntity::DumpFloatArray, `0x1015e140` CBasePlayer::Dump, `0x101c0ec0` CBaseToggle::Dump, `0x1034f7f0` CHL2_Player::Dump |
+| `0x1009bb40` CBaseEntity::DumpBits32 | `0x1015e140` CBasePlayer::Dump |
+| `0x1009bc30` CBaseEntity::DumpPtr | `0x1015e140` CBasePlayer::Dump |
+| `0x1009be00` CBaseEntity::DumpVector | `0x1015e140` CBasePlayer::Dump, `0x101c0ec0` CBaseToggle::Dump |
+| `0x1009c390` FUN_1009c390 | `0x1015e140` CBasePlayer::Dump |
+| `0x1009c850` CBaseEntity::DumpEhandleArray | `0x1015e140` CBasePlayer::Dump |
+| `0x1009c980` CBaseEntity::Dump | `0x101c0ec0` CBaseToggle::Dump |
+| `0x1009d1e0` CBaseEntity::ForceTransmit | `0x100a8fc0` CBaseEntity::SetFakeSilence, `0x101772b0` CBasePlayer::Weapon_Switch, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3380` FUN_101a3380, +5 more |
 | `0x1009d5e0` CBaseEntity::GetVSoundTableIdx | `0x101f58e0` FUN_101f58e0 |
 | `0x1009d6a0` CBaseEntity::GetVSoundGroup | `0x101f58e0` FUN_101f58e0 |
 | `0x1009e120` CBaseEntity::PostConstructor | `0x10027bb0` FUN_10027bb0, `0x100281f0` FUN_100281f0, `0x100289e0` FUN_100289e0, `0x10029ea0` FUN_10029ea0, +346 more |
-| `0x1009e280` CBaseEntity::ParseMapData | `0x102d7890` CNodeEnt::vfunc107, `0x1034b7b0` FUN_1034b7b0 |
+| `0x1009e280` CBaseEntity::ParseMapData | `0x102d7890` CNodeEnt::ParseMapData, `0x1034b7b0` FUN_1034b7b0 |
 | `0x1009e430` CAISound::FUN_1009e430 | `0x100568a0` CDynamicLight::vfunc110, `0x100bf9b0` CFuncRotating::vfunc110, `0x101017e0` CEnvLaser::vfunc110, `0x1010c560` CAreaPortal::vfunc110, +15 more |
 | `0x1009edc0` CBaseEntity::SetCollisionBounds | `0x1009d980` FUN_1009d980, `0x100bbbf0` FUN_100bbbf0, `0x10129960` FUN_10129960, `0x10155fb0` CRagdollProp::FUN_10155fb0, +3 more |
-| `0x1009f120` CBaseEntity::SetClassname | `0x1016d260` CBasePlayer::vfunc103, `0x101905e0` CDynamicProp::vfunc103 ‼, `0x10190f20` COrnamentProp::vfunc103, `0x1034b7b0` FUN_1034b7b0 |
+| `0x1009f120` CBaseEntity::SetClassname | `0x1016d260` CBasePlayer::Spawn, `0x101905e0` CDynamicProp::Spawn ‼, `0x10190f20` COrnamentProp::Spawn, `0x1034b7b0` FUN_1034b7b0 |
 | `0x1009f200` CBaseEntity::GetClassname | `0x1002f100` CCollisionEvent::vfunc4, `0x10032720` FUN_10032720, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1003eb50` CBaseEntity::PhysicsCheckVelocity, +23 more |
 | `0x1009f380` FUN_1009f380 | `0x1011f140` FUN_1011f140, `0x10121ce0` CGameMovement::vfunc12, `0x101269e0` FinishUnDuck, `0x10126cb0` FinishDuck ‼, +1 more |
 | `0x1009f3c0` CBaseEntity::AddTimedOverlay | `0x1002fc30` FUN_1002fc30, `0x100ab5c0` CBaseEntity::DrawInputOverlay |
 | `0x1009f4e0` CBaseEntity::DrawBBoxOverlay | `0x10119980` FUN_10119980, `0x103d5050` CNPC_VWerewolf::DrawBBoxOverlay |
-| `0x100a0130` CBaseEntity::DrawDebugGeometryOverlays | `0x1002b920` CPhysHinge::vfunc123, `0x1002c400` CPhysPulley::vfunc123, `0x1004d420` CPhysicsSpring::vfunc123, `0x10109a60` CFire::vfunc123, +4 more |
-| `0x100a02b0` CBaseEntity::DrawDebugTextOverlays | `0x1004d290` CPhysicsSpring::vfunc124, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100bc200` CBeam::FUN_100bc200, `0x100c0d10` CFuncRotating::vfunc124, +12 more |
+| `0x100a0130` CBaseEntity::DrawDebugGeometryOverlays | `0x1002b920` CPhysHinge::DrawDebugGeometryOverlays, `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1004d420` CPhysicsSpring::DrawDebugGeometryOverlays, `0x10109a60` CFire::DrawDebugGeometryOverlays, +4 more |
+| `0x100a02b0` CBaseEntity::DrawDebugTextOverlays | `0x1004d290` CPhysicsSpring::DrawDebugTextOverlays, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100bc200` CBeam::DrawDebugTextOverlays, `0x100c0d10` CFuncRotating::DrawDebugTextOverlays, +12 more |
 | `0x100a0420` CBaseEntity::SetName | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100af010` FUN_100af010, `0x1010e750` CBreakable::FUN_1010e750, `0x101978b0` FUN_101978b0, +3 more |
 | `0x100a0ae0` FUN_100a0ae0 | `0x101213b0` CGameMovement::vfunc11, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3470` FUN_101a3470, `0x1020fad0` FUN_1020fad0, +3 more |
-| `0x100a0e40` CBaseEntity::OnTakeDamage | `0x10155920` CRagdollProp::FUN_10155920, `0x1018f400` CBaseTerminal::FUN_1018f400 |
+| `0x100a0e40` CBaseEntity::OnTakeDamage | `0x10155920` CRagdollProp::OnTakeDamage, `0x1018f400` CBreakableProp::OnTakeDamage |
 | `0x100a1250` CBaseEntity::TakeDamage | `0x10030e40` CCollisionEvent::UpdateDamageEvents, `0x10032720` FUN_10032720, `0x1004ec60` FUN_1004ec60, `0x100b0980` FUN_100b0980, +18 more |
-| `0x100a1580` CBaseEntity::VPhysicsTakeDamage | `0x1004e970` CPhysBox::vfunc142 |
+| `0x100a1580` CBaseEntity::VPhysicsTakeDamage | `0x1004e970` CPhysBox::OnTakeDamage |
 | `0x100a19c0` FUN_100a19c0 | `0x1011d980` FUN_1011d980, `0x10145980` FUN_10145980, `0x10150910` FUN_10150910, `0x10151150` FUN_10151150, +3 more |
-| `0x100a1a70` CBaseEntity::Event_Killed | `0x1010e100` CBreakable::vfunc142 |
-| `0x100a1d20` CBaseEntity::GetNextTarget | `0x1018da40` CPointTeleport::vfunc113, `0x1018dc00` CPointTeleport::InputTeleport, `0x101c6cb0` CTriggerLook::vfunc175 |
-| `0x100a49d0` CBaseEntity::StartTouch | `0x1003db80` CBaseEntity::PhysicsStartTouch, `0x100fe9e0` CEnvWind::vfunc174, `0x10109a20` CFire::vfunc174, `0x1013ea30` CTriggerBrush::vfunc174, +1 more |
-| `0x100a4af0` CBaseEntity::Touch | `0x1003daa0` CBaseEntity::PhysicsTouch, `0x1003db80` CBaseEntity::PhysicsStartTouch, `0x101cbbc0` CTriggerEnvAudio::vfunc175, `0x102316d0` CTriggerElectricBugaloo::vfunc175, +1 more |
-| `0x100a4c20` CBaseEntity::EndTouch | `0x100fea60` CEnvWind::vfunc176, `0x1013eaa0` CTriggerBrush::vfunc176 |
-| `0x100a4e70` CBaseEntity::Use | `0x100ac9f0` CBaseEntity::InputUse, `0x1013eb10` CTriggerBrush::vfunc173, `0x10280630` FUN_10280630 |
+| `0x100a1a70` CBaseEntity::Event_Killed | `0x1010e100` CBreakable::OnTakeDamage |
+| `0x100a1d20` CBaseEntity::GetNextTarget | `0x1018da40` CPointTeleport::vfunc113, `0x1018dc00` CPointTeleport::InputTeleport, `0x101c6cb0` CTriggerLook::Touch |
+| `0x100a49d0` CBaseEntity::StartTouch | `0x1003db80` CBaseEntity::PhysicsStartTouch, `0x100fe9e0` CEnvWind::StartTouch, `0x10109a20` CFire::StartTouch, `0x1013ea30` CTriggerBrush::StartTouch, +1 more |
+| `0x100a4af0` CBaseEntity::Touch | `0x1003daa0` CBaseEntity::PhysicsTouch, `0x1003db80` CBaseEntity::PhysicsStartTouch, `0x101cbbc0` CTriggerEnvAudio::Touch, `0x102316d0` CTriggerElectricBugaloo::Touch, +1 more |
+| `0x100a4c20` CBaseEntity::EndTouch | `0x100fea60` CEnvWind::EndTouch, `0x1013eaa0` CTriggerBrush::EndTouch |
+| `0x100a4e70` CBaseEntity::Use | `0x100ac9f0` CBaseEntity::InputUse, `0x1013eb10` CTriggerBrush::Use, `0x10280630` FUN_10280630 |
 | `0x100a4fe0` CAISound::FUN_100a4fe0 | `0x10115260` CFuncMonitor::vfunc39, `0x1020acb0` CBaseVampireSkillEntity::vfunc39, `0x102113c0` CTriggerBombSite::vfunc39, `0x10211db0` CPropSign::vfunc39, +2 more |
 | `0x100a5030` CAISound::FUN_100a5030 | `0x10115300` CFuncMonitor::vfunc42, `0x10208c90` CItemContainer::InputUse, `0x1020adc0` CBaseVampireSkillEntity::vfunc42, `0x10211410` CTriggerBombSite::vfunc42, +3 more |
 | `0x100a52a0` CBaseEntity::EntityUnselectable | `0x10082520` FUN_10082520, `0x10167470` FUN_10167470, `0x10181be0` FUN_10181be0, `0x101c5f40` FUN_101c5f40, +1 more |
 | `0x100a53d0` CBaseEntity::PhysicsTouchTriggers | `0x100332c0` CBaseEntity::PhysicsCarried, `0x10036b10` CPhysicsPushedEntities::FinishPushers, `0x10036d40` CPhysicsPushedEntities::FinishPush, `0x10039470` CBaseEntity::PhysicsFollow, +11 more |
 | `0x100a5ea0` CBaseEntity::VPhysicsInitNormal | `0x1004e500` CPhysBox::vfunc241, `0x1004ff40` FUN_1004ff40, `0x1010f3d0` CPushable::vfunc223, `0x101504f0` CPhysicsCannister::vfunc223, +8 more |
 | `0x100a6150` CBaseEntity::VPhysicsInitShadow | `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x100bfe80` CFuncRotating::vfunc223, `0x100c9170` CBaseButton::vfunc223, `0x100c9d90` CRotButton::vfunc223, +7 more |
-| `0x100a6490` CBaseEntity::VPhysicsSetObject | `0x1004feb0` FUN_1004feb0, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x10154f70` CRagdollProp::FUN_10154f70, `0x10155050` CRagdollProp::FUN_10155050, +3 more |
-| `0x100a65a0` CBaseEntity::VPhysicsShadowCollision | `0x10213dd0` CPropHaunted::vfunc228 |
-| `0x100a7a80` CAISound::FUN_100a7a80 | `0x10168320` CBasePlayer::Replenish, `0x10169660` CBasePlayer::FUN_10169660, `0x1016be10` CBasePlayer::PostThink |
+| `0x100a6490` CBaseEntity::VPhysicsSetObject | `0x1004feb0` FUN_1004feb0, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x10154f70` CRagdollProp::FUN_10154f70, `0x10155050` CRagdollProp::UpdateOnRemove, +3 more |
+| `0x100a65a0` CBaseEntity::VPhysicsShadowCollision | `0x10213dd0` CPropHaunted::VPhysicsShadowCollision |
+| `0x100a7a80` CBaseEntity::Classify | `0x10168320` CBasePlayer::Replenish, `0x10169660` CBasePlayer::LeaveGrappleState, `0x1016be10` CBasePlayer::PostThink |
 | `0x100a7aa0` CBaseEntity::PassesDamageFilter | `0x10110da0` CBreakableSurface::vfunc141 |
 | `0x100a7de0` CBaseEntity::TraceAttack | `0x1010dea0` CBreakable::FUN_1010dea0, `0x10150870` CPhysicsCannister::vfunc141, `0x10155a70` CRagdollProp::FUN_10155a70 |
 | `0x100a8060` CBaseEntity::MakeDormant | `0x10071660` FUN_10071660, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3c40` FUN_101a3c40 |
-| `0x100a8400` CBaseEntity::TakeDamageFromCollision | `0x1004e8d0` CPhysBox::vfunc230, `0x1010e5c0` CBreakable::FUN_1010e5c0, `0x1018fe80` CBaseTerminal::FUN_1018fe80 |
-| `0x100a9290` CBaseEntity::SetNPCTransparent | `0x101942e0` CPropLargeHullIgnore::vfunc103 |
-| `0x100a9470` CBaseEntity::SetOccludesSound | `0x100ef260` CBaseDoor::vfunc103, `0x100f1c60` CRotDoor::Spawn, `0x101134f0` CBreakableSurface::vfunc103, `0x1018df70` CBaseProp::vfunc103, +6 more |
+| `0x100a8400` CBaseEntity::TakeDamageFromCollision | `0x1004e8d0` CPhysBox::VPhysicsCollision, `0x1010e5c0` CBreakable::VPhysicsCollision, `0x1018fe80` CBreakableProp::VPhysicsCollision |
+| `0x100a9290` CBaseEntity::SetNPCTransparent | `0x101942e0` CPropLargeHullIgnore::Spawn |
+| `0x100a9470` CBaseEntity::SetOccludesSound | `0x100ef260` CBaseDoor::vfunc103, `0x100f1c60` CRotDoor::Spawn, `0x101134f0` CBreakableSurface::Spawn, `0x1018df70` CBaseProp::Spawn, +6 more |
 | `0x100a9800` CBaseEntity::IsViewable | `0x101c5f40` FUN_101c5f40 |
 | `0x100a9ab0` CBaseEntity::CreateNoSpawn | `0x10056ba0` FUN_10056ba0, `0x10084ab0` FUN_10084ab0, `0x100f59e0` CEnvShooter::vfunc242, `0x100fbd50` FUN_100fbd50, +4 more |
-| `0x100a9c90` CBaseEntity::GetOwnerEntity | `0x100baf00` CBeam::vfunc104, `0x101716b0` CSprayCan::vfunc134, `0x10171aa0` CBloodSplat::vfunc134, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
+| `0x100a9c90` CBaseEntity::GetOwnerEntity | `0x100baf00` CBeam::Precache, `0x101716b0` CSprayCan::Remove, `0x10171aa0` CBloodSplat::Remove, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
 | `0x100a9eb0` CBaseEntity::GetSoundEmissionOrigin | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, `0x10102030` CMessage::InputShowMessage, +15 more |
-| `0x100aa140` CBaseEntity::Restore | `0x10057510` CFireSmoke::vfunc127, `0x1018d340` CPointAngleSensor::vfunc127, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101ba840` CSoundEnt::vfunc127 |
+| `0x100aa140` CBaseEntity::Restore | `0x10057510` CFireSmoke::Restore, `0x1018d340` CPointAngleSensor::vfunc127, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101ba840` CSoundEnt::Restore |
 | `0x100aa4e0` CBaseEntity::OnSave | `0x10154f70` CRagdollProp::FUN_10154f70, `0x1022a350` CSoundScheme::vfunc129 |
 | `0x100aa5a0` CAISound::FUN_100aa5a0 ‼ | `0x10027740` CPhysForce::FUN_10027740, `0x100ef5f0` CBaseDoor::FUN_100ef5f0, `0x100fdac0` CEnvPlayerSurfaceTrigger::vfunc130, `0x1010fef0` CBreakableSurface::vfunc130, +3 more |
 | `0x100aa680` CBaseEntity::ShouldSavePhysics | `0x10045790` CPhysObjSaveRestoreOps::vfunc0 |
 | `0x100aa7b0` FUN_100aa7b0 | `0x10027690` CPhysForce::vfunc5, `0x10028c00` CPhysMotor::vfunc5, `0x10029680` CKeepUpright::vfunc5, `0x10029b50` CPhysThruster::vfunc5, +411 more |
-| `0x100aaa40` CBaseEntity::SetCollisionGroup | `0x1004e260` CPhysBox::vfunc103, `0x100502b0` CPhysConvert::InputConvertTarget, `0x100f4b90` FUN_100f4b90, `0x1010d6a0` CBreakable::vfunc103, +20 more |
+| `0x100aaa40` CBaseEntity::SetCollisionGroup | `0x1004e260` CPhysBox::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x100f4b90` FUN_100f4b90, `0x1010d6a0` CBreakable::Spawn, +20 more |
 | `0x100aab10` CBaseEntity::SetOwnerEntity | `0x1009d980` FUN_1009d980, `0x101efa30` CDisciplineProjectile::FUN_101efa30, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, `0x10252ea0` CBaseCombatWeapon::FUN_10252ea0, +3 more |
 | `0x100aac30` CBaseEntity::GetMoveType | `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x1004ec60` FUN_1004ec60, `0x100fbdc0` CEnvParticle::FUN_100fbdc0, +5 more |
 | `0x100aacd0` CBaseEntity::GetMoveCollide | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution |
-| `0x100aad70` CBaseEntity::SetMoveType | `0x10029700` CKeepUpright::vfunc103, `0x100332c0` CBaseEntity::PhysicsCarried, `0x10039470` CBaseEntity::PhysicsFollow, `0x1004e260` CPhysBox::vfunc103, +58 more |
+| `0x100aad70` CBaseEntity::SetMoveType | `0x10029700` CKeepUpright::Spawn, `0x100332c0` CBaseEntity::PhysicsCarried, `0x10039470` CBaseEntity::PhysicsFollow, `0x1004e260` CPhysBox::Spawn, +58 more |
 | `0x100ab250` FUN_100ab250 ‼ | `0x100d1650` FUN_100d1650, `0x10102030` CMessage::InputShowMessage, `0x1011c060` CServerGameClients::vfunc3, `0x1011c8c0` CServerGameClients::vfunc8, +13 more |
 | `0x100ab280` CBaseEntity::SetTransmit | `0x100bc130` CBeam::FUN_100bc130 |
-| `0x100ac4e0` CBaseEntity::ThinkSet | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x1006bb30` CTestTraceline::vfunc103, `0x1006e770` FUN_1006e770, +176 more |
+| `0x100ac4e0` CBaseEntity::ThinkSet | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x1006bb30` CTestTraceline::Spawn, `0x1006e770` FUN_1006e770, +176 more |
 | `0x100ac610` CBaseEntity::SetNextThink | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x10028b20` FUN_10028b20 ‼, `0x10028b80` CPhysMotor::InputTurnOff, +8 more |
-| `0x100ac720` CBaseEntity::GetLastThink | `0x1003aca0` CBaseEntity::PhysicsStep, `0x10081020` CSceneEntity::FUN_10081020, `0x10084c80` CInstancedSceneEntity::vfunc134 ‼ |
-| `0x100ad320` CBaseEntity::GetVectors | `0x10029700` CKeepUpright::vfunc103, `0x1009fb80` CBaseEntity::SendDebugPivotOverlay, `0x1018cf20` FUN_1018cf20, `0x101b06a0` FUN_101b06a0 |
-| `0x100ad550` CBaseEntity::SetMovedir | `0x100c8d60` CBaseButton::vfunc103, `0x100ef260` CBaseDoor::vfunc103, `0x10116030` CFuncMoveLinear::vfunc103, `0x1013e820` CTriggerBrush::vfunc103, +1 more |
-| `0x100ada20` CBaseEntity::Teleport | `0x10155e40` CRagdollProp::FUN_10155e40, `0x101606a0` CBasePlayer::FUN_101606a0 |
+| `0x100ac720` CBaseEntity::GetLastThink | `0x1003aca0` CBaseEntity::PhysicsStep, `0x10081020` CSceneEntity::FUN_10081020, `0x10084c80` CInstancedSceneEntity::Remove ‼ |
+| `0x100ad320` CBaseEntity::GetVectors | `0x10029700` CKeepUpright::Spawn, `0x1009fb80` CBaseEntity::SendDebugPivotOverlay, `0x1018cf20` FUN_1018cf20, `0x101b06a0` FUN_101b06a0 |
+| `0x100ad550` CBaseEntity::SetMovedir | `0x100c8d60` CBaseButton::Spawn, `0x100ef260` CBaseDoor::vfunc103, `0x10116030` CFuncMoveLinear::Spawn, `0x1013e820` CTriggerBrush::Spawn, +1 more |
+| `0x100ada20` CBaseEntity::Teleport | `0x10155e40` CRagdollProp::Teleport, `0x101606a0` CBasePlayer::Teleport |
 | `0x100b11d0` CBaseEntity::SetCheckUntouch | `0x1003d490` CBaseEntity::PhysicsCheckForEntityUntouch, `0x1009d980` FUN_1009d980 |
 | `0x100b12e0` CBaseEntity::SetSentLastFrame | `0x1009d980` FUN_1009d980 |
 | `0x100b1420` CBaseEntity::SetGroundEntity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, +1 more |
 | `0x100b1510` CBaseEntity::GetGroundEntity | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10040220` CBaseEntity::UpdateBaseVelocity, `0x10040390` CBaseEntity::PhysicsSimulate, +4 more |
-| `0x100b15f0` CBaseEntity::SetModelName | `0x1004eae0` CPhysExplosion::vfunc103, `0x1004ef60` CPhysImpact::vfunc103, `0x1009d980` FUN_1009d980, `0x100b87a0` CBatSwarm::FUN_100b87a0, +5 more |
-| `0x100b1690` CBaseEntity::GetModelName | `0x1004e260` CPhysBox::vfunc103, `0x1004f900` CSimplePhysicsBrush::vfunc103, `0x10071330` CCameraAnimated::vfunc103, `0x10071400` CCameraAnimated::vfunc104, +46 more |
-| `0x100b1750` CBaseEntity::SetModelIndex | `0x1009d980` FUN_1009d980, `0x101c70d0` CTriggerVolume::vfunc103, `0x1023bba0` CWorld::vfunc103 ‼ |
+| `0x100b15f0` CBaseEntity::SetModelName | `0x1004eae0` CPhysExplosion::Spawn, `0x1004ef60` CPhysImpact::Spawn, `0x1009d980` FUN_1009d980, `0x100b87a0` CBatSwarm::Spawn, +5 more |
+| `0x100b1690` CBaseEntity::GetModelName | `0x1004e260` CPhysBox::Spawn, `0x1004f900` CSimplePhysicsBrush::Spawn, `0x10071330` CCameraAnimated::Spawn, `0x10071400` CCameraAnimated::Precache, +46 more |
+| `0x100b1750` CBaseEntity::SetModelIndex | `0x1009d980` FUN_1009d980, `0x101c70d0` CTriggerVolume::Spawn, `0x1023bba0` CWorld::Spawn ‼ |
 | `0x100b17f0` CBaseEntity::GetModelIndex | `0x1008d7c0` CBaseAnimating::GetAnimFlags, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x100b1a00` CBaseEntity::GetModel, `0x100ef6f0` CBaseDoor::vfunc223, +9 more |
-| `0x100b1960` CBaseEntity::GetSize | `0x100c8d60` CBaseButton::vfunc103, `0x100ef260` CBaseDoor::vfunc103, `0x100f0a40` CBaseDoor::vfunc245, `0x1010e100` CBreakable::vfunc142, +3 more |
-| `0x100b1ac0` CBaseEntity::CalcAbsolutePosition | `0x100933b0` CBaseAnimating::GetAttachmentLocal03, `0x10155e40` CRagdollProp::FUN_10155e40, `0x101eec30` CVampireProjectile::vfunc266 |
+| `0x100b1960` CBaseEntity::GetSize | `0x100c8d60` CBaseButton::Spawn, `0x100ef260` CBaseDoor::vfunc103, `0x100f0a40` CBaseDoor::vfunc245, `0x1010e100` CBreakable::OnTakeDamage, +3 more |
+| `0x100b1ac0` CBaseEntity::CalcAbsolutePosition | `0x100933b0` CBaseAnimating::GetAttachmentLocal03, `0x10155e40` CRagdollProp::Teleport, `0x101eec30` CVampireProjectile::vfunc266 |
 | `0x100b1d10` CBaseEntity::CalcAbsoluteVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x10038180` CPhysicsPushedEntities::LinearlyMoveRootEntity, `0x10038cb0` CBaseEntity::PhysicsPusher, +38 more |
 | `0x100b2300` CBaseEntity::SetAbsOrigin | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003a610` CBaseEntity::PhysicsStepTroika, +5 more |
 | `0x100b2510` CBaseEntity::SetAbsAngles | `0x100568a0` CDynamicLight::vfunc110, `0x101303c0` CLight::vfunc110 |
 | `0x100b2770` CBaseEntity::SetAbsVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, +13 more |
 | `0x100b2be0` CBaseEntity::SetOrigin | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100f14a0` CBaseDoor::Blocked, `0x1016be10` CBasePlayer::PostThink, +6 more |
-| `0x100b2d00` CBaseEntity::SetAngles | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100bf760` CFuncIllusionary::vfunc103, +17 more |
-| `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::vfunc103, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
+| `0x100b2d00` CBaseEntity::SetAngles | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100bf760` CFuncIllusionary::Spawn, +17 more |
+| `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::Spawn, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
-| `0x100b3070` CBaseEntity::GetOrigin | `0x10028c30` CPhysMotor::vfunc103, `0x10028d20` CPhysMotor::vfunc113, `0x10029f10` CConstraintAnchor::vfunc103, `0x1002b9f0` CPhysHinge::vfunc103, +56 more |
+| `0x100b3070` CBaseEntity::GetOrigin | `0x10028c30` CPhysMotor::Spawn, `0x10028d20` CPhysMotor::vfunc113, `0x10029f10` CConstraintAnchor::Spawn, `0x1002b9f0` CPhysHinge::Spawn, +56 more |
 | `0x100b3110` CBaseEntity::GetAngles | `0x10027de0` CPhysThruster::vfunc241, `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, +35 more |
-| `0x100b31b0` CBaseEntity::GetAbsOrigin | `0x10027cb0` CPhysThruster::vfunc242, `0x10028260` CPhysTorque::vfunc103, `0x1002bb90` CPhysBallSocket::vfunc241, `0x1002bdc0` CPhysSlideConstraint::vfunc241, +58 more |
+| `0x100b31b0` CBaseEntity::GetAbsOrigin | `0x10027cb0` CPhysThruster::vfunc242, `0x10028260` CPhysTorque::Spawn, `0x1002bb90` CPhysBallSocket::vfunc241, `0x1002bdc0` CPhysSlideConstraint::vfunc241, +58 more |
 | `0x100b3280` CBaseEntity::GetAbsAngles | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent, `0x100568a0` CDynamicLight::vfunc110, `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox, +15 more |
 | `0x100b3580` CBaseEntity::AddFlag | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10040220` CBaseEntity::UpdateBaseVelocity, `0x10071220` FUN_10071220, `0x10071660` FUN_10071660, +37 more |
 | `0x100b3640` CBaseEntity::RemoveFlag | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x10071550` FUN_10071550, +33 more |
-| `0x100b3840` CBaseEntity::AddFlag2 | `0x1004e260` CPhysBox::vfunc103, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::FUN_10154e40, `0x10191450` CPhysicsProp::vfunc103 ‼, +5 more |
-| `0x100b3900` CBaseEntity::RemoveFlag2 | `0x1004f900` CSimplePhysicsBrush::vfunc103, `0x1004fcb0` CSimplePhysicsProp::vfunc103, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::FUN_10154e40, +2 more |
-| `0x100b39c0` CBaseEntity::GetFlags2 | `0x1004e3e0` CPhysBox::vfunc68, `0x10082520` FUN_10082520, `0x101914a0` CPhysicsProp::FUN_101914a0, `0x101ccf10` CTraceFilterPlayerMovement::vfunc0, +1 more |
-| `0x100b3b00` CBaseEntity::Relink | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1004e260` CPhysBox::vfunc103, `0x10056a90` CDynamicLight::vfunc103, `0x1006e8e0` FUN_1006e8e0, +73 more |
+| `0x100b3840` CBaseEntity::AddFlag2 | `0x1004e260` CPhysBox::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::Spawn, `0x10191450` CPhysicsProp::Spawn ‼, +5 more |
+| `0x100b3900` CBaseEntity::RemoveFlag2 | `0x1004f900` CSimplePhysicsBrush::Spawn, `0x1004fcb0` CSimplePhysicsProp::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::Spawn, +2 more |
+| `0x100b39c0` CBaseEntity::GetFlags2 | `0x1004e3e0` CPhysBox::ShouldIgnoreCollision, `0x10082520` FUN_10082520, `0x101914a0` CPhysicsProp::ShouldIgnoreCollision, `0x101ccf10` CTraceFilterPlayerMovement::ShouldHitEntity, +1 more |
+| `0x100b3b00` CBaseEntity::Relink | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1006e8e0` FUN_1006e8e0, +73 more |
 | `0x100b4340` CAISound::FUN_100b4340 | `0x1004ea30` CPhysExplosion::vfunc117, `0x1004ee90` CPhysImpact::vfunc117, `0x10051630` CDisciplineParticle::FUN_10051630, `0x101a9d40` CScriptedSentence::vfunc117, +1 more |
 | `0x100b4b40` CAISound::FUN_100b4b40 | `0x100b7f70` CBasePlayer::FUN_100b7f70, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x1018dc00` CPointTeleport::InputTeleport, +1 more |
 | `0x100b4c00` CAISound::FUN_100b4c00 | `0x1034fe70` CHL2_Player::vfunc196 |
@@ -514,14 +844,14 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100b5040` CAISound::FUN_100b5040 | `0x1009df20` CBaseEntity::~CBaseEntity, `0x100a5ad0` CBaseEntity::VPhysicsInitSetup, `0x1010e750` CBreakable::FUN_1010e750, `0x1017be50` CBasePlayer::vfunc468, +5 more |
 | `0x100b5110` FUN_100b5110 | `0x101da020` CDisciplineProjectile::vfunc266, `0x101eec30` CVampireProjectile::vfunc266, `0x1029ff40` FUN_1029ff40 |
 | `0x100b5340` FUN_100b5340 | `0x100b2970` CBaseEntity::ApplyLocalVelocityImpulse |
-| `0x100b5b00` CAI_BaseNPC::FUN_100b5b00 | `0x10350270` CHL2_Player::vfunc333 |
-| `0x100b62a0` FUN_100b62a0 | `0x100b65b0` CBaseFlex::vfunc284 |
+| `0x100b5b00` CAI_BaseNPC::FUN_100b5b00 | `0x10350270` CHL2_Player::MaintainEyeDirection |
+| `0x100b62a0` FUN_100b62a0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x100b6480` FUN_100b6480 | `0x100b5970` FUN_100b5970 |
-| `0x100b6510` FUN_100b6510 | `0x100b65b0` CBaseFlex::vfunc284 |
-| `0x100b6960` CAI_BaseNPC::FUN_100b6960 | `0x100b65b0` CBaseFlex::vfunc284 |
-| `0x100b6cf0` CAI_BaseNPC::FUN_100b6cf0 | `0x100b65b0` CBaseFlex::vfunc284 |
-| `0x100b7040` CAI_BaseNPC::FUN_100b7040 | `0x100b65b0` CBaseFlex::vfunc284 |
-| `0x100b70e0` CAI_BaseNPC::FUN_100b70e0 | `0x100b65b0` CBaseFlex::vfunc284 |
+| `0x100b6510` FUN_100b6510 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
+| `0x100b6960` CAI_BaseNPC::FUN_100b6960 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
+| `0x100b6cf0` CAI_BaseNPC::FUN_100b6cf0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
+| `0x100b7040` CAI_BaseNPC::FUN_100b7040 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
+| `0x100b70e0` CAI_BaseNPC::FUN_100b70e0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x100bf5b0` FUN_100bf5b0 | `0x100bf480` FUN_100bf480 ‼, `0x102f5bd0` FUN_102f5bd0 ‼, `0x102f94f0` FUN_102f94f0, `0x10316560` FUN_10316560 |
 | `0x100bf6a0` FUN_100bf6a0 | `0x100bf600` FUN_100bf600, `0x102fac00` FUN_102fac00, `0x102fc6b0` FUN_102fc6b0, `0x102fef30` FUN_102fef30 ‼, +3 more |
 | `0x100c2ce0` FUN_100c2ce0 | `0x10095fe0` CBaseAnimating::GetSkeleton, `0x100c3440` FUN_100c3440 |
@@ -533,7 +863,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100c7480` FUN_100c7480 | `0x104279a0` FUN_104279a0, `0x104285d0` FUN_104285d0, `0x10428690` FUN_10428690, `0x10428750` FUN_10428750, +3 more |
 | `0x100c7f30` FUN_100c7f30 | `0x10328df0` CBaseCombatCharacter::StartGrappleAttack |
 | `0x100cd2d0` FUN_100cd2d0 | `0x1002b130` FUN_1002b130, `0x1004e130` CPhysBox::vfunc5, `0x10050240` CPhysConvert::vfunc5, `0x1006d950` CBaseCineCam::vfunc5, +111 more |
-| `0x100cd300` FUN_100cd300 | `0x100cae20` FUN_100cae20, `0x10102890` CEnvMicrophone::vfunc134, `0x1010db90` CBreakable::InputAddHealth, `0x1010dc50` CBreakable::InputRemoveHealth, +20 more |
+| `0x100cd300` FUN_100cd300 | `0x100cae20` FUN_100cae20, `0x10102890` CEnvMicrophone::Remove, `0x1010db90` CBreakable::InputAddHealth, `0x1010dc50` CBreakable::InputRemoveHealth, +20 more |
 | `0x100cd640` FUN_100cd640 | `0x100cebb0` FUN_100cebb0 |
 | `0x100cd660` FUN_100cd660 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1004e7c0` CPhysBox::vfunc226, `0x1004e910` CPhysBox::vfunc242, +150 more |
 | `0x100cddf0` FUN_100cddf0 | `0x100afb90` FUN_100afb90 |
@@ -547,12 +877,12 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100d1210` FUN_100d1210 | `0x100d1250` FUN_100d1250 |
 | `0x100d1590` FUN_100d1590 | `0x100cebb0` FUN_100cebb0 |
 | `0x100d15d0` FUN_100d15d0 | `0x100cebb0` FUN_100cebb0, `0x100efc90` CBaseDoor::Use |
-| `0x100dc480` FUN_100dc480 | `0x1004d9a0` CPhysicsSpring::vfunc103, `0x1004e260` CPhysBox::vfunc103, `0x1004e500` CPhysBox::vfunc241, `0x1004eae0` CPhysExplosion::vfunc103, +81 more |
+| `0x100dc480` FUN_100dc480 | `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004e260` CPhysBox::Spawn, `0x1004e500` CPhysBox::vfunc241, `0x1004eae0` CPhysExplosion::Spawn, +81 more |
 | `0x100dc580` FUN_100dc580 | `0x1004e500` CPhysBox::vfunc241, `0x10081b60` CSceneEntity::OnSceneFinished, `0x10081ed0` FUN_10081ed0, `0x1009d980` FUN_1009d980, +49 more |
-| `0x100dd990` FUN_100dd990 | `0x100b87a0` CBatSwarm::FUN_100b87a0, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
+| `0x100dd990` FUN_100dd990 | `0x100b87a0` CBatSwarm::Spawn, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x100dda20` FUN_100dda20 | `0x100b51b0` FUN_100b51b0, `0x100b8b50` FUN_100b8b50, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x100ddd20` FUN_100ddd20 | `0x100b52a0` FUN_100b52a0 |
-| `0x100ddd90` FUN_100ddd90 | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100dbd70` CDirtySpatialPartitionEntityList::vfunc0, `0x100dc220` FUN_100dc220, `0x10154e40` CRagdollProp::FUN_10154e40, +5 more |
+| `0x100ddd90` FUN_100ddd90 | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100dbd70` CDirtySpatialPartitionEntityList::vfunc0, `0x100dc220` FUN_100dc220, `0x10154e40` CRagdollProp::Spawn, +5 more |
 | `0x100df010` FUN_100df010 | `0x100dfd30` CDialog::CheckNameCollisions, `0x100dffa0` CDialog::LogAutoendFloats, `0x100e0290` CDialog::LogScriptProblems, `0x100e2ad0` CDialog::accumulate_stats, +3 more |
 | `0x100df030` FUN_100df030 | `0x100e15c0` FUN_100e15c0, `0x100e2ad0` CDialog::accumulate_stats, `0x100e3180` FUN_100e3180, `0x100e4240` CDialog::dump_dialog |
 | `0x100df120` FUN_100df120 | `0x100dffa0` CDialog::LogAutoendFloats |
@@ -578,8 +908,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100f0e30` FUN_100f0e30 | `0x1027dfb0` FUN_1027dfb0 |
 | `0x100f0e90` FUN_100f0e90 | `0x100f0c00` CBaseDoor::IsCloseBlocked, `0x100f1340` CBaseDoor::StartBlocked |
 | `0x100f2f90` FUN_100f2f90 | `0x100f2bd0` CRotDoor::GetNPCOpenData, `0x1010a450` FUN_1010a450, `0x10145980` FUN_10145980, `0x10148c40` CGravControllerPoint::vfunc0, +5 more |
-| `0x100f6d80` FUN_100f6d80 | `0x10044020` CPhysSaveRestoreBlockHandler::vfunc5, `0x100f8960` FUN_100f8960, `0x100f8fb0` CEntityListSystem::vfunc2, `0x102ea450` CNavPropertyDatabase::vfunc0 |
-| `0x100f6e40` FUN_100f6e40 | `0x100447f0` CPhysSaveRestoreBlockHandler::vfunc8, `0x100f89a0` FUN_100f89a0, `0x100f90a0` CEntityListSystem::vfunc5, `0x1014eba0` FUN_1014eba0, +1 more |
+| `0x100f6d80` FUN_100f6d80 | `0x10044020` CPhysSaveRestoreBlockHandler::vfunc5, `0x100f8960` FUN_100f8960, `0x100f8fb0` CEntityListSystem::LevelInitPreEntity, `0x102ea450` CNavPropertyDatabase::Init |
+| `0x100f6e40` FUN_100f6e40 | `0x100447f0` CPhysSaveRestoreBlockHandler::vfunc8, `0x100f89a0` FUN_100f89a0, `0x100f90a0` CEntityListSystem::LevelShutdownPostEntity, `0x1014eba0` FUN_1014eba0, +1 more |
 | `0x100f7060` FUN_100f7060 | `0x1003bdd0` FUN_1003bdd0, `0x100826b0` FUN_100826b0, `0x10086e50` FUN_10086e50, `0x10086fb0` FUN_10086fb0, +30 more |
 | `0x100f7380` FUN_100f7380 | `0x1006e130` FUN_1006e130, `0x10071970` FUN_10071970, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, +21 more |
 | `0x100f79b0` FUN_100f79b0 | `0x1004ebb0` FUN_1004ebb0, `0x10196f30` FUN_10196f30, `0x101c9b60` CAI_ChangeHintGroup::InputActivate, `0x101eff70` FUN_101eff70 |
@@ -588,24 +918,24 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100f7f20` FUN_100f7f20 | `0x10135720` FUN_10135720 |
 | `0x100f7fe0` FUN_100f7fe0 | `0x101aa390` FUN_101aa390 |
 | `0x100f8370` FUN_100f8370 | `0x10089fc0` FUN_10089fc0, `0x1028d820` FUN_1028d820, `0x1028d8d0` FUN_1028d8d0, `0x1039a256` FUN_1039a256 |
-| `0x100faf60` FUN_100faf60 | `0x100fae90` CEnvParticle::InputSetAttachType, `0x100fb3d0` CDisciplineParticle::FUN_100fb3d0, `0x100fc570` CEnvParticleHUD::vfunc241, `0x103f0510` FUN_103f0510 |
+| `0x100faf60` FUN_100faf60 | `0x100fae90` CEnvParticle::InputSetAttachType, `0x100fb3d0` CEnvParticle::Spawn, `0x100fc570` CEnvParticleHUD::vfunc241, `0x103f0510` FUN_103f0510 |
 | `0x100fb980` FUN_100fb980 | `0x100fb850` CEnvParticle::InputSetRateScale, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270 |
 | `0x100fba40` FUN_100fba40 | `0x100fb8a0` CEnvParticle::InputSetRampTime |
 | `0x100fbac0` FUN_100fbac0 | `0x100fbc50` FUN_100fbc50, `0x10169960` CBasePlayer::FUN_10169960 |
-| `0x100fbaf0` FUN_100fbaf0 | `0x10213b70` CPropHaunted::vfunc180, `0x10214a20` FUN_10214a20, `0x1034d140` FUN_1034d140 |
+| `0x100fbaf0` FUN_100fbaf0 | `0x10213b70` CPropHaunted::UpdateOnRemove, `0x10214a20` FUN_10214a20, `0x1034d140` FUN_1034d140 |
 | `0x100fbbb0` FUN_100fbbb0 | `0x100fbc20` FUN_100fbc20, `0x100fbc50` FUN_100fbc50, `0x10169960` CBasePlayer::FUN_10169960, `0x101ee7d0` FUN_101ee7d0, +3 more |
 | `0x100fbc90` FUN_100fbc90 | `0x100b9f80` CBatSwarm::FUN_100b9f80, `0x1015f150` CBasePlayer::InputPlayHUDParticle, `0x10163f70` FUN_10163f70, `0x10214cc0` FUN_10214cc0, +4 more |
 | `0x101067e0` CBaseCombatCharacter::AddScriptedExpression | `0x10089860` FUN_10089860 |
 | `0x10106a40` CBaseCombatCharacter::LookupExpressionIndex | `0x102adfe0` FUN_102adfe0 |
 | `0x10107480` FUN_10107480 | `0x103274d0` CBaseCombatCharacter::~CBaseCombatCharacter |
-| `0x1010e530` FUN_1010e530 | `0x1010e100` CBreakable::vfunc142, `0x10151150` FUN_10151150 |
+| `0x1010e530` FUN_1010e530 | `0x1010e100` CBreakable::OnTakeDamage, `0x10151150` FUN_10151150 |
 | `0x10116970` FUN_10116970 | `0x10116570` FUN_10116570 |
 | `0x10119390` FUN_10119390 | `0x10085180` FUN_10085180, `0x10085260` FUN_10085260, `0x100855f0` FUN_100855f0, `0x100856b0` FUN_100856b0, +10 more |
 | `0x101193b0` FUN_101193b0 | `0x100546b0` FUN_100546b0, `0x100548b0` FUN_100548b0, `0x10085480` FUN_10085480, `0x10085d00` FUN_10085d00, +160 more |
 | `0x10119750` FUN_10119750 | `0x101274a0` CGameMovement::PlayerMove, `0x10146e20` FUN_10146e20, `0x10351e10` CHL2_Player::vfunc470 |
 | `0x10119900` FUN_10119900 | `0x100aeb50` FUN_100aeb50 |
 | `0x10119940` FUN_10119940 | `0x10119980` FUN_10119980 |
-| `0x1011d2e0` FUN_1011d2e0 | `0x1011ccc0` FUN_1011ccc0, `0x10187fb0` CLagCompensationManager::vfunc7 |
+| `0x1011d2e0` FUN_1011d2e0 | `0x1011ccc0` FUN_1011ccc0, `0x10187fb0` CLagCompensationManager::FrameUpdatePostEntityThink |
 | `0x1011e010` FUN_1011e010 | `0x1011d980` FUN_1011d980, `0x102407f0` FUN_102407f0, `0x10242950` FUN_10242950 |
 | `0x1011e060` FUN_1011e060 | `0x1011d980` FUN_1011d980, `0x10145980` FUN_10145980, `0x10291f20` FUN_10291f20 |
 | `0x10129870` FUN_10129870 | `0x10129960` FUN_10129960 |
@@ -618,23 +948,23 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1012c840` FUN_1012c840 | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100a0b20` CBaseEntity::ClearParent, `0x100ad100` CBaseEntity::InputClearParent |
 | `0x1012c9c0` FUN_1012c9c0 | `0x1002f1e0` CCollisionEvent::ShouldCollide, `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList, `0x10037380` CPushBlockerEnum::vfunc0, `0x101d13a0` FUN_101d13a0 |
 | `0x10136580` FUN_10136580 ‼ | `0x1004ff40` FUN_1004ff40, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100aff90` FUN_100aff90, +35 more |
-| `0x10136ec0` FUN_10136ec0 | `0x102d7890` CNodeEnt::vfunc107 |
-| `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::vfunc103, `0x1004ec60` FUN_1004ec60, +120 more |
-| `0x10137220` FUN_10137220 | `0x10028260` CPhysTorque::vfunc103, `0x10028c30` CPhysMotor::vfunc103, `0x10029940` CKeepUpright::vfunc0, `0x1002b9f0` CPhysHinge::vfunc103, +143 more |
+| `0x10136ec0` FUN_10136ec0 | `0x102d7890` CNodeEnt::ParseMapData |
+| `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004ec60` FUN_1004ec60, +120 more |
+| `0x10137220` FUN_10137220 | `0x10028260` CPhysTorque::Spawn, `0x10028c30` CPhysMotor::Spawn, `0x10029940` CKeepUpright::vfunc0, `0x1002b9f0` CPhysHinge::Spawn, +143 more |
 | `0x10137e40` FUN_10137e40 | `0x100c3240` FUN_100c3240, `0x100c3ce0` FUN_100c3ce0, `0x1019c810` FUN_1019c810 |
 | `0x10137ed0` FUN_10137ed0 | `0x1002a210` FUN_1002a210, `0x100932a0` CBaseAnimating::GetAttachmentLocal02, `0x100934e0` CBaseAnimating::GetEyeballs, `0x100b3490` CBaseEntity::SetLocalTransform, +15 more |
-| `0x10137fe0` FUN_10137fe0 | `0x1002c400` CPhysPulley::vfunc123, `0x1002c570` CPhysPulley::vfunc241, `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x1006f080` FUN_1006f080, +11 more |
+| `0x10137fe0` FUN_10137fe0 | `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1002c570` CPhysPulley::vfunc241, `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x1006f080` FUN_1006f080, +11 more |
 | `0x10138130` FUN_10138130 | `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x100dcc20` FUN_100dcc20, `0x100dcea0` FUN_100dcea0, `0x100dd1b0` FUN_100dd1b0, +4 more |
 | `0x101381b0` FUN_101381b0 | `0x10029940` CKeepUpright::vfunc0, `0x100b2010` CBaseEntity::ComputeAbsDirection, `0x100f19b0` CRotDoor::ComputeSwingData, `0x10139f00` FUN_10139f00, +8 more |
 | `0x10138460` FUN_10138460 | `0x100282e0` CPhysTorque::vfunc241, `0x100283f0` CMotorController::vfunc0, `0x10028d20` CPhysMotor::vfunc113, `0x10029940` CKeepUpright::vfunc0, +5 more |
-| `0x10138600` FUN_10138600 | `0x10155ae0` CRagdollProp::FUN_10155ae0, `0x10428ed0` FUN_10428ed0 |
+| `0x10138600` FUN_10138600 | `0x10155ae0` CRagdollProp::SetupBones, `0x10428ed0` FUN_10428ed0 |
 | `0x10138630` FUN_10138630 | `0x1002a210` FUN_1002a210, `0x1002bdc0` CPhysSlideConstraint::vfunc241, `0x1002c190` CPhysFixed::vfunc241, `0x100933b0` CBaseAnimating::GetAttachmentLocal03, +11 more |
 | `0x10138720` FUN_10138720 | `0x1002a210` FUN_1002a210, `0x100932a0` CBaseAnimating::GetAttachmentLocal02, `0x100b3490` CBaseEntity::SetLocalTransform, `0x10137dd0` FUN_10137dd0, +14 more |
 | `0x10138760` FUN_10138760 | `0x100c67b0` FUN_100c67b0, `0x100dc680` CCollisionProperty::vfunc10, `0x101388e0` FUN_101388e0, `0x10139ac0` FUN_10139ac0, +10 more |
 | `0x10138df0` FUN_10138df0 | `0x1002a210` FUN_1002a210, `0x1002bdc0` CPhysSlideConstraint::vfunc241, `0x1002c190` CPhysFixed::vfunc241, `0x100933b0` CBaseAnimating::GetAttachmentLocal03, +18 more |
 | `0x10139500` FUN_10139500 | `0x10034590` CBaseEntity::PhysicsTryMove, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10040390` CBaseEntity::PhysicsSimulate, +46 more |
-| `0x10139550` FUN_10139550 | `0x10027de0` CPhysThruster::vfunc241, `0x1006ff40` CBaseCineCam::vfunc123, `0x100fe300` FUN_100fe300, `0x1011fb50` FUN_1011fb50, +13 more |
-| `0x10139610` FUN_10139610 | `0x100508c0` FUN_100508c0, `0x10059ea0` FUN_10059ea0, `0x1005acb0` CTEBeamEntPoint::vfunc3, `0x1005bfa0` CTEBeamPoints::vfunc3, +82 more |
+| `0x10139550` FUN_10139550 | `0x10027de0` CPhysThruster::vfunc241, `0x1006ff40` CBaseCineCam::DrawDebugGeometryOverlays, `0x100fe300` FUN_100fe300, `0x1011fb50` FUN_1011fb50, +13 more |
+| `0x10139610` FUN_10139610 | `0x100508c0` CBaseTempEntity::Test, `0x10059ea0` FUN_10059ea0, `0x1005acb0` CTEBeamEntPoint::vfunc3, `0x1005bfa0` CTEBeamPoints::vfunc3, +82 more |
 | `0x10139970` FUN_10139970 | `0x1006e8e0` FUN_1006e8e0, `0x1006f8f0` FUN_1006f8f0, `0x100f3dd0` FUN_100f3dd0, `0x100f4b90` FUN_100f4b90, +18 more |
 | `0x10139a90` FUN_10139a90 | `0x1002bdc0` CPhysSlideConstraint::vfunc241, `0x1002c190` CPhysFixed::vfunc241, `0x1009d980` FUN_1009d980, `0x100b2150` CBaseEntity::GetParentToWorldTransform, +6 more |
 | `0x10139b50` FUN_10139b50 | `0x1002a210` FUN_1002a210, `0x10037c10` CPhysicsPushedEntities::RotateRootEntity, `0x1006f080` FUN_1006f080, `0x100b2150` CBaseEntity::GetParentToWorldTransform, +4 more |
@@ -654,16 +984,16 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1013dbb0` FUN_1013dbb0 | `0x1013da90` FUN_1013da90 |
 | `0x1013dc60` FUN_1013dc60 | `0x1003dc70` CBaseEntity::PhysicsMarkEntityAsTouched, `0x100cd220` FUN_100cd220, `0x100cdc60` FUN_100cdc60, `0x100d11f0` FUN_100d11f0, +6 more |
 | `0x1013dce0` FUN_1013dce0 | `0x1003d770` CBaseEntity::PhysicsRemoveToucher, `0x1003d8f0` CBaseEntity::PhysicsRemoveTouchedList, `0x100cdc80` FUN_100cdc80, `0x101bc8e0` CSoundControllerImp::vfunc1, +3 more |
-| `0x10142aa0` FUN_10142aa0 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x1009f850` CBaseEntity::DrawAbsBoxOverlay, `0x10109a60` CFire::vfunc123, +12 more |
-| `0x10142af0` FUN_10142af0 | `0x10119980` FUN_10119980, `0x10162340` CBasePlayer::FUN_10162340, `0x102d31c0` FUN_102d31c0, `0x102f7e60` FUN_102f7e60 |
+| `0x10142aa0` FUN_10142aa0 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x1009f850` CBaseEntity::DrawAbsBoxOverlay, `0x10109a60` CFire::DrawDebugGeometryOverlays, +12 more |
+| `0x10142af0` FUN_10142af0 | `0x10119980` FUN_10119980, `0x10162340` CBasePlayer::DrawDebugGeometryOverlays, `0x102d31c0` FUN_102d31c0, `0x102f7e60` FUN_102f7e60 |
 | `0x10142b80` FUN_10142b80 | `0x10142e20` FUN_10142e20, `0x1027fc90` FUN_1027fc90 |
-| `0x10142e90` FUN_10142e90 | `0x1002b920` CPhysHinge::vfunc123, `0x1002c400` CPhysPulley::vfunc123, `0x1004d420` CPhysicsSpring::vfunc123, `0x1004f030` CPhysImpact::InputImpact, +18 more |
-| `0x101434b0` FUN_101434b0 | `0x1004d290` CPhysicsSpring::vfunc124, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x1009fe40` CBaseEntity::DrawTimedOverlays, `0x100bc200` CBeam::FUN_100bc200, +24 more |
-| `0x10143710` FUN_10143710 | `0x1006ff40` CBaseCineCam::vfunc123, `0x10135650` CLogicNPCCondition::vfunc113, `0x10135b00` CLogicSquadCondition::vfunc113, `0x10145300` FUN_10145300, +8 more |
+| `0x10142e90` FUN_10142e90 | `0x1002b920` CPhysHinge::DrawDebugGeometryOverlays, `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1004d420` CPhysicsSpring::DrawDebugGeometryOverlays, `0x1004f030` CPhysImpact::InputImpact, +18 more |
+| `0x101434b0` FUN_101434b0 | `0x1004d290` CPhysicsSpring::DrawDebugTextOverlays, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x1009fe40` CBaseEntity::DrawTimedOverlays, `0x100bc200` CBeam::DrawDebugTextOverlays, +24 more |
+| `0x10143710` FUN_10143710 | `0x1006ff40` CBaseCineCam::DrawDebugGeometryOverlays, `0x10135650` CLogicNPCCondition::vfunc113, `0x10135b00` CLogicSquadCondition::vfunc113, `0x10145300` FUN_10145300, +8 more |
 | `0x10143920` FUN_10143920 | `0x10119980` FUN_10119980, `0x1023c450` FUN_1023c450, `0x10291ea0` FUN_10291ea0 |
-| `0x10143b70` FUN_10143b70 | `0x1004f030` CPhysImpact::InputImpact, `0x1006ff40` CBaseCineCam::vfunc123, `0x10128850` FUN_10128850, `0x10145980` FUN_10145980, +3 more |
+| `0x10143b70` FUN_10143b70 | `0x1004f030` CPhysImpact::InputImpact, `0x1006ff40` CBaseCineCam::DrawDebugGeometryOverlays, `0x10128850` FUN_10128850, `0x10145980` FUN_10145980, +3 more |
 | `0x10143d80` FUN_10143d80 | `0x10135650` CLogicNPCCondition::vfunc113, `0x10135b00` CLogicSquadCondition::vfunc113, `0x101b06a0` FUN_101b06a0 |
-| `0x10144290` FUN_10144290 | `0x103e25a0` CFlameCluster::vfunc123, `0x103e3c40` FUN_103e3c40 |
+| `0x10144290` FUN_10144290 | `0x103e25a0` CFlameCluster::DrawDebugGeometryOverlays, `0x103e3c40` FUN_103e3c40 |
 | `0x10144790` FUN_10144790 | `0x101690b0` FUN_101690b0 |
 | `0x10144a30` FUN_10144a30 | `0x1030a7f0` FUN_1030a7f0 |
 | `0x10144db0` FUN_10144db0 | `0x102e8b80` FUN_102e8b80 |
@@ -673,10 +1003,10 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10146700` FUN_10146700 | `0x101ab450` CServerNetworkProperty::vfunc10 |
 | `0x10146790` FUN_10146790 | `0x101ab470` CServerNetworkProperty::vfunc11 |
 | `0x10147710` FUN_10147710 | `0x101467b0` FUN_101467b0 |
-| `0x1014f210` FUN_1014f210 | `0x1014f000` CPhysicsAnimlink::vfunc103, `0x103ed9b0` FUN_103ed9b0 |
-| `0x1014f750` CAI_BaseNPC::FUN_1014f750 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x1014f770` CAI_BaseNPC::FUN_1014f770 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x1014f790` CAI_BaseNPC::FUN_1014f790 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
+| `0x1014f210` FUN_1014f210 | `0x1014f000` CPhysicsAnimlink::Spawn, `0x103ed9b0` FUN_103ed9b0 |
+| `0x1014f750` CBaseCombatCharacter::PlayerDefenderBlockReaction | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
+| `0x1014f770` CBaseCombatCharacter::PlayerAttackerBlockedReaction | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
+| `0x1014f790` CBaseCombatCharacter::PlayerKnockbackReaction | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x1014f7b0` CAI_BaseNPC::FUN_1014f7b0 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x1014f930` CAI_BaseNPC::FUN_1014f930 | `0x1033f270` CBaseCombatCharacter::InputFrenzyTrigger |
 | `0x1014f9a0` CBaseCombatCharacter::FUN_1014f9a0 | `0x10326360` CBaseCombatCharacter::FinViewCone3d |
@@ -684,30 +1014,30 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1014fa10` CAI_BaseNPC::FUN_1014fa10 | `0x10162c30` CBasePlayer::TraceAttack, `0x10162fa0` CBasePlayer::FUN_10162fa0 |
 | `0x1014fa50` CAI_BaseNPC::FUN_1014fa50 | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10155380` FUN_10155380 | `0x10156a80` FUN_10156a80, `0x10157260` FUN_10157260 |
-| `0x101554a0` FUN_101554a0 | `0x10154e40` CRagdollProp::FUN_10154e40, `0x10156a80` FUN_10156a80, `0x10156e10` FUN_10156e10 |
-| `0x101563b0` FUN_101563b0 | `0x10155e40` CRagdollProp::FUN_10155e40 |
+| `0x101554a0` FUN_101554a0 | `0x10154e40` CRagdollProp::Spawn, `0x10156a80` FUN_10156a80, `0x10156e10` FUN_10156e10 |
+| `0x101563b0` FUN_101563b0 | `0x10155e40` CRagdollProp::Teleport |
 | `0x10156ce0` FUN_10156ce0 | `0x10156a80` FUN_10156a80 |
 | `0x10158ab0` FUN_10158ab0 ‼ | `0x10158b40` FUN_10158b40, `0x10158bc0` FUN_10158bc0 |
 | `0x10158af0` FUN_10158af0 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002af90` CPhysConstraint::InputTurnOff |
 | `0x10158c00` FUN_10158c00 | `0x10028d20` CPhysMotor::vfunc113, `0x101487a0` FUN_101487a0, `0x1019bf80` FUN_1019bf80 |
-| `0x101618e0` FUN_101618e0 | `0x10163af0` CBasePlayer::vfunc144, `0x1016bd50` FUN_1016bd50, `0x1016be10` CBasePlayer::PostThink, `0x102272b0` CPlayerEvents::InputRemoveControllerNPC |
-| `0x10161f10` FUN_10161f10 | `0x10163af0` CBasePlayer::vfunc144 |
-| `0x10167fd0` FUN_10167fd0 | `0x100db7a0` FUN_100db7a0, `0x1014dd50` CWeaponGravityGun::vfunc327, `0x10163020` CBasePlayer::vfunc142, `0x10167850` CBasePlayer::PlayerUse, +14 more |
+| `0x101618e0` FUN_101618e0 | `0x10163af0` CBasePlayer::Event_Killed, `0x1016bd50` FUN_1016bd50, `0x1016be10` CBasePlayer::PostThink, `0x102272b0` CPlayerEvents::InputRemoveControllerNPC |
+| `0x10161f10` FUN_10161f10 | `0x10163af0` CBasePlayer::Event_Killed |
+| `0x10167fd0` FUN_10167fd0 | `0x100db7a0` FUN_100db7a0, `0x1014dd50` CWeaponGravityGun::SecondaryAttack, `0x10163020` CBasePlayer::OnTakeDamage, `0x10167850` CBasePlayer::PlayerUse, +14 more |
 | `0x10172410` FUN_10172410 | `0x10172e60` CBasePlayer::vfunc451 |
 | `0x10172710` FUN_10172710 | `0x10086fb0` FUN_10086fb0, `0x10088de0` FUN_10088de0, `0x10089550` FUN_10089550, `0x100896c0` FUN_100896c0, +14 more |
 | `0x10175400` FUN_10175400 | `0x10169960` CBasePlayer::FUN_10169960, `0x101755d0` CBasePlayer::UpdateClientActionState |
-| `0x10176520` FUN_10176520 | `0x1016b130` CBasePlayer::vfunc436, `0x102387b0` CWeaponRanged::Shot ‼, `0x10255700` CBaseCombatWeapon::FUN_10255700, `0x103ed200` FUN_103ed200 |
+| `0x10176520` FUN_10176520 | `0x1016b130` CBasePlayer::vfunc436, `0x102387b0` CWeaponRanged::Shot ‼, `0x10255700` CBaseCombatWeapon::PrimaryAttack, `0x103ed200` FUN_103ed200 |
 | `0x10178120` FUN_10178120 | `0x100d6820` FUN_100d6820, `0x100ea6d0` FUN_100ea6d0, `0x1016fed0` FUN_1016fed0, `0x10171da0` CBasePlayer::InputWhisper, +1 more |
 | `0x1017a2b0` FUN_1017a2b0 | `0x1017a270` FUN_1017a270, `0x1017b6c0` FUN_1017b6c0 |
 | `0x1017c600` FUN_1017c600 | `0x101993c0` FUN_101993c0 |
-| `0x1017c6d0` FUN_1017c6d0 | `0x100d5000` FUN_100d5000, `0x10163020` CBasePlayer::vfunc142, `0x1018dc00` CPointTeleport::InputTeleport |
+| `0x1017c6d0` FUN_1017c6d0 | `0x100d5000` FUN_100d5000, `0x10163020` CBasePlayer::OnTakeDamage, `0x1018dc00` CPointTeleport::InputTeleport |
 | `0x1017d680` FUN_1017d680 | `0x100cc430` FUN_100cc430, `0x100ccea0` FUN_100ccea0 |
 | `0x1017d900` FUN_1017d900 | `0x1017d0b0` FUN_1017d0b0, `0x1017d6d0` FUN_1017d6d0, `0x10182550` CBasePlayer::FUN_10182550, `0x10352120` CHL2_Player::vfunc430 |
-| `0x1017dd80` FUN_1017dd80 | `0x102109b0` CTriggerPlayerActivityLevel::vfunc176 |
-| `0x1017ddd0` FUN_1017ddd0 | `0x102109b0` CTriggerPlayerActivityLevel::vfunc176 |
-| `0x1017de60` FUN_1017de60 | `0x102109b0` CTriggerPlayerActivityLevel::vfunc176 |
+| `0x1017dd80` FUN_1017dd80 | `0x102109b0` CTriggerPlayerActivityLevel::EndTouch |
+| `0x1017ddd0` FUN_1017ddd0 | `0x102109b0` CTriggerPlayerActivityLevel::EndTouch |
+| `0x1017de60` FUN_1017de60 | `0x102109b0` CTriggerPlayerActivityLevel::EndTouch |
 | `0x1017df50` FUN_1017df50 | `0x1014abe0` FUN_1014abe0, `0x10169960` CBasePlayer::FUN_10169960, `0x1016be10` CBasePlayer::PostThink, `0x101707c0` FUN_101707c0, +6 more |
-| `0x1017e150` FUN_1017e150 | `0x1014d140` FUN_1014d140, `0x1014dd50` CWeaponGravityGun::vfunc327, `0x10161fc0` CBasePlayer::FUN_10161fc0, `0x10168320` CBasePlayer::Replenish, +11 more |
+| `0x1017e150` FUN_1017e150 | `0x1014d140` FUN_1014d140, `0x1014dd50` CWeaponGravityGun::SecondaryAttack, `0x10161fc0` CBasePlayer::FUN_10161fc0, `0x10168320` CBasePlayer::Replenish, +11 more |
 | `0x1017e6f0` FUN_1017e6f0 | `0x101707c0` FUN_101707c0, `0x1017e680` CBasePlayer::InputSetInvestigateLevel, `0x1019a980` FUN_1019a980, `0x1019ab40` FUN_1019ab40, +3 more |
 | `0x1017f8d0` FUN_1017f8d0 | `0x10178170` FUN_10178170, `0x1017f170` FUN_1017f170, `0x1017f600` FUN_1017f600, `0x1017faa0` FUN_1017faa0, +1 more |
 | `0x101800e0` FUN_101800e0 | `0x10146e20` FUN_10146e20, `0x10178170` FUN_10178170, `0x10228a80` FUN_10228a80 |
@@ -722,12 +1052,12 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10185100` FUN_10185100 | `0x1015df00` FUN_1015df00, `0x101c5d40` CTriggerHurt::vfunc5, `0x1020fa30` CLogicVisible::vfunc5, `0x103274d0` CBaseCombatCharacter::~CBaseCombatCharacter, +1 more |
 | `0x1018f690` FUN_1018f690 | `0x101925e0` FUN_101925e0 |
 | `0x10191170` FUN_10191170 | `0x10191130` FUN_10191130 |
-| `0x10191ac0` FUN_10191ac0 | `0x101506a0` CPhysicsCannister::vfunc104, `0x1018fb50` CBaseTerminal::FUN_1018fb50 |
+| `0x10191ac0` FUN_10191ac0 | `0x101506a0` CPhysicsCannister::Precache, `0x1018fb50` CBreakableProp::Precache |
 | `0x10191cc0` FUN_10191cc0 | `0x10192130` FUN_10192130 |
 | `0x1019bfd0` FUN_1019bfd0 ‼ | `0x10156e10` FUN_10156e10 |
 | `0x1019ce00` FUN_1019ce00 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +183 more |
 | `0x1019cf50` FUN_1019cf50 | `0x100c01d0` FUN_100c01d0, `0x100c0420` FUN_100c0420, `0x100d1650` FUN_100d1650, `0x10104730` FUN_10104730, +67 more |
-| `0x1019cff0` FUN_1019cff0 | `0x100508c0` FUN_100508c0, `0x10059ea0` FUN_10059ea0, `0x1005acb0` CTEBeamEntPoint::vfunc3, `0x1005b3f0` CTEBeamEnts::vfunc3, +69 more |
+| `0x1019cff0` FUN_1019cff0 | `0x100508c0` CBaseTempEntity::Test, `0x10059ea0` FUN_10059ea0, `0x1005acb0` CTEBeamEntPoint::vfunc3, `0x1005b3f0` CTEBeamEnts::vfunc3, +69 more |
 | `0x1019d130` FUN_1019d130 | `0x100582f0` CTempEntsSystem::vfunc2, `0x10058380` CTempEntsSystem::vfunc3, `0x10058410` CTempEntsSystem::vfunc4, `0x100584a0` CTempEntsSystem::vfunc5, +47 more |
 | `0x1019d210` FUN_1019d210 | `0x100f5e80` CEffectsServer::vfunc2, `0x100f6050` CEffectsServer::vfunc3, `0x100f6170` CEffectsServer::vfunc4, `0x100f6290` CEffectsServer::vfunc5, +15 more |
 | `0x1019d280` FUN_1019d280 | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1002cd50` FUN_1002cd50, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, +64 more |
@@ -750,14 +1080,14 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101b65e0` FUN_101b65e0 | `0x101b4240` FUN_101b4240, `0x101b4d30` FUN_101b4d30 |
 | `0x101b6b90` FUN_101b6b90 | `0x101b4240` FUN_101b4240, `0x101b4d30` FUN_101b4d30, `0x101b5870` FUN_101b5870, `0x101b7370` FUN_101b7370 |
 | `0x101b78f0` FUN_101b78f0 | `0x101b2870` FUN_101b2870, `0x101b2e30` FUN_101b2e30, `0x101b66e0` FUN_101b66e0, `0x101b6bd0` FUN_101b6bd0, +6 more |
-| `0x101b9840` FUN_101b9840 | `0x101ba7d0` CSoundEnt::vfunc126 |
-| `0x101b9860` FUN_101b9860 | `0x101ba7d0` CSoundEnt::vfunc126, `0x101ba840` CSoundEnt::vfunc127 |
+| `0x101b9840` FUN_101b9840 | `0x101ba7d0` CSoundEnt::Save |
+| `0x101b9860` FUN_101b9860 | `0x101ba7d0` CSoundEnt::Save, `0x101ba840` CSoundEnt::Restore |
 | `0x101bab50` FUN_101bab50 | `0x101baf80` FUN_101baf80 |
 | `0x101babc0` FUN_101babc0 | `0x104296e0` CBaseGrenade::vfunc406, `0x10429f80` FUN_10429f80, `0x1042a540` FUN_1042a540, `0x1042a750` FUN_1042a750, +1 more |
-| `0x101bb0f0` FUN_101bb0f0 | `0x10102890` CEnvMicrophone::vfunc134, `0x101bb370` FUN_101bb370 |
-| `0x101bb150` CSoundEnt::SoundPointerForIndex | `0x10102890` CEnvMicrophone::vfunc134, `0x1011c060` CServerGameClients::vfunc3, `0x10163af0` CBasePlayer::vfunc144, `0x1016b480` FUN_1016b480, +1 more |
+| `0x101bb0f0` FUN_101bb0f0 | `0x10102890` CEnvMicrophone::Remove, `0x101bb370` FUN_101bb370 |
+| `0x101bb150` CSoundEnt::SoundPointerForIndex | `0x10102890` CEnvMicrophone::Remove, `0x1011c060` CServerGameClients::vfunc3, `0x10163af0` CBasePlayer::Event_Killed, `0x1016b480` FUN_1016b480, +1 more |
 | `0x101c01c0` FUN_101c01c0 | `0x101bfb00` FUN_101bfb00 |
-| `0x101c0820` CAISound::FUN_101c0820 | `0x10028260` CPhysTorque::vfunc103, `0x100fb3d0` CDisciplineParticle::FUN_100fb3d0, `0x100fcdd0` CParamsParticle::vfunc103 ‼, `0x101043a0` CParamsExplosion::vfunc103 ‼, +1 more |
+| `0x101c0820` CPointEntity::Spawn | `0x10028260` CPhysTorque::Spawn, `0x100fb3d0` CEnvParticle::Spawn, `0x100fcdd0` CParamsParticle::Spawn ‼, `0x101043a0` CParamsExplosion::Spawn ‼, +1 more |
 | `0x101c1480` CAI_BaseNPC::FUN_101c1480 | `0x10158cd0` CFuncPlat::FUN_10158cd0, `0x101c73d0` CChangeLevel::vfunc110 |
 | `0x101c1720` CAI_BaseNPC::FUN_101c1720 ‼ | `0x10116bf0` CFuncMoveLinear::vfunc133, `0x10209090` CItemContainer::FUN_10209090, `0x10223a10` CBaseKeyframedMover::FUN_10223a10 |
 | `0x101c19e0` FUN_101c19e0 | `0x1020c850` CSecCamera::vfunc133 |
@@ -777,10 +1107,10 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101ccd40` FUN_101ccd40 | `0x10128850` FUN_10128850, `0x1014a4f0` FUN_1014a4f0, `0x1016e0c0` FUN_1016e0c0, `0x101807d0` FUN_101807d0, +6 more |
 | `0x101ccd70` FUN_101ccd70 | `0x10124630` FUN_10124630, `0x10165790` FUN_10165790, `0x1032a490` FUN_1032a490, `0x1040f940` FUN_1040f940 |
 | `0x101ccf50` FUN_101ccf50 | `0x101cd190` FUN_101cd190 |
-| `0x101cd070` FUN_101cd070 | `0x101ccfe0` CTraceFilterEntity::vfunc0 |
+| `0x101cd070` FUN_101cd070 | `0x101ccfe0` CTraceFilterEntity::ShouldHitEntity |
 | `0x101cd110` FUN_101cd110 | `0x100d3860` FUN_100d3860, `0x10129700` FUN_10129700, `0x1027e140` FUN_1027e140, `0x1027e250` FUN_1027e250 |
 | `0x101cd250` FUN_101cd250 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
-| `0x101cd970` FUN_101cd970 | `0x10130460` CLight::vfunc103, `0x10136600` FUN_10136600, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3470` FUN_101a3470, +4 more |
+| `0x101cd970` FUN_101cd970 | `0x10130460` CLight::Spawn, `0x10136600` FUN_10136600, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3470` FUN_101a3470, +4 more |
 | `0x101cd9e0` FUN_101cd9e0 ‼ | `0x1003bad0` FUN_1003bad0, `0x1003bdd0` FUN_1003bdd0, `0x1006e130` FUN_1006e130, `0x1006e8e0` FUN_1006e8e0, +86 more |
 | `0x101cda50` FUN_101cda50 | `0x100843d0` FUN_100843d0, `0x100ba000` CBatSwarm::FUN_100ba000, `0x10183470` FUN_10183470, `0x10208c90` CItemContainer::InputUse, +6 more |
 | `0x101cdba0` FUN_101cdba0 | `0x10032180` FUN_10032180, `0x10102dd0` FUN_10102dd0, `0x10103370` FUN_10103370, `0x10104730` FUN_10104730, +7 more |
@@ -791,40 +1121,40 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101ce3d0` FUN_101ce3d0 | `0x1020e6b0` FUN_1020e6b0, `0x102f7ca0` FUN_102f7ca0 |
 | `0x101ce620` FUN_101ce620 | `0x100af010` FUN_100af010, `0x100af340` FUN_100af340, `0x100af840` FUN_100af840, `0x100afb90` FUN_100afb90, +16 more |
 | `0x101cebc0` FUN_101cebc0 | `0x100d8830` FUN_100d8830 ‼, `0x100efc90` CBaseDoor::Use, `0x10147430` FUN_10147430, `0x1014abe0` FUN_1014abe0, +33 more |
-| `0x101cecf0` FUN_101cecf0 | `0x100d8830` FUN_100d8830 ‼, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::FUN_10177210, `0x10230910` FUN_10230910 |
+| `0x101cecf0` FUN_101cecf0 | `0x100d8830` FUN_100d8830 ‼, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::Weapon_CanUse, `0x10230910` FUN_10230910 |
 | `0x101cee20` FUN_101cee20 | `0x10174c10` FUN_10174c10 ‼ |
-| `0x101cf250` FUN_101cf250 | `0x1016ea00` CBasePlayer::FUN_1016ea00, `0x1018d2f0` CPointAngleSensor::vfunc126 |
-| `0x101cf390` FUN_101cf390 | `0x10056a90` CDynamicLight::vfunc103, `0x100940d0` CBaseAnimating::SetSequenceBox, `0x100adf10` FUN_100adf10, `0x100d2eb0` FUN_100d2eb0, +15 more |
+| `0x101cf250` FUN_101cf250 | `0x1016ea00` CBasePlayer::Save, `0x1018d2f0` CPointAngleSensor::Save |
+| `0x101cf390` FUN_101cf390 | `0x10056a90` CDynamicLight::Spawn, `0x100940d0` CBaseAnimating::SetSequenceBox, `0x100adf10` FUN_100adf10, `0x100d2eb0` FUN_100d2eb0, +15 more |
 | `0x101cf3c0` FUN_101cf3c0 | `0x101cf4a0` FUN_101cf4a0 |
 | `0x101cf5c0` FUN_101cf5c0 | `0x100adbd0` FUN_100adbd0, `0x100d3270` FUN_100d3270, `0x100ef260` CBaseDoor::vfunc103, `0x100ef630` CBaseDoor::vfunc250, +21 more |
 | `0x101cf600` FUN_101cf600 | `0x1002d580` CObjectEvent::vfunc1, `0x100502b0` CPhysConvert::InputConvertTarget, `0x100d2eb0` FUN_100d2eb0, `0x100f49e0` FUN_100f49e0, +19 more |
 | `0x101cf720` FUN_101cf720 | `0x100af340` FUN_100af340, `0x100aff90` FUN_100aff90, `0x100d2d80` FUN_100d2d80, `0x100d3e90` FUN_100d3e90, +1 more |
 | `0x101cf9b0` FUN_101cf9b0 | `0x101cfa40` FUN_101cfa40 |
-| `0x101cfe10` FUN_101cfe10 | `0x1012a9b0` FUN_1012a9b0, `0x1012ad20` FUN_1012ad20, `0x10171aa0` CBloodSplat::vfunc134, `0x102692d0` FUN_102692d0 |
+| `0x101cfe10` FUN_101cfe10 | `0x1012a9b0` FUN_1012a9b0, `0x1012ad20` FUN_1012ad20, `0x10171aa0` CBloodSplat::Remove, `0x102692d0` FUN_102692d0 |
 | `0x101cfea0` FUN_101cfea0 | `0x104296e0` CBaseGrenade::vfunc406 |
 | `0x101d03e0` FUN_101d03e0 | `0x10191e90` CBreakParser::vfunc0, `0x101d0410` FUN_101d0410 |
 | `0x101d0570` FUN_101d0570 | `0x1020e290` CGameText::vfunc110 |
 | `0x101d0630` FUN_101d0630 | `0x100568a0` CDynamicLight::vfunc110 |
 | `0x101d08e0` FUN_101d08e0 | `0x101d0a00` FUN_101d0a00 |
-| `0x101d0ec0` FUN_101d0ec0 | `0x10109cf0` CFire::vfunc104, `0x1010fec0` CBreakableSurface::vfunc104 |
+| `0x101d0ec0` FUN_101d0ec0 | `0x10109cf0` CFire::Precache, `0x1010fec0` CBreakableSurface::Precache |
 | `0x101d0f10` FUN_101d0f10 | `0x1023bd20` FUN_1023bd20, `0x1033f750` CBaseCombatCharacter::PrecacheOnce |
-| `0x101d1070` FUN_101d1070 | `0x100e34d0` CDialog::audit_asset_files, `0x100e37d0` CDialog::dump_script_file, `0x1016ea00` CBasePlayer::FUN_1016ea00, `0x1016f2a0` FUN_1016f2a0, +1 more |
+| `0x101d1070` FUN_101d1070 | `0x100e34d0` CDialog::audit_asset_files, `0x100e37d0` CDialog::dump_script_file, `0x1016ea00` CBasePlayer::Save, `0x1016f2a0` FUN_1016f2a0, +1 more |
 | `0x101d1120` FUN_101d1120 | `0x101be500` CStealthKillRules::InDeafArc, `0x10218710` FUN_10218710 |
 | `0x101d1530` FUN_101d1530 | `0x10027de0` CPhysThruster::vfunc241, `0x101d1460` FUN_101d1460 |
-| `0x101d1800` FUN_101d1800 | `0x101ae7a0` CEnvSoundscape::vfunc134 |
+| `0x101d1800` FUN_101d1800 | `0x101ae7a0` CEnvSoundscape::Remove |
 | `0x101d2560` FUN_101d2560 | `0x103f1950` CVampireProjectile_MingXiaoSpit::vfunc266 |
 | `0x101d26b0` FUN_101d26b0 | `0x1039a256` FUN_1039a256, `0x103f1950` CVampireProjectile_MingXiaoSpit::vfunc266 |
-| `0x101d2850` FUN_101d2850 | `0x10081e00` CSceneEntity::InputStart, `0x1019a4e0` PyServerSystem::vfunc3, `0x101c7890` FUN_101c7890, `0x10212200` CPropSign::LoadSignData, +2 more |
+| `0x101d2850` FUN_101d2850 | `0x10081e00` CSceneEntity::InputStart, `0x1019a4e0` PyServerSystem::LevelInitPostEntity, `0x101c7890` FUN_101c7890, `0x10212200` CPropSign::LoadSignData, +2 more |
 | `0x101d2c70` FUN_101d2c70 | `0x10164870` CBasePlayer::FUN_10164870, `0x102627e0` FUN_102627e0, `0x10262c20` FUN_10262c20, `0x102debe0` FUN_102debe0, +7 more |
 | `0x101d2f40` FUN_101d2f40 | `0x100f2bd0` CRotDoor::GetNPCOpenData, `0x10172e60` CBasePlayer::vfunc451, `0x10262590` FUN_10262590, `0x10264680` CAI_HumanoidMotor::vfunc19, +7 more |
 | `0x101d3190` FUN_101d3190 | `0x10035030` FUN_10035030, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004f030` CPhysImpact::InputImpact, `0x1005eee0` CTEBSPDecal::vfunc3, +107 more |
-| `0x101d3730` FUN_101d3730 | `0x1006ff40` CBaseCineCam::vfunc123, `0x10080b00` FUN_10080b00, `0x100dfd30` CDialog::CheckNameCollisions, `0x100dffa0` CDialog::LogAutoendFloats, +45 more |
+| `0x101d3730` FUN_101d3730 | `0x1006ff40` CBaseCineCam::DrawDebugGeometryOverlays, `0x10080b00` FUN_10080b00, `0x100dfd30` CDialog::CheckNameCollisions, `0x100dffa0` CDialog::LogAutoendFloats, +45 more |
 | `0x101d3850` FUN_101d3850 | `0x101d5530` FUN_101d5530 |
 | `0x101d4e70` FUN_101d4e70 | `0x100d1d50` FUN_100d1d50 |
 | `0x101d4eb0` FUN_101d4eb0 | `0x100d1d50` FUN_100d1d50 |
 | `0x101d5bd0` FUN_101d5bd0 | `0x100d6210` FUN_100d6210, `0x100df2d0` FUN_100df2d0, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, +10 more |
 | `0x101d5e80` FUN_101d5e80 | `0x100d1d50` FUN_100d1d50, `0x100d6560` FUN_100d6560, `0x100d6680` FUN_100d6680, `0x100e4240` CDialog::dump_dialog, +7 more |
-| `0x101d5f10` FUN_101d5f10 | `0x100d6210` FUN_100d6210, `0x10169660` CBasePlayer::FUN_10169660, `0x101d7fb0` FUN_101d7fb0, `0x1022f640` FUN_1022f640, +1 more |
+| `0x101d5f10` FUN_101d5f10 | `0x100d6210` FUN_100d6210, `0x10169660` CBasePlayer::LeaveGrappleState, `0x101d7fb0` FUN_101d7fb0, `0x1022f640` FUN_1022f640, +1 more |
 | `0x101d8720` FUN_101d8720 | `0x100d7040` FUN_100d7040 |
 | `0x101d8770` FUN_101d8770 | `0x1022f580` FUN_1022f580, `0x1022f640` FUN_1022f640 |
 | `0x101d8820` FUN_101d8820 | `0x10168910` FUN_10168910, `0x101e7ea0` FUN_101e7ea0, `0x101e8100` FUN_101e8100, `0x101e8330` FUN_101e8330, +2 more |
@@ -855,11 +1185,11 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101e8c30` FUN_101e8c30 | `0x1008a520` FUN_1008a520 |
 | `0x101e8ec0` FUN_101e8ec0 | `0x1022f580` FUN_1022f580 |
 | `0x101e9040` FUN_101e9040 | `0x103f90f0` FUN_103f90f0 |
-| `0x101e9290` FUN_101e9290 | `0x103f91d0` FUN_103f91d0, `0x103fc060` CBloodPack::vfunc315, `0x103fc4e0` CBlueBloodPack::vfunc315 |
+| `0x101e9290` FUN_101e9290 | `0x103f91d0` FUN_103f91d0, `0x103fc060` CBloodPack::Deploy, `0x103fc4e0` CBlueBloodPack::Deploy |
 | `0x101e9570` FUN_101e9570 | `0x101e9950` FUN_101e9950 |
 | `0x101e9f10` FUN_101e9f10 | `0x100d6d40` FUN_100d6d40, `0x101e9f90` FUN_101e9f90 |
 | `0x101ea0b0` FUN_101ea0b0 | `0x100d6a50` FUN_100d6a50, `0x100d6d40` FUN_100d6d40, `0x10203710` FUN_10203710, `0x10203780` FUN_10203780 |
-| `0x101eb000` FUN_101eb000 | `0x101eb380` FUN_101eb380, `0x10255dd0` CBaseCombatWeapon::FUN_10255dd0 |
+| `0x101eb000` FUN_101eb000 | `0x101eb380` FUN_101eb380, `0x10255dd0` CBaseCombatWeapon::DrawDebugTextOverlays |
 | `0x101ed130` FUN_101ed130 | `0x1017a550` FUN_1017a550, `0x1017aa40` FUN_1017aa40, `0x10183910` FUN_10183910, `0x101d4fd0` FUN_101d4fd0, +1 more |
 | `0x101f0b50` FUN_101f0b50 | `0x101f0ea0` FUN_101f0ea0 |
 | `0x101f18f0` FUN_101f18f0 | `0x10227c00` FUN_10227c00, `0x10227c90` FUN_10227c90 |
@@ -882,7 +1212,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x101fa680` CVDmg_t::~CVDmg_t | `0x100bbef0` FUN_100bbef0, `0x100d9ec0` FUN_100d9ec0, `0x1010ab80` CFire::vfunc241, `0x10128850` FUN_10128850, +20 more |
 | `0x101fa8d0` CVDmg_t::Set | `0x100bbef0` FUN_100bbef0, `0x1010ab80` CFire::vfunc241, `0x10128850` FUN_10128850, `0x1013f7d0` CMoveHelperServer::vfunc7, +2 more |
 | `0x101fa960` CVDmg_t::SetSrc | `0x100bbef0` FUN_100bbef0, `0x100d9ec0` FUN_100d9ec0, `0x10165d90` CBasePlayer::FUN_10165d90, `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x101faa70` CVDmg_t::GetDmg | `0x1010e100` CBreakable::vfunc142, `0x10110da0` CBreakableSurface::vfunc141, `0x10128850` FUN_10128850, `0x1013f7d0` CMoveHelperServer::vfunc7, +12 more |
+| `0x101faa70` CVDmg_t::GetDmg | `0x1010e100` CBreakable::OnTakeDamage, `0x10110da0` CBreakableSurface::vfunc141, `0x10128850` FUN_10128850, `0x1013f7d0` CMoveHelperServer::vfunc7, +12 more |
 | `0x101fb340` CVDmg_t::EvadeCheck | `0x10162c30` CBasePlayer::TraceAttack |
 | `0x101fb3e0` CVDmg_t::AddFlags | `0x1022f640` FUN_1022f640, `0x102579f0` CBaseCombatWeapon::FUN_102579f0, `0x103e3570` FUN_103e3570 |
 | `0x101fb7a0` CVStatSubCost_t::CVStatSubCost_t | `0x101f69f0` FUN_101f69f0, `0x101ff300` CVStatInfoList_t::CVStatInfoList_t |
@@ -901,7 +1231,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10200ca0` CVStatList_t::GetBase | `0x100d4160` FUN_100d4160, `0x100d46c0` FUN_100d46c0, `0x10172e60` CBasePlayer::vfunc451, `0x101755d0` CBasePlayer::UpdateClientActionState, +5 more |
 | `0x10200fc0` CVStatList_t::AddBase | `0x100d8830` FUN_100d8830 ‼, `0x1014d7c0` FUN_1014d7c0, `0x1015f8b0` FUN_1015f8b0, `0x1017aa40` FUN_1017aa40, +4 more |
 | `0x10201100` CVStatList_t::SubBase | `0x100d8490` FUN_100d8490, `0x100d8830` FUN_100d8830 ‼, `0x1014d140` FUN_1014d140, `0x1017aa40` FUN_1017aa40, +6 more |
-| `0x102012d0` FUN_102012d0 | `0x100546b0` FUN_100546b0, `0x100548b0` FUN_100548b0, `0x100cf160` FUN_100cf160, `0x100cf420` FUN_100cf420, +71 more |
+| `0x102012d0` GetValue | `0x100546b0` FUN_100546b0, `0x100548b0` FUN_100548b0, `0x100cf160` FUN_100cf160, `0x100cf420` FUN_100cf420, +71 more |
 | `0x10201470` CVStatList_t::GetValueName | `0x100d6210` FUN_100d6210 |
 | `0x10201a40` CVStatList_t::ToDetailedStr | `0x100d4160` FUN_100d4160, `0x100d46c0` FUN_100d46c0 |
 | `0x10202060` FUN_10202060 | `0x102009b0` CVStatList_t::SetBaseToDefault, `0x10201190` CVStatList_t::Get, `0x10201590` CVStatList_t::SetMin, `0x102016a0` CVStatList_t::SetMax |
@@ -917,7 +1247,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10204270` FUN_10204270 | `0x1006c810` FUN_1006c810, `0x100ce0d0` FUN_100ce0d0, `0x100d0290` CVTSDependencySaveRestoreDataOps::vfunc1, `0x100d0350` CVTSDependencySaveRestoreDataOps::vfunc3, +7 more |
 | `0x102042a0` FUN_102042a0 | `0x101d4b90` FUN_101d4b90, `0x101e6310` FUN_101e6310, `0x101e7c50` FUN_101e7c50, `0x101ff850` CVStatInfoList_t::PostCache, +2 more |
 | `0x102043a0` FUN_102043a0 | `0x100cf160` FUN_100cf160, `0x100cf420` FUN_100cf420, `0x100cf7b0` FUN_100cf7b0, `0x100d01f0` CVTSDependencySaveRestoreDataOps::vfunc0, +13 more |
-| `0x10204900` FUN_10204900 | `0x1006cb10` FUN_1006cb10, `0x10160f90` CBasePlayer::FUN_10160f90, `0x101d6100` FUN_101d6100, `0x1022f580` FUN_1022f580, +4 more |
+| `0x10204900` FUN_10204900 | `0x1006cb10` FUN_1006cb10, `0x10160f90` CBasePlayer::ChooseMeleeAttackSequence, `0x101d6100` FUN_101d6100, `0x1022f580` FUN_1022f580, +4 more |
 | `0x10204c20` FUN_10204c20 | `0x101e54c0` FUN_101e54c0, `0x101e5ca0` FUN_101e5ca0, `0x10230d00` FUN_10230d00, `0x10230fc0` FUN_10230fc0 |
 | `0x10204c60` FUN_10204c60 | `0x1006cb10` FUN_1006cb10, `0x102304e0` FUN_102304e0, `0x102305d0` FUN_102305d0 |
 | `0x10205380` FUN_10205380 | `0x10199a70` FUN_10199a70 ‼, `0x101d4b90` FUN_101d4b90, `0x101d6070` FUN_101d6070, `0x101d8690` FUN_101d8690, +12 more |
@@ -934,10 +1264,10 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10206c30` FUN_10206c30 | `0x10206c70` FUN_10206c70 |
 | `0x10207c40` FUN_10207c40 | `0x100d8490` FUN_100d8490, `0x10339930` CBaseCombatCharacter::ResistsFeeding, `0x10339b50` CBaseCombatCharacter::IsBlueBlood, `0x10339c10` CBaseCombatCharacter::HasBadBlood, +1 more |
 | `0x10207c70` FUN_10207c70 | `0x100da040` FUN_100da040 |
-| `0x1020a0a0` FUN_1020a0a0 | `0x1010a130` CFire::vfunc103 |
+| `0x1020a0a0` FUN_1020a0a0 | `0x1010a130` CFire::Spawn |
 | `0x1020cd30` FUN_1020cd30 | `0x1020c2a0` FUN_1020c2a0, `0x1020c3d0` FUN_1020c3d0 |
 | `0x10217080` FUN_10217080 | `0x1020fad0` FUN_1020fad0 |
-| `0x1021fe50` FUN_1021fe50 | `0x100da230` FUN_100da230, `0x1017aa40` FUN_1017aa40, `0x10208f30` CItemContainer::InputSpawnItemInContainer, `0x10209350` CItemContainer::vfunc103 |
+| `0x1021fe50` FUN_1021fe50 | `0x100da230` FUN_100da230, `0x1017aa40` FUN_1017aa40, `0x10208f30` CItemContainer::InputSpawnItemInContainer, `0x10209350` CItemContainer::Spawn |
 | `0x1021fee0` FUN_1021fee0 | `0x1017aa40` FUN_1017aa40, `0x102116c0` FUN_102116c0 |
 | `0x10224100` FUN_10224100 | `0x100eef50` FUN_100eef50, `0x10208bf0` CItemContainer::FUN_10208bf0, `0x102241b0` FUN_102241b0, `0x102241f0` CBaseLockableEnt::InputUse, +8 more |
 | `0x1022dea0` FUN_1022dea0 | `0x1022e9d0` FUN_1022e9d0, `0x103419c0` CBaseCombatCharacter::InputChangeMasqueradeLevel |
@@ -948,7 +1278,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1023f040` FUN_1023f040 | `0x100d8220` FUN_100d8220, `0x1016cf30` FUN_1016cf30, `0x101d2960` FUN_101d2960, `0x102482f0` FUN_102482f0, +1 more |
 | `0x1023f060` FUN_1023f060 | `0x100d8220` FUN_100d8220, `0x1016cf30` FUN_1016cf30, `0x101d2960` FUN_101d2960, `0x102482f0` FUN_102482f0, +1 more |
 | `0x1023f0c0` FUN_1023f0c0 | `0x100d8220` FUN_100d8220, `0x1016cf30` FUN_1016cf30, `0x101d2960` FUN_101d2960, `0x102482f0` FUN_102482f0, +1 more |
-| `0x1023f3d0` FUN_1023f3d0 | `0x100b9c20` CBatSwarm::FUN_100b9c20 |
+| `0x1023f3d0` FUN_1023f3d0 | `0x100b9c20` CBatSwarm::TestCollision |
 | `0x1023fd00` FUN_1023fd00 | `0x103e3930` FUN_103e3930 |
 | `0x10240250` FUN_10240250 | `0x100f0c00` CBaseDoor::IsCloseBlocked, `0x102403b0` FUN_102403b0, `0x10240670` FUN_10240670 |
 | `0x10240cb0` FUN_10240cb0 | `0x10240fd0` FUN_10240fd0, `0x102414f0` FUN_102414f0 |
@@ -980,20 +1310,20 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1024ddf0` FUN_1024ddf0 | `0x1024cc50` FUN_1024cc50, `0x1024e000` FUN_1024e000 |
 | `0x1024f7b0` FUN_1024f7b0 ‼ | `0x1016de10` CBasePlayer::FUN_1016de10, `0x10199240` FUN_10199240, `0x1021fb50` FUN_1021fb50, `0x1021fc90` FUN_1021fc90, +2 more |
 | `0x102517b0` FUN_102517b0 | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d60c0` FUN_100d60c0, `0x100da230` FUN_100da230, `0x10173f90` FUN_10173f90, +60 more |
-| `0x102517e0` FUN_102517e0 | `0x101600a0` FUN_101600a0, `0x10160f90` CBasePlayer::FUN_10160f90, `0x1021f3e0` FUN_1021f3e0, `0x1021f710` FUN_1021f710, +36 more |
+| `0x102517e0` FUN_102517e0 | `0x101600a0` FUN_101600a0, `0x10160f90` CBasePlayer::ChooseMeleeAttackSequence, `0x1021f3e0` FUN_1021f3e0, `0x1021f710` FUN_1021f710, +36 more |
 | `0x102521f0` FUN_102521f0 | `0x1014a1b0` FUN_1014a1b0, `0x1014ab10` CWeaponGravityGun::vfunc278, `0x1014abe0` FUN_1014abe0, `0x1014c130` FUN_1014c130, +97 more |
-| `0x10252240` FUN_10252240 | `0x1014abe0` FUN_1014abe0, `0x1014d7c0` FUN_1014d7c0, `0x1014dd50` CWeaponGravityGun::vfunc327, `0x1021f3e0` FUN_1021f3e0, +25 more |
+| `0x10252240` FUN_10252240 | `0x1014abe0` FUN_1014abe0, `0x1014d7c0` FUN_1014d7c0, `0x1014dd50` CWeaponGravityGun::SecondaryAttack, `0x1021f3e0` FUN_1021f3e0, +25 more |
 | `0x10252410` FUN_10252410 | `0x102252f0` FUN_102252f0, `0x1024f670` CBaseCombatWeapon::FUN_1024f670, `0x103ee8f0` CWeaponThrown_Grenade_Frag::vfunc271 |
 | `0x10252470` FUN_10252470 | `0x103f6800` FUN_103f6800 |
 | `0x10255cf0` FUN_10255cf0 | `0x10335780` CBaseCombatCharacter::Inventory_MoveToFront |
 | `0x10256200` FUN_10256200 | `0x100b7fe0` CBasePlayer::FUN_100b7fe0 |
-| `0x10256220` FUN_10256220 | `0x101772b0` CBasePlayer::FUN_101772b0, `0x102506a0` FUN_102506a0, `0x10252ea0` CBaseCombatWeapon::FUN_10252ea0, `0x10253390` CBaseCombatWeapon::FUN_10253390, +3 more |
-| `0x10256280` FUN_10256280 | `0x101772b0` CBasePlayer::FUN_101772b0, `0x101abd40` FUN_101abd40 |
+| `0x10256220` FUN_10256220 | `0x101772b0` CBasePlayer::Weapon_Switch, `0x102506a0` FUN_102506a0, `0x10252ea0` CBaseCombatWeapon::FUN_10252ea0, `0x10253390` CBaseCombatWeapon::FUN_10253390, +3 more |
+| `0x10256280` FUN_10256280 | `0x101772b0` CBasePlayer::Weapon_Switch, `0x101abd40` FUN_101abd40 |
 | `0x10258270` FUN_10258270 | `0x103e3570` FUN_103e3570 |
-| `0x102585c0` FUN_102585c0 | `0x10182ec0` CBasePlayer::FUN_10182ec0 |
+| `0x102585c0` FUN_102585c0 | `0x10182ec0` CBasePlayer::Inventory_ShouldAllow_Autopickup |
 | `0x10258620` FUN_10258620 | `0x100d2b30` FUN_100d2b30 |
 | `0x10259de0` FUN_10259de0 | `0x10259f80` FUN_10259f80 |
-| `0x1025d730` FUN_1025d730 | `0x10146e20` FUN_10146e20, `0x10161460` CBasePlayer::FUN_10161460, `0x101812f0` FUN_101812f0, `0x102ee430` FUN_102ee430, +1 more |
+| `0x1025d730` FUN_1025d730 | `0x10146e20` FUN_10146e20, `0x10161460` CBasePlayer::DrawDebugTextOverlays, `0x101812f0` FUN_101812f0, `0x102ee430` FUN_102ee430, +1 more |
 | `0x1025d760` FUN_1025d760 | `0x101810f0` FUN_101810f0, `0x1030d850` FUN_1030d850 |
 | `0x1025dca0` FUN_1025dca0 | `0x102b57c0` FUN_102b57c0, `0x10385c30` FUN_10385c30, `0x103c1a60` FUN_103c1a60, `0x103c39e0` FUN_103c39e0 |
 | `0x1025ddd0` FUN_1025ddd0 | `0x102b5880` FUN_102b5880, `0x10385cf0` FUN_10385cf0, `0x103c1ad0` FUN_103c1ad0, `0x103c3a70` FUN_103c3a70 |
@@ -1004,15 +1334,15 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10267b60` FUN_10267b60 | `0x101eec30` CVampireProjectile::vfunc266 |
 | `0x10268ef0` CAISound::FUN_10268ef0 | `0x10162c30` CBasePlayer::TraceAttack |
 | `0x102699e0` FUN_102699e0 | `0x10162c30` CBasePlayer::TraceAttack, `0x10162fa0` CBasePlayer::FUN_10162fa0 |
-| `0x1026dc00` FUN_1026dc00 | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
-| `0x1026dc30` FUN_1026dc30 | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
+| `0x1026dc00` CAI_BaseNPC::CapabilitiesAdd | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
+| `0x1026dc30` CAI_BaseNPC::CapabilitiesRemove | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
 | `0x1026e940` FUN_1026e940 | `0x102e7e80` FUN_102e7e80 |
 | `0x102729d0` FUN_102729d0 | `0x10307ef0` FUN_10307ef0 |
 | `0x10273070` FUN_10273070 | `0x1016e0c0` FUN_1016e0c0, `0x102d7730` FUN_102d7730, `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
 | `0x10273760` FUN_10273760 | `0x1019ab40` FUN_1019ab40 |
 | `0x10279b70` FUN_10279b70 | `0x1019ab40` FUN_1019ab40 |
 | `0x1027a6c0` FUN_1027a6c0 | `0x102ef6a0` FUN_102ef6a0, `0x102ef760` FUN_102ef760 |
-| `0x1027bb20` CAI_BaseNPC::FUN_1027bb20 | `0x101a8fe0` FUN_101a8fe0, `0x101a96b0` FUN_101a96b0, `0x101aa550` FUN_101aa550, `0x102d7210` FUN_102d7210, +16 more |
+| `0x1027bb20` CAI_BaseNPC::PostConstructor | `0x101a8fe0` FUN_101a8fe0, `0x101a96b0` FUN_101a96b0, `0x101aa550` FUN_101aa550, `0x102d7210` FUN_102d7210, +16 more |
 | `0x1027de00` FUN_1027de00 | `0x100f1340` CBaseDoor::StartBlocked, `0x1027dfb0` FUN_1027dfb0 |
 | `0x1027e590` FUN_1027e590 | `0x102ee430` FUN_102ee430 |
 | `0x1027e7f0` FUN_1027e7f0 | `0x102c9c30` FUN_102c9c30 |
@@ -1025,7 +1355,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1028b160` FUN_1028b160 | `0x1028d230` FUN_1028d230 |
 | `0x1028e830` FUN_1028e830 | `0x1028e890` FUN_1028e890 |
 | `0x1028fc90` FUN_1028fc90 | `0x1034b7b0` FUN_1034b7b0 |
-| `0x10298ce0` CAI_BaseNPCTroika::FUN_10298ce0 | `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
+| `0x10298ce0` CAI_BaseNPCTroika::SetModel | `0x103ab310` CNPC_VSabbatLeader::TransformationStart |
 | `0x102a0bc0` FUN_102a0bc0 | `0x10298340` FUN_10298340 |
 | `0x102ae7f0` FUN_102ae7f0 | `0x102c33f0` CAI_BaseNPCTroika::InputChangeSchedule |
 | `0x102ae840` FUN_102ae840 | `0x103e0980` FUN_103e0980 |
@@ -1036,7 +1366,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x102c73b0` FUN_102c73b0 | `0x102c7100` FUN_102c7100, `0x102c8280` CAI_StandoffGoal::InputSetAggressiveness |
 | `0x102ca460` FUN_102ca460 | `0x102ca630` FUN_102ca630 |
 | `0x102cadb0` FUN_102cadb0 | `0x102c47e0` FUN_102c47e0, `0x1030d850` FUN_1030d850 |
-| `0x102cc350` CAI_BaseNPC::FUN_102cc350 | `0x1036c810` CNPC_VChangBros::PrintTask |
+| `0x102cc350` CAI_BaseNPC::TaskName | `0x1036c810` CNPC_VChangBros::PrintTask |
 | `0x102cd3b0` FUN_102cd3b0 | `0x102c8280` CAI_StandoffGoal::InputSetAggressiveness |
 | `0x102cd4a0` FUN_102cd4a0 | `0x102c8280` CAI_StandoffGoal::InputSetAggressiveness |
 | `0x102d0b20` FUN_102d0b20 | `0x102d31c0` FUN_102d31c0 |
@@ -1047,7 +1377,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x102d6120` FUN_102d6120 | `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x10232ef0` FUN_10232ef0, `0x1027fc90` FUN_1027fc90, +6 more |
 | `0x102d61b0` FUN_102d61b0 | `0x102ef1a0` FUN_102ef1a0, `0x1030a650` FUN_1030a650 |
 | `0x102d6210` FUN_102d6210 | `0x102f7a10` FUN_102f7a10, `0x102f7a90` FUN_102f7a90, `0x102f7e60` FUN_102f7e60, `0x102fa170` FUN_102fa170, +2 more |
-| `0x102d6230` FUN_102d6230 | `0x10085a80` FUN_10085a80, `0x1016e820` CBasePlayer::vfunc104, `0x102f7ca0` FUN_102f7ca0, `0x102fa510` FUN_102fa510, +1 more |
+| `0x102d6230` FUN_102d6230 | `0x10085a80` FUN_10085a80, `0x1016e820` CBasePlayer::Precache, `0x102f7ca0` FUN_102f7ca0, `0x102fa510` FUN_102fa510, +1 more |
 | `0x102d9150` FUN_102d9150 | `0x102e2990` _08__VCAI_InterestTarget____CUtlVectorDataOps::vfunc1 |
 | `0x102dc3e0` FUN_102dc3e0 | `0x102dbfb0` FUN_102dbfb0, `0x102dccc0` CAI_InterestingPlaceConverstation::InputEnable |
 | `0x102df1b0` FUN_102df1b0 | `0x102df090` CAI_MemoryListSaveRestoreOps::vfunc1, `0x102df1d0` CAI_MemoryListSaveRestoreOps::vfunc3 |
@@ -1096,9 +1426,9 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x102f91b0` FUN_102f91b0 | `0x10310d70` FUN_10310d70 |
 | `0x102f9400` FUN_102f9400 | `0x102ccc10` FUN_102ccc10 |
 | `0x102f96e0` FUN_102f96e0 | `0x102fb4e0` FUN_102fb4e0 ‼ |
-| `0x102f9920` FUN_102f9920 | `0x1016e820` CBasePlayer::vfunc104, `0x102f5bd0` FUN_102f5bd0 ‼ |
-| `0x102f9950` FUN_102f9950 | `0x1016e820` CBasePlayer::vfunc104, `0x102f51d0` FUN_102f51d0 ‼, `0x102f7a10` FUN_102f7a10, `0x102f7a90` FUN_102f7a90, +3 more |
-| `0x102f9970` FUN_102f9970 | `0x1016e820` CBasePlayer::vfunc104 |
+| `0x102f9920` FUN_102f9920 | `0x1016e820` CBasePlayer::Precache, `0x102f5bd0` FUN_102f5bd0 ‼ |
+| `0x102f9950` FUN_102f9950 | `0x1016e820` CBasePlayer::Precache, `0x102f51d0` FUN_102f51d0 ‼, `0x102f7a10` FUN_102f7a10, `0x102f7a90` FUN_102f7a90, +3 more |
+| `0x102f9970` FUN_102f9970 | `0x1016e820` CBasePlayer::Precache |
 | `0x102f9c70` FUN_102f9c70 | `0x101ca510` FUN_101ca510, `0x102f9ca0` FUN_102f9ca0, `0x102f9cd0` FUN_102f9cd0 |
 | `0x102fc910` FUN_102fc910 | `0x102fac00` FUN_102fac00, `0x102fef30` FUN_102fef30 ‼, `0x10310d70` FUN_10310d70 |
 | `0x102fcbd0` FUN_102fcbd0 | `0x102fef30` FUN_102fef30 ‼ |
@@ -1134,30 +1464,30 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10323210` CBaseCombatCharacter::GetPresenceBenefit | `0x102387b0` CWeaponRanged::Shot ‼ |
 | `0x103232b0` CBaseCombatCharacter::GetShakyHandsPenalty | `0x102387b0` CWeaponRanged::Shot ‼ |
 | `0x10323930` FUN_10323930 | `0x103426b0` FUN_103426b0 |
-| `0x103239a0` CBaseCombatCharacter::AddToTeam | `0x1016d260` CBasePlayer::vfunc103, `0x1016ebd0` CBasePlayer::FUN_1016ebd0 |
-| `0x10323a90` CBaseCombatCharacter::Spawn | `0x1016d260` CBasePlayer::vfunc103, `0x10209350` CItemContainer::vfunc103 |
+| `0x103239a0` CBaseCombatCharacter::AddToTeam | `0x1016d260` CBasePlayer::Spawn, `0x1016ebd0` CBasePlayer::Restore |
+| `0x10323a90` CBaseCombatCharacter::Spawn | `0x1016d260` CBasePlayer::Spawn, `0x10209350` CItemContainer::Spawn |
 | `0x10323b60` CBaseCombatCharacter::FUN_10323b60 | `0x1016de10` CBasePlayer::FUN_1016de10 |
 | `0x10323c20` CBaseCombatCharacter::GetMaxInvenSlotsPerSection | `0x10335780` CBaseCombatCharacter::Inventory_MoveToFront, `0x10336b90` CBaseCombatCharacter::HasRangedWeapon |
-| `0x10327960` CBaseCombatCharacter::SetBloodColor | `0x10150380` CPhysicsCannister::vfunc103 |
+| `0x10327960` CBaseCombatCharacter::SetBloodColor | `0x10150380` CPhysicsCannister::Spawn |
 | `0x1032b960` FUN_1032b960 | `0x1040f940` FUN_1040f940 |
-| `0x1032c580` CBaseCombatCharacter::Event_TookLife | `0x1017fb30` CBasePlayer::FUN_1017fb30 |
+| `0x1032c580` CBaseCombatCharacter::Event_TookLife | `0x1017fb30` CBasePlayer::Event_TookLife |
 | `0x1032cbe0` CBaseCombatCharacter::Weapon_Detach | `0x101743f0` CBasePlayer::FUN_101743f0 |
 | `0x1032d0c0` CAI_BaseNPC::FUN_1032d0c0 | `0x100da230` FUN_100da230, `0x101777e0` CBasePlayer::FUN_101777e0 |
-| `0x1032d890` CBaseCombatCharacter::Weapon_OwnsThisType | `0x100da230` FUN_100da230, `0x10171f50` CBasePlayer::FUN_10171f50, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::FUN_10177210, +1 more |
-| `0x1032e120` CBaseCombatCharacter::Weapon_Create | `0x1016de10` CBasePlayer::FUN_1016de10, `0x101772b0` CBasePlayer::FUN_101772b0, `0x10177900` CBasePlayer::FUN_10177900, `0x1021fc90` FUN_1021fc90, +1 more |
+| `0x1032d890` CBaseCombatCharacter::Weapon_OwnsThisType | `0x100da230` FUN_100da230, `0x10171f50` CBasePlayer::FUN_10171f50, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::Weapon_CanUse, +1 more |
+| `0x1032e120` CBaseCombatCharacter::Weapon_Create | `0x1016de10` CBasePlayer::FUN_1016de10, `0x101772b0` CBasePlayer::Weapon_Switch, `0x10177900` CBasePlayer::FUN_10177900, `0x1021fc90` FUN_1021fc90, +1 more |
 | `0x1032e7b0` CBaseCombatCharacter::GetActiveWeapon | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d3160` FUN_100d3160 ‼, `0x100d5e30` FUN_100d5e30, `0x100d5f10` FUN_100d5f10 ‼, +60 more |
 | `0x1032e890` FUN_1032e890 | `0x103228c0` CBaseCombatCharacter::UpdateOccultPowers |
 | `0x1032e8b0` CBaseCombatCharacter::GetWeapon | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d5be0` FUN_100d5be0, `0x100d5d10` FUN_100d5d10, `0x100d8220` FUN_100d8220, +18 more |
 | `0x1032e9f0` CBaseCombatCharacter::SetWeapon | `0x1032ead0` CBaseCombatCharacter::RemoveAllWeapons, `0x10335780` CBaseCombatCharacter::Inventory_MoveToFront |
-| `0x1032ebc0` CBaseCombatCharacter::TakeHealth | `0x10162210` CBasePlayer::FUN_10162210 |
+| `0x1032ebc0` CBaseCombatCharacter::TakeHealth | `0x10162210` CBasePlayer::TakeHealth |
 | `0x1032f770` CBaseCombatCharacter::BurnHitbox | `0x101c5900` FUN_101c5900, `0x10348720` FUN_10348720, `0x103e1cf0` FUN_103e1cf0, `0x103e3570` FUN_103e3570 |
 | `0x1032fab0` CBaseCombatCharacter::GetStealthModifier | `0x10351e10` CHL2_Player::vfunc470 |
 | `0x1032fe60` CAI_BaseNPC::FUN_1032fe60 | `0x101755d0` CBasePlayer::UpdateClientActionState |
 | `0x10330020` CAI_BaseNPC::FUN_10330020 | `0x10182550` CBasePlayer::FUN_10182550 |
 | `0x10330220` FUN_10330220 | `0x10064870` FUN_10064870, `0x10064df0` FUN_10064df0 |
-| `0x10331a40` CBaseCombatCharacter::BodyDirection3D | `0x102088a0` CItemContainer::FUN_102088a0 |
+| `0x10331a40` CBaseCombatCharacter::BodyDirection3D | `0x102088a0` CItemContainer::HeadDirection3D |
 | `0x103326b0` CBaseCombatCharacter::BeginSlowEntity | `0x103f1950` CVampireProjectile_MingXiaoSpit::vfunc266 |
-| `0x103327f0` CBaseCombatCharacter::EndSlowEntity | `0x103f1840` FUN_103f1840, `0x103f1b60` CVampireProjectile_MingXiaoSpit::vfunc134 |
+| `0x103327f0` CBaseCombatCharacter::EndSlowEntity | `0x103f1840` FUN_103f1840, `0x103f1b60` CVampireProjectile_MingXiaoSpit::Remove |
 | `0x10332fc0` CBaseCombatCharacter::GetDialogReactionModifier | `0x10227da0` FUN_10227da0 |
 | `0x10334180` CAI_BaseNPC::FUN_10334180 | `0x10352cd0` CHL2_Player::vfunc374 |
 | `0x103346c0` FUN_103346c0 | `0x10128370` FUN_10128370, `0x10163630` CBasePlayer::FUN_10163630, `0x101989b0` FUN_101989b0, `0x102524f0` FUN_102524f0, +11 more |
@@ -1168,7 +1498,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10335ea0` CBaseCombatCharacter::Inventory_Unwield | `0x10253ca0` CBaseCombatWeapon::FUN_10253ca0 |
 | `0x10336cd0` CBaseCombatCharacter::HasUsableMeleeWeapon | `0x103620d0` CNPC_VAsianVampire::SelectScheduleRangedCombat, `0x103afdb0` CNPC_VSheriffMan::SelectScheduleRangedCombat |
 | `0x10336d70` CBaseCombatCharacter::HasUsableRangedWeapon | `0x10361be0` CNPC_VAsianVampire::SelectScheduleMeleeCombat, `0x103af960` CNPC_VSheriffMan::SelectScheduleMeleeCombat |
-| `0x10337860` CBaseCombatCharacter::GetCharTemplate | `0x100d6680` FUN_100d6680, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x1016d260` CBasePlayer::vfunc103, +13 more |
+| `0x10337860` CBaseCombatCharacter::GetCharTemplate | `0x100d6680` FUN_100d6680, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x1016d260` CBasePlayer::Spawn, +13 more |
 | `0x10337980` CBaseCombatCharacter::SetVHistory | `0x100d6d40` FUN_100d6d40 |
 | `0x10337ca0` CBaseCombatCharacter::MemberSync | `0x10326de0` FUN_10326de0 |
 | `0x10337d80` CBaseCombatCharacter::PostConstructor | `0x1014f670` FUN_1014f670 |
@@ -1182,23 +1512,23 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1033b890` CBaseCombatCharacter::PrayerEnd | `0x10164870` CBasePlayer::FUN_10164870 |
 | `0x1033c770` CBaseCombatCharacter::RemoveMiscFlag | `0x10146e20` FUN_10146e20, `0x1022f640` FUN_1022f640, `0x102579f0` CBaseCombatWeapon::FUN_102579f0, `0x10338920` FUN_10338920 |
 | `0x1033c900` CBaseCombatCharacter::HasMiscFlag | `0x10146e20` FUN_10146e20, `0x1022d9d0` FUN_1022d9d0, `0x1022dc30` FUN_1022dc30, `0x102579f0` CBaseCombatWeapon::FUN_102579f0, +3 more |
-| `0x1033c9c0` CBaseCombatCharacter::GetMiscFlags | `0x10169660` CBasePlayer::FUN_10169660, `0x10338900` FUN_10338900 |
-| `0x1033cc30` CBaseCombatCharacter::AddPreDisciplineEffect | `0x101824c0` CBasePlayer::FUN_101824c0 |
-| `0x1033ccd0` CBaseCombatCharacter::RemovePreDisciplineEffects | `0x10182500` CBasePlayer::FUN_10182500 |
-| `0x1033cd70` CBaseCombatCharacter::AddDisciplineEffect | `0x101824e0` CBasePlayer::FUN_101824e0 |
-| `0x1033cef0` CBaseCombatCharacter::RemoveDisciplineEffects | `0x10182530` CBasePlayer::FUN_10182530 |
-| `0x1033df80` CBaseCombatCharacter::ApplyDisciplineSpawnFlags | `0x1016d260` CBasePlayer::vfunc103 |
-| `0x1033e4a0` CBaseCombatCharacter::DrawDebugTextOverlays | `0x10161460` CBasePlayer::FUN_10161460 |
+| `0x1033c9c0` CBaseCombatCharacter::GetMiscFlags | `0x10169660` CBasePlayer::LeaveGrappleState, `0x10338900` FUN_10338900 |
+| `0x1033cc30` CBaseCombatCharacter::AddPreDisciplineEffect | `0x101824c0` CBasePlayer::AddPreDisciplineEffect |
+| `0x1033ccd0` CBaseCombatCharacter::RemovePreDisciplineEffects | `0x10182500` CBasePlayer::RemovePreDisciplineEffects |
+| `0x1033cd70` CBaseCombatCharacter::AddDisciplineEffect | `0x101824e0` CBasePlayer::AddDisciplineEffect |
+| `0x1033cef0` CBaseCombatCharacter::RemoveDisciplineEffects | `0x10182530` CBasePlayer::RemoveDisciplineEffects |
+| `0x1033df80` CBaseCombatCharacter::ApplyDisciplineSpawnFlags | `0x1016d260` CBasePlayer::Spawn |
+| `0x1033e4a0` CBaseCombatCharacter::DrawDebugTextOverlays | `0x10161460` CBasePlayer::DrawDebugTextOverlays |
 | `0x1033eb60` CBaseCombatCharacter::FrenzyCheck | `0x1033e960` FUN_1033e960, `0x1033ea90` CBaseCombatCharacter::InputFrenzyCheck, `0x1033f1a0` CBaseCombatCharacter::FrenzyComparison, `0x1033f3f0` CBaseCombatCharacter::InputHungerCheck, +1 more |
 | `0x1033f6d0` FUN_1033f6d0 | `0x1016be10` CBasePlayer::PostThink, `0x10227440` CPlayerEvents::InputRemoveDisciplinesNow, `0x1033f590` CBaseCombatCharacter::InputFrenzyUpdate |
-| `0x10340360` CBaseCombatCharacter::Precache | `0x101506a0` CPhysicsCannister::vfunc104, `0x10209710` CItemContainer::FUN_10209710, `0x1042b080` CBaseGrenade::vfunc104 |
+| `0x10340360` CBaseCombatCharacter::Precache | `0x101506a0` CPhysicsCannister::Precache, `0x10209710` CItemContainer::Precache, `0x1042b080` CBaseGrenade::Precache |
 | `0x103407b0` CBaseCombatCharacter::ShouldTransmit | `0x10351550` CHL2_Player::vfunc86 |
-| `0x103411c0` CBaseCombatCharacter::BarterBegin | `0x10208c90` CItemContainer::InputUse, `0x10208fc0` CItemContainer::FUN_10208fc0, `0x10209090` CItemContainer::FUN_10209090 |
+| `0x103411c0` CBaseCombatCharacter::BarterBegin | `0x10208c90` CItemContainer::InputUse, `0x10208fc0` CItemContainer::InputBarterBegin, `0x10209090` CItemContainer::FUN_10209090 |
 | `0x103412b0` CBaseCombatCharacter::InputBarterBegin | `0x1034a230` CBaseCombatCharacter::InputBarterBegin ‼ |
-| `0x10341370` CBaseCombatCharacter::BarterEnd | `0x10208ff0` CItemContainer::FUN_10208ff0, `0x10209090` CItemContainer::FUN_10209090 |
+| `0x10341370` CBaseCombatCharacter::BarterEnd | `0x10208ff0` CItemContainer::InputBarterEnd, `0x10209090` CItemContainer::FUN_10209090 |
 | `0x10341450` CBaseCombatCharacter::InputBarterEnd | `0x1034a240` CBaseCombatCharacter::InputBarterEnd ‼ |
 | `0x10341510` CBaseCombatCharacter::GetActiveArmor | `0x10336170` CBaseCombatCharacter::Inventory_Debug_Print, `0x10336390` CBaseCombatCharacter::Inventory_Debug_Log |
-| `0x10341710` CBaseCombatCharacter::GetUsedHullBits | `0x1016e820` CBasePlayer::vfunc104 |
+| `0x10341710` CBaseCombatCharacter::GetUsedHullBits | `0x1016e820` CBasePlayer::Precache |
 | `0x10341aa0` CBaseCombatCharacter::IsUnconscious | `0x10181be0` FUN_10181be0 |
 | `0x103449b0` CBaseCombatCharacter::GetKnockbackActivity | `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10344da0` FUN_10344da0 | `0x10161200` CBasePlayer::FUN_10161200 |
@@ -1210,8 +1540,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10346070` CBaseCombatCharacter::GetRawAttackValue | `0x101600a0` FUN_101600a0, `0x10236130` FUN_10236130, `0x102397b0` CWeaponRanged::Kick, `0x103455a0` FUN_103455a0 |
 | `0x10346910` CBaseCombatCharacter::MeleeRollAndSendNotice | `0x10346830` MeleeRollAndSendNotice |
 | `0x103482e0` CAI_BaseNPC::FUN_103482e0 | `0x1016eb20` CBasePlayer::FUN_1016eb20, `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
-| `0x10348890` CBaseCombatCharacter::Restore | `0x1016ebd0` CBasePlayer::FUN_1016ebd0 |
-| `0x10348980` CBaseCombatCharacter::Save | `0x1016ea00` CBasePlayer::FUN_1016ea00 |
+| `0x10348890` CBaseCombatCharacter::Restore | `0x1016ebd0` CBasePlayer::Restore |
+| `0x10348980` CBaseCombatCharacter::Save | `0x1016ea00` CBasePlayer::Save |
 | `0x10349830` FUN_10349830 | `0x10160d00` CBasePlayer::PlayerAttackerBlockedReaction, `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x103498b0` FUN_103498b0 | `0x10160bc0` CBasePlayer::PlayerDefenderBlockReaction, `0x102579f0` CBaseCombatWeapon::FUN_102579f0 |
 | `0x10349970` FUN_10349970 | `0x10345ab0` CBaseCombatCharacter::WasMeleeBlocked |
@@ -1245,7 +1575,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1042bff0` FUN_1042bff0 | `0x10045790` CPhysObjSaveRestoreOps::vfunc0, `0x10045ab0` CPhysObjSaveRestoreOps::vfunc1, `0x100af010` FUN_100af010, `0x100afb90` FUN_100afb90, +25 more |
 | `0x1042fb50` FUN_1042fb50 | `0x10389cc0` FUN_10389cc0, `0x10390060` MvsnSec__2__H__MvsnSec__UCPfnTraits0__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits0__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits0____CSecureTypeBase::vfunc0, `0x1042f230` CSafeDiscSaveRestoreOps_0::vfunc1 |
 | `0x1042fbf0` FUN_1042fbf0 | `0x10390060` MvsnSec__2__H__MvsnSec__UCPfnTraits0__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits0__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits0____CSecureTypeBase::vfunc0, `0x1042f1c0` CSafeDiscSaveRestoreOps_0::vfunc0 |
-| `0x1042fc90` FUN_1042fc90 | `0x1015d7c0` FUN_1015d7c0, `0x1016d260` CBasePlayer::vfunc103, `0x101839a0` MvsnSec__2__H__MvsnSec__UCPfnTraits1__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits1__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits1____CSecureTypeBase::vfunc0, `0x1042f360` CSafeDiscSaveRestoreOps_1::vfunc1 |
+| `0x1042fc90` FUN_1042fc90 | `0x1015d7c0` FUN_1015d7c0, `0x1016d260` CBasePlayer::Spawn, `0x101839a0` MvsnSec__2__H__MvsnSec__UCPfnTraits1__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits1__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits1____CSecureTypeBase::vfunc0, `0x1042f360` CSafeDiscSaveRestoreOps_1::vfunc1 |
 | `0x1042fd40` FUN_1042fd40 | `0x101839a0` MvsnSec__2__H__MvsnSec__UCPfnTraits1__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits1__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits1____CSecureTypeBase::vfunc0, `0x1042f2f0` CSafeDiscSaveRestoreOps_1::vfunc0 |
 | `0x10430130` FUN_10430130 | `0x103835f0` MvsnSec__2__H__MvsnSec__UCPfnTraits4__U__CSecureCoderBasic__2__H__MvsnSec__UCPfnTraits4__HU__CSecureCoderPfn__MvsnSec__UCPfnTraits4____CSecureTypeBase::vfunc0, `0x1042f680` CSafeDiscSaveRestoreOps_4::vfunc0 |
 | `0x10430923` _atexit | `0x10029d60` FUN_10029d60, `0x1002d200` FUN_1002d200, `0x1002d290` FUN_1002d290, `0x1002d320` FUN_1002d320, +1561 more |
@@ -1255,8 +1585,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10430fa0` FUN_10430fa0 | `0x1002cc10` FUN_1002cc10, `0x1002d070` FUN_1002d070, `0x10032b20` FUN_10032b20, `0x10032bb0` FUN_10032bb0, +201 more |
 | `0x104312d5` operator_new | `0x1002d930` CPhysicsHook::LevelInitPreEntity, `0x1003c660` CDataObjectAccessSystem::Init, `0x10040970` Utouchlink_t____CEntityDataInstantiator::vfunc2, `0x10040d50` Ugroundlink_t____CEntityDataInstantiator::vfunc2, +144 more |
 | `0x104312f0` __alloca_probe ‼ | `0x1002ea40` FUN_1002ea40, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x10081190` FUN_10081190, `0x10096c40` CBaseAnimating::ComputeHitboxSurroundingBox, +34 more |
-| `0x10431320` __ftol | `0x1002fc30` FUN_1002fc30, `0x10058150` CSteamJet::vfunc173, `0x100586e0` CTempEntsSystem::vfunc8, `0x100587d0` CTempEntsSystem::vfunc9, +132 more |
-| `0x10431351` FUN_10431351 | `0x10032380` FUN_10032380, `0x100b87a0` CBatSwarm::FUN_100b87a0, `0x100b8d50` FUN_100b8d50, `0x1010f8b0` FUN_1010f8b0, +7 more |
+| `0x10431320` __ftol | `0x1002fc30` FUN_1002fc30, `0x10058150` CSteamJet::Use, `0x100586e0` CTempEntsSystem::vfunc8, `0x100587d0` CTempEntsSystem::vfunc9, +132 more |
+| `0x10431351` FUN_10431351 | `0x10032380` FUN_10032380, `0x100b87a0` CBatSwarm::Spawn, `0x100b8d50` FUN_100b8d50, `0x1010f8b0` FUN_1010f8b0, +7 more |
 | `0x1043136f` _atof | `0x10032880` FUN_10032880, `0x100568a0` CDynamicLight::vfunc110, `0x10071cd0` FUN_10071cd0, `0x1007a390` FUN_1007a390, +36 more |
 | `0x104313bc` _atol | `0x10432f1a` __tzset |
 | `0x10431590` _calloc | `0x1043715b` staticinit_1043715b |
@@ -1272,11 +1602,11 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10432449` FUN_10432449 | `0x100c7a10` FUN_100c7a10, `0x101104c0` FUN_101104c0, `0x10138ff0` FUN_10138ff0, `0x10232ef0` FUN_10232ef0 |
 | `0x10432520` FUN_10432520 | `0x100c3ce0` FUN_100c3ce0, `0x1013b280` FUN_1013b280, `0x1024eaa0` FUN_1024eaa0, `0x102f72c0` FUN_102f72c0, +1 more |
 | `0x104325f0` FUN_104325f0 | `0x100cce10` FUN_100cce10, `0x10148c40` CGravControllerPoint::vfunc0 |
-| `0x1043270c` _sscanf | `0x100d05d0` FUN_100d05d0, `0x10142540` CMultiplayRules::vfunc79, `0x1016fa90` FUN_1016fa90, `0x10178a10` CBasePlayer::FUN_10178a10 ‼, +2 more |
+| `0x1043270c` _sscanf | `0x100d05d0` FUN_100d05d0, `0x10142540` CMultiplayRules::vfunc79, `0x1016fa90` FUN_1016fa90, `0x10178a10` CBasePlayer::HandleAnimEvent ‼, +2 more |
 | `0x10432740` __strnicmp | `0x100d2070` FUN_100d2070, `0x10107c20` CFilterName::vfunc241, `0x10180e70` FUN_10180e70, `0x10186120` CPlayerMove::SetupMove, +8 more |
 | `0x104329c0` _strncpy | `0x100d6210` FUN_100d6210, `0x100d6d40` FUN_100d6d40, `0x100eba00` FUN_100eba00, `0x10432f1a` __tzset |
 | `0x10432c14` _strtok | `0x1012f640` FUN_1012f640, `0x101d0410` FUN_101d0410, `0x101d83a0` FUN_101d83a0, `0x101fb000` CVDmg_t::Parse, +10 more |
-| `0x10433464` __strlwr | `0x10056ba0` FUN_10056ba0, `0x10056d70` CTempEntTester::vfunc103, `0x10080b00` FUN_10080b00, `0x100e3400` FUN_100e3400, +21 more |
+| `0x10433464` __strlwr | `0x10056ba0` FUN_10056ba0, `0x10056d70` CTempEntTester::Spawn, `0x10080b00` FUN_10080b00, `0x100e3400` FUN_100e3400, +21 more |
 | `0x10433510` _strncat | `0x101f0330` FUN_101f0330, `0x102f7ca0` FUN_102f7ca0 |
 | `0x1043366f` _toupper | `0x1021aca0` FUN_1021aca0, `0x10431abe` FUN_10431abe |
 | `0x1043373b` __vsnprintf | `0x10232840` FUN_10232840, `0x102fc540` FUN_102fc540 |
@@ -1481,7 +1811,7 @@ Read these with `corpus asm <addr>`; their READ/WRITE and edges are partial.
 | `0x10203dd0` | FUN_10203dd0 | Could not recover jumptable; Treating indirect jump as call |
 | `0x1024f7b0` | FUN_1024f7b0 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102623a0` | CAI_Motor::FUN_102623a0 | Could not recover jumptable; Treating indirect jump as call |
-| `0x10265680` | FUN_10265680 | Could not recover jumptable; Treating indirect jump as call |
+| `0x10265680` | SetAIEnabled | Could not recover jumptable; Treating indirect jump as call |
 | `0x1026d7f0` | CAI_BaseNPC::FUN_1026d7f0 | Could not recover jumptable; Treating indirect jump as call |
 | `0x10272650` | CAI_BaseNPC::SetIdealActivity | Could not recover jumptable; Treating indirect jump as call |
 | `0x10273aa0` | FUN_10273aa0 | Could not recover jumptable; Treating indirect jump as call |
@@ -1499,14 +1829,14 @@ Read these with `corpus asm <addr>`; their READ/WRITE and edges are partial.
 | `0x102a9710` | FUN_102a9710 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102a9730` | FUN_102a9730 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102ae310` | FUN_102ae310 | Could not recover jumptable; Treating indirect jump as call |
-| `0x102b5d90` | CAI_BaseNPCTroika::FUN_102b5d90 | Could not recover jumptable; Treating indirect jump as call |
-| `0x102c1ce0` | CAI_BaseNPCTroika::FUN_102c1ce0 | Could not recover jumptable; Treating indirect jump as call |
+| `0x102b5d90` | CAI_BaseNPCTroika::LeaveGrappleState | Could not recover jumptable; Treating indirect jump as call |
+| `0x102c1ce0` | CAI_BaseNPCTroika::ScriptHide | Could not recover jumptable; Treating indirect jump as call |
 | `0x102c6db0` | _0BIGKA__VCAI_BaseNPC____CAI_Behavior::vfunc10 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102c6e90` | _0BIGKA__VCAI_BaseNPC____CAI_Behavior::vfunc17 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102c6f70` | _0BIGKA__VCAI_BaseNPC____CAI_Behavior::vfunc22 | Could not recover jumptable; Treating indirect jump as call |
-| `0x102d08c0` | CAI_Hint::vfunc119 | Could not recover jumptable; Treating indirect jump as call |
-| `0x102d72f0` | CAI_TestHull::vfunc103 | Could not recover jumptable; Treating indirect jump as call |
-| `0x102dbc80` | CAI_InterestingPlaceConverstation::vfunc103 | Could not recover jumptable; Treating indirect jump as call |
+| `0x102d08c0` | CAI_Hint::Kill | Could not recover jumptable; Treating indirect jump as call |
+| `0x102d72f0` | CAI_TestHull::Spawn | Could not recover jumptable; Treating indirect jump as call |
+| `0x102dbc80` | CAI_InterestingPlaceConverstation::Spawn | Could not recover jumptable; Treating indirect jump as call |
 | `0x102e0bd0` | FUN_102e0bd0 | Type propagation algorithm not settling |
 | `0x102e12c0` | FUN_102e12c0 | Could not recover jumptable; Treating indirect jump as call |
 | `0x102e12e0` | FUN_102e12e0 | Could not recover jumptable; Treating indirect jump as call |
@@ -1523,18 +1853,18 @@ Read these with `corpus asm <addr>`; their READ/WRITE and edges are partial.
 | `0x102fe150` | FUN_102fe150 | Removing unreachable block |
 | `0x102fe9f0` | FUN_102fe9f0 | Removing unreachable block |
 | `0x10301010` | FUN_10301010 | Removing unreachable block |
-| `0x1035ae80` | CGeneric_NPC_bathack::vfunc103 | Could not recover jumptable; Treating indirect jump as call |
-| `0x10371b70` | CNPC_VCop::vfunc442 | Could not recover jumptable; Treating indirect jump as call |
-| `0x1037e240` | CNPC_VGuard1::vfunc420 | Could not recover jumptable; Treating indirect jump as call |
-| `0x10387140` | CNPC_VHumanCombatPatrol::FUN_10387140 | Could not recover jumptable; Treating indirect jump as call |
-| `0x10388b30` | CNPC_VHunter::vfunc420 | Could not recover jumptable; Treating indirect jump as call |
+| `0x1035ae80` | CGeneric_NPC_bathack::Spawn | Could not recover jumptable; Treating indirect jump as call |
+| `0x10371b70` | CNPC_VCop::StartTask | Could not recover jumptable; Treating indirect jump as call |
+| `0x1037e240` | CNPC_VGuard1::NPCInit | Could not recover jumptable; Treating indirect jump as call |
+| `0x10387140` | CNPC_VHumanCombatant::NPCInit | Could not recover jumptable; Treating indirect jump as call |
+| `0x10388b30` | CNPC_VHunter::NPCInit | Could not recover jumptable; Treating indirect jump as call |
 | `0x103a07f0` | FUN_103a07f0 | Removing unreachable block |
-| `0x103a4700` | CNPC_VWolfMorph::FUN_103a4700 | Could not recover jumptable; Treating indirect jump as call |
-| `0x103a4a60` | CNPC_VFrenzyShadow::FUN_103a4a60 | Could not recover jumptable; Treating indirect jump as call |
+| `0x103a4700` | CNPC_VPlayerController::NPCThink | Could not recover jumptable; Treating indirect jump as call |
+| `0x103a4a60` | CNPC_VPlayerController::RemoveExtraAnimationModels | Could not recover jumptable; Treating indirect jump as call |
 | `0x103b92a0` | CNPC_VTzimisce::vfunc488 | Could not recover jumptable; Treating indirect jump as call |
-| `0x103c32c0` | CNPC_VTzimisceRunner::vfunc259 | Could not recover jumptable; Treating indirect jump as call |
+| `0x103c32c0` | CNPC_VTzimisceRunner::HandleAnimEvent | Could not recover jumptable; Treating indirect jump as call |
 | `0x103c43b0` | CNPC_VTzimisceRunner::vfunc330 | Could not recover jumptable; Treating indirect jump as call |
 | `0x103cb590` | CNPC_VWerewolf::NPCThink | Could not recover jumptable; Treating indirect jump as call |
-| `0x103dd800` | CNPC_VYukie::vfunc420 | Could not recover jumptable; Treating indirect jump as call |
+| `0x103dd800` | CNPC_VYukie::NPCInit | Could not recover jumptable; Treating indirect jump as call |
 | `0x104312f0` | __alloca_probe | Unable to track spacebase |
 | `0x10435ad6` | ___old_sbh_alloc_block | Type propagation algorithm not settling |

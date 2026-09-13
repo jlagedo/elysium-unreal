@@ -61,7 +61,10 @@ Interrupts  COND_NEW_ENEMY COND_SEE_ENEMY COND_SQUAD_SEE_ENEMY COND_SEE_FEAR
 
 `GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::GetSchedule`
 `0x102ae920`, 55 classes) and, only when it answers 0, slot 438 (`SelectSchedule` `0x102af660`,
-the state cases above). A non-zero pre-selector answer therefore pre-empts every state case. Read
+the state cases above). A non-zero pre-selector answer therefore pre-empts every state case.
+(Name, story 29a: the image calls slot 437 `PreSelectSchedule` — the VProf string of
+`CNPC_VSabbatLeader`'s override `0x103aa510` — and the corpus now names `0x102ae920`
+`CAI_BaseNPCTroika::PreSelectSchedule`; `GetSchedule` is this file's older label for it.) Read
 off the decompilation (story 26 ports it); `HasCondition` is `0x10269aa0`, `HasInterruptCondition`
 (needs the bit in the running mask) `0x10269d30`.
 

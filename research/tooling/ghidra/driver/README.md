@@ -625,6 +625,36 @@ string and its address, which is both the evidence and the marker `clear` uses t
 Attribution is `getFunctionContaining`, so disassembled-but-unowned code contributes nothing —
 the survey reports that count per module, and `MakeFuncs` is the answer when it is non-zero.
 
+### Names the corpus proposes after the dump: `corpus harvest`
+
+`corpus harvest` writes a proposal file, never the overlay; `names.tsv` is edited by a reader and
+`corpus names --apply` writes it. Five passes (`--passes`, all by default):
+
+- **docs** pairs an address with a backticked name the docs write beside it. It is proximity and
+  the noisiest source: run it with `--max-distance 6` (the `Name` (`0x…`) template) and read each
+  row against its sentence. The generated `docs/vtmb/npc-kernel/` tables are not read.
+- **slots** (`name_passes.py`, `sdk_layout.py`) reads the SDK class declarations as MSVC lays out
+  a primary vtable, pairs the retail names in a table with the SDK slot of that name, and names
+  the slots between two pairs that are the same distance apart on both sides.
+- **tu** does the same over address order inside a translation unit an `E:\Vampire\main\dlls\`
+  stamp pins, against the SDK `.cpp`'s definition order.
+- **message** takes a `Class::Method:` prefix of a string exactly one body references.
+- **identity** names every unnamed override at a slot whose named bodies state one method.
+
+**The SDK on disk is 2013's**, `$ELYSIUM_WORK_ROOT/research/sources/source-sdk-2013/src`; the
+Bloodlines SDK tree carries no `dlls/` headers. So a stretch of slots whose length differs was
+changed after 2003 and names nothing, macros only the later tree has (`DECLARE_ENT_SCRIPTDESC`,
+`CNetworkVar*`) are not expanded, and **every SDK proposal is held to the image's arity**: a
+`__thiscall` body's `RET n` is the stack words it pops, the declaration says how many it should,
+and a position the word count does not confirm is not proposed. Leave-one-out over
+`CAI_BaseNPC`'s named slots is printed each run; a disagreement there is a parser defect.
+
+Docs rows lose to a structural row for the same address and the disagreement is printed. A
+question the evidence cannot answer is recorded as an `unsettled` overlay row — the placeholder
+name and the reason — which `apply` never writes and the kernel ledger shows beside the slot.
+Newly applied names name more overrides, so harvest → review → apply is repeated until the
+structural passes propose nothing new.
+
 ### A datamap is only half in the image
 
 **VtMB's `typedescription_t` states no byte width** — its `+0x24` is zero on every record — so
