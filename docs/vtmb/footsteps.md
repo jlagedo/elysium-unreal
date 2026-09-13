@@ -17,7 +17,7 @@ addresses given.
 Companion documents: [animation_events.md](animation_events.md) (the `2050`–`2053` records and the
 dispatchers), [source_movement.md](source_movement.md) (the move loop the clock rides on),
 [surface_properties.md](surface_properties.md) (`surfacedata_t` and the step pools),
-[stealth.md](stealth.md) and [npc-ai-reverse-engineering.md](npc-ai-reverse-engineering.md)
+[stealth.md](stealth.md) and [npc-ai/README.md](npc-ai/README.md)
 (who listens to the sound bus), [water.md](water.md) (the water-level classification).
 
 ---

@@ -7,7 +7,7 @@
 // `bLineOfSightClear`, so a case can put a wall between two entities without a collision world.
 //
 // The authored facts: `docs/vtmb/stealth.md` -> "Visual observer transaction" / "Auditory
-// stealth", and `docs/vtmb/npc-ai-reverse-engineering.md` -> "Perception, sound, memory, and
+// stealth", and `docs/vtmb/npc-ai/senses.md` -> "Perception, sound, memory, and
 // hostility".
 
 #include "Misc/AutomationTest.h"

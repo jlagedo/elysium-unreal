@@ -1,7 +1,7 @@
 // Content-free Substrate automation: the damage flinch — its pure direction rule, the fan cell that
 // rule selects, and the producer gate on the one health commit.
 //
-// Every number here is a fact from `docs/vtmb/npc-ai-reverse-engineering.md` (the head/torso pick,
+// Every number here is a fact from `docs/vtmb/npc-ai/README.md` (the head/torso pick,
 // the incoming-vector derivation, the +-30 degree jitter, the 0.1/0.3 fades) or from
 // `docs/vtmb/animation_and_movers.md` (the nine-cell `hit_torso` fan and its `hit_yaw` parameter).
 // Nothing loads a rulebook, a mesh or an export: the rule is a function of two origins, a facing and

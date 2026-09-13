@@ -26,7 +26,7 @@ links and the route refusal — **0002** (19, 24); choreographed scenes, their c
 oblivious refcount — **0002** (7).
 
 ## Sources
-- Oracle: `docs/vtmb/entity_io.md` § "Scripted sequences", `docs/vtmb/npc-ai-reverse-engineering.md`
+- Oracle: `docs/vtmb/entity_io.md` § "Scripted sequences", `docs/vtmb/npc-ai/README.md`
   (the schedule host, `MaintainSchedule`, `DELAY_INTERRUPTS`, `NPC_STATE_SCRIPT`),
   `docs/vtmb/animation_and_movers.md` § "Scripted travel speed is the resolved clip's own ground
   speed". Each story names its section.
@@ -129,7 +129,10 @@ model / effort tier recommended for it.
   failing by name; the eight programs registered verbatim in their own registration file beside
   the feed and combat families. `TASK_SET_TOLERANCE_DISTANCE 2` rides the existing operand; the
   `+0x688` scaler is unrecovered, so the motor's acceptance floor stays and is named. The
-  task-side `ClearSchedule` and `TASK_WAIT_RANDOM`'s 0.1 floor are 0002/25's; the `0x2e` split
+  task-side `ClearSchedule` and `TASK_WAIT_RANDOM`'s 0.1 floor are 0002/25's — a clear from
+  `0x60`'s arm, `0x101a81a0` or `FixScriptNPCSchedule` (slot 586) is a RunTask-timed clear: the
+  pass ends with no program and the reselect runs next think (0002/25a's timing rule), so these
+  bodies call `RequestClearSchedule` and never reselect themselves; the `0x2e` split
   (`0x102cc080`) and the Troika `0x2f..0x33 → 0xf2..0xf9` row extend 0002/25's slot-440 seam
   (`FElysiumNpc::TranslateSchedule`) rather than re-creating it.
   Consumes: 0002/25 (the failure route, the `ClearSchedule` request, the slot-440 seam).

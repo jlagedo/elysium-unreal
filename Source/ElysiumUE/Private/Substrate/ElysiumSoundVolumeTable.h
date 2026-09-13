@@ -4,7 +4,7 @@
 
 // `system/sound_volume_table.txt` — the game-sound levels and their occlusion policy.
 //
-// The authored half of NPC hearing (`docs/vtmb/npc-ai-reverse-engineering.md` → "Visual and
+// The authored half of NPC hearing (`docs/vtmb/npc-ai/senses.md` → "Visual and
 // auditory input"). Four blocks, read as one table:
 //
 //   * `VolumeLevels`         — level index → the radius an average human hears it at.

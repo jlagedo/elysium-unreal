@@ -11,7 +11,7 @@ class FElysiumNpc;
 // item catalogue, and everything it writes is the character's own inventory. That is what makes a
 // whole spawn loadout drivable from a content-free test with a fabricated catalogue.
 //
-// The authored surface (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Common property surface"):
+// The authored surface (`docs/vtmb/npc-ai/population.md` -> "Common property surface"):
 // `additionalequipment` (267 rows), `alternateequipment` (184) and `cantdropweapons` (78). The
 // exported corpus states their shape exactly: `additionalequipment` is ONE classname per row, never
 // a list, and `"0"` is the authored "none" sentinel that 78 of those rows carry.

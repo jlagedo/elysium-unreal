@@ -20,7 +20,7 @@ enum class EElysiumMeleeDefenderReaction : uint8;
 // the whole rule off a stream on its own stack with no body at all
 // (`Elysium.Substrate.DamageFlinch`), and the producer passes the session's own owned stream.
 //
-// The recovered behaviour is `docs/vtmb/npc-ai-reverse-engineering.md` -> "Damage condition is not
+// The recovered behaviour is `docs/vtmb/npc-ai/social.md` -> "Damage condition is not
 // animation": the routine randomly selects the head or torso hit activity, derives `hit_yaw` from the
 // incoming vector relative to actor yaw, adds a random [-30,+30] degrees, and starts the gesture with
 // 0.1/0.3 fade values.

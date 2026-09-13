@@ -6,7 +6,7 @@ player's light-derived target surface, NPC visual and auditory admission, the
 selection, outputs, and HUD observability. Stealth-kill eligibility is a separate consumer of
 `stealthkillrules.txt`; feat construction is documented in [skills-and-checks.md](skills-and-checks.md),
 and the general sense/memory/enemy transaction is documented in
-[npc-ai-reverse-engineering.md](npc-ai-reverse-engineering.md).
+[npc-ai/README.md](npc-ai/README.md).
 
 ## Evidence and confidence
 
@@ -130,7 +130,7 @@ not hostility admission and does not itself fire a found output.
 **Corrected 2026-09-12** — an earlier revision of this list had step 2 calling
 `CBaseCombatCharacter::FInViewCone` and step 3 caching LOS false when out of cone. It does not:
 the function body has no cone term at all, and it has a PVS term the list was missing. The walk in
-`npc-ai-reverse-engineering.md` § "The think cadence, decoded" is the authority; the arms, in order:
+`npc-ai/lifecycle.md` § "The think cadence, decoded" is the authority; the arms, in order:
 
 1. `m_bfNPCStateFlags & 0x8` (name unrecovered) or `m_bfNPCFrenziedFlags & 0x8` → force
    `PVS = LOS = 1` and stamp both last-clear times. No gate, no trace.
@@ -440,10 +440,18 @@ quantization; position 1 shares attacker facing. Entry saves origins before plac
 increment raw `m_iIsOblivious`; then `OnGrappleBegin(partner)` and base entry. This does not set
 `MADE_OBLIVIOUS` or emit `OnIncapacitatedStart`. Exit `0x1026ce30` emits `OnGrappleEnd(partner)`
 before base leave and ends with a saturating raw decrement/reconnect (`0x10007ea0`). Existing
-squad hooks remain the named seam until story 17. Troika entry `0x102b5c00` additionally refuses
-after applying its queued reactive-damage array (`+0x65a8/+0x65b4`); that array's producer remains
-unrecovered. Ghoul-croucher override `0x1037b500` burns a player for 10 and refuses when its
-spawn-burning byte is set. These subclass entry arms are not established as implemented by 3b.
+squad hooks remain the named seam until story 17. **Base entry is not gated on grapple type or
+role** — `0x1026cdc0` runs `0x1026d130` and `OnGrappleBegin` for feed, seduction and stealth kill
+alike, and always returns true; the port's stealth-only gate in `FElysiumNpc::EnterGrappleState`
+is a divergence (story 25a fixes it). Troika entry `0x102b5c00` additionally refuses after
+applying its queued reactive-damage array (`+0x65a8/+0x65b4`) to the partner: the array is the
+deferred first burn hit that `CreateDamageEffects 0x10330d00` queues (burn bit `0x8`, hitbox > 0,
+`!ON_FIRE && curtime > m_flNextBurnTime +0x65bc`) and `TASK_ON_FIRE_LOOP 0x9d` drains — full walk
+in `npc-ai/schedule-kernel.md` § "The kernel's failure route and the base programs, walked".
+On success the Troika entry also aborts dialogue (`0x102c1170` → `0x102c0bb0`), cancels a live
+cine (`0x101a8c30`) and `ClearSchedule`s. Ghoul-croucher override `0x1037b500` burns a player for
+10 and refuses when its spawn-burning byte is set. These subclass entry arms are not established
+as implemented by 3b.
 
 **Sound.** Melee vtable `0x104ddd7c + 0x534` contains `0x10012201`, the thunk to weapon sound
 body **`0x10254450`**. Slot **0x17** selects `SoundData/stealth_kill_success` through

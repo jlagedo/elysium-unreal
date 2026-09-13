@@ -432,7 +432,7 @@ Flags       DELAY_INTERRUPTS
 nothing at all (`TASK_MAKE_OBLIVIOUS` gates the whole sense pass), taking interest in nothing,
 unconversable, refused an ordinary schedule, and breakable only by damage. The task semantics, the
 complete NPC flag vocabulary, and the schedule-change virtual that unwinds all of it are recovered
-in `docs/vtmb/npc-ai-reverse-engineering.md` → "The incapacitation tasks and the NPC flag word";
+in `docs/vtmb/npc-ai/schedule-kernel.md` → "The incapacitation tasks and the NPC flag word";
 `DELAY_INTERRUPTS` is decoded in the same document under "Interrupt conditions". The program carries
 no teardown tasks and needs none — the next schedule the victim is given releases every bit and the
 obliviousness refcount together. `[VtMB]`
@@ -720,5 +720,5 @@ mesmerized, disoriented, lost or cowering", `0x105865a8`); anything else goes th
 `ResistsFeeding` gate and the opposed roll. Because `TASK_PLAY_COWER`/`TASK_SET_COWER` pick
 `ACT_COWER`, `COWER2` or `COWER3` by `m_iCowerAnimOffset` (`+0x6414`), only one cowering NPC in
 three auto-accepts, and the `ACT_COWER_INTO` window never does. The producers of the four
-activities are in `npc-ai-reverse-engineering.md`, "The flee state and the cower, disoriented
+activities are in `npc-ai/programs.md`, "The flee state and the cower, disoriented
 and lost programs".

@@ -602,7 +602,7 @@ bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 // `sound_volume_table.txt` against the real file — the authored half of NPC hearing.
 //
 // Two claims: the four documented levels still carry the radii and occlusion policy
-// `docs/vtmb/npc-ai-reverse-engineering.md` records, and every category this runtime's producers
+// `docs/vtmb/npc-ai/README.md` records, and every category this runtime's producers
 // name is actually in the file. The second is the one that matters: a category the table does not
 // name resolves to the normal level and warns, so a re-export that renamed a row would quietly
 // change how far a gunshot carries.

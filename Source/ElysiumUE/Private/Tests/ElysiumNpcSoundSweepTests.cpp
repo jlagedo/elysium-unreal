@@ -7,7 +7,7 @@
 // cohort in `ElysiumNpcSensesTests.cpp`. What is under test here is what the sweep does with a
 // record and a raised condition, which is exactly the seam 10a adds.
 //
-// `docs/vtmb/npc-ai-reverse-engineering.md` -> "The three `GatherConditions` sweeps and the
+// `docs/vtmb/npc-ai/conditions-and-states.md` -> "The three `GatherConditions` sweeps and the
 // interest predicate" owns every fact here.
 
 #include "Misc/AutomationTest.h"

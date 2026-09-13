@@ -3,7 +3,7 @@
 // comfort-target array (story 8) excluding self, the busy/installed-schedule eligibility gates, the
 // per-comforter cap of three with no fallback, and the `m_hTargetEnt` write.
 //
-// `docs/vtmb/npc-ai-reverse-engineering.md` -> "The comfort sweep `0x102b1a20`, walked" owns every
+// `docs/vtmb/npc-ai/conditions-and-states.md` -> "The comfort sweep `0x102b1a20`, walked" owns every
 // fact here.
 
 #include "Misc/AutomationTest.h"

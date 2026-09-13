@@ -2,7 +2,7 @@
 // laws and their shared due test, driven as pure arithmetic over `ElysiumNpcThink::FInputs`.
 //
 // Every number here is a constant recovered from the DLL and recorded in
-// `docs/vtmb/npc-ai-reverse-engineering.md` § "The think cadence, decoded": `CalcNextUpdateThink`
+// `docs/vtmb/npc-ai/lifecycle.md` § "The think cadence, decoded": `CalcNextUpdateThink`
 // `0x10290720`, `CalcNextNormalThink` `0x10290b60`, `CalcNextMoveThink` `0x10290fc0`,
 // `CalcNextAIThink` `0x10291230`, `IsThinkDue` `0x10290660`. Nothing here stands a world.
 

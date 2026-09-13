@@ -67,7 +67,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).InputSetRelationship(Args); });
 
 	// The two policy-level schedule commands. Both take a native schedule NAME
-	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes") and both land on one
+	// (`docs/vtmb/npc-ai/authored-control.md` -> "Direct schedule changes") and both land on one
 	// handler, which distinguishes them by `Args.Input` in every diagnostic.
 	//
 	// Corpus provenance, because the two names are not evidenced the same way and the difference

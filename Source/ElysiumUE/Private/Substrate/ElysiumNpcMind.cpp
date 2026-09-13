@@ -127,7 +127,7 @@ void FElysiumNpcMind::RefreshStateFromOwner()
 	// `ScriptedSchedule` is deliberately NOT in this set, and it is the one owner in the arbiter that
 	// is a body claim without being a cognitive state. `aiscripted_schedule` "pushes an AI policy and
 	// goal rather than claiming the body for one exact animation"
-	// (`docs/vtmb/npc-ai-reverse-engineering.md`), and the policy it pushes IS a state — its
+	// (`docs/vtmb/npc-ai/README.md`), and the policy it pushes IS a state — its
 	// `forcestate` resolves to idle, alert or combat. Forcing `Scripted` on the claim would overwrite
 	// the push with the arbiter's opinion the instant the first movement task ran, which is exactly
 	// backwards: eleven of the thirteen corpus rows author a forced state, eight of them combat.

@@ -10,7 +10,7 @@
 //     stimulus, driven through the same headless world the weapon and damage suites use. A bus with
 //     nothing pushing into it is not a hearing surface.
 //
-// The authored facts: `docs/vtmb/npc-ai-reverse-engineering.md` → "Visual and auditory input" and
+// The authored facts: `docs/vtmb/npc-ai/senses.md` → "Visual and auditory input" and
 // `docs/vtmb/stealth.md` → "Auditory stealth".
 
 #include "Misc/AutomationTest.h"

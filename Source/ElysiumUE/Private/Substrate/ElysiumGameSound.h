@@ -17,7 +17,7 @@ struct FElysiumSoundVolumeTable;
 // it at emission and stores the ANSWER, so a consumer never has to re-ask the rulebook to know how
 // far a stimulus reached.
 //
-// The VtMB facts: `docs/vtmb/npc-ai-reverse-engineering.md` → "Visual and auditory input" and
+// The VtMB facts: `docs/vtmb/npc-ai/senses.md` → "Visual and auditory input" and
 // `docs/vtmb/stealth.md` → "Auditory stealth".
 
 // The `SoundTypes` names this runtime's producers emit. These are KEYS into the authored table, not

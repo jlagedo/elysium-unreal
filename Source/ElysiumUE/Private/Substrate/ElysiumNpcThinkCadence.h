@@ -23,7 +23,7 @@ struct FElysiumNpcScheduleHost;
 // caches, the `SCHEDULE_CHANGED` bit, the frenzy word, and `ShouldThinkFrequently()`. State
 // changes the rate only through those. There are no `ai_think_*` cvars.
 //
-// Oracle: `docs/vtmb/npc-ai-reverse-engineering.md` -> "The think cadence, decoded".
+// Oracle: `docs/vtmb/npc-ai/lifecycle.md` -> "The think cadence, decoded".
 namespace ElysiumNpcThink
 {
 	// A corpse's death program is not on any of the four clocks -- retail's dead body carries no

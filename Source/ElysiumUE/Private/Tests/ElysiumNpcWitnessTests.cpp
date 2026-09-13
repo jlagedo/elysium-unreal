@@ -3,7 +3,7 @@
 // real callers, the flee and attack consumers, and the schedule-selection submission that reaches
 // cycle 10b's incident admission.
 //
-// Every number asserted here is either a fact from `docs/vtmb/npc-ai-reverse-engineering.md` §
+// Every number asserted here is either a fact from `docs/vtmb/npc-ai/population.md` §
 // "Player-law observation transaction" (the four conditions 31-34, the authored-6 disable, the
 // closed-window advance, the closest-player + sight gate, the cone/`m_flSeekDistInspection`/trace
 // acceptance and the strongest-retained rule), a fact from `docs/vtmb/player-entity.md` § "Law,

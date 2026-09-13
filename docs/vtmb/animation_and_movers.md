@@ -4615,7 +4615,7 @@ and a press still fires it. The port states this once, in
 alert/relaxed branch and the gait fan all read. The bit itself is `FElysiumWeapon::bHidden`
 (`IsHidden`/`Hide`/`Unhide`); the writers are `Holster` (`0x10253ca0`, which ends with `Hide()`) →
 `OnHolstered`, the shared deploy commit (`0x10253b70`, which clears it) → `OnEquipped`, and the NPC
-`OnStateChange` overrides recorded in `docs/vtmb/npc-ai-reverse-engineering.md`. The attached wield
+`OnStateChange` overrides recorded in `docs/vtmb/npc-ai/README.md`. The attached wield
 model is hidden and re-installed with the bit, because retail's NODRAW stops the weapon rendering
 and this runtime's hand geometry is a separate component. Proof:
 `Elysium.Substrate.WeaponHidden.ActivityRequest` / `.HolsterDeploy` / `.StateChange`.

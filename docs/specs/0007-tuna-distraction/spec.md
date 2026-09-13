@@ -18,7 +18,7 @@ reach — 13.4 (unowned); doors — **0009**.
 
 ## Sources
 - Oracle: `docs/vtmb/physics-interaction.md`, `docs/vtmb/phy_vphysics.md`,
-  `docs/vtmb/entity_io.md` (`CPropSwitch`, `env_phys*`), `docs/vtmb/npc-ai-reverse-engineering.md`
+  `docs/vtmb/entity_io.md` (`CPropSwitch`, `env_phys*`), `docs/vtmb/npc-ai/senses.md`
   § "Hearing, walked" (`MakeAISound`, `sound_volume_table.txt`).
 - Authored data, V2 seams under `$ELYSIUM_WORK_ROOT/exports_v2/`: `maps/sp_tutorial_1.entities.glb`
   (`fish_can`, `chairoffice`, the guard, the door trigger), `vdata/system/sound_volume_table.txt`,
@@ -94,7 +94,7 @@ model / effort tier recommended for it.
   radius — and wired into 0002's hearing as a sound record; if retail raises none, the witness
   is re-read against retail play before anything is invented.
   Consumes: 0002/6a (hearing), 0002/10a (the sound sweep).
-  Oracle: `npc-ai-reverse-engineering.md` § "Hearing, walked" (physics impacts, new).
+  Oracle: `npc-ai/senses.md` § "Hearing, walked" (physics impacts, new).
   Size: S. Effort: Opus / high; corpus pass first.
 - [ ] **6. The icons.**
   Job: `PhysicsHand` / `CarryBody` published into `FElysiumInteractionView`.

@@ -8,7 +8,7 @@ Neighbouring owners: the skeletal pose frame and animation-channel decode are
 `docs/vtmb/animation_and_movers.md`; item records, acquisition and drop are
 `docs/vtmb/inventory.md`; the first/third-person split is `docs/vtmb/camera-view-modes.md`; the
 MDL container is `docs/vtmb/mdl_v2531.md`; NPC authored keyfields are
-`docs/vtmb/npc-ai-reverse-engineering.md`.
+`docs/vtmb/npc-ai/README.md`.
 
 Addresses are `vampire.dll` (server) and `client.dll` unless stated, both at image base
 `0x10000000`.
@@ -756,7 +756,7 @@ both sexes from one file.
 choice. Across the 108 installed maps, 2,060 placed `npc_*` entities carry these keys: 1,100
 author a non-empty `additionalequipment` and 307 a non-empty `alternateequipment` (316 of the
 former are `npc_maker`/`npc_maker_zombie` spawner templates rather than live placements). The
-per-map survey counts in `docs/vtmb/npc-ai-reverse-engineering.md` cover a narrower scope.
+per-map survey counts in `docs/vtmb/npc-ai/README.md` cover a narrower scope.
 
 Most-authored values, `additionalequipment`/`alternateequipment`: `item_w_glock_17c` 203/19,
 `item_w_fists` 107/7, `item_w_mac_10` 95/1, `item_w_thirtyeight` 86/9, `item_w_knife` 69/91,

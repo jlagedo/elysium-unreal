@@ -1278,7 +1278,7 @@ bool FElysiumNpc::ThinkScriptOwned(double Now)
 	}
 	// A scripted owner — a `scripted_sequence` beat or a choreographed scene's cast — is
 	// driving this body's pose. Script ownership suppresses the ordinary condition-gathering
-	// path (`docs/vtmb/npc-ai-reverse-engineering.md`), so nothing after this phase may select a
+	// path (`docs/vtmb/npc-ai/README.md`), so nothing after this phase may select a
 	// schedule whose idle would replace the clip the owner put on the body.
 	if (bScriptBodyRequested && !bScriptBodyHeld
 		&& Mind.CanAcquire(EElysiumBodyOwner::Sequence))
@@ -3110,7 +3110,7 @@ void FElysiumNpc::MakeOblivious(bool bOblivious)
 		// 3. The refcount and its bookkeeping bit.
 		NpcFlags.AddOblivious();
 		// 4. `OnIncapacitatedStart`. An authored output with 10 wires across the exported maps
-		//    (`docs/vtmb/npc-ai-reverse-engineering.md`), so this is a real content surface and not a
+		//    (`docs/vtmb/npc-ai/README.md`), so this is a real content surface and not a
 		//    diagnostic. The NPC is both caller and activator: nothing else is in scope at the arm.
 		FireOutput(FName(TEXT("OnIncapacitatedStart")), Handle);
 	}

@@ -305,7 +305,7 @@ public:
 
 	/**
 	 * `ChangeSchedule` / `StartSchedule` — the two policy-level commands that name a native schedule
-	 * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes"). One handler serves
+	 * (`docs/vtmb/npc-ai/authored-control.md` -> "Direct schedule changes"). One handler serves
 	 * both: they are "policy-level commands: the named schedule still executes normal tasks,
 	 * failures, interrupts, motor work, and activity translation", and nothing recovered states a
 	 * difference between them.
@@ -397,7 +397,7 @@ public:
 
 	/**
 	 * `CAI_BaseNPCTroika::SelectSchedule` case 1, in recovered priority order
-	 * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The idle branch, decided"). First match wins.
+	 * (`docs/vtmb/npc-ai/conditions-and-states.md` -> "The idle branch, decided"). First match wins.
 	 *
 	 * The steps this runtime cannot answer refuse by name rather than guessing, and the refusal
 	 * records what would settle it -- a refusal that says nothing is indistinguishable from a step

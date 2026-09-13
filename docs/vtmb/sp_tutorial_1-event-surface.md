@@ -207,7 +207,7 @@ carries `match_orientation 1`. Retail Jack is authored to stand on his own `wall
 and facing the node names, which is what a rebuild has to account for before attributing his
 pre-dialogue idle to a disposition stance or to a plain `ACT_IDLE`.
 
-The eligibility gate is now recovered (`npc-ai-reverse-engineering.md` → "Interesting-place
+The eligibility gate is now recovered (`npc-ai/programs.md` → "Interesting-place
 eligibility"): a straight-line 10,000 units, with no pathfinding and no line-of-sight test in the
 find stage. UP Jack sits 7,227 and 7,621 units from the two enabled group-32 nodes, so
 `TASK_FIND_INTERESTING_PLACE` **succeeds** for him and hands back a goal across the map. He
@@ -521,7 +521,7 @@ absolute transform, makes his five think lanes due, and forces network transmiss
 Since the event queue runs after the frame's think phase, Jack resumes due AI work on the next server
 frame. The input performs no safe-placement trace, velocity reset, schedule clear, or immediate touch
 dispatch. The complete native contract and collision boundary are in `docs/vtmb/entity_io.md`; the
-five AI deadlines are in `docs/vtmb/npc-ai-reverse-engineering.md`.
+five AI deadlines are in `docs/vtmb/npc-ai/README.md`.
 
 ### 7.3 Missing-target diagnostics from the chopshop graph
 

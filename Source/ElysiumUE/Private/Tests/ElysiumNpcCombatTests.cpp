@@ -3,7 +3,7 @@
 // and swing programs end to end over a recording motor, and the body-owner lifecycle around them.
 //
 // Every number and every ordering asserted here is a fact from
-// `docs/vtmb/npc-ai-reverse-engineering.md` -> "Ordinary humanoid combat selection" / "Schedules
+// `docs/vtmb/npc-ai/programs.md` -> "Ordinary humanoid combat selection" / "Schedules
 // and tasks" / "Interrupt conditions", or from `docs/vtmb/combat-and-damage.md` -> "Target
 // acquisition, sequence commit and recovery". Nothing loads a rulebook: the item catalogue is built
 // in code for the length of a case, which is what makes these the runtime's statement of the

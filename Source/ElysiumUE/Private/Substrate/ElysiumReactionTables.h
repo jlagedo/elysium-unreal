@@ -9,7 +9,7 @@
 // through `FElysiumNpc`'s relationship rows) and from `DispositionTable.txt`'s emotional/
 // presentation state (`FElysiumDispositionTable`, above). Nothing here derives from, or is derived
 // by, either of the other two — a band label like `Hatred` names a point on THIS scale, not a
-// `D_HT` row (`docs/vtmb/npc-ai-reverse-engineering.md` → "Emotional disposition and social
+// `D_HT` row (`docs/vtmb/npc-ai/social.md` → "Emotional disposition and social
 // reaction are different domains").
 //
 // `reaction.txt`'s `General.Table` ("Reaction Ranges") is the seven-row band-boundary list, joined

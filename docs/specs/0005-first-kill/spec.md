@@ -20,7 +20,7 @@ weapon overlay layers — **0015**; paired actions — **0010**.
 
 ## Sources
 - Oracle: `docs/vtmb/combat-and-damage.md`, `docs/vtmb/wielded_weapons.md`,
-  `docs/vtmb/animation_and_movers.md`, `docs/vtmb/npc-ai-reverse-engineering.md` (the death
+  `docs/vtmb/animation_and_movers.md`, `docs/vtmb/npc-ai/README.md` (the death
   family, RE-D1–RE-D5), `docs/vtmb/animation_events.md`.
 - Authored data, V2 seams under `$ELYSIUM_WORK_ROOT/exports_v2/`: `models/` (swing records, the
   per-attack knockback table in the sidecars), `vdata/` (`npctemplate*.txt`, weapon tables),
@@ -94,7 +94,7 @@ model / effort tier recommended for it.
   gate with the `NORMAL_HIGH_{dir}` candidate and the hit-buildup gate as named stand-ins; the
   5-second derived memory; the `OnKilled` transaction and the death ladder; the holdable reaction
   claim; the `DefaultSlot` montage-slot mechanism. Oracle: `combat-and-damage.md`,
-  `npc-ai-reverse-engineering.md` (RE-D1–RE-D5).
+  `npc-ai/README.md` (RE-D1–RE-D5).
 - [ ] **5. The melee contact instant from a real animation event.**
   Retail: the contact is an authored animation event on the swing clip; the queue-scheduled
   instant the port runs today models it without a notify.
@@ -112,7 +112,7 @@ model / effort tier recommended for it.
   NPC thinks on the frame of the hit.
   Job: `FElysiumNpc::ResetThinkTimers` at the port's knockback install.
   Consumes: 0002/15.
-  Oracle: `npc-ai-reverse-engineering.md` § "The think cadence, decoded" (Slot 614 dispatch sites).
+  Oracle: `npc-ai/lifecycle.md` § "The think cadence, decoded" (Slot 614 dispatch sites).
   Size: XS. Effort: Sonnet / low.
 - [ ] **8. The flying knockback chain.**
   Retail: the launch, its one-think delay, the magnitude and direction rules, the terminator and

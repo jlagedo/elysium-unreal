@@ -1818,7 +1818,7 @@ function, `0x10280d30`, which zeroes six consecutive fields from `+0x5c38` (sche
 and timers), clears a bit on the task owner, and installs nothing. The NPC therefore falls through
 to ordinary schedule selection on its next maintain. Since every exported sequence writes
 `m_iFinishSchedule = 0`, this is the path that always runs, and where it lands is decided by the
-idle selector in `npc-ai-reverse-engineering.md`.
+idle selector in `npc-ai/README.md`.
 
 **Inputs:** `BeginSequence`, `CancelSequence`, **`MoveToPosition`** (`inputFunc 0x1000d6c0`, whose
 body is `FUN_101a72b0` — reached only through the datamap, so the analyzers leave it

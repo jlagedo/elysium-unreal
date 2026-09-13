@@ -5,7 +5,7 @@
 // between two points clear), which the recording services script, and the NPC schedule RNG stream
 // is seeded per fixture so a chance roll is reproducible rather than sampled.
 //
-// The authored facts: `docs/vtmb/npc-ai-reverse-engineering.md` -> "Enemy acquisition and
+// The authored facts: `docs/vtmb/npc-ai/social.md` -> "Enemy acquisition and
 // replacement", "Interrupt conditions", "The idle branch, decided" and "`no_alert_state` does not
 // suppress the alert state"; `docs/vtmb/combat-and-damage.md` -> "NPC damage response and stagger
 // boundaries".
@@ -1213,7 +1213,7 @@ bool FElysiumNpcEnemyConditionSetTest::RunTest(const FString&)
 	TestEqual(TEXT("...and names nothing"), C.Describe(), FString(TEXT("(none)")));
 
 	// The identities are retail's own numbers, from the base condition table `0x102c8ce0`
-	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The base condition table"). The seven that
+	// (`docs/vtmb/npc-ai/conditions-and-states.md` -> "The base condition table"). The seven that
 	// used to sit in a placeholder band above 0x66 are decoded too, so the whole enum is one
 	// namespace with the binary's now.
 	TestEqual(TEXT("SEE_HATE is 0x43"), static_cast<int32>(EElysiumNpcCond::SeeHate), 0x43);

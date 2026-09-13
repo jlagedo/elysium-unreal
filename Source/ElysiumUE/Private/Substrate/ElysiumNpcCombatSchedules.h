@@ -13,7 +13,7 @@ class FElysiumNpc;
 // makes sense beside the `CAN_MELEE_ATTACK1` branch that selects it. `ElysiumSchedule::Register` is
 // the growth point; the kernel keeps the task vocabulary and nothing about fighting.
 //
-// The recovered material: `docs/vtmb/npc-ai-reverse-engineering.md` -> "Ordinary humanoid combat
+// The recovered material: `docs/vtmb/npc-ai/programs.md` -> "Ordinary humanoid combat
 // selection" for both selector orders, the decoded chase/attack/dodge/block programs and the
 // interrupt census; "Incapacitation, feeding, grapple, and death" for the three damage schedules;
 // `docs/vtmb/combat-and-damage.md` -> "Target acquisition, sequence commit and recovery" for the

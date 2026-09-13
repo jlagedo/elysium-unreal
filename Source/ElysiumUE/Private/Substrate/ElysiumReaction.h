@@ -30,7 +30,7 @@ namespace ElysiumReaction
 	// and active-Discipline facts. Every shipped `reactions000.txt` row authors `WhoModifies`
 	// `"Others"`, which this runtime reads as "driven by the OTHER party's facts" — the reacting
 	// NPC's own reaction changes because of something true about the subject, not about itself
-	// (`docs/vtmb/npc-ai-reverse-engineering.md` → "Emotional disposition and social reaction are
+	// (`docs/vtmb/npc-ai/social.md` → "Emotional disposition and social reaction are
 	// different domains"). These six are every condition the shipped file names; nothing here
 	// invents a seventh.
 	struct FSubjectFacts

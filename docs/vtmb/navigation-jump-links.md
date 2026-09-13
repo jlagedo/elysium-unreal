@@ -106,7 +106,7 @@ at all, so in retail Jack's walk to either group-32 place and every hunter's pat
 fails at `SetGoal` and runs the program's failure route (`_FAILED`'s 5.1–10 s retry for a
 place; the default fail schedule `0x43 FAIL` — `STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 1;
 WAIT_PVS` — for a patrol, then the idle selector's patrol step again: one refused route per
-second, `npc-ai-reverse-engineering.md` § "The kernel's failure route and the base programs").
+second, `npc-ai/schedule-kernel.md` § "The kernel's failure route and the base programs").
 The hub's two patrollers are `sentry2` and `monk_upstairs_podium` (`SetupPatrolType` then
 `FollowPatrolPath` from the level scripts, § "Patrol paths, walked"). The port's runtime Recast mesh
 (`ElysiumMapActorLifecycle.cpp`, a projection of the `.hulls` sidecar — world brushes of

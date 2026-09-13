@@ -2,7 +2,7 @@
 //
 // The kernel is deliberately content-free — task bodies reach the world through
 // `IElysiumScheduleRunner` — so the whole task program of a recovered schedule can be run and
-// asserted here. The behaviour under test is `docs/vtmb/npc-ai-reverse-engineering.md` ->
+// asserted here. The behaviour under test is `docs/vtmb/npc-ai/conditions-and-states.md` ->
 // "The idle branch, decided" (the two idle schedules) and "Door-obstruction schedule selection".
 //
 // Three shapes worth holding onto while reading:
@@ -911,7 +911,7 @@ bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
 
 // ============================================================================================
 // Story 25 — the kernel's failure route and the random wait
-// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The kernel's failure route and the base programs,
+// (`docs/vtmb/npc-ai/schedule-kernel.md` -> "The kernel's failure route and the base programs,
 // walked"). A task failing inside the loop ends the pass with its program installed
 // (`MaintainSchedule`'s `HasCondition(TASK_FAILED)` exit to `0x102821ae`); the next pass's top arm
 // installs `GetFailSchedule`'s answer — through slot 440 — and keeps running it in the same loop;

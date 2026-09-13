@@ -15,7 +15,7 @@ class IElysiumNpcMotor;   // the reachability query `TASK_MOVE_AWAY_PATH` asks t
 // task bodies, and the bodies live on the entity, reached through `IElysiumScheduleRunner` so this
 // file stays free of the world, the engine and the clip vocabulary.
 //
-// Recovered facts: `docs/vtmb/npc-ai-reverse-engineering.md` -> "The idle branch, decided" for the
+// Recovered facts: `docs/vtmb/npc-ai/conditions-and-states.md` -> "The idle branch, decided" for the
 // state-1 selection order, and "Door-obstruction schedule selection" for step 6. The IDs below are
 // retail's own registered numbers, kept so a trace row reads like the binary's.
 //
@@ -44,7 +44,7 @@ enum class EElysiumTask : uint8
 
 	// The combat vocabulary.
 	// The 12 additional task identities the registered combat families use, under their recovered
-	// names (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Schedules and tasks"). Everything else in
+	// names (`docs/vtmb/npc-ai/schedule-kernel.md` -> "Schedules and tasks"). Everything else in
 	// the 441-identity library stays absent: an unknown task is a schedule this runtime cannot
 	// honestly run, and the runner fails it by name.
 
@@ -163,7 +163,7 @@ const TCHAR* ElysiumTaskFailureName(int32 Reason);
 // The name -> id direction, for the two script-facing schedule commands.
 //
 // `ChangeSchedule` and `StartSchedule` "name native schedules explicitly"
-// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes"), so schedule identity is
+// (`docs/vtmb/npc-ai/authored-control.md` -> "Direct schedule changes"), so schedule identity is
 // authored API and needs a lookup rather than a number. Only a REGISTERED program resolves: a name
 // this runtime carries no program for has to fail by name, because starting some other schedule
 // under an authored name would be a behaviour invented out of a string.
@@ -197,7 +197,7 @@ struct FElysiumSchedule
 	EElysiumScheduleId FailSchedule = EElysiumScheduleId::None;
 
 	// Which newly gathered conditions may abort this task program
-	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Interrupt conditions").
+	// (`docs/vtmb/npc-ai/conditions-and-states.md` -> "Interrupt conditions").
 	//
 	// **Empty means interruptible by nothing**, and that is a real recovered posture rather than an
 	// unfilled default: `SCHED_TROIKA_MELEE_ATTACK1_SWING` declares no interrupts at all, "so once

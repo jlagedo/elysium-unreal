@@ -23,7 +23,7 @@ struct FElysiumSaveArchive;
 // `npc_perception` tuning and the hearing radii are substrate rules and stay here.
 //
 // The VtMB facts: `docs/vtmb/stealth.md` -> "Visual observer transaction" and "Auditory stealth",
-// and `docs/vtmb/npc-ai-reverse-engineering.md` -> "Perception, sound, memory, and hostility".
+// and `docs/vtmb/npc-ai/senses.md` -> "Perception, sound, memory, and hostility".
 
 namespace ElysiumNpcSense
 {

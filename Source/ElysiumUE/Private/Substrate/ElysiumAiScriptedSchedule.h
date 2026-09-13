@@ -13,7 +13,7 @@ class FElysiumEntityWorld;
 //
 // It is NOT a scripted sequence, and collapsing the two is the mistake this file exists to prevent:
 // "Unlike a scripted sequence, this entity pushes an AI policy and goal rather than claiming the
-// body for one exact animation" (`docs/vtmb/npc-ai-reverse-engineering.md` -> "`aiscripted_schedule`").
+// body for one exact animation" (`docs/vtmb/npc-ai/authored-control.md` -> "`aiscripted_schedule`").
 // The sequence claims bodies; the schedule pushes a state and a goal and lets the ordinary kernel
 // run. Everything below follows from that one distinction — the pushed state persists as the mind's
 // own state rather than as a hold, cognition keeps gathering, and only the two MOVING programs take
@@ -53,7 +53,7 @@ namespace ElysiumAiScriptedSchedule
 	/**
 	 * CHOSEN, NOT RECOVERED — the 1 vs 2 and 4 vs 5 distinction, taken as WALK versus RUN.
 	 *
-	 * Quoted from `docs/vtmb/npc-ai-reverse-engineering.md`: "The exact gait or policy label
+	 * Quoted from `docs/vtmb/npc-ai/README.md`: "The exact gait or policy label
 	 * distinguishing 1 from 2 and 4 from 5 is not yet proven." Gait is chosen over a policy label
 	 * because gait is the one difference between two otherwise identical move orders that a player
 	 * can see, and because the corpus splits cleanly along it: the two rows carrying `forcestate 0`

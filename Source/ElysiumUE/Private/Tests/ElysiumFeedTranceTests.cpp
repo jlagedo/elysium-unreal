@@ -1,7 +1,7 @@
 // The post-feed trance, end to end on a headless world: the surviving victim's install, the
 // program's first think, what it makes the NPC refuse, how long it holds, and how it unwinds.
 //
-// `docs/vtmb/feeding.md` -> "Step 4, decoded" and `docs/vtmb/npc-ai-reverse-engineering.md` ->
+// `docs/vtmb/feeding.md` -> "Step 4, decoded" and `docs/vtmb/npc-ai/schedule-kernel.md` ->
 // "The incapacitation tasks and the NPC flag word" own every fact asserted here. The kernel-level
 // shape of the program (task order, the 30 + 0..120 bound, DELAY_INTERRUPTS) is asserted in
 // `ElysiumScheduleTests.cpp`; this file asserts the SYSTEM around it -- the producer's guard, the

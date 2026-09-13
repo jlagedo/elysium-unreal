@@ -9,7 +9,7 @@
 namespace
 {
 	// The registered numbers, decoded from their registration sites
-	// (`docs/vtmb/npc-ai-reverse-engineering.md`). Carried so a trace row cites the binary.
+	// (`docs/vtmb/npc-ai/README.md`). Carried so a trace row cites the binary.
 	struct FScheduleMeta
 	{
 		int32 Number;

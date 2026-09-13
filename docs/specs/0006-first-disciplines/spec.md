@@ -14,7 +14,7 @@ damage spine — **0005**; the `HitInfo` AI-schedule consumer, possession and fr
 viewmodels — **0013**.
 
 ## Sources
-- Oracle: `docs/vtmb/disciplines.md` (RE41, RE53), `docs/vtmb/npc-ai-reverse-engineering.md`
+- Oracle: `docs/vtmb/disciplines.md` (RE41, RE53), `docs/vtmb/npc-ai/authored-control.md`
   § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
 - Authored data, V2 seams under `$ELYSIUM_WORK_ROOT/exports_v2/`: `vdata/disciplinetgt_*`,
   `vdata/` (the discipline tables), `scripts/` (`sp_tutorial_1` level script, the downstairs
@@ -73,7 +73,7 @@ model / effort tier recommended for it.
   Retail: the frenzy family's HitGroups and the `SetScriptedDiscipline` pending inputs.
   Job: both, over 0002/16c's `DoFrenzy` / `DoPossession` arms.
   Consumes: 0002/16c.
-  Oracle: `disciplines.md`, `npc-ai-reverse-engineering.md` § "Disciplines that possess or
+  Oracle: `disciplines.md`, `npc-ai/authored-control.md` § "Disciplines that possess or
   frenzy an NPC".
   Size: M. Effort: Opus / medium.
 - [ ] **9. The client-disable presentation.**

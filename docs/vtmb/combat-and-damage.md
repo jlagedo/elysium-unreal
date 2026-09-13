@@ -1642,7 +1642,7 @@ killer and game rules. The NPC override at `0x10265ad0` is schedule-aware:
   refuses the kill and returns. This guard is about being frozen, not about already dying;
 - a **started** scripted sequence defers the kill packet, otherwise the owning sequence is
   cancelled; the deferral test and its resume are owned by
-  [npc-ai-reverse-engineering.md](npc-ai-reverse-engineering.md);
+  [npc-ai/README.md](npc-ai/README.md);
 - `OnDeath` fires once through the native guard at `+0x5bd4`;
 - current and ideal NPC state become 7 (dead), strategy and squad claims are vacated, and the
   carcass-sound / corpse-fade fork runs; the death schedule itself is chosen later, by the
@@ -1746,7 +1746,7 @@ fresh corpse is still solid and still takes damage.
 **`CBaseAnimating::BecomeClientRagdoll` (`0x10090180`)** returns **false** when the model carries no
 ragdoll collide, and in that case only zeroes velocity — that false is what drives the death
 schedule choice recorded in
-[npc-ai-reverse-engineering.md](npc-ai-reverse-engineering.md). On success:
+[npc-ai/README.md](npc-ai/README.md). On success:
 
 - **when the force bone is `-1` it first sets a weighted-random sequence of activity `0x21`
   (`ACT_DIERAGDOLL`) at cycle 0**, so the ragdoll starts from the first frame of a death animation;

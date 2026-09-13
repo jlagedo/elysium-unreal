@@ -5,7 +5,7 @@
 // `Elysium.Substrate.NpcConditions.SoundSweepArms`; the see-unknown sweep (story 10b) and the
 // vision producer are not, so the direct assertions here remain the only cover for the rest.
 //
-// `docs/vtmb/npc-ai-reverse-engineering.md` -> "The interest predicate" owns every fact here.
+// `docs/vtmb/npc-ai/conditions-and-states.md` -> "The interest predicate" owns every fact here.
 
 #include "Misc/AutomationTest.h"
 

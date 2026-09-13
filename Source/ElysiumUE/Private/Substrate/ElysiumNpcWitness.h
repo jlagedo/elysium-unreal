@@ -14,7 +14,7 @@ struct FElysiumSaveArchive;
 // NPC law witnessing: the per-NPC half of the player-law transaction whose player half lives in
 // `Substrate/ElysiumLaw.h`.
 //
-// The behaviour is owned by `docs/vtmb/npc-ai-reverse-engineering.md` § "Player-law observation
+// The behaviour is owned by `docs/vtmb/npc-ai/population.md` § "Player-law observation
 // transaction" and `docs/vtmb/player-entity.md` § "Law, Masquerade and world response"; the feed
 // producer's own two callers are in `docs/vtmb/feeding.md`. The recovered distribution of the four
 // authored thresholds is the same RE document's § "Perception and player-reaction distributions".

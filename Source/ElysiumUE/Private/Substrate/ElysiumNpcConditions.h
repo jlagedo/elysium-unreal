@@ -17,7 +17,7 @@ struct FElysiumNpcMemory;
 //
 // A condition is one bit of decision input, gathered fresh at the top of every decision pass and
 // consumed by ideal-state selection, enemy choice and the schedule interrupt masks. The recovered
-// pass (`docs/vtmb/npc-ai-reverse-engineering.md` -> "AI update loop") clears the gathered marker
+// pass (`docs/vtmb/npc-ai/lifecycle.md` -> "AI update loop") clears the gathered marker
 // when `RunAI` begins and clears transient conditions when it ends, so a condition never outlives
 // the pass that produced it.
 //
@@ -27,7 +27,7 @@ struct FElysiumNpcMemory;
 // over it are rebuilt on the first think after a load. Nothing is lost by that, because every
 // producer below reads only saved memory plus the live world.
 //
-// The VtMB facts: `docs/vtmb/npc-ai-reverse-engineering.md` -> "Enemy acquisition and replacement",
+// The VtMB facts: `docs/vtmb/npc-ai/social.md` -> "Enemy acquisition and replacement",
 // "Interrupt conditions", "`no_alert_state` does not suppress the alert state", and
 // `docs/vtmb/combat-and-damage.md` -> "NPC damage response and stagger boundaries".
 
@@ -56,7 +56,7 @@ enum class EElysiumNpcCond : uint8
 
 	// --- Recovered identities --------------------------------------------------------------------
 	// --- The four law conditions ---
-	// The registry numbers the survey states in decimal (`docs/vtmb/npc-ai-reverse-engineering.md`
+	// The registry numbers the survey states in decimal (`docs/vtmb/npc-ai/population.md`
 	// -> "Player-law observation transaction"): 31, 32, 33, 34. Spelled in hex here so the whole
 	// enum reads in one base; the decimal is beside each one because that is how the table names it.
 	// Their producer is `Substrate/ElysiumNpcWitness.h`.
@@ -104,7 +104,7 @@ enum class EElysiumNpcCond : uint8
 
 	// --- Decoded from the base condition table, `FUN_102c8ce0` -----------------------------------
 	// The `CAI_BaseNPC` registrar is one dense namespace, 0x00..0x76, 119 entries, dumped whole
-	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The base condition table"). These seven used to
+	// (`docs/vtmb/npc-ai/conditions-and-states.md` -> "The base condition table"). These seven used to
 	// sit in a placeholder band above 0x66; every value below is the registered one.
 	SeeFear    = 0x44,
 	SeeEnemy   = 0x46,
@@ -507,7 +507,7 @@ namespace ElysiumNpcCond
 	 *
 	 * `CNPC_VHuman::SelectSchedule` (`0x10384ee0`) queries the active weapon's capability word: a
 	 * weapon reporting `0x18000` enters the melee selector, and every other weapon enters the ranged
-	 * one (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Ordinary humanoid combat selection"; the
+	 * one (`docs/vtmb/npc-ai/programs.md` -> "Ordinary humanoid combat selection"; the
 	 * melee class's full result is `0x40018000` and its `0x18000` portion is also the player's block
 	 * gate, `docs/vtmb/combat-and-damage.md`).
 	 *

@@ -1,7 +1,7 @@
 // Content-free Substrate automation: the RPG/social reaction-score calculator — the third social
 // domain. Every table here is
 // built in code, fabricated to match what `system/reaction.txt` and `system/reactions000.txt`
-// actually author (`docs/vtmb/npc-ai-reverse-engineering.md` → "Emotional disposition and social
+// actually author (`docs/vtmb/npc-ai/social.md` → "Emotional disposition and social
 // reaction are different domains"), so these cases are this runtime's statement of the contract
 // rather than a reading of the export. `Substrate/ElysiumReaction.h` is the pure calculator under
 // test; `Substrate/ElysiumRulebook.h` is the typed-table/parsing layer beside it.

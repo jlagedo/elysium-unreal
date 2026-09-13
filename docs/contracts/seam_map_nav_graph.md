@@ -4,7 +4,7 @@ This document defines one binary glTF 2.0 unit for one VtMB AI node graph: the c
 `.ain` the engine builds from a map's `info_node` entities, and the `.loc` stamp shipped beside
 it. Shared rules are owned by `seam_map_unit_contract.md`; the entities the graph was compiled
 from are owned by `seam_map_map_entities.md`, and NPC navigation behaviour by
-`docs/vtmb/npc-ai-reverse-engineering.md` and `docs/architecture/map-architecture.md`.
+`docs/vtmb/npc-ai/README.md` and `docs/architecture/map-architecture.md`.
 
 ## Unit identity
 

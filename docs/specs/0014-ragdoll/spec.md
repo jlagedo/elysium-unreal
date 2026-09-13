@@ -16,7 +16,7 @@ character corpus.
 ## Sources
 - Oracle: `docs/vtmb/combat-and-damage.md` (the death impulse envelope),
   `docs/vtmb/phy_vphysics.md`, `docs/vtmb/physics-interaction.md`,
-  `docs/vtmb/npc-ai-reverse-engineering.md` (RE-D1–RE-D5).
+  `docs/vtmb/npc-ai/README.md` (RE-D1–RE-D5).
 - Authored data, V2 seams under `$ELYSIUM_WORK_ROOT/exports_v2/`: `models/` (324 rigs, 289 with
   15 solids / 14 constraints: geometry, solid/ledge ownership, constraints, parameters,
   metadata, provenance), `maps/*.entities.glb` (`prop_ragdoll`, 52 placements on 14 maps).

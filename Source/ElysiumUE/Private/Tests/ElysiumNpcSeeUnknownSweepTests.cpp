@@ -7,7 +7,7 @@
 // `GatherSight`; that cohort lives in `ElysiumNpcSensesTests.cpp`. What is under test here is what
 // this sweep does with the memory record and the raised condition, which is the seam 10b adds.
 //
-// `docs/vtmb/npc-ai-reverse-engineering.md` -> "The three `GatherConditions` sweeps and the
+// `docs/vtmb/npc-ai/conditions-and-states.md` -> "The three `GatherConditions` sweeps and the
 // interest predicate" owns every fact here.
 
 #include "Misc/AutomationTest.h"

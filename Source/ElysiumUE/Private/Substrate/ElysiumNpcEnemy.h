@@ -16,7 +16,7 @@ struct FElysiumDmg;
 // byte it reads or writes already lives on the NPC's memory, relationship table and cognition
 // block. That is what makes a whole acquisition pass drivable headless from a test.
 //
-// The recovered order (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Enemy acquisition and
+// The recovered order (`docs/vtmb/npc-ai/social.md` -> "Enemy acquisition and
 // replacement"), and this file's five steps are exactly it:
 //
 //     sense / hear / take damage / script relation

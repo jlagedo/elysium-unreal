@@ -1,7 +1,7 @@
 // Content-free Substrate automation: `aiscripted_schedule` — the authored AI director.
 //
 // Every number and every ordering asserted here is a fact from
-// `docs/vtmb/npc-ai-reverse-engineering.md` -> "`aiscripted_schedule`" and "Direct schedule
+// `docs/vtmb/npc-ai/authored-control.md` -> "`aiscripted_schedule`" and "Direct schedule
 // changes", or a key spelling read off the exported `.ents` of the five maps that carry the
 // entity (`sm_apartment_1`, `sm_diner_1`, `sm_hub_1`, `sm_medical_1`, `sm_warehouse_1`). Nothing
 // here reads the export: the fixture states the authored record in code, which is what makes these
