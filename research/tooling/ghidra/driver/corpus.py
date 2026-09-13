@@ -306,9 +306,14 @@ def _migrate(connection: sqlite3.Connection) -> None:
 # wrong fact enters a document. `binary` is a name the image itself states -- a VProf scope, an
 # RTTI method, an export. `doc` is one a `docs/` topic file states beside the address, which is
 # this project's own recovered record. `inferred` is argued from call sites or slot position and
-# nothing else. `unsettled` is the record of a question the evidence could not answer: the row
-# names the function's current placeholder, states why no name was given, and changes nothing.
-NAME_TIERS = ("binary", "doc", "inferred", "unsettled")
+# nothing else. `accessor` is coined: the body reads or writes one recovered word and nothing
+# else, the member's name is the fact and the method name (`Get<Member>`, `Set<Member>`) is
+# convention -- a reader must not take it for retail spelling. `binary` also covers a body whose
+# bytes are a symbol's in the VC6 SP5 archive the game links (`crt_match.py`): the archive's
+# statement, not an argument. `unsettled` is the record of a question the evidence could not
+# answer: the row names the function's current placeholder, states why no name was given, and
+# changes nothing.
+NAME_TIERS = ("binary", "doc", "inferred", "accessor", "unsettled")
 
 NAMES_HEADER = "\t".join(("module", "addr", "name", "tier", "evidence"))
 
@@ -2125,7 +2130,7 @@ def _plausible(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Z][A-Za-z0-9]*", name)) and bool(re.search(r"[a-z][A-Z]", name))
 
 
-HARVEST_PASSES = ("docs", "slots", "tu", "message", "identity")
+HARVEST_PASSES = ("docs", "slots", "tu", "message", "crt", "accessor", "identity")
 
 
 def command_harvest(out: Path | None, limit: int, max_distance: int,
@@ -2248,7 +2253,8 @@ def command_harvest(out: Path | None, limit: int, max_distance: int,
                 stream.write(f"# alt: {', '.join(alternates)}\n")
             stream.write("\t".join((module, addr, name, tier, evidence)) + "\n")
         for source, title in (("slots", "slot order"), ("tu", "translation-unit order"),
-                              ("message", "message prefix"), ("identity", "slot identity"),
+                              ("message", "message prefix"), ("crt", "CRT bytes"),
+                              ("accessor", "accessor"), ("identity", "slot identity"),
                               ("unsettled", "unsettled")):
             chosen = [r for r in evidence_rows if r.source == source]
             if not chosen:
@@ -2313,6 +2319,9 @@ def _evidence_passes(connection: sqlite3.Connection,
             identity = report.get("identity", {}).get("reasons", {}).get(func)
             if identity:
                 why = f"{why}; slot identity: {identity}"
+            accessor = report.get("accessor", {}).get("reasons", {}).get(func)
+            if accessor:
+                why = f"{why}; {accessor}"
             recorded.add(func)
             kept.append(name_passes.Proposal(module, func, current["name"], "unsettled",
                                              f"CAI_BaseNPC#{slot} {why}", "unsettled"))
@@ -2322,6 +2331,24 @@ def _evidence_passes(connection: sqlite3.Connection,
     if report.get("message"):
         lines.append(f"message prefix: {report['message']['proposed']} proposed, "
                      f"{report['message']['ambiguous']} ambiguous")
+    if report.get("crt"):
+        crt = report["crt"]
+        if "error" in crt:
+            lines.append(f"CRT bytes: {crt['error']}")
+        else:
+            lines.append("CRT bytes: " + ", ".join(
+                f"{crt.get(k, 0)} {k}" for k in ("proposed", "agree", "disagree", "two symbols",
+                                                 "shared body", "decorated"))
+                + "; extents matched per archive: "
+                + ", ".join(f"{a} {n}" for a, n in crt.get("archives", {}).items()))
+            lines += [f"  disagree: {one}" for one in crt.get("disagreements", [])
+                      if "image" in one]
+    if report.get("accessor"):
+        acc = report["accessor"]
+        lines.append("accessor: " + ", ".join(
+            f"{acc.get(k, 0)} {k}" for k in ("proposed", "value", "ref", "test", "set", "derived",
+                                             "no layout word", "interior word", "two words",
+                                             "receiver untyped", "arity", "folded")))
     if report.get("identity"):
         identity = report["identity"]
         lines.append("slot identity: " + ", ".join(
@@ -2631,7 +2658,7 @@ def main() -> int:
     harvest_parser.add_argument("--out", type=Path, default=None)
     harvest_parser.add_argument("--limit", type=int, default=2000)
     harvest_parser.add_argument("--passes", default=",".join(HARVEST_PASSES),
-                                help="comma list of docs, slots, tu, message, identity")
+                                help="comma list of docs, slots, tu, message, crt, accessor, identity")
     harvest_parser.add_argument("--max-distance", type=int, default=HARVEST_WINDOW,
                                 help="how far from the address a name may stand; 6 keeps only "
                                      "the adjacent pairings the docs use as a template")

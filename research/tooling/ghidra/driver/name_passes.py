@@ -20,6 +20,13 @@ things the image and the SDK state instead, and each proposal carries the argume
 * **slot identity** -- a slot is one virtual across the hierarchy. Where the named bodies at a
   slot (the image's, the overlay's, the passes above) state one method, every unnamed override
   there takes it: `CNPC_VDog::StartTask` because eleven other bodies at slot 442 are `StartTask`.
+* **CRT bytes** (`crt_match.py`) -- a body whose bytes are a symbol's in the VC6 SP5 archive the
+  game links, relocation sites masked. The archive's statement, so tier `binary`.
+* **accessor** -- a leaf body that reads or writes one word of the recovered layout
+  (`docs/vtmb/npc-kernel/layout.tsv`) and nothing else. The member's name is the record; the
+  method name is convention (`Get<Member>`, `Set<Member>`, `Is<Member>` for a zero test), so the
+  row carries its own tier, `accessor`, unless an SDK header declares that very inline body under
+  a name, in which case the name is the SDK's and the tier `inferred`.
 
 The SDK passes are held to the image's arities: a `__thiscall` body's `RET n` is how many stack
 words it pops, and a declaration states how many it should. A proposal the word count does not
@@ -202,12 +209,14 @@ class Corpus:
         self.name: dict[str, str] = {}
         self.ns: dict[str, str] = {}
         self.size: dict[str, int] = {}
+        self.cc: dict[str, str] = {}
         self.thunk: set[str] = set()
         for row in connection.execute(
-                "SELECT addr, name, ns, size, thunk FROM functions WHERE module = ?", (module,)):
+                "SELECT addr, name, ns, size, thunk, cc FROM functions WHERE module = ?", (module,)):
             self.name[row[0]] = row[1] or ""
             self.ns[row[0]] = row[2] or ""
             self.size[row[0]] = row[3] or 0
+            self.cc[row[0]] = row[5] or ""
             if row[4]:
                 self.thunk.add(row[0])
         self.tables: dict[str, list[str]] = collections.defaultdict(list)
@@ -246,6 +255,11 @@ class Corpus:
         ns = self.ns.get(addr, "")
         name = self.name.get(addr, "")
         return name if ns in ("", "Global") else f"{ns}::{name}"
+
+    def code(self, addr: str) -> str:
+        row = self.db.execute("SELECT code FROM functions WHERE module = ? AND addr = ?",
+                              (self.module, addr)).fetchone()
+        return (row[0] if row else "") or ""
 
 
 # -- slot order ------------------------------------------------------------------------------------
@@ -470,15 +484,19 @@ def _why_not(slot: int, anchors: list[tuple[int, int]], broken: list, sdk_len: i
 # -- slot identity ---------------------------------------------------------------------------------
 
 def identity_pass(corpus: Corpus, sdk: sdk_layout.Sdk | None, chains: dict[str, list[str]],
-                  extra: dict[str, str]) -> tuple[list[Proposal], dict]:
+                  extra: dict[str, str | tuple[str, str]]) -> tuple[list[Proposal], dict]:
     """A slot is one virtual across the hierarchy: every body at slot `s` of every class that
     inherits the slot from the same introducer overrides the same method. Where the named bodies
     at a slot (the dump's, the overlay's, and `extra` -- the other passes' proposals, bare method
-    names) state one method and nothing else, every unnamed body there takes it.
+    names or `(name, tier)`) state one method and nothing else, every unnamed body there takes
+    it. A method every witness of which is a coined `accessor` proposal propagates as `accessor`:
+    the slot argument is sound, the spelling is still convention.
 
     Refused: a slot whose named bodies disagree; a slot whose bodies pop different stack word
     counts (one of the names, or the table, is not what it seems); a slot whose one name the SDK
     declares with a different arity; a body folded into another slot."""
+    extra_name = {a: (v[0] if isinstance(v, tuple) else v) for a, v in extra.items()}
+    extra_tier = {a: (v[1] if isinstance(v, tuple) else "inferred") for a, v in extra.items()}
     def introducer(cls: str, s: int) -> str:
         for ancestor in reversed(chains.get(cls, [cls])):
             if ancestor in corpus.tables and len(corpus.tables[ancestor]) > s:
@@ -521,9 +539,10 @@ def identity_pass(corpus: Corpus, sdk: sdk_layout.Sdk | None, chains: dict[str, 
             current = corpus.name.get(body, "")
             if not is_placeholder(current):
                 named[body] = current
-            elif body in extra:
-                named[body] = extra[body]
+            elif body in extra_name:
+                named[body] = extra_name[body]
         unnamed = [b for b in bodies if b not in named]
+        coined = bool(named) and all(extra_tier.get(b) == "accessor" for b in named)
         # A destructor's name is its class's; it says nothing about another class's body.
         methods = {m for m in named.values() if not m.startswith("~")}
         if not unnamed:
@@ -554,7 +573,7 @@ def identity_pass(corpus: Corpus, sdk: sdk_layout.Sdk | None, chains: dict[str, 
             refuse(f"{method} named, but the bodies pop {next(iter(words))} words and the SDK "
                    f"declares {declared}")
             continue
-        witnesses = sorted(corpus.label(b) if b not in extra else f"{extra[b]} (proposed)"
+        witnesses = sorted(corpus.label(b) if b not in extra_name else f"{extra_name[b]} (proposed)"
                            for b in named)
         for body in unnamed:
             owner = _owner(corpus, body, s, chains)
@@ -567,7 +586,7 @@ def identity_pass(corpus: Corpus, sdk: sdk_layout.Sdk | None, chains: dict[str, 
             name = f"{owner}::{method}"
             offered[body].add(name)
             proposals.setdefault(body, Proposal(
-                corpus.module, body, name, "inferred",
+                corpus.module, body, name, "accessor" if coined else "inferred",
                 f"slot identity: {intro}#{s} is {method} in {len(named)} named body(ies) "
                 f"({', '.join(witnesses[:3])}{', …' if len(witnesses) > 3 else ''}); "
                 + (f"all {len(bodies)} bodies pop {next(iter(words))} word(s)" if words
@@ -748,9 +767,406 @@ def message_pass(corpus: Corpus, sdk: sdk_layout.Sdk, chains: dict[str, list[str
     return proposals, {"proposed": len(proposals), "ambiguous": dropped}
 
 
+# -- accessors -------------------------------------------------------------------------------------
+
+LAYOUT_TSV = Path(__file__).resolve().parents[4] / "docs" / "vtmb" / "npc-kernel" / "layout.tsv"
+ACCESSOR_MAX_BYTES = 48
+# The table the whole base line is flattened into; a species table sits beside it.
+BASE_TABLE = "CAI_BaseNPCTroika"
+HUNGARIAN = re.compile(r"^m_(?:fl|f|b|i|n|h|p|v|vec|ang|sz|str|e|ul|us|uc|ch|a|q|c|s|t|d|w)?(?=[A-Z])")
+# An SDK header's one-line accessor: `Foo() const { return m_x; }` / `SetFoo(int x) { m_x = x; }`.
+SDK_GETTER = re.compile(r"\b(\w+)\s*\(\s*(?:void)?\s*\)\s*(?:const)?\s*\{\s*return\s+"
+                        r"(?:\([^;{}]*?\)\s*)?&?\s*(?:this->)?(m_\w+)(?:\.Get\(\))?\s*;\s*\}")
+SDK_SETTER = re.compile(r"\b(\w+)\s*\(\s*(?:const\s+)?[\w:<>]+\s*[&*]?\s*(\w+)\s*\)\s*\{\s*"
+                        r"(?:this->)?(m_\w+)(?:\s*=\s*\2|\.Set\(\s*\2\s*\))\s*;\s*\}")
+_LOCAL_DECL = re.compile(r"^(?:[\w:]+\s+)+\**\w+(?:\s*\[\d+\])?;$")
+_CAST = re.compile(r"\((?:[\w ]+?\s*\**)\)")
+_SIGNATURE = re.compile(r"^[^\n]*?\b(?:FUN_|vfunc|\w+::|\w+)[\w:~]*\s*\(([^)]*)\)\s*$", re.M)
+
+
+@dataclass
+class Word:
+    table: str
+    off: int
+    end: int
+    member: str
+    type: str
+    layer: str
+    tier: str
+
+
+def read_layout(path: Path = LAYOUT_TSV) -> dict[str, list[Word]]:
+    """`layout.tsv` as one sorted word list per table; a word runs to the next word's offset."""
+    tables: dict[str, list[Word]] = collections.defaultdict(list)
+    if not path.is_file():
+        return {}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = lines[0].split("\t")
+    col = {name: k for k, name in enumerate(header)}
+    for line in lines[1:]:
+        if not line.strip() or line.startswith("#"):
+            continue
+        cells = line.split("\t")
+        get = lambda name: cells[col[name]].strip() if col.get(name, 99) < len(cells) else ""  # noqa: E731
+        tables[get("table")].append(Word(get("table"), int(get("offset"), 16), 0, get("member"),
+                                        get("type"), get("layer"), get("tier")))
+    for table, words in tables.items():
+        words.sort(key=lambda w: w.off)
+        for k, word in enumerate(words):
+            word.end = words[k + 1].off if k + 1 < len(words) else word.off + 4
+    return dict(tables)
+
+
+def stem(member: str) -> str:
+    m = HUNGARIAN.match(member)
+    rest = member[m.end():] if m else (member[2:] if member.startswith("m_") else member)
+    return (rest[:1].upper() + rest[1:]) if rest else member
+
+
+def _statements(code: str) -> tuple[str | None, list[str], list[str]]:
+    """The receiver's name, the other parameters, and the body's statements, from decompiled C."""
+    head, _, rest = code.partition("{")
+    body = rest.rsplit("}", 1)[0]
+    sig = _SIGNATURE.search(head.strip().splitlines()[-1] if head.strip() else "")
+    params = [p.strip().split()[-1].lstrip("*") for p in (sig.group(1).split(",") if sig else [])
+              if p.strip() and p.strip() != "void"]
+    lines = []
+    buffer = ""
+    for raw in body.splitlines():
+        line = raw.strip()
+        # a comment line, not a store through a pointer (`*(int *)(this + 0x268) = param_1;`)
+        if not line or line.startswith(("/*", "//")) or re.match(r"^\*(?:/|\s|$)", line):
+            continue
+        buffer = (buffer + " " + line).strip()
+        if buffer.endswith(";"):
+            if not _LOCAL_DECL.match(buffer):
+                lines.append(buffer)
+            buffer = ""
+    return (params[0] if params else None), params[1:], lines
+
+
+SCALARS = set(sdk_layout.WORD_TYPES) | {"string_t", "float", "double", "bool", "byte", "int",
+                                         "short", "char", "uint", "undefined4", "undefined1",
+                                         "undefined2", "EHANDLE", "CBaseHandle", "Activity"}
+
+
+def _access_only(expr: str, recv: str) -> tuple[str, str | None] | None:
+    """`(kind, test)` when `expr` is nothing but one access through `recv`: kind `value` (a raw
+    word read), `ref` (the address, no dereference), `member` (the typed `recv->m_x` form, which
+    is a value for a scalar member and an address for a struct one); `test` is the `==` / `!=`
+    the access is compared against zero with, else None. None for a derived expression."""
+    text = _CAST.sub("", expr).replace("(", "").replace(")", "").strip()
+    test = None
+    m = re.match(r"^(.*?)\s*(!=|==)\s*(?:0|0\.0|'\\0'|false)$", text)
+    if m:
+        text, test = m.group(1).strip(), m.group(2)
+    address = text.startswith("&")
+    deref = text.startswith("*") or "[" in text
+    typed = "->" in text
+    text = text.lstrip("*&").strip()
+    if not (re.fullmatch(rf"{recv}\s*\+\s*0x[0-9a-f]+", text) or re.fullmatch(rf"{recv}->\w+", text)
+            or re.fullmatch(rf"{recv}\[\d+\]", text) or text == recv):
+        return None
+    if text == recv and not deref:
+        return None                   # `return this;`
+    if address:
+        return "ref", test
+    if typed:
+        return "member", test
+    return ("value" if deref else "ref"), test
+
+
+def accessor_pass(corpus: Corpus, sdk: sdk_layout.Sdk | None, chains: dict[str, list[str]],
+                  taken: set[str], layout: dict[str, list[Word]] | None = None
+                  ) -> tuple[list[Proposal], dict]:
+    """Name leaf bodies that touch exactly one recovered word. See the module docstring."""
+    layout = read_layout() if layout is None else layout
+    callees = collections.Counter()
+    for (caller,) in corpus.db.execute("SELECT caller FROM edges WHERE module = ?", (corpus.module,)):
+        callees[caller] += 1
+    stringy = {a for (a,) in corpus.db.execute(
+        "SELECT DISTINCT func_addr FROM string_refs WHERE module = ?", (corpus.module,))}
+    accesses: dict[str, list[tuple[str, int, str, str]]] = collections.defaultdict(list)
+    for func, cls, off, field, kind in corpus.db.execute(
+            "SELECT func_addr, cls, off, field, kind FROM accesses WHERE module = ?", (corpus.module,)):
+        accesses[func].append((cls or "", off, field or "", kind or ""))
+
+    base_chain = chains.get(BASE_TABLE, [BASE_TABLE])
+
+    def word_at(cls: str, off: int) -> Word | None:
+        """The recorded word a class touches at `off`: its own table, else the base line's where
+        the class descends from it, else -- for a class off the NPC line (`CAISound` typed as the
+        receiver of a `CBaseEntity` accessor) -- the base line's word when the word was introduced
+        at or above the deepest ancestor the two share."""
+        candidates = [cls] if cls in layout else []
+        candidates += [t for t in layout if t != cls and cls in chains.get(t, [])]
+        if BASE_TABLE in candidates:
+            candidates.remove(BASE_TABLE)
+            candidates.append(BASE_TABLE)
+        for table in candidates:
+            for word in layout[table]:
+                if word.off <= off < word.end:
+                    return word
+        if not candidates and cls and cls not in base_chain:
+            common = next((c for c in chains.get(cls, []) if c in base_chain), None)
+            if common:
+                for word in layout.get(BASE_TABLE, []):
+                    if word.off <= off < word.end:
+                        return word if word.layer in chains.get(common, [common]) else None
+        return None
+
+    header_text: dict[str, str] = {}
+
+    def sdk_text(cls: str) -> tuple[Path, str] | None:
+        path = sdk.header(cls) if sdk is not None else None
+        if path is None:
+            return None
+        if cls not in header_text:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            # the class's own unit and its shared half (`baseentity_shared.cpp` holds BloodColor)
+            for name in (path.with_suffix(".cpp").name, f"{path.stem}_shared.cpp"):
+                source = sdk.find_source(name)
+                if source is not None:
+                    text += "\n" + source.read_text(encoding="utf-8", errors="replace")
+            header_text[cls] = text
+        return path, header_text[cls]
+
+    def sdk_inline(owner: str, member: str, setter: bool, in_slot: bool
+                   ) -> tuple[str, str] | tuple[None, str] | None:
+        """The SDK's name for a one-line body over `member` on `owner`'s chain: `(name, where)`;
+        `(None, why)` when the SDK declares two such bodies; None when it declares none. Two
+        bodies where one is a virtual of the chain and the body fills a slot: the virtual."""
+        for cls in chains.get(owner, [owner]):
+            found = sdk_text(cls)
+            if found is None:
+                continue
+            path, text = found
+            names = {m.group(1) for m in (SDK_SETTER if setter else SDK_GETTER).finditer(text)
+                     if (m.group(3) if setter else m.group(2)) == member}
+            if len(names) == 1:
+                return next(iter(names)), f"{path.name} ({cls})"
+            if names and in_slot:
+                virtuals = {m.name for c in chains.get(owner, [owner]) for m in sdk.methods(c)[1]
+                            if m.virtual} & names
+                if len(virtuals) == 1:
+                    return next(iter(virtuals)), (f"{path.name} ({cls}); of {len(names)} such bodies "
+                                                  f"({', '.join(sorted(names))}) it is the virtual")
+            if names:
+                return None, f"SDK 2013 {path.name} declares {len(names)} such bodies ({', '.join(sorted(names))})"
+        return None
+
+    zero_names: set[str] | None = None
+
+    def is_zero(token: str) -> bool:
+        """`0`, `false`, or an SDK identifier defined as zero (`LIFE_ALIVE = 0`, the first
+        enumerator, a `#define X 0`)."""
+        nonlocal zero_names
+        if token in ("0", "false", "NULL"):
+            return True
+        if sdk is None:
+            return False
+        if zero_names is None:
+            zero_names = set()
+            for sub in sdk_layout.HEADER_DIRS:
+                base = sdk.root / sub
+                if not base.is_dir():
+                    continue
+                for path in base.rglob("*.h"):
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                    zero_names.update(re.findall(r"\b([A-Z_][A-Z0-9_]*)\s*=\s*0\b(?![x.])", text))
+                    zero_names.update(re.findall(r"#define\s+([A-Z_][A-Z0-9_]*)[ \t]+0\b(?![x.])", text))
+                    zero_names.update(re.findall(r"\benum\s+\w*\s*\{\s*([A-Z_][A-Z0-9_]*)\s*[,}]", text))
+        return token in zero_names
+
+    SDK_TEST = re.compile(r"\b(\w+)\s*\(\s*(?:void)?\s*\)\s*(?:const)?\s*\{\s*return\s+(?:\(\s*)?"
+                          r"(?:this->)?(m_\w+)\s*(==|!=)\s*(\w+)\s*\)?\s*;\s*\}")
+
+    def sdk_test(owner: str, member: str, op: str) -> tuple[str, str] | None:
+        """The SDK's name for `return m_x == ZERO;` on `owner`'s chain, polarity kept."""
+        for cls in chains.get(owner, [owner]):
+            found = sdk_text(cls)
+            if found is None:
+                continue
+            path, text = found
+            names = {m.group(1) for m in SDK_TEST.finditer(text)
+                     if m.group(2) == member and m.group(3) == op and is_zero(m.group(4))}
+            if len(names) == 1:
+                return next(iter(names)), f"{path.name} ({cls})"
+        return None
+
+    # Callers, thunks folded in: who passes what as the receiver of an untyped leaf.
+    callers: dict[str, set[str]] = collections.defaultdict(set)
+    thunk_of: dict[str, set[str]] = collections.defaultdict(set)
+    for caller, callee in corpus.db.execute("SELECT caller, callee FROM edges WHERE module = ?",
+                                            (corpus.module,)):
+        callers[callee].add(caller)
+        if caller in corpus.thunk:
+            thunk_of[callee].add(caller)
+    _RECEIVER = re.compile(r"\b(\w+)::~?\w+\s*\(\s*(\w+)\s*\*\s*this\b")
+
+    def receiver_from_callers(addr: str) -> tuple[str | None, str]:
+        """The class every typed call site passes its own `this` to; None with the reason."""
+        sites = set(callers.get(addr, set()))
+        for thunk in thunk_of.get(addr, set()):
+            sites |= callers.get(thunk, set())
+        call = re.compile(rf"\b(?:thunk_)?FUN_{addr}\(\s*(?:\([^()]*\)\s*)?(\w+)\s*(?:\+\s*0x[0-9a-f]+)?\s*[,)]")
+        classes: set[str] = set()
+        typed_sites = 0
+        for caller in sites:
+            if caller in corpus.thunk:
+                continue
+            code = corpus.code(caller)
+            head, _, body = code.partition("{")
+            m = _RECEIVER.search(head)
+            cls = m.group(2) if m else None
+            for site in call.finditer(body):
+                if site.group(1) != "this" or "+ 0x" in site.group(0):
+                    return None, "a call site passes something other than its own this"
+                if cls:
+                    classes.add(cls)
+                    typed_sites += 1
+        if not typed_sites:
+            return None, "no typed call site"
+        return min(classes, key=lambda c: (len(chains.get(c, [c])), c)), \
+            f"{typed_sites} call site(s) passing this ({', '.join(sorted(classes)[:4])})"
+
+    report = collections.Counter()
+    reasons: dict[str, str] = {}
+    proposals: list[Proposal] = []
+    for addr in sorted(corpus.name):
+        if addr in taken or addr in corpus.thunk or not is_placeholder(corpus.name[addr]):
+            continue
+        if corpus.size.get(addr, 0) > ACCESSOR_MAX_BYTES or callees[addr] or addr in stringy:
+            continue
+        touched = [a for a in accesses.get(addr, []) if a[3] in ("named", "this") and a[1] is not None]
+        if not touched:
+            continue
+        if corpus.cc.get(addr) != "__thiscall":
+            report["not thiscall"] += 1
+            continue
+        # An untyped `this` names no class; a slot body's class is the table that holds it, and
+        # a leaf every typed caller hands its own `this` is laid out as the most-base of them.
+        slots = corpus.fills.get(addr, set())
+        holder = min((c for c, _ in slots), key=lambda c: (len(chains.get(c, [])), c)) if slots else ""
+        typed_by = ""
+        if not holder and any(not cls for cls, _, _, _ in touched):
+            holder, typed_by = receiver_from_callers(addr)
+            if holder is None:
+                report["receiver untyped"] += 1
+                reasons[addr] = f"accessor: receiver untyped, {typed_by}"
+                continue
+            typed_by = f"; receiver typed from {typed_by}"
+        touched = [(cls or holder, off, field, kind) for cls, off, field, kind in touched]
+        words = {(cls, w.table, w.off) if (w := word_at(cls, off)) else None for cls, off, _, _ in touched}
+        if None in words:
+            report["no layout word"] += 1
+            reasons[addr] = "accessor: touches a word the layout does not record"
+            continue
+        if len({(t, o) for _, t, o in words}) != 1:
+            report["two words"] += 1
+            continue
+        cls, table, off = next(iter(words))
+        word = word_at(cls, off)
+        if "." in word.member or word.tier == "interior":
+            report["interior word"] += 1
+            reasons[addr] = f"accessor: {word.member} is an interior word, no name is coined for it"
+            continue
+        recv, params, statements = _statements(corpus.code(addr))
+        if recv is None or not statements:
+            report["unreadable"] += 1
+            continue
+        scalar = (word.type.endswith("*") or word.type in SCALARS
+                  or word.type.startswith(("CHandle<", "EHANDLE", "CBaseHandle"))
+                  or (sdk is not None and word.type in sdk.scalars()))
+        shape = None
+        why = f"accessor: reads {word.member} inside a derived expression"
+        if len(statements) == 1 and statements[0].startswith("return ") and statements[0] != "return;":
+            probe = _access_only(statements[0][len("return "):-1], recv)
+            if probe:
+                kind, test = probe
+                if kind == "member":
+                    kind = "value" if scalar else "ref"
+                if kind == "value" and not scalar:
+                    why = f"accessor: reads one word of the struct member {word.member}"
+                elif test and kind == "ref":
+                    why = f"accessor: tests the address of {word.member}"
+                elif test:
+                    shape = ("test", test)
+                else:
+                    shape = (kind, None)
+        elif params and all(re.match(r"^.+?\s=\s.+;$", s) for s in statements[:-1] or statements) \
+                and (statements[-1] == "return;" or "=" in statements[-1]):
+            value = params[0]
+            assigns = [s for s in statements if s != "return;"]
+            ok = bool(assigns)
+            for s in assigns:
+                lhs, _, rhs = s[:-1].partition(" = ")
+                probe = _access_only(lhs, recv)
+                rhs_text = _CAST.sub("", rhs).replace("(", "").replace(")", "").strip().lstrip("*")
+                if not probe or probe[0] not in ("value", "member") \
+                        or not re.fullmatch(rf"{value}(?:\[\d+\]|\s*!=\s*0)?", rhs_text):
+                    ok = False
+            if ok:
+                shape = ("set", value)
+        if shape is None:
+            report["derived"] += 1
+            reasons[addr] = why
+            continue
+        popped = corpus.words(addr)
+        if popped is None or (shape[0] == "set") != (popped >= 1):
+            report["arity"] += 1
+            continue
+        if slots:
+            owner = _owner(corpus, addr, next(iter(slots))[1], chains) if len({s for _, s in slots}) == 1 else None
+            if owner is None:
+                report["folded"] += 1
+                continue
+        else:
+            owner = word.layer or cls
+        tier = "accessor"
+        method = None
+        source_note = "; the name is coined from the member, no SDK header declares the body"
+        if shape[0] == "test":
+            sdk_name = sdk_test(owner, word.member, shape[1])
+            if sdk_name:
+                method, where = sdk_name
+                tier = "inferred"
+                source_note = f"; SDK 2013 {where} defines that test as {method}"
+            elif word.type != "bool":
+                report["derived"] += 1
+                reasons[addr] = (f"accessor: tests {word.member} {shape[1]} 0 and no SDK body "
+                                 "states the name; the enum it compares against is needed")
+                continue
+        else:
+            sdk_name = sdk_inline(owner, word.member, shape[0] == "set", bool(slots))
+            if sdk_name and sdk_name[0]:
+                method, where = sdk_name
+                tier = "inferred"
+                source_note = f"; SDK 2013 {where} declares that inline body as {method}"
+            elif sdk_name:
+                source_note = f"; the name is coined from the member: {sdk_name[1]}"
+        if method is None:
+            verb = {"set": "Set", "test": "Is" if shape[1] == "!=" else "IsNot"}.get(shape[0], "Get")
+            method = f"{verb}{stem(word.member)}"
+        what = {"value": f"returns {word.member}", "ref": f"returns the address of {word.member}",
+                "test": f"returns {word.member} {shape[1]} 0",
+                "set": f"stores {shape[1]} into {word.member}"}[shape[0]]
+        via = f"{cls}" + (f" (slot {sorted(s for _, s in slots)[0]})" if slots else "")
+        proposals.append(Proposal(
+            corpus.module, addr, f"{owner}::{method}", tier,
+            f"accessor: {corpus.size[addr]}-byte leaf {what} at +0x{off:x} ({word.type}, "
+            f"{table} {word.tier} row, introduced by {word.layer}), touches nothing else, via {via}"
+            f"{typed_by}; pops {popped} word(s)" + source_note, "accessor"))
+        report[shape[0]] += 1
+    out = dict(report)
+    out["proposed"] = len(proposals)
+    out["reasons"] = reasons
+    return proposals, out
+
+
 def run(connection: sqlite3.Connection, listing: sqlite3.Connection | None, module: str,
         binary: Path, research: Path,
-        passes: tuple[str, ...] = ("slots", "tu", "message", "identity")
+        passes: tuple[str, ...] = ("slots", "tu", "message", "crt", "accessor", "identity")
         ) -> tuple[list[Proposal], dict]:
     root = sdk_layout.sdk_root(research)
     if root is None:
@@ -772,8 +1188,22 @@ def run(connection: sqlite3.Connection, listing: sqlite3.Connection | None, modu
     if "message" in passes:
         rows, report["message"] = message_pass(corpus, sdk, chains, taken)
         out += rows
+        taken |= {r.addr for r in rows}
+    if "crt" in passes:
+        import crt_match  # noqa: WPS433 -- beside this file
+        archives = crt_match.crt_root(research)
+        if archives is None:
+            report["crt"] = {"error": "no staged VC6 SP5 archives; run `crt_fid stage`"}
+        else:
+            rows, report["crt"] = crt_match.crt_pass(corpus, binary, archives)
+            out += [r for r in rows if r.addr not in taken]
+            taken |= {r.addr for r in rows}
+    if "accessor" in passes:
+        rows, report["accessor"] = accessor_pass(corpus, sdk, chains, taken)
+        out += rows
+        taken |= {r.addr for r in rows}
     if "identity" in passes:
-        extra = {r.addr: r.name.split("::")[-1] for r in out}
+        extra = {r.addr: (r.name.split("::")[-1], r.tier) for r in out if r.tier != "unsettled"}
         rows, report["identity"] = identity_pass(corpus, sdk, chains, extra)
         out += [r for r in rows if r.addr not in extra]
     # A name two passes hand to two bodies is nobody's.
