@@ -95,7 +95,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: `docs/vtmb/npc-kernel/README.md`. Unrecovered: READ/WRITE direction is a regex over
   the decompiled C; 78 closure bodies are damaged decompilations; 2,970 are still `FUN_`.
   Size: M. Effort: Fable / high.
-- [ ] **29a. The naming pass.**
+- [x] **29a. The naming pass.**
   Retail: of the closure's 5,050 functions, 2,970 are `FUN_`; of the 2,490 *core* functions (a
   family or helper method, or a body touching an offset past `CBaseCombatCharacter`'s layout
   `+0x19b0`) 1,073 are — 725 in layers 0–4, 141 in 5–9, 116 in 10–18, 90 in 19–26. The image
@@ -116,7 +116,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   by name. Oracle: `npc-kernel/unnamed.md` (the count is the record). Unrecovered: nothing —
   a name the evidence cannot settle stays `FUN_` and says why in the overlay's evidence column.
   Size: M. Effort: Sonnet / medium — mechanical, reviewed as text.
-  Landed (2026-09-13), acceptance half met. `corpus harvest` gained the slot-order,
+  Landed (2026-09-13); closed with the core-count half of the acceptance unmet, by decision.
+  `corpus harvest` gained the slot-order,
   translation-unit-order and message-prefix passes (`name_passes.py`, `sdk_layout.py`) and a
   slot-identity pass (a named body at slot *N* names every override at *N*), all held to the
   image's `RET n` arity; docs-proximity rows lose to them. The SDK premise did not hold: the
