@@ -34,7 +34,8 @@ enum class EElysiumTask : uint8
 	SetActivity,
 	// Hold for `Param` seconds (`TASK_WAIT`).
 	Wait,
-	// Hold for a uniform random 0..`Param` seconds (`TASK_WAIT_RANDOM`).
+	// Hold for `RandomFloat(0.1, Param)` seconds (`TASK_WAIT_RANDOM` 0x67, base arm `0x10283dae`).
+	// The low bound is 0.1, not 0; `TASK_WAIT` (2) has no floor.
 	WaitRandom,
 	// Turn to face the position saved by the door-obstruction selector (`TASK_FACE_SAVEPOSITION`).
 	FaceSavePosition,
@@ -113,6 +114,10 @@ enum class EElysiumTask : uint8
 enum class EElysiumScheduleId : uint8
 {
 	None,
+	// The two base programs the kernel itself routes to (story 25): `SetSchedule(int)`'s miss arm
+	// installs `IDLE_STAND`, `GetFailSchedule` answers `FAIL` when no fail schedule was set.
+	IdleStand,                // 0x01 IDLE_STAND
+	Fail,                     // 0x43 FAIL
 	IdleDisposition,          // 0x6b SCHED_TROIKA_IDLE_DISPOSITION
 	AlertLookAroundNi,        // 0x4f SCHED_TROIKA_ALERT_LOOK_AROUND_NI
 	BackAwayFromDoorNe,       // 0x91 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE
@@ -187,7 +192,8 @@ struct FElysiumSchedule
 {
 	EElysiumScheduleId Id = EElysiumScheduleId::None;
 	TArray<FElysiumTaskStep> Tasks;
-	// Where a failed task goes. `None` ends the schedule and returns the NPC to selection.
+	// Where a failed task goes. `None` takes retail's default: `GetFailSchedule` (slot 439,
+	// `0x1028abe0`, no override on any class) answers base `FAIL` (0x43).
 	EElysiumScheduleId FailSchedule = EElysiumScheduleId::None;
 
 	// Which newly gathered conditions may abort this task program
@@ -356,7 +362,8 @@ public:
 	// answer false where there is no motor, which fails the task rather than pretending it ran.
 	virtual bool FaceSavePosition() { return false; }
 	virtual bool StepAwayFromSavePosition(float DistanceCm) { return false; }
-	// A uniform draw in [0, Max], from the NPC schedule stream.
+	// `RandomFloat(0.1, Max)` from the NPC schedule stream: `0.1 + (Max - 0.1) * frac`, the
+	// `TASK_WAIT_RANDOM` arm's draw (`0x10283dae`). Not clamped; a `Max` below 0.1 draws in `[Max, 0.1]`.
 	virtual float RandomSeconds(float Max) = 0;
 	// One trace row, so a decision is readable without a rebuild.
 	virtual void RecordScheduleEvent(const FString& Row) {}
@@ -438,6 +445,28 @@ public:
 	// tasks always write onto a cleared word — the same virtual ran when the program was installed.
 	virtual void OnScheduleChange() {}
 
+	// `ClearSchedule` (`0x10280d30`) asked for by a body the kernel is running. Retail executes it at
+	// the call site; here the body asks and the kernel honours the request at the next point it
+	// polls: after the task step that raised it, or at the top of the next `Tick` for a request
+	// raised outside one. `Start` discards a pending request, as retail's `ClearSchedule` then
+	// `SetSchedule` leaves the new program installed. Consumed by the answer.
+	//
+	// Twelve direct callers in retail (`thunk 0x10006a8c`); the task-body ones are the scripted
+	// family's (0003) and `CAI_BaseNPC::RunTask` `0x10288780`. The non-task callers — the
+	// save-position clear `0x102ae8e0`, base slot 420 `0x10273390`, Troika slot 379 `0x102b5c00`,
+	// cine slot 586, `CNPC_VCamera` `0x103692c0` — are story 25a's.
+	virtual bool TakeClearScheduleRequest() { return false; }
+	// `ClearSchedule`'s `PRESERVE_PATH` clear on the Troika pointer, ahead of its slot-435 dispatch.
+	virtual void ClearPreservePath() {}
+
+	// Slot 440 `TranslateSchedule` (`CAI_BaseNPCTroika` `0x102b12f0`, base `0x102cc080`): the first
+	// step of `SetSchedule(int)` (`0x102cc1f0`), run on every id that reaches it as a NUMBER — the
+	// fail route's answer, `TASK_SET_SCHEDULE` / `TASK_SET_FAIL_SCHEDULE` operands, a script's
+	// `ChangeSchedule`. The kernel applies it on the fail route; the selectors' answers are already
+	// translated Troika ids and never pass through it. Identity for a runner with no class table.
+	// The miss arm's literal 1 (`0x102cc229`) does NOT go through it.
+	virtual EElysiumScheduleId TranslateSchedule(EElysiumScheduleId Id) { return Id; }
+
 	// `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), the per-NPC interrupt overlay.
 	//
 	// The mask an NPC actually runs against is NOT the authored one. Every think,
@@ -497,13 +526,24 @@ struct FElysiumScheduleState
 
 namespace ElysiumSchedule
 {
-	// Begin Id after running the outgoing program's teardown. An unknown program reports
-	// TaskFail(5) without installing it, leaving the current program available to failure routing.
+	// `SetSchedule(int)` (`0x102cc1f0`): begin Id after running the outgoing program's teardown. A
+	// program this runtime does not carry is `GetScheduleOfType`'s miss — a trace row
+	// (`"GetScheduleOfType(): No CASE for %d"`) and base `IDLE_STAND` installed in its place. False
+	// only if `IDLE_STAND` itself is missing, which is a build defect.
 	bool Start(FElysiumScheduleState& State, EElysiumScheduleId Id, IElysiumScheduleRunner& Runner);
 
+	// `ClearSchedule` (`0x10280d30`): zero the six schedule words `+0x5c38..+0x5c4c` (program, schedule
+	// id, task index, status, both stamps), clear `PRESERVE_PATH`, dispatch slot 435 with no program.
+	// `m_failSchedule` (`+0x5c54`) is NOT among them and survives; no condition clear, no install; the
+	// NPC selects on its next pass.
+	void ClearSchedule(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner);
+
 	// Advance the running schedule by one think. Returns false once the schedule has ended
-	// (completed, failed through to nothing, or been interrupted), which is the caller's signal to
-	// select again.
+	// (completed, interrupted, or cleared by `ClearSchedule`), which is the caller's signal to select
+	// again. A failure never ends it. A task that fails inside the loop leaves its program installed
+	// and the pass ends (`MaintainSchedule`'s `HasCondition(TASK_FAILED)` exit to `0x102821ae`); the
+	// NEXT tick's `Conditions` carry `TASK_FAILED` and its top arm installs the failure route and
+	// keeps running on it in the same pass.
 	//
 	// It proposes no cadence. Retail's `MaintainSchedule` never informs the think clocks -- the four
 	// `Calc*` laws read distance, PVS, LOS, `SCHEDULE_CHANGED`, frenzy and `ShouldThinkFrequently`
@@ -512,7 +552,9 @@ namespace ElysiumSchedule
 	// `Conditions` is this decision pass's gathered set, checked against the active schedule's
 	// interrupt mask at the top of the tick and before any task work. Null means "no conditions
 	// were gathered for this pass" -- a headless kernel test, or a think that ran with condition
-	// gathering suppressed -- and skips the check entirely rather than testing an empty set.
+	// gathering suppressed -- and skips the check entirely rather than testing an empty set. A
+	// runner whose `TaskFail` sets `TASK_FAILED` must pass its set on the tick after a failure, or
+	// the failed program is re-run as retail would re-run it with the condition cleared.
 	//
 	// `bReduced` is `RunAI`'s own argument: the AI clock declining to think. It bounds task
 	// completions at one instead of ten.

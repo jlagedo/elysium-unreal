@@ -1726,7 +1726,8 @@ readers, `Idle_Stand` and `CheckTarget`, closed.
 - **`Idle_Stand`** is base schedule 1 (`STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 5; WAIT_PVS`,
   interrupts `NEW_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE SMELL PROVOKED GIVE_WAY HEAR_PLAYER
   HEAR_DANGER HEAR_COMBAT HEAR_BULLET_IMPACT`; "The kernel's failure route and the base
-  programs, walked"). **`COND_GIVE_WAY 0x68`'s reader** is the base idle selector `0x1028a380`
+  programs, walked"), and the fail route translates it through slot 440 to `0x6b
+  IDLE_DISPOSITION` on a Troika NPC — the comfort program's failure lands there, not on base 1. **`COND_GIVE_WAY 0x68`'s reader** is the base idle selector `0x1028a380`
   → `0x38 GIVE_WAY` (`SET_ROUTE_SEARCH_TIME 0.5; SET_TOLERANCE_DISTANCE 5;
   GET_PATH_TO_SAVEPOSITION 2; RUN_PATH_TIMED 2.0; WAIT_FOR_MOVEMENT`), unreachable on a Troika
   NPC whose class handles state 1 itself; the condition stays producer-less.
@@ -3469,7 +3470,11 @@ unnumbered is **0x1e**, `NPC_FREEZE` is the `0x3a` and `FALL_TO_GROUND` the `0x3
                  COND_CAN_MELEE_ATTACK2 COND_GIVE_WAY
 
 **`Idle_Stand`** (the fail schedule the comfort, calmed, follow, disoriented and interesting-place
-programs name) is base **1**, blob `0x106080b0`:
+programs name) is base **1**, blob `0x106080b0`. Naming it is not running it: the fail route's id
+goes through slot 440 before the lookup (below), and Troika's table (`0x102b12f0`, `case 1: case
+0x6b:`) sends it to **`0x6b IDLE_DISPOSITION`** — or `0x132 LAUGHING` under `D_MILDLY_CRAZY` — so
+on every Troika class those programs fail into the disposition idle, and base `IDLE_STAND` runs
+only through `SetSchedule(int)`'s miss arm, whose literal 1 (`0x102cc229`) skips the translation:
 
     IDLE_STAND: TASK_STOP_MOVING 0; TASK_SET_ACTIVITY ACT_IDLE; TASK_WAIT 5; TASK_WAIT_PVS 0
       Interrupts COND_NEW_ENEMY COND_SEE_FEAR COND_LIGHT_DAMAGE COND_HEAVY_DAMAGE COND_SMELL
@@ -3491,30 +3496,60 @@ blocked" local); then **`HasCondition(COND_TASK_FAILED 0x5c)` with the state unc
 block takes the fail route** — `0x10281730`: current local schedule id (slot 447), current task
 (`0x1028a150` = `&m_pSchedule->tasks[m_iCurTask]`, 8 bytes each), then **slot 439
 `GetFailSchedule(curSched, curTask, m_failSchedule)`** — `0x1028abe0` on all 79 classes, no
-override: `m_failSchedule (+0x5c54) ? m_failSchedule : 0x43` — then `m_failedSchedule +0x5c3c =
-id` (the selector trace `+0x1b2c = 1`, file/line `AI_BaseNPC_Schedule.cpp:682`) and
-**`SetSchedule(int)` `0x102cc1f0`**: slot 440 `TranslateSchedule` then slot 446
-`GetScheduleOfType` (`0x102cc260` → `g_AI_SchedulesManager.GetScheduleFromID` `0x1030f300`, a
-linked-list walk on `sched+0x1c`); a miss DevMsgs `"GetScheduleOfType(): No CASE for %d"` and
-installs **schedule 1, `IDLE_STAND`** instead. Every other invalidity (a state change, a door
-block, no `TASK_FAILED`) goes to `SetIdealState` + `GetNewSchedule` (`0x102814d0` →
+override: `m_failSchedule (+0x5c54) ? m_failSchedule : 0x43` — then the selector trace
+(`+0x1b2c = 1`, file/line `AI_BaseNPC_Schedule.cpp:682`) and **`SetSchedule(int)` `0x102cc1f0`**:
+**slot 440 `TranslateSchedule`** on the answer, then slot 446 `GetScheduleOfType` (`0x102cc260` →
+`g_AI_SchedulesManager.GetScheduleFromID` `0x1030f300`, a linked-list walk on `sched+0x1c`); a
+miss DevMsgs `"GetScheduleOfType(): No CASE for %d"` and pushes the **literal 1 `IDLE_STAND`**
+(`0x102cc229`) straight to slot 446, untranslated. Slot 440 is `CAI_BaseNPCTroika` `0x102b12f0`
+on 62 classes (`case 1: case 0x6b:` → `0x6b`, or `0x132` under flags2 `0x80000 D_MILDLY_CRAZY`;
+`2 → 0x46`, `3 → 0x47`, `6 → 0x4a`, `0xf → 0xb1`, `0x10 → 0xb7`, `0x15 → 0xb8`, `0x21/0x22 →
+0xed/0xee`, `0x25 → 0xc1`, `0x28 → 0xc2`, `0x2f..0x33 → 0xf2/0xf4/0xf6/0xf8/0xf9`, `0x77 → 0x78`
+on a `0x2774` hint, `0x94/0x96 → 0x95/0x97` by slot 293; a frenzied pre-table `0x102b11c0` under
+`m_bfNPCFrenziedFlags & 0x100`: `0xc7 → 0xc9`, `0xca/0xcb/0xd1/0xd2 → 0xcc`, `0xef → 0xf0`,
+`0x87/0x88 → 0x7d/0x7e`; everything else to base `0x102cc080`, which only splits `0x2e AISCRIPT`)
+and is overridden by twenty species classes (`vtmb_slot 440`; `CNPC_VWerewolf 0x103d5e00` has an
+arm on `0x43` itself) — story 25b. **So a program whose fail schedule is `Idle_Stand` never runs
+base `IDLE_STAND` on a Troika NPC; it runs `0x6b`.** Every other invalidity (a state change, a
+door block, no `TASK_FAILED`) goes to `SetIdealState` + `GetNewSchedule` (`0x102814d0` →
 `0x1028a260`, story 26's pre-selector) instead. The new program installs through `SetSchedule`
 (`0x10280e50`: `OnScheduleChange` slot 435 on the OLD schedule, `m_bDidMaintainSchedule = 0`,
 `m_pSchedule`, `m_iCurTask = 0`, `m_timeStarted`/`m_timeCurTask = curtime`, `fTaskStatus = 0`,
 **`m_failSchedule = 0`**, the 192 condition bits zeroed, the navigator cleared unless
 `NAV_CLIMB`/`NAV_JUMP` or `PRESERVE_PATH`) and the same `do…while` keeps running it: the failure
-route costs no think. The loop also handles `m_pSchedule == NULL` (a `GetNewSchedule` + install)
-and an installed schedule with zero tasks (`"ERROR: Missing or invalid schedule"`, then
-`SetState(1)` through slot `0x4d8`). `ClearSchedule` (`0x10280d30`) is the other exit: it zeroes
-`+0x5c38..+0x5c4c` (schedule, task index, fail id, status, both stamps), clears `PRESERVE_PATH`
-on the Troika pointer and dispatches slot 435 with `NULL`; no caller inside the AI think — it is
-reached from inside a task (the scripted family, 0003).
+route costs no think beyond the one the failure ended.
+
+**When the route runs, relative to the failure.** A task that fails inside the loop does NOT get
+its route on that pass. `TaskFail` (`0x10273fc0`) writes the reason to `+0x5c50`, sets `0x5c` and
+leaves the status word `+0x5c44` alone (only `TaskComplete 0x10273e80` = 4 and
+`TaskMovementComplete 0x10273ec0` write it), so `0x10273f90` still answers "running"; after
+`StartTask` or `RunTask` the loop tests `HasCondition(0x5c)` and jumps to `0x102821ae` — the one
+store of `m_bDidMaintainSchedule = 1` — with the failed program still installed. The route runs at
+the top of the NEXT `MaintainSchedule`, where `IsScheduleValid` answers no for `0x5c`, and only
+if the state is still its ideal and no door blocks; a state change in between reselects instead.
+The loop also handles `m_pSchedule == NULL` (a `GetNewSchedule` + install) and an installed
+schedule with zero tasks (`"ERROR: Missing or invalid schedule"`, then `SetState(1)` through slot
+`0x4d8`) — story 25c.
+
+**`ClearSchedule` (`0x10280d30`)** is the other exit: it zeroes `+0x5c38..+0x5c4c` (program,
+schedule id `+0x5c3c` — the `sched+0x1c` the loop copies there, not a fail id — task index,
+status, both stamps), clears `PRESERVE_PATH` on the Troika pointer and dispatches slot 435 with
+`NULL`. `m_failSchedule +0x5c54` is outside the range and survives. It has **twelve direct
+callers** (`thunk 0x10006a8c`), not only task bodies: `CAI_BaseNPC::RunTask 0x10288780` and the
+scripted family (0003) are the task-side ones; `0x102ae8e0` (stores `m_vSavePosition +0x5dd0`,
+sets `+0x63e0`, clears), base slot 420 `0x10273390`, Troika slot 379 `0x102b5c00`, `CCineNPC` /
+`CCineAI` slot 586 (`0x101a8840` / `0x101a95d0`), `0x10084260`, `0x101a81a0`, `0x10265820`,
+`0x1027be60`, `0x102c6ff0` and `CNPC_VCamera 0x103692c0` are not — story 25a. A clear from
+`StartTask` falls through to the loop's `m_pSchedule == NULL` arm and reselects on the same
+think; one from `RunTask` exits at `status != 4` and reselects next think.
 
 **`TASK_WAIT_RANDOM` is task `0x67`** (registrar `0x10316ff0`, the 330-name task table — the
 ids the port's tests spell as 0x17/0x1c/0x20… are confirmed against it), base `StartTask` arm
 `0x10283dae`: `m_flWaitFinished (+0x5db4) = curtime + RandomFloat(0.1, arg)` through the random
-interface at `0x1070b244`. The floor is `0.1`, not `0`: `TASK_WAIT_RANDOM 0.00` (four programs
-author it) still waits 0.1 s. `TASK_WAIT` (task 2, arm `0x10286505`) is `curtime + arg` with no
+interface at `0x1070b244`. The low bound is `0.1`, not `0`. `TASK_WAIT_RANDOM 0.00` (four programs
+author it) passes the operand unclamped, so under Source's `low + (high − low) · frac` (the engine's
+`vstdlib` body, not in `vampire.dll`) it waits between 0 and 0.1 s, never nothing; the port's
+`FRandRange(0.1, arg)` is the same expression. `TASK_WAIT` (task 2, arm `0x10286505`) is `curtime + arg` with no
 floor. Base `RunTask` completes both when `m_flWaitFinished <= curtime`.
 
 **`SetGoal` does not complete tasks.** Navigator `SetGoal` (`0x102ecd20`) returns a `char`; a
@@ -3527,14 +3562,44 @@ goal entity / re-paths on failure (`& 4`). The Troika arms that follow it with `
 `TaskFail`), and the `TASK_WAIT_PVS` base arm's relation to Troika's (`0x102aad7e`, spawnflag bit
 10 or `0x102c2430` → complete at once).
 
-**Port divergences (owned by story 25).** `ElysiumSchedule::Tick` answers `Fail == None` with
-`State.Clear()` (`ElysiumSchedule.cpp:696-702`, `:843-849`) — a return to selection on the same
-think — where retail installs `FAIL` and stands one second (`WAIT 1`, then `WAIT_PVS`) before
-selecting again; `ElysiumSchedule::Start` refuses an unregistered program with `TaskFail(0x05)`
-(`:622-631`) where retail's `SetSchedule(int)` falls to `IDLE_STAND`; `FElysiumNpc::RandomSeconds`
-draws `[0, Max]` where the arm draws `[0.1, Max]`. Unrecovered after this pass: the base `RunTask`
+**Port (story 25, closed 2026-09-13; reopened and re-closed 2026-09-13 after review).**
+`IDLE_STAND` (1) and `FAIL` (0x43) are registered from their blobs with their decoded masks
+(`ElysiumSchedule.cpp`, kernel registry; `COND_PROVOKED 0x53` and `COND_GIVE_WAY 0x68` added to
+`EElysiumNpcCond` with no producer yet). A task answering `Failed` inside `ElysiumSchedule::Tick`'s
+loop calls `TaskFail`, sets `bDidMaintainSchedule` and returns with the program installed — the
+`0x102821ae` exit; the route runs at the top of the next tick, where `TASK_FAILED` in the pass's
+conditions (the NPC's `TaskFail` writes it into `Cognition.Conditions`; `ThinkDead` now passes
+that set too) asks `FailScheduleFor` (`m_failSchedule`, then the program's declared route, then
+`FAIL`) and hands the answer to **`IElysiumScheduleRunner::TranslateSchedule`** (slot 440,
+identity by default) before `Start`; the loop then continues on the new program in the same
+pass, with the pass's condition snapshot dropped, as `SetSchedule`'s zeroing makes the next
+`IsScheduleValid` see none. For that to work the bit has to survive the gather in between:
+retail's `GatherConditions` (`0x1026ec30`) zeroes nothing (no six-word loop; only its lanes'
+`SetCondition`/`ClearCondition`), where the port's `ElysiumNpcEnemy::GatherConditions` rebuilds
+the sensed lanes from a `Reset()` word — a port structure, since its lanes only set — so it now
+carries `TASK_FAILED` and `SCHEDULE_DONE`, the two bits written from outside the gather, across
+the reset. `FElysiumNpc::TranslateSchedule` is Troika's `0x102b12f0` for the
+ids the port registers: `IdleStand`/`IdleDisposition → IdleDisposition`; under `D_MILDLY_CRAZY`
+the `0x132` target is a named seam (tallied, answers `IdleDisposition`) until 21a registers
+`LAUGHING`; the frenzied pre-table's `0xc7`/`0xca` rows are a named seam (tallied, identity)
+until 25b; species overrides are 25b's. The selectors' answers never pass through it — they are
+already Troika ids. `ElysiumSchedule::Start`'s miss arm traces `"GetScheduleOfType(): No CASE for
+…"`, tallies the unported program under `elysium.stubs` (kind `schedule`, surface
+`SetSchedule(<name>)`) and installs `IDLE_STAND` untranslated with no `TaskFail`.
+`FElysiumNpc::RandomSeconds` draws `FRandRange(0.1, Max)` and the kernel passes the operand
+unclamped. `ElysiumSchedule::ClearSchedule` is `0x10280d30` (the six words cleared,
+`FailScheduleOverride` kept, `PRESERVE_PATH` cleared, slot 435, conditions untouched); a body
+reaches it through `IElysiumScheduleRunner::TakeClearScheduleRequest`, polled after every task
+step and at the top of every tick, and discarded by `Start` — `FElysiumNpc::RequestClearSchedule`
+is the seam and no body calls it until 0003's task bodies and 25a's other callers. Consequence the
+port now shares with retail: a headless or stance-less body whose idle fails stands one pass on
+the failed program, then in `FAIL` (its `SET_ACTIVITY` watchdog, `WAIT 1`, `WAIT_PVS`) instead of
+reselecting every think, and `FAIL`'s mask withholds `NEW_ENEMY`, so `ChooseEnemy`'s interest gate
+starves for that program's life. Tests: `Elysium.Substrate.Schedule.FailRoute`,
+`Elysium.Substrate.Schedule.TroikaTranslate`. Unrecovered after this pass: the base `RunTask`
 path-completion arm named above; whether `TASK_SET_ACTIVITY ACT_IDLE` in `FAIL` re-plays an
-already-idle body (the Troika `0x102a1c0f` arm answers it, story 14).
+already-idle body (the Troika `0x102a1c0f` arm answers it, story 14); producers for
+`COND_PROVOKED` and `COND_GIVE_WAY`; the door-block gate on the route (25c).
 
 #### Patrol paths, walked (2026-09-12, story 10g)
 

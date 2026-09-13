@@ -4,6 +4,7 @@
 #include "ElysiumWorldServices.h"          // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
 #include "Substrate/ElysiumNpcGait.h"      // the authored travel speed a retreat step commands
 #include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
+#include "ElysiumStub.h"                   // the miss arm's tally row, so an unported program stays listed
 
 namespace
 {
@@ -18,6 +19,10 @@ namespace
 	const FScheduleMeta& MetaFor(EElysiumScheduleId Id)
 	{
 		static const FScheduleMeta None{ 0, TEXT("SCHED_NONE") };
+		// Numbered from the base registrar `FUN_102cadd0`, never from the stale debug name table
+		// `0x105d1488` (it drops `IDLE_PATHCORNER` and reads one slot early past id 2).
+		static const FScheduleMeta IdleStand{ 0x01, TEXT("SCHED_IDLE_STAND") };
+		static const FScheduleMeta Fail{ 0x43, TEXT("SCHED_FAIL") };
 		static const FScheduleMeta IdleDisposition{ 0x6b, TEXT("SCHED_TROIKA_IDLE_DISPOSITION") };
 		static const FScheduleMeta AlertLook{ 0x4f, TEXT("SCHED_TROIKA_ALERT_LOOK_AROUND_NI") };
 		static const FScheduleMeta BackAway{ 0x91, TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE") };
@@ -72,6 +77,8 @@ namespace
 
 		switch (Id)
 		{
+		case EElysiumScheduleId::IdleStand:              return IdleStand;
+		case EElysiumScheduleId::Fail:                   return Fail;
 		case EElysiumScheduleId::IdleDisposition:        return IdleDisposition;
 		case EElysiumScheduleId::AlertLookAroundNi:      return AlertLook;
 		case EElysiumScheduleId::BackAwayFromDoorNe:     return BackAway;
@@ -184,6 +191,43 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 	static TArray<FElysiumSchedule> Registry = []
 	{
 		TArray<FElysiumSchedule> Out;
+
+		// The kernel's two base programs, from their blobs (`CAI_BaseNPC` loader `FUN_102cb690`,
+		// pointer table `0x106034b8`); masks decoded, not chosen.
+		//
+		// `IDLE_STAND` (1, blob `0x106080b0`): what `SetSchedule(int)` installs when the requested
+		// program is missing — the one arm that reaches it untranslated. The comfort, calmed, follow,
+		// disoriented and interesting-place programs name it as their fail schedule, but that id goes
+		// through slot 440 first and a Troika NPC lands on `0x6b IDLE_DISPOSITION` (`0x102b12f0`), so
+		// this program runs only through the miss arm.
+		FElysiumSchedule& IdleStand = Out.AddDefaulted_GetRef();
+		IdleStand.Id = EElysiumScheduleId::IdleStand;
+		IdleStand.Tasks = {
+			Step(EElysiumTask::StopMoving),
+			ActivityStep(TEXT("ACT_IDLE")),
+			Step(EElysiumTask::Wait, 5.f),
+			Step(EElysiumTask::WaitPvs),
+		};
+		IdleStand.Interrupts = FElysiumNpcConditions::Of({
+			EElysiumNpcCond::NewEnemy, EElysiumNpcCond::SeeFear, EElysiumNpcCond::LightDamage,
+			EElysiumNpcCond::HeavyDamage, EElysiumNpcCond::Smell, EElysiumNpcCond::Provoked,
+			EElysiumNpcCond::GiveWay, EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearDanger,
+			EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearBulletImpact });
+
+		// `FAIL` (0x43, blob `0x10608238`): `GetFailSchedule`'s answer when `m_failSchedule` is 0.
+		// One second standing, then the PVS hold, then selection again.
+		FElysiumSchedule& FailProgram = Out.AddDefaulted_GetRef();
+		FailProgram.Id = EElysiumScheduleId::Fail;
+		FailProgram.Tasks = {
+			Step(EElysiumTask::StopMoving),
+			ActivityStep(TEXT("ACT_IDLE")),
+			Step(EElysiumTask::Wait, 1.f),
+			Step(EElysiumTask::WaitPvs),
+		};
+		FailProgram.Interrupts = FElysiumNpcConditions::Of({
+			EElysiumNpcCond::CanRangeAttack1, EElysiumNpcCond::CanRangeAttack2,
+			EElysiumNpcCond::CanMeleeAttack1, EElysiumNpcCond::CanMeleeAttack2,
+			EElysiumNpcCond::GiveWay });
 
 		// `TASK_SPECIAL_IDLE_ACTIVITY 5; TASK_WAIT_PVS 0`. The 5 is the activity operand retail
 		// passes and the stance machine ignores -- it selects from the disposition table, not from
@@ -441,7 +485,9 @@ namespace
 
 		case EElysiumTask::WaitRandom:
 		{
-			const float Seconds = Runner.RandomSeconds(FMath::Max(0.f, Step.Param));
+			// `m_flWaitFinished = curtime + RandomFloat(0.1, arg)`: the operand goes to the draw as
+			// authored, so `WAIT_RANDOM 0.00` still holds up to 0.1 s.
+			const float Seconds = Runner.RandomSeconds(Step.Param);
 			State.TaskEndsAt = Now + static_cast<double>(Seconds);
 			return Seconds > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
 		}
@@ -614,20 +660,52 @@ namespace
 		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 	}
 
+	// The fail route's id, `0x10281730`: `GetFailSchedule` (slot 439, `0x1028abe0`, no override on
+	// any of 79 classes) answers `m_failSchedule ? m_failSchedule : 0x43 FAIL`, and `SetSchedule(int)`
+	// (`0x102cc1f0`) then runs slot 440 on it before the lookup. `TASK_SET_FAIL_SCHEDULE` wins over
+	// the program's declared route when it ran — retail's chase sets `CHASE_ENEMY_FAILED` from inside
+	// the program.
+	EElysiumScheduleId FailScheduleFor(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner)
+	{
+		EElysiumScheduleId Fail = State.FailScheduleOverride;
+		if (Fail == EElysiumScheduleId::None)
+		{
+			const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
+			Fail = Active != nullptr && Active->FailSchedule != EElysiumScheduleId::None
+				? Active->FailSchedule : EElysiumScheduleId::Fail;
+		}
+		return Runner.TranslateSchedule(Fail);
+	}
 }
 
 bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	IElysiumScheduleRunner& Runner)
 {
+	// A clear asked for before this install is superseded by it: retail's `ClearSchedule` then
+	// `SetSchedule` leaves the new program standing, so the request must not outlive the install
+	// and clear the program it was never aimed at.
+	Runner.TakeClearScheduleRequest();
 	const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
 	if (Schedule == nullptr || !Schedule->IsValid())
 	{
-		// A schedule this runtime does not carry is refused by name rather than skipped, so the
-		// trace says which one and the NPC selects again instead of silently idling.
-		Runner.RecordScheduleEvent(FString::Printf(TEXT("refused schedule %s (%d): not registered"),
+		// `SetSchedule(int)` (`0x102cc1f0`) → `GetScheduleOfType` (`0x102cc260`) misses: retail
+		// DevMsgs and installs base schedule 1 in its place. No TaskFail; the NPC stands.
+		//
+		// In retail the miss is a shipped defect; here it is more often a program this runtime has
+		// not registered yet, and standing in `IDLE_STAND` would hide that behind a retail-shaped
+		// trace row. The tally keeps the unported program on the work list.
+		Runner.RecordScheduleEvent(FString::Printf(
+			TEXT("GetScheduleOfType(): No CASE for %s (0x%x); installing SCHED_IDLE_STAND"),
 			ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
-		Runner.TaskFail(0x05);
-		return false;
+		ElysiumStub::Fired(TEXT("schedule"),
+			FString::Printf(TEXT("SetSchedule(%s)"), ElysiumScheduleName(Id)), FString(),
+			FString::Printf(TEXT("0x%x"), ElysiumScheduleNumber(Id)),
+			TEXT("the story that registers the program; IDLE_STAND stands in"));
+		if (Id == EElysiumScheduleId::IdleStand)
+		{
+			return false;   // the fallback itself is missing: a build defect, not a retail path
+		}
+		return Start(State, EElysiumScheduleId::IdleStand, Runner);
 	}
 	// Everything retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) does besides installing the
 	// program, in its order. All three producers reach it here rather than at their own call sites,
@@ -651,6 +729,22 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 		ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
 	Runner.DebugScheduleInstalled(Id);
 	return true;
+}
+
+void ElysiumSchedule::ClearSchedule(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner)
+{
+	// `0x10280d30`, in order: zero `+0x5c38..+0x5c4c` (program, schedule id, task index, status, both
+	// stamps), clear `PRESERVE_PATH`, dispatch slot 435 with NULL. The conditions are untouched, and
+	// so is `m_failSchedule` (`+0x5c54`): a `TASK_FAILED` still standing on the next pass routes to
+	// whatever `TASK_SET_FAIL_SCHEDULE` last wrote, not to base `FAIL`.
+	const EElysiumScheduleId Cleared = State.Current;
+	const EElysiumScheduleId KeptFailSchedule = State.FailScheduleOverride;
+	State.Clear();
+	State.FailScheduleOverride = KeptFailSchedule;
+	Runner.ClearPreservePath();
+	Runner.OnScheduleChange();
+	Runner.RecordScheduleEvent(FString::Printf(TEXT("ClearSchedule: %s (0x%x) cleared"),
+		ElysiumScheduleName(Cleared), ElysiumScheduleNumber(Cleared)));
 }
 
 FElysiumNpcConditions ElysiumSchedule::EffectiveInterrupts(const FElysiumScheduleState& State,
@@ -688,18 +782,33 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	{
 		return false;
 	}
-	// A navigator can invoke TaskFail outside StartTask/RunTask. Its condition is the
-	// routing authority, independent of whether the current task would otherwise keep running.
+	// A `ClearSchedule` asked for outside a task step (retail executes it at its call site) is
+	// honoured before any task work, so the program it was aimed at never advances again.
+	if (Runner.TakeClearScheduleRequest())
+	{
+		ElysiumSchedule::ClearSchedule(State, Runner);
+		return false;
+	}
+	// `TASK_FAILED` is the routing authority, whoever raised it: a task body on the previous pass, or
+	// a navigator outside StartTask/RunTask. Independent of whether the current task would otherwise
+	// keep running.
+	//
+	// `MaintainSchedule` (`0x102817c0`) takes the fail route at the top of its loop, on
+	// `IsScheduleValid` (`0x10280ff0`) answering no for `COND_TASK_FAILED` with the state unchanged
+	// and no door block: `GetFailSchedule` (slot 439, `0x1028abe0`) answers `m_failSchedule` or base
+	// `FAIL`, `SetSchedule(int)` installs it, and the same loop keeps running it — the route costs no
+	// think beyond the one the failure ended. The caller has already routed a state change to
+	// selection before this tick runs.
 	if (Conditions && Conditions->Has(EElysiumNpcCond::TaskFailed))
 	{
-		const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
-		const EElysiumScheduleId Fail = State.FailScheduleOverride != EElysiumScheduleId::None
-			? State.FailScheduleOverride : Active ? Active->FailSchedule : EElysiumScheduleId::None;
-		if (Fail == EElysiumScheduleId::None || !Start(State, Fail, Runner))
+		if (!Start(State, FailScheduleFor(State, Runner), Runner))
 		{
 			State.Clear();
 			return false;
 		}
+		// The install zeroed the conditions (`SetSchedule 0x10280e50`), so the loop's next
+		// `IsScheduleValid` sees none: the pass snapshot must not interrupt the fail program.
+		Conditions = nullptr;
 	}
 
 	// The interrupt check runs at the TOP of the tick, before any task work: a schedule aborted by
@@ -748,8 +857,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	// cap on how many tasks may complete in one think, which is exactly what this loop is. Retail
 	// re-tests `IsScheduleValid` inside each iteration; this kernel tests once at the top, and the
 	// two are equivalent because the only thing that could change the answer mid-loop is an install
-	// (`TASK_SET_SCHEDULE`, a fail route), and every install both re-arms the delay window and zeroes
-	// the conditions -- so a re-test after one can never fire.
+	// (`TASK_SET_SCHEDULE`), and every install both re-arms the delay window and zeroes the
+	// conditions -- so a re-test after one can never fire. A failure inside the loop ends the pass
+	// (below), so its `TASK_FAILED` is tested where retail tests it: the next pass's top.
 	// ...and at most ONCE on a reduced pass. A reduced think is the AI clock declining to think;
 	// letting a chain of instantly-completing tasks run ten deep inside one would spend the whole
 	// decision budget the reduction exists to save.
@@ -782,6 +892,13 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		else
 		{
 			Result = ContinueTask(Step, State, Runner, Now);
+		}
+
+		// A task body that called `ClearSchedule` leaves no program behind, whatever it answered.
+		if (Runner.TakeClearScheduleRequest())
+		{
+			ElysiumSchedule::ClearSchedule(State, Runner);
+			return false;
 		}
 
 		if (Result == EElysiumTaskResult::Running)
@@ -838,15 +955,13 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		Runner.TaskFail(Reason);
 		Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
 			ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
-		// `TASK_SET_FAIL_SCHEDULE` wins over the program's declared route when it ran: retail's own
-		// chase sets `CHASE_ENEMY_FAILED` from inside the program rather than at its registration.
-		const EElysiumScheduleId Fail = State.FailScheduleOverride != EElysiumScheduleId::None
-			? State.FailScheduleOverride : Schedule->FailSchedule;
-		if (Fail == EElysiumScheduleId::None || !ElysiumSchedule::Start(State, Fail, Runner))
-		{
-			State.Clear();
-			return false;
-		}
+		// The pass ends here with the failed program still installed. `TaskFail` (`0x10273fc0`)
+		// writes the reason and the condition and leaves the status word `+0x5c44` alone, so the task
+		// is still "running" (`0x10273f90`) and `MaintainSchedule` exits on `HasCondition(TASK_FAILED)`
+		// to `0x102821ae` — the one store of `m_bDidMaintainSchedule = 1`. The route runs at the top
+		// of the NEXT pass, where it is also gated on the state and the door (see the top arm).
+		State.bDidMaintainSchedule = true;
+		return true;
 	}
 
 	// 0x102821ae: reaching the bounded loop's end preserves the task position for next think.

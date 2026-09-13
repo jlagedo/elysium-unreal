@@ -50,7 +50,11 @@ bool FElysiumExpressionPreparationLifetime::RunTest(const FString&)
 	if (!TestTrue(TEXT("resident preparation succeeds"), Scope.IsValid())) { AddError(Error); return false; }
 	TestEqual(TEXT("all ready tables cached including zero-key table"), Scope->NumPreparedTables(), 3);
 	Cast = nullptr;
-	CollectGarbage(RF_NoFlags);
+	// The engine's own keep-flags, not RF_NoFlags: an unflagged collection also reaps the
+	// RF_Standalone levels earlier Content.* cases loaded through the editor, and their tickable
+	// world subsystems are then destroyed while still initialized. Nothing this case creates
+	// carries RF_Standalone, so the assertions below are unchanged.
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	TestTrue(TEXT("preparation keeps cast and hard corpus references alive"), WeakCast.IsValid());
 	const auto View = ElysiumExpressions::LoadPreparedEvent(0xfed001u, TEXT("demal"), TEXT("expressions"), Error);
 	TestTrue(TEXT("event uses resident view"), View.IsValid());
@@ -63,7 +67,7 @@ bool FElysiumExpressionPreparationLifetime::RunTest(const FString&)
 	Replacement.Reset();
 	TestFalse(TEXT("last owner releases epoch"),
 		ElysiumExpressions::LoadPreparedEvent(0xfed001u, TEXT("demal"), TEXT("expressions"), Error).IsValid());
-	CollectGarbage(RF_NoFlags);
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	TestFalse(TEXT("weak registry does not pin cooked assets after teardown"), WeakCast.IsValid());
 	TestTrue(TEXT("an active event's copied view survives scope release"), View.IsValid() && View->Rows.Num() == 1);
 	return true;

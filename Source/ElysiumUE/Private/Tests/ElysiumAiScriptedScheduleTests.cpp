@@ -424,7 +424,14 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		}
 		F.Step(0.2);
 		F.Step(0.3);
-		TestTrue(TEXT("an exhausted route ends the follow-path program"),
+		// The exhausted leg fails on one pass and routes on the next (story 25): base `FAIL` —
+		// SET_ACTIVITY ACT_IDLE (a one-second watchdog on this headless body), WAIT 1, then its PVS
+		// hold — before the order ends.
+		F.Step(0.4);
+		TestEqual(TEXT("an exhausted route fails into FAIL"), F.Guard->Schedule.Current, EId::Fail);
+		F.Step(1.4);
+		F.Step(2.4);
+		TestTrue(TEXT("an exhausted route ends the follow-path program once FAIL completes"),
 			!F.Guard->ScriptedScheduleOrder.IsSet());
 	}
 	return true;
@@ -570,7 +577,11 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		F.Step(0.1);
-		TestTrue(TEXT("a refused route ends the order rather than holding the body"),
+		F.Step(0.2);   // the failing pass, then the routing pass (story 25)
+		TestEqual(TEXT("a refused route fails into FAIL"), F.Guard->Schedule.Current, EId::Fail);
+		F.Step(1.2);
+		F.Step(2.2);
+		TestTrue(TEXT("a refused route ends the order once FAIL has run out"),
 			!F.Guard->ScriptedScheduleOrder.IsSet());
 		TestTrue(TEXT("...and gives the body back"),
 			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
@@ -624,6 +635,9 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		F.Step(0.1);
+		F.Step(0.2);
+		F.Step(1.2);
+		F.Step(2.2);
 		TestTrue(TEXT("the refusal still ends the order silently"),
 			!F.Guard->ScriptedScheduleOrder.IsSet());
 	}

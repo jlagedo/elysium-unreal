@@ -1217,8 +1217,11 @@ bool FElysiumPlayerAttackReloadTest::RunTest(const FString&)
 		F.Frame(DryAt, GAtk);
 		TestEqual(TEXT("an empty magazine dry-fires rather than shooting"),
 			Pistol->AcceptedSwingCount(), 1);
+		// Scoped to the player's own stem: the cast NPC beside it is a headless body whose idle stands
+		// in base `FAIL` (0002/25), and that program's `SET_ACTIVITY ACT_IDLE` asks for a clip on its
+		// own cadence, which is not this dry fire's doing.
 		TestEqual(TEXT("a dry fire asks the body for no clip on any channel"),
-			F.Services.Count(TEXT("PlayNpcClip")), 0);
+			F.Services.Count(FString::Printf(TEXT("PlayNpcClip %s "), GPlayerStem)), 0);
 		TestTrue(TEXT("...while still holding both presses for the mode's own Attack_Rate"),
 			NearlyEqual(Pistol->NextPrimaryAttackTime, DryAt + 0.4)
 			&& NearlyEqual(Pistol->NextSecondaryAttackTime, DryAt + 0.4));

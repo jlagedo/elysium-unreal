@@ -453,7 +453,18 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 {
 	FElysiumNpcConditions& Cond = Npc.Cognition.Conditions;
 	const double Previous = Npc.Cognition.GatheredAt;
+	// Retail's `0x1026ec30` zeroes nothing: each lane below clears and re-sets its own bits, and a
+	// bit no lane owns stands until `SetSchedule` (`0x10280e50`) zeroes the word. This runtime's
+	// lanes only set, so the pass rebuilds the sensed lanes from a cleared word — a port structure,
+	// not a retail step — and the two bits the schedule kernel writes from outside the gather
+	// (`TaskFail 0x10273fc0` → `TASK_FAILED 0x5c`, `ScheduleDone` → `SCHEDULE_DONE 0x5d`) are
+	// carried across it. `MaintainSchedule` reads `TASK_FAILED` on the pass AFTER the failure
+	// (`IsScheduleValid 0x10280ff0`), and a gather that dropped it would re-run the failed task.
+	const bool bTaskFailed = Cond.Has(EElysiumNpcCond::TaskFailed);
+	const bool bScheduleDone = Cond.Has(EElysiumNpcCond::ScheduleDone);
 	Cond.Reset();
+	if (bTaskFailed) Cond.Set(EElysiumNpcCond::TaskFailed);
+	if (bScheduleDone) Cond.Set(EElysiumNpcCond::ScheduleDone);
 
 	// 1. Senses and the hostile-category conditions.
 	ElysiumNpcCond::GatherBump(Npc, Previous, Cond);

@@ -370,8 +370,9 @@ void FElysiumNpc::OnKilled()
 	}
 	if (!ElysiumSchedule::Start(Schedule, EElysiumScheduleId::Die, *this))
 	{
-		// `Start` already reported the refusal by name. The handoff still has to happen, and the
-		// dead think below is what runs it.
+		// Unreachable in a correct build: `Start` falls back to `IDLE_STAND` and answers false only
+		// when that program itself is missing. The handoff still has to happen, and the dead think
+		// below is what runs it.
 		Schedule.Clear();
 	}
 	// No clock reset: `Event_Killed` (`0x10265ad0`) is not a slot-614 site. A corpse is on no
@@ -1045,12 +1046,14 @@ FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
 		return EDeadThink::NotDead;
 	}
 	const double Now = World ? World->NowSeconds() : 0.0;
-	// No conditions are passed, and that is not an omission: gathering is suppressed for a corpse, so
-	// there is no gathered set to test, and the death program declares no interrupts for it to fire.
+	// Gathering is suppressed for a corpse and the death program declares no interrupts, so the set
+	// passed here carries nothing a mask could fire on. It is passed all the same for the one bit
+	// `TaskFail` writes into it: a rung of the death ladder that fails routes on the next poll, as
+	// every other program's failure does, instead of re-running the failed rung.
 	// The poll is a named constant rather than a stamp: a corpse is on none of the four clocks, and
 	// putting it on the distance laws would let the ragdoll handoff arrive up to six seconds after
 	// the death clip ended for a body the player is not standing next to.
-	if (Schedule.IsRunning() && ElysiumSchedule::Tick(Schedule, *this, Now))
+	if (Schedule.IsRunning() && ElysiumSchedule::Tick(Schedule, *this, Now, &Cognition.Conditions))
 	{
 		NextThink = static_cast<float>(Now + ElysiumNpcThink::DeadProgramPollSeconds);
 		return EDeadThink::Running;
@@ -1699,9 +1702,10 @@ void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
 		return;
 	}
 
-	// The program ended — completed, failed through to nothing, or was interrupted. Whatever
-	// movement it claimed goes back BEFORE the next selection runs: an idle program picked while
-	// this NPC still held the body would decline its own first task against itself.
+	// The program ended — completed, interrupted, or cleared by `ClearSchedule`; a failure never
+	// ends one, it routes into the next program on the following pass. Whatever movement it claimed
+	// goes back BEFORE the next selection runs: an idle program picked while this NPC still held the
+	// body would decline its own first task against itself.
 	ReleaseScheduleBody(TEXT("schedule ended"));
 
 	// A pushed scripted order lives exactly as long as the program it started. Arrival, a refused
@@ -2251,8 +2255,66 @@ float FElysiumNpc::PlayDeathActivity(const FString& Activity)
 
 float FElysiumNpc::RandomSeconds(float Max)
 {
-	return Max > 0.f
-		? ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.f, Max) : 0.f;
+	// `RandomFloat(0.1, arg)` (`0x10283dae`). `FRandRange` is the same `low + (high - low) * frac`,
+	// so an operand below the floor draws between it and 0.1, as retail's does.
+	return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.1f, Max);
+}
+
+bool FElysiumNpc::TakeClearScheduleRequest()
+{
+	const bool bRequested = bClearScheduleRequested;
+	bClearScheduleRequested = false;
+	return bRequested;
+}
+
+void FElysiumNpc::ClearPreservePath()
+{
+	NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
+}
+
+EElysiumScheduleId FElysiumNpc::TranslateSchedule(EElysiumScheduleId Id)
+{
+	// `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), in its order. Every generic leaf in
+	// this runtime is a Troika class; the twelve species overrides of slot 440 (`CNPC_VCop`
+	// `0x10372150`, `CNPC_VDog` `0x10374370`, `CNPC_VWerewolf` `0x103d5e00` with its own `0x43` arm,
+	// …) are story 25b's, so a species NPC translates as Troika here until its story lands.
+	//
+	// 1. The frenzied pre-table (`m_bfNPCFrenziedFlags & 0x100` → `0x102b11c0`): `0xc7 → 0xc9`,
+	//    `0xca/0xcb/0xd1/0xd2 → 0xcc`, `0xef → 0xf0`, `0x87/0x88 → 0x7d/0x7e` by slot 168. Of these
+	//    the port registers `0xc7 MELEE_IDLE` and `0xca MELEE_ADVANCE` as sources and none of the
+	//    targets. SEAM: the answer stays the untranslated id and the miss is tallied.
+	if (NpcFlags.HasFrenzied(0x100)
+		&& (Id == EElysiumScheduleId::MeleeIdle || Id == EElysiumScheduleId::MeleeAdvance))
+	{
+		ElysiumStub::Fired(TEXT("schedule"), TEXT("CAI_BaseNPCTroika::TranslateSchedule frenzied 0x102b11c0"),
+			DebugString(), ElysiumScheduleName(Id), TEXT("0002/25b: 0xc9 / 0xcc are not registered"));
+		return Id;
+	}
+	switch (Id)
+	{
+	// 2. `case 1: case 0x6b:` → `0x132 LAUGHING` under `D_MILDLY_CRAZY` (flags2 `0x80000`), else
+	//    `0x6b IDLE_DISPOSITION`. This is the arm the fail route reaches: every program whose fail
+	//    schedule is `Idle_Stand` lands here, never on base `IDLE_STAND`.
+	case EElysiumScheduleId::IdleStand:
+	case EElysiumScheduleId::IdleDisposition:
+		if (NpcFlags.Has(EElysiumNpcFlag2::D_MILDLY_CRAZY))
+		{
+			// SEAM: `0x132 SCHED_TROIKA_LAUGHING` is 21a's program. Until it is registered the
+			// non-crazy answer stands in, and the miss is tallied rather than falling into the miss
+			// arm's `IDLE_STAND`, which is a different wrong program.
+			ElysiumStub::Fired(TEXT("schedule"), TEXT("CAI_BaseNPCTroika::TranslateSchedule 0x132 LAUGHING"),
+				DebugString(), ElysiumScheduleName(Id), TEXT("0002/21a: SCHED_TROIKA_LAUGHING"));
+		}
+		return EElysiumScheduleId::IdleDisposition;
+	// 3. The remaining base→Troika rows (`2 → 0x46`, `3 → 0x47`, `6 → 0x4a`, `0xf → 0xb1`, `0x10 →
+	//    0xb7`, `0x15 → 0xb8`, `0x21/0x22 → 0xed/0xee`, `0x25 → 0xc1`, `0x28 → 0xc2`, `0x2f..0x33 →
+	//    0xf2/0xf4/0xf6/0xf8/0xf9`, `0x77 → 0x78` on a `0x2774` hint, `0x94/0x96 → 0x95/0x97` by slot
+	//    293) name base ids this runtime never routes to; 0003 owns the `0x2f..0x33` row and 21a the
+	//    `0x77` row. Anything else falls to `CAI_BaseNPC::TranslateSchedule` (`0x102cc080`), which
+	//    only splits `0x2e AISCRIPT` (0003) and is identity here.
+	default:
+		return Id;
+	}
 }
 
 void FElysiumNpc::RecordScheduleEvent(const FString& Row)
@@ -2614,11 +2676,9 @@ bool FElysiumNpc::StartNamedSchedule(const FString& Requested, const FString& Su
 	// The two callers that are -- the discipline applier `0x101de660` and `FeedInterrupt`
 	// `0x1033a9e0`, each "slot 614, then `SetSchedule`" -- re-base the clock themselves before
 	// they come through this door.
-	if (!ElysiumSchedule::Start(Schedule, Id, *this))
-	{
-		return false;   // `Start` reports the refusal by name through the runner's own trace
-	}
-	return true;
+	// Always true in a correct build: a named program this runtime carries installs, and `Start`
+	// answers false only when its own `IDLE_STAND` fallback is missing.
+	return ElysiumSchedule::Start(Schedule, Id, *this);
 }
 
 void FElysiumNpc::StopMoving()

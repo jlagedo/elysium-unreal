@@ -61,6 +61,8 @@ namespace
 		FElysiumEntityWorld World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumPlayer* Player = nullptr;
+		// The world time the fixture's own thinks reached; a case continues from here.
+		double SettledAt = 0.0;
 
 		explicit FTranceFixture(const FSetup& Setup)
 			: World(nullptr, nullptr, Services.Bundle())
@@ -161,7 +163,15 @@ namespace
 			{
 				World.AcceptInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
 					FElysiumVariant::String(TEXT("route_1 route_2")), Guard->Handle, Guard->Handle);
-				Step(0.0);   // the patrol executor takes its token and issues the first leg
+				// The headless guard carries no stance clips, so its idle program failed into base
+				// `FAIL` during the settle thinks (story 25): SET_ACTIVITY's one-second watchdog,
+				// WAIT 1, WAIT_PVS. The executor takes its token and issues the first leg once that
+				// program ends.
+				for (SettledAt = 0.0; SettledAt <= 5.0 && !Services.Saw(TEXT("NpcMotor MoveTo"));
+					SettledAt += 0.5)
+				{
+					Step(SettledAt);
+				}
 			}
 			Quiet();
 		}
@@ -420,7 +430,7 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 	TestTrue(TEXT("the guard is on its route"), F.Services.Saw(TEXT("NpcMotor MoveTo")));
 	const int32 MovesBefore = F.Services.Count(TEXT("NpcMotor MoveTo"));
 
-	double Now = 0.0;
+	double Now = F.SettledAt;
 	F.FeedAndInterrupt(Now);
 	TestEqual(TEXT("the trance is installed on a patroller"),
 		static_cast<int32>(F.Guard->Schedule.Current),
@@ -455,7 +465,9 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 	const double Held = F.RunOutTrance(Now);
 	TestTrue(TEXT("the trance ended inside the recovered bound"), Held >= 30.0 && Held <= 151.0);
 	TestFalse(TEXT("the bits are released"), F.Guard->IsBusyWithDiscipline());
-	for (int32 i = 0; i < 3; ++i)
+	// The headless guard's reselected idle fails on one pass, routes into base `FAIL` on the next
+	// (story 25), and `FAIL` stands its watchdog, `WAIT 1` and PVS hold before the route resumes.
+	for (int32 i = 0; i < 4; ++i)
 	{
 		Now += 1.0;
 		F.Step(Now);

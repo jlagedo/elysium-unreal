@@ -117,6 +117,11 @@ enum class EElysiumNpcCond : uint8
 	HearBulletImpact = 0x70,
 	HearPhysicsDanger = 0x71,
 	Smell = 0x5e,
+	// Named by the two base programs story 25 registers (`FAIL` 0x43, `IDLE_STAND` 1). No producer
+	// in the substrate yet: `PROVOKED` is `m_afMemory`'s provocation edge, `GIVE_WAY` the base idle
+	// selector's (`0x1028a380`) player-pushing yield. Both answer "never raised" until one is built.
+	Provoked = 0x53,
+	GiveWay  = 0x68,
 	// The fifth law condition. `BuildScheduleTestBits` adds it as a custom interrupt to every
 	// schedule of a non-busy, non-investigating NPC; `SelectSchedule` state 8 consumes it.
 	InvestigateLevel = 0x1e,

@@ -59,6 +59,12 @@ struct FElysiumSessionSaveFixture
 	{
 		if (Session) Session->OnSaveResult().Clear();
 		if (World) World->Detach();
+		// The deferred map actor never finishes spawning, so it gets no EndPlay and its adopted
+		// entity world would otherwise be torn down by the next garbage collection, after the
+		// recording services it reaches through the embodiment seam are gone. Release it here,
+		// while Services is still alive.
+		if (Host.MapActor) Host.MapActor->AdoptEntityWorldForTests(TPimplPtr<FElysiumEntityWorld>());
+		World = nullptr;
 		for (const FString& Slot : CreatedSlots) UGameplayStatics::DeleteGameInSlot(Slot, 0);
 	}
 };

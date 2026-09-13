@@ -129,8 +129,10 @@ model / effort tier recommended for it.
   failing by name; the eight programs registered verbatim in their own registration file beside
   the feed and combat families. `TASK_SET_TOLERANCE_DISTANCE 2` rides the existing operand; the
   `+0x688` scaler is unrecovered, so the motor's acceptance floor stays and is named. The
-  task-side `ClearSchedule` and `TASK_WAIT_RANDOM`'s 0.1 floor are 0002/25's.
-  Consumes: 0002/25.
+  task-side `ClearSchedule` and `TASK_WAIT_RANDOM`'s 0.1 floor are 0002/25's; the `0x2e` split
+  (`0x102cc080`) and the Troika `0x2f..0x33 → 0xf2..0xf9` row extend 0002/25's slot-440 seam
+  (`FElysiumNpc::TranslateSchedule`) rather than re-creating it.
+  Consumes: 0002/25 (the failure route, the `ClearSchedule` request, the slot-440 seam).
   Provides: the vocabulary 2 runs and 4 reuses.
   Oracle: § "Schedules and tasks" (the scripted family), § `TASK_WAIT_RANDOM`.
   Size: M. Effort: Sonnet / high.

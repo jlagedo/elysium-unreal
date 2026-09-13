@@ -1268,6 +1268,10 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 	FElysiumNpc& Victim = *F.Target;
 	F.Player->Origin = Victim.Origin + FVector(Cm(20.0), 0.0, 0.0);
 	Victim.Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+	// The headless body has no stance clips, so its idle program failed into base `FAIL` (story 25),
+	// whose mask withholds `NEW_ENEMY` and so starves `ChooseEnemy` — retail's own gate. This case is
+	// about the memory record, so it runs with no program installed.
+	Victim.Schedule.Clear();
 
 	FElysiumDmg Dmg;
 	Dmg.Family = EElysiumDmgFamily::Bashing;
@@ -1431,6 +1435,10 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 		TestTrue(TEXT("an unprojectable retreat was asked and refused"),
 			F.Services.Saw(TEXT("NpcMotor ProjectToNavigable")));
 		TestFalse(TEXT("...and the retreat never became a move request"), Motor->bMoving);
+		TestTrue(TEXT("...the failure stands as TASK_FAILED for the next pass"),
+			F.Fighter->Cognition.Conditions.Has(ECond::TaskFailed));
+		// The route runs at the top of the next pass (story 25).
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1, &F.Fighter->Cognition.Conditions);
 		TestNotEqual(TEXT("...so the program left the retreat through its fail path"),
 			F.Fighter->Schedule.Current, EId::RunAway);
 	}
@@ -1460,6 +1468,10 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0, nullptr);
 
 	TestEqual(TEXT("no damage is dealt out of nothing"), F.DamageTaken(F.Target), 0);
+	TestTrue(TEXT("the failed swing stands as TASK_FAILED for the next pass"),
+		F.Fighter->Cognition.Conditions.Has(ECond::TaskFailed));
+	// The route runs at the top of the next pass (story 25).
+	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.1, &F.Fighter->Cognition.Conditions);
 	TestNotEqual(TEXT("the failed swing left its own program"), F.Fighter->Schedule.Current,
 		EId::MeleeAttack1Swing);
 

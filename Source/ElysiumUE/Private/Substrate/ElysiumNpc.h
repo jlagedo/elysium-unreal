@@ -520,6 +520,18 @@ public:
 
 	virtual float RandomSeconds(float Max) override;
 
+	// `ClearSchedule` (`0x10280d30`) asked for by a body. SEAM: the task-body callers are 0003's
+	// scripted family, the non-task callers 25a's; no body in this runtime asks yet, so the request
+	// stays false.
+	void RequestClearSchedule() { bClearScheduleRequested = true; }
+	virtual bool TakeClearScheduleRequest() override;
+	virtual void ClearPreservePath() override;
+	bool bClearScheduleRequested = false;
+
+	// Slot 440 on this class: `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), the arms whose
+	// ids this runtime registers. See the body for the arms that are seams.
+	virtual EElysiumScheduleId TranslateSchedule(EElysiumScheduleId Id) override;
+
 	virtual void RecordScheduleEvent(const FString& Row) override;
 	virtual void DebugScheduleInstalled(EElysiumScheduleId InstalledSchedule) override;
 

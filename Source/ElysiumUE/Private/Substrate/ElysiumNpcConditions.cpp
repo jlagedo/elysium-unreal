@@ -66,6 +66,8 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::HearThumper:           return TEXT("HEAR_THUMPER");
 	case EElysiumNpcCond::HearBugbait:           return TEXT("HEAR_BUGBAIT");
 	case EElysiumNpcCond::Smell:                 return TEXT("SMELL");
+	case EElysiumNpcCond::Provoked:              return TEXT("PROVOKED");
+	case EElysiumNpcCond::GiveWay:               return TEXT("GIVE_WAY");
 	case EElysiumNpcCond::ShouldDodge:           return TEXT("SHOULD_DODGE");
 	case EElysiumNpcCond::ShouldBlock:           return TEXT("SHOULD_BLOCK");
 	case EElysiumNpcCond::ShouldStepback:        return TEXT("SHOULD_STEPBACK");

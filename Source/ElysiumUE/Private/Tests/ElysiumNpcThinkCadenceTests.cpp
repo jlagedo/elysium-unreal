@@ -304,10 +304,7 @@ bool FElysiumThinkCadenceLiveTest::RunTest(const FString&)
 	const double Now = F.World.NowSeconds();
 	TestFalse(TEXT("the body is out of the player's PVS"), Guard->Senses.Memory.bPlayerInPvs);
 	TestFalse(TEXT("...and out of its LOS"), Guard->Senses.Memory.bPlayerLos);
-	// The UPDATE clock, because it is the one law with no `SCHEDULE_CHANGED` term. This headless
-	// guard has no activity resolver behind it, so its idle program fails and reselects on every
-	// pass and the bit is set on every pass -- which pins the normal and AI clocks to 0.1 s. That
-	// pin is retail's own and correct; it just makes those two clocks the wrong thing to read here.
+	// The UPDATE clock, because it is the one law with no `SCHEDULE_CHANGED` term.
 	TestTrue(TEXT("an unseen distant body's update clock is throttled well past the pin"),
 		Guard->ScheduleHost.NextUpdate - Now > 1.0);
 	TestTrue(TEXT("...and never past the law's `x10 cap 16`"),
@@ -315,12 +312,13 @@ bool FElysiumThinkCadenceLiveTest::RunTest(const FString&)
 	TestTrue(TEXT("the entity think is the earlier of the two written clocks"),
 		FMath::IsNearlyEqual(static_cast<double>(Guard->NextThink),
 			FMath::Min(Guard->ScheduleHost.NextUpdate, Guard->ScheduleHost.NextNormal), 1e-3));
-	// The in-think install pin, on the same hidden body: this guard's idle program reselects
-	// inside every think (no activity resolver), so `OnScheduleChange` sets `SCHEDULE_CHANGED`
-	// inside the think and the normal law reads it before it is cleared -- 0.1 s out of PVS,
-	// where the distance branch alone would have chosen seconds.
-	TestTrue(TEXT("a program installed inside the think pins the hidden body's normal clock"),
-		Guard->ScheduleHost.NextNormal - Now <= 0.1 + 1e-3);
+	// This headless guard has no activity resolver, so its idle program failed into base `FAIL`
+	// (story 25), which now holds on `WAIT_PVS` out of the player's PVS. No program is installed
+	// inside these thinks, so nothing sets `SCHEDULE_CHANGED` and the normal clock leaves the pin.
+	TestEqual(TEXT("the hidden body holds FAIL's PVS wait rather than reselecting each pass"),
+		Guard->Schedule.Current, EElysiumScheduleId::Fail);
+	TestTrue(TEXT("...so its normal clock is off the in-think install pin"),
+		Guard->ScheduleHost.NextNormal - Now > 0.1 + 1e-3);
 	return true;
 }
 

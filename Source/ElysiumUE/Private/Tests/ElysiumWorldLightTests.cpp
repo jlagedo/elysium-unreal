@@ -94,10 +94,14 @@ bool FElysiumLightQueryNativeTraceTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
 	if (!Fixture.CreateWorld(*this)) return false;
-	const FString MapName = TEXT("__light_query_") + FGuid::NewGuid().ToString(EGuidFormats::Digits).ToLower();
+	// `BakedUnit` rejects a leading underscore on any directory segment, so a synthetic map
+	// identity must read like a retail one or the resolver hands back a short package name.
+	const FString MapName = TEXT("lightquery_") + FGuid::NewGuid().ToString(EGuidFormats::Digits).ToLower();
 	const FString ObjectPath = FElysiumContentPaths::BakedMapLightQuery(MapName);
+	if (!TestFalse(TEXT("the synthetic map identity resolves to a baked object path"), ObjectPath.IsEmpty())) return false;
 	const FString PackagePath = FPackageName::ObjectPathToPackageName(ObjectPath);
 	UPackage* Package = CreatePackage(*PackagePath);
+	if (!TestNotNull(TEXT("the transient light-query package is created"), Package)) return false;
 	Package->SetFlags(RF_Transient);
 	UElysiumMapLightQueryData* Data = NewObject<UElysiumMapLightQueryData>(Package,
 		*FPackageName::GetLongPackageAssetName(PackagePath), RF_Public | RF_Transient);
@@ -180,12 +184,18 @@ bool FElysiumLightQueryBakedTutorialTest::RunTest(const FString&)
 	Rig->AdoptBaked({}, MapName);
 	if (!TestTrue(TEXT("tutorial cooked query geometry becomes an available native service"),
 		Rig->IsGameplayLightAvailable())) return false;
+	// Sample one Source unit off each light's origin, never on it: `Engine_WorldLightDistanceFalloff`
+	// (`0x200a5620`) is `1 / (constant + linear·d + quadratic·d²)` with no distance clamp, so a point
+	// or spot light with `constant == 0` divides by zero at its own origin in retail as well. The
+	// loader fixup (`Mod_LoadWorldlights`, all-zero attenuation -> quadratic 1) guarantees a finite
+	// denominator at any d > 0.
 	int32 Samples = 0;
 	for (const FElysiumWorldLight& Light : Data->Records.Lights)
 	{
-		if (Data->ClusterAt(Light.Position) < 0) continue;
+		const FVector Sample = Light.Position + FVector(0, 0, ElysiumMove::U);
+		if (Data->ClusterAt(Sample) < 0) continue;
 		TestTrue(TEXT("the reloaded tutorial geometry produces finite illumination"),
-			FMath::IsFinite(Rig->QueryGameplayLight(Light.Position)));
+			FMath::IsFinite(Rig->QueryGameplayLight(Sample)));
 		if (++Samples == 16) break;
 	}
 	TestTrue(TEXT("the query samples actual non-solid tutorial positions"), Samples > 0);

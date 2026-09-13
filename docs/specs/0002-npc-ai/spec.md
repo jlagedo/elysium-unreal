@@ -288,7 +288,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   the gaze cascade's target arm. Both fields saved (`ComfortSweep` schema).
   Oracle: § "The comfort sweep `0x102b1a20`, walked". The squad test answers through 17's null
   squad; the `0x12f` arms fire once 10i registers the program.
-- [ ] **25. The kernel's failure route and the random wait.**
+- [x] **25. The kernel's failure route and the random wait.**
   Retail: `MaintainSchedule` (`0x102817c0`) takes the fail route on `COND_TASK_FAILED 0x5c` with
   the state unchanged and no door block: slot 439 `GetFailSchedule` (`0x1028abe0`, no override
   on any of 79 classes) answers `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule
@@ -296,29 +296,88 @@ the retail contract the code must match, the job, what it consumes or provides, 
   interrupts `CAN_RANGE_ATTACK1/2 CAN_MELEE_ATTACK1/2 GIVE_WAY`; the install goes through
   `SetSchedule(int)` (`0x102cc1f0`: translate, then `GetScheduleOfType`; a missing program
   DevMsgs and installs base **1 `IDLE_STAND`** — `STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 5;
-  WAIT_PVS`) and the same `do…while` keeps running it, so the route costs no think. Every other
-  invalidity (state change, door block) goes to `SetIdealState` + `GetNewSchedule` instead.
+  WAIT_PVS`) and the same `do…while` keeps running it, so the route costs no think beyond the
+  one the failure ended: a task failing inside the loop leaves its program installed (`TaskFail
+  0x10273fc0` never touches the status word) and the loop exits at `0x102821ae`; the route runs
+  at the top of the NEXT pass. Every other invalidity (state change, door block) goes to
+  `SetIdealState` + `GetNewSchedule` instead.
   `TASK_WAIT_RANDOM` is task `0x67`, base arm `0x10283dae`: `curtime + RandomFloat(0.1, arg)`
-  (a `0.00` operand still waits 0.1 s); `TASK_WAIT` (2) has no floor. `ClearSchedule
+  (a `0.00` operand still waits up to 0.1 s); `TASK_WAIT` (2) has no floor. `ClearSchedule
   0x10280d30` zeroes the six schedule words, clears `PRESERVE_PATH` and dispatches slot 435
   with `NULL`; reached from inside a task (0003), never from the think.
-  Gap: `ElysiumSchedule::Tick` answers `Fail == None` with `State.Clear()` and returns to
-  selection on the same think (`ElysiumSchedule.cpp:696-702`, `:843-849`); `Start` refuses an
-  unregistered program with `TaskFail(0x05)` (`:622-631`) where retail installs `IDLE_STAND`;
-  `FElysiumNpc::RandomSeconds` draws `[0, Max]` (`ElysiumNpc.cpp:2252-2256`) and the test
-  doubles scale `Max` (`ElysiumScheduleTests.cpp:97`); the `TaskFailed` condition reaches the
-  tick at `:693` (reproduced: the route runs before any task work). No `FAIL` or `IDLE_STAND`
-  program is registered (the five kernel built-ins are `ElysiumSchedule.cpp:224-273`).
-  Job: `FAIL` (0x43) and `IDLE_STAND` (1) registered from their blobs; the `Fail == None` arms
-  install `FAIL` and continue the same tick; `Start`'s unregistered-program arm installs
-  `IDLE_STAND` after the trace row; `RandomSeconds` drawing `[0.1, Max]` with the two doubles
-  following; a runner-requested `ClearSchedule` the tick honours after the task.
+  Chain: `MaintainSchedule 0x102817c0` → (in-loop failure: `TaskFail 0x10273fc0` writes the
+  reason and `0x5c`, leaves status `+0x5c44`, loop exits at `0x102821ae`) → next pass
+  `IsScheduleValid 0x10280ff0` → `0x10281730` → slot 439 `GetFailSchedule 0x1028abe0` →
+  `SetSchedule(int) 0x102cc1f0` → **slot 440 `TranslateSchedule`** (Troika `0x102b12f0`, base
+  `0x102cc080`) → slot 446 `GetScheduleOfType 0x102cc260` (miss: literal 1, untranslated) →
+  `SetSchedule 0x10280e50` (slot 435, conditions zeroed, `m_failSchedule = 0`).
+  Job (landed): `FAIL` (0x43) and `IDLE_STAND` (1) registered from their blobs; a task failing
+  inside the loop ends the pass with its program installed and the next pass's top arm routes it
+  (both `TASK_FAILED` producers share the arm); the route's id goes through the runner's slot-440
+  seam (`IElysiumScheduleRunner::TranslateSchedule`), Troika's `1/0x6b → 0x6b` arm on
+  `FElysiumNpc`; `Start`'s miss arm installs `IDLE_STAND` untranslated after the trace row and
+  tallies the unported program (`elysium.stubs`); `RandomSeconds` drawing `[0.1, Max]`; a
+  runner-requested `ClearSchedule` honoured after the task step or at the next tick's top,
+  superseded by an install, keeping `m_failSchedule`.
   Provides: the failure route every program family runs on (10g, 11, 10e, 10f, 21, 0003/1).
+  **What a consumer observes:** a Troika NPC whose `m_failSchedule` is `Idle_Stand` (comfort,
+  calmed, follow, disoriented, interesting-place) lands on `0x6b IDLE_DISPOSITION`, never on base
+  `IDLE_STAND`; only the miss arm runs `IDLE_STAND`.
+  Seams left: `0x132 LAUGHING` under `D_MILDLY_CRAZY` (21a); the frenzied pre-table
+  `0x102b11c0` (`0xc7 → 0xc9`, `0xca → 0xcc`, …) and the twelve species overrides of slot 440
+  (25b); the non-task `ClearSchedule` callers (25a); the loop's other exits (25c).
   Oracle: § "The `INVESTIGATE` family, decoded" → "The kernel's failure route and the base
   programs, walked". Unrecovered: the base `RunTask` arm that completes the base
   `GET_PATH_TO_*` tasks after a bare `SetGoal` (not on this story's path: the port's path tasks
   complete in their start arm).
   Size: S. Effort: Sonnet / medium — the oracle is complete and the gap is mechanical.
+- [ ] **25a. The `ClearSchedule` producers.**
+  Retail: `0x10280d30` has twelve direct callers (`thunk 0x10006a8c`). Task bodies:
+  `CAI_BaseNPC::RunTask 0x10288780` and the scripted family (0003). Not task bodies:
+  `0x102ae8e0` (stores `m_vSavePosition +0x5dd0`, sets the byte `+0x63e0`, clears), base slot
+  420 `0x10273390`, Troika slot 379 `0x102b5c00`, `CCineNPC`/`CCineAI` slot 586
+  (`0x101a8840`/`0x101a95d0`), `0x10084260`, `0x101a81a0`, `0x10265820`, `0x1027be60`,
+  `0x102c6ff0`, `CNPC_VCamera 0x103692c0`. A clear from `StartTask` falls through to
+  `m_pSchedule == NULL` in the same loop (`GetNewSchedule` + install, same think); one from
+  `RunTask` exits at `status != 4` and reselects next think.
+  Gap: `FElysiumNpc::RequestClearSchedule` is a seam no body calls; the kernel honours a request
+  after the task step or at the next tick's top (both "same pass" shapes).
+  Job: each caller recovered (what it clears for, what it writes beside the clear), wired to the
+  seam or named as a later story's; the `StartTask`-vs-`RunTask` timing difference where the
+  port's task bodies need it.
+  Consumes: 25. Oracle: § "The kernel's failure route and the base programs, walked".
+  Size: S. Effort: Sonnet / medium.
+- [ ] **25b. Species `TranslateSchedule` overrides and the frenzied pre-table.**
+  Retail: slot 440 is filled by `CAI_BaseNPCTroika 0x102b12f0` on 62 classes and overridden by
+  `CNPC_VAsianVampire 0x10362910`, `CNPC_VBach 0x10363a30`, `CNPC_VChangBros 0x1036b460`,
+  `CNPC_VCop 0x10372150`, `CNPC_VDog 0x10374370`, `CNPC_VFrenzyShadow 0x10375f20`,
+  `CNPC_VGargoyle 0x10378a30`, `CNPC_VGuard1 0x1037d240`, `CNPC_VHengeyokai 0x1037ffa0`,
+  `CNPC_VHunter 0x10388a40`, `CNPC_VMingXiao 0x10394570` / `Tentacle 0x1039e2d0`,
+  `CNPC_VSabbatLeader 0x103a7390`, `CNPC_VScurrying 0x103ac490`, `CNPC_VSheriffMan 0x103b0320`,
+  `CNPC_VTzimisce 0x103bd390` / `HeadClaw 0x103c1720` / `Runner 0x103c3560`,
+  `CNPC_VWerewolf 0x103d5e00` (its own `0x43` arm), `CNPC_VZombie 0x103df580`. Troika's frenzied
+  pre-table `0x102b11c0` (`m_bfNPCFrenziedFlags & 0x100`): `0xc7 → 0xc9`, `0xca/0xcb/0xd1/0xd2 →
+  0xcc`, `0xef → 0xf0`, `0x87/0x88 → 0x7d/0x7e` by slot 168 and flags1 `0x1000`.
+  Gap: `FElysiumNpc::TranslateSchedule` carries Troika's `1/0x6b` arm; the frenzied arm is a
+  named seam (identity, tallied); no species override exists.
+  Job: an index of the overrides so none is silently identity; each lands with its species
+  story; the frenzied targets `0xc9`/`0xcc`/`0xf0` registered with the melee family that owns
+  them.
+  Consumes: 25. Oracle: § "Species slot-435 overrides all chain" gains a slot-440 twin.
+  Size: XS now (the index), grows per species. Effort: Sonnet / low.
+- [ ] **25c. `MaintainSchedule`'s other exits.**
+  Retail: `m_pSchedule == NULL` → `GetNewSchedule 0x102814d0` + install in the same loop; an
+  installed schedule with zero tasks → `"ERROR: Missing or invalid schedule"` and `SetState(1)`
+  through slot `0x4d8`; the `ai_step` debug return; the door-block local from flags2 `0x200`
+  against `m_hBlockedDoor +0x5d28` that withholds the fail route.
+  Gap: the kernel's `Schedule == nullptr` arm answers `TaskFail(0x05)` (`ElysiumSchedule.cpp`,
+  the "ran off the end" arm), which is not a retail exit; the door-block gate on the route is
+  not reproduced (the port's door selector runs elsewhere).
+  Job: the null-schedule arm as a reselect, the zero-task arm as the state push, the door-block
+  gate on the top arm.
+  Consumes: 26 (`GetNewSchedule`), 11 (the door selector). Oracle: § "The kernel's failure route
+  and the base programs, walked".
+  Size: XS. Effort: Sonnet / low.
 - [ ] **22. `sp_tutorial_1` on the V2 lane.**
   Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1), the nine
   hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19) and 24's
@@ -466,7 +525,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `GET_PATH_TO_INTERESTING_PLACE`, `SET_PRESERVE_PATH`, `FACE_INTEREST`, `DO_INTEREST_ACTIVITY`,
   `PAUSE_MOVING`, `FACE_NEXT_NODE`, `WAIT_INDEFINITE` task in `EElysiumTask`. The shared entry
   `0x102a9f40` / loop `0x102aa210` / release `0x102da600` that 27's patrol arm also calls have
-  no port function; `Idle_Stand` is 25's.
+  no port function; the `Idle_Stand` fail schedule is 25's route, which lands a Troika NPC on
+  `0x6b IDLE_DISPOSITION` (25's "what a consumer observes").
   Oracle: § "Interesting places: the selector, the programs, the wait" (incl. "The failed
   walk, walked"), § "Interesting-place eligibility". Provides: the entry/loop/release trio to 27.
   Size: L. Effort: Opus / high.
@@ -584,7 +644,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   idle sound through slot 0x7dc instead of 0x7a8, and `0x1027a420` rolls `RandomInt(0, 20)`
   instead of `(0, 999)`. `COND_GIVE_WAY` 0x68's reader is base idle `0x1028a380` → `0x38
   GIVE_WAY`, unreachable on a Troika NPC; no `SetCondition` site carries the literal.
-  `Idle_Stand` is base 1 (25).
+  `SET_FAIL_SCHEDULE Idle_Stand` takes 25's route: through slot 440 a Troika NPC lands on `0x6b
+  IDLE_DISPOSITION`, not base 1 (25's "what a consumer observes").
   Gap: `GatherComfort` and its two `0x12f` arms (`ElysiumNpcConditions.cpp:581-649`,
   `bTaskCompletedExternally` `:569`) and `SetTarget` (`ElysiumNpc.h:646`) exist; no `Comfort`
   program in the registry, no `GET_PATH_TO_TARGET`, `RUN_TO_TARGET`, `FACE_TARGET`,
@@ -954,10 +1015,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `ElysiumNpcConditions.cpp:254`); no `InitialFlee`, `NextFleeSoundTime`, `TranslateSchedule`,
   `FleeAndDie`/`Faint` input, `MildlyCrazy` reader, no `0x48/0x70–0x78` program; the state byte
   `0x85` is in 15's table (`ElysiumNpcFlags.cpp:160`).
-  Job: the state, the ideal-state entry, the case-8 chain, the translation, `0x48`, the two
-  inputs with their slot-614 reset, the flee vocalisation slot and the `NPC_FLEE` sound.
-  Consumes: 15 (the state byte, slot 614), 10a (`CommitBestSound`), 10e (the look tasks), 26
-  (the state-2/0xe law arms share `ReportCriminalAct`).
+  Job: the state, the ideal-state entry, the case-8 chain, the translation's two flee arms
+  (`0x77 → 0x78`; `D_MILDLY_CRAZY → 0x132`, which needs `0x132 LAUGHING` registered) extending
+  25's `FElysiumNpc::TranslateSchedule` rather than re-creating it, `0x48`, the two inputs with
+  their slot-614 reset, the flee vocalisation slot and the `NPC_FLEE` sound.
+  Consumes: 15 (the state byte, slot 614), 25 (the slot-440 seam), 10a (`CommitBestSound`), 10e
+  (the look tasks), 26 (the state-2/0xe law arms share `ReportCriminalAct`).
   Oracle: § "The flee state and the cower, disoriented and lost programs" (incl. "Story 21a
   recovery"). Unrecovered: bytes `+0x6360/+0x6361` beside the level, `0x1042fde0`'s transform
   (the port keeps the level plain).
@@ -979,7 +1042,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0x1f, `FACE_HINTNODE` 0x2f, `GET_PATH_TO_COWER_NODE` 0x84, `_SAVE_POS` 0x85, `PAUSE_MOVING`
   0xa6, `PLAY_COWER` 0xe6, `SET_COWER` 0xe7, `LOOK_AT_PLAYER` 0xfb, `RUN_PATH_FLEE` 0x103,
   `FLIP_NEXT_IDEAL_YAW` 0x106, `WAIT_PVS`; the 0xe1/0xe3 completion branch 8 left waiting.
-  Consumes: 21a (the state and chain), 25 (`Idle_Stand` for `DISORIENTED`/`LOST`), 10e
+  Consumes: 21a (the state and chain), 25 (the `Idle_Stand` route for `DISORIENTED`/`LOST`,
+  which lands on `0x6b` through slot 440 — 25's "what a consumer observes"), 10e
   (`PLAY_COWER`), 12b (the hint search behind `GET_PATH_TO_COWER_NODE`). Provides: `COWERING`
   and `ONE_HIT_KILL`'s writers to 21c; `DISORIENTED` to 0006.
   Oracle: § "The flee state and the cower, disoriented and lost programs". Unrecovered: the
