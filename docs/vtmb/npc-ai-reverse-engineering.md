@@ -577,6 +577,67 @@ off the decompilation (story 26 ports it); `HasCondition` is `0x10269aa0`, `HasI
 The port's law branch (`ElysiumNpcWitness::SelectLawSchedule`) sits at the top of `SelectSchedule`
 by a CHOSEN position; retail's is step 5/7 here. `[VtMB]`
 
+**Story 26 recovery (2026-09-12).** The body re-read whole; the unrecovered items above close
+as follows, and two steps are corrected.
+
+- **Step 4 is the discipline manager, not a bump handler.** `DAT_10739a4c` is the global
+  `CDisciplineManager` (76 readers: `AddDiscFlag`, `OnTakeDamage`, the HitGroup chain…).
+  `0x101e3df0(mgr, npc)`: for each of the 30 discipline bits set in the NPC's active-effect word
+  (`npc+0xeb4`) whose record byte `+0x33` is set, `RemoveEffect` (`0x101e3af0`, DevMsg
+  `"Discipline<%s> RemoveEffect"`, with the `bumped` flag) — i.e. **being bumped ends every
+  active discipline effect authored as bump-interruptible**. `0x101e3ee0(mgr, npc)`: for each
+  active effect whose record byte `+0x34` is set, `InterruptSchedule` (`0x101e3a30`,
+  `"Discipline<%s> InterruptSchedule"`, the `OnInterruptSchedule` HitInfo at record `+0x2b8`) —
+  run when the installed schedule is **`0x14a SCHED_TROIKA_D_MESMERIZE`** (`0x102cc1f0(0x14a)`
+  compared by pointer). Neither returns a schedule. The two record bytes are parsed by the
+  HitGroup loader beside `DoPossession`/`DoFrenzy` (story 0006 owns their key names —
+  UNRECOVERED here).
+- **Step 6's interface is a ConVar**: `DAT_1092450c` → `cvar_debug_player_on_head`
+  (`0x10924508`, ctor `0x1028bc20`: name `"debug_player_on_head"`, default `"3"`, bounded
+  `0..3`, help `"What should I do if the player i…"`); `slot 1` false and `[0xb] < 4` is the
+  ordinary ConVar int read. Mode 0 → `0x7b SCHED_TROIKA_PLAYER_ON_HEAD_RUN`
+  (`GET_PATH_TO_RANDOM_NODE 256; RUN_PATH; WAIT_FOR_MOVEMENT`, no interrupts), 1 → `0x79
+  _DIVE` (`SET_FAIL_SCHEDULE _RUN; TASK_ATTEMPT_DIVE_SIDE 0; SET_SCHEDULE _RUN`), 2 → `0x7a
+  _DIVE_FORWARD` (`SET_FAIL_SCHEDULE _DIVE; TASK_ATTEMPT_DIVE_FORWARD 0`), 3 (the shipped
+  default) → 80 % `0x79`, else `0x7a`. The arm also `ClearCondition(PLAYER_ON_HEAD)` first,
+  and only runs with **no live `m_hDialogPartner`** and `!IsBusyWithDiscipline`.
+- **Names.** `0x3a` = base `NPC_FREEZE` (`TASK_FREEZE 0`, interrupt `COND_NPC_UNFREEZE`),
+  `0x3e` = base `FALL_TO_GROUND` (`TASK_FALL_TO_GROUND 0`), `0x6a` =
+  `SCHED_TROIKA_RUN_DIALOG` (`TASK_RUN_DIALOG 0`, interrupt `COND_PROVOKED`), `0x89` =
+  `SCHED_TROIKA_RUN_TO_SAVED` (list in "The alert programs, verbatim"), `0x14a` =
+  `SCHED_TROIKA_D_MESMERIZE`, `0x14c` = `SCHED_TROIKA_KNOCKBACK` (`SET_FAIL_SCHEDULE
+  MELEE_IDLE; STOP_MOVING; ADD_EVENT_EXPRESSION KNOCKBACK; TASK_MELEE_KNOCKBACK 0`), `0x151`
+  = `SCHED_TROIKA_ONFIRE` (`SET_FAIL_SCHEDULE FLEE_AND_COWER_SCREAM; STOP_MOVING;
+  ADD_EVENT_EXPRESSION KNOCKBACK; ON_FIRE_INTO; ON_FIRE_LOOP; ON_FIRE_OUTOF`), `0xf1` =
+  `SCHED_TROIKA_STARTLED` (`WAIT_RANDOM 0.50; STOP_MOVING; SET_ACTIVITY ACT_WALK`; interrupts
+  `LIGHT_DAMAGE HEAVY_DAMAGE`), `0xfc` = `FINISH_CLIMB` (`WALK_PATH; WAIT_FOR_MOVEMENT`), `0xfd`
+  = `FINISH_JUMP` (`TASK_JUMP 0; TASK_LAND 0`), `0x130` = `SCHED_TROIKA_CALMED`
+  (`SET_NPC_FLAG DONT_INVESTIGATE; NO_DIALOG; D_CALM; SET_FAIL_SCHEDULE Idle_Stand;
+  SET_TOLERANCE_DISTANCE 120; GET_PATH_TO_TARGET; WALK_TO_TARGET; WAIT_FOR_MOVEMENT;
+  FACE_TARGET; SET_FAIL_SCHEDULE CALMED; WAIT 0.2; WAIT_PVS`, no interrupts, `DELAY_INTERRUPTS`),
+  `0x131` = `SCHED_TROIKA_FOLLOW` (the same with `D_FOLLOW`, tolerance 60, `RUN_TO_TARGET`,
+  `WAIT 0.1`, interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR`, no flag). Both
+  re-select themselves on failure, so a calmed/followed NPC whose target is unreachable
+  re-tries at once, forever. `+0x65e4` is `combat_start_activity`'s resolved id (the
+  keyfields section): the squad arm returns `0xeb` only for an NPC that authored one.
+- **Step 8 corrected**: base `GetSchedule` (`0x1028a2a0`) tests `NPC_FREEZE 0x75` → `0x3a`
+  first, then `ON_FIRE` → `0x151`, then `FLOATING_OFF_GROUND 0x73` → gravity, slot `0x340(0)`,
+  `0x3e` — the summary above listed the gravity write ahead of the freeze test.
+- **Base `SelectSchedule` `0x1028a380`** (the `default:` of the Troika switch, states 0, 4–7,
+  9–0xc): state 1 → `HEAR_DANGER/COMBAT/WORLD/BULLET_IMPACT/PLAYER` → 6 (`ALERT_FACE`);
+  `GIVE_WAY 0x68` → `0x38`; navigator goal type 0 → 1 (`IDLE_STAND`); `LIGHT_DAMAGE` with an
+  `ACT 0x49` sequence → `0x14`; else 2 (`IDLE_WALK`). State 3 → `ENEMY_DEAD` + `ACT 0x61` → 8;
+  damage → face/flinch (`0x19`/7/6); hear-family → 6; else 9 (`ALERT_STAND`). State 4 → a live
+  `m_hCine` → `0x2e AISCRIPT`, else `"Script failed for %s"`, `CineCleanup 0x1027d170`, 1.
+  State 6 → 1; 7 → ragdoll ? `0x2c` : `0x2b`; `0xc` → 1; state 0 (`"NPC_STATE_IS_NONE!"`),
+  the combat fall-through (`"No suitable combat schedule"`) and any other state
+  (`"Invalid State for SelectSchedule"`) → **`0x43 FAIL`**. Troika's own switch covers 1, 2, 3,
+  8, 0xb, 0xc, 0xd, 0xe, so the base arms a Troika NPC can reach are 4, 6, 7 and the `0x43`
+  defaults.
+
+Unrecovered after this pass: the HitGroup record keys behind bytes `+0x33`/`+0x34` (0006), the
+`TASK_ATTEMPT_DIVE_*` and `TASK_RUN_DIALOG` arms, `TASK_MELEE_KNOCKBACK`, the `ON_FIRE_*` trio.
+
 ### `m_bReturnToInitialPos` is a one-shot armed only by alert or combat
 
 `CAI_BaseNPCTroika + 0x6494` decides between those two terminal answers, and it carries **no
@@ -754,6 +815,19 @@ exact entity relationship
 
 The exact placement and meaning of the additional special branches remain open, but the ordinary
 relation-type and priority precedence is closed.
+
+**Story 16b recovery (2026-09-12): the Troika composition `0x10299da0`, re-read.** Slot 404
+(`0x650`) on a Troika NPC is `CAI_BaseNPCTroika::IRelationType`, and its arms in order: self →
+0; null → 0; the target's cached `CBaseCombatCharacter*` (`target+0x9c`) carries `flags2 &
+0x20000 D_INSANE` **and** my `m_hClosestPlayer` is live → if I do not hate that player (slot
+`0x650` ≠ 1) and he is not my enemy (slot `0x2a0`) → **D_HT (1)** toward the insane target; the
+target's Troika pointer (`target+0x98`) has a live `m_hFollowerBoss +0x647c` that I hate or that
+is my enemy → D_HT; my own boss dead → the base table (`CBaseCombatCharacter::IRelationType`
+`0x10333340`); my boss is the target → **D_LI (3)**; else `r = boss->IRelationType(target)`,
+upgraded to D_HT when the boss hates the target, the boss's enemy is the target, or (the target
+being an NPC) the target hates the boss or targets him as enemy; else `r`. The summary in
+"`m_hFollowerBoss`" stands. UNRECOVERED: nothing on this path; the player's ally read
+(`0x101755d0`) and `CNPC_VHuman::SelectIdealState` (`0x103851e0`) keep their summaries.
 
 The map's `player_reaction` is an initial authored input to this combat relationship domain. A
 later `SetRelationship` call can deliberately alter it.
@@ -1359,6 +1433,61 @@ enemy is gone goes to alert, a non-follower to the hunt state `0xb` when the Con
 
 A second, unrecovered ConVar sits beside it at `DAT_10924f74`.
 
+**Story 16a recovery (2026-09-12).** `DAT_10924f74` is `debug_allow_move_facing` ("Sense and
+investigate leftovers"); the `BACKAWAY` arm of the controller forwards `(boss, boss origin, 1.0,
+1.0, 0)` to slot 517 (`0x814`) under it before returning `0x10c`. `SetFollowerBoss(name)`
+(`0x102c44e0`) resolves through slot 559 (`0x8bc`), writes `+0x647c`, refuses `this`, `Error`s
+when `m_iSquadDisconnected < 1 && m_pSquad`, then `0x102b52a0(0, 0)` (the `SetEnemy(NULL)` /
+`SetTarget(NULL)` / hint-clear bundle the possession arm also calls) and `frenziedFlags |=
+0x3008`. `SetFollowerType` (`0x102c4640`) → `0x102c4680(type)`: `0x101e8c90(&DAT_10739d08,
+type, &backAway +0x6484, &walkTo +0x6488, &runTo +0x648c)` reads the `Npc_Follower_Info` row
+of `Rules.txt`, then clamps `walkTo ≥ backAway + 10.0` and `runTo ≥ walkTo + 10.0`
+(`_DAT_1044e664 = 10.0`, the "overlap"; DevMsgs on each clamp).
+
+The ten programs, byte-read (`0x105e3100..0x105e536c`); every one interrupts on `NEW_ENEMY
+SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE GIVE_WAY INVESTIGATE_SOUND
+INVESTIGATE_SIGHT IGNORE_UNKNOWN DETECTED_ATTACK` plus the distance conditions named:
+
+- `0x115 FOLLOWER_WAIT`: `SET_NPC_FLAG TASKS_FACE_TARGET; SET_ACTIVITY ACT_IDLE;
+  SET_INSIDE_INTERRUPT_DIST DIST:FOLLOWER_DISTANCE_BACKAWAY; SET_SPECIAL_DISTANCE_ACCUM
+  DIST:FOLLOWER_DISTANCE_WALKTO; ADD_SPECIAL_DISTANCE_ACCUM DIST:FOLLOWER_DISTANCE_OVERLAP;
+  SET_OUTSIDE_INTERRUPT_DIST DIST:ACCUM; WAIT 2.0; WAIT_RANDOM 1.0` + `INSIDE_INTERRUPT_DIST_F
+  OUTSIDE_INTERRUPT_DIST_F`.
+- `0x113 FOLLOWER_FOLLOW_RUN`: `SET_FAIL_SCHEDULE FOLLOWER_FOLLOW_FAILED;
+  SET_SPECIAL_DISTANCE_ACCUM WALKTO; ADD OVERLAP; SET_INSIDE_INTERRUPT_DIST ACCUM;
+  SET_TOLERANCE_DISTANCE DIST:ACCUM; GET_PATH_TO_TARGET; RUN_PATH; WAIT_FOR_MOVEMENT` +
+  `INSIDE_INTERRUPT_DIST_F`.
+- `0x112 FOLLOWER_FOLLOW_WALK`: `SET_FAIL_SCHEDULE FOLLOW_FAILED; ACCUM = RUNTO + OVERLAP;
+  SET_OUTSIDE_INTERRUPT_DIST ACCUM; ACCUM = BACKAWAY + OVERLAP; SET_INSIDE_INTERRUPT_DIST ACCUM;
+  SET_TOLERANCE_DISTANCE ACCUM; GET_PATH_TO_TARGET; WALK_PATH; WAIT_FOR_MOVEMENT` + both
+  distance conditions.
+- `FOLLOWER_FOLLOW_FAILED`: `SET_NPC_FLAG TASKS_FACE_TARGET; SET_ACTIVITY ACT_IDLE; WAIT 2.0;
+  WAIT_RANDOM 1.0`.
+- `0x10c FOLLOWER_BACKAWAY`: `SET_FAIL_SCHEDULE BACKAWAY_FAILED; ACCUM = WALKTO − OVERLAP;
+  SET_OUTSIDE_INTERRUPT_DIST ACCUM; SET_TOLERANCE_DISTANCE 20; FIND_FOLLOWER_BACKAWAY_SIMPLE 0;
+  WALK_PATH; WAIT_FOR_MOVEMENT` + `OUTSIDE_INTERRUPT_DIST_F`. `_BACKAWAY_FAILED`:
+  `TASKS_FACE_TARGET; SET_ACTIVITY ACT_IDLE; ACCUM = WALKTO − OVERLAP; SET_OUTSIDE_INTERRUPT_DIST
+  ACCUM; WAIT 0.1; WAIT_RANDOM 0.1; SET_SCHEDULE FOLLOWER_BACKAWAY_ASTAR`. `_BACKAWAY_NODE` /
+  `_NODE_FAILED` mirror the pair with `FIND_FOLLOWER_BACKAWAY_NODE 0` (fail → `_ASTAR` too);
+  `_BACKAWAY_ASTAR` uses `FIND_FOLLOWER_BACKAWAY_ASTAR 64` with fail `_ASTAR_FAILED` (`WAIT
+  2.0; WAIT_RANDOM 1.0`, no transfer). So the ladder is simple → (fail) → A*; `_NODE` is reached
+  by name only.
+
+The `DIST:` operands are a second operand vocabulary the parser resolves like `NPCFlag:` —
+`FOLLOWER_DISTANCE_BACKAWAY/WALKTO/RUNTO` read `+0x6484/88/8c`, `FOLLOWER_DISTANCE_OVERLAP` is
+the 10.0 above, `ACCUM` the per-NPC accumulator the three `*_SPECIAL_DISTANCE_ACCUM` tasks
+write; `TASK_SET_INSIDE/OUTSIDE_INTERRUPT_DIST` are the producers of `COND_INSIDE/OUTSIDE_
+INTERRUPT_DIST_F 0x19/0x18` (tested against the boss each think). UNRECOVERED: their arms and
+the accumulator's offset. The three find tasks (Troika `StartTask` idx 26–28): `0x86 SIMPLE`
+(`0x102a2d9b`): no boss → `TaskFail(0x29)`; direction = normalise(me − boss) rotated by
+`RandomFloat(−45, 45)` about the boss, point = boss + `backAway` × dir, walk-probed
+(`0x102e6d70`, mask `0x202400b`, 100.0) → fail `TaskFail(7)`, else `SetGoal{type 4, tolerance
+[0x1049a1b0]}`; `0x87 NODE` (`0x102a2f94`): `0x102edae0(boss origin, walkTo − 10, 50000.0)`
+picks a node at least that far, fail 7; `0x88 ASTAR` (`0x102a3096`): `0x102edbb0(…, walkTo −
+10, 50000.0)`, fail 7. All three complete on the `SetGoal` alone (no explicit `TaskComplete`).
+`TASKS_FACE_TARGET` is an NPC flag (bit UNRECOVERED) the motor reads to keep facing
+`m_hTargetEnt` while the wait runs.
+
 ### The three `GatherConditions` sweeps and the interest predicate
 
 `CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`) makes **three** consecutive calls, and neither
@@ -1570,6 +1699,51 @@ sweep, the cine family (`CCineNPC`/`CCineAI` slot 583, `CineCleanup 0x1027d170`,
 `CNPC_VZombie` slot 420.
 
 Called from `ElysiumNpcEnemy::GatherConditions` between `GatherSeeUnknown` and `GatherSounds`. `[VtMB]`
+
+**Stories 10i and 10j recovery (2026-09-12).** The three comfort task arms, the `0x12f`
+readers, `Idle_Stand` and `CheckTarget`, closed.
+
+- **`TASK_PLAY_COMFORT_INTO 0xec`** (Troika `StartTask` `0x102a51b3`): `act = 0x106a + 3 ×
+  RandomInt(0, 1)`; `SelectWeightedSequence(act, -1)`; `SetIdealActivity(act)` (`0x10272650`).
+  `0x106a` is `ACT_COMFORT_INTO` and the stride of 3 steps to `ACT_COMFORT2_INTO`; the roll is
+  `(0, 1)`, so **`ACT_COMFORT3_*` is never chosen by this task** (the names exist in both
+  images; the third variant is reachable only by name). Run arm `0x102ab83c` (shared with
+  `PLAY_COWER`, `KICK_HINT`, `KICK_PROP`): `AutoMovement`, then complete when the sequence is
+  finished (slot `0x3ec`).
+- **`TASK_DO_COMFORT_LOOP 0xed` and `TASK_PLAY_COMFORT_OUTOF 0xee` share one start arm**
+  (`0x102a51e8`): `m_Activity (+0xfec) != -1 ? SetIdealActivity(m_Activity) : m_Activity = 0`.
+  Re-submitting the current activity is how the INTO→IDLE→OUTOF chain advances:
+  `CAI_BaseNPC::SetIdealActivity` (`0x10272650`) is a `switch` on the activity (its jump table
+  is the damaged one the corpus flags) that maps an `_INTO` to its `_IDLE` and an `_IDLE` to its
+  `_OUTOF` — UNRECOVERED case by case; the comfort trio is one of its rows. **`DO_COMFORT_LOOP`'s
+  run arm is `0x102aad71`, a bare `RET`**: the loop never completes on its own; it ends only
+  through the sweep's two `TaskComplete(false)` arms above (a new nearest comforter, or leaving
+  idle / losing the candidate / getting busy / no schedule). `PLAY_COMFORT_OUTOF`'s run arm is
+  the shared sequence-finished test.
+- **The `0x12f` readers**: `CAI_BaseNPC::GatherConditions` (`0x1026ec30`) plays the idle
+  vocalisation through slot `0x7dc` instead of `0x7a8` while `0x12f` runs, and `0x1027a420`
+  rolls `RandomInt(0, 20)` instead of `(0, 999)` — both already stated above; no third reader.
+- **`Idle_Stand`** is base schedule 1 (`STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 5; WAIT_PVS`,
+  interrupts `NEW_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE SMELL PROVOKED GIVE_WAY HEAR_PLAYER
+  HEAR_DANGER HEAR_COMBAT HEAR_BULLET_IMPACT`; "The kernel's failure route and the base
+  programs, walked"). **`COND_GIVE_WAY 0x68`'s reader** is the base idle selector `0x1028a380`
+  → `0x38 GIVE_WAY` (`SET_ROUTE_SEARCH_TIME 0.5; SET_TOLERANCE_DISTANCE 5;
+  GET_PATH_TO_SAVEPOSITION 2; RUN_PATH_TIMED 2.0; WAIT_FOR_MOVEMENT`), unreachable on a Troika
+  NPC whose class handles state 1 itself; the condition stays producer-less.
+- **`CAI_Memory::CheckTarget` `0x10271d10`** (VProf `"CAI_Memory::CheckTarget"`): clear `0x4b`
+  and `0x49`; `FVisible(target, 0x2804091)` (slot 201) → set `0x4b HAVE_TARGET_LOS` else `0x49
+  TARGET_OCCLUDED`; then `0x10271b10`: with the navigator's goal type (`+0x18`) not 3 or 1 and
+  a goal present (`0x102ee620` → `0x100113d8(goal)`): the goal's entity (`0x102ee160`) equal to
+  `m_hTargetEnt` and the goal flags (`0x102ee640`) carrying `4` → when the target is farther
+  than **`_DAT_104454c8 = 80.0` units** from the goal point (`0x102ee140`), re-path
+  (`0x10007b4e` → `0x102f1dc0`, the navigator's route rebuild); a goal on another entity →
+  `0x102ed310(target, vec3_origin)` (goal entity := target, offset zero, then the same rebuild).
+  Slot `0x364` (217) is **`CBaseEntity::GetAbsOrigin`** on all 497 classes; the "slot 220"
+  named in the sweep text above is `0x370`, a different accessor — re-read that line before
+  relying on it (UNRECOVERED which of the two the sweep's distance uses).
+
+Unrecovered after this pass: `SetIdealActivity`'s transition rows, whether the goal flag `4`
+carries a name, `FUN_100113d8`'s exact "has goal" answer.
 
 #### The sound sweep `0x102b1cd0`, walked
 
@@ -3256,6 +3430,316 @@ virtual reports done, clearing `PLAYING_FACE_ANIM 0x08000000`), `LOOK_AT_PLAYER 
 `0x101f5950`, start-only), `ALERT_LOOK_AT_UNKNOWN_ATTACKER 0x148` (`0x102a7722`, handle `+0x5b7c`,
 `TaskFail(0x21)` when dead).
 
+#### The kernel's failure route and the base programs, walked (2026-09-12, story 25)
+
+**Correction: the base programs are text blobs after all.** The claim above that "the base
+(`CAI_BaseNPC`) programs are not text blobs in `vampire.dll`" is wrong. `CAI_BaseNPC`'s loader is
+`FUN_102cb690`, called through the slot-452 `LoadedSchedules` virtual that `Precache`
+(`0x1027bb50`) dispatches (a false return is `"ERROR: Rejecting spawn of %s as error in NPC's
+schedules"`). It feeds 63 blobs to the same parser (`0x1030d850`, class name `"CAI_BaseNPC"`)
+through a **pointer table** at `0x106034b8..0x106035b4` — which is why the byte scan for
+`"\n\tSchedule\n\t\t"` immediately followed by a registrar `call` missed them — and the blob
+names carry **no `SCHED_` prefix** (`IDLE_STAND`, `FAIL`, `COWER`, `DIE`…: the 62 "bare names"
+the flee section counted). The base name↔id registrar is `FUN_102cadd0` (`AddSymbol` per pair),
+and **the debug name table `0x105d1488` is stale**: it lacks `IDLE_PATHCORNER` (id 3) so every
+name after `SCHED_IDLE_WALK` sits one slot early (`0x105d1488[0x43]` reads
+`SCHED_TROIKA_IDLE_STAND`, `[0x42]` `SCHED_FAIL`). Never number from it. The registrar's own
+numbering, verbatim: `1 IDLE_STAND, 2 IDLE_WALK, 3 IDLE_PATHCORNER, 4 IDLE_WANDER, 5 WAKE_ANGRY,
+6 ALERT_FACE, 7 ALERT_SMALL_FLINCH, 8 ALERT_SCAN, 9 ALERT_STAND, 10 INVESTIGATE_SOUND, 0xb
+COMBAT_FACE, 0xc COMBAT_SWEEP, 0xd FEAR_FACE, 0xe COMBAT_STAND, 0xf CHASE_ENEMY, 0x10
+CHASE_ENEMY_FAILED, 0x11 VICTORY_DANCE, 0x12 TARGET_FACE, 0x13 TARGET_CHASE, 0x14 SMALL_FLINCH,
+0x15 BACK_AWAY_FROM_ENEMY, 0x16 BACK_AWAY_FROM_SAVE_POSITION, 0x17 TAKE_COVER_FROM_ENEMY, 0x18
+TAKE_COVER_FROM_BEST_SOUND, 0x19 TAKE_COVER_FROM_ORIGIN, 0x1a FAIL_TAKE_COVER, 0x1b
+RUN_FROM_ENEMY, 0x1c ESTABLISH_LINE_OF_FIRE, 0x1d FAIL_ESTABLISH_LINE_OF_FIRE, 0x1e COWER, 0x1f
+MELEE_ATTACK1, 0x20 MELEE_ATTACK2, 0x21 RANGE_ATTACK1, 0x22 RANGE_ATTACK2, 0x23 SPECIAL_ATTACK1,
+0x24 SPECIAL_ATTACK2, 0x25 STANDOFF, 0x26 ARM_WEAPON, 0x27 DISARM_WEAPON, 0x28 HIDE_AND_RELOAD,
+0x29 RELOAD, 0x2a AMBUSH, 0x2b DIE, 0x2c SCHED_DIE_RAGDOLL, 0x2d WAIT_FOR_SCRIPT, 0x2e AISCRIPT,
+0x2f SCRIPTED_WALK, 0x30 SCRIPTED_RUN, 0x31 SCRIPTED_CUSTOM_MOVE, 0x32 SCRIPTED_WAIT, 0x33
+SCRIPTED_FACE, 0x34 SCENE_SEQUENCE, 0x35 SCENE_WALK, 0x36 SCENE_FACE_TARGET, 0x37 NEW_WEAPON,
+0x38 GIVE_WAY, 0x39 FORCED_GO, 0x3a NPC_FREEZE, 0x3b PATROL_WALK, 0x3c PATROL_RUN, 0x3d
+RUN_RANDOM, 0x3e FALL_TO_GROUND, 0x3f/0x40/0x41 DROPSHIP_DEPLOY_FIRST/SECOND/THIRD, 0x42
+SCHED_FLINCH_PHYSICS, 0x43 FAIL`. So the base `COWER` (`0x10604f98`) the flee section left
+unnumbered is **0x1e**, `NPC_FREEZE` is the `0x3a` and `FALL_TO_GROUND` the `0x3e` that
+`GetSchedule` returns, and `SCHED_DIE` is `0x2b` / `SCHED_DIE_RAGDOLL` `0x2c`.
+
+**`0x43` is `FAIL`**, and its list (blob `0x10608238`) is:
+
+    FAIL: TASK_STOP_MOVING 0; TASK_SET_ACTIVITY ACT_IDLE; TASK_WAIT 1; TASK_WAIT_PVS 0
+      Interrupts COND_CAN_RANGE_ATTACK1 COND_CAN_RANGE_ATTACK2 COND_CAN_MELEE_ATTACK1
+                 COND_CAN_MELEE_ATTACK2 COND_GIVE_WAY
+
+**`Idle_Stand`** (the fail schedule the comfort, calmed, follow, disoriented and interesting-place
+programs name) is base **1**, blob `0x106080b0`:
+
+    IDLE_STAND: TASK_STOP_MOVING 0; TASK_SET_ACTIVITY ACT_IDLE; TASK_WAIT 5; TASK_WAIT_PVS 0
+      Interrupts COND_NEW_ENEMY COND_SEE_FEAR COND_LIGHT_DAMAGE COND_HEAVY_DAMAGE COND_SMELL
+                 COND_PROVOKED COND_GIVE_WAY COND_HEAR_PLAYER COND_HEAR_DANGER COND_HEAR_COMBAT
+                 COND_HEAR_BULLET_IMPACT
+
+and **`GIVE_WAY`** (base `0x38`, the `COND_GIVE_WAY 0x68` consumer in the base idle selector) is
+`SET_ROUTE_SEARCH_TIME 0.5; SET_TOLERANCE_DISTANCE 5; GET_PATH_TO_SAVEPOSITION 2; RUN_PATH_TIMED
+2.0; WAIT_FOR_MOVEMENT`, interrupts `GIVE_WAY WAY_CLEAR NEW_ENEMY SEE_FEAR LIGHT_DAMAGE
+HEAVY_DAMAGE SMELL PROVOKED`. `NPC_FREEZE` (`0x3a`) is `TASK_FREEZE 0` interrupted by
+`COND_NPC_UNFREEZE`; `FALL_TO_GROUND` (`0x3e`) is `TASK_FALL_TO_GROUND 0`, no interrupts.
+
+**The route, in `MaintainSchedule` (`0x102817c0`).** Each iteration first asks `IsScheduleValid`
+(`0x10280ff0`, with `!m_bDidMaintainSchedule` as its `DELAY_INTERRUPTS` argument). When it says
+no, or `m_NPCState != m_IdealNPCState`: `0x10281430` decides whether the state change clears the
+schedule (`0x1026f4d0`); the `HIT_BY_DOOR`-style flags2 bit `0x200` on the Troika pointer is
+consumed against `m_hBlockedDoor +0x5d28` (an expired door is dropped, a live one sets a "door
+blocked" local); then **`HasCondition(COND_TASK_FAILED 0x5c)` with the state unchanged and no door
+block takes the fail route** — `0x10281730`: current local schedule id (slot 447), current task
+(`0x1028a150` = `&m_pSchedule->tasks[m_iCurTask]`, 8 bytes each), then **slot 439
+`GetFailSchedule(curSched, curTask, m_failSchedule)`** — `0x1028abe0` on all 79 classes, no
+override: `m_failSchedule (+0x5c54) ? m_failSchedule : 0x43` — then `m_failedSchedule +0x5c3c =
+id` (the selector trace `+0x1b2c = 1`, file/line `AI_BaseNPC_Schedule.cpp:682`) and
+**`SetSchedule(int)` `0x102cc1f0`**: slot 440 `TranslateSchedule` then slot 446
+`GetScheduleOfType` (`0x102cc260` → `g_AI_SchedulesManager.GetScheduleFromID` `0x1030f300`, a
+linked-list walk on `sched+0x1c`); a miss DevMsgs `"GetScheduleOfType(): No CASE for %d"` and
+installs **schedule 1, `IDLE_STAND`** instead. Every other invalidity (a state change, a door
+block, no `TASK_FAILED`) goes to `SetIdealState` + `GetNewSchedule` (`0x102814d0` →
+`0x1028a260`, story 26's pre-selector) instead. The new program installs through `SetSchedule`
+(`0x10280e50`: `OnScheduleChange` slot 435 on the OLD schedule, `m_bDidMaintainSchedule = 0`,
+`m_pSchedule`, `m_iCurTask = 0`, `m_timeStarted`/`m_timeCurTask = curtime`, `fTaskStatus = 0`,
+**`m_failSchedule = 0`**, the 192 condition bits zeroed, the navigator cleared unless
+`NAV_CLIMB`/`NAV_JUMP` or `PRESERVE_PATH`) and the same `do…while` keeps running it: the failure
+route costs no think. The loop also handles `m_pSchedule == NULL` (a `GetNewSchedule` + install)
+and an installed schedule with zero tasks (`"ERROR: Missing or invalid schedule"`, then
+`SetState(1)` through slot `0x4d8`). `ClearSchedule` (`0x10280d30`) is the other exit: it zeroes
+`+0x5c38..+0x5c4c` (schedule, task index, fail id, status, both stamps), clears `PRESERVE_PATH`
+on the Troika pointer and dispatches slot 435 with `NULL`; no caller inside the AI think — it is
+reached from inside a task (the scripted family, 0003).
+
+**`TASK_WAIT_RANDOM` is task `0x67`** (registrar `0x10316ff0`, the 330-name task table — the
+ids the port's tests spell as 0x17/0x1c/0x20… are confirmed against it), base `StartTask` arm
+`0x10283dae`: `m_flWaitFinished (+0x5db4) = curtime + RandomFloat(0.1, arg)` through the random
+interface at `0x1070b244`. The floor is `0.1`, not `0`: `TASK_WAIT_RANDOM 0.00` (four programs
+author it) still waits 0.1 s. `TASK_WAIT` (task 2, arm `0x10286505`) is `curtime + arg` with no
+floor. Base `RunTask` completes both when `m_flWaitFinished <= curtime`.
+
+**`SetGoal` does not complete tasks.** Navigator `SetGoal` (`0x102ecd20`) returns a `char`; a
+third argument of `2` (the patrol arm) or `0` (the base arms) only changes whether it clears the
+goal entity / re-paths on failure (`& 4`). The Troika arms that follow it with `TaskComplete` /
+`TaskFail(0x0c)` themselves (patrol point, interesting place, kick prop) decide the task; the base
+`GET_PATH_TO_*` arms (`0x1c` `GET_PATH_TO_LASTPOSITION`, `0x20` `GET_PATH_TO_BESTSOUND`, `0x1d`
+`GET_PATH_TO_BESTUNKNOWN`'s base twin) return without either, so their completion is the base
+`RunTask`'s (`0x10288780`). UNRECOVERED: that `RunTask` arm's test (goal active → complete, else
+`TaskFail`), and the `TASK_WAIT_PVS` base arm's relation to Troika's (`0x102aad7e`, spawnflag bit
+10 or `0x102c2430` → complete at once).
+
+**Port divergences (owned by story 25).** `ElysiumSchedule::Tick` answers `Fail == None` with
+`State.Clear()` (`ElysiumSchedule.cpp:696-702`, `:843-849`) — a return to selection on the same
+think — where retail installs `FAIL` and stands one second (`WAIT 1`, then `WAIT_PVS`) before
+selecting again; `ElysiumSchedule::Start` refuses an unregistered program with `TaskFail(0x05)`
+(`:622-631`) where retail's `SetSchedule(int)` falls to `IDLE_STAND`; `FElysiumNpc::RandomSeconds`
+draws `[0, Max]` where the arm draws `[0.1, Max]`. Unrecovered after this pass: the base `RunTask`
+path-completion arm named above; whether `TASK_SET_ACTIVITY ACT_IDLE` in `FAIL` re-plays an
+already-idle body (the Troika `0x102a1c0f` arm answers it, story 14).
+
+#### Patrol paths, walked (2026-09-12, story 10g)
+
+**The object.** `m_sppPatrolPath` is a two-word cell at `+0x658c`: a byte "owned" at `+0x658c`
+and the `CAI_PatrolPath*` at **`+0x6590`**; `m_sppPatrolPathHunt` is the sibling cell at
+`+0x6594`/`+0x6598` (the hunt chain's `MADE_HUNT_PATH` clear in case `0xb` reads `+0x6598 == 0`).
+`CAI_PatrolPath` (allocated by `0x10307d30`, freed by `0x10307db0`): `+0 type`, **`+4 schedule
+id`**, `+8 repeat count`, `+0xc node count`, `+0x10 current index`, `+0x14 node ids[]`. The
+type table at `0x1049df20` (five dwords per row: id, name, first-index cap, step, next type):
+
+| type | name | first index | step | next type |
+|---|---|---|---|---|
+| 0 | `"0"` | 0 | +1 | 0 |
+| 1 | `"1"` | last | −1 | 1 |
+| 2 | `"2"` | 0 | +1 | 3 |
+| 3 | `"3"` | last | −1 | 2 |
+
+`NextPoint` (`0x10307b80`): `idx += step`; off either end → if `repeat < 1` return **true (path
+exhausted)**, else `--repeat`, `type = next`, `idx = first(type)` (`0x10307c20`: `min(count−1,
+cap)`). So `0` loops forward, `1` loops backward, `2`/`3` ping-pong, and `repeat` is how many
+times the direction may wrap before the path is spent.
+
+**The three writers, all entity inputs** (no keyfield, no spawn path): `InputSetupPatrolType`
+(`0x1029eb30`: `"<repeat> <type> <schedule>"`, type through `0x103079c0` — an unknown name is
+`Error("Invalid Path Type String…")` — schedule through `0x1029f370`: the name as given, then
+`SCHED_%s`, then `SCHED_TROIKA_%s`, translated to the class id space; `0x1029f460(…, repeat,
+type, sched, NULL, 1)` creates/resets the object with the schedule id); `InputFollowPatrolPath`
+(`0x1029ed90`: a space-separated list of `info_node_patrol_point` / `info_node_hint` names,
+each resolved by `0x102d2900` (type `10000 || 800` and `stricmp` on `m_strGroup`), `0x1029f460(…,
+0, −1, 0, ids, 0)`: an existing object keeps its type/repeat/schedule and only receives the
+nodes; a missing one is created with **schedule 0**); `InputWalkToNode` (`0x1029e840`:
+`"<schedule> <node>"`, one node, schedule through `0x102c47e0`, `0x1029f460(…, 0, 0, sched,
+[node], 1)`). `0x1029f460` ends with `NextPoint`-style reset (`0x10307b60`) and, **when the
+object's schedule id is non-zero, rolls the interest chance (`0x1029f650`) and installs that
+schedule at once** through `0x102ae750` (`SetSchedule(int, bForce=0)` → `0x102ae780`: refused
+while the NPC or ideal state is dead (7) or the NPC is not alive (slot `0x278`); else
+`ForceScheduleChange 0x102ae490` + `SetSchedule 0x10280e50`). So the program starts from the
+input, not from the next idle selection; a `FollowPatrolPath` sent without a prior
+`SetupPatrolType` builds a path with schedule 0 that the idle selector discards on its next pass
+(`"WARNING: Patrol path for '%s' has no schedule."`, `0x1029f5d0` frees it). Also written by the
+hunt-list builders `0x10306700` / `0x10306f60` into the hunt cell (`TASK_CREATE_HUNT_PATROL_LIST
+0xae` / `TASK_FIND_HUNT_PATROL_TARGET 0xaf`, story 10h). `sp_tutorial_1` sends `SetupPatrolType`
+then `FollowPatrolPath` 0.1 s later to `sentry2` and `monk_upstairs_podium` (the Society hub; no
+graph node there, so `SetGoal` refuses every point — story 24).
+
+**Selection** (`SelectSchedule` case 1 step 3, `0x102af660`): `+0x6590 != 0` → `path->+4 != 0` →
+`0x1029f650(&m_sppPatrolPath)` (the interest roll, below) and **return `path->+4` verbatim**, one
+of `0x46 IDLE_PATROL`, `0x64/0x66/0x68 INVESTIGATE_NODE/_WALK/_HUNT`, `0x65/0x67/0x69
+FOLLOW_PATROL_PATH/_WALK/_HUNT`, or whatever the input named. `SCHED_TROIKA_IDLE_PATROL`
+(`0x10600860`): `TASK_PATROL_PATH 0; WAIT_FOR_MOVEMENT; WAIT_PVS` (interrupts as
+`INVESTIGATE_NODE` plus `GIVE_WAY`, `SEE_FEAR` listed twice); `TASK_PATROL_PATH 0x105` (arm
+`0x102a594d`) picks activity `0x1115` or `0x1121` by a branch and falls to `ACT 9` when the model
+lacks it, then hands the whole node list to the navigator — the base `PATROL_WALK/RUN` shape,
+UNRECOVERED beyond the activity pick.
+
+**The tasks.** `TASK_GET_PATH_TO_PATROL_POINT 0x7a` = `0x102aa640(&m_sppPatrolPath)` (Troika
+`StartTask` idx 17): no object → `TaskFail(0x1d)`; current node id −1 → `TaskFail(0x1d)` **(not
+"returns without completing" as read above: both the null-object and the −1 arms fail with
+0x1d; a node index outside the network's array only falls through to the same fail)**; else the
+node's hull position (`0x102fb0d0`, `m_eHull +0x1568`) into `AI_NavGoal_t{type 4, tolerance
+[0x1049a1ac] = −1 (the schedule's), flags −1}` and `SetGoal(…, 2)`; success → `TaskComplete`,
+refusal → `DevWarning("%s can't reach patrol point")` + `TaskFail(0x0c)`. Its `RunTask` arm
+(`0x102ab00f` → `0x102aa860`) re-issues the same goal every think while the task still runs — it
+never does after the start arm completed or failed, so it is dead for this task and live only for
+`0x7b GET_PATH_TO_PATROL_POINT_HUNT` (start `0x102a39d9`, run `0x102ab02a` on the hunt cell).
+`TASK_NEXT_PATROL_POINT 0x7d` = `0x102aa9e0` (idx 20): no object → `TaskFail(0x1d)`; `NextPoint`
+true → free the object (`0x1029f5d0`); then the interest roll `0x1029f650` and `TaskComplete`.
+`0x7e NEXT_PATROL_POINT_HUNT` (`0x102a3bac`) is the hunt twin. `0x7c GET_FULL_PATROL_PATH`
+(`0x102a39f4`) hands the list to the navigator as one route (UNRECOVERED body).
+
+**The interest roll and the two interest tasks.** Each patrol node may carry an interest record
+(`node->+0xa0`, from `info_node_patrol_point`'s keys: `+0x468` the interesting place's name,
+`+0x46c` a 0–99 chance). `0x1029f650`: `m_bPatrolInterest (+0x65a0) = RandomInt(0,99) <
+chance`, evaluated once per selection and once per `NEXT_PATROL_POINT`. `0x1029f730` resolves the
+record (cached at `+0x659c`) only while `+0x65a0` is set; `0x1029f780` resolves the record's
+named entity to its `CAI_InterestingPlace` (`+0x6300`, the same field the interesting-place
+programs use). `TASK_FACE_PATROL_INTEREST 0xb3` (start `0x102a63bd`): no place, or the place's
+`match_orientation +0x570` clear → `+0x6300 = +0x659c = 0`, `TaskComplete`; else
+`m_pMotor->SetIdealYaw(hint yaw 0x102d12e0)` and keep running — `RunTask 0x102ab974`: no place →
+complete; else set the turn activity (slot `0x8f0`) unless `MEMORY:TURNING 0x2000`, and when
+`FacingIdeal` (`0x10278c80`) clear both fields and complete. `TASK_DO_PATROL_INTEREST_ACTIVITY
+0xb5` (start `0x102a64a6`): no place → fall through to `TaskComplete`; else `0x102a9f40(place,
+record, 0)` — the same claim/INTO/`m_flWaitFinished = RandomFloat(min_time, max_time)` entry the
+interesting-place tasks use; `RunTask 0x102aba6c`: `0x102aa210(place)` (the INTO→IDLE→OUTOF
+loop) true → holster if the place's `+0x571` says so, fire `m_OnInterestingPlaceLeft` when
+arrived, release (`0x102da600`), clear `+0x6300`/`+0x659c`/`m_bInterestingPlaceArrived`,
+complete. With no interest record both tasks complete on their first think, which is every
+patrol in the shipped corpus that authors none.
+
+**Port divergences (owned by 10g).** The port has no `CAI_PatrolPath`; `ThinkPatrol` re-issues
+a refused point every think and the three inputs are not wired to a program install. Unrecovered
+after this pass: `0x7c`'s body, `TASK_PATROL_PATH`'s navigator call after the activity pick, the
+`info_node_patrol_point` keys that fill `+0x468`/`+0x46c`.
+
+#### The alert programs, verbatim (2026-09-12, story 10d)
+
+Byte-read from the blobs; the ids from the registrar (`FUN_102b9810`, 262 pairs decoded from
+its `mov [esp+0x10]/[esp+0x14]` and `push/push` forms — the table the section above numbered by
+hand is confirmed entry for entry).
+
+- `0x4b SCHED_TROIKA_ALERT_WAIT` (`0x105fffe8`): `TASK_RUN_DISPOSITION 5`; interrupts `NEW_ENEMY
+  SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE INVESTIGATE_SOUND
+  INVESTIGATE_SIGHT IGNORE_UNKNOWN DETECTED_ATTACK PLAYER_ON_HEAD`. `TASK_RUN_DISPOSITION 0xba`
+  (start `0x102a49bc`, run `0x102ab351`) is the disposition stance machine
+  (`animation_and_movers.md`) run for the operand's seconds; the selector sets `m_bGoToIdleState`
+  and `m_bForceStateChange` beside it, so the alert state ends with the program.
+- `0x4c SCHED_TROIKA_ALERT_TURN_TO_SOUND` (`0x105ffd78`): `PAUSE_MOVING 0; SET_NPC_FLAG
+  NO_UNKNOWN_ATTACK; ALERT_LOOK_AT_BEST_SOUND 0; WAIT_RANDOM 0.5; PLAY_SOUND Target_Suspect;
+  WAIT_RANDOM 1.5; UNLOOK_AT 0; CLEAR_NPC_FLAG NO_UNKNOWN_ATTACK`; interrupts `NEW_ENEMY
+  SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE REPEATED_DAMAGE SEE_SOUND_SOURCE
+  PLAYER_ON_HEAD`. The turn rung neither stores a last position nor remembers `INVESTIGATING`.
+- `0x4d SCHED_TROIKA_ALERT_STEP_TOWARDS_SOUND` (`0x105ffa68`): `STOP_MOVING; STORE_LASTPOSITION;
+  REMEMBER INVESTIGATING; ALERT_LOOK_AT_BEST_SOUND; WAIT_RANDOM 0.5; PLAY_SOUND Target_Suspect;
+  WAIT_RANDOM 1.5; SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_BESTSOUND; FACE_IDEAL;
+  **WALK_PATH_TIMED 2**; SET_SCHEDULE ALERT_LOOK_AROUND`; interrupts `NEW_ENEMY SEE_ENEMY
+  SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE INVESTIGATE_SOUND SEE_SOUND_SOURCE
+  PLAYER_ON_HEAD` (the `0x51` set). `TASK_WALK_PATH_TIMED 0x24`
+  is base (`WALK_PATH` for the operand's seconds, then complete) — the "step" is two seconds of
+  walking toward the sound, and there is no `WAIT_FOR_MOVEMENT`.
+- `0x4e SCHED_TROIKA_ALERT_LOOK_AROUND` (`0x105ff680`), the sound family's fail and exit program:
+  `REMEMBER INVESTIGATING; PLAY_SEQUENCE ACT_IDLE; SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND;
+  WAIT 5.00; PLAY_SOUND SUSPECT_GIVEUP; WAIT_RANDOM 1.00; SET_ACTIVITY ACT_IDLE; WAIT_RANDOM
+  0.00; SET_NPC_FLAG FORCE_RELAXED_ANIMS; WAIT_RANDOM 1.0; SET_TOLERANCE_DISTANCE 5;
+  GET_PATH_TO_LASTPOSITION; WALK_PATH; WAIT_FOR_MOVEMENT; FACE_LASTANGLE; CLEAR_LASTPOSITION;
+  FORGET INVESTIGATING`; interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE
+  HEAVY_DAMAGE INVESTIGATE_SOUND SEE_SOUND_SOURCE PLAYER_ON_HEAD`. It is `0x62 _RETURN` without
+  the `LOOKED_AT_UNKNOWN` clear. Note it walks back to `m_vecLastPosition`, which `0x4c` never
+  stored: reached from `0x4c`'s failure (no `SET_FAIL_SCHEDULE` there → `FAIL`) it is not; reached
+  from `0x4d`/`0x51`/`0x52` it is.
+- `0x56 SCHED_TROIKA_ALERT_TURN_TO_DETECTED_ATTACK` (`0x105fe3f8`): as `0x4c` with
+  `TASK_ALERT_LOOK_AT_DETECTED_ATTACK 0xfd` (start `0x102a5662`, shared run `0x102ab76a`) in place
+  of the best-sound look; same interrupts.
+- `0x8a SCHED_TROIKA_SHOT_BY_UNKNOWN` (`0x105f68c8`): `SET_NPC_FLAG DONT_INVESTIGATE;
+  SET_TOLERANCE_DISTANCE 12; FIND_COVER_FROM_SAVEPOSITION 0; SET_NPC_FLAG FORCE_RELAXED_ANIMS;
+  RUN_PATH; WAIT_FOR_MOVEMENT; GET_PATH_TO_SAVEPOSITION 0; FACE_PATH 0; CLEAR_NPC_FLAG
+  DONT_INVESTIGATE; SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 5; WAIT_RANDOM 5;
+  SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 5; WAIT 5; SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND;
+  WAIT 5; WAIT_RANDOM 5; SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 5; WAIT 20`; interrupts `NEW_ENEMY
+  SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR INVESTIGATE_SIGHT INVESTIGATE_SOUND DETECTED_ATTACK`. Its
+  selector `FUN_102b8c40`: `HasInterruptCondition(LIGHT_DAMAGE 0x4c) || (HEAVY_DAMAGE 0x4d)` →
+  `m_bCondTookDamage (+0x5b80) = 0`, `m_vSavePosition = m_vecLastDamagePosition (+0x5b9c)`,
+  `0x8a`; else 0. Shared with the hunt case.
+- `0x89 SCHED_TROIKA_RUN_TO_SAVED` (`0x105f6d58`), the `SEE_SOUND_SOURCE` third-party answer and
+  `GetSchedule`'s `m_fSavePositionWalk` answer: `SET_TOLERANCE_DISTANCE 24;
+  GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK 0; SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH;
+  WAIT_FOR_MOVEMENT; SET_TOLERANCE_DISTANCE 24; GET_PATH_TO_SAVEPOSITION 0; WALK_PATH_HUNT;
+  WAIT_FOR_MOVEMENT; SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 3; WAIT_RANDOM 5;
+  SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 1; GET_PATH_TO_RANDOM_NODE 2048; WALK_PATH;
+  WAIT_FOR_MOVEMENT`; interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR`.
+- `0x48 SCHED_VTROIKA_TURN_TO_SOUND` (`0x10600428`, the flee state's sound answer): as `0x4c` with
+  `TASK_LOOK_AT_BEST_SOUND 0xf8` (start `0x102a5515`, the same address as `0xf9`'s — one arm
+  serves both ids) and `WAIT_RANDOM 1.5` alone (no `PLAY_SOUND`, no 0.5 wait).
+- `0x105fdf58 SCHED_TROIKA_ALERT_COVER_FROM_UNKNOWN_ATTACKER`: `SET_FAIL_SCHEDULE 0x58;
+  SET_TOLERANCE_DISTANCE 0; FIND_COVER_FROM_UNKNOWN_ATTACKER; SET_NPC_FLAG FORCE_RELAXED_ANIMS;
+  RUN_PATH; WAIT_FOR_MOVEMENT;` then two lookaround/idle wait pairs; interrupts `SEE_ENEMY
+  SQUAD_SEE_ENEMY SEE_FEAR ENEMY_DEAD ENEMY_UNREACHABLE CAN_RANGE_ATTACK1 CAN_MELEE_ATTACK1
+  CAN_RANGE_ATTACK2 CAN_MELEE_ATTACK2 LOST_ENEMY`. No selector in `0x102a0000–0x102c9000`
+  returns its id; data-only like `0x58`.
+- `SCHED_TROIKA_ALERT_FACE` (`0x10600150`): `STOP_MOVING; SET_ACTIVITY ACT_IDLE; FACE_IDEAL`;
+  interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE
+  PLAYER_ON_HEAD`. No selector returns it.
+
+`0x4c`, `0x4d` and `0x56` declare no fail schedule: a failed `GET_PATH_TO_BESTSOUND` in `0x4d`
+runs `FAIL` (story 25), not `ALERT_LOOK_AROUND`. `m_eAlertLevel`'s reset question is settled in
+"Sense and investigate leftovers" (nothing resets it). Unrecovered after this pass: the
+`TASK_RUN_DISPOSITION` arms' body, `TASK_FIND_COVER_FROM_SAVEPOSITION` /
+`GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK` / `FACE_PATH` arms (`0x8a`, `0x89` — combat-cover
+vocabulary, 12b's neighbourhood).
+
+#### The hunt programs and the expiry chain, verbatim (2026-09-12, story 10h)
+
+Case `0xb`'s tail after the sound arms: `SEE_SOUND_SOURCE && FUN_102b8d20(0x84, 0x73)`; then
+`+0x6598 == 0 → flags1 &= ~0x1000 (MADE_HUNT_PATH)`; `MADE_HUNT_PATH` clear → (`m_flHuntExpireTimer
+<= curtime` → `0x85 HUNT_FINISH`; slot 168's enemy alive → `0x7c HUNT_SETUP`; else `0x7d
+HUNT_SETUP_NO_ENEMY`); set → `0x7e HUNT`.
+
+- `0x7c SCHED_TROIKA_HUNT_SETUP` (`0x105f8dc0`): `SET_FAIL_SCHEDULE HUNT_FAILED; STOP_MOVING;
+  SET_ACTIVITY ACT_IDLE; STORE_LASTPOSITION; REMEMBER INVESTIGATING; SET_TOLERANCE_DISTANCE 20;
+  GET_PATH_TO_LASTENEMY_LKP; WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; FIND_HUNT_PATROL_TARGET;
+  SET_NPC_FLAG MADE_HUNT_PATH; WAIT 1`.
+- `0x7d _SETUP_NO_ENEMY` (`0x105f8b50`): `SET_FAIL_SCHEDULE HUNT_FAILED; STOP_MOVING; SET_ACTIVITY
+  ACT_IDLE; STORE_LASTPOSITION; FIND_HUNT_PATROL_TARGET; SET_NPC_FLAG MADE_HUNT_PATH; WAIT 1`.
+- `0x7e SCHED_TROIKA_HUNT` (`0x105f8918`): `SET_FAIL_SCHEDULE HUNT_FAILED; SET_TOLERANCE_DISTANCE
+  20; GET_PATH_TO_PATROL_POINT_HUNT; WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; NEXT_PATROL_POINT_HUNT`.
+- `0x85 SCHED_TROIKA_HUNT_FINISH` (`0x105f7820`): `CLEAR_NPC_FLAG MADE_HUNT_PATH; STOP_MOVING;
+  SET_ACTIVITY ACT_IDLE; SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_LASTPOSITION; SET_NPC_FLAG
+  FORCE_RELAXED_ANIMS; WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; FACE_LASTANGLE; FORGET INVESTIGATING;
+  SUGGEST_STATE STATE:ALERT`. `SCHED_TROIKA_HUNT_FAILED` (`0x105f74f8`) is identical with
+  `WALK_PATH` for `WALK_PATH_HUNT`.
+- `0x84 HUNT_RUN_TO_SAVED` (`0x105f7b28`): `0x89`'s first nine tasks (through the second
+  `WAIT_FOR_MOVEMENT`), interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR`.
+- `HUNT_LOOK_AROUND` (`0x105f7d70`, the `0x80/0x81/0x82` exit): `PLAY_SEQUENCE ACT_IDLE;
+  SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 3; WAIT_RANDOM 3; SET_ACTIVITY ACT_IDLE;
+  WAIT_RANDOM 1`. `HUNT_TURN_LEFT` / `_RIGHT` (`0x105f72d8` / `0x105f70b8`): `PLAY_SEQUENCE
+  ACT_ALERT_L45_INTO (R45); WAIT_RANDOM 2; PLAY_SEQUENCE ACT_ALERT_L45_OUTOF (R45); SET_ACTIVITY
+  ACT_IDLE; WAIT_RANDOM 0`; no selector returns either.
+
+All of these share the interrupt set `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE
+HEAVY_DAMAGE INVESTIGATE_SOUND INVESTIGATE_SIGHT IGNORE_UNKNOWN DETECTED_ATTACK` (the run-to-saved
+pair excepted). The hunt patrol list is a second `CAI_PatrolPath` in the `+0x6594` cell built by
+`TASK_FIND_HUNT_PATROL_TARGET 0xaf` (`0x10306f60`) / `TASK_CREATE_HUNT_PATROL_LIST 0xae`
+(`0x10306700`) with type 0 and no schedule, walked by the `_HUNT` twins of the patrol tasks.
+Unrecovered: the two list builders' node choice, `GET_PATH_TO_LASTENEMY_LKP`, `m_flHuntExpireTimer`'s
+writer.
+
 ## Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload (2026-09-08)
 
 **The HitGroup record.** A discipline's `HitGroupList` entry (`0x374` bytes; loader `0x101e0080`)
@@ -3342,7 +3826,10 @@ source status if absent, sets misc `Fired_Gun 0x200000`, and inserts **COMBAT `1
 owned by the caster, for **0.2 seconds** using `DAT_1072bc40`/`DAT_1072bcb0` (the gunshot row).
 The HitGroup prelude `0x101dfc20`, after target `AddDiscFlag` and before `0x101de660`, inserts
 **BULLET_IMPACT `0x10`** at and owned by the target, also for **0.2 seconds**, using
-`DAT_1072bc58`/`DAT_1072bcb6` (`NPC_DISCIPLINE_ALERT`). These are two real insertions; neither
+`DAT_1072bc58`/`DAT_1072bcb6` (corrected 2026-09-12: those cells are the `BULLET_IMPACT` row
+of `sound_volume_table.txt`, index 14, volume 7 → 250 units, occludable; the gunshot cells are
+`PLAYER_GUNSHOT_PISTOL`, index 8, 1200 units; `NPC_DISCIPLINE_ALERT` is index 27 at
+`0x1072bc8c`/`0x1072bcc3` and is read by nobody — see the flee section's table layout). These are two real insertions; neither
 replaces the other. `0x10` is not DANGER (`0x8`). Direct OnEnd/OnInterrupt HitInfo callbacks do
 not repeat the HitGroup prelude. The source status guard is record-wide, so a live targeted status
 for the same record also suppresses repeated source activation.
@@ -3929,9 +4416,13 @@ names, `SQUAD_SLOT_ATTACK1/2` (`0x10316e80`, ids `0x3b9aca00/01`), with no consu
 registers zero squadslots; there is no `OccupyStrategySlot`/`VacateStrategySlot`;
 `m_squadSlotsUsed` is touched only by ctor, dtor and save. Do not build them.
 
-UNRECOVERED: `CAI_BaseNPC+0x98`'s entity; slot 578; slot 168 (`+0x2a0`, the `GetEnemy` variant
-the producer uses); `m_iMySquadSlot`'s offset (zero readers); `m_bfNPCStateFlags` bit 3;
-`CAI_Squad` `0x10316890/ab0/bc0/ec0/fa0/fd0` (memory-forwarding wrappers).
+UNRECOVERED: `CAI_Squad` `0x10316890/ab0/bc0/ec0/fa0/fd0` (memory-forwarding wrappers).
+Closed 2026-09-12 (story 17): `CAI_BaseNPC+0x98` is the Troika self-pointer ("The three cached
+downcasts"); slot 578 is an empty virtual and slot 168's Troika body returns `m_hLastEnemy` under
+state bit 6 ("The think cadence, decoded", closed items); **`m_iMySquadSlot` is `+0x5dac`**
+(`datamap_CAI_BaseNPC`, `FIELD_INTEGER`, between `m_SquadName +0x5da8` and `m_vecLastPosition
++0x5db8`; zero code readers, save-only); `m_bfNPCStateFlags` bit 3 is the PVS/LOS force ("The
+think cadence, decoded").
 
 ## The flee state and the cower, disoriented and lost programs (2026-09-08)
 
@@ -4035,7 +4526,30 @@ run `0x102ab83c`), `SET_COWER 0xe7` (`0x102a516c` / run `0x102ab4b2`), `LOOK_AT_
 `0x13`), `FLIP_NEXT_IDEAL_YAW 0x106` (`0x102a59eb`). **`DAT_10483aac = 512.0f`** (the "player near" distance for `0x71` vs `0x70`).
 `DAT_1072bc88`/`DAT_1072bcc2` are `.data` cells filled at startup from `sound_volume_table.txt`
 (the flee sound's radius row and type byte) — read them from the table, not the image.
-UNRECOVERED: `+0x6364`, the authored names of hint types `0x2774`/`0x27d8`.
+
+**Story 21a recovery (2026-09-12).** The table cells: `CSoundVolumeTable` (loader `0x101af9f0`,
+`"VDATA\System\sound_volume_table.txt"`, blocks `VolumeLevels`, `OccludedVolumeLevels`,
+`SoundTypes`, `MiscData`) is the object at **`0x1072bc20`**: `SoundTypes` (`0x101afcf0`) walks the
+34-name table `0x10597c4c` in file order and writes, per type index, the radius dword at `base +
+4·i` (the `VolumeLevels` row the type's volume names) and the occludable byte at `base + 0x88 +
+i`. So `DAT_1072bc88` / `DAT_1072bcc2` are index **26 = `NPC_FLEE`**, volume `"5"` → **240
+units, occludable 1**; and, correcting the disciplines section, `DAT_1072bc40` / `0x1072bcb0`
+are index 8 **`PLAYER_GUNSHOT_PISTOL`** (`"3"` → 1200) and `DAT_1072bc58` / `0x1072bcb6` index 14
+**`BULLET_IMPACT`** (`"7"` → 250, occludable), not `NPC_DISCIPLINE_ALERT` (index 27, `0x1072bc8c`
+/ `0x1072bcc3`). The `MakeAISound` first argument `8` is the `CSound` type bit, not a row.
+
+`+0x6364` is the witnessed criminal level, obfuscated: the one writer is **`0x1028ea60(level,
+location, offender)`** — called three times by the player-law sweep `0x1028efc0` and by
+`CNPC_VPedestrian` slots 433/461 — which stores `encode(level)` (`0x1042fde0`, then the XOR/ADD
+mix with `0x68d8635 / 0xae8746f / 0xffa91d8 / 0x197279ca / 0xa641cacd`), two bytes at
+`+0x6360/+0x6361`, `m_vecPLCriminalLocation +0x6380` and the offender handle `+0x638c`; every
+reader inverts the mix and calls `0x1042fe90`. The supernatural twin
+(`m_iPLSupernaturalLevelWitnessed`) is stored plain. The hint types: `0x2774` = 10100
+`info_hint`, `0x27d8` = 10200 `info_node_cover_corner` ("The navigation and reaction keyfields",
+`CNodeEnt::Spawn`); `TranslateSchedule`'s `0x77 → 0x78` therefore fires when the held hint is an
+`info_hint`. The base `SCHED_COWER` id is **`0x1e`** ("The kernel's failure route and the base
+programs"). UNRECOVERED after this pass: the two bytes `+0x6360/+0x6361`, `0x1042fde0`'s
+transform.
 
 ## Species slot-435 overrides all chain (2026-09-08)
 
@@ -4126,6 +4640,45 @@ normalize(target − apex)) × coneScalar > m_flFieldOfView` (strict). The scala
 cosine, not the threshold; the pulled-back apex widens the cone with proximity (the debug wedge
 `0x1029c4a0` draws it the same way). The 2-D variant is taken when the ConVar at `0x10936f74`
 reads 2.
+
+**Story 12b recovery (2026-09-12): the kick programs and their tasks, verbatim.**
+`0xa9 SCHED_TROIKA_KICK_PROP_AT_ENEMY` (`0x105f21a0`): `SET_TOLERANCE_DISTANCE 0;
+GET_PATH_TO_KICK_PROP 0; SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT;
+SNAP_TO_KICK_PROP 0; KICK_PROP 0; CLEAR_NPC_FLAG FORCE_RELAXED_ANIMS`; interrupts `NEW_ENEMY
+KICK_PROP_INVALID`. `0xa7 HINT_KICK_OVER` (`0x105f2590`): `SET_TOLERANCE_DISTANCE 0;
+GET_PATH_TO_HINTNODE 0; SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT;
+SNAP_TO_HINT 0; FACE_HINTNODE 0; CLEAR_NPC_FLAG FORCE_RELAXED_ANIMS; KICK_HINT 0`; `0xa8
+HINT_KICK_AT_ENEMY` (`0x105f2390`) the same with `FACE_ENEMY` and `KICK_HINT_AT`; both interrupt
+on `NEW_ENEMY HINT_INVALID`. Tasks (ids from the task registrar `0x10316ff0`; arms from the
+Troika `StartTask` jump table `0x102a7ab8`/`0x102a77f8`):
+
+- `0x111 GET_PATH_TO_KICK_PROP` (`0x102a6128`): `m_hKickPhysicsProp +0x643c` dead → `TaskFail(0x25)`;
+  no enemy → `TaskFail(6)`; goal = prop origin displaced **64 units** (`0x42800000`) along
+  normalise(prop − enemy) — the side of the prop facing away from the enemy — as `AI_NavGoal_t{type 4,
+  tolerance [0x1049a1ac] = −1, flags 0xa}` into `SetGoal`; the arm returns without completing (the
+  base `RunTask` decides, as for the other `GET_PATH_TO_*` arms).
+- `0x112 SNAP_TO_KICK_PROP` (`0x102a6289`): prop alive → `TaskComplete`, else `TaskFail(0x25)`.
+  Despite the name it moves nothing.
+- `0x113 KICK_PROP` (`0x102a62db`): prop dead → `TaskFail(0x25)`; else
+  `RestartIdealActivity(0xc84)` (`0x10289ee0`; `0xc84` is the `ACT_KICK` row of the activity
+  table), **`0x102b6890(prop)`** applies the kick, then the handle is cleared (`+0x643c = -1`).
+  Run arm `0x102ab83c` (sequence finished → complete).
+- `0x10f KICK_HINT` (`0x102a5f86`): `m_pHintNode` → `RestartIdealActivity(0xc84)`, else
+  `TaskFail(4)`. `0x110 KICK_HINT_AT` (`0x102a5fcc`): the same, then the hint's target name
+  (`0x10006a14(hint)`) resolved through `0x100f7770` into `+0x643c` (`"Warning: Kick hint (%s)
+  is trying to find a physics object (%s) that is not found."`), then the `0x102b6890` kick on
+  it. Both run through `0x102ab83c`.
+- **The kick `0x102b6890(prop)`**: direction = (enemy origin + `_DAT_10451ad0` z, or my own
+  origin when there is no enemy) − prop centre (slot `0x370`); the horizontal angle of that
+  direction versus my facing (`0x1013d580`) is clamped to **±20°** (`_DAT_1044eb0c = 20.0`,
+  the same cell as the stranger re-arm) about my yaw; speed = the prop's physics object mass
+  term (`IPhysicsObject` slot `0x30` × 100.0, capped `_DAT_10447ee0`); the impulse vector gets
+  `_DAT_10457f60` added to z and is applied through `IPhysicsObject` slots `0xa0`/`0x9c`
+  (`GetPosition`/`ApplyForceCenter`). No damage is dealt here; the prop's own impact does it.
+
+Unrecovered after this pass: `TASK_GET_PATH_TO_HINTNODE` / `SNAP_TO_HINT`'s arms (shared with
+the cover family), the `0x1049a1b0` tolerance cell's value, `_DAT_10451ad0` / `_DAT_10447ee0` /
+`_DAT_10457f60`.
 
 **The possession arm's virtuals**: slot 304 = `CBaseCombatCharacter::GiveBaseFightingItems`
 (Troika `0x102b5b20`: no melee (slot 307) and no ranged (slot 308) weapon → `GiveItem

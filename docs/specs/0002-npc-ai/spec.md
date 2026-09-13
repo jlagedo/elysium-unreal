@@ -289,24 +289,41 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: § "The comfort sweep `0x102b1a20`, walked". The squad test answers through 17's null
   squad; the `0x12f` arms fire once 10i registers the program.
 - [ ] **25. The kernel's failure route and the random wait.**
-  Retail: a program with no `TASK_SET_FAIL_SCHEDULE` fails through `GetFailSchedule`
-  (`0x1028abe0`): `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule 0x10280e50`) or base
-  schedule **0x43**, the last id before the Troika block at `0x44`; its task list is UNRECOVERED
-  (the base programs are not text blobs in `vampire.dll`; only the name table `0x105d1488`
-  survives). `TASK_WAIT_RANDOM` draws `RandomFloat(0.1, arg)`. `ClearSchedule 0x10280d30` is
-  reached from inside a task (the scripted family's empty play, 0003).
-  Job: the `Fail == None → State.Clear()` arm of `ElysiumSchedule.cpp` replaced by the 0x43
-  route — an idle stand of one think while 0x43's list is unrecovered, stated so at the site;
-  `RandomSeconds` drawing `[0.1, Max]`; a runner-requested schedule clear the tick honours after
-  the task.
+  Retail: `MaintainSchedule` (`0x102817c0`) takes the fail route on `COND_TASK_FAILED 0x5c` with
+  the state unchanged and no door block: slot 439 `GetFailSchedule` (`0x1028abe0`, no override
+  on any of 79 classes) answers `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule
+  0x10280e50`) or base **`0x43 FAIL`**: `STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 1; WAIT_PVS`,
+  interrupts `CAN_RANGE_ATTACK1/2 CAN_MELEE_ATTACK1/2 GIVE_WAY`; the install goes through
+  `SetSchedule(int)` (`0x102cc1f0`: translate, then `GetScheduleOfType`; a missing program
+  DevMsgs and installs base **1 `IDLE_STAND`** — `STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 5;
+  WAIT_PVS`) and the same `do…while` keeps running it, so the route costs no think. Every other
+  invalidity (state change, door block) goes to `SetIdealState` + `GetNewSchedule` instead.
+  `TASK_WAIT_RANDOM` is task `0x67`, base arm `0x10283dae`: `curtime + RandomFloat(0.1, arg)`
+  (a `0.00` operand still waits 0.1 s); `TASK_WAIT` (2) has no floor. `ClearSchedule
+  0x10280d30` zeroes the six schedule words, clears `PRESERVE_PATH` and dispatches slot 435
+  with `NULL`; reached from inside a task (0003), never from the think.
+  Gap: `ElysiumSchedule::Tick` answers `Fail == None` with `State.Clear()` and returns to
+  selection on the same think (`ElysiumSchedule.cpp:696-702`, `:843-849`); `Start` refuses an
+  unregistered program with `TaskFail(0x05)` (`:622-631`) where retail installs `IDLE_STAND`;
+  `FElysiumNpc::RandomSeconds` draws `[0, Max]` (`ElysiumNpc.cpp:2252-2256`) and the test
+  doubles scale `Max` (`ElysiumScheduleTests.cpp:97`); the `TaskFailed` condition reaches the
+  tick at `:693` (reproduced: the route runs before any task work). No `FAIL` or `IDLE_STAND`
+  program is registered (the five kernel built-ins are `ElysiumSchedule.cpp:224-273`).
+  Job: `FAIL` (0x43) and `IDLE_STAND` (1) registered from their blobs; the `Fail == None` arms
+  install `FAIL` and continue the same tick; `Start`'s unregistered-program arm installs
+  `IDLE_STAND` after the trace row; `RandomSeconds` drawing `[0.1, Max]` with the two doubles
+  following; a runner-requested `ClearSchedule` the tick honours after the task.
   Provides: the failure route every program family runs on (10g, 11, 10e, 10f, 21, 0003/1).
-  Oracle: § "The `INVESTIGATE` family, decoded" (the patrol paragraph), § `TASK_WAIT_RANDOM`.
-  Size: S. Effort: Sonnet / high.
+  Oracle: § "The `INVESTIGATE` family, decoded" → "The kernel's failure route and the base
+  programs, walked". Unrecovered: the base `RunTask` arm that completes the base
+  `GET_PATH_TO_*` tasks after a bare `SetGoal` (not on this story's path: the port's path tasks
+  complete in their start arm).
+  Size: S. Effort: Sonnet / medium — the oracle is complete and the gap is mechanical.
 - [ ] **22. `sp_tutorial_1` on the V2 lane.**
   Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1), the nine
   hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19) and 24's
   link check has a graph to walk. Until then 13's stuck-on-top failure is unreachable in the
-  tutorial.
+  tutorial. No corpus item: a pipeline story (the V2 lane's bake), gap stated by 24 and 19.
   Size: S–M. Effort: Sonnet / medium.
 - [ ] **24. Reachability: the graph's components on the runtime mesh.**
   Retail: a route exists when the `.ain` graph has a node path for the hull, and for nothing
@@ -316,59 +333,99 @@ the retail contract the code must match, the job, what it consumes or provides, 
   retail Jack's walk to `ip_by_window` / `ip_lean_1` and every hunter's route fails at `SetGoal`
   and runs the program's failure route. Hull 0 stands `(-13,-13,0)..(13,13,72)` (66 × 183 cm),
   steps 18 units (45.7 cm); links carry per-hull ground/jump masks, `linkInfo & 0x1000` is
-  off; doors are not graph cuts (the NPC opens them: `m_hBlockedDoor`,
-  `SelectDoorObstructionSchedule 0x102b7370`, `IGNORE_DOOR_FAILURE`). UNRECOVERED: whether
-  `MONSTERCLIP` cut links at graph build.
+  never set at build; doors are not graph cuts: `CAI_Node::InitLinks` (`0x102fb4e0`) probes
+  every link with mask `0x2000b` (`SOLID|WINDOW|GRATE|MONSTERCLIP`), which excludes
+  `MOVEABLE`, and marks a hull-0 ground link that a `0x2000`-mask hull trace hits with
+  `linkInfo |= 0x2000` (the door-on-link mark; the NPC opens the door: `m_hBlockedDoor`,
+  `SelectDoorObstructionSchedule 0x102b7370`, `IGNORE_DOOR_FAILURE`). **`MONSTERCLIP` cuts
+  links at graph build**: the fit, stand, walk and jump probes all carry `0x20000`.
   Port: a Recast projection of the `.hulls` sidecar (world brushes, player-blocking contents,
-  monsterclip excluded) at the engine's default agent (radius 34, height 144, step 35 cm),
-  built at activation; the nine hull-0 jump links are proxies (19). Its connectivity is tied
-  to nothing retail authored: on `sp_tutorial_1` it refuses Jack's and the hunters' routes as
-  retail does, by coincidence of geometry (partial paths 160–240 m short, 2026-09-12); a
-  retail ground link over a 45.7 cm riser is a false refusal at step 35, and a mesh that joins
-  two retail components walks an NPC where retail stands him idle.
-  Job: the agent from hull 0 in `DefaultEngine.ini`'s `RecastNavMesh` block; a game-side
-  check that every enabled hull-0 ground link of the map is walkable on the built mesh
-  (`FindPathSync` over the link list, reported like 19's staging); the reachability gate — a
-  request whose start and goal fall in different hull-0 components (nearest node per end, the
-  components baked beside 19's links) is refused before Recast is asked, so `TaskFail 0x0c`
-  fires where retail's does, the mesh supplying only the geometry inside a component; door
-  brushes verified not to cut the mesh, monsterclip's role stated. Decision for the owner: the
-  gate is the retail contract; naming wider reachability a modernization instead means NPCs
-  retail stands idle (Jack at the tutorial start) walk off in the port.
+  **monsterclip excluded** — `ElysiumMapCollision.cpp:285`, `UE_bsp_to_scene.py:135`,
+  `UE_map_sidecars.py:70`) at the engine's default agent — `DefaultEngine.ini:73-75` sets only
+  `RuntimeGeneration` and `bForceRebuildOnLoad`, no agent radius/height/step — built at
+  activation (`ElysiumMapActorLifecycle.cpp:840`); the nine hull-0 jump links are proxies (19,
+  `ElysiumNavJumpLink.h:12`); `FindPathSync` is called once, for the jump-link check
+  (`ElysiumNpcBody.cpp:617`), and partial paths are refused by every NPC request
+  (`ElysiumNpcBody.cpp:545`, callers `ElysiumNpc.cpp:614/2535/2817/3337`). Its connectivity is
+  tied to nothing retail authored: on `sp_tutorial_1` it refuses Jack's and the hunters' routes
+  as retail does, by coincidence of geometry (partial paths 160–240 m short, 2026-09-12); a
+  retail ground link over a 45.7 cm riser is a false refusal at step 35; a mesh that joins two
+  retail components walks an NPC where retail stands him idle; and a monsterclip volume retail
+  authored to keep NPCs out is open ground in the port.
+  Job: the agent from hull 0 in `DefaultEngine.ini`'s `RecastNavMesh` block; monsterclip
+  brushes added to the NPC-blocking geometry of the mesh projection (a second projection or a
+  per-agent area, the player's collision untouched); a game-side check that every enabled
+  hull-0 ground link of the map is walkable on the built mesh (`FindPathSync` over the link
+  list, reported like 19's staging); the reachability gate — a request whose start and goal
+  fall in different hull-0 components (nearest node per end, the components baked beside 19's
+  links) is refused before Recast is asked, so `TaskFail 0x0c` fires where retail's does, the
+  mesh supplying only the geometry inside a component; door brushes verified not to cut the
+  mesh. Decision for the owner: the gate is the retail contract; naming wider reachability a
+  modernization instead means NPCs retail stands idle (Jack at the tutorial start) walk off in
+  the port.
   Provides: the refusal 10g, 11, 10e/10f and 0003's walks fail through. Consumes: 19's bake.
-  Oracle: `navigation-jump-links.md` § "Tutorial connectivity: the graph's components".
+  Oracle: `navigation-jump-links.md` § "Tutorial connectivity: the graph's components" (incl.
+  "Closed 2026-09-12: `MONSTERCLIP` cuts links at graph build"). Unrecovered: the navigator's
+  reader of `linkInfo & 0x2000`, the name of contents bit `0x2000` in this engine's
+  `bspflags`, whether door brushes cut the port's mesh (a witness, not a corpus item).
   Size: M. Effort: Opus / high.
 - [ ] **10g. The patrol programs.**
-  Retail: 0x64 / 0x66 / 0x68 `INVESTIGATE_NODE` / `_WALK` / `_HUNT`; `SelectSchedule` case 1
-  returns the patrol path object's own id (`m_sppPatrolPath` +0x6590 → `+4`), one of these
-  three or `FOLLOW_PATROL_PATH` 0x65/0x67/0x69 — the same six task lists
-  (`SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_PATROL_POINT; [SET_NPC_FLAG FORCE_RELAXED_ANIMS;
-  RUN_PATH | WALK_PATH | WALK_PATH_HUNT]; WAIT_FOR_MOVEMENT; FACE_PATROL_INTEREST;
-  DO_PATROL_INTEREST_ACTIVITY; NEXT_PATROL_POINT`), none setting a fail schedule. Patrol is a
-  schedule like any other: an alert or combat program replaces it through `SetSchedule`, and
-  case 1 re-selects it from the path object when that program ends. `GET_PATH_TO_PATROL_POINT`
-  (Troika `StartTask` case 0x13): no path object → `TaskFail(0x1d)`; node id −1 returns
-  without completing; else the node's hull position (`0x102fb0d0`) into `SetGoal 0x102ecd20`,
-  a refusal → `"%s can't reach patrol point"` + `TaskFail(0x0c)`. The failure route is
-  `GetFailSchedule` (`0x1028abe0`): `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule`)
-  or base schedule **0x43**, whose task list is UNRECOVERED (the base programs are not text
-  blobs in `vampire.dll`) — a named seam until it is: the port runs it as an idle stand of one
-  think and states so.
-  Job: the three programs and `GET_PATH_TO_PATROL_POINT` 0x7a, `NEXT_PATROL_POINT` 0x7d,
-  `FACE_PATROL_INTEREST` 0xb3, `DO_PATROL_INTEREST_ACTIVITY` 0xb5, `FACE_IDEAL` 0x2b; the
-  path object's id read in the idle selector (step 3), running under the ordinary `Schedule`
-  body owner; the kernel's `Fail == None → State.Clear()` (`ElysiumSchedule.cpp`) replaced by
-  the 0x43 route. Retires the port's patrol executor (`ThinkPatrol`, `IssuePatrolMove`,
+  Retail: a patrol is a `CAI_PatrolPath` object in the `+0x658c` cell (`+0x6590` pointer;
+  `+0 type`, `+4 schedule id`, `+8 repeat`, `+0xc count`, `+0x10 index`, `+0x14 nodes[]`),
+  built only by three inputs: `SetupPatrolType "<repeat> <type> <schedule>"` (`0x1029eb30`;
+  type 0 loops forward, 1 backward, 2/3 ping-pong, `repeat` wraps allowed before the path is
+  spent; the schedule by name, `SCHED_%s`, `SCHED_TROIKA_%s`), `FollowPatrolPath "<node…>"`
+  (`0x1029ed90`; nodes by `info_node_patrol_point`/`info_node_hint` name, type `10000 || 800`;
+  an existing object keeps its type/repeat/schedule) and `WalkToNode "<schedule> <node>"`
+  (`0x1029e840`). The builder `0x1029f460` **installs the object's schedule at once**
+  (`0x102ae750` → `SetSchedule`, refused only while dead) when the id is non-zero; a path built
+  with schedule 0 is discarded by the idle selector with `"WARNING: Patrol path for '%s' has no
+  schedule."`. `SelectSchedule` case 1 step 3 returns `path->+4` verbatim after the interest
+  roll: `0x46 IDLE_PATROL` (`TASK_PATROL_PATH; WAIT_FOR_MOVEMENT; WAIT_PVS`), one of
+  `0x64/0x66/0x68 INVESTIGATE_NODE/_WALK/_HUNT` or `0x65/0x67/0x69 FOLLOW_PATROL_PATH/_WALK/
+  _HUNT` (six identical lists: `SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_PATROL_POINT;
+  [SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH | WALK_PATH | WALK_PATH_HUNT]; WAIT_FOR_MOVEMENT;
+  FACE_PATROL_INTEREST; DO_PATROL_INTEREST_ACTIVITY; NEXT_PATROL_POINT`, none with a fail
+  schedule, so a refused point runs `FAIL` — 25 — and the selector re-picks the same point one
+  second later). An alert or combat program replaces the patrol through `SetSchedule` and case
+  1 re-selects it when that program ends. `GET_PATH_TO_PATROL_POINT 0x7a` (`0x102aa640`): no
+  object **or a current node id of −1** → `TaskFail(0x1d)`; else the node's hull position
+  (`0x102fb0d0`) as `AI_NavGoal_t{type 4, tolerance −1, flags −1}` into `SetGoal(…, 2)`;
+  success → `TaskComplete`, refusal → `"%s can't reach patrol point"` + `TaskFail(0x0c)`.
+  `NEXT_PATROL_POINT 0x7d` (`0x102aa9e0`): advance; a spent path is freed; the interest roll;
+  complete. `FACE_PATROL_INTEREST 0xb3` / `DO_PATROL_INTEREST_ACTIVITY 0xb5` complete on their
+  first think when the node carries no interest record (27 owns the record arm). `sp_tutorial_1`
+  sends `SetupPatrolType` then `FollowPatrolPath` to `sentry2` and `monk_upstairs_podium`.
+  Gap: the port has no path object; `InputSetupPatrolType` / `InputFollowPatrolPath`
+  (`ElysiumNpc.cpp:499`, `:506`) write `PatrolType` / `PatrolPath` strings (`ElysiumNpc.h:212-213`)
+  and set `bPatrolActive` (`ElysiumNpc.h:1066`); `WalkToNode` has no input; the executor
+  `ThinkPatrol` (`ElysiumNpc.cpp:1734`, called `:1348`) and `IssuePatrolMove` (`:604`) re-issue a
+  refused point every think; the `Patrol` body owner (`ElysiumNpcMindTypes.h:24`) and its
+  suspend/resume path in `ThinkSchedulePolicy` (`ElysiumNpc.cpp:1292`); `SelectIdleSchedule`
+  returns `None` on `bPatrolActive` (`ElysiumNpc.cpp:1396`) and `SelectAlertSchedule` at `:1472`;
+  no program in the registry (`ElysiumSchedule.cpp:224-273`, `ElysiumNpcCombatSchedules.cpp`)
+  carries a patrol id; no `GET_PATH_TO_PATROL_POINT`, `NEXT_PATROL_POINT`, `FACE_PATROL_INTEREST`,
+  `DO_PATROL_INTEREST_ACTIVITY`, `FACE_IDEAL`, `WALK_PATH`, `WALK_PATH_HUNT` or `PATROL_PATH` task
+  (`EElysiumTask`, `ElysiumSchedule.h:26-111`); no immediate install from the input;
+  `ScheduleHost.bPatrolPathUseHint` (`ElysiumNpcScheduleHost.h:40`) is written and read by nobody.
+  Job: the path object with its type table and `NextPoint`; the three inputs building it and
+  installing its schedule at once; the seven programs (`0x46`, `0x64–0x69`) and the tasks
+  `0x7a`, `0x7d`, `0xb3`, `0xb5` (no-record arm), `FACE_IDEAL 0x2b`, `WALK_PATH 0x23`,
+  `WALK_PATH_HUNT 0x104`; the id read in the idle selector (step 3) with the interest roll;
+  running under the ordinary `Schedule` body owner. Retires `ThinkPatrol`, `IssuePatrolMove`,
   `bPatrolActive` / `bMoveIssued` / `bWalkingAnimation`, the `Patrol` body owner and its
-  suspend/resume path in `ThinkSchedulePolicy`) and with it its every-think re-issue of a
-  refused point (2026-09-12), and the idle and alert selectors' `None` return on
-  `bPatrolActive`; the saved route state moves into the schedule block. Save files are
-  disposable.
+  suspend/resume path in `ThinkSchedulePolicy`, and the idle and alert selectors' `None`
+  return on `bPatrolActive`; the saved route state moves into the schedule block. Save files
+  are disposable.
   Decided 2026-09-12: patrol and interesting places (11) become kernel programs here, before
   10d; no selector returns `None` to defer to an executor after this story, and no routing
   branch is added to `ThinkSchedulePolicy` to bridge one.
-  Oracle: § "The `INVESTIGATE` family, decoded" (the patrol paragraph), § "Followers, patrols,
-  and loitering".
+  Consumes: 25 (the `FAIL` route), 24 (the refusal). Provides: the path object and the
+  interest roll to 27 and the hunt cell to 10h.
+  Oracle: § "The `INVESTIGATE` family, decoded" → "Patrol paths, walked", "The kernel's
+  failure route and the base programs, walked"; § "Followers, patrols, and loitering".
+  Unrecovered: `TASK_PATROL_PATH`'s navigator call after its activity pick (`0x46` only),
+  `TASK_GET_FULL_PATROL_PATH 0x7c`'s body (no shipped program uses it).
   Size: L. Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
   Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
@@ -398,78 +455,167 @@ the retail contract the code must match, the job, what it consumes or provides, 
   become the program's operands in the schedule block. Same decision as 10g. Consumes 24: the
   refusal those witnesses hit is retail's own (no node path), and stays so only through the
   gate.
+  Gap: the executor is whole — `ThinkAmbient` (`ElysiumNpc.cpp:3311`, called `:1352`),
+  `EAmbientPhase` (`ElysiumNpc.h:1084`), `ClaimAmbientSpot` (`:1787`), `BeginAmbientUse`
+  (`:3221`), `BeginAmbientLeave` (`:3258`), `FinishAmbientUse` (`:3271`, 15 call sites),
+  `FailedSpotIndices` (`ElysiumNpc.h:1091`, `ElysiumNpc.cpp:1810/3327-3376`), the `Ambient`
+  body owner (`ElysiumNpcMindTypes.h:25`); `SelectIdleSchedule` returns `None` on
+  `bUseInteresting` (`ElysiumNpc.cpp:1396`); the keyfields exist (`use_interesting`
+  `ElysiumNpcClasses.cpp:125`, `interesting_place_groups` `:135`, mask at `ElysiumNpc.cpp:1849`);
+  no `0xff/0x100/0x102/0x105/0x106` or `_FAILED` program and no `FIND_INTERESTING_PLACE`,
+  `GET_PATH_TO_INTERESTING_PLACE`, `SET_PRESERVE_PATH`, `FACE_INTEREST`, `DO_INTEREST_ACTIVITY`,
+  `PAUSE_MOVING`, `FACE_NEXT_NODE`, `WAIT_INDEFINITE` task in `EElysiumTask`. The shared entry
+  `0x102a9f40` / loop `0x102aa210` / release `0x102da600` that 27's patrol arm also calls have
+  no port function; `Idle_Stand` is 25's.
   Oracle: § "Interesting places: the selector, the programs, the wait" (incl. "The failed
-  walk, walked"), § "Interesting-place eligibility".
+  walk, walked"), § "Interesting-place eligibility". Provides: the entry/loop/release trio to 27.
   Size: L. Effort: Opus / high.
+- [ ] **27. Patrol-point interest records.**
+  Retail: an `info_node_patrol_point` may carry an interest record at `node->+0xa0`
+  (`+0x468` the name of a `CAI_InterestingPlace`, `+0x46c` a 0–99 chance). `0x1029f650` rolls
+  `m_bPatrolInterest (+0x65a0) = RandomInt(0,99) < chance` at each selection of the patrol
+  program and at every `NEXT_PATROL_POINT`; `0x1029f730` resolves the record (cached `+0x659c`)
+  only while the roll holds, `0x1029f780` its named place into `+0x6300`. `FACE_PATROL_INTEREST
+  0xb3` (`0x102a63bd` / run `0x102ab974`): with a place whose `match_orientation +0x570` is set,
+  `SetIdealYaw(hint yaw 0x102d12e0)`, turn activity unless `MEMORY:TURNING`, complete when
+  `FacingIdeal` (`0x10278c80`), clearing both fields; otherwise clear both and complete.
+  `DO_PATROL_INTEREST_ACTIVITY 0xb5` (`0x102a64a6` / run `0x102aba6c`): the interesting-place
+  entry `0x102a9f40(place, record, 0)` (claim, INTO, `m_flWaitFinished = RandomFloat(min_time,
+  max_time)`), the loop `0x102aa210` until it answers true, then holster per `place->+0x571`,
+  `m_OnInterestingPlaceLeft` when arrived, release `0x102da600`, clear `+0x6300`/`+0x659c`/
+  `m_bInterestingPlaceArrived`, complete.
+  Gap: nothing — the port has no patrol node record, no `+0x65a0` roll and no place-facing.
+  Job: the record on the decoded patrol node (the two keys), the roll at 10g's two sites, the
+  record arm of the two tasks over 11's entry/loop/release.
+  Consumes: 10g (the object and the roll sites), 11 (the entry, loop and release), 19's bake
+  (the node record). Oracle: § "Patrol paths, walked" (The interest roll and the two interest
+  tasks). Unrecovered: the `info_node_patrol_point` key names that fill `+0x468`/`+0x46c`; which
+  shipped map authors one.
+  Size: S–M. Effort: Fable / medium; corpus pass on the node keys first.
 - [ ] **26. `GetSchedule`, the pre-selector.**
   Retail: `GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::GetSchedule`
   `0x102ae920`) and, only on 0, slot 438 (`SelectSchedule` `0x102af660`, the state cases 10d,
-  10g, 11, 21a port). `0x102ae920` in order: `m_iForcedSchedule` consumed and returned; the
-  connected-squad `flags2 & 0x2000` arm (17: `+0x65e4 != -1` and not `frenziedFlags & 0x80` →
-  0xeb, else `SquadNewEnemy` `0x103161a0` with the enemy); `WAS_BUMPED` 0x38 → `0x101e3df0`
-  (`DAT_10739a4c`) and a running 0x14a → `0x101e3ee0`; base `0x1028a2a0`: `NPC_FREEZE` 0x75 →
-  0x3a, `ON_FIRE` 0x30 → 0x151, `FLOATING_OFF_GROUND` 0x73 → gravity 1.0, slot 0x340(0), 0x3e;
-  state 2: `SUPERNATURAL/CRIMINAL_ATTACK_LEVEL` 0x22/0x20 through `HasInterruptCondition`
-  `0x10269d30` → `ReportSupernaturalAct` `0x1017f4a0` / `ReportCriminalAct` `0x1017f2a0` when
-  the closest player is the offender, `SetEnemy` slot 0x950 and slot 0x954(offender, 5);
-  `ON_FIRE` → 0x151; no enemy → ideal state 3 (1 under `no_alert_state`) and re-run;
-  `ATTACK_UNKNOWN` `flags1 & 0x800000` cleared → 0x5b unless `flags2` bit 7 or frenzied (10f);
-  `NEW_ENEMY` 0x54 → 0xea `START_COMBAT` unless frenzied. Any state: `PLAYER_ON_HEAD` 0x3b and
-  not busy → cleared; with no live dialogue partner, `DAT_1092450c`'s mode 0/1/2 → 0x7b/0x79/0x7a,
-  mode 3 → `RandomInt(0, 99) < 80 ? 0x79 : 0x7a`. State 0xe: the criminal half, `ON_FIRE`, no
+  10g, 11, 21a port; its `default:` is base `0x1028a380`, whose invalid-state and
+  no-combat-schedule arms return `0x43 FAIL`). `0x102ae920` in order: `m_iForcedSchedule`
+  consumed and returned; the connected-squad `flags2 & 0x2000` arm (17: `combat_start_activity`
+  `+0x65e4 != -1` and not `frenziedFlags & 0x80` → 0xeb, else `SquadNewEnemy` `0x103161a0` with
+  the enemy); `WAS_BUMPED` 0x38 → the discipline manager (`DAT_10739a4c`) removes every active
+  effect whose HitGroup record byte `+0x33` is set (`0x101e3df0` → `RemoveEffect 0x101e3af0`),
+  and a running `0x14a D_MESMERIZE` runs the `OnInterruptSchedule` HitInfo of every effect
+  whose byte `+0x34` is set (`0x101e3ee0`) — neither returns a schedule; base `0x1028a2a0`:
+  `NPC_FREEZE` 0x75 → 0x3a `NPC_FREEZE`, `ON_FIRE` 0x30 → 0x151 `ONFIRE`, `FLOATING_OFF_GROUND`
+  0x73 → gravity 1.0, slot 0x340(0), 0x3e `FALL_TO_GROUND`; state 2:
+  `SUPERNATURAL/CRIMINAL_ATTACK_LEVEL` 0x22/0x20 through `HasInterruptCondition` `0x10269d30` →
+  `ReportSupernaturalAct` `0x1017f4a0` / `ReportCriminalAct` `0x1017f2a0` when the closest player
+  is the offender, `SetEnemy` slot 0x950 and slot 0x954(offender, 5); `ON_FIRE` → 0x151; no
+  enemy → ideal state 3 (1 under `no_alert_state`) and re-run; `ATTACK_UNKNOWN` `flags1 &
+  0x800000` cleared → 0x5b unless `flags2` bit 7 or frenzied (10f); `NEW_ENEMY` 0x54 → 0xea
+  `START_COMBAT` unless frenzied. Any state: `PLAYER_ON_HEAD` 0x3b and not busy → cleared and,
+  with no live dialogue partner, the answer of 28. State 0xe: the criminal half, `ON_FIRE`, no
   enemy → state 3/1. Then the base again; then `flags2 & 2` → `flags1 &= ~8`, `flags2 &= ~2`,
-  navigator goal type (`+0x5d34` → `+0x18`) 3 → 0xfc `FINISH_CLIMB`, 1 → 0xfd `FINISH_JUMP`;
-  combat + `stay_entrenched` + slot 0x940 → `0x102b7690(1,0,0,0)` (12b); `flags1 & 2` cleared →
-  0xf1 `STARTLED`; idle: `KNOCKBACK` 0x28 → 0x14c, `COMFORT` 0x27 → 0x12f, `D_CALM` → 0x130
-  `CALMED`, `D_FOLLOW` → 0x131 `FOLLOW`, `D_POSSESSED` → 0x131, a live dialogue partner → 0x6a;
-  combat: `KNOCKBACK` → 0x14c; alert: `0x102b8a10` (`ENEMY_DEAD` 0x58 with a
-  `SelectWeightedSequence(0x61)` hit → 8); `m_fSavePositionWalk` → cleared, 0x89; else 0.
+  navigator goal type (`+0x5d34` → `+0x18`) 3 → 0xfc `FINISH_CLIMB` (`WALK_PATH;
+  WAIT_FOR_MOVEMENT`), 1 → 0xfd `FINISH_JUMP` (`TASK_JUMP; TASK_LAND`); combat +
+  `stay_entrenched` + slot 0x940 → `0x102b7690(1,0,0,0)` (12b); `flags1 & 2` cleared → 0xf1
+  `STARTLED` (`WAIT_RANDOM 0.5; STOP_MOVING; SET_ACTIVITY ACT_WALK`; interrupts damage); idle:
+  `KNOCKBACK` 0x28 → 0x14c `KNOCKBACK`, `COMFORT` 0x27 → 0x12f, `D_CALM` → 0x130 `CALMED`,
+  `D_FOLLOW` → 0x131 `FOLLOW`, `D_POSSESSED` → 0x131, a live dialogue partner → 0x6a
+  `RUN_DIALOG` (`TASK_RUN_DIALOG 0`, interrupt `PROVOKED`); combat: `KNOCKBACK` → 0x14c; alert:
+  `0x102b8a10` (`ENEMY_DEAD` 0x58 with a `SelectWeightedSequence(0x61)` hit → 8);
+  `m_fSavePositionWalk` → cleared, 0x89 `RUN_TO_SAVED`; else 0. `CALMED`/`FOLLOW` name
+  themselves as their own second fail schedule, so an unreachable target re-tries at once.
+  Gap: no pre-selector exists — `SelectSchedule` (`ElysiumNpc.cpp:1429`) runs the law branch
+  (`ElysiumNpcWitness::SelectLawSchedule`, `ElysiumNpcWitness.cpp:597`, its one call at
+  `ElysiumNpc.cpp:1452`) ahead of a three-way state switch (`:1459-1461`); no `ForcedSchedule`,
+  no squad arm, no `WAS_BUMPED` consumer (`EElysiumNpcCond::WasBumped` exists,
+  `ElysiumNpcConditions.h:78`), no base arms, no `0xfc/0xfd/0xf1/0x14c/0x130/0x131/0x6a/0x89`
+  program in the registry; `Knockback` 0x28 is a condition identity only
+  (`ElysiumNpcConditions.h:71`); `ScheduleHost.bSavePositionWalk` is written
+  (`ElysiumNpc.cpp:2717`) and read by nobody; `D_POSSESSED` has one reader (`ElysiumNpc.cpp:3135`,
+  the interest overlay); the dialogue partner arm has no `EElysiumScheduleId`.
   Job: the pre-selector as the kernel's first selection step, ahead of the state switch; the
-  law branch (`ElysiumNpcWitness::SelectLawSchedule`, its position CHOSEN today) moved into
-  retail's state-2/0xe arms; the idle chain's six arms — 0x14c is 0005's knockback, 0x12f is
-  10i, 0x130/0x131 registered from their blobs (`0x105df780` / `0x105df4f8`) over 0006's
-  `D_CALM`/`D_FOLLOW` flags and 16c's `D_POSSESSED`, 0x6a over the dialogue partner; the
-  three base arms; 0xfc/0xfd over the motor's goal type; 0xf1; 0x89 over `bSavePositionWalk`.
-  Arms whose producer is another story's (the squad arm, 12b's chooser, 10f's 0x5b) take that
-  story's seam until it lands.
-  Provides: selection to 10i, 16c, 0006 (`CALMED`/`FOLLOW`), 0005 (the knockback install).
-  Consumes: 17, 12b, 10f, 0004 (the dialogue partner), 0006 (the flags).
-  Oracle: § "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`". Unrecovered:
-  `DAT_10739a4c` and its two calls, `DAT_1092450c` and its mode, `+0x65e4`, the names of
-  0x3a/0x3e/0x6a/0x89/0x14a/0x151, the 0x7b/0x79/0x7a programs.
-  Size: L. Effort: Opus / high; corpus pass on the unrecovered items first.
+  law branch moved into retail's state-2/0xe arms; the `WAS_BUMPED` arm as two calls into
+  0006's effect store (a seam answering "no effects" until 0006 lands the two record bytes);
+  the idle chain's six arms — 0x14c is 0005's knockback, 0x12f is 10i, 0x130/0x131 registered
+  from their blobs (`0x105df780` / `0x105df4f8`) over 0006's `D_CALM`/`D_FOLLOW` flags and 16c's
+  `D_POSSESSED`, 0x6a over the dialogue partner; the three base arms with their programs;
+  0xfc/0xfd over the motor's goal type; 0xf1; 0x89 over `bSavePositionWalk` (10k's program);
+  the `PLAYER_ON_HEAD` clear with 28's answer behind it; base `SelectSchedule`'s `FAIL`
+  fall-throughs. Arms whose producer is another story's (the squad arm, 12b's chooser, 10f's
+  0x5b) take that story's seam until it lands.
+  Provides: selection to 10i, 10k, 16c, 28, 0006 (`CALMED`/`FOLLOW`), 0005 (the knockback
+  install). Consumes: 17, 12b, 10f, 25 (`FAIL`), 0004 (the dialogue partner), 0006 (the flags
+  and the effect record bytes).
+  Oracle: § "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`" (incl. "Story 26
+  recovery"). Unrecovered: the HitGroup keys behind record bytes `+0x33`/`+0x34` (0006's
+  table), `TASK_RUN_DIALOG`'s arm (0004), `TASK_MELEE_KNOCKBACK` (0005), the `ON_FIRE_*` trio
+  and `TASK_JUMP`/`TASK_LAND` (the motor).
+  Size: L. Effort: Opus / high.
+- [ ] **28. The player-on-head answer.**
+  Retail: `GetSchedule` (`0x102ae920`), any state: `HasCondition(PLAYER_ON_HEAD 0x3b)` and
+  `!IsBusyWithDiscipline()` → clear it; with no live `m_hDialogPartner`, the ConVar
+  `debug_player_on_head` (`0x10924508`, default `"3"`, bounded 0..3) picks `0 → 0x7b
+  PLAYER_ON_HEAD_RUN` (`GET_PATH_TO_RANDOM_NODE 256; RUN_PATH; WAIT_FOR_MOVEMENT`), `1 → 0x79
+  _DIVE` (`SET_FAIL_SCHEDULE _RUN; TASK_ATTEMPT_DIVE_SIDE 0; SET_SCHEDULE _RUN`), `2 → 0x7a
+  _DIVE_FORWARD` (`SET_FAIL_SCHEDULE _DIVE; TASK_ATTEMPT_DIVE_FORWARD 0`), `3 → RandomInt(0,99)
+  < 80 ? 0x79 : 0x7a`; none of the three interrupts on anything. Fourteen programs list
+  `COND_PLAYER_ON_HEAD` as an interrupt (the interest, patrol, alert and follower families).
+  Gap: no `PlayerOnHead` condition, producer, program or task in the port.
+  Job: the condition and its producer, the ConVar, the three programs, `TASK_ATTEMPT_DIVE_SIDE
+  0x108` / `_FORWARD 0x109` / `GET_PATH_TO_RANDOM_NODE 0x1f` (shared with 10k/21b), the
+  interrupt on the fourteen programs that name it.
+  Consumes: 26 (the arm), 0004 (the dialogue partner). Oracle: § "`GetSchedule` `0x102ae920`
+  runs ahead of `SelectSchedule`" (Story 26 recovery). Unrecovered: the producer of
+  `COND_PLAYER_ON_HEAD` (the contact test that sets it), the two dive arms.
+  Size: M. Effort: Fable / medium; corpus pass on the producer first.
 - [ ] **10i. The comfort program.**
   Retail: `SCHED_TROIKA_COMFORT` 0x12f (blob `0x105df9d0`), selected by 26 on `COMFORT` in
   idle: `SET_NPC_FLAG DONT_INVESTIGATE; SET_NPC_FLAG NO_DIALOG; SET_FAIL_SCHEDULE Idle_Stand;
   SET_TOLERANCE_DISTANCE 60; GET_PATH_TO_TARGET; RUN_TO_TARGET; WAIT_FOR_MOVEMENT; FACE_TARGET;
   PLAY_COMFORT_INTO; DO_COMFORT_LOOP; PLAY_COMFORT_OUTOF; WAIT 4; WAIT_PVS`; interrupts
   `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE GIVE_WAY HEAR_DANGER`.
-  Tasks `GET_PATH_TO_TARGET` 0x15, `RUN_TO_TARGET` 9, `FACE_TARGET` 0x31, `PLAY_COMFORT_INTO`
-  0xec, `DO_COMFORT_LOOP` 0xed, `PLAY_COMFORT_OUTOF` 0xee over `ACT_COMFORT{,2,3}_{INTO,IDLE,
-  OUTOF}`. While it runs, `CAI_BaseNPC::GatherConditions` (`0x1026ec30`) plays the idle sound
-  through slot 0x7dc instead of 0x7a8, and `0x1027a420` rolls `RandomInt(0, 20)` instead of
-  `(0, 999)`. `COND_GIVE_WAY` 0x68 has readers (base `SelectSchedule` `0x1028a380`,
-  `CNPC_VZombie` slot 438) and no `SetCondition` site with the literal. `Idle_Stand` is base
-  schedule 1, list unrecovered, 25's treatment.
-  Job: the program registered; the six tasks, the three comfort arms read off Troika
-  `StartTask` `0x102a1910` / `RunTask` `0x102aacf0` (cases 0xec–0xee) first; the two 0x12f
-  readers; `GIVE_WAY` as an identity with no producer; the fail route through 25.
+  Tasks `GET_PATH_TO_TARGET` 0x15, `RUN_TO_TARGET` 9, `FACE_TARGET` 0x31; `PLAY_COMFORT_INTO`
+  0xec (`0x102a51b3`): `act = ACT_COMFORT_INTO 0x106a + 3 × RandomInt(0, 1)`,
+  `SelectWeightedSequence`, `SetIdealActivity` — **`ACT_COMFORT3_*` is never chosen**;
+  `DO_COMFORT_LOOP` 0xed and `PLAY_COMFORT_OUTOF` 0xee share start arm `0x102a51e8`
+  (`SetIdealActivity(m_Activity)`, the INTO→IDLE→OUTOF advance living in `SetIdealActivity`'s
+  transition switch); the loop's run arm is a bare `RET` — **it ends only through the sweep's
+  `TaskComplete(false)` arms** — and the INTO/OUTOF run arm `0x102ab83c` completes when the
+  sequence finishes. While it runs, `CAI_BaseNPC::GatherConditions` (`0x1026ec30`) plays the
+  idle sound through slot 0x7dc instead of 0x7a8, and `0x1027a420` rolls `RandomInt(0, 20)`
+  instead of `(0, 999)`. `COND_GIVE_WAY` 0x68's reader is base idle `0x1028a380` → `0x38
+  GIVE_WAY`, unreachable on a Troika NPC; no `SetCondition` site carries the literal.
+  `Idle_Stand` is base 1 (25).
+  Gap: `GatherComfort` and its two `0x12f` arms (`ElysiumNpcConditions.cpp:581-649`,
+  `bTaskCompletedExternally` `:569`) and `SetTarget` (`ElysiumNpc.h:646`) exist; no `Comfort`
+  program in the registry, no `GET_PATH_TO_TARGET`, `RUN_TO_TARGET`, `FACE_TARGET`,
+  `PLAY_COMFORT_INTO/LOOP/OUTOF` task in `EElysiumTask`; `SpecialIdleActivity`'s idle-sound
+  roll and slot are the port's own (the two readers unmodelled); no `GiveWay` condition
+  identity.
+  Job: the program registered; the six tasks with the arms above; the activity chain
+  INTO→IDLE→OUTOF for the two comfort variants stated as the transition rows this task needs
+  (a CHOSEN reproduction of the `SetIdealActivity` switch until it is read whole); the two
+  0x12f readers; `GIVE_WAY` as an identity with no producer; the fail route through 25.
   Consumes: 10c (the target), 26 (selection), 0003/1 (`RUN_TO_TARGET`), 24 (the refusal), 25.
-  Oracle: § "The comfort sweep `0x102b1a20`, walked" (What reads the result). Unrecovered: the
-  three comfort task arms, `GIVE_WAY`'s producer, `Idle_Stand`'s list.
-  Size: M. Effort: Opus / medium; corpus pass on the three task arms first.
+  Oracle: § "The comfort sweep `0x102b1a20`, walked" (What reads the result; "Stories 10i and
+  10j recovery"). Unrecovered: `SetIdealActivity`'s (`0x10272650`) transition rows — the
+  comfort chain is one of them.
+  Size: M. Effort: Fable / medium; corpus pass on the transition switch first.
 - [ ] **10j. `CheckTarget`.**
   Retail: `CAI_BaseNPC::GatherConditions` (`0x1026ec30`), after `ChooseEnemy`, on a live
   `m_hTargetEnt`: `CAI_Memory::CheckTarget` `0x10271d10` clears `HAVE_TARGET_LOS` 0x4b and
   `TARGET_OCCLUDED` 0x49, sets 0x4b when `FVisible(target, 0x2804091)` else 0x49; then
-  `0x10271b10`: with a navigator goal (`+0x5d34`, goal type not 1 or 3, `0x102ee620 == 1`)
+  `0x10271b10`: with a navigator goal (`+0x5d34`, goal type not 1 or 3, `0x102ee620` non-null)
   whose entity (`0x102ee160`) is the target and whose flags (`0x102ee640`) carry 4, a target
-  farther than `_DAT_104454c8` from the goal point (`0x102ee140`) re-paths (`0x10007b4e`); a
-  goal on another entity is re-pointed at the target (`0x102ed310`).
+  farther than **80 units** (`_DAT_104454c8`) from the goal point (`0x102ee140`) re-paths
+  (`0x10007b4e` → `0x102f1dc0`); a goal on another entity is re-pointed at the target with a
+  zero offset (`0x102ed310`) and re-pathed. Slot 0x364 is `CBaseEntity::GetAbsOrigin`.
+  Gap: no `CheckTarget`, no `HaveTargetLos`/`TargetOccluded` condition identity, no goal refresh
+  (`ElysiumNpcConditions.h:36-146` lacks 0x4b/0x49); `TargetEnt` exists (`ElysiumNpc.h:1065`).
   Job: the two conditions and the goal refresh, over 10c's target and 0003/2's cine.
   Consumes: 10c, the motor. Provides: 0x4b/0x49 to 10i and 0003/2.
-  Oracle: § "The comfort sweep `0x102b1a20`, walked" (What reads the result). Unrecovered:
-  `_DAT_104454c8`, the goal flag 4's name, whether slot 0x364 is `WorldSpaceCenter`.
+  Oracle: § "The comfort sweep `0x102b1a20`, walked" (Stories 10i and 10j recovery).
+  Unrecovered: the goal flag 4's name; whether the comfort sweep's distance reads slot 217
+  (`GetAbsOrigin`) or slot 220 — a re-read of `0x102b1a20`'s asm, not on this story's path.
   Size: S. Effort: Sonnet / medium.
 - [ ] **10d. The alert selectors and the ladder.**
   Retail: `SelectSchedule` (`0x102af660`) case 3 runs regardless of what the NPC was doing:
@@ -487,39 +633,86 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `CommitBestSound` writes `m_BestSound` +0x60b0 and mirrors it to `m_InvestigateSound` +0x60dc;
   `FUN_102b9060`'s `HEAR_WORLD` arm writes +0x60dc directly, bypassing the commit and leaving
   `m_hBestSoundSource` +0x5b78 stale. 10a collapsed both into one `Memory.BestSound`, which is
-  unobservable only while +0x60dc has no reader.
-  Job: the two selectors, the ladder, the tail, the case-3 order, 0x4c/0x4d/0x4b as the
-  ladder's targets; `HasInterruptCondition` on the kernel; the +0x60b0 / +0x60dc split, before
-  `FUN_102b9060` is wired.
-  Oracle: § "The `INVESTIGATE` family, decoded" (Selection).
+  unobservable only while +0x60dc has no reader. The ladder's programs: `0x4b ALERT_WAIT` =
+  `TASK_RUN_DISPOSITION 5` (the selector sets `m_bGoToIdleState` and `m_bForceStateChange`
+  beside it); `0x4c ALERT_TURN_TO_SOUND` = `PAUSE_MOVING; SET_NPC_FLAG NO_UNKNOWN_ATTACK;
+  ALERT_LOOK_AT_BEST_SOUND; WAIT_RANDOM 0.5; PLAY_SOUND Target_Suspect; WAIT_RANDOM 1.5;
+  UNLOOK_AT; CLEAR_NPC_FLAG NO_UNKNOWN_ATTACK`; `0x4d ALERT_STEP_TOWARDS_SOUND` = `STOP_MOVING;
+  STORE_LASTPOSITION; REMEMBER INVESTIGATING; ALERT_LOOK_AT_BEST_SOUND; WAIT_RANDOM 0.5;
+  PLAY_SOUND Target_Suspect; WAIT_RANDOM 1.5; SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_BESTSOUND;
+  FACE_IDEAL; WALK_PATH_TIMED 2; SET_SCHEDULE ALERT_LOOK_AROUND` (two seconds of walking, no
+  `WAIT_FOR_MOVEMENT`); `0x56 ALERT_TURN_TO_DETECTED_ATTACK` = `0x4c` with
+  `ALERT_LOOK_AT_DETECTED_ATTACK`; `0x4e ALERT_LOOK_AROUND` (10e's exit) walks back to the
+  stored position. `0x4c`, `0x4d` and `0x56` set no fail schedule (a refused
+  `GET_PATH_TO_BESTSOUND` runs `FAIL`, 25). The damage answer `0x8a` is 10k.
+  Gap: no alert selector, ladder or tail exists — `SelectAlertSchedule` (`ElysiumNpc.cpp:1465`)
+  returns `None` at `:1472` or `AlertLookAroundNi` at `:1493`; no `AlertLevel`,
+  `FullInvestigate` reader beyond the see-unknown sweep (`ElysiumNpcConditions.cpp:504`), no
+  `Investigating` memory bit, no `0x4b/0x4c/0x4d/0x4e/0x56` program; `HasInterruptCondition` is
+  on the kernel (`ElysiumSchedule.cpp:678`); `CommitBestSound` exists with no runtime caller
+  (`ElysiumNpcSenses.cpp:936`); `BestSound` and `BestSoundSource` are one record
+  (`ElysiumNpcSenses.h:138/143`); `NextInvestigateSoundTime` is gated (`ElysiumNpcConditions.cpp:682`).
+  Job: the two selectors, the ladder, the tail, the case-3 order, the four programs
+  `0x4b/0x4c/0x4d/0x56` with `RUN_DISPOSITION 0xba`, `PAUSE_MOVING 0xa6`,
+  `ALERT_LOOK_AT_DETECTED_ATTACK 0xfd`, `WALK_PATH_TIMED 0x24`, `UNLOOK_AT`, `NO_UNKNOWN_ATTACK`
+  set/clear; `m_eAlertLevel` saved and zeroed only at spawn; the `INVESTIGATING` memory bit; the
+  +0x60b0 / +0x60dc split, before `FUN_102b9060` is wired; `CommitBestSound` wired at the
+  selector's sites.
+  Consumes: 25 (`FAIL`), 10e (`ALERT_LOOK_AROUND` and the look/sound tasks). Provides: the
+  ladder's `m_eAlertLevel` to 10e; `0x8a`'s selector site to 10k.
+  Oracle: § "The `INVESTIGATE` family, decoded" (Selection; "The alert programs, verbatim").
+  Unrecovered: `TASK_RUN_DISPOSITION`'s arms (`0x102a49bc` / `0x102ab351`) beyond "the
+  disposition stance machine for the operand's seconds".
   Size: L. Effort: Opus / high.
 - [ ] **10e. The sound-investigation programs.**
   Retail: 0x50, 0x51, 0x52, 0x53, 0x54, 0x58 with their task lists and interrupt sets; 0x53
   and 0x54 are dead in code, reachable by name only. No `INVESTIGATE` program declares
   `DELAY_INTERRUPTS`.
+  `0x4e ALERT_LOOK_AROUND`, their fail and exit program, is `REMEMBER INVESTIGATING;
+  PLAY_SEQUENCE ACT_IDLE; SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 5; PLAY_SOUND
+  SUSPECT_GIVEUP; WAIT_RANDOM 1; SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 0; SET_NPC_FLAG
+  FORCE_RELAXED_ANIMS; WAIT_RANDOM 1; SET_TOLERANCE_DISTANCE 5; GET_PATH_TO_LASTPOSITION;
+  WALK_PATH; WAIT_FOR_MOVEMENT; FACE_LASTANGLE; CLEAR_LASTPOSITION; FORGET INVESTIGATING`.
+  `GET_PATH_TO_BESTSOUND 0x20` (base `0x10285df8`) issues `SetGoal` and returns without
+  completing; the base `RunTask` decides the task.
+  Gap: none of the six programs, none of the tasks (`EElysiumTask`, `ElysiumSchedule.h:26-111`
+  has neither `StoreLastPosition` nor `PlaySound` nor `PlayCower`), no `LastPosition`/`LastAngle`
+  fields on the NPC (`ElysiumNpc.h`; the enemy-memory `LastPosition` at
+  `ElysiumNpcEnemyMemory.h:18` is 5's record), no `Investigating` memory bit, no `TASK_REMEMBER`
+  operand table (`Remember` is inert, `ElysiumSchedule.h:82`).
   Job: the six programs and their tasks: `STORE_LASTPOSITION` 0x17, `GET_PATH_TO_BESTSOUND`
   0x20, `WALK_RUN_PATH_COMBAT_SOUND` 0xd7, `ALERT_LOOK_AT_BEST_SOUND` 0xf9, `PLAY_SOUND` 0x11e,
-  `ADD_EVENT_EXPRESSION` 0xbe, `PLAY_COWER` 0xe6, `ALERT_LOOK_AT_UNKNOWN_ATTACKER` 0x148, and
-  `ALERT_LOOK_AROUND` as their fail and exit schedule.
-  Oracle: § "The `INVESTIGATE` family, decoded" (The programs, verbatim; Tasks the port lacks).
-  Size: M–L. Effort: Opus / medium.
+  `ADD_EVENT_EXPRESSION` 0xbe, `PLAY_COWER` 0xe6, `ALERT_LOOK_AT_UNKNOWN_ATTACKER` 0x148,
+  `IGNORE_DOOR_FAILURE`, and `ALERT_LOOK_AROUND` 0x4e with `PLAY_SEQUENCE 0x52`,
+  `GET_PATH_TO_LASTPOSITION 0x1c`, `FACE_LASTANGLE 0x11d`, `CLEAR_LASTPOSITION 0x18`, `FORGET
+  0x6d`; `m_vecLastPosition`/`m_angLastAngle` on the NPC; the `REMEMBER`/`FORGET` bit table.
+  Consumes: 10d (selection, `m_eAlertLevel`), 25 (`FAIL` for `0x4c/0x4d/0x56`). Provides: the
+  look/sound/last-position tasks to 10d, 10f, 10h, 10k, 21b.
+  Oracle: § "The `INVESTIGATE` family, decoded" (The programs, verbatim; Tasks the port lacks;
+  "The alert programs, verbatim"). Unrecovered: the base `RunTask` arm that completes
+  `GET_PATH_TO_BESTSOUND` / `GET_PATH_TO_LASTPOSITION` after `SetGoal` (goal active → complete,
+  else fail — UNREAD), `PLAY_COWER`'s run arm beyond sequence-finished.
+  Size: M–L. Effort: Fable / medium; corpus pass on the base `RunTask` path arm first.
 - [ ] **10f. The unknown-investigation programs.**
   Retail: 0x59–0x63 with their task lists and interrupt sets; 0x61 and 0x63 dead in code;
   0x5b from `GetSchedule` (`0x102ae920`) in combat only under `ATTACK_UNKNOWN`; 0x62 and 0x58
   reached by `SET_SCHEDULE`/`SET_FAIL_SCHEDULE` only; 0x60/0x61 clear `NO_UNKNOWN_ATTACK` and
   0x62/0x63 clear `LOOKED_AT_UNKNOWN`.
+  Gap: none of the eleven programs; the see-unknown sweep exists (`GatherSeeUnknown`,
+  `ElysiumNpcConditions.cpp:408`, conditions 0x01–0x07/0x26 at `ElysiumNpcConditions.h:39-55`);
+  no `LOOKED_AT_UNKNOWN`, `NO_UNKNOWN_ATTACK`, `FINISHED_IGNORE_UNKNOWN` flag reader or writer
+  (the flag word carries the bits, 8); no `TASK_CLEAR_NPC_FLAG` (`ElysiumSchedule.h:101-103`
+  states the false premise that no program clears a flag); `0x5b`'s `GetSchedule` site is 26's.
   Job: the eleven programs and their tasks: `LOOK_AT_BEST_UNKNOWN` 0xfc, `UNLOOK_AT` 0xfe,
   `GET_PATH_TO_BESTUNKNOWN` 0x79, `SET_PRESERVE_PATH` 0xc4, `WALK_PATH_HUNT` 0x104,
   `CLEAR_NPC_FLAG` 0x101, `GET_PATH_TO_LASTPOSITION` 0x1c, `WALK_PATH` 0x23, `FACE_LASTANGLE`
-  0x11d, `CLEAR_LASTPOSITION` 0x18, `FORGET` 0x6d, `PLAY_SEQUENCE` 0x52.
-  Oracle: § "The `INVESTIGATE` family, decoded".
-  Size: L. Effort: Opus / high.
-- [ ] **10h. The hunt-investigation programs.**
-  Retail: 0x7f, 0x80, 0x81, 0x82 and the hunt-state case 0xb order (raw `HEAR_*` accepted
-  there, unlike alert). Reached in retail only by script, by name, or by `DoFrenzy` (16c).
-  Job: the four programs; case 0xb behind the `"0"` default.
-  Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb).
-  Size: M. Effort: Sonnet / high.
+  0x11d, `CLEAR_LASTPOSITION` 0x18, `FORGET` 0x6d, `PLAY_SEQUENCE` 0x52; the selector
+  `FUN_102b8a60` at 10d's step 1; `0x5b`'s arm in 26.
+  Consumes: 10d (the selector's position), 10e (the shared tasks), 26 (`0x5b`), 25.
+  Oracle: § "The `INVESTIGATE` family, decoded". Unrecovered: `LOOK_AT_BEST_UNKNOWN`'s look
+  target (`0x102a55e3`) and the shared look run arm `0x102ab76a`'s head-turn virtual, the
+  base `RunTask` path-completion arm (10e).
+  Size: L. Effort: Fable / high; corpus pass on the two look arms first.
 - [ ] **12a. The reaction keyfields.**
   Retail: `percent_occluded_*` normalized at Spawn to a cumulative ladder, `_chase` forced to
   100 and never compared, rolled only in the ranged occluded selector `0x102b8320`;
@@ -527,9 +720,15 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `stay_entrenched` (+0x6435, input `StayEntrenched`, seven "keep my cover" readers);
   `combat_start_activity` (`TASK_PLAY_COMBAT_START_SEQUENCE` in 0xeb, squad-only);
   `bright_route_penalty` parsed and never read: no NavMesh light cost.
-  Job: the parse, the normalization, the readers named.
+  Gap: none of the seven keys is parsed (`ElysiumNpcClasses.cpp` registers no
+  `percent_occluded_*`, `hint_groups`, `stay_entrenched`, `combat_start_activity`,
+  `bright_route_penalty`, `allow_kick_hint_use`); `stay_entrenched` is a stated NOT MODELLED
+  arm of the interest predicate (`ElysiumNpcConditions.h:307`, `.cpp:258`); `npc_kickable` is
+  parsed on the prop (`ElysiumPropClasses.cpp:117`).
+  Job: the parse, the normalization, the readers named (the interest predicate's arm 2 closed).
   Oracle: § "The navigation and reaction keyfields", § "The cover and kick chooser, and the
-  combat leftovers". Unrecovered: what authors hint type 800.
+  combat leftovers". Unrecovered: what authors hint type 800 (an authoring question; no arm of
+  this story reads it).
   Size: S–M. Effort: Sonnet / medium.
 - [ ] **12b. The cover and kick chooser.**
   Retail: `0x102b7690` gated on `CanSeekCover` slot 592 and `allow_kick_hint_use`; the
@@ -539,13 +738,86 @@ the retail contract the code must match, the job, what it consumes or provides, 
   held, else the normal one; a hint that fails `FValidateHintType` (slot 566), or, unless
   `stay_entrenched`, one whose cover object is my enemy while `COND 0x2e || 0x48` holds →
   `ClearHintNode(5.0)` + `SetCondition(COND_HINT_INVALID 0x29)`.
-  Job: the chooser, the kick program and its hints, the kickable byte, the hint upkeep arm and
-  `COND_HINT_INVALID` (its other producers are `0x102d30b9` and the hint store's own).
-  Oracle: § "The cover and kick chooser, and the combat leftovers".
-  Size: M. Effort: Opus / medium.
+  The three programs verbatim: `0xa9` as above; `0xa7 HINT_KICK_OVER` = `SET_TOLERANCE_DISTANCE
+  0; GET_PATH_TO_HINTNODE; SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT;
+  SNAP_TO_HINT; FACE_HINTNODE; CLEAR_NPC_FLAG FORCE_RELAXED_ANIMS; KICK_HINT`, `0xa8` the same
+  with `FACE_ENEMY` and `KICK_HINT_AT`. Tasks: `GET_PATH_TO_KICK_PROP 0x111` (prop dead →
+  `TaskFail(0x25)`, no enemy → `0x06`, goal = prop origin + 64 units away from the enemy,
+  `SetGoal` flags `0xa`, completion left to the base `RunTask`); `SNAP_TO_KICK_PROP 0x112` (a
+  liveness check only); `KICK_PROP 0x113` (`RestartIdealActivity(ACT_KICK 0xc84)`, the impulse
+  `0x102b6890`: toward the enemy, yaw clamped ±20° about my facing, mass-scaled speed, z boost,
+  then the handle cleared); `KICK_HINT 0x10f` (hint → the activity, else `TaskFail(4)`);
+  `KICK_HINT_AT 0x110` (the same, then the hint's named physics object into the handle and the
+  impulse). `COND_KICK_PROP_INVALID` has no producer.
+  Gap: `ScheduleHost.KickProp` and `HintNode` / `HintReusableAt` exist as saved state
+  (`ElysiumNpcScheduleHost.h:34`, `.cpp:13`) with a release at `ElysiumNpc.cpp:2739-2745` and
+  `TaskFail`'s consumption of `bNpcKickable` (`ElysiumPhysProp.h:25`); no chooser, no
+  `CanSeekCover`, no `allow_kick_hint_use`, no `m_flOccludedDelay`, no `ClearHintNode` function
+  (`ElysiumNpc.cpp:870` names it in a comment), no `HintInvalid` / `KickPropInvalid` condition
+  identity, no `0xa7/0xa8/0xa9` program or kick task.
+  Job: the chooser, the three programs and their tasks with the arms above, the kickable byte,
+  the hint upkeep arm and `COND_HINT_INVALID` (its other producers are `0x102d30b9` and the hint
+  store's own), `KICK_PROP_INVALID` as an identity with no producer.
+  Consumes: 12a (`allow_kick_hint_use`, `stay_entrenched`, `hint_groups`), 26 (the entrenched
+  call site), 0005 (the prop impact's damage). Provides: the cover search to 10k.
+  Oracle: § "The cover and kick chooser, and the combat leftovers" (incl. "Story 12b recovery").
+  Unrecovered: `GET_PATH_TO_HINTNODE` / `SNAP_TO_HINT` arms (shared with the cover family), the
+  cells `0x1049a1b0`, `_DAT_10451ad0`, `_DAT_10447ee0`, `_DAT_10457f60`.
+  Size: M–L. Effort: Fable / medium; corpus pass on the two hint arms and the cells first.
+- [ ] **10k. The saved-position programs: shot by unknown, run to saved.**
+  Retail: `FUN_102b8c40` (alert step 2, hunt step 2): `HasInterruptCondition(LIGHT_DAMAGE 0x4c
+  || HEAVY_DAMAGE 0x4d)` → `m_bCondTookDamage = 0`, `m_vSavePosition = m_vecLastDamagePosition
+  +0x5b9c`, `0x8a SCHED_TROIKA_SHOT_BY_UNKNOWN`: `SET_NPC_FLAG DONT_INVESTIGATE;
+  SET_TOLERANCE_DISTANCE 12; FIND_COVER_FROM_SAVEPOSITION; SET_NPC_FLAG FORCE_RELAXED_ANIMS;
+  RUN_PATH; WAIT_FOR_MOVEMENT; GET_PATH_TO_SAVEPOSITION; FACE_PATH; CLEAR_NPC_FLAG
+  DONT_INVESTIGATE;` two lookaround/idle wait pairs; `WAIT 20`; interrupts `NEW_ENEMY SEE_ENEMY
+  SQUAD_SEE_ENEMY SEE_FEAR INVESTIGATE_SIGHT INVESTIGATE_SOUND DETECTED_ATTACK`. `0x89
+  SCHED_TROIKA_RUN_TO_SAVED` (the `SEE_SOUND_SOURCE` third-party D_HT answer in alert and
+  `GetSchedule`'s `m_fSavePositionWalk` answer): `SET_TOLERANCE_DISTANCE 24;
+  GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK; SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH;
+  WAIT_FOR_MOVEMENT; SET_TOLERANCE_DISTANCE 24; GET_PATH_TO_SAVEPOSITION; WALK_PATH_HUNT;
+  WAIT_FOR_MOVEMENT; SET_ACTIVITY ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 3; WAIT_RANDOM 5;
+  SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 1; GET_PATH_TO_RANDOM_NODE 2048; WALK_PATH;
+  WAIT_FOR_MOVEMENT`; interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR`. `0x84
+  HUNT_RUN_TO_SAVED` is `0x89`'s first nine tasks.
+  Gap: nothing — no `m_vSavePosition` consumer beyond the door programs, no cover-from-position
+  task, no `0x8a/0x89/0x84` program.
+  Job: the damage selector at 10d's and 10h's sites; the three programs; the tasks
+  `FIND_COVER_FROM_SAVEPOSITION`, `GET_PATH_TO_SAVEPOSITION`, `GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK`,
+  `FACE_PATH`, `GET_PATH_TO_RANDOM_NODE 0x1f`; `m_vecLastDamagePosition` from 0005's damage.
+  Consumes: 10d (the site), 12b (the cover search the find task shares), 0005 (the damage
+  position), 26 (`m_fSavePositionWalk`). Oracle: § "The alert programs, verbatim".
+  Unrecovered: the four task arms (`FIND_COVER_FROM_SAVEPOSITION`, `GET_PATH_TO_SAVEPOSITION`,
+  `_LOS_NOATTACK`, `FACE_PATH`), `m_vecLastDamagePosition`'s writer.
+  Size: M. Effort: Fable / medium; corpus pass on the four arms first.
+- [ ] **10h. The hunt-investigation programs.**
+  Retail: 0x7f, 0x80, 0x81, 0x82 and the hunt-state case 0xb order (raw `HEAR_*` accepted
+  there, unlike alert); the expiry chain after the sound arms: `+0x6598 == 0` clears
+  `MADE_HUNT_PATH`; clear → `m_flHuntExpireTimer <= curtime` → `0x85 HUNT_FINISH`, slot 168's
+  enemy alive → `0x7c HUNT_SETUP`, else `0x7d HUNT_SETUP_NO_ENEMY`; set → `0x7e HUNT`
+  (`GET_PATH_TO_PATROL_POINT_HUNT; WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; NEXT_PATROL_POINT_HUNT`
+  over the second `CAI_PatrolPath` in the `+0x6594` cell, built by `FIND_HUNT_PATROL_TARGET
+  0xaf` / `CREATE_HUNT_PATROL_LIST 0xae`); `HUNT_LOOK_AROUND`, `HUNT_FAILED` and the turn pair
+  verbatim in the oracle. Reached in retail only by script, by name, or by `DoFrenzy` (16c):
+  `CNPC_VHuman::SelectIdealState` enters state 0xb only under `debug_allow_npc_hunting`
+  (default `"0"`).
+  Gap: no hunt state (`EElysiumNpcState`, `ElysiumNpcMindTypes.h:8-16`: Idle, Alert, Combat,
+  Scripted, Prone, Dead), no `debug_allow_npc_hunting`, no hunt program or task; the `Hunt`
+  identifiers in the substrate are the law's hunter pursuit (`ElysiumLaw.h:186-363`).
+  Job: state 0xb with its `0x7f` state byte (15) behind the `"0"` default; the nine programs
+  (`0x7c/0x7d/0x7e/0x7f/0x80/0x81/0x82/0x84/0x85`, `HUNT_LOOK_AROUND`, `HUNT_FAILED`); the hunt
+  cell over 10g's object; the tasks `0x7b`, `0x7e`, `0xae`, `0xaf`, `GET_PATH_TO_LASTENEMY_LKP`,
+  `SUGGEST_STATE 0x06`; case 0xb's order.
+  Consumes: 10g (the path object), 10e/10f (the shared tasks), 10k (`0x84`), 16c (`DoFrenzy`'s
+  entry), 15 (the state byte). Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb; "The
+  hunt programs and the expiry chain, verbatim"). Unrecovered: the two list builders' node
+  choice (`0x10306700` / `0x10306f60`), `GET_PATH_TO_LASTENEMY_LKP`'s arm,
+  `m_flHuntExpireTimer`'s writer.
+  Size: M–L. Effort: Fable / medium; corpus pass on the list builders first.
 - [ ] **13b. The leak in the defect catalogue.**
   Job: the `TaskFail` obliviousness leak as an entry in `docs/vtmb/retail-defects.md`, from
-  the oracle section above.
+  the oracle section above. Gap: the file carries no "oblivious", "MADE_OBLIVIOUS" or
+  "m_iIsOblivious" today (2026-09-12).
   Size: XS. Effort: Haiku / low.
 - [ ] **16a. Followers.**
   Retail: keyfields `follower_boss` (+0x6478 → `m_hFollowerBoss` +0x647c) and `follower_type`
@@ -555,15 +827,34 @@ the retail contract the code must match, the job, what it consumes or provides, 
   back-away / walk-to / run-to per type, `walkTo ≥ backAway + overlap`, `runTo ≥ walkTo +
   overlap`); slot 607 (`0x102b93c0`) as the idle selector's step between busy/choreo and patrol
   (distance² vs +0x6484 → 0x10c, +0x648c → 0x113, +0x6488 → 0x112, else 0x115); the four
-  programs (blobs from `0x105e3100`) interrupting on `COND_INSIDE/OUTSIDE_INTERRUPT_DIST_F`
-  0x19/0x18, produced via `GetFollowerBoss` slot 293; tasks 0x86–0x88, fail 0x29 when the boss
-  is dead. The port has a comment stub in the idle selector and a body-owner enum value the
-  mind refuses.
-  Job: the keyfields and setter, the rules table, the idle step, the two conditions, the four
-  programs and three tasks.
-  Oracle: § "`m_hFollowerBoss` — the follower controller", § "Followers, patrols, and
-  loitering".
-  Size: L. Effort: Opus / high.
+  programs — ten blobs from `0x105e3100`: `0x115 WAIT`, `0x113 FOLLOW_RUN`, `0x112
+  FOLLOW_WALK`, `FOLLOW_FAILED`, `0x10c BACKAWAY` → `BACKAWAY_FAILED` → `BACKAWAY_ASTAR` →
+  `_ASTAR_FAILED` (`BACKAWAY_NODE`/`_NODE_FAILED` by name only) — every one interrupting on the
+  common alert set plus `COND_INSIDE/OUTSIDE_INTERRUPT_DIST_F` 0x19/0x18, which the tasks
+  `SET_INSIDE/OUTSIDE_INTERRUPT_DIST DIST:…` arm from the `DIST:` operand vocabulary
+  (`FOLLOWER_DISTANCE_BACKAWAY/WALKTO/RUNTO`, `OVERLAP = 10.0`, `ACCUM` via
+  `SET/ADD/SUB_SPECIAL_DISTANCE_ACCUM`); `TASKS_FACE_TARGET` set by the wait/failed programs;
+  tasks `0x86 FIND_FOLLOWER_BACKAWAY_SIMPLE` (a point `backAway` units from the boss on a
+  ±45° jittered away direction, walk-probed, fail 7), `0x87 _NODE` (`0x102edae0`), `0x88
+  _ASTAR` (`0x102edbb0`), all `TaskFail(0x29)` when the boss is dead; `SetFollowerBoss`
+  (`0x102c44e0`) also runs the `SetEnemy(NULL)`/`SetTarget(NULL)` bundle and sets
+  `frenziedFlags |= 0x3008`; `Npc_Follower_Info` clamps `walkTo ≥ backAway + 10`, `runTo ≥
+  walkTo + 10`.
+  Gap: a comment stub in the idle selector (`ElysiumNpc.cpp:1388`) and the `Follower` body
+  owner the mind refuses (`ElysiumNpcMindTypes.h:28`, `ElysiumNpcMind.cpp:136`,
+  `ElysiumNpc.cpp:4174`); `InsideInterruptDistanceSqr`/`OutsideInterruptDistanceSqr` are saved
+  (`ElysiumNpcScheduleHost.h:25-26`) with a reset at `ElysiumNpc.cpp:2697` and one reader at
+  `:3098`; no `follower_boss`/`follower_type` keyfield, no `Npc_Follower_Info` reader, no
+  `FollowerBoss` field, no condition 0x18/0x19 identity, no program, no `DIST:` operand.
+  Job: the keyfields and setter, the rules table, the idle step, the two conditions and their
+  `DIST:` producers, the ten programs and the three find tasks, the accumulator; `GetFollowerBoss`
+  as 6b's arm-4 producer.
+  Consumes: 25 (`FAIL`), 24 (the refusal), 0006 (the possession caller). Provides:
+  `m_hFollowerBoss` to 6b, 9, 16b, 16c.
+  Oracle: § "`m_hFollowerBoss` — the follower controller" (incl. "Story 16a recovery"),
+  § "Followers, patrols, and loitering". Unrecovered: the arms of the five `DIST:` tasks and
+  the accumulator's offset, `TASKS_FACE_TARGET`'s bit and reader.
+  Size: L–XL. Effort: Fable / high; corpus pass on the `DIST:` tasks first.
 - [ ] **16b. The composed relationship and the human ideal state.**
   Retail: `IRelationType` (`0x10299da0`): self → D_ER; a `D_INSANE` target with my closest
   player not hated and not my enemy → D_HT; target's boss hated or my enemy → D_HT; my boss ==
@@ -571,12 +862,19 @@ the retail contract the code must match, the job, what it consumes or provides, 
   or targets the other; else the base table. `CNPC_VHuman::SelectIdealState` (`0x103851e0`):
   enemy gone → follower to alert (idle under `no_alert_state`), non-follower to hunt only under
   `debug_allow_npc_hunting` `"0"`. The player's action state (`0x101755d0`) reads a follower
-  as ally. The port has a flat relationship table.
+  as ally. The `D_INSANE` arm reads the target's cached `CBaseCombatCharacter*` (`+0x9c`) and
+  applies only while my closest player is live and not hated / not my enemy.
+  Gap: a flat table — `IRelationType` exists only in comments (`ElysiumFeedSchedules.h:14`,
+  `ElysiumNpcConditions.h:156`); `D_INSANE` is a flag identity (`ElysiumNpcFlags.h:119`) with no
+  reader; `SelectIdealState` (`ElysiumNpcConditions.cpp:1217`, base `:1164`) has no follower
+  arm; no ally read on the player.
   Job: the composition routed through the feed guard and `GatherSight`; the ideal-state arm;
   the ally read.
-  Provides: the composed relation to 0005, 0006 and the target HUD.
+  Consumes: 16a (the boss), 16c (`D_INSANE`'s producer). Provides: the composed relation to
+  0005, 0006 and the target HUD.
   Oracle: § "`m_hFollowerBoss` — the follower controller", § "Relationship table, exactly
-  decoded".
+  decoded" (incl. "Story 16b recovery"). Unrecovered: nothing on the composition; the ally
+  read `0x101755d0` keeps its summary.
   Size: M. Effort: Opus / medium.
 - [ ] **17. Squads.**
   Retail: one shared `AI_Enemies` memory. Joining (`squadname` + `bits_CAP_SQUAD`, `InitSquad`
@@ -592,10 +890,20 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `IGNORE_SQUAD_SEE_ENEMY` have no readers (drop the port's clear under the latter); the
   strategy-slot namespace ships dead (do not build). The tutorial's `squad_warehouse` (`thug_2`,
   `thug_3`) is the witness.
+  `m_iMySquadSlot` is `+0x5dac`, saved, read by nobody.
+  Gap: no squad object — `ConnectedSquad()` answers null (`ElysiumNpc.h:642`); the refcount
+  lives on `ScheduleHost.SquadDisconnected` (`ElysiumNpcScheduleHost.h:22`) with
+  `DisconnectFromSquad`/`ReconnectToSquad` (`ElysiumNpc.cpp:2758-2777`); `SquadSeeEnemy` is an
+  identity (`ElysiumNpcConditions.h:130`) cleared by the overlay at `ElysiumNpc.cpp:3165` (the
+  `IGNORE_SQUAD_SEE_ENEMY` clear to drop); `SquadSeesPlayer` is a stub native
+  (`ElysiumScriptNatives.cpp:35`); no `squadname` keyfield, no `g_DisconnectedEnemies`, no
+  `TASK_SQUAD_NEW_ENEMY` / `TASK_DISCONNECT_FROM_SQUAD`.
   Job: the squad object sharing 5's record store, the disconnect refcount replacing the seams
-  in 7 and 8, the condition, the two tasks, the `SquadSeesPlayer` stub replaced.
-  Oracle: § "Squads, decoded". Unrecovered: `m_iMySquadSlot`'s offset.
-  Size: L–XL. Effort: Opus / high; corpus pass on `m_iMySquadSlot` first.
+  in 7 and 8, the condition and its producer, the two tasks, the `SquadSeesPlayer` stub
+  replaced, the overlay's clear removed.
+  Oracle: § "Squads, decoded" (unrecovered list closed 2026-09-12). Unrecovered: the six
+  `CAI_Squad` memory-forwarding wrappers (names only; their bodies forward to `AI_Enemies`).
+  Size: L–XL. Effort: Opus / high.
 - [ ] **16c. Possession and frenzy.**
   Retail: `Dominate_Possession`'s `DoPossession` byte runs `0x102c51a0`: squad disconnect,
   `SetEnemy(NULL)`, `flags2 |= D_POSSESSED | D_DISCONNECT_SQUAD`, `"player D_LI 99"`,
@@ -606,9 +914,14 @@ the retail contract the code must match, the job, what it consumes or provides, 
   installs before either. `DoPossession` dispatches slot 614 (`ResetThinkTimers`) at its start;
   `DoFrenzy` never does, so a possessed NPC acts on this frame and a frenzied one on its next
   cadence think. `NPCThink`'s 1 % `"Scream_Death"` roll runs under `frenziedFlags & 0x8000`.
-  The port parses and carries both bytes.
-  Job: both arms executed on apply, over 16a and 17.
-  Consumes: the HitGroup apply path from 0006.
+  Gap: both bytes are parsed and inherited (`ElysiumDisciplineTargetTables.cpp:199-200`,
+  `:302-303`) and refused with a warning at apply (`ElysiumDisciplines.cpp:949-952`); no
+  `m_bfNPCFrenziedFlags` field (comments only, `ElysiumNpcFlags.h:223`), no hunt state (10h),
+  no follower (16a), no squad disconnect beyond the refcount (17); `D_POSSESSED` has one reader
+  (`ElysiumNpc.cpp:3135`).
+  Job: both arms executed on apply, over 16a and 17; the frenzied word with its readers.
+  Consumes: the HitGroup apply path from 0006; 16a, 17, 10h (the hunt ideal state), 15 (slot
+  614). Provides: `D_INSANE` to 16b, the frenzied word to 6a/10a/10d's gates.
   Oracle: § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
   Settled as not in the image: the `m_bfNPCFrenziedFlags` bit names.
   Size: M. Effort: Opus / medium.
@@ -628,12 +941,27 @@ the retail contract the code must match, the job, what it consumes or provides, 
   radius and type from `sound_volume_table.txt`, 10.0)`, `ReportSupernaturalAct` `0x1017f4a0`
   / `ReportCriminalAct` `0x1017f2a0`, `m_flPlayerDist < 512.0 && RandomInt(0,99) < 80` → 0x71
   else 0x70). `TranslateSchedule` (`0x102b12f0`): 0x77 → 0x78 when the hint node is type
-  0x2774; 1/0x6b → 0x132 under `D_MILDLY_CRAZY`.
-  Job: the state, the ideal-state entry, the case-8 chain, the translation.
-  Oracle: § "The flee state and the cower, disoriented and lost programs". Unrecovered: the
-  criminal level `+0x6364`, the `sound_volume_table.txt` rows for the flee sound, hint type
-  names 0x2774/0x27d8, the base `SCHED_COWER` id.
-  Size: L. Effort: Opus / high; corpus pass on the unrecovered items first.
+  0x2774 (= 10100 `info_hint`); 1/0x6b → 0x132 under `D_MILDLY_CRAZY`. The criminal level
+  `+0x6364` is written obfuscated by `0x1028ea60(level, location, offender)` from the law
+  sweep `0x1028efc0` (encode `0x1042fde0`, decode `0x1042fe90`); the flee sound is the
+  `NPC_FLEE` row of `sound_volume_table.txt` (index 26: volume 5 → 240 units, occludable);
+  `0x48 SCHED_VTROIKA_TURN_TO_SOUND` = `PAUSE_MOVING; SET_NPC_FLAG NO_UNKNOWN_ATTACK;
+  LOOK_AT_BEST_SOUND; WAIT_RANDOM 1.5; UNLOOK_AT; CLEAR_NPC_FLAG NO_UNKNOWN_ATTACK`.
+  Gap: no flee state (`EElysiumNpcState`, `ElysiumNpcMindTypes.h:8-16`), the flee level
+  conditions exist (`ElysiumNpcConditions.h:63/65`) with the witness producing them
+  (`ElysiumNpcWitness.cpp:597-698`) and the overlay setting them (`ElysiumNpc.cpp:3141-3142`);
+  `IN_FLEE_SCHED` is read by the interest overlay (`ElysiumNpc.cpp:3133`,
+  `ElysiumNpcConditions.cpp:254`); no `InitialFlee`, `NextFleeSoundTime`, `TranslateSchedule`,
+  `FleeAndDie`/`Faint` input, `MildlyCrazy` reader, no `0x48/0x70–0x78` program; the state byte
+  `0x85` is in 15's table (`ElysiumNpcFlags.cpp:160`).
+  Job: the state, the ideal-state entry, the case-8 chain, the translation, `0x48`, the two
+  inputs with their slot-614 reset, the flee vocalisation slot and the `NPC_FLEE` sound.
+  Consumes: 15 (the state byte, slot 614), 10a (`CommitBestSound`), 10e (the look tasks), 26
+  (the state-2/0xe law arms share `ReportCriminalAct`).
+  Oracle: § "The flee state and the cower, disoriented and lost programs" (incl. "Story 21a
+  recovery"). Unrecovered: bytes `+0x6360/+0x6361` beside the level, `0x1042fde0`'s transform
+  (the port keeps the level plain).
+  Size: L. Effort: Opus / high.
 - [ ] **21b. The cower, disoriented and lost programs.**
   Retail: 0x70/0x71 `FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR)`, 0x72 `_SCREAM`, 0x73
   `FLEE_AND_COWER`, 0x74/0x75 `_STALL(_FAILED)`, 0x76 `_NO_ENEMY`, 0x77/0x78 `COWER(_HINT)`,
@@ -642,11 +970,21 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `DISORIENTED` is the terminal schedule of 16 discipline programs; `LOST` has no producer.
   `TASK_PLAY_COWER` rolls `m_iCowerAnimOffset` +0x6414 = `RandomInt(0,2) × 3`, `SET_COWER`
   reuses it. `IN_FLEE_SCHED` set by every flee leg and cleared first by `COWER_SIMPLE*`.
+  Base `COWER` (`STOP_MOVING; PLAY_SEQUENCE ACT_COWER`) is base `0x1e`.
+  Gap: no program of the family, no task of the list; `COWERING`/`COWER_PATH`/`ONE_HIT_KILL`
+  are flag identities (`ElysiumNpcFlags.h:65-86`) with `COWERING` read at `ElysiumNpc.cpp:3157`
+  and `ElysiumNpcSenses.cpp:857`; no `CowerAnimOffset`; `Disoriented`/`Lost` have no schedule
+  identity; the 0xe1/0xe3 completion branch is at `ElysiumNpc.cpp:2779`.
   Job: the fourteen programs and their tasks: `SUGGEST_STATE` 0x06, `GET_PATH_TO_RANDOM_NODE`
   0x1f, `FACE_HINTNODE` 0x2f, `GET_PATH_TO_COWER_NODE` 0x84, `_SAVE_POS` 0x85, `PAUSE_MOVING`
   0xa6, `PLAY_COWER` 0xe6, `SET_COWER` 0xe7, `LOOK_AT_PLAYER` 0xfb, `RUN_PATH_FLEE` 0x103,
   `FLIP_NEXT_IDEAL_YAW` 0x106, `WAIT_PVS`; the 0xe1/0xe3 completion branch 8 left waiting.
-  Oracle: § "The flee state and the cower, disoriented and lost programs".
+  Consumes: 21a (the state and chain), 25 (`Idle_Stand` for `DISORIENTED`/`LOST`), 10e
+  (`PLAY_COWER`), 12b (the hint search behind `GET_PATH_TO_COWER_NODE`). Provides: `COWERING`
+  and `ONE_HIT_KILL`'s writers to 21c; `DISORIENTED` to 0006.
+  Oracle: § "The flee state and the cower, disoriented and lost programs". Unrecovered: the
+  cower-node query through slot `0x688` (the hint search's cower category), `FLIP_NEXT_IDEAL_YAW`'s
+  motor read.
   Size: L. Effort: Opus / high.
 - [ ] **21c. The incapacitated victim's consumers.**
   Retail: `AttemptFeed` (`0x10168910`) reads the victim's ideal activity (+0xff0), auto-accepts
@@ -654,12 +992,18 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0x1098` only, so a cowering NPC auto-accepts one time in three. `ONE_HIT_KILL` (bit 30) has
   one reader, `OnTakeDamage` `0x102beda0`: any non-light hit kills outright. `COWERING` (bit
   10) withholds `COMFORT` in `BuildScheduleTestBits` and quarters hearing.
+  Gap: `IsFeedAutoAcceptState` (`ElysiumFeed.cpp:222`) answers through
+  `IsAutoAcceptDispositionName` (`:187`, called `:243`) from the disposition name;
+  `ONE_HIT_KILL` (`ElysiumNpcFlags.h:86`) has no reader; `COWERING` is read by the overlay
+  (`ElysiumNpc.cpp:3157`) and the hearing quarter (`ElysiumNpcSenses.cpp:857`) — that arm is
+  reproduced.
   Job: `IsFeedAutoAcceptState` answering from the ideal activity instead of the disposition
-  name; the `ONE_HIT_KILL` read in the damage path; the `COWERING` overlay read.
-  Provides: the `ONE_HIT_KILL` seam to 0005's damage.
+  name; the `ONE_HIT_KILL` read in the damage path.
+  Consumes: 21b (the writers), 0005 (the damage path). Provides: the `ONE_HIT_KILL` seam to
+  0005's damage.
   Oracle: § "The flee state and the cower, disoriented and lost programs" (Activities and the
-  feed; Flags the family writes); `feeding.md` § "Step 4, decoded".
-  Size: S–M. Effort: Sonnet / medium.
+  feed; Flags the family writes); `feeding.md` § "Step 4, decoded". Unrecovered: nothing.
+  Size: S. Effort: Sonnet / medium.
 
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,

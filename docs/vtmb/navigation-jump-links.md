@@ -104,13 +104,35 @@ here; 17 links carry no hull-0 motion) splits the 116 nodes into **ten component
 Jack's start area has no node within 6000 units and the Society hub at the far end has none
 at all, so in retail Jack's walk to either group-32 place and every hunter's patrol or visit
 fails at `SetGoal` and runs the program's failure route (`_FAILED`'s 5.1–10 s retry for a
-place; the default fail schedule `0x43` for a patrol). The port's runtime Recast mesh
+place; the default fail schedule `0x43 FAIL` — `STOP_MOVING; SET_ACTIVITY ACT_IDLE; WAIT 1;
+WAIT_PVS` — for a patrol, then the idle selector's patrol step again: one refused route per
+second, `npc-ai-reverse-engineering.md` § "The kernel's failure route and the base programs").
+The hub's two patrollers are `sentry2` and `monk_upstairs_podium` (`SetupPatrolType` then
+`FollowPatrolPath` from the level scripts, § "Patrol paths, walked"). The port's runtime Recast mesh
 (`ElysiumMapActorLifecycle.cpp`, a projection of the `.hulls` sidecar — world brushes of
 player-blocking contents, monsterclip excluded — at the engine's default agent: radius 34 cm,
 height 144 cm, step 35 cm) refuses the same routes on `sp_tutorial_1` as partial paths ending
 160–240 m short, which matches retail's answer here by coincidence of geometry, not by
 contract: nothing ties the mesh's connectivity to the graph's. Retail hull 0 stands
-`(-13,-13,0)..(13,13,72)` (66 × 183 cm) and steps 18 units (45.7 cm). UNRECOVERED: whether
-`MONSTERCLIP` cut links at graph build, and whether door brushes cut the port's mesh (retail's
-links pass through doors; the NPC opens them, `m_hBlockedDoor` / `SelectDoorObstructionSchedule
-0x102b7370`). Spec 0002 story 24 owns the reconciliation.
+`(-13,-13,0)..(13,13,72)` (66 × 183 cm) and steps 18 units (45.7 cm). UNRECOVERED: whether door
+brushes cut the port's mesh (retail's links pass through doors; the NPC opens them,
+`m_hBlockedDoor` / `SelectDoorObstructionSchedule 0x102b7370`). Spec 0002 story 24 owns the
+reconciliation.
+
+**Closed 2026-09-12 (story 24): `MONSTERCLIP` cuts links at graph build.** `CAI_Node::InitLinks`
+(`0x102fb4e0`) runs every probe with trace mask **`0x2000b`** = `CONTENTS_SOLID 1 | WINDOW 2 |
+GRATE 8 | MONSTERCLIP 0x20000`: the per-hull fit test at both nodes (`0x102f1900`, `"Cannot
+fit at node %d"`), the ground stand test (`0x102e7270`, `"Failed to stand at %d"`), the walk
+test (`0x102e4f50`, step 2.0, `"Failed to walk between nodes"`), the fly/climb hull traces
+(`ITraceFilter` slot 4 with `0x2000b`) and both jump probes (`0x102e6d70`, 100.0, `"Nodes
+connect for jumping"`). `MOVEABLE 0x4000` is not in the mask, so brush-entity doors do not
+block a link at build; and a hull-0 ground link additionally runs `0x102e7e80(start, end,
+0x2000)` (a hull trace with mask `0x2000` alone) and, when it hits, sets **`linkInfo |=
+0x2000`** on the new link (`link+0x64`) — the retail door-on-link mark, consumed by the
+navigator (UNRECOVERED reader; `0x2000` is a contents bit whose name in this engine's
+`bspflags` is not in the image). The port's `.hulls` projection excludes monsterclip, so a
+monsterclip brush retail authored to keep NPCs off an area is a component cut retail has and
+the port's mesh does not; the reachability gate must therefore be built from the decoded
+graph's components, not from the mesh, and the monsterclip volumes belong in the mesh as
+NPC-blocking geometry (a second divergence otherwise). A link's `linkInfo & 0x1000` (disabled)
+is never set at build; `0x2000` is the only info bit the builder writes.
