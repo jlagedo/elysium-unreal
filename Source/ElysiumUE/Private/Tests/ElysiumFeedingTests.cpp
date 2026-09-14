@@ -6,6 +6,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 #include "ElysiumAppState.h"
+#include "Substrate/ElysiumNpc.h"
 #include "ElysiumAudioLatency.h"
 #include "ElysiumBinds.h"
 #include "ElysiumBrushComponent.h"
@@ -352,7 +353,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -417,7 +418,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -518,7 +519,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		Defs.Defs[0].Keys.Add(TEXT("model"), TEXT("models/test/feed_victim.mdl"));
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -605,7 +606,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		TUniquePtr<FElysiumOrderedIOSink> OwnedSink = MakeUnique<FElysiumOrderedIOSink>();
 		FElysiumOrderedIOSink* Sink = OwnedSink.Get();
 		World.AddSink(MoveTemp(OwnedSink));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -656,7 +657,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -691,7 +692,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		FElysiumEntityWorld A(nullptr, nullptr, Services.Bundle());
 		A.Load(MakeFeedTestDefs());
 		A.SpawnPlayer();
-		A.Activate(0.0);
+		A.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		A.Tick(0.0);
 
 		FElysiumPlayer* Feeder = A.FindPlayer();
@@ -865,7 +866,7 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 	World.Tick(0.0);
 
 	FElysiumEntity* MakerEnt = World.FindByName(TEXT("blueblood_maker"));

@@ -456,14 +456,16 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 	//    `+0x5f78`..`+0x5f8c`, in this order — slot 94 `GetMoveType`, slot 95 `GetMoveCollide`,
 	//    slot 92 `GetSolid`, slot 211 `GetSolidFlags`, `m_fEffects`, `m_bfAINPCFlags`.
 	//
-	//    This runtime's script-hide is the entity chain's `bHidden` with no separate cine latch
-	//    (`ElysiumNpcKernelShapeMap.cpp` binds `+0x5d78` to `FElysiumEntity::bHidden` and says so),
-	//    and its beat (`FElysiumScriptedSequence`) carries no `+0x5f78` block, so the record is
-	//    RETURNED rather than written. The condition is reproduced exactly: a hidden body whose
-	//    `ScriptOwner` resolves.
-	const bool bCineScriptHidden = bHidden;
+	//    `+0x5d78` is its OWN byte (story 29e rebound it as `FElysiumNpc::bCineScriptHidden`, which
+	//    `NPCInit` clears at `102735xx` and this body clears on both arms), distinct from
+	//    `m_bScriptHidden` (`+0x0f4`) and from `m_fEffects`. Its SETTER — retail's `ScriptHide` —
+	//    is not ported yet, so the latch would never stand; until it is, the condition is read from
+	//    the entity's own hidden flag, which is this runtime's only live spelling of "hidden by a
+	//    script". The beat (`FElysiumScriptedSequence`) carries no `+0x5f78` block, so the record is
+	//    RETURNED rather than written.
+	const bool bCineLatchStands = bHidden;
 	FElysiumEntity* Cine = (World && ScriptOwner.IsSet()) ? World->Resolve(ScriptOwner) : nullptr;
-	if (bCineScriptHidden && Cine != nullptr)
+	if (bCineLatchStands && Cine != nullptr)
 	{
 		Record.bWroteToCine = true;
 		Record.MoveType = GetMoveType();
@@ -478,8 +480,8 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 		Record.NpcFlagWord = 0;
 	}
 	// 4. `m_bCineScriptHidden = 0` on BOTH arms — the latch is cleared whether or not a cine took
-	//    the record. The chain's `ScriptUnhide` has already cleared `bHidden`, which is this
-	//    runtime's spelling of the same latch.
+	//    the record (`102c1fxx` and the tail).
+	bCineScriptHidden = false;
 	//
 	// **Unrecovered:** the four vtable dispatches ahead of `CBaseEntity::ScriptUnhide` in the
 	// listing (the same slots 94/95/92/211, results discarded by the decompiler). They are the same

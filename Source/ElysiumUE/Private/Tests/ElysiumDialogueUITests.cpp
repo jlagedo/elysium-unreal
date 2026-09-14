@@ -18,6 +18,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumNpc.h"
 #include "ElysiumViewState.h"
 #include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumDialogueScreen.h"
@@ -639,9 +640,11 @@ bool FElysiumDialogueChoiceCarriesLineIdTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Speaker));
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 	// `Activate` only ARMS the mind's admission barrier; an unadmitted NPC refuses
-	// `BeginDialogueBodySession` and `OpenDialog` with it. One deterministic think admits it.
+	// `BeginDialogueBodySession` and `OpenDialog` with it. One deterministic think admits it — and
+	// that think falls at `curtime + 0.1`, because `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms
+	// `m_flNextThink` there on the map's first second (`_DAT_104493d0`), not at curtime.
 	World.Tick(0.0);
 	FElysiumEntity* Owner = World.FindByName(TEXT("dlg_owner"));
 	if (!TestNotNull(TEXT("the fixture world has a dialogue owner"), Owner))

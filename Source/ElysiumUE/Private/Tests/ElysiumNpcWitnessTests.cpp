@@ -102,6 +102,10 @@ namespace
 				// trace at all and a case that blocks the trace still has a seen player.
 				Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 			}
+			// The state machine does not start until the NPC's first think: `NPCInit`
+			// (`0x1029a0b0`) leaves `m_NPCState = NONE` at `1029a0f5` and arms the NPCInitThink at
+			// `curtime + 0.1`, which is what runs NONE -> IDLE. The shared fixture advances to that
+			// think, so the alert-promotion cases here read a settled IDLE guard.
 			FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
 			Quiet();
 		}
@@ -311,8 +315,10 @@ bool FElysiumNpcWitnessDirectLaneTest::RunTest(const FString&)
 			F.Has(ECond::CriminalFleeLevel));
 		// The recovered gate is on the lane, not on the comparison: nothing is compared, so nothing
 		// is accounted for either. This is what distinguishes it from the closed-window arm below.
+		// `0x1029a0b0` seeds `m_iPLCriminalActProcessed = -1`; an unadvanced lane keeps that
+		// sentinel, not the struct default 0.
 		TestEqual(TEXT("...and the processed count is NOT advanced"),
-			F.Guard->Witness.Channel(EChannel::Criminal).Processed, 0);
+			F.Guard->Witness.Channel(EChannel::Criminal).Processed, -1);
 
 		// Step back in front of it and the same act is witnessed — it was never consumed.
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
@@ -326,7 +332,7 @@ bool FElysiumNpcWitnessDirectLaneTest::RunTest(const FString&)
 			F.Guard->Witness.Channel(EChannel::Criminal).Level, 3);
 		// Gathering does not account for the act either: the copy is schedule selection's half.
 		TestEqual(TEXT("condition gathering does not advance the processed count"),
-			F.Guard->Witness.Channel(EChannel::Criminal).Processed, 0);
+			F.Guard->Witness.Channel(EChannel::Criminal).Processed, -1);
 	}
 
 	// --- A closed window advances the count WITHOUT producing the condition ----------------------
@@ -403,7 +409,7 @@ bool FElysiumNpcWitnessDirectLaneTest::RunTest(const FString&)
 		TestEqual(TEXT("the criminal channel's closed window still advanced its own count"),
 			F.Guard->Witness.Channel(EChannel::Criminal).Processed, F.Player->CriminalActCount());
 		TestEqual(TEXT("...while the supernatural count is left for schedule selection"),
-			F.Guard->Witness.Channel(EChannel::Supernatural).Processed, 0);
+			F.Guard->Witness.Channel(EChannel::Supernatural).Processed, -1);
 	}
 
 	// --- The investigate condition ----------------------------------------------------------------
@@ -865,7 +871,7 @@ bool FElysiumNpcWitnessSubmissionTest::RunTest(const FString&)
 	TestTrue(TEXT("gathering did not touch the Masquerade timer"),
 		F.Player->Police.MasqueradeTimerNext == 0.0);
 	TestEqual(TEXT("gathering did not copy the act count"),
-		F.Guard->Witness.Channel(EChannel::Criminal).Processed, 0);
+		F.Guard->Witness.Channel(EChannel::Criminal).Processed, -1);
 
 	// --- Schedule selection submits ---------------------------------------------------------------
 	F.Guard->SelectSchedule();

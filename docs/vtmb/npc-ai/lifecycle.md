@@ -2084,5 +2084,255 @@ base; then `ThinkSet(NULL, 0.0, NULL)`, which CLEARS the think function so a ped
 thinks again; then a scope-trace push naming `"CBaseEntity::SetSolid"` with `GetDebugName` from
 `m_iName` (`+0x26c`) and `SetSolid(SOLID_NONE)` on the collision.
 
-**Unrecovered:** who reads `m_vecPreDeathMins`/`m_vecPreDeathMaxs`. Nothing in this kernel's closure
-does; the two words are written here and nowhere else.
+**Unrecovered:** none of the collision-property accessors on `m_Collision` (`vtable +4` / `+8`).
+The two vectors are read by `CNPC_VPedestrian::OnRestore` `0x103a25a0` (story 29e, family
+Lifecycle19) when resurrecting a dead pedestrian: `0x101cf390` restores them as the pre-death
+bounds.
+
+## Story 29e, family Lifecycle19 — `NPCInit`, `StartNPC`, `OnRestore`
+
+_Recovered 2026-09-14._ `.rdata` cells from the pinned `vampire.dll` (the corpus holds none of
+them): `_DAT_10449280` = **1.0** (double) — every `NPCInit`/`StartNPC` think arm is `curtime <=
+1.0`, the map's first second; `_DAT_104493d0` = **0.1** (double); `_DAT_104704c0` = **512.0**
+(double), so the Werewolf floor adds `sqrt(512)`; `_DAT_104d0080` = **2.0944 rad = 120°**, FOV
+`cos = −0.5`. Corrections from the listing (not the checklist walks) are applied in place:
+`0x10360ce0` `+0x66d0` is `m_iLastJumpPositionIdx`; `0x1036b050` teleport words sit at `+0x66bc` /
+`+0x66c8` / `+0x66cc`; `0x103a25a0` pre-death bounds are `+0x6660`/`+0x666c`; `0x103cac20` opens
+with `SetEnemy(NULL)` and accumulates the teleport floor; `0x10273ad0` `ThinkSet`s both arms of
+the first-second test; capability mask **4**; FrenzyShadow tails into `0x10376c10`.
+
+### `CAI_BaseNPC::NPCInit` `0x10273390`
+
+Slot 420's base body. In order: `SetNPCTransparent(1)`; `m_hLastDamageEnt = -1`;
+`m_bCondTookDamage = 0`; `ClearAllClientRagdolling`; `AddFlag(0x12000)`; `m_flGravity = 1`;
+`m_takedamage = 2`; motor reset `0x102e0b40` then yaw from `GetAbsAngles[1]`, shifted by ±180
+when motor `+0x28` is set, stored to motor `+0x34` directly when motor `+0x1c == 180.0` else
+through `0x102e0a80`; `m_iMaxHealth = 100`; `m_lifeState = 0`; provenance `+0x1b3c`/`+0x1b40`
+(ABSENT in the port) line `0x1af1`; `m_IdealNPCState = 1`; `SelectHeaviestSequence(ACT 1)` else
+`0xf1` else `m_nSequence = 0`, the winner through `SetIdealActivity` `0x10272650`;
+`m_bShouldMove = 0`; `m_iCollisionMask = 0x202400b`; navigator `+0x2c = DAT_1093407c`;
+`ClearSchedule` `0x10280d30` (every class); navigator reset `0x102ee270`; `0x10095be0`;
+`0x1008f540`; `m_pHintNode = 0`; `m_afMemory = 0`; `SetEnemy(NULL)`; `m_flDistTooFar = 1024`
+with `SetDistLook(3072)`, replaced by `1e9` / `6000` on spawnflag `0x100`; `m_bKeepSound = 0`;
+zero six words at `+0x5c5c`; `0x102cc7e0` on the delayed CONDITION list (`+0x1a9c`) and then on
+the delayed SOUND list (`+0x1ae0`) — two different lists, not the same one twice; `0x10274ca0`;
+`m_pfnUse = LAB_10004da9`; while `curtime <= 1.0` `ThinkSet(0x10273aa0)` and `m_flNextThink =
+curtime + 0.1`, otherwise call `0x10273aa0` inline; then `m_bForceStateChange = 0`, `+0x5b58 =
+0`, `m_bfNPCFrenziedFlags = 0`, `+0x5b5c = curtime`, friend-block timers, `m_flLastStateChangeTime
+= 0`, `m_eEnemyOccludedCheck = 10`, `m_hShootTargetOverride = -1`, `+0x5b90 = 0`, cine/choreo
+clears, `0x10270180(NULL, 0)`, and the last-damage / last-attack / sound-wait / eye-look /
+weapon-search / wait-finished stamps zeroed last.
+
+`m_bCineScriptHidden` (`+0x5d78`) is cleared here, and it is its OWN byte: the field ledger gives
+it two accesses in the whole image (this clear) plus the read-and-clear pair in
+`CAI_BaseNPCTroika::ScriptUnhide` (`0x102c1ec0`). It is NOT `m_bScriptHidden` (`+0x00f4`, the word
+`0x100b5190` answers) and NOT `m_fEffects`'s `EF_NODRAW` (`+0x19c`); the port binds all three
+separately.
+
+**Unrecovered:** `DAT_1093407c` (the node network); motor `+0x1c` (the 180.0 sentinel); the
+health cvar at `DAT_10923f14` — an unnamed `ConCommandBase*` this image never writes, whose four
+referrers are `0x1029a0b0` and its three thunks, so the value it seeds `m_iHealth` with is not in
+the corpus; `m_pfnUse`.
+
+### `CAI_BaseNPCTroika::NPCInit` `0x1029a0b0`
+
+Slot 420. Raises `DAT_10937cf1` (`1029a0b3`), zeros `m_fEffects` (`1029a0c0`), seeds `m_iHealth`
+from the unnamed cvar object (`1029a0c6`–`1029a0ef`), `m_NPCState = 0` — **NPC_STATE_NONE**, the
+state the body leaves behind until the first think transitions it (`1029a0f5`) —
+`m_flNextListenTime = 0` (`1029a0fb`), `m_pfnTouch`, then the whole base body. Seeds PVS/LOS true
+and all eight think stamps to curtime; the occluded delays from the tuning record;
+`0x102b53d0(curtime)`; zeros the two `sPatrolPath` pairs (`+0x658c`/`+0x6590`, `+0x6594`/`+0x6598`)
+and the goal-tolerance / interrupt-distance block; `m_hMoveTargetEnt = -1` then
+`m_iHitBuildupCount = 0` (`1029a28b`, BEFORE the spawn-equip block) and `m_flWeaponScareTime =
+-1.0`; spawn-equip of `m_altEquipment` then `m_spawnEquipment` behind slot 513 bit `0x200000`,
+skipping a 2-byte `"0"` and 15-byte `"item_w_unarmed"`; the enemy store's back-pointer and its
+`FreeKnowledgeDuration`; `Player %s` relationship; clears `DAT_10937cf1`; `0x102b5dc0(this, 0)`;
+the cover/cower block and the two sound clocks `+0x6418` / `+0x623c` (`+0x641c` is **not** written
+here); `m_bIsBCCTargetable = 1` only when `m_statTemplate` is non-empty; `m_bIsAlive = 1`; law
+timers; `m_iPLCriminalActProcessed` / `m_iPLSupernaturalActProcessed = -1`; melee block; slot 593;
+saved attack extents `(-1,-1,-1)`; `0x102c54c0`; `m_bJumping`/`m_fJumpGravity`; the four discipline
+bit words `+0x0eb0`..`+0x0ebc` (`1029a589`); stat-list `Set(0xf, 0)` / `SetBase(0xc, BloodPool)`;
+`m_bReturnToInitialPos`, the three see-unknown words and `m_flMeleeHeightDiffTimer`;
+`InitPerceptionDistances`; `m_nCurrDisposition = DAT_10924984`; `m_hEyeLookTarget = -1`;
+`m_RelativeEyeTarget = 0`; teleport-timer tail (`> 0` → `curtime + self + 4` and
+`0x102ae7f0(0xfe)`, **whose whole body is `*(this + 0x65c8) = param_1`** — it writes
+`m_iForcedSchedule` and installs no schedule at all; else the timer is zeroed).
+
+`0x101e8c50` / `0x101e8c70` / `0x101e8c30` / `0x101e8bf0` are **not cvars**: each is a seven-byte
+`__fastcall` getter of a float field on the process-global `CVFeatList_t` (`0x10739d08`,
+`101e4d90`), which `0x101e6310` fills from `vdata/system/Rules.txt` through
+`KeyValues::GetFloat(key, default)` — `+0x288 Npc_Combat_Info/OccludedDelayNormal` (image default
+**0.5**), `+0x28c .../OccludedDelayCover` (**5.0**), `+0x284 .../FreeKnowledgeDuration` (**0.25**)
+and `+0x27c Zombie_Grapple_Info/DelayInitial` (**20.0**, the shipped `rules.txt` authors 10.0).
+The 3.4 / 10.0 / 0.5 triple is `CNPC_VCamera::NPCInit`'s own immediates, not this body's.
+
+**Unrecovered:** the health cvar object `DAT_10923f14`; `DAT_10924984` (the disposition table's
+default index — no writer in the image); the enemy-store object's identity at `+0x5d88`.
+
+### `CAI_BaseNPC::StartNPC` `0x10273ad0`
+
+Slot 422 base. Clears `m_bDidMaintainSchedule` and `+0x1b4c`. Drops to the floor unless movetype
+is 5 or 6, or slot 513 has bit 2 (mask 4), or spawnflag 4: probe 256 units down,
+`Warning("NPC %s stuck in wall--level design error\n")` (`105cc558`) on a miss, `SetOrigin` either
+way; skipped path `RemoveFlag(FL_ONGROUND)`. `m_target` non-null → `FindEntityByName` into
+`m_pGoalEnt`; miss `Warning("ReadyNPC()--%s couldn't find target %s")` (`105cc528`, THREE pushes:
+the classname and the target name); hit `SetState(1)` then `SetSchedule(3)`. Slot
+545 `InitSquad`. `ThinkSet` on **both** arms of `curtime <= 1.0`; stamp is `curtime +
+RandomFloat(0.1, 0.4)` during the first second and `curtime` after. Arrival activity/sequence
+cleared. Spawnflag `0x80` → `SetState(1)`, `SetActivity(1)`, `SetSchedule(0x2d)`.
+
+**Unrecovered:** the move-probe `0x102e7880` (no `m_pMoveProbe` store).
+
+### `CAI_BaseNPCTroika::StartNPC` `0x1029a8b0`
+
+Base `StartNPC`, then `ThinkSet` again, `SetFollowerBoss` `0x102c44e0` (unported; seam),
+`SetFollowerType` `0x102c4680`, `SetClosestPlayer` `0x10293a80`.
+
+**Unrecovered:** `0x102c44e0` (FindNamedEntity / squad refusal / frenzy bits).
+
+### `CAI_BaseNPC::OnRestore` `0x1027bf50`
+
+Give-up unless: state is not SCRIPT or the cine handle resolves live; saved schedule name
+non-empty and version word `+0x19b4 == 1`; flags bit 1 implies a live enemy; flags bit 2 implies
+a live `m_hTargetEnt`. Task index `> 0x29` clamps to 1. A kept schedule is looked up by name
+(`1027c019`) and then CHECKSUMMED: `0x1023f040` / `0x1023f0c0` over `schedule+0x20` for
+`schedule+0x24 << 3` bytes / `0x1023f060`, compared against the save's own word at `+0x1a3c`
+(`1027c064`); a mismatch writes `m_pSchedule = 0` (`1027c068`) and the body then takes the give-up
+arm. Null or give-up → clear the refind latch and
+`0x1027be60` (clear nav goal, clear schedule, zero the six-word block when no enemy, SCRIPT with
+a dead cine → `SetState(IDLE)` and `DevMsg("Scripted Sequence stripped on level transition")`).
+Else the refind latch takes flags bit 2. Then base combat-character restore, `+0x5b90 = 0`, and
+either `0x102ee270` or `0x102ee1e0` (failure runs `0x1027be60`).
+
+**Unrecovered:** the schedule-name registry walk `0x1030f350`;
+`CBaseCombatCharacter::OnRestore` `0x10323b60`; path refind `0x102ee1e0`.
+
+### `CAI_BaseNPCTroika::OnRestore` `0x102998c0`
+
+Validate both patrol-path cells — `0x1029f610` per cell, each releasing through `0x1029f5d0` on
+its own refusal, so the two routes are independent; base `OnRestore`; scan the interesting-place
+list `0x102db5e0` into `+0x62ec`; rebind ped link `+0x6310`/`+0x6314` (OOB increments
+`DAT_106c994c`); shoot-at-hint re-arm; follower boss/type; combat-start activity `0x1029f340`,
+which is itself `if (name == NULL) return -1; return ActivityNameToId(name)` over `0x10412520`;
+`+0x62e9 = 1` (`CBaseEntity`'s spawn-called byte); `0x10299a80`; script-hidden → `ThinkSet(NULL)`
+and `m_flNextThink = FLT_MAX`; slot 593.
+
+`0x102db5e0` walks every interesting place (`DAT_10927194`, `+0x540` next) and answers the LAST
+one whose marker table (`+0x580`, `+0x588` records of stride `0x1c`, first dword the occupant)
+holds this NPC — it does not break on the first hit. `0x10299a80` then re-checks that answer and
+has two refusals, each a `DevMsg` and a cleared `+0x62ec`: the place is not on the live list at
+all (`"ERROR: %s loc( %6.2f, %6.2f, %6.2f) thinks they are at an interesting place that no longer
+seems to be a valid entity!\n"`, `105d93d8`), or it is on the list but its marker table does not
+name this NPC (`"ERROR: %s loc( %6.2f, %6.2f, %6.2f) thinks they are at %s but that
+InterestingPlace, loc(%6.2f, %6.2f, %6.2f) does not know that.\n"`, `105d9338`).
+
+**Unrecovered:** the node network behind `0x1029f610`; ped-link search `0x102f96e0`.
+
+### `CNPC_VCamera::NPCInit` `0x103692c0`
+
+Replacement, never Troika. Snapshots origin; slot 74 of `DAT_1070ba0c` false → `UTIL_Remove` and
+return — and that refuse arm carries **no** `MOV byte ptr [0x10937cf1],0`, so the process-wide
+in-NPCInit latch is left SET when a camera deletes itself. Then a camera-shaped copy of the base
+init (hard-coded occluded delays 3.4/10.0, report stamps 0, enemy-store interval the 0.5 literal)
+that **stops** before the stat-list / disposition / teleport tail. Two places where it is NOT the
+Troika body: it seeds only `m_bInPlayerPVS`, `m_bInPlayerLOS` and `m_flNextPlayerLOS`
+(`103694c2`/`103694c9`/`103694d0`) and leaves the three stamps beside them at their spawn values;
+and its tail runs `+0x6414`, `+0x6418`, `+0x623c`, `+0x60a4`, `+0x60a8`, `+0x6398`, `+0x639c`,
+`+0x63a4`, `+0x63a8` and then jumps straight to `+0x6070`, never touching `+0x606c`.
+
+**Unrecovered:** the engine query at `DAT_1070ba0c` slot 74 (seam, default admits).
+
+### `CNPC_VWerewolf::NPCInit` `0x103caef0` and re-arm `0x103cac20`
+
+Writes `"Werewolf"` into `m_statTemplate` before **and** after Troika `NPCInit`. Inventory
+destroy, `GiveBaseFightingItems`, `AddClassRelationship(1, D_HT, 10)`, `m_takedamage = 1`, law
+thresholds 999999, perception block (`m_flSeekDistBase = 4096`, hearing 3, `DistTooFar = 1e9`,
+FOV `cos(120°)`, `SetDistLook(6000)`, `InitPerceptionDistances`, investigate 3), four
+`CapabilitiesAdd`, six hint pointers cleared, then `0x103cac20`. That helper is twenty-three
+writes, not two: `SetEnemy(NULL)`, `m_hClosestPlayer = -1`, the morph timers `+0x66a4`/`+0x66d4`/
+`+0x66d8`, `+0x66a1`, `+0x66a8`, `m_bPlayFrustration +0x66a9`, the cached fake-hull point
+`+0x66dc`/`+0x66e0`/`+0x66e4` ← `vec3_origin`, `+0x66ec` and `+0x66f4` ← curtime, the two hint
+search starts `+0x66b8`/`+0x66ac` ← NULL, the hint-node cache `+0x6708` and
+`m_iRandomMoveHintNodeZone +0x670c` ← -1, the hint-gate word `+0x66e8`, `+0x66f8`, `+0x66fc`, and
+the nearest-node-to-player pair `+0x6700`/`+0x6704`; then `+= sqrt(hullHalfX² + hullHalfY²)` and
+`+= sqrt(512)` onto `+0x66cc`/`+0x66d0` — the load path `0x103cabf0` runs the same helper, so the
+floor grows on every save/load.
+
+**Unrecovered:** the hull half-extents `0x102d6100` / `0x102d6120` (the first `+=` term is 0
+without a hull).
+
+### `CNPC_VCamera::StartNPC` `0x10369930`
+
+Replacement, not a Troika chain. Floor-drop only when the model is `models/null.mdl`
+case-insensitive AND movetype is neither 5 nor 6 AND neither solid-flags bit 2 nor spawnflag
+bit 2 is set. Warning on a miss is `"NPC %s stuck in wall, level designer"`. `m_target` gated
+non-empty; miss Warning `"ReadyNPC : %s couldn't find target"`. `ThinkSet` on both first-second
+arms, then a final `ThinkSet(LAB_1000f4e8, 0.0)` that does not restamp `m_flNextThink`.
+
+**Unrecovered:** move probe `0x102e7880`.
+
+### `CNPC_VFrenzyShadow::NPCInit` `0x10375c80`
+
+Weapon create (`item_w_fists`) and unconditional `|= 0x40` into the weapon's `+0x19c` BEFORE
+`CNPC_VPlayerController::NPCInit`. A null weapon faults at `10376c98`; the port crash-guards
+that iteration. Then ideal state `0xb`, `SetState(0xb)`, frenzied flags `0x5ddf`, senses on,
+speed scale 8, nav-ignore physics, tail `JMP 0x10376c10` (hostile recount).
+
+**Unrecovered:** the weapon entity's `m_fEffects` word (counted, not written).
+
+### `CNPC_VGhoulCroucher::NPCInit` `0x1037b290`
+
+Scope-trace name is `"CNPC_VWerewolf::NPCInit"` (retail copy-paste). HumanCombatant first,
+`Inventory_Destroy`, then `0x1021fe50` of `item_w_claws_ghoul` or `item_w_knife` off
+`m_bSpawnDisturbed`, `AddMiscFlag(0x10)`, burning particle when `m_bSpawnBurning`, hate class 1.
+
+**Unrecovered:** particle create `0x100fbc90`.
+
+### `CNPC_VNewscaster::NPCInit` `0x103a0420` / `CNPC_VPlayerController::NPCInit` `0x103a4580`
+
+Troika first. Law thresholds 999999, witnessed scramble, senses off, not BCC-targetable.
+Newscaster investigate mode 0; PlayerController mode 6, `SetForceFrequentThink(true)`,
+`m_hFriendPlayer` from owner or −1.
+
+**Unrecovered:** the CSecureType tag bytes beyond the two the port already carries.
+
+### `CNPC_VSabbatLeader::NPCInit` `0x103a6d40` / `CNPC_VSheriffMan::NPCInit` `0x103ae6c0`
+
+SabbatLeader: VampireBoss first, then route-fail/activated/model/classname/emitters, last-attack
+= curtime, roar budget 3. SheriffMan writes seven fields BEFORE VampireBoss (swarm handle,
+teleporting/dead/activated, last teleport origin and time), then model/classname,
+`0x103c6a00`, jump gravity 2.0, `DAT_109340d8 = 0x15`.
+
+**Unrecovered:** nothing on the species writes.
+
+### `CNPC_VTzimisce::NPCInit` `0x103b91d0` / `CNPC_VVampireBoss::NPCInit` `0x103c5840`
+
+Tzimisce: Troika, first-enemy, path mode, expression-map reset, 3 s pounce/body windows,
+pickup −1, collision-ignore re-arm. VampireBoss: Troika, clear model name and emitters,
+classname `"npc_VVampireBoss"`, jumping 0, transform reset, jump gravity 1.
+
+**Unrecovered:** expression-map reset `0x103b9f50`.
+
+### `CNPC_VZombie::NPCInit` `0x103defc0`
+
+Crawl-out latch FIRST, then Troika, `item_w_zombie_fists`, hate class 1, Hide on self, SetEnemy
+and SetTarget of closest player, grapple timer, `SetSchedule(0x161)`.
+
+**Unrecovered:** zombie-grapple cvar `0x101e8bf0`.
+
+### `CNPC_VPedestrian::OnRestore` `0x103a25a0`
+
+Troika first, then four gates: bool argument, `m_eLevelResetType != 2`, (alive OR type 0),
+script-hidden clear. Inside: destroy inventory, restore pre-death mins/maxs when dead,
+slot 420 `NPCInit`, clear follower-boss name, origin/angles from `+0x62a8`/`+0x62b4`,
+collision writes, `SetMoveType(4)`, `SetHullSizeNormal(false)`, Relink, `CreateVPhysics`.
+
+**Unrecovered:** Relink `0x101cf600`; pre-death collision OBB (the two vectors are the restored
+words).
+
+**Unrecovered (family):** `0x102c44e0` SetFollowerBoss; move probe `0x102e7880`; node network
+`DAT_1093407c`; interesting-place list; ped-link search; combat-start activity names; camera
+engine query; occluded-delay and zombie-grapple cvars; `CVStatList_t` type-0 list; expression-map
+reset `0x103b9f50`; ghoul particle create `0x100fbc90`; `m_flNextListenTime` (bound private as
+last-listen); `m_bCineScriptHidden` (`+0x5d78` bound to `bHidden`, not cleared on `NPCInit`).
+

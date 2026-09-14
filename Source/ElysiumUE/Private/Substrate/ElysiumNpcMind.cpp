@@ -88,14 +88,16 @@ void FElysiumNpcMind::SetCurrentStateTyped(EElysiumNpcState NewState)
 {
 	CurrentState = NewState;
 	// Any typed write retires the raw overlay, so `NpcStateRetail()` can never answer a stale id
-	// the typed word has since moved away from.
-	PendingRetailNpcState = 0;
+	// the typed word has since moved away from. The retired value is `INDEX_NONE`, not 0, because
+	// **0 is a retail state** — `NPC_STATE_NONE`, which `CAI_BaseNPCTroika::NPCInit` writes to
+	// `m_NPCState` at `1029a0f5` and every state reader can see.
+	PendingRetailNpcState = INDEX_NONE;
 }
 
 void FElysiumNpcMind::SetDesiredStateTyped(EElysiumNpcState NewState)
 {
 	DesiredState = NewState;
-	PendingRetailIdealState = 0;
+	PendingRetailIdealState = INDEX_NONE;
 }
 
 void FElysiumNpcMind::WriteNpcStateRetail(int32 RetailId)
@@ -116,7 +118,7 @@ void FElysiumNpcMind::WriteIdealStateRetail(int32 RetailId)
 
 int32 FElysiumNpcMind::NpcStateRetail() const
 {
-	if (PendingRetailNpcState != 0)
+	if (PendingRetailNpcState != INDEX_NONE)
 	{
 		return PendingRetailNpcState;
 	}
@@ -125,7 +127,7 @@ int32 FElysiumNpcMind::NpcStateRetail() const
 
 int32 FElysiumNpcMind::IdealStateRetail() const
 {
-	if (PendingRetailIdealState != 0)
+	if (PendingRetailIdealState != INDEX_NONE)
 	{
 		return PendingRetailIdealState;
 	}

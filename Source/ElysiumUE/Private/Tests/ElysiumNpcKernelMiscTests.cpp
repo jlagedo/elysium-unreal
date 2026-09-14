@@ -502,6 +502,11 @@ bool FElysiumNpcKernelMiscCanSeekCoverTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Npc });
+	// The window this case measures is exactly one second wide and `m_flCanSeekCoverTimer` is a
+	// FLOAT against a double clock, so the boundary assertion below is only exact on a stamp both
+	// types represent exactly. The fixture's clock stands at the NPC's first think (a tenth of a
+	// second, which float rounds up), so the case puts it on a whole second first.
+	Fixture.World.Tick(1.0);
 	const double Now = Fixture.World.NowSeconds();
 
 	// Arm 1: `COND_ENEMY_OCCLUDED` (0x48) answers true on its own, before the clock is read at all.
@@ -790,6 +795,10 @@ bool FElysiumNpcKernelMiscSpeciesBodiesTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Npc });
+	// `m_flFishTimer` is a FLOAT against a double clock, so the `<= curtime` boundary below is
+	// only exact on a stamp both types represent. The fixture's clock stands at the NPC's first
+	// think (a tenth of a second, which float rounds up), so this case puts it on a whole second.
+	Fixture.World.Tick(1.0);
 	const double Now = Fixture.World.NowSeconds();
 
 	// `0x10381c00` / `0x10381ca0` — the form bit and its timer.

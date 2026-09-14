@@ -241,7 +241,11 @@ bool FElysiumNpcKernelDebug10TraceMessagesTest::RunTest(const FString&)
 	const FString Flush = ConstNpc->TraceMessageFormat(TEXT("msg"), 0);
 	TestTrue(TEXT("the formatter carries the message"), Indented.Contains(TEXT("msg")));
 	TestTrue(TEXT("...behind the %-20s debug name"), Indented.StartsWith(TEXT("subject ")));
-	TestTrue(TEXT("...and the %6.2f curtime column"), Indented.Contains(TEXT("0.00 : ")));
+	// The column is `curtime`, and the fixture's clock stands at the NPC's first think — `NPCInit`
+	// (`0x1029a0b0`) arms it a tenth of a second after Activate, so the world is at 0.10 here.
+	TestTrue(TEXT("...and the %6.2f curtime column"),
+		Indented.Contains(FString::Printf(TEXT("%6.2f : "),
+			FElysiumNpcWorldFixture::FirstThinkSeconds)));
 	// `%*s` is the indent, so level 3 and level 0 are DIFFERENT strings — which is what proves the
 	// width argument reaches the format at all.
 	TestNotEqual(TEXT("an indent of 3 is not an indent of 0"), Indented, Flush);
@@ -715,25 +719,28 @@ bool FElysiumNpcKernelDebug10TroikaGeometryTest::RunTest(const FString&)
 	}
 	Npc->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
 
-	// --- `0x1000`: the four boxes, of which the seams leave the attack-extents one ------------------
+	// --- `0x1000`: Troika's attack-extents box, then the base body's degenerate ±5 box --------------
 	//
-	// The collision OBB, the `"Bip01"` bone and the alternate hull are all seams that refuse, so
-	// three of the four sub-arms are silent; the fourth is live, because `GetAttackExtents()`
-	// (slot 16, story 29c) answers a non-zero vector and the arm's gate is `!= vec3_origin`. With
-	// the OBB at zero the box is exactly `-extents` to `+extents`.
+	// Troika 2c is live because `CAI_BaseNPCTroika::NPCInit` `0x1029a0b0` writes
+	// `m_vecSavedAttackExtents = (-1,-1,-1)`, which is not `vec3_origin`. The collision OBB,
+	// `"Bip01"` bone and alternate hull seams still refuse. The tail
+	// `CAI_BaseNPC::DrawDebugGeometryOverlays` `0x10275760` then draws the degenerate ±5 box
+	// (family Debug, 29c-1). Two boxes, both `NDebugOverlay::Box` at 255/128/0 alpha 20.
 	Npc->DebugOverlays = 0x1000;
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaDrawDebugGeometryOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestEqual(TEXT("only the attack-extents box survives the 0x1000 arm's seams"),
-			Lines.Num(), 1);
-		if (Lines.Num() == 1)
+		TestEqual(TEXT("1029a0b0 extents open Troika 2c; 10275760 adds the ±5 degenerate box"),
+			Lines.Num(), 2);
+		if (Lines.Num() == 2)
 		{
 			TestEqual(TEXT("through NDebugOverlay::Box"), FString(Lines[0].Retail),
 				FString(TEXT("NDebugOverlay::Box")));
 			TestTrue(TEXT("in the listing's 255/128/0 at alpha 20"),
 				Lines[0].Text.Contains(TEXT("rgba=(255 128 0 20)")));
+			TestTrue(TEXT("the base degenerate ±5 box"),
+				Lines[1].Text.Contains(TEXT("mins=(-5.0 -5.0 -5.0) maxs=(5.0 5.0 5.0)")));
 		}
 	}
 	TestEqual(TEXT("the alternate hull answers m_eHull, which closes the second-box gate"),

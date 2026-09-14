@@ -184,9 +184,12 @@ namespace
 	ELYSIUM_NPC_WORD_CHAIN(0x5d70, "FElysiumScriptedCharacter::ScriptPhase",
 		"the port spells retail's script state as the phase plus the entity's script owner"),
 	ELYSIUM_NPC_WORD_CHAIN(0x5d74, "FElysiumEntity::ScriptOwner", "m_hCine, on the entity chain"),
-	ELYSIUM_NPC_WORD_CHAIN(0x5d78, "FElysiumEntity::bHidden",
-		"script-hide is the chain's ScriptHide/ScriptUnhide pair, which keeps no separate cine "
-			"latch"),
+	ELYSIUM_NPC_WORD_NOTED(0x5d78, FElysiumNpc, bCineScriptHidden,
+		"m_bCineScriptHidden is its OWN byte, not the entity's hidden flag: retail carries "
+			"m_bScriptHidden at +0x0f4 (the word 0x100b5190 answers, which the chain's bHidden is) "
+			"and m_fEffects' EF_NODRAW at +0x19c separately. CAI_BaseNPC::NPCInit clears this one "
+			"and CAI_BaseNPCTroika::ScriptUnhide (0x102c1ec0) reads and clears it; its setter, "
+			"retail's ScriptHide, is not ported, so the unhide tail still reads bHidden and says so"),
 	ELYSIUM_NPC_WORD_NOTED(0x5d7c, FElysiumNpc, ScriptArrivalActivity,
 		"an activity enum with no port counterpart, so the registered number"),
 	ELYSIUM_NPC_WORD(0x5d80, FElysiumNpc, ScriptArrivalSequence),

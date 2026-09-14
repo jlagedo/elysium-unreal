@@ -1200,7 +1200,7 @@ float FElysiumNpc::RetailFieldOfViewDot() const
 {
 	// `m_flFieldOfView` (`+0x1574`). Story 29c-1's view-cone arm already answers this word from the
 	// sense layer's default cone, which is the same question.
-	return ElysiumNpcSense::DefaultViewConeDot;
+	return FieldOfViewDot;
 }
 
 int32 FElysiumNpc::RetailAlternateHullKind() const

@@ -150,11 +150,13 @@ namespace
 			World = MakeUnique<FElysiumEntityWorld>(static_cast<AActor*>(nullptr),
 				static_cast<UElysiumSessionSubsystem*>(nullptr), Services.Bundle());
 			World->Load(MakeFootstepDefs());
-			World->Activate(0.0);
+			World->Activate(-FElysiumNpc::NpcInitThinkDelay);
 			// One deterministic think, no executor action: `Activate` only ARMS the mind's admission
 			// barrier, and an unadmitted NPC refuses `BeginDialogueBodySession`, which the muted case
 			// needs in order to open a conversation at all. Same line, same reason, as
-			// `ElysiumDialogueCameraTests`.
+			// `ElysiumDialogueCameraTests`. The map is activated a tenth of a second before this
+			// zero because `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms that think at
+			// `curtime + 0.1` (`_DAT_104493d0`), so it falls on this frame.
 			World->Tick(0.0);
 			auto Find = [this](const TCHAR* Name) -> FElysiumNpc*
 			{

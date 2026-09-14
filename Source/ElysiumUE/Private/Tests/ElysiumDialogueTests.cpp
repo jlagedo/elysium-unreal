@@ -13,6 +13,7 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
@@ -1327,7 +1328,7 @@ bool FElysiumDlgAutomaticTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Jack));
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 	World.Tick(0.0); // admit the NPC mind/body before dialogue acquires it
 	FElysiumEntity* JackEntity = World.FindByName(TEXT("Jack"));
 	if (!TestNotNull(TEXT("world fixture has Jack"), JackEntity))
@@ -1432,7 +1433,7 @@ bool FElysiumDialogueSessionIdentityTest::RunTest(const FString&)
 	}
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 	World.Tick(0.0);   // admit the NPC minds/bodies before dialogue acquires them
 	FElysiumEntity* Jack = World.FindByName(TEXT("Jack"));
 	FElysiumEntity* Nines = World.FindByName(TEXT("Nines"));
@@ -1714,7 +1715,7 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Waveover));
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 	World.Tick(0.0); // admit the NPC mind before dialogue acquires the body
 	FElysiumEntity* JackEntity = World.FindByName(TEXT("Jack"));
 	FElysiumEntity* WaveoverEntity = World.FindByName(TEXT("sJack_waveover"));

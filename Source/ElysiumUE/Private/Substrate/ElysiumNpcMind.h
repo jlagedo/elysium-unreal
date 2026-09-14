@@ -53,6 +53,7 @@ public:
 	// so it is a plain set/consume pair rather than a `RequestState` call. NOT CONSUMED yet: the
 	// state machine that reads it is story 29e's.
 	void ForceStateChange() { bForceStateChange = true; }
+	void ClearForceStateChange() { bForceStateChange = false; }
 	bool IsStateChangeForced() const { return bForceStateChange; }
 
 	static bool IsSupportedState(EElysiumNpcState State);
@@ -76,8 +77,13 @@ public:
 
 	// `m_IdealNPCState` (`+0x5cc4`) as the raw retail id the write above stored, or 0 for "never
 	// written". `IdealState()` beside it is this runtime's typed ideal and is the one every other
-	// system reads.
-	int32 DesiredRetailState() const { return PendingRetailIdealState; }
+	// system reads. The overlay's own "never written" is `INDEX_NONE` — 0 is `NPC_STATE_NONE`, a
+	// state retail writes — and this accessor keeps answering 0 for it, which is what its callers
+	// and `RequestDesiredState`'s suite mean by "nothing was written".
+	int32 DesiredRetailState() const
+	{
+		return PendingRetailIdealState == INDEX_NONE ? 0 : PendingRetailIdealState;
+	}
 
 	// Story 29e, family State19: `SetState` (`0x1026e340`) writes BOTH `+0x5cc0` and `+0x5cc4` as
 	// raw `NPC_STATE` ids, including values this runtime's typed enum has no member for (8 FLEE,
@@ -122,11 +128,12 @@ private:
 	// 0xb (HUNT) or 0xe, so a body that writes one of those has nowhere to put it; this is where it
 	// goes until the vocabulary grows, and `RequestDesiredState` is its only writer. Session state:
 	// the two flee arms rewrite it every pass they fire, and no save carries an ideal state.
-	int32 PendingRetailIdealState = 0;
+	int32 PendingRetailIdealState = INDEX_NONE;
 	// The SAME retail word as `CurrentState` above (`+0x5cc0 m_NPCState`), held a second time as
-	// the raw retail id — NOT a new offset. 0 means "never written via SetState"; readers then
-	// map `CurrentState`.
-	int32 PendingRetailNpcState = 0;
+	// the raw retail id — NOT a new offset. `INDEX_NONE` means "never written raw"; readers then
+	// map `CurrentState`. It cannot be 0, because **0 is `NPC_STATE_NONE`**: `NPCInit` writes it
+	// (`1029a0f5`) and the state machine reads it back until the first `SetState`.
+	int32 PendingRetailNpcState = INDEX_NONE;
 	bool bForceStateChange = false;  // +0x1b28 m_bForceStateChange (datamap)
 	// +0x5cc8 m_flLastStateChangeTime (datamap) — an absolute curtime stamp, carried as double
 	double LastStateChangeTime = 0.0;

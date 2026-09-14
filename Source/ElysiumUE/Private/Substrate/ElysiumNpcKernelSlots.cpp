@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 585 generated virtuals: 83 carry the retail default story 29c recovered, 313 are defined by hand
-// in the substrate, and 189 are still stubs — 145 29c, 17 29d, 27 29e.
+// 585 generated virtuals: 83 carry the retail default story 29c recovered, 316 are defined by hand
+// in the substrate, and 186 are still stubs — 145 29c, 17 29d, 24 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -828,10 +828,8 @@ void FElysiumNpc::OnSave()
 
 // slot 130 0x102998c0 (walked) `void OnRestore(bool)`
 //   layer 22, story 29e
-void FElysiumNpc::OnRestore(bool)
-{
-	FireKernelSlot(TEXT("OnRestore"), TEXT("0x102998c0"), TEXT("29e"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::OnRestore`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 131 0x10026c10 (walked) `int RequiredEdictIndex()`
 //   layer 0, story 29c
@@ -2746,10 +2744,8 @@ void FElysiumNpc::Slot411()
 
 // slot 420 0x1029a0b0 (sdk) `void NPCInit()`
 //   layer 22, story 29e
-void FElysiumNpc::NPCInit()
-{
-	FireKernelSlot(TEXT("NPCInit"), TEXT("0x1029a0b0"), TEXT("29e"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::NPCInit`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 421 0x101a6540 (sdk) `void PostNPCInit()`
 //   layer 0, story 29c
@@ -2760,10 +2756,8 @@ void FElysiumNpc::PostNPCInit()
 
 // slot 422 0x1029a8b0 (walked) `void StartNPC()`
 //   layer 21, story 29e
-void FElysiumNpc::StartNPC()
-{
-	FireKernelSlot(TEXT("StartNPC"), TEXT("0x1029a8b0"), TEXT("29e"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::StartNPC`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 423 0x1027e120 (walked) `bool IsTemplate()`
 //   layer 0, story 29c

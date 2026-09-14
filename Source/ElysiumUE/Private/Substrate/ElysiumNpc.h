@@ -604,6 +604,9 @@ public:
 	// `ThinkDead` polls on its own named 0.1 s and is on none of the four clocks, so the commit
 	// arms the entity think and nothing else.
 	void ArmThinkNow(double Now);
+	// The same write at an arbitrary stamp — `m_flNextThink := Stamp`, rounded so a float stamp
+	// never lands above the double frame it names.
+	void ArmThinkAt(double Stamp);
 	// Slot 584 `0x1028d910`: slot 614 and then every `Last` mirror := now. The broadcast form
 	// (`SetAIEnabled(true)`, the node-graph rebuild) and `TASK_WAIT_PVS`'s completion use it.
 	void ResetAllThinkStamps(double Now)
@@ -1142,6 +1145,12 @@ public:
 	double NextDodgeTime = 0.0;
 	// +0x65a8 m_QueuedBurnDamage (doc) — CTakeDamageInfo maps to this port's damage packet
 	TArray<FElysiumDmg> QueuedBurnDamage;
+	// `CAI_BaseNPCTroika::EnterGrappleState` (`0x102b5c00`) discharges that list into the partner
+	// and refuses the grapple. SEAM: retail stamps each record's hit group through
+	// `0x101c2a10(rec, RandomInt(0,1) ? 4 : 5)` and this runtime's damage packet carries no hit
+	// group, so the discharge is counted and the drawn hitbox recorded.
+	int32 GrappleBurnDischarges = 0;
+	int32 LastGrappleBurnHitbox = INDEX_NONE;
 	// +0x65bc m_flNextBurnTime (datamap) — FIELD_TIME; an absolute stamp
 	double NextBurnTime = 0.0;
 	// +0x65e0 m_sCombatStartActivity (datamap) — the authored combat-start activity key
@@ -1252,6 +1261,7 @@ public:
 	#include "Substrate/ElysiumNpcKernelSquad.inl"
 	#include "Substrate/ElysiumNpcKernelState19.inl"
 	#include "Substrate/ElysiumNpcKernelTranslate19.inl"
+	#include "Substrate/ElysiumNpcKernelLifecycle19.inl"
 	#include "Substrate/ElysiumNpcKernelTroikaHelpers.inl"
 
 private:

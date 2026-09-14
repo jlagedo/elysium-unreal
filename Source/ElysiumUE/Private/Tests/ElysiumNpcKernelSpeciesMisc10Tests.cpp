@@ -8,6 +8,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -87,7 +88,7 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 	F.Guard->Grapple.Partner = F.Other->Handle;
 	F.Guard->BaseLeaveGrappleState();
 	// The output rides the world's event queue; one tick delivers it.
-	F.World.World.Tick(0.0);
+	F.World.World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 
 	TestEqual(TEXT("`1026ce30`: m_OnGrappleEnd fires with NO grapple-type gate"),
 		F.World.Counter(TEXT("grapple_ends")), Before + 1.f, 0.001f);
@@ -100,6 +101,69 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 	F.Guard->BaseLeaveGrappleState();
 	TestFalse(TEXT("`10007ea4`: the decrement saturates rather than going negative"),
 		F.Guard->NpcFlags.IsOblivious());
+	return true;
+}
+
+// =================================================================================================
+// `CAI_BaseNPCTroika::EnterGrappleState` — `0x102b5c00`, slot 379. The twin of the body above: the
+// port gated its base half on `Grapple.Type == StealthKill` and retail has no such gate, exactly as
+// story 29d found for `LeaveGrappleState`.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10EnterGrappleTest,
+	"Elysium.Substrate.NpcKernelSpeciesMisc10.TroikaEnterGrappleState", GSpeciesMisc10Flags)
+bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
+{
+	FSpeciesMisc10Fixture F;
+	if (F.Guard == nullptr || F.Other == nullptr)
+	{
+		AddError(TEXT("no NPCs"));
+		return false;
+	}
+
+	// --- Step 1: a queued burn list discharges into the PARTNER and refuses the grapple ----------
+	//
+	// `102b5c06`: `if (0 < m_QueuedBurnDamage.Count)`, then per record `rec.attacker = rec.inflictor
+	// = this` (`102b5c1d`/`102b5c20`), `0x101c2a10(rec, RandomInt(0,1) ? 4 : 5)` and
+	// `partner->TakeDamage(rec)` (`102b5c3c`); `102b5d29` returns FALSE with the list intact.
+	{
+		FElysiumDmg Burn;
+		Burn.Family = EElysiumDmgFamily::Lethal;
+		Burn.BaseDamage = 3;
+		F.Guard->QueuedBurnDamage.Add(Burn);
+		F.Guard->QueuedBurnDamage.Add(Burn);
+		const int32 OtherHealthBefore = F.Other->Health;
+		TestFalse(TEXT("`102b5d29`: a queued burn list REFUSES the grapple"),
+			F.Guard->EnterGrappleState(F.Other->Handle, EElysiumGrappleRole::Attacker,
+				EElysiumGrappleType::Feed, 0, false));
+		TestEqual(TEXT("`102b5c3c`: every queued record is handed to the partner"),
+			F.Guard->GrappleBurnDischarges, 2);
+		TestTrue(TEXT("`101c2a10`: the hitbox drawn is 4 or 5"),
+			F.Guard->LastGrappleBurnHitbox == 4 || F.Guard->LastGrappleBurnHitbox == 5);
+		TestEqual(TEXT("...and the list is left standing, so the next attempt discharges it again"),
+			F.Guard->QueuedBurnDamage.Num(), 2);
+		TestFalse(TEXT("the refused grapple took no oblivious count"),
+			F.Guard->NpcFlags.IsOblivious());
+		(void)OtherHealthBefore;
+		F.Guard->QueuedBurnDamage.Reset();
+	}
+
+	// --- Step 2: with an empty list the base body runs, UNGATED by the grapple type --------------
+	//
+	// `102b5d2c` -> `0x1026cdc0` -> `0x1026d130` (SetEnemy(NULL), DisconnectFromSquad,
+	// `m_iIsOblivious++`), the `m_OnGrappleBegin` output, then `CBaseCombatCharacter`'s body.
+	ElysiumNpcEnemy::SetEnemy(*F.Guard, F.Other->Handle);
+	F.Guard->Schedule.Clear();
+	ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+	TestTrue(TEXT("a program is installed before the grapple"), F.Guard->Schedule.IsRunning());
+	const bool bEntered = F.Guard->EnterGrappleState(F.Other->Handle,
+		EElysiumGrappleRole::Attacker, EElysiumGrappleType::Feed, 0, false);
+	TestTrue(TEXT("`102b5d2c`: a NON-stealth grapple still takes the base body"), bEntered);
+	TestNull(TEXT("`1026d130`: SetEnemy(NULL) with no grapple-type gate"), F.Guard->GetEnemy());
+	TestTrue(TEXT("`10007ea0`: the oblivious count is raised with no MADE_OBLIVIOUS"),
+		F.Guard->NpcFlags.IsOblivious());
+	// --- Step 5: `102b5d1c` `ClearSchedule` on the accepting arm --------------------------------
+	TestFalse(TEXT("`10280d30`: the running program is cleared"), F.Guard->Schedule.IsRunning());
 	return true;
 }
 
@@ -137,7 +201,11 @@ bool FElysiumSpeciesMisc10BullseyeSpawnTest::RunTest(const FString&)
 	TestEqual(TEXT("`10356916`: m_takedamage is 2 without spawnflag 0x20000"), R.TakeDamage, 2);
 	TestEqual(TEXT("`10356928`: m_fEffects gains 0x40 at the tail"), R.Effects, 0x40);
 	// `_DAT_104493d0` is a DOUBLE 0.1 read out of the pinned image — NOT the 0.0 `ThinkSet` takes.
-	TestEqual(TEXT("`1035688c`: m_flNextThink = curtime + 0.1"), R.NextThink, 0.1, 0.0001);
+	// `curtime` is the fixture's clock, which stands at the NPC's first think
+	// (`FirstThinkSeconds`) because `NPCInit` (`0x1029a0b0`) arms that think a tenth of a second
+	// after Activate rather than at Activate.
+	TestEqual(TEXT("`1035688c`: m_flNextThink = curtime + 0.1"), R.NextThink,
+		FElysiumNpcWorldFixture::FirstThinkSeconds + 0.1, 0.0001);
 
 	// The three spawnflag arms, each in its own pass.
 	F.Guard->SpawnFlags = 0x80000 | 0x10000 | 0x20000;

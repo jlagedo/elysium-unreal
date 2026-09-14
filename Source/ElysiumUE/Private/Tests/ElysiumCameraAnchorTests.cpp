@@ -12,6 +12,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumCameraComponent.h"
+#include "Substrate/ElysiumNpc.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
@@ -696,7 +697,7 @@ CameraShotTable { Jack
 			// — which is what `DialogTarget` names on every shipped path (`SetShot` arm 2 reads
 			// `subject+0xFE8`, and every shipped caller's subject is the player).
 			World.SpawnPlayer();
-			World.Activate(0.0);
+			World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 			World.Tick(0.0);   // the NPC mind admits its body on its first think
 			World.OpenDialog(Walker->Handle, MakeOneLineConversation());
 			TestTrue(TEXT("the walker is now the open conversation's owner"),

@@ -1026,7 +1026,7 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		Defs.Defs.Add(MoveTemp(Prop));
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 	};
 
 	// The head frame every assertion measures in: eye height, facing +X.
@@ -1525,7 +1525,11 @@ bool FElysiumGazeDialogueTest::RunTest(const FString&)
 		Defs.Defs.Add(MoveTemp(Prop));
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and with it the mind's admission, which `OpenDialog` requires — falls
+		// at `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 	};
 
 	// The smallest conversation that opens: one spoken NPC line.

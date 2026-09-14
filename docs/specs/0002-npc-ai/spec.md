@@ -1045,7 +1045,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Recovery banked 2026-09-13 (all twelve callers walked, in that section): `NPCInit` clears
   unconditionally on every class; Troika's grapple entry clears after the queued-burn refusal
   (`+0x65a8` ← `CreateDamageEffects 0x10330d00`), the dialogue abort and the cine cancel, and
-  base entry `0x1026cdc0` is not type-gated (the port's stealth-only gate is a divergence);
+  base entry `0x1026cdc0` is not type-gated. **That divergence is CLOSED (story 29e's review,
+  2026-09-14):** `FElysiumNpc::EnterGrappleState` now ports `0x102b5c00` whole — the burn-list
+  discharge and refusal, the ungated base half, the dialogue stop, the cine cancel with its
+  immediate `SetState(m_IdealNPCState)`, and the trailing `ClearSchedule` — with the
+  stealth-only gate deleted, exactly as 29d deleted `LeaveGrappleState`'s twin. Case
+  `Elysium.Substrate.NpcKernelSpeciesMisc10.TroikaEnterGrappleState`;
   `OnRestore`'s `DiscardScheduleState` keep-rules; `npc_reset` reloads nothing; the CopGenerator
   chain to `+0x63e0`; `0x10084260` and `0x102c6ff0` are dead. The port work is the wiring above.
   Size: S. Effort: Sonnet / medium.

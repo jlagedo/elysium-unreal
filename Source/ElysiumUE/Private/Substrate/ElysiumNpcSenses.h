@@ -388,6 +388,17 @@ public:
 
 	void Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc);
 
+	// `thunk_FUN_102cc7e0(&m_DelayedSoundConditionList)` — the SECOND of the two delayed-list clears
+	// `CAI_BaseNPC::NPCInit` (`0x10273390`) issues. The first is the delayed CONDITION list, which
+	// the cognition half owns; this is the sound one at `+0x1ae0`, private to this struct.
+	void ClearPendingSounds() { PendingSounds.Reset(); }
+
+	// `m_flNextListenTime = 0` (`+0x63d0`), written by `CAI_BaseNPCTroika::NPCInit` at `1029a0fb`
+	// before it chains the base. The shape map binds the word here as `LastListenTime` because this
+	// runtime stamps the listen it DID rather than the one it owes; 0 is the same admission either
+	// way — the next `Listen` is due immediately.
+	void ResetListenClock() { LastListenTime = 0.0; }
+
 private:
 	struct FPendingSound
 	{

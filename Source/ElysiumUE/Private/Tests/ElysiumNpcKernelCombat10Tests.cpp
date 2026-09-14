@@ -1241,8 +1241,10 @@ bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 	N.BachRepositionTimer = 0.0;
 	N.Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x7b));
 	TestEqual(TEXT("0x103642f0 COND 0x7b answers 0x15a"), N.SelectScheduleRangedCombat(0), 0x15a);
+	// `curtime` is the fixture's clock, which stands at the NPC's first think: `NPCInit`
+	// (`0x1029a0b0`) arms that think a tenth of a second after Activate rather than at Activate.
 	TestEqual(TEXT("...and stamps +0x6690 with curtime + _DAT_10463584 (15.0)"),
-		N.BachRepositionTimer, 15.0, 1e-4);
+		N.BachRepositionTimer, FElysiumNpcWorldFixture::FirstThinkSeconds + 15.0, 1e-4);
 	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x7b));
 
 	// `10364355`: with NO weapon, COND `0x7a` answers 0x158 and COND `0x79` answers 0x159.

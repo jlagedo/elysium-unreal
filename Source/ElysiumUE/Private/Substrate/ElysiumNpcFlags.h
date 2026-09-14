@@ -166,6 +166,8 @@ public:
 	void SetRawWord2Bits(uint32 Mask) { Word2 |= Mask; }
 	void ClearRawWord2Bits(uint32 Mask) { Word2 &= ~Mask; }
 	bool HasRawWord2Bits(uint32 Mask) const { return (Word2 & Mask) != 0; }
+	/** Whole-word assign of `m_bfAINPCFlags` (`+0x14b8`). `NPCInit` (`0x1029a0b0`) writes 0. */
+	void AssignAiFlagsWord(uint32 Value) { Word1 = Value; }
 
 	void Set(EElysiumNpcFlag Flag) { Word1 |= static_cast<uint32>(Flag); }
 	void Set(EElysiumNpcFlag2 Flag) { Word2 |= static_cast<uint32>(Flag); }

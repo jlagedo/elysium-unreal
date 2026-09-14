@@ -433,6 +433,28 @@ bool FElysiumNpcMaker::IsFleshpileMaker() const
 	return Def != nullptr && Def->Classname.Equals(FleshpileMakerClassname, ESearchCase::IgnoreCase);
 }
 
+void FElysiumNpcMaker::OnRestore(bool /*bFromLoad*/)
+{
+	// `0x1034c260`: FindEntityByClassname(NULL, "npc_VAndreiBlood") then dynamic_cast into
+	// `DAT_10938040`, then `CAI_BaseNPCTroika::OnRestore`.
+	if (World != nullptr)
+	{
+		for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
+		{
+			if (!Candidate.IsValid() || Candidate->Def == nullptr)
+			{
+				continue;
+			}
+			if (Candidate->Def->Classname.Equals(TEXT("npc_VAndreiBlood"), ESearchCase::IgnoreCase))
+			{
+				FElysiumNpc::FleshpileAndreiSingleton() = Candidate->Handle;
+				break;
+			}
+		}
+	}
+	++MakerOnRestoreTroikaChains;
+}
+
 FElysiumNpc* FElysiumNpcMaker::FleshpileOwner() const
 {
 	// Retail's `DAT_10938040`: `FindEntityByClassname(NULL, "npc_VAndreiBlood")` plus

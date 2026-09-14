@@ -2285,7 +2285,12 @@ bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle Player = World.SpawnPlayer();
 	World.Activate(0.0);
-	World.Tick(0.0); // admit the NPC mind/body before dialogue acquires it
+	// The admitting think falls at `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`)
+	// arms `m_flNextThink` there on the map's first second (`_DAT_104493d0`), and an NPC that has
+	// not thought has not passed the mind's admission barrier, so it refuses the dialogue body
+	// claim. This world carries a game state, so `curtime` is the session clock at zero and the
+	// stamp is a flat 0.1.
+	World.Tick(FElysiumNpc::NpcInitThinkDelay);
 
 	FElysiumEntity* NpcEntity = World.FindByName(TEXT("Truthy"));
 	FElysiumNpc* Npc = NpcEntity ? NpcEntity->AsNpc() : nullptr;
@@ -2484,7 +2489,7 @@ static TUniquePtr<FLockWorld> StandLock(const TCHAR* LockClass, const TCHAR* Par
 	Fixture->World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Fixture->Services.Bundle());
 	Fixture->World->Load(MoveTemp(Defs));
 	Fixture->Player = Fixture->World->SpawnPlayer();
-	Fixture->World->Activate(0.0);
+	Fixture->World->Activate(-FElysiumNpc::NpcInitThinkDelay);
 	Fixture->PlayerEntity = Fixture->World->FindPlayer();
 	FElysiumEntity* LockEntity = Fixture->World->FindByName(TEXT("lock"));
 	Fixture->Lock = LockEntity ? LockEntity->AsLockableEntity() : nullptr;

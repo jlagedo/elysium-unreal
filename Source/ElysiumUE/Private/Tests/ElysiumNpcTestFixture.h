@@ -69,7 +69,15 @@ struct FElysiumNpcWorldBuilder
 	FElysiumEntityDef& AddNpc(const TCHAR* TargetName, const FVector& Origin = FVector::ZeroVector,
 		const TCHAR* Classname = TEXT("npc_VHumanCombatant"))
 	{
-		return AddEntity(Classname, TargetName, Origin);
+		FElysiumEntityDef& Def = AddEntity(Classname, TargetName, Origin);
+		// Every NPC a shipped map stands carries a `stattemplate`: 2055 of the 2060 `npc_*` entities
+		// in the exported `.ents` author one, and the five that do not are `npc_VNewscaster`. It is
+		// not decoration — `CAI_BaseNPCTroika::NPCInit` (`1029a4a2`) sets `m_bIsBCCTargetable` only
+		// when the string is non-empty, and an NPC without that byte is invisible to the sight and
+		// relation gates that read it. A fixture NPC therefore carries one too, so a case is
+		// standing what the game stands.
+		Def.Keys.Add(TEXT("stattemplate"), TEXT("Thug"));
+		return Def;
 	}
 
 	// A `math_counter`, the recording surface every I/O-wired case reads back as a number.
@@ -125,9 +133,20 @@ struct FElysiumNpcWorldFixture
 		Configure(Services);
 		World.Load(MoveTemp(Builder.Defs));
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		// The map stands up a tenth of a second BEFORE the case's zero. `CAI_BaseNPCTroika::NPCInit`
+		// (`0x1029a0b0`) runs from Activate and its first-second arm puts the first think at
+		// `curtime + 0.1` (`_DAT_104493d0`), not at curtime — an NPC that has not reached that stamp
+		// has not run `StartNPC`, is still in `NPC_STATE_NONE` (`1029a0f5`) and has not passed this
+		// runtime's admission barrier, so it refuses every body claim. Activating at `-0.1` is the
+		// honest way to say "the map has been up for a tenth of a second": the retail delay is kept
+		// intact and the first think lands on the frame at zero, which is the clock every case
+		// measures its absolute stamps from.
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
 		World.Tick(0.0);
 	}
+
+	// The clock at which the NPC's first think falls — the frame this fixture ends on.
+	static constexpr double FirstThinkSeconds = 0.0;
 
 	// The common case: nothing needs configuring before the world stands up.
 	explicit FElysiumNpcWorldFixture(FElysiumNpcWorldBuilder&& Builder)

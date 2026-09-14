@@ -13,6 +13,7 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
@@ -386,7 +387,11 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	// The first think — and the mind admission every body claim needs — falls at
+	// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+	// there on the map's first second (`_DAT_104493d0`).
+	World.Tick(0.0);
 
 	FElysiumEntity* Seq = World.FindByName(TEXT("seq1"));
 	FElysiumEntity* Target = World.FindByName(TEXT("mover1"));
@@ -450,7 +455,11 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World2(nullptr, nullptr);
 	World2.Load(MoveTemp(PlayerDefs));
-	World2.Activate(0.0);
+	World2.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	// The first think — and the mind admission every body claim needs — falls at
+	// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+	// there on the map's first second (`_DAT_104493d0`).
+	World2.Tick(0.0);
 	FElysiumEntity* PSeq = World2.FindByName(TEXT("pseq"));
 	FElysiumEntity* Count2 = World2.FindByName(TEXT("counter1"));
 	if (TestNotNull(TEXT("pseq resolved"), PSeq) && TestNotNull(TEXT("counter1 resolved"), Count2))
@@ -534,7 +543,11 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.ResolvedNpcGroundSpeedCmPerSecond = 136.7f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
 		FElysiumEntity* Npc = World.FindByName(TEXT("Isaac"));
@@ -595,7 +608,11 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.ResolvedNpcGroundSpeedCmPerSecond = 0.f;   // older sidecar: clip, no motion block
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
 		FElysiumEntity* Npc = World.FindByName(TEXT("Isaac"));
@@ -664,7 +681,11 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.ResolvedNpcSequenceGroundSpeedCmPerSecond = 72.2f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
 		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
@@ -701,7 +722,11 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.bNpcSequenceClipsResolve = false;   // the stub carries no motion for this clip
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
 		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
@@ -759,7 +784,11 @@ bool FElysiumPlayerControllerSequenceLocomotionTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	// The first think — and the mind admission every body claim needs — falls at
+	// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+	// there on the map's first second (`_DAT_104493d0`).
+	World.Tick(0.0);
 	FElysiumPlayer* Player = World.FindPlayer();
 	if (!TestNotNull(TEXT("player exists"), Player))
 	{
@@ -898,7 +927,11 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat_a"));
 		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
@@ -931,7 +964,11 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat_a"));
 		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
@@ -969,7 +1006,11 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* First = World.FindByName(TEXT("beat_a"));
 		FElysiumEntity* Second = World.FindByName(TEXT("beat_b"));
@@ -1111,7 +1152,11 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		// engine PVS test about `m_hClosestPlayer`, and with none it never completes -- the stance
 		// machine could not resume after the beat because the idle program never cycled.
 		World.SpawnPlayer();
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
 		FElysiumEntity* Npc = World.FindByName(TEXT("Damsel"));
@@ -1176,7 +1221,11 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Services.ClipSeconds = 2.0f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
 		FElysiumEntity* Npc = World.FindByName(TEXT("Damsel"));
@@ -1237,7 +1286,11 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Services.ClipSeconds = 2.0f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
 		FElysiumEntity* Npc = World.FindByName(TEXT("Damsel"));
@@ -1339,7 +1392,11 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("hold_beat"));
 		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
@@ -1370,7 +1427,11 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("hold_beat"));
 		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
@@ -1445,7 +1506,11 @@ bool FElysiumMontageSlotRunTest::RunTest(const FString&)
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
 		if (!TestNotNull(TEXT("the beat resolved"), Seq))
@@ -1492,7 +1557,11 @@ bool FElysiumMontageSlotRunTest::RunTest(const FString&)
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		// The first think — and the mind admission every body claim needs — falls at
+		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
+		// there on the map's first second (`_DAT_104493d0`).
+		World.Tick(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
 		if (!TestNotNull(TEXT("the held beat resolved"), Seq))

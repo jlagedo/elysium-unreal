@@ -187,6 +187,12 @@ public:
 	 *  refuse on. */
 	class FElysiumNpc* FleshpileOwner() const;
 
+	/** `CNPCMaker_Fleshpile::OnRestore` `0x1034c260`, slot 130: bind `DAT_10938040` to the live
+	 *  `npc_VAndreiBlood`, then chain Troika `OnRestore`. The chain is a seam — this leaf is not
+	 *  `FElysiumNpc`. */
+	void OnRestore(bool bFromLoad);
+	int32 MakerOnRestoreTroikaChains = 0;
+
 	/** `CNPCMaker_Fleshpile::MakeNPC` `0x1034c2d0`, slot 617. */
 	EAttempt FUN_1034c2d0(bool bBypass);
 

@@ -134,7 +134,7 @@ namespace
 			{
 				// `Activate` arms admission and schedules the first think at t=0, so THIS tick is
 				// already the admission barrier. A case that wants an un-admitted mind must skip it.
-				World.Tick(0.0);
+				World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 			}
 
 			FElysiumEntity* GuardEnt = World.FindByName(TEXT("guard"));
@@ -171,7 +171,7 @@ namespace
 				for (int32 i = 0; i < 2; ++i)
 				{
 					Wake();
-					World.Tick(0.0);
+					World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 				}
 			}
 			if (Setup.bPatrol)

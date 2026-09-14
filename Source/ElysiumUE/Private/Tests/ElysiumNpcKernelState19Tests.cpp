@@ -47,6 +47,11 @@ namespace
 			Guard = World.Npc(TEXT("guard"));
 			Other = World.Npc(TEXT("other"));
 			Player = World.Player();
+			// Every case here reads or drives the STATE machine, which retail does not start until
+			// the NPC's first think: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) leaves
+			// `m_NPCState = NONE` (`1029a0f5`) with `m_IdealNPCState = IDLE`, and the NPCInitThink it
+			// arms at `curtime + 0.1` runs the NONE -> IDLE transition. The shared fixture advances
+			// to that think, so the guard is IDLE here before any body is called by hand.
 			FElysiumNpcWorldFixture::Quiet({ Guard, Other });
 		}
 	};

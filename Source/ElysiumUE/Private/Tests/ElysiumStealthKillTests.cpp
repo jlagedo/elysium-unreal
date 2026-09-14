@@ -169,7 +169,7 @@ namespace
 			{
 				World.EnqueueInput(TEXT("stealth_victim_maker"), TEXT("Spawn"), FElysiumVariant::Void(),
 					0.0, World.PlayerHandle(), World.PlayerHandle());
-				World.Tick(0.0);
+				World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 			}
 			Guard = Fixture.Npc(TEXT("guard"));
 			Player = Fixture.Player();

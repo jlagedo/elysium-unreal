@@ -221,8 +221,10 @@ bool FElysiumNpcKernelDamageAttackExtentsTest::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand the NPC"));
 		return false;
 	}
-	// The whole body is a three-word copy out of the word `SetAttackExtents` (`0x1009af40`) writes.
-	TestEqual(TEXT("an unset margin answers zero"), Npc->GetAttackExtents(), FVector::ZeroVector);
+	// `CAI_BaseNPCTroika::NPCInit` `0x1029a0b0` writes `m_vecSavedAttackExtents = (-1, -1, -1)`
+	// in SOURCE units (`1029a5xx`). Activate runs that body; the getter answers centimetres.
+	TestEqual(TEXT("1029a0b0 NPCInit seeds saved attack extents (-1,-1,-1)"),
+		Npc->GetAttackExtents(), FVector(-1.0, -1.0, -1.0) * ElysiumMove::U);
 	Npc->SetAttackExtents(FVector(3.0, 5.0, 7.0));
 	TestEqual(TEXT("the getter answers exactly what the setter wrote"),
 		Npc->GetAttackExtents(), FVector(3.0, 5.0, 7.0));

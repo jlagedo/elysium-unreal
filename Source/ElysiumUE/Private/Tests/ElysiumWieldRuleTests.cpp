@@ -142,7 +142,7 @@ namespace
 			World.Load(MoveTemp(Defs));
 			World.SpawnPlayer();
 			World.Activate(0.0);
-			World.Tick(0.0);
+			World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 			Player = World.FindPlayer();
 		}
 
@@ -440,7 +440,7 @@ bool FElysiumWieldNpcLoadoutTest::RunTest(const FString&)
 	}
 	World.SpawnPlayer();
 	World.Activate(0.0);
-	World.Tick(0.0);
+	World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 
 	FElysiumEntity* Entity = World.FindByName(TEXT("clawed_guard"));
 	FElysiumNpc* Guard = Entity ? Entity->AsNpc() : nullptr;
@@ -459,7 +459,7 @@ bool FElysiumWieldNpcLoadoutTest::RunTest(const FString&)
 	for (int32 i = 0; i < 2; ++i)
 	{
 		FElysiumNpcWorldFixture::Wake({ Guard }, 0.0);
-		World.Tick(0.0);
+		World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 	}
 
 	TestTrue(TEXT("the loadout ran"), Guard->bLoadoutResolved);

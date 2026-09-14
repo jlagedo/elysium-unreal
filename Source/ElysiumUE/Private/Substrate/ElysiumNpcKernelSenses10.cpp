@@ -223,9 +223,20 @@ float FElysiumNpc::TargetStealthVisionScalar(const FElysiumEntity& SeenTarget) c
 	return Player != nullptr && Player->Handle == SeenTarget.Handle ? Player->Stealth.VisionScalar : 1.f;
 }
 
-bool FElysiumNpc::IsBccTargetable(const FElysiumEntity& /*Candidate*/)
+bool FElysiumNpc::IsBccTargetable(const FElysiumEntity& Candidate)
 {
-	return true;   // SEAM: `m_bIsBCCTargetable` (+0x1480) — the admitting arm. See the declaration.
+	// `m_bIsBCCTargetable` (`+0x1480`) — no longer a seam. Story 29e's family Lifecycle19 landed the
+	// byte itself: `CAI_BaseNPCTroika::NPCInit` (`1029a4a2`) sets it when and only when
+	// `m_statTemplate` is a non-empty string, and five species bodies clear it afterwards (Camera,
+	// Placeholder, Newscaster, PlayerController; the payphone sets it). 2055 of the 2060 `npc_*`
+	// entities in the shipped maps author a `stattemplate`, and the five that do not are
+	// `npc_VNewscaster`, whose own `NPCInit` (`0x103a0420`) clears the byte anyway — so the gate
+	// costs nothing that retail keeps and refuses exactly what retail refuses.
+	//
+	// An entity that is NOT an NPC has no such byte: retail's gate is on `+0x9c`'s combat character
+	// and every caller has already established that, so a non-NPC combat character passes.
+	const FElysiumNpc* const CandidateNpc = Candidate.AsNpc();
+	return CandidateNpc == nullptr || CandidateNpc->bIsBccTargetable;
 }
 
 bool FElysiumNpc::HasNoTargetFlag(const FElysiumEntity& /*Candidate*/)

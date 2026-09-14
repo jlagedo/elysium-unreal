@@ -124,7 +124,7 @@ namespace
 			World.Load(MoveTemp(Defs));
 			World.SpawnPlayer();
 			World.Activate(0.0);
-			World.Tick(0.0);   // the admission barrier
+			World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);   // the admission barrier
 
 			FElysiumEntity* GuardEnt = World.FindByName(TEXT("guard"));
 			Guard = GuardEnt ? GuardEnt->AsNpc() : nullptr;

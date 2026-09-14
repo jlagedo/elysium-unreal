@@ -775,16 +775,74 @@ bool FElysiumNpc::IsFeedBusy() const
 bool FElysiumNpc::EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
 	EElysiumGrappleType Type, int32 Position, bool bHolster)
 {
-	if (Type == EElysiumGrappleType::StealthKill)
+	// `CAI_BaseNPCTroika::EnterGrappleState` (`0x102b5c00`), slot 379, whole and in order. There is
+	// NO grapple-type gate anywhere in it: the port's `Type == StealthKill` gate — story 25a's named
+	// divergence, the twin of the one 29d removed from `LeaveGrappleState` — is deleted here.
+
+	// 1. `102b5c06`–`102b5d29`: a NON-EMPTY queued-burn list (`m_QueuedBurnDamage` `+0x65a8`, count
+	//    `+0x65b4`, records of `0x4c` bytes — `CreateDamageEffects` `0x10330d00` is the producer) is
+	//    DISCHARGED INTO THE PARTNER and the grapple is REFUSED. Each record takes this NPC as both
+	//    attacker and inflictor, a hitbox of `RandomInt(0,1) ? 4 : 5`, and is handed to the
+	//    partner's `TakeDamage`. The list is left standing — retail neither empties nor rewinds it,
+	//    so the next attempt discharges it again.
+	if (QueuedBurnDamage.Num() > 0)
 	{
-		// CAI_BaseNPC 0x1026cdc0 -> 0x1026d130. Unlike TASK_MAKE_OBLIVIOUS this
-		// increments the raw count without MADE_OBLIVIOUS or OnIncapacitatedStart.
-		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
-		DisconnectFromSquad();
-		NpcFlags.AddGrappleOblivious();
-		FireOutput(TEXT("OnGrappleBegin"), Partner);
+		FElysiumEntity* const PartnerEntity = World != nullptr ? World->Resolve(Partner) : nullptr;
+		FElysiumCombatCharacter* const PartnerCharacter =
+			PartnerEntity != nullptr ? PartnerEntity->AsCombatCharacter() : nullptr;
+		for (const FElysiumDmg& Queued : QueuedBurnDamage)
+		{
+			FElysiumDmg Burn = Queued;
+			Burn.Source = Handle;                                   // 102b5c1d rec[0xb] = this
+			Burn.Inflictor = Handle;                                // 102b5c20 rec[10] = this
+			// `101c2a10(rec, hitbox)` — the coin is `RandomInt(0, 1)` and ZERO takes 5.
+			LastGrappleBurnHitbox =
+				ElysiumRng::Stream(EElysiumRngStream::Reaction).RandRange(0, 1) == 0 ? 5 : 4;
+			// SEAM: this runtime's damage packet carries no hit group, so the hitbox is recorded
+			// rather than written into the descriptor.
+			++GrappleBurnDischarges;
+			if (PartnerCharacter != nullptr)
+			{
+				PartnerCharacter->TakeDamage(Burn, this);            // 102b5c3c
+			}
+		}
+		return false;                                               // 102b5d29, list intact
 	}
-	return FElysiumCombatCharacter::EnterGrappleState(Partner, Role, Type, Position, bHolster);
+
+	// 2. `102b5d2c`: `CAI_BaseNPC::EnterGrappleState` (`0x1026cdc0`) UNCONDITIONALLY — `0x1026d130`
+	//    (SetEnemy(NULL), DisconnectFromSquad, `m_iIsOblivious++` with no MADE_OBLIVIOUS and no
+	//    incapacitation event), then the `m_OnGrappleBegin` output (`+0x5bd8`), then
+	//    `CBaseCombatCharacter::EnterGrappleState` (`0x10329760`), whose answer is the base's.
+	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
+	DisconnectFromSquad();
+	NpcFlags.AddGrappleOblivious();
+	FireOutput(TEXT("OnGrappleBegin"), Partner);
+	if (!FElysiumCombatCharacter::EnterGrappleState(Partner, Role, Type, Position, bHolster))
+	{
+		return false;                                               // 102b5d29
+	}
+
+	// 3. `102b5d3d`: `IsInDialog` (`0x102c1170`) -> the dialogue stop (`0x102c0bb0`).
+	if (Dialogue.bInDialog)
+	{
+		StopDialogOnRemove();
+	}
+	// 4. `102b5d4f`: a LIVE `m_hCine` -> `CancelScript` (`0x101a8c30`), and then an IMMEDIATE
+	//    `SetState(m_IdealNPCState)` (`0x1026e340`) when the current state is not already it.
+	if (ScriptOwnerIsLive() && World != nullptr)
+	{
+		if (FElysiumEntity* const Owner = World->Resolve(ScriptOwner))
+		{
+			Owner->CancelScriptedSequenceForDialogue(Handle);       // 101a8c30
+		}
+		if (NpcStateRetail() != IdealStateRetail())
+		{
+			SetState(IdealStateRetail());                           // 1026e340
+		}
+	}
+	// 5. `102b5d1c`: `ClearSchedule` (`0x10280d30`), then TRUE.
+	ClearSchedule();
+	return true;
 }
 
 void FElysiumNpc::LeaveGrappleState()
@@ -3782,15 +3840,13 @@ void FElysiumNpc::Activate()
 	Senses.ResolveTuning(*this);
 	Senses.StartSoundCursorAtHead(*this);
 	Mind.ArmAdmission();
-	// `NPCInit` `0x1029a0b0` sets all EIGHT think stamps to curtime and seeds `m_bInPlayerPVS` and
-	// `m_bInPlayerLOS` true, so a fresh NPC is due on every clock and its first cadence pass reads
-	// "visible" rather than waiting 2 s for `SetPlayerLOS` to say so.
-	const double Now = World ? World->NowSeconds() : 0.0;
-	ResetThinkTimers(Now);
-	ScheduleHost.LastUpdate = ScheduleHost.LastNormal = Now;
-	ScheduleHost.LastMove = ScheduleHost.LastAI = Now;
-	Senses.Memory.bPlayerInPvs = true;
-	Senses.Memory.bPlayerLos = true;
+	// Slot 420 `NPCInit` (`0x1029a0b0`) is the retail writer of the eight think stamps, the PVS/LOS
+	// seeds and `m_flNextThink`. The port-only fragment that used to stand here is deleted; the real
+	// body runs, and with it retail's first-second arm — `ThinkSet(NPCInitThink, 0)` and
+	// `m_flNextThink = curtime + 0.1` (`10273a5x`, `_DAT_104493d0`). The first think is therefore
+	// due a tenth of a second after the map stands up, exactly as it is in retail, and nothing
+	// re-arms it here.
+	NPCInit();
 }
 
 void FElysiumNpc::SetDisableAi(bool bDisable)
@@ -3836,12 +3892,19 @@ void FElysiumNpc::ResetThinkTimers(double Now)
 
 void FElysiumNpc::ArmThinkNow(double Now)
 {
-	// `m_flNextThink := curtime`, alone. `NextThink` is a float and the world clock a double, so
-	// `float(Now)` rounds ABOVE `Now` for most values -- and `RunThinks`' `NextThink > Now` test
-	// would then skip the very think this exists to arm. One ULP down where it does. (Retail has
-	// no such problem: both are floats there.)
-	float Armed = static_cast<float>(Now);
-	if (static_cast<double>(Armed) > Now)
+	// `m_flNextThink := curtime`, alone.
+	ArmThinkAt(Now);
+}
+
+void FElysiumNpc::ArmThinkAt(double Stamp)
+{
+	// `m_flNextThink := Stamp`. `NextThink` is a float and the world clock a double, so
+	// `float(Stamp)` rounds ABOVE `Stamp` for most values -- and `RunThinks`' `NextThink > Now` test
+	// would then skip the very frame the stamp names, which is visible for any armed delay
+	// (`NPCInit`'s `curtime + 0.1` most of all). One ULP down where it does. (Retail has no such
+	// problem: `m_flNextThink` and `gpGlobals->curtime` are both floats there.)
+	float Armed = static_cast<float>(Stamp);
+	if (static_cast<double>(Armed) > Stamp)
 	{
 		Armed = std::nextafterf(Armed, -FLT_MAX);
 	}
