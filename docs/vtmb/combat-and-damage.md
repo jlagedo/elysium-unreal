@@ -1188,8 +1188,9 @@ Three single bytes complete it:
 
 - **`0xB8` is the direction bucket 0 answers.** The four directions cycle `BACK, LEFT, FORWARD,
   RIGHT`, and bucket `k` answers direction `(byte_b8 + k) mod 4`. This holds on **948 of 948**
-  records that fill every bucket, so the buckets are a rotation rather than a fixed order and a
-  consumer must read the byte.
+  records that fill every bucket, so the buckets are a rotation rather than a fixed order and the
+  authored layout needs the byte read — though retail's own selector never reads it; see
+  "The per-class default: slot 401" below.
 - **`0xB9` is the bucket-0 low-height marker.** It is `1` on exactly 166 full-table records, and
   every one carries a LOW reaction in bucket 0 with HIGH reactions in buckets 1–3. `0` carries no
   LOW bucket; `0xFF` is the partial-table unset form. No runtime read is identified, so this is an
@@ -1206,7 +1207,7 @@ if (record == null)                 activity = 0x8B          // flying-into-forw
 else {
   if (counts[bucket] < 1) bucket = 0                         // an empty bucket re-reads bucket 0
   count = counts[bucket]
-  if (count < 1)  activity = victim->vfunc(0x644)(bucket)    // a per-class default, by direction
+  if (count < 1)  activity = victim->vfunc(0x644)(bucket)    // a per-class default — a constant, see below
   else            activity = names[bucket][RandomInt(0, count - 1)]
 }
 if (victim+0xA8 != 0) activity = TranslateFlyingKnockbackActivity(activity)   // a PLAYER victim
@@ -1224,6 +1225,107 @@ Four things fall out of that shape and none of them is optional:
   different: no record at all takes `0x8B`, and an all-empty record takes the class virtual.
 - A resolved activity of `-1` with a drawn candidate emits the load-time warning
   *"melee attack sequence has knockb…"*, so an unregistered candidate name is retail-reported.
+
+#### The per-class default: slot 401 (`+0x644`)
+
+The `vfunc(0x644)` arm resolves to `CBaseCombatCharacter::KnockbackActivity_Default`
+(`0x10348B00`, 121 bytes, `__thiscall`, one stack word cleaned by `RET 0x4`) — and it is a
+constant, not a table. The bucket word is never read:
+
+```text
+if (this == null)              name = "NULL ENTITY"
+else if (this->m_iName == 0)   name = ""       // +0x26c = CBaseEntity::m_iName, string_t
+else                           name = this->m_iName
+push scope trace ("CBaseCombatCharacter::KnockbackActivity_Default", name); pop
+return 0x8A;
+```
+
+The string pair is the scope-trace frame every body in this chain carries — diagnostic only; it
+warns about nothing and gates nothing, and `NULL ENTITY` is just the label the trace would give a
+null victim, which the one dispatch site can never pass. `0x8A` is `ACT_KNOCKBACK_NORMAL_HIGH_BACK`
+per the load-time registry (`FUN_104126E0` registers the directional band in order: `0x86`
+`ACT_KNOCKBACK_NORMAL_LOW_BACK`, `0x87` `..._HIGH_FORWARD`, `0x88` `..._HIGH_RIGHT`, `0x89`
+`..._HIGH_LEFT`, `0x8A` `..._HIGH_BACK`, then the flying family `0x8B`–`0x8E` in the order
+`INTO_FORWARD`, `INTO_RIGHT`, `INTO_LEFT`, `INTO_BACK`). So the per-class default answers every
+direction — in range, out of range, whatever the selector passes — with the grounded
+flat-on-the-back cell. Because no class ever overrides it, the class × bucket table is one cell:
+
+| Class | 0 BACK | 1 LEFT | 2 FORWARD | 3 RIGHT |
+|---|---|---|---|---|
+| every `CBaseCombatCharacter` in the image | `0x8A` | `0x8A` | `0x8A` | `0x8A` |
+
+**No class overrides the slot anywhere in the image.** Two independent walks agree. The corpus's
+own slot walk fills slot 401 from the one body across all 85 of its carriers; a byte-level walk of
+the ledger's own image (sha256 `c546f4de2003624d…`) finds 875 RTTI complete-object vtables, of
+which 85 are deep enough to have a slot 401, and every one of those 85 entries is the same
+incremental-link thunk `0x1000FE1B` (`JMP 0x10348B00`) — `CBasePlayer` (469 entries),
+`CHL2_Player` (486) and `CNPC_VPlayerController` (617) included. A port needs no per-class seam
+here: the arm answers `0x8A` unconditionally.
+
+**The dispatch has exactly one live site and one route in.** Nothing calls `0x10348B00` directly.
+The image's only dispatch of `+0x644` is `CALL dword ptr [EAX + 0x644]` at `0x10344ACB`, inside
+`GetKnockbackActivity` itself (the corpus reports a second site at `0x10003B9D`; that address is
+the selector's own 5-byte `JMP` thunk, not another caller). `GetKnockbackActivity` has two
+callers: the melee impact body `FUN_102579F0`, which passes the landing swing record, and
+`FUN_102A0870`, which passes record `0` — and `FUN_102A0870` is itself dead, with no callers and
+no vtable slot, the same shape as the discarded push vector above. So an all-empty record on a
+melee-admitted hit is the only road to the virtual.
+
+**The bucket argument is the classifier's direction, unrotated.** At the call site the index is
+EDI — the return of the victim's slot-323 (`+0x50C`) classifier (`>316` or `<=45` → 2, `<=135` →
+3, `135…225` → 0, `>225` → 1, degenerate zero-length `away` → 0) — and the same EDI addresses the
+record's counts at `+0x28`, enum slots at `+0x38` and names at `+0x78` before it is pushed for the
+virtual. Nothing between the classifier and the record read applies the record's `+0xB8`
+rotation, and nothing elsewhere does either: the model-load resolver `FUN_10427A70` walks the four
+buckets in place and in authored order — `LookupActivity` per name, the registered count written
+back over the authored dword, unregistered names compacted out with the load warning — and never
+reads `0xB8`. The byte's only runtime reader in the whole image is the dead push-vector builder
+`FUN_103455A0`. So the authored statement "bucket `k` answers direction `(b8 + k) mod 4`"
+describes the file, not the consumer: retail's selector indexes the rotated array with the raw
+classifier index, and on the 574 of 948 full records whose byte is not `0` the drawn cell is the
+one authored for direction `(b8 + c) mod 4` while the yaw snap below still fires on the
+classified `c`. Reproducing the selector means reproducing the unrotated read; consuming the
+authored rotation instead is a named divergence, not retail.
+
+**Reachability is a load-time count, and it is wide.** The authored count dwords at record
+`+0x28` read `-1` on 4,164 of the 6,348 record buckets, `0` on 2,042, `-2` on 20 and `+1` on 122
+[data-verified over all 4,445 exported models]. The loader's `abs(count)` is how many name slots
+a bucket owns and the count written back is how many of those names registered, so a bucket's
+runtime count is `abs(authored)` minus the candidates `LookupActivity` refused. Gargoyle's twenty
+two-candidate buckets author the literal `1` as their second name (`count == -2`): the load
+warning *"Model %s tried to reference unregistered knockback activity…"* fires, the slot is
+compacted away, and the bucket lands at count 1.
+
+- **149 of the 1,587 records carry no registered candidate in any bucket**, and for these every
+  classified bucket falls through to the virtual. They sit on 74 sequences across 25 models
+  [data-verified]: the shared banks' own combo finishers — `fists_attack_farcombo`,
+  `fists_attack_jumpcombo`, `fists_attack_lowcombo` (×2), `fists_attack_medcombo` on both sexes'
+  `fists`, six `claws_attack_*` swings per sex, `baseballbat_attack_low`, `knife_attack_low`, the
+  three `frenzy_attack_*`, and both `handleclaws` wield banks — plus the monster bodies
+  (`andrei_rAttack_combo` ×6, `gargoyle_pillarCrush` ×7, the tzimisce creation's `Whole_*`, the
+  werewolf's `claw_attack_close`, `cat_attack` ×2, the chang brothers' five `claws_attack_*`, and
+  the zombie `Claw1`/`Lunge`/`BangGate` sets).
+- **No shipped record has an empty bucket 0 with any other bucket filled.** The
+  empty-bucket-re-reads-bucket-0 fallback therefore always finds a candidate; a drawn candidate
+  and the class default are mutually exclusive per blow, and the arm is reached exactly when the
+  landing record is all-empty.
+- `sp_tutorial_1` can reach the arm: the shared fists finishers above are the player's own
+  bare-fist combos, and the map's fist-fighting cast — `TutorialThug`, the shovelheads, the
+  patrolling security guard its makers spawn (37 `info_node_patrol_point` nodes) — authors no
+  `Disallow_Knockbacks`; only `Tutorial_Jack` does (`npctemplate_tutorial`). A combo finisher
+  landed on any of them, once the buildup counter admits the blow, answers through slot 401.
+
+**The answer rides the same tail as a drawn cell.** A player victim (`+0xA8 != 0`) passes it
+through `TranslateFlyingKnockbackActivity` (`0x10344C80`, via thunk `0x100089EF`), which pairs
+`0x8B→0x87`, `0x8C→0x88`, `0x8D→0x89`, `0x8E→0x8A` and forwards everything else unchanged —
+`0x8A` is a pass-through, so the default arrives as itself. An NPC victim skips the translate,
+and `IsFlyingKnockbackActivity` (`0x10344DA0`: `0x8A < act < 0x94`) refuses `0x8A`, so the yaw
+snap runs on the classified bucket's offset rather than the flying forced `+180`. A `-1` answer
+is refused at the callers, not in the selector — `FUN_102A0870` tests `-1 < activity` before
+dispatching the reaction virtual `+0x500`, and the melee site's warning arm (`0x10344AD5`,
+*"melee attack sequence has knockback activity '%s' which is undefined in code"*) fires only when
+a candidate was actually drawn — but the virtual can produce neither, since its one body returns
+`0x8A` and nothing overrides it.
 
 **The melee call site's own gate is a different expression from the entry's**
 (`CBaseCombatWeapon::FUN_102579F0`, the tail):
@@ -1457,9 +1559,16 @@ Each is recorded beside the retail fact it stands in for
 - **The eligibility gate is whole**: the alive filter, `Disallow_Knockbacks`, the hit-buildup
   counter with its `+0xBA == 2` override, and the `CNPC_VTzimisceRunner` class bypass that skips
   the two terms below it.
-- **The per-class default activity is the one selector arm not reproduced.** Retail reaches a
-  direction-keyed class virtual (`+0x644`) when a record's bucket 0 is also empty; nothing in this
-  runtime carries one, so the no-record `0x8B` cell stands in for it and is named where it is taken.
+- **The per-class default activity is the one selector arm not reproduced.** Retail reaches the
+  class virtual (`+0x644`) when a record's bucket 0 is also empty; the recovery is in
+  "The per-class default: slot 401 (`+0x644`)" above — one body (`0x10348B00`) fills the slot on
+  every carrier in the image and answers `0x8A`, `ACT_KNOCKBACK_NORMAL_HIGH_BACK`, whatever the
+  bucket. What the port must now produce is that cell where `SelectKnockbackActivity` currently
+  refuses (`ElysiumReactions.cpp`, the all-empty arm): the borrowed `0x8B` stand-in spells
+  forward (`0x8B` downgrades to `0x87`), the arm's own answer is back. The same recovery also
+  pins the frame retail reads the record's buckets in — the classifier's direction, with no
+  `+0xB8` rotation — where `KnockbackBucketFor` applies the rotation; matching retail there is
+  its own named decision, recorded beside the selector.
 - **Only the grounded cells are produced.** The flying chain and the launch assignment are not
   reproduced, so nothing moves a body yet — the seam that would carry one is
   `IElysiumNpcMotor::Launch`/`SampleBallistic`.
