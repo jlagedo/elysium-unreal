@@ -750,11 +750,11 @@ the retail contract the code must match, the job, what it consumes or provides, 
   unrecovered-list entry and (3) **the landed test that had pinned the guess**
   (`ElysiumNpcFootstepTests.cpp`) are all corrected to retail with the listing cited inline — the
   test was corrected, never the finding.
-  **Wave 1 of the port was started and cancelled** (State19, TranslateSchedule19, Lifecycle19) when
-  the session's budget ran out. **Nothing of it is in the tree** — every file the three families
-  created or edited is reverted or moved out, and none of their code was ever compiled. Their
-  *reading* is banked at `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/cancelled-wave1/`, and it
-  is worth having: it confirms the `HasInterruptCondition` gate on `0x102ad660` from the listing,
+  **Wave 1 of the port was first started and cancelled** (State19, TranslateSchedule19,
+  Lifecycle19) when a session's budget ran out; nothing of that attempt reached the tree, but its
+  *reading* was banked at `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/cancelled-wave1/` and
+  the three families were then ported from it (see "Port progress" below). The banked reading is
+  worth having: it confirms the `HasInterruptCondition` gate on `0x102ad660` from the listing,
   corrects thirteen `SelectIdealState` walks and nine slot-440 ones, transcribes all twenty species
   `TranslateSchedule` tables row by row, reads a dozen more `.rdata` cells, and names **three more
   landed tests that encode port-invented behaviour** (`Elysium.Substrate.NpcEnemy.IdealState` and
@@ -766,15 +766,52 @@ the retail contract the code must match, the job, what it consumes or provides, 
   **complement** of `MADE_HUNT_PATH`. One brief this story wrote was itself wrong and is corrected
   in the record: `+0x1b38` is **not** absent in the port — 29d stood it as
   `SelectIdealStateSelector` — so the twelve fifteen-byte slot-461 species bodies are real data rows.
-  **No body was ported and no slot row was flipped to `hand:`.** All 54 rows that claim `hand:` are
-  held with the prefix stripped (`hand-held-19-29.tsv` is the record, method names untouched), so
-  every one of the band's 28 slots is still a generated stub and the tree links. The port phase —
-  16 families over the 457 rows, in the story's stated order — is what remains, together with the
-  divergences the reading already names for it: the port's task runner **fails** an unknown task
+  At the banking, no body was ported and no slot row was flipped to `hand:`: all 54 rows that claim
+  `hand:` were held with the prefix stripped (`hand-held-19-29.tsv` is the record, method names
+  untouched), so every one of the band's 28 slots was a generated stub and the tree linked. The
+  divergences the reading names for the port: the port's task runner **fails** an unknown task
   where retail only `DevMsg`s and keeps the program running; `SelectIdealState 0x102ad660` gates on
   `HasInterruptCondition` (the running schedule's mask), not `HasCondition`, with the two flee arms
   as the exceptions; and `CNPC_VSabbatLeader::TaskFail 0x103a9400` does **not** chain `0x1029adb0`
   on its flip path, which breaks the port's "species arms are a prologue" invariant.
+  **Port progress (2026-09-14): 3 of 16 families landed, 96 of 457 rows; the story stays open.**
+  The port runs as one headless coding agent per family (Grok 4.6 at `xhigh`, from a brief per
+  family under `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/`, launched by `grok-launch.ps1`;
+  Codex `gpt-5.6-sol` is set up as the alternative, `codex-launch.ps1`), each followed by a full
+  Opus review that reads every body against the listing and fixes what it finds; `HANDOFF.md`
+  beside the briefs carries the run order and the review rules. Landed: **State19** (32 rows —
+  `SetState 0x1026e340` writing both state words and dispatching slot 463 with the entry value;
+  `SelectIdealState` base `0x1026f660` / Troika `0x102ad660` / VHuman / SabbatLeader / Tzimisce /
+  Guard1's fourteen law arms / Pedestrian's 512-unit ladders / Cop / Dog / Animal / Zombie /
+  Werewolf; the twelve fifteen-byte species rows as census data; the port-only ideal-state paths
+  deleted; `m_NPCState` with one source of truth that can spell NONE), **Translate19** (22 rows —
+  slot 440 base `0x102cc080` calling back into the object's own slot, Troika `0x102b12f0` whole
+  with the `1/0x6b → 0x132/0x6b` arm replacing the port's partial body, the frenzied pre-table
+  `0x102b11c0`, twenty species tables through the class lookup), **Lifecycle19** (42 rows —
+  `NPCInit` base `0x10273390` / Troika `0x1029a0b0` in listing order, `StartNPC`, `OnRestore` with
+  25a's CRC keep-rule and both patrol-pair validations, thirty-one species inits and the maker's
+  `0x1034c260`; `FElysiumNpc::Activate` now calls `NPCInit` and the port-only think-stamp fragment
+  is gone, so retail's `curtime + 0.1` first think stands and the shared test fixture activates at
+  `-0.1`; the four tuning values come from `Rules.txt` through the rulebook; `IsBccTargetable`
+  joined to `+0x1480`; `m_bCineScriptHidden +0x5d78` bound as its own byte). On the way, 25a's named
+  divergence closed: Troika `EnterGrappleState 0x102b5c00` is ported whole and the stealth-only
+  gate is gone. Tests 1190 → 1241; `hand-held-19-29.tsv` 54 → 37. **What the reviews found the
+  porting agent gets wrong, for whoever continues**: a seam invented beside an accessor an earlier
+  family already landed (twelve cases across the two runs, each silently disabling a live arm); arms
+  stubbed inside a body whose row reads "ported" (WerewolfRearm shipped 4 of 23); values invented
+  where the image holds them (the Camera's immediates shipped as the Troika tuning); the port bent
+  to the fixture (`ArmThinkNow`). Remaining, in order, one brief each: Maintain19 (10 rows),
+  Conditions19 (23), Spawn19 (60), RunAi19 (34), StartTask19 (28), RunTask19 (24), Select19 (39,
+  plus the agreed visual-only modernization: the selector, ideal-state and `TaskFail` stamps carried
+  as retail-address members and rendered in the story-23 debugger, the `__FILE__`/`__LINE__` words
+  staying absent), Damage19 (26), Script19 (32), Think19 (15), Boss19 (19), Werewolf19 (17), Misc19
+  (34, which closes the story: the absorbed stories' sentences, the `[x]`, the build-order line, and
+  the file rename dropping the layer suffix from `ElysiumNpcKernel<Family>19`). Open hazards
+  recorded by the reviews: `FElysiumEntityWorld::Activate` iterates `EntityList` by ranged-for while
+  `NPCInit` may create entities (Werewolf, ghoul) — index the loop; the live sense cone reads the
+  0.2 constant, not `RetailFieldOfViewDot`, so the Werewolf's −0.5 does not reach vision yet;
+  `GetMoveType` / `GetSolidFlags` / `SetMoveType` are still 29c stubs; the cine-hide setter
+  (`ScriptHide`) is unported.
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
   is a live per-worldlight evaluation: Source falloff by light type, the cone/angle term, the live
