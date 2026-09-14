@@ -224,6 +224,26 @@ static uint32 RetailFlags2(const FElysiumEntity& Entity);
  *  with `0x10` set is also false. */
 static bool RetailIsStandable(const FElysiumEntity& Entity);
 
+/** `CBaseEntity`'s OWN slot-153 body (`0x10026e70`, spelled `CAISound::FUN_10026e70` because
+ *  `CAISound` is the class the corpus attributes it to) — `m_vecVelocity` compared COMPONENT-WISE
+ *  for EXACT equality against `DAT_1070d1b0`/`b4`/`b8`, the image's shared zero vector, answering 0
+ *  when all three match and 1 otherwise.
+ *
+ *  Slot 153 has two bodies in this family and this is the other one: every class on the NPC line —
+ *  `CAI_BaseNPC` through every `CNPC_V*` leaf — carries `0x10280300`, which is `IsMoving()` above
+ *  and forwards to the navigator; the 497 classes that are NOT NPCs carry this, including the five
+ *  the kernel's closure walks (`CAISound`, `CAI_Hint`, `CAI_InterestingPlace`,
+ *  `CAI_InterestingPlaceConverstation`, `CAI_StandoffGoal`). It is therefore **not** a species
+ *  override of the NPC's slot and does not belong in `IsMoving`'s dispatch; it is the base entity's
+ *  answer, and it lands here beside its twin under the class it came from, exactly as `CanStandOn`
+ *  carries `CAISound::FUN_10026f80`.
+ *
+ *  No port caller: nothing in this runtime stands a `CAI_Hint` or a `CAISound` as an entity with a
+ *  vtable, so this is reached only by the test that pins it — the shape family BaseHelpers already
+ *  uses for `FUN_1028ebc0`. Exact equality is retail's and is kept: a velocity of `-0.0` on any axis
+ *  compares equal to `0.0` and answers "not moving", which is the shipped answer. */
+static bool BaseEntityIsMoving(const FElysiumEntity& Entity);
+
 /** The active weapon's capability word (weapon vtable +0x5a0, slot 360, retail body `0x1014f930`),
  *  which `ShouldMoveAndShoot` requires to carry `0x6000`. **SEAM**: `FElysiumWeapon` stands no such
  *  word; answers 0, so the Troika gate closes and the base rung is never reached. */

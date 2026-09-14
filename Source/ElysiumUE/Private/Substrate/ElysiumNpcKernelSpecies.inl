@@ -19,10 +19,11 @@
 //     `EMeleeSlotLine::Species` for exactly the six classes below and says the species body "is
 //     another family's row". This is that family: each species body lands under its own RETAIL
 //     ADDRESS (`FUN_103c19e0`, …) and the dispatcher `SpeciesSlot…` picks between them off the
-//     census, so a reader can check every arm against `docs/vtmb/npc-kernel/slots.md`. WIRING NOTE:
-//     the existing base bodies are TroikaHelpers' file and this family does not edit them, so the
-//     species arms are reachable through the dispatchers and the tests and not yet from the base
-//     slot; the report names the six one-line call sites the coordinator folds in.
+//     census, so a reader can check every arm against `docs/vtmb/npc-kernel/slots.md`. **WIRED**:
+//     all eighteen dispatchers now stand at the top of the base body they sit in front of — that
+//     prologue IS retail's vtable dispatch, and `SpeciesDispatchingSlot` below is retail's
+//     non-virtual thunk back down to the base. The call sites are named in each base body's
+//     comment (TroikaHelpers, BaseHelpers, Anim, Sounds and Closure).
 //
 //   * **The two tables disagree, and both answers are used.** The census says which retail class a
 //     classname IS (`RetailClass()`); the spawn registry says which classnames a map may stand
@@ -236,11 +237,59 @@ static const FSpeciesSlotRow* SpeciesSlotRowOf(const TCHAR* InRetailClass, int32
  *  `npc_VCop`'s recovered answer and not a bug. */
 const FSpeciesSlotRow* SpeciesSlotRow(int32 Slot) const;
 
+// --- Retail's NON-VIRTUAL call back down to the base body --------------------------------------------
+//
+// Four of this family's bodies end in a call to the very body they replace: `CNPC_VBach`'s slot 606
+// delegates to `thunk_FUN_102b8320`, `CNPC_VTzimisce`'s 593 runs `thunk_FUN_1029a070` FIRST and then
+// overwrites what it wrote, `CNPC_VZombie`'s 510 tails into `CAI_BaseNPC::ShouldPlayFloatSound` and
+// the five slot-482 copies ARE the base instruction for instruction. Every one of those calls is a
+// DIRECT call in retail — a `thunk_`, never a vtable dispatch — so it lands on the base body and can
+// never reach the species body a second time.
+//
+// This runtime stands ONE function per slot: the base body IS the vtable entry, and the species
+// prologue at the top of it is what the vtable does. `SpeciesDispatchingSlot` is what makes the
+// species body's own call to that function the direct call retail makes — while slot N's species
+// body is running, slot N's dispatcher answers "no species body" and the base arm runs. That is the
+// non-virtual thunk, written once instead of splitting five base bodies in five other families'
+// files. A DIFFERENT slot dispatched from inside a species body is untouched, because the guard is
+// per slot and not a depth count: retail's thunks are per body too.
+int32 SpeciesDispatchingSlot = 0;
+
+/** The row `Slot`'s dispatcher should run, or null — `SpeciesSlotRow` plus the rule above. */
+const FSpeciesSlotRow* SpeciesDispatchRow(int32 Slot) const;
+
+/** Marks `Slot`'s species body as the one running, for the life of the scope. */
+struct FSpeciesDispatchScope
+{
+	FSpeciesDispatchScope(FElysiumNpc& InNpc, int32 Slot);
+	~FSpeciesDispatchScope();
+
+	FSpeciesDispatchScope(const FSpeciesDispatchScope&) = delete;
+	FSpeciesDispatchScope& operator=(const FSpeciesDispatchScope&) = delete;
+
+	FElysiumNpc& Npc;
+	int32 Previous = 0;
+};
+
+#if WITH_DEV_AUTOMATION_TESTS
+/** Test-only: stand this NPC as `RetailClassName` for the species dispatch.
+ *
+ *  The two tables disagree (standing fact two above) and the gap is wider than `npc_VCop`:
+ *  `Substrate/ElysiumNpcClasses.cpp` registers fourteen spawnable `npc_*` classnames while the
+ *  census carries 77 classes, and the census gives `CNPC_VZombie` and `CNPC_VCop` NO classname at
+ *  all. Twelve of this family's eighteen wired slots are therefore carried by a class no fixture can
+ *  spawn, so the suite sets the latch the spawn path would have set and then drives the REAL base
+ *  slot through it — which is the only way to assert that the prologue picks the species arm.
+ *  Nothing in the shipping build calls this; `RetailClass()` stays the runtime's only writer. */
+void SetRetailClassForTests(const TCHAR* RetailClassName);
+#endif
+
 // --- The slot dispatchers ---------------------------------------------------------------------------
 //
 // Each answers whether a SPECIES body ran, and hands back what it answered. The Troika-line and
-// `CNPC_VAndreiBlood`-line bodies these sit in front of are family **TroikaHelpers**' and are not
-// touched: a dispatcher that answers false means "run the body you already have".
+// `CNPC_VAndreiBlood`-line bodies these sit in front of are family **TroikaHelpers**' (and Anim's,
+// Sounds', Closure's and BaseHelpers'): a dispatcher that answers false means "run the body you
+// already have", which is exactly what the one-line prologue at the top of each of those does.
 
 bool SpeciesSlot599(FElysiumEntity* Enemy, bool& OutAnswer);
 bool SpeciesSlot600(FElysiumEntity* Enemy, bool& OutAnswer);

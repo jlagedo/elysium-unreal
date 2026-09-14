@@ -195,21 +195,43 @@ float FElysiumNpc::SoundDurationOf(const TCHAR* SoundName) const
 
 void FElysiumNpc::ChainEntityList(TArray<FElysiumEntity*>& Out) const
 {
-	// `AutoaimDeflection` walks edict indices `1 .. gpGlobals->maxEntities`, skipping the free-slot
-	// byte at `edict+0x4c` and hopping each survivor's networkable to its `CBaseEntity`.
+	// THE ORDER IS RETAIL'S, and it is observable. `AutoaimDeflection` (`0x10176930`) does not walk
+	// an entity list at all — it walks the ENGINE'S EDICT ARRAY, by index, ascending:
 	//
-	// **Named modernization**: this runtime is not an edict array. The walk is over the world's live
-	// entity list instead, which is the same SET retail's walk survives to — every non-free edict
-	// with a bound entity — in the world's own order rather than in edict order. Retail's order is
-	// observable only through which of two EQUALLY well-aligned candidates wins, and the body's
-	// comparison is a strict `<=` on the alignment score, so the first of a tie wins in both.
+	//     edict = engine->PEntityOfEntIndex(0);          // (**(DAT_1070b22c + 0x98))()
+	//     for (i = 1; i < gpGlobals->maxEntities; ++i) { // gpGlobals+0x38
+	//         edict += 0x78;                             // sizeof(edict_t), one slot
+	//         if (edict[0x4c] != 0) continue;            // the free-slot byte
+	//         ...
+	//     }
+	//
+	// It matters which order that is, because the score comparison is `score <= best` and NOT `<`:
+	// a candidate that ties the running best REPLACES it, so among equally well-aligned candidates
+	// the one at the HIGHEST edict index wins. (29c-1's note said the opposite — "the first of a tie
+	// wins" — which is what a `<` would give. The decompiled C is `if (fVar15 <= fStack_f8) { best =
+	// fVar15; winner = candidate; }`. The scoring loop in `AutoaimDeflection` below already had the
+	// `<=`; only this comment was wrong.)
+	//
+	// `FElysiumEntityWorld::EntityList` IS this port's edict array: `ElysiumEntityWorld.cpp` states
+	// the invariant at both of its two writers — "the handle index IS the def-array index: stable,
+	// never recycled", and a runtime spawn "continues past the map's def array". So the list is the
+	// map's entity lump in lump order followed by every runtime spawn in creation order, indexed
+	// exactly as retail indexes edicts, and this walk is by index, ascending, like retail's.
+	//
+	// One structural difference, which is not an order difference: retail's loop starts at index 1
+	// because edict 0 is the engine's own reserved world edict, and this list reserves no such slot
+	// — its index 0 is the map's first entity. The same set, in the same order. (Retail's world
+	// edict would fail the `FL_AIMTARGET` screen in `AutoaimDeflection` anyway, which is why retail
+	// can skip it without a test.)
 	Out.Reset();
 	if (World == nullptr)
 	{
 		return;
 	}
-	for (const TUniquePtr<FElysiumEntity>& Entity : World->Entities())
+	for (int32 Index = 0; Index < World->NumEntities(); ++Index)
 	{
+		// `edict[0x4c] != 0` — the free-slot byte. A reaped slot here is a dead entity.
+		const TUniquePtr<FElysiumEntity>& Entity = World->Entities()[Index];
 		if (Entity.IsValid() && !Entity->IsDead())
 		{
 			Out.Add(Entity.Get());

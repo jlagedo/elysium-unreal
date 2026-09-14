@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 585 generated virtuals: 86 carry the retail default story 29c recovered, 235 are defined by hand
-// in the substrate, and 264 are still stubs — 145 29c, 91 29d, 28 29e.
+// 585 generated virtuals: 84 carry the retail default story 29c recovered, 239 are defined by hand
+// in the substrate, and 262 are still stubs — 145 29c, 89 29d, 28 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -205,17 +205,13 @@ void FElysiumNpc::TraceMessageBare(const TCHAR*)
 
 // slot 25 0x100265b0 (walked) `void vfunc25(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpc::Slot25(FElysiumEntity*)
-{
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot25`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 26 0x100265d0 (walked) `void vfunc26(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpc::Slot26(FElysiumEntity*)
-{
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot26`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 27 0x1029f8f0 (walked) `void vfunc27(CBaseEntity*)`
 //   layer 4, story 29c
@@ -3255,10 +3251,8 @@ void FElysiumNpc::GatherEnemyConditions(FElysiumEntity*)
 
 // slot 488 0x10293ec0 (walked) `void DeathSound()`
 //   layer 14, story 29d
-void FElysiumNpc::DeathSound()
-{
-	FireKernelSlot(TEXT("DeathSound"), TEXT("0x10293ec0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::DeathSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 489 0x10293f80 (walked) `void AlertSound()`
 //   layer 14, story 29d
@@ -3379,10 +3373,8 @@ void FElysiumNpc::TargetGiveUpSound()
 
 // slot 506 0x10294e70 (walked) `void vfunc506()`
 //   layer 14, story 29d
-void FElysiumNpc::Slot506()
-{
-	FireKernelSlot(TEXT("Slot506"), TEXT("0x10294e70"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot506`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 507 0x10294f40 (walked) `void FloatSound()`
 //   layer 14, story 29d
@@ -4039,10 +4031,6 @@ namespace ElysiumNpcKernelShape
 		// nothing.
 		constexpr FElysiumNpcSlotDefault GDefaults[] =
 		{
-			{ 25, TEXT("0x100265b0"), TEXT("Slot25"), TEXT("void"), 0, true,
-				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.Slot25(Arg0); return 0; } },
-			{ 26, TEXT("0x100265d0"), TEXT("Slot26"), TEXT("void"), 0, true,
-				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.Slot26(Arg0); return 0; } },
 			{ 32, TEXT("0x10026670"), TEXT("CanBeInteractiveUsed"), TEXT("0"), 0, false,
 				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; return Npc.CanBeInteractiveUsed(Arg0) ? 1 : 0; } },
 			{ 33, TEXT("0x10026690"), TEXT("Slot33"), TEXT("0xffffffff"), -1, false,

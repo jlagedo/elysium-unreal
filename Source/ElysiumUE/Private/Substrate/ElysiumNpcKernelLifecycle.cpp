@@ -17,6 +17,14 @@
 
 namespace
 {
+	// `CAI_Hint::vfunc5`'s two retail numbers. The condition the hint's destructor raises on its
+	// owner (`SetCondition(owner, 0x29)`, `0x10269a20`) is above nothing this port's registrar
+	// names, so it is spelled as the number — family Conditions' convention for the Werewolf's
+	// `0x7a`; and the reuse delay it passes to `ClearHintNode` is a literal `0.0`, not the 5.0 s
+	// every other caller passes.
+	constexpr int32 GHintDestroyedCondition = 0x29;
+	constexpr float GHintDestroyedReuseDelay = 0.0f;
+
 	// `_DAT_104454c4` — the shared `0.0f` constant of `vampire.dll`, and the "unset" SENTINEL every
 	// `CAI_Hint::Spawn` default test compares a hint float against. Family **Hints** recovered the
 	// same global; it is repeated here rather than exported because it is one float.
@@ -402,6 +410,25 @@ void FElysiumNpc::HintKill(FHintWords& Hint)
 	// 0x102d08c0, whose whole body is `MOV EAX,[ECX] / JMP [EAX + 0x134]`. `+0x134` is slot 77, so
 	// Kill on a hint node IS ScriptHide. Not "like" it: the same address is reached.
 	HintScriptHide(Hint);
+}
+
+void FElysiumNpc::HintDeletingDestructor()
+{
+	// 0x102d2f00 -> 0x102d3040. `this` is the node's OWNER — retail resolves it out of the hint's
+	// `m_hOwner` and takes the `m_pNPC` (+0x98) off it; here the owner is the receiver, so the two
+	// resolves are the caller's and what is left is the pair of writes, in retail's order.
+	//
+	//     SetCondition(owner, 0x29);                 // 0x10269a20, FIRST
+	//     CAI_BaseNPCTroika::ClearHintNode(owner, 0.0);
+	//
+	// The condition is raised BEFORE the reference is dropped, and the reuse delay is ZERO: the node
+	// is being destroyed, so there is nothing to hold a cooldown against. Both are retail's.
+	Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(GHintDestroyedCondition));
+	ClearScheduleHint(GHintDestroyedReuseDelay);
+
+	// SEAM: the rest of `0x102d3040` is the engine's global hint-list unlink and the node's own
+	// storage teardown. This substrate carries hint nodes as rows, not as engine objects on a list,
+	// so there is no list here and no kernel-observable state in that half.
 }
 
 FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()

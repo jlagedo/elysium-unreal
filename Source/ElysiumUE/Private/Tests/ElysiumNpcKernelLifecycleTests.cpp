@@ -1190,4 +1190,45 @@ bool FElysiumNpcKernelLifecycleClanOffsetTest::RunTest(const FString&)
 	return true;
 }
 
+// --- `CAI_Hint::vfunc5` (`0x102d2f00`), the owner half --------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleHintDestroyedTest,
+	"Elysium.Substrate.NpcKernelLifecycle.HintDestroyed", GLifecycleTestFlags)
+bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
+{
+	FLifecycleFixture Fix;
+	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *Fix.Npc;
+
+	// The owner is holding node 7 and owns it, with a cooldown that has not been set.
+	N.ScheduleHost.HintNode = 7;
+	N.ScheduleHost.bOwnsHint = true;
+	N.ScheduleHost.HintReusableAt = 0.0;
+	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x29));
+
+	N.HintDeletingDestructor();
+
+	// `SetCondition(owner, 0x29)` (`0x10269a20`) — the destructor's first write.
+	TestTrue(TEXT("0x102d2f00 raises condition 0x29 on the owner"),
+		N.Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x29)));
+	// `CAI_BaseNPCTroika::ClearHintNode(owner, 0.0)` — the reference goes, and the reuse delay is
+	// ZERO, not the 5.0 s every other caller of `ClearHintNode` passes.
+	TestEqual(TEXT("the hint reference is dropped"), N.ScheduleHost.HintNode, INDEX_NONE);
+	TestFalse(TEXT("ownership is released"), N.ScheduleHost.bOwnsHint);
+	TestEqual(TEXT("with a ZERO reuse delay: the node is gone, nothing to cool down"),
+		N.ScheduleHost.HintReusableAt, N.World != nullptr ? N.World->NowSeconds() : 0.0);
+
+	// Retail raises the condition unconditionally once the owner resolves — `ClearHintNode`'s own
+	// "no hint" arm performs no writes, but the condition has already been set by then.
+	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x29));
+	N.ScheduleHost.HintNode = INDEX_NONE;
+	N.HintDeletingDestructor();
+	TestTrue(TEXT("and it is raised even when the owner holds no hint"),
+		N.Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x29)));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

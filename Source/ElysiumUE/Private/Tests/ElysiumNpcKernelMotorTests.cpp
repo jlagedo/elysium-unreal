@@ -1085,4 +1085,48 @@ bool FElysiumNpcKernelMotorStoppingDistanceTest::RunTest(const FString&)
 	return true;
 }
 
+// --- Slot 153's other body: `CAISound::FUN_10026e70` ----------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorBaseIsMovingTest,
+	"Elysium.Substrate.NpcKernelMotor.BaseEntityIsMoving", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorBaseIsMovingTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_ismoving"), 4312);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	if (!TestNotNull(TEXT("guard"), Guard))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+
+	// `0x10026e70`, all three components against `vec3_origin` (`DAT_1070d1b0..b8`).
+	Guard->Velocity = FVector::ZeroVector;
+	TestFalse(TEXT("0x10026e70: a zero velocity is not moving"),
+		FElysiumNpc::BaseEntityIsMoving(*Guard));
+
+	// One component differing is enough: retail's test is an AND of three equalities, so any
+	// inequality falls through to `return 1`.
+	Guard->Velocity = FVector(0.0, 0.0, 1.0);
+	TestTrue(TEXT("0x10026e70: Z alone is moving"), FElysiumNpc::BaseEntityIsMoving(*Guard));
+	Guard->Velocity = FVector(0.0, 1.0, 0.0);
+	TestTrue(TEXT("0x10026e70: Y alone is moving"), FElysiumNpc::BaseEntityIsMoving(*Guard));
+	Guard->Velocity = FVector(1.0, 0.0, 0.0);
+	TestTrue(TEXT("0x10026e70: X alone is moving"), FElysiumNpc::BaseEntityIsMoving(*Guard));
+
+	// EXACT equality, not a tolerance — a velocity retail calls moving must not be rounded away.
+	Guard->Velocity = FVector(0.0, 0.0, 1e-8);
+	TestTrue(TEXT("0x10026e70: the comparison is exact, so a tiny velocity is still moving"),
+		FElysiumNpc::BaseEntityIsMoving(*Guard));
+
+	// This body is NOT the NPC's slot-153 answer: every class on the NPC line carries `0x10280300`,
+	// which is the navigator forward, and it answers independently of the velocity word above.
+	Guard->Velocity = FVector(1.0, 0.0, 0.0);
+	TestFalse(TEXT("slot 153 on an NPC is 0x10280300, the navigator forward, not this body"),
+		Guard->IsMoving());
+	Guard->Velocity = FVector::ZeroVector;
+	return true;
+}
+
 #endif  // WITH_DEV_AUTOMATION_TESTS

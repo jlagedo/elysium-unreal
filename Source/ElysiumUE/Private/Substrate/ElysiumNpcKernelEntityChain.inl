@@ -243,10 +243,15 @@ TArray<FString> DialogEventScriptCalls;
  *  `curtime - _DAT_10449270`. */
 float SoundDurationOf(const TCHAR* SoundName) const;
 
-/** The engine's `CGlobalEntityList::NumberOfEntities`-style live count (`gpGlobals+0x38`), which
- *  `AutoaimDeflection` walks 1..N over, and the per-index entity fetch. **SEAM**: the port's world
- *  is not an edict array; this answers the world's live entity list instead, which is the same set
- *  minus the free slots retail's `edict+0x4c` byte skips. Stated as the modernization it is. */
+/** The engine's edict array as `AutoaimDeflection` (`0x10176930`) walks it: index 1 up to
+ *  `gpGlobals->maxEntities` (`gpGlobals+0x38`), one `0x78`-byte slot at a time, skipping the
+ *  free-slot byte at `edict+0x4c`.
+ *
+ *  The ORDER is reproduced, not approximated: `FElysiumEntityWorld::EntityList` is this port's edict
+ *  array — its index IS the handle index, stable and never recycled, the map's entity lump in lump
+ *  order followed by the runtime spawns in creation order — and this walks it by ascending index.
+ *  That is observable, because `AutoaimDeflection`'s score test is `<=`: among equally aligned
+ *  candidates the highest index wins. `ElysiumNpcKernelEntityChain.cpp` carries the reading. */
 void ChainEntityList(TArray<FElysiumEntity*>& Out) const;
 
 /** `UTIL_TraceLine(src, src + dir*dist, MASK_SHOT, this, COLLISION_GROUP_NONE, &tr)` as both autoaim

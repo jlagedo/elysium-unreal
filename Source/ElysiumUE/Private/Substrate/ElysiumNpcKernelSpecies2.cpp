@@ -472,33 +472,36 @@ void FElysiumNpc::FUN_1039e860(FElysiumEntity* Arg)
 
 bool FElysiumNpc::SpeciesSlot21(FElysiumEntity* Arg)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(21);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(21);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x1039e800")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 21);
 	FUN_1039e800(Arg);
 	return true;
 }
 
 bool FElysiumNpc::SpeciesSlot22(FElysiumEntity* Arg)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(22);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(22);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x1039e830")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 22);
 	FUN_1039e830(Arg);
 	return true;
 }
 
 bool FElysiumNpc::SpeciesSlot23(FElysiumEntity* Arg)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(23);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(23);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x1039e860")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 23);
 	FUN_1039e860(Arg);
 	return true;
 }
@@ -997,33 +1000,36 @@ void FElysiumNpc::FUN_103682f0()
 
 bool FElysiumNpc::SpeciesDeathSound()
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(488);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(488);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103b92a0")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 488);
 	FUN_103b92a0();
 	return true;
 }
 
 bool FElysiumNpc::SpeciesSlot497()
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(497);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(497);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103681d0")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 497);
 	FUN_103681d0();
 	return true;
 }
 
 bool FElysiumNpc::SpeciesSlot506()
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(506);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(506);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103682f0")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 506);
 	FUN_103682f0();
 	return true;
 }
@@ -1259,11 +1265,14 @@ bool FElysiumNpc::FUN_103e1080(bool bArg)
 
 bool FElysiumNpc::SpeciesShouldPlayFloatSound(bool& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(510);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(510);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103e1080")) != 0)
 	{
 		return false;
 	}
+	// `FUN_103e1080`'s accepting arm tails into `ShouldPlayFloatSound`, the base it replaces;
+	// the scope makes that the direct call retail's tail jump is.
+	const FSpeciesDispatchScope Scope(*this, 510);
 	OutAnswer = FUN_103e1080(/*bArg=*/false);
 	return true;
 }
@@ -1293,22 +1302,24 @@ void FElysiumNpc::FUN_103e12f0(FElysiumEntity* Victim)
 
 bool FElysiumNpc::SpeciesSlot25(FElysiumEntity* Arg)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(25);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(25);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103e12c0")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 25);
 	FUN_103e12c0(Arg);
 	return true;
 }
 
 bool FElysiumNpc::SpeciesSlot26(FElysiumEntity* Arg)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(26);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(26);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103e12f0")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 26);
 	FUN_103e12f0(Arg);
 	return true;
 }

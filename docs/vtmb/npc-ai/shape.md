@@ -2747,6 +2747,33 @@ survivor's `BodyTarget` (slot 197) is the aim point, admitted only when `dot(toT
 and its score is at or below the running best, which starts at the caller's delta; a second trace
 confirms line of sight.
 
+**The walk order, recovered (2026-09-13).** It is not "the live entity list" in any order the engine
+happens to hold: it is the **edict array, by ascending index**, and the body walks it by pointer
+arithmetic rather than through a list API —
+
+```
+edict = engine->PEntityOfEntIndex(0);            // (**(DAT_1070b22c + 0x98))()
+for (i = 1; i < gpGlobals->maxEntities; ++i) {   // gpGlobals + 0x38
+    edict += 0x78;                               // sizeof(edict_t), one slot
+    if (edict[0x4c] != 0) continue;              // the free-slot byte
+    ...
+}
+```
+
+Index 0 is never visited: it is the engine's reserved world edict. The order is **observable**,
+because the admission is `score <= best` and not `score < best` — a candidate that ties the running
+best REPLACES it, so among two equally well-aligned candidates the one at the **higher edict index**
+wins the aim assist. 29c-1 first recorded this as a named divergence ("the walk is in world order
+rather than edict order") on the reading that a tie kept the first candidate; the decompiled C is
+`if (fVar15 <= fStack_f8) { fStack_f8 = fVar15; pCStack_f4 = pCVar12; }`, so the reading was wrong
+and the order matters. The port reproduces it: `FElysiumEntityWorld::EntityList` **is** this
+runtime's edict array — its index is the handle index, "stable, never recycled", the map's entity
+lump in lump order followed by every runtime spawn in creation order — and
+`FElysiumNpc::ChainEntityList` walks it by ascending index. The one structural difference is that
+this list reserves no slot for a world edict, so its index 0 is the map's first entity; that is a
+missing reserved slot and not a different order, and retail's world edict fails the `FL_AIMTARGET`
+screen in any case.
+
 **Unrecovered:** four things. The caller's `flDelta` (it arrives in the caller's frame); the score's
 three weights (`_DAT_10449198`, `_DAT_10449280`, `_DAT_10449270`, all shared `.rdata` words with no
 value in the corpus) and the frame-local divisor beside them, of which only the SHAPE is recovered —
@@ -3086,6 +3113,16 @@ One store written twice: `CNPC_VBaseBoss::m_BlacklistedEntities` at `+0x665c` (a
 `MeleeSlotLine` answers `EMeleeSlotLine::Species` for six classes; these are their bodies. Every one
 is a replacement, not a wrapper — none calls the Troika line.
 
+**Slot 599's argument is `GetEnemy()`, and it is a `CBaseEntity*`.** `signatures.md` types the slot
+`bool vfunc599(int)` because `CAI_BaseNPCTroika::0x102b5650` reads the parameter with no
+instruction, but `CNPC_VTzimisceRunner`'s `0x103c3960` casts it and calls `GetRefEHandle` on it. The
+callers settle it: `CAI_BaseNPCTroika::SelectScheduleMeleeCombat` `0x102b6c30` is
+`CALL [EAX+0x29c]` / `MOV EDI,EAX` / … / `PUSH EDI` / `CALL [EDX+0x95c]`, and
+`CNPC_VTzimisceRunner::SelectScheduleMeleeCombat` `0x103c4430` is `CALL [EAX+0x29c]` / `PUSH EAX` /
+`CALL [EDX+0x95c]`. `+0x29c` is slot **167**, the const `GetEnemy()` (`0x101a67e0`), not the Troika
+line's mutable slot 168. The same EDI is pushed into `+0x964` (slot 601) at `0x102b6c64`, so 601's
+argument is the same enemy.
+
 * **`CNPC_VFrenzyShadow` `0x10376b70` / `CNPC_VGargoyle` `0x10379ef0` (599)** and
   **`0x10376ba0` / `0x10379f20` (600)** — byte-identical pairs, 26 and 23 bytes. Fire the global
   melee event through `(*DAT_10924edc)->vfunc1()` and set `m_bInMelee`. **Every gate is gone**: the
@@ -3129,6 +3166,22 @@ An arm-then-fire hysteresis around `COND_ENEMY_OCCLUDED` (`0x48`). Without the c
 the first pass, and only delegates to the Troika body (`0x102b8320`) once armed. The flag is cleared
 the moment the condition drops, so the one-pass delay is re-paid every time the enemy goes behind
 cover — hysteresis, not a one-shot.
+
+### How a species body reaches the body it replaces
+
+Four of the species bodies in this section END in a call to the very slot they override:
+`CNPC_VBach`'s 606 delegates to `thunk_FUN_102b8320`, `CNPC_VTzimisce`'s 593 runs
+`thunk_FUN_1029a070` first and then overwrites all five words it wrote, `CNPC_VZombie`'s 510 tail
+jumps into `CAI_BaseNPC::ShouldPlayFloatSound` (`thunk_FUN_1027a530`) and the five slot-482 copies
+are `CAI_BaseNPC::CanPlaySequence` (`0x10278090`) instruction for instruction.
+
+**Every one of those is a DIRECT call, never a vtable dispatch** — a `thunk_` to the base class's
+own body — so it lands on the base and can never re-enter the species body. Retail gets that for
+free from having two functions per slot (the base's and the override's). A port that stands ONE
+function per slot, with the species resolution as a prologue at the top of the base body, has to say
+it: while slot N's species body is running, slot N's prologue must decline. That is what
+`FElysiumNpc::SpeciesDispatchingSlot` is, and it is per slot rather than a depth count because
+retail's thunks are per body too.
 
 ### Slot 609 — the three state gates, `0x103661f0`, `0x10367740`, `0x103b26f0`
 

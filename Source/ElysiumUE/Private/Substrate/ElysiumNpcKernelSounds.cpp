@@ -28,6 +28,7 @@
 #include "ElysiumMoveSolve.h"      // ElysiumMove::U — the Source-unit/centimetre conversion
 #include "ElysiumRng.h"
 #include "ElysiumSessionSubsystem.h"
+#include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -676,6 +677,55 @@ void FElysiumNpc::BaseJustMadeSound()
 }
 
 // ==================================================================================================
+// Slot 488 `DeathSound` / slot 506 `vfunc506` — two sound hooks with a species arm in front
+// ==================================================================================================
+//
+// Both were generated stub bodies until story 29c-1 needed a species prologue on them, and both keep
+// that stub as their Troika-line arm: `0x10293ec0` and `0x10294e70` are layer-14 bodies and belong to
+// story **29d**, which has not ported them. They live in THIS family's file because 497 and 506 are
+// the same sound-hook band and 488 is the death vocalization — the concern is sound, not dispatch.
+// The verdict overlay's rows now read `hand:` so the generator declares the virtuals and stops
+// defining them; the tally below is byte-for-byte the shape the generated definition fired, so
+// `elysium.stubs` still joins `docs/vtmb/npc-kernel/functions.md` by the same address and story.
+
+// slot 488 0x10293ec0 `void DeathSound()`
+void FElysiumNpc::DeathSound()
+{
+	// The vtable dispatch first: `CNPC_VTzimisce` `0x103b92a0` (family **Species**) fires `SPI_DIES`
+	// at the script host with three singleton-derived arguments and then TAIL-CALLS slot 487 — so a
+	// Tzimisce never reaches the base death sound at all, and the tail call is the only part of that
+	// body still unported (slot 487 is `JustMadeSound`, above, and is not this row).
+	if (SpeciesDeathSound())
+	{
+		return;
+	}
+	ElysiumStub::FSurface Surface;
+	Surface.Kind = TEXT("slot");
+	Surface.Surface = TEXT("CAI_BaseNPCTroika::DeathSound");
+	Surface.Address = TEXT("0x10293ec0");
+	Surface.Story = TEXT("29d");
+	ElysiumStub::Fired(Surface, DebugString(), FString(), TEXT("the NPC kernel"));
+}
+
+// slot 506 0x10294e70 `void vfunc506()`
+void FElysiumNpc::Slot506()
+{
+	// The vtable dispatch first: `CNPC_VCamera` `0x103682f0` (and `CNPC_VCameraSecurity` under it) is
+	// an EMPTY body — the other end of the same pair of sound hooks slot 497 carries — so a camera
+	// makes none of whatever this hook plays and the 29d stub below is not reached for one.
+	if (SpeciesSlot506())
+	{
+		return;
+	}
+	ElysiumStub::FSurface Surface;
+	Surface.Kind = TEXT("slot");
+	Surface.Surface = TEXT("CAI_BaseNPCTroika::Slot506");
+	Surface.Address = TEXT("0x10294e70");
+	Surface.Story = TEXT("29d");
+	ElysiumStub::Fired(Surface, DebugString(), FString(), TEXT("the NPC kernel"));
+}
+
+// ==================================================================================================
 // Slot 509 `ShouldPlayIdleSound` / slot 510 `ShouldPlayFloatSound` — the two idle vocalization gates
 // ==================================================================================================
 
@@ -796,6 +846,16 @@ bool FElysiumNpc::BaseShouldPlayIdleSound()
 // makes.
 bool FElysiumNpc::ShouldPlayFloatSound()
 {
+	// The vtable dispatch first: `CNPC_VZombie` `0x103e1080` (family **Species**) writes
+	// `m_iFloatSoundFrequency = 9` before any gate, runs a different eight and tails into THIS body
+	// on its accepting arm. The tail jump is direct, which `SpeciesShouldPlayFloatSound`'s dispatch
+	// scope reproduces.
+	bool bSpeciesAnswer = false;
+	if (SpeciesShouldPlayFloatSound(bSpeciesAnswer))
+	{
+		return bSpeciesAnswer;
+	}
+
 	if (SoundsIsInDialog(*this))
 	{
 		return false;

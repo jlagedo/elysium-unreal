@@ -1332,6 +1332,17 @@ bool FElysiumNpc::ShouldMaintainActivity()
 
 int32 FElysiumNpc::CanPlaySequence(bool bDisregardState, int32 InterruptLevel)
 {
+	// The vtable dispatch first. Five classes carry their own slot-482 body (`CNPC_VAnimal`
+	// `0x1035fd40`, `CNPC_VTzimisce` `0x103bd270` and three inheritors, family **Species**) and every
+	// one of them is BYTE-IDENTICAL to the body below — so the species arm CALLS this one and the
+	// answers coincide. The row is wired anyway because the dispatch is the recovered fact: the day a
+	// sixth class' copy turns out to differ, the prologue is already where it has to be.
+	int32 SpeciesAnswer = 0;
+	if (SpeciesCanPlaySequence(bDisregardState, InterruptLevel, SpeciesAnswer))
+	{
+		return SpeciesAnswer;
+	}
+
 	// `0x10278090`, slot 482. The return is retail's `CanPlaySequence_t`: 0 refuses, 1 is the plain
 	// yes, and **2 is the yes of a body that already holds a cine** — the two are not the same
 	// answer, which is why this returns an int rather than a bool.

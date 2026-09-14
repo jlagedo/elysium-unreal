@@ -464,9 +464,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   (retail would fault, and the arm is unreachable in retail); `PositionAtHint` declines the move on
   `vec3_invalid` rather than teleporting a Werewolf out of the world; slot 215's temp-vector ring is
   one-deep per entity rather than 128-deep global; `goto_line_for_response` refuses an out-of-range
-  index retail reads past; the entity-chain walk is in world order rather than edict order. And one
-  divergence was **closed** rather than added: `AcceptsAmbientGroup` now runs `0x102dad60`'s own
-  gate (see 29c above).
+  index retail reads past. And one divergence was **closed** rather than added:
+  `AcceptsAmbientGroup` now runs `0x102dad60`'s own gate (see 29c above). *(The entity-chain walk
+  order was listed here too and turned out not to be a divergence at all — see the cleanup below.)*
   **The measure.** `gen_kernel_shape --report` gives the 29c band **145** stubs, every one of them
   `no verdict`: the band's verdicted slots are all `hand:` and all defined, and the 145 that remain
   are non-core `CBaseEntity`/`CBaseAnimating` slots that 29c's closure never read and never
@@ -476,6 +476,46 @@ the retail contract the code must match, the job, what it consumes or provides, 
   29c, plus 275 new cases in 22 suites); `uv run pytest pipeline/tests -q` 4,047 passed;
   `kernel_ledger --check`, `kernel_shape --check` and `gen_kernel_shape --check` all pass;
   `merge_verdicts --audit` reports layers 0–9 with **0** core functions still unverdicted.
+  **Cleanup (2026-09-13), three results.** (1) *The overlay's targets now name real methods.* A
+  mechanical sweep — every `rule` row whose `target` spells `FStruct::Method`, checked against an
+  index of every member declared, defined or inherited anywhere in `Source/` — found **66** rows
+  still carrying a placeholder 29c had guessed (`FUN_10…`, `Field_0x…`, `clan_offset`,
+  `Slot0x630c`, `vfunc5`) although 29c-1 had ported the body under a recovered name; all 66 were
+  retargeted to the definition that cites the address, **66 → 0**, with three further rows whose
+  name *was* a real member but the wrong one (`0x102d08c0` → `HintKill`, `0x1037c2f0` →
+  `GhoulCroucherScriptUnhideTail`, `0x1017f8b0` → `DialogHunterThreatCount`). Two rows named no
+  port body at all and are now ported, cited and tested: `0x10026e70` is **not** a species
+  override but `CBaseEntity`'s own slot-153 body — every class on the NPC line carries
+  `0x10280300` — and lands as `FElysiumNpc::BaseEntityIsMoving` beside its twin in family Motor,
+  exactly as `CanStandOn` carries `CAISound::FUN_10026f80`; `0x102d2f00` is `CAI_Hint`'s deleting
+  destructor, whose kernel-observable half is done to the **owning NPC** (`SetCondition(0x29)`
+  first, then `ClearHintNode(0.0)` — a ZERO reuse delay, unlike every other caller's 5.0 s) and
+  lands as `FElysiumNpc::HintDeletingDestructor` in family Lifecycle, walked into
+  `npc-ai/lifecycle.md`. (2) *The Species arms are wired.* All **18** dispatchers the family left
+  unreachable now run from the top of the base body — slots 21/22/23/25/26/497/588 (BaseHelpers),
+  482 (Anim), 488/506/510 (Sounds), 593 (Closure) and 599/600/601/602/606/609 (TroikaHelpers) —
+  each with a named case in the owning suite proving the species body for its retail class and the
+  Troika body for a plain `npc_VCop`. Four species bodies call the body they replace through a
+  **direct, non-virtual** thunk in retail, which one function per slot cannot express, so the thunk
+  itself is ported (`FSpeciesDispatchScope`: while slot N's species body runs, slot N's dispatcher
+  answers "no species body") — per slot, as retail's thunks are. Slots 488 and 506 are layer-14
+  bodies story **29d** still owns; they moved out of the generated file only so the override has a
+  prologue, keep the identical `elysium.stubs` tally as their Troika arm, and their two new
+  `hand:` rows are the reason band 10–18's *Neither* reads 265 rather than 266. One species arm at
+  these slots stays unwired and is named: `CNPC_VYukie#602` (`0x103dda10`) lives in family Senses
+  as `YukieShouldLeaveMelee` with no Species table row. (3) *The entity-chain walk order was never
+  a divergence.* `AutoaimDeflection` (`0x10176930`) walks the **edict array by ascending index**
+  (`edict += 0x78`, `i = 1 .. gpGlobals->maxEntities`, skipping the free byte at `edict+0x4c`), and
+  the order is observable because the score test is `score <= best`, not `<`: a tie **replaces**
+  the incumbent, so the highest edict index wins. 29c-1's note claimed the opposite and called the
+  port's walk a modernization. `FElysiumEntityWorld::EntityList` *is* this runtime's edict array —
+  its index is the handle index, "stable, never recycled", the map's lump order then the runtime
+  spawns — so `ChainEntityList` now walks it by ascending index and
+  `Elysium.Substrate.NpcKernelEntityChain.WalkOrder` pins it; the note is gone from the code and
+  from the divergence list above. Verification: `uv run elysium build` clean; `uv run elysium test
+  Elysium.` **954/954**; `uv run pytest pipeline/tests -q` 4,047 passed; `kernel_ledger --check`,
+  `kernel_shape --check` and `gen_kernel_shape --check` all pass; `merge_verdicts --audit` still
+  reports layers 0–9 with **0** unverdicted and *Neither* **0** and **0**.
 - [ ] **29d. The middle: layers 10–18.**
   Retail: 347 core functions — the three `GatherConditions` sweeps (10a–10c, landed), the
   see-unknown sweep's neighbours, `CAI_Memory` and the sense helpers, hint and navigator

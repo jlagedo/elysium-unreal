@@ -291,6 +291,41 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRow(int32 Slot) cons
 	return SpeciesSlotRowOf(Cls != nullptr ? Cls->Name : nullptr, Slot);
 }
 
+const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesDispatchRow(int32 Slot) const
+{
+	// Retail's non-virtual thunk, spelled once: a species body that calls the body it replaces is
+	// calling it DIRECTLY, so slot `Slot`'s dispatcher must answer "nothing to run" while slot
+	// `Slot`'s own species body is on the stack. See the note in `ElysiumNpcKernelSpecies.inl`.
+	if (SpeciesDispatchingSlot == Slot)
+	{
+		return nullptr;
+	}
+	return SpeciesSlotRow(Slot);
+}
+
+FElysiumNpc::FSpeciesDispatchScope::FSpeciesDispatchScope(FElysiumNpc& InNpc, int32 Slot)
+	: Npc(InNpc)
+	, Previous(InNpc.SpeciesDispatchingSlot)
+{
+	Npc.SpeciesDispatchingSlot = Slot;
+}
+
+FElysiumNpc::FSpeciesDispatchScope::~FSpeciesDispatchScope()
+{
+	Npc.SpeciesDispatchingSlot = Previous;
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+void FElysiumNpc::SetRetailClassForTests(const TCHAR* RetailClassName)
+{
+	// The same two writes `RetailClass()` makes on its first call, with the classname resolution
+	// replaced by a direct census lookup. A null name stands an NPC the census claims nothing for,
+	// which is `npc_VCop`'s and `CNPC_VZombie`'s own answer.
+	bRetailClassResolved = true;
+	RetailClassRow = ElysiumNpcKernelClass::Find(RetailClassName);
+}
+#endif
+
 // -------------------------------------------------------------------------------------------------
 // `CNPC_VBaseBoss::m_BlacklistedEntities` — `0x103662d0`, `0x10366400`, `0x10366490`.
 // -------------------------------------------------------------------------------------------------
@@ -536,11 +571,12 @@ bool FElysiumNpc::FUN_103c3960(FElysiumEntity* Enemy)
 
 bool FElysiumNpc::SpeciesSlot599(FElysiumEntity* Enemy, bool& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(599);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(599);
 	if (Row == nullptr)
 	{
 		return false;   // no species body: run the Troika / `CNPC_VAndreiBlood` line you have
 	}
+	const FSpeciesDispatchScope Scope(*this, 599);
 	if (FCString::Strcmp(Row->Address, TEXT("0x10376b70")) == 0)
 	{
 		OutAnswer = FUN_10376b70(Enemy);
@@ -703,11 +739,12 @@ bool FElysiumNpc::FUN_103dd900(FElysiumEntity* Enemy)
 
 bool FElysiumNpc::SpeciesSlot600(FElysiumEntity* Enemy, bool& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(600);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(600);
 	if (Row == nullptr)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 600);
 	if (FCString::Strcmp(Row->Address, TEXT("0x10376ba0")) == 0)
 	{
 		OutAnswer = FUN_10376ba0(Enemy);
@@ -779,11 +816,12 @@ void FElysiumNpc::FUN_103c3a70(FElysiumEntity* Enemy)
 
 bool FElysiumNpc::SpeciesSlot601(FElysiumEntity* Enemy)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(601);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(601);
 	if (Row == nullptr)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 601);
 	if (FCString::Strcmp(Row->Address, TEXT("0x103c1ad0")) == 0)
 	{
 		FUN_103c1ad0(Enemy);
@@ -844,11 +882,12 @@ bool FElysiumNpc::FUN_103c3ab0()
 
 bool FElysiumNpc::SpeciesSlot602(bool& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(602);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(602);
 	if (Row == nullptr)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 602);
 	if (FCString::Strcmp(Row->Address, TEXT("0x103c1b10")) == 0)
 	{
 		OutAnswer = FUN_103c1b10();
@@ -898,11 +937,14 @@ int32 FElysiumNpc::FUN_10364280(int32 Arg)
 
 bool FElysiumNpc::SpeciesSlot606(int32 Arg, int32& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(606);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(606);
 	if (Row == nullptr)
 	{
 		return false;
 	}
+	// The scope is what makes `FUN_10364280`'s own `Slot606(Arg)` retail's `thunk_FUN_102b8320` —
+	// a direct call into the Troika body and not a second trip through this dispatcher.
+	const FSpeciesDispatchScope Scope(*this, 606);
 	if (FCString::Strcmp(Row->Address, TEXT("0x10364280")) == 0)
 	{
 		OutAnswer = FUN_10364280(Arg);
@@ -957,11 +999,12 @@ bool FElysiumNpc::FUN_103b26f0(bool bArg)
 
 bool FElysiumNpc::SpeciesSlot609(bool bArg, bool& OutRunBase)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(609);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(609);
 	if (Row == nullptr)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 609);
 	if (FCString::Strcmp(Row->Address, TEXT("0x103661f0")) == 0)
 	{
 		OutRunBase = FUN_103661f0(bArg);
@@ -1008,11 +1051,14 @@ int32 FElysiumNpc::FUN_103bd270(bool bDisregardState, int32 InterruptLevel)
 bool FElysiumNpc::SpeciesCanPlaySequence(bool bDisregardState, int32 InterruptLevel,
 	int32& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(482);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(482);
 	if (Row == nullptr)
 	{
 		return false;
 	}
+	// Both bodies below CALL `CanPlaySequence`, which is the base they are byte-identical to; the
+	// scope is what stops that call coming back here, exactly as retail's direct `0x10278090` does.
+	const FSpeciesDispatchScope Scope(*this, 482);
 	if (FCString::Strcmp(Row->Address, TEXT("0x1035fd40")) == 0)
 	{
 		OutAnswer = FUN_1035fd40(bDisregardState, InterruptLevel);
@@ -1047,11 +1093,12 @@ void FElysiumNpc::FUN_103c3fd0()
 
 bool FElysiumNpc::SpeciesSlot588()
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(588);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(588);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103c3fd0")) != 0)
 	{
 		return false;
 	}
+	const FSpeciesDispatchScope Scope(*this, 588);
 	FUN_103c3fd0();
 	return true;
 }
@@ -1092,11 +1139,14 @@ void FElysiumNpc::FUN_103b9180()
 
 bool FElysiumNpc::SpeciesSlot593()
 {
-	const FSpeciesSlotRow* Row = SpeciesSlotRow(593);
+	const FSpeciesSlotRow* Row = SpeciesDispatchRow(593);
 	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103b9180")) != 0)
 	{
 		return false;
 	}
+	// `FUN_103b9180` runs the base FIRST (`thunk_FUN_1029a070`) and then overwrites all five words;
+	// the scope makes its `Slot593()` that direct call rather than a second dispatch.
+	const FSpeciesDispatchScope Scope(*this, 593);
 	FUN_103b9180();
 	return true;
 }

@@ -124,6 +124,32 @@ static void HintScriptUnhide(FHintWords& Hint);
  *  runs at slot 119. Verbatim: this forwards. */
 static void HintKill(FHintWords& Hint);
 
+/** `CAI_Hint::vfunc5` (`0x102d2f00`), the hint node's deleting destructor — `thunk_FUN_102d3040`
+ *  then MSVC's `if (flags & 1) operator delete(this)`. What `0x102d3040` does that the KERNEL can
+ *  observe is done to the **owning NPC**, so it lands as a method on the owner and not as a static
+ *  over `FHintWords`:
+ *
+ *      if (m_hOwner resolves && owner->m_pNPC (+0x98) != NULL) {
+ *          (**(DAT_10924a6c + 4))();           // the memory-alloc hook; no NPC state
+ *          SetCondition(owner_npc, 0x29);      // 0x10269a20
+ *          CAI_BaseNPCTroika::ClearHintNode(owner_npc, 0.0);
+ *      }
+ *
+ *  The ORDER is retail's and is the point: the condition is raised BEFORE the hint reference is
+ *  dropped, so a selector that runs on the same pass sees both the bit and the cleared node.
+ *  `ClearHintNode(0.0)` is `ClearScheduleHint(0.f)` here — a ZERO reuse delay, unlike the 5.0 s
+ *  `TaskFail` and the state-change path pass, because the node is going away and there is nothing
+ *  left to cool down.
+ *
+ *  Condition `0x29` has no recovered name in the port's registrar, so it is spelled as the raw
+ *  number, the convention family Conditions set for the Werewolf's `0x7a`.
+ *
+ *  **SEAM, stated:** the rest of `0x102d3040` unlinks the node from the engine's global hint list
+ *  (`DAT_10925450` head, `+0x5d8` next, `DAT_10925454`/`DAT_1092545c` cursors, `DAT_10925458`
+ *  count) and frees its `CUtlVector`s. This substrate stands hint nodes as rows and not as engine
+ *  objects with a list, so there is no list to unlink from; nothing the kernel reads changes. */
+void HintDeletingDestructor();
+
 /** What `CAI_BaseNPCTroika::ScriptUnhide` (`0x102c1ec0`) hands the `scripted_sequence` that hid this
  *  body — the six words it writes into the cine entity at `+0x5f78`..`+0x5f8c`. Returned rather than
  *  written, because this runtime's beat carries no such block: see the definition. */

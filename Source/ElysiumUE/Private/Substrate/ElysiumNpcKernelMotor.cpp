@@ -1153,6 +1153,22 @@ bool FElysiumNpc::IsMoving()
 	return NavIsGoalActive();
 }
 
+bool FElysiumNpc::BaseEntityIsMoving(const FElysiumEntity& Entity)
+{
+	// slot 153's OTHER body. `CAISound::FUN_10026e70` `0x10026e70`, whole:
+	//
+	//     if (DAT_1070d1b0 == this->m_vecVelocity[0] &&
+	//         DAT_1070d1b4 == this->m_vecVelocity[1] &&
+	//         DAT_1070d1b8 == this->m_vecVelocity[2]) return 0;
+	//     return 1;
+	//
+	// `DAT_1070d1b0` is `vec3_origin` — family Geometry's standing fact, 371 readers and one writer
+	// (the static initialiser `0x101370b0`). The comparison is component-wise and EXACT, not a
+	// tolerance, so this is written out rather than as `!Velocity.IsNearlyZero()`: a near-zero
+	// velocity answers MOVING in retail and must answer moving here.
+	return !(Entity.Velocity.X == 0.0 && Entity.Velocity.Y == 0.0 && Entity.Velocity.Z == 0.0);
+}
+
 bool FElysiumNpc::CanStandOn(FElysiumEntity* Other)
 {
 	// slot 166. `CNPC_VMingXiaoTentacle::vfunc166` `0x1039ebd0` adds one arm in front of the base:

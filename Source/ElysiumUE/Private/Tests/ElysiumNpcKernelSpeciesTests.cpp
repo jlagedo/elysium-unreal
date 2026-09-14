@@ -6,6 +6,8 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumStub.h"
+#include "Misc/ScopeExit.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"
@@ -70,6 +72,68 @@ namespace
 			return Builder;
 		}
 	};
+
+	// The WIRING cases' fixture — the two sides of one vtable dispatch.
+	//
+	// `Species` is stood as a plain `npc_VHumanCombatant` and then TOLD which census class it is.
+	// That is not a shortcut around the spawn path, it is the only way in: twelve of the eighteen
+	// wired slots are carried by a class no registered classname resolves to, and the census gives
+	// `CNPC_VZombie` and `CNPC_VCop` no classname at all. The six slots whose carrier IS spawnable
+	// (`CNPC_VTzimisceRunner`'s 588/599/600/601/602 and `CNPC_VAnimal`'s 482) use `Runner` and
+	// `Animal`, which arrive through the real registry with no forcing.
+	//
+	// `Troika` is an `npc_VCop`: `RetailClass()` null, which is this family's recovered
+	// fall-through and is exactly "a plain Troika NPC with no species class".
+	struct FSpeciesWiringFixture
+	{
+		FElysiumNpcWorldFixture World;
+		FElysiumNpc* Species = nullptr;
+		FElysiumNpc* Troika = nullptr;
+		FElysiumNpc* Runner = nullptr;
+		FElysiumNpc* Animal = nullptr;
+
+		explicit FSpeciesWiringFixture(const TCHAR* RetailClassName)
+			: World(Build())
+		{
+			Species = World.Npc(TEXT("species"));
+			Troika = World.Npc(TEXT("troika"));
+			Runner = World.Npc(TEXT("runner"));
+			Animal = World.Npc(TEXT("animal"));
+			FElysiumNpcWorldFixture::Quiet({ Species, Troika, Runner, Animal });
+			if (Species != nullptr && RetailClassName != nullptr)
+			{
+				Species->SetRetailClassForTests(RetailClassName);
+			}
+		}
+
+		static FElysiumNpcWorldBuilder Build()
+		{
+			FElysiumNpcWorldBuilder Builder(TEXT("species_wiring"), 29135u);
+			Builder.AddNpc(TEXT("species"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+			Builder.AddNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+			Builder.AddNpc(TEXT("runner"), FVector(400.0, 0.0, 0.0), TEXT("npc_VTzimisceRunner"));
+			Builder.AddNpc(TEXT("animal"), FVector(600.0, 0.0, 0.0), TEXT("npc_VAnimal"));
+			return Builder;
+		}
+	};
+
+	// How many times a stubbed surface whose name contains `Needle` has fired since the last
+	// `ElysiumStub::ClearTally()`. Slots 488 and 506 keep story 29d's tally as their Troika arm, so
+	// the tally is what says which arm ran.
+	int32 SpeciesStubFires(const TCHAR* Needle)
+	{
+		TArray<ElysiumStub::FTally> Tally;
+		ElysiumStub::CollectTally(Tally);
+		int32 Count = 0;
+		for (const ElysiumStub::FTally& Row : Tally)
+		{
+			if (Row.Surface.Contains(Needle))
+			{
+				Count += Row.Count;
+			}
+		}
+		return Count;
+	}
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1245,6 +1309,613 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 
 	// --- `0x103bf560`: the motor yaw release ------------------------------------------------------
 	Npc->FUN_103bf560();   // reaches family Hints' ReleaseMotorHintYaw seam
+	return true;
+}
+
+// =================================================================================================
+// THE WIRING — one case per wired slot, each driving the REAL base body.
+// =================================================================================================
+//
+// Every case below calls the slot the way the kernel calls it (`Slot21`, `CanPlaySequence`,
+// `DeathSound`, …), never the dispatcher, and asserts the species side effect on the class that
+// carries the override and the Troika side effect on an `npc_VCop`. What the prologue does is the
+// vtable's own resolution, so a case that could only assert the dispatcher's answer would be
+// asserting nothing about the wiring.
+//
+// Three slots have NO observable difference between their two arms in this substrate and say so in
+// place: 482 (the five species copies are byte-identical to the base and CALL it), 497 (both arms
+// are empty — retail's camera body is one `ret` and the base's only effect is a global concept
+// cache this runtime has no table for) and 588 (`RestartIdealActivityId` is family Hints' seam and
+// reaches nothing, so "gated on IsActivityFinished" and "unconditional" write the same nothing).
+// Those three assert the arm that was taken through the dispatcher and the fact that the base body
+// TERMINATES — which for 482 is the whole risk, because its species body calls the base.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot21Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot21", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot21Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
+	FElysiumNpc* Tentacle = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Tentacle == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x1039e800` forwards to the head and raises NOTHING of its own; `0x1029f800` raises
+	// `COND_BEING_ATTACKED`. The condition is the discriminator.
+	Tentacle->TentacleHeadForwards = 0;
+	Tentacle->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
+	Tentacle->Slot21(nullptr);
+	TestEqual(TEXT("slot 21 on a tentacle asks its head, once"), Tentacle->TentacleHeadForwards, 1);
+	TestFalse(TEXT("and raises no COND_BEING_ATTACKED — the base body did not run"),
+		Tentacle->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
+
+	Cop->TentacleHeadForwards = 0;
+	Cop->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
+	Cop->Slot21(nullptr);
+	TestTrue(TEXT("slot 21 on a plain Troika NPC raises COND_BEING_ATTACKED"),
+		Cop->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
+	TestEqual(TEXT("and asks no head"), Cop->TentacleHeadForwards, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot22Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot22", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot22Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
+	FElysiumNpc* Tentacle = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Tentacle == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x1039e830`, the second of the three byte-identical forwards.
+	Tentacle->TentacleHeadForwards = 0;
+	Tentacle->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
+	Tentacle->Slot22(nullptr);
+	TestEqual(TEXT("slot 22 on a tentacle asks its head"), Tentacle->TentacleHeadForwards, 1);
+	TestFalse(TEXT("and the base's condition is not raised"),
+		Tentacle->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
+
+	Cop->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
+	Cop->Slot22(nullptr);
+	TestTrue(TEXT("slot 22 on a plain Troika NPC raises COND_BEING_ATTACKED"),
+		Cop->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot23Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot23", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot23Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
+	FElysiumNpc* Tentacle = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Tentacle == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x1039e860`, the third.
+	Tentacle->TentacleHeadForwards = 0;
+	Tentacle->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
+	Tentacle->Slot23(nullptr);
+	TestEqual(TEXT("slot 23 on a tentacle asks its head"), Tentacle->TentacleHeadForwards, 1);
+	TestFalse(TEXT("and the base's condition is not raised"),
+		Tentacle->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
+
+	Cop->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
+	Cop->Slot23(nullptr);
+	TestTrue(TEXT("slot 23 on a plain Troika NPC raises COND_BEING_ATTACKED"),
+		Cop->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot25Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot25", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot25Test::RunTest(const FString&)
+{
+	// `m_OnAttackedVictim` is what a mapper sees, so the counter is the read — the same wiring the
+	// `0x103e12c0` body case uses, driven through the SLOT this time.
+	FElysiumNpcWorldBuilder Builder(TEXT("species_wired25"), 29136u);
+	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+	Builder.AddNpc(TEXT("cop"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+	Builder.AddCounter(TEXT("victims"));
+	Builder.WireOutput(TEXT("zombie"), TEXT("OnAttackedVictim"), TEXT("victims"));
+	Builder.WireOutput(TEXT("cop"), TEXT("OnAttackedVictim"), TEXT("victims"));
+	FElysiumNpcWorldFixture World(MoveTemp(Builder));
+	FElysiumNpc* Zombie = World.Npc(TEXT("zombie"));
+	FElysiumNpc* Cop = World.Npc(TEXT("cop"));
+	FElysiumNpcWorldFixture::Quiet({ Zombie, Cop });
+	if (Zombie == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+	Zombie->SetRetailClassForTests(TEXT("CNPC_VZombie"));
+
+	Zombie->Slot25(Cop);
+	World.World.Tick(World.World.NowSeconds() + 0.1);
+	TestEqual(TEXT("slot 25 on a zombie fires OnAttackedVictim"), World.Counter(TEXT("victims")),
+		1.f);
+
+	// `0x100265b0` is ONE byte, a bare `ret`: the Troika arm writes nothing and fires nothing.
+	Cop->Slot25(Zombie);
+	World.World.Tick(World.World.NowSeconds() + 0.1);
+	TestEqual(TEXT("slot 25 on a plain Troika NPC is empty and fires nothing"),
+		World.Counter(TEXT("victims")), 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot26Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot26", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot26Test::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("species_wired26"), 29137u);
+	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+	Builder.AddNpc(TEXT("cop"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+	Builder.AddCounter(TEXT("victims"));
+	Builder.WireOutput(TEXT("zombie"), TEXT("OnAttackedVictim"), TEXT("victims"));
+	Builder.WireOutput(TEXT("cop"), TEXT("OnAttackedVictim"), TEXT("victims"));
+	FElysiumNpcWorldFixture World(MoveTemp(Builder));
+	FElysiumNpc* Zombie = World.Npc(TEXT("zombie"));
+	FElysiumNpc* Cop = World.Npc(TEXT("cop"));
+	FElysiumNpcWorldFixture::Quiet({ Zombie, Cop });
+	if (Zombie == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+	Zombie->SetRetailClassForTests(TEXT("CNPC_VZombie"));
+
+	// `0x103e12f0` — the SAME output from a second vtable entry.
+	Zombie->Slot26(Cop);
+	World.World.Tick(World.World.NowSeconds() + 0.1);
+	TestEqual(TEXT("slot 26 on a zombie fires the same OnAttackedVictim"),
+		World.Counter(TEXT("victims")), 1.f);
+
+	Cop->Slot26(Zombie);
+	World.World.Tick(World.World.NowSeconds() + 0.1);
+	TestEqual(TEXT("slot 26 on a plain Troika NPC is empty"), World.Counter(TEXT("victims")), 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot482Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot482CanPlaySequence",
+	GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(nullptr);
+	FElysiumNpc* Animal = Fixture.Animal;   // `npc_VAnimal`, a REAL spawn leaf carrying 0x1035fd40
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Animal == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// The carrier arrives through the registry, not through the latch.
+	TestEqual(TEXT("a spawned npc_VAnimal is CNPC_VAnimal"),
+		FString(Animal->RetailClass() != nullptr ? Animal->RetailClass()->Name : TEXT("")),
+		FString(TEXT("CNPC_VAnimal")));
+	int32 SpeciesAnswer = -1;
+	TestTrue(TEXT("so the slot-482 dispatcher claims it"),
+		Animal->SpeciesCanPlaySequence(true, 0, SpeciesAnswer));
+	TestFalse(TEXT("and refuses an npc_VCop, which has no census class"),
+		Cop->SpeciesCanPlaySequence(true, 0, SpeciesAnswer));
+
+	// `0x1035fd40` is BYTE-IDENTICAL to the base `0x10278090` and CALLS it, so the two arms cannot
+	// answer differently — the observable of the wiring is that the call terminates on the base arm
+	// rather than dispatching back into the species body. Every state arm is driven through the
+	// REAL slot to prove it.
+	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
+	Cop->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
+	TestEqual(TEXT("a combat animal refuses a sequence through the slot"),
+		Animal->CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("and so does a combat cop, on the Troika arm"), Cop->CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("disregarding state admits it on the species arm"),
+		Animal->CanPlaySequence(true, 0), 1);
+	TestEqual(TEXT("and on the Troika arm"), Cop->CanPlaySequence(true, 0), 1);
+
+	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Alert);
+	TestEqual(TEXT("an alert animal refuses at interrupt level 0"),
+		Animal->CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("and admits at level 1"), Animal->CanPlaySequence(false, 1), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot488Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot488DeathSound", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot488Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VTzimisce"));
+	FElysiumNpc* Tzimisce = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Tzimisce == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// The two arms are told apart by what they report: `0x103b92a0` fires `SPI_DIES` at the script
+	// host (three singleton seams, all substituting 0 — retail's own arm), and the Troika-line body
+	// is still story 29d's and tallies itself.
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+
+	Tzimisce->DeathSound();
+	TestEqual(TEXT("slot 488 on a Tzimisce fires SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
+	TestEqual(TEXT("and never reaches the base death sound"),
+		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::DeathSound")), 0);
+
+	Cop->DeathSound();
+	TestEqual(TEXT("slot 488 on a plain Troika NPC reaches the base, which is still 29d's"),
+		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::DeathSound")), 1);
+	TestEqual(TEXT("and fires no SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot497Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot497", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot497Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VCamera"));
+	FElysiumNpc* Camera = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Camera == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// **Both arms are observationally empty here and that is the row's own fact**: `0x103681d0` is
+	// one byte of `ret`, and the Troika body's only effect is a once-only scan of retail's global
+	// response-concept table, which this runtime has no table for (the seam writes -1 into a global
+	// this substrate does not carry). So the assertion is which arm the prologue takes.
+	TestTrue(TEXT("slot 497's dispatcher claims a camera"), Camera->SpeciesSlot497());
+	TestFalse(TEXT("and refuses a plain Troika NPC"), Cop->SpeciesSlot497());
+	TestNotNull(TEXT("and CNPC_VCameraSecurity inherits the same body"),
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCameraSecurity"), 497));
+	Camera->Slot497();   // the empty species arm
+	Cop->Slot497();      // the once-only base arm
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot506Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot506", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot506Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VCamera"));
+	FElysiumNpc* Camera = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Camera == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// Slot 506's base is still story 29d's and tallies itself, so the EMPTINESS of the camera's
+	// `0x103682f0` is observable after all: a camera makes no tally and a cop makes one.
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+
+	Camera->Slot506();
+	TestEqual(TEXT("slot 506 on a camera is empty — the 29d base never runs"),
+		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::Slot506")), 0);
+
+	Cop->Slot506();
+	TestEqual(TEXT("slot 506 on a plain Troika NPC reaches the base"),
+		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::Slot506")), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot510Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot510ShouldPlayFloatSound",
+	GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot510Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VZombie"));
+	FElysiumNpc* Zombie = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Zombie == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103e1080` writes `m_iFloatSoundFrequency = 9` FIRST and on every call, before any gate;
+	// the Troika-line body (`0x10294070`) never touches the word at all. `SLEEPING` is a gate BOTH
+	// bodies refuse on, so the answers agree and the word is the whole discriminator.
+	Zombie->FloatSoundFrequency = 0;
+	Zombie->NpcFlags.Set(EElysiumNpcFlag::SLEEPING);
+	TestFalse(TEXT("a SLEEPING zombie's slot 510 refuses"), Zombie->ShouldPlayFloatSound());
+	TestEqual(TEXT("but wrote m_iFloatSoundFrequency = 9 before that gate ran"),
+		Zombie->FloatSoundFrequency, 9);
+
+	Cop->FloatSoundFrequency = 0;
+	Cop->NpcFlags.Set(EElysiumNpcFlag::SLEEPING);
+	TestFalse(TEXT("a plain Troika NPC's slot 510 refuses on the same gate"),
+		Cop->ShouldPlayFloatSound());
+	TestEqual(TEXT("and leaves m_iFloatSoundFrequency alone — the species write never happened"),
+		Cop->FloatSoundFrequency, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot588Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot588", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot588Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(nullptr);
+	FElysiumNpc* Runner = Fixture.Runner;   // a REAL `npc_VTzimisceRunner`
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Runner == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// **No observable difference yet, and the reason is named**: both arms end in
+	// `RestartIdealActivityId`, family Hints' seam over `0x10289ee0`, which records the id and
+	// reaches nothing — so "gated on `IsActivityFinished()`" and `0x103c3fd0`'s "unconditional"
+	// write the same nothing. The DECISION is what is asserted, with the census behind it.
+	TestEqual(TEXT("a spawned runner is CNPC_VTzimisceRunner"),
+		FString(Runner->RetailClass() != nullptr ? Runner->RetailClass()->Name : TEXT("")),
+		FString(TEXT("CNPC_VTzimisceRunner")));
+	TestEqual(TEXT("and its slot-588 body is 0x103c3fd0, not the base's 0x10293e50"),
+		FString(ElysiumNpcKernelClass::BodyOf(Runner->RetailClass(), 588)),
+		FString(TEXT("0x103c3fd0")));
+	TestTrue(TEXT("so slot 588's dispatcher claims it"), Runner->SpeciesSlot588());
+	TestFalse(TEXT("and refuses a plain Troika NPC"), Cop->SpeciesSlot588());
+	Runner->Slot588();   // the species arm, through the slot
+	Cop->Slot588();      // the base arm
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot593Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot593", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot593Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VTzimisce"));
+	FElysiumNpc* Tzimisce = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Tzimisce == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103b9180` runs the base (`thunk_FUN_1029a070`) and then OVERWRITES all five words, so
+	// `m_flTargetLeadMin` is 0.01 on a Tzimisce and the base's 0.1 on everything else. That the
+	// base ran at all is what the direct call is for, and the number proves the order.
+	Tzimisce->TargetLeadMin = 999.f;
+	Tzimisce->Slot593();
+	TestEqual(TEXT("slot 593 on a Tzimisce leaves m_flTargetLeadMin at 0.01"),
+		Tzimisce->TargetLeadMin, 0.01f, 1.0e-06f);
+	TestEqual(TEXT("with the base's own weights standing under it"),
+		Tzimisce->TargetLeadCurrentWeight, 50.f, 1.0e-06f);
+
+	Cop->TargetLeadMin = 999.f;
+	Cop->Slot593();
+	TestEqual(TEXT("slot 593 on a plain Troika NPC writes the base's 0.1"), Cop->TargetLeadMin,
+		0.1f, 1.0e-06f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot599Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot599", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(nullptr);
+	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Runner == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103c3960` drops EVERY gate the Troika body has — frenzy, the can-enter timer, the range and
+	// height terms — and goes straight to the coordinator, which refuses. The frenzy bit is the
+	// discriminator: the Troika arm enters melee outright on it, the runner's arm never reads it.
+	Runner->NpcFlags.SetFrenziedWord(0x2);
+	Runner->bInMelee = true;
+	TestFalse(TEXT("a runner's slot 599 refuses on the coordinator, frenzy bit and all"),
+		Runner->Slot599(0));
+	TestFalse(TEXT("and clears m_bInMelee, which the Troika arm's first gate would not have"),
+		Runner->bInMelee);
+	Runner->NpcFlags.SetFrenziedWord(0);
+
+	Cop->NpcFlags.SetFrenziedWord(0x2);
+	Cop->bInMelee = false;
+	TestTrue(TEXT("a plain Troika NPC's slot 599 enters melee outright on frenzy bit 0x2"),
+		Cop->Slot599(0));
+	TestTrue(TEXT("and sets m_bInMelee"), Cop->bInMelee);
+	Cop->NpcFlags.SetFrenziedWord(0);
+
+	// The ARGUMENT. `signatures.md` types slot 599 `int` because the base ignores it, but the
+	// runner's copy caches `m_hPotentialEnemy` from it — and every recovered dispatch site pushes
+	// `GetEnemy()`. The prologue hands the species arm this NPC's own enemy, so a live enemy is
+	// what lands in the word and a cleared one is what lands when there is none.
+	Runner->Senses.Memory.Enemy = Cop->Handle;
+	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
+	Runner->Slot599(0);
+	TestEqual(TEXT("slot 599 hands the species arm GetEnemy(), which it caches"),
+		Runner->RunnerPotentialEnemy, Cop->Handle);
+	Runner->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Runner->Slot599(0);
+	TestFalse(TEXT("and with no enemy the cache is cleared, retail's null arm"),
+		Runner->RunnerPotentialEnemy.IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot600Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot600", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot600Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(nullptr);
+	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Runner == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103c39e0` fires the global melee event FIRST and unconditionally; the Troika body fires it
+	// only inside the accepting arm, which the weapon-capability seam (answering 0) never reaches.
+	const int32 RunnerEvents = Runner->MeleeEventFires;
+	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
+	TestFalse(TEXT("a runner's slot 600 still refuses on the coordinator"), Runner->Slot600(Cop));
+	TestEqual(TEXT("but the event fired anyway — before anything was decided"),
+		Runner->MeleeEventFires, RunnerEvents + 1);
+	TestEqual(TEXT("and the argument was cached into m_hPotentialEnemy"),
+		Runner->RunnerPotentialEnemy, Cop->Handle);
+
+	const int32 CopEvents = Cop->MeleeEventFires;
+	TestFalse(TEXT("a plain Troika NPC's slot 600 refuses with no capability bits"),
+		Cop->Slot600(Runner));
+	TestEqual(TEXT("and fires no event, because the fire is INSIDE the accepting arm"),
+		Cop->MeleeEventFires, CopEvents);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot601Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot601", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot601Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(nullptr);
+	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Runner == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103c3a70` releases the coordinator slot UNGUARDED and clears `m_hPotentialEnemy`; the
+	// Troika body guards the release on `m_pAttackCoordinator != 0`. With no coordinator object in
+	// this substrate that guard is closed, so the release count is the discriminator.
+	Runner->AttackCoordinator = 0;
+	Runner->bInMelee = true;
+	Runner->RunnerPotentialEnemy = Cop->Handle;
+	const int32 RunnerReleases = Runner->MeleeCoordinatorReleases;
+	Runner->Slot601(Cop);
+	TestFalse(TEXT("a runner's slot 601 leaves melee"), Runner->bInMelee);
+	TestEqual(TEXT("releasing the coordinator slot with no guard at all"),
+		Runner->MeleeCoordinatorReleases, RunnerReleases + 1);
+	TestFalse(TEXT("and FORGETS m_hPotentialEnemy — the runner's matched set"),
+		Runner->RunnerPotentialEnemy.IsSet());
+
+	Cop->AttackCoordinator = 0;
+	Cop->bInMelee = true;
+	const int32 CopReleases = Cop->MeleeCoordinatorReleases;
+	Cop->Slot601(Runner);
+	TestFalse(TEXT("a plain Troika NPC's slot 601 leaves melee too"), Cop->bInMelee);
+	TestEqual(TEXT("but releases nothing, because its release is GUARDED"),
+		Cop->MeleeCoordinatorReleases, CopReleases);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot602Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot602", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(nullptr);
+	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Runner == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103c3ab0` keeps only the FAR arm: out of double melee range with a full coordinator. The
+	// Troika body refuses first on its own null-coordinator test, which is the state this substrate
+	// is always in (the named divergence family TroikaHelpers records).
+	Runner->AttackCoordinator = 0;
+	Runner->ScheduleHost.EnemyDistUnits = 500.f;
+	TestTrue(TEXT("a runner's slot 602 leaves melee on the far arm"), Runner->Slot602());
+
+	Cop->AttackCoordinator = 0;
+	Cop->ScheduleHost.EnemyDistUnits = 500.f;
+	TestFalse(TEXT("a plain Troika NPC's slot 602 refuses on its null-coordinator test"),
+		Cop->Slot602());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot606Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot606", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VBach"));
+	FElysiumNpc* Bach = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Bach == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// With `COND_ENEMY_OCCLUDED` and `COND_ENEMY_UNREACHABLE` both up, the Troika body answers
+	// `0xaa` at once. Bach's `0x10364280` arms `m_bFireOccluded` and answers 0 on the FIRST pass and
+	// only then delegates — so the two answers differ on pass one and agree on pass two, which is
+	// what proves the delegation is a DIRECT call into the base and not a second dispatch.
+	for (FElysiumNpc* Npc : { Bach, Cop })
+	{
+		Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
+		Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyUnreachable);
+	}
+	Bach->bBachFireOccluded = false;
+
+	TestEqual(TEXT("slot 606 on a Bach answers 0 on the first pass"), Bach->Slot606(0), 0);
+	TestTrue(TEXT("having armed m_bFireOccluded"), Bach->bBachFireOccluded);
+	TestEqual(TEXT("slot 606 on a plain Troika NPC answers 0xaa at once"), Cop->Slot606(0), 0xaa);
+	TestEqual(TEXT("and Bach's SECOND pass delegates into that same base body"), Bach->Slot606(0),
+		0xaa);
+	TestTrue(TEXT("leaving the flag armed"), Bach->bBachFireOccluded);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot609Test,
+	"Elysium.Substrate.NpcKernelSpecies.WiredSlot609", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredSlot609Test::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VBach"));
+	FElysiumNpc* Bach = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Bach == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+
+	// `0x103661f0` admits only retail `m_NPCState` 4 or 0xc; every other state has its cached
+	// `m_pShootAtHintNode` ZEROED as a side effect of asking, and the base search never runs.
+	Bach->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
+	Bach->ScheduleHost.ShootAtHintNode = 77;
+	TestNull(TEXT("slot 609 on a combat Bach answers no hint"), Bach->Slot609(false));
+	TestEqual(TEXT("and zeroes m_pShootAtHintNode as a side effect of asking"),
+		Bach->ScheduleHost.ShootAtHintNode, 0);
+
+	// A scripted body (retail state 4) passes the gate and the base search runs, leaving the word
+	// where it is — the same place a plain Troika NPC leaves it, because there is no gate at all.
+	Bach->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
+	Bach->ScheduleHost.ShootAtHintNode = 77;
+	Bach->Slot609(false);
+	TestEqual(TEXT("a scripted Bach reaches the base search and keeps its cached hint"),
+		Bach->ScheduleHost.ShootAtHintNode, 77);
+
+	Cop->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
+	Cop->ScheduleHost.ShootAtHintNode = 77;
+	Cop->Slot609(false);
+	TestEqual(TEXT("a plain Troika NPC has no gate: its cached hint survives combat"),
+		Cop->ScheduleHost.ShootAtHintNode, 77);
 	return true;
 }
 

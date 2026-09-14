@@ -570,6 +570,26 @@ not the entity teardown every other class runs at slot 119.
 hoisted the reads or retail restores those four words from the cine first; nothing in the corpus
 settles which, and the port reproduces only the sequence whose destination is stated.
 
+### `CAI_Hint::vfunc5` — `0x102d2f00` / `0x102d3040` (2026-09-13)
+
+The hint node's deleting destructor, and the one place a hint's *destruction* writes to an NPC.
+`0x102d2f00` is MSVC's two-liner — `thunk_FUN_102d3040(this); if (flags & 1) operator delete(this);`
+— and `0x102d3040` is the destructor proper. Everything the kernel can observe is in its first arm
+and is done **to the owning NPC**: with `m_hOwner` (`this[0x178]`) resolving and that entity's
+`+0x98` NPC pointer non-null, it calls `SetCondition(owner, 0x29)` (`0x10269a20`) and then
+`CAI_BaseNPCTroika::ClearHintNode(owner, 0.0)`. The **order** is the fact: the condition is raised
+*before* the hint reference is dropped, so a selector running on the same pass sees both the bit and
+the cleared node. The **0.0** is the second: every other caller of `ClearHintNode` passes a reuse
+delay (5.0 s from `TaskFail` and from the state-change path), and this one passes zero, because the
+node is being destroyed and there is nothing left to hold a cooldown against. Condition `0x29` has
+no recovered name.
+
+The rest of `0x102d3040` is the engine bookkeeping: unlink from the global hint list (head
+`DAT_10925450`, next at `+0x5d8`, the two cursors `DAT_10925454` / `DAT_1092545c`, the count
+`DAT_10925458`), then destruct the node's `CUtlVector`s and free. **Unrecovered:** what the
+`(**(DAT_10924a6c + 4))()` call ahead of the two writes is — an allocator or scope hook with no
+arguments and no NPC state in reach.
+
 ## `CAI_BaseNPC::FindNamedEntity` — `0x10279090` (2026-09-13)
 
 Slot 559, the target-selector string dispatch, `__strcmpi` throughout. In order: `!player`,

@@ -1026,6 +1026,15 @@ FElysiumEntityHandle FElysiumNpc::GetBestSeeUnknown()
 
 void FElysiumNpc::Slot593()
 {
+	// The vtable dispatch first: `CNPC_VTzimisce` `0x103b9180` (family **Species**) runs THIS body
+	// and then overwrites all five words, so a Tzimisce's lead defaults are never the ones below.
+	// Its call back down is `thunk_FUN_1029a070`, a direct call, which `SpeciesSlot593`'s dispatch
+	// scope reproduces — which is why the prologue cannot recurse.
+	if (SpeciesSlot593())
+	{
+		return;
+	}
+
 	// `CAI_BaseNPCTroika::FUN_1029a070`, 48 bytes, five immediate stores and nothing else:
 	//
 	//     +0x655c = 0x3dcccccd = 0.1f     m_flTargetLeadMin

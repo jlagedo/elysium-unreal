@@ -1312,4 +1312,103 @@ bool FElysiumNpcKernelEntityChainAnglesAndThinkTest::RunTest(const FString&)
 	return true;
 }
 
+// --- `AutoaimDeflection`'s walk order (`0x10176930`) ----------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainWalkOrderTest,
+	"Elysium.Substrate.NpcKernelEntityChain.WalkOrder", GElysiumNpcKernelEntityChainFlags)
+bool FElysiumNpcKernelEntityChainWalkOrderTest::RunTest(const FString&)
+{
+	// Six rows in a known lump order. Retail's walk is the EDICT ARRAY by ascending index, and this
+	// port's entity index is that index: the def array in lump order, stable and never recycled.
+	FElysiumNpcWorldBuilder Builder(TEXT("sp_entitychain_order"), 29104);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	Builder.AddNpc(TEXT("a"));
+	Builder.AddCounter(TEXT("b"));
+	Builder.AddNpc(TEXT("c"));
+	Builder.AddEntity(TEXT("point_target"), TEXT("d"));
+	Builder.AddNpc(TEXT("e"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* A = Fixture.Npc(TEXT("a"));
+	if (!TestNotNull(TEXT("a"), A))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ A, Fixture.Npc(TEXT("c")), Fixture.Npc(TEXT("e")) });
+
+	TArray<FElysiumEntity*> Walk;
+	A->ChainEntityList(Walk);
+
+	// 1. The walk is in ASCENDING ENTITY INDEX, which is retail's ascending EDICT index — not the
+	//    order the name index, the class index or a hash happens to hold. This is the whole rule,
+	//    and it is observable because `AutoaimDeflection`'s score test is `<=`: among equally
+	//    aligned candidates the last one walked wins, so the order decides the winner.
+	bool bAscending = true;
+	for (int32 i = 1; i < Walk.Num(); ++i)
+	{
+		bAscending = bAscending && Walk[i - 1]->Handle.Index < Walk[i]->Handle.Index;
+	}
+	TestTrue(TEXT("0x10176930 walks by strictly ascending entity index"), bAscending);
+
+	// 2. And that index order is the map's LUMP order: the def array, as loaded.
+	TArray<FString> Names;
+	for (const FElysiumEntity* Entity : Walk)
+	{
+		if (!Entity->TargetName.IsEmpty())
+		{
+			Names.Add(Entity->TargetName);
+		}
+	}
+	const TArray<FString> Expected = { TEXT("world"), TEXT("a"), TEXT("b"), TEXT("c"),
+		TEXT("d"), TEXT("e") };
+	if (TestTrue(TEXT("every def row is walked"), Names.Num() >= Expected.Num()))
+	{
+		const TArray<FString> Lump(Names.GetData(), Expected.Num());
+		TestEqual(TEXT("in the def array's own order"), FString::Join(Lump, TEXT(",")),
+			FString::Join(Expected, TEXT(",")));
+	}
+
+	// 3. A spawn made AFTER the load walks after every map entity, because its index continues past
+	//    the def array — retail's next free edict is past the map's too. The player is the one such
+	//    spawn every world has (the viewmodels it brings with it come after it again, which is why
+	//    this asserts "after the map", not "last").
+	const FElysiumPlayer* Player = Fixture.Player();
+	const FElysiumNpc* E = Fixture.Npc(TEXT("e"));
+	if (TestNotNull(TEXT("the player stands"), Player) && TestNotNull(TEXT("e"), E))
+	{
+		TestTrue(TEXT("a spawn past the def array walks after every map entity"),
+			Player->Handle.Index > E->Handle.Index);
+		int32 PlayerAt = INDEX_NONE;
+		int32 EAt = INDEX_NONE;
+		for (int32 i = 0; i < Walk.Num(); ++i)
+		{
+			PlayerAt = Walk[i]->Handle.Index == Player->Handle.Index ? i : PlayerAt;
+			EAt = Walk[i]->Handle.Index == E->Handle.Index ? i : EAt;
+		}
+		TestTrue(TEXT("and the walk visits it after them"),
+			PlayerAt != INDEX_NONE && EAt != INDEX_NONE && EAt < PlayerAt);
+	}
+
+	// 4. `edict[0x4c] != 0` — the free-slot byte. A reaped slot drops OUT of the walk and the
+	//    survivors keep their indices; retail's `continue` renumbers nothing.
+	FElysiumNpc* C = Fixture.Npc(TEXT("c"));
+	if (!TestNotNull(TEXT("c resolves"), C))
+	{
+		return false;
+	}
+	const int32 CIndex = C->Handle.Index;
+	C->Kill();
+	A->ChainEntityList(Walk);
+	bool bReapedGone = true;
+	bool bStillAscending = true;
+	for (int32 i = 0; i < Walk.Num(); ++i)
+	{
+		bReapedGone = bReapedGone && Walk[i]->Handle.Index != CIndex;
+		bStillAscending = bStillAscending
+			&& (i == 0 || Walk[i - 1]->Handle.Index < Walk[i]->Handle.Index);
+	}
+	TestTrue(TEXT("a reaped slot is skipped"), bReapedGone);
+	TestTrue(TEXT("and the survivors keep their index order"), bStillAscending);
+	return true;
+}
+
 #endif   // WITH_DEV_AUTOMATION_TESTS

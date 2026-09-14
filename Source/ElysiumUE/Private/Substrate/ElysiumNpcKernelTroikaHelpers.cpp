@@ -448,6 +448,26 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 
 bool FElysiumNpc::Slot599(int32)
 {
+	// **The vtable dispatch first.** Four classes replace this slot outright — `CNPC_VFrenzyShadow`
+	// `0x10376b70`, `CNPC_VGargoyle` `0x10379ef0`, `CNPC_VTzimisceHeadClaw` `0x103c19e0` and
+	// `CNPC_VTzimisceRunner` `0x103c3960`, family **Species**' rows — and `MeleeSlotLine(599)` names
+	// them. A `RetailClass()` the census does not claim falls through to this body, which is
+	// `npc_VCop`'s recovered answer and not a hole.
+	//
+	// The argument: `signatures.md` types slot 599 `bool vfunc599(int)` because THIS body reads it
+	// with no instruction, but the runner's copy casts it to a `CBaseEntity*` and caches
+	// `m_hPotentialEnemy` from it. Every recovered dispatch site pushes `GetEnemy()` —
+	// `0x102b6c30` `CALL [EAX+0x29c]` / `MOV EDI,EAX` / `PUSH EDI` / `CALL [EDX+0x95c]`, and
+	// `0x103c4430` `CALL [EAX+0x29c]` / `PUSH EAX` / `CALL [EDX+0x95c]` — so this NPC's own enemy IS
+	// retail's argument and is what the species arm is handed. `+0x29c` is slot **167**, the CONST
+	// overload (`0x101a67e0`, a plain `m_hEnemy` resolve), not the Troika line's mutable 168 with
+	// its last-enemy fallback — so the const one is the one called here.
+	bool SpeciesAnswer = false;
+	if (SpeciesSlot599(static_cast<const FElysiumNpc*>(this)->GetEnemy(), SpeciesAnswer))
+	{
+		return SpeciesAnswer;
+	}
+
 	// `0x102b5650`. The `CNPC_VAndreiBlood`-line copy `0x10385ab0` is BYTE-IDENTICAL (family Bosses
 	// read it and this family re-read it), so one arm carries both lines and `MeleeSlotLine(599)`
 	// is asserted rather than branched on. The argument is read by nothing in the body.
@@ -517,8 +537,18 @@ bool FElysiumNpc::Slot599(int32)
 // Slot 600 — `FUN_102b57c0` `0x102b57c0` / `FUN_10385c30`.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::Slot600(FElysiumEntity*)
+bool FElysiumNpc::Slot600(FElysiumEntity* Enemy)
 {
+	// The vtable dispatch first: five classes replace this slot (family **Species**' `0x10376ba0`,
+	// `0x10379f20`, `0x103c1a60`, `0x103c39e0` and `CNPC_VYukie`'s `0x103dd900`, which is not a
+	// melee-entry body at all). The argument is retail's own and is passed straight through — the
+	// runner's copy caches `m_hPotentialEnemy` from it.
+	bool SpeciesAnswer = false;
+	if (SpeciesSlot600(Enemy, SpeciesAnswer))
+	{
+		return SpeciesAnswer;
+	}
+
 	// `0x102b57c0`. `0x10385c30` is BYTE-IDENTICAL, verified against the decompiled C of both, so
 	// one arm carries both lines. The argument is read by nothing in the body.
 	//
@@ -563,8 +593,17 @@ bool FElysiumNpc::Slot600(FElysiumEntity*)
 // Slot 601 — `FUN_102b5880` `0x102b5880` / `FUN_10385cf0` (family Bosses').
 // -------------------------------------------------------------------------------------------------
 
-void FElysiumNpc::Slot601(FElysiumEntity*)
+void FElysiumNpc::Slot601(FElysiumEntity* Enemy)
 {
+	// The vtable dispatch first: `CNPC_VTzimisceHeadClaw` `0x103c1ad0` and `CNPC_VTzimisceRunner`
+	// `0x103c3a70` replace this slot (family **Species**), both dropping the ranged-weapon test and
+	// the release's null guard. Retail's argument at every recovered site is `GetEnemy()`
+	// (`0x102b6c30` pushes the same EDI into `+0x964` as into `+0x95c`); it arrives here already.
+	if (SpeciesSlot601(Enemy))
+	{
+		return;
+	}
+
 	// `0x102b5880`, the Troika line, in retail's order and with the argument ignored:
 	//     (*DAT_10924edc)->vfunc1();                                   // the global melee event
 	//     m_bInMelee = 0;
@@ -603,6 +642,14 @@ void FElysiumNpc::Slot601(FElysiumEntity*)
 
 bool FElysiumNpc::Slot602()
 {
+	// The vtable dispatch first: `CNPC_VTzimisceHeadClaw` `0x103c1b10` and `CNPC_VTzimisceRunner`
+	// `0x103c3ab0` (family **Species**) keep only the far arm of the body below.
+	bool SpeciesAnswer = false;
+	if (SpeciesSlot602(SpeciesAnswer))
+	{
+		return SpeciesAnswer;
+	}
+
 	// `0x102b5900`, the Troika line:
 	//     if ((m_bfNPCFrenziedFlags & 2) == 2) return false;
 	//     if (GetFollowerBoss()) return false;
@@ -674,8 +721,17 @@ bool FElysiumNpc::Slot602()
 // Slot 606 — `FUN_102b8320` `0x102b8320`.
 // -------------------------------------------------------------------------------------------------
 
-int32 FElysiumNpc::Slot606(int32)
+int32 FElysiumNpc::Slot606(int32 Arg)
 {
+	// The vtable dispatch first: `CNPC_VBach` `0x10364280` (family **Species**) wraps this body in an
+	// arm-then-fire hysteresis around `COND_ENEMY_OCCLUDED` and DELEGATES here on its second pass —
+	// `thunk_FUN_102b8320`, a direct call, which `SpeciesSlot606`'s dispatch scope reproduces.
+	int32 SpeciesAnswer = 0;
+	if (SpeciesSlot606(Arg, SpeciesAnswer))
+	{
+		return SpeciesAnswer;
+	}
+
 	// `0x102b8320`, in retail's order. Each fail arm stamps the selector trace at
 	// `+0x1b30`/`+0x1b34`; the shape map calls that pair ABSENT and families Anim, Bosses and Damage
 	// all record the same, so the line numbers are named in the comments and not stored.
@@ -905,6 +961,18 @@ int32 FElysiumNpc::FindShootAtHintNode(bool bForce)
 
 void* FElysiumNpc::Slot609(bool bForce)
 {
+	// The vtable dispatch first, and slot 609's species arm is a GATE rather than a replacement:
+	// `CNPC_VBach` `0x103661f0`, `CNPC_VBatSwarm` `0x10367740` and `CNPC_VSheriffSwarm` `0x103b26f0`
+	// (family **Species**, three byte-identical bodies) admit only retail `m_NPCState` 4 or 0xc and
+	// otherwise ZERO `m_pShootAtHintNode` and answer NULL. An admitted body tail-calls the base
+	// (`thunk_FUN_102b6b50`), which is the search below — so the dispatcher hands back "may the base
+	// run" and the refusal is the only arm that returns early.
+	bool bRunBase = false;
+	if (SpeciesSlot609(bForce, bRunBase) && !bRunBase)
+	{
+		return nullptr;
+	}
+
 	// Retail's `CAI_Hint* vfunc609(bool)`. Hints are BARE INDICES in this runtime (family Hints'
 	// standing fact), so there is no object to answer with: the body is `FindShootAtHintNode`,
 	// which answers the index, and the slot answers null. Nothing is lost — every recovered caller
