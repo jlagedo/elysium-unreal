@@ -448,27 +448,17 @@ void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
 
 bool FElysiumNpcSenses::IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now)
 {
-	// Troika `FVisible` `0x102b4630` reads the same two bytes before slot 594. Retail writes
-	// `*blocker = 0` when the caller passed one; this port has no blocker out-param.
-	if (ElysiumNpcSense::IgnoreSenses())
-	{
-		return false;
-	}
-	if (ElysiumNpcSense::IgnorePlayer() && Npc.World && Candidate.Handle == Npc.World->PlayerHandle())
-	{
-		return false;
-	}
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	const bool RangeBypass = (Npc.GetMind().State() == EElysiumNpcState::Combat && !Memory.bEnemyOccluded)
-		|| Now < Memory.StealthVisionOverrideUntil;
-	const FElysiumPlayer* Player = Npc.World ? Npc.World->FindPlayer() : nullptr;
-	const float Scalar = Player && Player->Handle == Candidate.Handle ? Player->Stealth.VisionScalar : 1.f;
-	if (!RangeBypass && FVector::Dist(Npc.EyePosition(), Candidate.EyePosition())
-		> Npc.Senses.Perception.VisionDistanceCm * Scalar) return false;
-	const FElysiumCombatCharacter* Character = Candidate.AsCombatCharacter();
-	return (!Character || Npc.CanPerceiveConcealment(*Character))
-		&& !Npc.HasDisciplineStatus(TEXT("Dominate_BrainWipe"))
-		&& SegmentClear(Npc.World, Npc.EyePosition(), Candidate.EyePosition());
+	// Troika `FVisible` `0x102b4630` and the slot 594 range/concealment test under it are story
+	// 29d's family Senses10 (`ElysiumNpcKernelSenses10.cpp`); this dispatches the slot rather than
+	// keeping a second copy of the chain. Retail's mask here is `0x2804091`, which is what every
+	// caller of `FVisible` in the kernel closure passes.
+	//
+	// The dispatch matters beyond tidiness: slot 594 is the ONE writer of `m_bSeenInOuterBand`
+	// (`+0x6081`), which slot 472 `OnSeeEntity` reads, so the see-unknown path only works when the
+	// sighting goes through the slot.
+	(void)Now;
+	return const_cast<FElysiumNpc&>(Npc).FVisible(const_cast<FElysiumEntity*>(&Candidate),
+		0x2804091, nullptr, 0);
 }
 
 // `SetClosestPlayer` `0x10293a80`. Retail walks every client slot and keeps the nearest by 3-D
@@ -640,21 +630,14 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		const bool bPlayer = Candidate->Handle == World->PlayerHandle();
 		const bool bNpc = Candidate->AsNpc() != nullptr;
 		const FString Classname = Candidate->Def ? Candidate->Def->Classname : FString();
-		// QuerySeeEntity slot 468 (`0x102b38b0`): the two sense-off bytes, then any player /
-		// non-players only at D_HT/D_FR. Frenzy-friend (`m_bfNPCFrenziedFlags & 0x800` vs
-		// `m_hFriendPlayer`) is 16c; the seam answers "not a friend".
-		if (ElysiumNpcSense::IgnoreSenses())
+		// QuerySeeEntity slot 468 (`0x102b38b0`) — dispatched, not inlined. Its five arms (the two
+		// sense-off bytes, the frenzy-friend veto, the unconditional player pass-through and the
+		// D_HT/D_FR gate) are story 29d's family Senses10 body. The frenzy-friend arm the port's own
+		// comment called "16c work" is live there.
+		(void)Classname;
+		if (!Npc.QuerySeeEntity(const_cast<FElysiumEntity*>(Candidate)))
 		{
 			continue;
-		}
-		if (ElysiumNpcSense::IgnorePlayer() && bPlayer)
-		{
-			continue;
-		}
-		const EElysiumRelationship Relation = Npc.Relationships.Resolve(Candidate->Handle, Classname);
-		if (!bPlayer && Relation != EElysiumRelationship::Hate && Relation != EElysiumRelationship::Fear)
-		{
-			continue; // objects need an explicit D_HT/D_FR relation; neutral scenery is not a look target
 		}
 		const float DistanceCm = FVector::Dist(Npc.Origin, Candidate->Origin);
 		if (DistanceCm > PrefilterCm)

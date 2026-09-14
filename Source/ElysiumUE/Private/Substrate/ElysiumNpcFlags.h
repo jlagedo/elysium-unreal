@@ -242,6 +242,10 @@ public:
 	// `0x8` always-PVS/LOS (`CalcNextNormalThink`, `CalcNextAIThink`, `SetPlayerLOS`), `0x10`
 	// "does not witness", `0x800` the frenzy friend, `0x8000` `NPCThink`'s 1% death-scream roll.
 	static constexpr uint32 FrenziedAlwaysInPlayerView = 0x00000008;
+	// `0x800`, the frenzy friend. Its readers are slot 467 `QueryHearSound` (`0x102b35b0`,
+	// `102b3621`) and slot 468 `QuerySeeEntity` (`0x102b38b0`, `102b38f1`), which both refuse the
+	// entity `m_hFriendPlayer` (`+0x60ac`) resolves to while the bit stands. Story 29d, Senses10.
+	static constexpr uint32 FrenziedFriendPlayer = 0x00000800;
 	bool HasFrenzied(uint32 Mask) const { return (FrenziedWord & Mask) != 0; }
 	// 16c's writer. Retail assigns the whole word rather than OR-ing, and so does this.
 	void SetFrenziedWord(uint32 Value) { FrenziedWord = Value; }

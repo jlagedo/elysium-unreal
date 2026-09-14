@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 585 generated virtuals: 84 carry the retail default story 29c recovered, 239 are defined by hand
-// in the substrate, and 262 are still stubs — 145 29c, 89 29d, 28 29e.
+// 585 generated virtuals: 84 carry the retail default story 29c recovered, 266 are defined by hand
+// in the substrate, and 235 are still stubs — 145 29c, 62 29d, 28 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -159,17 +159,13 @@ void FElysiumNpc::DebugSetClassName(const TCHAR*)
 
 // slot 17 0x1028de90 (walked) `void TraceMessage(const char*, int) const`
 //   layer 12, story 29d
-void FElysiumNpc::TraceMessage(const TCHAR*, int32) const
-{
-	FireKernelSlot(TEXT("TraceMessage"), TEXT("0x1028de90"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::TraceMessage`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 18 0x1028de10 (walked) `void TraceMessage(const char*, int)`
 //   layer 12, story 29d
-void FElysiumNpc::TraceMessage(const TCHAR*, int32)
-{
-	FireKernelSlot(TEXT("TraceMessage"), TEXT("0x1028de10"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::TraceMessage`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 19 0x1028dfb0 (walked) `void TraceMessageBare(const char*) const`
 //   layer 1, story 29c
@@ -178,10 +174,8 @@ void FElysiumNpc::TraceMessage(const TCHAR*, int32)
 
 // slot 20 0x1028df30 (walked) `void TraceMessageBare(const char*)`
 //   layer 12, story 29d
-void FElysiumNpc::TraceMessageBare(const TCHAR*)
-{
-	FireKernelSlot(TEXT("TraceMessageBare"), TEXT("0x1028df30"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::TraceMessageBare`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 21 0x1029f800 (walked) `void vfunc21(CBaseEntity*)`
 //   layer 3, story 29c
@@ -689,10 +683,8 @@ void FElysiumNpc::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
 
 // slot 104 0x10298ad0 (sdk) `void Precache()`
 //   layer 14, story 29d
-void FElysiumNpc::Precache()
-{
-	FireKernelSlot(TEXT("Precache"), TEXT("0x10298ad0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Precache`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 105 0x10298ce0 (sdk) `void SetModel(char*)`
 //   layer 14, story 29d
@@ -718,27 +710,18 @@ void FElysiumNpc::ParseMapData(void*)
 
 // slot 108 0x1004fbb0 (walked) `bool KeyValue(const char*, Vector)`
 //   layer 11, story 29d
-bool FElysiumNpc::KeyValue(const TCHAR*, FVector)
-{
-	FireKernelSlot(TEXT("KeyValue"), TEXT("0x1004fbb0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 109 0x1004fbf0 (walked) `bool KeyValue(const char*, float)`
 //   layer 11, story 29d
-bool FElysiumNpc::KeyValue(const TCHAR*, float)
-{
-	FireKernelSlot(TEXT("KeyValue"), TEXT("0x1004fbf0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 110 0x101c1480 (walked) `bool KeyValue(const char*, const char*)`
 //   layer 10, story 29d
-bool FElysiumNpc::KeyValue(const TCHAR*, const TCHAR*)
-{
-	FireKernelSlot(TEXT("KeyValue"), TEXT("0x101c1480"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 111 0x10337ca0 (walked) `void MemberSync()`
 //   layer 13, story 29d
@@ -808,19 +791,13 @@ void FElysiumNpc::SetClassname(TCHAR*)
 
 // slot 123 0x1029ca50 (sdk) `void DrawDebugGeometryOverlays()`
 //   layer 15, story 29d
-void FElysiumNpc::DrawDebugGeometryOverlays()
-{
-	FireKernelSlot(TEXT("DrawDebugGeometryOverlays"), TEXT("0x1029ca50"), TEXT("29d"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::DrawDebugGeometryOverlays`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 124 0x1029d4e0 (sdk) `int DrawDebugTextOverlays()`
 //   layer 15, story 29d
-int32 FElysiumNpc::DrawDebugTextOverlays()
-{
-	FireKernelSlot(TEXT("DrawDebugTextOverlays"), TEXT("0x1029d4e0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::DrawDebugTextOverlays`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 125 0x1033e7e0 (walked) `void DrawMuzzleOverlay()`
 //   layer 4, story 29c
@@ -1234,10 +1211,8 @@ void FElysiumNpc::NotifySystemEvent(FElysiumEntity*, int32, void*)
 // slot 185 0x10268900 (walked) `void FireBullets(const FireBulletsInfo_t&)`
 //   takes `const FireBulletsInfo_t&`
 //   layer 16, story 29d
-void FElysiumNpc::FireBullets(void*)
-{
-	FireKernelSlot(TEXT("FireBullets"), TEXT("0x10268900"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::FireBullets`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 186 0x100270c0 (walked) `bool vfunc186()`
 //   layer 0, story 29c
@@ -3256,59 +3231,43 @@ void FElysiumNpc::GatherEnemyConditions(FElysiumEntity*)
 
 // slot 489 0x10293f80 (walked) `void AlertSound()`
 //   layer 14, story 29d
-void FElysiumNpc::AlertSound()
-{
-	FireKernelSlot(TEXT("AlertSound"), TEXT("0x10293f80"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::AlertSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 490 0x10294280 (walked) `void IdleSound()`
 //   layer 14, story 29d
-void FElysiumNpc::IdleSound()
-{
-	FireKernelSlot(TEXT("IdleSound"), TEXT("0x10294280"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::IdleSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 491 0x10294340 (walked) `void PainSound()`
 //   layer 14, story 29d
-void FElysiumNpc::PainSound()
-{
-	FireKernelSlot(TEXT("PainSound"), TEXT("0x10294340"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::PainSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 492 0x10294400 (walked) `void FearSound()`
 //   layer 14, story 29d
-void FElysiumNpc::FearSound()
-{
-	FireKernelSlot(TEXT("FearSound"), TEXT("0x10294400"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::FearSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 493 0x102944c0 (walked) `void LostEnemySound()`
 //   layer 14, story 29d
-void FElysiumNpc::LostEnemySound()
-{
-	FireKernelSlot(TEXT("LostEnemySound"), TEXT("0x102944c0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::LostEnemySound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 494 0x10294590 (walked) `void FoundEnemySound()`
 //   layer 14, story 29d
-void FElysiumNpc::FoundEnemySound()
-{
-	FireKernelSlot(TEXT("FoundEnemySound"), TEXT("0x10294590"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::FoundEnemySound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 495 0x10294660 (walked) `void SurprisedSound()`
 //   layer 14, story 29d
-void FElysiumNpc::SurprisedSound()
-{
-	FireKernelSlot(TEXT("SurprisedSound"), TEXT("0x10294660"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::SurprisedSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 496 0x10294720 (walked) `void TargetAcquiredSound()`
 //   layer 14, story 29d
-void FElysiumNpc::TargetAcquiredSound()
-{
-	FireKernelSlot(TEXT("TargetAcquiredSound"), TEXT("0x10294720"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::TargetAcquiredSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 497 0x102947e0 (walked) `void vfunc497()`
 //   layer 5, story 29c
@@ -3317,59 +3276,43 @@ void FElysiumNpc::TargetAcquiredSound()
 
 // slot 498 0x10294870 (walked) `void FleeSound()`
 //   layer 14, story 29d
-void FElysiumNpc::FleeSound()
-{
-	FireKernelSlot(TEXT("FleeSound"), TEXT("0x10294870"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::FleeSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 499 0x10294930 (walked) `void IdleAgitatedSound()`
 //   layer 14, story 29d
-void FElysiumNpc::IdleAgitatedSound()
-{
-	FireKernelSlot(TEXT("IdleAgitatedSound"), TEXT("0x10294930"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::IdleAgitatedSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 500 0x102949f0 (walked) `void ExertHvySound()`
 //   layer 14, story 29d
-void FElysiumNpc::ExertHvySound()
-{
-	FireKernelSlot(TEXT("ExertHvySound"), TEXT("0x102949f0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::ExertHvySound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 501 0x10294ab0 (walked) `void ExertLightSound()`
 //   layer 14, story 29d
-void FElysiumNpc::ExertLightSound()
-{
-	FireKernelSlot(TEXT("ExertLightSound"), TEXT("0x10294ab0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::ExertLightSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 502 0x10294b70 (walked) `void RiledSound()`
 //   layer 14, story 29d
-void FElysiumNpc::RiledSound()
-{
-	FireKernelSlot(TEXT("RiledSound"), TEXT("0x10294b70"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::RiledSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 503 0x10294c30 (walked) `void ComfortSound()`
 //   layer 14, story 29d
-void FElysiumNpc::ComfortSound()
-{
-	FireKernelSlot(TEXT("ComfortSound"), TEXT("0x10294c30"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::ComfortSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 504 0x10294cf0 (walked) `void UpsetSound()`
 //   layer 14, story 29d
-void FElysiumNpc::UpsetSound()
-{
-	FireKernelSlot(TEXT("UpsetSound"), TEXT("0x10294cf0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::UpsetSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 505 0x10294db0 (walked) `void TargetGiveUpSound()`
 //   layer 14, story 29d
-void FElysiumNpc::TargetGiveUpSound()
-{
-	FireKernelSlot(TEXT("TargetGiveUpSound"), TEXT("0x10294db0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::TargetGiveUpSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 506 0x10294e70 (walked) `void vfunc506()`
 //   layer 14, story 29d
@@ -3378,10 +3321,8 @@ void FElysiumNpc::TargetGiveUpSound()
 
 // slot 507 0x10294f40 (walked) `void FloatSound()`
 //   layer 14, story 29d
-void FElysiumNpc::FloatSound()
-{
-	FireKernelSlot(TEXT("FloatSound"), TEXT("0x10294f40"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::FloatSound`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 508 0x101a6b00 (walked) `void SpeakSentence(int)`
 //   layer 0, story 29c

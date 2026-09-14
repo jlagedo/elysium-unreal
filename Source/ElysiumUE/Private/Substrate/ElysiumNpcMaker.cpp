@@ -466,3 +466,333 @@ void FElysiumNpcMaker::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Cached ground Z"), FString::SanitizeFloat(CachedGroundZ));
 	Out.Emplace(TEXT("Last attempt"), AttemptName(LastAttempt));
 }
+
+// =================================================================================================
+// Story 29d, family **Precache10** — slot 104, the three `CNPCMaker*` bodies.
+// `0x1034b160` `CNPCMaker::Precache`, `0x1034c180` `CNPCMaker_Fleshpile::Precache`,
+// `0x1034cde0` `CNPCMaker_Zombie::Precache`. One method, three arms, keyed on the classname.
+// The walked prose is `docs/vtmb/npc-ai/lifecycle.md`.
+// =================================================================================================
+
+int32 FElysiumNpcMaker::DeveloperCvarLevel = 0;
+
+namespace
+{
+	// The classname `ElysiumNpcClasses.cpp` registers for `CNPCMaker_Zombie`.
+	constexpr const TCHAR* ZombieMakerClassname = TEXT("npc_maker_zombie");
+	// `s_item_w_zombie_fists_10625644`, the one extra `UTIL_PrecacheOther` the zombie arm adds.
+	// The same `.rdata` cell `CNPC_VZombie::Precache` (`0x103df120`) reads.
+	constexpr const TCHAR* ZombieFistsItem = TEXT("item_w_zombie_fists");
+	// The four `.rdata` format strings this body reaches are spelled at their call sites rather than
+	// named here, because `FString::Printf` and `UE_LOG` both require a literal format. For the
+	// record they are, verbatim (the retail strings end in `\n`, which `UE_LOG` supplies):
+	//   `0x105470e4`  "%s at %.0f %.0f %0.f missing modelname\n"
+	//   `0x10624f34`  "%s at %.0f %.0f %0.f missing NPCClassname\n"
+	//   `0x10624f00`  "%s: BAD MODEL NAME"
+	//   `0x10624f18`  "%s: BAD NPC Classname"
+	// The `%0.f` on the THIRD float is retail's own typo — `printf` reads it as `%0.f`, a precision
+	// of zero, which is the same output `%.0f` gives, so the two spellings agree and the port uses
+	// `%.0f` for all three.
+}
+
+bool FElysiumNpcMaker::IsZombieMaker() const
+{
+#if WITH_DEV_AUTOMATION_TESTS
+	if (bZombieMakerForTests)
+	{
+		return true;
+	}
+#endif
+	// Unreachable at runtime today: `ElysiumNpcClasses.cpp` registers no `npc_maker_zombie`. See
+	// the header.
+	return Def != nullptr && Def->Classname.Equals(ZombieMakerClassname, ESearchCase::IgnoreCase);
+}
+
+void FElysiumNpcMaker::Precache()
+{
+	// Which arm. `IsFleshpileMaker` and `IsZombieMaker` read the maker's own classname, exactly as
+	// slots 617 and 139 do; the base `CNPCMaker` arm is everything else.
+	const bool bFleshpile = IsFleshpileMaker();
+	const bool bZombie = IsZombieMaker();
+	const bool bBaseMaker = !bFleshpile && !bZombie;
+
+	// All three bodies open with the SAME question — slot 9 `GetModelName` (vtable `+0x24`), read
+	// three times to decide "unset or empty". This runtime carries the keyfield as
+	// `FElysiumEntity::Model`.
+	if (Model.IsEmpty())
+	{
+		// The missing-model arm, identical in all three: `Warning(fmt, GetDebugName(), origin.x,
+		// origin.y, origin.z)` — the three floats read off slot 220 `GetOrigin` (vtable `+0x370`),
+		// pushed x, y, z — then `UTIL_Remove(this)` (`thunk_FUN_101cd940`).
+		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s at %.0f %.0f %.0f missing modelname"),
+			*DebugString(), Origin.X, Origin.Y, Origin.Z);
+		Kill();
+		// And only the BASE `CNPCMaker` arm goes on to the developer overlay; the fleshpile and the
+		// zombie drop it entirely, which is the whole difference between their error arms.
+		if (bBaseMaker)
+		{
+			DrawBadNameOverlay(/*bBadClassname=*/false);
+		}
+		return;
+	}
+
+	// `PrecacheModel(model, 0)` through the engine (`(*DAT_1070b22c)+0x34`).
+	FElysiumNpc::FPrecacheOp ModelOp;
+	ModelOp.Channel = FElysiumNpc::EPrecacheChannel::Model;
+	ModelOp.Name = Model;
+	PrecacheLog.Add(ModelOp);
+
+	if (bZombie)
+	{
+		// `CNPCMaker_Zombie`'s two writes, BEFORE the chain and in retail's order: `m_altEquipment`
+		// (`+0x1a98`) then `m_spawnEquipment` (`+0x5dec`), both zeroed — so an authored equipment
+		// keyfield on a zombie maker is discarded and the base chain's `UTIL_PrecacheOther` arm can
+		// never fire. See the header for why neither word has a writer in this port.
+		AlternateEquipment.Reset();
+		AdditionalEquipment.Reset();
+	}
+
+	// `CAI_BaseNPC::thunk_FUN_1027bb50(this)` — the base NPC precache, run on the MAKER, which is a
+	// `CAI_BaseNPCTroika` in retail. Its three steps on a maker:
+	//   1. `UTIL_PrecacheOther(m_spawnEquipment)` when the word is non-null and not the sentinel
+	//      `"0"`. Nothing in this port writes it (header), so the arm is not taken.
+	//   2. slot 452 `LoadedSchedules`, which `FElysiumNpc::LoadedSchedules` answers true for every
+	//      class by design — so the reject arm (`"ERROR: Rejecting spawn of %s as error in NPC's
+	//      schedules."` plus `UTIL_Remove`) is unreachable here, exactly as it is on an NPC.
+	//   3. `CBaseCombatCharacter::Precache`, the once-per-map global emitter block that is
+	//      `CBaseCombatCharacter`'s story and not the NPC kernel's.
+	// All three are no-ops on this type, and the chain is named rather than dropped.
+	if (!AdditionalEquipment.IsEmpty() && AdditionalEquipment != TEXT("0"))
+	{
+		FElysiumNpc::FPrecacheOp EquipOp;
+		EquipOp.Channel = FElysiumNpc::EPrecacheChannel::Other;
+		EquipOp.Name = AdditionalEquipment;
+		PrecacheLog.Add(EquipOp);
+	}
+
+	// `m_iszNPCClassname` (`+0x665c`, this runtime's `NpcType`), read as the empty string when null.
+	if (bBaseMaker && NpcType.IsEmpty())
+	{
+		// ONLY the base `CNPCMaker` arm checks the classname for emptiness. The fleshpile and the
+		// zombie `UTIL_PrecacheOther` it unconditionally — an empty classname there reaches
+		// `UTIL_PrecacheOther("")`, whose own `Warning("NULL Ent in UTIL_PrecacheOther: %s")` is the
+		// diagnostic, and neither removes the maker.
+		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s at %.0f %.0f %.0f missing NPCClassname"),
+			*DebugString(), Origin.X, Origin.Y, Origin.Z);
+		Kill();
+		DrawBadNameOverlay(/*bBadClassname=*/true);
+		return;
+	}
+
+	FElysiumNpc::FPrecacheOp ChildOp;
+	ChildOp.Channel = FElysiumNpc::EPrecacheChannel::Other;
+	ChildOp.Name = NpcType;
+	PrecacheLog.Add(ChildOp);
+
+	if (bZombie)
+	{
+		// And the zombie arm's one extra weapon, AFTER the classname.
+		FElysiumNpc::FPrecacheOp FistsOp;
+		FistsOp.Channel = FElysiumNpc::EPrecacheChannel::Other;
+		FistsOp.Name = ZombieFistsItem;
+		PrecacheLog.Add(FistsOp);
+	}
+}
+
+void FElysiumNpcMaker::DrawBadNameOverlay(bool bBadClassname)
+{
+	// The developer gate both `CNPCMaker::Precache` overlay arms run, from the listing at
+	// `1034b21f`/`1034b2bf`: `if (cvar->vtable[1]()) return;` — `IsCommand`, a command is not a
+	// value — `if (cvar->m_nValue (+0x2c) <= 0) return;`. So the overlay needs `developer >= 1`,
+	// and retail's shipped default is 0.
+	if (DeveloperCvarLevel < 1)
+	{
+		return;
+	}
+	// `0x100067f3` formats `"%s: BAD …"` with `GetDebugName()`, `0x100092c3` binds the text to this
+	// entity's angles (slot 219 `GetAbsAngles`, vtable `+0x36c`) and origin (slot 220, `+0x370`),
+	// and `thunk_FUN_101cf390` draws the box at `m_Collision`'s `OBBMaxs` (`+0x8`) and `OBBMins`
+	// (`+0x4`) — pushed maxs first, mins second.
+	//
+	// SEAM: this substrate stands no collision OBB on an entity and no maker debug-overlay service,
+	// so the bounds are zero and nothing is drawn. The request is recorded whole.
+	FDeveloperOverlayBox Box;
+	Box.Text = bBadClassname
+		? FString::Printf(TEXT("%s: BAD NPC Classname"), *DebugString())
+		: FString::Printf(TEXT("%s: BAD MODEL NAME"), *DebugString());
+	DeveloperOverlayBoxes.Add(Box);
+}
+
+// -------------------------------------------------------------------------------------------------
+// Story 29d, family **Lifecycle10** — `MakeNPC`'s child inheritance and `CNPCMaker_Zombie`'s two
+// slots. `ElysiumNpcMaker.h` carries this half's reading notes.
+// -------------------------------------------------------------------------------------------------
+
+namespace
+{
+	// `s_item_w_zombie_fists_10625644`, the classname `0x1034d140` looks up.
+	const TCHAR* const GZombieFistsItem = TEXT("item_w_zombie_fists");
+	// `s_Zombies_spawning_emitter_1062565c` and its `1034d249 PUSH 0x41700000` lifetime.
+	const TCHAR* const GZombieSpawnEmitterName = TEXT("Zombies_spawning_emitter");
+	constexpr float GZombieSpawnEmitterLifetimeSeconds = 15.0f;
+	// `_DAT_10450a9c` — **0.9**, read out of the pinned `vampire.dll` at file offset `0x450a9c`
+	// (base `0x10000000`). The scale `CNPCMaker_Zombie::CanMakeNPC` multiplies its MANHATTAN
+	// distance by.
+	constexpr float GZombieMakerDistanceScale = 0.9f;
+}
+
+void FElysiumNpcMaker::ApplyChildInheritance(FElysiumNpc& Child)
+{
+	// `0x1034b7b0`, the copy block, in the listing's order. See the header for the correction this
+	// reading made to the checklist's walk.
+	LastChildRelationshipString = ChildWords.RelationshipString;   // +0x1584, seam
+	Child.AuthoredPerception = ChildWords.AuthoredPerception;      // +0x63b0
+	Child.AuthoredVision = ChildWords.AuthoredVision;              // +0x63b4
+	Child.AuthoredHearing = ChildWords.AuthoredHearing;            // +0x63bc
+
+	// `1034b9ee MOV ECX,ESI` — `InitPerceptionDistances` (`0x1028fb70`) and `0x1028fc90` run on the
+	// MAKER, not on the child whose three words were just written. That is retail's own oddity: a
+	// spawned NPC inherits the authored perception triple and NOTHING derives the resolved pair from
+	// it here; the child's own sense pass is what does. Reproduced, and counted.
+	++MakerPerceptionDerivations;
+
+	Child.bUseInteresting = ChildWords.bUseInteresting;            // +0x63d9
+	Child.PercentOccludedWait = ChildWords.PercentOccludedWait;    // +0x6420
+	Child.PercentOccludedCover = ChildWords.PercentOccludedCover;  // +0x6424
+	Child.PercentOccludedWalk = ChildWords.PercentOccludedWalk;    // +0x6428
+	Child.PercentOccludedFlank = ChildWords.PercentOccludedFlank;  // +0x642c
+	Child.PercentOccludedChase = ChildWords.PercentOccludedChase;  // +0x6430
+	Child.bAllowAlertLookaround = ChildWords.bAllowAlertLookaround;        // +0x6434
+	Child.bStayEntrenched = ChildWords.bStayEntrenched;                    // +0x6435
+	Child.ScheduleHost.bAllowKickHintUse = ChildWords.bAllowKickHintUse;   // +0x6436
+}
+
+FElysiumNpcMaker::EAttempt FElysiumNpcMaker::CanMakeNpcZombie(bool bBypass) const
+{
+	// `CNPCMaker_Zombie::CanMakeNPC` `0x1034d0a0`, slot 618, arm by arm.
+	//
+	//   1. `if ((char)param_1 != '\0') return true;` — a non-zero bypass answers YES before anything
+	//      else, exactly as the base body's own first arm does.
+	if (bBypass)
+	{
+		return EAttempt::Spawned;
+	}
+	//   2. With a resolvable player (`thunk_FUN_101cda50`), measure the MANHATTAN distance between
+	//      the maker's and the player's `GetAbsOrigin` (slot 217, vtable `+0x364`), scale it by
+	//      `_DAT_10450a9c` (0.9) and REFUSE when the product EXCEEDS `+0x76d8`. A zombie maker
+	//      refuses when the player is too FAR — the opposite sense of the base's Euclidean
+	//      minimum-distance arm at `+0x66c8`, which refuses when the player is too CLOSE.
+	//
+	//      SEAM: `+0x76d8` has no port keyfield, because `npc_maker_zombie` is not a registered
+	//      spawn leaf here (see `IsZombieMaker`). `ZombieMaxPcDistance` stands for it and is the
+	//      authored **0** a maker with no such key would carry, which makes this arm refuse for any
+	//      player at a non-zero distance — retail's own answer for an unauthored maximum.
+	const FElysiumPlayer* Player = World != nullptr ? World->FindPlayer() : nullptr;
+	if (Player != nullptr)
+	{
+		const FVector Delta = Player->Origin - Origin;
+		const double ManhattanUnits =
+			(FMath::Abs(Delta.X) + FMath::Abs(Delta.Y) + FMath::Abs(Delta.Z)) / ElysiumMove::U;
+		if (ManhattanUnits * GZombieMakerDistanceScale > static_cast<double>(ZombieMaxPcDistance))
+		{
+			return EAttempt::Distance;
+		}
+	}
+	//   3. `thunk_FUN_1034b580(this, '\0')` — the base with a HARD-CODED false bypass, so the live
+	//      limit, the global no-spawn byte, npcclip, the view cone, the Euclidean minimum distance
+	//      and the hull-occupancy trace all still run.
+	return CanMakeNpc(/*bBypass=*/false);
+}
+
+bool FElysiumNpcMaker::ZombieMakerOwnsFists() const
+{
+	// SEAM for `CBaseCombatCharacter::Weapon_OwnsThisType(this, "item_w_zombie_fists", 0)` — asked of
+	// the MAKER (`1034d16a MOV ECX,EDI`, and `EDI` is `this`), not of the zombie it just spawned. A
+	// maker on this leaf is an `FElysiumEntity` and owns no weapons, so the honest answer is false,
+	// which is the arm that goes on to look the item up.
+	return false;
+}
+
+FElysiumNpc* FElysiumNpcMaker::EquipZombieFists(bool bBypass)
+{
+	// `CNPCMaker_Zombie::MakeNPC` `0x1034d140`, slot 617, read off the listing — the checklist's walk
+	// stops at the hand-over and misses the last four steps.
+	//
+	//   1. `thunk_FUN_1034b7b0(this, param_1)` — the base `MakeNPC`. A null answer returns null.
+	if (TrySpawn(bBypass) != EAttempt::Spawned)
+	{
+		return nullptr;
+	}
+	FElysiumEntity* Spawned = World != nullptr ? World->Resolve(LastSpawnedChild) : nullptr;
+	FElysiumNpc* Child = Spawned != nullptr ? Spawned->AsNpc() : nullptr;
+	if (Child == nullptr)
+	{
+		return nullptr;
+	}
+
+	//   2. `Weapon_OwnsThisType` on the maker. **RETAIL FAULTS on the true arm**: `XOR ESI,ESI` at
+	//      entry leaves the item pointer null, `1034d173 JNZ 0x1034d19c` skips the lookup that would
+	//      have filled it, and `1034d1a3 MOV EBP,[ESI]` then dereferences null. The decompiled C has
+	//      the same shape (`piVar5` stays 0 and `iVar2 = *piVar5` runs unconditionally).
+	//
+	//      DIVERGENCE, named: this port takes the refusal instead of faulting. The arm is
+	//      unreachable in retail anyway — a maker owns no weapons — and a crash guard where retail
+	//      faults is the one divergence this story allows.
+	if (ZombieMakerOwnsFists())
+	{
+		return Child;
+	}
+
+	//   3. `thunk_FUN_10136580("item_w_zombie_fists")` — the entity factory. A missing definition
+	//      releases the spawned zombie through `thunk_FUN_101cd940` (`UTIL_Remove`) and answers null.
+	//      SEAM: the classname is LOOKED UP rather than created, because creating an item entity here
+	//      would be a second spawn event at a site retail's own `DispatchSpawn` (step 5) covers.
+	const bool bItemExists =
+		FElysiumClassRegistry::Get().Find(FName(GZombieFistsItem)) != nullptr;
+	if (!bItemExists)
+	{
+		Child->Kill();   // thunk_FUN_101cd940(this_00)
+		return nullptr;
+	}
+	LastZombieFistsItem = GZombieFistsItem;
+
+	//   4. `item->SetOrigin(this->EyePosition())` — vtable `+0xf8` is slot 62 `SetOrigin` and
+	//      `+0x304` is slot **193 `EyePosition`**, not `GetAbsOrigin`: the item is placed at the
+	//      MAKER'S EYE, which is its origin plus `m_vecViewOffset`. The checklist's walk says
+	//      "origin".
+	//   5. `item->+0x204 |= 0x40000000` (the flag word), `thunk_FUN_101d1280(item)` (`DispatchSpawn`),
+	//      and — when the item's own `+0x1d0` check answers FALSE — `zombie->Weapon_Equip(item->+0xa0,
+	//      false)` (vtable `+0x5fc`, slot 383). `+0xa0` is read BEFORE the flag is OR'd in
+	//      (`1034d1bd MOV EBP,[ESI+0xa0]` precedes `1034d1ca MOV [ESI+0x204],ECX`).
+	//
+	//      SEAM: this runtime stands no item entity for the fists at kernel level and
+	//      `FElysiumItemContainer` is the equip path; the hand-over is recorded.
+	++ZombieFistsEquips;
+
+	//   6. `___RTDynamicCast(this_00, 0, 0x10587908, 0x1062567c, 0)` and, on a hit,
+	//      `thunk_FUN_103e0980(child, this->+0x76d0)`. **SEAM, unrecovered**: the cast's target type
+	//      name lives at `0x1062567c`, whose bytes the corpus does not hold, and `+0x76d0` is an
+	//      unregistered maker keyfield. Neither has a port carrier, so the arm is skipped — which is
+	//      retail's own answer for a child whose class the cast refuses.
+	//
+	//   7. The spawn emitter: `"Zombies_spawning_emitter"` at the maker's `GetAbsOrigin` (slot 217)
+	//      and its `GetAbsAngles(-1.0)` (slot 219), given a 15.0-second life. SEAM: this runtime
+	//      stands no Source particle emitters, so the request is recorded.
+	FZombieSpawnEmitter Emitter;
+	Emitter.Origin = Origin;
+	Emitter.Angles = Angles;
+	Emitter.LifetimeSeconds = GZombieSpawnEmitterLifetimeSeconds;
+	ZombieSpawnEmitters.Add(Emitter);
+	(void)GZombieSpawnEmitterName;
+
+	//   8. `child->Unhide()` (vtable `+0x10c`, slot 67) and `thunk_FUN_1029f300(child, false)` —
+	//      `SetDisableAI(false)`, which OVERRIDES the copy `MakeNPC` made from the maker's own
+	//      `m_bDisableAI` a few steps earlier. A zombie maker's child always thinks.
+	//
+	//      Slot 67's own body (`0x1009d380`) is a later story's and its generated stub still stands;
+	//      it is DISPATCHED here rather than guessed at, which is what keeps the call in the tally
+	//      instead of silently dropping it.
+	Child->Unhide();
+	Child->SetDisableAi(false);
+	return Child;
+}

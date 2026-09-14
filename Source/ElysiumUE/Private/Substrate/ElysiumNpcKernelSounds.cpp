@@ -680,13 +680,13 @@ void FElysiumNpc::BaseJustMadeSound()
 // Slot 488 `DeathSound` / slot 506 `vfunc506` — two sound hooks with a species arm in front
 // ==================================================================================================
 //
-// Both were generated stub bodies until story 29c-1 needed a species prologue on them, and both keep
-// that stub as their Troika-line arm: `0x10293ec0` and `0x10294e70` are layer-14 bodies and belong to
-// story **29d**, which has not ported them. They live in THIS family's file because 497 and 506 are
-// the same sound-hook band and 488 is the death vocalization — the concern is sound, not dispatch.
-// The verdict overlay's rows now read `hand:` so the generator declares the virtuals and stops
-// defining them; the tally below is byte-for-byte the shape the generated definition fired, so
-// `elysium.stubs` still joins `docs/vtmb/npc-kernel/functions.md` by the same address and story.
+// Both were generated stub bodies until story 29c-1 needed a species prologue on them. They live in
+// THIS family's file because 497 and 506 are the same sound-hook band and 488 is the death
+// vocalization — the concern is sound, not dispatch — but the Troika-line bodies behind them
+// (`0x10293ec0` and `0x10294e70`) are layer 14 and belong to story **29d**, family **Sounds10**.
+// Story 29d ported them: each definition below is the SPECIES PROLOGUE 29c-1 put here, and the arm
+// it falls through to is `TroikaDeathSound()` / `TroikaSlot506()` in
+// `Substrate/ElysiumNpcKernelSounds10.cpp`, beside the other fifteen hooks of the same band.
 
 // slot 488 0x10293ec0 `void DeathSound()`
 void FElysiumNpc::DeathSound()
@@ -699,12 +699,7 @@ void FElysiumNpc::DeathSound()
 	{
 		return;
 	}
-	ElysiumStub::FSurface Surface;
-	Surface.Kind = TEXT("slot");
-	Surface.Surface = TEXT("CAI_BaseNPCTroika::DeathSound");
-	Surface.Address = TEXT("0x10293ec0");
-	Surface.Story = TEXT("29d");
-	ElysiumStub::Fired(Surface, DebugString(), FString(), TEXT("the NPC kernel"));
+	TroikaDeathSound();
 }
 
 // slot 506 0x10294e70 `void vfunc506()`
@@ -712,17 +707,12 @@ void FElysiumNpc::Slot506()
 {
 	// The vtable dispatch first: `CNPC_VCamera` `0x103682f0` (and `CNPC_VCameraSecurity` under it) is
 	// an EMPTY body — the other end of the same pair of sound hooks slot 497 carries — so a camera
-	// makes none of whatever this hook plays and the 29d stub below is not reached for one.
+	// makes none of whatever this hook plays and the Troika body below is not reached for one.
 	if (SpeciesSlot506())
 	{
 		return;
 	}
-	ElysiumStub::FSurface Surface;
-	Surface.Kind = TEXT("slot");
-	Surface.Surface = TEXT("CAI_BaseNPCTroika::Slot506");
-	Surface.Address = TEXT("0x10294e70");
-	Surface.Story = TEXT("29d");
-	ElysiumStub::Fired(Surface, DebugString(), FString(), TEXT("the NPC kernel"));
+	TroikaSlot506();
 }
 
 // ==================================================================================================
@@ -959,8 +949,19 @@ bool FElysiumNpc::BaseShouldPlayFloatSound() const
 // UNRECOVERED: what the literal `1` is. `IEngineSound`'s slot-5 signature is not pinned by this call
 // site — the only other use of the interface in this family is slot 3 (`EmitSound`) and slot 4
 // (`EmitSentenceByIndex`) — so the second argument is passed through as the recovered literal.
+//
+// SPECIES ARM (story 29d, family **Sounds10**): `CNPC_Crow::vfunc511` (`0x10357800`), the whole body
+// of which is ELEVEN bytes — `PUSH "NPC_Crow.Flap"; CALL thunk_FUN_101b0d80; RET`, i.e.
+// `CBaseEntity::StopSound("NPC_Crow.Flap")`. It does NOT chain to the base: a crow's slot 511
+// replaces the generic "stop everything this entity is playing" with a single named-script stop, so
+// nothing the base body would have stopped is stopped for a crow.
 void FElysiumNpc::StopLoopingSounds()
 {
+	if (IsRetailClass(TEXT("CNPC_Crow")))
+	{
+		StopNamedSound(TEXT("NPC_Crow.Flap"));
+		return;
+	}
 	if (IElysiumAudio* Audio = World != nullptr ? World->Audio() : nullptr)
 	{
 		Audio->StopEntitySounds(Handle, /*retail's literal second argument*/ 1);

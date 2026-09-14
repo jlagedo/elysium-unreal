@@ -674,29 +674,38 @@ bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 	TestFalse(TEXT("OnRestore(false) forwards false too"),
 		FElysiumNpc::OnRestoreForwardsCheckUntouch(false));
 
-	// The `FIELD_TIME` re-base: an unset stamp stays unset, a set one moves by the delta.
-	TestEqual(TEXT("an unset stamp stays 0"), FElysiumNpc::RebaseRestoredStamp(0.0, 50.0), 0.0);
-	TestEqual(TEXT("a set one moves by the delta"),
-		FElysiumNpc::RebaseRestoredStamp(10.0, 50.0), 60.0);
-	TestEqual(TEXT("and a negative delta moves it back"),
-		FElysiumNpc::RebaseRestoredStamp(10.0, -4.0), 6.0);
-
+	// `CAI_BaseNPC::Restore` `0x1027c160` — CORRECTED by story 29d, family SaveRestore10: the second
+	// argument of `thunk_FUN_101cf2f0` is the sentinel MODE and not a count, so the body decodes
+	// exactly two stamps and performs no clock re-base at all. `1027c189 PUSH 0x4` on
+	// `m_flExtendedBlockedByFriendTimer` (`+0x5b8c`) and `1027c199 PUSH 0x3` on `m_flWaitFinished`
+	// (`+0x5db4`).
 	FLifecycleFixture Fix;
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *Fix.Npc;
+	// Mode 4 catches the sentinel and writes FLT_MAX back; mode 3 writes 0.0 back.
+	N.ExtendedBlockedByFriendTimer = FElysiumNpc::SaveStampSentinel;
+	N.ScheduleHost.WaitFinished = FElysiumNpc::SaveStampSentinel;
+	// Neither neighbour is touched: the body names two fields and only two.
+	N.WeaponBlockedByFriendTimer = FElysiumNpc::SaveStampSentinel;
+	N.ScheduleHost.MoveWaitFinished = FElysiumNpc::SaveStampSentinel;
+	TestEqual(TEXT("the base body answers the chain's result"),
+		N.RestoreExtendedHeader(/*Archive=*/nullptr), 1);
+	TestEqual(TEXT("m_flExtendedBlockedByFriendTimer decodes at mode 4"),
+		N.ExtendedBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
+	TestEqual(TEXT("m_flWaitFinished decodes at mode 3"), N.ScheduleHost.WaitFinished, 0.0);
+	TestEqual(TEXT("the neighbour of the first is NOT one of the two fields"),
+		N.WeaponBlockedByFriendTimer, FElysiumNpc::SaveStampSentinel);
+	TestEqual(TEXT("nor is the neighbour of the second"),
+		N.ScheduleHost.MoveWaitFinished, FElysiumNpc::SaveStampSentinel);
+	// A stamp below the 1e+10 floor is left alone whatever its mode.
 	N.ExtendedBlockedByFriendTimer = 3.0;
-	N.WeaponBlockedByFriendTimer = 0.0;
 	N.ScheduleHost.WaitFinished = 7.0;
-	N.ScheduleHost.MoveWaitFinished = 0.0;
-	N.RestoreExtendedHeader(100.f);
-	TestEqual(TEXT("the extended block's first timer is re-based"),
-		N.ExtendedBlockedByFriendTimer, 103.0);
-	TestEqual(TEXT("an unset neighbour is left at 0"), N.WeaponBlockedByFriendTimer, 0.0);
-	TestEqual(TEXT("the wait block's first timer is re-based"), N.ScheduleHost.WaitFinished, 107.0);
-	TestEqual(TEXT("and its unset neighbour is left alone"), N.ScheduleHost.MoveWaitFinished, 0.0);
+	N.RestoreExtendedHeader(/*Archive=*/nullptr);
+	TestEqual(TEXT("an ordinary stamp survives the decode"), N.ExtendedBlockedByFriendTimer, 3.0);
+	TestEqual(TEXT("and so does the wait stamp"), N.ScheduleHost.WaitFinished, 7.0);
 	return true;
 }
 

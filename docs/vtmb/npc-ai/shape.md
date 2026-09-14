@@ -4006,3 +4006,412 @@ downstream reads anything either body writes except the `trace_t` itself.
 parameter is `void*` and both slots refuse rather than fill a buffer whose shape they do not know —
 `Physics_TraceEntity` leaves the caller's buffer byte-for-byte untouched, which its case asserts with
 a sentinel fill.
+
+## Story 29d, family Debug10 — the four big overlay dumps, the trace messages and the debug ring
+
+_Recovered 2026-09-14, story 29d._
+
+Fifteen `rule` rows of layers 10–18. Two facts apply to every one of them and are stated once here.
+
+**`DAT_1070b22c + 0x8c` is `IVEngineServer::IndexOfEdict`, not `AddEntityTextOverlay`.** Story
+29c-1 read the pair as one engine call; the listing of every overlay block in this band says
+otherwise. The edict at `+0x2e0` is pushed, the interface method is called, and its ANSWER is then
+the first argument of `NDebugOverlay::EntityText(entIndex, lineOffset, text, duration, r, g, b, a)`
+(`0x101434b0`) — which is why each block pushes eight dwords and cleans `0x20`. Every call site in
+this band passes duration 0.0 and the colour white at full alpha.
+
+**Every format string below was read out of the pinned image's `.rdata`.** The decompiler folds
+these argument lists into the 512-byte stack frames and loses most of them; where the ledger's
+one-line evidence and the image disagree, the image is what is recorded.
+
+### `CAI_BaseNPC::DrawDebugTextOverlays` — `0x102767d0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 124's BASE body, 2,872 bytes, and a distinct retail function beside the Troika override that
+owns the slot: the Troika body calls it first for its starting line index and `CNPC_Crow`'s calls it
+INSTEAD of the Troika one. It starts from `CBaseCombatCharacter::DrawDebugTextOverlays()`'s answer
+and returns the next free line.
+
+Under `m_debugOverlays & 0x80000` it emits **four** lines, not three:
+
+1. `"Health: %i"` (`0x105cc8cc`) with `m_iHealth`. The ledger's evidence omitted this line, which is
+   why it read the index advancing by four for three lines.
+2. `"Squad: %c : "` (`0x105cc8bc`) — the format carries no `%s`. The character comes out of
+   `SETLE AL; DEC AL; AND AL,9; ADD AL,0x4f` over `m_iSquadDisconnected`: `'O'` (0x4f) at or below
+   zero, `'X'` (0x58) above. `m_pSquad`'s name (`squad + 4`) is then `strncat`ed, followed by `"\n"`;
+   with no squad object the appended literal is `" - \n"` (`0x105cc8b4`, four characters), not
+   `"none"`. This read does NOT apply the disconnect gate — the gate only picks the `%c`.
+3. `"Enemy: "` (`0x105cc8a8`) plus the enemy's `m_iName` (`+0x26c`) when set else its
+   `m_iClassname` (`+0x11c`), then `"\n"`; with no enemy the same `" - \n"` block is written over
+   the terminator.
+4. `"Slot:  %s \n"` (`0x105cc898`) with slot 546 `SquadSlotName(m_iMySquadSlot)`.
+
+Under `m_debugOverlays & 0x1`, in order:
+
+* one `"MEM%02d: %s"` (`0x105cc888`) per resolving `CAI_Memory` record, walking `GetEnemies()`'s
+  `+0xc` head and `+0x38` next. The `%02d` is the record ORDINAL and it advances for every record
+  including the ones whose handle no longer resolves; the line index advances only for the printed
+  ones.
+* a SECOND `"Health: %i"` line — also absent from the ledger's evidence.
+* the weapon line. `"UNARMED"` (`0x105cc85c`) with no active weapon, otherwise
+  `"Weapon: %s (%d/%d) (%d/%d)"` (`0x105cc868`) with the name slot `0x570` answers, `m_iClip1`
+  (`+0x74c`), the ammo count for `m_iPrimaryAmmoType` (`+0x744`), `m_iClip2` (`+0x750`) and the count
+  for `m_iSecondaryAmmoType` (`+0x748`). A negative ammo TYPE answers -1 without asking for a count.
+  The listing's push order is what pairs clip1 with the primary count and clip2 with the secondary.
+* `"Stat: %s, "` (`0x105cc84c`) with slot 406 over `m_NPCState`, then `"Move: %s, "` (`0x105cc83c`)
+  with slot 407 over `GetNavType()`.
+* with a schedule, `"Schd: %s, "` (`0x105cc82c`) — `"Unknown"` (`0x1053c828`) for a null name — then
+  either one `"Task: %s (#%d), "` / `"Task: None"` line, or, under `m_debugOverlays & 0x100000`, one
+  `"%s%s%s%s"` (`0x105cc804`) line per task with the prefix `"Task:"`/`"       "`, the lead
+  `"->"`/`"   "` and the trail `"<-"`/`""`.
+* the activity line, UNCONDITIONALLY and outside the schedule block: `"Actv: RESET"` or
+  `"Actv: INVALID"` when either activity is -1, `"Actv: RESET"` for activity 0, otherwise
+  `"Actv: %s (%s)\n"` (`0x105cc7c8`, the same string the stat overlay uses).
+* `"Intr: %s (%s)\n"` (`0x105cc7b4`) with `m_interuptSchedule` (`+0x5f3c`) and `m_interruptText`
+  (`+0x5f34`), then `"Fail: %s (%s)\n"` (`0x105cc7a0`) with `m_failedSchedule` (`+0x5f38`) and
+  `m_failText` (`+0x5f30`). The ledger's evidence had these as "two conditional lines gated on two
+  non-zero ints just past the decompiler's view"; all four words and both strings are in the listing.
+* `"Enemy too far to attack"` (`0x105cc784`) while `COND_ENEMY_TOO_FAR` stands, printed as a bare
+  literal with no `Q_snprintf`.
+* `"Vel %.1f %.1f %.1f   Ang: %.1f %.1f %.1f\n"` (`0x105cc750`) — no colon after `Vel`, three spaces
+  before `Ang:` — gated on `m_vecAbsVelocity != vec3_origin || m_vecAngVelocity != vec3_angle`.
+  `DAT_1070d1b0` and `DAT_1070d9d0` are those two BSS zero vectors. The body calls
+  `CalcAbsoluteVelocity()` four times under separate `m_iEFlags` bit-12 tests, an artefact of the
+  SDK body this was cut down from.
+
+**Unrecovered:** nothing in the body. **Not built:** the active weapon and its five words, the
+studio header behind the activity names, and `GetNavType()` are seams, so the weapon line reads
+`UNARMED`, the activity names are empty and the movement line reads `Move: None, `.
+
+### `CAI_BaseNPCTroika::DrawDebugTextOverlays` — `0x1029d4e0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 124's Troika-line body, 3,754 bytes. Chains `0x102767d0` for the first free line and returns it
+unchanged unless `m_debugOverlays & 1`. Its lines, in order: `"Seq: "` (`0x105cc90c`) plus the
+sequence label, `" / "` (`0x105cc8fc`) and the activity name off `GetSeqDesc(m_nSequence)`, or
+`"(INVALID)"` (`0x105cc900`); `"Cycle: %.2f"` (`0x105cc8ec`); three pose lines when `GetModelPtr()`
+is non-null; `"ground speed: %.3f"` (`0x105d9c3c`) from `+0x654`; `"dist to player: %.3f"`
+(`0x105d9c20`) from `+0x6264`; `"Disposition: %s"` (`0x105d9c0c`); `"pos: %5.1f, %5.1f, %5.1f"`
+(`0x105d9bec`) from slot 217 and `"dir: %5.1f, %5.1f, %5.1f"` (`0x105d9bcc`) from slot 219 — the
+second is `dir`, not `ang`.
+
+**The third pose line is a retail typo and it is reproduced.** `0x105d9c54` reads `"aim_yaw: %.3"`:
+the conversion character is missing, so the pose parameter the body just fetched is never formatted
+at all. Its two neighbours (`"move_yaw: %.3f"` `0x105d9c78`, `"aim_pitch: %.3f"` `0x105d9c64`) are
+whole. The line still appears and still consumes an index, which is the part a later override can
+observe.
+
+Then `"HG - %d : HB - %d"` (`0x105d9b90`) with `m_LastHitGroup` (`+0x1594`) and the last
+`CTakeDamageInfo`'s `+0x40` — that is `+0x664c`, read by the four-byte `0x101c2a30`. Then, under
+ConVar `DAT_1092429c`, one of four `EALTAI_*` lines (`0x105d9b64`, `0x105d9b38`, `0x105d9b0c`,
+`0x105d9ae0`) for `m_eAlternateAI` 1..4 carrying `m_flAlternateAIExpireTimer (+0x6450) - curtime` —
+the REMAINING time; mode 0 and anything above 4 print nothing. Finally the dialogue scene at
+`+0x6554`: `"Scene: %s time: %.2f"` (`0x105d9ac4`) when the `CChoreoScene` at `+0x4bc` is live and
+`"Scene: %s"` (`0x105d9ab8`) when it is not — both of which RETURN out of the body — and
+`"??? scene"` (`0x105d9aac`) otherwise. An unresolved scene handle prints nothing at all and does
+not advance the index.
+
+**Unrecovered:** whether the shipped CRT's `Q_snprintf` emits the literal prefix or nothing for the
+incomplete `"%.3"` specifier; the port emits the prefix. **Not built:** the studio header (so the
+sequence line is `(INVALID)` and the three pose values read 0.0), `m_flGroundSpeed`, the
+`CTakeDamageInfo` packet and the `CChoreoScene` object.
+
+### The condition dump — `0x1029d4e0`'s `0x10000000` block
+
+_Recovered 2026-09-14, story 29d._
+
+A third of the Troika text body, and three of its rules were not in the ledger's evidence.
+
+The block opens with an **`"INT COND\n"` header line** (`0x105d9bc0`). It then copies six words of
+`m_CustomInterruptConditions` (`+0x5c74`) and six of `m_InverseInterruptConditions` (`+0x5c8c`) onto
+the stack and walks ids 0..0x76, appending a three-character abbreviation from slot 408 for every
+standing bit of either mask into one 512-byte buffer, flushed every eight appended entries.
+
+The set arm's format is `"%s  "` (`0x105d9bb8`, two trailing spaces) and the interrupt arm's is
+`"!%s "` (`0x105d9bb0`). **The two arms use opposite upper-case probes.** Both compute the
+upper-case count as `(v * 4) / 10` where `v` is 10 or 0, but the set arm takes 10 when
+`HasCondition(id)` stands (`JNZ`) and the interrupt arm takes 10 when it does NOT (`JZ`). Four is
+past the end of a three-character name, so each abbreviation is either wholly upper or wholly lower;
+a standing condition therefore shouts in the set list and whispers in the interrupt list.
+
+After the walk, the leftover is flushed when `count & 7` is non-zero and that value is SAVED. A
+`"COND\n"` header (`0x105d9ba8`) follows, then the fixed 26-id watch list — `0x40, 0x46, 0x01, 0x47,
+0x48, 0x49, 0x4c, 0x4f, 0x51, 0x08, 0x5f, 0x60, 0x09, 0x54, 0x56, 0x57, 0x58, 0x59, 0x63, 0x6d,
+0x6f, 0x70, 0x0a, 0x0b, 0x0c, 0x0d` in that order — through `"%s "` (`0x105a1518`), flushed on
+`(i & 7) == 7` and therefore three times over 24 entries.
+
+**The final flush is a retail bug and it is reproduced.** It tests the SAVED `count & 7` from the
+bitfield loop against 7, not the watch list's own remainder of two. A bitfield walk that happened to
+end with exactly seven pending abbreviations therefore drops the last two watch entries silently.
+
+When the block's gate is closed (`m_debugOverlays & 0x10000000` clear, or no schedule) the body
+instead prints a SECOND `"Enemy too far to attack"` line on `COND_ENEMY_TOO_FAR` — the base body has
+already printed one under its own `0x1` bit.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::DrawDebugGeometryOverlays` — `0x1029ca50`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 123's Troika-line body, 2,129 bytes, read from the listing. Four `m_debugOverlays` masks, three
+unmasked blocks, then `CAI_BaseNPC::DrawDebugGeometryOverlays` (`0x10275760`).
+
+`0x400000` draws three cones through `0x1029c4a0`, each with eight arguments: mine
+(length `0x1029c970`, `m_flFieldOfView`, 0.0, 64, 192, 64, 50, 1); the `m_hClosestPlayer` one
+(length `0x1029c9f0`, `m_flFieldOfView` divided by that player's slot `+0x74`, 2.0, 192, 64, 0, 100,
+0); and a third (length `0x1029ca30`, 4.0, 255, 0, 128, 150, 0). **The second call overwrites the
+length and field-of-view registers**, so the third cone is drawn with the player-scaled pair whenever
+a player resolved and with the plain pair otherwise.
+
+`0x1000` draws four things. The collision box through `NDebugOverlay::BoxDirection`
+(`0x10144cd0`) ORIENTED by `m_vecForward` (`+0x6290`) at (128, 0, 0) alpha 40, when the OBB mins and
+maxs differ. A ±10 `NDebugOverlay::BoxAngles` (`0x10142b80`) at the `"Bip01"` bone carrying that
+bone's own ANGLES, same colour, unconditional within the arm. The collision box widened by
+`m_vecAttackExtents` (`+0x50`) at (255, 128, 0) alpha 20, when that vector is not `vec3_origin`. And
+the `+0x156c` hull's box at (255, 255, 64) alpha 10 when that hull differs from `m_eHull`
+(`+0x1568`).
+
+`0x20000000` draws two `NDebugOverlay::Circle` rings about the axis `(1, 0, 0)`. **The radii are the
+weapon's range words and `0x42000000` is the ring HEIGHT, not the radius** — the ledger's evidence
+had these the other way round, and `CNPC_VMingXiao#123` settles it. The near ring's radius is
+`min(+0x8b8, +0x8bc)` at (255, 255, 32) alpha 128 and the far ring's is `max(+0x8c0, +0x8c4)` at
+(128, 128, 16) alpha 128, both of height 32.0; unarmed the pair is 2000.0 and 0.0.
+
+Under ConVar `DAT_10924f24`, five ±2 boxes at (255, 32, 32) alpha 1 for 0.1 s at the enemy's slot
+197 `BodyTarget`, which is called with the NOISY flag — that is why the loop runs five times, and it
+passes an UNINITIALISED stack vector as the call's `posSrc`.
+
+With `m_pHintNode` (`+0x5ddc`) set, two 200-unit `BoxDirection` facings at (255, 0, 0) alpha 50 with
+extents `(0, 0, -10)` to `(200, 0, 10)`, drawn from the hint's origin plus `m_vDefaultEyeOffset`.
+The two yaws are built on `0x102d12e0`'s node yaw: for hint types 100, 0x65, 0x283c and 0x283d the
+first is MINUS `hint + 0x454` and the second PLUS it; for type 0x27d8 the leaning-left arm jumps
+PAST that negation and gives a bare `+43.0` with the hint's own value, while the not-leaning arm
+gives minus the hint's value with `-43.0`. Every other hint type skips the arm outright.
+
+Finally the relationship-line walk, gated on **`+0x6658` and not `+0x63fd`**. Every entity within
+4096.0 units (`0x100f8490`, mask `0x820`) whose `+0x9c` is a combat character and is not this NPC
+gets a line whose channel weights come from slot 404 — 1 to (4,1,1), 2 to (4,4,1), 3 to (1,4,1),
+4 to (1,1,4), default (4,0,0) — each multiplied by `clamp((slot 405 + 2) * 6, 0, 0x3f)`. A null
+`+0x9c` ENDS the walk rather than skipping the entity. **The arm is dead in retail**: `layout.md`
+records `+0x6658` as `m_bUnread6658`, a byte the Troika constructor (`0x1028d230`) zeroes and
+nothing else in the corpus touches.
+
+**Unrecovered:** the body of `0x1029c4a0` and of its two length helpers `0x1029c9f0` and
+`0x1029ca30`, none of which is a core function of the band; the port records the three calls with
+their eight arguments instead. **Not built:** the collision OBB, the skeleton, the second hull, the
+active weapon and the hint store, so of the four `0x1000` sub-arms only the attack-extents box draws.
+
+### `CAI_BaseNPCTroika::NPCThinkDebugPre` — `0x10292500`
+
+_Recovered 2026-09-14, story 29d._
+
+The pre-think debug pass, 1,782 bytes, one caller (`NPCThink` `0x10292de0`). The decompiler reports
+it DAMAGED — type propagation does not settle and both witness colour ladders come out as
+`extraout_ST0` — so it was read from the listing.
+
+Two witness boxes, each under `curtime <= timer` (the `TEST AH,0x41; JP` pair is taken for BOTH
+"less" and "equal"). Each computes one scalar `x = (timer - curtime) * 0.2` (`_DAT_10451ab4`) and
+then clamps **each colour channel separately** as `(int)min(ceiling, ceiling * x)`:
+
+* `m_flCriminalWitnessedTimer` (`+0x63a4`): ceilings 255.0, 64.0, 64.0 (`_DAT_1044fffc`,
+  `_DAT_10451acc`), box ±3 at `GetOrigin()` lifted by `OBBMaxs().z + 16.0` (`_DAT_10451ad0`),
+  alpha 1, duration 0.5.
+* `m_flSupernaturalWitnessedTimer` (`+0x63a8`): ceilings 192.0, 255.0, 64.0 (`_DAT_1049ae14`), lift
+  `+ 12.0` (`_DAT_1044faa4`), otherwise identical. The ledger's evidence read this as "the same box
+  with the opposite corner order" and the whole scalar "clamped to 64.0"; the corner order is
+  identical — only the two stack slots the extents live in are swapped — and the ceilings differ.
+
+Under ConVar `DAT_1092479c`, two arms. `COND_SEE_PLAYER` with a resolving `m_hClosestPlayer` traces
+eye to eye, draws `CBaseEntity::DrawBBoxOverlay` on whatever it hit when that is neither the player
+nor null, **and then draws the line itself** — red (255, 0, 0) when something blocked it, green
+(0, 255, 0) when `tr.fraction == 1.0` (`0x10449280`, a double) or the hit IS the player. The line is
+the arm's output and the ledger's evidence omitted it. `COND_ENEMY_OCCLUDED` labels
+`"Blocked by %s"` (`0x105d8b44`) 20.0 units (`_DAT_1044eb0c`) above the eye, naming
+`m_hEnemyOccluder` (`+0x5d90`) through `GetDebugName()` — or the literal `"**UNKNOWN**"`
+(`0x105477a4`) when that handle does not resolve.
+
+Under ConVar `DAT_109244c4`, slot 389 `Weapon_ShootPosition(GetAbsOrigin())` gets a ±3 box at
+(255, 64, 64) alpha 1 for 0.2 s, `0x10278650`'s anchor gets a ±2 box at (64, 255, 64), and a line of
+the same green joins them.
+
+ConVar `DAT_1092435c` is an INT selector and not a flag: 1 calls `0x1028e030`, 2 calls `0x1028e060`,
+everything else calls neither.
+
+The tail is the body's only state write: `if (+0x5b55) { +0x5b55 = 0; 0x1027efb0(this); }`. The
+clear happens only when the byte was already set.
+
+**Unrecovered:** nothing in the body. **Not built:** story 29b records the 16 KB debug ring
+(`+0x1b4e`) and its three cursors (`+0x5b50`, `+0x5b54`, `+0x5b55`) absent, so the dump is never
+requested and `0x1027efb0` never runs; the eye-to-eye ray cast, `0x1028e030`/`0x1028e060` and
+`0x10278650` (family Motor10's row) are seams.
+
+### The debug ring — `0x1027ef20`, `0x1027ee20`, `0x1027efb0`
+
+_Recovered 2026-09-14, story 29d._
+
+`0x1027ef20` appends one line to the NPC's OWN 16 KB ring. The whole body is under
+`if (param_1 != 0)`, so a null line does nothing at all. Otherwise it `sprintf`s at
+`this + 0x1b4e + cursor`, advances the cursor at `+0x5b50` by the returned byte count, and — when
+the POST-advance cursor is **strictly above** `0x3dff` — zero-fills `0x4000 - cursor` bytes from
+there, sets the wrap latch at `+0x5b54` and resets the cursor to 0. A cursor landing exactly on
+`0x3dff` does not wrap; one at `0x3e00` does. The zero-fill length is computed from the post-advance
+cursor, so a cursor past `0x4000` memsets a negative length, which the `rep stos` treats as a very
+large unsigned one.
+
+`0x1027ee20` is the same shape over a GLOBAL ring rather than the entity's, and is what slots 17 and
+19 use. `0x1027efb0` is the DUMP `NPCThinkDebugPre`'s tail runs, walking the buffer from the cursor
+in 512-byte chunks.
+
+**Unrecovered:** nothing. **Not built:** all three buffers are story 29b's ABSENT words. The port
+carries the cursor rule as a pure function and routes the LINES to its own channel, which is what
+the shape map's reason for the absence names.
+
+### The three Troika trace messages — `0x1028de10`, `0x1028de90`, `0x1028df30`
+
+_Recovered 2026-09-14, story 29d._
+
+Four slots, two pairs, and the asymmetry inside each pair is the reason both members exist.
+
+Slot 18 (`0x1028de10`, non-const, 94 bytes) formats through `0x1028d990` into a 512-byte buffer and
+then, under the trace toggle `DAT_10920534`, appends the FORMATTED text to the NPC's own ring
+(`0x1027ef20`); with the toggle clear it `DevMsg`s the same text.
+
+Slot 17 (`0x1028de90`, const, 125 bytes) runs the SAME formatter into a 512-byte buffer and then, on
+the ring arm, `Q_strncpy`s the **RAW** message into a SECOND 512-byte buffer and rings THAT through
+the GLOBAL `0x1027ee20`. So the ring never sees the formatted text; only the `DevMsg` arm does. The
+formatter still runs on the ring arm — it is called before the branch — and its output is dropped.
+
+Slot 20 (`0x1028df30`, non-const, 89 bytes) does no formatting at all: a null message returns
+immediately, and otherwise the raw message goes to the NPC's own ring or to `DevMsg`. It is
+byte-identical to slot 19 (`0x1028dfb0`, story 29c-1) except that slot 19 rings the global buffer.
+
+`0x1028d990`'s three format arms, for the record, are `"%-20s  %6.2f : %*s %s\n%s%s %s%s %s\n\n"`
+(`0x105d8828`, the `DevMsg` arm with `GetDebugName`), `"%6.2f : %*s %s\n%s%s %s%s %s\n\n"`
+(`0x105d8868`) and `"%6.2f : %*s %s\n"` (`0x105d8854`); its blocks are `"CONDS:"` (`0x105d8908`),
+the 32-glyph `"PIS__PF_T_L__TTEPLM________ICCCC"` (`0x105d88e0`) over `m_afMemory` (`+0x5d8c`), the
+30-glyph `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"` (`0x105d88b8`) over `m_bfAINPCFlags` (`+0x14b8`) and
+`"NAV %s %s"` (`0x105d888c`). The indent is clamped at 0 and a null message becomes the empty string.
+
+**Unrecovered:** nothing. **Not built:** `0x1028d990` itself is family Conditions10's row in this
+same band and is not written twice; until it lands the formatter answers the message with the indent
+clamp applied, which is the shortest of its three arms with every optional block empty.
+
+### `CNPC_Crow::DrawDebugTextOverlays` — `0x10358f90`
+
+_Recovered 2026-09-14, story 29d._
+
+259 bytes, and the one slot-124 body in the census that chains the BASE (`0x102767d0`) instead of
+the Troika one — a crow never gets the sequence, pose, disposition, position or condition lines. It
+returns the base's answer unchanged when `m_debugOverlays & 1` is clear. Otherwise line N is
+`"morale: %d"` (`0x10628c84`) with `m_nMorale` (`+0x5f50`), and, only with an enemy, line N+1 is
+`"enemy (dist): %s (%g)"` (`0x10628c68`) with the enemy's **classname** (`GetClassname`, not
+`GetDebugName`) and the crow's own cached `m_flEnemyDist` (`+0x5f4c`). Retail pushes the float FIRST
+and re-dispatches `GetEnemy()` afterwards for the classname.
+
+**Unrecovered:** nothing. **Not built:** `CNPC_Crow`'s two words; the morale reads 0 and the
+distance 0.0.
+
+### `CNPC_VHengeyokai::DrawDebugTextOverlays` — `0x10383560`
+
+_Recovered 2026-09-14, story 29d._
+
+106 bytes: the Troika body for the first free line, then — under `m_debugOverlays & 1` — slot 9's
+string printed with NO format string at all, the empty string (`DAT_106b8540`) substituting for a
+null one, and the return is that line plus one. The `+1` is the contract every later overlay body
+consumes.
+
+**Unrecovered:** nothing. **Not built:** slot 9 is a generated stub owned by another story, so the
+line prints retail's null arm.
+
+### `CNPC_VNewscaster::DrawDebugTextOverlays` — `0x103a1250`
+
+_Recovered 2026-09-14, story 29d._
+
+151 bytes. A scope-trace push carrying `GetDebugName()` — `"NULL ENTITY"` (`0x105387dc`) for a null
+`this`, the empty string for a null `m_iName` — then the Troika body, then, under
+`m_debugOverlays & 1`, `0x103a0ff0`'s story-queue lines. `0x103a0ff0` answers a COUNT and the
+newscaster ADDS it to the Troika body's line index, so the two bodies share one budget.
+
+**Unrecovered:** nothing. **Not built:** `0x103a0ff0` is family Species' row in band 5–9 and is not
+re-ported here; the count reads 0 until the two are wired.
+
+### `CNPC_VTzimisce::DrawDebugTextOverlays` — `0x103c08d0`
+
+_Recovered 2026-09-14, story 29d._
+
+387 bytes. The Troika body, then under `m_debugOverlays & 1`: the distance starts at
+`_DAT_104454c4` = 0.0 and becomes the full 3-D separation between `m_hPickupTarget` (`+0x6670`) and
+this NPC when that handle resolves. When `0x103be130`'s carry probe stands AND the distance exceeds
+`_DAT_1047a3ac` = 160.0, the distance is latched into `_DAT_1093d01c` and the current schedule's
+name (`+0x5c38` then `+0x40`) is `strcpy`ed into the buffer `DAT_1093cd70`. The line is then
+`"Body - %5.1f|%5.1f|%s"` (`0x1065c904`) with the live distance, the latched distance and the
+latched name, and the return is the line plus one.
+
+**The two globals are a cross-NPC latch and not per-instance state**: every Tzimisce in the map
+writes and reads the same pair, which is why the printed pair can name a schedule this NPC is not
+running.
+
+**Unrecovered:** nothing. **Not built:** `0x103be130` has no verdict row and no port counterpart, so
+the latch never updates.
+
+### `CNPC_VZombie::DrawDebugTextOverlays` — `0x103e0e80`
+
+_Recovered 2026-09-14, story 29d._
+
+224 bytes. The Troika body, then — under `m_debugOverlays & 0x40000`, which is NOT bit 0 like its
+siblings — one line per set bit of the 0..0xbf bitfield at `+0x5c5c`. Each id is offset by
+1,000,000,000, converted back through `ConditionGlobalToLocal` (`0x102ea280`) over
+`GetClassScheduleIdSpace() + 0x30`, named through slot 458 and printed as `"Cond: %s\n"`
+(`0x10665864`); the line index advances once per printed condition and is the return. The body's
+`id == -1` guard is unreachable, the loop starting at 0.
+
+**Unrecovered:** nothing. **Not built:** `+0x5c5c` is one of the schedule block's six words with no
+port member of its own, so the walk finds nothing to print.
+
+### `CNPC_VCop::DrawDebugGeometryOverlays` — `0x10372f00`
+
+_Recovered 2026-09-14, story 29d._
+
+1,020 bytes, debug-only, but the arms are the recovered statement of what a cop knows about the
+player. Three gates in order: `m_debugOverlays & 1`, a resolving `m_hClosestPlayer`, and a
+non-degenerate collision OBB. Each failure jumps straight to the tail, and **the Troika body always
+runs**, whichever gate closed.
+
+The label sits `(OBBMaxs().z - OBBMins().z) + 8.0` (`_DAT_1045597c`) above `GetAbsOrigin()` and is
+built by a switch on slot 404 `IRelationType(closestPlayer)`: 1 to `"D_HT"` (`0x105cc520`),
+2 to `"D_FR"` (`0x105cc518`), 3 to `"D_LI"` (`0x105cc510`), 4 to `"D_NU"` (`0x105cc508`), and 0 or
+anything above 4 to `"D_ER"` (`0x10636728`).
+
+The `D_HT` arm first re-runs the TROIKA `IRelationType` (`0x10299da0`) and throws the answer away,
+then appends four suffixes, each independently: `" Suspect"` (`0x10636750`) when the player IS the
+cop class's shared provoker handle `DAT_1093ac3c` and `curtime < _DAT_1093aca8`; `" Alert"`
+(`0x10636748`) when `0x1017f8d0` stands on the player's `+0xa8` record; `" Count%d"` (`0x1063673c`,
+no space before the number) when `0x1017f770` answers above zero; and `" Pursuit"` (`0x10636730`)
+when the player is `m_hPursuitPlayer` (`+0x6664`). Every arm then appends `"  %d  %d"`
+(`0x1063671c`) with two further cop-class statics, `DAT_1093acac` and `DAT_1093acb0`, and draws the
+whole label through `NDebugOverlay::Text` with `bViewCheck` false and duration 0.
+
+**Unrecovered:** what `DAT_1093acac` and `DAT_1093acb0` count; neither has a writer in this band.
+**Not built:** the collision OBB, so the label gate never opens for a spawned NPC; the four cop
+statics and `m_hPursuitPlayer`, so all four suffixes are dropped. The two player words ARE real —
+`Police.CopsInPursuit` and `Police.HeightenedAlertExpiry` — and are read when the candidate is the
+player. Note also that the census gives `CNPC_VCop` no entity classname, so a spawned `npc_VCop`
+resolves to no census class at all and takes the Troika body: this override is unreachable in the
+port for the same reason it is unreachable through the port's spawn registry.
+
+### `CNPC_VMingXiao::DrawDebugGeometryOverlays` — `0x10399d40`
+
+_Recovered 2026-09-14, story 29d._
+
+328 bytes, and the shortest body in the family with a recovered fact in it. Gated on
+`m_debugOverlays & 0x20000000` — the WEAPON-RING bit, not bit 0 like its siblings, so MingXiao's
+bands and the Troika body's two weapon rings appear together and are meant to be read against each
+other. Four `NDebugOverlay::Circle` rings about `(1, 0, 0)` at radii **100.0, 150.0, 200.0 and
+300.0** source units, each of height 8.0, colour (255, 32, 32) at alpha 128, no depth test,
+duration 0. The Troika body then always runs. The four radii are MingXiao's recovered range bands
+and are also what settles the radius/height argument order of the Troika body's own rings.
+
+**Unrecovered:** nothing.

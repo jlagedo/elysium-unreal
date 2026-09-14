@@ -773,3 +773,242 @@ the follower any-angle bypass before it reaches the base body at the target's EY
 
 **Unrecovered:** the name and default of the 2-D/3-D ConVar behind `0x103268e0`. The port takes the
 3-D branch unconditionally.
+
+## Story 29d, family Sounds10 — the sound hooks, the `KeyValue` formatters and `FireBullets` (2026-09-14)
+
+The layer 10–18 half of the NPC's sound surface: the seventeen concept hooks of slots 488–507, the
+three `KeyValue` overloads that carry a map's keyvalues into them, and slot 185 `FireBullets`.
+Family **Sounds** (story 29c-1) owns the layer 0–9 gates *in front* of these — slot 486
+`FOkToMakeSound`, slot 487 `JustMadeSound`, slots 509/510 and the per-species vocalization table.
+
+### The VSound concept hooks — `0x10293ec0`, `0x10293f80`, `0x10294280`, `0x10294340`, `0x10294400`, `0x102944c0`, `0x10294590`, `0x10294660`, `0x10294720`, `0x10294870`, `0x10294930`, `0x102949f0`, `0x10294ab0`, `0x10294b70`, `0x10294c30`, `0x10294cf0`, `0x10294db0`, `0x10294e70`
+
+_Recovered 2026-09-14, story 29d._
+
+Eighteen bodies, 138 to 160 bytes each, and every one is the same two statements:
+
+```text
+if ((guard & 1) == 0) {                       // a per-hook once-flag byte
+    guard |= 1;
+    for (i = 0; i < DAT_1073dc3c; ++i) {      // the global VSound concept list
+        name = ((Entry**)DAT_1073dc40)[i]->Name;     // a null name reads as ""
+        if (__strcmpi(name, "<concept>") == 0) { cache = entry->Id; goto speak; }
+    }
+    cache = 0xffffffff;                       // the miss, which is NOT a refusal
+}
+speak:
+FUN_101f5950(&DAT_1073dc28, this, cache, 2, 1.0f, 1.25f);
+```
+
+`DAT_1073dc28` is the VSound table object; `+0x14`/`+0x18` are the concept list this walk reads
+(`DAT_1073dc3c` / `DAT_1073dc40` are those two cells) and `+0x1c`/`+0x20` are the per-entity table
+array the play entry indexes with `CBaseEntity::GetVSoundTableIdx` (`m_iVSoundTableIdx`, `+0x00bc`,
+written by `CBaseEntity::PrecacheSoundTable` `0x1009d460`).
+
+**The trailing three arguments are not a priority and a window.** `0x101f5950` picks one wav for the
+concept out of the entity's table group (`0x101f4600`, which composes `"%s/%s.wav"` or
+`"%s/%s_%d.wav"` with `RandomInt(1, N)` and substitutes the female group when
+`CBaseCombatCharacter::IsMale` is false and `GetVSoundGroupFemale` is set), builds a
+`CPASAttenuationFilter` at `GetSoundEmissionOrigin()` with attenuation `0.8`, and then hands
+`EmitSound` the arguments it was given: **channel** (`2`, `CHAN_VOICE`), **volume** (`1.0`) and the
+**fifth argument** (`1.25`), plus flags `0` and pitch `100`. An earlier one-line walk read them as
+"priority 2 and the window 1.0 to 1.25"; the listing at `101f5a40`..`101f5a65` pushes them straight
+through to the engine call.
+
+**The concept names carry underscores.** They are `.rdata` cells the corpus holds only as symbols,
+and reading them out of the pinned image at `0x105d8c30` gives, in address order: `Death`,
+`Target_Suspect`, `Float_Sound_Info`, `Idle_Calm`, **`Pain`** (`0x105d8c6c`, previously "unnamed in
+the corpus"), `Fear_Start`, `Target_Lost`, `Target_Reacquired`, `Surprised`, `Target_Acquired`,
+`???` (`0x105d8ccc`, a three-byte placeholder), **`Flee`** (`0x105d8cd0`, also previously unnamed),
+`Idle_Agitated`, `Riled`, `Comfort`, `Upset`, `Target_GiveUp`, `Float`, `Alarmed_Loop`,
+`Animal_Kened`, `Warning_Loop`. `Exert_Heavy` and `Exert_Light` live apart, at `0x1057a1a0` and
+`0x1057a1b0`.
+
+The per-hook table, in slot order — the concept, the guard byte and the id cache:
+
+| Slot | Body | Concept | Guard | Cache | Gate in front |
+|---|---|---|---|---|---|
+| 488 `DeathSound` | `0x10293ec0` | `Death` | `DAT_10923f0d` | `DAT_10924d64` | — |
+| 489 `AlertSound` | `0x10293f80` | `Target_Suspect` | `DAT_10924330` | `DAT_109241f0` | — |
+| 490 `IdleSound` | `0x10294280` | `Idle_Calm` | `DAT_109240c0` | `DAT_10924504` | — |
+| 491 `PainSound` | `0x10294340` | `Pain` | `DAT_1092482c` | `DAT_1092442c` | — |
+| 492 `FearSound` | `0x10294400` | `Fear_Start` | `DAT_10924934` | `DAT_10924e88` | — |
+| 493 `LostEnemySound` | `0x102944c0` | `Target_Lost` | `DAT_10923dd4` | `DAT_109249c8` | `RandomInt(0,99) < 0x19` |
+| 494 `FoundEnemySound` | `0x10294590` | `Target_Reacquired` | `DAT_109240c8` | `DAT_10924a14` | `!IsBusyWithDiscipline()` |
+| 495 `SurprisedSound` | `0x10294660` | `Surprised` | `DAT_10923f0c` | `DAT_10924f64` | — |
+| 496 `TargetAcquiredSound` | `0x10294720` | `Target_Acquired` | `DAT_10923dde` | `DAT_1092423c` | — |
+| 498 `FleeSound` | `0x10294870` | `Flee` | `DAT_10923dd5` | `DAT_10924e84` | — |
+| 499 `IdleAgitatedSound` | `0x10294930` | `Idle_Agitated` | `DAT_10923ddd` | `DAT_10923e30` | — |
+| 500 `ExertHvySound` | `0x102949f0` | `Exert_Heavy` | `DAT_109241ec` | `DAT_109240bc` | — |
+| 501 `ExertLightSound` | `0x10294ab0` | `Exert_Light` | `DAT_10923f0f` | `DAT_10924838` | — |
+| 502 `RiledSound` | `0x10294b70` | `Riled` | `DAT_10924aac` | `DAT_10924244` | — |
+| 503 `ComfortSound` | `0x10294c30` | `Comfort` | `DAT_1092497c` | `DAT_10924624` | — |
+| 504 `UpsetSound` | `0x10294cf0` | `Upset` | `DAT_10924242` | `DAT_10924fb4` | — |
+| 505 `TargetGiveUpSound` | `0x10294db0` | `Target_GiveUp` | `DAT_10923dd6` | `DAT_10923d7c` | — |
+| 506 `vfunc506` | `0x10294e70` | `Target_Reacquired` | `DAT_10924240` | `DAT_10924830` | `!IsBusyWithDiscipline()` |
+
+Three facts the table makes visible. **Slot 493 rolls first and unconditionally**, so the random
+stream advances on every call whether or not the sound is spoken — the gate is `RandomInt(0, 99)`
+below `0x19`, a 25-in-100 chance, and its stream position is inherited by everything else the idle
+branch draws. **Slots 494 and 506 are the same hook twice**: the same gate over the same concept
+string through two different guard/cache pairs, which with a pure lookup is the same answer.
+**Slot 490 carries no `FOkToMakeSound` gate at all** — the rate limit on idle vocalization is slot
+509's weighted roll (`0x1027a420`, family Sounds) and the two species overrides that *do* gate
+(`CNPC_VTest` `0x103b4600`, `CNPC_VTzimisce` `0x103b9380`) carry the gate in their own bodies.
+
+The port stands two seams and no table: `VSoundConceptId` walks a list this runtime does not load,
+so the count is zero and the answer is retail's own `0xffffffff`; `SpeakVSound` then takes retail's
+own `"ERROR: VSnd: Play: %s Table out of bounds: %d"` arm, because an entity with no table index is
+out of bounds in retail too. Both record what they were asked for.
+
+**Unrecovered:** what authored file the VSound concept list and the per-entity tables are parsed
+from — nothing in the corpus writes `DAT_1073dc28`'s four cells, and `vdata/` holds no file whose
+rows are these eighteen names. Until it is found, no NPC in this port speaks a concept.
+
+### Slot 507 `FloatSound` — `0x10294f40`
+
+_Recovered 2026-09-14, story 29d._
+
+302 bytes — the only hook with a computed fifth argument and the only one that writes state. The
+concept lookup is the shape above (`Float`, `0x105d8d14`, guard `DAT_1092488d` bit 0, cache
+`DAT_10924f68`). Then, from the listing at `10294f9f`:
+
+```text
+EAX = m_iDialog (+0x0128); NEG EAX; SBB EAX,EAX; AND EAX,0xe     ; t = dialogue name ? 0xe : 0
+ADD EAX,0x42; CMP EAX,0x32; JLE -> FLD double [0x10449148]       ; 4.0 — UNREACHABLE
+LEA ECX,[EAX-0x32]; EAX=0x14; CDQ; IDIV ECX; FILD                ; (int)(0x14 / (t + 0x10))
+```
+
+`t + 0x42` is `0x42` or `0x50`, both above `0x32`, so the constant arm cannot be taken by either
+value of `t` and the answer is the integer quotient: `20/16 = 1` → **1.0** with no authored
+`dialogname`, `20/30 = 0` → **0.0** with one. That value is `EmitSound`'s attenuation slot, not a
+window maximum: an NPC in conversation floats at `ATTN_NONE`.
+
+The re-arm follows. Bit 1 of the same flag caches `Float_Sound_Info`'s table id
+(`0x1006cf30` over the rule-table registry `DAT_106c7c34`) and bit 2 caches **row 1** of it
+(`1029502c` pushes `1`), which the authored table names
+`FloatSoundMinDelay -- Minimum delay in seconds before next float sound` and sets to `5.0`.
+`0x1006c9d0` runs the row through `__ftol`, so what is cached is the **int** `5`, and `1029505f`
+adds it to the engine clock with `FIADD` — an integer add. `m_flNextFloatSoundTime` (`+0x10ec`) is
+the write, and this body is its only writer in the whole kernel: `CAI_BaseNPC::ShouldPlayFloatSound`
+(`0x1027a530`, family Sounds) is what reads it back, which is why that gate had never refused before
+this story. `m_iFloatSoundFrequency` (`+0x10e8`) is NOT written here; the keyfield `floatfreq` is
+its only source.
+
+The same table's row 0 is the 50.0-unit player distance slot 510 reads, row 2 a
+`FloatSoundFrequency` nothing in the recovered closure reads, and row 3 the Zombie's own 250.0
+distance.
+
+**Unrecovered:** nothing.
+
+### The two `CNPC_VWerewolf` sound arms — `0x103d8660`, `0x103d87a0`
+
+_Recovered 2026-09-14, story 29d._
+
+245 bytes each, and against the Troika bodies they replace (`0x102949f0` slot 500 and `0x10294340`
+slot 491) the differences are exactly three: each walks the concept list through its **own** guard
+and cache (`DAT_1093f99c`/`DAT_1093fa30` for slot 500, `DAT_1093d634`/`DAT_1093d6ec` for slot 491),
+so a werewolf's lookup is independent of the base's; each pushes a `g_ScopeTraceStack` frame the
+base has none of; and each passes **`0`** as the play entry's fifth argument where the base passes
+`1.25`. The concept names are identical — `Exert_Heavy` and `Pain` — and neither arm chains to the
+body it replaces.
+
+The scope-trace string on **both** is `"CNPC_VWerewolf::ExertHvySound"` (`0x10663248`): slot 491's
+frame is a copy-paste, a retail mislabel a debug dump reproduces verbatim.
+
+**Unrecovered:** nothing.
+
+### `CNPC_Crow`'s slot 511 — `0x10357800`
+
+_Recovered 2026-09-14, story 29d._
+
+Eleven bytes: `PUSH "NPC_Crow.Flap"` (`0x10628bb4`), `CALL thunk_FUN_101b0d80`, `RET` — a single
+`CBaseEntity::StopSound` of the crow's flap loop. It does **not** chain to
+`CAI_BaseNPC::StopLoopingSounds` (`0x1027caa0`), whose `IEngineSound` slot-5 call stops everything
+the entity is playing, so for a crow nothing the base body would have stopped is stopped.
+
+**Unrecovered:** what `"NPC_Crow.Flap"` resolves to. It is a soundscript name and this runtime
+indexes no live voice by script name, so the port records the request and answers nothing.
+
+### The three `KeyValue` overloads — `0x1004fbb0`, `0x1004fbf0`, `0x101c1480`, `0x1009eca0`, `0x1009ebb0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slots 108, 109 and 110 are one cascade. **Slot 108** (`0x1004fbb0`, 38 bytes) and **slot 109**
+(`0x1004fbf0`, 13 bytes) are *pure forwards* — neither formats anything itself; each tail-calls the
+`CBaseEntity` body on the same object (`0x1009eca0` and `0x1009ebb0`), and it is that body which
+pushes a `CBaseEntity::KeyValue` scope-trace frame, `Q_snprintf`s into a 256-byte stack buffer with
+the format at `0x10555584` (`"%f %f %f"`) or `0x10554f28` (`"%f"`), and dispatches the object's own
+**slot 110** through `vtable +0x1b8` with the buffer. An earlier one-line walk attributed the
+formatting to the NPC-line bodies; the 38 and 13 bytes leave no room for it.
+
+**Slot 110** (`0x101c1480`, 114 bytes, 77 classes) is three arms, read off the listing because the
+decompiled C loses which store is which:
+
+1. `__strcmpi(key, "lip")` (`0x10561fc0`) → `FSTP [ESI + 0x504]` at `101c14a4`, `m_flLip`, return
+   true;
+2. `__strcmpi(key, "distance")` (`0x1053f4c4`) → `FSTP [ESI + 0x4fc]` at `101c14d0`,
+   `m_flMoveDistance`, return true;
+3. anything else tail-calls `CBaseEntity::KeyValue` (`0x1009e430`) and returns its answer verbatim.
+
+Both compares are case-insensitive and both values go through `atof` (`0x1043136f`), so a
+non-numeric value writes `0.0` and the arm *still* answers true. The two words are `CBaseToggle`'s,
+flattened onto `CAI_BaseNPCTroika` by the shape map; slot 110 is their only writer in the kernel
+closure and nothing in it reads them.
+
+**Unrecovered:** which authored map keyfields actually reach these two arms. `distance` and `lip`
+are `CBaseToggle`'s own names and no `npc_*` entity in the 22 exported maps authors either, so the
+arms are reachable and unexercised.
+
+### Slot 185 `FireBullets` — `0x10268900`
+
+_Recovered 2026-09-14, story 29d._
+
+1212 bytes, shared by `CAI_BaseNPC#185` and `CAI_BaseNPCTroika#185`. Ten steps, in retail's order:
+
+1. `m_pBaseNPCTroika` (`+0x0098`) set → `--m_iFakeReloadCount` (`+0x65f0`) on it, **once per call**.
+2. `info+0x58 = GetAmmoDef()->Flags(info+0x8c)` — the ammo-def singleton `DAT_1070ba0c` vtable
+   `+0xdc`, then `0x104276a0`, whose whole body is
+   `(0 < i && i < m_nAmmoIndex) ? m_AmmoType[i].nFlags : 0`.
+3. `info+0x94` (the attacker) defaults to the shooter when unset.
+4. push the two trace filters `0x101c2c60` and `0x101c2c30`, and `DAT_1072cb48 = flags | 0x1000`.
+5. `VectorVectors(info+0x14, right, up)` — `0x10138a90` is the **cross-product basis builder**, not
+   `AngleVectors`: `right = normalize(f.y, -f.x, 0)` and `up = normalize(cross(right, f))`, with a
+   degenerate arm for `f.x == f.y == 0` that answers `right = (1,0,0)` and `up = (0, -f.z, 0)`,
+   neither normalized nor orthogonal. `info+0x14` is the shooting *direction*, the same word the
+   per-shot direction is copied from two lines later.
+6. open a per-victim tally (`0x1027f940`).
+7. for each of `info[0]` repeats, for each of `info[1]` bullets:
+   * copy the forward into `info+0x20`;
+   * add the **unscaled** spread offset `0x10268170` unless the ammo flag `0x2000000` is set. The
+     full gate is `(flags & 0x2000000) == 0 || (m_pPlayer && m_pPlayer->+0x1e78 == 0)`, and
+     `+0x00a8` is `m_pPlayer` — so for an **NPC** shooter the second disjunct is dead and the flag
+     alone decides. The offset itself is a rejection sample: two independent sums of two
+     `RandomFloat(-0.5, 0.5)` draws, redrawn while `x*x + y*y > 1.0`, then
+     `right * (spread.x * x) + up * (spread.y * y)`; a *player* shooter replaces both spread
+     components with `FUN_10160680`'s scaling of `+0x1ddc`;
+   * `info+0x2c = info+0x08 + dir * info+0x44` — the endpoint;
+   * read the ranged skill: `0x101cda50` answers the local player when the server is single-player
+     and not dedicated, the body walks that player's stat lists (`+0x13bc` count, `+0x13c0` table)
+     for the first whose `+0x10` is `3` and asks it for stat `3` (`0x102012d0`), and a player with
+     no such list falls back to a lazily-built empty `CVStatList_t` (`DAT_109f0b40`) that answers
+     `0`;
+   * when `info+0xa0` bit 0 is set, **or** the skill is above 2 and the shooter is not the player,
+     latch the tracer flag and divide `info+0xa4` by `DAT_104994c8` indexed by the skill clamped to
+     `0..5`. That table is `{ 1.0, 1.0, 1.0, 1.1, 1.3, 1.5 }`, read out of the pinned image.
+8. slot 186 (`vtable +0x2e8`, whose whole retail body `0x100270c0` is `return false;`) gates the
+   emission half. The **tracer arm** fires only when the latch is set *and* `info+0xa8` names a
+   non-empty tracer, with `1.0 / info[1]` as the per-shot fraction (`_DAT_104454c0` is `1.0`), and
+   it **replaces** the trace pass — a bullet that draws a tracer does no damage in this body.
+   Otherwise `0x10267b60` traces and whatever it wrote into `info+0xbc` is added to the tally, a new
+   `{ handle, count }` pair appended when the victim is not already there.
+9. after **each** repeat, every tallied victim takes `RangedDamagePerVictim` (`0x10268330`) with
+   `hits / info[1]`. The tally is never cleared between repeats, so repeat 2 re-pays repeat 1's
+   victims with their accumulated counts — a retail quirk, reproduced.
+10. `0x10160560` on `m_pPlayer` and the tally is freed. Unreachable for an NPC shooter.
+
+**Unrecovered:** the retail names of `info+0xa0` and `info+0xa4` — `0x101ef900`'s signature is not
+pinned by this call site — and the `CAmmoDef` index order, which family **Damage** already recorded
+as unrecovered for `GiveAmmo`'s clamp. The port stands recording seams for the ammo def, the
+ranged-skill join, the trace pass, the tracer effect and `RangedDamagePerVictim`; every one answers
+the value retail's own refusing arm answers, so no arm of the body above is silently skipped.

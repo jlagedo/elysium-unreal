@@ -3,6 +3,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumRng.h"
+#include "ElysiumSaveArchive.h"   // story 29d: `RestoreExtendedHeader`'s `IRestore` is this archive
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -838,35 +839,48 @@ TArray<FElysiumEntityHandle> FElysiumNpc::ConversationPlaceActivate(const FStrin
 // Slots 127 / 130 — save and restore.
 // -------------------------------------------------------------------------------------------------
 
-double FElysiumNpc::RebaseRestoredStamp(double SavedStamp, double SaveTimeDelta)
+int32 FElysiumNpc::RestoreExtendedHeader(void* Archive)
 {
-	// `thunk_FUN_101cf2f0(first, count)` re-bases a run of saved `FIELD_TIME` floats. An UNSET stamp
-	// (0) stays 0 — retail's own answer for a time field that was never written — and anything else
-	// moves by the save/restore delta.
-	return SavedStamp == 0.0 ? 0.0 : SavedStamp + SaveTimeDelta;
-}
-
-void FElysiumNpc::RestoreExtendedHeader(float SaveTimeDelta)
-{
-	// 0x1027c160, slot 127, in retail's order:
+	// 0x1027c160, slot 127 on the `CAI_BaseNPC` line, read off the LISTING — see the `.inl` for what
+	// story 29d corrected here. In retail's order:
 	//
-	//   1. `IRestore` vtable `+8` reads `AIExtendedSaveHeader_t` into `field_0x19b4`. SEAM: this
-	//      runtime's archive (`FElysiumSaveArchive`) carries no extended AI header block — the
-	//      schedule and the stamps are fields in the leaf's own record — so there is no header to
-	//      read and nothing at `+0x19b4` to read it into.
-	//   2. `CBaseCombatCharacter::Restore` — the chain's, run by `FElysiumNpc::Serialize`.
-	//   3. FOUR floats from `m_flExtendedBlockedByFriendTimer` (`+0x5b8c`) and THREE from
-	//      `m_flWaitFinished` (`+0x5db4`), re-based onto the restored clock. The port carries the
-	//      first and the last of those runs; the words between them are the same declared block.
+	//   1. `1027c178 CALL [IRestore + 0x8]` reads `AIExtendedSaveHeader_t` (datamap `0x105cabd0`)
+	//      into `field_0x19b4`. This runtime's header is `FElysiumNpc::FAiExtendedSaveHeader` and
+	//      `LastSavedExtendedHeader` is `+0x19b4`; the four words come back through the same seam
+	//      `BaseSave` wrote them through (`ElysiumNpcKernelSaveRestore10.cpp`).
+	//   2. `1027c17e CALL CBaseCombatCharacter::Restore` — and EDI keeps its answer, which is this
+	//      body's return value.
+	//   3. `1027c189 PUSH 0x4 / LEA EDX,[ESI+0x5b8c]` and `1027c199 PUSH 0x3 / LEA EAX,[ESI+0x5db4]`
+	//      — TWO sentinel decodes, `m_flExtendedBlockedByFriendTimer` at mode 4 and
+	//      `m_flWaitFinished` at mode 3. Not a clock re-base and not seven fields.
 	//   4. `thunk_FUN_102e0b80(m_pMotor)` when a motor stands, and `thunk_FUN_102e8ac0` on the
 	//      move-and-shoot overlay — both re-link a saved pointer. This runtime rebuilds the motor
 	//      from the def on load and binds no overlay at all
-	//      (`ElysiumNpcKernelShapeMap.cpp` `+0x5cf4` ABSENT), so neither has a pointer to re-link.
-	const double Delta = static_cast<double>(SaveTimeDelta);
-	ExtendedBlockedByFriendTimer = RebaseRestoredStamp(ExtendedBlockedByFriendTimer, Delta);
-	WeaponBlockedByFriendTimer = RebaseRestoredStamp(WeaponBlockedByFriendTimer, Delta);
-	ScheduleHost.WaitFinished = RebaseRestoredStamp(ScheduleHost.WaitFinished, Delta);
-	ScheduleHost.MoveWaitFinished = RebaseRestoredStamp(ScheduleHost.MoveWaitFinished, Delta);
+	//      (`ElysiumNpcKernelShapeMap.cpp` `+0x5cf4` ABSENT), so neither has a pointer to re-link;
+	//      family SaveRestore10 counts both.
+	FAiExtendedSaveHeader Header;
+	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
+	{
+		*Ar << Header.Version;
+		*Ar << Header.Flags;
+		*Ar << Header.ScheduleName;
+		*Ar << Header.ScheduleCrc;
+		LastSavedExtendedHeader = Header;
+	}
+	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::Fields, TEXT("AIExtendedSaveHeader_t"),
+		static_cast<int32>(Header.Flags) });
+
+	const int32 ChainResult = 1;   // `CBaseCombatCharacter::Restore`; see `GChainRestoreResult`.
+
+	SaveStampDecode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
+	SaveStampDecode(ScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
+
+	if (Motor != nullptr)
+	{
+		++MotorRestoreFixups;
+	}
+	++MoveAndShootRestoreFixups;
+	return ChainResult;
 }
 
 bool FElysiumNpc::OnRestoreForwardsCheckUntouch(bool bCallerValue)

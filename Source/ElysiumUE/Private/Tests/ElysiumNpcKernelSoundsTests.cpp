@@ -639,16 +639,19 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	F.Npc->NextFloatSoundTime = 0.0;
 	F.Npc->Senses.Memory.ClosestPlayer = F.World.World.PlayerHandle();
 	F.Npc->Senses.Memory.ClosestPlayerDistanceCm = 10.0f * ElysiumMove::U;   // well inside 50 units
+	// Slot 507 was a generated stub when this case was written, so the probe was the
+	// `elysium.stubs` tally. Story **29d** (family Sounds10) ported `0x10294f40`, so the probe is
+	// now the body's own output: `FloatSound` speaks the VSound concept `"Float"` and re-arms
+	// `m_flNextFloatSoundTime`. Same question, answered off the real body.
 	bool bFloated = false;
 	for (int32 Pass = 0; Pass < 64 && !bFloated; ++Pass)
 	{
-		ElysiumStub::ClearTally();
+		F.Npc->VSoundSpeakCalls.Reset();
 		const bool bIdle = F.Npc->BaseShouldPlayIdleSound();
-		TArray<ElysiumStub::FTally> Tally;
-		ElysiumStub::CollectTally(Tally);
-		const bool bPlayedFloat = Tally.ContainsByPredicate([](const ElysiumStub::FTally& Row)
+		const bool bPlayedFloat = F.Npc->VSoundSpeakCalls.ContainsByPredicate(
+			[](const FElysiumNpc::FVSoundSpeak& Row)
 			{
-				return Row.Surface == TEXT("CAI_BaseNPCTroika::FloatSound");
+				return Row.Concept != nullptr && FCString::Strcmp(Row.Concept, TEXT("Float")) == 0;
 			});
 		if (bPlayedFloat)
 		{
@@ -658,7 +661,7 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the idle gate dispatches slot 507 FloatSound when slot 510 says yes"),
 		bFloated);
-	ElysiumStub::ClearTally();
+	F.Npc->VSoundSpeakCalls.Reset();
 
 	// With the float hook disabled the gate falls to `RandomInt(0, 999) == 0`: over 400 passes a
 	// 1-in-1000 roll must almost never fire, which is what the weight IS.
@@ -699,13 +702,12 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	bool bFloatedUnderSchedule = false;
 	for (int32 Pass = 0; Pass < 64 && !bFloatedUnderSchedule; ++Pass)
 	{
-		ElysiumStub::ClearTally();
+		F.Npc->VSoundSpeakCalls.Reset();
 		const bool bIdle = F.Npc->BaseShouldPlayIdleSound();
-		TArray<ElysiumStub::FTally> Tally;
-		ElysiumStub::CollectTally(Tally);
-		if (Tally.ContainsByPredicate([](const ElysiumStub::FTally& Row)
+		if (F.Npc->VSoundSpeakCalls.ContainsByPredicate(
+			[](const FElysiumNpc::FVSoundSpeak& Row)
 			{
-				return Row.Surface == TEXT("CAI_BaseNPCTroika::FloatSound");
+				return Row.Concept != nullptr && FCString::Strcmp(Row.Concept, TEXT("Float")) == 0;
 			}))
 		{
 			bFloatedUnderSchedule = true;
@@ -716,7 +718,7 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 		bFloatedUnderSchedule);
 
 	F.Npc->Schedule.Clear();
-	ElysiumStub::ClearTally();
+	F.Npc->VSoundSpeakCalls.Reset();
 	return true;
 }
 

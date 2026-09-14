@@ -313,16 +313,21 @@ TArray<FElysiumEntityHandle> ConversationPlaceActivate(const FString& PlacesName
 
 // --- Slot 127/130: save and restore ----------------------------------------------------------------
 
-/** `CAI_BaseNPC::Restore` (`0x1027c160`), slot 127 — read the extended save header
- *  (`AIExtendedSaveHeader_t`) into `+0x19b4`, chain `CBaseCombatCharacter::Restore`, re-derive four
- *  extended-block timers, then re-link the motor and the move-and-shoot overlay. */
-void RestoreExtendedHeader(float SaveTimeDelta);
-
-/** The re-derivation `Restore` applies to its timer blocks (`thunk_FUN_101cf2f0`, twice — four
- *  floats from `m_flExtendedBlockedByFriendTimer` and three from `m_flWaitFinished`): a saved
- *  ABSOLUTE stamp is re-based onto the restored clock. Answers the re-based stamp; a stamp that was
- *  never set (0) stays 0, which is retail's own answer for an unset `FIELD_TIME`. */
-static double RebaseRestoredStamp(double SavedStamp, double SaveTimeDelta);
+/** `CAI_BaseNPC::Restore` (`0x1027c160`), slot 127's body on the `CAI_BaseNPC` line and the body
+ *  the Troika override `0x10299700` calls through a DIRECT `thunk_`. Read the extended save header
+ *  (`AIExtendedSaveHeader_t`, datamap `0x105cabd0`) into `+0x19b4`, chain
+ *  `CBaseCombatCharacter::Restore` and KEEP its answer, decode two sentinel stamps, then re-link the
+ *  motor and the move-and-shoot overlay. Returns the chain's answer, which is what every caller of
+ *  slot 127 propagates.
+ *
+ *  **CORRECTED by story 29d, family SaveRestore10.** 29c-1 read `thunk_FUN_101cf2f0(p, 4)` and
+ *  `(p, 3)` as "four floats from `m_flExtendedBlockedByFriendTimer`, three from `m_flWaitFinished`"
+ *  and ported them as a save/restore clock re-base. The second argument is the sentinel MODE, not a
+ *  count: the listing has exactly two calls (`1027c189 PUSH 0x4` on `+0x5b8c`, `1027c199 PUSH 0x3`
+ *  on `+0x5db4`), and `0x101cf2f0` is the decode half of the codec family SaveRestore10 ports —
+ *  `ElysiumNpcKernelSaveRestore10.inl` § "The sentinel codec". Retail performs NO re-base here, so
+ *  `RebaseRestoredStamp` — a rule retail does not have — is gone with it. */
+int32 RestoreExtendedHeader(void* Archive);
 
 /** `CAISound::OnRestore` (`0x100aa5a0`), slot 130 — the asm is
  *  `MOV [ESP+4], 0 / JMP [[this]+0x18]`: it overwrites its own argument with 0 and tail-jumps to

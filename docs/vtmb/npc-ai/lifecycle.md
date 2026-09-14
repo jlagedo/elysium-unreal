@@ -1138,3 +1138,283 @@ block is entered on BOTH parties, the slot is dispatchable on both.
 `OnFedUponEnd` from one place only — `FElysiumCombatCharacter::CompleteFeedTransaction`, on the
 feeder, onto the victim — because a map that wires the output counts the fires; the slot forwards
 there rather than becoming a second producer.
+
+## Story 29d, family Precache10 — slot 104 `Precache`, the base, the Troika body and its twenty-three species arms — `0x1027bb50`, `0x10298ad0` (2026-09-14)
+
+_Recovered 2026-09-14, story 29d._
+
+Twenty-eight `rule` rows fill **two** retail functions on the NPC line plus **twenty-three** species
+overrides of one slot and **three** `CNPCMaker*` bodies. The slot is 104; the two base functions are
+`CAI_BaseNPC::Precache` `0x1027bb50` and `CAI_BaseNPCTroika::Precache` `0x10298ad0`, and the latter
+is what the vtable carries.
+
+**`CAI_BaseNPC::Precache` `0x1027bb50`, three steps.** `m_spawnEquipment` (`+0x5dec`) goes through
+`UTIL_PrecacheOther` (`0x101d0ec0`) when it is non-null AND its first two bytes differ from
+`DAT_105399a0` — which is the one-character string **`"0"`**, retail's authored "none" sentinel, so
+the test is "set, and not the sentinel". Then slot 452 `LoadedSchedules` (vtable `+0x710`) decides
+the rest: **false** prints `DevMsg("ERROR: Rejecting spawn of %s as error in NPC's schedules.")` with
+`CBaseEntity::GetDebugName`, `UTIL_Remove`s the entity (`thunk_FUN_101cd940`) and **returns without
+chaining the base at all**; true falls through to `CBaseCombatCharacter::Precache`, which is
+`CBaseCombatCharacter::PrecacheOnce` `0x1033f750` — the once-guarded GLOBAL block of discipline,
+damage-effect and HUD emitters every character shares, not an NPC-kernel row.
+
+**`CAI_BaseNPCTroika::Precache` `0x10298ad0`, in order.** An unset or empty model keyfield (slot 9,
+vtable `+0x24`) is replaced through slot 212 `SetModelName` (`+0x350`) with
+`"models/error/error.mdl"`; the keyfield is `PrecacheModel`d (`*DAT_1070b22c+0x34`, preload 0) and
+the returned index handed to slot 10 `SetModelIndex` (`+0x28`); `m_altEquipment` (`+0x1a98`) is
+`UTIL_PrecacheOther`d unless it is `"0"` **or** the exact fifteen-byte literal `"item_w_unarmed"`
+(two exclusions where the base body has one); `CAI_BaseNPC::Precache` is chained **directly**, with
+no argument; a set `m_iDialog` (`+0x0128`) builds `"sound/character/%s"` into a `0x104` stack buffer,
+is chopped, lowercased and glob-precached twice; `+0x64e8 m_iDispositionModelIndex` takes the
+`CDispositionTable` row `0x100ec640` builds for this model; and slot 608 (`+0x980`,
+`SetAttackCoordinator`) is dispatched with `"Normal"` last. **Every Troika NPC is bound to the
+coordinator named `"Normal"` at precache**, which is what makes the coordinator's five entry points
+reachable at all.
+
+**The dialogue chop is FOUR characters, not five.** Read off the listing at `10298bf8`..`10298c04`:
+`REPNE SCASB / NOT ECX / DEC ECX` leaves `strlen(buf)` in `ECX`, `SUB EDX,0x4` puts `buf - 4` in
+`EDX`, and `MOV byte ptr [ECX + EDX*1],AL` writes the NUL at `buf[strlen - 4]`. `Q_strnlwr` then runs
+over the **new** length. The checklist's walk claimed five and is corrected here.
+
+**`0x101d0f10` takes FOUR arguments, and its three call sites pass three different pairs.** The
+decompiler shows two; the listing shows `(dir, ext, starPrefix, soundFlag)`. A null or empty
+directory answers 0, and so does one whose first three characters match `DAT_105a0410` or whose first
+character matches `DAT_105a040c`; otherwise `FindFirst`/`FindNext` walk `"%s/*%s"` and every
+non-directory hit is precached as a sound under `"*%s/%s"` (when `starPrefix`) or `"%s/%s"` of
+**`dir + 6`** — retail skips the literal `"sound/"` every call site opens with — with `soundFlag` as
+the precache flag, and the return is the number of hits. The Troika body passes `(1, 0)` and `.wav`
+then `.mp3`; `CNPC_VNewscaster` passes `(0, 0)` and `.mp3` then `.wav`; `CNPC_VWerewolf` passes
+`(0, 1)` and `.wav` twice. `DAT_10598a30` is `".wav"` and `DAT_10548ed4` is `".mp3"`, pinned by
+`FUN_101b1120`, which is SDK-2013's `CSoundEmitterSystem::EmitSound` instruction for instruction
+(`Q_stristr(name, ".wav") || Q_stristr(name, ".mp3") || name[0] == '!'`).
+
+### The twenty-three species arms — `0x10358ec0` … `0x103df120`
+
+_Recovered 2026-09-14, story 29d._
+
+Every arm is an override of the SAME slot. The recovered fact that separates them is **where each
+one chains** and **what it appends**. Sixteen chain the Troika body first; five chain a base last;
+`CNPC_Crow` chains first and then hard-codes a model; `CNPC_VMingXiaoTentacle` writes its model
+fallback before chaining. Four of the classes (`CNPC_Crow`, `CGeneric_NPC_bathack`,
+`CGenericSabbat_NPC`, and `CGenericNPC`, which chains nothing) are `CAI_BaseNPC`-line classes, so the
+body they reach is `0x1027bb50` and the Troika half never runs for one.
+
+#### `CNPC_Crow` — `0x10358ec0`
+
+24 bytes, and the only body in the band whose two calls are inverted: `CAI_BaseNPC::Precache` FIRST,
+then `PrecacheModel("models/crow.mdl", 0)`. No model keyfield is read and no fallback is set, so a
+crow's model is hard-coded and a map cannot override it.
+
+#### `CGeneric_NPC` — `0x10359f70`, `CGeneric_NPC_bathack` — `0x1035ade0`, `CGenericSabbat_NPC` — `0x1035b5d0`
+
+Three classes with three **separate** `.rdata` copies of the same four wav names
+(`npc/metropolice/alert1|surprise1|die1.wav` and the four `npc/citizen/pain1..4.wav`), at
+`0x10629a18`, `0x10629d80` and `0x1062a004`. `CGeneric_NPC` falls an unset model keyfield back to
+**`models/character/npc/sabbat/sabbat_female.mdl`** (`0x10629c00`) — and `CGenericSabbat_NPC`'s own
+pointer `0x1062a000` resolves to the *same string*. The bathack hard-codes `models/bats.mdl` and
+reads no keyfield at all. `CGenericSabbat_NPC` opens with `thunk_FUN_10207e60`, which resolves this
+entity's char template (`0x10207c40`) and precaches the template's `+0x78` (`0x101d4f20`). All three
+chain LAST — the Troika body for `CGeneric_NPC`, `CAI_BaseNPC::Precache` for the other two.
+
+**The decompiled C shows one of the bathack's four sound calls with a single argument. The listing at
+`1035ae13` shows `PUSH 0x0` before all four.** There is no stack quirk; the same artifact appears in
+`CNPC_VTest` and is corrected there too.
+
+#### `CNPC_VAndreiBlood` — `0x1035cb90`
+
+The Troika body, three sounds (`Character/Boss/Andrei/TeleportOut.wav`, `TeleportIn.wav`,
+`Summon.wav`), then three emitters with preload **1**. **The emitter names carry a hyphen before
+`Emitter`**: `Andrei_Teleport_Out-Emitter`, `Andrei_Teleport_In-Emitter`, `Andrei_Summon-Emitter`
+(`0x1062b04c`, `0x1062b02c`, `0x1062b010`), each also named by `CNPC_VAndreiBlood::StartTask`. The
+checklist's walk spelled all three with an underscore.
+
+#### `CNPC_VAsianVampire` — `0x10360bc0`
+
+A scope-trace frame, the Troika body, exactly one `UTIL_PrecacheOther("item_w_avamp_blade")`, and the
+frame popped. That single weapon is the whole species payload.
+
+#### `CNPC_VBach` — `0x103637b0`
+
+The Troika body, then **three weapons before five sounds**: `item_w_grenade_frag`, `item_w_katana`,
+`item_w_rem_m_700_bach`, then `Character/Boss/Bach/bach_grenade.wav`, `bach_shield.wav`,
+`bach_camp_warn.wav`, `bach_holy_light.wav`, `snipe_warn6.wav`. The weapons-before-sounds order is
+this arm's fact.
+
+#### `CNPC_VChangBros` — `0x1036ae60`
+
+One body fills three species slots (`CNPC_VChangBros#104`, `…Blade#104`, `…Claw#104`). Scope-trace
+frame, the Troika body, seven emitters with preload 1 — `chang_teleport_in_emitter`,
+`chang_teleport_out_emitter`, `chang_powerup_emitter`, `chang_spine_emitter`,
+`chang_center_emitter`, `chang_blast_emitter`, `chang_ball_charge_emitter` — then four weapons:
+`item_w_chang_claw`, `item_w_chang_blade`, `item_w_chang_energy_ball`, `item_w_chang_ghost`.
+
+#### `CNPC_VGargoyle` — `0x10378470`
+
+The Troika body, then **nine gib models with preload 1** in the body's own push order (descending
+`.rdata`, `0x1063a808` down to `0x1063a550`): `garg_gibbs`, `gargoyle_head`, `gargoyle_L_foot`,
+`gargoyle_L_hand`, `gargoyle_L_torso`, `gargoyle_pelvis`, `gargoyle_R_foot`, `gargoyle_R_hand`,
+`gargoyle_R_torso`, all under `models/character/monster/gargoyle/gargoyle_gibbs/`. Then the four
+`character/monster/gargoyle/stomp_1..4.wav` (`0x10639480`, to `0x10`), the three
+`exert_heavy_1..3.wav` (`0x10639490`, to `0xc`), `roar2.wav`, and `item_w_gargoyle_fist`.
+
+#### `CNPC_VGhoulCroucher` — `0x1037b1a0`
+
+55 bytes, the shortest arm: the Troika body, `item_w_claws_ghoul`, then the two Malkavian-mansion
+stalker models with preload 0 (`.../Stalker/stalker.mdl`, `.../Stalker_Female/stalker_female.mdl`).
+Those two models are what makes the male/female split in its `SetModel` sibling (`0x1037b1f0`)
+reachable.
+
+#### `CNPC_VHengeyokai` — `0x1037f960`
+
+The Troika body, the four `character/monster/hengeyokai/stomp_1..4.wav`, the three
+`exert_heavy_1..3.wav`, `models/character/monster/Hengeyokai/hengeyokai.mdl` with preload 0, the
+`Hengeyokai_freeze_emitter` with preload **0** rather than the 1 Andrei, Chang and the ManBat use,
+and `item_w_hengeyokai_fist`.
+
+#### `CNPC_VManBat` — `0x1038aec0`
+
+280 bytes, the longest. The Troika body, a four-entry model table (`0x10640ce0`, preload 0) whose
+first two entries are `models/character/monster/manbat/Throw_Objects/ThrowTaxi.mdl` and
+`.../supportb.mdl`; four emitters with preload 1 — `Manbat_screechcone_emitter`,
+`Manbat_player_emitter`, `HUD_Manbat_emitter`, `Manbat_blast_player` (the last with no `_emitter`
+suffix), and exactly the four the screech-cone body `0x1038e9c0` spawns; three three-entry sound
+tables (`character/male/sheriff_manbat/wingflap_1..3`, `exert_heavy_1..3`, `fly_by_1..3`); the two
+singles `screech.wav` and `fall.wav`; **`sheriff_teleport_emitter` precached TWICE in a row from the
+identical `.rdata` cell `0x10642adc`**, a retail duplicate that is kept; and `item_w_manbat_claw`.
+
+#### `CNPC_VMingXiao` — `0x10392660`
+
+The Troika body, then **eleven emitters all with preload 0**: `Ming_xiao_slimetrail_emitter`,
+`…_emitter2`, `Ming_xiao_tentacle_damage_emitter`, `Ming_xiao_tentacle_burst_emitter`,
+`Ming_xiao_death_emitter`, `…_emitter2`, `Ming_xiao_death_proxy_emitter`, `…_emitter2`,
+`Ming_xiao_vomit_emitter`, `Ming_xiao_transform_emitter`, `…_emitter2`. Then one sound —
+`character/monster/ming xiao/movement.wav`, whose directory carries a **space**, not an underscore —
+and three weapons: `item_w_mingxiao_melee`, `item_w_mingxiao_tentacle`, `item_w_mingxiao_spit`.
+
+#### `CNPC_VMingXiaoTentacle` — `0x1039c220`
+
+The one arm whose model fallback runs **before** the chain: an unset keyfield takes
+`models/character/monster/mingxiao/mingxiao_tentacle/mingxiao_tentacle.mdl` through slot 212, then
+the Troika body runs and precaches it. Then three `PrecacheModel` calls whose returned indices are
+STORED — `m_iModeIndexTentacleToGrub` (`+0x6664`), `m_iModeIndexGrub` (`+0x6668`) and
+`m_iModeIndexGrubToProxy` (`+0x666c`). **The first two push the SAME string (`0x1064a2f0`,
+`MingXiao_baby.mdl`), so retail's first two indices are equal**; the third is
+`MingXiao_transformation.mdl`. Then three emitters with preload 0
+(`Ming_xiao_tentacle_transform_emitter`, `Ming_xiao_baby_transform_emitter`,
+`Ming_xiao_baby_death_emitter`) and two sounds, `character/monster/ming xiao/tentacle_hit_ground.wav`
+then `tentacle_flopping_loop.wav` (the listing pins both pointer targets at `1039c30b`/`1039c31e`).
+
+#### `CNPC_VNewscaster` — `0x103a03e0`
+
+The Troika body, then `sound/character/conversations/news/tv` globbed twice — **`.mp3` first and
+`.wav` second**, the reverse of the Troika body's pair, and both with `0x101d0f10`'s third and fourth
+arguments 0 where the Troika body passes 1 and 0.
+
+#### `CNPC_VSabbatLeader` — `0x103a6ab0`
+
+Scope-trace frame, the Troika body, `models/character/monster/Andrei/andrei.mdl` and
+`models/character/npc/unique/hollywood/andrei/andrei_no_mouth.mdl` both with preload 1, the
+seven-entry `character/monster/andrei_transformed/step1..7.wav` table (`0x1064c480`, to `0x1c`), the
+three-entry `exert_heavy_1..3.wav` table (`0x1064c49c`, to `0xc`), then seven singles in push order —
+`ambient_run.wav`, `Leap_Down_Attack_1.wav`, `dive_in_splash.wav`, `dive_out_splash.wav`,
+`splash_warning.wav`, `jump_retreat.wav`, `roar_1.wav`, all under
+`Character/Monster/Andrei_Transformed/` — then `Andrei_powerup_emitter` and `Andrei_blast_emitter`
+with preload 1, and `item_w_sabbatleader_attack`.
+
+#### `CNPC_VSheriffMan` — `0x103ae540`
+
+Scope-trace frame, the Troika body, `models/character/monster/manbat/manbat.mdl` with preload 1,
+`sheriff_landblast_emitter` once and `sheriff_teleport_emitter` **twice** from the same `.rdata` cell
+the ManBat arm reads, all preload 1, then `item_w_sheriff_sword`.
+
+#### `CNPC_VTest` — `0x103b41e0`
+
+Twelve sounds and only THEN the Troika body — base-last, like `CNPC_VTzimisce`. In order:
+`death1`, `alert1`, `idle1`, the four-entry `pain1..4` table (`0x10652194`, to `0x10`), `fear1`,
+`lostenemy1`, `foundenemy1`, `surprise1`, `knockout1`, all under `character/npc/test/`.
+**The decompiled C shows the `surprise1` call with one argument; the listing at `103b427f` shows
+`PUSH 0x0` before all twelve.** The checklist's "retail stack quirk" is a decompiler artifact and is
+not reproduced. `knockout1` is precached and never spoken by any vocalization hook.
+
+#### `CNPC_VTzimisce` — `0x103b8fa0`
+
+Six `character/monster/spiderchick/spi_footstep_indiv_1..6.wav` (`0x106530fc`, to `0x18`), three
+`spi_attack_swish_1..3.wav` (`0x10653114`, to `0xc`), `item_w_tzimisce_melee`, and only then the
+Troika body. Base-last.
+
+#### `CNPC_VTzimisceHeadClaw` — `0x103c1400`
+
+The Troika body, four emitters with preload 1 — `Tzim2_powerup_emitter`, `Tzim2_blast_emitter`,
+`Tzim2_player_emitter`, `HUD_Tzim2_emitter`, exactly the four the slot-332 grab body spawns by name —
+then the fat guy's four footsteps as **two contiguous tables of two** (`0x1065ca68`, `0x1065ca70`)
+and his three `Exert_Heavy_1..3.wav` (`0x1065ca78`), the two singles
+`Character/Monster/TC_FatGuy/Sluge_Hit.wav` and `Sluge_Affected.wav`, then `item_w_tzimisce2_claw`
+and `item_w_tzimisce2_head`.
+
+#### `CNPC_VTzimisceRunner` — `0x103c31e0`
+
+The Troika body, then four contiguous tables — `character/monster/TC_Runner/foot_steps_1..2`
+(`0x1065d680`), `foot_steps_3..4` (`0x1065d688`), `Breath1..4` (`0x1065d690`) and `Exert_Heavy_1..3`
+(`0x1065d6a0`) — then `item_w_tzimisce3_claw`. The 2+2 left/right split is the same one
+`docs/vtmb/footsteps.md` records for this class.
+
+#### `CNPC_VWerewolf` — `0x103cb2a0`
+
+A scope-trace frame carrying `m_iName` (`+0x26c`, the literal **`"NULL ENTITY"`** with a space when
+`this` is null, which C++ cannot reach); the Troika body; then `sound/Character/Monster/Werewolf` and
+`sound/Area/Special/Observatory` globbed for `.wav` with `0x101d0f10`'s third argument **clear** and
+its fourth **set** — the reverse of the Troika body's pair. Then the sound-group binding, in retail's
+write order: `m_iVSoundTableIdx` (`+0x00bc`) `:= 2`, `m_iszVSoundGroup` (`+0x00c0`) `:= "Werewolf"`
+(NULLed when the literal is empty, which it is not), and `m_iVSoundGroup` (`+0x00b4`) `:=
+thunk_FUN_101f55a0(&DAT_1073dc28, this, group, 0)` — the same triple `CNPC_VZombie::SetModel` makes.
+Then a four-entry footstep table (`0x1065f4d0`), `item_w_werewolf_attacks`, and the two singles
+`dev/ww_tele_out.wav` and `dev/ww_tele_in.wav` (a **slash**, not the underscore the checklist's walk
+spells).
+
+**The werewolf's footstep table is the Tzimisce fat guy's.** The listing annotates the indexed load
+at `103cb385` with `character/monster/TC_FatGuy/Foot_Step1.wav` and `Foot_Step2.wav`. Its own steps
+come through the sound GROUP it binds three lines earlier; this table is a retail copy-paste and is
+reproduced rather than corrected.
+
+#### `CNPC_VZombie` — `0x103df120`
+
+The Troika body, `zombie_headshot_death_emitter` and `zombie_headshot_dmg_emitter` with preload
+**0**, then `item_w_zombie_fists`. The two emitters are the assets `CNPC_VZombie::OnTakeDamage`
+(`0x103e06d0`) names.
+
+### The three `CNPCMaker*` arms — `0x1034b160`, `0x1034c180`, `0x1034cde0`
+
+_Recovered 2026-09-14, story 29d._
+
+`classes.md` stands `CNPCMaker` as a `CAI_BaseNPCTroika` with 621 slots, so slot 104 IS the NPC
+`Precache` virtual for a maker. All three bodies open with the same question — is the model keyfield
+(slot 9) unset or empty — and diverge only in what the error arms carry.
+
+`CNPCMaker::Precache` `0x1034b160` is the only one that checks BOTH keyfields and draws the developer
+overlays. Model present: `PrecacheModel(model, 0)`, chain `CAI_BaseNPC::Precache`,
+`UTIL_PrecacheOther(m_iszNPCClassname +0x665c)` and return. Model present but classname EMPTY:
+`Warning("%s at %.0f %.0f %0.f missing NPCClassname", GetDebugName(), origin.x, origin.y, origin.z)`,
+`UTIL_Remove(this)`, then — only when the `developer` cvar (`DAT_1070af4c`) answers `!IsCommand()`
+and `GetInt() >= 1` — a `"%s: BAD NPC Classname"` overlay box at the collision `OBBMins`/`OBBMaxs`.
+Model EMPTY: the same shape with `"missing modelname"` and `"%s: BAD MODEL NAME"`. Both error arms
+return early when the developer gate refuses. The `%0.f` on the third float is retail's own typo and
+prints the same as `%.0f`.
+
+`CNPCMaker_Fleshpile::Precache` `0x1034c180` **drops the empty-classname check and the developer
+overlay entirely**, keeping only the missing-model warning and the removal — so an empty classname on
+a fleshpile maker reaches `UTIL_PrecacheOther("")` and its own `"NULL Ent in UTIL_PrecacheOther: %s"`
+warning instead of removing the maker.
+
+`CNPCMaker_Zombie::Precache` `0x1034cde0` is the fleshpile shape plus three zombie facts: **before**
+the chain it zeroes `m_altEquipment` (`+0x1a98`) and `m_spawnEquipment` (`+0x5dec`), so an authored
+equipment keyfield is discarded and the base chain's own `UTIL_PrecacheOther` arm can never fire;
+and **after** the classname it also precaches `item_w_zombie_fists`.
+
+**Unrecovered:** the two reject literals of `0x101d0f10` (`DAT_105a0410`, three characters, and
+`DAT_105a040c`, one) — the corpus holds neither's bytes, so the gate is ported with empty constants
+and refuses nothing, and no call site in this family passes a directory either could match; entries
+2 and 3 of `CNPC_VManBat`'s four-entry model table (`0x10640ce0`), which the corpus names only by the
+table's first two targets; `CGenericSabbat_NPC`'s char-template column `+0x78`, which has no
+recovered name; and the two `.rdata` tables of `CNPC_VTzimisce` are told apart by the layout
+convention (an array declared first carries the higher string addresses) rather than by a direct
+read of the pointers.
