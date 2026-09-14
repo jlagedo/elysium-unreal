@@ -1,0 +1,20 @@
+{
+  "mcp": {
+    "servers": {
+      "vtmb-corpus": {
+        "command": "uv",
+        "args": [
+          "run",
+          "--directory",
+          "E:\\dev\\elysium-unreal",
+          "--no-sync",
+          "python",
+          "research/tooling/ghidra/driver/corpus_mcp.py"
+        ],
+        "env": {
+          "PYTHONUNBUFFERED": "1"
+        }
+      }
+    }
+  }
+}
