@@ -95,17 +95,19 @@ namespace
 	// The Tzimisce vfunc `+0x9ac` (`0x103c4160`): `foot_steps_{1,2}` or `{3,4}` by the flag the
 	// caller passes, then `RandomInt(0, 1)` inside the chosen pair.
 	//
-	// UNRECOVERED: WHICH pair the flag selects. The asm records only that 2050 passes 1 and 2051
-	// passes 0 (`103c32eb` / `103c32d9`); the recovery does not say which literal each reaches inside
-	// `0x103c4160`. The port takes flag 1 — the LEFT id — as `foot_steps_1/2`. Getting the pair
-	// backwards swaps two interchangeable footfall wavs and nothing else.
+	// RECOVERED, story 29e, from `0x103c4160`'s own listing (`103c41d8` / `103c420e` / `103c424b`)
+	// while reading the damaged `CNPC_VTzimisceRunner::HandleAnimEvent 0x103c32c0`: the flag the
+	// caller passes selects **flag 0 → `foot_steps_1/2`** and **flag 1 → `foot_steps_3/4`**. Anim
+	// event 2051 passes 0 (`103c32d9`) and 2050 passes 1 (`103c32eb`), so 2051 is the `1/2` pair.
+	// The port had the sense backwards and the two arrays are swapped here to match; the arrays
+	// keep their `Left`/`Right` names because that is the foot each anim event stands for.
 	const TCHAR* const TzimisceLeftSteps[] = {
-		TEXT("character/monster/TC_Runner/foot_steps_1.wav"),
-		TEXT("character/monster/TC_Runner/foot_steps_2.wav"),
-	};
-	const TCHAR* const TzimisceRightSteps[] = {
 		TEXT("character/monster/TC_Runner/foot_steps_3.wav"),
 		TEXT("character/monster/TC_Runner/foot_steps_4.wav"),
+	};
+	const TCHAR* const TzimisceRightSteps[] = {
+		TEXT("character/monster/TC_Runner/foot_steps_1.wav"),
+		TEXT("character/monster/TC_Runner/foot_steps_2.wav"),
 	};
 	// The SECOND sound the same call emits, `RandomInt(0, 3)`.
 	const TCHAR* const TzimisceBreaths[] = {

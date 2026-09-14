@@ -190,7 +190,7 @@ The two vfuncs, read out of the class vtables in the image:
 | slot | class | target | what it does |
 |---|---|---|---|
 | `+0x9a4` (617) | `CNPC_VHengeyokai` (`vftable 0x104b683c`) | `0x103817f0` | `EmitSound(CHAN_BODY 4, character/monster/hengeyokai/stomp_{1..4}.wav` chosen by `RandomInt(0,3)`, vol 1.0, 0.8, pitch 100) through a `CPASAttenuationFilter` |
-| `+0x9ac` (619) | `CNPC_VTzimisceRunner` (`vftable 0x104cd144`), `CNPC_VTzimisceHeadClaw` | `0x103c4160` | picks `character/monster/TC_Runner/foot_steps_{1,2}` or `{3,4}` by the passed flag and `RandomInt(0,1)`, **plus** `character/monster/TC_Runner/Breath{1..4}` (`RandomInt(0,3)`); both `CHAN_BODY 4`, vol 1.0 / 0.8, pitch 100 |
+| `+0x9ac` (619) | `CNPC_VTzimisceRunner` (`vftable 0x104cd144`), `CNPC_VTzimisceHeadClaw` | `0x103c4160` | picks `character/monster/TC_Runner/foot_steps_{1,2}` on flag **0** or `{3,4}` on flag **1** (recovered in 29e at `103c41d8`/`103c420e`/`103c424b`), then `RandomInt(0,1)` inside the pair, **plus** `character/monster/TC_Runner/Breath{1..4}` (`RandomInt(0,3)`); both `CHAN_BODY 4`, vol 1.0 / 0.8, pitch 100 |
 
 Neither reads a `surfacedata_t`, a template or a cvar. Species footsteps are fixed wav pools.
 
@@ -906,9 +906,12 @@ designer-visible number and `D_ref(L) * 100` is where retail actually goes silen
   `FL_NOTARGET` are not traced; the port carries both as `FElysiumPlayer::bNoPlayerSound`, false.
 - The origin `UpdatePlayerSound` stamps on the reserved record comes from vfunc `+0x370`, which is
   not identified (the NPC step's PAS filter uses `+0x378`); the port stamps the entity origin.
-- Which `TC_Runner/foot_steps_*` pair the `+0x9ac` flag selects: the two pointer tables at
-  `0x1065d680` / `0x1065d688` are read only by the vfunc and the runner's precache, and their
-  contents are not exposed; the port takes flag 1 (2050) as `foot_steps_1/2`.
+- ~~Which `TC_Runner/foot_steps_*` pair the `+0x9ac` flag selects~~ — **recovered, story 29e
+  (2026-09-14).** Read off `0x103c4160`'s own listing (`103c41d8` / `103c420e` / `103c424b`) while
+  working the damaged `CNPC_VTzimisceRunner::HandleAnimEvent 0x103c32c0` from `corpus asm`: **flag
+  0 selects `foot_steps_1/2` and flag 1 selects `foot_steps_3/4`**. Anim event 2051 passes 0
+  (`103c32d9`) and 2050 passes 1 (`103c32eb`), so 2050 is the `3/4` pair. The port had taken the
+  opposite and is corrected, along with the test that had pinned the guess.
 
 ### 4.1 Recovered, deliberately not ported (the port's own out-of-scope list)
 

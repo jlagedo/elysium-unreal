@@ -690,8 +690,13 @@ bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 			TestEqual(TEXT("and raises no shake"), Runner->ShakeAmplitude, 0.0f, 1e-6f);
 			TestEqual(TEXT("its two pools are two wavs each"), Runner->LeftWavs.Num(), 2);
 			TestEqual(TEXT("and the breath pool is four"), Runner->ExtraWavs.Num(), 4);
-			// The flag `103c32eb`/`103c32d9` passes: 2050 -> 1, 2051 -> 0, and the two ids therefore
-			// draw from different pools.
+			// The flag `103c32eb`/`103c32d9` passes: 2050 -> 1, 2051 -> 0. Which pair each flag then
+			// reaches was UNRECOVERED when this test landed, and the port guessed flag 1 = `1/2`.
+			// Story 29e read `0x103c4160` itself (`103c41d8` / `103c420e` / `103c424b`) while working
+			// the damaged `CNPC_VTzimisceRunner::HandleAnimEvent 0x103c32c0`: **flag 0 selects
+			// `foot_steps_1/2` and flag 1 selects `foot_steps_3/4`**. The guess was backwards, so this
+			// test asserted port-invented behaviour and is corrected here to retail's own answer —
+			// 2050 (flag 1) is the `3/4` pair and 2051 (flag 0) is the `1/2` pair.
 			FRandomStream Stream(11);
 			const TCHAR* Left =
 				ElysiumFootsteps::PickSpeciesWav(*Runner, ElysiumFootsteps::EventWalkLeft, Stream);
@@ -700,12 +705,12 @@ bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 			if (TestNotNull(TEXT("2050 draws a wav"), Left)
 				&& TestNotNull(TEXT("2051 draws a wav"), Right))
 			{
-				TestTrue(TEXT("2050 draws from foot_steps_1/2"),
-					FString(Left).Contains(TEXT("foot_steps_1"))
-					|| FString(Left).Contains(TEXT("foot_steps_2")));
-				TestTrue(TEXT("2051 draws from foot_steps_3/4"),
-					FString(Right).Contains(TEXT("foot_steps_3"))
-					|| FString(Right).Contains(TEXT("foot_steps_4")));
+				TestTrue(TEXT("2050 (flag 1) draws from foot_steps_3/4"),
+					FString(Left).Contains(TEXT("foot_steps_3"))
+					|| FString(Left).Contains(TEXT("foot_steps_4")));
+				TestTrue(TEXT("2051 (flag 0) draws from foot_steps_1/2"),
+					FString(Right).Contains(TEXT("foot_steps_1"))
+					|| FString(Right).Contains(TEXT("foot_steps_2")));
 			}
 		}
 	}

@@ -693,6 +693,88 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 29d. Provides: the interpreter every program family runs on, finished once.
   Oracle: `schedule-kernel.md`, `conditions-and-states.md`, `lifecycle.md`. Unrecovered: the 8
   damaged bodies (`0x1028a260` first). Size: XL. Effort: Opus or Fable / high.
+  **Reading banked (2026-09-14); the story stays open for the port.** The band is **19–29**, not
+  the 19–26 the story text names: `order.md` has been regenerated since that sizing and now runs to
+  layer 29, so the whole top band is 29e's and nothing may be left unverdicted above 29d.
+  `"19-29"` joins `CHECKLIST_BANDS` and `docs/vtmb/npc-kernel/checklist-19-29.md` is committed.
+  **The reading.** 468 core functions, **every one verdicted**: **466 `rule`, 2 `present`, 0
+  `mechanism`, 0 `dead`, 0 `unsettled`**, and `coverage.md`'s *Neither* for layers 19–29 is **289 →
+  0**. No pack is missing — all 18 reading packs returned, plus both damaged batches. The band's
+  shape is the opposite of 29c's and sharper than 29d's: **zero `mechanism`**, because a schedule
+  interpreter's body is a rule even when it calls `memcpy` on the way, and the only two `present`
+  rows are a three-step oblivious helper the port already carries at both call sites and a species
+  `GatherConditions` whose whole content is an unconditional chain to the base.
+  **Two spine bodies were read from the listing rather than the decompiler**, with their two-level
+  MSVC jump tables byte-read out of the pinned image, because Ghidra's `case N` labels are arm
+  indices and not task ids: `CAI_BaseNPC::StartTask 0x102827f0` (byte table `0x10287138`, arm table
+  `0x10286f8c`, **107 arms**) and `CAI_BaseNPCTroika::StartTask 0x102a1910` (`0x102a7ab8` /
+  `0x102a77f8`, **176 arms**). Both walks are recorded, together with the full **330-entry task id →
+  name table** from the runtime registrar `FUN_10316ff0` and the **42-string `TaskFail` reason
+  vocabulary** from the text pointer table at `0x106152b0` — which makes every failure exit in the
+  band self-describing.
+  **The 11 damaged rows all stand; none is `unsettled`.** The structural finding is that **not one
+  of them has a jump table**: in every case Ghidra's "unrecovered indirect jump" is a *virtual tail
+  call* (`JMP dword ptr [reg+0xNNN]`) in the epilogue, and `0xNNN / 4` is the slot. The recurring
+  "unrecovered jump through the active weapon's vtable `+0x108`" that blocked four `NPCInit` rows is
+  simply slot 66 `CBaseEntity::Hide 0x1009d2a0`. It also settled that the three 39-byte `NPCInit`s
+  are **not** one body: `CNPC_VHunter 0x10388b30` and `CNPC_VYukie 0x103dd800` each chain
+  `CNPC_VHumanCombatant::NPCInit 0x10387140` rather than Troika's, so both hide the active weapon
+  twice. `0x1028a260` needs no row of its own — it is `GetNewSchedule`, layer 0, already verdicted
+  in band 0–4, and this band decoded it: clear `+0x1b2c`, slot 437 `GetSchedule`, else tail-jump
+  slot 438.
+  **Three systematic batch errors were found and corrected before the merge**, each against a
+  landed story's precedent, by a mechanical sweep over 281 rows: (1) **18 rows** gave a
+  `CAI_BaseNPC` body the same `hand:` target as its Troika twin — 29d's error (1), since
+  `gen_kernel_shape` binds a slot to the Troika body — and each now takes `Base<Method>`
+  (`BaseNPCThink`, `BaseRunAI`, `BaseGatherConditions`, `BaseSelectIdealState`, `BaseStartTask`,
+  `BaseRunTask`, `BaseSelectSchedule`, `BaseNPCInit`, `BaseTranslateSchedule`, …); (2) **193 rows**
+  coined a per-species name instead of the slot's own method — 29d's error (2) — and were
+  retargeted, with the sweep's Troika-line guard correctly *sparing* `CAI_Motor`, `CAI_Navigator`,
+  `CAI_StandoffBehavior`, `CAI_StandoffGoal` and the `CCineNPC` line, whose slot indices are their
+  own; (3) **70 `registry:` rows** named a datum the census cannot carry — `gen_kernel_shape`'s
+  `CONSTANT_BODY_RE` matches only `{ return; }` and `{ return <literal>; }`, so each would have
+  produced an empty `Default` and the behaviour would have vanished silently — and all 70 are now
+  method targets. The band-wide ruling behind (3), recorded because it had no precedent: **a
+  species override is a registry row only when the census can hold its whole body**; a translation
+  table is a switch, not one literal.
+  **Three defects in already-landed work were found and closed on the way.** (1) A latent
+  **unity-build ODR collision** in 29d's family SpeciesMisc10: both halves defined
+  `GSlowExpireSentinel` / `GSlowEntityMagnitude` in an anonymous namespace, which is *not*
+  file-local under a unity build. It compiled only because the chunk boundary fell between them,
+  and this story's census growth moved it — the hazard is that such a collision is invisible until
+  an unrelated file changes size. (2) The **Tzimisce footstep pair sense was backwards**:
+  `footsteps.md` recorded "which pair the `+0x9ac` flag selects" as unrecovered and the port guessed
+  flag 1 = `foot_steps_1/2`; `0x103c4160`'s own listing (`103c41d8` / `103c420e` / `103c424b`),
+  reached while working the damaged `CNPC_VTzimisceRunner::HandleAnimEvent 0x103c32c0`, gives **flag
+  0 → `1/2`, flag 1 → `3/4`**, so 2050 is the `3/4` pair. The code, the oracle row, the
+  unrecovered-list entry and (3) **the landed test that had pinned the guess**
+  (`ElysiumNpcFootstepTests.cpp`) are all corrected to retail with the listing cited inline — the
+  test was corrected, never the finding.
+  **Wave 1 of the port was started and cancelled** (State19, TranslateSchedule19, Lifecycle19) when
+  the session's budget ran out. **Nothing of it is in the tree** — every file the three families
+  created or edited is reverted or moved out, and none of their code was ever compiled. Their
+  *reading* is banked at `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/cancelled-wave1/`, and it
+  is worth having: it confirms the `HasInterruptCondition` gate on `0x102ad660` from the listing,
+  corrects thirteen `SelectIdealState` walks and nine slot-440 ones, transcribes all twenty species
+  `TranslateSchedule` tables row by row, reads a dozen more `.rdata` cells, and names **three more
+  landed tests that encode port-invented behaviour** (`Elysium.Substrate.NpcEnemy.IdealState` and
+  two cases of `Elysium.Substrate.Schedule.TroikaTranslate`) for the port to correct to retail. Two
+  findings there change the shape of a function rather than a constant: `CAI_BaseNPC::
+  TranslateSchedule 0x102cc080` answers through a **virtual `CALL` back into slot 440 on the
+  object's own vtable** (so a species class re-enters its *own* body, and the fall-out path is the
+  **identity**, not "nothing"), and the frenzied pre-table's `0x87`/`0x88` tail tests the
+  **complement** of `MADE_HUNT_PATH`. One brief this story wrote was itself wrong and is corrected
+  in the record: `+0x1b38` is **not** absent in the port — 29d stood it as
+  `SelectIdealStateSelector` — so the twelve fifteen-byte slot-461 species bodies are real data rows.
+  **No body was ported and no slot row was flipped to `hand:`.** All 54 rows that claim `hand:` are
+  held with the prefix stripped (`hand-held-19-29.tsv` is the record, method names untouched), so
+  every one of the band's 28 slots is still a generated stub and the tree links. The port phase —
+  16 families over the 457 rows, in the story's stated order — is what remains, together with the
+  divergences the reading already names for it: the port's task runner **fails** an unknown task
+  where retail only `DevMsg`s and keeps the program running; `SelectIdealState 0x102ad660` gates on
+  `HasInterruptCondition` (the running schedule's mask), not `HasCondition`, with the two flee arms
+  as the exceptions; and `CNPC_VSabbatLeader::TaskFail 0x103a9400` does **not** chain `0x1029adb0`
+  on its flip path, which breaks the port's "species arms are a prologue" invariant.
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
   is a live per-worldlight evaluation: Source falloff by light type, the cone/angle term, the live

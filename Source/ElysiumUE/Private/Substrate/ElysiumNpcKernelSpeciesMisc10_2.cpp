@@ -33,9 +33,15 @@ namespace
 	// `_DAT_104cd108` is a **DOUBLE** reading **240.0** (`103c20dc` is `FCOMP double ptr`). The 2-D
 	// distance at or past which slot 332 raises condition `0x35`.
 	constexpr double GHeadClawConditionDistanceUnits = 240.0;
-	// `_DAT_1044fab0`, the DOUBLE 0.0 sentinel, and `0x43fa0000` = 500.0.
-	constexpr double GSlowExpireSentinel = 0.0;
-	constexpr float GSlowEntityMagnitude = 500.f;
+	// `_DAT_1044fab0`, the DOUBLE 0.0 sentinel, and `0x43fa0000` = 500.0. The ManBat half of this
+	// family reads the same two cells and names them `GSlowExpireSentinel` /
+	// `GSlowEntityMagnitude`; these carry the head claw's own spelling because an anonymous
+	// namespace does NOT make a name file-local under a unity build — the two halves are
+	// concatenated into one translation unit and two definitions of one name is a hard error. (It
+	// only surfaced when story 29e's census grew and moved the unity chunk boundary, which is the
+	// whole hazard: a latent collision compiles until an unrelated file changes size.)
+	constexpr double GHeadClawSlowExpireSentinel = 0.0;
+	constexpr float GHeadClawSlowEntityMagnitude = 500.f;
 	// `103c1dd5`: `PUSH 8.0` then `PUSH 5.0` — `RandomFloat(5.0, 8.0)`.
 	constexpr float GHeadClawSlowSecondsMin = 5.f;
 	constexpr float GHeadClawSlowSecondsMax = 8.f;
@@ -400,9 +406,9 @@ void FElysiumNpc::HeadClawSlot332(FElysiumEntity* SlowTarget)
 	}
 	// 1. `103c1db0`: `BeginSlowEntity(victim, 500.0)` only while `m_flSlowedExpire` (**+0x6678**,
 	//    not the `+0x6684` the walk names) still equals the 0.0 sentinel.
-	if (HeadClawSlowedExpire == GSlowExpireSentinel)
+	if (HeadClawSlowedExpire == GHeadClawSlowExpireSentinel)
 	{
-		BeginSlowEntity(SlowTarget->Handle, GSlowEntityMagnitude);
+		BeginSlowEntity(SlowTarget->Handle, GHeadClawSlowEntityMagnitude);
 	}
 	// 2. `103c1dd5`: `m_flSlowedExpire = RandomFloat(5.0, 8.0) + curtime`, unconditionally.
 	HeadClawSlowedExpire = SpeciesMisc10_2Now(*this)
@@ -449,7 +455,7 @@ void FElysiumNpc::HeadClawSlot332(FElysiumEntity* SlowTarget)
 bool FElysiumNpc::HeadClawSlowRunning() const
 {
 	// `0x103c24a0`: `m_flSlowedExpire` (+0x6678) strictly above 0.0.
-	return HeadClawSlowedExpire > GSlowExpireSentinel;
+	return HeadClawSlowedExpire > GHeadClawSlowExpireSentinel;
 }
 
 void FElysiumNpc::TzimisceHeadClawEndSlow(bool bForce)
@@ -471,7 +477,7 @@ void FElysiumNpc::TzimisceHeadClawEndSlow(bool bForce)
 	FElysiumEntity* Victim = World != nullptr ? World->Resolve(HeadClawSlowedEntity) : nullptr;
 	if (Victim != nullptr && Victim->AsCombatCharacter() != nullptr)
 	{
-		EndSlowEntity(HeadClawSlowedEntity, GSlowEntityMagnitude);
+		EndSlowEntity(HeadClawSlowedEntity, GHeadClawSlowEntityMagnitude);
 		HeadClawSlowedEntity = FElysiumEntityHandle::Invalid();
 		// `103c2319`: `…/Sluge_Affected.wav` on channel 3 from the VICTIM's slot-222 origin at
 		// attenuation 0.8 — the same wav slot 332's second emit uses.

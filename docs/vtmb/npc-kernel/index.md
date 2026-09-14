@@ -1907,7 +1907,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103c2810` | CNPC_VTzimisceHeadClaw::Save | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao::Save` — `0x10395f80` |
 | `0x103c2860` | CNPC_VTzimisceHeadClaw::vfunc127 | docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPCTroika::Restore` — `0x10299700` |
 | `0x103c31e0` | CNPC_VTzimisceRunner::Precache | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VTzimisceRunner` — `0x103c31e0` |
-| `0x103c32c0` | CNPC_VTzimisceRunner::HandleAnimEvent | docs/vtmb/animation_and_movers.md § Sequence events and native dispatch [data-verified, VtMB decompiled], docs/vtmb/animation_events.md § The NPC footstep band (2050-2053) — `CAI_BaseNPC::HandleAnimEvent` `0x10274e30`, docs/vtmb/footsteps.md § 1.7 Species overrides, docs/vtmb/footsteps.md § 5.1 NPC |
+| `0x103c32c0` | CNPC_VTzimisceRunner::HandleAnimEvent | docs/vtmb/animation_and_movers.md § Sequence events and native dispatch [data-verified, VtMB decompiled], docs/vtmb/animation_events.md § The NPC footstep band (2050-2053) — `CAI_BaseNPC::HandleAnimEvent` `0x10274e30`, docs/vtmb/footsteps.md § 1.7 Species overrides, docs/vtmb/footsteps.md § 4. Unrecovered, +1 more |
 | `0x103c3960` | CNPC_VTzimisceRunner::vfunc599 | docs/vtmb/npc-ai/shape.md § The melee quartet's species replacements — slots 599, 600, 601, 602 |
 | `0x103c39e0` | FUN_103c39e0 | docs/vtmb/npc-ai/shape.md § The melee quartet's species replacements — slots 599, 600, 601, 602 |
 | `0x103c3a70` | FUN_103c3a70 | docs/vtmb/npc-ai/shape.md § The melee quartet's species replacements — slots 599, 600, 601, 602 |
@@ -1918,7 +1918,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103c3d80` | CNPC_VTzimisceRunner::SetActivity | docs/vtmb/npc-ai/shape.md § `CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity` — `0x103c3e10`, docs/vtmb/npc-ai/shape.md § `CNPC_VTzimisceRunner::SetActivity` — `0x103c3d80` |
 | `0x103c3e10` | CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity | docs/vtmb/animation_and_movers.md § The complete NPC translation-virtual surface [VtMB decompiled + data-verified], docs/vtmb/npc-ai/shape.md § `CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity` — `0x103c3e10`, docs/vtmb/npc-ai/shape.md § `CNPC_VTzimisceRunner::NotifyChangeSizeSmall` `0x103c3cd0` and `::NotifyChangeSizeNormal` `0x103c3d10` |
 | `0x103c3fd0` | CNPC_VTzimisceRunner::vfunc588 | docs/vtmb/npc-ai/shape.md § The remaining species one-liners |
-| `0x103c4160` | FUN_103c4160 | docs/vtmb/footsteps.md § 1.7 Species overrides, docs/vtmb/footsteps.md § 5.1 NPC |
+| `0x103c4160` | FUN_103c4160 | docs/vtmb/footsteps.md § 1.7 Species overrides, docs/vtmb/footsteps.md § 4. Unrecovered, docs/vtmb/footsteps.md § 5.1 NPC |
 | `0x103c4430` | CNPC_VTzimisceRunner::SelectScheduleMeleeCombat | docs/vtmb/npc-ai/schedule-kernel.md § `0x102b6c30` slot 604 and its five species overrides, docs/vtmb/npc-ai/shape.md § The melee quartet's species replacements — slots 599, 600, 601, 602 |
 | `0x103c4ef0` | CNPC_VVampire::Spawn | docs/vtmb/npc-ai/lifecycle.md § Map creation, spawn, activation, and first AI admission |
 | `0x103c5910` | CNPC_VVampireBoss::Restore | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VAndreiBlood::Restore` — `0x1035cf80`, and `CNPC_VChangBros::Restore` — `0x1036b170`, docs/vtmb/npc-ai/lifecycle.md § `CNPC_VVampireBoss::Restore` — `0x103c5910` |
@@ -2201,22 +2201,22 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103cb754` | docs/vtmb/npc-ai/lifecycle.md:212 |
 | `0x10445000` | docs/vtmb/animation_rig_resolution.md:763, docs/vtmb/npc-ai/lifecycle.md:1440, docs/vtmb/npc-ai/shape.md:3064, +1 more |
 | `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/npc-ai/conditions-and-states.md:1223, docs/vtmb/npc-ai/conditions-and-states.md:1307 |
-| `0x104454c4` | docs/vtmb/footsteps.md:95, docs/vtmb/footsteps.md:963, docs/vtmb/npc-ai/shape.md:183, +2 more |
-| `0x104454d0` | docs/vtmb/camera-view-modes.md:661, docs/vtmb/footsteps.md:490, docs/vtmb/footsteps.md:1028, +1 more |
+| `0x104454c4` | docs/vtmb/footsteps.md:95, docs/vtmb/footsteps.md:966, docs/vtmb/npc-ai/shape.md:183, +2 more |
+| `0x104454d0` | docs/vtmb/camera-view-modes.md:661, docs/vtmb/footsteps.md:490, docs/vtmb/footsteps.md:1031, +1 more |
 | `0x10445e08` | docs/vtmb/entity_io.md:1910 |
-| `0x10447ee0` | docs/vtmb/footsteps.md:278, docs/vtmb/footsteps.md:983, docs/vtmb/source_movement.md:402 |
-| `0x10449148` | docs/vtmb/footsteps.md:104, docs/vtmb/footsteps.md:966, docs/vtmb/npc-ai/senses.md:878 |
-| `0x10449198` | docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:997, docs/vtmb/source_movement.md:404 |
+| `0x10447ee0` | docs/vtmb/footsteps.md:278, docs/vtmb/footsteps.md:986, docs/vtmb/source_movement.md:402 |
+| `0x10449148` | docs/vtmb/footsteps.md:104, docs/vtmb/footsteps.md:969, docs/vtmb/npc-ai/senses.md:878 |
+| `0x10449198` | docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, docs/vtmb/source_movement.md:404 |
 | `0x104491a8` | docs/vtmb/source_movement.md:580 |
 | `0x104491b4` | docs/vtmb/animation_and_movers.md:2160, docs/vtmb/animation_events.md:46, docs/vtmb/source_movement.md:585 |
 | `0x10449258` | docs/vtmb/camera-view-modes.md:695, docs/vtmb/entity_io.md:252 |
-| `0x10449260` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:995 |
-| `0x10449270` | docs/vtmb/entity_io.md:250, docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:997, +2 more |
-| `0x10449280` | docs/vtmb/footsteps.md:372, docs/vtmb/footsteps.md:1000, docs/vtmb/npc-ai/shape.md:4230, +1 more |
+| `0x10449260` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:998 |
+| `0x10449270` | docs/vtmb/entity_io.md:250, docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, +2 more |
+| `0x10449280` | docs/vtmb/footsteps.md:372, docs/vtmb/footsteps.md:1003, docs/vtmb/npc-ai/shape.md:4230, +1 more |
 | `0x104492a8` | docs/vtmb/source_movement.md:130 |
-| `0x104492ac` | docs/vtmb/footsteps.md:123, docs/vtmb/footsteps.md:971 |
-| `0x104492b8` | docs/vtmb/footsteps.md:491, docs/vtmb/footsteps.md:1029 |
-| `0x104492d0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:996, docs/vtmb/source_movement.md:320, +1 more |
+| `0x104492ac` | docs/vtmb/footsteps.md:123, docs/vtmb/footsteps.md:974 |
+| `0x104492b8` | docs/vtmb/footsteps.md:491, docs/vtmb/footsteps.md:1032 |
+| `0x104492d0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:999, docs/vtmb/source_movement.md:320, +1 more |
 | `0x104492dc` | docs/vtmb/npc-ai/social.md:888 |
 | `0x104493d0` | docs/vtmb/choreographed_scenes.md:840, docs/vtmb/entity_io.md:1883, docs/vtmb/npc-ai/social.md:823 |
 | `0x10449400` | docs/vtmb/camera-view-modes.md:2075 |
@@ -2227,26 +2227,26 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1044fab0` | docs/vtmb/footsteps.md:319 |
 | `0x10450010` | docs/vtmb/animation_and_movers.md:3902 |
 | `0x1045001c` | docs/vtmb/animation_and_movers.md:3899 |
-| `0x10450564` | docs/vtmb/combat-and-damage.md:975, docs/vtmb/footsteps.md:341, docs/vtmb/footsteps.md:989 |
+| `0x10450564` | docs/vtmb/combat-and-damage.md:975, docs/vtmb/footsteps.md:341, docs/vtmb/footsteps.md:992 |
 | `0x10452dc4` | docs/vtmb/camera-view-modes.md:695 |
 | `0x10453b74` | docs/vtmb/camera-view-modes.md:611, docs/vtmb/camera-view-modes.md:982 |
 | `0x10453b78` | docs/vtmb/camera-view-modes.md:641, docs/vtmb/camera-view-modes.md:3275 |
 | `0x10453b88` | docs/vtmb/camera-view-modes.md:641, docs/vtmb/camera-view-modes.md:3273 |
 | `0x10454110` | docs/vtmb/animation_and_movers.md:1149, docs/vtmb/player-entity.md:601 |
 | `0x10454b8c` | docs/vtmb/source_movement.md:397 |
-| `0x1045597c` | docs/vtmb/footsteps.md:531, docs/vtmb/footsteps.md:1034 |
+| `0x1045597c` | docs/vtmb/footsteps.md:531, docs/vtmb/footsteps.md:1037 |
 | `0x10457f54` | docs/vtmb/computer-terminals.md:524 |
-| `0x1045a3f0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:996 |
+| `0x1045a3f0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:999 |
 | `0x10462914` | docs/vtmb/footsteps.md:300, docs/vtmb/source_movement.md:277 |
-| `0x10462918` | docs/vtmb/footsteps.md:370, docs/vtmb/footsteps.md:998 |
-| `0x10462928` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:995 |
-| `0x10462950` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:962, docs/vtmb/source_movement.md:579 |
-| `0x10462958` | docs/vtmb/footsteps.md:437, docs/vtmb/footsteps.md:1025 |
-| `0x104629d8` | docs/vtmb/footsteps.md:530, docs/vtmb/footsteps.md:1034 |
-| `0x104629e4` | docs/vtmb/footsteps.md:480, docs/vtmb/footsteps.md:1026 |
-| `0x104704a8` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:961 |
-| `0x104704b8` | docs/vtmb/footsteps.md:578, docs/vtmb/footsteps.md:1047 |
-| `0x1047aa18` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:960 |
+| `0x10462918` | docs/vtmb/footsteps.md:370, docs/vtmb/footsteps.md:1001 |
+| `0x10462928` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:998 |
+| `0x10462950` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:965, docs/vtmb/source_movement.md:579 |
+| `0x10462958` | docs/vtmb/footsteps.md:437, docs/vtmb/footsteps.md:1028 |
+| `0x104629d8` | docs/vtmb/footsteps.md:530, docs/vtmb/footsteps.md:1037 |
+| `0x104629e4` | docs/vtmb/footsteps.md:480, docs/vtmb/footsteps.md:1029 |
+| `0x104704a8` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:964 |
+| `0x104704b8` | docs/vtmb/footsteps.md:578, docs/vtmb/footsteps.md:1050 |
+| `0x1047aa18` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:963 |
 | `0x104902c9` | docs/vtmb/vtmb-animation-reverse-engineering.md:2271 |
 | `0x10497c80` | docs/vtmb/npc-ai/senses.md:164 |
 | `0x10499568` | docs/vtmb/npc-ai/shape.md:322 |
@@ -2318,7 +2318,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10562f58` | docs/vtmb/camera-view-modes.md:2300 |
 | `0x10566a1c` | docs/vtmb/entity_io.md:1664 |
 | `0x10568c54` | docs/vtmb/entity_io.md:2160 |
-| `0x1057254c` | docs/vtmb/footsteps.md:339, docs/vtmb/footsteps.md:992 |
+| `0x1057254c` | docs/vtmb/footsteps.md:339, docs/vtmb/footsteps.md:995 |
 | `0x1057909c` | docs/vtmb/entity_io.md:970 |
 | `0x10579660` | docs/vtmb/npc-ai/shape.md:3512 |
 | `0x1057966c` | docs/vtmb/npc-ai/conditions-and-states.md:310, docs/vtmb/npc-ai/senses.md:1325 |
@@ -2423,8 +2423,8 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1065ca68` | docs/vtmb/npc-ai/lifecycle.md:1349 |
 | `0x1065ca70` | docs/vtmb/npc-ai/lifecycle.md:1349 |
 | `0x1065ca78` | docs/vtmb/npc-ai/lifecycle.md:1350 |
-| `0x1065d680` | docs/vtmb/footsteps.md:910, docs/vtmb/npc-ai/lifecycle.md:1357 |
-| `0x1065d688` | docs/vtmb/footsteps.md:910, docs/vtmb/npc-ai/lifecycle.md:1357 |
+| `0x1065d680` | docs/vtmb/npc-ai/lifecycle.md:1357 |
+| `0x1065d688` | docs/vtmb/npc-ai/lifecycle.md:1357 |
 | `0x1065d690` | docs/vtmb/npc-ai/lifecycle.md:1357 |
 | `0x1065d6a0` | docs/vtmb/npc-ai/lifecycle.md:1358 |
 | `0x1065f4d0` | docs/vtmb/npc-ai/lifecycle.md:1370 |
@@ -2436,7 +2436,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10709200` | docs/vtmb/facial_animation.md:1079 |
 | `0x1070b22c` | docs/vtmb/footsteps.md:148, docs/vtmb/stealth.md:629 |
 | `0x1070b244` | docs/vtmb/activity_enum.md:318, docs/vtmb/footsteps.md:153, docs/vtmb/npc-ai/schedule-kernel.md:627, +1 more |
-| `0x1070b898` | docs/vtmb/footsteps.md:344, docs/vtmb/footsteps.md:664, docs/vtmb/footsteps.md:993 |
+| `0x1070b898` | docs/vtmb/footsteps.md:344, docs/vtmb/footsteps.md:664, docs/vtmb/footsteps.md:996 |
 | `0x1070ba38` | docs/vtmb/camera-view-modes.md:1766 |
 | `0x1070d1b0` | docs/vtmb/camera-view-modes.md:1792 |
 | `0x1071a278` | docs/vtmb/footsteps.md:406, docs/vtmb/source_movement.md:271 |
@@ -2449,7 +2449,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1072bcb6` | docs/vtmb/npc-ai/programs.md:767 |
 | `0x1072bcc3` | docs/vtmb/npc-ai/authored-control.md:371, docs/vtmb/npc-ai/programs.md:769 |
 | `0x1072bccc` | docs/vtmb/npc-ai/senses.md:318 |
-| `0x1072bd1c` | docs/vtmb/footsteps.md:596, docs/vtmb/footsteps.md:1042 |
+| `0x1072bd1c` | docs/vtmb/footsteps.md:596, docs/vtmb/footsteps.md:1045 |
 | `0x1072c474` | docs/vtmb/game_runtime.md:126 |
 | `0x1072c540` | docs/vtmb/stealth.md:296 |
 | `0x10738964` | docs/vtmb/computer-terminals.md:652 |

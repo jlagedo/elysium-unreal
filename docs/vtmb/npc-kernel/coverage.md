@@ -42,7 +42,7 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 | 0–4 | 1474 | 1264 | 85 | 122 | 0 | 3 | 0 | 839 | 708 | **0** |
 | 5–9 | 258 | 206 | 23 | 29 | 0 | 0 | 0 | 228 | 230 | **0** |
 | 10–18 | 344 | 269 | 67 | 8 | 0 | 0 | 0 | 271 | 266 | **0** |
-| 19–29 | 468 | 0 | 0 | 0 | 0 | 0 | 468 | 111 | 129 | **289** |
+| 19–29 | 468 | 466 | 0 | 2 | 0 | 0 | 0 | 111 | 129 | **0** |
 
 ## `CAI_BaseNPC` slots without a name
 
@@ -461,10 +461,10 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100fd0b0` | staticinit_100fd0b0 | Source/ElysiumUE/Private/Player/ElysiumPlayerCameraManager.cpp:181 |
 | `0x1011d7e0` | FUN_1011d7e0 | Source/ElysiumUE/Private/Player/ElysiumCommandBus.cpp:55, Source/ElysiumUE/Public/ElysiumFootstepTuning.h:31 |
 | `0x1011e0d0` | FUN_1011e0d0 | Source/ElysiumUE/Public/ElysiumMoveSolve.h:69 |
-| `0x1011e430` | CGameMovement::vfunc16 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:257, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:232, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:322, +2 more |
-| `0x1011e940` | UpdateStepSound | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:459, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:257, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:19, +10 more |
+| `0x1011e430` | CGameMovement::vfunc16 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:259, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:232, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:322, +2 more |
+| `0x1011e940` | UpdateStepSound | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:459, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:259, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:19, +10 more |
 | `0x1011f140` | FUN_1011f140 | Source/ElysiumUE/Public/ElysiumMoveSolve.h:170 |
-| `0x1011f520` | CGameMovement::vfunc24 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:339, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:239, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:393, +2 more |
+| `0x1011f520` | CGameMovement::vfunc24 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:341, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:239, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:393, +2 more |
 | `0x1011fa80` | StartGravity | Source/ElysiumUE/Public/ElysiumMoveSolve.h:150 |
 | `0x101200c0` | WaterMove | Source/ElysiumUE/Public/ElysiumMoveSolve.h:85 |
 | `0x10120ba0` | FUN_10120ba0 | Source/ElysiumUE/Public/ElysiumMoveSolve.h:104 |
@@ -472,7 +472,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10121000` | AirAccelerate | Source/ElysiumUE/Public/ElysiumMoveSolve.h:113 |
 | `0x101212e0` | CGameMovement::vfunc10 | Source/ElysiumUE/Public/ElysiumMoveSolve.h:109 |
 | `0x101226b0` | CGameMovement::vfunc17 | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:1105, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:289 |
-| `0x10125db0` | CheckFalling | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:419, Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:933, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:257, +8 more |
+| `0x10125db0` | CheckFalling | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:419, Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:933, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:259, +8 more |
 | `0x101265d0` | CanUnduck | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:665 |
 | `0x10126fd0` | CGameMovement::Duck | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:708, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:289, Source/ElysiumUE/Public/ElysiumMovementComponent.h:298 |
 | `0x101274a0` | CGameMovement::PlayerMove | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1530, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:421, Source/ElysiumUE/Private/Tests/ElysiumPlayerFootstepTests.cpp:493, +2 more |
@@ -503,7 +503,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1016a870` | CBasePlayer::FUN_1016a870 | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:56, Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:217 |
 | `0x1016a9b0` | CBasePlayer::FUN_1016a9b0 | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:213 |
 | `0x1016aaf0` | CBasePlayer::ProcessUsercmds | Source/ElysiumUE/Private/Player/ElysiumPlayerController.cpp:144, Source/ElysiumUE/Public/ElysiumMoveSolve.h:227, Source/ElysiumUE/Public/ElysiumPlayer.h:2043 |
-| `0x1016b480` | FUN_1016b480 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:430, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:81, +6 more |
+| `0x1016b480` | FUN_1016b480 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:485, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:430, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:81, +6 more |
 | `0x1016be10` | CBasePlayer::PostThink | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1474 |
 | `0x1016d260` | CBasePlayer::Spawn | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1475, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:131, +4 more |
 | `0x1016eec0` | CBasePlayer::RetrieveGlobalEmailFlags | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1008, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1020, Source/ElysiumUE/Public/ElysiumPlayer.h:2088 |
@@ -668,7 +668,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10367a40` | FUN_10367a40 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSchedule.cpp:170, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:146 |
 | `0x1036e500` | staticinit_1036e500 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelPositions.cpp:34, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelPositions.cpp:914 |
 | `0x1036e550` | staticinit_1036e550 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelPositions.cpp:35, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelPositions.cpp:914 |
-| `0x103d8ba0` | FUN_103d8ba0 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:247, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:221 |
+| `0x103d8ba0` | FUN_103d8ba0 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:249, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:221 |
 | `0x103e8be0` | CWeaponMelee_TzimisceMelee::vfunc370 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:245 |
 | `0x103e9ac0` | FUN_103e9ac0 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:643 |
 | `0x103ea5b0` | CWeaponMelee::Operator_HandleAnimEvent | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:475, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:1257, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:235, +2 more |
@@ -1594,21 +1594,21 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Tests/ElysiumEntityIOTests.cpp:480 | ``const double RetailEpsilon = 0.005;   // vampire.dll 0x10454050 (research/.../claim-verification.md …`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumEventClasses.cpp:11 | ``//                  datamap_t 0x105b28c0 -> records 0x105b2904, 36 fields; the leading 14 are`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumEventClasses.cpp:14 | ``//                  records 0x105c2a94, 31 fields; leading 11 static, trailing 20 outputs built`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:275 | ``// `GetSurfaceIndex("wade")`, string at `0x1057254c`.`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:277 | ``// `GetSurfaceIndex("wade")`, string at `0x1057254c`.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:244 | ``// ¦ "water" ¦ "wade"))` for the other three (`0x10572554` / `0x10572544` / `0x1057254c`) — so the`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:286 | ``+ 0.75f * BaseJumpVelocity * VerticalScalar * JumpDurationSeconds;   // 0.75 at `0x10462958``` |
-| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:292 | ``// The jump table at `0x1011ed90` is over `'D'`..`'V'` and only two letters have their own`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:288 | ``+ 0.75f * BaseJumpVelocity * VerticalScalar * JumpDurationSeconds;   // 0.75 at `0x10462958``` |
+| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:294 | ``// The jump table at `0x1011ed90` is over `'D'`..`'V'` and only two letters have their own`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:296 | ``// `CGameMovement+0xa4`). A jump table over `'D'`..`'V'` (`0x1011ed90`) in which only two letters`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:372 | ``// `surfacedata_t`'s `gamematerial`, the letter `0x1011ed90`'s jump table switches on. Empty is`` |
 | Source/ElysiumUE/Private/Tests/ElysiumPlayerFootstepTests.cpp:322 | ``// --- The three `gamematerial` pairs (`0x1011ed90`'s jump table) ----------------------------`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:393 | ``// The wade branch's four-phase counter (`0x1011eb42`, global `0x1070b898`). Phase 0 returns`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:395 | ``// The wade branch's four-phase counter (`0x1011eb42`, global `0x1070b898`). Phase 0 returns`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:285 | ``// The wade branch's module-global counter (`0x1070b898`, `0x1011eb42`): phase 0 returns BEFORE`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:398 | ``// `WadePhase` is the module-global counter at `0x1070b898`, held by the caller so a save can carry`` |
 | Source/ElysiumUE/Public/ElysiumPlayer.h:2311 | ``// The wade branch's four-phase counter — retail's MODULE GLOBAL at `0x1070b898`, which is a`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:459 | ``// HARD, dry. The floating reduction is a real write to `m_flFallVelocity` (`0x104629e4`), which`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:461 | ``// HARD, dry. The floating reduction is a real write to `m_flFallVelocity` (`0x104629e4`), which`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:331 | ``inline constexpr float kFloatingFallReduction = 173.0f;   // `0x104629e4``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:424 | ``// local (`0x104629e4`). Returns 0 when no step is forced.`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:472 | ``if (FallSpeedUnits > SafeFallSpeed * 0.5f)   // 0.5 at `0x104454d0``` |
+| Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:474 | ``if (FallSpeedUnits > SafeFallSpeed * 0.5f)   // 0.5 at `0x104454d0``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:279 | ``inline constexpr float kSlowSpeed2DUnits    = 100.0f;   // `0x10450564`, tested with `<=``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:298 | ``inline constexpr float kVolDirtWalk    = 0.25f;   // `0x10449260``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelGeometry.cpp:109 | ``// `_DAT_10449260`, a **DOUBLE** (`1039997d  FCOMP double ptr [0x10449260]`) = 0.25. The 2-D dot`` |

@@ -139,7 +139,7 @@ PLACEHOLDER_RE = re.compile(r"^(thunk_)?(FUN_[0-9a-fA-F]+|vfunc\d+)$")
 # The build-order bands `docs/specs/0002-npc-ai/spec.md` sizes stories 29c-29e by.
 CORE_BANDS = ((0, 4), (5, 9), (10, 18), (19, 99))
 # The checklists this tool commits. A band outside the list is rendered on demand by `--checklist`.
-CHECKLIST_BANDS = ("0-9", "10-18")
+CHECKLIST_BANDS = ("0-9", "10-18", "19-29")
 # The four words a porting story may write in the verdict column, plus the escape hatch for a row
 # no reading settles. `unsettled` is not a verdict: it is a recorded failure to reach one, and
 # `coverage.md` counts it apart so the acceptance measure cannot be met by writing it.
