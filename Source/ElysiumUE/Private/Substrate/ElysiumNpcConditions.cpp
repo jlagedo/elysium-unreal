@@ -131,6 +131,15 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	// Story 29c-1, family Conditions.
 	case EElysiumNpcCond::TooCloseForRanged:       return TEXT("TOO_CLOSE_FOR_RANGED");
 	case EElysiumNpcCond::BeingAttacked:           return TEXT("BEING_ATTACKED");
+	case EElysiumNpcCond::DetectedAttack:          return TEXT("DETECTED_ATTACK");
+	case EElysiumNpcCond::PlayerSnarlRange:        return TEXT("PLAYER_SNARL_RANGE");
+	case EElysiumNpcCond::DogCombatLatch:          return TEXT("DOG_COMBAT_LATCH");
+	case EElysiumNpcCond::DogAlertSound:           return TEXT("DOG_ALERT_SOUND");
+	case EElysiumNpcCond::DogBark:                 return TEXT("DOG_BARK");
+	case EElysiumNpcCond::DogIdleFromAlert:        return TEXT("DOG_IDLE_FROM_ALERT");
+	case EElysiumNpcCond::DogIdleFromAlert2:       return TEXT("DOG_IDLE_FROM_ALERT2");
+	case EElysiumNpcCond::DogCombatLatch2:         return TEXT("DOG_COMBAT_LATCH2");
+	case EElysiumNpcCond::WerewolfDead:            return TEXT("WEREWOLF_DEAD");
 	case EElysiumNpcCond::ExtendedBlockedByFriend: return TEXT("EXTENDED_BLOCKED_BY_FRIEND");
 	case EElysiumNpcCond::EnemyTooFar:             return TEXT("ENEMY_TOO_FAR");
 	case EElysiumNpcCond::NotFacingAttack:         return TEXT("NOT_FACING_ATTACK");
@@ -1223,90 +1232,9 @@ bool ElysiumNpcCond::HasDetectedAttack(const FElysiumNpc& Npc, double Now)
 		&& (Now - Memory.DetectedAttackTime) <= DetectedAttackRetentionSeconds;
 }
 
-// --- Ideal state — the two layers, kept two ---
-
-namespace
-{
-	bool NpcCondHasAnyHear(const FElysiumNpcConditions& Cond)
-	{
-		return Cond.Has(EElysiumNpcCond::HearCombat) || Cond.Has(EElysiumNpcCond::HearPlayer)
-			|| Cond.Has(EElysiumNpcCond::HearWorld) || Cond.Has(EElysiumNpcCond::HearDanger);
-	}
-
-	bool NpcCondHasDamage(const FElysiumNpcConditions& Cond)
-	{
-		return Cond.Has(EElysiumNpcCond::LightDamage) || Cond.Has(EElysiumNpcCond::HeavyDamage);
-	}
-}
-
-EElysiumNpcState ElysiumNpcCond::SelectIdealStateBase(const FIdealStateInput& In,
-	const FElysiumNpcConditions& Cond, bool& bOutCombatWithoutEnemy)
-{
-	bOutCombatWithoutEnemy = false;
-	switch (In.Current)
-	{
-	case EElysiumNpcState::Idle:
-		// CHOSEN, NOT RECOVERED (the promotion, not the fallback): the survey states the escalation
-		// "idle to alert to combat" and that the concrete human selectors enter their weapon/combat
-		// policy only for state 2, but no recovered body names the exact idle->combat test. A
-		// committed enemy is taken as that test, because case 2's own recovered fallback proves the
-		// converse — combat without an enemy is the error case, so an enemy is what combat means.
-		if (In.bHasEnemy)
-		{
-			return EElysiumNpcState::Combat;
-		}
-		// Recovered, and load-bearing: `case 1` promotes idle -> alert on `COND_LIGHT_DAMAGE`,
-		// `COND_HEAVY_DAMAGE` and the whole hear family with NO `m_bNoAlertState` test.
-		if (NpcCondHasDamage(Cond) || NpcCondHasAnyHear(Cond))
-		{
-			return EElysiumNpcState::Alert;
-		}
-		return EElysiumNpcState::Idle;
-
-	case EElysiumNpcState::Alert:
-		if (In.bHasEnemy)
-		{
-			return EElysiumNpcState::Combat;
-		}
-		// SEAM (comment only): retail's alert -> idle relaxation is a timeout on the last state
-		// change, and neither the member nor its interval is recovered. An NPC therefore stays alert
-		// once promoted rather than decaying on an invented clock; the alert schedule it runs is an
-		// ordinary lookaround, so the visible cost of holding the state is nil.
-		return EElysiumNpcState::Alert;
-
-	case EElysiumNpcState::Combat:
-		if (!In.bHasEnemy)
-		{
-			// Recovered verbatim: `case 2` emits `Combat state with no enemy` and falls back to
-			// state 3. The emission is reported rather than logged here so the entity name is in
-			// hand at the log site.
-			bOutCombatWithoutEnemy = true;
-			return EElysiumNpcState::Alert;
-		}
-		return EElysiumNpcState::Combat;
-
-	default:
-		// Scripted, Prone and Dead are owned by their own transactions; the ideal-state pass leaves
-		// them alone rather than competing with the body arbiter or the death path.
-		return In.Current;
-	}
-}
-
-EElysiumNpcState ElysiumNpcCond::SelectIdealState(const FIdealStateInput& In,
-	const FElysiumNpcConditions& Cond, bool& bOutCombatWithoutEnemy)
-{
-	// The Troika layer's OWN damage and sense promotions. `no_alert_state` skips these — and only
-	// these.
-	if (!In.bNoAlertState && In.Current == EElysiumNpcState::Idle && !In.bHasEnemy
-		&& (NpcCondHasDamage(Cond) || NpcCondHasAnyHear(Cond)))
-	{
-		FIdealStateInput Promoted = In;
-		Promoted.Current = EElysiumNpcState::Alert;
-		// Even having promoted, the body still ends in the unconditional base tail call below —
-		// which is why this is written as a rewrite of the input rather than an early return.
-		return SelectIdealStateBase(Promoted, Cond, bOutCombatWithoutEnemy);
-	}
-	// The unconditional tail: `return CAI_BaseNPC::SelectIdealState(this)`. Under `no_alert_state`
-	// this is the ONLY layer that runs, and it promotes anyway.
-	return SelectIdealStateBase(In, Cond, bOutCombatWithoutEnemy);
-}
+// --- Ideal state ---
+//
+// Story 29e, family State19 replaced this file's two-layer summary with slot 461's retail bodies.
+// `FElysiumNpc::BaseSelectIdealState` (`0x1026f660`), `FElysiumNpc::TroikaSelectIdealState`
+// (`0x102ad660`) and the twelve species arms live in `Substrate/ElysiumNpcKernelState19.cpp` and
+// `ElysiumNpcKernelState19_2.cpp`.

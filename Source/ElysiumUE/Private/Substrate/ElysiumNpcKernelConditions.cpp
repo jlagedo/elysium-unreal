@@ -380,6 +380,10 @@ namespace
 		// The HL2 line. No `npc_V*` classname reaches it; carried so the census can be checked.
 		{ TEXT("CAI_BaseHumanoid"),        TEXT("0x10260630"),
 			FElysiumNpc::EStateChangeSpecies::HumanoidPreStep },
+		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0"),
+			FElysiumNpc::EStateChangeSpecies::BachSnapBack },
+		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20"),
+			FElysiumNpc::EStateChangeSpecies::Cop },
 	};
 }
 
@@ -586,6 +590,15 @@ void FElysiumNpc::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewS
 			// bodies outside this closure — and no `npc_V*` classname reaches this row.
 			(void)FElysiumNpcFlags::NpcStateFlagsForRetailState(CondRetailStateId(NewState));
 			return;
+		case EStateChangeSpecies::BachSnapBack:
+			if (BachOnStateChange(LastOnStateChangeOldRetail, LastOnStateChangeNewRetail))
+			{
+				return;
+			}
+			break;
+		case EStateChangeSpecies::Cop:
+			CopOnStateChange(LastOnStateChangeOldRetail, LastOnStateChangeNewRetail);
+			break;
 		}
 	}
 	OnStateChangeTroika(OldState, NewState);

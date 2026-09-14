@@ -79,6 +79,11 @@ enum class EStateChangeSpecies : uint8
 	 *  Troika body and goes straight to `CAI_BaseNPC::OnStateChange`. No `npc_V*` classname reaches
 	 *  it; the row is carried so the census can be checked against it. */
 	HumanoidPreStep,
+	/** `CNPC_VBach::OnStateChange` (`0x103639b0`) — while `m_bCanFightYet` is 0, ALERT/COMBAT
+	 *  snap back through `SetState(old)` and never reach the Troika body. */
+	BachSnapBack,
+	/** `CNPC_VCop::OnStateChange` (`0x10371c20`) — pursuit latch, census, holster/draw tails. */
+	Cop,
 };
 
 /** One row of retail's slot-463 species table: the census class, the retail address of the body that

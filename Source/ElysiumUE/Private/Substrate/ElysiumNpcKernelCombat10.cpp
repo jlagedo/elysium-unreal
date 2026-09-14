@@ -710,6 +710,24 @@ void FElysiumNpc::ClearForcedNpcState()
 
 int32 FElysiumNpc::PreSelectIdealStateRetail()
 {
+	if (SpeciesDispatchingSlot != 460)
+	{
+		const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 460);
+		if (SlotBody != nullptr)
+		{
+			if (FCString::Strcmp(SlotBody, TEXT("0x10368f80")) == 0)
+			{
+				const FSpeciesDispatchScope Scope(*this, 460);
+				return CameraPreSelectIdealState();
+			}
+			if (FCString::Strcmp(SlotBody, TEXT("0x10374d80")) == 0)
+			{
+				const FSpeciesDispatchScope Scope(*this, 460);
+				return DogPreSelectIdealState();
+			}
+		}
+	}
+
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
 	// `102ad349`: `+0x1b38 = 2` unconditionally at entry — the state-change record's reason word.

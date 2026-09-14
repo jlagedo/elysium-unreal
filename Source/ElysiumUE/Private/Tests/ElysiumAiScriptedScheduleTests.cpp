@@ -796,7 +796,9 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		}
 		F.Guard->Relationships.SetEntity(F.Victim->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->Senses.Memory.Enemy = F.Victim->Handle;
-		F.Guard->UpdateIdealState(0.5);
+		// `0x102ad660` needs `HasInterruptCondition`; a patrol executor has no schedule mask.
+		// These cases are about the body arbiter, so the state write is `SetState(2)`.
+		F.Guard->SetState(2);
 		F.Step(0.6);
 		TestTrue(TEXT("the combat claim took the route"),
 			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule
@@ -820,9 +822,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedSchedulePreemptionTest,
 	"Elysium.Substrate.AiScriptedSchedule.CombatPreemption", GElysiumTestFlags)
 bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 {
-	// The recovered emission this case runs into on the way back out of combat: `SelectIdealState`
-	// case 2 emits `Combat state with no enemy` and falls back to alert. It is latched once per NPC.
-	AddExpectedError(TEXT("Combat state with no enemy"), EAutomationExpectedErrorFlags::Contains, 1);
+	// The recovered emission this case runs into on the way back out of combat: `0x1026f660` case 2
+	// emits `***Combat state with no enemy!` (`105cc04c`) and falls back to alert. Retail's
+	// `DevWarning` is NOT latched and story 29e's port stopped latching it, so the count is the
+	// number of no-enemy combat passes rather than one.
+	AddExpectedError(TEXT("Combat state with no enemy"), EAutomationExpectedErrorFlags::Contains, 0);
 
 	FAiScheduleFixture::FSetup Setup;
 	Setup.bPatrol = true;
@@ -834,10 +838,15 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	TestTrue(TEXT("the guard starts on its route"),
 		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 
-	// Commit an enemy through the real ideal-state pass, exactly as `FCombatFixture` does.
+	// Commit an enemy the way `MaintainSchedule 0x102817c0` does — `SetState(m_IdealNPCState)`
+	// (`0x1026e340`) — exactly as `FCombatFixture` does. A patrol executor installs no schedule
+	// mask, so `0x102ad660`'s idle→combat arm (`HasInterruptCondition 0x10269d30`) cannot answer.
 	F.Guard->Relationships.SetEntity(F.Victim->Handle, EElysiumRelationship::Hate, 5);
 	F.Guard->Senses.Memory.Enemy = F.Victim->Handle;
-	F.Guard->UpdateIdealState(0.5);
+	F.Guard->SetState(2);
+	// `1026e35d`/`1026e368`: `SetState` writes BOTH state words, so the ideal matches the current.
+	TestEqual(TEXT("1026e340 writes m_NPCState"), F.Guard->NpcStateRetail(), 2);
+	TestEqual(TEXT("...and m_IdealNPCState with the same value"), F.Guard->IdealStateRetail(), 2);
 	TestTrue(TEXT("the acquisition promotes the mind to combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 

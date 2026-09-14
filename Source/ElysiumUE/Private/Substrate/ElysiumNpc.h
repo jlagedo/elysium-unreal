@@ -1250,6 +1250,8 @@ public:
 	#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10.inl"
 	#include "Substrate/ElysiumNpcKernelSpeciesMisc10.inl"
 	#include "Substrate/ElysiumNpcKernelSquad.inl"
+	#include "Substrate/ElysiumNpcKernelState19.inl"
+	#include "Substrate/ElysiumNpcKernelTranslate19.inl"
 	#include "Substrate/ElysiumNpcKernelTroikaHelpers.inl"
 
 private:

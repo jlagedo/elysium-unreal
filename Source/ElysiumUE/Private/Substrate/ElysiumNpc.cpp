@@ -1585,11 +1585,9 @@ bool FElysiumNpc::ClassHolstersOnState() const
 	// because the rule belongs to the classname and a map that spawns one must not have to wait for
 	// this table to be remembered.
 	//
-	// **Four more overrides are UNREAD and are deliberately absent**: `CNPC_VCop` (0x10371c20),
-	// `CNPC_VBach` (0x103639b0), `CNPC_VTzimisce` (0x103ba2c0) and `CNPC_VSabbatLeader`
-	// (0x103a6f70) each fill slot 463 with a body this recovery did not decompile. Two of them —
-	// npc_VCop and npc_VSabbatLeader — ARE registered classes here, so they take the Troika base's
-	// answer (no weapon write) until their bodies are read. That is a stated gap, not a decision.
+	// Story 29e, family State19: `CNPC_VCop` (`0x10371c20`) and `CNPC_VBach` (`0x103639b0`) now
+	// fill slot 463. `CNPC_VTzimisce` (`0x103ba2c0`) is the FacialExpression row. SabbatLeader's
+	// `0x103a6f70` is still unread.
 	static const TCHAR* const Holsterers[] = {
 		TEXT("npc_VGuard1"),            // CNPC_VGuard1            0x1037d020
 		TEXT("npc_VHunter"),            // CNPC_VHunter            0x10388880
@@ -1690,50 +1688,21 @@ void FElysiumNpc::UpdateIdealState(double Now)
 		return;
 	}
 
-	// Story 29c-1, family Conditions: the three SPECIES overrides of slot 461 are complete
-	// REPLACEMENTS — `CNPC_VCamera` (`0x10369060`), `CNPC_VMingXiao` (`0x103945a0`) and
-	// `CNPC_VMingXiaoTentacle` (`0x1039e310`) each write `m_IdealNPCState` and return without ever
-	// reaching `CAI_BaseNPCTroika::SelectIdealState`. No registered classname resolves to one of the
-	// three today, so this is the arm nothing takes; it sits ahead of the two-layer rule because that
-	// is where retail's vtable puts it.
-	{
-		EElysiumNpcState SpeciesIdeal = Current;
-		if (SelectIdealStateForSpecies(SpeciesIdeal))
-		{
-			if (SpeciesIdeal != Current)
-			{
-				Mind.RequestState(SpeciesIdeal, TEXT("SelectIdealState (species)"));
-			}
-			return;
-		}
-	}
-
-	ElysiumNpcCond::FIdealStateInput In;
-	In.Current = Current;
-	In.bNoAlertState = bNoAlertState;
-	In.bHasEnemy = Senses.Memory.Enemy.IsSet();
-	bool bCombatWithoutEnemy = false;
-	const EElysiumNpcState Ideal =
-		ElysiumNpcCond::SelectIdealState(In, Cognition.Conditions, bCombatWithoutEnemy);
-
-	if (bCombatWithoutEnemy && !Cognition.bWarnedCombatWithoutEnemy)
-	{
-		// The recovered emission, verbatim, and once: it is a state-machine invariant failing, not
-		// a per-think event.
-		Cognition.bWarnedCombatWithoutEnemy = true;
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s Combat state with no enemy"), *DebugString());
-	}
-	if (Ideal == Current)
+	// Story 29e, family State19: slot 461 is the retail body. `HasInterruptCondition` answers 0
+	// with no program installed, so a committed enemy no longer promotes idle → combat here.
+	SelectIdealState();
+	const int32 IdealRetail = LastSelectIdealStateRetail;
+	if (IdealRetail == NpcStateRetail())
 	{
 		return;
 	}
-	Mind.RequestState(Ideal, TEXT("SelectIdealState"));
+	SetState(IdealRetail);
 	// "entering NPC state 14 opens the criminal window".
 	// The CHOSEN mapping of retail state 14 onto this runtime's Alert, and why Alert rather than
 	// Combat or Idle, is stated in full at `ElysiumNpcWitness::OnEnteredAlertState`. This is its one
 	// call site: the promotion edge, after the transition is committed and not on every pass spent in
 	// the state.
-	if (Ideal == EElysiumNpcState::Alert && Mind.State() == EElysiumNpcState::Alert)
+	if (IdealRetail == 3 && Mind.State() == EElysiumNpcState::Alert)
 	{
 		ElysiumNpcWitness::OnEnteredAlertState(*this, Now);
 	}
@@ -2391,50 +2360,7 @@ void FElysiumNpc::ClearPreservePath()
 	NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
 }
 
-EElysiumScheduleId FElysiumNpc::TranslateSchedule(EElysiumScheduleId Id)
-{
-	// `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), in its order. Every generic leaf in
-	// this runtime is a Troika class; the twelve species overrides of slot 440 (`CNPC_VCop`
-	// `0x10372150`, `CNPC_VDog` `0x10374370`, `CNPC_VWerewolf` `0x103d5e00` with its own `0x43` arm,
-	// …) are story 25b's, so a species NPC translates as Troika here until its story lands.
-	//
-	// 1. The frenzied pre-table (`m_bfNPCFrenziedFlags & 0x100` → `0x102b11c0`): `0xc7 → 0xc9`,
-	//    `0xca/0xcb/0xd1/0xd2 → 0xcc`, `0xef → 0xf0`, `0x87/0x88 → 0x7d/0x7e` by slot 168. Of these
-	//    the port registers `0xc7 MELEE_IDLE` and `0xca MELEE_ADVANCE` as sources and none of the
-	//    targets. SEAM: the answer stays the untranslated id and the miss is tallied.
-	if (NpcFlags.HasFrenzied(0x100)
-		&& (Id == EElysiumScheduleId::MeleeIdle || Id == EElysiumScheduleId::MeleeAdvance))
-	{
-		ElysiumStub::Fired(TEXT("schedule"), TEXT("CAI_BaseNPCTroika::TranslateSchedule frenzied 0x102b11c0"),
-			DebugString(), ElysiumScheduleName(Id), TEXT("0002/25b: 0xc9 / 0xcc are not registered"));
-		return Id;
-	}
-	switch (Id)
-	{
-	// 2. `case 1: case 0x6b:` → `0x132 LAUGHING` under `D_MILDLY_CRAZY` (flags2 `0x80000`), else
-	//    `0x6b IDLE_DISPOSITION`. This is the arm the fail route reaches: every program whose fail
-	//    schedule is `Idle_Stand` lands here, never on base `IDLE_STAND`.
-	case EElysiumScheduleId::IdleStand:
-	case EElysiumScheduleId::IdleDisposition:
-		if (NpcFlags.Has(EElysiumNpcFlag2::D_MILDLY_CRAZY))
-		{
-			// SEAM: `0x132 SCHED_TROIKA_LAUGHING` is 21a's program. Until it is registered the
-			// non-crazy answer stands in, and the miss is tallied rather than falling into the miss
-			// arm's `IDLE_STAND`, which is a different wrong program.
-			ElysiumStub::Fired(TEXT("schedule"), TEXT("CAI_BaseNPCTroika::TranslateSchedule 0x132 LAUGHING"),
-				DebugString(), ElysiumScheduleName(Id), TEXT("0002/21a: SCHED_TROIKA_LAUGHING"));
-		}
-		return EElysiumScheduleId::IdleDisposition;
-	// 3. The remaining base→Troika rows (`2 → 0x46`, `3 → 0x47`, `6 → 0x4a`, `0xf → 0xb1`, `0x10 →
-	//    0xb7`, `0x15 → 0xb8`, `0x21/0x22 → 0xed/0xee`, `0x25 → 0xc1`, `0x28 → 0xc2`, `0x2f..0x33 →
-	//    0xf2/0xf4/0xf6/0xf8/0xf9`, `0x77 → 0x78` on a `0x2774` hint, `0x94/0x96 → 0x95/0x97` by slot
-	//    293) name base ids this runtime never routes to; 0003 owns the `0x2f..0x33` row and 21a the
-	//    `0x77` row. Anything else falls to `CAI_BaseNPC::TranslateSchedule` (`0x102cc080`), which
-	//    only splits `0x2e AISCRIPT` (0003) and is identity here.
-	default:
-		return Id;
-	}
-}
+
 
 void FElysiumNpc::RecordScheduleEvent(const FString& Row)
 {

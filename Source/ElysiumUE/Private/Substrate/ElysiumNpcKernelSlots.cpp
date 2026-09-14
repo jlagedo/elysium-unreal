@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 585 generated virtuals: 83 carry the retail default story 29c recovered, 312 are defined by hand
-// in the substrate, and 190 are still stubs — 145 29c, 17 29d, 28 29e.
+// 585 generated virtuals: 83 carry the retail default story 29c recovered, 313 are defined by hand
+// in the substrate, and 189 are still stubs — 145 29c, 17 29d, 27 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -2986,11 +2986,8 @@ int32 FElysiumNpc::NumBehaviors()
 
 // slot 461 0x102ad660 (walked) `NPC_STATE SelectIdealState()`
 //   layer 22, story 29e
-EElysiumNpcState FElysiumNpc::SelectIdealState()
-{
-	FireKernelSlot(TEXT("SelectIdealState"), TEXT("0x102ad660"), TEXT("29e"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::SelectIdealState`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 462 0x101aa6b0 (sdk) `bool ShouldGoToIdleState()`
 //   layer 0, story 29c

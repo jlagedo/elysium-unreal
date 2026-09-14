@@ -1114,13 +1114,21 @@ bool FElysiumScheduleTroikaTranslateTest::RunTest(const FString&)
 		Guard->TranslateSchedule(EElysiumScheduleId::Fail), EElysiumScheduleId::Fail);
 	TestEqual(TEXT("a Troika id with no row is identity"),
 		Guard->TranslateSchedule(EElysiumScheduleId::MeleeIdle), EElysiumScheduleId::MeleeIdle);
-	// The seams: the answer stands in for the unregistered target rather than missing into IDLE_STAND.
+	// `102b1335 ADD EAX,0x132`: with `D_MILDLY_CRAZY` set the answer is the number `0x132`, and
+	// this port's registry holds no program for it. Retail hands the number to slot 446
+	// `SetSchedule` (`0x102cc1f0`), whose miss arm `DevMsg`s "No CASE for Schedule Type %d!" and
+	// installs the literal 1 IDLE_STAND UNTRANSLATED (`102cc227 PUSH 0x1` / `102cc229 CALL
+	// [EAX+0x6f8]`). The earlier IDLE_DISPOSITION answer here was port-invented.
 	Guard->NpcFlags.Set(EElysiumNpcFlag2::D_MILDLY_CRAZY);
-	TestEqual(TEXT("D_MILDLY_CRAZY's 0x132 is a seam answering IDLE_DISPOSITION until 21a"),
-		Guard->TranslateSchedule(EElysiumScheduleId::IdleStand), EElysiumScheduleId::IdleDisposition);
+	TestEqual(TEXT("D_MILDLY_CRAZY's 0x132 is unregistered; the miss arm is IDLE_STAND"),
+		Guard->TranslateSchedule(EElysiumScheduleId::IdleStand), EElysiumScheduleId::IdleStand);
+	TestEqual(TEXT("...and the raw number slot 440 answered is 0x132 (102b1335)"),
+		Guard->LastTranslateScheduleRetail, 0x132);
 	Guard->NpcFlags.SetFrenziedWord(0x100);
-	TestEqual(TEXT("the frenzied pre-table's 0xc9 is a seam answering MELEE_IDLE until 25b"),
-		Guard->TranslateSchedule(EElysiumScheduleId::MeleeIdle), EElysiumScheduleId::MeleeIdle);
+	TestEqual(TEXT("the frenzied pre-table's 0xc9 is unregistered; the miss arm is IDLE_STAND"),
+		Guard->TranslateSchedule(EElysiumScheduleId::MeleeIdle), EElysiumScheduleId::IdleStand);
+	TestEqual(TEXT("...and the raw number is 0xc9 (102b120c MOV EAX,0xc9)"),
+		Guard->LastTranslateScheduleRetail, 0xc9);
 	return true;
 }
 

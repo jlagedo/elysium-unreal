@@ -710,7 +710,14 @@ bool FElysiumNpcWitnessDeadlineSetterTest::RunTest(const FString&)
 		// The recovered idle -> alert promotion: the hear family, with no `no_alert_state` test.
 		F.Guard->Cognition.Conditions.Reset();
 		F.Guard->Cognition.Conditions.Set(ECond::HearCombat);
-		F.Guard->UpdateIdealState(5.0);
+		{
+			FElysiumNpcConditions Mask;
+			Mask.Set(ECond::HearCombat);
+			const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+			F.Guard->Cognition.Conditions.Set(ECond::HearCombat);
+			F.Guard->UpdateIdealState(5.0);
+		}
 		TestTrue(TEXT("entering alert opens the criminal window"),
 			EW::IsChannelOpen(*F.Guard, EChannel::Criminal, 5.0));
 		TestFalse(TEXT("...for two seconds and no longer"),
@@ -810,7 +817,14 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 		F.LookAndGather(0.1);
 		TestTrue(TEXT("the enemy transaction commits the player as the enemy"),
 			F.Guard->Senses.Memory.Enemy == F.Player->Handle);
-		F.Guard->UpdateIdealState(0.1);
+		{
+			FElysiumNpcConditions Mask;
+			Mask.Set(ECond::NewEnemy);
+			const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+			F.Guard->Cognition.Conditions.Set(ECond::NewEnemy);
+			F.Guard->UpdateIdealState(0.1);
+		}
 		// A committed enemy is what promotes the NPC to combat, and the combat branch is what
 		// selects a fighting program rather than the disposition idle.
 		TestNotEqual(TEXT("the promoted NPC no longer selects its disposition idle"),

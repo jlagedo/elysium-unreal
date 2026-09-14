@@ -2177,3 +2177,72 @@ where the port has one method and both dispatch to the same observable behaviour
 stands.**
 
 **Unrecovered:** nothing.
+
+## Story 29e, family State19 — `SetState` `0x1026e340`, `SelectIdealState` `0x1026f660` / `0x102ad660` (2026-09-14)
+
+`CAI_BaseNPC::SetState` (`0x1026e340`) is not a vtable slot. It reads `m_NPCState` (`+0x5cc0`) at
+entry; when the target differs it stamps `m_flLastStateChangeTime` (`+0x5cc8`) from
+`gpGlobals->curtime`; when the target is 1 IDLE and slot 167 `GetEnemy` is live it calls
+`SetEnemy(NULL)` (`0x10279a50`) and `DevMsg(2, "Stripped")`. Both `+0x5cc0` and `+0x5cc4` then take
+the target. Slot 463 is dispatched only when the **re-read** of `+0x5cc0` after the strip differs
+from the target, and the arguments are `(oldAtEntry, new)` — the listing at `1026e37e` re-reads the
+word, the dispatch still uses the value saved at entry.
+
+`CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`) writes `+0x1b38 = 2` and switches on
+`m_NPCState`. Every arm but the four flee arms (`0x21` / `0x1f` in idle and alert) and case `0xe`'s
+three damage arms uses `HasInterruptCondition` (`0x10269d30`), which answers 0 when `+0x5c38` holds
+no schedule. A committed enemy with no program therefore answers **nothing**. The flee arms use
+bare `HasCondition`, skip `m_bNoAlertState`, and omit the `m_NPCState != 8` guard the
+`0x102ad260` / `0x102ad2d0` pair apply. Fallthrough is `CAI_BaseNPC::SelectIdealState`
+(`0x1026f660`), whose case 1 also uses the interrupt form.
+
+`CNPC_VHuman::SelectIdealState` (`0x103851e0`): the hunt arm is `IsCommand() == false &&
+DAT_1092447c[0xb] != 0`, not a `GetBool`. Its no-enemy ladder is also reached **with a live enemy**
+whenever interrupt `LOST_ENEMY 0x47` stands. `CNPC_VSabbatLeader::SelectIdealState` (`0x103a7450`)
+gates on `m_bActivated`; `m_NPCState == 2` is COMBAT. The twelve fifteen-byte slot-461 bodies write
+`SelectIdealStateSelector` (`+0x1b38`) and chain to `0x103851e0` or `0x10387380`.
+
+The base's hear arms read slot 474 `GetBestSound`, which on the Troika line (`0x102b4520`) is
+`return &m_BestSound` and is therefore **never null** — the null arm at `1026f77a` is retail's own
+dead branch for every `npc_V*` class. The type word is `CSound +0x4`, and the base admits only 1, 8
+and 0x10 where `CNPC_VTzimisce` (`0x103bd690`, `103bd8ba`) additionally admits **4**. Case 3's hear
+arm ends in an unconditional `thunk_FUN_101e3d70(&DAT_10739a4c, this)` (`1026f91b`) — the
+discipline manager's break-on-notice sweep, whose only other caller is `SetEnemy` (`0x10279a50`).
+
+**The four species ladders that are not a prologue.** `CNPC_VGuard1` (`0x1037d290`) runs four law
+arms per state (`0x21`/`0x1f` → FLEE, `0x22`/`0x20` → COMBAT), each gated on the closest player
+BEING that channel's offender, each latching `0x1037e2d0` and dispatching slot 596; `INVESTIGATE_LEVEL
+0x1e` promotes to the guard's own state `0xc`, whose ladder ends in an unconditional IDLE that never
+reaches the chain; state `0xb` leaves on **interrupt** `SEE_PLAYER 0x5a` only while `m_fHatesPlayer`
+stands. `CNPC_VCop` (`0x103726c0`) runs the pre-pass `FUN_103723f0` from idle and alert — seven
+tests, every one the BARE form, clearing `m_bCondTookDamage` whenever damage stands regardless of
+the attacker — and writes its answer as the ideal state; its state `0xc` carries the same four law
+conditions with **no** offender compare. `CNPC_VPedestrian` (`0x103a2e30`) answers FLEE from every
+arm it takes: three damage interrupts, a combat-sound ladder against the closest player and then
+against `m_hLastHeardEnt`, and a bullet-impact tail, with `_DAT_10483aac` = **512.0** and
+`_DAT_1049dfe4` = **262144.0** (= 512²) read from the pinned image. `CNPC_VTzimisce` (`0x103bd690`)
+is the base ladder with HUNT `0xb` where the base answers ALERT, `SEE_UNKNOWN` through slot 586
+`GetBestSeeUnknown`, and `ENEMY_DEAD 0x58` joining "no enemy" on the combat fallback.
+
+`CNPC_VDog` (`0x103743c0`) state 1's `SEE_UNKNOWN` and `PLAYER_SNARL_RANGE` arms **tail-jump to
+`CNPC_VAnimal`** (`10374602`, `103746d3`), not to Troika, and the snarl arm additionally snapshots
+`+0x667c` into `+0x6680` and stamps `+0x6678` with `curtime`. Its state 3 carries five guards that
+all land on `FUN_103747c0(1)` (whose whole body is `return 0`, so each means "go to `CNPC_VAnimal`
+now") ahead of three arms that do write: `DOG_COMBAT_LATCH 0x78` → COMBAT and
+`DOG_IDLE_FROM_ALERT 0x7c` / `0x7d` → IDLE.
+
+`CNPC_VCop::OnStateChange` (`0x10371c20`) releases the pursuit through `0x1017f6e0`, which
+DECREMENTS the pursued player's `+0x1d10` and on the zero crossing runs `0x10370630` and
+`BeginHeightenedAlert` — the port's `CopSlot597Prologue` is the matching increment. Both of its
+tails chain `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`) with `(old, new)`, whose weapon
+half is unconditional: new 1 hides the active weapon (`+0x108`), new 2 / 3 / `0xb` unhides it
+(`+0x10c`).
+
+**Unrecovered:** slot 495 (`vtable +0x7bc`) on the idle combat roll; `0x1027d0a0`'s cine-release
+body; `0x101e3d70`'s discipline sweep (no port accessor for "which disciplines break on notice");
+`CNPC_VDog`'s `+0x667c` source word (the class carries no datamap and nothing reads the offset);
+the crime level of the player's active weapon at `weaponData +0x3c4` (`0x102517e0`), which
+`CNPC_VPedestrian`'s two gunshot arms report. **Not built:** retail states 8, 0xb, 0xe have no
+`EElysiumNpcState` member; the raw id is stored beside the typed word. The `m_SelectIdealStateTrace`
+`__FILE__`/`__LINE__` pair (`+0x1b3c`/`+0x1b40`) is ABSENT in the shape map; only the selector tag
+`+0x1b38` is stood.

@@ -279,10 +279,12 @@ bool FElysiumNpcKernelCondStateChangeSpeciesTest::RunTest(const FString&)
 		{ TEXT("CNPC_VCamera"),            TEXT("0x10368ea0"), ESpecies::Suppressed },
 		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10368ea0"), ESpecies::Suppressed },
 		{ TEXT("CAI_BaseHumanoid"),        TEXT("0x10260630"), ESpecies::HumanoidPreStep },
+		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0"), ESpecies::BachSnapBack },
+		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20"), ESpecies::Cop },
 	};
 	int32 Count = 0;
 	FElysiumNpc::StateChangeSpeciesRows(Count);
-	TestEqual(TEXT("the table is thirteen rows"), Count, static_cast<int32>(UE_ARRAY_COUNT(Rows)));
+	TestEqual(TEXT("the table is fifteen rows"), Count, static_cast<int32>(UE_ARRAY_COUNT(Rows)));
 	for (const FExpect& E : Rows)
 	{
 		const FElysiumNpc::FStateChangeSpecies* Row = FElysiumNpc::StateChangeSpeciesOf(E.Cls);

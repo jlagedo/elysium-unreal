@@ -202,12 +202,27 @@ enum class EElysiumNpcCond : uint8
 	// `CCineAISchedule::RemoveIgnoredConditions` (`0x101a89a0`, slot 459) clears it on its scene
 	// partner, and it is the LAST of that body's fourteen. No producer in this runtime.
 	BeingAttacked           = 0x0a,
+	// `COND_DETECTED_ATTACK` 0x0b. Troika `SelectIdealState` (`0x102ad660`) case 1/3/0xe and
+	// `CNPC_VSabbatLeader` do not use it; the idle/alert ladders and case 0xe's second arm do.
+	DetectedAttack          = 0x0b,
 	ExtendedBlockedByFriend = 0x2e,
 	EnemyTooFar             = 0x55,
 	NotFacingAttack         = 0x61,
 	WeaponHasLos            = 0x62,
 	WeaponPlayerInSpread    = 0x64,
 	WeaponPlayerNearTarget  = 0x65,
+
+	// Story 29e, family State19: `CNPC_VDog`'s local conditions, all above the base registrar's
+	// 0x76, plus `PLAYER_SNARL_RANGE` 0x2b. No producer in this runtime; tests raise them by name.
+	PlayerSnarlRange        = 0x2b,
+	DogCombatLatch          = 0x78,
+	DogAlertSound           = 0x79,
+	DogBark                 = 0x7b,
+	DogIdleFromAlert        = 0x7c,
+	DogIdleFromAlert2       = 0x7d,
+	DogCombatLatch2         = 0x7e,
+	// `CNPC_VWerewolf::SelectIdealState` (`0x103d0820`) reads this as its dead-arm gate.
+	WerewolfDead            = 0x7a,
 };
 
 // `investigate_mode` / `investigate_mode_combat`, the two authored keyfields the interest predicate
@@ -350,7 +365,10 @@ struct FElysiumNpcCognition
 	double GatheredAt = -1.0;
 
 	// One report each, per NPC.
-	bool bWarnedCombatWithoutEnemy = false;
+	// Story 29e, family State19: there is no `bWarnedCombatWithoutEnemy` latch. Retail's
+	// `DevWarning(2, "***Combat state with no enemy!")` (`105cc04c`) is emitted unlatched by all
+	// five bodies that carry it — `0x1026f660`, `0x1035fe80`, `0x103851e0`, `0x103b4ff0`,
+	// `0x103bd690` — and `CNPC_VAnimal`'s fires even on the passes where its arm did not take.
 	bool bReportedAlertRefusal = false;
 	// The retail-shaped starvation warning is latched per NPC *per schedule*: a different schedule
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
@@ -688,34 +706,10 @@ namespace ElysiumNpcCond
 	}
 
 	// --- Ideal state --------------------------------------------------------------------------------
-	// The decision inputs, spelled out so the rule is drivable with no NPC at all.
-	struct FIdealStateInput
-	{
-		EElysiumNpcState Current = EElysiumNpcState::Idle;
-		bool bNoAlertState = false;
-		bool bHasEnemy = false;
-	};
-
-	/**
-	 * `CAI_BaseNPC::SelectIdealState` (`0x1026f660`) — the BASE layer.
-	 *
-	 * Its `case 1` promotes idle -> alert on `COND_LIGHT_DAMAGE`, `COND_HEAVY_DAMAGE` and the whole
-	 * hear family **with no `m_bNoAlertState` test**, and its `case 2` emits `Combat state with no
-	 * enemy` and falls back to state 3. `bOutCombatWithoutEnemy` reports that emission to the caller
-	 * so the warning is logged where an entity name is in hand.
-	 */
-	EElysiumNpcState SelectIdealStateBase(const FIdealStateInput& In,
-		const FElysiumNpcConditions& Cond, bool& bOutCombatWithoutEnemy);
-
-	/**
-	 * `CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`) — the TROIKA layer, and the whole point
-	 * of keeping two.
-	 *
-	 * `no_alert_state` skips THIS layer's damage and sense promotions, and the body then ends in an
-	 * unconditional `return CAI_BaseNPC::SelectIdealState(this)`. The keyvalue is therefore not a
-	 * suppression: the base tail promotes anyway. Collapsing the two layers into one gated test is
-	 * exactly the bug the recovered shape exists to prevent.
-	 */
-	EElysiumNpcState SelectIdealState(const FIdealStateInput& In, const FElysiumNpcConditions& Cond,
-		bool& bOutCombatWithoutEnemy);
+	// Story 29e, family State19: the two-layer port-only summary that used to live here
+	// (`FIdealStateInput`, `SelectIdealStateBase`, `SelectIdealState`) is GONE. Slot 461's retail
+	// bodies are `FElysiumNpc::BaseSelectIdealState` (`0x1026f660`) and
+	// `FElysiumNpc::TroikaSelectIdealState` (`0x102ad660`) in
+	// `Substrate/ElysiumNpcKernelState19.cpp`, with the species line beside them; a retail body
+	// never sits next to a port-only equivalent of itself.
 }

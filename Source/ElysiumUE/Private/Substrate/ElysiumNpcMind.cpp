@@ -26,8 +26,8 @@ bool FElysiumNpcMind::Admit()
 		return false;
 	}
 	AdmissionPhase = EAdmission::Admitted;
-	CurrentState = EElysiumNpcState::Idle;
-	DesiredState = EElysiumNpcState::Idle;
+	SetCurrentStateTyped(EElysiumNpcState::Idle);
+	SetDesiredStateTyped(EElysiumNpcState::Idle);
 	Record(TEXT("admission: armed -> admitted (Idle, no executor)"));
 	return true;
 }
@@ -52,6 +52,86 @@ bool FElysiumNpcMind::IsResumableOwner(EElysiumBodyOwner Owner)
 		|| Owner == EElysiumBodyOwner::Ambient;
 }
 
+namespace
+{
+	int32 State19MindMapTyped(EElysiumNpcState State)
+	{
+		switch (State)
+		{
+		case EElysiumNpcState::Idle:     return 1;
+		case EElysiumNpcState::Combat:   return 2;
+		case EElysiumNpcState::Alert:    return 3;
+		case EElysiumNpcState::Scripted: return 4;
+		case EElysiumNpcState::Prone:    return 6;
+		case EElysiumNpcState::Dead:     return 7;
+		}
+		return 0;
+	}
+
+	void State19MindApplyTyped(EElysiumNpcState& Out, int32 RetailId)
+	{
+		switch (RetailId)
+		{
+		case 1: Out = EElysiumNpcState::Idle;     return;
+		case 2: Out = EElysiumNpcState::Combat;   return;
+		case 3: Out = EElysiumNpcState::Alert;    return;
+		case 4: Out = EElysiumNpcState::Scripted; return;
+		case 6: Out = EElysiumNpcState::Prone;    return;
+		case 7: Out = EElysiumNpcState::Dead;     return;
+		default:
+			return;
+		}
+	}
+}
+
+void FElysiumNpcMind::SetCurrentStateTyped(EElysiumNpcState NewState)
+{
+	CurrentState = NewState;
+	// Any typed write retires the raw overlay, so `NpcStateRetail()` can never answer a stale id
+	// the typed word has since moved away from.
+	PendingRetailNpcState = 0;
+}
+
+void FElysiumNpcMind::SetDesiredStateTyped(EElysiumNpcState NewState)
+{
+	DesiredState = NewState;
+	PendingRetailIdealState = 0;
+}
+
+void FElysiumNpcMind::WriteNpcStateRetail(int32 RetailId)
+{
+	EElysiumNpcState Typed = CurrentState;
+	State19MindApplyTyped(Typed, RetailId);
+	SetCurrentStateTyped(Typed);
+	PendingRetailNpcState = RetailId;
+}
+
+void FElysiumNpcMind::WriteIdealStateRetail(int32 RetailId)
+{
+	EElysiumNpcState Typed = DesiredState;
+	State19MindApplyTyped(Typed, RetailId);
+	SetDesiredStateTyped(Typed);
+	PendingRetailIdealState = RetailId;
+}
+
+int32 FElysiumNpcMind::NpcStateRetail() const
+{
+	if (PendingRetailNpcState != 0)
+	{
+		return PendingRetailNpcState;
+	}
+	return State19MindMapTyped(CurrentState);
+}
+
+int32 FElysiumNpcMind::IdealStateRetail() const
+{
+	if (PendingRetailIdealState != 0)
+	{
+		return PendingRetailIdealState;
+	}
+	return State19MindMapTyped(DesiredState);
+}
+
 void FElysiumNpcMind::RequestDesiredState(int32 RetailIdealState, int32 RetailSourceLine)
 {
 	// `FUN_102ad260` / `FUN_102ad2d0`, the write half. Retail's body is three stores and a return:
@@ -61,7 +141,7 @@ void FElysiumNpcMind::RequestDesiredState(int32 RetailIdealState, int32 RetailSo
 	// The typed `DesiredState` is deliberately NOT touched: no member of `EElysiumNpcState` is retail
 	// state 8, and mapping it onto Alert or Combat would be a different behaviour wearing this one's
 	// name. The raw id is stored so a reader — and the test — can see the request that was made.
-	PendingRetailIdealState = RetailIdealState;
+	WriteIdealStateRetail(RetailIdealState);
 	Record(FString::Printf(
 		TEXT("ideal state requested: retail %d (AI_BaseNPCTroika.cpp:%d); no port state carries it"),
 		RetailIdealState, RetailSourceLine));
@@ -69,7 +149,7 @@ void FElysiumNpcMind::RequestDesiredState(int32 RetailIdealState, int32 RetailSo
 
 bool FElysiumNpcMind::RequestState(EElysiumNpcState NewState, const TCHAR* Reason)
 {
-	DesiredState = NewState;
+	SetDesiredStateTyped(NewState);
 	if (!IsSupportedState(NewState))
 	{
 		Record(FString::Printf(TEXT("state rejected: %s (%s)"), LexToString(NewState),
@@ -77,7 +157,7 @@ bool FElysiumNpcMind::RequestState(EElysiumNpcState NewState, const TCHAR* Reaso
 		return false;
 	}
 	const EElysiumNpcState Before = CurrentState;
-	CurrentState = NewState;
+	SetCurrentStateTyped(NewState);
 	Record(FString::Printf(TEXT("state: %s -> %s (%s)"), LexToString(Before),
 		LexToString(NewState), Reason ? Reason : TEXT("no reason")));
 	return true;
@@ -151,18 +231,18 @@ void FElysiumNpcMind::RefreshStateFromOwner()
 		|| CurrentOwner == EElysiumBodyOwner::Follower;
 	if (bScripted)
 	{
-		CurrentState = EElysiumNpcState::Scripted;
+		SetCurrentStateTyped(EElysiumNpcState::Scripted);
 	}
 	else if (CurrentState == EElysiumNpcState::Scripted)
 	{
 		// Handing the body back leaves the ordinary states, and idle is where an unowned body
 		// starts; the next decision pass re-derives alert or combat from its conditions.
-		CurrentState = EElysiumNpcState::Idle;
+		SetCurrentStateTyped(EElysiumNpcState::Idle);
 	}
 	// An ordinary owner change is NOT a cognitive transition (K7 separates the two): a patrol token
 	// taken by an alert NPC must not reset it to idle, or the ideal-state pass and the body arbiter
 	// would fight for the state every think.
-	DesiredState = CurrentState;
+	SetDesiredStateTyped(CurrentState);
 }
 
 bool FElysiumNpcMind::Acquire(EElysiumBodyOwner Requested, bool bSuspendCurrent,
@@ -240,8 +320,8 @@ void FElysiumNpcMind::Invalidate(const TCHAR* Reason, bool bDead)
 	{
 		++OwnerGeneration;
 	}
-	CurrentState = bDead ? EElysiumNpcState::Dead : EElysiumNpcState::Idle;
-	DesiredState = CurrentState;
+	SetCurrentStateTyped(bDead ? EElysiumNpcState::Dead : EElysiumNpcState::Idle);
+	SetDesiredStateTyped(CurrentState);
 	Record(FString::Printf(TEXT("invalidate: %s -> None gen=%u state=%s (%s)"),
 		LexToString(Before), OwnerGeneration, LexToString(CurrentState),
 		Reason ? Reason : TEXT("no reason")));
@@ -253,13 +333,13 @@ void FElysiumNpcMind::Restore(EElysiumNpcState SavedState, EElysiumBodyOwner Sav
 	CurrentOwner = IsResumableOwner(SavedOwner) ? SavedOwner : EElysiumBodyOwner::None;
 	ParkedOwner = EElysiumBodyOwner::None;
 	++OwnerGeneration;
-	CurrentState = IsSupportedState(SavedState) && SavedState != EElysiumNpcState::Scripted
-		? SavedState : EElysiumNpcState::Idle;
+	SetCurrentStateTyped(IsSupportedState(SavedState) && SavedState != EElysiumNpcState::Scripted
+		? SavedState : EElysiumNpcState::Idle);
 	if (CurrentState == EElysiumNpcState::Dead)
 	{
 		CurrentOwner = EElysiumBodyOwner::None;
 	}
-	DesiredState = CurrentState;
+	SetDesiredStateTyped(CurrentState);
 	Record(FString::Printf(TEXT("restore: state=%s owner=%s gen=%u"), LexToString(CurrentState),
 		LexToString(CurrentOwner), OwnerGeneration));
 }

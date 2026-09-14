@@ -1413,3 +1413,55 @@ the next call, which is `CAI_Enemies::GetLastKnownPosition(&lkp, enemy)` (`0x102
 
 **Unrecovered:** what stat id `0xb` is, and what the value `5` means. Family Sounds10 records the
 same `CVStatList_t` join as unrecovered for `FireBullets`' ranged skill.
+
+## Story 29e, family Translate19 — slot 440 `0x102cc080` / `0x102b12f0` / `0x102b11c0` (2026-09-14)
+
+`CAI_BaseNPC::TranslateSchedule` (`0x102cc080`) is identity for every id except `0x2e SCHED_AISCRIPT`.
+On `0x2e` it resolves `m_hCine` (`+0x5d74`); a dead cine `DevWarning`s, runs `CineCleanup`
+(`0x1027d170`) and **calls** slot 440 with `1` (a `CALL dword ptr [EAX+0x6e0]`, not a tail jump, so
+a species class re-enters its own body). A live cine switches on `m_fMoveTo` (`cine+0x5f60`): 0 and
+4 → `slot440(0x32)`, 1 → `0x2f`, 2 → `0x30`, 3 → `0x31`, 5 → `0x33`, `> 5` → identity. The fall-out
+path leaves `EAX` as `param_1`.
+
+`CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`) runs the frenzied pre-table (`0x102b11c0`)
+only when `m_bfNPCFrenziedFlags & 0x100`. The `1` / `0x6b` arm is
+`(-(uint)((m_bfAINPCFlags2 & 0x80000) != 0x80000) & 0xffffff39) + 0x132` — `0x132` when
+`D_MILDLY_CRAZY` is set, else `0x6b`. Rows: `2→0x46, 3→0x47, 6→0x4a, 0xf→0xb1, 0x10→0xb7, 0x15→0xb8,
+0x21→0xed, 0x22→0xee, 0x25→0xc1, 0x28→0xc2, 0x2f→0xf2, 0x30→0xf4, 0x31→0xf6, 0x32→0xf8, 0x33→0xf9`;
+`0x77→0x78` on a live hint whose type is `0x2774`; `0x94→0x95` and `0x96→0x97` each dispatch slot
+293 twice.
+
+`0x102b11c0`: `0xc7→0xc9`; `0xca/0xcb/0xd1/0xd2→0xcc`; `0xef→0xf0`; `0x87`/`0x88` test the
+**complement** of `MADE_HUNT_PATH` (`+0x14b8` bit `0x1000`): bit set → `0x7e`; bit clear with an
+enemy → `0x7c`; bit clear with none → `0x7d`. Default `0`.
+
+The twenty species overrides are 20 distinct bodies (Chang brothers share `0x1036b460`, Rat/Scurrying
+share `0x103ac490`). Dispatch keys on the address. Of every target, the one registered program here
+is Troika `0xf → 0xb1 SCHED_TROIKA_CHASE_ENEMY`; everything else goes through story 25's miss arm —
+retail hands the NUMBER to slot 446 `SetSchedule` (`0x102cc1f0`), whose miss `DevMsg`s "No CASE for
+Schedule Type %d!" and installs the literal `1 IDLE_STAND` **untranslated** (`102cc227` / `102cc229`).
+
+Four species bodies are more than a table. `CNPC_VAsianVampire` (`0x10362910`) **calls**
+`GetJumpSchedule` (`0x10362430`) for `0xe5..0xe6` at `10362972` and returns its answer — Troika is
+never reached. `CNPC_VBach` (`0x10363a30`) is not a table at all: it splits on `param_1 < 0xee`, and
+its katana arm (`10363a93`) is four gates in order — a live active weapon, its classname equal to
+`"item_w_katana"`, `SelectWeightedSequence(0x10, -1) != 0` (so **sequence index zero refuses**,
+unlike every other sequence probe), and `STOP_BACKUP 0x2c` CLEAR — before answering `0x160`.
+`CNPC_VHengeyokai` (`0x1037ffa0`) has a side effect: translating any id but `0x16e` with
+`m_nSkin +0x670 == 1` runs `0x10383130`, so *merely translating a schedule thaws a hengeyokai*.
+`CNPC_VZombie` (`0x103df580`) prints `npc_zombie: encountered schedule:[investigate unknown]
+...ignoring!` (`0x10665640`) on its `0x5b` row while translating it anyway. `CNPC_VGuard1`'s crazy
+offset is `0x28` where `CNPC_VCop`'s and `CNPC_VHunter`'s is `0x29`; the `0xc7 → 0xc8` rows on
+`CNPC_VMingXiaoTentacle`, `CNPC_VTzimisceHeadClaw` and `CNPC_VTzimisceRunner` SHADOW the frenzied
+table's `0xc7 → 0xc9`, because a species body is the entry point and answers before Troika is ever
+reached; `CNPC_VSheriffMan` (`0x103b0320`) has no translation row at all.
+
+**Unrecovered:** `CCineNPC::m_fMoveTo` (`cine +0x5f60`), the selector `0x102cc080`'s live arm
+switches on — this runtime's scripted-sequence record has no such column, so the selector answers 0,
+which is retail's own "no move" arm (shared with 4). The cine itself is NOT a seam: `m_hCine`
+(`+0x5d74`) is bound to `FElysiumEntity::ScriptOwner` and read through `ScriptOwnerIsLive()`.
+`CNPC_VTzimisce` (`0x103bd390`) and `CNPC_VWerewolf` (`0x103d5e00`) stamp their own
+`__FILE__`/`__LINE__` into `+0x1b30`/`+0x1b34` before answering and the default arm writes neither —
+the pair records "this class decided". The shape map calls it ABSENT; the mind's transition trace
+carries the same account.
+

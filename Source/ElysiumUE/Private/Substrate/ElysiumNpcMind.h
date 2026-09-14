@@ -79,9 +79,25 @@ public:
 	// system reads.
 	int32 DesiredRetailState() const { return PendingRetailIdealState; }
 
+	// Story 29e, family State19: `SetState` (`0x1026e340`) writes BOTH `+0x5cc0` and `+0x5cc4` as
+	// raw `NPC_STATE` ids, including values this runtime's typed enum has no member for (8 FLEE,
+	// 0xb HUNT, 0xe). These are that write and the matching reads. Mapped ids (1/2/3/4/6/7) also
+	// update `CurrentState` / `DesiredState`; unmapped ids leave the typed words and keep the raw.
+	void WriteNpcStateRetail(int32 RetailId);
+	void WriteIdealStateRetail(int32 RetailId);
+	int32 NpcStateRetail() const;
+	int32 IdealStateRetail() const;
+	void StampLastStateChangeTime(double Now) { LastStateChangeTime = Now; }
+	double GetLastStateChangeTime() const { return LastStateChangeTime; }
+
 private:
 	bool IsAcquisitionAllowed(EElysiumBodyOwner Requested) const;
 	void Record(const FString& Row);
+	// `m_NPCState` and `m_IdealNPCState` have ONE source of truth each. The typed word is it; the
+	// raw overlay below exists only for the retail ids `EElysiumNpcState` cannot spell (8 FLEE,
+	// 0xb HUNT, 0xe), and any typed write retires the overlay so the two can never disagree.
+	void SetCurrentStateTyped(EElysiumNpcState NewState);
+	void SetDesiredStateTyped(EElysiumNpcState NewState);
 	void RefreshStateFromOwner();
 
 	EAdmission AdmissionPhase = EAdmission::Spawned;
@@ -107,6 +123,10 @@ private:
 	// goes until the vocabulary grows, and `RequestDesiredState` is its only writer. Session state:
 	// the two flee arms rewrite it every pass they fire, and no save carries an ideal state.
 	int32 PendingRetailIdealState = 0;
+	// The SAME retail word as `CurrentState` above (`+0x5cc0 m_NPCState`), held a second time as
+	// the raw retail id — NOT a new offset. 0 means "never written via SetState"; readers then
+	// map `CurrentState`.
+	int32 PendingRetailNpcState = 0;
 	bool bForceStateChange = false;  // +0x1b28 m_bForceStateChange (datamap)
 	// +0x5cc8 m_flLastStateChangeTime (datamap) — an absolute curtime stamp, carried as double
 	double LastStateChangeTime = 0.0;

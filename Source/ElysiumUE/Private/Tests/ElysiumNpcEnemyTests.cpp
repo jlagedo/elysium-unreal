@@ -23,10 +23,12 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
+#include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -846,94 +848,203 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 }
 
 
-// `SelectIdealState`, both layers. The `no_alert_state` case is the load-bearing one:
-// the keyvalue skips the Troika layer's promotions and the base tail promotes anyway.
+// `SelectIdealState`, both layers. Corrected to retail: `CAI_BaseNPCTroika::SelectIdealState`
+// (`0x102ad660`) gates every arm but four on `HasInterruptCondition` (`0x10269d30`), whose FIRST
+// statement is `if (*(int *)(this + 0x5c38) == 0) return 0;` — so with no program installed a
+// committed enemy does NOT take combat from idle and idle damage does not promote. The exceptions
+// are the four flee arms (`0x21` at `0x452b`/`0x456b`, `0x1f` at `0x4532`/`0x4573`) and case
+// `0xe`'s damage arms (`0x45f0`), which call the bare `HasCondition` (`0x10269aa0`) instead.
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyIdealStateTest,
 	"Elysium.Substrate.NpcEnemy.IdealState", GElysiumTestFlags)
 bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 {
-	using namespace ElysiumNpcCond;
-
-	auto Ideal = [](EElysiumNpcState Current, bool bNoAlert, bool bEnemy,
-		const FElysiumNpcConditions& Cond, bool& bWarned)
+	FElysiumNpcWorldBuilder Builder(TEXT("enemy_ideal_state"), 0x49444c45);
+	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f));
+	FElysiumNpcWorldFixture World(MoveTemp(Builder));
+	FElysiumNpc* Guard = World.Npc(TEXT("guard"));
+	FElysiumNpc* Other = World.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the guard leaf constructs"), Guard)
+		|| !TestNotNull(TEXT("the other leaf constructs"), Other))
 	{
-		FIdealStateInput In;
-		In.Current = Current;
-		In.bNoAlertState = bNoAlert;
-		In.bHasEnemy = bEnemy;
-		return SelectIdealState(In, Cond, bWarned);
-	};
-	auto CheckState = [this](const TCHAR* What, EElysiumNpcState Actual, EElysiumNpcState Expected)
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard, Other });
+	Guard->SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
+
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+	ElysiumNpcEnemy::SetEnemy(*Guard, Other->Handle);
+	TestEqual(TEXT("102ad660: a committed enemy does NOT take combat from idle with no schedule"),
+		Guard->SelectIdealStateRetail(), 1);
+
+	Guard->Cognition.Conditions.Reset();
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
+	TestEqual(TEXT("102ad660: idle LIGHT_DAMAGE does not promote with no schedule"),
+		Guard->SelectIdealStateRetail(), 1);
+
+	// `102ad660` case 1 `0x452b` / `0x4532`: the two idle flee arms are the BARE `HasCondition`,
+	// they skip the `m_bNoAlertState` gate, and each ORs `0x100 INITIAL_FLEE` into
+	// `m_bfAINPCFlags` before answering FLEE (8) — with no program installed at all.
+	Guard->Cognition.Conditions.Reset();
+	Guard->NpcFlags.Clear(EElysiumNpcFlag::INITIAL_FLEE);
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::SupernaturalFleeLevel);
+	TestEqual(TEXT("102ad660 0x452b: idle SUPERNATURAL_FLEE takes FLEE with no schedule"),
+		Guard->SelectIdealStateRetail(), 8);
+	TestTrue(TEXT("...and ORs 0x100 INITIAL_FLEE"),
+		Guard->NpcFlags.Has(EElysiumNpcFlag::INITIAL_FLEE));
+
+	Guard->Cognition.Conditions.Reset();
+	Guard->NpcFlags.Clear(EElysiumNpcFlag::INITIAL_FLEE);
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::CriminalFleeLevel);
+	TestEqual(TEXT("102ad660 0x4532: idle CRIMINAL_FLEE takes FLEE with no schedule"),
+		Guard->SelectIdealStateRetail(), 8);
+	TestTrue(TEXT("...and ORs 0x100 INITIAL_FLEE"),
+		Guard->NpcFlags.Has(EElysiumNpcFlag::INITIAL_FLEE));
+
+	// The same two arms in case 3 (`0x456b` / `0x4573`), which is otherwise untested.
+	Guard->WriteNpcStateRetail(3);
+	Guard->Cognition.Conditions.Reset();
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::SupernaturalFleeLevel);
+	TestEqual(TEXT("102ad660 0x456b: alert SUPERNATURAL_FLEE takes FLEE with no schedule"),
+		Guard->SelectIdealStateRetail(), 8);
+	Guard->Cognition.Conditions.Reset();
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::CriminalFleeLevel);
+	TestEqual(TEXT("102ad660 0x4573: alert CRIMINAL_FLEE takes FLEE with no schedule"),
+		Guard->SelectIdealStateRetail(), 8);
+
+	// `102ad660` case 3 `0x4562`: alert → combat is the INTERRUPT form, so it too needs the mask.
+	Guard->Cognition.Conditions.Reset();
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+	Guard->WriteIdealStateRetail(3);
+	TestEqual(TEXT("102ad660 0x4562: alert NEW_ENEMY does not take combat with no schedule"),
+		Guard->SelectIdealStateRetail(), 3);
 	{
-		TestTrue(FString::Printf(TEXT("%s (got %s, expected %s)"), What, LexToString(Actual),
-			LexToString(Expected)), Actual == Expected);
-	};
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::NewEnemy);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+		TestEqual(TEXT("...and does with one"), Guard->SelectIdealStateRetail(), 2);
+	}
+	Guard->Schedule.Clear();
 
-	bool bWarned = false;
-	const FElysiumNpcConditions Quiet;
-	const FElysiumNpcConditions Hurt = FElysiumNpcConditions::Of({ EElysiumNpcCond::LightDamage });
-	const FElysiumNpcConditions Heavy = FElysiumNpcConditions::Of({ EElysiumNpcCond::HeavyDamage });
-	const FElysiumNpcConditions Heard = FElysiumNpcConditions::Of({ EElysiumNpcCond::HearCombat });
+	// `102ad660` case `0xe`: the three damage arms are the bare form, and the attacker must BE the
+	// committed enemy (`0x45f0`).
+	Guard->WriteNpcStateRetail(0xe);
+	Guard->WriteIdealStateRetail(0xe);
+	Guard->Cognition.Conditions.Reset();
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::HeavyDamage);
+	ElysiumNpcEnemy::SetEnemy(*Guard, Other->Handle);
+	Guard->Senses.Memory.LastDamageAttacker = Other->Handle;
+	TestEqual(TEXT("102ad660 0x45f0: case 0xe HEAVY_DAMAGE from the enemy takes combat, bare"),
+		Guard->SelectIdealStateRetail(), 2);
 
-	// --- The ordinary promotions ------------------------------------------------------------------
-	CheckState(TEXT("a quiet idle NPC stays idle"),
-		Ideal(EElysiumNpcState::Idle, false, false, Quiet, bWarned), EElysiumNpcState::Idle);
-	CheckState(TEXT("light damage promotes idle -> alert"),
-		Ideal(EElysiumNpcState::Idle, false, false, Hurt, bWarned), EElysiumNpcState::Alert);
-	CheckState(TEXT("heavy damage promotes idle -> alert"),
-		Ideal(EElysiumNpcState::Idle, false, false, Heavy, bWarned), EElysiumNpcState::Alert);
-	CheckState(TEXT("a heard combat sound promotes idle -> alert"),
-		Ideal(EElysiumNpcState::Idle, false, false, Heard, bWarned), EElysiumNpcState::Alert);
-
-	// --- `no_alert_state` is NOT a suppression ----------------------------------------------------
-	// The Troika layer skips ITS damage and sense promotions under the keyvalue, and then falls
-	// into an unconditional `return CAI_BaseNPC::SelectIdealState(this)` whose case 1 carries no
-	// such test. Collapsing the two layers is exactly the bug this assertion exists to catch.
-	CheckState(TEXT("no_alert_state still promotes on damage — the base tail has no such test"),
-		Ideal(EElysiumNpcState::Idle, true, false, Hurt, bWarned), EElysiumNpcState::Alert);
-	CheckState(TEXT("...and on the hear family"),
-		Ideal(EElysiumNpcState::Idle, true, false, Heard, bWarned), EElysiumNpcState::Alert);
-	CheckState(TEXT("...and a quiet NPC is still idle either way"),
-		Ideal(EElysiumNpcState::Idle, true, false, Quiet, bWarned), EElysiumNpcState::Idle);
-
-	// The base layer alone, asserted directly, so the two layers are known to be two.
+	// `1026f660` case 1 `0x137c`: HEAVY_DAMAGE promotes idle → alert in the BASE, and
+	// `no_alert_state` does not gate it — the Troika layer skips its own `0x4522` arm and the
+	// unconditional base tail promotes anyway. This is the load-bearing two-layer assertion.
+	Guard->WriteNpcStateRetail(1);
+	Guard->WriteIdealStateRetail(1);
 	{
-		FIdealStateInput In;
-		In.Current = EElysiumNpcState::Idle;
-		In.bNoAlertState = true;
-		bool bBaseWarned = false;
-		CheckState(TEXT("the base layer promotes with no_alert_state set"),
-			SelectIdealStateBase(In, Hurt, bBaseWarned), EElysiumNpcState::Alert);
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::HeavyDamage);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		Guard->Cognition.Conditions.Reset();
+		Guard->Cognition.Conditions.Set(EElysiumNpcCond::HeavyDamage);
+		Guard->bNoAlertState = true;
+		TestEqual(TEXT("1026f660 0x137c: no_alert_state still promotes on HEAVY_DAMAGE"),
+			Guard->SelectIdealStateRetail(), 3);
+	}
+	Guard->Schedule.Clear();
+
+	Guard->WriteNpcStateRetail(1);
+	Guard->WriteIdealStateRetail(1);
+	{
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::LightDamage);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		Guard->Cognition.Conditions.Reset();
+		Guard->Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
+		Guard->bNoAlertState = true;
+		TestEqual(TEXT("1026f660 0x1373: and on LIGHT_DAMAGE — the base tail has no such test"),
+			Guard->SelectIdealStateRetail(), 3);
 	}
 
-	// --- An enemy takes combat, from idle and from alert -------------------------------------------
-	CheckState(TEXT("a committed enemy takes combat from idle"),
-		Ideal(EElysiumNpcState::Idle, false, true, Quiet, bWarned), EElysiumNpcState::Combat);
-	CheckState(TEXT("...and from alert"),
-		Ideal(EElysiumNpcState::Alert, false, true, Quiet, bWarned), EElysiumNpcState::Combat);
-	CheckState(TEXT("an alert NPC with no enemy stays alert"),
-		Ideal(EElysiumNpcState::Alert, false, false, Quiet, bWarned), EElysiumNpcState::Alert);
-
-	// --- Combat with no enemy: the recovered warning and the alert fallback ------------------------
-	bWarned = false;
-	CheckState(TEXT("combat with no enemy falls back to alert"),
-		Ideal(EElysiumNpcState::Combat, false, false, Quiet, bWarned), EElysiumNpcState::Alert);
-	TestTrue(TEXT("...and reports the recovered emission to its caller"), bWarned);
-
-	bWarned = false;
-	CheckState(TEXT("combat with an enemy stays combat"),
-		Ideal(EElysiumNpcState::Combat, false, true, Quiet, bWarned), EElysiumNpcState::Combat);
-	TestFalse(TEXT("...silently"), bWarned);
-
-	// --- The states this pass does not own ---------------------------------------------------------
-	for (const EElysiumNpcState Owned : { EElysiumNpcState::Scripted, EElysiumNpcState::Prone,
-		EElysiumNpcState::Dead })
+	// `1026f660` case 1 `0x1397`: the hear family, again with `no_alert_state` set, and the base's
+	// own extra gate — slot 474's type word must be 1, 8 or 0x10.
+	Guard->WriteNpcStateRetail(1);
+	Guard->WriteIdealStateRetail(1);
 	{
-		CheckState(TEXT("a state owned by another transaction is left alone"),
-			Ideal(Owned, false, true, Hurt, bWarned), Owned);
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::HearCombat);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		Guard->Cognition.Conditions.Reset();
+		Guard->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
+		Guard->bNoAlertState = true;
+		Guard->Senses.Memory.BestSound.TypeMask = ElysiumGameSounds::Combat;
+		TestEqual(TEXT("1026f660 0x1397: no_alert_state still promotes on the hear family"),
+			Guard->SelectIdealStateRetail(), 3);
+		Guard->WriteIdealStateRetail(1);
+		Guard->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
+		Guard->Senses.Memory.BestSound.TypeMask = ElysiumGameSounds::Carcass;
+		TestEqual(TEXT("...but a sound type outside {1, 8, 0x10} refuses the arm"),
+			Guard->SelectIdealStateRetail(), 1);
 	}
+	Guard->Schedule.Clear();
+	Guard->bNoAlertState = false;
+	Guard->Senses.Memory.BestSound.TypeMask = 0;
+
+	// `1026f660` case 7 `0x13dd`: the dead state WRITES 7 rather than being left alone.
+	Guard->WriteNpcStateRetail(7);
+	Guard->WriteIdealStateRetail(1);
+	Guard->Cognition.Conditions.Reset();
+	TestEqual(TEXT("1026f660 0x13dd: case 7 writes the dead state"),
+		Guard->SelectIdealStateRetail(), 7);
+
+	// `1026f660` case 4: a scripted NPC with none of `0x5c`/`0x4c`/`0x4d` falls to the default and
+	// answers `m_IdealNPCState` untouched.
+	Guard->WriteNpcStateRetail(4);
+	Guard->WriteIdealStateRetail(4);
+	TestEqual(TEXT("1026f660 case 4 quiet answers m_IdealNPCState unchanged"),
+		Guard->SelectIdealStateRetail(), 4);
+	{
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::TaskFailed);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		Guard->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
+		const int32 ExitsBefore = Guard->SelectIdealStateScriptExitCalls;
+		TestEqual(TEXT("...and TASK_FAILED still answers it unchanged"),
+			Guard->SelectIdealStateRetail(), 4);
+		// TWICE, and that is retail: `102ad660` case 4 runs `0x1027d0a0` and then `break`s into
+		// the unconditional `return CAI_BaseNPC::SelectIdealState(this)`, whose own case 4
+		// (`0x5c`/`0x4c`/`0x4d`) runs it again. Both layers see the same standing condition.
+		TestEqual(TEXT("...having run the script exit (0x1027d0a0) once per layer"),
+			Guard->SelectIdealStateScriptExitCalls, ExitsBefore + 2);
+	}
+	Guard->Schedule.Clear();
+
+	// `1026f660` case 2 `0x13cc`: combat with no enemy writes 3 and emits. The ideal is seeded to 2
+	// first so the answer can only come from that arm.
+	Guard->Cognition.Conditions.Reset();
+	Guard->WriteNpcStateRetail(2);
+	Guard->WriteIdealStateRetail(2);
+	ElysiumNpcEnemy::SetEnemy(*Guard, FElysiumEntityHandle::Invalid());
+	AddExpectedError(TEXT("Combat state with no enemy"), EAutomationExpectedErrorFlags::Contains, 0);
+	TestEqual(TEXT("1026f660 0x13cc combat with no enemy falls back to alert"),
+		Guard->SelectIdealStateRetail(), 3);
+
+	// The converse: `goto default; return m_IdealNPCState` — the arm does NOT write, so a seeded
+	// ideal of 3 survives a live enemy.
+	Guard->WriteNpcStateRetail(2);
+	Guard->WriteIdealStateRetail(3);
+	ElysiumNpcEnemy::SetEnemy(*Guard, Other->Handle);
+	TestEqual(TEXT("1026f660 combat with an enemy answers m_IdealNPCState unchanged"),
+		Guard->SelectIdealStateRetail(), 3);
 	return true;
 }
 
@@ -977,7 +1088,14 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(*F.Guard, 3.91);
 	TestTrue(TEXT("the heard stimulus raises HEAR_COMBAT"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::HearCombat));
-	F.Guard->UpdateIdealState(3.5);
+	{
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::HearCombat);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
+		F.Guard->UpdateIdealState(3.5);
+	}
 	TestTrue(TEXT("the NPC promotes to alert"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 
@@ -988,7 +1106,14 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	// A committed enemy takes it to combat, and combat selects a real fight program.
 	F.Hate(F.ThugA, 5);
 	F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
-	F.Guard->UpdateIdealState(4.0);
+	{
+		FElysiumNpcConditions Mask;
+		Mask.Set(EElysiumNpcCond::NewEnemy);
+		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+		F.Guard->UpdateIdealState(4.0);
+	}
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 

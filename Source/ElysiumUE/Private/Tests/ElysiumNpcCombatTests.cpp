@@ -288,7 +288,13 @@ namespace
 			}
 			Hate(Target, 5);
 			Fighter->Senses.Memory.Enemy = Target->Handle;
-			Fighter->UpdateIdealState(Now);
+			// `SelectIdealState` (`0x102ad660`) only promotes idle → combat through
+			// `HasInterruptCondition`, which answers 0 with no program installed, and these
+			// fixtures install none. `SetState(2)` (`0x1026e340`) is retail's OWN commit — it is
+			// what `MaintainSchedule 0x102817c0` calls with `m_IdealNPCState` — so the fixture
+			// reaches combat the way the kernel does, without inventing an ideal-state path.
+			(void)Now;
+			Fighter->SetState(2);
 		}
 
 		int32 DamageTaken(const FElysiumNpc* Npc) const
@@ -1084,10 +1090,13 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 	TestTrue(TEXT("...and the pass raises NEW_ENEMY"),
 		F.Fighter->Cognition.Conditions.Has(ECond::NewEnemy));
 
-	// The interrupt then ends the idle program, and the ideal-state pass takes the NPC to combat.
-	TestFalse(TEXT("NEW_ENEMY interrupts the disposition idle"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 20.0,
-			&F.Fighter->Cognition.Conditions));
+	// `MaintainSchedule 0x102817c0` is where both halves live, in this order: `IsScheduleValid`
+	// (`0x10280ff0`) answers false on the interrupt, THEN `FUN_1026f4d0` dispatches slot 461 and
+	// `SetState(m_IdealNPCState)` commits. `m_pSchedule` (`+0x5c38`) is still installed for both,
+	// which is why `HasInterruptCondition` (`0x10269d30`) can answer at all.
+	TestTrue(TEXT("NEW_ENEMY interrupts the disposition idle"),
+		ElysiumSchedule::HasInterruptCondition(F.Fighter->Schedule, *F.Fighter,
+			F.Fighter->Cognition.Conditions, ECond::NewEnemy));
 	F.Fighter->UpdateIdealState(20.0);
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Combat);
@@ -1175,8 +1184,11 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestTrue(TEXT("...and an enemy inside reach and faced is attackable"),
 		Victim.Cognition.Conditions.Has(ECond::CanMeleeAttack1));
 
-	TestFalse(TEXT("the damage interrupts the disposition idle"),
-		ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.0, &Victim.Cognition.Conditions));
+	// The interrupt stands against the installed mask — `IsScheduleValid 0x10280ff0` answers false
+	// — before `MaintainSchedule 0x102817c0` runs slot 461 and commits with `SetState`.
+	TestTrue(TEXT("the damage interrupts the disposition idle"),
+		ElysiumSchedule::HasInterruptCondition(Victim.Schedule, Victim,
+			Victim.Cognition.Conditions, ECond::LightDamage));
 	Victim.UpdateIdealState(1.0);
 	TestTrue(TEXT("the ideal-state pass takes the struck bystander to combat"),
 		Victim.GetMind().State() == EElysiumNpcState::Combat);
