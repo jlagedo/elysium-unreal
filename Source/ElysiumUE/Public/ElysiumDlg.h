@@ -164,6 +164,99 @@ namespace ElysiumDlgText
 	TCHAR ChosenTakeLetter(const FElysiumDlgLine& Line, bool bMale, int32 ClanOffset);
 }
 
+// --- Story 29d, family **Social10** — `CDialog`'s three packet bodies ------------------------------
+//
+// `CDialog::fill_packet` (`0x100e7da0`), `CDialog::process_npc_line` (`0x100e8100`) and
+// `CDialog::process_pc_line` (`0x100e8520`) are the conversation object's own rules, and the
+// checklist's target for all three is `FElysiumDlgConversation::EnterNpcLine`. The scheduling half
+// (col-4 now, col-5 parked) and the gender/clan variant half were already ported; what lands here is
+// the half that was not — the row-fetch MISS default, the ellipsis normalisation pass, the packet
+// flag words and the band arithmetic — as pure rules over plain values, so
+// `Tests/ElysiumNpcKernelSocial10Tests.cpp` can drive every arm without a conversation.
+namespace ElysiumDlgRetail
+{
+	/** `0x1054ca50` — the shared literal `process_npc_line` byte-copies into the caller's buffer when
+	 *  `get(this, &line_tag)` MISSES, before returning 0 ("used the default"). Read out of the pinned
+	 *  `vampire.dll` at file offset `0x54ca50`: a SINGLE SPACE. */
+	const TCHAR* MissingNpcLineText();
+
+	/** `0x100e7f70` — replace the FIRST occurrence of `Needle` with `Replacement`, in place, bounded
+	 *  by `BufferChars` (retail's `Q_strncpy` size, so at most `BufferChars - 1` characters survive).
+	 *  Answers whether a replacement happened, which is what the caller's loop reads. */
+	bool ReplaceFirst(FString& InOut, const FString& Needle, const FString& Replacement,
+		int32 BufferChars);
+
+	/** `0x100e8060` — the ellipsis normaliser `process_npc_line` runs over the NPC subtitle after
+	 *  `line_copy` and before `CallEventScript`. NOT a truncate/pad. Six replace-UNTIL-NO-MATCH
+	 *  passes over an `0x800` buffer, in this order, with both tables read out of the pinned image at
+	 *  `0x10561a88` (needles) and `0x10561aa0` (replacements):
+	 *
+	 *      " . . . "  ->  " ... "
+	 *      ". . . "   ->  "... "
+	 *      " . . ."   ->  " ... "     <- NOT `" ..."`: `0x10561aa8` holds `0x10561b14`, the SAME
+	 *                                    pointer pass 1 uses, so this pass ADDS a trailing space
+	 *      ". . ."    ->  "..."
+	 *      "\x85 "    ->  "... "      <- CP1252 0x85, the horizontal ellipsis byte
+	 *      "\x85"     ->  "... "      <- a bare one becomes `"... "`, adding a space
+	 *
+	 *  Pass 5 runs before pass 6, so every `0x85` followed by a space is consumed first and only a
+	 *  bare one reaches pass 6. The `.dlg` parser maps each Latin-1 byte to the code point of the
+	 *  same value, so `0x85` is literally `TCHAR(0x85)` in this runtime's strings. */
+	FString NormaliseEllipses(const FString& In);
+
+	/** The two packet flag bits `process_pc_line` (`0x100e8520`) ORs into the packet's flag word at
+	 *  `packet + 0x2804 + i * 4`. */
+	enum class EPcRowFlag : uint32
+	{
+		None = 0,
+		/** `100e8600` — an Auto-End row whose `LookupSpeechFile` HIT. The row is dropped and the
+		 *  conversation auto-terminates. */
+		AutoEndSpoken = 0x10,
+		/** `100e866a` — an Auto-Link row whose dependency test passed. The row STAYS in the band. */
+		AutoLink = 0x20,
+	};
+
+	/** What one PC response row answers to `fill_packet`. `Return` is retail's own `AL`: `1` keeps the
+	 *  row, `0` and `-1` both drop it, and `-1` alone raises the auto-terminate flag `+0x30e9`. */
+	struct FPcRowResult
+	{
+		int32 Return = 1;
+		uint32 Flags = 0;
+		/** `100e85e0` — the Auto-End-with-NO-speech-file arm collapses the whole band to one entry
+		 *  at flags 0 and value -1 with the count forced to 1, and still returns 1. */
+		bool bCollapseBand = false;
+	};
+
+	/** `0x100e8520`'s classification, arm for arm. `bPacketFlagSet` is retail's
+	 *  `thunk_FUN_100e84e0(0x30, packet)` — the packet-wide 0x30 test both automatic arms are gated
+	 *  on; `bDependencyTestPasses` is `CDialogDependency::Test`; `bHasSpeechFile` is
+	 *  `LookupSpeechFile(m_iCurrentLine)`, which the port's own named divergence
+	 *  (`ElysiumDialogueSession.h`) makes always true. */
+	FPcRowResult ClassifyPcRow(bool bAutoEnd, bool bAutoLink, bool bStartingCondition,
+		bool bPacketFlagSet, bool bDependencyTestPasses, bool bHasSpeechFile);
+
+	/** What `fill_packet` makes of a whole band of `process_pc_line` answers. */
+	struct FPacketBand
+	{
+		/** `+0x2834 m_iNumChoices` after the dropped rows are subtracted. */
+		int32 Count = 0;
+		/** `+0x30e9` — a `-1` answer from any row raises it. */
+		bool bAutoTerminate = false;
+		/** The `"I do not have a valid reply."` substitution (`0x1056368c`) — it fires when the flag
+		 *  is CLEAR and the count is zero, and NOT when the band had no authored rows to begin with.
+		 *  Retail has no such extra gate; the port had one and this is what removes it. */
+		bool bNoValidReply = false;
+	};
+
+	/** `0x100e7da0`'s band arithmetic over the per-row answers, in retail's order: the compacting
+	 *  index (the loop counter minus the number already dropped), `-1` raising the flag AND dropping,
+	 *  anything below 1 dropping, the stored count reduced by the dropped rows, then the fallback. */
+	FPacketBand FillPacketBand(const TArray<int32>& RowReturns);
+
+	/** `0x1056368c` — the literal the fallback writes over the NPC's own subtitle. */
+	const TCHAR* NoValidReplyLiteral();
+}
+
 // A whole parsed `.dlg` file: rows in file order plus an id -> index map for link resolution.
 struct FElysiumDlgFile
 {

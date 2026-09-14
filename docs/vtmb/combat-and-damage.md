@@ -2102,3 +2102,239 @@ who author `invincible 0`.
 - **Alive-Path Filtering and Rounding**:
   - `OnTakeDamage_Alive` (`0x103302e0`) guards against dead/invalid states (`0x168 != 0x1e/0x1f`) and non-positive incoming values (`damage <= 0.0`).
   - Final damage values truncate to integer via standard `__ftol()` (FISTP truncation toward zero) prior to deducting entity health.
+
+## Story 29d, family Combat10 — the fighting-item loadout, the health readers, the weapon drops and the knockback
+
+_Recovered 2026-09-14, story 29d._
+
+Eleven bodies that decide what a body fights with, how hurt it is, what it leaves behind and how far
+a hit throws it. Three standing facts, established once here.
+
+**Stat `0x0f` is the accumulated WOUND counter and stat `0x11` is the cap.**
+`CBaseCombatCharacter::HealthToPercent` (`0x1032fe60`, which carries retail's own scope-trace
+string) returns `((stat0x11 - stat0x0f) * m_iMaxHealth) / stat0x11`, so `0x0f` counts damage TAKEN
+rather than hit points remaining. `CNPC_VVampireBoss::GetCurrHealthPercent` (`0x103c6830`) is the
+COMPLEMENT — `stat0x0f / stat0x11`, the damage fraction.
+
+**Retail's `CVStatList_t` lookup is a linear scan for a list TYPE.** Every body here that touches a
+stat opens with the same eleven-instruction walk: `+0x13bc` count, `+0x13c0` table, the first entry
+whose record `+0x10` equals the wanted type, else the lazily built global `DAT_109f0b40` (guard bit
+0 of `DAT_109f0b2a`, registered with `atexit 0x10012a8a`) — an EMPTY list whose every read answers
+`0`. Type `0` is the character sheet; type `2` is the buff list and type `3` the scripted list.
+
+**The two `Weapon_Drop` bodies are not one function split in two.** `0x1032ce40` (slot 386) drops
+the ACTIVE weapon and rerolls its ammunition first; `0x1032d0c0` (slot 385) takes a named weapon,
+routes the active one back through slot 386, and otherwise either splits a stack or removes the
+item. Neither touches the other's arms.
+
+### `CBaseCombatCharacter::HealthToPercent` `0x1032fe60`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 348, 344 bytes, shared by `CAI_BaseHumanoid`, `CAI_BaseNPC` and `CAI_BaseNPCTroika` and 73
+more. `1032ff24` takes the type-0 list and asks it for stat `0x11` (the cap); `1032ff8f` runs the
+SAME walk again and asks for stat `0x0f` (the wounds); `1032ffa8` answers
+`((cap - wounds) * m_iMaxHealth) / cap` as an INTEGER divide. Retail does not guard the divisor: a
+character whose type-0 list answers `0` for the cap faults.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VMingXiao::vfunc348` `0x103970d0`
+
+_Recovered 2026-09-14, story 29d._
+
+532 bytes, `CNPC_VMingXiao#348` only, and slot 348's one species override. It reuses the base's
+scope-trace string (`CBaseCombatCharacter::HealthToPercent`), makes the same two stat reads in the
+same order, and adds a loop `i = 0..5` over `0x10398000(this, i)` folding one extra contribution in
+per true result before the final `__ftol` — the regrown-limb count lowering the reported percent.
+The decompiler lost the FPU arithmetic entirely (it shows three bare `__ftol()` calls with no
+operands); the loop, its bound and its guard are what the listing carries.
+
+**Unrecovered:** the exact weight each limb contributes, which the decompiler dropped with the FPU
+stack; and what `0x10398000`'s six indices name.
+
+### `CNPC_VVampireBoss::GetCurrHealthPercent` `0x103c6830`
+
+_Recovered 2026-09-14, story 29d._
+
+356 bytes, no slot, three direct callers and retail's own recovered name in its scope-trace string.
+`103c68db` reads stat `0x0f` FIRST into the numerator and `103c694d` stat `0x11` SECOND into the
+divisor. `103c6964` takes `ABS((float)cap)` against the shared epsilon `_DAT_104ce8c0` (**1e-05**);
+the decompiler's `(a < eps) == (a == eps)` idiom is true exactly when both comparisons are false,
+i.e. when `a > eps`, so this is a **divide-by-zero guard on the DIVISOR** and not a test on the
+numerator. The refusal answer is `_DAT_104454c4`, **0.0**.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VWerewolf::GiveBaseFightingItems` `0x103cc9b0` and `::RemoveBaseFightingItems` `0x103cca80`
+
+_Recovered 2026-09-14, story 29d._
+
+155 and 146 bytes, of which 99 each are the scope-trace frame; `CNPC_VWerewolf#304` and `#305`, the
+only species override of either slot beyond the shared `CNPC_VBaseBoss` body `0x10390fd0`.
+
+The Troika pair (`0x102b5b20`, 56 bytes, and `0x102b5b70`, 37 — both under the walk threshold) is:
+slot 307 `HasUsableMeleeWeapon` false **and** slot 308 `HasUsableRangedWeapon` false, then
+`thunk_FUN_1021fe50(this, "item_w_fists", 0)` and `AddMiscFlag(0x10)`; and its exact inverse, gated
+on `GetMiscFlags() & 0x10`.
+
+The Werewolf arm **replaces** rather than extends: `103cca32` runs
+`Inventory_Find("item_w_werewolf_attacks")` and, only when the item is ABSENT, gives that item and
+sets the same `0x10`. It consults neither base gate and never grants fists. `103ccb32` mirrors it
+with its own classname, on the same `0x10` gate.
+
+`0x10` is `CBaseCombatCharacter::m_iMiscFlags`' unarmed-combat marker and is the one bit either pair
+writes. `0x1021fe50` is `Weapon_Create` + the init `0x10258620` + `Inventory_Can_Insert` + the
+weapon's `vt+0x5fc` equip and, because the third argument is `0`, its `vt+0x610` switch;
+`0x1021fee0` is `Inventory_Find` + `Inventory_Remove` + `UTIL_Remove`.
+
+**`CNPC_VWerewolf` carries no entity classname in the census**, so no spawned NPC's `RetailClass()`
+can be it and the pair is unreachable in play today.
+
+**Unrecovered:** the name of misc flag `0x10` in the 22-name table at `0x10619ec8`.
+
+### `CAI_BaseNPC::Weapon_Drop()` `0x1032ce40`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 386, 511 bytes, everything inside a scope-trace frame named
+`CBaseCombatCharacter::Weapon_Drop`. In order:
+
+1. `1032cec2` — three gates: `m_bCantDropWeapons` (`+0x1589`) CLEAR, a non-null `GetActiveWeapon()`,
+   and `thunk_FUN_102577e0` on that weapon.
+2. `1032cefa` — when `GetFlags()` carries `FL_NPC` (`0x2000`) the weapon's ammunition is **rerolled**
+   before it is dropped. The loop runs `i = 0` and `1` (`iVar9` steps `0x1093c` while below
+   `0x21278`, which is exactly twice) and writes `weapon+0x74c + 4*i`. Per entry, the weapon's
+   `vt+0x454` decides the source: true takes `RandomInt(1, wpndata+0x2674 + i*0x1093c)` through
+   `0x102517b0`; false takes the weapon's `vt+0x450` as a cap and writes `RandomInt(1, cap)`, or a
+   **flat `0`** when the cap is below 1.
+3. `1032cf94` — `thunk_FUN_100b5190(weapon)` gates the weapon's `vt+0x138`.
+4. `1032cfa8` / `1032cfeb` — `m_hLastWeapon` (`+0x0ea4`) and `m_hLastMeleeWeapon` (`+0x0ea8`) are
+   each reset to `0xffffffff`, and **only** when they resolve to THIS weapon.
+5. `1032d02c` — the weapon's `vt+0x4b0`, then `CBaseCombatCharacter::Inventory_Remove`, then — only
+   when `FL_NPC` is still set, which retail re-reads — `Weapon_Detach`.
+
+**Unrecovered:** the identity of the weapon vtable slots `+0x454`, `+0x450`, `+0x138` and `+0x4b0`,
+and of the weapon-data table `0x102517b0` indexes.
+
+### `CAI_BaseNPC::Weapon_Drop(CBaseCombatWeapon*, const Vector*, bool)` `0x1032d0c0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 385, 431 bytes, same scope-trace name. The second argument is read by no arm of the body.
+
+1. `1032d129` — a null weapon does nothing at all.
+2. `1032d13d` — a weapon that IS `GetActiveWeapon()` takes `this->vt+0x608` and returns.
+   `0x608 / 4` is **386**, so that is this class's own no-argument `Weapon_Drop` above.
+3. `1032d158` — `thunk_FUN_102577e0(weapon)` **or** the third argument forcing it.
+4. `1032d16d` — the **stack split**. `param_1[0x234]` is BYTE offset `0x8d0`, which is
+   `m_iItemCount` — the stack quantity, not a magazine — and the weapon's `vt+0x5cc` beside it is
+   the stackability test. With `vt+0x5cc` true and the count at two or more: `1032d27a` decrements
+   the count, reads `GetClassname` off the ORIGINAL (`vt+0x570`), `Weapon_Create`s a fresh one, runs
+   `thunk_FUN_10258620` and the NEW weapon's `vt+0x4b0`, and **returns**. A failed create at
+   `1032d2b2` falls straight out of the body, leaving the original decremented and NOT removed.
+5. `1032d18e` / `1032d1d1` / `1032d212` — otherwise the same two handle resets as slot 386, the
+   weapon's `vt+0x4b0`, `Inventory_Remove`, and `Weapon_Detach` under `FL_NPC`.
+
+An earlier one-line walk read step 4 as an AMMO test ("the weapon still has ammo … ammo count
+`param_1[0x234]` >= 2"). The offset is `0x8d0` and `+0x74c` — the real magazine — is untouched by
+either drop body except through slot 386's reroll.
+
+**Unrecovered:** the identity of the weapon vtable slots `+0x5cc`, `+0x570` and `+0x4b0`.
+
+### `CAI_BaseNPCTroika::SetScriptedDiscipline` `0x102c2ec0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 589, 830 bytes — long only because the type scan is inlined six times. The rule is short and
+**the ORDER of its two-step writes is the behaviour**, because both intermediate states are
+observable.
+
+`102c2f1c` — `base = CVStatList_t::GetBase(list3, statId)`, where `list3` is the type-3 scripted
+list. Then:
+
+* `value > base`: `102c2f9c` looks up the type-2 BUFF list and, **only when its own `GetBase` is
+  below the new value**, `102c3002` runs `Set(list2, statId, value)`. Then `102c3081`
+  `AddBase(list3, statId, value - base)` and `102c30e6` `Set(list3, statId, value)` — in that order.
+* `value < base`: `102c3169` `Set(list3, statId, value)` **first**, then `102c31c3`
+  `SubBase(list3, statId, base - value)`.
+* `value == base`: nothing is written at all; retail falls out of both branches.
+
+**Unrecovered:** what the type-2 and type-3 list ids mean beyond "buff" and "scripted", which is
+how their readers use them.
+
+### `CAI_BaseNPC::vfunc357` `0x1033b5f0` — the prayer pulse
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 357, 354 bytes, one caller outside the NPC line. Two gates, both required: `m_Activity`
+(`+0x0fec`) equal to **`0x132`** and `m_flNextFeedPulse` (`+0x1490`) below `curtime`. Below them:
+
+1. `1033b673` — the type-0 list, then `GetValue(stat 0x0e)`. Stat `0x0e` is `FaithPoints`.
+2. `1033b68c` — the stat DEFINITION's own maximum: `0x10200370(&DAT_1074e658, 0x0e)`, then
+   `0x10205840` on its `+0x60`.
+3. Strictly below it, `1033b6c8` `IncBase(stat 0x0e)` by one; at or above it, `1033b70c` dispatches
+   `vt+0x598` — slot 358, `PrayerEnd` `0x1033b890`.
+4. `1033b712` — the cadence tail, which runs on **every** pulse whichever arm was taken:
+   `m_flNextFeedPulse = curtime + m_flNextFeedDuration` (`+0x1494`), and while
+   `m_flNextFeedDuration` is above `_DAT_1047b868` it is reduced by `_DAT_1049e890`, so the interval
+   accelerates to that floor. **Both cells are DOUBLES in `.rdata`** — the decompiler shows
+   `(float)_DAT_…` — reading **0.3** and **0.15**.
+
+`+0x1490` / `+0x1494` are the FEED cadence pair; retail reuses them for the prayer.
+
+**Unrecovered:** the retail name of activity `0x132`.
+
+### `FUN_102a0290` — the knockback velocity builder
+
+_Recovered 2026-09-14, story 29d._
+
+400 bytes, no slot, one direct caller, and the sole writer of `m_KnockbackVelocity` (`+0x6004`).
+`102a0296` seeds a local with `5.0`, which is **DEAD on the null-source path** — it is only ever
+read through `t = raw * _DAT_104491b4`, which that path does not take.
+
+* **Null source** (`102a02a7`): slot 219 `GetAbsAngles` (`vt+0x36c`) converted to a forward vector
+  (`0x10139550`) straight into `+0x6004`, then all three components NEGATED. The blend parameter is
+  the bare `_DAT_104454c0` (**1.0**).
+* **A source** (`102a02ee`): `CBaseCombatCharacter::GetRawAttackValue(source)` becomes the blend
+  parameter times `_DAT_104491b4` (**0.1**). When `thunk_FUN_10344da0` says the source's weapon id
+  at `+0x3ec` lies in **139..147** (`102a0307`), the raw value is FORCED to `1.0` and the velocity
+  is copied verbatim from the source's `+0x3bc..+0x3c4` — with `CBaseEntity::CalcAbsoluteVelocity`
+  first when `m_iEFlags` bit 12 is set — skipping the origin subtraction entirely. Otherwise
+  (`102a0348`) it is this body's slot-217 origin minus the source's.
+* `102a0395` — Z is ZEROED and the vector is normalised through `0x10137220`.
+* `102a03a2` — `xy = _DAT_1049a1d8 + (_DAT_1049a1dc - _DAT_1049a1d8) * t` and
+  `z = _DAT_1049a1e0 + (_DAT_1049a1e4 - _DAT_1049a1e0) * t`. All four cells were read out of the
+  pinned image: **220**, **400**, **200** and **310**.
+* `102a03d2` — X, then Z, then Y are each multiplied by the XY factor; `102a03f3` then **replaces**
+  Z outright with the Z factor, so its multiply is dead.
+
+SOURCE units per second, as the field is.
+
+**Unrecovered:** which weapons the `139..147` id window names.
+
+### `FUN_102a1650` — the yaw clearance sweep
+
+_Recovered 2026-09-14, story 29d._
+
+455 bytes, no slot, four call sites: three from `CAI_BaseNPCTroika::StartTask` (`0x102a1910`, once
+with a literal `180.0`) and one from `CNPC_VFrenzyShadow::StartTask` (`0.0`). Its first argument is
+read by no arm.
+
+`102a1656` scales the yaw by `_DAT_1044eb08` (pi/180) and takes `FSINCOS`. `102a16a1` reads slot 217
+`GetAbsOrigin` (`vt+0x364`) as the sweep START. The END is built at `102a16ab`..`102a17b5`:
+
+    end = origin
+        + cos(yaw) * m_vecForward (+0x6290) * _DAT_10462950 * reach
+        + sin(yaw) * m_vecRight   (+0x629c) * _DAT_10451acc * reach
+
+Both scale cells were read out of the pinned image: `_DAT_10462950` is **40.0** and `_DAT_10451acc`
+is **64.0**. `102a17f0` zeroes a 14-word `trace_t` on the stack and runs the move probe
+(`m_pMoveProbe`, `+0x5d40`) hull sweep `0x102e6d70` with mask `0x202400b` and the literal `100.0` —
+the same mask the rest of the kernel traces with.
+
+**The decompiler types the body `void`, and it is not.** `102a1807` tail-calls the probe and
+`RET 0xc` hands back whatever it left in `AL`, which is why all four call sites read the byte: a
+blocked sweep is what refuses the task.
+
+**Unrecovered:** what the probe's `100.0` argument bounds.

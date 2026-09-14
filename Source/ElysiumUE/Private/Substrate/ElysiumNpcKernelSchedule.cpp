@@ -75,9 +75,19 @@ namespace
 	constexpr float GScheduleMeleeRangeUnits = 0.0f;
 
 	// `_DAT_10451acc` — the height-difference threshold the melee height-diff timer arms above.
-	// UNRECOVERED float; 0.0 makes an enemy at or below this NPC's own height "level", which
-	// disarms the timer. Any positive value only widens that arm.
-	constexpr float GScheduleMeleeHeightDiffUnits = 0.0f;
+	//
+	// **RECOVERED as 64.0f by story 29d** and no longer the 0.0 stand-in this line carried. The cell
+	// is at file offset `0x451acc` of the pinned `vampire.dll` (`.rdata` is identity-mapped off
+	// image base `0x10000000`) and reads `00 00 80 42`. Three of 29d's families reached it
+	// independently from three different bodies — family Combat10 as the yaw sweep's right leg
+	// (`0x102a1650`, paired with `_DAT_10462950` = 40.0), family Debug10 as the witness-box clamp in
+	// `0x10292500`, and this one — and the reviewer read the bytes back a fourth time before the
+	// constant was changed, because it is a live threshold rather than a comment.
+	//
+	// It matters: at 0.0 only an enemy exactly level or below disarmed the timer, so nearly every
+	// melee selector armed it. At retail's 64.0 an enemy within 64 units of this NPC's own height
+	// counts as level and the timer is held at -1.0 instead.
+	constexpr float GScheduleMeleeHeightDiffUnits = 64.0f;
 
 	// `_DAT_104c3cd4` — `CNPC_VSabbatLeader`'s `TOO_FAR_TO_ATTACK` distance bound. UNRECOVERED.
 	constexpr float GScheduleSabbatTooFarUnits = 0.0f;
@@ -809,6 +819,23 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 604);
 	const TCHAR* SlotBody = Override != nullptr ? Override->Address : TEXT("0x102b6c30");
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
+
+	// --- Story 29d, family SpeciesAnim10: three further species bodies -----------------------------
+	// `CNPC_VHuman` `0x10385e40` (34 census classes), `CNPC_VMingXiao` `0x10396050` and `CNPC_VBach`
+	// `0x10364080`. All three REPLACE the Troika body wholesale; the bodies are in
+	// `ElysiumNpcKernelAnim10_2.cpp`.
+	if (FCString::Strcmp(SlotBody, TEXT("0x10385e40")) == 0)
+	{
+		return SelectScheduleMeleeCombatHuman();
+	}
+	if (FCString::Strcmp(SlotBody, TEXT("0x10396050")) == 0)
+	{
+		return SelectScheduleMeleeCombatMingXiao();
+	}
+	if (FCString::Strcmp(SlotBody, TEXT("0x10364080")) == 0)
+	{
+		return SelectScheduleMeleeCombatBach();
+	}
 
 	// --- CNPC_VChangBros 0x1036d800 and CNPC_VTzimisceRunner 0x103c4430 ---------------------------
 	// One shape, two schedule id sets. The `0x59` and `0x15a`/`0xe1` arms are where they differ.

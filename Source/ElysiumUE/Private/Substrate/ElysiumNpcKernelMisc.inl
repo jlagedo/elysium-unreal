@@ -82,7 +82,9 @@ static bool StandoffSchedulesLoaded();
 // a hand-typed class list so the arm is checkable against `docs/vtmb/npc-kernel/slots.md` by
 // construction. A classname no census class claims — `npc_VCop` is the recovered example — answers
 // `Troika`, which is the correct fall-through and not a bug.
-enum class EVictimHitLine : uint8 { Troika, Gargoyle, SabbatLeader, Zombie };
+// Story 29d, family **SpeciesMisc10** added `GhoulCroucher` (`0x1037be80`): the FOURTH species
+// override of slot 24, and the only one besides the Zombie that keeps the Troika body.
+enum class EVictimHitLine : uint8 { Troika, Gargoyle, SabbatLeader, Zombie, GhoulCroucher };
 
 /** One row of the slot-24 species table: the retail class and the body that fills the slot for it. */
 struct FVictimHitSpecies

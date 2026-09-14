@@ -8,6 +8,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
+#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -825,6 +826,15 @@ void FElysiumNpc::GatherAttackConditions(FElysiumEntity* Enemy, float DistanceUn
 	// DIFFERENT entity than the committed enemy still gathers for the committed one — which is what
 	// retail does too, because its caller only ever passes `GetEnemy()`.
 	(void)Enemy;
+	// Story 29d, family **SpeciesMisc10**: `CNPC_VBach#561` (`0x10363db0`) ADDS the shield, teleport
+	// and weapon-switch block IN FRONT of the base and changes nothing the base gathers, so it runs
+	// here and the base runs after it, unmodified. The distance argument IS read by that arm —
+	// unlike the base, which takes the port's own committed enemy.
+	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 561);
+	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10363db0")) == 0)
+	{
+		BachGatherAttackConditions(DistanceUnits);
+	}
 	(void)DistanceUnits;
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	ElysiumNpcCond::GatherAttackConditions(*this, Now, Cognition.Conditions);
@@ -989,6 +999,13 @@ void FElysiumNpc::Slot583(const FVector& PointCm)
 
 void FElysiumNpc::Slot584(int32 Unused)
 {
+	// Story 29d, family **Anim10**: `CAI_BaseHumanoid#584` and `CAI_ExpressiveNPC#584` fill this slot
+	// with `FUN_10260dc0` (`0x10260dc0`) instead — an 11-byte tail jump through the Expresser at
+	// `+0x5f48` — so the species prologue runs FIRST and the body below is the Troika line's.
+	if (Slot584Species(Unused))
+	{
+		return;
+	}
 	//     ResetThinkTimers();                              // vtable +0x998, slot 614
 	//     m_flLastThink = m_flLastUpdateThink = m_flLastNormalThink
 	//                   = m_flLastMoveThink = m_flLastAIThink = gpGlobals->curtime;

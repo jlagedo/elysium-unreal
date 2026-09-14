@@ -571,7 +571,11 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	// Every row of the slot-24 table by name, against the census.
 	int32 Count = 0;
 	const FElysiumNpc::FVictimHitSpecies* Rows = FElysiumNpc::VictimHitSpeciesRows(Count);
-	TestEqual(TEXT("the Troika line plus three species overrides"), Count, 4);
+	// Four species overrides since story 29d, family SpeciesMisc10 added `CNPC_VGhoulCroucher#24`
+	// (`0x1037be80`); the census carries that row (`ElysiumNpcKernelShape.cpp`) and the loop below
+	// checks it like every other. Count corrected by family SpeciesLifecycle10, whose own slot-174
+	// row meets the same class.
+	TestEqual(TEXT("the Troika line plus four species overrides"), Count, 5);
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const FElysiumNpc::FVictimHitSpecies& Row = Rows[Index];

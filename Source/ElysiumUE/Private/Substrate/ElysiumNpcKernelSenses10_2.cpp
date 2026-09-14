@@ -58,7 +58,7 @@ namespace
 // `CNPC_VCameraSecurity` — slot 201 `0x10369ff0` and slot 363 `0x10369fb0`.
 // =================================================================================================
 
-bool FElysiumNpc::SecCameraCanSee(const FElysiumEntity* Camera, const FElysiumEntity* Target) const
+bool FElysiumNpc::SecCameraCanSee(const FElysiumEntity* Camera, const FElysiumEntity* SeenTarget) const
 {
 	// SEAM for `CSecCamera::CanSee` (`0x1020cd00`): the enabled byte `+0x7d8`, then `0x1020cd30`'s
 	// 2-D distance against the far radius `+0x794` and the near radius `+0x790`, then the cone test
@@ -67,12 +67,12 @@ bool FElysiumNpc::SecCameraCanSee(const FElysiumEntity* Camera, const FElysiumEn
 	// reads clear — retail's switched-off camera, which is the refusing arm and the one that leaves
 	// a security NPC blind rather than omniscient.
 	(void)Camera;
-	(void)Target;
+	(void)SeenTarget;
 	return false;
 }
 
 bool FElysiumNpc::SecCameraInViewCone(const FElysiumEntity* Camera,
-	const FElysiumEntity* Target) const
+	const FElysiumEntity* SeenTarget) const
 {
 	// SEAM for `CSecCamera::InViewCone` (`0x1020cc60`) alone: re-check the argument's `+0xa8`, take
 	// the camera's forward from its angles (camera slot `+0x374` through `0x10139610`), the
@@ -80,7 +80,7 @@ bool FElysiumNpc::SecCameraInViewCone(const FElysiumEntity* Camera,
 	// (`0x101d1120`), and require the dot STRICTLY greater than the camera's cosine `+0x798`. The
 	// cosine word does not exist here; answers false, as above.
 	(void)Camera;
-	(void)Target;
+	(void)SeenTarget;
 	return false;
 }
 
@@ -158,7 +158,7 @@ FElysiumEntity* FElysiumNpc::FrenzyShadowBestEnemy()
 		// asked, not this NPC's, which is why it goes through the candidate's own NPC leaf when it
 		// has one and answers D_ER otherwise — retail's null-`this` arm.
 		const FElysiumNpc* CandidateNpc = Candidate != nullptr ? Candidate->AsNpc() : nullptr;
-		return CandidateNpc != nullptr && CandidateNpc->Disposition(FriendArgument) == GSpeciesD_HT;
+		return CandidateNpc != nullptr && CandidateNpc->IRelationTypeOf(FriendArgument) == GSpeciesD_HT;
 	};
 	auto PassesFilter = [this](FElysiumEntity* Candidate)
 	{
@@ -216,7 +216,7 @@ FElysiumEntity* FElysiumNpc::FrenzyShadowBestEnemy()
 		{
 			Score += 0x10000000;
 		}
-		Score += DispositionPriority(Candidate) * 0x1000000;   // 103768d6, slot 405 shifted 24
+		Score += IRelationPriorityOf(Candidate) * 0x1000000;   // 103768d6, slot 405 shifted 24
 
 		if (Score > BestScore)
 		{
@@ -273,21 +273,21 @@ FVector FElysiumNpc::MingXiaoGetShootEnemyDir(const FVector& ShootPositionCm, in
 // `CNPC_VScurrying` — `0x103acac0` and `0x103acba0`.
 // =================================================================================================
 
-bool FElysiumNpc::IsNosferatuTemplate(const FElysiumEntity& Target)
+bool FElysiumNpc::IsNosferatuTemplate(const FElysiumEntity& SeenTarget)
 {
 	// `0x103ad0f0`: the target's character template compared against `Player_Nosferatu`. On this
 	// sheet a player's template IS its clan (`ElysiumDlgClan::OffsetFromSheetClan`), and a
 	// non-player target carries no `Player_*` template at all.
-	const FElysiumCombatCharacter* Character = Target.AsCombatCharacter();
+	const FElysiumCombatCharacter* Character = SeenTarget.AsCombatCharacter();
 	return Character != nullptr && Character->Sheet.Clan() == GNosferatuClan
-		&& Target.AsNpc() == nullptr;
+		&& SeenTarget.AsNpc() == nullptr;
 }
 
-bool FElysiumNpc::ScurryingMustDetectAdmits(const FElysiumEntity& Target) const
+bool FElysiumNpc::ScurryingMustDetectAdmits(const FElysiumEntity& SeenTarget) const
 {
 	// `0x103ad0a0`: true for any target that is NOT a player, and for a player only while
 	// COND `0x5a` (`SEE_PLAYER`) or COND `0x6f` stands.
-	if (World == nullptr || Target.Handle != World->PlayerHandle())
+	if (World == nullptr || SeenTarget.Handle != World->PlayerHandle())
 	{
 		return true;
 	}
@@ -295,28 +295,28 @@ bool FElysiumNpc::ScurryingMustDetectAdmits(const FElysiumEntity& Target) const
 		|| Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x6f));
 }
 
-bool FElysiumNpc::ScurryingShouldDetect(const FElysiumEntity* Target) const
+bool FElysiumNpc::ScurryingShouldDetect(const FElysiumEntity* SeenTarget) const
 {
 	// `103acac0`: a null target answers false.
-	if (Target == nullptr)
+	if (SeenTarget == nullptr)
 	{
 		return false;
 	}
 	// `103acad4`: the distance between the two slot-217 origins (the ROOT of the summed squares,
 	// `0x10579660`) must be STRICTLY below `m_flDetectionDistance` (`+0x6690`).
 	const float DistanceUnits = static_cast<float>(
-		FVector::Dist(Origin, Target->Origin) / ElysiumMove::U);
+		FVector::Dist(Origin, SeenTarget->Origin) / ElysiumMove::U);
 	if (!(DistanceUnits < ScurryingDetectionDistanceUnits))
 	{
 		return false;
 	}
 	// `103acb1a`: `m_fIgnoreNosferatu` (`+0x6694`) rejects a `Player_Nosferatu` target.
-	if (bScurryingIgnoreNosferatu && IsNosferatuTemplate(*Target))
+	if (bScurryingIgnoreNosferatu && IsNosferatuTemplate(*SeenTarget))
 	{
 		return false;
 	}
 	// `103acb3c`: `m_fMustDetect` (`+0x6695`) rejects unless `0x103ad0a0` holds.
-	if (bScurryingMustDetect && !ScurryingMustDetectAdmits(*Target))
+	if (bScurryingMustDetect && !ScurryingMustDetectAdmits(*SeenTarget))
 	{
 		return false;
 	}
@@ -475,14 +475,6 @@ FVector FElysiumNpc::GetHintEndpointUnits(const FHintWords& Hint) const
 	return Hint.OriginCm / ElysiumMove::U;
 }
 
-int32 FElysiumNpc::GetForwardHintForHint(const FHintWords& Hint) const
-{
-	// SEAM for `CNPC_VWerewolf::GetForwardHintForHint` — the hint the forward is measured FROM.
-	// Answers the hint's own end entity, which is the same seam as above and leaves the forward a
-	// zero delta when nothing resolves.
-	return FindHintEndEntity(Hint);
-}
-
 float FElysiumNpc::GetForwardYawForHint(const FHintWords& Hint) const
 {
 	// `103d728c`: the working direction is SEEDED with `vec3_invalid` (`DAT_10713de0`…`de8`) and
@@ -580,6 +572,10 @@ FElysiumNpc::FWerewolfHintGroundpoint FElysiumNpc::InitializeHintDataRow(
 	// `0x7f800000` exponent mask and on failure falling back to the RAW origin / RAW endpoint.
 	FWerewolfHintGroundpoint Row;
 	Row.HintNode = Hint.NodeId;
+	// The end-entity handle at element `+0x00`, which this comment already named and the row did not
+	// carry until story 29d's family Hints10 added the word for `GetHintEndEntity` (`0x103d6390`) to
+	// read back. `FindHintEndEntity` (`0x103d6520`) is what retail resolves it with.
+	Row.CachedEndEntity = FindHintEndEntity(Hint);
 
 	const FVector OwnUnits = Hint.OriginCm / ElysiumMove::U
 		+ FVector(0.0, 0.0, GHintGroundpointLiftUnits);
@@ -644,6 +640,24 @@ bool FElysiumNpc::CachedNearestNodeZone(int32& OutZone) const
 	return false;
 }
 
+bool FElysiumNpc::ValidateHintTypeForWords(const FHintWords& Hint) const
+{
+	// Slot 566 (`vtable +0x8d8`) over the words already in hand — see the declaration for why the
+	// node-index entry point cannot serve these two bodies.
+	const FElysiumNpcClass* Cls = RetailClass();
+	const FHintTypeSpecies* Row = HintTypeSpeciesOf(Cls != nullptr ? Cls->Name : nullptr);
+	if (FValidateHintTypeSpecies(Row, Hint.HintType))
+	{
+		return true;
+	}
+	if (HintTypeSpeciesFallsThroughToBase(Row))
+	{
+		// `CNPC_VBach` (`0x10365800`) alone; slot 566's Troika body is still a generated stub.
+		return const_cast<FElysiumNpc*>(this)->FValidateHintType(nullptr);
+	}
+	return false;
+}
+
 bool FElysiumNpc::IsValidRandomMoveHint(const FHintWords& Hint, double Now)
 {
 	// `103d7dfa`: false unless all four of — the hint is non-null, `0x102d14c0` says it is not
@@ -658,7 +672,7 @@ bool FElysiumNpc::IsValidRandomMoveHint(const FHintWords& Hint, double Now)
 	{
 		return false;
 	}
-	if (!FValidateHintTypeForSpecies(Hint.NodeId))
+	if (!ValidateHintTypeForWords(Hint))
 	{
 		return false;
 	}
@@ -712,7 +726,7 @@ bool FElysiumNpc::IsValidMoveHint(const FHintWords& Hint, double Now)
 	{
 		return false;
 	}
-	if (!FValidateHintTypeForSpecies(Hint.NodeId))
+	if (!ValidateHintTypeForWords(Hint))
 	{
 		return false;
 	}
@@ -750,12 +764,6 @@ bool FElysiumNpc::IsValidMoveHint(const FHintWords& Hint, double Now)
 	FElysiumEntity* HintEntity = World != nullptr && Hint.HintOwner.IsSet()
 		? World->Resolve(Hint.HintOwner) : nullptr;
 	return !FUN_10366400(HintEntity);
-}
-
-void FElysiumNpc::SetHullSizeSmall(bool bSmall)
-{
-	// `0x10273180`. The hull swap itself is the navigator's; the LATCH `+0x5f2d` is this object's.
-	bHullShrunk = bSmall;
 }
 
 void FElysiumNpc::WerewolfCheckStuck()

@@ -558,12 +558,19 @@ bool FElysiumNpcKernelAnimActivityCommitTest::RunTest(const FString&)
 	TestEqual(TEXT("the cycle is zeroed"), Guard->SequenceCycle, 0.f);
 	TestEqual(TEXT("and m_flPrevAnimTime with it"), Guard->PrevAnimTime, 0.f);
 
-	// `SetIdealActivity` `0x10272650`: activity 0 TAIL JUMPS to slot 310 and does NOT store the
-	// word; every other activity stores it and re-resolves the ideal triple.
+	// `SetIdealActivity` `0x10272650`: activity 0 TAIL JUMPS to slot 310 and stores nothing ITSELF;
+	// every other activity stores the word here and re-resolves the ideal triple beside it.
+	//
+	// **STRENGTHENED by story 29d, family Anim10.** Slot 310 was a generated stub when this case
+	// landed, so "without storing the word" could be read off `m_IdealActivity` still holding 42.
+	// Slot 310 is now `CAI_BaseNPCTroika::SetActivity` (`0x10295750`) over
+	// `CAI_BaseNPC::SetActivity` (`0x102725d0`), and the BASE body's own third line is
+	// `m_IdealActivity = act` — so the word does land, written by the slot and not by this body.
+	// The probe now reads the real body's output: 0, not 42.
 	Guard->IdealActivityNumber = 42;
 	Guard->SetIdealActivity(0);
-	TestEqual(TEXT("ACT_INVALID resets through slot 310 without storing the word"),
-		Guard->IdealActivityNumber, 42);
+	TestEqual(TEXT("ACT_INVALID resets through slot 310, whose own base body stores the word"),
+		Guard->IdealActivityNumber, 0);
 	Guard->SetIdealActivity(0x3b);
 	TestEqual(TEXT("and any other activity stores m_IdealActivity"), Guard->IdealActivityNumber,
 		0x3b);

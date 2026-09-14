@@ -68,6 +68,7 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::Smell:                 return TEXT("SMELL");
 	case EElysiumNpcCond::Provoked:              return TEXT("PROVOKED");
 	case EElysiumNpcCond::GiveWay:               return TEXT("GIVE_WAY");
+	case EElysiumNpcCond::StopBackup:            return TEXT("STOP_BACKUP");
 	case EElysiumNpcCond::ShouldDodge:           return TEXT("SHOULD_DODGE");
 	case EElysiumNpcCond::ShouldBlock:           return TEXT("SHOULD_BLOCK");
 	case EElysiumNpcCond::ShouldStepback:        return TEXT("SHOULD_STEPBACK");
@@ -382,10 +383,32 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 				Player->LastHostileAssessmentTime = Now;
 			}
 		}
+		// `1026a3d1`: **the gate this body was missing.** Everything from here down — `SEE_ENEMY`
+		// and the whole relation switch — runs ONLY when the relation is not `D_NU` (4). A neutral
+		// entity is seen, is stamped on the player's per-relation surface above, and raises nothing
+		// else. Story 29d, family Senses10.
+		if (Relation == EElysiumRelationship::Neutral)
+		{
+			continue;
+		}
+		// `1026a3dd`: **the second gate this body was missing.** `SEE_ENEMY` (`0x46`) is raised HERE,
+		// for the committed enemy (slot 0x29c) when it is the entity this iteration is looking at —
+		// so it is subject to the skip-entity exclusion and the `D_NU` gate above. The port raised it
+		// unconditionally from `GatherCommittedEnemy`, off `Sighted().Contains(Enemy)`.
+		if (Memory.Enemy.IsSet() && Handle == Memory.Enemy)
+		{
+			Out.Set(EElysiumNpcCond::SeeEnemy);
+		}
 		// Troika's `OnLooked` classifies D_HT by its raw IRelationPriority: negative is DISLIKE,
 		// 0..10 HATE, and 11+ NEMESIS.  The relationship store deliberately retains D_HT as its
 		// disposition, so this is the one place the priority expands it into the three conditions.
 		// Only actual HATE and FEAR take the base `UpdateEnemyMemory` write.
+		//
+		// `1026a48a`: retail's `default:` arm — relation `D_ER` (0) — prints
+		// `DevWarning(2, "%s can't assess %s")` and raises nothing. `FElysiumRelationships::Resolve`
+		// never answers `D_ER`, so that arm is UNREACHABLE here; it is recorded rather than
+		// simulated, because manufacturing a `D_ER` would be inventing a relation the store has no
+		// value for.
 		const int32 Priority = Npc.Relationships.ResolvePriority(Handle, NpcCondClassnameOf(*Target));
 		FElysiumNpcMemory::ESeen Slot = FElysiumNpcMemory::ESeen::Count;
 		switch (Relation)
@@ -919,11 +942,12 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 	// consecutive failures the committed enemy retains `HAVE_ENEMY_LOS`; at ten it flips.
 	Out.Set(Memory.bEnemyOccluded ? EElysiumNpcCond::EnemyOccluded : EElysiumNpcCond::HaveEnemyLos);
 
-	// `SEE_ENEMY` is the fresh Look admission answer, never closest-player cache replay.
-	if (Npc.Senses.Sighted().Contains(Memory.Enemy))
-	{
-		Out.Set(EElysiumNpcCond::SeeEnemy);
-	}
+	// `SEE_ENEMY` (`0x46`) is NOT raised here. Its one retail writer is `CAI_BaseNPC::OnLooked`
+	// (`0x1026a2c0`, `1026a3dd`), inside the per-entity loop and behind both the skip-entity
+	// exclusion and the `relation != D_NU` gate — so a neutral committed enemy, or one that is this
+	// pass's skipped unknown, does not raise it however plainly it is seen. `GatherSight` carries
+	// it; this body raised it unconditionally off the seen set, which was the divergence. Story
+	// 29d, family Senses10.
 
 	// SEAM (comment only, never set): `ENEMY_UNREACHABLE` (0x59). It needs a path query — "can this
 	// body reach that actor" — and `IElysiumNpcMotor` carries no reachability verb yet. The door

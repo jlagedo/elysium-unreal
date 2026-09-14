@@ -117,9 +117,26 @@ namespace
 		}
 	};
 
+	// How many times the NPC asked to speak the VSound concept `Concept` since the last
+	// `VSoundSpeakCalls.Reset()`. Story **29d** (family Sounds10) ported the slot 488 and 506
+	// Troika-line bodies (`0x10293ec0`, `0x10294e70`), so the arm that ran is no longer told by an
+	// `elysium.stubs` tally but by the concept the body actually asked for — which is the stronger
+	// question, because a tally could only say that *some* stub fired.
+	int32 SpeciesSpeaksConcept(const FElysiumNpc& Npc, const TCHAR* Concept)
+	{
+		int32 Count = 0;
+		for (const FElysiumNpc::FVSoundSpeak& Row : Npc.VSoundSpeakCalls)
+		{
+			if (Row.Concept != nullptr && FCString::Strcmp(Row.Concept, Concept) == 0)
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
+
 	// How many times a stubbed surface whose name contains `Needle` has fired since the last
-	// `ElysiumStub::ClearTally()`. Slots 488 and 506 keep story 29d's tally as their Troika arm, so
-	// the tally is what says which arm ran.
+	// `ElysiumStub::ClearTally()`.
 	int32 SpeciesStubFires(const TCHAR* Needle)
 	{
 		TArray<ElysiumStub::FTally> Tally;
@@ -994,6 +1011,10 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("fleshpile"), 29133u);
 		FElysiumEntityDef& Maker = Builder.AddEntity(TEXT("npc_maker_fleshpile"), TEXT("maker"));
+		// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker_Fleshpile::Spawn`
+		// (`0x1034c020`) dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the
+		// maker. A maker with no `model` key does not survive its own spawn, in retail or here.
+		Maker.Keys.Add(TEXT("model"), TEXT("models/fleshpile.mdl"));
 		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VTzimisceRunner"));
 		Maker.Keys.Add(TEXT("MaxNPCCount"), TEXT("10"));
 		Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
@@ -1037,6 +1058,10 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("fleshpile_no_owner"), 29135u);
 		FElysiumEntityDef& Maker = Builder.AddEntity(TEXT("npc_maker_fleshpile"), TEXT("maker"));
+		// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker_Fleshpile::Spawn`
+		// (`0x1034c020`) dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the
+		// maker. A maker with no `model` key does not survive its own spawn, in retail or here.
+		Maker.Keys.Add(TEXT("model"), TEXT("models/fleshpile.mdl"));
 		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VTzimisceRunner"));
 		Maker.Keys.Add(TEXT("MaxNPCCount"), TEXT("10"));
 		Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
@@ -1059,6 +1084,10 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("fleshpile2"), 29134u);
 		FElysiumEntityDef& Maker = Builder.AddEntity(TEXT("npc_maker_fleshpile"), TEXT("maker"));
+		// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker_Fleshpile::Spawn`
+		// (`0x1034c020`) dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the
+		// maker. A maker with no `model` key does not survive its own spawn, in retail or here.
+		Maker.Keys.Add(TEXT("model"), TEXT("models/fleshpile.mdl"));
 		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VTzimisceRunner"));
 		Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
 		Builder.AddNpc(TEXT("owner"), FVector(900.0, 0.0, 0.0), TEXT("npc_VAndreiBlood"));
@@ -1545,18 +1574,26 @@ bool FElysiumNpcKernelSpeciesWiredSlot488Test::RunTest(const FString&)
 
 	// The two arms are told apart by what they report: `0x103b92a0` fires `SPI_DIES` at the script
 	// host (three singleton seams, all substituting 0 — retail's own arm), and the Troika-line body
-	// is still story 29d's and tallies itself.
+	// speaks the VSound concept `"Death"`.
+	//
+	// This case was written when slot 488's Troika arm was still a generated stub, so its probe for
+	// that arm was the `elysium.stubs` tally. Story **29d** (family Sounds10) ported `0x10293ec0`,
+	// so the probe is now the body's own output. Same question, answered off the real body: a
+	// tally proved only that *a* stub fired, where the speak record proves *which concept* the
+	// NPC actually asked for.
 	ElysiumStub::ClearTally();
 	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+	Tzimisce->VSoundSpeakCalls.Reset();
+	Cop->VSoundSpeakCalls.Reset();
 
 	Tzimisce->DeathSound();
 	TestEqual(TEXT("slot 488 on a Tzimisce fires SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
 	TestEqual(TEXT("and never reaches the base death sound"),
-		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::DeathSound")), 0);
+		SpeciesSpeaksConcept(*Tzimisce, TEXT("Death")), 0);
 
 	Cop->DeathSound();
-	TestEqual(TEXT("slot 488 on a plain Troika NPC reaches the base, which is still 29d's"),
-		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::DeathSound")), 1);
+	TestEqual(TEXT("slot 488 on a plain Troika NPC reaches the base, which speaks Death"),
+		SpeciesSpeaksConcept(*Cop, TEXT("Death")), 1);
 	TestEqual(TEXT("and fires no SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
 	return true;
 }
@@ -1600,18 +1637,25 @@ bool FElysiumNpcKernelSpeciesWiredSlot506Test::RunTest(const FString&)
 		return false;
 	}
 
-	// Slot 506's base is still story 29d's and tallies itself, so the EMPTINESS of the camera's
-	// `0x103682f0` is observable after all: a camera makes no tally and a cop makes one.
+	// The EMPTINESS of the camera's `0x103682f0` is observable through what the base would have
+	// said: `0x10294e70` speaks the concept `"Target_Reacquired"`, so a camera speaks nothing and
+	// a cop speaks once.
+	//
+	// The probe was the `elysium.stubs` tally when this case was written and slot 506's Troika arm
+	// was still generated; story **29d** (family Sounds10) ported `0x10294e70`, so it now reads the
+	// real body's output instead.
 	ElysiumStub::ClearTally();
 	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+	Camera->VSoundSpeakCalls.Reset();
+	Cop->VSoundSpeakCalls.Reset();
 
 	Camera->Slot506();
 	TestEqual(TEXT("slot 506 on a camera is empty — the 29d base never runs"),
-		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::Slot506")), 0);
+		SpeciesSpeaksConcept(*Camera, TEXT("Target_Reacquired")), 0);
 
 	Cop->Slot506();
 	TestEqual(TEXT("slot 506 on a plain Troika NPC reaches the base"),
-		SpeciesStubFires(TEXT("CAI_BaseNPCTroika::Slot506")), 1);
+		SpeciesSpeaksConcept(*Cop, TEXT("Target_Reacquired")), 1);
 	return true;
 }
 

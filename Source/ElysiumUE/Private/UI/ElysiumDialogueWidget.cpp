@@ -86,9 +86,23 @@ void ElysiumDialogueUI::FillTurn(const FElysiumDlgConversation& Conversation,
 		// own subtitle rather than leaving a line with nothing under it (`get_pc_responses`
 		// `0x100e82d0`). The substitution is presentation's, which is why the machine only reports
 		// the condition.
+		//
+		// `CDialog::process_npc_line` (`0x100e8100`) runs `0x100e8060` over the copied line at
+		// `100e820c`, BEFORE `CallEventScript` — the ellipsis normaliser, which no port path ran
+		// until story 29d (family Social10). It is applied to the NPC subtitle and to nothing else:
+		// `process_pc_line`'s own `line_copy` at `100e8875` has no such pass, so a PC choice keeps
+		// its authored spacing.
 		Out.Line = Conversation.NoValidReply()
 			? FElysiumDlgConversation::NoValidReplyText()
-			: NpcLine->DisplayText(bMale, ClanOffset);
+			: ElysiumDlgRetail::NormaliseEllipses(NpcLine->DisplayText(bMale, ClanOffset));
+	}
+	else if (!Conversation.IsOver())
+	{
+		// `100e8130` — `get(this, &line_tag)` MISSED. Retail byte-copies the shared literal at
+		// `0x1054ca50` (a single space) into the packet's NPC-text slot and returns 0, the
+		// "used default" answer that makes `fill_packet` skip the response band entirely. This
+		// runtime reaches the same state when the conversation is live but no NPC row resolved.
+		Out.Line = ElysiumDlgRetail::MissingNpcLineText();
 	}
 
 	// Author order, enabled and disabled alike (M-DISABLED). The gate was evaluated once by

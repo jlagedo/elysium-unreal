@@ -22,8 +22,10 @@ headers, and the two reading overlays beside the tool (`kernel_fields.tsv`,
 edges and counts — the category `docs/vtmb/` already commits — and never a decompiled body.
 The provenance line at the top of each file names the module hash and the corpus dump date.
 
-One table is not written from the corpus alone. `checklist-<band>.md` is the ledger joined with a
-**verdict overlay**, `research/tooling/ghidra/driver/kernel_verdicts.tsv`:
+Two tables are not written from the corpus alone. `checklist-<band>.md` is the ledger joined with a
+**verdict overlay**, `research/tooling/ghidra/driver/kernel_verdicts.tsv`; `checklist-0-9.md` and
+`checklist-10-18.md` are the committed ones (story 29d added the second), and any other band renders
+on demand:
 
     uv run elysium research kernel_ledger --checklist 10-18   # render one more band's checklist
     uv run elysium research kernel_ledger --bodies 0-9        # the reading packs, out of repo
@@ -92,6 +94,7 @@ Start from the question:
 | What has neither the port nor the oracle mentioned yet; which bodies are damaged? | `coverage.md` |
 | Which functions still have no name? | `unnamed.md` |
 | What did the porting story decide about every function of layers 0–9, and why? | `checklist-0-9.md` |
+| The same, for the middle layers 10–18 | `checklist-10-18.md` |
 | Which `docs/vtmb` section walks address `0x10……`? | `index.md` |
 | The raw call graph inside the closure | `graph.tsv` |
 

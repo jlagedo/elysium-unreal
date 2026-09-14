@@ -13,6 +13,18 @@ namespace ElysiumMiscFlags
 	// matrix) is 0006's (first-disciplines); `ElysiumDisciplines::NotifyBumped` stands in for it here.
 	inline constexpr uint32 ObfBumpedObject = 0x100;
 
+	// Name 0 of the 22, `Unconscious`. Its reader is `CBaseCombatCharacter::IsUnconscious`
+	// (`0x10341aa0`), whose whole body past the scope-trace push is `return (m_iMiscFlags & 1) != 0`
+	// -- and that predicate is the last refusal of `CBaseCombatCharacter::CanBeFedUponBy`
+	// (`0x10339800`). Story 29d, Conditions10.
+	inline constexpr uint32 Unconscious = 0x1;
+
+	// Name 18 of the 22, `No_Resist_Feeding`. Read by `CAI_BaseNPCTroika::CanBeFedUponBy`
+	// (`0x102c4a60`, `102c4a8a PUSH 0x40000`): when the feeder IS this body's own follower boss the
+	// feed is refused unless this flag stands, so your own follower or ghoul may only feed on you
+	// while it does. Story 29d, Conditions10.
+	inline constexpr uint32 NoResistFeeding = 0x40000;
+
 	bool ParseName(const FString& Name, uint32& OutMask);
 	inline void Set(uint32& Word, uint32 Mask) { Word |= Mask; }
 	inline void Clear(uint32& Word, uint32 Mask) { Word &= ~Mask; }

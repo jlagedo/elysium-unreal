@@ -42,6 +42,11 @@ namespace
 
 	// --- The ConVar globals, by address. `DebugConVar` keys on the SPELLING, so a body names the
 	//     global it read and a test names the same one. --------------------------------------------
+	// Retail's own trace buffer, `1028de9a PUSH 0x200` on slot 17 and the same on slot 18. It is
+	// handed to the formatter as an argument rather than baked in, so `0x1028d990`'s
+	// "size <= 0 writes nothing at all" arm stays reachable.
+	constexpr int32 GDebug10TraceBufferBytes = 0x200;
+
 	constexpr TCHAR GDebug10CvTraceRing[] = TEXT("DAT_10920534");   // the trace-message toggle
 	constexpr TCHAR GDebug10CvAltAi[] = TEXT("DAT_1092429c");       // Troika text: the EALTAI line
 	constexpr TCHAR GDebug10CvThinkTrace[] = TEXT("DAT_1092479c");  // think-pre: the LOS/blocked block
@@ -330,10 +335,13 @@ FString FElysiumNpc::TraceMessageFormat(const TCHAR* Message, int32 IndentLevel)
 	// (`0x105d88b8`) over `m_bfAINPCFlags` and `"NAV %s %s"` (`0x105d888c`). The indent is clamped at
 	// 0 (`if (level < 0) level = 0`) and a null message becomes the empty string.
 	//
-	// Until that row lands this answers the message unchanged with the clamp applied, which is the
-	// shortest arm with every optional block empty. Nothing is invented.
-	(void)IndentLevel;
-	return Message != nullptr ? FString(Message) : FString();
+	// **No longer a seam.** Family Conditions10 landed `0x1028d990` as
+	// `FElysiumNpc::BuildConditionDebugString` in this same wave, so the formatter is the real body
+	// now. Both trace slots hand it retail's own buffer size — `1028de9a PUSH 0x200` on slot 17 and
+	// the identical push on slot 18 — which is load-bearing rather than decorative: a size of zero
+	// or less is the arm that writes NOTHING AT ALL, and it stays reachable because the size is a
+	// parameter here instead of a constant inside the body.
+	return BuildConditionDebugString(Message, IndentLevel, GDebug10TraceBufferBytes);
 }
 
 bool FElysiumNpc::TraceMessagesGoToRing() const
@@ -1265,8 +1273,11 @@ float FElysiumNpc::CrowEnemyDistUnits() const
 
 FElysiumEntity* FElysiumNpc::CopPursuitPlayer() const
 {
-	// SEAM for `CNPC_VCop::m_hPursuitPlayer` (`+0x6664`).
-	return nullptr;
+	// `CNPC_VCop::m_hPursuitPlayer` (`+0x6664`). **No longer a seam**: story 29d's family
+	// SpeciesMisc10 landed the WRITER (`CNPC_VCop#597`, `0x10372cc0`) and the word with it, so this
+	// resolves it. A cop that has not latched a pursuit still answers null, which is retail's own
+	// answer for the `0xffffffff` the latch writes when the seen entity carries no player record.
+	return World != nullptr ? World->Resolve(CopPursuitHandle) : nullptr;
 }
 
 bool FElysiumNpc::CopSuspectIs(const FElysiumEntity* Candidate) const
@@ -1308,9 +1319,17 @@ int32 FElysiumNpc::PlayerCopsInPursuitCount(const FElysiumEntity* Candidate) con
 
 bool FElysiumNpc::TzimisceIsCarryingBody() const
 {
-	// SEAM for `0x103be130`, the carry probe the `Body - …` latch stands behind. No verdict row and
-	// no port counterpart; answering false leaves the latch pair holding whatever it held.
-	return false;
+	// `0x103be130`, the carry probe the `Body - …` latch stands behind.
+	//
+	// **No longer a seam.** It was landed as one on the grounds that the body has "no port
+	// counterpart", but the whole of it is
+	//     `return (m_bfAINPCFlags [+0x14b8] >> 5) & 0xffffff01;`
+	// — bit 5 of the NPC flag word, which story 29d (family Conditions10) recovered as
+	// `CARRYING_BODY` alongside `FINDING_BODY` (0x10) while porting `0x103be090`/`0x103be050`. The
+	// port carries that word, so the seam was refusing something it could answer. Ghidra's
+	// `0xffffff01` mask is the `AL`-return artifact: the shift puts bit 5 in the low bit and only
+	// the low bit is read.
+	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
 }
 
 int32 FElysiumNpc::NewscasterStoryOverlayLines(int32 FirstLine)

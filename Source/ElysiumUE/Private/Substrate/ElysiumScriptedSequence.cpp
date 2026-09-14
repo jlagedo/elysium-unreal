@@ -632,12 +632,21 @@ public:
 		}
 	}
 
-	// The waiting pose. VtMB's script grabs its NPC at level start and holds it in the pre-idle
-	// until the beat is triggered — which is why plus_jenny is already sobbing and the prophet
-	// already praying when the player first walks up. Done in Activate because the NPC's own body
-	// graph must already exist and the player must already occupy the final frozen placement.
+	// Slot 113 `Activate`, and then the waiting pose.
+	//
+	// VtMB's script grabs its NPC at level start and holds it in the pre-idle until the beat is
+	// triggered — which is why plus_jenny is already sobbing and the prophet already praying when
+	// the player first walks up. Done in Activate because the NPC's own body graph must already
+	// exist and the player must already occupy the final frozen placement.
+	//
+	// Story 29d, family Lifecycle10 put retail's own slot-113 body (`0x101a8de0`) in FRONT of it:
+	// the pose is this runtime's staging and retail's is the actor search, the sequence-sound
+	// precaches and the next-script resolution. Retail's half runs first because retail's half IS
+	// slot 113 and the pose is what this port adds after it.
 	virtual void Activate() override
 	{
+		ActivateRetailBody();
+
 		const FString& Wait = PreIdle.IsEmpty() ? PreIdleAlt : PreIdle;
 		if (Wait.IsEmpty())
 		{
@@ -732,6 +741,134 @@ public:
 			if (!F.Value->IsEmpty())
 			{
 				Out.Emplace(F.Key, *F.Value);
+			}
+		}
+		// Story 29d, family Lifecycle10: slot 113's two recorded halves, so the `Activate` body is
+		// assertable through the ordinary inspector rather than through a friend declaration.
+		Out.Emplace(TEXT("Activate precaches"),
+			FString::JoinBy(ActivatePrecacheLog, TEXT(","),
+				[](const FSequenceSoundPrecache& Row) { return Row.SequenceName; }));
+		Out.Emplace(TEXT("Activate diagnostics"), FString::FromInt(ActivateDiagnostics.Num()));
+	}
+
+	// --- Story 29d, family Lifecycle10: slot 113 `Activate` — `0x101a8de0` -----------------------
+	//
+	// `CCineAISchedule::FUN_101a8de0`, slot 113 for `CCineAI`, `CCineAISchedule` and `CCineNPC`.
+	// The world's late `Activate()` pass is where it runs (`FElysiumEntityWorld` calls it exactly
+	// once, after every entity has spawned), which is the same phase Source's is.
+
+	/** One `0x10428880` request — `PrecacheSequenceSounds(studiohdr, sequenceName)`: look the named
+	 *  sequence up on the actor's studio header, walk its anim events, and precache every event id
+	 *  below `5000` that is a sound event as a script sound (warning
+	 *  `"Bad sound event %d in sequence %s"` for an unterminated option string).
+	 *
+	 *  **SEAM**: this substrate has no studio header at kernel level and its sounds are baked
+	 *  soundscripts resolved by name, so the request is RECORDED and nothing is acquired. The
+	 *  recovered half is WHICH sequence names are asked for, on WHICH actor, and in what order. */
+	struct FSequenceSoundPrecache
+	{
+		FString ActorName;
+		FString SequenceName;
+	};
+	TArray<FSequenceSoundPrecache> ActivatePrecacheLog;
+
+	/** What `Activate` printed, verbatim in retail's order. Both diagnostics are `DevMsg`s bracketed
+	 *  by the divider string at `0x105794f0`, which is recorded as its own entry so the bracketing
+	 *  is assertable. */
+	TArray<FString> ActivateDiagnostics;
+
+	/** SEAM for `piVar2[0x25]` (`+0x94`), the `CBaseAnimating` sub-object pointer the actor search
+	 *  requires. A beat's actor on this runtime is an `FElysiumScriptedCharacter` (an NPC or the
+	 *  `!playercontroller` stand-in), so `AsCombatCharacter()` is the carrier for "this entity
+	 *  animates". */
+	static bool ActivateCarriesAnimating(FElysiumEntity& Candidate)
+	{
+		return Candidate.AsCombatCharacter() != nullptr;
+	}
+
+	/** SEAM for `CBaseAnimating::GetModelPtr(actor, -1)`, the studio header. This runtime resolves a
+	 *  model by name through the bake rather than holding an `studiohdr_t*`, so a non-empty `Model`
+	 *  is the same question. */
+	static bool ActivateHasModel(FElysiumEntity& Actor)
+	{
+		return !Actor.Model.IsEmpty();
+	}
+
+	void ActivateRetailBody()
+	{
+		// `CBaseEntity::Activate(this)` first — this runtime's base does nothing, and the chain is
+		// stated rather than skipped.
+		FElysiumEntity::Activate();
+
+		// `while (piVar2 = FindEntityByName(piVar2, m_iszEntity, 0, 0)) { if (piVar2[0x25]) break; }`
+		// — the search walks EVERY entity with the name and stops at the first that carries a
+		// `CBaseAnimating`, so a named marker or trigger sharing the actor's name is skipped rather
+		// than failing the beat. A null `m_iszEntity` reads as the empty string (`DAT_106b8540`).
+		//
+		// `ForEachNamed` is the public half of this runtime's one name walk and visits every match
+		// in entity-list order without an early out, so the FIRST animating hit is kept and later
+		// ones are ignored — the same entity the retail loop breaks on.
+		FElysiumEntity* Actor = nullptr;
+		if (World != nullptr && !TargetEntity.IsEmpty())
+		{
+			World->ForEachNamed(TargetEntity, [&Actor](FElysiumEntity& Candidate)
+				{
+					if (Actor == nullptr && ActivateCarriesAnimating(Candidate))
+					{
+						Actor = &Candidate;
+					}
+				});
+		}
+
+		// The divider `DevMsg` at `0x105794f0`, which brackets both diagnostics.
+		const TCHAR* const Divider = TEXT("--------------------");
+		if (Actor == nullptr)
+		{
+			// `"Could not find NPC %s in CCineNP..."` with `m_iszEntity` and `GetDebugName(this)`.
+			// This arm SKIPS the precache entirely and falls straight to the next-script resolution,
+			// which is `goto LAB_101a8eec` in the decompiled C.
+			ActivateDiagnostics.Add(Divider);
+			ActivateDiagnostics.Add(FString::Printf(
+				TEXT("Could not find NPC %s in CCineNPC::Activate (%s)"),
+				*TargetEntity, *DebugString()));
+			ActivateDiagnostics.Add(Divider);
+		}
+		else if (!ActivateHasModel(*Actor))
+		{
+			// `"NPC %s has no model in CCineNPC::"`. Retail calls `GetDebugName` on THIS beat first
+			// and on the ACTOR second, and passes only the second to the message — the first call's
+			// answer is discarded, which is a retail oddity the argument list preserves.
+			ActivateDiagnostics.Add(Divider);
+			(void)DebugString();
+			ActivateDiagnostics.Add(FString::Printf(
+				TEXT("NPC %s has no model in CCineNPC::Activate"), *Actor->DebugString()));
+			ActivateDiagnostics.Add(Divider);
+		}
+		else
+		{
+			// `thunk_FUN_10428880(modelPtr, name)` on `m_iszPreIdle`, `m_iszPostIdle` and
+			// `m_iszPlay`, in THAT order. `m_iszPreIdle` is the field whose KEYFIELD is `m_iszIdle`
+			// (`vtmb_fields CCineNPC`: `+0x5f44 m_iszPreIdle … key m_iszIdle`), which is this class's
+			// `PreIdle` — not `PreIdleAlt`, whose keyfield is the literal `m_iszPreIdle`.
+			for (const FString* Name : { &PreIdle, &PostIdle, &Play })
+			{
+				ActivatePrecacheLog.Add({ Actor->DebugString(), *Name });
+			}
+		}
+
+		// `piVar2 = FindEntityByName(&DAT_106eb5d8, 0, m_iszNextScript, 0, 0);` then
+		// `m_hNextCine = hit ? hit->GetRefEHandle() : 0xffffffff;` and finally — when `m_hNextCine`
+		// does not resolve to a live entity — `m_iszNextScript = 0`.
+		//
+		// This runtime substitutes the authored chain STRING for the live handle
+		// (`ElysiumScriptedSequence.cpp` § the post-idle band), so the two steps collapse into one:
+		// a next script that names nothing live clears the name.
+		if (!NextScript.IsEmpty())
+		{
+			FElysiumEntity* Next = World != nullptr ? World->FindByName(NextScript) : nullptr;
+			if (Next == nullptr)
+			{
+				NextScript.Reset();
 			}
 		}
 	}

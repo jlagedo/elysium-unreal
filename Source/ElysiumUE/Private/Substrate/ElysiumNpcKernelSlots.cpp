@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 585 generated virtuals: 84 carry the retail default story 29c recovered, 266 are defined by hand
-// in the substrate, and 235 are still stubs — 145 29c, 62 29d, 28 29e.
+// 585 generated virtuals: 83 carry the retail default story 29c recovered, 312 are defined by hand
+// in the substrate, and 190 are still stubs — 145 29c, 17 29d, 28 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -260,11 +260,8 @@ int32 FElysiumNpc::GetHighlightMaterial(FElysiumEntity*)
 
 // slot 35 0x102c0220 (walked) `int vfunc35(CBaseEntity*)`
 //   layer 16, story 29d
-int32 FElysiumNpc::Slot35(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("Slot35"), TEXT("0x102c0220"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot35`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 36 0x100266f0 (walked) `const char* vfunc36()`
 //   layer 0, story 29c
@@ -688,17 +685,13 @@ void FElysiumNpc::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
 
 // slot 105 0x10298ce0 (sdk) `void SetModel(char*)`
 //   layer 14, story 29d
-void FElysiumNpc::SetModel(TCHAR*)
-{
-	FireKernelSlot(TEXT("SetModel"), TEXT("0x10298ce0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::SetModel`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 106 0x1027bb20 (sdk) `void PostConstructor(char*)`
 //   layer 15, story 29d
-void FElysiumNpc::PostConstructor(TCHAR*)
-{
-	FireKernelSlot(TEXT("PostConstructor"), TEXT("0x1027bb20"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::PostConstructor`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 107 0x1009e280 (sdk) `void ParseMapData(CEntityMapData*)`
 //   takes `CEntityMapData*`
@@ -809,20 +802,14 @@ void FElysiumNpc::DrawMuzzleOverlay()
 // slot 126 0x102993c0 (sdk) `int Save(ISave&)`
 //   takes `ISave&`
 //   layer 16, story 29d
-int32 FElysiumNpc::Save(void*)
-{
-	FireKernelSlot(TEXT("Save"), TEXT("0x102993c0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Save`, written by hand in the substrate. Declared here,
+// defined there.
 
 // slot 127 0x10299700 (walked) `int Restore(IRestore&)`
 //   takes `IRestore&`
 //   layer 10, story 29d
-int32 FElysiumNpc::Restore(void*)
-{
-	FireKernelSlot(TEXT("Restore"), TEXT("0x10299700"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Restore`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 128 0x101a6520 (sdk) `bool ShouldSavePhysics()`
 //   layer 0, story 29c
@@ -1173,10 +1160,8 @@ void FElysiumNpc::EndBlocked()
 
 // slot 180 0x1028d6e0 (sdk) `void UpdateOnRemove()`
 //   layer 15, story 29d
-void FElysiumNpc::UpdateOnRemove()
-{
-	FireKernelSlot(TEXT("UpdateOnRemove"), TEXT("0x1028d6e0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::UpdateOnRemove`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 181 0x100ada20 (sdk) `void Teleport(Vector*, QAngle*, Vector*)`
 //   layer 0, story 29c
@@ -1315,11 +1300,8 @@ int32 FElysiumNpc::Illumination()
 
 // slot 201 0x102b4630 (walked) `bool FVisible(CBaseEntity*, int, CBaseEntity**, int)`
 //   layer 15, story 29d
-bool FElysiumNpc::FVisible(FElysiumEntity*, int32, FElysiumEntity*, int32)
-{
-	FireKernelSlot(TEXT("FVisible"), TEXT("0x102b4630"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::FVisible`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 203 0x100a1360 (walked) `float GetAttackDamageScale()`
 //   layer 0, story 29c
@@ -1476,11 +1458,8 @@ FVector FElysiumNpc::GetSoundEmissionOrigin() const
 
 // slot 223 0x10273720 (walked) `bool CreateVPhysics()`
 //   layer 13, story 29d
-bool FElysiumNpc::CreateVPhysics()
-{
-	FireKernelSlot(TEXT("CreateVPhysics"), TEXT("0x10273720"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::CreateVPhysics`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 224 0x100273b0 (walked) `bool ForceVPhysicsCollide(CBaseEntity*)`
 //   layer 0, story 29c
@@ -1966,11 +1945,8 @@ void FElysiumNpc::DamageFlinch(void*, const FVector&, void*)
 
 // slot 295 0x102c21c0 (walked) `bool CanTalk(CBaseEntity*)`
 //   layer 15, story 29d
-bool FElysiumNpc::CanTalk(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("CanTalk"), TEXT("0x102c21c0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::CanTalk`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 296 0x10348ba0 (walked) `bool vfunc296(int)`
 //   layer 0, story 29c
@@ -2037,17 +2013,13 @@ bool FElysiumNpc::Inventory_ShouldAllow_AutopickupAmmo(FElysiumEntity*)
 
 // slot 304 0x102b5b20 (walked) `void GiveBaseFightingItems()`
 //   layer 11, story 29d
-void FElysiumNpc::GiveBaseFightingItems()
-{
-	FireKernelSlot(TEXT("GiveBaseFightingItems"), TEXT("0x102b5b20"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::GiveBaseFightingItems`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 305 0x102b5b70 (walked) `void RemoveBaseFightingItems()`
 //   layer 11, story 29d
-void FElysiumNpc::RemoveBaseFightingItems()
-{
-	FireKernelSlot(TEXT("RemoveBaseFightingItems"), TEXT("0x102b5b70"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::RemoveBaseFightingItems`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 306 0x1033e370 (walked) `void LookAtEntity(CBaseEntity*, bool)`
 //   layer 5, story 29c
@@ -2082,10 +2054,8 @@ FElysiumEntity* FElysiumNpc::GetBestRangedWeapon()
 
 // slot 310 0x10295750 (sdk) `void SetActivity(Activity)`
 //   layer 17, story 29d
-void FElysiumNpc::SetActivity(int32)
-{
-	FireKernelSlot(TEXT("SetActivity"), TEXT("0x10295750"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::SetActivity`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 311 0x10272400 (walked) `void ForcePreTranslatedSequenceAndActivity(Activity, Activity,
 // int)`
@@ -2102,10 +2072,8 @@ void FElysiumNpc::UpdatePresenceEffect()
 
 // slot 314 0x102bf070 (walked) `void UpdatePoseParameters(float)`
 //   layer 12, story 29d
-void FElysiumNpc::UpdatePoseParameters(float)
-{
-	FireKernelSlot(TEXT("UpdatePoseParameters"), TEXT("0x102bf070"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::UpdatePoseParameters`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 315 0x10346cd0 (walked) `void MeleeSwingUpdate()`
 //   layer 18, story 29d
@@ -2191,11 +2159,8 @@ bool FElysiumNpc::Slot325()
 // slot 326 0x1029fec0 (walked) `bool vfunc326(void*, CBaseCombatCharacter*)`
 //   takes `void*`
 //   layer 14, story 29d
-bool FElysiumNpc::Slot326(void*, FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("Slot326"), TEXT("0x1029fec0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot326`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 327 0x10345460 (walked) `bool vfunc327()`
 //   layer 0, story 29c
@@ -2224,10 +2189,8 @@ bool FElysiumNpc::Slot329()
 // slot 330 0x1029fbe0 (walked) `void vfunc330(float, const FireBulletsInfo_t*)`
 //   takes `const FireBulletsInfo_t*`
 //   layer 14, story 29d
-void FElysiumNpc::Slot330(float, void*)
-{
-	FireKernelSlot(TEXT("Slot330"), TEXT("0x1029fbe0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot330`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 331 0x10347180 (walked) `bool ChooseMeleeAttackSequence(CBaseCombatWeapon*, CBaseEntity*,
 // Activity, int*)`
@@ -2242,10 +2205,8 @@ bool FElysiumNpc::ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity*, in
 
 // slot 332 0x1014f890 (walked) `void vfunc332(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpc::Slot332(FElysiumEntity*)
-{
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot332`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 333 0x102bff20 (walked) `void MaintainEyeDirection(float)`
 //   layer 5, story 29c
@@ -2307,11 +2268,8 @@ void FElysiumNpc::RemoveDisciplineEffects(int32, int32)
 
 // slot 342 0x102c4a60 (walked) `bool CanBeFedUponBy(CBaseCombatCharacter*)`
 //   layer 15, story 29d
-bool FElysiumNpc::CanBeFedUponBy(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("CanBeFedUponBy"), TEXT("0x102c4a60"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::CanBeFedUponBy`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 343 0x10053e20 (walked) `void SetShakyHands(float, float, int)`
 //   layer 0, story 29c
@@ -2350,11 +2308,8 @@ float FElysiumNpc::GetShakyHandsIntensity()
 
 // slot 348 0x1032fe60 (walked) `int HealthToPercent()`
 //   layer 11, story 29d
-int32 FElysiumNpc::HealthToPercent()
-{
-	FireKernelSlot(TEXT("HealthToPercent"), TEXT("0x1032fe60"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::HealthToPercent`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 349 0x103412b0 (walked) `void InputBarterBegin(inputdata_t&)`
 //   takes `inputdata_t&`
@@ -2393,10 +2348,8 @@ void FElysiumNpc::PrayerBegin()
 
 // slot 357 0x1033b5f0 (walked) `void vfunc357()`
 //   layer 14, story 29d
-void FElysiumNpc::Slot357()
-{
-	FireKernelSlot(TEXT("Slot357"), TEXT("0x1033b5f0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot357`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 358 0x1033b890 (walked) `void PrayerEnd()`
 //   layer 1, story 29c
@@ -2407,11 +2360,8 @@ void FElysiumNpc::PrayerEnd()
 
 // slot 359 0x1029e750 (walked) `int vfunc359(CBaseEntity*)`
 //   layer 15, story 29d
-int32 FElysiumNpc::Slot359(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("Slot359"), TEXT("0x1029e750"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot359`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 360 0x1014f930 (walked) `bool vfunc360()`
 //   layer 0, story 29c
@@ -2507,12 +2457,8 @@ FVector FElysiumNpc::HeadDirection3D()
 
 // slot 375 0x10295590 (walked) `Activity NPC_EarlyTranslateActivity(Activity)`
 //   layer 15, story 29d
-int32 FElysiumNpc::NPC_EarlyTranslateActivity(int32)
-{
-	FireKernelSlot(TEXT("NPC_EarlyTranslateActivity"), TEXT("0x10295590"), TEXT("29d"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::NPC_EarlyTranslateActivity`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 376 0x10295710 (sdk) `Activity NPC_TranslateActivity(Activity)`
 //   layer 0, story 29c
@@ -2569,17 +2515,13 @@ bool FElysiumNpc::Weapon_EquipAmmoOnly(FElysiumEntity*)
 
 // slot 385 0x1032d0c0 (walked) `void Weapon_Drop(CBaseCombatWeapon*, const Vector*, bool)`
 //   layer 11, story 29d
-void FElysiumNpc::Weapon_Drop(FElysiumEntity*, const FVector*, bool)
-{
-	FireKernelSlot(TEXT("Weapon_Drop"), TEXT("0x1032d0c0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Weapon_Drop`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 386 0x1032ce40 (walked) `void Weapon_Drop()`
 //   layer 10, story 29d
-void FElysiumNpc::Weapon_Drop()
-{
-	FireKernelSlot(TEXT("Weapon_Drop"), TEXT("0x1032ce40"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Weapon_Drop`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 387 0x1032d2e0 (walked) `void Weapon_Drop_All()`
 //   layer 11, story 29d
@@ -2702,11 +2644,8 @@ int32 FElysiumNpc::KnockbackActivity_Default(int32)
 
 // slot 402 0x102658f0 (walked) `bool Event_Gibbed()`
 //   layer 15, story 29d
-bool FElysiumNpc::Event_Gibbed()
-{
-	FireKernelSlot(TEXT("Event_Gibbed"), TEXT("0x102658f0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Event_Gibbed`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 403 0x1032bdf0 (sdk) `void Event_Dying()`
 //   layer 0, story 29c
@@ -2718,11 +2657,8 @@ void FElysiumNpc::Event_Dying()
 // slot 404 0x10299da0 (sdk) `Disposition_t IRelationType(CBaseEntity*)`
 //   returns `Disposition_t`
 //   layer 14, story 29d
-int32 FElysiumNpc::IRelationType(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("IRelationType"), TEXT("0x10299da0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::IRelationType`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 405 0x10333700 (sdk) `int IRelationPriority(CBaseEntity*)`
 //   layer 0, story 29c
@@ -2805,10 +2741,8 @@ void FElysiumNpc::Slot411()
 
 // slot 419 0x102c5500 (walked) `void UpdateBurstShootPause()`
 //   layer 10, story 29d
-void FElysiumNpc::UpdateBurstShootPause()
-{
-	FireKernelSlot(TEXT("UpdateBurstShootPause"), TEXT("0x102c5500"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::UpdateBurstShootPause`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 420 0x1029a0b0 (sdk) `void NPCInit()`
 //   layer 22, story 29e
@@ -2966,10 +2900,8 @@ int32 FElysiumNpc::RunTaskSlot444(void*)
 
 // slot 445 0x10288710 (walked) `void StartTaskOverlay()`
 //   layer 10, story 29d
-void FElysiumNpc::StartTaskOverlay()
-{
-	FireKernelSlot(TEXT("StartTaskOverlay"), TEXT("0x10288710"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::StartTaskOverlay`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 446 0x102cc260 (sdk) `CAI_Schedule* GetScheduleOfType(int)`
 //   returns `CAI_Schedule*`
@@ -3049,11 +2981,8 @@ int32 FElysiumNpc::NumBehaviors()
 
 // slot 460 0x102ad340 (walked) `NPC_STATE PreSelectIdealState()`
 //   layer 15, story 29d
-EElysiumNpcState FElysiumNpc::PreSelectIdealState()
-{
-	FireKernelSlot(TEXT("PreSelectIdealState"), TEXT("0x102ad340"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::PreSelectIdealState`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 461 0x102ad660 (walked) `NPC_STATE SelectIdealState()`
 //   layer 22, story 29e
@@ -3093,26 +3022,18 @@ void FElysiumNpc::OnChangeActivity(int32)
 // slot 467 0x102b35b0 (sdk) `bool QueryHearSound(CSound*)`
 //   takes `CSound*`
 //   layer 14, story 29d
-bool FElysiumNpc::QueryHearSound(void*)
-{
-	FireKernelSlot(TEXT("QueryHearSound"), TEXT("0x102b35b0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::QueryHearSound`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 468 0x102b38b0 (walked) `bool QuerySeeEntity(CBaseEntity*)`
 //   layer 15, story 29d
-bool FElysiumNpc::QuerySeeEntity(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("QuerySeeEntity"), TEXT("0x102b38b0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::QuerySeeEntity`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 469 0x102b39a0 (sdk) `void OnLooked(int)`
 //   layer 15, story 29d
-void FElysiumNpc::OnLooked(int32)
-{
-	FireKernelSlot(TEXT("OnLooked"), TEXT("0x102b39a0"), TEXT("29d"), DebugString());
-}
+// verdict `present`: the body is `FElysiumNpc::OnLooked`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 470 0x102b39e0 (sdk) `void OnListened()`
 //   layer 9, story 29c
@@ -3126,10 +3047,8 @@ void FElysiumNpc::OnLooked(int32)
 
 // slot 472 0x102b3e00 (walked) `void OnSeeEntity(CBaseEntity*)`
 //   layer 13, story 29d
-void FElysiumNpc::OnSeeEntity(FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("OnSeeEntity"), TEXT("0x102b3e00"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::OnSeeEntity`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 473 0x102b4070 (walked) `int GetSoundInterests()`
 //   layer 0, story 29c
@@ -3163,11 +3082,8 @@ int32 FElysiumNpc::GetSoundInterests()
 
 // slot 478 0x102743c0 (sdk) `CBaseEntity* BestEnemy()`
 //   layer 14, story 29d
-FElysiumEntity* FElysiumNpc::BestEnemy()
-{
-	FireKernelSlot(TEXT("BestEnemy"), TEXT("0x102743c0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::BestEnemy`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 479 0x101a6820 (walked) `bool IsValidEnemy(CBaseEntity*)`
 //   layer 0, story 29c
@@ -3457,18 +3373,13 @@ bool FElysiumNpc::MovementCost(int32, const FVector&, const FVector&, void*)
 //   takes `AILocalMoveGoal_t*`
 //   takes `AIMoveResult_t*`
 //   layer 15, story 29d
-bool FElysiumNpc::OnObstructingDoor(void*, FElysiumEntity*, float, void*)
-{
-	FireKernelSlot(TEXT("OnObstructingDoor"), TEXT("0x102984a0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::OnObstructingDoor`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 532 0x10290570 (walked) `void vfunc532(int)`
 //   layer 11, story 29d
-void FElysiumNpc::Slot532(int32)
-{
-	FireKernelSlot(TEXT("Slot532"), TEXT("0x10290570"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot532`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 533 0x102b4ab0 (walked) `Vector EyeOffset(Activity, Activity)`
 //   layer 5, story 29c
@@ -3496,10 +3407,8 @@ void FElysiumNpc::AddLookTarget(FElysiumEntity*, float, float, float)
 
 // slot 538 0x1026b4f0 (walked) `void AimGun()`
 //   layer 13, story 29d
-void FElysiumNpc::AimGun()
-{
-	FireKernelSlot(TEXT("AimGun"), TEXT("0x1026b4f0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::AimGun`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 539 0x1026b480 (walked) `void SetAim(const Vector&)`
 //   layer 2, story 29c
@@ -3529,11 +3438,8 @@ void FElysiumNpc::AimGun()
 
 // slot 544 0x102709c0 (walked) `bool UpdateEnemyMemory(CBaseEntity*, const Vector&, CBaseEntity*)`
 //   layer 10, story 29d
-bool FElysiumNpc::UpdateEnemyMemory(FElysiumEntity*, const FVector&, FElysiumEntity*)
-{
-	FireKernelSlot(TEXT("UpdateEnemyMemory"), TEXT("0x102709c0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::UpdateEnemyMemory`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 545 0x10273d30 (sdk) `bool InitSquad()`
 //   layer 8, story 29c
@@ -3631,11 +3537,8 @@ void FElysiumNpc::OnEndMoveAndShoot()
 
 // slot 562 0x1026fbe0 (walked) `bool WeaponLOSCondition(const Vector&, const Vector&, bool)`
 //   layer 15, story 29d
-bool FElysiumNpc::WeaponLOSCondition(const FVector&, const FVector&, bool)
-{
-	FireKernelSlot(TEXT("WeaponLOSCondition"), TEXT("0x1026fbe0"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::WeaponLOSCondition`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 563 0x10295300 (walked) `void TranslateEnemyChasePosition(CBaseEntity*, Vector&, float&,
 // float*)`
@@ -3660,11 +3563,8 @@ void FElysiumNpc::CheckAmmo()
 // slot 566 0x10295c20 (sdk) `bool FValidateHintType(CAI_Hint*)`
 //   takes `CAI_Hint*`
 //   layer 11, story 29d
-bool FElysiumNpc::FValidateHintType(void*)
-{
-	FireKernelSlot(TEXT("FValidateHintType"), TEXT("0x10295c20"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::FValidateHintType`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 567 0x1026a8f0 (walked) `Activity GetHintActivity(short)`
 //   layer 0, story 29c
@@ -3703,20 +3603,13 @@ int32 FElysiumNpc::GetHintActivity(int16)
 
 // slot 573 0x1026fcf0 (walked) `bool InnateWeaponLOSCondition(const Vector&, const Vector&, bool)`
 //   layer 14, story 29d
-bool FElysiumNpc::InnateWeaponLOSCondition(const FVector&, const FVector&, bool)
-{
-	FireKernelSlot(TEXT("InnateWeaponLOSCondition"), TEXT("0x1026fcf0"), TEXT("29d"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::InnateWeaponLOSCondition`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 574 0x10278900 (walked) `Vector GetShootEnemyDir(const Vector&, int, int)`
 //   layer 12, story 29d
-FVector FElysiumNpc::GetShootEnemyDir(const FVector&, int32, int32)
-{
-	FireKernelSlot(TEXT("GetShootEnemyDir"), TEXT("0x10278900"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::GetShootEnemyDir`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 575 0x102bf4a0 (walked) `bool ShouldMoveAndShoot()`
 //   layer 3, story 29c
@@ -3775,10 +3668,8 @@ void FElysiumNpc::ReportOverThinkLimit(float)
 
 // slot 585 0x1029aa10 (walked) `void ProcessTweakParam(const char*, const char*)`
 //   layer 10, story 29d
-void FElysiumNpc::ProcessTweakParam(const TCHAR*, const TCHAR*)
-{
-	FireKernelSlot(TEXT("ProcessTweakParam"), TEXT("0x1029aa10"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::ProcessTweakParam`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 586 0x101aa5d0 (walked) `EHANDLE GetBestSeeUnknown()`
 //   layer 0, story 29c
@@ -3787,11 +3678,8 @@ void FElysiumNpc::ProcessTweakParam(const TCHAR*, const TCHAR*)
 
 // slot 587 0x1028ef20 (walked) `bool CanWitnessSupernatural(int)`
 //   layer 13, story 29d
-bool FElysiumNpc::CanWitnessSupernatural(int32)
-{
-	FireKernelSlot(TEXT("CanWitnessSupernatural"), TEXT("0x1028ef20"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::CanWitnessSupernatural`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 588 0x10293e50 (walked) `void vfunc588()`
 //   layer 6, story 29c
@@ -3800,10 +3688,8 @@ bool FElysiumNpc::CanWitnessSupernatural(int32)
 
 // slot 589 0x102c2ec0 (walked) `void SetScriptedDiscipline(int, int)`
 //   layer 15, story 29d
-void FElysiumNpc::SetScriptedDiscipline(int32, int32)
-{
-	FireKernelSlot(TEXT("SetScriptedDiscipline"), TEXT("0x102c2ec0"), TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpc::SetScriptedDiscipline`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 590 0x1029f940 (walked) `bool OkToInterruptForMelee()`
 //   layer 2, story 29c
@@ -3830,11 +3716,8 @@ bool FElysiumNpc::Slot591()
 
 // slot 594 0x102b4760 (walked) `bool vfunc594(CBaseEntity*, int, CBaseEntity**, int)`
 //   layer 14, story 29d
-bool FElysiumNpc::Slot594(FElysiumEntity*, int32, FElysiumEntity*, int32)
-{
-	FireKernelSlot(TEXT("Slot594"), TEXT("0x102b4760"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::Slot594`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 595 0x102b4cc0 (walked) `void AcquireNearestHatedTarget()`
 //   layer 21, story 29e
@@ -3900,12 +3783,8 @@ float FElysiumNpc::Slot603(void*, void*)
 
 // slot 605 0x102b7fc0 (walked) `int SelectScheduleRangedCombat(int)`
 //   layer 15, story 29d
-int32 FElysiumNpc::SelectScheduleRangedCombat(int32)
-{
-	FireKernelSlot(TEXT("SelectScheduleRangedCombat"), TEXT("0x102b7fc0"), TEXT("29d"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpc::SelectScheduleRangedCombat`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 606 0x102b8320 (walked) `int vfunc606(int)`
 //   layer 2, story 29c
@@ -4080,8 +3959,6 @@ namespace ElysiumNpcKernelShape
 				[](FElysiumNpc& Npc) -> int64 { return Npc.Slot328() ? 1 : 0; } },
 			{ 329, TEXT("0x1014f850"), TEXT("Slot329"), TEXT("0"), 0, false,
 				[](FElysiumNpc& Npc) -> int64 { return Npc.Slot329() ? 1 : 0; } },
-			{ 332, TEXT("0x1014f890"), TEXT("Slot332"), TEXT("void"), 0, true,
-				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.Slot332(Arg0); return 0; } },
 			{ 360, TEXT("0x1014f930"), TEXT("Slot360"), TEXT("0"), 0, false,
 				[](FElysiumNpc& Npc) -> int64 { return Npc.Slot360() ? 1 : 0; } },
 			{ 361, TEXT("0x1014f950"), TEXT("Slot361"), TEXT("0"), 0, false,

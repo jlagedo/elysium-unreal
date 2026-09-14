@@ -835,6 +835,10 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 	Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
 	Maker.Keys.Add(TEXT("Flag_InfChild"), TEXT("1"));
 	Maker.Keys.Add(TEXT("MaxLiveChildren"), TEXT("1"));
+	// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker::Spawn` (`0x1034afe0`) dispatches
+	// slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the maker. A maker with no `model`
+	// key does not survive its own spawn, in retail or here.
+	Maker.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
 	auto Wire = [&Maker](const TCHAR* Output, const TCHAR* Target)
 	{
 		FElysiumOutputDef Row;

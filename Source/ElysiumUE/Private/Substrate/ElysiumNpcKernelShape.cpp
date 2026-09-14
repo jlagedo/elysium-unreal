@@ -3273,7 +3273,7 @@ namespace
 			TEXT("ChooseMeleeAttackSequence"), ETier::Walked, TEXT("0x10347180"), 11, TEXT("29d"),
 			false, TEXT(""), TEXT("") },
 		{ 332, TEXT(""), TEXT(""), TEXT("void vfunc332(CBaseEntity*)"), TEXT("Slot332"),
-			ETier::Walked, TEXT("0x1014f890"), 0, TEXT("29c"), false, TEXT("rule"), TEXT("void") },
+			ETier::Walked, TEXT("0x1014f890"), 0, TEXT("29c"), false, TEXT("rule"), TEXT("") },
 		{ 333, TEXT(""), TEXT("MaintainEyeDirection"), TEXT("void MaintainEyeDirection(float)"),
 			TEXT("MaintainEyeDirection"), ETier::Walked, TEXT("0x102bff20"), 5, TEXT("29c"), false,
 			TEXT("present"), TEXT("") },
@@ -8800,10 +8800,10 @@ const FElysiumNpcShapeCensus& Census()
 		/* Classnames       */ 77,
 		/* Overrides        */ 2344,
 		/* VerdictedSlots   */ 409,
-		/* DefaultSlots     */ 84,
+		/* DefaultSlots     */ 83,
 		/* VerdictedOverrides */ 1771,
 		/* RegistryValues   */ 451,
-		/* RowDigest        */ 0x7d518fc9397c2864ull,
+		/* RowDigest        */ 0x6f85694fbac908c6ull,
 	};
 	return GCensus;
 }

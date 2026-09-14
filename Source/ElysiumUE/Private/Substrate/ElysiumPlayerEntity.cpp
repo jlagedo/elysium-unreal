@@ -1631,3 +1631,123 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			bDialogWeaponWasDrawable ? TEXT("yes") : TEXT("no"))
 		: FString(TEXT("(none)")));
 }
+
+// =================================================================================================
+// Story 29d, family **Social10** — the two `CBasePlayer` bodies.
+//
+// `docs/vtmb/npc-ai/social.md` § "Story 29d, family Social10 — talking, the tweak file and the
+// dialogue packet" carries the walk of both.
+// =================================================================================================
+
+void FElysiumPlayer::OpenBarterOrLoot(FElysiumEntity* TradeTarget, bool bLoot, int32 ArgA,
+	int32 ArgB, int32 ArgC)
+{
+	// `0x1017c600`, `RET 0x14` — five stack arguments past `this`. Read off the listing because the
+	// decompiled C folds the target pointer and the loot byte into one parameter.
+	//
+	//   1017c617  engine->vtbl[+0x8c](target->edict)   -> this->+0x1eb8
+	//   1017c629  this->+0x1ec0 = loot_byte
+	//   1017c642  loot == 0 -> CBaseCombatCharacter::SyncVendorInventory(target, a, b, c)
+	//                          and select "showbarter\n"
+	//   1017c650  loot != 0 -> 0x10324080(target) and select "showloot\n"
+	//   1017c669  engine->vtbl[+0xf4](engine, this->edict, cmd)
+	//
+	// The window is opened by a CONSOLE COMMAND on the PLAYER's own edict, not by a direct call —
+	// which is why the port having no barter or loot window does not make this body unportable: the
+	// command bus is real, and this is what would issue on it.
+	BarterTarget = TradeTarget != nullptr ? TradeTarget->Handle : FElysiumEntityHandle::Invalid();
+	bBarterTargetIsLoot = bLoot;
+
+	if (!bLoot)
+	{
+		// SEAM — `CBaseCombatCharacter::SyncVendorInventory(target, ArgA, ArgB, ArgC)`. The three
+		// arguments are pushed in order at `1017c63d`..`1017c63f`; their meaning is unrecovered and
+		// they are carried rather than dropped.
+		++VendorInventorySyncs;
+		LastTradeWindowCommand = TEXT("showbarter\n");   // 0x10587ef4
+	}
+	else
+	{
+		// SEAM — `0x10324080(target)`, the corpse-loot inventory build. The three extra arguments are
+		// NOT passed on this arm, which is retail.
+		++CorpseLootBuilds;
+		LastTradeWindowCommand = TEXT("showloot\n");     // 0x10587ee8
+	}
+	(void)ArgA;
+	(void)ArgB;
+	(void)ArgC;
+
+	// SEAM for `ClientCommand`. This runtime has no `showbarter` / `showloot` console command yet
+	// (spec 9.8b owns barter and containers), so the command is RECORDED rather than dispatched into
+	// a handler that would answer nothing. `LastTradeWindowCommand` is what a caller and a test read.
+}
+
+bool FElysiumPlayer::ClientDisciplineDurationRecord(int32 Slot, float& OutValue) const
+{
+	// SEAM — see `ElysiumPlayer.h`. `thunk_FUN_102012d0` / `thunk_FUN_100ce450` /
+	// `thunk_FUN_100ce600` over `DAT_106e7050`.
+	(void)Slot;
+	OutValue = 0.f;
+	const_cast<FElysiumPlayer*>(this)->ClientDisciplineDurationProbes += 1;
+	return false;
+}
+
+bool FElysiumPlayer::ClientDisciplineDurationInBounds(float Delta) const
+{
+	// SEAM — `thunk_FUN_100ce630`. Admitting.
+	(void)Delta;
+	return true;
+}
+
+double FElysiumPlayer::ClientDisciplineDurationNow() const
+{
+	// SEAM — the engine's `vtable +0x1dc` global time, which is the substrate clock here.
+	return World != nullptr ? World->NowSeconds() : 0.0;
+}
+
+void FElysiumPlayer::RescaleActiveDisciplineDurations(const void* A, const void* B, float Scale,
+	float Divisor)
+{
+	// `0x10183120`. `1018312a CMP EAX,[ESP + 0x28] / JZ 0x10183245` — the whole body is skipped when
+	// the first two arguments are POINTER-EQUAL. Retail's own no-op guard, reproduced as the pointer
+	// identity it is rather than as a value compare.
+	if (A == B)
+	{
+		return;
+	}
+
+	// `10183143`..`1018323c` — seventeen slots, `+0x1adc` stride 4.
+	for (int32 Slot = 0; Slot < ClientDisciplineDurationCount; ++Slot)
+	{
+		// `10183199 thunk_FUN_102012d0(list, i)` then `101831bf thunk_FUN_100ce450(&DAT_106e7050,
+		// this, &key)` and `101831d3 thunk_FUN_100ce600(&DAT_106e7050, &value)`. All three are one
+		// seam here: "does this player have a stored value for Discipline slot `i`".
+		float Value = 0.f;
+		if (!ClientDisciplineDurationRecord(Slot, Value))
+		{
+			continue;
+		}
+
+		// `101831e4 FLD dword [value] / FSTP qword` — retail widens the stored float to a DOUBLE
+		// before the subtraction, so the rebase is done at double precision and only the result is
+		// narrowed back. Reproduced, because a float subtraction of two large absolute times would
+		// not answer the same remainder.
+		const double Stored = static_cast<double>(Value);
+		// `101831ee CALL [engine + 0x1dc]` then `101831fd FSUBR qword [remaining]` — `stored - now`.
+		const double Remaining = Stored - ClientDisciplineDurationNow();
+		// `10183201 FLD dword [slot] / FSUB ST0,ST1 / FSTP` — the ELAPSED part, kept as a float.
+		const float Elapsed = static_cast<float>(static_cast<double>(ClientDisciplineDurations[Slot])
+			- Remaining);
+		// `10183209 FMUL dword [Scale] / FDIV dword [Divisor]` — the remaining part, rescaled. The
+		// divide is unguarded in retail; a zero divisor produces an infinity that the bounds test
+		// below is then asked about, which is exactly what happens here.
+		const float Delta = static_cast<float>(Remaining * static_cast<double>(Scale)
+			/ static_cast<double>(Divisor));
+		// `1018321a thunk_FUN_100ce630(&DAT_106e7050, delta)` — the write is GATED on it.
+		if (ClientDisciplineDurationInBounds(Delta))
+		{
+			// `10183223 FLD / FADD / FSTP dword [slot]`.
+			ClientDisciplineDurations[Slot] = Elapsed + Delta;
+		}
+	}
+}

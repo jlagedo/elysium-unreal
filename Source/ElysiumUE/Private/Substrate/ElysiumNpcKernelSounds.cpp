@@ -724,6 +724,14 @@ void FElysiumNpc::Slot506()
 // and every other body takes the base decision unchanged.
 bool FElysiumNpc::ShouldPlayIdleSound()
 {
+	// Story 29d, family **SpeciesAnim10**: `CNPC_VZombie#509` is `0x103e0fa0`, which REPLACES this
+	// body wholesale — no dialog refusal, no state test, no `SF_NPC_GAG` — and adds a 1-in-21 arm on
+	// `SCHED_TROIKA_COMFORT` that skips the float-sound gate. The body is in
+	// `ElysiumNpcKernelAnim10_2.cpp`; the dispatch is here so slot 509 stays one method.
+	if (ShouldPlayIdleSoundZombieArm())
+	{
+		return ShouldPlayIdleSoundZombie();
+	}
 	if (SoundsIsInDialog(*this))
 	{
 		return false;

@@ -700,6 +700,22 @@ struct FElysiumAnimationIntent
 	// The form the body is wearing. No recovered translation row reads it; it rides so the seam takes
 	// it rather than growing a parameter later.
 	FString FormTag;
+	// **The live NPC state the recovered translation bodies read, answered by the KERNEL.**
+	//
+	// The generated `PreTranslate_*` tables (`Visual/ElysiumNpcActivityTables.cpp`) key their rows on
+	// an `ElysiumActionTables::ENpcPredicate`, and until story 29d the resolve pass could answer only
+	// two of the eighteen — so the frenzy rows, the gait override, the cover and reload delegates and
+	// every form and variant row were unreachable whatever the body was doing. The same eighteen
+	// questions are what `CAI_BaseNPCTroika::NPC_EarlyTranslateActivity` (`0x10295590`) and its five
+	// species arms read directly off the NPC, and `FElysiumNpc::PreTranslatePredicate` is that one
+	// evaluator. An intent built for a live NPC binds this to it, so slot 375 and the table walk read
+	// the same state instead of two different ones.
+	//
+	// The predicate rides as `int32` because `ENpcPredicate` is declared in a `Visual/` PRIVATE
+	// header and this is the module's public intent record; the binder casts at the one call site.
+	// Unbound — the gym's synthetic intents, and every player intent — the resolve pass keeps its own
+	// two-answer fallback, which is exactly what it did before.
+	TFunction<bool(int32 Predicate, int32 Operand)> NpcLiveState;
 
 	// Completion.
 	bool bLoop = true;

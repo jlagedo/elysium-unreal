@@ -4415,3 +4415,934 @@ duration 0. The Troika body then always runs. The four radii are MingXiao's reco
 and are also what settles the radius/height argument order of the Troika body's own rings.
 
 **Unrecovered:** nothing.
+## Story 29d, families Anim10 and SpeciesAnim10 — activity, sequence, pose and model
+
+_Recovered 2026-09-14, story 29d._
+
+Twenty-seven `rule` rows across seven retail surfaces: slot 105 `SetModel`, the activity triple
+(`SetActivityAndSequence`, the base `SetActivity`, `MaintainActivity`, `AdvanceToIdealActivity`),
+slot 310 `SetActivity`, slot 375 `NPC_EarlyTranslateActivity`, slot 314 `UpdatePoseParameters`,
+slots 326 / 330 / 359 / 584, `CAI_BaseHumanoid`'s own slot-333 body, and family SpeciesAnim10's
+four species arms of slots 604 and 509.
+
+**Animation is state, not a picture.** An activity id, the sequence chosen for it, the answer a
+translation table gives and the ORDER of a pose write against a dispatch are all things a retail
+program observes. `SetActivityAndSequence` fires slot 465 and the global activity-change listener
+on two DIFFERENT edges; `SetActivity`'s two refusals are what make a repeated request a no-op; and
+`MaintainActivity`'s `ACT_TRANSITION` arm is what lets a transition clip finish. Only the rendering
+of a chosen clip is visual, and nothing below is taken as visual-only.
+
+**Slot 375 was split across two surfaces and no longer is.** Before this story the visual animation
+path walked the generated `PreTranslate_*` rows through `ElysiumActionTables::NpcTranslate` while
+the kernel's slot 375 was a stub answering 0, and the table walker's live-predicate evaluator
+answered FALSE to every predicate but two — so its frenzy, gait, cover, reload and form rows could
+not fire at all. The kernel body below is now the interpreter, and `FElysiumNpc::
+PreTranslatePredicate` is the ONE evaluator both surfaces read: every predicate in the generated
+vocabulary is answered from the same read the slot-375 body makes.
+
+### `CAI_BaseNPCTroika::SetModel` — `0x10298ce0`
+
+_Recovered 2026-09-14, story 29d._
+
+Fifty bytes and four calls, and the ORDER is the whole body because each reads what the one before
+it wrote: `CBaseCombatCharacter::SetModel(name)`, then `SetHullSizeNormal(force = 1)`
+(`0x10273070`), then `SetDefaultEyeOffset` (`0x10274ca0`), then `+0x64e8` from the disposition
+stance-table row resolver (`0x100ec640`). The model must be set before the hull and the hull before
+the eye — `SetDefaultEyeOffset`'s fallback arm reads the mins and maxs `SetHullSizeNormal` has just
+written.
+
+Three classes replace it. `CAI_BaseHumanoid` (`0x1025e510`) is a different body entirely;
+`CNPC_VGhoulCroucher` (`0x1037b1f0`) and `CNPC_VZombie` (`0x103e0540`) share one 119-byte body that
+runs this one FIRST.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseHumanoid::SetModel` — `0x1025e510`
+
+_Recovered 2026-09-14, story 29d._
+
+485 bytes: `CBaseCombatCharacter::SetModel` and then twenty-six indices cached into the consecutive
+words `+0x5fb8`..`+0x601c`, in this order — `body_trans_Y`, `body_trans_X`, `body_lift`,
+`body_yaw`, `body_pitch`, `body_roll`, `spine_yaw`, `spine_pitch`, `spine_roll`, `neck_trans`,
+`head_yaw`, `head_pitch`, `head_roll`, `move_rightleft`, `move_forwardback`, `move_updown`,
+`body_rightleft`, `body_updown`, `body_tilt`, `chest_rightleft`, `chest_updown`, `chest_tilt`,
+`head_forwardback`, `head_rightleft`, `head_updown`, `head_tilt`.
+
+**The cache is not one lookup repeated.** The first THIRTEEN go through
+`CBaseAnimating::LookupPoseParameter`, which answers `-1` on a miss; the last THIRTEEN go through
+`thunk_FUN_100b5d10`, which is `LookupFlexController` — the body story 29c-1 recovered as answering
+**0**, not -1, when nothing matches. So the two halves of one array take different miss values, and
+a misspelt flex name caches controller zero rather than being dropped. Indices 10..12 (`head_yaw`,
+`head_pitch`, `head_roll`) are the three `0x1025efc0` zeroes at the top of every
+`MaintainEyeDirection` pass, which is what ties the two bodies together.
+
+`CAI_BaseHumanoid` sits under `CAI_BaseActor` on a sibling SDK branch with 590 vtable slots and no
+entity classname anywhere in the 77-class census, so no spawned `npc_*` reaches this arm. It is
+recovered because it is the only statement of what those twenty-six words are.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPC::SetActivityAndSequence` — `0x10272490`
+
+_Recovered 2026-09-14, story 29d._
+
+243 bytes, the commit every activity change ends in, and every one of its six effects is ordered
+against the others.
+
+1. `m_TranslatedActivity` (`+0x0ff4`) is written FIRST, before anything below can read it.
+2. A NEGATIVE sequence takes `ResetSequence(0)` and skips the cycle word, the duration and the
+   weapon activity — but not the rest of the body.
+3. Otherwise `m_flCycle` (`+0x06f8`) is zeroed UNLESS the sequence equals `m_nSequence` (`+0x06f0`)
+   with `+0x065d` set, OR the old activity (`+0x0fec`) and the new one are BOTH in
+   `{9 ACT_WALK, 0x13 ACT_RUN}`. That pair is retail's walk/run cycle carry, and it is what keeps a
+   footfall in phase across a gait change.
+4. `ResetSequence(seq)`, `CBaseAnimating::SequenceDuration(seq)`, then
+   `CBaseCombatCharacter::Weapon_SetActivity(weaponActivity, duration)`.
+5. Slot 533 `EyeOffset(activity, m_TranslatedActivity)` feeds `SetViewOffset` (`0x1009f380`) — for
+   EVERY request, the negative-sequence one included.
+6. Slot 465 `OnChangeActivity(activity)` fires only when `m_Activity` differs from the NEW
+   ACTIVITY; the global activity-change listener (`0x101f6010` over `DAT_1073dd58`) fires on a
+   DIFFERENT comparison — `m_Activity` against the TRANSLATED activity — and only while
+   `m_bKeepSound` (`+0x5cd8`) is clear. Both read `m_Activity` before step 7 overwrites it.
+7. `m_Activity = activity`, then `CAI_Navigator::OnNewActivity` through `m_pNavigator` (`+0x5d44`).
+
+`m_bKeepSound` exists for exactly one caller: `CAI_BaseNPCTroika::SetActivity` raises it around its
+random fidget/hunt pick so the listener is not told about the intermediate activity.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPC::SetActivity` — `0x102725d0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 310's BASE body, a distinct retail function beside the Troika override `0x10295750` that owns
+the slot. Two refusals then three writes:
+
+```
+if ((m_Activity != act) && (act == 0 || m_Activity != 2)) { ... }
+```
+
+A request equal to what is already playing is a NO-OP — which is why `RestartIdealActivity`
+(`0x10289ee0`) has to clear `m_Activity` before asking — and a body in `ACT_TRANSITION` (2) refuses
+everything except `ACT_RESET` (0). Past them: `m_IdealActivity` takes the request,
+`ResolveActivityToSequence` (`0x10272130`) fills `m_nIdealSequence`, `m_IdealTranslatedActivity` and
+`m_IdealWeaponActivity`, and `SetActivityAndSequence` commits all four — re-reading
+`m_IdealActivity` rather than using its own argument.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPC::MaintainActivity` — `0x102727d0`
+
+_Recovered 2026-09-14, story 29d._
+
+Gated on slot 466 `ShouldMaintainActivity`. Inside, work happens only when `m_Activity` differs
+from `m_IdealActivity` OR `m_nSequence` from `m_nIdealSequence` — either mismatch is enough.
+
+Activity 2 is the special arm: it WAITS for `m_bSequenceFinished` (`+0x065c`) and then runs
+`AdvanceToIdealActivity` (`0x102726a0`) and nothing else. That is what lets a transition clip play
+out. Every other activity re-resolves the ideal through `0x10272130` FIRST and then advances. The
+body writes no field of its own; the rest of its 230 bytes is the scope-trace push and pop.
+
+Not a vtable slot — `__thiscall` with no dispatch site — so it is reached by direct call, and
+`m_bForceMaintainActivity` (`+0x65fa`) brackets exactly one of them (`FUN_10290350`, the
+alternate-AI door transaction).
+
+**Unrecovered:** nothing.
+
+### `AdvanceToIdealActivity` — `0x102726a0`
+
+_Recovered 2026-09-14, story 29d._
+
+`FindTransitionSequence(m_nSequence, m_nIdealSequence)`; a `-NAN` answer — retail's own sentinel,
+produced by comparing the returned float against itself — dispatches slot 310 with
+`m_IdealActivity` and stops. A transition sequence that is NOT the ideal one commits activity **2**
+with that sequence, re-resolving the translated and weapon pair from the transition sequence's OWN
+activity when `GetSequenceActivity` gives it one; retail seeds both locals with 2 first, so a
+transition whose sequence carries no activity commits `(2, seq, 2, 2)`. Only when the transition IS
+the ideal sequence does the ideal activity commit outright.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::SetActivity` — `0x10295750`
+
+_Recovered 2026-09-14, story 29d._
+
+612 bytes, slot 310, and three top arms. Every request outside the `0x1093`-`0x1096` and
+`0x1115`-`0x1117` families forwards to `0x102725d0` unchanged.
+
+**Request `0x1093`, the idle-fidget family.** When `m_Activity` is OUTSIDE `0x1093`..`0x1096`, hand
+`0x1093` to the base and stop. When it is inside and slot 251 `IsActivityFinished` is FALSE, the
+body **does nothing at all** — no base call, no roll — which is the arm that makes a fidget play to
+its end. When it is inside and finished: `m_bKeepSound` 1, `RandomInt(0, 99)`, and `0x1095` below
+15, `0x1096` below 30, `0x1094` below 40, else `0x1093`; `m_bKeepSound` returns to 0 on every one
+of the four exits.
+
+**Request `0x1115`, the hunt-walk family.** `m_bfNPCFrenziedFlags` bit `0x40` forces
+`0xf17 ACT_RUN_FRENZY` unless it is ALREADY playing, in which case the body does nothing rather
+than restarting it; else bit `0x20` forces `0x13 ACT_RUN` on the same terms; else, outside
+`0x1115`..`0x1117`, hand `0x1115` down; else, if `IsActivityFinished`, the two roll bounds start at
+15 and 15 and widen to **8 and 0x18** only when slot 168 `GetEnemy` is non-null AND slot 541's
+enemy memory carries a record for him (`0x102dfa20`). On that path retail reads the last known
+position (`0x102dfed0`) and its own slot-217 origin into stack vectors and DISCARDS both; the reads
+are dispatches a program can observe, the values go nowhere. Then `m_bKeepSound` 1,
+`RandomInt(0, 99)`, `0x1116` below the first bound, `0x1117` below the sum, else `0x1115`, and
+`m_bKeepSound` 0.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::NPC_EarlyTranslateActivity` — `0x10295590`
+
+_Recovered 2026-09-14, story 29d._
+
+295 bytes, slot 375, five steps in this order.
+
+1. The gait-override ConVar `DAT_10924d6c` (the `vtable+4` "is this a command" probe, value at
+   `+0x2c`). Value 1 rewrites `9 ACT_WALK` and `0x1115 ACT_HUNT_WALK` to `0x13 ACT_RUN`; value 2
+   rewrites `0x13` to `9`.
+2. `m_bfNPCFrenziedFlags` (`+0x5b84`) bit `0x40` rewrites
+   `{0x17, 9, 0x13, 0x16, 0x1115, 0x1121}` to `0xf17 ACT_RUN_FRENZY`; ELSE bit `0x20` rewrites
+   `{0x1115, 9, 0x16, 0x1121}` to `0x13`. The two are an `else if`, so `0x40` wins outright.
+3. `3 ACT_FIDGET` becomes `1 ACT_IDLE` — **and only when step 2 took neither rewrite**, because
+   both of those arms `goto LAB_10295655` past this test. Unobservable, since 3 is in neither
+   rewrite set; recorded because the listing says so.
+4. **One capability test in front of BOTH delegates.** `10295655 CALL [vtable+0x804]` (slot 513
+   `CapabilitiesGet`) then `1029565f TEST 0x8000000`: under that bit, `0x55 ACT_RELOAD_FAST`
+   RETURNS slot 570 `GetReloadActivity(m_pHintNode)`'s answer, and `6 ACT_COVER` — or `1 ACT_IDLE`
+   when `m_afMemory` (`+0x5d8c`) bit 2 is set — RETURNS slot 569 `GetCoverActivity(m_pHintNode)`'s.
+   Neither falls through.
+5. Otherwise `CBaseCombatCharacter::NPC_EarlyTranslateActivity`, which is the identity.
+
+**Correction.** The earlier one-line walk placed only the reload delegate under `0x8000000` and left
+`ACT_COVER` outside it; so did the generated `PreTranslate_Troika` table, whose `ACT_COVER` row was
+predicated `Always`. The listing puts one `TEST` in front of both.
+
+**Unrecovered:** the ConVar's registered name and default; `0` is the value a defaulted object
+answers and is the arm the port takes.
+
+### `CNPC_VHuman::NPC_EarlyTranslateActivity` — `0x103854f0`
+
+_Recovered 2026-09-14, story 29d._
+
+565 bytes and slot 375 for **39** census classes — the armed/alert decision tree, then the
+rewrites. It writes exactly one field, `m_bAggressiveAnims` (`+0x6410`), on four different paths,
+and every rewrite below reads only that.
+
+1. Slot 513 `CapabilitiesGet` bit `0x40` rewrites `0x11 ACT_WALK_AIM` to `9` and
+   `0x15 ACT_RUN_AIM` to `0x13`. This runs BEFORE the weapon test, so it lands on an unarmed body
+   too.
+2. With NO active weapon, or one whose `+0x19c` carries `0x40 NODRAW`, `m_bAggressiveAnims` is
+   CLEARED and the request goes straight to `0x10295590`, skipping both rewrite blocks. Retail
+   calls `GetActiveWeapon()` twice here; the second call is what reads `+0x19c`.
+3. Otherwise the tree. The flag is SET when capability `0x40` stands AND the ConVar `DAT_10924f74`
+   is live with a non-zero `+0x2c` AND `m_bfAINPCFlags2` (`+0x14bc`) carries
+   `0x400 MOVE_FACE_ENEMY`. Failing that: `m_bfAINPCFlags` (`+0x14b8`) `0x10000 FORCE_RELAXED_ANIMS`
+   clears it and beats everything below; `m_bfNPCFrenziedFlags` `0x200` skips the state ladder and
+   SETS it; otherwise the flag is cleared and then the state ladder decides — `m_NPCState` 2 sets
+   it, and for state 3 or `0xb` **it is set when the matching ConVar (`DAT_10923f5c` for 3,
+   `DAT_10924034` for `0xb`) is LIVE and non-zero, OR `m_afMemory` carries `0x8000000`**. It stays
+   clear only when that ConVar is dead or zero AND the memory bit is clear — `goto LAB_10385611`
+   requires both terms. The pack-07 walk had this arm inverted.
+4. Aggressive CLEAR rewrites `9` to `0x16` and `0x13` to `0x17`, through `0x10295590` rather than
+   by returning.
+5. Aggressive SET: `1 ACT_IDLE` becomes `5` ONLY when there is an active weapon whose slot 360
+   (`+0x5a0`) answer carries `0x6000`; then the six fixed pairs `0x3b`→`0x3d`, `0x3c`→`0x3e`,
+   `0x9d`→`0x9f`, `0x9e`→`0xa0`, `0xa1`→`0xa3`, `0xa2`→`0xa4`.
+6. Everything else falls to `0x10295590` unchanged.
+
+**Unrecovered:** the three ConVars' names and defaults, and the weapon's `+0x19c` draw-flag word,
+which no port member carries.
+
+### `CNPC_VTzimisce::NPC_EarlyTranslateActivity` — `0x103bde40`
+
+_Recovered 2026-09-14, story 29d._
+
+Gated on `0x103be130`, which is `m_bfAINPCFlags` (`+0x14b8`) bit 5 `0x20 CARRYING_BODY`. Under it
+the polarity is a ZERO test: `m_bHeavyBodyTarget` (`+0x6688`) **CLEAR** returns `0xfd` for request
+1 and `0xff` for 9 or `0x13`, and SET returns `0xfc` and `0xfe`. Every other request, and the whole
+un-flagged case, falls to `0x10295590`.
+
+The generated `PreTranslate_Tzimisce` rows carry the right ids; its `BodySideLeft` predicate was
+documented with the opposite polarity and is corrected with this body.
+
+**Unrecovered:** what writes `+0x6688`.
+
+### `CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity` — `0x103c3e10`
+
+_Recovered 2026-09-14, story 29d._
+
+It chains `0x10295590` **first** and only then remaps the TRANSLATED activity under a non-zero form
+byte `+0x6672` — so it is a post-pass on the base's answer and not a replacement, which is exactly
+why its slot-310 twin `0x103c3d80` remaps the REQUEST instead and the two look alike but are not.
+The switch is on the incoming activity: 1 and `0xf1` become `0x1134`, 3 `0x1135`, 9 `0x1136`,
+`0x13` `0x1137`, everything else passes through.
+
+Because the base has already rewritten `3 ACT_FIDGET` to `1 ACT_IDLE`, the `0x1135` row is
+unreachable through the chain and a fidget request answers `0x1134`.
+
+The generated `PreTranslate_TzimisceRunner` rows keyed `RunnerVariantIs == 0..3` with no `From`
+activity, which is the wrong key; the generator is corrected with this body.
+
+**Unrecovered:** what writes `+0x6672`.
+
+### `CNPC_VTzimisceRunner::SetActivity` — `0x103c3d80`
+
+_Recovered 2026-09-14, story 29d._
+
+110 bytes. With `+0x6672` non-zero the REQUEST is remapped before `0x10295750`, tested in retail's
+own order — 1, 9, `0x13`, 3, `0xf1`, which is not numeric order — to `0x1134`, `0x1136`, `0x1137`,
+`0x1135`, `0x1134`. With the byte clear every request forwards unchanged.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::UpdatePoseParameters` — `0x102bf070`
+
+_Recovered 2026-09-14, story 29d._
+
+528 bytes, slot 314. The aim target is `m_hShootTargetOverride` (`+0x5ba8`) resolved and, failing
+that, slot 167 `GetEnemy`; retail's `goto` pair means a LIVE override enters the aim arm even when
+`GetEnemy()` is null. `m_iIsOblivious` (`+0x5bb4`) at 1 or more takes the no-aim arm even WITH a
+target, because the test is INSIDE the aim arm and not in front of it.
+
+The no-aim arm writes `m_bAimWeaponAtTarget` (`+0x0e6c`) = 0, `m_flSet_PoseParameters` (`+0x1064`)
+= `_DAT_104454c4` = 0.0 and `+0x1068` = 0.0.
+
+The aim arm: slot 193 `EyePosition`, `0x10278650` for the aim point, the delta normalised;
+`m_bAimWeaponAtTarget` = 1; `m_hWeaponAimTarget` (`+0x0e70`) = the target's handle or `0xffffffff`;
+`m_vWeaponAimOffset` (`+0x0e74`) = the aim point minus the TARGET's slot-217 origin;
+`VectorAngles(delta)` with the pitch biased by `_DAT_1049ae9c` and the yaw taken relative to slot
+219 `GetAbsAngles`; then both clamped low-bound-first to `_DAT_1049a180` (-45.0) and `_DAT_1049949c`
+(45.0) into `+0x1064` and `+0x1068`.
+
+`CBaseCombatCharacter::UpdatePoseParameters(interval)` is the tail on BOTH arms.
+
+**`_DAT_1049ae9c` is 7.5f**, read out of the pinned image's `.rdata` on 2026-09-14; the checklist
+left it unnamed.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::vfunc326` — `0x1029fec0`
+
+_Recovered 2026-09-14, story 29d._
+
+81 bytes over the base `0x103482e0`. The Troika arm can only ever NARROW the base's answer: a base
+FALSE passes straight through, and a base TRUE becomes false unless `m_iHitBuildupCount` (`+0x6064`)
+is at or below the int of the ConVar `DAT_109245e4` (`+0x2c`, 0 when the object is defaulted) OR
+the SWING RECORD's byte `+0xba` is 2. `+0xba` is read off `param_1`, the FIRST argument, not off
+the attacker.
+
+**Unrecovered:** the ConVar's name; the port reads the same value
+`docs/vtmb/combat-and-damage.md` § "Who may be knocked back" recovered.
+
+### `CAI_BaseNPCTroika::vfunc330` — `0x1029fbe0`
+
+_Recovered 2026-09-14, story 29d._
+
+205 bytes, `void(float, FireBulletsInfo_t*)`, the near-miss flinch. `delta = GetAbsOrigin() -
+info->m_vecSrc` (`+0x08`..`+0x10`), and its LENGTH comes out of `0x10137220` — which family Senses10
+recovered as `VectorNormalize`, a body that ANSWERS the length while normalising in place. Retail
+hands the UN-normalised delta to the reaction, because the normalise writes through `ECX`, which
+points at a second copy.
+
+The whole body is gated on three non-null terms in this order: `info + 0x98` (the firing weapon),
+`info + 0x94` (the attacker) and `attacker + 0x9c` (the attacker's combat-character record). Past
+them, the weapon's `CVDmg_t` row (`0x102517e0`, three rows of stride `0xec84` searched on the
+weapon's `+0x848`) gives two distance bands: a length below `row + 0x404` plays reaction kind 2,
+else a length below `row + 0x408` plays kind 0, both through `0x10344f80`. Beyond `row + 0x408`
+nothing happens at all.
+
+`0x10344f80`'s own three refusal gates are exactly the knockback-eligibility rule's — slot 400
+`AllowsKnockbackBypass` first, then the template byte `+0x9e Disallow_Knockbacks`, then
+`CVStatList_t::IsEqual(0x0f, 0x11)`.
+
+**Unrecovered:** the `CVDmg_t` table, so the two distance bands have no values here.
+
+### `CAI_BaseNPCTroika::vfunc359` — `0x1029e750`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 359 (`vtable+0x59c`) is the **Auspex aura index**.
+`CBaseCombatCharacter::UpdateAuspex` (`0x100532b0`) calls it with the observer and uses the answer
+as `DAT_10937160[idx + IsKindred * 8]` to pick the aura colour, treating a NEGATIVE as no aura at
+all. Arms in retail's order:
+
+* `CBaseEntity::EntityUnselectable(this)` true → `-1`.
+* `m_iCurFrenzyCount` (`+0x146c`) greater than 0 → `4`.
+* `m_bfAINPCFlags2` (`+0x14bc`) bit `0x80000` `D_MILDLY_CRAZY` → `3`. **This test comes before the
+  state switch**, so a mildly-crazy body never reads its state.
+* otherwise a switch on `m_NPCState` (`+0x5cc0`): 2 and `0xb` → `1`; 3 and `0xe` → `7`; 5, 6, 8, 9,
+  10 and `0xd` → `0`; 7 → `-1`; the default arm, with a non-null observer whose slot 404
+  `IRelationType` answers `1 D_HT`, → `2`, else `5`.
+
+**Unrecovered:** what `EntityUnselectable` reads; and what colours `DAT_10937160`'s sixteen cells
+carry.
+
+### `CAI_BaseHumanoid::MaintainEyeDirection` — `0x1025fa50`
+
+_Recovered 2026-09-14, story 29d._
+
+2,226 bytes and `CAI_BaseHumanoid#333` — a distinct body beside the Troika slot-333 one
+(`0x102bff20`). Read off the LISTING: the decompiler aliases six stack floats across the three
+passes (`fStack_78` is both the normalised time and a head-vector component, `fStack_88` both a
+ConVar value and the loop counter) and loses which vector is which twice.
+
+**Pass 1, `1025fa5c`.** When `m_iszExpressionScene` (`+0x5f9c`) is set and the handle at `+0x5fa0`
+does NOT resolve, `PlayScene(name, &m_hExpressionSceneEnt)`. A null `string_t` reads as the empty
+string, so retail plays the EMPTY scene rather than skipping.
+
+**Pass 2, `1025fa98`.** Slot 283 `ProcessSceneEvents`, slot 193 `EyePosition`, `0x1025efc0` (which
+writes pose parameters `HumanoidPoseParams[10..12]` to 0, flushes the bone cache and clears the two
+cached-direction bits of `+0x5f4c`), then slot 371 `HeadDirection3D` into the running head vector.
+
+**Pass 3, `1025facf`.** The look queue at `+0x5f88` (0x24-byte records, count at `+0x5f94`) is
+pruned: an entry whose END stamp (`entry + 0x18`) is past, or whose kind (`entry + 0x00`) is 0 with
+a dead handle at `entry + 0x04`, is dropped by a `memmove` of the tail (`0x10260820`) and the count
+decremented. **The walk does not advance its index on a removal** — `1025fb17` jumps over the
+`INC EBX` — so two adjacent dead entries are both caught.
+
+**Pass 4, `1025fb25`.** The classname compare against `"cycler_actor"` happens first and
+unconditionally, because its `SETZ BL` result is used by both arms. Then, **only when slot 586
+answers false** — and slot 586 on this branch is `0x1025f1a0`, whose whole body is
+`return m_LookTargets.Count() != 0`, so the gate is "I have nothing to look at" and the block is an
+ACQUISITION: a body in `m_NPCState` 4 `NPC_STATE_SCRIPT` takes the cycler arm only if it IS a
+`cycler_actor` and otherwise does **nothing at all**, no `PickLookTarget`; any other state takes the
+cycler arm for a `cycler_actor` and `PickLookTarget(false, 1.5, 2.5)` for everyone else. The cycler
+arm is `AddLookTarget(UTIL_PlayerByIndex(1), 0.5, RandomFloat(DAT_1090fc0c, DAT_1090fc9c))`, each
+ConVar reading 0.0 when its `vtable+4` probe answers true.
+
+The earlier walk read `+0x928` as "is it in a scene"; it is `HasActiveLookTargets`.
+
+**Pass 5, `1025fc13`.** Every surviving entry that does not name THIS entity accumulates. For each:
+`t = (curtime - entry[+0x14]) / (entry[+0x18] - entry[+0x14])`, zero-weighted strictly below 0 and
+strictly above 1 (both bounds inclusive — `1025fc71`'s `TEST AH,5 / JNP` and `1025fc82`'s
+`AND 0x4100 / JZ`); ramped by `entry[+0x1c]` (`f = t / ramp` below the ramp, `1.0` in the middle,
+`(1.0 - t) / ramp` past `1 - ramp`, the 1.0 being the DOUBLE at `0x10449280`); and scaled by
+`entry[+0x20]` through the cubic `3f² - 2f³` (`_DAT_10449258` = 3.0). An entity-backed entry
+refreshes its cached position from the entity's own `EyePosition` first. The offset from the eye is
+normalised and dotted against slot 371 — re-dispatched per entry — and accepted on
+`dot >= _DAT_10497ca0`, which is a **DOUBLE reading -0.5**, so a target up to 120° off the head
+direction is admitted. An accepted entry blends into the head vector as
+`head * (1 - w) + offset * w` and the head is NOT re-normalised inside the loop.
+
+**Pass 6, `1025fe49`.** With at least one accepted entry: slot 537 `SetHeadDirection(eye + head *
+100.0, interval)` is called and THEN `+0x5f74`..`+0x5f7c` is written. With none — the empty queue
+included — the stored vector decays first, `stored * 0.8 + head * 0.2`, is written, is NORMALISED
+in place, and only then is slot 537 called. **The two arms differ in order, and only the decay arm
+normalises.**
+
+**Pass 7, `1025ffce`.** The view target, walked BACKWARDS from `count - 1`. The first entry naming
+THIS entity takes `eye + head * 100.0` — reading the stack copy of `HeadDirection3D`, which on the
+decay arm is still the ORIGINAL head direction. Otherwise an entry whose position passes slot 587
+(`0x1025e920`, the 3-D 0.5 eye-target cone) claims the view target and the walk STOPS; retail
+refreshes an entity-backed position twice more on that path. When the walk finds nobody, slot 587
+is asked about the CURRENT view target (slot 278) and, only when that refuses, the fallback is
+built: `VectorVectors(HeadDirection3D(), &right, &up)` and then
+`eye + forward * 128.0 (_DAT_1046dcd0) + right * RandomFloat(-16, 16) + up * RandomFloat(-32, 32)`.
+The earlier walk called this "slot +0x458 plus a velocity-projected point"; there is no velocity in
+it.
+
+**Pass 8, `102601e1`.** When `+0x5f80` is strictly past `curtime`, `+0x0854` is **toggled**
+(`x = (x == 0)`, not set) and `+0x5f80` is re-armed to `curtime + RandomFloat(1.5, 4.5)`. The
+compare is strict, so a deadline exactly at `curtime` does not fire.
+
+**Unrecovered:** the two cycler ConVars' names and defaults.
+
+### `CNPC_VGhoulCroucher::SetModel` and `CNPC_VZombie::SetModel` — `0x1037b1f0`, `0x103e0540`
+
+_Recovered 2026-09-14, story 29d._
+
+The SAME 119 bytes on two classes. `CAI_BaseNPCTroika::SetModel` (`0x10298ce0`) runs FIRST — so the
+model write, the hull and the eye all happen before `IsMale` is ever asked — then
+`CBaseCombatCharacter::IsMale` selects `m_iszVSoundGroup` (`+0x00c0`) as `"Zombie_Male"`
+(`0x1063b150`) or `"Zombie_Female"` (`0x1063b140`), each through the `-(s[0] != 0) & addr` idiom
+that yields a null `string_t` for an empty literal; then `+0x00bc` takes the literal **2**,
+unconditionally and AFTER the gender read; then the group (substituting the empty string when null)
+is resolved through the vocalization registry `0x101f55a0` over `DAT_1073dc28` with the create flag
+**clear**, and the record pointer stored into `+0x00b4`.
+
+So the sound group is bound at MODEL time on these two classes, where `CNPC_VWerewolf::Precache`
+makes the same three writes once at precache.
+
+**Unrecovered:** nothing.
+
+### `FUN_10260dc0` — `CAI_ExpressiveNPC`'s slot 584
+
+_Recovered 2026-09-14, story 29d._
+
+Eleven bytes: `MOV ECX,[ECX+0x5f48]` then `JMP 0x100116d0` — a tail jump through the Expresser
+pointer at `+0x5f48` into `0x10311c10` with the concept id and a modifier string, and no pre- or
+post-work at all. `CAI_BaseHumanoid` and `CAI_ExpressiveNPC` are its only two census rows; the
+Troika line fills slot 584 with `0x1028d910` (`ResetAllThinkStamps`), which has nothing to do with
+it. The two bodies do not even share an arity.
+
+**Unrecovered:** nothing. **Not reachable:** neither class carries an entity classname in the
+77-class census.
+
+### `CNPC_VHuman::SelectScheduleMeleeCombat` — `0x10385e40`
+
+_Recovered 2026-09-14, story 29d._
+
+1,449 bytes and slot 604 for **34** census classes — the most-inherited melee selector in the game.
+It REPLACES the Troika body `0x102b6c30` wholesale and never chains it. Every return also stamps the
+selector trace, `+0x1b30` with `"E:\Vampire\main\dlls\hl2_dll\NPC_VHuman.cpp"` and `+0x1b34` with
+the line.
+
+**Out of melee** (`m_bInMelee` `+0x6078` clear) **with slot 599 refusing**: the melee failure gate
+`0x102b6fe0` is offered first and any non-zero answer returns; then, with the melee-range ConVar
+`DAT_10924a1c` (0.0 when its `vtable+4` probe answers true, else the float at `+0x28`), the far arm
+needs `range + 200.0 (_DAT_104492b8)` **strictly below** `m_flEnemyDist` (`+0x6268`) and answers
+`0xe7` (line 1563); otherwise `RandomInt(0, 99)` must **exceed 24** (`CMP EAX,0x19; JL`) and the
+distance must be at or beyond the bare range for `0xe5` (line 1575), else `0xe4` (line 1571).
+
+**In melee with slot 602 agreeing to leave**: slot 601, then slot 308 gives `0xe9` (line 1535);
+else `2 * range` **at or below** the distance gives `0xe7` (line 1541) — `10385ee1`'s
+`TEST AH,0x41; JP` admits equality — else `0xe4` (line 1545).
+
+**The common tail** offers `0x102b7370` `SelectDoorObstructionSchedule` and THEN `0x102b6fe0`,
+returning either non-zero answer. Then, in strict order: `COND 0x0c SHOULD_DODGE` → `0xd5`;
+`COND 0x0d SHOULD_BLOCK` → `0xd6` (both read through the INTERRUPT form `0x10269d30`, not the plain
+`HasCondition`); `COND 0x0f SHOULD_KICK` and `COND 0x0e SHOULD_STEPBACK` — **both read before either
+is tested** — give `0xdb` for kick alone, `0xdb` for kick + stepback with `RandomInt(0, 1) == 1`,
+and `0xd3` otherwise, with stepback alone also `0xd3`; `COND 0x51 CAN_MELEE_ATTACK1` → `0xdc` or
+`0xdd` by slot 308.
+
+Then the height-difference retry stamp at `+0x6274`, ticked whatever the arms below decide: forced
+to `-1.0` when `+0x626c` is at or below `_DAT_10451acc` (64.0), armed to
+`curtime + RandomFloat(3.0, 4.0)` when it holds `-1.0`, and flagged expired once it is at or below
+`curtime`. Under slot 308, together with `COND 9`, `COND 0x1a` or `COND 0x59` or the expired stamp,
+slot 601 then `0xe9`; `COND 0x59` alone gives `0x17`; neither `COND 9` nor `COND 0x60` gives 199;
+otherwise the enemy's `WorldSpaceCenter` is read and discarded and `0x102a11d0` gives `0xe0`/`0xe1`
+by slot 308; then `0x102b7690(0, 1, 0, 1)` is offered; and the last pair is `0xd1`/`0xd2` when the
+distance is **strictly below** the bare range and the stamp has not expired, else `0xca`/`0xcb`.
+
+**Three float compares were decoded off the listing** because the decompiler renders them as
+`(a < b) != (a == b)` and `(a < b) == (a == b)`: `2 * range <= distance`, `range + 200 < distance`,
+and `distance < range`. The earlier walk had the first as "exceeds" and the last as "at or below".
+
+**Unrecovered:** the melee-range ConVar's name and default; what `+0x626c` and `+0x6268` are
+written by.
+
+### `CNPC_VMingXiao::SelectScheduleMeleeCombat` — `0x10396050`
+
+_Recovered 2026-09-14, story 29d._
+
+1,522 bytes, the same skeleton as `0x10385e40` with four differences, and its own trace file
+`"E:\Vampire\main\dlls\hl2_dll\NPC_VMingXiao.cpp"`.
+
+1. The not-yet-engaged arm tests the distance against `range + 200` **first** and does not offer the
+   melee failure gate `0x102b6fe0` at all.
+2. The common tail offers ONLY `0x102b7370`.
+3. It OPENS the ladder with an arm the human body lacks: `COND 0x48 ENEMY_OCCLUDED` → slot 601 then
+   `0xe9` when slot 308 passes, `0xcd` otherwise.
+4. There is NO `COND 0x0d SHOULD_BLOCK` arm at all; only `COND 0x0c SHOULD_DODGE` → `0xd5`.
+
+It also re-fetches `GetEnemy()` at every use rather than caching it, which is observable only in the
+dispatch count.
+
+**Unrecovered:** as `0x10385e40`.
+
+### `CNPC_VBach::SelectScheduleMeleeCombat` — `0x10364080`
+
+_Recovered 2026-09-14, story 29d._
+
+395 bytes, `CNPC_VBach#604` only, and a weapon-DISCIPLINE prologue in front of the human body: Bach
+must be holding the right gun or the right sword for the condition he is in. Its trace file is
+`"E:\Vampire\main\dlls\hl2_dll\NPC_VBach.cpp"`.
+
+`COND 0x7b` stamps `+0x6690` with `curtime + _DAT_10463584` (15.0f) and returns `0x15a` (line
+0x26e). Otherwise `GetActiveWeapon()` is fetched ONCE and `COND 0x7a` read immediately after it.
+Unarmed: `0x7a` gives `0x158` (line 0x28c) and `0x79` gives `0x159` (line 0x290). Armed with `0x7a`
+CLEAR and `0x79` set: the weapon's classname must be `"item_w_rem_m_700_bach"` or the body answers
+`0x159` (line 0x280), and on a match it RETURNS slot 605 `SelectScheduleRangedCombat`'s answer —
+the one arm that leaves the melee family. Armed with `0x7a` set: the classname must be
+`"item_w_katana"` or `0x158` (line 0x279).
+
+The fall-through calls `0x10385e40` DIRECTLY (not through the vtable), clears `+0x6444` unless
+`m_NPCState` is 4 or `0xc` — on every path out, including the ones that answered non-zero — and
+forces `0x159` (line 0x29d) when that call returned 0.
+
+**Unrecovered:** what reads `+0x6690` and `+0x6444`; neither has a recovered reader.
+
+### `CNPC_VZombie::vfunc509` — `0x103e0fa0`
+
+_Recovered 2026-09-14, story 29d._
+
+166 bytes, slot 509, `CNPC_VZombie#509` only. It REPLACES the Troika body `0x10294040` wholesale:
+there is no `IsInDialog` refusal, no `m_NPCState` test and no `SF_NPC_GAG` test in it at all, which
+is why a zombie vocalises in states where a human body would have refused. Every refusal returns
+false through the same low-byte clear.
+
+1. `m_bIsBCCTargetable` clear → false.
+2. A LIVE `m_hDialogPartner` (`+0x0fe8`) → false.
+3. `IsBusyWithDiscipline()` → false.
+4. The odds default to `RandomInt(0, 999)`; when the current schedule (`+0x5c38`) is non-null and
+   its `+0x1c` passed through slot 447 `GetLocalScheduleId` equals `0x12f`, the odds become
+   `RandomInt(0, 20)` **and the float-sound check is SKIPPED**.
+5. Otherwise slot 510 `ShouldPlayFloatSound` true plays slot 507 `FloatSound` and returns FALSE —
+   the float sound is played INSTEAD of an idle sound, not beside it.
+6. True only when the roll is exactly 0.
+
+**Unrecovered:** nothing.
+
+## Story 29d, family SpeciesMisc10 — the one-off species words: the grapple exit, the Bach shield, the Chang brothers, the croucher's burn, the ManBat cone, the Tzimisce pair, the boss health record and the Werewolf
+
+_Recovered 2026-09-14, story 29d._
+
+The per-species half of the family's forty-one rows. The dialogue and player-record bodies are in
+[`social.md`](./social.md) and the two spawn-side bodies in [`lifecycle.md`](./lifecycle.md), under
+the same family header.
+
+**Five facts hold across the whole family and are stated once here.**
+
+1. **`CNPC_VVampireBoss::GetCurrHealthPercent` (`0x103c6830`) RISES with damage.** It is
+   `stat 0x0f (wounds) / stat 0x11 (cap)`, not a remaining-health fraction. So `0x103c6a20`'s
+   `GetCurrHealthPercent() - m_HealthPercentRecord` answers **positive** for a body that has LOST
+   health — the earlier walk says negative — and every threshold that reads it is a fraction of the
+   bar lost since the mark.
+2. **`+0x9c` is the `CBaseCombatCharacter` self-downcast cache and `+0xa8` the `CBasePlayer` one.**
+   `victim->+0xa8 != 0` reads "is this the player", which is what makes the ManBat cone, the head
+   claw's slot 332 and the croucher's burn player-only bodies.
+3. **`_DAT_1044fab0` is a DOUBLE reading 0.0** (`103c1db6` is `FCOMP double ptr`), read at file
+   offset `0x44fab0` of the pinned `vampire.dll`. It is the "no slow running" sentinel the ManBat
+   and the head claw both compare their expiry against.
+4. **`CBaseCombatCharacter::BeginSlowEntity`/`EndSlowEntity` take `500.0` at every one of their
+   three call sites in this image** (`1038eb5e`, `103c1dca`, `103c2296`).
+5. **`CNPC_VWerewolf`'s two hint words are the other way round from the earlier walk.** The datamap
+   reads `+0x66b0 m_pTeleportHint`, `+0x66b4 m_pLastUsedTeleportHint`, `+0x66bc m_pMoveHint`,
+   `+0x66c0 m_pLastUsedMoveHint`, `+0x66c4 m_pBreakHint`.
+
+### `CAI_BaseNPC::LeaveGrappleState` `0x1026ce30`
+
+_Recovered 2026-09-14, story 29d._
+
+A distinct retail function beside the Troika override `0x102b5d90` that owns slot 380 —
+`0x102b5d90` is only this call plus a tail `JMP [vtable + 0x998]` into slot 614. Four
+**unconditional** steps, with no grapple-type gate anywhere in the body:
+
+1. `1026ce30` — fire `m_OnGrappleEnd` (`+0x5bf0`) through `0x100cd660` with the entity the handle at
+   `+0x1538` resolves to as activator, or null when `+0x153c` is `-1` or the handle word fails its
+   `& 0x1fff` index / `>> 13` serial check.
+2. `1026ce78` — `CBaseCombatCharacter::LeaveGrappleState`.
+3. `1026ce82` — slot 416 (`vt+0x680`) `SetForceFrequentThink(false)`.
+4. `1026ce8d` — `0x10007ea0`: `--m_iIsOblivious` (`+0x5bb4`), clamped at 0, then the squad reconnect
+   `0x10009601`.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VBach::GatherAttackConditions` `0x10363db0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 561's species body, and a prologue: it ADDS the shield, teleport and weapon-switch block in
+front of the base `0x1026dd10` and changes nothing the base gathers.
+
+`10363dc6` gates the whole first block on `HasCondition(0x4c LIGHT_DAMAGE)` or
+`HasCondition(0x4d HEAVY_DAMAGE)`. Inside, `m_bCondTookDamage` (`+0x5b80`) is cleared FIRST
+(`10363de3`), then the distance argument at or above `DAT_1062d200[m_iBachTeleportState]` **or**
+`m_flNextHolyLightTime` already past takes the SHIELD arm; anything else reads the cvar at
+`DAT_10924a6c` and sets condition `0x7b` (teleport).
+
+`DAT_1062d200` is **768.0, 768.0, 384.0, 384.0** — four floats read at file offset `0x62d200` of the
+pinned image.
+
+The shield arm fires only when `m_flNextShieldTime` (`+0x6688`) is past, and then walks the
+`+0x13bc`/`+0x13c0` stat-list array for the entry whose `+0x10` is **3** (the scripted list), falling
+back to the lazily constructed global `CVStatList_t` at `DAT_109f0b40`; calls
+`CVStatList_t::SetBase(stat 0xd, 5)`; sets `m_flNextShieldTime = curtime + _DAT_1044eb0c` (**20.0**),
+`m_bShieldActive` (`+0x66a5`) = 1 and `m_flShieldTime` (`+0x6684`) = `curtime + _DAT_1046bac0`
+(**6.0**); and emits `"Character/Boss/Bach/bach_shield.wav"` (`0x1062ea6c` — **with** the `.wav`,
+which the earlier walk dropped) through a `CPASAttenuationFilter` built from slot `+0x378` at volume
+1.0, attenuation 0.8, pitch 100, channel 2. On EITHER branch `+0x66a6` is then cleared
+(`10363f81`).
+
+Independently of all of that (`10363f87`), when `m_flNextWeaponSwitchTime` (`+0x668c`) is past the
+body reads the same cvar and sets condition `0x79` at or above `_DAT_104704d0` and `0x7a` below it.
+`_DAT_104704d0` is **72.0**, read at file offset `0x4704d0`.
+
+**Unrecovered:** what `+0x66a6` means; only its clear is in this body.
+
+### `CNPC_VChangBros::CheckForTeleport` `0x1036cab0`, `::CheckForUnited` `0x1036cbd0` and `::SelectLedgeNode` `0x1036cfa0`
+
+_Recovered 2026-09-14, story 29d._
+
+**`CheckForTeleport`**, three arms in retail's order: `m_ChangType` (`+0x66b8`) equal to 1 answers
+false outright; else the health delta `0x103c6a20` at or above `_DAT_104ad9f8` answers true; else,
+only for `m_ChangType` 0 and only when `GetOtherBrother` returns an entity, `curtime - m_fFacingTime`
+(`+0x66d0`) strictly greater than `GetFacingTimeToTeleport()` answers true. `_DAT_104ad9f8` is
+**0.1**, read at file offset `0x4ad9f8` — and by fact 1 that is a tenth of the bar LOST since the
+mark.
+
+**`CheckForUnited`**: false at once with no other brother, and false while `curtime` has not passed
+`m_fLastUnitedAttackTime` (`+0x66ec`) plus `_DAT_104ada48`; past both it is true UNLESS both
+brothers' `GetCurrHealthPercent` are below `_DAT_104ada4c`. `_DAT_104ada48` is **30.0** s and
+`_DAT_104ada4c` is **0.5**, both read out of the pinned image. By fact 1, "below 0.5" is the HEALTHY
+half, so **two healthy brothers refuse the united attack** and one hurt brother is what allows it —
+the opposite reading from the one the threshold suggests at a glance.
+
+**`SelectLedgeNode`**: walks the global hint list from `DAT_10925450` through the `+0x5d8` next link,
+keeps only nodes whose type word `+0x5dc` is `0x4653` and that `CheckJumpPathToHintNode(this, node)`
+accepts, and scores each survivor by the full 3-D distance between the node's `GetAbsOrigin`
+(`vt+0x364`) and its own. The incumbent is seeded `-3.4028235e+38` and REPLACED on a **strictly
+greater** distance, so the Chang brothers pick the **farthest** reachable ledge — the opposite
+comparison from `CNPC_VSheriffMan::SelectLedgeNode` (`0x103b0ab0`), and unlike the Sheriff's twin
+there is no closest-player gate in front of it. Null when nothing qualifies.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VGhoulCroucher::OnVictimHitByMe` `0x1037be80` and `::BurnPlayer` `0x1037c090`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 24's fourth species override. The victim's `+0xa8` player record is read first, and when
+`m_bSpawnBurning` (`+0x6665`) is set and that pointer is live it calls `BurnPlayer(player, 10.0)` —
+`1037bf3c` pushes `0x41200000`. It then ALWAYS runs the Troika line `0x1029f8d0`, the melee-move
+record clear, unlike the Gargoyle and Sabbat-leader arms which drop it.
+
+`BurnPlayer` itself: with a non-null target, iterate every hitbox of its model — the count read via
+`CBaseAnimating::GetModelPtr` then `*(ptr + *(ptr + 0x104) + 4)` — calling
+`CBaseCombatCharacter::BurnHitbox(target, index, 5.0, 0.5)` on each; then build a `CTakeDamageInfo`
+through `thunk_FUN_101c26d0` with inflictor = `GetActiveWeapon()`, attacker = `this`, the CALLER's
+damage amount, `bitsDamageType` **8**, and the trailing `0, 0, -1`; then `CBaseEntity::TakeDamage`.
+The earlier walk read the `8` as the whole descriptor and lost the damage amount.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VManBat::StartScreechCone` `0x1038e9c0`
+
+_Recovered 2026-09-14, story 29d._
+
+No vtable slot; one direct caller, `CNPC_VManBat::StartTask` (`0x1038c390`), once with the resolved
+enemy and once with null. 1,283 bytes, in order:
+
+1. `1038e9d2` — when the handle at `+0x66a4` still resolves, `UTIL_Remove` (`0x101cd940`) that
+   emitter and null the handle.
+2. `1038ea01` — spawn `Manbat_screechcone_emitter` through `0x100fbc90` at slot 217 `GetAbsOrigin`
+   (`vt+0x364`), store it in `+0x66a4`, attach it to bone `"Bip01 Jaw"` (`vt+0x3cc` with mode 1) and
+   start it (`vt+0x3c4`). This half runs even for a NULL target.
+3. `1038ea33` — everything below needs a non-null target that carries a player record at `+0xa8`.
+4. `1038ea60` — `UTIL_ScreenShake` (`0x101cdba0`) taking slot 220 `GetOrigin` (`vt+0x370`) **on
+   `this`, not on the target** — with `2.5, 0.2, 3.0, 0.0, 0, 0`.
+5. `1038ea69` — the target's `+0x9c` combat view; null ends the body.
+6. `1038eb2c` — `0x10344f80(view, targetSlot217Origin - mySlot217Origin, 2, 0)`, the push.
+7. `1038eb43` — only when the slow stamp `+0x6684` still equals `_DAT_1044fab0`,
+   `BeginSlowEntity(view, 500.0)`.
+8. `1038eb85` — restamp `+0x6684 = curtime + RandomFloat(15.0, 25.0)` unconditionally.
+9. `1038eb9a` — cache the victim's handle into `+0x6680`.
+10. `1038ebb0` — when `+0x669c` holds nothing, spawn `Manbat_player_emitter` at the target's origin,
+    attach it at `"Bip01 Spine"` mode 1 and start it.
+11. `1038ec4a` — the same shape for `Manbat_blast_player` at `+0x66a8`, at the SAME nesting level.
+12. `1038ed3c` — when `0x1015d680(playerRecord, 0)` resolves an item and `+0x66a0` is stale, spawn
+    `HUD_Manbat_emitter`, attach it to THAT ITEM with mode `0xe` and an EMPTY bone name, start it,
+    and set the byte at `+0x4a1` of the spawned emitter to 1.
+13. `1038edd2` — whenever the player record stands, OR bit 0 into its `+0x2454`.
+
+### `CNPC_VManBat::ReleaseSlowedEntity` `0x1038f020`
+
+_Recovered 2026-09-14, story 29d._
+
+`RunAI` (`0x1038e990`) calls it with `force = 0` and `Event_Killed` (`0x1038e8c0`) with `force = 1`.
+It runs only while `0x1038f290` says `m_flSlowedExpire` (`+0x6684`) is above `_DAT_1044fab0`, and
+then only when the caller forces it or that expiry has reached `curtime`. It zeroes `+0x6684`; calls
+`EndSlowEntity(victim's +0x9c, 500.0)` only while the handle resolves with a combat view;
+`UTIL_Remove`s the three effect entities at `+0x669c`, `+0x66a8` and `+0x66a0` **in that order**,
+setting each handle to `-1`; clears bit 0 of the victim's `+0xa8` `+0x2454` word; and finally sets
+`m_hSlowedEntity` to `-1` **outside** that guard, so the handle is cleared even when the victim never
+resolved.
+
+**Unrecovered:** what `+0x2454` bit 0 and the spawned emitter's `+0x4a1` byte mean on the player.
+
+### `CNPC_VSabbatLeader::CheckForJumpCondition` `0x103a9d90` and `::UpdateBloodSplash` `0x103aa960`
+
+_Recovered 2026-09-14, story 29d._
+
+**`CheckForJumpCondition`**, three arms in retail order: `0x103c67f0(this, DAT_104c3cc8)` — whose own
+body is `curtime - m_flLastAttackTime (+0x5d9c) > argument`, STRICTLY — then the health delta
+`0x103c6a20` at or above `_DAT_104c3cc4`, then `PlayerDamagedEnoughThisRound`. The threshold is
+handed to `0x103c67f0` as an ARGUMENT rather than compared inline. `_DAT_104c3cc8` is **8.0** and
+`_DAT_104c3cc4` is **0.0666667**, both read out of the pinned image at `0x4c3cc8` and `0x4c3cc4`.
+
+**`UpdateBloodSplash`**: does nothing at all while `m_bDiving` (`+0x66d5`) is set — **not even the
+level copy**, which is what freezes the edge. Otherwise, when the current water level (`+0x3e0`
+`m_nWaterLevel`) is above 0 AND either the previous level `+0x66c4` was 0 or
+`m_fLastSplashTime (+0x66c8) + _DAT_104c3cdc` has passed `curtime`, it spawns the
+`"bloodsplash_emitter"` pool emitter through `SpawnBloodPoolEmitter` and, ONLY on the dry-to-wet edge
+(previous level 0), additionally `"bloodbigsplash_emitter"`, then stamps `+0x66c8` with `curtime`.
+The previous level is copied from the current one on every non-diving pass, so entering a dive
+freezes it and leaving one re-fires the big splash. `_DAT_104c3cdc` is **0.25** s.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VTzimisceHeadClaw::vfunc332` `0x103c1d80` and `::EndSlow` `0x103c2230`
+
+_Recovered 2026-09-14, story 29d._
+
+**Four offsets are corrected here**, read off the listing rather than the decompiler's struct:
+`m_flSlowedExpire` is `+0x6678` (`103c1db0` `FLD float ptr [EBX + 0x6678]`), `m_hSlowedEntity`
+`+0x6674` (`103c1e02`), the player emitter `+0x667c` (`103c1dfc` `LEA EDI,[EBX + 0x667c]`) and the
+HUD emitter `+0x6680` (`103c1ff2`). The earlier walk swapped the first two and shifted the last two;
+`0x103c2230` reads the same four, which is the cross-check.
+
+Slot 332's Troika-line base (`0x1014f890`) is `return;`. The species body is guarded on a target
+that carries a player record at `+0xa8` **and** a combat view at `+0x9c`, so it is a player-only
+body. Then, in order:
+
+1. `103c1db0` — `BeginSlowEntity(view, 500.0)` only while `m_flSlowedExpire` still equals the
+   DOUBLE-`0.0` sentinel `_DAT_1044fab0`.
+2. `103c1dd5` — `m_flSlowedExpire = RandomFloat(5.0, 8.0) + curtime`. The bounds are recovered from
+   the pushes (`PUSH 0x41000000` then `PUSH 0x40a00000`), which the earlier walk left unstated.
+3. `103c1e02` — `m_hSlowedEntity` = the victim's handle.
+4. `103c1e08` — with the `+0x667c` handle dead, spawn `"Tzim2_player_emitter"` at the victim's slot
+   217 origin, store the handle, attach at `"Bip01 Spine"` mode 1 (`103c1e6f`) and start it.
+5. `103c1f13` / `103c1f5c` — a `CPASAttenuationFilter` on the victim's slot 222
+   `GetSoundEmissionOrigin`, then `"Character/Monster/TC_FatGuy/Sluge_Hit.wav"` on channel **4** and
+   `"Character/Monster/TC_FatGuy/Sluge_Affected.wav"` on channel **3**, both at volume 1.0,
+   attenuation 0.8 and pitch 100. The earlier walk named neither string.
+6. `103c1f87` — with the player's inventory slot 0 (`0x1015d680`) holding an entity and the `+0x6680`
+   handle dead, spawn `"HUD_Tzim2_emitter"`, store the handle, attach at that item with mode `0xe`
+   and an empty bone name, and start it.
+7. `103c20ba` — the **2-D** distance (`sqrt(dx*dx + dy*dy)`, no Z) between the two slot 217 origins;
+   at or above `_DAT_104cd108` it reads the cvar at `DAT_10924a6c` and `SetCondition(0x35)`.
+   `_DAT_104cd108` is a **DOUBLE reading 240.0** — `103c20dc` is `FCOMP double ptr` — read at file
+   offset `0x4cd108`.
+
+`EndSlow` (`0x103c2230`) is the teardown. Gate `0x103c24a0`: act only while `m_flSlowedExpire` is
+above 0.0, then only when the caller forces it or the timer has reached `curtime`. It zeroes
+`+0x6678`; and ONLY while `m_hSlowedEntity` resolves with a `+0x9c` view, calls
+`EndSlowEntity(view, 500.0)`, sets the handle to `0xffffffff` and emits `Sluge_Affected.wav` on
+channel 3 from the VICTIM's slot 222 origin at attenuation 0.8 — so a stale handle leaves
+`m_hSlowedEntity` standing. Then `UTIL_Remove`s the two owned effects at `+0x667c` and `+0x6680`,
+each only when the handle's serial matches its slot, setting both to `0xffffffff`. `0x1065d43c` is
+`Sluge_Affected.wav`, not the `"Sluge_Affect"` the earlier walk named, and it is the same wav slot
+332's second emit uses.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VTzimisceRunner::NotifyChangeSizeSmall` `0x103c3cd0` and `::NotifyChangeSizeNormal` `0x103c3d10`
+
+_Recovered 2026-09-14, story 29d._
+
+Slots 335 and 336, whose Troika-line bases (`0x103415f0`, `0x10341680`) are pure no-ops — a
+scope-trace push and pop and nothing else — so these arms ADD the entire behaviour.
+
+Slot 335, four writes in order: `SetHullSizeSmall(force = 1)` (`0x10273180`); the form byte `+0x6672`
+= 1, which `PreTranslate_TzimisceRunner` (`0x103c3e10`) selects its four `TZ` activity variants on;
+`m_bWantsLargeHull` (`+0x5f2c`) = 0; and `+0x6674` = the float the engine interface at
+`DAT_1070b22c` returns from vtable `+0x1dc` called with 0.
+
+Slot 336 is the inverse **and its guard**: re-call the same engine accessor and compare against the
+value slot 335 cached at `+0x6674`. **Only when the two differ** does it `SetHullSizeNormal(force =
+1)` (`0x10273070`), clear `+0x6672` and set `m_bWantsLargeHull` = 1. An unchanged token leaves the
+runner small and the form byte set, so the restore is edge-triggered on that engine value and not on
+a request — and slot 336 can refuse outright. It also takes an `int` argument the override ignores.
+
+**Unrecovered:** what `DAT_1070b22c` vtable `+0x1dc` answers. Only the EQUALITY of two successive
+reads is observable in these two bodies.
+
+### `CNPC_VVampireBoss::WaitForTransformation` `0x103c63c0`, the health record pair and `::SpawnBodyEmitters` `0x103c6f40`
+
+_Recovered 2026-09-14, story 29d._
+
+**`WaitForTransformation`**, one gate then three writes: nothing until `curtime` passes
+`m_flProteanTransformStartTime` (`+0x66b0`) plus `_DAT_104ce8bc` (**2.0** s, read at `0x4ce8bc`);
+then it selects the type-0 (Attributes) `CVStatList_t` from `+0x13bc`/`+0x13c0` with the lazily built
+global fallback and calls `CVStatList_t::Set(stat 0x0f, 0)` — **a full heal**, because `0x0f` is the
+wound counter and not current health; resolves `m_hTransformPartner`, `RTDynamicCast`s it and fires
+the partner's output at `+0x6664` with `this` as both activator and caller; then `TaskComplete(0)`
+(`0x10273e80`, which returns untouched while `COND 0x5c TASK_FAILED` stands).
+
+**The health record pair.** `0x103c6a00` is one write —
+`m_HealthPercentRecord (+0x6698) = GetCurrHealthPercent(this)` — the boss line's snapshot taken
+before a phase, with five direct callers across the boss species. `0x103c6a20` answers
+`GetCurrHealthPercent(this) - m_HealthPercentRecord`, in that order and as a `float10`. By fact 1
+that is **positive** for a body that has lost health.
+
+**`SpawnBodyEmitters`**: `KillBodyEmitters` FIRST, then a fixed four-iteration loop calling
+`SpawnBodyEmitter(i, name)` with the four attachment names from the pointer table at
+`PTR_s_Bip01_L_Hand_1065e6d0`, storing each spawned entity's handle (its vtable `+0x4` accessor)
+into `m_hParticleEmitters[i]` at `+0x66a0`. A spawn that answers null leaves that slot's PREVIOUS
+handle untouched rather than clearing it, which is why the kill has to run first. The four names,
+read out of the pinned image at `0x65e6d0`: `"Bip01 L Hand"`, `"Bip01 R Hand"`, `"Bip01 Spine"`,
+`"Bip01 Spine"` — the last two are the SAME string.
+
+**Unrecovered:** what the partner's `+0x6664` output is named.
+
+### `CNPC_VWerewolf::TaskFail` `0x103ce750`, `::HasPath` `0x103d0db0`, `::DrawDebugStatOverlays` `0x103d5130` and `::SnapToAnimationPoint` `0x103d9f90`
+
+_Recovered 2026-09-14, story 29d._
+
+**`TaskFail`** (slot 448). The DIAGNOSTIC half runs only when the running schedule (`+0x5c38`) equals
+one of `0x160`, `0x161` or `0x162` resolved through `0x102cc1f0`: `DevWarning` `"Werewolf failed task
+'%32s' schedule..."` with the task name from slot `0x704` over `0x1028a150`'s current task
+(`"INVALID TASK"` when there is none), the schedule name at `schedule+0x40` and the failure text from
+`0x10316fa0`; then `"Current MOVE Hint: %s"` for `m_pMoveHint` (`+0x66bc`), `"Current TELEPORT Hint:
+%s"` for `m_pTeleportHint` (`+0x66b0`) and `"Current BREAK Hint: %s"` — which is **gated on
+`m_pBreakHint` but prints the TELEPORT hint**, a retail copy-paste bug to reproduce.
+
+The rest is unconditional, in order: `SetHullSizeSmall(1)`, `ClearMoveHint`, `ClearTeleportHint`,
+`m_pBreakHint` (`+0x66c4`) = 0, `+0x66a4` = 0, `+0x66a1` = 1, the Troika base `0x1029adb0`,
+`CheckStuck(NULL)`, `+0x66e8` = 0, `+0x6708` = `-1`, `+0x670c` = `-1`.
+
+**`HasPath`**: 120 of its 138 bytes are the scope-trace frame that supplies the name; the body is ONE
+call, `0x102ee380(m_pNavigator (+0x5d34), &start, &end)`. **The two navigator-cache stamps the
+earlier walk attributes to this body are inside `0x102ee380`** — it writes `nav+8` from the NPC's own
+`+0x156c` hull and `nav+0xc` from the global frame word, repeats the same pair on the path object
+`0x102ecc00`, and only then forwards both `Vector`s to `0x102fdcc0`. Twelve direct callers plus one
+from outside the kernel; the `void` return is a decompile artifact of the forwarded call.
+
+**`DrawDebugStatOverlays`** (slot 76), in retail's order:
+
+1. `103d51a1` — `"Not Seen Time  : %3.1f"` with `max(curtime - +0x66ec, 0.0)`. The clamp against
+   `_DAT_104454c4` (0.0) is folded away by the decompiler and is recovered from the listing.
+2. `103d51d3` — `"Player Distance: %3.1f"` reading `+0x6264 m_flPlayerDist`, the CACHED distance and
+   not a computed range.
+3. `103d51ee` — the tail into `CNPC_VMingXiao`'s arm `0x10366290`, chained rather than replaced.
+4. `103d51f3` — the zone word `+0x66e8`, bit by bit: `0x1 ZONE_NO_TALL_ANIMS`,
+   `0x2 ZONE_PLAYER_ON_BREAKABLE`, `0x40 ZONE_PLAYER_INSIDE`, `0x80 ZONE_PLAYER_OUTSIDE`,
+   `0x4 ZONE_PLAYER_ON_PLATFORM`, `0x800 ZONE_WOLF_INSIDE`, `0x1000 ZONE_WOLF_OUTSIDE`,
+   `0x100 ZONE_WOLF_ON_PLATFORM`.
+5. `103d52dd` — conditions `0x77 CAN_TELEPORT`, `0x78 CAN_SPECIAL_MOVE`, `0x79 ENEMY_REACHABLE`,
+   `0x7b SHOULD_BREAKHINT`, `0x7a DEATH_TRIGGERED` — `0x7b` BEFORE `0x7a`.
+6. `103d535f` — `m_DoorState` (`+0x6680`) printed `"door state: (%d)closed"` / `closing` / `open` /
+   `opening` for 0..3. There is **no `default:` arm**: any other value prints nothing at all.
+7. `103d539e` — `DrawDebugHintInfo` on a cvar-selected PLAYER hint, reached through
+   `UTIL_PlayerByIndex(1)` then `0x10172710` and an RTTI cast to `CAI_Hint`.
+8. `103d53ea` — then on the NPC's own hint: `m_pMoveHint` (`+0x66bc`) first, else `m_pTeleportHint`
+   (`+0x66b0`), else `m_pLastUsedTeleportHint` (`+0x66b4`) or `m_pLastUsedMoveHint` (`+0x66c0`)
+   selected by two more cvars.
+9. `103d5450` — the LAST FIVE entries of the schedule-stack array `+0x668c` with count `+0x6698`
+   (`start = max(count - 5, 0)`), printing `"INVALID SCHEDULE"` for a null row or one whose `+0x40`
+   name is null.
+
+**`SnapToAnimationPoint`**: six writes and two calls in order —
+`CBaseAnimating::MatchOriginAnglesToAnimation("Bip01", 1, 1)`, which snaps origin AND angles onto the
+animation's root bone; `SetHullSizeSmall(force = 0)` (`0x10273180`, which therefore does nothing when
+`+0x5f2d` already says small); `+0x66dc`/`+0x66e0`/`+0x66e4` set from `DAT_1070d1b0/b4/b8`
+(`vec3_origin`), clearing the cached fake-hull position; `+0x66a8` = 0; and both hint handles
+`+0x6708` and `+0x670c` = `-1`, so the snap also drops whatever hint the Werewolf was heading for.
+
+**Unrecovered:** the retail names of `+0x66a1`, `+0x66a4`, `+0x66a8`, `+0x6708` and `+0x670c` on
+`CNPC_VWerewolf` — none is in the class's datamap and no corpus body declares them.
+
+### The three species `Restore` bodies — `0x10360e10`, `0x103a6e80`, `0x103ae7f0`
+
+_Recovered 2026-09-14, story 29d._
+
+Three slot-127 species overrides that chain `CNPC_VVampireBoss::Restore` and then write constants.
+All values below are read verbatim out of the pinned `vampire.dll`.
+
+* `CNPC_VAsianVampire::restore` (`0x10360e10`): `m_fJumpGravity` (`+0x64b8`) = `_DAT_104a9300`, a
+  float **2.0** at file offset `0x4a9300`.
+* `CNPC_VSabbatLeader::vfunc127` (`0x103a6e80`): `m_pMonsterModelName` (`+0x6680`) =
+  `"models/character/monster/Andrei/andrei.mdl"`, `m_pszMonsterClassname` (`+0x6694`) =
+  `"npc_VSabbatLeader"`, and `SetBodyEmitterName(0, "Andrei_powerup_emitter")` and
+  `(1, "Andrei_powerup_emitter")` — the same string twice.
+* `CNPC_VSheriffMan::vfunc127` (`0x103ae7f0`): `m_pMonsterModelName` =
+  `"models/character/monster/manbat/manbat.mdl"`, `m_pszMonsterClassname` = `"npc_VSheriffMan"`,
+  `m_fJumpGravity` = `_DAT_104c6148` — a **float** (`103ae811` is `FLD dword`) reading **2.0** — and
+  finally the GLOBAL `DAT_109340d8` = `0x15`.
+
+That last write is not species data. `DAT_109340d8` is shared with four `NPCInit` bodies
+(`CNPC_VGargoyle` `0x103785f0`, `CNPC_VHengeyokai` `0x1037fa70`, `CNPC_VManBat` `0x1038b070`,
+`CNPC_VSheriffMan` `0x103ae6c0`) and read by seven functions outside the NPC kernel. It is the one
+part of these rows a class -> slot -> value data table alone cannot carry.
+
+**Unrecovered:** what `DAT_109340d8` selects; its seven readers are outside this kernel's closure.

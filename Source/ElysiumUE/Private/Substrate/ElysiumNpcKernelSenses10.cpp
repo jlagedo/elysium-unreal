@@ -12,7 +12,8 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
-#include "Substrate/ElysiumSession.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 
 // Story 29d, family **Senses10** — the Troika-line bodies. The species line is in
 // `ElysiumNpcKernelSenses10_2.cpp`; the declarations and this family's standing facts are in
@@ -77,30 +78,25 @@ namespace
 // Slot 404 / 405 — the two dispositions, read off the store the Troika body's tail reaches.
 // =================================================================================================
 
-int32 FElysiumNpc::Disposition(const FElysiumEntity* Candidate) const
+int32 FElysiumNpc::IRelationTypeOf(const FElysiumEntity* Candidate) const
 {
-	// `CAI_BaseNPCTroika::IRelationType` (`0x10299da0`) arms 1 and 2: self and null both answer 0.
-	if (Candidate == nullptr || Candidate->Handle == Handle)
-	{
-		return GD_ER;
-	}
-	const FString Classname = Candidate->Def ? Candidate->Def->Classname : FString();
-	switch (Relationships.Resolve(Candidate->Handle, Classname))
-	{
-	case EElysiumRelationship::Hate:  return GD_HT;
-	case EElysiumRelationship::Fear:  return GD_FR;
-	case EElysiumRelationship::Like:  return GD_LI;
-	default:                          return GD_NU;
-	}
-	// The squad/boss forwarding arms in front of that tail (`10299dc7`..`10299eaa`) are family
-	// Conditions10's half of slot 404 and are deliberately NOT reproduced here: standing a second
-	// copy of them is exactly what the one-slot-one-body rule exists to prevent.
+	// **This is now the one-line forward the `.inl` promised.** Slot 404 (`0x10299da0`) carries its
+	// body as of family **Conditions10** — the two null arms, the INSANE forwarding, both boss arms
+	// and the `CBaseCombatCharacter` tail — so this reads the slot instead of the store the tail
+	// reaches, which is what every retail caller of `vtable +0x650` gets.
+	return const_cast<FElysiumNpc*>(this)->IRelationType(const_cast<FElysiumEntity*>(Candidate));
 }
 
-int32 FElysiumNpc::DispositionPriority(const FElysiumEntity* Candidate) const
+int32 FElysiumNpc::IRelationPriorityOf(const FElysiumEntity* Candidate) const
 {
 	// `IRelationPriority` (`0x10333700`) — the raw integer, with `FElysiumRelationships`' own
 	// recovered defaults (5 for a live actor with no row, 0 for a null target).
+	//
+	// **This one does NOT become a forward, and the reason is a slot boundary rather than a gap.**
+	// Story 29d's family Conditions10 owns slot **404**, not slot 405: `0x10333700` is a LAYER 0 row
+	// of story 29c's band whose overlay target is still the generated stub, so forwarding would tell
+	// every caller that every entity has priority 0 — which is the same error the `.inl` above
+	// records for slot 404 before it landed. The store this reads IS what `0x10333700` reads.
 	if (Candidate == nullptr)
 	{
 		return 0;
@@ -113,22 +109,22 @@ int32 FElysiumNpc::DispositionPriority(const FElysiumEntity* Candidate) const
 // Slot 201 `FVisible` — `CAI_BaseNPCTroika::FVisible` `0x102b4630`, 232 bytes.
 // =================================================================================================
 
-void FElysiumNpc::WriteFVisibleBlocker(const FElysiumEntity* Target)
+void FElysiumNpc::WriteFVisibleBlocker(const FElysiumEntity* SeenTarget)
 {
 	++FVisibleBlockerWrites;
-	LastFVisibleBlockerTarget = Target != nullptr ? Target->Handle : FElysiumEntityHandle::Invalid();
+	LastFVisibleBlockerTarget = SeenTarget != nullptr ? SeenTarget->Handle : FElysiumEntityHandle::Invalid();
 }
 
-bool FElysiumNpc::BaseEntityFVisible(const FElysiumEntity& Target, int32 /*Mask*/) const
+bool FElysiumNpc::BaseEntityFVisible(const FElysiumEntity& SeenTarget, int32 /*Mask*/) const
 {
 	// `CBaseEntity::FVisible` — the eye-to-eye segment slot 201 ends at. The mask is the caller's;
 	// this runtime's embodiment answers one world term and takes no mask.
 	const IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	return Embodiment == nullptr
-		|| Embodiment->QueryLineOfSight(EyePosition(), Target.EyePosition());
+		|| Embodiment->QueryLineOfSight(EyePosition(), SeenTarget.EyePosition());
 }
 
-bool FElysiumNpc::FVisible(FElysiumEntity* Target, int32 Mask, FElysiumEntity* Blocker, int32 Arg4)
+bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4)
 {
 	// `0x102b4630`. The one-shot static init at `102b4630` resolves the `Dominate_BrainWipe`
 	// discipline id into `DAT_10924074` through `0x101e1590` / `0x101e1870` and is guarded by bit 0
@@ -144,36 +140,36 @@ bool FElysiumNpc::FVisible(FElysiumEntity* Target, int32 Mask, FElysiumEntity* B
 		if (FCString::Strcmp(SlotBody, TEXT("0x10369ff0")) == 0)
 		{
 			FSpeciesDispatchScope Scope(*this, 201);
-			return CameraSecurityFVisible(Target);
+			return CameraSecurityFVisible(SeenTarget);
 		}
 		if (FCString::Strcmp(SlotBody, TEXT("0x103ba290")) == 0)
 		{
 			FSpeciesDispatchScope Scope(*this, 201);
-			return TzimisceFVisible(Target, Mask, Blocker, Arg4);
+			return TzimisceFVisible(SeenTarget, Mask, Blocker, Arg4);
 		}
 		if (FCString::Strcmp(SlotBody, TEXT("0x103e0bc0")) == 0)
 		{
 			FSpeciesDispatchScope Scope(*this, 201);
-			return ZombieFVisible(Target, Mask, Blocker, Arg4);
+			return ZombieFVisible(SeenTarget, Mask, Blocker, Arg4);
 		}
 		if (FCString::Strcmp(SlotBody, TEXT("0x103cb810")) == 0)
 		{
 			// `CNPC_VWerewolf#201`, story 29c-1's `WerewolfFVisible`. Dispatched, not re-ported.
 			FSpeciesDispatchScope Scope(*this, 201);
 			FElysiumEntityHandle Unused;
-			return WerewolfFVisible(Target, &Unused);
+			return WerewolfFVisible(SeenTarget, &Unused);
 		}
 		if (FCString::Strcmp(SlotBody, TEXT("0x103ddaf0")) == 0)
 		{
 			// `CNPC_VYukie#201`, story 29c-1's `YukieFVisible`, which chains slot 594 below.
 			FSpeciesDispatchScope Scope(*this, 201);
 			FElysiumEntityHandle Unused;
-			return YukieFVisible(Target, &Unused);
+			return YukieFVisible(SeenTarget, &Unused);
 		}
 	}
 
 	// `102b4655`: a null target answers false and does NOT write the blocker. Retail's asymmetry.
-	if (Target == nullptr)
+	if (SeenTarget == nullptr)
 	{
 		return false;
 	}
@@ -182,22 +178,22 @@ bool FElysiumNpc::FVisible(FElysiumEntity* Target, int32 Mask, FElysiumEntity* B
 	{
 		if (Blocker != nullptr)
 		{
-			WriteFVisibleBlocker(Target);
+			WriteFVisibleBlocker(SeenTarget);
 		}
 		return false;
 	}
 	// `102b466e`: `npc_ignore_player` AND the target carrying `+0xa8` — blocker written, false.
-	if (ElysiumNpcSense::IgnorePlayer() && IsPlayerRecord(*this, Target))
+	if (ElysiumNpcSense::IgnorePlayer() && IsPlayerRecord(*this, SeenTarget))
 	{
 		if (Blocker != nullptr)
 		{
-			WriteFVisibleBlocker(Target);
+			WriteFVisibleBlocker(SeenTarget);
 		}
 		return false;
 	}
 	// `102b4688`: slot 594 (`vtable +0x948`) with the caller's mask and BOTH trailing arguments
 	// forced to `0` — so the Troika line never hands slot 594 a blocker cell.
-	if (!Slot594(Target, Mask, nullptr, 0))
+	if (!Slot594(SeenTarget, Mask, nullptr, 0))
 	{
 		return false;
 	}
@@ -208,7 +204,7 @@ bool FElysiumNpc::FVisible(FElysiumEntity* Target, int32 Mask, FElysiumEntity* B
 		return false;
 	}
 	// `102b46b1`: the base `CBaseEntity::FVisible` does the trace itself.
-	return BaseEntityFVisible(*Target, Mask);
+	return BaseEntityFVisible(*SeenTarget, Mask);
 }
 
 // =================================================================================================
@@ -220,11 +216,11 @@ float FElysiumNpc::SeekDistInspectionCm() const
 	return Senses.Perception.VisionDistanceCm;   // +0x63b8 m_flSeekDistInspection
 }
 
-float FElysiumNpc::TargetStealthVisionScalar(const FElysiumEntity& Target) const
+float FElysiumNpc::TargetStealthVisionScalar(const FElysiumEntity& SeenTarget) const
 {
 	// The target's slot 28 (`vtable +0x70`). Only the player carries a stealth surface here.
 	const FElysiumPlayer* Player = World != nullptr ? World->FindPlayer() : nullptr;
-	return Player != nullptr && Player->Handle == Target.Handle ? Player->Stealth.VisionScalar : 1.f;
+	return Player != nullptr && Player->Handle == SeenTarget.Handle ? Player->Stealth.VisionScalar : 1.f;
 }
 
 bool FElysiumNpc::IsBccTargetable(const FElysiumEntity& /*Candidate*/)
@@ -258,12 +254,12 @@ bool FElysiumNpc::InnateWeaponLosTrace(const FVector& StartCm, const FVector& En
 	return true;
 }
 
-bool FElysiumNpc::Slot594(FElysiumEntity* Target, int32 /*Mask*/, FElysiumEntity* Blocker,
+bool FElysiumNpc::Slot594(FElysiumEntity* SeenTarget, int32 /*Mask*/, FElysiumEntity* Blocker,
 	int32 /*Arg4*/)
 {
 	// `102b4770`: `m_bSeenInOuterBand (+0x6081) = 0` FIRST, before anything is read.
 	Senses.Memory.bPlayerInOuterBand = false;
-	if (Target == nullptr)
+	if (SeenTarget == nullptr)
 	{
 		// Retail dereferences the target unguarded (`102b477d` `MOV EDI,[ESP+0x48]`, then
 		// `CALL [EDX+0x304]`). CRASH GUARD, named: no caller in this runtime can reach it, because
@@ -272,7 +268,7 @@ bool FElysiumNpc::Slot594(FElysiumEntity* Target, int32 /*Mask*/, FElysiumEntity
 	}
 
 	const FVector MyEyeCm = EyePosition();                  // `102b4777` slot 0x304
-	const FVector TargetEyeCm = Target->EyePosition();      // `102b478a` slot 0x304
+	const FVector TargetEyeCm = SeenTarget->EyePosition();      // `102b478a` slot 0x304
 
 	// `102b4790`: the range block runs only when `(m_NPCState != 2 || m_bEnemyWentOccluded)` AND
 	// `m_flStealthVisionOverrideTime <= curtime`. Retail state 2 is COMBAT.
@@ -287,14 +283,14 @@ bool FElysiumNpc::Slot594(FElysiumEntity* Target, int32 /*Mask*/, FElysiumEntity
 	{
 		const float DistanceCm = static_cast<float>(FVector::Dist(MyEyeCm, TargetEyeCm));
 		// `102b4808`: the target's slot 28 times `m_flSeekDistInspection`.
-		const float LimitCm = TargetStealthVisionScalar(*Target) * SeekDistInspectionCm();
+		const float LimitCm = TargetStealthVisionScalar(*SeenTarget) * SeekDistInspectionCm();
 		// `102b4819`: `dist <= limit` continues; `dist > limit` refuses.
 		if (DistanceCm > LimitCm)
 		{
 			// `102b4820`: the blocker is written only when one was passed. Retail's own arm.
 			if (Blocker != nullptr)
 			{
-				WriteFVisibleBlocker(Target);
+				WriteFVisibleBlocker(SeenTarget);
 			}
 			return false;
 		}
@@ -307,7 +303,7 @@ bool FElysiumNpc::Slot594(FElysiumEntity* Target, int32 /*Mask*/, FElysiumEntity
 	}
 
 	// `102b485e`: the concealment test, only when the target IS a combat character (`+0x9c`).
-	if (const FElysiumCombatCharacter* Character = Target->AsCombatCharacter())
+	if (const FElysiumCombatCharacter* Character = SeenTarget->AsCombatCharacter())
 	{
 		if (!CanPerceiveConcealment(*Character))
 		{
@@ -316,7 +312,7 @@ bool FElysiumNpc::Slot594(FElysiumEntity* Target, int32 /*Mask*/, FElysiumEntity
 			// `102b492a`: the blocker write, again only when one was passed.
 			if (Blocker != nullptr)
 			{
-				WriteFVisibleBlocker(Target);
+				WriteFVisibleBlocker(SeenTarget);
 			}
 			return false;
 		}
@@ -476,7 +472,7 @@ bool FElysiumNpc::QuerySeeEntity(FElysiumEntity* Candidate)
 	}
 	// `102b393c`: slot 404 `IRelationType`, true for D_HT and D_FR alone. Every other disposition —
 	// including retail's `default:` — answers false.
-	const int32 Relation = Disposition(Candidate);
+	const int32 Relation = IRelationTypeOf(Candidate);
 	return Relation == GD_HT || Relation == GD_FR;
 }
 
@@ -701,7 +697,7 @@ FElysiumEntity* FElysiumNpc::BestEnemy()
 		}
 		// `10274483`: slot 404 `IRelationType`, D_HT or D_FR alone. Retail dispatches it TWICE when
 		// the first answer is not 1; the query is pure, so one call is the same observation.
-		const int32 Relation = Disposition(Candidate);
+		const int32 Relation = IRelationTypeOf(Candidate);
 		if (Relation != GD_HT && Relation != GD_FR)
 		{
 			continue;
@@ -734,7 +730,7 @@ FElysiumEntity* FElysiumNpc::BestEnemy()
 				continue;
 			}
 			State.bVisible = BestEnemyCandidateVisible(Candidate);   // 10274585
-			State.Priority = DispositionPriority(Candidate);         // 102745b6
+			State.Priority = IRelationPriorityOf(Candidate);         // 102745b6
 			State.Distance = BestEnemyDistanceKey(*Candidate);       // 102745c9
 			State.bUnreachable = false;                              // 1027460b
 			State.Best = Candidate;                                  // 10274708
@@ -742,7 +738,7 @@ FElysiumEntity* FElysiumNpc::BestEnemy()
 		}
 
 		// `102744e6`: the two matching reachability classes fall here.
-		const int32 Priority = DispositionPriority(Candidate);
+		const int32 Priority = IRelationPriorityOf(Candidate);
 		if (Priority > State.Priority)
 		{
 			// `102744fe`: slot 479 again. A candidate that fails it is DROPPED, not demoted to the
@@ -789,7 +785,7 @@ FElysiumEntity* FElysiumNpc::BestEnemy()
 		}
 		State.Distance = Distance;                          // 102746eb
 		State.bVisible = bCandidateVisible;                 // 102746f2
-		State.Priority = DispositionPriority(Candidate);    // 102746f6
+		State.Priority = IRelationPriorityOf(Candidate);    // 102746f6
 		State.bUnreachable = bCandidateUnreachable;         // 10274704
 		State.Best = Candidate;                             // 10274708
 	}
@@ -1147,7 +1143,7 @@ bool FElysiumNpc::InnateWeaponLOSCondition(const FVector& OwnerPosCm, const FVec
 	}
 	// `1026fe08`: slot 404 `IRelationType` equal to D_HT answers TRUE — shooting a hated blocker is
 	// fine. Note `1026fe19`'s `MOV AL,AL`: the answer is the relation's own low byte, which is 1.
-	if (Disposition(Blocker) == GD_HT)
+	if (IRelationTypeOf(Blocker) == GD_HT)
 	{
 		return true;
 	}
@@ -1246,7 +1242,7 @@ void FElysiumNpc::RestoreNormalHull()
 {
 	// `0x10273070`: restore the normal hull from the navigator, clear `+0x5f2d`, and re-run
 	// `0x10272f40` when `+0x36c` stands.
-	bHullShrunk = false;
+	bIsUsingSmallHull = false;
 	if (bHasPhysicsObject)
 	{
 		BuildVPhysicsShadow();
@@ -1259,7 +1255,7 @@ void FElysiumNpc::HeadProbe()
 	// both set. Neither has a port producer — the hull swap they record is `CAI_Navigator`'s — so
 	// today this is always false and the probe does nothing, which is retail's own answer for a body
 	// whose hull was never shrunk.
-	if (!bHullShrunk || !bHullShrinkArmed)
+	if (!bIsUsingSmallHull || !bWantsLargeHull)
 	{
 		return;
 	}
@@ -1333,7 +1329,7 @@ void FElysiumNpc::CopOnSeeEntity(FElysiumEntity* Seen)
 {
 	// `10371ae0`: when `+0x6081` is CLEAR and slot 404 answers D_HT, stamp; then the Troika body
 	// runs UNCONDITIONALLY.
-	if (!Senses.Memory.bPlayerInOuterBand && Disposition(Seen) == GD_HT)
+	if (!Senses.Memory.bPlayerInOuterBand && IRelationTypeOf(Seen) == GD_HT)
 	{
 		StampCopSuspect(Seen);
 	}
@@ -1343,7 +1339,7 @@ void FElysiumNpc::CopOnSeeEntity(FElysiumEntity* Seen)
 void FElysiumNpc::HunterOnSeeEntity(FElysiumEntity* Seen)
 {
 	// `103887d0`: the twin.
-	if (!Senses.Memory.bPlayerInOuterBand && Disposition(Seen) == GD_HT)
+	if (!Senses.Memory.bPlayerInOuterBand && IRelationTypeOf(Seen) == GD_HT)
 	{
 		StampHunterSuspect(Seen);
 	}

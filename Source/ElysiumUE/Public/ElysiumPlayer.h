@@ -2134,6 +2134,76 @@ public:
 	bool WasRecentlyObservedByHostile(double Now) const;
 	bool IsInStealthPosture() const;
 
+	// --- Story 29d, family **Social10** — two `CBasePlayer` bodies -------------------------------
+	//
+	// Both are checklist rows of story 29d whose overlay `target` named an `FElysiumNpc` method.
+	// Neither is an NPC body: `0x1017c600` writes `+0x1eb8` / `+0x1ec0` and reads the player's own
+	// edict, and `0x10183120` walks `+0x1adc`, which `vtmb_fields CBasePlayer` names
+	// `m_flClientVActiveDisciplineDurations[17]`. Both are retargeted here and the correction is
+	// recorded in the story's verdict file.
+
+	// `+0x1eb8` — the entity index of the NPC whose barter or loot window is open, written by
+	// `0x1017c600` from `engine->GetEntityIndex(target->edict)` (`1017c617`, engine vtable `+0x8c`).
+	// Carried as this runtime's handle, whose index IS the edict index (story 29c-1's cleanup:
+	// `FElysiumEntityWorld::EntityList` is the edict array).
+	FElysiumEntityHandle BarterTarget;
+	// `+0x1ec0` — the loot byte. 0 = barter, 1 = loot a corpse.
+	bool bBarterTargetIsLoot = false;
+
+	// `0x1017c600` — the player-side trade-window opener, 119 bytes, five arguments. It records the
+	// two words above, runs `CBaseCombatCharacter::SyncVendorInventory(target, a, b, c)` for barter
+	// or `0x10324080(target)` for loot, and then opens the window by issuing a CONSOLE COMMAND on
+	// the player's own edict (engine vtable `+0xf4 ClientCommand`, `1017c669`) — `"showbarter\n"`
+	// (`0x10587ef4`) or `"showloot\n"` (`0x10587ee8`) — never by a direct call.
+	void OpenBarterOrLoot(class FElysiumEntity* TradeTarget, bool bLoot, int32 ArgA, int32 ArgB,
+		int32 ArgC);
+
+	// SEAM for `CBaseCombatCharacter::SyncVendorInventory` and `0x10324080` (the corpse-loot
+	// inventory build). Neither has a producer in this substrate — there is no barter or loot window
+	// — so each is COUNTED with the arguments it was given and named at its call site.
+	int32 VendorInventorySyncs = 0;
+	int32 CorpseLootBuilds = 0;
+	// The command `OpenBarterOrLoot` last selected, verbatim including retail's trailing newline.
+	FString LastTradeWindowCommand;
+
+	// `+0x1adc m_flClientVActiveDisciplineDurations[17]`, the client-side mirror of each compiled
+	// Discipline's running duration. Retail's array is seventeen wide — `stats.txt`'s Discipline
+	// count, not the thirteen `FElysiumDisciplineState` compiles — so it is declared at retail's
+	// width. **No producer in this runtime**: the port's active-Discipline state is an absolute
+	// `EndTime` per slot, not a duration mirror, so this array stands for the retail word and is
+	// written only by the body below and by a test.
+	static constexpr int32 ClientDisciplineDurationCount = 17;
+	float ClientDisciplineDurations[ClientDisciplineDurationCount] = {};
+
+	// `0x10183120` — 308 bytes, unnamed in retail; the name is recovered from the array it rewrites.
+	// For each of the seventeen slots it finds the class-info entry whose type tag (`+0x10`) is 3 —
+	// the Discipline stat list — or lazily builds the global `CVStatList_t` singleton, asks that list
+	// whether slot `i` exists, looks this player's record up in `DAT_106e7050` and reads its value,
+	// then rewrites the slot as
+	//
+	//     remaining = value - engine->Time();                       // 101831fd FSUBR
+	//     slot      = (slot - remaining) + remaining * Scale / Divisor;
+	//
+	// guarded by a bounds test on the computed term. The whole body is skipped when its first two
+	// arguments are POINTER-EQUAL, which is retail's no-op guard (`1018312a CMP EAX,[ESP+0x28]`).
+	void RescaleActiveDisciplineDurations(const void* A, const void* B, float Scale, float Divisor);
+
+	// SEAM for `thunk_FUN_102012d0(list, i)` (does the Discipline stat list carry slot `i`),
+	// `thunk_FUN_100ce450(&DAT_106e7050, this, &key)` (is there a record for this player and slot)
+	// and `thunk_FUN_100ce600(&DAT_106e7050, &out)` (its stored value). There is no such registry in
+	// this substrate, so the membership test answers FALSE and no slot is rewritten. Counted so the
+	// walk is observable.
+	bool ClientDisciplineDurationRecord(int32 Slot, float& OutValue) const;
+	int32 ClientDisciplineDurationProbes = 0;
+
+	// SEAM for `thunk_FUN_100ce630(&DAT_106e7050, delta)`, the bounds test that gates the write.
+	// Answers TRUE, the ADMITTING value — retail writes when it passes.
+	bool ClientDisciplineDurationInBounds(float Delta) const;
+
+	// SEAM for `engine->vtable +0x1dc` (`101831ee`), the global time the rebase subtracts. The
+	// substrate clock is what this runtime has; the world's `NowSeconds()` is it.
+	double ClientDisciplineDurationNow() const;
+
 	// `PlayerStealthKillEligibility` `0x10167320`. Not `IsInStealthPosture()`: that function also
 	// requires a 1.0 s unseen-by-`D_HT` window, which is the light-query term, not this one.
 	bool CanAttemptStealthKill() const;

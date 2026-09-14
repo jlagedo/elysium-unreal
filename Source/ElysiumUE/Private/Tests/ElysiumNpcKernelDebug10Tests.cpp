@@ -179,8 +179,15 @@ bool FElysiumNpcKernelDebug10TraceMessagesTest::RunTest(const FString&)
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("with the toggle clear all three DevMsg"), Debug10RetailOrder(Lines),
 			FString(TEXT("0x1028de10|0x1028de90|0x1028df30")));
-		TestEqual(TEXT("and the DevMsg arm carries the FORMATTED text"),
-			Debug10TextOrder(Lines), FString(TEXT("slot 18|slot 17|slot 20")));
+		// The three texts are the formatter's output now that `0x1028d990` is ported (it was a
+		// passthrough seam when this case was written), so each is asserted by what it CARRIES
+		// rather than by equality with the bare message.
+		const FString Texts = Debug10TextOrder(Lines);
+		TestTrue(TEXT("the DevMsg arm carries slot 18's message"), Texts.Contains(TEXT("slot 18")));
+		TestTrue(TEXT("...slot 17's"), Texts.Contains(TEXT("slot 17")));
+		TestTrue(TEXT("...and slot 20's"), Texts.Contains(TEXT("slot 20")));
+		TestTrue(TEXT("...each behind the formatter's %-20s debug-name column"),
+			Texts.Contains(TEXT("subject ")));
 	}
 
 	// A null message. Slot 20's whole body is under `if (param_1 != 0)`, so it says nothing at all;
@@ -198,7 +205,14 @@ bool FElysiumNpcKernelDebug10TraceMessagesTest::RunTest(const FString&)
 		TestEqual(TEXT("slot 18 has no null guard and still prints"), Lines.Num(), 1);
 		if (Lines.Num() == 1)
 		{
-			TestEqual(TEXT("the formatter's empty-string substitution"), Lines[0].Text, FString());
+			// `1028d9c1`: a null message becomes the EMPTY STRING, not a refusal — so the line is
+			// still the full formatted frame (debug name, curtime, indent) with nothing in the
+			// message slot. Asserting the whole line is empty was the seam's answer, not retail's.
+			TestFalse(TEXT("a null message still prints a formatted frame"), Lines[0].Text.IsEmpty());
+			TestTrue(TEXT("...carrying the debug-name column"),
+				Lines[0].Text.StartsWith(TEXT("subject ")));
+			TestFalse(TEXT("...and the empty-string substitution, not the literal 'null'"),
+				Lines[0].Text.Contains(TEXT("null")));
 		}
 	}
 
@@ -217,14 +231,23 @@ bool FElysiumNpcKernelDebug10TraceMessagesTest::RunTest(const FString&)
 	}
 	Debug10ResetConVars();
 
-	// The formatter itself is family Conditions10's row (`0x1028d990` ->
-	// `FElysiumNpc::BuildConditionDebugString`) and is seamed here: it answers the message with the
-	// indent clamped at 0, which is retail's shortest arm with every optional block empty. A
-	// NEGATIVE indent is clamped rather than rejected (`if (level < 0) level = 0`).
-	TestEqual(TEXT("the format seam answers the message unchanged"),
-		ConstNpc->TraceMessageFormat(TEXT("msg"), 3), FString(TEXT("msg")));
-	TestEqual(TEXT("and a negative indent is clamped, not refused"),
-		ConstNpc->TraceMessageFormat(TEXT("msg"), -5), FString(TEXT("msg")));
+	// The formatter is family Conditions10's row (`0x1028d990` ->
+	// `FElysiumNpc::BuildConditionDebugString`). It was SEAMED when this case was written, so these
+	// probes asserted the passthrough; the story's close wired the real body, so they now read what
+	// retail's `"%-20s  %6.2f : %*s %s\n…"` actually produces. Same questions, answered off the
+	// formatter instead of past it.
+	const FString Indented = ConstNpc->TraceMessageFormat(TEXT("msg"), 3);
+	const FString Clamped = ConstNpc->TraceMessageFormat(TEXT("msg"), -5);
+	const FString Flush = ConstNpc->TraceMessageFormat(TEXT("msg"), 0);
+	TestTrue(TEXT("the formatter carries the message"), Indented.Contains(TEXT("msg")));
+	TestTrue(TEXT("...behind the %-20s debug name"), Indented.StartsWith(TEXT("subject ")));
+	TestTrue(TEXT("...and the %6.2f curtime column"), Indented.Contains(TEXT("0.00 : ")));
+	// `%*s` is the indent, so level 3 and level 0 are DIFFERENT strings — which is what proves the
+	// width argument reaches the format at all.
+	TestNotEqual(TEXT("an indent of 3 is not an indent of 0"), Indented, Flush);
+	// `if (level < 0) level = 0` — a negative indent is clamped, not rejected, so it must produce
+	// exactly the level-0 string rather than an error or a refusal.
+	TestEqual(TEXT("and a negative indent is clamped to 0, not refused"), Clamped, Flush);
 	return true;
 }
 

@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumNpcMaker.h"
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumClassRegistry.h"   // story 29d: the zombie fists' classname lookup
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
@@ -51,16 +52,102 @@ void FElysiumNpcMaker::ParseMapData(const FString& MapData)
 	// the world already ran before `Spawn`; there is nothing to forward to from here.
 }
 
+const TCHAR* FElysiumNpcMaker::MakerThinkName(EMakerThink Think)
+{
+	switch (Think)
+	{
+	case EMakerThink::None:      return TEXT("none");
+	case EMakerThink::Inert:     return TEXT("inert");
+	case EMakerThink::Base:      return TEXT("base");
+	case EMakerThink::Fleshpile: return TEXT("fleshpile");
+	case EMakerThink::Zombie:    return TEXT("zombie");
+	}
+	return TEXT("unknown");
+}
+
 void FElysiumNpcMaker::Spawn()
 {
+	// Story 29d, family **SpeciesLifecycle10** — slot 103 for all three maker classnames:
+	// `CNPCMaker::Spawn` `0x1034afe0`, `CNPCMaker_Fleshpile::Spawn` `0x1034c020` and
+	// `CNPCMaker_Zombie::Spawn` `0x1034cc60`, in the listing's order. The header carries the
+	// correction this reading made to the checklist's walk (`+0x66b0`/`+0x66b8` swapped, and
+	// `m_Collision` at `+0x270` rather than `+0x17c`).
+	const bool bZombie = IsZombieMaker();
+	const bool bFleshpile = IsFleshpileMaker();
+
+	// 1. `1034b04c LEA ECX,[ESI + 0x270] / CALL 0x1000428c` — `SetSolid(SOLID_NONE)` on
+	//    `m_Collision`, under a `"CBaseEntity::SetSolid"` scope frame naming this maker's
+	//    targetname. SEAM; see the header.
+	RetailSolidType = 0;
+
+	// 2. `1034b065 MOV dword ptr [ESI + 0x66b0],0x0` — `m_cLiveChildren`, and it is written BEFORE
+	//    the slot-104 dispatch, not after.
 	LiveChildren = 0;
-	CachedGroundZ = 0.0f;
+
+	// 3. `1034b06f CALL dword ptr [EAX + 0x1a0]` — slot **104** `Precache`, dispatched virtually, so
+	//    each maker class takes its own arm. This runtime's `Precache` RECORDS rather than acquires
+	//    (see the header's note on why), so calling it here adds no event retail's order lacks.
+	Precache();
+
+	// 4. `1034b075` — `if (m_bInfChild (+0x66c3)) m_bFade (+0x66c2) = 1`. Infinite implies fade.
 	if (bInfinite)
 	{
 		bFade = true;
 	}
-	NextThink = bDisabled ? ELYSIUM_NEVER_THINK
-		: static_cast<float>((World ? World->NowSeconds() : 0.0) + SpawnFrequency);
+
+	// 5. `1034b086 MOV AL,byte ptr [ESI + 0x66c0]` — the enabled/disabled split. The think body
+	//    installed here is the ONLY difference between the base and fleshpile arms.
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	if (!bDisabled)
+	{
+		InstalledThink = bZombie ? EMakerThink::Zombie
+			: (bFleshpile ? EMakerThink::Fleshpile : EMakerThink::Base);
+		// `1034b0a6 FLD float ptr [ESI + 0x6664] / FADD float ptr [ECX + 0xc]` — spawn frequency
+		// plus curtime, and for the zombie a `RandomFloat(1.0, 2.0)` on top
+		// (`1034cd2a CALL dword ptr [0x109f385c]`, added BEFORE the frequency and the clock).
+		double Delay = static_cast<double>(SpawnFrequency);
+		if (bZombie)
+		{
+			Delay += static_cast<double>(
+				ElysiumRng::Stream(EElysiumRngStream::NpcMaker).FRandRange(
+					ZombieSpawnJitterMin, ZombieSpawnJitterMax));
+		}
+		NextThink = static_cast<float>(Now + Delay);
+	}
+	else
+	{
+		// `1034b0c8 PUSH 0x1000572c` — the inert think, which resolves to `0x101c0b60`, a bare `RET`.
+		// The ZOMBIE arm instead pushes a NULL think (`1034cd4a PUSH 0x0`), and neither path stamps
+		// `m_flNextThink` at all: a disabled maker keeps whatever next-think it already had.
+		//
+		// This runtime has no think-function pointer, so "installed a body that does nothing" and
+		// "installed no body" are both expressed by never being due. `ELYSIUM_NEVER_THINK` is that,
+		// and it is the port of leaving `m_flNextThink` at its spawn-time value with a think body
+		// that cannot act — the distinction retail keeps is recorded in `InstalledThink`.
+		InstalledThink = bZombie ? EMakerThink::None : EMakerThink::Inert;
+		NextThink = ELYSIUM_NEVER_THINK;
+	}
+
+	// 6. `1034b0b7 CALL 0x1001514a` — `CBaseEntity::Relink`. On the base and fleshpile arms it is
+	//    inside each branch; on the zombie arm the two branches join first (`1034cd48 JMP
+	//    0x1034cd51`) so it runs once either way. The observable difference is nil and the count is
+	//    what records it.
+	++RelinkCalls;
+
+	// 7. `1034b0bc MOV dword ptr [ESI + 0x66b8],0x0` — `m_flGround`, the LAST write of the base and
+	//    fleshpile arms.
+	CachedGroundZ = 0.0f;
+
+	// 8. The zombie's second difference: the five police-level thresholds, written after `m_flGround`
+	//    (`1034cd5d` then `1034cd67`..`1034cd7f`) and in offset order.
+	if (bZombie)
+	{
+		PlInvestigate = ZombieMakerPoliceLevel;           // +0x6348
+		PlCriminalFlee = ZombieMakerPoliceLevel;          // +0x634c
+		PlCriminalAttack = ZombieMakerPoliceLevel;        // +0x6350
+		PlSupernaturalFlee = ZombieMakerPoliceLevel;      // +0x6354
+		PlSupernaturalAttack = ZombieMakerPoliceLevel;    // +0x6358
+	}
 }
 
 FElysiumNpcMaker::EAttempt FElysiumNpcMaker::CanMakeNpc(bool bBypass) const
@@ -168,14 +255,43 @@ FElysiumNpcMaker::EAttempt FElysiumNpcMaker::TrySpawn(bool bBypass)
 		return LastAttempt = EAttempt::InvalidChild;
 	}
 
+	// Story 29d, family Lifecycle10 — `MakeNPC` `0x1034b7b0`, the steps between the child's creation
+	// and its spawn, in the listing's order.
+	//
+	// `1034b928`..`1034b982`: `m_sRefMapDataBuffer` (`+0x76cc`) is copied byte by byte into the
+	// maker's inline buffer at `+0x66cc`, handed to the child's `ParseMapData` (vtable `+0x1ac`) as a
+	// two-word `CEntityMapData`, then the child's `Precache` (`+0x1bc`) runs and `SetClassname`
+	// (`+0x1e8`) is given `m_iszNPCClassname` (`+0x665c`).
+	//
+	// SEAM, all three: this runtime builds a child from the registered classname and the keyvalue map
+	// above, which the world applies at `Construct` — so the block is RECORDED and applied to
+	// nothing; the classname is already the child's; and `Precache()` is not called here for the
+	// reason `FElysiumNpc::Precache` states (residency is the map epoch's, and a per-entity precache
+	// would add an event retail's order does not have here).
+	LastChildMapDataReplay = RefMapDataBuffer;
+
 	static const FName OnSpawnNpc(TEXT("OnSpawnNPC"));
+	FElysiumNpc* ChildNpc = ChildEntity->AsNpc();
+	if (ChildNpc != nullptr)
+	{
+		// `1034b988 MOV EAX,[ESI+0x1584] / 1034b998 MOV [EDI+0x1584],EAX` — the relationship string
+		// is copied BEFORE the output fires, which is the one thing in the block that is not part of
+		// `ApplyChildInheritance`'s run (retail copies it here and the rest after the spawnflags).
+		LastChildRelationshipString = ChildWords.RelationshipString;
+	}
 	FireOutput(OnSpawnNpc, Handle);
 	ChildEntity->SpawnFlags = bFade ? 0x204 : 4;
 	// `MakeNPC` `0x1034b7b0`, right after the spawnflags: `child->SetDisableAI(this->GetDisableAI())`.
-	if (FElysiumNpc* ChildNpc = ChildEntity->AsNpc())
+	if (ChildNpc != nullptr)
 	{
 		ChildNpc->SetDisableAi(bDisableAi);
+		// `1034b9d0`..`1034ba69` — the nine inherited words and the two perception derivations.
+		ApplyChildInheritance(*ChildNpc);
 	}
+	// `1034ba73 CALL [this->vtable + 0x9ac]` — slot 619 `ChildPreSpawn(child)`. `CNPCMaker`'s own
+	// body (`0x1034af30`) is `return;`, so the base maker's hook does nothing; the fleshpile's and
+	// the zombie's are other rows. Counted, so the order around `DispatchSpawn` stays assertable.
+	++ChildPreSpawnCalls;
 	World->CallEntitySpawn(*ChildEntity);
 	if (ChildEntity->IsDead())
 	{
@@ -185,6 +301,10 @@ FElysiumNpcMaker::EAttempt FElysiumNpcMaker::TrySpawn(bool bBypass)
 	}
 	ChildEntity->SetOwnerEntity(Handle);
 	World->RenameEntity(*ChildEntity, ChildTargetName);
+	// `1034baa4 CALL [this->vtable + 0x9b0]` — slot 620 `ChildPostSpawn(child)`, AFTER the rename and
+	// before the counters. `CNPCMaker`'s own body (`0x1034af50`) is empty too.
+	++ChildPostSpawnCalls;
+	LastSpawnedChild = ChildHandle;
 	++LiveChildren;
 	if (!bInfinite)
 	{
@@ -193,6 +313,14 @@ FElysiumNpcMaker::EAttempt FElysiumNpcMaker::TrySpawn(bool bBypass)
 		{
 			NextThink = ELYSIUM_NEVER_THINK;
 		}
+	}
+	// `1034baee MOV byte ptr [EDI + 0x65f4],0x1` — `m_bCameFromSpawner` on the CHILD, the very last
+	// write before the return. The checklist's walk calls it "the child's `+0x2c4` latch", which is
+	// Ghidra's `this_00[0x17].field_0x2c4` struct view of the same byte; the listing's offset is
+	// `+0x65f4` and the datamap names it.
+	if (ChildNpc != nullptr)
+	{
+		ChildNpc->bCameFromSpawner = true;
 	}
 	UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s Spawn -> %s (live %d/%d, remaining %d%s)"),
 		*DebugString(), *World->DescribeHandle(ChildHandle), LiveChildren, MaxLiveChildren,
@@ -713,6 +841,20 @@ bool FElysiumNpcMaker::ZombieMakerOwnsFists() const
 	return false;
 }
 
+bool FElysiumNpcMaker::ZombieFistsItemExists() const
+{
+	// SEAM for `thunk_FUN_10136580("item_w_zombie_fists")`. See the header: the class registry IS
+	// this runtime's entity factory, and the item catalogue only populates it once
+	// `ElysiumItems::Install` has run.
+#if WITH_DEV_AUTOMATION_TESTS
+	if (ZombieFistsItemForTests.IsSet())
+	{
+		return ZombieFistsItemForTests.GetValue();
+	}
+#endif
+	return FElysiumClassRegistry::Get().Find(FName(GZombieFistsItem)) != nullptr;
+}
+
 FElysiumNpc* FElysiumNpcMaker::EquipZombieFists(bool bBypass)
 {
 	// `CNPCMaker_Zombie::MakeNPC` `0x1034d140`, slot 617, read off the listing — the checklist's walk
@@ -747,9 +889,7 @@ FElysiumNpc* FElysiumNpcMaker::EquipZombieFists(bool bBypass)
 	//      releases the spawned zombie through `thunk_FUN_101cd940` (`UTIL_Remove`) and answers null.
 	//      SEAM: the classname is LOOKED UP rather than created, because creating an item entity here
 	//      would be a second spawn event at a site retail's own `DispatchSpawn` (step 5) covers.
-	const bool bItemExists =
-		FElysiumClassRegistry::Get().Find(FName(GZombieFistsItem)) != nullptr;
-	if (!bItemExists)
+	if (!ZombieFistsItemExists())
 	{
 		Child->Kill();   // thunk_FUN_101cd940(this_00)
 		return nullptr;

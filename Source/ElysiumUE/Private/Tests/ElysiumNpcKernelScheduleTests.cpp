@@ -575,6 +575,15 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 		Troika->MeleeScheduleFailureGate(nullptr), 0xcd);
 
 	// --- the Troika line, `0x102b6c30` ------------------------------------------------------------
+	//
+	// **STRENGTHENED by story 29d, family SpeciesAnim10.** The fixture stands this body as
+	// `npc_VHumanCombatant`, and `CNPC_VHumanCombatant` fills slot 604 with `0x10385e40` — the
+	// `CNPC_VHuman` selector 34 census classes share, which that story landed. So this NPC no
+	// longer reaches the Troika line at all, and the assertions below would be measuring the human
+	// arm. It is re-classed to `CAI_BaseNPCTroika`, which carries no slot-604 override row and is
+	// therefore the one class whose lookup answers "the Troika body", exactly as it did when slot
+	// 604's species arms were unwritten.
+	Troika->SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 	// Not in melee and slot 599 refusing is the first arm: the gate, then 0xe4.
 	Troika->Cognition.Conditions.Reset();
 	Troika->bInMelee = false;

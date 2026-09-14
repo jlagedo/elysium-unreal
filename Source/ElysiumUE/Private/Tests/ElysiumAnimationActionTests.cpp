@@ -1495,19 +1495,24 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("a body in combat takes neither arm"), Fighting.PreTranslation,
 			FString(TEXT("ACT_WALK")));
 
-		// Empty hands take the tree's own early-out, before any state is read.
+		// **CORRECTED by story 29d (family Anim10).** Empty hands take the tree's own early-out at
+		// `10385e90` — and that early-out clears `m_bAggressiveAnims` and jumps to
+		// `thunk_FUN_10295590(this, param_1)` with the request UNCHANGED. Neither rewrite block runs
+		// for an unarmed body, so it answers NEITHER arm of the branch and its walk stays a walk.
+		// This case previously read the early-out as TAKING the relaxed arm.
 		FElysiumAnimationIntent Bare = Armed;
 		Bare.WeaponClassname.Reset();
 		Bare.ActorState = EElysiumNpcState::Alert;
-		TestEqual(TEXT("an unarmed body is never armed/alert, whatever its state"),
+		TestEqual(TEXT("an unarmed body answers NEITHER arm, so its walk is not rewritten"),
 			ElysiumAnimResolve::TranslateActivity(Bare, GuardCatalog).PreTranslation,
-			FString(TEXT("ACT_WALK_RELAXED")));
+			FString(TEXT("ACT_WALK")));
 
-		// **The availability probe is part of the translation, not an opt-in.** That unarmed rewrite
-		// runs whatever the body can play, so a cast body carrying only the plain `ACT_WALK` — which is
-		// most of the shipped cast — depends on rung 4 of the probe, the original request, to travel at
-		// all. A producer that resolved with the probe off would get the named miss and its own stated
-		// fallback where retail poses the walk the body actually authors.
+		// **The availability probe is part of the translation, not an opt-in.** The relaxed rewrite
+		// runs for an ARMED body whose aggression flag came out clear — whatever the body can play —
+		// so a cast body carrying only the plain `ACT_WALK`, which is most of the shipped cast,
+		// depends on rung 4 of the probe, the original request, to travel at all. A producer that
+		// resolved with the probe off would get the named miss and its own stated fallback where
+		// retail poses the walk the body actually authors.
 		FElysiumNpcClipSet Plain;
 		Plain.Stem = TEXT("plain_body");
 		Plain.Clips.Add(TEXT("walk"), MakeClip(CastBank, TEXT("ACT_WALK"), 30, 0x1));
@@ -1518,9 +1523,12 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		FElysiumAnimationIntent PlainWalk = ActivityIntent(TEXT("plain_body"), TEXT("ACT_WALK"),
 			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 		PlainWalk.ActorClassname = TEXT("npc_VHumanCombatant");
+		// An ARMED, non-alert body: the arm the relaxed rewrite actually sits on.
+		PlainWalk.WeaponClassname = TEXT("item_w_glock_17c");
+		PlainWalk.ActorState = EElysiumNpcState::Idle;
 		const ElysiumAnimResolve::FElysiumTranslationResult PlainTranslation =
 			ElysiumAnimResolve::TranslateActivity(PlainWalk, PlainCatalog);
-		TestEqual(TEXT("the unarmed rewrite names a relaxed walk this body cannot play"),
+		TestEqual(TEXT("the relaxed rewrite names a walk this body cannot play"),
 			PlainTranslation.PreTranslation, FString(TEXT("ACT_WALK_RELAXED")));
 		TestEqual(TEXT("so the probe answers at rung 4, the original request"),
 			PlainTranslation.AvailabilityRung, 4);
@@ -1534,6 +1542,14 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("...recorded as the rung that answered rather than as a clean resolve"),
 			static_cast<int32>(PlainClip.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::TranslatedFallback));
+
+		// And the unarmed body reaches the same clip at rung 1, because nothing rewrote its request.
+		FElysiumAnimationIntent PlainBare = PlainWalk;
+		PlainBare.WeaponClassname.Reset();
+		const ElysiumAnimResolve::FElysiumTranslationResult BareTranslation =
+			ElysiumAnimResolve::TranslateActivity(PlainBare, PlainCatalog);
+		TestEqual(TEXT("an unarmed body needs no rung at all — its request was never rewritten"),
+			BareTranslation.Resolved, FString(TEXT("ACT_WALK")));
 
 		// The same classification taken all the way to a CLIP. What a producer plays is the
 		// translated label, never the raw request's own weighted pick, so a seam that dropped the

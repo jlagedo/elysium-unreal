@@ -8,17 +8,27 @@
 #include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumNpcClips.h"
 
-// The unarmed cast gait.
+// The relaxed cast gait.
 //
 // `PreTranslate_Human` (`vampire.dll 0x103854f0`) carries two rows that fire under `NotArmedAlert`:
-// `ACT_WALK` -> `ACT_WALK_RELAXED` (9 -> 22) and `ACT_RUN` -> `ACT_RUN_RELAXED` (19 -> 23). An
-// unarmed body satisfies that predicate unconditionally -- the recovered tree early-outs on "no
-// active weapon" before it reads any state -- and **no shipped body carries either sequence**;
-// the census over `out/npc/clips` finds `ACT_WALK_RELAXED` on none of the 293 exported bodies.
+// `ACT_WALK` -> `ACT_WALK_RELAXED` (9 -> 22) and `ACT_RUN` -> `ACT_RUN_RELAXED` (19 -> 23), and
+// **no shipped body carries either sequence** -- the census over `out/npc/clips` finds
+// `ACT_WALK_RELAXED` on none of the 293 exported bodies.
 //
-// So on every unarmed cast body the only thing that hands the gait back is the four-way
-// availability probe at the tail of `CAI_BaseNPC::TranslateActivity` (`0x10271ff0`), whose rung 4
-// is the untranslated request. That probe is unconditional in retail: its one early return is
+// **CORRECTED by story 29d (family Anim10), and this file's premise was the thing that was wrong.**
+// It said an unarmed body satisfies that predicate *unconditionally*, because the recovered tree
+// early-outs on "no active weapon" before it reads any state. The listing says the early-out
+// SKIPS the rewrite rather than taking it: at `10385e90` a null `GetActiveWeapon()` (or one whose
+// `+0x19c` carries `0x40`) clears `m_bAggressiveAnims` and jumps straight to
+// `switchD_10385635_caseD_2` -- `thunk_FUN_10295590(this, param_1)` with the request UNCHANGED --
+// while both rewrite blocks sit past `LAB_10385611` and are reachable only with a weapon in hand.
+// So an unarmed `ACT_WALK` stays `ACT_WALK`, and the body that gets translated into a sequence it
+// does not carry is the **armed, non-aggressive** one. The predicate's name reads as its own
+// negation; what it means is "armed, and `m_bAggressiveAnims` clear".
+//
+// So on such a body the only thing that hands the gait back is the four-way availability probe at
+// the tail of `CAI_BaseNPC::TranslateActivity` (`0x10271ff0`), whose rung 4 is the untranslated
+// request. That probe is unconditional in retail: its one early return is
 // `ACT_SCRIPT_CUSTOM_MOVE` (`0x18`), and nothing else skips it.
 //
 // The distinction these two tests hold is that the probe never crosses activities -- its four rungs
@@ -75,24 +85,41 @@ bool FElysiumGaitSubstitutionGateTest::RunTest(const FString&)
 		Refused.ResolvedActivity, FString(TEXT("ACT_WALK")));
 
 	// The four rungs above it are not substitutions and must survive the cleared flag. This is the
-	// exact shape of the defect: an unarmed cast body whose class pre-translates the walk into a
-	// relaxed walk it does not carry, rescued by rung 4 and nothing else.
-	FElysiumAnimationIntent Unarmed;
-	Unarmed.Stem = Body.Stem;
-	Unarmed.Activity = TEXT("ACT_WALK");
-	Unarmed.Source = EElysiumAnimSource::Npc;
-	Unarmed.BodyKind = EElysiumAnimBodyKind::Cast;
-	Unarmed.ActorClassname = TEXT("npc_VHumanCombatant");
-	Unarmed.ActorState = EElysiumNpcState::Idle;
-	Unarmed.bAllowFallbackLadder = true;
-	Unarmed.bAllowSubstituteActivity = false;
+	// exact shape of the defect: a cast body whose class pre-translates the walk into a relaxed
+	// walk it does not carry, rescued by rung 4 and nothing else.
+	//
+	// The body has to be **armed** to reach the rewrite at all (see the header): a weapon
+	// classname is what `0x103854f0`'s `GetActiveWeapon()` gate reads, and an idle state is what
+	// leaves `m_bAggressiveAnims` clear.
+	FElysiumAnimationIntent Relaxed;
+	Relaxed.Stem = Body.Stem;
+	Relaxed.Activity = TEXT("ACT_WALK");
+	Relaxed.Source = EElysiumAnimSource::Npc;
+	Relaxed.BodyKind = EElysiumAnimBodyKind::Cast;
+	Relaxed.ActorClassname = TEXT("npc_VHumanCombatant");
+	Relaxed.ActorState = EElysiumNpcState::Idle;
+	Relaxed.WeaponClassname = TEXT("item_w_9mm");
+	Relaxed.bAllowFallbackLadder = true;
+	Relaxed.bAllowSubstituteActivity = false;
 	FElysiumAnimationSelection Probed;
-	ElysiumAnimResolve::Resolve(Unarmed, Catalog, Probed);
-	TestEqual(TEXT("the availability probe still hands an unarmed body its plain walk back"),
+	ElysiumAnimResolve::Resolve(Relaxed, Catalog, Probed);
+	TestEqual(TEXT("the availability probe still hands a relaxed body its plain walk back"),
 		Probed.ResolvedActivity, FString(TEXT("ACT_WALK")));
 	TestFalse(TEXT("...naming a real label"), Probed.SequenceLabel.IsEmpty());
 	TestTrue(TEXT("...through a rung of the probe rather than the translation's own answer"),
 		Probed.AvailabilityRung > 1);
+
+	// And the arm the correction created: an UNARMED body takes `10385e90`'s early-out, so its
+	// walk is never rewritten and the probe has nothing to rescue. Retail's answer is the request
+	// itself, off the translation rather than off a rung.
+	FElysiumAnimationIntent Unarmed = Relaxed;
+	Unarmed.WeaponClassname.Reset();
+	FElysiumAnimationSelection UnarmedOut;
+	ElysiumAnimResolve::Resolve(Unarmed, Catalog, UnarmedOut);
+	TestEqual(TEXT("an unarmed body's walk is never pre-translated into the relaxed walk"),
+		UnarmedOut.ResolvedActivity, FString(TEXT("ACT_WALK")));
+	TestEqual(TEXT("...so the translation answers it directly and no rung is spent"),
+		UnarmedOut.AvailabilityRung, 1);
 	return true;
 }
 

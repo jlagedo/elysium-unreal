@@ -1028,7 +1028,19 @@ bool FElysiumDlgNoValidReplyTest::RunTest(const FString&)
 	Gated.Conv->AdvanceTerminal();
 	TestTrue(TEXT("the Continue closes"), Gated.Conv->IsOver());
 
-	// A band with no PC rows at all is terminal by design and keeps the authored line.
+	// A band with no PC rows at all is terminal — and it takes the substitution too.
+	//
+	// **CORRECTED by story 29d (family Social10).** This case asserted the opposite, on a
+	// `CandidateRows > 0` gate the port had invented. `CDialog::fill_packet` (`0x100e7da0`) has no
+	// such gate: `get_pc_responses` (`0x100e82d0`) answers **0** when the row after the NPC line is
+	// another NPC line, the drop loop is skipped, and the test at `100e7e9a` is only
+	// `(m_bSawDisabledRow +0x30e9 == 0) && (survivors == 0)` — both of which hold. Retail then
+	// writes "I do not have a valid reply." into PC response slot 0 (`packet + 0x804`), sets the
+	// count to 1, the link to 0 and `+0x2814` to -1.
+	//
+	// So an NPC line with no authored reply offers exactly one response reading "I do not have a
+	// valid reply.", and taking it ends the conversation. That is retail's answer for an
+	// under-authored bank, and this port reproduces it rather than the friendlier Continue.
 	ElysiumDlgTestFixture::FBand Last;
 	if (!Last.Build(*this, {
 		ElysiumDlgRow(11, TEXT("That is all."), TEXT("#"), TEXT(""), TEXT("")),
@@ -1038,7 +1050,8 @@ bool FElysiumDlgNoValidReplyTest::RunTest(const FString&)
 	}
 	Last.Conv->Start();
 	TestTrue(TEXT("a bandless line is terminal"), Last.Conv->IsTerminalLine());
-	TestFalse(TEXT("...and is NOT a no-valid-reply substitution"), Last.Conv->NoValidReply());
+	TestTrue(TEXT("...and IS a no-valid-reply substitution, as 0x100e7da0 has no candidate gate"),
+		Last.Conv->NoValidReply());
 
 	// A disabled-only band is a no-valid-reply too: the player can read what they lack but cannot
 	// answer, so the Continue has to be there.

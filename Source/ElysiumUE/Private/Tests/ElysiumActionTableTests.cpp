@@ -1337,17 +1337,35 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 
 		// ... and the Tzimisce runner's chain runs *before* its rules, so a request the chain
 		// delegates never reaches the variant selection at all.
+		//
+		// **RE-KEYED by story 29d (family Anim10).** `0x103c3e10` tests the form byte `+0x6672` for
+		// NON-ZERO — which is what `FormBit` means for this class — and then switches on the
+		// INCOMING activity; it does not compare a variant VALUE. The rows carried
+		// `RunnerVariantIs == 0..3` with no `From`, so none of them could match the request it was
+		// meant to rewrite. The probe reads the corrected key.
 		FNpcState Variant;
-		Variant.Variant = 1;
+		Variant.Holds.Add(ENpcPredicate::CoverCapable);
 		const FNpcTranslation Delegated = WalkNpc(TEXT("PreTranslate_TzimisceRunner"),
 			TEXT("ACT_COVER"), Variant, Nothing);
 		TestTrue(TEXT("the runner's chain delegates a cover request before its own rules run"),
 			Delegated.bDelegated);
 		TestEqual(TEXT("and it delegates to the cover slot"), static_cast<int32>(Delegated.Delegate),
 			static_cast<int32>(ENpcSlot::Cover));
+		FNpcState Carrying;
+		Carrying.Holds.Add(ENpcPredicate::FormBit);
 		TestEqual(TEXT("an ordinary request reaches the runner's variant selection"),
-			WalkNpc(TEXT("PreTranslate_TzimisceRunner"), TEXT("ACT_FIDGET"), Variant,
-				Nothing).Activity, FString(TEXT("ACT_TZ_FIDGET2")));
+			WalkNpc(TEXT("PreTranslate_TzimisceRunner"), TEXT("ACT_WALK"), Carrying,
+				Nothing).Activity, FString(TEXT("ACT_TZ_WALK2")));
+		// The chain runs BEFORE the rows, so `ACT_FIDGET` has already become `ACT_IDLE` by the time
+		// the variant rows see it — the `ACT_TZ_FIDGET2` row retail carries is unreachable through
+		// this chain, and the answer is the idle variant. Story 29d's kernel body reproduces the
+		// same ordering and the same dead row.
+		TestEqual(TEXT("a fidget is already an idle by the time the rows run"),
+			WalkNpc(TEXT("PreTranslate_TzimisceRunner"), TEXT("ACT_FIDGET"), Carrying,
+				Nothing).Activity, FString(TEXT("ACT_TZ_IDLE2")));
+		TestEqual(TEXT("...and with the form byte clear it stays the chain's answer"),
+			WalkNpc(TEXT("PreTranslate_TzimisceRunner"), TEXT("ACT_FIDGET"), Plain,
+				Nothing).Activity, FString(TEXT("ACT_IDLE")));
 
 		// The cover delegate is an ordered candidate list against the body's own vocabulary.
 		const TSet<FString> Crouching = { TEXT("ACT_MIDCRUNCH_IDLE"), TEXT("ACT_CRUNCH_IDLE"),
@@ -1385,8 +1403,16 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 			FString(TEXT("ACT_RELOAD_FAST")));
 
 		// The delegating rows on the common Troika pre-translation.
-		const FNpcTranslation Cover = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_COVER"), Plain,
-			Nothing);
+		//
+		// **RE-GATED by story 29d (family Anim10).** `10295655 CALL [vtable+0x804]` then
+		// `1029565f TEST 0x8000000` sits in front of BOTH delegates, not only the reload one, so an
+		// incapable body does NOT leave the pre-translation for cover. The row carried `Always`.
+		TestFalse(TEXT("without the capability bit a cover request does NOT delegate"),
+			WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_COVER"), Plain, Nothing).bDelegated);
+		FNpcState Covering;
+		Covering.Holds.Add(ENpcPredicate::CoverCapable);
+		const FNpcTranslation Cover = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_COVER"),
+			Covering, Nothing);
 		TestTrue(TEXT("a cover request leaves the pre-translation for the cover delegate"),
 			Cover.bDelegated);
 		FNpcState Reloading;
@@ -1401,16 +1427,25 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		TestTrue(TEXT("an ordinary request reaches the paired-action tail"),
 			WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_IDLE"), Plain, Nothing).bGrappleTail);
 
-		// The two rows whose request family the recovered reading did not enumerate say so rather
-		// than guessing a membership.
+		// **ENUMERATED by story 29d (family Anim10).** The two rows whose request family the earlier
+		// reading named without listing are now the six and the four requests `0x10295590` actually
+		// rewrites, read arm by arm off the listing, so nothing is left undecided.
 		FNpcState Frenzied;
 		Frenzied.Holds.Add(ENpcPredicate::MovementPolicyFrenzy);
-		const FNpcTranslation Unresolved = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_WALK"),
+		const FNpcTranslation Resolved = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_WALK"),
 			Frenzied, Nothing);
-		TestTrue(TEXT("a frenzy movement policy reports what it cannot decide"),
-			Unresolved.bUnresolved);
-		TestEqual(TEXT("and leaves the request alone rather than guessing"), Unresolved.Activity,
-			FString(TEXT("ACT_WALK")));
+		TestFalse(TEXT("a frenzy movement policy no longer has a family it cannot decide"),
+			Resolved.bUnresolved);
+		TestEqual(TEXT("and ACT_WALK is one of its six"), Resolved.Activity,
+			FString(TEXT("ACT_RUN_FRENZY")));
+		TestEqual(TEXT("while a request outside the six is left alone"),
+			WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_RANGE_ATTACK1"), Frenzied,
+				Nothing).Activity, FString(TEXT("ACT_RANGE_ATTACK1")));
+		FNpcState Hurrying2;
+		Hurrying2.Holds.Add(ENpcPredicate::MovementPolicyRun);
+		TestEqual(TEXT("the hurried gait's set is the smaller four, and ACT_RUN_RELAXED is NOT in it"),
+			WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_RUN_RELAXED"), Hurrying2,
+				Nothing).Activity, FString(TEXT("ACT_RUN_RELAXED")));
 
 		// The remaining leaves.
 		TestEqual(TEXT("the wolf morph answers every request with its one activity"),

@@ -23,68 +23,11 @@ namespace
 		return Entity.Def ? Entity.Def->Classname : FString();
 	}
 
-	// One candidate, scored once. Everything the arbitration compares is resolved up front so the
-	// comparison itself is the recovered rule and nothing else.
-	struct FNpcEnemyCandidate
-	{
-		FElysiumEntityHandle Handle;
-		int32 Priority = 0;
-		int32 DistanceUnits = 0;   // truncated squared Source distance, as retail compares it
-		bool bVisible = false;
-		bool bReachable = true;
-	};
-
-	// CHOSEN, NOT RECOVERED (the value, not the rule): reachability. Step 1 of the recovered
-	// arbitration is "a reachable candidate beats an unreachable candidate", and this runtime has no
-	// reachability query — `IElysiumNpcMotor` carries projection and movement but no "can this body
-	// path to that actor". Every candidate therefore answers reachable, which collapses step 1 to a
-	// no-op rather than removing it: the comparison below still runs it, so the day a path query
-	// lands it is one function that changes. Reporting "unreachable" instead would be worse — it
-	// would make every candidate equal at step 1 AND set `ENEMY_UNREACHABLE`'s downstream branches
-	// off a value nothing measured.
-	bool NpcEnemyIsReachable(const FElysiumNpc&, const FElysiumEntity&)
-	{
-		return true;
-	}
-
-	// Is this candidate currently seen? The sight path tracks only the player, so any other
-	// candidate is unseen — the same deliberate scope as `ElysiumNpcConditions.cpp`'s seen set, and
-	// the reason step 4 of the arbitration is exercisable at all today.
-	bool NpcEnemyIsCandidateVisible(const FElysiumNpc& Npc, const FElysiumEntityHandle& Handle)
-	{
-		// BestEnemy's visibility tie-break is this Look pass's actual seen set, not the two-second
-		// closest-player cache. That also makes NPC/object candidates follow the same admission.
-		const FElysiumEntity* Candidate = Npc.World ? Npc.World->Resolve(Handle) : nullptr;
-		return Npc.Senses.Sighted().Contains(Handle)
-			|| (Candidate && FElysiumNpcSenses::IsVisible(Npc, *Candidate, Npc.World->NowSeconds()));
-	}
-
-	// The recovered arbitration, as a strict "does Candidate displace Incumbent".
-	bool NpcEnemyDisplaces(const FNpcEnemyCandidate& Candidate, const FNpcEnemyCandidate& Incumbent)
-	{
-		// 1. Reachability class.
-		if (Candidate.bReachable != Incumbent.bReachable)
-		{
-			return Candidate.bReachable;
-		}
-		// 2. Larger IRelationPriority.
-		if (Candidate.Priority != Incumbent.Priority)
-		{
-			return Candidate.Priority > Incumbent.Priority;
-		}
-		// 4. Visibility modifies the distance comparison. A visible candidate can displace a farther
-		//    UNSEEN incumbent; a closer unseen candidate displaces only an unseen incumbent.
-		if (Candidate.bVisible != Incumbent.bVisible)
-		{
-			// At equal priority/reachability a visible candidate displaces an unseen incumbent even
-			// when it is farther; an unseen candidate never displaces a visible incumbent.
-			return Candidate.bVisible;
-		}
-		// 3. At equal priority and the same visibility class, smaller integer distance wins. Ties go
-		//    to the incumbent, which is insertion order — the first eligible entity in world order
-		//    holds the slot.
-		return Candidate.DistanceUnits < Incumbent.DistanceUnits;
-	}
+	// The candidate struct and the three scoring helpers this file used to arbitrate with moved into
+	// story 29d's slot-478 body (`FElysiumNpc::FBestEnemyState`,
+	// `FElysiumNpc::BestEnemyCandidateVisible`, `FElysiumNpc::BestEnemyDistanceKey` and the slot-530
+	// `IsUnreachable` dispatch). The rule they carried is unchanged and is now beside the three
+	// gates retail applies in front of it.
 }
 
 int32 ElysiumNpcEnemy::RelationPriority(const FElysiumNpc& Npc, const FElysiumEntity& Candidate)
@@ -217,83 +160,15 @@ bool ElysiumNpcEnemy::IsScheduleInterested(const FElysiumNpc& Npc, EElysiumNpcCo
 
 FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 {
-	FElysiumEntityWorld* World = Npc.World;
-	if (World == nullptr)
-	{
-		return FElysiumEntityHandle::Invalid();
-	}
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-
-	bool bHaveBest = false;
-	FNpcEnemyCandidate Best;
-
-	// Candidate discovery walks only this NPC's CAI_Memory records. A hostile world actor that has
-	// never been observed is absent here and cannot be selected.
-	for (const FElysiumNpcEnemyMemoryRecord& Record : Npc.EnemyMemory.Records())
-	{
-		FElysiumEntity* Entity = World->Resolve(Record.Handle);
-		if (Entity == nullptr || Entity->Handle == Npc.Handle || Record.bEluded)
-		{
-			continue;   // never self
-		}
-		// "a living actor": the player and the registered combat characters are the actors this
-		// runtime carries. A logic entity or a prop is not an enemy no matter what row names it.
-		if (Entity->AsCombatCharacter() == nullptr || Entity->IsInert())
-		{
-			continue;
-		}
-		EElysiumRelationship Relation = EElysiumRelationship::Neutral;
-		int32 Priority = 0;
-		if (!Npc.Relationships.ResolveRow(Entity->Handle, NpcEnemyClassnameOf(*Entity), Relation, Priority))
-		{
-			Priority = 5;   // IRelationPriority's non-null default
-		}
-		if (Relation != EElysiumRelationship::Hate && Relation != EElysiumRelationship::Fear)
-		{
-			continue;   // only D_HT and D_FR are eligible
-		}
-
-		FNpcEnemyCandidate Candidate;
-		Candidate.Handle = Entity->Handle;
-		Candidate.Priority = Priority;
-		Candidate.DistanceUnits = FMath::TruncToInt(
-			FVector::DistSquared(Npc.Origin, Entity->Origin) / (ElysiumMove::U * ElysiumMove::U));
-		Candidate.bVisible = NpcEnemyIsCandidateVisible(Npc, Entity->Handle);
-		Candidate.bReachable = NpcEnemyIsReachable(Npc, *Entity);
-
-		if (!bHaveBest)
-		{
-			Best = Candidate;
-			bHaveBest = true;
-			continue;
-		}
-		if (Candidate.bReachable != Best.bReachable)
-		{
-			if (Candidate.bReachable)
-			{
-				Best = Candidate;
-			}
-			continue;
-		}
-		if (Candidate.Priority != Best.Priority)
-		{
-			if (Candidate.Priority > Best.Priority)
-			{
-				// 0x102744e6's higher-priority arm replaces the actor/priority/distance but leaves
-				// the visibility latch untouched. The next equal-priority candidate observes that
-				// stale byte, which is a retail selection quirk rather than a clean lexicographic key.
-				const bool bPriorVisibleLatch = Best.bVisible;
-				Best = Candidate;
-				Best.bVisible = bPriorVisibleLatch;
-			}
-			continue;
-		}
-		if (NpcEnemyDisplaces(Candidate, Best))
-		{
-			Best = Candidate;
-		}
-	}
-	return bHaveBest ? Best.Handle : FElysiumEntityHandle::Invalid();
+	// `BestEnemy` (`0x102743c0`) is SLOT 478, and story 29d's family Senses10 carries its body —
+	// including the three gates this walk did not have (`FL_NOTARGET`, `m_bIsBCCTargetable` and
+	// slot 479 `IsValidEnemy`, which retail requires before BOTH the outright reachability win and
+	// the higher-priority replacement) and the one species arm over it
+	// (`CNPC_VFrenzyShadow#478`, `0x103766d0`). This dispatches the slot rather than keeping a
+	// second copy of the arbitration; the four helpers this file used to score with moved into
+	// `FElysiumNpc::BestEnemyCandidateVisible` / `BestEnemyDistanceKey` / the slot-530 dispatch.
+	FElysiumEntity* Best = const_cast<FElysiumNpc&>(Npc).BestEnemy();
+	return Best != nullptr ? Best->Handle : FElysiumEntityHandle::Invalid();
 }
 
 void ElysiumNpcEnemy::SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& NewEnemy)

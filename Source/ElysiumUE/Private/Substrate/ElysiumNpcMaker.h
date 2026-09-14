@@ -57,6 +57,73 @@ public:
 	// family Species.
 	bool IsDepleted() const { return !bInfinite && RemainingTotal < 1; }
 
+	// --- Story 29d, family SpeciesLifecycle10: slot 103 `Spawn`, the three maker arms -------------
+	//
+	//   `CNPCMaker::Spawn`           `0x1034afe0`  — 261 bytes
+	//   `CNPCMaker_Fleshpile::Spawn` `0x1034c020`  — byte-identical but for the installed think
+	//   `CNPCMaker_Zombie::Spawn`    `0x1034cc60`  — 295 bytes; a spawn jitter, a NULL disabled
+	//                                                think, Relink on both paths, and the five
+	//                                                police thresholds slammed to 999999
+	//
+	// One method with three arms keyed on the maker's own classname, exactly as slots 104, 139, 617
+	// and 618 already are on this class.
+	//
+	// **The checklist's walk has `+0x66b0` and `+0x66b8` the wrong way round.** `vtmb_fields
+	// CNPCMaker` puts `m_cLiveChildren` at `+0x66b0` and `m_flGround` at `+0x66b8`, and the listing
+	// agrees: `1034b065 MOV dword ptr [ESI + 0x66b0],0x0` runs BEFORE the slot-104 dispatch and
+	// `1034b0bc MOV dword ptr [ESI + 0x66b8],0x0` is the last write on both paths. It also calls the
+	// collision property `+0x17c`; `1034b04c LEA ECX,[ESI + 0x270]` says `m_Collision` is `+0x270`
+	// and `+0x17c` is `m_flNextThink`, the other word the body writes.
+
+	/** Which think body the last `Spawn` installed, named by its retail address. `ThinkSet` is what
+	 *  chooses between the four, and the choice is the whole difference between the three arms. */
+	enum class EMakerThink : uint8
+	{
+		None,        // `CBaseEntity::ThinkSet(NULL)` — the zombie's disabled path
+		Inert,       // `0x1000572c` -> `0x101c0b60`, a bare `RET`: the base/fleshpile disabled path
+		Base,        // `0x1000696a` -> `0x1034bbf0`, `CNPCMaker`'s own think
+		Fleshpile,   // `0x10010dd4` -> `0x1034c8b0`
+		Zombie,      // `0x10015c4e` -> `0x1034d2d0`
+	};
+	EMakerThink InstalledThink = EMakerThink::None;
+	static const TCHAR* MakerThinkName(EMakerThink Think);
+
+	/** SEAM for `CCollisionProperty::SetSolid(SOLID_NONE = 0)` on `m_Collision` (`+0x270`), under a
+	 *  `"CBaseEntity::SetSolid"` scope-trace frame naming this maker's targetname. Family Motor10
+	 *  stands the same seam on `FElysiumNpc` as `RetailSolidType`; a maker is not an `FElysiumNpc`,
+	 *  so it gets its own. Seeded to `SOLID_NONE` because that is what `Spawn` writes and nothing in
+	 *  this runtime writes anything else — a maker is never solid. */
+	int32 RetailSolidType = 0;
+
+	/** SEAM for `CBaseEntity::Relink` (`0x1001514a`), which re-inserts the entity into the engine's
+	 *  spatial partition. This runtime has no partition to relink into, so the call is counted —
+	 *  and the COUNT is the recovered fact, because the base and fleshpile arms run it on the
+	 *  enabled path only reachable through their `if`, while the zombie arm runs it on both. */
+	int32 RelinkCalls = 0;
+
+	/** `m_iPLInvestigateLevel` (`+0x6348`), `m_iPLCriminalFleeLevel` (`+0x634c`),
+	 *  `m_iPLCriminalAttackLevel` (`+0x6350`), `m_iPLSupernaturalFleeLevel` (`+0x6354`) and
+	 *  `m_iPLSupernaturalAttackLevel` (`+0x6358`) — the five `CAI_BaseNPCTroika` law thresholds a
+	 *  maker carries in retail because `CNPCMaker` IS one. `CNPCMaker_Zombie::Spawn` writes the
+	 *  literal 999999 into all five on ITSELF, so the maker entity can never cross a law threshold.
+	 *
+	 *  **SEAM:** `ElysiumNpcClasses.cpp` registers no police-level keyfield on `npc_maker`, and this
+	 *  port's maker is not a law participant at all, so nothing reads these back. They are carried
+	 *  so the zombie arm's five writes are real writes at their retail names. */
+	int32 PlInvestigate = 0;
+	int32 PlCriminalFlee = 0;
+	int32 PlCriminalAttack = 0;
+	int32 PlSupernaturalFlee = 0;
+	int32 PlSupernaturalAttack = 0;
+
+	/** `1034cd58 MOV EAX,0xf423f` — **999999**, the literal all five take. */
+	static constexpr int32 ZombieMakerPoliceLevel = 999999;
+
+	/** `1034cd25 PUSH 0x3f800000` / `1034cd20 PUSH 0x40000000` — `RandomFloat(1.0, 2.0)`, the
+	 *  zombie maker's first-think jitter, added to `m_flSpawnFrequency` and curtime. */
+	static constexpr float ZombieSpawnJitterMin = 1.0f;
+	static constexpr float ZombieSpawnJitterMax = 2.0f;
+
 	virtual void Spawn() override;
 
 	// --- Story 29c-1, family Lifecycle ------------------------------------------------------------
@@ -308,6 +375,31 @@ public:
 	 *  A maker on this leaf owns no weapons, so it answers **false**, which is the arm that goes on
 	 *  to look the item up. See `EquipZombieFists` for why the other arm is a retail crash. */
 	bool ZombieMakerOwnsFists() const;
+
+	/** SEAM for `thunk_FUN_10136580("item_w_zombie_fists")`, retail's entity factory. This runtime's
+	 *  factory is the class registry, and the item catalogue registers one class per `vdata/items`
+	 *  definition only when `ElysiumItems::Install` runs — which a headless world does not do. So
+	 *  the honest answer in a bare fixture is **false**, and that is retail's own "the item
+	 *  definition is missing" arm: release the spawned zombie and answer null.
+	 *
+	 *  **GAP, named rather than patched:** the SUCCESS arm is therefore unreachable without an
+	 *  installed catalogue, exactly as `IsZombieMaker`'s spawn-leaf gap is. The latch below is the
+	 *  same instrument `SetZombieMakerForTests` is, for the same reason — a body whose carrier no
+	 *  fixture can stand is still a body. Nothing in the shipping build sets it. */
+	bool ZombieFistsItemExists() const;
+
+#if WITH_DEV_AUTOMATION_TESTS
+	/** Force the catalogue answer, in BOTH directions.
+	 *
+	 *  The fallback reads `FElysiumClassRegistry`, which is a **process-wide singleton**: once any
+	 *  earlier suite in the same process has installed the item catalogue, `item_w_zombie_fists` is
+	 *  registered and the missing-item arm stops being reachable. A fixture that asserted the
+	 *  absence therefore passed alone and failed in a full run, which is an order dependency rather
+	 *  than a defect in either body. Unset, the registry still answers. */
+	void SetZombieFistsItemForTests(bool bExists) { ZombieFistsItemForTests = bExists; }
+	void ClearZombieFistsItemForTests() { ZombieFistsItemForTests.Reset(); }
+	TOptional<bool> ZombieFistsItemForTests;
+#endif
 
 	/** `"Zombies_spawning_emitter"` (`0x1062565c`), created at the maker's origin and angles and
 	 *  given a 15.0-second life (`1034d249 PUSH 0x41700000`). SEAM: this runtime stands no Source

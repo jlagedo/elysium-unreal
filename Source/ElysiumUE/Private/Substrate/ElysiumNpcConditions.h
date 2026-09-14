@@ -64,6 +64,12 @@ enum class EElysiumNpcCond : uint8
 	CriminalAttackLevel     = 0x20,   // 32 — `pl_criminal_attack`
 	SupernaturalFleeLevel   = 0x21,   // 33 — `pl_supernatural_flee`
 	SupernaturalAttackLevel = 0x22,   // 34 — `pl_supernatural_attack`
+	// Story 29d, family Combat10: the dodge test `0x102b7f40` (and the two bodies that inline it,
+	// `CNPC_VMingXiao` `0x103967d0` and `CNPC_VSheriffMan` `0x103afdb0`) refuses on it, so a selector
+	// that could not name it would silently drop an arm. `STOP_BACKUP` is the registrar's own name
+	// (`FUN_102c8ce0`, `docs/vtmb/npc-ai/conditions-and-states.md` § "The base condition table"). No
+	// producer in this runtime.
+	StopBackup            = 0x2c,
 	ShouldDodge           = 0x0c,
 	ShouldBlock           = 0x0d,
 	ShouldStepback        = 0x0e,

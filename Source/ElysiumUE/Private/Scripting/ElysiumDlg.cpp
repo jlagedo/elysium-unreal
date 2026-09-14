@@ -1039,7 +1039,6 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 	// Auto-Link/Auto-End row is authored control flow, not a response: it suppresses the response band
 	// and remains pending until the spoken NPC turn completes. Physical row order decides between
 	// overlapping automatic gates, just as it does for starting sentinels.
-	int32 CandidateRows = 0;
 	for (int32 j = LineIndex + 1; j < DlgFile->Lines.Num(); ++j)
 	{
 		const FElysiumDlgLine& L = DlgFile->Lines[j];
@@ -1049,9 +1048,11 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 		}
 		if (!L.IsPcChoice() || L.IsStartingCondition())
 		{
+			// `CDialog::process_pc_line` (`0x100e8520`) answers 0 for a starting-condition row
+			// (`thunk_FUN_100df240`), which `fill_packet`'s `iVar4 < 1` arm DROPS without raising
+			// `+0x30e9` — the same effect as not gathering it.
 			continue;
 		}
-		++CandidateRows;
 
 		const FElysiumDlgGateResult Gate = ExplainGate(L.Condition);
 		if (Gate.bPasses)
@@ -1109,8 +1110,15 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 
 	// Retail's "no valid reply": `get_pc_responses` returned nothing and no Auto-End set the
 	// auto-terminate flag, so the engine replaces the NPC's own text and shows one dummy response.
-	// A band that authored no PC rows at all is terminal by design and keeps the authored line.
-	bNoValidReply = Enabled == 0 && PendingAutomaticIndex == INDEX_NONE && CandidateRows > 0;
+	//
+	// `CDialog::fill_packet` (`0x100e7da0`) at `100e7e9a` tests exactly two things —
+	// `*(char *)(this + 0x30e9) == 0` and `m_iNumChoices == 0` — and `ElysiumDlgRetail::
+	// FillPacketBand` is that arithmetic ported and tested. The port carried a THIRD gate,
+	// `CandidateRows > 0`, so an NPC line with no authored PC rows at all kept its own subtitle where
+	// retail replaces it: `get_pc_responses` answers 0, the drop loop never runs, the count is 0 and
+	// the fallback fires. Story 29d, family Social10 removes the gate; `CandidateRows` is gone with
+	// it because nothing else read it.
+	bNoValidReply = Enabled == 0 && PendingAutomaticIndex == INDEX_NONE;
 
 	++Rev;
 	// No passing choices and no pending automatic -> terminal line; the UI offers a close.
@@ -1283,4 +1291,199 @@ void FElysiumDlgConversation::Close()
 	PendingAutomaticIndex = INDEX_NONE;
 	bNoValidReply = false;
 	++Rev;
+}
+
+// =================================================================================================
+// Story 29d, family **Social10** — `CDialog`'s three packet bodies.
+//
+// `docs/vtmb/npc-ai/social.md` § "Story 29d, family Social10 — talking, the tweak file and the
+// dialogue packet" carries the walk. Every rule below is read off the decompiled C or the listing
+// and cites the address that produced it.
+// =================================================================================================
+
+namespace ElysiumDlgRetail
+{
+	namespace
+	{
+		// `0x100e8060`'s two pointer tables, read out of the pinned `vampire.dll` at file offset
+		// `address - 0x10000000`: the needles at `0x10561a88` and the replacements at `0x10561aa0`,
+		// six entries each (`iVar2` steps by 4 while `iVar2 < 0x18`). The `.rdata` cells the tables
+		// point at are `0x10561b3c`, `b34`, `b2c`, `b24`, `b20`, `b1c` and `0x10561b14`, `b0c`,
+		// `b14`, `b08`, `b0c`, `b0c` — note that entries 0 and 2 share ONE replacement pointer.
+		const TCHAR GCp1252Ellipsis = static_cast<TCHAR>(0x85);
+
+		struct FEllipsisPass
+		{
+			const TCHAR* Needle;
+			const TCHAR* Replacement;
+		};
+
+		// Built once because two of the six needles carry a raw `0x85` that no string literal here
+		// should spell inline.
+		const TArray<FEllipsisPass>& EllipsisPasses()
+		{
+			static const FString Bare = FString::Chr(GCp1252Ellipsis);
+			static const FString BareSpace = Bare + TEXT(" ");
+			static const TArray<FEllipsisPass> Passes =
+			{
+				{ TEXT(" . . . "), TEXT(" ... ") },   // 0x10561b3c -> 0x10561b14
+				{ TEXT(". . . "),  TEXT("... ")  },   // 0x10561b34 -> 0x10561b0c
+				{ TEXT(" . . ."),  TEXT(" ... ") },   // 0x10561b2c -> 0x10561b14  (the shared pointer)
+				{ TEXT(". . ."),   TEXT("...")   },   // 0x10561b24 -> 0x10561b08
+				{ *BareSpace,      TEXT("... ")  },   // 0x10561b20 -> 0x10561b0c
+				{ *Bare,           TEXT("... ")  },   // 0x10561b1c -> 0x10561b0c
+			};
+			return Passes;
+		}
+
+		// `Q_strncpy(dst, src, 0x800)` keeps at most `0x7ff` characters plus the terminator.
+		constexpr int32 GEllipsisBufferChars = 0x800;
+	}
+
+	const TCHAR* MissingNpcLineText()
+	{
+		// `0x1054ca50`, byte-copied into the caller's buffer at `100e8130`. A single space.
+		return TEXT(" ");
+	}
+
+	const TCHAR* NoValidReplyLiteral()
+	{
+		// `0x1056368c`, byte-copied over the packet's NPC text at `100e7eb0`.
+		return TEXT("I do not have a valid reply.");
+	}
+
+	bool ReplaceFirst(FString& InOut, const FString& Needle, const FString& Replacement,
+		int32 BufferChars)
+	{
+		// `0x100e7f70`: `strstr` for the needle; on a miss return 0 without touching the buffer. On a
+		// hit, terminate the buffer at the match, copy the prefix into a scratch, append the
+		// replacement, append the tail from `match + strlen(needle)`, then `Q_strncpy` the scratch
+		// back over the caller's buffer bounded by its size.
+		if (Needle.IsEmpty())
+		{
+			return false;
+		}
+		const int32 At = InOut.Find(Needle, ESearchCase::CaseSensitive, ESearchDir::FromStart);
+		if (At == INDEX_NONE)
+		{
+			return false;
+		}
+		FString Built = InOut.Left(At) + Replacement + InOut.Mid(At + Needle.Len());
+		// The bound is retail's and it is a TRUNCATION, not a refusal.
+		if (BufferChars > 0 && Built.Len() > BufferChars - 1)
+		{
+			Built.LeftInline(BufferChars - 1);
+		}
+		InOut = MoveTemp(Built);
+		return true;
+	}
+
+	FString NormaliseEllipses(const FString& In)
+	{
+		// `0x100e8060`: `Q_strncpy` into a local `0x800` buffer, then
+		//     for (i = 0; i < 0x18; i += 4)
+		//         while (replace_first(buf, 0x800, needle[i], repl[i])) {}
+		// and a final `Q_strncpy` back into the caller's buffer at ITS size (`0x800` here).
+		//
+		// The inner loop is replace-UNTIL-NO-MATCH per pass, and the passes run in table order, so an
+		// earlier pass's output can still be reworked by a later one — `" . . . "` becomes `" ... "`
+		// on pass 0 and is then left alone, but `". . . . "` is chewed by pass 0 and pass 1 in turn.
+		FString Buffer = In;
+		if (Buffer.Len() > GEllipsisBufferChars - 1)
+		{
+			Buffer.LeftInline(GEllipsisBufferChars - 1);
+		}
+		for (const FEllipsisPass& Pass : EllipsisPasses())
+		{
+			while (ReplaceFirst(Buffer, Pass.Needle, Pass.Replacement, GEllipsisBufferChars))
+			{
+			}
+		}
+		return Buffer;
+	}
+
+	FPcRowResult ClassifyPcRow(bool bAutoEnd, bool bAutoLink, bool bStartingCondition,
+		bool bPacketFlagSet, bool bDependencyTestPasses, bool bHasSpeechFile)
+	{
+		// `0x100e8520` past the row fetch (`100e8570`: a miss returns 1 outright) and the dependency
+		// parse. Three blocks, in the listing's order, and the second is an `else` of the first only
+		// in the decompiler's rendering — retail tests `is_auto_end` and `is_auto_link` separately.
+		FPcRowResult Result;
+
+		// Block 1 — `thunk_FUN_100df120` (is this row Auto-End) AND the packet's 0x30 flag is CLEAR
+		// AND `CDialogDependency::Test` passes.
+		if (bAutoEnd && !bPacketFlagSet && bDependencyTestPasses)
+		{
+			if (!bHasSpeechFile)
+			{
+				// `100e85e0` — `LookupSpeechFile(m_iCurrentLine)` came back null: the band collapses
+				// to a single entry at flags 0 / value -1 with `m_iNumChoices` forced to 1, and the
+				// row still answers 1.
+				Result.Return = 1;
+				Result.bCollapseBand = true;
+				return Result;
+			}
+			// `100e8600` — flag bit 0x10, answer -1 (which drops the row AND raises `+0x30e9`), and
+			// `Q_strncpy` the row's text into `+0x31ea` over `0x100` bytes.
+			Result.Return = -1;
+			Result.Flags |= static_cast<uint32>(EPcRowFlag::AutoEndSpoken);
+			return Result;
+		}
+
+		// Block 2 — `thunk_FUN_100df1b0` (is this row Auto-Link), the same two gates.
+		if (bAutoLink)
+		{
+			if (!bPacketFlagSet && bDependencyTestPasses)
+			{
+				// `100e866a` — flag bit 0x20 and answer 1: the row STAYS in the band.
+				Result.Return = 1;
+				Result.Flags |= static_cast<uint32>(EPcRowFlag::AutoLink);
+			}
+			return Result;
+		}
+
+		// Block 3 — `thunk_FUN_100df240`, the starting-condition sentinel: answer 0, which drops the
+		// row WITHOUT raising the auto-terminate flag.
+		if (bStartingCondition)
+		{
+			Result.Return = 0;
+			return Result;
+		}
+
+		// An ordinary response row: `local_38` is still its initial 1.
+		return Result;
+	}
+
+	FPacketBand FillPacketBand(const TArray<int32>& RowReturns)
+	{
+		// `100e7e50`..`100e7ec8`. `iVar8` is the loop counter, `iVar5` the dropped count, and the
+		// index handed to `process_pc_line` is `iVar8 - iVar5` — a COMPACTING index, so a surviving
+		// row lands in the packet slot immediately after the last survivor rather than at its own
+		// ordinal. The loop bound is re-read from `+0x2834` each pass, which nothing in the loop
+		// writes, so it is the original count.
+		FPacketBand Band;
+		int32 Dropped = 0;
+		for (const int32 Answer : RowReturns)
+		{
+			if (Answer == -1)
+			{
+				Band.bAutoTerminate = true;   // `+0x30e9 = 1`
+				++Dropped;
+			}
+			else if (Answer < 1)
+			{
+				++Dropped;
+			}
+		}
+		Band.Count = RowReturns.Num() - Dropped;
+		// `100e7e9a` — the flag is CLEAR and the count is zero. There is NO further gate: a band with
+		// no authored PC rows at all reaches this too, because `get_pc_responses` answered 0 and the
+		// loop never ran.
+		Band.bNoValidReply = !Band.bAutoTerminate && Band.Count == 0;
+		if (Band.bNoValidReply)
+		{
+			Band.Count = 1;   // `*(undefined4 *)(this + 0x2834) = 1`
+		}
+		return Band;
+	}
 }

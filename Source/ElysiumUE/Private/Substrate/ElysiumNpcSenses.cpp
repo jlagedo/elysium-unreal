@@ -661,9 +661,10 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 			continue;
 		}
 		SeenByChannel[Channel].Add(Candidate->Handle);
-		const bool bOuterBand = !bRangeBypass && !bDamageOverride
-			&& !Npc.NpcFlags.Has(EElysiumNpcFlag2::NO_UNKNOWN_VISION)
-			&& EyeDistance > ElysiumNpcSense::OuterBandFraction * Perception.VisionDistanceCm * Scalar;
+		// `m_bSeenInOuterBand` (`+0x6081`) is written by SLOT 594, inside the `IsVisible` dispatch
+		// just above — that is its ONE retail writer (`102b4857`). Read back here rather than
+		// recomputed, so the byte slot 472 reads is the byte slot 594 wrote.
+		const bool bOuterBand = Memory.bPlayerInOuterBand;
 		{
 			FElysiumNpcSightingDebug Sighting;
 			Sighting.EffectiveRadiusCm = Perception.VisionDistanceCm * Scalar;
@@ -673,46 +674,16 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 			Sighting.bDamageOverride = bDamageOverride;
 			ElysiumNpcDebugLogging::Sighting(Npc, *Candidate, Sighting);
 		}
-		if (bOuterBand && ElysiumNpcCond::ShouldInvestigate(Npc, *Candidate, false))
-		{
-			const bool Eligible = bPlayer && Player && Player->IsInStealthPosture();
-			if (!Eligible)
-			{
-				Npc.NpcFlags.Set(EElysiumNpcFlag::ATTACK_UNKNOWN);
-			}
-			else
-			{
-			bSeeUnknownThisPass = true;
-			if (Memory.BestSeeUnknown == Candidate->Handle) continue;
-			Memory.BestSeeUnknown = Candidate->Handle;
-			++Npc.EnemySightings;
-			if (Memory.LastSeeUnknown == Candidate->Handle)
-			{
-				++Memory.SeeUnknownRepeatSightings;
-				Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
-				Npc.NpcFlags.Clear(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
-			}
-			else
-			{
-				Memory.LastSeeUnknown = Candidate->Handle;
-				Memory.LastSeeUnknownPosition = Candidate->Origin;
-				Memory.SeeUnknownRepeatSightings = 0;
-				Memory.SeeUnknownRunTimer = Now + ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(10.f, 20.f);
-				Memory.SeeUnknownStartTimer = Now + ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(5.f, 10.f);
-				Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
-				Npc.NpcFlags.Clear(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
-				Npc.NpcFlags.Clear(EElysiumNpcFlag::LOOKED_AT_UNKNOWN);
-				Npc.FireOutput(FName(TEXT("OnUnknownVisionPlayer")), Candidate->Handle);
-			}
-			continue;
-			}
-		}
+		// Slot 472 `OnSeeEntity` (`0x102b3e00`) — dispatched, not inlined. Story 29d's family
+		// Senses10 owns the body and its two species arms (`CNPC_VCop`, `CNPC_VHunter`); the port
+		// carried every arm here but fired `OnUnknownVisionPlayer` LAST where retail fires it
+		// FIRST, which is the observable order difference that made the row `rule`.
+		Npc.OnSeeEntity(const_cast<FElysiumEntity*>(Candidate));
+		// `SEE_UNKNOWN` itself is the see-unknown sweep's, read off the memory slot 472 just wrote:
+		// this candidate holds `m_hBestSeeUnknown` exactly when the body took its admitting arm.
 		if (Memory.BestSeeUnknown == Candidate->Handle)
 		{
-			Memory.BestSeeUnknown = FElysiumEntityHandle::Invalid();
-			Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
-			Npc.NpcFlags.Clear(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
-			Npc.NpcFlags.Clear(EElysiumNpcFlag::LOOKED_AT_UNKNOWN);
+			bSeeUnknownThisPass = true;
 		}
 	}
 	for (const auto& Channel : SeenByChannel) SeenThisPass.Append(Channel);
@@ -831,27 +802,23 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 		if (Event.Time <= LastListenTime || Event.ExpireTime < Now || Event.Source == Npc.Handle) continue;
 		const FElysiumEntity* Owner = Event.Source.IsSet() ? World->Resolve(Event.Source) : nullptr;
 		if (Event.Source.IsSet() && (!Owner || Owner->IsInert())) continue;
-		// QueryHearSound slot 467 (`0x102b35b0`): the same two bytes as QuerySeeEntity. Frenzy
-		// friend is 16c.
-		if (ElysiumNpcSense::IgnoreSenses()) continue;
-		if (ElysiumNpcSense::IgnorePlayer() && Owner && Owner->Handle == World->PlayerHandle()) continue;
-		if (Owner)
-		{
-			const FElysiumCombatCharacter* Character = Owner->AsCombatCharacter();
-			if (!Character || !Npc.CanPerceiveConcealment(*Character)) continue;
-		}
-		if (Event.TypeMask == ElysiumGameSounds::Player && Event.Source == World->PlayerHandle()
-			&& Rules && Rules->StealthKillRules().InDeafZone(*World->FindPlayer(), Npc)) continue;
+		// `CanHearSound` (`0x1030f7b0`), the LISTEN-level cull retail runs before it dispatches slot
+		// 467: the sound's expiry, the owner's own liveness, and the radius test against
+		// `HearingSensitivity() * volume` with `AdjustSoundDistForStealth` applied. That radius test
+		// is HERE, in `Listen`, and NOT in slot 467 — slot 467's own distance arm is the extra
+		// quarter-scale one a cowering or sleeping body takes, and it lives in the slot body.
 		const float BaseRadius = Event.UnadjustedRadiusCm;
-		float Radius = FMath::Max(0.f, BaseRadius * Perception.HearingScalar - Event.StealthHearingReductionCm);
+		const float Radius = FMath::Max(0.f,
+			BaseRadius * Perception.HearingScalar - Event.StealthHearingReductionCm);
 		const float Distance = FVector::Dist(Npc.EyePosition(), Event.Position);
 		if (Distance > Radius) continue;
 		if (Event.bOccludable && !SegmentClear(World, Event.Position, Npc.EyePosition())) continue;
-		if (Npc.NpcFlags.Has(EElysiumNpcFlag::COWERING) || Npc.NpcFlags.Has(EElysiumNpcFlag::SLEEPING))
-		{
-			Radius = FMath::Max(0.f, BaseRadius * Perception.HearingScalar * 0.25f - Event.StealthHearingReductionCm);
-			if (Distance > Radius) continue;
-		}
+		// Slot 467 `QueryHearSound` (`0x102b35b0`) — dispatched, not inlined. Its eight arms (the
+		// two sense-off bytes, the frenzy-friend veto the port's comment called "16c work", self,
+		// the owner's concealment, the deaf zone and the cowering/sleeping quarter-radius test) are
+		// story 29d's family Senses10 body.
+		(void)Rules;
+		if (!Npc.QueryHearSound(const_cast<FElysiumGameSoundEvent*>(&Event))) continue;
 		// OnListened 0x1026a5e0 switches on the exact raw type; a combination is not two sounds.
 		EElysiumNpcCond Condition = EElysiumNpcCond::None;
 		FElysiumGameSoundEvent* Record = nullptr;

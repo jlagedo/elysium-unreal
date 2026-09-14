@@ -559,6 +559,12 @@ void FElysiumNpc::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewS
 			// release, not even the base state-flag byte.
 			return;
 		case EStateChangeSpecies::HolsterOnState:
+			// Story 29d, family SpeciesLifecycle10: two of the nine classes carry a PRE-STEP ahead of
+			// the shared switch — `CNPC_VGuard1::OnStateChange` (`0x1037d020`) and
+			// `CNPC_VHunter::OnStateChange` (`0x10388880`), whose first halves run before the first
+			// `GetActiveWeapon` in both bodies. Every other class in this row reaches the switch
+			// directly, which is what the arm answers for them.
+			StateChangeSpeciesPreStep(OldState, NewState);
 			// The seven classes' own body: hide on IDLE, unhide on ALERT / COMBAT / 11, then chain.
 			ApplyStateWeaponVisibility(NewState);
 			break;

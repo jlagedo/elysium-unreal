@@ -447,9 +447,12 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	// be reached either way.
 	//
 	// What is left is decidable and is what these two rows answer:
-	//   - no active weapon: the tree's own early-out, before any state is read;
-	//   - `m_NPCState == NPC_STATE_ALERT`: sets the flag unconditionally;
-	//   - any state that is neither alert nor combat: falls past every override to the tail, clear.
+	//   - `m_NPCState == NPC_STATE_ALERT` with a weapon: sets the flag unconditionally;
+	//   - a weapon and any state that is neither alert nor combat: falls past every override to the
+	//     tail with the flag clear, which is the arm the relaxed gait rewrites sit on.
+	// **No active weapon answers NEITHER.** Story 29d read `0x103854f0`'s early-out at the listing:
+	// it clears the flag and jumps to the Troika body with the request UNCHANGED, so an unarmed body
+	// reaches no rewrite in this table at all.
 	//
 	// **A body in combat answers NEITHER arm, and that is a stated absence rather than an oversight.**
 	// The combat rung terminates in a ConVar whose default no static read of the image can recover —
@@ -460,18 +463,34 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	// Every other predicate answers false for the same reason it always did: the state it reads is
 	// the global gait override, the movement policy byte, cover and reload capability, and the form
 	// and variant bits, none of which this runtime publishes.
+	// **Story 29d, family Anim10 — slot 375's two surfaces now read ONE state.** When the intent
+	// carries a live NPC's evaluator (`FElysiumNpc::PreTranslatePredicate`, the same reads
+	// `CAI_BaseNPCTroika::NPC_EarlyTranslateActivity` `0x10295590` and its five species arms make),
+	// that answers every predicate and the two-answer fallback below is not reached at all. An
+	// intent with no NPC behind it — the gym's, the player's — keeps the fallback unchanged.
 	const bool bHasActiveWeapon = !Intent.WeaponClassname.IsEmpty();
 	const EElysiumNpcState ActorState = Intent.ActorState;
-	auto LiveState = [bHasActiveWeapon, ActorState](ENpcPredicate Predicate, int32)
+	const TFunction<bool(int32, int32)>* NpcState =
+		Intent.NpcLiveState ? &Intent.NpcLiveState : nullptr;
+	auto LiveState = [bHasActiveWeapon, ActorState, NpcState](ENpcPredicate Predicate, int32 Operand)
 	{
+		if (NpcState != nullptr)
+		{
+			return (*NpcState)(static_cast<int32>(Predicate), Operand);
+		}
 		switch (Predicate)
 		{
 		case ENpcPredicate::ArmedAlert:
 			return bHasActiveWeapon && ActorState == EElysiumNpcState::Alert;
 		case ENpcPredicate::NotArmedAlert:
-			return !bHasActiveWeapon
-				|| (ActorState != EElysiumNpcState::Alert
-					&& ActorState != EElysiumNpcState::Combat);
+			// **CORRECTED by story 29d (family Anim10).** Both arms of `0x103854f0`'s branch require
+			// an ACTIVE WEAPON: an unarmed body takes the early-out at `10385e90`, which clears
+			// `m_bAggressiveAnims` and jumps to `thunk_FUN_10295590(this, param_1)` with the request
+			// UNCHANGED — neither rewrite block runs, so an unarmed `ACT_WALK` stays `ACT_WALK`.
+			// The comment above read the early-out as taking the relaxed arm; it skips it.
+			return bHasActiveWeapon
+				&& ActorState != EElysiumNpcState::Alert
+				&& ActorState != EElysiumNpcState::Combat;
 		default:
 			return false;
 		}

@@ -1791,7 +1791,7 @@ writing the literal key `m_iszPreIdle` is dropped by the keyvalue lookup:
 | `m_iszNextScript` | `0x5f58` | the sequence to begin when this one ends |
 | `m_iszLinkedSequence` | `0x5f5c` | resolved to an entity by a single getter (`FUN_101a8130`); no exported map writes it |
 | `m_fMoveTo` | `0x5f60` | 0 No / 1 Walk / 2 Run / 3 Custom movement / 4 Instantaneous / 5 No - Turn to Face |
-| `m_iFinishSchedule` | `0x5f64` | which schedule the NPC is handed back on, in `FixScriptNPCSchedule` (`FUN_101a95d0`): `0` the default, `1` schedule `0x2a`, anything else `DevMsg("FixScriptNPCSchedule - no case!")` and then the default. All six exported `aiscripted_sequence`s write `0` |
+| `m_iFinishSchedule` | `0x5f64` | which schedule the NPC is handed back on, in `CCineAI`'s `FixScriptNPCSchedule` (`FUN_101a95d0` — slot 586 is per-class; see below): `0` the default, `1` schedule `0x2a`, anything else `DevMsg("FixScriptNPCSchedule - no case!")` and then the default. The `scripted_sequence` override never reads the field, so a value authored there is accepted by the datamap and never consulted. All six exported `aiscripted_sequence`s write `0` |
 | `m_flRadius` | `0x5f68` | **never read** — no site in the class range touches it |
 | `m_flRepeat` | `0x5f6c` | **never read** |
 
@@ -1819,6 +1819,19 @@ and timers), clears a bit on the task owner, and installs nothing. The NPC there
 to ordinary schedule selection on its next maintain. Since every exported sequence writes
 `m_iFinishSchedule = 0`, this is the path that always runs, and where it lands is decided by the
 idle selector in `npc-ai/README.md`.
+
+**Slot 586 is `FixScriptNPCSchedule`, and `CCineNPC`'s override ignores `m_iFinishSchedule`.**
+`Finish` (`FUN_101a8640`) hands the NPC back through the owning cine's vtable slot 586, filled per
+class across the hierarchy (`CAI_BaseNPCTroika 0x101aa5d0`, `CCineAI 0x101a95d0`,
+`CCineNPC 0x101a8840`, `CCineAISchedule 0x101a98c0`, …). The `m_iFinishSchedule` switch described
+above belongs to `CCineAI`'s override alone. `CCineNPC::vfunc586` (`0x101a8840` — the
+`scripted_sequence` side, 102 of the 108 authorings) never reads the keyfield: unless the NPC's
+`m_IdealNPCState` (`+0x5cc4`) is already 7 (DEAD), it stamps the assert-origin pair — the file
+string `E:\Vampire\main\dlls\scripted.cpp` into `+0x1b3c` and line 970 (`0x3ca`) into `+0x1b40`,
+the same idiom `SelectIdealState` (`0x1026f660`) uses with its `AI_BaseNPC.cpp` lines, and the
+same pair `CineCleanup` writes with line 11037/11042 — and sets `m_IdealNPCState = 1` (IDLE),
+then calls `ClearSchedule` (`0x10280d30`) unconditionally. The hand-back on a `scripted_sequence`
+is therefore always ideal-IDLE plus a clear.
 
 **Inputs:** `BeginSequence`, `CancelSequence`, **`MoveToPosition`** (`inputFunc 0x1000d6c0`, whose
 body is `FUN_101a72b0` — reached only through the datamap, so the analyzers leave it
@@ -1867,18 +1880,18 @@ VtMB additions are decoded from the bit tests in the class range `0x101a5000–0
 | --- | --- | --- |
 | `1` | WAITTILLSEEN | — |
 | `2` | EXITAGITATED | — |
-| `4` | REPEATABLE — when clear, the beat schedules its own removal | `FUN_101a8640` |
+| `4` | REPEATABLE — when clear, the beat `ThinkSet`s `SUB_Remove` (`FUN_101c0b10`, which DevWarns `SUB_Remove called on entity with health` and zeroes `m_iHealth` if any remains) at `curtime + 0.1` — the delay is the shared float datum `0x104493d0` (`0x3FB999999999999A`), read 189 times across the dll | `FUN_101a8640` |
 | `8` | LEAVECORPSE | — |
 | `16` | START_ON_SPAWN — **set on none of the exported sequences** | — |
 | `32` | NOINTERRUPT — gates `m_interruptable` | `FUN_101a8890` |
-| `64` | OVERRIDESTATE | — |
-| `128` | NOSCRIPTMOVEMENT — do not move the NPC to the mark | — |
+| `64` | OVERRIDESTATE — **never read.** No test of bit `0x40` on `m_spawnflags` exists in `vampire.dll`: the and-immediate dword form (`+0x204 & 0x40`), the byte form (`+0x205 & 0x40`), the shift form (`+0x204 >> 6 & 1`) and the compound mask (`& 0xc0`) are all absent corpus-wide; every and-form hit is a mover class reusing the bit (`CRotDoor`, `CFuncRotating`, `CBaseButton`, `CEnvSpark`). 55 exported sequences author it — authored noise, not a behaviour | — |
+| `128` | NOSCRIPTMOVEMENT — do not move the NPC to the mark; also read at cleanup (shift form, `>> 7 & 1`) to skip the bone-0 grounding snap | `0x1027d170` |
 | `256` | **Hold the post-idle.** With `m_iszPostIdle` set and no live `m_hNextCine`, the sequence-done path logs `Post Idle %s finished`, sets the NPC's script state to 2, replays the post-idle, and returns before cleanup — so the beat never completes and `OnEndSequence` never fires | `FUN_101a8640` |
 | `512` | **Priority script.** Tested on the contending cine; when set the challenger is refused with `%s is a priority script and cannot be kicked out of the queue` | `FUN_101a8ac0` |
 | `1024` | caches the resolved NPC pointer into the cine at `+0x5f98`; no exported map sets it | `FUN_101a7760` |
 | `2048` | suppresses the `Found %s, but can't play` console warning; no exported map sets it | `FUN_101a7600` |
 | `4096` | **Pass through characters.** Saves the NPC's troika flags into `m_saved_troika_flags` and ORs bit `0x40` into them for the beat's duration, restoring on cleanup. Bit `0x40` is read by the NPC's `CBaseAnimating::IsIgnoreCollisionEntity` override (`FUN_1029afc0`, `FUN_1029b180`), which with it set answers true for any entity carrying an AI object (`+0x94`) or a player controller (`+0xa8`) — every NPC and the player. World collision is untouched | `FUN_101a7880`, `FUN_101a9080` |
-| `8192` | **Never read.** No instruction in `.text` tests spawnflags bit `0x2000`, in either the dword encoding (`+0x204` with immediate `0x2000`) or the byte one (`+0x205` with `0x20`), across all 391 sites that read the field — though four sequences author it | — |
+| `8192` | **Snap the body to the played clip's root on cleanup.** Read in `CineCleanup` (`0x1027d170`) as `m_spawnflags >> 13 & 1` — a shift-and-mask form the original and-immediate census (dword `+0x204`, byte `+0x205`) did not sweep, which is how this reader was missed; four sequences author it | `0x1027d170` |
 
 Bit usage across the 22 exported maps: `4` on 49, `32` on 53, `64` on 55, `128` on 1, `256` on 21,
 `512` on 31, `4096` on 6, `8192` on 4; bits `1`, `2`, `8`, `16`, `1024` and `2048` on none.
@@ -1892,9 +1905,42 @@ happening. `CCineNPC::Activate` (`FUN_101a8de0`) reports its own resolution fail
 `Could not find NPC %s in CCineNPC::Activate for %s` and `NPC %s has no model in CCineNPC::Activate
 for %s`.
 
+`BeginSequence` also arms the start clock itself, before anything else runs: **both arms of the
+throttle write `m_startTime`** — `curtime + 0.05` on the normal path, `m_flNextThink + 0.05` on the
+throttled early return (the shared datum `0x10445e08`, `0x3FA999999999999A` — the same constant
+`DelayStart` adds on release). For a beat that does not travel that 0.05 s is the whole latency
+from input to `OnBeginSequence`: possession puts a WAIT beat straight into `TASK_WAIT_FOR_SCRIPT`,
+whose `IsTimeToStart` gate (`m_startTime ≤ curtime`) opens one tick after the input, so the
+pre-idle plays for exactly that long.
+
 That no sequence carries bit 16 is load-bearing: every beat is entered by an explicit
 `BeginSequence` — an I/O wire, a `m_iszNextScript` chain, or a level-script call — and none starts
 itself at map load.
+
+**`sm_hub_1`'s two street poses are trigger-fired, not level-start.** The two NPCs a rebuild might
+expect to hold a pose from map load — `plus_jenny` and the `Prophet` — hold nothing: retail has no
+mechanism that plays `m_iszIdle` before a `BeginSequence`, and neither NPC gets one at load. Jenny
+(`npc_VPedestrian`; beat `plus_jenny_cries` authors `sobbing` as `m_iszIdle`/`m_iszPlay`/
+`m_iszPostIdle`, `m_fMoveTo 0`, spawnflags `868` = REPEATABLE+NOINTERRUPT+OVERRIDESTATE+
+hold-post-idle+priority) is authored **StartHidden** together with her beat and the crying
+`ambient_generic`; a `logic_auto` `OnMapLoad` calls the map Python `unhidePlus()` (and stops the
+sobbing loop 1.1 s in, catching the sound the unhide would otherwise leave playing). The body of
+`unhidePlus()` is not in the script export corpus — only the wire is — but nothing else in the map
+addresses the beat: the sole `BeginSequence` wire is a `trigger_once` by the murder scene
+(`OnStartTouch → plus_jenny_cries,BeginSequence`, next to the `PlaySound` on the sobbing loop). So
+retail Jenny stands — unhidden, ordinary idle — until the player crosses that brush, then sobs
+forever: the hold-post-idle bit makes `SequenceDone` replay and never complete. The `Prophet`
+(`npc_VDialogPedestrian`, sign prop parented) loops instead of holding: four `trigger_multiple`
+brushes named `prophet_trigger` fire `rant_chooser,PickRandom` and disable themselves at 0.1 s;
+the case wires `BeginSequence` one of `prophet_rant_sequence_1/2/3` (`m_fMoveTo 3`, `doom_walk` to
+the mark, `rant_wave`/`rant_hand_up`/`rant_fist_down`, REPEATABLE, `m_flRadius 51200` — never
+read, so authored noise); each beat's `OnBeginSequence` picks a voice line through
+`rant_chooser_2`, and each line scene's `OnCompletion` re-enables `prophet_trigger` at +2 s (one
+`Kill` wire ends the loop at a story point). Until the player first crosses a brush he stands in
+his ordinary idle by his sign. A runtime that played the pre-idle at `Activate` manufactured both
+poses at map load; retail plays `m_iszIdle` only inside `TASK_WAIT_FOR_SCRIPT`, after
+`BeginSequence` — removing that playback loses nothing retail has, provided the trigger wires
+exist so the pose arrives when the player arrives.
 
 `sp_theatre`'s courtroom walk-out is the worked example of the two additions that matter: the five
 NPCs that walk carry `0x1260` (NOINTERRUPT + OVERRIDESTATE + priority + troika), and the two that

@@ -42,19 +42,23 @@
 
 // --- Slot 404 / 405: the two dispositions this family reads --------------------------------------
 //
-// SEAM, and the one place this family departs from a literal vtable dispatch. Slot 404
-// `IRelationType` (`0x10299da0`) is family **Conditions10**'s row of this same story and is still
-// the generated stub answering `0` (`D_ER`); dispatching it would tell every body below that every
-// entity is an error relation, which is neither retail's answer nor this runtime's. Both helpers
-// therefore read the same store the Troika body's tail reaches through
-// `CBaseCombatCharacter::IRelationType` — `FElysiumRelationships` — and map it onto retail's
-// `Disposition_t` ids. The day slot 404 carries its body these become one-line forwards to it.
+// Slot 404 `IRelationType` (`0x10299da0`) is family **Conditions10**'s row of this same story. When
+// this family landed it was still the generated stub answering `0` (`D_ER`) and dispatching it would
+// have told every body below that every entity is an error relation, so both helpers read the store
+// the Troika body's tail reaches through `CBaseCombatCharacter::IRelationType` —
+// `FElysiumRelationships` — mapped onto retail's `Disposition_t` ids.
+//
+// **`IRelationTypeOf` is now the promised one-line forward**: Conditions10 landed `0x10299da0` with
+// all three of its forwarding arms and the four species overrides, so this reads slot 404 itself.
+// `IRelationPriorityOf` does NOT forward, and that is a slot boundary rather than a gap: slot **405**
+// (`0x10333700`) is a layer-0 row of story 29c's band and is still the generated stub, so its
+// dispatch would answer 0 for everything. See the `.cpp` at each body.
 //
 // Retail's ids: `D_ER 0`, `D_HT 1`, `D_FR 2`, `D_LI 3`, `D_NU 4`. `FElysiumRelationships::Resolve`
 // never answers `D_ER`, so retail's `default:` arms (the `OnLooked` `DevWarning`, `QuerySeeEntity`'s
 // refusal) are unreachable through this helper and say so at each site.
-int32 Disposition(const FElysiumEntity* Candidate) const;
-int32 DispositionPriority(const FElysiumEntity* Candidate) const;
+int32 IRelationTypeOf(const FElysiumEntity* Candidate) const;
+int32 IRelationPriorityOf(const FElysiumEntity* Candidate) const;
 
 // --- Slot 201 `FVisible`: the blocker out-parameter ----------------------------------------------
 
@@ -210,11 +214,9 @@ FMoveAndShootOverlay MoveAndShootOverlay;
 void DisableMoveAndShootOverlay();                       // 0x102e8250
 void ArmMoveAndShootOverlay(float PauseMin, float PauseMax);  // 0x102e8270
 
-/** `m_flBurstShootPauseMin` (`+0x5bbc`) and `m_flBurstShootPauseMax` (`+0x5bc0`), the pair slot 445
- *  hands `0x102e8270`. Declared here because this body is their only reader in the kernel closure
- *  and no port producer writes them yet. */
-float BurstShootPauseMin = 0.f;
-float BurstShootPauseMax = 0.f;
+// `m_flBurstShootPauseMin` (`+0x5bbc`) and `m_flBurstShootPauseMax` (`+0x5bc0`), the pair slot 445
+// hands `0x102e8270`, are already declared on `FElysiumNpc` itself (story 29b's shape). Slot 445 is
+// their first reader in the kernel closure.
 
 // --- Slot 223 `CreateVPhysics`: the shadow the callee builds -------------------------------------
 
@@ -322,10 +324,9 @@ bool SoundOwnerInDeafZone(const FElysiumEntity* Owner) const;
  *  written out in full at the definition and the two latches are declared below so the day the
  *  navigator lands the probe is one function that changes rather than one that is invented.
  *
- *  With `bHullShrunk` false — which is every NPC today — the body does nothing, which is retail's
- *  own answer for a body whose hull was never shrunk. */
-bool bHullShrunk = false;        // +0x5f2d
-bool bHullShrinkArmed = false;   // +0x5f2c
+ *  With `m_fIsUsingSmallHull` false — which is every NPC today — the body does nothing, which is
+ *  retail's own answer for a body whose hull was never shrunk. The two latches are `FElysiumNpc`'s
+ *  own `bIsUsingSmallHull` (`+0x5f2d`) and `bWantsLargeHull` (`+0x5f2c`), declared by story 29b. */
 void HeadProbe();
 
 /** SEAM for `0x10273070`, the probe's clean-trace tail: restore the normal hull from the navigator,
@@ -432,10 +433,9 @@ bool IsAreaClear(const FVector& PositionCm, int32 Mask) const;
  *  does. */
 void WerewolfCheckStuck();
 
-/** `SetHullSizeSmall(bSmall)` (`0x10273180`) — the tail every `CheckStuck` exit but the teleport
- *  ends in. **SEAM**: the hull swap is the navigator's; the LATCH (`+0x5f2d`) is this object's and
- *  is written. */
-void SetHullSizeSmall(bool bSmall);
+// `SetHullSizeSmall(bForce)` (`0x10273180`) — the tail every `CheckStuck` exit but the teleport ends
+// in — is family **Motor10**'s body and is declared in `ElysiumNpcKernelMotor10.inl`. Dispatched
+// here, not re-ported.
 
 /** SEAM for `CNPC_VWerewolf::TeleportOut` — the third-probe escape. Counted; the teleport itself is
  *  family Positions' `PositionAtHint` story. */
@@ -449,12 +449,16 @@ int32 WerewolfTeleportOutCalls = 0;
  *  SOURCE units, as family Hints' twin is. */
 FVector GetHintTargetGroundpoint(const FHintWords& Hint) const;
 
-/** SEAM for `CNPC_VWerewolf::GetHintEndpoint` (the hint's END entity's origin) and
- *  `GetForwardHintForHint` (the hint the forward is measured from). Both resolve through family
- *  Hints' `FindHintEndEntity` (`0x103d6520`), which is a real recovered walk over a hint store that
- *  does not exist yet, so both answer the hint's own origin and name what they stand for. */
+/** SEAM for `CNPC_VWerewolf::GetHintEndpoint` (the hint's END entity's origin). It resolves through
+ *  family Hints' `FindHintEndEntity` (`0x103d6520`), which is a real recovered walk over a hint
+ *  store that does not exist yet, so it answers the hint's own origin and names what it stands for.
+ *
+ *  This family's companion seam for `GetForwardHintForHint` is GONE: story 29d, family **Hints10**
+ *  landed `0x103d7090` itself (`ElysiumNpcKernelHints10.cpp`), so `GetForwardYawForHint` now calls
+ *  the real body — which answers null when no partner hint of type `0x3a9c` shares this hint's end
+ *  entity, and the yaw is then measured from the hint's own origin, the same fallback this seam
+ *  produced. */
 FVector GetHintEndpointUnits(const FHintWords& Hint) const;
-int32 GetForwardHintForHint(const FHintWords& Hint) const;
 
 /** `CNPC_VWerewolf::GetForwardYawForHint` (`0x103d7210`). The working direction is seeded with
  *  `vec3_invalid` (`DAT_10713de0`…), then overwritten by `endOrigin - forwardOrigin` normalised and
@@ -482,6 +486,14 @@ FWerewolfHintGroundpoint InitializeHintDataRow(const FHintWords& Hint) const;
  *  an infinity or a NaN exponent, which is what `vec3_invalid` (`FLT_MAX`) is NOT, so a `FLT_MAX`
  *  groundpoint passes this test and is stored. Recorded because it is the surprising half. */
 static bool IsGroundpointExponentValid(const FVector& PointUnits);
+
+/** Slot 566 `FValidateHintType` applied to a hint whose WORDS are already in hand. Retail passes the
+ *  `CAI_Hint*` itself (`vtable +0x8d8`), and both bodies below call it that way; family Hints'
+ *  `FValidateHintTypeForSpecies` takes a NODE INDEX and re-resolves it through the hint-store seam,
+ *  which resolves nothing — so these two bodies would refuse at the gate rather than reaching their
+ *  own type ladders. This applies the same species table to the words the caller already has, and
+ *  carries `CNPC_VBach`'s fall-through to the base body. */
+bool ValidateHintTypeForWords(const FHintWords& Hint) const;
 
 /** `CNPC_VWerewolf::IsValidRandomMoveHint` (`0x103d7dc0`) and `::IsValidMoveHint` (`0x103d8060`) —
  *  the two 520-byte twins whose type sets differ in BOTH membership and sense. `Now` is the

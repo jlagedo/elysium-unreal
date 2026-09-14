@@ -531,9 +531,11 @@ void FElysiumNpc::FUN_103a0d50()
 	//   * the inner `for` releases EIGHT handles per record — `+0x04`/`+0x08` at four strides of 8 —
 	//     plus the record's own object at `+0x00`, so nine per row.
 	//
-	// This runtime carries a story as its NAME only (see `FNewscasterStory`): nothing here stands a
-	// VCD, so there are no handles to release and the observable is the drain itself. The
-	// story-active flag is cleared last, exactly as retail does.
+	// Story **29d**, family SpeciesMisc10, gave `FNewscasterStory` the four `(dependency, filename)`
+	// pairs and the chosen index that `0x103a07f0` fills — so the nine handles this loop releases per
+	// row now have port counterparts, and `Reset()` frees them with the row. Nothing here stands a
+	// VCD ENTITY, so the observable is still the drain itself. The story-active flag is cleared last,
+	// exactly as retail does.
 	NewscasterMainStories.Reset();
 	NewscasterSideStories.Reset();
 	bNewscasterStoryActive = false;

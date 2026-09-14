@@ -82,7 +82,13 @@ namespace
 	// thing waiting; each site says what the stand-in does.
 	constexpr float GDatFollowRunDistanceUnits = 0.f;        // _DAT_1049a17c — slot 571's walk/run
 	constexpr float GDatHintHeightDiffUnits = 0.f;           // _DAT_1049ae28 — 0x10296c40's height
-	constexpr float GDatValidHeadTargetDotMin = 0.f;         // _DAT_10497ca0 — ValidHeadTarget
+	// NO LONGER UNRECOVERED. Story 29d, family **Anim10** read `_DAT_10497ca0` out of the pinned
+	// image while porting `CAI_BaseHumanoid::MaintainEyeDirection` (`0x1025fa50`), whose
+	// `1025fda5 FCOMP double ptr [0x10497ca0]` settles both its width and its value: it is a
+	// **double** and it reads **-0.5**. So the head-target cone is 120 degrees off the head
+	// direction, not the forward half-plane the 0.0 stand-in made it. `0x1025ea00` reads the same
+	// cell and its gate is still STRICT, so a target dead behind (dot -1) is still refused.
+	constexpr double GDatValidHeadTargetDotMin = -0.5;       // _DAT_10497ca0 — ValidHeadTarget
 	constexpr float GDatFaceAnimYawMid = 0.f;                // _DAT_104704b4 — 0x10297a20's rung 2
 	constexpr float GDatFaceAnimRandomScale = 0.f;           // _DAT_1044ffdc — 0x10297a20's draw
 	constexpr float GDatDistanceEpsilon = 0.f;               // _DAT_1046a51c — the 1/(d+eps) guard
@@ -156,8 +162,10 @@ bool FElysiumNpc::ValidHeadTargetBaseActor(const FVector& LookTargetPosCm) const
 	// the nearest recovered axis; the head's own deflection from it is UNRECOVERED.
 	const FVector Facing = FElysiumNpcSenses::ViewForward(*this);
 	const double Dot = FVector::DotProduct(Facing, Dir);
-	// `_DAT_10497ca0` is UNRECOVERED; at the 0.0f stand-in the gate is "the target is in front".
-	if (!(Dot > static_cast<double>(GDatValidHeadTargetDotMin)))
+	// `_DAT_10497ca0` = **-0.5**, a double, recovered 2026-09-14 by story 29d (family Anim10) out of
+	// the pinned image at `0x1025fa50`'s `FCOMP double ptr` — the gate admits anything within 120
+	// degrees of the head direction, and still refuses a target dead behind.
+	if (!(Dot > GDatValidHeadTargetDotMin))
 	{
 		return false;
 	}

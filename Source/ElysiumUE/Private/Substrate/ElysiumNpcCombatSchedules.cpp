@@ -471,10 +471,55 @@ namespace
 	}
 }
 
+// --- The two selectors and the kernel slots they now defer to ---
+//
+// Story 29d, family **Combat10**. These two functions are the port's PRE-KERNEL selectors, reached
+// from `FElysiumNpc::SelectCombatSchedule`; the recovered vtable bodies are slots 604 and 605
+// (`FElysiumNpc::SelectScheduleMeleeCombat` / `SelectScheduleRangedCombat`), which carry retail's
+// arms in retail's order and answer a RAW RETAIL SCHEDULE NUMBER. Carrying two different answers for
+// one decision is what `KernelAnswerFirst` below ends: the slot body runs first and, whenever the
+// number it answers names a program THIS RUNTIME REGISTERS, that is the answer.
+//
+// The fall-through is not a second opinion. Family Schedule's standing fact two — "most of what
+// these selectors answer is not a registered program" — is why it exists: the slot bodies name
+// `0xe9`, `0xe4`, `0xe7`, `0x98`, `0xc2`–`0xc6`, `0x8c`–`0x8f`, `0x158`–`0x15f` and a dozen more
+// that this runtime has no program for, and returning `None` for those would leave a fighting NPC
+// with nothing to run. The CHOSEN, NOT RECOVERED approximations below are what still stands in for
+// them, and the miss is recorded so the two can be told apart in a trace.
+
+namespace
+{
+	EElysiumScheduleId KernelAnswerFirst(FElysiumNpc& Npc, int32 RetailNumber, const TCHAR* Slot)
+	{
+		if (RetailNumber == 0)
+		{
+			return EElysiumScheduleId::None;   // retail's own "I decline" — the composition rule
+		}
+		const EElysiumScheduleId Mapped = FElysiumNpc::ScheduleFromRetailNumber(RetailNumber);
+		if (Mapped != EElysiumScheduleId::None)
+		{
+			return Mapped;
+		}
+		Npc.RecordScheduleEvent(FString::Printf(
+			TEXT("%s answered retail 0x%x, which this runtime registers no program for"),
+			Slot, RetailNumber));
+		return EElysiumScheduleId::None;
+	}
+}
+
 // --- The melee selector (`0x10385e40`) ---
 
 EElysiumScheduleId ElysiumNpcCombat::SelectMeleeSchedule(FElysiumNpc& Npc, double Now)
 {
+	// Slot 604 `0x102b6c30` and its five species arms (`ElysiumNpcKernelSchedule.cpp`), which are the
+	// recovered body this function approximates.
+	if (const EElysiumScheduleId Kernel = KernelAnswerFirst(Npc,
+		Npc.SelectScheduleMeleeCombat(0), TEXT("SelectScheduleMeleeCombat"));
+		Kernel != EElysiumScheduleId::None)
+	{
+		return Kernel;
+	}
+
 	const FElysiumNpcConditions& Cond = Npc.Cognition.Conditions;
 
 	// 1. Scripted combat-mode and weapon-switch gates. SKIPPED, not refused: neither has a domain in
@@ -570,6 +615,16 @@ EElysiumScheduleId ElysiumNpcCombat::SelectMeleeSchedule(FElysiumNpc& Npc, doubl
 
 EElysiumScheduleId ElysiumNpcCombat::SelectRangedSchedule(FElysiumNpc& Npc, double Now)
 {
+	// Slot 605 `0x102b7fc0` and its five species arms (`ElysiumNpcKernelCombat10_2.cpp`), which are
+	// the recovered body this function approximates. Steps 1 to 4 below say they are "SKIPPED"; they
+	// are not skipped any more — they are the slot body, and it runs first.
+	if (const EElysiumScheduleId Kernel = KernelAnswerFirst(Npc,
+		Npc.SelectScheduleRangedCombat(0), TEXT("SelectScheduleRangedCombat"));
+		Kernel != EElysiumScheduleId::None)
+	{
+		return Kernel;
+	}
+
 	const FElysiumNpcConditions& Cond = Npc.Cognition.Conditions;
 	(void)Now;   // the ranged selector's own per-NPC timers are undecoded; see step 2
 

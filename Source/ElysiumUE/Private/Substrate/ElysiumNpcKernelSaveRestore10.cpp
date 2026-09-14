@@ -449,51 +449,30 @@ int32 FElysiumNpc::BaseSave(void* Archive)
 	return ChainResult;
 }
 
-namespace
-{
-	// `0x102993c0`'s eleven stamps, in the listing's order with the listing's modes. The DECODE pass
-	// walks the identical list — the decompiled C renders its pointers one slot out through EBX and
-	// stack aliasing, but the pushed modes read `3,2,2,3,3,3,3,2,2,4,4`, which is this list.
-	struct FTroikaSaveStamp
-	{
-		const TCHAR* Field = nullptr;
-		FElysiumNpc::ESaveStampMode Mode = FElysiumNpc::ESaveStampMode::None;
-	};
-
-	const FTroikaSaveStamp GTroikaSaveStamps[] =
-	{
-		{ TEXT("m_flCanSeekCoverTimer"),        FElysiumNpc::ESaveStampMode::Zero },      // +0x607c
-		{ TEXT("m_flSeeUnknownCheatVisionTime"), FElysiumNpc::ESaveStampMode::MinusOne }, // +0x6084
-		{ TEXT("m_flMeleeHeightDiffTimer"),     FElysiumNpc::ESaveStampMode::MinusOne },  // +0x6274
-		{ TEXT("m_flOccludedReportTimeE"),      FElysiumNpc::ESaveStampMode::Zero },      // +0x62cc
-		{ TEXT("m_flOccludedReportTimeT"),      FElysiumNpc::ESaveStampMode::Zero },      // +0x62d0
-		{ TEXT("m_flOccludedReportTimeW"),      FElysiumNpc::ESaveStampMode::Zero },      // +0x62d4
-		{ TEXT("m_flInterruptTime"),            FElysiumNpc::ESaveStampMode::Zero },      // +0x632c
-		{ TEXT("m_flNextInterestChangeTime"),   FElysiumNpc::ESaveStampMode::MinusOne },  // +0x63d4
-		{ TEXT("m_flWeaponScareTime"),          FElysiumNpc::ESaveStampMode::MinusOne },  // +0x63dc
-		{ TEXT("m_flIgnoreCollisionTimer"),     FElysiumNpc::ESaveStampMode::FloatMax },  // +0x6458
-		{ TEXT("m_flEyeFidgetTime"),            FElysiumNpc::ESaveStampMode::FloatMax },  // +0x657c
-	};
-}
-
 int32 FElysiumNpc::TroikaSave(void* Archive)
 {
-	// `CAI_BaseNPCTroika::Save` `0x102993c0`. The eleven stamps, in the listing's order.
+	// `CAI_BaseNPCTroika::Save` `0x102993c0`. The eleven stamps, in the listing's order, with the
+	// retail field and offset each port member stands for named on its own line. The DECODE pass
+	// walks the identical list: the decompiled C renders its pointers one slot out through EBX and
+	// stack aliasing, but the modes pushed at `1029956f`..`102995e9` read `3,2,2,3,3,3,3,2,2,4,4`,
+	// which is this list.
 	//
 	// Ten of the eleven are `double` on this runtime's leaf and one — `m_flEyeFidgetTime`
 	// (`+0x657c`) — lands on the entity chain as `FElysiumCombatCharacter::NextFidgetTime`, a
 	// `float`, which is why the codec carries both widths.
-	SaveStampEncode(CanSeekCoverTimer, ESaveStampMode::Zero);
-	SaveStampEncode(Senses.Memory.SeeUnknownGraceUntil, ESaveStampMode::MinusOne);
-	SaveStampEncode(MeleeHeightDiffTimer, ESaveStampMode::MinusOne);
-	SaveStampEncode(OccludedReportTimeE, ESaveStampMode::Zero);
-	SaveStampEncode(OccludedReportTimeT, ESaveStampMode::Zero);
-	SaveStampEncode(OccludedReportTimeW, ESaveStampMode::Zero);
-	SaveStampEncode(ScheduleHost.InterruptTime, ESaveStampMode::Zero);
-	SaveStampEncode(AmbientNextActivityAt, ESaveStampMode::MinusOne);
-	SaveStampEncode(WeaponScareTime, ESaveStampMode::MinusOne);
-	SaveStampEncode(IgnoreCollisionUntil, ESaveStampMode::FloatMax);
-	SaveStampEncode(NextFidgetTime, ESaveStampMode::FloatMax);
+	SaveStampEncode(CanSeekCoverTimer, ESaveStampMode::Zero);                    // +0x607c
+	SaveStampEncode(Senses.Memory.SeeUnknownGraceUntil, ESaveStampMode::MinusOne);  // +0x6084
+	SaveStampEncode(MeleeHeightDiffTimer, ESaveStampMode::MinusOne);            // +0x6274
+	SaveStampEncode(OccludedReportTimeE, ESaveStampMode::Zero);                 // +0x62cc
+	SaveStampEncode(OccludedReportTimeT, ESaveStampMode::Zero);                 // +0x62d0
+	SaveStampEncode(OccludedReportTimeW, ESaveStampMode::Zero);                 // +0x62d4
+	SaveStampEncode(ScheduleHost.InterruptTime, ESaveStampMode::Zero);          // +0x632c
+	// `m_flNextInterestChangeTime`. `ElysiumNpcKernelShapeMap.cpp` binds `+0x63d4` to
+	// `FElysiumNpc::AmbientNextActivityAt`, "the interesting-place activity clock".
+	SaveStampEncode(AmbientNextActivityAt, ESaveStampMode::MinusOne);           // +0x63d4
+	SaveStampEncode(WeaponScareTime, ESaveStampMode::MinusOne);                 // +0x63dc
+	SaveStampEncode(IgnoreCollisionUntil, ESaveStampMode::FloatMax);            // +0x6458
+	SaveStampEncode(NextFidgetTime, ESaveStampMode::FloatMax);                  // +0x657c
 
 	// The nine `CAISound` records, in the listing's order (`+0x60b0` up to `+0x6210`, stride 0x2c).
 	SaveSoundStampEncode(Senses.Memory.BestSound);
@@ -574,6 +553,9 @@ namespace
 	{
 		const TCHAR* Address = nullptr;
 		const TCHAR* RetailClass = nullptr;
+		/** Null means "this override belongs to no port body that can run on an `FElysiumNpc`" —
+		 *  the arm is LISTED so the coverage case still passes over it, and the Troika body runs,
+		 *  which is what a class whose override this runtime cannot stand would do anyway. */
 		int32 (FElysiumNpc::*Body)(void*) = nullptr;
 	};
 
@@ -592,6 +574,23 @@ namespace
 		{ TEXT("0x1039eda0"), TEXT("CNPC_VMingXiaoTentacle"), &FElysiumNpc::MingXiaoTentacleRestore },
 		{ TEXT("0x103c2860"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawRestore },
 		{ TEXT("0x103c5910"), TEXT("CNPC_VVampireBoss"),      &FElysiumNpc::VampireBossRestore },
+
+		// The five slot-127 bodies of the OTHER bosses. Each one chains `CNPC_VVampireBoss::Restore`
+		// (`0x103c5910`) as its base, which this family recovered; a row whose own half is not yet
+		// walked is routed to that base, which ports the half that IS known and keeps the boss reset
+		// (`m_pMonsterModelName`, the emitter names, `m_pszMonsterClassname`) from being lost to a
+		// silent fall-through to the Troika body.
+		//
+		// **Two of the five have landed** — story 29d, family SpeciesLifecycle10 owns
+		// `CNPC_VAndreiBlood` `0x1035cf80` and the Chang brothers' shared `0x1036b170`, and their
+		// rows now name their own bodies. `CNPC_VAndreiBlood`'s IS the bare base call, which is a
+		// recovered fact rather than a placeholder (see `AndreiBloodRestore`). The remaining three
+		// still await their owning story, and the day it lands each row's `Body` moves to it.
+		{ TEXT("0x1035cf80"), TEXT("CNPC_VAndreiBlood"),      &FElysiumNpc::AndreiBloodRestore },
+		{ TEXT("0x10360e10"), TEXT("CNPC_VAsianVampire"),     &FElysiumNpc::VampireBossRestore },
+		{ TEXT("0x1036b170"), TEXT("CNPC_VChangBros"),        &FElysiumNpc::ChangBrosRestore },
+		{ TEXT("0x103a6e80"), TEXT("CNPC_VSabbatLeader"),     &FElysiumNpc::VampireBossRestore },
+		{ TEXT("0x103ae7f0"), TEXT("CNPC_VSheriffMan"),       &FElysiumNpc::VampireBossRestore },
 	};
 
 	bool SaveRestore10Dispatch(FElysiumNpc& Npc, int32 Slot, const FSaveRestore10Arm* Arms,
@@ -616,6 +615,10 @@ namespace
 			if (FCString::Strcmp(Arms[Index].Address, Override->Address) != 0)
 			{
 				continue;
+			}
+			if (Arms[Index].Body == nullptr)
+			{
+				return false;
 			}
 			const FElysiumNpc::FSpeciesDispatchScope Scope(Npc, Slot);
 			OutResult = (Npc.*(Arms[Index].Body))(Archive);
@@ -823,15 +826,19 @@ void FElysiumNpc::LeaveInterestingPlaceOnRemove()
 	// `*(undefined1 *)(param_1 + 0x18ba) = 0;` is OUTSIDE the `if`: retail clears
 	// `m_bInterestingPlaceArrived` whether or not a place was held.
 	bAmbientArrived = false;
+	++InterestingPlaceReleases;
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s %s"), *DebugString(), GLeaveInterestingPlaceReason);
 }
 
 void FElysiumNpc::StopDialogOnRemove()
 {
-	// `thunk_FUN_102c0bb0(this)`. `CAI_BaseNPCTroika::FinishTalking` is this runtime's talk-end
-	// stamp (`ElysiumNpc.h`: "The stamp form is the same fact without a separate `FinishTalking`
-	// sweep"), so ending the window IS that call.
-	TalkingUntil = -1.0;
+	// `thunk_FUN_102c0bb0(this)`. Story 29d, family Social10 landed
+	// `CAI_BaseNPCTroika::FinishTalking` (`0x102c0ca0`) itself, so this is now the CALL retail makes
+	// rather than the talk-end stamp that stood in for it. The observable difference is retail's
+	// own: `FinishTalking` stamps `m_flTalkEnd` with `curtime` instead of clearing it, releases the
+	// dialog partner, clears `m_szDialogQue` and picks a dialogue-singleton notify from the latched
+	// `m_bIsTalking`. Named minimal fix, reported by family Social10.
+	FinishTalking();
 	// SEAM, named: the sound-channel-5 stop, slot 275, `FadeoutExpressions` and the schedule `0xf1`
 	// install. Schedule `0xf1` has no registered id in this runtime and nothing here stands a
 	// per-channel sound stop at kernel level, so the install is COUNTED and the rest answers
@@ -889,6 +896,7 @@ namespace
 	{
 		const TCHAR* Address = nullptr;
 		const TCHAR* RetailClass = nullptr;
+		/** Null: see `FSaveRestore10Arm::Body`. */
 		void (FElysiumNpc::*Body)() = nullptr;
 	};
 
@@ -897,6 +905,12 @@ namespace
 		{ TEXT("0x10371a90"), TEXT("CNPC_VCop"),         &FElysiumNpc::CopUpdateOnRemove },
 		{ TEXT("0x10391230"), TEXT("CNPC_VMingXiao"),    &FElysiumNpc::MingXiaoUpdateOnRemove },
 		{ TEXT("0x103a03a0"), TEXT("CNPC_VNewscaster"),  &FElysiumNpc::NewscasterUpdateOnRemove },
+
+		// `CCineAI`, `CCineAISchedule` and `CCineNPC` share `0x101a7140`. A cine actor is
+		// `FElysiumScriptedSequence` in this port and never an `FElysiumNpc`, so this arm can never
+		// be SELECTED at runtime — it is listed so the coverage case passes over it rather than
+		// leaving a census row nothing in this file knows about.
+		{ TEXT("0x101a7140"), TEXT("CCineNPC"),          nullptr },
 	};
 }
 
@@ -917,6 +931,10 @@ bool FElysiumNpc::UpdateOnRemoveSpecies()
 		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
 		{
 			continue;
+		}
+		if (Arm.Body == nullptr)
+		{
+			return false;
 		}
 		const FSpeciesDispatchScope Scope(*this, GUpdateOnRemoveSlot);
 		(this->*Arm.Body)();
@@ -1023,11 +1041,16 @@ int32 FElysiumNpc::OpeningDoorToggleState() const
 
 void FElysiumNpc::MaintainActivity()
 {
-	// SEAM for `CAI_BaseNPC::MaintainActivity` `0x102727d0`. See the `.inl`: nothing in this runtime
-	// publishes an ideal activity from an NPC-side maintain pass, so this answers nothing and
-	// records the one fact the call site makes observable.
+	// The bookkeeping this family stood the seam for: the one fact the call site makes observable is
+	// that `m_bForceMaintainActivity` was up across exactly one call and down on either side of it.
 	bForceMaintainActivitySeenByLastMaintain = bForceMaintainActivity;
 	++MaintainActivityCalls;
+	// Story 29d, family **Anim10** landed `CAI_BaseNPC::MaintainActivity` (`0x102727d0`) itself —
+	// the slot-466 gate, the two-term mismatch test and the `ACT_TRANSITION` arm — as
+	// `BaseMaintainActivity` (`ElysiumNpcKernelAnim10.cpp`). This seam is now its entry point rather
+	// than its replacement; the body runs AFTER the bookkeeping, which is the order retail's caller
+	// sees (the latch is raised, the body runs, the latch is cleared).
+	BaseMaintainActivity();
 }
 
 bool FElysiumNpc::AlternateAiDoorSweepHit(const FVector& StartCm, const FVector& EndCm)

@@ -1371,3 +1371,809 @@ wraps itself in a scope-trace push keyed on `m_iName`, popped on every arm inclu
 and therefore the base task sub-space's own range; what each species condition `0x77`+ MEANS, since
 only the abbreviation survives. **Not built:** this runtime's task vocabulary carries no registered
 numbers, so `TaskName` translates nothing and answers `"<<null>>"` for every id.
+
+## Conditions10 — the flag-word writers, `IRelationType` and `TaskFail`
+
+_Recovered 2026-09-14, story 29d._
+
+The fifteen layer 10–18 bodies over 64 bytes that write or read the two NPC flag words, decide a
+disposition, or run a species arm of `TaskFail`. Every constant below was read from the pinned
+image's listing or `.rdata`, not from the decompiler's folded output; where it disagrees with the
+checklist's one-line walk, the correction is stated at the arm.
+
+### `CAI_BaseNPCTroika::IRelationType` `0x10299da0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 404, 541 bytes, and the widest-read body of this band: 5 direct, 9 virtual and 22 chained
+callers. Two guards, then three forwarding arms, then the table.
+
+The guards are `candidate == this` (`10299daa`) and `candidate == NULL` (`10299db7`), both `D_ER`,
+and both ahead of everything — which is why a species arm that answers `D_ER` on null changes
+nothing for null and everything for the arms behind it. `EBX` is then loaded with the candidate's
+`+0x9c` (`m_pNPC`, `CBaseEntity`'s self-downcast cache) at `10299dc4` and stays live to the last arm.
+
+**Arm A, the INSANE forwarding (`10299dd2`).** When that NPC carries `D_INSANE`
+(`m_bfAINPCFlags2 & 0x20000`, tested as `AND EAX,0x20000 / CMP EAX,0x20000`) and `m_hClosestPlayer`
+(`+0x628c`) resolves to a live entity, the answer is `D_HT` if either `this->IRelationType(player)`
+— slot 404 again, dispatched VIRTUALLY, so a cop asks its own species body — is `D_HT`, or if
+`this->GetEnemy()` is that player. That second call is `vtable +0x2a0`, slot **168**, the Troika
+line's mutable `GetEnemy` with the `m_hLastEnemy` fallback. Every failure inside the arm falls
+through to arm B rather than answering.
+
+**Arm B, the candidate's boss (`10299eaa`).** Retail reads the candidate's `+0x98`
+(`m_pCombatCharacter`) and then `+0x647c` off it. `+0x647c` is a `CAI_BaseNPCTroika` member, so the
+read is only meaningful when that combat character is an NPC; for the player it lands on an
+unrelated word of `CBasePlayer`. With a resolving boss the arm is the same pair as arm A —
+slot 404 virtually, then slot 168 — and answers `D_HT` on either.
+
+**Arm C, my own boss (`10299f0f`).** `m_hFollowerBoss` (`+0x647c`) is read RAW rather than through
+slot 293 (the same resolve either way), then taken through its own `+0x9c`. No boss, or a boss that
+is not an NPC, chains `CBaseCombatCharacter::IRelationType` and the walk ends. A boss that IS the
+candidate answers `D_LI` unconditionally, table or no table. Otherwise `EDI` takes the BOSS's
+slot-404 answer toward the candidate; `D_HT` returns at once, and so does the boss's `vtable +0x29c`
+— slot **167**, the CONST `GetEnemy` with NO last-enemy fallback, an asymmetry against the two arms
+above it — being the candidate. A candidate that is not an NPC then returns the boss's answer.
+
+**The correction.** `10299f84` is `MOV EDI,EAX`: when the candidate IS an NPC, the return register
+is REASSIGNED with the candidate's own slot-404 answer toward the boss, and the two tests that
+follow (`D_HT`, and the candidate's slot 168 being the boss) are about that second call. So the
+fall-through answer for an NPC candidate is **the candidate's relation toward my boss**, not the
+boss's toward the candidate. The checklist's walk states the latter, which holds only for a non-NPC.
+
+**Unrecovered:** what the player's `+0x647c` actually holds, which arm B reads blindly.
+
+### `CNPC_VCop::IRelationType` `0x10372b70`
+
+_Recovered 2026-09-14, story 29d._
+
+170 bytes, three arms in front of a direct thunk to `0x10299da0`. A null candidate answers `0`
+(`D_ER`) rather than whatever the base would say. `DAT_1093ac3c` is the cop class's SHARED provoker
+handle — written only by `CNPC_VCop`'s own `0x10370560` and `0x103705b0` plus its static init, read
+by this body and `CNPC_VCop::DrawDebugGeometryOverlays` — and while the candidate IS that entity and
+`curtime` is below the paired expiry `_DAT_1093aca8`, the answer is `D_HT`. It is one timed grudge
+every cop in the map shares, not a per-cop memory. Then, when the candidate carries a player record
+at `+0xa8`: `0x1017f8d0` (`curtime < m_flHeightenedAlertExpireTimer`, `+0x1d1c`) answers `D_HT`, and
+`0x1017f770` (`m_iCopsInPursuitCount`, `+0x1d10`) answers `D_HT` when it is greater than zero.
+
+The chain is a DIRECT thunk, so the base body's own three virtual `+0x650` calls re-enter this arm.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VHunter::IRelationType` `0x10388bb0`
+
+_Recovered 2026-09-14, story 29d._
+
+109 bytes, and strictly smaller than the cop's: a null candidate answers `D_ER`, the hunter class's
+own static provoker handle `DAT_1093b650` with expiry `_DAT_1093b658` — written only by `0x10387fd0`
+and read by nothing but this body — answers `D_HT`, and everything else chains `0x10299da0`. It has
+**no** player-side arms: no heightened-alert timer and no cops-in-pursuit count, so a hunter's extra
+hostility comes only from that one shared thirty-second timer.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::CanBeFedUponBy` `0x102c4a60`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 342, 77 bytes, three arms. `m_bInvincible` (`+0x63d8`) refuses immediately — retail clears only
+the low byte of `EAX` (`AND EAX,0xffffff00`), so the upper bits are stale and the bool is false.
+Then `GetFollowerBoss()` (slot 293, `vtable +0x494`): when the boss stands AND the boss IS the
+feeder, the feed is refused unless `HasMiscFlag(0x40000)`, which is name **18** of the 22 in the
+table at `0x10619ec8` — `No_Resist_Feeding`. So your own follower or ghoul may only feed on you while
+that flag stands, and the early return again carries only the cleared low byte. Everything else
+defers to `CBaseCombatCharacter::CanBeFedUponBy` (`0x10339800`) with the feeder.
+
+That base body **never reads the feeder**. Its five terms are all about the victim, in order:
+`CanBeFedUpon()` (`0x10339a90`, whose whole body past the scope-trace push is
+`GetCharTemplate(this)->+0x95 == 0`); `m_bfAINPCFlags2 & 0x8000000` (`NOT_FEEDABLE`) clear; no live
+grapple — `m_GrapplePartner` (`+0x1538`) resolving together with `m_GrappleRole` (`+0x153c`) not
+being -1 is the refusal; slot 158 `IsAlive()`; and `!IsUnconscious()` (`0x10341aa0`, `m_iMiscFlags`
+bit 0, name **0** of the same table). Which is why the Troika override has to make the follower test
+itself: the base has no idea who is feeding.
+
+**Unrecovered:** the char template column at `+0x95`.
+
+### `CAI_BaseNPCTroika::CanWitnessSupernatural` `0x1028ef20`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 587, 118 bytes. The `int` argument is dead in every arm. Five refusals in this exact order,
+each answering false on its own: `IsKindred()`; `m_iDialog` (`+0x0128`) non-zero; `m_iIsOblivious`
+(`+0x5bb4`) greater than zero; bit `0x10` of `m_bfNPCFrenziedFlags` — the "does not witness" bit
+`DoFrenzy`'s `0x9fbd` word carries, and this body is its ONE reader; and `IsBusyWithDiscipline()`.
+
+Past all five the body answers true when `m_iPLSupernaturalFleeLevel` (`+0x6354`) is below 3, and
+otherwise returns whether `m_iPLSupernaturalAttackLevel` (`+0x6358`) is below 3. Both are the RAW
+authored keyfields — retail does not resolve a negative to the authored-disable 6 here — so a body
+authored with flee 3 or more AND attack 3 or more can never witness a supernatural act at all.
+
+**Unrecovered:** nothing.
+
+### `CAI_BaseNPCTroika::vfunc532` `0x10290570`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 532, 145 bytes, the door-failure cleanup. A jump table at `0x10290604` covers `param_1 - 1` in
+`[0,7]`; anything outside falls straight to the tail.
+
+* **Case 1** (`10290587`): `m_eAlternateAI` (`+0x644c`) in `[1,4]` runs the navigator arm, then the
+  clear. Outside that window, nothing.
+* **Cases 2 and 4** (`10290598`): only `m_eAlternateAI == 4`. `vtable +0x700` is slot **448** — the
+  call at `102905a7` is `TaskFail(0xe)`, which runs the WHOLE failure chain from inside the door
+  cleanup and BEFORE `m_hOpeningDoor` (`+0x5d24`) is set to -1 and `m_bOpeningDoorWait` (`+0x5d30`)
+  to 0. Then the clear.
+* **Case 8** (`102905c0`): `m_eAlternateAI` of 0 or less takes nothing; **1..3 takes the clear
+  alone** (`102905ca CMP EAX,0x3 / JLE 0x102905ea`); exactly 4 also takes the navigator arm; 5 and
+  above take nothing. The checklist's walk says "no clear for values 1-3", which the listing
+  contradicts.
+
+The navigator arm (`102905d4`) is `m_pNavigator->IsGoalSet()` (`0x102ee2e0`,
+`m_pPath(+0x30)->GoalType(+0x10) != 0` — distinct from `0x102ee680 IsGoalActive`, the
+current-waypoint test) gating the door cleanup `0x102bf7e0`, which tests `IsGoalSet` a SECOND time,
+calls `StopMoving` and sets `m_bShouldMove` (`+0x1a40`). Every path then chains
+`CAI_BaseNPC::vfunc532` (`0x1027e0f0`), whose entire body is the two door words and `return 1`.
+
+**Unrecovered:** what the eight reason bits mean individually; only 1, 2, 4 and 8 have arms.
+
+### `CAI_BaseNPCTroika::UpdateBurstShootPause` `0x102c5500`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 419, 69 bytes. `GetActiveWeapon()` first: with a weapon, `m_flBurstShootPauseMin` (`+0x5bbc`)
+takes `0x102c5780` — the weapon-data word at `wpndata + 0x264` — and `m_flBurstShootPauseMax`
+(`+0x5bc0`) the word at `+0x268`, both scaled by `0x102c5570` with the data resolved by `0x102517e0`.
+With NO weapon the two retail literals `0x3e99999a` (0.3) and `0x3f000000` (0.5) are written instead
+and the body returns.
+
+`0x102c5570` has to be read from the listing: the decompiler turned its x87 compare chain into a
+`ushort` of status-word bits and invented a return-storage parameter. The scale seeds at
+`_DAT_104454c0` = 1.0 and stays there when `wpndata + 0x26c` is at or below `_DAT_104454c4`. Past
+that it measures the distance from this body to `m_hShootTargetOverride` (`+0x5ba8`) or, failing
+that, to `GetEnemy()`'s body target, and the scale becomes `sqrt(distance / range)` when the distance
+exceeds the same threshold and the distance itself when it does not; with no enemy at all the seeded
+1.0 is what gets divided, giving `sqrt(1.0 / range)`. The answer is `scale * (value - wpndata+0x260)`.
+
+**Unrecovered:** the four weapon-data columns' names.
+
+### `CNPC_VAsianVampire::TaskFail` `0x10362390`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448, `CNPC_VAsianVampire` only; 117 bytes, most of which is the scope-trace push and pop. The
+whole arm is `if (0xb < code && code < 0x10) m_bPathBlocked (+0x66d4) = 1;` — failure codes 12..15 —
+followed by the unconditional chain to `CAI_BaseNPCTroika::TaskFail` (`0x1029adb0`) with the code
+unchanged. Relative to the base, the AsianVampire contributes exactly that one write.
+
+**Unrecovered:** which failure codes 12..15 are by name.
+
+### `CNPC_VChangBros::TaskFail` `0x1036d1d0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448 for `CNPC_VChangBros`, `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw`, sharing one body.
+The same 12..15 gate as the AsianVampire arm, but the write is `m_failSchedule` (`+0x5c54`) `= 0x15d`
+rather than the path-blocked flag — the same schedule id `SelectFailSchedule`'s Chang arm answers —
+then the unconditional chain to `0x1029adb0`. Three retail classes contribute this single arm.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VGargoyle::TaskFail` `0x10379060`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448, 77 bytes. In COMBAT (`m_NPCState == 2`, `+0x5cc0`) with `TASK_FAILED` (`0x5c`) standing as
+an INTERRUPT condition — `0x10269d30`, which needs an installed schedule and the bit in BOTH the
+condition set and the custom mask, not the plain `HasCondition` — it clears the top bit of
+`m_afMemory` (`+0x5d8c &= 0x7fffffff`). Then `m_iShunnedFindPillar` (`+0x6680`) is zeroed and the
+body chains `0x1029adb0`.
+
+The middle pair is where the checklist's walk stops: it records `1037908c CALL 0x10006613` as
+reached with a `this` that "has no visible prior assignment in the decompile (likely a lost this
+alias rather than a confirmed retail bug — needs an asm check before this arm is ported)". The asm
+check settles it. `0x10379040` is four instructions —
+`MOV EAX,[ECX+0x14b8] / SHR EAX,4 / AND AL,1 / RET` — and never writes `ECX`, so `ECX` still holds
+`this` from `10379081`. **There is no bug.** Both bodies are plain `m_bfAINPCFlags` accessors for bit
+`0x10`, `FINDING_BODY`: `0x10379040` reads it and `0x10379000` writes it, so the arm is
+`if (IsFindingBody()) SetFindingBody(false)`.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VHengeyokai::TaskFail` `0x10380510`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448, 130 bytes, and the template for the Tzimisce arm below it. In order: the same combat-plus-
+`TASK_FAILED`-interrupt clear of `m_afMemory`'s top bit; then, when `FINDING_BODY` stands
+(`0x10381be0` is `(m_bfAINPCFlags >> 4) & 1`, NOT a species word), `0x10382970(this,
+m_hPickupTarget)` runs and `0x10381ba0(this, false)` clears that same bit; then, when `CARRYING_BODY`
+is CLEAR (`0x10381c80` is `(m_bfAINPCFlags >> 5) & 1`), `0x102c43b0(this, 0.75)` re-arms
+`m_flIgnoreCollisionTimer` (`+0x6458`) and `m_hPickupTarget` (`+0x6664`) goes to -1; then
+`m_iShunnedFindFish` (`+0x6678`) is zeroed and the body chains `0x1029adb0`.
+
+**`0x10382970` does not release the pickup target.** It is a `CUtlVector<BlacklistedEntity_t>`
+grow-and-append — the standard 4 / double / step growth, then a `memmove` of the tail and a
+`(handle, float)` pair written at the insertion point — onto `m_BlacklistedEntities` (`+0x66a4`),
+with the float `curtime + _DAT_1044eb0c` and `_DAT_1044eb0c` = **20.0**. The target is SHUNNED for
+twenty seconds; the release is the separate `FINDING_BODY` clear on the next line. The checklist's
+walk calls it a release.
+
+`0x102c43b0` itself is `if (GetIgnoreCollisionEntity()) { m_flIgnoreCollisionTimer = curtime +
+delay; 0x102c43f0(this); }`, and `0x102c43f0` is `if (timer <= curtime) { <clear the ignored
+entity>; timer = FLT_MAX; }` — so a zero or negative delay expires in the same call.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VTzimisce::TaskFail` `0x103ba350`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448, 130 bytes, the Hengeyokai arm with its own words. `0x103be090` and `0x103be130` are
+byte-identical to `0x10381be0` and `0x10381c80` — `FINDING_BODY` and `CARRYING_BODY` on
+`m_bfAINPCFlags` — and `0x103be050` is the same bit-`0x10` writer. `0x103bf200` is the same
+twenty-second blacklist append against `m_FailedPickupTargets` (`+0x6690`). The species words are
+`m_hPickupTarget` at `+0x6670` and `m_iShunnedFindBody` at `+0x66b8`.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VMingXiao::TaskFail` `0x10394090`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448, 88 bytes, a switch on `m_eThrowableObjectMode` (`+0x673c`). Modes **3** and **4** call
+`0x102e0a60(m_pMotor, 0x43340000)` — `m_pMotor + 0x1c = 180.0f`, the same steering reset the Troika
+body itself makes — and touch nothing else, so the mode and the throw handle both survive. Every
+other mode calls `0x10398d90(this, 0)` and then sets `m_hThrowObject` (`+0x6718`) to -1.
+
+`0x10398d90`'s whole body is `m_eThrowableObjectMode = arg`. It is the MODE setter, not a
+throwable-prop clear as the checklist's walk has it, so the default arm's first act is to put the
+mode back to 0.
+
+**Unrecovered:** what the throwable-object modes are by name.
+
+### `CNPC_VSheriffMan::TaskFail` `0x103b0290`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 448, leaf only, 100 bytes. Apart from the scope-trace push and pop the entire body is a single
+direct call to `CAI_BaseNPCTroika::TaskFail` (`0x1029adb0`) with the incoming code unchanged. The
+recovered fact is the ABSENCE of a species override: unlike the Hengeyokai, Tzimisce and MingXiao
+variants elsewhere in this pack, the sheriff carries no additional `TaskFail` arms at all and needs
+only correct dispatch.
+
+**Unrecovered:** nothing.
+
+### `0x1028d990` — the AI trace line
+
+_Recovered 2026-09-14, story 29d._
+
+906 bytes, no slot; the formatter slots **17** and **18** push every trace message through. Retail's
+signature is `(this, const char* message, int indent, char* out, int size)` and it writes into the
+caller's buffer.
+
+`1028d9a0` / `1028d9a8`: a null `out` or a `size` of zero or less writes **nothing at all** — not
+even an empty string — and the entire body is skipped. A null message is replaced by a local NUL at
+`1028d9c1`, and a negative indent is clamped to 0 at `1028d9d4`.
+
+**The `CONDS:` block** (`1028da06`) is gated only by the schedule-debug ConVar `DAT_10924a6c`, on the
+usual idiom: `cv->vtable[4]()` must answer 0 (the object is a variable, not a command) and the int at
+`cv + 0x2c` must be **greater than** zero. It `sprintf`s `"CONDS:"` (`0x105d8908`), then walks
+`[0, GetLastSharedCondition())` — slot 409, re-read on EVERY iteration at `1028da73` — appending
+`" %s"` (`0x105a3060`, the space is LEADING) with `GetShortConditionName(id)` (slot 408) for each id
+whose `HasCondition` (`0x10269aa0`, the raw set at `+0x5c5c`) stands, and closes with `"\n"`
+(`0x10547e40`).
+
+**Two ladders, not three.** The checklist's walk says three. `1028dac6` renders 32 glyphs of
+`"PIS__PF_T_L__TTEPLM________ICCCC"` (`0x105d88e0`) over `m_afMemory` (`+0x5d8c`) and `1028db20`
+renders 30 of `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"` (`0x105d88b8`) over `m_bfAINPCFlags` (`+0x14b8`),
+a set bit taking the legend's character at that index and a clear bit `'.'` (`0x2e`). The third
+buffer (`1028db56`) is only ever NUL-terminated and never written, so the fifth `%s` of the full
+format always prints nothing. The two loops differ only in their test spelling — `TEST EAX,EDX / JZ`
+against `AND ESI,EAX / CMP ESI,EAX / JNZ` — which for a single bit is the same question.
+
+**The `NAV` pair** (`1028db6b`) needs the listing too; the decompiler dropped both arguments.
+`GetNavType()` (`0x1027d990`, `m_pNavigator(+0x5d34)->+0x18`) is called FIVE times. Unless it is 3 or
+1 the buffer is emptied and nothing prints. The first `%s` of `"NAV %s %s"` (`0x105d888c`) is
+`"CLIMB"` (`0x105d88a0`) on nav type 3 and five spaces (`0x105d8898`) otherwise; the second is
+`"JUMP"` (`0x105d88b0`) on nav type 1 and four spaces (`0x105d88a8`) otherwise. So a climbing body
+prints `NAV CLIMB` and a jumping one `NAV` then four blanks then `JUMP`, in aligned columns.
+
+**The three format strings**, selected by the two debug BYTES `DAT_10920534` and `DAT_10920535`:
+
+| `534` | `535` | `.rdata` | Format |
+|---|---|---|---|
+| set | set | `0x105d8868` | `%6.2f : %*s %s\n%s%s %s%s %s\n\n` |
+| set | clear | `0x105d8854` | `%6.2f : %*s %s\n` |
+| clear | — | `0x105d8828` | `%-20s  %6.2f : %*s %s\n%s%s %s%s %s\n\n` |
+
+The `%6.2f` is `gpGlobals->curtime`; the `%*s` takes the indent as its WIDTH and the empty string as
+its value, so the field is that many spaces; the leading `%-20s` of the third arm is
+`GetDebugName()`. The four optional blocks are built when `DAT_10920534 == 0 || DAT_10920535 != 0`,
+which is exactly the two arms that consume them — the short arm builds none of them.
+
+**Unrecovered:** what each glyph of the 32-character memory legend stands for (the 30-character flag
+legend is confirmed by the `0x1030cbd0` name table); and whether `DAT_10920534` and `DAT_10920535`
+have recovered console names.
+
+### `0x102c54c0` — the fake-reload reroll
+
+_Recovered 2026-09-14, story 29d._
+
+43 bytes and under the walk threshold, recorded here because the reroll site is what makes
+`m_iFakeReloadCount` (`+0x65f0`) mean anything. `0x10207c40` is `GetCharTemplate(this)` followed by
+`0x101d5e80` on the template manager `DAT_10738d10`; the engine random stream's `vtable +8`
+(`RandomInt`) is then called with the template ints at `+0x34` and `+0x38`, and the draw is stored.
+Its two direct callers are the AsianVampire's reload arms; nothing reaches it virtually.
+
+**Unrecovered:** the names of the template columns at `+0x34` and `+0x38`.
+
+## Story 29d, family Combat10 — ranged-combat selection and the ideal-state pre-select
+
+Slot 605 is six bodies, not one: a Troika line, a shared human arm that fills 36 species slots, and
+four species arms. Every one of them is an **ordered** body — the arms are tried in retail's order
+and the first that answers wins — and every arm stamps `+0x1b30` with its own `.cpp` name and
+`+0x1b34` with the line, which is how the six were told apart. Three helpers sit between the arms
+(`0x102b8620`, `0x102b7370`, `0x102b7cf0`) and a fourth (`0x102b7f40`) decides the dodge; which of
+the four a body offers, and in what order, is most of what separates the six.
+
+Every body answers a **raw retail schedule number**. Of the two dozen those numbers name, this
+runtime registers three (`0xb1`, `0xb9`, `0xec`).
+
+### `CAI_BaseNPCTroika::SelectScheduleRangedCombat` `0x102b7fc0`
+
+_Recovered 2026-09-14, story 29d._
+
+677 bytes, `CAI_BaseNPCTroika#605` plus twenty more, and the arm a spawned `npc_VCop` reaches (its
+census classname list is null, so its `RetailClass()` is null and every species lookup falls
+through). In order:
+
+1. `102b7fc6` — `m_bInMelee` (`+0x6078`) gives `0xe3`, line 0x5d98.
+2. `102b7fe6` — `COND_TOO_CLOSE_FOR_RANGED` (`0x08`) **and** slot 307 `HasUsableMeleeWeapon`
+   (`vt+0x4cc`) **and** slot 599 (`vt+0x95c`) on `GetEnemy()` (slot 167) gives `0xe3`, line 0x5db2.
+3. `102b8027` — `COND_WEAPON_THROUGH_WALL` (`0x3c`) gives **`0xb8`**, line 0x5db7. This is the one
+   arm `CNPC_VAsianVampire` diverges on.
+4. `102b8047` — the weapon pre-pass `0x102b8620` wins whenever it answers non-zero. The door helper
+   and the taunt prologue are **not** offered on this line.
+5. `102b8056` — the split. Neither `COND_TOO_CLOSE_TO_ATTACK` (`0x5f`) nor `COND 0x08`, **and**
+   `0x101e3f50(&DAT_10739a4c, this)` false: slot 606 (`vt+0x978`) wins if non-zero, else
+   `COND_EXTENDED_BLOCKED_BY_FRIEND` (`0x2e`) gives `0xbd` (0x5dff), else `COND_TOO_FAR_TO_ATTACK`
+   (`0x60`) gives `0xb1` (0x5e04), else **0**.
+6. `102b8121` — otherwise, neither `COND_WAITING_ATTACK_TIME` (`0x2f`) nor
+   `COND_WEAPON_BLOCKED_BY_FRIEND` (`0x63`): `0x102b7f40` gives `0xef` (0x5dd8), else slot 307
+   **and** `RandomInt(0,99) < 0x19` **and** slot 599 gives `0xe8` (0x5ddc), else `0xf0` (0x5de0).
+7. `102b818c` — else the same pair with `0xb8` in place of `0xef` (0x5de9), **no roll** before slot
+   599 giving `0xe8` (0x5ded), else `0xb9` (0x5df1).
+
+Note the discipline gate's subject: the Troika line passes **`this`**, the human arm passes the
+enemy's `+0x9c`.
+
+**Unrecovered:** `DAT_10739a4c`'s discipline identity, and the console name of the melee-range
+convar `DAT_10924a1c` the pre-pass thresholds on.
+
+### `CNPC_VHuman::SelectScheduleRangedCombat` `0x10386560`
+
+_Recovered 2026-09-14, story 29d._
+
+802 bytes, filling 36 species `#605` slots and **no Troika-line slot** — it replaces the Troika body
+wholesale and never chains it. It differs from `0x102b7fc0` in three places: a cover-hint arm in
+second position, two extra helpers in step 4, and the discipline gate on the ENEMY.
+
+1. `10386566` — `m_bInMelee` gives `0xe3`, line 0x6cf.
+2. `10386588` — the cover hint. An empty `m_pShootAtHint` (`+0x6444`) is filled from slot 609
+   (`vt+0x984`, argument `0`); when it is **still** empty the arm is skipped entirely, otherwise
+   `!COND_WAITING_ATTACK_TIME` gives `0xec`, line 0x6e4.
+3. `103865d7` — the `COND 0x08` / slot 307 / slot 599 triple gives `0xe3`, line 0x6e9.
+4. `1038661d` — `COND 0x3c` gives `0xb8`, line 0x6ee.
+5. `1038663d` — three helpers, first non-zero wins, **in this order**: `0x102b8620`,
+   `0x102b7370 SelectDoorObstructionSchedule`, `0x102b7cf0`.
+6. `10386675` — the split, with `0x101e3f50` applied to `GetEnemy()->+0x9c` (its combat-character
+   self-downcast, so the entity itself for a combat character and null otherwise). Then slot 606,
+   `0xbd` (0x736), `0xb1` (0x73b), or 0.
+7. `103866f2` / `10386720` — the same dodge/spacing pair as the Troika body, lines 0x70f, 0x713,
+   0x717 and 0x720, 0x724, 0x728.
+
+**Unrecovered:** nothing in the body; the hint store slot 609 searches is family Hints' seam.
+
+### `CNPC_VAsianVampire::SelectScheduleRangedCombat` `0x103620d0`
+
+_Recovered 2026-09-14, story 29d._
+
+546 bytes inside a scope-trace frame, `CNPC_VAsianVampire#605` only. It replaces the Troika base and
+is the shortest of the six: no dodge helper, no slot-606 arm, no cover-hint arm, and neither the
+door helper nor the taunt prologue — the weapon pre-pass is the only helper in front of it.
+
+1. `1036213a` — `m_bInMelee` gives `0xe3`, line 0x26a.
+2. `10362163` — the `COND 0x08` triple gives `0xe3`, line 0x284.
+3. `103621c2` — `COND 0x3c` gives **`0xf0`**, line 0x289. The Troika base answers `0xb8` here; this
+   is the whole of the divergence and it is one number.
+4. `103621f4` — `0x102b8620`.
+5. `10362210` — `COND 0x5f` **or** `COND 0x08`, and neither `COND 0x2f` nor `COND 0x63`, gives
+   `0xf0`, line 0x2af. A body that fails the inner pair falls through rather than answering.
+6. `10362253` — `COND_SEE_ENEMY` and not `COND_ENEMY_OCCLUDED` and not `COND_TOO_FAR_TO_ATTACK`
+   gives `0xf0`, line 0x2e5.
+7. `103622b1` — `COND_ENEMY_UNREACHABLE` takes `GetJumpSchedule` (line 0x2ce), else `0xe8` (0x2d2).
+
+**Unrecovered:** nothing.
+
+### `CNPC_VBach::SelectScheduleRangedCombat` `0x103642f0`
+
+_Recovered 2026-09-14, story 29d._
+
+413 bytes, `CNPC_VBach#605` only, and the one arm of the six that **chains**: its classname tests
+fall through to `CNPC_VHuman`'s body `0x10386560` through a direct non-virtual call, and its own
+tail then rewrites that answer. Three of its conditions — `0x79`, `0x7a`, `0x7b` — live above the
+base registrar's `0x76` in a Bach-line table the census does not carry, so they have no names.
+
+1. `103642f6` — `COND 0x7b` stamps `+0x6690` with `curtime + _DAT_10463584` (**15.0**) and answers
+   `0x15a`, line 700 (decimal in the listing, unlike the rest).
+2. `1036433d` — `GetActiveWeapon()` is fetched once and `COND 0x7a` tested once, before the split.
+3. `10364355` — with **no** weapon: `COND 0x7a` gives `0x158` (0x2da), `COND 0x79` gives `0x159`
+   (0x2de).
+4. `1036439b` — with a weapon and `COND 0x7a`: a classname that is not `item_w_katana`
+   (case-insensitive) gives `0x158` (0x2c8); the katana itself **dispatches slot 604**
+   `SelectScheduleMeleeCombat` (`vt+0x970`) and returns its answer.
+5. `103643f7` — `COND 0x79`: a classname that is not `item_w_rem_m_700_bach` gives `0x159` (0x2d3);
+   the matching rifle falls through.
+6. `10364447` — `CNPC_VHuman::SelectScheduleRangedCombat`.
+7. `1036445a` — **unconditionally**, an `m_NPCState` (`+0x5cc0`) that is neither `4` nor `0xc`
+   clears `+0x6444`. This runs whatever the human body answered.
+8. `1036447a` — a human answer of `0` with `COND_SEE_ENEMY` standing is rewritten to `0x15f`
+   (0x2ed); anything else is handed back unchanged.
+
+**Unrecovered:** the names of conditions `0x79`, `0x7a` and `0x7b`, and of the word at `+0x6690` on
+the Bach line (`CNPC_VScurrying` owns the same offset as `m_flDetectionDistance`, which is a
+different word on a different line).
+
+### `CNPC_VMingXiao::SelectScheduleRangedCombat` `0x103967d0`
+
+_Recovered 2026-09-14, story 29d._
+
+794 bytes, `CNPC_VMingXiao#605` only — the human skeleton with **three** things removed or changed:
+
+* there is **no `COND 0x3c` arm** at all, so a Ming Xiao with its weapon through a wall falls to the
+  split instead of answering `0xb8`;
+* there is **no `0x101e3f50` discipline gate** in front of the slot-606 branch, which is therefore
+  entered on the two conditions alone;
+* the dodge decision is **inlined** and is only the FIRST arm of `0x102b7f40` —
+  `SelectWeightedSequence(0x10, -1) != 0`, `!COND_STOP_BACKUP (0x2c)`, `RandomInt(0,99) < 0x4b` — at
+  the same `0x4b` threshold. The helper's discipline arm and its `COND 0x3c` arm are not there.
+
+Lines: 0xb12, 0xb27, 0xb2c, 0xb6e, 0xb73, 0xb49, 0xb4d, 0xb51, 0xb58, 0xb5c, 0xb60. The three
+helpers (`0x102b8620`, `0x102b7370`, `0x102b7cf0`) are offered in the human's order.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VSheriffMan::SelectScheduleRangedCombat` `0x103afdb0`
+
+_Recovered 2026-09-14, story 29d._
+
+984 bytes, `CNPC_VSheriffMan#605` only, and the longest of the six because it offers the three
+helpers as three separate tests rather than as one chained condition. Its own two differences:
+
+* **no slot-606 arm at all.** Where every other body reaches `vt+0x978`, the sheriff's branch is
+  `COND_SEE_ENEMY` and not `COND_ENEMY_OCCLUDED` and not `COND_TOO_FAR_TO_ATTACK`, which
+  **declines** (`103aff56`); otherwise `COND_ENEMY_UNREACHABLE` gives **`0x15a`** (line 0x314), else
+  `0xe8` (0x31a). `0x15a` is a number no other slot-605 body names.
+* the same inlined first-arm-only dodge as Ming Xiao's, at `0x4b`.
+
+Lines: 0x2b1, 0x2cb, 0x2d0, 0x314, 0x31a, 0x2ed, 0x2f1, 0x2f5, 0x2fc, 0x300, 0x304.
+
+**Unrecovered:** nothing.
+
+### `FUN_102b8620` — the ranged weapon pre-pass
+
+_Recovered 2026-09-14, story 29d._
+
+688 bytes, no slot and no verdict row of its own, and the first helper every one of the six
+selectors offers. It owns reload `0xc4`/`0xc6`, the reload-cover pair `0xc2`/`0xc3`, the draw
+`0xe9`, the melee switch `0xe3`, the spacing trio `0xe4`/`0xe5`/`0xe7` and the no-weapon `0x98`. In
+order:
+
+1. `102b8626` — the convar `DAT_10923d3c` (its `vtable +0x04` bool CLEAR and its `+0x2c` int
+   non-zero), a live `GetActiveWeapon()`, its `vtable +0x5a0` capability word carrying `0x6000`, and
+   `m_iFakeReloadCount` (`+0x65f0`) below 1: `thunk_FUN_102c54c0(this)`, then `m_pHintNode`
+   (`+0x5ddc`) empty gives `0xc4` (0x5e8f), else `0xc6` (0x5e93).
+2. `102b86ba` — a weapon whose `+0x74c` first magazine entry is **above zero** declines the whole
+   pre-pass. This is the ordinary path for an armed, loaded body.
+3. `102b86e5` — an empty weapon whose `vtable +0x460` admits a reload and whose reserve
+   (`thunk_FUN_103346c0` on its `+0x744` ammo type) is at least 1 takes cover to reload:
+   `COND_SEE_ENEMY` or `COND_NEW_ENEMY` gives `0xc2` (0x5ecb), else `0xc3` (0x5ecf).
+4. `102b87b3` — slot 308 `HasUsableRangedWeapon` (`vt+0x4d0`): `GetEnemy()`, slot 601 (`vt+0x964`,
+   which clears `m_bInMelee`), `0xe9` (0x5ea2).
+5. `102b87e8` — slot 307 `HasUsableMeleeWeapon`: slot 599 on the enemy gives `0xe3` (0x5ea8); else
+   the melee-range convar `DAT_10924a1c` (`0.0` when its bool is SET, its `+0x28` float otherwise)
+   plus `_DAT_104492b8` (**200.0**) below `m_flEnemyDist` (`+0x6268`) gives `0xe7` (0x5eae); else
+   **`RandomInt(0,99)` is drawn** and, only when it is above `0x18` **and** the distance is at or
+   beyond the bare convar, `0xe5` (0x5eba); else `0xe4` (0x5eb6). The roll is consumed either way.
+6. `102b88b8` — no usable weapon at all gives `0x98` (0x5ec1).
+
+**Unrecovered:** the console names and defaults of `DAT_10923d3c` and `DAT_10924a1c`, and the
+identity of the weapon vtable slots `+0x5a0`, `+0x460` and `+0x450`.
+
+### `FUN_102b7f40` — the dodge test
+
+_Recovered 2026-09-14, story 29d._
+
+93 bytes, no slot, and **three arms rather than one**. An earlier one-line walk (of Ming Xiao's
+inlined copy) described only the first:
+
+1. `102b7f46` — `SelectWeightedSequence(ACT 0x10, -1)`. Retail tests it **`!= 0`, not `!= -1`**, so
+   a body that authors no such sequence still passes this gate.
+2. `102b7f5f` — `!COND_STOP_BACKUP (0x2c)` **and** `RandomInt(0,99) < 0x4b` gives true.
+3. `102b7f85` — `0x101e3f50(&DAT_10739a4c, this)` gives true. **Reached even when `COND 0x2c`
+   stands**, because arm 2's refusal does not exit.
+4. `102b7f96` — `COND_WEAPON_THROUGH_WALL (0x3c)` gives true, on the same footing.
+5. `102b7fa6` — otherwise false.
+
+`CNPC_VMingXiao` and `CNPC_VSheriffMan` inline arm 1 and arm 2 only, which is why they are not calls
+to this body.
+
+**Unrecovered:** `DAT_10739a4c`'s discipline identity, as above.
+
+### `FUN_102b7cf0` — the taunt-and-cover prologue
+
+_Recovered 2026-09-14, story 29d._
+
+462 bytes, no slot, offered third by the human, Ming Xiao and Sheriff-man selectors.
+
+**One arm sits outside everything else**: `102b7cf6`, `COND_LOST_ENEMY` (`0x47`) gives `0x10`, line
+23844. Everything below is inside **one** block opened at `102b7d2a` on
+`GetEnemy() != 0 && CanSeekCover()` (slot 592, `vt+0x940`) — the cover offer, the convar gate, the
+`0x800` taunt arm and the `SEE_ENEMY` arm alike. A body with no enemy answers `0`, whatever its
+flags say. (An earlier one-line walk read the convar-gated half as a sibling of that gate; it is
+not.) Inside it, in order:
+
+1. `102b7d4a` — `0x102b7690(1, 1, 1, 1)`, the entrenched cover / kick-prop selector; any non-zero
+   answer wins.
+2. `102b7d69` — the convar `DAT_109248f4`, read the same way as `DAT_10923d3c` above.
+3. `102b7d8a` — `m_bfAINPCFlags & DODGING (0x800)` is **consumed**, then `RandomInt(0,99)`: above
+   `0x45` advances `m_flNextDodgeTime` (`+0x65a4`) by `_DAT_10463584` (**15.0**, read out of the
+   pinned image) and answers `0x8f` (line 23891); otherwise it sets `FORCED_OCCLUDE` (`0x10000000`)
+   and answers `0x8e` (line 23884). The advance is an **add**, not a re-base on `curtime`.
+4. `102b7e12` — five terms, all required: `COND_SEE_ENEMY`; `m_flNextDodgeTime` past `curtime`;
+   `m_bfNPCFrenziedFlags` (`+0x5b84`) carrying `0x2000`; `m_bfAINPCFlags2` (`+0x14bc`) **lacking**
+   `D_INSANE` (`0x20000`); and `m_bStayEntrenched` (`+0x6435`) clear. It re-arms
+   `m_flNextDodgeTime = curtime + RandomFloat(10.0, 20.0)` and rolls again: above `0x3b` gives
+   `0x8d` (line 23909), else `0x8c` (line 23905).
+
+**Unrecovered:** the console name and default of `DAT_109248f4`, and the name of the frenzied-word
+bit `0x2000` (no name table covers `+0x5b84`; both `DoPossession`'s `0x3b1c` and `DoFrenzy`'s
+`0x9fbd` carry it, so it reads as "under one of the two AI disciplines").
+
+### `CAI_BaseNPCTroika::PreSelectIdealState` `0x102ad340`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 460, 629 bytes, and the one body that decides an NPC's ideal state ahead of `SelectSchedule`.
+`+0x1b38` is set to `2` unconditionally at entry and each arm then stamps `+0x1b3c` with
+`AI_BaseNPCTroika.cpp` and `+0x1b40` with its line.
+
+1. `102ad34f` — `m_eForcedState` (`+0x65cc`) non-zero: copied into `m_IdealNPCState` (`+0x5cc4`),
+   the forced word cleared, line 0x4495, and it is **returned** — nothing below runs.
+2. `102ad37a` — the cover timer, which is not an answer: `HasInterruptCondition(COND_SEE_ENEMY)`
+   **and** `m_flCanSeekCoverTimer` (`+0x607c`) exactly `0.0` arms it to
+   `curtime + RandomFloat(1.0, 3.0)`; otherwise plain `HasCondition(COND_ENEMY_OCCLUDED)` zeroes it.
+   The asymmetry between the interrupt test and the plain test is retail's.
+3. `102ad3c6` / `102ad3d8` — the two flee helpers `0x102ad260` and `0x102ad2d0` in that order, each
+   of which writes `m_IdealNPCState` itself and whose non-zero answer means it already did.
+4. `102ad3ef` — `HasInterruptCondition(COND_SEE_FEAR)`: the flag write is **nested**, armed only
+   while `m_NPCState` is not already `8`, and the ideal state is then written **unconditionally** to
+   `8` (line 0x44b8). (A one-line walk read the two as alternatives; the listing nests them.)
+5. `102ad429` — `HasInterruptCondition(COND_SUPERNATURAL_ATTACK_LEVEL)` gives `2`, line 0x44be.
+6. `102ad459` — `HasInterruptCondition(COND_CRIMINAL_ATTACK_LEVEL)`; with none of the above and not
+   this one, the body returns `0` **without touching the ideal state**.
+7. `102ad4d9` — the obfuscated `m_iPLCriminalLevelWitnessed` (`+0x6364`) is unscrambled inline and
+   decoded through `0x1042fe90`, then compared against the same decode of the literal `0x3cf445af`,
+   which evaluates to **2**. At or below 2, with `m_NPCState` neither `2` nor `0xe`: resolve
+   `m_hCriminalOffender` (`+0x638c`) and, when slot 404 `IRelationType` on it answers `1` (`D_HT`),
+   fall straight to the combat tail; otherwise `m_bAllowCriminalSuspicion` (`+0x65f8`) writes
+   `m_iSubState` (`+0x63f8`) to `0` and answers `0xe`, line 0x44d3.
+8. `102ad58a` — the shared tail: `2`, line 0x44cb. It is reached from four different failures.
+
+**`+0x65cc` is `m_eForcedState`, a raw `NPC_STATE`.** `0x102ae840` — the scripted-order push — takes
+an `NPC_STATE` as its first argument and stores it there beside `m_bForceStateChange` (`+0x1b28`)
+and `CHOOSE_NEW_SCHEDULE`; this slot is its only consumer and it consumes it as the ideal state.
+
+**Unrecovered:** the retail names of `NPC_STATE` `0xe` (the criminal-suspicion window) and of
+`m_iSubState`'s value space.
+
+## Hints10 — `FValidateHintType` and the Werewolf's hint endpoints
+
+_Recovered 2026-09-14, story 29d._
+
+Story 29d, family **Hints10**: which hint an NPC is allowed to use, and where a hint's far end is.
+Seven rows. The port is `Substrate/ElysiumNpcKernelHints10.{inl,cpp}`, the suite is
+`Elysium.Substrate.NpcKernelHints10.`, and every seam these bodies read through was built by story
+29c-1's family Hints (`ElysiumNpcKernelHints.inl` — there is no `CAI_Hint` on this substrate, and
+`FHintWords` is the typed view of one hint's own datamap words).
+
+### `CAI_BaseNPCTroika::FValidateHintType` `0x10295c20`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 566, `vtable +0x8d8`, the canonical Troika-line fill (~51 census classes). 544 bytes past its
+scope-trace prologue.
+
+A null hint takes the `XOR AL,AL` tail at `10295c9a`. Otherwise the body gates on the HINT GROUP
+before it looks at the type at all: `hint->m_iGroupID` (`+0x470`) AND `this->m_iHintGroups`
+(`+0x62e4`) must be non-zero. **Both words are 32-bit SETS, not ids** — one bit per group, which is
+why `0x102989e0` parses `hint_groups` into a mask and why an unauthored list is `0xffffffff`. When
+the AND is zero the body refuses, and only when the globally tracked debug NPC (`DAT_10925444`
+through `PTR_DAT_10566458`) **is this body** does it first format the two masks and `DevMsg`
+`"Hint group id %s usable %s"` (`0x105d8dd0`) onto the hint through `0x102d0ab0`. Each mask is
+rendered by a `0x20`-iteration loop that appends the format at `0x105a1814` — which the pinned image
+reads as `" %d"` — for every set bit, with the **1-based** index (`10295cf0 LEA EDX,[ESI + 0x1]`),
+so bit 0 prints `" 1"`.
+
+An admitted hint is then dispatched on `m_nHintType` (`+0x5dc`) by numeric range. Both boundaries
+that story 29d's checklist had only inferred are confirmed at the listing:
+
+| `m_nHintType` | Arm | Listing |
+|---|---|---|
+| `< 0x64` | false | `10295d92 CMP EAX,0x64 / JL` |
+| `0x64 .. 0x65` | `0x102974f0` (`IsHintCoverValidLoose`) | `10295d97 CMP EAX,0x65 / JLE` |
+| `== 0x2774` | **true**, outright | `10295dac MOV AL,1` |
+| `== 0x27d8` | `0x10297430` (`IsHintCoverValid`) | `10295d8d JZ` |
+| `> 0x27d8` and `< 0x283c` | false | `10295df2 CMP EAX,0x283c / JL` |
+| `0x283c .. 0x283d` | `0x10295ed0` (the quiet cover rule) | `10295dfd CMP EAX,0x283d / JLE` |
+| `== 0x28a0` | `0x102961a0` (the verbose cover rule) | `10295e04` |
+| anything else | false | `10295d69` |
+
+The `0x2774` accept sits **inside** the `99 < t` block, so the structure is `t > 0x27d8` /
+`t == 0x27d8` / `t >= 0x64` / else-false rather than a flat switch. All four callees were already
+ported — two by family Hints (`IsHintCoverValid`, `IsHintCoverValidLoose`) and two by family
+BaseHelpers (`FUN_10295ed0`, `FUN_102961a0`) — and this body calls them.
+
+**Port convention settled here**: the generated slot signature spells the hint `void*` because
+retail's parameter is `CAI_Hint*` and this substrate has no such entity. The `void*` **is** a
+`const FHintWords*`; a caller holding a `ScheduleHost::HintNode`-shaped index goes through
+`FValidateHintTypeNode`.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VManBat::FValidateHintType` `0x1038e480`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 566's one **replacement** body — the other eleven census overrides are constants or type ranges
+that story 29c-1 tabled. It reads neither `m_iGroupID` nor the range switch.
+
+`1038e48b`: only `m_nHintType == 20000` is considered; everything else refuses at `1038e5b3`. The
+body then decodes an obfuscated word at `m_field_0x6670` into a mode index:
+
+```
+EAX = ((word & 0x00710935) ^ 0x00148739)
+EAX = (EAX + 0x004094ab) & 0x018ef6ca
+EAX = EAX ^ word ^ 0x412a96ec
+mode = FUN_1042fbf0(EAX)                  // p ^ ((((p & 0x67c8c535) ^ 0xdcb8cc14)
+                                          //      + 0x18e71cec) ^ 0x82aa05e1) & 0x98373aca
+                                          //   ^ 0xea3e269c
+```
+
+`1038e4c7 DEC EAX / CMP EAX,7 / JA` then indexes the jump table at `0x1038e5c0`, which holds eight
+entries for modes 1..8 and sends 5, 6 and 7 to the default label. The five name templates, at their
+`.rdata` addresses in the pinned image:
+
+| mode | template | address |
+|---|---|---|
+| 1 | `ManBat Landpoint` — copied **raw** by a byte loop, no `sprintf`, no index | `0x10642c74` |
+| 2, 4 | `ManBat Divepoint %d` | `0x10642ca8` |
+| 3 | `ManBat Divepoint %d Bottom` | `0x10642c88` |
+| 8 | `ManBat Script Node %d` | `0x10642c58` |
+| default (0, 5, 6, 7, 9+) | `ManBat %d` | `0x10642c4c` |
+
+The `%d` is `m_field_0x6674`, a plain int beside the scrambled word. The built name is then matched
+against the hint's `m_iName` (`+0x26c`) with `__strcmpi`, or — when the template's last character is
+`*` — with `__strnicmp` over `strlen - 1` characters (`1038e590 DEC ECX`), which excludes the `*`
+itself. **Retail's empty-template arm is worth naming**: `1038e556`, when the built name is
+zero-length, does not compare strings at all; it loads the hint's name **pointer** into `EAX` and
+tests it for zero, so an unnamed hint matches an empty template and a named one does not. None of
+the five templates can be empty, so the arm is unreachable through this body.
+
+The descramble is invertible over the ladder's masked bits: the `+0x6670` words that produce modes
+1..8 are `0xbb2782fb`, `0xbb2782fa`, `0xbb2782f9`, `0xbb2782fc`, `0xbb2782f7`, `0xbb2782fe`,
+`0xbb2782f5` and `0xbb2782f0`, and the zero word decodes to `0xbb258278`. The suite drives the whole
+body with them.
+
+**Unrecovered:** what `+0x6670` and `+0x6674` are authored or written by. No producer in the port
+sets either, so the ported body always takes whatever the default word decodes to.
+
+### `CNPC_VWerewolf::GetHintEndEntity` `0x103d6390`
+
+_Recovered 2026-09-14, story 29d._
+
+A cache in front of `FindHintEndEntity` (`0x103d6520`, already ported by family Hints). It scans the
+record array at `+0x6714` (count `+0x6720`, stride `0x48` = 18 ints) for the row whose word at
+`+0x04` is this hint, and answers that row's word at `+0x00` — a cached `EHANDLE` to the hint's end
+entity, resolved through `PTR_DAT_10566458` with the usual `index & 0x1fff` / `serial >> 0xd` check.
+
+Two corrections. **First**, the hit arm does not answer "a second cached handle at the same slot": it
+re-reads `base[i * 0x12]`, which is the *same* word `+0x00`, and re-validates it, answering null if
+that second resolve fails. The redundancy is retail's and there is one handle. **Second**, this fixes
+the record layout story 29c-1 recorded for `GetHintGroundpoint` (`0x103d6770`): that body starts its
+cursor at `field_0x6714 + 4` (`103d6779`) and matches there too, so the hint pointer is at `+0x04`,
+the cached end entity at `+0x00`, and the groundpoint at `+0x08`. `FWerewolfHintGroundpoint` carries
+all three now.
+
+A row whose cached handle does not resolve is **skipped** by the loop guard rather than answered, so
+the scan keeps walking; a miss or an empty array falls through to `FindHintEndEntity`.
+
+**Unrecovered:** the producer that fills `+0x6714`. Nothing in the port writes it, so the fallback is
+the only arm reached.
+
+### `CNPC_VWerewolf::GetHintEndpoint` `0x103d6650`
+
+_Recovered 2026-09-14, story 29d._
+
+A null hint answers `DAT_1070d1b0/b4/b8`, and `staticinit_101370b0` writes **zero** into all three —
+it is `vec3_origin`, not "a fixed global point". Any other hint resolves its end entity through
+`GetHintEndEntity` and copies that entity's `GetAbsOrigin` (vtable `+0x364`) into the caller's
+`Vector`, **with no null check**: retail faults on a hint whose end entity does not resolve. The port
+carries a named crash guard that answers the same `vec3_origin` the null-hint arm answers.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VWerewolf::GetForwardHintForHint` `0x103d7090`
+
+_Recovered 2026-09-14, story 29d._
+
+The switch at `103d70dd` names **fourteen** hint types that are handed straight back: `15000`
+(`0x3a98`), `0x3a99`, `0x3a9c`, `0x3a9f`, `0x3aa0`, `0x3aa1` and `0x3aa3 .. 0x3aaa`. **`0x3aa2` is
+not among them** — a `0x3a9f .. 0x3aaa` run would be fifteen — and neither are `0x3a9a`, `0x3a9b`,
+`0x3a9d` or `0x3a9e`.
+
+Every other type resolves the input's end entity through `GetHintEndEntity` once, then walks the
+global hint list from its head `DAT_10925450` through the next link at index `0x176` (`+0x5d8`),
+looking for a hint whose own type is `0x3a9c` and whose own end entity is the **same object**. That
+hint is the "forward" partner. On no match the loop cursor is null, and retail `DevWarning`s with the
+format at `0x10662f98` — `"Could Not find forward hint for hint: %s (%s) \n"`, **two** `%s`, both
+supplied by `CBaseEntity::GetDebugName` — and returns that null.
+
+**Unrecovered:** the global hint list. The port's `GlobalHintList()` is a seam answering an empty
+list, so the no-match arm is the one reached.
+
+### `CNPC_VWerewolf::IsValidTeleportHint` `0x103d8300`
+
+_Recovered 2026-09-14, story 29d._
+
+Seven ordered refusals, then one negated test. In the listing's order:
+
+1. the hint is null;
+2. `field_0x66e8 & 0x4` — the same Werewolf bit word `IsImperativeTeleportHint` reads;
+3. `IsHintUnusable(hint)` (`0x102d14c0`, family Hints' three-arm rule);
+4. slot 566 `FValidateHintType` through `vtable +0x8d8` — **virtually**, so a Werewolf takes its own
+   species row (`0x103d7ce0`, 15000..15018 except 15007) and not the Troika dispatcher;
+5. the hint's type is in `0x3aa3 .. 0x3aa8`, six separate `CMP`s at `103d83c8`..`103d8430`;
+6. `hint->+0x470 == 1` **and** `field_0x66e8 & 0x40`. Note the **equality** compare against 1 on the
+   same word slot 566 treats as a bit set — retail's own asymmetry, reproduced.
+
+If every gate passes, the body resolves the hint's end entity through `GetHintEndEntity` and answers
+the **negation** of `thunk_FUN_100b5190(endEntity)`. `0x100b5190` is a seven-byte getter of `+0xf4`,
+which `docs/vtmb/npc-kernel/fields.md` names `m_bScriptHidden` — it is the script-hidden test, not an
+"entity-busy/occupied" test as the checklist walk read it. A teleport hint is valid only when its far
+end is not script-hidden.
+
+**Unrecovered:** nothing in the rule. The endpoint's `m_bScriptHidden` has no source here (there is
+no entity behind a hint node), so the port's seam answers `false`, which is the **admitting** value:
+retail negates it, so nothing is silently refused.
+
+### `CNPC_VVampireBoss::SelectHintNode` `0x103c59d0` — read as `present`
+
+_Recovered 2026-09-14, story 29d._
+
+Read again against `0x10365780`, the address the port's `FElysiumNpc::FindHintNode`
+(`ElysiumNpcKernelHints.cpp`) cites. The two retail bodies are identical arm for arm:
+`FindHintNear(hintType, flags, 5000.0, null, null)` through `0x102d1af0`, the result written to
+`m_pHintNode` (`+0x5ddc`) on **both** paths, a hit calling `0x10273e80(this, 0)`
+(`TaskComplete(false)`) and returning true, a miss writing an assert file string and line into
+`+0x1b44` / `+0x1b48` and then `vtable +0x700 (4)` (`TaskFail(4)`) and returning false.
+
+The difference is **not only the line number**, as the checklist recorded: the file string differs
+too — `0x1065ec20` `"E:\Vampire\main\dlls\hl2_dll\npc_VVampireBoss.cpp"` line `0xd1` here against
+`0x1062eadc` `"E:\Vampire\main\dlls\hl2_dll\NPC_VBach.cpp"` line `0x48a` there. Both halves are the
+same deliberately unmodelled assert pair: `ElysiumNpcKernelShapeMap.cpp` records `+0x1b44`
+**ABSENT** port-wide, a decision already accepted for the sibling body. Retail keeps two functions
+where the port has one method and both dispatch to the same observable behaviour. **`present`
+stands.**
+
+**Unrecovered:** nothing.

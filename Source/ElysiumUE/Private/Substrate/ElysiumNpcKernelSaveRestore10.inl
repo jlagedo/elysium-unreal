@@ -11,7 +11,8 @@
 //
 // The definitions are in `Substrate/ElysiumNpcKernelSaveRestore10.cpp` and the tests in
 // `Tests/ElysiumNpcKernelSaveRestore10Tests.cpp`. The walked prose is
-// `docs/vtmb/npc-ai/lifecycle.md` § "Story 29d, family SaveRestore10 — slots 126, 127, 180 and 106".
+// `docs/vtmb/npc-ai/lifecycle.md` § "Story 29d, family SaveRestore10", and the non-slot half's is
+// § "Story 29d, family Lifecycle10".
 //
 // --- What this family is --------------------------------------------------------------------------
 //
@@ -395,6 +396,11 @@ void NewscasterUpdateOnRemove();
  *  `m_bInterestingPlaceArrived` and it is the `bFireLeft` argument, which is retail's own
  *  `0x100cd660` flag. */
 void LeaveInterestingPlaceOnRemove();
+
+/** How many times the release above ran. The call is unconditional in retail — the place check is
+ *  INSIDE `0x102b53d0`, not at its call site — so this counts the Troika body's passes as well as
+ *  the releases, which is what a species arm's "did it chain?" case reads. */
+int32 InterestingPlaceReleases = 0;
 
 /** `FUN_102c0bb0` (`0x102c0bb0`), the dialogue stop `UpdateOnRemove` runs when `IsInDialog()` says
  *  yes: stop sound channel 5 on this entity, dispatch slot `0x44c` (**275**), then

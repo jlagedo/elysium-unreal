@@ -746,3 +746,465 @@ trailing arguments are never read.
 
 **Unrecovered:** the word at `entity+0x200`, which no other body in layers 0–9 reads, and therefore
 what makes an entity eligible to be forgotten.
+
+## Story 29d, family Social10 — talking, the tweak file and the dialogue packet
+
+_Recovered 2026-09-14, story 29d._
+
+Ten rows: whether an NPC will talk, what ends a line, what the tweak file may set, and what the
+dialogue packet carries. Four are `CAI_BaseNPCTroika` bodies and land in
+`Substrate/ElysiumNpcKernelSocial10.{inl,cpp}`; three are `CDialog`'s and land in
+`Public/ElysiumDlg.h` / `Private/Scripting/ElysiumDlg.cpp` under `namespace ElysiumDlgRetail`,
+because the overlay's target for all three is `FElysiumDlgConversation::EnterNpcLine`; two are
+`CBasePlayer`'s and land on `FElysiumPlayer`; and two were already `present`. The suite is
+`Elysium.Substrate.NpcKernelSocial10.` and covers all of them.
+
+### `CAI_BaseNPCTroika::CanTalk` `0x102c21c0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 295, `vtable +0x49c`, 244 bytes. One nested chain in which every failure falls out to
+`102c22ad XOR AL,AL` and only the innermost line reaches `MOV AL,1`. Sixty census classes share it;
+`CPayphone::CanTalk` (`0x101aaee0`, seven arms, story 29c-1) is the one override.
+
+The gates, in the listing's order:
+
+| # | Listing | Gate |
+|---|---|---|
+| 1 | `102c21c8` | the activator is non-null |
+| 2 | `102c21d0` | `m_iDialog` (**`+0x128`**) is non-zero — the authored `dialogname` |
+| 3 | `102c21de` | slot 158 `IsAlive()` on **this** NPC (`vtable +0x278`) |
+| 4 | `102c21ee` | the same slot 158 on the **activator** (`MOV ECX,EDI`) |
+| 5 | `102c2200` | `CBaseCombatCharacter::IsUnconscious` is false |
+| 6 | `102c220f` | `m_bScriptHidden` (`+0xf4`, through the seven-byte getter `0x100b5190`) is false |
+| 7 | `102c221e` | `m_bWillTalk` (**`+0x1088`**) is set |
+| 8 | `102c222c` | bit 2 of `m_bfNPCStateFlags` (**`+0x5b64`**) is clear |
+| 9 | `102c2239` | `m_bfAINPCFlags` (`+0x14b8`) `& 0x80000` — `NO_DIALOG` — is clear |
+| 10 | `102c2245` | `IsInDialog()` (`0x102c1170`) is false |
+| 11 | `102c2250` | the **activator's** controller test `0x10175180` is false |
+| 12 | `102c225b` | the cross predicate `0x10146b20(activator, this)` is **true** |
+| 13 | `102c2267` | `IsBusyWithDiscipline` (`0x1033e2b0`) is false |
+| 14 | `102c2272` | `m_bfAINPCFlags2` (`+0x14bc`) `& 0x10000000` — `NO_DIALOG_PERSISTENT` — is clear |
+| 15 | `102c227e` | the singleton `0x1023bd00()` is null **or** its `+0x4ac` is zero |
+| 16 | `102c2291` | slot 404 `IRelationType` is neither `D_HT` (1) nor `D_FR` (2) |
+
+**Three field names are corrected** against story 29d's checklist walk, from the listing and from
+`vtmb_fields CAI_BaseNPCTroika`: the walk gives `m_iDialog +0x5b64`, `m_bWillTalk +0x128` and
+`m_bfNPCStateFlags +0x1088`, and all three are rotated one place. The datamap puts `m_iDialog` at
+`+0x128` with `key dialogname` and `m_bWillTalk` at `+0x1088`, and `+0x5b64` is the per-state
+capability word whose bit 2 the payphone override also reads.
+
+**And gate 16's receiver is corrected.** `102c2291` is `MOV EDX,[ESI] / PUSH EDI / MOV ECX,ESI /
+CALL [EDX+0x650]` — the dispatch is on `this` with the activator as the argument, so the question is
+"what do *I* think of *you*", not the reverse. Gates 9 and 14 are also two separate tests five gates
+apart, which is why the port's `HasDialogSuppressFlag()` (which ORs the two bits) is not what either
+one reads.
+
+**Unrecovered:** three retail inputs have no source on this substrate and are seams, each answering
+the **admitting** value so nothing is silently refused — the activator's `m_hControllerNPC` state-3
+test (`0x10175180`; the port carries that word on the NPC, which
+`FElysiumPlayer::CanAttemptStealthKill` already records as a shape gap), the cross predicate
+`0x10146b20` (spec 0006 owns its producers), and the menu singleton `0x1023bd00`'s `+0x4ac`.
+
+### `CAI_BaseNPCTroika::FinishTalking` `0x102c0ca0`
+
+_Recovered 2026-09-14, story 29d._
+
+573 bytes. It **latches** `m_bIsTalking` (`+0x64c0`) at `102c0d12`, before anything is written, and
+the latched byte is what picks the notification at the very end.
+
+If `m_hDialogScene` (`+0x6554`) resolves to a live entity, the partner's `+0x498` byte — "this
+speech scene has finished its line" — splits two arms:
+
+* clear → `UTIL_Remove(partner)` (`0x101cd940`). A partner that has **not** reported done is
+  destroyed outright.
+* set → the partner's slot `0x3d4` (**245**), then `CBaseEntity::ThinkSet(partner, 0x101c0b10, 0.0)`
+  and `partner->m_flNextThink` (`+0x17c`) `= curtime + _DAT_104493d0`. That constant is **0.1**, a
+  **double**, read out of the pinned image (`102c0e29 FADD qword ptr [0x104493d0]`).
+
+Then, unconditionally and in this order (`102c0e62`..`102c0e8b`):
+
+```
+m_hDialogScene (+0x6554) = -1
+m_szDialogQue[0] (+0x64ec) = 0
+m_bIsTalking (+0x64c0) = 0
+m_flTalkEnd (+0x64cc) = curtime          // a STAMP, not a clear
+CBaseEntity::ResetScriptedSoundOverrideEnt(this)
+```
+
+The `+0x64cc` write is the fact that mattered for the port: it is a **stamp with the current time**,
+not a clear, and `CAI_BaseNPCTroika::IsTalking` (`0x102c0aa0`) compares `curtime < m_flTalkEnd`
+**strictly**, so the stamped instant already answers "not talking". Until story 29d the port carried
+`+0x64c0` and `+0x64cc` as one `TalkingUntil` stamp; this body can tell them apart, so `bIsTalking`
+is now its own member and `ElysiumNpcKernelShapeMap.cpp` binds `+0x64c0` to it. The spoken-line
+player `0x102c0520` writes both together (`102c0923 MOV byte [ESI+0x64c0],1` and
+`102c092a FSTP float [ESI+0x64cc]`), which is `FElysiumNpc::OnDialogFilePlayed`.
+
+Finally `102c0e92 TEST BL,BL` reads the **latched** byte. Both arms resolve
+`UTIL_PlayerByIndex(1)` (`0x101cd9e0`) first and do nothing when there is no player; then
+`thunk_FUN_10178120` reaches the conversation object hanging off that player and:
+
+* the latch was **clear** → `CDialog::CallPendingNPCEventScript`;
+* the latch was **set** → `CDialog::NPCNotifyDoneTalking`.
+
+`SaveRestore10`'s `StopDialogOnRemove` (`0x102c0bb0`) now **calls** this body instead of standing in
+for it with a `TalkingUntil = -1` clear.
+
+**Unrecovered:** the delivery side of the two notifications. This runtime's dialogue continuation is
+`FElysiumEntityWorld::UpdateDialogueAutomatic`, which the checklist verdicts `present` against
+`0x100e4780` arm for arm and which already runs the pending-script flush first and unconditionally;
+re-entering it from here would run the turn's continuation twice, so `FinishTalking` **records which
+of the two was asked for** and leaves the delivery to the world. The partner-side scene stop and the
+`UTIL_Remove` are counted seams: the scene player carries its own completion and exposes no
+per-entity think word to the kernel.
+
+### `CAI_BaseNPCTroika::ProcessTweakParam` `0x1029aa10`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 585, 735 bytes, the tweak-file key dispatch. Eleven `__strcmpi` compares in this order, and a
+twelfth miss reaches the ignore message.
+
+`CAPABILITIES` (`0x105d976c`) and `GOALS` (`0x105d96e8`) are **recognised**, each prints its own
+`DevMsg(2, ...)` placeholder — `"Maybe this should be in a func/input SetCapability!\n"`
+(`0x105d972c`) and `"Hey foo!  You need to implement some goals!\n"` (`0x105d96b0`) — and then
+**falls through** to `1029aa3d`, so both messages print for the same key.
+
+`NPCPERCEPTION` (`0x105d96a0`) stores `atoi(value)` into `m_iNPCPerception` (`+0x63b0`) and then
+clamps twice. Each clamp `Error`s with
+`"ProcessTweakParam:  %s - You specified an invalid NPCPERCEPTION parameter (%d).  Must be between 1
+and %d\n"` (`0x105d9620`) — the trailing `10` is a **pushed literal**, not the field — and the second
+clamp **re-reads** `+0x63b0` (`1029aabd`), so a value clamped up to 1 cannot then be clamped down to
+10. Both `0x1028fb70` (`InitPerceptionDistances`) and `0x1028fc90` then run.
+
+`VISION` (`0x105d9618`) and `HEARING` (`0x105d957c`) share one shape at `m_flSeekDistBase`
+(`+0x63b4`) and `m_flHearingScalarBase` (`+0x63bc`):
+
+```
+st0 = atof(value)
+FCOM  dword [0x104454c4]        ; the floor
+FST   dword [esi + 0x63b4]      ; the STORE happens BEFORE the branch, on every path
+JP    -> not-below, or NaN      ; skip to the recomputes
+FCOMP dword [0x104492dc]        ; the sentinel
+JNP   -> equal                  ; skip to the recomputes
+Error(...)                      ; below the floor and not the sentinel
+-> the same two recomputes
+```
+
+`_DAT_104454c4` is **0.0f** and `_DAT_104492dc` is **-1.0f**, both read out of the pinned image and
+both `FCOM`'d as `dword`, so both are floats. A negative value is still stored, `-1` is the
+derive sentinel and is exempt from the error, and `0x1028fb70` / `0x1028fc90` run on **both** the
+error path and the accepting path.
+
+The rest: `SQUAD` → `0x1029a930` (family Squad's `SetSquad`), `IPGROUPS` → `0x10298910`,
+`HINTGROUPS` → `0x102989e0`, `TPMOVETIMER` → `m_flTeleportMoveTimer` (`+0x65dc`) `= curtime +
+atof(value)` (an **absolute** time, which is how `ShouldThinkFrequently` reads the word),
+`IGNOREATTACK` → `m_bIgnoreDetectedAttack` (`+0x65f5`) `= atoi != 0`, `NOALERTSTATE` →
+`m_bNoAlertState` (`+0x65f6`) `= atoi != 0`. Every one of those nine returns from inside its own
+block, so only `CAPABILITIES`, `GOALS` and an unrecognised key reach
+`DevMsg(2, "ProcessTweakParam(%s, %s) ignored by base class.\n")` (`0x105d96f0`).
+
+**Divergence, named:** retail's `Error()` does not return, so the `NPCPERCEPTION` clamps are dead
+code in retail and the process exits. This runtime logs at `Error` level and continues to the clamp
+— a crash guard, so an authored tweak file with a bad value cannot take the game down.
+
+**Unrecovered:** nothing in the rule.
+
+### `CDialog::process_npc_line` `0x100e8100` — the two arms the port did not carry
+
+_Recovered 2026-09-14, story 29d._
+
+Two halves of this body were already ported and are unchanged: the col-4/col-5 scheduling
+(`FElysiumDlgConversation::EnterNpcLine`, which runs col-4 **now** and parks col-5) and the
+gender/clan variant selection (`FElysiumDlgLine::RawFor`, citing `get_display_text 0x100e1ad0`).
+The two that were missing:
+
+**1. The row-fetch miss.** `local_34 = this->m_iCurrentLine (+0x2830)`, then `get(this, &local_34)`.
+On a **miss** (`100e8130`) the body byte-copies the shared literal at `0x1054ca50` into the caller's
+buffer and returns 0, the "used the default" answer that makes `fill_packet` skip the response band
+entirely. The pinned image reads that cell as a **single space**.
+
+**2. `0x100e8060` is the ellipsis normaliser, not a truncate/pad.** It copies the caller's buffer
+into a local `0x800` one and runs six replace-**until-no-match** passes through `0x100e7f70`, then
+copies back. The needle table is at `0x10561a88` and the replacement table at `0x10561aa0`, six
+entries each (`iVar2` steps by 4 while `iVar2 < 0x18`):
+
+| pass | needle | `.rdata` | replacement | `.rdata` |
+|---|---|---|---|---|
+| 1 | `" . . . "` | `0x10561b3c` | `" ... "` | `0x10561b14` |
+| 2 | `". . . "` | `0x10561b34` | `"... "` | `0x10561b0c` |
+| 3 | `" . . ."` | `0x10561b2c` | **`" ... "`** | `0x10561b14` |
+| 4 | `". . ."` | `0x10561b24` | `"..."` | `0x10561b08` |
+| 5 | CP1252 `0x85` + space | `0x10561b20` | `"... "` | `0x10561b0c` |
+| 6 | bare CP1252 `0x85` | `0x10561b1c` | `"... "` | `0x10561b0c` |
+
+**Pass 3's replacement carries a trailing space**: `0x10561aa8` holds `0x10561b14`, the *same*
+pointer pass 1 uses, so a six-character needle is replaced by a five-character string that is not its
+prefix. Pass 5 runs before pass 6, so every `0x85` followed by a space is consumed first and only a
+bare one reaches pass 6, which **adds** a space. `0x100e7f70` itself replaces the first occurrence
+only, bounded by `Q_strncpy`'s size (`0x800` here, so at most `0x7ff` characters survive), and
+reports whether it replaced anything — that report is the inner loop's condition.
+
+The normaliser runs on the **NPC subtitle only**. `process_pc_line`'s own `line_copy` at `100e8875`
+has no such pass, so a PC choice keeps its authored spacing.
+
+**Unrecovered:** nothing.
+
+### `CDialog::process_pc_line` `0x100e8520` — the packet flag words
+
+_Recovered 2026-09-14, story 29d._
+
+883 bytes, one PC response row of the current NPC line. The gate, the automatic rows and
+`DisplayText(bMale, ClanOffset)` were already carried; what was missing is the pair of flag bits the
+packet carries and the return code that drives `fill_packet`'s band arithmetic. Ported as
+`ElysiumDlgRetail::ClassifyPcRow`.
+
+A row that `get` misses returns 1 outright. `CDialogDependency::Parse` then fills the packet's flag
+word at `packet + 0x2804 + i*4` and its value at `packet + 0x2814 + i*4`. Three blocks follow, and
+the second is not an `else` of the first — retail tests the two markers separately:
+
+* **Auto-End** (`thunk_FUN_100df120`) with the packet's `0x30` test (`thunk_FUN_100e84e0`) **clear**
+  and `CDialogDependency::Test` passing:
+  * `LookupSpeechFile(m_iCurrentLine)` **misses** (`100e85e0`) → the band **collapses**:
+    `m_iNumChoices (+0x2834) = 1`, slot 0's flags `0` and value `-1`, and the row still answers **1**.
+  * it **hits** (`100e8600`) → flag bit **`0x10`**, the row answers **-1**, and the row's text is
+    `Q_strncpy`'d into `+0x31ea` over `0x100` bytes.
+* **Auto-Link** (`thunk_FUN_100df1b0`) with the same two gates → flag bit **`0x20`** and the row
+  answers **1**, so the row **stays** in the band.
+* a **starting-condition** row (`thunk_FUN_100df240`) → answers **0**, which `fill_packet` drops
+  *without* raising the auto-terminate flag.
+* anything else keeps its initial **1**.
+
+**Unrecovered:** the `LookupSpeechFile` arm stays the port's named divergence
+(`ElysiumDialogueSession.h`): this runtime resolves a speech file for every line, so the
+band-collapse arm is unreachable through the conversation and is driven by its test instead.
+
+### `CDialog::fill_packet` `0x100e7da0` — the band arithmetic, and a divergence closed
+
+_Recovered 2026-09-14, story 29d._
+
+362 bytes. It clears the auto-end flag `+0x30e9`, zeroes the four `0x800` text slots from
+`packet + 0x804` and `CDialogDependency::Init`s the four dependencies at `+0x2848` stride `0x228`;
+runs `process_npc_line` and **returns when it fails**; then `get_pc_responses` into `+0x2838` with
+the count stored at `+0x2834`, and walks the rows.
+
+The index handed to `process_pc_line` is `iVar8 - iVar5` — the loop counter **minus the number
+already dropped** — a **compacting** index, so a surviving row lands in the packet slot immediately
+after the last survivor rather than at its own ordinal. A `-1` answer raises `+0x30e9` **and**
+increments the dropped count; anything below 1 increments it too. The stored count is then reduced by
+the dropped rows.
+
+Finally, at `100e7e9a`, when `+0x30e9` is **clear** and that count is **zero**, the packet's NPC text
+is overwritten with `"I do not have a valid reply."` (`0x1056368c`), slot 0's flags are set to 0 and
+its value to `-1`, and `m_iNumChoices` is forced to 1.
+
+**The port's divergence is closed.** `ElysiumDlg.cpp` gated that fallback on `CandidateRows > 0` —
+"a band that authored no PC rows at all is terminal by design and keeps the authored line". Retail
+has no such gate: `get_pc_responses` answers 0, the drop loop never runs, the count is zero and the
+substitution fires. The gate is removed and `CandidateRows` with it. `ElysiumDlgRetail::FillPacketBand`
+is the arithmetic, tested arm by arm.
+
+**Unrecovered:** nothing.
+
+### `CBasePlayer` `0x1017c600` — the barter/loot window opener
+
+_Recovered 2026-09-14, story 29d._
+
+Read off the listing, because the decompiled C folds the target pointer and the loot byte into one
+parameter. `RET 0x14` — five stack arguments past `this`: the target NPC, the loot byte and three
+ints.
+
+```
+1017c617  this->+0x1eb8 = engine->vtbl[+0x8c](target->edict +0x2e0)    ; the entity index
+1017c629  this->+0x1ec0 = loot_byte
+1017c642  loot == 0 -> CBaseCombatCharacter::SyncVendorInventory(target, a, b, c)
+                       and select "showbarter\n"   (0x10587ef4)
+1017c650  loot != 0 -> 0x10324080(target)          ; the corpse-loot inventory build, NO extra args
+                       and select "showloot\n"     (0x10587ee8)
+1017c669  engine->vtbl[+0xf4](engine, this->edict +0x2e0, cmd)         ; ClientCommand
+```
+
+The window is opened by a **console command on the player's own edict**, never by a direct call, and
+both command strings carry a trailing newline.
+
+**Unrecovered:** this runtime has no barter or loot window (spec 9.8b owns barter and containers) and
+no `showbarter` / `showloot` console command. The two branch calls are counted seams and the selected
+command is recorded on the player rather than dispatched into a handler that would answer nothing.
+The three extra arguments' meaning is unrecovered; they are carried rather than dropped.
+
+### `CBasePlayer` `0x10183120` — `RescaleActiveDisciplineDurations`
+
+_Recovered 2026-09-14, story 29d._
+
+**Retargeted and the walk is corrected.** The checklist calls this `FElysiumNpc::RebaseClassStatArray`
+and "a time-rebase of 17 stored per-condition timers … exact semantics unresolved". It is not an NPC
+body at all: `vtmb_fields CBasePlayer` names `+0x1adc`
+**`m_flClientVActiveDisciplineDurations[17]`**, the client-side mirror of each compiled Discipline's
+running duration — seventeen wide because that is `stats.txt`'s Discipline count.
+
+`1018312a CMP EAX,[ESP + 0x28] / JZ` skips the whole body when the first two arguments are
+**pointer-equal** — a no-op guard, not a value compare. Otherwise, for each of the seventeen slots:
+
+* find the class-info entry in the list at `+0x13bc` / `+0x13c0` whose type tag (`+0x10`) is **3** —
+  the Discipline stat list — or lazily construct the global `CVStatList_t` singleton at
+  `DAT_109f0b40` (guarded by the `DAT_109f0b2a` bit-0 latch and registered with `_atexit`);
+* `thunk_FUN_102012d0(list, i)` — does the list carry slot `i`;
+* build a `CVStat` key `(3, i)` with `0x10230f00`, test membership with
+  `thunk_FUN_100ce450(&DAT_106e7050, this, &key)` and read the stored value with
+  `thunk_FUN_100ce600(&DAT_106e7050, &value)`;
+* then, at double precision (`101831e4 FLD dword / FSTP qword` widens the stored float before the
+  subtraction):
+
+```
+remaining = value - engine->vtbl[+0x1dc]()        ; 101831fd FSUBR
+elapsed   = slot  - remaining                     ; 10183201 FLD / FSUB / FSTP
+delta     = remaining * arg2 / arg3               ; 10183209 FMUL / FDIV  (the divide is unguarded)
+if (thunk_FUN_100ce630(&DAT_106e7050, delta))     ; 1018321a
+    slot = elapsed + delta                        ; 10183223
+```
+
+So it is a **duration rescale**: the elapsed part of each running Discipline is kept and the
+*remaining* part is scaled by `arg2 / arg3`.
+
+**Unrecovered:** `DAT_106e7050`, the per-(player, stat) record registry. This runtime's active
+Discipline state is an absolute `EndTime` per slot on `FElysiumDisciplineState`, not a duration
+mirror, so `+0x1adc` is declared at retail's width and written only by this body and by its test; the
+record lookup is a seam answering nothing, so no slot is rewritten today. The bounds test
+`0x100ce630` is a seam answering **true**, the admitting value.
+
+## Story 29d, family SpeciesMisc10 — the Newscaster's story queue, the cop's pursuit latch and the Sabbat leader's round record
+
+_Recovered 2026-09-14, story 29d._
+
+The relationship, dialogue and player-record half of this family's forty-one rows. The per-species
+words and the spawn-side bodies are in [`shape.md`](./shape.md) and [`lifecycle.md`](./lifecycle.md)
+under the same family header.
+
+### `CNPC_VNewscaster::LoadNewscasterStories` `0x103a0ab0`
+
+_Recovered 2026-09-14, story 29d._
+
+**The class attribution and the file paths are both corrections.** The reading batch filed
+`0x103a0670` and this body under the Ming Xiao family; they are `CNPC_VNewscaster`'s, and the two
+words they load (`+0x665c` / `+0x6670`) are the queues `0x103a0d50` tears down and `0x103a0ff0`
+prints. And `0x1064aadc` / `0x1064aac0` are **format strings** — `"%sNewscaster_Main.txt"` and
+`"%sNewscaster_Side.txt"` — handed to `UTIL_VarArgs` (`0x101d3730`) with the single vararg
+`"vdata\system\"` at `0x105a0f80` (`103a0ac2`). The files are `vdata/system/Newscaster_Main.txt` and
+`vdata/system/Newscaster_Side.txt`; the earlier walk read the `%s` as a `\s`.
+
+The body, in order:
+
+1. `103a0abd` — tear BOTH queues down through `0x103a0d50` first, so a reload never appends.
+2. `103a0ac2` — build the main path and open it as `KeyValues` (`0x101f2e20` against the filesystem
+   at `DAT_1070b238`).
+3. `103a0aef` — `GetFirstSubKey()` then `GetNextKey()`: every child of the file's one top-level
+   block, in authored order. Each key zeroes a ten-word `0x28` scratch row (`103a0b00`), fills it
+   with `0x103a07f0`, and is appended **only when that answers true** — growing the array through
+   `0x103a1320` when the new count would exceed the allocation at `+0x6660`, republishing the base
+   pointer to `+0x666c`, bumping the count `+0x6668`, memmoving the tail in `0x28` strides and
+   copying the ten words into the new slot.
+4. `103a0ba7` — the `KeyValues` release runs **unconditionally** after the block, so a missing file
+   dereferences a null (`MOV ECX,[EDI+4]` with `EDI == 0`). Retail faults there.
+5. `103a0bb8` — the identical sequence verbatim for the side file into `+0x6670` (allocation
+   `+0x6674`, count `+0x667c`, base mirror `+0x6680`).
+6. `103a0cae` — `m_bStoriesLoaded` (`+0x6690`) = 1, last.
+
+**`0x103a07f0`, the per-`Story` parser, and the `+0x24` correction.** `103a0803` requires the key's
+name to CONTAIN `"Story"` (`strstr`), warning `"Newscaster: invalid key! (%s)"` otherwise.
+`103a081f` reads the story's name as `GetString("Name", "STORY")`, so an unnamed story is literally
+`STORY`. `103a0872` finds the first `Version` subkey and walks siblings from it, reading
+`dependency` and `filename`; a fifth version warns `"Newscaster: too many versions in %s! skipping
+%s"` (`103a08ba`) and the version counter advances **only inside the filename block** (`103a0954`),
+so a version with a dependency and no filename occupies no slot. The four slots are
+`+0x04`/`+0x08`, `+0x0c`/`+0x10`, `+0x14`/`+0x18` and `+0x1c`/`+0x20`, which is what `0x103a0d50`'s
+nine-handle release walk (`i = 0; i < 0x20; i += 8`) is counting.
+
+The tail (`103a098d`..`103a0a0b`) is the fact the play body depends on: the parser walks the stored
+versions in order, and the FIRST whose `dependency` is null, empty, or evaluates non-zero through
+`0x1000134d` — `PyRun_String(src, Py_eval_input, __main__, __main__)`, the same interpreter every
+dlg condition uses — has its **index** stored at `+0x24` and the record answers true. A record whose
+every dependency is false frees its strings and answers **false**, and never reaches a queue. So
+`+0x24` is not a version count; it is the chosen version, and `record + 8 + selected * 8` is that
+version's filename.
+
+The authored data bears it out: `vdata/system/newscaster_main.txt` is a `NewsData` block of `Story`
+children whose `Version` rows carry dependencies like `G.Story_State < 15 and not IsPCMalk()`.
+
+**Unrecovered:** nothing in this body. The port refuses a missing file with a named log rather than
+faulting, which is a crash guard and the one divergence here.
+
+### `CNPC_VNewscaster::PlayNextNewscasterStory` `0x103a0670`
+
+_Recovered 2026-09-14, story 29d._
+
+No slot; one direct caller. In order:
+
+1. `103a0678` — with `m_bStoriesLoaded` clear, `0x101cd9e0(1)` — `UTIL_PlayerByIndex(1)`, whose own
+   body checks the index against `gpGlobals->maxClients`, the edict's free byte `+0x4c` and its
+   `+0x40` unknown — must answer an entity. **A missing player returns WITHOUT loading**, so the
+   next call tries again.
+2. `103a069b` — seed BOTH cursors with `RandomInt(0, count - 1)`.
+3. `103a06c8` — `IsInDialog` (`0x102c1170`) refuses the whole rest of the body.
+4. `103a06dd` — `count0 + count1` zero does nothing.
+5. `103a06ef` — `RandomInt(0, count0 + count1)`, an **inclusive** upper bound, so the roll can equal
+   the sum; `m_bPlayMainStory` (`+0x668c`) is 1 below `count0` and 0 otherwise.
+6. `103a0719` — a **zero** `+0x668c` or an empty main queue advances the SIDE cursor `+0x6688`
+   modulo `+0x667c`, returning early on an empty side queue; anything else advances the MAIN cursor
+   `+0x6684` modulo `+0x6668`.
+7. `103a0789` — `base + i*0x28 + 8 + record[+0x24]*8` — the selected version's filename — is played
+   through `0x102c0520` when it is non-null.
+
+**Note a retail inconsistency, not a port error.** This body reads `+0x668c` non-zero as "the MAIN
+queue"; the debug overlay `0x103a0ff0` highlights a MAIN row when `+0x668c == 0`. Both are in the
+image and both are reproduced.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VCop::vfunc597` `0x10372cc0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 597's species body, and a prologue: it adds two things in front of the Troika base
+`0x102b4fb0`, which then runs unchanged.
+
+`10372ce6` gates the whole prologue on the argument being the very entity `m_hClosestPlayer`
+(`+0x628c`) resolves to. Inside, when `m_hPursuitPlayer` (`+0x6664`) does **not** resolve to a live
+entity **and** `GetState()` (slot 464) is `2` COMBAT, the latch takes the argument's `+0xa8` and
+stores that object's handle, writing `0xffffffff` when it is null. **`+0xa8` is `m_pPlayer`, the
+player self-downcast cache** — the earlier walk called it "the argument's troika sub-object", so
+what is latched is the PLAYER's own handle and nothing else can ever be. Then, unconditionally for
+that same argument, `InputSetRelationship` (`0x10273790`) with the literal `"Player D_HT 10"` at
+priority argument 0 (`10372d5b`) — capital `P`, unlike `CNPC_VGuard1`'s literal below.
+
+`CNPC_VGuard1`'s hate latch (`0x1037e2d0`, 20 bytes) is the same write from the other side: set the
+byte at `+0x6660`, then `InputSetRelationship("player D_HT 10", 0)` — **lower case** `player`. It is
+reached from `OnStateChange` (`0x1037d020`) and six times from `vfunc461` (`0x1037d290`), so a
+provoked guard permanently reclassifies the player as hated at disposition priority 10 and latches
+that it has done so.
+
+**Unrecovered:** nothing.
+
+### `CNPC_VSabbatLeader::RecordPlayerHealth` `0x103aaa80` and `::PlayerDamagedEnoughThisRound` `0x103aabc0`
+
+_Recovered 2026-09-14, story 29d._
+
+A pair with one shared read. Both resolve `m_hClosestPlayer` (`+0x628c`) as a live `EHANDLE` and
+walk that player's class-info list (`+0x13bc` count, `+0x13c0` table) for the entry whose type tag
+`+0x10` is 0, falling back to the lazily constructed `CVStatList_t` singleton `DAT_109f0b40` (guarded
+by bit 0 of `DAT_109f0b2a` and registered with `_atexit`), then read stat `0x0f`.
+
+**Stat `0x0f` is the accumulated WOUND counter, not current health.**
+`CBaseCombatCharacter::HealthToPercent` (`0x1032fe60`) computes
+`((stat0x11 - stat0x0f) * m_iMaxHealth) / stat0x11`, so `0x11` is the cap and `0x0f` rises with
+damage. `RecordPlayerHealth` therefore snapshots the player's damage TOTAL into `m_LastPlayerHealth`
+(`+0x66cc`) at the start of a round, and does **nothing at all** without a live closest player — the
+mark keeps its previous value rather than resetting.
+
+`PlayerDamagedEnoughThisRound` answers false without that player, and otherwise
+`_DAT_104c3ce0 <= (float)(stat0x0f - m_LastPlayerHealth)`. `_DAT_104c3ce0` is **2.0f**, read at file
+offset `0x4c3ce0` of the pinned `vampire.dll` (bytes `00 00 00 40`; the same pass re-reads
+`_DAT_104ce8c0` as `1e-05` and `_DAT_104454c4` as `0.0`, both matching values the port already
+records, which validates the mapping). So the name is literal: the player's wound counter must have
+risen by at least two since the mark.
+
+**Unrecovered:** nothing in this family's social half.

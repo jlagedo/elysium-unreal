@@ -490,18 +490,29 @@ namespace ElysiumActionTables
 		ArmedAlert,
 		// Outside that branch. Not the negation of a *predicate* — it is the other arm of the same
 		// recovered branch, and it is spelled separately so a row reads as the branch it sits in.
+		// **BOTH arms require an active weapon** (story 29d, family Anim10): `0x103854f0`'s
+		// no-weapon early-out clears `m_bAggressiveAnims` and jumps to the Troika body with the
+		// request UNCHANGED, so an unarmed body answers neither and reaches no row here.
 		NotArmedAlert,
 		// The active weapon's `+0x5a0` result carries `0x6000`, which is what turns an idle request
 		// into an aim inside the armed/alert branch.
 		RangedAimCapable,
 		// `+0x14bc & 0x80000`, the Troika class-translation's laugh-idle gate.
 		LaughIdleFlagged,
-		// The class's own form bit — `+0x14b8` on `CNPC_VHengeyokai`; the recovered reading for
-		// `CNPC_VTzimisce` names the bit only as "its form bit".
+		// The class's own form bit. `m_bfAINPCFlags` (`+0x14b8`) bit 5 `CARRYING_BODY` on
+		// `CNPC_VHengeyokai` (`0x10381c80`) and `CNPC_VTzimisce` (`0x103be130`); the byte `+0x6672`
+		// on `CNPC_VTzimisceRunner`, whose slot-375 body tests it for NON-ZERO. Story 29d.
 		FormBit,
-		// `CNPC_VTzimisce`'s `+0x6688` selects the `_L` body variant.
+		// `CNPC_VTzimisce`'s `m_bHeavyBodyTarget` (`+0x6688`) is **ZERO**. Story 29d read
+		// `0x103bde40` at the listing: the `== ' '` arm is the one that answers `0xfd`/`0xff`, the
+		// `_L` variants, and the non-zero arm answers the plain `0xfc`/`0xfe`. The earlier comment
+		// stated the opposite polarity; the ids in the generated rows were always right.
 		BodySideLeft,
-		// `CNPC_VTzimisceRunner`'s `+0x6672` equals the row's `Operand`.
+		// **UNUSED.** `CNPC_VTzimisceRunner`'s `+0x6672` equals the row's `Operand` — which is not
+		// what `0x103c3e10` does. Story 29d re-read it: retail tests the byte for non-zero (which is
+		// `FormBit`) and switches on the INCOMING activity, so the runner's rows are keyed that way
+		// now and no row carries this. Kept in the vocabulary because its index is part of the
+		// generated `Count` and nothing is served by renumbering eighteen predicates.
 		RunnerVariantIs,
 		// The cover context type equals the row's `Operand`.
 		CoverContextIs,

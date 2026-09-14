@@ -138,10 +138,15 @@ struct FElysiumScriptedScheduleOrder
 
 	// Story 29c-1, family Schedule. `0x102ae840` writes a bare `int` into `+0x65cc` — the offset
 	// the shape map binds to THIS struct ("the forced state travels with the pushed order") — beside
-	// `m_bForceStateChange` and `CHOOSE_NEW_SCHEDULE`. It is the director's own order id, not a
-	// schedule number and not this struct's `Mode`, so it is recorded by its retail offset and read
-	// by nothing yet.
-	int32 RetailOrderId = 0;  // +0x65cc, the word `0x102ae840` stamps
+	// `m_bForceStateChange` and `CHOOSE_NEW_SCHEDULE`.
+	//
+	// **CORRECTED, story 29d, family Combat10.** 29c-1 read it as "the director's own order id, not
+	// a schedule number", read by nothing. It is `m_eForcedState`, a raw retail `NPC_STATE`:
+	// `0x102ae840(this, NPC_STATE, bForce)` stores its FIRST argument here, and slot 460
+	// `PreSelectIdealState` (`0x102ad340`, `102ad34f`) is its ONE consumer — it copies the word into
+	// `m_IdealNPCState`, clears it, and returns it ahead of every other arm.
+	// `FElysiumNpc::ForcedNpcState` / `ClearForcedNpcState` are the accessors that say so.
+	int32 RetailOrderId = 0;  // +0x65cc m_eForcedState, the word `0x102ae840` stamps
 
 	bool IsSet() const { return Mode != 0; }
 	void Reset() { *this = FElysiumScriptedScheduleOrder(); }

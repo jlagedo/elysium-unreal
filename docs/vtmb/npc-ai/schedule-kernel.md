@@ -1094,3 +1094,322 @@ stamps the ASSERT file/line pair at `+0x1b44`/`+0x1b48` with line `0x3d9c` and r
 entity's own vtable `+0x700` — slot 448, `TaskFail` — with code `0x1d`.
 
 **Unrecovered:** the argument's type, and therefore what `+0x04` is and what the two middle calls do.
+
+## Story 29d, family Motor10 — `CAI_Motor`, `CAI_Navigator`, the standoff goal and the hull probe
+
+_Recovered 2026-09-14, story 29d._
+
+Twelve bodies of layers 10–18: the two `CAI_Motor` step bodies and the helper between them, the
+navigator's `MoveNormal` and its gate, the standoff behaviour's activity translation, the standoff
+goal entity's two inputs and its `UpdateOnRemove`, the two hull-size bodies, `CAI_TestHull::Spawn`
+and the shoot target. Movement is the schedule kernel's concern and they land here together.
+
+Only ONE of the twelve fills a Troika-line slot (`0x102984a0`, slot 531). The rest fill slots on
+their own object's vtable — `CAI_Motor`'s 21-slot table, `CAI_Navigator`'s 18-slot table,
+`CAI_StandoffBehavior`'s 29-slot behaviour table and `CAI_StandoffGoal`'s 246-slot
+`CBaseEntity`-line goal entity — or no slot at all.
+
+**Ten constants, all read out of the pinned image.** `_DAT_10449270` **0.5** (double),
+`_DAT_104454c0` **1.0f**, `_DAT_104454c4` **0.0f**, `_DAT_104493d0` **0.1** (double),
+`_DAT_1044fab0` **0.0**, `_DAT_1044e658` **0.01** (double — `lifecycle.md` lists it as unrecovered
+and this is its value), `_DAT_10451acc` **64.0f**, `_DAT_10449258` **3.0f**, `_DAT_104994e0`
+**-30.0f**, and the sweep's inline `0x42c80000` = **100.0f**.
+
+### `CAI_Motor::MoveGroundExecute` `0x102e14a0` and its walk `0x102e1560`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 19 of `CAI_Motor`'s own table, which no class overrides, and it **returns** the value of
+`0x102e1560` — `CALL 0x10012116; POP EDI; POP ESI; POP ECX; RET 0xc` leaves `EAX` alone, so the
+decompiler's `void` signature is wrong. Four statements: motor slot 18 `MoveFacing` on the goal
+first; `flIdealSpeed = GetCurSpeed()` (`0x102e12c0`, whose whole body is `JMP [[owner]+0x3e0]`, the
+owner's slot 248 `GetIdealSpeed`); `step = (|m_vecVelocity| + flIdealSpeed) * m_flMoveInterval *
+0.5`, with the 0.5 a **double** the x87 widens; then `0x102e1560(goal, speed, step, arg2, arg3)`.
+The last two arguments are slot 19's **own** second and third stack words — the `AIMoveTrace_t` out
+param and the trace filter — which the decompiler mis-attributes as `param_1` and `param_2`.
+
+`0x102e1560` is the walk. `step <= goal->maxDist` (`+0x28`) zeroes `m_flMoveInterval` (`+0x30`) and
+leaves the step alone; otherwise the goal flag `0x2` (`+0x38`) zeroes the interval outright and
+anything else scales it by `1.0 - maxDist/step`, and either way the step is clamped down to
+`maxDist`. The polarity reads backwards until one remembers that `m_flMoveInterval` is the time
+REMAINING: a step that fits inside the goal consumes the whole interval. Then `m_vecVelocity`
+(`+0x3c`) is set per axis to `goal->dir * speed`. A step strictly above `_DAT_1044fab0` (**0.0**)
+builds `end = slot 220 GetOrigin() + step * dir` and goes through `0x102e0bd0` with the goal's
+expected blocker (`+0x34`); a **zero** answer dispatches motor slot 10 (`+0x28`) and returns 0,
+anything else is returned verbatim. A step at or below the epsilon asks the LOCAL NAVIGATOR instead
+— `(*(motor+0x10))->slot 6 (+0x18)(goal)` — and folds its answer to `1` / `0`.
+
+**Unrecovered:** what motor slot 10 is, and what `0x102e0bd0`'s five trailing arguments mean past
+the two this body supplies.
+
+### `CAI_Motor::MoveGroundStep` `0x102e1760`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 20, three stack arguments — the `AILocalMoveGoal_t`, an `AIMoveTrace_t` out param and a trace
+filter. Motor slot 18 `MoveFacing` first, on the goal. Then `m_vecVelocity = goal->dir *
+GetCurSpeed()`, and `step = (sqrt(v dot v) + speed) * m_flMoveInterval * 0.5` over the velocity just
+written. The clamp is slot 19's: `FCOMP; FNSTSW AX; AND EAX,0x4100; JNZ` tests C3 and C0, so
+`step <= maxDist` zeroes the interval and leaves the step, and anything else scales the interval by
+`_DAT_104454c0 (1.0) - maxDist/step` and clamps the step to `maxDist`.
+
+The start point is **slot 220 `GetOrigin`** (`vt+0x370` on the outer at `+0x4`), not slot 217
+`GetAbsOrigin`. `VectorMA(origin, step, dir)` builds the endpoint, a 14-dword (0x38-byte) record is
+zeroed, and the hull trace `0x102e6d70` on the motor's `+0x68` fills it with kind **2**, mask
+**`0x202400b`**, extent **100.0** and this body's third argument as the filter.
+
+**The record is copied into the SECOND argument — the caller's `AIMoveTrace_t` — and the move goal
+is never written back.** `EBX` is argument 1 and `EDI` is argument 2 and the listing reads them
+separately (`MOV EDI,[ESP+0x78]` at `102e1890`). The copy runs only when that pointer is non-null,
+and it writes `+0x00`, `+0x04`, `+0x08`, `+0x0c`, `+0x10`, `+0x14`, `+0x18`, `+0x1c`, `+0x20`,
+`+0x24`, the `EHANDLE` at `+0x28` through its assignment operator, and `+0x34`. **`+0x2c` and
+`+0x30` are not copied.**
+
+The answer. `|trace->flTotalDist (+0x24) - step| <= 0.1` (`_DAT_104493d0`, a double; `TEST AH,0x41;
+JP` makes it `<=`) opens the `4` / `0` pair — and **`return 4` additionally requires the goal's
+expected blocker (`+0x34`) to be NON-ZERO** (`MOV EBX,[EBX+0x34]; TEST EBX,EBX; JZ -> return 0`)
+before `trace->pObstruction (+0x1c)` is compared against it. A zero blocker or a mismatch answers
+0. Otherwise the body calls `0x101cf5c0` on the outer with `trace+0x04` and flag 1, and answers
+`1 + 2 * (trace->fStatus (+0x00) < 0)`.
+
+**`0x101cf5c0` is `UTIL_SetOrigin`, not `NDebugOverlay::Line`.** Its body is
+`entity->slot 62 (+0xf8) SetLocalOrigin(vec)` and then `PhysicsTouchTriggers()` when the third
+argument is non-zero, and `../npc-kernel/layout.md`'s `m_vecGrappleSavedOrigin` row already names it
+"the SetAbsOrigin helper". So the last arm of `MoveGroundStep` **moves the body to the trace
+endpoint**; it is the step, not a debug draw.
+
+The `AIMoveTrace_t` layout comes from `0x102e6d70`'s own initialiser, which writes by index before
+it dispatches on the kind: `[0] fStatus = 0`, `[1..3] vEndPosition = *start`, `[4..6] vHitNormal =
+vec3_origin`, `[7] pObstruction = 0`, `[9] flTotalDist = 0`; every arm answers `fStatus >= 0`.
+
+**Unrecovered:** `AIMoveTrace_t`'s `+0x2c` and `+0x30`, and `0x102e6d70`'s fifth and seventh
+arguments (both `0` at this call site).
+
+### `CAI_Navigator::MoveNormal` `0x102efaa0` and its gate `0x102efd50`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 12 of `CAI_Navigator`'s own table, under a `"CAI_Navigator::MoveNormal"` scope-trace frame
+that is pushed and popped on every exit. **It returns an `AIMoveResult_t`, not a distance.** The
+gate's refusal is `MOV EAX,0xfffffffc` = **-4 `AIMR_ILLEGAL`**, which the decompiler prints as
+`-NAN` only because it typed the return `float`; the ideal-speed arm answers `XOR EAX,EAX` = **0
+`AIMR_OK`**; and every other exit is the enact's own answer, carried in `EAX` throughout.
+
+In order. The gate `0x102efd50`: it reads the CURRENT route's nav type (`thunk_FUN_1030bc00` over
+`nav+0x30`) and the navigator's own (`nav+0x18`); a GROUND route under a non-ground nav type
+DevMsgs `"Warning: NPC appears to have wro…"`, runs `m_pMotor`'s slot 8 for nav type **1** or its
+slot 5 for nav type **3** (and neither for any other value), and resets the nav type to 0 through
+`0x102eeba0`; a route type of **2** under a nav type that is not 2 is the ONE refusal, and it
+happens without the `0x102f13d0` call and without clearing `nav+0x51`. Everything else calls
+`0x102f13d0(nav, 0)`, clears `nav+0x51` and passes.
+
+Then navigator slot 16 (`+0x40`) is offered the move with a result **seeded to `-4`** before the
+call; when it answers true that seeded-or-overwritten value is returned. Otherwise: owner slot 248
+`GetIdealSpeed`, then `m_Activity` (`+0xfec`), `m_nSequence` (`+0x6f0`) and slot 217
+`GetAbsOrigin()` are saved, in that order; the route's movement activity (`0x102ee3f0` =
+`nav->+0x30->+0x2c`) is pushed through owner slot 310 `SetActivity`; and `GetIdealSpeed` is read
+again — `speed <= _DAT_104454c4` (**0.0f**, and it is `<=`, not `<`) together with `m_Activity == 2`
+answers **0**.
+
+A 14-dword block and then a 31-dword block are zeroed, and **the second covers the first**
+(`[E0-0x7c, E0)` contains `[E0-0x38, E0)`) — retail's own redundancy. Navigator slot 17 (`+0x44`)
+builds the move info and navigator slot 15 (`+0x3c`) enacts it, with the block pushed LAST so it is
+the first parameter and this function's own stack word the second. A non-zero answer is returned.
+
+On `AIMR_OK` the restore runs, and it is **two independent tests**, not one: the first is on the
+ideal speed SAVED before `SetActivity` (`FLD [ESP+0x14]` at `102efc11`) against `_DAT_1044e658`
+(**the double 0.01**), the second on how far the body actually moved against the same constant.
+Both are `TEST AH,5; JP`, a strict `<` with NaN taking the skip. Inside both, `m_nSequence` is
+written DIRECTLY (not through a setter) and the saved activity is re-issued through slot 310. The
+tail — navigator slot 6 (`+0x18`) when `nav+0x51` is clear — runs whether or not the restore did.
+
+**Unrecovered:** what `m_pMotor`'s slots 5 and 8 are, what `0x102f13d0` does, what `nav+0x51` is
+called, and the shape of the 31-dword block past what slot 17 fills.
+
+### `CAI_BaseNPCTroika::OnObstructingDoor` `0x102984a0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 531 on the Troika line; the `CAI_BaseNPC` line carries `0x1027dc80` at the same slot and
+neither calls the other. `bool OnObstructingDoor(AILocalMoveGoal_t*, CBaseDoor*, float distClear,
+AIMoveResult_t*)`.
+
+**`m_hOpeningDoor` is `+0x5d24`.** `LEA EBP,[EDI+0x5d24]` at `102984e7` is the handle this body
+reads and writes; `+0x644c` is `m_eAlternateAI` and `+0x6450` is `m_flAlternateAIExpireTimer`.
+
+A NULL door `DevMsg`s `"**WARNING** No door given to OnUpcomingDoor() **WARNING**"` — the retail
+NAME in the literal is `OnUpcomingDoor` — and answers false. The gate is
+`moveGoal->maxDist (+0x28) >= distClear`, and because it is `FCOMP; TEST AH,5; JNP` an UNORDERED
+compare also runs the body. Every exit not named "true" below answers FALSE.
+
+1. The door already in `m_hOpeningDoor` → `*result = 0`, `0x100f0e70(door)`, **true**.
+2. The squad's focus door (`GetSquadFocus 0x103166b0` over `+0x5da4`, under
+   `m_iSquadDisconnected (+0x5bb0) <= 0 && m_pSquad != 0`) → `*result = -2`,
+   `0x100f0e90(door, 1)`, **true**.
+3. Slot 464 `GetState() == 4` (`NPC_STATE_SCRIPT`) with slot 513 `CapabilitiesGet()` NOT carrying
+   the full `0xd00`: when `distClear < _DAT_10451acc` (**64.0f**, a strict `<`) it runs
+   `StopScheduledMove 0x102bf770`, sets `m_eAlternateAI = 4`, `m_flAlternateAIExpireTimer = curtime
+   + _DAT_10449258` (**3.0f**) and `m_hOpeningDoor = door->GetRefEHandle()`; and **either way**
+   `*result = 0`, `0x100f0e70(door)`, **true**.
+4. `0x1027f550(this, door)` refusing → `*result = -2`, `0x100f0e90(door, 4)`, **true**.
+5. `TEST AH,0xd` — **ANY** of `0xd00`, not all of it. With none set the body answers FALSE having
+   written nothing at all.
+6. The door's slot 246 (`+0x3d8`) is asked for a nav position with `(door->+0x4f8 == 2)` as its
+   third argument. A `-1` answer writes `0` **through the RESULT pointer** — `MOV EDX,[ESP+0x3c]`
+   at `10298725` is argument 4, not the move goal the decompiler names — clears the door and
+   answers **true**.
+7. Otherwise `CAI_Pathfinder::BuildLocalRoute` (`0x10304130`, the VProf scope at `0x10611514`
+   names it) is asked from slot 217 `GetAbsOrigin()` with flags `0x30`, hull `-1`, `1`, `0.0`, `0`.
+   FOUND stamps `door->GetRefEHandle()` into `waypoint+0x24` and splices at `nav->+0x30 + 0x24`
+   through `0x10319f30`; a FAILED splice falls straight out with **false** and no further write,
+   and a successful one sets `m_hOpeningDoor`, sets `m_bOpeningDoorWait (+0x5d30) = (door->+0x4f8
+   == 2)` and writes **`moveGoal->maxDist = distClear`** (`MOV [ECX+0x28],EAX` at `10298722`, with
+   `ECX` argument 1 and `EAX` argument 3) before falling into the arm-6 exit.
+   NOT FOUND gives up with `0x100f0e70` and **false** for `door->+0x4f8` of 0 or 2; for any other
+   value it sets `m_hOpeningDoor = door` and tries `0x10298840`, whose FAILURE writes `-2` with
+   `0x100f0e90(door, 0x40)` and answers **true** and whose SUCCESS resets `m_hOpeningDoor` to
+   `0xffffffff`, calls `0x100f0e70` and answers **FALSE**.
+
+The two door helpers are one word each: `0x100f0e70` is `door->+0x644 = 0` (eleven bytes) and
+`0x100f0e90` is `door->+0x644 |= bits`. `0x1027f550` is four arms — a null door answers false with
+**no** flag write; `(CapabilitiesGet() & 0xd00) != 0xd00` ORs `0x8`; `door->+0x640 > curtime` ORs
+`0x10`; otherwise true.
+
+**Unrecovered:** what door slot 246 is called, what `+0x644`'s bits `0x1`, `0x4`, `0x8`, `0x10` and
+`0x40` are NAMED, and the waypoint record `0x10304130` returns past its `+0x24`.
+
+### `CAI_StandoffBehavior::TranslateActivity` `0x102c79e0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 22 of the behaviour's own table. `this+4` is the owner NPC and `this+0x1c` is the posture word
+family Lifecycle's `FStandoffWords::Posture` carries. Arms in retail's order:
+
+1. The owner's `m_pHintNode` (`+0x5ddc`) existing with `m_nHintType` (`+0x5dc`) == `0x65`: owner
+   slot 569 (`+0x8e4`) is read into a local, read **again** to replace an incoming activity of `1`,
+   and then `+0x1c = 2` when `+0x1c` was `0` **and the FIRST read was 8**.
+2. `+0x1c == 2`: activity `1` answers `8`; activity `9` answers `0x12` when
+   `SelectHeaviestSequence(owner, 0x12, -1)` is non-negative.
+3. `+0x1c == 1` with activity `8` answers `1` (the listing returns with `EAX` still holding
+   `[ESI+0x1c]`).
+4. `+0x1c == 3` with activity `8` or `1`: `DAT_10925390` when `weapon_smg1` (`0x10601ef8`) is owned
+   and its sequence resolves, else `DAT_10925388` when `weapon_pistol` (`0x10601ee8`) does, else
+   `0x1027e590(owner, "NPC in standoff lacks needed low aim activity (%s)", weapon ?
+   GetClassname() : "no weapon")` — the literal at `0x10601e9c` is **low aim activity**, not "low
+   cover animation", and the `"no weapon"` fallback lives at `0x10601edc` — and answers `1`.
+5. Anything left tails to `CAI_Behavior::vfunc22`.
+
+**Unrecovered:** the VALUES of `DAT_10925390` and `DAT_10925388`. Both live past the end of the
+file's raw `.data`, so they are registered at runtime and the image does not carry them.
+
+### `CAI_StandoffGoal`'s two inputs `0x102c87a0` / `0x102c8830` and `UpdateOnRemove` `0x102cdc50`
+
+_Recovered 2026-09-14, story 29d._
+
+Slots 241, 243 and 180 of a 246-slot `CBaseEntity`-line goal entity. The two inputs are **one
+clamp**, byte for byte, differing only in the backing routine they end on: `m_aggressiveness`
+(`+0x484`) outside `[0, 4]` and not the sentinel **5** `DevMsg`s
+`"Invalid aggressiveness value %d"` with the PRE-clamp value, a negative clamps to 0 and a value
+over 4 clamps to 4, and every path calls the backing routine **exactly once** — the negative arm
+returns from inside the warning block after calling it, and the tail calls it on every other path.
+
+`CAI_GoalEntity::InputActivate` (`0x102cd650`) returns with NOTHING done when `m_flags` (`+0x480`)
+bit `0x1` already stands; otherwise it inserts into the global goal list `DAT_106eb5d8` through
+`0x100f6d80` (intrusive node at `+0x450`), resolves the actors once through `0x102cd4a0` and sets
+bit `0x2` or refreshes them through `0x102cd3b0` when `0x2` already stands, sets bit `0x1`, and
+dispatches `EnableGoal` (vtable `+0x3d0`) for each of the `+0x468` actor handles, count `+0x474`,
+each validated through `PTR_DAT_10566458`. `InputDeactivate` (`0x102cdb70`) is the exact inverse:
+nothing unless bit `0x1` stands, the same resolve-or-refresh, CLEAR bit `0x1`, `DisableGoal`
+(`+0x3d4`) per actor, and the list removal (`0x100f6e40`) **last**.
+
+`UpdateOnRemove` tests bit `0x1` of `+0x480` and, when it stands, builds a 0x20-byte `inputdata_t`
+on the stack and dispatches the goal's **own** slot 243 with it. **Only the `variant_t` inside the
+block is initialised**, and it is the inlined `variant_t` constructor: `block+0x08` (the union's
+`iVal`) `= 0`, `block+0x14` (`eVal`) `= -1`, `block+0x18` (`fieldType`) `= FIELD_VOID`. The `-1` is
+at `+0x14`, not `+0x0c`: the `MOV dword ptr [ESP+0x1c],0xffffffff` at `102cdc72` is issued AFTER
+the `PUSH ECX`, which shifts its address by four. `pActivator` (`+0x00`), `pCaller` (`+0x04`) and
+`nOutputID` (`+0x1c`) are left **uninitialised** — three words of stack garbage, which ships
+because nothing this body reaches reads them. `CBaseEntity::UpdateOnRemove` is the tail either way.
+
+**Unrecovered:** what the actor list's entries are used for past `EnableGoal` / `DisableGoal`, and
+what aggressiveness value `5` means.
+
+### `CAI_BaseNPC::SetHullSizeNormal` `0x10273070` and `SetHullSizeSmall` `0x10273180`
+
+_Recovered 2026-09-14, story 29d._
+
+The normal body runs its self-check **unconditionally and before the gate**:
+`NAI_Hull::Bits(m_eHull)` (`0x102d6210`, `PTR_DAT_1060a750[hull][0]`) is called **twice**, so the
+test is `(bits & NAI_Hull::GetUsedHullBits()) != bits` — "this body's hull was never precached" —
+and the six-line ERROR block names the entity through `GetDebugName` and the hull through
+`NAI_Hull::Name` (`0x102d6230`, the same record's `+4`). Then, when `m_fIsUsingSmallHull`
+(`+0x5f2d`) is SET **or** the force byte is non-zero: `UTIL_SetSize(this, mins 0x102d6100,
+maxs 0x102d6120)` — the listing EVALUATES maxs first and mins second and then pushes mins before
+maxs — `m_fIsUsingSmallHull = 0` (the `MOV` at `1027312a` sits before the physics `JZ`, so the clear
+happens on both arms), and `SetupVPhysicsHull` (`0x10272f40`) only when `+0x36c` is live. `RET 0x4`
+with no value: the body is `void`, and its nineteen direct callers make it the widest-called body of
+this band.
+
+The small twin has no self-check, its gate is inverted (`m_fIsUsingSmallHull` CLEAR **or** forced),
+it sizes to `0x102d6140` / `0x102d6160`, sets `+0x5f2d = 1`, rebuilds the same way — and **returns
+1 unconditionally**, including on the path where the gate refused and nothing changed.
+
+**Unrecovered:** the hull table `PTR_DAT_1060a750` itself, and therefore every hull's bits, name and
+extents.
+
+### `CAI_TestHull::Spawn` `0x102d72f0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 103 on `CAI_TestHull`, read from the listing (the decompiler's jump-table warning is the tail
+`JMP` to slot 66). The hull pick: read `NAI_Hull::GetUsedHullBits()` (`0x102f9950`, a one-line
+`return DAT_10610be8`), then **`TEST EBX,EBX; JLE`** — a **signed** test, so a zero OR negative mask
+short-circuits to hull 0 *without* the fallback call. The shipped `.data` initialiser for that mask
+is `0xffffffff`, which is exactly such a value; the mask's two writers are `0x102f9900` (clear it,
+and `DAT_1093412c` with it — that is where the runtime `0` comes from, at the start of the
+node-graph build) and `0x102f9920` (`|= bits`). A positive mask walks `i = 0 .. 21` and takes the
+first `i` whose `NAI_Hull::Bits(i)` intersects it; after 22 misses it calls `AddUsedHullBits(0)` — a
+no-op OR, performed anyway — and answers 0.
+
+Then, in order: `m_eHull` (`+0x1568`) `= i`; `SetHullSizeNormal(false)`; `SetSolid(SOLID_BBOX = 2)`
+on `m_Collision` (`+0x270`) under a `"CBaseEntity::SetSolid"` scope-trace frame;
+`AddSolidFlags(zero-extended word[+0x2b4] | 4)` — retail reads the current 16-bit solid-flag word,
+ORs `FSOLID_NOT_SOLID` in and passes the whole thing back to a function that ORs it again — under a
+`"CBaseEntity::AddSolidFlags"` frame; slot 93 `SetMoveType(MOVETYPE_FLY = 4, 0)`; `m_iHealth`
+(`+0x210`) `= 0x32` = **50**; `AddFlag(0x40000)`; `byte [+0x5f44] = 0`; and a **tail** `JMP` to slot
+66 `Hide()`, so `Hide`'s answer is `Spawn`'s and nothing runs after it.
+
+**Unrecovered:** what the byte at `+0x5f44` is — `../npc-kernel/layout.md` binds that offset to an
+output block, which a one-byte zero cannot be — and what `DAT_1093412c` holds.
+
+### `CAI_BaseNPC::GetShootTarget` `0x10278650`
+
+_Recovered 2026-09-14, story 29d._
+
+No slot, four direct callers. The checklist's row named this "the standoff anchor"; it is the
+**shoot target**, and the reading that settles it is the call at `102786f1`–`10278709`: slot 541
+(`vt+0x874`) is `GetEnemies()` and takes **no** arguments, so the two pushes bracketing it belong to
+the next call, which is `CAI_Enemies::GetLastKnownPosition(&lkp, enemy)` (`0x102dfed0`, whose own
+`DevWarning` reads `"Asking LastKnownPosition for ene…"`). The enemy comes from slot 167
+`GetEnemy()` (`+0x29c`), the offset from `enemy->slot 197 BodyTarget(posSrc, bNoisy, bFlag2)`
+(`+0x314`), and the cached handle at `+0x5ba8` the body short-circuits on is the one
+`../npc-kernel/layout.md` already calls `m_hShootTargetOverride`.
+
+`Vector GetShootTarget(const Vector& posSrc, bool bNoisy, bool bFlag2)`, in retail's order:
+
+1. `m_hShootTargetOverride` resolving answers **that entity's `GetAbsOrigin()`** and ignores all
+   three arguments. The handle is validated against `PTR_DAT_10566458` twice — once for the gate and
+   once to resolve — which is one redundant read and no behaviour.
+2. No enemy: `AngleVectors(GetAngles(), &forward, NULL, NULL)` (slot 221 `+0x374`, which returns a
+   `const QAngle&` and so takes only the hidden pointer, then `0x10139610` with
+   `forward = (cos(pitch)cos(yaw), cos(pitch)sin(yaw), -sin(pitch))`), and the answer is
+   `forward + posSrc`.
+3. An enemy: `lkp + (BodyTarget(posSrc, bNoisy, bFlag2) - enemy->GetAbsOrigin())`, with the body
+   target's **Z first raised by `_DAT_104994e0` = -30.0f** — a negative offset, so the target moves
+   DOWN — when the enemy's player record (`+0x9c`, itself gated on its own `+0xa8`) carries a
+   `CVStatList_t` of type **3** in its `+0x13bc` / `+0x13c0` table whose `GetValue(0xb)`
+   (`0x102012d0`) answers exactly **5**. An entity with no type-3 list falls back to the lazily
+   built EMPTY global `DAT_109f0b40`, whose `GetValue` answers 0.
+
+**Unrecovered:** what stat id `0xb` is, and what the value `5` means. Family Sounds10 records the
+same `CVStatList_t` join as unrecovered for `FireBullets`' ranged skill.

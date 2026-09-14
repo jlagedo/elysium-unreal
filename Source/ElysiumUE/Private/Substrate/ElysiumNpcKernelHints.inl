@@ -141,14 +141,24 @@ uint32 WerewolfHintFlags = 0;         // +0x66e8 CNPC_VWerewolf, the hint-gate b
 // SOURCE UNITS. This family writes that same pair rather than standing a second copy.
 
 /** One row of the Werewolf's authored hint-groundpoint array — `+0x6714` the base, `+0x6720` the
- *  count, stride `0x48`, the hint pointer at `+0x00` and the groundpoint at `+0x08`. The array is
- *  filled by no ported producer, so it is empty and `GetHintGroundpoint` always takes its miss arm,
- *  which is the recovered fallback and not a refusal. SOURCE UNITS, as every retail position word
- *  here is and as family Motor's `GetGroundpoint` takes and answers. */
+ *  count, stride `0x48`. The array is filled by no ported producer, so it is empty and
+ *  `GetHintGroundpoint` always takes its miss arm, which is the recovered fallback and not a
+ *  refusal. SOURCE UNITS, as every retail position word here is and as family Motor's
+ *  `GetGroundpoint` takes and answers.
+ *
+ *  **Story 29d, family Hints10 corrected the record's layout.** 29c-1 read the hint pointer at
+ *  `+0x00`; both readers disagree. `GetHintGroundpoint` (`0x103d6770`) starts its cursor at
+ *  `field_0x6714 + 4` and `GetHintEndEntity` (`0x103d6390`) matches on `puVar4[1]`, so the hint is
+ *  at `+0x04`; `+0x00` is a cached `EHANDLE` to the hint's END ENTITY, which is the word
+ *  `GetHintEndEntity` answers, and the groundpoint is at `+0x08`. The port's matching behaviour was
+ *  already right — it keys on the hint — so only the record and the comment change. */
 struct FWerewolfHintGroundpoint
 {
-	int32 HintNode = INDEX_NONE;
-	FVector GroundpointUnits = FVector::ZeroVector;
+	/** +0x00 — the cached end-entity handle `CNPC_VWerewolf::GetHintEndEntity` (`0x103d6390`)
+	 *  answers on a hit, carried here as a hint-node index like every other handle in this seam. */
+	int32 CachedEndEntity = INDEX_NONE;
+	int32 HintNode = INDEX_NONE;                        // +0x04
+	FVector GroundpointUnits = FVector::ZeroVector;     // +0x08
 };
 TArray<FWerewolfHintGroundpoint> WerewolfHintGroundpoints;  // +0x6714 / +0x6720
 
@@ -175,6 +185,12 @@ enum class EHintTypeRule : uint8
 	InRange,
 	/** `Lo <= m_nHintType <= Hi && m_nHintType != Except`. */
 	InRangeExcept,
+	/** `Lo <= m_nHintType <= Hi` OUTRIGHT, and otherwise FALL THROUGH to the base body
+	 *  (`CAI_BaseNPCTroika::FValidateHintType`, `0x10295c20`) rather than answering false. Story
+	 *  29d's `CNPC_VBach` (`0x10365800`) is the one row, and it is why
+	 *  `HintTypeSpeciesFallsThroughToBase` exists: a `false` from such a row means "ask the base",
+	 *  not "no". */
+	InRangeOrBase,
 };
 
 /** One row of retail's slot-566 species table: the census class, the body that fills the slot for
@@ -202,6 +218,10 @@ static const FHintTypeSpecies* HintTypeSpeciesOf(const TCHAR* InRetailClass);
 
 /** The rule applied. A null row is "no species override", which this family cannot answer for. */
 static bool FValidateHintTypeSpecies(const FHintTypeSpecies* Row, int32 HintType);
+
+/** Does a `false` from `FValidateHintTypeSpecies` on this row mean "ask the base body" rather than
+ *  "no"? True only for `EHintTypeRule::InRangeOrBase`. Story 29d, family Senses10. */
+static bool HintTypeSpeciesFallsThroughToBase(const FHintTypeSpecies* Row);
 
 /** This NPC's row applied to a hint node — the entry point the slot will call. False when the seam
  *  cannot resolve the node, and false when no row carries this species. */

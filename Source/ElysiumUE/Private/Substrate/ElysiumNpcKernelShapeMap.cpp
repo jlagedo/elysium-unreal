@@ -518,12 +518,14 @@ namespace
 	ELYSIUM_NPC_WORD(0x64b4, FElysiumNpc, JumpHeight),
 	ELYSIUM_NPC_WORD(0x64b8, FElysiumNpc, JumpGravity),
 	ELYSIUM_NPC_WORD(0x64bc, FElysiumNpc, TimesTalked),
-	ELYSIUM_NPC_WORD_NOTED(0x64c0, FElysiumNpc, TalkingUntil,
-		"the flag and its end time are one stamp in this port"),
+	// Story 29d, family Social10 split the pair: `FinishTalking` (`0x102c0ca0`) clears the FLAG and
+	// STAMPS `+0x64cc` with `curtime`, so the two words are two members again.
+	ELYSIUM_NPC_WORD_NOTED(0x64c0, FElysiumNpc, bIsTalking,
+		"m_bIsTalking, the latch FinishTalking reads before it clears anything"),
 	ELYSIUM_NPC_WORD(0x64c4, FElysiumNpc, DefaultCamera),
 	ELYSIUM_NPC_WORD_NOTED(0x64c8, FElysiumNpc, Stance, "the stance index, retail's m_CurrStance"),
 	ELYSIUM_NPC_WORD_NOTED(0x64cc, FElysiumNpc, TalkingUntil,
-		"the same stamp m_bIsTalking maps to"),
+		"m_flTalkEnd; FinishTalking stamps it with curtime rather than clearing it"),
 	ELYSIUM_NPC_WORD_NOTED(0x64d0, FElysiumNpc, NoDeformExpression,
 		"the port names expressions rather than indexing the disposition table"),
 	ELYSIUM_NPC_WORD_CHAIN(0x64d4, "FElysiumAnimating::Disposition",

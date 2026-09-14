@@ -1361,14 +1361,31 @@ NPC_BODIES = (
             _nrule(("GaitOverrideRun",), "ACT_WALK", "ACT_RUN"),
             _nrule(("GaitOverrideRun",), "ACT_HUNT_WALK", "ACT_RUN"),
             _nrule(("GaitOverrideWalk",), "ACT_RUN", "ACT_WALK"),
-            _nrule(("MovementPolicyFrenzy",), None, "ACT_RUN_FRENZY",
-                   family="MoveWalkRunRelaxedHuntCombat"),
-            _nrule(("MovementPolicyRun",), None, "ACT_RUN", family="MoveWalking"),
+            # Story 29d (family Anim10) walked `0x10295590` arm by arm and ENUMERATED
+            # the two request families the earlier reading named without listing.  The
+            # frenzy arm rewrites exactly {0x17, 9, 0x13, 0x16, 0x1115, 0x1121} and the
+            # hurried one exactly {0x1115, 9, 0x16, 0x1121}; the two are an `else if`,
+            # which the row order already reproduces.  `UnrecoveredFamilyRules` goes
+            # 2 -> 0 with this.
+            _nrule(("MovementPolicyFrenzy",), "ACT_RUN_RELAXED", "ACT_RUN_FRENZY"),
+            _nrule(("MovementPolicyFrenzy",), "ACT_WALK", "ACT_RUN_FRENZY"),
+            _nrule(("MovementPolicyFrenzy",), "ACT_RUN", "ACT_RUN_FRENZY"),
+            _nrule(("MovementPolicyFrenzy",), "ACT_WALK_RELAXED", "ACT_RUN_FRENZY"),
+            _nrule(("MovementPolicyFrenzy",), "ACT_HUNT_WALK", "ACT_RUN_FRENZY"),
+            _nrule(("MovementPolicyFrenzy",), "ACT_COMBATMOVE", "ACT_RUN_FRENZY"),
+            _nrule(("MovementPolicyRun",), "ACT_HUNT_WALK", "ACT_RUN"),
+            _nrule(("MovementPolicyRun",), "ACT_WALK", "ACT_RUN"),
+            _nrule(("MovementPolicyRun",), "ACT_WALK_RELAXED", "ACT_RUN"),
+            _nrule(("MovementPolicyRun",), "ACT_COMBATMOVE", "ACT_RUN"),
             _nrule((), "ACT_FIDGET", "ACT_IDLE"),
+            # `10295655 CALL [vtable+0x804]` then `1029565f TEST 0x8000000` sits in front
+            # of BOTH delegates, not just the reload one: story 29d read the listing and
+            # the cover rows take the same capability gate.
             _nrule(("ReloadFastCapable",), "ACT_RELOAD_FAST", None, "Delegate",
                    delegate="Reload"),
-            _nrule((), "ACT_COVER", None, "Delegate", delegate="Cover"),
-            _nrule(("CoverIdleFlagged",), "ACT_IDLE", None, "Delegate", delegate="Cover"),
+            _nrule(("CoverCapable",), "ACT_COVER", None, "Delegate", delegate="Cover"),
+            _nrule(("CoverCapable", "CoverIdleFlagged"), "ACT_IDLE", None, "Delegate",
+                   delegate="Cover"),
         ),
     },
     {
@@ -1473,19 +1490,22 @@ NPC_BODIES = (
         "slot": "PreTranslate",
         "inheritors": 1,
         "owner": "CNPC_VTzimisceRunner",
-        "policy": "after common Troika translation, +0x6672 selects one of the four "
-                  "TZ variants",
+        "policy": "after common Troika translation, a non-zero +0x6672 remaps the "
+                  "TRANSLATED idle, fidget and gait onto the TZ variants",
         "chain": "PreTranslate_Troika",
         "chain_order": "BeforeRules",
+        # Story 29d (family Anim10) walked `0x103c3e10`: retail tests the form byte
+        # +0x6672 for NON-ZERO and then switches on the INCOMING (already translated)
+        # activity.  It does not compare a variant VALUE, and the earlier rows — keyed
+        # `RunnerVariantIs == 0..3` with no `From` — could never match the request they
+        # were meant to rewrite.  The form byte is the class's own form bit, which is
+        # what `FormBit` already means for the Hengeyokai and the Tzimisce.
         "rules": (
-            _nrule(("RunnerVariantIs",), None, "ACT_TZ_IDLE2", "RewriteAndReturn",
-                   operand=0),
-            _nrule(("RunnerVariantIs",), None, "ACT_TZ_FIDGET2", "RewriteAndReturn",
-                   operand=1),
-            _nrule(("RunnerVariantIs",), None, "ACT_TZ_WALK2", "RewriteAndReturn",
-                   operand=2),
-            _nrule(("RunnerVariantIs",), None, "ACT_TZ_RUN2", "RewriteAndReturn",
-                   operand=3),
+            _nrule(("FormBit",), "ACT_IDLE", "ACT_TZ_IDLE2", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_DISPOSITION", "ACT_TZ_IDLE2", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_FIDGET", "ACT_TZ_FIDGET2", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_WALK", "ACT_TZ_WALK2", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_RUN", "ACT_TZ_RUN2", "RewriteAndReturn"),
         ),
     },
     {

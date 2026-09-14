@@ -1009,12 +1009,41 @@ namespace
 		FElysiumNpcWorldFixture World;
 		FElysiumNpcMaker* Maker = nullptr;
 
+		/** What `Spawn`'s own slot-104 dispatch precached, before any case drove `Precache()` by
+		 *  hand. See the constructor. */
+		TArray<FElysiumNpc::FPrecacheOp> SpawnPrecacheLog;
+		bool bDeadAfterSpawn = false;
+
 		FPrecache10MakerFixture(const TCHAR* Classname, const TCHAR* ModelKey, const TCHAR* NpcType)
 			: World(Build(Classname, ModelKey, NpcType))
 		{
 			check(FString(Classname) == TEXT("npc_maker")
 				|| FString(Classname) == TEXT("npc_maker_fleshpile"));
-			Maker = static_cast<FElysiumNpcMaker*>(World.World.FindByName(TEXT("maker")));
+			// **STRENGTHENED, story 29d family SpeciesLifecycle10.** `CNPCMaker::Spawn`
+			// (`0x1034afe0`) dispatches slot 104 `Precache` through `vt+0x1a0`, and the port's
+			// `FElysiumNpcMaker::Spawn` now makes that dispatch. So by the time a case runs, slot 104
+			// has ALREADY run once at map load — which is retail's order — and a maker with no model
+			// keyfield has already `UTIL_Remove`d itself, exactly as retail's does.
+			//
+			// Two consequences, both recorded rather than hidden: `FindByName` answers only LIVE
+			// entities, so the maker is fetched off the entity list by targetname whether it lives or
+			// not; and the spawn-time log is kept before the live one is cleared, so each case below
+			// still measures exactly the `Precache()` it drives by hand.
+			for (const TUniquePtr<FElysiumEntity>& Entity : World.World.Entities())
+			{
+				if (Entity && Entity->TargetName == TEXT("maker"))
+				{
+					Maker = static_cast<FElysiumNpcMaker*>(Entity.Get());
+					break;
+				}
+			}
+			if (Maker != nullptr)
+			{
+				SpawnPrecacheLog = Maker->PrecacheLog;
+				bDeadAfterSpawn = Maker->IsDead();
+				Maker->PrecacheLog.Reset();
+				Maker->DeveloperOverlayBoxes.Reset();
+			}
 		}
 
 		static FElysiumNpcWorldBuilder Build(const TCHAR* Classname, const TCHAR* ModelKey,
@@ -1034,6 +1063,19 @@ namespace
 			return Builder;
 		}
 	};
+
+	bool Precache10CheckMakerLog(FAutomationTestBase& Test, const TCHAR* What,
+		const TArray<FString>& Expected, const TArray<FElysiumNpc::FPrecacheOp>& Log)
+	{
+		const TArray<FString> Actual = Precache10LogText(Log);
+		if (Actual != Expected)
+		{
+			Test.AddError(FString::Printf(TEXT("%s: expected [%s], got [%s]"), What,
+				*FString::Join(Expected, TEXT(" | ")), *FString::Join(Actual, TEXT(" | "))));
+			return false;
+		}
+		return true;
+	}
 
 	bool Precache10CheckMakerLog(FAutomationTestBase& Test, const TCHAR* What,
 		const FElysiumNpcMaker& Maker, const TArray<FString>& Expected)
@@ -1062,6 +1104,11 @@ bool FElysiumNpcKernelPrecache10MakerBaseTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		// `Spawn` (`0x1034afe0`) dispatched slot 104 at map load, which is retail's order and is the
+		// half story 29d family SpeciesLifecycle10 added.
+		Precache10CheckMakerLog(*this, TEXT("Spawn's own slot-104 dispatch"),
+			{ TEXT("model:models/maker.mdl:0"), TEXT("other:npc_VCop:0") },
+			Fix.SpawnPrecacheLog);
 		Fix.Maker->Precache();
 		Precache10CheckMakerLog(*this, TEXT("a complete npc_maker"), *Fix.Maker,
 			{ TEXT("model:models/maker.mdl:0"), TEXT("other:npc_VCop:0") });

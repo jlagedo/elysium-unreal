@@ -789,17 +789,14 @@ bool FElysiumNpc::EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiu
 
 void FElysiumNpc::LeaveGrappleState()
 {
-	const bool bStealth = Grapple.Type == EElysiumGrappleType::StealthKill;
-	if (bStealth) FireOutput(TEXT("OnGrappleEnd"), Grapple.Partner);
-	FElysiumCombatCharacter::LeaveGrappleState();
-	if (bStealth)
-	{
-		// 0x1026ce30 -> 0x10007ea0: saturating decrement, then reconnect.
-		NpcFlags.RemoveGrappleOblivious();
-		ReconnectToSquad();
-	}
-	// `CAI_BaseNPCTroika::LeaveGrappleState` `0x102b5d90` (slot 380): the base body, then a tail
-	// jump into slot 614. A body released from a grapple thinks on the same frame.
+	// `CAI_BaseNPCTroika::LeaveGrappleState` `0x102b5d90` (slot 380) is exactly two statements: the
+	// base body `0x1026ce30`, then a tail jump into slot 614. Story 29d ported the base under its own
+	// name (`ElysiumNpcKernelSpeciesMisc10.cpp`) because it is a DISTINCT retail function, and its
+	// four steps are UNCONDITIONAL — this body used to gate the output fire and the
+	// oblivious-decrement pair on `Grapple.Type == StealthKill`, which retail does not, and omitted
+	// slot 416 `SetForceFrequentThink(false)` entirely.
+	BaseLeaveGrappleState();
+	// A body released from a grapple thinks on the same frame.
 	ResetThinkTimers(World ? World->NowSeconds() : 0.0);
 }
 
@@ -808,6 +805,15 @@ void FElysiumNpc::Think()
 	// One `NPCThink` (`0x10292de0`), in its recovered order. The four stamps on `ScheduleHost`
 	// decide what runs, and the tail at the bottom is the ONLY writer of `NextThink`.
 	if (IsInert())
+	{
+		return;
+	}
+	// Slot 431's species dispatch, story 29d family SpeciesLifecycle10. `CPayphone::vfunc431`
+	// (`0x101aabf0`) REPLACES this body outright — it never calls `CAI_BaseNPCTroika::NPCThink` — so
+	// the arm is a prologue that owns the whole pass. It sits under `IsInert()` rather than above it
+	// because retail expresses "this entity is gone" by having no think function at all, which is
+	// what `IsInert()` stands for here; every other statement of the Troika body is below.
+	if (PayphoneThink())
 	{
 		return;
 	}
@@ -2275,7 +2281,12 @@ void FElysiumNpc::OnDialogFilePlayed(double DurationSeconds)
 {
 	// The spoken-line player `0x102c0520`: `m_bIsTalking = 1`, the end time `+0x64cc = curtime +
 	// duration`, then slot 614 -- the talking body is on the 0.01 s floor from this frame.
+	//
+	// `102c0923 MOV byte ptr [ESI + 0x64c0],1` and `102c092a FSTP float ptr [ESI + 0x64cc]` are the
+	// two writes, and story 29d (family Social10) split them: `FinishTalking` (`0x102c0ca0`) clears
+	// the FLAG and STAMPS the time, so the two words cannot be one member any more.
 	const double Now = World ? World->NowSeconds() : 0.0;
+	bIsTalking = true;
 	TalkingUntil = Now + FMath::Max(0.0, DurationSeconds);
 	ResetThinkTimers(Now);
 }
@@ -2848,6 +2859,11 @@ void FElysiumNpc::TaskFail(int32 Reason)
 {
 	// Troika slot 448 (0x1029adb0), then CAI_BaseNPC 0x10273fc0. In particular,
 	// OnScheduleChange is not a substitute: its masks and oblivious refcount writes differ.
+	//
+	// Story 29d, family Conditions10: the seven SPECIES bodies at slot 448 (0x10362390, 0x1036d1d0,
+	// 0x10379060, 0x10380510, 0x10394090, 0x103b0290, 0x103ba350) each run their own arm and then
+	// chain 0x1029adb0 unconditionally, so the arms are a prologue and this line is where they run.
+	SpeciesTaskFail(Reason);
 	if (CurrentAmbientSpot()) FinishAmbientUse(bAmbientArrived, false);
 	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
 	if (Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
@@ -3617,6 +3633,12 @@ FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
 {
 	if (IsInert())
 	{
+		// Every other refusal below says why; this one did not, and a silent refusal here reads at
+		// the call site as "the body arbiter said no" when the truth is that the entity is dead or
+		// hidden. Story 29d spent a bisection on exactly that.
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s refused a dialogue body session: the entity is inert (dead=%d hidden=%d)"),
+			*DebugString(), bDead ? 1 : 0, bHidden ? 1 : 0);
 		return FElysiumBodyOwnerToken();
 	}
 	if (DialogueBodyOwner.IsSet())
@@ -3794,6 +3816,17 @@ void FElysiumNpc::SeedSheet()
 
 void FElysiumNpc::Spawn()
 {
+	// Story 29d, family **SpeciesMisc10**: `CNPC_Bullseye#103` (`0x103567e0`) REPLACES slot 103
+	// outright — the aim-target dummy has no sheet, no body and no motor, and its whole spawn is the
+	// hull, the two blood-colour calls, the think arm and the solid/damage words. `CNPC_Bullseye`
+	// carries no entity classname in the census, so this arm is unreachable at runtime today.
+	if (ElysiumNpcKernelClass::BodyOf(RetailClass(), 103) != nullptr
+		&& FCString::Strcmp(ElysiumNpcKernelClass::BodyOf(RetailClass(), 103),
+			TEXT("0x103567e0")) == 0)
+	{
+		BullseyeSpawn();
+		return;
+	}
 	SeedSheet();
 	// Keyfields (model/angles/use_interesting/stattemplate) are already applied. Stand the body:
 	// out/npc/<stem>.glb, playing the standing idle `default_disposition` selects, spread across

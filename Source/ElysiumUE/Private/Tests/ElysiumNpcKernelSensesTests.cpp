@@ -404,9 +404,16 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 	TestFalse(TEXT("0x103ddaa0: and refuses only a null one"),
 		F.Guard->YukieFInViewCone(nullptr));
 
-	// `0x103ddaf0` — Yukie's FVisible chains slot 594 instead of answering true. Slot 594 is story
-	// 29d's declared stub, so the chain answers false; the GATE above it is the recovered half.
-	TestFalse(TEXT("0x103ddaf0: CNPC_VYukie::FVisible chains slot 594, which is still a stub"),
+	// `0x103ddaf0` — Yukie's FVisible chains slot 594 instead of answering true. Story 29d (family
+	// Senses10) wrote slot 594's body (`0x102b4760`), so the chain now answers the REAL range and
+	// concealment test rather than a stub's false: a candidate inside `m_flSeekDistInspection` is
+	// admitted, and one outside it is refused with the blocker written (`102b482e`).
+	F.Guard->Senses.Perception.VisionDistanceCm = 100000.f;
+	F.Guard->Senses.Perception.bResolved = true;
+	TestTrue(TEXT("0x103ddaf0: CNPC_VYukie::FVisible chains slot 594, which now answers"),
+		F.Guard->YukieFVisible(F.Other, &Blocker));
+	F.Guard->Senses.Perception.VisionDistanceCm = 1.f;
+	TestFalse(TEXT("0x103ddaf0: ...and slot 594's range refusal comes back through the chain"),
 		F.Guard->YukieFVisible(F.Other, &Blocker));
 	TestFalse(TEXT("0x103ddaf0: a null candidate refuses before the gate"),
 		F.Guard->YukieFVisible(nullptr, &Blocker));

@@ -387,6 +387,12 @@ const FElysiumNpc::FHintTypeSpecies* FElysiumNpc::HintTypeSpeciesRows(int32& Out
 		{ TEXT("CNPC_VChangBros"), TEXT("0x1036c6a0"), ERule::AlwaysTrue, 0, 0, 0, false },
 		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103af810"), ERule::AlwaysTrue, 0, 0, 0, false },
 		{ TEXT("CNPC_VZombie"), TEXT("0x103e03b0"), ERule::AlwaysFalse, 0, 0, 0, false },
+		// Story 29d, family Senses10. `CNPC_VBach::FValidateHintType` (`0x10365800`):
+		// `16999 < t && t < 0x426e` — 17000..17005 — accepted OUTRIGHT, and everything else FALLING
+		// THROUGH to `CAI_BaseNPCTroika::FValidateHintType` (`0x10295c20`) rather than answering
+		// false, which is why it takes its own rule kind. 29c-1 left it out deliberately ("chains
+		// into the base body, so it is 29d's"); this is 29d putting it in.
+		{ TEXT("CNPC_VBach"), TEXT("0x10365800"), ERule::InRangeOrBase, 17000, 17005, 0, false },
 		// `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw` fill the slot with the SAME body as
 		// `CNPC_VChangBros` (`0x1036c6a0`) and reach it by inheritance, so the base-chain walk in
 		// `HintTypeSpeciesOf` is what serves them rather than two duplicate rows. Recorded here so a
@@ -443,8 +449,17 @@ bool FElysiumNpc::FValidateHintTypeSpecies(const FHintTypeSpecies* Row, int32 Hi
 		return HintType >= Row->Lo && HintType <= Row->Hi;
 	case EHintTypeRule::InRangeExcept:
 		return HintType != Row->Except && HintType >= Row->Lo && HintType <= Row->Hi;
+	case EHintTypeRule::InRangeOrBase:
+		// `10365804`: `16999 < t && t < 0x426e` answers true outright; every other type falls
+		// through to the base body, which `HintTypeSpeciesFallsThroughToBase` is how a caller knows.
+		return HintType >= Row->Lo && HintType <= Row->Hi;
 	}
 	return false;
+}
+
+bool FElysiumNpc::HintTypeSpeciesFallsThroughToBase(const FHintTypeSpecies* Row)
+{
+	return Row != nullptr && Row->Rule == EHintTypeRule::InRangeOrBase;
 }
 
 bool FElysiumNpc::FValidateHintTypeForSpecies(int32 HintNode) const
@@ -459,7 +474,19 @@ bool FElysiumNpc::FValidateHintTypeForSpecies(int32 HintNode) const
 		// every species takes the refusal — reported, not papered over.
 		return false;
 	}
-	return FValidateHintTypeSpecies(Row, Hint.HintType);
+	if (FValidateHintTypeSpecies(Row, Hint.HintType))
+	{
+		return true;
+	}
+	// `CNPC_VBach`'s row (`0x10365800`) falls through to the base body rather than refusing. Story
+	// 29d, family Senses10 wrote this against slot 566's generated stub and passed `nullptr`; family
+	// Hints10 landed the real body (`0x10295c20`), whose first act is a null-hint refusal, so the
+	// RESOLVED HINT is what retail's fall-through hands it. Named minimal fix, story 29d/Hints10.
+	if (HintTypeSpeciesFallsThroughToBase(Row))
+	{
+		return const_cast<FElysiumNpc*>(this)->FValidateHintType(&Hint);
+	}
+	return false;
 }
 
 // -------------------------------------------------------------------------------------------------

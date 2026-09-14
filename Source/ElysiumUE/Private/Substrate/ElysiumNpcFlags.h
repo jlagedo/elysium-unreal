@@ -155,6 +155,13 @@ public:
 	// `0x80000100` and clears it again with `&= 0x7ffffeff`. So retail carries a real bit there
 	// whose NAME is unrecovered — the `0x1030cbd0` table has no entry that resolves to it. These two
 	// accessors let a recovered body write the word retail writes without inventing a name for it.
+	// `m_bfAINPCFlags` whole, for the ONE reader that walks it bit by bit rather than by name: the
+	// AI debug overlay `0x1028d990` (`1028db18 MOV EDX,[EBP+0x14b8]`), which renders bits 0..29
+	// against the legend `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"` at `0x105d88b8` — the same string the
+	// comment at the top of this file cites as the bit order's independent confirmation. Story 29d,
+	// Conditions10.
+	uint32 RawWord1() const { return Word1; }
+
 	static constexpr uint32 Word2UnnamedBit31 = 0x80000000u;
 	void SetRawWord2Bits(uint32 Mask) { Word2 |= Mask; }
 	void ClearRawWord2Bits(uint32 Mask) { Word2 &= ~Mask; }
@@ -242,6 +249,10 @@ public:
 	// `0x8` always-PVS/LOS (`CalcNextNormalThink`, `CalcNextAIThink`, `SetPlayerLOS`), `0x10`
 	// "does not witness", `0x800` the frenzy friend, `0x8000` `NPCThink`'s 1% death-scream roll.
 	static constexpr uint32 FrenziedAlwaysInPlayerView = 0x00000008;
+	// `0x10`, "does not witness". Its one reader is slot 587 `CanWitnessSupernatural`
+	// (`0x1028ef20`, `1028ef53 TEST byte ptr [ESI+0x14c8],0x10`), whose fourth refusal it is: a
+	// frenzied body cannot witness a supernatural act at all. Story 29d, Conditions10.
+	static constexpr uint32 FrenziedDoesNotWitness = 0x00000010;
 	// `0x800`, the frenzy friend. Its readers are slot 467 `QueryHearSound` (`0x102b35b0`,
 	// `102b3621`) and slot 468 `QuerySeeEntity` (`0x102b38b0`, `102b38f1`), which both refuse the
 	// entity `m_hFriendPlayer` (`+0x60ac`) resolves to while the bit stands. Story 29d, Senses10.

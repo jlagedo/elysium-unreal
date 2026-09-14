@@ -11,7 +11,7 @@
 //
 // The definitions are in `Substrate/ElysiumNpcKernelMotor10.cpp` and the tests in
 // `Tests/ElysiumNpcKernelMotor10Tests.cpp`. The walked prose is
-// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 29d, family Motor10 — …".
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 29d, family Motor10".
 //
 // This family EXTENDS story 29c-1's family **Motor** (`ElysiumNpcKernelMotor.inl`) rather than
 // standing a second set of motor seams: `Navigator`, `MotorSeams`, `KernelHullTrace`,
@@ -310,6 +310,15 @@ int32 StandoffTranslateActivity(FStandoffWords& Words, int32 Activity);
  *  activity alone and never latches posture 2. Counted. */
 int32 HintActivityForNode(int32 HintNode) const;
 
+/** SEAM for `DAT_10925390` and `DAT_10925388`, the two activity ids the low-aim arm answers with.
+ *  Both live in **uninitialised `.data`** — the file's raw `.data` ends before either address, so
+ *  they are registered at runtime by `ActivityList_RegisterSharedActivity` and their VALUES are
+ *  **unrecovered**, exactly as family Sounds10 found for `FireBullets`' skill table. Both answer
+ *  `INDEX_NONE`, which `SelectHeaviestSequence` (itself a seam answering `INDEX_NONE`) then refuses,
+ *  so the arm falls through to its own DevMsg — retail's own path for a body with no such sequence. */
+static int32 StandoffLowAimActivitySmg();
+static int32 StandoffLowAimActivityPistol();
+
 /** SEAM for `CBaseCombatCharacter::Weapon_OwnsThisType(name, 0)` (`0x102c7aa4` /
  *  `0x102c7ad7`) — does this body carry a weapon of the named class? The two names are
  *  `"weapon_smg1"` (`0x10601ef8`) and `"weapon_pistol"` (`0x10601ee8`), read out of the listing.
@@ -524,7 +533,7 @@ double DoorNextTryTime(const FElysiumEntity& Door) const;
  *  standing fact — no pathfinder, no node graph — so this answers **null**, which is retail's own
  *  NOT-FOUND arm and is the one that reaches the door-type split. Counted. */
 int32 BuildLocalRouteWaypoints = 0;
-bool BuildLocalRouteThroughDoor(const FVector& FromUnits, const FVector& ToUnits, int32 Flags);
+bool BuildLocalRouteThroughDoor(const FVector& FromUnits, const FVector& ToUnits, int32 RouteFlags);
 
 /** SEAM for `thunk_FUN_10319f30(navigator->+0x30 + 0x24, waypoint)` — splice the waypoint the
  *  search found into the navigator's live path, answering whether the splice took. Unreachable

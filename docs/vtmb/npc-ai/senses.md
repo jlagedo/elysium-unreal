@@ -1012,3 +1012,615 @@ pinned by this call site — and the `CAmmoDef` index order, which family **Dama
 as unrecovered for `GiveAmmo`'s clamp. The port stands recording seams for the ammo def, the
 ranged-skill join, the trace pass, the tracer effect and `RangedDamagePerVictim`; every one answers
 the value retail's own refusing arm answers, so no arm of the body above is silently skipped.
+
+## Story 29d, family Senses10 — what the NPC perceives and who its enemy is
+
+The twenty-four `Senses10` rows and ten `SpeciesSenses10` rows of layers 10–18: the visibility
+chain (slots 201 and 594), the two sense queries (467, 468), the look hook (469) with the
+`CAI_BaseNPC` base body beneath it, the see-unknown hook (472), enemy selection (478), the memory
+writer (544), the weapon-LOS pair (562, 573), the aim pair (538, 574), slots 223/402/445, and the
+species arms over them. Ported in `Substrate/ElysiumNpcKernelSenses10.cpp` (the Troika line) and
+`Substrate/ElysiumNpcKernelSenses10_2.cpp` (the species line).
+
+Three facts hold across the family and are stated once here.
+
+* **`+0x9c` is the entity's own `CBaseCombatCharacter` self-downcast cache.** For a combat character
+  it IS the entity pointer; for anything else it is null. Every `+0x9c` test in this family
+  therefore reads "is this a combat character", and every pointer compare against a `+0x9c`
+  (`CNPC_VZombie::FVisible`, `CNPC_VFrenzyShadow::BestEnemy`) is a compare against the entity.
+* **`+0x6081` is `m_bSeenInOuterBand` and slot 594 is its only writer.** It is cleared on entry to
+  every slot-594 call and set when the target lies beyond `_DAT_10457f54` (**0.7**) of the effective
+  vision radius. Slot 472 and both of its species arms read it.
+* **The distance key of both `BestEnemy` bodies is `__ftol` of the SUM OF SQUARES.** `0x10431320`
+  is plain `__ftol` — 39 bytes, no callees — and both bodies hand it the unrooted sum. The
+  checklist's walk of `CNPC_VFrenzyShadow::BestEnemy` said "`__ftol` of the squared-distance root";
+  the listing (`1037697d`) shows no `fsqrt`.
+
+### `FVisible` `0x102b4630`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 201 on the Troika line. A one-shot static init guarded by bit 0 of `DAT_10923e2c` resolves the
+`Dominate_BrainWipe` discipline id through `0x101e1590` / `0x101e1870` into `DAT_10924074`; the
+lookup is a name resolution and has no game-visible effect. Then, in order: a **null target**
+answers false and does **not** write the blocker out-parameter (`102b4655`); `npc_ignore_senses`
+(`DAT_10924fba`) writes the blocker, if one was passed, and answers false; `npc_ignore_player`
+(`DAT_10924fb9`) with a target carrying `+0xa8` does the same; slot 594 (`vtable +0x948`) is
+dispatched with the caller's mask and **both** trailing arguments forced to `0`, so the Troika line
+never hands slot 594 a blocker cell; this NPC carrying the `Dominate_BrainWipe` status
+(`0x1033d2f0`) answers false; and finally `CBaseEntity::FVisible` performs the trace itself.
+
+The asymmetry of the three blocker writes is the reason this row is `rule` rather than `present`.
+
+**Unrecovered:** nothing.
+
+### `Slot594` `0x102b4760`
+
+_Recovered 2026-09-14, story 29d._
+
+The range and concealment test slot 201 dispatches. `m_bSeenInOuterBand` (`+0x6081`) is written
+`0` first, before anything is read (`102b4770`), then both eye points are taken through slot
+`0x304`. The range block runs only when `(m_NPCState != 2 || m_bEnemyWentOccluded)` **and**
+`m_flStealthVisionOverrideTime <= curtime` — retail state 2 is COMBAT. Inside it the 3-D distance is
+compared against the **target's** slot 28 (`vtable +0x70`, its own stealth vision scalar) times this
+NPC's `m_flSeekDistInspection` (`+0x63b8`): beyond the product the body writes `*blocker = 0` when a
+cell was passed and answers false, and beyond `_DAT_10457f54` (**0.7**) of that same product it
+instead sets the far byte and carries on. Then, when the target carries a `+0x9c` combat character,
+`0x10146b20(cc, this)` refusing writes the blocker and answers false, drawing a ±2 debug box first
+when `m_debugOverlays < 0` and the target is the player. The success exit draws a ±3 box.
+
+**CORRECTION to the port.** `102b479b` reads `[ESI+0x5bc5]`, which the shape map names
+`m_bEnemyWentOccluded` — the occlusion **edge** `0x10270180` writes. The port's `IsVisible` read the
+ten-failure debounce instead, a different word with a different writer.
+
+**Unrecovered:** nothing.
+
+### `QueryHearSound` `0x102b35b0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 467, and it is a chain of refusals with a single distance arm at the end. In retail's order: a
+null `CSound*`; `npc_ignore_senses`; `npc_ignore_player` with an owner that resolves and carries
+`+0xa8`; `m_bfNPCFrenziedFlags` (`+0x5b84`) bit `0x800` with the owner resolving to
+`m_hFriendPlayer` (`+0x60ac`); the owner being this NPC; an owner that resolves to a live entity
+whose `+0x9c` is null **or** whose `0x10146b20(cc, this)` concealment test refuses — so a sound made
+by a live non-combat-character owner is not heard at all, while a sound with **no** owner handle
+skips the whole block; and sound type `4` with the owner carrying a player record and
+`CStealthKillRules::InDeafZone(&DAT_1072c540, player, this)` true.
+
+The distance test then runs **only** when `m_bfAINPCFlags` (`+0x14b8`) carries `0x20400` —
+`COWERING | SLEEPING`. It compares the distance from the **ear** position (slot `0x310`) to the
+sound origin against `HearingSensitivity()` (slot `0x770`, `+0x63c0`) times the sound's integer
+volume times `_DAT_1044bef8` (**0.25**), with `CBaseEntity::AdjustSoundDistForStealth` subtracting
+the owner's slot-30 stealth reduction from that **threshold** (and clamping it at zero) for a type-4
+sound whose owner is the player. `dist <= threshold` hears. Everything else answers true.
+
+The ordinary radius test is **not** here: it is `CanHearSound` (`0x1030f7b0`), the Listen-level cull
+that dispatches this slot, and its threshold is the same product without the `0.25`.
+
+**Unrecovered:** nothing.
+
+### `QuerySeeEntity` `0x102b38b0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 468, 159 bytes. `npc_ignore_senses`, or `npc_ignore_player` with a non-null candidate carrying
+`+0xa8`, answers 0 — note the null check sits inside the second arm only. Then the frenzy-friend
+veto: `(m_bfNPCFrenziedFlags & 0x800) == 0x800` with the candidate resolving to `m_hFriendPlayer`
+answers 0, and it is ahead of the player arm, so a frenzied body does not see its friend at all.
+Then **any** candidate carrying `+0xa8` answers 1, before any relationship test. Otherwise slot 404
+`IRelationType` answers 1 for `D_HT` and `D_FR` and 0 for every other disposition including the
+`default:`.
+
+**Unrecovered:** nothing.
+
+### `OnLooked` `0x1026a2c0`
+
+_Recovered 2026-09-14, story 29d._
+
+The `CAI_BaseNPC` base body beneath the Troika override that owns slot 469 — a distinct retail
+function, which is why it carries its own name in the port (`FElysiumNpc::BaseOnLooked`, whose body
+is `ElysiumNpcCond::GatherSight`).
+
+`ClearCondition` over the six-entry table at `0x105c979c`; the entity to **skip** resolved from the
+senses object at `+0x98` — slot `0x928` normally, or the handle at `+0x608c` when `m_bfAINPCFlags2`
+bit `0x400000` is set — and skipped before any arm. Then per entity off the senses iterator
+(`0x1030fc90` / `0x1030fd20`): slot `0x650` `IRelationType`; a player (`+0xa8` non-null) raises COND
+`0x5a` `SEE_PLAYER` and, when `m_bIsBCCTargetable` is set, stamps the player's per-relation
+assessment through `0x1017ff40` — for **every** relation, including `D_NU`.
+
+Then, and **only** when `relation != 4` (`D_NU`): the committed enemy (slot `0x29c`) being this
+entity raises COND `0x46` `SEE_ENEMY`, and the switch runs. `D_HT` (1) under `D_CALM`
+(`m_bfAINPCFlags2 & 0x10000`) falls into the `D_FR` arm and is rejected there; otherwise slot
+`0x654` `IRelationPriority` splits it into `0x45` `SEE_DISLIKE` below 0, `0x43` `SEE_HATE` at 0..10
+and `0x5b` `SEE_NEMESIS` above 10, writing `m_hLastSeenDislikeEnt` / `m_hLastSeenHateEnt` /
+`m_hLastSeenNemesisEnt` and then slot `0x880` `UpdateEnemyMemory` with the target's slot-`0x364`
+origin. `D_FR` (2) writes `m_hLastSeenFearEnt`, makes the same `0x880` call and raises `0x44`.
+`D_LI` (3) and `D_NU` (4) raise nothing. `D_ER` (0) prints `DevWarning(2, "%s can't assess %s")`.
+
+**CORRECTION to the port.** Two gates were missing and are now in `GatherSight`: the
+`relation != D_NU` gate, and `SEE_ENEMY`, which the port raised unconditionally in
+`GatherCommittedEnemy` off the seen set rather than inside this loop behind the skip exclusion and
+that gate.
+
+**Unrecovered:** retail's `D_ER` arm is unreachable through this port —
+`FElysiumRelationships::Resolve` never answers `D_ER` — so the `DevWarning` is recorded rather than
+reproduced.
+
+### `OnLooked` (Troika) `0x102b39a0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 469, 36 bytes, two statements: call `CAI_BaseNPC::OnLooked` (`0x1026a2c0`) first, then if
+`HasCondition(0x54 COND_NEW_ENEMY)` still stands after it, increment `m_iEnemySightings` (`+0x60a8`)
+by one.
+
+**Unrecovered:** nothing.
+
+### `OnSeeEntity` `0x102b3e00`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 472, 485 bytes, and **the order is the row**. The outer gate, in retail's order:
+`m_bfAINPCFlags2` (`+0x14bc`) bit `0x4000000` CLEAR, the far byte `+0x6081` SET, and
+`0x102b3270(entity, false)` true. Inside it, and only when the entity's `+0xa8` player pointer is
+non-null and `0x101671a0` admits it: read the ConVar object `DAT_10924a6c` slot 1, call
+`0x10269a20(this, 1)`, and — if `m_hBestSeeUnknown` (`+0x609c`) **already** resolves to this entity
+— **return with nothing written**, not even the tail's flag clear.
+
+Otherwise `m_hBestSeeUnknown = entity` and `m_iEnemySightings += 1`. If `m_hLastSeeUnknown`
+(`+0x60a0`) resolves to the same entity, `m_iSeeUnknownRepeatSightings += 1`,
+`m_bfAINPCFlags &= 0xfebfffff` (`IGNORE_UNKNOWN` `0x400000` and `MADE_INITIAL_RESPONSE`
+`0x1000000`) and **return** — again before the tail.
+
+Otherwise `m_OnUnknownVisionPlayer` (`+0x5fa4`) fires **FIRST**, with the entity as activator, and
+only then: `m_hLastSeeUnknown = m_hBestSeeUnknown`, `m_vecLastSeeUnknownPos` (`+0x6088`) from the
+resolved handle's slot-217 origin, `m_iSeeUnknownRepeatSightings = 0`,
+`m_flSeeUnknownRunTimer = curtime + RandomFloat(10.0, 20.0)` and
+`m_flSeeUnknownStartTimer = curtime + RandomFloat(5.0, 10.0)`.
+
+The path refused inside the gate ORs `0x800000` into `m_bfAINPCFlags`. Every path that reaches the
+bottom then releases `m_hBestSeeUnknown` **only** when it resolves to this entity — otherwise the
+body returns having written nothing — and the shared tail clears `m_bfAINPCFlags &= 0xfe9fffff`, the
+two above plus `LOOKED_AT_UNKNOWN` (`0x200000`).
+
+**CORRECTION to the port.** The port fired `OnUnknownVisionPlayer` **last**, after the five writes.
+Retail fires it first. That is an observable order difference and is why the row is `rule`.
+
+**Unrecovered:** nothing.
+
+### `BestEnemy` `0x102743c0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 478, 884 bytes. It walks the `CAI_Memory` list (slot `0x874`, head `+0xc`, next `+0x38`, handle
+`+0x24`) and rejects a candidate in this order: an unresolvable handle; `FL_NOTARGET`
+(`GetFlags() & 0x8000`, read as the sign of `(flags >> 8)`); an entity whose `+0x9c` combat
+character is live but whose `m_bIsBCCTargetable` (`+0x1480`) is clear — an entity with **no** combat
+character passes; self; slot 158 `IsAlive` false; slot 404 `IRelationType` that is neither `D_HT`
+nor `D_FR` (retail dispatches it twice); and a `HasEludedMe` record (`0x102e0210`).
+
+The arbitration seeds `bestUnreachable = true`, `bestDistance = 0x10000000`, `bestPriority = -1000`
+and `bestVisible = false`, and slot `0x848` is slot 530 `IsUnreachable`. The first key is
+**absolute**: an unreachable candidate against a reachable incumbent is dropped outright, and a
+reachable candidate against an unreachable incumbent wins outright — with no priority and no
+distance comparison, and with `bestVisible`, `bestPriority` and `bestDistance` all rewritten from
+the winner.
+
+Two candidates of the same reachability class fall to slot `0x654` `IRelationPriority`. Strictly
+greater replaces — leaving the incumbent **visibility byte in place**, which the next equal-priority
+candidate then observes — and a lower priority is dropped. At equal priority the truncated distance
+decides: a closer candidate replaces when it is visible or the incumbent is not; a farther one
+replaces only when the incumbent is unseen and it is seen. Visibility is
+`CAI_Senses::DidSeeEntity` (`0x1030fb10`) **or** slot 201 `FVisible(cand, 0x2804091, 0, 0)`.
+
+Slot 479 `IsValidEnemy` (`vtable +0x77c`) gates the outright reachability win, the higher-priority
+replacement **and** the equal-priority replacement, and a candidate that fails it is dropped rather
+than demoted.
+
+**CORRECTION to the port.** `ElysiumNpcEnemy::BestEnemy` carried the walk, the reachability split,
+the priority key, the distance and visibility tie-break and the stale-visibility quirk, but had no
+`FL_NOTARGET` gate, no `m_bIsBCCTargetable` read and no slot-479 gate, so it could commit an enemy
+retail refuses. The decompiled C also loses the `bestPriority` write on the higher-priority arm
+(`10274517`), which the listing carries.
+
+**Unrecovered:** `FL_NOTARGET` and `m_bIsBCCTargetable` have no port word; both seams answer the
+**admitting** value, which is retail's own answer for an untouched entity.
+
+### `BestEnemy` (Frenzy Shadow) `0x103766d0`
+
+_Recovered 2026-09-14, story 29d._
+
+`CNPC_VFrenzyShadow`'s replacement, and it is a **score**, not a lexicographic key. The friend
+player's `+0xa8` record is resolved once (`103766d8`) and handed to every relation query, so a
+frenzy shadow asks what its candidates think of its **friend**, never of itself.
+
+**The sticky arm** runs only while `m_iHostileEnemyCount` (`+0x6664`) is above 1: the current
+`GetEnemy()` whose `+0x9c` is live, whose `GetFlags` bit 15 is clear, whose `m_bIsBCCTargetable` is
+set, whose slot 158 is true and whose own slot 404 against the friend record answers `D_HT`, and
+which is neither eluded nor unreachable, is returned unchanged.
+
+Otherwise a full rescan with `best = null`, `bestDist = 0x10000000`, `bestScore = 0` — **not**
+`-1000` — and `m_iHostileEnemyCount = 0`, rebuilt by the pass. Per candidate, past the same filter
+and the eluded test: not unreachable adds `0x40000000`; the candidate's own `D_HT` toward the friend
+adds `0x20000000` and increments the hostile count; `DidSeeEntity` or slot 201
+`FVisible(cand, 0x2804091, 0, 0)` adds `0x10000000`; and slot 405 `IRelationPriority` shifted left
+24 is added last. A strictly higher score wins if slot 479 passes; an equal score wins only when the
+distance is strictly less **and** slot 479 passes. On exit a winner that differs from the current
+`GetEnemy()` clears `m_bFailedGrapple` (`+0x6668`).
+
+**Unrecovered:** nothing.
+
+### `UpdateEnemyMemory` `0x102709c0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 544. `GetEnemies()` null answers **TRUE** at once and writes nothing. With a non-null enemy it
+reads the enemy's own NPC sub-object at `enemy+0x94` and, when that exists **and** this NPC's
+`m_iSquadDisconnected` (`+0x5bb0`) is below 1 **and** its squad word (`+0x5da4`) is non-zero, forms
+the enemy's squad word as `0` when the enemy's own `+0x5bb0` is above 0 and its `+0x5da4` otherwise,
+then answers **FALSE** when that word equals ours and the enemy is still connected — so squadmates
+never enter each other's memory. Then `IsEluded` (`0x102e0210`) on the same list fires slot `0x7b8`
+`FoundEnemySound`. Then it forwards unconditionally to `CAI_Memory::UpdateMemory` (`0x102df700`)
+with the node array at `m_pNavigator+0x2c`, the enemy, the position and the velocity, and answers
+whatever that answers.
+
+**CORRECTION to the checklist's pack-01 row**, confirmed against the C: the enemy's sub-object is
+`+0x94` (`param_1[0x25]`), not `+0xa8`; `m_iSquadDisconnected` is `+0x5bb0`; and `+0x5d34` is
+`m_pNavigator`, not a squad word.
+
+**Unrecovered:** the squad word has no port source and answers `0`, which is retail's own "no squad"
+value and makes the squadmate gate's third term false — the admitting arm.
+
+### `InnateWeaponLOSCondition` `0x1026fcf0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 573. The ray runs from the caller's position plus `m_vecViewOffset` (`+0x0184`) to the caller's
+target (`0x1004f7a0` builds it); the trace uses mask `0x46004003` with the self filter
+`0x101d3190(this, 0)` and is optionally drawn under a cvar. Arms in order: a fraction equal to
+`_DAT_10449280` (a **double** 1.0) answers true; the hit entity being slot 167 `GetEnemy()` answers
+true; a hit entity that is null **or** whose `+0x9c` combat character is null raises COND `0x66` and
+records the blocker into `m_hEnemyOccluder` (`+0x5d90`) through `0x10270aa0`, then answers false;
+otherwise slot 404 `IRelationType` equal to `D_HT` answers true — the `MOV AL,AL` at `1026fe19`
+returns the relation's own low byte — and anything else raises COND `0x63` and answers false.
+
+**CORRECTION to the checklist's walk.** It calls `+0x9c` "the `+0x27` word" and reports both
+condition raises as gated on "trace bool bytes". The listing reads `[ESP+0xb8]` at `1026fe25` and
+`1026fe51`; with `SUB ESP,0xa4` and two pushes that is the **third argument**, `bSetConditions`.
+There is no trace byte in either arm.
+
+**Unrecovered:** nothing.
+
+### `WeaponLOSCondition` `0x1026fbe0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 562, `bool(ownerPos, targetPos, bSetConditions)`. With an active weapon the answer is the
+weapon's own slot `+0x5b0` with the same three arguments. With no weapon, capabilities (slot 513)
+without bit `0x20000` answer 0 and, only under `bSetConditions`, touch the ConVar object
+`DAT_10924a6c` and raise COND `0x42`; with the bit, the answer is slot 573's.
+
+**Then, whatever that answer was**, capabilities are re-read and bit `0x10000000` adds `0x10266b10`
+— the **player-in-line-of-fire** test — which when true sets COND `100` under `bSetConditions` and
+returns 0, overriding a weapon that said yes.
+
+`0x10266b10` itself walks every client: `dot(normalize(target - owner), normalize(center - owner))`
+strictly above `0.92` **and** the distance to the target strictly greater than the distance to that
+client. `0x10137220` (`1057966c`) is `VectorNormalize`, which answers the **length**, which is where
+both unsquared distance terms come from.
+
+**Unrecovered:** the weapon's own slot `+0x5b0` has no counterpart on this substrate; the seam
+answers the admitting value, so the 0.92 override is what decides a weapon-carrying body.
+
+### `GetShootEnemyDir` `0x10278900`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 574. `0x10278650` resolves the aim **point** first — the `m_hShootTargetOverride` (`+0x5ba8`)
+origin when that handle is live; else, with no enemy, the body's own forward from slot `0x374`
+through `AngleVectors` (`0x10139610`); else the enemy-memory LKP (`0x102dfed0`) plus the enemy's
+`BodyTarget(shootPos)` minus its slot-217 origin, with `+_DAT_104994e0` added to Z when the enemy's
+stat `0x0b` reads 5. The caller's shoot position is then subtracted and the delta is **normalised in
+place** through `0x1057966c` before the three floats are stored out: the listing writes
+`[ESP+0x4]`, `[ESP+0x4]` and `[ESP+0x8]` **after** the `POP ESI` at `10278969`, which the decompiled
+C misses, so the slot returns a **unit** direction.
+
+`CNPC_VMingXiao::GetShootEnemyDir` (`0x10395d00`) is the same body with `_DAT_1044eb0c` (**20.0**)
+added to the aim point's Z before the subtraction.
+
+**Unrecovered:** `_DAT_104994e0`, and the `CVStatList_t` join by retail list **type** that stat
+`0x0b` is read through; the port's stat therefore reads not-5 and the Z bonus is not applied.
+
+### `AimGun` `0x1026b4f0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 538, and the whole body is gated on slot 167 `GetEnemy()` being non-null — an NPC with no enemy
+does nothing here. Then slot 217 `GetAbsOrigin` feeds slot 389 `Weapon_ShootPosition`, the Vector
+that returns is handed to slot 574 `GetShootEnemyDir` with **both** trailing arguments `0`, and the
+direction that comes back goes straight to slot 539 `SetAim`. No member is written in this body;
+every write happens inside those slots.
+
+**Unrecovered:** nothing.
+
+### `StartTaskOverlay` `0x10288710`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 445, gated entirely on slot 529 `IsCurTaskContinuousMove` — a false answer leaves the overlay
+untouched. Then, when slot 575 `ShouldMoveAndShoot` is false, it disables the move-and-shoot overlay
+by writing `FLT_MAX` (`0x7f7fffff`) into `m_MoveAndShootOverlay+0x18` through `0x102e8250` and
+returns. Otherwise it calls slot 419 `UpdateBurstShootPause` **first** and only then `0x102e8270`
+with `m_flBurstShootPauseMin` (`+0x5bbc`) and `m_flBurstShootPauseMax` (`+0x5bc0`), which re-derives
+the overlay's shot counts from the active weapon's data (`+0x3a4` / `+0x3a8`), stores the pause pair
+at `overlay+0x24` / `+0x28` and re-arms `overlay+0x18 = curtime + overlay+0x2c` — falling back to
+the same `0x102e8250` disable when the NPC is in state 4, has no weapon, or lacks either the `0x11`
+or the `0x15` activity sequence.
+
+**Unrecovered:** the activity-sequence half of that fallback; this runtime has no activity-sequence
+table, so the state-4 and no-weapon halves are the two the port can answer.
+
+### `Event_Gibbed` `0x102658f0`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 402, a two-gate body whose answer is always the **first** gate's. Slot 394 `CorpseGib` false →
+slot 395 `CorpseFade` runs and the body returns 0. True → slot 398 `HasExplosiveGibs` decides: false
+`UTIL_Remove`s this (`0x101cd940`) and returns the first gate's value, and that is the **one** path
+that does not run `CorpseFade`; true runs
+`CBaseCombatCharacter::CreateSecondaryDiscParticles(m_vDiscBloodType +0xfd0)`, then slot 77
+`ScriptHide` (`vtable +0x134`), then slot 395, and returns the first gate's value.
+
+**Unrecovered:** nothing.
+
+### `CreateVPhysics` `0x10273720`
+
+_Recovered 2026-09-14, story 29d._
+
+Slot 223, 36 bytes. Both slot 158 `IsAlive` and a **null** physics object at `+0x36c` are required
+before `0x10272f40` builds the shadow, and the slot returns true **unconditionally**, including when
+nothing was created. `0x10272f40` itself refuses when slot 94 `GetMoveType` answers 7, destroys any
+existing object first, calls `VPhysicsInitShadow(true, false, NULL)`, sets the shadow mass from the
+model's own `mass` keyvalue or — when that is at or below `_DAT_104454c4` (**0.0**) — `90` for a
+male body and `65` for a female one, and sets its damping from the summed hull extents times
+`_DAT_10449270` (**0.5**) squared.
+
+**Unrecovered:** the studio header's `mass` keyvalue, which this substrate does not parse, so the
+gender default is always the one taken; and the physics object itself, which is recorded rather than
+created.
+
+### `HeadProbe` `0x1026ab50`
+
+_Recovered 2026-09-14, story 29d._
+
+`RunAI` (`0x1026f110`) calls this between `GatherConditions` and `PrescheduleThink`. It runs only
+when the shrunk-hull byte `m_fIsUsingSmallHull` (`+0x5f2d`) **and** `m_bWantsLargeHull` (`+0x5f2c`)
+are both set. It takes the navigator hull maxs (`0x102d6120`) and mins (`0x102d6100`) off
+`m_pNavigator` (`+0x5d34`, whose sub-object is `+0x1568`), centres a box on `GetAbsOrigin` raised by
+`_DAT_104454c0` (**1.0**), halves the extents by `_DAT_104454d0` (**0.5**) and scales them by
+`_DAT_104492dc` (**-1.0**), sets the two box flag bytes from the zero-delta test against
+`_DAT_104454c4` (**0.0**) and the `_DAT_104492e0` extent tests, traces mask `0x200400b` with the
+self filter `0x101d3190`, optionally draws it under a cvar, and on a clean trace (start-solid byte
+clear **and** fraction equal to `_DAT_10449280` = **1.0**) calls `0x10273070` — which restores the
+normal hull from the navigator, clears `+0x5f2d` and re-runs `0x10272f40` when `+0x36c` stands.
+
+**Unrecovered:** `_DAT_104492e0`; and the whole hull swap, which is `CAI_Navigator`'s and has no
+port producer, so both latches ship clear and the body does nothing — which is retail's own answer
+for a body whose hull was never shrunk.
+
+### `FVisible` (Camera Security) `0x10369ff0`
+
+_Recovered 2026-09-14, story 29d._
+
+`CNPC_VCameraSecurity` **replaces** slot 201 outright: the NPC's own eyes are never consulted. It
+resolves the linked `CSecCamera` (`0x10369e70`) and answers 1 only when the candidate carries a
+player record at `+0xa8`, the link is non-null, and `0x1020cd00` — the camera's own sight test: the
+enabled byte `+0x7d8`, `0x1020cd30`'s 2-D distance against the far radius `+0x794` and the near
+radius `+0x790`, the cone test `0x1020cc60`, and a `0x4091` trace whose fraction must equal
+`_DAT_10449280` — is true. Every other case is 0.
+
+`CNPC_VCameraSecurity::FInViewCone` (`0x10369fb0`) is the same shape over slot 363 with the camera's
+**cone** test alone in place of its full sight test; the cone reads the argument's `+0xa8` again,
+takes the camera's forward from its angles (camera slot `+0x374` through `0x10139610`), the
+normalised direction from the camera's `GetAbsOrigin` to the argument's `WorldSpaceCenter`
+(`0x101d1120`), and requires the dot **strictly** greater than the camera's cosine at `+0x798`. A
+missing link is false for both.
+
+**Unrecovered:** the camera entity's five words (`+0x790`, `+0x794`, `+0x798`, `+0x7d8` and its
+angles) have no port counterpart, so both tests answer **false** — retail's switched-off camera,
+which leaves a security NPC blind rather than omniscient.
+
+### `FVisible` (Zombie and Tzimisce) `0x103e0bc0`
+
+_Recovered 2026-09-14, story 29d._
+
+`CNPC_VZombie` adds **one** arm in front of the Troika base: the current enemy's `+0x9c` compared
+against the queried entity — which on this leaf is the entity itself — is answered by
+`0x10146a80`, the obfuscate test (discipline stat 8 at or above 1 **and** the entity's `+0x14dc`
+cloak byte), **negated**: an obfuscated enemy is invisible and an unobfuscated one is visible
+without any sight test at all. Every other entity falls through to `CAI_BaseNPCTroika::FVisible`
+(`0x102b4630`) with the **fourth argument forced to 0**.
+
+`CNPC_VTzimisce::FVisible` (`0x103ba290`), 30 bytes, is that clamp and nothing else: the base with
+the caller's fourth argument discarded.
+
+**Unrecovered:** nothing.
+
+### `OnSeeEntity` (Cop and Hunter) `0x10371ae0`
+
+_Recovered 2026-09-14, story 29d._
+
+Two 54-byte twins. When `+0x6081` is **clear** and slot 404 `IRelationType(seen)` answers `D_HT`,
+`CNPC_VCop` calls `0x10370560`, which stamps the class-static cop suspect state —
+`_DAT_1093aca8 = curtime + _DAT_104492a8` (**30.0**) and `DAT_1093ac3c = seen->handle` — but **only
+when the seen entity carries a non-null `+0xa8`**. `CNPC_VHunter` (`0x103887d0`) is the same over
+`0x10387fd0`, `DAT_1093b650` and `_DAT_1093b658`, and has **no** `+0xa8` guard. Both then run the
+Troika `OnSeeEntity` (`0x102b3e00`) unconditionally.
+
+The same globals are read back by `CNPC_VCop::DrawDebugGeometryOverlays` (`0x10372f00`, family
+Debug10) and by the two slot-404 species arms (family Conditions10).
+
+**Unrecovered:** nothing.
+
+### `ScurryingShouldDetect` `0x103acac0`
+
+_Recovered 2026-09-14, story 29d._
+
+`CNPC_VScurrying`'s detection test. A null target answers false. The distance between the two
+slot-217 origins (the root of the summed squares) must be **strictly** below
+`m_flDetectionDistance` (`+0x6690`). Then `m_fIgnoreNosferatu` (`+0x6694`) rejects a target whose
+character template is `Player_Nosferatu` (`0x103ad0f0`). Then `m_fMustDetect` (`+0x6695`) rejects
+unless `0x103ad0a0` holds, which is true for any target that is **not** a player and for a player
+only while COND `0x5a` `SEE_PLAYER` or COND `0x6f` stands. Passing all of them answers true.
+
+**Unrecovered:** nothing.
+
+### `ScurryingFindFleeDestination` `0x103acba0`
+
+_Recovered 2026-09-14, story 29d._
+
+Given a threat position and a distance it first asks the navigator (`+0x5d34`) for the nearest node
+within 30000 units (`0x102edae0` over `0x103008f0` and `0x102ee9c0`). On **success** it jitters that
+node: whichever of the x or y deltas to the threat is larger picks the axis, the sign of that delta
+picks a `0..-60` or `0..60` band on it and the other axis gets `-80..80`; z is the node z plus slot
+522 `StepHeight` times `_DAT_104454d0`; and it tries up to **5** random points against
+`CAI_BaseNPCTroika::IsAreaClear` with mask `0x202400b`, keeping the **last one tried** whether or
+not it was accepted. The accepted point is written to the out vector when one was passed and it
+answers 1.
+
+On **failure** it marches instead: start at slot 217 `GetAbsOrigin` raised by `StepHeight` times
+`_DAT_104454d0`, direction normalised **away** from the threat, hull-trace (collision bounds from
+`+0x1568`, mask `0x202400b`) to start plus direction times the distance, and while the trace is
+blocked (fraction below `_DAT_104454c0` or either solid flag set) scale **both** the distance and
+the direction by `_DAT_104454d0` and retry, answering 0 once the distance falls to `_DAT_104454c0`
+or below. A clear trace returns its endpoint.
+
+**Unrecovered:** the AI network, so the node search always fails and the march is the arm taken —
+which is retail's own answer for a map with no network, and the arm that still produces a
+destination.
+
+### `WerewolfCheckStuck` `0x103cb920`
+
+_Recovered 2026-09-14, story 29d._
+
+Scope-traced and gated on slot `0x28c`. Probe 1 is a hull trace from `GetAbsOrigin` to origin plus
+`_DAT_10452dc4` (**2.0**) in Z with mask `0x202400b`, using the `m_eHull` (`+0x1568`) normal
+mins/maxs (`0x102d6100` / `0x102d6120`) and the navigator's (`+0x5d40`) filter, inside a `CVProfile`
+`"CAI_MoveProbe::TraceHull"` scope.
+
+**CLEAR** → re-probe through the navigator (`0x102a99e0`) using the **small** hull (`0x102d6140` /
+`0x102d6160`) when `+0x5f2d` is set, with the third extent scaled by `_DAT_10449154`, and only when
+that fraction is below `_DAT_104454c0` or either start-solid byte is set does it `DevWarning`
+`"attempting alt unstuck..."` and run slot `0x360`.
+
+**BLOCKED** → up to three escalating world traces (`0x1006dec0` with the `0x101d3190(this, 7)`
+filter): the first reports `"Werewolf stuck!"`; the second reports `"Werewolf unstuck..."` and runs
+slot `0x360`; the third either succeeds at `0x10269aa0(this, 0x77)` → `"Werewolf teleported out from
+stuck"`, `TeleportOut` and slot `0x700` with `"Werewolf stuck"`, or reports `"Werewolf STUCK!!"` and
+does nothing.
+
+Every exit but the teleport ends in `SetHullSizeSmall(1)`.
+
+**Unrecovered:** `_DAT_10449154`; and the hull sweeps, which are the navigator's — the port's probes
+answer CLEAR, retail's own not-stuck answer.
+
+### `GetHintTargetGroundpoint` `0x103d68d0`
+
+_Recovered 2026-09-14, story 29d._
+
+A linear scan of `m_HintData` (`+0x6714`) over the count at `+0x6720` at stride `0x48`, comparing
+the **entity pointer** at element `+0x04` against the requested hint and answering the Vector at
+element `+0x14` — the **target** groundpoint, where the sibling `GetHintGroundpoint` (`0x103d6770`,
+family Hints) answers `+0x08`. On a miss it `DevWarning`s that the werewolf did not find the hint
+and falls back to `GetGroundpoint(GetHintEndpoint(hint))`, so a miss **still** answers a point. Six
+direct callers need it.
+
+**Unrecovered:** nothing.
+
+### `GetForwardYawForHint` `0x103d7210`
+
+_Recovered 2026-09-14, story 29d._
+
+It seeds the working direction with `vec3_invalid` (`DAT_10713de0`…`de8`) — a seed that is then
+overwritten outright and never reaches the answer — takes `GetHintEndEntity` and
+`GetForwardHintForHint`, forms the end origin minus the forward origin from slot 217 on each,
+normalises it and converts it to a yaw through `0x101d2c70`. It then switches on the hint type at
+`+0x5dc`: `0x3a9a` and `0x3a9d` add `_DAT_10455050`, `0x3a9b` and `0x3a9e` subtract it, and `0x3aa3`
+and `0x3aa5` **discard** the computed yaw and take the hint's own slot-219 yaw instead.
+
+**Read off the listing, because the decompiler lost the `float10` return storage and both tails read
+alike.** The final compare against `_DAT_10450568` (**360.0**) is a single-step **wrap**, not a
+selection: `103d7347` subtracts 360.0 when the yaw is above it, and `103d736d`/`103d737a` add 360.0
+when it is below `_DAT_104454c4` (**0.0**).
+
+**Unrecovered:** `_DAT_10455050`, an `.rdata` cell this body is the only reader of; the port applies
+the two adjust arms as a zero offset and names it rather than guessing a number.
+
+### `InitializeHintData` `0x103d7710`
+
+_Recovered 2026-09-14, story 29d._
+
+Runs only while the werewolf hint count `+0x6720` is zero. It walks the global hint entity chain
+from `DAT_10925450` through the `+0x18` next link, growing the `+0x6714` array one `0x48`-byte
+`CHintData_WW` per entity, and per entity: `CHintData_WW::Init`, store the entity at `+4`,
+`FindHintEndEntity` into the handle at `+0` (`0xffffffff` when absent), `GetForwardYawForHint`
+written back through the entity angles slot `0x104`, `GetGroundpoint` of `GetAbsOrigin` raised by
+`_DAT_104492a4` (**60.0**) into `+8`, `GetGroundpoint` of `GetHintEndpoint` raised the same into
+`+0x14`, each validated against the `0x7f800000` exponent mask and on failure `DevMsg`ing
+`"has invalid ground point"` / `"has invalid target ground point"` and falling back to the raw
+origin or raw endpoint. Then it counts entities named by the hint target string through
+`0x100f7770` and `DevWarning`s unless the count is exactly 1. Finally it `DevMsg`s the hint total.
+
+Note that the validity test is an **exponent-saturation** test: `FLT_MAX` (`0x7f7fffff`, which is
+what `vec3_invalid` carries) **passes** it and is stored; only an infinity or a NaN fails.
+
+**Unrecovered:** the global hint chain, which is family Hints' `HintWords` seam and resolves
+nothing, so the array stays empty — retail's own answer for a map with no hints. The per-hint rule
+is exercised on its own.
+
+### `IsValidRandomMoveHint` `0x103d7dc0`
+
+_Recovered 2026-09-14, story 29d._
+
+False unless all four of: the hint is non-null, `0x102d14c0` says it is not taken (its `+0x5e8`
+disable flag clear, curtime past its lock time `+0x5ec` and its owner handle `+0x5e0` dead), slot
+566 `FValidateHintType` passes, and the type `+0x5dc` is not `0x3aa9`.
+
+Then by type: `0x3aa8` is true only when slot 617 `EnemyCouldSeeHull` at the hint endpoint answers
+**false**. `0x3a9a`, `0x3a9b` and `0x3a99` are true when `curtime - m_flLastSeenByPlayerTime`
+(`+0x66ec`) is at or below 0 **or** below `_DAT_10452dc4` (**2.0**), and otherwise only when the
+cached nearest node from `0x103d0ad0` has `+0x94` equal to `m_iRandomMoveHintNodeZone` (`+0x670c`).
+`0x3aa7`, `0x3aa5`, `15000` and `0x3aa3` are **always false**. Every other type is true only when
+the per-NPC hint cooldown list `0x10366400` (handle and time pairs at `+0x665c`, count `+0x6668`)
+holds no live entry — a call that also evicts the expired row by swapping in the last.
+
+**Unrecovered:** the node graph, so the node-zone arm refuses — retail's own empty-cache answer.
+
+### `IsValidMoveHint` `0x103d8060`
+
+_Recovered 2026-09-14, story 29d._
+
+The twin, and the type set differs in **both membership and sense**. False on a null hint, on
+`0x102d14c0` reporting the hint taken, on slot 566 `FValidateHintType` failing, and on types
+`0x3aa3` and `0x3aa9` by name. Type `0x3aa8` needs `HasCondition(0x77)` **set** *and* slot 617 at
+the hint endpoint to answer false. Type `0x3aa5` needs `m_DoorState` (`+0x6680`) to be exactly `2` —
+where the random-move twin refuses `0x3aa5` outright. Every other type needs the hint's end entity
+from `GetHintEndEntity` to have a **clear** byte at `+0xf4` and the cooldown list `0x10366400` to
+answer false. Only those three paths reach the true tail.
+
+**Unrecovered:** `+0xf4`'s retail name — `0x100b5190`'s whole body is `return *(byte*)(ent + 0xf4)`
+and `CanHearSound` (`0x1030f7b0`) reads it beside `m_bIsBCCTargetable` as a refusal. It has no port
+word and answers 0, the admitting value.
+
+### `FValidateHintType` (Bach) `0x10365800`
+
+_Recovered 2026-09-14, story 29d._
+
+`CNPC_VBach` accepts hint types 17000 through 17005 (`16999 < t && t < 0x426e`) **outright** and
+otherwise **falls through** to `CAI_BaseNPCTroika::FValidateHintType` (`0x10295c20`) rather than
+answering false — which is why it takes its own rule kind (`EHintTypeRule::InRangeOrBase`) in the
+slot-566 species table story 29c-1 deliberately left it out of.
+
+**Unrecovered:** slot 566's own Troika-line body (`0x10295c20`) is still a generated stub, so the
+fall-through takes whatever it answers.

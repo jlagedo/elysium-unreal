@@ -110,8 +110,9 @@ oblivious refcount — **0002** (7).
 with a 4 s stall cap and a distance deadline, teleports onto the mark and fires `OnEndSequence` on
 failure; plays the pre-idle at `Activate`; withholds `OnEndSequence` under flag 256; chains
 `m_iszNextScript` as a queued input; runs any target, NPC or not, as a timing shell; overwrites a
-standing claim instead of queueing. `docs/vtmb/entity_io.md` carries the 256 and bit-reader
-errors above.
+standing claim instead of queueing. (The bit-reader errors this exposed in `docs/vtmb/entity_io.md`
+— the "never read" rows for bits `0x80`/`0x2000`, actually read in `CineCleanup` in shift form —
+were corrected there on 2026-09-14.)
 
 ## Stories
 In build order. A story is done when every behaviour it lists is in the substrate and its
@@ -204,9 +205,12 @@ model / effort tier recommended for it.
   refcount from 0002 (7), the montage-slot run, its claim and the player stand-in from 0010.
 - Open at the 0010 border: what retail does when a beat possesses an actor a choreographed scene
   holds — recovered under 0010/6 before either side is chosen.
-- Open recoveries, stated in code and oracle rather than guessed: the `m_startTime` write in
-  `BeginSequence 0x101a7390` for beats that do not travel; `_DAT_104493d0`, the self-remove delay;
-  the `+0x688` tolerance scaler; `CCineNPC::vfunc586 0x101a8840` (its own `FixScriptNPCSchedule`);
-  the `TASK_SET_SCHEDULE` / `TASK_STOP_MOVING` `StartTask` arms; spawnflag `0x40` OVERRIDESTATE's
-  reader; how plus_jenny and the prophet hold their level-start poses once the `Activate` pre-idle
-  goes.
+- Open recoveries, stated in code and oracle rather than guessed: the `+0x688` tolerance scaler;
+  the `TASK_SET_SCHEDULE` / `TASK_STOP_MOVING` `StartTask` arms. The cine-side list is closed
+  (recovered 2026-09-14, recorded in entity_io § "Scripted sequences"): `BeginSequence` writes
+  `m_startTime = curtime + 0.05` in both throttle arms (throttled arm: `m_flNextThink + 0.05`),
+  the shared `DelayStart` datum `0x10445e08`; `_DAT_104493d0` = 0.1, the `SUB_Remove` self-remove
+  delay; `CCineNPC::vfunc586 0x101a8840` — ideal-state IDLE unless dead, then unconditional
+  `ClearSchedule`, never reading `m_iFinishSchedule` (that switch is `CCineAI`'s slot-586 alone);
+  OVERRIDESTATE `0x40` is never read, in any encoding; plus_jenny and the prophet hold no
+  level-start pose — both are trigger-fired beats.

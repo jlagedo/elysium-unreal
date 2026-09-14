@@ -1127,7 +1127,13 @@ bool FElysiumNpcKernelLifecycleParseMapDataTest::RunTest(const FString&)
 		FElysiumNpcMaker::ExtractRefMapDataBlock(TEXT("}abc")), FString(TEXT("}")));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("lifecycle-maker"), 20260913);
-	Builder.AddEntity(TEXT("npc_maker"), TEXT("maker"));
+	// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker::Spawn` (`0x1034afe0`) dispatches
+	// slot 104 `Precache`, and the base `CNPCMaker` arm `UTIL_Remove`s the maker on a missing `model`
+	// keyfield AND on a missing child classname. A maker authored with neither does not survive its
+	// own spawn, in retail or here, so both are set.
+	FElysiumEntityDef& MakerDef = Builder.AddEntity(TEXT("npc_maker"), TEXT("maker"));
+	MakerDef.Keys.Add(TEXT("model"), TEXT("models/maker.mdl"));
+	MakerDef.Keys.Add(TEXT("NPCType"), TEXT("npc_VCop"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumEntity* Entity = Fixture.World.FindByName(TEXT("maker"));
 	if (!TestNotNull(TEXT("the maker spawned"), Entity))

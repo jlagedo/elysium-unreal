@@ -435,6 +435,15 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 	// The literal `1` is Source's `Disposition_t` `D_HT`, which this runtime spells
 	// `EElysiumRelationship::Hate`. It is the constant that makes this more than a bare forward:
 	// slot 597 is "hate this entity at the caller's priority" and nothing else.
+	//
+	// Story 29d, family **SpeciesMisc10**: `CNPC_VCop#597` (`0x10372cc0`) ADDS the `m_hPursuitPlayer`
+	// latch and the `"Player D_HT 10"` relationship write IN FRONT of this body, which then runs
+	// unchanged — so the prologue goes here and nothing below it moves.
+	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 597);
+	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10372cc0")) == 0)
+	{
+		CopSlot597Prologue(Other);
+	}
 	if (Other == nullptr)
 	{
 		return;

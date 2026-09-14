@@ -516,7 +516,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Elysium.` **954/954**; `uv run pytest pipeline/tests -q` 4,047 passed; `kernel_ledger --check`,
   `kernel_shape --check` and `gen_kernel_shape --check` all pass; `merge_verdicts --audit` still
   reports layers 0–9 with **0** unverdicted and *Neither* **0** and **0**.
-- [ ] **29d. The middle: layers 10–18.**
+- [x] **29d. The middle: layers 10–18.**
   Retail: 347 core functions — the three `GatherConditions` sweeps (10a–10c, landed), the
   see-unknown sweep's neighbours, `CAI_Memory` and the sense helpers, hint and navigator
   helpers, `SetEnemy 0x10279a50`, the flag-word writers — 116 unnamed, 4 damaged, 17 port-cited.
@@ -527,6 +527,148 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 29c. Provides: the producers every gather and selector reads (`fields.md` *Producers
   later* for layers 19–26 drops to zero). Oracle: the subsystem files. Unrecovered: the 4
   damaged bodies. Size: L. Effort: Opus / high for the walked bodies, Sonnet for the rest.
+  Landed (2026-09-14). **The reading.** 344 core functions, every one verdicted: **269 `rule`, 67
+  `mechanism`, 8 `present`, 0 `dead`, 0 `unsettled`**, and `coverage.md`'s *Neither* for layers
+  10–18 is **265 → 0**. The count the story's premise got wrong this time is the opposite of 29c's:
+  where 29c expected trivia and found bodies, this band expected 347 and holds 344, of which **241
+  are over 64 bytes** — it really is the middle, and almost none of it is an accessor. The 67
+  `mechanism` rows are not a spread: **63 of them are one family**, the per-species `vfunc5`
+  deleting destructors, and the reviewer read the largest (`CNPC_VTzimisce` `0x103b6e90`, 225 bytes)
+  to confirm it is pure `CUtlVector` teardown before accepting the other 62. The remaining four were
+  each audited individually and **three were re-verdicted `rule`** — the `CNPC_VMingXiao`,
+  `CNPC_VMingXiaoTentacle` and `CNPC_VTzimisceHeadClaw` slot-126 `Save` bodies, which bracket the
+  archive call with in-place NPC writes under retail-chosen sentinel modes and are the rubric's
+  explicit "a retail-specific rule around the mechanism" case. So the `mechanism` verdict — the one
+  word that makes work disappear — has **100 % audit coverage** in this band.
+  **Two systematic errors the review found, both band-wide.** (1) *A base body and its Troika
+  override cannot both be `hand:`.* `gen_kernel_shape` binds a slot to `bodies["CAI_BaseNPCTroika"]
+  or bodies["CAI_BaseNPC"]`, so only the Troika body is the slot's body; **seven** rows had given
+  the base body the same `hand:` target as its twin (slots 104, 124, 126, 310, 326, 380, 469) and
+  each now takes its own name on 29c-1's `BaseEntityIsMoving` precedent — `BasePrecache`,
+  `BaseSave`, `BaseSetActivity`, `BaseOnLooked`, `BaseLeaveGrappleState`,
+  `BaseDrawDebugTextOverlays`. The seventh, the unnamed `0x103482e0`, turned out to be the
+  **knockback eligibility predicate** already walked in `combat-and-damage.md` and is `present`.
+  (2) *A species override targets the slot's own method.* Band 0–9 records that convention — 57
+  addresses all target `FElysiumNpc::SquadSlotName` — and **61 rows** of this band had coined a
+  per-species name instead (`GargoylePrecache`, `CopIRelationType`, `WerewolfTaskFail` …). All 61
+  were retargeted; a mechanical sweep (`species-sweep-10-18.py`) now reports 116 species slot rows
+  on the slot's method and **7 off it, every one a confirmed false positive** — `CAI_Motor` has a
+  21-slot table, `CAI_Navigator` 18, `CAI_StandoffBehavior` 29 and `CAI_StandoffGoal` is a 246-slot
+  goal entity, so those slots are on their own vtables and their coined names are right. Left
+  uncorrected, the 61 would have become 61 port methods nothing dispatches to — the "one species arm
+  stays unwired" defect 29c-1 had to name.
+  **The port.** 16 families in four waves of three, each owning one
+  `ElysiumNpcKernel<Family>10.{inl,cpp}`, one `Elysium.Substrate.NpcKernel<Family>10.` suite and its
+  own walked sections: SpeciesMisc10 41, Senses10+SpeciesSenses10 34, Sounds10 28, Precache10 28,
+  Anim10+SpeciesAnim10 26, Combat10 21, SaveRestore10+Lifecycle10 22, Conditions10 20,
+  Social10+Hints10 17, Debug10 15, Motor10 12, SpeciesLifecycle10 12 — plus a 17th group of **67
+  rows that need no body at all** (the destructors). **236 automation cases in 13 new suites** and
+  **222 of 222 `rule` bodies over 64 bytes** carry a walked paragraph, across `senses.md`,
+  `social.md`, `conditions-and-states.md`, `lifecycle.md`, `schedule-kernel.md`, `shape.md` and
+  `combat-and-damage.md`. The other 19 bodies over 64 bytes are `mechanism`/`present`, which the
+  rubric exempts.
+  **The build-order problem, and the protocol that already existed for it.** The batches had spelled
+  75 slot rows `hand:` at reading time, which tells the generator to emit no stub — regenerating
+  would have deleted 75 definitions before a single body existed and red-linked the tree for the
+  whole porting phase. 29c→29c-1 had exactly this shape and solved it by flipping a row to `hand:`
+  **as its body landed**, so that is what happened here: the prefix was held off 76 rows
+  (`hand-held-10-18.tsv` is the record, the method names untouched) and each family flipped its own
+  back. All three `--check`s pass at every point between waves, which is what made the waves safe to
+  run in parallel.
+  **What the reading changed.** More than a hundred of the checklist's one-line walks were wrong and
+  are corrected in the code, the prose and the overlay's *evidence*. The ones that would have
+  shipped wrong behaviour rather than wrong prose: `0x101cf5c0` is **`UTIL_SetOrigin`, not
+  `NDebugOverlay::Line`**, which inverts the damaged row `0x102e1760`'s last arm — it *moves the
+  body to the trace endpoint*, so it **is** the step and not a debug draw; `DAT_1070b22c + 0x8c` is
+  **`IVEngineServer::IndexOfEdict`**, not `AddEntityTextOverlay`, and its answer is the first
+  argument of an eight-dword `NDebugOverlay::EntityText` (a misidentification that ran through
+  29c-1's code too); `CanTalk`'s three field names were **rotated** (`m_iDialog` `+0x128`,
+  `m_bWillTalk` `+0x1088`, `m_bfNPCStateFlags` `+0x5b64`); both `OnStateChange` rows were walked as
+  door hooks and **neither has a door in it** — `0x1037e2d0` calls `InputSetRelationship(this,
+  "player D_HT 10", 0)`; `0x1032d0c0`'s second arm is a **stack split, not an ammo test**;
+  `0x102b7f40` has **three** arms, not one; `0x10278650` is `GetShootTarget`, not a standoff anchor;
+  `0x103a0670` is `CNPC_VNewscaster`'s, not MingXiao's; `m_altEquipment`/`m_spawnEquipment` and
+  `+0x66b0`/`+0x66b8` were **swapped**; the dialogue-directory chop is **4**, not 5; and two
+  boolean-polarity inversions (`0x103854f0`'s aggressive-anims gate, `0x10268900`'s spread gate).
+  Two claimed retail quirks were **decompiler artifacts** and correctly not reproduced, and several
+  real retail defects **were** reproduced: a format string missing its conversion character
+  (`"aim_yaw: %.3"`), a flush gated on the wrong loop's counter that drops two of seven pending
+  abbreviations, a dead relationship arm behind a word nothing writes (`+0x6658`), the Werewolf's
+  footstep table being a copy-paste of the Tzimisce's, and the maker running both perception
+  derivations on itself instead of the child.
+  **Constants.** Story 29c-1 read 42 `.rdata` cells out of the pinned image; this band read **more
+  than sixty more** the corpus does not hold, including two concept names (`Pain`, `Flee`) and
+  `_DAT_10451acc` = **64.0**, which three families reached independently from three different bodies
+  and the reviewer read back a fourth time from the file — because `ElysiumNpcKernelSchedule.cpp`
+  was carrying that same cell as `GScheduleMeleeHeightDiffUnits = 0.0 /* UNRECOVERED */` in a
+  **live threshold**. At 0.0 only an enemy exactly level or below disarmed the melee height-diff
+  timer; at retail's 64.0 anything within 64 units counts as level. That is a defect in landed work
+  that this band's reading closed, and it is the reason the story looked for more of them.
+  **Three more defects in already-landed work, found and closed.** 29c-1's `RestoreExtendedHeader`
+  (`0x1027c160`, band 5–9) had misread `thunk_FUN_101cf250(float*, mode)`'s second argument as a
+  count and ported a **save/restore clock re-base retail does not perform**; the body is corrected
+  in place and its test rewritten. Family Debug's `ActiveWeaponEntity` answered `nullptr` claiming
+  no kernel accessor exists, when `FElysiumInventory::Active` is exactly that accessor and four
+  recovered bodies open with the call. Debug10's own `TzimisceIsCarryingBody` seam answered false as
+  "no port counterpart", when the whole of `0x103be130` is `(m_bfAINPCFlags >> 5) & 1` =
+  `CARRYING_BODY`, a word this runtime carries. A fourth was closed at the story's close:
+  `TraceMessageFormat` was a passthrough seam and now runs Conditions10's ported `0x1028d990` with
+  retail's own `0x200` buffer size, handed in as a parameter so the "size ≤ 0 writes nothing at all"
+  arm stays reachable.
+  **The four damaged rows** were read from the listing, confirmed against `vtmb_asm` by a second
+  reader, and all four stand: `0x102e1760` (`CAI_Motor` slot 20 — with two corrections: the trace
+  record is copied into the caller's **second argument**, the `AIMoveTrace_t` out param, not back
+  into the move goal, and `return 4` additionally requires the goal's expected blocker `+0x34` to be
+  **non-zero**), `0x10292500` (Troika's pre-think debug pass — and **not dead** despite `0d/0v/0c`:
+  `NPCThink 0x10292de0` reaches it through thunk `0x10008b57`), `0x102b5d90` (slot 380, `present`)
+  and `0x102d72f0` (`CAI_TestHull::Spawn`, verified constant for constant). None is `unsettled`.
+  ***Producers later*, reported rather than claimed.** The story promised this drops to zero for
+  layers 19–26. It reads **18**, not zero — and **zero of the 18 name a producer in layer ≤ 18**, so
+  nothing in 19–26 is waiting on this band. Every remaining one is 29e's own forward reference
+  inside 19+: `NPCThink 0x10292de0` writing `+0x6264`/`+0x6268`, `NPCInit 0x1029a0b0`, Troika
+  `Spawn 0x10298d30`, `StartTask 0x102a1910`, `0x100521e0`. They stay because 29e ports them.
+  **The measure.** `gen_kernel_shape --report` gives the 29d band **89 → 17** stubs. Fourteen of the
+  seventeen have no verdict at all and are **not core** — `CBaseCombatCharacter`/`CBaseAnimating`
+  slots this band's closure never read, checked one by one against the checklist — and the other
+  three are the destructor rows. This is the same place 29c-1's 145 stand, and the same argument.
+  **Decisions taken**, none with a precedent: (1) a family is named `<Concern>10` rather than
+  extending 29c-1's same-named family, so a file says which band it is and the two never contend for
+  one `.cpp`; (2) the species-arm convention is the *bare slot method*, with a large arm free to be
+  a private helper, because the overlay's target then answers "which slot does this body serve";
+  (3) the port's deferred `NPCInit` (admission, loadout, a parked director's order) is **not** part
+  of `NPCThink`, so a species body that replaces the think must still run it — without that a
+  payphone is never admitted and **cannot be talked to at all**; (4) `Precache` and `Save`/`Restore`
+  are ported and deliberately **not wired** into `Spawn`/`Serialize`, because this substrate acquires
+  assets for a whole map epoch first and a call there would add an event retail's order does not
+  have.
+  **Divergences, all named, all crash guards or unreachable:** null-argument guards where retail
+  faults (`FireBullets`, `KeyValue`, slot 594, `QuerySeeEntity`, `OnObstructingDoor`,
+  `GhoulCroucherStartTouch`, `EquipZombieFists`, slot 348's zero cap, `GetHintEndpoint`,
+  `LoadNewscasterStories`), `ProcessTweakParam` logging where retail's `Error()` exits the process,
+  and the overlay durations, which `FDebugLine` has no column for and which decide only how long a
+  picture stays on a screen this runtime does not have. One divergence was **closed** rather than
+  added: `EnterNpcLine`'s `CandidateRows > 0` gate on the "I do not have a valid reply." fallback was
+  a port invention — `CDialog::fill_packet 0x100e7da0` tests only `(m_bSawDisabledRow == 0) &&
+  (survivors == 0)`, and `get_pc_responses 0x100e82d0` answers 0 for a band with no PC rows, so an
+  under-authored terminal line offers that substitute row in retail too.
+  Verification: `uv run elysium build` clean; `uv run elysium test Elysium.` **1,190/1,190** (954
+  after 29c-1's cleanup, plus 236 new cases in 13 suites), 0 failed; `uv run pytest pipeline/tests
+  -q` **4,047 passed**, 22 skipped; `kernel_ledger --check`, `kernel_shape --check` and
+  `gen_kernel_shape --check` all pass; `merge_verdicts --audit` reports layers 10–18 with **0**
+  unverdicted and *Neither* **0**. Band 19–99's *Neither* fell 298 → 289 as a side effect: nine of
+  29e's functions are now cited by this band's port.
+  Unrecovered, and counted as such: the `CVDmg_t` near-miss bands; the VSound concept list (nothing
+  in `vdata/` holds the eighteen names, so no concept can actually be played); `DAT_109340d8`'s
+  selector; `DAT_1093acac`/`DAT_1093acb0`; `m_rflRegrowTimers`' per-limb index; a dozen ConVar names
+  and defaults; and whether the shipped CRT emits the literal prefix for retail's incomplete
+  `"aim_yaw: %.3"`. Two reachability gaps are named rather than patched: **six retail classes carry
+  no entity classname in the census** (`CNPC_VCop`, `CNPC_VGhoulCroucher`, `CNPC_VWerewolf`,
+  `CNPC_VZombie`, `CScriptedTarget`, `CNPCMaker`) so their arms cannot be selected at runtime, and
+  `npc_maker_zombie` is not a registered spawn leaf — every such arm is ported whole and driven by
+  retail class in a test. One behavioural gap belongs to another story and is stated here: the
+  ghoul's touch burn deals no health damage, because `BurnPlayer` faithfully builds a family-less
+  `FElysiumDmg` (`1037c140 PUSH 0x0`) and this port's damage resolver rejects a descriptor with no
+  family — that join is `CBaseEntity::TakeDamage`'s, not this band's.
 - [ ] **29e. The loop and the state machine: layers 19–26.**
   Retail: 354 core functions, 90 unnamed, 8 damaged, 106 already cited by the oracle — the
   interpreter itself: `SetState 0x1026e340`, `SelectIdealState 0x1026f660` / Troika `0x102ad660`

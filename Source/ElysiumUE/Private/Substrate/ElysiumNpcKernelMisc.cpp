@@ -721,6 +721,9 @@ const FElysiumNpc::FVictimHitSpecies* FElysiumNpc::VictimHitSpeciesRows(int32& O
 		{ TEXT("CNPC_VGargoyle"), TEXT("0x1037a450"), EVictimHitLine::Gargoyle },
 		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103ab4a0"), EVictimHitLine::SabbatLeader },
 		{ TEXT("CNPC_VZombie"), TEXT("0x103e1280"), EVictimHitLine::Zombie },
+		// Story 29d, family **SpeciesMisc10**: `CNPC_VGhoulCroucher#24` (`0x1037be80`). Without this
+		// row a burning croucher fell to the bare Troika arm and never burned the player.
+		{ TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037be80"), EVictimHitLine::GhoulCroucher },
 	};
 	OutCount = UE_ARRAY_COUNT(Rows);
 	return Rows;
@@ -836,6 +839,21 @@ void FElysiumNpc::OnVictimHitByMe(FElysiumEntity* Victim)
 		{
 			FireOutput(FName(TEXT("OnAttackedVictim")), Victim->Handle);
 		}
+		return;
+
+	case EVictimHitLine::GhoulCroucher:
+		// `CNPC_VGhoulCroucher::OnVictimHitByMe` `0x1037be80`, story 29d family SpeciesMisc10:
+		//     player = param_1 ? param_1->+0xa8 : 0;                  // the PLAYER downcast cache
+		//     if (m_bSpawnBurning (+0x6665) && player) BurnPlayer(player, 10.0);
+		//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);      // ALWAYS, unlike the Gargoyle
+		//                                                             // and SabbatLeader arms
+		// `1037bf3c` pushes `0x41200000` = **10.0** as the burn damage.
+		if (bGhoulSpawnBurning && Victim != nullptr && World != nullptr
+			&& Victim->Handle == World->PlayerHandle())
+		{
+			BurnPlayer(Victim, 10.f);
+		}
+		ClearMeleeMoveRecords();
 		return;
 
 	case EVictimHitLine::Troika:

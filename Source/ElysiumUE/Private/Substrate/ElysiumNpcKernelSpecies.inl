@@ -79,13 +79,30 @@ bool bBachFireOccluded = false;   // +0x66a3 CNPC_VBach::m_bFireOccluded (datama
 FVector TentacleCoordinatePosUnits = FVector::ZeroVector;   // +0x668c/+0x6690/+0x6694 (walked)
 
 /** One row of `CNPC_VNewscaster`'s two story queues — a fixed-stride `0x28` record whose first word
- *  is the story's own object and whose `+0x04`/`+0x08` pair, walked in steps of 8 up to `0x20`, are
- *  the four VCD/resource handles `0x103a0d50` releases. The runtime carries the NAME only: nothing
- *  in this substrate stands a VCD, so a row is what the debug listing prints and what the release
- *  counts, which is every observable the two bodies produce. */
+ *  is the story's name and whose `+0x04`/`+0x08` pair, walked in steps of 8 up to `0x20`, are the
+ *  four `(dependency, filename)` pairs `0x103a0d50` releases.
+ *
+ *  Story **29d**, family SpeciesMisc10, added the four pairs and the selected index: `0x103a07f0`'s
+ *  tail (`103a098f`..`103a0a0b`) stores at `+0x24` the index of the FIRST version whose `dependency`
+ *  is absent, empty, or evaluates non-zero, and `0x103a0670` plays `record + 8 + selected * 8` —
+ *  that version's FILENAME. Without them the play body has nothing to choose between, which is why
+ *  they land here rather than in a second struct beside this one. */
 struct FNewscasterStory
 {
 	FString Name;
+
+	/** One authored `Version` block: `dependency` at `+0x04 + i*8` and `filename` at `+0x08 + i*8`,
+	 *  four of them per record — a fifth is refused with `"Newscaster: too many versions in %s!"`. */
+	struct FVersion
+	{
+		FString Dependency;
+		FString Filename;
+	};
+	TArray<FVersion> Versions;
+
+	/** `+0x24`. `INDEX_NONE` never reaches a queue: a record whose every dependency is false is
+	 *  answered `false` by the parser and never appended. */
+	int32 SelectedVersion = INDEX_NONE;
 };
 
 // The two queues and their cursors. `CNPC_VNewscaster` has no datamap in the corpus, so every name

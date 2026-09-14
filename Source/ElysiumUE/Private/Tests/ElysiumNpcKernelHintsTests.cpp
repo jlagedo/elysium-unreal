@@ -51,10 +51,12 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	// Every row, by name, with the retail address it came from.
 	int32 Count = 0;
 	const FRow* Rows = FElysiumNpc::HintTypeSpeciesRows(Count);
-	// Ten DISTINCT bodies: five with a real rule, four `return 1` and one `return 0`.
+	// Eleven DISTINCT bodies: five with a real rule, four `return 1`, one `return 0`, and — added by
+	// story 29d, family Senses10 — `CNPC_VBach` (`0x10365800`), which accepts 17000..17005 outright
+	// and FALLS THROUGH to the base body for everything else.
 	// `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw` share `CNPC_VChangBros`'s body and reach it
 	// by inheritance, which is why they are not rows.
-	TestEqual(TEXT("the table carries the ten recovered slot-566 species bodies"), Count, 10);
+	TestEqual(TEXT("the table carries the eleven recovered slot-566 species bodies"), Count, 11);
 	TMap<FString, FString> ByClass;
 	for (int32 i = 0; i < Count; ++i)
 	{
@@ -62,6 +64,19 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("CNPC_Crow's body"), ByClass.FindRef(TEXT("CNPC_Crow")),
 		FString(TEXT("0x10358c60")));
+	// Story 29d, family Senses10.
+	TestEqual(TEXT("CNPC_VBach's body"), ByClass.FindRef(TEXT("CNPC_VBach")),
+		FString(TEXT("0x10365800")));
+	TestTrue(TEXT("0x10365800 accepts 17000..17005 outright"),
+		Ask(TEXT("CNPC_VBach"), 17000) && Ask(TEXT("CNPC_VBach"), 17005));
+	TestFalse(TEXT("...and 16999 / 17006 are outside the range"),
+		Ask(TEXT("CNPC_VBach"), 16999) || Ask(TEXT("CNPC_VBach"), 17006));
+	TestTrue(TEXT("...and a type outside it FALLS THROUGH to the base rather than refusing"),
+		FElysiumNpc::HintTypeSpeciesFallsThroughToBase(
+			FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VBach"))));
+	TestFalse(TEXT("no other row falls through to the base"),
+		FElysiumNpc::HintTypeSpeciesFallsThroughToBase(
+			FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VWerewolf"))));
 	TestEqual(TEXT("CNPC_VDog's body"), ByClass.FindRef(TEXT("CNPC_VDog")),
 		FString(TEXT("0x10374aa0")));
 	TestEqual(TEXT("CNPC_VSabbatLeader's body"), ByClass.FindRef(TEXT("CNPC_VSabbatLeader")),
@@ -527,7 +542,9 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 		Hint.NodeId = 42;
 		Hint.OriginCm = FVector(10.0, 20.0, 30.0);
 		Npc->WerewolfHintGroundpoints.Reset();
-		Npc->WerewolfHintGroundpoints.Add({ 42, FVector(1.0, 2.0, 3.0) });
+		// Story 29d, family Hints10 corrected the record: `+0x00` is the cached end entity and the
+		// hint is at `+0x04` (`103d6779`). This probe keys on the hint, as the body does.
+		Npc->WerewolfHintGroundpoints.Add({ INDEX_NONE, 42, FVector(1.0, 2.0, 3.0) });
 		TestEqual(TEXT("a matching row answers its groundpoint, in source units"),
 			Npc->GetHintGroundpoint(Hint).X, 1.0, 0.001);
 		Npc->WerewolfHintGroundpoints.Reset();
@@ -549,7 +566,7 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 			"FLT_MAX into the origin"), Npc->Origin.Equals(Before, 0.001));
 
 		// An authored row moves it for real, scaled out of source units.
-		Npc->WerewolfHintGroundpoints.Add({ 42, FVector(100.0, 0.0, 0.0) });
+		Npc->WerewolfHintGroundpoints.Add({ INDEX_NONE, 42, FVector(100.0, 0.0, 0.0) });
 		Npc->PositionAtHint(Hint);
 		TestEqual(TEXT("an authored groundpoint places the body at it"), Npc->Origin.X,
 			100.0 * ElysiumMove::U, 0.01);

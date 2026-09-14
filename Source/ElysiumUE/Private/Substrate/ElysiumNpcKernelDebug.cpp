@@ -3,7 +3,9 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -936,6 +938,30 @@ void FElysiumNpc::DrawDebugStatOverlays()
 	//                 `m_iDialog` is set; otherwise it tail-calls the base.
 	//   `0x102775e0`  everything else — the base body itself.
 	const TCHAR* SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 76);
+	// Story 29d, family **SpeciesMisc10**: a FOURTH body, `CNPC_VWerewolf#76` (`0x103d5130`), which
+	// PREPENDS two lines, CHAINS `0x10366290` (the boss arm above), then APPENDS the zone word, the
+	// five conditions, the door state, the hint dump and the schedule stack.
+	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x103d5130")) == 0)
+	{
+		TArray<FString> Lines;
+		WerewolfDrawDebugStatOverlays(Lines);
+		// `103d51ee`: the two prepended lines come out FIRST, then the MingXiao arm runs, then the
+		// rest. `WerewolfDrawDebugStatOverlays` builds the whole list in retail's order; the chain
+		// point is here, between line 2 and line 3.
+		for (int32 Index = 0; Index < Lines.Num(); ++Index)
+		{
+			if (Index == 2)
+			{
+				BossDrawDebugStatOverlays();
+			}
+			EmitDebugMsg(TEXT("%s"), Lines[Index]);
+		}
+		if (Lines.Num() < 3)
+		{
+			BossDrawDebugStatOverlays();
+		}
+		return;
+	}
 	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10366290")) == 0)
 	{
 		BossDrawDebugStatOverlays();
@@ -1120,7 +1146,13 @@ float FElysiumNpc::MotorYawSpeed() const
 
 FElysiumEntity* FElysiumNpc::ActiveWeaponEntity() const
 {
-	// SEAM for `CBaseCombatCharacter::GetActiveWeapon()`. Family BaseHelpers seams the same object's
-	// maximum range (`ActiveWeaponMaxRangeUnits`); there is no kernel accessor for the entity.
-	return nullptr;
+	// `CBaseCombatCharacter::GetActiveWeapon()` — the inventory's active slot (`+0x19a4`).
+	//
+	// Story 29d, family **Combat10**: this was a seam answering null because "there is no kernel
+	// accessor for the entity", and there is — `FElysiumInventory::Active` is retail's own
+	// `m_hActiveWeapon` resolve and is what `ElysiumNpcCond::WeaponCapability` already reads. The
+	// two `Weapon_Drop` bodies (slots 385/386, `0x1032d0c0` / `0x1032ce40`), the ranged weapon
+	// pre-pass (`0x102b8620`) and `CNPC_VBach::SelectScheduleRangedCombat` (`0x103642f0`) all begin
+	// with this call, so a null answer would have made four recovered bodies no-ops.
+	return Inventory.Active(*this);
 }
