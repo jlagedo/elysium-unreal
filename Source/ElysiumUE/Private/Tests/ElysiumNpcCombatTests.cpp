@@ -833,20 +833,20 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1,
 			&F.Fighter->Cognition.Conditions));
 
-	// Arrival ends the program.
+	// Fixture correction from retail `MaintainSchedule`: arrival completes the last task, then
+	// `10281980` raises SCHEDULE_DONE and the same loop reaches `10281b89` selection. The target is
+	// still too far, so the replacement is another chase rather than a caller-visible empty gap.
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
-	TestFalse(TEXT("arrival completes the last task and ends the chase"),
+	TestTrue(TEXT("arrival completes and reselects in the same retail loop"),
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2,
 			&F.Fighter->Cognition.Conditions));
-	TestFalse(TEXT("nothing is left running"), F.Fighter->Schedule.IsRunning());
-
-	// The claim is given back where the program ended, before the next selection runs.
-	F.Fighter->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
-	F.Fighter->Cognition.Conditions.Reset();
-	F.Fighter->ThinkStanceOrIdle(10.3, /*bReduced=*/false);
-	TestTrue(TEXT("the ended program hands the body back"),
-		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::None);
-	TestTrue(TEXT("...and stops the request it was holding"), F.Services.Saw(TEXT("NpcMotor Stop")));
+	TestTrue(TEXT("10281be5 installed the replacement selected after completion"),
+		F.Fighter->Schedule.IsRunning());
+	TestEqual(TEXT("102814d0 recorded that replacement as m_IdealSchedule"),
+		F.Fighter->ScheduleHost.IdealScheduleRetail,
+		ElysiumScheduleNumber(F.Fighter->Schedule.Current));
+	TestTrue(TEXT("the replacement keeps the schedule body owner"),
+		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 
 	// Back in the band, the attack window opens.
 	F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
@@ -973,19 +973,27 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 			FElysiumNpcConditions::Of({ ECond::NewEnemy }));
 		TestTrue(TEXT("the swing program restarts"),
 			ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
-		TestFalse(TEXT("with a mask installed, NEW_ENEMY aborts it"),
-			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5, &Storm));
-		TestEqual(TEXT("...and no attack was pressed"), Weapon->Swing.Serial, SerialBefore);
+		F.Fighter->Cognition.Conditions = Storm;
+		// Fixture correction: `10281340` invalidates the swing, then `10281b89` selects and starts
+		// the replacement in this same loop. The install's `10280e7x` condition clear is the durable
+		// proof that the mask fired even when the combat selector returns to an attack immediately.
+		TestTrue(TEXT("with a mask installed, NEW_ENEMY reselects in the same loop"),
+			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5,
+				&F.Fighter->Cognition.Conditions));
+		TestFalse(TEXT("the replacement install clears NEW_ENEMY"),
+			F.Fighter->Cognition.Conditions.Has(ECond::NewEnemy));
 	}
 
 	// The registered posture: no interrupts, so the same storm cannot stop the swing.
 	TestTrue(TEXT("the swing program restarts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
-	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5, &Storm);
+	F.Fighter->Cognition.Conditions = Storm;
+	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5,
+		&F.Fighter->Cognition.Conditions);
 	TestTrue(TEXT("a NEW_ENEMY mid-swing does not abort the terminal attack"),
 		Weapon->Swing.Serial > SerialBefore);
-	TestFalse(TEXT("...and nothing reported an interrupt"),
-		F.Debug(F.Fighter, TEXT("Mind transition")).Contains(TEXT("interrupted by")));
+	TestTrue(TEXT("...and without a mask the condition is not consumed by an install"),
+		F.Fighter->Cognition.Conditions.Has(ECond::NewEnemy));
 	return true;
 }
 
@@ -1029,13 +1037,17 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 	TestTrue(TEXT("the starvation gate no longer blocks a dead enemy mid-chase"),
 		ElysiumNpcEnemy::IsScheduleInterested(*F.Fighter, ECond::EnemyDead));
 
-	const FElysiumNpcConditions Dead = FElysiumNpcConditions::Of({ ECond::EnemyDead });
-	TestFalse(TEXT("ENEMY_DEAD mid-chase ends the program"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1, &Dead));
-	TestFalse(TEXT("...returning the NPC to selection rather than to a fail schedule"),
+	F.Fighter->Cognition.Conditions = FElysiumNpcConditions::Of({ ECond::EnemyDead });
+	// Fixture correction: `10281340` invalidates before task work, but `10281b89` reselects and
+	// `10281be5` installs the answer in the same iteration; the observable boundary is the install's
+	// condition clear, not an empty schedule returned to the caller.
+	TestTrue(TEXT("ENEMY_DEAD mid-chase reselects in the same loop"),
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1,
+			&F.Fighter->Cognition.Conditions));
+	TestTrue(TEXT("selection installed a replacement rather than the fail route"),
 		F.Fighter->Schedule.IsRunning());
-	TestTrue(TEXT("...and the trace names the condition that fired"),
-		F.Debug(F.Fighter, TEXT("Mind transition")).Contains(TEXT("interrupted by ENEMY_DEAD")));
+	TestFalse(TEXT("the replacement install consumed ENEMY_DEAD"),
+		F.Fighter->Cognition.Conditions.Has(ECond::EnemyDead));
 	return true;
 }
 

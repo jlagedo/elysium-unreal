@@ -1025,7 +1025,7 @@ void FElysiumCogWindow_Npc::RenderSchedule(FElysiumNpc& Npc)
 		Row(TEXT("task"), Program
 			? FString::Printf(TEXT("%d of %d"), State.TaskIndex + 1, Program->Tasks.Num())
 			: FString(TEXT("(unregistered program)")));
-		Row(TEXT("started"), State.bTaskStarted ? TEXT("yes") : TEXT("no"));
+		Row(TEXT("started"), State.TaskStatus != EElysiumTaskStatus::New ? TEXT("yes") : TEXT("no"));
 		// Both are PER-RUN: `TASK_SET_FAIL_SCHEDULE` and `TASK_SET_TOLERANCE_DISTANCE` write them for
 		// this run of the program, and `Start` resets them, so a previous program's tolerance can
 		// never leak into the next one's path request.

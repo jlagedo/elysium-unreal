@@ -385,8 +385,8 @@ struct FElysiumNpcCognition
 	// condition number and its promote stamp
 	TArray<TPair<int32, double>> DelayedConditions;
 	bool bCondTookDamage = false;  // +0x5b80 m_bCondTookDamage (datamap)
-	// +0x5c74 m_CustomInterruptConditions (sdk-order) — retail's cached mask; today recomputed
-	// each think by ElysiumSchedule::EffectiveInterrupts
+	// +0x5c74 m_CustomInterruptConditions (sdk-order) — retail's cached positive mask, refreshed by
+	// GetNewSchedule when m_flCacheInterruptTime is behind curtime.
 	FElysiumNpcConditions CustomInterruptConditions;
 	// +0x5c8c m_InverseInterruptConditions (walked) — the inverted !COND mask retail keeps as a
 	// second word

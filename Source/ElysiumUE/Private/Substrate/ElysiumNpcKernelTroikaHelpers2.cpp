@@ -747,7 +747,7 @@ void FElysiumNpc::FUN_102aa9e0(const void* TaskArgument)
 		++TaskArgumentForwards;
 		// `TaskComplete(false)` — `m_ScheduleState.fTaskStatus = COMPLETE`, which this runtime
 		// spells as the schedule state's external-completion latch.
-		Schedule.bTaskCompletedExternally = true;
+		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 		return;
 	}
 	TaskFail(TroikaTaskArgumentAssertReason);

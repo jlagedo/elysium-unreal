@@ -209,6 +209,7 @@ struct FMoveAndShootOverlay
 	float PauseMax = 0.f;    // +0x28, from m_flBurstShootPauseMax (+0x5bc0)
 	int32 Disables = 0;      // how many times 0x102e8250 ran
 	int32 Arms = 0;          // how many times 0x102e8270 ran
+	int32 UpdateCalls = 0;   // 0x102e8560, reached by RunTaskOverlay 0x10289c90
 };
 FMoveAndShootOverlay MoveAndShootOverlay;
 void DisableMoveAndShootOverlay();                       // 0x102e8250

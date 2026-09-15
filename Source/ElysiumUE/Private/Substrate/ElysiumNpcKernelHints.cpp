@@ -1023,7 +1023,7 @@ bool FElysiumNpc::FindHintNode(int32 HintType, uint8 SearchFlags)
 	if (Node != INDEX_NONE)
 	{
 		// `thunk_FUN_10273e80(this, '\0')` — `TaskComplete(false)`.
-		Schedule.bTaskCompletedExternally = true;
+		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 		return true;
 	}
 	// The miss arm writes retail's assert file and line into `+0x1b44` / `+0x1b48`

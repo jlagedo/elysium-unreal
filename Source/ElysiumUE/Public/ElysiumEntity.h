@@ -474,6 +474,9 @@ public:
 	// matching body handle. Base false also covers choreographed-scene claims, which have their own
 	// cast lifetime rather than CCineNPC's CancelSequence transition.
 	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& NpcHandle) { return false; }
+	// `CCineNPC::m_interruptable` (`+0x5f90`). The scripted-sequence leaf derives the same immutable
+	// spawnflag word; NPC schedule changes ask through this narrow accessor before cancelling it.
+	virtual bool IsScriptedSequenceInterruptable() const { return false; }
 
 	// --- Dialogue body ownership ---
 	// The open world session holds this token beside its camera handle. Only the NPC leaf backs

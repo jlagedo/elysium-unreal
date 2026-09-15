@@ -774,7 +774,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `HasInterruptCondition` (the running schedule's mask), not `HasCondition`, with the two flee arms
   as the exceptions; and `CNPC_VSabbatLeader::TaskFail 0x103a9400` does **not** chain `0x1029adb0`
   on its flip path, which breaks the port's "species arms are a prologue" invariant.
-  **Port progress (2026-09-14): 3 of 16 families landed, 96 of 457 rows; the story stays open.**
+  **Port progress (2026-09-14): 4 of 16 families landed, 106 of 457 rows; the story stays open.**
   The port runs as one headless coding agent per family (Grok 4.6 at `xhigh`, from a brief per
   family under `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/`, launched by `grok-launch.ps1`;
   Codex `gpt-5.6-sol` is set up as the alternative, `codex-launch.ps1`), each followed by a full
@@ -800,8 +800,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   family already landed (twelve cases across the two runs, each silently disabling a live arm); arms
   stubbed inside a body whose row reads "ported" (WerewolfRearm shipped 4 of 23); values invented
   where the image holds them (the Camera's immediates shipped as the Troika tuning); the port bent
-  to the fixture (`ArmThinkNow`). Remaining, in order, one brief each: Maintain19 (10 rows),
-  Conditions19 (23), Spawn19 (60), RunAi19 (34), StartTask19 (28), RunTask19 (24), Select19 (39,
+  to the fixture (`ArmThinkNow`). Remaining, in order, one brief each: Conditions19 (23),
+  Spawn19 (60), RunAi19 (34), StartTask19 (28), RunTask19 (24), Select19 (39,
   plus the agreed visual-only modernization: the selector, ideal-state and `TaskFail` stamps carried
   as retail-address members and rendered in the story-23 debugger, the `__FILE__`/`__LINE__` words
   staying absent), Damage19 (26), Script19 (32), Think19 (15), Boss19 (19), Werewolf19 (17), Misc19
@@ -812,6 +812,30 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0.2 constant, not `RetailFieldOfViewDot`, so the Werewolf's −0.5 does not reach vision yet;
   `GetMoveType` / `GetSolidFlags` / `SetMoveType` are still 29c stubs; the cine-hide setter
   (`ScriptHide`) is unported.
+  **Maintain19 landed (2026-09-14): 10 rows.** `MaintainSchedule 0x102817c0` is now the one
+  interpreter loop: validity and same-call reselection, the state/door/fail routes, null retry,
+  the five-value task status, start/run overlays, continuous-move memory, 10/1 completion and 8 ms
+  budgets, both `ai_step` exits and the common `m_bDidMaintainSchedule` write all run in listing
+  order. `0x102ae750` / `SetSchedule 0x102ae780` and `ForceScheduleChange 0x102ae490` preserve the
+  dead/alive gates, live-cine cancellation and two ordered slot-435 calls; base/Troika and all four
+  species `OnScheduleChange` bodies stand, including `VacateSquadSlot`, opening-door slot 532 and
+  the Werewolf's 51-entry history. `TaskMovementComplete 0x10273ec0` carries all five statuses,
+  and SabbatLeader `TaskFail 0x103a9400` returns without the base chain on its two flip arms.
+  Review corrected two more incomplete claims before landing: `timeStarted +0x5c48` and
+  `timeCurTaskStarted +0x5c4c` are now distinct schedule-state words written at install/task start,
+  and base `OnScheduleChange 0x1027a700` reaches the already-ported `VacateSquadSlot 0x1028ae60`.
+  It also retained the worker's corrections of the aliased `+0x1b24`/`+0x632c` timers and narrowed
+  ideal-schedule enum: `m_IdealSchedule +0x5c3c` is raw int32. Tests **1,241 → 1,247**; pipeline
+  tests remain **4,047 passed**. The scratch held list is reconciled as **49 → 48 raw rows** and
+  **42 → 41 non-`hand:` rows**; the earlier printed 37 was stale, because seven scratch rows were
+  already `hand:` and raw length was never an unfinished-body count. The full review was performed
+  locally at the owner's request, with no review agent; it found the two omitted arms above and
+  records that missing-arm habit for the next family. No new gameplay divergence. Remaining seams:
+  the unexposed `ai_step` console producer, the existing absent move-and-shoot controller
+  `0x102e8560`, the missing inverse-interrupt program column, and raw selector results that
+  Select19 owns. Remaining families, in order: Conditions19 (23), Spawn19 (60), RunAi19 (34),
+  StartTask19 (28), RunTask19 (24), Select19 (39), Damage19 (26), Script19 (32), Think19 (15),
+  Boss19 (19), Werewolf19 (17), Misc19 (34).
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
   is a live per-worldlight evaluation: Source falloff by light type, the cone/angle term, the live

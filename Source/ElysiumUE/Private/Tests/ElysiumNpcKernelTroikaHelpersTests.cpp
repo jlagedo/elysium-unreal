@@ -687,11 +687,14 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	TestTrue(TEXT("and TaskFail raised COND_TASK_FAILED with it"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	const int32 ForwardsBefore = Npc->TaskArgumentForwards;
-	Npc->Schedule.bTaskCompletedExternally = false;
+	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
 	int32 Dummy = 0;
 	Npc->FUN_102aa9e0(&Dummy);
 	TestEqual(TEXT("a live argument forwards once"), Npc->TaskArgumentForwards, ForwardsBefore + 1);
-	TestTrue(TEXT("and completes the task"), Npc->Schedule.bTaskCompletedExternally);
+	// Representation update: the forwarded `TaskComplete(false)` reaches `10273e98`, which writes
+	// literal status 4 to `+0x5c44`.
+	TestEqual(TEXT("and completes the task"), Npc->Schedule.TaskStatus,
+		EElysiumTaskStatus::Complete);
 
 	// `0x10312cd0` — the expresser factory. The base gate is `IsAlive`, and only a live body
 	// reaches the factory at all.

@@ -483,6 +483,11 @@ public:
 		return !OwnedNpc.IsSet();
 	}
 
+	virtual bool IsScriptedSequenceInterruptable() const override
+	{
+		return (SpawnFlags & 0x20) == 0;   // CCineNPC::m_interruptable +0x5f90
+	}
+
 	// The action animation ran out (or there was none): hold the post-idle, fire OnEndSequence, and
 	// hand off to the next script.
 	void EndSequence()

@@ -322,6 +322,20 @@ enum class EElysiumTaskResult : uint8
 	Failed,      // end the schedule through its fail schedule
 };
 
+// `AIScheduleState_t::fTaskStatus` (`+0x5c44`). Retail carries five values, and
+// `TaskMovementComplete` distinguishes all four non-complete values. The old pair of booleans
+// could not represent status 2 versus 3 and therefore could not host that body.
+enum class EElysiumTaskStatus : int32
+{
+	New = 0,
+	Running = 1,
+	RunningMovement = 2,
+	RunningTask = 3,
+	Complete = 4,
+};
+
+struct FElysiumScheduleState;
+
 // What `TASK_WAIT_FOR_MOVEMENT` sees when it samples the outstanding request. Three answers rather
 // than a bool, because "still travelling" and "the body gave up" take different routes out of the
 // schedule: one holds the task, the other fails it into the fail schedule.
@@ -443,7 +457,52 @@ public:
 	// This is why `SCHED_TROIKA_MESMERIZED` needs no teardown tasks and why the trance unwinds
 	// completely: the NEXT schedule this NPC is given is what ends it. It is also why the mesmerize
 	// tasks always write onto a cleared word — the same virtual ran when the program was installed.
-	virtual void OnScheduleChange() {}
+	virtual void OnScheduleChange(EElysiumScheduleId NewSchedule) { (void)NewSchedule; }
+	// `gpGlobals->curtime`, used by base SetSchedule to stamp both schedule clocks. A plain runner
+	// has no world clock and therefore starts at retail's zero-initialised value.
+	virtual double ScheduleTime() const { return 0.0; }
+
+	// The non-task arms of `MaintainSchedule` (`0x102817c0`). Defaults preserve the engine-neutral
+	// runner's answer; `FElysiumNpc` supplies the retail state, door, selector and animation words.
+	virtual bool IsSpecialNavigation() const { return false; }
+	virtual void MarkSpecialNavigationScheduleEnd() {}
+	virtual bool ConsumeChooseNewSchedule() { return false; }
+	virtual bool ScheduleStateDiffersFromIdeal() const { return false; }
+	virtual bool HasMaintenanceCondition(EElysiumNpcCond Cond) const
+	{
+		(void)Cond;
+		return false;
+	}
+	virtual void PrepareScheduleReselect() {}
+	virtual bool ConsumeBlockedDoorForSchedule(double Now) { (void)Now; return false; }
+	virtual void CommitIdealStateForSchedule() {}
+	virtual EElysiumScheduleId SelectScheduleForMaintenance(double Now,
+		int32& OutIdealScheduleRetail)
+	{
+		(void)Now;
+		OutIdealScheduleRetail = 0;
+		return EElysiumScheduleId::None;
+	}
+	virtual void SetIdealScheduleForMaintenance(int32 RetailId) { (void)RetailId; }
+	virtual void MissingSchedule() {}
+	virtual void MaintainActivity() {}
+	virtual int32 LocalScheduleIdForStart(EElysiumScheduleId Id)
+	{
+		return ElysiumScheduleNumber(Id);
+	}
+	virtual void MaintenanceOnStartSchedule(int32 LocalScheduleId) { (void)LocalScheduleId; }
+	virtual void DebugTaskStart(const FElysiumTaskStep& Step) { (void)Step; }
+	virtual void MaintenanceStartTaskOverlay() {}
+	virtual bool MaintenanceIsCurTaskContinuousMove() { return false; }
+	virtual void RememberContinuousMove() {}
+	virtual void RunTaskOverlay() {}
+	virtual bool IsAiStepMode() const { return false; }
+	virtual void AdvanceAiStepDebugIndex() {}
+	virtual void FreezeForAiStep() {}
+	virtual void NextScheduledTaskForMaintenance(FElysiumScheduleState& State);
+	// This port represents patrol, ambient use and pushed scripted orders as executors outside the
+	// retail schedule table. Their existing handoff consumes the completed program at ScheduleDone.
+	virtual bool TakeExternalExecutorReturn() { return false; }
 
 	// `ClearSchedule` (`0x10280d30`) asked for by a body the kernel is running. Retail executes it at
 	// the call site; here the body asks and the kernel honours the request at the next point it
@@ -485,8 +544,11 @@ struct FElysiumScheduleState
 	int32 TaskIndex = 0;
 	// Set when a timed task starts; the substrate clock decides when it completes.
 	double TaskEndsAt = 0.0;
-	bool bTaskStarted = false;
-	bool bTaskCompletedExternally = false; // TaskComplete(false), consumed by MaintainSchedule
+	// `m_ScheduleState.timeStarted +0x5c48` and `timeCurTaskStarted +0x5c4c`. The latter is read by
+	// both RunTask spines, so these are distinct retail state rather than derived diagnostics.
+	double ScheduleStartedAt = 0.0;
+	double TaskStartedAt = 0.0;
+	EElysiumTaskStatus TaskStatus = EElysiumTaskStatus::New;
 
 	// What `TASK_SET_FAIL_SCHEDULE` and `TASK_SET_TOLERANCE_DISTANCE` wrote for THIS run of the
 	// program. Both are per-run rather than per-program: the same schedule reached from two
@@ -516,8 +578,9 @@ struct FElysiumScheduleState
 		Current = EElysiumScheduleId::None;
 		TaskIndex = 0;
 		TaskEndsAt = 0.0;
-		bTaskStarted = false;
-		bTaskCompletedExternally = false;
+		ScheduleStartedAt = 0.0;
+		TaskStartedAt = 0.0;
+		TaskStatus = EElysiumTaskStatus::New;
 		FailScheduleOverride = EElysiumScheduleId::None;
 		ToleranceUnits = -1.f;
 		bDidMaintainSchedule = false;
@@ -526,6 +589,12 @@ struct FElysiumScheduleState
 
 namespace ElysiumSchedule
 {
+	// `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`): install a schedule pointer that has
+	// already passed the id lookup. `None` is a null pointer and is installed as null; unlike
+	// `Start`, it does not take `GetScheduleOfType`'s IDLE_STAND miss arm.
+	void Install(FElysiumScheduleState& State, EElysiumScheduleId Id,
+		IElysiumScheduleRunner& Runner);
+
 	// `SetSchedule(int)` (`0x102cc1f0`): begin Id after running the outgoing program's teardown. A
 	// program this runtime does not carry is `GetScheduleOfType`'s miss — a trace row
 	// (`"GetScheduleOfType(): No CASE for %d"`) and base `IDLE_STAND` installed in its place. False

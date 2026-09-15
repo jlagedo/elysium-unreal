@@ -348,10 +348,10 @@ void FElysiumNpc::ChangeSchedule(EElysiumScheduleId Id)
 	const int32 RawRetailId = ElysiumScheduleNumber(Id);
 	const int32 Stamp = ResolveIdealScheduleStamp(RawRetailId);
 
-	// `m_IdealSchedule = <stamp>` (`+0x5c3c`), which nothing in this runtime wrote before.
-	const EElysiumScheduleId Stamped = ScheduleFromRetailNumber(Stamp);
-	ScheduleHost.IdealSchedule = Stamped;
-	if (Stamped == EElysiumScheduleId::None)
+	// `m_IdealSchedule = <stamp>` (`+0x5c3c`) keeps the raw int32 exactly, including -1 and the
+	// global >=1e9 namespace that the typed installed-program enum cannot spell.
+	ScheduleHost.IdealScheduleRetail = Stamp;
+	if (Stamp == INDEX_NONE)
 	{
 		// SEAM, stated once per call rather than swallowed: with no class schedule id space the
 		// translation answers -1 and the stamp is empty. Retail would have stamped the global id
@@ -436,8 +436,7 @@ void FElysiumNpc::NextScheduledTask()
 {
 	// `m_ScheduleState.fTaskStatus (+0x5c44) = 0` (TASKSTATUS_NEW) and `m_iScheduleIndex (+0x5c40)
 	// += 1`, in that order.
-	Schedule.bTaskStarted = false;
-	Schedule.bTaskCompletedExternally = false;
+	Schedule.TaskStatus = EElysiumTaskStatus::New;
 	++Schedule.TaskIndex;
 	// `if (IsTaskIndexCurrent())` — `0x10280db0`, which is "the index reached the program's task
 	// count", i.e. the program is exhausted.
@@ -463,7 +462,7 @@ void FElysiumNpc::TaskComplete(bool bIgnoreTaskFailed)
 	{
 		return;
 	}
-	Schedule.bTaskCompletedExternally = true;
+	Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 }
 
 // 0x102623c0 `CAI_Motor` slot 2

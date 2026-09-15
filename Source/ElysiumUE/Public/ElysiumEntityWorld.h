@@ -731,6 +731,11 @@ public:
 	// (`m_flNextThink = curtime - 0.1`) has no body here to take it.
 	bool IsAiEnabled() const { return bAiEnabled; }
 	void SetAiEnabled(bool bEnabled);
+	// Bit 1 of retail's same `DAT_1092053c` word: the `ai_step` command freezes an NPC immediately
+	// after it advances a completed task. The console command is not exposed yet; the stored mode is
+	// still part of the schedule interpreter and is directly driveable by automation.
+	bool IsAiStepMode() const { return bAiStepMode; }
+	void SetAiStepMode(bool bEnabled) { bAiStepMode = bEnabled; }
 	// `0x1028d820(point)`: slot 583 on every NPC -- each one within 2048 units of the point takes
 	// slot 614. Called by `CBasePlayer::Teleport` `0x101606a0`, the `teleport_player` command
 	// `0x101803a0` and `CPointTeleport::InputTeleport` `0x1018dc00`.
@@ -1126,4 +1131,5 @@ private:
 	bool bHasMeasuredFrame = false;
 	// `g_AIDisabled` bit 0, inverted. A fresh world starts enabled, as retail's global does.
 	bool bAiEnabled = true;
+	bool bAiStepMode = false;
 };

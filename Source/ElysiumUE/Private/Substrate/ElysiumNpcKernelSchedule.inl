@@ -109,7 +109,7 @@ int32 ResolveIdealScheduleStamp(int32 RawRetailId) const;
  *  each a scope-trace wrapper with no logic of its own; their trace names are
  *  `FElysiumNpcScheduleHost::SetScheduleTraceName`).
  *
- *  Stamp `ScheduleHost.IdealSchedule`, then run `SetSchedule(int)` (`0x102cc1f0`) →
+ *  Stamp raw `ScheduleHost.IdealScheduleRetail`, then run `SetSchedule(int)` (`0x102cc1f0`) →
  *  `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`), which is `ElysiumSchedule::Start`. */
 void ChangeSchedule(EElysiumScheduleId Id);
 

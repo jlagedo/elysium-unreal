@@ -579,5 +579,5 @@ void FElysiumNpc::ZombieNPCInit()
 	ElysiumNpcEnemy::SetEnemy(*this, Closest != nullptr ? Closest->Handle : FElysiumEntityHandle::Invalid());
 	SetTarget(Closest != nullptr ? Closest->Handle : FElysiumEntityHandle::Invalid());
 	ZombieGrappleReadyTimer = Lifecycle19_2Now(*this) + TuningZombieGrappleReadyInterval();
-	InstallScheduleRetail(ZombieCrawlScheduleRetailId, false);           // 0x161
+	SetSchedule(ZombieCrawlScheduleRetailId, false);                      // 0x103df04b -> 0x102ae750
 }

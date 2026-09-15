@@ -597,7 +597,8 @@ static int32 GlobalToLocalId(const FScheduleIdSpace* Space, int32 GlobalId);
  *  retail's constructor leaves. */
 void CineDelayState(int32& OutDelay, float& OutStartTime) const;
 
-/** **SEAM** for `CCineNPC::m_interruptable` (+0x5f90). No port member; answers false. */
+/** `CCineNPC::m_interruptable` (+0x5f90), read through the scripted-sequence entity that already
+ *  stores the word. A missing or non-sequence owner answers false. */
 bool CineIsInterruptable() const;
 
 // --- The `CBasePlayer` bodies' own inputs ---------------------------------------------------------

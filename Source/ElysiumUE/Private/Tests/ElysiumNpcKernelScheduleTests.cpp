@@ -208,7 +208,7 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 	TestEqual(TEXT("ChangeSchedule installs the program"), Guard->Schedule.Current,
 		EElysiumScheduleId::IdleDisposition);
 	TestEqual(TEXT("and leaves m_IdealSchedule empty (no class schedule id space)"),
-		Guard->ScheduleHost.IdealSchedule, EElysiumScheduleId::None);
+		Guard->ScheduleHost.IdealScheduleRetail, INDEX_NONE);
 
 	// --- `0x10280db0` `IsTaskIndexCurrent` and `0x10280f40` `NextScheduledTask` -------------------
 	const FElysiumSchedule* Program = ElysiumScheduleFor(EElysiumScheduleId::IdleDisposition);
@@ -234,12 +234,15 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 
 	Guard->Cognition.Conditions.Reset();
 	Guard->Schedule.TaskIndex = TaskCount - 1;
-	Guard->Schedule.bTaskStarted = true;
+	Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
 	Guard->ScheduleHost.FailedSchedule = EElysiumScheduleId::Fail;
 	Guard->ScheduleHost.InterruptSchedule = EElysiumScheduleId::Fail;
 	Guard->NextScheduledTask();
 	TestEqual(TEXT("NextScheduledTask advances the index"), Guard->Schedule.TaskIndex, TaskCount);
-	TestFalse(TEXT("and clears the task status"), Guard->Schedule.bTaskStarted);
+	// Representation update: `10280f40 MOV [this+0x5c44],0` is the full status word, not the old
+	// `bTaskStarted` approximation.
+	TestEqual(TEXT("and clears the task status"), Guard->Schedule.TaskStatus,
+		EElysiumTaskStatus::New);
 	TestTrue(TEXT("exhausting the program raises COND_SCHEDULE_DONE"),
 		Guard->Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone));
 	TestEqual(TEXT("and zeroes m_failedSchedule"), Guard->ScheduleHost.FailedSchedule,
@@ -256,19 +259,20 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 
 	// --- `0x10273e80` `TaskComplete` and the two `CAI_Motor` forwards ----------------------------
 	Guard->Cognition.Conditions.Reset();
-	Guard->Schedule.bTaskCompletedExternally = false;
+	Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
 	Guard->TaskComplete(/*bIgnoreTaskFailed=*/false);
+	// `10273e98 MOV [this+0x5c44],4` is reached only after the `COND_TASK_FAILED` refusal.
 	TestFalse(TEXT("TaskComplete(false) refuses to overwrite an already-failed task"),
-		Guard->Schedule.bTaskCompletedExternally);
+		Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete);
 	Guard->TaskComplete(/*bIgnoreTaskFailed=*/true);
 	TestTrue(TEXT("TaskComplete(true) writes the status regardless"),
-		Guard->Schedule.bTaskCompletedExternally);
+		Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete);
 	Guard->Cognition.Conditions.Reset();
-	Guard->Schedule.bTaskCompletedExternally = false;
+	Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
 	Guard->MotorTaskComplete(/*bIgnoreTaskFailed=*/false);
 	TestTrue(TEXT("the motor's slot 2 reaches the same body through the owner back-pointer"),
-		Guard->Schedule.bTaskCompletedExternally);
+		Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete);
 
 	Guard->Cognition.Conditions.Reset();
 	Guard->ScheduleHost.FailureReason = 0;

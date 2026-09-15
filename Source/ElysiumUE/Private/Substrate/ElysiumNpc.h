@@ -726,7 +726,7 @@ public:
 
 	virtual void ClearConditions() override;
 
-	virtual void OnScheduleChange() override;
+	virtual void OnScheduleChange(EElysiumScheduleId NewSchedule) override;
 
 	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
 
@@ -1262,6 +1262,7 @@ public:
 	#include "Substrate/ElysiumNpcKernelState19.inl"
 	#include "Substrate/ElysiumNpcKernelTranslate19.inl"
 	#include "Substrate/ElysiumNpcKernelLifecycle19.inl"
+	#include "Substrate/ElysiumNpcKernelMaintain19.inl"
 	#include "Substrate/ElysiumNpcKernelTroikaHelpers.inl"
 
 private:

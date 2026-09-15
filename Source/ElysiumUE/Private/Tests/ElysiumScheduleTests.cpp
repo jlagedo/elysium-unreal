@@ -62,7 +62,19 @@ namespace
 			const EElysiumScheduleId* Translated = Translations.Find(Id);
 			return Translated ? *Translated : Id;
 		}
-		virtual void ScheduleDone() override { ++CompletedSchedules; }
+		virtual void ScheduleDone() override
+		{
+			++CompletedSchedules;
+			// `NextScheduledTask 0x10280f40` raises condition 0x5d before the next iteration's
+			// `IsScheduleValid 0x10280ff0`; the recording runner must expose that live write.
+			Conditions.Set(EElysiumNpcCond::ScheduleDone);
+		}
+		virtual bool HasMaintenanceCondition(EElysiumNpcCond Cond) const override
+		{
+			// `102819d5` and the later `10281f50` read the NPC's live condition set, including writes
+			// made by StartTask/RunTask after an install cleared the incoming pass snapshot.
+			return Conditions.Has(Cond);
+		}
 
 		// Knobs a test turns to drive each branch.
 		bool bVisible = true;
@@ -179,7 +191,7 @@ namespace
 			Conditions.Reset();
 			Calls.Add(TEXT("ClearConditions"));
 		}
-		virtual void OnScheduleChange() override
+		virtual void OnScheduleChange(EElysiumScheduleId) override
 		{
 			if (ObservedState) OutgoingSchedules.Add(ObservedState->Current);
 			Calls.Add(TEXT("OnScheduleChange"));
@@ -741,13 +753,14 @@ bool FElysiumScheduleMesmerizedTest::RunTest(const FString&)
 		static_cast<int32>(FMath::RoundToInt(Now - Started)), 150);
 	TestTrue(TEXT("it held across thinks rather than completing in one"), Thinks >= 2);
 
-	// It carries no teardown tasks: the three flags and the obliviousness are still set when the
-	// program ends, and it is the NEXT install that releases them.
-	TestTrue(TEXT("D_IS_BUSY survives the program's own end"),
+	// Fixture correction from the retail loop: `10281980` advances the completed last task and
+	// raises SCHEDULE_DONE; that same iteration reaches `10281be5 SetSchedule(NULL)`, whose
+	// `10280e53` slot-435 call releases these bits before the missing-schedule return.
+	TestFalse(TEXT("D_IS_BUSY is released by the loop's replacement install"),
 		Runner.Flags.Has(EElysiumNpcFlag::D_IS_BUSY));
-	TestTrue(TEXT("the victim is still oblivious"), Runner.Flags.IsOblivious());
+	TestFalse(TEXT("the obliviousness refcount is released with it"), Runner.Flags.IsOblivious());
 
-	// ...and now the next schedule releases all of it, through `OnScheduleChange`.
+	// A later real install leaves the already released state clear.
 	ElysiumSchedule::Start(State, EElysiumScheduleId::AlertLookAroundNi, Runner);
 	TestFalse(TEXT("D_IS_BUSY released by the next install"),
 		Runner.Flags.Has(EElysiumNpcFlag::D_IS_BUSY));
@@ -1056,9 +1069,13 @@ bool FElysiumScheduleFailRouteTest::RunTest(const FString&)
 			PreserveAt != INDEX_NONE && ChangeAt > PreserveAt);
 		TestEqual(TEXT("slot 435 is dispatched with no program"), Runner.OutgoingSchedules.Last(),
 			EElysiumScheduleId::None);
-		TestEqual(TEXT("ClearSchedule leaves the conditions alone"), Runner.ConditionClears, ClearsBefore);
-		TestEqual(TEXT("...and m_failSchedule (+0x5c54 is outside +0x5c38..+0x5c4c)"),
-			State.FailScheduleOverride, EElysiumScheduleId::BackAwayFromDoorNe);
+		// Fixture correction: ClearSchedule itself leaves both alone, then the same-think second
+		// iteration reaches `10281be5 SetSchedule(NULL)`. Base `0x10280e50` clears the six condition
+		// words and `m_failSchedule` before `0x1028226c` returns on the second null selection.
+		TestEqual(TEXT("the replacement SetSchedule clears conditions once"),
+			Runner.ConditionClears, ClearsBefore + 1);
+		TestEqual(TEXT("the replacement SetSchedule clears m_failSchedule"),
+			State.FailScheduleOverride, EElysiumScheduleId::None);
 		TestEqual(TEXT("and is not a schedule completion"), Runner.CompletedSchedules, 0);
 	}
 

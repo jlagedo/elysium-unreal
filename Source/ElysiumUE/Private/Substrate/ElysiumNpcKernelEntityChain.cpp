@@ -1090,8 +1090,8 @@ bool FElysiumNpc::CineCanInterrupt() const
 	// interrupted, it is already over.
 	//
 	// `+0x5ce4` is bound to `FElysiumNpc::TargetEnt` in the shape map, which is the word this reads.
-	// SEAM: `m_interruptable` is `CCineNPC`'s and has no port member; `CineIsInterruptable()` below
-	// answers false, so this answers false and says which term refused.
+	// `m_interruptable` is read through the owning scripted-sequence leaf by
+	// `CineIsInterruptable()` below.
 	if (!CineIsInterruptable())
 	{
 		return false;
@@ -1111,11 +1111,11 @@ bool FElysiumNpc::CineCanInterrupt() const
 
 bool FElysiumNpc::CineIsInterruptable() const
 {
-	// SEAM for `CCineNPC::m_interruptable` (+0x5f90, `FIELD_BOOLEAN`). No port member; the port's
-	// scripted sequence carries its own interruption policy on the sequence entity
-	// (`FElysiumEntity::bScriptOwnerLocked` is the nearest thing and is a DIFFERENT rule — it is
-	// spawnflag 512's queue lock, not `m_interruptable`). Answers false.
-	return false;
+	// `CCineNPC::m_interruptable` (+0x5f90, `FIELD_BOOLEAN`). The scripted-sequence leaf derives the
+	// exact immutable value from spawnflag 0x20; the accessor keeps the NPC from guessing from the
+	// different queue-lock bit.
+	const FElysiumEntity* Owner = World != nullptr ? World->Resolve(ScriptOwner) : nullptr;
+	return Owner != nullptr && Owner->IsScriptedSequenceInterruptable();
 }
 
 void FElysiumNpc::FixScriptNpcSchedule(FElysiumNpc& Npc)

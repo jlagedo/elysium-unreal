@@ -681,10 +681,6 @@ namespace
 bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	IElysiumScheduleRunner& Runner)
 {
-	// A clear asked for before this install is superseded by it: retail's `ClearSchedule` then
-	// `SetSchedule` leaves the new program standing, so the request must not outlive the install
-	// and clear the program it was never aimed at.
-	Runner.TakeClearScheduleRequest();
 	const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
 	if (Schedule == nullptr || !Schedule->IsValid())
 	{
@@ -707,6 +703,20 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 		}
 		return Start(State, EElysiumScheduleId::IdleStand, Runner);
 	}
+	Install(State, Id, Runner);
+	return true;
+}
+
+void ElysiumSchedule::Install(FElysiumScheduleState& State, EElysiumScheduleId Id,
+	IElysiumScheduleRunner& Runner)
+{
+	// A clear asked for before this install is superseded by it: retail's `ClearSchedule` then
+	// `SetSchedule` leaves the new program standing, so the request cannot outlive the install.
+	Runner.TakeClearScheduleRequest();
+	// A null pointer is a real input to `CAI_BaseNPC::SetSchedule(CAI_Schedule*)`; the selection
+	// loop uses it to clear the outgoing program before trying the selector once more.
+	const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
+	check(Id == EElysiumScheduleId::None || (Schedule != nullptr && Schedule->IsValid()));
 	// Everything retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) does besides installing the
 	// program, in its order. All three producers reach it here rather than at their own call sites,
 	// which is what keeps a script's `ChangeSchedule`, a discipline's `AI_Schedule` and the feed's
@@ -715,20 +725,25 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	// 1. The schedule-change virtual (slot 435). It releases the bits and the obliviousness the
 	//    PREVIOUS program was holding, which is how an incapacitating schedule unwinds without
 	//    carrying teardown tasks of its own.
-	Runner.OnScheduleChange();
+	Runner.OnScheduleChange(Id);                                         // 0x10280e53
 	// The old task is visible to the callback, including HitInfo expiry's TaskComplete.
 	State.Clear();
-	State.Current = Id;
+	State.Current = Schedule != nullptr ? Id : EElysiumScheduleId::None;
+	const double Now = Runner.ScheduleTime();
+	State.ScheduleStartedAt = Now;                                      // 0x10280e69, +0x5c48
+	State.TaskStartedAt = Now;                                          // 0x10280e73, +0x5c4c
 	// 2. Zero the gathered conditions. A stimulus standing at the instant of install is destroyed;
 	//    only one the next pass re-observes can interrupt the new program.
 	Runner.ClearConditions();
 	// 3. `m_bDidMaintainSchedule = false` -- `State.Clear()` above already did it, and it is restated
 	//    here because it is a rule of the install rather than a side effect of clearing state.
 	State.bDidMaintainSchedule = false;
-	Runner.RecordScheduleEvent(FString::Printf(TEXT("schedule %s (0x%x)"),
-		ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
-	Runner.DebugScheduleInstalled(Id);
-	return true;
+	if (Schedule != nullptr)
+	{
+		Runner.RecordScheduleEvent(FString::Printf(TEXT("schedule %s (0x%x)"),
+			ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
+		Runner.DebugScheduleInstalled(Id);
+	}
 }
 
 void ElysiumSchedule::ClearSchedule(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner)
@@ -742,7 +757,7 @@ void ElysiumSchedule::ClearSchedule(FElysiumScheduleState& State, IElysiumSchedu
 	State.Clear();
 	State.FailScheduleOverride = KeptFailSchedule;
 	Runner.ClearPreservePath();
-	Runner.OnScheduleChange();
+	Runner.OnScheduleChange(EElysiumScheduleId::None);
 	Runner.RecordScheduleEvent(FString::Printf(TEXT("ClearSchedule: %s (0x%x) cleared"),
 		ElysiumScheduleName(Cleared), ElysiumScheduleNumber(Cleared)));
 }
@@ -775,198 +790,303 @@ bool ElysiumSchedule::HasInterruptCondition(const FElysiumScheduleState& State,
 	return Conditions.Has(Cond) && MaskHasCondition(State, Runner, Cond);
 }
 
+void IElysiumScheduleRunner::NextScheduledTaskForMaintenance(FElysiumScheduleState& State)
+{
+	State.TaskStatus = EElysiumTaskStatus::New;
+	++State.TaskIndex;
+	const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
+	if (Schedule == nullptr || !Schedule->Tasks.IsValidIndex(State.TaskIndex))
+	{
+		ScheduleDone();
+	}
+}
+
 bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
 	const FElysiumNpcConditions* Conditions, bool bReduced)
 {
-	if (!State.IsRunning())
-	{
-		return false;
-	}
-	// A `ClearSchedule` asked for outside a task step (retail executes it at its call site) is
-	// honoured before any task work, so the program it was aimed at never advances again.
+	// A clear requested outside a task is consumed before any more work.
 	if (Runner.TakeClearScheduleRequest())
 	{
 		ElysiumSchedule::ClearSchedule(State, Runner);
-		return false;
+		// Retail's outside caller has already executed ClearSchedule before it enters this body;
+		// the null program therefore reaches the invalid/reselect arm in this same pass.
 	}
-	// `TASK_FAILED` is the routing authority, whoever raised it: a task body on the previous pass, or
-	// a navigator outside StartTask/RunTask. Independent of whether the current task would otherwise
-	// keep running.
-	//
-	// `MaintainSchedule` (`0x102817c0`) takes the fail route at the top of its loop, on
-	// `IsScheduleValid` (`0x10280ff0`) answering no for `COND_TASK_FAILED` with the state unchanged
-	// and no door block: `GetFailSchedule` (slot 439, `0x1028abe0`) answers `m_failSchedule` or base
-	// `FAIL`, `SetSchedule(int)` installs it, and the same loop keeps running it — the route costs no
-	// think beyond the one the failure ended. The caller has already routed a state change to
-	// selection before this tick runs.
-	if (Conditions && Conditions->Has(EElysiumNpcCond::TaskFailed))
+	auto HasCondition = [&Runner, &Conditions](EElysiumNpcCond Cond)
 	{
-		if (!Start(State, FailScheduleFor(State, Runner), Runner))
-		{
-			State.Clear();
-			return false;
-		}
-		// The install zeroed the conditions (`SetSchedule 0x10280e50`), so the loop's next
-		// `IsScheduleValid` sees none: the pass snapshot must not interrupt the fail program.
-		Conditions = nullptr;
-	}
+		return (Conditions != nullptr && Conditions->Has(Cond))
+			|| Runner.HasMaintenanceCondition(Cond);
+	};
 
-	// The interrupt check runs at the TOP of the tick, before any task work: a schedule aborted by
-	// a new condition must not first advance the task that the condition invalidated. An interrupt
-	// ends the program and hands the NPC back to selection -- it deliberately does NOT go through
-	// `FailSchedule`, which is task failure's route (see `FElysiumSchedule::Interrupts`).
-	if (Conditions != nullptr)
+	// The listing converts _DAT_1049a148 (8.0 ms) to cycles once, then compares after every
+	// completed task. FPlatformTime supplies the same monotonic budget without exporting RDTSC.
+	const double StartedAt = FPlatformTime::Seconds();                    // 0x10281907
+	constexpr double CycleBudgetSeconds = 0.008;                         // _DAT_1049a148 = 8.0 ms
+	const int32 MaintainScheduleBound = bReduced ? 1 : 10;                // 0x1028190e
+	for (int32 Guard = 0; Guard < MaintainScheduleBound; ++Guard)
 	{
-		if (const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current))
+		bool bCompletedScheduleAtTop = false;
+		if (State.IsRunning() && State.TaskStatus == EElysiumTaskStatus::Complete)
 		{
-			// `DELAY_INTERRUPTS`, exactly as `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`) spells it:
-			// the flag is ANDed with `!m_bDidMaintainSchedule`, so it buys ONE think of immunity and is
-			// re-armed by every install. Nothing is latched -- a condition suppressed here is simply
-			// not consulted this pass, and a stimulus that persists is re-gathered and fires next
-			// think.
-			const bool bDelayed = Active->bDelayInterrupts && !State.bDidMaintainSchedule;
-			// The effective mask: the authored one plus the runner's per-NPC overlay
-			// (`IElysiumScheduleRunner::BuildScheduleTestBits`). Shared with the condition sweeps
-			// that consult the same mask -- see `ElysiumSchedule::EffectiveInterrupts`.
-			const FElysiumNpcConditions Mask = ElysiumSchedule::EffectiveInterrupts(State, Runner);
-			const FElysiumNpcConditions Firing = bDelayed
-				? FElysiumNpcConditions() : Mask.Intersection(*Conditions);
+			Runner.NextScheduledTaskForMaintenance(State);                   // 0x10281980
+			const FElysiumSchedule* Advanced = ElysiumScheduleFor(State.Current);
+			bCompletedScheduleAtTop = Advanced == nullptr
+				|| !Advanced->Tasks.IsValidIndex(State.TaskIndex);
+			if (Runner.IsAiStepMode())                                      // 0x10281987
+			{
+				Runner.AdvanceAiStepDebugIndex();                              // 0x102821f5
+				return State.IsRunning();                                      // 0x10282269
+			}
+			if (Runner.TakeExternalExecutorReturn())
+			{
+				// The port's out-of-table executor resumes at the caller boundary. This is the old
+				// ScheduleDone handoff moved to the exact completion edge; ordinary schedules do not
+				// take it and continue through retail's reselect block below.
+				Install(State, EElysiumScheduleId::None, Runner);
+				return false;
+			}
+		}
+
+		const bool bTaskFailed = HasCondition(EElysiumNpcCond::TaskFailed);
+		const bool bScheduleDone = bCompletedScheduleAtTop
+			|| HasCondition(EElysiumNpcCond::ScheduleDone);
+		bool bScheduleValid = State.IsRunning();                            // 0x10280ff0
+		if (bScheduleValid && Runner.IsSpecialNavigation())                 // 0x10281023
+		{
+			if (bTaskFailed || bScheduleDone)
+			{
+				Runner.MarkSpecialNavigationScheduleEnd();                     // 0x10281045
+				bScheduleValid = false;
+			}
+		}
+		else if (bScheduleValid && Runner.ConsumeChooseNewSchedule())       // 0x10281075
+		{
+			bScheduleValid = false;
+		}
+		else if (bScheduleValid)
+		{
+			const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
+			const bool bDelayed = Active != nullptr && Active->bDelayInterrupts
+				&& !State.bDidMaintainSchedule;                               // 0x102819c7
 			if (bDelayed)
 			{
 				Runner.RecordScheduleEvent(FString::Printf(
 					TEXT("schedule %s (0x%x) DELAY_INTERRUPTS: interrupts held for this think"),
 					ElysiumScheduleName(State.Current), ElysiumScheduleNumber(State.Current)));
 			}
-			if (!Firing.IsEmpty())
+			else if (Conditions != nullptr && Active != nullptr)
 			{
-				Runner.RecordScheduleEvent(FString::Printf(
-					TEXT("schedule %s (0x%x) interrupted by %s"), ElysiumScheduleName(State.Current),
-					ElysiumScheduleNumber(State.Current), *Firing.Describe()));
-				State.Clear();
-				return false;
+				const FElysiumNpcConditions Firing =
+					EffectiveInterrupts(State, Runner).Intersection(*Conditions);
+				if (!Firing.IsEmpty())
+				{
+					Runner.RecordScheduleEvent(FString::Printf(
+						TEXT("schedule %s (0x%x) interrupted by %s"),
+						ElysiumScheduleName(State.Current), ElysiumScheduleNumber(State.Current),
+						*Firing.Describe()));
+					bScheduleValid = false;                                     // 0x10281340
+				}
+			}
+			if (bTaskFailed || bScheduleDone)
+			{
+				bScheduleValid = false;                                      // 0x10281213
 			}
 		}
-	}
 
-	// Bounded rather than looping to completion: a schedule whose every task completes instantly
-	// would otherwise run the whole program inside one think, and a fail-schedule chain could
-	// bounce between two programs forever.
-	//
-	// The bound is retail's: `MaintainSchedule` (`0x102817c0`, at `0x1028190e`) iterates at most
-	// 10 times per call, and continues only while tasks keep COMPLETING (`0x1028212e`) -- so it is a
-	// cap on how many tasks may complete in one think, which is exactly what this loop is. Retail
-	// re-tests `IsScheduleValid` inside each iteration; this kernel tests once at the top, and the
-	// two are equivalent because the only thing that could change the answer mid-loop is an install
-	// (`TASK_SET_SCHEDULE`), and every install both re-arms the delay window and zeroes the
-	// conditions -- so a re-test after one can never fire. A failure inside the loop ends the pass
-	// (below), so its `TASK_FAILED` is tested where retail tests it: the next pass's top.
-	// ...and at most ONCE on a reduced pass. A reduced think is the AI clock declining to think;
-	// letting a chain of instantly-completing tasks run ten deep inside one would spend the whole
-	// decision budget the reduction exists to save.
-	const int32 MaintainScheduleBound = bReduced ? 1 : 10;
-	for (int32 Guard = 0; Guard < MaintainScheduleBound; ++Guard)
-	{
-		const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
-		if (Schedule == nullptr || !Schedule->Tasks.IsValidIndex(State.TaskIndex))
+		const bool bStateMismatchAtEntry = Runner.ScheduleStateDiffersFromIdeal();
+		if (!bScheduleValid || bStateMismatchAtEntry)                       // 0x102819da
 		{
-			// Ran off the end: the schedule completed.
-			if (Schedule) Runner.ScheduleDone();
-			else Runner.TaskFail(0x05);
-			State.Clear();
-			return false;
-		}
-
-		const FElysiumTaskStep& Step = Schedule->Tasks[State.TaskIndex];
-		EElysiumTaskResult Result;
-		if (State.bTaskCompletedExternally)
-		{
-			State.bTaskCompletedExternally = false;
-			Result = EElysiumTaskResult::Complete;
-		}
-		else if (!State.bTaskStarted)
-		{
-			State.bTaskStarted = true;
-			Runner.TaskStarting();
-			Result = BeginTask(Step, State, Runner, Now);
-		}
-		else
-		{
-			Result = ContinueTask(Step, State, Runner, Now);
-		}
-
-		// A task body that called `ClearSchedule` leaves no program behind, whatever it answered.
-		if (Runner.TakeClearScheduleRequest())
-		{
-			ElysiumSchedule::ClearSchedule(State, Runner);
-			return false;
-		}
-
-		if (Result == EElysiumTaskResult::Running)
-		{
-			// The pass ran, so the delay window closes -- `MaintainSchedule`'s common exit
-			// (`0x102821ae`, the single store at `0x10282342`) sets `m_bDidMaintainSchedule = 1`.
-			// Retail has two other returns and neither stores: the `ai_step` debug return, which a
-			// shipping session cannot reach, and the "Missing or invalid schedule" error, which is
-			// only reachable AFTER the loop's own `SetSchedule` has re-armed the flag or left no
-			// schedule at all. So this is the only exit that matters here too: every other path out
-			// of this function clears the state or installs a program, and both re-arm the window.
-			State.bDidMaintainSchedule = true;
-			return true;
-		}
-		if (Result == EElysiumTaskResult::Complete)
-		{
-			if (Step.Task == EElysiumTask::SetSchedule)
+			Runner.PrepareScheduleReselect();                                // 0x102819f4
+			const bool bDoorBlocks = Runner.ConsumeBlockedDoorForSchedule(Now); // 0x10281a04
+			const bool bStateMismatch = Runner.ScheduleStateDiffersFromIdeal();
+			if (!bTaskFailed || bStateMismatch || bDoorBlocks)                // 0x10281a6c
 			{
-				// `TASK_SET_SCHEDULE` is the transfer the melee approach uses to hand the NPC to the
-				// terminal swing. It is NOT a failure and NOT a return to selection: the program is
-				// replaced in place and keeps running this same think, which is what makes
-				// "face, stop, then swing" one uninterruptible decision rather than three.
-				const EElysiumScheduleId Next = Step.Target;
-				if (!ElysiumSchedule::Start(State, Next, Runner))
+				Runner.CommitIdealStateForSchedule();                           // 0x10281b5a
+				int32 IdealRetail = 0;
+				const EElysiumScheduleId Selected =
+					Runner.SelectScheduleForMaintenance(Now, IdealRetail);         // 0x10281b89
+				Runner.SetIdealScheduleForMaintenance(IdealRetail);              // 0x102814d0
+				if (Runner.TakeExternalExecutorReturn())
 				{
-					State.Clear();
+					// Patrol and interesting-place schedules live outside this registry. Their selector
+					// answer is represented by the owning executor, so hand the null answer to the caller
+					// at the same selection edge instead of treating it as a registry miss.
+					Install(State, EElysiumScheduleId::None, Runner);                  // 0x10281be5 adapter
 					return false;
 				}
-				continue;
+				Install(State, Selected, Runner);                               // 0x10281be5
 			}
-			++State.TaskIndex;
-			State.bTaskStarted = false;
-			if (State.TaskIndex == Schedule->Tasks.Num())
+			else
 			{
-				Runner.ScheduleDone();
-				State.Clear();
+				const EElysiumScheduleId Fail = FailScheduleFor(State, Runner);   // 0x10281ab8
+				Runner.SetIdealScheduleForMaintenance(ElysiumScheduleNumber(Fail)); // 0x10281ac1
+				Start(State, Fail, Runner);                                      // 0x10281730
+			}
+			// SetSchedule cleared the live condition set, so the old pass snapshot is spent.
+			Conditions = nullptr;
+		}
+
+		if (!State.IsRunning())                                             // 0x10281c1d
+		{
+			int32 IdealRetail = 0;
+			const EElysiumScheduleId Selected =
+				Runner.SelectScheduleForMaintenance(Now, IdealRetail);          // 0x10281c46
+			Runner.SetIdealScheduleForMaintenance(IdealRetail);
+			if (Runner.TakeExternalExecutorReturn())
+			{
+				Install(State, EElysiumScheduleId::None, Runner);                  // 0x10281ca6 adapter
 				return false;
 			}
-			continue;
-		}
-
-		// Failed.
-		int32 Reason = Runner.TaskFailureReason();
-		if (Reason == 0)
-		{
-			switch (Step.Task)
+			if (Selected != EElysiumScheduleId::None)
 			{
-			case EElysiumTask::GetPathToEnemy: case EElysiumTask::FaceEnemy: Reason = 0x06; break;
-			case EElysiumTask::MeleeAttack1: case EElysiumTask::RangeAttack1: Reason = 0x03; break;
-			case EElysiumTask::SpecialIdleActivity: Reason = 0x15; break;
-			default: Reason = 0x0c; break;
+				Install(State, Selected, Runner);                               // 0x10281ca6
 			}
 		}
-		Runner.TaskFail(Reason);
-		Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
-			ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
-		// The pass ends here with the failed program still installed. `TaskFail` (`0x10273fc0`)
-		// writes the reason and the condition and leaves the status word `+0x5c44` alone, so the task
-		// is still "running" (`0x10273f90`) and `MaintainSchedule` exits on `HasCondition(TASK_FAILED)`
-		// to `0x102821ae` — the one store of `m_bDidMaintainSchedule = 1`. The route runs at the top
-		// of the NEXT pass, where it is also gated on the state and the door (see the top arm).
-		State.bDidMaintainSchedule = true;
-		return true;
+
+		const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
+		if (Schedule == nullptr || Schedule->Tasks.IsEmpty())               // 0x10281ce4
+		{
+			Runner.MissingSchedule();                                        // 0x1028226c
+			return false;                                                     // 0x10282336
+		}
+
+		if (State.TaskStatus == EElysiumTaskStatus::New)                    // 0x10281cf7
+		{
+			if (State.TaskIndex == 0)
+			{
+				int32 Local = Runner.LocalScheduleIdForStart(State.Current);     // 0x10281d17
+				if (Local == INDEX_NONE)
+				{
+					Local = ElysiumScheduleNumber(State.Current);
+				}
+				Runner.MaintenanceOnStartSchedule(Local);                       // 0x10281d29
+			}
+			const FElysiumTaskStep& Step = Schedule->Tasks[State.TaskIndex];
+			Runner.DebugTaskStart(Step);                                      // 0x10281d5c
+			State.TaskStatus = EElysiumTaskStatus::Running;                    // 0x10281d91
+			Runner.TaskStarting();                                            // +0x5c50 = 0
+			State.TaskStartedAt = Now;                                        // 0x10281da2, +0x5c4c
+			const EElysiumTaskResult Result = BeginTask(Step, State, Runner, Now); // 0x10281e10
+			const bool bClearedByStartTask = Runner.TakeClearScheduleRequest();
+			if (bClearedByStartTask)
+			{
+				ClearSchedule(State, Runner);
+			}
+			else if (Result == EElysiumTaskResult::Complete)
+			{
+				if (Step.Task == EElysiumTask::SetSchedule)
+				{
+					Start(State, Step.Target, Runner);
+					Conditions = nullptr;
+					continue;
+				}
+				State.TaskStatus = EElysiumTaskStatus::Complete;
+			}
+			else if (Result == EElysiumTaskResult::Failed)
+			{
+				int32 Reason = Runner.TaskFailureReason();
+				if (Reason == 0)
+				{
+					switch (Step.Task)
+					{
+					case EElysiumTask::GetPathToEnemy:
+					case EElysiumTask::FaceEnemy: Reason = 0x06; break;
+					case EElysiumTask::MeleeAttack1:
+					case EElysiumTask::RangeAttack1: Reason = 0x03; break;
+					case EElysiumTask::SpecialIdleActivity: Reason = 0x15; break;
+					default: Reason = 0x0c; break;
+					}
+				}
+				Runner.TaskFail(Reason);
+				Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
+					ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
+			}
+			const bool bRunning = State.TaskStatus != EElysiumTaskStatus::Complete
+				&& State.TaskStatus != EElysiumTaskStatus::RunningMovement;
+			if (bRunning && !HasCondition(EElysiumNpcCond::TaskFailed))
+			{
+				Runner.MaintenanceStartTaskOverlay();                           // 0x10281e89
+			}
+		}
+
+		Runner.MaintainActivity();                                         // 0x10281eee
+		if (State.TaskStatus != EElysiumTaskStatus::Complete
+			&& State.TaskStatus != EElysiumTaskStatus::New)                   // 0x10281f26
+		{
+			const bool bRunning = State.TaskStatus != EElysiumTaskStatus::RunningMovement;
+			if (!bRunning || HasCondition(EElysiumNpcCond::TaskFailed))
+			{
+				break;                                                          // 0x102821ae
+			}
+			const FElysiumTaskStep& Step = Schedule->Tasks[State.TaskIndex];
+			const EElysiumTaskResult Result = ContinueTask(Step, State, Runner, Now); // 0x1028202c
+			const bool bClearedByRunTask = Runner.TakeClearScheduleRequest();
+			if (bClearedByRunTask)
+			{
+				ClearSchedule(State, Runner);
+			}
+			else if (Result == EElysiumTaskResult::Complete)
+			{
+				if (Step.Task == EElysiumTask::SetSchedule)
+				{
+					Start(State, Step.Target, Runner);
+					Conditions = nullptr;
+					continue;
+				}
+				State.TaskStatus = EElysiumTaskStatus::Complete;
+			}
+			else if (Result == EElysiumTaskResult::Failed)
+			{
+				int32 Reason = Runner.TaskFailureReason();
+				if (Reason == 0)
+				{
+					switch (Step.Task)
+					{
+					case EElysiumTask::GetPathToEnemy:
+					case EElysiumTask::FaceEnemy: Reason = 0x06; break;
+					case EElysiumTask::MeleeAttack1:
+					case EElysiumTask::RangeAttack1: Reason = 0x03; break;
+					case EElysiumTask::SpecialIdleActivity: Reason = 0x15; break;
+					default: Reason = 0x0c; break;
+					}
+				}
+				Runner.TaskFail(Reason);
+				Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
+					ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
+			}
+			const bool bStillRunning = State.TaskStatus != EElysiumTaskStatus::Complete
+				&& State.TaskStatus != EElysiumTaskStatus::RunningMovement;
+			if (bStillRunning && !HasCondition(EElysiumNpcCond::TaskFailed))
+			{
+				if (Runner.MaintenanceIsCurTaskContinuousMove())                // 0x102820dc
+				{
+					Runner.RememberContinuousMove();                               // 0x102820e6
+				}
+				Runner.RunTaskOverlay();                                         // 0x102820f2
+			}
+			if (State.TaskStatus != EElysiumTaskStatus::Complete)
+			{
+				break;                                                          // 0x10282137
+			}
+		}
+
+		if (State.TaskStatus != EElysiumTaskStatus::Complete
+			&& State.TaskStatus != EElysiumTaskStatus::New)
+		{
+			break;
+		}
+		if ((FPlatformTime::Seconds() - StartedAt) > CycleBudgetSeconds)    // 0x10282179
+		{
+			break;
+		}
 	}
 
-	// 0x102821ae: reaching the bounded loop's end preserves the task position for next think.
-	State.bDidMaintainSchedule = true;
-	return true;
+	Runner.MaintainActivity();                                           // 0x102821ae
+	if (Runner.IsAiStepMode())
+	{
+		Runner.FreezeForAiStep();                                          // 0x102821c2
+	}
+	State.bDidMaintainSchedule = true;                                   // 0x10282342
+	return State.IsRunning();
 }
 
 // `TASK_MOVE_AWAY_PATH`.

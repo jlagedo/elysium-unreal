@@ -114,7 +114,7 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 		FailSchedule = ScheduleState.FailScheduleOverride == EElysiumScheduleId::None
 			? TEXT("(program default)") : ElysiumScheduleName(ScheduleState.FailScheduleOverride);
 		ToleranceUnits = ScheduleState.ToleranceUnits;
-		bTaskStarted = ScheduleState.bTaskStarted;
+		bTaskStarted = ScheduleState.TaskStatus != EElysiumTaskStatus::New;
 		if (const FElysiumSchedule* Program = ElysiumScheduleFor(ScheduleState.Current))
 		{
 			TaskCount = Program->Tasks.Num();

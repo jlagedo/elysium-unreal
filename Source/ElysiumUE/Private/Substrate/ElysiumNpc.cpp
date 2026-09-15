@@ -1133,7 +1133,33 @@ FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
 	// The poll is a named constant rather than a stamp: a corpse is on none of the four clocks, and
 	// putting it on the distance laws would let the ragdoll handoff arrive up to six seconds after
 	// the death clip ended for a body the player is not standing next to.
-	if (Schedule.IsRunning() && ElysiumSchedule::Tick(Schedule, *this, Now, &Cognition.Conditions))
+	struct FDeathClipRunner final : IElysiumScheduleRunner
+	{
+		explicit FDeathClipRunner(FElysiumNpc& InNpc) : Npc(InNpc) {}
+
+		FElysiumNpc& Npc;
+		virtual float RunSpecialIdleActivity(double At) override
+		{
+			return Npc.RunSpecialIdleActivity(At);
+		}
+		virtual bool IsBodyVisible() const override { return Npc.IsBodyVisible(); }
+		virtual float PlayActivity(const FString& Activity) override
+		{
+			return Npc.PlayActivity(Activity);
+		}
+		virtual float RandomSeconds(float Max) override { return Npc.RandomSeconds(Max); }
+		virtual float PlayDeathActivity(const FString& Activity) override
+		{
+			return Npc.PlayDeathActivity(Activity);
+		}
+		virtual void TaskFail(int32 Reason) override { Npc.TaskFail(Reason); }
+		virtual int32 TaskFailureReason() const override { return Npc.TaskFailureReason(); }
+		virtual void TaskStarting() override { Npc.TaskStarting(); }
+		virtual bool TakeClearScheduleRequest() override { return Npc.TakeClearScheduleRequest(); }
+	};
+	FDeathClipRunner DeathRunner(*this);
+	if (Schedule.IsRunning()
+		&& ElysiumSchedule::Tick(Schedule, DeathRunner, Now, &Cognition.Conditions))
 	{
 		NextThink = static_cast<float>(Now + ElysiumNpcThink::DeadProgramPollSeconds);
 		return EDeadThink::Running;
@@ -1252,10 +1278,9 @@ void FElysiumNpc::RunConditionPass(double Now, bool bReduced)
 			Senses.Tick(*this, SenseNow);
 		}
 		// The rest of the recovered decision pass, in `RunAI`'s own order — condition
-		// gathering (which contains the enemy transaction), then ideal-state selection, then the
-		// schedule work every executor below performs.
+		// gathering (which contains the enemy transaction), then the schedule work. Retail's one
+		// `MaintainSchedule` loop owns ideal-state selection and commits it before reselection.
 		ElysiumNpcEnemy::GatherConditions(*this, SenseNow);
-		UpdateIdealState(SenseNow);
 		return;
 	}
 	if (bReduced)
@@ -1785,8 +1810,7 @@ void FElysiumNpc::UpdateIdealState(double Now)
 
 void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
 {
-	if (Schedule.IsRunning()
-		&& ElysiumSchedule::Tick(Schedule, *this, Now, &Cognition.Conditions, bReduced))
+	if (MaintainSchedule(Now, bReduced))
 	{
 		return;
 	}
@@ -1810,18 +1834,9 @@ void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
 		return;
 	}
 
-	const EElysiumScheduleId Next = SelectSchedule();
-	if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(Schedule, Next, *this))
-	{
-		// No idle schedule applies -- an executor owns this body, or this model carries no
-		// stance set at all. Re-asked on the cadence, which for a distant unseen body is the very
-		// throttling the laws exist to apply, and for one in the player's view is 0.1 s.
-		return;
-	}
-	// The install set `SCHEDULE_CHANGED`, and `Think` cleared that bit at the TOP of this pass --
-	// so the tail below reads it and pins the normal and AI clocks to 0.1 s for one think, which
-	// is exactly what retail does for a program installed inside a think.
-	ElysiumSchedule::Tick(Schedule, *this, Now, nullptr, bReduced);
+	// `MaintainSchedule` already selected, installed and ran the replacement inside its one loop.
+	// A false answer here is the retail missing-schedule exit or a selector that deliberately
+	// returned none; the ordinary cadence asks again.
 }
 
 void FElysiumNpc::ThinkPatrol(double Now)
@@ -2844,6 +2859,12 @@ void FElysiumNpc::TaskFail(int32 Reason)
 	// Troika slot 448 (0x1029adb0), then CAI_BaseNPC 0x10273fc0. In particular,
 	// OnScheduleChange is not a substitute: its masks and oblivious refcount writes differ.
 	//
+	// Story 29e, Maintain19: SabbatLeader's ninth species body returns immediately on its route-flip
+	// arm, so it must run before the unconditional-prologue family below.
+	if (SabbatLeaderTaskFail(Reason))
+	{
+		return;                                                          // 0x103a94bc / 0x103a94db
+	}
 	// Story 29d, family Conditions10: the seven SPECIES bodies at slot 448 (0x10362390, 0x1036d1d0,
 	// 0x10379060, 0x10380510, 0x10394090, 0x103b0290, 0x103ba350) each run their own arm and then
 	// chain 0x1029adb0 unconditionally, so the arms are a prologue and this line is where they run.
@@ -2898,6 +2919,12 @@ void FElysiumNpc::TaskFail(int32 Reason)
 void FElysiumNpc::ScheduleDone()
 {
 	Cognition.Conditions.Set(EElysiumNpcCond::ScheduleDone);
+	// Patrol, ambient use and pushed `aiscripted_schedule` orders are the three retail schedule
+	// families this runtime currently represents as executors outside the program registry. Their
+	// old handoff lived after Tick returned false; latch it at retail's actual completion edge so
+	// the single MaintainSchedule loop does not replace them with an idle program first.
+	bReturnToExternalExecutorAfterSchedule = bPatrolActive || bUseInteresting
+		|| ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
 }
 
 void FElysiumNpc::ClearScheduleHint(float ReuseDelay)
@@ -2961,7 +2988,7 @@ void FElysiumNpc::EndDisciplineSchedule()
 	if (NpcFlags.Has(EElysiumNpcFlag2::D_DISCONNECT_SQUAD)) ReconnectToSquad();
 	const int32 Number = ElysiumScheduleNumber(Schedule.Current);
 	if ((Number == 0xe1 || Number == 0xe3) && !Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed))
-		Schedule.bTaskCompletedExternally = true;
+		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 }
 
 bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
@@ -3260,54 +3287,6 @@ void FElysiumNpc::ClearConditions()
 	// Retail's `SetSchedule` zeroes all 192 condition bits. See
 	// `IElysiumScheduleRunner::ClearConditions` for why this is half of `DELAY_INTERRUPTS`.
 	Cognition.Conditions.Reset();
-}
-
-void FElysiumNpc::OnScheduleChange()
-{
-	// Base slot 435 (0x1027a700) precedes the Troika override. Navigator's notification
-	// and the dead strategy-slot namespace have no additional substrate state to release.
-	ScheduleHost.MoveWaitFinished = 0.0;
-	NpcFlags.BeginScheduleChange();
-	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH))
-	{
-		const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
-		if (Motor && Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
-			Motor->ClearNavigationGoal();
-		if (CurrentAmbientSpot()) FinishAmbientUse(bAmbientArrived, false);
-		ScheduleHost.Unknown6300 = ScheduleHost.Unknown659c = 0;
-		if (Motor) Motor->ResetSteering();
-		bMoveIssued = false;
-		bWalkingAnimation = false;
-		ScheduleHost.GoalToleranceCm = 0.f;
-		ScheduleHost.InsideInterruptDistanceSqr = ScheduleHost.OutsideInterruptDistanceSqr = 0.f;
-		ScheduleHost.InterruptTime = 0.0;
-		ScheduleHost.MoveTarget = FElysiumEntityHandle::Invalid();
-		// m_hOpeningDoor/slot532's close operation is supplied with the door obstruction lane.
-		if (NpcFlags.ApplyScheduleChangeMasks())
-		{
-			// UnOblivious 0x1026d160 always calls Reconnect, even if its bookkeeping bit
-			// was already cleared by a separate discipline-expiry owner.
-			ReconnectToSquad();
-			RecordScheduleEvent(TEXT("OnScheduleChange: obliviousness released"));
-		}
-		if (NpcFlags.Has(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX))
-		{
-			SetAttackExtents(ScheduleHost.SavedSleepExtents);
-			ScheduleHost.SavedSleepExtents = FVector(-1.0);
-			NpcFlags.Clear(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
-		}
-		ScheduleHost.bMotorAnimationMovement = false;
-		ScheduleHost.DesiredMoveYaw = 0.f;
-		ScheduleHost.bWaitFinishedSet = false;
-	}
-	if (NpcFlags.Has(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN))
-	{
-		ElysiumDisciplines::NotifyScheduleChanged(*this);
-		ClearOwnedActivityCopyProps();
-		bInvincible = false;
-	}
-	NpcFlags.FinishScheduleChange();
-	ScheduleHost.MemoryBits &= ~0x2000u;
 }
 
 void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)

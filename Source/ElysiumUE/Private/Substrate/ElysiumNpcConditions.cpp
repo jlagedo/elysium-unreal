@@ -624,7 +624,7 @@ namespace
 	{
 		if (!Conditions.Has(EElysiumNpcCond::TaskFailed))
 		{
-			Npc.Schedule.bTaskCompletedExternally = true;
+			Npc.Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 		}
 	}
 

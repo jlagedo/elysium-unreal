@@ -452,7 +452,8 @@ bound of 1, and skips the end-of-pass clear of `COND_LIGHT_DAMAGE`, `COND_HEAVY_
 (`0x10292de0`) passes `!(m_flNextAIThink − curtime < frametime)` — so a Troika NPC whose
 `m_flNextAIThink` (`+0x6250`) is not yet due still thinks, but gathers nothing and maintains one
 task. Sibling cadences: `m_flNextUpdateThink` `+0x6244`, `m_flNextNormalThink` `+0x6248`. The port
-does not model this mode. `[VtMB]`
+passes this mode into the retail loop: it skips the full gather and caps completions at one.
+`[VtMB]`
 
 ### Two Troika virtuals, identified
 
@@ -575,8 +576,9 @@ store of `m_bDidMaintainSchedule = 1` — with the failed program still installe
 the top of the NEXT `MaintainSchedule`, where `IsScheduleValid` answers no for `0x5c`, and only
 if the state is still its ideal and no door blocks; a state change in between reselects instead.
 The loop also handles `m_pSchedule == NULL` (a `GetNewSchedule` + install) and an installed
-schedule with zero tasks (`"ERROR: Missing or invalid schedule"`, then `SetState(1)` through slot
-`0x4d8`) — story 25c.
+schedule with zero tasks (`"ERROR: Missing or invalid schedule"`, then **`SetActivity(ACT_IDLE)`**
+through slot 310 / vtable `+0x4d8`, listing `0x1028227e..0x10282280`) — story 25c. The older
+`SetState(1)` wording was a slot-name error; this exit does not touch either state word.
 
 **`ClearSchedule` (`0x10280d30`)** is the other exit. It zeroes six words, in this order:
 `+0x5c48` timeStarted, `+0x5c4c` timeCurTaskStarted, `+0x5c44` fTaskStatus, **`+0x5c3c`
@@ -677,7 +679,123 @@ starves for that program's life. Tests: `Elysium.Substrate.Schedule.FailRoute`,
 `Elysium.Substrate.Schedule.TroikaTranslate`. Unrecovered after this pass: the base `RunTask`
 path-completion arm named above; whether `TASK_SET_ACTIVITY ACT_IDLE` in `FAIL` re-plays an
 already-idle body (the Troika `0x102a1c0f` arm answers it, story 14); producers for
-`COND_PROVOKED` and `COND_GIVE_WAY`; the door-block gate on the route (25c).
+`COND_PROVOKED` and `COND_GIVE_WAY`.
+
+### Maintain19 completion (2026-09-14)
+
+The two Troika schedule-change entries compose in a surprising but explicit order. `0x102ae750`
+translates the raw number through slot 440 and resolves it through `GetScheduleOfType`, then passes
+the schedule pointer and force byte to `0x102ae780`. That body refuses without writes when either
+`m_NPCState` or `m_IdealNPCState` is 7, then requires `IsAlive()` or a non-zero force byte. On
+admission it calls `ForceScheduleChange 0x102ae490` first and base
+`SetSchedule(CAI_Schedule*) 0x10280e50` second. Both bodies dispatch slot 435, so this entry makes
+**two ordered `OnScheduleChange(newSchedule)` calls** before the new task state stands. `[VtMB]`
+The base install then writes both retail clocks to `curtime`: `timeStarted +0x5c48` at
+`0x10280e69` and `timeCurTaskStarted +0x5c4c` at `0x10280e73`. `MaintainSchedule` rewrites only
+the latter when it starts each new task (`0x10281da2`). Both words now live independently in the
+schedule state; clearing or replacing a schedule zeroes them before a new install stamps them.
+
+`ForceScheduleChange`'s three warning blocks do not refuse the change: `!0x1028a190`,
+`!IsAlive && !force`, and a live cine whose `m_interruptable +0x5f90` is clear each print and
+continue. A live cine is then cancelled. If current and ideal state differ, the ideal selector
+refresh runs unless ideal is DEAD, followed by `SetState(ideal)` in either case. Finally,
+navigation other than `NAV_CLIMB` and `NAV_JUMP` clears `PRESERVE_PATH`, and slot 435 runs. The
+port reads the scripted sequence's existing `bInterruptable` word through an entity-chain accessor;
+it does not infer it from the separate queue-lock spawnflag. `[VtMB]`
+
+The Troika slot-435 body now includes the previously omitted live-opening-door arm:
+`0x102a09eb..0x102a0a07` resolves `m_hOpeningDoor +0x5d24` and calls slot 532 with reason 8 before
+either flag mask. Slot 532 clears the opening-door handle and wait byte on every path, and its
+Troika arm additionally ends the alternate door transaction where the reason permits. Deferring
+this call leaves stale ownership visible after the replacement program is installed. `[VtMB]`
+Its base body `0x1027a700` first calls navigator slot 4, whose retail body `0x102eea30` is an
+empty `RET 4`, clears `m_flMoveWaitFinished +0x5db4`, and calls the already-ported
+`VacateSquadSlot 0x1028ae60`. The last call currently takes its own no-squad refusal because the
+substrate has no squad object, but it remains in the chain so that source can become live without
+rewiring this body.
+
+`TaskMovementComplete 0x10273ec0` first clears `m_bShouldMove`. Status 0 or 1 becomes 3; status 2
+calls `TaskComplete(false)` and therefore becomes 4 unless `TASK_FAILED` stands; status 3 warns
+`"Movement completed twice!"` without changing it; status 4 falls out unchanged. Script states
+4, 5 and 6 retain their ideal activity, while every other state installs `GetStoppedActivity()`.
+An active navigator goal receives `StopMoving` and every path then receives `ClearGoal`. The port
+therefore carries the full five-value `fTaskStatus +0x5c44` in place of the former pair of
+started/completed booleans. `[VtMB]`
+
+SabbatLeader `TaskFail 0x103a9400` treats reasons 12 through 15 specially. Each increments
+`m_RouteFailCount +0x66bc`; the pinned image stores **6.0f** at `_DAT_104c3cc0`
+(`00 00 c0 40`), and retail converts the integer count to float for the comparison. Below six,
+and for all other reasons, it chains Troika `TaskFail 0x1029adb0`. At six or above it flips
+`m_FailureType`, installs `0x161` when the flipped value is non-zero or `0x160` when zero through
+`0x102ae750`, and returns without the Troika chain. Consequently the flip arm neither raises
+`COND_TASK_FAILED` nor runs the base failure cleanup. The two source-file/line stamps remain
+ABSENT shape words. `[VtMB]`
+
+`ElysiumSchedule::Tick` is now the single `MaintainSchedule 0x102817c0` loop. It re-runs validity
+inside every iteration; handles special-navigation completion, `CHOOSE_NEW_SCHEDULE`, delayed
+interrupts, state changes and the blocked-door retry; installs a selector's null answer as a real
+null pointer before the one retry; calls `OnStartSchedule`, both task overlays and
+`MaintainActivity` in listing order; writes memory bit `0x40000` on continuous movement; and
+observes the 10/1 completion limit plus the recovered **8 ms** cycle budget (`_DAT_1049a148 =
+8.0`). The door comparison follows the x87 flags: expired or equal drops the handle, future or
+unordered latches it, and the consumed flags2 mask clears both `0x200` and bit 31
+(`0x80000200`). The common exit alone writes `m_bDidMaintainSchedule = 1`; the `ai_step` return
+and missing/zero-task error return do not.
+
+The `GetNewSchedule 0x102814d0` adapter retains its own internal order. It first refreshes
+`CacheInterruptConditions 0x1026a0f0` only while `m_flCacheInterruptTime +0x1b24 < curtime`, then
+calls slot 433 only while the gathered marker is clear, calls the still separately owned slot-438
+selector, converts that original answer through slot 580 / `0x102ea2d0` into the raw int32
+`m_IdealSchedule +0x5c3c`, and finally sends the original answer through slot 440 and
+`GetScheduleOfType`. The port now carries that ideal word as int32, so local ids, `-1` and global
+ids at or above 1,000,000,000 are representable. The current slot-438 API still returns the typed
+set of registered programs; Select19 owns widening its result to supply those raw forms. Maintain19
+preserves the raw retail number of every currently supported selector answer and keeps the install
+translation separate from that ideal stamp. The shape map previously bound **both** `+0x1b24` and Troika
+`m_flInterruptTime +0x632c` to one `ScheduleHost.InterruptTime`; Maintain19 splits the first into
+`CacheInterruptTime`, because the schedule-change reset of `+0x632c` must not silently force or
+suppress the cache gate. The current program format has no authored inverse-interrupt column, so
+the cached inverse mask remains empty; the positive authored mask plus slot 453 is complete.
+
+`FElysiumNpc::MaintainSchedule` supplies the entity words to that loop. The former pre-loop
+`UpdateIdealState` runtime call and the select/start/second-tick body in `ThinkStanceOrIdle` no
+longer stand as separate execution paths. Program blobs remain outside this family; every absent
+translated id still takes story 25's registry-miss path.
+
+The runtime already represents three retail schedule families outside the program registry:
+patrol, interesting-place use and pushed `aiscripted_schedule` orders. Their body-owner handoff
+used to run when the old tick returned an empty program. Maintain19 moves that existing handoff to
+`NextScheduledTask`'s `SCHEDULE_DONE` edge, before reselection, and only when one of those external
+executors is waiting. A state-changing interrupt can reach the same boundary through slot 438:
+the port's patrol/interesting selector adapter returns null because the executor already carries
+that program. Both paths install a null pointer through the ordinary `SetSchedule` substrate so
+slot 435 runs, gathered conditions clear, and discipline/oblivious flags release before the caller
+resumes the executor. An ordinary registered schedule continues through retail's same-call
+reselect. This is the one adapter required by the current external-executor representation, not a
+second interpreter and not a live-state exception.
+
+This port's `ThinkDead` reuses the same task interpreter only to finish its death clip, then performs
+the ragdoll/final-frame handoff outside `RunAI`. It supplies a task-only runner which has no schedule
+selector; completion therefore returns to that handoff without adding a DEAD-only exception to the
+retail Maintain/reselection body. `FElysiumNpc::SelectScheduleForMaintenance` preserves the
+ordinary live-selector zero as `GetScheduleOfType`'s literal-1 fallback; the external-executor
+adapter described above is the sole null answer that returns to its existing owner.
+The caller boundary follows the recovered death order: `CAI_BaseNPC::Event_Killed 0x10265ad0`
+calls `CBaseCombatCharacter::Event_Killed 0x1032b9b0` at `0x10265cea`, whose first state write is
+`m_lifeState = LIFE_DYING`; only afterwards does the NPC body stamp ideal DEAD at `0x10265d06`,
+run its death-sound/physics decision, stamp DEAD again at `0x10265db0`, and call
+`SetState(7)` at `0x10265dba`. The port's pre-existing `ThinkDead` owns that post-kill visual and
+physics/final-frame boundary. The task-only adapter changes none of its outputs or polling cadence;
+it only prevents that caller from pretending to be the live `RunAI` selector once the death clip's
+single task completes. Live `RunAI` selection still sends ordinary zero answers to the literal-1
+registry fallback; only the already-existing patrol/interesting executor adapter consumes its own
+null answer as described above.
+
+**Unrecovered:** the identity and producer of the profiler's process-wide cycle records; only the
+observable 8 ms stop budget is needed by the port. The current program format has no input column
+for retail's inverse interrupt mask, and the current typed slot-438 surface cannot yet return an
+unregistered local/global numeric selector result; those inputs belong to the program and Select19
+families respectively. Later task families still own task bodies absent from the current registry.
 
 ## Species slot-435 overrides all chain (2026-09-08)
 
@@ -685,8 +803,14 @@ already-idle body (the Troika `0x102a1c0f` arm answers it, story 14); producers 
 `CNPC_VTzimisce` `0x103bf610`, `CNPC_VWerewolf::OnScheduleChange` `0x103ced10` **all call the
 Troika body `0x102a0940` first**, then, gated on `PRESERVE_PATH` clear, decrement a per-species
 shun counter (`m_iShunnedFindPillar` / `m_iShunnedFindFish` with `+0x6680 = 0` / `m_iShunnedFindBody`
-with `m_ePathMode = 0`); the werewolf keeps a 50-entry schedule history at `+0x668c`. No
-classname branch is needed in the port's single `OnScheduleChange`. Classes on the plain base
+with `m_ePathMode = 0`); the werewolf drops the oldest row only when its count already exceeds 50,
+then appends, so the history settles at **51** entries at `+0x668c`. The port's final NPC leaf
+dispatches these tails by `BodyOf(RetailClass(), 435)` and uses `FSpeciesDispatchScope` around the
+direct Troika thunk. Retail stores the incoming **`CAI_Schedule*`**, not its numeric id. Its only
+recovered consumer is Werewolf `DrawDebugStatOverlays 0x103d5130` at `0x103d5450`, which
+dereferences the pointer only for its schedule name and prints `INVALID SCHEDULE` for null; the
+port's existing `TArray<FString>` therefore carries the whole consumed representation. No history
+reader compares schedule identity or inspects a task. Classes on the plain base
 reset `0x1027a700` (no flag word): `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_ExpressiveNPC`,
 `CAI_TestHull`, `CCineNPC`, `CCineAI`, `CCineAISchedule`, `CGenericNPC`, `CGenericSabbat_NPC`,
 `CGeneric_NPC_bathack`, `CNPC_Bullseye`, `CNPC_Crow`, `CScriptedTarget`; `CGeneric_NPC`,
@@ -1464,4 +1588,3 @@ which is retail's own "no move" arm (shared with 4). The cine itself is NOT a se
 `__FILE__`/`__LINE__` into `+0x1b30`/`+0x1b34` before answering and the default arm writes neither —
 the pair records "this class decided". The shape map calls it ABSENT; the mind's transition trace
 carries the same account.
-

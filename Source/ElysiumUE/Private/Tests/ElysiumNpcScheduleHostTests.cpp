@@ -128,7 +128,9 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->ScheduleHost.SquadDisconnected = 1;
 	Npc->NpcFlags.AddOblivious();
 	Npc->bInvincible = true;
-	Npc->OnScheduleChange();
+	// Slot 435's recovered signature is `void OnScheduleChange(CAI_Schedule*)`; `102a0940` ignores
+	// the argument, and this direct base-body case supplies retail's null schedule pointer.
+	Npc->OnScheduleChange(EElysiumScheduleId::None);
 	TestTrue(TEXT("schedule replacement also restores attack margins"), Npc->ScheduleHost.AttackExtentsCm.Equals(FVector(4,5,6)));
 	TestFalse(TEXT("activity-copy cleanup clears invincibility"), Npc->bInvincible);
 	TestFalse(TEXT("activity-copy bit is consumed by unconditional tail"), Npc->NpcFlags.Has(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN));

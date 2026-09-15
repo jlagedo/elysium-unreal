@@ -42,7 +42,10 @@ struct FElysiumNpcScheduleHost
 	float DesiredMoveYaw = 0.f;
 	float InsideInterruptDistanceSqr = 0.f;
 	float OutsideInterruptDistanceSqr = 0.f;
-	double InterruptTime = 0.0;
+	double InterruptTime = 0.0; // +0x632c m_flInterruptTime
+	// `m_flCacheInterruptTime` (`+0x1b24`), distinct from `InterruptTime` above.
+	// `GetNewSchedule 0x102814d0` refreshes the cached masks only while this is before curtime.
+	double CacheInterruptTime = 0.0;
 	// `CAI_BaseNPCTroika::m_hMoveTargetEnt`: -1 at spawn (`0x1029a0b0`), released by `TaskFail`
 	// (`0x1029adb0`) and `OnScheduleChange` (`0x102a0940`), read by Troika `StartTask` (`0x102a1910`).
 	// NOT `CAI_BaseNPC::m_hTargetEnt` (+0x5ce4), which is `FElysiumNpc::TargetEnt` and is never
@@ -71,8 +74,9 @@ struct FElysiumNpcScheduleHost
 	// them to its offset and the shape test fails if one goes missing.
 	bool bShouldMove = false;  // +0x1a40 m_bShouldMove (datamap)
 	bool bRanAi = false;  // +0x1b4c m_bRanAI (walked)
-	// +0x5c3c m_IdealSchedule (datamap)
-	EElysiumScheduleId IdealSchedule = EElysiumScheduleId::None;
+	// +0x5c3c m_IdealSchedule (datamap). Raw int32: retail preserves local ids, global ids >= 1e9
+	// and -1 here before TranslateSchedule/GetScheduleOfType resolves the installed pointer.
+	int32 IdealScheduleRetail = 0;
 	bool bDoPostRestoreRefindPath = false;  // +0x5c58 m_bDoPostRestoreRefindPath (doc)
 	FString HintGroup;  // +0x5db0 m_strHintGroup (datamap)
 	// +0x5db4 m_flWaitFinished (datamap) — an absolute curtime deadline, beside its existing
