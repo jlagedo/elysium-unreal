@@ -1,0 +1,257 @@
+# 0019 npc-kernel-rework — The kernel as data plus a class tree: extract what Troika typed, port what the bytecode observes, delete what nothing can see
+
+## Witness
+The tutorial's stealth lessons, unchanged: the same `sp_tutorial_1` witness tests green on both
+sides of every story here. And one new witness: `SCHED_TROIKA_CHASE_ENEMY_FAILED` runs from
+retail's own text — stop, wait 0.2 s, fail to `STANDOFF`, tolerance 24, find cover from the
+enemy, relaxed anims, run the path, remember `INCOVER`, face the enemy, idle, wait 1 s — where
+today the port runs an invented two-task program (`ElysiumNpcCombatSchedules.cpp:293`).
+
+## Scope
+No new behaviour. Every story either loads what the port retyped, or removes what nothing can
+observe. Five pieces: the strict verdict pass that separates rule from mechanism and dead; the
+data seams (datamap bindings, schedule texts with their id spaces and flag tables, the tunables
+table); the class tree; the deletions and the mechanism seams; the reach cut that scopes 0002.
+
+Owned elsewhere: the world's AI objects — **0018**; the mind and its programs' task bodies —
+**0002**. This spec finishes and then closes: once story 7 lands, nothing remains here.
+
+The rule every story applies, from `docs/vision.md` § "The three adjudication tests", restated
+for the kernel on 2026-09-15 after the session that found the DRM:
+
+> A retail function is ported only if something can observe it: an authored keyfield, a
+> schedule text, a script-visible name, an entity output, a save field, a player-visible timing,
+> or the witness. What Troika typed as a string or a table is **data** — extracted from the
+> install, loaded, never retyped. What an observable names is a **rule** — ported verbatim with
+> retail's constants and order. What the world merely needs is a **mechanism** — Unreal's
+> service behind a seam, retail thresholds kept as tunables. What nothing observes is **dead** —
+> one verdict row, no body, no test.
+
+What the 29-series method got wrong, so it is not repeated: "port everything in the closure,
+bottom-up by call layer" has no term for that question, so an automated port answered yes to
+every function it reached — the `CAI_Motor` ground step, the physics tick, twenty-one debug
+overlay bodies with no output device, and Macrovision's `CSecureType` integer scrambler, all
+verdicted `rule` and all ported with tests. Bottom-up by layer stays the right *order*; the
+closure was the wrong *scope*.
+
+## Sources
+- Ledger: `docs/vtmb/npc-kernel/` — `order.md` (the 30 layers), `functions.md`, `fields.md`,
+  `classes.md`, `layout.md`, `signatures.md`, `coverage.md`, `checklist-*.md`;
+  `research/tooling/ghidra/driver/kernel_verdicts.tsv` (the overlay), `merge_verdicts.py`,
+  `kernel_ledger.py`, `kernel_shape.py`; `research/tooling/gen_kernel_shape.py`.
+- Oracle: `docs/vtmb/npc-ai/shape.md` (§ "The tables", § "The layout the datamaps do not
+  save", § "How a species body reaches the body it replaces"); `schedule-kernel.md`
+  (§ "Schedules and tasks: the behavior program", § "The schedule host and the task surface,
+  walked" — the Brujah id-space walk); `conditions-and-states.md` (§ "`DELAY_INTERRUPTS`,
+  decoded" — the parser and the `CAI_Schedule` layout); `senses.md` (the `NPCFlag:` and
+  `MiscFlag:` parsers and the name↔mask tables).
+- Replays and probes: `$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json`
+  (every class's `typedescription_t` rows); `research/tooling/probes/native_schedule_survey.py`
+  (the schedule-text extractor).
+- Contracts: `docs/contracts/seam_map_unit_contract.md`, `seam_map_vdata.md` (the precedent
+  for a text table as a GLB unit).
+
+## Witness data
+Read on 2026-09-15 from the tree and the pinned `vampire.dll`.
+
+| Measure | Value |
+|---|---:|
+| Verdict rows: `rule` / `mechanism` / `present` / `dead` | 2,205 / 175 / 161 / 0 |
+| Kernel source (`ElysiumNpcKernel*.cpp/.inl`) | 87,532 lines |
+| …of which generated census / slot stubs | 9,008 / 6,009 |
+| …Debug families / Motor families | ≈3,500 / ≈4,000 |
+| `CHOSEN, NOT RECOVERED` admissions in the port | 59 (23 in the schedule files) |
+| Retail schedules / task invocations / task identities | 691 / 4,139 / 441 |
+| Port programs / task identities, hand-typed | 19 / 58 |
+| NPC-chain datamap rows: `KEY` / `INPUT` / `OUTPUT` / `SAVE` | 275 / 80 / 28 / 727 |
+| Port bindings, hand-typed: class fields / inputs / serialize blocks | 48 / 22 / 9 |
+
+Misverdicted `rule` rows that anchor story 1, with their port targets: the physics tick
+`0x100b4f30` → `VPhysicsUpdate`; the ground step `0x102e1760` → `MotorMoveGroundStep`; the
+navigator move `0x102efaa0` → `NavigatorMoveNormal`; the debug ring appender `0x1027ef20` →
+`AppendDebugLogLine`; the criminal-witness writer `0x1028ea60` → `RecordCriminalWitness`, whose
+`CSecureType` half (`0x1042fde0` / `0x1042fe90`, twelve constants copied into
+`ElysiumNpcKernelSenses.cpp:97` and `ElysiumNpcKernelCombat10.cpp:82` with a test that the two
+copies agree) is SafeDisc copy protection over a plain integer. The Bosses family already carries
+the ManBat and Hengeyokai secure ints as plain integers (`ElysiumNpcKernelBosses.inl:29`); the
+Senses and Combat10 families did not.
+
+Retail's own text for the chase and its failure route, read at `0x5f0732` and `0x5ef06a` of the
+image, is the witness above; the port's two programs at `ElysiumNpcCombatSchedules.cpp:255-300`
+drop `FORCE_RELAXED_ANIMS`, two interrupts, and the whole failure program.
+
+## Stories
+In build order. A story is done when the code it names is gone or generated, the witness is
+green, and `coverage.md` shows the change.
+
+- [ ] **1. The strict verdict pass.**
+  Retail: none — a judgment over the 2,545 overlay rows, bands 0–29.
+  Rule: a `rule` row must name its observable in `evidence` — the keyfield, schedule text,
+  script name, output, save field, timing or witness test that would notice its absence — or
+  it becomes `mechanism` (the Unreal service or seam named in `target`) or `dead` (`target -`).
+  `present` rows are re-read the same way. The pass is judgment per row, not a re-reading of
+  bodies: the evidence column already says what each body does.
+  Job: the pass, folded through `merge_verdicts --band … --from` so a corrected row lands on
+  top of the batch it corrects; `coverage.md` re-rendered; the outputs are **the delete list**
+  (every `dead` row's port target and its tests) and **the seam list** (every `mechanism` row's
+  port target and the Unreal service that replaces it). Expected `dead`: the 21 Debug bodies
+  and the ring (`0x1027ef20`, `0x1027efb0`), the three debug stamps, the salt bytes, the
+  scrambler pair and the secure ints. Expected `mechanism`: the `CAI_Motor` / `CAI_Navigator`
+  bodies (`0x102e14a0`, `0x102e1560`, `0x102e1760`, `0x102efaa0`, `0x102efd50`), the physics
+  tick, network change-state, the trace and push-out bodies, the sector partition.
+  Provides: the lists every story below consumes; the re-verdicted 19–29 checklist to 8.
+  Size: M. Effort: Fable / high.
+
+- [ ] **2. The datamap bindings, generated.**
+  Retail: every class's `DATADESC` — `DEFINE_KEYFIELD` (name, member, type: fully data),
+  `DEFINE_INPUT` (a field-setting input: fully data), `DEFINE_INPUTFUNC` (name and argument
+  type data, the handler code), `DEFINE_OUTPUT` (fully data), `DEFINE_FIELD` with `SAVE`, and
+  `FUNCTIONTABLE` — replayed as `datamap_records-vampire.dll.json`. `ReadKeyField`
+  (`0x100acab0`) and `AcceptInput` (`0x100abc90`) walk that table; nothing knows a field by name.
+  Gap: `ElysiumNpcClasses.cpp` hand-types 48 `ElysiumAddClassField` rows and 22 `D.Input`
+  rows against 275 keys and 80 inputs; nine `Serialize*Block` helpers walk a save format the
+  project calls disposable; 0002's 12a lists seven keys never parsed.
+  Job: extend `gen_kernel_shape.py` (or a sibling under `research/tooling/`) to emit, for every
+  entity class the port stands, the `KEY` → member bindings through the shape census's
+  retail-name → port-member map, the `OUTPUT` declarations, the `INPUT` registry (field-form
+  inputs bound; `INPUTFUNC` rows emitted as declarations the port fills by hand — 80 on the
+  chain, most field-form), and the `SAVE` walk over bound members; the hand rows and the nine
+  blocks deleted; a generator check that every retail `KEY` on a stood class has a bound member
+  and every bound `SAVE` word is walked. Member names stay the port's: the census is the
+  bridge, so no member is renamed to `m_` anything, and no offset, `FIELD_*` type or datamap
+  walker is reproduced. The strings cross the seam; the reflection does not.
+  Provides: keyfields to 0018 story 2 and 10; the parse half of 0002's 12a. Consumes: 1.
+  Size: M. Effort: Opus / high.
+
+- [ ] **3. The schedule seam: texts, id spaces, flag tables.**
+  Retail: the 691 schedule descriptions are null-terminated ASCII in `.rdata`, one per
+  schedule — `Schedule <name> Tasks <TASK_* arg>… Interrupts <COND_*>… [Flags …]`. Each class's
+  `InitCustomSchedules` (the worked example `CNPC_VBrujah` `0x10367a40`) calls
+  `CAI_LocalIdSpace::Init` (`0x102ea0e0`) on its schedule, task and condition spaces with the
+  global namespaces and the base class's spaces as parents, registers its names against its
+  numbers through `0x102ea130`, then runs the parser `0x1030d850` over its texts, breaking on
+  the first failure into the byte slot 452 `LoadedSchedules` returns. The parser resolves task
+  names, `SCHEDULE:` targets and `COND_*` through the class's spaces, `NPCFlag:` through
+  `0x1030cbd0`, `MiscFlag:` and `MEMORY:` through the name↔mask tables `0x1033cb00` /
+  `0x1033cb50`, `ACTIVITY:` through the activity list, and `Flags` through the two-token table
+  `0x1030d7e0` (`NONE`, `DELAY_INTERRUPTS`). It fills a `CAI_Schedule`: inverted interrupt mask
+  `+0x00`, flags `+0x18`, id `+0x1c`, task array and count `+0x20` / `+0x24` (cap 64), interrupt
+  mask `+0x28`, name `+0x40`. Ids are per class: `0x156` names six different schedules in six
+  tables. The fourth space, squad slots, sits `0x18` past the third.
+  Gap: 19 programs hand-typed from prose in `ElysiumNpcCombatSchedules.cpp`,
+  `ElysiumSchedule.cpp`, `ElysiumFeedSchedules.cpp`, `ElysiumAiScriptedSchedule.cpp`, with
+  `FScheduleMeta` numbers decoded by hand (two at 0), `EElysiumScheduleId` (29 entries) and
+  invented masks; the id spaces stubbed at the empty range so every translation answers -1.
+  Job, pipeline: a V2 unit per owning class, `vtmb:ai-schedule:<class>` →
+  `ai-schedules/<class>.glb`, under the unit contract like `seam_map_vdata.md`, carrying the
+  class's verbatim texts as rows, its schedule / task / condition / squad-slot registrations
+  (name, number) recovered from its init body's call sites, and — once, on the Troika unit —
+  the `NPCFlag:`, `MiscFlag:` and `MEMORY:` name tables; the extractor lifted from
+  `native_schedule_survey.py`; the owner of each text recovered at export from which init body
+  references it; a contract `docs/contracts/seam_map_ai_schedule.md`; and an import lane,
+  `uv run elysium import ai-schedules`, deploying each unit's texts and tables as loose files
+  under `Content/ElysiumCorpus/ai/schedules/<class>/` the way the vdata lane deploys
+  `vdata/**` — the runtime reads the deployed corpus, never the GLB (0018 § Scope). Decided
+  2026-09-15 by the owner: GLB unit as the export-stage product, deployed to the corpus.
+  Job, runtime: a port of the parser and its argument grammar (bare number, `SCHEDULE:`,
+  `ACTIVITY:`, `NPCFlag:`, `MEMORY:`, `MiscFlag:`, `Flags`), `CAI_LocalIdSpace` with parents,
+  loading from the deployed corpus (`CorpusRoot()`) at class init in the tree's order, malformed text a load
+  error as retail's is;
+  `EElysiumTask` becomes a name table the parser resolves; the runner keeps "unknown task fails
+  by name" — that failure count over the loaded programs is the port's task-coverage meter.
+  Job, deletions: the 19 programs, `FScheduleMeta`, `EElysiumScheduleId` and its 20 non-test
+  users (they ask the class's space by name), the program-content tests
+  (`ElysiumScheduleTests.cpp` and the schedule halves of `ElysiumNpcKernelScheduleTests.cpp`,
+  `ElysiumNpcCombatTests.cpp`); the interpreter (`Register`, `Start`, `Install`, `Tick`,
+  `MaintainSchedule`) stays.
+  Provides: every program to 0002, loaded; the coverage meter. Consumes: 1, 2.
+  Oracle: `schedule-kernel.md` § "The schedule host and the task surface, walked",
+  `conditions-and-states.md` § "`DELAY_INTERRUPTS`, decoded". Unrecovered: the parser's
+  argument grammar beyond the six forms seen (a read of `0x1030d850`'s body before the port);
+  the registration call-site shape in each of the 20 owners' init bodies.
+  Size: L. Effort: Opus / high.
+
+- [ ] **4. The tunables table.**
+  Retail: the `.rdata` cells every kernel file cites — "every threshold below was read out of
+  the pinned `vampire.dll` at its cited address".
+  Gap: the constants are inline, per file, with a paragraph of provenance each; the DRM
+  constants were carried the same way.
+  Job: one overlay, `research/tooling/ghidra/driver/kernel_tunables.tsv` (address, name, type,
+  value, evidence), rendered by the ledger into a generated `ElysiumNpcKernelTunables.cpp` and
+  verified against the image by `--check`; rule bodies read a named tunable; the inline
+  constants and their paragraphs deleted as each family is touched by 6. Committed as generated
+  C++, as the ledger's addresses and values already are — decided 2026-09-15 by the owner over
+  a corpus file, because these are recovered numbers, not retail content.
+  Provides: the thresholds 6's mechanism seams keep. Consumes: 1.
+  Size: S–M. Effort: Sonnet / medium.
+
+- [ ] **5. The class tree: one port class per retail class.**
+  Retail: 77 classes in six lines under `CAI_BaseNPCTroika` (`classes.md`), each with its own
+  words past `+0x665c` and its overrides at the slots `signatures.md` lists; a species body
+  that calls the body it replaces does so by a **direct** call to the base's own function,
+  never through the vtable (`shape.md` § "How a species body reaches the body it replaces").
+  Gap: `FElysiumNpc` is `final`; species are rows keyed on the retail class name; the vtable
+  is rebuilt by hand — `ElysiumNpcKernelClassLookup` (`Find`, `OfClassname`, `DerivesFrom`,
+  `OverrideOf`, `BodyOf`), `RetailClass()` / `IsRetailClass` string checks inside bodies, the
+  "prologue must decline while the species body runs" re-entry rule, 6,009 lines of numbered
+  slot stubs, slot numbers in the API (`RunTaskSlot444`), and every NPC carrying every
+  species' words. Decided 2026-09-15 by the owner: **the whole tree, uniformly** — a class
+  whose only difference is its sound table is a twenty-line class; two dispatch mechanisms is
+  worse than either.
+  Job: `FElysiumNpc` becomes the Troika base (`final` dropped); one subclass per retail class
+  in the retail tree, own words on the owning class, overrides `virtual`, `Super::` where retail
+  called the base directly; a classname → constructor factory replacing `OfClassname` (the
+  most-derived claimant rule kept); `FElysiumPlayerControllerNpc` folded in as
+  `CNPC_VPlayerController`'s port; the vocalisation slots 488–508 as one base body over a
+  virtual sound-table getter each species overrides; the dispatcher, the string checks, the
+  re-entry rule, the slot stubs and the species `if` prologues deleted; `gen_kernel_shape.py`
+  emits the census only, and the census test asserts one port class per retail class, one
+  member per own word on that class, and one override per retail (class, slot) row verdicted
+  `rule`. Lands alone on a branch with the witness green before and after; no other story
+  touches `ElysiumNpc.h` while it is open.
+  Consumes: 1 (the delete list first, so nothing dead is re-homed), 3 (programs load per
+  class in the tree's order). Provides: the tree every species story in 0002 lands on.
+  Size: XL. Effort: Opus / high.
+
+- [ ] **6. The deletions and the mechanism seams.**
+  Job, dead: every `dead` row's body and test removed — the Debug, Debug10 and Debug10_2
+  families, the ring and stamps and their words, the scrambler in Senses and Combat10 (the
+  criminal level stored plain, the retail field noted as a `CSecureType` so the ledger still
+  lines up), the secure ints.
+  Job, mechanism: every `mechanism` row's body replaced by a seam call into Unreal that keeps
+  the row's retail thresholds as tunables (4) — locomotion stepping and yaw to the character
+  movement component, path following to the NavMesh inside 0018's reachability gate, traces
+  and push-out to the collision service, the physics tick and network state to nothing; the
+  Motor, Motor10, Motor2 families, the Positions trace bodies, Geometry's push-outs and
+  EntityChain's engine rows.
+  Consumes: 1, 4, 0018 story 3. Provides: the smaller kernel 0002 continues on.
+  Size: L. Effort: Opus / high.
+
+- [ ] **7. The reach cut.**
+  Retail: none — a query over the ledger.
+  Job: `kernel_ledger --reach <map>`: seeded from the map's population (classnames → retail
+  classes → their `SelectSchedule`, `TranslateSchedule`, `StartTask`, `RunTask` overrides and
+  the base arms) and the schedule texts those classes load (the task and condition identities
+  their programs name), the query lists the functions, task identities and species rows the map
+  reaches; `coverage.md` gains a per-map column. 0002's open stories are then cut to
+  `sp_tutorial_1`'s list first and `sm_hub_1`'s second.
+  Consumes: 3 (the programs say which tasks a class reaches). Provides: 0002's scope.
+  Size: S–M. Effort: Sonnet / medium.
+
+- [ ] **8. 29e closes under the strict verdict.**
+  Job: the 19–29 checklist re-verdicted by 1 before the twelve remaining families land; each
+  family ported as rules only, its `dead` and `mechanism` arms skipped with the verdict as the
+  record; the in-flight Conditions19 reviewed against the pass before it merges. 29e keeps its
+  number and its text in 0002; this story is the rule it finishes under.
+  Consumes: 1. Size: what remains of 29e. Effort: as 29e.
+
+## Build order
+1 → 2 → 3 → 4, with 8 in parallel from 1 on → 5 → 6 → 7. 2 precedes 0018 story 2. 5 lands
+alone on a branch. When 7 lands this spec closes and 0002's build order takes over.
+
+## Seams
+- Provides: the loaded programs and id spaces to 0002; the generated bindings and the tunables
+  to 0018 and 0002; the class tree every species story lands on; the reach cut that scopes
+  0002; the delete and seam lists.
+- Consumes: the ledger and its overlay; the datamap replay; the pinned `vampire.dll` through
+  the export lane; 0018 story 3 for the path seam.

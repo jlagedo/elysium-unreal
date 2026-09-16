@@ -1,5 +1,15 @@
 # 0002 npc-ai — NPC AI: what an NPC senses, remembers, decides, schedules and walks, witnessed by the tutorial's stealth lessons
 
+**Reworked 2026-09-15.** This spec is now the mind alone. The world's AI objects — graph,
+hints, places, patrol paths, the sound list, squads, the coordinator, makers, the law bus — are
+**0018**; the data seams, the strict verdict pass, the class tree and the reach cut are **0019**.
+The rule both apply governs every open story here: a retail function is ported only if something
+can observe it, and what Troika typed as text or a table is loaded from the install, never
+retyped. Programs come from the schedule seam (0019 story 3), so where an open story's Job says
+"the programs", read: the task bodies and the selector arms; the program itself loads from
+retail's text. The landed stories stand as written — their text is the record of what was
+recovered, not the method that continues.
+
 ## Witness
 `sp_tutorial_1`'s stealth lessons played against retail. The sneak-past lesson on `thug_1`: he
 idles at his interesting place, hears the player's footsteps and walks the alert ladder to look,
@@ -15,7 +25,11 @@ Owned elsewhere and consumed here: weapons, damage, death — **0005**; firearms
 disciplines' own effects and costs — **0006**; conversation UI and the `.dlg` runtime — **0004**
 (this spec provides the `NO_DIALOG` refusal and the partner's sense freeze); the
 `scripted_sequence` beat and `NPC_STATE_SCRIPT` — **0003** (this spec provides the hold, the
-kernel and the route refusal it runs on).
+kernel and the route refusal it runs on). The world's AI infrastructure and its query
+surface — **0018** (this spec consumes hint searches, place selection, patrol records, the
+sound list, squads, the melee slot and the route refusal through it); the data seams, the
+verdict pass, the class tree and the reach cut — **0019** (this spec lands on its loaded
+programs, generated bindings, tunables and class tree, and is scoped by its reach cut).
 
 ## Sources
 - Oracle: `docs/vtmb/npc-ai/README.md` (the NPC AI oracle), `docs/vtmb/stealth.md`,
@@ -79,6 +93,8 @@ cited by other documents; a split keeps the number and adds a letter. Each open 
 the retail contract the code must match, the job, what it consumes or provides, and a size
 (XS–XL) with the model / effort tier recommended for it. Sizes are read off the kernel ledger
 (`## Build order` below), not guessed: a story is sized after its closure is known.
+
+### The kernel ledger and the bands (29 series; 29e open, finishing under 0019 story 8)
 
 - [x] **29. The kernel ledger.** Retail: the whole `CAI_BaseNPC` family in `vampire.dll` — 77
   classes, 600 primary-vtable slots, the 835-offset `CAI_BaseNPCTroika` layout, and the 5,050
@@ -836,6 +852,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Select19 owns. Remaining families, in order: Conditions19 (23), Spawn19 (60), RunAi19 (34),
   StartTask19 (28), RunTask19 (24), Select19 (39), Damage19 (26), Script19 (32), Think19 (15),
   Boss19 (19), Werewolf19 (17), Misc19 (34).
+
+### The mind
+
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
   is a live per-worldlight evaluation: Source falloff by light type, the cone/angle term, the live
@@ -1150,56 +1169,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 26 (`GetNewSchedule`), 11 (the door selector). Oracle: § "The kernel's failure route
   and the base programs, walked".
   Size: XS. Effort: Sonnet / low.
-- [ ] **22. `sp_tutorial_1` on the V2 lane.**
-  Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1), the nine
-  hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19) and 24's
-  link check has a graph to walk. Until then 13's stuck-on-top failure is unreachable in the
-  tutorial. No corpus item: a pipeline story (the V2 lane's bake), gap stated by 24 and 19.
-  Size: S–M. Effort: Sonnet / medium.
-- [ ] **24. Reachability: the graph's components on the runtime mesh.**
-  Retail: a route exists when the `.ain` graph has a node path for the hull, and for nothing
-  else — navigator `SetGoal` (`0x102ecd20`) refuses otherwise and every path task answers
-  `TaskFail(0x0c)`. The tutorial graph is ten components (27/23/18/16/10/7/6/3/3/3 nodes);
-  Jack's start area has no node within 6000 units and the Society hub none at all, so in
-  retail Jack's walk to `ip_by_window` / `ip_lean_1` and every hunter's route fails at `SetGoal`
-  and runs the program's failure route. Hull 0 stands `(-13,-13,0)..(13,13,72)` (66 × 183 cm),
-  steps 18 units (45.7 cm); links carry per-hull ground/jump masks, `linkInfo & 0x1000` is
-  never set at build; doors are not graph cuts: `CAI_Node::InitLinks` (`0x102fb4e0`) probes
-  every link with mask `0x2000b` (`SOLID|WINDOW|GRATE|MONSTERCLIP`), which excludes
-  `MOVEABLE`, and marks a hull-0 ground link that a `0x2000`-mask hull trace hits with
-  `linkInfo |= 0x2000` (the door-on-link mark; the NPC opens the door: `m_hBlockedDoor`,
-  `SelectDoorObstructionSchedule 0x102b7370`, `IGNORE_DOOR_FAILURE`). **`MONSTERCLIP` cuts
-  links at graph build**: the fit, stand, walk and jump probes all carry `0x20000`.
-  Port: a Recast projection of the `.hulls` sidecar (world brushes, player-blocking contents,
-  **monsterclip excluded** — `ElysiumMapCollision.cpp:285`, `UE_bsp_to_scene.py:135`,
-  `UE_map_sidecars.py:70`) at the engine's default agent — `DefaultEngine.ini:73-75` sets only
-  `RuntimeGeneration` and `bForceRebuildOnLoad`, no agent radius/height/step — built at
-  activation (`ElysiumMapActorLifecycle.cpp:840`); the nine hull-0 jump links are proxies (19,
-  `ElysiumNavJumpLink.h:12`); `FindPathSync` is called once, for the jump-link check
-  (`ElysiumNpcBody.cpp:617`), and partial paths are refused by every NPC request
-  (`ElysiumNpcBody.cpp:545`, callers `ElysiumNpc.cpp:614/2535/2817/3337`). Its connectivity is
-  tied to nothing retail authored: on `sp_tutorial_1` it refuses Jack's and the hunters' routes
-  as retail does, by coincidence of geometry (partial paths 160–240 m short, 2026-09-12); a
-  retail ground link over a 45.7 cm riser is a false refusal at step 35; a mesh that joins two
-  retail components walks an NPC where retail stands him idle; and a monsterclip volume retail
-  authored to keep NPCs out is open ground in the port.
-  Job: the agent from hull 0 in `DefaultEngine.ini`'s `RecastNavMesh` block; monsterclip
-  brushes added to the NPC-blocking geometry of the mesh projection (a second projection or a
-  per-agent area, the player's collision untouched); a game-side check that every enabled
-  hull-0 ground link of the map is walkable on the built mesh (`FindPathSync` over the link
-  list, reported like 19's staging); the reachability gate — a request whose start and goal
-  fall in different hull-0 components (nearest node per end, the components baked beside 19's
-  links) is refused before Recast is asked, so `TaskFail 0x0c` fires where retail's does, the
-  mesh supplying only the geometry inside a component; door brushes verified not to cut the
-  mesh. Decision for the owner: the gate is the retail contract; naming wider reachability a
-  modernization instead means NPCs retail stands idle (Jack at the tutorial start) walk off in
-  the port.
-  Provides: the refusal 10g, 11, 10e/10f and 0003's walks fail through. Consumes: 19's bake.
-  Oracle: `navigation-jump-links.md` § "Tutorial connectivity: the graph's components" (incl.
-  "Closed 2026-09-12: `MONSTERCLIP` cuts links at graph build"). Unrecovered: the navigator's
-  reader of `linkInfo & 0x2000`, the name of contents bit `0x2000` in this engine's
-  `bspflags`, whether door brushes cut the port's mesh (a witness, not a corpus item).
-  Size: M. Effort: Opus / high.
+- [ ] **22. `sp_tutorial_1` on the V2 lane.** Moved to 0018 story 13 (2026-09-15).
+- [ ] **24. Reachability: the graph's components on the runtime mesh.** Moved to 0018 story 3
+  (2026-09-15), retail contract and the owner's decision carried verbatim; this spec's path
+  tasks consume its refusal.
 - [ ] **10g. The patrol programs.**
   Retail: a patrol is a `CAI_PatrolPath` object in the `+0x658c` cell (`+0x6590` pointer;
   `+0 type`, `+4 schedule id`, `+8 repeat`, `+0xc count`, `+0x10 index`, `+0x14 nodes[]`),
@@ -1259,6 +1232,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `TASK_GET_FULL_PATROL_PATH 0x7c`'s body (no shipped program uses it).
   Size: L. Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
+  Rework (2026-09-15): the registry, the visitor walk and the entry / loop / release trio
+  are 0018 story 5; the programs load from the schedule seam (0019 story 3). This story
+  keeps the three selector arms and retires the ambient executor.
   Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
   INTERACT`; the last two unreachable (no setter for `SHOULD_LOITER`, no caller pairs NPCs for
   `SHOULD_INTERACT`; do not invent one); `group_id` and `interesting_place_groups` are 1-based
@@ -1303,6 +1279,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   walk, walked"), § "Interesting-place eligibility". Provides: the entry/loop/release trio to 27.
   Size: L. Effort: Opus / high.
 - [ ] **27. Patrol-point interest records.**
+  Rework (2026-09-15): the node record is 0018 story 6; this story keeps the roll and the
+  two task arms.
   Retail: an `info_node_patrol_point` may carry an interest record at `node->+0xa0`
   (`+0x468` the name of a `CAI_InterestingPlace`, `+0x46c` a 0–99 chance). `0x1029f650` rolls
   `m_bPatrolInterest (+0x65a0) = RandomInt(0,99) < chance` at each selection of the patrol
@@ -1551,6 +1529,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   base `RunTask` path-completion arm (10e).
   Size: L. Effort: Fable / high; corpus pass on the two look arms first.
 - [ ] **12a. The reaction keyfields.**
+  Rework (2026-09-15): the parse is 0019 story 2, generated from the datamap; this story
+  keeps the normalization and the readers.
   Retail: `percent_occluded_*` normalized at Spawn to a cumulative ladder, `_chase` forced to
   100 and never compared, rolled only in the ranged occluded selector `0x102b8320`;
   `hint_groups` index list → mask, empty = all, `FValidateHintType` slot 566;
@@ -1716,6 +1696,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   read `0x101755d0` keeps its summary.
   Size: M. Effort: Opus / medium.
 - [ ] **17. Squads.**
+  Rework (2026-09-15): the squad object, membership, the cap and the disconnect refcount are
+  0018 story 8; this story keeps the condition producer, the two tasks and the overlay's
+  clear.
   Retail: one shared `AI_Enemies` memory. Joining (`squadname` + `bits_CAP_SQUAD`, `InitSquad`
   `0x10273d30` / `SetSquad` `0x1029a930`) points `m_pEnemies` at `squad+8`; `GetEnemies()`
   (`0x10273e10`) diverts to the global `g_DisconnectedEnemies` while `m_iSquadDisconnected` (a
@@ -1851,88 +1834,55 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Size: S. Effort: Sonnet / medium.
 
 ## Build order
-Derived from `docs/vtmb/npc-kernel/order.md` (2026-09-13): the closure's call graph layered so a
-function sits after everything it calls. Layer 0 is the leaves; the think is the top. The
-kernel's spine, by layer:
+Reworked 2026-09-15. The 29-series' order — bottom-up by call layer — stays; its scope — the
+whole closure — does not. Programs are data (0019 story 3), the world's objects are 0018's, and
+a function is ported only if something can observe it (0019 § Scope).
 
-| Layer | Function |
-|---|---|
-| 0 | `ClearSchedule 0x10280d30`; base `SelectSchedule 0x1028a260` (damaged) |
-| 2–3 | the sound sweep `0x102b1cd0`, the comfort sweep `0x102b1a20` |
-| 13 | the see-unknown sweep `0x102b15c0` |
-| 19–20 | `SetState 0x1026e340`; `NPCInit 0x10273390` |
-| 21–22 | `SelectIdealState 0x1026f660` / Troika `0x102ad660`; `MaintainSchedule 0x102817c0`; `RunTask 0x10288780`; Troika `NPCInit 0x1029a0b0` |
-| 23–24 | `GatherConditions 0x1026ec30`; Troika `RunTask 0x102aacf0`; `StartTask 0x102827f0`; `RunAI 0x1026f110` |
-| 25–26 | `GetSchedule 0x102ae920`; Troika `SelectSchedule 0x102af660`; Troika `StartTask 0x102a1910`; `NPCThink 0x10292de0` |
+1. **0019 stories 1–4 and 0018 stories 1–3, in parallel.** Until 0019/3 lands no program is
+   typed by hand; until 0018/3 lands no path task is wired.
+2. **29e finishes under the strict verdict** (0019 story 8).
+3. **0019/5 the class tree**, alone on a branch; then **0019/6** the deletions and the
+   mechanism seams; then **0019/7** the reach cut.
+4. **The mind, cut to `sp_tutorial_1`'s reach**: task bodies and selector arms only, in the
+   order the selectors reach them — 25a; 10d, 10e, 10f, 10h, 10g, 10i / 10j, 10k, 11 / 27,
+   12b; then the overlays and the social families — 16a, 16b, 16c, 17, 21a, 21b, 21c; then 28
+   and 13b.
+5. **The hub's reach** (0018 story 13): the idle families first.
 
-Two rules follow. A story whose closure reaches a higher layer than a story it consumes is
-ordered after it; the list above keeps that order. A story is *recovery-complete* when every
-function its `Retail:` cites is in the closure with a name and an undamaged body; until then
-its size is provisional. The open stories, as the ledger reads them (functions cited by the
-story's `Retail:` text; `FUN_` = still unnamed):
+The open stories, re-scoped. A story keeps its number and its retail text; what moved is named.
 
-| Story | Cited | In closure | Max layer | `FUN_` | Damaged |
-|---|---|---|---|---|---|
-| 25a `ClearSchedule` producers | 14 | 10 | 22 | 7 | 0 |
-| 25b species `TranslateSchedule` | 22 | 22 | 22 | 3 | 0 |
-| 25c `MaintainSchedule` exits | 1 | 1 | 3 | 1 | 0 |
-| 24 reachability | 3 | 2 | 20 | 1 | 0 |
-| 10g patrol programs | 8 | 5 | 21 | 5 | 0 |
-| 11 interesting places | 8 | 7 | 20 | 7 | 0 |
-| 27 patrol-point interest | 12 | 8 | 9 | 8 | 0 |
-| 26 `GetSchedule` | 16 | 14 | 25 | 11 | 1 |
-| 28 player-on-head | 2 | 1 | 25 | 1 | 0 |
-| 10i comfort program | 9 | 5 | 23 | 3 | 1 |
-| 10j `CheckTarget` | 11 | 11 | 23 | 10 | 0 |
-| 10d alert selectors | 3 | 1 | 25 | 0 | 0 |
-| 10f unknown-investigation | 3 | 1 | 25 | 1 | 0 |
-| 12b cover and kick | 5 | 3 | 26 | 2 | 0 |
-| 10h hunt-investigation | 2 | 2 | 21 | 2 | 0 |
-| 16a followers | 7 | 4 | 20 | 4 | 0 |
-| 16b composed relationship | 3 | 2 | 23 | 1 | 0 |
-| 17 squads | 7 | 6 | 20 | 6 | 0 |
-| 16c possession and frenzy | 3 | 3 | 21 | 3 | 0 |
-| 21a flee | 10 | 8 | 24 | 5 | 0 |
-| 21c incapacitated consumers | 2 | 1 | 24 | 1 | 0 |
+| Story | Keeps here | Moved out |
+|---|---|---|
+| 25a `ClearSchedule` producers | the wiring | — |
+| 25b species `TranslateSchedule` | the twenty species bodies, on their classes after 0019/5 | the pre-table's ids → the seam |
+| 25c `MaintainSchedule` exits | absorbed by 29e | — |
+| 22 | — | 0018/13 |
+| 24 | — | 0018/3 |
+| 10g patrol programs | the roll sites, the task arms | programs → seam; paths → 0018/6 |
+| 11 interesting places | the three selector arms; retires the ambient executor | programs → seam; registry, walk, trio → 0018/5 |
+| 27 patrol-point interest | the roll, the two task arms | the record → 0018/6 |
+| 26 `GetSchedule` | absorbed by 29e | — |
+| 28 player-on-head | as written | — |
+| 10i comfort program | the task arms | program → seam |
+| 10j `CheckTarget` | as written | — |
+| 10d alert selectors | the two selectors, the ladder, the tail | the four programs → seam |
+| 10e sound-investigation | the task arms | programs → seam; the list → 0018/7 |
+| 10f unknown-investigation | the task arms | programs → seam |
+| 12a reaction keyfields | the normalization, the readers | the parse → 0019/2 |
+| 12b cover and kick | the chooser | programs → seam; the searches → 0018/4 |
+| 10k saved-position programs | the task arms | programs → seam |
+| 10h hunt-investigation | the task arms | programs → seam; the hunt path → 0018/6 |
+| 13b the leak | as written | — |
+| 16a followers | as written | — |
+| 16b composed relationship | as written; the ideal state in 29e | — |
+| 17 squads | the condition producer, the two tasks | the object → 0018/8 |
+| 16c possession and frenzy | as written | — |
+| 21a flee | the selector, the task arms | programs → seam |
+| 21b cower, disoriented, lost | the task arms | programs → seam |
+| 21c incapacitated consumers | the loop half in 29e, the rest here | — |
 
-Stories citing no function (22, 10e, 12a, 10k, 13b, 21b) are pipeline or program-blob work, or
-cite their programs by schedule id; they are sized by hand. Cited functions outside the closure
-are the other subsystems' producers (`entries.md` names them) — a story that consumes one names
-the owning spec.
-
-### The sequence, optimized on the ledger (2026-09-13)
-
-The closure's *core* — a family or helper method, or a body touching an NPC-range offset — is
-2,490 functions. By layer band: 0–4 has 1,453 (725 unnamed), 5–9 has 242, 10–14 has 175, 15–19
-has 172, 20–24 has 230, 25–29 has 218. 1,382 of the 2,490 are ≤ 64 bytes. That distribution is
-the argument for building the kernel bottom-up in bulk rather than feature by feature: the bottom
-two bands are shape and accessors, the top two are the interpreter, and every feature story
-today re-walks pieces of both. So:
-
-1. **29a → 29a-1 → 29b-0 → 29b → 29c → 29c-1 → 29d → 29e**, in that order. Each is a layer band;
-   each enters implementation with its checklist generated from the ledger and leaves with its
-   `coverage.md` count at zero for its band. 29c is the band's *reading* — every function
-   verdicted, so the band's **Neither** reaches zero — and 29c-1 is the band's *bodies*; the split
-   is 29c's landed paragraph. 29d and 29e are expected to split the same way, and their checklists
-   are `kernel_ledger --checklist 10-18` / `19-99` on the same overlay.
-2. The open feature stories shrink to what sits **above** the bands already built. The split of
-   each story's cited functions between layers ≤ 9 (29c's) and > 9, from the ledger today:
-   25a 3/9 · 25b 1/21 · 25c 1/0 · 24 1/1 · 10g 2/3 · 11 6/1 · 27 8/0 · 26 6/8 · 28 0/1 ·
-   10i 3/2 · 10j 6/5 · 10d 0/1 · 10f 0/1 · 12b 2/1 · 10h 0/2 · 16a 1/3 · 16b 0/2 · 17 5/1 ·
-   16c 0/3 · 21a 4/4 · 21c 4/17. After 29c, 27 and 11 are wiring only; after 29e, 25b, 25c, 26,
-   10d and 21c's loop half are done and those stories keep only their program blobs, species
-   rows and consumer wiring.
-3. What remains after 29e is **programs and wiring**, and it is ordered by consumer: 25a (the
-   `ClearSchedule` wiring, now one story's worth), the program families in the order the
-   selectors reach them (10d, 10e, 10f, 10h, 10g, 10i/10j, 10k, 11/27, 12a/12b), the social
-   families (16a, 17, 16c, 21a–c), the graph (24, 22), then 28 and 13b.
-4. The tutorial cut comes between 29e and step 3: a reachability query over the ledger (planned
-   as `kernel_ledger --reach`) seeded from `sp_tutorial_1`'s population selects which programs
-   and species rows 0004–0009 actually need, and step 3 is run on that subset first.
-
-The rule the sequence encodes: **a story enters implementation only when its closure is
-recovery-complete** — every cited function named, undamaged, and in a band already built or in
-the story itself. A story that fails the rule is a recovery story first.
+Sizes are re-read after 0019/7: a story's size is the task identities and selector arms the
+reach cut leaves it, not the programs it once listed.
 
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,
@@ -1943,3 +1893,7 @@ the story itself. A story that fails the rule is a recovery story first.
   and dialogue gates (0004).
 - Consumes: the HitGroup apply path and the cloak/detection-record producers from 0006 (6a,
   16c); the grapple state machine and damage from 0005 (3c, 21c).
+- Consumes (2026-09-15): 0018's query surface — hint searches, place selection and the trio,
+  patrol records, the sound list, squads and the shared memory, the melee slot, the route
+  refusal; 0019's loaded programs and id spaces, generated bindings, tunables, class tree and
+  reach cut.
