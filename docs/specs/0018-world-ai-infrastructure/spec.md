@@ -88,20 +88,39 @@ units. `pt1` (`group_id 2`, `enabled 1`, `min_time 30`, `max_time 60`) at the th
 `pt2` / `pt3` (`group_id 2`, `enabled 0`) down the alley. `thug_1`: `hint_groups 1..32`,
 `interesting_place_groups 2`, `use_interesting 1`, no squad; his investigate inputs are the
 player's footsteps (180/240 units) and doors; the `logic_gunfire` sounds are `sound_event 0`,
-audio only. `squad_warehouse` (`thug_2`, `thug_3`) is the map's one squad.
+audio only. The alley has `squad_warehouse` (`thug_2`, `thug_3`); the full V2 entity unit
+also authors `soc_int_squad_guard` (6 members) and `soc_int_squad_monk` (1), for three squad
+names on the map.
 
-**`sm_hub_1`.** 86 definitions, mostly `npc_VPedestrian` and makers. The per-map counts of
-hints, places, patrol points and nodes are **not in the oracle yet**; story 1 produces them.
-Until it lands every size below is provisional.
+**The census (story 1, landed 2026-09-16; `population.md` § "The AI infrastructure census").**
+The export root holds 108 entity units and 100 nav graphs, not the 22 maps of the older
+survey. Totals: 11,305 nodes, 29,075 links, 3,604 hull-0 jump links, 3,156 hint nodes (the
+`info_node_*` family carrying `hinttype`, not `info_node_hint` alone), 1,293 places (retail
+spells the classname `intersting_place`), 49 conversation places, 582 patrol points, 400
+makers, 8,458 entity graph nodes, 875 placed squad members, 248 maker squad requests and 161
+distinct squad names. `sm_hub_1`: 578 nodes, 1,856 links, 5 components (510 / 64 / 2 / 1 / 1),
+274 hint nodes, 76 places, 34 patrol points, 48 makers and 2 squad names. `sp_tutorial_1`: 116
+nodes, 234 links, 49 hint nodes, 29 places, 37 patrol points, 14 makers and 3 squad names.
+Authored values are dirty — group 1 places carry `max_time` up to 23,523,235 s — and the
+records must accept them as retail's float parse does. `info_node_patrol_point` carries
+`target_name` and `ip_percent`: 0002/27's interest record. The query surface (§ "The query
+surface of the helper classes") is 43 address-backed helper operations in seven object tables;
+every row has a recovered caller and an explicit retail answer, including unnamed `FUN_`
+bodies.
 
 ## Stories
 In build order. A story is done when its object is baked on both witness maps, its actor or
 asset stands in the level, every query on its surface is tested against the baked level, and
 its recovery is written in the oracle section it names.
 
-- [ ] **1. The infrastructure census and the query surface.**
+- [x] **1. The infrastructure census and the query surface.** Landed 2026-09-16 (pass 3):
+  `research/tooling/probes/ai_infra_census.py`, `ai_infra_surface.py`; the two sections in
+  `population.md`. Pass 1 undercounted because the brief's classname rules were wrong
+  (`intersting_place`, the `info_node_*` hint family); pass 2 corrected them; pass 3 retains
+  `info_node`, maker-`NPCType` and squad dimensions and replaces the consumer-seed heuristic
+  with the validated helper-operation surface.
   Retail: none — a reading of the exports and the ledger.
-  Job: one survey over the 22 entity exports and the 22 nav graphs: per map, the counts of
+  Job: one survey over every entity export and nav graph in the V2 root: per map, the counts of
   `info_node`, `info_node_hint` by hint type, interesting places by group and enable state,
   `info_node_patrol_point`, makers by `NPCType`, squads, and every keyfield each carries; and,
   from `functions.md`, the calls the closure makes into each helper class — one table per
@@ -161,6 +180,9 @@ its recovery is written in the oracle section it names.
   game-side check that every enabled hull-0 ground link is walkable on the built mesh,
   reported like the jump-link staging; door brushes verified not to cut the mesh. No pathfinder
   is ported: Recast walks inside a component.
+  Census caveat: the census's component counts are raw undirected connectivity over every
+  link of every hull (7 on the tutorial); the gate needs hull-0, post-monsterclip components
+  (10 on the tutorial per `navigation-jump-links.md`), which this story computes.
   Decision for the owner, carried from 0002/24: the gate is the retail contract; naming wider
   reachability a modernization means NPCs retail stands idle (Jack at the tutorial start) walk
   off in the port.

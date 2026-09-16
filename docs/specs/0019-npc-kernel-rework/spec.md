@@ -122,6 +122,24 @@ green, and `coverage.md` shows the change.
   walker is reproduced. The strings cross the seam; the reflection does not.
   Provides: keyfields to 0018 story 2 and 10; the parse half of 0002's 12a. Consumes: 1.
   Size: M. Effort: Opus / high.
+  **Pass A landed (2026-09-16, GLM-5.3-Flash from a brief, Fable review):**
+  `research/tooling/gen_kernel_bindings.py` reads the replay's `CAI_BaseNPC` and
+  `CAI_BaseNPCTroika` rows, joins them to the shape map by offset and emits
+  `Substrate/ElysiumNpcKernelBindings.h/.cpp` — 35 bound keyfields, 24 output names, 34
+  handler-form inputs listed, 5 unbound with a reason (three `FElysiumNpcScheduleHost` words
+  the entity-only binding API cannot reach, `default_disposition` on a chain row,
+  `interesting_place_groups` hand-owned by its parse-on-write accessor). `BuildNpcClass` calls
+  `AddNpcFields` first; 21 hand rows retired, 4 kept that pass A cannot reach: `stattemplate`,
+  `floatfreq`, `cantdropweapons` are `CBaseCombatCharacter` keys the shape map does not cover,
+  and `m_iEnemySightings` is a `SAVE`-only row, a save-walk binding under its retail name. Seventeen retail keys
+  are bound for the first time, among them 12a's `stay_entrenched`, `percent_occluded_*`,
+  `squadname`, `follower_*`. `--check` verifies the emission; the test
+  `Elysium.Substrate.NpcKernelBindings.Counts` holds the counts. **Pass B, open:** the
+  `CBaseEntity` / `CBaseCombatCharacter` keys (200), which need the census and the shape map
+  extended to the chain words the port stores on `FElysiumNpc` first; a binding surface for
+  component-struct members; the save walk over `SAVE`-only rows, landing together with the
+  deletion of the nine `Serialize*Block` helpers so no field persists twice; and the non-NPC
+  classes as 0018 stands them.
 
 - [ ] **3. The schedule seam: texts, id spaces, flag tables.**
   Retail: the 691 schedule descriptions are null-terminated ASCII in `.rdata`, one per

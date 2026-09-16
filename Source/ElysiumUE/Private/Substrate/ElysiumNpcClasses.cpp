@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelBindings.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumPendingInput.h"
@@ -44,6 +45,8 @@ static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FEl
 
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
+	ElysiumNpcKernelBindings::AddNpcFields(D);
+
 	// `WillTalk` and `SetAnimation` are not here: they belong to CBaseCombatCharacter and
 	// CBaseAnimating, and the chain walk (R2) reaches them — the NPC shares those two ancestors
 	// with the player, as VtMB's chain does.
@@ -122,15 +125,6 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 			Npc.TakeDamage(Amount);
 		});
 
-	ElysiumAddClassField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
-	ElysiumAddClassField(D, TEXT("allow_alert_lookaround"), &FElysiumNpc::bAllowAlertLookaround);
-	// `m_bNoAlertState` (0x65f6). 39 authored occurrences in the corpus. It is a keyfield like its
-	// two neighbours, and the save walk carries it for the same reason they are carried.
-	ElysiumAddClassField(D, TEXT("no_alert_state"), &FElysiumNpc::bNoAlertState);
-	// `m_bInvincible` (0x63d8). A total damage refusal, not a soak — see FElysiumNpc::RejectsAllDamage.
-	ElysiumAddClassField(D, TEXT("invincible"), &FElysiumNpc::bInvincible, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera, EElysiumField::Key);
-	ElysiumAddClassField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction, EElysiumField::Key);
 	ElysiumAddClassField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
 	// `interesting_place_groups` -> `m_sInterestingPlaceGroups +0x62d8`, parsed into
 	// `m_iInterestingPlaceGroups +0x62dc` on the write, as `0x10298910` is.
@@ -158,11 +152,6 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).SetHintGroups(V.ToString()); };
 		D.Fields.Add(FName(TEXT("hint_groups")), MoveTemp(Acc));
 	}
-	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
-	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
-	// value instead of raising AttributeError. The dialogue runner drives the count; it stays 0 until a conversation closes.
-	ElysiumAddClassField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, EElysiumField::Save);
-
 	// The stance pair, under retail's own datamap names. Save-only: they carry flag `0x2` there, so
 	// they persist and no keyvalue or script writes them. Nothing in the recovered writer set resets
 	// either on a schedule, state, dialogue or disposition change, which is why a character keeps its
@@ -194,26 +183,15 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		D.Fields.Add(FName(TEXT("m_flStanceTime")), MoveTemp(Acc));
 	}
 
-	// --- Senses: the three authored perception keyfields ---
-	// `InitPerceptionDistances` reads all three at spawn. They are Save-flagged like the rest of
-	// the authored NPC tuning: a map may not rewrite them, but a payload has to carry what the
-	// entity was authored with, because the resolved pair is derived from them at Activate.
 	// --- Cognition: the acquisition counter behind the lookaround chance ---
 	// `m_iEnemySightings` (+0x60a8) is engine-written, never authored — the same Save-only posture
 	// the two stance members take. It is saved because the chance it feeds is a per-character
 	// history: a guard who has fought the player before looks around more often.
 	ElysiumAddClassField(D, TEXT("m_iEnemySightings"), &FElysiumNpc::EnemySightings, EElysiumField::Save);
-
-	// `teleport_move_timer` -> `m_flTeleportMoveTimer` (+0x65dc): the third arm of
-	// `ShouldThinkFrequently()`. A keyfield with no code writer; see the member.
-	ElysiumAddClassField(D, TEXT("teleport_move_timer"), &FElysiumNpc::TeleportMoveTimer, EElysiumField::Save);
 	// `floatfreq` -> `m_iFloatSoundFrequency` (`CBaseCombatCharacter +0x10e8`, `fieldType 0`): the
 	// authored "the float sound plays 1 time in X" frequency both halves of slot 510 roll against
 	// (`Substrate/ElysiumNpcKernelSounds.cpp`). 0 and 8 disable the hook.
 	ElysiumAddClassField(D, TEXT("floatfreq"), &FElysiumNpc::FloatSoundFrequency, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);
 
 	// --- Combat: the three authored loadout keyfields ---
 	// `additionalequipment` (267 authored rows), `alternateequipment` (184) and `cantdropweapons`
@@ -221,51 +199,27 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// payload has to carry what the entity was authored with, because the resolved loadout is
 	// derived from them on the first think. The resolution is `Substrate/ElysiumNpcLoadout.h`; what
 	// each is read for (and which of the three is deliberately unread) is stated on the members.
-	ElysiumAddClassField(D, TEXT("additionalequipment"), &FElysiumNpc::AdditionalEquipment, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("alternateequipment"),  &FElysiumNpc::AlternateEquipment,  EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("cantdropweapons"),     &FElysiumNpc::bCantDropWeapons,    EElysiumField::Save);
-
-	// --- Authored player-law thresholds and policy ---
-	// The four `pl_*` thresholds the law lanes compare against, `pl_investigate` beside them, and
-	// the three investigation-policy keys that are parsed and carried with their meanings
-	// unrecovered (the SEAM is on the members). All 424-row keyfields, Save-flagged for the same
-	// reason the perception and loadout tuning above is: a map may not rewrite them, but a payload
-	// has to carry what the entity was authored with.
-	//
-	// The member defaults are the authored-disable 6 rather than 0, so an NPC row that omits a key
-	// resolves to "this reaction is off" instead of "react to everything"; the reasoning is at
-	// `ElysiumNpcWitness::DefaultThreshold`.
-	ElysiumAddClassField(D, TEXT("pl_criminal_flee"),        &FElysiumNpc::PlCriminalFlee,        EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("pl_criminal_attack"),      &FElysiumNpc::PlCriminalAttack,      EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("pl_supernatural_flee"),    &FElysiumNpc::PlSupernaturalFlee,    EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("pl_supernatural_attack"),  &FElysiumNpc::PlSupernaturalAttack,  EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("pl_investigate"),          &FElysiumNpc::PlInvestigate,         EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("investigate_mode"),        &FElysiumNpc::InvestigateMode,        EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("investigate_mode_combat"), &FElysiumNpc::InvestigateModeCombat,  EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("full_investigate"),        &FElysiumNpc::FullInvestigate,        EElysiumField::Save);
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)
 {
+	ElysiumNpcKernelBindings::AddInterestingPlaceFields(D);
+
 	D.Input(TEXT("Enable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumInterestingPlace&>(E).InputEnable(Args); });
 	D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumInterestingPlace&>(E).InputDisable(Args); });
 	D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumInterestingPlace&>(E).InputToggle(Args); });
-	ElysiumAddClassField(D, TEXT("type"),              &FElysiumInterestingPlace::Type);
-	ElysiumAddClassField(D, TEXT("enabled"),           &FElysiumInterestingPlace::bEnabled);
-	ElysiumAddClassField(D, TEXT("max_npcs"),          &FElysiumInterestingPlace::MaxNpcs);
-	ElysiumAddClassField(D, TEXT("group_id"),          &FElysiumInterestingPlace::GroupId);
-	ElysiumAddClassField(D, TEXT("rating"),            &FElysiumInterestingPlace::Rating);
+	// Not in the place's datamap, so not generated; the row stays by hand.
 	ElysiumAddClassField(D, TEXT("testflags"),         &FElysiumInterestingPlace::TestFlags);
-	ElysiumAddClassField(D, TEXT("match_orientation"), &FElysiumInterestingPlace::bMatchOrientation);
-	ElysiumAddClassField(D, TEXT("min_time"),          &FElysiumInterestingPlace::MinTime);
-	ElysiumAddClassField(D, TEXT("max_time"),          &FElysiumInterestingPlace::MaxTime);
 }
 
 static void BuildNpcMakerClass(FElysiumClassDesc& D)
 {
+	ElysiumNpcKernelBindings::AddNpcMakerFields(D);
+
 	D.Input(TEXT("Spawn"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpcMaker&>(E).InputSpawn(Args); });
 	D.Input(TEXT("Enable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
@@ -278,21 +232,11 @@ static void BuildNpcMakerClass(FElysiumClassDesc& D)
 	D.Input(TEXT("DisableThink"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpcMaker&>(E).InputDisableThink(Args); });
 
+	// The datamap's two save-only rows (no external name, so nothing to generate): the live-child
+	// counter the spawner owns and its cached ground height.
 	using FM = FElysiumNpcMaker;
-	ElysiumAddClassField(D, TEXT("NPCType"),           &FM::NpcType);
-	ElysiumAddClassField(D, TEXT("MaxNPCCount"),       &FM::RemainingTotal);
-	ElysiumAddClassField(D, TEXT("SpawnFrequency"),    &FM::SpawnFrequency);
 	ElysiumAddClassField(D, TEXT("m_cLiveChildren"),   &FM::LiveChildren, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("MaxLiveChildren"),   &FM::MaxLiveChildren);
 	ElysiumAddClassField(D, TEXT("m_flGround"),        &FM::CachedGroundZ, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("NPCTargetname"),     &FM::ChildTargetName);
-	ElysiumAddClassField(D, TEXT("Flag_StartDisabled"),&FM::bDisabled);
-	ElysiumAddClassField(D, TEXT("Flag_NPCClip"),      &FM::bNpcClip);
-	ElysiumAddClassField(D, TEXT("Flag_Fade"),         &FM::bFade);
-	ElysiumAddClassField(D, TEXT("Flag_InfChild"),     &FM::bInfinite);
-	ElysiumAddClassField(D, TEXT("Flag_NoDrop"),       &FM::bNoDrop);
-	ElysiumAddClassField(D, TEXT("Flag_ViewCone"),     &FM::bViewCone);
-	ElysiumAddClassField(D, TEXT("MinPCDistance"),      &FM::MinPcDistance);
 }
 
 // One shared leaf per living-NPC classname (a class-for-class registration, so the registry's exact
