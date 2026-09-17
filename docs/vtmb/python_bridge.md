@@ -263,6 +263,39 @@ datamap walk** (`FUN_10195940`) and then:
 So `pc.clan = 3` and the I/O wire that writes a keyfield are one path, exactly as the read side
 unifies attribute reads with input dispatch.
 
+## AI infrastructure references and mutations (2026-09-17)
+
+The script surface reaches AI infrastructure through entities and their declared fields/inputs.
+Two shipped patch examples make the distinction concrete:
+
+- `python/temple/temple.py:65..68`: `Finds("Bottleneck_Cover")`, then `cover.EnableHint()` on
+  each returned entity. The following lines find `Guards_BottleNeck_Spawners` and enable them.
+- `python/chinatown/chinatown.py:224..229`: find `gangster_up_1/2`, call
+  `SetupPatrolType("2 0 FOLLOW_PATROL_PATH_WALK")`, then call `FollowPatrolPath` with
+  `A1 A2 A3 A4` and `A3 A4 A1 A2` respectively.
+
+| Reference | Retail resolution |
+|---|---|
+| Entity `targetname` | `FindEntityByName` / `FindEntitiesByName` and named I/O targets use the entity list's matching rules (`0x100f7770`); names can be shared |
+| Bound Python entity | The boxed live entity receives its input synchronously through `0x101962a0`; calling it does not repeat name lookup and fan out to other entities of that name |
+| Patrol token such as `A1` | Inside the NPC input, `0x102d2840` finds the first hint of type 10000/800 whose `Group +0x5f0` matches exactly, case-sensitively; `0x102d2900` returns its network index |
+| Network-node index | Internal navigation lookup used by the handler/tasks; it is not an entity `targetname` or a boxed `CBaseEntity` |
+
+`InputFollowPatrolPath 0x1029ed90` aborts before installing a path if any token resolves to
+`-1`. Patrol Group lookup checks neither hint disabled/owner/cooldown nor the NPC's hint-group
+mask. This differs from availability checks made by other hint searches and from the
+case-insensitive entity-name lookup documented in `entity_io.md`.
+
+`CAI_Hint::InputEnableHint 0x102d09f0` unhides and clears disabled; `InputDisableHint
+0x102d0a20` hides and sets it. Hint `Kill 0x102d08c0` dispatches hide rather than destruction.
+Place `InputDisable 0x102db440` clears enabled and invokes visitor eviction `0x102daac0`.
+These calls change live state observed by later AI queries; they do not just alter authoring
+metadata. Ordinary attribute reads/writes retain the datamap permissions described above;
+calling an input and assigning a field are not interchangeable. See § Synchronous calls versus
+queued Python for ordering and `navigation-jump-links.md` § Task readers of network data for
+the graph/hint fields the NPC consumers observe. This establishes indirect graph access through
+the entity API, not a general Python API for arbitrary AIN memory.
+
 ## Datamaps are built at runtime — the base `CBaseEntity` contract
 
 VtMB has **no static `DEFINE_FIELD` arrays**; each class's `datamap_t` is populated at init by a

@@ -223,11 +223,13 @@ cleared and the cycle restarts, **one refused route per think**. Witness on `sp_
 `mercenary_upstairs` (`8` → `sentry3_ip_arms_crossed` one floor down, `ip_melee_guy` ×2 in the
 warehouse) cycles the three on its 16 s cadence. Every one of those routes is refused because the
 runtime navmesh does not connect the NPC's area to the node (a partial path ends 160–240 m
-short), not because a node is off the mesh. Retail refuses them too, and by its own rule: the
-`.ain` graph has no node within 6000 units of Jack's spawn and none at the Society hub
-(`navigation-jump-links.md` § "Tutorial connectivity"), so `SetGoal` fails and retail stands
-those NPCs idle with the 5–10 s retry. The port's mesh agrees by geometry, not by contract —
-spec 0002 story 24.
+short), not because a node is off the mesh. **Qualification, 2026-09-17:** the exported `.ain`
+has no node within 6000 units of Jack's spawn and none near the Society hub. That predicts
+node-route failure if it is the graph retail actually loads. The exports pair a patched BSP
+with a packed AIN, and loaded/rebuilt network selection still needs verification. Retail can
+also try a local route for other goal branches before node routing. See
+`navigation-jump-links.md` § "Route selection and node identity"; a static component census
+alone does not establish every retail route outcome.
 
 ## The `INVESTIGATE` family, decoded (2026-09-08)
 
@@ -477,7 +479,8 @@ times the direction may wrap before the path is spent.
 `SCHED_%s`, then `SCHED_TROIKA_%s`, translated to the class id space; `0x1029f460(…, repeat,
 type, sched, NULL, 1)` creates/resets the object with the schedule id); `InputFollowPatrolPath`
 (`0x1029ed90`: a space-separated list of `info_node_patrol_point` / `info_node_hint` names,
-each resolved by `0x102d2900` (type `10000 || 800` and `stricmp` on `m_strGroup`), `0x1029f460(…,
+each resolved by `0x102d2900 -> 0x102d2840` (type `10000 || 800`, first exact-case match on
+`m_strGroup` in hint-list order, without disabled/owner/cooldown checks), `0x1029f460(…,
 0, −1, 0, ids, 0)`: an existing object keeps its type/repeat/schedule and only receives the
 nodes; a missing one is created with **schedule 0**); `InputWalkToNode` (`0x1029e840`:
 `"<schedule> <node>"`, one node, schedule through `0x102c47e0`, `0x1029f460(…, 0, 0, sched,
@@ -491,8 +494,14 @@ input, not from the next idle selection; a `FollowPatrolPath` sent without a pri
 (`"WARNING: Patrol path for '%s' has no schedule."`, `0x1029f5d0` frees it). Also written by the
 hunt-list builders `0x10306700` / `0x10306f60` into the hunt cell (`TASK_CREATE_HUNT_PATROL_LIST
 0xae` / `TASK_FIND_HUNT_PATROL_TARGET 0xaf`, story 10h). `sp_tutorial_1` sends `SetupPatrolType`
-then `FollowPatrolPath` 0.1 s later to `sentry2` and `monk_upstairs_podium` (the Society hub; no
-graph node there, so `SetGoal` refuses every point — story 24).
+then `FollowPatrolPath` 0.1 s later to `sentry2` and `monk_upstairs_podium` (the Society hub;
+the packed AIN has no nearby node, but the selected install's loaded/rebuilt network and
+patrol binding must be confirmed before predicting each task's refusal — 0018 story 3).
+
+**Lookup correction, 2026-09-17:** `0x102d2840` compares bytes directly, not `stricmp`.
+`A1` and `a1` are distinct patrol tokens. On a lookup result of `-1`, `InputFollowPatrolPath`
+logs and returns before `0x1029f460`; it does not install a partial path with a missing node.
+The first-match order is the runtime hint list, not an arbitrary sort of BSP entities.
 
 **Selection** (`SelectSchedule` case 1 step 3, `0x102af660`): `+0x6590 != 0` → `path->+4 != 0` →
 `0x1029f650(&m_sppPatrolPath)` (the interest roll, below) and **return `path->+4` verbatim**, one
@@ -500,9 +509,11 @@ of `0x46 IDLE_PATROL`, `0x64/0x66/0x68 INVESTIGATE_NODE/_WALK/_HUNT`, `0x65/0x67
 FOLLOW_PATROL_PATH/_WALK/_HUNT`, or whatever the input named. `SCHED_TROIKA_IDLE_PATROL`
 (`0x10600860`): `TASK_PATROL_PATH 0; WAIT_FOR_MOVEMENT; WAIT_PVS` (interrupts as
 `INVESTIGATE_NODE` plus `GIVE_WAY`, `SEE_FEAR` listed twice); `TASK_PATROL_PATH 0x105` (arm
-`0x102a594d`) picks activity `0x1115` or `0x1121` by a branch and falls to `ACT 9` when the model
-lacks it, then hands the whole node list to the navigator — the base `PATROL_WALK/RUN` shape,
-UNRECOVERED beyond the activity pick.
+`0x102a594d`) selects patrol movement activity, falling back to `ACT 9` when unavailable.
+**Assembly correction, 2026-09-17:** it joins `0x102a5904`, writes the movement activity through
+`0x102ee250`, clears memory mask 2 through `0x102a98e0`, and completes. This arm reads no
+patrol object or AIN node and hands no list to navigation. The upstream source of the route
+that the following `WAIT_FOR_MOVEMENT` expects remains unrecovered.
 
 **The tasks.** `TASK_GET_PATH_TO_PATROL_POINT 0x7a` = `0x102aa640(&m_sppPatrolPath)` (Troika
 `StartTask` idx 17): no object → `TaskFail(0x1d)`; current node id −1 → `TaskFail(0x1d)` **(not
@@ -517,7 +528,13 @@ never does after the start arm completed or failed, so it is dead for this task 
 `TASK_NEXT_PATROL_POINT 0x7d` = `0x102aa9e0` (idx 20): no object → `TaskFail(0x1d)`; `NextPoint`
 true → free the object (`0x1029f5d0`); then the interest roll `0x1029f650` and `TaskComplete`.
 `0x7e NEXT_PATROL_POINT_HUNT` (`0x102a3bac`) is the hunt twin. `0x7c GET_FULL_PATROL_PATH`
-(`0x102a39f4`) hands the list to the navigator as one route (UNRECOVERED body).
+(`0x102a39f4`) is also corrected by assembly: it reads only `nodes[currentIndex]`, resolves
+that network row, obtains its hull position and submits a type-4 goal. Null path fails `0x1d`;
+current id `-1` jumps to the epilogue (`0x102a3a39 -> 0x102a77ea`) without complete/fail;
+successful `SetGoal` completes, refusal warns and fails `0x0c`. Other out-of-range indices
+take the counter/null-node branch before `GetPosition`; a safe `0x1d` fallback is not inferred
+for that arm. No shipped schedule use of this registered task was found, so its name does not
+establish a full-waypoint-list requirement.
 
 **The interest roll and the two interest tasks.** Each patrol node may carry an interest record
 (`node->+0xa0`, from `info_node_patrol_point`'s keys: `+0x468` the interesting place's name,
@@ -539,9 +556,11 @@ complete. With no interest record both tasks complete on their first think, whic
 patrol in the shipped corpus that authors none.
 
 **Port divergences (owned by 10g).** The port has no `CAI_PatrolPath`; `ThinkPatrol` re-issues
-a refused point every think and the three inputs are not wired to a program install. Unrecovered
-after this pass: `0x7c`'s body, `TASK_PATROL_PATH`'s navigator call after the activity pick, the
-`info_node_patrol_point` keys that fill `+0x468`/`+0x46c`.
+a refused point every think and the three inputs are not wired to a program install. The
+2026-09-17 task audit closes the two task-body misconceptions above; the entity census identifies
+`target_name` / `ip_percent` for `+0x468` / `+0x46c`. The upstream route for `TASK_PATROL_PATH`
+and the selected install's node associations remain open. See `navigation-jump-links.md`
+§ "Task readers of network data" for topology consumers beyond patrols.
 
 #### The alert programs, verbatim (2026-09-12, story 10d)
 
@@ -651,8 +670,13 @@ HEAVY_DAMAGE INVESTIGATE_SOUND INVESTIGATE_SIGHT IGNORE_UNKNOWN DETECTED_ATTACK`
 pair excepted). The hunt patrol list is a second `CAI_PatrolPath` in the `+0x6594` cell built by
 `TASK_FIND_HUNT_PATROL_TARGET 0xaf` (`0x10306f60`) / `TASK_CREATE_HUNT_PATROL_LIST 0xae`
 (`0x10306700`) with type 0 and no schedule, walked by the `_HUNT` twins of the patrol tasks.
-Unrecovered: the two list builders' node choice, `GET_PATH_TO_LASTENEMY_LKP`, `m_flHuntExpireTimer`'s
-writer.
+The 2026-09-17 task audit confirms the two list builders traverse eligible, unvisited neighbors
+from the NPC's nearest node, selecting by direction with random perturbation and stopping rules.
+`0x10306700` keeps a list; `0x10306f60` keeps the terminal node and its hull-adjusted hunt target.
+They require live adjacency/capability state, not just a component label; see
+`navigation-jump-links.md` § "Task readers of network data". Remaining: precise geometric
+constants/caller variants, complete endpoint binding, `GET_PATH_TO_LASTENEMY_LKP`, and
+`m_flHuntExpireTimer`'s writer.
 
 ## The flee state and the cower, disoriented and lost programs (2026-09-08)
 
@@ -840,7 +864,8 @@ the base selector** owned by `CNPC_VBatSwarm` (vtable `0x104aab04`) and `CNPC_VS
 **Hint type 10000** is never a `m_pHintNode`: no category bit, no `FValidateHintType` case
 (`0x10295c20` handles `0x27d8`, 100/101, `0x2774`, `0x283c/d`, `0x28a0`; base returns 0), so both
 searches reject it. Its only lookup is by **name**: `0x102d2840` walks the hint list for type
-`10000 || 800` with `stricmp(hint->m_strGroup +0x5f0, name)`, `0x102d2900` returns the node id;
+`10000 || 800` with an exact-case byte comparison of `hint->m_strGroup +0x5f0` and the token,
+first match in hint-list order (corrected 2026-09-17); `0x102d2900` returns the node id;
 callers `InputFollowPatrolPath 0x1029ed90` and `InputWalkToNode 0x1029e840`, which tokenize the
 input and build the `CAI_PatrolPath` at `+0x6590` from node ids. `hint_groups` does not filter
 patrol points. `CNodeEnt::Spawn` `0x102d78d0` → `0x102d7d30` maps classnames to types

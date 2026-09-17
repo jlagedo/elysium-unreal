@@ -1170,17 +1170,23 @@ the retail contract the code must match, the job, what it consumes or provides, 
   and the base programs, walked".
   Size: XS. Effort: Sonnet / low.
 - [ ] **22. `sp_tutorial_1` on the V2 lane.** Moved to 0018 story 13 (2026-09-15).
-- [ ] **24. Reachability: the graph's components on the runtime mesh.** Moved to 0018 story 3
-  (2026-09-15), retail contract and the owner's decision carried verbatim; this spec's path
-  tasks consume its refusal.
+- [ ] **24. Unreal navigation and retail route outcomes.** Moved to 0018 story 3
+  (2026-09-15), boundary revised 2026-09-17. Unreal owns pathfinding and locomotion;
+  compact baked AIN topology supplies node goals, special links and validated admission rules.
+  Hunt/cover/retreat/flank goal selection traverses ordered adjacency with live state; those
+  rules remain observable even when Unreal supplies the walking route.
+  A local route can precede node routing in retail, so no universal nearest-component veto.
+  These tasks retain their goal kind, failure code and ordering when calling that service;
+  ordinary graph nodes/edges require no actors or second pathfinder.
 - [ ] **10g. The patrol programs.**
   Retail: a patrol is a `CAI_PatrolPath` object in the `+0x658c` cell (`+0x6590` pointer;
   `+0 type`, `+4 schedule id`, `+8 repeat`, `+0xc count`, `+0x10 index`, `+0x14 nodes[]`),
   built only by three inputs: `SetupPatrolType "<repeat> <type> <schedule>"` (`0x1029eb30`;
   type 0 loops forward, 1 backward, 2/3 ping-pong, `repeat` wraps allowed before the path is
   spent; the schedule by name, `SCHED_%s`, `SCHED_TROIKA_%s`), `FollowPatrolPath "<node…>"`
-  (`0x1029ed90`; nodes by `info_node_patrol_point`/`info_node_hint` name, type `10000 || 800`;
-  an existing object keeps its type/repeat/schedule) and `WalkToNode "<schedule> <node>"`
+  (`0x1029ed90`; tokens match hint `Group` exactly, type `10000 || 800`, first in hint-list
+  order; no disabled/owner/cooldown filter. A missing token aborts without installing a new
+  path; a successful update keeps an existing object's type/repeat/schedule) and `WalkToNode "<schedule> <node>"`
   (`0x1029e840`). The builder `0x1029f460` **installs the object's schedule at once**
   (`0x102ae750` → `SetSchedule`, refused only while dead) when the id is non-zero; a path built
   with schedule 0 is discarded by the idle selector with `"WARNING: Patrol path for '%s' has no
@@ -1228,8 +1234,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   interest roll to 27 and the hunt cell to 10h.
   Oracle: § "The `INVESTIGATE` family, decoded" → "Patrol paths, walked", "The kernel's
   failure route and the base programs, walked"; § "Followers, patrols, and loitering".
-  Unrecovered: `TASK_PATROL_PATH`'s navigator call after its activity pick (`0x46` only),
-  `TASK_GET_FULL_PATROL_PATH 0x7c`'s body (no shipped program uses it).
+  Correction, 2026-09-17: `TASK_PATROL_PATH` sets movement activity, clears memory mask 2
+  and completes; it does not read or submit a patrol list. `GET_FULL_PATROL_PATH 0x7c` reads
+  only the current node, with its distinct `-1` early return (no shipped program use found).
+  Unrecovered: the upstream route expected by the `0x46` program's `WAIT_FOR_MOVEMENT`.
+  Use 0018/3's stable node data and 0018/6's logical path state; I/O/Python and the task loop
+  must share the same live state. Evidence: `navigation-jump-links.md` § "Task readers of network data".
   Size: L. Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
   Rework (2026-09-15): the registry, the visitor walk and the entry / loop / release trio
@@ -1625,10 +1635,15 @@ the retail contract the code must match, the job, what it consumes or provides, 
   (`0x7c/0x7d/0x7e/0x7f/0x80/0x81/0x82/0x84/0x85`, `HUNT_LOOK_AROUND`, `HUNT_FAILED`); the hunt
   cell over 10g's object; the tasks `0x7b`, `0x7e`, `0xae`, `0xaf`, `GET_PATH_TO_LASTENEMY_LKP`,
   `SUGGEST_STATE 0x06`; case 0xb's order.
-  Consumes: 10g (the path object), 10e/10f (the shared tasks), 10k (`0x84`), 16c (`DoFrenzy`'s
-  entry), 15 (the state byte). Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb; "The
-  hunt programs and the expiry chain, verbatim"). Unrecovered: the two list builders' node
-  choice (`0x10306700` / `0x10306f60`), `GET_PATH_TO_LASTENEMY_LKP`'s arm,
+  The list builders' runtime adjacency reads are confirmed (2026-09-17): retain directional
+  candidate order, link/capability predicates, random draws and list-versus-terminal-node
+  results through 0018's node-query service; Unreal moves between the resulting goals.
+  Consumes: 0018/3 and 6 (topology and hunt query), 10g (the path object), 10e/10f (the shared
+  tasks), 10k (`0x84`), 16c (`DoFrenzy`'s entry), 15 (the state byte).
+  Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb; "The
+  hunt programs and the expiry chain, verbatim") and `navigation-jump-links.md` § "Task readers
+  of network data". Unrecovered: remaining geometric constants/caller variants and endpoint
+  filters of `0x10306700` / `0x10306f60`, `GET_PATH_TO_LASTENEMY_LKP`'s arm,
   `m_flHuntExpireTimer`'s writer.
   Size: M–L. Effort: Fable / medium; corpus pass on the list builders first.
 - [ ] **13b. The leak in the defect catalogue.**

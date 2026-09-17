@@ -1,17 +1,26 @@
-# 0018 world-ai-infrastructure — The world's AI infrastructure: the graph, the places, the sound world and the groups every NPC queries, witnessed by the tutorial's alley and the Santa Monica hub
+# 0018 world-ai-infrastructure — The world's AI infrastructure: Unreal navigation, authored places, the sound world and the groups every NPC queries
+
+**Revised 2026-09-17, task-reader audit included:** Unreal owns movement pathfinding and
+locomotion. AIN supplies special traversal and the runtime topology used to select gameplay
+goals: hunt, cover, retreat and flank inspect neighboring nodes. Required graph data
+uses compact baked records, not an actor per node/edge. This supersedes the 2026-09-15 actor-per-graph-record
+decision and the universal nearest-component gate; see § Navigation boundary and story 3.
 
 ## Witness
 Two maps, baked into their levels and standing in the editor before any NPC program runs on
 them. `sp_tutorial_1`: the thug's alley — `pt1..pt3`, his `hint_groups`, the nine hull-0 jump
 links, the ten graph components, the footstep and door sounds he hears. `sm_hub_1`: 38 placed
 NPCs and 48 maker requests, the densest ambient population in the corpus — pedestrians walking
-places and crosswalk links, cops, makers cycling. The witness is that every infrastructure object
-on both maps is visible as a baked actor, answers the queries the mind makes with retail's
-answers, and is exercised by a scene test that needs no NPC to run.
+places and crosswalk hints, cops, makers cycling. Authored places, hints, patrol points and makers
+are selectable baked actors; special traversal uses native navigation links. Compact navigation
+records are inspectable in a cooked asset. Their queries are exercised independently of NPC
+programs, with native movement tests for the pathfinding and traversal boundary.
+Graph counts here describe the current packed exports; refresh those pins after validating the
+selected patched graph. They do not assert that the installed patch uses the packed network.
 
 ## Scope
-Everything an NPC queries but does not own: the nav graph and its reachability on the Unreal
-mesh; hint nodes; interesting places and their type table; patrol paths and patrol-point interest
+Everything an NPC queries but does not own: Unreal navigation and the retail node data its
+callers observe; hint nodes; interesting places and their type table; patrol paths and patrol-point interest
 records; the shared AI sound list and its volume table; squads; the attack coordinator and
 standoff goals; the relationship defaults; makers; the player-law bus. For each object: its baked
 actor or asset in the generated level, the substrate record the runtime builds from it at
@@ -22,7 +31,7 @@ Owned elsewhere: the mind that consumes these queries — **0002**; the data sea
 and the verdict pass — **0019**; the player's law acts — **0005**, **0006** (this spec owns the
 bus NPCs read, not the transaction that writes it); the scripted entities — **0003**.
 
-Three rules, decided by the owner 2026-09-15:
+Three rules, decided 2026-09-15 and narrowed for navigation on 2026-09-17:
 - **No sidecars: the runtime reads only the project's own Content.** Two roots, both
   gitignored: the deployed corpus `Content/ElysiumCorpus/` — the retail bytes an
   `uv run elysium import <lane>` lifts out of the export units, where vdata, dialogue, sound
@@ -33,24 +42,109 @@ Three rules, decided by the owner 2026-09-15:
   the migration still to finish, owned by the map lane's own later spec, not here. The
   placement rule, confirmed 2026-09-15: **what can stand on a map is baked onto the map as an
   actor; what cannot goes to the corpus; what is recovered from the binary is generated
-  source.** For now only the AI infrastructure entities bake as actors — hints, interesting
-  places, patrol points, makers, and the graph's nodes and links; every other classname in the
-  lump keeps its `.ents` read until the map lane's spec. So a placed object in this spec is a
-  baked actor, a table is a deployed corpus file read from `CorpusRoot()`, and the substrate
-  record is built from the baked or deployed thing at activation. The bake and the
+  source.** The navigation exception is explicit: AIN nodes and ordinary edges describe a
+  compiled network, and do not each require an actor. Hints, interesting places, patrol points
+  and makers bake as actors; native nav links represent special traversal. Required network
+  data lives in one cooked `UDataAsset` per map, referenced by its baked map content. Other
+  entities keep the existing entity-table transport (`UElysiumMapEntities` or `.ents`, according
+  to the map's migration state). Tables live under `CorpusRoot()`. The substrate reads these
+  baked or deployed sources at activation. The bake and the
   import regenerate everything, so an edit made in the editor does not persist; an authored
   override layer would be a separate, named story. (`docs/vision.md`
   § "The build shape" still says the runtime builds "from the intermediates on disk"; that
   sentence is superseded by this decision and awaits the owner's edit.)
 - **Every interaction reaches Unreal.** Walking, path following, traces, collision and line of
-  sight go through Unreal's NavMesh, nav links and collision — which is the second reason the
-  objects are real actors. Named by content → record; needed by the world → Unreal service.
-  The retail graph survives only as data on the baked node actors (per-hull masks, component
-  id) for the reachability gate; the sound list is a rule object and sound propagation is not
-  reproduced; no Source pathfinder, sector partition or hull probe is ported here.
+  sight go through Unreal's NavMesh, nav links and collision. Named by content → record;
+  needed by the world → Unreal service. Keep only the AIN-derived data needed for node
+  identities, hull positions, ordered adjacency, special links and validated route-admission
+  rules. Preserve the recovered graph searches that choose gameplay goals; Unreal finds and
+  follows the walking route to a chosen goal. No Source movement pathfinder, sector partition
+  or hull-probe implementation is ported here. The sound list is
+  a rule object and sound propagation is not reproduced.
 - **A story lands only against its query surface.** Story 1 lists the calls the closure makes
   into each helper class; a story's tests are those calls against the baked witness maps, not
   a speculative API.
+
+## Navigation boundary
+
+Unreal builds a `RecastNavMesh` from the map's collision within `NavMeshBoundsVolume`s.
+`AAIController` and path following request and follow routes; `CharacterMovement` moves the
+NPC. AIN is not converted into Recast polygons or a chain of actors that an NPC must follow.
+Epic's [navigation overview](https://dev.epicgames.com/documentation/en-us/unreal-engine/basic-navigation-in-unreal-engine)
+and [ANavLinkProxy](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/AIModule/ANavLinkProxy)
+describe the native services used at this boundary.
+
+| Source information | Bake / runtime use | Representation |
+|---|---|---|
+| BSP hints, patrol points, places, makers | Preserve authored identity, position, properties and I/O | Native `AActor` subclasses with `UCLASS` / `UPROPERTY` |
+| AIN jump edges for the supported NPC hull | Add hull Z offsets, convert endpoints once, retain source link identity and validate traversal in Unreal | Existing `AElysiumNavJumpLink : ANavLinkProxy`; one actor per selected connection |
+| AIN node ids, type, position, relevant yaw, zone, hull offsets and resolved hint/patrol associations | Answer node-based goal and interest queries without reading exports in the game | Indexed `USTRUCT` records in one cooked navigation `UDataAsset` per map |
+| Ordinary AIN edges, endpoint ids, ordered adjacency, link-info and 22 indexed hull-motion masks | Hunt, cover, retreat and flank select candidates dynamically from neighboring nodes | Compact link records and per-node adjacency in the same asset; no actor per node/edge |
+| Derived per-hull/per-capability component labels | Diagnostics or a proven optimization for a particular admission branch | Optional derived data; cannot replace ordered topology or query-specific predicates |
+| Remaining export metadata | Offline source evidence; add runtime fields only for recovered consumers | No blanket copy of opaque node tails or Source movement pathfinder |
+| World collision, NPC blockers, doors and agent dimensions | Generate usable walkable surfaces and preserve obstacle interaction | Unreal collision, navigation areas/filters and movement services |
+
+AIN translation is therefore **selective**. NavMesh supplies ordinary walking, but cannot
+invent retail's named patrol-node identity or prove that a graph-dependent goal should succeed.
+Conversely, the absence of an AIN connection cannot veto every native move: retail can build
+a local route before consulting the graph (`0x102f2060 -> 0x10304130`). A component match is
+also insufficient to guarantee success; endpoint binding, capability, node rejection, directional
+jump checks and stale-link probes can refuse it (`0x10304e00`, `0x102f3c10`, `0x102ff960`).
+The rule/engine split must keep the caller's failure code and ordering. Changing which
+authored programs succeed is not authorized by this representation change.
+
+The task-reader audit establishes a runtime topology requirement, independently of the remaining
+route-admission questions. Hunt (`0x10306700`, `0x10306f60`), cover (`0x10301720`, `0x10302320`),
+retreat (`0x10300b50`) and flank (`0x10302e50`) traverse adjacency to choose goals. Preserve
+their candidate order, distinct predicates, runtime cooldown/ownership checks and observed RNG
+draw sites. Unreal collision supplies their geometric questions; Unreal navigation moves to
+the selected destinations. These searches must not be replaced by arbitrary NavMesh points.
+Patrol name binding and the interesting-place eligibility pick do not themselves need adjacency.
+The full export remains the offline record, including fields whose consumers are still open.
+Endpoint admission, alternate movement-route costs and the remaining hint/cower families still
+need recovery; that uncertainty does not block the independent BSP actor-class slice.
+
+**Source pairing is a prerequisite for behavioral claims.** The current tutorial exports combine
+an Unofficial Patch BSP with 203 node entities and a packed AIN with 116 nodes. The installed
+loose patch AIN instead has 203 nodes / 429 links; the hub's patch AIN has 578 / 1,862 rather
+than the export's 578 / 1,856. These are separate candidates, not proof of live selection.
+BSP lump index, authored `nodeid` and network index differ; `CNodeEnt::Spawn 0x102d78d0` has distinct loaded-graph,
+rebuild and standalone-hint branches. Use that lifecycle, with explicit unresolved associations,
+not a dictionary keyed only by `nodeid` or an unrestricted nearest-position repair. Confirm which
+network the selected install loads/rebuilds before treating a static graph as its authority.
+Evidence and remaining gaps: `docs/vtmb/navigation-jump-links.md` § "Route selection and node
+identity: correction (2026-09-17)".
+
+## Entity I/O, Python and live state
+
+The baked actor is the serialized starting data and world identity. At adoption it binds to
+the existing entity world and class/input/field registry; `UCLASS` / `UPROPERTY` do not by
+themselves expose the VtMB scripting API. Use 0019's generated external-name bindings and
+one authoritative live entity/registry state shared by I/O, Python and NPC queries.
+
+| Reference | Resolution contract |
+|---|---|
+| Entity `targetname` | Runtime entity lookup for I/O/Python; may be nonunique; preserve matching and entity delivery order, special targets and rename/removal behavior |
+| Entity handle | One live entity; a bound Python input call addresses this handle rather than fanning out by name |
+| Patrol hint `Group` | Exact-case, first match in retail hint-list order, type 10000 or 800; not `targetname`, and not filtered by hint enabled/owner/cooldown state |
+| BSP entity index / authored `nodeid` / network index | Separate identities; preserve the loader's association and valid/absent/out-of-range outcomes |
+| Unreal actor label / `AActor::Tags` | Editor organization / baked-family adoption; neither replaces VtMB entity or patrol names |
+
+Static node/link records are cooked once. Hint disabled/owner/next-use state, node cooldown,
+place occupancy/visitors, patrol iteration, search cursors and any recovered stale/rejected
+link/node state are runtime state, keyed by the appropriate stable identity. Registries must
+read that state, not stale copies of the actor's initial values. Preserve each query's predicate:
+cover's hint-owner test differs from flank's disabled/cooldown/owner test. A global "enabled
+nodes only" filter would change both patrol lookup and cover selection.
+
+Python input calls execute synchronously; map-output actions and their Python payloads follow
+the existing event queue. Field writes use the recovered write permissions and do not invent
+input events. `EditAnywhere` does not grant game-Python write permission. Preserve hint `Kill`
+as hide and place `Disable`'s visitor effects. Runtime entity classname/lifecycle must reflect
+retail's replacement of node authoring entities with hints, alongside retained BSP provenance.
+Witnesses: tutorial `logic_failed_blueblood -> blueblood_maker.Spawn` after 1.25 s; patch
+`temple.py` enables `Bottleneck_Cover`; `chinatown.py` installs differently ordered patrols for
+`gangster_up_1/2`. See `python_bridge.md`, `entity_io.md` and `navigation-jump-links.md`.
 
 ## Sources
 - Oracle: `docs/vtmb/npc-ai/population.md` (the authored population), `senses.md` (the sound
@@ -82,7 +176,7 @@ requests). `interesting_place_groups` on 416 definitions, 56 distinct groups; `h
 423; `squadname` on 105 definitions, 28 squads. Densest maps: `la_hub_1` 68 + 40, `sm_hub_1`
 38 + 48, `sm_warehouse_1` 53 + 2, `sp_theatre` 42, `sp_tutorial_1` 20 + 14.
 
-**`sp_tutorial_1`.** The graph is ten components (27/23/18/16/10/7/6/3/3/3 nodes); nine hull-0
+**`sp_tutorial_1`, current exported graph.** Ten components (27/23/18/16/10/7/6/3/3/3 nodes); nine hull-0
 jump links `22, 24, 30, 88, 110, 115, 147, 163, 218`; Jack's start has no node within 6000
 units. `pt1` (`group_id 2`, `enabled 1`, `min_time 30`, `max_time 60`) at the thug's spawn,
 `pt2` / `pt3` (`group_id 2`, `enabled 0`) down the alley. `thug_1`: `hint_groups 1..32`,
@@ -129,68 +223,120 @@ its recovery is written in the oracle section it names.
   Size: S. Effort: Sonnet / medium.
 
 - [ ] **2. The baked infrastructure actors.**
-  Retail: none — a build-shape decision. Decided 2026-09-15 by the owner: **baked**, over
-  runtime-spawned views, for the two reasons in § Scope (no sidecars; every interaction reaches
-  Unreal).
-  Job: following the jump-link lane, the map bake stages one record per placed infrastructure
-  entity — nodes and links from the nav-graph unit; hints, places, patrol points and makers from
-  the entities unit — and the editor bake places one actor per record in the generated level,
-  carrying the entity's keyvalues as properties and a debug draw (type, groups, enabled, yaw,
-  links, component). At activation the entity world adopts the actors by tag, as
-  `AElysiumMapActor` adopts the level's, builds each substrate record from its actor, and skips
-  those classnames in the `.ents` read so no entity exists twice; every other classname keeps
-  the `.ents` path until the map lane's spec. The actor is the runtime's source, the export is
-  the bake's. An export entity of a baked classname with no actor after the bake is a bake
-  error. The tables these objects read (`interestingplacetypelist.txt`,
+  Retail: a representation decision; the authored values and identity still follow the retail
+  entity contract. Scope narrowed 2026-09-17 to BSP-authored hints, places, patrol points and
+  makers. Ordinary AIN nodes/edges belong to 3's cooked data, not this actor slice.
+  Job: use the existing map-entities GLB reader/join and map bake to stage and place these
+  entities once. Classes are native Unreal `AActor` subclasses with `UCLASS`, `GENERATED_BODY`
+  and typed, serialized `UPROPERTY` fields. A patrol point may serve both hint and patrol
+  queries through the same actor. Use standard editor billboards/arrows, Details categories
+  and Outliner folders; no custom visualizer, graph-actor hierarchy or per-frame editor system.
+  Bake-only setters exposed to Unreal Python use `UFUNCTION` where needed. These actors
+  remain runtime content; only their visualization components are editor-only.
+  At map load adopt the actors through native `AActor::Tags` using `ElysiumBakedTags`, then
+  read their typed properties. Tags identify the family; properties carry the data. Replace
+  their definitions at the original BSP entity indices before `EntityWorld::Load` constructs
+  entities and runs Spawn/PostSpawn. This applies to both `UElysiumMapEntities` and `.ents`:
+  do not append duplicates or filter/renumber the def array. Preserve outputs and unrelated
+  authored keys needed by existing consumers, including the maker's child template.
+  Missing/duplicate actors for the declared baked set fail validation. Graph binding can be
+  explicitly unresolved in the class-only slice and is resolved/validated by 3 before its
+  node-dependent queries are enabled. Other classes keep their current transport.
+  Follow § Entity I/O, Python and live state: retain identity and initial state on the actor,
+  bind one live runtime state, and make all input/field/task readers observe that same state.
+  The tables these objects read (`interestingplacetypelist.txt`,
   `sound_volume_table.txt`, `Rules.txt`) are already deployed under
   `Content/ElysiumCorpus/vdata/` by the vdata lane; their loaders
   (`FElysiumInterestingPlaceTable::Load`, the `ElysiumVdata::ReadVdata` callers) read
   `CorpusRoot()` instead of the export root in 5, 7 and 11.
-  Keyfields come from 0019's generated datamap bindings — **this story waits for 0019 story 2**
-  so no infrastructure keyfield is hand-typed. Nothing baked is committed.
+  Retail external-name/type/member mappings come from 0019 story 2; normal Unreal class and
+  property declarations are the actor implementation, not a recreation of Source reflection.
+  The bindings need actor targets before they can be complete: class construction, reflection
+  and save/reload can be a small first slice. Completing this story's parser/adoption path
+  waits for the relevant generated bindings, not for AIN route admission. Nothing baked is committed.
+  Checks: spawn through `UWorld`, verify reflected fields and registered editor components;
+  bake/save/unload/reload representative actors; compare authored values, source indices and
+  repeated outputs; verify one runtime entity per baked BSP row before any spawn-time I/O.
+  Add bridge checks for name lookup versus bound-handle calls, repeated targetnames, exact-case
+  patrol Groups, and a Python/input mutation becoming visible to the appropriate NPC query.
   Consumes: 0019 story 2. Provides: the actor the debugger (12) selects and the editor shows.
   Size: M. Effort: Opus / high (pipeline stage, editor bake, runtime bind).
 
-- [ ] **3. The nav graph and reachability.** Absorbs 0002's stories 22 and 24, moved here.
-  Retail: a route exists when the `.ain` graph has a node path for the hull, and for nothing
-  else — navigator `SetGoal` (`0x102ecd20`) refuses otherwise and every path task answers
-  `TaskFail(0x0c)`. Hull 0 stands `(-13,-13,0)..(13,13,72)` (66 × 183 cm), steps 18 units
-  (45.7 cm); links carry per-hull ground/jump masks, `linkInfo & 0x1000` is never set at
-  build; doors are not graph cuts: `CAI_Node::InitLinks` (`0x102fb4e0`) probes every link with
-  mask `0x2000b` (`SOLID|WINDOW|GRATE|MONSTERCLIP`), excludes `MOVEABLE`, and marks a hull-0
-  ground link that a `0x2000`-mask hull trace hits with `linkInfo |= 0x2000` (the NPC opens the
-  door: `m_hBlockedDoor`, `SelectDoorObstructionSchedule 0x102b7370`, `IGNORE_DOOR_FAILURE`).
-  **`MONSTERCLIP` cuts links at graph build.** On the tutorial, Jack's walk to `ip_by_window` /
-  `ip_lean_1` and every hunter's route fails at `SetGoal` and runs the program's failure route.
-  Port today: a Recast projection of the `.hulls` sidecar with monsterclip excluded
-  (`ElysiumMapCollision.cpp:285`), the engine's default agent (`DefaultEngine.ini:73-75`),
-  built at activation (`ElysiumMapActorLifecycle.cpp:840`); the nine jump links as baked
-  proxies (`ElysiumNavJumpLink.h:12`); `FindPathSync` called once, for the jump-link check
-  (`ElysiumNpcBody.cpp:617`); partial paths refused (`ElysiumNpcBody.cpp:545`). Its connectivity
-  matches retail's refusals on the tutorial by coincidence of geometry.
-  Job: nodes and links baked as actors carrying their per-hull masks and hull-0 component id
-  (traversal links as Unreal nav links, as the jump links already are); the reachability gate
-  reading the component ids off the actors; the `.hulls` / `.dispcol` collision the mesh
-  projection reads today moved off the export root under the no-sidecars rule (consumed from
-  the map lane, not owned here); the reachability gate — a request whose start and goal fall in different hull-0
-  components (nearest node per end) is refused before Recast is asked, so `TaskFail 0x0c` fires
-  where retail's does and the mesh supplies only the geometry inside a component; the agent
-  from hull 0 in the `RecastNavMesh` block; monsterclip brushes added to the NPC-blocking
-  geometry (a second projection or a per-agent area, the player's collision untouched); a
-  game-side check that every enabled hull-0 ground link is walkable on the built mesh,
-  reported like the jump-link staging; door brushes verified not to cut the mesh. No pathfinder
-  is ported: Recast walks inside a component.
-  Census caveat: the census's component counts are raw undirected connectivity over every
-  link of every hull (7 on the tutorial); the gate needs hull-0, post-monsterclip components
-  (10 on the tutorial per `navigation-jump-links.md`), which this story computes.
-  Decision for the owner, carried from 0002/24: the gate is the retail contract; naming wider
-  reachability a modernization means NPCs retail stands idle (Jack at the tutorial start) walk
-  off in the port.
-  Provides: the route refusal 0002's path tasks and 0003's walks fail through. Consumes: 2.
-  Oracle: `navigation-jump-links.md` § "Tutorial connectivity: the graph's components" (incl.
-  "Closed 2026-09-12: `MONSTERCLIP` cuts links at graph build"). Unrecovered: the navigator's
-  reader of `linkInfo & 0x2000`; the name of contents bit `0x2000` in this engine's `bspflags`;
-  whether door brushes cut the port's mesh (a witness, not a corpus item).
+- [ ] **3. Unreal navigation and the required AIN data.** Absorbs 0002's stories 22 and 24.
+  Retail: `SetGoal 0x102ecd20` selects among route branches, not one universal graph test.
+  `0x102f2060` may accept a local route first; `BuildNodeRoute 0x10304e00` requires endpoint
+  binding and node connectivity on its ordinary branch. Interesting-place goal type 8 takes
+  the node-route path; patrol node lookup itself can fail before routing (`0x102aa640`).
+  Preserve each caller's failure and timing, including `0x1d` for missing patrol nodes and
+  `0x0c` for a refused route. See § Navigation boundary and the oracle's 2026-09-17 correction.
+  Hull 0 is Source `(-13,-13,0)..(13,13,72)` with an 18-unit step. `InitLinks 0x102fb4e0`
+  includes `MONSTERCLIP` and excludes `MOVEABLE`; `0x102ff960` checks link-off `0x1000`, hull
+  motion intersected with capability, rejected nodes, directional jumps and stale links.
+  `linkInfo & 0x2000` also affects alternate-route cost (`0x102fe9f0`), not just connectivity.
+  Port today: `AElysiumNpcBody::MoveTo` calls `AAIController::MoveToLocation` with native
+  pathfinding. `map_jump_links.py -> bake_map_v2.py -> bake_jump_links.py` already bakes
+  `AElysiumNavJumpLink` smart links; native capsule/CharacterMovement handles flight and
+  landing. There is no baked node-query/admission asset. The old spec's unconditional
+  nearest-component check was an unproven approximation and is withdrawn.
+  Job, in order:
+  1. Verify the source pair and loaded/rebuilt network for each witness. Preserve BSP order,
+     distinguish authored IDs from network IDs, reproduce the node/hint association lifecycle,
+     and report unmatched nodes without inventing a nearest replacement. Structural export
+     counts alone are not the verdict on patched-map reachability.
+  2. Stage the node-query data in one cooked `UDataAsset` with typed `USTRUCT` rows: stable
+     network index, node type, position/relevant yaw, zone, per-hull offsets, and entity/hint
+     association; links with endpoint ids, link-info, all 22 indexed hull-motion masks, and
+     adjacency in the order retail installs it. Decode named fields from the variable-width
+     export; never equate an opaque tail offset or a derived component id with the retail zone.
+     Retain map/source identity, used-hull bits and recipe version with the asset. Keep authored
+     `nodeid` separately as provenance. Reference the asset from baked map content so cooking
+     includes it; read it before node-dependent spawn
+     and activation. No runtime GLB/AIN read, actor per ordinary node/edge, or per-node tick.
+  3. Reuse the existing jump-link lane. Select by the actual supported hull/capabilities;
+     keep all 22 source slots correctly indexed offline, add the appropriate ground-node Z
+     offset, convert Source inches to Unreal cm once, and configure native traversal links.
+     A shared AIN edge does not prove both jump directions are physically legal. Preserve the
+     native directional probe, traversal state, cancellation and failure contract. Fly/climb
+     edges need their own proven consumers; never reinterpret them as walking or jumping.
+  4. Expose compact topology and shared runtime state to the recovered hunt/cover/retreat/flank
+     goal selectors. Preserve per-query link/hint predicates, neighbor and tie order, node
+     cooldown, rotating search cursors and observed RNG sequencing. The programs remain in
+     0002; the shared query objects are here. Component labels may assist diagnostics or a
+     proven admission optimization, but never replace these goal searches. Separately finish
+     local-route gates, endpoint binding and alternate-route effects before declaring movement
+     admission faithful. Same-component is not proof of a legal route. Unreal supplies geometry,
+     traces, movement pathfinding and following; no second movement pathfinder is implemented.
+  5. Configure native agent dimensions and NPC-blocking monsterclip geometry; verify door
+     interaction without creating artificial navigation cuts. Consume cooked world/brush
+     collision from the map lane. A complete Recast path may still take an unintended shortcut,
+     so compare the relevant route restrictions as well as start/end connectivity.
+  Acceptance: both witness levels save/reload the node data and link actors with no external
+  export access; their BSP actor set contains no duplicate graph-marker actors. Validate node
+  binding (including standalone hints, duplicate authored IDs and out-of-range associations),
+  all hull indices, source-pair/recipe invalidation, and native link endpoints. Exercise a legal
+  local move with no graph coverage, a graph-dependent refusal, a same-component move blocked
+  by collision, different capabilities on the same hull, directed jump refusal, and door versus
+  monsterclip behavior. Reuse the existing native jump-flight tests. Missing source data is
+  distinct from a valid empty graph; neither becomes global permission or a blanket movement
+  veto. Incomplete required data prevents publication of the affected navigation slice.
+  Query tests must compare the selected node/list and state writes under controlled neighbor
+  order, capabilities, hint ownership, node cooldown, query cursor and RNG; matching only the
+  final reachable component is insufficient. Include shipped hunt setup, `SHOT_BY_UNKNOWN`,
+  `MELEE_RETREAT` and flank program consumers. Use each family's own predicate, not one merged
+  eligibility function. Preserve hint-list order separately from BSP/entity and neighbor order.
+  Current packed-export census pins: tutorial has 116 nodes / 234 links / 9 hull-0 jumps and
+  ten hull-0 ground-or-jump components; hub has 578 / 1,856 / 119 and seven components
+  (509 / 63 / 2 / 1 / 1 / 1 / 1). Story 1's seven/five components mix all hulls and are not
+  these profiles. Recompute pins for the verified source pair rather than forcing a patch graph
+  to match packed counts. The unit's variable-width node tails are not fixed six-integer records.
+  Provides: node-goal data and route outcomes to 0002 and 0003; Unreal supplies movement.
+  Consumes: 2 for hint/patrol associations; the existing jump lane is independently reusable.
+  Oracle: `navigation-jump-links.md`. Open: patched-install graph selection, complete endpoint
+  filters and local-route gates, alternate-route cost/waypoint semantics, hint-path/cower query
+  arms and the native door/monsterclip witness. Runtime adjacency is now a confirmed requirement;
+  precise geometric constants and remaining task wrappers still need their own closure. This
+  story remains incomplete until those required consumers are resolved; the actor-class slice
+  does not claim to solve them.
   Size: M–L. Effort: Opus / high.
 
 - [ ] **4. Hint nodes.**
@@ -201,9 +347,13 @@ its recovery is written in the oracle section it names.
   expiring lock list bosses keep on hints (`0x103662d0`, `0x10366400`, `0x10366490`).
   Gap: the port has the rule bodies (`ElysiumNpcKernelHints*.cpp`) and no registry under
   them — every search answers over nothing.
-  Job: the hint registry as records (type, group mask, yaw, node, `match_orientation`, in-use
+  Job: the hint registry as records (type, group mask, yaw, optional network-node association, in-use
   owner); the queries on the surface from 1 — nearest by type, group and distance; cover from
   enemy; shoot-at hint; lock and unlock with expiry; the validators rehomed onto the records.
+  Graph-based cover/flank searches consume 3's topology and runtime node cooldowns. Cover's
+  owner-only hint test and flank's full unusable test remain distinct. Python/I/O writes share
+  this registry's state, including `EnableHint` / `DisableHint` and hide/unhide; hint `Kill`
+  follows retail's hide override rather than removing its graph identity.
   The species halves of slot 566 stay with their classes in 0002.
   Provides: the searches to 0002's cover, kick, interest and alert families. Consumes: 2, 3.
   Oracle: `shape.md` (the four hint sections), `schedule-kernel.md` § "The three hint
@@ -236,9 +386,15 @@ its recovery is written in the oracle section it names.
   Job: the path records and the point's interest record; the queries the patrol program asks
   (next point, hunt path, the record). The roll, the two interest tasks and the programs stay
   in 0002's 10g and 27.
-  Consumes: 2, 5. Oracle: `schedule-kernel.md` § "Patrol paths, walked". Unrecovered: the
-  `info_node_patrol_point` key names that fill `+0x468` / `+0x46c`; which shipped map authors
-  one (1 answers this).
+  Consumes: 2, 3, 5. Oracle: `programs.md` § "Patrol paths, walked" and
+  `navigation-jump-links.md` § "Route selection and node identity". Story 1 identifies
+  `target_name` / `ip_percent`; the hint's network association and hull-adjusted destination
+  come from 3. The path is the program's ordered goals; native navigation finds each walking
+  route. Hunt-list builders use 3's ordered runtime adjacency and their recovered directional
+  selection; retain their RNG and list/terminal-node distinction. `GET_FULL_PATROL_PATH` reads
+  only the current node, while `TASK_PATROL_PATH` itself reads no graph/path object (2026-09-17
+  task audit). Unrecovered: the upstream route expected by `TASK_PATROL_PATH`, remaining
+  endpoint filters and any unclosed task wrappers; see the oracle's task-reader matrix.
   Size: S–M. Effort: Fable / medium; corpus pass on the node keys first.
 
 - [ ] **7. The AI sound list and its volume table.**
@@ -314,26 +470,33 @@ its recovery is written in the oracle section it names.
 - [ ] **12. The infrastructure debugger view.** Visual-only modernization, as 0002's 23.
   Job: the overlay draws hints (type, group, locked), places (enabled, claimant, visitors,
   wait), patrol paths, the sound list with expiry, squads and slots, coordinator slots, graph
-  components and the last refusal; selection through the baked actor.
+  components and the last refusal. Select authored objects through their baked actors and
+  inspect network data through the cooked asset; graph diagnostics do not require graph actors.
   Consumes: 2–9. Size: S. Effort: Sonnet / medium.
 
 - [ ] **13. The hub at idle: the second witness.**
   Job: `sm_hub_1` and `sp_tutorial_1` on the V2 lane (0002's 22, moved here) with every
   object above baked; a scene test per map that opens the baked level and walks each record's
-  queries against it — places per group, hints per type, links per component, audibility at a set of
+  queries against it — places per group, hints per type, node associations and route outcomes, audibility at a set of
   origins — and a played witness once 0002's idle programs land: pedestrians visit places, cops
-  patrol, makers cycle, nobody walks between graph components.
+  patrol, makers cycle, and each stood route branch preserves its success/failure contract while
+  Unreal performs movement. Do not turn component boundaries into a universal movement ban.
   Consumes: everything above. Size: M. Effort: Sonnet / medium, then played.
 
 ## Build order
-1 → 2 (after 0019 story 2) → 3 → 4, 5, 6 in parallel → 7 → 8, 9 → 10, 11 → 12 → 13. Story 1
-first because every size above is provisional until the census exists. 0018 runs beside 0019
+The node/goal chain is 1 → 2 (relevant 0019 story 2 bindings before adoption) → 3 → 4 → 5 → 6.
+Stories 7 and 9 can follow 2 independently; 8 waits for 0002/5; 10 waits for 2 and the relevant
+bindings; 11 follows its existing data/services. The debugger (12) and full witness (13) follow
+their listed dependencies. Story 1 establishes the corpus sizes. 0018 runs beside 0019
 and consumes 0002 only through the query surface: no story here adds a member to the NPC.
+The native actor-class/reflection/save slice of 2 can precede binding completion; AIN selection,
+node-query data and admission are 3's work, not prerequisites for constructing those classes.
 
 ## Seams
 - Provides: the query surface to 0002 — hint searches, place selection and the trio, the next
   patrol point and its record, audible sounds, squad members and the shared memory, the melee
-  slot, the route refusal; the baked actors to the debugger; the second witness.
+  slot, node-goal data and route outcomes; the baked actors and navigation asset to the debugger;
+  the second witness. NavMesh/path following/CharacterMovement supply movement.
 - Consumes: 0019's generated datamap bindings (every infrastructure keyfield) and tunables;
   0002/5's enemy record store; 0005 / 0006's law acts; the V2 export units through the map
   bake, never at runtime.

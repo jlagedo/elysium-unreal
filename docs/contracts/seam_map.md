@@ -104,12 +104,21 @@ and `seam_map_animation_bank.md` are not current unit specifications.
 These seams remain typed, queryable resources rather than being forced into fake glTF scenes or
 nodes. glTF assets link to them where spatial placement or visual binding requires it.
 
+For AI entities, baked properties initialize shared live entity/registry state. Retail
+`targetname` and entity handles route I/O/Python; patrol `Group` uses its own exact-case lookup;
+network indices address compact graph records. Unreal labels and family tags do not replace
+those identities. Hint ownership/disabled state, node cooldown and place occupancy remain
+runtime values, rather than independent immutable copies in the navigation asset. The bridge
+retains synchronous Python input dispatch and queued map outputs (0018 § Entity I/O, Python
+and live state; `docs/vtmb/python_bridge.md`).
+
 | Retail source map | Slice | VtMB source | Packaging type | File type | Export mapping | Seam file or absence | Unreal type | What it is |
 |---|---|---|---|---|---|---|---|---|
 | `<VTMB>/Vampire/` (`pack000.vpk` … `pack103.vpk` plus retail loose files) | Source resolution | Loose files + VPK archives | Patch/retail loose trees + retail VPK members | Mixed | UP-first install index | None | None | Chooses the winning source bytes. |
 | `<VTMB>/Vampire/maps/<map>.bsp` | Entity definitions | BSP entity lump | BSP entity lump | Quoted entity text | Keyvalues, outputs, hulls and model annotations | `<map>.ents` | No asset; `FElysiumEntityDef` / `FElysiumEntityWorld` | Addressable game entities and Source I/O. |
 | `<VTMB>/Vampire/maps/<map>.bsp` | Player start | `info_player_start` | BSP entity lump | Quoted entity text | Unreal-space origin and yaw | `<map>.spawn` | `APlayerStart` | Initial spawn transform. |
-| `<VTMB>/Vampire/maps/<map>.bsp` | Navigation hints | `info_node`, routes, marks and hint entities | BSP entity lump | Quoted entity text | Preserve entities; omit Source node graph | `<map>.ents` | Runtime Recast navmesh | Authored hints remain game data; Unreal solves paths. |
+| `<VTMB>/Vampire/maps/<map>.bsp` | AI places and goals | Hints, patrol points, interesting places and makers | BSP entity lump | Quoted entity text | Preserve authored fields, I/O and lump identity | `maps/<map>.entities.glb` offline; baked actors planned in 0018/2; existing entity-table transport until adopted | Native `AActor` subclasses with `UPROPERTY` fields | Authored goals and behavior inputs; Recast supplies walking routes. Plain navigation authoring nodes do not automatically become actors. |
+| `<VTMB>/Vampire/maps/graphs/<map>.ain` | Navigation data needed by retail rules | Network-node identities, hull positions, ordered adjacency and special traversal | VPK or loose member, resolved independently of BSP | Version-30 AIN | Typed nodes/links with zone, hint association, endpoint ids, link-info and 22 hull masks; validate actual loaded/rebuilt source | `nav-graphs/<map>.glb` offline; existing jump actors; compact cooked node/link asset planned in 0018/3 | `ANavLinkProxy`, `UDataAsset` / `USTRUCT`; native Recast navigation | Hunt/cover/retreat/flank choose goals using runtime topology and live state; Unreal finds/follows walking routes. Component labels cannot replace those queries. No ordinary graph-node/edge actors. |
 | `<VTMB>/Vampire/maps/<map>.bsp` | Per-map audio index | Audio references from each map | BSP entity lump | Quoted entity text | `map-entities` `dependencies[]` / `coverage.unresolved` (`seam_map_map_entities.md`) | none (`audio/maps/<map>.json` retired with the `audio` bundle, AUD0.4) | None | Map-scoped audio dependency inventory. |
 | `<VTMB>/Vampire/maps/<map>.bsp`; `<VTMB>/Vampire/pack*.vpk/particles/<root>.txt` | Placed particles | `env_particle` + particle closure | BSP entity lump + VPK/loose | Entity text + particle TXT | Per-map flattened emitter closure | `<map>.particles.json` | `UNiagaraSystem` | Baked Niagara systems for placed emitters. |
 | `<VTMB>/Vampire/maps/sm_hub_1.bsp`; `<VTMB>/Vampire/pack*.vpk/particles/dropletfast.tga` | Weather | Weather entities, particles and cover geometry | BSP + VPK/loose | BSP v17 + particle TXT/TGA | Rain, wetness and cover description | `<map>.weather.json` | `UNiagaraSystem`, dynamic material instances | Map weather presentation inputs. |
