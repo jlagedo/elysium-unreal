@@ -10,6 +10,11 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - `ELYSIUM_VTMB_ROOT` — the VtMB game install; the source corpus, read and never written.
 - `ELYSIUM_WORK_ROOT` — the out-of-repo scratch tree for exports, bakes and logs.
 - `uv run elysium` is the only public command surface;
+- `uv run elysium build` — incremental editor build.
+- `uv run elysium test <prefix>` — automation test name prefix (`Elysium.Substrate.Npc`); results in
+  `$ELYSIUM_WORK_ROOT/reports/tests/<timestamp>-<slug>/index.json`.
+- `$ELYSIUM_WORK_ROOT/exports/scripts/` — exported retail Python scripts.
+- `$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json` — datamap replay (field flags).
 - The running game receives `-ElysiumContentRoot` and reads the export corpus from disk.
 
 ## Project layout
