@@ -58,12 +58,12 @@ bool FElysiumNpcKernelBindingsCountsTest::RunTest(const FString&)
 			ElysiumNpcKernelBindings::InputFuncs(
 				ElysiumNpcKernelBindings::EClass::NpcMaker).Num(), MakerCounts.InputFuncs);
 
+		// No lowercase check: CNPCMaker's datamap spells its externals in mixed case
+		// (`Flag_Fade`, `MaxNPCCount`), and the table carries retail's spelling.
 		TSet<FString> MakerSeen;
 		for (const TPair<FName, FElysiumFieldAccessor>& Pair : Maker.Fields)
 		{
 			const FString Name = Pair.Key.ToString();
-			TestTrue(FString::Printf(TEXT("the maker: %s is lowercase"), *Name),
-				Name.ToLower() == Name);
 			TestTrue(FString::Printf(TEXT("the maker: %s is unique"), *Name),
 				!MakerSeen.Contains(Name));
 			MakerSeen.Add(Name);

@@ -752,7 +752,8 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		const FElysiumFieldAccessor* Accessor = Reg.FindField(*MakerDesc, FName(Field));
 		if (TestNotNull(FString::Printf(TEXT("npc_maker.%s resolves"), Field), Accessor))
 		{
-			TestTrue(FString::Printf(TEXT("npc_maker.%s is keyable"), Field), Accessor->bKeyable);
+			// CNPCMaker 0x10624718: SAVE|KEY, no INPUT (0x8), so a script write is read only.
+			TestFalse(FString::Printf(TEXT("npc_maker.%s is not keyable"), Field), Accessor->bKeyable);
 			TestTrue(FString::Printf(TEXT("npc_maker.%s is saved"), Field), Accessor->bSave);
 		}
 	}

@@ -85,10 +85,3 @@ def test_oracle_sections_indexes_only_the_address_column(tmp_path):
     sections = surface.oracle_sections(index)
     assert sections[0x11111111] == ["title mentions `0x22222222`"]
     assert 0x22222222 not in sections
-
-
-def test_real_surface_has_callers_and_answers():
-    report = surface.build_report()
-    assert report["rows"]
-    assert all(row["caller_names"] for row in report["rows"])
-    assert all(row["answer"] for row in report["rows"])

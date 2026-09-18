@@ -326,6 +326,8 @@ def render_header(model: Model) -> str:
     out = _header(model)
     out += [
         "",
+        "#pragma once",
+        "",
         '#include "Containers/ArrayView.h"',
         "",
         "struct FElysiumClassDesc;",

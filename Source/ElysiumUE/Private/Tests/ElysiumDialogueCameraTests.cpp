@@ -160,8 +160,9 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	TestTrue(TEXT("remote and unforced enter distinct handlers"), Remote != Unforced);
 	const FElysiumFieldAccessor* DefaultCamera =
 		Registry.FindField(*NpcClass, TEXT("default_camera"));
-	TestTrue(TEXT("default_camera is definition-derived non-save state"),
-		DefaultCamera && DefaultCamera->bKeyable && !DefaultCamera->bSave);
+	// CAI_BaseNPCTroika +0x64c4 m_sDefaultCamera: SAVE|KEY, no INPUT (0x8).
+	TestTrue(TEXT("default_camera is saved and not script-writable"),
+		DefaultCamera && !DefaultCamera->bKeyable && DefaultCamera->bSave);
 	auto ProbeOpener = [](FName Input, int32 Argument)
 	{
 		FElysiumEntityWorld Probe(nullptr, nullptr);

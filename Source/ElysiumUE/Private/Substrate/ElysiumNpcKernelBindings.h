@@ -6,6 +6,8 @@
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
+#pragma once
+
 #include "Containers/ArrayView.h"
 
 struct FElysiumClassDesc;

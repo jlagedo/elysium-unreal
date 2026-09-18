@@ -263,6 +263,15 @@ datamap walk** (`FUN_10195940`) and then:
 So `pc.clan = 3` and the I/O wire that writes a keyfield are one path, exactly as the read side
 unifies attribute reads with input dispatch.
 
+In the datamap replay's flag byte, `SAVE` is `0x2`, `KEY` is `0x4` and `INPUT` is `0x8`, so
+the write gate is the `INPUT` bit, not `KEY`. A plain keyvalue (`SAVE|KEY`, flags `6`) is
+readable but read only. On the NPC family this makes `default_camera`, `player_reaction`,
+`use_interesting`, `no_alert_state`, `allow_alert_lookaround`, every `npc_maker` keyvalue
+(`NPCType` … `MinPCDistance`) and every `intersting_place` keyvalue read only, while the five
+`pl_*` levels (`SAVE|KEY|INPUT`, flags `14`) are writable (CAI_BaseNPCTroika `0x105ce470`,
+CNPCMaker `0x10624718`, CAI_InterestingPlace `0x1060bdd8`). The port's `bKeyable` is this bit;
+`gen_kernel_bindings` maps `INPUT` to it. No shipped script assigns any of the read-only names.
+
 ## AI infrastructure references and mutations (2026-09-17)
 
 The script surface reaches AI infrastructure through entities and their declared fields/inputs.
