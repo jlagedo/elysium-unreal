@@ -2501,6 +2501,44 @@ _Computed by `uv run elysium research ai_infra_census` over 108 entity units and
 | sp_tutorial_1 | soc_int_squad_monk | 1 | 0 |
 | sp_tutorial_1 | squad_warehouse | 2 | 0 |
 
+## Classnames outside the census families (2026-09-19, 0018 story 2 review)
+
+The census above counts a fixed classname list. A scan of every `ai_*`, `logic_*`, `npc_*` and
+`info_node*` classname over the same 108 entity units, joined with the datamap replay and the
+32 exported scripts' `CreateEntity*` calls, adds:
+
+**Authored, with a retail class, registered by nothing in the port** (0018 story 14):
+
+| classname | retail class | rows | maps | keyfields | inputs / outputs |
+|---|---|---|---|---|---|
+| `logic_npc_condition` | `CLogicNPCCondition 0x1057748c` | 3 | `hw_tawni_1` (2), `la_ventruetower_1b` | `condition`, `target_npc` | `Test` / `OnTrue`, `OnFalse` |
+| `logic_squad_condition` | `CLogicSquadCondition 0x105775b0` | 1 | `la_ventruetower_1b` | `condition`, `squad_name` | `Test` / `OnTrue`, `OnFalse` |
+| `ai_changetarget` | `CAI_ChangeTarget 0x1059e044` | 2 | `la_bradbury_1` | `m_iszNewTarget` | `Activate` |
+| `info_node_link` | `CAI_DynamicLink 0x10608f58` | 6 | `sp_giovanni_4` | `startnode`, `endnode`, `initialstate` | `TurnOn`, `TurnOff` |
+
+Authored values: both `hw_tawni_1` rows are named `check_condition`, target
+`npc_tawni_boyfriend`, and test `COND_SEE_PLAYER` and `COND_HEAR_PLAYER`; `floor_2_vis_check`
+tests `COND_SEE_PLAYER` over squad `floor_2`; both `ai_changetarget` rows set `!player`. No
+body of these four classes is walked yet.
+
+**Graph-node classnames carrying no `hinttype`** (0018 story 3's node data, not hints):
+`info_node_werewolf` (80, `sp_observatory_2`), `info_node_tzimisce` (19, `ch_temple_4` 18 and
+`la_bradbury_1` 1; `CNodeEnt::Spawn 0x102d78d0` rewrites it to `info_node`).
+
+**In the binary, authored by no map and created by no script:** `ai_goal_standoff` (factory
+`0x1000a19b`, `CAI_StandoffGoal`), `ai_changehintgroup` (`CAI_ChangeHintGroup 0x1059e0e4`),
+`ai_sound` (factory `0x10001398`). The scripts create only `inspection_node`, `prop_*`,
+`item_*` and `npc_VHuman`. `ai_network` is created by code (`CAI_NetworkManager`), never
+authored. `ai_relationship` does not exist in `vampire.dll`: its `ai_*` classname table is
+`ai_changehintgroup`, `ai_changetarget`, `ai_goal_standoff`, `ai_hint`, `ai_network`,
+`ai_sound`.
+
+**NPC classnames.** The maps author 41 `npc_*` classnames (makers aside); the port registers 15. The
+unregistered ones with more than a handful of rows: `npc_vcamera` 87 (a deliberate inert
+record), `npc_vghoulcroucher` 58, `npc_vzombie` 48, `npc_vsabbatgunman` 21, `npc_vtzimisce` 10,
+`npc_vtzimisceheadclaw` 10, `npc_vlasombra` 6, `npc_vbrujah` 5. None stands on
+`sp_tutorial_1`, `sm_hub_1` or `sp_soc_3`.
+
 ## The query surface of the helper classes (2026-09-16, 0018 story 1)
 
 _Computed by `uv run elysium research ai_infra_surface` from the recovered address-backed helper interface, joined with `graph.tsv`, `functions.md` and `index.md`._

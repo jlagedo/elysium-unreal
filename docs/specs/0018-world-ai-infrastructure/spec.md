@@ -6,6 +6,10 @@ goals: hunt, cover, retreat and flank inspect neighboring nodes. Required graph 
 uses compact baked records, not an actor per node/edge. This supersedes the 2026-09-15 actor-per-graph-record
 decision and the universal nearest-component gate; see § Navigation boundary and story 3.
 
+**Revised 2026-09-19:** story 2's scope is closed at five baked families — hints, places,
+conversation places, makers and placed NPCs — with its bake pins; story 14 added for the four
+AI logic entities no spec owned.
+
 ## Witness
 Two maps, baked into their levels and standing in the editor before any NPC program runs on
 them. `sp_tutorial_1`: the thug's alley — `pt1..pt3`, his `hint_groups`, the nine hull-0 jump
@@ -202,6 +206,19 @@ surface of the helper classes") is 43 address-backed helper operations in seven 
 every row has a recovered caller and an explicit retail answer, including unnamed `FUN_`
 bodies.
 
+**Story 2's bake pins (2026-09-19, from the V2 entity units).** The census counts a patrol
+point as a hint *and* a patrol point, so its two columns are not a sum: the baked families
+are a disjoint partition and a patrol point is one hint actor.
+
+| map | BSP rows | hints (patrol) | places | conversation | makers | NPCs | actors |
+|---|---|---|---|---|---|---|---|
+| `sp_tutorial_1` | 1,868 | 49 (37) | 29 | 0 | 14 | 20 | 112 |
+| `sm_hub_1` | 2,597 | 274 (34) | 76 | 0 | 48 | 38 | 436 |
+| `sp_soc_3` | 531 | 40 (25) | 13 | 2 | 0 | 15 | 70 |
+
+Plain `info_node` rows (154 on the tutorial, 304 on the hub) get no actor. Every NPC
+classname on the three maps is a registered runtime class.
+
 ## Stories
 In build order. A story is done when its object is baked on both witness maps, its actor or
 asset stands in the level, every query on its surface is tested against the baked level, and
@@ -222,45 +239,88 @@ its recovery is written in the oracle section it names.
   `population.md` and the surface table every story below builds to; sizes are re-read from it.
   Size: S. Effort: Sonnet / medium.
 
-- [ ] **2. The baked infrastructure actors.**
+- [ ] **2. The baked infrastructure actors.** Scope closed 2026-09-19.
   Retail: a representation decision; the authored values and identity still follow the retail
-  entity contract. Scope narrowed 2026-09-17 to BSP-authored hints, places, patrol points and
-  makers. Ordinary AIN nodes/edges belong to 3's cooked data, not this actor slice.
-  Job: use the existing map-entities GLB reader/join and map bake to stage and place these
-  entities once. Classes are native Unreal `AActor` subclasses with `UCLASS`, `GENERATED_BODY`
-  and typed, serialized `UPROPERTY` fields. A patrol point may serve both hint and patrol
-  queries through the same actor. Use standard editor billboards/arrows, Details categories
-  and Outliner folders; no custom visualizer, graph-actor hierarchy or per-frame editor system.
-  Bake-only setters exposed to Unreal Python use `UFUNCTION` where needed. These actors
-  remain runtime content; only their visualization components are editor-only.
-  At map load adopt the actors through native `AActor::Tags` using `ElysiumBakedTags`, then
-  read their typed properties. Tags identify the family; properties carry the data. Replace
-  their definitions at the original BSP entity indices before `EntityWorld::Load` constructs
-  entities and runs Spawn/PostSpawn. This applies to both `UElysiumMapEntities` and `.ents`:
-  do not append duplicates or filter/renumber the def array. Preserve outputs and unrelated
-  authored keys needed by existing consumers, including the maker's child template.
-  Missing/duplicate actors for the declared baked set fail validation. Graph binding can be
-  explicitly unresolved in the class-only slice and is resolved/validated by 3 before its
-  node-dependent queries are enabled. Other classes keep their current transport.
-  Follow § Entity I/O, Python and live state: retain identity and initial state on the actor,
-  bind one live runtime state, and make all input/field/task readers observe that same state.
-  The tables these objects read (`interestingplacetypelist.txt`,
-  `sound_volume_table.txt`, `Rules.txt`) are already deployed under
-  `Content/ElysiumCorpus/vdata/` by the vdata lane; their loaders
-  (`FElysiumInterestingPlaceTable::Load`, the `ElysiumVdata::ReadVdata` callers) read
-  `CorpusRoot()` instead of the export root in 5, 7 and 11.
-  Retail external-name/type/member mappings come from 0019 story 2; normal Unreal class and
-  property declarations are the actor implementation, not a recreation of Source reflection.
-  The bindings need actor targets before they can be complete: class construction, reflection
-  and save/reload can be a small first slice. Completing this story's parser/adoption path
-  waits for the relevant generated bindings, not for AIN route admission. Nothing baked is committed.
-  Checks: spawn through `UWorld`, verify reflected fields and registered editor components;
-  bake/save/unload/reload representative actors; compare authored values, source indices and
-  repeated outputs; verify one runtime entity per baked BSP row before any spawn-time I/O.
-  Add bridge checks for name lookup versus bound-handle calls, repeated targetnames, exact-case
-  patrol Groups, and a Python/input mutation becoming visible to the appropriate NPC query.
-  Consumes: 0019 story 2. Provides: the actor the debugger (12) selects and the editor shows.
-  Size: M. Effort: Opus / high (pipeline stage, editor bake, runtime bind).
+  entity contract. `CNodeEnt::Spawn 0x102d78d0` removes the authoring entity on every branch
+  and builds a `CAI_Hint` from the raw keyvalue block `CNodeEnt::ParseMapData 0x102d7890`
+  stashes: `CNodeEnt 0x1060aaf8` carries seven keyfields, `CAI_Hint 0x106099f0` the rest
+  (`group_id`, `ip_percent`, `target_name`, `StartHintDisabled`, `UserData`, the outputs).
+  There is no patrol-point class — a patrol point is a `CAI_Hint` of type 10000. The maker
+  hands its child every non-maker key through `m_sRefMapDataBuffer +0x76cc`. No keyfield in
+  these families carries `INPUT`, so every one is read only to Python (`python_bridge.md`
+  § "The write path").
+  Families, a disjoint partition of the BSP rows, one actor per row: **hints** — every
+  `info_node_*` / `info_hint` row carrying `hinttype`, patrol points included;
+  **`intersting_place`**; **`intersting_place_conversation`**
+  (`CAI_InterestingPlaceConverstation 0x1060c2c0`); **makers** — `npc_maker`,
+  `npc_maker_fleshpile`, `npc_maker_zombie`; **placed NPCs** — every `npc_*` classname.
+  Plain `info_node` rows and ordinary AIN nodes/edges get no actor; they are 3's cooked data.
+  Other classes keep their current transport.
+  Job, in order:
+  1. Generated keyfields. Extend `gen_kernel_bindings` with `CAI_Hint`,
+     `CAI_InterestingPlaceConverstation` and `CNPCMaker_Zombie` (the slice of 0019 story 2's
+     open pass this story needs, landed here), and emit one `USTRUCT` of typed `UPROPERTY`
+     fields per datamap chain — hint, place, conversation place, maker, NPC (the 268-row chain
+     `CBaseEntity` … `CAI_BaseNPCTroika`). Defaults are retail's constructor defaults, so an
+     absent key and its default are the same entity, as in retail. Each struct has a generated
+     apply (key, raw string) and emit (def keys) pair using the parser
+     `FElysiumEntity::Construct` uses; the bake never re-implements `atof` in Python.
+  2. Actors. Native `AActor` subclasses with `UCLASS`, `GENERATED_BODY` and those structs. The
+     typed properties are authoritative. Two array properties carry what has no typed field:
+     `ExtraKeys` (ordered pairs for keys with no datamap row — `testflags`, patch spellings, a
+     blank key) and `Outputs` (ordered rows, repeats kept). The maker adds a `ChildTemplate`
+     (the NPC struct plus the set of keys actually authored, so a child's class defaults are
+     not overwritten). Patrol `Group` is an `FString`: 328 exact-case tokens. Bake-only
+     `UFUNCTION` setters take raw strings. Standard editor billboards/arrows, Details
+     categories and Outliner folders; no custom visualizer or per-frame editor system. The
+     actors are runtime content; only their visualization components are editor-only.
+  3. Stage and bake. A new importer reads the entity unit's structured rows — not the legacy
+     text reading, which loses `sm_hub_1` block 1611's `origin` — and stages one record per row
+     (index, family, classname, ordered keys, outputs) inside the map-geometry manifest with a
+     content hash and a level-recipe entry. The map bake places the actors; `bake --verify`
+     fails on a missing, duplicate or wrong-family actor. Tags live in `ElysiumBakedTags`
+     (one per family, plus the existing `EntityIndex(i)`); the jump link's undeclared
+     `elysium.nav-jump` is declared with them. Nothing baked is committed.
+  4. Adoption. `AdoptBakedLevel` buckets the actors by entity index. A replacement pass in
+     `AElysiumMapActor::LoadMap` runs after the defs load and before the model-preload walk and
+     `EntityWorld::Load`: it rewrites the def at the original BSP index in place, for both
+     `UElysiumMapEntities` and `.ents` — never appended, filtered or renumbered. The def's
+     origin is kept (sky-scope rows are already transformed) and the actor validated against
+     it; `Times` 0 → −1 once. A missing, duplicate or classname-mismatched actor fails the
+     load; a level baked without the infrastructure table leaves the pass inactive.
+  5. Entity classes, per § Entity I/O, Python and live state: one live runtime state that
+     every input, field and task reader observes. The hint class serves the whole hint family:
+     generated bindings, `EnableHint` / `DisableHint` / `Walk` / `DontWalk` / `SetUserData`,
+     `Kill` as hide (`0x102d08c0`), a hidden hint swallowing inputs, the `HintSpawn` defaults.
+     `HintWords()` and `FindHintByName` read that state; patrol `Group` resolves exact-case,
+     first match in hint-list order, type 10000 or 800. Node binding stays explicitly
+     unresolved (`-1`) until 3, and every `HintWords()` caller is audited so no arm answers
+     before its search (4) exists. The conversation place is registered with its bindings and
+     three inputs. `npc_maker_zombie` is registered with its three fields. NPC placements feed
+     the existing NPC classes; a classname with no runtime class stays the record it is today.
+  Checks: spawn each class through `UWorld`, verify reflected fields and registered editor
+  components; save/reload and compare fields, `ExtraKeys` order and repeated outputs; apply →
+  emit → parse round trips on dirty values (`23523235.0`, `.5`, `"0  0 72"`, `"-3496,92"`);
+  index-preserving replacement over both transports; a maker child def identical with and
+  without the actors; one runtime entity per def index before any spawn-time I/O. Bridge:
+  name lookup fans out over a repeated targetname and a bound-handle call does not; a Python
+  field write on any of these keyfields is refused; `DisableHint` and a place's `Disable`
+  called from Python become visible to the NPC query; exact-case `Group` on two tokens
+  differing only in case; tutorial `logic_failed_blueblood -> blueblood_maker.Spawn` still
+  fires after 1.25 s through an adopted maker.
+  Test maps: staging runs over all 108 entity units with no editor — every row in exactly one
+  family, none dropped, order and repeats kept, every dirty value staged. Bake goals, each
+  passing `bake map --verify`, a baked-level content test against the pins in § Witness data,
+  a def-parity test (actor-rebuilt defs against the transport's at the same indices) and a
+  load: `sp_tutorial_1` and `sm_hub_1` (required), `sp_soc_3` (the only V2 map with
+  conversation places). The zombie and fleshpile makers, `info_hint` and `info_node_kick_over`
+  stand on no V2 map yet; their real authored rows are the fixtures of runtime unit tests.
+  Consumes: 0019 story 2 (its open-pass slice lands here). Provides: the actor the debugger
+  (12) selects and the editor shows; the live hint entity to 4; the placed-NPC actor.
+  Oracle: `shape.md` § "The hint node's own words" (the `CAI_Hint` / `CNodeEnt` datamap
+  tables), `navigation-jump-links.md` (the `ParseMapData` stash), `population.md`
+  § "Classnames outside the census families".
+  Size: L. Effort: Opus / high (generator, pipeline stage, editor bake, runtime bind).
 
 - [ ] **3. Unreal navigation and the required AIN data.** Absorbs 0002's stories 22 and 24.
   Retail: `SetGoal 0x102ecd20` selects among route branches, not one universal graph test.
@@ -483,11 +543,39 @@ its recovery is written in the oracle section it names.
   Unreal performs movement. Do not turn component boundaries into a universal movement ban.
   Consumes: everything above. Size: M. Effort: Sonnet / medium, then played.
 
+- [ ] **14. The AI logic entities.** Added 2026-09-19: found by the classname scan beside
+  story 2, outside story 1's census families, owned by no spec.
+  Retail, datamaps only — no body is walked yet: `CLogicNPCCondition 0x1057748c`
+  (`logic_npc_condition`: `condition`, `target_npc`, input `Test`, outputs `OnTrue` /
+  `OnFalse`); `CLogicSquadCondition 0x105775b0` (`logic_squad_condition`: `condition`,
+  `squad_name`, the same input and outputs); `CAI_ChangeTarget 0x1059e044`
+  (`ai_changetarget`: `m_iszNewTarget`, input `Activate`); `CAI_DynamicLink 0x10608f58`
+  (`info_node_link`: `startnode`, `endnode`, `initialstate`, inputs `TurnOn` / `TurnOff`);
+  and the conversation place's think pair (`WaitThink` / `TalkThink`,
+  `CAI_InterestingPlaceConverstation 0x1060c2c0`), whose actor and class 2 stands.
+  Witnesses, 12 rows in the corpus: `hw_tawni_1` — two `check_condition` rows test
+  `COND_SEE_PLAYER` / `COND_HEAR_PLAYER` on `npc_tawni_boyfriend`, `OnTrue` runs
+  `setSpotted()`, `SetRelationship player D_HT 5` and kills the checker;
+  `la_ventruetower_1b` — `floor_2_vis_check` tests `COND_SEE_PLAYER` over squad `floor_2`,
+  `OnTrue -> stealth_failed.Trigger`, and one `logic_npc_condition`; `la_bradbury_1` —
+  `Evelyn_target` / `Mabellene_target` retarget their NPCs to `!player`; `sp_giovanni_4` —
+  six links (`startnode 17 -> endnode 18`, `16 -> 19`, …). Conversation places: 49 rows on
+  17 maps.
+  Gap: none of the four is registered; they are inert records and their wires do nothing.
+  Job: walk the four bodies and the think pair; generate their bindings; register the classes.
+  They are point logic entities on the entity table, not baked actors. `info_node_link`
+  toggles 3's link state; `logic_squad_condition` reads 8's squad; the conversation place
+  picks its talkers from 5's places. `logic_npc_condition` and `ai_changetarget` wait on no
+  story here. Tests use the authored rows above as fixtures.
+  Consumes: 2, 3, 5, 8. Oracle: `population.md` § "Classnames outside the census families";
+  each body's recovery lands in `entity_io.md`. Size: S. Effort: Sonnet / medium.
+
 ## Build order
 The node/goal chain is 1 → 2 (relevant 0019 story 2 bindings before adoption) → 3 → 4 → 5 → 6.
 Stories 7 and 9 can follow 2 independently; 8 waits for 0002/5; 10 waits for 2 and the relevant
 bindings; 11 follows its existing data/services. The debugger (12) and full witness (13) follow
-their listed dependencies. Story 1 establishes the corpus sizes. 0018 runs beside 0019
+their listed dependencies. 14's condition and retarget entities wait on nothing here; its
+link, squad and conversation arms follow 3, 8 and 5. Story 1 establishes the corpus sizes. 0018 runs beside 0019
 and consumes 0002 only through the query surface: no story here adds a member to the NPC.
 The native actor-class/reflection/save slice of 2 can precede binding completion; AIN selection,
 node-query data and admission are 3's work, not prerequisites for constructing those classes.
