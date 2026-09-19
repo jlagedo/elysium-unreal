@@ -1764,6 +1764,218 @@ routine itself: it returns early when disabled, fires `OnTimer`, then re-arms.
 disabled state when `RefireTime` is invalid and no random range is authored — so a timer with a
 nonsensical interval never runs even if it was authored enabled.
 
+## The AI logic entities (0018 story 14)
+
+Four point entities and one think pair, recovered 2026-09-19. Offsets and flags are the datamap
+replay's; every body below was read in the corpus. Shared machinery first.
+
+**The name finder.** `FUN_100f7770(list 0x106eb5d8, prev, name, pActivator, pSearching)` walks the
+entity list from `prev` and matches `m_iName` (`+0x26c`): interned-pointer equality, else
+`__strcmpi`, else a trailing `*` as a `__strnicmp` prefix. An entity with a NULL name is skipped; a
+NULL or empty search name returns NULL. A `!` name is resolved only when `prev == NULL`, so it
+yields exactly one entity and a loop over it ends on the second call. `FUN_100f7f20` is the same
+call with a fallback to `FUN_100f7380`, which matches `m_iClassname` (`+0x11c`) the same way.
+
+**The `!` resolver** `0x100f7460(name, pSearching, pActivator)`, in compare order: `player` →
+player 1 (`0x101cd9e0(1)`); `playercontroller` → `0x101618a0(player)`; `pvsplayer` → a PVS lookup
+from `pSearching`, else from `pActivator` (`0x101d1800`, not walked), and player 1 when both are
+NULL; `activator` →
+`pActivator`, else `pSearching->m_hLastInputActivator` (`+0x10c`); `picker` →
+`0x10172710(player)`; `caller` → `pSearching->m_hLastInputCaller` (`+0x110`), NULL when
+`pSearching` is NULL; anything else → `Warning("Invalid entity search name %s")`, NULL.
+
+**Output firing.** Every output here goes through `0x100cd660(output, activator, caller, delay 0)`,
+which sends a void variant — an input's value is never forwarded.
+
+### `logic_npc_condition` (`CLogicNPCCondition`)
+
+Datamap `0x1057748c`, vtable `0x10469674`, size `0x490`. Keys `condition` (`m_sCondition` `+0x450`)
+and `target_npc` (`m_sTargetNPC` `+0x454`); input `Test` (`0x101358e0`); outputs `OnTrue` `+0x458`,
+`OnFalse` `+0x470`. Two unsaved fields: the target EHANDLE cache `+0x488` and the condition id
+`+0x48c`. No think.
+
+**Activate** (slot 113, `0x10135650`) — not Spawn, so every entity already exists: it runs the
+target resolver once and discards the result (warming the cache), then resolves the condition name
+through `0x102c8cc0` into `+0x48c`. The id is never re-resolved. An id `< 1` prints
+`"%s has invalid condition %s!"` and posts a red debug overlay at the entity's origin.
+
+Ids are global: the dictionary holds `1000000000 + enum index` (registrar `0x102c8ce0`; startup
+check `0x102c9c30` requires every index `0..0x76`). `COND_SEE_PLAYER` is `0x5a`, `COND_HEAR_PLAYER`
+`0x6f`.
+
+**`Test`** runs the evaluator `0x10135840` and fires exactly one output with
+`activator = the input's activator, caller = this`:
+
+1. `+0x48c < 1` → DevWarning (invalid condition) → false.
+2. Target resolver `0x10135720`: a live cached EHANDLE is returned with no search. Otherwise
+   `FUN_100f7f20(NULL, target_npc, this, m_hLastInputActivator)` — targetname first, then
+   classname, **first match** — and the NPC back-pointer `found+0x94` is taken. NULL (no entity, or
+   not an NPC) stores `-1`; otherwise the NPC's `GetRefEHandle()` is cached.
+3. No NPC → DevWarning (unable to find target NPC) → false.
+4. `HasCondition 0x10269aa0(npc, id)`: ids `>= 1000000000` skip the per-class remap (slot 580,
+   `0x102ea2d0`); the test is bit `id - 1000000000` of `m_Conditions` `+0x5c5c` — bit 90 for
+   `COND_SEE_PLAYER`, 111 for `COND_HEAR_PLAYER`. The raw current set: no ignore or interrupt mask
+   takes part.
+
+Every failure is `OnFalse`; there is no silent arm. A dead target fails the serial check and is
+searched again by name, so it can rebind to a new same-named NPC. `!player` finds the player, whose
+`+0x94` is NULL → `OnFalse`.
+
+### `logic_squad_condition` (`CLogicSquadCondition`)
+
+Datamap `0x105775b0`; the same layout with `squad_name` (`m_sSquadName` `+0x454`), input `Test`
+(`0x10135d00`). Activate `0x10135b00` mirrors the NPC variant. `+0x488` is a **raw squad pointer**,
+not a handle: `0x10135bd0` fills it from `FindSquadByName 0x10315790` (global list head
+`0x10936c68`, node `{+0 next, +4 name}`, `__strcmpi`, first match, NULL names read as `""`) only
+while it is 0. A hit is cached for the entity's life with no liveness check; a miss is retried on
+every `Test`.
+
+Evaluator `0x10135c10`: invalid id → DevWarning, false; no squad → DevWarning (unable to find
+squad), false; then
+
+```c
+for (i = 0; i < squad->count(+0x5c); i++) {          // count re-read every pass
+    m = GetMember(squad, i);                         // 0x103160c0
+    if (m && HasCondition(m, id)) return true;       // any member; stops at the first hit
+}
+return false;
+```
+
+`GetMember` bounds `i` against `+0x5c`, then — if member 0 (`+0x1c`) is live and its
+`m_iSquadDisconnected` (`+0x5bb0`) is `> 0` — returns NULL for **every** index; otherwise it
+returns member `i`'s entity if its handle is live. NULL members are skipped, so a squad whose first
+member is disconnected always answers `OnFalse`.
+
+### `ai_changetarget` (`CAI_ChangeTarget`)
+
+Datamap `0x1059e044`, two records: key `m_iszNewTarget` `+0x450`, input `Activate`
+(`0x101c99c0`). No Spawn or Activate override, no think, no outputs. The input is the whole class:
+
+```c
+for (e = NULL; (e = FindByName(e, this->m_target /*+0x20c*/, pActivator, NULL)); ) {
+    e->m_target /*+0x20c*/ = this->m_iszNewTarget;
+    if (e->npc /*+0x94*/) e->npc->m_pGoalEnt /*+0x5de8*/ = NULL;
+}
+```
+
+**Every** entity whose targetname matches this entity's own `target` key is retargeted — wildcard
+included, no classname fallback. Nothing else on the NPC is touched: no schedule, condition or
+route write. The searching entity is passed as NULL, so `!caller` resolves to nothing here and
+`!activator` is the input's activator. An empty `target` or no match is silent. The *new* target is
+only a stored name; whoever reads `m_target` next resolves it (`!player` on the Bradbury rows).
+
+### `info_node_link` (`CAI_DynamicLink`)
+
+Datamap `0x10608f58`: keys `startnode` (`m_nSrcID` `+0x454`), `endnode` (`m_nDestID` `+0x458`),
+`initialstate` (`m_nLinkState` `+0x45c`); inputs `TurnOn` (`0x102ccc80`), `TurnOff`
+(`0x102cccb0`). The constructor `0x102cce60` writes `-1 / -1 / 0` and head-inserts the entity into
+the global list `0x1092541c`, linked through `+0x450`; the destructor `0x102ccee0` unlinks it. No
+Spawn or Activate override.
+
+**Ids become indices once the graph is ready.** The network manager's delayed-init think
+`0x102f6a50` calls `0x102cc900`, which for every listed entity maps both authored ids through
+`0x102f6d10` (a linear scan of the WC-id table; miss = `-1`), **writes the indices back into
+`+0x454` / `+0x458`**, and applies the state once — this is where `initialstate` takes effect. A
+missing id prints `"ERROR: Dynamic link WC node %d not found"` and becomes index **0**; no table at
+all prints one error and skips the walk.
+
+**The inputs are edge-triggered:** `TurnOn` acts only when the state is 0, `TurnOff` only when it is
+1; each flips the state, then calls the toggle. A repeated input does nothing.
+
+**The toggle** `0x102ccce0`: either id `-1` → DevMsg, return. It takes the source node from the
+index table (`0x1093407c`: count, then `CAI_Node**`), scans that node's links (`+0x78` count,
+`+0x7c` array) for one whose endpoints (`link+4`, `link+8`) are the pair **in either order**, and
+on the first hit sets bit `0x1000` of the info word `link+0x64` for off, or clears it for on. No
+such link → `"Error: info_node_link unable to form between nodes %d and %d"`. One write serves both
+directions because `InitLinks 0x102fb4e0` appends the same `CAI_Link*` to both endpoints. An
+out-of-range index reaches a NULL+`0x78` read (`0x102ccd24`); init's write-back keeps it
+unreachable.
+
+The bit is read by the traversability gate `0x102ff960` and by the cover, flank and threat searches
+`0x10301720`, `0x10302320`, `0x10302e50`, `0x10310d70`, each as `(link+0x64 & 0x1000) == 0` beside
+its own hull-mask test.
+
+**Rebuild only.** `0x102f5190` — reached when the graph is rebuilt in-game, never on a loaded
+`.ain` — re-marks adjacency for each entity's pair (`0x102cc9f0`), purges entities whose link no
+longer exists (`0x102ccb80` → `UTIL_Remove`), then re-applies every survivor's state
+(`0x102ccb50`). The port loads built graphs and does not reach it.
+
+### `intersting_place_conversation` (`CAI_InterestingPlaceConverstation`)
+
+Datamap `0x1060c2c0`, 25 records, vtable `0x1049d2a4`, size `0x52c`. It is **not** an interesting
+place: the constructor `0x102dbb00` chains `CBaseEntity` → `CPointEntity`, and its own fields start
+at `+0x450` as the place's do. It names places and drives them.
+
+Keys: `interesting_places` `+0x450`, `sound_loop` `+0x454`, `sound_once` `+0x458`, `enabled`
+`+0x45c`, `player_dist` `+0x464`, `audible_dist` `+0x468`, `min_time` `+0x50c`, `max_time` `+0x510`,
+`turn_towards_talker` `+0x514`, `sound_occluded` `+0x515` (constructor default 1). Saved state:
+`m_bPlayOneOffSound` `+0x45d`, `m_flOneOffSoundComplete` `+0x460`, `m_flTalkTime` `+0x508`,
+`m_bNodesDisabled` `+0x516`. Unsaved: occupied count `+0x500`, last talker index `+0x504`, the place
+handle vector `+0x518` (size `+0x524`). Inputs `Enable` (`0x102dccc0`), `Disable` (`0x102dcce0`),
+`PlayOneOffSound` (`0x102dcd10`). Outputs `OnConversationStart` `+0x46c`, `OnNewTalker` `+0x484`,
+`OnConversationEnd` `+0x49c`, `OnPlayerTooClose` `+0x4b4`, `OnOneOffSoundComplete` `+0x4cc`,
+`OnPlayerLeftRadius` `+0x4e4`. `WaitThink` (`0x102dc180`) and `TalkThink` (`0x102dbfb0`) are
+FUNCTION rows.
+
+**Activate** (`0x102dbde0`) collects **every** entity named by `interesting_places`. Each must cast
+to `CAI_InterestingPlace` with `max_npcs` (`m_iMarkersAllocated` `+0x584`) `== 1`, or it is skipped
+with a DevWarning ("Must be an intersting_place entity with 1 slot"). An accepted place's handle is
+appended and the place's `+0x608` is pointed back at this entity. Then `enabled` arms `WaitThink`
+(first tick `+0.5 s`); otherwise the think is cleared.
+
+**The gate** `0x102dc8f0`, run at the top of both thinks: false while `m_bNodesDisabled`. It zeroes
+the count, removes stale handles from the vector in place, and counts places whose occupancy
+`place+0x564 == 1`. If a removed entry sat at or below the last talker index and more than one
+place is still occupied, it resets the index to 0 and picks a talker at once. It answers
+`occupied > 1` — a conversation needs two seated NPCs.
+
+**`WaitThink`**, every 0.5 s: no player → re-arm. Gate true → start: play the sound (the one-off if
+latched, else the loop), switch to `TalkThink` at `+0.0001 s`, fire `OnConversationStart`
+(this, this). Otherwise, while the nodes are disabled and the player's eye is farther than
+`player_dist + 120` from the origin: re-enable every place (`CAI_InterestingPlace::InputEnable`),
+clear `m_bNodesDisabled`, fire `OnPlayerLeftRadius` (activator = player).
+
+**`TalkThink`**, every 0.1 s, in order:
+
+1. No player → re-arm. The conversation is not torn down.
+2. Gate false → end the conversation, back to `WaitThink`.
+3. Player closer than `player_dist` → `OnPlayerTooClose` (activator = player), end the
+   conversation, call `CAI_InterestingPlace::InputDisable` on **every** place — the visitor walk of
+   `0x102daac0`, so the seated NPCs are thrown off — set `m_bNodesDisabled`, back to `WaitThink`.
+4. `m_flOneOffSoundComplete != 0` and past → `OnOneOffSoundComplete`, play the sound again.
+5. `m_bPlayOneOffSound` → play the one-off sound.
+6. `m_flTalkTime < curtime` → pick a talker. `m_flTalkTime` starts at 0, so the first pick is on
+   the first tick.
+
+**The pick** `0x102dca60`: every place gets `m_Mode` (`+0x590`) `= 2`. Then, until one matches:
+`draw = RandomInt(0, occupied)` — inclusive — and a scan in vector order with a **1-based**
+counter over occupied places; the match is the place where `counter == draw` and its index is not
+the last talker's. So a draw of 0, and a draw that lands on the last talker, each cost another
+`RandomInt` and a rescan. The match gets `m_Mode = 1`, becomes the last talker, `OnNewTalker`
+fires (this, this), and `m_flTalkTime = curtime + RandomFloat(min_time, max_time)`.
+
+**Ending** (`0x102dc490`): every place `m_Mode = 0`, stop the sound, `OnConversationEnd`
+(this, this). `Disable` clears `enabled`, runs this unconditionally — so it fires
+`OnConversationEnd` on an idle entity — and clears the think. `Enable` sets `enabled` and arms
+`WaitThink`. `PlayOneOffSound` only latches `+0x45d`.
+
+The class writes nothing on an NPC and picks no line or scene: `m_Mode` (0 idle, 1 talker,
+2 listener) on each place and the two authored sounds are its whole effect. Precache
+(`0x102dbcb0`) warns on an empty `sound_loop` and is silent on an empty `sound_once`.
+
+### Unrecovered
+
+- Who reads a place's `m_Mode` and its `+0x608` back-pointer, and who writes the occupancy count
+  `place+0x564` — the place and marker code, outside these bodies. `turn_towards_talker` is read by
+  none of the functions above, so its consumer sits there too.
+- The sound routine `0x102dc6a0`: the attenuation scaling from `audible_dist` (`0x10228350`) and the
+  emit flags are read but not walked to the engine call's contract.
+- The writer of the NPC back-pointer `CBaseEntity+0x94`.
+- Whether the entity allocator zeroes the block — `enabled`, the times and the distances have no
+  constructor default and rely on it.
+- The squad list's removal path, which decides whether `logic_squad_condition`'s raw pointer can
+  actually dangle in a shipped map.
+
 ## Scripted sequences (`scripted_sequence` / `aiscripted_sequence`)
 
 VtMB's cutscene beat: move a named NPC to a marker, play an animation on it, and fire an output on
