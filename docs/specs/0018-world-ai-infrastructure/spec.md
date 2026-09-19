@@ -239,7 +239,16 @@ its recovery is written in the oracle section it names.
   `population.md` and the surface table every story below builds to; sizes are re-read from it.
   Size: S. Effort: Sonnet / medium.
 
-- [ ] **2. The baked infrastructure actors.** Scope closed 2026-09-19.
+- [x] **2. The baked infrastructure actors.** Scope closed 2026-09-19; landed 2026-09-19.
+  Landed: `bake map --verify` passes on `sp_tutorial_1` (112 actors), `sm_hub_1` (436) and
+  `sp_soc_3` (70); `Elysium.Content.InfraActors.*` pin the counts and assert byte-equal def parity;
+  the three maps and non-baked `sm_warehouse_1` boot Active with every hint live as `ai_hint`; the
+  tutorial's `logic_failed_blueblood -> blueblood_maker.Spawn` spawns through the adopted maker at
+  +1.25 s. Staging covers 105 of the 108 entity units: `la_ventruetower_2`, `la_ventruetower_3` and
+  `sp_giovanni_2b` are refused by the legacy lump reader every lane shares. Recovery:
+  `shape.md` § "The live hint, stood", `navigation-jump-links.md` (the `CNodeEnt` rule),
+  `population.md` § "Patrol tokens against the retail lookup", `seam_map_map.md` § "Import — AI
+  infrastructure actors".
   Retail: a representation decision; the authored values and identity still follow the retail
   entity contract. `CNodeEnt::Spawn 0x102d78d0` removes the authoring entity on every branch
   and builds a `CAI_Hint` from the raw keyvalue block `CNodeEnt::ParseMapData 0x102d7890`
