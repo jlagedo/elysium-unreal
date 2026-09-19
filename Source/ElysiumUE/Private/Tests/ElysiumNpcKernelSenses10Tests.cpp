@@ -966,7 +966,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 
 	FElysiumNpc::FHintWords Hint;
 	Hint.bValid = true;
-	Hint.NodeId = 7;
+	Hint.HintIndex = 7;
 	Hint.HintType = 0x3aa8;
 	Hint.OriginCm = FVector(Senses10Cm(200.f), 0.0, 0.0);
 	Hint.Angles = FVector(0.0, 45.0, 0.0);
@@ -982,7 +982,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 		F.Guard->GetHintTargetGroundpoint(Hint), FVector(11.0, 22.0, 33.0));
 	// `103d698c`: a MISS still answers a point — the `GetGroundpoint` fallback, not a refusal.
 	FElysiumNpc::FHintWords Missing = Hint;
-	Missing.NodeId = 99;
+	Missing.HintIndex = 99;
 	const FVector Fallback = F.Guard->GetHintTargetGroundpoint(Missing);
 	TestFalse(TEXT("0x103d69ad a miss still answers a point rather than refusing"),
 		Fallback.ContainsNaN());

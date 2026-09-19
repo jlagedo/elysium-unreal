@@ -299,7 +299,7 @@ int32 FElysiumNpc::GetHintEndEntity(const FHintWords& Hint) const
 	// same slot"; the decompiled C shows one word read twice. CORRECTED here and in the prose.
 	for (const FWerewolfHintGroundpoint& Row : WerewolfHintGroundpoints)
 	{
-		if (Row.HintNode == INDEX_NONE || Row.HintNode != Hint.NodeId)
+		if (Row.HintNode == INDEX_NONE || Row.HintNode != Hint.HintIndex)
 		{
 			continue;
 		}
@@ -373,8 +373,8 @@ bool FElysiumNpc::IsForwardHintExemptType(int32 HintType)
 
 TArray<int32> FElysiumNpc::GlobalHintList() const
 {
-	// SEAM for `DAT_10925450` and its `+0x5d8` next link. No hint store on this substrate.
-	return TArray<int32>();
+	// `DAT_10925450` walked by its `+0x5d8` next link: the world's hint list, head first.
+	return World != nullptr ? World->HintList() : TArray<int32>();
 }
 
 int32 FElysiumNpc::GetForwardHintForHint(const FHintWords& Hint) const
@@ -382,7 +382,7 @@ int32 FElysiumNpc::GetForwardHintForHint(const FHintWords& Hint) const
 	// `103d70dd` — the exemption list hands the input hint straight back.
 	if (IsForwardHintExemptType(Hint.HintType))
 	{
-		return Hint.NodeId;
+		return Hint.HintIndex;   // the input hint itself
 	}
 
 	// `103d7150`: resolve the input's end entity ONCE, then walk the global hint list from its head

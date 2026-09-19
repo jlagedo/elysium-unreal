@@ -539,7 +539,7 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 	// `GetHintGroundpoint` (`0x103d6770`) — the authored table, then retail's warn-and-fall-back.
 	{
 		FElysiumNpc::FHintWords Hint = MakeHint(15000);
-		Hint.NodeId = 42;
+		Hint.HintIndex = 42;
 		Hint.OriginCm = FVector(10.0, 20.0, 30.0);
 		Npc->WerewolfHintGroundpoints.Reset();
 		// Story 29d, family Hints10 corrected the record: `+0x00` is the cached end entity and the
@@ -750,7 +750,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// hint itself.
 	{
 		FElysiumNpc::FHintWords Hint = MakeHint(15000);
-		Hint.NodeId = 13;
+		Hint.HintIndex = 13;
 		Hint.TargetName = TEXT("end_of_the_line");
 		TestEqual(TEXT("a hint whose target name resolves to nothing falls back to itself"),
 			Npc->FindHintEndEntity(Hint), 13);

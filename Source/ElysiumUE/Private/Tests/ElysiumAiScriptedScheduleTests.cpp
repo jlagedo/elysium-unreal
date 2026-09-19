@@ -114,9 +114,12 @@ namespace
 
 			for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
 			{
-				Builder.AddEntity(TEXT("info_node_patrol_point"),
+				FElysiumEntityDef& Point = Builder.AddEntity(TEXT("info_node_patrol_point"),
 					*FString::Printf(TEXT("route_%d"), PointIndex),
 					FVector(0.0, static_cast<double>(PointIndex) * -200.0, 0.0));
+				// A patrol point is found by its exact-case `Group` on a type-10000 hint (`0x102d2840`).
+				Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
+				Point.Keys.Add(TEXT("Group"), Point.TargetName);
 			}
 			return Builder;
 		}

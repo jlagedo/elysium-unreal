@@ -362,13 +362,9 @@ public:
 
 	void InputClearPatrolPath(const FElysiumInputArgs&);
 
-	// One name out of a `FollowPatrolPath` list.
-	//
-	// A patrol point is NOT addressed by targetname. Every `info_node_patrol_point` the maps author
-	// ships with an empty targetname and carries its name in a `Group` keyvalue — 34 of 34 on
-	// `sm_hub_1`, which is what the level script's `FollowPatrolPath("s1 s2 s3 ...")` names. The
-	// targetname path is kept ahead of it because it costs nothing and is what a hand-built fixture
-	// uses.
+	// One name out of a `FollowPatrolPath` list — retail's `0x102d2840`: the first hint, in hint-list
+	// order, of type 10000 or 800 whose `Group` equals the token exactly (case-sensitive). A patrol
+	// point is never addressed by targetname.
 	const FElysiumEntity* FindPatrolPoint(const FString& Name) const;
 
 	bool ResolvePatrolPoints();

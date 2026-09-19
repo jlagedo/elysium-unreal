@@ -31,6 +31,7 @@
 #include "Substrate/ElysiumPhysProp.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumFootsteps.h"
+#include "Substrate/ElysiumHint.h"
 #include "ElysiumClassRegistry.h"   // FElysiumClassDesc — the registered descriptor's own name
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
@@ -566,20 +567,29 @@ void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
 
 const FElysiumEntity* FElysiumNpc::FindPatrolPoint(const FString& Name) const
 {
-	if (const FElysiumEntity* Named = World->FindByName(Name))
+	// `0x102d2840`, which `0x102d2900` wraps for `InputFollowPatrolPath` (`0x1029ed90`): walk the
+	// global hint list from its head, admit a hint of type 10000 or 800 only, and compare its
+	// `Group` (`+0x5f0`) to the token with a byte-for-byte, CASE-SENSITIVE compare. First match wins.
+	// No targetname path, and no disabled/owner/cooldown or group-mask test (`python_bridge.md`).
+	//
+	// Retail answers the hint's network node (`+0x5e4`, -1 on a miss); this answers the hint
+	// itself, whose origin the patrol walks to. The node id stays a named seam until 0018 story 3,
+	// and a hint found here is never turned into a network-route failure.
+	if (World == nullptr)
 	{
-		return Named;
+		return nullptr;
 	}
-	for (const TUniquePtr<FElysiumEntity>& Ent : World->Entities())
+	for (const int32 Index : World->HintList())
 	{
-		if (!Ent.IsValid() || Ent->Def == nullptr
-			|| !Ent->Def->Classname.Equals(TEXT("info_node_patrol_point"), ESearchCase::IgnoreCase))
+		const FElysiumHint* Hint = World->Entities().IsValidIndex(Index)
+			? FElysiumHint::Cast(World->Entities()[Index].Get()) : nullptr;
+		if (Hint == nullptr || (Hint->HintType != 10000 && Hint->HintType != 800))
 		{
 			continue;
 		}
-		if (Ent->Def->Keys.FindRef(TEXT("Group")).Equals(Name, ESearchCase::IgnoreCase))
+		if (Hint->Group.Equals(Name, ESearchCase::CaseSensitive))
 		{
-			return Ent.Get();
+			return Hint;
 		}
 	}
 	return nullptr;

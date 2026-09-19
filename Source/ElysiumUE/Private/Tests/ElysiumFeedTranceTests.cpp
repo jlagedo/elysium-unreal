@@ -117,6 +117,9 @@ namespace
 				FElysiumEntityDef Point;
 				Point.Classname = TEXT("info_node_patrol_point");
 				Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+				// A patrol point is found by its exact-case `Group` on a type-10000 hint (`0x102d2840`).
+				Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
+				Point.Keys.Add(TEXT("Group"), Point.TargetName);
 				Point.Origin = FVector(0.0, static_cast<double>(PointIndex) * -200.0, 0.0);
 				Defs.Defs.Add(MoveTemp(Point));
 			}

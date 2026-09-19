@@ -15,6 +15,8 @@
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumHint.h"
+#include "Substrate/ElysiumNodeEntity.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -157,6 +159,14 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		}
 	}
 	Defs = MoveTemp(InDefs);
+	// `CNodeEnt::Spawn` (`0x102d78d0`): every hint-making `info_node*` / `info_hint` row lives as an
+	// `ai_hint`. Before construction, so the registry, the name/class indices and every reader see
+	// the entity retail's world holds; the authored classname stays on `SourceClassname`.
+	for (FElysiumEntityDef& Def : Defs.Defs)
+	{
+		ElysiumNodeEntity::ApplyHintReplacement(Def);
+	}
+	Hints.Reset();
 	for (const FElysiumEntityDef& Def : Defs.Defs)
 	{
 		if (Def.Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
@@ -186,6 +196,10 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 			NameIndex.Add(FName(*D.TargetName), i);
 		}
 		ClassIndex.Add(FName(*D.Classname), i);
+		if (FElysiumHint::Cast(Ent.Get()) != nullptr)
+		{
+			Hints.Insert(i, 0);   // `0x102d2e30`: the constructor prepends
+		}
 		EntityList.Add(MoveTemp(Ent));
 	}
 
@@ -454,6 +468,7 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 
 	// The synthesized def outlives the entity (it holds Def*), so own it here. Moving the unique_ptr
 	// into RuntimeDefs does not move the pointed-to object, so a Def* taken before the move stays valid.
+	ElysiumNodeEntity::ApplyHintReplacement(Def);
 	TUniquePtr<FElysiumEntityDef> Owned = MakeUnique<FElysiumEntityDef>(MoveTemp(Def));
 	const FElysiumEntityDef& Ref = *Owned;
 
@@ -469,6 +484,10 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 		NameIndex.Add(FName(*Ref.TargetName), Idx);
 	}
 	ClassIndex.Add(FName(*Ref.Classname), Idx);
+	if (FElysiumHint::Cast(Ent.Get()) != nullptr)
+	{
+		Hints.Insert(Idx, 0);
+	}
 
 	FElysiumEntity* Raw = Ent.Get();
 	EntityList.Add(MoveTemp(Ent));
@@ -2554,6 +2573,7 @@ void FElysiumEntityWorld::Teardown()
 	EventQueue.Reset();
 	NameIndex.Empty();
 	ClassIndex.Empty();
+	Hints.Empty();
 
 	// Bodies are the world's embodiments — destroy them with the world. (The map actor also frees
 	// them when it is destroyed; this handles a world rebuild on a surviving actor, e.g. reload.)

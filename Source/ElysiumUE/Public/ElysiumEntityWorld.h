@@ -701,6 +701,12 @@ public:
 
 	int32 NumEntities() const { return EntityList.Num(); }
 	const TArray<TUniquePtr<FElysiumEntity>>& Entities() const { return EntityList; }
+
+	// Retail's global hint list `DAT_10925450`, head first: the entity index of every live `ai_hint`
+	// in list order. `CAI_Hint`'s constructor (`0x102d2e30`) PREPENDS, and the map parse
+	// (`0x10136650`) creates unparented rows in BSP order, so the last hint the map authored heads
+	// the list. A hint is never removed from it: `Kill` on a hint hides it (`0x102d08c0`).
+	const TArray<int32>& HintList() const { return Hints; }
 	const FElysiumEventQueue& Queue() const { return EventQueue; }
 	FElysiumEventQueue& Queue() { return EventQueue; }
 	const FElysiumRingBufferSink& RingBuffer() const { return *Ring; }
@@ -892,6 +898,7 @@ private:
 	TArray<TUniquePtr<FElysiumEntity>> EntityList;    // Defs.Defs then runtime-spawned; index = handle index
 	TMultiMap<FName, int32> NameIndex;                // targetname -> entity index (non-unique)
 	TMultiMap<FName, int32> ClassIndex;               // classname  -> entity index
+	TArray<int32> Hints;                              // `DAT_10925450`, head first (HintList)
 
 	FElysiumEventQueue EventQueue;
 	TArray<TUniquePtr<IElysiumIOSink>> Sinks;

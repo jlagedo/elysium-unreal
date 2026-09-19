@@ -2,7 +2,8 @@
 //
 // The datamap-backed field/input bindings of the port's NPC-family classes, transcribed from the
 // datamap replay (`research/ghidra/types/datamap_records-vampire.dll.json`; CAI_BaseNPC 0x105c9814,
-// CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8).
+// CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8, CAI_Hint
+// 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8).
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
@@ -14,11 +15,15 @@ struct FElysiumClassDesc;
 
 namespace ElysiumNpcKernelBindings
 {
-	enum class EClass : uint8 { Npc, NpcMaker, InterestingPlace };
+	enum class EClass : uint8 { Npc, NpcMaker, InterestingPlace, Hint, ConversationPlace,
+		NpcMakerZombie };
 
 	void AddNpcFields(FElysiumClassDesc& D);
 	void AddNpcMakerFields(FElysiumClassDesc& D);
 	void AddInterestingPlaceFields(FElysiumClassDesc& D);
+	void AddHintFields(FElysiumClassDesc& D);
+	void AddConversationPlaceFields(FElysiumClassDesc& D);
+	void AddNpcMakerZombieFields(FElysiumClassDesc& D);
 	TConstArrayView<const TCHAR*> Outputs(EClass Class = EClass::Npc);
 	TConstArrayView<const TCHAR*> InputFuncs(EClass Class = EClass::Npc);
 	struct FCounts

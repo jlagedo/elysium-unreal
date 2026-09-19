@@ -38,6 +38,9 @@
 struct FHintWords
 {
 	bool bValid = false;
+	// The hint entity itself — retail holds the `CAI_Hint*`; this runtime holds its entity index
+	// (0018 story 2). Distinct from `NodeId`, the network node the hint is bound to.
+	int32 HintIndex = INDEX_NONE;
 	FString Name;                     // +0x026c m_iName                 key targetname
 	FString Activity;                 // +0x0450 m_strActivity
 	float TargetAngleRange = 0.f;     // +0x0454 m_flTargetAngleRange    key target_angle_range
@@ -62,8 +65,9 @@ struct FHintWords
 	FVector Angles = FVector::ZeroVector;
 };
 
-/** SEAM. Resolve `HintNode` (a `ScheduleHost::HintNode`-shaped index) into its words. Answers false
- *  and leaves `Out` untouched: retail's `CAI_Hint` entities have no store here. */
+/** Resolve `HintNode` — a hint's entity index, the form a `ScheduleHost::HintNode` holds — into the
+ *  live `ai_hint`'s words (`FElysiumHint::ToWords`). Answers false and leaves `Out` untouched when
+ *  the index is not a live hint. */
 bool HintWords(int32 HintNode, FHintWords& Out) const;
 
 /** SEAM for `0x102d1af0` — the task-side hint search `FindHintNode` (`0x10365780`) runs, with the
@@ -78,8 +82,9 @@ int32 FindHintNear(int32 HintType, uint8 SearchFlags, float RadiusUnits) const;
 int32 FindHintOfTypeNear(const FElysiumEntity* Near, int32 HintType, uint8 SearchFlags,
 	float RadiusUnits) const;
 
-/** SEAM for `CGlobalEntityList::FindEntityByName` + the `CAI_Hint` RTTI cast that
- *  `FindHintEndEntity` (`0x103d6520`) performs. Answers `INDEX_NONE`. */
+/** `CGlobalEntityList::FindEntityByName` + the `CAI_Hint` RTTI cast that `FindHintEndEntity`
+ *  (`0x103d6520`) performs: the first entity the name matches, as a hint index, or `INDEX_NONE`
+ *  when that first match is not a hint. */
 int32 FindHintByName(const FString& HintName) const;
 
 /** `0x102d1420`, the hint release: `m_hHintOwner (+0x5e0) = -1` and

@@ -251,7 +251,7 @@ bool FElysiumNpcKernelHints10EndEntityTest::RunTest(const FString&)
 	// `103d63xx` — the empty cache falls straight through to `FindHintEndEntity` (`0x103d6520`),
 	// which with no hint store and no target name answers the hint's own node id.
 	FElysiumNpc::FHintWords Hint = Hints10MakeHint(15000);
-	Hint.NodeId = 11;
+	Hint.HintIndex = 11;
 	TestEqual(TEXT("an empty cache falls through to FindHintEndEntity, which answers the hint"),
 		F.Npc->GetHintEndEntity(Hint), 11);
 
@@ -311,14 +311,14 @@ bool FElysiumNpcKernelHints10ForwardHintTest::RunTest(const FString&)
 
 	// `103d70dd` — an exempt hint is handed straight back.
 	FElysiumNpc::FHintWords Exempted = Hints10MakeHint(0x3a9c);
-	Exempted.NodeId = 21;
+	Exempted.HintIndex = 21;
 	TestEqual(TEXT("an exempt hint is returned unchanged"),
 		F.Npc->GetForwardHintForHint(Exempted), 21);
 
 	// `103d7176` — the global hint list is empty here, so the loop runs to its end and the body
 	// answers the null cursor after warning. That is retail's own no-match arm, not a refusal.
 	FElysiumNpc::FHintWords Other = Hints10MakeHint(0x3aab);
-	Other.NodeId = 22;
+	Other.HintIndex = 22;
 	TestTrue(TEXT("the global hint list seam answers nothing"), F.Npc->GlobalHintList().IsEmpty());
 	TestEqual(TEXT("a non-exempt hint with no partner answers null"),
 		F.Npc->GetForwardHintForHint(Other), static_cast<int32>(INDEX_NONE));
@@ -357,7 +357,7 @@ bool FElysiumNpcKernelHints10TeleportHintTest::RunTest(const FString&)
 	// so the slot-566 gate (gate 4) is satisfied without a cover object; the NPC's group mask
 	// defaults to every group.
 	FElysiumNpc::FHintWords Good = Hints10MakeHint(0x2774);
-	Good.NodeId = 31;
+	Good.HintIndex = 31;
 	F.Npc->WerewolfHintFlags = 0;
 	TestTrue(TEXT("a hint that passes every gate is valid, because the endpoint seam answers "
 				  "'not script-hidden', which is the admitting value"),

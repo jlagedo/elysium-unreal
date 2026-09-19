@@ -11,6 +11,8 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumClassFields.h"
+#include "Substrate/ElysiumConversationPlace.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
@@ -42,6 +44,8 @@ static TUniquePtr<FElysiumEntity> MakeNpc()       { return MakeUnique<FElysiumNp
 static TUniquePtr<FElysiumEntity> MakeController(){ return MakeUnique<FElysiumPlayerControllerNpc>(); }
 static TUniquePtr<FElysiumEntity> MakeNpcMaker()  { return MakeUnique<FElysiumNpcMaker>(); }
 static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FElysiumInterestingPlace>(); }
+static TUniquePtr<FElysiumEntity> MakeHint()      { return MakeUnique<FElysiumHint>(); }
+static TUniquePtr<FElysiumEntity> MakeConversationPlace() { return MakeUnique<FElysiumConversationPlace>(); }
 
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
@@ -290,6 +294,19 @@ struct FElysiumNpcRegistrar
 		{
 			BuildNpcMakerClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeNpcMaker));
 		}
+		// `CNPCMaker_Zombie` (0018 story 2): the shared maker leaf plus the zombie's own three rows.
+		// Its think is a seam (`FElysiumNpcMaker::Think`).
+		FElysiumClassDesc& ZombieMaker = Reg.Register(TEXT("npc_maker_zombie"), ElysiumBaseClassName(),
+			&MakeNpcMaker);
+		BuildNpcMakerClass(ZombieMaker);
+		ElysiumNpcKernelBindings::AddNpcMakerZombieFields(ZombieMaker);
+
+		// `ai_hint` — the live `CAI_Hint` every hint-making `info_node*` row becomes
+		// (`ElysiumNodeEntity::ApplyHintReplacement`).
+		FElysiumHint::BuildClass(Reg.Register(FElysiumHint::ClassName(), ElysiumBaseClassName(),
+			&MakeHint));
+		FElysiumConversationPlace::BuildClass(Reg.Register(TEXT("intersting_place_conversation"),
+			ElysiumBaseClassName(), &MakeConversationPlace));
 	}
 };
 

@@ -2,13 +2,16 @@
 //
 // The datamap-backed field/input bindings of the port's NPC-family classes, transcribed from the
 // datamap replay (`research/ghidra/types/datamap_records-vampire.dll.json`; CAI_BaseNPC 0x105c9814,
-// CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8).
+// CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8, CAI_Hint
+// 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8).
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
 #include "Substrate/ElysiumNpcKernelBindings.h"
 
 #include "Substrate/ElysiumClassFields.h"
+#include "Substrate/ElysiumConversationPlace.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMaker.h"
@@ -152,6 +155,73 @@ namespace ElysiumNpcKernelBindings
 		// UNBOUND +0x54c m_vecMinBounds "min_bounds" — no port member
 	}
 
+	void AddHintFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("Group"), &FElysiumHint::Group, EElysiumField::Save);  // +0x5f0 m_strGroup
+		ElysiumAddClassField(D, TEXT("HintType"), &FElysiumHint::HintType, EElysiumField::Save);  // +0x5dc m_nHintType
+		ElysiumAddClassField(D, TEXT("StartHintDisabled"), &FElysiumHint::Disabled,
+			EElysiumField::Save);  // +0x5e8 m_iDisabled
+		ElysiumAddClassField(D, TEXT("UserData"), &FElysiumHint::UserData, EElysiumField::Save);  // +0x5d4 m_iszUserData
+		ElysiumAddClassField(D, TEXT("group_id"), &FElysiumHint::GroupId, EElysiumField::Save);  // +0x470 m_iGroupID
+		ElysiumAddClassField(D, TEXT("hint_rating"), &FElysiumHint::HintRating,
+			EElysiumField::Save);  // +0x464 m_flHintRating
+		ElysiumAddClassField(D, TEXT("ip_percent"), &FElysiumHint::IpPercent, EElysiumField::Save);  // +0x46c m_iIPPercent
+		ElysiumAddClassField(D, TEXT("target_angle_range"), &FElysiumHint::TargetAngleRange,
+			EElysiumField::Save);  // +0x454 m_flTargetAngleRange
+		ElysiumAddClassField(D, TEXT("target_dist_max"), &FElysiumHint::TargetDistMax,
+			EElysiumField::Save);  // +0x460 m_flTargetDistMax
+		ElysiumAddClassField(D, TEXT("target_dist_min"), &FElysiumHint::TargetDistMin,
+			EElysiumField::Save);  // +0x45c m_flTargetDistMin
+		ElysiumAddClassField(D, TEXT("target_name"), &FElysiumHint::InterestTargetName,
+			EElysiumField::Save);  // +0x468 m_strTargetName
+	}
+
+	void AddConversationPlaceFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("audible_dist"), &FElysiumConversationPlace::AudibleDist,
+			EElysiumField::Save);  // +0x468 m_flAudibleDist
+		ElysiumAddClassField(D, TEXT("enabled"), &FElysiumConversationPlace::bEnabled,
+			EElysiumField::Save);  // +0x45c m_bEnabled
+		ElysiumAddClassField(D, TEXT("interesting_places"),
+			&FElysiumConversationPlace::InterestingPlaces, EElysiumField::Save);  // +0x450 m_iszInterestingPlaces
+		ElysiumAddClassField(D, TEXT("max_time"), &FElysiumConversationPlace::MaxTime,
+			EElysiumField::Save);  // +0x510 m_flMaxTime
+		ElysiumAddClassField(D, TEXT("min_time"), &FElysiumConversationPlace::MinTime,
+			EElysiumField::Save);  // +0x50c m_flMinTime
+		ElysiumAddClassField(D, TEXT("player_dist"), &FElysiumConversationPlace::PlayerDist,
+			EElysiumField::Save);  // +0x464 m_flPlayerDist
+		ElysiumAddClassField(D, TEXT("sound_loop"), &FElysiumConversationPlace::SoundLoop,
+			EElysiumField::Save);  // +0x454 m_iszSoundLoop
+		ElysiumAddClassField(D, TEXT("sound_occluded"), &FElysiumConversationPlace::bSoundOccluded,
+			EElysiumField::Save);  // +0x515 m_bSoundOccluded
+		ElysiumAddClassField(D, TEXT("sound_once"), &FElysiumConversationPlace::SoundOnce,
+			EElysiumField::Save);  // +0x458 m_iszSoundOnce
+		ElysiumAddClassField(D, TEXT("turn_towards_talker"),
+			&FElysiumConversationPlace::bTurnTowardsTalker, EElysiumField::Save);  // +0x514 m_bTurnTowardsTalker
+	}
+
+	void AddNpcMakerZombieFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("Flag_ZombieAIType"), &FElysiumNpcMaker::ZombieAiType,
+			EElysiumField::Save);  // +0x76d0 m_iZombieAISpawnType
+		ElysiumAddClassField(D, TEXT("remove_distance"), &FElysiumNpcMaker::RemoveDistance,
+			EElysiumField::Save);  // +0x76d8 m_flRemoveDist
+		ElysiumAddClassField(D, TEXT("should_ragdoll"), &FElysiumNpcMaker::bShouldRagdoll,
+			EElysiumField::Save);  // +0x76d4 m_bShouldRagdoll
+	}
+
 	namespace
 	{
 	const TCHAR* const GNpcOutputs[] =
@@ -255,6 +325,46 @@ namespace ElysiumNpcKernelBindings
 		TEXT("Enable"),
 	};
 
+	const TCHAR* const GHintOutputs[] =
+	{
+		TEXT("OnAnimEvent1"),
+		TEXT("OnAnimEvent2"),
+		TEXT("OnAnimEvent3"),
+		TEXT("OnAnimEvent4"),
+		TEXT("OnAnimEvent5"),
+		TEXT("OnAnimEvent6"),
+		TEXT("OnAnimEvent7"),
+		TEXT("OnAnimEvent8"),
+		TEXT("OnNPCArrival"),
+		TEXT("OnNPCKicked"),
+	};
+
+	const TCHAR* const GHintInputFuncs[] =
+	{
+		TEXT("DisableHint"),
+		TEXT("DontWalk"),
+		TEXT("EnableHint"),
+		TEXT("SetUserData"),
+		TEXT("Walk"),
+	};
+
+	const TCHAR* const GConversationPlaceOutputs[] =
+	{
+		TEXT("OnConversationEnd"),
+		TEXT("OnConversationStart"),
+		TEXT("OnNewTalker"),
+		TEXT("OnOneOffSoundComplete"),
+		TEXT("OnPlayerLeftRadius"),
+		TEXT("OnPlayerTooClose"),
+	};
+
+	const TCHAR* const GConversationPlaceInputFuncs[] =
+	{
+		TEXT("Disable"),
+		TEXT("Enable"),
+		TEXT("PlayOneOffSound"),
+	};
+
 	}
 
 	TConstArrayView<const TCHAR*> Outputs(EClass Class)
@@ -265,6 +375,12 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GNpcMakerOutputs);
 			case EClass::InterestingPlace:
 				return MakeArrayView(GInterestingPlaceOutputs);
+			case EClass::Hint:
+				return MakeArrayView(GHintOutputs);
+			case EClass::ConversationPlace:
+				return MakeArrayView(GConversationPlaceOutputs);
+			case EClass::NpcMakerZombie:
+				return TConstArrayView<const TCHAR*>();
 			default:
 				return MakeArrayView(GNpcOutputs);
 		}
@@ -278,6 +394,12 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GNpcMakerInputFuncs);
 			case EClass::InterestingPlace:
 				return MakeArrayView(GInterestingPlaceInputFuncs);
+			case EClass::Hint:
+				return MakeArrayView(GHintInputFuncs);
+			case EClass::ConversationPlace:
+				return MakeArrayView(GConversationPlaceInputFuncs);
+			case EClass::NpcMakerZombie:
+				return TConstArrayView<const TCHAR*>();
 			default:
 				return MakeArrayView(GNpcInputFuncs);
 		}
@@ -291,6 +413,12 @@ namespace ElysiumNpcKernelBindings
 				return {12, 0, 3, 4};
 			case EClass::InterestingPlace:
 				return {8, 3, 10, 2};
+			case EClass::Hint:
+				return {11, 0, 10, 5};
+			case EClass::ConversationPlace:
+				return {10, 0, 6, 3};
+			case EClass::NpcMakerZombie:
+				return {3, 0, 0, 0};
 			default:
 				return {36, 4, 24, 34};
 		}

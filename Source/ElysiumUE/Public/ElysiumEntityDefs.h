@@ -39,6 +39,11 @@ struct FElysiumConvexHull
 struct FElysiumEntityDef
 {
 	FString Classname;
+	// The classname the map authored, when the runtime entity carries another. Set only by the
+	// node→hint replacement (`ElysiumNodeEntity::ApplyHintReplacement`): an `info_node_*` row that
+	// makes a hint spawns as `ai_hint`, as retail's `CNodeEnt::Spawn` (`0x102d78d0`) does, and keeps
+	// its authored classname here as provenance. Empty otherwise.
+	FString SourceClassname;
 	FString TargetName;                     // may be empty; targetnames are non-unique
 	FVector Origin = FVector::ZeroVector;   // Unreal cm, read verbatim (UE_ exporter)
 

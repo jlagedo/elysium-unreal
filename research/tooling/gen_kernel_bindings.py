@@ -5,15 +5,20 @@ Owner-run archaeology, not part of any build.  The datamap replay
 (``$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json``)
 records what retail's own registration wrote for the classes this port stands:
 ``CAI_BaseNPC`` and ``CAI_BaseNPCTroika`` (the shared ``npc_*`` leaf),
-``CNPCMaker`` (the two ``npc_maker`` classnames) and ``CAI_InterestingPlace``
-(retail's misspelled ``intersting_place``): every member with its offset, type
-and flags, and — where retail had one — the external name a map, a script or an
-input used.  This generator transcribes those rows into committed source:
+``CNPCMaker`` (the ``npc_maker`` classnames) and its ``CNPCMaker_Zombie`` rows,
+``CAI_InterestingPlace`` (retail's misspelled ``intersting_place``),
+``CAI_InterestingPlaceConverstation`` and ``CAI_Hint`` (``ai_hint``): every
+member with its offset, type and flags, and — where retail had one — the
+external name a map, a script or an input used.  This generator transcribes
+those rows into committed source:
 
 * ``ElysiumNpcKernelBindings.h/.cpp`` — one ``Add…Fields`` per binding class
   (one ``ElysiumAddClassField`` row per field the replay names and the class's
   member map binds), the per-class ``Outputs``/``InputFuncs`` name tables and
   ``Counts`` (the four totals, as literals).
+* ``AiInfra/ElysiumInfraKeyfields.h`` — the reflected keyfield structs the
+  baked infrastructure actors hold (0018 story 2): one ``UPROPERTY`` per keyed
+  row of each struct's tables, named by its external.
 
 The classification is fixed.  A row with ``OUTPUT`` is an output name.  A row
 with ``FUNCTIONTABLE`` is skipped.  An ``INPUT`` row whose type is ``void`` or
@@ -72,6 +77,7 @@ BINDINGS_H = ("Source", "ElysiumUE", "Private", "Substrate",
               "ElysiumNpcKernelBindings.h")
 BINDINGS_CPP = ("Source", "ElysiumUE", "Private", "Substrate",
                 "ElysiumNpcKernelBindings.cpp")
+KEYFIELDS_H = ("Source", "ElysiumUE", "Private", "AiInfra", "ElysiumInfraKeyfields.h")
 
 # The binding classes, each over the retail datamap tables whose rows it registers. The NPC's
 # two tables are one binding class because the port stands one shared leaf for them; the maker
@@ -80,6 +86,9 @@ BINDING_CLASSES = (
     ("Npc", ("CAI_BaseNPC", "CAI_BaseNPCTroika")),
     ("NpcMaker", ("CNPCMaker",)),
     ("InterestingPlace", ("CAI_InterestingPlace",)),
+    ("Hint", ("CAI_Hint",)),
+    ("ConversationPlace", ("CAI_InterestingPlaceConverstation",)),
+    ("NpcMakerZombie", ("CNPCMaker_Zombie",)),
 )
 
 # Bound NPC rows the binding API cannot express, by offset, with the type that fails it. A
@@ -123,6 +132,62 @@ CLASS_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
         0x57C: ("FElysiumInterestingPlace", "bEnabled"),
         0x584: ("FElysiumInterestingPlace", "MaxNpcs"),
     },
+    # `ai_hint` (0018 story 2): every keyfield the replay names, one port member each.
+    "CAI_Hint": {
+        0x454: ("FElysiumHint", "TargetAngleRange"),
+        0x45C: ("FElysiumHint", "TargetDistMin"),
+        0x460: ("FElysiumHint", "TargetDistMax"),
+        0x464: ("FElysiumHint", "HintRating"),
+        0x468: ("FElysiumHint", "InterestTargetName"),
+        0x46C: ("FElysiumHint", "IpPercent"),
+        0x470: ("FElysiumHint", "GroupId"),
+        0x5D4: ("FElysiumHint", "UserData"),
+        0x5DC: ("FElysiumHint", "HintType"),
+        0x5E8: ("FElysiumHint", "Disabled"),
+        0x5F0: ("FElysiumHint", "Group"),
+    },
+    # `intersting_place_conversation` (0018 story 2). Its base is `CBaseEntity`, not the place.
+    "CAI_InterestingPlaceConverstation": {
+        0x450: ("FElysiumConversationPlace", "InterestingPlaces"),
+        0x454: ("FElysiumConversationPlace", "SoundLoop"),
+        0x458: ("FElysiumConversationPlace", "SoundOnce"),
+        0x45C: ("FElysiumConversationPlace", "bEnabled"),
+        0x464: ("FElysiumConversationPlace", "PlayerDist"),
+        0x468: ("FElysiumConversationPlace", "AudibleDist"),
+        0x50C: ("FElysiumConversationPlace", "MinTime"),
+        0x510: ("FElysiumConversationPlace", "MaxTime"),
+        0x514: ("FElysiumConversationPlace", "bTurnTowardsTalker"),
+        0x515: ("FElysiumConversationPlace", "bSoundOccluded"),
+    },
+    # `npc_maker_zombie`'s own three rows, on the shared maker leaf.
+    "CNPCMaker_Zombie": {
+        0x76D0: ("FElysiumNpcMaker", "ZombieAiType"),
+        0x76D4: ("FElysiumNpcMaker", "bShouldRagdoll"),
+        0x76D8: ("FElysiumNpcMaker", "RemoveDistance"),
+    },
+}
+
+# The reflected keyfield structs the baked infrastructure actors carry (0018 story 2), each over
+# the replay tables whose keyed rows become its `UPROPERTY`s. The NPC struct is the chain under
+# `CAI_BaseNPCTroika` down to (not including) `CBaseEntity`, walked through the replay's own
+# `base` links, so a table the chain adds or drops moves the struct with it.
+KEYFIELD_STRUCTS = (
+    ("FElysiumBaseEntityKeyfields", ("CBaseEntity",)),
+    ("FElysiumHintKeyfields", ("CAI_Hint",)),
+    ("FElysiumPlaceKeyfields", ("CAI_InterestingPlace",)),
+    ("FElysiumConversationPlaceKeyfields", ("CAI_InterestingPlaceConverstation",)),
+    ("FElysiumMakerKeyfields", ("CNPCMaker", "CNPCMaker_Zombie")),
+    ("FElysiumNpcKeyfields", "chain:CAI_BaseNPCTroika"),
+)
+
+# The replay's type names, as the reflected C++ type a keyfield is held in. Anything the table
+# does not name (`color32`, `custom`, ...) is held as the raw keyvalue string.
+KEYFIELD_TYPES = {
+    "int": "int32", "char": "int32", "short": "int32",
+    "float": "float", "time": "float",
+    "bool": "bool",
+    "string": "FString", "modelname": "FString", "soundname": "FString",
+    "vector": "FVector", "position": "FVector",
 }
 
 # The shape map's two row shapes. The first is the binding regex: a _WORD or _WORD_NOTED row
@@ -242,9 +307,72 @@ def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassMod
 
 
 @dataclass
+class KeyfieldRow:
+    """One keyed replay row as a reflected property."""
+
+    table: str
+    name: str
+    external: str
+    type: str
+    offset: int
+    flags: list[str]
+
+
+@dataclass
+class KeyfieldStruct:
+    name: str
+    tables: tuple[str, ...]
+    rows: list[KeyfieldRow] = field(default_factory=list)
+
+
+@dataclass
 class Model:
     classes: list[ClassModel]
     datamaps: dict[str, str]
+    keyfields: list[KeyfieldStruct] = field(default_factory=list)
+
+
+def _chain_below(replay: dict, top: str, stop: str = "CBaseEntity") -> tuple[str, ...]:
+    """`top` and every replay base under it, stopping before `stop`."""
+    out: list[str] = []
+    cls: str | None = top
+    while cls and cls != stop:
+        if cls not in replay:
+            raise SystemExit(f"gen_kernel_bindings: replay has no table {cls}")
+        out.append(cls)
+        cls = replay[cls].get("base")
+    return tuple(out)
+
+
+def keyfield_structs(replay: dict) -> list[KeyfieldStruct]:
+    """The reflected keyfield structs: every keyed field row of each struct's tables."""
+    structs: list[KeyfieldStruct] = []
+    for name, spec in KEYFIELD_STRUCTS:
+        tables = _chain_below(replay, spec.split(":", 1)[1]) if isinstance(spec, str) else spec
+        struct = KeyfieldStruct(name=name, tables=tables)
+        seen: dict[str, str] = {}
+        for cls in tables:
+            for record in replay[cls]["records"]:
+                external = record.get("external")
+                flags = list(record.get("flagNames") or [])
+                if not external or "OUTPUT" in flags or "FUNCTIONTABLE" in flags:
+                    continue
+                if "INPUT" in flags and (record["typeName"] == "void"
+                                         or int(record["offset"]) == 0):
+                    continue
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", external):
+                    raise SystemExit(f"gen_kernel_bindings: {cls}.{external} is not an identifier")
+                folded = external.lower()
+                if folded in seen:
+                    # A reflected property name folds case, exactly as the registry's FName does.
+                    raise SystemExit(f"gen_kernel_bindings: {name} repeats {external} "
+                                     f"({seen[folded]} and {cls})")
+                seen[folded] = cls
+                struct.rows.append(KeyfieldRow(
+                    table=cls, name=record["name"], external=external,
+                    type=record["typeName"], offset=int(record["offset"]), flags=flags))
+        structs.append(struct)
+    return structs
 
 
 def build(repo: Path) -> Model:
@@ -254,9 +382,13 @@ def build(repo: Path) -> Model:
 
     replay_path = work_root().joinpath(*REPLAY)
     replay = json.loads(replay_path.read_text(encoding="utf-8"))
-    return Model(classes=classify(replay, repo, model_offsets),
-                 datamaps={cls: replay[cls]["datamap"]
-                           for _, tables in BINDING_CLASSES for cls in tables})
+    keyfields = keyfield_structs(replay)
+    datamaps = {cls: replay[cls]["datamap"] for _, tables in BINDING_CLASSES for cls in tables}
+    for struct in keyfields:
+        for cls in struct.tables:
+            datamaps.setdefault(cls, replay[cls]["datamap"])
+    return Model(classes=classify(replay, repo, model_offsets), datamaps=datamaps,
+                 keyfields=keyfields)
 
 
 # --- Emission -----------------------------------------------------------------------------------
@@ -334,11 +466,10 @@ def render_header(model: Model) -> str:
         "",
         "namespace ElysiumNpcKernelBindings",
         "{",
-        "\tenum class EClass : uint8 { Npc, NpcMaker, InterestingPlace };",
+        *_wrapped("enum class EClass : uint8 { "
+                  + ", ".join(c.name for c in model.classes) + " };", "\t"),
         "",
-        "\tvoid AddNpcFields(FElysiumClassDesc& D);",
-        "\tvoid AddNpcMakerFields(FElysiumClassDesc& D);",
-        "\tvoid AddInterestingPlaceFields(FElysiumClassDesc& D);",
+        *[f"\tvoid {_add_function_name(c)}(FElysiumClassDesc& D);" for c in model.classes],
         "\tTConstArrayView<const TCHAR*> Outputs(EClass Class = EClass::Npc);",
         "\tTConstArrayView<const TCHAR*> InputFuncs(EClass Class = EClass::Npc);",
         "\tstruct FCounts",
@@ -385,8 +516,7 @@ def _render_add(model_class: ClassModel) -> list[str]:
 
 
 def _array_symbol(model_class: ClassModel) -> str:
-    return {"Npc": "Npc", "NpcMaker": "NpcMaker",
-            "InterestingPlace": "InterestingPlace"}[model_class.name]
+    return model_class.name
 
 
 def _array_block(model_class: ClassModel, accessor: str, rows: list[Row]) -> list[str]:
@@ -407,6 +537,8 @@ def render_cpp(model: Model) -> str:
         '#include "Substrate/ElysiumNpcKernelBindings.h"',
         "",
         '#include "Substrate/ElysiumClassFields.h"',
+        '#include "Substrate/ElysiumConversationPlace.h"',
+        '#include "Substrate/ElysiumHint.h"',
         '#include "Substrate/ElysiumInterestingPlace.h"',
         '#include "Substrate/ElysiumNpc.h"',
         '#include "Substrate/ElysiumNpcMaker.h"',
@@ -452,6 +584,49 @@ def render_cpp(model: Model) -> str:
     counts = ", ".join(str(n) for n in (len(npc.bound), len(npc.unbound),
                                         len(npc.outputs), len(npc.inputfuncs)))
     out += ["\t\t\tdefault:", f"\t\t\t\treturn {{{counts}}};", "\t\t}", "\t}", "}"]
+    return "\n".join(out) + "\n"
+
+
+def render_keyfields(model: Model) -> str:
+    """The reflected keyfield structs the baked infrastructure actors hold.
+
+    One `UPROPERTY` per keyed replay row, named by its external so the reflected name IS the
+    keyvalue a map authors (`FindPropertyByName` folds case exactly as the registry's `FName`
+    does). Every property is zero/empty by default: retail's constructors leave these words zero
+    (`CAI_Hint` `0x102d2e30`), and an actor emits only what it authored, so a default is never
+    stamped into an entity def.
+    """
+    tables = [cls for struct in model.keyfields for cls in struct.tables]
+    provenance = ", ".join(f"{cls} {model.datamaps[cls]}" for cls in tables)
+    out = [
+        "// Generated by `uv run elysium research gen_kernel_bindings`. Do not hand-edit.",
+        "//",
+        *_comment("The keyed datamap rows of the classes 0018 story 2 bakes as actors, as reflected "
+                  "keyfield structs, transcribed from the datamap replay "
+                  f"(`research/ghidra/types/datamap_records-vampire.dll.json`; {provenance})."),
+        *_comment("A property's name is the retail external name, so the reflected name is the "
+                  "keyvalue a map authors. Every default is zero: an actor emits only the keys "
+                  "it authored (`AiInfra/ElysiumInfraActor.h`), so a default never reaches an "
+                  "entity def."),
+        "",
+        "#pragma once",
+        "",
+        '#include "CoreMinimal.h"',
+        "",
+        '#include "ElysiumInfraKeyfields.generated.h"',
+    ]
+    defaults = {"int32": " = 0", "float": " = 0.0f", "bool": " = false",
+                "FString": "", "FVector": " = FVector::ZeroVector"}
+    for struct in model.keyfields:
+        out += ["", *_comment(f"{', '.join(struct.tables)} — {len(struct.rows)} keyed rows."),
+                "USTRUCT(BlueprintType)", f"struct {struct.name}", "{", "\tGENERATED_BODY()", ""]
+        for row in struct.rows:
+            cpp = KEYFIELD_TYPES.get(row.type, "FString")
+            raw = "" if row.type in KEYFIELD_TYPES else f", held raw ({row.type})"
+            out.append(f"\t// +0x{row.offset:x} {row.name} ({', '.join(row.flags)}){raw}")
+            out.append(f'\tUPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "{row.table}")')
+            out.append(f"\t{cpp} {row.external}{defaults[cpp]};")
+        out += ["};"]
     return "\n".join(out) + "\n"
 
 
@@ -538,6 +713,7 @@ def main(argv: list[str] | None = None) -> int:
     status = 0
     status |= _emit(repo.joinpath(*BINDINGS_H), render_header(model), args.check)
     status |= _emit(repo.joinpath(*BINDINGS_CPP), render_cpp(model), args.check)
+    status |= _emit(repo.joinpath(*KEYFIELDS_H), render_keyfields(model), args.check)
     return status
 
 

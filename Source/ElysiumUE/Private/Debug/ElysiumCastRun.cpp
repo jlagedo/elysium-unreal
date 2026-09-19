@@ -124,7 +124,10 @@ namespace
 			{
 				continue;
 			}
-			if (!Ent->Def->Classname.Equals(TEXT("info_node_patrol_point"), ESearchCase::IgnoreCase))
+			// A patrol point lives as an `ai_hint` (`ElysiumNodeEntity`); its authored classname is kept.
+			const FString& Authored = Ent->Def->SourceClassname.IsEmpty()
+				? Ent->Def->Classname : Ent->Def->SourceClassname;
+			if (!Authored.Equals(TEXT("info_node_patrol_point"), ESearchCase::IgnoreCase))
 			{
 				continue;
 			}
@@ -490,6 +493,9 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 			FElysiumEntityDef Def;
 			Def.Classname = TEXT("info_node_patrol_point");
 			Def.TargetName = FString::Printf(TEXT("%s%d"), CastRoutePrefix, Point + 1);
+			// The NPC's patrol lookup is retail's (`0x102d2840`): a type-10000 hint by exact `Group`.
+			Def.Keys.Add(TEXT("hinttype"), TEXT("10000"));
+			Def.Keys.Add(TEXT("Group"), Def.TargetName);
 			Def.Origin = ElysiumArena::DefaultOrigin() + Course.Route[Point];
 			CourseProps.Add(Entities->SpawnRuntimeEntity(MoveTemp(Def)));
 		}

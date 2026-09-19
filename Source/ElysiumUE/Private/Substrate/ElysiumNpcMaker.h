@@ -28,6 +28,12 @@ public:
 	bool bNoDrop = false;           // base CNPCMaker declares it but does not consume it
 	bool bViewCone = false;
 	int32 MinPcDistance = 0;        // Source units
+	// `CNPCMaker_Zombie`'s own three keyfields (datamap `0x106253e8`), bound on this shared leaf by
+	// `ElysiumNpcKernelBindings::AddNpcMakerZombieFields`. Carried and saved; nothing in this runtime
+	// reads them yet, because the zombie maker's think (`0x1034d2d0`) is unported (0018 story 10).
+	int32 ZombieAiType = 0;         // +0x76d0 m_iZombieAISpawnType  Flag_ZombieAIType
+	bool bShouldRagdoll = false;    // +0x76d4 m_bShouldRagdoll      should_ragdoll
+	float RemoveDistance = 0.0f;    // +0x76d8 m_flRemoveDist        remove_distance
 	// `CNPCMaker` is a `CAI_BaseNPCTroika` in retail, so it carries `m_bDisableAI` and the
 	// `DisableThink` input, and `MakeNPC` `0x1034b7b0` copies its own value onto every child
 	// (`0x1029f2e0` -> `0x1029f300`). The maker itself never thinks as an NPC here.
@@ -220,14 +226,11 @@ public:
 
 	/** Is this maker the zombie variant? `npc_maker_zombie` here, `CNPCMaker_Zombie` in the census.
 	 *
-	 *  **GAP, named rather than patched:** `ElysiumNpcClasses.cpp` registers only `npc_maker` and
-	 *  `npc_maker_fleshpile` against this leaf, so no map in this runtime can stand a
-	 *  `CNPCMaker_Zombie` and this predicate can never answer true at runtime — even though the
-	 *  census claims the classname (`CNPCMaker_Zombie_Classnames`, `npc-kernel/classes.md`) and
-	 *  `docs/vtmb/wielded_weapons.md` records that the shipped maps place them. That is a
-	 *  spawn-registration gap, not a fact about retail, and registering a new spawnable classname
-	 *  is a change to the port's spawn surface rather than a body of this story. The arm is ported
-	 *  whole and is exercised through the test latch below. */
+	 *  `ElysiumNpcClasses.cpp` registers `npc_maker_zombie` against this leaf (0018 story 2), so a
+	 *  shipped zombie maker stands with its own three keyfields and takes this arm. Its think body
+	 *  (`CNPCMaker_Zombie` think `0x1034d2d0`) is unported: `Think` refuses to run the base maker's
+	 *  spawn loop in its place (see there). The test latch below still stands a zombie maker without
+	 *  a classname. */
 	bool IsZombieMaker() const;
 
 #if WITH_DEV_AUTOMATION_TESTS

@@ -3,6 +3,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
@@ -101,13 +102,21 @@ namespace
 
 bool FElysiumNpc::HintWords(int32 HintNode, FHintWords& Out) const
 {
-	// SEAM: retail's hint words live on a `CAI_Hint` ENTITY reached through `m_pHintNode`
-	// (`+0x5ddc`). This runtime carries hint references as bare indices and stands no hint store,
-	// so there is nothing to read `m_nHintType` (`+0x5dc`), `m_iGroupID` (`+0x470`),
-	// `m_strTargetName` (`+0x468`) or the four target-range floats off.
-	(void)HintNode;
-	(void)Out;
-	return false;
+	// Retail's hint words live on the `CAI_Hint` ENTITY reached through `m_pHintNode` (`+0x5ddc`).
+	// This runtime carries a hint reference as that entity's index (0018 story 2), so the words are
+	// the live `ai_hint`'s own. An index that is not a live hint answers false and leaves `Out`
+	// untouched.
+	if (World == nullptr || !World->Entities().IsValidIndex(HintNode))
+	{
+		return false;
+	}
+	const FElysiumHint* Hint = FElysiumHint::Cast(World->Entities()[HintNode].Get());
+	if (Hint == nullptr || Hint->IsDead())
+	{
+		return false;
+	}
+	Out = Hint->ToWords();
+	return true;
 }
 
 int32 FElysiumNpc::FindHintNear(int32 HintType, uint8 SearchFlags, float RadiusUnits) const
@@ -137,12 +146,16 @@ int32 FElysiumNpc::FindHintOfTypeNear(const FElysiumEntity* Near, int32 HintType
 
 int32 FElysiumNpc::FindHintByName(const FString& HintName) const
 {
-	// SEAM for `CGlobalEntityList::FindEntityByName` (`0x100f7770`) narrowed to `CAI_Hint` by
-	// `__RTDynamicCast`. `FElysiumEntityWorld::FindByName` exists and its matcher is already
-	// retail's (`NameMatches`), but nothing it can return is a hint, so this refuses rather than
-	// handing back an arbitrary entity as if it were one.
-	(void)HintName;
-	return INDEX_NONE;
+	// `CGlobalEntityList::FindEntityByName` (`0x100f7770`) narrowed to `CAI_Hint` by
+	// `__RTDynamicCast`: the FIRST entity the name matches, and a miss when that one is not a hint —
+	// the cast fails, the search does not continue to a later match.
+	if (World == nullptr)
+	{
+		return INDEX_NONE;
+	}
+	const FElysiumEntity* First = World->FindByName(HintName);
+	const FElysiumHint* Hint = FElysiumHint::Cast(First);
+	return Hint != nullptr ? Hint->Handle.Index : INDEX_NONE;
 }
 
 void FElysiumNpc::ReleaseHintNode(int32 HintNode, float ReuseDelaySeconds)
@@ -715,7 +728,7 @@ FVector FElysiumNpc::GetHintGroundpoint(const FHintWords& Hint) const
 	// hint's own origin. SOURCE UNITS throughout, as retail's are.
 	for (const FWerewolfHintGroundpoint& Row : WerewolfHintGroundpoints)
 	{
-		if (Row.HintNode != INDEX_NONE && Row.HintNode == Hint.NodeId)
+		if (Row.HintNode != INDEX_NONE && Row.HintNode == Hint.HintIndex)
 		{
 			return Row.GroundpointUnits;
 		}
@@ -1001,7 +1014,7 @@ int32 FElysiumNpc::FindHintEndEntity(const FHintWords& Hint) const
 	}
 	if (First == INDEX_NONE)
 	{
-		First = Hint.NodeId;
+		First = Hint.HintIndex;   // the hint itself, not its network node
 	}
 	FHintWords FirstWords;
 	if (HintWords(First, FirstWords) && !FirstWords.TargetName.IsEmpty())

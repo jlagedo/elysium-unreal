@@ -535,7 +535,7 @@ FVector FElysiumNpc::GetHintTargetGroundpoint(const FHintWords& Hint) const
 	// `+0x14` — the TARGET groundpoint, where family Hints' twin answers `+0x08`.
 	for (const FWerewolfHintGroundpoint& Row : WerewolfHintGroundpoints)
 	{
-		if (Row.HintNode != INDEX_NONE && Row.HintNode == Hint.NodeId)
+		if (Row.HintNode != INDEX_NONE && Row.HintNode == Hint.HintIndex)
 		{
 			return Row.GroundpointUnits;
 		}
@@ -571,7 +571,8 @@ FElysiumNpc::FWerewolfHintGroundpoint FElysiumNpc::InitializeHintDataRow(
 	// `GetGroundpoint(GetHintEndpoint + _DAT_104492a4)` into `+0x14`, each validated against the
 	// `0x7f800000` exponent mask and on failure falling back to the RAW origin / RAW endpoint.
 	FWerewolfHintGroundpoint Row;
-	Row.HintNode = Hint.NodeId;
+	// Element `+0x04` is the hint ENTITY (`this_01[1] = this_00`), not its network node.
+	Row.HintNode = Hint.HintIndex;
 	// The end-entity handle at element `+0x00`, which this comment already named and the row did not
 	// carry until story 29d's family Hints10 added the word for `GetHintEndEntity` (`0x103d6390`) to
 	// read back. `FindHintEndEntity` (`0x103d6520`) is what retail resolves it with.
@@ -611,17 +612,20 @@ void FElysiumNpc::InitializeHintData()
 	{
 		return;
 	}
-	// `103d77fa`: the walk is the GLOBAL hint entity chain from `DAT_10925450` through the `+0x18`
-	// next link. SEAM: family Hints' `HintWords` resolves no node, so the chain is empty and the
-	// array stays empty — retail's own answer for a map with no hints. `InitializeHintDataRow` is
-	// the per-hint rule and is exercised directly.
+	// `103d77fa`: the walk is the GLOBAL hint list from `DAT_10925450` through each hint's
+	// `+0x5d8` next link (`this_00[1].m_vecViewOffset[1]`), every hint of every type.
+	//
+	// Not ported here, and recorded as the two live-hint effects this body has: `103d7888` writes the
+	// forward yaw back through the hint's own angles (slot `0x104`, `SetLocalAngles`), and `103d7a70`
+	// counts the entities named by the hint's `target_name`, `DevWarning`ing when it is not exactly
+	// one. Both belong to the Werewolf's program (0002), not to the hint store.
 	int32 Count = 0;
-	for (int32 Node = 0; ; ++Node)
+	for (const int32 Node : GlobalHintList())
 	{
 		FHintWords Hint;
 		if (!HintWords(Node, Hint) || !Hint.bValid)
 		{
-			break;
+			continue;
 		}
 		WerewolfHintGroundpoints.Add(InitializeHintDataRow(Hint));
 		++Count;

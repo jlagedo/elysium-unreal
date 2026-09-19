@@ -823,6 +823,9 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		FElysiumEntityDef Point;
 		Point.Classname = TEXT("info_node_patrol_point");
 		Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+		// A patrol point is found by its exact-case `Group` on a type-10000 hint (`0x102d2840`).
+		Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
+		Point.Keys.Add(TEXT("Group"), Point.TargetName);
 		Point.Origin = FVector(static_cast<float>(PointIndex * 100), 25.0f, 0.0f);
 		Defs.Defs.Add(MoveTemp(Point));
 	}
@@ -1017,6 +1020,9 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 			FElysiumEntityDef Point;
 			Point.Classname = TEXT("info_node_patrol_point");
 			Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+			// A patrol point is found by its exact-case `Group` on a type-10000 hint (`0x102d2840`).
+			Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
+			Point.Keys.Add(TEXT("Group"), Point.TargetName);
 			Point.Origin = FVector(static_cast<float>(PointIndex * 100), 25.0f, 0.0f);
 			Defs.Defs.Add(MoveTemp(Point));
 		}
@@ -1235,6 +1241,9 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 			FElysiumEntityDef Point;
 			Point.Classname = TEXT("info_node_patrol_point");
 			Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+			// A patrol point is found by its exact-case `Group` on a type-10000 hint (`0x102d2840`).
+			Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
+			Point.Keys.Add(TEXT("Group"), Point.TargetName);
 			Point.Origin = FVector(static_cast<float>(PointIndex * 100), 25.0f, 0.0f);
 			Defs.Defs.Add(MoveTemp(Point));
 		}
