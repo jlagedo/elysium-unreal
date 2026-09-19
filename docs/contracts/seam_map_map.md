@@ -2313,3 +2313,53 @@ map places no water actor. `MapsOnV2Models` reads `sp_tutorial_1`, `sm_pawnshop_
 assets are read only for a listed map, and `Elysium.Content.MapEnvironment.FieldParity` fails on a
 map with the assets but not the flag — listing one flag without the other is the half-cutover this
 file warns against).
+## Import — AI infrastructure actors (0018 story 2)
+
+The BSP-authored rows an NPC queries but does not own stand on the baked level as one native
+actor each, and the runtime rebuilds their entity defs from those actors.
+
+### Identity and naming
+
+- **Stage:** `importers/map_ai_infra.py`, riding the map-geometry manifest as `aiInfra`
+  (`MANIFEST_VERSION` 14). One row per entity in five disjoint families — `hint` (every row
+  `CNodeEnt::Spawn 0x102d78d0` turns into a `CAI_Hint`, patrol points included), `place`
+  (`intersting_place`), `conversation` (`intersting_place_conversation`), `maker` (`npc_maker`,
+  `npc_maker_fleshpile`, `npc_maker_zombie`) and `npc` (every other `npc_*`). A row carries
+  `index` (its BSP entity ordinal), `family`, `classname`, `targetname`, `originCm`,
+  `rotationQuat`, `keys` (every authored pair in order, repeats kept, minus the hoisted
+  `classname`/`targetname` and the output rows) and `outputs` (the entity table's rows). The
+  payload carries `counts`, `entityRows` and a canonical-JSON `sha256`.
+- **Bake:** `pipeline/unreal/bake_ai_infra.py` places `AElysiumHintActor`,
+  `AElysiumInterestingPlaceActor`, `AElysiumConversationPlaceActor`, `AElysiumNpcMakerActor`
+  or `AElysiumNpcPlacementActor` at `originCm`, then one `AElysiumInfraIndex` declaring the set.
+  Tags: the family tag (`elysium.infra.hint|place|conversation|maker|npc`) and
+  `elysium.ent=<index>`; the index carries `elysium.infra.index`. Outliner folders under `AI/`.
+  The level recipe keys on `ai_infra` (the stage hash) and `ai_infra_shape`.
+- **Runtime:** `UElysiumMapVisuals::AdoptBakedLevel` buckets the actors;
+  `ElysiumInfraAdoption::Apply` runs right after the entity table loads.
+
+### The row contract
+
+The stage takes identity, origin and outputs from the same `collect_entity_fields` reading both
+entity-table transports are built from, and refuses a map it cannot stage faithfully: a family
+row whose legacy pair reading differs from the unit's structured pairs, a hint row the census rule
+and the retail rule classify differently, an authored hint type unlike its class-forced type, a
+parented hint row, or a row in the 3D-skybox miniature. Three maps' lumps cannot be reconstructed
+by the legacy reading at all (`la_ventruetower_2`, `la_ventruetower_3`, `sp_giovanni_2b`); every
+lane refuses them alike.
+
+The actor's typed keyfield structs (`AiInfra/ElysiumInfraKeyfields.h`, generated from the datamap
+replay) are authoritative. `AuthoredKeys` keeps every authored pair. The def is rebuilt by walking
+it: a key whose property still holds what its authored string parses to re-emits that string; a
+changed property emits its typed value; an unauthored datamap row is emitted once non-zero; the
+result folds as the entity table folds (one slot per exact spelling, first position, last value).
+An untouched level therefore rebuilds the transport's defs byte for byte.
+
+### Verification
+
+`bake map --verify` runs `verify_ai_infra`: exactly one index actor, and the placed actors are
+exactly the staged rows — each once, as its family's class and tag, with the staged classname.
+`Elysium.Content.InfraActors.{Tutorial,Hub,Soc3}` load the baked level, pin the family counts and
+assert def parity against the entity table. Bake goals: `sp_tutorial_1` 112 actors (49 hints of
+which 37 patrol points, 29 places, 14 makers, 20 NPCs), `sm_hub_1` 436 (274/34, 76, 48, 38),
+`sp_soc_3` 70 (40/25, 13 places, 2 conversation places, 15 NPCs).

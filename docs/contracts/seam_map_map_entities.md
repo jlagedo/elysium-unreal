@@ -292,6 +292,22 @@ stage refuses to run unscoped.
    `FElysiumEntityDef` arrays. That is the parity that matters: it is the only check that both
    C++ readers produce the same defs.
 
+### The infrastructure replacement pass (0018 story 2)
+
+On a level that carries an `AElysiumInfraIndex`, `ElysiumInfraAdoption::Apply` rewrites the def
+at each declared entity index from its baked actor (`seam_map_map.md` § "Import — AI
+infrastructure actors"), after either transport loaded the table and before the level script, the
+model preload walk or `FElysiumEntityWorld::Load` reads it. It never appends, filters or
+renumbers: the ordinal stays the handle and the save key. It validates the whole declared set
+first — one actor per index, the declared family, the table's classname, the actor within 0.5 cm
+of the def's origin — and on any refusal leaves the table untouched and fails the map runtime.
+`Classname`, `Origin` and the brush fields stay the table's; `TargetName`, `Keys`, `Outputs` and
+`bStartHidden` come from the actor, `Times` 0 normalised to -1 once.
+
+`FElysiumEntityWorld::Load` then applies retail's node lifecycle to every def on every map
+(`ElysiumNodeEntity::ApplyHintReplacement`): a hint-making `info_node*` / `info_hint` row becomes
+classname `ai_hint`, its authored classname kept on `FElysiumEntityDef::SourceClassname`.
+
 ### Cutover
 
 `ElysiumEntityDefSource::Load(Map, Out, SkyScale, SkyOrigin)` is the one entry point every

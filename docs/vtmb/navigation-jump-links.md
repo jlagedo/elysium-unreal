@@ -178,6 +178,30 @@ Read from the pinned `vampire.dll` through `vtmb_code`, with the branch and argu
   create standalone hints with network id `-1`. Thus BSP lump index, authored `nodeid`, and
   network index are different identities; neither matching by `nodeid` nor zipping every
   BSP entity with AIN nodes reproduces this loader.
+- Which rows make a hint (0018 story 2, 2026-09-19). `CNodeEnt::Spawn` first calls
+  `FUN_102d7d30`, which forces `m_eHintType` from the classname — `info_node` 0,
+  `info_node_cover_med` 100, `_cover_low` 101, `_cover_corner` 10200, `_crosswalk` 11000,
+  `_tzimisce_claw_left/right` 14000/14001, `_kick_over` 10300, `_kick_at` 10301, `_shoot_at` 10400,
+  `info_node_werewolf` 0, `_werewolf_hint` kept only in 15000..15018, `_sabbat_*`
+  16000..16005, `_bach_*` 17000..17005, `_chang_*` 18000..18003, `_manbat_fly_to_point` 20000;
+  other classnames keep the authored value — and warns on a type-10000 row with an empty
+  `Group` and on a duplicate exact-case `Group`. It rewrites `info_node_tzimisce` to
+  `info_node`. The standalone set above makes a hint iff the (short) type is non-zero; every
+  other `CNodeEnt` row iff the type is non-zero OR a `Group` is authored. The forced value only
+  decides; the hint itself parses the row's raw block, whose `hinttype` is the authored one.
+- `CNodeEnt::ParseMapData 0x102d7890` stashes the row's whole raw keyvalue block in
+  `DAT_10926a38` before the base parse, and `FUN_102d2f30` creates the hint as classname
+  **`ai_hint`** (`s_ai_hint_1060a388`), feeds it that block (vtable `+0x1ac`), writes the network
+  id at `+0x5e4`, and runs `Spawn`/`PostSpawn`. So `group_id`, `ip_percent`, `target_name`,
+  `StartHintDisabled`, `UserData` and the outputs — none of them on `CNodeEnt`'s seven-row
+  datamap (`0x1060aaf8`) — reach the hint. The live entity is always `ai_hint`; the authored
+  `info_node_*` entity never survives its own spawn. Over the 108 exported maps this rule and the
+  census's "carries `hinttype`" rule select the same 3,156 rows, and no row's authored type
+  differs from its class-forced type.
+- The port applies the rule at the def level (`Substrate/ElysiumNodeEntity`): a hint row's
+  classname becomes `ai_hint` before construction, the authored one kept on
+  `FElysiumEntityDef::SourceClassname`. Rows that make no hint keep today's record-only path;
+  their removal, and the network half of the loader above, are 0018 story 3's.
 - The previously unidentified reader of `linkInfo & 0x2000` is present in the alternate
   route builder `0x102fe9f0`. Its decompilation reports damage, so this fact was checked in
   assembly: `0x102feb60..0x102feb6f` draws one integer in 5..10 when its third parameter is

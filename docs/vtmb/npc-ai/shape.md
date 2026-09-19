@@ -599,6 +599,55 @@ the count, and — when `this[0x178]` names an owning NPC — calls
 **Unrecovered:** what `m_iszUserData` is read by; the AI-network node layout past the origin at
 `+0x08`; and which `CAI_Hint` slot carries the outputs' activator convention.
 
+### The live hint, stood (0018 story 2, 2026-09-19)
+
+The datamap replay (`CAI_Hint 0x106099f0`, base `CBaseEntity`) names eleven keyfields, all
+`SAVE|KEY` and none `INPUT`, so every one is read only to Python: `target_angle_range`,
+`target_dist_min`, `target_dist_max`, `hint_rating` (float); `target_name`, `UserData`, `Group`
+(string); `ip_percent`, `group_id`, `HintType`, `StartHintDisabled` (int). Its five input
+handlers and their writes:
+
+| Input | Body | Effect |
+|---|---|---|
+| `EnableHint` | `0x102d09f0` | `CBaseEntity::ScriptUnhide` (by address), `m_iDisabled := 0` |
+| `DisableHint` | `0x102d0a20` | `CBaseEntity::ScriptHide` (by address), `m_iDisabled := 1` |
+| `Walk` / `DontWalk` | `0x102d0a50` / `0x102d0a80` | `FUN_102d3e60` resolves the network node; `FUN_102f97c0(node, 1/0)`; a null node returns |
+| `SetUserData` | `0x102d4060` | a string variant (type 2) replaces `m_iszUserData`; any other type clears it |
+
+The class overrides three base slots: slot 77 `CAI_Hint::ScriptHide` (`0x102d0860`) and slot 78
+`ScriptUnhide` (`0x102d0890`) add `m_iDisabled := 1 / 0` to the base bodies, and slot 119 `Kill`
+(`0x102d08c0`) jumps to slot 77 — a hint's `Kill` hides and disables it. Every input still passes
+`CBaseEntity::AcceptInput`'s one entry gate (`FUN_100abc90`): a hidden entity answers true, doing
+nothing, to any input not beginning with `ScriptUnhide`, so a hidden hint swallows `EnableHint`.
+
+The constructor (`0x102d2e30`) sets `m_hHintOwner = -1`, leaves every other word zero, and
+**prepends** the hint to `DAT_10925450`. The map parse (`0x10136650`) spawns every unparented row
+immediately in BSP order (parented rows are deferred and sorted), and no hint row in the 108
+exported maps has a `parentname`, so the list runs in **reverse BSP order**. That order is
+observable: the patrol lookup `0x102d2840` takes the first type-10000/800 hint whose `Group`
+matches byte for byte, and `sp_soc_3` authors `d1..d4` twice (rows 355–358 and 362–365), so its
+patrol tokens resolve to the later rows.
+
+**The port** (`Substrate/ElysiumHint.{h,cpp}`) stands `ai_hint` with these inputs and overrides,
+applies the entry gate to the hint's own inputs (the gate is not global in this substrate yet — a
+named seam), and keeps the list on `FElysiumEntityWorld::HintList`. A hint reference is the hint's
+entity index: `FHintWords::HintIndex`, which the Werewolf's rows and end-entity walks compare where
+retail compares the `CAI_Hint*`. `m_nNodeID` stays -1 until 0018 story 3.
+
+**Caller audit of the live `HintWords`.** Every reader gets its hint index from one of these
+sources, so turning the words on made only the Werewolf's list walks answer:
+
+| Source of the index | Readers | Answers now? |
+|---|---|---|
+| The searches `0x102d1af0`, `0x102d24b0`, `0x102d2980`, `NavAllHintNodes`, `ClaimHintNode`, `NthHintOfType` — still seams (story 4) | `ScheduleHost.HintNode` / `ShootAtHintNode` readers: `IsHintUnusable`, the validators `0x10295ed0` / `0x102961a0` / `0x10296c40`, slot 566, `SelectScheduleForHint`, the cover validators `0x10297430` / `0x102974f0`, `PlayHintIdleActivity`, `TranslateSchedule` case 0x77, `ClosureHintTypeOf`, `SelectCoverOrKickSchedule`, `TeleportIn`, `CacheFloorHeights`, `EyeOffset`, `GatherHintNodes` | No: no index reaches them |
+| `SetMoveHint` / `SetTeleportHint` (`0x103d44e0` / `0x103d45c0`) | the Werewolf endpoint readers | No: their selectors are not wired |
+| `GlobalHintList()` | `InitializeHintData` (`0x103d7710`), `GetForwardHintForHint` (`0x103d7090`) | Yes — retail's own walks, Werewolf only (`sp_observatory_2`) |
+| `FindHintByName` (name lookup + `CAI_Hint` cast) | `FindHintEndEntity` (`0x103d6520`) | Yes — retail's |
+
+`InitializeHintData` also writes each hint's angles (`103d7888`, slot `0x104`) and warns when a
+hint's `target_name` does not name exactly one entity (`103d7a70`); both are the Werewolf program's
+and are not ported.
+
 ## `FValidateHintType`'s species half — slot 566's ten decided bodies
 
 _Recovered 2026-09-13, story 29c-1._

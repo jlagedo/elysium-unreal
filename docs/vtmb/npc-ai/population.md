@@ -2539,6 +2539,24 @@ record), `npc_vghoulcroucher` 58, `npc_vzombie` 48, `npc_vsabbatgunman` 21, `npc
 `npc_vtzimisceheadclaw` 10, `npc_vlasombra` 6, `npc_vbrujah` 5. None stands on
 `sp_tutorial_1`, `sm_hub_1` or `sp_soc_3`.
 
+## Patrol tokens against the retail lookup (2026-09-19, 0018 story 2)
+
+`0x102d2840` resolves a `FollowPatrolPath` token to the first hint of type 10000 or 800, in
+hint-list order (reverse BSP order), whose `Group` matches byte for byte; it has no targetname
+path. Scanned over the 108 entity units and the 32 exported scripts:
+
+- **Map wires:** 767 `FollowPatrolPath` tokens; 757 match a `Group` exactly. The other 10, all on
+  `sm_warehouse_1` (rows 1108 and 1452: `b5 b6 b7 m2 m3 m5 z1 z2`), match nothing under either
+  rule — no `Group`, no targetname, in any case.
+- **Scripts:** 102 tokens; all match a `Group` exactly.
+- **Duplicate exact-case Groups on patrol-type hints:** `sp_soc_3` `d1..d4` (rows 355–358 and
+  362–365), `sm_beachhouse_1` `p3` (rows 670, 887); the later row wins. `hw_ash_sewer_1` (4 rows)
+  and `sm_warehouse_1` (3) author type-10000 hints with an empty `Group` (retail's own
+  `FUN_102d7d30` warning).
+
+So the retail lookup changes no shipped patrol; only hand-built fixtures addressed points by
+targetname.
+
 ## The query surface of the helper classes (2026-09-16, 0018 story 1)
 
 _Computed by `uv run elysium research ai_infra_surface` from the recovered address-backed helper interface, joined with `graph.tsv`, `functions.md` and `index.md`._

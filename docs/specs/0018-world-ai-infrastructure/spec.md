@@ -261,22 +261,26 @@ its recovery is written in the oracle section it names.
      `CAI_InterestingPlaceConverstation` and `CNPCMaker_Zombie` (the slice of 0019 story 2's
      open pass this story needs, landed here), and emit one `USTRUCT` of typed `UPROPERTY`
      fields per datamap chain — hint, place, conversation place, maker, NPC (the 268-row chain
-     `CBaseEntity` … `CAI_BaseNPCTroika`). Defaults are retail's constructor defaults, so an
-     absent key and its default are the same entity, as in retail. Each struct has a generated
-     apply (key, raw string) and emit (def keys) pair using the parser
-     `FElysiumEntity::Construct` uses; the bake never re-implements `atof` in Python.
+     `CBaseEntity` … `CAI_BaseNPCTroika`). A property is named by its external, so the reflected
+     name is the keyvalue; every default is zero (the `CAI_Hint` constructor `0x102d2e30` leaves
+     its words zero) and display-only, because an actor emits only what it authored. Parsing is
+     the runtime's own (`AiInfra/ElysiumKeyfieldAccess`: CRT `atoi`/`atof`, `ElysiumParseVec3`);
+     the bake never re-implements `atof` in Python.
   2. Actors. Native `AActor` subclasses with `UCLASS`, `GENERATED_BODY` and those structs. The
-     typed properties are authoritative. Two array properties carry what has no typed field:
-     `ExtraKeys` (ordered pairs for keys with no datamap row — `testflags`, patch spellings, a
-     blank key) and `Outputs` (ordered rows, repeats kept). The maker adds a `ChildTemplate`
-     (the NPC struct plus the set of keys actually authored, so a child's class defaults are
-     not overwritten). Patrol `Group` is an `FString`: 328 exact-case tokens. Bake-only
+     typed properties are authoritative. `AuthoredKeys` keeps every authored pair in order, repeats
+     kept — datamap rows and the rest (`testflags`, patch spellings, a blank key) — and `Outputs`
+     the output rows. The def is rebuilt by walking `AuthoredKeys`: a key whose property still
+     holds what its string parses to re-emits the string byte for byte, a changed property emits
+     its typed value, an unauthored row is emitted once non-zero. The maker adds a
+     `ChildTemplate` (the NPC struct), so the child's keys are typed too and still re-emit as
+     authored. Patrol `Group` is an `FString`: 328 exact-case tokens. Bake-only
      `UFUNCTION` setters take raw strings. Standard editor billboards/arrows, Details
      categories and Outliner folders; no custom visualizer or per-frame editor system. The
      actors are runtime content; only their visualization components are editor-only.
-  3. Stage and bake. A new importer reads the entity unit's structured rows — not the legacy
-     text reading, which loses `sm_hub_1` block 1611's `origin` — and stages one record per row
-     (index, family, classname, ordered keys, outputs) inside the map-geometry manifest with a
+  3. Stage and bake. A new importer (`importers/map_ai_infra.py`) stages one record per row
+     (index, family, classname, ordered keys, outputs) from the same legacy pair reading the
+     entity table is built from, and refuses a family row whose reading differs from the unit's
+     structured pairs inside the map-geometry manifest with a
      content hash and a level-recipe entry. The map bake places the actors; `bake --verify`
      fails on a missing, duplicate or wrong-family actor. Tags live in `ElysiumBakedTags`
      (one per family, plus the existing `EntityIndex(i)`); the jump link's undeclared
