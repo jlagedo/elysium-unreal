@@ -3,6 +3,10 @@
 
 #include "ElysiumMapActor.h"
 
+#include "AiInfra/ElysiumInfraActor.h"
+#include "AiInfra/ElysiumInfraIndex.h"
+#include "Map/ElysiumInfraAdoption.h"
+
 #include "ElysiumAudioSubsystem.h"        // the audio-catalog activation prerequisite
 #include "ElysiumCameraService.h"         // the LocalPlayer-scoped camera service handed to the world
 #include "ElysiumContentPaths.h"          // the map's sidecar paths (.sky/.ents/.spawn)
@@ -70,6 +74,7 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
 	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
 	if (bNavigationFailed)      { MissingItems.Add(TEXT("runtime navigation failed")); }
+	if (bInfrastructureFailed)  { MissingItems.Add(TEXT("baked AI infrastructure failed")); }
 	else if (bNavigationRequired && !bNavigationReady)
 	{
 		MissingItems.Add(TEXT("runtime navigation building"));
@@ -98,6 +103,11 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(FString& Ou
 	if (bNavigationFailed)
 	{
 		OutFailure = TEXT("required runtime navigation failed");
+		return EElysiumMapReadinessResult::Failed;
+	}
+	if (bInfrastructureFailed)
+	{
+		OutFailure = TEXT("baked AI infrastructure does not match the entity table");
 		return EElysiumMapReadinessResult::Failed;
 	}
 	// Once construction is declared complete, these inputs cannot arrive on a later engine tick.
@@ -395,6 +405,37 @@ void AElysiumMapActor::LoadMap()
 			if (DefSource != EElysiumEntityDefSource::None)
 			{
 				EntityCount = EntDefs.Num();
+
+				// 0018 story 2: the baked AI infrastructure actors rewrite their own rows, in place,
+				// before the level script, the model preload walk or the entity world reads any def.
+				// A refusal leaves the table as the transport loaded it and fails the runtime.
+				bInfrastructureAdoptionFailed = false;
+				if (Visuals)
+				{
+					ElysiumInfraAdoption::FInput InfraInput;
+					for (const TObjectPtr<AElysiumInfraActor>& Infra : Visuals->GetInfraActors())
+					{
+						InfraInput.Actors.Add(Infra.Get());
+					}
+					for (const TObjectPtr<AElysiumInfraIndex>& Index : Visuals->GetInfraIndices())
+					{
+						InfraInput.Indices.Add(Index.Get());
+					}
+					InfraInput.StrayCount = Visuals->GetInfraStrayCount();
+					ElysiumInfraAdoption::FResult InfraResult;
+					FString InfraError;
+					if (!ElysiumInfraAdoption::Apply(InfraInput, EntDefs, InfraResult, InfraError))
+					{
+						bInfrastructureAdoptionFailed = true;
+						UE_LOG(LogElysium, Error, TEXT("map '%s': baked AI infrastructure refused: %s"),
+							*MapName, *InfraError);
+					}
+					else if (InfraResult.bActive)
+					{
+						UE_LOG(LogElysium, Log, TEXT("map '%s': %d entity defs rebuilt from baked AI infrastructure"),
+							*MapName, InfraResult.Replaced);
+					}
+				}
 
 				// Import this map's `worldspawn.levelscript` module before anything can
 				// evaluate against it. VtMB's own load order: the level script's top-level code
@@ -699,6 +740,7 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 		&& CollisionState != EElysiumCollisionBuildState::Disabled;
 	P.bNavigationReady = !P.bNavigationRequired || IsRuntimeNavigationReady();
 	P.bNavigationFailed = bNavigationBuildFailed;
+	P.bInfrastructureFailed = bInfrastructureAdoptionFailed;
 	P.bSpawnTransformReady = bSpawnPending;
 	P.bPlayerEntityReady = EntityWorld && EntityWorld->PlayerHandle().IsSet();
 

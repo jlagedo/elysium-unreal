@@ -80,6 +80,9 @@ struct FElysiumMapRuntimePrerequisites
 	bool bNavigationRequired = false;
 	bool bNavigationReady = false;
 	bool bNavigationFailed = false;
+	// 0018 story 2: the level's baked AI infrastructure did not match its entity table
+	// (`ElysiumInfraAdoption::Apply` refused). The defs were left as the transport loaded them.
+	bool bInfrastructureFailed = false;
 	bool bSpawnTransformReady = false;
 	bool bPlayerEntityReady = false;
 	bool bPossessedPawnReady = false;
@@ -937,6 +940,8 @@ private:
 	bool bAnimationPreloadReady = false;
 	bool bNativeAnimationPreloadPending = false;
 	bool bNativeAnimationPreloadFailed = false;
+	// 0018 story 2: `ElysiumInfraAdoption::Apply` refused this level's infrastructure actors.
+	bool bInfrastructureAdoptionFailed = false;
 	TSharedPtr<FElysiumExpressionPreparation> ExpressionPreparation;
 	TSharedPtr<FElysiumPreparedPropModels> PropModelPreparation;
 	TSharedPtr<FElysiumPreparedWieldModels> WieldModelPreparation;

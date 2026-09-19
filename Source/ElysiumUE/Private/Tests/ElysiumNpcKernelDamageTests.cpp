@@ -32,7 +32,8 @@ static constexpr EAutomationTestFlags GDamageTestFlags =
 
 namespace
 {
-	constexpr float U = ElysiumMove::U;
+	// Named apart from the other kernel suites' `DamageU`: a unity blob can put two anonymous ones together.
+	constexpr float DamageU = ElysiumMove::U;
 
 	FElysiumNpc::FElysiumTraceHit MakeTrace(int32 HitGroup, const FVector& EndPosUnits)
 	{
@@ -241,7 +242,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_traceattack"), 0x29c1d005);
 	Builder.AddNpc(TEXT("npc"));
-	Builder.AddNpc(TEXT("attacker"), FVector(200.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("attacker"), FVector(200.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
 	FElysiumNpc* Attacker = Fixture.Npc(TEXT("attacker"));
@@ -504,7 +505,7 @@ bool FElysiumNpcKernelDamageOnTakeDamageDeadTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_dead"), 0x29c1d007);
 	Builder.AddNpc(TEXT("npc"));
-	Builder.AddNpc(TEXT("attacker"), FVector(0.0, 0.0, 100.0 * U));
+	Builder.AddNpc(TEXT("attacker"), FVector(0.0, 0.0, 100.0 * DamageU));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
 	FElysiumNpc* Attacker = Fixture.Npc(TEXT("attacker"));
@@ -582,7 +583,7 @@ bool FElysiumNpcKernelDamageBlockedReactionTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_blocked"), 0x29c1d008);
 	Builder.AddNpc(TEXT("npc"));
-	Builder.AddNpc(TEXT("defender"), FVector(60.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("defender"), FVector(60.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
 	FElysiumNpc* Defender = Fixture.Npc(TEXT("defender"));
@@ -846,8 +847,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageEmittersTest,
 bool FElysiumNpcKernelDamageEmittersTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_emitters"), 0x29c1d00e);
-	Builder.AddNpc(TEXT("boss"), FVector(10.0 * U, 20.0 * U, 30.0 * U));
-	Builder.AddNpc(TEXT("body"), FVector(0.0, 0.0, 77.0 * U));
+	Builder.AddNpc(TEXT("boss"), FVector(10.0 * DamageU, 20.0 * DamageU, 30.0 * DamageU));
+	Builder.AddNpc(TEXT("body"), FVector(0.0, 0.0, 77.0 * DamageU));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
 	FElysiumNpc* Body = Fixture.Npc(TEXT("body"));
@@ -1029,7 +1030,7 @@ bool FElysiumNpcKernelDamageAoeTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_aoe"), 0x29c1d010);
 	Builder.AddNpc(TEXT("boss"));
-	Builder.AddNpc(TEXT("victim"), FVector(100.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("victim"), FVector(100.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
 	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
@@ -1127,11 +1128,11 @@ bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_mingxiao"), 0x29c1d012);
 	Builder.AddNpc(TEXT("ming"));
-	Builder.AddNpc(TEXT("object"), FVector(200.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("object"), FVector(200.0 * DamageU, 0.0, 0.0));
 	// A THIRD body for the slot-166 block: the cleanup bodies above reach `UTIL_Remove` on whatever
 	// `object` is, and a killed entity no longer resolves, which would make the handle comparisons
 	// below measure the fixture rather than the recovered walk.
-	Builder.AddNpc(TEXT("standable"), FVector(400.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("standable"), FVector(400.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
 	FElysiumNpc* Object = Fixture.Npc(TEXT("object"));
@@ -1267,7 +1268,7 @@ bool FElysiumNpcKernelDamageTzimisceReleaseTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_tzimrelease"), 0x29c1d013);
 	Builder.AddNpc(TEXT("tzim"));
-	Builder.AddNpc(TEXT("carried"), FVector(50.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("carried"), FVector(50.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Tzim = Fixture.Npc(TEXT("tzim"));
 	FElysiumNpc* Carried = Fixture.Npc(TEXT("carried"));
@@ -1311,7 +1312,7 @@ bool FElysiumNpcKernelDamageThrowTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_throw"), 0x29c1d014);
 	Builder.AddNpc(TEXT("bach"));
-	Builder.AddNpc(TEXT("spot"), FVector(300.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("spot"), FVector(300.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Bach = Fixture.Npc(TEXT("bach"));
 	FElysiumNpc* Spot = Fixture.Npc(TEXT("spot"));
@@ -1404,7 +1405,7 @@ bool FElysiumNpcKernelDamageControllerLineTest::RunTest(const FString&)
 
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_controller"), 0x29c1d015);
 	Builder.AddNpc(TEXT("shadow"));
-	Builder.AddNpc(TEXT("victim"), FVector(100.0 * U, 0.0, 0.0));
+	Builder.AddNpc(TEXT("victim"), FVector(100.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Shadow = Fixture.Npc(TEXT("shadow"));
 	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));

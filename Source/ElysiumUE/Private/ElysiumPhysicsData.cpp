@@ -8,7 +8,9 @@
 #include "Serialization/JsonSerializer.h"
 #include "UObject/UnrealType.h"
 
-namespace
+// Named, not anonymous: a unity blob can pair this file with `ElysiumCookRoot.cpp`, whose anonymous
+// namespace defines the same `Hash`/`Fail` helpers.
+namespace ElysiumPhysicsDataJson
 {
 	using FObject = TSharedPtr<FJsonObject>;
 	using FValues = TArray<TSharedPtr<FJsonValue>>;
@@ -282,7 +284,7 @@ UElysiumPhysicsData* UElysiumPhysicsData::ApplyJson(UElysiumPhysicsData* Asset, 
 #if WITH_EDITOR
 	FElysiumPhysicsSourceData Pending;
 	if (!Asset) { OutError = TEXT("physics source asset is absent"); return nullptr; }
-	if (!Decode(Json, Pending, OutError)) return nullptr;
+	if (!ElysiumPhysicsDataJson::Decode(Json, Pending, OutError)) return nullptr;
 	Asset->Data = MoveTemp(Pending); Asset->MarkPackageDirty(); return Asset;
 #else
 	OutError = TEXT("physics source authoring is editor only"); return nullptr;
@@ -294,7 +296,7 @@ FString UElysiumPhysicsData::Verify(UElysiumPhysicsData* Asset, const FString& J
 #if WITH_EDITOR
 	FElysiumPhysicsSourceData Expected; FString Error;
 	if (!Asset) return TEXT("physics source asset is absent");
-	if (!Decode(Json, Expected, Error)) return Error;
+	if (!ElysiumPhysicsDataJson::Decode(Json, Expected, Error)) return Error;
 	return FElysiumPhysicsSourceData::StaticStruct()->CompareScriptStruct(&Asset->Data, &Expected, 0)
 		? FString() : TEXT("saved physics source data differs (including cooked evidence/geometry)");
 #else

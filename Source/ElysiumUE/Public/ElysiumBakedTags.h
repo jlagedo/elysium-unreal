@@ -58,6 +58,20 @@ namespace ElysiumBakedTags
 	// (D3). It ships neutral: nothing overridden, so it changes no pixel until an owner call
 	// puts a number on it.
 	inline const FName PostProcess(TEXT("elysium.ppv"));
+	// AIN jump links (`AElysiumNavJumpLink`, `pipeline/unreal/bake_jump_links.py`). The engine's
+	// navigation system consumes these actors; the runtime adopts nothing from the tag.
+	inline const FName NavJump(TEXT("elysium.nav-jump"));
+
+	// The BSP-authored AI infrastructure families (0018 story 2), one `AElysiumInfraActor` subclass
+	// each, every actor also tagged with `EntityIndex(i)` — its row in the map's entity table. The
+	// map adopts them before the entity world is built and rebuilds each def at its own index.
+	inline const FName InfraHint(TEXT("elysium.infra.hint"));
+	inline const FName InfraPlace(TEXT("elysium.infra.place"));
+	inline const FName InfraConversation(TEXT("elysium.infra.conversation"));
+	inline const FName InfraMaker(TEXT("elysium.infra.maker"));
+	inline const FName InfraNpc(TEXT("elysium.infra.npc"));
+	// The one `AElysiumInfraIndex` a baked level carries: the declared set the adoption checks.
+	inline const FName InfraIndex(TEXT("elysium.infra.index"));
 
 	// The `.lights` line index tag carried alongside Light, e.g. "elysium.src=137".
 	inline FName SourceIndex(int32 Index)

@@ -1,4 +1,7 @@
 #include "Visual/ElysiumMapVisuals.h"
+
+#include "AiInfra/ElysiumInfraActor.h"
+#include "AiInfra/ElysiumInfraIndex.h"
 #include "ElysiumSkyProvenance.h"
 
 #include "ElysiumBakedTags.h"
@@ -160,6 +163,9 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	EffectsByEntity.Reset();
 	WaterVolumes = nullptr;
 	WaterVolumeCount = 0;
+	InfraActors.Reset();
+	InfraIndices.Reset();
+	InfraStrayCount = 0;
 	LightStylePrimitiveCount = 0;
 	EffectCount = 0;
 	EffectSkyCount = 0;
@@ -214,10 +220,33 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		{
 			continue;
 		}
+		// 0018 story 2: an infrastructure actor is bucketed by class; its family tag, its entity
+		// index and the declared set are checked by `ElysiumInfraAdoption`, which owns the verdict.
+		const bool bInfraTagged = Actor->ActorHasTag(ElysiumBakedTags::InfraHint)
+			|| Actor->ActorHasTag(ElysiumBakedTags::InfraPlace)
+			|| Actor->ActorHasTag(ElysiumBakedTags::InfraConversation)
+			|| Actor->ActorHasTag(ElysiumBakedTags::InfraMaker)
+			|| Actor->ActorHasTag(ElysiumBakedTags::InfraNpc)
+			|| Actor->ActorHasTag(ElysiumBakedTags::InfraIndex);
 		// The class tags first (R6.7): a detail or sprite actor inside the 3D-skybox miniature also
 		// carries `elysium.sky` as its scope marker, and the static-mesh sky bucket must never
 		// see it (`ElysiumBakedTags.h`).
-		if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
+		if (bInfraTagged)
+		{
+			if (AElysiumInfraIndex* Index = Cast<AElysiumInfraIndex>(Actor))
+			{
+				InfraIndices.Add(Index);
+			}
+			else if (AElysiumInfraActor* Infra = Cast<AElysiumInfraActor>(Actor))
+			{
+				InfraActors.Add(Infra);
+			}
+			else
+			{
+				++InfraStrayCount;
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
 		{
 			if (AElysiumDetailPropActor* DetailActor = Cast<AElysiumDetailPropActor>(Actor))
 			{

@@ -8,6 +8,8 @@
 class AElysiumDetailPropActor;
 class AElysiumEffectActor;
 class AElysiumSpriteActor;
+class AElysiumInfraActor;
+class AElysiumInfraIndex;
 class AElysiumWaterVolumes;
 class AStaticMeshActor;
 class APostProcessVolume;
@@ -127,6 +129,11 @@ public:
 	// carries; the leaf's publishes reach it through `FindEffectActor`. Null when this map bakes
 	// no such actor (a legacy-lane map, or an index that is not an effects entity).
 	const TArray<TObjectPtr<AElysiumEffectActor>>& GetEffectActors() const { return EffectActors; }
+	// 0018 story 2 — what the level carried for the infrastructure adoption pass.
+	TConstArrayView<TObjectPtr<AElysiumInfraActor>> GetInfraActors() const { return InfraActors; }
+	TConstArrayView<TObjectPtr<AElysiumInfraIndex>> GetInfraIndices() const { return InfraIndices; }
+	int32 GetInfraStrayCount() const { return InfraStrayCount; }
+
 	AElysiumEffectActor* FindEffectActor(int32 EntityIndex) const;
 	// The family overrides (`DA_EffectFamilies`), loaded once at adopt; null when the asset is
 	// absent (every effect plays the floor).
@@ -226,6 +233,12 @@ private:
 	// R7.1: one per map at most (the bake places a single actor carrying every row), so this is a
 	// handle rather than a bucket.
 	UPROPERTY() TObjectPtr<AElysiumWaterVolumes> WaterVolumes;
+	// 0018 story 2: the baked AI infrastructure actors and the level's declared-set index, handed
+	// to `ElysiumInfraAdoption` before the entity world is built. Checked there, not here.
+	UPROPERTY() TArray<TObjectPtr<AElysiumInfraActor>> InfraActors;
+	UPROPERTY() TArray<TObjectPtr<AElysiumInfraIndex>> InfraIndices;
+	// Actors carrying an infrastructure family tag whose class is not an infrastructure actor.
+	int32 InfraStrayCount = 0;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeWorldBrushes;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;
