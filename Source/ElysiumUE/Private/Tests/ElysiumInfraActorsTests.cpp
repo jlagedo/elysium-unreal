@@ -14,6 +14,7 @@
 #include "Components/BillboardComponent.h"
 #include "ElysiumBakedTags.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumMapActor.h"
 #include "ElysiumMapEntities.h"
 #include "Map/ElysiumInfraAdoption.h"
 #include "Serialization/ObjectReader.h"
@@ -282,6 +283,13 @@ namespace ElysiumInfraActorsTests
 		Maker.Keys.Add(TEXT("hint_groups"), TEXT("1 2"));
 		Maker.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/thug/thug.mdl"));
 		Maker.Keys.Add(TEXT("origin"), TEXT("0 0 0"));
+		FElysiumOutputDef Spawned;
+		Spawned.Name = TEXT("OnSpawnNPC");
+		Spawned.Target = TEXT("relay");
+		Spawned.Input = TEXT("Trigger");
+		Spawned.Delay = 0.5f;
+		Maker.Outputs.Add(Spawned);
+		Maker.Outputs.Add(Spawned);
 		Defs.Defs.Add(Maker);
 		FElysiumEntityDef Hint;
 		Hint.Classname = TEXT("info_node_patrol_point");
@@ -306,6 +314,12 @@ namespace ElysiumInfraActorsTests
 			{ TEXT("NPCType"), TEXT("hint_groups"), TEXT("model"), TEXT("origin") },
 			{ TEXT("npc_VHuman"), TEXT("1 2"), TEXT("models/character/npc/common/thug/thug.mdl"), TEXT("0 0 0") });
 		Out.Maker->TargetName = TEXT("blueblood_maker");
+		FElysiumInfraOutput Spawned;
+		Spawned.Name = TEXT("OnSpawnNPC");
+		Spawned.Target = TEXT("relay");
+		Spawned.Input = TEXT("Trigger");
+		Spawned.Delay = 0.5f;
+		Out.Maker->SetBakedOutputs({ Spawned, Spawned });
 		Out.Hint = Spawn<AElysiumHintActor>(World, 2, TEXT("info_node_patrol_point"), FVector(0.0, 200.0, 0.0),
 			{ TEXT("hinttype"), TEXT("Group") }, { TEXT("10000"), TEXT("A1") });
 		Out.Index = World->SpawnActor<AElysiumInfraIndex>();
@@ -336,6 +350,16 @@ namespace ElysiumInfraActorsTests
 			{
 				return false;
 			}
+			for (int32 o = 0; o < X.Outputs.Num(); ++o)
+			{
+				const FElysiumOutputDef& P = X.Outputs[o];
+				const FElysiumOutputDef& Q = Y.Outputs[o];
+				if (P.Name != Q.Name || P.Target != Q.Target || P.Input != Q.Input || P.Param != Q.Param
+					|| P.Delay != Q.Delay || P.Times != Q.Times || P.Python != Q.Python)
+				{
+					return false;
+				}
+			}
 		}
 		return true;
 	}
@@ -362,7 +386,9 @@ bool FElysiumInfraAdoptionReplaceTest::RunTest(const FString&)
 	TestEqual(TEXT("...with no error"), Error, FString());
 	TestTrue(TEXT("...active"), Result.bActive);
 	TestEqual(TEXT("...rewriting both declared rows"), Result.Replaced, 2);
-	TestTrue(TEXT("untouched actors rebuild the transport's defs exactly (so the maker's child is too)"),
+	// `FElysiumNpcMaker` builds each child from its own def's keys and output rows
+	// (`ElysiumNpcMaker.cpp`, the child template), so equal maker defs spawn equal children.
+	TestTrue(TEXT("untouched actors rebuild the transport's defs exactly, output rows included"),
 		SameDefs(Defs, Before));
 
 	// The asset transport's defs take the same pass.
@@ -430,11 +456,6 @@ bool FElysiumInfraAdoptionRefusalsTest::RunTest(const FString&)
 	Mismatch.Actors = { Stood.Maker, Wrong };
 	Refuses(TEXT("a classname the table does not have"), Mismatch, TEXT("table has"));
 
-	AElysiumHintActor* Far = Spawn<AElysiumHintActor>(Fixture.World, 2, TEXT("info_node_patrol_point"),
-		FVector(0.0, 900.0, 0.0), {}, {});
-	ElysiumInfraAdoption::FInput Moved = InputOf(Stood);
-	Moved.Actors = { Stood.Maker, Far };
-	Refuses(TEXT("an actor standing off its def"), Moved, TEXT("cm from its def"));
 
 	AElysiumInfraIndex* Wide = Fixture.World->SpawnActor<AElysiumInfraIndex>();
 	Wide->ConfigureDeclaredSet({ 1, 2, 99 }, { ElysiumBakedTags::InfraMaker, ElysiumBakedTags::InfraHint,
@@ -453,6 +474,60 @@ bool FElysiumInfraAdoptionRefusalsTest::RunTest(const FString&)
 		ElysiumInfraAdoption::Apply(ElysiumInfraAdoption::FInput(), Defs, Result, Error));
 	TestFalse(TEXT("...inactive"), Result.bActive);
 	TestTrue(TEXT("...and the defs are the transport's"), SameDefs(Defs, MakeDefs()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraAdoptionMovedTest,
+	"Elysium.Substrate.InfraAdoption.Moved", GElysiumInfraTestFlags)
+bool FElysiumInfraAdoptionMovedTest::RunTest(const FString&)
+{
+	using namespace ElysiumInfraActorsTests;
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
+	{
+		return false;
+	}
+	FAdoptionWorld Stood = StandActors(Fixture.World);
+	// A designer dragged the patrol point in the editor (a game world will not move a static root,
+	// so the moved actor is stood where the drag left it): the entity follows it.
+	AElysiumHintActor* Dragged = Spawn<AElysiumHintActor>(Fixture.World, 2, TEXT("info_node_patrol_point"),
+		FVector(254.0, -508.0, 25.4), { TEXT("hinttype"), TEXT("Group") }, { TEXT("10000"), TEXT("A1") });
+	ElysiumInfraAdoption::FInput Input = InputOf(Stood);
+	Input.Actors = { Stood.Maker, Dragged };
+	FElysiumEntityDefs Defs = MakeDefs();
+	ElysiumInfraAdoption::FResult Result;
+	FString Error;
+	TestTrue(TEXT("a moved actor is adopted, not refused"),
+		ElysiumInfraAdoption::Apply(Input, Defs, Result, Error));
+	TestEqual(TEXT("...and counted as moved"), Result.Moved, 1);
+	TestEqual(TEXT("the def stands where the actor stands"), Defs.Defs[2].Origin, FVector(254.0, -508.0, 25.4));
+	TestEqual(TEXT("...and its origin keyvalue says so in Source inches, Y negated"),
+		Defs.Defs[2].Keys.FindRef(TEXT("origin")), FString(TEXT("100 200 10")));
+	TestEqual(TEXT("an unmoved actor keeps the table's origin"), Defs.Defs[1].Origin, FVector(100.0, 0.0, 0.0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraAdoptionReadinessTest,
+	"Elysium.Substrate.InfraAdoption.Readiness", GElysiumInfraTestFlags)
+bool FElysiumInfraAdoptionReadinessTest::RunTest(const FString&)
+{
+	// A refused level builds no entity world; its own arm names why, ahead of the generic one.
+	FElysiumMapRuntimePrerequisites P;
+	P.bConstructionComplete = true;
+	P.bInfrastructureFailed = true;
+	P.bMenuBackdrop = true;
+	FString Failure;
+	TestTrue(TEXT("a refused infrastructure fails the runtime"),
+		P.Evaluate(Failure) == EElysiumMapReadinessResult::Failed);
+	TestTrue(TEXT("...naming the infrastructure, not the missing substrate"),
+		Failure.Contains(TEXT("AI infrastructure")));
+	TestTrue(TEXT("Missing names it"), P.Missing().Contains(TEXT("baked AI infrastructure failed")));
+
+	FElysiumMapRuntimePrerequisites Nav;
+	Nav.bNavigationFailed = true;
+	Nav.bNavigationRequired = true;
+	TestFalse(TEXT("a failed navigation is not also reported as building"),
+		Nav.Missing().Contains(TEXT("runtime navigation building")));
 	return true;
 }
 

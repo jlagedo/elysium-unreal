@@ -186,6 +186,12 @@ bool FElysiumHintInputsTest::RunTest(const FString&)
 	Fire(F.World, Hint, TEXT("EnableHint"));
 	TestTrue(TEXT("a hidden hint swallows EnableHint"), Hint->IsHidden());
 	TestEqual(TEXT("...and stays disabled"), Hint->Disabled, 1);
+	// `Q_strnicmp(input, "ScriptUnhide", strlen(input))`: any case-insensitive prefix passes.
+	auto Args = [](const TCHAR* Name) { FElysiumInputArgs A; A.Input = FName(Name); return A; };
+	TestFalse(TEXT("the gate passes ScriptUnhide"), Hint->SwallowsInput(Args(TEXT("ScriptUnhide"))));
+	TestFalse(TEXT("...and a prefix of it, in any case"), Hint->SwallowsInput(Args(TEXT("scriptun"))));
+	TestTrue(TEXT("...but not a longer name"), Hint->SwallowsInput(Args(TEXT("ScriptUnhideNow"))));
+	TestTrue(TEXT("...nor anything else"), Hint->SwallowsInput(Args(TEXT("Kill"))));
 	Fire(F.World, Hint, TEXT("ScriptUnhide"));
 	TestFalse(TEXT("ScriptUnhide passes the gate"), Hint->IsHidden());
 	TestEqual(TEXT("...and the hint's slot 78 clears m_iDisabled (0x102d0890)"), Hint->Disabled, 0);
@@ -299,7 +305,7 @@ bool FElysiumHintBridgeTest::RunTest(const FString&)
 	Env.Ctx.World = &F.World;
 	ElysiumExpr::Exec(TEXT("Bottleneck_Cover.EnableHint()"), Env);
 	TestFalse(TEXT("the script call evaluates"), Env.bError);
-	TestEqual(TEXT("...and reaches one of the two hints"), (A->Disabled == 0 ? 1 : 0) + (B->Disabled == 0 ? 1 : 0), 1);
+	TestTrue(TEXT("...and reaches only the first name match, the lower index"), A->Disabled == 0 && B->Disabled == 1);
 	FElysiumNpc::FHintWords Words;
 	Reader->HintWords(A->Disabled == 0 ? A->Handle.Index : B->Handle.Index, Words);
 	TestEqual(TEXT("the NPC's hint query observes the input's write"), Words.Disabled, 0);

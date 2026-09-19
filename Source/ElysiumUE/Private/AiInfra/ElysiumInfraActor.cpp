@@ -184,11 +184,24 @@ void AElysiumInfraActor::BuildDefOutputs(TArray<FElysiumOutputDef>& OutOutputs) 
 	}
 }
 
-void AElysiumInfraActor::ApplyToDef(FElysiumEntityDef& Def) const
+bool AElysiumInfraActor::ApplyToDef(FElysiumEntityDef& Def) const
 {
 	Def.TargetName = TargetName;
 	BuildDefKeys(Def.Keys);
 	BuildDefOutputs(Def.Outputs);
+	// The actor's place is the entity's. The bake stands it exactly on the table's origin, so an
+	// untouched actor changes nothing; a moved one carries the move into both the placement and
+	// the authored `origin` keyvalue, in Source inches with Y negated back (`formats/bsp.py`
+	// `source_to_unreal`, inverted).
+	const FVector Location = GetActorLocation();
+	const bool bMoved = !Location.Equals(Def.Origin, MovedToleranceCm);
+	if (bMoved)
+	{
+		Def.Origin = Location;
+		const double Inches = 1.0 / 2.54;
+		Def.Keys.Add(TEXT("origin"), FString::Printf(TEXT("%.9g %.9g %.9g"),
+			Location.X * Inches, -Location.Y * Inches, Location.Z * Inches));
+	}
 	// `UE_map_sidecars.build_entities`: `keys.get("StartHidden", "0") == "1"`, exact spelling.
 	const FString* StartHidden = nullptr;
 	for (const TPair<FString, FString>& Pair : Def.Keys)
@@ -199,4 +212,5 @@ void AElysiumInfraActor::ApplyToDef(FElysiumEntityDef& Def) const
 		}
 	}
 	Def.bStartHidden = StartHidden != nullptr && *StartHidden == TEXT("1");
+	return bMoved;
 }

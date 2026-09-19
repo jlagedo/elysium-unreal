@@ -297,10 +297,12 @@ its recovery is written in the oracle section it names.
   4. Adoption. `AdoptBakedLevel` buckets the actors by entity index. A replacement pass in
      `AElysiumMapActor::LoadMap` runs after the defs load and before the model-preload walk and
      `EntityWorld::Load`: it rewrites the def at the original BSP index in place, for both
-     `UElysiumMapEntities` and `.ents` — never appended, filtered or renumbered. The def's
-     origin is kept (sky-scope rows are already transformed) and the actor validated against
-     it; `Times` 0 → −1 once. A missing, duplicate or classname-mismatched actor fails the
-     load; a level baked without the infrastructure table leaves the pass inactive.
+     `UElysiumMapEntities` and `.ents` — never appended, filtered or renumbered. An actor
+     standing on its def's origin leaves it as it is; one moved in the editor gives the def its
+     location and a rewritten `origin` keyvalue (no row is staged in the skybox miniature, so no
+     sky transform is involved); `Times` 0 → −1 once. A missing, duplicate or
+     classname-mismatched actor fails the load and builds no entity world; a level baked without
+     the infrastructure table leaves the pass inactive.
   5. Entity classes, per § Entity I/O, Python and live state: one live runtime state that
      every input, field and task reader observes. The hint class serves the whole hint family:
      generated bindings, `EnableHint` / `DisableHint` / `Walk` / `DontWalk` / `SetUserData`,
@@ -312,7 +314,7 @@ its recovery is written in the oracle section it names.
      three inputs. `npc_maker_zombie` is registered with its three fields. NPC placements feed
      the existing NPC classes; a classname with no runtime class stays the record it is today.
   Checks: spawn each class through `UWorld`, verify reflected fields and registered editor
-  components; save/reload and compare fields, `ExtraKeys` order and repeated outputs; apply →
+  components; save/reload and compare fields, `AuthoredKeys` order and repeated outputs; apply →
   emit → parse round trips on dirty values (`23523235.0`, `.5`, `"0  0 72"`, `"-3496,92"`);
   index-preserving replacement over both transports; a maker child def identical with and
   without the actors; one runtime entity per def index before any spawn-time I/O. Bridge:
@@ -558,7 +560,8 @@ its recovery is written in the oracle section it names.
 
 - [ ] **14. The AI logic entities.** Added 2026-09-19: found by the classname scan beside
   story 2, outside story 1's census families, owned by no spec.
-  Retail, datamaps only — no body is walked yet: `CLogicNPCCondition 0x1057748c`
+  Retail, bodies walked 2026-09-19 (`entity_io.md` § "The AI logic entities"):
+  `CLogicNPCCondition 0x1057748c`
   (`logic_npc_condition`: `condition`, `target_npc`, input `Test`, outputs `OnTrue` /
   `OnFalse`); `CLogicSquadCondition 0x105775b0` (`logic_squad_condition`: `condition`,
   `squad_name`, the same input and outputs); `CAI_ChangeTarget 0x1059e044`
@@ -575,11 +578,15 @@ its recovery is written in the oracle section it names.
   six links (`startnode 17 -> endnode 18`, `16 -> 19`, …). Conversation places: 49 rows on
   17 maps.
   Gap: none of the four is registered; they are inert records and their wires do nothing.
-  Job: walk the four bodies and the think pair; generate their bindings; register the classes.
-  They are point logic entities on the entity table, not baked actors. `info_node_link`
-  toggles 3's link state; `logic_squad_condition` reads 8's squad; the conversation place
-  picks its talkers from 5's places. `logic_npc_condition` and `ai_changetarget` wait on no
-  story here. Tests use the authored rows above as fixtures.
+  Job: generate their bindings; register the classes against the walked bodies. They are
+  point logic entities on the entity table, not baked actors. `info_node_link` sets and clears
+  3's link-off bit `0x1000`, applied once when the graph is ready and edge-triggered after;
+  `logic_squad_condition` reads 8's squad — any member, and nothing while member 0 is
+  disconnected; both conditions resolve their id at Activate and test the raw `m_Conditions`.
+  The conversation place is a `CPointEntity` sibling of the place, not a subclass: it writes
+  `m_Mode` on 5's one-slot places, needs two occupied, and its too-close arm runs the place's
+  `Disable` visitor walk; keep the pick's `RandomInt` draw count. `logic_npc_condition` and
+  `ai_changetarget` wait on no story here. Tests use the authored rows above as fixtures.
   Consumes: 2, 3, 5, 8. Oracle: `population.md` § "Classnames outside the census families";
   each body's recovery lands in `entity_io.md`. Size: S. Effort: Sonnet / medium.
 

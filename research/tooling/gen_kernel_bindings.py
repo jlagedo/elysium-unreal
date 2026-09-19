@@ -624,7 +624,12 @@ def render_keyfields(model: Model) -> str:
             cpp = KEYFIELD_TYPES.get(row.type, "FString")
             raw = "" if row.type in KEYFIELD_TYPES else f", held raw ({row.type})"
             out.append(f"\t// +0x{row.offset:x} {row.name} ({', '.join(row.flags)}){raw}")
-            out.append(f'\tUPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "{row.table}")')
+            # `classname` / `targetname` are the def's identity, hoisted out of its keys; the actor
+            # carries them apart (`SourceClassname`, `TargetName`), so these two rows only show.
+            access = ("VisibleAnywhere, BlueprintReadOnly"
+                      if row.external in ("classname", "targetname")
+                      else "EditAnywhere, BlueprintReadWrite")
+            out.append(f'\tUPROPERTY({access}, Category = "{row.table}")')
             out.append(f"\t{cpp} {row.external}{defaults[cpp]};")
         out += ["};"]
     return "\n".join(out) + "\n"

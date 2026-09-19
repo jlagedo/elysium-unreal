@@ -299,10 +299,12 @@ at each declared entity index from its baked actor (`seam_map_map.md` § "Import
 infrastructure actors"), after either transport loaded the table and before the level script, the
 model preload walk or `FElysiumEntityWorld::Load` reads it. It never appends, filters or
 renumbers: the ordinal stays the handle and the save key. It validates the whole declared set
-first — one actor per index, the declared family, the table's classname, the actor within 0.5 cm
-of the def's origin — and on any refusal leaves the table untouched and fails the map runtime.
-`Classname`, `Origin` and the brush fields stay the table's; `TargetName`, `Keys`, `Outputs` and
-`bStartHidden` come from the actor, `Times` 0 normalised to -1 once.
+first — one actor per index, the declared family, the table's classname — and on any refusal
+leaves the table untouched, builds no entity world (no level script, no spawn) and fails the map
+runtime. `Classname` and the brush fields stay the table's; `TargetName`, `Keys`, `Outputs` and
+`bStartHidden` come from the actor, `Times` 0 normalised to -1 once. An actor standing on its
+def's origin leaves it as it is; one moved in the editor gives the def its location and rewrites
+the `origin` keyvalue in Source inches, so a moved actor moves its entity.
 
 `FElysiumEntityWorld::Load` then applies retail's node lifecycle to every def on every map
 (`ElysiumNodeEntity::ApplyHintReplacement`): a hint-making `info_node*` / `info_hint` row becomes

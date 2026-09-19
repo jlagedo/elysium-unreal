@@ -618,7 +618,8 @@ The class overrides three base slots: slot 77 `CAI_Hint::ScriptHide` (`0x102d086
 `ScriptUnhide` (`0x102d0890`) add `m_iDisabled := 1 / 0` to the base bodies, and slot 119 `Kill`
 (`0x102d08c0`) jumps to slot 77 — a hint's `Kill` hides and disables it. Every input still passes
 `CBaseEntity::AcceptInput`'s one entry gate (`FUN_100abc90`): a hidden entity answers true, doing
-nothing, to any input not beginning with `ScriptUnhide`, so a hidden hint swallows `EnableHint`.
+nothing, to any input whose name is not a case-insensitive prefix of `ScriptUnhide`
+(`Q_strnicmp(input, "ScriptUnhide", strlen(input))`), so a hidden hint swallows `EnableHint`.
 
 The constructor (`0x102d2e30`) sets `m_hHintOwner = -1`, leaves every other word zero, and
 **prepends** the hint to `DAT_10925450`. The map parse (`0x10136650`) spawns every unparented row

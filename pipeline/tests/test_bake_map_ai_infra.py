@@ -7,6 +7,7 @@ bake verifier's declared-set check is pure. Both run here with no live editor.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -133,14 +134,23 @@ def test_author_refuses_a_bad_payload(bake):
 
 
 def _verify_module():
+    """`bake_verify` against the editor surface it touches at import (`test_bake_verify_water.py`)."""
     spec, module = _load("bake_verify")
-    fake = SimpleNamespace(log=lambda *a, **k: None, log_error=lambda *a, **k: None,
-                           log_warning=lambda *a, **k: None)
-    with mock.patch.dict(sys.modules, {"unreal": fake}):
-        try:
-            spec.loader.exec_module(module)
-        except Exception as error:   # the verifier's module-level editor imports
-            pytest.skip("bake_verify needs more of the editor at import: %s" % error)
+    editor = SimpleNamespace(
+        does_directory_exist=lambda target: True, make_directory=lambda target: True,
+        does_asset_exist=lambda target: False, load_asset=lambda target: None,
+        list_assets=lambda package, recursive=True, include_folder=True: [])
+    fake = SimpleNamespace(
+        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+        MaterialEditingLibrary=object(), GeometryScript_Collision=object(),
+        EditorAssetLibrary=editor, Paths=SimpleNamespace(project_dir=lambda: str(REPO)),
+        SystemLibrary=SimpleNamespace(get_command_line=lambda: ""),
+        LinearColor=lambda *values: values,
+        log=lambda *a, **k: None, log_error=lambda *a, **k: None, log_warning=lambda *a, **k: None)
+    with mock.patch.dict(sys.modules, {"unreal": fake}),             mock.patch.dict(os.environ, {"ELYSIUM_WORK_ROOT": str(REPO)}):
+        sys.modules.pop("pipeline.unreal.bake_lib", None)
+        with pytest.raises(SystemExit):
+            spec.loader.exec_module(module)   # main() refuses: no -BakeMaps= on the command line
     return module
 
 

@@ -24,7 +24,7 @@ struct FElysiumBaseEntityKeyfields
 	GENERATED_BODY()
 
 	// +0x11c m_iClassname (SAVE, KEY)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CBaseEntity")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CBaseEntity")
 	FString classname;
 	// +0x120 m_iGlobalname (GLOBAL, SAVE, KEY)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CBaseEntity")
@@ -84,7 +84,7 @@ struct FElysiumBaseEntityKeyfields
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CBaseEntity")
 	FString use_filter_name;
 	// +0x26c m_iName (SAVE, KEY)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CBaseEntity")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CBaseEntity")
 	FString targetname;
 	// +0x374 m_iszUseScript (SAVE, KEY)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CBaseEntity")

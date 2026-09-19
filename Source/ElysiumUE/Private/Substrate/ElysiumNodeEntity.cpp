@@ -127,9 +127,8 @@ namespace ElysiumNodeEntity
 		return false;
 	}
 
-	int32 ClassHintType(const FString& Classname, int32 AuthoredHintType, bool& bForced)
+	int32 ClassHintType(const FString& Classname, int32 AuthoredHintType)
 	{
-		bForced = true;
 		if (Classname.Equals(TEXT("info_node_werewolf_hint"), ESearchCase::IgnoreCase))
 		{
 			const int16 Short = static_cast<int16>(AuthoredHintType);
@@ -142,7 +141,6 @@ namespace ElysiumNodeEntity
 				return Row.HintType;
 			}
 		}
-		bForced = false;
 		return AuthoredHintType;
 	}
 
@@ -155,8 +153,7 @@ namespace ElysiumNodeEntity
 		// `CNodeEnt::Spawn`'s first rewrite: `info_node_tzimisce` spawns as `info_node`.
 		const FString Effective = Classname.Equals(TEXT("info_node_tzimisce"), ESearchCase::IgnoreCase)
 			? FString(TEXT("info_node")) : Classname;
-		bool bForced = false;
-		const int16 Type = static_cast<int16>(ClassHintType(Effective, AuthoredHintType(Keys), bForced));
+		const int16 Type = static_cast<int16>(ClassHintType(Effective, AuthoredHintType(Keys)));
 		for (const TCHAR* Standalone : GStandaloneClassnames)
 		{
 			if (Effective.Equals(Standalone, ESearchCase::IgnoreCase))

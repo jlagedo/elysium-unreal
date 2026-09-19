@@ -40,7 +40,7 @@ public:
 	float TargetAngleRangeDot = 0.0f;                // +0x458 m_flTargetAngleRangeDot
 	FElysiumEntityHandle HintOwner;                  // +0x5e0 m_hHintOwner (-1 from the ctor)
 	int32 NodeId = INDEX_NONE;                       // +0x5e4 m_nNodeID; SEAM until 0018 story 3
-	double NextUseTime = 0.0;                        // +0x5ec m_flNextUseTime
+	float NextUseTime = 0.0f;                        // +0x5ec m_flNextUseTime (FIELD_TIME, a float)
 
 	// The registered classname (`ElysiumNodeEntity::HintClassname`).
 	static FName ClassName();
@@ -82,7 +82,8 @@ public:
 	void InputSetUserData(const FElysiumInputArgs& Args);
 
 	// Retail's one entry gate on `CBaseEntity::AcceptInput` (`FUN_100abc90`): a hidden entity
-	// answers true, doing nothing, to every input whose name does not begin with `ScriptUnhide`.
+	// answers true, doing nothing, to every input whose name is not a case-insensitive prefix of
+	// `ScriptUnhide` (`Q_strnicmp(input, "ScriptUnhide", strlen(input))`).
 	// SEAM for the gate itself, which this substrate does not stand globally; the hint's own inputs
 	// apply it, because a hidden hint swallowing `EnableHint` is what the shipped scripts observe.
 	bool SwallowsInput(const FElysiumInputArgs& Args) const;

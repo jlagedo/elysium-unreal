@@ -129,8 +129,14 @@ public:
 	void BuildDefOutputs(TArray<FElysiumOutputDef>& OutOutputs) const;
 
 	// Rewrite `Def`'s authored data (keys, outputs, targetname, start-hidden) from this actor. Its
-	// classname and origin are the entity table's and stay as they are.
-	void ApplyToDef(FElysiumEntityDef& Def) const;
+	// classname and brush fields stay the entity table's. When the actor no longer stands on the
+	// def's origin (moved in the editor), its location becomes the def's origin and its `origin`
+	// keyvalue; answers whether it did.
+	bool ApplyToDef(FElysiumEntityDef& Def) const;
+
+	// How far an actor may stand from its def's origin and still count as unmoved: the bake places
+	// it on the table's own centimetre value, rounded to five decimals.
+	static constexpr double MovedToleranceCm = 0.001;
 
 	// The keyfield structs a key may belong to, in lookup order: the family's own first, the base
 	// entity's last.

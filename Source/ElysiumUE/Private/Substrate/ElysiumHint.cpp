@@ -62,7 +62,7 @@ void FElysiumHint::FromWords(const FElysiumNpc::FHintWords& Words)
 	GroupId = Words.GroupMask;
 	HintOwner = Words.HintOwner;
 	Disabled = Words.Disabled;
-	NextUseTime = Words.NextUseTime;
+	NextUseTime = static_cast<float>(Words.NextUseTime);
 }
 
 void FElysiumHint::Spawn()
@@ -123,7 +123,10 @@ void FElysiumHint::InputSetUserData(const FElysiumInputArgs& Args)
 
 bool FElysiumHint::SwallowsInput(const FElysiumInputArgs& Args) const
 {
-	return IsHidden() && !Args.Input.ToString().StartsWith(TEXT("ScriptUnhide"), ESearchCase::CaseSensitive);
+	// `Q_strnicmp(input, "ScriptUnhide", strlen(input)) != 0`: the input passes when its name is a
+	// case-insensitive PREFIX of `ScriptUnhide`, and every other name is swallowed.
+	const FString Name = Args.Input.ToString();
+	return IsHidden() && FCString::Strnicmp(*Name, TEXT("ScriptUnhide"), Name.Len()) != 0;
 }
 
 void FElysiumHint::GetDebugState(TArray<TPair<FString, FString>>& Out) const
@@ -184,10 +187,11 @@ void FElysiumHint::BuildClass(FElysiumClassDesc& D)
 	D.Input(TEXT("ScriptUnhide"), [](FElysiumEntity& E, const FElysiumInputArgs&)
 		{ static_cast<FElysiumHint&>(E).HintScriptUnhide(); });
 
-	// The three save-only words the claim protocol writes (`0x102d1420`, `0x102d14c0`).
+	// The save-only words the claim protocol writes (`0x102d1420`, `0x102d14c0`).
 	ElysiumAddClassField(D, TEXT("m_hHintOwner"), &FElysiumHint::HintOwner, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("m_nNodeID"), &FElysiumHint::NodeId, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("m_strActivity"), &FElysiumHint::Activity, EElysiumField::Save);
+	ElysiumAddClassField(D, TEXT("m_flNextUseTime"), &FElysiumHint::NextUseTime, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("m_flTargetAngleRangeDot"), &FElysiumHint::TargetAngleRangeDot,
 		EElysiumField::Save);
 }

@@ -1245,6 +1245,9 @@ int32 FElysiumNpc::StandoffSelect(FStandoffWords& Words, const FStandoffConditio
 	//    and the reaction counter becomes `m_iReactionsLeft > 1 ? 1 : 0`.
 	if (Conditions.bCond0x4c && LifecycleRandomInt(0, 99) <= Words.ChanceThreshold && bHasEnemy)
 	{
+		// SEAM: this writes the caller's `FHintWords` VIEW. The live `ai_hint` takes the write only
+		// when its owner writes the view back (`FElysiumHint::FromWords`); the claim path that does
+		// so is 0018 story 4's, so for now nothing reaches the entity's `m_flNextUseTime`.
 		if (Hint != nullptr && Hint->bValid && Now < Hint->NextUseTime)
 		{
 			Hint->NextUseTime = Now;

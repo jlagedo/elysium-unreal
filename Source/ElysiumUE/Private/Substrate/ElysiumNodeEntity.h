@@ -21,10 +21,10 @@ namespace ElysiumNodeEntity
 	bool IsNodeClassname(const FString& Classname);
 
 	// `FUN_102d7d30`, the first call `CNodeEnt::Spawn` makes: the hint type a node's CLASSNAME
-	// forces, whatever `hinttype` it authored. `bForced` is false for a classname the table does not
-	// name, where the authored value stands (`info_node_werewolf_hint` keeps an authored 15000..15018
-	// and is forced to 0 otherwise).
-	int32 ClassHintType(const FString& Classname, int32 AuthoredHintType, bool& bForced);
+	// forces, whatever `hinttype` it authored. A classname the table does not name keeps the
+	// authored value (`info_node_werewolf_hint` keeps an authored 15000..15018 and is forced to 0
+	// otherwise).
+	int32 ClassHintType(const FString& Classname, int32 AuthoredHintType);
 
 	// `CNodeEnt::Spawn`'s decision, over a def's classname and raw keys. The standalone set
 	// (`info_hint`, `info_node_kick_over`, `info_node_kick_at`, `info_node_shoot_at`) makes a hint

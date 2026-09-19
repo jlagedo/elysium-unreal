@@ -97,11 +97,6 @@ namespace ElysiumInfraAdoption
 				Problems.Add(FString::Printf(TEXT("entity %d: table has %s, actor authored %s"), Entity,
 					*Def.Classname, *Actor->SourceClassname));
 			}
-			const double Gap = FVector::Dist(Actor->GetActorLocation(), Def.Origin);
-			if (Gap > OriginToleranceCm)
-			{
-				Problems.Add(FString::Printf(TEXT("entity %d: actor stands %.2f cm from its def"), Entity, Gap));
-			}
 		}
 		for (const TPair<int32, const AElysiumInfraActor*>& Pair : ByIndex)
 		{
@@ -122,7 +117,7 @@ namespace ElysiumInfraAdoption
 		// Only now does anything change.
 		for (const int32 Entity : Index->DeclaredIndices)
 		{
-			ByIndex.FindChecked(Entity)->ApplyToDef(Defs.Defs[Entity]);
+			OutResult.Moved += ByIndex.FindChecked(Entity)->ApplyToDef(Defs.Defs[Entity]) ? 1 : 0;
 			++OutResult.Replaced;
 		}
 		return true;

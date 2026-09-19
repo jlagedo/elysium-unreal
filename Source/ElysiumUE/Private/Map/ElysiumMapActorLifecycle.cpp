@@ -74,11 +74,11 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
 	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
 	if (bNavigationFailed)      { MissingItems.Add(TEXT("runtime navigation failed")); }
-	if (bInfrastructureFailed)  { MissingItems.Add(TEXT("baked AI infrastructure failed")); }
 	else if (bNavigationRequired && !bNavigationReady)
 	{
 		MissingItems.Add(TEXT("runtime navigation building"));
 	}
+	if (bInfrastructureFailed)  { MissingItems.Add(TEXT("baked AI infrastructure failed")); }
 
 	if (!bMenuBackdrop)
 	{
@@ -402,40 +402,41 @@ void AElysiumMapActor::LoadMap()
 			// either way; nothing below this line knows which transport answered.
 			const EElysiumEntityDefSource DefSource = ElysiumEntityDefSource::Load(
 				MapName, EntDefs, SkyDef.Scale, SkyDef.OriginCm);
-			if (DefSource != EElysiumEntityDefSource::None)
+			// 0018 story 2: the baked AI infrastructure actors rewrite their own rows, in place,
+			// before the level script, the model preload walk or the entity world reads any def.
+			// A refusal leaves the table as the transport loaded it, builds no entity world from it
+			// (no level script, no spawn) and fails the runtime on its own readiness arm.
+			bInfrastructureAdoptionFailed = false;
+			if (DefSource != EElysiumEntityDefSource::None && Visuals)
+			{
+				ElysiumInfraAdoption::FInput InfraInput;
+				for (const TObjectPtr<AElysiumInfraActor>& Infra : Visuals->GetInfraActors())
+				{
+					InfraInput.Actors.Add(Infra.Get());
+				}
+				for (const TObjectPtr<AElysiumInfraIndex>& Index : Visuals->GetInfraIndices())
+				{
+					InfraInput.Indices.Add(Index.Get());
+				}
+				InfraInput.StrayCount = Visuals->GetInfraStrayCount();
+				ElysiumInfraAdoption::FResult InfraResult;
+				FString InfraError;
+				if (!ElysiumInfraAdoption::Apply(InfraInput, EntDefs, InfraResult, InfraError))
+				{
+					bInfrastructureAdoptionFailed = true;
+					UE_LOG(LogElysium, Error, TEXT("map '%s': baked AI infrastructure refused: %s"),
+						*MapName, *InfraError);
+				}
+				else if (InfraResult.bActive)
+				{
+					UE_LOG(LogElysium, Log, TEXT("map '%s': %d entity defs rebuilt from baked AI infrastructure (%d moved)"),
+						*MapName, InfraResult.Replaced, InfraResult.Moved);
+				}
+			}
+
+			if (DefSource != EElysiumEntityDefSource::None && !bInfrastructureAdoptionFailed)
 			{
 				EntityCount = EntDefs.Num();
-
-				// 0018 story 2: the baked AI infrastructure actors rewrite their own rows, in place,
-				// before the level script, the model preload walk or the entity world reads any def.
-				// A refusal leaves the table as the transport loaded it and fails the runtime.
-				bInfrastructureAdoptionFailed = false;
-				if (Visuals)
-				{
-					ElysiumInfraAdoption::FInput InfraInput;
-					for (const TObjectPtr<AElysiumInfraActor>& Infra : Visuals->GetInfraActors())
-					{
-						InfraInput.Actors.Add(Infra.Get());
-					}
-					for (const TObjectPtr<AElysiumInfraIndex>& Index : Visuals->GetInfraIndices())
-					{
-						InfraInput.Indices.Add(Index.Get());
-					}
-					InfraInput.StrayCount = Visuals->GetInfraStrayCount();
-					ElysiumInfraAdoption::FResult InfraResult;
-					FString InfraError;
-					if (!ElysiumInfraAdoption::Apply(InfraInput, EntDefs, InfraResult, InfraError))
-					{
-						bInfrastructureAdoptionFailed = true;
-						UE_LOG(LogElysium, Error, TEXT("map '%s': baked AI infrastructure refused: %s"),
-							*MapName, *InfraError);
-					}
-					else if (InfraResult.bActive)
-					{
-						UE_LOG(LogElysium, Log, TEXT("map '%s': %d entity defs rebuilt from baked AI infrastructure"),
-							*MapName, InfraResult.Replaced);
-					}
-				}
 
 				// Import this map's `worldspawn.levelscript` module before anything can
 				// evaluate against it. VtMB's own load order: the level script's top-level code
@@ -540,7 +541,7 @@ void AElysiumMapActor::LoadMap()
 					}
 				}
 			}
-			else
+			else if (!bInfrastructureAdoptionFailed)
 			{
 				UE_LOG(LogElysium, Log,
 					TEXT("no entity table for %s (no baked asset, no .ents) — entity world not built"),

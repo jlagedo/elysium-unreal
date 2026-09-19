@@ -27,16 +27,13 @@ namespace ElysiumInfraAdoption
 	{
 		bool bActive = false;     // the level declared a baked set (carried an index actor)
 		int32 Replaced = 0;       // defs rewritten from an actor
+		int32 Moved = 0;          // of those, actors moved off their table origin (editor edits)
 	};
 
 	// Validate the whole declared set first — one index actor, every declared index in range,
 	// adopted by exactly one actor of the declared family whose authored classname is the def's —
-	// and only then rewrite. A level with no index actor leaves `Defs` untouched and answers true.
-	// On any refusal `Defs` is untouched, `OutError` names every problem, and the answer is false.
+	// and only then rewrite. An actor moved in the editor moves its entity (`ApplyToDef`). A level
+	// with no index actor leaves `Defs` untouched and answers true. On any refusal `Defs` is
+	// untouched, `OutError` names every problem, and the answer is false.
 	bool Apply(const FInput& Input, FElysiumEntityDefs& Defs, FResult& OutResult, FString& OutError);
-
-	// The furthest an actor may stand from its def's origin, in centimetres. The bake places each
-	// actor at the entity table's own origin, so a larger gap means the level and the table were
-	// not built from the same map.
-	constexpr double OriginToleranceCm = 0.5;
 }
