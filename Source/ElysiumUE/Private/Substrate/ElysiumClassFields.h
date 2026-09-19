@@ -49,7 +49,12 @@ void ElysiumAddClassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClas
 	{
 		Acc.Type = EElysiumVariantType::Vector;
 		Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Vector(static_cast<const TClass&>(E).*Member); };
-		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToVector(); };
+		// A keyvalue arrives as a string variant, which ToVector() reads as zero; parse it the way
+		// the base Field does so a subclass vector keyfield spawns with its authored value.
+		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
+		{
+			static_cast<TClass&>(E).*Member = V.IsVector() ? V.ToVector() : ElysiumParseVec3(V.ToString());
+		};
 	}
 	else if constexpr (std::is_same_v<TMember, FElysiumEntityHandle>)
 	{
