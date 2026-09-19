@@ -115,7 +115,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: older-staged manifest still loads (`_place_water` writes them only when present).
 #: 11 (R7.4, integrator): `water.faces[]` gains `meshedAreaCm2` beside `areaCm2`, which this lane
 #: does not read -- the G26 area pin is answered on the staged side, where both numbers are.
-MANIFEST_VERSION = 13
+#: 12 (0005 requirement 1): `lightQuery`. 13 (0005 requirement 19): `jumpLinks`.
+#: 14 (0018 story 2): `aiInfra` -- the BSP-authored AI infrastructure rows this lane places one
+#: actor each for (`bake_ai_infra.author`), and their declared-set index.
+MANIFEST_VERSION = 14
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -564,6 +567,8 @@ def _build_class():
             recipe["unit_sha256"] = self.geometry.unit_sha256
             recipe["light_query"] = self.geometry.manifest.get("lightQuery", {}).get("sha256")
             recipe["jump_links"] = self.geometry.manifest.get("jumpLinks", {}).get("sha256")
+            recipe["ai_infra"] = self.geometry.manifest.get("aiInfra", {}).get("sha256")
+            recipe["ai_infra_shape"] = _ai_infra_actor_shape()
             # R7.2 ruling 3: the SLOT each face group binds, so a unit that gained (or lost) its
             # projector twin -- or, R7.4, its `_Underside` twin -- re-authors the level instead of
             # reusing a level bound to the other one. `slot_asset` already resolves both.
@@ -1442,6 +1447,16 @@ def _build_class():
                 raise ValueError("map manifest has no AIN jump links; stage the V2 map again")
             return bake_jump_links.author(actors, payload)
 
+        def _place_ai_infra(self, actors):
+            """Author the BSP-authored AI infrastructure actors (0018 story 2)."""
+            from pipeline.unreal import bake_ai_infra
+            payload = self.geometry.manifest.get("aiInfra")
+            if payload is None:
+                raise ValueError("map manifest has no AI infrastructure rows; stage the V2 map again")
+            placed = bake_ai_infra.author(actors, payload)
+            log("level: %d AI infrastructure actors" % placed)
+            return placed
+
         # ---------------------------------------------------------------- captures (R5.5)
 
         def _place_captures(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
@@ -1677,6 +1692,12 @@ def detail_actor_tags(stem, sky):
 
     tags = (TAG_DETAIL, "elysium.model=%s" % stem)
     return tags + ((TAG_SKY,) if sky else ())
+
+
+def _ai_infra_actor_shape():
+    """`bake_ai_infra.INFRA_ACTOR_SHAPE`, read lazily: that module imports `unreal` itself."""
+    from pipeline.unreal import bake_ai_infra
+    return bake_ai_infra.INFRA_ACTOR_SHAPE
 
 
 def miniature_transform(sky_block):

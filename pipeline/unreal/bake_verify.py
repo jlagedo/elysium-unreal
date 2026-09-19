@@ -789,6 +789,86 @@ WORLD_TAG = "elysium.world"
 LIGHT_STYLE_TAG_PREFIX = "elysium.style="
 
 
+#: 0018 story 2: family tag -> the actor class the bake places for it (`bake_ai_infra.FAMILIES`,
+#: restated: that module imports `unreal` at load and this one is imported by pure tests).
+AI_INFRA_CLASSES = {
+    "elysium.infra.hint": "ElysiumHintActor",
+    "elysium.infra.place": "ElysiumInterestingPlaceActor",
+    "elysium.infra.conversation": "ElysiumConversationPlaceActor",
+    "elysium.infra.maker": "ElysiumNpcMakerActor",
+    "elysium.infra.npc": "ElysiumNpcPlacementActor",
+}
+AI_INFRA_INDEX_TAG = "elysium.infra.index"
+AI_INFRA_FAMILY_TAGS = {"hint": "elysium.infra.hint", "place": "elysium.infra.place",
+                        "conversation": "elysium.infra.conversation",
+                        "maker": "elysium.infra.maker", "npc": "elysium.infra.npc"}
+
+
+def ai_infra_errors(map_name, placed, payload, index_count):
+    """The declared-set check, pure: `placed` is one `(class_name, tags, entity_index,
+    source_classname)` per actor carrying an infrastructure family tag, `payload` the staged
+    `aiInfra` block, `index_count` how many index actors stand. Every staged row must stand exactly
+    once, as its family's class, carrying its family tag and `elysium.ent=<index>`, with the staged
+    classname; nothing unstaged may stand."""
+    errors = []
+    if index_count != 1:
+        errors.append("%s: %d AI infrastructure index actors, want exactly one" % (map_name, index_count))
+    staged = {int(row["index"]): row for row in payload.get("rows") or []}
+    seen = {}
+    for class_name, tags, entity_index, source_classname in placed:
+        family_tags = [tag for tag in tags if tag in AI_INFRA_CLASSES]
+        if len(family_tags) != 1:
+            errors.append("%s: %s carries %d infrastructure family tags" % (map_name, class_name, len(family_tags)))
+            continue
+        if AI_INFRA_CLASSES[family_tags[0]] != class_name:
+            errors.append("%s: entity %s is a %s under %s" % (map_name, entity_index, class_name, family_tags[0]))
+        if "elysium.ent=%d" % entity_index not in tags:
+            errors.append("%s: entity %s: its elysium.ent tag does not name it" % (map_name, entity_index))
+        if entity_index in seen:
+            errors.append("%s: entity %s placed twice" % (map_name, entity_index))
+            continue
+        seen[entity_index] = family_tags[0]
+        row = staged.get(entity_index)
+        if row is None:
+            errors.append("%s: entity %s stands but was not staged" % (map_name, entity_index))
+            continue
+        if AI_INFRA_FAMILY_TAGS[row["family"]] != family_tags[0]:
+            errors.append("%s: entity %s staged as %s, placed under %s"
+                          % (map_name, entity_index, row["family"], family_tags[0]))
+        if row["classname"] != source_classname:
+            errors.append("%s: entity %s staged as %s, placed as %s"
+                          % (map_name, entity_index, row["classname"], source_classname))
+    missing = sorted(set(staged) - set(seen))
+    if missing:
+        errors.append("%s: %d staged AI infrastructure row(s) have no actor (first: %s)"
+                      % (map_name, len(missing), missing[:5]))
+    return errors
+
+
+def verify_ai_infra(actors, map_name):
+    """0018 story 2, `MapsOnV2Models` maps only: the placed infrastructure actors are exactly the
+    staged `aiInfra` rows (`ai_infra_errors`)."""
+    if not map_transport.is_map_on_v2_models(map_name):
+        return []
+    manifest = _staged_manifest(map_name)
+    if manifest is None or manifest.get("aiInfra") is None:
+        return ["%s: on MapsOnV2Models but no staged aiInfra rows to check the level against "
+                "(run: uv run elysium bake map --maps %s --force)" % (map_name, map_name)]
+    placed, index_count = [], 0
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if AI_INFRA_INDEX_TAG in tags:
+            index_count += 1
+        if any(tag in AI_INFRA_CLASSES for tag in tags):
+            placed.append((actor.get_class().get_name(), tags,
+                           int(actor.get_editor_property("entity_index")),
+                           str(actor.get_editor_property("source_classname"))))
+    errors = ai_infra_errors(map_name, placed, manifest["aiInfra"], index_count)
+    unreal.log("[verify] AI infrastructure: %d actors, %d staged rows, %d problem(s)"
+               % (len(placed), len(manifest["aiInfra"].get("rows") or []), len(errors)))
+    return errors
+
+
 def verify_water(actors, map_name):
     """R7.1, `MapsOnV2Models` maps only: exactly one
     `elysium.water` actor iff the map stages a `water.volumes[]` row, the actor's row count, and
@@ -2140,6 +2220,7 @@ def verify_map(map_name):
         errors.extend(verify_sprites(actors, map_name))
         errors.extend(verify_effects(actors, map_name))
         errors.extend(verify_water(actors, map_name))
+        errors.extend(verify_ai_infra(actors, map_name))
         errors.extend(verify_sky_scope(actors, map_name))
         errors.extend(verify_ropes(world_dir, map_name))
         errors.extend(verify_captures(

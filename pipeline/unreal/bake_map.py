@@ -2252,6 +2252,7 @@ class Bake(object):
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
         self._place_navigation(actors)
+        self._place_ai_infra(actors)
         # R5.5: captures last, so every surface, prop, light and the sky are in the render.
         captures = self._place_captures(actors, sky_scale, sky_origin)
         # **Built once before the save and once after it, because the two halves of a reflection
@@ -2556,6 +2557,10 @@ class Bake(object):
 
     def _place_navigation(self, actors):
         """The V2 lane authors its decoded AIN links into this level."""
+        return 0
+
+    def _place_ai_infra(self, actors):
+        """The V2 lane authors the baked AI infrastructure actors (0018 story 2) into this level."""
         return 0
 
     def _place_player_start(self, actors):
