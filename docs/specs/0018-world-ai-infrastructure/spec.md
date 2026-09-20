@@ -443,7 +443,22 @@ its recovery is written in the oracle section it names.
   first supporting the default agent -- so a body on any other agent runs plain path following
   rather than being steered against a mesh it does not path on.
 
-  **Still open: job 6 and the acceptance harness** — the door cuts and pedestrian nav areas, and
+  **Job 6 landed 2026-09-20: the roadway is priced and the walls are walls.** Both marks are
+  convexes, not boxes -- `FAreaNavModifier` through `INavRelevantInterface`, because
+  `ANavModifierVolume` wants brush geometry for a convex set the payload already holds exactly and
+  `UNavModifierComponent` marks an AABB, which would price the pavement beside a roadway slab.
+  `UElysiumNavArea_Pedestrian` at cost 1 over the `---p` rows (hub 9, tutorial none): not cheaper
+  ground, ground story 5's filter prefers. `UElysiumNavArea_DoorCut` over every door no graph link
+  runs through, computed in the collision lane from the patch graph -- which reproduces the
+  census's own figures, tutorial 8 of 36 and the hub's smoke-shop pair 2 of 29, from the pipeline
+  for the first time.
+  Recorded limit: a door can be traversable for ONE agent and not another -- on the tutorial 5 of
+  the 8 are crossed by both hulls, 1 by the human alone and 2 by the rat alone. A nav area is not
+  per-agent, so job 6 cuts only the doors no agent crosses and leaves those 3 open on both meshes.
+  That over-permits rather than walling an agent out of a door retail let it use, and 7's
+  per-agent smart link is where it closes (`partialByAgent`, pinned 3 and 0).
+
+  **Still open: the acceptance harness** — the door cuts and pedestrian nav areas, and
   the verify arm that pins every ground link pathing on its agent's mesh, the rat-only links on
   the rat's and not the human's. The meshes those checks need now exist, and so does the hull
   answer that tells an agent which mesh is its own.
@@ -991,6 +1006,10 @@ its recovery is written in the oracle section it names.
   and its transform `0x103831c0` (→ 18), `CNPC_VMingXiao::StartTask 0x10392f4d` and its transform
   `0x1039a77d` (→ 15), `CNPC_VMingXiaoTentacle::StartTask 0x1039c4c0` task `0x14b`
   (17/17 or 15/15), `CNPC_VSabbatLeader::TransformationStart 0x103ab39d` (0/0), and
-  `CNPC_VVampireBoss::StartTask 0x103c5ac0` task `0x14e` (0/0 after a monster-model swap, reachable
-  for the Sheriff through `CNPC_VSheriffMan::StartTask 0x103aec70`'s default branch — which shipped
-  schedule issues `0x14e` is itself unrecovered).
+  `CNPC_VVampireBoss::StartTask 0x103c5ac0` task `0x14e` `TASK_VVAMPIREBOSS_SET_AS_MONSTER` (0/0
+  after a monster-model swap). Recovered 2026-09-20, `npc-ai/programs.md` § "The boss transformation
+  programs": three programs issue it (boss `0x159`, Sheriff `0x15b`, SabbatLeader `0x163`), all six
+  boss-line classes reach the arm — the SabbatLeader after three writes of its own — and the shipped
+  maps fire it for the Sheriff (`la_ventruetower_3`), Andrei (`la_bradbury_3`, plus a code-side
+  500-unit proximity trigger) and both Becketts (`sm_warehouse_1`, where the "monster" model is
+  Beckett, so 0/0 lands on a human).

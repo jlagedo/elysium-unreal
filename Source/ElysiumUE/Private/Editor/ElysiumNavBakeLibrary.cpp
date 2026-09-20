@@ -144,6 +144,37 @@ TArray<FString> UElysiumNavBakeLibrary::NavMeshTileCounts(UWorld* World)
 	return Rows;
 }
 
+FString UElysiumNavBakeLibrary::NavAreaAt(UWorld* World, const FString& AgentName,
+	const FVector& PointCm, const FVector& ExtentCm)
+{
+	UNavigationSystemV1* Nav = NavSystem(World);
+	if (Nav == nullptr)
+	{
+		return FString();
+	}
+	ARecastNavMesh* Mesh = nullptr;
+	for (TActorIterator<ARecastNavMesh> It(World); It; ++It)
+	{
+		if (It->GetConfig().Name.ToString() == AgentName)
+		{
+			Mesh = *It;
+			break;
+		}
+	}
+	if (Mesh == nullptr)
+	{
+		return FString();
+	}
+
+	FNavLocation Landed;
+	if (!Mesh->ProjectPoint(PointCm, Landed, ExtentCm))
+	{
+		return FString();   // nothing walkable here -- what a cut doorway looks like
+	}
+	const UClass* Area = Mesh->GetAreaClass(Mesh->GetPolyAreaID(Landed.NodeRef));
+	return Area != nullptr ? Area->GetName() : TEXT("NavArea_Default");
+}
+
 TArray<FString> UElysiumNavBakeLibrary::SetMapNavAgents(UWorld* World, int32 HullBits)
 {
 	TArray<FString> Kept;

@@ -266,6 +266,8 @@ def place_world_collision_actor(entry, asset, skip_if_current=False):
         raise RuntimeError("%s: the payload authored no world body" % entry["map"])
     log("%s: %d world collision body(ies) stand in the level" % (entry["map"], placed))
 
+    place_nav_areas(entry, actors)
+
     wanted = build_navigation(entry["map"], world)
     prune_unwanted_navmeshes(entry["map"], actors, wanted)
 
@@ -286,12 +288,21 @@ def level_collision_is_current(entry, asset, world, actors):
     exactly like a full one: presence alone would call a wiped level current.
     """
     found = None
+    marks = 0
     for existing in actors.get_all_level_actors():
         if isinstance(existing, unreal.ElysiumWorldCollisionActor):
             if found is not None:
                 return False        # two of them: re-place, which drops both and spawns one
             found = existing
+        elif isinstance(existing, unreal.ElysiumNavAreaActor):
+            marks += 1
     if found is None:
+        return False
+    # The marks are cut INTO the meshes, so a level missing them has meshes that were built
+    # without them -- priced roadway and door cuts included.
+    wants_marks = bool(entry.get("navAreas")) or any(
+        not row.get("traversable") for row in (entry.get("navDoors") or {}).get("rows", []))
+    if wants_marks and marks != 1:
         return False
     if (found.get_editor_property("map_name") != entry["map"]
             or found.get_editor_property("payload") != asset
@@ -311,6 +322,85 @@ def level_collision_is_current(entry, asset, world, actors):
     wanted = unreal.ElysiumNavBakeLibrary.agent_names_for_hull_bits(bits)
     return bool(wanted) and all(
         tiles.get("RecastNavMesh-%s" % name, 0) > 0 for name in wanted)
+
+
+def place_nav_areas(entry, actors):
+    """Stand this map's nav-area marks beside its world collision, before the meshes are cut.
+
+    Two marks, both from rows this lane staged:
+
+      * the priced roadway -- the `---p` signature, `0x2000` with no clip bit, which is the only
+        one that reaches a link. Cost 1: it is not cheaper ground, it is ground story 5's
+        pedestrian query filter prefers, and marking it now is what lets that story be a filter
+        change rather than a re-bake.
+      * a null area over every door NO graph link runs through. Retail's graph builds through a
+        standing door (the build mask is the one without `MOVEABLE`) while every run-time probe
+        finds it solid, so a door with a link is one NPCs use and a door without one is a wall.
+        The doors that DO carry a link are left alone: story 7 gives them their cut and their
+        smart link together, so no commit in between turns a door NPCs use into a wall.
+
+    Placed before the build, because an area mark only reaches tiles that are rasterised after it.
+    """
+    for existing in actors.get_all_level_actors():
+        if isinstance(existing, unreal.ElysiumNavAreaActor):
+            actors.destroy_actor(existing)
+
+    areas = entry.get("navAreas") or []
+    doors = entry.get("navDoors") or {}
+    cut_rows = [row for row in doors.get("rows", []) if not row.get("traversable")]
+    if not areas and not cut_rows:
+        if doors.get("skipped"):
+            log("%s: no door answer (%s); no door is cut" % (entry["map"], doors["skipped"]))
+        return 0
+
+    actor = actors.spawn_actor_from_class(
+        unreal.ElysiumNavAreaActor, unreal.Vector(0.0, 0.0, 0.0))
+    if actor is None:
+        raise RuntimeError("could not spawn the nav-area actor in %s" % entry["map"])
+    actor.set_actor_label("ElysiumNavAreas")
+    actor.author(entry["map"])
+
+    placed = 0
+    for row in areas:
+        points, sizes = _flatten_hulls(row["hulls"])
+        if actor.add_area("pedestrian", unreal.ElysiumNavArea_Pedestrian, points, sizes):
+            placed += len(sizes)
+
+    # One convex per cut door, from the same staged hulls its collision body is cooked from, moved
+    # into world space by the entity origin those hulls are stated relative to.
+    door_points, door_sizes = [], []
+    for row in cut_rows:
+        origin = row.get("originCm") or [0.0, 0.0, 0.0]
+        body = next((b for b in entry.get("brushBodies", [])
+                     if int(b["entityIndex"]) == int(row["entityIndex"])), None)
+        if body is None:
+            continue
+        points, sizes = _flatten_hulls(body["hulls"], origin)
+        door_points.extend(points)
+        door_sizes.extend(sizes)
+    if door_sizes and actor.add_area("doorcut", unreal.ElysiumNavArea_DoorCut,
+                                     door_points, door_sizes):
+        placed += len(door_sizes)
+
+    log("%s: %d nav-area convex(es) -- roadway %d, doors cut %d of %d (%d carry a link)"
+        % (entry["map"], placed, sum(len(r["hulls"]) for r in areas), len(cut_rows),
+           doors.get("doors", 0), doors.get("traversable", 0)))
+    return placed
+
+
+def _flatten_hulls(hulls, origin=(0.0, 0.0, 0.0)):
+    """`[[x,y,z,...], ...]` to one `unreal.Vector` list plus the per-convex point counts."""
+    points, sizes = [], []
+    for hull in hulls:
+        count = 0
+        for index in range(0, len(hull) - 2, 3):
+            points.append(unreal.Vector(
+                float(hull[index]) + float(origin[0]),
+                float(hull[index + 1]) + float(origin[1]),
+                float(hull[index + 2]) + float(origin[2])))
+            count += 1
+        sizes.append(count)
+    return points, sizes
 
 
 def prune_unwanted_navmeshes(map_name, actors, wanted_agents):

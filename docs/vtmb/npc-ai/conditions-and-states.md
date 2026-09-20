@@ -1127,7 +1127,7 @@ dot below `_DAT_104492d0` — read as a **double**, and SDK 2013's twin states t
 answers `COND_NONE`. A body that gets past the dot asks the enemy's combat character slot 327
 (vtable `+0x51c`, base body `0x10345460`, `return 1`) and refuses when it says no.
 
-The two differ in exactly three places. The outer band is `_DAT_1044ddb0` for attack 1 and
+The two differ in exactly three places. The outer band is `_DAT_1044ddb0` (**256**) for attack 1 and
 `_DAT_1044c3a8` (**180**) for attack 2. Attack 1 re-dispatches `GetEnemy()` a second time as a null
 gate *after* the dot and refuses when there is none; attack 2 has no such gate and answers
 `COND_CAN_MELEE_ATTACK2` (`0x52`) with no enemy at all. Attack 1 then dispatches `GetEnemy()` a
@@ -1135,8 +1135,21 @@ gate *after* the dot and refuses when there is none; attack 2 has no such gate a
 for a grounded enemy and `0` otherwise — retail computes that branchlessly as `-(flags & 1) & 0x51`.
 Attack 2 never reads the ground flag.
 
-**Unrecovered:** `_DAT_1044ddb0`, attack 1's outer band. It must exceed 64 for the `0x60` rung below
-it to be reachable at all, and nothing in the corpus or the oracle pins it.
+**The four cells, read from the file (2026-09-20).** The corpus names the cells but does not hold
+their bytes; `.rdata` maps RVA `0x445000` to raw `0x445000`, so the file offset is the address minus
+the image base `0x10000000`. `_DAT_1044ddb0` = `00 00 80 43` = float **256.0**; `_DAT_10451acc` =
+`00 00 80 42` = float **64.0**; `_DAT_1044c3a8` = `00 00 34 43` = float **180.0**; `_DAT_104492d0` =
+`66 66 66 66 66 66 E6 3F` = double **0.7**. Each width is the listing's own (`FCOMP float ptr` at
+`0x1026d9be`, `0x1026d9db`, `0x1026daaa`, `0x1026dac5`; `FCOMP double ptr` at `0x1026d9f8`,
+`0x1026dae0`). Every distance test is `AND EAX,0x4100` / `JNZ` past the return, so each is a strict
+`>`: attack 1 answers `0x09` on `(256, ∞)`, `0x60` on `(64, 256]`, and reaches the dot only at
+`≤ 64`; attack 2 the same with 180. Both rungs are reachable in both bodies. `_DAT_1044ddb0` is a
+pooled literal, not this function's own — sixteen other bodies read it (`CNPC_Crow::
+GatherEnemyConditions 0x10357680`, `CNPC_VMingXiaoTentacle::GatherConditions 0x1039ec10`,
+`CNPC_VPedestrian::SelectSchedule 0x103a29f0`, `CAI_BaseNPC::StartTask 0x102827f0` among them) — so
+256 here says nothing about what it means there.
+
+**Unrecovered:** nothing.
 
 ## The victim-side reaction slots — `0x1029f800`, `0x1029f850`, `0x1029f890`, `0x1029f8f0`, `0x1029fb70` (2026-09-13)
 

@@ -978,3 +978,152 @@ the file 2026-09-20): `0x1049a1b0` = **−2.0** (the goal tolerance), `_DAT_1045
 `0x102c23f0`; slot 595 = `AcquireNearestHatedTarget()` `0x102b4cc0` (box ±1024/±1024/±128, flag
 mask `0x40`, targetable, alive, not hidden, `IRelationType == D_HT`, nearest → slot 596
 `SetEnemy`). Possession calls 304 then 614 then 595; frenzy calls 595 first.
+
+## The boss transformation programs — task `0x14e` `TASK_VVAMPIREBOSS_SET_AS_MONSTER` (2026-09-20)
+
+_Recovered 2026-09-20; closes "which shipped schedule issues `0x14e`" in `../navigation-jump-links.md`
+and spec 0018. Read from the decompile and the listing, a byte scan of `vampire.dll`, the datamap
+replay, every exported `.ents` lump, and both copies of `python/downtown/downtown.py` in the install._
+
+**The binding.** `FUN_103c52a0` is the `CNPC_VVampireBoss` registrar. Its one static caller is
+`FUN_103c51c0` (`if (DAT_1065e6c8 != DAT_10936b68)`), through thunk `0x10015c35` — which is why the
+caller ledger shows none. It pushes name/id pairs and commits them with `0x102ea130` against
+`"CNPC_VVampireBoss"`: tasks `0x14a TELEPORT_OUT` (`0x1065ebb8`), `0x14b TELEPORT_IN` (`0x1065eb94`),
+`0x14c START_TRANSFORM` (`0x1065eb6c`), `0x14d WAIT_FOR_TRANSFORM` (`0x1065eb40`), **`0x14e
+SET_AS_MONSTER`** (`0x1065eb18`), `0x14f DESTROY` (`0x1065eaf8`), all `TASK_VVAMPIREBOSS_*`; schedules
+`0x158 SCHED_VVAMPIREBOSS_TRANSFORM` (`0x1065ead4`) and `0x159 SCHED_VVAMPIREBOSS_TRANSFORM_TO_BEAST`
+(`0x1065e9d0`). No condition and no squad slot is bound. The ids are **class-local**: the boss's
+schedule / task / condition spaces are `DAT_1093d330` / `DAT_1093d348` / `DAT_1093d360`, seeded by
+`0x102ea0e0` from the parents `0x1093d258` / `0x1093d270` / `0x1093d288`, and exactly five registrars
+name `0x1093d348` as their own task-space parent — `0x103adce0` (SheriffMan, `DAT_1093c538`),
+`0x103a5e80` (SabbatLeader, `DAT_1093c408`), `0x1035c490` (AndreiBlood), `0x10360640` (AsianVampire),
+`0x1036a420` (ChangBros; Blade and Claw share its `StartTask`). Only inside those six classes does
+`0x14e` mean this task. A subclass numbers on from the boss: SheriffMan tasks `0x150`–`0x158` and
+schedules `0x15a`–`0x15d`; SabbatLeader tasks `0x150`–`0x163` and schedules `0x15a`–`0x166`.
+
+**Three programs carry it, and only three.** Schedules exist in the image only as definition text
+resolved by task name, and `TASK_VVAMPIREBOSS_SET_AS_MONSTER` occurs exactly four times in the file:
+the name at `0x1065eb18` and inside three definitions (`0x1065e978`, `0x10650e02`, `0x1064d28e`). Each
+definition ends `Interrupts\n\0` with no interrupt entry. No definition names any of the three by
+`SCHEDULE:`, so nothing chains into them.
+
+- `SCHED_VVAMPIREBOSS_TRANSFORM_TO_BEAST`, **`0x159`**, text `0x1065e8f0`, registrar `0x103c52a0`:
+  `START_TRANSFORM 0`, `WAIT_FOR_TRANSFORM 0`, `SET_AS_MONSTER 0`.
+- `SCHED_VSHERIFFMAN_TRANSFORM_TO_BEAST`, **`0x15b`**, text `0x10650d48`, registrar `0x103adce0`:
+  `TASK_SET_ACTIVITY ACTIVITY:ACT_SHERIFF_TAUNT`, `START_TRANSFORM 0`, `WAIT_FOR_TRANSFORM 0`,
+  `SET_AS_MONSTER 0`, `TASK_SET_ACTIVITY ACTIVITY:ACT_IDLE`, `TASK_WAIT 0.1`,
+  `TASK_VSHERIFFMAN_FINISH_TRANSFORM 0` (`0x154`).
+- `SCHED_VSABBATLEADER_TRANSFORM_TO_BEAST`, **`0x163`**, text `0x1064d1a8`, registrar `0x103a5e80`:
+  `TASK_VSABBATLEADER_SET_UNTARGETABLE 0` (`0x15f`), `TASK_SET_ACTIVITY ACTIVITY:ACT_ANDREI_TRANSFORM`,
+  `START_TRANSFORM 0`, `WAIT_FOR_TRANSFORM 0`, `SET_AS_MONSTER 0`, `TASK_SET_ACTIVITY
+  ACTIVITY:ACT_IDLE`, `TASK_WAIT 0.1`, `TASK_SET_SCHEDULE SCHEDULE:SCHED_VSABBATLEADER_RUN_TO_TOP`.
+
+The sibling `0x158 SCHED_VVAMPIREBOSS_TRANSFORM` (text `0x1065ea00`) does not carry it — `TASK_SET_ACTIVITY
+ACTIVITY:ACT_IDLE`, `WAIT_FOR_TRANSFORM 0`, `DESTROY 0` — and is the program `TransformationStart
+0x103c60a0` sets on the partner entity it creates, never on the boss.
+
+**Who sets each.** One site per id, each `0x102ae750(this, id, 0)`, which is `0x102cc1f0` (resolve the
+id) then `0x102ae780`. `0x102ae780` does nothing when `m_NPCState (+0x5cc0) == 7` or `m_IdealNPCState
+(+0x5cc4) == 7`, and otherwise needs vtable `+0x278` (`0x100b4dc0`, `return m_lifeState == 0`) to
+answer true because the force argument is 0 at all three sites. No `SelectSchedule` returns these ids
+for these classes (`CNPC_VSheriffMan::SelectSchedule 0x103ae8c0` returns only `0x158`, `0x15a`,
+`0x15c`, `0x15d`); the `0x15b` that `CNPC_VSabbatLeader::SelectSchedule 0x103a70c0`,
+`::SelectScheduleMeleeCombat 0x103aa060`, `CNPC_VAndreiBlood::SelectSchedule 0x1035d010`,
+`CNPC_VAsianVampire::GetJumpSchedule 0x10362430` and `CNPC_VManBat::InputManBatStun 0x1038fa50` use
+is each class's OWN `0x15b`.
+
+- **`0x159`** — `CNPC_VVampireBoss::InputTransformModel 0x103c75f0`, input `TransformModel`, slot 617
+  (`0x103c76b0` is `JMP [EAX+0x9a4]`), so all six classes inherit it. It first writes `+0x6694 =
+  "npc_VVampireBoss"` (`0x1065e8dc`) unconditionally; then reads `m_MorphModelName` (`+0x667c`, key
+  `MorphModel`), a null becoming `""`; and only when the first byte is non-zero writes
+  `m_pMonsterModelName (+0x6680) = m_MorphModelName` and sets `0x159`. An absent or empty key does
+  nothing, silently.
+- **`0x15b`** — `CNPC_VSheriffMan::StartTransformation 0x103b15e0`, input `StartTransformation`. No
+  guard. Writes `+0x1b30 = "…npc_vsheriffman.cpp"` (`0x10651388`), `+0x1b34 = 0x4c7`, then sets.
+- **`0x163`** — `CNPC_VSabbatLeader::StartTransformation 0x103aa3b0`, input `StartTransformation`. No
+  guard. Writes `m_bActivated (+0x66b8) = 1`, `AddClassRelationship(1, 1, 10)`, `+0x1b30 =
+  "…NPC_VSabbatLeader.cpp"` (`0x1064ed7c`), `+0x1b34 = 0x549`, then sets. **It has a second, code-side
+  caller**, its only static one: `CNPC_VSabbatLeader::RunTask 0x103a8990` calls it when the global
+  gate object `DAT_1093c34c` passes (its vtable `+4` answers 0 and its `[0xb]` is non-zero),
+  `m_bActivated == 0`, `m_NPCState != 5`, and `0x10266c80(origin, 500.0)` finds a client within
+  **500** units (`0x104c3cd0`). The test sits at the top of `RunTask`, ahead of the task dispatch, so it
+  runs on every task tick of an unactivated SabbatLeader — a transformation with no map wire at all.
+
+**`StartTask`, per class** (slot 442). The boss body `0x103c5ac0` writes `m_fTaskStartTime (+0x669c)
+= curtime` first, then branches `< 0x14d`, `== 0x14d`, `== 0x14e`, `== 0x14f`. The `0x14e` arm
+(`0x103c5dac`): `m_pMonsterModelName == 0` — a pointer test, not an empty-string test — writes `+0x1b44`
+= file, `+0x1b48 = 0x131` and `TaskFail` (vtable `+0x700`, argument 4) and returns; otherwise vtable
+`+0x1a4` with the model name (slot 105, `CAI_BaseNPCTroika::SetModel 0x10298ce0`), `m_fEffects |= 0x10`,
+`m_nRenderFX = 0`, `m_nRenderMode = 0`, `m_eHull (+0x1568) = 0`, `+0x156c = 0`, `0x10273070(this, 1)`,
+`0x101cf600(this)`, then `TaskComplete 0x10273e80(this, 0)`.
+
+- `CNPC_VSheriffMan 0x103aec70`: cases `0x13b` and `0x150`–`0x158`; `0x14e` is the jump table's
+  default (`0x103af4cb`, `CALL 0x1000de7c` = the boss `StartTask`). Nothing runs before it.
+- `CNPC_VSabbatLeader 0x103a78c0`: **its own `0x14e` arm, then the boss arm as well.** First, for any
+  task outside `0x161`–`0x162` inclusive while `m_bParticleSpawned (+0x66e4)` is set, it clears the
+  byte and calls `KillBodyEmitters`. Then `0x103a79df SUB EAX,0x14e` / `JZ 0x103a7a0d`: `m_bActivated
+  (+0x66b8) = 1`, `m_bIsBossMonster (+0x6496) = 1`, `m_flLastAttackTime (+0x5d9c) = curtime`,
+  `JMP 0x103a7993` → `CALL 0x1000de7c`. The arm has no return.
+- `CNPC_VAndreiBlood 0x1035d1b0`, `CNPC_VAsianVampire 0x103611a0`, `CNPC_VChangBros 0x1036b750`: no
+  `0x14e` case; each defaults into the boss body with nothing before it.
+
+**Why the guard passes for the two subclasses**, whose `StartTransformation` never writes the model
+name: their `NPCInit` does, and so does their `Restore` (slot 127). `CNPC_VSabbatLeader::NPCInit
+0x103a6d40` and `0x103a6e80` write `"models/character/monster/Andrei/andrei.mdl"` (`0x1064ead0`);
+`CNPC_VSheriffMan::NPCInit 0x103ae6c0` and `0x103ae7f0` write
+`"models/character/monster/manbat/manbat.mdl"` (`0x10651230`). The base `NPCInit 0x103c5840` and
+`Restore 0x103c5910` write **0**, so a plain `npc_VVampireBoss` has a model only after a guarded
+`TransformModel` — and loses it across a save. The field ledger files these writes under the subclass
+names; a query scoped to `CNPC_VVampireBoss` alone misses them and reads as "the arm always fails".
+SabbatLeader also overrides slot 618 (`TransformationStart 0x103ab310`); the other five use the boss's
+`0x103c60a0`.
+
+**The maps** (all 108 exported lumps scanned for both inputs and for the `MorphModel` key; every wire
+is `times -1`, empty parameter):
+
+| Map | Firing entity | Output | Target (classname) | Input | Delay |
+|---|---|---|---|---|---|
+| `la_ventruetower_3` | `logic_relay` `logic_zap_player` | `OnTrigger` | `sheriff` (`npc_VSheriffMan`) | `StartTransformation` | 0.2 |
+| `la_bradbury_3` | `npc_VSabbatLeader` `Andrei` | `OnDialogEnd` | `Andrei` (itself) | `StartTransformation` | 0.0 |
+| `sm_warehouse_1` | `scripted_sequence` `wolf_transform` | `OnEndSequence` | `beckett_wolf` (`npc_VVampireBoss`) | `TransformModel` | 1.5 |
+| `sm_warehouse_1` | `scripted_sequence` `sWolf_5` | `OnBeginSequence` | `Beckett` (`npc_VVampireBoss`) | `TransformModel` | 3.1 |
+
+Both warehouse bosses spawn as `models/character/monster/wolf_form_2/Wolf_Form_2.mdl` with `MorphModel
+= models/character/npc/unique/Santa_Monica/Beckett/Beckett.mdl`: for them the "monster" swap turns the
+wolf INTO Beckett, and `m_eHull` / `+0x156c` go to 0 on a human. `wolf_transform` also sends
+`beckett_wolf` `Kill` at 3.0. Only three entities in the shipped maps carry `MorphModel`: these two
+and `la_hub_1`'s `MingXiao2`.
+
+**`la_hub_1` reaches it under the Unofficial Patch and not in the base game.** `MingXiao2` is an
+`npc_VVampireBoss` with `MorphModel = …/Downtown/Nines/Nines.mdl` and no wire fires `TransformModel`
+at it. `dlg/main characters/mingxiao2.dlg` line 171 runs `ChangeMingXiaoToNines()`. In the install's
+base copy, `Vampire/python/downtown/downtown.py:446`, the two lines `mx = Find("MingXiao2")` /
+`if mx: mx.TransformModel()` are **commented out** (`##`) and the body is only the `fade_white` fade
+and a `SetModel(".../Nines.mdl")` scheduled 0.75 s later — no schedule, no task, no hull write. The
+`Unofficial_Patch/python/downtown/downtown.py:511` copy ("changed by Wesp") restores the two lines,
+and that is the copy the game runs and the export corpus takes (`exports/scripts` is byte-identical to
+it). A port that follows the base scripts does not run `0x159` here; one that follows the patch does.
+
+**Not this task.** Eight classes bind a different name to their own `0x14e`, in task spaces whose
+parent is not `0x1093d348`: `CNPC_Crow` `TASK_CROW_PICK_RANDOM_GOAL` (registrar `0x10359270`, parent
+`0x1090ff20`); `CNPC_VBach` `TASK_VBACH_SELECT_TELEPORT` (`0x10362e20`), `CNPC_VHengeyokai`
+`TASK_VHENGEYOKAI_SET_UNTARGETABLE` (`0x1037ea90`) and `CNPC_VManBat` `TASK_MANBAT_FIND_LANDNODE`
+(`0x10389f80`), all parent `0x1093d270`; `CNPC_VMingXiao` `TASK_VMING_XIAO_FORCED_DEATH` (`0x103913c0`),
+`CNPC_VMingXiaoTentacle` `TASK_VMING_XIAO_TENTACLE_SPAWN_PROXY` (`0x1039b260`) and `CNPC_VWerewolf`
+`TASK_VWEREWOLF_TELEPORT_IN` (`0x103c8f00`), all parent `0x10924260`; `CNPC_VZombie`
+`TASK_VZOMBIE_PERFORM_ANIMATED_DEATH` (`0x103de500`, parent `0x1093a4c0`). MingXiao's own
+`SET_AS_MONSTER` is **`0x14c`**. The two lookalike wires are separate inputs on those classes:
+`ch_fishmarket_1` `Relay_Combat_Start` → `Zygaena` (`npc_VHengeyokai`) reaches
+`InputStartTransformation 0x10383170`, which sets `0x170`; `ch_temple_4` `logic_switch_mx` →
+`MingXiao2` (`npc_VMingXiao`, delay 0.5) reaches `0x1039a700`, which sets `0x156`. `sm_warehouse_1`'s
+unnamed `logic_relay` → `wolf` `TransformModel` names an entity the lump does not hold. `hw_609_1`
+holds an `npc_VSabbatLeader` `plus_Andrei` that no wire transforms; the `RunTask` proximity test above
+is the only path left to it. And schedule id `0x14e` is the unrelated `SCHED_TROIKA_FLYING_WALL_HIT`
+(`0x105dae48`, bound in `0x102b9810`, set by `CAI_BaseNPCTroika::RunTask 0x102aacf0`).
+
+**Unrecovered:** the identity of the gate object `DAT_1093c34c` (a cvar by shape; not named); the names
+of `+0x156c`, `+0x6694` and the `+0x1b30`/`+0x1b34` and `+0x1b44`/`+0x1b48` file/line pairs, none of
+which has a datamap record; the bodies `0x10273070(this, 1)` and `0x101cf600(this)` at the tail of the
+arm; how the script-side `TransformModel()` call is routed to the datamap input (it matters only under
+the patch); whether the base `Vampire/python` tree in this install is byte-identical to the shipped
+1.2 scripts.

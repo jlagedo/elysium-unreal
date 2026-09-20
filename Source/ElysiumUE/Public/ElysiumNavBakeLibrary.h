@@ -123,4 +123,15 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
 	static TArray<FString> NavMeshTileCounts(UWorld* World);
+
+	/**
+	 * Whether `PointCm` lands on the named agent's mesh at all, and on what area.
+	 *
+	 * Answers "" when nothing there projects -- which is what a door cut looks like from outside,
+	 * because a null area is not walkable and so is not a polygon to land on. Otherwise the area
+	 * class's name, so a priced roadway can be told from ordinary ground.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static FString NavAreaAt(UWorld* World, const FString& AgentName, const FVector& PointCm,
+		const FVector& ExtentCm);
 };

@@ -292,6 +292,49 @@ def compare_geometry(
     }
 
 
+#: The signature a priced pedestrian volume wears: `0x2000` and NO clip bit -- the brushes that
+#: actually reach a link. A brush also carrying MONSTERCLIP stops `InitLinks`' own walk test, so
+#: no ground link is ever built across it and its `0x2000` never reaches one; on `sm_hub_1` 455 of
+#: 461 flagged links cross one of the 9 clip-free boxes and 0 of 1,185 unflagged links does
+#: (`navigation-jump-links.md`).
+PEDESTRIAN_SIGNATURE = contents_signature.signature_of(0x2000)
+
+
+def nav_area_rows(partitions: Sequence[tuple[int, list[list[float]]]]) -> list[dict[str, Any]]:
+    """The hull rows that get a nav-area mark, by area. Only the roadway, for now."""
+
+    rows: list[dict[str, Any]] = []
+    for signature, hulls in partitions:
+        if signature != PEDESTRIAN_SIGNATURE:
+            continue
+        rows.append({"area": "pedestrian", "signature": signature, "hulls": hulls})
+    return rows
+
+
+def nav_door_rows(map_name: str, brush_rows: Sequence[dict[str, Any]],
+                  ents_path: Path) -> dict[str, Any]:
+    """Every door and whether retail's graph runs through it, or an empty answer with a reason.
+
+    A map whose nav graph has not been exported yet stages no door answer rather than guessing:
+    cutting every door because the graph is missing would wall off the ones NPCs use, and that is
+    exactly the failure the door rule exists to prevent.
+    """
+
+    from elysium_pipeline.importers import map_nav_doors
+
+    try:
+        block = map_nav_doors.load_graph_block(map_name)
+    except (FileNotFoundError, ValueError) as error:
+        return {"doors": 0, "traversable": 0, "cut": 0, "rows": [],
+                "skipped": f"no usable nav graph: {error}"}
+
+    with Path(ents_path).open("r", encoding="ascii") as handle:
+        entities = json.load(handle).get("entities") or []
+    origins = {index: entity["origin"] for index, entity in enumerate(entities)
+               if isinstance(entity.get("origin"), list) and len(entity["origin"]) == 3}
+    return map_nav_doors.stage(block, brush_rows, origins, map_nav_doors.hull_radius_cm)
+
+
 def stage_map(
     map_name: str,
     *,
@@ -336,6 +379,11 @@ def stage_map(
         "displacementVertices": vertices,
         "displacementIndices": indices,
         "brushBodies": brush_rows,
+        # Which hull rows are a priced roadway, and which doors the graph runs through. Staged
+        # here because this lane is the one holding both the hulls and their signatures; a second
+        # lane computing it could disagree with the solids it is describing.
+        "navAreas": nav_area_rows(partitions),
+        "navDoors": nav_door_rows(map_name, brush_rows, ents_path),
     }
 
     parity: dict[str, Any] = {"checked": False}

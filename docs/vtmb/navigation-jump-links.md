@@ -1550,10 +1550,12 @@ be conflated — the values coincide for most species, which is exactly the trap
 write counts.
 
 **Unrecovered:** the source-level name of `+0x156c` (no datamap record, no string; "pathing hull"
-is synthesised from its readers and the `*_PATHING_HULL` rows); the enum spelling of 23; which
-shipped schedule issues `CNPC_VVampireBoss::StartTask`'s task `0x14e`, which sets both fields to 0
-after a monster-model swap and is reachable from `CNPC_VSheriffMan::StartTask 0x103aec70`'s default
-branch; the intent behind the `BuildExtrapolatedRoute` split.
+is synthesised from its readers and the `*_PATHING_HULL` rows); the enum spelling of 23; the intent
+behind the `BuildExtrapolatedRoute` split. (Closed 2026-09-20: which shipped schedule issues
+`CNPC_VVampireBoss::StartTask`'s task `0x14e`, the arm that sets both fields to 0 after a
+monster-model swap. It is `TASK_VVAMPIREBOSS_SET_AS_MONSTER`, carried by three programs — the boss's
+`0x159`, the Sheriff's `0x15b` and the SabbatLeader's `0x163` — and reached by six classes, not the
+Sheriff alone: `npc-ai/programs.md` § "The boss transformation programs".)
 
 ### Doors and NPC-clip, the retail contract (2026-09-19, 0018 stories 3 and 7)
 
