@@ -399,14 +399,34 @@ its recovery is written in the oracle section it names.
   same collision took 34.4 s built at load, the hub adopts five with the roadway correctly not
   cutting the mesh, and the collider arrives in 0.1–0.2 ms.
 
-  **Still open: jobs 5 and 6 and the acceptance harness.** Job 5's blocker is now cleared — there
-  is geometry in the level for Recast to cut — and `pipeline/unreal/bake_navmesh.py` holds the
-  build, still unwired because turning it on also means `RuntimeGeneration=DynamicModifiersOnly`,
-  removing `bForceRebuildOnLoad` (which would throw the saved mesh away) and reducing the runtime
-  to adoption. Half of that produces an empty mesh that looks like success. Then the door cuts and
-  pedestrian areas, then the verify arm. The rat gets a mesh when a map builds the agents its
-  graph names rather than the one its bodies wear — and nothing rat-shaped can path on it until
-  `m_eHull` is recovered for the species that differ from the human.
+  **Still open: jobs 5 and 6 and the acceptance harness.** Job 5's blocker is cleared — there is
+  geometry in the level for Recast to cut — and `pipeline/unreal/bake_navmesh.py` holds the build.
+  It was wired once, on 2026-09-20, and reverted; what that attempt taught is worth more than the
+  code was, because each point is a trap the next attempt would otherwise hit:
+
+  1. **It builds.** Both witnesses produced real per-agent meshes from the level's collision:
+     tutorial Rat 1,235 tiles / Human 915 in 0.92 s, hub Rat 1,581 / Human 1,126 in 5.14 s. The
+     rat mesh existed for the first time, which is the thing the story is for.
+  2. **`AsyncLoadLock`.** A level opened through the editor's loader leaves the navigation system
+     locked, and `Build` declines SILENTLY ("Navigation NOT building because navigation build is
+     locked (flags: 0x20)"). It must be removed, and `IsNavigationBuildingLocked` checked after,
+     or the bake saves nothing and says it succeeded.
+  3. **The agent mask must precede the navigation system, not follow it.** Creating the system in
+     editor mode spawns data for every SUPPORTED agent; calling `SetSupportedAgentsMask` after
+     leaves all fourteen standing. The mask belongs on a `UNavigationSystemModuleConfig` handed to
+     `AddNavigationSystemToWorld`.
+  4. **Cell and tile size are `RecastNavMesh` properties, not `FNavDataConfig` ones**, so the ini's
+     `SupportedAgents` cannot carry them and every mesh takes the engine default. On `sm_hub_1`
+     that asks Recast for 3,084,588 tiles against its 1,048,576 limit. Scaling the tile with the
+     cell made it worse (24 M for the rat): the real cause is the bounds, ~29,000 × 19,800 ×
+     31,000 cm, and the Z extent wants explaining before a tile size is chosen.
+  5. **A stale `RecastNavMesh` saved in a level is worse than none** — the runtime reads it as
+     "already built" and skips the build the map needs. The collision import now drops navigation
+     actors whenever it touches a level (`928de621`).
+
+  Then the door cuts and pedestrian areas, then the verify arm. The rat gets a mesh when a map
+  builds the agents its graph names rather than the one its bodies wear — and nothing rat-shaped
+  can path on it until `m_eHull` is recovered for the species that differ from the human.
   Retail: three masks move an NPC, and all three carry `MONSTERCLIP 0x20000` and none carries
   `PLAYERCLIP 0x10000` — `0x2000b` builds the graph, `0x2400b` probes a local route and fits a
   node, `0x202400b` moves (`navigation-jump-links.md` § "Doors and NPC-clip"). One mask sees:
