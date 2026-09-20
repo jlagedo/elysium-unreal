@@ -40,6 +40,7 @@ from pathlib import Path
 from elysium_pipeline.paths import repo_root
 
 HULL_TABLE = ("docs", "vtmb", "data", "hull_table.json")
+CLASS_HULLS = ("docs", "vtmb", "data", "class_hulls.json")
 MASKS_JSON = ("research", "tooling", "data", "contents_masks.json")
 HEADER = ("Source", "ElysiumUE", "Private", "Substrate", "ElysiumRetailHullTable.h")
 ENGINE_INI = ("Config", "DefaultEngine.ini")
@@ -157,7 +158,7 @@ def assert_distinct(rows: list[dict]) -> list[str]:
     return problems
 
 
-def emit_header(document: dict, rows: list[dict], step: dict) -> str:
+def emit_header(document: dict, rows: list[dict], step: dict, class_rows: list[dict]) -> str:
     table = document["rows"]
     linked = set(LINKED_HULLS)
     out = [
@@ -267,15 +268,59 @@ def emit_header(document: dict, rows: list[dict], step: dict) -> str:
         "\t\t}",
         "\t}",
         "",
-        "\t/** The agent every body falls back to while its class's stand hull is unrecovered.",
-        "\t    Slot 337 declares a PRECACHE SET, not the hull a body stands on; that is m_eHull",
-        "\t    (+0x1568), and only six classes carry a witnessed store to it. Until the rest are",
-        "\t    read, a body follows its map's graph rather than guessing from the class. */",
+        "\t/** What a body wears when no row below claims its retail class.",
+        "\t    Retail's own answer for that case: CAI_BaseNPC's constructor zeroes both hull",
+        "\t    words before any derived constructor runs, so a class with no store of its own",
+        "\t    stands and paths on HUMAN_HULL. */",
         f"\tinline constexpr int32 DefaultHull = {DEFAULT_AGENT_HULL};",
+        "",
+        "\t/** One retail class's two hull words.",
+        "",
+        "\t    `Standing` is m_eHull (+0x1568): it sizes the collision box, and every trace and",
+        "\t    line-of-sight helper takes its extents from it. `Pathing` is +0x156c, which has no",
+        "\t    datamap record and is never saved: CAI_Navigator::SetGoal caches it and the whole",
+        "\t    A* family feeds it to CAI_Node::GetPosition. So the NavMesh agent follows Pathing",
+        "\t    and the capsule follows Standing, and on three species they differ. */",
+        "\tstruct FClassHulls",
+        "\t{",
+        "\t\tconst TCHAR* RetailClass;",
+        "\t\tint32 Standing;",
+        "\t\tint32 Pathing;",
+        "\t};",
+        "",
+        "\t/** Most-derived first: a class with no row of its own inherits the nearest ancestor's,",
+        "\t    so a caller takes the FIRST row whose class is in the body's retail chain.",
+        "\t    CNPC_VRat is the case that needs the ordering -- it has no constructor of its own",
+        "\t    and takes CNPC_VScurrying's 19. */",
+        f"\tinline constexpr int32 ClassHullCount = {len(class_rows)};",
+        "\tinline const FClassHulls ClassHulls[ClassHullCount] =",
+        "\t{",
+    ]
+    for row in class_rows:
+        out.append(f"\t\t{{ TEXT(\"{row['class']}\"), {row['standing']:2d}, {row['pathing']:2d} }},"
+                   f"\t// ctor {row['ctor']}, store {row['store']}")
+        for line in _wrap_note(row.get("note", "")):
+            out.append(f"\t\t//   {line}")
+    out += [
+        "\t};",
         "}",
         "",
     ]
     return "\n".join(out)
+
+
+def _wrap_note(note: str, width: int = 88) -> list[str]:
+    """A row's note as comment-width lines; an empty note contributes nothing."""
+    lines, current = [], ""
+    for word in note.split():
+        if current and len(current) + 1 + len(word) > width:
+            lines.append(current)
+            current = word
+        else:
+            current = f"{current} {word}".strip()
+    if current:
+        lines.append(current)
+    return lines
 
 
 def emit_ini_block(rows: list[dict]) -> str:
@@ -363,6 +408,18 @@ def main(argv=None) -> int:
     document = load(HULL_TABLE)
     step = load(MASKS_JSON)["stepHeight"]
     rows = agents(document, step["base"]["value"])
+    class_rows = load(CLASS_HULLS)["rows"]
+
+    # Every hull a class names must be a row of the table, or the emitted header would index past
+    # it -- which is exactly what retail's own unassigned 23 would do, and the accessors there
+    # bounds-check nothing.
+    for row in class_rows:
+        for field in ("standing", "pathing"):
+            hull = row[field]
+            if not (0 <= hull < len(document["rows"])) and row["class"] != "CBaseCombatCharacter":
+                print(f"FAIL: {row['class']} names {field} hull {hull}, outside the "
+                      f"{len(document['rows'])}-row table")
+                return 1
 
     problems = assert_distinct(rows)
     for line in problems:
@@ -387,7 +444,8 @@ def main(argv=None) -> int:
         return 0
 
     repo = repo_root()
-    status = _emit(repo.joinpath(*HEADER), emit_header(document, rows, step), args.check)
+    status = _emit(repo.joinpath(*HEADER),
+                   emit_header(document, rows, step, class_rows), args.check)
     if not EMIT_AGENTS_INI:
         print("skip: the SupportedAgents block lands with job 5's per-map agent mask "
               "(see EMIT_AGENTS_INI)")

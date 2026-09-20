@@ -431,6 +431,18 @@ its recovery is written in the oracle section it names.
   patrol arm, extrapolated routes, debug drawing. `0x102d7730` turns out to be `CAI_TestHull`
   machinery with no NPC caller, and nothing outside code can set a hull.
 
+  **The hull words landed 2026-09-20.** `docs/vtmb/data/class_hulls.json` carries every recovered
+  constructor store with its address, and `gen_hull_table` emits it as `ElysiumRetailHulls::
+  ClassHulls`, most-derived first. The kernel carries BOTH words -- `HullKind` for the standing
+  hull and `PathingHullKind` for `+0x156c`, which retires the alternate-hull seam -- filled in
+  `BaseNPCInit`, the first body that runs with the retail class known. The body sizes its capsule
+  from the standing hull and states its nav agent from the pathing one, never deriving the agent
+  from the capsule (a rat's capsule clamps to a sphere, so a derived agent would be the wrong
+  shape for its own mesh). A rat now stands and paths on 19, inherited through `CNPC_VScurrying`
+  exactly as retail inherits it. Named modernization limit: `UCrowdManager` serves one mesh -- the
+  first supporting the default agent -- so a body on any other agent runs plain path following
+  rather than being steered against a mesh it does not path on.
+
   **Still open: job 6 and the acceptance harness** — the door cuts and pedestrian nav areas, and
   the verify arm that pins every ground link pathing on its agent's mesh, the rat-only links on
   the rat's and not the human's. The meshes those checks need now exist, and so does the hull

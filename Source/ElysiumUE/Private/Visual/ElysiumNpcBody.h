@@ -78,6 +78,11 @@ public:
 	// when the owner is not an NPC. OutWorld is the entity world it was resolved in, or null. The
 	// one resolution path the debug readers share, so a stale body reads as stale everywhere.
 	const FElysiumNpc* ResolveOwningNpc(const FElysiumEntityWorld*& OutWorld) const;
+
+	/** Size the capsule from the kernel's STANDING hull and the nav agent from its PATHING hull.
+	 *  They are different rows on the Sheriff, Hengeyokai and Ming Xiao. Safe to call before the
+	 *  kernel is bound: it answers nothing and waits to be called again. */
+	void ApplyRetailHull();
 	// The model this body wears and the repeatable token its weighted picks ride on. Set once when
 	// the motor is built, because that is the one place that knows both.
 	void SetModelStem(const FString& InStem, USkeletalMeshComponent* InVisual, int32 InVariant);

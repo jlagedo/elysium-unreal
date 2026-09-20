@@ -220,9 +220,14 @@ int32 RetailLastDamageInfoWord40() const;
  *  uses for the same word. */
 float RetailFieldOfViewDot() const;
 
-/** `m_eHull`'s alternate at `+0x156c` — the hull the `0x1000` arm draws a second box for when it
- *  differs from `m_eHull` (`+0x1568`). **SEAM**: no port word carries a second hull; answers
- *  `HullKind`, which makes the two equal and takes retail's "no second box" arm. */
+/** Fill both hull words from the generated class table, keyed on this body's retail class.
+ *  Called once the class is known; a class with no row of its own inherits the nearest
+ *  ancestor's, which is what retail's constructor chain does. */
+void ApplyRetailHulls();
+
+/** `+0x156c`, the PATHING hull — the hull the `0x1000` arm draws a second box for when it differs
+ *  from `m_eHull` (`+0x1568`). Answers `PathingHullKind`, which the body fills from the class
+ *  table, so the two differ on exactly the species retail differs on. */
 int32 RetailAlternateHullKind() const;
 
 /** `CBaseAnimating::GetBonePosition01("Bip01", &pos, &ang)` (`0x1000f263`), the root-bone box of the

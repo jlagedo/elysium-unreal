@@ -215,6 +215,65 @@ void AElysiumNpcBody::SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEnt
 {
 	OwningMap = InMap;
 	OwningEntity = InOwner;
+	ApplyRetailHull();
+}
+
+void AElysiumNpcBody::ApplyRetailHull()
+{
+	// The kernel holds both of retail's hull words and they are not always the same row. The
+	// CAPSULE takes the standing hull (`m_eHull`), which is what sizes retail's collision box and
+	// what every trace and line-of-sight helper measures with. The NAV AGENT takes the pathing
+	// hull (`+0x156c`), which is what `CAI_Navigator::SetGoal` caches and the A* family feeds to
+	// `CAI_Node::GetPosition` -- so it is what decides which baked mesh this body paths on.
+	//
+	// They differ on three species. The Sheriff stands on a 20 x 100 box and routes on the human
+	// mesh, needing no agent of his own; Hengeyokai is the inverse; Ming Xiao splits 15 / 16.
+	const FElysiumEntityWorld* World = nullptr;
+	const FElysiumNpc* Npc = ResolveOwningNpc(World);
+	if (Npc == nullptr)
+	{
+		return;   // not bound yet; the caller re-applies once it is
+	}
+	const ElysiumRetailHulls::FRow* Stand = ElysiumRetailHulls::Find(Npc->HullKind);
+	const ElysiumRetailHulls::FRow* Path = ElysiumRetailHulls::Find(Npc->PathingHullKind);
+	if (Stand == nullptr || Path == nullptr)
+	{
+		return;
+	}
+
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const float StandRadius = static_cast<float>(Stand->Maxs.X * ElysiumMove::U);
+	const float StandHalfHeight =
+		static_cast<float>((Stand->Maxs.Z - Stand->Mins.Z) * 0.5 * ElysiumMove::U);
+	Capsule->SetCapsuleSize(StandRadius, StandHalfHeight, /*bUpdateOverlaps=*/false);
+
+	// The agent is stated from the table, never derived from the capsule: a rat's capsule clamps
+	// to a sphere (its half-height is under its radius), so a derived agent would be the wrong
+	// shape for the mesh it has to match. `bUpdateNavAgentWithOwnersCollision` off for the same
+	// reason.
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Movement->SetUpdateNavAgentWithOwnersCollisions(false);
+	FNavAgentProperties& Agent = Movement->NavAgentProps;
+	Agent.AgentRadius = static_cast<float>(Path->Maxs.X * ElysiumMove::U);
+	Agent.AgentHeight = static_cast<float>((Path->Maxs.Z - Path->Mins.Z) * ElysiumMove::U);
+	Agent.AgentStepHeight =
+		static_cast<float>(ElysiumRetailHulls::StepHeightUnits * ElysiumMove::U);
+
+	// `UCrowdManager` serves ONE mesh -- the first that supports the default agent, which is the
+	// human's (`CrowdManager.cpp:1306-1367`). A body on any other agent must therefore run plain
+	// path following, or it would be steered against a mesh it does not path on. NAMED
+	// MODERNIZATION LIMIT, not a defect: retail has no crowd simulation at all.
+	if (Npc->PathingHullKind != ElysiumRetailHulls::DefaultHull)
+	{
+		if (AAIController* AI = Cast<AAIController>(GetController()))
+		{
+			if (UCrowdFollowingComponent* Crowd =
+					Cast<UCrowdFollowingComponent>(AI->GetPathFollowingComponent()))
+			{
+				Crowd->SetCrowdSimulationState(ECrowdSimulationState::Disabled);
+			}
+		}
+	}
 }
 
 void AElysiumNpcBody::EnsureAnimDriver()

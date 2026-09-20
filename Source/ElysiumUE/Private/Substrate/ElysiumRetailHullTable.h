@@ -130,9 +130,70 @@ namespace ElysiumRetailHulls
 		}
 	}
 
-	/** The agent every body falls back to while its class's stand hull is unrecovered.
-	    Slot 337 declares a PRECACHE SET, not the hull a body stands on; that is m_eHull
-	    (+0x1568), and only six classes carry a witnessed store to it. Until the rest are
-	    read, a body follows its map's graph rather than guessing from the class. */
+	/** What a body wears when no row below claims its retail class.
+	    Retail's own answer for that case: CAI_BaseNPC's constructor zeroes both hull
+	    words before any derived constructor runs, so a class with no store of its own
+	    stands and paths on HUMAN_HULL. */
 	inline constexpr int32 DefaultHull = 0;
+
+	/** One retail class's two hull words.
+
+	    `Standing` is m_eHull (+0x1568): it sizes the collision box, and every trace and
+	    line-of-sight helper takes its extents from it. `Pathing` is +0x156c, which has no
+	    datamap record and is never saved: CAI_Navigator::SetGoal caches it and the whole
+	    A* family feeds it to CAI_Node::GetPosition. So the NavMesh agent follows Pathing
+	    and the capsule follows Standing, and on three species they differ. */
+	struct FClassHulls
+	{
+		const TCHAR* RetailClass;
+		int32 Standing;
+		int32 Pathing;
+	};
+
+	/** Most-derived first: a class with no row of its own inherits the nearest ancestor's,
+	    so a caller takes the FIRST row whose class is in the body's retail chain.
+	    CNPC_VRat is the case that needs the ordering -- it has no constructor of its own
+	    and takes CNPC_VScurrying's 19. */
+	inline constexpr int32 ClassHullCount = 21;
+	inline const FClassHulls ClassHulls[ClassHullCount] =
+	{
+		{ TEXT("CNPC_VCamera"),  7,  7 },	// ctor 0x10368060, store 0x1036807e
+		{ TEXT("CNPC_VGargoyle"), 14, 14 },	// ctor 0x10377a60, store 0x10377a93
+		{ TEXT("CNPC_VManBat"), 20, 20 },	// ctor 0x10389cc0, store 0x10389d56
+		{ TEXT("CNPC_VWerewolf"), 12, 12 },	// ctor 0x103ca4b0, store 0x103ca5cc
+		{ TEXT("CNPC_VScurrying"), 19, 19 },	// ctor 0x103abb00, store 0x103abb22
+		//   CNPC_VRat has no constructor of its own; its factory 0x103ad710 runs this one and
+		//   re-vtables.
+		{ TEXT("CNPC_VSheriffMan"), 21,  0 },	// ctor 0x103ae3e0, store 0x103ae463
+		//   Writes +0x1568 alone. Stands on SHERIFF_HULL and routes on the human mesh, so he needs
+		//   no agent of his own.
+		{ TEXT("CNPC_VHengeyokai"),  0, 18 },	// ctor 0x1037e680, store 0x1037e786
+		//   The inverse split: human-sized box, HENGEYOKAI pathing. A transform later raises
+		//   standing to 18 and leaves pathing alone (0x1038096e) -- 0002's, listed under 0018's
+		//   Seams.
+		{ TEXT("CNPC_VMingXiao"), 15, 16 },	// ctor 0x10390ee0, store 0x10390f78
+		//   The split MING_XIAO_PATHING_HULL exists for.
+		{ TEXT("CNPC_VMingXiaoTentacle"), 17, 17 },	// ctor 0x1039afe0, store 0x1039b008
+		{ TEXT("CNPC_VTzimisce"), 10, 10 },	// ctor 0x103b6c60, store 0x103b6d32
+		//   Settled by the byte-level tie-break: 0x103b6d27 b8 0a 00 00 00 feeds both stores. A
+		//   reading of 0xb is HeadClaw's value.
+		{ TEXT("CNPC_VTzimisceHeadClaw"), 11, 11 },	// ctor 0x103c1220, store 0x103c127d
+		{ TEXT("CNPC_VTzimisceRunner"), 13, 13 },	// ctor 0x103c2fa0, store 0x103c2ff3
+		{ TEXT("CNPC_Crow"),  4,  4 },	// ctor 0x10357440, store 0x10357493
+		//   Written in Spawn, not the constructor: it overrides the inherited 0/0.
+		{ TEXT("CGeneric_NPC"),  0,  0 },	// ctor 0x1035a090, store 0x1035a0c4
+		//   Spawn-time store of the value it already inherited.
+		{ TEXT("CGeneric_NPC_bathack"),  0,  0 },	// ctor 0x1035ae80, store 0x1035aea0
+		{ TEXT("CGenericSabbat_NPC"),  0,  0 },	// ctor 0x1035b700, store 0x1035b734
+		{ TEXT("CNPC_VHuman"),  0,  0 },	// ctor 0x10384010, store 0x1038402b
+		{ TEXT("CAI_BaseNPCTroika"),  0,  0 },	// ctor 0x1028d230, store 0x1028d4c7
+		{ TEXT("CAI_BaseNPC"),  0,  0 },	// ctor 0x1027c300, store 0x1027c574
+		//   Zeroes both before any derived constructor runs, which is what rescues the base sentinel
+		//   below.
+		{ TEXT("CBasePlayer"),  0,  0 },	// ctor 0x1015d7c0, store 0x1015dac2
+		{ TEXT("CBaseCombatCharacter"), 23, 23 },	// ctor 0x10326de0, store 0x103272ce
+		//   23 is one past the 22-row table -- an unassigned value, not a sentinel row. It never
+		//   survives construction, and would fault if it reached a reader: the accessors index the
+		//   pointer table raw, with no bounds check anywhere.
+	};
 }

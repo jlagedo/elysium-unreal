@@ -2,6 +2,7 @@
 
 #include "Containers/Map.h"
 #include "ElysiumEntityDefs.h"
+#include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumNpc.h"
 
 namespace
@@ -162,4 +163,39 @@ const FElysiumNpcClass* FElysiumNpc::RetailClass() const
 bool FElysiumNpc::IsRetailClass(const TCHAR* RetailClassName) const
 {
 	return ElysiumNpcKernelClass::DerivesFrom(RetailClass(), RetailClassName);
+}
+
+// --- The two hull words -------------------------------------------------------------------------
+
+void FElysiumNpc::ApplyRetailHulls()
+{
+	// Retail writes both words in a CONSTRUCTOR, so a class with no store of its own holds
+	// whatever the nearest ancestor's constructor left -- which for everything under
+	// `CAI_BaseNPC` is 0, that constructor zeroing both before any derived one runs. The table is
+	// ordered most-derived first, so the first row this body's chain claims IS that nearest
+	// ancestor (`navigation-jump-links.md` § "The two hull words").
+	//
+	// `CNPC_VRat` is the case that needs the ordering: it has no constructor of its own, and its
+	// factory runs `CNPC_VScurrying`'s and then re-vtables, so 19 reaches it by inheritance.
+	for (int32 Index = 0; Index < ElysiumRetailHulls::ClassHullCount; ++Index)
+	{
+		const ElysiumRetailHulls::FClassHulls& Row = ElysiumRetailHulls::ClassHulls[Index];
+		if (IsRetailClass(Row.RetailClass))
+		{
+			// `CBaseCombatCharacter`'s own 23 is one past the table and never survives retail's
+			// construction either. Refusing it here keeps an unassigned value from reaching the
+			// extent accessors, which index raw and bounds-check nothing.
+			const bool bUsable = ElysiumRetailHulls::Find(Row.Standing) != nullptr
+				&& ElysiumRetailHulls::Find(Row.Pathing) != nullptr;
+			if (bUsable)
+			{
+				HullKind = Row.Standing;
+				PathingHullKind = Row.Pathing;
+				return;
+			}
+			break;
+		}
+	}
+	HullKind = ElysiumRetailHulls::DefaultHull;
+	PathingHullKind = ElysiumRetailHulls::DefaultHull;
 }

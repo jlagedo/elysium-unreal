@@ -1205,9 +1205,11 @@ float FElysiumNpc::RetailFieldOfViewDot() const
 
 int32 FElysiumNpc::RetailAlternateHullKind() const
 {
-	// SEAM for `+0x156c`, the second hull the `0x1000` arm compares against `m_eHull` (`+0x1568`).
-	// Answering `HullKind` makes them equal, which takes retail's "no second box" arm.
-	return HullKind;
+	// `+0x156c`, the PATHING hull, which this arm draws a second box for when it differs from
+	// `m_eHull`. No longer a seam: the word is carried (`PathingHullKind`) and differs from the
+	// standing hull on the Sheriff, Hengeyokai and Ming Xiao, so retail's two-box arm is now
+	// reachable for exactly the species retail reaches it for.
+	return PathingHullKind;
 }
 
 bool FElysiumNpc::RetailBonePosition(const TCHAR* BoneName, FVector& OutPositionUnits,

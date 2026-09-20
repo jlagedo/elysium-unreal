@@ -79,10 +79,27 @@ bool bIgnoreCollisionSpecies = false;
 // than a second copy of the same word. The Facing family carries the IDEAL one beside it
 // (`IdealActivityNumber`, +0x0ff0).
 
-// +0x1568 `CAI_BaseNPCTroika::m_eHull` — the hull id `CNPC_VWerewolf::GetGroundpoint`
-// (`0x103d6a40`) resolves its trace extents from. Below the shape map's band, so 29b did not bind
-// it; the extents themselves are a seam (`RetailHullExtents` below).
+// +0x1568 `CAI_BaseNPCTroika::m_eHull` — the STANDING hull. It sizes the collision box and every
+// trace and line-of-sight helper resolves its extents from it (`CNPC_VWerewolf::GetGroundpoint`
+// `0x103d6a40` among them). Below the shape map's band, so 29b did not bind it; the extents
+// themselves come from the generated table (`RetailHullExtents` below).
+//
+// Both words are filled from `ElysiumRetailHulls::ClassHulls` by the body that wears this kernel,
+// keyed on the retail class. A class with no row of its own inherits the nearest ancestor's, which
+// is retail's own arrangement: `CAI_BaseNPC`'s constructor zeroes both before any derived
+// constructor runs (`navigation-jump-links.md` § "The two hull words", 2026-09-20).
 int32 HullKind = 0;
+
+// +0x156c — the PATHING hull, and a different word from the one above on three species. It has no
+// datamap record in retail and is never saved: `CAI_Navigator::SetGoal 0x102ecd2c` caches it and
+// the whole A* family feeds it to `CAI_Node::GetPosition`, so it is what decides which NavMesh
+// agent a body paths on. Seven `GetPosition` sites pass `m_eHull` instead, none of them routing —
+// patrol-goal anchoring, the zombie's patrol arm, extrapolated routes and debug drawing.
+//
+// The Sheriff stands on hull 21 and paths on 0; Hengeyokai is the inverse (0 standing, 18
+// pathing); Ming Xiao splits 15 / 16, which is what `MING_XIAO_PATHING_HULL` exists for. For every
+// other species the two agree.
+int32 PathingHullKind = 0;
 
 // --- The navigator seam --------------------------------------------------------------------------
 //
