@@ -222,9 +222,24 @@ def place_world_collision_actor(entry, asset):
 
     # Exactly one, always: a second would be a lane that ran twice, and the runtime refuses a
     # level carrying two rather than picking one.
+    #
+    # Navigation data is dropped with it. This project generates navigation at run time, over the
+    # agents a body can actually use, so a RecastNavMesh saved in the level is always a leftover --
+    # and a stale one is worse than none, because the runtime reads a saved mesh as "already
+    # built" and would skip the build the map actually needs.
+    stale_nav = 0
     for existing in actors.get_all_level_actors():
         if isinstance(existing, unreal.ElysiumWorldCollisionActor):
             actors.destroy_actor(existing)
+        elif isinstance(existing, unreal.RecastNavMesh):
+            actors.destroy_actor(existing)
+            stale_nav += 1
+        elif isinstance(existing, unreal.NavMeshBoundsVolume):
+            actors.destroy_actor(existing)
+            stale_nav += 1
+    if stale_nav:
+        log("%s: dropped %d stale navigation actor(s) from the level"
+            % (entry["map"], stale_nav))
 
     actor = actors.spawn_actor_from_class(
         unreal.ElysiumWorldCollisionActor, unreal.Vector(0.0, 0.0, 0.0))
