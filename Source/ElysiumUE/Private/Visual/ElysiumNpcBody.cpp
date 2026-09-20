@@ -11,6 +11,7 @@
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "ElysiumCollisionChannels.h"
+#include "Substrate/ElysiumRetailHullTable.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
 #include "ElysiumMapActor.h"
@@ -72,7 +73,17 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	bUseControllerRotationYaw = false;
 
 	UCapsuleComponent* Capsule = GetCapsuleComponent();
-	Capsule->InitCapsuleSize(34.0f, 88.0f);
+	// Retail's own hull row, not a rounded stand-in. HUMAN_HULL is 26 x 72 Source units, so the
+	// capsule is 33.02 cm across and 182.88 cm tall — the body is 7 cm taller than the 34 x 176 it
+	// used to be, which is the difference between measuring the hull table and guessing at it.
+	// A body on another species' hull re-sizes itself through ApplyRetailHull.
+	const ElysiumRetailHulls::FRow* Human =
+		ElysiumRetailHulls::Find(ElysiumRetailHulls::DefaultHull);
+	Capsule->InitCapsuleSize(
+		static_cast<float>(Human->Maxs.X * ElysiumMove::U),
+		static_cast<float>((Human->Maxs.Z - Human->Mins.Z) * 0.5 * ElysiumMove::U));
+	// NPCs stay on ECC_Pawn: Unreal reads navigation relevance off that channel, so "blocks an
+	// NPC" and "cuts the NavMesh" stay the same fact. The player has its own object channel.
 	Capsule->SetCollisionProfileName(TEXT("Pawn"));
 	Capsule->SetCanEverAffectNavigation(false);
 
@@ -81,6 +92,11 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	Movement->RotationRate = FRotator(0.0f, 360.0f, 0.0f);
 	Movement->MaxWalkSpeed = 254.0f; // retail speed_walk: 100 Source inches/s, expressed in cm
 	Movement->BrakingDecelerationWalking = 768.0f;
+	// Retail's step height, 18 Source units, for every species but the three that override it
+	// (Ming Xiao 30, its tentacle 9, Tzimisce 26). The engine's own default is 45 cm, which is
+	// close enough to have hidden the fact that the number was never actually retail's.
+	Movement->MaxStepHeight =
+		static_cast<float>(ElysiumRetailHulls::StepHeightUnits * ElysiumMove::U);
 	Movement->SetCanEverAffectNavigation(false);
 	Movement->SetAutoActivate(false);
 
