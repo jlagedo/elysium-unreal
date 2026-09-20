@@ -292,9 +292,18 @@ The producer walks the entities unit in `entities[].index` order and, for every 
 |---|---|---|
 | `hulls` | `models[N].headNode` → `bsp.nodes[].children` → `bsp.leafs[].firstLeafBrush`/`numLeafBrushes` → `bsp.leafBrushes.values[]` → `collision.brushes[]` → `collision.brushSides[].plane`/`.bevel` → `planes[]` | `model.index` |
 | `contents` | `collision.brushes[].contents`, OR-ed over the model's **hull-producing** brushes only | — |
+| `hull_contents` | `collision.brushes[].contents` per hull-producing brush, **parallel to `hulls`** | — |
 | `blocks_player` | `contents & 0x1400B` — `SOLID\|WINDOW\|GRATE\|MOVEABLE\|PLAYERCLIP`; water and pure `MONSTERCLIP` stay passable | — |
 | `brush_mesh` | `models[N].firstFace`/`numFaces` → `faces[].numEdges`/`.texInfo` → `texinfos[].texData` → `textures[].asset`; the model is meshed when **any** face survives | the `func_areaportalwindow` → `target` → `targetname` → `model` join that suppresses render-only visibility backings |
 | `sky` | `bsp.nodes[]` + `planes[]` point-leaf walk of model 0, `bsp.leafs[].area`, `models[N].mins`/`maxs` for the brush-entity classification point | the first `sky_camera` block's `origin` and `scale` |
+
+`hull_contents` is carried beside the OR because the OR cannot answer for a mixed entity, and
+since 0018 story 3 the body wears the collision profile its brushes' CONTENTS SIGNATURE names
+rather than one derived from the classname. Retail asks four questions of a brush — does it block
+the player (`& 0x1400B`), an NPC (`& 0x2400B`), sight (`& 0x804091`), is it a pedestrian volume
+(`& 0x2000`) — and all three movement masks carry `MOVEABLE`, so a door stops both pawns, while
+the sight mask carries it too, so a door stops sight and a glass `func_brush` does not.
+`blocks_player` remains the OR's own answer and is unchanged.
 
 `models[N].origin` is **not** part of the join: it is `(0, 0, 0)` on all 368 models of the three
 maps and the exporter never reads it. The entity's `origin` keyvalue is the only translation.
@@ -536,6 +545,24 @@ mints `FGuid::NewGuid()`, so nothing is cacheable even in principle. The payload
 authored once, offline, with a stable `BodySetupGuid` saved in the package: the editor derives them
 into the DDC on the first load after an import and never again, and a cooked build carries the
 cooked buffers in the package. That is the "no runtime cook" the roadmap line asks for.
+
+**Payload version 2 (0018 story 3, 2026-09-20): one cooked world body per CONTENTS SIGNATURE.**
+Version 1 cooked a single body from the player-solid brushes, which is all `.hulls` carried then.
+It now carries every brush answering any retail mask, led by its contents word, and both
+transports partition the world the same way: one body per signature, each wearing the generated
+profile that signature names. A version-1 payload still loads, adopted under the one signature its
+body stands for — blocks both pawns, silent about sight, which is exactly what its `BlockAll`
+component did. A payload whose `PayloadVersion` is newer than the build understands is REFUSED
+rather than half-read; falling back to the sidecar there would look like success.
+
+Brush-entity rows carry a signature too, because a mover answers by its own brushes: the `SOLID`
+arm wears `ElysiumSigDyn_*`, the `WorldDynamic` twin that keeps `Block` on the `+use` ray and the
+debug pick so a door's own knob stays addressable. `Trigger`, `Passable` and `None` keep their
+class-derived profiles — those say what the entity IS, not what its brushes are made of.
+
+The manifest is `2.0.0` and the recipe version 2; the fingerprint covers the partition as well as
+the geometry, since the same vertices under a different signature are different bodies wearing
+different profiles.
 
 ### Identity and naming
 

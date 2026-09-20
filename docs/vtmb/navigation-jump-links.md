@@ -1009,6 +1009,15 @@ Re-derived in the repository 2026-09-20 and reproducing every count below:
 | | ✓ | | | 106 | `0x8020000` NPC clip |
 | | | | ✓ | 47 | `0x8002000` pedestrian alone |
 
+**The port answers these four questions separately as of 2026-09-20** (0018 story 3, jobs 1–3
+and 7). A brush's signature is computed once at the seam, `.hulls` carries the contents word, and
+each signature gets a collision body wearing a generated profile: the player and NPCs are on two
+different object channels, sight has its own trace channel, and Unreal's own rule — a body is
+navigation-relevant exactly when it blocks `ECC_Pawn` — makes "blocks an NPC" and "cuts the mesh"
+the same fact. The visible consequence on `sp_tutorial_1`: 17 sight-only brushes begin stopping
+the thug's sight, 276 window and grate brushes stop doing so, and the 5 NPC-only clips exist for
+the first time.
+
 No brush in the game blocks the player alone: `PLAYERCLIP` never ships without `MONSTERCLIP`.
 Non-solid brushes carrying `OPAQUE 0x80` or `0x800000` number 1,764 on 25 maps
 (`la_museum_1` 894, `la_skyline_1` 265, `hw_warrens_2b` 102 … `sp_tutorial_1` 17); window and

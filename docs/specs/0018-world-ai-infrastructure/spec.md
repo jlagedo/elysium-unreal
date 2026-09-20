@@ -359,6 +359,33 @@ its recovery is written in the oracle section it names.
   run time. Nothing here is deferred to a later pass: every hull the
   shipped graphs use gets its agent, and a brush answers each retail query by its own contents
   word — movement, sight and the pedestrian volume alike — not by a hand-kept list of classes.
+
+  **Landed 2026-09-20, jobs 1, 2, 3 and 7 (the contents half).** A brush's signature — its four
+  answers — is computed once at the seam and nothing downstream tests a contents bit again.
+  `research/tooling/data/contents_masks.json` → `gen_contents_signatures` emits the runtime
+  header, the pipeline module and one named collision profile per signature, because only a
+  profile name survives a `.umap` save. `.hulls` carries every answering brush led by its
+  contents word (the row shape is 1 mod 3 where the old format was 0, so neither reader can
+  misread the other's file) and the byte-diff against the legacy exporter keeps it as a
+  divergence proved by projection. Both transports partition the world into one body per
+  signature — payload v2 cooks one per signature and refuses a version it does not know — and a
+  brush entity wears the `Dyn` profile of its own brushes. Sight moved off the +use channel,
+  which the world collider ignored outright, onto a channel the signature profiles answer:
+  17 tutorial brushes begin blocking the thug's sight and 276 window and grate brushes stop.
+  The player took its own object channel so the two pawn questions can differ, with
+  `ElysiumPlayer` mirroring `Pawn` in every engine profile (the test re-reads the engine's own
+  table). NPCs stayed on `ECC_Pawn`, which is what makes "blocks an NPC" and "cuts the NavMesh"
+  one fact — asserted through `IsNavigationRelevant` itself, not by reading config. The hull
+  table answers `RetailHullExtents` for its 13 callers, and the body is 33.02 × 182.88 stepping
+  45.72 rather than 34 × 176 stepping the engine's default.
+
+  **Still open: the navigation half** — jobs 4 (agents installed and bound per species), 5 (the
+  per-agent meshes built in the editor and saved with the level), 6 (pedestrian nav areas) and
+  the acceptance harness. The 14 agents are generated and tested but deliberately not installed
+  (`gen_hull_table.EMIT_AGENTS_INI`): declaring them while `EnsureRuntimeNavigation` still lets
+  the navigation system create data for every supported agent would build 14 Recast meshes on
+  every load of all 108 maps. They land with the per-map `SupportedAgentsMask`, which needs the
+  map's own `UsedHullBits` at bake time.
   Retail: three masks move an NPC, and all three carry `MONSTERCLIP 0x20000` and none carries
   `PLAYERCLIP 0x10000` — `0x2000b` builds the graph, `0x2400b` probes a local route and fits a
   node, `0x202400b` moves (`navigation-jump-links.md` § "Doors and NPC-clip"). One mask sees:
