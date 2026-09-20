@@ -43,14 +43,14 @@ public:
 	// Called once at spawn, before RegisterComponent — the base UPrimitiveComponent creates the
 	// physics body from GetBodySetup() at registration, so the setup must be cooked first.
 	void InitBrush(const FElysiumEntityHandle& InOwner, const TArray<FElysiumConvexHull>& Hulls,
-		EElysiumBrushSolidity Solidity);
+		EElysiumBrushSolidity Solidity, uint8 ContentsSignature);
 
 	// The same body, adopted from the map's cooked collision payload instead of cooked here:
 	// `Cooked` is one entity's `UBodySetup`, authored offline from these same hulls.
 	// The component keeps the setup but does not
 	// own it — the payload asset does, and it outlives the map load.
 	void InitBrushFromPayload(const FElysiumEntityHandle& InOwner, UBodySetup* Cooked,
-		EElysiumBrushSolidity Solidity);
+		EElysiumBrushSolidity Solidity, uint8 ContentsSignature);
 
 	// Dormancy: dormant → collision off (cannot be touched/traced) and visual hidden;
 	// active → restore the built solidity and attached visual.
@@ -71,11 +71,17 @@ private:
 
 	FElysiumEntityHandle OwningEntity;
 	EElysiumBrushSolidity BuiltSolidity = EElysiumBrushSolidity::Solid;
+	// The contents signature of this entity's own brushes. A SOLID mover wears the profile that
+	// signature names, so a door blocks sight and both pawns through MOVEABLE while a glass
+	// `func_brush` blocks neither pawn's sight. Zero means the source carried no contents and the
+	// body keeps `BlockAll`, which is what it wore before the column existed.
+	uint8 BuiltSignature = 0;
 	FBox LocalBounds = FBox(ForceInit);
 
 	void ApplySolidity(EElysiumBrushSolidity Solidity);
 	// The tail both InitBrush paths share: solidity, and the one overlap tap.
-	void FinishInit(const FElysiumEntityHandle& InOwner, EElysiumBrushSolidity Solidity);
+	void FinishInit(const FElysiumEntityHandle& InOwner, EElysiumBrushSolidity Solidity,
+		uint8 ContentsSignature);
 
 	// Overlap taps — forward to the entity world (resolved through the owning map actor), so a
 	// stale world pointer is impossible: teardown drops the actor's world before the actor's

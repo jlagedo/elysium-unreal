@@ -25,19 +25,21 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
+from elysium_pipeline.formats import contents_signature
+
 #: The lane's own name -- the staging directory below `$ELYSIUM_WORK_ROOT/import/` and the recipe
 #: stage label the editor phase fingerprints under.
 FAMILY = "map_collision"
 
 #: Manifest schema the editor phase understands. Bumped when the row shape changes.
-MANIFEST_SCHEMA = "1.0.0"
+MANIFEST_SCHEMA = "2.0.0"
 
 #: The name of the staged manifest, and of the report the editor phase writes beside it.
 MANIFEST_NAME = "manifest.json"
 IMPORT_REPORT_NAME = "import_report.json"
 
 #: Bumped whenever this lane's mapping changes in a way that must re-author every asset.
-RECIPE_VERSION = 1
+RECIPE_VERSION = 2
 
 #: The mount every per-map asset lands under. The C++ twin is
 #: `FElysiumContentPaths::BakedMapDir` / `BakedMapCollision`.
@@ -48,10 +50,13 @@ BAKED_MOUNT = "/ElysiumBaked"
 #: editor phase would silently discard.
 MIN_HULL_VERTICES = 4
 
-#: Which brushes of the widened `.hulls` this payload cooks: the player-solid ones, which is the
-#: set the sidecar carried before it grew a contents column, and the set this payload's single
-#: world body has always stood for. `SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP`.
+#: `SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP` -- the brushes the sidecar carried before it grew a
+#: contents column, kept for reading a `.ents` written before the per-hull column existed.
 PAYLOAD_CONTENTS_MASK = 0x1 | 0x2 | 0x8 | 0x4000 | 0x10000
+
+#: What a brush body written before the per-hull contents column stood for: it blocked both pawns
+#: and said nothing about sight, which is what its `BlockAll` profile did.
+LEGACY_BRUSH_SIGNATURE = contents_signature.signature_of(0x1) & ~(1 << 2)
 
 
 def staging_root(work_root: Path) -> Path:
@@ -100,21 +105,30 @@ class StagedMapCollision:
 
 
 def read_hull_rows(path: Path) -> list[list[float]]:
-    """`<map>.hulls`: the brushes this payload cooks, as flat `x y z ...` clouds in Unreal cm.
+    """Every staged world hull, in file order, regardless of signature.
 
-    The acceptance rule is `UElysiumMapCollision::LoadHulls`'s, verbatim: a contents word then at
-    least four whole vertex triples, anything else skipped rather than staged.
-
-    The payload still cooks ONE world body, so only the rows the old `BLOCK_MASK` filter would
-    have written are staged -- the player-solid ones. The contents column is read to decide that
-    and then dropped; the NPC-only clips, sight-only brushes and pedestrian volumes the widened
-    sidecar now carries stay out of the payload until it grows a body per signature. Both
-    transports partition identically once it does.
+    Kept as the parity subject -- the check compares what was staged against what the file holds,
+    and that is simplest over one flat list. `read_hull_partitions` is what the payload authors
+    from.
     """
 
-    rows: list[list[float]] = []
+    return [hull for _signature, hulls in read_hull_partitions(path) for hull in hulls]
+
+
+def read_hull_partitions(path: Path) -> list[tuple[int, list[list[float]]]]:
+    """`<map>.hulls` grouped by contents signature, each group in file order.
+
+    The acceptance rule is `UElysiumMapCollision::LoadHulls`'s, verbatim: a contents word then at
+    least four whole vertex triples, anything else skipped rather than staged. A row answering no
+    mask was never written and cannot become a body.
+
+    Groups are ordered by first appearance, so the payload's bodies land in a stable order that
+    does not depend on how a dict happens to iterate.
+    """
+
+    groups: dict[int, list[list[float]]] = {}
     if not Path(path).is_file():
-        return rows
+        return []
     with Path(path).open("r", encoding="utf-8") as handle:
         for line in handle:
             tokens = line.split()
@@ -122,10 +136,11 @@ def read_hull_rows(path: Path) -> list[list[float]]:
                 continue
             if not tokens[0].startswith("0x"):
                 continue
-            if not int(tokens[0], 16) & PAYLOAD_CONTENTS_MASK:
+            signature = contents_signature.signature_of(int(tokens[0], 16))
+            if not signature:
                 continue
-            rows.append([float(token) for token in tokens[1:]])
-    return rows
+            groups.setdefault(signature, []).append([float(token) for token in tokens[1:]])
+    return list(groups.items())
 
 
 def read_displacement_rows(path: Path) -> list[list[float]]:
@@ -192,16 +207,29 @@ def brush_entity_rows(ents_path: Path, sky_scale: float) -> list[dict[str, Any]]
         hulls = entity.get("hulls") or []
         if not hulls or entity.get("sky"):
             continue
-        staged = [
-            list(hull) for hull in hulls
-            if len(hull) >= MIN_HULL_VERTICES * 3 and len(hull) % 3 == 0
-        ]
+        # Per-hull contents, parallel to `hulls`. A mover answers the retail masks by its own
+        # brushes, so the body's signature is the OR of its kept brushes' signatures rather than
+        # the entity's class: a door blocks sight and both pawns through MOVEABLE, a glass
+        # `func_brush` blocks neither pawn's sight. A `.ents` written before the column existed
+        # carries none, and the body falls back to the player-solid answer it had then.
+        per_hull = entity.get("hull_contents") or []
+        staged: list[list[float]] = []
+        signature = 0
+        for position, hull in enumerate(hulls):
+            if len(hull) < MIN_HULL_VERTICES * 3 or len(hull) % 3 != 0:
+                continue
+            staged.append(list(hull))
+            if position < len(per_hull):
+                signature |= contents_signature.signature_of(int(per_hull[position]))
         if not staged:
             continue
+        if not per_hull:
+            signature = LEGACY_BRUSH_SIGNATURE
         rows.append({
             "entityIndex": index,
             "classname": entity.get("classname", ""),
             "sky": bool(entity.get("sky")),
+            "signature": signature,
             "hulls": staged,
         })
     return rows
@@ -279,7 +307,8 @@ def stage_map(
 ) -> dict[str, Any]:
     """One map's manifest entry: its three payloads, its asset path and its parity verdict."""
 
-    hull_rows = read_hull_rows(hulls_path)
+    partitions = read_hull_partitions(hulls_path)
+    hull_rows = [hull for _signature, hulls in partitions for hull in hulls]
     if not hull_rows:
         raise MapCollisionStageError(
             f"{map_name}: no world hulls at {hulls_path}; the world collider is required, not "
@@ -301,6 +330,12 @@ def stage_map(
         "assetPath": asset_path(map_name),
         "recipeVersion": RECIPE_VERSION,
         "skyScale": sky_scale,
+        # One entry per contents signature the map carries, each `{signature, hulls}`. The flat
+        # `worldHulls` stays beside it as the parity subject and as what a reader that predates
+        # the partition still understands.
+        "worldBodies": [
+            {"signature": signature, "hulls": hulls} for signature, hulls in partitions
+        ],
         "worldHulls": hull_rows,
         "displacementVertices": vertices,
         "displacementIndices": indices,

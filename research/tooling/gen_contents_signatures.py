@@ -125,6 +125,12 @@ def profile_name(bits: int, letters: str) -> str:
     return f"ElysiumSig_{kept or 'None'}"
 
 
+def dynamic_profile_name(bits: int, letters: str) -> str:
+    """The mover twin: `ElysiumSigDyn_PNS`. A brush entity moves, so it is WorldDynamic."""
+
+    return profile_name(bits, letters).replace("ElysiumSig_", "ElysiumSigDyn_", 1)
+
+
 def responses(bits: int, letters: str) -> dict[str, str]:
     """The response this signature gives on every listed channel."""
 
@@ -277,6 +283,22 @@ def emit_header(document: dict, letters: str) -> str:
     for bits in range(1 << len(letters)):
         out.append(f"\t\tcase {bits}: return FName(TEXT(\"{profile_name(bits, letters)}\"));"
                    f"\t// {spell(bits, letters)} — {describe(bits, letters)}")
+    out += [
+        "\t\tdefault: return NAME_None;",
+        "\t\t}",
+        "\t}",
+        "",
+        "\t/** The profile a MOVER of this signature wears -- a solid brush entity. Same answers,",
+        "\t    WorldDynamic, and Block on the +use ray and the debug pick so a door's own knob",
+        "\t    stays addressable. */",
+        "\tinline FName DynamicProfileName(EElysiumContentsSignature Signature)",
+        "\t{",
+        "\t\tswitch (static_cast<uint8>(Signature))",
+        "\t\t{",
+    ]
+    for bits in range(1 << len(letters)):
+        out.append(f"\t\tcase {bits}: return FName(TEXT(\"{dynamic_profile_name(bits, letters)}\"));"
+                   f"\t// {spell(bits, letters)}")
     out += [
         "\t\tdefault: return NAME_None;",
         "\t\t}",
@@ -448,6 +470,28 @@ def emit_ini_block(letters: str) -> str:
                    f"ObjectTypeName=\"WorldStatic\",CustomResponses=({custom}),"
                    f"HelpMessage=\"Contents signature {mark}: {describe(bits, letters)}.\","
                    f"bCanModify=False)")
+
+    out += [
+        "; The mover twin of each signature: a SOLID brush entity wears one of these. Same answers",
+        "; to the four retail questions -- all three movement masks carry MOVEABLE and so does the",
+        "; sight mask, which is how a door stops both pawns and sight while a glass func_brush stops",
+        "; neither pawn's sight -- but WorldDynamic, because a mover moves, and Block on the +use",
+        "; ray and the debug pick, because a door's own knob has to stay addressable.",
+    ]
+    for bits in range(1 << len(letters)):
+        mark = spell(bits, letters)
+        if mark not in SHIPPED:
+            continue
+        table = dict(responses(bits, letters))
+        table["ElysiumUse"] = "ECR_Block"
+        table["ElysiumPick"] = "ECR_Block"
+        custom = ",".join(f"(Channel=\"{channel}\",Response={table[channel]})"
+                          for channel in PROFILE_CHANNELS)
+        out.append(f"+Profiles=(Name=\"{dynamic_profile_name(bits, letters)}\","
+                   f"CollisionEnabled={collision_enabled(bits, letters)},"
+                   f"ObjectTypeName=\"WorldDynamic\",CustomResponses=({custom}),"
+                   f"HelpMessage=\"Contents signature {mark}, on a mover: "
+                   f"{describe(bits, letters)}.\",bCanModify=False)")
 
     out += [
         "; The player's hull: the engine's Pawn profile on the player's own object channel, so a",

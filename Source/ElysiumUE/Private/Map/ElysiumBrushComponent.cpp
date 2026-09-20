@@ -1,6 +1,7 @@
 #include "ElysiumBrushComponent.h"
 
 #include "Debug/ElysiumPick.h"
+#include "ElysiumContentsSignature.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
@@ -41,7 +42,8 @@ UElysiumBrushComponent::UElysiumBrushComponent()
 }
 
 void UElysiumBrushComponent::InitBrush(const FElysiumEntityHandle& InOwner,
-	const TArray<FElysiumConvexHull>& Hulls, EElysiumBrushSolidity Solidity)
+	const TArray<FElysiumConvexHull>& Hulls, EElysiumBrushSolidity Solidity,
+	uint8 ContentsSignature)
 {
 	// One convex element per hull, cooked once. Same recipe as the world .hulls: simple-as-complex,
 	// verts verbatim (entity-local cm). This is the fallback path since R4.2 — a map with a cooked
@@ -67,11 +69,11 @@ void UElysiumBrushComponent::InitBrush(const FElysiumEntityHandle& InOwner,
 	BrushBodySetup->InvalidatePhysicsData();
 	BrushBodySetup->CreatePhysicsMeshes();
 
-	FinishInit(InOwner, Solidity);
+	FinishInit(InOwner, Solidity, ContentsSignature);
 }
 
 void UElysiumBrushComponent::InitBrushFromPayload(const FElysiumEntityHandle& InOwner,
-	UBodySetup* Cooked, EElysiumBrushSolidity Solidity)
+	UBodySetup* Cooked, EElysiumBrushSolidity Solidity, uint8 ContentsSignature)
 {
 	// The setup arrives already cooked (offline, or off this machine's DDC on the payload's first
 	// load), so nothing is built here — the bounds are read back off the elements the import
@@ -86,14 +88,15 @@ void UElysiumBrushComponent::InitBrushFromPayload(const FElysiumEntityHandle& In
 		}
 	}
 
-	FinishInit(InOwner, Solidity);
+	FinishInit(InOwner, Solidity, ContentsSignature);
 }
 
 void UElysiumBrushComponent::FinishInit(const FElysiumEntityHandle& InOwner,
-	EElysiumBrushSolidity Solidity)
+	EElysiumBrushSolidity Solidity, uint8 ContentsSignature)
 {
 	OwningEntity = InOwner;
 	BuiltSolidity = Solidity;
+	BuiltSignature = ContentsSignature;
 	ApplySolidity(Solidity);
 
 	// The single overlap tap (bound once; events fire only after RegisterComponent).
@@ -106,11 +109,23 @@ void UElysiumBrushComponent::ApplySolidity(EElysiumBrushSolidity Solidity)
 	switch (Solidity)
 	{
 	case EElysiumBrushSolidity::Solid:
+	{
 		// Blocks like the world brushes. A solid brush blocking the pawn produces Hit, not
 		// begin/end overlap, so no overlap events are generated here (movers handle OnBlocked).
-		SetCollisionProfileName(TEXT("BlockAll"));
+		//
+		// WHICH world brushes is the mover's own contents answer: all three retail movement masks
+		// carry MOVEABLE, so a door stops both pawns, and the sight mask carries it too, so a door
+		// stops sight while a glass `func_brush` does not. Its `Dyn` profile is the WorldDynamic
+		// twin of the signature profiles the static world wears, and unlike those it keeps the
+		// +use ray and the debug pick, which is how a door's own knob stays addressable.
+		const EElysiumContentsSignature Signature =
+			static_cast<EElysiumContentsSignature>(BuiltSignature);
+		SetCollisionProfileName(Signature == EElysiumContentsSignature::None
+			? FName(TEXT("BlockAll"))
+			: ElysiumContents::DynamicProfileName(Signature));
 		SetGenerateOverlapEvents(false);
 		break;
+	}
 	case EElysiumBrushSolidity::Trigger:
 		// Query-only overlap volume: the pawn overlaps it (its response to Pawn is Overlap, so the
 		// pawn's Block-of-WorldDynamic is not a mutual block) and walks through it, raising touch.

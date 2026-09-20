@@ -38,7 +38,7 @@ from pipeline.unreal import bake_lib as bl  # noqa: E402
 STAGE = "map_collision"
 
 #: Manifest schema this script understands.
-MANIFEST_SCHEMA = "1.0.0"
+MANIFEST_SCHEMA = "2.0.0"
 
 #: The one class this lane authors.
 ASSET_CLASS = "ElysiumMapCollisionPayload"
@@ -132,6 +132,10 @@ def author_map(entry, force=False):
         {
             "recipeVersion": entry.get("recipeVersion"),
             "skyScale": entry.get("skyScale"),
+            # The partition as well as the geometry: the same vertices under a different
+            # signature are different bodies wearing different profiles, and a re-stage that
+            # moves only the signature must still re-author.
+            "worldBodies": entry.get("worldBodies", []),
             "worldHulls": entry["worldHulls"],
             "displacementVertices": entry.get("displacementVertices", []),
             "displacementIndices": entry.get("displacementIndices", []),
@@ -157,7 +161,16 @@ def author_map(entry, force=False):
     # Re-authoring an existing asset drops what was there first: the body setups are subobjects of
     # this package, and leaving the previous set behind would carry it into the save.
     asset.reset_authoring()
-    asset.author_world_hulls(make_hulls(entry["worldHulls"]))
+    # One world body per contents signature: a brush answers four retail masks and the answers
+    # differ, so a single body cannot say that an NPC clip stops an NPC and not the player. A
+    # manifest staged before the partition existed carries only the flat list, and authors the one
+    # body it always did.
+    world_bodies = entry.get("worldBodies")
+    if world_bodies:
+        for row in world_bodies:
+            asset.author_world_body(int(row["signature"]), make_hulls(row["hulls"]))
+    else:
+        asset.author_world_hulls(make_hulls(entry["worldHulls"]))
 
     flat = entry.get("displacementVertices", [])
     vertices = [unreal.Vector(flat[i], flat[i + 1], flat[i + 2])
@@ -165,7 +178,10 @@ def author_map(entry, force=False):
     asset.author_displacement(vertices, [int(i) for i in entry.get("displacementIndices", [])])
 
     for row in entry.get("brushBodies", []):
-        asset.author_brush_body(int(row["entityIndex"]), make_hulls(row["hulls"]))
+        # A mover wears the profile of its own brushes: a door blocks sight and both pawns through
+        # MOVEABLE, a glass func_brush blocks neither pawn's sight.
+        asset.author_brush_body_with_signature(
+            int(row["entityIndex"]), int(row.get("signature", 0)), make_hulls(row["hulls"]))
 
     # Cook now, in the import, so the DDC entry exists before any map load and a payload that
     # cannot cook is this run's failure rather than a silent fallback at runtime.

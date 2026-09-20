@@ -169,8 +169,22 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 	// than warning.
 	UElysiumMapCollisionPayload* Asset = LoadObject<UElysiumMapCollisionPayload>(
 		nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
-	if (Asset == nullptr || Asset->GetWorldHulls() == nullptr || Asset->WorldHullCount() == 0)
+	// A world is required, and it may arrive either shape: one body per signature (version 2) or
+	// the single player-solid set (version 1).
+	const bool bHasWorld = Asset != nullptr
+		&& (Asset->GetWorldBodies().Num() > 0 || Asset->GetWorldHulls() != nullptr)
+		&& Asset->WorldHullCount() > 0;
+	if (!bHasWorld)
 	{
+		return false;
+	}
+	if (Asset->PayloadVersion > ElysiumCollisionPayload::SupportedVersion)
+	{
+		// Newer than this build understands: refuse rather than adopt a world whose shape is only
+		// half read. Falling back to the sidecar would be worse — it would look like it worked.
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: payload version %d is newer than this build supports (%d)"),
+			*AssetPath, Asset->PayloadVersion, ElysiumCollisionPayload::SupportedVersion);
 		return false;
 	}
 
@@ -186,18 +200,38 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 	}
 
 	Payload = Asset;
-	// The payload still cooks ONE world body, from the BLOCK_MASK-filtered `.hulls` it was staged
-	// from, so it can only be given the one signature that set stands for: blocks both pawns, and
-	// answers nothing about sight. That is exactly what this body did as `BlockAll` — the sight
-	// channel defaults to Ignore — so adopting a payload behaves today as it did yesterday.
-	// Payload v2 carries a signature per body and this collapses into the same partition the
-	// sidecar path already builds.
-	const EElysiumContentsSignature PayloadSignature =
-		EElysiumContentsSignature::Player | EElysiumContentsSignature::Npc;
-	HullCollision = MakeHullComponent(Owner, Asset->WorldHullBounds(), PayloadSignature);
-	HullCollision->ProcMeshBodySetup = Asset->GetWorldHulls();
-	HullCollision->RegisterComponent();
-	HullsBySignature.Add(static_cast<uint8>(PayloadSignature), HullCollision);
+	if (Asset->GetWorldBodies().Num() > 0)
+	{
+		// A version-2 payload carries one cooked body per contents signature, so the adopted world
+		// partitions exactly as the sidecar path's does — same profiles, same navigation answer.
+		for (const FElysiumSignatureCollisionBody& Row : Asset->GetWorldBodies())
+		{
+			const EElysiumContentsSignature Signature =
+				static_cast<EElysiumContentsSignature>(Row.Signature);
+			UElysiumHullCollisionComponent* Component =
+				MakeHullComponent(Owner, Row.Bounds, Signature);
+			Component->ProcMeshBodySetup = Row.Body;
+			Component->RegisterComponent();
+			HullsBySignature.Add(Row.Signature, Component);
+			if (HullCollision == nullptr)
+			{
+				HullCollision = Component;
+			}
+		}
+	}
+	else
+	{
+		// A version-1 payload cooked ONE body, from the BLOCK_MASK-filtered `.hulls` it was staged
+		// from, so it can only be given the signature that set stands for: blocks both pawns, and
+		// answers nothing about sight. That is exactly what this body did as `BlockAll` — the
+		// sight channel defaults to Ignore — so an unconverted payload behaves as it did before.
+		const EElysiumContentsSignature Signature = static_cast<EElysiumContentsSignature>(
+			UElysiumMapCollisionPayload::LegacyWorldSignature());
+		HullCollision = MakeHullComponent(Owner, Asset->WorldHullBounds(), Signature);
+		HullCollision->ProcMeshBodySetup = Asset->GetWorldHulls();
+		HullCollision->RegisterComponent();
+		HullsBySignature.Add(static_cast<uint8>(Signature), HullCollision);
+	}
 	HullCount = Asset->WorldHullCount();
 
 	if (UBodySetup* DispSetup = Asset->GetDisplacement())

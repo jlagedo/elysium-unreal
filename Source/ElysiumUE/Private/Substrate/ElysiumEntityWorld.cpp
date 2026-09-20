@@ -3,6 +3,7 @@
 #include "ElysiumBrushComponent.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumClassRegistry.h"
+#include "ElysiumContentsSignature.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumLineService.h"
@@ -414,14 +415,19 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	// runs past the map's def array and finds nothing there, which is correct: it has no authored
 	// collision to have been baked, so it cooks from its own hulls like every unconverted map does.
 	const UElysiumMapCollisionPayload* Cooked = CollisionPayload.Get();
-	UBodySetup* CookedBody = Cooked ? Cooked->FindBrushBody(Ent.Handle.Index) : nullptr;
-	if (CookedBody)
+	const FElysiumBrushCollisionBody* CookedRow =
+		Cooked ? Cooked->FindBrushRow(Ent.Handle.Index) : nullptr;
+	if (CookedRow && CookedRow->Body)
 	{
-		Body->InitBrushFromPayload(Ent.Handle, CookedBody, Sol);
+		Body->InitBrushFromPayload(Ent.Handle, CookedRow->Body, Sol, CookedRow->Signature);
 	}
 	else
 	{
-		Body->InitBrush(Ent.Handle, Ent.Def->Hulls, Sol);
+		// The def carries the OR of this entity's brushes' contents, which is as much as the
+		// entity table has ever said. It answers the four retail questions for the body as a
+		// whole -- enough for a door to stop sight and a glass `func_brush` not to.
+		Body->InitBrush(Ent.Handle, Ent.Def->Hulls, Sol,
+			static_cast<uint8>(ElysiumContents::SignatureOf(Ent.Def->Contents)));
 	}
 	Body->SetupAttachment(Root);
 	Body->SetRelativeLocation(Ent.Origin);   // hulls are entity-local; the live origin places them

@@ -5,9 +5,11 @@
 
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
+
 #include "ElysiumAppState.h"
 #include "ElysiumAudioLatency.h"
 #include "ElysiumBinds.h"
+#include "ElysiumContentsSignature.h"
 #include "ElysiumBrushComponent.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
@@ -1219,6 +1221,17 @@ bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
 // FPlayerWorldFixture, the transient-game-world preamble every native-actor case below uses.
 #include "Tests/ElysiumPlayerWorldFixture.h"
 
+namespace
+{
+	/** The contents signature a fixture brush stands for: ordinary SOLID world geometry, which
+	 *  blocks both pawns and sight. The tests below build slabs and trigger volumes out of thin
+	 *  air rather than out of a map's brushes, so they have no contents word of their own. */
+	uint8 ElysiumTestBrushSignature()
+	{
+		return static_cast<uint8>(ElysiumContents::SignatureOf(0x1));
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSleepTest,
 	"Elysium.Substrate.NpcMotorSleep", GElysiumTestFlags)
 bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
@@ -1323,7 +1336,8 @@ bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
 		}
 	}
 	UElysiumBrushComponent* Floor = NewObject<UElysiumBrushComponent>(FloorOwner, TEXT("Slab"));
-	Floor->InitBrush(FElysiumEntityHandle::Invalid(), { Slab }, EElysiumBrushSolidity::Solid);
+	Floor->InitBrush(FElysiumEntityHandle::Invalid(), { Slab }, EElysiumBrushSolidity::Solid,
+		ElysiumTestBrushSignature());
 	Floor->SetupAttachment(Root);
 	Floor->RegisterComponent();
 	FloorOwner->AddInstanceComponent(Floor);
@@ -1428,7 +1442,8 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 	}
 	UElysiumBrushComponent* Trigger =
 		NewObject<UElysiumBrushComponent>(TriggerOwner, TEXT("Firetrans"));
-	Trigger->InitBrush(FElysiumEntityHandle::Invalid(), { Hull }, EElysiumBrushSolidity::Trigger);
+	Trigger->InitBrush(FElysiumEntityHandle::Invalid(), { Hull }, EElysiumBrushSolidity::Trigger,
+		ElysiumTestBrushSignature());
 	Trigger->SetupAttachment(Root);
 	Trigger->SetRelativeLocation(FeetDestination);
 	Trigger->RegisterComponent();
@@ -1729,7 +1744,8 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		}
 	}
 	UElysiumBrushComponent* Slab = NewObject<UElysiumBrushComponent>(Map, TEXT("DoorSlab"));
-	Slab->InitBrush(SlabHandle, { SlabHull }, EElysiumBrushSolidity::Solid);
+	Slab->InitBrush(SlabHandle, { SlabHull }, EElysiumBrushSolidity::Solid,
+		ElysiumTestBrushSignature());
 	Slab->SetupAttachment(Map->GetRootComponent());
 	Slab->SetWorldLocation(BodyOrigin + Aim * 75.0f);
 	Slab->RegisterComponent();

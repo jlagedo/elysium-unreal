@@ -1,5 +1,6 @@
 #include "ElysiumMapCollisionPayload.h"
 
+#include "ElysiumContentsSignature.h"
 #include "PhysicsEngine/BodySetup.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCollisionPayload, Log, All);
@@ -58,23 +59,60 @@ namespace
 
 UBodySetup* UElysiumMapCollisionPayload::FindBrushBody(int32 EntityIndex) const
 {
+	const FElysiumBrushCollisionBody* Row = FindBrushRow(EntityIndex);
+	return Row ? Row->Body : nullptr;
+}
+
+const FElysiumBrushCollisionBody* UElysiumMapCollisionPayload::FindBrushRow(
+	int32 EntityIndex) const
+{
 	for (const FElysiumBrushCollisionBody& Row : BrushBodies)
 	{
 		if (Row.EntityIndex == EntityIndex)
 		{
-			return Row.Body;
+			return &Row;
 		}
 	}
 	return nullptr;
 }
 
+uint8 UElysiumMapCollisionPayload::LegacyWorldSignature()
+{
+	// A version-1 payload was staged from the `BLOCK_MASK`-filtered sidecar, so its one body is
+	// the player-solid set: blocks both pawns, says nothing about sight. That is exactly what the
+	// `BlockAll` component it wore did, the sight channel defaulting to Ignore.
+	return static_cast<uint8>(
+		EElysiumContentsSignature::Player | EElysiumContentsSignature::Npc);
+}
+
 int32 UElysiumMapCollisionPayload::WorldHullCount() const
 {
+	if (WorldBodies.Num() > 0)
+	{
+		int32 Count = 0;
+		for (const FElysiumSignatureCollisionBody& Row : WorldBodies)
+		{
+			Count += Row.HullCount;
+		}
+		return Count;
+	}
 	return WorldHulls ? WorldHulls->AggGeom.ConvexElems.Num() : 0;
 }
 
 FBox UElysiumMapCollisionPayload::WorldHullBounds() const
 {
+	if (WorldBodies.Num() > 0)
+	{
+		FBox Box(ForceInit);
+		for (const FElysiumSignatureCollisionBody& Row : WorldBodies)
+		{
+			if (Row.Bounds.IsValid)
+			{
+				Box += Row.Bounds;
+			}
+		}
+		return Box;
+	}
 	return ConvexBounds(WorldHulls);
 }
 
@@ -105,6 +143,10 @@ bool UElysiumMapCollisionPayload::CreatePhysicsMeshes()
 	};
 
 	Create(WorldHulls);
+	for (const FElysiumSignatureCollisionBody& Row : WorldBodies)
+	{
+		Create(Row.Body);
+	}
 	Create(Displacement);
 	for (const FElysiumBrushCollisionBody& Row : BrushBodies)
 	{
@@ -166,6 +208,32 @@ void UElysiumMapCollisionPayload::AuthorWorldHulls(const TArray<FElysiumCollisio
 		*MapName, Count, Hulls.Num());
 }
 
+void UElysiumMapCollisionPayload::AuthorWorldBody(uint8 Signature,
+	const TArray<FElysiumCollisionHull>& Hulls)
+{
+	FElysiumSignatureCollisionBody Row;
+	Row.Signature = Signature;
+	// Auto-named for the same reason the brush bodies are: two `UBodySetup`s under one outer may
+	// not share a name, and a re-author would collide with the subobject it is replacing.
+	Row.Body = NewObject<UBodySetup>(this);
+	// The world collider's recipe, as `AuthorWorldHulls` states it -- same physics on both paths.
+	Row.Body->CollisionTraceFlag = CTF_UseDefault;
+	Row.Body->bGenerateMirroredCollision = false;
+	Row.Body->bDoubleSidedGeometry = true;
+	Row.Body->bHasCookedCollisionData = true;
+	Row.Body->BodySetupGuid = FGuid::NewGuid();
+	Row.HullCount = FillConvexElems(*Row.Body, Hulls);
+	Row.Bounds = ConvexBounds(Row.Body);
+	WorldBodies.Add(MoveTemp(Row));
+	// Any signature body makes this a version-2 payload, read by signature and never through
+	// `WorldHulls`.
+	PayloadVersion = 2;
+	UE_LOG(LogElysiumCollisionPayload, Log,
+		TEXT("%s: authored world body %s with %d convex hull(s) of %d row(s)"),
+		*MapName, *ElysiumContents::Spell(static_cast<EElysiumContentsSignature>(Signature)),
+		WorldBodies.Last().HullCount, Hulls.Num());
+}
+
 void UElysiumMapCollisionPayload::AuthorDisplacement(const TArray<FVector>& Vertices,
 	const TArray<int32>& Indices)
 {
@@ -209,10 +277,21 @@ void UElysiumMapCollisionPayload::AuthorBrushBody(int32 EntityIndex,
 	BrushBodies.Add(MoveTemp(Row));
 }
 
+void UElysiumMapCollisionPayload::AuthorBrushBodyWithSignature(int32 EntityIndex, uint8 Signature,
+	const TArray<FElysiumCollisionHull>& Hulls)
+{
+	AuthorBrushBody(EntityIndex, Hulls);
+	BrushBodies.Last().Signature = Signature;
+}
+
 void UElysiumMapCollisionPayload::ResetAuthoring()
 {
 	DiscardAuthored(WorldHulls);
 	DiscardAuthored(Displacement);
+	for (const FElysiumSignatureCollisionBody& Row : WorldBodies)
+	{
+		DiscardAuthored(Row.Body);
+	}
 	for (const FElysiumBrushCollisionBody& Row : BrushBodies)
 	{
 		DiscardAuthored(Row.Body);
@@ -221,7 +300,10 @@ void UElysiumMapCollisionPayload::ResetAuthoring()
 	Displacement = nullptr;
 	DisplacementVertices.Reset();
 	DisplacementIndices.Reset();
+	WorldBodies.Reset();
 	BrushBodies.Reset();
+	// Back to the shape a fresh asset has; `AuthorWorldBody` is what makes it 2 again.
+	PayloadVersion = 1;
 }
 
 FString UElysiumMapCollisionPayload::CookAuthored()
@@ -242,6 +324,11 @@ FString UElysiumMapCollisionPayload::CookAuthored()
 	};
 
 	Cook(WorldHulls, TEXT("world hulls"));
+	for (const FElysiumSignatureCollisionBody& Row : WorldBodies)
+	{
+		Cook(Row.Body, FString::Printf(TEXT("world body %s"),
+			*ElysiumContents::Spell(static_cast<EElysiumContentsSignature>(Row.Signature))));
+	}
 	Cook(Displacement, TEXT("displacement"));
 	for (const FElysiumBrushCollisionBody& Row : BrushBodies)
 	{

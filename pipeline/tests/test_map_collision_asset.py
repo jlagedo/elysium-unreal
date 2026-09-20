@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from elysium_pipeline.formats import contents_signature
 from elysium_pipeline.importers import map_collision
 
 
@@ -75,12 +76,12 @@ def test_read_hull_rows_applies_the_runtime_readers_acceptance_rule(tmp_path):
     assert rows[1][3] == pytest.approx(2.0)
 
 
-def test_read_hull_rows_stages_only_what_the_single_world_body_stands_for(tmp_path):
-    """The payload cooks one body, so it takes the player-solid brushes and no others.
+def test_the_world_partitions_into_one_body_per_contents_signature(tmp_path):
+    """A brush answers four retail masks and the answers differ, so the world is not one body.
 
-    The widened sidecar also carries NPC-only clips, sight-only brushes and pedestrian volumes.
-    Cooking those into the same body would make an NPC clip solid to the player, which is the
-    defect the signature partition exists to prevent -- they wait for a body per signature.
+    A single set could not say that an NPC clip stops an NPC and not the player, or that an
+    unsolid OPAQUE brush stops sight and neither pawn. Groups keep file order and appear in order
+    of first appearance, so the payload's bodies land the same way on every run.
     """
 
     npc_clip, sight_only, pedestrian = 0x08020000, 0x08000080, 0x08002000
@@ -89,14 +90,18 @@ def test_read_hull_rows_stages_only_what_the_single_world_body_stands_for(tmp_pa
         _hull_line(_cube(2.0), npc_clip),
         _hull_line(_cube(3.0), sight_only),
         _hull_line(_cube(4.0), pedestrian),
-        _hull_line(_cube(5.0), 0x10000),      # PLAYERCLIP alone: still the player's
+        _hull_line(_cube(5.0), SOLID),        # joins the first group, after it
+        _hull_line(_cube(6.0), 0x0),          # answers no mask: never staged
     ]) + "\n")
 
-    rows = map_collision.read_hull_rows(path)
+    partitions = map_collision.read_hull_partitions(path)
 
-    assert len(rows) == 2
-    assert rows[0][3] == pytest.approx(1.0)
-    assert rows[1][3] == pytest.approx(5.0)
+    assert [contents_signature.spell(sig) for sig, _ in partitions] == [
+        "PNS-", "-N--", "--S-", "---p"]
+    solid = partitions[0][1]
+    assert [hull[3] for hull in solid] == [pytest.approx(1.0), pytest.approx(5.0)]
+    # The flat list the parity check uses is every staged hull, in the same order.
+    assert len(map_collision.read_hull_rows(path)) == 5
 
 
 def test_brush_entity_rows_key_by_lump_ordinal_and_skip_point_entities(tmp_path):

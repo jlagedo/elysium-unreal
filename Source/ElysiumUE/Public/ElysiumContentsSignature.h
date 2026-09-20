@@ -111,6 +111,33 @@ namespace ElysiumContents
 		}
 	}
 
+	/** The profile a MOVER of this signature wears -- a solid brush entity. Same answers,
+	    WorldDynamic, and Block on the +use ray and the debug pick so a door's own knob
+	    stays addressable. */
+	inline FName DynamicProfileName(EElysiumContentsSignature Signature)
+	{
+		switch (static_cast<uint8>(Signature))
+		{
+		case 0: return FName(TEXT("ElysiumSigDyn_None"));	// ----
+		case 1: return FName(TEXT("ElysiumSigDyn_P"));	// P---
+		case 2: return FName(TEXT("ElysiumSigDyn_N"));	// -N--
+		case 3: return FName(TEXT("ElysiumSigDyn_PN"));	// PN--
+		case 4: return FName(TEXT("ElysiumSigDyn_S"));	// --S-
+		case 5: return FName(TEXT("ElysiumSigDyn_PS"));	// P-S-
+		case 6: return FName(TEXT("ElysiumSigDyn_NS"));	// -NS-
+		case 7: return FName(TEXT("ElysiumSigDyn_PNS"));	// PNS-
+		case 8: return FName(TEXT("ElysiumSigDyn_p"));	// ---p
+		case 9: return FName(TEXT("ElysiumSigDyn_Pp"));	// P--p
+		case 10: return FName(TEXT("ElysiumSigDyn_Np"));	// -N-p
+		case 11: return FName(TEXT("ElysiumSigDyn_PNp"));	// PN-p
+		case 12: return FName(TEXT("ElysiumSigDyn_Sp"));	// --Sp
+		case 13: return FName(TEXT("ElysiumSigDyn_PSp"));	// P-Sp
+		case 14: return FName(TEXT("ElysiumSigDyn_NSp"));	// -NSp
+		case 15: return FName(TEXT("ElysiumSigDyn_PNSp"));	// PNSp
+		default: return NAME_None;
+		}
+	}
+
 	/** True when a body of this signature cuts the NavMesh: it blocks an NPC, and nothing
 	    else in the engine's relevance test is ever set (see the Vehicle note above). */
 	inline bool AffectsNavigation(EElysiumContentsSignature Signature)
