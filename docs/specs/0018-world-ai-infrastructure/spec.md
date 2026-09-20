@@ -379,18 +379,21 @@ its recovery is written in the oracle section it names.
   table answers `RetailHullExtents` for its 13 callers, and the body is 33.02 × 182.88 stepping
   45.72 rather than 34 × 176 stepping the engine's default.
 
-  **Still open: the navigation half** — jobs 4 (agents installed and bound per species), 5 (the
-  per-agent meshes built in the editor and saved with the level), 6 (pedestrian nav areas) and
-  the acceptance harness. The mechanism is written: `UElysiumNavBakeLibrary` restricts a level to
-  the agents its graph's `UsedHullBits` names, places the bounds volume as a real brush and
-  builds synchronously reporting each agent's cost; the stage carries `usedHullBits`;
-  `AElysiumMapActor::RestrictNavigationToUsableAgents` holds the run-time path, which has no
-  graph in hand, to the one agent a body stands on. The 14 agents are generated and tested but
-  NOT installed (`gen_hull_table.EMIT_AGENTS_INI`), because installing them also means turning
-  `bAutoCreateNavigationData` off and that pair decides whether every map still reaches Active —
-  a question only a real map load answers, and the editor wedged before one could be run. The
-  next step is that load: flip the flag, boot both witnesses, confirm Active, then build the
-  meshes into the `.umap` and reduce the runtime to adoption.
+  **Landed 2026-09-20, job 4's agents.** All 14 are declared, generated from the hull rows, with
+  `bAutoCreateNavigationData` off so nothing creates data for agents nothing uses.
+  `UElysiumNavBakeLibrary` restricts a level to the agents its graph's `UsedHullBits` names (the
+  stage now carries the word), places the bounds volume as a real brush and builds synchronously
+  reporting each agent's tiles, bytes and seconds; `RestrictNavigationToUsableAgents` holds the
+  run-time path, which has no graph in hand, to the one agent a body stands on. Verified by
+  loading both witnesses: `sp_tutorial_1` Active in 34.4 s and `sm_hub_1` in 22.2 s, each having
+  built exactly one mesh — `Human`, radius 33.0, 0.46 s on the tutorial.
+
+  **Still open: jobs 5 and 6 and the acceptance harness** — the per-agent meshes built during
+  `bake map` and saved in the `.umap` (with the runtime reduced to adoption and
+  `RuntimeGeneration` to dynamic modifiers), the door cuts and pedestrian nav areas, and the
+  verify arm that pins every ground link pathing on its agent's mesh. The rat has no mesh until
+  a map builds the agents its graph names rather than the one its bodies wear, and no rat body
+  exists to path on one until `m_eHull` is recovered for the species that differ.
   Retail: three masks move an NPC, and all three carry `MONSTERCLIP 0x20000` and none carries
   `PLAYERCLIP 0x10000` — `0x2000b` builds the graph, `0x2400b` probes a local route and fits a
   node, `0x202400b` moves (`navigation-jump-links.md` § "Doors and NPC-clip"). One mask sees:
