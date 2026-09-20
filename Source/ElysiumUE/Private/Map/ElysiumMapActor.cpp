@@ -1681,13 +1681,26 @@ bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& To
 	{
 		return true;
 	}
-	// `ELYSIUM_USE_CHANNEL` is this project's solid-world channel: the walkable `.hulls` collider is
-	// material-less and would be reported instead of the wall on the visibility channel, which is
-	// exactly why `+use` has its own. Complex tracing is off — the brush bodies are convex hulls and
-	// the query runs per NPC per sense pass.
+	// The SIGHT channel, which every body answers by its own brush contents (0018 story 3). Retail
+	// asks this with mask `0x4091` — SOLID, SLIME, OPAQUE, MOVEABLE — and that is not the mask that
+	// decides where a body may walk: it carries neither WINDOW nor GRATE, so an NPC sees through
+	// glass and grating, and it carries OPAQUE without needing SOLID, so a `tools_shadow` brush
+	// that stops nothing still stops sight. 17 such brushes stand on `sp_tutorial_1` and 276
+	// window/grate brushes no longer block it.
+	//
+	// This used to trace ELYSIUM_USE_CHANNEL, which the world collider is set to IGNORE — so an
+	// NPC's sight was answered by whatever else happened to block the +use ray and never by brush
+	// contents at all. Nothing could make glass transparent to an NPC or an opaque tool brush
+	// solid to it.
+	//
+	// Characters are deliberately not occluders, as the seam states: retail's `0x4091` carries no
+	// character bit, so neither pawn profile blocks this channel and a body standing between two
+	// points does not break the line. Complex tracing is off — the bodies are convex hulls and the
+	// query runs per NPC per sense pass.
 	FCollisionQueryParams Params(FName(TEXT("ElysiumLineOfSight")), /*bTraceComplex*/ false);
 	FHitResult Hit;
-	return !World->LineTraceSingleByChannel(Hit, FromCm, ToCm, ELYSIUM_USE_CHANNEL, Params);
+	return !World->LineTraceSingleByChannel(Hit, FromCm, ToCm,
+		ElysiumCollision::SightChannel, Params);
 }
 
 bool AElysiumMapActor::TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,

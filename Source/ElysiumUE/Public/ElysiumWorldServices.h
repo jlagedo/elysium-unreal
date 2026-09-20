@@ -1021,12 +1021,19 @@ public:
 	// implementation that reported "blocked" there would blind every NPC in exactly the runs meant
 	// to prove they can see.
 	//
-	// Divergence, named: retail traces with content mask `0x4091` (solid world + opaque). Source
-	// content masks are not portable to Unreal's channel set, so the semantics are adapted rather
-	// than the number — the implementation traces `ELYSIUM_USE_CHANNEL`, which is the project's
-	// solid-world channel and the one the map's brush bodies and the material-less `.hulls` walkable
-	// surface already answer on. Characters are deliberately NOT occluders here: retail's mask
-	// carries no NPC/player bits, so a body standing between two points does not break the line.
+	// Retail traces with content mask `0x4091` — SOLID, SLIME, OPAQUE, MOVEABLE — and since 0018
+	// story 3 the implementation answers it by CONTENTS rather than by adaptation: every body
+	// wears the collision profile its brushes' contents signature names, and this traces the
+	// dedicated sight channel those profiles answer on. The mask is not the movement mask, and the
+	// difference is visible: it names neither WINDOW nor GRATE, so an NPC sees through glass and
+	// grating, and it names OPAQUE without SOLID, so a `tools_shadow` brush that stops nothing
+	// still stops sight.
+	//
+	// Divergence, named: characters are NOT occluders here. Retail's `0x4091` carries no character
+	// bit, so a body standing between two points does not break the line. (`FVisible`'s own
+	// `0x2804091` does carry MONSTER; the arms that want it are noted at their call sites.)
+	// Unwitnessed, and stated as such: that a sight-only brush stops a retail sight trace is read
+	// from the mask and the contents, not yet seen in a running retail game.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
 
 	// `CStealthKillRules::FindVictim` `0x101be1f0`'s acquisition ray. Mask `0x201400b`

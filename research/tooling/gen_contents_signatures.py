@@ -501,9 +501,13 @@ def emit_ini_block(letters: str) -> str:
         f"ObjectTypeName=\"ElysiumPlayer\","
         f"CustomResponses=((Channel=\"ElysiumUse\",Response=ECR_Ignore),"
         f"(Channel=\"ElysiumPick\",Response=ECR_Ignore),"
-        f"(Channel=\"ElysiumSight\",Response=ECR_Block)),"
+        f"(Channel=\"ElysiumSight\",Response=ECR_Ignore)),"
         f"HelpMessage=\"The player's hull: Pawn, on the player's own object channel.\","
         f"bCanModify=False)",
+        "; The player does NOT occlude sight. Retail's NPC line-of-sight mask 0x4091 carries no",
+        "; character bit, so a body standing between two points does not break the line -- the",
+        "; divergence already named on IElysiumEmbodiment::QueryLineOfSight. The sight channel is",
+        "; answered by brush contents, movers and props, which is the whole point of having it.",
         "",
         "; ElysiumPlayer answers exactly as Pawn does in every engine profile. A profile that does",
         "; not name a channel falls back to that channel's DefaultResponse, which is Block here, so",
