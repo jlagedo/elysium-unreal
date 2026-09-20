@@ -1,0 +1,92 @@
+{
+  "source": "vampire.dll trace-mask immediates, as walked in docs/vtmb/navigation-jump-links.md",
+  "comment": [
+    "The four questions a brush answers, and the retail mask that asks each. A brush's SIGNATURE",
+    "is its four answers; nothing downstream of the bake tests a contents bit again.",
+    "Only the BRUSH bits of each mask are kept: the entity bits (MONSTER 0x2000000) select which",
+    "entities a trace hits and are answered by those entities' own collision, not by world geometry.",
+    "The sight row is therefore 0x804091, the brush half of the game's one sight mask 0x2804091."
+  ],
+  "masks": [
+    {
+      "key": "player",
+      "letter": "P",
+      "mask": 81931,
+      "hex": "0x1400b",
+      "sdkName": "MASK_PLAYERSOLID_BRUSHONLY",
+      "bits": ["SOLID 0x1", "WINDOW 0x2", "GRATE 0x8", "MOVEABLE 0x4000", "PLAYERCLIP 0x10000"],
+      "question": "does this brush block the player",
+      "retail": ["0x1011e560 CategorizePosition", "0x1011fb50", "0x10166cc0", "0x1006db10", "0x10350830 CHL2_Player::vfunc436"],
+      "oracle": "docs/vtmb/navigation-jump-links.md '#doors-and-npc-clip-the-retail-contract'"
+    },
+    {
+      "key": "npc",
+      "letter": "N",
+      "mask": 147467,
+      "hex": "0x2400b",
+      "sdkName": "MASK_NPCSOLID_BRUSHONLY",
+      "bits": ["SOLID 0x1", "WINDOW 0x2", "GRATE 0x8", "MOVEABLE 0x4000", "MONSTERCLIP 0x20000"],
+      "question": "does this brush block an NPC",
+      "retail": ["0x10303b30 local-route ground retry", "0x102f3ccb CanFitAtNode", "0x102f3df1 CanFitAtNode"],
+      "note": [
+        "The graph-build mask 0x2000b and the motor's 0x202400b differ from this one only in bits",
+        "no BRUSH carries differently: 0x2000b drops MOVEABLE (which is why links run through",
+        "standing doors) and 0x202400b adds MONSTER (an entity bit). All three carry MONSTERCLIP,",
+        "so one brush answer serves the build, the node fit and the motor alike."
+      ],
+      "oracle": "docs/vtmb/navigation-jump-links.md '#doors-and-npc-clip-the-retail-contract'"
+    },
+    {
+      "key": "sight",
+      "letter": "S",
+      "mask": 8405137,
+      "hex": "0x804091",
+      "sdkName": "MASK_OPAQUE_AND_NPCS, brush bits",
+      "bits": ["SOLID 0x1", "SLIME 0x10", "OPAQUE 0x80", "MOVEABLE 0x4000", "%compileNpcOpaque 0x800000"],
+      "question": "does this brush block sight",
+      "retail": ["0x102b4630 FVisible slot 201", "0x10301720 the cover search", "0x10302e50 the shoot node"],
+      "note": [
+        "Carries neither WINDOW nor GRATE: an NPC sees through glass and grating.",
+        "SLIME 0x10 is on no brush of any shipped map, so it never decides an answer.",
+        "OPAQUE without SOLID is a light-blocker that still stops sight: 1,764 brushes on 25 maps."
+      ],
+      "oracle": "docs/vtmb/navigation-jump-links.md '#the-cover-search-walked'"
+    },
+    {
+      "key": "pedestrian",
+      "letter": "p",
+      "mask": 8192,
+      "hex": "0x2000",
+      "sdkName": null,
+      "bits": ["%compilewanderclip 0x2000"],
+      "question": "is this brush a pedestrian volume",
+      "retail": ["0x102fbbaa InitLinks' second walk test", "0x102fe9f0 the alternate search's 5-10x edge cost"],
+      "note": [
+        "Troika's own bit, tools/toolspedclip. The tie of %compilewanderclip to 0x2000 is an",
+        "inference by elimination and by name: clip brushes reach the BSP with their sides'",
+        "texinfo stripped, so no texture survives to witness it.",
+        "Only a brush carrying NO clip bit prices a route -- one that also carries MONSTERCLIP",
+        "stops InitLinks' own walk test, so no ground link is built across it to price."
+      ],
+      "oracle": "docs/vtmb/navigation-jump-links.md '#the-node-searches-and-the-pedestrian-cost'"
+    }
+  ],
+  "slope": {
+    "comment": [
+      "Retail's AI navigation has NO slope term of its own. CAI_MoveProbe_TestGroundMove",
+      "(0x102e4f50) clamps only on step height -- max(hullHeight * 0.5, StepHeight + 0.1) at",
+      "0x102e565b -- and CAI_MoveProbe_CheckStandPosition (0x102e7270) accepts a downward hull",
+      "trace iff it hit at all and the hit ENTITY's slot 164 allows standing; neither reads a",
+      "surface normal. An authored node graph needs no slope limit; a rasterised NavMesh does.",
+      "The port therefore takes retail's own standable normal from the player movement layer,",
+      "where the same world is stood on: 0.7 at 0x104492d0, already ported as",
+      "ElysiumMove::StandableZ (Source/ElysiumUE/Public/ElysiumMoveSolve.h). This is a sourced",
+      "retail constant, not a tuning choice, but its application to NPC navigation is named."
+    ],
+    "standableNormalZ": 0.7,
+    "retail": "0x104492d0",
+    "port": "ElysiumMove::StandableZ",
+    "oracle": "docs/vtmb/source_movement.md '#the-ground-test'"
+  },
+  "stepHeightSourceUnits": 18
+}

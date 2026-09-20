@@ -885,8 +885,25 @@ shipped graph (Source units; `UsedHullBits` is the OR of these bits):
 | 20 | `0x100000` | `MANBAT_HULL` | (-40,-40,0)..(40,40,160) | 256 |
 | 21 | `0x200000` | `SHERIFF_HULL` | (-20,-20,0)..(20,20,100) | 363 |
 
-Hulls 1–6, 8 and 9 (`HUMAN_PATHING`, `SMALL_CENTERED`, `WIDE_HUMAN`, `TINY`, `WIDE_SHORT`,
-`WIDE_TALL`, `LARGE`, `LARGE_CENTERED`) carry no link anywhere. `UsedHullBits` by map count:
+Hulls 1–6, 8 and 9 carry no link anywhere. Their extents were recovered 2026-09-20 with the rest
+(all 22 rows are now committed as `docs/vtmb/data/hull_table.json`, replayed by
+`research/tooling/probes/hull_table.py --check`), and they are listed here because a hull with no
+link still sizes a body:
+
+| hull | bit | name | mins..maxs |
+|---:|---|---|---|
+| 1 | `0x2` | `HUMAN_PATHING_HULL` | (-8,-8,0)..(8,8,72) |
+| 2 | `0x4` | `SMALL_CENTERED_HULL` | (-20,-20,-20)..(20,20,20) |
+| 3 | `0x8` | `WIDE_HUMAN_HULL` | (-15,-15,0)..(20,15,72) |
+| 4 | `0x10` | `TINY_HULL` | (-12,-12,0)..(12,12,24) |
+| 5 | `0x20` | `WIDE_SHORT_HULL` | (-35,-35,0)..(35,35,32) |
+| 6 | `0x40` | `WIDE_TALL_HULL` | (-25,-25,0)..(25,25,100) |
+| 8 | `0x100` | `LARGE_HULL` | (-40,-40,0)..(40,40,100) |
+| 9 | `0x200` | `LARGE_CENTERED_HULL` | (-38,-38,-38)..(38,38,38) |
+
+`WIDE_HUMAN_HULL` is the one asymmetric row in the table: its maxs reach 20 in x against mins of
+−15, so it has no single radius and could not be an agent as it stands. It carries no link, so
+nothing asks it to be. `UsedHullBits` by map count:
 `0x1` 66, `0x81` 15, `0x80001` 10, `0x2001` 4, `0x4001` 2, `0x82c01` 2, and one each of
 `0x40081`, `0x38001`, `0x2081`, `0x82001`, `0x80c01`, `0xc01`, `0x801`, `0x300081`, `0x1001`.
 Both witness maps are `0x80001`: human and rat.
@@ -902,15 +919,34 @@ except: 0 HUMAN `(-8,-8,0)..(8,8,72)`; 2 SMALL_CENTERED `±12`; 3 WIDE_HUMAN
 `(-10,-10,0)..(10,10,70)`; 15 MING_XIAO and 16 MING_XIAO_PATHING keep x / y and drop to
 height 100; 18 HENGEYOKAI `(-10,-10,0)..(10,10,70)`.
 
+**There is no walkable slope limit to recover** (2026-09-20, 0018 story 3). The spec listed one as
+an unrecovered read; it does not exist, because an authored node graph never asks the question.
+Two bodies decide whether an NPC may stand or walk somewhere, and neither reads a surface normal:
+`CAI_MoveProbe_TestGroundMove 0x102e4f50` clamps only on step height — `max(hull height × 0.5,
+StepHeight + 0.1)` at `102e565b`, 36.0 on hull 0 — and `CAI_MoveProbe_CheckStandPosition
+0x102e7270` accepts a downward hull trace iff it hit at all (`fraction != 1.0`) and the hit
+ENTITY's slot 164 allows standing, reached through slot 166, whose body `0x10026f80` is the base
+for every class but the two Ming Xiao overrides. Passability is the step height and the hull, end
+to end.
+
+A rasterised NavMesh must answer what retail never asked, so the port supplies the term. It takes
+retail's OWN standable normal from the player movement layer, where the same floor is stood on:
+`0.7` at `0x104492d0`, already ported as `ElysiumMove::StandableZ`
+(`Source/ElysiumUE/Public/ElysiumMoveSolve.h`), giving a 45.57° agent slope. The constant is
+retail's; applying it to NPC navigation is the named modernization.
+
 **The rat hull is not a subset of the human one.** Of 6,848 rat links on 14 maps, 546 carry no
 human motion. `sp_tutorial_1`: 41 of 428, reaching 1 node no human link touches, 5 of them
 joining node sets the human links keep apart (`0–69`, `1–69`, `44–69`, `77–113`, `146–190`);
 `sm_hub_1`: 99 of 1,862, 2 such nodes, 9 such links. A rat passes where a human cannot.
 
-**Brush contents, read as answers to the retail masks** (`contents_signatures.py`). Taking
+**Brush contents, read as answers to the retail masks.** Taking
 each brush's four answers — blocks the player (`& 0x1400b`), blocks an NPC (`& 0x2400b`), blocks
 sight (`& 0x804091`, the brush bits of the sight mask `0x2804091`), is a pedestrian volume
-(`& 0x2000`) — the 146,162 answering brushes of the 108 maps fall into seven signatures:
+(`& 0x2000`) — the 146,162 answering brushes of the 108 maps fall into seven signatures.
+Re-derived in the repository 2026-09-20 and reproducing every count below:
+`uv run elysium research contents_signatures`, reading the four masks and their retail sites from
+`research/tooling/data/contents_masks.json`.
 
 | player | NPC | sight | ped | brushes | typical contents |
 |:-:|:-:|:-:|:-:|---:|---|
