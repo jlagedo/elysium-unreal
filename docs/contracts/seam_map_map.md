@@ -564,6 +564,17 @@ The manifest is `2.0.0` and the recipe version 2; the fingerprint covers the par
 the geometry, since the same vertices under a different signature are different bodies wearing
 different profiles.
 
+**The lane also stands the collision in the map's own level.** `AElysiumWorldCollisionActor`
+carries one static component per signature, each referencing the payload's cooked body and wearing
+that signature's profile, so the level holds navigation-relevant geometry before the game runs --
+which is what a baked navigation mesh can be cut from, and cut from the right solids, since a
+component is navigation-relevant exactly when its profile blocks `ECC_Pawn`. The world bodies are
+authored `RF_Public` for it: a level may not name another package's private sub-object, and the
+save refuses with "Illegal reference to private object". It is placed here rather than by
+`bake map` because this lane authors the bodies it points at, so the actor and the asset are
+written together. The runtime adopts it after checking map name, payload identity and body count,
+spawns nothing, and refuses a level carrying two actors rather than picking one.
+
 ### Identity and naming
 
 ```text

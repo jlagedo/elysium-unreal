@@ -388,16 +388,22 @@ its recovery is written in the oracle section it names.
   loading both witnesses: `sp_tutorial_1` Active in 34.4 s and `sm_hub_1` in 22.2 s, each having
   built exactly one mesh — `Human`, radius 33.0, 0.46 s on the tutorial.
 
-  **Still open: jobs 5 and 6 and the acceptance harness**, and job 5 has a named blocker, found
-  2026-09-20 while wiring it. At bake time the level holds NO navigation-relevant geometry: the
-  baked world meshes wear `ElysiumPickOnly`, which ignores both pawn channels, and the collision
-  bodies are transient components the runtime builds from the payload at load. Recast would run
-  over nothing and save an empty mesh — success-looking, failing later as NPCs that never find a
-  path. `pipeline/unreal/bake_navmesh.py` is written and deliberately unwired for that reason.
-  What unblocks it is **job 3's level actor**: one static component per contents signature,
-  referencing the payload's cooked body setups, saved in the `.umap`. That is also what makes the
-  mesh cut from the right solids, since a body affects navigation exactly when its signature
-  blocks an NPC. Order, therefore: the collision actor, then the meshes, then the door cuts and
+  **Job 3's level actor landed 2026-09-20.** `AElysiumWorldCollisionActor` stands the world
+  collision in the `.umap` — one static `UPrimitiveComponent` per signature, referencing the
+  payload's cooked body (a bare primitive, not the procedural mesh the transient colliders use,
+  whose body setup is `Instanced` and would duplicate the geometry into the level; and the bodies
+  had to become `RF_Public`, since a level may not name another package's private sub-object).
+  Placed by the collision import, which is also what authors those bodies, so the two cannot
+  disagree; adoption checks map name, payload identity and body count and refuses a level with
+  two. Witnessed: the tutorial adopts its four signatures and boots Active in 21.4 s where the
+  same collision took 34.4 s built at load, the hub adopts five with the roadway correctly not
+  cutting the mesh, and the collider arrives in 0.1–0.2 ms.
+
+  **Still open: jobs 5 and 6 and the acceptance harness.** Job 5's blocker is now cleared — there
+  is geometry in the level for Recast to cut — and `pipeline/unreal/bake_navmesh.py` holds the
+  build, still unwired because turning it on also means `RuntimeGeneration=DynamicModifiersOnly`,
+  removing `bForceRebuildOnLoad` (which would throw the saved mesh away) and reducing the runtime
+  to adoption. Half of that produces an empty mesh that looks like success. Then the door cuts and
   pedestrian areas, then the verify arm. The rat gets a mesh when a map builds the agents its
   graph names rather than the one its bodies wear — and nothing rat-shaped can path on it until
   `m_eHull` is recovered for the species that differ from the human.
