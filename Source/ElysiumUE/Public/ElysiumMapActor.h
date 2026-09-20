@@ -880,6 +880,10 @@ private:
 	// only when every independent prerequisite is satisfied.
 	void PollRuntimeActivation();
 	void EnsureRuntimeNavigation();
+	// Build meshes only for the agents a body can actually use. The project declares one agent per
+	// retail hull that carries links in a shipped graph; this run-time path has no map graph in
+	// hand to say which of them THIS map needs, so it takes the one every NPC stands on.
+	void RestrictNavigationToUsableAgents(class UNavigationSystemV1& Navigation) const;
 	bool IsRuntimeNavigationReady() const;
 	FElysiumMapRuntimePrerequisites CollectRuntimePrerequisites() const;
 	void ActivateRuntime();

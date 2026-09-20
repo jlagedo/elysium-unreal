@@ -22,6 +22,7 @@
 #include "Audio/ElysiumSoundScheme.h"     // FElysiumSoundSchemeManager — built at load, stopped at EndPlay
 #include "Map/ElysiumMapCollision.h"      // the walkable-surface build and its readiness states
 #include "Map/ElysiumMapLog.h"
+#include "Substrate/ElysiumRetailHullTable.h"   // the agent an NPC body actually stands on
 #include "Visual/ElysiumEntityBodies.h"   // SetMap and the map animation preload
 #include "Visual/ElysiumNativeAnimationData.h"
 #include "Visual/ElysiumExpressionPreparation.h"
@@ -805,6 +806,48 @@ void AElysiumMapActor::PollRuntimeActivation()
 	}
 }
 
+void AElysiumMapActor::RestrictNavigationToUsableAgents(UNavigationSystemV1& Navigation) const
+{
+	const TArray<FNavDataConfig>& Agents = Navigation.GetSupportedAgents();
+	if (Agents.Num() <= 1)
+	{
+		return;   // a single-agent project: nothing to restrict
+	}
+	const FName Wanted = ElysiumRetailHulls::AgentName(ElysiumRetailHulls::DefaultHull);
+	FNavAgentSelector Mask;
+	Mask.Empty();
+	for (int32 Index = 0; Index < Agents.Num(); ++Index)
+	{
+		if (Agents[Index].Name == Wanted)
+		{
+			Mask.Set(Index);
+		}
+	}
+	if (!Mask.ContainsAnyAgent())
+	{
+		UE_LOG(LogElysium, Error,
+			TEXT("runtime navigation: no supported agent named '%s'; re-run "
+				"`elysium research gen_hull_table`"), *Wanted.ToString());
+		return;
+	}
+	Mask.MarkInitialized();
+	Navigation.SetSupportedAgentsMask(Mask);
+
+	// Auto-creation is off project-wide, precisely so that declaring 14 agents does not spawn 14
+	// meshes: whoever wants data says which agent it wants. This path wants exactly one.
+	if (Navigation.GetNavDataForAgentName(Wanted) == nullptr)
+	{
+		for (const FNavDataConfig& Agent : Agents)
+		{
+			if (Agent.Name == Wanted)
+			{
+				Navigation.CreateNavigationDataInstanceInLevel(Agent, GetLevel());
+				break;
+			}
+		}
+	}
+}
+
 void AElysiumMapActor::EnsureRuntimeNavigation()
 {
 	if (bMenuBackdrop || bNavigationBuildRequested || bNavigationBuildFailed || !Collision
@@ -861,6 +904,16 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	{
 		BoundsBox->RegisterComponent();
 	}
+
+	// The project declares one agent per retail hull that carries links in a shipped graph — 14 of
+	// the 22 rows. A map needs meshes only for the hulls ITS OWN graph uses (`UsedHullBits`; both
+	// witnesses are human and rat), and this run-time path has no graph in hand: the place set
+	// that brings `UsedHullBits` to the runtime is 0018 story 4's, and the baked per-agent meshes
+	// are story 3's own job 5. Until either lands, restrict the build to the one agent a body can
+	// actually use — every NPC wears HUMAN_HULL, because `m_eHull` is unrecovered for the species
+	// that differ. Without this, declaring 14 agents would build 14 Recast meshes on every load of
+	// every map, most of them for creatures the map never spawns.
+	RestrictNavigationToUsableAgents(*Navigation);
 
 	// Both colliders cook asynchronously after their components register. Refresh their octree data
 	// now that the activation barrier has observed completed BodySetups, then build exactly once.

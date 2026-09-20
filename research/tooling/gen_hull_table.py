@@ -61,15 +61,20 @@ LINKED_HULLS = (0, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)
 #: The agent a body falls back to when its class's stand hull is not yet recovered.
 DEFAULT_AGENT_HULL = 0
 
-#: Whether to install the agents in `DefaultEngine.ini`. Held off until 0018 story 3's job 5.
+#: Whether to install the agents in `DefaultEngine.ini`. NOT YET -- the mechanism that restricts
+#: them exists and is unverified against a running game.
 #:
-#: The list is inert only once something restricts it. Today `EnsureRuntimeNavigation` spawns one
-#: bounds volume per map load and lets the navigation system create data for every supported
-#: agent, so declaring all 14 would build 14 Recast meshes on every load of every map -- including
-#: the 102 still on the sidecar transport, which have no business paying for a Ming Xiao mesh.
-#: Job 5 adds the per-map `SupportedAgentsMask` (from the graph's own `UsedHullBits`) and turns
-#: `bAutoCreateNavigationData` off; the agents land with it. Until then the header below is a
-#: table nothing reads, which costs nothing.
+#: The list is inert only once something restricts it, because the navigation system will happily
+#: create data for every supported agent -- 14 Recast meshes on every load of every map, most of
+#: them for creatures the map never spawns. Two things restrict it, and both are written:
+#: `UElysiumNavBakeLibrary::SetMapNavAgents` gives a level the agents its own graph's
+#: `UsedHullBits` names, and `AElysiumMapActor::RestrictNavigationToUsableAgents` holds the
+#: run-time path, which has no graph in hand, to the one agent an NPC body stands on.
+#:
+#: What is missing is evidence. Installing the agents also requires turning
+#: `bAutoCreateNavigationData` off, and that combination decides whether every map still reaches
+#: Active -- a question only a real map load answers, which could not be run here. Flipping this
+#: without that evidence would risk every map's navigation on an assumption.
 EMIT_AGENTS_INI = False
 
 #: Recast cell size per agent, centimetres. A cell must resolve the narrowest gap the hull can

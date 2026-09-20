@@ -80,7 +80,15 @@ def project_graph(block: dict, map_name: str) -> dict:
                          startCm=_endpoint(by_id[src], HUMAN_HULL),
                          endCm=_endpoint(by_id[dst], HUMAN_HULL),
                          bidirectional=True))
+    # The agents this map needs a mesh for. `UsedHullBits` is the graph's own answer -- an OR of
+    # the hulls its links were built for -- and it is what the bake gives the navigation system as
+    # a SupportedAgentsMask, so a map builds the meshes its own graph uses and no others. Both
+    # witnesses are `0x80001`: human and rat.
+    used_hull_bits = int(header["usedHullBits"]["value"])
     result = dict(version=RECIPE_VERSION, map=normalize_key(map_name), hull=HUMAN_HULL,
+                  usedHullBits=used_hull_bits,
+                  usedHulls=[bit for bit in range(RETAIL_HULL_COUNT)
+                             if used_hull_bits & (1 << bit)],
                   sourceLinks=len(links), excluded=excluded, links=rows)
     result["sha256"] = hashlib.sha256(json.dumps(result, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return result
