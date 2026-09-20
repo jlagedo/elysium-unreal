@@ -575,6 +575,12 @@ save refuses with "Illegal reference to private object". It is placed here rathe
 written together. The runtime adopts it after checking map name, payload identity and body count,
 spawns nothing, and refuses a level carrying two actors rather than picking one.
 
+**The lane also bakes the map's navigation meshes**, in the same pass and from those same bodies,
+for the agents the map's graph names (`UsedHullBits`, staged by the jump-link lane). The runtime
+adopts a level that arrives with tiles and builds nothing; a level without one still builds at
+load. `RuntimeGeneration` is `DynamicModifiersOnly` and `bForceRebuildOnLoad` is unset, since a
+forced rebuild would discard the baked mesh on every load.
+
 ### Identity and naming
 
 ```text

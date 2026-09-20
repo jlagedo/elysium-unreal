@@ -1009,8 +1009,9 @@ Re-derived in the repository 2026-09-20 and reproducing every count below:
 | | ✓ | | | 106 | `0x8020000` NPC clip |
 | | | | ✓ | 47 | `0x8002000` pedestrian alone |
 
-**The port answers these four questions separately as of 2026-09-20** (0018 story 3, jobs 1–3
-and 7). A brush's signature is computed once at the seam, `.hulls` carries the contents word, and
+**The port answers these four questions separately as of 2026-09-20** (0018 story 3, jobs 1–5
+and 7), and its navigation mesh is cut from the answers: each map carries a baked mesh per agent
+its graph names, built from the bodies that block an NPC and no others. A brush's signature is computed once at the seam, `.hulls` carries the contents word, and
 each signature gets a collision body wearing a generated profile: the player and NPCs are on two
 different object channels, sight has its own trace channel, and Unreal's own rule — a body is
 navigation-relevant exactly when it blocks `ECC_Pawn` — makes "blocks an NPC" and "cuts the mesh"
