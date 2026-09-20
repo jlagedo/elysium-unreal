@@ -381,11 +381,16 @@ its recovery is written in the oracle section it names.
 
   **Still open: the navigation half** — jobs 4 (agents installed and bound per species), 5 (the
   per-agent meshes built in the editor and saved with the level), 6 (pedestrian nav areas) and
-  the acceptance harness. The 14 agents are generated and tested but deliberately not installed
-  (`gen_hull_table.EMIT_AGENTS_INI`): declaring them while `EnsureRuntimeNavigation` still lets
-  the navigation system create data for every supported agent would build 14 Recast meshes on
-  every load of all 108 maps. They land with the per-map `SupportedAgentsMask`, which needs the
-  map's own `UsedHullBits` at bake time.
+  the acceptance harness. The mechanism is written: `UElysiumNavBakeLibrary` restricts a level to
+  the agents its graph's `UsedHullBits` names, places the bounds volume as a real brush and
+  builds synchronously reporting each agent's cost; the stage carries `usedHullBits`;
+  `AElysiumMapActor::RestrictNavigationToUsableAgents` holds the run-time path, which has no
+  graph in hand, to the one agent a body stands on. The 14 agents are generated and tested but
+  NOT installed (`gen_hull_table.EMIT_AGENTS_INI`), because installing them also means turning
+  `bAutoCreateNavigationData` off and that pair decides whether every map still reaches Active —
+  a question only a real map load answers, and the editor wedged before one could be run. The
+  next step is that load: flip the flag, boot both witnesses, confirm Active, then build the
+  meshes into the `.umap` and reduce the runtime to adoption.
   Retail: three masks move an NPC, and all three carry `MONSTERCLIP 0x20000` and none carries
   `PLAYERCLIP 0x10000` — `0x2000b` builds the graph, `0x2400b` probes a local route and fits a
   node, `0x202400b` moves (`navigation-jump-links.md` § "Doors and NPC-clip"). One mask sees:
