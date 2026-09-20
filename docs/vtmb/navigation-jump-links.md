@@ -908,6 +908,20 @@ nothing asks it to be. `UsedHullBits` by map count:
 `0x40081`, `0x38001`, `0x2081`, `0x82001`, `0x80c01`, `0xc01`, `0x801`, `0x300081`, `0x1001`.
 Both witness maps are `0x80001`: human and rat.
 
+**Declaring a hull and carrying a link for it are two different counts** (2026-09-20,
+`research/tooling/probes/census_links_hulls.py`, which re-derives every figure in this section
+from the patch's loose graphs). Per hull, maps declaring it in `UsedHullBits` against maps
+carrying at least one link for it: hull 0 **108 / 97** (the 11 `NumNodes: 0` graphs still declare
+human), 7 **18 / 18**, 10 4/4, 11 5/5, 12 1/1, 13 8/8, **14 `GARGOYLE_HULL` 2 / 1**, 15–18 1/1,
+19 `RAT_HULL` 14/14, 20 1/1, 21 1/1.
+
+Two corrections fall out. `TINY_CENTERED_HULL` carries its 8,986 links on **18** maps, not the 15
+stated earlier and carried into 0018 story 3 — 15 is the `0x81` row of the histogram alone, and it
+misses `0x40081`, `0x2081` and `0x300081`. And `GARGOYLE_HULL` is the table's one hull a map
+DECLARES without shipping a single link for it, so "one mesh per bit of `UsedHullBits`" builds one
+mesh nothing can path on; the bake reports such a mesh rather than assuming the declaration is
+load-bearing.
+
 **The SMALL extents of the same rows** (record `+0x20` / `+0x2c`, read by `0x102d6140` /
 `0x102d6160`; each record is filled by its own static initialiser in `0x102d4440`…`0x102d6100`,
 values pass through stack slots — `hull_table.py` replays them). Identical to the full extents
@@ -939,6 +953,18 @@ retail's; applying it to NPC navigation is the named modernization.
 human motion. `sp_tutorial_1`: 41 of 428, reaching 1 node no human link touches, 5 of them
 joining node sets the human links keep apart (`0–69`, `1–69`, `44–69`, `77–113`, `146–190`);
 `sm_hub_1`: 99 of 1,862, 2 such nodes, 9 such links. A rat passes where a human cannot.
+
+The hub's 9 were enumerated 2026-09-20 (they had been counted but never listed, and 0018 story 3
+pins them): `155–304`, `156–304`, `158–304`, `304–154`, `304–577`, `526–568`, `567–568`,
+`568–527`, `568–528`. They are two places, not nine: every one touches node 304 or node 568. The
+acceptance these support is one-sided — a rat-only link must path on the rat mesh, and these must
+NOT path on the human mesh — so a Recast floor that is simply denser than the sparse graph will
+show up here as a named exception rather than a silent pass.
+
+Per-hull link and component counts on the two witnesses, from the same probe: `sp_tutorial_1`
+human 388 (363 ground, 25 jump) in twelve components `63/27/23/22/18/16/10/7/6/3/3/3`, rat 428
+(392 / 36) in nine `64/33/24/23/22/16/10/7/3`; `sm_hub_1` human 1,763 (1,646 / 117) in
+`509/63/2`, rat 1,862 (1,759 / 103) in `510/64/2`.
 
 **Brush contents, read as answers to the retail masks.** Taking
 each brush's four answers — blocks the player (`& 0x1400b`), blocks an NPC (`& 0x2400b`), blocks

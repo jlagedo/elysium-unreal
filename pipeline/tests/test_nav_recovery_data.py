@@ -149,6 +149,44 @@ def test_the_slope_term_is_recorded_as_having_no_ai_counterpart():
     assert slope["port"] == "ElysiumMove::StandableZ"
 
 
+# ---------------------------------------------------------------- the graphs retail loads
+
+@pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
+def test_the_witness_graphs_are_the_patch_loose_ones():
+    """The pins are the patch's graphs (203/429, 578/1,862), not the packed 116/234."""
+
+    import census_links_hulls
+
+    directory = census_links_hulls.graphs_dir()
+    tutorial = census_links_hulls.read_graph(f"{directory}/sp_tutorial_1.ain")
+    hub = census_links_hulls.read_graph(f"{directory}/sm_hub_1.ain")
+    assert (len(tutorial.nodes), len(tutorial.links)) == (203, 429)
+    assert (len(hub.nodes), len(hub.links)) == (578, 1862)
+    for model in (tutorial, hub):
+        assert model.header.used_hull_bits.value == 0x80001      # human and rat
+        assert model.header.num_hulls.value == EXPECTED_HULLS
+
+
+@pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
+def test_the_rat_links_that_bridge_separate_human_node_sets():
+    """Story 3's one-sided acceptance: these must path on the rat mesh and not the human one."""
+
+    import census_links_hulls
+
+    directory = census_links_hulls.graphs_dir()
+    tutorial = census_links_hulls.rat_only(
+        census_links_hulls.read_graph(f"{directory}/sp_tutorial_1.ain"))
+    hub = census_links_hulls.rat_only(census_links_hulls.read_graph(f"{directory}/sm_hub_1.ain"))
+    assert tutorial["ratOnly"] == 41
+    assert tutorial["bridging"] == [(0, 69), (1, 69), (44, 69), (77, 113), (146, 190)]
+    assert hub["ratOnly"] == 99
+    assert hub["bridging"] == [
+        (155, 304), (156, 304), (158, 304), (304, 154), (304, 577),
+        (526, 568), (567, 568), (568, 527), (568, 528)]
+    # Nine links, but only two places: every one touches node 304 or node 568.
+    assert all(304 in pair or 568 in pair for pair in hub["bridging"])
+
+
 @pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
 def test_the_witness_maps_carry_the_signatures_the_spec_pins():
     import contents_signatures

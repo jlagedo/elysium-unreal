@@ -446,10 +446,25 @@ its recovery is written in the oracle section it names.
   Provides: the solids, the agents and the per-agent meshes to 4–12; the verification harness
   their route tests run on. Consumes: the map unit's collision rows; 2's bake stage.
   Oracle: `navigation-jump-links.md` § "Doors and NPC-clip, the retail contract", § "What the
-  shipped graphs and maps actually use". Unrecovered, each a read before its job lands: which
-  class stands on which hull (the users of `TINY_CENTERED_HULL`, 8,986 links on 15 maps, above
-  all); species overrides of the step height; the walkable slope limit; the open `146–184`
-  pair on the tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
+  shipped graphs and maps actually use".
+  Recovered 2026-09-20, the reads this story owed (`docs/vtmb/data/hull_table.json`,
+  `research/tooling/probes/{hull_table,contents_signatures,census_links_hulls}.py`, all three
+  reproducing the pins from the repository): all 22 hull rows, the 8 link-less ones included —
+  of which `WIDE_HUMAN_HULL` is asymmetric `(-15,-15,0)..(20,15,72)` and so could never be an
+  agent, though it carries no link. **There is no walkable slope limit to recover**: retail's
+  ground move (`0x102e4f50`) clamps only on step height and its stand test (`0x102e7270`) reads
+  no normal, so the agents take retail's own standable normal `0.7` (`0x104492d0`, already ported
+  as `ElysiumMove::StandableZ`) and the application is the named modernization.
+  `TINY_CENTERED_HULL` is the two security cameras' (`shape.md` § "Slot 337"), and its 8,986
+  links are on **18** maps, not the 15 stated here — 15 is the `0x81` histogram row alone.
+  `GARGOYLE_HULL` is declared by 2 maps and carries links on 1, so "one mesh per bit" can build a
+  mesh nothing paths on; the bake reports it. The hub's 9 bridging rat links are enumerated at
+  last (`155/156/158/304-…`, `526/567/568-…`: two places, nodes 304 and 568).
+  Unrecovered, each a read before its job lands: how `CNPC_VRat`, `CNPC_VCamera`,
+  `CNPC_VGargoyle`, `CNPC_VManBat`, `CNPC_VSheriffMan` and `CNPC_VWerewolf` acquire `m_eHull`
+  (`+0x1568`) — slot 337 declares a PRECACHE set, not the stand hull, and only six classes carry
+  a witnessed store; species overrides of the step height; the open `146–184` pair on the
+  tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
   closed: `MOVEABLE 0x4000` is the bit that hits doors, and the graph-build mask `0x2000b` is
   the only one without it — which is 7's door rule.)
   Size: L. Effort: Opus / high (exporter, payload, editor bake, nav config, verify).

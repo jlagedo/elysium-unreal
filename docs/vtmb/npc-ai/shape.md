@@ -3623,8 +3623,49 @@ added; the listing is `CALL 0x1000be92; OR AH,0x4 / 0x8 / 0x20; RET` — a byte-
 (`0x1038b100`), `CNPC_VMingXiaoTentacle` `0x38000` (`0x1039c480`), `CNPC_VSheriffMan` `0x200000`
 (`0x103ae840`) and `CNPC_VWerewolf` `0x1000` (`0x103cab50`).
 
-**Unrecovered:** which hull each bit names. The hull table itself (`0x102d6100` / `0x102d6120`) is a
-seam in this port.
+**Which hull each bit names** was recovered 2026-09-20 with the table itself
+(`docs/vtmb/data/hull_table.json`, `navigation-jump-links.md` § "What the shipped graphs and maps
+actually use"). A row's index is its bit, so the join is direct:
+
+| bits | hull | class(es) |
+|---|---|---|
+| `0x80` | 7 `TINY_CENTERED_HULL` | `CNPC_VCamera`, `CNPC_VCameraSecurity` |
+| `0x400` | 10 `TZIMISCE1_HULL` | `CNPC_VTzimisce` |
+| `0x800` | 11 `TZIMISCE2_HULL` | `CNPC_VTzimisceHeadClaw` |
+| `0x1000` | 12 `WEREWOLF_HULL` | `CNPC_VWerewolf` |
+| `0x2000` | 13 `TZIMISCERUNNER_HULL` | `CNPC_VTzimisceRunner` |
+| `0x4000` | 14 `GARGOYLE_HULL` | `CNPC_VGargoyle` |
+| `0x38000` | 15 + 16 + 17, the MING_XIAO trio | `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle` |
+| `0x40001` | 18 `HENGEYOKAI_HULL` + human | `CNPC_VHengeyokai` |
+| `0x80000` | 19 `RAT_HULL` | `CNPC_VScurrying`, `CNPC_VRat` |
+| `0x100000` | 20 `MANBAT_HULL` | `CNPC_VManBat` |
+| `0x200000` | 21 `SHERIFF_HULL` | `CNPC_VSheriffMan` |
+
+That `TINY_CENTERED_HULL` — 8,986 links, the second most linked hull in the corpus — belongs to
+the two security cameras is worth stating plainly: a hull nothing walks on carries a sixth of the
+game's link budget.
+
+**But this slot declares a PRECACHE SET, not the hull the body stands on.** That is `m_eHull`
+(`+0x1568`), and `SetHullSizeNormal 0x10273070` reads the table row for it, sizing the body
+through `UTIL_SetSize`; its guard `(Bits(m_eHull) & GetUsedHullBits()) != Bits(m_eHull)` is what
+the DevMsg "`%s is using hull %s which has no ...`" reports. The two are not the same fact, and
+the port must not treat them as one.
+
+What writes `m_eHull`: the setter `0x102d7730` has exactly two callers, `0x102f7a90` and
+`InitLinks 0x102fb4e0` — both graph-build code driving the `CAI_TestHull` probe, never an NPC.
+Every other write is a direct store, and there are only eight: `CNPC_Crow::Spawn` 4 (`TINY_HULL`,
+a hull with no link in any graph — consistent with no link flying), `CNPC_VMingXiao::StartTask`
+15, `CNPC_VMingXiaoTentacle` 17 and 15 (`vfunc442` and `StartTask`), `CNPC_VHengeyokai::StartTask`
+18, and `CNPC_VVampireBoss::StartTask` / `CNPC_VSabbatLeader::TransformationStart` back to 0, plus
+`CGeneric_NPC`, `CGeneric_NPC_bathack` and `CGenericSabbat_NPC`'s Spawns setting 0.
+
+**Unrecovered:** how `CNPC_VRat` / `CNPC_VScurrying`, `CNPC_VCamera`, `CNPC_VGargoyle`,
+`CNPC_VManBat`, `CNPC_VSheriffMan` and `CNPC_VWerewolf` acquire theirs. Each declares a bare
+constant with bit 0 ABSENT, so standing on hull 0 would trip the guard above, yet no write to
+`+0x1568` reaches them in the corpus. A read before 0018 story 3's job 4 binds a body to an agent;
+until it lands, only the six classes with a witnessed store may be bound by class, and the rest
+follow their graph's `UsedHullBits`. Note also that `CNPC_VWerewolf` keeps a FAKE hull
+(`UpdateFakeHull`, `CheckStuck`, `GetGroundpoint`), so its table row may not be its body at all.
 
 ### Slot 533 `EyeOffset` — `0x10274db0`, `0x102b4ab0`
 
