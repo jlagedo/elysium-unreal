@@ -228,18 +228,17 @@ def place_world_collision_actor(entry, asset):
     # and a stale one is worse than none, because the runtime reads a saved mesh as "already
     # built" and would skip the build the map actually needs.
     stale_nav = 0
+    stale_names = []
     for existing in actors.get_all_level_actors():
         if isinstance(existing, unreal.ElysiumWorldCollisionActor):
             actors.destroy_actor(existing)
-        elif isinstance(existing, unreal.RecastNavMesh):
-            actors.destroy_actor(existing)
-            stale_nav += 1
-        elif isinstance(existing, unreal.NavMeshBoundsVolume):
+        elif isinstance(existing, (unreal.RecastNavMesh, unreal.NavMeshBoundsVolume)):
+            stale_names.append(existing.get_name())
             actors.destroy_actor(existing)
             stale_nav += 1
     if stale_nav:
-        log("%s: dropped %d stale navigation actor(s) from the level"
-            % (entry["map"], stale_nav))
+        log("%s: dropped %d stale navigation actor(s) from the level: %s"
+            % (entry["map"], stale_nav, ", ".join(sorted(stale_names))))
 
     actor = actors.spawn_actor_from_class(
         unreal.ElysiumWorldCollisionActor, unreal.Vector(0.0, 0.0, 0.0))
@@ -249,11 +248,117 @@ def place_world_collision_actor(entry, asset):
     placed = actor.author_from_payload(asset)
     if not placed:
         raise RuntimeError("%s: the payload authored no world body" % entry["map"])
+    log("%s: %d world collision body(ies) stand in the level" % (entry["map"], placed))
+
+    wanted = build_navigation(entry["map"], world)
+    prune_unwanted_navmeshes(entry["map"], actors, wanted)
 
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, level_path):
         raise RuntimeError("could not save %s after placing its world collision" % level_path)
-    log("%s: %d world collision body(ies) stand in the level" % (entry["map"], placed))
     return placed
+
+
+def prune_unwanted_navmeshes(map_name, actors, wanted_agents):
+    """Destroy every navigation mesh in the level whose agent this map did not ask for.
+
+    `UNavigationSystemV1::Build` spawns missing navigation data for every SUPPORTED agent, mask or
+    no mask, so a level that named two ends up holding fourteen -- twelve of them empty. They are
+    not harmless clutter: the runtime reads any saved mesh as "already built", and each one asks
+    Recast for a tile grid it then clamps, an error per agent per load.
+
+    Done from Python, over the editor's own actor list, because that list sees them: the same
+    sweep in C++ over the world's actors and over NavDataSet both come up empty, so whatever holds
+    these twelve is not either of those.
+    """
+    if not wanted_agents:
+        return 0
+    keep = {"RecastNavMesh-%s" % name for name in wanted_agents}
+    dropped = []
+    for actor in actors.get_all_level_actors():
+        if isinstance(actor, unreal.RecastNavMesh) and actor.get_name() not in keep:
+            dropped.append(actor.get_name())
+            actors.destroy_actor(actor)
+    if dropped:
+        log("%s: dropped %d unused navigation mesh(es): %s"
+            % (map_name, len(dropped), ", ".join(sorted(dropped))))
+    return len(dropped)
+
+
+def used_hull_bits(map_name):
+    """The map's own `UsedHullBits`, staged by the jump-link lane, or None when it has not run.
+
+    It is the graph's answer to "which hulls do my links serve", so it is also the answer to
+    "which agents does this map need a mesh for". Both witnesses are `0x80001`: human and rat.
+    """
+    root = os.environ.get("ELYSIUM_WORK_ROOT")
+    if not root:
+        return None
+    path = os.path.join(root, "import", "map_geometry", map_name, "manifest.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    bits = (manifest.get("jumpLinks") or {}).get("usedHullBits")
+    return int(bits) if bits else None
+
+
+def build_navigation(map_name, world):
+    """Build this level's navigation meshes and leave them in it to be saved.
+
+    Done here, right after the collision actor is placed, because that actor IS the geometry a
+    mesh can be cut from: the baked world meshes wear `ElysiumPickOnly` and ignore both pawn
+    channels, so before it existed the level held nothing walkable and Recast would have saved an
+    empty mesh -- success-looking, failing later as NPCs that never find a path. The
+    relevant-component count and the per-agent tile check below are what turn that silent failure
+    into a loud one.
+
+    The agent set is the map's own `UsedHullBits`, and it is applied by CREATING the navigation
+    system from it: masking a system that already exists leaves data spawned for every supported
+    agent, because editor-mode creation spawns the missing data as it initialises.
+    """
+    bits = used_hull_bits(map_name)
+    if bits is None:
+        log("%s: no staged UsedHullBits; navigation stays a run-time build" % map_name)
+        return []
+
+    agents = unreal.ElysiumNavBakeLibrary.create_navigation_for_agents(world, bits)
+    if not agents:
+        raise RuntimeError("%s: UsedHullBits %#x named no supported agent" % (map_name, bits))
+
+    relevant = unreal.ElysiumNavBakeLibrary.count_navigation_relevant_components(world)
+    if not relevant:
+        raise RuntimeError(
+            "%s: no navigation-relevant component in the level; a mesh built now would be empty"
+            % map_name)
+    log("%s: %d navigation-relevant component(s), agents %s"
+        % (map_name, relevant, ", ".join(agents)))
+
+    bounds = unreal.ElysiumNavBakeLibrary.navigation_bounds_of(world)
+    if not unreal.ElysiumNavBakeLibrary.place_nav_bounds(world, bounds):
+        raise RuntimeError("%s: could not place the navigation bounds" % map_name)
+
+    rows = unreal.ElysiumNavBakeLibrary.build_agent_nav_meshes(world)
+    if not rows:
+        raise RuntimeError("%s: the navigation build produced no mesh" % map_name)
+    built = set()
+    for row in rows:
+        log("%s: agent %-16s r%6.2f h%7.2f -> %d tile(s), %d byte(s), %.2fs"
+            % (map_name, row.agent, row.agent_radius, row.agent_height,
+               row.tiles, row.bytes, row.seconds))
+        if not row.tiles:
+            raise RuntimeError(
+                "%s: agent %s built 0 tiles; the mesh would save empty" % (map_name, row.agent))
+        built.add(row.agent)
+    missing = [name for name in agents if name not in built]
+    if missing:
+        raise RuntimeError("%s: no mesh for %s" % (map_name, ", ".join(missing)))
+    extra = [name for name in built if name not in agents]
+    if extra:
+        # An agent this map's graph never named BUILT a mesh, which the mask should have
+        # prevented. (Agents that were spawned empty are pruned before the save instead.)
+        raise RuntimeError(
+            "%s: built meshes for agents the map does not use: %s" % (map_name, ", ".join(extra)))
+    return agents
 
 
 def run(manifest_path, force=False):

@@ -884,6 +884,9 @@ private:
 	// retail hull that carries links in a shipped graph; this run-time path has no map graph in
 	// hand to say which of them THIS map needs, so it takes the one every NPC stands on.
 	void RestrictNavigationToUsableAgents(class UNavigationSystemV1& Navigation) const;
+	// Whether this level arrived with a navigation mesh already built into it, carrying tiles.
+	// A mesh with no tiles is not one: it would read as built and leave every NPC unable to path.
+	bool HasBakedNavigationMesh(const class UNavigationSystemV1& Navigation) const;
 	bool IsRuntimeNavigationReady() const;
 	FElysiumMapRuntimePrerequisites CollectRuntimePrerequisites() const;
 	void ActivateRuntime();

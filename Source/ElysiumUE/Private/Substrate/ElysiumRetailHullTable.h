@@ -72,6 +72,40 @@ namespace ElysiumRetailHulls
 		return (Hull >= 0 && Hull < Count) ? &Table[Hull] : nullptr;
 	}
 
+	/** Recast cell size for a hull's agent, centimetres, or 0 for a hull with no agent.
+	    A cell must resolve the narrowest gap the hull can pass, so it scales with the
+	    radius: the rat's 15 cm radius would be lost at the human's cell. */
+	inline float AgentCellSize(int32 Hull)
+	{
+		switch (Hull)
+		{
+		case 0: return 10.0f;	// HUMAN_HULL
+		case 7: return 10.0f;	// TINY_CENTERED_HULL
+		case 10: return 15.0f;	// TZIMISCE1_HULL
+		case 11: return 15.0f;	// TZIMISCE2_HULL
+		case 12: return 15.0f;	// WEREWOLF_HULL
+		case 13: return 10.0f;	// TZIMISCERUNNER_HULL
+		case 14: return 10.0f;	// GARGOYLE_HULL
+		case 15: return 15.0f;	// MING_XIAO_HULL
+		case 16: return 15.0f;	// MING_XIAO_PATHING_HULL
+		case 17: return 10.0f;	// MING_XIAO_TENTACLE_HULL
+		case 18: return 15.0f;	// HENGEYOKAI_HULL
+		case 19: return 5.0f;	// RAT_HULL
+		case 20: return 15.0f;	// MANBAT_HULL
+		case 21: return 15.0f;	// SHERIFF_HULL
+		default: return 0.0f;
+		}
+	}
+
+	/** Recast tile edge for a hull's agent, centimetres: CellsPerTile cells square.
+	    Cell and tile are RecastNavMesh properties, which SupportedAgents cannot carry, so
+	    without these every mesh takes the engine default and a large map is clamped. */
+	inline constexpr int32 CellsPerTile = 200;
+	inline float AgentTileSize(int32 Hull)
+	{
+		return AgentCellSize(Hull) * static_cast<float>(CellsPerTile);
+	}
+
 	/** The navigation agent cut for a hull, matching DefaultEngine.ini's SupportedAgents.
 	    NAME_None for a hull with no links: no mesh is built for one. */
 	inline FName AgentName(int32 Hull)

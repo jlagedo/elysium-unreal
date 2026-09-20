@@ -806,6 +806,21 @@ void AElysiumMapActor::PollRuntimeActivation()
 	}
 }
 
+bool AElysiumMapActor::HasBakedNavigationMesh(const UNavigationSystemV1& Navigation) const
+{
+	// Tiles, not merely a nav-data actor: an empty mesh saved in a level would otherwise read as
+	// "already built" and leave every NPC unable to path, with nothing said about it.
+	for (const ANavigationData* Data : Navigation.NavDataSet)
+	{
+		const ARecastNavMesh* Mesh = Cast<ARecastNavMesh>(Data);
+		if (Mesh != nullptr && Mesh->GetNumActiveTiles() > 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void AElysiumMapActor::RestrictNavigationToUsableAgents(UNavigationSystemV1& Navigation) const
 {
 	const TArray<FNavDataConfig>& Agents = Navigation.GetSupportedAgents();
@@ -860,6 +875,19 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	UWorld* World = GetWorld();
 	UNavigationSystemV1* Navigation = World
 		? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+
+	// A level that arrived with its own built mesh is adopted, not rebuilt. That is what baking
+	// it is for: the mesh was cut offline from the world-collision actor's bodies, where it could
+	// be inspected and measured, and rebuilding it here would throw that away and charge the load
+	// the seconds the bake already spent.
+	if (Navigation != nullptr && HasBakedNavigationMesh(*Navigation))
+	{
+		bNavigationBuildRequested = true;
+		UE_LOG(LogElysium, Log,
+			TEXT("runtime navigation %s: adopted the level's baked mesh, no build"), *MapName);
+		return;
+	}
+
 	if (!CollisionBounds.IsValid || !World || !Navigation)
 	{
 		bNavigationBuildFailed = true;
@@ -927,16 +955,26 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 
 bool AElysiumMapActor::IsRuntimeNavigationReady() const
 {
-	if (!bNavigationBuildRequested || bNavigationBuildFailed || !NavigationBounds)
+	if (!bNavigationBuildRequested || bNavigationBuildFailed)
 	{
 		return false;
 	}
 	UNavigationSystemV1* Navigation = GetWorld()
 		? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
-	const ARecastNavMesh* Recast = Navigation
-		? Cast<ARecastNavMesh>(Navigation->GetMainNavData()) : nullptr;
-	return Recast && Recast->GetNumActiveTiles() > 0
-		&& !Navigation->IsNavigationBuildInProgress();
+	if (Navigation == nullptr)
+	{
+		return false;
+	}
+	// A bounds volume is required only when this map BUILT its mesh: the adopt path spawns none,
+	// because the mesh it adopted was cut against bounds that existed at bake time and are gone.
+	// Demanding one here is what left an adopting map waiting for a volume that never comes.
+	if (NavigationBounds == nullptr && !HasBakedNavigationMesh(*Navigation))
+	{
+		return false;
+	}
+	// Any agent's mesh with tiles, not the main one: a map may build for an agent that is not
+	// first in the project's list, and `GetMainNavData` answers only for the default.
+	return HasBakedNavigationMesh(*Navigation) && !Navigation->IsNavigationBuildInProgress();
 }
 
 void AElysiumMapActor::ActivateRuntime()

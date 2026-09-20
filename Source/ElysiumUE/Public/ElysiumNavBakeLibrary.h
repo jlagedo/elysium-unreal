@@ -57,6 +57,18 @@ public:
 	static TArray<FString> SetMapNavAgents(UWorld* World, int32 HullBits);
 
 	/**
+	 * Create `World`'s navigation system already restricted to the agents `HullBits` names, and
+	 * return those agent names.
+	 *
+	 * The order matters and is the whole reason this exists. Creating the system first and
+	 * masking afterwards leaves data spawned for every SUPPORTED agent -- fourteen Recast meshes
+	 * where a map's graph named two -- because editor-mode creation spawns the missing data as it
+	 * initialises. The mask has to be on the config the system is built from.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static TArray<FString> CreateNavigationForAgents(UWorld* World, int32 HullBits);
+
+	/**
 	 * Build every navigation mesh the world now supports, synchronously, and report each one.
 	 *
 	 * `UNavigationSystemV1::Build` ends in `EnsureBuildCompletion`, so this returns with the tiles
@@ -74,6 +86,20 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
 	static bool PlaceNavBounds(UWorld* World, const FBox& BoundsCm);
+
+	/**
+	 * The bounds every navigation-relevant primitive covers, padded.
+	 *
+	 * Taken from the bodies that actually cut the mesh rather than from the whole level, so a
+	 * render-only actor cannot inflate the volume Recast rasterises.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static FBox NavigationBoundsOf(UWorld* World);
+
+	/** How many navigation-relevant primitives the world holds -- the bake's guard against
+	 *  building over nothing and saving the empty result as if it had worked. */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static int32 CountNavigationRelevantComponents(UWorld* World);
 
 	/** The agent names the project declares, in `SupportedAgents` order -- the bake's own check
 	 *  that the generated ini and the generated hull table still agree. */

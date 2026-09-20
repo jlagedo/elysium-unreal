@@ -83,6 +83,12 @@ EMIT_AGENTS_INI = True
 #: Measured costs are reported by the bake (0018 story 3, job 5) and pinned there, not here.
 CELL_SIZE_BY_RADIUS = ((20.0, 5.0), (40.0, 10.0), (float("inf"), 15.0))
 
+#: Cells per tile edge. Recast's tile grid is bounds/tileSize square and it refuses more than
+#: 1,048,576 tiles. Cell and tile are RecastNavMesh properties, which `SupportedAgents` cannot
+#: carry, so without an explicit value every mesh takes the engine default and a large map is
+#: clamped. 200 cells keeps both witnesses far inside the limit at every agent's cell.
+CELLS_PER_TILE = 200
+
 
 def load(path: tuple[str, ...]) -> dict:
     return json.loads(repo_root().joinpath(*path).read_text(encoding="utf-8"))
@@ -220,6 +226,30 @@ def emit_header(document: dict, rows: list[dict], step: dict) -> str:
         "\tinline const FRow* Find(int32 Hull)",
         "\t{",
         "\t\treturn (Hull >= 0 && Hull < Count) ? &Table[Hull] : nullptr;",
+        "\t}",
+        "",
+        "\t/** Recast cell size for a hull's agent, centimetres, or 0 for a hull with no agent.",
+        "\t    A cell must resolve the narrowest gap the hull can pass, so it scales with the",
+        "\t    radius: the rat's 15 cm radius would be lost at the human's cell. */",
+        "\tinline float AgentCellSize(int32 Hull)",
+        "\t{",
+        "\t\tswitch (Hull)",
+        "\t\t{",
+    ]
+    for row in rows:
+        out.append(f"\t\tcase {row['bit']}: return {row['cellSizeCm']:.1f}f;\t// {row['hull']}")
+    out += [
+        "\t\tdefault: return 0.0f;",
+        "\t\t}",
+        "\t}",
+        "",
+        "\t/** Recast tile edge for a hull's agent, centimetres: CellsPerTile cells square.",
+        "\t    Cell and tile are RecastNavMesh properties, which SupportedAgents cannot carry, so",
+        "\t    without these every mesh takes the engine default and a large map is clamped. */",
+        f"\tinline constexpr int32 CellsPerTile = {CELLS_PER_TILE};",
+        "\tinline float AgentTileSize(int32 Hull)",
+        "\t{",
+        "\t\treturn AgentCellSize(Hull) * static_cast<float>(CellsPerTile);",
         "\t}",
         "",
         "\t/** The navigation agent cut for a hull, matching DefaultEngine.ini's SupportedAgents.",
