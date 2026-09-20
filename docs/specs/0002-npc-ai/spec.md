@@ -1169,11 +1169,11 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 26 (`GetNewSchedule`), 11 (the door selector). Oracle: § "The kernel's failure route
   and the base programs, walked".
   Size: XS. Effort: Sonnet / low.
-- [ ] **22. `sp_tutorial_1` on the V2 lane.** Moved to 0018 story 13 (2026-09-15).
-- [ ] **24. Unreal navigation and retail route outcomes.** Moved to 0018 story 3
-  (2026-09-15), boundary revised 2026-09-17. Unreal owns pathfinding and locomotion;
-  compact baked AIN topology supplies node goals, special links and validated admission rules.
-  Hunt/cover/retreat/flank goal selection traverses ordered adjacency with live state; those
+- [ ] **22. `sp_tutorial_1` on the V2 lane.** Moved to 0018 story 20 (2026-09-15).
+- [ ] **24. Unreal navigation and retail route outcomes.** Moved to 0018 stories 4 to 9
+  (2026-09-15), boundary revised 2026-09-20. Unreal owns pathfinding, reachability and
+  locomotion; AIN is translated at bake time into places, nav links and areas.
+  Hunt/cover/retreat/flank goal selection applies retail's tests over those places; those
   rules remain observable even when Unreal supplies the walking route.
   A local route can precede node routing in retail, so no universal nearest-component veto.
   These tasks retain their goal kind, failure code and ordering when calling that service;
@@ -1238,12 +1238,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   and completes; it does not read or submit a patrol list. `GET_FULL_PATROL_PATH 0x7c` reads
   only the current node, with its distinct `-1` early return (no shipped program use found).
   Unrecovered: the upstream route expected by the `0x46` program's `WAIT_FOR_MOVEMENT`.
-  Use 0018/3's stable node data and 0018/6's logical path state; I/O/Python and the task loop
+  Use 0018/4's place set and 0018/11's logical path state; I/O/Python and the task loop
   must share the same live state. Evidence: `navigation-jump-links.md` § "Task readers of network data".
   Size: L. Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
   Rework (2026-09-15): the registry, the visitor walk and the entry / loop / release trio
-  are 0018 story 5; the programs load from the schedule seam (0019 story 3). This story
+  are 0018 story 10; the programs load from the schedule seam (0019 story 3). This story
   keeps the three selector arms and retires the ambient executor.
   Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
   INTERACT`; the last two unreachable (no setter for `SHOULD_LOITER`, no caller pairs NPCs for
@@ -1289,7 +1289,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   walk, walked"), § "Interesting-place eligibility". Provides: the entry/loop/release trio to 27.
   Size: L. Effort: Opus / high.
 - [ ] **27. Patrol-point interest records.**
-  Rework (2026-09-15): the node record is 0018 story 6; this story keeps the roll and the
+  Rework (2026-09-15): the node record is 0018 story 11; this story keeps the roll and the
   two task arms.
   Retail: an `info_node_patrol_point` may carry an interest record at `node->+0xa0`
   (`+0x468` the name of a `CAI_InterestingPlace`, `+0x46c` a 0–99 chance). `0x1029f650` rolls
@@ -1635,10 +1635,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   (`0x7c/0x7d/0x7e/0x7f/0x80/0x81/0x82/0x84/0x85`, `HUNT_LOOK_AROUND`, `HUNT_FAILED`); the hunt
   cell over 10g's object; the tasks `0x7b`, `0x7e`, `0xae`, `0xaf`, `GET_PATH_TO_LASTENEMY_LKP`,
   `SUGGEST_STATE 0x06`; case 0xb's order.
-  The list builders' runtime adjacency reads are confirmed (2026-09-17): retain directional
-  candidate order, link/capability predicates, random draws and list-versus-terminal-node
-  results through 0018's node-query service; Unreal moves between the resulting goals.
-  Consumes: 0018/3 and 6 (topology and hunt query), 10g (the path object), 10e/10f (the shared
+  The hunt target is 0018 story 9's: a reachable place within 256 units of travel best aligned
+  with the heading, retail's jitter draws kept; the list builder `0xae` has no issuer and is not
+  built. Unreal moves to the resulting goal.
+  Consumes: 0018/9 and 11 (the hunt target and the path object), 10g (the path object), 10e/10f (the shared
   tasks), 10k (`0x84`), 16c (`DoFrenzy`'s entry), 15 (the state byte).
   Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb; "The
   hunt programs and the expiry chain, verbatim") and `navigation-jump-links.md` § "Task readers
@@ -1712,7 +1712,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Size: M. Effort: Opus / medium.
 - [ ] **17. Squads.**
   Rework (2026-09-15): the squad object, membership, the cap and the disconnect refcount are
-  0018 story 8; this story keeps the condition producer, the two tasks and the overlay's
+  0018 story 14; this story keeps the condition producer, the two tasks and the overlay's
   clear.
   Retail: one shared `AI_Enemies` memory. Joining (`squadname` + `bits_CAP_SQUAD`, `InitSquad`
   `0x10273d30` / `SetSquad` `0x1029a930`) points `m_pEnemies` at `squad+8`; `GetEnemies()`
@@ -1854,7 +1854,7 @@ whole closure — does not. Programs are data (0019 story 3), the world's object
 a function is ported only if something can observe it (0019 § Scope).
 
 1. **0019 stories 1–4 and 0018 stories 1–3, in parallel.** Until 0019/3 lands no program is
-   typed by hand; until 0018/3 lands no path task is wired.
+   typed by hand; until 0018/5 lands no path task is wired.
 2. **29e finishes under the strict verdict** (0019 story 8).
 3. **0019/5 the class tree**, alone on a branch; then **0019/6** the deletions and the
    mechanism seams; then **0019/7** the reach cut.
@@ -1862,7 +1862,7 @@ a function is ported only if something can observe it (0019 § Scope).
    order the selectors reach them — 25a; 10d, 10e, 10f, 10h, 10g, 10i / 10j, 10k, 11 / 27,
    12b; then the overlays and the social families — 16a, 16b, 16c, 17, 21a, 21b, 21c; then 28
    and 13b.
-5. **The hub's reach** (0018 story 13): the idle families first.
+5. **The hub's reach** (0018 story 20): the idle families first.
 
 The open stories, re-scoped. A story keeps its number and its retail text; what moved is named.
 
@@ -1871,26 +1871,26 @@ The open stories, re-scoped. A story keeps its number and its retail text; what 
 | 25a `ClearSchedule` producers | the wiring | — |
 | 25b species `TranslateSchedule` | the twenty species bodies, on their classes after 0019/5 | the pre-table's ids → the seam |
 | 25c `MaintainSchedule` exits | absorbed by 29e | — |
-| 22 | — | 0018/13 |
-| 24 | — | 0018/3 |
-| 10g patrol programs | the roll sites, the task arms | programs → seam; paths → 0018/6 |
-| 11 interesting places | the three selector arms; retires the ambient executor | programs → seam; registry, walk, trio → 0018/5 |
-| 27 patrol-point interest | the roll, the two task arms | the record → 0018/6 |
+| 22 | — | 0018/20 |
+| 24 | — | 0018/4–9 |
+| 10g patrol programs | the roll sites, the task arms | programs → seam; paths → 0018/11 |
+| 11 interesting places | the three selector arms; retires the ambient executor | programs → seam; registry, walk, trio → 0018/10 |
+| 27 patrol-point interest | the roll, the two task arms | the record → 0018/11 |
 | 26 `GetSchedule` | absorbed by 29e | — |
 | 28 player-on-head | as written | — |
 | 10i comfort program | the task arms | program → seam |
 | 10j `CheckTarget` | as written | — |
 | 10d alert selectors | the two selectors, the ladder, the tail | the four programs → seam |
-| 10e sound-investigation | the task arms | programs → seam; the list → 0018/7 |
+| 10e sound-investigation | the task arms | programs → seam; the list → 0018/13 |
 | 10f unknown-investigation | the task arms | programs → seam |
 | 12a reaction keyfields | the normalization, the readers | the parse → 0019/2 |
-| 12b cover and kick | the chooser | programs → seam; the searches → 0018/4 |
+| 12b cover and kick | the chooser | programs → seam; the searches → 0018/8 |
 | 10k saved-position programs | the task arms | programs → seam |
-| 10h hunt-investigation | the task arms | programs → seam; the hunt path → 0018/6 |
+| 10h hunt-investigation | the task arms | programs → seam; the hunt path → 0018/11 |
 | 13b the leak | as written | — |
 | 16a followers | as written | — |
 | 16b composed relationship | as written; the ideal state in 29e | — |
-| 17 squads | the condition producer, the two tasks | the object → 0018/8 |
+| 17 squads | the condition producer, the two tasks | the object → 0018/14 |
 | 16c possession and frenzy | as written | — |
 | 21a flee | the selector, the task arms | programs → seam |
 | 21b cower, disoriented, lost | the task arms | programs → seam |

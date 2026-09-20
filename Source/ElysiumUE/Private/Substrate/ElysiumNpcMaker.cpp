@@ -362,7 +362,7 @@ void FElysiumNpcMaker::Think()
 	if (InstalledThink == EMakerThink::Zombie)
 	{
 		// SEAM for `CNPCMaker_Zombie`'s own think (`0x10015c4e` -> `0x1034d2d0`), which is unported
-		// (0018 story 10). Running the base `CNPCMaker` think here instead would spawn children by a
+		// (0018 story 16). Running the base `CNPCMaker` think here instead would spawn children by a
 		// rule the zombie maker does not follow, so it does nothing and stops being due. Its inherited
 		// `Spawn` input (slot 617 is not overridden) still reaches `TrySpawn`.
 		NextThink = ELYSIUM_NEVER_THINK;

@@ -30,7 +30,7 @@ public:
 	int32 MinPcDistance = 0;        // Source units
 	// `CNPCMaker_Zombie`'s own three keyfields (datamap `0x106253e8`), bound on this shared leaf by
 	// `ElysiumNpcKernelBindings::AddNpcMakerZombieFields`. Carried and saved; nothing in this runtime
-	// reads them yet, because the zombie maker's think (`0x1034d2d0`) is unported (0018 story 10).
+	// reads them yet, because the zombie maker's think (`0x1034d2d0`) is unported (0018 story 16).
 	int32 ZombieAiType = 0;         // +0x76d0 m_iZombieAISpawnType  Flag_ZombieAIType
 	bool bShouldRagdoll = false;    // +0x76d4 m_bShouldRagdoll      should_ragdoll
 	float RemoveDistance = 0.0f;    // +0x76d8 m_flRemoveDist        remove_distance

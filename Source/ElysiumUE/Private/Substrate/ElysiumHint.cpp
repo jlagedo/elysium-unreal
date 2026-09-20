@@ -107,7 +107,7 @@ void FElysiumHint::InputDisableHint(const FElysiumInputArgs&)
 void FElysiumHint::InputWalk(const FElysiumInputArgs&)
 {
 	// SEAM: `FUN_102d3e60` resolves the network node this hint is bound to; no node is bound until
-	// 0018 story 3, and retail's own null arm returns without touching anything.
+	// 0018 story 4, and retail's own null arm returns without touching anything.
 }
 
 void FElysiumHint::InputDontWalk(const FElysiumInputArgs&)

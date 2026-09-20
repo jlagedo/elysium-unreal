@@ -9,7 +9,7 @@ struct FElysiumEntityDef;
 // keyvalue block (`FUN_102d2f30`, classname `ai_hint`) or makes none, and then removes the
 // authoring entity on every branch. This is the def-level half of that lifecycle: which rows
 // become a hint, and the classname the live entity carries. The graph-node half (the network node,
-// its id, the removal of rows that make no hint) is 0018 story 3's.
+// its id, the removal of rows that make no hint) is 0018 story 4's.
 namespace ElysiumNodeEntity
 {
 	// The classname `FUN_102d2f30` creates the hint under (`s_ai_hint_1060a388`).

@@ -127,7 +127,7 @@ green, and `coverage.md` shows the change.
   target plain substrate objects, so binding actor properties still requires an explicit
   adapter and coverage check. Actor declarations may be built first; generated bindings and
   runtime adoption complete together for each stood class. AIN nodes/edges are decoded graph
-  data, not datamap keyfields: their selective bake and native nav links are owned by 0018/3,
+  data, not datamap keyfields: their bake into places and native nav links is owned by 0018/4 and 0018/7,
   and do not require generated actor classes for every graph record.
   **Shared runtime access:** preserve the existing entity lookup/input/field bridge so map I/O,
   Python and NPC queries read and mutate one live state initialized from the baked actor.
@@ -136,7 +136,7 @@ green, and `coverage.md` shows the change.
   and queued output ordering; `UPROPERTY(EditAnywhere)` alone grants no retail script API.
   Coverage must include an input/field mutation observed by the actual registry query, not
   just successful deserialization. Inputs with side effects still need their recovered handlers.
-  Provides: keyfields to 0018 story 2 and 10; the parse half of 0002's 12a. Consumes: 1.
+  Provides: keyfields to 0018 story 2 and 16; the parse half of 0002's 12a. Consumes: 1.
   Size: M. Effort: Opus / high.
   **Pass A landed (2026-09-16, GLM-5.3-Flash from a brief, Fable review):**
   `research/tooling/gen_kernel_bindings.py` reads the replay's `CAI_BaseNPC` and
@@ -254,16 +254,16 @@ green, and `coverage.md` shows the change.
   lines up), the secure ints.
   Job, mechanism: every `mechanism` row's body replaced by a seam call into Unreal that keeps
   the row's retail thresholds as tunables (4) — locomotion stepping and yaw to the character
-  movement component, pathfinding/following to Unreal navigation with 0018's route-specific
-  admission contract (local-route and graph-dependent branches kept distinct), traces
+  movement component, pathfinding/following to Unreal navigation through 0018 story 5's
+  movement seam (goal types, tolerance rules and failure codes kept), traces
   and push-out to the collision service, the physics tick and network state to nothing; the
   Motor, Motor10, Motor2 families, the Positions trace bodies, Geometry's push-outs and
   EntityChain's engine rows.
-  The 2026-09-17 graph task audit distinguishes movement pathfinding from destination choice:
-  hunt/cover/retreat/flank inspect ordered topology, ownership/cooldowns and query-specific
-  predicates. Preserve those observed selection rules over 0018's cooked records and live
-  state; a NavMesh service substitution does not authorize deleting them as pathfinder internals.
-  Consumes: 1, 4, 0018 story 3. Provides: the smaller kernel 0002 continues on.
+  Destination choice is not pathfinding: hunt, cover, retreat and flank choose among places by
+  query-specific tests, ownership and cooldowns. Those tests are behaviour and stay (0018 story
+  9); the graph traversal under them is engine and goes with the pathfinder (0018 § Navigation
+  boundary, 2026-09-20).
+  Consumes: 1, 4, 0018 story 5. Provides: the smaller kernel 0002 continues on.
   Size: L. Effort: Opus / high.
 
 - [ ] **7. The reach cut.**
@@ -287,7 +287,7 @@ green, and `coverage.md` shows the change.
 ## Build order
 1 → 2 → 3 → 4, with 8 in parallel from 1 on → 5 → 6 → 7. Relevant bindings from 2 precede
 completion of 0018 story 2's bake/adoption, while its native class declarations can precede
-binding completion. AIN projection is 0018/3's independent format boundary. 5 lands
+binding completion. AIN projection is 0018/4's independent format boundary. 5 lands
 alone on a branch. When 7 lands this spec closes and 0002's build order takes over.
 
 ## Seams
@@ -295,4 +295,4 @@ alone on a branch. When 7 lands this spec closes and 0002's build order takes ov
   to 0018 and 0002; the class tree every species story lands on; the reach cut that scopes
   0002; the delete and seam lists.
 - Consumes: the ledger and its overlay; the datamap replay; the pinned `vampire.dll` through
-  the export lane; 0018 story 3 for the path seam.
+  the export lane; 0018 story 5 for the path seam.

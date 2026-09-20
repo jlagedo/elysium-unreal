@@ -14,7 +14,7 @@ struct FElysiumClassDesc;
 // the world's hint list (`FElysiumEntityWorld::HintList`). Kernel queries read it through
 // `FElysiumNpc::HintWords`, which fills an `FHintWords` view from this entity.
 //
-// The network node (`m_nNodeID` `+0x5e4`) stays -1: the node binding is 0018 story 3's. The
+// The network node (`m_nNodeID` `+0x5e4`) stays -1: the node binding is 0018 story 4's. The
 // searches over the list (`0x102d1af0`, `0x102d24b0`, `0x102d2980`) are story 4's.
 class FElysiumHint final : public FElysiumEntity
 {
@@ -39,7 +39,7 @@ public:
 	FString Activity;                                // +0x450 m_strActivity
 	float TargetAngleRangeDot = 0.0f;                // +0x458 m_flTargetAngleRangeDot
 	FElysiumEntityHandle HintOwner;                  // +0x5e0 m_hHintOwner (-1 from the ctor)
-	int32 NodeId = INDEX_NONE;                       // +0x5e4 m_nNodeID; SEAM until 0018 story 3
+	int32 NodeId = INDEX_NONE;                       // +0x5e4 m_nNodeID; SEAM until 0018 story 4
 	float NextUseTime = 0.0f;                        // +0x5ec m_flNextUseTime (FIELD_TIME, a float)
 
 	// The registered classname (`ElysiumNodeEntity::HintClassname`).

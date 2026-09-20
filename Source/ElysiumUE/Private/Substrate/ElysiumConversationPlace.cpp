@@ -7,14 +7,14 @@
 void FElysiumConversationPlace::InputEnable(const FElysiumInputArgs&)
 {
 	bEnabled = true;
-	// SEAM for `FUN_102dc3e0`, the enable half of the conversation machinery (0018 story 14).
+	// SEAM for `FUN_102dc3e0`, the enable half of the conversation machinery (0018 story 18).
 	++NodesEnabledCalls;
 }
 
 void FElysiumConversationPlace::InputDisable(const FElysiumInputArgs&)
 {
 	bEnabled = false;
-	// SEAM for `FUN_102dc490`, the disable half of the conversation machinery (0018 story 14).
+	// SEAM for `FUN_102dc490`, the disable half of the conversation machinery (0018 story 18).
 	++NodesDisabledCalls;
 	// `CBaseEntity::ThinkSet(this, NULL, 0.0, NULL)`.
 	NextThink = ELYSIUM_NEVER_THINK;
@@ -30,7 +30,7 @@ void FElysiumConversationPlace::GetDebugState(TArray<TPair<FString, FString>>& O
 	Out.Emplace(TEXT("Enabled"), bEnabled ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Places"), InterestingPlaces.IsEmpty() ? TEXT("(none)") : InterestingPlaces);
 	Out.Emplace(TEXT("One-off sound pending"), bPlayOneOffSound ? TEXT("yes") : TEXT("no"));
-	Out.Emplace(TEXT("Behaviour"), TEXT("unbuilt (0018 story 14)"));
+	Out.Emplace(TEXT("Behaviour"), TEXT("unbuilt (0018 story 18)"));
 }
 
 void FElysiumConversationPlace::BuildClass(FElysiumClassDesc& D)

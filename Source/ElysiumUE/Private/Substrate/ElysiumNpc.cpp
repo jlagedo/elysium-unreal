@@ -573,7 +573,7 @@ const FElysiumEntity* FElysiumNpc::FindPatrolPoint(const FString& Name) const
 	// No targetname path, and no disabled/owner/cooldown or group-mask test (`python_bridge.md`).
 	//
 	// Retail answers the hint's network node (`+0x5e4`, -1 on a miss); this answers the hint
-	// itself, whose origin the patrol walks to. The node id stays a named seam until 0018 story 3,
+	// itself, whose origin the patrol walks to. The node id stays a named seam until 0018 story 4,
 	// and a hint found here is never turned into a network-route failure.
 	if (World == nullptr)
 	{
