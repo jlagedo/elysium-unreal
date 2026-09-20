@@ -10,6 +10,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimGraph.h"
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
 #include "ElysiumMapActor.h"
@@ -843,8 +844,12 @@ void AElysiumNpcBody::ApplyCollisionState()
 	// is what CBaseAnimating::IsIgnoreCollisionEntity returning true for NPCs and the player means.
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
-		Capsule->SetCollisionResponseToChannel(ECC_Pawn,
-			bIgnoreCharacterCollision ? ECR_Ignore : ECR_Block);
+		const ECollisionResponse Response = bIgnoreCharacterCollision ? ECR_Ignore : ECR_Block;
+		// Both pawn channels: the retail rule is about NPCs AND the player, and the player now
+		// carries its own object type, so dropping only ECC_Pawn would leave the body solid to
+		// the one character the flag most often means.
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, Response);
+		Capsule->SetCollisionResponseToChannel(ElysiumCollision::PlayerChannel, Response);
 	}
 }
 

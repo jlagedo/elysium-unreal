@@ -136,6 +136,91 @@ def test_the_ini_block_declares_both_channels_and_the_shipped_profiles():
     assert block.isascii(), "the engine ini stays ASCII"
 
 
+def test_every_engine_profile_answers_the_player_as_it_answers_a_pawn():
+    """The one rule behind the player's new channel, checked against the engine's own table.
+
+    `UCollisionProfile::FillProfileData` seeds every profile from the default response container
+    and then applies its `CustomResponses`, so a profile that never names `ElysiumPlayer` falls
+    back to that channel's DefaultResponse -- Block. The nine engine profiles that leave `Pawn` at
+    Block therefore need nothing; the ten that say Overlap or Ignore about `Pawn` must say the
+    same about `ElysiumPlayer`, or a trigger volume becomes a wall the player cannot walk through.
+    """
+
+    engine_ini = _engine_base_ini()
+    if engine_ini is None:
+        pytest.skip("the engine install is not on this machine")
+
+    import re
+
+    expected = {}
+    for line in engine_ini.splitlines():
+        if not line.startswith("+Profiles="):
+            continue
+        name = re.search(r'Name="([^"]+)"', line)
+        pawn = re.search(r'\(Channel="?Pawn"?,\s*Response=(\w+)\)', line)
+        if name and pawn and pawn.group(1) != "ECR_Block":
+            expected[name.group(1)] = pawn.group(1)
+
+    assert dict(gen.PAWN_MIRROR_PROFILES) == expected, (
+        "the engine's profile table changed; regenerate PAWN_MIRROR_PROFILES from it")
+
+
+def test_the_mirror_entries_reach_the_generated_block():
+    block = gen.emit_ini_block(LETTERS)
+    for name, response in gen.PAWN_MIRROR_PROFILES:
+        assert f'+EditProfiles=(Name="{name}",' in block
+        assert f'(Channel="ElysiumPlayer",Response={response})' in block
+    # The trigger family is the one that would fail loudest, so name it outright.
+    assert '+EditProfiles=(Name="Trigger",CustomResponses=((Channel="ElysiumPlayer",' \
+           'Response=ECR_Overlap)))' in block
+
+
+def test_the_player_profile_is_a_pawn_on_the_players_own_channel():
+    block = gen.emit_ini_block(LETTERS)
+    assert f'+Profiles=(Name="{gen.PLAYER_PROFILE}",CollisionEnabled=QueryAndPhysics,' in block
+    assert 'ObjectTypeName="ElysiumPlayer"' in block
+    # The player occludes an NPC's sight, as MONSTER does in retail's own sight mask.
+    assert '(Channel="ElysiumSight",Response=ECR_Block)' in block
+
+
+def test_the_channel_header_matches_the_declared_channels():
+    header = (REPO / "Source" / "ElysiumUE" / "Public" / "ElysiumCollisionChannels.h").read_text(
+        encoding="utf-8")
+    for channel, name, _default, _trace in gen.NEW_CHANNELS:
+        constant = f"{name.removeprefix('Elysium')}Channel"
+        assert f"{constant} = {channel};" in header, f"{name} is not bound to {channel}"
+    assert f'PlayerPawnProfile = FName(TEXT("{gen.PLAYER_PROFILE}"))' in header
+    # The two existing channels keep their numbers: a renumbering would silently repoint
+    # every +use and pick trace in the project.
+    ini = (REPO / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8")
+    assert 'Channel=ECC_GameTraceChannel1,DefaultResponse=ECR_Block' in ini and '"ElysiumUse"' in ini
+    assert 'Channel=ECC_GameTraceChannel2,DefaultResponse=ECR_Ignore' in ini
+
+
+def test_the_projects_own_profiles_name_both_new_channels():
+    """A project profile that omits them inherits Block, which would wall the player off."""
+
+    ini = (REPO / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8")
+    for line in ini.splitlines():
+        if line.startswith('+Profiles=(Name="ElysiumPickOnly"') or \
+                line.startswith('+Profiles=(Name="ElysiumBrushPassable"'):
+            assert '(Channel="ElysiumPlayer",Response=ECR_Ignore)' in line
+            assert '(Channel="ElysiumSight",Response=ECR_Ignore)' in line
+        if line.startswith('+Profiles=(Name="ElysiumPropSolid"'):
+            # A solid prop is a model entity and the sight mask names SOLID.
+            assert '(Channel="ElysiumSight",Response=ECR_Block)' in line
+
+
+def _engine_base_ini() -> str | None:
+    root = os.environ.get("ELYSIUM_UE_ROOT")
+    if not root:
+        return None
+    path = Path(root) / "Engine" / "Config" / "BaseEngine.ini"
+    if not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def test_the_marked_block_round_trips_in_place():
     block = gen.emit_ini_block(LETTERS)
     first = gen.splice_ini("[/Script/Engine.CollisionProfile]\n+Profiles=(Name=\"X\")\n\n[Other]\n",

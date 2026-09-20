@@ -3,6 +3,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSessionSubsystem.h"
@@ -1141,7 +1142,10 @@ void AElysiumMapActor::RegisterTouchAnchor(UPrimitiveComponent* Source,
 	Proxy->SetRelativeRotation(FRotator::ZeroRotator);
 	Proxy->SetCollisionObjectType(ECC_WorldDynamic);
 	Proxy->SetCollisionResponseToAllChannels(ECR_Ignore);
+	// Both pawns: a touch anchor fires for the player as well as for an NPC, and the player is on
+	// its own object channel so that a brush can stop one and not the other.
 	Proxy->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	Proxy->SetCollisionResponseToChannel(ElysiumCollision::PlayerChannel, ECR_Overlap);
 	Proxy->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Proxy->SetGenerateOverlapEvents(true);
 	Proxy->OnComponentBeginOverlap.AddDynamic(this, &AElysiumMapActor::HandleTouchAnchorBegin);

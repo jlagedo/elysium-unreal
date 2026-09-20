@@ -3,6 +3,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "ElysiumCameraComponent.h"
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumMovementComponent.h"
 #include "ElysiumUserCmd.h"
 #include "GameFramework/PlayerController.h"
@@ -22,7 +23,12 @@ AElysiumPawn::AElysiumPawn()
 	Hull->SetCanEverAffectNavigation(false);
 	Hull->InitBoxExtent(FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth,
 		ElysiumMove::StandHeight * 0.5f));
-	Hull->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
+	// The engine's Pawn profile on the player's OWN object channel. Retail asks "does this brush
+	// block the player" and "does it block an NPC" with two different masks (0x1400b against
+	// 0x2400b), and one channel cannot answer both: 4,145 shipped brushes carry MONSTERCLIP and
+	// 3,775 carry PLAYERCLIP. NPCs keep ECC_Pawn, because Unreal reads navigation relevance off
+	// that channel and so "blocks an NPC" and "cuts the NavMesh" stay one fact.
+	Hull->SetCollisionProfileName(ElysiumCollision::PlayerPawnProfile);
 	// The hull must raise overlaps so trigger brush bodies see the player begin/end touch. Its
 	// Block-of-WorldDynamic is not a mutual block against a trigger's overlap response, so the
 	// player passes through and the overlap fires rather than being stopped.
