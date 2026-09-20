@@ -1,0 +1,10 @@
+# Project-level Codex config, layered over ~/.codex/config.toml when this repo is trusted.
+# The corpus tools are read-only queries; without this a headless `codex exec` refuses every
+# MCP call ("requires approval, but approval policy is never").
+[mcp_servers.vtmb-corpus]
+command = "uv"
+args = ["run", "--no-sync", "python", "research/tooling/ghidra/driver/corpus_mcp.py"]
+default_tools_approval_mode = "approve"
+
+[mcp_servers.vtmb-corpus.env]
+PYTHONUNBUFFERED = "1"
