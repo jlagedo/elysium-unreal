@@ -949,6 +949,31 @@ retail's OWN standable normal from the player movement layer, where the same flo
 (`Source/ElysiumUE/Public/ElysiumMoveSolve.h`), giving a 45.57° agent slope. The constant is
 retail's; applying it to NPC navigation is the named modernization.
 
+**Step height: three species override it, and the graph was built with none of their values**
+(2026-09-20). Slot 522 is `StepHeight`; 77 classes fill it and exactly **three** species replace
+the base, which closes `shape.md`'s open "which three override it for real":
+
+| class | body | constant | value |
+|---|---|---|---|
+| `CAI_BaseNPC` (every other NPC) | `0x101a6b40` | `0x10453b94` | **18** |
+| `CNPC_VMingXiao` | `0x10391030` | `0x104492a8` | 30 |
+| `CNPC_VMingXiaoTentacle` | `0x1039b050` | `0x1044c3a4` | 9 |
+| `CNPC_VTzimisce` | `0x103b6dd0` | `0x104cc4fc` | 26 |
+| `CAI_TestHull` | `0x102d72b0` | `0x10462950` | **40** |
+
+The last row is not a species and is the one that matters for a baked mesh. `CAI_TestHull` is the
+probe `InitLinks` drives to lay down the graph, and it steps **40 units (101.6 cm)** — more than
+twice the 18 any NPC walks with. So **the shipped links assert reachability at a step height no
+NPC has**, and a NavMesh cut at 18 units can honestly fail to path a link the graph carries.
+Story 3's acceptance ("every ground link paths on its agent's mesh") must therefore treat a
+step-height shortfall as an EXPECTED class of outlier, reported with the rise measured, rather
+than as a mesh defect — and the alternative, cutting every agent at 40, would let NPCs walk up
+ledges retail's own motor refuses. The agents take 18; the harness names what that costs.
+
+(The two constants `TestGroundMove` clamps with are confirmed at the same time: `0x104454d0` is
+`0.5` and `0x104493d0` is the double `0.1`, so the clamp really is
+`max(hull height × 0.5, StepHeight + 0.1)` — 36.0 on hull 0.)
+
 **The rat hull is not a subset of the human one.** Of 6,848 rat links on 14 maps, 546 carry no
 human motion. `sp_tutorial_1`: 41 of 428, reaching 1 node no human link touches, 5 of them
 joining node sets the human links keep apart (`0–69`, `1–69`, `44–69`, `77–113`, `146–190`);

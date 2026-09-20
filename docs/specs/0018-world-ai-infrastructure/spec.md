@@ -431,7 +431,12 @@ its recovery is written in the oracle section it names.
      retail game; one capture at a tutorial brush closes it.
   Acceptance, as `bake map --verify` on both witnesses, per baked agent: every link whose
   motion for that hull has the ground bit paths on that agent's mesh within a stated length
-  factor, outliers listed; every NPC-only brush cuts the mesh; the rat-only links path on the
+  factor, outliers listed — with one expected class of outlier, recovered 2026-09-20: the graph
+  was laid down by `CAI_TestHull`, which steps **40** units (`0x102d72b0`), while every NPC steps
+  18 (`CAI_BaseNPC::StepHeight 0x101a6b40`; only Ming Xiao 30, its tentacle 9 and Tzimisce 26
+  differ). A link asserting a rise between the two is unreachable for a real agent and is
+  reported with its rise measured, not counted a mesh defect; cutting the agents at 40 instead
+  would let NPCs climb what retail's own motor refuses. Also: every NPC-only brush cuts the mesh; the rat-only links path on the
   rat mesh, and the 5 / 9 that bridge separate human node sets do NOT path on the human mesh;
   jump-link endpoints, hints, places and patrol points project onto the mesh of every agent
   that uses them; a report of AIN zones against mesh connectivity, pinned. Both levels save,
@@ -463,8 +468,7 @@ its recovery is written in the oracle section it names.
   Unrecovered, each a read before its job lands: how `CNPC_VRat`, `CNPC_VCamera`,
   `CNPC_VGargoyle`, `CNPC_VManBat`, `CNPC_VSheriffMan` and `CNPC_VWerewolf` acquire `m_eHull`
   (`+0x1568`) — slot 337 declares a PRECACHE set, not the stand hull, and only six classes carry
-  a witnessed store; species overrides of the step height; the open `146–184` pair on the
-  tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
+  a witnessed store; the open `146–184` pair on the tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
   closed: `MOVEABLE 0x4000` is the bit that hits doors, and the graph-build mask `0x2000b` is
   the only one without it — which is 7's door rule.)
   Size: L. Effort: Opus / high (exporter, payload, editor bake, nav config, verify).

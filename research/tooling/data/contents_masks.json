@@ -88,5 +88,29 @@
     "port": "ElysiumMove::StandableZ",
     "oracle": "docs/vtmb/source_movement.md '#the-ground-test'"
   },
-  "stepHeightSourceUnits": 18
+  "stepHeight": {
+    "comment": [
+      "Slot 522. 77 classes fill it; exactly three species replace the base, and the graph-build",
+      "probe replaces it with a value more than twice the base. CAI_TestHull is what InitLinks",
+      "drives to lay the links down, so the shipped graph asserts reachability at a step height",
+      "no NPC has: a mesh cut at 18 can honestly fail to path a link the graph carries, and the",
+      "acceptance harness reports that as an expected class of outlier with the rise measured.",
+      "Cutting the agents at 40 instead would let NPCs climb ledges retail's own motor refuses."
+    ],
+    "baseSourceUnits": 18,
+    "base": {"class": "CAI_BaseNPC", "body": "0x101a6b40", "constant": "0x10453b94", "value": 18.0},
+    "overrides": [
+      {"class": "CNPC_VMingXiao", "body": "0x10391030", "constant": "0x104492a8", "value": 30.0},
+      {"class": "CNPC_VMingXiaoTentacle", "body": "0x1039b050", "constant": "0x1044c3a4", "value": 9.0},
+      {"class": "CNPC_VTzimisce", "body": "0x103b6dd0", "constant": "0x104cc4fc", "value": 26.0}
+    ],
+    "graphBuildProbe": {
+      "class": "CAI_TestHull", "body": "0x102d72b0", "constant": "0x10462950", "value": 40.0
+    },
+    "groundMoveClamp": {
+      "expression": "max(hullHeight * 0.5, StepHeight + 0.1)",
+      "retail": "0x102e565b",
+      "constants": {"0x104454d0": 0.5, "0x104493d0": 0.1}
+    }
+  }
 }

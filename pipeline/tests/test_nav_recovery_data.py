@@ -149,6 +149,30 @@ def test_the_slope_term_is_recorded_as_having_no_ai_counterpart():
     assert slope["port"] == "ElysiumMove::StandableZ"
 
 
+def test_the_graph_was_built_with_a_step_no_npc_walks():
+    """The one step-height fact the acceptance harness has to be built around.
+
+    `CAI_TestHull` lays the links down stepping 40 units; the NPCs that use them step 18. A link
+    the graph asserts can therefore be unreachable on a mesh cut for a real agent, which is an
+    expected outlier rather than a defect.
+    """
+
+    step = _load(CONTENTS_MASKS)["stepHeight"]
+    assert step["base"]["value"] == 18.0 == step["baseSourceUnits"]
+    assert step["graphBuildProbe"]["value"] == 40.0
+    assert step["graphBuildProbe"]["value"] > 2 * step["base"]["value"]
+    assert {row["class"]: row["value"] for row in step["overrides"]} == {
+        "CNPC_VMingXiao": 30.0, "CNPC_VMingXiaoTentacle": 9.0, "CNPC_VTzimisce": 26.0}
+
+
+def test_the_ground_move_clamp_constants():
+    clamp = _load(CONTENTS_MASKS)["stepHeight"]["groundMoveClamp"]
+    assert clamp["constants"] == {"0x104454d0": 0.5, "0x104493d0": 0.1}
+    # 36.0 on hull 0: half of 72 beats 18 + 0.1.
+    assert max(72.0 * clamp["constants"]["0x104454d0"],
+               18.0 + clamp["constants"]["0x104493d0"]) == 36.0
+
+
 # ---------------------------------------------------------------- the graphs retail loads
 
 @pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
