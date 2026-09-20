@@ -1469,6 +1469,92 @@ and `0x1e` by none.
 **Unrecovered:** nothing in this section. (The weapon's own LOS slot `+0x5b0` is one body for
 all 169 weapon vtables — `senses.md` § "`WeaponLOSCondition`".)
 
+### The two hull words — `m_eHull` `+0x1568` and the pathing hull `+0x156c` (2026-09-20, 0018 story 3)
+
+_Four independent opencode walks over `vampire.dll`: one from the setter out, one from the hull
+table down, one per-class from each constructor forward, and a byte-level tie-break. The six
+species values are unanimous across all four; the Tzimisce value and the `GetPosition` call-site
+split were settled by the tie-break, which quoted the bytes._
+
+**A constructor writes the hull, which is why the field ledger sees no writer.** The ledger does
+not record constructor accesses, so ~24 classes that store these fields were invisible to it and
+the earlier note "only six classes carry a witnessed store" was wrong. The stores were found by
+scanning `.text` for the displacements `68 15 00 00` / `6c 15 00 00` (183 hits, 46 stores) —
+a parallel scan for `lea/add/sub reg, 0x1568/0x156c` finds none, so the set is exhaustive.
+
+`CBaseCombatCharacter::CBaseCombatCharacter 0x10326de0` stores **23** into both
+(`0x10327295 b8 17 00 00 00` → `0x103272ce` / `0x103272d4`) — one past the 22-row table, an
+"unassigned" value and not a sentinel row. It never survives: `CAI_BaseNPC`'s constructor
+`0x1027c300` zeroes both at `0x1027c574`/`0x1027c57a` before any derived constructor runs. It
+would fault if it ever reached a reader: the accessors index the pointer table raw —
+`FUN_102d6100(i) = (&PTR_DAT_1060a750)[i] + 8`, mins `+8`, maxs `+0x14`, small `+0x20`/`+0x2c`,
+bit `+0`, name `+4` — with **no bounds check anywhere**. The 22-row bound comes from code, not
+from the table: `CAI_Node::InitLinks` loops `cmp esi,0x16; jl` (`0x102fbee0`) and the test-hull
+cursor wraps at `0x16` (`0x102f7a90`).
+
+| Class | ctor | `+0x1568` stands | `+0x156c` paths |
+|---|---|---|---|
+| `CNPC_VCamera` | `0x10368060` @`0x1036807e` | 7 TINY_CENTERED | 7 |
+| `CNPC_VWerewolf` | `0x103ca4b0` @`0x103ca5cc` | 12 WEREWOLF | 12 |
+| `CNPC_VGargoyle` | `0x10377a60` @`0x10377a93` | 14 GARGOYLE | 14 |
+| `CNPC_VScurrying` (and `CNPC_VRat`, which has no ctor of its own) | `0x103abb00` @`0x103abb22` | 19 RAT | 19 |
+| `CNPC_VManBat` | `0x10389cc0` @`0x10389d56` | 20 MANBAT | 20 |
+| `CNPC_VSheriffMan` | `0x103ae3e0` @`0x103ae463` | **21 SHERIFF** | **0 HUMAN** (never written) |
+| `CNPC_VHengeyokai` | `0x1037e680` @`0x1037e786` | **0 HUMAN** | **18 HENGEYOKAI** |
+| `CNPC_VMingXiao` | `0x10390ee0` @`0x10390f78` | **15 MING_XIAO** | **16 MING_XIAO_PATHING** |
+| `CNPC_VTzimisce` | `0x103b6c60` @`0x103b6d32` | 10 TZIMISCE1 | 10 |
+| `CNPC_VTzimisceHeadClaw` | `0x103c1220` @`0x103c127d` | 11 | 11 |
+| `CNPC_VTzimisceRunner` | `0x103c2fa0` @`0x103c2ff3` | 13 | 13 |
+| `CNPC_VMingXiaoTentacle` | `0x1039afe0` @`0x1039b008` | 17 | 17 |
+| `CNPC_Crow` (in `Spawn`, not the ctor) | `0x10357440` @`0x10357493` | 4 TINY | 4 |
+| everything else under `CAI_BaseNPC` / `CAI_BaseNPCTroika` / `CNPC_VHuman` / `CBasePlayer` | — | 0 HUMAN | 0 |
+
+`CNPC_VTzimisce` is decidable from the bytes — `0x103b6d27 b8 0a 00 00 00` (`mov eax,0xa`) feeding
+both stores; a reading of `0xb` is HeadClaw's value at `0x103c1278`.
+
+**`+0x156c` decides the route; `+0x1568` decides the box.** `CAI_Navigator::SetGoal 0x102ecd20`
+reads `[npc+0x156c]` at `0x102ecd2c` (`8b 88 6c 15 00 00`) into the navigator's `+8` and the route
+object's, refreshed every frame by `CAI_Navigator::Move 0x102eff40` at `0x102effe1`; the whole A*
+family (`0x102fd240`, `CAI_Pathfinder::HasPathInner 0x102fe150`, `0x102fe9f0`, `0x102fef30`,
+`0x10301010`, `0x103005f0`/`7e0`/`8f0`/`b50`, `0x10301720`, `0x10302320`, `0x102fcbd0`,
+`0x102fcd00`, `0x102f1900`, `0x102fce80`, `0x102fcfe0`) then hands that cache to
+`CAI_Node::GetPosition 0x102fb0d0` as its hull argument. 114 call sites reach `GetPosition`
+through the single thunk `0x1000d99a`.
+
+**Seven of those sites pass `m_eHull` instead**, and none of them is node-graph routing: patrol-path
+goal anchoring in `CAI_BaseNPCTroika::StartTask`/`RunTask` (`0x102a3a86`, `0x102aa6b6`,
+`0x102aa8df`), `CNPC_VZombie::StartTask 0x103dff20`, the worker of
+`CAI_Pathfinder::BuildExtrapolatedRoute` (`0x10300211`), debug route drawing (`0x10275a04`) and the
+network node collector `FUN_10310d70`. So a Sheriff **routes on the human mesh while standing on a
+20 × 100 box, and has his patrol goals anchored at Sheriff-hull node offsets**. Why
+`BuildExtrapolatedRoute` reads the standing hull while its callers cache the pathing one is
+unrecovered — the bytes state the split, not the intent.
+
+**`0x102d7730` is not the NPC hull setter.** It writes both fields from its one argument and
+tail-jumps `SetHullSizeNormal(force=1)`, but it has zero direct callers; its only thunk is reached
+from `CAI_Node::InitLinks 0x102fb4e0` and the hull-bumper `0x102f7a90`, both driving the
+`CAI_TestHull` singleton with a loop counter. No NPC path touches it.
+
+**Nothing outside code sets a hull.** `m_eHull` carries `SAVE` only — no KEY flag, no external
+name — and `CNPCMaker` re-parses keyvalue text per child with no field copy, so a map cannot carry
+one. `+0x156c` is in no datamap at all, so a restored NPC's pathing hull is always its class
+default even when the standing hull was task-modified at save time.
+
+**When the box is applied**: `CAI_BaseNPCTroika::SetModel 0x10298ce0` calls
+`SetHullSizeNormal(force=1)` right after the model loads, inside `CAI_BaseNPCTroika::Spawn
+0x10298d30`. `SetHullSizeNormal 0x10273070` first resolves the hull's bit and `DevMsg`s
+`"%s is using hull %s which has not been precached."` when it is outside the class's slot-337 set.
+
+**Slot 337 `GetUsedHullBits` is a precache declaration, not the stand hull**, and the two must not
+be conflated — the values coincide for most species, which is exactly the trap. Only a witnessed
+write counts.
+
+**Unrecovered:** the source-level name of `+0x156c` (no datamap record, no string; "pathing hull"
+is synthesised from its readers and the `*_PATHING_HULL` rows); the enum spelling of 23; which
+shipped schedule issues `CNPC_VVampireBoss::StartTask`'s task `0x14e`, which sets both fields to 0
+after a monster-model swap and is reachable from `CNPC_VSheriffMan::StartTask 0x103aec70`'s default
+branch; the intent behind the `BuildExtrapolatedRoute` split.
+
 ### Doors and NPC-clip, the retail contract (2026-09-19, 0018 stories 3 and 7)
 
 _Read here from the DLL (mask immediates, `CTraceFilterNav`, the two Troika collide vetoes) and
@@ -1561,6 +1647,67 @@ first arm never drops anything.
 The native witness the spec asks for (story 3, job 5) is
 still to run: a closed door with a link through it must not cut the Recast mesh, and an NPC-only
 clip brush must.
+
+### The engine's per-brush admission test, and what a non-solid OPAQUE brush does to sight (2026-09-20, 0018 story 3)
+
+_Two independent opencode walks over `bin/engine.dll` (image base `0x20000000`, read with
+`pedis.py`; the DLL is not in the corpus MCP) — one down from the BSP brush loader, one in from the
+server trace interface. Both reach the same instruction and both answer STOPS. The map half is a
+repo probe over the leaf-brush lumps._
+
+This closes what story 3 carried as an inference: 1,764 brushes on 25 maps are `OPAQUE 0x80` yet
+NOT `SOLID` (17 on `sp_tutorial_1` as `0x08000080`, 894 on `la_museum_1`), and the port's `--S-`
+signature makes them block NPC sight. The mask overlap alone was never proof.
+
+**The mask reaches the brush test unchanged.** `CEngineTrace::TraceRay` (`0x2006a5c0`, slot 4 of
+the `EngineTraceServer003` vtable `0x20174864`; `vampire.dll` calls it with `0x02804091` from 40
+sites) passes its mask to the world trace `0x200312d0`, which stores it once into the global
+`0x209b2d20` at `0x20031460`. That global has **five references in the whole image**: the store and
+the four leaf-loop reads. Nothing ANDs, ORs, replaces or splits it into world and entity masks.
+
+**The test is exactly `contents & mask`.** In `CM_TraceThroughLeaf 0x20030aa0`:
+
+```
+20030ba1  lea eax, [esi + eax*8 + 0x42d168]   ; brush = &brushes[brushnum]
+20030ba8  cmp dword ptr [eax + ecx*4 + 0xc], ebp  ; already clipped this trace?
+20030bb2  8b 0d 20 2d 9b 20                   ; mov ecx, [0x209b2d20]   the mask
+20030bb8  85 08                               ; test [eax], ecx         contents & mask
+20030bba  74 5b                               ; je  skip
+```
+
+`0x08000080 & 0x02804091 = 0x80`, so the brush is admitted. **`SOLID` is not required and `DETAIL`
+is not rejected** — detail is simply another bit in the word. The box/hull twin
+`CM_TestInLeaf 0x20030c70` carries the identical test at `0x20030cc1`.
+
+**The loader copies the map's word verbatim.** `CMod_LoadBrushes 0x200334a0` (named by its own
+string `"CMod_LoadBrushes: funny lump size"` at `0x2019c370`) reads lump 18's 12-byte records into
+24-byte entries at `bsp+0x42d168`, `contents` at `+0`, `numsides` `+4`, `firstside` `+8`, per-hull
+check stamps `+0xc`. `CollisionBSPData_LoadLeafs 0x200331a0` keeps only `firstleafbrush` `+0xc` and
+`numleafbrushes` `+0xe` of each 32-byte disk leaf.
+
+**There is no leaf-contents pre-test.** This matters because the leaves listing these brushes have
+contents `0`: neither trace arm ever loads a leaf's contents dword, and the leaf gatherer
+`0x2002fc50` appends every geometrically reached leaf with no contents filter. The only skips in
+the loop are the same-trace check stamp, `numsides == 0`, and a per-side `side+8 != 0` test in the
+ray arm that is dead for BSP data — the loader writes `0` there for every side
+(`0x20033610 c7 46 08 00 00 00 00`) and nothing else stores to it. `CM_ClipBoxToBrush 0x200305e0`
+is a pure plane clip that reads no contents and, on a hit, copies the brush's own word into
+`trace_t.contents`.
+
+**The map half** (`hull_table.py`-style probe over lumps 10/17/18 of the patched BSPs): all 17
+tutorial brushes and all 894 on `la_museum_1` are listed in the leaf-brush list of at least one
+open leaf, so a trace reaches them. None is listed only by solid leaves.
+
+**Verdict: STOPS.** A brush that is `OPAQUE` without `SOLID` blocks a `0x02804091` sight trace in
+retail. The port's `--S-` answer is correct as built, and the once-planned live capture at a
+tutorial brush is retired.
+
+**Unrecovered:** the two walks name the second per-leaf list differently — a displacement list
+(`leaf+0x10`, node contents at `+0x3c`) versus a linked brush list — though both show it gated by
+the same mask global; which of the two lists holds a given world brush at runtime was not traced
+back to brush creation, and the admission test is identical either way. The static-prop stage
+receives the same mask through `ClipRayToCollideable` (slot 3, `0x20069730`); its hitbox arm was
+read only at its call site.
 
 ### Static topology and live query state
 

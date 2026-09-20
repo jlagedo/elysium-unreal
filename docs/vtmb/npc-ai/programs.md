@@ -564,7 +564,9 @@ is the run arm `0x102aad7e` — Troika `RunTask` case 5, walked in `lifecycle.md
 `StartTask` idx 17): no object → `TaskFail(0x1d)`; current node id −1 → `TaskFail(0x1d)` **(not
 "returns without completing" as read above: both the null-object and the −1 arms fail with
 0x1d; a node index outside the network's array only falls through to the same fail)**; else the
-node's hull position (`0x102fb0d0`, `m_eHull +0x1568`) into `AI_NavGoal_t{type 4, tolerance
+node's hull position (`0x102fb0d0`, `m_eHull +0x1568` — **the standing hull here, not the pathing
+one**: the patrol arms are among the seven sites that pass `+0x1568`, while routing passes
+`+0x156c`; `navigation-jump-links.md` § "The two hull words") into `AI_NavGoal_t{type 4, tolerance
 [0x1049a1ac] = −1 (the schedule's), flags −1}` and `SetGoal(…, 2)`; success → `TaskComplete`,
 refusal → `DevWarning("%s can't reach patrol point")` + `TaskFail(0x0c)`. Its `RunTask` arm
 (`0x102ab00f` → `0x102aa860`) re-issues the same goal every think while the task still runs — it

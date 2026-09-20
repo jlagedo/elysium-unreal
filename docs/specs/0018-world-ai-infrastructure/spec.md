@@ -365,10 +365,9 @@ its recovery is written in the oracle section it names.
   `research/tooling/data/contents_masks.json` → `gen_contents_signatures` emits the runtime
   header, the pipeline module and one named collision profile per signature, because only a
   profile name survives a `.umap` save. `.hulls` carries every answering brush led by its
-  contents word (the row shape is 1 mod 3 where the old format was 0, so neither reader can
-  misread the other's file) and the byte-diff against the legacy exporter keeps it as a
-  divergence proved by projection. Both transports partition the world into one body per
-  signature — payload v2 cooks one per signature and refuses a version it does not know — and a
+  contents word. (It was written to stay readable by the old format's reader; story 21 retires
+  that reader and the divergence record with it, leaving `.hulls` a V2 intermediate.)
+  Payload v2 cooks one body per signature and refuses a version it does not know, and a
   brush entity wears the `Dyn` profile of its own brushes. Sight moved off the +use channel,
   which the world collider ignored outright, onto a channel the signature profiles answer:
   17 tutorial brushes begin blocking the thug's sight and 276 window and grate brushes stop.
@@ -419,10 +418,23 @@ its recovery is written in the oracle section it names.
   takes its agent's own from the hull table. A fifth, mine: `IsRuntimeNavigationReady` demanded a
   bounds volume the adopt path never spawns, so an adopting map hung rather than failing.
 
+  **The hull gate is closed (2026-09-20, four walks; `navigation-jump-links.md` § "The two hull
+  words").** A CONSTRUCTOR writes the hull, which is why the kernel ledger — which does not record
+  constructor accesses — saw a witnessed store for almost nobody; ~24 classes carry one. The rat
+  stands and paths on 19 through `CNPC_VScurrying`'s constructor `0x103abb22`. And there are **two**
+  hull words, not one: `+0x1568` sizes the collision box and the trace helpers, while `+0x156c` is
+  the PATHING hull that `CAI_Navigator::SetGoal 0x102ecd2c` caches and the whole A* family feeds to
+  `CAI_Node::GetPosition`. **So the Recast agent follows `+0x156c` and the capsule follows
+  `+0x1568`** — the Sheriff stands on hull 21 and routes on the human mesh, needing no agent of his
+  own, while Hengeyokai is the inverse (stands 0, paths 18) and Ming Xiao splits 15/16. Seven
+  `GetPosition` sites do pass `m_eHull`, none of them routing: patrol-goal anchoring, the zombie's
+  patrol arm, extrapolated routes, debug drawing. `0x102d7730` turns out to be `CAI_TestHull`
+  machinery with no NPC caller, and nothing outside code can set a hull.
+
   **Still open: job 6 and the acceptance harness** — the door cuts and pedestrian nav areas, and
   the verify arm that pins every ground link pathing on its agent's mesh, the rat-only links on
-  the rat's and not the human's. The meshes those checks need now exist. Nothing rat-shaped can
-  path on the rat mesh until `m_eHull` is recovered for the species that differ from the human.
+  the rat's and not the human's. The meshes those checks need now exist, and so does the hull
+  answer that tells an agent which mesh is its own.
   Retail: three masks move an NPC, and all three carry `MONSTERCLIP 0x20000` and none carries
   `PLAYERCLIP 0x10000` — `0x2000b` builds the graph, `0x2400b` probes a local route and fits a
   node, `0x202400b` moves (`navigation-jump-links.md` § "Doors and NPC-clip"). One mask sees:
@@ -460,8 +472,8 @@ its recovery is written in the oracle section it names.
      SIGNATURE is its four answers — player `& 0x1400b`, NPC `& 0x2400b`, sight `& 0x804091`,
      pedestrian `& 0x2000` — computed from the word by one generated table, the masks named by
      their retail addresses; nothing downstream tests a contents bit again. The `.hulls`
-     sidecar gains the same word so the legacy transport partitions identically; its maps keep
-     the run-time Recast build until their own migration, with the right solids and agents.
+     sidecar gains the same word. (It gained it to keep the legacy transport partitioning
+     identically; story 21 retires that transport, and the sidecar stays as a V2 intermediate.)
   2. The payload. One cooked body per signature present on the map, its collision profile
      generated from the signature: the player pawn's channel, the NPC pawn's channel and a
      dedicated sight channel each blocked or ignored as the signature says; a pedestrian-only
@@ -490,9 +502,14 @@ its recovery is written in the oracle section it names.
      `MOVEABLE` stand for, not the use channel against whatever answers it. This changes what
      the tutorial's thug can see — 17 sight-only brushes start blocking him, 276 window and
      grate brushes stop — so the `sp_tutorial_1` stealth witness runs before and after, and a
-     lesson that turns is read against retail before it is accepted. That these brushes block
-     retail sight is inferred from the mask and the contents, not yet witnessed in a running
-     retail game; one capture at a tutorial brush closes it.
+     lesson that turns is read against retail before it is accepted. **Closed 2026-09-20, read
+     from `engine.dll` rather than captured live** (two walks, `navigation-jump-links.md` § "The
+     engine's per-brush admission test"): the mask reaches the leaf loop unchanged through one
+     global with five references, the admission is exactly `contents & mask`
+     (`0x20030bb8 85 08`), `SOLID` is not required and `DETAIL` is not rejected, no leaf-contents
+     pre-test exists — which matters, since these brushes sit in leaves of contents 0 — and a
+     repo probe over lumps 10/17/18 confirms all 17 tutorial and all 894 `la_museum_1` brushes
+     are listed by an open leaf. A non-solid OPAQUE brush STOPS a `0x2804091` trace.
   Acceptance, as `bake map --verify` on both witnesses, per baked agent: every link whose
   motion for that hull has the ground bit paths on that agent's mesh within a stated length
   factor, outliers listed — with one expected class of outlier, recovered 2026-09-20: the graph
@@ -529,10 +546,10 @@ its recovery is written in the oracle section it names.
   `GARGOYLE_HULL` is declared by 2 maps and carries links on 1, so "one mesh per bit" can build a
   mesh nothing paths on; the bake reports it. The hub's 9 bridging rat links are enumerated at
   last (`155/156/158/304-…`, `526/567/568-…`: two places, nodes 304 and 568).
-  Unrecovered, each a read before its job lands: how `CNPC_VRat`, `CNPC_VCamera`,
-  `CNPC_VGargoyle`, `CNPC_VManBat`, `CNPC_VSheriffMan` and `CNPC_VWerewolf` acquire `m_eHull`
-  (`+0x1568`) — slot 337 declares a PRECACHE set, not the stand hull, and only six classes carry
-  a witnessed store; the open `146–184` pair on the tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
+  How the six species acquire `m_eHull` is **closed** (2026-09-20; § "The two hull words"): a
+  constructor writes it, the ledger never saw those stores, and there are two hull words — the
+  agent follows `+0x156c`, the capsule `+0x1568`.
+  Unrecovered: the open `146–184` pair on the tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
   closed: `MOVEABLE 0x4000` is the bit that hits doors, and the graph-build mask `0x2000b` is
   the only one without it — which is 7's door rule.)
   Size: L. Effort: Opus / high (exporter, payload, editor bake, nav config, verify).
@@ -561,7 +578,13 @@ its recovery is written in the oracle section it names.
   `nodeid` as provenance — and the crosswalk pairs (two type-11000 hint nodes a link joins).
   No links, zones or masks. At run time a registry keyed by network index carries the
   cooldown; hints get their `NodeId`; a hint's stand position and a patrol point resolve to
-  the node at hull height; `TASK_GET_PATH_TO_RANDOM_NODE` draws from the set. The bake reports
+  the node at hull height; `TASK_GET_PATH_TO_RANDOM_NODE` draws from the set. **"At hull height"
+  is two questions, and the row carries both offsets** — retail's `CAI_Node::GetPosition
+  0x102fb0d0` is reached with the PATHING hull `+0x156c` from every routing site and with the
+  STANDING hull `m_eHull` from seven others (patrol anchoring, the zombie's patrol arm,
+  extrapolated routes, debug drawing; 3's § "The two hull words"). The two agree for every species
+  but the Sheriff, Hengeyokai and Ming Xiao, so the asset keeps the per-agent Z offsets it already
+  writes and each caller names which word it is asking with. The bake reports
   every hint, patrol point and interesting place that sits off an agent's mesh, and every one
   no node covers, so reach that changes against retail is seen, not discovered.
   Acceptance: both witness levels load the asset with no external export access; the pairing
@@ -600,6 +623,14 @@ its recovery is written in the oracle section it names.
   `RandomInt(5, 10)` drawn per request; the acceptance radius equal to retail's tolerance
   with nothing added for the capsule; partial paths off; an off-mesh goal projected within
   the tolerance and refused beyond it. The 0.8 s think gate.
+  Two things story 3 hands over rather than settles. **The route's hull is `+0x156c`**, read at
+  `SetGoal 0x102ecd2c` and refreshed each frame by `CAI_Navigator::Move 0x102effe1` — this
+  navigator is the object that owns that read, and 3 only supplies the word (§ "The two hull
+  words"). **The step-height outliers**: retail's graph was laid down by `CAI_TestHull`, which
+  steps 40 (`0x102d72b0`), while NPCs step 18 — 3's harness reports every link asserting a rise
+  between the two, with its rise measured, and this story decides what an NPC does about one
+  (refuse the link, or accept a gait that cannot climb it). Cutting the agents at 40 is not an
+  option: it would let NPCs climb what retail's own motor refuses.
   Acceptance, on the baked witnesses: each goal type issued and its tolerance observed at
   arrival; a refused route raises `0x0c` at once without the retry word and at the deadline
   with it; a schedule change drops the goal and the pedestrian byte, `PRESERVE_PATH` keeps
@@ -655,7 +686,14 @@ its recovery is written in the oracle section it names.
   agent's motion crosses its closed box; a traversable door gets a smart link through the
   doorway over a cut strip, enabled while the door is open or an NPC may open it and its
   failure timer is not running; reaching the link runs slot 531, waits for the door, resumes;
-  a refusal is 5's `0x0e`. Every other door cuts the mesh. Crosswalks: a smart link between
+  a refusal is 5's `0x0e`. **A door NO link crosses is already cut by story 3** — 3 hands over the
+  per-door, per-agent crossing table it computes from the patch graph — so what this story adds is
+  the cut plus the smart link for a TRAVERSABLE door, together, in one commit. (Owner decision,
+  2026-09-20: cutting a linked door before its link exists would make the 8 tutorial doors NPCs use
+  and the hub's smoke-shop pair into walls until this story lands, so 3 leaves them uncut.) Story 3
+  also hands over its bake-report list of the other NPC-blocking brush entities — 19 `func_brush`
+  on the tutorial, 18 on the hub — for the same judgement, since map logic can toggle them.
+  Crosswalks: a smart link between
   the two curb places carrying the pair's `Walk` / `DontWalk` state; the wait and the queue
   rule on 5's events.
   Acceptance: the existing jump-flight tests, per agent; an NPC opens `frontgate` and passes,
@@ -745,6 +783,11 @@ its recovery is written in the oracle section it names.
   (`+0x468` the name of a `CAI_InterestingPlace`, `+0x46c` a 0–99 chance) resolved by
   `0x1029f730` and `0x1029f780`.
   Gap: nothing — no path record, no node record.
+  A patrol point's position is taken at the **standing** hull, not the pathing one: the three
+  patrol arms (`0x102a3a86`, `0x102aa6b6`, `0x102aa8df`) are among the seven `GetPosition` sites
+  that pass `m_eHull` while routing passes `+0x156c` (3's § "The two hull words"). For every
+  species but the Sheriff, Hengeyokai and Ming Xiao the two words agree, so this matters only for
+  those three; the place set (4) carries a point's per-hull offsets so either can be asked for.
   Job: the path records and the point's interest record; the queries the patrol program asks
   (next point, hunt path, the record). The roll, the two interest tasks and the programs stay
   in 0002's 10g and 27.
@@ -766,6 +809,11 @@ its recovery is written in the oracle section it names.
   flags 3, radius 5000); `CNPC_VManBat` runs six `TASK_MANBAT_FLY_TO_HINT` schedules (hint
   type 20000). The navigator's type is fly while it lasts.
   Port today: the body has no flying mode; `EElysiumNpcNavType` is only ever ground or jump.
+  The two flyers' hulls are recovered and sit in 3's generated class table unused until this story
+  spawns them — `CNPC_VManBat` 20 `MANBAT_HULL` (ctor `0x10389d56`), `CNPC_VGargoyle` 14
+  `GARGOYLE_HULL` (ctor `0x10377a93`), each the same in both hull words. `GARGOYLE_HULL` carries
+  links on one map only, so its agent can build a mesh nothing paths on; a straight flight does not
+  need one.
   Job: a flying gait on the body — CharacterMovement's flying mode steering straight at the
   goal with a swept look-ahead on 3's NPC-solid bodies — driven through 5's navigator, so
   tolerance, arrival and `0x0c` are the same contract as on the ground; the nav type reported
@@ -896,6 +944,23 @@ its recovery is written in the oracle section it names.
   Unreal performs the movement.
   Consumes: everything above. Size: M. Effort: Sonnet / medium, then played.
 
+- [ ] **21. Retiring the legacy map transport.** Added 2026-09-20 by owner decision: V2 is the
+  pipeline, and a map that cannot load on it is a failure rather than a compatibility case. Story
+  3's own step 1 already makes a map with no baked collision actor and no baked mesh fail the load
+  with a named error, and deletes the arms 3 touched — `UElysiumMapCollision`'s `LoadHulls` sidecar
+  arm and its per-signature transient components, `EnsureRuntimeNavigation`'s run-time build and
+  `RestrictNavigationToUsableAgents`, and the pipeline's `LEGACY_BRUSH_SIGNATURE`,
+  `PAYLOAD_CONTENTS_MASK`, `classify_hulls` and `HULLS_NAMED_DIVERGENCE`. This story deletes what
+  survives that gate as dead code: the legacy `Bake` beside `MapBakeV2`, the `MapsOnV2Models` /
+  `MapsOnNewTransport` selectors and every `IsMapOn*` test of them, the sidecar-diff lane's legacy
+  comparison, and the `.hulls`/`.ents`/`.dispcol` readers no longer reached (the files stay as V2
+  intermediates the producer writes from the GLB units). ~80 references across 36 files.
+  Part B, on the owner's approval rather than automatically: the other 102 maps onto V2, including
+  the three the legacy lump reader refuses (`sp_giovanni_2b` and its pair) — run when a story's
+  witness needs a map outside the six, not before.
+  Runs immediately after 3 and before 4, so stories 4–20 never carry a legacy arm.
+  Consumes: 3. Size: M. Effort: Sonnet / medium (deletion, then the six maps re-verified).
+
 ## Seams
 - Provides: the query surface to 0002 — hint searches, place selection and the trio, the next
   patrol point and its record, audible sounds, squad members and the shared memory, the melee
@@ -906,3 +971,14 @@ its recovery is written in the oracle section it names.
   bake, never at runtime.
 - 0018 runs beside 0019 and consumes 0002 only through the query surface: no story here adds a
   member to the NPC.
+- **The species hull-transform writers stay with their classes in 0002** (recorded 2026-09-20, so
+  the work is tracked rather than lost). 0018 story 3 provides both hull words, the generated
+  class table and the setter; each writer below is built when 0002 registers its class, since the
+  port spawns none of them today. Each changes `m_eHull` alone — the pathing hull survives the
+  shape change — except the last two, which write both: `CNPC_VHengeyokai::StartTask 0x1038096e`
+  and its transform `0x103831c0` (→ 18), `CNPC_VMingXiao::StartTask 0x10392f4d` and its transform
+  `0x1039a77d` (→ 15), `CNPC_VMingXiaoTentacle::StartTask 0x1039c4c0` task `0x14b`
+  (17/17 or 15/15), `CNPC_VSabbatLeader::TransformationStart 0x103ab39d` (0/0), and
+  `CNPC_VVampireBoss::StartTask 0x103c5ac0` task `0x14e` (0/0 after a monster-model swap, reachable
+  for the Sheriff through `CNPC_VSheriffMan::StartTask 0x103aec70`'s default branch — which shipped
+  schedule issues `0x14e` is itself unrecovered).
