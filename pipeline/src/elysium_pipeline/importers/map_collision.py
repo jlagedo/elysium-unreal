@@ -48,6 +48,11 @@ BAKED_MOUNT = "/ElysiumBaked"
 #: editor phase would silently discard.
 MIN_HULL_VERTICES = 4
 
+#: Which brushes of the widened `.hulls` this payload cooks: the player-solid ones, which is the
+#: set the sidecar carried before it grew a contents column, and the set this payload's single
+#: world body has always stood for. `SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP`.
+PAYLOAD_CONTENTS_MASK = 0x1 | 0x2 | 0x8 | 0x4000 | 0x10000
+
 
 def staging_root(work_root: Path) -> Path:
     return Path(work_root) / "import" / FAMILY
@@ -95,10 +100,16 @@ class StagedMapCollision:
 
 
 def read_hull_rows(path: Path) -> list[list[float]]:
-    """`<map>.hulls`: one flat `x y z x y z ...` point cloud per line, Unreal cm.
+    """`<map>.hulls`: the brushes this payload cooks, as flat `x y z ...` clouds in Unreal cm.
 
-    The acceptance rule is `UElysiumMapCollision::LoadHulls`'s, verbatim: at least four whole
-    vertex triples, anything else skipped rather than staged.
+    The acceptance rule is `UElysiumMapCollision::LoadHulls`'s, verbatim: a contents word then at
+    least four whole vertex triples, anything else skipped rather than staged.
+
+    The payload still cooks ONE world body, so only the rows the old `BLOCK_MASK` filter would
+    have written are staged -- the player-solid ones. The contents column is read to decide that
+    and then dropped; the NPC-only clips, sight-only brushes and pedestrian volumes the widened
+    sidecar now carries stay out of the payload until it grows a body per signature. Both
+    transports partition identically once it does.
     """
 
     rows: list[list[float]] = []
@@ -107,9 +118,13 @@ def read_hull_rows(path: Path) -> list[list[float]]:
     with Path(path).open("r", encoding="utf-8") as handle:
         for line in handle:
             tokens = line.split()
-            if len(tokens) < MIN_HULL_VERTICES * 3 or len(tokens) % 3 != 0:
+            if len(tokens) < MIN_HULL_VERTICES * 3 + 1 or len(tokens) % 3 != 1:
                 continue
-            rows.append([float(token) for token in tokens])
+            if not tokens[0].startswith("0x"):
+                continue
+            if not int(tokens[0], 16) & PAYLOAD_CONTENTS_MASK:
+                continue
+            rows.append([float(token) for token in tokens[1:]])
     return rows
 
 

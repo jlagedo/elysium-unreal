@@ -40,6 +40,7 @@ import argparse
 import json
 import os
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -47,6 +48,7 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 
 from elysium_pipeline import paths, shared_corpus
+from elysium_pipeline.formats import contents_signature
 from elysium_pipeline.formats.bsp import (
     INCH_TO_CM,
     source_angles_to_unreal_quat,
@@ -842,11 +844,22 @@ def displacement_triangles(units: MapUnits, world_faces: Sequence[int]) -> list[
 
 
 def write_hulls(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]:
-    """`<map>.hulls`: one world brush per line as flat Unreal-space verts (cm).
+    """`<map>.hulls`: one world brush per line, its CONTENTS word then flat Unreal-space verts (cm).
 
     The miniature's own brushes are dropped -- backdrop the player can never reach, drawn at
     `scale * (v - origin)` while a hull would collide at the raw miniature coordinates. A brush is
     classified by its hull's centroid, the same BSP-area test every other content class uses.
+
+    Every brush answering ANY retail mask is written, not just the player-solid ones, and each row
+    leads with `0x%08x` so the reader can partition by signature (0018 story 3, job 1). Retail asks
+    four questions of a brush and the old `BLOCK_MASK` filter could only keep the answer to one, so
+    the NPC-only clips, the sight-only brushes and the pedestrian volumes never left the BSP at
+    all -- on `sp_tutorial_1`, 5 brushes an NPC cannot pass and 17 that stop its sight.
+
+    The leading token makes every row an odd token count where the old format was a multiple of
+    three, so a reader built for the old format fails loudly instead of reading a contents word as
+    a coordinate. `validation/map_sidecar_diff` carries the divergence: strip column 0, keep the
+    rows answering `BLOCK_MASK`, and the bytes are the legacy exporter's again.
     """
 
     planes = source_planes(units.root["planes"])
@@ -859,6 +872,7 @@ def write_hulls(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]
         0,
     )
     written = skipped_sky = 0
+    by_signature: Counter[str] = Counter()
     lines: list[str] = []
     for index in sorted(world):
         brush = brushes[index]
@@ -866,15 +880,24 @@ def write_hulls(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]
         contents, points = brush_hull(
             planes, sides[first:first + int(brush["numSides"])], int(brush["contents"])
         )
-        if points is None or not (contents & BLOCK_MASK):
+        if points is None:
+            continue
+        signature = contents_signature.signature_of(contents)
+        if not signature:
             continue
         if sky.is_sky(tuple(np.asarray(points).mean(axis=0))):
             skipped_sky += 1
             continue
-        lines.append(" ".join(f"{c:.4f}" for c in hull_vertices(points)))
+        verts = " ".join(f"{c:.4f}" for c in hull_vertices(points))
+        lines.append(f"0x{contents & 0xFFFFFFFF:08x} {verts}")
+        by_signature[contents_signature.spell(signature)] += 1
         written += 1
     write_sidecar_lines(out_dir / f"{units.name}.hulls", lines)
-    return {"brushes": written, "skyBrushes": skipped_sky}
+    return {
+        "brushes": written,
+        "skyBrushes": skipped_sky,
+        "signatures": dict(by_signature.most_common()),
+    }
 
 
 def light_rows(units: MapUnits, sky: SkyScope) -> list[dict[str, Any]]:
@@ -1052,6 +1075,12 @@ def build_entities(
                 # (`brush_mesh`), the contents word and `blocks_player` are untouched: this drops
                 # the collider, not the entity.
                 hulls: list[list[float]] = []
+                # Per-hull contents, parallel to `hulls`. The OR below answers for the entity as a
+                # whole, which is all `blocks_player` ever needed, but a mover's body wears the
+                # collision profile of its own brushes' signature -- a glass `func_brush` must not
+                # block sight while the door beside it does -- and an OR cannot say that when an
+                # entity's brushes disagree. Keeping the column lets the consumer decide.
+                hull_contents: list[int] = []
                 contents_or = 0
                 head = int(models[index]["headNode"])
                 for brush_index in sorted(model_brushes(nodes, leafs, leaf_brushes, head)):
@@ -1065,11 +1094,14 @@ def build_entities(
                     if points is None:
                         continue
                     contents_or |= contents
+                    hull_contents.append(contents & 0xFFFFFFFF)
                     hulls.append(hull_vertices(points))
                 if entity.get("sky"):
                     hulls = []
+                    hull_contents = []
                 entity["model"] = index
                 entity["hulls"] = hulls
+                entity["hull_contents"] = hull_contents
                 entity["contents"] = contents_or
                 entity["blocks_player"] = bool(contents_or & BLOCK_MASK)
                 if index in brush_meshes:

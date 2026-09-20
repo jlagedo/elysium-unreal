@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "ElysiumContentsSignature.h"
 #include "ProceduralMeshComponent.h"
 #include "ElysiumMapCollision.generated.h"
 
@@ -123,9 +124,17 @@ private:
 	void LoadDispCol(const FString& MapName);
 	// The two components are built the same way on both paths — profile, channel ignores, bounds,
 	// registration — and differ only in where their BodySetup came from.
-	UElysiumHullCollisionComponent* MakeHullComponent(AActor* Owner, const FBox& LocalBounds);
+	UElysiumHullCollisionComponent* MakeHullComponent(AActor* Owner, const FBox& LocalBounds,
+		EElysiumContentsSignature Signature);
 	UElysiumDispCollisionComponent* MakeDispComponent(AActor* Owner);
 
+	// One hull component per contents signature the map carries. A brush answers four retail
+	// masks and the answers differ, so a single BlockAll body cannot stand for all of them: the
+	// NPC-only clips must stop an NPC and not the player, the sight-only brushes must stop
+	// neither pawn, and only the ones blocking an NPC may cut the NavMesh.
+	UPROPERTY() TMap<uint8, TObjectPtr<UElysiumHullCollisionComponent>> HullsBySignature;
+	// The first signature component built, kept so the debug overlay and any caller that still
+	// wants "the world collider" has one to name. Never the whole world any more.
 	UPROPERTY() TObjectPtr<UElysiumHullCollisionComponent> HullCollision;
 	UPROPERTY() TObjectPtr<UElysiumDispCollisionComponent> DispCollision;
 	UPROPERTY() TObjectPtr<const UElysiumMapCollisionPayload> Payload;

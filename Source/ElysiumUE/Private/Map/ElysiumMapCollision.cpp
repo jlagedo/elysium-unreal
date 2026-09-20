@@ -68,6 +68,7 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 	DispTriCount = 0;
 	bBrushCollision = false;
 	FailureReason.Reset();
+	HullsBySignature.Reset();
 	HullCollision = nullptr;
 	DispCollision = nullptr;
 	Payload = nullptr;
@@ -113,21 +114,24 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 }
 
 UElysiumHullCollisionComponent* UElysiumMapCollision::MakeHullComponent(AActor* Owner,
-	const FBox& LocalBounds)
+	const FBox& LocalBounds, EElysiumContentsSignature Signature)
 {
-	// No render sections (never drawn), simple = convex. One FKConvexElem per solid brush, so pawn
+	// No render sections (never drawn), simple = convex. One FKConvexElem per brush, so pawn
 	// capsule sweeps (which query simple collision) hit the brushes and their invisible clip
 	// volumes.
-	UElysiumHullCollisionComponent* Component =
-		NewObject<UElysiumHullCollisionComponent>(Owner, TEXT("HullCollision"));
+	//
+	// The profile is the signature's own, which is what makes a brush answer each retail mask
+	// separately — and what decides navigation, since Unreal calls a body navigation-relevant
+	// exactly when it blocks ECC_Pawn. The profile already says Ignore on the +use and pick
+	// channels, so no per-channel fixup follows it any more.
+	const FName ProfileName = ElysiumContents::ProfileName(Signature);
+	UElysiumHullCollisionComponent* Component = NewObject<UElysiumHullCollisionComponent>(
+		Owner, FName(*FString::Printf(TEXT("HullCollision_%s"),
+			*ElysiumContents::Spell(Signature))));
 	Component->SetupAttachment(this);
 	Component->bUseComplexAsSimpleCollision = false;
 	Component->bUseAsyncCooking = true;
-	Component->SetCollisionProfileName(TEXT("BlockAll"));
-	// .hulls include PLAYERCLIP. BlockAll would steal the +use ray (and the debug pick) from
-	// door/button brushes the way unprofiled baked world would — ElysiumPickOnly exists for that.
-	Component->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
-	Component->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
+	Component->SetCollisionProfileName(ProfileName);
 	Component->SetLocalCollisionBounds(LocalBounds);
 	return Component;
 }
@@ -182,9 +186,18 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 	}
 
 	Payload = Asset;
-	HullCollision = MakeHullComponent(Owner, Asset->WorldHullBounds());
+	// The payload still cooks ONE world body, from the BLOCK_MASK-filtered `.hulls` it was staged
+	// from, so it can only be given the one signature that set stands for: blocks both pawns, and
+	// answers nothing about sight. That is exactly what this body did as `BlockAll` — the sight
+	// channel defaults to Ignore — so adopting a payload behaves today as it did yesterday.
+	// Payload v2 carries a signature per body and this collapses into the same partition the
+	// sidecar path already builds.
+	const EElysiumContentsSignature PayloadSignature =
+		EElysiumContentsSignature::Player | EElysiumContentsSignature::Npc;
+	HullCollision = MakeHullComponent(Owner, Asset->WorldHullBounds(), PayloadSignature);
 	HullCollision->ProcMeshBodySetup = Asset->GetWorldHulls();
 	HullCollision->RegisterComponent();
+	HullsBySignature.Add(static_cast<uint8>(PayloadSignature), HullCollision);
 	HullCount = Asset->WorldHullCount();
 
 	if (UBodySetup* DispSetup = Asset->GetDisplacement())
@@ -229,7 +242,25 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 			: EElysiumCollisionBuildState::Cooking;
 	};
 
-	const EElysiumCollisionBuildState HullState = ComponentState(HullCollision);
+	// Every signature body must be ready, not just the first: an NPC-only clip still cooking is a
+	// hole an NPC can walk through.
+	EElysiumCollisionBuildState HullState = HullsBySignature.IsEmpty()
+		? ComponentState(HullCollision)
+		: EElysiumCollisionBuildState::Ready;
+	for (const TPair<uint8, TObjectPtr<UElysiumHullCollisionComponent>>& Entry : HullsBySignature)
+	{
+		const EElysiumCollisionBuildState State = ComponentState(Entry.Value);
+		if (State == EElysiumCollisionBuildState::Failed)
+		{
+			HullState = EElysiumCollisionBuildState::Failed;
+			break;
+		}
+		if (State == EElysiumCollisionBuildState::Cooking)
+		{
+			HullState = EElysiumCollisionBuildState::Cooking;
+		}
+	}
+
 	const EElysiumCollisionBuildState DispState = ComponentState(DispCollision);
 	if (HullState == EElysiumCollisionBuildState::Failed
 		|| DispState == EElysiumCollisionBuildState::Failed)
@@ -245,7 +276,16 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 FBox UElysiumMapCollision::GetWorldBounds() const
 {
 	FBox WorldBox(ForceInit);
-	if (HullCollision)
+	// The union of every signature, including the bodies that stop nothing: the nav bounds must
+	// cover the whole playable volume, and a sight-only brush still stands inside it.
+	for (const TPair<uint8, TObjectPtr<UElysiumHullCollisionComponent>>& Entry : HullsBySignature)
+	{
+		if (Entry.Value)
+		{
+			WorldBox += Entry.Value->Bounds.GetBox();
+		}
+	}
+	if (HullsBySignature.IsEmpty() && HullCollision)
 	{
 		WorldBox += HullCollision->Bounds.GetBox();
 	}
@@ -258,7 +298,14 @@ FBox UElysiumMapCollision::GetWorldBounds() const
 
 void UElysiumMapCollision::RefreshNavigationData()
 {
-	if (HullCollision && HullCollision->IsRegistered())
+	for (const TPair<uint8, TObjectPtr<UElysiumHullCollisionComponent>>& Entry : HullsBySignature)
+	{
+		if (Entry.Value && Entry.Value->IsRegistered())
+		{
+			FNavigationSystem::UpdateComponentData(*Entry.Value);
+		}
+	}
+	if (HullsBySignature.IsEmpty() && HullCollision && HullCollision->IsRegistered())
 	{
 		FNavigationSystem::UpdateComponentData(*HullCollision);
 	}
@@ -278,47 +325,93 @@ bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 		return false;   // no .hulls sidecar: this map has no brush collider
 	}
 
-	// Each line is one solid world brush as a flat, unordered point cloud in Unreal cm:
-	// x y z x y z ...  (>= 4 verts). UE builds the convex hull from the points, so order is
-	// irrelevant. The sidecar is pre-filtered at export to player-blocking contents
-	// (SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP), so invisible clip brushes are in and passable
-	// water/monsterclip is out.
-	TArray<TArray<FVector>> Hulls;
-	Hulls.Reserve(Lines.Num());
-	FBox HullBounds(ForceInit);
+	// Each line is one world brush: its CONTENTS word as `0x%08x`, then a flat, unordered point
+	// cloud in Unreal cm (x y z x y z ..., >= 4 verts). UE builds the convex hull from the points,
+	// so order is irrelevant.
+	//
+	// The sidecar carries every brush answering ANY retail mask, not just the player-solid ones,
+	// and the contents word is what tells them apart: the brushes are partitioned by signature and
+	// each partition gets a body wearing that signature's profile. That is how an NPC-only clip
+	// comes to stop an NPC and not the player, and how a sight-only brush stops neither pawn.
+	//
+	// An older sidecar wrote bare coordinates, so its rows are a multiple of three tokens and the
+	// leading token does not parse as hex. Such a file is refused outright rather than read as if
+	// its first coordinate were a contents word — re-export the map.
+	TMap<uint8, TArray<TArray<FVector>>> BySignature;
+	TMap<uint8, FBox> BoundsBySignature;
+	int32 Parsed = 0;
 	for (const FString& Line : Lines)
 	{
 		TArray<FString> Tok;
 		Line.ParseIntoArray(Tok, TEXT(" "), true);
-		if (Tok.Num() < 12 || Tok.Num() % 3 != 0)
+		if (Tok.Num() < 13 || Tok.Num() % 3 != 1 || !Tok[0].StartsWith(TEXT("0x")))
 		{
-			continue;   // need >= 4 verts, whole (x,y,z) triples
+			continue;   // need a contents word and >= 4 whole (x,y,z) triples
+		}
+		const uint32 Contents = FParse::HexNumber(*Tok[0].Mid(2));
+		const EElysiumContentsSignature Signature = ElysiumContents::SignatureOf(Contents);
+		if (Signature == EElysiumContentsSignature::None)
+		{
+			continue;   // answers no mask: it was never staged, and cannot be a body
 		}
 		TArray<FVector> Verts;
-		Verts.Reserve(Tok.Num() / 3);
-		for (int32 I = 0; I + 2 < Tok.Num(); I += 3)
+		Verts.Reserve((Tok.Num() - 1) / 3);
+		FBox& SignatureBounds =
+			BoundsBySignature.FindOrAdd(static_cast<uint8>(Signature), FBox(ForceInit));
+		for (int32 I = 1; I + 2 < Tok.Num(); I += 3)
 		{
-			Verts.Emplace(FCString::Atod(*Tok[I]), FCString::Atod(*Tok[I + 1]), FCString::Atod(*Tok[I + 2]));
-			HullBounds += Verts.Last();
+			Verts.Emplace(FCString::Atod(*Tok[I]), FCString::Atod(*Tok[I + 1]),
+				FCString::Atod(*Tok[I + 2]));
+			SignatureBounds += Verts.Last();
 		}
-		Hulls.Add(MoveTemp(Verts));
+		BySignature.FindOrAdd(static_cast<uint8>(Signature)).Add(MoveTemp(Verts));
+		++Parsed;
 	}
-	if (Hulls.Num() == 0 || !HullBounds.IsValid)
+	if (Parsed == 0)
 	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("'%s' carries no readable brush rows; a sidecar written before the contents "
+				"column was added must be re-exported"), *MapName);
 		return false;
 	}
 
 	// Cooked async — hundreds of synchronous Chaos cooks stall the game thread, and the map actor's
 	// spawn teleport waits for ground before releasing the pawn. (R4.2's payload path has no cook
 	// to schedule; this one is the fallback for an unconverted map.)
-	HullCollision = MakeHullComponent(Owner, HullBounds);
-	HullCollision->RegisterComponent();
-
-	HullCount = Hulls.Num();
-	// Set the whole convex set in one call: SetCollisionConvexMeshes replaces the elements and
-	// cooks collision once (AddCollisionConvexMesh would re-cook per hull).
-	HullCollision->SetCollisionConvexMeshes(MoveTemp(Hulls));
-	UE_LOG(LogElysiumCollision, Log, TEXT("brush collision: %d convex hulls"), HullCount);
+	HullCount = Parsed;
+	for (TPair<uint8, TArray<TArray<FVector>>>& Partition : BySignature)
+	{
+		const EElysiumContentsSignature Signature =
+			static_cast<EElysiumContentsSignature>(Partition.Key);
+		const FBox& SignatureBounds = BoundsBySignature[Partition.Key];
+		if (!SignatureBounds.IsValid)
+		{
+			continue;
+		}
+		UElysiumHullCollisionComponent* Component =
+			MakeHullComponent(Owner, SignatureBounds, Signature);
+		Component->RegisterComponent();
+		// Set the whole convex set in one call: SetCollisionConvexMeshes replaces the elements and
+		// cooks collision once (AddCollisionConvexMesh would re-cook per hull).
+		const int32 Count = Partition.Value.Num();
+		Component->SetCollisionConvexMeshes(MoveTemp(Partition.Value));
+		HullsBySignature.Add(Partition.Key, Component);
+		if (HullCollision == nullptr)
+		{
+			HullCollision = Component;
+		}
+		UE_LOG(LogElysiumCollision, Log,
+			TEXT("brush collision %s: %d convex hulls on profile '%s'%s"),
+			*ElysiumContents::Spell(Signature), Count,
+			*ElysiumContents::ProfileName(Signature).ToString(),
+			ElysiumContents::AffectsNavigation(Signature) ? TEXT(" (cuts the NavMesh)") : TEXT(""));
+	}
+	if (HullsBySignature.Num() == 0)
+	{
+		return false;
+	}
+	UE_LOG(LogElysiumCollision, Log, TEXT("brush collision: %d convex hulls in %d signature(s)"),
+		HullCount, HullsBySignature.Num());
 	return true;
 }
 

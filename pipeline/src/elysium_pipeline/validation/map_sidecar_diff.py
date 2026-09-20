@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any
 
 from elysium_pipeline import paths
-from elysium_pipeline.exporters.UE_map_sidecars import SIDECAR_DIR_NAME
+from elysium_pipeline.exporters.UE_map_sidecars import BLOCK_MASK, SIDECAR_DIR_NAME
 from elysium_pipeline.validation.shots_diff import git_commit
 
 #: The eight legacy sidecars R3.2 reproduces. `.ready` (R2.4) is producer-only -- the legacy
@@ -69,6 +69,15 @@ DISPCOL_NAMED_DIVERGENCE = (
     "producer recovers displacement geometry from the mesh's float32 POSITION accessor instead "
     "(UE_map_sidecars.displacement_triangles), accepted rather than publishing "
     "DISP_VERTS numerically."
+)
+HULLS_NAMED_DIVERGENCE = (
+    "0018 story 3: `.hulls` now carries every brush answering any retail mask, each row led by "
+    "its CONTENTS word, where the legacy exporter kept only the player-solid brushes (BLOCK_MASK) "
+    "and wrote bare coordinates. Retail asks four questions of a brush -- does it block the "
+    "player, an NPC, sight, is it a pedestrian volume -- and the old filter could keep the answer "
+    "to one, so NPC-only clips, sight-only brushes and pedestrian volumes never left the BSP. "
+    "`classify_hulls` proves the divergence by projection: drop the contents column, keep the "
+    "rows answering BLOCK_MASK, and the bytes are the legacy exporter's again."
 )
 KNOWN_MAP_DIVERGENCES: dict[str, str] = {
     "la_hub_1": "the legacy exporter's own signed-int16 planenum overflow corrupts its "
@@ -163,6 +172,43 @@ def classify_dispcol(diff: dict[str, Any], legacy_path: Path, producer_path: Pat
             abs(a - b) for a, b in zip(legacy_row, producer_row)
         ) if legacy_row else 0.0)
     return "named_divergence" if max_delta <= DISPCOL_TOLERANCE_CM else "unexpected"
+
+
+def classify_hulls(diff: dict[str, Any], legacy_path: Path, producer_path: Path) -> str:
+    """`"byte_equal"` / `"named_divergence"` / `"unexpected"` for a `.hulls` file diff.
+
+    0018 story 3 widened `.hulls`: every brush answering ANY retail mask is written, each row led
+    by its CONTENTS word, where the legacy exporter kept only the player-solid brushes and wrote
+    bare coordinates. The divergence is proved rather than assumed -- project the producer's rows
+    back to the legacy format (drop the contents column, keep the rows answering `BLOCK_MASK`) and
+    the result must be the legacy bytes exactly. Anything else is a producer defect.
+
+    A coordinate that moved, a row that vanished or a row order that changed all survive the
+    projection and so still come back `"unexpected"`.
+    """
+
+    if diff["equal"]:
+        return "byte_equal"
+    if not (diff["legacyPresent"] and diff["producerPresent"]):
+        return "unexpected"
+    legacy_rows = [line.split() for line in _read_text_rows(legacy_path)]
+    projected: list[list[str]] = []
+    for row in (line.split() for line in _read_text_rows(producer_path)):
+        if not row:
+            return "unexpected"
+        try:
+            contents = int(row[0], 16)
+        except ValueError:
+            return "unexpected"          # not the new format either: a real defect
+        if contents & BLOCK_MASK:
+            projected.append(row[1:])
+    return "named_divergence" if projected == legacy_rows else "unexpected"
+
+
+def _read_text_rows(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
+    return [line for line in path.read_text(encoding="ascii").splitlines() if line.strip()]
 
 
 def _read_float_rows(path: Path) -> list[list[float]]:
@@ -304,6 +350,10 @@ def diff_map(
             diff["classification"] = classify_dispcol(diff, legacy_path, producer_path)
             if diff["classification"] == "named_divergence":
                 diff["reason"] = DISPCOL_NAMED_DIVERGENCE
+        elif suffix == ".hulls" and not diff["equal"]:
+            diff["classification"] = classify_hulls(diff, legacy_path, producer_path)
+            if diff["classification"] == "named_divergence":
+                diff["reason"] = HULLS_NAMED_DIVERGENCE
         else:
             diff["classification"] = "byte_equal" if diff["equal"] else "unexpected"
         files[suffix] = diff

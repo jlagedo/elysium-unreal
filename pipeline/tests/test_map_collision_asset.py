@@ -33,13 +33,23 @@ def _cube(scale: float = 1.0) -> list[float]:
     ) for c in corner]
 
 
+#: SOLID: the contents word a `.hulls` row leads with for an ordinary player-solid brush.
+SOLID = 0x1
+
+
+def _hull_line(row: list[float], contents: int = SOLID) -> str:
+    """One `.hulls` row: its contents word, then the flat vertex cloud."""
+
+    return f"0x{contents:08x} " + " ".join(f"{c:.4f}" for c in row)
+
+
 def _write_map(directory: Path, name: str, *, entities, hull_rows=None, disp_rows=None,
                sky_scale: float | None = None) -> Path:
     directory = directory / name
     directory.mkdir(parents=True, exist_ok=True)
     rows = hull_rows if hull_rows is not None else [_cube()]
     _write(directory / f"{name}.hulls",
-           "\n".join(" ".join(f"{c:.4f}" for c in row) for row in rows) + "\n")
+           "\n".join(_hull_line(row) for row in rows) + "\n")
     if disp_rows:
         _write(directory / f"{name}.dispcol",
                "\n".join(" ".join(f"{c:.4f}" for c in row) for row in disp_rows) + "\n")
@@ -52,16 +62,41 @@ def _write_map(directory: Path, name: str, *, entities, hull_rows=None, disp_row
 
 def test_read_hull_rows_applies_the_runtime_readers_acceptance_rule(tmp_path):
     path = _write(tmp_path / "probe.hulls", "\n".join([
-        " ".join(f"{c:.4f}" for c in _cube()),            # eight verts: kept
-        "1 2 3 4 5 6 7 8 9",                              # three verts: too few for a convex
-        "1 2 3 4 5 6 7 8 9 10 11",                        # not whole triples
-        " ".join(f"{c:.4f}" for c in _cube(2.0)),         # kept
+        _hull_line(_cube()),                              # eight verts: kept
+        f"0x{SOLID:08x} 1 2 3 4 5 6 7 8 9",               # three verts: too few for a convex
+        f"0x{SOLID:08x} 1 2 3 4 5 6 7 8 9 10 11",         # not whole triples
+        " ".join(f"{c:.4f}" for c in _cube()),            # no contents word: the old format
+        _hull_line(_cube(2.0)),                           # kept
     ]) + "\n")
 
     rows = map_collision.read_hull_rows(path)
 
     assert [len(row) // 3 for row in rows] == [8, 8]
     assert rows[1][3] == pytest.approx(2.0)
+
+
+def test_read_hull_rows_stages_only_what_the_single_world_body_stands_for(tmp_path):
+    """The payload cooks one body, so it takes the player-solid brushes and no others.
+
+    The widened sidecar also carries NPC-only clips, sight-only brushes and pedestrian volumes.
+    Cooking those into the same body would make an NPC clip solid to the player, which is the
+    defect the signature partition exists to prevent -- they wait for a body per signature.
+    """
+
+    npc_clip, sight_only, pedestrian = 0x08020000, 0x08000080, 0x08002000
+    path = _write(tmp_path / "probe.hulls", "\n".join([
+        _hull_line(_cube(), SOLID),
+        _hull_line(_cube(2.0), npc_clip),
+        _hull_line(_cube(3.0), sight_only),
+        _hull_line(_cube(4.0), pedestrian),
+        _hull_line(_cube(5.0), 0x10000),      # PLAYERCLIP alone: still the player's
+    ]) + "\n")
+
+    rows = map_collision.read_hull_rows(path)
+
+    assert len(rows) == 2
+    assert rows[0][3] == pytest.approx(1.0)
+    assert rows[1][3] == pytest.approx(5.0)
 
 
 def test_brush_entity_rows_key_by_lump_ordinal_and_skip_point_entities(tmp_path):
