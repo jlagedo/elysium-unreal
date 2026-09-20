@@ -105,4 +105,22 @@ public:
 	 *  that the generated ini and the generated hull table still agree. */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
 	static TArray<FString> SupportedAgentNames(UWorld* World);
+
+	/**
+	 * The agent names `HullBits` asks for, from the hull table alone -- no world, no navigation
+	 * system, nothing spawned. The collision import asks this to decide whether a level already
+	 * carries the meshes it would otherwise build.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static TArray<FString> AgentNamesForHullBits(int32 HullBits);
+
+	/**
+	 * Every navigation mesh standing in `World`, as "<agent>=<active tiles>".
+	 *
+	 * Tiles, not actors: an empty mesh is saved and loaded exactly like a full one, and reads as
+	 * "already built" to the runtime. This is what says whether a level's baked navigation
+	 * survived whatever last rewrote it.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static TArray<FString> NavMeshTileCounts(UWorld* World);
 };

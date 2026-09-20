@@ -157,8 +157,10 @@ def install(tmp_path: Path, *, pakfile: bytes = b"", extra: dict[str, bytes] | N
     write(game, "scripts/surfaceproperties.txt", SURFACE_TABLE)
     write(game, "scripts/game_sounds_surfaceproperties.txt", GAME_SOUNDS)
     write(game, "maps/tutorial.bsp", bsp(pakfile))
-    # The two loose trees the retail engine writes while it runs; both are excluded.
-    write(game, "maps/graphs/tutorial.ain", b"runtime cache")
+    # `maps/soundcache/` is the one loose tree the retail engine writes that stays excluded.
+    # A loose `maps/graphs/` AIN is indexed and shadows the packed one, because that is what the
+    # patched install runs (0018 story 3).
+    write(game, "maps/graphs/tutorial.ain", b"loose nav graph")
     write(game, "maps/soundcache/tutorial.cache", b"runtime cache")
     build_vpk(
         game / "pack000.vpk",
@@ -193,16 +195,18 @@ def test_the_walk_keys_every_member_lower_case_and_forward_slashed(tmp_path):
     assert "lights.rad" in paths                     # so is a file at the install root
 
 
-def test_the_containers_and_the_runtime_cache_trees_are_the_only_omissions(tmp_path):
+def test_the_containers_and_the_sound_cache_are_the_only_omissions(tmp_path):
     result = collect(tmp_path)
     paths = {member.path for member in result.members}
     assert "pack000.vpk" not in paths
     assert "maps/soundcache/tutorial.cache" not in paths
-    # The VPK-shipped `maps/graphs/` members are not excluded; they are the nav-graph seam's.
+    # `maps/graphs/` members are the nav-graph seam's at every layer, and a loose AIN shadows the
+    # packed one exactly as the engine resolves it -- which is how the patch's own graphs reach
+    # the seam (0018 story 3).
     assert "maps/graphs/tutorial.ain" in paths
-    assert result.by_path()["maps/graphs/tutorial.ain"].source.origin["kind"] == "vpk"
+    assert result.by_path()["maps/graphs/tutorial.ain"].source.origin["kind"] == "loose"
     assert [row["path"] for row in result.excluded_trees] == [
-        "pack*.vpk", "maps/graphs/", "maps/soundcache/"
+        "pack*.vpk", "maps/soundcache/"
     ]
 
 

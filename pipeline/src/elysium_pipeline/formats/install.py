@@ -39,8 +39,17 @@ WHOLE_INSTALL = ("",)
 
 # The narrow asset subset, for a caller that wants only the trees its converter reads.
 ASSET_DIRS = ("materials", "models", "maps", "resource", "particles", "scripts", "vdata")
-#: Directories below `maps/` the retail engine writes at run time; never pipeline inputs.
-RUNTIME_CACHE_DIRS = frozenset({"graphs", "soundcache"})
+#: Directories below `maps/` the retail engine writes at run time and no seam reads.
+#:
+#: `graphs` is NOT one of them any more (0018 story 3, 2026-09-20). The patch ships its own
+#: complete set of 108 `.ain` files built from its own BSPs, and those are the graphs the patched
+#: install actually runs -- on 107 of 108 maps the `.ain` is not older than the `.bsp`, so retail
+#: loads it rather than rebuilding (`navigation-jump-links.md` § "Which graph the patched install
+#: runs on"). Skipping the tree meant the nav-graph seam resolved the base game's packed graph
+#: against the patch's map: 116 nodes and 234 links on `sp_tutorial_1` where the map it is paired
+#: with has 203 and 429. Retail rewrites a graph only when the map is newer than it, which no
+#: shipped map is, so indexing the tree costs an occasional re-export of one unit and nothing else.
+RUNTIME_CACHE_DIRS = frozenset({"soundcache"})
 
 
 # One process-lifetime index per (roots, dirs) key. The install is read-only while the

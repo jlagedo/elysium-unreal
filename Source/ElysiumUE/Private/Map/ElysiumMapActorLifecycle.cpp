@@ -35,6 +35,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "EngineUtils.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
 
@@ -813,6 +814,12 @@ bool AElysiumMapActor::HasBakedNavigationMesh(const UNavigationSystemV1& Navigat
 	return false;
 }
 
+//: How long a level's baked navigation meshes get to register before their absence is called a
+//: defect. They are saved actors, so they arrive with the level -- but registration into
+//: `NavDataSet` happens on the navigation system's own schedule, after the collision this waits
+//: behind is already Ready. Failing on the first miss turned that race into a permanent failure.
+static constexpr double GElysiumNavAdoptGraceSeconds = 30.0;
+
 void AElysiumMapActor::EnsureRuntimeNavigation()
 {
 	if (bMenuBackdrop || bNavigationBuildRequested || bNavigationBuildFailed || !Collision
@@ -836,15 +843,46 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	{
 		bNavigationBuildRequested = true;
 		UE_LOG(LogElysium, Log,
-			TEXT("runtime navigation %s: adopted the level's baked mesh, no build"), *MapName);
+			TEXT("runtime navigation %s: adopted the level's baked mesh after %.3fs, no build"),
+			*MapName, GetRuntimeWaitSeconds());
 		return;
 	}
 
+	// Not yet, rather than never: keep waiting while the grace window stands.
+	if (GetRuntimeWaitSeconds() < GElysiumNavAdoptGraceSeconds)
+	{
+		return;
+	}
+
+	// Say what IS there. "No mesh with tiles" has three different causes -- no navigation system,
+	// no registered data, or data that registered empty -- and they need different fixes.
+	FString Held = TEXT("no navigation system in this world");
+	if (Navigation != nullptr)
+	{
+		TArray<FString> Rows;
+		for (const ANavigationData* Data : Navigation->NavDataSet)
+		{
+			const ARecastNavMesh* Mesh = Cast<ARecastNavMesh>(Data);
+			Rows.Add(Mesh != nullptr
+				? FString::Printf(TEXT("%s=%d tile(s)"), *Mesh->GetName(), Mesh->GetNumActiveTiles())
+				: FString::Printf(TEXT("%s (not a Recast mesh)"), Data ? *Data->GetName() : TEXT("null")));
+		}
+		int32 InWorld = 0;
+		for (TActorIterator<ARecastNavMesh> It(GetWorld()); It; ++It)
+		{
+			++InWorld;
+			Rows.Add(FString::Printf(TEXT("[unregistered] %s=%d tile(s)"),
+				*It->GetName(), It->GetNumActiveTiles()));
+		}
+		Held = FString::Printf(TEXT("NavDataSet %d, meshes in level %d: %s"),
+			Navigation->NavDataSet.Num(), InWorld,
+			Rows.IsEmpty() ? TEXT("none") : *FString::Join(Rows, TEXT(", ")));
+	}
 	bNavigationBuildFailed = true;
 	UE_LOG(LogElysium, Error,
-		TEXT("runtime navigation %s: the level carries no baked navigation mesh with tiles; "
+		TEXT("runtime navigation %s: no baked navigation mesh with tiles registered in %.0fs (%s); "
 			"run: uv run elysium bake map --maps %s && uv run elysium import map-collision --maps %s"),
-		*MapName, *MapName, *MapName);
+		*MapName, GElysiumNavAdoptGraceSeconds, *Held, *MapName, *MapName);
 }
 
 bool AElysiumMapActor::IsRuntimeNavigationReady() const

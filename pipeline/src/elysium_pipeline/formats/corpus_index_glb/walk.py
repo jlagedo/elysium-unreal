@@ -7,9 +7,10 @@ not the asset subset the map and character bakes index, because a member no seam
 exactly what it exists to find.
 
 Only two things are left out and both are named in `model.EXCLUDED_TREES`: the VPK container
-files themselves, and the loose `maps/graphs/` and `maps/soundcache/` trees the retail engine
-writes while it runs. The VPK-shipped `maps/graphs/*.ain` and `*.loc` members are not excluded;
-they are the nav-graph seam's.
+files themselves, and the loose `maps/soundcache/` tree the retail engine writes while it runs.
+The loose `maps/graphs/` tree IS walked (0018 story 3): the patch ships its own 108 `.ain` files,
+built from its own BSPs, and those -- not the base game's packed ones -- are the graphs the
+patched install runs.
 
 Disposition is decided by asking the seams, not by restating their path rules here: each entry of
 `SEAM_CLAIMS` calls the seam's own `source_keys()` against this same complete index and maps each

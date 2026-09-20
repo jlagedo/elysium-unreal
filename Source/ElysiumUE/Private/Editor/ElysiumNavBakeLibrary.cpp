@@ -111,6 +111,39 @@ TArray<FString> UElysiumNavBakeLibrary::SupportedAgentNames(UWorld* World)
 	return Names;
 }
 
+TArray<FString> UElysiumNavBakeLibrary::AgentNamesForHullBits(int32 HullBits)
+{
+	TArray<FString> Names;
+	for (int32 Hull = 0; Hull < ElysiumRetailHulls::Count; ++Hull)
+	{
+		if ((HullBits & (1 << Hull)) == 0)
+		{
+			continue;
+		}
+		const FName AgentName = ElysiumRetailHulls::AgentName(Hull);
+		if (!AgentName.IsNone())
+		{
+			Names.Add(AgentName.ToString());
+		}
+	}
+	return Names;
+}
+
+TArray<FString> UElysiumNavBakeLibrary::NavMeshTileCounts(UWorld* World)
+{
+	TArray<FString> Rows;
+	// The world's own actors, not the navigation system's NavDataSet: this is asked of a level
+	// that has just been loaded in the editor, where the set may not be populated yet.
+	for (TActorIterator<ARecastNavMesh> It(World); It; ++It)
+	{
+		const UEnum* Modes = StaticEnum<ENavDataGatheringModeConfig>();
+		Rows.Add(FString::Printf(TEXT("%s=%d gen=%d"), *It->GetName(), It->GetNumActiveTiles(),
+			static_cast<int32>(It->GetRuntimeGenerationMode())));
+	}
+	Rows.Sort();
+	return Rows;
+}
+
 TArray<FString> UElysiumNavBakeLibrary::SetMapNavAgents(UWorld* World, int32 HullBits)
 {
 	TArray<FString> Kept;
@@ -392,5 +425,6 @@ TArray<FElysiumNavAgentBuild> UElysiumNavBakeLibrary::BuildAgentNavMeshes(UWorld
 		Nav->UnregisterNavData(Mesh);
 		Mesh->Destroy();
 	}
+
 	return Report;
 }

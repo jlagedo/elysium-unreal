@@ -176,9 +176,16 @@ bool FElysiumNavJumpBakedTutorialTest::RunTest(const FString&)
 	UWorld* Baked = LoadObject<UWorld>(nullptr, *(Package + TEXT(".sp_tutorial_1")));
 	if (!TestNotNull(TEXT("tutorial baked level exists"), Baked)
 		|| !TestNotNull(TEXT("tutorial persistent level exists"), Baked->PersistentLevel.Get())) return false;
+	// The PATCH's graph -- 203 nodes, 429 links -- which is what the patched install runs and what
+	// this map is baked from (0018 story 3). The first nine pairs are the base game's packed graph
+	// unchanged; the rest are jumps on the 87 nodes the patch adds.
 	const TMap<int32, FIntPoint> Expected = {{22, {8, 11}}, {24, {8, 15}}, {30, {9, 42}},
 		{88, {32, 36}}, {110, {49, 53}}, {115, {51, 53}}, {147, {70, 71}},
-		{163, {76, 74}}, {218, {101, 106}}};
+		{163, {76, 74}}, {218, {101, 106}}, {237, {117, 136}}, {238, {117, 138}},
+		{256, {122, 134}}, {261, {123, 136}}, {278, {131, 133}}, {279, {131, 136}},
+		{281, {132, 134}}, {283, {133, 134}}, {285, {134, 136}}, {287, {135, 132}},
+		{292, {137, 132}}, {390, {180, 185}}, {393, {181, 143}}, {399, {185, 186}},
+		{402, {186, 187}}, {407, {189, 187}}};
 	TSet<int32> Found;
 	for (AActor* Actor : Baked->PersistentLevel->Actors)
 	{
@@ -197,7 +204,8 @@ bool FElysiumNavJumpBakedTutorialTest::RunTest(const FString&)
 		TestTrue(TEXT("connection retains both directions and distinct native endpoints"),
 			Direction == ENavLinkDirection::BothWays && !Start.Equals(End));
 	}
-	TestEqual(TEXT("all nine tutorial human AIN jumps survive baking and reloading"), Found.Num(), Expected.Num());
+	TestEqual(TEXT("every tutorial human AIN jump survives baking and reloading"),
+		Found.Num(), Expected.Num());
 	return true;
 }
 

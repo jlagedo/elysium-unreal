@@ -63,19 +63,24 @@ def install_roots(tmp_path, monkeypatch):
     install.invalidate_index_cache()
 
 
-def test_retail_runtime_caches_below_maps_are_not_indexed(install_roots):
-    # The engine writes AI node graphs and sound caches under maps/ while it runs; a play
-    # session must not re-stamp the index, and nothing reads those files.
+def test_the_sound_cache_is_skipped_and_the_patch_graphs_are_indexed(install_roots):
+    # The engine writes sound caches under maps/ while it runs and nothing reads them, so a play
+    # session must not re-stamp the index through that tree.
+    #
+    # `maps/graphs/` is NOT skipped (0018 story 3): the patch ships its own complete set of AINs
+    # built from its own BSPs, and those are the graphs the patched install runs. Skipping them
+    # left the nav-graph seam pairing the base game's packed graph with the patch's map.
     os.makedirs(os.path.join(install_roots.patch, "maps", "graphs"))
     os.makedirs(os.path.join(install_roots.patch, "maps", "soundcache"))
     for rel in (("maps", "sm_hub_1.bsp"), ("maps", "graphs", "sm_hub_1.ain"),
-                ("maps", "graphs", ".loc"), ("maps", "soundcache", "sm_hub_1.cache")):
+                ("maps", "graphs", "sm_hub_1.loc"), ("maps", "soundcache", "sm_hub_1.cache")):
         with open(os.path.join(install_roots.patch, *rel), "wb") as f:
             f.write(b"x")
     index = install.build_index(verbose=False)
     assert "maps/sm_hub_1.bsp" in index
-    assert not [k for k in index if k.startswith("maps/graphs/")
-        or k.startswith("maps/soundcache/")]
+    assert index["maps/graphs/sm_hub_1.ain"][0] == "loose"
+    assert index["maps/graphs/sm_hub_1.loc"][0] == "loose"
+    assert not [k for k in index if k.startswith("maps/soundcache/")]
 
 
 def test_a_repeat_call_returns_the_same_index_object(install_roots):

@@ -73,7 +73,7 @@ def test_endpoint_or_filter_change_invalidates_level_recipe():
     assert jump.project_graph(graph, "fixture")["sha256"] != first
 
 
-def test_tutorial_decoded_ain_has_nine_human_jump_connections():
+def test_tutorial_decoded_ain_has_its_human_jump_connections():
     try:
         root = paths.export_v2_root()
     except RuntimeError:
@@ -81,6 +81,12 @@ def test_tutorial_decoded_ain_has_nine_human_jump_connections():
     if not (root / "nav-graphs/sp_tutorial_1.glb").is_file():
         pytest.skip("tutorial V2 navigation unit unavailable")
     payload = jump.stage_map("sp_tutorial_1", root)
-    assert payload["sourceLinks"] == 234
-    assert [row["index"] for row in payload["links"]] == [22, 24, 30, 88, 110, 115, 147, 163, 218]
-    assert payload["excluded"] == dict(nonJump=225, disabled=0, duplicate=0)
+    # The PATCH's own graph, which is the one the patched install runs (0018 story 3): 203 nodes
+    # and 429 links against the base game's packed 116 / 234. The first nine indices below are the
+    # base graph's, unchanged -- the patch adds 87 nodes and its jumps sit past them.
+    assert payload["sourceLinks"] == 429
+    assert [row["index"] for row in payload["links"]] == [
+        22, 24, 30, 88, 110, 115, 147, 163, 218, 237, 238, 256, 261, 278, 279, 281,
+        283, 285, 287, 292, 390, 393, 399, 402, 407,
+    ]
+    assert payload["excluded"] == dict(nonJump=404, disabled=0, duplicate=0)

@@ -59,18 +59,13 @@ EXCLUDED_TREES = (
         "reason": "the VPK container files are the source of their members, not members",
     },
     {
-        "path": "maps/graphs/",
-        "reason": "loose tree the retail engine writes while it runs; the VPK-shipped "
-                  "maps/graphs/*.ain and *.loc members are the nav-graph seam's and are kept",
-    },
-    {
         "path": "maps/soundcache/",
         "reason": "loose tree the retail engine writes while it runs",
     },
 )
 
 #: The loose subtrees below an install root that the walk skips, lower-cased and slash-terminated.
-EXCLUDED_LOOSE_PREFIXES = ("maps/graphs/", "maps/soundcache/")
+EXCLUDED_LOOSE_PREFIXES = ("maps/soundcache/",)
 
 #: The sections `coverage.mapped[]` grades. Coverage grades the walk rather than bytes here.
 COVERAGE_SECTIONS = (

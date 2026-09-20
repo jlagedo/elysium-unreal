@@ -145,6 +145,11 @@ def author_map(entry, force=False):
     if (not force and unreal.EditorAssetLibrary.does_asset_exist(object_path)
             and bl.asset_class_name(object_path) == ASSET_CLASS
             and bl.stored_recipe(object_path, producer='map-collision') == fingerprint):
+        # The payload is current, but the LEVEL is a separate product this lane also owns, and the
+        # fingerprint above covers none of it: `bake map` rewrites the level from scratch, so a
+        # re-bake with unchanged collision leaves a level with no world-collision actor and no
+        # navigation mesh while this lane reports "reused". Ask the level itself.
+        place_world_collision_actor(entry, unreal.load_asset(object_path), skip_if_current=True)
         return "reused"
 
     bl.ensure_dir(package_root)
@@ -197,7 +202,7 @@ def author_map(entry, force=False):
     return "imported"
 
 
-def place_world_collision_actor(entry, asset):
+def place_world_collision_actor(entry, asset, skip_if_current=False):
     """Stand the map's world collision in its own level, as one static component per signature.
 
     The runtime used to build these into transient components at map load, which meant the level
@@ -209,6 +214,10 @@ def place_world_collision_actor(entry, asset):
     Placed here rather than in `bake map` because this lane is what authors the bodies the actor
     points at: one lane writes both, so the actor and the asset cannot disagree. A map whose level
     is not baked yet is skipped -- it will get its actor the next time this runs.
+
+    Called on BOTH the authored and the reused path, because whether the level needs this is a
+    question about the level, not about the payload: `bake map` rewrites the level and takes the
+    actor and the meshes with it, leaving a payload that still fingerprints clean.
     """
     level_path = "%s/%s" % (entry["packageRoot"], entry["map"])
     if not unreal.EditorAssetLibrary.does_asset_exist(level_path):
@@ -219,6 +228,13 @@ def place_world_collision_actor(entry, asset):
         raise RuntimeError("could not open %s to place its world collision" % level_path)
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+
+    # Only when the payload was NOT re-authored. A re-author replaces every body setup, so the
+    # actor standing in the level points at objects that no longer exist and must be re-placed
+    # whatever the level looks like.
+    if skip_if_current and level_collision_is_current(entry, asset, world, actors):
+        log("%s: the level already carries its world collision and meshes" % entry["map"])
+        return 0
 
     # Exactly one, always: a second would be a lane that ran twice, and the runtime refuses a
     # level carrying two rather than picking one.
@@ -256,6 +272,45 @@ def place_world_collision_actor(entry, asset):
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, level_path):
         raise RuntimeError("could not save %s after placing its world collision" % level_path)
     return placed
+
+
+def level_collision_is_current(entry, asset, world, actors):
+    """Whether this level already carries exactly what this lane would place into it.
+
+    Exactly one world-collision actor, pointing at THIS payload with a body per world body, plus a
+    navigation mesh carrying TILES for every agent the map's own `UsedHullBits` names. Anything
+    else -- most often a level `bake map` has just rewritten, which carries none of them -- means
+    place it again.
+
+    Tiles rather than actors, because an empty mesh saves, loads and reads as "already built"
+    exactly like a full one: presence alone would call a wiped level current.
+    """
+    found = None
+    for existing in actors.get_all_level_actors():
+        if isinstance(existing, unreal.ElysiumWorldCollisionActor):
+            if found is not None:
+                return False        # two of them: re-place, which drops both and spawns one
+            found = existing
+    if found is None:
+        return False
+    if (found.get_editor_property("map_name") != entry["map"]
+            or found.get_editor_property("payload") != asset
+            or len(found.get_editor_property("bodies")) != len(entry.get("worldBodies", []))):
+        return False
+
+    tiles = {}
+    for row in unreal.ElysiumNavBakeLibrary.nav_mesh_tile_counts(world):
+        name, _, count = row.rpartition("=")
+        tiles[name] = int(count)
+    log("%s: the level's navigation meshes are %s"
+        % (entry["map"], ", ".join("%s %d tile(s)" % kv for kv in sorted(tiles.items())) or "none"))
+
+    bits = used_hull_bits(entry["map"])
+    if bits is None:
+        return any(count > 0 for count in tiles.values())
+    wanted = unreal.ElysiumNavBakeLibrary.agent_names_for_hull_bits(bits)
+    return bool(wanted) and all(
+        tiles.get("RecastNavMesh-%s" % name, 0) > 0 for name in wanted)
 
 
 def prune_unwanted_navmeshes(map_name, actors, wanted_agents):
