@@ -28,14 +28,7 @@ private:
 	FBox LocalCollisionBounds = FBox(ForceInit);
 };
 
-// The world's convex brush set (`<map>.hulls`, or the payload's cooked convexes).
-UCLASS(Transient)
-class UElysiumHullCollisionComponent final : public UElysiumCollisionOnlyMeshComponent
-{
-	GENERATED_BODY()
-};
-
-// The displacement terrain trimesh (`<map>.dispcol`, or the payload's cooked trimesh).
+// The displacement terrain trimesh (the payload's cooked trimesh).
 UCLASS(Transient)
 class UElysiumDispCollisionComponent final : public UElysiumCollisionOnlyMeshComponent
 {
@@ -58,22 +51,24 @@ const TCHAR* ElysiumCollisionBuildStateName(EElysiumCollisionBuildState State);
 // transport it actually got rather than the one it assumed, exactly as the entity table does.
 enum class EElysiumCollisionSource : uint8
 {
-	None,      // nothing built (disabled, or no hull data at all)
-	Payload,   // /ElysiumBaked/<map>/DA_<map>_Collision, cooked offline
-	Sidecar,   // <map>.hulls + <map>.dispcol, parsed and cooked at load
+	None,      // nothing built (disabled, or no usable payload)
+	Payload,   // /ElysiumBaked/<map>/DA_<map>_Collision, cooked offline -- the only transport
 };
 
 const TCHAR* ElysiumCollisionSourceName(EElysiumCollisionSource Source);
 
-// The map's WALKABLE SURFACE. Baked world geometry carries no gameplay collision, so the two
-// colliders built here are the only thing the player stands on: `<map>.hulls` is one convex
-// element per solid world brush (invisible PLAYERCLIP volumes included, geometry the designer
-// clipped off excluded), and `<map>.dispcol` is the displacement terrain trimesh the convex set
-// cannot represent. Both are collision-only — never drawn.
+// The map's WALKABLE SURFACE, adopted rather than built. Baked world geometry carries no gameplay
+// collision, so what stands here is the only thing the player stands on, and all of it arrives
+// cooked in one `UElysiumMapCollisionPayload` per map.
 //
-// Both may instead arrive cooked, as one `UElysiumMapCollisionPayload` per map: same
-// geometry, same component recipe, but the Chaos cook happened offline. The payload wins when the map has one and the
-// sidecar readers answer otherwise; the asset's presence is the cutover flag.
+// The world itself is not a component of this object at all: it is the level's own saved
+// `AElysiumWorldCollisionActor`, one static body per contents signature, which is what lets a
+// navigation mesh be cut from it offline and adopted at load. This object verifies that actor
+// against the payload and keeps a pointer. Only the displacement trimesh -- one body, outside the
+// signature partition -- is still a component registered here.
+//
+// There is no loose-sidecar path and no run-time build (0018 story 21): a map that cannot answer
+// from its own baked content fails the load with a named error naming the bake command.
 //
 // A component on AElysiumMapActor, deliberately separate from UElysiumMapVisuals: what the map
 // looks like and what it is solid against are two different sidecars answering two different
@@ -121,26 +116,8 @@ private:
 	// False means the level has none (build the components) or carries a wrong one (fail).
 	bool AdoptLevelCollisionActor(const FString& InMapName,
 		const class UElysiumMapCollisionPayload& Asset);
-	// One FKConvexElem per solid brush, cooked in a single call. Returns true when at least one
-	// hull loaded; false (sidecar missing/empty) means this map has no brush collider.
-	bool LoadHulls(const FString& MapName);
-	// The displacement terrain trimesh. Only meaningful alongside brush collision; no-op when the
-	// sidecar is absent (map has no displacements).
-	void LoadDispCol(const FString& MapName);
-	// The two components are built the same way on both paths — profile, channel ignores, bounds,
-	// registration — and differ only in where their BodySetup came from.
-	UElysiumHullCollisionComponent* MakeHullComponent(AActor* Owner, const FBox& LocalBounds,
-		EElysiumContentsSignature Signature);
 	UElysiumDispCollisionComponent* MakeDispComponent(AActor* Owner);
 
-	// One hull component per contents signature the map carries. A brush answers four retail
-	// masks and the answers differ, so a single BlockAll body cannot stand for all of them: the
-	// NPC-only clips must stop an NPC and not the player, the sight-only brushes must stop
-	// neither pawn, and only the ones blocking an NPC may cut the NavMesh.
-	UPROPERTY() TMap<uint8, TObjectPtr<UElysiumHullCollisionComponent>> HullsBySignature;
-	// The first signature component built, kept so the debug overlay and any caller that still
-	// wants "the world collider" has one to name. Never the whole world any more.
-	UPROPERTY() TObjectPtr<UElysiumHullCollisionComponent> HullCollision;
 	UPROPERTY() TObjectPtr<UElysiumDispCollisionComponent> DispCollision;
 	UPROPERTY() TObjectPtr<const UElysiumMapCollisionPayload> Payload;
 	// The adopted level actor, when this map's collision stands in the level rather than being

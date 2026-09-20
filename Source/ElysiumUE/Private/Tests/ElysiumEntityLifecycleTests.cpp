@@ -883,7 +883,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHullCollisionBoundsTest,
 	"Elysium.Substrate.HullCollisionBounds", GElysiumTestFlags)
 bool FElysiumHullCollisionBoundsTest::RunTest(const FString&)
 {
-	UElysiumHullCollisionComponent* Hull = NewObject<UElysiumHullCollisionComponent>();
+	// The surviving collision-only component: the world is the level's saved actor now, so the
+	// displacement trimesh is the only one this path still builds (0018 story 21).
+	UElysiumDispCollisionComponent* Hull = NewObject<UElysiumDispCollisionComponent>();
 	if (!TestNotNull(TEXT("collision-only hull component constructs"), Hull))
 	{
 		return false;

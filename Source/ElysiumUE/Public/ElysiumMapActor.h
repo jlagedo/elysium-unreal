@@ -33,7 +33,6 @@ class UMaterialInstanceDynamic;
 class UNiagaraComponent;
 class UNiagaraSystem;
 class UTexture2D;
-class ANavMeshBoundsVolume;
 class APawn;
 class AElysiumNpcBody;
 class AElysiumMapActor;
@@ -677,7 +676,6 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumMapVisuals> Visuals;
 	UPROPERTY() TObjectPtr<UElysiumMapCollision> Collision;
 	UPROPERTY() TObjectPtr<UElysiumEntityBodies> Bodies;
-	UPROPERTY(Transient) TObjectPtr<ANavMeshBoundsVolume> NavigationBounds;
 	UPROPERTY(Transient) TArray<TObjectPtr<AElysiumNpcBody>> NpcMotors;
 	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraSystem> RainSystem;
@@ -879,11 +877,8 @@ private:
 	// final transform, observes asynchronous collision completion, and opens the atomic transaction
 	// only when every independent prerequisite is satisfied.
 	void PollRuntimeActivation();
+	// Adopt the level's baked meshes. There is no build arm: a map without them fails (story 21).
 	void EnsureRuntimeNavigation();
-	// Build meshes only for the agents a body can actually use. The project declares one agent per
-	// retail hull that carries links in a shipped graph; this run-time path has no map graph in
-	// hand to say which of them THIS map needs, so it takes the one every NPC stands on.
-	void RestrictNavigationToUsableAgents(class UNavigationSystemV1& Navigation) const;
 	// Whether this level arrived with a navigation mesh already built into it, carrying tiles.
 	// A mesh with no tiles is not one: it would read as built and leave every NPC unable to path.
 	bool HasBakedNavigationMesh(const class UNavigationSystemV1& Navigation) const;

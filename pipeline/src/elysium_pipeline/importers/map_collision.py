@@ -50,13 +50,6 @@ BAKED_MOUNT = "/ElysiumBaked"
 #: editor phase would silently discard.
 MIN_HULL_VERTICES = 4
 
-#: `SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP` -- the brushes the sidecar carried before it grew a
-#: contents column, kept for reading a `.ents` written before the per-hull column existed.
-PAYLOAD_CONTENTS_MASK = 0x1 | 0x2 | 0x8 | 0x4000 | 0x10000
-
-#: What a brush body written before the per-hull contents column stood for: it blocked both pawns
-#: and said nothing about sight, which is what its `BlockAll` profile did.
-LEGACY_BRUSH_SIGNATURE = contents_signature.signature_of(0x1) & ~(1 << 2)
 
 
 def staging_root(work_root: Path) -> Path:
@@ -210,8 +203,8 @@ def brush_entity_rows(ents_path: Path, sky_scale: float) -> list[dict[str, Any]]
         # Per-hull contents, parallel to `hulls`. A mover answers the retail masks by its own
         # brushes, so the body's signature is the OR of its kept brushes' signatures rather than
         # the entity's class: a door blocks sight and both pawns through MOVEABLE, a glass
-        # `func_brush` blocks neither pawn's sight. A `.ents` written before the column existed
-        # carries none, and the body falls back to the player-solid answer it had then.
+        # `func_brush` blocks neither pawn's sight. A `.ents` without the column is refused: it
+        # predates the contents seam and its bodies would answer every mask wrongly (story 21).
         per_hull = entity.get("hull_contents") or []
         staged: list[list[float]] = []
         signature = 0
@@ -224,7 +217,10 @@ def brush_entity_rows(ents_path: Path, sky_scale: float) -> list[dict[str, Any]]
         if not staged:
             continue
         if not per_hull:
-            signature = LEGACY_BRUSH_SIGNATURE
+            raise ValueError(
+                f"brush entity {index} ({entity.get('classname', '')!r}) carries no "
+                "`hull_contents`; re-export this map's `.ents`"
+            )
         rows.append({
             "entityIndex": index,
             "classname": entity.get("classname", ""),

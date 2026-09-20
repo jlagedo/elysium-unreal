@@ -107,9 +107,9 @@ def test_the_world_partitions_into_one_body_per_contents_signature(tmp_path):
 def test_brush_entity_rows_key_by_lump_ordinal_and_skip_point_entities(tmp_path):
     directory = _write_map(tmp_path, "sp_probe", entities=[
         {"classname": "worldspawn"},
-        {"classname": "func_door", "hulls": [_cube()]},
+        {"classname": "func_door", "hulls": [_cube()], "hull_contents": [SOLID]},
         {"classname": "info_player_start"},
-        {"classname": "trigger_once", "hulls": [_cube(), _cube(3.0)]},
+        {"classname": "trigger_once", "hulls": [_cube(), _cube(3.0)], "hull_contents": [SOLID, SOLID]},
     ])
 
     rows = map_collision.brush_entity_rows(directory / "sp_probe.ents", 1.0)
@@ -128,8 +128,8 @@ def test_a_sky_brush_entity_is_not_composed_into_the_collision_at_all(tmp_path):
     handle still finds its own body."""
 
     directory = _write_map(tmp_path, "sp_probe", sky_scale=16.0, entities=[
-        {"classname": "func_brush", "hulls": [_cube()], "sky": True},
-        {"classname": "func_brush", "hulls": [_cube()]},
+        {"classname": "func_brush", "hulls": [_cube()], "hull_contents": [SOLID], "sky": True},
+        {"classname": "func_brush", "hulls": [_cube()], "hull_contents": [SOLID]},
     ])
 
     rows = map_collision.brush_entity_rows(
@@ -146,9 +146,9 @@ def test_stage_map_counts_the_miniatures_it_kept_out_of_the_collision(tmp_path):
     miniatures were excluded on purpose."""
 
     directory = _write_map(tmp_path, "sp_probe", sky_scale=16.0, hull_rows=[_cube()], entities=[
-        {"classname": "func_brush", "hulls": [_cube()], "sky": True},
-        {"classname": "func_brush", "hulls": [_cube(2.0)], "sky": True},
-        {"classname": "func_door", "hulls": [_cube(3.0)]},
+        {"classname": "func_brush", "hulls": [_cube()], "hull_contents": [SOLID], "sky": True},
+        {"classname": "func_brush", "hulls": [_cube(2.0)], "hull_contents": [SOLID], "sky": True},
+        {"classname": "func_door", "hulls": [_cube(3.0)], "hull_contents": [SOLID]},
     ])
 
     entry = map_collision.stage_map(
@@ -169,7 +169,7 @@ def test_stage_map_carries_the_sidecars_and_reports_its_own_numbers(tmp_path):
     disp = [[float(v) for v in range(9)], [float(v) for v in range(9, 18)]]
     directory = _write_map(tmp_path, "sp_probe", sky_scale=16.0,
                            hull_rows=[_cube(), _cube(2.0), _cube(3.0)], disp_rows=disp,
-                           entities=[{"classname": "func_door", "hulls": [_cube()]}])
+                           entities=[{"classname": "func_door", "hulls": [_cube()], "hull_contents": [SOLID]}])
 
     entry = map_collision.stage_map(
         "sp_probe",

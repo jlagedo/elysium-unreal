@@ -22,7 +22,6 @@
 #include "Audio/ElysiumSoundScheme.h"     // FElysiumSoundSchemeManager — built at load, stopped at EndPlay
 #include "Map/ElysiumMapCollision.h"      // the walkable-surface build and its readiness states
 #include "Map/ElysiumMapLog.h"
-#include "Substrate/ElysiumRetailHullTable.h"   // the agent an NPC body actually stands on
 #include "Visual/ElysiumEntityBodies.h"   // SetMap and the map animation preload
 #include "Visual/ElysiumNativeAnimationData.h"
 #include "Visual/ElysiumExpressionPreparation.h"
@@ -30,14 +29,12 @@
 #include "Visual/ElysiumMapVisuals.h"     // the baked-level adoption and the material audit
 #include "Visual/ElysiumNpcBody.h"        // SetRuntimeReady at the activation barrier
 
-#include "Components/BoxComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
 
@@ -295,11 +292,6 @@ void AElysiumMapActor::LoadMap()
 	bAnimationPreloadReady = false;
 	bNativeAnimationPreloadPending = false;
 	bNativeAnimationPreloadFailed = false;
-	if (NavigationBounds)
-	{
-		NavigationBounds->Destroy();
-		NavigationBounds = nullptr;
-	}
 	bNavigationBuildRequested = false;
 	bNavigationBuildFailed = false;
 
@@ -821,48 +813,6 @@ bool AElysiumMapActor::HasBakedNavigationMesh(const UNavigationSystemV1& Navigat
 	return false;
 }
 
-void AElysiumMapActor::RestrictNavigationToUsableAgents(UNavigationSystemV1& Navigation) const
-{
-	const TArray<FNavDataConfig>& Agents = Navigation.GetSupportedAgents();
-	if (Agents.Num() <= 1)
-	{
-		return;   // a single-agent project: nothing to restrict
-	}
-	const FName Wanted = ElysiumRetailHulls::AgentName(ElysiumRetailHulls::DefaultHull);
-	FNavAgentSelector Mask;
-	Mask.Empty();
-	for (int32 Index = 0; Index < Agents.Num(); ++Index)
-	{
-		if (Agents[Index].Name == Wanted)
-		{
-			Mask.Set(Index);
-		}
-	}
-	if (!Mask.ContainsAnyAgent())
-	{
-		UE_LOG(LogElysium, Error,
-			TEXT("runtime navigation: no supported agent named '%s'; re-run "
-				"`elysium research gen_hull_table`"), *Wanted.ToString());
-		return;
-	}
-	Mask.MarkInitialized();
-	Navigation.SetSupportedAgentsMask(Mask);
-
-	// Auto-creation is off project-wide, precisely so that declaring 14 agents does not spawn 14
-	// meshes: whoever wants data says which agent it wants. This path wants exactly one.
-	if (Navigation.GetNavDataForAgentName(Wanted) == nullptr)
-	{
-		for (const FNavDataConfig& Agent : Agents)
-		{
-			if (Agent.Name == Wanted)
-			{
-				Navigation.CreateNavigationDataInstanceInLevel(Agent, GetLevel());
-				break;
-			}
-		}
-	}
-}
-
 void AElysiumMapActor::EnsureRuntimeNavigation()
 {
 	if (bMenuBackdrop || bNavigationBuildRequested || bNavigationBuildFailed || !Collision
@@ -871,15 +821,17 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 		return;
 	}
 
-	const FBox CollisionBounds = Collision->GetWorldBounds();
 	UWorld* World = GetWorld();
 	UNavigationSystemV1* Navigation = World
 		? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
 
-	// A level that arrived with its own built mesh is adopted, not rebuilt. That is what baking
-	// it is for: the mesh was cut offline from the world-collision actor's bodies, where it could
-	// be inspected and measured, and rebuilding it here would throw that away and charge the load
-	// the seconds the bake already spent.
+	// The level arrived with its meshes already cut, offline, from the world-collision actor's own
+	// bodies -- for the agents its own graph's `UsedHullBits` names. Adopting them is the whole
+	// point of baking: a run-time build would throw that away, charge the load the seconds the bake
+	// already spent, and (having no graph in hand) could only guess at which agents the map needs.
+	//
+	// So there is no build arm here any more (0018 story 21). A map without a baked mesh fails,
+	// and the error names the command that fixes it.
 	if (Navigation != nullptr && HasBakedNavigationMesh(*Navigation))
 	{
 		bNavigationBuildRequested = true;
@@ -888,69 +840,11 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 		return;
 	}
 
-	if (!CollisionBounds.IsValid || !World || !Navigation)
-	{
-		bNavigationBuildFailed = true;
-		UE_LOG(LogElysium, Error, TEXT("runtime navigation %s: no valid collision bounds/navigation system"),
-			*MapName);
-		return;
-	}
-
-	// The nav-bounds actor normally carries an editor-authored brush. Generated maps intentionally
-	// carry no nav asset, so a no-collision UBoxComponent contributes the equivalent runtime bounds;
-	// UNavigationSystemV1 reads GetComponentsBoundingBox and Recast projects the actual colliders.
-	const FVector Center = CollisionBounds.GetCenter();
-	FVector Extent = CollisionBounds.GetExtent();
-	Extent.X += 500.0f;
-	Extent.Y += 500.0f;
-	Extent.Z += 300.0f;
-
-	const FTransform BoundsTransform(FRotator::ZeroRotator, Center);
-	FActorSpawnParameters Params;
-	Params.Owner = this;
-	Params.OverrideLevel = GetLevel();
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Params.bDeferConstruction = true;
-	NavigationBounds = World->SpawnActor<ANavMeshBoundsVolume>(
-		ANavMeshBoundsVolume::StaticClass(), BoundsTransform, Params);
-	if (!NavigationBounds)
-	{
-		bNavigationBuildFailed = true;
-		UE_LOG(LogElysium, Error, TEXT("runtime navigation %s: failed to create bounds"), *MapName);
-		return;
-	}
-
-	UBoxComponent* BoundsBox = NewObject<UBoxComponent>(NavigationBounds, TEXT("ElysiumNavigationBounds"));
-	BoundsBox->SetMobility(EComponentMobility::Static);
-	BoundsBox->SetBoxExtent(Extent);
-	BoundsBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	BoundsBox->SetCanEverAffectNavigation(false);
-	BoundsBox->SetupAttachment(NavigationBounds->GetRootComponent());
-	NavigationBounds->AddInstanceComponent(BoundsBox);
-	NavigationBounds->FinishSpawning(BoundsTransform);
-	if (!BoundsBox->IsRegistered())
-	{
-		BoundsBox->RegisterComponent();
-	}
-
-	// The project declares one agent per retail hull that carries links in a shipped graph — 14 of
-	// the 22 rows. A map needs meshes only for the hulls ITS OWN graph uses (`UsedHullBits`; both
-	// witnesses are human and rat), and this run-time path has no graph in hand: the place set
-	// that brings `UsedHullBits` to the runtime is 0018 story 4's, and the baked per-agent meshes
-	// are story 3's own job 5. Until either lands, restrict the build to the one agent a body can
-	// actually use — every NPC wears HUMAN_HULL, because `m_eHull` is unrecovered for the species
-	// that differ. Without this, declaring 14 agents would build 14 Recast meshes on every load of
-	// every map, most of them for creatures the map never spawns.
-	RestrictNavigationToUsableAgents(*Navigation);
-
-	// Both colliders cook asynchronously after their components register. Refresh their octree data
-	// now that the activation barrier has observed completed BodySetups, then build exactly once.
-	Collision->RefreshNavigationData();
-	Navigation->OnNavigationBoundsUpdated(NavigationBounds);
-	Navigation->Build();
-	bNavigationBuildRequested = true;
-	UE_LOG(LogElysium, Log, TEXT("runtime navigation %s: Recast build requested over %s"),
-		*MapName, *CollisionBounds.ToString());
+	bNavigationBuildFailed = true;
+	UE_LOG(LogElysium, Error,
+		TEXT("runtime navigation %s: the level carries no baked navigation mesh with tiles; "
+			"run: uv run elysium bake map --maps %s && uv run elysium import map-collision --maps %s"),
+		*MapName, *MapName, *MapName);
 }
 
 bool AElysiumMapActor::IsRuntimeNavigationReady() const
@@ -965,15 +859,8 @@ bool AElysiumMapActor::IsRuntimeNavigationReady() const
 	{
 		return false;
 	}
-	// A bounds volume is required only when this map BUILT its mesh: the adopt path spawns none,
-	// because the mesh it adopted was cut against bounds that existed at bake time and are gone.
-	// Demanding one here is what left an adopting map waiting for a volume that never comes.
-	if (NavigationBounds == nullptr && !HasBakedNavigationMesh(*Navigation))
-	{
-		return false;
-	}
-	// Any agent's mesh with tiles, not the main one: a map may build for an agent that is not
-	// first in the project's list, and `GetMainNavData` answers only for the default.
+	// Any agent's mesh with tiles, not the main one: a map bakes for the agents its own graph
+	// names, which need not include the project's first.
 	return HasBakedNavigationMesh(*Navigation) && !Navigation->IsNavigationBuildInProgress();
 }
 
