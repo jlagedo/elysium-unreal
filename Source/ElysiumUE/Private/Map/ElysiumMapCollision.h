@@ -116,6 +116,11 @@ private:
 	// Returns true when the world convex set was adopted (which is what makes the map walkable);
 	// false means no payload, and the sidecar readers below answer instead.
 	bool AdoptPayload(const FString& MapName);
+	// The level's own world-collision actor, when it carries one: its components are static and
+	// saved, which is what lets a navigation mesh be baked from them. Adopting it spawns nothing.
+	// False means the level has none (build the components) or carries a wrong one (fail).
+	bool AdoptLevelCollisionActor(const FString& InMapName,
+		const class UElysiumMapCollisionPayload& Asset);
 	// One FKConvexElem per solid brush, cooked in a single call. Returns true when at least one
 	// hull loaded; false (sidecar missing/empty) means this map has no brush collider.
 	bool LoadHulls(const FString& MapName);
@@ -138,6 +143,9 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumHullCollisionComponent> HullCollision;
 	UPROPERTY() TObjectPtr<UElysiumDispCollisionComponent> DispCollision;
 	UPROPERTY() TObjectPtr<const UElysiumMapCollisionPayload> Payload;
+	// The adopted level actor, when this map's collision stands in the level rather than being
+	// built into transient components at load.
+	UPROPERTY() TObjectPtr<class AElysiumWorldCollisionActor> LevelCollision;
 	EElysiumCollisionSource Source = EElysiumCollisionSource::None;
 	EElysiumCollisionBuildState BuildState = EElysiumCollisionBuildState::Disabled;
 	FString FailureReason;

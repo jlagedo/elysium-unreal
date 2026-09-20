@@ -215,7 +215,12 @@ void UElysiumMapCollisionPayload::AuthorWorldBody(uint8 Signature,
 	Row.Signature = Signature;
 	// Auto-named for the same reason the brush bodies are: two `UBodySetup`s under one outer may
 	// not share a name, and a re-author would collide with the subobject it is replacing.
-	Row.Body = NewObject<UBodySetup>(this);
+	//
+	// RF_Public, unlike every other body here, because the map's LEVEL references these: the
+	// world-collision actor's components point at them so a navigation mesh can be baked from
+	// geometry that exists before the game runs. A private sub-object cannot be named from
+	// another package, and the save refuses with "Illegal reference to private object".
+	Row.Body = NewObject<UBodySetup>(this, NAME_None, RF_Public);
 	// The world collider's recipe, as `AuthorWorldHulls` states it -- same physics on both paths.
 	Row.Body->CollisionTraceFlag = CTF_UseDefault;
 	Row.Body->bGenerateMirroredCollision = false;

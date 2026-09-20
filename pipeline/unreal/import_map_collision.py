@@ -192,7 +192,53 @@ def author_map(entry, force=False):
     bl.stamp_recipe(asset, fingerprint, producer='map-collision')
     if not bl.save(object_path):
         raise RuntimeError("save failed: %s" % object_path)
+
+    place_world_collision_actor(entry, asset)
     return "imported"
+
+
+def place_world_collision_actor(entry, asset):
+    """Stand the map's world collision in its own level, as one static component per signature.
+
+    The runtime used to build these into transient components at map load, which meant the level
+    held no navigation-relevant geometry at all and a navigation mesh could only ever be generated
+    at run time. Saved in the level, they are what Recast can bake a mesh FROM -- and from the
+    right solids, since a body affects navigation exactly when its contents signature blocks an
+    NPC, so the NPC-only clips cut the mesh and the sight-only brushes do not.
+
+    Placed here rather than in `bake map` because this lane is what authors the bodies the actor
+    points at: one lane writes both, so the actor and the asset cannot disagree. A map whose level
+    is not baked yet is skipped -- it will get its actor the next time this runs.
+    """
+    level_path = "%s/%s" % (entry["packageRoot"], entry["map"])
+    if not unreal.EditorAssetLibrary.does_asset_exist(level_path):
+        log("%s: no baked level yet; its world-collision actor waits for one" % entry["map"])
+        return 0
+
+    if not unreal.EditorLoadingAndSavingUtils.load_map(level_path):
+        raise RuntimeError("could not open %s to place its world collision" % level_path)
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+
+    # Exactly one, always: a second would be a lane that ran twice, and the runtime refuses a
+    # level carrying two rather than picking one.
+    for existing in actors.get_all_level_actors():
+        if isinstance(existing, unreal.ElysiumWorldCollisionActor):
+            actors.destroy_actor(existing)
+
+    actor = actors.spawn_actor_from_class(
+        unreal.ElysiumWorldCollisionActor, unreal.Vector(0.0, 0.0, 0.0))
+    if actor is None:
+        raise RuntimeError("could not spawn the world-collision actor in %s" % level_path)
+    actor.set_actor_label("ElysiumWorldCollision")
+    placed = actor.author_from_payload(asset)
+    if not placed:
+        raise RuntimeError("%s: the payload authored no world body" % entry["map"])
+
+    if not unreal.EditorLoadingAndSavingUtils.save_map(world, level_path):
+        raise RuntimeError("could not save %s after placing its world collision" % level_path)
+    log("%s: %d world collision body(ies) stand in the level" % (entry["map"], placed))
+    return placed
 
 
 def run(manifest_path, force=False):

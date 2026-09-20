@@ -3,6 +3,8 @@
 #include "Debug/ElysiumPick.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapCollisionPayload.h"
+#include "ElysiumWorldCollisionActor.h"
+#include "EngineUtils.h"
 #include "ElysiumMapTransportSettings.h"
 #include "ElysiumUseIcons.h"
 
@@ -69,6 +71,7 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 	bBrushCollision = false;
 	FailureReason.Reset();
 	HullsBySignature.Reset();
+	LevelCollision = nullptr;
 	HullCollision = nullptr;
 	DispCollision = nullptr;
 	Payload = nullptr;
@@ -150,6 +153,71 @@ UElysiumDispCollisionComponent* UElysiumMapCollision::MakeDispComponent(AActor* 
 	return Component;
 }
 
+bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
+	const UElysiumMapCollisionPayload& Asset)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return false;
+	}
+	AElysiumWorldCollisionActor* Found = nullptr;
+	for (TActorIterator<AElysiumWorldCollisionActor> It(World); It; ++It)
+	{
+		if (Found != nullptr)
+		{
+			// Two of them is a bake that ran twice. Refuse rather than pick one: the second may
+			// carry a different partition, and half a world is worse than none.
+			UE_LOG(LogElysiumCollision, Error,
+				TEXT("%s: the level carries more than one world-collision actor"), *InMapName);
+			return false;
+		}
+		Found = *It;
+	}
+	if (Found == nullptr)
+	{
+		return false;   // a level baked before the actor existed: build the components instead
+	}
+	if (Found->MapName != InMapName)
+	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: the level's world-collision actor belongs to '%s'"),
+			*InMapName, *Found->MapName);
+		return false;
+	}
+	if (Found->Payload != &Asset)
+	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: the level's world-collision actor points at a different payload"),
+			*InMapName);
+		return false;
+	}
+	if (Found->Bodies.Num() != Asset.GetWorldBodies().Num())
+	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: the level carries %d world body(ies), the payload %d"),
+			*InMapName, Found->Bodies.Num(), Asset.GetWorldBodies().Num());
+		return false;
+	}
+
+	for (UElysiumWorldCollisionComponent* Component : Found->Bodies)
+	{
+		if (Component == nullptr || Component->Body == nullptr)
+		{
+			UE_LOG(LogElysiumCollision, Error,
+				TEXT("%s: the level's world-collision actor carries an empty body"), *InMapName);
+			return false;
+		}
+		UE_LOG(LogElysiumCollision, Log, TEXT("adopted world body %s on '%s'%s"),
+			*ElysiumContents::Spell(
+				static_cast<EElysiumContentsSignature>(Component->Signature)),
+			*Component->GetCollisionProfileName().ToString(),
+			Component->CanEverAffectNavigation() ? TEXT(" (cuts the NavMesh)") : TEXT(""));
+	}
+	LevelCollision = Found;
+	return true;
+}
+
 bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 {
 	AActor* Owner = GetOwner();
@@ -200,7 +268,13 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 	}
 
 	Payload = Asset;
-	if (Asset->GetWorldBodies().Num() > 0)
+
+	// A level that carries its own world-collision actor is adopted, not rebuilt: its components
+	// are static, saved, and already in the navigation octree, which is what lets a mesh be baked
+	// from them. No world component is spawned at all — only the displacement, which is one
+	// trimesh and is not part of the signature partition.
+	const bool bAdoptedLevel = AdoptLevelCollisionActor(MapName, *Asset);
+	if (!bAdoptedLevel && Asset->GetWorldBodies().Num() > 0)
 	{
 		// A version-2 payload carries one cooked body per contents signature, so the adopted world
 		// partitions exactly as the sidecar path's does — same profiles, same navigation answer.
@@ -219,7 +293,7 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 			}
 		}
 	}
-	else
+	else if (!bAdoptedLevel)
 	{
 		// A version-1 payload cooked ONE body, from the BLOCK_MASK-filtered `.hulls` it was staged
 		// from, so it can only be given the signature that set stands for: blocks both pawns, and
@@ -278,9 +352,12 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 
 	// Every signature body must be ready, not just the first: an NPC-only clip still cooking is a
 	// hole an NPC can walk through.
-	EElysiumCollisionBuildState HullState = HullsBySignature.IsEmpty()
-		? ComponentState(HullCollision)
-		: EElysiumCollisionBuildState::Ready;
+	// An adopted level actor's bodies were cooked by the import and materialised by
+	// `CreatePhysicsMeshes` before adoption, so there is nothing left to wait for.
+	EElysiumCollisionBuildState HullState = LevelCollision != nullptr
+		? EElysiumCollisionBuildState::Ready
+		: (HullsBySignature.IsEmpty() ? ComponentState(HullCollision)
+			: EElysiumCollisionBuildState::Ready);
 	for (const TPair<uint8, TObjectPtr<UElysiumHullCollisionComponent>>& Entry : HullsBySignature)
 	{
 		const EElysiumCollisionBuildState State = ComponentState(Entry.Value);
@@ -310,6 +387,17 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 FBox UElysiumMapCollision::GetWorldBounds() const
 {
 	FBox WorldBox(ForceInit);
+	// The level's own bodies, when this map's collision stands in it rather than being built.
+	if (LevelCollision)
+	{
+		for (const UElysiumWorldCollisionComponent* Component : LevelCollision->Bodies)
+		{
+			if (Component)
+			{
+				WorldBox += Component->Bounds.GetBox();
+			}
+		}
+	}
 	// The union of every signature, including the bodies that stop nothing: the nav bounds must
 	// cover the whole playable volume, and a sight-only brush still stands inside it.
 	for (const TPair<uint8, TObjectPtr<UElysiumHullCollisionComponent>>& Entry : HullsBySignature)
@@ -332,6 +420,16 @@ FBox UElysiumMapCollision::GetWorldBounds() const
 
 void UElysiumMapCollision::RefreshNavigationData()
 {
+	if (LevelCollision)
+	{
+		for (UElysiumWorldCollisionComponent* Component : LevelCollision->Bodies)
+		{
+			if (Component && Component->IsRegistered())
+			{
+				FNavigationSystem::UpdateComponentData(*Component);
+			}
+		}
+	}
 	for (const TPair<uint8, TObjectPtr<UElysiumHullCollisionComponent>>& Entry : HullsBySignature)
 	{
 		if (Entry.Value && Entry.Value->IsRegistered())
