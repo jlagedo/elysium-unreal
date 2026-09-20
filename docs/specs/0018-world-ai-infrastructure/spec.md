@@ -388,12 +388,19 @@ its recovery is written in the oracle section it names.
   loading both witnesses: `sp_tutorial_1` Active in 34.4 s and `sm_hub_1` in 22.2 s, each having
   built exactly one mesh — `Human`, radius 33.0, 0.46 s on the tutorial.
 
-  **Still open: jobs 5 and 6 and the acceptance harness** — the per-agent meshes built during
-  `bake map` and saved in the `.umap` (with the runtime reduced to adoption and
-  `RuntimeGeneration` to dynamic modifiers), the door cuts and pedestrian nav areas, and the
-  verify arm that pins every ground link pathing on its agent's mesh. The rat has no mesh until
-  a map builds the agents its graph names rather than the one its bodies wear, and no rat body
-  exists to path on one until `m_eHull` is recovered for the species that differ.
+  **Still open: jobs 5 and 6 and the acceptance harness**, and job 5 has a named blocker, found
+  2026-09-20 while wiring it. At bake time the level holds NO navigation-relevant geometry: the
+  baked world meshes wear `ElysiumPickOnly`, which ignores both pawn channels, and the collision
+  bodies are transient components the runtime builds from the payload at load. Recast would run
+  over nothing and save an empty mesh — success-looking, failing later as NPCs that never find a
+  path. `pipeline/unreal/bake_navmesh.py` is written and deliberately unwired for that reason.
+  What unblocks it is **job 3's level actor**: one static component per contents signature,
+  referencing the payload's cooked body setups, saved in the `.umap`. That is also what makes the
+  mesh cut from the right solids, since a body affects navigation exactly when its signature
+  blocks an NPC. Order, therefore: the collision actor, then the meshes, then the door cuts and
+  pedestrian areas, then the verify arm. The rat gets a mesh when a map builds the agents its
+  graph names rather than the one its bodies wear — and nothing rat-shaped can path on it until
+  `m_eHull` is recovered for the species that differ from the human.
   Retail: three masks move an NPC, and all three carry `MONSTERCLIP 0x20000` and none carries
   `PLAYERCLIP 0x10000` — `0x2000b` builds the graph, `0x2400b` probes a local route and fits a
   node, `0x202400b` moves (`navigation-jump-links.md` § "Doors and NPC-clip"). One mask sees:
