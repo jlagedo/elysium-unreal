@@ -458,7 +458,39 @@ its recovery is written in the oracle section it names.
   That over-permits rather than walling an agent out of a door retail let it use, and 7's
   per-agent smart link is where it closes (`partialByAgent`, pinned 3 and 0).
 
-  **Still open: the acceptance harness** — the door cuts and pedestrian nav areas, and
+  **The acceptance harness landed 2026-09-20: `uv run elysium verify nav --maps <map>`.**
+  `importers/map_nav_acceptance.py` projects retail's graph into an answer key -- ground and jump
+  links per agent, the links only one agent has, and the subset of those that BRIDGE node sets the
+  human's links leave apart. `UElysiumNavVerifyLibrary` answers it in batch (a per-link editor
+  round trip would dominate the bake), distinguishing "an endpoint is off the mesh" from "both ends
+  are on it and cannot be joined" -- a hole and a wall are different findings with different fixes.
+  `validation/nav_acceptance.py` holds every verdict and needs no editor, which is what makes the
+  rules testable.
+  It reproduces the census from the pipeline for the first time: tutorial 203 nodes / 429 links,
+  41 rat-only, 5 bridging; hub 578 / 1,862, 99 rat-only, 9 bridging.
+
+  **What it found.** All 2,009 human ground links path, and all 2,151 rat ones but three. Every
+  jump endpoint projects on both agents. All 14 bridging links path on the RAT's mesh -- the claim
+  a one-mesh port cannot make, now witnessed rather than asserted.
+  Three real findings and one correction:
+   * **The bridging criterion above was wrong and is changed.** It demanded those links NOT path on
+     the human's mesh. Measured, the human mesh paths all 14, 70 cm to 9,155 cm -- which is this
+     spec's own named modernization ("NPCs can reach floor retail's sparse graph never covered"),
+     not a defect. Retail's graph is a sparse set of designer-placed nodes and a rasterised floor is
+     not; demanding Recast reproduce its CONNECTIVITY would be demanding it reproduce its
+     sparseness. The base-mesh result is now reported as reach that changed, with its length, which
+     is what this story already asks for: reach that changes is "seen, not discovered".
+   * **38 step-height outliers** (5 tutorial, 30 hub, 3 shared with the detours below): links whose
+     rise is above the NPC's 18 and inside the graph builder's 40. Predicted by the recovery and
+     excused by the harness rather than failed -- the mesh is right and retail's own graph is
+     asking for a climb its own motor would refuse. Story 5 decides what an NPC does on reaching
+     one.
+   * **3 rat detours on the hub**, of 1,759 ground links: indices 406 (1,086 cm straight, 4,561 cm
+     routed), 721 (152 / 577) and 1,472 (1,120 / 5,229). Unexplained, and the open question is
+     whether the rat's finer 5 cm cells resolve an obstacle the human's 10 cm cells smooth over,
+     which would make the rat route the long way round where the human walks straight.
+
+  **Still open:** — the door cuts and pedestrian nav areas, and
   the verify arm that pins every ground link pathing on its agent's mesh, the rat-only links on
   the rat's and not the human's. The meshes those checks need now exist, and so does the hull
   answer that tells an agent which mesh is its own.

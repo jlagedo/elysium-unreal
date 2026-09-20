@@ -1373,6 +1373,95 @@ def verify_model_catalogues(
              require_work=True, require_ue=True, activity=True)
 
 
+@verify_app.command("nav")
+def verify_nav(
+    ctx: typer.Context,
+    maps: list[str] = typer.Option(None, "--maps", help="Map stem to verify (repeatable)."),
+    factor: float = typer.Option(3.0, "--factor",
+                                 help="How far a path may exceed the straight line before it is "
+                                      "reported."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Check each baked map's navigation meshes against retail's own graph.
+
+    The graph is the only machine-readable record of where retail's NPCs could walk, so it is the
+    only way to judge a baked mesh by something other than looking at it. Every ground link must
+    path on its own agent's mesh; every jump endpoint must project; and the links only one agent
+    has -- the rat's bridging nine on the hub -- must path on that agent's mesh and NOT on the
+    human's, which is the check a one-mesh port cannot pass.
+    """
+    state = _state(ctx)
+    state.json_output = json_output
+    if not maps:
+        raise typer.BadParameter("verify nav refuses to run unscoped; name maps with --maps")
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        import json as _json
+
+        from elysium_pipeline import unreal
+        from elysium_pipeline.importers import map_nav_acceptance as acceptance
+        from elysium_pipeline.validation import nav_acceptance as verdicts
+
+        root = config.work_root / "verify" / "nav"
+        root.mkdir(parents=True, exist_ok=True)
+        key_path, answers_path = root / "key.json", root / "answers.json"
+        answers_path.unlink(missing_ok=True)
+
+        keys = []
+        for name in maps:
+            key = acceptance.stage(name)
+            key["agentNames"] = acceptance.agent_names(key["hulls"])
+            keys.append(key)
+        key_path.write_text(_json.dumps({"maps": keys}), encoding="utf-8")
+
+        unreal.verify_nav(config, runner, key_path, answers_path)
+        answered = _read_json(answers_path)
+        if not answered:
+            raise RuntimeError(f"verify nav produced no answers at {answers_path}")
+
+        by_map = {row["map"]: row for row in answered["maps"]}
+        reports, failed = {}, 0
+        for key in keys:
+            answer = by_map.get(key["map"])
+            if answer is None or answer.get("skipped"):
+                raise RuntimeError(
+                    f"{key['map']}: {answer.get('skipped') if answer else 'no answer'}")
+            rows = [verdicts.mesh_errors(
+                [key["agentNames"][str(hull)] for hull in key["hulls"]], answer["meshes"])]
+            excused = {row["index"] for row in key["stepOutliers"]}
+            for hull, table in key["perHull"].items():
+                given = answer["perHull"].get(hull)
+                if given is None:
+                    continue
+                rows.append(verdicts.ground_link_errors(
+                    table["ground"], given["groundLengths"], int(hull),
+                    factor=factor, excused=excused))
+                rows.append(verdicts.projection_errors(
+                    "jump-start", table["jump"], given["jumpStartsLanded"], int(hull)))
+                rows.append(verdicts.projection_errors(
+                    "jump-end", table["jump"], given["jumpEndsLanded"], int(hull)))
+            for hull, given in answer.get("bridging", {}).items():
+                rows.append(verdicts.bridging_errors(
+                    key["agentOnly"][hull]["bridging"], given["agentLengths"],
+                    given["baseLengths"], int(hull), key["baseHull"]))
+            report = verdicts.report(rows)
+            report["stepOutliers"] = len(excused)
+            reports[key["map"]] = report
+            failed += report["failed"]
+            line = ", ".join(f"{row['check']} {row['failed']}" for row in rows
+                             if row["failed"])
+            if not state.json_output:
+                console.print(f"  {key['map']}: {'clean' if report['clean'] else line}"
+                              f"  [{len(excused)} step-height outlier(s) excused]")
+        (root / "report.json").write_text(_json.dumps(reports, indent=2), encoding="utf-8")
+        _summary(state, f"verify nav: {len(keys)} map(s), {failed} finding(s)",
+                 maps=len(keys), failed=failed, report=str(root / "report.json"))
+        if failed:
+            raise RuntimeError(f"verify nav found {failed} finding(s); see {root / 'report.json'}")
+
+    _execute(state, "verify nav", ExitCode.UNREAL_OR_BAKE, action, require_ue=True)
+
+
 @verify_app.command("expression-tables")
 def verify_expression_tables(
     ctx: typer.Context,

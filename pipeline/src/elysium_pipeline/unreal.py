@@ -631,6 +631,33 @@ def import_map_entities(config, runner, manifest_path, *, force: bool = False) -
 MAP_COLLISION_IMPORT_TIMEOUT_SECONDS = 60 * 60.0
 
 
+def verify_nav(config, runner, key_path, answers_path) -> None:
+    """Run the editor half of `verify nav`: open each baked level and answer its key's queries.
+
+    The script holds no judgement. It opens the levels, runs the path and projection queries the
+    answer key names, and writes what came back; `validation/nav_acceptance.py` decides what any of
+    it means, which is what lets every rule be tested without an editor.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/verify_nav.py'}",
+            f"-VerifyNavKey={key_path}",
+            f"-VerifyNavOut={answers_path}",
+            "-unattended",
+            "-nosplash",
+            "-nullrhi",
+            "-NoLiveCoding",
+            "-noP4",
+            "-nosound",
+        ],
+    )
+
+
 def import_map_collision(config, runner, manifest_path, *, force: bool = False) -> None:
     """Run the editor phase of `import map-collision` over one staged manifest.
 
