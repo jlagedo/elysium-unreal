@@ -3659,13 +3659,15 @@ a hull with no link in any graph — consistent with no link flying), `CNPC_VMin
 18, and `CNPC_VVampireBoss::StartTask` / `CNPC_VSabbatLeader::TransformationStart` back to 0, plus
 `CGeneric_NPC`, `CGeneric_NPC_bathack` and `CGenericSabbat_NPC`'s Spawns setting 0.
 
-**Unrecovered:** how `CNPC_VRat` / `CNPC_VScurrying`, `CNPC_VCamera`, `CNPC_VGargoyle`,
-`CNPC_VManBat`, `CNPC_VSheriffMan` and `CNPC_VWerewolf` acquire theirs. Each declares a bare
-constant with bit 0 ABSENT, so standing on hull 0 would trip the guard above, yet no write to
-`+0x1568` reaches them in the corpus. A read before 0018 story 3's job 4 binds a body to an agent;
-until it lands, only the six classes with a witnessed store may be bound by class, and the rest
-follow their graph's `UsedHullBits`. Note also that `CNPC_VWerewolf` keeps a FAKE hull
-(`UpdateFakeHull`, `CheckStuck`, `GetGroundpoint`), so its table row may not be its body at all.
+**Recovered 2026-09-20** (this paragraph used to read "Unrecovered"): how `CNPC_VRat` /
+`CNPC_VScurrying`, `CNPC_VCamera`, `CNPC_VGargoyle`, `CNPC_VManBat`, `CNPC_VSheriffMan` and
+`CNPC_VWerewolf` acquire theirs. **A CONSTRUCTOR writes it**, and the corpus field ledger does not
+record constructor accesses — which is the whole reason "no write to `+0x1568` reaches them in the
+corpus" looked true. The stores, the second hull word at `+0x156c` that decides ROUTING, and the
+three species whose two words differ are in `navigation-jump-links.md` § "The two hull words";
+the table itself is `docs/vtmb/data/class_hulls.json`. Still open: `CNPC_VWerewolf` keeps a FAKE
+hull (`UpdateFakeHull`, `CheckStuck`, `GetGroundpoint`), so what its constructor's 12 sizes and
+what its fake hull sizes are two questions, and only the first is answered.
 
 ### Slot 533 `EyeOffset` — `0x10274db0`, `0x102b4ab0`
 

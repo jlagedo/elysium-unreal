@@ -62,6 +62,13 @@ uv run elysium import map-environment --maps <map>
 uv run elysium verify
 ```
 
+`import map-collision` is also what stands the map's world-collision actor and nav-area marks in
+its level and bakes its navigation meshes, so a level is not loadable until it has run AFTER
+`bake map` -- the runtime has no fallback and fails the load naming both commands. It judges the
+meshes it built against retail's graph before it may succeed (`verify nav`, skippable only with
+`--skip-nav-verify` while iterating on the lane); `uv run elysium verify nav --maps <map>` asks
+again on demand. It needs the map's nav graph exported first (`export_v2 nav-graph-glb <map>`).
+
 `MapsOnV2Models` selects `MapBakeV2` over the legacy `Bake`; `bake map` refuses a map that is
 not listed. `export map <map>` (no flag) reaches the same bake through the legacy decode plus
 an unconditional re-verification of the character and catalogue corpora, ~20 minutes.

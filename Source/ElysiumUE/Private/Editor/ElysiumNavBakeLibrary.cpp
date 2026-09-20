@@ -142,9 +142,9 @@ TArray<FString> UElysiumNavBakeLibrary::NavMeshTileCounts(UWorld* World)
 	// that has just been loaded in the editor, where the set may not be populated yet.
 	for (TActorIterator<ARecastNavMesh> It(World); It; ++It)
 	{
-		const UEnum* Modes = StaticEnum<ENavDataGatheringModeConfig>();
-		Rows.Add(FString::Printf(TEXT("%s=%d gen=%d"), *It->GetName(), It->GetNumActiveTiles(),
-			static_cast<int32>(It->GetRuntimeGenerationMode())));
+		// `<name>=<tiles>` and nothing after it: the collision import parses this row, and a
+		// diagnostic suffix added here once made every level read as stale and rebuild on every run.
+		Rows.Add(FString::Printf(TEXT("%s=%d"), *It->GetName(), It->GetNumActiveTiles()));
 	}
 	Rows.Sort();
 	return Rows;

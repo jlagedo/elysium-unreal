@@ -139,3 +139,32 @@ def test_agent_names_follow_the_generated_ini_rule():
     assert key.agent_name("HUMAN_HULL") == "Human"
     assert key.agent_name("MING_XIAO_PATHING_HULL") == "MingXiaoPathing"
     assert key.agent_name("RAT_HULL") == "Rat"
+
+
+def test_a_pinned_finding_that_reproduces_is_reported_not_failed():
+    links = [{"index": 7, "src": 0, "dst": 1, "straightCm": 100.0}]
+    row = verdicts.ground_link_errors(links, [450.0], hull=19, known={7: "rat hole"})
+    assert row["failed"] == 0
+    assert [finding["index"] for finding in row["knownFindings"]] == [7]
+
+
+def test_a_new_finding_beside_a_pinned_one_still_fails():
+    links = [{"index": 7, "src": 0, "dst": 1, "straightCm": 100.0},
+             {"index": 8, "src": 1, "dst": 2, "straightCm": 100.0}]
+    row = verdicts.ground_link_errors(links, [450.0, 450.0], hull=19, known={7: "rat hole"})
+    assert row["failed"] == 1
+    assert row["failures"][0]["index"] == 8
+
+
+def test_a_pin_that_stops_reproducing_fails_until_it_is_removed():
+    # A pin is not a tolerance: once the finding is gone the pin has to go too, or it would
+    # quietly excuse the next regression on that link.
+    links = [{"index": 7, "src": 0, "dst": 1, "straightCm": 100.0}]
+    row = verdicts.ground_link_errors(links, [120.0], hull=19, known={7: "rat hole"})
+    assert row["failed"] == 1 and row["stalePins"] == 1
+
+
+def test_the_pinned_detours_are_the_three_hub_rat_holes():
+    from elysium_pipeline.validation.nav_known_findings import known_detours
+    assert sorted(known_detours("sm_hub_1", 19)) == [406, 721, 1472]
+    assert known_detours("sp_tutorial_1", 19) == {}

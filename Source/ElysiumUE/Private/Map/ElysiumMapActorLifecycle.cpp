@@ -856,7 +856,14 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 		// area a modifier raises would queue for ever -- which would make `DynamicModifiersOnly`
 		// buy nothing and story 7's door links impossible. Released HERE, once the baked mesh is
 		// in hand, so there is nothing left for a rebuild to destroy.
-		Navigation->ReleaseInitialBuildingLock();
+		// NOT `ReleaseInitialBuildingLock()`: that calls `RemoveNavigationBuildLock` with its default
+		// action, `Rebuild`, which runs `RebuildAll()` the moment the last lock comes off
+		// (`NavigationSystem.cpp:4814-4835`) -- wiping the baked tiles and starting a full run-time
+		// build of every mesh, the rat's at 5 cm cells included. It was tried first and the map
+		// adopted its mesh, placed the player and then never went Active. `NoRebuild` takes the
+		// lock off and leaves the tiles alone, which is the whole point of releasing it HERE.
+		Navigation->RemoveNavigationBuildLock(ENavigationBuildLock::InitialLock,
+			UNavigationSystemV1::ELockRemovalRebuildAction::NoRebuild);
 		UE_LOG(LogElysium, Log,
 			TEXT("runtime navigation %s: adopted the level's baked mesh after %.3fs, no build "
 				"(initial build lock released)"),

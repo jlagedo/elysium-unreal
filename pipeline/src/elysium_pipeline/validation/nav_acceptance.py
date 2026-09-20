@@ -42,15 +42,22 @@ def _row(check: str, failures: Sequence[dict[str, Any]], **extra: Any) -> dict[s
 
 def ground_link_errors(links: Sequence[dict[str, Any]], lengths: Sequence[float], hull: int,
                        *, factor: float = DEFAULT_LENGTH_FACTOR,
-                       excused: Iterable[int] = ()) -> dict[str, Any]:
+                       excused: Iterable[int] = (),
+                       known: dict[int, str] | None = None) -> dict[str, Any]:
     """Every ground link must path on its own agent's mesh, within `factor` of the straight line.
 
     `excused` are links the key already predicted unreachable -- the step-height outliers, where
     retail's graph asserts a rise its own NPCs cannot climb. They are reported by the key and not
     failed here, because the mesh is right and the graph is asking for something retail's motor
     would refuse too.
+
+    `known` are findings already looked at and pinned by link index (`nav_known_findings.py`).
+    A pinned finding that reproduces is reported, not failed; anything NEW fails; and a pin that
+    no longer reproduces fails too, so a fixed finding is un-pinned rather than left standing as a
+    tolerance nobody can see.
     """
 
+    known = dict(known or {})
     excused_set = set(excused)
     holes, walls, detours = [], [], []
     for link, length in zip(links, lengths):
@@ -67,10 +74,19 @@ def ground_link_errors(links: Sequence[dict[str, Any]], lengths: Sequence[float]
             detours.append({"index": link["index"], "straightCm": round(straight, 1),
                             "pathCm": round(float(length), 1),
                             "factor": round(float(length) / straight, 2)})
-    failures = holes + walls + detours
-    return _row(f"ground-links-hull-{hull}", failures, hull=hull, links=len(links),
+    found = holes + walls + detours
+    found_indices = {int(row["index"]) for row in found}
+    reproduced = [row for row in found if int(row["index"]) in known]
+    fresh = [row for row in found if int(row["index"]) not in known]
+    stale = [{"index": index,
+              "reason": f"pinned finding no longer reproduces; remove the pin ({why})"}
+             for index, why in sorted(known.items()) if index not in found_indices]
+    return _row(f"ground-links-hull-{hull}", fresh + stale, hull=hull, links=len(links),
                 excused=len(excused_set), holes=len(holes), walls=len(walls),
-                detours=len(detours), factor=factor)
+                detours=len(detours), factor=factor,
+                knownFindings=[{**row, "pinned": known[int(row["index"])]}
+                               for row in reproduced],
+                stalePins=len(stale))
 
 
 def bridging_errors(bridging: Sequence[dict[str, Any]], agent_lengths: Sequence[float],

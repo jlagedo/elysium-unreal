@@ -1373,6 +1373,79 @@ def verify_model_catalogues(
              require_work=True, require_ue=True, activity=True)
 
 
+def _nav_verify(state: CliState, config: ProjectConfig, runner: ProcessRunner,
+                maps: list[str], factor: float) -> int:
+    """Judge each named map's baked meshes against retail's graph; returns the finding count.
+
+    Shared by `verify nav` and by `import map-collision`, which builds the meshes and therefore
+    must not be able to finish having built a wrong one: a gate nobody runs is not a gate.
+    """
+    import json as _json
+
+    from elysium_pipeline import unreal
+    from elysium_pipeline.importers import map_nav_acceptance as acceptance
+    from elysium_pipeline.validation import nav_acceptance as verdicts
+    from elysium_pipeline.validation.nav_known_findings import known_detours
+
+    root = config.work_root / "verify" / "nav"
+    root.mkdir(parents=True, exist_ok=True)
+    key_path, answers_path = root / "key.json", root / "answers.json"
+    answers_path.unlink(missing_ok=True)
+
+    keys = []
+    for name in maps:
+        key = acceptance.stage(name)
+        key["agentNames"] = acceptance.agent_names(key["hulls"])
+        keys.append(key)
+    key_path.write_text(_json.dumps({"maps": keys}), encoding="utf-8")
+
+    unreal.verify_nav(config, runner, key_path, answers_path)
+    answered = _read_json(answers_path)
+    if not answered:
+        raise RuntimeError(f"verify nav produced no answers at {answers_path}")
+
+    by_map = {row["map"]: row for row in answered["maps"]}
+    reports, failed = {}, 0
+    for key in keys:
+        answer = by_map.get(key["map"])
+        if answer is None or answer.get("skipped"):
+            raise RuntimeError(
+                f"{key['map']}: {answer.get('skipped') if answer else 'no answer'}")
+        rows = [verdicts.mesh_errors(
+            [key["agentNames"][str(hull)] for hull in key["hulls"]], answer["meshes"])]
+        excused = {row["index"] for row in key["stepOutliers"]}
+        for hull, table in key["perHull"].items():
+            given = answer["perHull"].get(hull)
+            if given is None:
+                continue
+            rows.append(verdicts.ground_link_errors(
+                table["ground"], given["groundLengths"], int(hull),
+                factor=factor, excused=excused,
+                known=known_detours(key["map"], int(hull))))
+            rows.append(verdicts.projection_errors(
+                "jump-start", table["jump"], given["jumpStartsLanded"], int(hull)))
+            rows.append(verdicts.projection_errors(
+                "jump-end", table["jump"], given["jumpEndsLanded"], int(hull)))
+        for hull, given in answer.get("bridging", {}).items():
+            rows.append(verdicts.bridging_errors(
+                key["agentOnly"][hull]["bridging"], given["agentLengths"],
+                given["baseLengths"], int(hull), key["baseHull"]))
+        report = verdicts.report(rows)
+        report["stepOutliers"] = len(excused)
+        reports[key["map"]] = report
+        failed += report["failed"]
+        line = ", ".join(f"{row['check']} {row['failed']}" for row in rows if row["failed"])
+        pinned = sum(len(row.get("knownFindings", [])) for row in rows)
+        if not state.json_output:
+            console.print(f"  {key['map']}: {'clean' if report['clean'] else line}"
+                          f"  [{len(excused)} step-height outlier(s) excused, "
+                          f"{pinned} pinned finding(s) reproduced]")
+    (root / "report.json").write_text(_json.dumps(reports, indent=2), encoding="utf-8")
+    _summary(state, f"verify nav: {len(keys)} map(s), {failed} finding(s)",
+             navMaps=len(keys), navFailed=failed, navReport=str(root / "report.json"))
+    return failed
+
+
 @verify_app.command("nav")
 def verify_nav(
     ctx: typer.Context,
@@ -1387,8 +1460,11 @@ def verify_nav(
     The graph is the only machine-readable record of where retail's NPCs could walk, so it is the
     only way to judge a baked mesh by something other than looking at it. Every ground link must
     path on its own agent's mesh; every jump endpoint must project; and the links only one agent
-    has -- the rat's bridging nine on the hub -- must path on that agent's mesh and NOT on the
-    human's, which is the check a one-mesh port cannot pass.
+    has must path on that agent's mesh -- the claim a one-mesh port cannot make. Findings already
+    judged are pinned in `validation/nav_known_findings.py`; anything new fails.
+
+    `import map-collision` runs this itself after it builds the meshes, so this command is for
+    asking again, not for remembering to ask.
     """
     state = _state(ctx)
     state.json_output = json_output
@@ -1396,68 +1472,10 @@ def verify_nav(
         raise typer.BadParameter("verify nav refuses to run unscoped; name maps with --maps")
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        import json as _json
-
-        from elysium_pipeline import unreal
-        from elysium_pipeline.importers import map_nav_acceptance as acceptance
-        from elysium_pipeline.validation import nav_acceptance as verdicts
-
-        root = config.work_root / "verify" / "nav"
-        root.mkdir(parents=True, exist_ok=True)
-        key_path, answers_path = root / "key.json", root / "answers.json"
-        answers_path.unlink(missing_ok=True)
-
-        keys = []
-        for name in maps:
-            key = acceptance.stage(name)
-            key["agentNames"] = acceptance.agent_names(key["hulls"])
-            keys.append(key)
-        key_path.write_text(_json.dumps({"maps": keys}), encoding="utf-8")
-
-        unreal.verify_nav(config, runner, key_path, answers_path)
-        answered = _read_json(answers_path)
-        if not answered:
-            raise RuntimeError(f"verify nav produced no answers at {answers_path}")
-
-        by_map = {row["map"]: row for row in answered["maps"]}
-        reports, failed = {}, 0
-        for key in keys:
-            answer = by_map.get(key["map"])
-            if answer is None or answer.get("skipped"):
-                raise RuntimeError(
-                    f"{key['map']}: {answer.get('skipped') if answer else 'no answer'}")
-            rows = [verdicts.mesh_errors(
-                [key["agentNames"][str(hull)] for hull in key["hulls"]], answer["meshes"])]
-            excused = {row["index"] for row in key["stepOutliers"]}
-            for hull, table in key["perHull"].items():
-                given = answer["perHull"].get(hull)
-                if given is None:
-                    continue
-                rows.append(verdicts.ground_link_errors(
-                    table["ground"], given["groundLengths"], int(hull),
-                    factor=factor, excused=excused))
-                rows.append(verdicts.projection_errors(
-                    "jump-start", table["jump"], given["jumpStartsLanded"], int(hull)))
-                rows.append(verdicts.projection_errors(
-                    "jump-end", table["jump"], given["jumpEndsLanded"], int(hull)))
-            for hull, given in answer.get("bridging", {}).items():
-                rows.append(verdicts.bridging_errors(
-                    key["agentOnly"][hull]["bridging"], given["agentLengths"],
-                    given["baseLengths"], int(hull), key["baseHull"]))
-            report = verdicts.report(rows)
-            report["stepOutliers"] = len(excused)
-            reports[key["map"]] = report
-            failed += report["failed"]
-            line = ", ".join(f"{row['check']} {row['failed']}" for row in rows
-                             if row["failed"])
-            if not state.json_output:
-                console.print(f"  {key['map']}: {'clean' if report['clean'] else line}"
-                              f"  [{len(excused)} step-height outlier(s) excused]")
-        (root / "report.json").write_text(_json.dumps(reports, indent=2), encoding="utf-8")
-        _summary(state, f"verify nav: {len(keys)} map(s), {failed} finding(s)",
-                 maps=len(keys), failed=failed, report=str(root / "report.json"))
+        failed = _nav_verify(state, config, runner, list(maps), factor)
         if failed:
-            raise RuntimeError(f"verify nav found {failed} finding(s); see {root / 'report.json'}")
+            raise RuntimeError(f"verify nav found {failed} finding(s); see "
+                               f"{config.work_root / 'verify' / 'nav' / 'report.json'}")
 
     _execute(state, "verify nav", ExitCode.UNREAL_OR_BAKE, action, require_ue=True)
 
@@ -3212,6 +3230,11 @@ def import_map_collision(
     stage_only: bool = typer.Option(
         False, "--stage-only", help="Write the manifest; launch no editor.",
     ),
+    skip_nav_verify: bool = typer.Option(
+        False, "--skip-nav-verify",
+        help="Do not judge the meshes this run built against retail's graph. For iterating on "
+             "the lane itself; a bake that ships runs the check.",
+    ),
 ) -> None:
     """Import each named map's collision into /ElysiumBaked/<map>/DA_<map>_Collision.
 
@@ -3266,6 +3289,17 @@ def import_map_collision(
             problems.append(str(editor_failure))
         if problems:
             raise RuntimeError("; ".join(problems))
+
+        # This lane builds the navigation meshes, so it is the lane that must not be able to
+        # finish having built a wrong one. Judged against retail's graph here, automatically:
+        # the check existed as `verify nav` first and nothing ran it, which is a gate nobody
+        # walks through.
+        if not skip_nav_verify:
+            nav_failed = _nav_verify(_state(ctx), config, runner, list(maps or []), 3.0)
+            if nav_failed:
+                raise RuntimeError(
+                    f"the meshes built, and verify nav found {nav_failed} new finding(s) in "
+                    f"them; see {config.work_root / 'verify' / 'nav' / 'report.json'}")
 
     # The stage reads the loose collision sidecars and nothing else; the editor phase needs the
     # engine and nothing else -- every number travels in the manifest.

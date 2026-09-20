@@ -97,6 +97,11 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	// close enough to have hidden the fact that the number was never actually retail's.
 	Movement->MaxStepHeight =
 		static_cast<float>(ElysiumRetailHulls::StepHeightUnits * ElysiumMove::U);
+	// The same standable normal the meshes are cut with (`ElysiumNavBakeLibrary`'s slope is
+	// acos of this), so a body can walk every slope its mesh offers it. The engine default is
+	// 44.765 degrees against the mesh's 45.57: a sliver of floor that was on the mesh and
+	// unwalkable, which a route would cross and the movement component would refuse.
+	Movement->SetWalkableFloorZ(ElysiumMove::StandableZ);
 	Movement->SetCanEverAffectNavigation(false);
 	Movement->SetAutoActivate(false);
 
