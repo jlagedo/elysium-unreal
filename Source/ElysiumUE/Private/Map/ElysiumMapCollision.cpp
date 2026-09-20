@@ -165,20 +165,48 @@ bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
 			*InMapName);
 		return false;
 	}
-	if (Found->Bodies.Num() != Asset.GetWorldBodies().Num())
+	// Against the rows the actor would actually author, not every row: `AuthorFromPayload` skips a
+	// signature whose body is empty, so comparing with the full count would make a degenerate row
+	// -- a signature staged with no usable hull -- render the level unloadable rather than merely
+	// unrepresented.
+	int32 Authorable = 0;
+	for (const FElysiumSignatureCollisionBody& Row : Asset.GetWorldBodies())
+	{
+		if (Row.Body != nullptr && Row.HullCount > 0)
+		{
+			++Authorable;
+		}
+	}
+	if (Found->Bodies.Num() != Authorable)
 	{
 		UE_LOG(LogElysiumCollision, Error,
-			TEXT("%s: the level carries %d world body(ies), the payload %d"),
-			*InMapName, Found->Bodies.Num(), Asset.GetWorldBodies().Num());
+			TEXT("%s: the level carries %d world body(ies), the payload authors %d of its %d"),
+			*InMapName, Found->Bodies.Num(), Authorable, Asset.GetWorldBodies().Num());
 		return false;
 	}
 
+	// Identity, not just arity: a payload re-author replaces every body setup, so a level whose
+	// actor still points at the previous set would adopt objects the payload no longer owns and
+	// stand a world the cook never verified. Counting alone cannot see that.
+	TSet<const UBodySetup*> Owned;
+	for (const FElysiumSignatureCollisionBody& Row : Asset.GetWorldBodies())
+	{
+		Owned.Add(Row.Body);
+	}
 	for (UElysiumWorldCollisionComponent* Component : Found->Bodies)
 	{
 		if (Component == nullptr || Component->Body == nullptr)
 		{
 			UE_LOG(LogElysiumCollision, Error,
 				TEXT("%s: the level's world-collision actor carries an empty body"), *InMapName);
+			return false;
+		}
+		if (!Owned.Contains(Component->Body))
+		{
+			UE_LOG(LogElysiumCollision, Error,
+				TEXT("%s: the level's world-collision actor points at a body this payload does "
+					"not own; re-run `uv run elysium import map-collision --maps %s`"),
+				*InMapName, *InMapName);
 			return false;
 		}
 		UE_LOG(LogElysiumCollision, Log, TEXT("adopted world body %s on '%s'%s"),

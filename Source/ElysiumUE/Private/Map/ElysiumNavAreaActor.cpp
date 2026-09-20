@@ -3,7 +3,7 @@
 #include "AI/NavigationModifier.h"
 #include "AI/NavigationSystemBase.h"
 #include "ElysiumNavAreas.h"
-#include "NavigationSystem.h"
+#include "NavigationSystem.h"   // FNavigationRelevantData
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNavArea, Log, All);
 
@@ -85,20 +85,29 @@ UElysiumNavAreaComponent* AElysiumNavAreaActor::AddArea(const FString& Label,
 	{
 		if (Size <= 0 || Cursor + Size > Points.Num())
 		{
-			break;   // a truncated run is a staging defect, not something to guess at
+			// A truncated run is a staging defect, not something to guess at -- and silence here
+			// would leave the level marked with fewer convexes than the report claims.
+			UE_LOG(LogElysiumNavArea, Error,
+				TEXT("%s: %s names a convex of %d point(s) with %d left; the run is truncated"),
+				*MapName, *Label, Size, Points.Num() - Cursor);
+			return nullptr;
 		}
 		FElysiumNavAreaConvex Convex;
 		Convex.Points.Reserve(Size);
 		for (int32 Index = 0; Index < Size; ++Index)
 		{
 			Convex.Points.Add(Points[Cursor + Index]);
-			Bounds += Points[Cursor + Index];
 		}
 		Cursor += Size;
 		if (Convex.Points.Num() < GMinConvexPoints)
 		{
 			++Dropped;
-			continue;
+			continue;   // and its points stay OUT of the bounds below: the octree keys on what is
+						// marked, and a dropped convex marks nothing
+		}
+		for (const FVector& Point : Convex.Points)
+		{
+			Bounds += Point;
 		}
 		Component->Convexes.Add(MoveTemp(Convex));
 	}

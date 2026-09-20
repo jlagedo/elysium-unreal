@@ -79,10 +79,17 @@ public:
 	// one resolution path the debug readers share, so a stale body reads as stale everywhere.
 	const FElysiumNpc* ResolveOwningNpc(const FElysiumEntityWorld*& OutWorld) const;
 
+	/** Set by `ApplyRetailHull`; read by `ApplyCrowdState`, which runs from the lazy controller
+	 *  spawn and must not re-resolve the kernel to learn a word that cannot change. */
+	int32 CachedPathingHull = 0;
+
 	/** Size the capsule from the kernel's STANDING hull and the nav agent from its PATHING hull.
 	 *  They are different rows on the Sheriff, Hengeyokai and Ming Xiao. Safe to call before the
 	 *  kernel is bound: it answers nothing and waits to be called again. */
 	void ApplyRetailHull();
+
+	/** The PATHING hull this body was last sized for -- which agent's mesh it belongs on. */
+	int32 PathingHullKind() const;
 	// The model this body wears and the repeatable token its weighted picks ride on. Set once when
 	// the motor is built, because that is the one place that knows both.
 	void SetModelStem(const FString& InStem, USkeletalMeshComponent* InVisual, int32 InVariant);

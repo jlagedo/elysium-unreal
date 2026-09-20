@@ -544,7 +544,7 @@ its recovery is written in the oracle section it names.
      blocks an NPC. `UElysiumMapCollision` adopts that actor on the payload transport
      and spawns nothing; the sidecar arm is unchanged but for job 1's partition.
   4. Agents from the hull table. One supported agent per hull with links in any shipped
-     graph — 14, inside the engine's 16 — generated from the recovered rows: radius half the
+     graph — 14, inside `FNavAgentSelector`'s 31 — generated from the recovered rows: radius half the
      width, height `maxs.z − mins.z`, inches to centimetres once, step height from retail's
      18 units. A map bakes one Recast mesh per bit of its graph's `UsedHullBits`; an NPC's nav
      agent follows its hull, so a rat paths on the rat mesh. The body's capsule is cut from the same row: a
@@ -1008,12 +1008,17 @@ its recovery is written in the oracle section it names.
   3's own step 1 already makes a map with no baked collision actor and no baked mesh fail the load
   with a named error, and deletes the arms 3 touched — `UElysiumMapCollision`'s `LoadHulls` sidecar
   arm and its per-signature transient components, `EnsureRuntimeNavigation`'s run-time build and
-  `RestrictNavigationToUsableAgents`, and the pipeline's `LEGACY_BRUSH_SIGNATURE`,
-  `PAYLOAD_CONTENTS_MASK`, `classify_hulls` and `HULLS_NAMED_DIVERGENCE`. This story deletes what
-  survives that gate as dead code: the legacy `Bake` beside `MapBakeV2`, the `MapsOnV2Models` /
-  `MapsOnNewTransport` selectors and every `IsMapOn*` test of them, the sidecar-diff lane's legacy
-  comparison, and the `.hulls`/`.ents`/`.dispcol` readers no longer reached (the files stay as V2
+  `RestrictNavigationToUsableAgents`, and the pipeline's `LEGACY_BRUSH_SIGNATURE` and
+  `PAYLOAD_CONTENTS_MASK`. This story deletes what survives that gate: the legacy `Bake` beside
+  `MapBakeV2`, the `MapsOnV2Models` / `MapsOnNewTransport` selectors and every `IsMapOn*` test of
+  them, the sidecar-diff lane's legacy comparison (`classify_hulls` and `HULLS_NAMED_DIVERGENCE`,
+  which story 3 left standing because deleting only the classifier would fail `elysium verify` on
+  every map), and the `.hulls`/`.ents`/`.dispcol` readers no longer reached (the files stay as V2
   intermediates the producer writes from the GLB units). ~80 references across 36 files.
+  Also dead and to be deleted with them, each unreachable since story 3: `bake_navmesh.py` (never
+  wired, and its `SetMapNavAgents` order is the one story 3 proved wrong),
+  `UElysiumNavBakeLibrary::SetMapNavAgents`, `UElysiumMapCollisionPayload::LegacyWorldSignature`,
+  and `UElysiumMapCollision::GetWorldBounds` / `RefreshNavigationData`.
   Part B, on the owner's approval rather than automatically: the other 102 maps onto V2, including
   the three the legacy lump reader refuses (`sp_giovanni_2b` and its pair) — run when a story's
   witness needs a map outside the six, not before.

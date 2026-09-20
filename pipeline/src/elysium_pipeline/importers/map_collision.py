@@ -111,7 +111,8 @@ def read_hull_rows(path: Path) -> list[list[float]]:
 def read_hull_partitions(path: Path) -> list[tuple[int, list[list[float]]]]:
     """`<map>.hulls` grouped by contents signature, each group in file order.
 
-    The acceptance rule is `UElysiumMapCollision::LoadHulls`'s, verbatim: a contents word then at
+    The acceptance rule was `UElysiumMapCollision::LoadHulls`'s (deleted with the sidecar
+    transport, 0018 story 21) and is kept verbatim here: a contents word then at
     least four whole vertex triples, anything else skipped rather than staged. A row answering no
     mask was never written and cannot become a body.
 
@@ -243,7 +244,8 @@ def displacement_soup(rows: Sequence[Sequence[float]]) -> tuple[list[float], lis
     """`<map>.dispcol` rows as one vertex buffer plus flat index triples.
 
     Three vertices per triangle, un-welded and in file order -- the same soup
-    `UElysiumMapCollision::LoadDispCol` hands the procedural mesh, so the cooked trimesh and the
+    `UElysiumMapCollision::LoadDispCol` handed the procedural mesh before story 21 deleted it;
+    the cooked trimesh keeps that soup's shape, so it and the
     runtime-built one take the same input.
     """
 
@@ -347,6 +349,18 @@ def stage_map(
     """One map's manifest entry: its three payloads, its asset path and its parity verdict."""
 
     partitions = read_hull_partitions(hulls_path)
+    # Only the seven signatures the game actually ships have a generated collision profile. A
+    # profile name that DefaultEngine.ini does not declare falls back to the engine default
+    # silently, so a brush answering an eighth combination would stand wearing a profile that
+    # answers the wrong masks -- and nothing downstream would say so. The generator's own note
+    # promises this refusal; this is it.
+    for signature, _hulls in partitions:
+        spelled = contents_signature.spell(signature)
+        if spelled not in contents_signature.SHIPPED:
+            raise MapCollisionStageError(
+                f"{map_name}: signature {spelled} has no generated collision profile "
+                f"(shipped: {', '.join(contents_signature.SHIPPED)}); re-run "
+                "`uv run elysium research gen_contents_signatures` if this map needs it")
     hull_rows = [hull for _signature, hulls in partitions for hull in hulls]
     if not hull_rows:
         raise MapCollisionStageError(

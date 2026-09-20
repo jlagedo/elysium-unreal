@@ -100,4 +100,47 @@ bool FElysiumRetailHullSpeciesTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailHullSplitTest,
+	"Elysium.Substrate.RetailHull.Split", GElysiumRetailHullFlags)
+bool FElysiumRetailHullSplitTest::RunTest(const FString&)
+{
+	// The three species the two-word design EXISTS for. Every other class has both words alike,
+	// so a table that silently collapsed to one word would pass every other test in this file.
+	struct FSplit { const TCHAR* Class; int32 Standing; int32 Pathing; };
+	static const FSplit Splits[] =
+	{
+		{ TEXT("CNPC_VSheriffMan"), 21, 0  },   // stands SHERIFF, routes on the human mesh
+		{ TEXT("CNPC_VHengeyokai"),  0, 18 },   // the inverse
+		{ TEXT("CNPC_VMingXiao"),   15, 16 },   // what MING_XIAO_PATHING_HULL exists for
+	};
+	for (const FSplit& Split : Splits)
+	{
+		const ElysiumRetailHulls::FClassHulls* Row = nullptr;
+		for (int32 Index = 0; Index < ElysiumRetailHulls::ClassHullCount; ++Index)
+		{
+			if (FString(ElysiumRetailHulls::ClassHulls[Index].RetailClass) == Split.Class)
+			{
+				Row = &ElysiumRetailHulls::ClassHulls[Index];
+				break;
+			}
+		}
+		if (!TestNotNull(*FString::Printf(TEXT("%s has a row"), Split.Class), Row))
+		{
+			continue;
+		}
+		TestEqual(*FString::Printf(TEXT("%s stands on %d"), Split.Class, Split.Standing),
+			Row->Standing, Split.Standing);
+		TestEqual(*FString::Printf(TEXT("%s paths on %d"), Split.Class, Split.Pathing),
+			Row->Pathing, Split.Pathing);
+		TestNotEqual(*FString::Printf(TEXT("%s's two words differ"), Split.Class),
+			Row->Standing, Row->Pathing);
+	}
+
+	// And the agent that follows from the split: the Sheriff needs no agent of his own, because
+	// he routes on the human's mesh however large the box he stands in.
+	TestEqual(TEXT("the Sheriff's agent is the human's"),
+		ElysiumRetailHulls::AgentName(0), FName(TEXT("Human")));
+	return true;
+}
+
 #endif

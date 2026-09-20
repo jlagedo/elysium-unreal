@@ -3801,6 +3801,12 @@ void FElysiumNpc::Spawn()
 		return;
 	}
 	SeedSheet();
+	// BEFORE the body, because the body is sized from these: retail writes both hull words in a
+	// CONSTRUCTOR, long before anything can read them, and the port's nearest equivalent is here.
+	// They were filled in `BaseNPCInit` first, which runs from `Activate` -- after `BuildMotor`
+	// below had already sized the capsule and stated the nav agent from a word that was still 0,
+	// so every species stood and pathed as a human however right the table was.
+	ApplyRetailHulls();
 	// Keyfields (model/angles/use_interesting/stattemplate) are already applied. Stand the body:
 	// out/npc/<stem>.glb, playing the standing idle `default_disposition` selects, spread across
 	// the three VtMB authors per disposition and seeded from this entity's own index — a cop that

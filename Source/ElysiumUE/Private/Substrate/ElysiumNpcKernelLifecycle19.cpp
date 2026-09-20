@@ -481,11 +481,6 @@ void FElysiumNpc::WerewolfRearm()
 
 void FElysiumNpc::BaseNPCInit()
 {
-	// Retail sets both hull words in a CONSTRUCTOR, long before this. The port has no constructor
-	// chain to hang them on -- one `FElysiumNpc` wears every class -- so they are resolved here,
-	// which is the first body that runs with the retail class known and still ahead of everything
-	// that reads a hull. The values and their order are the constructors'; only the moment moves.
-	ApplyRetailHulls();
 	bNpcTransparent = true;                                              // 1027339x SetNPCTransparent(1)
 	Senses.Memory.LastDamageAttacker = FElysiumEntityHandle::Invalid();  // m_hLastDamageEnt = -1
 	Cognition.bCondTookDamage = false;                                   // 102733xx

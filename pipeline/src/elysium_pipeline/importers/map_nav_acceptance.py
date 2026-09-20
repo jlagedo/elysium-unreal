@@ -240,7 +240,7 @@ def agent_name(hull_name: str) -> str:
     """`HUMAN_HULL` -> `Human`, the same rule `gen_hull_table` emits the ini block with.
 
     Stated here rather than imported because the generator is a research tool and this is the
-    pipeline; if the two ever disagree, `test_map_nav_acceptance.py` fails on the committed
+    pipeline; if the two ever disagree, `test_nav_acceptance.py` fails on the committed
     `SupportedAgents` block rather than a mesh going quietly unfound.
     """
 

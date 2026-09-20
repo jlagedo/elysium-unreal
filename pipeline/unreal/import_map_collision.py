@@ -140,6 +140,13 @@ def author_map(entry, force=False):
             "displacementVertices": entry.get("displacementVertices", []),
             "displacementIndices": entry.get("displacementIndices", []),
             "brushBodies": entry.get("brushBodies", []),
+            # The door answer comes from the GRAPH, not from the hulls, so a re-exported graph can
+            # flip a door between cut and traversable while every number above is unchanged.
+            # Without it here the payload reuses, the level keeps yesterday's cuts, and the report
+            # is clean -- the same shape of bug as the level state this lane already learned to
+            # ask about rather than infer.
+            "navDoors": entry.get("navDoors", {}),
+            "navAreas": entry.get("navAreas", []),
         },
     )
     if (not force and unreal.EditorAssetLibrary.does_asset_exist(object_path)
@@ -463,8 +470,13 @@ def build_navigation(map_name, world):
     """
     bits = used_hull_bits(map_name)
     if bits is None:
-        log("%s: no staged UsedHullBits; navigation stays a run-time build" % map_name)
-        return []
+        # There is no run-time build to fall back on any more (0018 story 21): a level saved with
+        # no mesh fails the load after its grace window. Refusing here names the missing lane
+        # instead of shipping a level that cannot be entered.
+        raise RuntimeError(
+            "%s: no staged UsedHullBits, so no agent set to build for; run: "
+            "uv run elysium export_v2 nav-graph-glb %s && uv run elysium bake map --maps %s"
+            % (map_name, map_name, map_name))
 
     agents = unreal.ElysiumNavBakeLibrary.create_navigation_for_agents(world, bits)
     if not agents:

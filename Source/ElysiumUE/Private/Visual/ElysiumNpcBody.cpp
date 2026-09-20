@@ -241,6 +241,34 @@ void AElysiumNpcBody::ApplyRetailHull()
 		return;
 	}
 
+	// The ORDER this depends on, made loud. The kernel fills both words in `FElysiumNpc::Spawn`,
+	// ahead of `BuildMotor` -- retail writes them in a constructor, earlier still. This body ran
+	// once with the call in `BaseNPCInit` instead, which `Activate` reaches AFTER `BuildMotor`:
+	// both words were 0, every species took the human capsule and the human agent, and nothing
+	// said a word because the tests pinned the table rather than the body. If the ordering ever
+	// slips again, this is the line that says so.
+	if (Npc->HullKind == ElysiumRetailHulls::DefaultHull
+		&& Npc->PathingHullKind == ElysiumRetailHulls::DefaultHull)
+	{
+		const ElysiumRetailHulls::FClassHulls* Row = nullptr;
+		for (int32 Index = 0; Index < ElysiumRetailHulls::ClassHullCount; ++Index)
+		{
+			if (Npc->IsRetailClass(ElysiumRetailHulls::ClassHulls[Index].RetailClass))
+			{
+				Row = &ElysiumRetailHulls::ClassHulls[Index];
+				break;
+			}
+		}
+		if (Row != nullptr && (Row->Standing != ElysiumRetailHulls::DefaultHull
+			|| Row->Pathing != ElysiumRetailHulls::DefaultHull))
+		{
+			UE_LOG(LogElysiumNpcEnt, Error,
+				TEXT("%s: the kernel's hull words are still unset but %s stands on %d and paths "
+					"on %d; the body is being sized before FElysiumNpc::Spawn filled them"),
+				*GetName(), Row->RetailClass, Row->Standing, Row->Pathing);
+		}
+	}
+
 	UCapsuleComponent* Capsule = GetCapsuleComponent();
 	const float StandRadius = static_cast<float>(Stand->Maxs.X * ElysiumMove::U);
 	const float StandHalfHeight =
@@ -259,21 +287,18 @@ void AElysiumNpcBody::ApplyRetailHull()
 	Agent.AgentStepHeight =
 		static_cast<float>(ElysiumRetailHulls::StepHeightUnits * ElysiumMove::U);
 
-	// `UCrowdManager` serves ONE mesh -- the first that supports the default agent, which is the
-	// human's (`CrowdManager.cpp:1306-1367`). A body on any other agent must therefore run plain
-	// path following, or it would be steered against a mesh it does not path on. NAMED
-	// MODERNIZATION LIMIT, not a defect: retail has no crowd simulation at all.
-	if (Npc->PathingHullKind != ElysiumRetailHulls::DefaultHull)
-	{
-		if (AAIController* AI = Cast<AAIController>(GetController()))
-		{
-			if (UCrowdFollowingComponent* Crowd =
-					Cast<UCrowdFollowingComponent>(AI->GetPathFollowingComponent()))
-			{
-				Crowd->SetCrowdSimulationState(ECrowdSimulationState::Disabled);
-			}
-		}
-	}
+	// The crowd limit for a non-human agent is NOT applied here: the controller that owns the
+	// follower is spawned lazily by the first accepted MoveTo, so there is nothing to disable yet
+	// and `ApplyCrowdState` would re-enable it afterwards regardless. It is decided there instead.
+	CachedPathingHull = Npc->PathingHullKind;
+}
+
+int32 AElysiumNpcBody::PathingHullKind() const
+{
+	// Cached at `ApplyRetailHull`, because `ApplyCrowdState` runs from the lazy controller spawn
+	// where resolving the owning entity again would be a second lookup for a word that cannot
+	// change: retail writes the hull in a constructor and only a transform rewrites it.
+	return CachedPathingHull;
 }
 
 void AElysiumNpcBody::EnsureAnimDriver()
@@ -906,7 +931,15 @@ void AElysiumNpcBody::ApplyCrowdState()
 	// A frozen body is SOLID_NONE — a character walks through it — so it must not steer other
 	// agents around it either. Detour avoidance is a separate register from collision, and an
 	// immobilised body left in it is an invisible obstacle every neighbour paths around.
-	Crowd->SetCrowdSimulationState(bFrozen
+	//
+	// NAMED MODERNIZATION LIMIT, and it has to be decided here rather than where the hull is
+	// applied: `UCrowdManager` serves ONE mesh -- the first that supports the default agent, the
+	// human's (`CrowdManager.cpp:1306-1367`) -- and the controller that owns this component is
+	// spawned lazily by the first accepted MoveTo, long after the hull is known. A body on any
+	// other agent must run plain path following, or the crowd would steer it against a mesh it
+	// does not path on. Retail has no crowd simulation at all, so this costs nothing against it.
+	const bool bOffTheCrowdsMesh = PathingHullKind() != ElysiumRetailHulls::DefaultHull;
+	Crowd->SetCrowdSimulationState(bFrozen || bOffTheCrowdsMesh
 		? ECrowdSimulationState::Disabled : ECrowdSimulationState::Enabled);
 }
 

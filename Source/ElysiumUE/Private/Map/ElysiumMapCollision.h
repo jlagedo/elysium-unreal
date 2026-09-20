@@ -109,7 +109,7 @@ public:
 private:
 	// The R4.2 cooked payload, when this map has one: adopt its two world body setups verbatim.
 	// Returns true when the world convex set was adopted (which is what makes the map walkable);
-	// false means no payload, and the sidecar readers below answer instead.
+	// false fails the load -- there are no sidecar readers behind this any more.
 	bool AdoptPayload(const FString& MapName);
 	// The level's own world-collision actor, when it carries one: its components are static and
 	// saved, which is what lets a navigation mesh be baked from them. Adopting it spawns nothing.

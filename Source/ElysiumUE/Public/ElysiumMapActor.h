@@ -982,6 +982,9 @@ private:
 	bool bMenuBackdrop = false;
 	bool bNavigationBuildRequested = false;
 	bool bNavigationBuildFailed = false;
+	/** When the baked mesh was first looked for -- the grace window runs from here, which is
+	 *  after the collision is Ready, not from map load. */
+	double NavigationGraceStartSeconds = 0.0;
 	// Set in EndPlay. After it, a DestroyNpcMotor call is the entity world's own teardown running
 	// against actors the engine has already destroyed, and must do nothing.
 	bool bMotorsRetired = false;

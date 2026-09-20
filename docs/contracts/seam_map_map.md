@@ -550,10 +550,12 @@ cooked buffers in the package. That is the "no runtime cook" the roadmap line as
 Version 1 cooked a single body from the player-solid brushes, which is all `.hulls` carried then.
 It now carries every brush answering any retail mask, led by its contents word, and both
 transports partition the world the same way: one body per signature, each wearing the generated
-profile that signature names. A version-1 payload still loads, adopted under the one signature its
-body stands for — blocks both pawns, silent about sight, which is exactly what its `BlockAll`
-component did. A payload whose `PayloadVersion` is newer than the build understands is REFUSED
-rather than half-read; falling back to the sidecar there would look like success.
+profile that signature names. A version-1 payload is REFUSED (0018 story 21): its single body could answer nothing about sight
+or the pedestrian volume, so reading it as a world would stand a map whose NPC clips and sight
+brushes had silently vanished. Any `PayloadVersion` other than the one this build authors is
+refused for the same reason -- half-reading a world looks like success. There is no sidecar to
+fall back to: the loose readers are gone and an unbaked map fails its load with the bake command
+named.
 
 Brush-entity rows carry a signature too, because a mover answers by its own brushes: the `SOLID`
 arm wears `ElysiumSigDyn_*`, the `WorldDynamic` twin that keeps `Block` on the `+use` ray and the
@@ -577,9 +579,12 @@ spawns nothing, and refuses a level carrying two actors rather than picking one.
 
 **The lane also bakes the map's navigation meshes**, in the same pass and from those same bodies,
 for the agents the map's graph names (`UsedHullBits`, staged by the jump-link lane). The runtime
-adopts a level that arrives with tiles and builds nothing; a level without one still builds at
-load. `RuntimeGeneration` is `DynamicModifiersOnly` and `bForceRebuildOnLoad` is unset, since a
-forced rebuild would discard the baked mesh on every load.
+adopts a level that arrives with tiles and builds nothing; a level WITHOUT one fails the load
+after a 30 s grace window, naming the bake command (0018 story 21 -- there is no run-time build
+arm any more). `RuntimeGeneration` is `DynamicModifiersOnly` and `bForceRebuildOnLoad` is unset,
+since a forced rebuild would discard the baked mesh on every load. `bInitialBuildingLocked` holds
+the game's navigation until the baked mesh is adopted, and `EnsureRuntimeNavigation` releases it
+there: held for ever, no dirty area a modifier raises would ever be rebuilt.
 
 ### Identity and naming
 

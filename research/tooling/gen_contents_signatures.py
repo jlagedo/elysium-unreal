@@ -497,17 +497,24 @@ def emit_ini_block(letters: str) -> str:
         "; The player's hull: the engine's Pawn profile on the player's own object channel, so a",
         "; brush can stop one pawn and not the other. NPCs stay on ECC_Pawn, which is what keeps",
         "; 'blocks an NPC' and 'cuts the NavMesh' one fact.",
+        "; Visibility=Ignore because the engine's own Pawn profile sets it: this profile mirrors",
+        "; Pawn, and an unnamed channel falls back to Block, which would make the player an",
+        "; occluder for every ECC_Visibility trace that Pawn is invisible to.",
         f"+Profiles=(Name=\"{PLAYER_PROFILE}\",CollisionEnabled=QueryAndPhysics,"
         f"ObjectTypeName=\"ElysiumPlayer\","
-        f"CustomResponses=((Channel=\"ElysiumUse\",Response=ECR_Ignore),"
+        f"CustomResponses=((Channel=\"Visibility\",Response=ECR_Ignore),"
+        f"(Channel=\"ElysiumUse\",Response=ECR_Ignore),"
         f"(Channel=\"ElysiumPick\",Response=ECR_Ignore),"
         f"(Channel=\"ElysiumSight\",Response=ECR_Ignore)),"
         f"HelpMessage=\"The player's hull: Pawn, on the player's own object channel.\","
         f"bCanModify=False)",
-        "; The player does NOT occlude sight. Retail's NPC line-of-sight mask 0x4091 carries no",
-        "; character bit, so a body standing between two points does not break the line -- the",
-        "; divergence already named on IElysiumEmbodiment::QueryLineOfSight. The sight channel is",
-        "; answered by brush contents, movers and props, which is the whole point of having it.",
+        "; The player does NOT occlude sight, and that is a NAMED DIVERGENCE rather than retail's",
+        "; arrangement (corrected 2026-09-20; this note claimed the opposite and was wrong).",
+        "; Retail's one sight mask is 0x2804091, which carries MONSTER 0x2000000, so in retail a",
+        "; body standing between two points DOES break the line. 0x804091 is that mask's brush",
+        "; half -- all a world body can answer, and all the contents signature is computed from.",
+        "; Job 7 wires the character arm; until then this channel is answered by brush contents,",
+        "; movers and props alone.",
         "",
         "; ElysiumPlayer answers exactly as Pawn does in every engine profile. A profile that does",
         "; not name a channel falls back to that channel's DefaultResponse, which is Block here, so",

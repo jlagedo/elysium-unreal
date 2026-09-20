@@ -295,6 +295,7 @@ void AElysiumMapActor::LoadMap()
 	bNativeAnimationPreloadFailed = false;
 	bNavigationBuildRequested = false;
 	bNavigationBuildFailed = false;
+	NavigationGraceStartSeconds = 0.0;
 
 	// Per-phase timing for the Maps Cog window: stamp closes the running phase and opens the next.
 	LoadPhases.Reset();
@@ -801,6 +802,12 @@ void AElysiumMapActor::PollRuntimeActivation()
 
 bool AElysiumMapActor::HasBakedNavigationMesh(const UNavigationSystemV1& Navigation) const
 {
+	// NOTE: any agent with tiles, deliberately. The map's own `UsedHullBits` is the right set to
+	// demand -- and `verify nav` demands exactly that offline, per agent, by name -- but the word
+	// does not reach the runtime yet: the place set that carries it is story 4's. Until it does,
+	// asking for "a mesh with tiles" is the strongest question this path can ask without
+	// inventing an agent set, and a level short of one agent is caught by the harness rather
+	// than here. Stated so the gap is visible instead of looking like thoroughness.
 	// Tiles, not merely a nav-data actor: an empty mesh saved in a level would otherwise read as
 	// "already built" and leave every NPC unable to path, with nothing said about it.
 	for (const ANavigationData* Data : Navigation.NavDataSet)
@@ -842,14 +849,30 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	if (Navigation != nullptr && HasBakedNavigationMesh(*Navigation))
 	{
 		bNavigationBuildRequested = true;
+		// The lock that got us here has done its job and must now come off. `bInitialBuildingLocked`
+		// stops `OnWorldInitDone` rebuilding over the baked tiles before the collision has loaded,
+		// but the engine releases it only for editor run modes, and `UNavigationSystemV1::Tick`
+		// gates `RebuildDirtyAreas` behind `!IsNavigationBuildingLocked()`. Left on, every dirty
+		// area a modifier raises would queue for ever -- which would make `DynamicModifiersOnly`
+		// buy nothing and story 7's door links impossible. Released HERE, once the baked mesh is
+		// in hand, so there is nothing left for a rebuild to destroy.
+		Navigation->ReleaseInitialBuildingLock();
 		UE_LOG(LogElysium, Log,
-			TEXT("runtime navigation %s: adopted the level's baked mesh after %.3fs, no build"),
+			TEXT("runtime navigation %s: adopted the level's baked mesh after %.3fs, no build "
+				"(initial build lock released)"),
 			*MapName, GetRuntimeWaitSeconds());
 		return;
 	}
 
-	// Not yet, rather than never: keep waiting while the grace window stands.
-	if (GetRuntimeWaitSeconds() < GElysiumNavAdoptGraceSeconds)
+	// Not yet, rather than never: keep waiting while the grace window stands. Measured from when
+	// the COLLISION became ready, not from map load -- a map whose collision takes most of the
+	// load would otherwise arrive here with the window already spent and fail on its first miss,
+	// which is the race this window exists to absorb.
+	if (NavigationGraceStartSeconds <= 0.0)
+	{
+		NavigationGraceStartSeconds = FPlatformTime::Seconds();
+	}
+	if (FPlatformTime::Seconds() - NavigationGraceStartSeconds < GElysiumNavAdoptGraceSeconds)
 	{
 		return;
 	}

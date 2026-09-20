@@ -59,10 +59,10 @@ AGENTS_MAX_COUNT = 31                  # FNavAgentSelector::AgentsMaxCount, NavA
 #: (`research/tooling/probes/census_links_hulls.py`, re-derived from the patch's own graphs).
 LINKED_HULLS = (0, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)
 
-#: The agent a body falls back to when its class's stand hull is not yet recovered.
+#: The hull a body falls back to when no class row claims it -- retail's own answer for that
+#: case, CAI_BaseNPC's constructor having zeroed both words before any derived one runs.
 DEFAULT_AGENT_HULL = 0
 
-#: Whether to install the agents in `DefaultEngine.ini`. NOT YET -- the mechanism that restricts
 #: them exists and is unverified against a running game.
 #:
 #: The list is inert only once something restricts it, because the navigation system will happily

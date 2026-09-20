@@ -44,6 +44,12 @@ public:
  * `UNavArea_Null` rather than a cost: an NPC must not path through the doorway at all, and a high
  * cost would only make it a last resort.
  *
+ * Note this is a SUBCLASS of `UNavArea_Null`, not that class, so Recast does not give it the
+ * reserved null-area id (`GetNewAreaID` compares the exact class). It still cuts, because it
+ * inherits `AreaFlags = 0` and no default query filter accepts a zero-flag polygon -- but the
+ * polygons are generated and then rejected rather than never rasterised, so `NavAreaAt` sees
+ * nothing walkable there while a raw tile dump still shows geometry.
+ *
  * The doors that DO carry a link -- 8 of the tutorial's 36, the hub's smoke-shop pair -- are not
  * cut here. They get their cut and their smart link together in story 7, so that no commit
  * in between turns a door NPCs use into a wall.

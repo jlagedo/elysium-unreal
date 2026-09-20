@@ -1,7 +1,6 @@
 #include "ElysiumNavBakeLibrary.h"
 
 #include "AI/NavigationSystemBase.h"
-#include "Builders/CubeBuilder.h"
 #include "Components/BrushComponent.h"
 #include "Engine/Polys.h"
 #include "ElysiumWorldCollisionActor.h"
@@ -12,6 +11,13 @@
 #include "NavigationSystem.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "UObject/UObjectIterator.h"
+
+#if WITH_EDITOR
+// UnrealEd, and `ElysiumUE.Build.cs` takes that dependency for Editor targets only. Every body in
+// this file runs from the bake, which is an editor commandlet; the guard is what keeps a Game
+// target compiling at all (`ElysiumMapBakeLibrary.cpp` guards the same way).
+#include "Builders/CubeBuilder.h"
+#endif // WITH_EDITOR
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNavBake, Log, All);
 
@@ -300,6 +306,13 @@ TArray<FString> UElysiumNavBakeLibrary::CreateNavigationForAgents(UWorld* World,
 
 bool UElysiumNavBakeLibrary::PlaceNavBounds(UWorld* World, const FBox& BoundsCm)
 {
+#if !WITH_EDITOR
+	// The brush builder is UnrealEd's. Nothing in a packaged game places navigation bounds -- the
+	// mesh is baked and adopted -- so this answers plainly rather than pretending to succeed.
+	UE_LOG(LogElysiumNavBake, Error, TEXT("PlaceNavBounds is editor-only"));
+	return false;
+#else
+
 	UNavigationSystemV1* Nav = NavSystem(World);
 	if (Nav == nullptr || !BoundsCm.IsValid || BoundsCm.GetSize().IsNearlyZero())
 	{
@@ -331,6 +344,7 @@ bool UElysiumNavBakeLibrary::PlaceNavBounds(UWorld* World, const FBox& BoundsCm)
 	Nav->OnNavigationBoundsUpdated(Volume);
 	UE_LOG(LogElysiumNavBake, Log, TEXT("nav bounds %s"), *BoundsCm.ToString());
 	return true;
+#endif // WITH_EDITOR
 }
 
 TArray<FElysiumNavAgentBuild> UElysiumNavBakeLibrary::BuildAgentNavMeshes(UWorld* World)
@@ -424,8 +438,11 @@ TArray<FElysiumNavAgentBuild> UElysiumNavBakeLibrary::BuildAgentNavMeshes(UWorld
 		Row.AgentRadius = Mesh->GetConfig().AgentRadius;
 		Row.AgentHeight = Mesh->GetConfig().AgentHeight;
 		Report.Add(Row);
+		// `Bytes` is the COMPRESSED TILE CACHE, not the tile data, and `Seconds` is the whole
+		// build rather than this agent's share -- the engine builds every agent in one pass and
+		// does not attribute it. Named here so a per-agent reading of either is not invented.
 		UE_LOG(LogElysiumNavBake, Log,
-			TEXT("agent '%s' (r %.2f h %.2f): %d tile(s), %d byte(s)"),
+			TEXT("agent '%s' (r %.2f h %.2f): %d tile(s), %d cache byte(s)"),
 			*Row.Agent, Row.AgentRadius, Row.AgentHeight, Row.Tiles, Row.Bytes);
 	}
 	if (Report.IsEmpty())
@@ -441,13 +458,29 @@ TArray<FElysiumNavAgentBuild> UElysiumNavBakeLibrary::BuildAgentNavMeshes(UWorld
 	// Over the WORLD's actors, not `NavDataSet`: the spawned-but-empty meshes are in the level
 	// without being in the registered set, so a pass over the set alone finds none of them and
 	// they reach the save anyway.
+	TSet<FString> Wanted;
+	for (const FElysiumNavAgentBuild& Row : Report)
+	{
+		Wanted.Add(Row.Agent);
+	}
 	TArray<ARecastNavMesh*> Unwanted;
 	for (TActorIterator<ARecastNavMesh> It(World); It; ++It)
 	{
-		if (It->GetNumActiveTiles() == 0)
+		if (It->GetNumActiveTiles() > 0)
 		{
-			Unwanted.Add(*It);
+			continue;
 		}
+		// An empty mesh for an agent this map ASKED for is a failed build, not clutter. Dropping
+		// it would leave the level short of an agent with nothing said, and the load would adopt
+		// whatever else had tiles.
+		if (Wanted.Contains(It->GetConfig().Name.ToString()))
+		{
+			UE_LOG(LogElysiumNavBake, Error,
+				TEXT("agent '%s' was asked for and built no tiles; the level is short a mesh"),
+				*It->GetConfig().Name.ToString());
+			continue;
+		}
+		Unwanted.Add(*It);
 	}
 	for (ARecastNavMesh* Mesh : Unwanted)
 	{
