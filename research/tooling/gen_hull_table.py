@@ -75,7 +75,7 @@ DEFAULT_AGENT_HULL = 0
 #: `bAutoCreateNavigationData` off, and that combination decides whether every map still reaches
 #: Active -- a question only a real map load answers, which could not be run here. Flipping this
 #: without that evidence would risk every map's navigation on an assumption.
-EMIT_AGENTS_INI = False
+EMIT_AGENTS_INI = True
 
 #: Recast cell size per agent, centimetres. A cell must resolve the narrowest gap the hull can
 #: pass, so it scales with the radius rather than being one project-wide number: the rat's 15 cm

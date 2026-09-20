@@ -127,17 +127,23 @@ def test_the_header_marks_which_hulls_carry_links():
             assert "true" in line
 
 
-def test_the_agents_are_not_installed_until_something_restricts_them():
-    """14 declared agents with auto-create on would build 14 meshes on every map load.
+def test_the_agents_are_installed_only_beside_the_thing_that_restricts_them():
+    """Declaring 14 agents is safe only because nothing may create data for all of them.
 
-    The block is generated and tested here; it reaches `DefaultEngine.ini` only when job 5 adds
-    the per-map `SupportedAgentsMask` and turns `bAutoCreateNavigationData` off.
+    With auto-creation left on, the navigation system spawns and builds every supported agent --
+    14 Recast meshes on every load of every map, most for creatures the map never spawns. The two
+    restrictions are `UElysiumNavBakeLibrary::SetMapNavAgents` (the agents a map's own graph
+    names) and `AElysiumMapActor::RestrictNavigationToUsableAgents` (the one agent a body stands
+    on). Verified on both witnesses: each reached Active having built exactly one mesh, `Human`
+    at radius 33.0.
     """
 
-    assert gen.EMIT_AGENTS_INI is False
+    assert gen.EMIT_AGENTS_INI is True
     ini = (REPO / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8")
-    assert "+SupportedAgents=" not in ini
-    assert gen.BEGIN_MARKER not in ini
+    assert ini.count("+SupportedAgents=") == 14
+    assert gen.BEGIN_MARKER in ini
+    # The one line that keeps the other 13 from being built behind the project's back.
+    assert "bAutoCreateNavigationData=False" in ini
 
 
 def test_the_ini_block_is_ascii_and_round_trips():
