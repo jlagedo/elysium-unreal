@@ -496,7 +496,7 @@ hunt-list builders `0x10306700` / `0x10306f60` into the hunt cell (`TASK_CREATE_
 0xae` / `TASK_FIND_HUNT_PATROL_TARGET 0xaf`, story 10h). `sp_tutorial_1` sends `SetupPatrolType`
 then `FollowPatrolPath` 0.1 s later to `sentry2` and `monk_upstairs_podium` (the Society hub;
 the packed AIN has no nearby node, but the selected install's loaded/rebuilt network and
-patrol binding must be confirmed before predicting each task's refusal — 0018 story 3).
+patrol binding must be confirmed before predicting each task's refusal — 0018 story 4).
 
 **Lookup correction, 2026-09-17:** `0x102d2840` compares bytes directly, not `stricmp`.
 `A1` and `a1` are distinct patrol tokens. On a lookup result of `-1`, `InputFollowPatrolPath`
@@ -513,7 +513,52 @@ FOLLOW_PATROL_PATH/_WALK/_HUNT`, or whatever the input named. `SCHED_TROIKA_IDLE
 **Assembly correction, 2026-09-17:** it joins `0x102a5904`, writes the movement activity through
 `0x102ee250`, clears memory mask 2 through `0x102a98e0`, and completes. This arm reads no
 patrol object or AIN node and hands no list to navigation. The upstream source of the route
-that the following `WAIT_FOR_MOVEMENT` expects remains unrecovered.
+that the following `WAIT_FOR_MOVEMENT` expects was closed 2026-09-19 — there is none:
+
+**`SCHED_TROIKA_IDLE_PATROL` has no route, and shipped data never asks for one (0018 story 11,
+2026-09-19).** _Two independent opencode walks, diffed; `OnScheduleChange` and the
+`TranslateSchedule` arms re-read from the DLL here._ No task of `0x46` calls `SetGoal`, no
+schedule-start hook or think installs a goal, and the patrol index advances ONLY in
+`TASK_NEXT_PATROL_POINT` (`0x7d` / `0x7e` → `0x102aa9e0` → `NextPoint 0x10307b80`). Worse for a
+leftover: `CAI_BaseNPCTroika::OnScheduleChange` (`0x102a0940`) CLEARS the navigator goal
+(`0x102ee270`) on every schedule change, unless `m_bfAINPCFlags & 8` (the `SET_PRESERVE_PATH`
+bit) stands or the navigator is mid-jump or mid-climb (`m_navType` 1 or 3). So under `0x46`
+`WAIT_FOR_MOVEMENT` finds goal type 0 and COMPLETES at once — no fail code — and the NPC
+stands in its patrol-walk activity until `WAIT_PVS`. Two doors lead to `0x46`: a patrol path
+whose schedule word (`path+4`) names it — and over every shipped `SetupPatrolType` argument
+(32 BSPs and the level scripts) the word is only ever `FOLLOW_PATROL_PATH`, `_WALK` or `_HUNT`,
+with zero occurrences of `IDLE_PATROL` and zero of `WalkToNode` — and `TranslateSchedule`
+(`0x102b12f0`), which turns the base `SCHED_IDLE_WALK` (2) into `0x46` and 3 into `0x47`; no
+producer of base schedule 2 was found in the image. The programs that actually walk a patrol
+are `0x65` / `0x67` / `0x69`: `SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_PATROL_POINT;
+RUN_PATH | WALK_PATH | WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; FACE_PATROL_INTEREST;
+DO_PATROL_INTEREST_ACTIVITY; NEXT_PATROL_POINT` — one type-4 goal per point.
+
+The path object, pinned: `0x114` bytes from a pool of 32 (`0x10934158`; "Patrol path pool is
+dry"); `{+0 type, +4 schedule, +8 repeats, +0xc count, +0x10 current, +0x14 ids[64]}`. The
+type table `0x1049df20` (start cap, step, next type): type 0 `{0, +1, 0}` and type 1
+`{0x7fff, −1, 1}` LOOP; type 2 `{0, +1, 3}` and type 3 `{0x7fff, −1, 2}` PING-PONG by swapping
+type at each end. `NextPoint` steps the index; out of range with `repeats < 1` means the path
+is exhausted (the caller destroys it, `0x1029f5d0`), otherwise `repeats--`, the type becomes
+the row's next type and the index restarts at `min(count − 1, cap)`. The installer
+`0x1029f460(npc, slot, repeat, type, schedule, ids, reinit)`: `reinit = 0` appends to an
+existing path keeping its type, repeats and schedule (`FollowPatrolPath`, which therefore
+never sets the schedule); `reinit != 0` resets it first (`SetupPatrolType`, `WalkToNode`, the
+hunt builders) — which is why scripts always call `SetupPatrolType` BEFORE `FollowPatrolPath`;
+a non-zero schedule word then rolls the patrol interest (`0x1029f650`) and forces that
+schedule (`0x102ae750`). `SetupPatrolType` resolves its schedule token as given, then as
+`SCHED_<token>`, then as `SCHED_TROIKA_<token>` (`0x1029f370`).
+**The token lookup is case-INsensitive (closed 2026-09-19).** `0x102cadb0` → the schedule-name
+registry `DAT_109203cc` → `0x10249aa0`, a symbol table built by `0x1024a230` with
+`CUtlSymbolTable(0, 0, caseInsensitive = 1)` (`0x1024b2d0` picks the comparator `0x1024b230`,
+which calls the CRT `_stricmp 0x1043e780`). So `la_ventruetower_2`'s `Follow_Patrol_Path_Walk`
+misses as given and resolves on the second try as `SCHED_Follow_Patrol_Path_Walk` =
+`SCHED_FOLLOW_PATROL_PATH_WALK`. (The probe string is ADDED to the symbol table by the lookup —
+`0x1024b5e0` is `AddString` — a leak with no game effect.) All three misses →
+`DevMsg "ERROR (%s): Could not find sched…"` and schedule 0. **`WAIT_PVS` on the Troika line**
+is the run arm `0x102aad7e` — Troika `RunTask` case 5, walked in `lifecycle.md`: spawnflag
+`0x400` or `ShouldThinkFrequently` completes at once, else the PVS test against
+`m_hClosestPlayer` completes it; the walk that saw only the base arm was wrong.
 
 **The tasks.** `TASK_GET_PATH_TO_PATROL_POINT 0x7a` = `0x102aa640(&m_sppPatrolPath)` (Troika
 `StartTask` idx 17): no object → `TaskFail(0x1d)`; current node id −1 → `TaskFail(0x1d)` **(not
@@ -559,7 +604,8 @@ patrol in the shipped corpus that authors none.
 a refused point every think and the three inputs are not wired to a program install. The
 2026-09-17 task audit closes the two task-body misconceptions above; the entity census identifies
 `target_name` / `ip_percent` for `+0x468` / `+0x46c`. The upstream route for `TASK_PATROL_PATH`
-and the selected install's node associations remain open. See `navigation-jump-links.md`
+and the selected install's node associations were closed 2026-09-19 (above, and
+`../navigation-jump-links.md`). See `navigation-jump-links.md`
 § "Task readers of network data" for topology consumers beyond patrols.
 
 #### The alert programs, verbatim (2026-09-12, story 10d)
@@ -918,9 +964,11 @@ Troika `StartTask` jump table `0x102a7ab8`/`0x102a77f8`):
   `_DAT_10457f60` added to z and is applied through `IPhysicsObject` slots `0xa0`/`0x9c`
   (`GetPosition`/`ApplyForceCenter`). No damage is dealt here; the prop's own impact does it.
 
-Unrecovered after this pass: `TASK_GET_PATH_TO_HINTNODE` / `SNAP_TO_HINT`'s arms (shared with
-the cover family), the `0x1049a1b0` tolerance cell's value, `_DAT_10451ad0` / `_DAT_10447ee0` /
-`_DAT_10457f60`.
+Unrecovered after this pass (`TASK_GET_PATH_TO_HINTNODE` / `SNAP_TO_HINT`'s arms were closed
+2026-09-19: `../navigation-jump-links.md` § "The hint-path, snap and cower arms, walked"): nothing — the four cells are plain `.rdata` floats with no writer in the image (read from
+the file 2026-09-20): `0x1049a1b0` = **−2.0** (the goal tolerance), `_DAT_10451ad0` = **16.0**
+(the kick's z lift on the enemy origin), `_DAT_10447ee0` = **1000.0** (the mass-term cap),
+`_DAT_10457f60` = **150.0** (added to the impulse's z).
 
 **The possession arm's virtuals**: slot 304 = `CBaseCombatCharacter::GiveBaseFightingItems`
 (Troika `0x102b5b20`: no melee (slot 307) and no ranged (slot 308) weapon → `GiveItem

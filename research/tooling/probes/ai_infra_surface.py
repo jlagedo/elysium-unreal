@@ -97,14 +97,17 @@ QUERY_SPECS = (
     ("squad", 0x10316700, "leave",
      "does nothing: retail's LeaveSquad body is an empty RET 4 stub"),
 
-    ("coordinator", 0x1025DB50, "is full",
-     "true when the registered melee count has reached the coordinator's slot count"),
+    ("coordinator", 0x1025DB50, "has room",
+     "true while the registered count is below the cap (2); corrected 2026-09-19 "
+     "— earlier read as \"is full\""),
     ("coordinator", 0x1025DB70, "admit",
-     "admits the NPC to a melee slot when capacity and registration rules allow it"),
+     "already registered answers true; full forwards to the evicting add with the "
+     "candidate's enemy distance; else appends"),
     ("coordinator", 0x1025DCA0, "request attacker slot",
-     "requests the attacker-side melee slot and answers whether it was acquired"),
+     "adds with room; when full evicts the member with the strictly greatest enemy "
+     "distance above the threshold, or refuses"),
     ("coordinator", 0x1025DDD0, "release",
-     "removes the NPC from the coordinator's registered handle array"),
+     "removes the NPC by moving the last entry into its slot"),
     ("coordinator", 0x1025DE90, "is unregistered",
      "returns true when a linear scan finds no coordinator entry for this NPC"),
 

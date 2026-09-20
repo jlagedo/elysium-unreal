@@ -1314,15 +1314,45 @@ that stands in front of every `SetCondition` in this family.
 
 `0x102a0bc0` (178 bytes) is the other end: the navigator's waypoint-advance (`FUN_102f0400`) hands
 it `path->CurWaypoint` and it decides whether that waypoint *is* a live crossing. Six gates, all
-required — a non-null waypoint, `waypoint+0x10 >= 0` (an entity index), `waypoint+0x30 != NULL` (a
-hint record), `waypoint+0x28 & 0x4`, the same path type `8`, and a path node found by
-`0x102f96e0(entity[index], hint->+0x10)` whose `+0x64` carries the live phase bit. Only then
+required — a non-null waypoint, `waypoint+0x10 >= 0` (its NODE id), `waypoint+0x30 != NULL` (the
+NEXT waypoint — `102a0bdc MOV EBX,[ESI+0x30]`), `waypoint+0x28 & 0x4`, the same path type `8`, and
+the LINK from this waypoint's node (`network->nodes[id]`, `102a0c11`) to the next waypoint's node id
+(`102a0c26 MOV EDX,[EBX+0x10]`), found by `0x102f96e0(node, nextId)`, whose `+0x64` carries the live
+phase bit. _(Corrected 2026-09-19: the 09-13 walk read `+0x10` as an entity index and `+0x30` as a
+hint record.)_ Only then
 `0x102a0b90`, which is two statements and no gate: `m_bfAINPCFlags |= 0x4` and
 `m_pCrosswalkLink = node`. The waypoint's own bit 2 at `+0x28` and `AT_CROSSWALK`'s bit 2 share a
 number by coincidence; the second is written only on success.
 
-**Unrecovered:** `DAT_10924a6c`; the meaning of the waypoint's `+0x28` bit 2; whether the four phase
-bits are authored per link or written by a traffic-light entity. **Not built:** this runtime has no
+**What holds the body — the movement sink's slot 1, `0x10298340` (2026-09-19).** The Troika
+override of `CAI_DefMovementSink` slot 1 (the sub-object at `NPC+0x19b0`; the SDK's
+`OnCalcBaseMove` position) runs before the base `0x1027dc10`. **Corrected 2026-09-19 (review
+against the listing): the `AT_CROSSWALK` bit it tests is the OBSTRUCTING NPC's, not the
+mover's** — `[arg1+0x60]` is the move trace's obstruction entity, `[+0x98]` that entity's Troika
+self-pointer, `[+0x14b8] >> 2 & 1` its flag (the base body reads the same `+0x60` and then
+`+0xa4`, the door self-downcast, which places this slot at the SDK's obstruction callback, not
+`OnCalcBaseMove`). So the rule is "I am blocked by an NPC that is waiting at a crossing": then
+it re-runs the arrival test `0x102a0bc0` on MY navigator's current waypoint: still red →
+`*pResult = 0` and "handled", so the move is swallowed for this frame and I queue behind it;
+otherwise, within **32 units** of my waypoint (`d² <= 1024.0`, `0x1045d650`, 3-D) → it advances
+the path (`0x102f0400`) itself and answers handled; otherwise the base. The waiter's own stop is
+the schedule's; this body is what keeps the walkers behind it from shoving through. Also: `OnStateChange 0x102ae140` clears `AT_CROSSWALK` on every call; `Save` writes the
+link as its two endpoint node ids and `OnRestore 0x102998c0` finds it again through
+`0x102f96e0`; and the throttle test is STRICT (`102a0de0 AND EAX,0x4100 / JNE` skips on
+`curtime <= stamp`) — one opencode walk read it as inclusive and was wrong.
+
+**Closed 2026-09-19 (0018 story 7; `navigation-jump-links.md` § "What the shipped graphs and maps
+actually use").** The waypoint's `+0x28` bit 2 is the SDK's `bits_WP_TO_NODE`: BOTH route builders
+put it on every graph-node waypoint (`102fcc41 PUSH 4` in the primary `0x102fcbd0`; base 4 in the
+pedestrian `0x102fcd00`), so the gate only excludes the goal and detour waypoints. What the
+pedestrian builder adds for a crosswalk pair is `0x20`, the SDK's `bits_WP_DONT_SIMPLIFY`, on the
+waypoint and the one AFTER it on the route (`102fcd98 OR AL,0x20` hits the waypoint built just
+before, and the chain is built goal → start by prepending; corrected 2026-09-20). The phase bits are neither authored per link nor
+per phase: `0x102f97c0` (from `CAI_Hint::InputWalk` / `InputDontWalk`) is their only writer and
+sets or clears all four at once, and no shipped AIN carries any, so the 64-second clock never
+changes an answer — the cycle is the map's `logic_timer` (`sm_hub_1`, `hw_hub_1`: 40 s).
+
+`DAT_10924a6c` is the ConVar `ent_trace_conditions` — the static object at `0x10924a68` (registrar `0x1028bde0`: name `0x105d7ad0`, default `"1"`, help "When ent_trace is on, this will dump info about conditions also."), whose `+4` word is the pointer every condition setter reads a value through (slot 1) and discards: a debug-trace read, no game state (closed 2026-09-19). **Not built:** this runtime has no
 navigator path type, no node graph and no navigation link, so all three bodies refuse at the seam
 that answers for them, and `RunAI` (slot 432) is still a generated stub, so nothing calls the rule.
 

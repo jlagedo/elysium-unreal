@@ -488,7 +488,59 @@ names, `SQUAD_SLOT_ATTACK1/2` (`0x10316e80`, ids `0x3b9aca00/01`), with no consu
 registers zero squadslots; there is no `OccupyStrategySlot`/`VacateStrategySlot`;
 `m_squadSlotsUsed` is touched only by ctor, dtor and save. Do not build them.
 
-UNRECOVERED: `CAI_Squad` `0x10316890/ab0/bc0/ec0/fa0/fd0` (memory-forwarding wrappers).
+**The six "wrappers", closed 2026-09-19 (0018 story 14).** Two opencode walks and an adjudication
+pass; `0x102dfc10` and `0x102b5120` re-read here. Only three are squad code, and a fourth and fifth
+sit beside them: each walks `members[0 .. count-1]` (`squad+0x1c`, count `+0x5c`), skips a handle
+that does not resolve, applies NO member-0 rule and NO `m_iSquadDisconnected` test, and dispatches
+one NPC vtable slot on the member with its arguments forwarded verbatim. They are what a SHARED
+`CAI_Memory` calls where a private one (`memory+8 == 0`) calls the same slot on its one outer NPC.
+
+| fan-out | member slot | caller in `CAI_Memory` | Troika body | base body |
+|---|---|---|---|---|
+| `0x103167f0` | 54 `+0xd8` (enemy) | `RefreshMemories 0x102df320`; AND of the answers, first false ends it | `0x102b50b0`: true unless the argument is my current enemy, a schedule runs and condition `0x47` does not interrupt it | `0x10026910` false |
+| `0x10316890` | 55 `+0xdc` (enemy, pos, dir) | `UpdateMemory 0x102df700`, new-record arm only | `0x102b5100` empty | empty |
+| `0x103169a0` | 56 `+0xe0` (enemy, record's six dwords, tag) | `0x102df320`, `0x102dfaa0`, `ClearMemory 0x102dfc10` — a record being dropped | `0x102b5120`: when the enemy's `m_lifeState` (`+0x200`) is non-zero and it is my `m_hLastEnemy` (`+0x1a94`), clear `m_hLastEnemy` | empty |
+| `0x10316ab0` | 57 `+0xe4` | `0x102dfd90` (then `record+0x35 = 1`) | `0x102b51a0` empty | empty |
+| `0x10316bc0` | 58 `+0xe8` (enemy) | `0x102dfed0`, `0x102e0290`, `0x102e0470`, on a lookup miss | `0x102b51c0` empty | empty |
+
+So the whole observable effect of the five is slot 54's veto on dropping a record and slot 56's
+`m_hLastEnemy` clear; no class below the Troika line overrides any of them. `0x10316ec0`,
+`0x10316fa0` and `0x10316fd0` are not squad code: the `g_ppszTaskFailureText` self-check (table
+`0x106152b0`, 42 rows), `TaskFailureToString` (`code < 0x2a`, signed) and a task-name id lookup.
+
+Squad facts the same walks fixed. The object is `0x78` bytes, allocated only by `FindCreateSquad`;
+the global list head is `0x10936c68`, linked through `squad+0`, name at `+4`. The overflow test is
+`count + 1 <= 16`; the message is `"Error!! Squad %s is too big!!! Replacing last member"`.
+`RemoveFromSquad` shifts down from the found index, then `count--` clamped at 0; the per-survivor
+slot 578 is `0x101a6cc0`, a bare `RET 4` with NO override in any of 77 classes — dead. A squad is
+never freed or unlinked in a level: an empty squad stays listed (`CNPC_VCamera::InitSquad
+0x10369bd0` creates one and immediately removes itself), `Event_Killed` and `UpdateOnRemove` leave
+`m_pSquad` pointing at it, and `DeleteAllSquads` runs only from
+`CAI_SystemHook::LevelShutdownPostEntity` (`0x102cc410`). `GetMember`'s member-0 rule fires only
+when member 0's handle RESOLVES and its `m_iSquadDisconnected > 0`; a stale member 0 bypasses it.
+`UpdateOnRemove`'s guard `0x10315ec0` skips the removal for a disconnected NPC.
+
+`DisconnectFromSquad 0x1026d050`, listing re-read: `m_iSquadDisconnected > 0` skips to the
+increment; otherwise `LeaveSquad` (only when `m_pSquad`) and then — NOT gated on having a squad —
+`ClearMemory` on `g_DisconnectedEnemies` with the tag `"…AI_BaseNPC.cpp(3894) :"`; the increment
+runs on EVERY call. `ClearMemory` pops each record, runs the slot-56 notify for it, and frees it.
+The only three stores to `+0x5bb0` in the image are that increment and `ReconnectToSquad`'s
+decrement and zero-floor (`0x1026d0ce`, `0x1026d0e8`), after which it clears `m_bfAINPCFlags2`
+bits 31 and 23 unconditionally. Callers: task `0xf5` (`102a536e`: disconnect, `flags2 |=
+0x80800000`, complete), `DoPossession`, `DoFrenzy`, the oblivious wrapper `0x1026d130`, and the
+ManBat minion sweep `0x1038fc80`; reconnect from its twin `0x1038fd40` and from `0x101def10` when
+`flags2 & 0x800000`.
+
+`logic_squad_condition` resolves its squad ONCE (`0x10135bd0` caches `FindSquad(squad_name)` at
+`+0x488`, never re-resolved or invalidated); since squads die only at level shutdown the pointer
+cannot dangle. `Test 0x10135c10`: invalid condition id → false; no squad → warning and false; no
+members → false, silently; the first member with `HasCondition` → true, re-reading the count each
+pass. `SquadSeesPlayer` is NOT a condition: the one string (`0x105904fc`) is a Python method
+(`0x10196f30`) that scans NPCs within 4096 of the player and compares squad names — and reads
+address 4 for a disconnected NPC, a latent fault.
+
+UNRECOVERED: the engine-side dispatcher of `LevelShutdownPostEntity`; the fill path of the
+condition-name registry `0x109203dc`.
 Closed 2026-09-12 (story 17): `CAI_BaseNPC+0x98` is the Troika self-pointer ("The three cached
 downcasts"); slot 578 is an empty virtual and slot 168's Troika body returns `m_hLastEnemy` under
 state bit 6 ("The think cadence, decoded", closed items); **`m_iMySquadSlot` is `+0x5dac`**
@@ -715,8 +767,72 @@ caches the pointer at `m_pAttackCoordinator` (`+0x65e8`) and the name at
 `m_sAttackCoordinatorName` (`+0x65ec`), storing NULL for an empty name, and answers true. A null or
 empty argument is refused before the walk.
 
-**Unrecovered:** what a coordinator object is beyond the three fields its five entry points read — a
-cap at `+0x00`, a handle array at `+0x04` and a live count at `+0x10`.
+The object itself is recovered in the next section. The binder is the only reader of the three
+globals, and its only dispatch site is `CAI_BaseNPCTroika::Precache` (`0x10298ad0`, slot 608 through
+`+0x980`) with the literal `"Normal"`, result ignored; so "Player" and "Boss" are built and never
+bound by anything in `vampire.dll`. `+0x65e8` is not in the datamap; `+0x65ec` is (SAVE) and has
+no reader in the image.
+
+### The attack coordinator object — `0x1025d880` … `0x1025df40` (2026-09-19, 0018 story 15)
+
+_Recovered 2026-09-19 by two independent opencode walks and an adjudication pass; the builder, the
+evict path `0x1025dca0`, the angular query `0x1025df40` and the lifetime chain re-read from the
+listing._
+
+**Lifetime.** Three plain heap objects of `0x28` bytes — no vtable, no RTTI, no datamap, not an
+entity, never saved. `0x1025d880` allocates each and constructs it as `(cap 2, name)` —
+`DAT_1090fbec` "Normal" (`0x105c89dc`), `DAT_1090fbf0` "Player" (`0x10547404`), `DAT_1090fbf4`
+"Boss" (`0x105a0c78`); an allocation failure stores NULL. It runs as the LAST statement of the
+`CWorld` constructor (`0x1023b840 -> thunk 0x10011bcb -> 0x1028d770 -> thunk 0x1000a01f`, reached
+from the `worldspawn` factory `0x1023ae40`); `0x1028d770` also loads `InterestingPlaceTypeList` and
+precaches the two dialog emitters first. `0x1025d940` frees all three (`0x1025da20` purge, then
+delete) and zeroes the globals; it is the FIRST statement of the `CWorld` destructor (`0x1023ba30 ->
+thunk 0x100134ad -> 0x1028d800`). So every map starts with three empty coordinators and no handle
+survives a level change. The corpus callers index misses this double-thunk chain; `vtmb_grep
+thunk_FUN_1028d770` finds it.
+
+**Layout** (constructor `0x1025d9d0`, `RET 8`): `+0x00` cap (int, 2 for all three, written only
+here), `+0x04` `EHANDLE*` array, `+0x08` allocated count, `+0x0c` grow step (8), `+0x10` live
+count, `+0x14` array mirror, `+0x18` `char name[16]` (`Q_strncpy` 15). `0x1025e120` returns
+`this+0x18`. Growth `0x1025e140`: 0 → 8, then +8.
+
+**The entry points**, every handle resolved through `0x10566458` (`h & 0x1fff`, serial `h >> 13`,
+entity at cell `+4`, serial at `+8`); an unresolvable handle is skipped, never purged:
+
+| address | answer |
+|---|---|
+| `0x1025db50` | `count < cap` (signed `SETL`): **"has room"**, not "is full" |
+| `0x1025db70` | add: a live entry already resolving to this NPC answers 1 with no insert; `count >= cap` tail-calls `0x1025dca0(npc, 1)`; else append at `array[count]`, `count++`, answer 1. A NULL NPC also tail-calls `0x1025dca0` (unbounded recursion with room; no caller passes NULL) |
+| `0x1025dca0` | add-or-evict `(npc, useDist)`: with room, `0x1025db70`. Full: threshold = the candidate's `m_flEnemyDist` (`+0x6268`) when `useDist`, else `0.0f` (`0x104454c4`); scan `0..count-1` for the member with the STRICTLY greatest `m_flEnemyDist` above the running best (`FCOM`/`TEST AH,5`/`JP`: equal and NaN keep the earlier); none → answer 0, nothing changed; else release that member (`0x1025ddd0`) and `0x1025db70` the candidate |
+| `0x1025ddd0` | release: first entry resolving to the NPC is overwritten by the LAST entry (`memmove(&a[i], &a[count-1], 4)`), `count--`; order is not preserved; not found or NULL: no-op |
+| `0x1025de90` | 1 when the NPC is **absent** (or NULL, or count 0), 0 when present |
+| `0x1025df40` | angular separation, `(npc, enemy)`: 0 when either is NULL or `count < 2`; else for every other member the signed `AngleDiff` (`0x1013d580`) between its bearing to the enemy and this NPC's (`atan2` over slot-220 positions, ×57.29578), keeping the smallest magnitude from 360.0; ≤ 0.0 answers `-1`, else 1. A stale member handle resolves to NULL and is then dereferenced — a latent crash. Caller: `CAI_BaseNPCTroika::StartTask 0x102a1910` |
+
+**Callers**, all through thunks: `0x1025db70` from slot 599 (`0x102b5650`, the `CNPC_VAndreiBlood`
+copy `0x10385ab0`, `0x103c19e0`, `0x103c3960`); `0x1025dca0` with `useDist = 0` from slot 600
+(`0x102b57c0`, `0x10385c30`, `0x103c1a60`, `0x103c39e0`) and with `useDist = 1` only from
+`0x1025db70`'s full arm; `0x1025ddd0` from slot 601 (`0x102b5880`, `0x10385cf0`, `0x103c1ad0`,
+`0x103c3a70`); `0x1025db50` and `0x1025de90` from slot 602 (`0x102b5900`, `0x10385d70`,
+`0x103c1b10`, `0x103c3ab0`). `0x10385ab0` calls `0x1025db70` TWICE: once before the
+`m_bfNPCFrenziedFlags & 0x1000` test with the result discarded (`0x10385b5d`), and again only when
+the bit is clear, whose result decides (`0x10385b7b`); the duplicate scan makes the second call a
+no-op on success.
+
+**Release sites.** Slot 601 is the only remover, dispatched from 23 `CALL [reg+0x964]` sites:
+`CAI_BaseNPCTroika::Event_Killed` (unguarded) and `UpdateOnRemove` (guarded on `+0x65e8`), and the
+`SelectScheduleMeleeCombat` arms of `CAI_BaseNPCTroika` (`0x102b6c30`), `CNPC_VHuman`,
+`CNPC_VAsianVampire`, `CNPC_VMingXiao`, `CNPC_VSabbatLeader` and `CNPC_VSheriffMan`, plus
+`0x102b6fe0` and `0x102b8620`, each behind its own `m_bInMelee` / slot 602 / condition guard
+(`0x59`, `9`, `0x1a`, `0x3a`, `0x48`).
+
+**Correction.** `population.md`'s surface row named `0x1025db50` "is full, true when the count has
+reached the cap"; the listing answers the opposite polarity, and slot 602's "full" arm is the
+`0x1025db50() == 0` case. The inequality there is inclusive: `2 * range <= m_flEnemyDist`
+(`FCOMP [ESI+0x6268]` / `TEST AH,0x41` / `JP`), NaN not taking it.
+
+**Unrecovered:** any binder for "Player" or "Boss" outside `vampire.dll`; the engine-side order in
+which a save-game load re-instantiates `worldspawn` (and so rebuilds the objects) relative to the
+restored NPCs' precache.
 
 ### The follower-distance ladder `0x102b93c0`
 

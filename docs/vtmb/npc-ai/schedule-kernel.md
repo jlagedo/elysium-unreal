@@ -905,7 +905,7 @@ return;` then `fTaskStatus = 4`. `CAI_Motor` slot 2 (`0x102623c0`) forwards to i
 `m_pOuter (+0x4)` and `CAI_Motor` slot 1 (`0x102623a0`) is `JMP [[m_pOuter] + 0x700]` — the owner's
 slot 448 `TaskFail`, unchanged. `[VtMB]`
 
-**Unrecovered:** `DAT_10924a6c` and its slot 1.
+`DAT_10924a6c` is the ConVar `ent_trace_conditions` — the static object at `0x10924a68` (registrar `0x1028bde0`: name `0x105d7ad0`, default `"1"`, help "When ent_trace is on, this will dump info about conditions also."), whose `+4` word is the pointer every condition setter reads a value through (slot 1) and discards: a debug-trace read, no game state (closed 2026-09-19).
 
 ### `0x102a18a0` — the `TASK_WAIT` deadline
 
@@ -913,7 +913,7 @@ slot 448 `TaskFail`, unchanged. `[VtMB]`
 m_flWaitFinished = curtime + _DAT_10447ee0;` — an operand at or below zero waits a retail default
 rather than not at all. `[VtMB]`
 
-**Unrecovered:** `_DAT_10447ee0`'s value.
+`_DAT_10447ee0` = **1000.0** (a `.rdata` float, no writer; read 2026-09-20).
 
 ### `0x1028a2a0` — `CAI_BaseNPC::PreSelectSchedule`
 
@@ -941,7 +941,8 @@ Two species overrides sit in front of it and only then delegate: `CNPC_VMingXiao
 answers `m_flIdealRange` (`+0x6748`) for -1000004, `CNPC_VTzimisce` (`0x103b9120`) answers
 `_DAT_10457f60` for -1000001. `[VtMB]`
 
-**Unrecovered:** `_DAT_10457f60`; the base body's three sentinel answers.
+`_DAT_10457f60` = **150.0** (a `.rdata` float, no writer; read 2026-09-20).
+**Unrecovered:** the base body's three sentinel answers.
 
 ### `0x102ae840` — the scripted-schedule order push
 
@@ -1455,8 +1456,53 @@ the `PUSH ECX`, which shifts its address by four. `pActivator` (`+0x00`), `pCall
 `nOutputID` (`+0x1c`) are left **uninitialised** — three words of stack garbage, which ships
 because nothing this body reaches reads them. `CBaseEntity::UpdateOnRemove` is the tail either way.
 
-**Unrecovered:** what the actor list's entries are used for past `EnableGoal` / `DisableGoal`, and
-what aggressiveness value `5` means.
+**The actor list and aggressiveness 5, closed 2026-09-19 (0018 story 15).** Two opencode walks and
+an adjudication pass; the resolver, the refresher, `vfunc244` and the preset table re-read here.
+`m_actors` is a `CUtlVector<CHandle<CAI_BaseNPC>>`: array `+0x468`, allocated `+0x46c`, grow
+`+0x470`, count `+0x474`, mirror `+0x478`. Its readers are exactly `0x102cd4a0`, `0x102cd3b0`,
+`0x102cd650`, `0x102cdb70`, `CAI_StandoffGoal::InputSetAggressiveness 0x102c8280`, `vfunc242
+0x102cd740` and the deleting destructor `0x102c88c0` — nothing else consumes an actor.
+
+- The resolver `0x102cd4a0` zeroes the count and purges, then iterates every entity matching
+  `m_iszActor` (`+0x454`): `m_SearchType` (`+0x460`) 0 by targetname (`0x100f7770`), 1 by classname
+  (`0x100f7380`), any other value none. Each match contributes the NPC at `entity+0x94`, skipped
+  when null or when `GetState()` (slot 464, `+0x740`) answers 7 (`NPC_STATE_DEAD`); the handle is
+  appended. `m_iszGoal` (`+0x458`) then resolves by TARGETNAME, first match, into `m_hGoalEntity`
+  (`+0x47c`), or `0xFFFFFFFF`.
+- The refresher `0x102cd3b0` walks `count-1` down to 0 and swap-removes (last entry into the slot,
+  `count--`) an entry that no longer resolves or whose NPC is in state 7.
+- `vfunc242 0x102cd740` (the `UpdateActors` input `0x101cc7c0` jumps straight to it, and the
+  spawn think `0x102cd310` takes it when `m_fStartActive` is clear) snapshots the list, refreshes,
+  re-resolves, and dispatches slot 244 for each actor that is new and slot 245 for each that left.
+  `Spawn 0x102cd2d0` arms that think at `curtime + 0.01` (`0x1044e658` is a **double**).
+- Slot 244 `0x102c8570` / slot 245 `0x102c8690` find the actor's `CAI_StandoffBehavior` by
+  `__RTDynamicCast` over its behaviour array (slots 456 / 457), set `behavior+0x19` to 1 / 0
+  (`0x102c7360`), and on 244 `behavior+0x1a = spawnflags & 1` (`0x102c7390`). BOTH then apply a
+  seven-dword parameter block through `0x102c73b0` (copied to `behavior+0x20..+0x38`; `+0x3c =
+  -1.0f`, `+0x40 = block[2]`, `+0x44 = block[3]`), its first dword overwritten with
+  `m_HintChangeReaction` (`+0x4a4`) after the copy (`102c8631`).
+- **Aggressiveness 5 selects the entity's own block** `m_customParams` at `+0x488` (keys
+  `CustomCoverOnReload` `+0x48c`, `CustomMinTimeShots` `+0x490`, `CustomMaxTimeShots` `+0x494`,
+  `CustomMinShots` `+0x498`, `CustomMaxShots` `+0x49c`, `CustomOddsCover` `+0x4a0`); 0..4 index the
+  preset table `0x10601880`, stride `0x1c` (`102c8600 CMP EAX,5`). Read from the DLL, as
+  `{coverOnReload, minTimeShots, maxTimeShots, minShots, maxShots, oddsCover}`:
+  0 `{1, 10.0, 15.0, 0, 1, 90}`, 1 `{1, 4.0, 8.0, 1, 2, 50}`, 2 `{1, 2.0, 4.0, 1, 4, 25}`,
+  3 `{1, 1.0, 3.0, 2, 4, 10}`, 4 `{0, 0.0, 0.0, 100, 100, 0}`. `InputSetAggressiveness` reads an
+  int payload only when the variant's field type is 4 (else 0), clamps as the two inputs do, and
+  re-applies the block to every actor inline.
+
+**`vfunc242`'s order, read from the listing (closed 2026-09-19).** It is the SDK's
+`CAI_GoalEntity::UpdateActors`: (1) the refresher prunes; (2) every current actor's resolved
+POINTER (`0x10009c8c`) is inserted into a stack `CUtlRBTree` whose comparator is the unsigned
+pointer compare `0x102ce100` (`CMP ECX,EAX / SBB / NEG`); (3) the resolver rebuilds the list;
+(4) the NEW list is walked in index order 0 … n−1 — an actor absent from the tree gets slot 244
+(`+0x3d0`, `102cd8c1`) at once, one present is removed from the tree (`102cd913`…); (5) what is
+left in the tree gets slot 245 (`+0x3d4`, `102cd9a2`) in the tree's IN-ORDER walk (leftmost
+first, `102cd94d`…, then successor steps). So every enable precedes every disable, enables
+follow the resolver's entity-list order, and disables go in ASCENDING OBJECT ADDRESS — an
+allocator order, not an authored one. `entity+0x94` has no datamap name: it is the
+`CAI_BaseNPC*` self-downcast the NPC constructor caches (`1027c64b MOV [ESI+0x94],ESI`), which
+`shape.md` calls `m_pBaseNPC`.
 
 ### `CAI_BaseNPC::SetHullSizeNormal` `0x10273070` and `SetHullSizeSmall` `0x10273180`
 
@@ -1478,8 +1524,9 @@ The small twin has no self-check, its gate is inverted (`m_fIsUsingSmallHull` CL
 it sizes to `0x102d6140` / `0x102d6160`, sets `+0x5f2d = 1`, rebuilds the same way — and **returns
 1 unconditionally**, including on the path where the gate refused and nothing changed.
 
-**Unrecovered:** the hull table `PTR_DAT_1060a750` itself, and therefore every hull's bits, name and
-extents.
+The hull table `PTR_DAT_1060a750` itself — 22 rows, bits `1 << index`, names and both extent
+pairs — is tabulated in `../navigation-jump-links.md` § "What the shipped graphs and maps
+actually use" (closed 2026-09-19).
 
 ### `CAI_TestHull::Spawn` `0x102d72f0`
 

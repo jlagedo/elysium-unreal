@@ -2507,7 +2507,7 @@ The census above counts a fixed classname list. A scan of every `ai_*`, `logic_*
 `info_node*` classname over the same 108 entity units, joined with the datamap replay and the
 32 exported scripts' `CreateEntity*` calls, adds:
 
-**Authored, with a retail class, registered by nothing in the port** (0018 story 14):
+**Authored, with a retail class, registered by nothing in the port** (0018 story 18):
 
 | classname | retail class | rows | maps | keyfields | inputs / outputs |
 |---|---|---|---|---|---|
@@ -2521,7 +2521,7 @@ Authored values: both `hw_tawni_1` rows are named `check_condition`, target
 tests `COND_SEE_PLAYER` over squad `floor_2`; both `ai_changetarget` rows set `!player`. No
 body of these four classes is walked yet.
 
-**Graph-node classnames carrying no `hinttype`** (0018 story 3's node data, not hints):
+**Graph-node classnames carrying no `hinttype`** (0018 story 4's places, not hints):
 `info_node_werewolf` (80, `sp_observatory_2`), `info_node_tzimisce` (19, `ch_temple_4` 18 and
 `la_bradbury_1` 1; `CNodeEnt::Spawn 0x102d78d0` rewrites it to `info_node`).
 
@@ -2610,10 +2610,10 @@ _Computed by `uv run elysium research ai_infra_surface` from the recovered addre
 ### coordinator
 | query | retail address | ledger name | caller (<=3) | what it answers | oracle section |
 | --- | --- | --- | --- | --- | --- |
-| is full | 0x1025db50 | FUN_1025db50 | FUN_102b5900 / FUN_10385d70 / FUN_103c1b10 | true when the registered melee count has reached the coordinator's slot count | The `CNPC_VAndreiBlood` line's melee-slot bodies — `0x10385ab0`, `0x10385c30`, `0x10385cf0`, `0x10385d70`; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
-| admit | 0x1025db70 | FUN_1025db70 | FUN_1025dca0 / CAI_BaseNPCTroika::FUN_102b5650 / CNPC_VAndreiBlood::FUN_10385ab0 | admits the NPC to a melee slot when capacity and registration rules allow it | The melee quartet's species replacements — slots 599, 600, 601, 602; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
-| request attacker slot | 0x1025dca0 | FUN_1025dca0 | FUN_1025db70 / FUN_102b57c0 / FUN_10385c30 | requests the attacker-side melee slot and answers whether it was acquired | The melee quartet's species replacements — slots 599, 600, 601, 602; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
-| release | 0x1025ddd0 | FUN_1025ddd0 | FUN_1025dca0 / FUN_102b5880 / FUN_10385cf0 | removes the NPC from the coordinator's registered handle array | The `CNPC_VAndreiBlood` line's melee-slot bodies — `0x10385ab0`, `0x10385c30`, `0x10385cf0`, `0x10385d70`; The melee quartet's species replacements — slots 599, 600, 601, 602; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
+| has room | 0x1025db50 | FUN_1025db50 | FUN_102b5900 / FUN_10385d70 / FUN_103c1b10 | true while the registered count is below the cap (2); corrected 2026-09-19 — earlier read as "is full" | The `CNPC_VAndreiBlood` line's melee-slot bodies — `0x10385ab0`, `0x10385c30`, `0x10385cf0`, `0x10385d70`; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
+| admit | 0x1025db70 | FUN_1025db70 | FUN_1025dca0 / CAI_BaseNPCTroika::FUN_102b5650 / CNPC_VAndreiBlood::FUN_10385ab0 | already registered answers true; full forwards to the evicting add with the candidate's enemy distance; else appends | The melee quartet's species replacements — slots 599, 600, 601, 602; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
+| request attacker slot | 0x1025dca0 | FUN_1025dca0 | FUN_1025db70 / FUN_102b57c0 / FUN_10385c30 | adds with room; when full evicts the member with the strictly greatest enemy distance above the threshold, or refuses | The melee quartet's species replacements — slots 599, 600, 601, 602; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
+| release | 0x1025ddd0 | FUN_1025ddd0 | FUN_1025dca0 / FUN_102b5880 / FUN_10385cf0 | removes the NPC by moving the last entry into its slot | The `CNPC_VAndreiBlood` line's melee-slot bodies — `0x10385ab0`, `0x10385c30`, `0x10385cf0`, `0x10385d70`; The melee quartet's species replacements — slots 599, 600, 601, 602; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
 | is unregistered | 0x1025de90 | FUN_1025de90 | FUN_102b5900 / FUN_10385d70 / FUN_103c1b10 | returns true when a linear scan finds no coordinator entry for this NPC | The `CNPC_VAndreiBlood` line's melee-slot bodies — `0x10385ab0`, `0x10385c30`, `0x10385cf0`, `0x10385d70`; The melee entry and exit quartet `0x102b5650`, `0x102b57c0`, `0x102b5880`, `0x102b5900` |
 
 ### standoff

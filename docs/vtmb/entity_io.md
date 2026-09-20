@@ -1764,7 +1764,7 @@ routine itself: it returns early when disabled, fires `OnTimer`, then re-arms.
 disabled state when `RefireTime` is invalid and no random range is authored — so a timer with a
 nonsensical interval never runs even if it was authored enabled.
 
-## The AI logic entities (0018 story 14)
+## The AI logic entities (0018 story 18)
 
 Four point entities and one think pair, recovered 2026-09-19. Offsets and flags are the datamap
 replay's; every body below was read in the corpus. Shared machinery first.
@@ -1963,18 +1963,88 @@ The class writes nothing on an NPC and picks no line or scene: `m_Mode` (0 idle,
 2 listener) on each place and the two authored sounds are its whole effect. Precache
 (`0x102dbcb0`) warns on an empty `sound_loop` and is silent on an empty `sound_once`.
 
-### Unrecovered
+### The place-side leftovers, closed (2026-09-19, 0018 story 10)
 
-- Who reads a place's `m_Mode` and its `+0x608` back-pointer, and who writes the occupancy count
-  `place+0x564` — the place and marker code, outside these bodies. `turn_towards_talker` is read by
-  none of the functions above, so its consumer sits there too.
-- The sound routine `0x102dc6a0`: the attenuation scaling from `audible_dist` (`0x10228350`) and the
-  emit flags are read but not walked to the engine call's contract.
-- The writer of the NPC back-pointer `CBaseEntity+0x94`.
-- Whether the entity allocator zeroes the block — `enabled`, the times and the distances have no
-  constructor default and rely on it.
-- The squad list's removal path, which decides whether `logic_squad_condition`'s raw pointer can
-  actually dangle in a shipped map.
+_Two independent opencode walks, diffed; `Release 0x102da600` and the engine allocator re-read
+from the corpus here._
+
+- **Occupancy `place+0x564`** is not a datamap field and is NOT saved (0 after a load; the
+  marker save ops `0x102d9240` / `0x102d9320` carry the markers and `+0x584` / `+0x588` only).
+  The constructor zeroes it; `ClaimMarker 0x102da7c0` increments it only when the NPC's marker
+  is found AND its second argument is set — true at the interesting-place wait
+  (`102a6469`, `(place, 0, 1)`), false at the patrol-interest wait (`102a64cc`), so a
+  patrol-interest visitor never counts; `Release 0x102da600` decrements it on a marker match,
+  swap-removing the `0x1c`-byte marker `{npc*, spot + hullMin, spot + hullMax}` and firing
+  `OnNPCLeft` (`+0x468`). Its only READERS are the conversation place's gate `0x102dc8f0` and
+  pick `0x102dca60`, both `== 1`. `Release` also writes `npc+0x62fc = place` BEFORE the scan,
+  match or not — the "last place" the candidate collector `0x102db470` skips, so an NPC does
+  not return to the place it just left. With a null NPC or a zero second argument both
+  functions only fire their output.
+- **`m_Mode` (`+0x590`, SAVE, no key)**: set through `0x102db3b0` (0, 1 or 2 only) by the
+  conversation place alone — `0x102dca60` sets every place 2 and the chosen talker 1,
+  `0x102dc490` resets all to 0. Its one reader, `0x102daea0`, picks which of the place TYPE's
+  activity tables names the visitor's animation: mode 1 → `type+0x114`, mode 2 → `type+0x158`,
+  otherwise (or when that table is missing) `type+0x48`; a place with no type answers `""`.
+  The wait and the loop both read it, and a changed name is what makes the loop refresh the
+  activity.
+- **The back-pointer `place+0x608`** (the object's last dword, unsaved): written by the
+  conversation place's `Activate 0x102dbde0` through `0x102db740` for each place it ACCEPTS —
+  an `__RTDynamicCast` to `CAI_InterestingPlace` with exactly one spot (`+0x584 == 1`), else a
+  DevWarning. Read only by `0x102db760` from the visitor's loop `0x102aa210`: with a
+  conversation, the talker is marker 0's NPC of the place at `conv+0x504`; when that is another
+  NPC it becomes the visitor's target and — gated by **`turn_towards_talker`**
+  (`m_bTurnTowardsTalker +0x514`, whose only reader is this loop) — the motor faces it.
+- **Constants**: `0x104454d0` = 0.5f (the out-phase wait the loop adds), `0x1044c3a8` = 180.0f
+  (the half turn), both floats.
+- **`0x102a9f40`'s yaw source** is its SECOND STACK ARGUMENT, a face entity
+  (`102aa07a MOV ECX,[ESP+0x14] / TEST / JZ`): zero → the place's own yaw, quantised through
+  the 16-bit angle; non-zero → that entity's yaw (`0x102d12e0`). The interesting-place wait
+  passes zero; the patrol-interest wait passes `0x1029f730`'s cached interest entity. Either
+  way `match_orientation` (`place+0x570`) gates the whole arm.
+- **`CBaseEntity+0x94`** is the entity's cached `CAI_BaseNPC*` self-downcast, written by that
+  constructor (`1027c64b MOV [ESI+0x94],ESI`) and zeroed by the base one; no conversation-place
+  function reads it (the class holds EHANDLEs).
+- **The allocation IS zeroed**: the entity allocator `0x100aa720` is `VEngineServer` slot 45,
+  whose engine body `0x201092d0` is `_calloc(1, size)`. So `enabled`, the times and the
+  distances, which no constructor writes, start at 0.
+- **The sound routine `0x102dc6a0(oneOff)`** stops the current sound (`0x102dc520`), then
+  emits `oneOff ? +0x458 : +0x454` (an empty name warns and emits nothing) through
+  `IEngineSoundServer003` (`0x1070b248`) slot 2 (`engine 0x20001b90`) with `(filter, entindex,
+  channel 2, name, volume 1.0, attenuation, flags, pitch 100, NULL, NULL, 1, 0.0)` — the
+  `VEngineServer` slot 35 call in front of it (`102dc7b1`) is only `IndexOfEdict(edict +0x2e0)`
+  (`engine 0x20109110`, one argument), which both opencode walks misread as the emit.
+  `flags = oneOff ? 0x80 : 0x180`, `| 0x200` when `+0x515` is clear; `attenuation =
+  0x10228350(audible_dist +0x468)` = 0 for `d <= 0`, else `(int)(20·log10(d / 36) + 40)` —
+  200 → 54, 500 → 62, 1000 → 68, 2000 → 74. A one-off arms `+0x460 = curtime +` the sample's
+  duration; and after `OnOneOffSoundComplete` the binary replays the LOOP sample.
+
+- **The stop routine `0x102dc520`**, settled from the listing (2026-09-19): the same filter
+  pair, `IndexOfEdict`, then `IEngineSoundServer003` slot **11** (`102dc5e1 CALL [EBX+0x2c]`,
+  `engine 0x20001ab0`) with `(filter, entindex, channel 2, volume 0.0, attenuation 0, flags 4,
+  pitch 100, NULL, NULL, 0, 0.0)` — eleven arguments, no sample: the engine body substitutes an
+  empty name and ORs `0x40000` into the flags before the shared emitter `0x20001950`. `4` is
+  the SDK's `SND_STOP`.
+- **The loop's phase-3 arm completes the task, on both sub-arms** (`0x102aa210`; the local
+  at `[ESP+0x13]` is the returned "done" byte, `[ESP+0x12]` the "refresh activity" byte). With
+  the out-animation finished (slot 251 true) and `+0x6304 == 3` it clears `m_bfAINPCFlags &
+  0x20000000`, snaps to the `Bip01` bone (`MoveToBoneOriginAngles`), writes `m_flWaitFinished
+  +0x5db4 = curtime`, and — when `m_bfAINPCFlags2 & 8` — sets done = 1 and clears
+  `0x80000008` there (`102aa2cd`). When that bit is clear the arm itself leaves done = 0, but
+  the tail's test `m_flWaitFinished <= curtime || flags2 & 8` is now true with `0x20000000`
+  clear, so `102aa53d` sets done = 1 on the same call. The two walks each saw one half.
+- **The overlap test `0x102da9e0(pos*, mins*, maxs*)` (argument names by their use) is inclusive on all six faces** and
+  returns the first OCCUPIED spot record (`rec[0] != 0`; records are `0x1c` bytes at
+  `place+0x580`, count `+0x588`) whose box (lo at `rec+4`, hi at `rec+0x10`) it meets: near side
+  `pos + maxs >= lo` (`AND 0x100 / JNE` skips only on less), far side `pos + mins <= hi`
+  (`TEST AH,0x41 / JP` skips only on greater). **Retail bug, reproduced verbatim by the
+  listing:** the far side adds `mins.x` on ALL three axes — `102daa49 FLD [EDI]` and
+  `102daa58 FLD [EDI]` where `[EDI+4]` and `[EDI+8]` belong — so y uses `mins.x` (harmless for
+  a square hull) and z uses `pos.z + mins.x` instead of `pos.z + mins.z`, which lowers the
+  tested point by the hull's half-width.
+
+**Unrecovered:** nothing on the place side. (The squad list's removal path was closed in
+`npc-ai/social.md`: squads are never freed in a level, so `logic_squad_condition`'s pointer
+cannot dangle.)
 
 ## Scripted sequences (`scripted_sequence` / `aiscripted_sequence`)
 

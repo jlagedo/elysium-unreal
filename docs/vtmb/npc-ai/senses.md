@@ -234,6 +234,51 @@ promotes what is due. Outputs: `OnHearWorld` on `0x6e`, **`OnHearPlayer` on `0x6
 `0x1028e8b0(this, owner, 1.0)` for `HEAR_COMBAT`/`HEAR_BULLET_IMPACT` only (forwarded to
 `0x1028e940` only when the owner is or shares my enemy).
 
+**The shared list itself — `CSoundEnt`'s pool (2026-09-19, 0018 story 13).** Two independent
+opencode walks agreed on every row; `Initialize`, `AllocSound`, the think and `Listen` re-read from
+the listing here. `CWorld::Precache` (`0x1023c020`) creates the entity `soundent` per map (failure
+prints `**COULD NOT CREATE SOUNDENT**`); `CServerGameDLL::vfunc6` (`0x1011adc0`) nulls
+`DAT_1072c464` at level shutdown.
+
+- **Capacity 64, fixed.** The class is `0xf64` bytes: 64 `CSound` records of `0x2c` from `+0x464`
+  (`CMP ESI,0x40` at `101bafac`; `SoundPointerForIndex 0x101bb150` admits `0..63`). Two index
+  lists, sentinel `-1`, both singly linked through `CSound::m_iNext` (`+0x18`): free head
+  `m_iFreeSound +0x450`, active head `m_iActiveSound +0x454`. `+0x1c` is `m_iNextAudible`, NOT a
+  list link: it is the per-listener heard chain, below.
+- **`Initialize 0x101baf80`**: free list `0 → 1 → … → 63 → -1`, active empty; then
+  `gpGlobals->maxClients` (`+0x14`) records are allocated in order — client k owns record k
+  (`ClientSoundIndex 0x101bb220` = `IndexOfEdict - 1`) — each with `m_flExpireTime = -1.0f`, the
+  never-expire sentinel. That reserved record is the one `UpdatePlayerSound` rewrites in place
+  every `PostThink`; it never passes through `InsertSound`.
+- **`AllocSound 0x101bab50`** pops the FREE HEAD and pushes the record at the ACTIVE HEAD, so the
+  active list is newest first. **A full pool drops the sound**: `DevMsg("Free Sound List is
+  empty!")`, `-1`, then `InsertSound` prints `Could not AllocSound() for InsertSound() (DLL)` and
+  returns having written nothing. There is no eviction and no overwrite of an older record.
+- **`InsertSound 0x101bac90`** validates nothing but the null singleton (a null owner stores the
+  invalid handle), writes origin, type, volume, `m_flStartTime = curtime`, `m_flExpireTime =
+  curtime + duration`, the occludable byte (`+0x14`) and the owner handle. The five-argument
+  overload `0x101babc0` is the same with the owner forced invalid and no masquerade hook.
+- **Expiry is the entity's think** `0x101ba890` (vtable slot 134; the corpus names it
+  `CSoundEnt::Remove`, wrongly — it re-arms `m_flNextThink`): first at `curtime + 1.0` from `Spawn
+  0x101ba6f0`, then every `curtime + 0.3` (`0x1047b868`, a double). It walks the active list newest
+  to oldest and frees a record iff **`m_flExpireTime + 4.0f <= curtime`** (`0x10450aa0`; `FCOMP` /
+  `TEST AH,0x41` / `JP`, so equality frees and NaN keeps) **and** `m_flExpireTime != -1.0f`. A
+  sound therefore stays listed — and audible to any NPC that has not yet listened since it was
+  inserted — for four seconds past its authored duration. `FreeSound 0x101ba9d0` unlinks through
+  the previous index and pushes at the FREE HEAD (LIFO reuse), clearing no field.
+- **A dead or disconnected client's record** is zeroed by `0x101b98d0` (`Event_Killed 0x10163af0`,
+  `ClientDisconnect 0x1011c060`): expire 0, so the next think frees it; it also writes `m_iNext =
+  -1` without unlinking, harmless with one client because record 0 is the list's tail.
+- **`Listen 0x1030f940`** resets the listener's chain head (`senses+0x1c = -1`), walks the active
+  list newest to oldest, and PREPENDS each admitted record through the record's own
+  `m_iNextAudible`, so the two chain iterators `0x10310440` (first) / `0x10310480` (next) read
+  oldest first. The chain lives in the shared records: it is valid only until the next NPC
+  listens, which is why `OnListened` runs inside the same call. Other walkers of the active list:
+  the nearest-of-type query `0x101bb370` (type by equality, strict `<`, so a tie goes to the newer
+  record) and `CEnvMicrophone`'s think `0x10102890` (type by mask).
+- **Saved whole.** The datamap (`0x10599e24`) flags the pool and both heads `SAVE`; the save fixup
+  maps the `-1.0f` sentinel to `1e11` and back (`0x101cf250` / `0x101cf2f0`).
+
 **Hearing cannot acquire an enemy.** Nothing in the hear path writes `CAI_Memory`.
 `HEAR_PLAYER` yields the delayed condition, the `m_LastSoundPlayer` copy (on the NPC, not in
 memory), `OnHearPlayer`, the idle→alert promotion in `CAI_BaseNPC::SelectIdealState`
@@ -1310,8 +1355,36 @@ strictly above `0.92` **and** the distance to the target strictly greater than t
 client. `0x10137220` (`1057966c`) is `VectorNormalize`, which answers the **length**, which is where
 both unsquared distance terms come from.
 
-**Unrecovered:** the weapon's own slot `+0x5b0` has no counterpart on this substrate; the seam
-answers the admitting value, so the 0.92 override is what decides a weapon-carrying body.
+**The weapon's arm — slot 364 (`+0x5b0`) `0x1024f330` and slot 284 (`+0x470`) `0x1024f3d0`
+(recovered 2026-09-19, 0018 story 9).** One body each for EVERY weapon class: a byte scan of
+`.rdata` finds 169 vtables holding `0x1024f330` at `+0x5b0`, all 169 hold `0x1024f3d0` at
+`+0x470`, and no table holds one without the other — there is no per-weapon line-of-sight rule.
+
+`0x1024f330(ownerPos, targetPos, bSetConditions)` resolves `m_hOwner` (`weapon+0x88c`) with NO
+null guard, takes the owner's cached NPC pointer (`entity+0x94`), asks it for the shoot position
+from `ownerPos` (slot 389, `+0x614`, `Weapon_ShootPosition`) and calls slot 284 with `(npc, npc,
+&shootPos, targetPos, bSetConditions)`.
+
+`0x1024f3d0(npc, ignore, from*, to*, bSetConditions)`: one LINE trace `from → to`, mask
+**`0x46004003`** (the SDK's `MASK_SHOT`), filter = `ignore`, collision group 0. Then, in order:
+
+1. `fraction == 1.0` (the double `0x10449280`) → **true**;
+2. the hit entity is `GetEnemy()` (slot 167, `+0x29c`) → **true**;
+3. the hit entity is a character (`entity+0x9c != 0`): the NPC's relation to it (slot 404,
+   `+0x650`) `== 1` (`D_HT`) → **true** — shooting through one hated body at another is allowed;
+   otherwise, under `bSetConditions`, COND `0x63 WEAPON_BLOCKED_BY_FRIEND`, and **false**;
+4. the hit entity is not a character, its collision group (`+0x368`) is **4** and `fraction >
+   0.0` strictly (`0x104454c4`): the trace is RE-RUN from the hit point
+   (`from + (to − from) · fraction`) with that entity as the new ignore — slot 284 calls itself
+   — and its answer is returned. One such entity per recursion, no depth limit;
+5. anything else: under `bSetConditions`, COND `0x66 WEAPON_SIGHT_OCCLUDED`; **false**.
+
+The innate arm `0x1026fcf0` (above) has no step 4: only a weapon looks through a group-4 entity.
+**Who is group 4:** `CBreakable::Spawn 0x1010d6a0` (`1010d78b PUSH 4`, unconditional — no material
+test in front of it), `CWindowPane::Spawn 0x1010f5f0`, `CBreakableSurface::Spawn 0x101134f0` and
+`CBreakable` slot 103 `0x1000a10f` — the only four `SetCollisionGroup(4)` sites in the image. So
+every `func_breakable`, glass or crate, is transparent to a weapon's line of sight and opaque to
+the innate one. **Unrecovered:** nothing here.
 
 ### `GetShootEnemyDir` `0x10278900`
 

@@ -633,7 +633,7 @@ patrol tokens resolve to the later rows.
 applies the entry gate to the hint's own inputs (the gate is not global in this substrate yet — a
 named seam), and keeps the list on `FElysiumEntityWorld::HintList`. A hint reference is the hint's
 entity index: `FHintWords::HintIndex`, which the Werewolf's rows and end-entity walks compare where
-retail compares the `CAI_Hint*`. `m_nNodeID` stays -1 until 0018 story 3.
+retail compares the `CAI_Hint*`. `m_nNodeID` stays -1 until 0018 story 4.
 
 **Caller audit of the live `HintWords`.** Every reader gets its hint index from one of these
 sources, so turning the words on made only the Werewolf's list walks answer:
@@ -648,6 +648,140 @@ sources, so turning the words on made only the Werewolf's list walks answer:
 `InitializeHintData` also writes each hint's angles (`103d7888`, slot `0x104`) and warns when a
 hint's `target_name` does not name exactly one entity (`103d7a70`); both are the Werewolf program's
 and are not ported.
+
+## The hint list and its four searches — `0x102d1af0`, `0x102d24b0`, `0x102d2980`, `0x102d1760` (2026-09-19, 0018 story 8)
+
+_Recovered 2026-09-19 by two independent opencode walks and an adjudication pass. `0x102d1af0`,
+`0x102d24b0`, the unusable test, the claim and the release were re-read from the listing here;
+`0x102d2980` and `0x102d1760` stand on the two walks agreeing row for row. The port still carries
+these as seams (the caller audit above); this is the retail contract story 4 stands them against._
+
+**The list.** `DAT_10925450` is the head of a singly linked, NULL-terminated list through
+`hint+0x5d8`; `DAT_10925454` is a rotating search cursor; `DAT_10925458` counts live hints. The
+constructor `0x102d2e30` inserts at the HEAD — so list order is the reverse of spawn order, which is
+what "first match in hint-list order" means for the patrol lookup — and sets `m_hHintOwner`
+(`+0x5e0`) invalid and `m_flNextUseTime` (`+0x5ec`) 0. The factory `0x102d2f30` zeroes the cursor
+and increments the count on every hint it makes, and is the ONLY writer of `m_nNodeID` (`+0x5e4`,
+`SAVE` only, not a keyfield): `102d2fce MOV [ESI+0x5e4],ECX` stores its fourth argument, which
+`CNodeEnt::Spawn` passes as the running node counter `DAT_10926a3c` (`102d79cc`) or `-1` for the
+standalone classes (`102d7bbc`). The destructor `0x102d3040` is the only unlinker; a cursor sitting
+on the removed node is zeroed, not advanced. It also notifies a live owner: the NPC at
+`owner+0x98` gets condition `0x29` and `ClearHintNode(0.0)`. **`Kill` never reaches it**: slot 119
+`0x102d08c0` tail-jumps to slot 77, which on a hint is `0x102d0860` — `CBaseEntity::ScriptHide`
+(`0x100a8710`) then `m_iDisabled = 1`. A killed hint stays on the list, disabled.
+
+**Unusable** (`0x102d14c0`), in order: `m_iDisabled` (`+0x5e8`) non-zero; `curtime <
+m_flNextUseTime` (strict — `FLD curtime` / `FCOMP [+0x5ec]` / `TEST AH,5` / `JP`, so an equal time
+is usable); `m_hHintOwner` resolving to a live entity. Nothing else — no node test, no separate
+hidden word.
+
+**The three cursor searches** share one walk. Arguments: `0x102d1af0(npc, type, flags, radius,
+origin*, outScore*)`; `0x102d24b0(npc, anchor, type, flags, radius)`; `0x102d2980(npc, flags, mask,
+radius, origin*, outScore*)`. An empty list answers NULL and leaves the cursor alone. The walk
+starts at `cursor->next`, or at the head when the cursor or its next is NULL. `0x102d1af0` wraps to
+the head unconditionally and stops when it returns to its START node, so every node is visited once,
+the cursor node last. `0x102d24b0` and `0x102d2980` wrap only while the cursor is non-NULL and stop
+on reaching the CURSOR, so the cursor node itself is never examined; with a NULL cursor they walk
+head to tail once. The cursor is written on exit only: the returned node, or NULL on a miss.
+
+Admission, in evaluation order:
+
+1. not unusable (`0x102d14c0`);
+2. `0x102d1af0` / `0x102d24b0`: `type == 0` (any) or `m_nHintType` (`+0x5dc`) equal to it.
+   `0x102d2980` has no type argument: it requires `(mask & hint+0x474) != 0`, the class word `Spawn`
+   (`0x102d0b60`) derives from the type — 1 for 100, 101 and `0x27d8`; 4 for `0x283c`; 8 for
+   `0x283d`; `0x10` for `0x28a0`; 0 otherwise — so a zero mask admits nothing;
+3. 3-D squared distance STRICTLY under `radius²` (NaN rejects), measured from `origin` (the NPC's
+   `GetAbsOrigin` when NULL), or in `0x102d24b0` from the ANCHOR's origin;
+4. slot 566 `FValidateHintType(hint)` on the NPC. The base body `0x1026a8d0` answers 0, so only the
+   Troika line ever finds a hint; `0x10295c20` opens on `hint->m_iGroupID (+0x470) &
+   npc->m_iHintGroups (+0x62e4)`. `Spawn` turns an authored `group_id` of 1..32 into `1 << (id-1)`
+   and anything else into `0xFFFFFFFF`;
+5. scoring (`0x102d1af0`, `0x102d2980`): flags bit 3 (`8`) scores `sqrt(d²) × m_flHintRating`
+   (`+0x464`), else bit 1 (`2`) scores `d²`, both from the NPC's own origin; a candidate is dropped
+   only when STRICTLY worse than the best so far, so an equal score replaces — the later node in
+   walk order wins a tie;
+6. flags bit 0 (`1`): a line trace from the eye (slot 193) of the NPC — of the ANCHOR in
+   `0x102d24b0` — to the hint's origin plus that same entity's `m_vecViewOffset` (`+0x184`), mask
+   `0x2400b`, `CTraceFilterSimple` skipping that entity; admitted only on `fraction == 1.0`.
+
+`0x102d1af0` stops at the first admitted node unless bit 1 or bit 3 is set (`102d1e7c TEST AL,0xa`).
+`0x102d24b0` always returns the first admitted node. `0x102d2980` stops at the first admitted node
+iff bit 0 is CLEAR — a different bit — and then leaves `*outScore` at `FLT_MAX`; with bit 0 set and
+no scoring bit the LAST admitted node wins. `0x102d2940` is `0x102d2980` with mask 1.
+
+**`0x102d1760`, the random pick.** Flags bit 2 (`4`) diverts `0x102d1af0` and `0x102d24b0` — not
+`0x102d2980` — to `0x102d1760(npc, type, flags, radius, NULL)`, dropping the anchor, the origin and
+the score pointer. It walks head to tail with no cursor and no wrap, applies steps 1–4 and 6,
+collects every admitted node, and draws ONE `RandomInt(0, count-1)` — only when `count >= 1`; the
+cursor becomes the pick, or NULL.
+
+**The searches write nothing on the NPC.** Callers store the result in `m_pHintNode` (`+0x5ddc`)
+and then claim it; a refused claim clears the field again (`102a28f5`, `102b7190`).
+
+**Claim `0x102d1350(hint, npc)`**: refused (AL 0) only when the owner handle resolves to a live
+entity that is not the requester; a stale owner, no owner, or the requester itself succeed, writing
+`m_hHintOwner = *npc->GetRefEHandle()`. **Release `0x102d1420(hint, delay)`** is two stores:
+owner invalid, `m_flNextUseTime = curtime + delay`. `CAI_BaseNPCTroika::ClearHintNode 0x10295ab0`
+releases only when `0x102d1450` says this NPC owns the hint, then zeroes `m_pHintNode` and
+`m_iFailedCoverLOSChecks` (`+0x6404`), clears bit `0x2000` and resets the saved attack extents.
+Delays seen: 5.0 `Event_Killed`, 5.0 on a path failure and 1.0 before a re-search in Troika
+`StartTask`, 0.5 for the hint `0x103bfa50` did not pick, 0.0 from `UpdateOnRemove` (which releases
+without the owner gate) and from the hint's own destructor.
+
+**Call sites**, all through thunk `0x1000633e` for `0x102d1af0`: base `StartTask` tasks `0x40`
+(find) / `0x41` (find and claim) `(type 0, flags = (byte)taskData, 2000.0)`; Troika `StartTask`
+`(0x2774, 2, (slot 0x688 radius + 8192.0) × 0.5)`; `CNPC_Crow` `(700, 3, 5000.0)`; `0x10365780`
+`(type, flags, 5000.0)`; `0x1038b370` `(20000, 0, 15000.0)` after a `RandomInt(1,3)` stored at
+`+0x6674`; `CNPC_VManBat` `StartTask` / `RunTask` `(20000, 0, 5000.0)` with one flags-2 site
+(`1038c5c5`). `0x102d24b0`: `0x103bfa50` twice, `(14000 | 14001, 0, 200.0)`. `0x102d2980`:
+`0x102b6b50` `(8, 0x10, weapon +0x8c0 or 1024.0)` after a `RandomFloat(2.0, 2.5)`; `0x102b7110`
+`(8, its argument, slot 550)`, retried once when `+0x6435` is set. **Corrected 2026-09-19
+(review against the listing): a native site DOES set flags bit 2.**
+`CNPC_VVampireBoss::SelectHintNode` (`0x103c59d0`, thunk `0x100053a3`) forwards its flags byte
+unchanged to `0x102d1af0` at radius 5000, and `CNPC_VSabbatLeader::StartTask` (`0x103a78c0`)
+calls it five times — `(0x3e83, 2)`, `(16000, 4)`, `(16000, 2)`, `(0x3e81, 2)`, `(0x3e82, 2)`.
+The `(16000, 4)` site reaches the random pick `0x102d1760` and its one `RandomInt` draw with no
+authored operand involved; tasks `0x40` / `0x41` remain the authored road to it. The review
+also names `0x10367680` and `0x103b2630` as forwarders of caller-supplied flags at radius 5000
+(not re-read here).
+
+`DAT_10924a6c` is the ConVar `ent_trace_conditions` — the static object at `0x10924a68` (registrar `0x1028bde0`: name `0x105d7ad0`, default `"1"`, help "When ent_trace is on, this will dump info about conditions also."), whose `+4` word is the pointer every condition setter reads a value through (slot 1) and discards: a debug-trace read, no game state (closed 2026-09-19).
+
+**`owner+0x98` and its five neighbours are cached self-downcasts (closed 2026-09-19).** Troika
+gave `CBaseEntity` six pointer fields that the base constructor zeroes and exactly one derived
+constructor each fills with `this` (byte scan for `MOV [ESI+off],ESI`: one site per offset), so
+"is it an X" is a null test instead of a `dynamic_cast`:
+
+| field | written at | by the constructor of |
+|---|---|---|
+| `+0x94` | `1027c64b` | `CAI_BaseNPC` (`0x1027c300`) |
+| `+0x98` | `1028d3bc` | `CAI_BaseNPCTroika` (`0x1028d230`; its first call is `0x1027c300`) |
+| `+0x9c` | `103271db` | `CBaseCombatCharacter` (`0x10326de0`; the first call of both `0x1027c300` and `0x1015d7c0`) |
+| `+0xa0` | `10250b78` | `CBaseCombatWeapon` (`0x10250ac0`) |
+| `+0xa4` | `100ee347` | `CBaseDoor` (`0x100ee2b0`) |
+| `+0xa8` | `1015d998` | `CBasePlayer` (`0x1015d7c0`) |
+
+None is in a datamap; none is saved. Every "`entity+0x9c != 0`" gate in the weapon and LOS
+ladders is therefore "the hit entity is a combat character", and `+0x98` is "is a Troika NPC".
+
+**Unrecovered:**
+the clamp `Spawn` applies to `m_flHintRating` through the `NPC_Cover_Distance_Scalar` cvar helper
+`0x1006caa0`;
+`0x102d1fe0`, a fifth cursor writer with its own criteria compare, not walked; the list walkers
+`0x102d0910`, `0x102d31c0` and `0x103cb4b0`; whether any shipped schedule authors flags bit 2.
+
+**`m_iHintGroups` — the parser `0x102989e0` (thunk `0x1000b8e3`; closed 2026-09-19).** A NULL or
+empty string writes `0xffffffff` — every group. Otherwise the mask starts at 0, the string is
+copied to a 256-byte stack buffer with NO length check, and each space-separated token goes
+through `atoi`: a value `1..32` sets bit `value − 1`, anything else (0, negatives, above 32,
+text) sets nothing, so a non-empty string of junk yields mask 0 and matches no hint. Only the
+space `0x20` separates; a tab or comma ends nothing and `atoi` stops at it. Two callers:
+`CAI_BaseNPCTroika::Spawn` (`1029922d`, with `m_sHintGroups +0x62e0`, `""` when unset) and
+`ProcessTweakParam 0x1029aa10` on the key `HINTGROUPS` (`0x105d94d0`, site `1029ac4c`). Its
+near-twin `0x10298910` (thunk `0x10014ff6`) fills `m_iInterestingPlaceGroups +0x62dc` — the one
+difference is that a NULL or empty string leaves **0**, no group, where the hint parser writes all
+ones (`1029892a JE` straight to the exit) — from the same two places — `Spawn` (`10299216`) and the key `IPGROUPS` (`0x105d94e0`, `1029ac28`).
 
 ## `FValidateHintType`'s species half — slot 566's ten decided bodies
 
@@ -1115,7 +1249,15 @@ _Recovered 2026-09-13, story 29c-1._
 
 Four slots of pure tunables, read out of `.rdata`. **Step height** (slot 522) is
 `_DAT_10453b94 = 18.0` (`0x101a6b40`), and that body is what slot 522 carries on the Troika line.
-**Max jump speed** (slot 523) is where the two lines differ: `CAI_BaseNPC` (`0x101a6b60`) returns the
+**Slot 523 — CORRECTED 2026-09-19: this is the STEP-DOWN height, not a jump speed.** Its two
+readers are `CAI_MoveProbe`'s forwarders `0x102e7e20` (`JMP [vtable+0x82c]`): the stand probe
+`0x102e7270` uses it as the drop below the feet, and the ground test `0x102e4f50` stores it in the
+step record right after slot 522's step height (`102e5193` / `102e51a1`). By the same SDK ordering
+slot 524's 350.0 is then the max jump speed, not a gravity — CONFIRMED by use 2026-09-19: the
+jump arm `0x102e6290` reads it (`102e63dd`) and passes it as the horizontal-speed argument of
+`CalcJumpLaunchVelocity 0x102e7060`, where it divides the 2-D distance
+(`../navigation-jump-links.md` § "Triangulate, the ground accounting and the jump arm"). The old label, kept for the cross-references: **Max jump speed**
+(slot 523) is where the two lines differ: `CAI_BaseNPC` (`0x101a6b60`) returns the
 SAME 18.0, while `CAI_BaseNPCTroika` (`0x101aa670`) overrides it with `_DAT_1044faa8 = 36.0`.
 **Jump gravity** (slot 524, `0x101a6b80`) is `_DAT_10477ce8 = 350.0` and nothing overrides it — zero
 dispatch sites in the closure, but the slot is filled, so the body is not dead. `CAI_TestHull`
@@ -3650,7 +3792,7 @@ Past all four, the centre handed over is **my** origin — the opposite receiver
 Z is not multiplied by anything in the dot, so a tentacle straight overhead is judged only by its XY
 bearing.
 
-**Unrecovered:** what `DAT_10924a6c` is, what condition `0x78` is named (it is one past the base
+**Unrecovered:** (`DAT_10924a6c` is the ConVar `ent_trace_conditions`, see the hint-list section) what condition `0x78` is named (it is one past the base
 registrar's `0x00..0x76` namespace), and what `m_ePhase` values other than 2 mean.
 
 ## Story 29c-1, family Dialogue — `CDialog`'s two bodies, the `CBasePlayer` half and the security camera
