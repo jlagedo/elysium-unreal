@@ -1224,12 +1224,17 @@ void FElysiumNpc::StartTaskOverlay()
 
 FVector FElysiumNpc::HullMinsUnits(bool bSmall) const
 {
-	// SEAM: `CAI_Navigator`'s hull table (`0x102d6100` normal mins / `0x102d6140` small mins). No
-	// navigator stands here, so this falls to family Motor's `RetailHullExtents` and then to the
-	// entity's own collision bounds, both of which are seams answering zero.
+	// `CAI_Navigator`'s hull table: `0x102d6100` normal mins against `0x102d6140` small mins.
+	// `bSmall` picks the TABLE, on this NPC's own hull — it is not a different hull id. The
+	// earlier reading passed hull 1 for "small", which answers correctly for a human only by
+	// coincidence (HUMAN_PATHING_HULL's full box is the same (-8,-8,0)..(8,8,72) as HUMAN_HULL's
+	// small one) and wrongly for every other species. The fallback to the entity's own collision
+	// bounds stays for a hull id the table does not carry.
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
-	if (RetailHullExtents(bSmall ? 1 : 0, MinsUnits, MaxsUnits))
+	const EElysiumHullExtents Which =
+		bSmall ? EElysiumHullExtents::Small : EElysiumHullExtents::Full;
+	if (RetailHullExtents(HullKind, Which, MinsUnits, MaxsUnits))
 	{
 		return MinsUnits;
 	}
@@ -1241,7 +1246,9 @@ FVector FElysiumNpc::HullMaxsUnits(bool bSmall) const
 {
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
-	if (RetailHullExtents(bSmall ? 1 : 0, MinsUnits, MaxsUnits))   // 0x102d6120 / 0x102d6160
+	const EElysiumHullExtents Which =           // 0x102d6120 / 0x102d6160
+		bSmall ? EElysiumHullExtents::Small : EElysiumHullExtents::Full;
+	if (RetailHullExtents(HullKind, Which, MinsUnits, MaxsUnits))
 	{
 		return MaxsUnits;
 	}

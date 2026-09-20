@@ -442,7 +442,7 @@ void FElysiumNpc::DrawEnemyMemoryOverlays()
 		FVector HullMins = FVector::ZeroVector;
 		FVector HullMaxs = FVector::ZeroVector;
 		const FElysiumNpc* RememberedNpc = Remembered->AsNpc();
-		RetailHullExtents(RememberedNpc != nullptr ? RememberedNpc->HullKind : 0, HullMins,
+		RetailHullExtents(RememberedNpc != nullptr ? RememberedNpc->HullKind : 0, EElysiumHullExtents::Full, HullMins,
 			HullMaxs);
 		EmitOverlayBox(GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
 		EmitOverlayBox(GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
@@ -639,7 +639,7 @@ void FElysiumNpc::DrawDebugHullAtPoint(const FVector& PointUnits, float Duration
 		TargetName.IsEmpty() ? TEXT("") : *TargetName);
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, HullMins, HullMaxs);
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
 	EmitOverlayBox(GNpcKernelDebug2Box, PointUnits, HullMins, HullMaxs, 255, 100, 0, 100);
 	const float HalfX = (HullMaxs.X + HullMins.X) * GNpcKernelDebug2Half;
 	const float HalfY = (HullMaxs.Y + HullMins.Y) * GNpcKernelDebug2Half;

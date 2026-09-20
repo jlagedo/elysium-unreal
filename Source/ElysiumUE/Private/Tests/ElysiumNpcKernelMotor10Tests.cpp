@@ -103,12 +103,21 @@ bool FElysiumNpcKernelMotor10HullNormalTest::RunTest(const FString&)
 	F.Npc->SetHullSizeNormal(true);
 	TestEqual(TEXT("the force byte opens it with the flag already clear"), F.Npc->SetSizeCalls, 2);
 
-	// `RetailHullExtents` is family Motor's seam and answers the ZERO box, so `UTIL_SetSize` is
-	// asked with a degenerate hull. That is the recovered refusal, asserted rather than worked
-	// around.
-	TestEqual(TEXT("the hull table seam hands UTIL_SetSize a zero mins"),
-		F.Npc->LastSetSizeMinsUnits, FVector::ZeroVector);
-	TestEqual(TEXT("...and a zero maxs"), F.Npc->LastSetSizeMaxsUnits, FVector::ZeroVector);
+	// `SetHullSizeNormal` sizes the body from the hull table's FULL pair (`0x102d6100` /
+	// `0x102d6120`). The NPC stands on hull 0, so that is HUMAN_HULL's 26 x 72 box.
+	TestEqual(TEXT("UTIL_SetSize is handed HUMAN_HULL's full mins"),
+		F.Npc->LastSetSizeMinsUnits, FVector(-13.0, -13.0, 0.0));
+	TestEqual(TEXT("...and its full maxs"),
+		F.Npc->LastSetSizeMaxsUnits, FVector(13.0, 13.0, 72.0));
+
+	// The small twin reads the SAME row's other pair (`0x102d6140` / `0x102d6160`), never a
+	// different hull id.
+	F.Npc->SetHullSizeSmall(true);
+	TestEqual(TEXT("the small twin is handed HUMAN_HULL's small mins"),
+		F.Npc->LastSetSizeMinsUnits, FVector(-8.0, -8.0, 0.0));
+	TestEqual(TEXT("...and its small maxs"),
+		F.Npc->LastSetSizeMaxsUnits, FVector(8.0, 8.0, 72.0));
+	F.Npc->SetHullSizeNormal(true);
 
 	// The VPhysics rebuild is gated on `+0x36c`, and the `+0x5f2d` clear happens on BOTH arms — the
 	// `MOV byte [ESI+0x5f2d],0` at `1027312a` sits before the `JZ` at `10273131`.

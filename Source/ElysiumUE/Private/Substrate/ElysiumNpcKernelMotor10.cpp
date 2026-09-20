@@ -668,7 +668,7 @@ void FElysiumNpc::SetHullSizeNormal(bool bForce)
 	//    extents come off one table either way.
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
-	RetailHullExtents(HullKind, MinsUnits, MaxsUnits);      // family Motor's seam: the zero box
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, MinsUnits, MaxsUnits);      // family Motor's seam: the zero box
 	LastSetSizeMinsUnits = MinsUnits;
 	LastSetSizeMaxsUnits = MaxsUnits;
 	++SetSizeCalls;
@@ -691,10 +691,12 @@ bool FElysiumNpc::SetHullSizeSmall(bool bForce)
 	if (!bIsUsingSmallHull || bForce)
 	{
 		// `UTIL_SetSize(this, NAI_Hull::SmallMins(m_eHull), NAI_Hull::SmallMaxs(m_eHull))`
-		// (`0x102d6140` / `0x102d6160`), family Motor's `RetailHullExtents` seam.
+		// (`0x102d6140` / `0x102d6160`) — the SMALL pair of the same hull's row, not a smaller
+		// hull. For two rows it is the wider of the two: TZIMISCE1's small box is 45 against its
+		// full 35, so "small hull" is retail's name for the alternate box, not a shrink.
 		FVector MinsUnits = FVector::ZeroVector;
 		FVector MaxsUnits = FVector::ZeroVector;
-		RetailHullExtents(HullKind, MinsUnits, MaxsUnits);
+		RetailHullExtents(HullKind, EElysiumHullExtents::Small, MinsUnits, MaxsUnits);
 		LastSetSizeMinsUnits = MinsUnits;
 		LastSetSizeMaxsUnits = MaxsUnits;
 		++SetSizeCalls;

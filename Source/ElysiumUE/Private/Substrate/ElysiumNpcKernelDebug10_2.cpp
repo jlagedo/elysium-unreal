@@ -411,7 +411,7 @@ void FElysiumNpc::TroikaDrawDebugGeometryOverlays()
 		{
 			FVector HullMins = FVector::ZeroVector;
 			FVector HullMaxs = FVector::ZeroVector;
-			RetailHullExtents(RetailAlternateHullKind(), HullMins, HullMaxs);
+			RetailHullExtents(RetailAlternateHullKind(), EElysiumHullExtents::Full, HullMins, HullMaxs);
 			EmitOverlayBox(GDebug10_2Box, Origin / ElysiumMove::U, HullMins, HullMaxs,
 				0xff, 0xff, 0x40, 10);
 		}

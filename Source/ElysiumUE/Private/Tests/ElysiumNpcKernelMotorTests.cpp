@@ -722,11 +722,31 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 		static_cast<float>(Ground.X), 3.4028234663852886e+38f);
 	TestEqual(TEXT("in all three terms"), static_cast<float>(Ground.Z),
 		3.4028234663852886e+38f);
+	// The hull table, replayed from the image. Hull 0 is HUMAN_HULL, and its two extent pairs
+	// differ: the full box is 13 wide and the small one 8, at the same 72 height.
 	FVector Mins(1.0, 1.0, 1.0);
 	FVector Maxs(2.0, 2.0, 2.0);
-	TestFalse(TEXT("the hull table refuses"), Guard->RetailHullExtents(0, Mins, Maxs));
+	TestTrue(TEXT("the hull table answers for hull 0"),
+		Guard->RetailHullExtents(0, FElysiumNpc::EElysiumHullExtents::Full, Mins, Maxs));
+	TestEqual(TEXT("HUMAN_HULL's full mins"), Mins, FVector(-13.0, -13.0, 0.0));
+	TestEqual(TEXT("...and its full maxs"), Maxs, FVector(13.0, 13.0, 72.0));
+	TestTrue(TEXT("the small pair is the same row's other box"),
+		Guard->RetailHullExtents(0, FElysiumNpc::EElysiumHullExtents::Small, Mins, Maxs));
+	TestEqual(TEXT("HUMAN_HULL's small mins"), Mins, FVector(-8.0, -8.0, 0.0));
+	TestEqual(TEXT("...and its small maxs"), Maxs, FVector(8.0, 8.0, 72.0));
+	// Retail's table has 22 rows; a hull id outside it keeps the refusal every caller's failure
+	// arm is written against.
+	TestFalse(TEXT("a hull id the table does not carry still refuses"),
+		Guard->RetailHullExtents(22, FElysiumNpc::EElysiumHullExtents::Full, Mins, Maxs));
 	TestEqual(TEXT("and zeroes both extents"), Mins, FVector::ZeroVector);
 	TestEqual(TEXT("both"), Maxs, FVector::ZeroVector);
+	// Not every small box is smaller: TZIMISCE1 (bit 10) widens from 35 to 45.
+	TestTrue(TEXT("TZIMISCE1's full box"),
+		Guard->RetailHullExtents(10, FElysiumNpc::EElysiumHullExtents::Full, Mins, Maxs));
+	TestEqual(TEXT("reaches 35"), Maxs.X, 35.0);
+	TestTrue(TEXT("and its SMALL box is wider"),
+		Guard->RetailHullExtents(10, FElysiumNpc::EElysiumHullExtents::Small, Mins, Maxs));
+	TestEqual(TEXT("at 45"), Maxs.X, 45.0);
 
 	// `PerformMovement` `0x1026c120` and `PostRun` `0x1026c7c0` — the delegate and the ordered pair.
 	Guard->PerformMovement(0.25f, 3);

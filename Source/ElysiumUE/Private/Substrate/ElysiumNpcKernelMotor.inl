@@ -196,9 +196,25 @@ struct FKernelHullTrace
 bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const FVector& HullMins,
 	const FVector& HullMaxs, int32 Mask, FKernelHullTrace& OutTrace) const;
 
-/** `thunk_FUN_102d6140(m_eHull)` / `thunk_FUN_102d6160(m_eHull)` — the shared hull table's mins and
- *  maxs for a hull id. **SEAM**: no hull table here; answers false with both left at zero. */
-bool RetailHullExtents(int32 Hull, FVector& OutMinsUnits, FVector& OutMaxsUnits) const;
+/** Which of a hull row's two extent pairs is being asked for.
+ *
+ *  Retail's table carries both for every hull, read by four accessors: `0x102d6100` / `0x102d6120`
+ *  answer the FULL box and `0x102d6140` / `0x102d6160` the SMALL one. They are not a scale of one
+ *  another -- TZIMISCE1 and TZIMISCE2's small boxes are WIDER than their full ones -- so the
+ *  choice is the caller's and has to be stated rather than inferred from the hull id. */
+enum class EElysiumHullExtents : uint8
+{
+	Full,    // 0x102d6100 / 0x102d6120
+	Small,   // 0x102d6140 / 0x102d6160
+};
+
+/** The shared hull table's mins and maxs for a hull id, in SOURCE units.
+ *
+ *  Answers from the replayed `NAI_Hull` table (`Substrate/ElysiumRetailHullTable.h`,
+ *  `docs/vtmb/data/hull_table.json`). False, with both left at zero, for a hull id retail's own
+ *  table does not carry -- which is what every caller's failure arm was written against. */
+bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUnits,
+	FVector& OutMaxsUnits) const;
 
 /** `m_Collision`'s slots +4 / +8 — an entity's OBB mins and maxs, SOURCE units, which `CheckStuck`
  *  (`0x103ab580`) builds both boxes from. **SEAM**: `FElysiumEntity` carries no collision extents;

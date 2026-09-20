@@ -172,7 +172,7 @@ bool FElysiumNpc::IsValidCover(const FVector& CoverCm, void* Hint)
 	// plus a hundredth of a unit), so it is a STANDING hull test at the spot, not a drop test.
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, HullMins, HullMaxs);   // family Motor's seam: the zero box
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);   // family Motor's seam: the zero box
 	const FVector EndCm(CoverCm.X, CoverCm.Y,
 		CoverCm.Z - HullMins.Z * GPositionsTailU + ValidCoverDrop * GPositionsTailU);
 
@@ -356,7 +356,7 @@ bool FElysiumNpc::EnemyCouldSeeHull(const FVector& OriginCm, bool bSkipViewCone,
 	{
 		FVector HullMins = FVector::ZeroVector;
 		FVector HullMaxs = FVector::ZeroVector;
-		RetailHullExtents(HullKind, HullMins, HullMaxs);   // family Motor's seam: the zero box
+		RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);   // family Motor's seam: the zero box
 		BoxMin = OriginCm + HullMins * GPositionsTailU;
 		BoxMax = OriginCm + HullMaxs * GPositionsTailU;
 	}
@@ -534,7 +534,7 @@ void FElysiumNpc::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& Ch
 	{
 		FVector HullMins = FVector::ZeroVector;
 		FVector HullMaxs = FVector::ZeroVector;
-		RetailHullExtents(HullKind, HullMins, HullMaxs);
+		RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
 		// `NAI_Hull::Width` is `FUN_102d61b0` — `maxs.y - mins.y`, the Y span, not a radius.
 		*ToleranceOut = static_cast<float>(HullMaxs.Y - HullMins.Y) * GPositionsTailU;
 	}
@@ -563,7 +563,7 @@ void FElysiumNpc::TranslateEnemyChasePositionSpecies(FElysiumEntity* Enemy,
 		{
 			FVector HullMins = FVector::ZeroVector;
 			FVector HullMaxs = FVector::ZeroVector;
-			RetailHullExtents(HullKind, HullMins, HullMaxs);
+			RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
 			Tolerance = static_cast<float>(HullMaxs.Y - HullMins.Y) * GPositionsTailU;
 		}
 		// `CNPC_VAnimal` (`0x1035f5c0`, with `CNPC_VDog` and `CNPC_VRat` beside it) and

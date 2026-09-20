@@ -890,7 +890,7 @@ void FElysiumNpc::UpdateFakeHull(double Now)
 		// hull, a quarter larger than the real one, hung off the pelvis.
 		FVector HullMinsUnits = FVector::ZeroVector;
 		FVector HullMaxsUnits = FVector::ZeroVector;
-		RetailHullExtents(HullKind, HullMinsUnits, HullMaxsUnits);
+		RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMinsUnits, HullMaxsUnits);
 		const FVector FakeMinUnits = HullMinsUnits * GFakeHullExtentScale + BonePosUnits;
 		const FVector FakeMaxUnits = HullMaxsUnits * GFakeHullExtentScale + BonePosUnits;
 

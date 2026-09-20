@@ -576,7 +576,7 @@ FVector FElysiumNpc::GetGroundpoint(const FVector& PointUnits) const
 	// caller does.
 	FVector Mins = FVector::ZeroVector;
 	FVector Maxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, Mins, Maxs);
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, Mins, Maxs);
 	const FVector EndUnits(PointUnits.X, PointUnits.Y, PointUnits.Z - GGroundpointDrop);
 	FKernelHullTrace Trace;
 	if (KernelHullTrace(PointUnits, EndUnits, Mins, Maxs, GMotorTailGroundTraceMask, Trace)

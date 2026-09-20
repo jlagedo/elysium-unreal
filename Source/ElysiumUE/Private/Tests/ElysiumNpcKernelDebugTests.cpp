@@ -957,8 +957,8 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
 	// `DrawDebugHullAtPoint`: the box is drawn at the point it is handed, in the recovered colour
-	// (255, 100, 0) at alpha 100, with the hull extents the seam refuses — so a degenerate box, and
-	// the radius the second call carries is 0.
+	// (255, 100, 0) at alpha 100, and now at the hull table's own extents — this NPC stands on
+	// hull 0, so HUMAN_HULL's full box. It used to be degenerate because the table was a seam.
 	FElysiumNpc::BeginDebugCapture();
 	Npc->DrawDebugHullAtPoint(FVector(12.f, -3.f, 4.f), 0.f);
 	const TArray<FElysiumNpc::FDebugLine> Hull = FElysiumNpc::EndDebugCapture();
@@ -966,7 +966,7 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 	if (Hull.Num() == 2)
 	{
 		TestEqual(TEXT("the box carries retail's colour and alpha"), Hull[0].Text,
-			FString(TEXT("(12.0 -3.0 4.0) mins=(0.0 0.0 0.0) maxs=(0.0 0.0 0.0) ")
+			FString(TEXT("(12.0 -3.0 4.0) mins=(-13.0 -13.0 0.0) maxs=(13.0 13.0 72.0) ")
 				TEXT("rgba=(255 100 0 100)")));
 		TestEqual(TEXT("and the second call is emitted under its address, unrecovered"),
 			FString(Hull[1].Retail), FString(TEXT("0x1000566e")));

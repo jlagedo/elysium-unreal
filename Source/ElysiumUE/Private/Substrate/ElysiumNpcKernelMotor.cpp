@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // Story 29c-1, family **Motor** — `CAI_Motor`, `CAI_Navigator`, and everything the NPC asks of its
@@ -356,14 +357,23 @@ bool FElysiumNpc::KernelHullTrace(const FVector& StartUnits, const FVector& EndU
 	return false;
 }
 
-bool FElysiumNpc::RetailHullExtents(int32 Hull, FVector& OutMinsUnits, FVector& OutMaxsUnits) const
+bool FElysiumNpc::RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUnits,
+	FVector& OutMaxsUnits) const
 {
-	// `thunk_FUN_102d6140(m_eHull)` / `thunk_FUN_102d6160(m_eHull)` — the shared hull table.
-	// **SEAM**: no hull table.
-	(void)Hull;
-	OutMinsUnits = FVector::ZeroVector;
-	OutMaxsUnits = FVector::ZeroVector;
-	return false;
+	// The shared hull table, replayed from the image's own static initialisers. A hull id outside
+	// the table keeps the zero box and the false return every caller's failure arm was written
+	// against, so an unrecovered id still refuses rather than boxing a point.
+	const ElysiumRetailHulls::FRow* Row = ElysiumRetailHulls::Find(Hull);
+	if (Row == nullptr)
+	{
+		OutMinsUnits = FVector::ZeroVector;
+		OutMaxsUnits = FVector::ZeroVector;
+		return false;
+	}
+	const bool bSmall = Which == EElysiumHullExtents::Small;
+	OutMinsUnits = bSmall ? Row->SmallMins : Row->Mins;
+	OutMaxsUnits = bSmall ? Row->SmallMaxs : Row->Maxs;
+	return true;
 }
 
 bool FElysiumNpc::RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
