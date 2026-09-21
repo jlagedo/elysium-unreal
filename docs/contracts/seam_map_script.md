@@ -43,8 +43,13 @@ ships only inside a VPK is provenance and never executes. The unit states this p
 
 ## GLB structure
 
-The unit is scene-less and has no BIN chunk: every datum is text, a token or a small integer
-table the extension states directly.
+The unit is scene-less and declares no accessor: every decoded datum is text, a token or a small
+integer table the extension states directly. The BIN chunk it does carry is the **source capsule**
+alone (`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds each resolved member's own
+bytes, one `bufferView` per member addresses them, and `sourceResolution` declares
+`"capsule": {"encoding": "raw"}` with each member row naming its view. An empty member capsules to
+nothing and names no view. `uv run elysium import scripts` deploys the members the interpreter
+executes to `Content/ElysiumCorpus/scripts/**`, reading nothing but the units.
 
 ```json
 {
@@ -52,7 +57,7 @@ table the extension states directly.
   "extensionsRequired": ["ELYSIUM_vtmb_script"],
   "extensions": {
     "ELYSIUM_vtmb_script": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "source": {},
@@ -115,7 +120,7 @@ sides. A marshal type code outside the 2.1 set is `unresolved`.
 
 | Key | Kind | Contents |
 |---|---|---|
-| `schemaVersion` | string | `1.0.0` |
+| `schemaVersion` | string | `1.1.0` — 1.1.0 added the source capsule |
 | `identity` | object | `asset`, `scriptPath`, `sourceKind`, `sourcePolicy` |
 | `sourceResolution` | object | the member table, each row with `executed` |
 | `source` | object | `text`, `encoding`, `lineEnding`, `bom`, `lines[]` |

@@ -21,7 +21,10 @@ from elysium_pipeline.formats.unit_contract import (
 KIND = "script"
 KIND_TITLE = "Script"
 SCRIPT_EXTENSION = extension_name(KIND)
-SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 added the source capsule: every member's exact bytes travel in the unit's BIN
+#: chunk, so `uv run elysium import scripts` deploys the script the install resolved
+#: without the install.
+SCHEMA_VERSION = "1.1.0"
 
 #: The install root the seam reads. The family directory it publishes into is the caller's,
 #: exactly as every shipped seam has it: `output_relative_path` is relative to that directory.

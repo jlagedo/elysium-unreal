@@ -434,8 +434,6 @@ def validate_document(
         validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise ScriptGlbValidationError(str(error)) from error
-    if binary:
-        _fail("a script unit carries no BIN chunk")
     asset, key, members = _check_identity(root)
     has_companion = any(str(member.get("role")) == "pyc" for member in members)
     if not has_companion and root.get("pyc") is not None:

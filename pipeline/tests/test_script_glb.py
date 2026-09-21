@@ -292,11 +292,25 @@ def test_the_extension_root_opens_with_the_contracts_keys_in_order():
     assert extension_of(document)["schemaVersion"] == SCHEMA_VERSION
 
 
-def test_a_script_unit_is_scene_less_and_carries_no_binary_chunk():
-    _, _, document, binary = document_for()
-    assert binary == b""
-    for core in ("scenes", "nodes", "meshes", "images", "textures", "samplers", "buffers"):
+def test_a_script_unit_is_scene_less_and_its_bin_chunk_is_the_capsule_alone():
+    closure, _, document, binary = document_for()
+    for core in ("scenes", "nodes", "meshes", "images", "textures", "samplers"):
         assert core not in document
+    # The one buffer is the capsule's; every view it declares is one `encapsulate` wrote.
+    assert document["buffers"] == [{"byteLength": len(binary)}]
+    members = extension_of(document)["sourceResolution"]["members"]
+    assert len(document["bufferViews"]) == len(members)
+    resolved = {member.path: member.data for member in closure.members()}
+    for row in members:
+        view = document["bufferViews"][row["capsule"]["bufferView"]]
+        carried = binary[view["byteOffset"]:view["byteOffset"] + view["byteLength"]]
+        assert carried == resolved[row["path"]]
+        assert hashlib.sha256(carried).hexdigest() == row["sha256"]
+
+
+def test_a_script_unit_declares_the_source_capsule():
+    _, _, document, _ = document_for()
+    assert extension_of(document)["sourceResolution"]["capsule"] == {"encoding": "raw"}
 
 
 def test_a_companion_inside_a_vpk_is_provenance_the_interpreter_never_executes():
@@ -832,8 +846,8 @@ def test_the_validator_refuses_a_declared_scene():
         validation.validate_document(tampered, binary)
 
 
-def test_a_member_capsule_the_seam_never_declared_is_refused():
-    """The script seam has not adopted the source capsule, so it may not carry one unannounced."""
+def test_a_capsule_that_is_not_the_member_it_names_is_refused():
+    """The capsule is the deploy lane's only source of bytes, so it is weighed, never trusted."""
 
     closure, _, document, binary = document_for()
     validation.validate_document(document, binary, source_members=closure.members(), member_exists=resolver()
@@ -841,7 +855,7 @@ def test_a_member_capsule_the_seam_never_declared_is_refused():
     tampered = copy.deepcopy(document)
     members = extension_of(tampered)["sourceResolution"]["members"]
     members[0]["capsule"] = {"byteLength": 0}
-    with pytest.raises(validation.ScriptGlbValidationError, match="does not declare"):
+    with pytest.raises(validation.ScriptGlbValidationError):
         validation.validate_document(tampered, binary, source_members=closure.members(), member_exists=resolver()
     )
 
@@ -862,7 +876,7 @@ def test_the_written_unit_round_trips_through_standalone_validation(tmp_path):
     assert summary["byteCoveragePercent"] == [100.0, 100.0]
     assert summary["unresolved"] == 0 and summary["unsupported"] == 0
     document, binary = read_glb(path)
-    assert binary == b""
+    assert binary and document["buffers"] == [{"byteLength": len(binary)}]
     assert document["extensionsRequired"] == [SCRIPT_EXTENSION]
 
 
