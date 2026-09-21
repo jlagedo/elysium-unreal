@@ -2385,6 +2385,7 @@ is `[[0, v, v]]`.
 | `end_width_cm` | cm | derived: `width_cm × 0.1` — every VtMB beam tapers |
 | `noise_amplitude_cm` | cm | key `NoiseAmplitude` × 2.54 (0 ×21, 15 ×21, 200 ×5); the runtime scales it by `length / 100` over 128 divisions |
 | `texture` | `vtmb:material:sprites/beama` | key `texture` (`materials/sprites/beama.vmt` on all 47) → the material lane's `MI_` |
+| `material` | package path | the material lane's RESOLVED path for `texture` — a join result, not an entity fact, so it is manifest-only and is NOT written to the actor (`bake_map_v2.FAMILY_ROW_SKIP`). Added to this table 2026-09-21: the producer had always emitted it and the contract had never listed it, which is why the bake tried to set it as a property and died on the first map that owns a beam (0018 story 21-8, `ch_fulab_1`). |
 | `texture_scroll` | units/s | key `TextureScroll` (35 on all 47) |
 | `radius_cm` | cm | key `Radius` × 2.54 (256 on all 47) |
 | `life_s` | s | key `life` (0 ×42 continuous, `.1` ×5 strikers) |
@@ -2494,7 +2495,12 @@ curve carries either.)
 
 None of the three maps authors a `func_dustmotes`, `env_steam` or `env_beam`; the three tables
 were exercised on `ch_lotus_1` (39 dustmotes), `hw_hub_1` (2 steam) and `ch_fulab_1` (12 beams,
-`sprites/beama` staged) without staging them. Stage warnings the corpus produces
+`sprites/beama` staged) without staging them. **`ch_fulab_1` was first BAKED on 2026-09-21
+(story 21-8)**, and staging-without-baking is exactly what had hidden the `material` row above:
+a field is only discovered to be a non-property when something tries to write it to an actor.
+The 47 beams all name one texture, so the runtime binding the fixed `ElysiumEffectAssets::
+BeamMaterial` rather than the row's own material matches every beam in the corpus; `Texture` is
+carried on the actor and read by nothing, which is inert for the same reason. Stage warnings the corpus produces
 (`effectStats.unreadKeys`): `ch_fulab_1`'s `pilot_flame_emitter` authors `fps` inside a spawn
 block and `flametrail*` a `rate` on the particle body (no row in the runtime's tables), and
 `impactfx_sparks_blue` a `maxframes` typo — all carried nowhere, as VtMB carries them nowhere.

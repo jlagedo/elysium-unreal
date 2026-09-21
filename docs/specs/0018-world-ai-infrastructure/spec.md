@@ -780,10 +780,30 @@ its recovery is written in the oracle section it names.
   readers read. The seam, in the NPC's words: request a move; outcomes arrived, failed with a
   code, blocked by a door, blocked by an NPC; a route sample (has a path, distance left, next
   corner). Under it, on the body: a path-following component that raises those events; the
-  default and the pedestrian query filters, the pedestrian one pricing 3's area at ONE
+  default and the pedestrian query filters, the pedestrian one pricing 3's area UP by ONE
   `RandomInt(5, 10)` drawn per request; the acceptance radius equal to retail's tolerance
   with nothing added for the capsule; partial paths off; an off-mesh goal projected within
   the tolerance and refused beyond it. The 0.8 s think gate.
+  **The pedestrian price is an AVOIDANCE, and this story's own text had the sign backwards**
+  (corrected 2026-09-21 by 21-8, before the filter was built). Retail's A* `FUN_102fe9f0` draws
+  `local_20 = RandomInt(5, 10)` once per request and applies it as
+  `cost = cost * local_20` on a link whose flag is set, then relaxes a node only when the new
+  total is SMALLER -- so the multiply is a penalty. The pedestrian keeps to the pavement and pays
+  5-10x to enter the roadway; `FUN_103055b0` passes the flag byte as `' '` and everyone else
+  pays the unpenalised cost, so the road is never a wall. `ElysiumNavAreas.h` said "priced to
+  prefer" and now says what it does.
+
+  **And the flag is per-LINK, which gives this story an exact acceptance set it did not have.**
+  The brush contents `0x2000` that 3 marked as an area lands in `CAI_Link::m_LinkInfo` at
+  `link+0x64` -- the nav-graph unit's `fields[0]` (`seam_map_nav_graph.md` § "Link stream",
+  recovered 2026-09-21 from the loader listing). It is the only value that field ever takes:
+  **1,331 links across 40 of the 108 maps**, and on `sm_hub_1` exactly **461 flagged against
+  1,185 unflagged hull-0 ground links** -- the two numbers `ElysiumNavAreas.h` had already
+  derived from the brush side, reached here independently from the link record. So the area mark
+  and the link flag are two views of one fact, and this story's filter can be judged link by link
+  against the published units rather than by eye: every link the port prices up should be one
+  retail flagged, on every map, and the 68 maps with no flagged link should see no pricing at all.
+
   Three things story 3 hands over rather than settles. **The route's hull is `+0x156c`**, read at
   `SetGoal 0x102ecd2c` and refreshed each frame by `CAI_Navigator::Move 0x102effe1` — this
   navigator is the object that owns that read, and 3 only supplies the word (§ "The two hull
@@ -1084,6 +1104,35 @@ its recovery is written in the oracle section it names.
   and keeps flying at its hint (`SelectSchedule 0x10358ce0` answers `SCHED_CROW_IDLE_FLY` while
   navigator type is 2). Neither reads hint yaw on arrival. Flight is navigator type 2 + flag
   `0x400` over entity move type 4, never an entity-movetype change.
+  **This story now has a concrete work list, and the gate hands it over** (2026-09-21, 21-8's
+  first bake of `la_ventruetower_3` -- the corpus's only hull-20 map and its only four-agent map).
+  Every one of that map's 70 navigation findings was hull 20 while hulls 0, 7 and 21 were clean on
+  the same geometry: **7 ground links, 12 jump starts, 19 jump ends and 32 bridging links**. They
+  are not mesh defects. The nodes behind them are reached by nothing that walks -- nodes 46 and 48
+  carry sixteen hull-20 links and ZERO links for every other hull, node 47 carries twelve against
+  a single hull-0 and hull-7 link each whose move type is `2`, a jump -- and the Manbat's own mesh
+  answers at no height within 600 cm of any of the three. `MANBAT_HULL`'s 160-unit height is the
+  flight envelope, not a body walking under a ceiling.
+  So `validation/nav_acceptance.FLYING_HULLS` routes hull 20's ground-link, jump-projection and
+  bridging verdicts through `flight_row`: every finding is reported under `flightClaims` and none
+  is failed, because they are flight this port has not built rather than floor it failed to
+  rasterise. The map reads `clean [41 step-height outlier(s) excused, 70 flight claim(s)
+  reported]`. **That list is this story's acceptance input**: when the flying gait lands, each
+  claim is either answered by flight or re-judged, and `FLYING_HULLS` is the one place to revisit.
+  The mesh is still cut for hull 20 -- `TASK_MANBAT_FIND_LANDNODE` and `TASK_MANBAT_FALL_TO_GROUND`
+  say the bat touches ground and needs somewhere to land.
+
+  **The open question 21-8 could not close.** This story's own first line says no link in any
+  shipped graph flies, and that survives a full sweep: `fields[1+h]` is only ever 0, 1 or 2 across
+  all 29,382 links, never the fly bit. Yet hull 20's links on this map are move type `1`, GROUND.
+  How a ground link squares with a flyer that never traverses links -- whether `FIND_FLYNODE` and
+  `FIND_LANDNODE` read the node set directly and ignore link move types, or whether the ManBat
+  does ground-walk between landings -- is unread. The node record's own type word is still
+  typed-unidentified (`seam_map_nav_graph.md` § Node stream), so nothing has been read as
+  `NODE_AIR`; what is measured is only that the single hull reaching those nodes is one that
+  flies. Settle it here before building the gait.
+  Recovery: `seam_map_nav_graph.md` § "Flying hulls".
+
   Oracle: `navigation-jump-links.md` § "The flying movers, walked".
   Size: M. Effort: Opus / medium.
 
@@ -2066,6 +2115,149 @@ its recovery is written in the oracle section it names.
   (21-1 lists them); `sm_pier_1`, delisted by this group; and `la_ventruetower_2`,
   `la_ventruetower_3`, `sp_giovanni_2b`, which 21-7 unblocked.
   Consumes: 21-7. Size: L, by batch.
+
+  **Started 2026-09-21 on the owner's approval, as a whole-corpus pass rather than a map at a
+  time.** The legacy export tree went with it: the 102 per-map directories, the six `_21-5-away-*`
+  witness directories and `shared/` are deleted (3.5 GB), leaving an export root with no map half
+  at all. Five stale readers of it were corrected FIRST, so none of them failed silently
+  afterwards -- `_maps_bake_fingerprint` had been hashing two paths whose readers went with 21-4
+  and 21-5 and now hashes the four published units per map; `debug compose` gated on a legacy
+  directory and now gates on the baked `.umap` through a new `asset_paths.baked_level_path`;
+  `unreal.py`'s `_compose`, `_cast` and `_greenroom` readers still looked under the export root
+  that 21-6 moved the writers out of; and `UE_extract_scenes.check_referenced` globbed legacy
+  `.ents` for its `SceneFile` cross-check and now reads the published entity units -- which makes
+  it STRONGER, 113 values over all 108 maps where before it saw only whichever maps happened to
+  have been legacy-exported. All seven missing nav-graph units are exported, so the corpus is
+  108 of 108, and they match 21-1's reading of the install (`hw_chateau_1` 0 nodes / hull bits
+  16385, `sm_smoke_1` 0 / 1, then `hw_warrens_2b` 19, `la_bradbury_1` 25, `la_library_1` 14,
+  `la_malkavian_3b` 35, `sm_coffee_1` 8).
+
+  **How a finding is triaged** (owner's rule, 2026-09-21, after the first three):
+  1. Ask whether the spec already knows the CLASS and has a story that owns it — the step-height
+     outliers and the rat-hole erosion hypothesis (story 5), a link whose mesh answers only the
+     long way round (story 5), per-agent links and drops (story 7), flight (story 12).
+  2. If it does: make the minimal change that lets the map bake — a pin in
+     `nav_known_findings.py` carrying the measurement — and annotate the owning story with what
+     this map adds. Do not redesign anything from inside this pass.
+  3. If it does not: stop and recover the cause properly, then FILE A STORY for the work. A
+     finding whose class is unknown is a question about VtMB, and answering it by pinning would
+     bury it.
+  The second map judged took route 3 twice over (flight, and the link record), which is why the
+  rule is written down rather than assumed.
+
+  **What the pass is finding, and it is not what the story expected.** Every failure so far is
+  the navigation gate, none is a bake failure. Two are judged:
+   * **`sm_pier_1` link 97** (nodes 37->59, 3.53x) is pinned. Node 37 stands on the beach UNDER
+     the pier and node 59 on the deck 461 cm above it, and the deck overhangs the beach from
+     ~200 cm east of the straight line, so no climbing surface exists between them; the mesh's
+     4,431 cm back to the ramp by node 47 is the only walk the geometry offers. Retail asserts
+     the link and prices it: it is the only one of the map's 187 carrying `m_LinkInfo & 0x2000`,
+     which retail's own A* multiplies by `RandomInt(5, 10)`. The port's 3.53x is INSIDE retail's
+     own penalty for it.
+   * **`la_ventruetower_3`'s 70 findings were all hull 20** and none is a mesh defect; they are
+     flight, and they are now story 12's work list (see there). The gate learned flying hulls
+     rather than pinning them away.
+  Both settled a seam on the way: the link record's 25 tokens are now read
+  (`seam_map_nav_graph.md` § "Link stream" -- token 2 is `CAI_Link::m_LinkInfo` at `link+0x64`,
+  tokens 3..24 the per-hull move types), and that flag turns out to be the same `0x2000` story 3
+  marked as the roadway area from the brush side. The two recoveries agree to the link on
+  `sm_hub_1` (461 flagged, 1,185 unflagged) -- and reading the A* is what caught story 5's sign
+  error, where the roadway was to be PREFERRED and is in fact avoided at 5-10x.
+
+  **The first BAKE defect, and the shape of it is the story's whole point.** `ch_fulab_1` did not
+  fail the gate -- it failed to bake at all: `ElysiumBeamActor exposes no property 'material' for
+  row[725].material`. The producer has always written two fields for a beam's texture, the
+  `vtmb:material:` id (`texture`, which the actor carries) and the material lane's resolved
+  package path (`material`, which no actor property matches and nothing reads), and the bake
+  writes every family row field it does not explicitly skip. No map in the six owns an `env_beam`
+  -- `seam_map_map.md` says the beam table was exercised on this very map by STAGING and never by
+  baking -- so the mismatch could not be seen until a map with one was baked. `material` joins
+  `FAMILY_ROW_SKIP` as the join result it is, and the contract's `beams[]` table lists it now.
+  Inert either way: all 47 beams in the corpus name one texture, and the runtime binds a fixed
+  `BeamMaterial` regardless.
+
+  Memory, measured for the first time (nothing in the project had this number): one editor process
+  per map, peak working set **12.54 GB** worst case on a 32 GB machine, median 9.09 GB, lowest
+  system free 2.62 GB, with no upward trend across maps -- the per-map process exit is releasing
+  everything. Median 54 s per map.
+
+  **STOPPED INCOMPLETE 2026-09-21 by owner decision, with the small-hull problem below unsolved.**
+  63 of 108 maps attempted in 64 minutes: **37 green, 26 failed, 45 never attempted.** The ledger
+  is `$ELYSIUM_WORK_ROOT/scratch/21-8/bake_ledger.jsonl` (one row per attempt: exit, seconds, peak
+  RSS, log path) and `status.json` holds the green/failed split; `verify/nav/by-map/<map>.json`
+  holds the per-map verdicts for the 41 maps judged after the retention fix. Re-running
+  `scratch/21-8/bake_all.py` skips every green map and retries only the rest, so the pass resumes
+  where it stopped -- and `ch_fulab_1` will then bake, since its beam fix landed after it ran.
+  The 26: `ch_fishmarket_1`, `ch_fulab_1`, `ch_hub_1`, `ch_lotus_1`, `ch_temple_1`, `ch_temple_2`,
+  `ch_zhaos_1`, `hw_609_1`, `hw_ash_sewer_1`, `hw_hub_1`, `hw_jewelry_1`, `hw_netcafe_1`,
+  `hw_vesuvius_1`, `hw_warrens_1`, `hw_warrens_2`, `hw_warrens_3`, `hw_warrens_4`,
+  `la_bradbury_1`, `la_bradbury_2`, `la_bradbury_3`, `la_confession_1`, `la_crackhouse_1`,
+  `la_empire_1`, `la_empire_2`, `la_expipe_1`, `sp_giovanni_2b`.
+
+  **What stopped it: the findings are one problem, not twenty-six.** Every failure but
+  `ch_fulab_1`'s bake defect is the navigation gate, and over the 41 retained reports the 1,154
+  findings sort by AGENT rather than by map:
+
+  | hull | agent | radius cm | cell cm | Recast erosion | findings | maps |
+  |---|---|---:|---:|---:|---:|---:|
+  | 7 | TinyCentered | 20.32 | 10 | 30.0 | **624** | 5 |
+  | 19 | Rat | 15.24 | 5 | 20.0 | **231** | 6 |
+  | 0 | Human | 33.02 | 10 | 40.0 | 220 | 17 |
+  | 13 | Tzimiscerunner | 30.48 | 10 | 40.0 | 70 | 5 |
+  | 11 | Tzimisce2 | 63.50 | 15 | 75.0 | 9 | 2 |
+
+  By kind: 789 ground links, 160 jump starts, 132 jump ends, 73 bridging. **855 of 1,154 -- 74% --
+  are the two smallest agents**, whose eroded radius exceeds retail's hull by the widest margin.
+  That is story 5's rat-hole hypothesis at corpus scale, and it is 21-10's to settle: pinning
+  these one by one would be a tolerance wearing pins as a disguise, on a hypothesis
+  `nav_known_findings.py` itself marks NOT proven. **21-8 cannot close until 21-10 does.**
+  Nothing was pinned for it.
+
+- [ ] **21-9. The gate's judgement machinery.** Opened 2026-09-21 by 21-8, which ran into its
+  limits on the second map it judged.
+  Port today: `validation/nav_acceptance.ground_link_errors` takes `known=` and reports a pinned
+  finding rather than failing it, with a stale pin failing too. **`bridging_errors` and
+  `projection_errors` take no pins at all**, so a judged finding in either has nowhere to live: on
+  `la_ventruetower_3` the 12 jump-start, 19 jump-end and 32 bridging findings could only be
+  handled because the hull turned out to FLY, which `FLYING_HULLS` covers wholesale. A
+  non-flying hull with one judged jump endpoint would leave the gate red with no way to record
+  the judgement, and the temptation then is a tolerance -- the one thing
+  `nav_known_findings.py`'s own docstring forbids.
+  Job: extend the pin mechanism to both checks on the shape `ground_link_errors` already has
+  (pin by index, report on reproduce, FAIL a pin that stops reproducing), keyed by point index
+  for projections and link index for bridging; `nav_known_findings` grows the two tables beside
+  `KNOWN_DETOURS`. Then re-read whether any pin 21-8 wrote as a whole-hull flight exemption
+  should be a per-finding pin instead.
+  Consumes: 21-8's corpus pass, for the real finding set to shape it against. Size: S.
+  Effort: Sonnet / medium.
+
+- [ ] **21-10. The small hulls' cell size.** Opened 2026-09-21 by 21-8, which is blocked on it.
+  Retail: `NAI_Hull`'s rat is 12 x 12 x 10 units (radius 15.24 cm) and its TINY_CENTERED is
+  16 x 16 x 8 (radius 20.32 cm); retail's own graph asserts links through passages those hulls
+  fit, because `CAI_TestHull` swept THAT hull to build them.
+  Port today: `ElysiumRetailHulls::AgentCellSize` gives the rat 5 cm cells and TinyCentered 10,
+  and `ElysiumNavBakeLibrary` applies them to every resolution (`:365-378`). Recast erodes the
+  walkable surface by `ceil(radius / cell)` CELLS, so the rat is eroded 20 cm a side against a
+  true 15.24 and TinyCentered 30 against 20.32 -- each agent loses 4.8 / 9.7 cm a side, and a
+  passage between those bounds is open in retail and closed on the mesh.
+  Evidence, measured rather than argued: the table above. The three `sm_hub_1` rat holes story 5
+  already pins carry this as their "leading hypothesis, NOT proven"; 21-8 turned three into 855
+  across eleven maps, which is what makes the experiment worth its cost.
+  Job:
+  1. **Settle the hypothesis before changing anything.** Re-cut ONE map's rat mesh at 2.54 cm
+     cells (erosion exactly 15.24, four times the tiles) and re-ask the same failing links.
+     `hw_hub_1` is the subject: 145 rat ground-link findings, the largest single set.
+     `ARecastNavMesh::NavMeshResolutionParams` is a UPROPERTY, so this is a probe over the baked
+     level and needs no C++ change or re-bake. If the findings collapse, erosion is the cause; if
+     they do not, erosion is exonerated and the real cause is still open -- say which.
+  2. On a confirmed cause, decide the cell size per hull against its cost (tiles go as the
+     inverse square: the rat's 5 -> 2.54 is 3.9x the tiles, and `CellsPerTile` 200 means the tile
+     edge shrinks with it), then re-bake and re-judge the eleven maps.
+  3. Whatever survives at the chosen cell size is judged link by link and pinned with its
+     measurement, as 21-2 and 21-8 pinned theirs.
+  Consumes: 21-8's finding set (present). Provides: to 21-8, the ability to close; to story 5,
+  a measured answer in place of its "three rat routes" framing.
+  Size: M. Effort: Opus / high (one experiment, then a cost decision).
 
 ## Seams
 - Provides: the query surface to 0002 — hint searches, place selection and the trio, the next

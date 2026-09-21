@@ -178,3 +178,42 @@ def test_the_theatres_five_pins_are_the_one_dropped_node():
     assert sorted(pins) == [4, 8, 10, 53, 56]
     assert all("132 cm down onto node 26" in why for why in pins.values())
     assert known_detours("sp_theatre", 19) == {}
+
+
+def test_flight_row_reports_a_flying_hull_rather_than_failing_it():
+    """0018 story 21-8: hull 20's NPC flies, so its links are not walkable-mesh claims."""
+    from elysium_pipeline.validation import nav_acceptance as verdicts
+
+    links = [{"index": i, "src": i, "dst": i + 1, "straightCm": 100.0} for i in range(3)]
+    ground = verdicts.ground_link_errors(links, [verdicts.OFF_MESH] * 3, 20)
+    assert ground["failed"] == 3
+
+    flown = verdicts.flight_row(ground, 20)
+    assert flown["failed"] == 0
+    assert flown["failures"] == []
+    assert flown["flying"] is True
+    assert flown["flightClaimCount"] == 3
+    assert [row["index"] for row in flown["flightClaims"]] == [0, 1, 2]
+    # Every other key the ground check stated is carried through.
+    assert flown["links"] == 3 and flown["hull"] == 20
+    assert flown["check"] == ground["check"]
+
+
+def test_flight_row_counts_claims_past_the_listing_cap():
+    """The count is the check's own `failed`, not the length of its truncated listing."""
+    from elysium_pipeline.validation import nav_acceptance as verdicts
+
+    n = verdicts.MAX_LISTED + 7
+    links = [{"index": i, "src": i, "dst": i + 1, "straightCm": 100.0} for i in range(n)]
+    ground = verdicts.ground_link_errors(links, [verdicts.OFF_MESH] * n, 20)
+    flown = verdicts.flight_row(ground, 20)
+    assert flown["flightClaimCount"] == n
+    assert len(flown["flightClaims"]) == verdicts.MAX_LISTED
+    assert flown["flightClaimsTruncated"] == 7
+
+
+def test_manbat_is_the_only_flying_hull():
+    """The evidence is the ManBat task list; no other hull has been shown to fly."""
+    from elysium_pipeline.validation import nav_acceptance as verdicts
+
+    assert verdicts.FLYING_HULLS == frozenset({20})

@@ -244,8 +244,8 @@ public:
 	UPROPERTY()
 	FElysiumPostMoveTickFunction PostMoveTickFunction;
 
-	// Map name under FElysiumContentPaths::Root() (a folder holding <MapName>.obj). Empty on a
-	// stage world, which has no map to name.
+	// The map's stem, which names its baked level and its three `DA_<MapName>_*` assets under
+	// FElysiumContentPaths::BakedUnit(). Empty on a stage world, which has no map to name.
 	UPROPERTY(EditAnywhere, Category = "Elysium")
 	FString MapName = TEXT("sp_tutorial_1");
 

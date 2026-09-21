@@ -52,7 +52,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumVisuals, Log, All);
 // (elysium.reload) to toggle.
 static TAutoConsoleVariable<int32> CVarRopes(
 	TEXT("elysium.Ropes"), 1,
-	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
+	TEXT("Build the map's cables from its baked rope actors (1) or skip (0). Applied at map load."),
 	ECVF_Default);
 
 // Source's distance fog, on (1) or off (0), for A/B. It is a per-primitive material term rather

@@ -38,6 +38,32 @@ KNOWN_DETOURS: dict[str, dict[int, dict[int, str]]] = {
             1472: "rat hole: nodes 400->175, 1,120 cm straight, routed 5,229 (4.7x)",
         },
     },
+    "sm_pier_1": {
+        0: {
+            # Node 37 (6909, 681, -1537) stands on the BEACH, under the pier; node 59
+            # (6899, -488, -1077) stands on the DECK 461 cm above it. Measured 2026-09-21, the
+            # map's first time through the gate (0018 story 21-8), with
+            # `scratch/21-8/probe_pier_path.py`: the deck OVERHANGS the beach from about 200 cm
+            # east of the straight line (a lateral fan at three stations answers at both -1069
+            # and -1569 from dx +200 outward, and at the beach alone on the line itself), so
+            # there is no climbing surface anywhere between the two nodes. The mesh's path is
+            # the only walk the geometry offers: 4,431 cm back along the beach to the ramp by
+            # node 47 -- node 37's only other link -- where it climbs 507 cm in one step
+            # (points 2->3, z -1574 to -1068) and returns along the deck.
+            #
+            # Retail asserts the link anyway, and says itself that it is a bad one. Link 97 is
+            # the ONLY link of this map's 187 whose `m_LinkInfo` is non-zero, and the bit is
+            # `0x2000`: the A* at `0x102fe9f0` multiplies that edge's cost by a random integer
+            # in [5, 10] (`local_20 = rand(5, 10)`, applied when the navigation goal's flag byte
+            # is set). Retail's own penalty for this link is therefore 5-10x, and the port's mesh
+            # costs 3.53x -- INSIDE retail's own tolerance for it, so no route retail would take
+            # is lost by pinning this. Story 5 owns what an NPC does on reaching a link its mesh
+            # answers only the long way round.
+            97: "under-pier detour: nodes 37->59, deck 461 cm above the beach and overhanging it; "
+                "1,256 cm straight, routed 4,431 (3.53x) via the ramp at node 47; retail marks "
+                "this link alone `m_LinkInfo & 0x2000`, a random 5-10x cost penalty",
+        },
+    },
     "sp_theatre": {
         0: {
             # Five links, one destination. Node 26 stands at (-12, 292, -294) and every node that

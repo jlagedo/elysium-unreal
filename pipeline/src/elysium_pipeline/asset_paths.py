@@ -107,6 +107,18 @@ def map_package(map_name: str) -> str:
     return BAKED_MOUNT + canonical.removeprefix(BAKED_MOUNT + "/Maps")
 
 
+def baked_level_path(repo_root: Path, map_name: str) -> Path:
+    """The `.umap` on disk for a baked map, the one file that says the map exists.
+
+    Since 0018 story 21-3 a map is travelable when its level and its three `DA_<map>_*` assets
+    stand in the mount; story 21-8 deleted the legacy export tree that callers used to stat
+    instead, so every "is this map there?" question resolves here.
+    """
+    relative = map_package(map_name).removeprefix(BAKED_MOUNT + "/")
+    stem = relative.rsplit("/", 1)[-1]
+    return Path(repo_root) / "Plugins" / "ElysiumBaked" / "Content" / relative / (stem + ".umap")
+
+
 def validate_landing(package: str, content_root: Path, *, extension: str = ".uasset") -> Path:
     """Bound the actual filesystem path, including this machine's content-root length."""
     prefix = BAKED_MOUNT + "/"

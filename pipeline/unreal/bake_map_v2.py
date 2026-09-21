@@ -218,7 +218,14 @@ EFFECT_ROW_FIELDS = (
 #: `dustmotes[]` / `steam[]` / `beams[]` row field -> actor property: the row's own names, in
 #: Unreal's Python spelling (a `_cm` / `_s` suffix kept as written). `color` + `alpha` fold into
 #: one `LinearColor` property `color`.
-FAMILY_ROW_SKIP = frozenset({"index", "sky", "origin_cm", "rotation", "alpha", "targetname"})
+#: `material` is the material lane's RESOLVED asset path for the row's `texture`, a join result
+#: rather than an entity fact, so it stays in the manifest for tooling and is not written to the
+#: actor -- which carries the `vtmb:material:` id in `Texture`, as the contract's `beams[]` table
+#: states. Until 0018 story 21-8 baked a map with an `env_beam` (none of the six had one, and
+#: `seam_map_map.md` says so: the beam table was exercised on `ch_fulab_1` by STAGING, never by
+#: baking) this omission could not be seen, and the bake died on row 725 of that map.
+FAMILY_ROW_SKIP = frozenset({"index", "sky", "origin_cm", "rotation", "alpha", "targetname",
+                             "material"})
 #: `particleTrees{}.nodes[]` field -> `FElysiumParticleNode` property. Ramps (`[[t, lo, hi], ...]`)
 #: become arrays of `FElysiumRampKey {T, Lo, Hi}`; the spawn block's fields are prefixed `spawn_`;
 #: `sprite` / `normal` carry `texture` (path) and `aspect` (Vector2D); `collide` flattens to

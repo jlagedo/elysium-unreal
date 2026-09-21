@@ -6,6 +6,8 @@ Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastruc
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
 Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0002/29e 4 of 16 families.
+Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
+It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
 
 ## Decision owed (does not block 01–06)
@@ -50,6 +52,8 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 - [ ] **07 · 0018/4** — The place set. M · Opus/high. **Needs the decision above.**
 - [ ] **08 · 0018/5** — The navigator and the movement seam. L · Opus/high.
+  21-8 corrected its pedestrian price (an AVOIDANCE, not a preference) and handed it an exact
+  acceptance set: the 1,331 links over 40 maps carrying `m_LinkInfo & 0x2000`.
 - [ ] **09 · 0018/6** — Geometry services (sight, hull sweep, stand test, reachability). M · Opus/high.
 
 ## C — close 0019
@@ -68,6 +72,9 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 - [ ] **16 · 0018/10** — Interesting places. M · Opus/high.
 - [ ] **17 · 0018/11** — Patrol paths and the patrol-point interest record. S–M · Fable/medium. Corpus pass done 2026-09-21.
 - [ ] **18 · 0018/12** — The flying mover. M · Opus/medium.
+  21-8 handed it a work list: `la_ventruetower_3`'s 70 hull-20 flight claims (7 ground, 12 jump
+  starts, 19 jump ends, 32 bridging), reported by the gate and owed an answer. One open read
+  first: hull 20's links are move type GROUND on a flyer that never traverses links.
 - [ ] **19 · 0018/13** — The AI sound list and its volume table. M · Opus/high.
 - [ ] **20 · 0018/14** — Squads (the object). M · Opus/high.
 - [ ] **21 · 0018/15** — The attack coordinator and the standoff goal. S–M · Opus/medium.
@@ -113,7 +120,19 @@ Task bodies and selector arms only; programs come from row 04. Sizes below preda
 
 ## On demand, not in the sequence
 
-- [ ] **0018/21-8** — The other 102 maps. Owner's approval only, when a witness needs a map outside the six. Needs row 01.
+- [ ] **0018/21-8** — The other 102 maps. Owner's approval only, when a witness needs a map outside
+  the six. Needs row 01. **Approved 2026-09-21, run, and STOPPED INCOMPLETE the same day**: the
+  legacy export tree is deleted and all 108 nav-graph units are published, but of 63 maps
+  attempted only 37 are green. It cannot close until **21-10** settles the small-hull cell size,
+  which is what 26 of its failures are. Resume by re-running `scratch/21-8/bake_all.py`, which
+  skips the green maps.
+- [ ] **0018/21-9** — The gate's judgement machinery: pins for bridging and jump-projection
+  findings, which take none today. S · Sonnet/medium. Opened by 21-8; shape it against 21-8's
+  finding set.
+- [ ] **0018/21-10** — The small hulls' cell size. M · Opus/high. Opened by 21-8 and **blocking
+  it**: 855 of 1,154 findings are the rat and TinyCentered agents, whose Recast erosion exceeds
+  retail's hull by 4.8 and 9.7 cm a side. One experiment settles it (re-cut `hw_hub_1`'s rat mesh
+  at 2.54 cm cells and re-ask the 145 links); then a cost decision, a re-bake and a re-judge.
 
 ## Where this differs from the specs' stated orders
 

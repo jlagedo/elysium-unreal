@@ -13,6 +13,8 @@ import re
 import shutil
 
 from elysium_pipeline import workspace_lock
+from elysium_pipeline.asset_paths import baked_level_path
+from elysium_pipeline.paths import saved_debug_root
 from elysium_pipeline.importers import map_geometry
 
 
@@ -1276,9 +1278,13 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         for value in values:
             if value.startswith("-ElysiumMap="):
                 map_name = value.split("=", 1)[1]
-        if not (config.export_root / map_name).is_dir():
+        # The gate is the BAKED level, not a legacy export directory: since 0018 story 21-3 a
+        # map is travelable when its level and its three `DA_<map>_*` assets exist, and story
+        # 21-8 deleted the export tree this used to stat.
+        if not baked_level_path(config.repo_root, map_name).is_file():
             raise UnrealFailure(
-                f"{map_name} is not exported; the composed-pose run drives a body on a real map")
+                f"{map_name} has no baked level; the composed-pose run drives a body on a real "
+                f"map -- run `uv run elysium bake map --maps {map_name}` first")
         bodies = list(options.bodies) or list(COMPOSE_BODIES)
 
         reports: list[Path] = []
@@ -1293,7 +1299,7 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             if exec_cmds:
                 launch.append("-ExecCmds=" + ";".join(exec_cmds))
             _run(config, runner, editor, launch)
-            reports.append(config.export_root / "_compose"
+            reports.append(saved_debug_root("_compose")
                            / f"{map_name}-{weapon}-{body}.json")
 
         # Recording without judging is the failure mode every other harness here already fixed:
@@ -1340,7 +1346,7 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         # that a baseline carries and a run does not, so pointing both at `_move` would make a
         # player-only run report every cast course as missing — and the two cast hosts are apart
         # for the same reason.
-        cast_root = config.export_root / "_cast"
+        cast_root = saved_debug_root("_cast")
         if sited_map:
             cast_root = cast_root / sited_map
         diff = [
@@ -1443,7 +1449,7 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             launch.append("-ExecCmds=" + ";".join(exec_cmds))
         _run(config, runner, editor, launch)
         if kind == "modelroom" and not live:
-            review = config.export_root / "_greenroom" / "review"
+            review = saved_debug_root("_greenroom") / "review"
             _run(
                 config,
                 runner,

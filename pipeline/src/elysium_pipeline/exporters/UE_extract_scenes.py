@@ -36,7 +36,7 @@ import os
 import sys
 
 from elysium_pipeline.formats import install, vpk
-from elysium_pipeline.paths import export_root
+from elysium_pipeline.paths import export_root, export_v2_root
 
 OUT = os.fspath(export_root())
 
@@ -101,32 +101,44 @@ def extract(picked, dest_root, force=False):
 
 
 def check_referenced(scenes):
-    """Cross-check the `SceneFile` of every `logic_choreographed_scene` in the already-exported
-    maps against the mirror, and report the ones the install does not ship.
+    """Cross-check the `SceneFile` of every `logic_choreographed_scene` in the published map
+    entity units against the mirror, and report the ones the install does not ship.
 
     A `SceneFile` naming no file is map data outliving its assets (RE19 counts eight, on three
-    maps) -- breakage worth surfacing once, not a format question. Silent when no map is
-    exported yet: the mirror itself is whole-game and does not depend on the map export."""
+    maps) -- breakage worth surfacing once, not a format question. Silent when no entity unit is
+    published: the mirror itself is whole-game and does not depend on the map export.
+
+    Until 0018 story 21-8 this read the legacy `$ELYSIUM_EXPORT_ROOT/<map>/<map>.ents` sidecars,
+    which that story deleted. It reads `exports_v2/maps/<map>.entities.glb` now -- the same lump
+    through the unit's own lexer, so a `SceneFile` whose value carries an escaped quote is read
+    correctly here where the sidecar's regexes could lose it (21-7)."""
+    from elysium_pipeline.exporters.UE_map_sidecars import (
+        blocks_of_class, entity_pair_blocks,
+    )
+    from elysium_pipeline.formats.map_entities_glb.model import MAP_ENTITIES_EXTENSION
+    from elysium_pipeline.formats.unit_contract import read_glb
+
     referenced = {}
-    for p in sorted(glob.glob(os.path.join(OUT, "*", "*.ents"))):
+    for path in sorted((export_v2_root() / "maps").glob("*.entities.glb")):
+        stem = path.name[: -len(".entities.glb")]
         try:
-            with open(p, encoding="utf-8") as f:
-                doc = json.load(f)
+            document, _binary = read_glb(path)
         except (OSError, ValueError):
             continue
-        for ent in doc.get("entities", []):
-            if (ent.get("classname") or "").lower() != "logic_choreographed_scene":
-                continue
-            sf = ent.get("keys", {}).get("SceneFile")
+        block = (document.get("extensions") or {}).get(MAP_ENTITIES_EXTENSION)
+        if not isinstance(block, dict):
+            continue
+        pairs = entity_pair_blocks(block.get("entities") or [])
+        for keys in blocks_of_class(pairs, "logic_choreographed_scene"):
+            sf = keys.get("scenefile")
             if isinstance(sf, str) and sf.strip():
-                referenced.setdefault(sf.replace("\\", "/").lower(),
-                                      set()).add(os.path.basename(p)[:-len(".ents")])
+                referenced.setdefault(sf.replace("\\", "/").lower(), set()).add(stem)
     if not referenced:
         return
     prefix = SCENE_ROOT + "/"
     missing = {k: v for k, v in referenced.items()
                if not (k.startswith(prefix) and k[len(prefix):] in scenes)}
-    print(f"[scenes] {len(referenced)} SceneFile value(s) named by the exported maps, "
+    print(f"[scenes] {len(referenced)} SceneFile value(s) named by the published maps, "
           f"{len(referenced) - len(missing)} resolve", flush=True)
     for key in sorted(missing):
         print(f"  ! not in the install: {key}  <- {', '.join(sorted(missing[key]))}", flush=True)

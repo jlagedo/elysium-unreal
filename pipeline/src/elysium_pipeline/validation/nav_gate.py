@@ -84,18 +84,29 @@ def judge(
             given = answer["perHull"].get(hull)
             if given is None:
                 continue
-            rows.append(verdicts.ground_link_errors(
+            ground = verdicts.ground_link_errors(
                 table["ground"], given["groundLengths"], int(hull),
                 factor=factor, excused=excused,
-                known=known_detours(key["map"], int(hull))))
-            rows.append(verdicts.projection_errors(
-                "jump-start", table["jump"], given["jumpStartsLanded"], int(hull)))
-            rows.append(verdicts.projection_errors(
-                "jump-end", table["jump"], given["jumpEndsLanded"], int(hull)))
+                known=known_detours(key["map"], int(hull)))
+            starts = verdicts.projection_errors(
+                "jump-start", table["jump"], given["jumpStartsLanded"], int(hull))
+            ends = verdicts.projection_errors(
+                "jump-end", table["jump"], given["jumpEndsLanded"], int(hull))
+            if int(hull) in verdicts.FLYING_HULLS:
+                # The hull's NPC flies, so its nodes stand in the air and none of these three
+                # is a claim about a walkable surface. Reported, never failed.
+                rows.extend(verdicts.flight_row(row, int(hull))
+                            for row in (ground, starts, ends))
+            else:
+                rows.extend((ground, starts, ends))
         for hull, given in answer.get("bridging", {}).items():
-            rows.append(verdicts.bridging_errors(
+            bridging = verdicts.bridging_errors(
                 key["agentOnly"][hull]["bridging"], given["agentLengths"],
-                given["baseLengths"], int(hull), key["baseHull"]))
+                given["baseLengths"], int(hull), key["baseHull"])
+            if int(hull) in verdicts.FLYING_HULLS:
+                rows.append(verdicts.flight_row(bridging, int(hull)))
+            else:
+                rows.append(bridging)
         report = verdicts.report(rows)
         report["stepOutliers"] = len(excused)
         reports[key["map"]] = report
@@ -103,9 +114,19 @@ def judge(
         if on_line is not None:
             line = ", ".join(f"{row['check']} {row['failed']}" for row in rows if row["failed"])
             pinned = sum(len(row.get("knownFindings", [])) for row in rows)
-            on_line(f"  {key['map']}: {'clean' if report['clean'] else line}"
-                    f"  [{len(excused)} step-height outlier(s) excused, "
-                    f"{pinned} pinned finding(s) reproduced]")
+            flight = sum(row.get("flightClaimCount", 0) for row in rows)
+            note = (f"{len(excused)} step-height outlier(s) excused, "
+                    f"{pinned} pinned finding(s) reproduced")
+            if flight:
+                note += f", {flight} flight claim(s) reported"
+            on_line(f"  {key['map']}: {'clean' if report['clean'] else line}  [{note}]")
     out = report_path(config.work_root)
     out.write_text(json.dumps(reports, indent=2), encoding="utf-8")
+    # A per-map copy beside it, because `report.json` holds only the LAST run: `bake map` judges
+    # one map per launch, so a corpus pass overwrites each map's verdicts with the next map's and
+    # a failure found early cannot be read once the pass has moved on (0018 story 21-8).
+    by_map = out.parent / "by-map"
+    by_map.mkdir(parents=True, exist_ok=True)
+    for name, report in reports.items():
+        (by_map / f"{name}.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return NavGateResult(maps=len(keys), failed=failed, report_path=out)

@@ -29,6 +29,59 @@ MAX_LISTED = 25
 NO_PATH = -1.0
 OFF_MESH = -2.0
 
+#: Hulls whose NPC moves by FLIGHT, so its graph nodes stand in the air and its links are not
+#: claims about a walkable surface at all.
+#:
+#: Recovered 2026-09-21 (0018 story 21-8), the first time a map with one reached the gate.
+#: `la_ventruetower_3` is the corpus's only hull-20 map, and every one of its 70 findings was
+#: hull 20 while hulls 0, 7 and 21 were clean on the same geometry. The bat's task list names
+#: the movement outright -- `TASK_MANBAT_TAKEOFF`, `TASK_MANBAT_FLY_TO_HINT`,
+#: `TASK_MANBAT_FLY_RANDOM`, `TASK_MANBAT_FALL_TO_GROUND`, `TASK_MANBAT_FIND_FLYNODE`,
+#: `TASK_MANBAT_FIND_LANDNODE` (`vampire.dll` `thunk_FUN_10389f80`) -- and the graph agrees:
+#: all seven failing ground links are claimed by hull 20 ALONE (`fields[1+h]` is 0 for hulls 0,
+#: 7 and 21 on every one). Nodes 46 and 48 carry sixteen hull-20 links and ZERO links for every
+#: other hull; node 47 carries twelve, against exactly one each for hulls 0 and 7 whose move
+#: type is 2, a jump. No walking hull reaches any of the three, and the Manbat's own mesh
+#: answers at no height within 600 cm of them.
+#:
+#: That these are the fly and land nodes those tasks search is INFERRED, not read: the node
+#: record's type word is still typed-unidentified, so nothing here reads a `NODE_AIR`. What is
+#: measured is that the only hull reaching them is one that flies. See
+#: `docs/contracts/seam_map_nav_graph.md` § "Flying hulls" for the full disposition, including
+#: the open question this leaves 0018 story 12.
+#:
+#: So the mesh is still cut -- `FIND_LANDNODE` and `FALL_TO_GROUND` say the bat does touch the
+#: ground, and it needs somewhere to land -- but a flying hull's links are REPORTED rather than
+#: failed: they are flight the port does not implement yet, not floor it failed to rasterise.
+#: MANBAT_HULL's 160-unit height is a flight envelope, not a body that walks under a ceiling.
+FLYING_HULLS: frozenset[int] = frozenset({20})
+
+
+def flight_row(row: dict[str, Any], hull: int) -> dict[str, Any]:
+    """Re-cast one walkable-mesh verdict as a flying hull's: reported, never failed.
+
+    Takes the row a ground/projection/bridging check already produced rather than its pieces,
+    so the claim COUNT is that check's own `failed` and not the length of its already-truncated
+    `failures` list -- a flying hull with more than `MAX_LISTED` findings would otherwise report
+    fewer claims than it has. Every other key the check set is carried through unchanged.
+    """
+
+    claims = list(row.get("failures") or ())
+    carried = {k: v for k, v in row.items()
+               if k not in ("check", "failed", "failures", "truncated")}
+    return {
+        "check": row["check"],
+        "failed": 0,
+        "failures": [],
+        "truncated": 0,
+        "flying": True,
+        "flightClaims": claims,
+        "flightClaimCount": int(row["failed"]),
+        "flightClaimsTruncated": max(0, int(row["failed"]) - len(claims)),
+        **carried,
+        "hull": hull,
+    }
+
 
 def _row(check: str, failures: Sequence[dict[str, Any]], **extra: Any) -> dict[str, Any]:
     return {

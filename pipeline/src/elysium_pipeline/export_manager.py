@@ -795,10 +795,9 @@ def ensure_policy_content(config, runner, *, force: bool = False,
 
 
 def _baked_package(config, map_name: str) -> Path:
-    from elysium_pipeline.asset_paths import map_package
+    from elysium_pipeline.asset_paths import baked_level_path
 
-    relative = map_package(map_name).removeprefix("/ElysiumBaked/")
-    return config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / relative / (relative.rsplit("/", 1)[-1] + ".umap")
+    return baked_level_path(config.repo_root, map_name)
 
 
 def bake_and_verify(
@@ -893,17 +892,25 @@ def bake_v2_maps(
 
 def _maps_bake_fingerprint(config, maps: Sequence[str], *,
                                                   cache: ContentDigestCache | None = None) -> str:
-    """One recipe for the whole profile bake: every selected map's exported directory
-    (geometry, entities and sidecars) and its published nav graph, the whole shared corpus (its
-    tables, and the texture and mesh bytes the map-scoped material and level recipes hash), the
-    particle sprites each map imports, the driving scripts, and the world-material policy."""
-    inputs = [config.export_root / name for name in maps]
-    inputs.append(config.export_root / "shared")
-    # The nav-graph unit is in no exported map directory, and since 0018 story 21-2 the bake cuts
-    # navigation meshes from it: it decides `UsedHullBits`, so the agent set, and which doors are
-    # cut. A re-exported graph must relaunch the bake.
+    """One recipe for the whole profile bake: every selected map's published `export_v2` units
+    and its nav graph, the particle sprites each map imports, the driving scripts, and the
+    world-material policy.
+
+    0018 story 21-8: the per-map `$ELYSIUM_EXPORT_ROOT/<map>/` directories and `shared/` used to
+    head this list. Their readers went with 21-4 and 21-5 and the directories themselves went
+    with this story, so they had been hashing nothing -- a recipe weaker than it read. A map's
+    inputs are its four `exports_v2/maps/<map>*.glb` units now, which is what the bake stages
+    from.
+    """
+    inputs: list[Path] = []
     if config.export_v2_root is not None:
-        inputs.extend(config.export_v2_root / "nav-graphs" / f"{name}.glb" for name in maps)
+        units = config.export_v2_root / "maps"
+        inputs.extend(units / f"{name}{suffix}.glb" for name in maps
+                      for suffix in ("", ".entities", ".lighting", ".visibility"))
+        # Since 0018 story 21-2 the bake cuts navigation meshes from the nav-graph unit: it
+        # decides `UsedHullBits`, so the agent set, and which doors are cut. A re-exported graph
+        # must relaunch the bake.
+        inputs.extend(units.parent / "nav-graphs" / f"{name}.glb" for name in maps)
     # Native references embedded in a map change when the merged R8 catalogues change.
     inputs.extend(config.repo_root / "Plugins/ElysiumBaked/Content/Models/_Corpus" / name
                   for name in ("DA_PlacedModels.uasset", "DA_PropSkins.uasset"))
