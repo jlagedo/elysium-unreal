@@ -179,22 +179,17 @@ def test_is_output_key_is_the_class_datamap_not_the_key_text():
     assert is_output_key("logic_relay", "OnTrigger") is True
 
 
-def test_collect_entity_fields_default_keeps_case_variants_as_separate_slots():
-    # Legacy: "Frob" and "frob" are two different `keys` slots, each keeping its own last value.
+def test_collect_entity_fields_folds_case_variants_and_keeps_the_last_spelling():
+    # 0018 story 21-7: `__strcmpi` at `101a5b0a` reaches one datamap record for both spellings and
+    # `ParseMapData 0x1009e280` applies the pairs in order, so it is one slot holding the LAST
+    # value -- spelled the way that occurrence authored it, never forced lowercase.
     _outputs, keys = collect_entity_fields([("Frob", "1"), ("frob", "2")])
-    assert keys == {"Frob": "1", "frob": "2"}
-
-
-def test_collect_entity_fields_fold_keys_collapses_case_variants_and_keeps_last_spelling():
-    # R3.4: opting in matches the entities unit's own identity rule (`decode.py`'s `occurrences`
-    # map, keyed by the already-folded key) -- one slot, spelled the way the *last* occurrence
-    # authored it, not forced lowercase.
-    fields = EntityDivergences(fold_keys=True)
-    _outputs, keys = collect_entity_fields([("Frob", "1"), ("frob", "2")], fields)
     assert keys == {"frob": "2"}
+    _outputs, reversed_order = collect_entity_fields([("frob", "1"), ("Frob", "2")])
+    assert reversed_order == {"Frob": "2"}
 
-    # An entity that never repeats a key under two spellings is unaffected either way.
-    _outputs, unaffected = collect_entity_fields([("RenderColor", "255 0 0")], fields)
+    # An entity that never repeats a key under two spellings is unaffected.
+    _outputs, unaffected = collect_entity_fields([("RenderColor", "255 0 0")])
     assert unaffected == {"RenderColor": "255 0 0"}
 
 
