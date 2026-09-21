@@ -2,11 +2,17 @@
 
 `pipeline/src/elysium_pipeline/importers/map_entities.py` turns the R3.2 producer's entity join
 into the manifest `pipeline/unreal/bake_map_entities.py` executes inside `bake map`'s own
-editor session, and refuses to write one whose
-rows do not match the `<map>.ents` document the asset replaces.
+editor session.
 
-These pin the pieces that decide whether a wrong asset can be authored at all: the parity
-comparison itself, the refusal it drives, the asset path that must stay the twin of
+**The parity check against `<map>.ents` is gone** (0018 story 21-4), and with it the two
+`compare_rows` cases and the refusal they drove. It proved the cooked asset equalled the file it
+replaced while that file was the BSP decoder's; since R3.5 the sidecar is written from the same
+`prepare_join` + `build_entities` this stage calls, and since 21-4 the bake writes it moments
+earlier in the same run, so the comparison had become the join against itself. What the join's
+flags may diverge on is 21-7's, measured against retail.
+
+These pin what is left of the shape that decides whether a wrong asset can be authored: the
+manifest the editor half executes, the asset path that must stay the twin of
 `FElysiumContentPaths::BakedMapEntities`, and the extraction that keeps `.ents` and the asset
 reading one join.
 """
@@ -42,71 +48,15 @@ def _join():
                            brush_meshes={})
 
 
-def _write_ents(path: Path, rows):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="ascii") as handle:
-        json.dump({"map": path.stem, "entities": rows}, handle, separators=(",", ":"))
-
-
-def test_compare_rows_names_the_index_and_the_field_that_differ():
-    staged = [_row(), _row(classname="func_door", origin=[4.0, 5.0, 6.0])]
-    sidecar = [_row(), _row(classname="func_door", origin=[4.0, 5.0, 6.5])]
-
-    verdict = map_entities.compare_rows(staged, sidecar)
-
-    assert verdict["defCount"] == {"staged": 2, "sidecar": 2, "equal": True}
-    assert verdict["mismatchCount"] == 1
-    assert verdict["equal"] is False
-    assert verdict["indexMismatches"] == [
-        {"index": 1, "field": "origin", "staged": [4.0, 5.0, 6.0], "sidecar": [4.0, 5.0, 6.5]}
-    ]
-
-
-def test_compare_rows_catches_a_field_present_on_only_one_side_and_a_count_gap():
-    # A row that gained `sky` and a row the sidecar does not have at all: index parity is by lump
-    # ordinal, so a count gap is reported as such and never absorbed by matching on classname.
-    staged = [_row(sky=True), _row(classname="func_door")]
-    sidecar = [_row()]
-
-    verdict = map_entities.compare_rows(staged, sidecar)
-
-    assert verdict["defCount"] == {"staged": 2, "sidecar": 1, "equal": False}
-    assert verdict["equal"] is False
-    assert verdict["indexMismatches"] == [
-        {"index": 0, "field": "sky", "staged": True, "sidecar": None}
-    ]
-
-
-def test_stage_map_refuses_rows_that_do_not_match_the_sidecar(monkeypatch, tmp_path):
-    monkeypatch.setattr(producer, "prepare_join", lambda name, root=None: _join())
-    monkeypatch.setattr(
-        map_entities.producer, "build_entities",
-        lambda *args, **kwargs: ([_row(classname="func_door")], {"entities": 1}),
-    )
-    ents = tmp_path / "sp_probe.ents"
-    _write_ents(ents, [_row()])
-
-    with pytest.raises(map_entities.MapEntityStageError) as error:
-        map_entities.stage_map("sp_probe", ents_path=ents)
-
-    assert "classname" in str(error.value)
-
-
-def test_stage_map_entities_writes_a_manifest_carrying_the_rows_and_a_passing_parity(
-    monkeypatch, tmp_path
-):
+def test_stage_map_entities_writes_a_manifest_carrying_the_rows(monkeypatch, tmp_path):
     rows = [_row(), _row(classname="func_door", model=18, hulls=[[1.0, 2.0, 3.0]])]
     monkeypatch.setattr(producer, "prepare_join", lambda name, root=None: _join())
     monkeypatch.setattr(
         map_entities.producer, "build_entities",
         lambda *args, **kwargs: (rows, {"entities": len(rows)}),
     )
-    ents = tmp_path / "exports" / "sp_probe" / "sp_probe.ents"
-    _write_ents(ents, rows)
-
     staged = map_entities.stage_map_entities(
-        tmp_path / "exports_v2", tmp_path / "staging",
-        maps=["sp_probe"], ents_for=lambda stem: ents,
+        tmp_path / "exports_v2", tmp_path / "staging", maps=["sp_probe"],
     )
 
     assert staged.maps == ["sp_probe"]
@@ -118,7 +68,7 @@ def test_stage_map_entities_writes_a_manifest_carrying_the_rows_and_a_passing_pa
     assert entry["assetPath"] == "/ElysiumBaked/sp_probe/DA_sp_probe_Entities"
     assert entry["packageRoot"] == "/ElysiumBaked/sp_probe"
     assert entry["entities"] == rows
-    assert entry["parity"]["checked"] is True and entry["parity"]["equal"] is True
+    assert "parity" not in entry
 
 
 def test_stage_map_entities_refuses_an_unscoped_run(tmp_path):

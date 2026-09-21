@@ -119,7 +119,11 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 15 (0018 story 21-3): `ropes` -- one row per cable segment this lane places one actor each for
 #: (`bake_ropes.author`), so `UElysiumMapVisuals::BuildRopes` builds its cables from the level
 #: instead of from `<map>.ropes` under the export root.
-MANIFEST_VERSION = 15
+#: 16 (0018 story 21-4): `decals` -- one projector row per `infodecal`, which `_place_decals`
+#: stands an `ADecalActor` from -- and `weather`, the rain contract plus the name of the R16 cover
+#: raster staged beside the manifest. With both here the bake opens no file under
+#: `$ELYSIUM_EXPORT_ROOT/<map>/`.
+MANIFEST_VERSION = 16
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -363,8 +367,13 @@ def _build_class():
                 fail("no staged geometry for %s at %s (the offline stage runs from "
                      "`uv run elysium export map %s`)" % (self.map, manifest_file, self.map))
                 return False
-            if not self.load_corpus():
-                return False
+            # 0018 story 21-4: `load_corpus` is not called here any more. It bound
+            # `shared/materials.json`, `shared/manifest.json` and `<map>.materials.json`, and no
+            # field it sets has a reader on this lane -- `read_mtl`, `_load_placed_prop_materials`
+            # and `CorpusBake` are the only consumers and none of them runs here. The material
+            # units carry what the map-local document used to: a PAKFILE-only material is a
+            # first-class unit keyed `maps/<map>/...` with its own `patchBase` chain, staged by
+            # the material lane and resolved in `resolve_materials` below.
             self.env = self._read_env()
 
             start = time.time()
@@ -384,15 +393,17 @@ def _build_class():
             self.v2_materials = {
                 key: _V2Material(key, row) for key, row in self.geometry.materials.items()}
             self.world_mats = self.v2_materials
-            self.decals = bl.read_decals(os.path.join(self.dir, "%s.decals" % self.map))
-            weather_path = os.path.join(self.dir, "%s.weather.json" % self.map)
-            if os.path.isfile(weather_path):
-                with open(weather_path, "r", encoding="utf-8") as handle:
-                    self.weather = json.load(handle)
+            self.decals = self.geometry.decals
+            staged_weather = self.geometry.weather
+            if staged_weather is not None:
+                self.weather = staged_weather["document"]
                 if (self.weather.get("schema") != "elysium.map-weather"
                         or self.weather.get("version") != 1):
-                    fail("unsupported weather sidecar: %s" % weather_path)
+                    fail("unsupported staged weather payload for %s" % self.map)
                     return False
+                # The raster is a file beside the manifest (the editor's Python carries no Pillow
+                # to make one); `_stage_weather_texture` imports it from this directory.
+                self.weather_dir = self.geometry.weather_dir
 
             counts = self.geometry.counts
             log("v2 unit: %s (%s)" % (
@@ -578,6 +589,11 @@ def _build_class():
             recipe["ai_infra_shape"] = _ai_infra_actor_shape()
             recipe["ropes"] = self.geometry.manifest.get("ropes", {}).get("sha256")
             recipe["rope_shape"] = _rope_actor_shape()
+            # 0018 story 21-4: the projector rows and the rain payload are staged inputs now, so
+            # the level is stamped against their digests rather than against the host's parse of
+            # `<map>.decals`. `_level_recipe`'s host half no longer sees either file.
+            recipe["decals"] = self.geometry.manifest.get("decals", {}).get("sha256")
+            recipe["weather"] = (self.geometry.weather or {}).get("sha256")
             # R7.2 ruling 3: the SLOT each face group binds, so a unit that gained (or lost) its
             # projector twin -- or, R7.4, its `_Underside` twin -- re-authors the level instead of
             # reusing a level bound to the other one. `slot_asset` already resolves both.
@@ -1961,6 +1977,32 @@ def _count_by_master(materials):
     return counts
 
 
+#: The `vtmb:material:` prefix a staged placement row names its material by. `_place_decals`
+#: folds the bare key through `decal_instance_path`, which is the R7.2 naming rule.
+MATERIAL_ID_PREFIX = "vtmb:material:"
+
+
+def _staged_decal(row):
+    """One staged `decals[]` row as the `bake_lib.DecalDef` the shared placer already reads.
+
+    0018 story 21-4: the rows are `UE_map_sidecars.decal_rows`' own, so this is an adapter and
+    not a second reading -- the same seven facts the 15-token `.decals` line carried, in the same
+    order, with the material named by its `vtmb:material:` id rather than by a bare key.
+    """
+
+    decal = bl.DecalDef()
+    identity = str(row["materialId"])
+    decal.mat = (identity[len(MATERIAL_ID_PREFIX):]
+                 if identity.startswith(MATERIAL_ID_PREFIX) else identity)
+    decal.loc = unreal.Vector(*row["locCm"])
+    decal.normal = unreal.Vector(*row["normal"])
+    decal.s_dir = unreal.Vector(*row["sDir"])
+    decal.t_dir = unreal.Vector(*row["tDir"])
+    decal.half_w = float(row["halfWCm"])
+    decal.half_h = float(row["halfHCm"])
+    return decal
+
+
 class _Placement(object):
     """One staged `staticProps[]` row, in the shape `map_geometry.Placement` publishes."""
 
@@ -2143,6 +2185,13 @@ class _StagedGeometry(object):
         # carries no "water" key at all, and `_place_water` reads an empty list the same as a
         # map with no `LEAFWATERDATA`.
         self.water = list((self.manifest.get("water") or {}).get("volumes") or [])
+        # 0018 story 21-4: the `infodecal` projectors and the rain contract, both staged rather
+        # than read off the export root. `decals` is in `DecalDef` order, which is the decal sort
+        # order; `weather` is `None` on every map that ships no rain.
+        self.decals = [_staged_decal(row)
+                       for row in (self.manifest.get("decals") or {}).get("rows") or []]
+        self.weather = self.manifest.get("weather") or None
+        self.weather_dir = os.path.dirname(manifest_file)
 
     def brush_stems(self):
         return {int(index): stem

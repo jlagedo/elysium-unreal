@@ -1094,22 +1094,17 @@ def bake_v2_maps(
     nothing when they are current). This is the V2 lane's own entry: the prerequisite check,
     the world-material masters, the four staged inputs and `bake_map.py`.
 
-    The lane still reads `.env`, `.decals` and `.weather.json` off the map's export directory,
-    so that directory must exist from one `export map <map> --intermediate-only`; that residue is
-    21-4's to remove.
+    **The lane opens nothing under `$ELYSIUM_EXPORT_ROOT/<map>/`** (0018 story 21-4). It used to
+    read `.env`, `.decals` and `.weather.json` there and refuse a map whose export directory was
+    absent; the producer runs inside `_stage_map_inputs` now and writes the sidecars it needs
+    from the published units, and the decal projectors and the rain cover are staged blocks of
+    the geometry manifest. A map goes from its `exports_v2` units to a level in this one command.
     """
     _require_export_config(config)
 
     names = list(dict.fromkeys(maps))
     if not names:
         return []
-    unexported = [str(config.export_root / name) for name in names
-                  if not (config.export_root / name / f"{name}.env").is_file()]
-    if unexported:
-        raise ExportBakeFailure(
-            "no export directory for: " + ", ".join(unexported)
-            + "; run `elysium export map <map> --intermediate-only` once to write the sidecars "
-            "the V2 lane still reads")
     native_model_pipeline.require_map_prerequisites(config)
     adopt_export_root(config.export_root, config.work_root)
     try:

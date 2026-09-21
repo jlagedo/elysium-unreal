@@ -123,7 +123,10 @@ def test_touching_one_sidecar_dirties_the_recipe_and_no_other_field(module, suff
         assert before["runtime_sidecars"][f"{other}_sha256"] == \
             after["runtime_sidecars"][f"{other}_sha256"]
     # Nothing parsed elsewhere in the recipe moves -- these sidecars are runtime-only inputs.
-    for key in ("props", "decals", "lights", "environment", "sky", "spawn"):
+    # `props` and `decals` left this function in 0018 story 21-4: both are staged rows now
+    # (`geometry.placements` and the `decals` manifest block), and `MapBakeV2._level_recipe`
+    # stamps those instead.
+    for key in ("lights", "environment", "sky", "spawn"):
         assert before[key] == after[key]
 
 

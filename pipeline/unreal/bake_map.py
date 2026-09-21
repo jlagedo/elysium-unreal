@@ -45,6 +45,19 @@ from pipeline.unreal import sky_composites as sky_assets
 MOUNT = mounts.BAKED
 OUT_ROOT = os.fspath(export_root())
 
+#: Where this run's map sidecars stand. `-BakeMapSidecars=<root>` names the parent, one directory
+#: per map below it, and the host points it at the producer's own `exports_v2/_sidecars`
+#: (0018 story 21-4). Empty on the legacy lane, which keeps reading beside the rest of the map's
+#: export -- `_sidecar_dir` resolves the two.
+SIDECAR_ROOT_FLAG = "BakeMapSidecars"
+
+
+def _sidecar_dir(map_name):
+    """The directory holding one map's eight producer sidecars, for this run."""
+
+    root = cmdline_arg(SIDECAR_ROOT_FLAG, "")
+    return os.path.join(root or OUT_ROOT, map_name)
+
 MASTERS = {
     "opaque": "%s/M_World_Opaque.M_World_Opaque" % mounts.MATERIALS,
     "masked": "%s/M_World_Masked.M_World_Masked" % mounts.MATERIALS,
@@ -452,6 +465,12 @@ def level_sidecar_recipe(map_root: Path, map_name: str, digest=None) -> dict:
     input that no longer matches -- a stale level that reads as a runtime bug. `digest` lets a
     caller route the hash through a cache (`Bake._file_sha256`); the default hashes the file
     directly, which is what a standalone call (a test, a differ) needs.
+
+    **`.props` and `.decals` are not parsed here any more** (0018 story 21-4). Both were only
+    ever read for the V2 lane's benefit, and both are staged now: `MapBakeV2._level_recipe`
+    already overwrote `props`/`prop_skins` from `geometry.placements`, and it stamps the staged
+    projector rows' own digest in place of this function's `decals` parse. Nothing on either lane
+    authors an actor from the files.
     """
 
     def _digest(path: Path) -> str:
@@ -480,27 +499,6 @@ def level_sidecar_recipe(map_root: Path, map_name: str, digest=None) -> dict:
             return float(value)
         except ValueError:
             return value
-
-    props = []
-    for tokens in lines("props"):
-        if len(tokens) < 9:
-            continue
-        props.append({
-            "stem": tokens[0],
-            "position": [float(value) for value in tokens[1:4]],
-            "rotation": [float(value) for value in tokens[4:8]],
-            "solid": int(tokens[8]),
-            "skin": int(tokens[9]) if len(tokens) >= 10 else 0,
-            "sky": int(tokens[10]) if len(tokens) >= 11 else 0,
-        })
-
-    decals = []
-    for tokens in lines("decals"):
-        if len(tokens) == 15:
-            decals.append({
-                "material": tokens[0],
-                "values": [float(value) for value in tokens[1:]],
-            })
 
     lights = []
     for index, tokens in enumerate(lines("lights")):
@@ -549,8 +547,6 @@ def level_sidecar_recipe(map_root: Path, map_name: str, digest=None) -> dict:
             spawn["yaw"] = float(tokens[1])
 
     return {
-        "props": props,
-        "decals": decals,
         "lights": lights,
         "environment": env,
         "sky": sky,
@@ -645,6 +641,17 @@ class Bake(object):
         self.tracker = tracker
         self.digest_cache = digest_cache
         self.dir = os.path.join(OUT_ROOT, map_name)
+        # 0018 story 21-4: where this map's SIDECARS stand, which is no longer where the rest of
+        # its legacy export stands. The producer writes the eight it owns into
+        # `exports_v2/_sidecars/<map>/` and the host names that root on the command line; with no
+        # flag (the legacy lane) it is `self.dir`, exactly as before. Only the sidecar readers
+        # take this -- `.obj`, `.mtl`, `.blend`, `brushes/` and `tex/cube/` are the decoder's and
+        # stay under `self.dir` until 21-5 deletes them.
+        self.sidecar_dir = _sidecar_dir(map_name)
+        # Where `_stage_weather_texture` finds the rain raster. The legacy lane keeps it beside
+        # the rest of the map's export; `MapBakeV2` re-points it at the geometry staging tree
+        # once it has read the staged weather payload.
+        self.weather_dir = self.dir
         # The shared corpus: one decode per source, so one asset per source. A map resolves these
         # and never authors them -- the corpus scope owns their receipts and their pruning.
         self.corpus_dir = os.fspath(SC.corpus_dir(OUT_ROOT))
@@ -998,10 +1005,15 @@ class Bake(object):
             self.tracker.pruned("textures", pruned)
 
     def _stage_weather_texture(self):
-        """The rain height field, the one map-owned texture both lanes import."""
+        """The rain height field, the one map-owned texture both lanes import.
+
+        `weather_dir` is where the raster stands: the map's export directory on the legacy lane,
+        the geometry stage's own staging directory since 0018 story 21-4 (`importers.map_weather`
+        writes it beside the manifest, because the editor's embedded Python carries no Pillow).
+        """
         if self.weather:
             relative = self.weather["height_texture"]["path"]
-            source = os.path.join(self.dir, relative.replace("/", os.sep))
+            source = os.path.join(self.weather_dir, relative.replace("/", os.sep))
             if not os.path.isfile(source):
                 fail("weather height texture missing: %s" % source)
             else:
@@ -1807,7 +1819,7 @@ class Bake(object):
         rows to light the miniature's props -- so they are carried into the sky transform
         (position scaled, reach scaled by the same factor) rather than deleted, per the owner
         call of 2026-07-26. Deleting them would un-light authored content."""
-        path = os.path.join(self.dir, "%s.lights" % self.map)
+        path = os.path.join(self.sidecar_dir, "%s.lights" % self.map)
         if not os.path.isfile(path):
             return 0, 0, None
         placed = sky_placed = 0
@@ -2225,7 +2237,7 @@ class Bake(object):
 
         return {
             "placement": level_sidecar_recipe(
-                Path(self.dir), self.map, digest=self._file_sha256),
+                Path(self.sidecar_dir), self.map, digest=self._file_sha256),
             "world_sky_meshes": sorted(world_sky),
             # Only the models this map places. Enumerating the whole shared package would make
             # every level stale whenever any of the corpus's 3,000 meshes changed, which is the
@@ -2433,7 +2445,7 @@ class Bake(object):
     def _read_env(self):
         """<map>.env as key -> [tokens]. Absent on a map with no environment sidecar at all."""
         env = {}
-        path = os.path.join(self.dir, "%s.env" % self.map)
+        path = os.path.join(self.sidecar_dir, "%s.env" % self.map)
         if os.path.isfile(path):
             with open(path, "r", encoding="utf-8", errors="replace") as handle:
                 for line in handle:
@@ -2446,7 +2458,7 @@ class Bake(object):
         """(scale, origin) from the .sky sidecar. 16 / world origin is the Source default."""
         scale = 16.0
         origin = (0.0, 0.0, 0.0)
-        path = os.path.join(self.dir, "%s.sky" % self.map)
+        path = os.path.join(self.sidecar_dir, "%s.sky" % self.map)
         if not os.path.isfile(path):
             return scale, origin
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
@@ -2678,7 +2690,7 @@ class Bake(object):
         return 0
 
     def _place_player_start(self, actors):
-        path = os.path.join(self.dir, "%s.spawn" % self.map)
+        path = os.path.join(self.sidecar_dir, "%s.spawn" % self.map)
         if not os.path.isfile(path):
             return
         origin = None

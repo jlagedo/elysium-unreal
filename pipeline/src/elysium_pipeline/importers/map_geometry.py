@@ -99,7 +99,12 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 15 (0018 story 21-3): the manifest carries `ropes` -- one row per cable segment
 #: (`UE_map_sidecars.rope_rows` through `importers.map_ropes`), the baked rope actors. It is the
 #: last per-map file the runtime opened from outside the project.
-MANIFEST_VERSION = 15
+#: 16 (0018 story 21-4): the manifest carries `decals` -- one projector row per `infodecal`
+#: (`UE_map_sidecars.decal_rows` through `importers.map_decals`) -- and `weather`, the rain
+#: contract plus its R16 cover raster (`importers.map_weather`, which writes `rain_height.png`
+#: beside this file). They are the last two decoder-only products the BAKE opened from outside
+#: the project, so with them staged a map needs no legacy export directory at all.
+MANIFEST_VERSION = 16
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -2359,6 +2364,8 @@ def stage_map(map_name: str, root: Path | None = None,
     from elysium_pipeline.importers import map_ai_infra as ai_infra_lane
     from elysium_pipeline.importers import map_jump_links as jump_link_lane
     from elysium_pipeline.importers import map_ropes as rope_lane
+    from elysium_pipeline.importers import map_decals as decal_lane
+    from elysium_pipeline.importers import map_weather as weather_lane
     from elysium_pipeline.importers import textures as texture_lane
 
     staging = material_staging_root(work_root)
@@ -2366,6 +2373,10 @@ def stage_map(map_name: str, root: Path | None = None,
         raise MapGeometryError(
             f"no material staging tree at {staging} (run: uv run elysium import materials)")
     read_sidecar = sidecar_reader(staging)
+    # One reader for both 21-4 lanes: the decal projector wants `$decalscale` and its albedo's
+    # size, the rain cover wants the three render flags, and both come off the same material
+    # units. Shared so a map's units are opened once.
+    material_units = sidecars.MaterialUnits(root)
     # The material lane is read BEFORE the geometry now: which `SURF_NODRAW` faces the producer
     # keeps is a question only the staged provenance can answer (R7.4, owner decision 2).
     geometry = read_geometry(map_name, root, compile_water_predicate(read_sidecar))
@@ -2437,6 +2448,13 @@ def stage_map(map_name: str, root: Path | None = None,
         "jumpLinks": jump_link_lane.stage_map(map_name, root),
         "aiInfra": ai_infra_lane.stage_for_join(geometry.join, geometry.map_name),
         "ropes": rope_lane.stage_for_join(geometry.join, geometry.map_name),
+        "decals": decal_lane.stage_for_join(
+            geometry.join, geometry.map_name, materials=material_units),
+        # `None` on every map but the one that ships rain. The raster lands beside this file, so
+        # the bake imports `T_RainHeight` without numpy or Pillow, neither of which the editor's
+        # embedded CPython carries.
+        "weather": weather_lane.stage_for_geometry(
+            geometry, geometry.map_name, root=root, materials=material_units),
         "details": {
             "fields": list(DETAIL_RECORD_FIELDS),
             "models": geometry.detail_models(),

@@ -28,6 +28,18 @@ from elysium_pipeline.asset_paths import map_package
 MATERIALS = mounts.MATERIALS
 
 
+#: 0018 story 21-4: `-BakeMapSidecars=<root>` names where the producer wrote this run's sidecars,
+#: one directory per map below it. `bake map` passes the same flag to both commandlets, so the
+#: verifier reads the files the bake read. Empty (a hand-run verify with no flag) falls back to
+#: the legacy export root, which is where they used to stand.
+SIDECAR_ROOT_FLAG = "BakeMapSidecars"
+
+
+def _sidecar_dir(map_name):
+    root = arg(SIDECAR_ROOT_FLAG, "")
+    return os.path.join(root or os.fspath(export_root()), map_name)
+
+
 _CORPUS_MATERIALS = None
 
 
@@ -50,21 +62,22 @@ def _map_prop_mtls(map_name):
     """The corpus `.mtl` files for the models THIS map places, as ``[(file name, path)]``.
 
     The corpus holds every model in the install. A map is answerable for the ones it places, so
-    the scan joins its own `.props` and `.ents` stems against the corpus rather than walking all
-    of it -- which would re-read three thousand models for every map verified and still say
-    nothing about this one.
+    the scan joins its own stems against the corpus rather than walking all of it -- which would
+    re-read three thousand models for every map verified and still say nothing about this one.
+
+    0018 story 21-4: the stems come from the staged `placements` rows and the staged entity rows,
+    not from `<map>.props` and `<map>.ents` under the export root. The staged row carries the same
+    `stem` the legacy line's first column carried (`map_geometry.Placement`'s own docstring says
+    so), so the set is unchanged. The `.mtl` join itself is the shared corpus's and dies with it
+    in 21-5.
     """
-    root = os.fspath(export_root())
-    prop_dir = os.fspath(SC.props_dir(root))
+    prop_dir = os.fspath(SC.props_dir(os.fspath(export_root())))
     stems = set()
-    props = os.path.join(root, map_name, map_name + ".props")
-    if os.path.isfile(props):
-        with open(props, "r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                token = line.split()
-                if token:
-                    stems.add(token[0])
-    ents = os.path.join(root, map_name, map_name + ".ents")
+    manifest = _staged_manifest(map_name) or {}
+    for placement in manifest.get("placements") or []:
+        if placement.get("stem"):
+            stems.add(placement["stem"])
+    ents = os.path.join(_sidecar_dir(map_name), map_name + ".ents")
     if os.path.isfile(ents):
         with open(ents, "r", encoding="utf-8", errors="replace") as handle:
             for entity in json.load(handle).get("entities", []):
@@ -79,26 +92,22 @@ def _map_prop_mtls(map_name):
     return out
 
 
-def _local_materials(map_name):
-    """The definitions of materials that exist only inside this map's own PAKFILE."""
-    path = os.path.join(os.fspath(export_root()), map_name, "%s.materials.json" % map_name)
-    if not os.path.isfile(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as handle:
-        return SC.check_materials(json.load(handle))["materials"]
-
-
 def _world_materials(map_name):
     """The map's surfaces, joined to their definitions the same way the bake joins them.
 
-    A `.mtl` states slot names and material keys; every channel and flag lives in the corpus, or
-    in the map's own `materials.json` for a material only its PAKFILE carries. Reading the `.mtl`
-    without both documents yields nothing at all, which would pass every check by verifying an
-    empty set.
+    A `.mtl` states slot names and material keys; every channel and flag lives in the corpus.
+    Reading the `.mtl` without that document yields nothing at all, which would pass every check
+    by verifying an empty set.
+
+    0018 story 21-4 dropped the `local=` half. It read `<map>.materials.json`, the decoder's
+    record of materials only a map's own PAKFILE carries -- and exactly one map in the whole
+    export tree has ever had one (`sm_pier_1`, which this group delisted). The V2 material lane
+    represents a PAKFILE-only material as a first-class unit keyed `maps/<map>/...` with its own
+    `patchBase` chain, so nothing is owed a replacement.
     """
     world_dir = os.path.join(os.fspath(export_root()), map_name)
     return bl.read_mtl(os.path.join(world_dir, map_name + ".mtl"),
-                       corpus=_corpus_materials(), local=_local_materials(map_name))
+                       corpus=_corpus_materials())
 
 
 def arg(key, default=""):
@@ -119,37 +128,43 @@ def asset_tag(data, name):
     return str(result) if result is not None else ""
 
 
-def verify_sm_hub_1_weather(package, world_dir):
-    """Verify the authored data contract and the one generated UE weather presentation path."""
+def verify_sm_hub_1_weather(package, map_name):
+    """Verify the authored data contract and the one generated UE weather presentation path.
+
+    0018 story 21-4: the contract is read from the STAGED weather block rather than from
+    `<map>.weather.json` under the export root. Every assertion below is unchanged -- two
+    `attach_type` 11 emitters, the pinned footprint, the R16 metadata, the height texture and the
+    per-map instances -- and the footprint is the sharpest of them: it is what says the ported
+    cover built its raster over the same world the decoder did.
+    """
     errors = []
 
     def fail(message):
         unreal.log_error("[verify] weather: " + message)
         errors.append("weather: " + message)
 
-    sidecar_path = os.path.join(world_dir, "sm_hub_1.weather.json")
-    try:
-        with open(sidecar_path, "r", encoding="utf-8") as handle:
-            weather = json.load(handle)
-    except (OSError, ValueError) as exc:
-        fail("sidecar missing or invalid: %s" % exc)
+    staged = (_staged_manifest(map_name) or {}).get("weather")
+    if not staged:
+        fail("no staged weather payload (run: uv run elysium bake map --maps %s --force)"
+             % map_name)
         return errors
+    weather = staged.get("document") or {}
     if weather.get("schema") != "elysium.map-weather" or weather.get("version") != 1:
-        fail("sidecar schema/version is not elysium.map-weather v1")
+        fail("staged payload schema/version is not elysium.map-weather v1")
     emitters = weather.get("emitters", [])
     if len(emitters) != 2 or any(
             item.get("particle_definition") != "rain_follow_emitter"
             or item.get("attach_type") != 11 for item in emitters):
-        fail("sidecar does not contain exactly two attach_type=11 rain_follow emitters")
+        fail("the payload does not contain exactly two attach_type=11 rain_follow emitters")
     bounds = weather.get("world_bounds_cm", {})
     minimum = bounds.get("min", [])
     maximum = bounds.get("max", [])
     if len(minimum) != 3 or len(maximum) != 3:
-        fail("sidecar world bounds are incomplete")
+        fail("the payload's world bounds are incomplete")
     else:
         footprint = (maximum[0] - minimum[0], maximum[1] - minimum[1])
         if abs(footprint[0] - 28971.24) > 0.01 or abs(footprint[1] - 19639.28) > 0.01:
-            fail("sidecar footprint drifted: %.3f x %.3f cm" % footprint)
+            fail("footprint drifted: %.3f x %.3f cm" % footprint)
     height_meta = weather.get("height_texture", {})
     if (height_meta.get("format") != "R16_UNORM"
             or height_meta.get("resolution") != 2048
@@ -1441,6 +1456,107 @@ def verify_ropes(actors, map_name):
     return errors
 
 
+#: 0018 story 21-4: the tag `_place_decals` stamps on a baked projector, and the id prefix a
+#: staged row names its material by. Restated here rather than imported, as the rope lane restates
+#: its own: an assertion that calls the code it asserts cannot fail.
+DECAL_TAG = "elysium.decal"
+DECAL_MATERIAL_PREFIX = "vtmb:material:"
+#: A cm tolerance for the float round trip through the actor's transform and `DecalSize`.
+DECAL_EPSILON = 0.05
+#: `bake_map.DECAL_HALF_DEPTH`, the projection box's reach along the decal's own -X.
+DECAL_HALF_DEPTH = 16.0
+
+
+def decal_errors(map_name, placed, payload):
+    """The baked-projector check, pure: `placed` is one `facts` dict per actor carrying the decal
+    tag -- its material asset path, its world location and its `decal_size` -- and `payload` the
+    staged `decals` block.
+
+    Placement order IS the check's index. `_place_decals` walks the staged rows in order and the
+    level keeps that order per `ADecalActor` label, so row `i` is compared with actor `i`: a decal
+    carries no source tag of its own, and the ORDER is load-bearing anyway -- it is the sort order
+    two decals on one wall layer by.
+
+    `decal_size` is `(half depth, half height, half width)`: a deferred decal maps its texture U
+    to the component's local Z and V to local Y, which is why the staged half-extents arrive
+    swapped.
+    """
+    errors = []
+    rows = list(payload.get("rows") or [])
+    if len(placed) != len(rows):
+        errors.append("%s: %d decal actor(s) stand, %d staged row(s)"
+                      % (map_name, len(placed), len(rows)))
+        return errors
+    for index, (facts, row) in enumerate(zip(placed, rows)):
+        expected = _decal_instance_path(row["materialId"])
+        if facts["material"] != expected:
+            errors.append("%s: decal %d binds %s, staged as %s"
+                          % (map_name, index, facts["material"], expected))
+        for axis in range(3):
+            if abs(facts["locCm"][axis] - row["locCm"][axis]) > DECAL_EPSILON:
+                errors.append("%s: decal %d stands at %s, staged at %s"
+                              % (map_name, index, facts["locCm"], row["locCm"]))
+                break
+        size = facts["sizeCm"]
+        for label, value, want in (
+            ("depth", size[0], DECAL_HALF_DEPTH),
+            ("height", size[1], float(row["halfHCm"])),
+            ("width", size[2], float(row["halfWCm"])),
+        ):
+            if abs(value - want) > DECAL_EPSILON:
+                errors.append("%s: decal %d half %s is %.4f, staged %.4f"
+                              % (map_name, index, label, value, want))
+    return errors
+
+
+def _decal_instance_path(material_id):
+    """`bake_map.decal_instance_path` restated over a staged `vtmb:material:` id (R7.2 ruling 2:
+    `/ElysiumBaked/Materials/<dir>/MI_<safe stem>_Decal`)."""
+    from elysium_pipeline.asset_names import safe_name
+
+    key = (material_id[len(DECAL_MATERIAL_PREFIX):]
+           if material_id.startswith(DECAL_MATERIAL_PREFIX) else material_id)
+    parts = key.split("/")
+    folded = "/".join(safe_name(part) for part in parts[:-1])
+    name = "MI_" + safe_name(parts[-1]) + "_Decal"
+    root = "/ElysiumBaked/Materials"
+    return f"{root}/{folded}/{name}" if folded else f"{root}/{name}"
+
+
+def verify_decals(actors, map_name):
+    """0018 story 21-4: the placed `ADecalActor`s are exactly the staged `decals` rows.
+
+    Before this story the projectors came from `<map>.decals` under the export root, produced by
+    the BSP decoder, and no check ever asked whether the level carried them -- the decal count was
+    a line in the bake log and nothing compared it with anything. The rows are the producer's now,
+    so this asks the level the same question `verify_ropes` asks of the cables.
+    """
+    manifest = _staged_manifest(map_name)
+    if manifest is None or manifest.get("decals") is None:
+        return ["%s: no staged decal rows to check the level against "
+                "(run: uv run elysium bake map --maps %s --force)" % (map_name, map_name)]
+    placed = []
+    for actor in actors:
+        if DECAL_TAG not in [str(tag) for tag in actor.tags]:
+            continue
+        component = actor.decal
+        size = component.get_editor_property("decal_size")
+        material = component.get_editor_property("decal_material")
+        location = actor.get_actor_location()
+        placed.append({
+            "material": (material.get_path_name().split(".", 1)[0] if material else ""),
+            "locCm": [location.x, location.y, location.z],
+            "sizeCm": [size.x, size.y, size.z],
+        })
+    errors = decal_errors(map_name, placed, manifest["decals"])
+    counts = manifest["decals"].get("counts") or {}
+    unreal.log("[verify] decals: %d actor(s), %d staged row(s) (%d unmatched, %d displacement "
+               "face(s) the projector index cannot offer), %d problem(s)"
+               % (len(placed), len(manifest["decals"].get("rows") or []),
+                  counts.get("unmatched", 0), counts.get("dispFacesSkipped", 0), len(errors)))
+    return errors
+
+
 def _atof(text):
     """C `atof`: the longest numeric prefix, 0.0 when there is none (the producer's own reader;
     `UE_map_sidecars` needs numpy and cannot be imported here)."""
@@ -1760,8 +1876,11 @@ def verify_v2_materials(map_name, registry, prop_mtls):
 
     # The semantic pair the legacy walks owned. The flags are the corpus definition's, joined by
     # unit key -- the staged manifest records the master a unit resolved to, never why.
+    # 0018 story 21-4 dropped the `<map>.materials.json` overlay that used to be merged in here:
+    # exactly one map in the export tree ever had one (`sm_pier_1`, delisted by this group), and
+    # a PAKFILE-only material is a first-class unit in the V2 lane rather than a map-local record.
+    # The shared corpus underneath is 21-5's to retire, and this join goes with it.
     definitions = dict(_corpus_materials())
-    definitions.update(_local_materials(map_name))
     flagged = parented = normals = 0
     for key in sorted(units):
         row, owner = units[key]
@@ -1887,7 +2006,11 @@ def verify_map(map_name):
 
     # The `.mtl` of every model this map places: what the material questions are asked of.
     prop_mtls = _map_prop_mtls(map_name)
-    world_dir = os.path.join(os.fspath(export_root()), map_name)
+    # The light lanes read `<map>.lights` and `<map>.sky`, two of the producer's own eight, so
+    # they read them where the producer wrote them (0018 story 21-4). `_world_materials` above
+    # still reads `<map>.mtl` off the legacy export root; that file is the decoder's and goes
+    # with it in 21-5.
+    world_dir = _sidecar_dir(map_name)
     # `verify_v2_materials` asks the three material questions -- alpha capability, glass and
     # refract staging and parentage, NormalMap linearity -- of what the map actually binds:
     # the material lane's `/ElysiumBaked/Materials/<family>/` instances. The three walks that
@@ -1896,7 +2019,7 @@ def verify_map(map_name):
     # drew (0018 story 21-1).
     errors.extend(verify_v2_materials(map_name, registry, prop_mtls))
 
-    ents_path = os.path.join(os.fspath(export_root()), map_name, map_name + ".ents")
+    ents_path = os.path.join(_sidecar_dir(map_name), map_name + ".ents")
     annotated = set()
     if os.path.isfile(ents_path):
         with open(ents_path, "r", encoding="utf-8") as handle:
@@ -1965,7 +2088,7 @@ def verify_map(map_name):
         brush_tris, brush_slots, brush_unbound, brush_collision))
 
     if map_name == "sm_hub_1":
-        errors.extend(verify_sm_hub_1_weather(package, world_dir))
+        errors.extend(verify_sm_hub_1_weather(package, map_name))
 
     level = "%s/%s" % (package, map_name)
     if unreal.EditorAssetLibrary.does_asset_exist(level):
@@ -1987,6 +2110,7 @@ def verify_map(map_name):
         errors.extend(verify_ai_infra(actors, map_name))
         errors.extend(verify_sky_scope(actors, map_name))
         errors.extend(verify_ropes(actors, map_name))
+        errors.extend(verify_decals(actors, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:

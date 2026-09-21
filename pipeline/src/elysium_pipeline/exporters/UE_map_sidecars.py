@@ -60,6 +60,8 @@ from elysium_pipeline.formats.map_entities_glb import model as entity_model
 from elysium_pipeline.formats.map_entities_glb.model import MAP_ENTITIES_EXTENSION
 from elysium_pipeline.formats.map_glb.model import MAP_EXTENSION
 from elysium_pipeline.formats.map_lighting_glb.model import MAP_LIGHTING_EXTENSION
+from elysium_pipeline.formats.material_glb.model import MATERIAL_EXTENSION
+from elysium_pipeline.formats.texture_glb.model import TEXTURE_EXTENSION
 from elysium_pipeline.formats.unit_contract import read_glb
 
 #: `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/` -- a separate tree from the legacy export root, so a
@@ -852,6 +854,471 @@ def displacement_triangles(units: MapUnits, world_faces: Sequence[int]) -> list[
     return rows
 
 
+# ---------------------------------------------------------------- infodecal projectors
+
+#: `R_DecalShoot` binds a decal to a face whose plane its origin stands within this many Source
+#: inches of. Verbatim from `UE_bsp_to_scene`'s decal pass.
+DECAL_PLANE_RADIUS = 64.0
+#: How far outside a face's winding the projected centre may fall and still bind it (inches).
+DECAL_EDGE_TOLERANCE = 1.0
+#: `_room_normal` samples BSP leaf solidity this far either side of the projected centre (inches).
+DECAL_SOLIDITY_PROBE = 2.0
+#: A VMT with no `$decalscale` sizes at 1.0, and so does one authoring a literal 0 -- `vmt._find_f`
+#: returns 0.0 and the `or 1.0` in `vmt.parse` swallows it. Reproduced rather than corrected.
+DECAL_DEFAULT_SCALE = 1.0
+
+#: The legacy `infodecal` regexes, verbatim. The origin test is deliberately narrow -- a single
+#: space between components, no exponent, no comma decimal -- because a decal whose origin it
+#: cannot read is one the legacy exporter silently dropped.
+_DECAL_ORIGIN = re.compile(r'"origin"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"')
+_DECAL_TEXTURE = re.compile(r'"texture"\s+"([^"]+)"')
+_BRUSH_MODEL_KEY = re.compile(r'"model"\s+"\*(\d+)"')
+
+
+class MaterialUnits:
+    """The VMT facts a map's placement lanes need, read off the published material units.
+
+    Both consumers here used to read `shared/materials.json` + `shared/manifest.json`, the two
+    documents 0018 story 21-4 stops consulting:
+
+      * `decal_projector` wants the albedo's pixel dimensions and `$decalscale`, which is what
+        `R_DecalSize` multiplies to size a decal's quad. The corpus stated the dimensions so the
+        decal pass did not have to decode the image; the texture unit states them under
+        `dimensions`, and the material unit carries every VMT key under `parameters` and names
+        its albedo in `textureBindings`.
+      * `render_flags` wants the three render semantics the rain-cover filter drops a surface
+        for. Each is the same test `vmt.parse` makes, against the unit's own published keys.
+
+    A material with no resolvable albedo, or an albedo with no dimensions, answers `None` from
+    `decal_projector`: the legacy pass skipped and counted such a decal rather than guessing a
+    size, and so does this.
+    """
+
+    def __init__(self, root: Path | None = None) -> None:
+        self._root = Path(root) if root is not None else paths.export_v2_root()
+        self._cache: dict[str, tuple[int, int, float] | None] = {}
+        self._flags: dict[str, dict[str, bool]] = {}
+        self._units: dict[str, dict[str, Any] | None] = {}
+
+    def _material_unit(self, key: str) -> dict[str, Any] | None:
+        if key not in self._units:
+            path = self._root / "materials" / f"{key}.glb"
+            block = None
+            if path.is_file():
+                document, _binary = read_glb(path)
+                candidate = (document.get("extensions") or {}).get(MATERIAL_EXTENSION)
+                block = candidate if isinstance(candidate, dict) else None
+            self._units[key] = block
+        return self._units[key]
+
+    def _texture_dimensions(self, key: str) -> tuple[int, int] | None:
+        path = self._root / "textures" / f"{key}.glb"
+        if not path.is_file():
+            return None
+        document, _binary = read_glb(path)
+        block = (document.get("extensions") or {}).get(TEXTURE_EXTENSION)
+        dimensions = (block or {}).get("dimensions") or {}
+        width = int(dimensions.get("width") or 0)
+        height = int(dimensions.get("height") or 0)
+        return (width, height) if width and height else None
+
+    def decal_projector(self, key: str) -> tuple[int, int, float] | None:
+        """`(albedo width, albedo height, $decalscale)` for one material key, or `None`."""
+
+        if key in self._cache:
+            return self._cache[key]
+        self._cache[key] = self._resolve(key)
+        return self._cache[key]
+
+    def render_flags(self, key: str) -> dict[str, bool]:
+        """`water` / `refract` / `additive` for one material key, by `vmt.parse`'s own tests.
+
+        `water` is the `Water` shader OR `%compilewater` (vbsp reads the compile key, not the
+        shader name, which is why four corpus units declare something else); `refract` is the
+        `Refract` shader; `additive` is `$additive 1`. A key with no published unit answers all
+        three false, which is what a material the corpus could not resolve answered before.
+        """
+
+        if key in self._flags:
+            return self._flags[key]
+        unit = self._material_unit(key) or {}
+        shader = str(unit.get("shader") or "").lower()
+        parameters = {
+            str(row.get("key", "")).lower(): str(row.get("value", "")).strip()
+            for row in (unit.get("parameters") or ())
+        }
+        self._flags[key] = {
+            "water": shader == "water" or "%compilewater" in parameters,
+            "refract": shader == "refract",
+            "additive": parameters.get("$additive") == "1",
+        }
+        return self._flags[key]
+
+    def _resolve(self, key: str) -> tuple[int, int, float] | None:
+        # One level of `patch` indirection, which is all `vmt.parse` follows.
+        unit = self._material_unit(key)
+        for _step in range(2):
+            if unit is None:
+                return None
+            albedo = _material_albedo(unit)
+            scale = _material_decal_scale(unit)
+            if albedo is not None:
+                size = self._texture_dimensions(albedo)
+                return None if size is None else (size[0], size[1], scale)
+            base = (unit.get("patchOf") or unit.get("patch") or {})
+            base_key = base.get("materialPath") if isinstance(base, dict) else None
+            if not base_key:
+                return None
+            unit = self._material_unit(shared_corpus.material_key(base_key))
+        return None
+
+
+def _material_albedo(unit: dict[str, Any]) -> str | None:
+    """The texture key this material's `$basetexture` resolves to, or `None`."""
+
+    for binding in unit.get("textureBindings") or ():
+        if str(binding.get("parameter", "")).lower() != "$basetexture":
+            continue
+        asset = str(binding.get("asset") or "")
+        prefix = "vtmb:texture:"
+        if asset.startswith(prefix):
+            return asset[len(prefix):]
+        value = binding.get("value")
+        return shared_corpus.texture_key(value) if value else None
+    return None
+
+
+def _material_decal_scale(unit: dict[str, Any]) -> float:
+    """`$decalscale`, with `vmt.parse`'s own default and its own zero quirk."""
+
+    for parameter in unit.get("parameters") or ():
+        if str(parameter.get("key", "")).lower() != "$decalscale":
+            continue
+        try:
+            value = float(str(parameter.get("value", "")).strip())
+        except ValueError:
+            return DECAL_DEFAULT_SCALE
+        return value or DECAL_DEFAULT_SCALE
+    return DECAL_DEFAULT_SCALE
+
+
+def _brush_model_origins(blocks: Sequence[str]) -> dict[int, tuple[float, float, float]]:
+    """Each brush model's authored world offset, from the entity that carries it.
+
+    vbsp leaves a brush entity's faces at their authored coordinates and hands the entity an
+    `origin` the engine adds back; the decal projector search needs the face where the player
+    sees it. `UE_bsp_to_scene` built the same table (`model_origin`) with the same two regexes.
+    """
+
+    out: dict[int, tuple[float, float, float]] = {}
+    for block in blocks:
+        model = _BRUSH_MODEL_KEY.search(block)
+        if not model:
+            continue
+        origin = _DECAL_ORIGIN.search(block)
+        if origin:
+            out[int(model.group(1))] = tuple(float(value) for value in origin.groups())
+    return out
+
+
+def _projector_faces(
+    units: MapUnits, backings: set[int], offsets: dict[int, tuple[float, float, float]]
+) -> tuple[np.ndarray, np.ndarray, list[np.ndarray], list[tuple[Any, ...]]]:
+    """Every face a decal may project onto, indexed the way the legacy pass indexed it.
+
+    **The filter is the decoder's, not `meshed_faces`'.** A decal binds any face with three or
+    more edges and a texinfo that is not a `func_areaportalwindow` backing and not an undrawn
+    `tools/` surface -- with no `SURF_NODRAW` test, and including the 3D-skybox miniature's faces
+    and every brush model's. `meshed_faces` honours `SURF_NODRAW` (R7.1), which is right for a
+    mesh and wrong here: reproducing the decoder is what keeps this story a transport change.
+
+    **One face class the published unit cannot offer: a displacement.** Its geometry is stated by
+    its own displacement mesh and it contributes no vertices to a model mesh, so it carries no
+    `firstVertex` span, and its FLAT winding -- which is what the decal pass projects onto, not
+    the sculpted surface -- is published nowhere: the root unit carries neither VERTEXES
+    numerically nor the DISP_VERTS offsets that would let the flat quad be recovered from the
+    displaced grid. R3.4 already declined to publish those for `.dispcol`'s sake. The legacy pass
+    read the winding straight out of VERTEXES/EDGES and so could bind a decal to sculpted terrain.
+
+    **Measured, 2026-09-21, over all 92 maps with a legacy `.decals` and 5,037 lines** (the probe
+    is `research/tooling/probes/decal_weather_parity.py`): 84 maps are byte-identical, three are
+    the lump-reader refusals 21-7 owns (`la_ventruetower_2`, `la_ventruetower_3`,
+    `sp_giovanni_2b`), and five differ by 22 rows in total -- `la_library_1` 11, `sm_oceanhouse_2`
+    6, `sp_soc_1` 2, `sm_warehouse_1` 1, `la_malkavian_5` 1. **Every one of the 22 is this gap**,
+    and every one is an `unbound` row (no projector face), never an `unresolved` one (no material
+    size): 21 sit inside a displacement's own bounds, and the 22nd was walked to its face --
+    `la_malkavian_5`'s `decals/damage/malkfire3` at Source (946.022, 1582.15, -16) projects onto
+    face 2610, `dispInfo 103`, whose flat plane is z = -64 exactly, which is the legacy line's
+    own position. **All six maps of 0018 story 21-4 are byte-identical**, so the story's own
+    acceptance is unaffected; the five are 21-8's to judge when it reaches them. `decal_rows`
+    reports `dispFacesSkipped` per map so the exposure is visible rather than inferred.
+    """
+
+    faces = units.root["faces"]
+    models = {int(row["index"]): row for row in units.root["models"]}
+    nodes = units.document["nodes"]
+    planes = source_planes(units.root["planes"])
+    texinfos = units.root["texinfos"]
+    face_model = _face_models(units.root["models"])
+
+    mesh_of: dict[int, int | None] = {}
+    for index, row in models.items():
+        node = row.get("node")
+        mesh_of[index] = None if node is None else int(nodes[int(node)].get("mesh"))
+
+    positions: dict[tuple[int, int], np.ndarray] = {}
+
+    def primitive_positions(mesh: int, primitive: int) -> np.ndarray:
+        key = (mesh, primitive)
+        hit = positions.get(key)
+        if hit is None:
+            attributes = units.document["meshes"][mesh]["primitives"][primitive]["attributes"]
+            hit = units.accessor(attributes["POSITION"])
+            positions[key] = hit
+        return hit
+
+    normals: list[np.ndarray] = []
+    distances: list[float] = []
+    polygons: list[np.ndarray] = []
+    basis: list[tuple[Any, ...]] = []
+    for index, face in enumerate(faces):
+        if int(face["numEdges"]) < 3 or int(face["texInfo"]) < 0:
+            continue
+        model = face_model.get(index, 0)
+        if model in backings:
+            continue
+        material = _face_material(units, face)
+        if material is None:
+            continue
+        base = shared_corpus.base_material(material)
+        if base.startswith("tools/") and base not in DRAWN_TOOL_MATERIALS:
+            continue
+        if face.get("primitive") is None or face.get("firstVertex") is None:
+            continue                                   # a displacement face; see the docstring
+        mesh = mesh_of.get(model)
+        if mesh is None:
+            continue
+        first = int(face["firstVertex"])
+        count = int(face["vertexCount"])
+        published = primitive_positions(mesh, int(face["primitive"]))[first:first + count]
+        offset = np.asarray(offsets.get(model, (0.0, 0.0, 0.0)), dtype=np.float64)
+        points = np.asarray(
+            [source_position(point) for point in published], dtype=np.float64
+        ) + offset
+
+        plane = int(face["plane"])
+        normal = np.asarray(planes[plane, :3], dtype=np.float64)
+        distance = float(planes[plane, 3]) + float(np.dot(normal, offset))
+        if int(face["side"]):
+            normal, distance = -normal, -distance
+
+        edge = points[1] - points[0]
+        length = float(np.linalg.norm(edge))
+        if length <= 0.0:
+            continue
+        along = edge / length
+        across = np.cross(normal, along)
+        polygon = np.asarray(
+            [[float(np.dot(p - points[0], along)), float(np.dot(p - points[0], across))]
+             for p in points]
+        )
+        vectors = texinfos[int(face["texInfo"])]["textureVecs"]
+        normals.append(normal)
+        distances.append(distance)
+        polygons.append(polygon)
+        basis.append(
+            (points[0], along, across, index,
+             np.asarray(vectors[0][:3], dtype=np.float64),
+             np.asarray(vectors[1][:3], dtype=np.float64))
+        )
+    return (
+        np.asarray(normals) if normals else np.zeros((0, 3)),
+        np.asarray(distances) if distances else np.zeros((0,)),
+        polygons,
+        basis,
+    )
+
+
+def _inplane(polygon: np.ndarray, point: np.ndarray) -> float:
+    """Distance from a 2D point to a convex polygon, 0 inside. Verbatim from the legacy `_inplane`,
+    seam tolerance included: either winding counts as inside, because a face's authored winding is
+    arbitrary and a decal that lands on a shared edge must still bind."""
+
+    edges = np.roll(polygon, -1, axis=0) - polygon
+    lengths = np.hypot(edges[:, 0], edges[:, 1])
+    lengths[lengths < 1e-9] = 1e-9
+    offsets = point - polygon
+    cross = (edges[:, 0] * offsets[:, 1] - edges[:, 1] * offsets[:, 0]) / lengths
+    if np.all(cross >= -0.5) or np.all(cross <= 0.5):
+        return 0.0
+    travel = np.clip(
+        (offsets[:, 0] * edges[:, 0] + offsets[:, 1] * edges[:, 1]) / (lengths * lengths), 0, 1
+    )
+    nearest = polygon + edges * travel[:, None]
+    return float(np.min(np.hypot(*(point - nearest).T)))
+
+
+def decal_rows(
+    join: "MapJoin", *, materials: MaterialUnits | None = None, root: Path | None = None
+) -> dict[str, Any]:
+    """VtMB's decal layer as one projector row per placed `infodecal`, in entity-lump order.
+
+    VtMB leaves the OVERLAYS lump empty: every poster, stain, sign and spray is an `infodecal`
+    entity carrying a `texture` and an `origin`, and the engine projects it onto the surfaces
+    within its radius (`engine.dll R_DecalShoot -> R_DecalNode -> R_DecalCreate`). This recovers
+    each decal's projector -- the visible face its origin projects squarely onto (nearest by
+    plane distance), the room-facing normal, the face's texture axes and the half-extents
+    (`R_DecalSize`: the albedo's pixel dimensions x `$decalscale`) -- and states it in Unreal
+    space, which is what the bake stands one `ADecalActor` per row from.
+
+    Ported from `UE_bsp_to_scene.py`'s decal pass for 0018 story 21-4, which retired the legacy
+    `<map>.decals` sidecar and the BSP decode behind it. The port matches the decoder rather than
+    improving on it; the two places it cannot are `_projector_faces`' displacement note and the
+    entity lump 21-7 owns.
+
+    **Row order is the decal sort order.** Two decals on one wall layer in the order the entity
+    lump names them, so the rows are never sorted or de-duplicated.
+    """
+
+    units = join.units
+    materials = materials if materials is not None else MaterialUnits(root)
+    offsets = _brush_model_origins(join.text_blocks)
+    backings = visibility_backing_models(join.pair_blocks)
+    normals, distances, polygons, basis = _projector_faces(units, backings, offsets)
+
+    disp_skipped = sum(
+        1 for face in units.root["faces"]
+        if int(face["numEdges"]) >= 3 and int(face["texInfo"]) >= 0
+        and face.get("primitive") is None and int(face.get("dispInfo", -1)) >= 0
+    )
+
+    rows: list[dict[str, Any]] = []
+    unresolved = 0
+    unbound = 0
+    keys: set[str] = set()
+    for block in join.text_blocks:
+        if '"infodecal"' not in block:
+            continue
+        origin = _DECAL_ORIGIN.search(block)
+        texture = _DECAL_TEXTURE.search(block)
+        if not (origin and texture):
+            continue
+        key = shared_corpus.base_material(texture.group(1))
+        resolved = materials.decal_projector(key)
+        if resolved is None or len(normals) == 0:
+            unresolved += 1
+            continue
+        width, height, scale = resolved
+        point = np.asarray([float(value) for value in origin.groups()], dtype=np.float64)
+        gaps = np.abs(normals @ point - distances)
+        best: tuple[float, int] | None = None
+        for candidate in np.where(gaps <= DECAL_PLANE_RADIUS)[0]:
+            anchor, along, across, _face, _sax, _tax = basis[candidate]
+            local = np.asarray(
+                [float(np.dot(point - anchor, along)), float(np.dot(point - anchor, across))]
+            )
+            if _inplane(polygons[candidate], local) <= DECAL_EDGE_TOLERANCE and (
+                best is None or gaps[candidate] < best[0]
+            ):
+                best = (float(gaps[candidate]), int(candidate))
+        if best is None:
+            unbound += 1
+            continue
+
+        chosen = best[1]
+        anchor, _along, _across, face_index, s_axis, t_axis = basis[chosen]
+        normal = normals[chosen]
+        projected = point - normal * (float(np.dot(normal, point)) - float(distances[chosen]))
+        normal = _room_normal(join, projected, normal, point)
+        # The decal's frame is the face's texture axes made perpendicular to the normal. The
+        # texinfo s/t sign is authored per face, so it is normalised: t (V) stays as authored,
+        # which keeps text upright, and s (U) is signed so the frame is left-handed with respect
+        # to the outward normal -- what reads un-mirrored from the room side. The test runs in
+        # SOURCE space, before the reflection: `source_dir_to_unreal` negates Y, so the same
+        # comparison after the transform would choose the opposite sign.
+        s_dir = s_axis - normal * float(np.dot(normal, s_axis))
+        s_dir = s_dir / np.linalg.norm(s_dir)
+        t_dir = t_axis - normal * float(np.dot(normal, t_axis))
+        t_dir = t_dir / np.linalg.norm(t_dir)
+        if float(np.dot(np.cross(s_dir, t_dir), normal)) > 0:
+            s_dir = -s_dir
+
+        keys.add(key)
+        rows.append(
+            {
+                "index": len(rows),
+                "materialId": "vtmb:material:" + shared_corpus.material_key(key),
+                "face": int(face_index),
+                "locCm": list(source_to_unreal(*projected)),
+                "normal": list(source_dir_to_unreal(*normal)),
+                "sDir": list(source_dir_to_unreal(*s_dir)),
+                "tDir": list(source_dir_to_unreal(*t_dir)),
+                "halfWCm": width * scale / 2.0 * INCH_TO_CM,
+                "halfHCm": height * scale / 2.0 * INCH_TO_CM,
+            }
+        )
+    return {
+        "rows": rows,
+        "placed": len(rows),
+        # The legacy pass counted both of these as one `n_decal_miss`. They are split because they
+        # mean opposite things: a material the units cannot size is authored dirt the decoder
+        # skipped too, while a decal that binds no face is the one way this port can lose a row
+        # the decoder placed -- see `_projector_faces` on displacement faces.
+        "unresolved": unresolved,
+        "unbound": unbound,
+        "unmatched": unresolved + unbound,
+        "materials": len(keys),
+        "projectorFaces": len(basis),
+        "dispFacesSkipped": disp_skipped,
+    }
+
+
+def _room_normal(
+    join: "MapJoin", projected: np.ndarray, normal: np.ndarray, origin: np.ndarray
+) -> np.ndarray:
+    """Turn a face's normal toward the open side, where the decal is meant to be seen.
+
+    A decal's host face is drawn double-sided (world `CullMode` disabled), so VtMB authors the
+    wall with arbitrary winding and the plane normal may point into the sealed interior. The
+    engine resolves the room side from BSP leaf solidity; so does this. Ambiguous -- both sides
+    solid, or both open -- falls back to the side the entity's own origin stands on, then to the
+    authored normal. Verbatim from `UE_bsp_to_scene._room_normal`.
+    """
+
+    leafs = join.units.root["bsp"]["leafs"]
+
+    def solid(point: np.ndarray) -> bool:
+        leaf = join.sky._point_leaf(point)
+        return bool(int(leafs[leaf]["contents"]) & 1) if 0 <= leaf < len(leafs) else False
+
+    plus = solid(projected + normal * DECAL_SOLIDITY_PROBE)
+    minus = solid(projected - normal * DECAL_SOLIDITY_PROBE)
+    if plus != minus:
+        return normal if minus else -normal
+    side = float(np.dot(origin - projected, normal))
+    return -normal if side < -1e-3 else normal
+
+
+def decal_line(row: dict[str, Any]) -> str:
+    """One `decal_rows` row as its 15-token `.decals` line, the only place the format is written.
+
+    The line names the bare material key, which is the `materialId` less its `vtmb:material:`
+    prefix -- `shared_corpus.material_key` is the identity on every decal key the install ships
+    (measured over all 5,095 legacy `.decals` lines, 2026-09-21), so the row needs one spelling.
+    """
+
+    location, normal = row["locCm"], row["normal"]
+    s_dir, t_dir = row["sDir"], row["tDir"]
+    return (
+        f"{row['materialId'][len('vtmb:material:'):]} "
+        f"{location[0]:.4f} {location[1]:.4f} {location[2]:.4f} "
+        f"{normal[0]:.6f} {normal[1]:.6f} {normal[2]:.6f} "
+        f"{s_dir[0]:.6f} {s_dir[1]:.6f} {s_dir[2]:.6f} "
+        f"{t_dir[0]:.6f} {t_dir[1]:.6f} {t_dir[2]:.6f} "
+        f"{row['halfWCm']:.4f} {row['halfHCm']:.4f}"
+    )
+
+
 # ---------------------------------------------------------------- the sidecar writers
 
 
@@ -1207,7 +1674,8 @@ def _fog(block: str, distance_scale: float) -> dict[str, Any]:
 
 
 def write_environment(
-    units: MapUnits, sky: SkyScope, blocks: Sequence[str], out_dir: Path, corpus_root: Path
+    units: MapUnits, sky: SkyScope, blocks: Sequence[str], out_dir: Path,
+    root: Path | None = None,
 ) -> dict[str, Any]:
     """`<map>.env`: the 2D sky name, the face-set flag and the two fog sets.
 
@@ -1216,8 +1684,10 @@ def write_environment(
     so a world-space equivalent is `x scale`. The 2D backdrop is fogged by neither -- every sky
     face in the game carries `$nofog 1`.
 
-    `skybox` states whether the shared corpus holds all six faces of this map's sky, which is the
-    same question the legacy exporter asked of the same corpus.
+    `skybox` states whether the install publishes all six faces of this map's sky. The legacy
+    exporter asked that of `shared/manifest.json`; since 0018 story 21-4 it is asked of the
+    published texture units (`sky_faces_published`), which is what leaves this producer reading
+    nothing outside `$ELYSIUM_EXPORT_V2_ROOT`.
     """
 
     def first_block(classname: str) -> str:
@@ -1229,13 +1699,7 @@ def write_environment(
     text = "".join(blocks)
     match = re.search(r'"skyname"\s+"([^"]+)"', text, re.I)
     skyname = match.group(1).lower() if match else None
-    sky_ok = False
-    if skyname:
-        textures = _corpus_textures(corpus_root)
-        sky_ok = all(
-            shared_corpus.sky_texture_key(skyname, face) in textures
-            for face in shared_corpus.SKY_FACES
-        )
+    sky_ok = bool(skyname) and sky_faces_published(skyname, root)
 
     world_fog = _fog(first_block("worldspawn"), 1.0)
     sky_fog = _fog(first_block("sky_camera"), sky.scale if sky.ok else 1.0)
@@ -1450,37 +1914,24 @@ def write_displacement_collision(
     return len(rows)
 
 
-# ---------------------------------------------------------------- the shared corpus
+# ---------------------------------------------------------------- the published sky faces
 
 
-_CORPUS_CACHE: dict[Path, tuple[dict[str, Any], dict[str, Any]]] = {}
+def sky_faces_published(sky_name: str, root: Path | None = None) -> bool:
+    """Does the install publish all six faces of this sky?
 
+    `<map>.env`'s `skybox` flag. Until 0018 story 21-4 this was a membership test over
+    `shared/manifest.json`'s texture table -- the legacy exporter's own question, asked of the
+    corpus `UE_extract_corpus` builds. It is the same question asked of the published texture
+    units instead, which is the one thing that let this producer stop reading the legacy export
+    root at all. `importers.sky_composites.plan_composites` already names exactly these files,
+    and refuses a partial set the same way.
+    """
 
-def _corpus(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`shared/materials.json` and `shared/manifest.json` -- the same two documents the legacy
-    exporter resolved rope materials and sky faces against. They are produced by
-    `UE_extract_corpus`, not by the map exporter, so R3.5 does not retire them."""
-
-    root = Path(root)
-    if root in _CORPUS_CACHE:
-        return _CORPUS_CACHE[root]
-    materials_file = shared_corpus.materials_path(str(root))
-    manifest_file = shared_corpus.manifest_path(str(root))
-    for path in (materials_file, manifest_file):
-        if not Path(path).is_file():
-            raise MapSidecarError(
-                f"no shared corpus at {path}; run: uv run elysium export bundle corpus"
-            )
-    with open(materials_file, encoding="utf-8") as handle:
-        materials = shared_corpus.check_materials(json.load(handle))["materials"]
-    with open(manifest_file, encoding="utf-8") as handle:
-        manifest = shared_corpus.check_manifest(json.load(handle))
-    _CORPUS_CACHE[root] = (materials, manifest["textures"])
-    return _CORPUS_CACHE[root]
-
-
-def _corpus_textures(root: Path) -> dict[str, Any]:
-    return _corpus(root)[1]
+    faces = (root or paths.export_v2_root()) / "textures" / shared_corpus.SKY_DIR
+    return all(
+        (faces / f"{sky_name}{face}.glb").is_file() for face in shared_corpus.SKY_FACES
+    )
 
 
 # ---------------------------------------------------------------- the run
@@ -1532,7 +1983,6 @@ def write_sidecars(
     *,
     root: Path | None = None,
     out_dir: Path | None = None,
-    corpus_root: Path | None = None,
     entity_fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
 ) -> dict[str, Any]:
     """Produce one map's legacy sidecars from its published units and return the run's numbers.
@@ -1542,13 +1992,17 @@ def write_sidecars(
     the travel gate onto the bake's own four packages, and nothing reads the marker any more.
     `entity_fields` opts `.ents` into the R3.4 divergences one at
     a time; the default keeps this run byte-comparable to `UE_bsp_to_scene.py`.
+
+    **This run reads nothing outside `$ELYSIUM_EXPORT_V2_ROOT`** (0018 story 21-4). The one tie
+    left was `corpus_root`, which fed `shared/manifest.json` to the `.env` sky-face test and is
+    gone with it; that is what lets `bake map` call this itself instead of requiring a legacy
+    export directory somebody ran `export map` to produce.
     """
 
     join = prepare_join(map_name, root)
     units = join.units
     out_dir = Path(out_dir) if out_dir is not None else sidecar_dir(map_name, root)
     out_dir.mkdir(parents=True, exist_ok=True)
-    corpus_root = Path(corpus_root) if corpus_root is not None else paths.export_root()
 
     pair_blocks = join.pair_blocks
     text_blocks = join.text_blocks
@@ -1560,7 +2014,7 @@ def write_sidecars(
     report["hulls"] = write_hulls(units, sky, out_dir)
     report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir, entity_fields)
     report["lights"] = write_lights(units, sky, out_dir)
-    report["env"] = write_environment(units, sky, text_blocks, out_dir, corpus_root)
+    report["env"] = write_environment(units, sky, text_blocks, out_dir, root)
     report["sky"] = write_sky(units, sky, bool(scenes["sky"]), out_dir)
     report["spawn"] = write_spawn(units, text_blocks, out_dir)
     report["ropes"] = write_ropes(units, pair_blocks, out_dir)
@@ -1589,18 +2043,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="write under this root instead of $ELYSIUM_EXPORT_V2_ROOT/_sidecars",
     )
-    parser.add_argument(
-        "--corpus-root",
-        type=Path,
-        default=None,
-        help="the export root holding shared/materials.json (default: $ELYSIUM_EXPORT_ROOT)",
-    )
     arguments = parser.parse_args(argv)
     for map_name in arguments.maps:
         out_dir = (arguments.out_root / map_name) if arguments.out_root else None
-        report = write_sidecars(
-            map_name, out_dir=out_dir, corpus_root=arguments.corpus_root
-        )
+        report = write_sidecars(map_name, out_dir=out_dir)
         print(json.dumps(report, separators=(",", ":")))
     return 0
 

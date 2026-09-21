@@ -747,15 +747,30 @@ def _stage_map_inputs(config, maps: Sequence[str]) -> dict[str, Path]:
     existed; under the fold a missing entry would have the bake write a level with no entity
     table, no collision actor and no meshes -- a level that cannot be loaded at all. There is
     nothing to gain by finding that out afterwards.
+
+    **The producer runs here too, first** (0018 story 21-4). The collision, environment and
+    entity lanes read the map's sidecars, and until this story somebody had to have run
+    `export map --intermediate-only` -- a full legacy BSP decode -- to put them on disk. They are
+    `UE_map_sidecars.write_sidecars`' own output and it reads nothing but the published units, so
+    the bake writes them itself, into the producer's own `exports_v2/_sidecars/<map>/`. Nothing
+    under `$ELYSIUM_EXPORT_ROOT/<map>/` is opened by this launch or by the editor behind it.
     """
+    from elysium_pipeline.exporters import UE_map_sidecars as producer
     from elysium_pipeline.importers import map_collision, map_entities, map_environment
 
     names = list(dict.fromkeys(maps))
-    sidecar_dir = lambda stem: config.export_root / stem  # noqa: E731 - one expression, two uses
+    for name in names:
+        report = producer.write_sidecars(name, root=config.export_v2_root)
+        print(f"produced sidecars for {name}: {report['hulls']['brushes']} hulls, "
+              f"{report['ents']['entities']} entities, {report['lights']['lights']} lights, "
+              f"{report['ropes']['segments']} rope segments, {report['dispcol']} "
+              f"displacement triangles -> {report['outputDir']}")
+
+    sidecar_dir = lambda stem: producer.sidecar_dir(  # noqa: E731 - one expression, two uses
+        stem, config.export_v2_root)
     staged = {
         "entities": map_entities.stage_map_entities(
-            config.export_v2_root, map_entities.staging_root(config.work_root), maps=names,
-            ents_for=lambda stem: config.export_root / stem / f"{stem}.ents"),
+            config.export_v2_root, map_entities.staging_root(config.work_root), maps=names),
         "collision": map_collision.stage_map_collision(
             map_collision.staging_root(config.work_root), maps=names, sidecar_dir=sidecar_dir),
         "environment": map_environment.stage_map_environment(
@@ -838,6 +853,8 @@ def bake_maps(
     Per-asset reuse is the commandlet's own decision, read off each asset's recipe stamp; a
     failed batch is reported by the editor log naming the failing map.
     """
+    from elysium_pipeline.exporters import UE_map_sidecars as producer
+
     maps = list(dict.fromkeys(maps))
     # Every offline read the launch needs, done here because Unreal's embedded CPython carries no
     # numpy. Staging every launch rather than caching it keeps the bake's inputs and the published
@@ -859,6 +876,11 @@ def bake_maps(
                 f"-BakeMapEntities={manifests['entities']}",
                 f"-BakeMapCollision={manifests['collision']}",
                 f"-BakeMapEnvironment={manifests['environment']}",
+                # 0018 story 21-4: where the producer wrote this batch's sidecars. The editor
+                # half reads `.env`, `.sky`, `.spawn` and `.lights` from here, and the four
+                # runtime sidecars' digests for the level recipe; it no longer composes a path
+                # under the legacy export root.
+                f"-BakeMapSidecars={config.export_v2_root / producer.SIDECAR_DIR_NAME}",
                 *(["-BakeForce=1"] if force else []),
                 *([f"-BakeFrom={from_stage}"] if from_stage else []),
                 *(["-BakeParticles=1"] if particles else []),
@@ -874,6 +896,8 @@ def bake_maps(
 
 
 def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) -> None:
+    from elysium_pipeline.exporters import UE_map_sidecars as producer
+
     maps = list(dict.fromkeys(maps))
     for offset in range(0, len(maps), max(1, batch_size)):
         batch = maps[offset : offset + max(1, batch_size)]
@@ -886,6 +910,9 @@ def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) ->
                 "-run=pythonscript",
                 f"-script={config.repo_root / 'pipeline/unreal/bake_verify.py'}",
                 f"-BakeMaps={','.join(batch)}",
+                # The same sidecar root the bake read, so the verifier asks its questions of the
+                # files the bake used rather than of a legacy directory (0018 story 21-4).
+                f"-BakeMapSidecars={config.export_v2_root / producer.SIDECAR_DIR_NAME}",
                 "-unattended",
                 "-nosplash",
                 "-nopause",

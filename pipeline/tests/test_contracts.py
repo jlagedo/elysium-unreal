@@ -1093,6 +1093,10 @@ def test_texture_bake_enables_commandlet_rendering() -> None:
         repo_root=REPO,
         project=REPO / "ElysiumUE.uproject",
         unreal_shader_work_root=Path("D:/UnrealCache/ShaderWorking"),
+        # 0018 story 21-4: the launch names the producer's sidecar root on the command line, so
+        # the editor half reads the files the host just produced rather than composing a path
+        # under the legacy export root.
+        export_v2_root=Path("W:/exports_v2"),
     )
     with (
         mock.patch.object(
@@ -1107,6 +1111,7 @@ def test_texture_bake_enables_commandlet_rendering() -> None:
     assert len(submitted) == 1
     assert "-AllowCommandletRendering" in submitted[0][0]
     assert "-shaderworkingdir=D:\\UnrealCache\\ShaderWorking" in submitted[0][0]
+    assert "-BakeMapSidecars=W:\\exports_v2\\_sidecars" in submitted[0][0]
 
 
 def test_work_root_derivations() -> None:

@@ -609,11 +609,12 @@ def test_focused_character_policy_runs_only_character_material_generators() -> N
 
 
 def _v2_config(temporary: str, map_name: str = "test_map"):
+    # No export directory is written: 0018 story 21-4 removed the `.env` gate that demanded one.
+    # A map goes from its published `exports_v2` units to a level in this one command, and the
+    # producer runs inside `_stage_map_inputs` to write the sidecars the lane still reads.
     config = _config(temporary)
     config.game_root = Path(temporary) / "game"
     config.work_root = Path(temporary) / "work"
-    (config.export_root / map_name).mkdir(parents=True, exist_ok=True)
-    (config.export_root / map_name / f"{map_name}.env").write_text("sky 0\n", encoding="utf-8")
     return config
 
 
@@ -637,11 +638,19 @@ def test_bake_v2_maps_bakes_each_named_map_once() -> None:
                                      skip_nav_verify=False, on_line=None)
 
 
-def test_bake_v2_maps_refuses_a_map_with_no_export_directory() -> None:
+def test_bake_v2_maps_needs_no_export_directory() -> None:
+    """0018 story 21-4: the lane opens nothing under `$ELYSIUM_EXPORT_ROOT/<map>/`, so a map that
+    was never legacy-exported reaches the bake. What decides whether it can be baked is whether
+    its units are published, and `_stage_map_inputs` says so by name if they are not."""
+
     with tempfile.TemporaryDirectory() as temporary:
         config = _v2_config(temporary)
-        with mock.patch.object(export_manager, "bake_and_verify") as bake:
-            with pytest.raises(export_manager.ExportBakeFailure) as caught:
-                export_manager.bake_v2_maps(config, object(), ["never_exported"])
-        assert "--intermediate-only" in str(caught.value)
-        bake.assert_not_called()
+        with (
+            mock.patch.object(export_manager.native_model_pipeline, "require_map_prerequisites"),
+            mock.patch.object(export_manager, "adopt_export_root"),
+            mock.patch.object(export_manager, "ensure_world_material_content"),
+            mock.patch.object(export_manager, "bake_and_verify") as bake,
+        ):
+            names = export_manager.bake_v2_maps(config, object(), ["never_exported"])
+        assert names == ["never_exported"]
+        bake.assert_called_once()
