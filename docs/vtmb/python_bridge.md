@@ -272,6 +272,28 @@ readable but read only. On the NPC family this makes `default_camera`, `player_r
 CNPCMaker `0x10624718`, CAI_InterestingPlace `0x1060bdd8`). The port's `bKeyable` is this bit;
 `gen_kernel_bindings` maps `INPUT` to it. No shipped script assigns any of the read-only names.
 
+### The three gates, read together (2026-09-21, 0019 story 2 pass B)
+
+The same flag byte answers three different questions, and they are not the same mask. Read off the
+two walkers rather than inferred:
+
+| Path | Body | Mask it tests |
+|---|---|---|
+| Read a field by name — `Entity.__getattr__`, `GetKeyValue`, `ent_info` | `CBaseEntity::ReadKeyField` `0x100acab0` | `flags & 0x14` — **`KEY` or `OUTPUT`** |
+| Dispatch an input by name | `CBaseEntity::AcceptInput` `0x100abc90` | `flags & 8` — **`INPUT`** |
+| …and, where that row's `inputFunc` (`+0x1c`) is null, WRITE the field | same body, second test | `flags & 4` — **`KEY`**, so a field-form input needs `INPUT` *and* `KEY` |
+| Assign by name — `Entity.__setattr__` | `0x10195a10` | `flags & 8` — **`INPUT`** |
+
+So `KEY` is the READ permission and half of the field-form input's write permission; `INPUT` alone
+is what a script assignment needs. A `SAVE|KEY` row (flags `6`) is readable by name, saved, and
+writable by nothing — which is the shape of nearly every authored keyvalue in the game.
+
+A `SAVE` row with **no external name** therefore answers no name at all: no read, no input, no
+attribute. It is persistence and nothing else. That is what makes the port's generated save walk
+(`AddNpcSaveFields`, 199 rows on the NPC chain) register under the RETAIL MEMBER NAME with
+`EElysiumField::Save` alone — there is no external to use, and the `m_` prefix cannot collide with
+the keyed namespace above.
+
 ## AI infrastructure references and mutations (2026-09-17)
 
 The script surface reaches AI infrastructure through entities and their declared fields/inputs.

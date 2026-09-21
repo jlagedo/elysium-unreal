@@ -588,7 +588,7 @@ bool FElysiumNpc::CanWitnessSupernatural(int32 Level)
 	{
 		return false;
 	}
-	if (!DialogName().IsEmpty())                                         // 1028ef35, m_iDialog +0x0128
+	if (!DialogName.IsEmpty())                                         // 1028ef35, m_iDialog +0x0128
 	{
 		return false;
 	}

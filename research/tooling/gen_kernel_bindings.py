@@ -22,29 +22,46 @@ those rows into committed source:
 
 The classification is fixed.  A row with ``OUTPUT`` is an output name.  A row
 with ``FUNCTIONTABLE`` is skipped.  An ``INPUT`` row whose type is ``void`` or
-whose offset is 0 is an input *handler*, not a field.  Everything else with an
-external name is a field row, bound when the class's member map carries a
-member at that offset and left as an ``UNBOUND`` comment when it does not — the
-comment is the recorded gap, the same posture the shape map's own ``_ABSENT``
-rows take.  Save-only rows carry no external and are nobody's row here: where
-the port binds one by hand (``m_cLiveChildren``, ``m_flGround``,
-``m_iEnemySightings``), the hand row stays.
+whose offset is 0 is an input *handler*, not a field.  A row with an external
+name is a field row, bound when the class's member map carries a member at that
+offset and left as an ``UNBOUND`` comment when it does not — the comment is the
+recorded gap, the same posture the shape map's own ``_ABSENT`` rows take.  A row
+with NO external name and the ``SAVE`` flag is retail's persistence and nothing
+else, and lands in the NPC's ``AddNpcSaveFields`` under its retail member name.
+
+The NPC's entity chain is four more binding classes (pass B, 2026-09-21).
+``ReadKeyField`` (``0x100acab0``) walks ``CAI_BaseNPCTroika`` up to
+``CBaseEntity``, and the port's registry carries the same walk through
+``FElysiumClassDesc::BaseName``, so ``CBaseEntity``, ``CBaseToggle``,
+``CBaseAnimating`` and ``CBaseCombatCharacter`` each get their own
+``Add…Fields`` registered on the matching chain node.  ``CBaseFlex`` and
+``CBaseAnimatingOverlay`` name no external and get none.  ``CBaseCombatCharacter``
+carries the character sheet: retail gives every ELEMENT of its four trait arrays
+its own datamap row, so the 148 trait names are recovered data, emitted as
+``ElysiumAddSheetField`` rows against the port's compiled slot table.
 
 Member resolution is per class.  The NPC's two tables resolve through the shape
-map (``ElysiumNpcKernelShapeMap.cpp``), which the census checks.  ``CNPCMaker``
-and ``CAI_InterestingPlace`` have no shape map; they resolve through the small
-hand-written ``CLASS_MEMBER_MAPS`` below, and the compiler is the check — a
-wrong member name fails ``uv run elysium build``.
+map (``ElysiumNpcKernelShapeMap.cpp``), which the census checks; a row whose
+shape-map member belongs to one of the port's component structs binds through
+``ElysiumAddClassFieldVia`` and ``NPC_COMPONENT_PATHS``.  The chain classes
+resolve through ``CHAIN_MEMBER_MAPS``, and a chain row in neither that nor
+``CHAIN_UNBOUND``/``BOUND_ELSEWHERE`` FAILS the generator — that is the check
+that every retail ``KEY`` on a stood class has a member or a stated reason.
+``CNPCMaker`` and ``CAI_InterestingPlace`` resolve through ``CLASS_MEMBER_MAPS``.
+Everywhere, the compiler is the second check — a wrong member name fails
+``uv run elysium build``.
 
 Flag mapping, fixed: ``SAVE`` -> ``EElysiumField::Save``; ``INPUT`` ->
 ``EElysiumField::Key``; neither -> ``EElysiumField::None``.  ``KEY`` alone
-adds no flag: the registry applies spawn keyvalues regardless of ``Key``, so
-retail's spawn-time ``KEY`` needs no port bit.
+adds no flag, and that is retail: ``ReadKeyField``'s gate is ``KEY|OUTPUT``
+(a read), ``AcceptInput``'s field write needs ``INPUT`` *and* ``KEY``
+(``0x100abc90``), and ``Entity.__setattr__``'s gate is ``INPUT`` alone
+(``docs/vtmb/python_bridge.md``).  The port's ``bKeyable`` is that write gate.
 
 A bound row the binding API cannot express fails the build through
-``ElysiumAddClassField``'s ``static_assert``; such a row moves to the
-``UNBOUND`` comments through ``UNSUPPORTED_MEMBER_TYPES`` below rather than by
-editing anything the generator emits.
+``ElysiumAddClassFieldVia``'s ``static_assert``; such a row moves to the
+``UNBOUND`` / ``SAVE_UNBOUND`` comments rather than by editing anything the
+generator emits.
 
 Usage::
 
@@ -83,6 +100,10 @@ KEYFIELDS_H = ("Source", "ElysiumUE", "Private", "AiInfra", "ElysiumInfraKeyfiel
 # two tables are one binding class because the port stands one shared leaf for them; the maker
 # and the place stand their own.
 BINDING_CLASSES = (
+    ("BaseEntity", ("CBaseEntity",)),
+    ("Toggle", ("CBaseToggle",)),
+    ("Animating", ("CBaseAnimating",)),
+    ("CombatCharacter", ("CBaseCombatCharacter",)),
     ("Npc", ("CAI_BaseNPC", "CAI_BaseNPCTroika")),
     ("NpcMaker", ("CNPCMaker",)),
     ("InterestingPlace", ("CAI_InterestingPlace",)),
@@ -91,22 +112,319 @@ BINDING_CLASSES = (
     ("NpcMakerZombie", ("CNPCMaker_Zombie",)),
 )
 
-# Bound NPC rows the binding API cannot express, by offset, with the type that fails it. A
-# member whose owner is one of the kernel's component structs (FElysiumNpcScheduleHost and
-# kin) does not derive FElysiumEntity, which is the one thing `ElysiumAddClassField`
-# static_asserts on before member type even comes into it. Such a row lands in the UNBOUND
-# comments; the seam that would carry it is a second API surface, which is nobody's one-line
-# decision.
-UNSUPPORTED_MEMBER_TYPES: dict[int, str] = {
-    0x5DB0: "FElysiumNpcScheduleHost",
-    0x62E0: "FElysiumNpcScheduleHost",
-    0x6436: "FElysiumNpcScheduleHost",
+# The port class each binding class registers against. The first five are the NPC's entity chain:
+# retail's `ReadKeyField` walks `CAI_BaseNPCTroika` -> `CAI_BaseNPC` -> `CBaseCombatCharacter` ->
+# `CBaseFlex` -> `CBaseAnimatingOverlay` -> `CBaseAnimating` -> `CBaseToggle` -> `CBaseEntity`, and
+# the port's registry carries the same walk through `FElysiumClassDesc::BaseName`. `CBaseFlex` and
+# `CBaseAnimatingOverlay` name no external at all, so neither gets a binding class.
+PORT_CLASS = {
+    "BaseEntity": "FElysiumEntity",
+    "Toggle": "FElysiumAnimating",
+    "Animating": "FElysiumAnimating",
+    "CombatCharacter": "FElysiumCombatCharacter",
+    "Npc": "FElysiumNpc",
 }
 
-# The retail-offset -> port-member map for the two classes with no shape map, keyed by retail
-# class, then by offset. Written by hand from the walked members `ElysiumNpcClasses.cpp`
-# binds; the compiler is the check — a wrong member name fails the build, never a silent
-# wrong binding. A replay key absent here is an UNBOUND row (`no port member`).
+# The NPC's entity chain, keyed by retail class then offset, as (port type, member). The port's
+# chain is the same shape with one stated divergence: **there is no `CBaseToggle` node.** Retail
+# derives `CBaseCombatCharacter` from `CBaseToggle`, so every character inherits the mover's nine
+# keys; this port keeps mover data on `FElysiumMoverBase`, a sibling of the character chain, so
+# those nine rows are recorded gaps on the node that stands where retail's toggle does.
+#
+# Written by hand from the members the port already declares, exactly as `CLASS_MEMBER_MAPS` below
+# is: the compiler is the check -- a wrong member name fails the build, never a silent wrong
+# binding. An offset in neither this map nor `CHAIN_UNBOUND` fails the generator.
+CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
+    "CBaseEntity": {
+        0x00C0: ("FElysiumEntity", "SoundGroup"),
+        0x00E0: ("FElysiumEntity", "bStartHidden"),
+        0x00FC: ("FElysiumEntity", "bNpcTransparent"),
+        0x00FD: ("FElysiumEntity", "bBlocksTraces"),
+        0x0124: ("FElysiumEntity", "ParentName"),
+        0x0128: ("FElysiumEntity", "DialogName"),
+        0x0164: ("FElysiumEntity", "AuthoredSpeed"),
+        0x017C: ("FElysiumEntity", "NextThink"),
+        0x0204: ("FElysiumEntity", "SpawnFlags"),
+        0x0208: ("FElysiumEntity", "MaxHealth"),
+        0x020C: ("FElysiumEntity", "Target"),
+        0x0210: ("FElysiumEntity", "Health"),
+        0x0214: ("FElysiumEntity", "UseFilterName"),
+        0x021C: ("FElysiumEntity", "DamageFilterName"),
+        0x026C: ("FElysiumEntity", "TargetName"),
+        0x0374: ("FElysiumEntity", "UseScript"),
+        0x0388: ("FElysiumEntity", "Model"),
+        0x03B0: ("FElysiumEntity", "BaseVelocity"),
+        0x03C8: ("FElysiumEntity", "AngularVelocity"),
+        0x03D4: ("FElysiumEntity", "Velocity"),
+        0x03E0: ("FElysiumEntity", "WaterLevel"),
+        0x03E4: ("FElysiumEntity", "WaterType"),
+        0x03EC: ("FElysiumEntity", "Gravity"),
+        0x03F0: ("FElysiumEntity", "Friction"),
+        0x03F4: ("FElysiumEntity", "LocalTime"),
+        0x0428: ("FElysiumEntity", "Angles"),
+        0x0434: ("FElysiumEntity", "Flags"),
+    },
+    "CBaseToggle": {},
+    "CBaseAnimating": {
+        0x0670: ("FElysiumAnimating", "Skin"),
+    },
+    "CBaseCombatCharacter": {
+        0x13D8: ("FElysiumCombatCharacter", "Money"),
+    },
+}
+
+# The one reason the nine `CBaseToggle` rows share, expanded from the `TOGGLE` marker below.
+TOGGLE_REASON = (
+    "retail derives `CBaseCombatCharacter` from `CBaseToggle`, so every character inherits the "
+    "mover's keys; this port keeps mover data on `FElysiumMoverBase`, a sibling of the character "
+    "chain, so there is no member on this node")
+
+# Why a chain row has no binding. Never "not got to it": each names the retail word and says what
+# this port does instead. A row here is a recorded gap `--check` accepts; a row in neither map is
+# a fault.
+CHAIN_UNBOUND: dict[tuple[str, int], str] = {
+    # --- CBaseEntity ---
+    ("CBaseEntity", 0x011C):
+        "the def's identity: `FElysiumEntityDef::Classname` is hoisted out of the keys and the "
+        "registry keys the descriptor on it, so there is no member a write could land on",
+    ("CBaseEntity", 0x0120):
+        "`m_iGlobalname` is retail's FTYPEDESC_GLOBAL carry across a `trigger_changelevel`; this "
+        "port carries state across a level change in the map snapshot, and no shipped map "
+        "authors the key",
+    ("CBaseEntity", 0x012C):
+        "`m_bBlocked` is the blocked-by-a-mover latch `CBaseToggle`'s movers set; this port's "
+        "movers carry their own, and no shipped map authors the key",
+    ("CBaseEntity", 0x0168):
+        "a render word: `m_nRenderFX`'s effect table is Source's, and Unreal renders",
+    ("CBaseEntity", 0x016C):
+        "a render word: `m_nRenderMode`'s blend modes are Source's, and Unreal renders",
+    ("CBaseEntity", 0x0184):
+        "`m_vecViewOffset` is the eye height every sight test starts from; this port takes an "
+        "NPC's eye from its body (0018 story 6), and no shipped map authors the key",
+    ("CBaseEntity", 0x0190):
+        "`m_vecMoveDir` is the mover's authored direction, which this port keeps on "
+        "`FElysiumMoverBase`; no shipped map authors it on a character",
+    ("CBaseEntity", 0x019C):
+        "a render word: `m_fEffects` is Source's EF_ bit field, and Unreal renders",
+    ("CBaseEntity", 0x01A0):
+        "a render word, and a `color32`: the binding API marshals no colour type because nothing "
+        "in the substrate reads one -- Unreal renders",
+    ("CBaseEntity", 0x01A4):
+        "`m_nModelIndex` is the engine's precache slot for `model`, an index into Source's own "
+        "model table; this port resolves a model by name",
+    ("CBaseEntity", 0x038C):
+        "`m_vecSize` is the brush extent Source derives at spawn; this port takes it from the "
+        "baked hulls (`FElysiumEntityDef::Hulls`), and no shipped map authors the key",
+    # --- CBaseToggle: the nine the port's chain does not carry ---
+    ("CBaseToggle", 0x045C): "TOGGLE",
+    ("CBaseToggle", 0x0480): "TOGGLE",
+    ("CBaseToggle", 0x0488): "TOGGLE",
+    ("CBaseToggle", 0x048C): "TOGGLE",
+    ("CBaseToggle", 0x0490): "TOGGLE",
+    ("CBaseToggle", 0x04A0): "TOGGLE",
+    ("CBaseToggle", 0x0500): "TOGGLE",
+    ("CBaseToggle", 0x0504): "TOGGLE",
+    ("CBaseToggle", 0x0538): "TOGGLE",
+    # --- CBaseAnimating ---
+    ("CBaseAnimating", 0x05A4):
+        "`m_flEffectStartTime` stamps the render effect `m_fEffects` drives, which Unreal renders",
+    ("CBaseAnimating", 0x0678):
+        "`m_flSkinCrossfadeTime` is the dissolve Source runs between two `skin` families; this "
+        "port swaps the material family outright",
+    ("CBaseAnimating", 0x067C):
+        "`m_nBody` is Source's bodygroup word; this port composes a character from the model "
+        "record's own parts",
+    ("CBaseAnimating", 0x0680):
+        "`m_nHitboxSet` selects a studiomdl hitbox set; this port traces against the Unreal "
+        "skeletal body's physics asset",
+    ("CBaseAnimating", 0x0684):
+        "`m_flModelScale` is the studiomdl render scale, which the baked mesh carries",
+    ("CBaseAnimating", 0x0688):
+        "`m_nTopColor` is VtMB's two-tone model tint, which Unreal renders",
+    ("CBaseAnimating", 0x068C):
+        "`m_nBottomColor` is VtMB's two-tone model tint, which Unreal renders",
+    ("CBaseAnimating", 0x06F0):
+        "`m_nSequence` is the studiomdl sequence index; this port plays a clip by name through "
+        "the animation seam (`IElysiumAnimatable::PlayAnimClip`)",
+    ("CBaseAnimating", 0x06F4):
+        "`m_flPlaybackRate` is half the studiomdl playback cursor; Unreal's animation graph owns "
+        "the port's",
+    ("CBaseAnimating", 0x06F8):
+        "`m_flCycle` is the studiomdl playback cursor; Unreal's animation graph owns the port's",
+    # --- CBaseCombatCharacter ---
+    ("CBaseCombatCharacter", 0x00DC):
+        "`m_impactEnergyScale` scales the damage a physics impact deals; this port has no "
+        "physics-impact damage path yet, so there is nothing the word would reach",
+    ("CBaseCombatCharacter", 0x10AC):
+        "`m_sTeamName` is Source's team string; VtMB decides hostility through the relationship "
+        "table and the disposition, and the six maps that author the key have no reader",
+    ("CBaseCombatCharacter", 0x13A0):
+        "`m_iVHistoryID` is bound on `player` alone: this port stores the History index on "
+        "`FElysiumPlayerRecord`, which no NPC has",
+    ("CBaseCombatCharacter", 0x1468):
+        "`m_iCurVReaction` is the reaction row a character is currently playing; this port "
+        "carries the live reaction on `FElysiumCombatCharacter`'s reaction state, not as an index",
+    ("CBaseCombatCharacter", 0x1584):
+        "`m_RelationshipString` is the authored relationship line; this port parses it into "
+        "`FElysiumNpc::Relationships` through the `SetRelationship` input, so the string itself "
+        "has no member",
+    ("CBaseCombatCharacter", 0x158C):
+        "`m_LootableType` selects the corpse's loot table; this port's inventory has no "
+        "loot-table seam yet",
+}
+
+# Rows the port binds on ANOTHER binding class, because it stores a word retail puts on the chain
+# on a leaf instead. The row is a recorded gap here and a binding there, so the key still resolves
+# through the registry's chain walk for the classes that have the member.
+BOUND_ELSEWHERE: dict[tuple[str, int], str] = {
+    ("CAI_BaseNPCTroika", 0x6558): "Animating (`FElysiumAnimating::Disposition`)",
+    ("CBaseCombatCharacter", 0x10E4): "Npc (`FElysiumNpc::StatTemplate`)",
+    ("CBaseCombatCharacter", 0x10E8): "Npc (`FElysiumNpc::FloatSoundFrequency`)",
+    ("CBaseCombatCharacter", 0x1589): "Npc (`FElysiumNpc::bCantDropWeapons`)",
+}
+
+# A `CBaseCombatCharacter` sheet row: retail gives every ELEMENT of the four trait arrays its own
+# datamap row, named by the slot it holds. `(container, base-or-current)` -> the array's first
+# offset and its element count; a row's slot index is its distance from that first offset.
+SHEET_ROW_RE = re.compile(r"m_iV(Attributes|Abilities|Disciplines|ActiveDisciplines)(Base|Current)\[")
+SHEET_ARRAY_BASE = {
+    ("Attributes", "Base"): (0x10F0, 35),
+    ("Attributes", "Current"): (0x117C, 35),
+    ("Abilities", "Base"): (0x1210, 13),
+    ("Abilities", "Current"): (0x1244, 13),
+    ("Disciplines", "Base"): (0x1280, 13),
+    ("Disciplines", "Current"): (0x12C4, 13),
+    ("ActiveDisciplines", "Base"): (0x1310, 13),
+    ("ActiveDisciplines", "Current"): (0x1354, 13),
+}
+
+# The component structs this port splits the NPC object into, and the path from `FElysiumNpc` to
+# each. Retail holds `CAI_BaseNPCTroika` as one flat object, so a datamap row reaches any word by
+# one offset; this port owns the same words on separate structs, so a row whose shape-map member
+# belongs to one binds through `ElysiumAddClassFieldVia` and this path rather than through a
+# pointer-to-member. `FElysiumNpcMemory` and `FElysiumNpcPerception` are two levels down because
+# `FElysiumNpcSenses` owns them, exactly as retail's `CAI_Senses` owns its.
+NPC_COMPONENT_PATHS: dict[str, str] = {
+    "FElysiumNpcScheduleHost": "ScheduleHost",
+    "FElysiumNpcMind": "Mind",
+    "FElysiumNpcSenses": "Senses",
+    "FElysiumNpcPerception": "Senses.Perception",
+    "FElysiumNpcMemory": "Senses.Memory",
+    "FElysiumNpcEnemyMemory": "EnemyMemory",
+    "FElysiumNpcWitness": "Witness",
+    "FElysiumNpcCognition": "Cognition",
+    "FElysiumNpcDialogue": "Dialogue",
+    "FElysiumNpcFlags": "NpcFlags",
+    "FElysiumScheduleState": "Schedule",
+    "FElysiumStanceState": "Stance",
+    "FElysiumStanceClips": "StanceClips",
+    "FElysiumNpcCombatSelector": "CombatSelector",
+}
+
+# Rows the generator must NOT emit even though the shape map binds a member, with the reason. One
+# row: `interesting_place_groups`' sibling `hint_groups` parses on the write the way retail's
+# `0x102989e0` does, so the port owns the pair as one hand accessor and a generated plain binding
+# would silently drop the parse.
+HAND_OWNED_MEMBERS: dict[int, str] = {
+    0x62D8: "hand-owned by its parse-on-write accessor "
+            "(`FElysiumNpc::SetInterestingPlaceGroups`)",
+    0x62E0: "hand-owned by its parse-on-write accessor (`FElysiumNpc::SetHintGroups`)",
+}
+
+# --- The SAVE walk -----------------------------------------------------------------------------
+#
+# A datamap row with no external name and the `SAVE` flag is retail's persistence and nothing else:
+# `ReadKeyField` cannot resolve it (its gate is `KEY|OUTPUT`, `0x100acab0`), `AcceptInput` cannot
+# reach it (`INPUT`, `0x100abc90`) and no Python name addresses it. The port's equivalent is a
+# registry field flagged `Save` and nothing else, registered under the RETAIL MEMBER NAME because
+# there is no external to use -- which is the posture the port already took by hand for
+# `m_iEnemySightings`, `m_CurrStance` and `m_flStanceTime`.
+#
+# Resolution is the shape map's, the same as a keyed NPC row's. Two tables qualify it.
+
+# Rows whose shape-map member is an aggregate several retail rows share: the map records the owning
+# struct, and the datamap records which word of it. The path is from `FElysiumNpc`, compiled, so a
+# re-home is a build error. Every one is a component-struct member, which is what makes them this
+# story's rather than a later one's.
+SAVE_ROW_PATHS: dict[int, str] = {
+    # The four seen-by-disposition slots, in `ESeen` order (HATE, FEAR, DISLIKE, NEMESIS).
+    0x5B68: "Senses.Memory.LastSeen[0]",
+    0x5B6C: "Senses.Memory.LastSeen[1]",
+    0x5B70: "Senses.Memory.LastSeen[2]",
+    0x5B74: "Senses.Memory.LastSeen[3]",
+    # The two witness channels, `EChannel` order (Criminal 0, Supernatural 1). `+0x635c` is the
+    # `CSecureType` half 0019 story 1 named dead inside a row that stays a rule: the port stores the
+    # criminal level plain, so the scrambler has no port word and the level binds like its sibling.
+    0x635C: "Witness.Channels[0].Level",
+    0x6368: "Witness.Channels[1].Level",
+    0x636C: "Witness.Channels[0].Processed",
+    0x6370: "Witness.Channels[1].Processed",
+    0x6374: "Witness.Channels[1].Location",
+    0x6380: "Witness.Channels[0].Location",
+    0x638C: "Witness.Channels[0].Offender",
+    0x6390: "Witness.Channels[1].Offender",
+    0x6398: "Witness.Channels[0].IgnoreUntil",
+    0x639C: "Witness.Channels[1].IgnoreUntil",
+    # The stance pair retail saves, and the two latches beside them that it does not -- all four
+    # are words of one port struct.
+    0x64C8: "Stance.Current",
+    0x64E0: "Stance.bInFidget",
+    0x64E1: "Stance.bInChange",
+    0x64E4: "Stance.LastChangeTime",
+    # `m_eForcedState` is one word of the pushed scripted-schedule order, which this port folds
+    # into a struct (`FElysiumScriptedScheduleOrder`); the shape map binds the whole struct to the
+    # offset, so the datamap row is what says which word of it.
+    0x65CC: "ScriptedScheduleOrder.ForcedState",
+}
+
+# Why a SAVE row is not a generated field. Two kinds, each with its reason on the row:
+# an aggregate whose port member carries its own typed serializer -- which is what retail's own
+# nested datamap is, a `FIELD_EMBEDDED` row pointing at a second `datamap_t` -- and a word this
+# port re-derives rather than stores.
+SAVE_UNBOUND: dict[int, str] = {
+    0x1A9C: "EMBEDDED",
+    0x5C40: "EMBEDDED",
+    0x5CDC: "EMBEDDED",
+    0x60B0: "EMBEDDED",
+    0x60DC: "EMBEDDED",
+    0x6108: "EMBEDDED",
+    0x6134: "EMBEDDED",
+    0x6160: "EMBEDDED",
+    0x618C: "EMBEDDED",
+    0x61B8: "EMBEDDED",
+    0x61E4: "EMBEDDED",
+    0x6210: "EMBEDDED",
+    0x6594: "EMBEDDED",
+    0x5DDC: "`m_pHintNode` is a FIELD_CLASSPTR: retail saves the pointer through its own entity "
+            "table, and this port holds the hint as a handle the navigator re-resolves",
+    0x5DE8: "`m_pGoalEnt` is a FIELD_CLASSPTR, the same case as `m_pHintNode`",
+    0x64D8: "`m_flMinBlink` is a word of the RESOLVED disposition row "
+            "(`FElysiumDisposition::MinBlinkInterval`), which this port re-derives from the "
+            "disposition table whenever the model or the disposition changes "
+            "(`FElysiumNpc::StanceResolvedFor`); persisting it would restore a stale derivation",
+    0x64DC: "`m_flMaxBlink` is the same resolved-row word as `m_flMinBlink`",
+}
+
+# What each of the shape map's four no-member forms means for the save walk. They are not one
+# answer: a PRIVATE row HAS a port member and cannot be named from outside, a CHAIN row is carried
+# by a class below the NPC and persists with that class, and only IMPLICIT and ABSENT mean there is
+# no word to carry.
+NO_MEMBER_SAVE_REASON = {
+    "PRIVATE": "the port member exists but its owner keeps it private, so no compiled path reaches "
+               "it; the owning struct's own `Serialize` carries it, which is where it stays until "
+               "that struct exposes an accessor",
+    "CHAIN": "the port carries this concern on the entity chain BELOW the NPC, and the class that "
+             "owns the member is the class that persists it",
+    "IMPLICIT": "the language or an existing mechanism provides the word, so there is no member to "
+                "persist",
+    "ABSENT": "this port declares no member for the word (the shape map's row says why), so there "
+              "is nothing for the save walk to carry",
+}
+
+EMBEDDED_REASON = (
+    "a FIELD_EMBEDDED row: retail's datamap points at a second `datamap_t` and recurses, and this "
+    "port's matching member carries its own typed `Serialize`, which is the same shape")
+
 CLASS_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
     "CNPCMaker": {
         0x665C: ("FElysiumNpcMaker", "NpcType"),
@@ -211,6 +529,11 @@ class Row:
     kind: str           # "field" | "output" | "inputfunc"
     flags: list[str] = field(default_factory=list)
     binding: tuple[str, str] | None = None   # (Type, Member) out of the class's member map
+    # ("ScheduleHost", "HintGroup"): a word the entity reaches through one of the port's component
+    # structs, bound by compiled path instead of by pointer-to-member.
+    via: tuple[str, str] | None = None
+    # (container, slot, is-base) for a `CBaseCombatCharacter` character-sheet element row.
+    sheet: tuple[str, int, bool] | None = None
     reason: str = ""    # an unbound field's reason
 
 
@@ -239,6 +562,100 @@ class ClassModel:
     unbound: list[Row] = field(default_factory=list)
     outputs: list[Row] = field(default_factory=list)
     inputfuncs: list[Row] = field(default_factory=list)
+    # The `SAVE`-only rows: retail's persistence, which no name resolves. Only the NPC binding
+    # class fills these -- the chain classes' save rows belong to the port classes that own those
+    # words, and their persistence is already theirs.
+    saved: list[Row] = field(default_factory=list)
+    save_unbound: list[Row] = field(default_factory=list)
+
+
+def _sheet_of(record: dict) -> tuple[str, int, bool] | None:
+    """A `CBaseCombatCharacter` trait-array element row as (container, slot, is-base)."""
+    match = SHEET_ROW_RE.match(record["name"])
+    if match is None:
+        return None
+    container, half = match.group(1), match.group(2)
+    first, count = SHEET_ARRAY_BASE[(container, half)]
+    slot, remainder = divmod(int(record["offset"]) - first, 4)
+    if remainder != 0 or not 0 <= slot < count:
+        raise SystemExit(f"gen_kernel_bindings: {record['name']} at "
+                         f"+0x{int(record['offset']):x} is not an element of "
+                         f"{container}{half} (first +0x{first:x}, {count} slots)")
+    return container, slot, half == "Base"
+
+
+def _classify_field(cls: str, record: dict, base: dict, bound: dict, no_member: dict,
+                    model_offsets: set[int]) -> Row:
+    """One field row, resolved against whichever member map its class uses."""
+    offset = base["offset"]
+    # The NPC's own two tables resolve through the shape map, which the census checks.
+    if cls in ("CAI_BaseNPC", "CAI_BaseNPCTroika"):
+        if offset not in model_offsets:
+            # The replay names a field whose offset the shape census never recorded. That is a
+            # disagreement between two committed artefacts, not a row to emit.
+            raise SystemExit(f"gen_kernel_bindings: {cls} +0x{offset:x} "
+                             f"({record['name']}) is not a word of the shape census")
+        if offset in HAND_OWNED_MEMBERS:
+            return Row(kind="field", reason=HAND_OWNED_MEMBERS[offset], **base)
+        where = BOUND_ELSEWHERE.get((cls, offset))
+        if where is not None:
+            return Row(kind="field", reason=f"bound by binding class {where}", **base)
+        if offset in bound:
+            port_type, member = bound[offset]
+            path = NPC_COMPONENT_PATHS.get(port_type)
+            if path is not None:
+                return Row(kind="field", via=(path, member), **base)
+            return Row(kind="field", binding=bound[offset], **base)
+        if offset in no_member:
+            return Row(kind="field",
+                       reason=f"no shape-map member ({no_member[offset]})", **base)
+        return Row(kind="field", reason="no shape-map member", **base)
+
+    # The entity chain: the hand chain map, the sheet, or a recorded reason.
+    if cls in CHAIN_MEMBER_MAPS:
+        chain = CHAIN_MEMBER_MAPS[cls]
+        if offset in chain:
+            return Row(kind="field", binding=chain[offset], **base)
+        sheet = _sheet_of(record)
+        if sheet is not None:
+            return Row(kind="field", sheet=sheet, **base)
+        where = BOUND_ELSEWHERE.get((cls, offset))
+        if where is not None:
+            return Row(kind="field", reason=f"bound by binding class {where}", **base)
+        reason = CHAIN_UNBOUND.get((cls, offset))
+        if reason is None:
+            raise SystemExit(
+                f"gen_kernel_bindings: {cls} +0x{offset:x} ({record['name']}, "
+                f"\"{base['external']}\") is a retail KEY with no entry in "
+                f"CHAIN_MEMBER_MAPS, BOUND_ELSEWHERE or CHAIN_UNBOUND")
+        return Row(kind="field",
+                   reason=TOGGLE_REASON if reason == "TOGGLE" else reason, **base)
+
+    # A class with its own hand member map (the maker, the places, the hint).
+    member_map = CLASS_MEMBER_MAPS[cls]
+    if offset in member_map:
+        return Row(kind="field", binding=member_map[offset], **base)
+    return Row(kind="field", reason="no port member", **base)
+
+
+def _classify_save(cls: str, record: dict, base: dict, bound: dict, no_member: dict) -> Row:
+    """One `SAVE`-only row: a generated save field, or a recorded reason."""
+    offset = base["offset"]
+    path = SAVE_ROW_PATHS.get(offset)
+    if path is not None:
+        return Row(kind="save", via=(path, ""), **base)
+    reason = SAVE_UNBOUND.get(offset)
+    if reason is not None:
+        return Row(kind="save", reason=EMBEDDED_REASON if reason == "EMBEDDED" else reason, **base)
+    if offset in bound:
+        port_type, member = bound[offset]
+        component = NPC_COMPONENT_PATHS.get(port_type)
+        if component is not None:
+            return Row(kind="save", via=(component, member), **base)
+        return Row(kind="save", binding=bound[offset], **base)
+    if offset in no_member:
+        return Row(kind="save", reason=NO_MEMBER_SAVE_REASON[no_member[offset]], **base)
+    return Row(kind="save", reason="no shape-map member", **base)
 
 
 def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassModel]:
@@ -248,60 +665,41 @@ def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassMod
     for binding, tables in BINDING_CLASSES:
         model = ClassModel(name=binding, tables=tables)
         for cls in tables:
-            member_map = CLASS_MEMBER_MAPS.get(cls)
             for record in replay[cls]["records"]:
-                external = record.get("external")
-                if not external:
-                    continue
                 flags = list(record.get("flagNames") or [])
+                if "FUNCTIONTABLE" in flags:
+                    continue
                 offset = int(record["offset"])
+                external = record.get("external")
                 base = dict(cls=cls, name=record["name"], type=record["typeName"],
-                            offset=offset, external=external, flags=flags)
+                            offset=offset, external=external or "", flags=flags)
+                if not external:
+                    # Only the NPC's own two tables are this story's save walk; the chain's save
+                    # rows are the port classes' own, and those classes already persist them.
+                    if binding == "Npc" and "SAVE" in flags:
+                        row = _classify_save(cls, record, base, bound, no_member)
+                        if row.via is not None or row.binding is not None:
+                            model.saved.append(row)
+                        else:
+                            model.save_unbound.append(row)
+                    continue
                 if "OUTPUT" in flags:
                     model.outputs.append(Row(kind="output", **base))
-                elif "FUNCTIONTABLE" in flags:
                     continue
-                elif "INPUT" in flags and (record["typeName"] == "void" or offset == 0):
+                if "INPUT" in flags and (record["typeName"] == "void" or offset == 0):
                     model.inputfuncs.append(Row(kind="inputfunc", **base))
+                    continue
+                row = _classify_field(cls, record, base, bound, no_member, model_offsets)
+                if row.binding is not None or row.via is not None or row.sheet is not None:
+                    model.bound.append(row)
                 else:
-                    if member_map is not None:
-                        # No shape map for this class: the hand-written member map is the
-                        # whole resolution, and an offset it lacks is a recorded gap.
-                        if offset in member_map:
-                            row = Row(kind="field", binding=member_map[offset], **base)
-                        else:
-                            row = Row(kind="field", reason="no port member", **base)
-                    else:
-                        # The NPC's shape-map path.
-                        if offset in bound:
-                            if offset in UNSUPPORTED_MEMBER_TYPES:
-                                row = Row(
-                                    kind="field",
-                                    reason=f"member type {UNSUPPORTED_MEMBER_TYPES[offset]}",
-                                    **base)
-                            else:
-                                row = Row(kind="field", binding=bound[offset], **base)
-                        elif offset in no_member:
-                            row = Row(kind="field",
-                                      reason=f"no shape-map member ({no_member[offset]})",
-                                      **base)
-                        else:
-                            row = Row(kind="field", reason="no shape-map member", **base)
-                        # The replay names a field whose offset the shape census never
-                        # recorded. That is a disagreement between two committed artefacts,
-                        # not a row to emit.
-                        if offset not in model_offsets:
-                            raise SystemExit(
-                                f"gen_kernel_bindings: {cls} +0x{offset:x} "
-                                f"({record['name']}) is not a word of the shape census")
-                    if row.binding is not None:
-                        model.bound.append(row)
-                    else:
-                        model.unbound.append(row)
+                    model.unbound.append(row)
         model.bound.sort(key=lambda r: r.external)
         model.unbound.sort(key=lambda r: r.external)
         model.outputs.sort(key=lambda r: r.external)
         model.inputfuncs.sort(key=lambda r: r.external)
+        model.saved.sort(key=lambda r: r.name)
+        model.save_unbound.sort(key=lambda r: r.name)
         classes.append(model)
     return classes
 
@@ -470,6 +868,8 @@ def render_header(model: Model) -> str:
                   + ", ".join(c.name for c in model.classes) + " };", "\t"),
         "",
         *[f"\tvoid {_add_function_name(c)}(FElysiumClassDesc& D);" for c in model.classes],
+        *[f"\tvoid Add{c.name}SaveFields(FElysiumClassDesc& D);"
+          for c in model.classes if c.saved or c.save_unbound],
         "\tTConstArrayView<const TCHAR*> Outputs(EClass Class = EClass::Npc);",
         "\tTConstArrayView<const TCHAR*> InputFuncs(EClass Class = EClass::Npc);",
         "\tstruct FCounts",
@@ -478,6 +878,7 @@ def render_header(model: Model) -> str:
         "\t\tint32 Unbound;",
         "\t\tint32 Outputs;",
         "\t\tint32 InputFuncs;",
+        "\t\tint32 Saved;",
         "\t};",
         "\tFCounts Counts(EClass Class = EClass::Npc);",
         "}",
@@ -491,6 +892,25 @@ def _add_function_name(model_class: ClassModel) -> str:
     return f"Add{model_class.name}Fields"
 
 
+def _row_code(model_class: ClassModel, row: Row) -> str:
+    """The one registration statement a bound row emits."""
+    name = _literal(row.external if row.kind != "save" else row.name)
+    if row.sheet is not None:
+        container, slot, is_base = row.sheet
+        return (f"ElysiumAddSheetField(D, {name}, "
+                f"EElysiumTraitContainer::{container}, {slot}, "
+                f"/*bBase=*/{'true' if is_base else 'false'}, {flags_of(row)});")
+    if row.via is not None:
+        path, member = row.via
+        reach = f"{path}.{member}" if member else path
+        return (f"ElysiumAddClassFieldVia<{PORT_CLASS[model_class.name]}>(D, {name}, "
+                f"[](auto& E) -> auto&{{ return E.{reach}; }}, {flags_of(row)});")
+    assert row.binding is not None
+    port_type, member = row.binding
+    return (f"ElysiumAddClassField(D, {name}, "
+            f"&{port_type}::{member}, {flags_of(row)});")
+
+
 def _render_add(model_class: ClassModel) -> list[str]:
     out = [
         f"\tvoid {_add_function_name(model_class)}(FElysiumClassDesc& D)",
@@ -501,16 +921,36 @@ def _render_add(model_class: ClassModel) -> list[str]:
         "\t\t// keyvalues regardless of Key.",
     ]
     for row in model_class.bound:
-        assert row.binding is not None
-        port_type, member = row.binding
-        code = (f"ElysiumAddClassField(D, {_literal(row.external)}, "
-                f"&{port_type}::{member}, {flags_of(row)});")
-        lines = _wrapped(code, "\t\t")
+        lines = _wrapped(_row_code(model_class, row), "\t\t")
         lines[-1] += f"  // +0x{row.offset:x} {row.name}"
         out += lines
     for row in model_class.unbound:
-        out.append(f"\t\t// UNBOUND +0x{row.offset:x} {row.name} "
-                   f"\"{row.external}\" — {row.reason}")
+        out += _comment(f"UNBOUND +0x{row.offset:x} {row.name} \"{row.external}\" "
+                        f"— {row.reason}", "\t\t")
+    out += ["\t}", ""]
+    return out
+
+
+def _render_save(model_class: ClassModel) -> list[str]:
+    """The `SAVE`-only walk: one field per persisted word, under its retail member name."""
+    if not model_class.saved and not model_class.save_unbound:
+        return []
+    out = [
+        f"\tvoid Add{model_class.name}SaveFields(FElysiumClassDesc& D)",
+        "\t{",
+        "\t\t// Retail's persistence, and only that: a `SAVE` row with no external name is",
+        "\t\t// reachable by no keyvalue, no input and no Python attribute, so each registers",
+        "\t\t// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are",
+        "\t\t// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,",
+        "\t\t// and they cannot collide with the externals above.",
+    ]
+    for row in model_class.saved:
+        lines = _wrapped(_row_code(model_class, row), "\t\t")
+        lines[-1] += f"  // +0x{row.offset:x} {row.type}"
+        out += lines
+    for row in model_class.save_unbound:
+        out += _comment(f"NOT SAVED +0x{row.offset:x} {row.name} ({row.type}) — {row.reason}",
+                        "\t\t")
     out += ["\t}", ""]
     return out
 
@@ -536,18 +976,22 @@ def render_cpp(model: Model) -> str:
         "",
         '#include "Substrate/ElysiumNpcKernelBindings.h"',
         "",
+        '#include "ElysiumPlayer.h"',
+        '#include "ElysiumSheetSlots.h"',
         '#include "Substrate/ElysiumClassFields.h"',
         '#include "Substrate/ElysiumConversationPlace.h"',
         '#include "Substrate/ElysiumHint.h"',
         '#include "Substrate/ElysiumInterestingPlace.h"',
         '#include "Substrate/ElysiumNpc.h"',
         '#include "Substrate/ElysiumNpcMaker.h"',
+        '#include "Substrate/ElysiumSheetFields.h"',
         "",
         "namespace ElysiumNpcKernelBindings",
         "{",
     ]
     for model_class in model.classes:
         out += _render_add(model_class)
+        out += _render_save(model_class)
     out += ["\tnamespace", "\t{"]
     for model_class in model.classes:
         out += _array_block(model_class, "Outputs", model_class.outputs)
@@ -578,11 +1022,13 @@ def render_cpp(model: Model) -> str:
             continue
         counts = ", ".join(str(n) for n in (len(model_class.bound), len(model_class.unbound),
                                             len(model_class.outputs),
-                                            len(model_class.inputfuncs)))
+                                            len(model_class.inputfuncs),
+                                            len(model_class.saved)))
         out.append(f"\t\t\tcase EClass::{model_class.name}:")
         out.append(f"\t\t\t\treturn {{{counts}}};")
     counts = ", ".join(str(n) for n in (len(npc.bound), len(npc.unbound),
-                                        len(npc.outputs), len(npc.inputfuncs)))
+                                        len(npc.outputs), len(npc.inputfuncs),
+                                        len(npc.saved)))
     out += ["\t\t\tdefault:", f"\t\t\t\treturn {{{counts}}};", "\t\t}", "\t}", "}"]
     return "\n".join(out) + "\n"
 
@@ -674,9 +1120,15 @@ def report(model: Model) -> None:
         print("Table A — bound rows (external, type, member, flags)")
         print(line)
         for row in model_class.bound:
-            assert row.binding is not None
-            port_type, member = row.binding
-            print(f"  {row.external:<26} {port_type}.{member:<24} {flags_of(row):<38} "
+            if row.sheet is not None:
+                container, slot, is_base = row.sheet
+                where = f"Sheet.{container}[{slot}]{' base' if is_base else ''}"
+            elif row.via is not None:
+                where = f"{PORT_CLASS[model_class.name]}.{'.'.join(row.via)}"
+            else:
+                assert row.binding is not None
+                where = f"{row.binding[0]}.{row.binding[1]}"
+            print(f"  {row.external:<26} {where:<40} {flags_of(row):<38} "
                   f"+0x{row.offset:x} {row.name}")
         print()
         print("Table B — unbound rows (external, name, offset, reason)")
@@ -694,10 +1146,27 @@ def report(model: Model) -> None:
         print()
         print("Table E — counts")
         print(line)
+        if model_class.saved or model_class.save_unbound:
+            print()
+            print("Table F — the SAVE walk (retail member, port reach)")
+            print(line)
+            for row in model_class.saved:
+                where = (f"{PORT_CLASS[model_class.name]}."
+                         + ".".join(p for p in row.via if p)) if row.via \
+                    else f"{row.binding[0]}.{row.binding[1]}"
+                print(f"  {row.name:<34} {where:<46} +0x{row.offset:x} {row.type}")
+            print()
+            print("Table G — SAVE rows with no generated field")
+            print(line)
+            for row in model_class.save_unbound:
+                print(f"  {row.name:<34} +0x{row.offset:<6x} {row.type:<10} {row.reason}")
+            print()
         print(f"  bound       {len(model_class.bound):4d}")
         print(f"  unbound     {len(model_class.unbound):4d}")
         print(f"  outputs     {len(model_class.outputs):4d}")
         print(f"  inputfuncs  {len(model_class.inputfuncs):4d}")
+        print(f"  saved       {len(model_class.saved):4d}")
+        print(f"  not saved   {len(model_class.save_unbound):4d}")
 
 
 def main(argv: list[str] | None = None) -> int:

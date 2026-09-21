@@ -72,6 +72,10 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	Class = &InClass;
 	TargetName = InDef.TargetName;
 	Origin = InDef.Origin;   // the live copy; the def's is immutable (SetOrigin moves this one)
+	// The producer hoists `StartHidden` out of the keys, so seed the member from the def before
+	// the keyvalue walk below: an authored key still wins, and a def that carries only the
+	// hoisted bool still lands on the word the datamap row binds.
+	bStartHidden = InDef.bStartHidden;
 
 	// Apply the raw keyvalues through the class chain field table. Only mapped base/leaf
 	// fields are copied onto members; unmapped keys stay on the def (property-bag reads land
@@ -98,7 +102,7 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 
 	// start_hidden — born fully OFF. No prior think to save; the body build skips
 	// collision + draw while bHidden.
-	if (InDef.bStartHidden)
+	if (bStartHidden)
 	{
 		bHidden = true;
 		NextThink = ELYSIUM_NEVER_THINK;

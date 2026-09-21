@@ -511,7 +511,7 @@ bool FElysiumNpc::PayphoneCanTalk(const FElysiumEntity* Activator) const
 	{
 		return false;
 	}
-	if (DialogName().IsEmpty())
+	if (DialogName.IsEmpty())
 	{
 		return false;
 	}

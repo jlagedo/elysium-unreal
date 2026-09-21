@@ -3723,7 +3723,7 @@ bool FElysiumNpc::IsValidStealthKillTarget(const FElysiumPlayer& /*Attacker*/) c
 	{
 		return false;
 	}
-	if (!DialogName().IsEmpty())
+	if (!DialogName.IsEmpty())
 	{
 		return false;
 	}

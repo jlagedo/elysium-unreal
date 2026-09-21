@@ -100,13 +100,13 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 		// from the same authored ground speed the Walk branch above resolves through its activity
 		// -- the label-route sibling of ResolveNpcActivityClip, not a second seam.
 		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-		float AuthoredSpeed = 0.f;
+		float ClipGroundSpeed = 0.f;
 		FString CustomAnim;
 		if (Embodiment && Embodiment->ResolveNpcSequenceClip(ModelStem(), CustomClip,
-			EElysiumAnimBodyKind::Cast, CustomAnim, AuthoredSpeed)
-			&& FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
+			EElysiumAnimBodyKind::Cast, CustomAnim, ClipGroundSpeed)
+			&& FMath::IsFinite(ClipGroundSpeed) && ClipGroundSpeed > 0.f)
 		{
-			Speed = AuthoredSpeed;
+			Speed = ClipGroundSpeed;
 			UE_LOG(LogElysiumNpcEnt, Verbose,
 				TEXT("%s scripted custom move uses '%s' -> '%s' authored ground speed %.1fcm/s"),
 				*DebugString(), *CustomClip, *CustomAnim, Speed);

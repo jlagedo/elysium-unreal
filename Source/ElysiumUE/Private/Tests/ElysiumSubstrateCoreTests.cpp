@@ -1084,7 +1084,11 @@ bool FElysiumSheetTest::RunTest(const FString&)
 	};
 	TestEqual(TEXT("Intimidation is `intimidate` on the datamap"), SlotName(EC::Abilities, 3), FString(TEXT("intimidate")));
 	TestEqual(TEXT("Computer is `computers`"), SlotName(EC::Abilities, 9), FString(TEXT("computers")));
-	TestEqual(TEXT("Gender carries its trailing underscore"), SlotName(EC::Attributes, 11), FString(TEXT("gender_")));
+	// The trailing underscore is on the BASE row only: the datamap spells the current row `gender`
+	// and the base row `base_gender_` (`CBaseCombatCharacter 0x1061664c`, `+0x11a8` / `+0x111c`).
+	TestEqual(TEXT("Gender's current row is the bare name"), SlotName(EC::Attributes, 11), FString(TEXT("gender")));
+	TestEqual(TEXT("and its base row carries the trailing underscore"),
+		ElysiumSheetBaseDatamap(ElysiumSheetSlots(EC::Attributes)[11]), FString(TEXT("base_gender_")));
 	TestEqual(TEXT("Health is `vhealth`"), SlotName(EC::Attributes, ElysiumSlot::Health), FString(TEXT("vhealth")));
 	TestEqual(TEXT("Max_Health is `vmax_health`"), SlotName(EC::Attributes, ElysiumSlot::MaxHealth), FString(TEXT("vmax_health")));
 
@@ -1150,7 +1154,7 @@ bool FElysiumSheetTest::RunTest(const FString&)
 		TEXT("base_humanity"), TEXT("masquerade"), TEXT("bloodpool"), TEXT("clan"),
 		TEXT("generation"), TEXT("experience"), TEXT("vmax_health"), TEXT("intimidate"),
 		TEXT("computers"), TEXT("celerity"), TEXT("base_celerity"), TEXT("active_obfuscate"),
-		TEXT("gender_"), TEXT("gender") })
+		TEXT("gender"), TEXT("base_gender_") })
 	{
 		TestNotNull(*FString::Printf(TEXT("player.%s resolves as a field"), Name),
 			reinterpret_cast<const void*>(FieldOn(Player, Name)));

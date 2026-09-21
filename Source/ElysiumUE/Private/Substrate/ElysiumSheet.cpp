@@ -23,6 +23,8 @@ namespace
 	// case-insensitive; the casing is kept so the row reads back against the file.
 	#define SLOT(Index, Map, Name)            { Index, TEXT(Map), TEXT(Name), nullptr }
 	#define SLOT_ALIAS(Index, Map, Alt, Name) { Index, TEXT(Map), TEXT(Name), TEXT(Alt) }
+	// The one slot whose BASE row retail does not spell `base_<Map>`.
+	#define SLOT_BASE(Index, Map, Base, Name) { Index, TEXT(Map), TEXT(Name), nullptr, TEXT(Base) }
 
 	// Attributes — 35 slots. Not "the nine attributes": the container runs `Attrib_Order`(0), the
 	// nine World-of-Darkness attributes, then every derived and bookkeeping stat through
@@ -46,9 +48,12 @@ namespace
 		SLOT( 8, "intelligence",             "Intelligence"),
 		SLOT( 9, "wits",                     "Wits"),
 		SLOT(10, "clan",                     "Clan"),
-		// The trailing underscore is VtMB's, not a typo: RE24 read `base_gender_` off the datamap.
-		// `gender` is accepted as an alias because that is how the save documents it.
-		SLOT_ALIAS(11, "gender_", "gender",  "Gender"),
+		// The trailing underscore is VtMB's, not a typo -- but it is on the BASE row alone. The
+		// datamap replay has `gender` at `+0x11a8` (current) and `base_gender_` at `+0x111c`
+		// (base), so `gender_` is a spelling retail never accepts and this table no longer offers
+		// it (`CBaseCombatCharacter 0x1061664c`). RE24 read the base row and the pair was carried
+		// the other way round until 0019 story 2 pass B generated both halves from the replay.
+		SLOT_BASE(11, "gender", "base_gender_", "Gender"),
 		SLOT(12, "bloodpool",                "BloodPool"),
 		SLOT(13, "bloodpool_max",            "BloodPool_Max"),
 		SLOT(14, "faithpoints",              "FaithPoints"),
@@ -121,7 +126,10 @@ namespace
 		SLOT( 3, "active_celerity",        "Active_Celerity"),
 		SLOT( 4, "active_corpus_vampirus", "Active_Corpus_Vampirus"),
 		SLOT( 5, "active_dementation",     "Active_Dementation"),
-		SLOT( 6, "active_dominate",        "Active_Dominate"),
+		// Troika typed the base row's external three times over. The datamap is the namespace, so
+		// `base_active_active_active_dominate` is what a map or a script has to author, and the
+		// tidy spelling addresses nothing (`CBaseCombatCharacter 0x1061664c`, `+0x1328`).
+		SLOT_BASE( 6, "active_dominate", "base_active_active_active_dominate", "Active_Dominate"),
 		SLOT( 7, "active_fortitude",       "Active_Fortitude"),
 		SLOT( 8, "active_obfuscate",       "Active_Obfuscate"),
 		SLOT( 9, "active_potence",         "Active_Potence"),
@@ -132,6 +140,7 @@ namespace
 
 	#undef SLOT
 	#undef SLOT_ALIAS
+	#undef SLOT_BASE
 
 	bool IsValidContainer(EElysiumTraitContainer Container)
 	{
@@ -196,6 +205,12 @@ FElysiumSheet::FElysiumSheet()
 		Base[i].SetNumZeroed(Count);
 		Current[i].SetNumZeroed(Count);
 	}
+}
+
+FString ElysiumSheetBaseDatamap(const FElysiumSheetSlot& Slot)
+{
+	return Slot.BaseDatamap ? FString(Slot.BaseDatamap)
+		: FString::Printf(TEXT("base_%s"), Slot.Datamap);
 }
 
 int32 FElysiumSheet::GetBase(EElysiumTraitContainer Container, int32 Slot) const

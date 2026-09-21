@@ -187,6 +187,24 @@ public:
 	int32   UseIcon = 0;                             // use_icon — reticle icon index (1-based; 0 = none)
 	int32   LockedIcon = 0;                          // locked_icon — reticle icon when use-locked
 
+	// --- The three CBaseEntity keys 0019 story 2 pass B binds ---
+	// `m_iDialog` (+0x0128), the conversation file. On the entity and not on the NPC because
+	// retail declares it on `CBaseEntity`: the four shipped phones author `dialogname` on a
+	// non-character, and 83 maps author it at all. A member rather than a live read of
+	// `Def->Keys` so a runtime write has somewhere to land, which is what retail's mutable
+	// `string_t` is.
+	FString DialogName;                              // dialogname
+	// `m_flSpeed` (+0x0164). 104 maps author it; on a character nothing in the recovered set
+	// reads it (retail's movers do), so this carries the authored word and no more. Named for the
+	// authoring the way `FElysiumNpc::AuthoredHearing` and kin are, and not `Speed`, because a
+	// bare `Speed` on the root entity shadows a local in ten kernel bodies.
+	float   AuthoredSpeed = 0.0f;                    // speed
+	// `m_bStartHidden` (+0x00e0). Seeded from `FElysiumEntityDef::bStartHidden`, which the
+	// producer hoists out of the keys, and overwritten by an authored `StartHidden` keyvalue;
+	// `Construct` gates the born-hidden state on this member, so the datamap row and the spawn
+	// rule read one word.
+	bool    bStartHidden = false;                    // StartHidden
+
 	// --- Dormancy + liveness ---
 	// ScriptHide/StartHidden is one reversible whole-entity OFF switch: non-solid, undrawn,
 	// next-think = never — all together. `bDead` (Kill) is terminal; the world reaps the

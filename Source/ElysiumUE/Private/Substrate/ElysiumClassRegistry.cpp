@@ -1,5 +1,7 @@
 #include "ElysiumClassRegistry.h"
 
+#include "Substrate/ElysiumNpcKernelBindings.h"
+
 #include "ElysiumEntityDefs.h"
 #include "HAL/IConsoleManager.h"
 
@@ -162,32 +164,17 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		D.Input(TEXT("SetFakeSilence"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ E.SetFakeSilence(A.Param.ToInt() != 0); });
 
-		// Base keyfields — the CBaseEntity datamap contract (python_bridge.md). All keyable
-		// (the base builder sets flags bit 0x8); the fields with no consumer still round-
-		// trip through the tables for spawn keyvalues, save enumeration, and the inspector.
-		D.Field(TEXT("angles"),          &FElysiumEntity::Angles);
-		D.Field(TEXT("model"),           &FElysiumEntity::Model);
-		D.Field(TEXT("target"),          &FElysiumEntity::Target);
-		D.Field(TEXT("targetname"),      &FElysiumEntity::TargetName);
-		D.Field(TEXT("parentname"),      &FElysiumEntity::ParentName);
-		D.Field(TEXT("spawnflags"),      &FElysiumEntity::SpawnFlags);
-		D.Field(TEXT("health"),          &FElysiumEntity::Health);
-		D.Field(TEXT("max_health"),      &FElysiumEntity::MaxHealth);
-		D.Field(TEXT("flags"),           &FElysiumEntity::Flags);
-		D.Field(TEXT("velocity"),        &FElysiumEntity::Velocity);
-		D.Field(TEXT("avelocity"),       &FElysiumEntity::AngularVelocity);
-		D.Field(TEXT("basevelocity"),    &FElysiumEntity::BaseVelocity);
-		D.Field(TEXT("gravity"),         &FElysiumEntity::Gravity);
-		D.Field(TEXT("friction"),        &FElysiumEntity::Friction);
-		D.Field(TEXT("ltime"),           &FElysiumEntity::LocalTime);
-		D.Field(TEXT("waterlevel"),      &FElysiumEntity::WaterLevel);
-		D.Field(TEXT("watertype"),       &FElysiumEntity::WaterType);
-		D.Field(TEXT("soundgroup"),      &FElysiumEntity::SoundGroup);
-		D.Field(TEXT("usescript"),       &FElysiumEntity::UseScript);
-		D.Field(TEXT("npc_transparent"), &FElysiumEntity::bNpcTransparent);
-		D.Field(TEXT("blocks_traces"),   &FElysiumEntity::bBlocksTraces);
-		D.Field(TEXT("dmg_filter_name"), &FElysiumEntity::DamageFilterName);
-		D.Field(TEXT("use_filter_name"), &FElysiumEntity::UseFilterName);
+		// Base keyfields — the `CBaseEntity` datamap, generated from the replay by
+		// `gen_kernel_bindings` (0019 story 2 pass B). Every row retail declares, with retail's own
+		// flags: `SAVE|KEY` is readable and saved but NOT keyable, because VtMB's Python write gate
+		// is the `INPUT` bit and not `KEY` (`docs/vtmb/python_bridge.md` § "The write path"). Spawn
+		// keyvalue application ignores the gate either way, so an authored key still lands.
+		ElysiumNpcKernelBindings::AddBaseEntityFields(D);
+
+		// The two rows the replay does not put on `CBaseEntity`. Retail declares `use_icon` and
+		// `locked_icon` on `CBaseButton`, `CBaseDoor`, `CPushable`, `CPropSwitch` and kin, one copy
+		// each; this port carries the reticle pair once on the base, which is a generalisation and
+		// not a recovered row — so it stays hand-written where the generated table cannot claim it.
 		D.Field(TEXT("use_icon"),        &FElysiumEntity::UseIcon);
 		D.Field(TEXT("locked_icon"),     &FElysiumEntity::LockedIcon);
 	});

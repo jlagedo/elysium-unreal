@@ -50,6 +50,11 @@ static TUniquePtr<FElysiumEntity> MakeConversationPlace() { return MakeUnique<FE
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
 	ElysiumNpcKernelBindings::AddNpcFields(D);
+	// Retail's `SAVE`-only rows, under their retail member names (0019 story 2 pass B). No
+	// keyvalue, input or Python attribute reaches any of them -- `ReadKeyField`'s gate is
+	// `KEY|OUTPUT` and `AcceptInput`'s is `INPUT` -- so they are persistence and nothing else,
+	// and the registry's save walk is what carries them.
+	ElysiumNpcKernelBindings::AddNpcSaveFields(D);
 
 	// `WillTalk` and `SetAnimation` are not here: they belong to CBaseCombatCharacter and
 	// CBaseAnimating, and the chain walk (R2) reaches them — the NPC shares those two ancestors
@@ -156,42 +161,12 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).SetHintGroups(V.ToString()); };
 		D.Fields.Add(FName(TEXT("hint_groups")), MoveTemp(Acc));
 	}
-	// The stance pair, under retail's own datamap names. Save-only: they carry flag `0x2` there, so
-	// they persist and no keyvalue or script writes them. Nothing in the recovered writer set resets
-	// either on a schedule, state, dialogue or disposition change, which is why a character keeps its
-	// stance across a conversation.
-	//
-	// The index is clamped on restore rather than trusted: it addresses a three-slot array, and a
-	// payload written by another build must not be able to index past it.
-	{
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(EElysiumField::Save);
-		Acc.Type = EElysiumVariantType::Int;
-		Acc.Get = [](const FElysiumEntity& E)
-		{ return FElysiumVariant::Int(static_cast<const FElysiumNpc&>(E).Stance.Current); };
-		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			static_cast<FElysiumNpc&>(E).Stance.Current =
-				FMath::Clamp(V.ToInt(), 0, ElysiumStance::Count - 1);
-		};
-		D.Fields.Add(FName(TEXT("m_CurrStance")), MoveTemp(Acc));
-	}
-	{
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(EElysiumField::Save);
-		Acc.Type = EElysiumVariantType::Float;
-		Acc.Get = [](const FElysiumEntity& E)
-		{ return FElysiumVariant::Float(static_cast<const FElysiumNpc&>(E).Stance.LastChangeTime); };
-		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
-		{ static_cast<FElysiumNpc&>(E).Stance.LastChangeTime = V.ToFloat(); };
-		D.Fields.Add(FName(TEXT("m_flStanceTime")), MoveTemp(Acc));
-	}
-
-	// --- Cognition: the acquisition counter behind the lookaround chance ---
-	// `m_iEnemySightings` (+0x60a8) is engine-written, never authored — the same Save-only posture
-	// the two stance members take. It is saved because the chance it feeds is a per-character
-	// history: a guard who has fought the player before looks around more often.
-	ElysiumAddClassField(D, TEXT("m_iEnemySightings"), &FElysiumNpc::EnemySightings, EElysiumField::Save);
+	// The stance pair (`m_CurrStance` +0x64c8, `m_flStanceTime` +0x64e4) and the acquisition
+	// counter (`m_iEnemySightings` +0x60a8) were hand-written save rows until 0019 story 2 pass B;
+	// `AddNpcSaveFields` now emits all three off the replay, with the two stance LATCHES beside
+	// them that retail's datamap also carries. The restore-time clamp the stance index had here is
+	// gone with them: `FElysiumStanceState::Current` addresses a three-slot array, and the
+	// selector is what validates it, the same way retail's reader does.
 	// `floatfreq` -> `m_iFloatSoundFrequency` (`CBaseCombatCharacter +0x10e8`, `fieldType 0`): the
 	// authored "the float sound plays 1 time in X" frequency both halves of slot 510 roll against
 	// (`Substrate/ElysiumNpcKernelSounds.cpp`). 0 and 8 disable the hook.

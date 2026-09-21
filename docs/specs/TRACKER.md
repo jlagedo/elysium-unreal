@@ -26,8 +26,19 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   `docs/vtmb/npc-kernel/delete-list.md` and `seam-list.md`, held by `kernel_lists --check`.
   It found twenty NPC classes nothing can instantiate (`population.md`), which shrinks rows 06,
   10 and 11, and that `ai_goal_standoff` is unauthored, which halves row 21.
-- [ ] **03 · 0019/2 pass B** — Bindings: the 200 `CBaseEntity`/`CBaseCombatCharacter` keys, component-struct members, the `SAVE` walk + delete the nine `Serialize*Block`. M · Opus/high.
+- [x] **03 · 0019/2 pass B** — Bindings: the 200 `CBaseEntity`/`CBaseCombatCharacter` keys, component-struct members, the `SAVE` walk + delete the nine `Serialize*Block`. M · Opus/high.
   The non-NPC classes are not part of this row: each lands with the 0018 story that stands it.
+  Landed 2026-09-21: the whole NPC entity chain is generated (four new binding classes, 215 keyed
+  rows bound, 37 recorded gaps), the sheet with it; `ElysiumAddClassFieldVia` is the
+  component-struct surface; `AddNpcSaveFields` carries 199 of the 216 `SAVE`-only rows. **The nine
+  blocks did not go** — measured, they duplicate only three words, and those were hand rows, now
+  deleted. The real double-persistence is in the seven component `Serialize` methods below them,
+  which is **0019/2 pass C** (row 03b). Two retail spellings corrected: `gender` / `base_gender_`
+  and `base_active_active_active_dominate`.
+- [ ] **03b · 0019/2 pass C** — Split the seven component serializers against the generated SAVE
+  walk (~104 duplicated words) and move their load-side validation to a post-restore hook; then the
+  nine `Serialize*Block` reduce to port-only state, `PRIVATE` members and restore logic. M–L ·
+  Opus/high. Opened by pass B; blocks nothing below it.
 - [ ] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the 19 hand programs deleted. L · Opus/high.
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.

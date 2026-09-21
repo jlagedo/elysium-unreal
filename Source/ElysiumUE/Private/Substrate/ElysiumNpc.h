@@ -816,7 +816,6 @@ public:
 	// --- Use-to-talk (`CBasePlayer::PlayerUse`, `0x10167850`) — `Substrate/ElysiumNpcDialogue.h` ---
 
 	// `FElysiumNpcDialogue::Name`.
-	FString DialogName() const { return Dialogue.Name(*this); }
 
 	// `FElysiumNpcDialogue::IsUsable`.
 	virtual bool IsUsable() const override { return Dialogue.IsUsable(*this); }

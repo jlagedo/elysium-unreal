@@ -657,10 +657,10 @@ void FElysiumNpc::TroikaPrecache()
 	// CALL 0x1000eaf7`; the decompiler's `param_1` is the dead `EAX` of the previous call).
 	BasePrecache();
 
-	// `m_iDialog` (`+0x0128`, this runtime's `DialogName()`): the conversation directory, globbed
+	// `m_iDialog` (`+0x0128`, this runtime's `DialogName`): the conversation directory, globbed
 	// twice — `.wav` first, then `.mp3`. Both with `bStarPrefix` SET and the precache flag 0, which
 	// is the opposite pair from `CNPC_VWerewolf`'s two calls to the same function.
-	const FString Dialog = DialogName();
+	const FString Dialog = DialogName;
 	if (!Dialog.IsEmpty())
 	{
 		const FString Directory = DialogueSoundDirectory(Dialog);

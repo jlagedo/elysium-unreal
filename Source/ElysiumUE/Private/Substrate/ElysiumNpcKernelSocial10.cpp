@@ -114,7 +114,7 @@ bool FElysiumNpc::CanTalk(FElysiumEntity* Activator)
 	//          CORRECTION: the checklist walk puts `m_iDialog` at `+0x5b64`; `vtmb_fields
 	//          CAI_BaseNPCTroika` and the listing both put it at `+0x128`, which is the authored
 	//          `dialogname` key.
-	if (Activator == nullptr || DialogName().IsEmpty())
+	if (Activator == nullptr || DialogName.IsEmpty())
 	{
 		return false;
 	}

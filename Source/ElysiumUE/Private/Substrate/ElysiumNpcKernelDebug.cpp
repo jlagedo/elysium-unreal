@@ -969,8 +969,8 @@ void FElysiumNpc::DrawDebugStatOverlays()
 	}
 
 	// `0x1029c010`'s own first arm: `if (m_iDialog == 0) { CAI_BaseNPC::DrawDebugStatOverlays();
-	// return; }`. `m_iDialog` (+0x0128) is the dialogue file name, which `DialogName()` answers.
-	if (DialogName().IsEmpty())
+	// return; }`. `m_iDialog` (+0x0128) is the dialogue file name, which `DialogName` answers.
+	if (DialogName.IsEmpty())
 	{
 		BaseDrawDebugStatOverlays();
 		return;

@@ -22,6 +22,7 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
+#include "Substrate/ElysiumNpcKernelBindings.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Holster's carried-weapon fallback
 #include "Substrate/ElysiumPendingInput.h"
@@ -38,51 +39,6 @@ namespace
 		TEXT("Malkavian"), TEXT("Nosferatu"), TEXT("Toreador"), TEXT("Tremere"), TEXT("Ventrue") };
 	constexpr int32 GClanMin = 2;
 	constexpr int32 GClanMax = 8;
-
-	// One trait slot on FElysiumCombatCharacter::Sheet, as VtMB's datamap exposes it: the current
-	// value under the bare name, the base under a `base_` prefix. Both halves are keyable and both
-	// are saved, which is what the recovered datamap flags say.
-	void AddSlotField(FElysiumClassDesc& D, const TCHAR* Name,
-		EElysiumTraitContainer Container, int32 Slot, bool bBase)
-	{
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(ElysiumFieldDefault);
-		Acc.Type = EElysiumVariantType::Int;
-		Acc.Get = [Container, Slot, bBase](const FElysiumEntity& E)
-		{
-			const FElysiumSheet& S = static_cast<const FElysiumCombatCharacter&>(E).Sheet;
-			return FElysiumVariant::Int(bBase ? S.GetBase(Container, Slot) : S.GetCurrent(Container, Slot));
-		};
-		Acc.Set = [Container, Slot](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			// A write lands on the base either way: a keyvalue and a script assignment both set the
-			// character sheet, and the current value is derived from it.
-			static_cast<FElysiumCombatCharacter&>(E).Sheet.SetBase(Container, Slot, V.ToInt());
-		};
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-
-	// Every compiled slot in every container, twice over. 74 slots -> 148 fields on
-	// CBaseCombatCharacter, which is the whole sheet reachable through one R2 walk.
-	void AddSheetFields(FElysiumClassDesc& D)
-	{
-		for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
-		{
-			const EElysiumTraitContainer Container = (EElysiumTraitContainer)i;
-			for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
-			{
-				AddSlotField(D, Slot.Datamap, Container, Slot.Index, /*bBase=*/false);
-				AddSlotField(D, *FString::Printf(TEXT("base_%s"), Slot.Datamap),
-					Container, Slot.Index, /*bBase=*/true);
-				if (Slot.Alias)
-				{
-					AddSlotField(D, Slot.Alias, Container, Slot.Index, /*bBase=*/false);
-					AddSlotField(D, *FString::Printf(TEXT("base_%s"), Slot.Alias),
-						Container, Slot.Index, /*bBase=*/true);
-				}
-			}
-		}
-	}
 
 	// The same shape for FElysiumPlayer::Law, read-only (the SetCriminalLevel family writes it).
 	void AddLawField(FElysiumClassDesc& D, const TCHAR* Name, int32 FElysiumLawState::* Member)
@@ -243,9 +199,20 @@ static FElysiumClassRegistrar GRegAnimating(
 	ElysiumAnimatingClassName(), ElysiumBaseClassName(), nullptr,
 	[](FElysiumClassDesc& D)
 	{
-		// `skin` is KEY and INPUT with a null inputFunc — the keyvalue, the wire and `.skin =` are
-		// the same direct write, so the field alone serves all three (entity_io.md).
-		ElysiumAddClassField(D, TEXT("skin"), &FElysiumAnimating::Skin);
+		// The `CBaseAnimating` datamap, generated from the replay (0019 story 2 pass B). `skin` is
+		// its one bound row — KEY and INPUT with a null inputFunc, so the keyvalue, the wire and
+		// `.skin =` are the same direct write (entity_io.md) — and the other ten are recorded gaps
+		// naming the Source render word each stands for.
+		ElysiumNpcKernelBindings::AddAnimatingFields(D);
+		// Retail derives `CBaseCombatCharacter` from `CBaseToggle`, so a character inherits the
+		// mover's nine keys; this port keeps mover data on `FElysiumMoverBase`. The generated
+		// function stands where retail's toggle does and records all nine as gaps, so the chain
+		// still accounts for every key `ReadKeyField` would resolve on a character.
+		ElysiumNpcKernelBindings::AddToggleFields(D);
+
+		// `default_disposition` is a `CAI_BaseNPCTroika` row (`m_sDefaultDisposition +0x6558`)
+		// that this port carries on the animating node, because the disposition drives the
+		// standing pose for every character and not only for an NPC.
 		ElysiumAddClassField(D, TEXT("default_disposition"), &FElysiumAnimating::Disposition);
 		// Project save-only companion for SetDisposition's second argument. It is deliberately not a
 		// script field: retail exposes the pair through the method, not as two writable attributes.
@@ -328,9 +295,16 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		D.Input(TEXT("LookAtEntityOrigin"),  [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputLookAtEntityOrigin(A); });
 		D.Input(TEXT("LookAtEntityDefault"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputLookAtEntityDefault(A); });
 
-		// `money` is `m_iMoney`, the one counter `stats.txt` does not carry as a Stat. Humanity,
-		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
-		ElysiumAddClassField(D, TEXT("money"), &FC::Money);
+		// The `CBaseCombatCharacter` datamap, generated from the replay (0019 story 2 pass B):
+		// `money` (`m_iMoney`, the one counter `stats.txt` does not carry as a Stat) and the whole
+		// character sheet — retail gives every ELEMENT of the four trait arrays its own datamap
+		// row, so the 148 trait names are recovered data and not a second namespace. Humanity,
+		// blood, masquerade, clan and sex are trait slots and arrive with them.
+		//
+		// The names are retail's, typos included: `base_active_active_active_dominate` is what
+		// `CBaseCombatCharacter`'s table actually spells for Active_Disciplines slot 6's base,
+		// and it is therefore the only spelling a map or a script can author.
+		ElysiumNpcKernelBindings::AddCombatCharacterFields(D);
 
 		// `trigger_stealth_mod`'s raw aggregate (`+0x1084`). Registered on THIS chain node
 		// rather than on the player, because the trigger's own increment is guarded by
@@ -399,7 +373,9 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		ElysiumAddClassField(D, TEXT("m_iEyeLookMode"), &FC::EyeLookMode, EElysiumField::None);
 
 		AddFeedFields(D);
-		AddSheetFields(D);
+		// `gender` is retail's spelling of Attributes slot 11's CURRENT row and arrives generated;
+		// its base row is `base_gender_`, trailing underscore and all. The save format documents
+		// the slot as `gender`, so nothing else is needed here.
 	});
 
 // The player. Its classname is VtMB's own (`player`); nothing in a `.ents` file carries it, because

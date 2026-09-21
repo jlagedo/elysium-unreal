@@ -210,12 +210,54 @@ green, and `coverage.md` shows the change.
   and `m_iEnemySightings` is a `SAVE`-only row, a save-walk binding under its retail name. Seventeen retail keys
   are bound for the first time, among them 12a's `stay_entrenched`, `percent_occluded_*`,
   `squadname`, `follower_*`. `--check` verifies the emission; the test
-  `Elysium.Substrate.NpcKernelBindings.Counts` holds the counts. **Pass B, open:** the
-  `CBaseEntity` / `CBaseCombatCharacter` keys (200), which need the census and the shape map
-  extended to the chain words the port stores on `FElysiumNpc` first; a binding surface for
-  component-struct members; the save walk over `SAVE`-only rows, landing together with the
-  deletion of the nine `Serialize*Block` helpers so no field persists twice; and the non-NPC
-  classes as 0018 stands them.
+  `Elysium.Substrate.NpcKernelBindings.Counts` holds the counts.
+  **Pass B landed (2026-09-21).** The whole NPC entity chain is generated. `ReadKeyField`
+  (`0x100acab0`) walks `CAI_BaseNPCTroika` up to `CBaseEntity` and the port's registry carries the
+  same walk through `FElysiumClassDesc::BaseName`, so `CBaseEntity`, `CBaseToggle`,
+  `CBaseAnimating` and `CBaseCombatCharacter` each gained an `Add…Fields` registered on the
+  matching chain node (`CBaseFlex` and `CBaseAnimatingOverlay` name no external and got none):
+  **27 + 0 + 1 + 149 + 38 keyed rows bound, 37 recorded gaps**, each naming the retail word and
+  what this port does instead. *The "200 `CBaseEntity`/`CBaseCombatCharacter` keys" this story
+  asked for were 200 replay ROWS, not 200 gaps:* 148 are the character sheet, which
+  `AddSheetFields` already registered at runtime, and 25 more were the base node's hand rows, so
+  the real gap was **42**, of which 5 now bind and 37 carry a reason.
+  *Three new `FElysiumEntity` words:* `DialogName` (`m_iDialog +0x128`, replacing a live read of
+  `Def->Keys` that no runtime write could reach), `AuthoredSpeed` (`m_flSpeed +0x164`) and
+  `bStartHidden` (`m_bStartHidden +0xe0`, now the one word both the datamap row and the born-hidden
+  spawn rule read).
+  *The sheet is generated too*, as `ElysiumAddSheetField` rows against the port's compiled slot
+  table, which put retail's own spellings in charge and corrected two: `gender` / `base_gender_`
+  (the underscore is on the base row alone — the pair was carried inverted) and
+  `base_active_active_active_dominate` (Troika's typo, and the only spelling that addresses
+  Active_Disciplines slot 6's base). Both now sit in `FElysiumSheetSlot::BaseDatamap`, and
+  `docs/vtmb/game_runtime.md` § "How a trait is addressed" records them.
+  *The component-struct binding surface* is `ElysiumAddClassFieldVia<TClass>(D, name, resolver)` —
+  a captureless generic lambda returning a reference, so one form serves a component member, a
+  struct nested in one and an array element alike, and the path is compiled. `ElysiumAddClassField`
+  delegates to it, and the marshalling chain widened to every integral type and every enum, because
+  retail's `FIELD_INTEGER` lands on the port's `uint32` bit words and `uint8` enums.
+  *The SAVE walk* is `AddNpcSaveFields`: **199 of the 216** `SAVE`-only rows that have a shape-map
+  member, registered under their RETAIL MEMBER NAME with `EElysiumField::Save` alone. That is
+  retail's own reading — `ReadKeyField` gates on `KEY|OUTPUT`, `AcceptInput` on `INPUT`, and a row
+  with no external answers neither, so it is persistence and nothing else
+  (`docs/vtmb/python_bridge.md` § "The three gates, read together"). The 17 that do not generate
+  each say why: 13 are `FIELD_EMBEDDED` rows whose port member carries its own typed `Serialize`
+  (which is the same shape as retail's nested `datamap_t`), 2 are `FIELD_CLASSPTR`, and 2 are the
+  blink pair, a word of the RESOLVED disposition row this port re-derives.
+  **The nine `Serialize*Block` helpers did NOT go, and the reason is a finding.** Measured against
+  the 239 port words the generated walk now reaches, the nine blocks duplicate **three** of them —
+  `m_iEnemySightings`, `m_CurrStance`, `m_flStanceTime`, and those were hand rows in
+  `BuildNpcClass` rather than block writes. They are deleted. What the blocks actually carry is
+  three things the walk cannot: port state with no retail datamap row at all (the patrol/ambient
+  bookkeeping 0018's places need), `PRIVATE` members the shape map records as strings because
+  `sizeof` cannot reach them (`m_NPCState`, `m_IdealNPCState`, `m_bDisableAI` and 11 more), and
+  restore LOGIC that is not persistence (re-`Start`ing the saved program, re-claiming an ambient
+  spot, rebasing handles, the witness clamps). **The real double-persistence is one layer down:**
+  `FElysiumNpcWitness::Serialize`, `FElysiumNpcScheduleHost::Serialize` and their kin write ~104
+  of the words the registry now carries. Splitting those seven component serializers against the
+  generated walk — and moving their load-side validation to a post-restore hook — is the remaining
+  work, and it is a different job from "delete the nine blocks": **pass C.**
+  **Still open:** pass C above, and the non-NPC classes as 0018 stands them.
 
 - [ ] **3. The schedule seam: texts, id spaces, flag tables.**
   Retail: the 691 schedule descriptions are null-terminated ASCII in `.rdata`, one per

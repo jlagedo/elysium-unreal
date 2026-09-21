@@ -554,7 +554,7 @@ int32 FElysiumNpc::FloatSoundMinDelaySeconds() const
 // `0x1027a530`'s `RandomInt(0, frequency)` is what spends it.
 void FElysiumNpc::FloatSound()
 {
-	const float Attenuation = FloatSoundAttenuation(!DialogName().IsEmpty());
+	const float Attenuation = FloatSoundAttenuation(!DialogName.IsEmpty());
 	SpeakVSound(GSounds10ConceptFloat, VSoundConceptId(GSounds10ConceptFloat), GSounds10ChanVoice,
 		GSounds10Volume, Attenuation);
 

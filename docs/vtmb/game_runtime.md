@@ -371,6 +371,22 @@ read:** `Health`(15) has the identical collision with `m_iHealth` and its datama
 sampled; the runtime takes `vhealth` from the slot-17 pattern, and a later decompile pass should
 confirm or correct it.
 
+**The whole 148-row set, read off the datamap replay (2026-09-21, 0019 story 2 pass B).** Every
+element of the four arrays has its own `typedescription_t` row, so the externals are data rather
+than a derivation, and two of them are not what the `base_<name>` rule would produce:
+
+- **`base_gender_`'s underscore is on the BASE row alone.** `+0x11a8` (current) is spelled
+  `gender`; `+0x111c` (base) is `base_gender_`. The RE24 sample read the base row, and the pair
+  was carried the other way round — as a datamap name `gender_` with `gender` as an alias — until
+  the replay was walked whole. `gender_` addresses nothing.
+- **`base_active_dominate` does not exist.** Active_Disciplines slot 6's base row is spelled
+  `base_active_active_active_dominate` (`+0x1328`), Troika's typo, and since the datamap IS the
+  namespace that is the only spelling a map or a level script can author for it. The current row
+  (`+0x136c`) is the ordinary `active_dominate`.
+
+Both are carried in the port's compiled slot table as `FElysiumSheetSlot::BaseDatamap`, which is
+null on the other 72 slots.
+
 A Hammer keyvalue / `__getattr__` walk resolves the *datamap* name; `BumpStat` and the
 `feats.txt` `Base%d` keys resolve the *`stats.txt`* name — two spellings, one slot.
 

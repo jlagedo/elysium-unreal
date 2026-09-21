@@ -178,7 +178,9 @@ void FElysiumNpcDialogue::End(FElysiumNpc& Npc, const FElysiumInputArgs& Args)
 
 FString FElysiumNpcDialogue::Name(const FElysiumNpc& Npc) const
 {
-	return Npc.Def ? Npc.Def->Keys.FindRef(TEXT("dialogname")) : FString();
+	// `m_iDialog` is a `CBaseEntity` word, so the live member is the answer: a read of the def's
+	// keys would miss a runtime write, which retail's mutable `string_t` accepts.
+	return Npc.DialogName;
 }
 
 bool FElysiumNpcDialogue::IsUsable(const FElysiumNpc& Npc) const
@@ -301,7 +303,7 @@ bool FElysiumNpcDialogue::OpenConversation(FElysiumNpc& Npc, const FElysiumEntit
 	{
 		return false;
 	}
-	const FString DialogName = Npc.Def->Keys.FindRef(TEXT("dialogname"));
+	const FString& DialogName = Npc.DialogName;
 	if (DialogName.IsEmpty())
 	{
 		return false;   // an NPC with no dialogue file — nothing to open

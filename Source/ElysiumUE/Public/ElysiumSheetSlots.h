@@ -41,13 +41,23 @@ const TCHAR* ElysiumTraitContainerName(EElysiumTraitContainer Container);
 // what `BumpStat` and the `feats.txt` / `traiteffects000.txt` trait references resolve instead —
 // two spellings, one slot. They differ on five rows; everything else is the lowercased internal
 // name. `Alias` is a second accepted datamap spelling, or null.
+//
+// The BASE array's row is `base_<Datamap>` on every slot but one, so `BaseDatamap` is null except
+// where retail's own table spells it otherwise. It does, once: Active_Disciplines slot 6's base row
+// is `base_active_active_active_dominate` (`CBaseCombatCharacter 0x1061664c`, `+0x1328`) — Troika's
+// typo, and therefore the only spelling a map or a level script can author for that slot's base.
 struct FElysiumSheetSlot
 {
 	int32 Index = INDEX_NONE;
 	const TCHAR* Datamap = nullptr;
 	const TCHAR* Internal = nullptr;
 	const TCHAR* Alias = nullptr;
+	const TCHAR* BaseDatamap = nullptr;
 };
+
+// The base array's datamap row for a slot: `BaseDatamap` where retail spells one, `base_<Datamap>`
+// otherwise.
+FString ElysiumSheetBaseDatamap(const FElysiumSheetSlot& Slot);
 
 // The container's slots, in slot order — `Slots[i].Index == i` holds, and the leading `*_Order`
 // block occupies 0 on Attributes and Abilities.
