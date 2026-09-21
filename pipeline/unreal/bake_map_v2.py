@@ -258,6 +258,12 @@ TAG_WATER = "elysium.water"
 #: ride each volume when the staged row carries them.
 WATER_ACTOR_SHAPE = 2
 
+#: 0018 story 21-2: the shape `bake_map_collision.place_nav_areas` writes the marks as -- the two
+#: area classes and which staged rows reach each. Bumped when that changes for the same staged
+#: rows (story 7 gives the doors that DO carry a link their own per-agent cut, which is the next
+#: bump), so the level re-authors rather than keeping marks cut to the old rule.
+NAV_AREA_ACTOR_SHAPE = 1
+
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not
 #: have to wait for the last name the host defines.
@@ -633,7 +639,39 @@ def _build_class():
             # The rest clip a skeletal-rest placement is dealt is a function of its model path and
             # its lump index, so it belongs in the recipe: a re-deal has to re-author the level.
             recipe["rest_poses"] = dict(sorted(self.rest_labels.items()))
+            # 0018 story 21-2: the level now carries the world-collision actor, the nav-area marks
+            # and the Recast meshes, so their inputs are level inputs.
+            #
+            # The payload's FINGERPRINT rather than its rows: `reset_authoring` replaces every
+            # `UBodySetup` subobject, so a re-cooked payload leaves a saved level whose actor
+            # points at objects that no longer exist -- which the runtime refuses at load. Nothing
+            # the recipe already digests can say that. (The staged hull bytes are in the host's
+            # sidecar recipe; this is the identity of what was cooked from them.)
+            recipe["collision_payload"] = self.collision_fingerprint
+            # The meshes are only as current as the numbers they were cut with, and those numbers
+            # are in no file: the radius and height come from the generated `SupportedAgents` ini,
+            # the cell, tile and step from the generated hull table, the slope from a constant in
+            # `ElysiumNavBakeLibrary.cpp`. Without this a change to any of them would leave every
+            # level reading as current and quietly built to the old shape.
+            bits = self._used_hull_bits()
+            recipe["nav_build_shape"] = (
+                list(unreal.ElysiumNavBakeLibrary.nav_build_shape(bits))
+                if bits is not None else None)
+            recipe["nav_area_shape"] = NAV_AREA_ACTOR_SHAPE
             return recipe
+
+        def _used_hull_bits(self):
+            """Which hulls the map's own graph serves, so which agents it owes a mesh.
+
+            The staged graph's own word, not a second reading of the AIN: the jump-link lane put it
+            in the map manifest and `bake_map_collision.build_navigation` masks the navigation
+            system with it. PRESENCE, not truth -- a staged 0 is a graph that names no hull, which
+            is a different failure from a lane that never ran, and the two earn different
+            diagnostics. No shipped `.ain` carries one (the eleven whose `NumNodes` is 0 all still
+            name a hull), but conflating them would report the wrong remedy on the day one does.
+            """
+            bits = (self.geometry.manifest.get("jumpLinks") or {}).get("usedHullBits")
+            return None if bits is None else int(bits)
 
         def _read_sky(self):
             """R6.7: the miniature transform is the staged manifest's own `sky` block (the unit's

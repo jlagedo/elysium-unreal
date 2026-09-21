@@ -1,8 +1,8 @@
 """The per-map collision payload's offline stage (R4.2).
 
 `pipeline/src/elysium_pipeline/importers/map_collision.py` turns `<map>.hulls`, `<map>.dispcol` and
-the brush-entity `hulls` of `<map>.ents` into the manifest `pipeline/unreal/import_map_collision.py`
-executes.
+the brush-entity `hulls` of `<map>.ents` into the manifest `pipeline/unreal/bake_map_collision.py`
+executes inside `bake map`'s own editor session.
 
 These pin the pieces that decide whether a wrong payload can be authored at all: the sidecar
 acceptance rule the C++ reader states, the 3D-skybox scale that is the one transform this lane

@@ -64,8 +64,11 @@ CLANG_DATABASE_TIMEOUT_SECONDS = 300.0
 POLICY_TIMEOUT_SECONDS = 1800.0
 CORPUS_TIMEOUT_SECONDS = 7200.0
 #: One batch is `MAP_BAKE_BATCH` maps of Nanite build, Lumen surface-cache fitting and texture
-#: compression, each a cold DDC miss on a first run. Kept where it was when a batch was twelve
-#: maps: it is the bound on a wedged launch, not a budget the batch is expected to approach.
+#: compression, each a cold DDC miss on a first run -- and, since 0018 story 21-2 folded the
+#: collision lane in, the Chaos convex cook of a few thousand hulls plus a synchronous Recast
+#: build per map. The cook is the reason the old `import map-collision` had an hour of its own: a
+#: cold DDC pays for all of it. Kept where it was when a batch was twelve maps, which is now
+#: three hours for ONE map: it is the bound on a wedged launch, not a budget to approach.
 MAP_BAKE_TIMEOUT_SECONDS = 10800.0
 CLOTH_TIMEOUT_SECONDS = 1800.0
 
@@ -78,6 +81,10 @@ TEST_REPORT_RETENTION = 50
 
 class UnrealFailure(RuntimeError):
     pass
+
+
+class MapStageFailure(RuntimeError):
+    """An offline stage could not read what a map's level needs, so no editor is launched."""
 
 
 _EDITOR_EXECUTABLES = frozenset({"unrealeditor.exe", "unrealeditor-cmd.exe"})
@@ -592,45 +599,6 @@ def import_models(config, runner, manifest_path, *, force: bool = False) -> None
     )
 
 
-#: One data asset per map, each a few thousand reflected rows and no build of any kind. A whole
-#: scoped run is seconds of work behind the editor's own boot, so this is a short leash: anything
-#: past it is a hang, not a long job.
-MAP_ENTITY_IMPORT_TIMEOUT_SECONDS = 30 * 60.0
-
-
-def import_map_entities(config, runner, manifest_path, *, force: bool = False) -> None:
-    """Run the editor phase of `import map-entities` over one staged manifest.
-
-    `pipeline/unreal/import_map_entities.py` (R4.1) reads the manifest and authors one
-    `UElysiumMapEntities` per map under `/ElysiumBaked/<map>/`. No unit root travels: the stage
-    already read the GLB units and carried every row in the manifest.
-    """
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/import_map_entities.py'}",
-            f"-ImportMapEntities={manifest_path}",
-            *(["-ImportForce=1"] if force else []),
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-        timeout=MAP_ENTITY_IMPORT_TIMEOUT_SECONDS,
-    )
-
-
-#: One data asset per map: a few thousand convex hulls and a triangle soup, plus the Chaos cook of
-#: each. The cook is the work here (the entity lane has none), and a cold DDC pays for all of it,
-#: so this leash is longer than `import map-entities`' -- but still a leash, not a budget.
-MAP_COLLISION_IMPORT_TIMEOUT_SECONDS = 60 * 60.0
-
-
 def verify_nav(config, runner, key_path, answers_path) -> None:
     """Run the editor half of `verify nav`: open each baked level and answer its key's queries.
 
@@ -655,65 +623,6 @@ def verify_nav(config, runner, key_path, answers_path) -> None:
             "-noP4",
             "-nosound",
         ],
-    )
-
-
-def import_map_collision(config, runner, manifest_path, *, force: bool = False) -> None:
-    """Run the editor phase of `import map-collision` over one staged manifest.
-
-    `pipeline/unreal/import_map_collision.py` (R4.2) reads the manifest and authors one
-    `UElysiumMapCollisionPayload` per map under `/ElysiumBaked/<map>/`. No unit root travels: the
-    stage already read the sidecars and carried every number in the manifest.
-    """
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/import_map_collision.py'}",
-            f"-ImportMapCollision={manifest_path}",
-            *(["-ImportForce=1"] if force else []),
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-        timeout=MAP_COLLISION_IMPORT_TIMEOUT_SECONDS,
-    )
-
-
-#: One data asset per map, a dozen or so scalar/vector properties and no build of any kind --
-#: shorter than even `import map-entities`' leash. Anything past this is a hang, not a long job.
-MAP_ENVIRONMENT_IMPORT_TIMEOUT_SECONDS = 15 * 60.0
-
-
-def import_map_environment(config, runner, manifest_path, *, force: bool = False) -> None:
-    """Run the editor phase of `import map-environment` over one staged manifest.
-
-    `pipeline/unreal/import_map_environment.py` (R4.4) reads the manifest and authors one
-    `UElysiumMapEnvironment` per map under `/ElysiumBaked/<map>/`. No unit root travels: the
-    stage already read the sidecars and carried every value in the manifest.
-    """
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/import_map_environment.py'}",
-            f"-ImportMapEnvironment={manifest_path}",
-            *(["-ImportForce=1"] if force else []),
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-        timeout=MAP_ENVIRONMENT_IMPORT_TIMEOUT_SECONDS,
     )
 
 
@@ -805,46 +714,65 @@ def read_lookdev_report(report_path: Path) -> dict | None:
 #: flag `UWorld::Tick` consumes and a `-run=pythonscript` commandlet never reaches -- so nothing
 #: was released between maps, and none of those numbers describe what the lane costs now.
 #:
-#: Three is the conservative carry-over from that evidence, not a measured ceiling: it is the
-#: largest batch on record that completed. No run has yet been made with the release working, so
-#: re-derive this number from one -- watch the process's peak working set across the batch --
-#: rather than raising it on the assumption that the collect now recovers everything.
-MAP_BAKE_BATCH = 3
+#: Three was the conservative carry-over from that evidence, not a measured ceiling: it was the
+#: largest batch on record that completed.
+#:
+#: ONE since 0018 story 21-2, and for a new reason on top of the old one. Folding the three
+#: `import map-*` commands into the bake moved their work into this process: a Chaos convex cook
+#: over thousands of hulls per map (the lane that used to do it budgeted an hour of its own for
+#: it, on the grounds that a cold DDC pays for all of it), the cooked payload held resident until
+#: the map is released, and a synchronous Recast build whose rat agent rasterises 5 cm cells over
+#: a map the size of the hub. None of that was in any of the numbers above. Process exit is still
+#: the only certain release, and an editor boot is a couple of minutes against a map bake measured
+#: in tens -- so the batch buys little and now risks more.
+#:
+#: The first measured number, 2026-09-21: `sm_hub_1` ALONE, its assets all reused and only the
+#: collision cook and the level forced, peaks the process at 11,223 MB -- against 12,983 MB for
+#: the whole three-map batch on record. One map already costs what three used to, so one it stays.
+#: The commandlet logs `process peak working set` per map (`bake_map._peak_working_set_mb`); raise
+#: this only on a batch whose later lines show the release between maps giving the memory back.
+MAP_BAKE_BATCH = 1
 
 
-def bake_maps(
-    config,
-    runner,
-    maps: Sequence[str],
-    *,
-    force: bool = False,
-    particles: bool = False,
-    batch_size: int | None = None,
-) -> None:
-    """Bake the named maps, `batch_size` maps per editor process (the whole list when None).
+def _stage_map_inputs(config, maps: Sequence[str]) -> dict[str, Path]:
+    """Stage every offline input one `bake map` launch needs, and name its manifests.
 
-    `particles` opts the map's Niagara authoring pass in; it is off by default because
-    force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
-    launch without it leaves whatever particle packages the mount already carries untouched.
+    Four lanes, all read in THIS interpreter because Unreal's embedded CPython carries no numpy
+    and none of these reads can happen behind the commandlet: the map's published root unit
+    (R5.1), and -- since 0018 story 21-2 folded their commands away -- the entity table (R4.1),
+    the collision hulls (R4.2) and the environment (R4.4).
 
-    Editor start-up (module load, plugin init, registry scan) is the fixed cost per process, and
-    it buys the only release that is certain: process exit. Between maps the commandlet now
-    drops the previous map's world and collects for real (`bake_map._collect_garbage`), which
-    used to be a no-op, and it isolates per-map failures either way -- a crash mid-run costs only
-    a relaunch, because every saved asset carries its recipe stamp and is reused. Profile bakes
-    pass `MAP_BAKE_BATCH` so what the in-process release does not recover is bounded by how soon
-    the process ends.
-
-    Per-asset reuse is the commandlet's own decision, read off each asset's recipe stamp; a
-    failed batch is reported by the editor log naming the failing map.
+    A lane that could not stage a requested map RAISES here, before the editor is launched. It
+    used to be reported after its own command had run, which was harmless when the level already
+    existed; under the fold a missing entry would have the bake write a level with no entity
+    table, no collision actor and no meshes -- a level that cannot be loaded at all. There is
+    nothing to gain by finding that out afterwards.
     """
-    maps = list(dict.fromkeys(maps))
-    # R5.1: a map is authored from its published root unit, and decoding that unit needs numpy,
-    # which Unreal's embedded CPython does not carry. So the read happens here, in this
-    # interpreter, immediately before the commandlet launches -- the staged pair it leaves is what
-    # `bake_map_v2` reads. Staging every launch rather than caching it keeps the bake's inputs and
-    # the published unit in step; it costs ~1.5 s per map.
-    for name in maps:
+    from elysium_pipeline.importers import map_collision, map_entities, map_environment
+
+    names = list(dict.fromkeys(maps))
+    sidecar_dir = lambda stem: config.export_root / stem  # noqa: E731 - one expression, two uses
+    staged = {
+        "entities": map_entities.stage_map_entities(
+            config.export_v2_root, map_entities.staging_root(config.work_root), maps=names,
+            ents_for=lambda stem: config.export_root / stem / f"{stem}.ents"),
+        "collision": map_collision.stage_map_collision(
+            map_collision.staging_root(config.work_root), maps=names, sidecar_dir=sidecar_dir),
+        "environment": map_environment.stage_map_environment(
+            map_environment.staging_root(config.work_root), maps=names,
+            sidecar_dir=sidecar_dir),
+    }
+    failures = []
+    for lane, result in staged.items():
+        print(f"staged map {lane}: {result.summary()}")
+        failures.extend(f"{lane}/{name}: {detail}" for name, detail in result.failures)
+    if failures:
+        raise MapStageFailure(
+            "these maps cannot be baked -- an offline stage could not read what the level needs:\n"
+            + "\n".join(f"  {row}" for row in failures))
+    manifests = {lane: result.manifest_path for lane, result in staged.items()}
+
+    for name in names:
         manifest = map_geometry.stage_map(name)
         print(f"staged V2 geometry for {name}: {manifest['counts']} "
               f"({manifest['vertexBytes']} vertex bytes, "
@@ -876,6 +804,45 @@ def bake_maps(
               f"{(stats.get('rows') or {}).get('dustmotes', 0)} dustmotes, "
               f"{(stats.get('rows') or {}).get('steam', 0)} steam, "
               f"{(stats.get('rows') or {}).get('beams', 0)} beams")
+    return manifests
+
+
+def bake_maps(
+    config,
+    runner,
+    maps: Sequence[str],
+    *,
+    force: bool = False,
+    from_stage: str = "",
+    particles: bool = False,
+    batch_size: int | None = None,
+) -> None:
+    """Bake the named maps, `batch_size` maps per editor process (the whole list when None).
+
+    One launch is the whole of a loadable level (0018 story 21-2): the geometry and the level, the
+    entity table, the environment, the cooked collision payload, the world-collision actor, the
+    nav-area marks, the Recast meshes, the prune, and one save carrying all of it.
+
+    `particles` opts the map's Niagara authoring pass in; it is off by default because
+    force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
+    launch without it leaves whatever particle packages the mount already carries untouched.
+    `from_stage` forces one stage and every one after it (`bake_map.STAGE_ORDER`); it never skips
+    one, because the level is authored from tables the earlier stages fill even when they reuse.
+
+    Editor start-up (module load, plugin init, registry scan) is the fixed cost per process, and
+    it buys the only release that is certain: process exit. Between maps the commandlet now
+    drops the previous map's world and collects for real (`bake_map._collect_garbage`), which
+    used to be a no-op, and it isolates per-map failures either way -- a crash mid-run costs only
+    a relaunch, because every saved asset carries its recipe stamp and is reused.
+
+    Per-asset reuse is the commandlet's own decision, read off each asset's recipe stamp; a
+    failed batch is reported by the editor log naming the failing map.
+    """
+    maps = list(dict.fromkeys(maps))
+    # Every offline read the launch needs, done here because Unreal's embedded CPython carries no
+    # numpy. Staging every launch rather than caching it keeps the bake's inputs and the published
+    # units in step; the geometry half costs ~1.5 s per map.
+    manifests = _stage_map_inputs(config, maps)
 
     step = max(1, batch_size) if batch_size else max(1, len(maps))
     for offset in range(0, len(maps), step):
@@ -889,7 +856,11 @@ def bake_maps(
                 "-run=pythonscript",
                 f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
                 f"-BakeMaps={','.join(batch)}",
+                f"-BakeMapEntities={manifests['entities']}",
+                f"-BakeMapCollision={manifests['collision']}",
+                f"-BakeMapEnvironment={manifests['environment']}",
                 *(["-BakeForce=1"] if force else []),
+                *([f"-BakeFrom={from_stage}"] if from_stage else []),
                 *(["-BakeParticles=1"] if particles else []),
                 "-AllowCommandletRendering",
                 "-unattended",

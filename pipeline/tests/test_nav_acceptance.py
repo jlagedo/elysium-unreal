@@ -168,3 +168,13 @@ def test_the_pinned_detours_are_the_three_hub_rat_holes():
     from elysium_pipeline.validation.nav_known_findings import known_detours
     assert sorted(known_detours("sm_hub_1", 19)) == [406, 721, 1472]
     assert known_detours("sp_tutorial_1", 19) == {}
+
+
+def test_the_theatres_five_pins_are_the_one_dropped_node():
+    """0018 story 21-2: five links, one destination, one 132 cm drop. Pinned on the human hull --
+    `sp_theatre`'s graph is human-only, so there is no rat hull to pin anything on."""
+    from elysium_pipeline.validation.nav_known_findings import known_detours
+    pins = known_detours("sp_theatre", 0)
+    assert sorted(pins) == [4, 8, 10, 53, 56]
+    assert all("132 cm down onto node 26" in why for why in pins.values())
+    assert known_detours("sp_theatre", 19) == {}

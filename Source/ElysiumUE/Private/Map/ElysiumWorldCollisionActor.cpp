@@ -62,6 +62,11 @@ int32 AElysiumWorldCollisionActor::AuthorFromPayload(UElysiumMapCollisionPayload
 		}
 	}
 	Bodies.Reset();
+	if (Displacement != nullptr)
+	{
+		Displacement->DestroyComponent();
+		Displacement = nullptr;
+	}
 
 	Payload = InPayload;
 	if (InPayload == nullptr)
@@ -92,6 +97,31 @@ int32 AElysiumWorldCollisionActor::AuthorFromPayload(UElysiumMapCollisionPayload
 			TEXT("%s: world body %s, %d hull(s), profile '%s'%s"), *MapName, *Spelling,
 			Row.HullCount, *Component->GetCollisionProfileName().ToString(),
 			Component->CanEverAffectNavigation() ? TEXT(" (cuts the NavMesh)") : TEXT(""));
+	}
+
+	// The displacement terrain, on the maps that have any. It wears `PNS-`, the signature every
+	// solid opaque world brush wears, because that is what a displacement surface is: the
+	// transient component the runtime used to build for it was `BlockAll` with the +use and pick
+	// channels ignored, which is the same three answers. It is not partitioned by contents the way
+	// the brush world is -- `.dispcol` is one triangle soup with no per-face contents word to
+	// partition by -- so there is one component and one signature.
+	if (UBodySetup* DisplacementBody = InPayload->GetDisplacement())
+	{
+		Displacement = NewObject<UElysiumWorldCollisionComponent>(this, TEXT("World_Displacement"));
+		Displacement->Signature = static_cast<uint8>(
+			EElysiumContentsSignature::Player | EElysiumContentsSignature::Npc
+				| EElysiumContentsSignature::Sight);
+		Displacement->Body = DisplacementBody;
+		Displacement->LocalCollisionBounds = InPayload->DisplacementBounds();
+		Displacement->ApplySignature();
+		Displacement->SetupAttachment(GetRootComponent());
+		Displacement->RegisterComponent();
+		AddInstanceComponent(Displacement);
+		UE_LOG(LogElysiumWorldCollision, Log,
+			TEXT("%s: displacement terrain, %d triangle(s), profile '%s'%s"), *MapName,
+			InPayload->DisplacementTriangleCount(),
+			*Displacement->GetCollisionProfileName().ToString(),
+			Displacement->CanEverAffectNavigation() ? TEXT(" (cuts the NavMesh)") : TEXT(""));
 	}
 	return Bodies.Num();
 }

@@ -96,18 +96,37 @@ public:
 
 	/**
 	 * The agent names `HullBits` asks for, from the hull table alone -- no world, no navigation
-	 * system, nothing spawned. The collision import asks this to decide whether a level already
-	 * carries the meshes it would otherwise build.
+	 * system, nothing spawned. The bake asks this to name the meshes a level owes, and again after
+	 * the save to check that every one of them reached disk with tiles.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
 	static TArray<FString> AgentNamesForHullBits(int32 HullBits);
+
+	/**
+	 * Every parameter the meshes `HullBits` asks for would be built with, one readable row per
+	 * agent -- for the bake's level recipe to hash, not for anything to parse.
+	 *
+	 * A level that carries baked navigation is only as current as the numbers it was cut with, and
+	 * those numbers are not in any file the recipe already digests: the radius and height come from
+	 * the generated `SupportedAgents` ini, the cell, tile and step from the generated hull table,
+	 * and the slope from a constant in this file. Without this a change to any of them would leave
+	 * every level reading as current and quietly built to the old shape. World-free, like
+	 * `AgentNamesForHullBits`, because the recipe is computed before a level exists.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static TArray<FString> NavBuildShape(int32 HullBits);
 
 	/**
 	 * Every navigation mesh standing in `World`, as "<agent>=<active tiles>".
 	 *
 	 * Tiles, not actors: an empty mesh is saved and loaded exactly like a full one, and reads as
 	 * "already built" to the runtime. This is what says whether a level's baked navigation
-	 * survived whatever last rewrote it.
+	 * survived whatever last rewrote it, and the bake asks it of its own output after the save.
+	 *
+	 * The world must be one the EDITOR opened, not one `LoadPackage` returned. The count comes
+	 * from each mesh's generator, which only exists once a navigation system has registered the
+	 * data, and `TActorIterator` walks `UWorld::Levels`, which a package-loaded world leaves
+	 * empty -- so a package-loaded level answers "no meshes with no tiles" however good it is.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
 	static TArray<FString> NavMeshTileCounts(UWorld* World);

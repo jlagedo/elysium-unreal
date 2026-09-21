@@ -20,7 +20,12 @@ def _config(temporary: str):
     baked.mkdir(parents=True)
     (baked / "test_map.umap").write_bytes(b"level")
     export.mkdir(parents=True)
-    return SimpleNamespace(repo_root=repo, export_root=export)
+    work = Path(temporary) / "work"
+    work.mkdir(parents=True)
+    units = Path(temporary) / "exports_v2"
+    units.mkdir(parents=True)
+    return SimpleNamespace(repo_root=repo, export_root=export, work_root=work,
+                           export_v2_root=units)
 
 
 def _write_character_materials(material_root):
@@ -44,16 +49,25 @@ def _record_verification(config) -> None:
     )
 
 
+def _clean_gate(failed: int = 0):
+    """A nav gate that ran and found `failed` findings, without an editor."""
+    return mock.patch.object(
+        export_manager.nav_gate, "judge",
+        return_value=export_manager.nav_gate.NavGateResult(
+            maps=1, failed=failed, report_path=Path("report.json")))
+
+
 def test_bake_launches_once_per_batch_and_trusts_the_exit() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         config = _config(temporary)
         with (
             mock.patch.object(export_manager.unreal, "bake_maps") as bake,
             mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
+            _clean_gate(),
         ):
             export_manager.bake_and_verify(config, object(), ["test_map", "test_map"])
         bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False,
-                                     particles=False,
+                                     from_stage="", particles=False,
                                      batch_size=export_manager.unreal.MAP_BAKE_BATCH)
         verify.assert_not_called()
 
@@ -64,11 +78,14 @@ def test_missing_baked_package_is_a_loud_failure() -> None:
         with (
             mock.patch.object(export_manager.unreal, "bake_maps"),
             mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
+            _clean_gate() as gate,
         ):
             with pytest.raises(export_manager.ExportBakeFailure) as caught:
                 export_manager.bake_and_verify(config, object(), ["absent_map"])
         assert "absent_map" in str(caught.value)
         verify.assert_not_called()
+        # The missing `.umap` is caught before anything is judged: there is nothing to judge.
+        gate.assert_not_called()
 
 
 def test_verify_is_an_explicit_opt_in() -> None:
@@ -77,6 +94,7 @@ def test_verify_is_an_explicit_opt_in() -> None:
         with (
             mock.patch.object(export_manager.unreal, "bake_maps"),
             mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
+            _clean_gate(),
         ):
             export_manager.bake_and_verify(
                 config, object(), ["test_map"], verify=True
@@ -84,9 +102,46 @@ def test_verify_is_an_explicit_opt_in() -> None:
         verify.assert_called_once_with(config, mock.ANY, ["test_map"])
 
 
-#: The fields `unreal.bake_maps` prints out of a staged manifest, and nothing more -- enough for a
-#: test that is about the commandlet's argv rather than about the staging read.
-_STAGED_STUB = {"counts": {}, "vertexBytes": 0, "placements": []}
+def test_the_nav_gate_runs_on_every_bake_and_can_fail_it() -> None:
+    """0018 story 21-2: the lane that builds the meshes judges them, by whichever door it was
+    entered -- `bake map` and `export map` both come through here. `--skip-nav-verify` is for
+    iterating on the lane itself."""
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _config(temporary)
+        with (
+            mock.patch.object(export_manager.unreal, "bake_maps"),
+            mock.patch.object(export_manager.unreal, "verify_bakes"),
+            _clean_gate() as gate,
+        ):
+            export_manager.bake_and_verify(config, object(), ["test_map"])
+        gate.assert_called_once()
+
+        with (
+            mock.patch.object(export_manager.unreal, "bake_maps"),
+            mock.patch.object(export_manager.unreal, "verify_bakes"),
+            _clean_gate(failed=3),
+        ):
+            with pytest.raises(export_manager.ExportBakeFailure) as caught:
+                export_manager.bake_and_verify(config, object(), ["test_map"])
+        assert "3 new finding" in str(caught.value)
+
+        with (
+            mock.patch.object(export_manager.unreal, "bake_maps"),
+            mock.patch.object(export_manager.unreal, "verify_bakes"),
+            _clean_gate(failed=3) as gate,
+        ):
+            export_manager.bake_and_verify(config, object(), ["test_map"],
+                                           skip_nav_verify=True)
+        gate.assert_not_called()
+
+
+#: The three per-map asset manifests `unreal.bake_maps` hands the commandlet (0018 story 21-2) --
+#: enough for a test that is about the argv rather than about the staging read.
+_STAGED_MANIFESTS = {
+    "entities": Path("entities.json"),
+    "collision": Path("collision.json"),
+    "environment": Path("environment.json"),
+}
 
 
 def test_particle_pass_is_an_explicit_opt_in() -> None:
@@ -110,14 +165,69 @@ def test_particle_pass_is_an_explicit_opt_in() -> None:
         editor.mkdir(parents=True)
         (editor / "UnrealEditor-Cmd.exe").write_bytes(b"")
 
-        # The staging read needs a published root unit; this test is about the command line.
-        with mock.patch.object(export_manager.unreal.map_geometry, "stage_map",
-                               return_value=_STAGED_STUB):
+        # The four staged inputs are read elsewhere; this test is about the command line.
+        with mock.patch.object(export_manager.unreal, "_stage_map_inputs",
+                               return_value=_STAGED_MANIFESTS):
             export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
             assert "-BakeParticles=1" not in recorded[-1]
 
             export_manager.unreal.bake_maps(config, _Runner(), ["test_map"], particles=True)
             assert "-BakeParticles=1" in recorded[-1]
+
+
+def test_one_launch_carries_the_three_per_map_asset_manifests() -> None:
+    """0018 story 21-2: `bake map` is one editor boot for a loadable level.
+
+    The entity table, the environment and the collision payload used to be three commands with
+    three boots of their own, run after the bake, with the level unloadable in between. They ride
+    this argv now, and `--from` rides beside them.
+    """
+    recorded: list[list[str]] = []
+
+    class _Runner:
+        def run(self, argv, **_kwargs):
+            recorded.append([str(item) for item in argv])
+            return SimpleNamespace(returncode=0)
+
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _config(temporary)
+        config.ue_root = Path(temporary) / "ue"
+        config.project = config.repo_root / "ElysiumUE.uproject"
+        editor = config.ue_root / "Engine" / "Binaries" / "Win64"
+        editor.mkdir(parents=True)
+        (editor / "UnrealEditor-Cmd.exe").write_bytes(b"")
+
+        with mock.patch.object(export_manager.unreal, "_stage_map_inputs",
+                               return_value=_STAGED_MANIFESTS):
+            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
+            argv = recorded[-1]
+            assert "-BakeMapEntities=entities.json" in argv
+            assert "-BakeMapCollision=collision.json" in argv
+            assert "-BakeMapEnvironment=environment.json" in argv
+            assert not any(item.startswith("-BakeFrom=") for item in argv)
+
+            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"],
+                                            from_stage="collision")
+            assert "-BakeFrom=collision" in recorded[-1]
+
+
+def test_a_map_whose_offline_stage_failed_never_reaches_the_editor() -> None:
+    """A level authored without one of the three assets cannot be loaded at all, so the refusal
+    is before the launch rather than a line in a report read after it."""
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _config(temporary)
+
+        def _stage(_config, _maps):
+            raise export_manager.unreal.MapStageFailure("collision/test_map: no <map>.hulls")
+
+        with (
+            mock.patch.object(export_manager.unreal, "_stage_map_inputs", side_effect=_stage),
+            mock.patch.object(export_manager.unreal, "_run") as run,
+        ):
+            with pytest.raises(export_manager.unreal.MapStageFailure) as caught:
+                export_manager.unreal.bake_maps(config, object(), ["test_map"])
+        assert "no <map>.hulls" in str(caught.value)
+        run.assert_not_called()
 
 
 def test_particle_pass_is_part_of_the_profile_recipe() -> None:
@@ -523,7 +633,8 @@ def test_bake_v2_maps_bakes_each_named_map_once() -> None:
         prerequisites.assert_called_once_with(config)
         masters.assert_called_once()
         bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True,
-                                     particles=False, verify=True)
+                                     from_stage="", particles=False, verify=True,
+                                     skip_nav_verify=False, on_line=None)
 
 
 def test_bake_v2_maps_refuses_a_map_with_no_export_directory() -> None:

@@ -36,6 +36,7 @@ from elysium_pipeline.tasking import (
     fingerprint_paths,
 )
 from elysium_pipeline import shared_corpus, unreal, workers, native_model_pipeline
+from elysium_pipeline.validation import nav_gate
 
 
 class OfflineExportFailure(RuntimeError):
@@ -1030,21 +1031,28 @@ def bake_and_verify(
     maps: Sequence[str],
     *,
     force: bool = False,
+    from_stage: str = "",
     particles: bool = False,
     verify: bool = False,
+    skip_nav_verify: bool = False,
+    on_line=None,
 ) -> None:
-    """Bake the named maps, and read the mount back only when explicitly asked to.
+    """Bake the named maps, judge their navigation, and read the mount back only when asked to.
 
     The bake's exit code is the acceptance signal, and each asset's recipe stamp is the record
     of what was authored -- a crash loses only unsaved packages, and the next run resumes off
     the stamps alone. `verify` opts into the deep read-back, which `uv run elysium verify maps`
     also runs on its own whenever a mount has to be re-checked without authoring it again.
+
+    The navigation gate is NOT optional in the same way, and it is here rather than on the `bake
+    map` command because `export map` reaches this same bake: a lane that builds navigation
+    meshes must not be able to finish having built a wrong one, by whichever door it was entered.
     """
     names = list(dict.fromkeys(maps))
     if not names:
         return
-    unreal.bake_maps(config, runner, names, force=force, particles=particles,
-                     batch_size=unreal.MAP_BAKE_BATCH)
+    unreal.bake_maps(config, runner, names, force=force, from_stage=from_stage,
+                     particles=particles, batch_size=unreal.MAP_BAKE_BATCH)
     missing = [
         str(_baked_package(config, name))
         for name in names
@@ -1052,6 +1060,14 @@ def bake_and_verify(
     ]
     if missing:
         raise ExportBakeFailure("bake did not produce: " + ", ".join(missing))
+    if skip_nav_verify:
+        print("[bake] --skip-nav-verify: the meshes this run built are unjudged")
+    else:
+        result = nav_gate.judge(config, runner, names, on_line=on_line)
+        if result.failed:
+            raise ExportBakeFailure(
+                f"the levels baked, and verify nav found {result.failed} new finding(s) in their "
+                f"meshes; see {result.report_path}")
     if verify:
         unreal.verify_bakes(config, runner, names)
     else:
@@ -1065,15 +1081,18 @@ def bake_v2_maps(
     maps: Sequence[str],
     *,
     force: bool = False,
+    from_stage: str = "",
     particles: bool = False,
     verify: bool = False,
+    skip_nav_verify: bool = False,
+    on_line=None,
 ) -> list[str]:
-    """Author the named maps' levels from their published V2 units, and nothing else.
+    """Author the named maps' levels from their published V2 units -- the whole of a loadable one.
 
     `export map` reaches the same bake through the legacy decode and an unconditional
     re-verification of the character and catalogue corpora (about twenty minutes that import
     nothing when they are current). This is the V2 lane's own entry: the prerequisite check,
-    the world-material masters, the staged root unit and `bake_map.py`.
+    the world-material masters, the four staged inputs and `bake_map.py`.
 
     The lane still reads `.env`, `.decals` and `.weather.json` off the map's export directory,
     so that directory must exist from one `export map <map> --intermediate-only`; that residue is
@@ -1097,7 +1116,9 @@ def bake_v2_maps(
         ensure_world_material_content(config, runner)
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
-    bake_and_verify(config, runner, names, force=force, particles=particles, verify=verify)
+    bake_and_verify(config, runner, names, force=force, from_stage=from_stage,
+                    particles=particles, verify=verify, skip_nav_verify=skip_nav_verify,
+                    on_line=on_line)
     return names
 
 
@@ -1105,11 +1126,16 @@ def _maps_bake_fingerprint(config, maps: Sequence[str], *,
                            particles: bool = False,
                            cache: ContentDigestCache | None = None) -> str:
     """One recipe for the whole profile bake: every selected map's exported directory
-    (geometry, entities and sidecars), the whole shared corpus (its tables, and the texture
-    and mesh bytes the map-scoped material and level recipes hash), the particle sprites
-    each map imports, the driving scripts, and the world-material policy."""
+    (geometry, entities and sidecars) and its published nav graph, the whole shared corpus (its
+    tables, and the texture and mesh bytes the map-scoped material and level recipes hash), the
+    particle sprites each map imports, the driving scripts, and the world-material policy."""
     inputs = [config.export_root / name for name in maps]
     inputs.append(config.export_root / "shared")
+    # The nav-graph unit is in no exported map directory, and since 0018 story 21-2 the bake cuts
+    # navigation meshes from it: it decides `UsedHullBits`, so the agent set, and which doors are
+    # cut. A re-exported graph must relaunch the bake.
+    if config.export_v2_root is not None:
+        inputs.extend(config.export_v2_root / "nav-graphs" / f"{name}.glb" for name in maps)
     # Native references embedded in a map change when the merged R8 catalogues change.
     inputs.extend(config.repo_root / "Plugins/ElysiumBaked/Content/Models/_Corpus" / name
                   for name in ("DA_PlacedModels.uasset", "DA_PropSkins.uasset"))
@@ -1123,7 +1149,11 @@ def _maps_bake_fingerprint(config, maps: Sequence[str], *,
         extra=(
             "maps-bake-r8-catalogues",
             "particles-on" if particles else "particles-off",
-            _bake_script_fingerprint(config, ("bake_map.py",), cache=cache),
+            _bake_script_fingerprint(
+                config,
+                ("bake_map.py", "bake_map_entities.py", "bake_map_environment.py",
+                 "bake_map_collision.py"),
+                cache=cache),
             _world_material_fingerprint(config),
             *(str(_baked_package(config, name)) for name in maps),
             *maps,
@@ -1137,7 +1167,12 @@ def _bake_profile_maps(config, runner, maps: Sequence[str], *, force: bool = Fal
                        cache: ContentDigestCache | None = None) -> None:
     """Bake the profile's maps behind one receipt; a stale receipt costs one launch whose
     per-map reuse is still the commandlet's own recipe-stamp decision. The declared outputs
-    are every baked `.umap`, so a nuked or partial mount defeats the skip."""
+    are every baked `.umap`, so a nuked or partial mount defeats the skip.
+
+    No navigation gate here, unlike `bake_and_verify`. This path may skip the launch entirely on
+    a current receipt, and judging meshes no run built would be a gate reporting on someone
+    else's work -- the profile's maps are judged by the bake that made them.
+    """
     names = list(dict.fromkeys(maps))
     if not names:
         return

@@ -1,9 +1,11 @@
-"""R2.3 (MP-1.3): `level_sidecar_recipe` closes over the runtime-only sidecars.
+"""R2.3 (MP-1.3): `level_sidecar_recipe` closes over the sidecars nothing else in the recipe sees.
 
-`.ents`, `.hulls`, `.dispcol` and `.ropes` feed no baked actor -- `AElysiumMapActor` reads them at
-map load, not the bake -- so nothing else in the recipe notices a touched one. Without a digest
-here the tracker would keep serving a level stamped against an input that no longer matches: a
-stale level that reads as a runtime bug.
+`.ents` and `.ropes` feed no baked actor -- `AElysiumMapActor` reads them at map load, not the
+bake -- so nothing else in the recipe notices a touched one. `.hulls` and `.dispcol` DO reach a
+baked actor since 0018 story 3 (the world-collision actor is cut from them), but through the
+staged collision manifest rather than through any of the fields the level recipe names, so the
+same argument holds for all four. Without a digest here the tracker would keep serving a level
+stamped against an input that no longer matches: a stale level that reads as a runtime bug.
 """
 
 from __future__ import annotations
@@ -153,3 +155,4 @@ def test_a_missing_sidecar_digests_to_none_rather_than_failing(module) -> None:
     assert sidecars["ropes_sha256"] is None
     assert sidecars["ents_sha256"] is not None
     assert sidecars["hulls_sha256"] is not None
+

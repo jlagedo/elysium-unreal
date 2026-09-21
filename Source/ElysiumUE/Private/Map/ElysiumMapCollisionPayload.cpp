@@ -245,9 +245,16 @@ void UElysiumMapCollisionPayload::AuthorDisplacement(const TArray<FVector>& Vert
 	{
 		return;   // a map with no displacements authors no trimesh
 	}
-	Displacement = NewObject<UBodySetup>(this);
+	// RF_Public for the same reason the world bodies carry it: since 0018 story 21-2 the level's
+	// world-collision actor points at this body too, so that displacement terrain cuts the
+	// navigation mesh the bake saves, and a level may not name another package's private
+	// sub-object -- the save refuses with "Illegal reference to private object".
+	Displacement = NewObject<UBodySetup>(this, NAME_None, RF_Public);
 	Displacement->CollisionTraceFlag = CTF_UseComplexAsSimple;
 	Displacement->bGenerateMirroredCollision = false;
+	// Tested against `sp_soc_3`'s missing floor (0018 story 21-2): flipping this to one-sided
+	// changes the baked mesh by nothing at all -- 414 tiles and the same 20 findings either way --
+	// so whatever buries that map's lower floor, it is not both faces of the sheet being emitted.
 	Displacement->bDoubleSidedGeometry = true;
 	Displacement->bHasCookedCollisionData = true;
 	Displacement->BodySetupGuid = FGuid::NewGuid();

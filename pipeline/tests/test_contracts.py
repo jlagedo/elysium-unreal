@@ -1094,8 +1094,14 @@ def test_texture_bake_enables_commandlet_rendering() -> None:
         project=REPO / "ElysiumUE.uproject",
         unreal_shader_work_root=Path("D:/UnrealCache/ShaderWorking"),
     )
-    with mock.patch.object(
-            unreal_driver, "editor_executable", return_value=Path("UnrealEditor-Cmd.exe")):
+    with (
+        mock.patch.object(
+            unreal_driver, "editor_executable", return_value=Path("UnrealEditor-Cmd.exe")),
+        # The four offline stages read the real export roots; this test is about the argv.
+        mock.patch.object(unreal_driver, "_stage_map_inputs", return_value={
+            "entities": Path("e.json"), "collision": Path("c.json"),
+            "environment": Path("v.json")}),
+    ):
         unreal_driver.bake_maps(config, runner, ["sp_theatre"])
 
     assert len(submitted) == 1

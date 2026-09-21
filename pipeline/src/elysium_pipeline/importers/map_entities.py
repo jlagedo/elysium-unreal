@@ -1,12 +1,13 @@
 """Stage one map's entity table for the `UElysiumMapEntities` data asset (R4.1).
 
-`uv run elysium import map-entities --maps <map>...` turns each named map's published GLB units
-into one `/ElysiumBaked/Maps/<map>/DA_<map>_Entities` asset carrying the same rows the `<map>.ents`
+`uv run elysium bake map --maps <map>...` turns each named map's published GLB units
+into one `/ElysiumBaked/<map>/DA_<map>_Entities` asset carrying the same rows the `<map>.ents`
 document carries, in the same order.
 This module is the offline stage half: it runs the R3.2 producer's own entity join
 (`exporters.UE_map_sidecars.build_entities`), asserts def-count and per-index parity against the
 `.ents` file the asset replaces, and writes one `manifest.json` the editor phase
-(`pipeline/unreal/import_map_entities.py`) executes.
+(`pipeline/unreal/bake_map_entities.py`) executes. `uv run elysium bake map` runs both halves in
+one command; 0018 story 21-2 retired the `import map-entities` that used to be its own.
 
 **Parity is a stage failure, not a warning.** The asset is a transport change and nothing else, so
 a row that does not equal the sidecar's row -- by count, by field set or by value -- stops the run
@@ -35,9 +36,8 @@ FAMILY = "map_entities"
 #: Manifest schema the editor phase understands. Bumped when the row shape changes.
 MANIFEST_SCHEMA = "1.0.0"
 
-#: The name of the staged manifest, and of the report the editor phase writes beside it.
+#: The name of the staged manifest the editor phase reads.
 MANIFEST_NAME = "manifest.json"
-IMPORT_REPORT_NAME = "import_report.json"
 
 #: Bumped whenever this lane's mapping changes in a way that must re-author every asset.
 RECIPE_VERSION = 2   # 2: R6.4 `cull_max_cm` rides the row
@@ -74,7 +74,7 @@ class MapEntityStageError(RuntimeError):
 
 @dataclass
 class StagedMapEntities:
-    """One `import map-entities` run: what landed in the manifest and what refused."""
+    """One entity-table staging run: what landed in the manifest and what refused."""
 
     manifest_path: Path
     maps: list[str] = field(default_factory=list)
@@ -207,7 +207,7 @@ def stage_map_entities(
 
     if not maps:
         raise MapEntityStageError(
-            "import map-entities refuses to run unscoped: pass --maps <stem> (repeatable)"
+            "the entity-table stage refuses to run unscoped: pass --maps <stem> (repeatable)"
         )
     staging = Path(staging)
     staging.mkdir(parents=True, exist_ok=True)

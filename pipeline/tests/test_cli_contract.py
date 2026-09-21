@@ -101,13 +101,15 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 
 #: Every command the import family registers. The
 #: destination is per lane, not one tree: `vdata` deploys loose bytes to `Content/ElysiumCorpus`,
-#: while `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`. The
-#: last two are not corpus families at all but per-map lanes (R4.1, R4.2), which is why they refuse
-#: to run unscoped where a corpus lane takes `--all`.
+#: while `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`.
+#:
+#: Every lane here is a CORPUS lane, and since 0018 story 21-2 that is the whole rule. The three
+#: per-map lanes -- `map-entities`, `map-collision`, `map-environment` (R4.1, R4.2, R4.4) -- were
+#: commands of their own, each with its own editor boot, and a level was not loadable between
+#: them. They are stages of `bake map` now; their offline halves still live under `importers/`.
 IMPORT_COMMANDS = ("vdata", "dialogue", "sound", "sound-schemes", "textures",
                    "surface-properties", "materials",
-                   "models", "characters", "model-catalogues", "expression-tables", "cook-roots",
-                   "map-entities", "map-collision", "map-environment")
+                   "models", "characters", "model-catalogues", "expression-tables", "cook-roots")
 
 
 def test_import_registers_exactly_the_migrated_import_lanes() -> None:

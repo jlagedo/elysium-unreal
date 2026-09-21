@@ -56,20 +56,34 @@ uv run elysium export_v2 map-glb <map>
 uv run elysium export_v2 nav-graph-glb <map>
 uv run elysium export map <map> --intermediate-only   # once: the sidecars the lane still reads
 uv run elysium bake map --maps <map>
-uv run elysium import map-entities    --maps <map>
-uv run elysium import map-collision   --maps <map>
-uv run elysium import map-environment --maps <map>
 uv run elysium verify
 ```
 
-`import map-collision` is also what stands the map's world-collision actor and nav-area marks in
-its level and bakes its navigation meshes, so a level is not loadable until it has run AFTER
-`bake map` -- the runtime has no fallback and fails the load naming both commands. It judges the
-meshes it built against retail's graph before it may succeed (`verify nav`, skippable only with
-`--skip-nav-verify` while iterating on the lane); `uv run elysium verify nav --maps <map>` asks
-again on demand. It needs the map's nav graph exported first.
+**`bake map` is one command and it yields a loadable level** (0018 story 21-2). In one editor
+session, per map: the geometry, the level's actors, `DA_<map>_Entities`, `DA_<map>_Environment`,
+the cooked `DA_<map>_Collision`, the world-collision actor, the nav-area marks, the Recast meshes
+for the agents the map's own graph names, the prune -- and one save carrying all of it. Then
+`verify nav` judges the meshes it just built against retail's graph, automatically, because a lane
+that builds navigation must not be able to finish having built a wrong one; `--skip-nav-verify` is
+for iterating on the lane itself, and `uv run elysium verify nav --maps <map>` asks again on
+demand. The three `import map-*` commands this replaced are gone.
+
+For lane work, `--from <stage>` re-runs one stage and every one after it:
+
+```
+textures  materials  world  sky  particles  entities  environment  collision  level
+```
+
+It FORCES rather than skips. Every stage always runs -- the level is authored from tables the
+earlier stages fill on their reuse paths as well as their build paths, so a skipped stage would
+stamp a level against a recipe computed from nothing. `--force` is `--from textures`. There is no
+`nav` stage: the marks must precede the meshes, the meshes must precede the save, and the save is
+`level`'s.
+
+The map's nav graph must be exported first -- it decides `UsedHullBits`, so the agent set, and
+which doors are cut.
 
 The runtime reads a map's entities, collision and environment from its three baked
 `DA_<map>_*` assets and nowhere else (0018 story 21-1 retired the sidecar arms and the per-map
 flag that used to select between them), so a map that has not been through this procedure fails
-the load with an error naming the command that fixes it.
+the load with an error naming the one command that fixes it.

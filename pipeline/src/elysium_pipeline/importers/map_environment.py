@@ -1,12 +1,13 @@
 """Stage one map's environment for the `UElysiumMapEnvironment` asset (R4.4).
 
-`uv run elysium import map-environment --maps <map>...` turns each named map's `<map>.env`,
-`<map>.sky` and `<map>.spawn` sidecars into one `/ElysiumBaked/Maps/<map>/DA_<map>_Environment` asset
+`uv run elysium bake map --maps <map>...` turns each named map's `<map>.env`,
+`<map>.sky` and `<map>.spawn` sidecars into one `/ElysiumBaked/<map>/DA_<map>_Environment` asset
 carrying the same values -- the 2D-sky flag and its two fog sets, the 3D-skybox miniature's
 placement transform, and the initial player spawn. This module is the offline stage half: it
 reads the three sidecars verbatim, asserts
 parity against them, and writes one `manifest.json` the editor phase
-(`pipeline/unreal/import_map_environment.py`) executes.
+(`pipeline/unreal/bake_map_environment.py`) executes. `uv run elysium bake map` runs both halves
+in one command; 0018 story 21-2 retired the `import map-environment` that used to be its own.
 
 **The rows come from the sidecars, not from a re-derivation of them.** Since R3.5 those files are
 written by the R3.2 producer straight off the BSP entity lump (`UE_map_sidecars.write_environment` /
@@ -31,9 +32,8 @@ FAMILY = "map_environment"
 #: Manifest schema the editor phase understands. Bumped when the row shape changes.
 MANIFEST_SCHEMA = "1.0.0"
 
-#: The name of the staged manifest, and of the report the editor phase writes beside it.
+#: The name of the staged manifest the editor phase reads.
 MANIFEST_NAME = "manifest.json"
-IMPORT_REPORT_NAME = "import_report.json"
 
 #: Bumped whenever this lane's mapping changes in a way that must re-author every asset.
 RECIPE_VERSION = 1
@@ -70,7 +70,7 @@ class MapEnvironmentStageError(RuntimeError):
 
 @dataclass
 class StagedMapEnvironment:
-    """One `import map-environment` run: what landed in the manifest and what refused."""
+    """One environment staging run: what landed in the manifest and what refused."""
 
     manifest_path: Path
     maps: list[str] = field(default_factory=list)
@@ -250,7 +250,7 @@ def stage_map_environment(
 
     if not maps:
         raise MapEnvironmentStageError(
-            "import map-environment refuses to run unscoped: pass --maps <stem> (repeatable)"
+            "the environment stage refuses to run unscoped: pass --maps <stem> (repeatable)"
         )
     staging = Path(staging)
     staging.mkdir(parents=True, exist_ok=True)

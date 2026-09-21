@@ -1,13 +1,14 @@
 """Stage one map's collision for the `UElysiumMapCollisionPayload` asset (R4.2).
 
-`uv run elysium import map-collision --maps <map>...` turns each named map's collision sidecars
-into one `/ElysiumBaked/Maps/<map>/DA_<map>_Collision` asset carrying the same convex sets and the same
+`uv run elysium bake map --maps <map>...` turns each named map's collision sidecars
+into one `/ElysiumBaked/<map>/DA_<map>_Collision` asset carrying the same convex sets and the same
 triangle soup, cooked once offline instead of on every map load. This module is the offline
 stage half: it reads
 `<map>.hulls`, `<map>.dispcol` and the brush-entity `hulls` of `<map>.ents`, applies the one
 transform the runtime applies (the 3D-skybox scale on a `sky` brush entity), asserts parity against
 the files it read, and writes one `manifest.json` the editor phase
-(`pipeline/unreal/import_map_collision.py`) executes.
+(`pipeline/unreal/bake_map_collision.py`) executes. `uv run elysium bake map` runs both halves
+in one command; 0018 story 21-2 retired the `import map-collision` that used to be its own.
 
 **The rows come from the sidecars, not from a second port of the hull solver.** Since R3.5 those
 files are written by the R3.2 producer from the published GLB units, so re-deriving them here would
@@ -34,9 +35,8 @@ FAMILY = "map_collision"
 #: Manifest schema the editor phase understands. Bumped when the row shape changes.
 MANIFEST_SCHEMA = "2.0.0"
 
-#: The name of the staged manifest, and of the report the editor phase writes beside it.
+#: The name of the staged manifest the editor phase reads.
 MANIFEST_NAME = "manifest.json"
-IMPORT_REPORT_NAME = "import_report.json"
 
 #: Bumped whenever this lane's mapping changes in a way that must re-author every asset.
 RECIPE_VERSION = 2
@@ -79,7 +79,7 @@ class MapCollisionStageError(RuntimeError):
 
 @dataclass
 class StagedMapCollision:
-    """One `import map-collision` run: what landed in the manifest and what refused."""
+    """One collision staging run: what landed in the manifest and what refused."""
 
     manifest_path: Path
     maps: list[str] = field(default_factory=list)
@@ -476,7 +476,7 @@ def stage_map_collision(
 
     if not maps:
         raise MapCollisionStageError(
-            "import map-collision refuses to run unscoped: pass --maps <stem> (repeatable)"
+            "the collision stage refuses to run unscoped: pass --maps <stem> (repeatable)"
         )
     staging = Path(staging)
     staging.mkdir(parents=True, exist_ok=True)

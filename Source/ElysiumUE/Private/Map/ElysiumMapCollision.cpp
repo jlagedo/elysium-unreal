@@ -69,7 +69,6 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 	bBrushCollision = false;
 	FailureReason.Reset();
 	LevelCollision = nullptr;
-	DispCollision = nullptr;
 	Payload = nullptr;
 	Source = EElysiumCollisionSource::None;
 
@@ -89,9 +88,9 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 	{
 		BuildState = EElysiumCollisionBuildState::Failed;
 		FailureReason = FString::Printf(
-			TEXT("'%s' has no usable baked world collision; run: uv run elysium bake map --maps %s "
-				"&& uv run elysium import map-collision --maps %s"),
-			*MapName, *MapName, *MapName);
+			TEXT("'%s' has no usable baked world collision; run: "
+				"uv run elysium bake map --maps %s"),
+			*MapName, *MapName);
 		UE_LOG(LogElysiumCollision, Error, TEXT("%s"), *FailureReason);
 		return false;
 	}
@@ -106,20 +105,6 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 		*MapName, ElysiumCollisionSourceName(Source), HullCount, DispTriCount,
 		(FPlatformTime::Seconds() - Started) * 1000.0);
 	return true;
-}
-
-UElysiumDispCollisionComponent* UElysiumMapCollision::MakeDispComponent(AActor* Owner)
-{
-	UElysiumDispCollisionComponent* Component =
-		NewObject<UElysiumDispCollisionComponent>(Owner, TEXT("DispCollision"));
-	Component->SetupAttachment(this);
-	Component->bUseComplexAsSimpleCollision = true;
-	Component->bUseAsyncCooking = true;
-	Component->SetCollisionProfileName(TEXT("BlockAll"));
-	Component->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
-	Component->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
-	Component->SetVisibility(false);
-	return Component;
 }
 
 bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
@@ -147,7 +132,7 @@ bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
 	{
 		UE_LOG(LogElysiumCollision, Error,
 			TEXT("%s: the level carries no world-collision actor; re-run "
-				"`uv run elysium import map-collision --maps %s`"), *InMapName, *InMapName);
+				"`uv run elysium bake map --maps %s`"), *InMapName, *InMapName);
 		return false;
 	}
 	if (Found->MapName != InMapName)
@@ -204,7 +189,7 @@ bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
 		{
 			UE_LOG(LogElysiumCollision, Error,
 				TEXT("%s: the level's world-collision actor points at a body this payload does "
-					"not own; re-run `uv run elysium import map-collision --maps %s`"),
+					"not own; re-run `uv run elysium bake map --maps %s`"),
 				*InMapName, *InMapName);
 			return false;
 		}
@@ -213,6 +198,28 @@ bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
 				static_cast<EElysiumContentsSignature>(Component->Signature)),
 			*Component->GetCollisionProfileName().ToString(),
 			Component->CanEverAffectNavigation() ? TEXT(" (cuts the NavMesh)") : TEXT(""));
+	}
+
+	// The displacement terrain stands in the level too since 0018 story 21-2, and it has to: it is
+	// walkable ground on the maps that have it, and the navigation mesh is cut from this level.
+	// A payload that carries displacement and a level that does not is a level baked before that,
+	// with a hole in its mesh where its ground is.
+	const bool bWantsDisplacement = Asset.GetDisplacement() != nullptr;
+	if (bWantsDisplacement != Found->HasDisplacement())
+	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: the payload carries %s displacement and the level's world-collision actor "
+				"carries %s; re-run `uv run elysium bake map --maps %s`"),
+			*InMapName, bWantsDisplacement ? TEXT("") : TEXT("no"),
+			Found->HasDisplacement() ? TEXT("one") : TEXT("none"), *InMapName);
+		return false;
+	}
+	if (Found->Displacement != nullptr && Found->Displacement->Body != Asset.GetDisplacement())
+	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: the level's displacement points at a body this payload does not own; "
+				"re-run `uv run elysium bake map --maps %s`"), *InMapName, *InMapName);
+		return false;
 	}
 	LevelCollision = Found;
 	return true;
@@ -270,15 +277,9 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 		return false;
 	}
 	HullCount = Asset->WorldHullCount();
-
-	if (UBodySetup* DispSetup = Asset->GetDisplacement())
-	{
-		DispCollision = MakeDispComponent(Owner);
-		DispCollision->SetLocalCollisionBounds(Asset->DisplacementBounds());
-		DispCollision->ProcMeshBodySetup = DispSetup;
-		DispCollision->RegisterComponent();
-		DispTriCount = Asset->DisplacementTriangleCount();
-	}
+	// Reported, not built: the displacement stands in the level with the rest of the world since
+	// 0018 story 21-2, and `AdoptLevelCollisionActor` has just checked that it is this payload's.
+	DispTriCount = Asset->DisplacementTriangleCount();
 
 	UE_LOG(LogElysiumCollision, Log,
 		TEXT("cooked collision '%s': %d convex hulls, %d displacement triangles, %d brush bodies"),
@@ -292,29 +293,9 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 	{
 		return BuildState;
 	}
-
-	auto ComponentState = [](const UProceduralMeshComponent* Component)
-	{
-		if (!Component)
-		{
-			return EElysiumCollisionBuildState::Ready;
-		}
-		const UBodySetup* Setup = Component->ProcMeshBodySetup;
-		if (!Setup)
-		{
-			return EElysiumCollisionBuildState::Cooking;
-		}
-		if (Setup->bFailedToCreatePhysicsMeshes)
-		{
-			return EElysiumCollisionBuildState::Failed;
-		}
-		return Setup->bCreatedPhysicsMeshes
-			? EElysiumCollisionBuildState::Ready
-			: EElysiumCollisionBuildState::Cooking;
-	};
-
-	// The world is the level's own actor, whose bodies the import cooked and `CreatePhysicsMeshes`
-	// materialised before adoption, so there is nothing left to wait for there. Only the
-	// displacement is still a component this object registers.
-	return ComponentState(DispCollision);
+	// Nothing is left to wait for. Every body this map stands on -- the world's signature bodies
+	// and, since 0018 story 21-2, the displacement terrain -- is a component of the level's own
+	// saved actor, cooked by the bake and materialised by `CreatePhysicsMeshes` before adoption.
+	// This object registers no component of its own any more, so `Cooking` has nobody to ask.
+	return EElysiumCollisionBuildState::Ready;
 }

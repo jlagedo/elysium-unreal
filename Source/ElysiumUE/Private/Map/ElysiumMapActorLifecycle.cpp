@@ -911,8 +911,8 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	bNavigationBuildFailed = true;
 	UE_LOG(LogElysium, Error,
 		TEXT("runtime navigation %s: no baked navigation mesh with tiles registered in %.0fs (%s); "
-			"run: uv run elysium bake map --maps %s && uv run elysium import map-collision --maps %s"),
-		*MapName, GElysiumNavAdoptGraceSeconds, *Held, *MapName, *MapName);
+			"run: uv run elysium bake map --maps %s"),
+		*MapName, GElysiumNavAdoptGraceSeconds, *Held, *MapName);
 }
 
 bool AElysiumMapActor::IsRuntimeNavigationReady() const

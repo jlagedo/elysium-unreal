@@ -74,6 +74,13 @@ FBox UElysiumNavBakeLibrary::NavigationBoundsOf(UWorld* World)
 				Box += Component->Bounds.GetBox();
 			}
 		}
+		// The displacement terrain too, and not only for completeness: a map can have ground that
+		// is displacement and nothing else over it, which is what leaves its rooms outside the
+		// volume Recast rasterises if this is left to the brush bodies alone.
+		if (It->Displacement != nullptr)
+		{
+			Box += It->Displacement->Bounds.GetBox();
+		}
 	}
 	if (Box.IsValid)
 	{
@@ -134,6 +141,41 @@ TArray<FString> UElysiumNavBakeLibrary::AgentNamesForHullBits(int32 HullBits)
 	return Names;
 }
 
+TArray<FString> UElysiumNavBakeLibrary::NavBuildShape(int32 HullBits)
+{
+	TArray<FString> Rows;
+	const UNavigationSystemV1* Defaults = GetDefault<UNavigationSystemV1>();
+	const TArray<FNavDataConfig>& Agents = Defaults->GetSupportedAgents();
+	for (int32 Hull = 0; Hull < ElysiumRetailHulls::Count; ++Hull)
+	{
+		if ((HullBits & (1 << Hull)) == 0)
+		{
+			continue;
+		}
+		const FName AgentName = ElysiumRetailHulls::AgentName(Hull);
+		if (AgentName.IsNone())
+		{
+			continue;
+		}
+		const FNavDataConfig* Config = Agents.FindByPredicate(
+			[AgentName](const FNavDataConfig& Candidate) { return Candidate.Name == AgentName; });
+		// An agent the hull table names and the ini does not is a generation mismatch, and it is
+		// `CreateNavigationForAgents` that refuses it. Recorded here rather than skipped, so the
+		// recipe still changes on the day the two stop agreeing.
+		Rows.Add(FString::Printf(
+			TEXT("%s r=%.4f h=%.4f cell=%.4f tile=%.1f step=%.4f slope=%.6f"),
+			*AgentName.ToString(),
+			Config != nullptr ? Config->AgentRadius : -1.0f,
+			Config != nullptr ? Config->AgentHeight : -1.0f,
+			ElysiumRetailHulls::AgentCellSize(Hull),
+			ElysiumRetailHulls::AgentTileSize(Hull),
+			ElysiumRetailHulls::StepHeightUnits * 2.54f,
+			SlopeDegrees()));
+	}
+	Rows.Sort();
+	return Rows;
+}
+
 TArray<FString> UElysiumNavBakeLibrary::NavMeshTileCounts(UWorld* World)
 {
 	TArray<FString> Rows;
@@ -141,8 +183,8 @@ TArray<FString> UElysiumNavBakeLibrary::NavMeshTileCounts(UWorld* World)
 	// that has just been loaded in the editor, where the set may not be populated yet.
 	for (TActorIterator<ARecastNavMesh> It(World); It; ++It)
 	{
-		// `<name>=<tiles>` and nothing after it: the collision import parses this row, and a
-		// diagnostic suffix added here once made every level read as stale and rebuild on every run.
+		// `<name>=<tiles>` and nothing after it: the bake parses this row, and a diagnostic suffix
+		// added here once made every level read as stale and rebuild on every run.
 		Rows.Add(FString::Printf(TEXT("%s=%d"), *It->GetName(), It->GetNumActiveTiles()));
 	}
 	Rows.Sort();

@@ -63,6 +63,11 @@ def test_hull_radius_is_the_tables_lateral_extent():
     # not per-agent; story 7's smart link is where per-agent traversal belongs.
     ("sp_tutorial_1", 36, 8, 3),
     ("sm_hub_1", 29, 2, 0),      # the smoke-shop pair, both agents
+    # 0018 story 21-2's three, measured the first time they went through the lane. Every one is a
+    # human-only map (`UsedHullBits` 0x1), so no door can be partial by agent: there is one agent.
+    ("sp_soc_3", 5, 1, 0),
+    ("sm_pawnshop_1", 10, 0, 0),   # a shop: no encounter's graph runs through any of its doors
+    ("sp_theatre", 9, 0, 0),
 ])
 def test_the_shipped_maps_door_answers(map_name, total, traversable, partial):
     pytest.importorskip("elysium_pipeline.paths")

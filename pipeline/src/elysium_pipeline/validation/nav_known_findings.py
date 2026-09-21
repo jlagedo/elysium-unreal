@@ -7,6 +7,10 @@ then fails on anything NEW and on any pin that stops reproducing (a stale pin is
 left to rot).
 
 Nothing here is a tolerance. Each row is one specific link.
+
+The name says detours because that is what the first three rows were. It holds any of the three
+ground-link findings `nav_acceptance.ground_link_errors` reports -- a hole (an endpoint projects
+nowhere), a wall (both ends project and cannot be joined) and a detour -- keyed the same way.
 """
 
 from __future__ import annotations
@@ -32,6 +36,27 @@ KNOWN_DETOURS: dict[str, dict[int, dict[int, str]]] = {
             406: "rat hole: nodes 81->311, 1,086 cm straight, routed 4,561 (4.2x)",
             721: "rat hole: nodes 158->304, 152 cm straight, routed 577 (3.8x); also bridging",
             1472: "rat hole: nodes 400->175, 1,120 cm straight, routed 5,229 (4.7x)",
+        },
+    },
+    "sp_theatre": {
+        0: {
+            # Five links, one destination. Node 26 stands at (-12, 292, -294) and every node that
+            # links to it -- 0, 1, 2, 20, 21 -- stands at z -162, so all five assert a 132 cm DROP
+            # (measured 2026-09-20, first time this map went through the gate). Both ends project;
+            # the mesh will not join them, which is what a ledge looks like to path following.
+            #
+            # 132 cm is not a step. Retail's own step height is 18 units (45.7 cm) and even its
+            # graph builder's limit is 40 (101.6), so this is past both -- the graph records these
+            # as ground links anyway, and retail's NPC gets down by falling. Nothing in the port
+            # falls yet: a drop is not a jump link (the AIN marks none here) and the harness's
+            # step-outlier excuse does not reach a rise this large. Story 5 owns what an NPC does
+            # on reaching a link its mesh does not offer, and this is that question in its
+            # cleanest form; story 7's per-agent links are where a drop could become traversable.
+            4: "drop: node 0->26, 132 cm down onto node 26; both ends project, no path",
+            8: "drop: node 1->26, 132 cm down onto node 26; both ends project, no path",
+            10: "drop: node 2->26, 132 cm down onto node 26; both ends project, no path",
+            53: "drop: node 20->26, 132 cm down onto node 26; both ends project, no path",
+            56: "drop: node 21->26, 132 cm down onto node 26; both ends project, no path",
         },
     },
 }

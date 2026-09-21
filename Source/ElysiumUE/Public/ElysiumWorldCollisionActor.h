@@ -81,10 +81,30 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Elysium|Collision")
 	TArray<TObjectPtr<UElysiumWorldCollisionComponent>> Bodies;
 
+	/**
+	 * The displacement terrain, when the map has any. Beside `Bodies` rather than in it, because it
+	 * is one trimesh rather than one body per contents signature, and because the adoption check
+	 * counts `Bodies` against the payload's own world-body count.
+	 *
+	 * It had been left out of the level entirely (0018 story 3 job 3 placed the signature bodies
+	 * only), which made displacement terrain collidable at run time -- the runtime still built its
+	 * own transient component -- and invisible to the BAKE, so a map whose floor is displacement
+	 * got a navigation mesh with a hole where its ground is. Found on `sp_soc_3`, whose graph
+	 * asserts 16 ground links over two displacement rooms that the mesh could not join
+	 * (0018 story 21-2, 2026-09-20).
+	 */
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Collision")
+	TObjectPtr<UElysiumWorldCollisionComponent> Displacement;
+
 #if WITH_EDITOR
-	/** Author one component per world body the payload carries, replacing any already here.
-	 *  Returns the number of components authored. */
+	/** Author one component per world body the payload carries, plus the displacement terrain when
+	 *  it has any, replacing anything already here. Returns the number of world BODIES authored --
+	 *  the displacement is not one of them, and `HasDisplacement` answers for it separately. */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Import")
 	int32 AuthorFromPayload(UElysiumMapCollisionPayload* InPayload);
 #endif
+
+	/** Whether the displacement terrain stands in this level. */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Collision")
+	bool HasDisplacement() const { return Displacement != nullptr; }
 };

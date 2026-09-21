@@ -28,13 +28,6 @@ private:
 	FBox LocalCollisionBounds = FBox(ForceInit);
 };
 
-// The displacement terrain trimesh (the payload's cooked trimesh).
-UCLASS(Transient)
-class UElysiumDispCollisionComponent final : public UElysiumCollisionOnlyMeshComponent
-{
-	GENERATED_BODY()
-};
-
 // Readiness of the only collision the player can stand on. Disabled is an intentional satisfied
 // state (`elysium.BrushCollision 0`); Failed is never safe to admit gameplay.
 enum class EElysiumCollisionBuildState : uint8
@@ -109,9 +102,6 @@ private:
 	// False means the level has none (build the components) or carries a wrong one (fail).
 	bool AdoptLevelCollisionActor(const FString& InMapName,
 		const class UElysiumMapCollisionPayload& Asset);
-	UElysiumDispCollisionComponent* MakeDispComponent(AActor* Owner);
-
-	UPROPERTY() TObjectPtr<UElysiumDispCollisionComponent> DispCollision;
 	UPROPERTY() TObjectPtr<const UElysiumMapCollisionPayload> Payload;
 	// The adopted level actor, when this map's collision stands in the level rather than being
 	// built into transient components at load.

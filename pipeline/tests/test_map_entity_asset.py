@@ -1,7 +1,8 @@
 """The per-map entity asset's offline stage (R4.1).
 
 `pipeline/src/elysium_pipeline/importers/map_entities.py` turns the R3.2 producer's entity join
-into the manifest `pipeline/unreal/import_map_entities.py` executes, and refuses to write one whose
+into the manifest `pipeline/unreal/bake_map_entities.py` executes inside `bake map`'s own
+editor session, and refuses to write one whose
 rows do not match the `<map>.ents` document the asset replaces.
 
 These pin the pieces that decide whether a wrong asset can be authored at all: the parity

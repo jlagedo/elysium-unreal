@@ -23,6 +23,7 @@ import math
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import time
 
@@ -31,6 +32,7 @@ import unreal
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
+from elysium_pipeline import map_bake_stages  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.asset_names import (  # noqa: E402
@@ -418,9 +420,10 @@ def capture_radius():
 
 
 def cmdline_arg(key, default=""):
-    """Read -Key=value off the editor command line."""
+    """Read -Key=value off the editor command line (a quoted path is one token)."""
     needle = "-%s=" % key
-    for token in unreal.SystemLibrary.get_command_line().split():
+    for token in re.findall(r'"[^"]*"|\S+', unreal.SystemLibrary.get_command_line()):
+        token = token.strip('"')
         if token.lower().startswith(needle.lower()):
             return token[len(needle):].strip('"')
     return default
@@ -569,15 +572,22 @@ class AssetTracker(object):
     question decided here is the one the engine cannot answer: does this asset still match the
     intermediate it was authored from?
 
-    `stage` names group the run's counters for reporting; they select nothing.
+    `stage` names group the run's counters for reporting, and since 0018 story 21-2 they also
+    name what `--from <stage>` forces: a stage in `force_stages` re-authors whatever its recipe
+    says, exactly as `--force` does for all of them (`--force` is `--from textures`).
     """
 
-    def __init__(self, scope, digest_cache, force=False):
+    def __init__(self, scope, digest_cache, force=False, force_stages=()):
         self.scope = scope
         self.force = bool(force)
+        self.force_stages = frozenset(force_stages)
         self.digest_cache = digest_cache
         self.stages = {}
         self.recipes = {}
+
+    def forced(self, stage):
+        """Whether this run must re-author `stage` whatever the mount already carries."""
+        return self.force or stage in self.force_stages
 
     def _counters(self, stage):
         return self.stages.setdefault(stage, {"built": 0, "reused": 0, "pruned": 0})
@@ -595,7 +605,7 @@ class AssetTracker(object):
             if bl.asset_class_name(object_path) != expected_class:
                 bl.delete_owned_asset(object_path)
                 exists = False
-        if (self.force or not fresh or not exists
+        if (self.forced(stage) or not fresh or not exists
                 or stored != fingerprint):
             return True
         counters["reused"] += 1
@@ -681,6 +691,17 @@ class Bake(object):
         # loads it by path. Held on the instance, which dies with `bake_one`, so the wrappers go
         # before `_release_map_packages` runs -- see its own comment.
         self.world_meshes = {}
+        # The three per-map asset lanes' staged entries for THIS map, handed in by `bake_one` from
+        # the manifests the host staged before the editor launched (0018 story 21-2). None is a
+        # lane the run was not given a manifest for, which `stage_*` refuses rather than skips.
+        self.entities_entry = None
+        self.environment_entry = None
+        self.collision_entry = None
+        # The cooked payload and its fingerprint, set by `stage_collision` and read by
+        # `stage_level`: the actor it places points at these bodies, and the level's own recipe
+        # carries this hash.
+        self.collision_payload = None
+        self.collision_fingerprint = ""
 
     def _file_sha256(self, path):
         return self.digest_cache.digest(Path(path))
@@ -2113,6 +2134,74 @@ class Bake(object):
             ppv.tags = [TAG_PPV]
             ppv.set_folder_path("Environment")
 
+    # ------------------------------------- the three per-map asset lanes (0018 story 21-2)
+
+    def _lane_entry(self, entry, lane, flag):
+        if entry is None:
+            raise RuntimeError(
+                "%s: no staged %s entry; the bake was launched without -%s, or the stage did not "
+                "reach this map" % (self.map, lane, flag))
+        return entry
+
+    def stage_entities(self):
+        """`DA_<map>_Entities`, the entity table the runtime reads and the only one it reads."""
+        from pipeline.unreal import bake_map_entities
+        entry = self._lane_entry(self.entities_entry, "entity table", "BakeMapEntities")
+        bake_map_entities.author(entry, force=self.tracker.forced("entities"))
+
+    def stage_environment(self):
+        """`DA_<map>_Environment`: the fog, the sky, the 3D-skybox transform and the spawn."""
+        from pipeline.unreal import bake_map_environment
+        entry = self._lane_entry(self.environment_entry, "environment", "BakeMapEnvironment")
+        bake_map_environment.author(entry, force=self.tracker.forced("environment"))
+
+    def stage_collision(self):
+        """Cook `DA_<map>_Collision` and hold it for the level.
+
+        Before `stage_level`, not inside it, because the level's own recipe carries this payload's
+        fingerprint: `reset_authoring` replaces every body setup, so a re-cooked payload leaves a
+        saved level pointing at objects that no longer exist, and nothing else the recipe digests
+        can say so. The decision to re-cook therefore has to be made before the level is asked
+        whether it may be reused.
+        """
+        from pipeline.unreal import bake_map_collision
+        entry = self._lane_entry(self.collision_entry, "collision", "BakeMapCollision")
+        self.collision_fingerprint = bake_map_collision.payload_fingerprint(entry)
+        self.collision_payload, _outcome = bake_map_collision.author_payload(
+            entry, force=self.tracker.forced("collision"))
+
+    def _used_hull_bits(self):
+        """The map's own `UsedHullBits` -- which hulls its graph's links serve, so which agents it
+        owes a mesh. The V2 lane reads it off the staged graph; the legacy lane stages no graph and
+        has no answer, and `bake_map_collision.build_navigation` refuses on None by name."""
+        return None
+
+    def _place_collision(self, actors):
+        """The world-collision actor and the nav-area marks, in that order.
+
+        Both before the meshes are cut: the bodies ARE the geometry Recast rasterises, and an area
+        mark only reaches tiles rasterised after it.
+        """
+        from pipeline.unreal import bake_map_collision
+        entry = self._lane_entry(self.collision_entry, "collision", "BakeMapCollision")
+        bodies = bake_map_collision.place_world_collision(entry, self.collision_payload, actors)
+        marks = bake_map_collision.place_nav_areas(entry, actors)
+        return bodies, marks
+
+    def _build_navigation(self, world, actors):
+        """Cut this map's navigation meshes from the collision that now stands in the level, and
+        drop the ones the engine spawned for agents the map never asked for."""
+        from pipeline.unreal import bake_map_collision
+        agents = bake_map_collision.build_navigation(self.map, world, self._used_hull_bits())
+        bake_map_collision.prune_unwanted_navmeshes(self.map, actors, agents)
+        return agents
+
+    def _assert_saved_navigation(self, map_path):
+        """Whether the saved level carries a mesh with tiles for every agent the map asked for."""
+        from pipeline.unreal import bake_map_collision
+        return bake_map_collision.saved_navigation_is_complete(
+            self.map, map_path, self._used_hull_bits())
+
     # ------------------------------------------------------------------- level
 
     def _level_recipe(self):
@@ -2247,6 +2336,12 @@ class Bake(object):
         self._place_player_start(actors)
         self._place_navigation(actors)
         self._place_ai_infra(actors)
+        # The world collision and the marks, before the captures only because they are authoring
+        # and the capture pass is a render. Neither renders -- `UElysiumWorldCollisionComponent`
+        # creates no scene proxy and a nav-area component is a plain `USceneComponent` -- so
+        # standing them here cannot reach a probe.
+        bodies, marks = self._place_collision(actors)
+        log("level: %d world collision body(ies), %d nav-area convex(es)" % (bodies, marks))
         # R5.5: captures last, so every surface, prop, light and the sky are in the render.
         captures = self._place_captures(actors, sky_scale, sky_origin)
         # **Built once before the save and once after it, because the two halves of a reflection
@@ -2272,6 +2367,15 @@ class Bake(object):
         if captures:
             built = self._build_captures(world, captures)
             log("level: %d reflection capture actors, %d built" % (captures, built))
+
+        # Navigation last, after the capture RENDER. Three reasons, none of them ordering against
+        # the captures themselves -- the nav meshes go into the `.umap` and the capture cubes into
+        # the `_BuiltData` sibling, so the two products never meet. A `RecastNavMesh` carries a
+        # debug rendering component, and a commandlet with rendering allowed is not the place to
+        # find out whether its proxy is created; `_build_captures` raises `SystemExit` on a short
+        # count, and a capture failure should not first pay for a Recast build; and this is the
+        # longest step in the stage, so it belongs on the side of the stamp where failing is free.
+        self._build_navigation(world, actors)
 
         self.tracker.stamp(world, map_path)
         if not unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
@@ -2309,6 +2413,14 @@ class Bake(object):
         # load would hand back the copy already in memory, and the check would prove nothing.
         world = None
         if captures and not self._assert_saved_captures(map_path, captures):
+            return False
+        # Unconditional, unlike the capture re-count: every map owes navigation. This is the check
+        # the fold had to replace rather than inherit -- `import map-collision` used to read the
+        # tile counts off a RELOADED level, which was the only thing in the project that ever
+        # asked whether baked navigation reached disk, and it asked on the next run rather than
+        # this one. The level is already stamped and on the mount, so a failure discards it.
+        if not self._assert_saved_navigation(map_path):
+            self._discard_stamped_level(map_path)
             return False
         self.tracker.built("level")
         log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
@@ -2744,11 +2856,15 @@ def bake_corpus(digest_cache, force=False):
     return True
 
 
-def bake_one(map_name, digest_cache, force=False):
+def bake_one(map_name, digest_cache, lanes=None, force=False, force_stages=()):
     """Bake one map in the current editor process.
 
     Geometry and placements are authored from the map's published root unit (R5.1,
     `bake_map_v2`); 0018 story 21-1 retired the `.obj`/`.props` lane and the flag that chose it.
+    Since 21-2 one call is the whole of a loadable level: the entity table, the environment and
+    the cooked collision payload are stages here, and the world-collision actor, the nav-area
+    marks and the Recast meshes go into the level before its one save. `lanes` is
+    `{lane: {map: entry}}` from the three manifests the host staged before this process started.
 
     The previous map's world goes first, before anything of this map's is read, and
     unconditionally. It used to go inside `stage_level`, which is both too late and conditional:
@@ -2768,8 +2884,12 @@ def bake_one(map_name, digest_cache, force=False):
         fail("%s: new_blank_map returned null" % map_name)
         return False
     _collect_garbage()
-    tracker = AssetTracker(map_name, digest_cache, force=force)
+    tracker = AssetTracker(map_name, digest_cache, force=force, force_stages=force_stages)
     bake = v2.bake_class()(map_name, tracker, digest_cache)
+    lanes = lanes or {}
+    bake.entities_entry = lanes.get("entities", {}).get(map_name)
+    bake.environment_entry = lanes.get("environment", {}).get(map_name)
+    bake.collision_entry = lanes.get("collision", {}).get(map_name)
     if not bake.load_masters() or not bake.load_sources():
         return False
     bake.stage_textures()
@@ -2784,6 +2904,12 @@ def bake_one(map_name, digest_cache, force=False):
         from pipeline.unreal import make_particle_systems
         make_particle_systems.build(
             map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
+    # The two data-asset lanes: no world, no level, no ordering against anything here. The
+    # collision cook DOES have one -- the level recipe carries its fingerprint, so the decision to
+    # re-cook is made before the level is asked whether it may be reused.
+    bake.stage_entities()
+    bake.stage_environment()
+    bake.stage_collision()
     if bake.flush():
         return False
     if not bake.stage_level():
@@ -2844,6 +2970,46 @@ def _settle_and_collect():
     unreal.ElysiumMapBakeLibrary.finish_asset_compilation()
     _collect_garbage()
     unreal.ElysiumMapBakeLibrary.tick_commandlet_frames(RELEASE_TICK_FRAMES)
+
+
+def _peak_working_set_mb():
+    """This process's peak working set in MB, or None where it cannot be asked.
+
+    Through `psapi` directly, because the editor's embedded Python carries no `psutil`. The
+    `restype`/`argtypes` are not decoration: `GetCurrentProcess` returns a pseudo-handle of -1,
+    which a default `c_int` return truncates on a 64-bit process, and the call then fails.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _Counters(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        kernel32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi.GetProcessMemoryInfo.argtypes = [
+            wintypes.HANDLE, ctypes.POINTER(_Counters), wintypes.DWORD]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        counters = _Counters()
+        counters.cb = ctypes.sizeof(_Counters)
+        if not psapi.GetProcessMemoryInfo(
+                kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+            return None
+        return counters.PeakWorkingSetSize / (1024.0 * 1024.0)
+    except (AttributeError, ImportError, OSError):
+        return None
 
 
 def _release_map_packages(map_name):
@@ -2970,6 +3136,37 @@ def _run_corpus():
         raise SystemExit(1)
 
 
+#: The three per-map asset lanes the bake absorbed in 0018 story 21-2: the stage label, the flag
+#: naming its staged manifest, and the module that reads it. Each manifest covers the whole run,
+#: so a batch of three maps reads each of them once and indexes by map name.
+LANE_MANIFESTS = (
+    ("entities", "BakeMapEntities", "bake_map_entities"),
+    ("environment", "BakeMapEnvironment", "bake_map_environment"),
+    ("collision", "BakeMapCollision", "bake_map_collision"),
+)
+
+
+def _load_lane_manifests():
+    """`{lane: {map: entry}}` for the three lanes, validated before a single asset is touched.
+
+    A lane whose flag is absent contributes nothing and `Bake.stage_*` refuses the map by name --
+    an entity table, an environment and a collision payload are what make a level loadable, so a
+    run that cannot author one has nothing to offer and must not write a level instead.
+    """
+    import importlib
+
+    lanes = {}
+    for lane, flag, module_name in LANE_MANIFESTS:
+        path = cmdline_arg(flag, "")
+        if not path:
+            continue
+        module = importlib.import_module("pipeline.unreal.%s" % module_name)
+        manifest = module.load_manifest(path)
+        lanes[lane] = {entry["map"]: entry for entry in manifest["maps"]}
+        log("%s: %d staged map(s) from %s" % (lane, len(lanes[lane]), path))
+    return lanes
+
+
 def main():
     if cmdline_arg("BakeCorpus", ""):
         _run_corpus()
@@ -2979,11 +3176,18 @@ def main():
     if not map_names:
         map_names = [cmdline_arg("BakeMap", "sp_tutorial_1")]
     force = bool(cmdline_arg("BakeForce", ""))
+    try:
+        force_stages = map_bake_stages.stages_from(cmdline_arg("BakeFrom", "").strip())
+    except ValueError as exc:
+        raise SystemExit("[bake] -BakeFrom: %s" % exc)
     BAKE_PARTICLES[0] = bool(cmdline_arg("BakeParticles", ""))
-    log("maps=%s%s%s" % (
+    log("maps=%s%s%s%s" % (
         ",".join(map_names),
         " (forced)" if force else "",
+        " (from %s)" % cmdline_arg("BakeFrom", "") if force_stages and not force else "",
         " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)"))
+
+    lanes = _load_lane_manifests()
 
     from elysium_pipeline.asset_paths import map_package
     _scan_packages(list(MAP_SCAN_PACKAGES) + [map_package(name) for name in map_names])
@@ -2993,7 +3197,8 @@ def main():
     for position, map_name in enumerate(map_names, 1):
         log("--- [%d/%d] %s ---" % (position, len(map_names), map_name))
         try:
-            if not bake_one(map_name, digest_cache, force=force):
+            if not bake_one(map_name, digest_cache, lanes=lanes, force=force,
+                            force_stages=force_stages):
                 failed.append(map_name)
         except (Exception, SystemExit) as exc:
             fail("%s raised: %s" % (map_name, exc))
@@ -3004,6 +3209,12 @@ def main():
             # blank map the call opens first -- its own level package is unsaved and therefore
             # skipped, but tearing the scene down is what makes the rest of the mount collectable.
             _release_map_packages(map_name)
+            peak = _peak_working_set_mb()
+            if peak is not None:
+                # The evidence `unreal.MAP_BAKE_BATCH` asks for. The peak is the PROCESS's, so in
+                # a batch it only ever rises: read the first map's line as that map's cost and
+                # each later one as what the release between maps failed to give back.
+                log("%s: process peak working set %.0f MB" % (map_name, peak))
     digest_cache.write()
 
     if failed:

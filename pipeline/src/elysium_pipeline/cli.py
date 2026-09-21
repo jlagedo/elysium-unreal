@@ -22,6 +22,7 @@ from typing import Any, Callable
 import typer
 from rich.console import Console
 
+from elysium_pipeline import map_bake_stages
 from elysium_pipeline.config import ConfigError, ProjectConfig
 from elysium_pipeline.dependencies import (
     DependencyError,
@@ -31,6 +32,7 @@ from elysium_pipeline.dependencies import (
 )
 from elysium_pipeline.process import ProcessFailure, ProcessRunner
 from elysium_pipeline.reporting import ExitCode, RunReport
+from elysium_pipeline.validation import nav_gate
 from elysium_pipeline.workspace_lock import WorkspaceLease, assert_project_idle
 
 
@@ -1373,84 +1375,11 @@ def verify_model_catalogues(
              require_work=True, require_ue=True, activity=True)
 
 
-def _nav_verify(state: CliState, config: ProjectConfig, runner: ProcessRunner,
-                maps: list[str], factor: float) -> int:
-    """Judge each named map's baked meshes against retail's graph; returns the finding count.
-
-    Shared by `verify nav` and by `import map-collision`, which builds the meshes and therefore
-    must not be able to finish having built a wrong one: a gate nobody runs is not a gate.
-    """
-    import json as _json
-
-    from elysium_pipeline import unreal
-    from elysium_pipeline.importers import map_nav_acceptance as acceptance
-    from elysium_pipeline.validation import nav_acceptance as verdicts
-    from elysium_pipeline.validation.nav_known_findings import known_detours
-
-    root = config.work_root / "verify" / "nav"
-    root.mkdir(parents=True, exist_ok=True)
-    key_path, answers_path = root / "key.json", root / "answers.json"
-    answers_path.unlink(missing_ok=True)
-
-    keys = []
-    for name in maps:
-        key = acceptance.stage(name)
-        key["agentNames"] = acceptance.agent_names(key["hulls"])
-        keys.append(key)
-    key_path.write_text(_json.dumps({"maps": keys}), encoding="utf-8")
-
-    unreal.verify_nav(config, runner, key_path, answers_path)
-    answered = _read_json(answers_path)
-    if not answered:
-        raise RuntimeError(f"verify nav produced no answers at {answers_path}")
-
-    by_map = {row["map"]: row for row in answered["maps"]}
-    reports, failed = {}, 0
-    for key in keys:
-        answer = by_map.get(key["map"])
-        if answer is None or answer.get("skipped"):
-            raise RuntimeError(
-                f"{key['map']}: {answer.get('skipped') if answer else 'no answer'}")
-        rows = [verdicts.mesh_errors(
-            [key["agentNames"][str(hull)] for hull in key["hulls"]], answer["meshes"])]
-        excused = {row["index"] for row in key["stepOutliers"]}
-        for hull, table in key["perHull"].items():
-            given = answer["perHull"].get(hull)
-            if given is None:
-                continue
-            rows.append(verdicts.ground_link_errors(
-                table["ground"], given["groundLengths"], int(hull),
-                factor=factor, excused=excused,
-                known=known_detours(key["map"], int(hull))))
-            rows.append(verdicts.projection_errors(
-                "jump-start", table["jump"], given["jumpStartsLanded"], int(hull)))
-            rows.append(verdicts.projection_errors(
-                "jump-end", table["jump"], given["jumpEndsLanded"], int(hull)))
-        for hull, given in answer.get("bridging", {}).items():
-            rows.append(verdicts.bridging_errors(
-                key["agentOnly"][hull]["bridging"], given["agentLengths"],
-                given["baseLengths"], int(hull), key["baseHull"]))
-        report = verdicts.report(rows)
-        report["stepOutliers"] = len(excused)
-        reports[key["map"]] = report
-        failed += report["failed"]
-        line = ", ".join(f"{row['check']} {row['failed']}" for row in rows if row["failed"])
-        pinned = sum(len(row.get("knownFindings", [])) for row in rows)
-        if not state.json_output:
-            console.print(f"  {key['map']}: {'clean' if report['clean'] else line}"
-                          f"  [{len(excused)} step-height outlier(s) excused, "
-                          f"{pinned} pinned finding(s) reproduced]")
-    (root / "report.json").write_text(_json.dumps(reports, indent=2), encoding="utf-8")
-    _summary(state, f"verify nav: {len(keys)} map(s), {failed} finding(s)",
-             navMaps=len(keys), navFailed=failed, navReport=str(root / "report.json"))
-    return failed
-
-
 @verify_app.command("nav")
 def verify_nav(
     ctx: typer.Context,
     maps: list[str] = typer.Option(None, "--maps", help="Map stem to verify (repeatable)."),
-    factor: float = typer.Option(3.0, "--factor",
+    factor: float = typer.Option(nav_gate.DEFAULT_FACTOR, "--factor",
                                  help="How far a path may exceed the straight line before it is "
                                       "reported."),
     json_output: bool = typer.Option(False, "--json"),
@@ -1463,8 +1392,8 @@ def verify_nav(
     has must path on that agent's mesh -- the claim a one-mesh port cannot make. Findings already
     judged are pinned in `validation/nav_known_findings.py`; anything new fails.
 
-    `import map-collision` runs this itself after it builds the meshes, so this command is for
-    asking again, not for remembering to ask.
+    `bake map` runs this itself over every mesh it builds, so this command is for asking again,
+    not for remembering to ask.
     """
     state = _state(ctx)
     state.json_output = json_output
@@ -1472,10 +1401,15 @@ def verify_nav(
         raise typer.BadParameter("verify nav refuses to run unscoped; name maps with --maps")
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        failed = _nav_verify(state, config, runner, list(maps), factor)
-        if failed:
-            raise RuntimeError(f"verify nav found {failed} finding(s); see "
-                               f"{config.work_root / 'verify' / 'nav' / 'report.json'}")
+        result = nav_gate.judge(
+            config, runner, list(maps), factor=factor,
+            on_line=None if json_output else console.print)
+        _summary(state, f"verify nav: {result.maps} map(s), {result.failed} finding(s)",
+                 navMaps=result.maps, navFailed=result.failed,
+                 navReport=str(result.report_path))
+        if result.failed:
+            raise RuntimeError(f"verify nav found {result.failed} finding(s); see "
+                               f"{result.report_path}")
 
     _execute(state, "verify nav", ExitCode.UNREAL_OR_BAKE, action, require_ue=True)
 
@@ -2680,7 +2614,16 @@ def bake_map(
         ),
     ),
     force: bool = typer.Option(
-        False, "--force", help="Rebake the level even when its recipe stamp is current."
+        False, "--force", help="Rebake everything, whatever any recipe stamp says."
+    ),
+    from_stage: str = typer.Option(
+        "", "--from", metavar="STAGE",
+        help=(
+            "Re-run this stage and every one after it: "
+            + ", ".join(map_bake_stages.STAGE_ORDER)
+            + ". Earlier stages still run and still reuse -- the level is authored from what "
+            "they hold, so none can be skipped."
+        ),
     ),
     particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
@@ -2691,16 +2634,30 @@ def bake_map(
             "iteration trusts a clean bake exit)."
         ),
     ),
+    skip_nav_verify: bool = typer.Option(
+        False, "--skip-nav-verify",
+        help="Do not judge the meshes this run built against retail's graph. For iterating on "
+             "the lane itself; a bake that ships runs the check.",
+    ),
 ) -> None:
-    """Author each named map's level from its published V2 units: stage the root unit, run
-    `bake_map.py`, nothing else. `export map` is the legacy-lane orchestrator around the same
-    bake."""
+    """Author each named map's level from its published V2 units -- the whole of it.
+
+    One command yields a loadable level: the geometry and the level, the entity table, the
+    environment, the cooked collision payload, the world-collision actor, the nav-area marks, the
+    navigation meshes, and one save carrying all of it -- then `verify nav` over what it built.
+    """
+    # Refused here rather than in the commandlet: a typo should not cost an editor boot.
+    try:
+        map_bake_stages.stages_from(from_stage)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
         names = export_manager.bake_v2_maps(
-            config, runner, maps, force=force, particles=particles, verify=verify)
+            config, runner, maps, force=force, from_stage=from_stage, particles=particles,
+            verify=verify, skip_nav_verify=skip_nav_verify, on_line=console.print)
         console.print("map bake complete: " + ", ".join(names))
 
     _execute(
@@ -3123,270 +3080,6 @@ def import_models(
     _execute(
         _state(ctx),
         "import models",
-        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
-        action,
-        require_work=True,
-        require_ue=not stage_only,
-        activity=not stage_only,
-    )
-
-
-@import_app.command("map-entities")
-def import_map_entities(
-    ctx: typer.Context,
-    maps: list[str] = typer.Option(
-        None, "--maps",
-        help="Map stem this run stages the entity table for (repeatable: --maps sp_tutorial_1 "
-             "--maps sm_hub_1). Required -- the stage refuses to run unscoped.",
-    ),
-    force: bool = typer.Option(
-        False, "--force", help="Re-author every asset even when its recipe stamp is current."
-    ),
-    stage_only: bool = typer.Option(
-        False, "--stage-only", help="Write the manifest; launch no editor.",
-    ),
-) -> None:
-    """Import each named map's entity table into /ElysiumBaked/<map>/DA_<map>_Entities.
-
-    Runs the R3.2 producer's entity join over the published units, asserts def-count and per-index
-    parity against the `<map>.ents` document the asset replaces, and then authors one
-    `UElysiumMapEntities` per map in a headless editor.
-    """
-
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import unreal
-        from elysium_pipeline.importers import map_entities as importer
-
-        if (config.export_v2_root is None or config.work_root is None
-                or config.export_root is None):
-            raise ConfigError(
-                "ELYSIUM_EXPORT_V2_ROOT, ELYSIUM_EXPORT_ROOT and ELYSIUM_WORK_ROOT must be "
-                "configured; copy dev/paths.example.env to .elysium.local.env and set the local "
-                "paths"
-            )
-        root = importer.staging_root(config.work_root)
-        staged = importer.stage_map_entities(
-            config.export_v2_root, root, maps=maps or [],
-            ents_for=lambda stem: config.export_root / stem / f"{stem}.ents",
-        )
-        console.print(staged.summary())
-        for name, detail in staged.failures:
-            console.print(f"[yellow]  {name}: {detail}[/yellow]", markup=True)
-        if stage_only:
-            if staged.failures:
-                raise RuntimeError(f"{len(staged.failures)} map(s) could not be staged")
-            return
-
-        editor_failure: Exception | None = None
-        try:
-            unreal.import_map_entities(config, runner, staged.manifest_path, force=force)
-        except unreal.UnrealFailure as error:
-            editor_failure = error
-        report = _read_json(root / importer.IMPORT_REPORT_NAME)
-        failed = (report.get("failed") or []) if report else []
-        if report:
-            console.print(
-                "map-entity import: "
-                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
-                f"{len(failed)} failed"
-            )
-            for row in failed[:10]:
-                console.print(f"[yellow]  {row.get('map')}: {row.get('reason')}[/yellow]",
-                              markup=True)
-        problems = []
-        if staged.failures:
-            problems.append(f"{len(staged.failures)} map(s) could not be staged")
-        if failed:
-            problems.append(f"{len(failed)} map(s) failed to import")
-        if editor_failure is not None:
-            problems.append(str(editor_failure))
-        if problems:
-            raise RuntimeError("; ".join(problems))
-
-    # The stage reads the published units and the legacy `.ents` it asserts against; the editor
-    # phase needs the engine and nothing else -- every row travels in the manifest.
-    _execute(
-        _state(ctx),
-        "import map-entities",
-        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
-        action,
-        require_work=True,
-        require_ue=not stage_only,
-        activity=not stage_only,
-    )
-
-
-@import_app.command("map-collision")
-def import_map_collision(
-    ctx: typer.Context,
-    maps: list[str] = typer.Option(
-        None, "--maps",
-        help="Map stem this run stages collision for (repeatable: --maps sp_tutorial_1 "
-             "--maps sm_hub_1). Required -- the stage refuses to run unscoped.",
-    ),
-    force: bool = typer.Option(
-        False, "--force", help="Re-author every asset even when its recipe stamp is current."
-    ),
-    stage_only: bool = typer.Option(
-        False, "--stage-only", help="Write the manifest; launch no editor.",
-    ),
-    skip_nav_verify: bool = typer.Option(
-        False, "--skip-nav-verify",
-        help="Do not judge the meshes this run built against retail's graph. For iterating on "
-             "the lane itself; a bake that ships runs the check.",
-    ),
-) -> None:
-    """Import each named map's collision into /ElysiumBaked/<map>/DA_<map>_Collision.
-
-    Reads `<map>.hulls`, `<map>.dispcol` and the brush-entity `hulls` of `<map>.ents`, asserts
-    parity against them, and then authors one cooked `UElysiumMapCollisionPayload` per map in a
-    headless editor.
-    """
-
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import unreal
-        from elysium_pipeline.importers import map_collision as importer
-
-        if config.work_root is None or config.export_root is None:
-            raise ConfigError(
-                "ELYSIUM_EXPORT_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
-                "dev/paths.example.env to .elysium.local.env and set the local paths"
-            )
-        root = importer.staging_root(config.work_root)
-        staged = importer.stage_map_collision(
-            root, maps=maps or [], sidecar_dir=lambda stem: config.export_root / stem,
-        )
-        console.print(staged.summary())
-        for name, detail in staged.failures:
-            console.print(f"[yellow]  {name}: {detail}[/yellow]", markup=True)
-        if stage_only:
-            if staged.failures:
-                raise RuntimeError(f"{len(staged.failures)} map(s) could not be staged")
-            return
-
-        editor_failure: Exception | None = None
-        try:
-            unreal.import_map_collision(config, runner, staged.manifest_path, force=force)
-        except unreal.UnrealFailure as error:
-            editor_failure = error
-        report = _read_json(root / importer.IMPORT_REPORT_NAME)
-        failed = (report.get("failed") or []) if report else []
-        if report:
-            console.print(
-                "map-collision import: "
-                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
-                f"{len(failed)} failed"
-            )
-            for row in failed[:10]:
-                console.print(f"[yellow]  {row.get('map')}: {row.get('reason')}[/yellow]",
-                              markup=True)
-        problems = []
-        if staged.failures:
-            problems.append(f"{len(staged.failures)} map(s) could not be staged")
-        if failed:
-            problems.append(f"{len(failed)} map(s) failed to import")
-        if editor_failure is not None:
-            problems.append(str(editor_failure))
-        if problems:
-            raise RuntimeError("; ".join(problems))
-
-        # This lane builds the navigation meshes, so it is the lane that must not be able to
-        # finish having built a wrong one. Judged against retail's graph here, automatically:
-        # the check existed as `verify nav` first and nothing ran it, which is a gate nobody
-        # walks through.
-        if not skip_nav_verify:
-            nav_failed = _nav_verify(_state(ctx), config, runner, list(maps or []), 3.0)
-            if nav_failed:
-                raise RuntimeError(
-                    f"the meshes built, and verify nav found {nav_failed} new finding(s) in "
-                    f"them; see {config.work_root / 'verify' / 'nav' / 'report.json'}")
-
-    # The stage reads the loose collision sidecars and nothing else; the editor phase needs the
-    # engine and nothing else -- every number travels in the manifest.
-    _execute(
-        _state(ctx),
-        "import map-collision",
-        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
-        action,
-        require_work=True,
-        require_ue=not stage_only,
-        activity=not stage_only,
-    )
-
-
-@import_app.command("map-environment")
-def import_map_environment(
-    ctx: typer.Context,
-    maps: list[str] = typer.Option(
-        None, "--maps",
-        help="Map stem this run stages the environment for (repeatable: --maps sp_tutorial_1 "
-             "--maps sm_hub_1). Required -- the stage refuses to run unscoped.",
-    ),
-    force: bool = typer.Option(
-        False, "--force", help="Re-author every asset even when its recipe stamp is current."
-    ),
-    stage_only: bool = typer.Option(
-        False, "--stage-only", help="Write the manifest; launch no editor.",
-    ),
-) -> None:
-    """Import each named map's environment into /ElysiumBaked/<map>/DA_<map>_Environment.
-
-    Reads `<map>.env`, `<map>.sky` and `<map>.spawn` verbatim, asserts parity against them, and
-    then authors one `UElysiumMapEnvironment` per map in a headless editor.
-    """
-
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import unreal
-        from elysium_pipeline.importers import map_environment as importer
-
-        if config.work_root is None or config.export_root is None:
-            raise ConfigError(
-                "ELYSIUM_EXPORT_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
-                "dev/paths.example.env to .elysium.local.env and set the local paths"
-            )
-        root = importer.staging_root(config.work_root)
-        staged = importer.stage_map_environment(
-            root, maps=maps or [], sidecar_dir=lambda stem: config.export_root / stem,
-        )
-        console.print(staged.summary())
-        for name, detail in staged.failures:
-            console.print(f"[yellow]  {name}: {detail}[/yellow]", markup=True)
-        if stage_only:
-            if staged.failures:
-                raise RuntimeError(f"{len(staged.failures)} map(s) could not be staged")
-            return
-
-        editor_failure: Exception | None = None
-        try:
-            unreal.import_map_environment(config, runner, staged.manifest_path, force=force)
-        except unreal.UnrealFailure as error:
-            editor_failure = error
-        report = _read_json(root / importer.IMPORT_REPORT_NAME)
-        failed = (report.get("failed") or []) if report else []
-        if report:
-            console.print(
-                "map-environment import: "
-                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
-                f"{len(failed)} failed"
-            )
-            for row in failed[:10]:
-                console.print(f"[yellow]  {row.get('map')}: {row.get('reason')}[/yellow]",
-                              markup=True)
-        problems = []
-        if staged.failures:
-            problems.append(f"{len(staged.failures)} map(s) could not be staged")
-        if failed:
-            problems.append(f"{len(failed)} map(s) failed to import")
-        if editor_failure is not None:
-            problems.append(str(editor_failure))
-        if problems:
-            raise RuntimeError("; ".join(problems))
-
-    # The stage reads the loose environment sidecars and nothing else; the editor phase needs the
-    # engine and nothing else -- every value travels in the manifest.
-    _execute(
-        _state(ctx),
-        "import map-environment",
         ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
         action,
         require_work=True,

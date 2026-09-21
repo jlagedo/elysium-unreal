@@ -1062,6 +1062,56 @@ def save(asset_path):
     return unreal.EditorAssetLibrary.save_asset(asset_path, only_if_is_dirty=True)
 
 
+class ManifestError(RuntimeError):
+    """A staged manifest cannot be executed as written."""
+
+
+def load_stage_manifest(path, *, schema, required, lane):
+    """One offline stage's manifest, validated before a single asset is touched.
+
+    The three per-map asset lanes -- entities, collision, environment -- stage in the host
+    interpreter and author here, and each validated its own manifest with the same thirty lines
+    until 0018 story 21-2 folded all three into `bake map`. What differs between them is only
+    the schema version and the keys an entry must carry, so those are arguments and the rest is
+    shared.
+
+    The parity check is the load-bearing one. Each stage refuses to WRITE an entry whose parity
+    against the sidecar it replaces failed, so an unchecked or unequal entry arriving here is a
+    manifest that must not be executed at all -- not one bad map to skip.
+    """
+    with open(path, "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict):
+        raise ManifestError("%s manifest is not an object" % lane)
+    if manifest.get("schemaVersion") != schema:
+        raise ManifestError("%s manifest schema %r is not %s"
+                            % (lane, manifest.get("schemaVersion"), schema))
+    entries = manifest.get("maps")
+    if not isinstance(entries, list):
+        raise ManifestError("%s manifest maps is not a list" % lane)
+    mount = manifest.get("mount")
+    if not isinstance(mount, str) or not mount.startswith("/") or mount.endswith("/"):
+        raise ManifestError("%s manifest mount %r is not a mount path" % (lane, mount))
+    for index, entry in enumerate(entries):
+        for key in required:
+            if key not in entry:
+                raise ManifestError("%s maps[%d] lacks %r" % (lane, index, key))
+        if not entry["assetPath"].startswith(mount + "/"):
+            raise ManifestError("%s maps[%d] %s is outside %s"
+                                % (lane, index, entry["assetPath"], mount))
+        parity = entry["parity"]
+        if not parity.get("checked") or not parity.get("equal"):
+            raise ManifestError("%s maps[%d] %s carries no passing parity verdict: %r"
+                                % (lane, index, entry["map"], parity))
+    return manifest
+
+
+def split_asset_path(asset_path):
+    """`/Root/dir/DA_name` -> (`/Root/dir`, `DA_name`)."""
+    package, _, name = asset_path.rpartition("/")
+    return package, name
+
+
 #: The package-metadata tag every baked asset carries: the sha256 of its authoring recipe.
 #: `Config/DefaultGame.ini` lists it in `MetaDataTagsForAssetRegistry` (the asset manager
 #: settings class is `config=Game`), so a saved asset
