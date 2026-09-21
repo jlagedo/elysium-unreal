@@ -76,7 +76,11 @@ def _vector(raw: str) -> tuple[list[float], list[str], list[str]]:
 
 
 def _output_row(index: int, pair: KeyValue) -> Output:
-    """One output keyvalue split the way `FUN_100ccf90` splits it."""
+    """One output keyvalue split the way `FUN_100ccf90` splits it.
+
+    Two fields are not the token: an empty `input` is substituted with `Use` (`DAT_10555f7c`), and
+    a `times` of 0 is rewritten to -1. `raw` keeps the authored bytes either way.
+    """
 
     raw = str(pair.value)
     fields = raw.split(",")
@@ -93,7 +97,7 @@ def _output_row(index: int, pair: KeyValue) -> Output:
         key_value=pair.index,
         key=pair.source_key,
         target=field("target"),
-        input=field("input"),
+        input=field("input") or entity_model.DEFAULT_INPUT,
         parameter=field("parameter"),
         delay=entity_model.number_row(field("delay")),
         times={

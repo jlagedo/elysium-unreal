@@ -18,6 +18,7 @@ from typing import Any
 
 from elysium_pipeline.formats.map_entities_glb.model import (
     ANOMALY_ROLES,
+    DEFAULT_INPUT,
     DEPENDENCY_ROLES,
     DISABLED_KEY_SUFFIX,
     ENTITIES_LUMP,
@@ -359,9 +360,13 @@ def _compare_outputs(index: int, published: dict[str, Any], pairs: list[Any]) ->
 
         if output.get("fieldCount") != len(fields):
             raise MapEntitiesGlbValidationError(f"{where} fieldCount disagrees with a fresh split")
-        for name, at in (("target", 0), ("input", 1), ("parameter", 2), ("python", 5)):
+        for name, at in (("target", 0), ("parameter", 2), ("python", 5)):
             if output.get(name) != field(at):
                 raise MapEntitiesGlbValidationError(f"{where} {name} disagrees with a fresh split")
+        # An empty `input` is the one field the row parser substitutes for (`DAT_10555f7c` ->
+        # `Use`, `0x100ccf90`), so a fresh split has to apply the same rule to compare.
+        if output.get("input") != (field(1) or DEFAULT_INPUT):
+            raise MapEntitiesGlbValidationError(f"{where} input disagrees with a fresh split")
         delay = output.get("delay") or {}
         if delay.get("raw") != field(3) or delay.get("value") != _atof(field(3)):
             raise MapEntitiesGlbValidationError(f"{where} delay disagrees with a fresh split")

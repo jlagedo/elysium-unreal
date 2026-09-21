@@ -107,6 +107,11 @@ _ATOI = re.compile(r"^[+-]?\d+")
 #: rewrites an authored 0 back to it (`0xffffffff`), so both mean unlimited.
 UNLIMITED_TIMES = -1
 
+#: What an empty `input` token reads as: `DAT_10555f7c`, the shipped `.data` string the row parser
+#: substitutes rather than interning nothing (`0x100ccf90` field 1). The entities unit states the
+#: same constant as `entity_model.DEFAULT_INPUT`.
+DEFAULT_INPUT = "Use"
+
 _ACCESSOR_COMPONENT = {5120: "b", 5121: "B", 5122: "h", 5123: "H", 5125: "I", 5126: "f"}
 _ACCESSOR_WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 
@@ -351,6 +356,9 @@ def split_output(value: str) -> dict[str, Any] | None:
     (`100cd099` -> `0x1043136f`) -- which is what every other number in `.ents` already reads with
     and what an empty token skips entirely, keeping the seeded `0.0`.
 
+    An empty `input` is not interned as nothing: the parser substitutes `DAT_10555f7c`, read from
+    the shipped `.data` as `"Use"`, so `target,,,0,-1,,` addresses the receiver's `Use` input.
+
     `times` reads with `_atoi`, **and an authored `0` is rewritten to `-1`**: the record is seeded
     at `-1` and the parser puts it back, so both spellings mean unlimited and only a positive
     value is a countdown. This function is the one owner of that rewrite (0018 story 21-7) --
@@ -371,7 +379,7 @@ def split_output(value: str) -> dict[str, Any] | None:
     times = atoi(parts[4])
     row = {
         "target": parts[0],
-        "input": parts[1],
+        "input": parts[1] or DEFAULT_INPUT,
         "param": parts[2],
         "delay": atof(parts[3]),
         "times": times if times != 0 else UNLIMITED_TIMES,

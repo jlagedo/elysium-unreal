@@ -111,7 +111,17 @@ target , input , parameter , delay , times , python , extra
 A row publishes `target`, `input`, `parameter`, `delay` (`{raw, value}`), `times`
 (`{raw, value}`; the parser initializes `-1` and rewrites an authored `0` to `-1`, so both mean
 unlimited — the row carries `unlimited: true` for either), `python` (verbatim), `extra` (verbatim,
-present only when authored, never interpreted), `fieldCount` and `raw`. Across the 108 maps,
+present only when authored, never interpreted), `fieldCount` and `raw`.
+
+**`input` is the one field the parser fills in for** (0018 story 21-7). An empty token is not
+interned as nothing: `0x100ccf90` substitutes `DAT_10555f7c`, read from the shipped `.data` as
+`"Use"`, so `target,,,0,-1,py,` addresses the receiver's `Use` input. The unit publishes `Use`;
+`raw` still carries the authored bytes. 6,856 of the corpus's outputs author an empty `input`, and
+two of them name a target — `sm_oceanhouse_2[1181]` and `sp_soc_1[189]` — so for every other one
+the substituted name addresses nobody and only the row's Python runs.
+
+No field is trimmed at either end: the splitter `0x101d16c0` copies until the next comma and
+strips nothing. Across the 108 maps,
 24,065 of 24,081 outputs write seven fields, 14 write six, one writes five and one writes eight;
 a count other than seven is a `output-field-count` anomaly, not a failure.
 

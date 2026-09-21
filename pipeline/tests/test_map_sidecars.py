@@ -106,6 +106,17 @@ def test_model_brushes_collects_only_leaves_under_the_given_headnode():
     assert model_brushes(nodes, leafs, leaf_brushes, 2) == {200, 201}
 
 
+def test_split_output_substitutes_use_for_an_empty_input():
+    # 0018 story 21-7: field 1 is the one field the row parser fills in for. An empty token is not
+    # interned as nothing -- `0x100ccf90` substitutes `DAT_10555f7c`, read from the shipped `.data`
+    # as `"Use"` -- so `target,,,0,-1,py,` addresses the receiver's `Use` input. Nothing is
+    # trimmed, so a token that is only whitespace is a name, not an absence.
+    assert split_output("door,,,0,-1,py")["input"] == "Use"
+    assert split_output(",,,0,-1,setArea(\"santa_monica\"),")["input"] == "Use"
+    assert split_output("door, ,,0,-1,py")["input"] == " "
+    assert split_output("door,Open,,0,-1,py")["input"] == "Open"
+
+
 def test_split_output_times_is_atoi_and_an_authored_zero_is_unlimited():
     # 0018 story 21-7: field 4 reads with `_atoi` -- the longest integer prefix -- and retail's
     # parser rewrites the result 0 back to the -1 the record was seeded with, so both spellings

@@ -64,6 +64,11 @@ OUTPUT_FIELD_COUNT = 7
 #: The parser initializes `times` to -1 and rewrites an authored 0 to -1; both mean unlimited.
 UNLIMITED_TIMES = -1
 
+#: What an output row's `input` field reads as when the authored token is empty. Retail's row
+#: parser substitutes `DAT_10555f7c` -- the shipped `.data` string `"Use"` -- rather than interning
+#: nothing (`0x100ccf90` field 1), so an author who wrote `target,,,0,-1,,` addressed `Use`.
+DEFAULT_INPUT = "Use"
+
 #: The class whose `python_script` keyvalue is a Python expression rather than a plain value.
 PYTHON_CHECK_CLASS = "logic_pythoncheck"
 PYTHON_CHECK_KEY = "python_script"
@@ -537,6 +542,7 @@ class MapEntitiesModel:
 __all__ = [
     "ANOMALY_ROLES",
     "DEPENDENCY_ROLES",
+    "DEFAULT_INPUT",
     "DISABLED_KEY_SUFFIX",
     "ENTITIES_LUMP",
     "INCH_TO_METRE",
