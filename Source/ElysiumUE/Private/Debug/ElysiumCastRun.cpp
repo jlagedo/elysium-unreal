@@ -256,7 +256,7 @@ AElysiumNpcBody* FElysiumCastRun::FindBody() const
 
 FString FElysiumCastRun::OutputDir() const
 {
-	const FString Root = FPaths::Combine(FElysiumContentPaths::Root(), TEXT("_cast"));
+	const FString Root = FElysiumContentPaths::SavedDebugDir(TEXT("_cast"));
 	// A sited host keeps its own directory, and therefore its own baseline. Sharing one would make
 	// every arena-only run report the map's courses missing, and every sited run report the arena's.
 	return MapName.IsEmpty() ? Root : FPaths::Combine(Root, MapName);

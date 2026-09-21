@@ -1,12 +1,17 @@
-// P2.8 — the content-gated tier. These read the offline pipeline's real exported intermediates
-// from $ELYSIUM_EXPORT_ROOT and assert the parse contract holds against actual game data. They emit a
-// structured abstention when a required export is unavailable, so a fresh checkout stays green without
-// being reported as covered; a machine that has run the exporter gets real regression coverage.
+// P2.8 — the content-gated tier. These read the project's own baked and deployed content and assert
+// the parse contract holds against actual game data. Each abstains structurally when what it reads
+// is absent -- by asking the asset registry or the corpus directly -- so a fresh checkout stays
+// green without being reported as covered; a machine that has run the bake and the imports gets
+// real regression coverage.
+//
+// 0018 story 21-6 removed the one shared gate this file used to carry, `SkipIncompleteCorpus`: it
+// read `.elysium-incomplete` markers under the export root, and it had no call sites left. The
+// markers' offline half (repository policy, `reconstruct`) is unaffected.
 //
 // The app-context mask (not ClientContext alone) so they run in the editor commandlet uv run elysium test
-// drives as well as in a game/client session — the `.ents` are read from disk through
+// drives as well as in a game/client session — what is read from disk goes through
 // FElysiumContentPaths, which resolves the same in either. ProductFilter keeps them in this
-// project's own suite bucket, out of the per-commit smoke set where a missing export would look
+// project's own suite bucket, out of the per-commit smoke set where missing content would look
 // like noise.
 
 #include "Misc/AutomationTest.h"
@@ -107,8 +112,8 @@ static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // `Elysium.Policy.*` is the third tier: cases that need a GENERATED `/Game` package -- a real
-// material graph, a declared input asset, an audio routing asset -- and read nothing from
-// `$ELYSIUM_EXPORT_ROOT`. They cannot be Substrate, because a recording stub cannot answer "the
+// material graph, a declared input asset, an audio routing asset -- and read no deployed corpus
+// file at all. They cannot be Substrate, because a recording stub cannot answer "the
 // master carries an EnvStrength scalar defaulting to 0"; they are not Content either, because
 // nothing about the user's own corpus is being regressed. Keeping them under Content made the
 // corpus tier slower and told a reader something untrue about what the run needed.
@@ -121,31 +126,6 @@ static constexpr EAutomationTestFlags GElysiumSubstrateTestFlags =
 
 namespace
 {
-	// Abstain only while a domain this test actually reads is missing. Naming the domains is what
-	// lets `export bundle npc` un-gate the character tests without a whole-corpus export.
-	//
-	// The structured event keeps abstention separate from execution in the command summary without
-	// misusing Unreal's warning channel for an expected missing-corpus state.
-	bool SkipIncompleteCorpus(FAutomationTestBase& Test, std::initializer_list<const TCHAR*> Domains)
-	{
-		TArray<FString> Missing;
-		for (const TCHAR* Domain : Domains)
-		{
-			if (FElysiumContentPaths::IsIncomplete(Domain))
-			{
-				Missing.Add(Domain);
-			}
-		}
-		if (Missing.IsEmpty())
-		{
-			return false;
-		}
-		Test.AddInfo(FString::Printf(
-			TEXT("ELYSIUM_TEST_ABSTAIN: the %s export domain(s) are marked incomplete at %s.*"),
-			*FString::Join(Missing, TEXT(", ")), *FElysiumContentPaths::IncompleteMarker()));
-		return true;
-	}
-
 	// Count entities of a classname, and collect info_landmark targetnames — the two things the
 	// integration assertions turn on (class coverage, and the anchors the P4.6 travel path needs).
 	struct FEntsSurvey

@@ -940,7 +940,7 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyLoad(
 	{
 		BindStore(World);
 		const FString Map = Args.Num() > 0 ? Args[0] : TEXT("tutorial");
-		// Scripts live under the $ELYSIUM_EXPORT_ROOT.
+		// Scripts live under the deployed corpus (`uv run elysium import scripts`).
 		const FString Abs = FPaths::ConvertRelativePathToFull(
 			FElysiumContentPaths::ScriptModuleFile(Map));
 		FString ModName, Err;

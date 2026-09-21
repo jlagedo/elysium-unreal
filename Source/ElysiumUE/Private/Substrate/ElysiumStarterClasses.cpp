@@ -648,7 +648,7 @@ public:
 class FElysiumChangeLevel final : public FElysiumTriggerBase
 {
 public:
-	FString DestMap;        // `map` — the destination map name (an exported folder under $ELYSIUM_EXPORT_ROOT)
+	FString DestMap;        // `map` — the destination map name (a baked level on the /ElysiumBaked mount)
 	FString LandmarkName;   // `landmark` — the info_landmark shared with the destination map
 
 	// SF_CHANGELEVEL_NOTOUCH (stock Source `0x0002`): the transition fires only via a scripted input,

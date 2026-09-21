@@ -15,8 +15,8 @@ namespace ElysiumWireDump
 	// string.
 	FString BuildJson(const FElysiumEntityWorld& World);
 
-	// Write the report under the export root's `_wires/` (the same place `_profile`, `_lights` and
-	// `_greenroom` put their artifacts, which is below ELYSIUM_WORK_ROOT unless the export root is
+	// Write the report under `Saved/Elysium/_wires/` (the same place `_profile`, `_lights` and
+	// `_greenroom` put their artifacts since 0018 story 21-6; before it they were below the export
 	// pointed elsewhere). Returns the path written, or empty on failure — including the case where
 	// no content root is configured at all.
 	FString Write(const FElysiumEntityWorld& World);

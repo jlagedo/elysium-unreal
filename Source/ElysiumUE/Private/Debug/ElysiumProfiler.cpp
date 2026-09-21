@@ -151,7 +151,7 @@ void FElysiumProfileRun::BeginCsvCapture()
 	const FString CamName = ElysiumVantages::Table[RunList[CamIndex]].Name;
 
 #if CSV_PROFILER
-	const FString Folder = FElysiumContentPaths::Root() / TEXT("_profile");
+	const FString Folder = FElysiumContentPaths::SavedDebugDir(TEXT("_profile"));
 	const FString File = FString::Printf(TEXT("elysium_%s_%s"), *Map, *CamName);
 	FCsvProfiler::Get()->BeginCapture(CaptureFrames, Folder, File);
 #endif
@@ -217,7 +217,8 @@ void FElysiumProfileRun::Finish()
 	Json += TEXT("  ]\n");
 	Json += TEXT("}\n");
 
-	const FString OutPath = FElysiumContentPaths::Root() / TEXT("_profile") / (Map + TEXT("_summary.json"));
+	const FString OutPath =
+		FElysiumContentPaths::SavedDebugDir(TEXT("_profile")) / (Map + TEXT("_summary.json"));
 	if (FFileHelper::SaveStringToFile(Json, *OutPath))
 	{
 		UE_LOG(LogElysiumProfile, Log, TEXT("wrote %s"), *OutPath);

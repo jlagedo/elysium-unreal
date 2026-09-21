@@ -1020,7 +1020,7 @@ FString FElysiumGreenRoomRun::CurrentLabel() const
 
 FString FElysiumGreenRoomRun::OutputDirectory() const
 {
-	return FElysiumContentPaths::Root() / TEXT("_greenroom")
+	return FElysiumContentPaths::SavedDebugDir(TEXT("_greenroom"))
 		/ (bReview ? TEXT("review") : Selector);
 }
 

@@ -13,8 +13,11 @@ script/dialogue/sign mirrors: output lives under $ELYSIUM_EXPORT_ROOT/ (gitignor
 patch-first (patch loose > retail loose > VPK), the engine's own search order.
 
 Two subtrees are deliberately excluded:
-  * `vdata/signs/` -- owned by `UE_extract_signs.py` (it also decodes the sign background art
-    into $ELYSIUM_EXPORT_ROOT/signs), so mirroring it here would duplicate.
+  * `vdata/signs/` -- this mirror is the OFFLINE one and has never carried the sign panels; an
+    extractor of its own owned them, because it also decoded their background art. That extractor
+    is gone (0018 story 21-6) and the art is an imported `T_` asset, so what the game reads is
+    `uv run elysium import vdata`, which deploys every subtree including `signs/`. This exclusion
+    is now only about what this offline mirror holds.
   * `*.xls` -- `stealth.xls` is a design-source spreadsheet, not an engine-loaded table.
 
 The hunter/vampire trait split is left intact: `<name>.txt` is byte-identical to
@@ -34,7 +37,7 @@ from elysium_pipeline.paths import export_root
 OUT = os.fspath(export_root())
 
 ROOT = "vdata"
-EXCLUDE_PREFIXES = ("vdata/signs/",)   # owned by UE_extract_signs.py
+EXCLUDE_PREFIXES = ("vdata/signs/",)   # never mirrored here; `import vdata` deploys them
 EXTS = (".txt",)                        # skip stealth.xls (design source, not engine data)
 
 

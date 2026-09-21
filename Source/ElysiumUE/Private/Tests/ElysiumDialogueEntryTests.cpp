@@ -30,7 +30,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumDlg.h"
 #include "Tests/ElysiumDialogueTestHelpers.h"
-#include "Tests/ElysiumScratchContentRoot.h"
+#include "Tests/ElysiumScratchCorpusRoot.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "HAL/FileManager.h"
@@ -395,7 +395,7 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 	// `FUN_10178280` holsters only AFTER `CDialog::Acquire` has taken the conversation, so the
 	// fixture needs a `.dlg` that really loads: a conversation that fails to open must leave the
 	// hands alone, and that is asserted below on its own NPC.
-	const FElysiumScratchContentRoot Scratch(TEXT("DialogHolster"));
+	const FElysiumScratchCorpusRoot Scratch(TEXT("DialogHolster"));
 	const FString DialogName = TEXT("dlg/test/holster.dlg");
 	const FString DlgPath = FElysiumContentPaths::DlgFromDialogname(DialogName);
 	{
@@ -403,7 +403,7 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 		const FString Joined = ElysiumDlgRow(1, TEXT("A word with you."), TEXT("#"),
 			FString(), FString()) + TEXT("\r\n");
 		IFileManager::Get().MakeDirectory(*FPaths::GetPath(DlgPath), /*Tree*/ true);
-		if (!TestTrue(TEXT("the scratch content root is installed"), Scratch.IsInstalled())
+		if (!TestTrue(TEXT("the scratch corpus root is installed"), Scratch.IsInstalled())
 			|| !TestTrue(TEXT("the holster fixture conversation writes"),
 				FFileHelper::SaveStringToFile(Joined, *DlgPath)))
 		{

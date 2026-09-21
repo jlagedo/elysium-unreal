@@ -52,7 +52,7 @@ EFFECTS_CLASSES = [
 ]
 
 #: `$ELYSIUM_WORK_ROOT/exports_v2/_census/<map>.json` -- beside the GLB units it summarizes,
-#: mirroring `shots_diff.py`'s `_shots/_baseline` placement under the export root it reads.
+#: mirroring `shots_diff.py`'s `_shots/_baseline` placement under the root it reads.
 CENSUS_DIR_NAME = "_census"
 
 

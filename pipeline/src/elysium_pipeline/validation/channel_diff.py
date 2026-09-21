@@ -26,7 +26,7 @@ Two baseline roots, because the two hosts differ in kind:
   `CCC7` settles the speed authority, which is exactly the "expectation that
   moves with the thing it measures" the gym exists to avoid.
 * **Sited runs** are made on a real map, so they are game-derived and their
-  baseline stays under the gitignored `$ELYSIUM_EXPORT_ROOT/_move/baseline/`.
+  baseline stays under the gitignored `Saved/Elysium/_move/baseline/`.
   Those are compared in full, frame rows included — they are re-promoted freely,
   so there is nothing to protect from a deliberate change.
 
@@ -47,7 +47,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from elysium_pipeline.paths import export_root
+from elysium_pipeline.paths import saved_debug_root
 
 MANIFEST_SUFFIX = ".channels.json"
 
@@ -508,21 +508,22 @@ def cmd_hz(out: Path, rates: list[int]) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    # The gym's baselines live beside the sited courses' under the work root, because the gym now
-    # stands a real baked body and its recordings are therefore game-derived (CCC7). They are still
+    # The gym's baselines live beside the sited courses' under `Saved/`, where the run writes them
+    # (0018 story 21-6); the gym stands a real baked body and its recordings are therefore
+    # game-derived (CCC7). They are still
     # measured recordings rather than regenerated expectations -- that is the property that lets the
     # gym fail -- but they cannot be committed, so a regression check needs a completed export first.
     ap.add_argument("--gym-baseline", type=Path, default=None,
-                    help="where the gym baselines live (default $ELYSIUM_EXPORT_ROOT/_move/baseline)")
+                    help="where the gym baselines live (default Saved/Elysium/_move/baseline)")
     ap.add_argument("--out", type=Path, default=None,
-                    help="the run directory (default $ELYSIUM_EXPORT_ROOT/_move)")
+                    help="the run directory (default Saved/Elysium/_move)")
     ap.add_argument("--promote", action="store_true",
                     help="promote the current runs to their baselines")
     ap.add_argument("--hz", nargs="+", type=int, metavar="HZ",
                     help="compare the same course across these frame rates")
     args = ap.parse_args()
 
-    out = args.out if args.out is not None else export_root() / "_move"
+    out = args.out if args.out is not None else saved_debug_root("_move")
     gym_baseline = args.gym_baseline if args.gym_baseline is not None else out / "baseline"
 
     if args.promote:

@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 
-// Faceposer's flex-controller weight table — `$ELYSIUM_EXPORT_ROOT/expressions/<stem>.txt`.
+// Faceposer's flex-controller weight table, from the install's own `expressions/<stem>.txt`.
+// The runtime reads it as cooked content (`FElysiumContentPaths::BakedExpressionTables`), not as
+// a file; the grammar below is the source's.
 //
 // One file is a named set of rows over a shared key list, and a key is a flex-controller name
 // (`Visual/ElysiumFacialRig.h`). 249 tables ship: 121 `<stem>_phonemes`, 121 `<stem>_expressions`

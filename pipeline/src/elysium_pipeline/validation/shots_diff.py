@@ -1,13 +1,15 @@
 """Compare a `uv run elysium debug shots` capture against a kept baseline — the pixel half of the screenshot
 regression harness (roadmap P2.9, sky-ambience B6).
 
-`uv run elysium debug shots` renders each configured vantage to `$ELYSIUM_EXPORT_ROOT/_shots/<map>/`. That answers "what does it
-look like now"; this answers "what changed", which is the question a regression asks. Promote a
-run you trust to `$ELYSIUM_EXPORT_ROOT/_shots/_baseline/<map>/`, and every later run is a diff against it: a look
-regression becomes a number and a heat map instead of an eyeball and a memory.
+`uv run elysium debug shots` renders each configured vantage to `Saved/Elysium/_shots/<map>/`. That
+answers "what does it look like now"; this answers "what changed", which is the question a
+regression asks. Promote a run you trust to `Saved/Elysium/_shots/_baseline/<map>/`, and every
+later run is a diff against it: a look regression becomes a number and a heat map instead of an
+eyeball and a memory.
 
-Baselines live under `$ELYSIUM_EXPORT_ROOT/`, so they are game-derived and gitignored like every capture. They
-are a local instrument, not a committed fixture. `--save` writes a `baseline.json` beside each
+Baselines live under `Saved/`, so they are per-user output and gitignored like every capture (0018
+story 21-6 moved them there with the writer; before it they were under the export root, which is
+why a debug verb used to need one). They are a local instrument, not a committed fixture. `--save` writes a `baseline.json` beside each
 promoted map naming the build commit, the map and the camera set it was captured against (R2.1,
 MP-1.1), so a regression report can state what it is comparing against rather than "whatever HEAD
 happened to be that day".
@@ -27,9 +29,9 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from elysium_pipeline.paths import export_root, repo_root
+from elysium_pipeline.paths import repo_root, saved_debug_root
 
-OUT = export_root() / "_shots"
+OUT = saved_debug_root("_shots")
 BASELINE = OUT / "_baseline"
 DIFFDIR = OUT / "_diff"
 

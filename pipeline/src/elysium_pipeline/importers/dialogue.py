@@ -8,9 +8,10 @@ Content/ElysiumCorpus/dlg/<hub>/<name>.dlg          <- FElysiumContentPaths::Dlg
 Content/ElysiumCorpus/scenes/<path>.vcd             <- FElysiumContentPaths::SceneFile
 ```
 
-Both trees mirror the legacy loose export (`exporters/UE_extract_scripts.py` for `dlg/`,
-`UE_extract_scenes.py` for `scenes/`) exactly, so the reader flip from `Root()` to `CorpusRoot()`
-is a change of prefix and nothing else. A scene's install path is `sound/<rel>.vcd` and the
+Both trees matched the legacy loose export exactly when the reader flipped from the export root to
+`CorpusRoot()`, so that flip was a change of prefix and nothing else. (`dlg/` came off the script
+extractor, which 0018 story 21-6 deleted; `UE_extract_scenes.py` still writes the offline `scenes/`
+mirror.) A scene's install path is `sound/<rel>.vcd` and the
 runtime addresses it by `<rel>` with that prefix already stripped
 (`ElysiumScene::NormalizeSceneRel`), so this lane strips it too.
 

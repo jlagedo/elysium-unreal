@@ -4,7 +4,7 @@
 
 // The one viewport-capture path, shared by the `elysium_screenshot` MCP tool (which
 // returns the PNG inline to the agent) and the `-ElysiumShots` regression harness (which writes
-// it to $ELYSIUM_EXPORT_ROOT/_shots). Both need the same two things: a frame's back buffer as an FColor
+// it to Saved/Elysium/_shots). Both need the same two things: a frame's back buffer as an FColor
 // bitmap, and that bitmap as PNG bytes.
 //
 // Capture is inherently deferred — the engine services a screenshot request at the end of the

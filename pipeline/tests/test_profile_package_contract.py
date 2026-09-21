@@ -24,15 +24,15 @@ def test_complete_profiles_include_every_global_bundle() -> None:
     # `T_` assets, so no profile composites an atlas any more. R8: `npc` and `items` are gone --
     # characters and wield are native import lanes (`import characters`), not export bundles.
     # AUD0.4: `audio` is gone -- the sound family is `export_v2` units deployed by
-    # `import sound` / `import sound-schemes`.
+    # `import sound` / `import sound-schemes`. 0018 story 21-6: `scripts`, `signs`, `cfg` and `ui`
+    # are gone with their extractors -- those four trees are the game's, and the game reads them
+    # out of `Content/ElysiumCorpus` where `import scripts` / `... vdata` / `... engine-config` /
+    # `... ui-strings` deploy them from the published units. What is left here writes nothing the
+    # running game opens.
     expected = {
         "particles",
-        "scripts",
-        "signs",
         "vdata",
-        "cfg",
         "scenes",
-        "ui",
     }
     for profile in ("grid", "all"):
         bundles = export_all.bundles_for_profile(profile)

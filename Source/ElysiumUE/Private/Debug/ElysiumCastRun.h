@@ -48,7 +48,7 @@ class UWorld;
 // course of, exits non-zero. A baseline diff is a second opinion on a recording that already
 // stands on its own.
 //
-// One `FElysiumChannelRecorder` run per course under `$ELYSIUM_EXPORT_ROOT/_cast/` (arena) or
+// One `FElysiumChannelRecorder` run per course under `Saved/Elysium/_cast/` (arena) or
 // `_cast/<map>/` (sited); `pipeline/src/elysium_pipeline/validation/channel_diff.py` is the
 // comparator, the same one that judges the movement runs.
 class FElysiumCastRun

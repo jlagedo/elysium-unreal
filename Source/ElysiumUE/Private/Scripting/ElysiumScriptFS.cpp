@@ -30,36 +30,35 @@ namespace
 	}
 
 	// Sandbox-relative tree prefix -> the mirror directory it is served from. Ordered: the first
-	// match wins, so `vdata/signs/` must precede `vdata/`.
+	// match wins, though since 0018 story 21-6 no two prefixes nest.
 	//
-	// Most mounts are the trees the offline pipeline mirrors under Root(). Two are not: `vdata/`
-	// and `dlg/` serve from FElysiumContentPaths (VdataDir/DlgDir), the export_v2 capsule import
-	// onto CorpusRoot.
-	// `dlg/` matters here for the same reason `vdata/` did: the runtime's own reader
-	// (`DlgFromDialogname`) already resolves through the corpus, so a script that probes
-	// `fileutil.isFile("dlg/...")` to gate a line — vamputil.py:1039 does exactly that — must see
-	// the same bytes the conversation will load. One path, one byte source.
+	// Every mount is a subtree of `FElysiumContentPaths::CorpusRoot()`, the one loose read root the
+	// runtime has. 21-6 closed the last three that were not: `cfg/` and `python/` moved with their
+	// accessors, and `vdata/signs/` was DELETED rather than moved -- signs deploy as the
+	// `vdata/signs/` subtree of the table corpus now (`import vdata`), so the `vdata/` mount below
+	// already answers that prefix, one sandbox path to one real path. That is the `sound/`
+	// precedent: a mount whose reason has gone is retired, not repointed.
+	//
 	// `sound/` is NOT mounted: audio is baked asset content now (AUD1.2), and no shipped script
-	// opens a file under `sound/` — every `sound`-ish name in the 36 loose scripts is an entity
+	// opens a file under `sound/` -- every `sound`-ish name in the 36 loose scripts is an entity
 	// name handed to `Find()`, not a path. A script that asked for one would get the sandbox's
 	// "no such file", which is what it would get from a VtMB install with the VPKs unmounted.
-	// `vdata/signs/` stays on Root()'s legacy `signs/` mirror, not yet migrated. `python/` lands on
-	// out/scripts because that is where UE_extract_scripts.py puts VtMB's `Vampire/python/` tree;
-	// VtMB's own `Vampire/scripts/` (kb_act.lst and the Valve script files) is a different tree and
-	// has no mirror, which is why hunter mode's keybinding copy resolves to nothing and says so.
 	//
-	// Rebuilt per call rather than cached in a static: both roots are command-line/environment
-	// pinned and a test may move them for its own scope, and a table baked on first use would keep
-	// serving whichever root happened to be installed then.
+	// `python/` lands on the corpus's `scripts/` because that is the name the runtime has always
+	// given VtMB's `Vampire/python/` tree (`ScriptsDir()`). VtMB's own `Vampire/scripts/` (kb_act.lst
+	// and the Valve script files) is a different tree and has no mirror, which is why hunter mode's
+	// keybinding copy resolves to nothing and says so.
+	//
+	// Rebuilt per call rather than cached in a static: the corpus root is command-line pinned and a
+	// test may move it for its own scope, and a table baked on first use would keep serving whichever
+	// root happened to be installed then.
 	TArray<TPair<FString, FString>> Mounts()
 	{
-		const FString Root = FPaths::ConvertRelativePathToFull(FElysiumContentPaths::Root());
 		TArray<TPair<FString, FString>> T;
-		T.Emplace(TEXT("cfg/"),         Root / TEXT("cfg"));
-		T.Emplace(TEXT("vdata/signs/"), Root / TEXT("signs")); // extracted flat + lowercased
-		T.Emplace(TEXT("vdata/"),       FElysiumContentPaths::VdataDir());
-		T.Emplace(TEXT("python/"),      Root / TEXT("scripts"));
-		T.Emplace(TEXT("dlg/"),         FElysiumContentPaths::DlgDir());
+		T.Emplace(TEXT("cfg/"),    FElysiumContentPaths::CfgDir());
+		T.Emplace(TEXT("vdata/"),  FElysiumContentPaths::VdataDir());
+		T.Emplace(TEXT("python/"), FElysiumContentPaths::ScriptsDir());
+		T.Emplace(TEXT("dlg/"),    FElysiumContentPaths::DlgDir());
 		return T;
 	}
 
@@ -274,7 +273,7 @@ bool FElysiumScriptFS::Resolve(const FString& VirtualPath, EElysiumFsAccess Acce
 		return true;
 	}
 
-	// Both write paths land in the overlay, never in Root().
+	// Both write paths land in the overlay, never in the deployed corpus.
 	IFileManager::Get().MakeDirectory(*FPaths::GetPath(OverlayPath), /*Tree*/ true);
 
 	if (Access == EElysiumFsAccess::Update && !IFileManager::Get().FileExists(*OverlayPath))

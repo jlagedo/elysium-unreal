@@ -1,47 +1,24 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "HAL/FileManager.h"
-#include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 
-// Single source of truth for the external export root. Runtime code only reads intermediates
-// produced before launch; it never invokes the offline Python pipeline.
+// Single source of truth for every path the runtime reads. There are three roots and all three are
+// inside the project: the deployed corpus `CorpusRoot()`, the baked package mounts, and
+// `ProjectSavedDir()` for what the game itself writes. 0018 story 21-6 deleted the fourth --
+// `Root()`, the external export tree, with its `-ElysiumContentRoot=` pin, its
+// `ELYSIUM_EXPORT_ROOT` fallback and the `.elysium-incomplete` markers. The game opens no file
+// outside its own project directory. Runtime code only reads what was produced before launch; it
+// never invokes the offline Python pipeline.
 struct FElysiumContentPaths
 {
-	static FString Root()
-	{
-		FString Value;
-		if (!FParse::Value(FCommandLine::Get(), TEXT("ElysiumContentRoot="), Value))
-		{
-			Value = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_EXPORT_ROOT"));
-		}
-		if (Value.IsEmpty())
-		{
-			const FString WorkRoot =
-				FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_WORK_ROOT"));
-			if (!WorkRoot.IsEmpty())
-			{
-				Value = WorkRoot / TEXT("exports");
-			}
-		}
-		if (Value.IsEmpty())
-		{
-			return FString();
-		}
-		Value = FPaths::ConvertRelativePathToFull(Value);
-		FPaths::NormalizeDirectoryName(Value);
-		return Value;
-	}
-	static bool IsConfigured() { return !Root().IsEmpty(); }
-
-	// The deployed, gitignored, runtime-parsed corpus written by `uv run elysium import` --
-	// distinct from Root(), which is the offline pipeline's loose export tree. vdata is the first
-	// family imported onto it; more follow as the
-	// migration converges the runtime onto one resolution mechanism. `-ElysiumCorpusRoot=` mirrors
-	// Root()'s `-ElysiumContentRoot=` pin so tests/dev can redirect the corpus independently.
+	// The deployed, gitignored, runtime-parsed corpus written by `uv run elysium import <lane>`:
+	// every retail byte the game reads as a FILE rather than as baked package content. Seven lanes
+	// fill it -- `vdata` (signs included), `dialogue`, `sound`, `sound-schemes`, `scripts`,
+	// `engine-config` and `ui-strings` -- and since 0018 story 21-6 it is the ONLY loose read root
+	// the runtime has. `-ElysiumCorpusRoot=` lets a test redirect it for its own scope.
 	static FString CorpusRoot()
 	{
 		FString Value;
@@ -53,29 +30,6 @@ struct FElysiumContentPaths
 		FPaths::NormalizeDirectoryName(Value);
 		return Value;
 	}
-	// Offline/content-test completeness signal only. Gameplay reads the artifacts that are present
-	// and must never refuse to boot solely because this marker exists.
-	//
-	// The corpus is incomplete per DOMAIN, and the aggregate marker says only that SOMETHING is.
-	// A domain is named for the export bundle that clears it -- `npc`, `audio`, `vdata`, `scenes`,
-	// `scripts`, plus `maps` for the map exports -- so a test that reads one domain abstains only
-	// while THAT domain is missing. `pipeline/src/elysium_pipeline/clean.py` writes both.
-	static FString IncompleteMarker() { return Root() / TEXT(".elysium-incomplete"); }
-	static FString IncompleteMarker(const TCHAR* Domain)
-	{
-		return IncompleteMarker() + TEXT(".") + Domain;
-	}
-	static bool IsIncomplete()
-	{
-		const FString Value = Root();
-		return !Value.IsEmpty() && IFileManager::Get().FileExists(*IncompleteMarker());
-	}
-	static bool IsIncomplete(const TCHAR* Domain)
-	{
-		const FString Value = Root();
-		return !Value.IsEmpty() && IFileManager::Get().FileExists(*IncompleteMarker(Domain));
-	}
-
 	// Original authored content under `/Game/ElysiumAuthored`. The one tracked package namespace.
 	// Nothing here is generated and nothing here is derived from the user's install, so a clean or a
 	// regeneration must never write to or remove it (`Content/CLAUDE.md`).
@@ -145,7 +99,7 @@ struct FElysiumContentPaths
 	// offline-baked into real .uasset content under the /ElysiumBaked plugin mount, and the map
 	// IS a real .umap the engine opens. These are package paths (a virtual content root), not
 	// filesystem paths, so they take no FPaths::ProjectDir. The mount's Content/ is game-derived
-	// and gitignored exactly like Root(); only the .uplugin descriptor is committed.
+	// and gitignored exactly like the deployed corpus; only the .uplugin descriptor is committed.
 	static FString BakedMount() { return TEXT("/ElysiumBaked"); }
 	static FString CastData() { return BakedMount() / TEXT("Models/_Corpus/DA_Cast.DA_Cast"); }
 	static FString BakedMapDir(const FString& Map)
@@ -530,12 +484,10 @@ struct FElysiumContentPaths
 		return Out;
 	}
 
-	// There is no per-map accessor under `Root()` any more. 0018 story 21-3 retired the last three
-	// -- `MapExportReady` (the travel gate, now the bake's own four packages), `MapEnts` (the
-	// `elysium.ents` verb and two test fixtures, now `DA_<map>_Entities`) and `MapRopes`
-	// (`BuildRopes`, now the level's baked rope actors) -- and `MapDir` with them. The runtime
-	// opens no file under `$ELYSIUM_EXPORT_ROOT/<map>/`; what still reads `Root()` is the corpus
-	// trees below, which 21-6 moves into `Content/ElysiumCorpus/`.
+	// There is no export root at all any more. 0018 story 21-3 retired the last per-map accessors
+	// -- `MapExportReady`, `MapEnts`, `MapRopes` and `MapDir` -- and 21-6 retired `Root()` itself
+	// with the four corpus trees that were its last readers (`scripts/`, `cfg/`, `signs/`, `ui/`,
+	// all below `CorpusRoot()` now) and the eight debug write roots (`SavedDebugDir`).
 
 	// The corpus tree is deployed all-lower-case (`uv run elysium import`), while VtMB keyvalues and
 	// `dialogname` fields carry the authoring case ("dlg/Main Characters/jack_tutorial.dlg",
@@ -594,30 +546,34 @@ struct FElysiumContentPaths
 	static FString BakedExpressionTables()
 	{ return BakedMount() / TEXT("ExpressionTables/_Corpus/DA_ExpressionTables.DA_ExpressionTables"); }
 
-	// Scripting. VtMB's level scripts + dialogue are game-global loose plain-text, mirrored under
-	// the export root's scripts/ and dlg/ directories by
-	// pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py. A
+	// Scripting. VtMB's level scripts + dialogue are game-global loose plain-text, deployed by
+	// `uv run elysium import scripts` and `... dialogue` out of the published units. A
 	// worldspawn `levelscript` value (e.g. "tutorial") names the hub module, which lives at
 	// scripts/<module>/<module>.py — imported into the embedded CPython VM at map load.
-	// Scripts stay on the legacy loose export until their own migration slice (the ScriptFS mounts
-	// are a separate reader); `dlg/` moved to the corpus with DC.
-	static FString ScriptsDir() { return Root() / TEXT("scripts"); }
+	//
+	// The lane deploys each unit's `.py` and never its compiled companion: CPython 2.1 takes a
+	// `.pyc` only when the mtime recorded in it matches the source beside it, which a deploy's
+	// fresh times never satisfy. What DOES appear in this tree is the bytecode the VM writes itself
+	// on import -- 2.1 has no `dont_write_bytecode` -- and the lane leaves those files alone rather
+	// than pruning them as orphans (`importers/scripts.py`, `Lane.kept_suffixes`).
+	static FString ScriptsDir() { return CorpusRoot() / TEXT("scripts"); }
 	static FString DlgDir() { return CorpusRoot() / TEXT("dlg"); }
 	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
-	// Console config. VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
-	// mirrored under the export root's cfg/ directory by
-	// pipeline/src/elysium_pipeline/exporters/UE_extract_cfg.py. The runtime console bridge
+	// Console config. VtMB's `cfg/*` alias + cvar tables (Valve console syntax), deployed by
+	// `uv run elysium import engine-config` out of the published units. The runtime console bridge
 	// (FElysiumConsole) seeds its alias/cvar store from these. `user.cfg` records the source install's
 	// personal Basic/Plus choice, but the runtime replaces only `patchtype` with Elysium's Plus
 	// selector after parsing. VtMB's file-touching scripts reach the same tree through the script
-	// filesystem's `cfg/` mount (FElysiumScriptFS), which is what makes `FixKeyBindings` resolve.
-	static FString CfgDir() { return Root() / TEXT("cfg"); }
+	// filesystem's `cfg/` mount (FElysiumScriptFS), which is what makes `FixKeyBindings` resolve --
+	// and the lane deploys `valve.rc` and `dummy.txt` beside the `.cfg` files, which the legacy
+	// mirror's extension filter had dropped, so a script asking for one now gets the real file.
+	static FString CfgDir() { return CorpusRoot() / TEXT("cfg"); }
 	static FString CfgFile(const FString& File) { return CfgDir() / File; }
 
 	// VtMB's whole RPG/rules layer is Valve-KeyValues text under `vdata/`, now sourced from the
-	// export_v2 capsule import (`uv run elysium import vdata`) onto CorpusRoot() rather than from
-	// Root(). Per-table consumer map: `docs/vtmb/vdata-catalog.md`. Signs stay on the legacy
-	// export root (SignsDir() below) -- a deliberate divergence, not yet migrated: rulebook
+	// export_v2 capsule import (`uv run elysium import vdata`) onto CorpusRoot(). Per-table consumer
+	// map: `docs/vtmb/vdata-catalog.md`. Every subtree deploys, `signs/` included since 0018 story
+	// 21-6 -- SignsDir() below is a directory OF this tree now, not a root of its own: rulebook
 	// tables read corpus-only, terminal definitions stay overlay-first over this same directory.
 	static FString VdataDir() { return CorpusRoot() / TEXT("vdata"); }
 	static FString VdataFile(const FString& Rel) { return VdataDir() / Rel; }
@@ -625,7 +581,7 @@ struct FElysiumContentPaths
 	// The script filesystem's writable overlay (FElysiumScriptFS). VtMB's scripts write as well as
 	// read — `haven_pc.txt` takes the PC's name, the Unofficial Patch's hunter mode copies `- hunter`
 	// asset variants over the shipped ones — and every one of those writes lands here instead of in
-	// Root(), which is game-derived pipeline output a re-export regenerates. It doubles as the VM's
+	// CorpusRoot(), which an import regenerates from the units. It doubles as the VM's
 	// virtual install root: a path that ever escaped the shim would land inside the sandbox rather
 	// than in the project tree. Under Saved/ because it is per-user mutable state, not content.
 	static FString ScriptFsRoot() { return FPaths::ProjectSavedDir() / TEXT("Elysium/ScriptFS"); }
@@ -637,21 +593,26 @@ struct FElysiumContentPaths
 		return CorpusRoot() / CorpusRel(DialogName);
 	}
 
-	// Signs. VtMB's sign+popup panels are game-global `SignData` KeyValues files,
-	// mirrored flat and lowercased under the export root's signs/ directory by
-	// pipeline/src/elysium_pipeline/exporters/UE_extract_signs.py (a `definition_file`
-	// keyvalue's `vdata/Signs/` prefix and authored case are dropped). Their `BackgroundImage`
-	// materials are the imported `T_` assets (`UI/ElysiumUiArt.h`, R6.6).
-	static FString SignsDir() { return Root() / TEXT("signs"); }
+	// Signs. VtMB's sign+popup panels are the `signs/` subtree of the table corpus above -- 278
+	// `SignData` KeyValues files, deployed by `uv run elysium import vdata` like every other vdata
+	// subtree (0018 story 21-6; before it they were excluded from that lane and mirrored flat by an
+	// extractor of their own). `FElysiumSignData::LeafName` drops a `definition_file` keyvalue's
+	// `vdata/Signs/` prefix and folds its case, which is exactly the seam's own key, so the authored
+	// spelling and the deployed one meet here. Their `BackgroundImage` materials are the imported
+	// `T_` assets (`UI/ElysiumUiArt.h`, R6.6).
+	static FString SignsDir() { return VdataDir() / TEXT("signs"); }
 	static FString SignFile(const FString& Leaf) { return SignsDir() / Leaf; }
 
-	// UI source (pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py). The `.res` layouts and both schemes are
-	// mirrored as **design intent** and are not executed as layout; what the runtime actually reads
-	// is the authored string table (menu labels are `VMainMenu_BTN_*` tokens — docs/vtmb/vtmb-ui.md §2).
-	// Every picture the UI draws is an imported `T_` asset (`UI/ElysiumUiArt.h`, R6.6); no art is
-	// read off this tree. Game-derived, so gitignored and regenerable like every other exported mirror.
-	static FString UiDir() { return Root() / TEXT("ui"); }
-	static FString UiStrings() { return UiDir() / TEXT("strings.json"); }
+	// UI source. The runtime reads exactly one authored UI file: the string table menu labels
+	// resolve against (`VMainMenu_BTN_*` and `#GameUI_*` tokens — docs/vtmb/vtmb-ui.md §2),
+	// deployed verbatim by `uv run elysium import ui-strings`. It is the install's own
+	// `resource/gameui_english.txt` -- a Valve KeyValues document, UTF-16 LE with a byte-order
+	// mark, parsed by FElysiumUIStrings, NOT the flat `strings.json` a legacy extractor used to
+	// derive. The seam's 51 other units (the `.res` layouts, both schemes, the HUD sprite and
+	// key-binding tables) are design intent and are not deployed at all; every picture the UI draws
+	// is an imported `T_` asset (`UI/ElysiumUiArt.h`, R6.6).
+	static FString UiDir() { return CorpusRoot() / TEXT("ui"); }
+	static FString UiStrings() { return UiDir() / TEXT("resource/gameui_english.txt"); }
 
 	// Fonts. The sign/popup panel's typeface set — hand-authored/game-agnostic OFL faces committed
 	// under Content/Fonts (not the game-derived export root), mapping VtMB's authored face names
@@ -659,8 +620,18 @@ struct FElysiumContentPaths
 	static FString FontsDir() { return FPaths::ProjectContentDir() / TEXT("Fonts"); }
 	static FString FontFile(const FString& File) { return FontsDir() / File; }
 
+	// Everything the game WRITES for a developer to read afterwards: the shot runner's frames, the
+	// profiler's captures, the cast/compose/green-room/move harnesses, the wire dump and the light
+	// probe. These used to land in the export root, which made a debug verb impossible to run
+	// without one; they are per-user output rather than content, so since 0018 story 21-6 they land
+	// beside `ScriptFsRoot()` under `Saved/`. `Kind` is the subdirectory, spelled as the pipeline's
+	// own readers expect it (`validation/shots_diff.py`, `profile_report.py`, `channel_diff.py`).
+	static FString SavedDebugDir(const TCHAR* Kind)
+	{
+		return FPaths::ProjectSavedDir() / TEXT("Elysium") / Kind;
+	}
 	// Light-probe output (debug, `ElysiumLightProbe.cpp`). R4.3 retired the Lights Cog window's
 	// hand-survey JSON that used to share this directory (`UElysiumLightCalibration` replaces it as
 	// cooked content); the probe's own `<map>.probe.json` still lands here.
-	static FString LightEditsDir() { return Root() / TEXT("_lights"); }
+	static FString LightEditsDir() { return SavedDebugDir(TEXT("_lights")); }
 };

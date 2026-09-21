@@ -27,7 +27,7 @@ void FElysiumCogWindow_Maps::Initialize()
 void FElysiumCogWindow_Maps::RenderHelp()
 {
 	ImGui::Text(
-		"Map lifecycle. Lists every map the pipeline has exported under $ELYSIUM_EXPORT_ROOT; click Travel to "
+		"Map lifecycle. Lists every map the bake has published onto the /ElysiumBaked mount; click Travel to "
 		"load one (the current map is highlighted). Reload re-loads the current map without a recook "
 		"- the export->reload hot loop, same as elysium.reload. Below, the current map's per-phase "
 		"load timings and surface/light/prop counts.");
@@ -54,7 +54,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
-	FCogWidgets::HelpMarker("Re-Travel the current map: edit the exporter, re-export to $ELYSIUM_EXPORT_ROOT, "
+	FCogWidgets::HelpMarker("Re-Travel the current map: edit the lane, re-run `uv run elysium bake map`, "
 		"then Reload here to see it - no editor recook. Same as the elysium.reload console command.");
 	if (!ImGui::BeginTabBar("##MapViews"))
 	{

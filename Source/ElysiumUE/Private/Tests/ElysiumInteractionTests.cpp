@@ -90,7 +90,7 @@
 #include "Substrate/ElysiumSignData.h"
 #include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
-#include "Tests/ElysiumScratchContentRoot.h"
+#include "Tests/ElysiumScratchCorpusRoot.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUseIcons.h"
@@ -2154,12 +2154,13 @@ bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
 	// gate. The truthy-*string* block is authored FIRST and the non-zero-*integer* block second, so
 	// the integer-only rule must skip the string and select the integer, where the old ToBool()
 	// would have taken the string block first. FElysiumSignData::Load reads through
-	// FElysiumContentPaths::SignFile, so the fixture lives under a scratch content root installed
-	// for the test.
-	const FElysiumScratchContentRoot Scratch(TEXT("SignTruth"));
-	const FString ScratchSigns = Scratch.Directory(TEXT("signs"));
+	// FElysiumContentPaths::SignFile, so the fixture lives under a scratch corpus root installed
+	// for the test. Since 0018 story 21-6 the panels are the `vdata/signs/` subtree of the table
+	// corpus, so that is where the fixture goes.
+	const FElysiumScratchCorpusRoot Scratch(TEXT("SignTruth"));
+	const FString ScratchSigns = Scratch.Directory(TEXT("vdata/signs"));
 
-	if (!TestTrue(TEXT("the scratch content root is installed"),
+	if (!TestTrue(TEXT("the scratch corpus root is installed"),
 		FPaths::IsSamePath(FElysiumContentPaths::SignsDir(), ScratchSigns)))
 	{
 		return false;
@@ -2218,13 +2219,13 @@ bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 	// world's live conversation to observe which choices survive the gate.
 	//
 	// OpenConversation loads the `dialogname` `.dlg` off disk (FElysiumContentPaths::DlgFromDialogname),
-	// so the synthetic fixture lives under a scratch content root installed for the test.
-	const FElysiumScratchContentRoot Scratch(TEXT("DlgCondTruth"));
+	// so the synthetic fixture lives under a scratch corpus root installed for the test.
+	const FElysiumScratchCorpusRoot Scratch(TEXT("DlgCondTruth"));
 	const FString ScratchRoot = Scratch.Root;
 	const FString DialogName = TEXT("dlg/test/cond_truth.dlg");
 	const FString DlgPath = ScratchRoot / DialogName;
 
-	if (!TestTrue(TEXT("the scratch content root is installed"),
+	if (!TestTrue(TEXT("the scratch corpus root is installed"),
 		FPaths::IsSamePath(FElysiumContentPaths::DlgFromDialogname(DialogName), DlgPath)))
 	{
 		return false;

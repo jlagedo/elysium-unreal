@@ -22,7 +22,7 @@ class UElysiumMapSubsystem;
 //
 // It replays a fixed `FElysiumUserCmdStream` per course through the **real input router**, so the
 // harness exercises the same path a player does, and writes one `FElysiumChannelRecorder` run per
-// course under `$ELYSIUM_EXPORT_ROOT/_move/`.
+// course under `Saved/Elysium/_move/`.
 // `pipeline/src/elysium_pipeline/validation/channel_diff.py` is the comparator.
 //
 // It runs against one of two hosts. `-ElysiumMap=<name>` replays the sited courses on a real map,

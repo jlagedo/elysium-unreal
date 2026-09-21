@@ -925,7 +925,6 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
         suffix += 1
     arguments = [
         str(config.project),
-        f"-ElysiumContentRoot={config.export_root}",
         f"-ExecCmds=Automation RunTest {selected};Quit",
         f"-ReportExportPath={report}",
         "-unattended",
@@ -1020,7 +1019,7 @@ def summarize_test_report(report_dir: Path) -> dict:
 
 
 def common_game_args(config) -> list[str]:
-    return [str(config.project), "-game", f"-ElysiumContentRoot={config.export_root}"]
+    return [str(config.project), "-game"]
 
 
 def run_editor(config, runner, extra: Sequence[str] = ()) -> None:
@@ -1028,7 +1027,7 @@ def run_editor(config, runner, extra: Sequence[str] = ()) -> None:
         config,
         runner,
         editor_executable(config),
-        [str(config.project), f"-ElysiumContentRoot={config.export_root}", *extra],
+        [str(config.project), *extra],
     )
 
 

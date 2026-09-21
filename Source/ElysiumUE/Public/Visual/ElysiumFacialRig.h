@@ -4,7 +4,8 @@
 #include "Containers/ArrayView.h"
 #include "ElysiumFacialRig.generated.h"
 
-// A rigged NPC's facial flex rig, read off `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`.
+// A rigged NPC's facial flex rig, decoded offline and carried by the baked body (the reader
+// takes JSON TEXT, `LoadJsonText`, never a path -- nothing here opens a file).
 // Reflected value data can ride a cooked mesh; evaluation remains plain arithmetic.
 // The UObject-side cache that hands a rig out is `UElysiumAnimSubsystem`.
 //

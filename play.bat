@@ -19,15 +19,9 @@ if not defined ELYSIUM_UE_ROOT (
     exit /b 1
 )
 
-if defined ELYSIUM_EXPORT_ROOT (
-    set "EXPORT_ROOT=%ELYSIUM_EXPORT_ROOT%"
-) else (
-    if not defined ELYSIUM_WORK_ROOT (
-        echo [play] Set ELYSIUM_WORK_ROOT or ELYSIUM_EXPORT_ROOT in .elysium.local.env.
-        exit /b 1
-    )
-    set "EXPORT_ROOT=%ELYSIUM_WORK_ROOT%\exports"
-)
+REM 0018 story 21-6: the game reads nothing outside the project, so there is no external root to
+REM pass. What it needs is the deployed corpus, and that lives in the checkout.
+set "CORPUS=%REPO_ROOT%Content\ElysiumCorpus"
 
 set "UE=%ELYSIUM_UE_ROOT%\Engine\Binaries\Win64\UnrealEditor.exe"
 set "PROJECT=%REPO_ROOT%ElysiumUE.uproject"
@@ -36,15 +30,15 @@ if not exist "%UE%" (
     echo [play] UnrealEditor.exe not found at "%UE%".
     exit /b 1
 )
-if not exist "%EXPORT_ROOT%" (
-    echo [play] Export corpus not found at "%EXPORT_ROOT%".
-    echo [play] Run an export before launching the game.
+if not exist "%CORPUS%" (
+    echo [play] Deployed corpus not found at "%CORPUS%".
+    echo [play] Run the `uv run elysium import` lanes before launching the game.
     exit /b 1
 )
 
 set "MAP_ARG="
 if not "%~1"=="" set "MAP_ARG=-ElysiumMap=%~1"
 
-"%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -log "-ElysiumContentRoot=%EXPORT_ROOT%" %MAP_ARG%
+"%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -log %MAP_ARG%
 set "EXIT_CODE=%ERRORLEVEL%"
 endlocal & exit /b %EXIT_CODE%

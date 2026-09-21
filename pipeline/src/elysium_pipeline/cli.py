@@ -3524,10 +3524,7 @@ def export_bundle(
     bundle: str = typer.Argument(...),
     force: bool = typer.Option(False, "--force"),
 ) -> None:
-    allowed = {
-        "particles", "scripts", "signs", "vdata", "cfg", "scenes",
-        "ui", "policy",
-    }
+    allowed = {"particles", "vdata", "scenes", "policy"}
     if bundle not in allowed:
         raise typer.BadParameter("bundle must be one of: " + ", ".join(sorted(allowed)))
     # `policy` is the only bundle that authors assets, so it is the only one needing an editor.

@@ -123,30 +123,14 @@ def _run_bundle(
         from elysium_pipeline.exporters import UE_extract_particles
 
         UE_extract_particles.main(force=force, index=index)
-    elif name == "scripts":
-        from elysium_pipeline.exporters import UE_extract_scripts
-
-        UE_extract_scripts.main(force=force, index=index)
-    elif name == "signs":
-        from elysium_pipeline.exporters import UE_extract_signs
-
-        UE_extract_signs.main(force=force, index=index)
     elif name == "vdata":
         from elysium_pipeline.exporters import UE_extract_vdata
 
         UE_extract_vdata.main(force=force, index=index)
-    elif name == "cfg":
-        from elysium_pipeline.exporters import UE_extract_cfg
-
-        UE_extract_cfg.main(force=force, index=index)
     elif name == "scenes":
         from elysium_pipeline.exporters import UE_extract_scenes
 
         UE_extract_scenes.main(force=force, index=index)
-    elif name == "ui":
-        from elysium_pipeline.exporters import UE_extract_ui
-
-        UE_extract_ui.main(force=force, index=index)
     else:
         raise KeyError(f"unknown export bundle: {name}")
 

@@ -77,7 +77,7 @@ namespace
 
 	FString OutputDir()
 	{
-		return FPaths::Combine(FElysiumContentPaths::Root(), TEXT("_compose"));
+		return FElysiumContentPaths::SavedDebugDir(TEXT("_compose"));
 	}
 
 	// One place that resolves what the run drives, so a null anywhere reads the same.

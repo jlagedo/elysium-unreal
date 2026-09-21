@@ -148,13 +148,11 @@ namespace ElysiumWireDump
 
 	FString Write(const FElysiumEntityWorld& World)
 	{
-		const FString Root = FElysiumContentPaths::Root();
-		if (Root.IsEmpty())
-		{
-			return FString();
-		}
+		// The emptiness guard this used to carry went with the export root: `SavedDebugDir`
+		// answers a project-relative path that always exists.
 		const FString Map = World.MapName().IsEmpty() ? TEXT("unknown") : World.MapName();
-		const FString Path = Root / TEXT("_wires") / (Map + TEXT(".json"));
+		const FString Path =
+			FElysiumContentPaths::SavedDebugDir(TEXT("_wires")) / (Map + TEXT(".json"));
 		return FFileHelper::SaveStringToFile(BuildJson(World), *Path) ? Path : FString();
 	}
 }

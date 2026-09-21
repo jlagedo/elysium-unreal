@@ -14,7 +14,7 @@
 // 0018 story 21-3: the travel gate and the map list ask the project.
 //
 // `HasBakedMap` is a predicate over four packages -- the level and the three `DA_<map>_*` assets --
-// so it can only be asked of real content; the scratch content root the retired
+// so it can only be asked of real content; the scratch corpus root the retired
 // `ElysiumMapExportGateTests` drove the `.ready` marker with cannot fabricate a package. This test
 // therefore runs against the mount itself: every map the gate accepts carries all four, and a level
 // that carries only its `.umap` is refused. The mount holds ~100 such stale bare levels, baked

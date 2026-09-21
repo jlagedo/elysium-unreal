@@ -120,7 +120,8 @@ struct FElysiumHUDEquipmentView
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	EElysiumWeaponClass WeaponClass = EElysiumWeaponClass::None;
 
-	// Path under `$ELYSIUM_EXPORT_ROOT/ui/art` without extension (e.g. hud/inventory_images/weapons_ranged/thirtyeight).
+	// Texture unit key without extension (e.g. hud/inventory_images/weapons_ranged/thirtyeight),
+	// resolved to its imported `T_` asset by `UI/ElysiumUiArt.h` (R6.6).
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FName Icon;
 
@@ -142,7 +143,8 @@ struct FElysiumHUDDisciplineView
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FText Name;
 
-	// Path under `$ELYSIUM_EXPORT_ROOT/ui/art` without extension (e.g. hud/disciplines/bloodheal).
+	// Texture unit key without extension (e.g. hud/disciplines/bloodheal), resolved to its
+	// imported `T_` asset by `UI/ElysiumUiArt.h` (R6.6).
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FName Icon;
 
@@ -161,7 +163,7 @@ struct FElysiumHUDSelectorEntry
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FText Detail;
 
-	// Path under `$ELYSIUM_EXPORT_ROOT/ui/art` without extension.
+	// Texture unit key without extension, resolved to its imported `T_` asset (R6.6).
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FName Icon;
 
@@ -206,8 +208,8 @@ struct FElysiumHUDSelectorView
 	bool IsOpen() const { return Type != EElysiumHUDSelector::None; }
 };
 
-// Decoded HUD art paths under `$ELYSIUM_EXPORT_ROOT/ui/art`. The widget loads `<path>.png`; the
-// publisher is the only writer of these names.
+// Decoded HUD art keys. The widget resolves each to its imported `T_` asset through
+// `UI/ElysiumUiArt.h` (R6.6); the publisher is the only writer of these names.
 namespace ElysiumHUDArt
 {
 	inline FName Inventory(const TCHAR* RelStem)

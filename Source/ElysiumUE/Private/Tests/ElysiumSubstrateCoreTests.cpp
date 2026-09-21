@@ -500,25 +500,31 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 		FElysiumScriptFS::AccessFromMode(TEXT("rb+")) == EElysiumFsAccess::Update);
 
 	// --- the mount table ---------------------------------------------------------------------
-	// The trees the offline pipeline mirrors resolve; the ones it does not are reported as absent
-	// rather than mapped somewhere wrong. VtMB's own `scripts/` (kb_act.lst) is NOT out/scripts —
-	// that is its `python/` tree — which is why hunter mode's keybinding copy finds nothing.
+	// The trees the corpus carries resolve; the ones it does not are reported as absent rather
+	// than mapped somewhere wrong. VtMB's own `scripts/` (kb_act.lst) is NOT the corpus's
+	// `scripts/` — that is its `python/` tree — which is why hunter mode's keybinding copy finds
+	// nothing. Since 0018 story 21-6 every mount is a subtree of ONE root, `CorpusRoot()`, so each
+	// assertion below names the corpus and `vdata/signs/` is no longer a mount of its own.
+	const FString Corpus = FElysiumContentPaths::CorpusRoot().Replace(TEXT("\\"), TEXT("/"));
+	const auto Mapped = [&Corpus](const FString& Path) -> FString
+	{
+		FString Slashed = Path.Replace(TEXT("\\"), TEXT("/"));
+		return Slashed.StartsWith(Corpus) ? Slashed.RightChop(Corpus.Len()) : Slashed;
+	};
 	FString Real;
 	TestTrue(TEXT("cfg is mounted"), FElysiumScriptFS::MapToMirror(TEXT("cfg/config.cfg"), Real));
-	TestTrue(TEXT("cfg maps under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.EndsWith(TEXT("/cfg/config.cfg")));
+	TestEqual(TEXT("cfg maps under the corpus"), Mapped(Real), TEXT("/cfg/config.cfg"));
 	TestTrue(TEXT("vdata is mounted"),
 		FElysiumScriptFS::MapToMirror(TEXT("vdata/system/stats.txt"), Real));
-	TestTrue(TEXT("vdata maps under the corpus"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.EndsWith(TEXT("/vdata/system/stats.txt")));
-	TestTrue(TEXT("vdata/signs is mounted ahead of vdata"),
+	TestEqual(TEXT("vdata maps under the corpus"), Mapped(Real), TEXT("/vdata/system/stats.txt"));
+	TestTrue(TEXT("vdata/signs resolves through the one vdata mount"),
 		FElysiumScriptFS::MapToMirror(TEXT("vdata/signs/death.txt"), Real));
-	TestTrue(TEXT("signs map under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.EndsWith(TEXT("/signs/death.txt")));
-	TestTrue(TEXT("python maps onto the exported script mirror"),
+	TestEqual(TEXT("signs map under the corpus, inside vdata"),
+		Mapped(Real), TEXT("/vdata/signs/death.txt"));
+	TestTrue(TEXT("python maps onto the deployed script tree"),
 		FElysiumScriptFS::MapToMirror(TEXT("python/tutorial/tutorial.py"), Real));
-	TestTrue(TEXT("python maps under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.EndsWith(TEXT("/scripts/tutorial/tutorial.py")));
+	TestEqual(TEXT("python maps under the corpus"),
+		Mapped(Real), TEXT("/scripts/tutorial/tutorial.py"));
 	TestTrue(TEXT("a mount point itself resolves (nt.listdir on a tree)"),
 		FElysiumScriptFS::MapToMirror(TEXT("cfg"), Real));
 	TestFalse(TEXT("VtMB's own scripts/ has no mirror"),
@@ -528,8 +534,8 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 	TestFalse(TEXT("maps/ has no mirror"), FElysiumScriptFS::MapToMirror(TEXT("maps/x.bsp"), Real));
 
 	// --- resolve: reads may fall to the mirror, writes never do ------------------------------
-	// Root() is regenerable pipeline output; a script write into it would vanish on the next
-	// export. Every write lands in the Saved/ overlay instead.
+	// The corpus is regenerable deployed content; a script write into it would vanish on the next
+	// import. Every write lands in the Saved/ overlay instead.
 	FString Err;
 	TestTrue(TEXT("a write resolves"), FElysiumScriptFS::Resolve(
 		TEXT("Vampire/vdata/hackterminals/haven_pc.txt"), EElysiumFsAccess::Write, Real, Err));

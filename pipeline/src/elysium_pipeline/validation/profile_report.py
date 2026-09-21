@@ -2,7 +2,7 @@
 """Turn the headless profiler's output into the roadmap 0.1 baseline table.
 
 The C++ harness (-ElysiumProfile, Source/ElysiumUE/Private/ElysiumProfiler.cpp) writes,
-per map, under $ELYSIUM_EXPORT_ROOT/_profile/:
+per map, under Saved/Elysium/_profile/:
   <map>_summary.json          — vantages, averaged stat-unit ms, SM6/adapter, light count
   elysium_<map>_<cam>*.csv    — the CSV profiler capture (per-pass GPU stats when the
                                 engine was launched with -csvGpuStats)
@@ -20,9 +20,9 @@ import glob
 import json
 import os
 import sys
-from elysium_pipeline.paths import export_root
+from elysium_pipeline.paths import saved_debug_root
 
-PROFILE_DIR = os.path.join(os.fspath(export_root()), "_profile")
+PROFILE_DIR = os.fspath(saved_debug_root("_profile"))
 
 # The CSV profiler prefixes true per-pass GPU timings (milliseconds) with "GPU/". Other
 # "GPU"-ish columns (DrawCall/* are call *counts*, RayTracingGeometry/* are megabytes,
@@ -164,7 +164,7 @@ def report(map_name: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--map", default="sp_tutorial_1", help="map name under $ELYSIUM_EXPORT_ROOT")
+    ap.add_argument("--map", default="sp_tutorial_1", help="map name under Saved/Elysium/_profile")
     args = ap.parse_args()
     return report(args.map)
 

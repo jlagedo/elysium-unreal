@@ -1,25 +1,22 @@
 # Export profiles. 0018 story 21-5 removed the `maps` / `discover` keys: the BSP decoder is
 # gone, so a profile has no map half -- a map is published as `export_v2` units and goes to a
 # level through `bake map`. What is left is the global bundles.
+#
+# 21-6 removed four more -- `scripts`, `signs`, `cfg`, `ui` -- with the extractors behind them:
+# those trees are deployed from published units by `uv run elysium import scripts`,
+# `... engine-config`, `... ui-strings` and `... vdata` (signs), which the game reads directly out
+# of `Content/ElysiumCorpus`. Nothing here writes anything the running game opens.
 
 [profiles.grid]
 bundles = [
   "particles",
-  "scripts",
-  "signs",
   "vdata",
-  "cfg",
   "scenes",
-  "ui",
 ]
 
 [profiles.all]
 bundles = [
   "particles",
-  "scripts",
-  "signs",
   "vdata",
-  "cfg",
   "scenes",
-  "ui",
 ]

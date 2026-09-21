@@ -44,7 +44,7 @@ namespace
 
 	FString OutputDir()
 	{
-		return FPaths::Combine(FElysiumContentPaths::Root(), TEXT("_move"));
+		return FElysiumContentPaths::SavedDebugDir(TEXT("_move"));
 	}
 }
 

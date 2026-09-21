@@ -314,7 +314,7 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 			LastPyResult = bLastPyError ? Err : FString::Printf(TEXT("imported module '%s'"), *ModName);
 		}
 	}
-	ImGui::TextColored(GColorDim, "($ELYSIUM_EXPORT_ROOT/scripts/<name>/<name>.py)");
+	ImGui::TextColored(GColorDim, "(Content/ElysiumCorpus/scripts/<name>/<name>.py)");
 
 	const FString Loaded = VM.GetLoadedModule();
 	if (!Loaded.IsEmpty())

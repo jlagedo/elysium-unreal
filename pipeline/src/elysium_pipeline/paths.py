@@ -44,6 +44,17 @@ def export_v2_root() -> Path:
     return Path(override).expanduser().resolve() if override else work_root() / "exports_v2"
 
 
+def saved_debug_root(kind: str) -> Path:
+    """`Saved/Elysium/<kind>` inside the checkout: where the running game writes its debug output.
+
+    The Python twin of `FElysiumContentPaths::SavedDebugDir`. Before 0018 story 21-6 these lived
+    under the export root, which is why this resolver is new and takes no environment variable:
+    the directory is a property of the project, not of the machine.
+    """
+
+    return repo_root() / "Saved" / "Elysium" / kind
+
+
 def research_root() -> Path:
     return work_root() / "research"
 

@@ -144,8 +144,8 @@ void FElysiumShotRun::BeginCapture()
 			*MapActor->GetWeatherDebugSummary());
 	}
 
-	// $ELYSIUM_EXPORT_ROOT/_shots/<map>/<map>_<cam>.png — gitignored, derived from the user's own install.
-	const FString Path = FElysiumContentPaths::Root() / TEXT("_shots") / Map
+	// Saved/Elysium/_shots/<map>/<map>_<cam>.png — per-user debug output, gitignored.
+	const FString Path = FElysiumContentPaths::SavedDebugDir(TEXT("_shots")) / Map
 		/ (FString::Printf(TEXT("%s_%s.png"), *Map, *CamName));
 
 	bAwaitingCapture = true;
@@ -206,7 +206,8 @@ void FElysiumShotRun::Finish()
 	Json += TEXT("  ]\n");
 	Json += TEXT("}\n");
 
-	const FString OutPath = FElysiumContentPaths::Root() / TEXT("_shots") / Map / TEXT("manifest.json");
+	const FString OutPath =
+		FElysiumContentPaths::SavedDebugDir(TEXT("_shots")) / Map / TEXT("manifest.json");
 	if (FFileHelper::SaveStringToFile(Json, *OutPath))
 	{
 		UE_LOG(LogElysiumShots, Log, TEXT("wrote %s (%d shots)"), *OutPath, Shots.Num());
