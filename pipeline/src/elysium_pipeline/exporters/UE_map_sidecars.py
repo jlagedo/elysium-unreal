@@ -99,6 +99,14 @@ ROPE_SLACK_FUDGE = -100
 #: C `atof`: the longest numeric prefix, 0.0 when there is none. Verbatim from the legacy `_ATOF`.
 _ATOF = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
 
+#: C `atoi`: the longest integer prefix, 0 when there is none. An output row's `times` is the one
+#: field retail reads with it (`0x100ccf90` field 4).
+_ATOI = re.compile(r"^[+-]?\d+")
+
+#: The `times` an output row spells when it never runs out. Retail seeds the record at -1 and
+#: rewrites an authored 0 back to it (`0xffffffff`), so both mean unlimited.
+UNLIMITED_TIMES = -1
+
 _ACCESSOR_COMPONENT = {5120: "b", 5121: "B", 5122: "h", 5123: "H", 5125: "I", 5126: "f"}
 _ACCESSOR_WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 
@@ -119,6 +127,13 @@ def atof(token: str) -> float:
 
     match = _ATOF.match((token or "").strip())
     return float(match.group(0)) if match else 0.0
+
+
+def atoi(token: str) -> int:
+    """C `atoi` of one keyvalue token -- the longest integer prefix, 0 when there is none."""
+
+    match = _ATOI.match((token or "").strip())
+    return int(match.group(0)) if match else 0
 
 
 def write_sidecar_lines(path: Path, lines: Iterable[str]) -> None:
@@ -336,6 +351,11 @@ def split_output(value: str) -> dict[str, Any] | None:
     (`100cd099` -> `0x1043136f`) -- which is what every other number in `.ents` already reads with
     and what an empty token skips entirely, keeping the seeded `0.0`.
 
+    `times` reads with `_atoi`, **and an authored `0` is rewritten to `-1`**: the record is seeded
+    at `-1` and the parser puts it back, so both spellings mean unlimited and only a positive
+    value is a countdown. This function is the one owner of that rewrite (0018 story 21-7) --
+    it is retail's own, applied where retail applies it, at the parse.
+
     **Six fields, and no seventh.** The row body splits six times (`100cd0d9`) and returns at
     `100cd109` without looking further, so a 7th comma-separated token -- which retail's own
     authoring tool writes on almost every output, usually empty -- is inert residue the engine
@@ -348,18 +368,13 @@ def split_output(value: str) -> dict[str, Any] | None:
         return None
     parts = value.split(",")
 
-    def number(text: str, default: float) -> float:
-        try:
-            return float(text)
-        except ValueError:
-            return default
-
+    times = atoi(parts[4])
     row = {
         "target": parts[0],
         "input": parts[1],
         "param": parts[2],
         "delay": atof(parts[3]),
-        "times": int(number(parts[4], -1)),
+        "times": times if times != 0 else UNLIMITED_TIMES,
         "python": parts[5] if len(parts) > 5 else "",
     }
     return row

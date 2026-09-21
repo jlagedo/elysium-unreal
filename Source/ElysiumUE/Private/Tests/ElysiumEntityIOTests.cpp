@@ -130,8 +130,8 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 //      receiver produces drains breadth-first, behind the pending cohort.         QueueDrainOrder
 //   3. Servicing ONE record delivers to every name match in stable entity order,
 //      then runs its field-6 Python.                                              RecordServiceOrder
-//   4. `times` counts down only when positive; authored 0 and -1 both mean
-//      unlimited.                                                                 OutputTimes
+//   4. `times` counts down only when positive, and a row is taken at the number
+//      the document states; the authored-0 rewrite is the producer's.             OutputTimes
 //   5. Binding is late (resolved at service, never prebound), and missing-at-
 //      service is a counted non-fatal drop with no retry.                         LateBindingAndDrops
 //
@@ -577,10 +577,15 @@ bool FElysiumOutputTimesTest::RunTest(const FString&)
 	using namespace ElysiumEventOrderTests;
 
 	// `FireOutput` decrements only a POSITIVE `times`; a row reaching zero is removed without
-	// disturbing the remaining rows, and an authored 0 is unlimited exactly like -1 (§2.5.1). The
-	// word in the contract is *authored*, so this one map is built the authored way — written as
-	// `.ents` and parsed — rather than by hand, which would settle by construction the question of
-	// where an authored 0 becomes unlimited.
+	// disturbing the remaining rows (§2.5.1). An authored 0 is unlimited exactly like -1, but that
+	// is retail's ROW PARSER speaking (`0x100ccf90`, field 4: `_atoi`, then 0 -> -1), and the port
+	// of that parser is `UE_map_sidecars.split_output`, which owns the rewrite alone since 0018
+	// story 21-7 (pinned by `test_split_output_times_is_atoi_and_an_authored_zero_is_unlimited`).
+	// So a `.ents` document is POST-parse and is read verbatim: the third relay below states a
+	// literal 0 and is therefore a row spent before it fires, which is what a directly constructed
+	// def with `Times = 0` already meant (the fan-out test's row 6). A shipped map cannot reach
+	// this reader with a 0 at all. The map is still built the written-and-parsed way, because that
+	// is what proves the reader adds nothing of its own.
 	IFileManager::Get().MakeDirectory(*FPaths::AutomationTransientDir(), /*Tree*/ true);
 	const FString EntsPath = FPaths::CreateTempFilename(
 		*FPaths::AutomationTransientDir(), TEXT("ElysiumOutputTimes_"), TEXT(".ents"));
@@ -602,7 +607,7 @@ bool FElysiumOutputTimesTest::RunTest(const FString&)
 	const TArray<FString> Entities = {
 		RelayJson(TEXT("relay_twice"), TEXT("hit_twice"), 2),
 		RelayJson(TEXT("relay_minus_one"), TEXT("hit_minus_one"), -1),
-		RelayJson(TEXT("relay_zero"), TEXT("hit_zero"), 0),
+		RelayJson(TEXT("relay_zero"), TEXT("hit_zero"), 0),   // post-parse 0: spent, not unlimited
 		CounterJson(TEXT("hit_twice")),
 		CounterJson(TEXT("hit_minus_one")),
 		CounterJson(TEXT("hit_zero")),
@@ -644,13 +649,13 @@ bool FElysiumOutputTimesTest::RunTest(const FString&)
 		Sink->CountOf(TEXT("deliver"), TEXT("hit_minus_one.Add")), 3);
 	TestEqual(TEXT("...and the receiver counted three"),
 		CounterValue(World, TEXT("hit_minus_one")), 3.f);
-	// The other half of the same rule: retail's parser seeds `times` to -1 and rewrites an
-	// authored 0 back to -1, so both spellings mean unlimited and only a positive value is a
-	// countdown.
-	TestEqual(TEXT("an authored times=0 is unlimited too"),
-		Sink->CountOf(TEXT("deliver"), TEXT("hit_zero.Add")), 3);
-	TestEqual(TEXT("...and the receiver counted three"),
-		CounterValue(World, TEXT("hit_zero")), 3.f);
+	// The other half of the same rule, from the reader's side: a document states a parsed number
+	// and this reader does not second-guess it. Retail's own maps cannot reach here with a 0 --
+	// `split_output` turned every authored one into -1 before the row was written.
+	TestEqual(TEXT("a stated times=0 is spent, not unlimited"),
+		Sink->CountOf(TEXT("deliver"), TEXT("hit_zero.Add")), 0);
+	TestEqual(TEXT("...and the receiver counted nothing"),
+		CounterValue(World, TEXT("hit_zero")), 0.f);
 
 	// A spent row is a SILENT skip: nothing is queued, so nothing can be diagnosed. The third
 	// attempt on the times=2 row must not look like a dead wire or a missing input.

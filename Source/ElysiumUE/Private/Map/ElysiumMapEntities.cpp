@@ -50,14 +50,12 @@ void UElysiumMapEntities::Deserialize(FElysiumEntityDefs& Out, float SkyScale,
 			OutDef.Input = OutputRow.Input;
 			OutDef.Param = OutputRow.Param;
 			OutDef.Delay = OutputRow.Delay;
+			// Verbatim. Retail rewrites an authored `times` of 0 to -1, but it does so in the row
+			// parser `0x100ccf90`, and the port's twin of that parser is
+			// `UE_map_sidecars.split_output` -- which owns the rewrite since 0018 story 21-7. By
+			// the time a row reaches this asset it has been parsed, so re-applying the rule here
+			// would be a second owner disagreeing with the direct-construction path.
 			OutDef.Times = OutputRow.Times;
-			// Retail's parser seeds `times` to -1 and rewrites an authored 0 back to -1, so both
-			// spell unlimited and only a positive value is a real countdown. Normalised here, the
-			// same one owner the `.ents` reader is (R3.4), not in the exporter or the stage.
-			if (OutDef.Times == 0)
-			{
-				OutDef.Times = -1;
-			}
 			OutDef.Python = OutputRow.Python;
 			Def.Outputs.Add(MoveTemp(OutDef));
 		}

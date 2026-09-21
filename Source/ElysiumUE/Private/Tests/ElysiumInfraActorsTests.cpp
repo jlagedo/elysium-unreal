@@ -256,12 +256,16 @@ bool FElysiumInfraActorsDefEmitTest::RunTest(const FString&)
 	TestEqual(TEXT("targetname"), Def.TargetName, FString(TEXT("spot")));
 	TestTrue(TEXT("StartHidden is recomputed from the keys"), Def.bStartHidden);
 
+	// The rebuild re-derives nothing: a staged row is already what retail's row parser produced,
+	// so `times` travels verbatim and the authored-0 rewrite stays where 0018 story 21-7 put it,
+	// in `UE_map_sidecars.split_output`. A staged row cannot carry 0 any more; if one is placed
+	// here by hand, the def says what the actor says.
 	FElysiumInfraOutput Out;
 	Out.Name = TEXT("OnNPCArrived");
 	Out.Times = 0;
 	Place->SetBakedOutputs({ Out });
 	Place->ApplyToDef(Def);
-	TestEqual(TEXT("an authored times 0 is unlimited, once"), Def.Outputs[0].Times, -1);
+	TestEqual(TEXT("times travels verbatim"), Def.Outputs[0].Times, 0);
 	return true;
 }
 

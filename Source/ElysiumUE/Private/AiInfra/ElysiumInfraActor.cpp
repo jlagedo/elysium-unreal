@@ -178,8 +178,10 @@ void AElysiumInfraActor::BuildDefOutputs(TArray<FElysiumOutputDef>& OutOutputs) 
 		Out.Input = Row.Input;
 		Out.Param = Row.Param;
 		Out.Delay = Row.Delay;
-		// `UElysiumMapEntities::Deserialize` and `FElysiumEntityDefs::Parse`: an authored 0 is -1.
-		Out.Times = Row.Times == 0 ? -1 : Row.Times;
+		// Verbatim, like the other two transports: the staged row is already what retail's row
+		// parser produced, so the authored-0 rewrite happened in `UE_map_sidecars.split_output`
+		// (0018 story 21-7) and must not happen twice.
+		Out.Times = Row.Times;
 		Out.Python = Row.Python;
 	}
 }

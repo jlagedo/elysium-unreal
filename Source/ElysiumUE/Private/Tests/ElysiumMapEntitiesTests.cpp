@@ -1,8 +1,9 @@
 // Content-free Substrate automation for UElysiumMapEntities::Deserialize — the R4.1 transport's
-// asset-side reader. The asset is a
-// transport change and nothing else, so what is asserted here is that the two reads the JSON path
-// performs at parse time happen on this path too, in the same place and with the same result: the
-// retail `times` 0 -> -1 (unlimited) rewrite, and the 3D-skybox placement transform.
+// asset-side reader. The asset is a transport change and nothing else, so what is asserted here is
+// that every row field travels verbatim and the one placement read the JSON path performs happens
+// on this path too, in the same place and with the same result: the 3D-skybox transform. Parsing
+// a keyvalue is retail's job and the producer's port of it (0018 story 21-7); a reader that
+// re-derived a field would be a second owner of a rule this side cannot see the input to.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -65,8 +66,10 @@ namespace
 	}
 }
 
-// The row -> def copy: order, identity, the brush fields, and the one normalisation the reader
-// owns (`times` 0 -> -1, exactly as ElysiumEntityDefs.cpp's JSON path does it).
+// The row -> def copy: order, identity, the brush fields, and that the reader derives nothing.
+// Every output field travels verbatim -- retail's authored-`times` 0 -> -1 rewrite belongs to its
+// row parser `0x100ccf90`, whose port is `UE_map_sidecars.split_output` (0018 story 21-7), so a
+// staged row already carries -1 and this reader must not rewrite it a second time.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEntitiesDeserializeRowsTest,
 	"Elysium.Substrate.MapEntities.DeserializeRows", GElysiumMapEntitiesTestFlags)
 bool FElysiumMapEntitiesDeserializeRowsTest::RunTest(const FString&)
@@ -91,8 +94,8 @@ bool FElysiumMapEntitiesDeserializeRowsTest::RunTest(const FString&)
 	TestEqual(TEXT("point entity model index"), Point.Model, (int32)INDEX_NONE);
 	if (TestEqual(TEXT("both outputs travel"), Point.Outputs.Num(), 2))
 	{
-		TestEqual(TEXT("an authored times of 0 normalises to unlimited"),
-			Point.Outputs[0].Times, -1);
+		TestEqual(TEXT("times travels verbatim, un-normalised"),
+			Point.Outputs[0].Times, 0);
 		TestEqual(TEXT("a positive times is a real countdown and is kept"),
 			Point.Outputs[1].Times, 3);
 		TestEqual(TEXT("output name"), Point.Outputs[0].Name, FString(TEXT("OnMapSpawn")));

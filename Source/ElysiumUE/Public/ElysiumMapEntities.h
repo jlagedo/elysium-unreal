@@ -14,9 +14,10 @@
 // (`elysium_pipeline.importers.map_entities`), which runs the R3.2 producer's own entity join over
 // the published GLB units and asserts parity against the `.ents` file this asset replaces.
 
-// One row of an entity's `outputs[]`, verbatim from the sidecar's own seven-field split. `Times` is
-// stored as authored -- the retail `0` -> unlimited rewrite is `Deserialize`'s, so this asset and
-// the sidecar hold the same number and exactly one owner normalises it.
+// One row of an entity's `outputs[]`, verbatim from the producer's own six-field split. Every
+// field is exactly what retail's row parser `0x100ccf90` produced, `Times` included: the `0` ->
+// unlimited rewrite belongs to that parser, whose port is `UE_map_sidecars.split_output` (0018
+// story 21-7), so nothing downstream re-applies it.
 USTRUCT()
 struct FElysiumMapEntityOutputRow
 {
@@ -108,12 +109,12 @@ public:
 	// One row per lump block, in lump order, with no drops and no reorders.
 	UPROPERTY(EditAnywhere, Category = "Map") TArray<FElysiumMapEntityRow> Entities;
 
-	// Fill `Out` with this table's defs. The two reads the JSON path performs at parse time happen
-	// here, so the asset stores what was authored and one owner normalises it: an authored `times`
-	// of 0 becomes -1 (unlimited), and a `bSky` row's origin and hulls are carried through the
-	// 3D-skybox placement transform `world(v) = scale * (v - skyOrigin)` (hulls take the scale, not
-	// the translation). Pass the map's `.sky` values, or leave the identity to read the miniature's
-	// raw coordinates unchanged -- exactly `FElysiumEntityDefs::Parse`'s contract.
+	// Fill `Out` with this table's defs. The one placement read the JSON path performs happens here
+	// too: a `bSky` row's origin and hulls are carried through the 3D-skybox transform
+	// `world(v) = scale * (v - skyOrigin)` (hulls take the scale, not the translation). Pass the
+	// map's `.sky` values, or leave the identity to read the miniature's raw coordinates unchanged
+	// -- exactly `FElysiumEntityDefs::Parse`'s contract. No output field is re-derived: the
+	// producer's `split_output` is retail's row parser and has already applied every rule.
 	void Deserialize(FElysiumEntityDefs& Out, float SkyScale = 1.f,
 		const FVector& SkyOrigin = FVector::ZeroVector) const;
 };

@@ -106,6 +106,22 @@ def test_model_brushes_collects_only_leaves_under_the_given_headnode():
     assert model_brushes(nodes, leafs, leaf_brushes, 2) == {200, 201}
 
 
+def test_split_output_times_is_atoi_and_an_authored_zero_is_unlimited():
+    # 0018 story 21-7: field 4 reads with `_atoi` -- the longest integer prefix -- and retail's
+    # parser rewrites the result 0 back to the -1 the record was seeded with, so both spellings
+    # mean unlimited and only a positive value is a countdown. This function is the one owner of
+    # that rewrite; `UElysiumMapEntities::Deserialize` and `FElysiumEntityDefs::Parse` no longer
+    # re-apply it, because by the time they read a row it has already been parsed.
+    assert split_output("door,Open,,0,0,py")["times"] == -1
+    assert split_output("door,Open,,0,-1,py")["times"] == -1
+    assert split_output("door,Open,,0,2,py")["times"] == 2
+    # `_atoi`, not `int(float())`: a numeric prefix, and 0 from a token with none.
+    assert split_output("door,Open,,0,3x,py")["times"] == 3
+    assert split_output("door,Open,,0,1e3,py")["times"] == 1
+    assert split_output("door,Open,,0,abc,py")["times"] == -1
+    assert split_output("door,Open,,0,,py")["times"] == -1
+
+
 def test_split_output_trims_no_field():
     # 0018 story 21-7: the splitter `0x101d16c0` is a bare copy-until-the-next-comma and strips
     # nothing, so every space an author wrote is part of the interned string. `delay` is still a

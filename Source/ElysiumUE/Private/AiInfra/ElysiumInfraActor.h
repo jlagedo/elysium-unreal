@@ -48,8 +48,8 @@ struct FElysiumInfraOutput
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Elysium")
 	float Delay = 0.0f;
 
-	// As authored; an authored 0 is normalised to -1 (unlimited) when the def is rebuilt, exactly
-	// once, as both entity-table transports do.
+	// As the producer parsed it, which is what retail's row parser `0x100ccf90` produced: an
+	// authored 0 already reads -1 (unlimited) here, and the rebuild re-derives nothing.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Elysium")
 	int32 Times = -1;
 
@@ -125,7 +125,7 @@ public:
 	// slot per exact spelling, at its first position, holding its last value.
 	void BuildDefKeys(TMap<FString, FString>& OutKeys) const;
 
-	// The def's output rows, in order, `Times` 0 normalised to -1.
+	// The def's output rows, in order, every field verbatim from the staged row.
 	void BuildDefOutputs(TArray<FElysiumOutputDef>& OutOutputs) const;
 
 	// Rewrite `Def`'s authored data (keys, outputs, targetname, start-hidden) from this actor. Its
