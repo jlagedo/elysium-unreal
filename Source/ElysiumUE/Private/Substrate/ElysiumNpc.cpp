@@ -3970,7 +3970,17 @@ void FElysiumNpc::OnDormancyChanged()
 	{
 		// Waking, not going dormant: `ScriptUnhide`'s Troika tail `0x102c1ec0` dispatches slot 614
 		// right after `CBaseEntity::ScriptUnhide`, so an unhidden body thinks on this frame.
-		ResetThinkTimers(World ? World->NowSeconds() : 0.0);
+		//
+		// A RESTORE is not an unhide, and must not take this arm. The four think clocks
+		// (`m_flNextUpdateThink` .. `m_flNextAIThink`, `+0x6244`..`+0x6250`) are retail `SAVE` rows
+		// that the generated datamap walk restores, and `ApplyEntityRecord` calls this hook after
+		// that walk -- so re-arming here would throw the saved cadence away and make every restored
+		// NPC think immediately, which is a thing retail's own `OnRestore 0x1027bf50` never does.
+		// (Found by `Elysium.Substrate.NpcKernelBindings.SaveRoundTrip`, 0019/2 pass C.)
+		if (World == nullptr || !World->IsApplyingSnapshot())
+		{
+			ResetThinkTimers(World ? World->NowSeconds() : 0.0);
+		}
 	}
 	if (Motor)
 	{
@@ -3978,53 +3988,212 @@ void FElysiumNpc::OnDormancyChanged()
 	}
 }
 
+// The NPC's leaf record. Retail's `CAI_BaseNPC::Save 0x1027bc60` writes exactly one block by hand
+// -- `AIExtendedSaveHeader_t` -- and defers every other word to the datamap walk; this port's
+// generated SAVE walk (`AddNpcSaveFields`, 199 rows) IS that walk, and `ApplyEntityRecord` restores
+// it by name before this blob is read. So what is left here is retail's one hand block plus the two
+// things a datamap cannot reach: port state that has no retail row at all (the patrol and ambient
+// bookkeeping 0018's places need), and the words the shape map records as `PRIVATE`, whose owning
+// struct keeps them behind an accessor no compiled path reaches.
+//
+// Nothing in this record fixes anything up. A restored handle's epoch, a re-found program, a value
+// another build wrote, a cursor into session state -- all of that is `OnPostRestore` below, which
+// is retail's slot 130. Keeping the two apart is what stops a decode from depending on the order
+// the blocks happen to be written in.
 void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 {
-	// One helper per version block, in exact archive order. Only the patrol block may end the
-	// record: a payload written before ambient-place state existed carries nothing after it.
-	if (!SerializePatrolBlock(Ar))
+	SerializeExtendedHeader(Ar);
+	SerializePatrolBlock(Ar);
+	SerializeMakerBlock(Ar);
+	SerializeMindBlock(Ar);
+	// The NPC flag word travels with the record and not with the walk: retail's `m_bfAINPCFlags`
+	// pair is a concern the shape map reaches no compiled path into.
+	NpcFlags.Serialize(Ar);
+	Relationships.Serialize(Ar);
+	Senses.Serialize(Ar);
+	EnemyMemory.Serialize(Ar);
+	Ar << bLoadoutResolved;
+	Disciplines.Serialize(Ar);
+	SerializeDisciplineFlags(Ar);
+	ScheduleHost.Serialize(Ar);
+	// `m_flNextComfortCheckTime` and `m_hTargetEnt`. Both are retail `SAVE` rows, and both are
+	// recorded gaps in the generated walk (`ElysiumNpcKernelBindings.cpp`: "the port member exists
+	// but its owner keeps it private"), so the record carries them until that owner opens a path.
+	Ar << NextComfortCheckTime;
+	Ar << TargetEnt;
+}
+
+// `AIExtendedSaveHeader_t` -- the one block retail's own `Save` writes by hand (`0x1027bc60`), and
+// the only thing `BaseOnRestore 0x1027bf50` needs in order to re-find the program the save was
+// taken during: its NAME, the checksum of its task array, and the three-bit liveness word.
+void FElysiumNpc::SerializeExtendedHeader(FElysiumSaveArchive& Ar)
+{
+	FAiExtendedSaveHeader Header = Ar.IsLoading()
+		? FAiExtendedSaveHeader() : BuildExtendedSaveHeader();
+	Ar << Header.Version;
+	Ar << Header.Flags;
+	Ar << Header.ScheduleName;
+	Ar << Header.ScheduleCrc;
+	if (Ar.IsLoading())
+	{
+		LastSavedExtendedHeader = Header;
+	}
+}
+
+// Retail's slot 130, `CAI_BaseNPCTroika::OnRestore 0x102998c0` over `CAI_BaseNPC::OnRestore
+// 0x1027bf50`, reached for the first time from the port's own persistence. Everything the archive
+// deliberately did not do lives here: the schedule re-find by name and checksum, the give-up arm,
+// the handle re-stamping the walk cannot reach, the clamps on values another build wrote, and the
+// caches that are session state rather than simulation state.
+void FElysiumNpc::OnPostRestore(FElysiumEntityWorld& InWorld)
+{
+	// --- Retail's own chain, arm for arm (the seams inside it are named at their sites). ---
+	// `BaseOnRestore` re-finds the program the record named, compares the checksum of its task
+	// array against the one the record carries, and gives up to `RestoreGiveUp` when either fails.
+	OnRestore(/*bFromLoad=*/true);
+	RestartRestoredSchedule();
+
+	// --- The port's re-derivations, which retail has no counterpart for. ---
+	// Each of these is a component saying what its own restored words mean; the order is the order
+	// the components depend on one another in, and no component reads an archive.
+	ScheduleHost.OnPostRestore();
+	Senses.OnPostRestore(*this);
+	EnemyMemory.Rebase(InWorld);
+	Relationships.Rebase(InWorld);
+	Witness.Rebase(InWorld);
+	RestoreDisciplineState(InWorld);
+
+	// `m_hTargetEnt` and the maker relationship ride the record rather than the walk (both are
+	// recorded gaps), so their epochs are this hook's to re-stamp.
+	TargetEnt = InWorld.RebaseSavedHandle(TargetEnt);
+	OwnerEntity = InWorld.RebaseSavedHandle(OwnerEntity);
+
+	RestorePatrolAndAmbient();
+	RestoreMindState();
+
+	// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory above on
+	// the first think after the load. What has to be stamped is the pass CLOCK -- the edge every
+	// stimulus producer measures against. Leaving it at -1 would make an hour-old remembered gunshot
+	// look new and promote a restored NPC to alert on the strength of it.
+	Cognition.Conditions.Reset();
+	Cognition.GatheredAt = InWorld.NowSeconds();
+	RestoreDeathBodyState();
+}
+
+// **Divergence, stated.** Retail's `OnRestore` installs the re-found program by writing
+// `m_pSchedule` and nothing else, because its datamap has already restored the whole
+// `m_ScheduleState` block underneath it -- the task index at `+0x5c50` (which is what the ceiling
+// clamp just above exists to sanitise), `timeStarted +0x5c48` and `timeCurTaskStarted +0x5c4c`. So
+// a retail NPC genuinely RESUMES mid-program.
+//
+// This port does not save those three words, deliberately: a task holds a playing clip, a pending
+// motor move or a wall-clock deadline, and none of those survive a load, so resuming at task 3
+// would hold a pose nothing is playing. Restarting the same program keeps the intent (an NPC
+// mid-lookaround resumes looking around rather than dropping to its stance) without pretending the
+// state under it survived. That choice is older than this hook; what changes with pass C is only
+// WHICH program comes back -- retail's re-find by name and task-array checksum instead of a saved
+// enum -- so the restart is applied here, over retail's own answer, rather than inside it.
+void FElysiumNpc::RestartRestoredSchedule()
+{
+	if (!Schedule.IsRunning())
 	{
 		return;
 	}
-	SerializeMakerBlock(Ar);
-	SerializeMindBlock(Ar);
-	SerializeScheduleBlock(Ar);
-	SerializeSocialBlock(Ar);
-	SerializeSensesBlock(Ar);
-	if (Ar.Version() >= FElysiumSaveVersion::NpcEnemyMemory)
+	const EElysiumScheduleId Restored = Schedule.Current;
+	if (ElysiumAiScriptedSchedule::IsScriptedProgram(Restored))
 	{
-		EnemyMemory.Serialize(Ar);
-		if (Ar.IsLoading() && World)
-		{
-			EnemyMemory.Rebase(*World);
-		}
+		// A scripted director's program is not restartable without the order that pushed it, and
+		// that order is not save state. `SaveBlockReason` refuses a save while the
+		// `ScriptedSchedule` owner holds the body, so a record can only carry this program from the
+		// narrow window between the push and its first movement claim. Restarting it would fail its
+		// first task by name on the next think; refusing it here says so once, and the NPC selects
+		// normally instead.
+		Schedule.Clear();
+		RecordScheduleEvent(FString::Printf(
+			TEXT("restore refused %s: the pushed order it needs is not save state"),
+			ElysiumScheduleName(Restored)));
+		return;
 	}
-	SerializeLoadoutBlock(Ar);
-	SerializeWitnessBlock(Ar);
-	SerializeDisciplineBlock(Ar);
-	SerializeDisciplineFlags(Ar);
-	ScheduleHost.Serialize(Ar, World);
-	if (Ar.Version() >= FElysiumSaveVersion::ComfortSweep)
-	{
-		// `m_flNextComfortCheckTime` and `m_hTargetEnt`, both saved by retail's datamaps.
-		Ar << NextComfortCheckTime;
-		Ar << TargetEnt;
-		if (Ar.IsLoading() && World)
-		{
-			TargetEnt = World->RebaseSavedHandle(TargetEnt);
-		}
-	}
+	// `Clear` and not `ClearSchedule`: nothing is running here, the record is being replaced by the
+	// one the header named. Dispatching slot 435 would release the NPC flag word the record has
+	// just restored, and the program would come back conversable and un-oblivious.
+	Schedule.Clear();
+	ElysiumSchedule::Start(Schedule, Restored, *this);
+}
 
-	if (Ar.IsLoading())
+// A restored body stands where the record puts it, so no in-flight travel survives the load; the
+// beat that owned it re-issues its own move (`FElysiumScriptedSequence`). Then the authored patrol
+// route is resolved again from the `PatrolPath` keyfield the field walk restored.
+//
+// **Divergence, stated:** `TroikaOnRestore` releases both stored routes, because retail persists
+// the RESOLVED route and cannot rebuild one whose nodes the network no longer carries
+// (`0x1029f610` / `0x1029f5d0`). This port persists the authored token string instead, so it can
+// and does rebuild -- which reaches the authored intent retail could only fail to.
+void FElysiumNpc::RestorePatrolAndAmbient()
+{
+	EndScriptMove();
+	bPatrolActive = bPatrolActive && ResolvePatrolPoints();
+	bMoveIssued = false;
+	bWalkingAnimation = false;
+	if (bPatrolActive)
 	{
-		// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory
-		// above on the first think after the load. What has to be stamped is the pass CLOCK — the
-		// edge every stimulus producer measures against. Leaving it at -1 would make an hour-old
-		// remembered gunshot look new and promote a restored NPC to alert on the strength of it.
-		Cognition.Conditions.Reset();
-		Cognition.GatheredAt = World ? World->NowSeconds() : 0.0;
-		RestoreDeathBodyState();
+		CurrentSpotIndex = INDEX_NONE;
+		AmbientPhase = EAmbientPhase::None;
+		bAmbientArrived = false;
 	}
+	if (!bPatrolActive && AmbientPhase != EAmbientPhase::None)
+	{
+		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
+		if (!Spot || !Spot->Claim(Handle))
+		{
+			CurrentSpotIndex = INDEX_NONE;
+			AmbientPhase = EAmbientPhase::None;
+			bAmbientArrived = false;
+		}
+	}
+	// No clock is touched on any branch: the saved cadence is the authoritative one, and
+	// `ApplyEntityRecord` restamps the saved `NextThink` after this hook returns. Retail restores
+	// its stamps the same way and resets nothing on a load.
+}
+
+// The mind's state and its body owner, validated against the patrol and ambient state the step
+// above has just settled -- which is why it runs after it rather than inside the decode.
+void FElysiumNpc::RestoreMindState()
+{
+	const EElysiumNpcState State = static_cast<EElysiumNpcState>(RestoredMindState);
+	EElysiumBodyOwner Owner = static_cast<EElysiumBodyOwner>(RestoredMindOwner);
+	if (!FElysiumNpcMind::IsSupportedState(State) || !FElysiumNpcMind::IsResumableOwner(Owner))
+	{
+		Owner = EElysiumBodyOwner::None;
+	}
+	if (Owner == EElysiumBodyOwner::Patrol && !bPatrolActive)
+	{
+		Owner = EElysiumBodyOwner::None;
+	}
+	if (Owner == EElysiumBodyOwner::Ambient && AmbientPhase == EAmbientPhase::None)
+	{
+		Owner = EElysiumBodyOwner::None;
+	}
+	Mind.Restore(State, Owner);
+	PatrolOwner = Owner == EElysiumBodyOwner::Patrol
+		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+	AmbientOwner = Owner == EElysiumBodyOwner::Ambient
+		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+	// A restore never resumes `Schedule` ownership either: `BaseOnRestore` re-found the program by
+	// name and restarted it, and its first movement task takes the claim again.
+	ScheduleOwner.Reset();
+	// Nor `ScriptedSchedule`. The order behind it is a live goal handle and a route resolved out of
+	// the previous map epoch, so it is session state (the reasoning is on
+	// `FElysiumScriptedScheduleOrder`); what the push durably changed is the mind state restored
+	// just above and, for mode 3, the committed enemy the senses record carries.
+	ScriptedScheduleOwner.Reset();
+	ScriptedScheduleOrder.Reset();
+	CombatSelector.Reset();
+	// A restore never resumes `Sequence` ownership, so any token from before the load is retired
+	// with it. The request survives: whichever order the two entities restore in, a beat that
+	// re-stamps its queue lock has its claim taken again on the next think.
+	SequenceOwner.Reset();
+	bScriptBodyHeld = false;
 }
 
 void FElysiumNpc::RestoreDeathBodyState()
@@ -4034,15 +4203,14 @@ void FElysiumNpc::RestoreDeathBodyState()
 		return;
 	}
 	// A corpse's BODY state is not save state and cannot be: the motor is rebuilt at load and a held
-	// pose is a pose, not a fact about the character. So the death transaction's body half — frozen,
-	// non-solid to characters, handed to physics or held on its final frame — is re-applied rather
+	// pose is a pose, not a fact about the character. So the death transaction's body half -- frozen,
+	// non-solid to characters, handed to physics or held on its final frame -- is re-applied rather
 	// than restored. Without it a loaded corpse stands up solid, animating its spawn idle.
 	//
 	// Re-applied HERE and not from an armed think, because a corpse's saved cadence is `never` and
 	// there is no think to arm: the snapshot applier restamps the saved `NextThink` after this
-	// returns and is the authoritative one there (the same caveat the patrol and discipline blocks
-	// state). The body already exists — `Spawn` builds it, and a snapshot is applied over a
-	// fully-spawned world.
+	// returns and is the authoritative one there. The body already exists -- `Spawn` builds it, and a
+	// snapshot is applied over a fully-spawned world.
 	bDeathHandoffDone = false;
 	SetBodyFrozen(true);
 	SetIgnoreCharacterCollision(true);
@@ -4052,348 +4220,114 @@ void FElysiumNpc::RestoreDeathBodyState()
 		// end it: the handoff is the load's own work.
 		CompleteDeathHandoff();
 	}
-	// Otherwise `SCHED_DIE` restarted with the schedule block, the saved think that was carrying it
-	// comes back with the record, and `ThinkDead` ends it exactly as it would have.
+	// Otherwise `SCHED_DIE` came back with the record through `BaseOnRestore`, the saved think that
+	// was carrying it comes back too, and `ThinkDead` ends it exactly as it would have.
 }
 
-bool FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
+// The patrol route and the ambient spot, as words. Every decision they feed is in
+// `RestorePatrolAndAmbient`; nothing here is port state retail has a row for.
+void FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 {
 	Ar << PatrolType;
 	Ar << PatrolPath;
 	Ar << PatrolIndex;
-	uint8 Active = bPatrolActive ? 1 : 0;
-	Ar << Active;
-	if (Ar.IsLoading())
-	{
-		// A restored body stands where the payload puts it, so no in-flight travel survives
-		// the load. The beat that owned it re-issues its own move (FElysiumScriptedSequence).
-		EndScriptMove();
-	}
-	if (Ar.IsLoading() && Ar.AtEnd())
-	{
-		bPatrolActive = Active != 0 && ResolvePatrolPoints();
-		bMoveIssued = false;
-		bWalkingAnimation = false;
-		return false; // compatibility with snapshots written before ambient-place state existed
-	}
+	Ar << bPatrolActive;
 	uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
 	Ar << SavedAmbientPhase;
 	Ar << CurrentSpotIndex;
 	Ar << AmbientLeaveAt;
 	Ar << AmbientNextActivityAt;
 	Ar << AmbientActivityCycle;
-	uint8 SavedAmbientArrived = bAmbientArrived ? 1 : 0;
-	Ar << SavedAmbientArrived;
+	Ar << bAmbientArrived;
 	if (Ar.IsLoading())
 	{
-		bPatrolActive = Active != 0 && ResolvePatrolPoints();
-		bMoveIssued = false;
-		bWalkingAnimation = false;
 		AmbientPhase = static_cast<EAmbientPhase>(SavedAmbientPhase);
-		bAmbientArrived = SavedAmbientArrived != 0;
-		// No clock is touched on either branch: the saved cadence is the authoritative one (see
-		// `SerializeScheduleBlock`), `ScheduleHost.Serialize` restores the eight stamps after every
-		// block here, and `ApplyEntityRecord` restamps the saved `NextThink` after the leaf. Retail
-		// restores its stamps the same way and resets nothing on a load.
-		if (bPatrolActive)
-		{
-			CurrentSpotIndex = INDEX_NONE;
-			AmbientPhase = EAmbientPhase::None;
-			bAmbientArrived = false;
-		}
-		if (!bPatrolActive && AmbientPhase != EAmbientPhase::None)
-		{
-			FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
-			if (!Spot || !Spot->Claim(Handle))
-			{
-				CurrentSpotIndex = INDEX_NONE;
-				AmbientPhase = EAmbientPhase::None;
-				bAmbientArrived = false;
-			}
-		}
 	}
-	return true;
 }
 
+// The maker relationship. `npc_maker` ownership is a runtime association with no retail datamap
+// row on either side, so it rides the record; the handle is re-stamped by the hook.
 void FElysiumNpc::SerializeMakerBlock(FElysiumSaveArchive& Ar)
 {
-	// Version 13 appends the maker relationship after the pre-existing NPC leaf. Older saves
-	// deliberately restore legacy runtime NPCs unowned rather than guessing a maker association.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcMaker)
-	{
-		Ar << OwnerEntity;
-		uint8 OwnerNotified = bOwnerTerminationNotified ? 1 : 0;
-		Ar << OwnerNotified;
-		if (Ar.IsLoading())
-		{
-			OwnerEntity = World
-				? World->RebaseSavedHandle(OwnerEntity) : FElysiumEntityHandle::Invalid();
-			bOwnerTerminationNotified = OwnerNotified != 0;
-		}
-	}
+	Ar << OwnerEntity;
+	Ar << bOwnerTerminationNotified;
 }
 
+// `m_NPCState` and the body owner, as raw words. The shape map records the state pair as `PRIVATE`,
+// so no compiled path reaches it and the walk cannot carry it. Validation is `RestoreMindState`.
 void FElysiumNpc::SerializeMindBlock(FElysiumSaveArchive& Ar)
 {
-	if (Ar.Version() >= FElysiumSaveVersion::NpcMind)
+	uint8 SavedState = static_cast<uint8>(Mind.State());
+	EElysiumBodyOwner ResumableOwner = Mind.Owner();
+	if (!FElysiumNpcMind::IsResumableOwner(ResumableOwner))
 	{
-		uint8 SavedState = static_cast<uint8>(Mind.State());
-		EElysiumBodyOwner ResumableOwner = Mind.Owner();
-		if (!FElysiumNpcMind::IsResumableOwner(ResumableOwner))
-		{
-			ResumableOwner = EElysiumBodyOwner::None;
-		}
-		uint8 SavedOwner = static_cast<uint8>(ResumableOwner);
-		Ar << SavedState;
-		Ar << SavedOwner;
-		if (Ar.IsLoading())
-		{
-			const EElysiumNpcState State = static_cast<EElysiumNpcState>(SavedState);
-			EElysiumBodyOwner Owner = static_cast<EElysiumBodyOwner>(SavedOwner);
-			if (!FElysiumNpcMind::IsSupportedState(State)
-				|| !FElysiumNpcMind::IsResumableOwner(Owner))
-			{
-				Owner = EElysiumBodyOwner::None;
-			}
-			if (Owner == EElysiumBodyOwner::Patrol && !bPatrolActive)
-			{
-				Owner = EElysiumBodyOwner::None;
-			}
-			if (Owner == EElysiumBodyOwner::Ambient && AmbientPhase == EAmbientPhase::None)
-			{
-				Owner = EElysiumBodyOwner::None;
-			}
-			Mind.Restore(State, Owner);
-			PatrolOwner = Owner == EElysiumBodyOwner::Patrol
-				? Mind.CurrentToken() : FElysiumBodyOwnerToken();
-			AmbientOwner = Owner == EElysiumBodyOwner::Ambient
-				? Mind.CurrentToken() : FElysiumBodyOwnerToken();
-			// A restore never resumes `Schedule` ownership either: the program restarts from its
-			// first task below, and its first movement task takes the claim again.
-			ScheduleOwner.Reset();
-			// Nor `ScriptedSchedule`. The order behind it is a live goal handle and a route resolved
-			// out of the previous map epoch, so it is session state (the reasoning is on
-			// `FElysiumScriptedScheduleOrder`); what the push durably changed is the mind state
-			// restored just above and, for mode 3, the committed enemy the senses block carries.
-			ScriptedScheduleOwner.Reset();
-			ScriptedScheduleOrder.Reset();
-			CombatSelector.Reset();
-			// A restore never resumes `Sequence` ownership, so any token from before the load is
-			// retired with it. The request survives: whichever order the two entities restore in,
-			// a beat that re-stamps its queue lock has its claim taken again on the next think.
-			SequenceOwner.Reset();
-			bScriptBodyHeld = false;
-			// A restored Dead mind still owes its body the death transaction's body half. It is not
-			// re-applied here: the schedule block below decides whether the death program comes back
-			// with the record, and `RestoreDeathBodyState` runs once every block has landed.
-		}
+		ResumableOwner = EElysiumBodyOwner::None;
+	}
+	uint8 SavedOwner = static_cast<uint8>(ResumableOwner);
+	Ar << SavedState;
+	Ar << SavedOwner;
+	if (Ar.IsLoading())
+	{
+		RestoredMindState = SavedState;
+		RestoredMindOwner = SavedOwner;
 	}
 }
 
-void FElysiumNpc::SerializeScheduleBlock(FElysiumSaveArchive& Ar)
+// The NPC's own tracked discipline effects, restored. A targeted `disciplinetgt` cast lands its
+// trait-effect groups on whichever character it hit, and that is usually an NPC; without the pair
+// of this and `Disciplines.Serialize` a Dominate group on a guard evaporates across a save while
+// its owned expiry event rides the map snapshot's queue block and comes back looking for it.
+//
+// The owned expiry events themselves are not in the record -- they are queue records the snapshot's
+// queue block already carries, serial and all. That is what makes the restore coherent: the event
+// comes back pointing at the serial the record restores. An event whose serial no longer matches
+// anything (a renewal minted a newer one before the save, or teardown ran) is dropped by
+// `ElysiumDisciplines::CommitExpiry`'s own guard with a Verbose line, which is the guard working
+// rather than a loss.
+void FElysiumNpc::RestoreDisciplineState(FElysiumEntityWorld& InWorld)
 {
-	// The schedule's IDENTITY is saved; its task position is not, and that is deliberate. A task
-	// holds a playing clip, a pending motor move or a wall-clock deadline, and none of those
-	// survive a load -- so resuming at task 3 would hold a pose nothing is playing. Restarting
-	// the same program preserves the intent (an NPC mid-lookaround resumes looking around rather
-	// than dropping to its stance) without pretending the state under it survived.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcSchedule)
+	// Session state, never simulation state: a restored character starts from the live sound bus
+	// rather than replaying a retention window that no longer exists.
+	Disciplines.SoundCursor = 0;
+	// HitInfo end/interrupt callbacks (0x101dfe80) retain the original caster. Handle archives strip
+	// the map epoch; restore it before expiry resolves the source.
+	for (FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
 	{
-		// The flag word travels with the schedule because it IS schedule state: every bit in it was
-		// written by a task and is released by the next schedule change.
-		//
-		// The restore below re-Starts the saved program, and `ElysiumSchedule::Start` runs
-		// `OnScheduleChange` -- which releases exactly these bits before the restarted program's own
-		// first tasks set them again. That is the same one-think round trip a live schedule change
-		// performs, so the word is not redundant: it is what keeps a mesmerized NPC from being
-		// conversable, sensing and un-oblivious in the window before its first think after a load,
-		// and what carries bits belonging to any program that does not restart at all.
-		NpcFlags.Serialize(Ar);
-		uint8 SavedSchedule = static_cast<uint8>(Schedule.Current);
-		Ar << SavedSchedule;
-		if (Ar.IsLoading())
+		Effect.Source = InWorld.RebaseSavedHandle(Effect.Source);
+	}
+
+	// The tracked rows say which authored groups this NPC is carrying; `Effects` is the list they
+	// were installed into, and an NPC's `Effects` is rebuilt at spawn from its `stattemplate` alone
+	// (`SeedSheet`), so the discipline groups are missing from it after a restore. Re-append exactly
+	// one copy per tracked row -- the same one-per-live-effect invariant `RemoveTargetEffect`
+	// removes against, which is why this adds rather than `AddUnique`s: two records may legitimately
+	// name the same group.
+	bool bAdded = false;
+	for (const FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
+	{
+		for (const FString& Group : Effect.Effects)
 		{
-			// The one site that resets the schedule record without being `ClearSchedule`
-			// (`0x10280d30`), and deliberately: nothing is running here — the record is being
-			// replaced by the payload's. Dispatching slot 435 would release the NPC flag word the
-			// line above has just restored, and a program that does not restart below would come
-			// back conversable and un-oblivious.
-			Schedule.Clear();
-			const EElysiumScheduleId Restored = static_cast<EElysiumScheduleId>(SavedSchedule);
-			if (ElysiumAiScriptedSchedule::IsScriptedProgram(Restored))
-			{
-				// A scripted director's program is not restartable without the order that pushed it,
-				// and that order is not save state. `SaveBlockReason` refuses a save while the
-				// `ScriptedSchedule` owner holds the body, so a payload can only carry this program
-				// from the narrow window between the push and its first movement claim. Restarting it
-				// would fail its first task by name on the next think; refusing it here says so once,
-				// and the NPC selects normally instead.
-				RecordScheduleEvent(FString::Printf(
-					TEXT("restore refused %s: the pushed order it needs is not save state"),
-					ElysiumScheduleName(Restored)));
-			}
-			else if (Restored != EElysiumScheduleId::None && ElysiumScheduleFor(Restored) != nullptr)
-			{
-				ElysiumSchedule::Start(Schedule, Restored, *this);
-			}
-			// NextThink is deliberately NOT touched here. The base record serializes it, so a
-			// restored NPC already carries the cadence it was saved on -- rewriting it to "now"
-			// would discard saved state and make the payload fail its own round trip.
+			Effects.Add(Group);
+			bAdded = true;
 		}
 	}
-}
-
-void FElysiumNpc::SerializeSocialBlock(FElysiumSaveArchive& Ar)
-{
-	if (Ar.Version() >= FElysiumSaveVersion::NpcSocial)
+	if (bAdded)
 	{
-		Relationships.Serialize(Ar);
-		if (Ar.IsLoading() && World)
-		{
-			Relationships.Rebase(*World);
-		}
+		// `RebuildEffects` re-derives the `health`/`max_health` pair off the sheet, and an NPC's
+		// SHEET is not save state -- it is re-seeded from the stat template at spawn, so its damage
+		// slot reads zero here while the field walk has already restored the real `health`
+		// keyfield. Re-deriving would therefore hand a wounded NPC its whole track back, so the
+		// restored pair is put back over the derived one. (The sheet/keyfield split on a restored
+		// NPC is older than this hook and is not changed by it; this only refuses to make it worse.)
+		const int32 RestoredHealth = Health;
+		const int32 RestoredMaxHealth = MaxHealth;
+		RebuildEffects();
+		Health = RestoredHealth;
+		MaxHealth = RestoredMaxHealth;
 	}
-}
-
-void FElysiumNpc::SerializeSensesBlock(FElysiumSaveArchive& Ar)
-{
-	// The memory is what survives losing sight, so it is what a save has to carry; the
-	// resolved perception pair is not saved because it is derived from the keyfields the field
-	// walk already restored.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcSenses)
-	{
-		Senses.Serialize(Ar, *this);
-	}
-}
-
-void FElysiumNpc::SerializeLoadoutBlock(FElysiumSaveArchive& Ar)
-{
-	// The loadout latch, and only the latch: the weapon it granted is a real runtime entity
-	// the snapshot already carries with its own owner field, so re-running the resolution on a
-	// restore would hand a restored NPC a second gun. A payload that predates this restores the
-	// latch CLEAR, which is correct for it — an older payload was written by a build that granted
-	// nothing, so the loadout has genuinely not run for that NPC.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcCombat)
-	{
-		uint8 LoadoutResolved = bLoadoutResolved ? 1 : 0;
-		Ar << LoadoutResolved;
-		if (Ar.IsLoading())
-		{
-			bLoadoutResolved = LoadoutResolved != 0;
-		}
-	}
-	else if (Ar.IsLoading())
-	{
-		bLoadoutResolved = false;
-	}
-}
-
-void FElysiumNpc::SerializeWitnessBlock(FElysiumSaveArchive& Ar)
-{
-	// The retained witness block.
-	// Appended at the very end of the NPC leaf behind its own version, so it is additive: an
-	// `NpcCombat` payload restores an NPC that has witnessed nothing and whose three windows are at
-	// the spawn-zero default, which is exactly what the pre-witness build wrote. The processed counts
-	// restore at zero there, which means a legacy NPC will observe the first act after the load —
-	// the conservative direction, since the alternative would silently forgive a crime.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcWitness)
-	{
-		Witness.Serialize(Ar);
-		if (Ar.IsLoading())
-		{
-			if (World)
-			{
-				Witness.Rebase(*World);
-			}
-			else
-			{
-				Witness.Reset();
-			}
-		}
-	}
-	else if (Ar.IsLoading())
-	{
-		Witness.Reset();
-	}
-}
-
-void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
-{
-	// The NPC's own tracked discipline effects.
-	// A targeted `disciplinetgt` cast lands its trait-effect groups on whichever character it hit —
-	// active targeted effects are tracked on the affected character — and the affected character
-	// is usually an NPC. Both
-	// halves must persist: without this block a Dominate group on a guard evaporates across a save
-	// while its owned expiry event rides the map snapshot's queue block and comes back looking for
-	// it.
-	//
-	// Appended at the very END of the NPC leaf behind its own version, so it is additive: an
-	// `NpcWitness` payload restores an NPC carrying no discipline state, which is what a payload
-	// written before this block carries.
-	//
-	// The owned expiry events themselves are NOT written here — they are queue records and the map
-	// snapshot's queue block already carries them, serial and all. That is what makes the restore
-	// coherent: the event comes back pointing at the serial this block restores. An event whose
-	// serial no longer matches anything (a renewal minted a newer one before the save, or teardown
-	// ran) is dropped by `ElysiumDisciplines::CommitExpiry`'s own guard with a Verbose line, which
-	// is the guard working rather than a loss.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcDisciplines)
-	{
-		Disciplines.Serialize(Ar);
-		if (Ar.IsLoading())
-		{
-			// Session state, never simulation state: a restored character starts from the live
-			// sound bus rather than replaying a retention window that no longer exists.
-			Disciplines.SoundCursor = 0;
-			// HitInfo end/interrupt callbacks (0x101dfe80) retain the original caster.
-			// Handle archives strip the map epoch; restore it before expiry resolves the source.
-			if (World)
-			{
-				for (FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
-				{
-					Effect.Source = World->RebaseSavedHandle(Effect.Source);
-				}
-			}
-
-			// The tracked rows say which authored groups this NPC is carrying; `Effects` is the
-			// list they were installed into, and an NPC's `Effects` is rebuilt at spawn from its
-			// `stattemplate` alone (`SeedSheet`), so the discipline groups are missing from it
-			// after a restore. Re-append exactly one copy per tracked row — the same one-per-live-
-			// effect invariant `RemoveTargetEffect` removes against, which is why this adds rather
-			// than `AddUnique`s: two records may legitimately name the same group.
-			bool bAdded = false;
-			for (const FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
-			{
-				for (const FString& Group : Effect.Effects)
-				{
-					Effects.Add(Group);
-					bAdded = true;
-				}
-			}
-			if (bAdded)
-			{
-				// `RebuildEffects` re-derives the `health`/`max_health` pair off the sheet, and an
-				// NPC's SHEET is not save state — it is re-seeded from the stat template at spawn,
-				// so its damage slot reads zero here while the field walk has already restored the
-				// real `health` keyfield. Re-deriving would therefore hand a wounded NPC its whole
-				// track back, so the restored pair is put back over the derived one. (The sheet/
-				// keyfield split on a restored NPC is older than this block and is not changed by
-				// it; this only refuses to make it worse.)
-				const int32 RestoredHealth = Health;
-				const int32 RestoredMaxHealth = MaxHealth;
-				RebuildEffects();
-				Health = RestoredHealth;
-				MaxHealth = RestoredMaxHealth;
-			}
-			// A restored row keeps its `bRemoveOnHearCombat` listener and the think that services it
-			// keeps its SAVED cadence: no clock is armed here (see `SerializeScheduleBlock`). The
-			// listener's poll runs on the next saved think, as it would have in retail.
-		}
-	}
-	else if (Ar.IsLoading())
-	{
-		Disciplines.Reset();
-	}
+	// A restored row keeps its `bRemoveOnHearCombat` listener and the think that services it keeps
+	// its SAVED cadence: no clock is armed here. The listener's poll runs on the next saved think,
+	// as it would have in retail.
 }
 
 const TCHAR* FElysiumNpc::SaveBlockReason() const

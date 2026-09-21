@@ -35,10 +35,22 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   deleted. The real double-persistence is in the seven component `Serialize` methods below them,
   which is **0019/2 pass C** (row 03b). Two retail spellings corrected: `gender` / `base_gender_`
   and `base_active_active_active_dominate`.
-- [ ] **03b · 0019/2 pass C** — Split the seven component serializers against the generated SAVE
-  walk (~104 duplicated words) and move their load-side validation to a post-restore hook; then the
-  nine `Serialize*Block` reduce to port-only state, `PRIVATE` members and restore logic. M–L ·
-  Opus/high. Opened by pass B; blocks nothing below it.
+- [x] **03b · 0019/2 pass C** — Split the component serializers against the generated SAVE walk and
+  move their load-side validation to a post-restore hook. M–L · Opus/high.
+  Landed 2026-09-21. The overlap measured **62 words in three components**, not ~104 in seven — the
+  other four answer retail `FIELD_EMBEDDED` rows and stay; `save_walk_overlap` holds it at 0.
+  `FElysiumNpcWitness::Serialize` is gone entirely. **The hook did not have to be built:** retail's
+  slot 130 was already ported whole (`ElysiumNpcKernelLifecycle19.cpp:1059`) with only tests calling
+  it, so pass C wired it — `FElysiumEntity::OnPostRestore`, dispatched by `ApplyEntityRecord` — and
+  the schedule re-find by name and task CRC is live for the first time. The nine blocks are four,
+  every dead version gate is deleted (schema 39, floor raised), and retail's `AIExtendedSaveHeader_t`
+  is the leaf's one hand block, as it is retail's.
+  It found and fixed a defect: `OnDormancyChanged` re-armed the four `m_flNext*Think` rows on every
+  load, so retail's saved cadence was discarded and every restored NPC thought immediately. It named
+  one it did not fix: the port restarts the restored program where retail resumes it, and the
+  restart's own slot 435 releases twelve of the walk's per-run rows.
+  New net: `Elysium.Substrate.NpcKernelBindings.SaveRoundTrip` (218 rows, 23 named exceptions); six
+  component suites moved off `Npc->Serialize(Ar)` onto the real `Freeze`/`ApplySnapshot` path.
 - [ ] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the 19 hand programs deleted. L · Opus/high.
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.

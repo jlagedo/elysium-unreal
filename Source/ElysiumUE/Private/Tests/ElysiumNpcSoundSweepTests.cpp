@@ -619,8 +619,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSoundSweepSaveTest,
 	"Elysium.Substrate.NpcConditions.SoundSweepSave", GElysiumTestFlags)
 bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 {
+	// The committed source and its two clocks are retail `SAVE` rows (`m_hLastHeardEnt`,
+	// `m_flNextInvestigateSoundTime`, `m_flNextSeeSoundSourceTime`), and since 0019/2 pass C the
+	// generated datamap walk is what carries them -- `FElysiumNpcMemory::Serialize` keeps only the
+	// port-only words and the embedded sound records. So this goes through a whole record.
 	FSweepFixture F;
-	if (!TestNotNull(TEXT("npc"), F.Npc) || !TestNotNull(TEXT("owner"), F.Owner))
+	FSweepFixture G;
+	if (!TestNotNull(TEXT("npc"), F.Npc) || !TestNotNull(TEXT("owner"), F.Owner)
+		|| !TestNotNull(TEXT("the restored npc"), G.Npc)
+		|| !TestNotNull(TEXT("the restored owner"), G.Owner))
 	{
 		return false;
 	}
@@ -636,39 +643,34 @@ bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 	Memory.NextInvestigateSoundTime = 12.25;
 	Memory.NextSeeSoundSourceTime = 3.5;
 
-	TArray<uint8> Payload;
-	{
-		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
-		Memory.Serialize(Ar);
-	}
-	FElysiumNpcMemory Restored;
-	{
-		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-		Restored.Serialize(Ar);
-	}
+	ElysiumRoundTripSnapshot(F.World, G.World);
+
+	const FElysiumNpcMemory& Restored = G.Npc->Senses.Memory;
 	TestTrue(TEXT("the investigate gate round-trips"),
 		FMath::IsNearlyEqual(Restored.NextInvestigateSoundTime, 12.25));
 	TestTrue(TEXT("the see-source limit round-trips"),
 		FMath::IsNearlyEqual(Restored.NextSeeSoundSourceTime, 3.5));
-
-	// The archive writes a handle as `{Index, bWasValid}` and DROPS the epoch by design
-	// (`ElysiumSaveArchive.h`): re-stamping belongs to the applier, so the committed source is only
-	// comparable after `Rebase`. Asserting equality before it would be asserting against the
-	// save format rather than against this field.
-	TestTrue(TEXT("the committed source keeps its index across the round trip"),
-		Restored.BestSoundSource.Index == F.Owner->Handle.Index);
-	Restored.Rebase(F.World);
-	TestTrue(TEXT("...and rebases to the live handle"),
-		Restored.BestSoundSource == F.Owner->Handle);
+	// The archive drops a handle's epoch by design (`ElysiumSaveArchive.h`) and the applier
+	// re-stamps it, so what has to survive is the INDEX and the resolution.
+	TestTrue(TEXT("the committed source rebases onto the live owner"),
+		Restored.BestSoundSource == G.Owner->Handle);
+	TestNotNull(TEXT("...and resolves"), G.World.Resolve(Restored.BestSoundSource));
 
 	// An index the restored world has no slot for drops rather than pointing at whatever now
-	// occupies it. (The epoch cannot carry staleness here — the archive never wrote one.)
-	Restored.BestSoundSource.Index = F.World.Entities().Num() + 64;
-	Restored.Rebase(F.World);
-	TestFalse(TEXT("an unresolvable committed source rebases to invalid"),
-		Restored.BestSoundSource.IsSet());
+	// occupies it.
+	{
+		FSweepFixture H;
+		FSweepFixture I;
+		if (H.Npc == nullptr || I.Npc == nullptr)
+		{
+			return false;
+		}
+		H.Npc->Senses.Memory.BestSoundSource =
+			FElysiumEntityHandle(H.World.Entities().Num() + 64, 1);
+		ElysiumRoundTripSnapshot(H.World, I.World);
+		TestFalse(TEXT("an unresolvable committed source restores as invalid"),
+			I.Npc->Senses.Memory.BestSoundSource.IsSet());
+	}
 	return true;
 }
 

@@ -377,23 +377,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepSaveTest,
 	"Elysium.Substrate.NpcConditions.SeeUnknownSweepSave", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepSaveTest::RunTest(const FString&)
 {
-	FElysiumNpcMemory Memory;
-	Memory.SeeUnknownGraceUntil = 42.5;
-
-	TArray<uint8> Payload;
+	// `m_flSeeUnknownCheatVisionTime` is a retail `SAVE` row, and since 0019/2 pass C the generated
+	// datamap walk carries it rather than `FElysiumNpcMemory::Serialize` -- so the round trip has to
+	// be a whole record, not a bare struct through an archive.
+	FSweepFixture F;
+	FSweepFixture G;
+	if (F.Npc == nullptr || G.Npc == nullptr)
 	{
-		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
-		Memory.Serialize(Ar);
+		return false;
 	}
-	FElysiumNpcMemory Restored;
-	{
-		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-		Restored.Serialize(Ar);
-	}
+	F.Npc->Senses.Memory.SeeUnknownGraceUntil = 42.5;
+	ElysiumRoundTripSnapshot(F.World, G.World);
 	TestTrue(TEXT("the grace timer round-trips"),
-		FMath::IsNearlyEqual(Restored.SeeUnknownGraceUntil, 42.5));
+		FMath::IsNearlyEqual(G.Npc->Senses.Memory.SeeUnknownGraceUntil, 42.5));
 	return true;
 }
 

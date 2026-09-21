@@ -386,7 +386,8 @@ public:
 	// Troika FVisible, also BestEnemy's fallback. No Look-only cone or 3072-unit prefilter.
 	static bool IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now);
 
-	void Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc);
+	void Serialize(FElysiumSaveArchive& Ar);
+	void OnPostRestore(FElysiumNpc& Npc);
 
 	// `thunk_FUN_102cc7e0(&m_DelayedSoundConditionList)` — the SECOND of the two delayed-list clears
 	// `CAI_BaseNPC::NPCInit` (`0x10273390`) issues. The first is the delayed CONDITION list, which

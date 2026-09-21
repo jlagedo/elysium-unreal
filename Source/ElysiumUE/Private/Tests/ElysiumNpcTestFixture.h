@@ -25,6 +25,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumSaveTypes.h"
 #include "Misc/AssertionMacros.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Templates/Function.h"
@@ -111,6 +112,21 @@ struct FElysiumNpcWorldBuilder
 		Source->Outputs.Add(MoveTemp(Row));
 	}
 };
+
+// Round-trip one world's state onto another through the REAL persistence path: the registry's
+// named field walk, then the leaf blob, then the restore hook, in the order `ApplyEntityRecord`
+// runs them.
+//
+// A case that reaches for `Npc->Serialize(Ar)` instead is testing the leaf blob alone, and since
+// 0019/2 pass C the leaf blob is no longer where most NPC state lives -- the generated datamap SAVE
+// walk carries it, `ApplySnapshot` is what drives that walk, and `OnPostRestore` (retail's slot 130)
+// is what re-derives from it. So this is the only call that exercises what a real save does.
+inline void ElysiumRoundTripSnapshot(FElysiumEntityWorld& From, FElysiumEntityWorld& To)
+{
+	FElysiumMapSnapshot Snapshot;
+	From.Freeze(Snapshot);
+	To.ApplySnapshot(Snapshot);
+}
 
 // Stands a world from a builder's defs: `Load`, `SpawnPlayer`, `Activate(0.0)`, `Tick(0.0)` — the
 // four calls every fixture's constructor ended on. A suite's own fixture holds one of these plus

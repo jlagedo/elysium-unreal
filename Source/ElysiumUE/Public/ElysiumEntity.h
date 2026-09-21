@@ -645,6 +645,18 @@ public:
 	// saved: they are disposable presentation and rebuild from the def plus the restored state.
 	virtual void Serialize(FElysiumSaveArchive& Ar) {}
 
+	// Retail's slot 130, `CBaseEntity::OnRestore`: the load-side half of persistence, run once the
+	// whole record is in. A datamap walk restores WORDS; what a class re-derives from them -- a
+	// handle whose epoch died with the old map, a cursor into a store that is session state, a
+	// clamp on a value another build wrote, a program that has to be re-found by name -- is this
+	// hook's, never the archive's. `CAI_BaseNPC::OnRestore 0x1027bf50` is the worked example: the
+	// save writes a schedule NAME and a task-array checksum, and the re-find, the checksum compare
+	// and the give-up arm all happen here.
+	//
+	// Called by `ApplyEntityRecord` after `Serialize` and after `OnDormancyChanged`, and before the
+	// saved think cadence is restamped -- so a hook may arm work without out-running the snapshot.
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) {}
+
 	// True when this entity leaves the map with the player rather than staying behind — an inventory
 	// item that is an owned entity. The freeze records such an entity in the snapshot's
 	// `AbsentEntities` set instead of its state, which is what stops walking back into a map from

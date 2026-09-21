@@ -198,6 +198,10 @@ struct FAiExtendedSaveHeader
 	uint32 ScheduleCrc = 0;
 };
 
+/** Build the header from live state — retail's own block, shared by `BaseSave` and by the record
+ *  `FElysiumNpc::Serialize` writes. */
+FAiExtendedSaveHeader BuildExtendedSaveHeader() const;
+
 /** The header the last `BaseSave` built, kept so a case can read the flags without an archive. */
 FAiExtendedSaveHeader LastSavedExtendedHeader;
 

@@ -179,6 +179,14 @@ void FElysiumNpcMemory::Reset()
 	*this = FElysiumNpcMemory();
 }
 
+// Twenty-seven of the words this block used to write are retail `SAVE` rows the generated datamap
+// walk now carries under their own names -- `m_hEnemy`, `m_hLastSeen*Ent`, `m_hClosestPlayer`,
+// the see-unknown timers, the player LOS/PVS stamps, the repeated-damage window. What is left is
+// either a word retail has no row for at all, or a `FIELD_EMBEDDED` row: retail's own datamap
+// points at a second `datamap_t` and recurses into it, and the eight sound records below are
+// exactly that shape (`m_LastSoundCombat +0x6160` and its kin, which `gen_kernel_bindings.py`
+// records as `SAVE_UNBOUND` for the same reason). So a nested serializer here is not a duplicate
+// of the walk -- it is the port's spelling of the recursion.
 void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 {
 	auto SerializeSound = [&Ar](FElysiumGameSoundEvent& Sound)
@@ -197,18 +205,14 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		Ar << Occludable;
 		if (Ar.IsLoading()) { Sound.bOccludable = Occludable != 0; }
 	};
-	Ar << Enemy;
-	Ar << LastEnemy;
 	for (int32 i = 0; i < static_cast<int32>(ESeen::Count); ++i)
 	{
-		Ar << LastSeen[i];
 		Ar << LastSeenTime[i];
 	}
 	Ar << LastHeardSource;
 	Ar << LastHeardPosition;
 	Ar << LastHeardCategory;
 	Ar << LastHeardTime;
-	Ar << LastDamageAttacker;
 	Ar << LastDamageTime;
 	Ar << LastDamageAmount;
 	Ar << EnemyLosFailures;
@@ -217,32 +221,15 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	uint8 Latched = bEnemyLosLatched ? 1 : 0;
 	Ar << Occluded;
 	Ar << Latched;
-	Ar << ClosestPlayer;
-	Ar << ClosestPlayerDistanceCm;
 	uint8 InRange = bPlayerInRange ? 1 : 0;
 	uint8 OuterBand = bPlayerInOuterBand ? 1 : 0;
 	uint8 InCone = bPlayerInCone ? 1 : 0;
 	uint8 PlayerVisible = bPlayerVisible ? 1 : 0;
-	uint8 PlayerInPvs = bPlayerInPvs ? 1 : 0;
-	uint8 PlayerLos = bPlayerLos ? 1 : 0;
 	Ar << InRange;
 	Ar << OuterBand;
 	Ar << InCone;
 	Ar << PlayerVisible;
-	Ar << PlayerInPvs;
-	Ar << PlayerLos;
 	Ar << LastBumpTime;
-	Ar << PlayerLosLastClearTime;
-	Ar << PlayerPvsLastClearTime;
-	Ar << PlayerLosNextUpdateTime;
-	Ar << StealthVisionOverrideUntil;
-	Ar << BestSeeUnknown;
-	Ar << LastSeeUnknown;
-	Ar << LastSeeUnknownPosition;
-	Ar << SeeUnknownRepeatSightings;
-	Ar << SeeUnknownRunTimer;
-	Ar << SeeUnknownStartTimer;
-	Ar << SeeUnknownGraceUntil;
 	SerializeSound(LastSoundCombat);
 	SerializeSound(LastSoundBulletImpact);
 	SerializeSound(LastSoundFlinch);
@@ -251,57 +238,31 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	SerializeSound(LastSoundPhysicsDanger);
 	SerializeSound(LastSoundWorld);
 	SerializeSound(BestSound);
-	// The sound sweep's committed source and its two clocks. Below the save floor, so this is
-	// unconditional -- an older payload is refused whole rather than half-read.
-	Ar << BestSoundSource;
-	Ar << NextInvestigateSoundTime;
-	Ar << NextSeeSoundSourceTime;
-	// Version 19 appends the repeated-damage window at the END of the memory record. Elusion belongs
-	// to CAI_Memory's per-observed-actor record, not the committed-enemy tracking cache here.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcCognition)
-	{
-		Ar << RepeatedDamageWindowStart;
-		Ar << RepeatedDamageAccumulated;
-	}
-	// Version 20 appends the detected-attack record after those, in the same additive shape: a
-	// payload that predates it restores an NPC that has not been swung at, which is the default.
-	if (Ar.Version() >= FElysiumSaveVersion::NpcCombat)
-	{
-		Ar << DetectedAttackAttacker;
-		Ar << DetectedAttackTime;
-	}
+	Ar << DetectedAttackAttacker;
+	Ar << DetectedAttackTime;
 	if (Ar.IsLoading())
 	{
-		if (Ar.Version() < FElysiumSaveVersion::NpcCombat)
-		{
-			DetectedAttackAttacker = FElysiumEntityHandle::Invalid();
-			DetectedAttackTime = -1.0;
-		}
-		if (Ar.Version() < FElysiumSaveVersion::NpcCognition)
-		{
-			// A payload that predates the block restores the default rather than whatever this live
-			// object happened to be carrying before the load.
-			RepeatedDamageWindowStart = -1.0;
-			RepeatedDamageAccumulated = 0;
-		}
 		bEnemyOccluded = Occluded != 0;
 		bEnemyLosLatched = Latched != 0;
 		bPlayerInRange = InRange != 0;
 		bPlayerInOuterBand = OuterBand != 0;
 		bPlayerInCone = InCone != 0;
 		bPlayerVisible = PlayerVisible != 0;
-		bPlayerInPvs = PlayerInPvs != 0;
-		bPlayerLos = PlayerLos != 0;
-		EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0,
-			ElysiumNpcSense::EnemyLosFailureLimit);
-		// A negative accumulator would make the 15% test unfalsifiable rather than merely wrong, so
-		// a payload from another build is floored rather than trusted.
-		RepeatedDamageAccumulated = FMath::Max(0, RepeatedDamageAccumulated);
 	}
 }
 
+// The load-side half (slot 130) of the sensory memory, and the whole of what the datamap walk
+// cannot do. Re-stamping is idempotent -- it writes the live epoch onto a still-valid index -- so
+// a word the walk already re-stamped costs nothing by passing through again, and keeping every
+// handle on one path is what lets each dependent clear sit beside the handle it depends on. The
+// handles that genuinely have no registered row, and would otherwise carry a dead epoch, are
+// `LastHeardSource`, the eight embedded sound `Source`s and `DetectedAttackAttacker`.
 void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 {
+	// A value another build wrote is refused rather than trusted: a negative LOS-failure count or
+	// damage accumulator would make the tests that read them unfalsifiable rather than merely wrong.
+	EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0, ElysiumNpcSense::EnemyLosFailureLimit);
+	RepeatedDamageAccumulated = FMath::Max(0, RepeatedDamageAccumulated);
 	// Every remembered handle goes through the one rebase path. A handle that no longer resolves
 	// becomes invalid rather than pointing at whichever entity now occupies its slot; the LOS
 	// latch travels with the enemy it was taken for, so it drops with it.
@@ -985,7 +946,7 @@ float FElysiumNpcSenses::EffectiveVisionDistanceCm(const FElysiumNpc& Npc, doubl
 	return FMath::Max(Distance, 0.f);
 }
 
-void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc)
+void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar)
 {
 	Memory.Serialize(Ar);
 	Ar << LastListenTime;
@@ -999,28 +960,32 @@ void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc)
 		Ar << Sound.PromoteAt;
 		if (Ar.IsLoading()) Sound.Condition = static_cast<EElysiumNpcCond>(Condition);
 	}
-	if (Ar.IsLoading())
+}
+
+// The load-side half (slot 130). Everything here is re-derivation, which is why it needs the NPC
+// and the archive does not: a saved pass cache would describe a look this NPC never took, and the
+// tuning is authored data the field walk has already restored in its keyfield form.
+void FElysiumNpcSenses::OnPostRestore(FElysiumNpc& Npc)
+{
+	HeardConditions.Reset();
+	SeenThisPass.Reset();
+	for (int32 Channel = 0; Channel < 3; ++Channel)
 	{
-		HeardConditions.Reset();
-		SeenThisPass.Reset();
-		for (int32 Channel = 0; Channel < 3; ++Channel)
-		{
-			NextLookTime[Channel] = -1.0;
-			SeenByChannel[Channel].Reset();
-		}
-		if (Npc.World)
-		{
-			Memory.Rebase(*Npc.World);
-		}
-		else
-		{
-			Memory.Reset();
-		}
-		// The bus is session state: a restored NPC starts at the live head rather than replaying
-		// a retention window it was not present for.
-		StartSoundCursorAtHead(Npc);
-		// The tuning is authored data, re-derived from the restored keyfields rather than saved.
-		Perception = FElysiumNpcPerception();
-		ResolveTuning(Npc);
+		NextLookTime[Channel] = -1.0;
+		SeenByChannel[Channel].Reset();
 	}
+	if (Npc.World)
+	{
+		Memory.Rebase(*Npc.World);
+	}
+	else
+	{
+		Memory.Reset();
+	}
+	// The bus is session state: a restored NPC starts at the live head rather than replaying
+	// a retention window it was not present for.
+	StartSoundCursorAtHead(Npc);
+	// The tuning is authored data, re-derived from the restored keyfields rather than saved.
+	Perception = FElysiumNpcPerception();
+	ResolveTuning(Npc);
 }

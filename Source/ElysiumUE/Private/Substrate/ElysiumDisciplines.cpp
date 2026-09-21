@@ -1769,13 +1769,5 @@ void FElysiumCombatCharacter::RemoveFromComfortList()
 
 void FElysiumCombatCharacter::SerializeDisciplineFlags(FElysiumSaveArchive& Ar)
 {
-	if (Ar.Version() >= FElysiumSaveVersion::DisciplineFlags)
-	{
-		Ar << MiscFlags << ComfortingCount;
-	}
-	else if (Ar.IsLoading())
-	{
-		MiscFlags = 0;
-		ComfortingCount = 0;
-	}
+	Ar << MiscFlags << ComfortingCount;
 }

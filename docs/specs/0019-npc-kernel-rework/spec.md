@@ -257,7 +257,67 @@ green, and `coverage.md` shows the change.
   of the words the registry now carries. Splitting those seven component serializers against the
   generated walk — and moving their load-side validation to a post-restore hook — is the remaining
   work, and it is a different job from "delete the nine blocks": **pass C.**
-  **Still open:** pass C above, and the non-NPC classes as 0018 stands them.
+  **Pass C landed (2026-09-21): the split, and the hook that was already there.**
+  *The measurement first, and it corrects pass B's estimate twice.* The overlap is **62 words, not
+  ~104, and it is in three components rather than seven** — `FElysiumNpcMemory` 27,
+  `FElysiumNpcScheduleHost` 23, `FElysiumNpcWitness` 12, `FElysiumNpcSenses` 0. The 104 pass B
+  quoted is the count of all component-member rows in `AddNpcSaveFields`, not of words a
+  serializer also wrote. `FElysiumNpcFlags`, `FElysiumRelationships`, `FElysiumNpcEnemyMemory` and
+  `FElysiumDisciplineState` overlap the walk by **nothing**: they answer retail `FIELD_EMBEDDED`
+  rows, where retail's own datamap points at a second `datamap_t` and recurses, so a nested
+  serializer there is the port's spelling of the recursion rather than a duplicate — and they stay.
+  The measurement is reproducible: `uv run elysium research save_walk_overlap` crosses the
+  generated walk's resolver paths against each serializer's `Ar <<` statements and now answers 0.
+  `FElysiumNpcWitness::Serialize` had 12 duplicated words and **no** port-only word, so it is gone
+  entirely; the other three keep only what the walk cannot reach.
+  *The post-restore hook did not have to be built — it had to be WIRED.* The whole of retail's slot
+  130 was already ported at `ElysiumNpcKernelLifecycle19.cpp:1059-1233` — `FElysiumNpc::OnRestore`
+  → `SpeciesOnRestore` → `TroikaOnRestore` → `BaseOnRestore`, walked arm by arm against
+  `0x102998c0` and `0x1027bf50`, its unrecoverable inputs already marked `SEAM` — and **every
+  caller was a test**. The port's persistence had never once run it. Pass C adds
+  `FElysiumEntity::OnPostRestore(World)`, called by `ApplyEntityRecord` after the leaf blob and
+  after `OnDormancyChanged` but before the saved think cadence is restamped, and `FElysiumNpc`'s
+  override runs `OnRestore(true)` and then the port-only re-derivations (the four `Rebase`s, the
+  senses tuning, the discipline re-install, the patrol/ambient resolve, the mind validation,
+  `RestoreDeathBodyState`). The schedule re-find by NAME and task-array CRC32 is therefore live for
+  the first time.
+  *Retail's one hand block is now the leaf's one hand block.* `CAI_BaseNPC::Save 0x1027bc60` writes
+  `AIExtendedSaveHeader_t` — version, the three-bit liveness word, a 128-byte schedule name, the
+  task-array CRC32 — and defers everything else to the datamap walk. `BuildExtendedSaveHeader` is
+  split out of `BaseSave` so the real save path writes the same block, and `BaseOnRestore` reads it.
+  The nine `Serialize*Block` helpers are four: the header, patrol/ambient, the maker relationship
+  and the mind's two raw words. Every one of the leaf's version gates is deleted — all sat below
+  `MinSupported`, and `ElysiumSaveTests.cpp` already asserted it — and the schema is
+  `NpcSaveWalkSplit` (39), with the floor raised to it.
+  *Two defects, one found and fixed, one named.* **Fixed:** `ApplyEntityRecord` calls
+  `OnDormancyChanged()` after the field walk, and the NPC's hook took its "waking, not going
+  dormant" arm and ran `ResetThinkTimers` — so retail's four `m_flNext*Think` rows (`+0x6244`..)
+  were thrown away on *every* load and every restored NPC thought immediately, which retail's
+  `OnRestore` never does. A restore is not a `ScriptUnhide`; the arm now stands down while
+  `FElysiumEntityWorld::IsApplyingSnapshot()` is true. **Named, not fixed:** this port restarts the
+  restored program where retail resumes it (retail's datamap also carries the task cursor `+0x5c50`;
+  this port does not save it, because a task holds a clip, a pending move or a deadline). A restart
+  runs retail's own slot 435 `TroikaOnScheduleChange 0x102a0940`, which releases twelve of the
+  walk's rows on the way in — `m_flGoalTolerance`, the two interrupt distances, `m_flInterruptTime`,
+  `m_hMoveTargetEnt`, `m_flDesiredMoveYaw`, `m_bWaitFinishedSet`, `m_flMoveWaitFinished`,
+  `m_bShouldMove`, the opening-door pair and `m_bDidMaintainSchedule`. They are per-run task state
+  the restarted program's own first tasks set again; the divergence is stated at
+  `FElysiumNpc::RestartRestoredSchedule` and each row is listed with its retail address in the test.
+  *One generated row corrected:* `m_bConditionsGathered` (+0x5ca4, retail `bool`) was bound to
+  `FElysiumNpcCognition::GatheredAt`, a `double`, so it marshalled a timestamp under a bool's name
+  and was then stomped on load. It is a recorded `SAVE_UNBOUND` gap now — the port carries that fact
+  as the pass EDGE, which the hook re-stamps — and the walk is 198 rows.
+  *The net:* `Elysium.Substrate.NpcKernelBindings.SaveRoundTrip`, which nothing equivalent existed
+  for. It stamps all 218 registered `m_*` rows with values no default produces, freezes, applies
+  onto a world that knows nothing, and requires each to read back — with 23 named exceptions, each
+  carrying the reason and the retail address that overwrites it. Six component save suites were
+  driving `Npc->Serialize(Ar)` directly and so were testing the leaf blob alone; they now go through
+  `Freeze`/`ApplySnapshot` via `ElysiumRoundTripSnapshot`, which is the only call that exercises
+  what a real save does. `Elysium.Substrate` runs 458 of 458.
+  **Still open:** the non-NPC classes as 0018 stands them. The 19 `mechanism` rows whose bodies are
+  in `ElysiumNpcKernelSaveRestore10.cpp` — retail's slot 126/127 `Save`/`Restore` twins, which this
+  port's persistence still does not call — stay with story 6, as story 1 assigned them; pass C only
+  shares their CRC helpers and their header struct.
 
 - [ ] **3. The schedule seam: texts, id spaces, flag tables.**
   Retail: the 691 schedule descriptions are null-terminated ASCII in `.rdata`, one per

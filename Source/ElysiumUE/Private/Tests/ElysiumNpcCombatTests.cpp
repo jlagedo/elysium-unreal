@@ -1332,7 +1332,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationSaveTest,
 bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 {
 	FCombatFixture F(TEXT("0"));
-	if (F.Target == nullptr || F.Fighter == nullptr || F.Player == nullptr)
+	// The destination world: the catalogue is installed once per process, so the second fixture
+	// borrows the first one's. Both stand before the round trip, because since 0019/2 pass C the
+	// relationship store's handles are re-stamped by `OnPostRestore` (retail's slot 130) rather
+	// than by the leaf blob, and only `Freeze`/`ApplySnapshot` runs it.
+	FCombatFixture G(TEXT("0"), /*bWithFists*/ true, /*bInstallCatalogue*/ false);
+	if (F.Target == nullptr || F.Fighter == nullptr || F.Player == nullptr
+		|| G.Target == nullptr || G.Fighter == nullptr || G.Player == nullptr)
 	{
 		return false;
 	}
@@ -1352,20 +1358,6 @@ bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 	TestEqual(TEXT("damage leaves the one authored relationship row intact"),
 		Victim.Relationships.NumEntityRules() * 10 + Victim.Relationships.NumDerivedRules(), 10);
 
-	TArray<uint8> Payload;
-	{
-		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
-		Victim.Serialize(Ar);
-	}
-
-	// The destination world: the catalogue is installed once per process, so the second fixture
-	// borrows the first one's.
-	FCombatFixture G(TEXT("0"), /*bWithFists*/ true, /*bInstallCatalogue*/ false);
-	if (G.Target == nullptr || G.Fighter == nullptr || G.Player == nullptr)
-	{
-		return false;
-	}
 	// A live stimulus on the DESTINATION store, because clearing one is the direction the load's own
 	// reset exists for — an already-empty array would be left alone by a load that did nothing at
 	// all. This is the fight the player was in before the slot was loaded, and a restored character
@@ -1374,11 +1366,8 @@ bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 		5, /*ExpiresAt*/ 1000.0);
 	TestEqual(TEXT("the destination relationship store holds a transient row before the load"),
 		G.Target->Relationships.NumDerivedRules(), 1);
-	{
-		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-		G.Target->Serialize(Ar);
-	}
+
+	ElysiumRoundTripSnapshot(F.World, G.World);
 
 	const FElysiumRelationships& Restored = G.Target->Relationships;
 	TestEqual(TEXT("the authored hate row survived the round trip"),

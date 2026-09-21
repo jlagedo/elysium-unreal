@@ -6,7 +6,6 @@
 // back here, so this is a one-way edge.
 #include "Substrate/ElysiumSchedule.h"
 
-class FElysiumEntityWorld;
 struct FElysiumSaveArchive;
 
 // Story 29c-1, family **Hints**. Five retail bodies — `0x102a13d0`, `0x102a1420`, `0x102a1470`,
@@ -176,5 +175,6 @@ struct FElysiumNpcScheduleHost
 	static const TCHAR* SetScheduleTraceName(const TCHAR* RetailClass);
 
 	void ResetThinkTimers(double Now) { NextUpdate = NextNormal = NextMove = NextAI = Now; }
-	void Serialize(FElysiumSaveArchive& Ar, const FElysiumEntityWorld* World);
+	void Serialize(FElysiumSaveArchive& Ar);
+	void OnPostRestore();
 };

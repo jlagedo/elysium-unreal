@@ -656,8 +656,12 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// would read those bytes as the fields that followed them. `SeeUnknownSweep` does the same with
 	// the see-unknown grace timer. Saves are disposable, so the floor is deliberately moved to that
 	// schema rather than migrated.
-	TestEqual(TEXT("the floor is the see-unknown-sweep schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::SeeUnknownSweep);
+	// `NpcSaveWalkSplit` then moved it further than any of those: 0019/2 pass C took 62 words out
+	// of the NPC leaf and left them to the generated datamap walk, which changes the record in both
+	// directions at once. Every leaf gate below the floor is therefore unreachable-false by
+	// construction, which is what makes the list below a list of DEAD gates.
+	TestEqual(TEXT("the floor is the save-walk-split schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NpcSaveWalkSplit);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -740,7 +744,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::ComfortSweep);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcSaveWalkSplit);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -770,7 +774,11 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the terminal's mail flags and the player's global email"),
 			(int32)FElysiumSaveVersion::TerminalEmail),
 		TPair<const TCHAR*, int32>(TEXT("the sound sweep's committed source"),
-			(int32)FElysiumSaveVersion::SoundSweep) })
+			(int32)FElysiumSaveVersion::SoundSweep),
+			TPair<const TCHAR*, int32>(TEXT("the see-unknown sweep's grace timer"),
+				(int32)FElysiumSaveVersion::SeeUnknownSweep),
+			TPair<const TCHAR*, int32>(TEXT("the comfort sweep's re-arm clock"),
+				(int32)FElysiumSaveVersion::ComfortSweep) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is below the disposable-schema floor"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported >= Appended.Value);

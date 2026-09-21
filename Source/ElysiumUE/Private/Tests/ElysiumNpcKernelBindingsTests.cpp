@@ -5,6 +5,10 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
+#include "ElysiumEntityWorld.h"
+#include "ElysiumSaveTypes.h"
+#include "Substrate/ElysiumNpc.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 
 // The generated NPC field table, asserted rather than described.
 //
@@ -213,6 +217,253 @@ bool FElysiumNpcKernelBindingsChainTest::RunTest(const FString&)
 		TestEqual(TEXT("the compiled sheet is 74 slots"), Slots, 74);
 	}
 
+	return true;
+}
+
+// The generated SAVE walk, driven end to end through the real persistence path.
+//
+// `Counts` above asserts the SHAPE of the emission — that the rows exist and carry the right
+// flags. Nothing asserted that they survive a save. That matters here more than it usually would,
+// because until 0019/2 pass C the NPC leaf ALSO wrote 62 of these words by hand, and
+// `ApplyEntityRecord` restores registered fields first and replays the leaf blob after — so a
+// hand-written word silently overrode the generated one and the walk's own value never landed.
+// The failure mode was a value mismatch with no error anywhere, which is exactly the kind of
+// thing only a round trip catches.
+//
+// So: stamp every registered `Save` row with a value it could not hold by accident, freeze, apply
+// onto a world that was just built and knows nothing about any of it, and require each row to
+// read back. A row that does not is either a hand serializer that has come back, or a restore
+// hook overreaching — and the second is a real answer, which is why the exceptions below are
+// named one by one rather than skipped in bulk.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBindingsSaveRoundTripTest,
+	"Elysium.Substrate.NpcKernelBindings.SaveRoundTrip", GElysiumNpcBindingsFlags)
+bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
+{
+	// What the restore hook is SUPPOSED to overwrite, each with the reason it does. Retail's own
+	// slot 130 re-derives rather than trusts for exactly these, so a row here is the walk working
+	// and the hook working, not a leak. Anything not on this list must survive untouched.
+	struct FDerived { const TCHAR* Name; const TCHAR* Why; };
+	static const FDerived Derived[] =
+	{
+		// --- The restart divergence, through retail's own slot 435 -------------------------------
+		// `BaseOnRestore 0x1027bf50` re-finds the saved program and retail then RESUMES it, because
+		// its datamap also restored the task cursor at `+0x5c50`. This port does not save that
+		// cursor (a task holds a clip, a pending move or a deadline, none of which survive a load),
+		// so it restarts the program instead -- and a restart runs `TroikaOnScheduleChange`
+		// `0x102a0940`, retail's own slot 435, which releases exactly the per-run words below. They
+		// are the price of the restart, they belong to the task that is not coming back, and the
+		// restarted program's first tasks set them again.
+		{ TEXT("m_flGoalTolerance"),              TEXT("released by slot 435 `0x102a09ce`") },
+		{ TEXT("m_flInsideInterruptDistanceSqr"), TEXT("released by slot 435 `0x102a09d4`") },
+		{ TEXT("m_flOutsideInterruptDistanceSqr"),TEXT("released by slot 435 `0x102a09da`") },
+		{ TEXT("m_flInterruptTime"),              TEXT("released by slot 435 `0x102a09e0`") },
+		{ TEXT("m_hMoveTargetEnt"),               TEXT("released by slot 435 `0x102a09e6`") },
+		{ TEXT("m_flDesiredMoveYaw"),             TEXT("released by slot 435 `0x102a0a8d`") },
+		{ TEXT("m_bWaitFinishedSet"),             TEXT("released by slot 435 `0x102a0a93`") },
+		{ TEXT("m_flMoveWaitFinished"),           TEXT("released by slot 435 `0x1027a716`") },
+		{ TEXT("m_bShouldMove"),                  TEXT("released by slot 435 `0x102a09c8`") },
+		{ TEXT("m_hOpeningDoor"),
+		  TEXT("slot 435's live-door arm `0x102a09f8` dispatches slot 532, which clears the pair") },
+		{ TEXT("m_bOpeningDoorWait"),             TEXT("cleared with `m_hOpeningDoor`") },
+		{ TEXT("m_bDidMaintainSchedule"),
+		  TEXT("false by every install, restated as a rule of the install rather than a side "
+		       "effect -- a restarted program gets the one think of DELAY_INTERRUPTS immunity a "
+		       "fresh install gives") },
+		{ TEXT("m_iFeedPhase"),
+		  TEXT("the restart interrupts a running feed, and its teardown leaves the phase in "
+		       "`ReleaseTail` rather than wherever the record found it") },
+		{ TEXT("m_IdealSchedule"),
+		  TEXT("the restart re-seeds the host's ideal alongside the program it installs") },
+
+		// --- Values another build could have written, refused rather than trusted ---------------
+		{ TEXT("m_iPLCriminalLevelWitnessed"),
+		  TEXT("clamped to `ElysiumLaw::MaxActivityLevel` by the witness hook") },
+		{ TEXT("m_iPLSupernaturalLevelWitnessed"),
+		  TEXT("clamped to `ElysiumLaw::MaxActivityLevel` by the witness hook") },
+
+		// --- Derived, not stored ----------------------------------------------------------------
+		{ TEXT("m_hActiveWeapon"),
+		  TEXT("`Inventory.RebuildFrom` re-derives the handle list after every record has landed: "
+		       "it is a cache of what the items' own Save rows say, not a fact of its own") },
+		{ TEXT("m_eForcedState"),
+		  TEXT("a word of the scripted-schedule order, which is session state -- the hook retires "
+		       "the order rather than resuming a route out of the previous map epoch") },
+		{ TEXT("m_flLastInPlayerLOS"),
+		  TEXT("re-headed against the live clock by the senses hook") },
+		{ TEXT("m_flLastInPlayerPVS"),
+		  TEXT("re-headed against the live clock by the senses hook") },
+		{ TEXT("m_flNextPlayerLOS"),
+		  TEXT("re-headed against the live clock by the senses hook") },
+		{ TEXT("m_flSeekDistInspection"),
+		  TEXT("`ResolveTuning` re-derives the perception pair from the restored keyfields") },
+		{ TEXT("m_flHearingScalarInspection"),
+		  TEXT("`ResolveTuning` re-derives the perception pair from the restored keyfields") },
+	};
+	auto IsDerived = [](FName Row, const TCHAR*& OutWhy) -> bool
+	{
+		for (const FDerived& D : Derived)
+		{
+			if (Row == FName(D.Name)) { OutWhy = D.Why; return true; }
+		}
+		return false;
+	};
+
+	// A value of each type that no spawn default and no re-derivation produces, so "it came back"
+	// cannot be confused with "it was never written". Handles are the exception and have to name a
+	// LIVE index: the applier re-stamps a saved handle's epoch and drops one whose index no longer
+	// exists, so a bogus index would read back Invalid for a correct reason.
+	int32 Salt = 0;
+	auto Stamp = [&Salt](const FElysiumFieldAccessor& Acc,
+		const FElysiumEntityHandle& Live) -> FElysiumVariant
+	{
+		++Salt;
+		switch (Acc.Type)
+		{
+		case EElysiumVariantType::Bool:   return FElysiumVariant::Bool(true);
+		// Inside a `uint8` so an enum-backed row round-trips its storage rather than its top
+		// bits: pass B widened the marshaller to every integral type and every enum precisely
+		// because retail's `FIELD_INTEGER` lands on the port's narrow words, and a stamp that
+		// overflowed one would fail here for the marshaller's reason instead of the record's.
+		case EElysiumVariantType::Int:    return FElysiumVariant::Int(100 + (Salt % 100));
+		case EElysiumVariantType::Float:  return FElysiumVariant::Float(2000.f + Salt);
+		case EElysiumVariantType::String: return FElysiumVariant::String(
+			FString::Printf(TEXT("roundtrip_%d"), Salt));
+		case EElysiumVariantType::Vector: return FElysiumVariant::Vector(
+			FVector(Salt, Salt + 1, Salt + 2));
+		case EElysiumVariantType::Handle: return FElysiumVariant::Handle(Live);
+		default:                          return FElysiumVariant::Void();
+		}
+	};
+
+	FElysiumNpcWorldFixture F(([]
+	{
+		FElysiumNpcWorldBuilder B(TEXT("bindings_roundtrip"), 20260921u);
+		B.AddNpc(TEXT("subject"));
+		// A second NPC so every saved handle can name a live entity that is not the subject: a
+		// handle that pointed at itself would round-trip even if the rebase dropped it.
+		B.AddNpc(TEXT("other"), FVector(256.0, 0.0, 0.0));
+		return B;
+	})());
+
+	FElysiumNpc* Subject = F.Npc(TEXT("subject"));
+	FElysiumNpc* Other = F.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the subject NPC stands"), Subject)
+		|| !TestNotNull(TEXT("the witness NPC stands"), Other))
+	{
+		return false;
+	}
+
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	if (!TestNotNull(TEXT("the subject carries a class descriptor"), Subject->Class))
+	{
+		return false;
+	}
+
+	// Only the generated walk's own rows: they are the ones with no external name, which is what
+	// the `m_` prefix means here (`docs/vtmb/python_bridge.md` § "The three gates, read together").
+	TMap<FName, FElysiumVariant> Written;
+	for (const FName& Row : Reg.SaveFields(*Subject->Class))
+	{
+		if (!Row.ToString().StartsWith(TEXT("m_")))
+		{
+			continue;
+		}
+		const FElysiumFieldAccessor* Acc = Reg.FindField(*Subject->Class, Row);
+		if (Acc == nullptr || !Acc->Set || !Acc->Get)
+		{
+			continue;
+		}
+		const FElysiumVariant Value = Stamp(*Acc, Other->Handle);
+		if (Value.Type == EElysiumVariantType::Void)
+		{
+			continue;
+		}
+		Acc->Set(*Subject, Value);
+		Written.Emplace(Row, Value);
+	}
+
+	// The walk is the NPC's whole retail persistence, so an empty one would make every assertion
+	// below vacuously true.
+	if (!TestTrue(TEXT("the generated walk carries rows to round-trip"), Written.Num() > 100))
+	{
+		return false;
+	}
+
+	FElysiumMapSnapshot Snapshot;
+	F.World.Freeze(Snapshot);
+	if (!TestTrue(TEXT("the frozen map carries records"), Snapshot.Entities.Num() > 0))
+	{
+		return false;
+	}
+
+	// A world built from the same defs and nothing else: every value below has to have come out of
+	// the record, because nothing here ever wrote one.
+	FElysiumNpcWorldFixture G(([]
+	{
+		FElysiumNpcWorldBuilder B(TEXT("bindings_roundtrip"), 20260921u);
+		B.AddNpc(TEXT("subject"));
+		B.AddNpc(TEXT("other"), FVector(256.0, 0.0, 0.0));
+		return B;
+	})());
+	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
+
+	FElysiumNpc* Restored = G.Npc(TEXT("subject"));
+	FElysiumNpc* RestoredOther = G.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the subject restores"), Restored)
+		|| !TestNotNull(TEXT("the witness restores"), RestoredOther))
+	{
+		return false;
+	}
+
+	int32 Survived = 0;
+	int32 Rederived = 0;
+	for (const TPair<FName, FElysiumVariant>& Row : Written)
+	{
+		const FElysiumFieldAccessor* Acc = Reg.FindField(*Restored->Class, Row.Key);
+		if (!TestNotNull(*FString::Printf(TEXT("%s is still a registered row"), *Row.Key.ToString()),
+			Acc))
+		{
+			continue;
+		}
+		const FElysiumVariant Back = Acc->Get(*Restored);
+		bool bSame = false;
+		switch (Row.Value.Type)
+		{
+		case EElysiumVariantType::Bool:   bSame = Back.AsBool == Row.Value.AsBool; break;
+		case EElysiumVariantType::Int:    bSame = Back.AsInt == Row.Value.AsInt; break;
+		case EElysiumVariantType::Float:
+			bSame = FMath::IsNearlyEqual(Back.AsFloat, Row.Value.AsFloat, 0.01f); break;
+		case EElysiumVariantType::String: bSame = Back.AsString == Row.Value.AsString; break;
+		case EElysiumVariantType::Vector:
+			bSame = Back.AsVector.Equals(Row.Value.AsVector, 0.01); break;
+		case EElysiumVariantType::Handle:
+			// The epoch is the applier's to re-stamp, so the INDEX is what round-trips.
+			bSame = Back.AsHandle.Index == RestoredOther->Handle.Index; break;
+		default: break;
+		}
+
+		const TCHAR* Why = nullptr;
+		if (IsDerived(Row.Key, Why))
+		{
+			++Rederived;
+			continue;
+		}
+		if (bSame)
+		{
+			++Survived;
+		}
+		else
+		{
+			AddError(FString::Printf(
+				TEXT("the generated save row '%s' did not survive the record — either a hand ")
+				TEXT("serializer writes it again after the field walk, or a restore hook ")
+				TEXT("overwrites it without saying so"),
+				*Row.Key.ToString()));
+		}
+	}
+
+	TestEqual(TEXT("every generated save row that is not re-derived survived the record"),
+		Survived + Rederived, Written.Num());
 	return true;
 }
 

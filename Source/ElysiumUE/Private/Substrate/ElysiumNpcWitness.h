@@ -285,7 +285,8 @@ struct FElysiumNpcWitness
 	}
 
 	void Reset();
-	void Serialize(FElysiumSaveArchive& Ar);
+	// No `Serialize`: every word of this block is a retail `SAVE` row the generated datamap walk
+	// carries, so the record restores it by name. `Rebase` is the load-side half (slot 130).
 	void Rebase(const FElysiumEntityWorld& World);
 };
 

@@ -403,6 +403,12 @@ SAVE_UNBOUND: dict[int, str] = {
             "disposition table whenever the model or the disposition changes "
             "(`FElysiumNpc::StanceResolvedFor`); persisting it would restore a stale derivation",
     0x64DC: "`m_flMaxBlink` is the same resolved-row word as `m_flMinBlink`",
+    0x5CA4: "`m_bConditionsGathered` is retail's BOOL latch for `has this pass gathered yet`, and "
+            "this port carries the same fact as the pass EDGE itself -- "
+            "`FElysiumNpcCognition::GatheredAt`, a `double` every stimulus producer measures "
+            "against. Binding the two would marshal a timestamp under a bool's name, and the "
+            "restore hook re-stamps the edge to the load's own `now` in any case, so there is no "
+            "member here to save",
 }
 
 # What each of the shape map's four no-member forms means for the save walk. They are not one

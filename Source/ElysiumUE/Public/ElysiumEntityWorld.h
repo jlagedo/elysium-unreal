@@ -239,6 +239,10 @@ public:
 		return RebaseHandle(Saved);
 	}
 
+	// True while a snapshot is being laid over this world. Read by leaves whose dormancy hook would
+	// otherwise re-arm a clock the record has just restored.
+	bool IsApplyingSnapshot() const { return bApplyingSnapshot; }
+
 	// Give up this world's claim on the session: forget the player (so Teardown dehydrates nothing)
 	// and suppress the teardown freeze. What a load means for the world being replaced — the record
 	// and the snapshots have already been overwritten from the payload, and travel is deferred, so
@@ -936,6 +940,10 @@ private:
 	// Set by Detach(): this world no longer owns any part of the session, so Teardown neither
 	// dehydrates the player nor freezes a snapshot over the one a load just restored.
 	bool bDetached = false;
+	// True for the duration of `ApplySnapshot`. A leaf's dormancy hook cannot otherwise tell a
+	// restore from a live `ScriptUnhide`, and the two want opposite things from the clock: an
+	// unhide arms the body to think on this frame, a restore must leave the saved cadence alone.
+	bool bApplyingSnapshot = false;
 
 	// The omission baseline: each entity's state as the spawn pass left it, index-aligned
 	// with EntityList. A freeze records only what has moved since, which is what makes a 2,600-entity

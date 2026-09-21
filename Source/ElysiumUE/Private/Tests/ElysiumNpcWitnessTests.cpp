@@ -924,41 +924,33 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessSaveTest,
 	"Elysium.Substrate.NpcWitness.Save", GElysiumTestFlags)
 bool FElysiumNpcWitnessSaveTest::RunTest(const FString&)
 {
-	TArray<uint8> Payload;
-	{
-		FWitnessFixture F;
-		if (F.Guard == nullptr || F.Player == nullptr)
-		{
-			return false;
-		}
-		FElysiumNpcWitnessChannel& Criminal = F.Guard->Witness.Channel(EChannel::Criminal);
-		Criminal.Processed = 3;
-		Criminal.Level = 4;
-		Criminal.Location = FVector(Cm(200.f), Cm(10.f), 0.0);
-		Criminal.Offender = F.Player->Handle;
-		Criminal.IgnoreUntil = 42.5;
-		FElysiumNpcWitnessChannel& Super = F.Guard->Witness.Channel(EChannel::Supernatural);
-		Super.Processed = 1;
-		Super.Level = 2;
-		Super.Offender = F.Player->Handle;
-		F.Guard->Witness.bSupernaturalFleeOnly = true;
-		F.Guard->Witness.NosferatuIgnoreUntil = 17.25;
-
-		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
-		F.Guard->Serialize(Ar);
-	}
-
+	// Through the real persistence path, because since 0019/2 pass C that is the only path that
+	// carries this block: every word of the witness record is a retail `SAVE` row the generated
+	// datamap walk restores by name (`m_iPLCriminalActProcessed`, `m_hCriminalOffender`,
+	// `m_flNosferatuIgnoreTimer` and their kin), and the clamps and the handle re-stamping are
+	// `FElysiumNpcWitness::Rebase`, which `OnPostRestore` -- retail's slot 130 -- is what runs.
+	FWitnessFixture F;
 	FWitnessFixture G;
-	if (G.Guard == nullptr || G.Player == nullptr)
+	if (F.Guard == nullptr || F.Player == nullptr || G.Guard == nullptr || G.Player == nullptr)
 	{
 		return false;
 	}
-	{
-		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-		G.Guard->Serialize(Ar);
-	}
+
+	FElysiumNpcWitnessChannel& Criminal = F.Guard->Witness.Channel(EChannel::Criminal);
+	Criminal.Processed = 3;
+	Criminal.Level = 4;
+	Criminal.Location = FVector(Cm(200.f), Cm(10.f), 0.0);
+	Criminal.Offender = F.Player->Handle;
+	Criminal.IgnoreUntil = 42.5;
+	FElysiumNpcWitnessChannel& Super = F.Guard->Witness.Channel(EChannel::Supernatural);
+	Super.Processed = 1;
+	Super.Level = 2;
+	Super.Offender = F.Player->Handle;
+	F.Guard->Witness.bSupernaturalFleeOnly = true;
+	F.Guard->Witness.NosferatuIgnoreUntil = 17.25;
+
+	ElysiumRoundTripSnapshot(F.World, G.World);
+
 	const FElysiumNpcWitness& R = G.Guard->Witness;
 	TestEqual(TEXT("the criminal processed count survives"),
 		R.Channel(EChannel::Criminal).Processed, 3);
@@ -980,36 +972,25 @@ bool FElysiumNpcWitnessSaveTest::RunTest(const FString&)
 		static_cast<int32>(R.GlobalCursor),
 		static_cast<int32>(G.World.LawEvents().LastSerial()));
 
-	// --- Additive against the previous schema -----------------------------------------------------
-	// The NPC leaf gates this block on the archive version in BOTH directions, so writing at `Law`
-	// genuinely omits it — the same shape the senses and loadout blocks use, and the reason this
-	// does not need a hand-written legacy byte stream.
+	// --- The clamp, which is the whole reason the hook exists rather than the archive -------------
+	// A level another build wrote is refused rather than trusted: the walk restores the word, and
+	// `Rebase` is what holds it to the rulebook's ceiling.
 	{
-		TArray<uint8> Legacy;
-		{
-			FWitnessFixture F;
-			if (F.Guard == nullptr)
-			{
-				return false;
-			}
-			F.Guard->Witness.Channel(EChannel::Criminal).Processed = 9;
-			FMemoryWriter Writer(Legacy, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Law);
-			F.Guard->Serialize(Ar);
-		}
 		FWitnessFixture H;
-		if (H.Guard == nullptr)
+		FWitnessFixture I;
+		if (H.Guard == nullptr || H.Player == nullptr || I.Guard == nullptr)
 		{
 			return false;
 		}
-		H.Guard->Witness.Channel(EChannel::Criminal).Processed = 5;
-		FMemoryReader Reader(Legacy, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Law);
-		H.Guard->Serialize(Ar);
-		TestEqual(TEXT("a pre-witness payload restores an NPC that has witnessed nothing"),
-			H.Guard->Witness.Channel(EChannel::Criminal).Processed, 0);
-		TestFalse(TEXT("...with its windows at the spawn-zero default"),
-			EW::IsChannelOpen(*H.Guard, EChannel::Criminal, 0.0));
+		FElysiumNpcWitnessChannel& Wild = H.Guard->Witness.Channel(EChannel::Criminal);
+		Wild.Processed = -9;
+		Wild.Level = ElysiumLaw::MaxActivityLevel + 40;
+		Wild.Offender = H.Player->Handle;
+		ElysiumRoundTripSnapshot(H.World, I.World);
+		TestEqual(TEXT("a negative processed count is floored rather than replayed"),
+			I.Guard->Witness.Channel(EChannel::Criminal).Processed, 0);
+		TestEqual(TEXT("an over-range level is held to the rulebook's ceiling"),
+			I.Guard->Witness.Channel(EChannel::Criminal).Level, ElysiumLaw::MaxActivityLevel);
 	}
 	return true;
 }

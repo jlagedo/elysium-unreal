@@ -378,23 +378,12 @@ bool FElysiumNpc::NavigatorGoalIsActive() const
 // Slot 126 `Save`.
 // -------------------------------------------------------------------------------------------------
 
-int32 FElysiumNpc::BaseSave(void* Archive)
+// The `AIExtendedSaveHeader_t` half of `CAI_BaseNPC::Save 0x1027bc60`, on its own so the two save
+// paths build one header. Retail writes exactly this block by hand and defers every other word to
+// the datamap walk; this port's generated SAVE walk is that walk, so this is the one hand block the
+// NPC record carries, and `BaseOnRestore 0x1027bf50` is what reads it back.
+FElysiumNpc::FAiExtendedSaveHeader FElysiumNpc::BuildExtendedSaveHeader() const
 {
-	// `CAI_BaseNPC::Save` `0x1027bc60`, read off the listing because the checklist's walk read the
-	// two MODE arguments as counts. `1027bc6c PUSH 0x4 / LEA EBP,[ESI+0x5b8c]` and
-	// `1027bc80 PUSH 0x3 / LEA EBX,[ESI+0x5db4]`: exactly two encode calls.
-	SaveStampEncode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
-	SaveStampEncode(ScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
-
-	// `if (m_pMotor +0x5d44) thunk_FUN_102e0b60(m_pMotor);` — the motor's pre-archive pointer
-	// fix-up, GUARDED; then `thunk_FUN_102e8aa0(&m_MoveAndShootOverlay +0x5cf4)`, which is NOT.
-	if (Motor != nullptr)
-	{
-		++MotorSaveFixups;
-	}
-	++MoveAndShootSaveFixups;
-
-	// `AIExtendedSaveHeader_t`, built on the stack at `ESP+0x14`.
 	FAiExtendedSaveHeader Header;
 	Header.Version = GExtendedHeaderVersion;
 	Header.Flags = 0;
@@ -433,6 +422,27 @@ int32 FElysiumNpc::BaseSave(void* Archive)
 		Header.ScheduleName.Reset();
 		Header.ScheduleCrc = 0;
 	}
+	return Header;
+}
+
+int32 FElysiumNpc::BaseSave(void* Archive)
+{
+	// `CAI_BaseNPC::Save` `0x1027bc60`, read off the listing because the checklist's walk read the
+	// two MODE arguments as counts. `1027bc6c PUSH 0x4 / LEA EBP,[ESI+0x5b8c]` and
+	// `1027bc80 PUSH 0x3 / LEA EBX,[ESI+0x5db4]`: exactly two encode calls.
+	SaveStampEncode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
+	SaveStampEncode(ScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
+
+	// `if (m_pMotor +0x5d44) thunk_FUN_102e0b60(m_pMotor);` — the motor's pre-archive pointer
+	// fix-up, GUARDED; then `thunk_FUN_102e8aa0(&m_MoveAndShootOverlay +0x5cf4)`, which is NOT.
+	if (Motor != nullptr)
+	{
+		++MotorSaveFixups;
+	}
+	++MoveAndShootSaveFixups;
+
+	// `AIExtendedSaveHeader_t`, built on the stack at `ESP+0x14`.
+	FAiExtendedSaveHeader Header = BuildExtendedSaveHeader();
 	SaveWriteFields(Archive, Header);
 
 	// `uVar3 = CBaseCombatCharacter::Save(this, param_1);` — the chain's answer, and this body's.

@@ -1381,8 +1381,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemySaveTest,
 	"Elysium.Substrate.NpcEnemy.Save", GElysiumTestFlags)
 bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 {
+	// Through the real persistence path: `m_hEnemy`, `m_iEnemySightings`, `m_flSumDamage` and
+	// `m_flLastDamageTime` are retail `SAVE` rows the generated datamap walk carries since 0019/2
+	// pass C, while the `CAI_Memory` record list stays in the leaf blob (retail's own nested
+	// datamap). Only `Freeze`/`ApplySnapshot` drives both, and only it runs the restore hook.
 	FEnemyFixture F;
-	if (F.Guard == nullptr || F.Player == nullptr)
+	FEnemyFixture G;
+	if (F.Guard == nullptr || F.Player == nullptr || G.Guard == nullptr || G.Player == nullptr)
 	{
 		return false;
 	}
@@ -1403,26 +1408,12 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	F.Guard->Senses.Memory.RepeatedDamageAccumulated = 17;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
 
-	TArray<uint8> Payload;
-	{
-		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
-		F.Guard->Serialize(Ar);
-	}
-
-	FEnemyFixture G;
-	if (G.Guard == nullptr || G.Player == nullptr)
-	{
-		return false;
-	}
-	{
-		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-		G.Guard->Serialize(Ar);
-	}
+	ElysiumRoundTripSnapshot(F.World, G.World);
 
 	const FElysiumNpcMemory& Restored = G.Guard->Senses.Memory;
 	TestTrue(TEXT("the committed enemy survives"), Restored.Enemy == G.Player->Handle);
+	TestEqual(TEXT("the sighting count survives, through the generated walk"),
+		G.Guard->EnemySightings, 3);
 	TestTrue(TEXT("the eluded marker survives"), G.Guard->EnemyMemory.IsEluded(G.Player->Handle));
 	const FElysiumNpcEnemyMemoryRecord* RestoredRecord =
 		G.Guard->EnemyMemory.Find(G.Player->Handle);
@@ -1448,26 +1439,24 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	// stimulus from before the save cannot read as new.
 	TestTrue(TEXT("the pass clock is stamped on restore"), G.Guard->Cognition.GatheredAt >= 0.0);
 
-	// A payload written before this schema restores with the defaults rather than being refused.
+	// The hook's own half: a record whose actor the restored world no longer carries is dropped
+	// rather than left naming a dead index (`FElysiumNpcEnemyMemory::Rebase`).
 	{
-		TArray<uint8> Legacy;
-		{
-			FMemoryWriter Writer(Legacy, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::NpcSenses);
-			F.Guard->Serialize(Ar);
-		}
 		FEnemyFixture H;
-		if (H.Guard == nullptr)
+		FEnemyFixture I;
+		if (H.Guard == nullptr || H.Player == nullptr || I.Guard == nullptr)
 		{
 			return false;
 		}
-		FMemoryReader Reader(Legacy, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::NpcSenses);
-		H.Guard->Serialize(Ar);
-		TestEqual(TEXT("a pre-enemy-memory payload restores no observed actors"),
-			H.Guard->EnemyMemory.Num(), 0);
-		TestEqual(TEXT("...and no open damage window"),
-			H.Guard->Senses.Memory.RepeatedDamageAccumulated, 0);
+		H.Guard->EnemyMemory.Update(*H.Guard, H.Player->Handle, 5.0);
+		if (FElysiumNpcEnemyMemoryRecord* Row = H.Guard->EnemyMemory.FindMutable(H.Player->Handle))
+		{
+			Row->Handle = FElysiumEntityHandle(9999, 1);   // an index no world ever had
+			Row->bPositionOnly = false;
+		}
+		ElysiumRoundTripSnapshot(H.World, I.World);
+		TestEqual(TEXT("a record naming an actor the restored world lacks is dropped"),
+			I.Guard->EnemyMemory.Num(), 0);
 	}
 	return true;
 }

@@ -93,6 +93,10 @@ struct FElysiumSaveVersion
 		SeeUnknownSweep = 37,
 		// The comfort sweep's re-arm clock and the NPC's `m_hTargetEnt`, appended to the NPC leaf.
 		ComfortSweep = 38,
+		// 0019/2 pass C: the NPC leaf gives up the 62 words the generated datamap SAVE walk already
+		// carries and gains retail's own `AIExtendedSaveHeader_t` in their place. A mid-record
+		// change in every direction at once, so the floor moves with it.
+		NpcSaveWalkSplit = 39,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -110,7 +114,12 @@ struct FElysiumSaveVersion
 	// `NpcEnemyMemory` inserts the CAI_Memory block ahead of later NPC leaf blocks. Saves are
 	// disposable, so the build refuses every older payload rather than attempting a migration or
 	// replaying a shifted leaf.
-	static constexpr int32 MinSupported = SeeUnknownSweep;
+	//
+	// `NpcSaveWalkSplit` is the same judgement at a larger scale: 0019/2 pass C moved 62 words out
+	// of the NPC leaf and into the generated datamap walk, which changes the record in both
+	// directions at once. Every leaf gate below this line is therefore unreachable-false by
+	// construction, and a gate that can never read false is dead code rather than compatibility.
+	static constexpr int32 MinSupported = NpcSaveWalkSplit;
 
 	static const FGuid GUID;
 };

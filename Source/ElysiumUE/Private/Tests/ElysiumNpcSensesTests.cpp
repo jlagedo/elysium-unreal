@@ -674,9 +674,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesMemorySaveTest,
 	"Elysium.Substrate.NpcSenses.MemorySave", GElysiumTestFlags)
 bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 {
+	// Through the real persistence path. Since 0019/2 pass C the memory record is split between two
+	// carriers: 27 of its words are retail `SAVE` rows the generated datamap walk restores by name
+	// (`m_hEnemy`, `m_hLastSeen*Ent`, `m_flLastInPlayerLOS` …), and what stays in the leaf blob is
+	// the port-only state plus the eight embedded sound records, which is what retail's own
+	// `FIELD_EMBEDDED` rows recurse into. Only `Freeze`/`ApplySnapshot` drives both.
 	FSensesFixture F;
+	FSensesFixture G;
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard)
-		|| !TestNotNull(TEXT("the player exists"), F.Player))
+		|| !TestNotNull(TEXT("the player exists"), F.Player)
+		|| G.Guard == nullptr || G.Player == nullptr)
 	{
 		return false;
 	}
@@ -697,24 +704,7 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	Mem.bEnemyLosLatched = true;
 	Mem.PlayerLosLastClearTime = 6.0;
 
-	TArray<uint8> Payload;
-	{
-		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
-		F.Guard->Serialize(Ar);
-	}
-
-	// A second world of the same shape, restored from that payload.
-	FSensesFixture G;
-	if (G.Guard == nullptr || G.Player == nullptr)
-	{
-		return false;
-	}
-	{
-		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-		G.Guard->Serialize(Ar);
-	}
+	ElysiumRoundTripSnapshot(F.World, G.World);
 
 	const FElysiumNpcMemory& Restored = G.Guard->Senses.Memory;
 	TestTrue(TEXT("the committed enemy survives the round trip"),
@@ -735,24 +725,26 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	TestTrue(TEXT("...and the edge latch, so a restore does not re-fire OnFoundEnemy"),
 		Restored.bEnemyLosLatched);
 
-	// A payload written before the senses block restores without them rather than half-read.
+	// The hook's own half: a remembered enemy the restored world no longer has drops, and the
+	// latch and debounce it was taken for drop with it (`FElysiumNpcMemory::Rebase`).
 	{
-		TArray<uint8> Legacy;
-		{
-			FMemoryWriter Writer(Legacy, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Activation);
-			F.Guard->Serialize(Ar);
-		}
 		FSensesFixture H;
-		if (H.Guard == nullptr)
+		FSensesFixture I;
+		if (H.Guard == nullptr || I.Guard == nullptr)
 		{
 			return false;
 		}
-		FMemoryReader Reader(Legacy, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Activation);
-		H.Guard->Serialize(Ar);
-		TestFalse(TEXT("a pre-senses payload restores an NPC with no remembered enemy"),
-			H.Guard->Senses.Memory.Enemy.IsSet());
+		// An index no world ever had: the applier answers Invalid, as it does for a killed entity.
+		H.Guard->Senses.Memory.Enemy = FElysiumEntityHandle(9999, 1);
+		H.Guard->Senses.Memory.EnemyLosFailures = 3;
+		H.Guard->Senses.Memory.bEnemyLosLatched = true;
+		ElysiumRoundTripSnapshot(H.World, I.World);
+		TestFalse(TEXT("an enemy the restored world does not carry comes back unset"),
+			I.Guard->Senses.Memory.Enemy.IsSet());
+		TestEqual(TEXT("...and the debounce taken for it drops with it"),
+			I.Guard->Senses.Memory.EnemyLosFailures, 0);
+		TestFalse(TEXT("...and so does the edge latch"),
+			I.Guard->Senses.Memory.bEnemyLosLatched);
 	}
 	return true;
 }

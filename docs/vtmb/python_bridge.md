@@ -290,9 +290,20 @@ writable by nothing — which is the shape of nearly every authored keyvalue in 
 
 A `SAVE` row with **no external name** therefore answers no name at all: no read, no input, no
 attribute. It is persistence and nothing else. That is what makes the port's generated save walk
-(`AddNpcSaveFields`, 199 rows on the NPC chain) register under the RETAIL MEMBER NAME with
+(`AddNpcSaveFields`, 198 rows on the NPC chain) register under the RETAIL MEMBER NAME with
 `EElysiumField::Save` alone — there is no external to use, and the `m_` prefix cannot collide with
 the keyed namespace above.
+
+**And since 0019/2 pass C (2026-09-21) that walk is the SOLE carrier of those rows.** The port used
+to write 62 of the same words by hand into the NPC's leaf blob as well, through the component
+serializers; because `ApplyEntityRecord` restores registered fields by name FIRST and replays the
+leaf blob AFTER, the hand-written copy silently won and the walk's value never landed. The split
+now follows retail's own: `CAI_BaseNPC::Save 0x1027bc60` writes one hand block
+(`AIExtendedSaveHeader_t`) and defers the rest to the datamap walk, and every load-side
+re-derivation — the handle re-stamping, the clamps, the schedule re-find by name and task-array
+CRC32 — is slot 130, `CAI_BaseNPC::OnRestore 0x1027bf50`, which the port reaches through
+`FElysiumEntity::OnPostRestore`. A nested `Serialize` survives only where retail has a
+`FIELD_EMBEDDED` row and recurses into a second `datamap_t` itself.
 
 ## AI infrastructure references and mutations (2026-09-17)
 

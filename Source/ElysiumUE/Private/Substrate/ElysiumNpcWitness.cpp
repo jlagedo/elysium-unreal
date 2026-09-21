@@ -227,41 +227,20 @@ void FElysiumNpcWitness::Reset()
 	*this = FElysiumNpcWitness();
 }
 
-void FElysiumNpcWitness::Serialize(FElysiumSaveArchive& Ar)
-{
-	for (int32 i = 0; i < ChannelCount; ++i)
-	{
-		Ar << Channels[i].Processed;
-		Ar << Channels[i].Level;
-		Ar << Channels[i].Location;
-		Ar << Channels[i].Offender;
-		Ar << Channels[i].IgnoreUntil;
-	}
-	uint8 FleeOnly = bSupernaturalFleeOnly ? 1 : 0;
-	Ar << FleeOnly;
-	Ar << NosferatuIgnoreUntil;
-	if (Ar.IsLoading())
-	{
-		bSupernaturalFleeOnly = FleeOnly != 0;
-		for (int32 i = 0; i < ChannelCount; ++i)
-		{
-			// A payload written by another build must not be able to make an act count run backwards:
-			// the processed count is monotonic by construction, and a negative one would replay every
-			// act the player has ever committed.
-			Channels[i].Processed = FMath::Max(0, Channels[i].Processed);
-			Channels[i].Level = FMath::Clamp(Channels[i].Level, 0, ElysiumLaw::MaxActivityLevel);
-		}
-	}
-	// The global lane's consumed-serial cursor is deliberately NOT here. The store it indexes is
-	// session state (K8, the reasoning is on `FElysiumLawEventBus`), so a saved serial would name a
-	// record that no longer exists; `Rebase` starts it at the live head instead, which is exactly
-	// what the sound cursor does for the same reason.
-}
-
+// The post-restore half of this block. Every word of it is a retail `SAVE` row the generated
+// datamap walk carries (`AddNpcSaveFields`: `m_iPLCriminalActProcessed`, `m_hCriminalOffender`,
+// `m_flNosferatuIgnoreTimer` and their kin), so nothing here reads an archive -- what is left is
+// what a walk cannot do: re-stamp handles whose epoch died with the old map, and refuse a value
+// another build wrote.
 void FElysiumNpcWitness::Rebase(const FElysiumEntityWorld& World)
 {
 	for (int32 i = 0; i < ChannelCount; ++i)
 	{
+		// A payload written by another build must not be able to make an act count run backwards:
+		// the processed count is monotonic by construction, and a negative one would replay every
+		// act the player has ever committed.
+		Channels[i].Processed = FMath::Max(0, Channels[i].Processed);
+		Channels[i].Level = FMath::Clamp(Channels[i].Level, 0, ElysiumLaw::MaxActivityLevel);
 		Channels[i].Offender = World.RebaseSavedHandle(Channels[i].Offender);
 		if (!Channels[i].Offender.IsSet())
 		{
@@ -275,6 +254,10 @@ void FElysiumNpcWitness::Rebase(const FElysiumEntityWorld& World)
 	{
 		bSupernaturalFleeOnly = false;
 	}
+	// The global lane's consumed-serial cursor is deliberately not a saved word. The store it
+	// indexes is session state (K8, the reasoning is on `FElysiumLawEventBus`), so a saved serial
+	// would name a record that no longer exists; it starts at the live head instead, which is
+	// exactly what the sound cursor does for the same reason.
 	GlobalCursor = World.LawEvents().LastSerial();
 }
 

@@ -626,8 +626,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x5d78 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bCondTookDamage"),
 			[](auto& E) -> auto&{ return E.Cognition.bCondTookDamage; }, EElysiumField::Save);  // +0x5b80 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bConditionsGathered"),
-			[](auto& E) -> auto&{ return E.Cognition.GatheredAt; }, EElysiumField::Save);  // +0x5ca4 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bDidMaintainSchedule"),
 			[](auto& E) -> auto&{ return E.Schedule.bDidMaintainSchedule; }, EElysiumField::Save);  // +0x5bb8 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bEnemyWentOccluded"),
@@ -1075,6 +1073,12 @@ namespace ElysiumNpcKernelBindings
 		// own typed `Serialize`, which is the same shape
 		// NOT SAVED +0x5d48 m_UnreachableEnts (custom) — this port declares no member for the word
 		// (the shape map's row says why), so there is nothing for the save walk to carry
+		// NOT SAVED +0x5ca4 m_bConditionsGathered (bool) — `m_bConditionsGathered` is retail's BOOL
+		// latch for `has this pass gathered yet`, and this port carries the same fact as the pass
+		// EDGE itself -- `FElysiumNpcCognition::GatheredAt`, a `double` every stimulus producer
+		// measures against. Binding the two would marshal a timestamp under a bool's name, and the
+		// restore hook re-stamps the edge to the load's own `now` in any case, so there is no
+		// member here to save
 		// NOT SAVED +0x6080 m_bDisableAI (bool) — the port member exists but its owner keeps it
 		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
 		// which is where it stays until that struct exposes an accessor
@@ -1583,7 +1587,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::NpcMakerZombie:
 				return {3, 0, 0, 0, 0};
 			default:
-				return {37, 3, 24, 34, 199};
+				return {37, 3, 24, 34, 198};
 		}
 	}
 }

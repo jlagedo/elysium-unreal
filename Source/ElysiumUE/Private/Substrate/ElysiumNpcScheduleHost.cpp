@@ -116,20 +116,23 @@ const TCHAR* FElysiumNpcScheduleHost::SetScheduleTraceName(const TCHAR* RetailCl
 	return TEXT("");
 }
 
-void FElysiumNpcScheduleHost::Serialize(FElysiumSaveArchive& Ar, const FElysiumEntityWorld* World)
+// Twenty-three of the words this block used to write are retail `SAVE` rows the generated datamap
+// walk now carries under their own names -- the four think clocks and their four stamps
+// (`m_flNextUpdateThink` .. `m_flLastAIThink`), `m_afMemory`, `m_flGoalTolerance`,
+// `m_hMoveTargetEnt`, `m_hKickPhysicsProp` and the rest. What is left is port state retail has no
+// row for. The two handles are gone from here as well: the field applier re-stamps a saved handle's
+// epoch itself for every registered row, so a second rebase here would restate what it already did.
+void FElysiumNpcScheduleHost::Serialize(FElysiumSaveArchive& Ar)
 {
-	Ar << NextUpdate << NextNormal << NextMove << NextAI;
-	Ar << LastUpdate << LastNormal << LastMove << LastAI;
-	Ar << FailureReason << MemoryBits << GoalToleranceCm << DesiredMoveYaw;
-	Ar << SquadDisconnected;
-	Ar << InsideInterruptDistanceSqr << OutsideInterruptDistanceSqr << InterruptTime;
-	Ar << MoveTarget << KickProp << HintNode << HintReusableAt << SavedSleepExtents << bPatrolPathUseHint;
-	Ar << bOwnsHint << FailedCoverLosChecks << AttackExtentsCm;
-	Ar << bSavePositionWalk << bMotorAnimationMovement << bWaitFinishedSet << Unknown6300 << Unknown659c << MoveWaitFinished;
-	if (Ar.IsLoading()) PendingFailureReason = 0;
-	if (Ar.IsLoading() && World)
-	{
-		MoveTarget = World->RebaseSavedHandle(MoveTarget);
-		KickProp = World->RebaseSavedHandle(KickProp);
-	}
+	Ar << FailureReason;
+	Ar << HintNode << HintReusableAt << bOwnsHint;
+	Ar << AttackExtentsCm << bMotorAnimationMovement;
+	Ar << Unknown6300 << Unknown659c;
+}
+
+// The load-side half (slot 130). `PendingFailureReason` is the in-flight half of a failure the
+// record has already resolved into `FailureReason`, so a restored host carries no pending one.
+void FElysiumNpcScheduleHost::OnPostRestore()
+{
+	PendingFailureReason = 0;
 }

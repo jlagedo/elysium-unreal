@@ -906,6 +906,8 @@ public:
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+
 	virtual const TCHAR* SaveBlockReason() const override;
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
@@ -1327,19 +1329,27 @@ private:
 	// The autonomous executors: the patrol route, an interesting place, or the standing stance.
 	void ThinkAutonomous(double Now, bool bReduced);
 
-	// --- Serialize(), one helper per version block, in exact archive order ----------------------
+	// --- Serialize(), in exact archive order ---------------------------------------------------
+	//
+	// Words only. Retail's one hand block (`AIExtendedSaveHeader_t`) and, after it, the port state
+	// no retail datamap row reaches. Everything load-side is `OnPostRestore` below.
 
-	// The pre-version patrol and ambient state. Returns false for a payload written before
-	// ambient-place state existed, which is where the leaf's record ends.
-	bool SerializePatrolBlock(FElysiumSaveArchive& Ar);
+	void SerializeExtendedHeader(FElysiumSaveArchive& Ar);
+	void SerializePatrolBlock(FElysiumSaveArchive& Ar);
 	void SerializeMakerBlock(FElysiumSaveArchive& Ar);
 	void SerializeMindBlock(FElysiumSaveArchive& Ar);
-	void SerializeScheduleBlock(FElysiumSaveArchive& Ar);
-	void SerializeSocialBlock(FElysiumSaveArchive& Ar);
-	void SerializeSensesBlock(FElysiumSaveArchive& Ar);
-	void SerializeLoadoutBlock(FElysiumSaveArchive& Ar);
-	void SerializeWitnessBlock(FElysiumSaveArchive& Ar);
-	void SerializeDisciplineBlock(FElysiumSaveArchive& Ar);
+
+	// --- OnPostRestore(), retail's slot 130 ----------------------------------------------------
+
+	void RestartRestoredSchedule();
+	void RestorePatrolAndAmbient();
+	void RestoreMindState();
+	void RestoreDisciplineState(FElysiumEntityWorld& InWorld);
+
+	// The mind's saved words, held between the record and `RestoreMindState`, which validates them
+	// against the patrol and ambient state the same hook has just settled.
+	uint8 RestoredMindState = 0;
+	uint8 RestoredMindOwner = 0;
 
 	// ---------------------------------------------------------------------------------------------
 

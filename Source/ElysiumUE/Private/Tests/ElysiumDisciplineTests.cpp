@@ -33,6 +33,7 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 
 #include "Misc/ScopeExit.h"
 #include "Serialization/MemoryReader.h"
@@ -1650,153 +1651,101 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 	FRulesFixture Rules;
 	const TCHAR* const DazeGroup = TEXT("Discipline (Test-Daze)");
 
-	// One built world with a cast already landed on victim0, plus the payload its NPC leaf writes.
-	auto CastAndFreeze = [&Rules](TArray<uint8>& OutPayload, int32 Version,
-		FElysiumActiveDisciplineEffect& OutExpected) -> bool
+	// One world of this shape. Two of them stand at once, because since 0019/2 pass C the discipline
+	// restore -- the caster rebase, the `Effects` re-install and the health-over-derive -- is
+	// `FElysiumNpc::RestoreDisciplineState`, reached from `OnPostRestore` (retail's slot 130), and
+	// only `Freeze`/`ApplySnapshot` runs it.
+	struct FDisciplineWorld
 	{
-		ElysiumRng::SeedAll(9109);
 		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeDisciplineTestDefs());
-		World.SpawnPlayer();
-		World.Activate(0.0);
-		World.Tick(0.0);
+		FElysiumEntityWorld World;
 
-		FElysiumPlayer* Player = World.FindPlayer();
-		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim0"));
-		if (Player == nullptr || Victim == nullptr)
+		FDisciplineWorld() : World(nullptr, nullptr, Services.Bundle())
 		{
-			return false;
+			ElysiumRng::SeedAll(9109);
+			World.Load(MakeDisciplineTestDefs());
+			World.SpawnPlayer();
+			World.Activate(0.0);
+			World.Tick(0.0);
 		}
-		SeedCharacter(*Player, Rules.Stats);
-		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
-		Player->Origin = FVector::ZeroVector;
-		Learn(*Player, ED::Dominate, 1);
-		if (!ED::Accepted(ED::Use(*Player, ED::Dominate, 1)))
-		{
-			return false;
-		}
-		if (Victim->Disciplines.TargetEffects.Num() != 1)
-		{
-			return false;
-		}
-		OutExpected = Victim->Disciplines.TargetEffects[0];
-
-		FMemoryWriter Writer(OutPayload, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Writer, Version);
-		Victim->Serialize(Ar);
-		return true;
 	};
 
-	// --- The round trip -------------------------------------------------------------------------
-	TArray<uint8> Payload;
-	FElysiumActiveDisciplineEffect Expected;
-	if (!TestTrue(TEXT("a cast landed a tracked effect on the NPC"),
-		CastAndFreeze(Payload, FElysiumSaveVersion::Latest, Expected)))
+	FDisciplineWorld Source;
+	FDisciplineWorld Dest;
+
+	FElysiumPlayer* Player = Source.World.FindPlayer();
+	FElysiumCombatCharacter* Victim = FindCharacter(Source.World, TEXT("victim0"));
+	FElysiumCombatCharacter* Restored = FindCharacter(Dest.World, TEXT("victim0"));
+	if (!TestNotNull(TEXT("the caster exists"), Player)
+		|| !TestNotNull(TEXT("the victim exists"), Victim)
+		|| !TestNotNull(TEXT("the restored victim exists"), Restored))
 	{
 		return false;
 	}
+	SeedCharacter(*Player, Rules.Stats);
+	SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
+	SeedCharacter(*Restored, Rules.Stats, /*ClanIndex*/ 0);
+	Player->Origin = FVector::ZeroVector;
+	Learn(*Player, ED::Dominate, 1);
+	if (!TestTrue(TEXT("the cast is accepted"),
+			ED::Accepted(ED::Use(*Player, ED::Dominate, 1)))
+		|| !TestEqual(TEXT("a cast landed a tracked effect on the NPC"),
+			Victim->Disciplines.TargetEffects.Num(), 1))
+	{
+		return false;
+	}
+	const FElysiumActiveDisciplineEffect Expected = Victim->Disciplines.TargetEffects[0];
 	TestEqual(TEXT("the tracked row names the record that cast it"),
 		Expected.Record, FString(GDazeRecord));
 	TestTrue(TEXT("...and carries a live expiry serial"), Expected.Serial != 0);
 
+	const int32 HealthBefore = Restored->Health;
+	TestEqual(TEXT("a freshly built NPC tracks nothing"),
+		Restored->Disciplines.TargetEffects.Num(), 0);
+	TestFalse(TEXT("...and carries none of the cast's groups"), HasEffect(*Restored, DazeGroup));
+
+	ElysiumRoundTripSnapshot(Source.World, Dest.World);
+
+	if (!TestEqual(TEXT("the tracked effect survives the record"),
+		Restored->Disciplines.TargetEffects.Num(), 1))
 	{
-		ElysiumRng::SeedAll(9109);
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeDisciplineTestDefs());
-		World.SpawnPlayer();
-		World.Activate(0.0);
-		World.Tick(0.0);
-
-		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim0"));
-		if (!TestNotNull(TEXT("the restored victim exists"), Victim))
-		{
-			return false;
-		}
-		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
-		const int32 HealthBefore = Victim->Health;
-		TestEqual(TEXT("a freshly built NPC tracks nothing"),
-			Victim->Disciplines.TargetEffects.Num(), 0);
-		TestFalse(TEXT("...and carries none of the cast's groups"), HasEffect(*Victim, DazeGroup));
-
-		{
-			FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-			Victim->Serialize(Ar);
-		}
-
-		if (!TestEqual(TEXT("the tracked effect survives the leaf round trip"),
-			Victim->Disciplines.TargetEffects.Num(), 1))
-		{
-			return false;
-		}
-		const FElysiumActiveDisciplineEffect& R = Victim->Disciplines.TargetEffects[0];
-		TestEqual(TEXT("...with its record"), R.Record, Expected.Record);
-		TestEqual(TEXT("...its hit table"), R.HitTable, Expected.HitTable);
-		TestEqual(TEXT("...its group names"), R.Effects.Num(), Expected.Effects.Num());
-		TestTrue(TEXT("...its deadline"), NearlyEqual(R.EndTime, Expected.EndTime));
-		TestEqual(TEXT("...and the expiry serial the queued event is keyed on"),
-			R.Serial, Expected.Serial);
-		TestEqual(TEXT("the serial counter comes back with it, so a renewal cannot reuse a serial"),
-			Victim->Disciplines.SerialCounter, Expected.Serial);
-		TestTrue(TEXT("the authored group is re-installed into the effect list"),
-			HasEffect(*Victim, DazeGroup));
-		TestEqual(TEXT("...exactly once per tracked row, never twice"),
-			Victim->Effects.FilterByPredicate([DazeGroup](const FString& E)
-				{ return E.Equals(DazeGroup, ESearchCase::IgnoreCase); }).Num(), 1);
-		TestEqual(TEXT("...and the restored health keyfield is not re-derived over"),
-			Victim->Health, HealthBefore);
-
-		// --- The stale serial drops harmlessly ---------------------------------------------------
-		// The owned expiry events ride the map snapshot's queue block, not this leaf, so a restored
-		// NPC can be handed a serial that no longer matches anything — a renewal minted a newer one
-		// before the save, or teardown ran. The domain's own guard drops it.
-		ED::CommitExpiry(*Victim, Expected.Serial + 500);
-		TestEqual(TEXT("a serial matching nothing removes nothing"),
-			Victim->Disciplines.TargetEffects.Num(), 1);
-		TestTrue(TEXT("...and leaves the group installed"), HasEffect(*Victim, DazeGroup));
-
-		// The MATCHING serial is what ends it, which is what makes the restore coherent.
-		ED::CommitExpiry(*Victim, R.Serial);
-		TestEqual(TEXT("the restored serial is the one the expiry event answers to"),
-			Victim->Disciplines.TargetEffects.Num(), 0);
-		TestFalse(TEXT("...and the teardown takes the group back off"),
-			HasEffect(*Victim, DazeGroup));
+		return false;
 	}
+	const FElysiumActiveDisciplineEffect& R = Restored->Disciplines.TargetEffects[0];
+	TestEqual(TEXT("...with its record"), R.Record, Expected.Record);
+	TestEqual(TEXT("...its hit table"), R.HitTable, Expected.HitTable);
+	TestEqual(TEXT("...its group names"), R.Effects.Num(), Expected.Effects.Num());
+	TestTrue(TEXT("...its deadline"), NearlyEqual(R.EndTime, Expected.EndTime));
+	TestEqual(TEXT("...and the expiry serial the queued event is keyed on"),
+		R.Serial, Expected.Serial);
+	TestEqual(TEXT("the serial counter comes back with it, so a renewal cannot reuse a serial"),
+		Restored->Disciplines.SerialCounter, Expected.Serial);
+	TestTrue(TEXT("the authored group is re-installed into the effect list"),
+		HasEffect(*Restored, DazeGroup));
+	TestEqual(TEXT("...exactly once per tracked row, never twice"),
+		Restored->Effects.FilterByPredicate([DazeGroup](const FString& E)
+			{ return E.Equals(DazeGroup, ESearchCase::IgnoreCase); }).Num(), 1);
+	TestEqual(TEXT("...and the restored health keyfield is not re-derived over"),
+		Restored->Health, HealthBefore);
+	// The caster's epoch is re-stamped, so expiry can still resolve who cast it.
+	TestTrue(TEXT("the caster handle rebases onto the restored world"),
+		!Expected.Source.IsSet() || Dest.World.Resolve(R.Source) != nullptr);
 
-	// --- Additive against the previous schema ----------------------------------------------------
-	// The NPC leaf gates every appended block on the archive version in BOTH directions, so writing
-	// at `NpcWitness` genuinely omits this one — the same shape the senses, loadout and witness
-	// blocks use, and the reason this needs no hand-written legacy byte stream.
-	{
-		TArray<uint8> Legacy;
-		FElysiumActiveDisciplineEffect Ignored;
-		if (!TestTrue(TEXT("the legacy payload is written"),
-			CastAndFreeze(Legacy, FElysiumSaveVersion::NpcWitness, Ignored)))
-		{
-			return false;
-		}
-		ElysiumRng::SeedAll(9109);
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeDisciplineTestDefs());
-		World.SpawnPlayer();
-		World.Activate(0.0);
-		World.Tick(0.0);
+	// --- The stale serial drops harmlessly -------------------------------------------------------
+	// The owned expiry events ride the map snapshot's queue block, not this leaf, so a restored NPC
+	// can be handed a serial that no longer matches anything — a renewal minted a newer one before
+	// the save, or teardown ran. The domain's own guard drops it.
+	ED::CommitExpiry(*Restored, Expected.Serial + 500);
+	TestEqual(TEXT("a serial matching nothing removes nothing"),
+		Restored->Disciplines.TargetEffects.Num(), 1);
+	TestTrue(TEXT("...and leaves the group installed"), HasEffect(*Restored, DazeGroup));
 
-		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim0"));
-		if (!TestNotNull(TEXT("the legacy victim exists"), Victim))
-		{
-			return false;
-		}
-		FMemoryReader Reader(Legacy, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::NpcWitness);
-		Victim->Serialize(Ar);
-		TestEqual(TEXT("a pre-discipline payload restores an NPC carrying no tracked effects"),
-			Victim->Disciplines.TargetEffects.Num(), 0);
-		TestFalse(TEXT("...and none of the cast's groups"), HasEffect(*Victim, DazeGroup));
-	}
+	// The MATCHING serial is what ends it, which is what makes the restore coherent.
+	ED::CommitExpiry(*Restored, R.Serial);
+	TestEqual(TEXT("the restored serial is the one the expiry event answers to"),
+		Restored->Disciplines.TargetEffects.Num(), 0);
+	TestFalse(TEXT("...and the teardown takes the group back off"),
+		HasEffect(*Restored, DazeGroup));
 	return true;
 }
 

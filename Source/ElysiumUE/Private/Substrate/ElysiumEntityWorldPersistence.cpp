@@ -1,3 +1,4 @@
+#include "Misc/ScopeExit.h"
 #include "ElysiumEntityWorld.h"
 
 #include "ElysiumClassRegistry.h"
@@ -199,6 +200,9 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 
 int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 {
+	// Scoped, so an early return below cannot leave the world thinking it is still restoring.
+	bApplyingSnapshot = true;
+	ON_SCOPE_EXIT { bApplyingSnapshot = false; };
 	if (!Snapshot.IsValid())
 	{
 		return 0;
@@ -448,6 +452,14 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 	// Registered fields can alter a class-specific physical gate (notably trigger StartDisabled)
 	// without changing hidden/dead. Re-apply unconditionally after all restored state is present.
 	E->OnDormancyChanged();
+
+	// Retail's slot 130, once the whole record is in: the field walk and the leaf blob have both
+	// landed and dormancy is settled, so this is the first moment a class can re-derive from its
+	// restored words (`CBaseEntity::OnRestore`; `CAI_BaseNPC::OnRestore 0x1027bf50` is the NPC's).
+	// Before the think restamp below, deliberately -- a hook may arm work, and the snapshot's
+	// cadence is still the authoritative statement over it.
+	E->OnPostRestore(*this);
+
 	// Leaf deserializers and dormancy hooks may arm an entity while rebuilding transient state
 	// (NPC patrol/interesting-place recovery does both). The generic saved schedule is the later,
 	// authoritative statement: restore it last so freeze -> apply -> freeze remains identical and
