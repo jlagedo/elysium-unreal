@@ -1120,7 +1120,9 @@ its recovery is written in the oracle section it names.
   | `.ready`, `.obj`, the per-map directory | travel gate, `ExportedMaps()` | nothing: the baked level and its three assets are the proof | 21-1, 21-3 |
   | `.decals` | `bake_map_v2.py:380` | staged `decals[]` rows → the baked `ADecalActor`s (exist) | 21-4 |
   | `.weather.json`, `weather/rain_height.png` | `bake_map_v2.py:381` | staged rows → `/ElysiumBaked/<map>/Weather` (exists) | 21-4 |
-  | `.props`, `<map>.materials.json` | weather cover, `bake_verify`, the level recipe | staged `placements`; the material units | 21-4 |
+  | `.props` | weather cover, `bake_verify`, the level recipe | staged `placements` (landed) | 21-4 |
+  | `<map>.materials.json` | `load_corpus`, `bake_verify`, the material report | nothing: one map in the tree ever had one, and a PAKFILE-only material is a unit in its own right (landed) | 21-4 |
+  | `<map>.mtl` (the verify lane's half) | the hub's wetness check | the staged `materials` table joined to the corpus on `provenance` (landed) | 21-4 |
   | the producer's eight sidecars | the three asset stages, the level recipe | offline scratch `exports_v2/_sidecars/<map>/`, never opened by the game | 21-4 |
   | `.obj` `.mtl` `.blend` `_sky.obj` `brushes/*` `tex/cube/*` `.water` `.particles.json` | the legacy bake only | deleted | 21-5 |
   | `/ElysiumBaked/Shared/{Textures,Materials,Meshes}`, `export bundle corpus` | `CorpusBake`, the legacy maps | deleted; V2's homes are `/ElysiumBaked/{Textures,Materials,Models/_Corpus}` | 21-5 |
@@ -1477,7 +1479,27 @@ its recovery is written in the oracle section it names.
   `verify_decals`: the decal count was a line in the bake log and nothing compared it with
   anything, so a level that had lost every projector passed every lane. `bake map --verify` now
   counts the `ADecalActor`s against the staged rows — material instance, location, and the
-  `(half depth, half height, half width)` triple a deferred decal's `DecalSize` carries.
+  `(half depth, half height, half width)` triple a deferred decal's `DecalSize` carries — keyed
+  on the component's own `SortOrder`, since `get_all_level_actors` returns the editor's order and
+  not the bake's. The key is free: the sort order IS the staged index, because it is also how two
+  decals on one wall layer.
+
+  **And one the story did not foresee.** The hub's wetness check read `<map>.mtl` off the export
+  root and reported an empty corpus the first time the map was baked without one. It reads the
+  staged material table now, joined to the corpus on each row's `provenance` and deduped on the
+  group key with R7.4's suffixes stripped, which reproduces the expected 14 scalars exactly.
+  `_world_materials` is gone with it, and nothing in the verify lane opens
+  `$ELYSIUM_EXPORT_ROOT/<map>/` any more.
+
+  As it was checked: `uv run elysium build` green; `uv run pytest` green apart from the two
+  `kernel_ledger`/`kernel_shape` `--check` failures that reproduce on a clean tree and are not
+  this story's. All six directories moved away; the six baked; `verify nav` 0 findings over all
+  six; `verify maps` green. Then all six travelled in one run of the game — the tutorial's
+  scripted opening playing, `elysium.weather.rain_on` bringing up the hub's two
+  `rain_follow_emitter`s. Staging the decal lane over the whole published corpus is clean as well:
+  105 of 108 maps with zero validation failures, the three that are not being 21-7's refusals. The
+  six legacy directories were restored afterwards: they are the parity probe's comparison subject
+  until 21-5 deletes the decoder, and nothing reads them.
 
   Recovery: `seam_map_map.md` § "The bake needs no legacy directory (0018 story 21-4)".
   Retail: none — but a producer ported here must reproduce the decoder's output, which is

@@ -937,6 +937,26 @@ verdict only from a lane whose `required` keys name one; collision and environme
 theirs, against files the decoder did not write either but which state geometry the stage
 transforms rather than merely re-reads.
 
+**`verify_decals` is new, and it is new because nothing had it.** The decal count was a line in the
+bake log and nothing compared it with anything, so a level that had lost every projector passed
+every lane the bake ran. It counts the `ADecalActor`s against the staged rows — the bound instance,
+the location, and the `(half depth, half height, half width)` triple a deferred decal's `DecalSize`
+carries — keyed on the component's own `SortOrder` rather than on list position, because
+`get_all_level_actors` returns the editor's order and not the bake's. That key is free: the sort
+order IS the staged row's index, since it is also how two decals on one wall layer.
+
+**Witnessed 2026-09-21, with all six `$ELYSIUM_EXPORT_ROOT/<map>/` directories moved away.**
+`sp_genesisdevice_1` baked from its four published units alone — 7 world hulls, 3 brush bodies, 0
+nav nodes — and the other five re-baked with `--force`. `verify nav` is **0 findings over all six**;
+`verify maps` is green with decals 123 / 219 / 0 / 38 / 29, each equal to that map's legacy
+`.decals` line count, and the hub's weather lane passing its 14 wet scalars and 2048 R16 cover. All
+six then travelled in one run of the game: `sp_genesisdevice_1`, `sp_tutorial_1` (its scripted
+opening playing — the sentry's patrol, the sign popup, the idle timer), `sm_hub_1` with
+`elysium.weather.rain_on` bringing up two active `rain_follow_emitter`s, `sp_soc_3`,
+`sm_pawnshop_1` and `sp_theatre`. Staging the decal lane over the whole published corpus is clean
+too: **105 of 108 maps stage with zero validation failures**, the three that do not being 21-7's
+lump-reader refusals.
+
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 
 `sm_pawnshop_1`, `sp_tutorial_1` and `sm_hub_1` were headlessly booted (`uv run elysium debug
