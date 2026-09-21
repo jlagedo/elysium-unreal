@@ -324,13 +324,47 @@ def test_a_version_other_than_30_is_an_anomaly_not_a_failure():
     assert {"role": "version-not-30", "offset": 8, "value": "31"} in model.anomalies
 
 
-def test_a_node_width_other_than_32_tokens_is_the_documented_anomaly():
-    # This fixture's node width is 7 (2 hulls, 1 tail int, 2 lead), which is exactly why the
-    # spec's `NumNodes x 32` formula does not generalise past `sp_tutorial_1` -- see the
-    # exporter's `specDeviations`.
+def test_a_node_width_off_the_corpus_law_is_the_documented_anomaly():
+    # The law is `NumHulls + 6 + ceil(NumNodes / 32)`: origin, yaw, the per-hull floats, two tail
+    # integers, a one-bit-per-node bitset, and the two lead integers. This fixture's nodes are 7
+    # wide (2 hulls, ONE tail int, 2 lead) where the law asks for 9, so it is a real departure --
+    # it has no bitset word at all -- and the anomaly names both widths.
     model = _model()
     anomaly = next(a for a in model.anomalies if a["role"] == "node-count-mismatch")
     assert anomaly["derivedNodeWidth"] == 7
+    assert anomaly["expectedNodeWidth"] == 9
+
+
+def test_the_node_width_law_holds_on_the_shipped_graphs_this_project_bakes():
+    """The check used to assume 32 tokens and so flagged every graph outside 97..128 nodes --
+    79 of 101 published units, `sm_pawnshop_1` (5 nodes, 29 wide) among them. Against the law it
+    flags none of the patch's own graphs."""
+    pytest.importorskip("elysium_pipeline.paths")
+    from elysium_pipeline import paths
+    try:
+        graphs = paths.vtmb_root() / "Unofficial_Patch" / "maps" / "graphs"
+    except RuntimeError:
+        pytest.skip("game root not configured")
+    if not graphs.is_dir():
+        pytest.skip("the patch's loose graphs are not installed")
+
+    checked = 0
+    for name in ("sp_tutorial_1", "sm_hub_1", "sp_soc_3", "sm_pawnshop_1", "sp_theatre"):
+        path = graphs / f"{name}.ain"
+        if not path.is_file():
+            continue
+        tokens = path.read_text(encoding="latin-1").split()
+        hulls = int(tokens[tokens.index("NumHulls:") + 1])
+        start = tokens.index("NumNodes:")
+        nodes = int(tokens[start + 1])
+        region = tokens[start + 2:tokens.index("TotalNumLinks")]
+        real = [token for token in region if token != "Nodes:"]
+        blocks = -(-nodes // 32)
+        assert len(real) == nodes * (hulls + 6 + blocks), name
+        assert region.count("Nodes:") == blocks, name
+        checked += 1
+    if not checked:
+        pytest.skip("none of the five graphs is installed")
 
 
 def test_an_out_of_range_link_index_is_flagged():

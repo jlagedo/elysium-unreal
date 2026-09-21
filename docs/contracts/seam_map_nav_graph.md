@@ -64,19 +64,32 @@ integers.
 
 ### Node stream
 
-Each node is 32 tokens. The first 30 are on one line, the last two open the next line ahead of the
-following node's tokens, so a 32-token line is `<t30> <t31>` of node `n` followed by all 30 lead
-tokens of node `n+1`, and a 2-token line is the trailing pair of the node preceding a `Nodes:`
-label. On sp_tutorial_1: 112 lines of 32 tokens, 4 of 31 (`Nodes:` plus 30), 4 of 2, and
-`116 × 32 + 4 = 3,716` tokens in the region — which is the check the decoder performs.
+**A node is `NumHulls + 6 + ceil(NumNodes / 32)` tokens** — recovered 2026-09-21 (0018 story
+21-2) over the patch's 108 loose `.ain` files, exact on 97 of the 97 non-empty graphs. The first
+survey read "32 tokens" off the base game's 116-node `sp_tutorial_1`, which is simply what the law
+gives for any graph of 97..128 nodes; the patch's own tutorial graph has 203 nodes and is 35 wide,
+`sm_hub_1` (578) is 47, `sm_pawnshop_1` (5) is 29. All but the last two tokens are on one line; the
+last two open the next line ahead of the following node's tokens, and a 2-token line is the
+trailing pair of the node preceding a `Nodes:` label. The label follows the same block size: one
+per 32 nodes, `ceil(NumNodes / 32)` of them, 97 of 97. The decoder derives the width from the file
+and checks the region against the law; with `W = ceil(NumNodes / 32)`:
 
 | Tokens | Field | Published as |
 |---|---|---|
 | 0 | `x,y,z` (comma-joined floats) | `origin` `{source, gltf}` |
 | 1 | yaw, degrees | `yaw` |
 | 2–23 | 22 per-hull floats | `hullOffsets[22]`; `-3.87`, `-4.87`, `-8.87` and `0.10` are the observed values |
-| 24–29 | six integers | `tail[6]`, typed-unidentified |
-| 30–31 | two integers | `lead[2]`, typed-unidentified |
+| 24–25 | two integers | the head of `tail`, typed-unidentified |
+| 26…25+W | `W` 32-bit words, **one bit per node** | the rest of `tail`, typed-unidentified |
+| last two | two integers | `lead[2]`, typed-unidentified |
+
+**The bitset is narrowed, not identified.** Over all 11,558 nodes of the 97 graphs it never names
+a node that is not one of the node's own link neighbours (0 cases); it equals the neighbour set on
+6,395 nodes and is a strict subset on 5,163. So it selects among a node's links. It cannot be
+derived from the link rows: on `sm_pawnshop_1` node 0 names node 4 and node 4 does not name node
+0, across a link row identical to the five that are named from both ends. The selection is
+per-direction and made by the reader, and it stays typed-unidentified until the retail loader is
+walked — which is why `tail` is still published whole rather than split.
 
 `tail` and `lead` carry values that read as bit masks (`134217728`, `33554432`, `1073741824`,
 negative two's-complement) beside small counts; the stock Source node record's `nodeType`,
@@ -174,7 +187,7 @@ Both are joins to another seam's data and warn when absent.
 |---|---|---|
 | `header.version`, `.numHulls`, `.usedHullBits`, `.zoneCount`, `.numNodes`, `.totalNumLinks` | each labelled line's label and value | `mapped-text` |
 | `zones` | the zone line | `mapped-text` |
-| `nodes[i]` | that node's 32 tokens | `mapped-text` |
+| `nodes[i]` | that node's tokens | `mapped-text` |
 | `nodes.label[n]` | one `Nodes:` label token | `mapped-text` |
 | `links[i]` | one link line's 25 tokens | `mapped-text` |
 | `wcLookup` | the label and its integers | `mapped-text` |
@@ -186,7 +199,7 @@ Both are joins to another seam's data and warn when absent.
 
 | Row | Meaning |
 |---|---|
-| `anomalies[] node-count-mismatch` | the node-region token count is not `NumNodes × 32` plus the label count |
+| `anomalies[] node-count-mismatch` | the node-region token count is not `NumNodes × (NumHulls + 6 + ceil(NumNodes / 32))` plus the label count; carries `expectedNodeWidth` and `derivedNodeWidth`. (Against the old `× 32` it flagged 79 of 101 units — every graph outside 97..128 nodes.) |
 | `anomalies[] link-count-mismatch` | the link line count differs from `TotalNumLinks`, or a line is not 25 tokens |
 | `anomalies[] zone-count-mismatch` | the zone line's integer count differs from `ZoneCount` |
 | `anomalies[] wclookup-count-mismatch` | `WCLookup` carries other than `NumNodes` integers |

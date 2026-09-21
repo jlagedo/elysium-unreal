@@ -7,6 +7,20 @@ per-hull floats are accounted for -- while the trailing 2-token `lead` pair and 
 row stay exactly as documented on every file. This decoder derives the node width from the file
 itself (`tail` is carried as whatever is left over, `lead` stays the fixed trailing pair) rather
 than assuming 32; see the exporter's `specDeviations` for the corpus evidence.
+
+**The width is not arbitrary, and the law is exact** (recovered 2026-09-21, 0018 story 21-2, over
+the patch's 108 loose `.ain` files): `width = NumHulls + 6 + ceil(NumNodes / 32)`, on 97 of the 97
+non-empty graphs with no departure. The part that varies is the END of `tail`: two integers, then
+a bitset of `ceil(NumNodes / 32)` 32-bit words carrying ONE BIT PER NODE. 32 was simply the width
+of a graph with 97..128 nodes, which the base game's 116-node `sp_tutorial_1` is. The `Nodes:`
+label follows the same block size -- one per 32 nodes, `ceil(NumNodes / 32)` of them, 97 of 97.
+
+What the bitset SAYS is narrowed, not identified. Over all 11,558 nodes it never names a node
+that is not a link neighbour (0 cases), equals the neighbour set on 6,395 and is a strict subset
+on 5,163 -- so it selects among a node's own links. It is not derivable from the link rows: on
+`sm_pawnshop_1` node 0 names node 4 and node 4 does not name node 0, across a link row identical
+to the five it does name both ways. Whatever picks the subset is per-direction and lives in the
+reader, so it stays typed-unidentified until the retail loader is walked.
 """
 
 from __future__ import annotations
@@ -399,13 +413,19 @@ def decode_nav_graph(closure: NavGraphSourceClosure) -> NavGraphModel:
                     "remainder": remainder,
                 }
             )
-        expected_total = num_nodes * 32 + len(node_labels)
+        # The corpus law (see the module docstring), not the 32 the first survey generalised from
+        # one 116-node graph. With 32 here this flagged 79 of 101 published units -- every graph
+        # outside 97..128 nodes -- which made it a line everyone learned to read past, on the one
+        # check that would say a node region had really lost or gained tokens.
+        expected_width = num_hulls + 6 + -(-num_nodes // 32)
+        expected_total = num_nodes * expected_width + len(node_labels)
         if len(node_region) != expected_total:
             anomalies.append(
                 {
                     "role": "node-count-mismatch",
                     "expected": expected_total,
                     "actual": len(node_region),
+                    "expectedNodeWidth": expected_width,
                     "derivedNodeWidth": node_width,
                 }
             )
