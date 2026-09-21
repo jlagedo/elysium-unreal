@@ -1127,3 +1127,123 @@ which has a datamap record; the bodies `0x10273070(this, 1)` and `0x101cf600(thi
 arm; how the script-side `TransformModel()` call is routed to the datamap input (it matters only under
 the patch); whether the base `Vampire/python` tree in this install is byte-identical to the shipped
 1.2 scripts.
+
+## The patrol-point interest record and the path object (2026-09-21, 0018 story 11)
+
+_The corpus pass story 11 was sized on. Code read against `vampire.dll`, data against the 108 V2
+entity units; every count below was reproduced independently from the units before it was written._
+
+### The record is the hint itself
+
+`CNodeEnt::Spawn 0x102d78d0` puts the built `CAI_Hint` in the network node's associated-hint slot
+`node->+0xa0`, so "the interest record at `node->+0xa0`" and "the patrol point's hint" are one
+object. Its two interest fields are `+0x468` `target_name` (a `string_t`) and `+0x46c` `ip_percent`
+(an int).
+
+**The roll, `0x1029f650`.** It clears `m_bPatrolInterest +0x65a0`, resolves the record through
+`0x1029f6c0`, then draws `RandomInt(0, 99)` (`DAT_1070b244` vtable slot 8) and sets the byte when
+
+```
+roll < record->+0x46c
+```
+
+— **strictly less than**, one draw, made once per point rather than per read. Its callers are path
+installation `0x1029f460`, `NEXT_PATROL_POINT 0x102aa9e0` and schedule selection `0x102af660`, so in
+the walking tasks the roll has already happened before `StartTask` resolves anything.
+
+**The record resolver, `0x1029f730`,** answers nothing while `+0x65a0` is zero; otherwise it returns
+the cache `+0x659c`, filling it from `0x1029f6c0` on first use. **The place resolver, `0x1029f780`,**
+returns the cache `+0x6300`, and on first use takes the record's `+0x468`, **falling back to the
+empty-string global `DAT_106b8540` when the name pointer is null**, looks it up by name in the
+entity list `DAT_106eb5d8` (`0x100f7770`), and stores `entity+0xb0` on a hit. There is no classname
+test in the body: an `intersting_place` is what the authored names happen to point at, not a
+condition the resolver enforces. Neither resolver runs at spawn or `Activate`; both run on use from
+`StartTask 0x102a1910` (`102a63d0`, `102a64b9`) and `RunTask 0x102aacf0` (`102ab97d`, `102aba75`).
+A missing name or a name that resolves to nothing leaves `+0x6300` zero and the patrol task
+completes with no interest action.
+
+### The path object
+
+`CAI_PatrolPath` is a pooled record, not an entity: 32 slots of `0x114` bytes at `DAT_10934158`
+(`0x10307d30` takes one, `0x10307db0` returns it), with a SAVE-only datamap `0x106117c0`
+(built by `0x10307990`) whose six fields carry **no external key names** — `m_ePathType +0x00`,
+`m_iSchedule +0x04`, `m_iRepeatCount +0x08`, `m_iNodeCount +0x0c`, `m_iNodeCurrent +0x10`,
+`m_riNodeIDs +0x14` (64 ints). The NPC holds it at `+0x6590` behind an ownership byte `+0x658c`.
+
+**It is not dead weight.** The installer `0x1029f460` is reached from `InputSetupPatrolType`
+`0x1029eb30`, `InputFollowPatrolPath` `0x1029ed90` (whose tokens resolve through `0x102d2900` /
+`0x102d2840`) and `InputWalkToNode` `0x1029e840`, and the hunt-list builders `0x10306700` /
+`0x10306f60` install into the hunt cell `+0x6594` / `+0x6598`. `sp_tutorial_1` entity row 1627
+wires exactly this: `SetupPatrolType sentry2 "999 2 FOLLOW_PATROL_PATH_WALK"` at +2.0 s then
+`FollowPatrolPath "sentry2_1 sentry2_2 sentry2_3"` at +2.1 s.
+
+**The loop / ping-pong table is `0x1049df20`**, four rows of (name, first-index cap, step, next
+type), parsed case-insensitively by `0x103079c0`:
+
+| type | name | first index | step | next |
+|---:|---|---:|---:|---:|
+| 0 | `0` | 0 | +1 | 0 |
+| 1 | `1` | `0x7fff` | -1 | 1 |
+| 2 | `2` | 0 | +1 | 3 |
+| 3 | `3` | `0x7fff` | -1 | 2 |
+
+So 0 loops forward, 1 loops backward, 2/3 ping-pong. `NextPoint 0x10307b80` adds the step to
+`+0x10`; at either end it reports exhausted when `m_iRepeatCount +0x08 < 1`, else decrements the
+count, switches to `next type` and resets the index through `0x10307c20`. **A type-10000 hint
+carries no path-type or repeat field** — the table is the path object's alone, reached only after
+`FollowPatrolPath` has resolved hints to node ids.
+
+### Hint-list order, exactly
+
+The list is a process-global singly linked list, head `DAT_10925450`, next pointer `+0x5d8`. The
+`CAI_Hint` constructor `0x102d2e30` **inserts at the head**, so the list is newest-first and the
+LATER-constructed hint wins a duplicate exact-case `Group` — which is what "reverse BSP order" in
+§ "Patrol tokens against the retail lookup" means, stated as the mechanism. `0x102d3040` unlinks.
+`0x102d2840` walks from the head, accepts only hint type 10000 or 800, and compares `Group +0x5f0`
+byte for byte; it reads neither `StartHintDisabled +0x5e8`, nor the owner `+0x5e0`, nor the
+cooldown `+0x5ec`.
+
+### What an authored patrol point actually carries
+
+582 `info_node_patrol_point` rows over the 108 units, 328 distinct exact-case `Group` tokens.
+Row counts per key (a row is counted once per key, not per occurrence):
+
+| key | rows | | key | rows |
+|---|---:|---|---|---:|
+| `angles`, `classname`, `Group`, `hinttype`, `ip_percent`, `nodeid`, `origin` | 582 each | | `StartHintDisabled` | 515 |
+| `group_id`, `hint_rating`, `target_angle_range`, `target_dist_min`, `target_dist_max` | 205 each | | `targetname` | 68 |
+| `StartHidden` | 61 | | `target_name` | 60 |
+
+`target_angle_range`, `target_dist_min`, `target_dist_max` and `hint_rating` are **inert on a
+type-10000 hint**: `CAI_Hint::Spawn 0x102d0b60` has no type-10000 branch that reads them. Only
+`origin` has no datamap record at all (the map parser owns it).
+
+**`ip_percent` is authored on every one of the 582 rows** and never empty or non-numeric:
+
+| value | 20 | 30 | 45 | 50 | 65 | 68 | 70 | 75 | 80 | 90 | 100 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| rows | 1 | 2 | 1 | 9 | 2 | 1 | 1 | 5 | 2 | 2 | **556** |
+
+`100` is outside the drawn range `0..99`, so under the strict `<` those 556 points **always** take
+their interest — the common case is not a chance at all. No shipped row omits the key, so the
+absent-key default of `+0x46c` stays unrecovered (neither `0x102d2e30` nor `0x102d0b60` writes it);
+either `0` or `-1` would make the test always fail.
+
+**`target_name`**: 60 rows, 35 distinct names, of which **53 resolve to an `intersting_place` on the
+same map and 7 do not** — `ch_hub_1` rows 1175/1176 (`tong_look`) and five on `sp_tutorial_1`:
+row 1623 `sentry1_ip_cigarette`, 1626 `sentry2_ip_whistle`, 1628 `monk1_ip_pray`,
+1629 `monk1_ip_idle`, 1683 `cellar_ip_whistle`. These are authored dangles that retail resolves to
+nothing every time, and the tutorial — the project's first witness map — carries five of them.
+
+**The exact-case witnesses exist and are on one map.** The only same-map `Group` tokens differing
+only in case are `sm_warehouse_1`'s `B1`/`b1` (rows 542 / 866), `B2`/`b2` (543 / 1567) and
+`B3`/`b3` (544 / 1496).
+
+**Witness maps**: `sp_tutorial_1` 37 patrol rows, `sm_hub_1` 34, `sp_soc_3` 25.
+
+**`pt1`, `pt2`, `pt3` are `intersting_place` rows, not patrol points** (`sp_tutorial_1` entity rows
+419, 418, 416: `type Idle`, `group_id 2`, `rating 3`, `testflags 4`, `max_npcs 1`, bounds
+`-16 -16 0`..`16 16 72`; `pt1` `enabled 1`, `min_time 30`, `max_time 60`, `match_orientation 1`;
+`pt2` and `pt3` `enabled 0`, `min_time 3`, `max_time 6`). The patrol points that *reach* them are
+`A1`, `A2`, `A3` (rows 433, 434, 435; `nodeid` 39, 40, 41, `ip_percent 100`, `group_id 1`), each
+naming its place through `target_name`.

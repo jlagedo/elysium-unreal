@@ -1770,3 +1770,126 @@ local-route gates, alternate movement-route costs/waypoints, `GET_PATH_TO_HINTNO
 need their full walks. Base node/near/far cover registrations and `GET_FULL_PATROL_PATH` have
 no shipped schedule witness in this audit; registration alone does not establish required
 behavior. Adjacency reads in the witnessed hunt/cover/retreat/flank families are established.
+
+### The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12)
+
+_The three reads story 12 owed: the species' flight speeds, what the fly arm of `MoveLimit` does
+when blocked, and landing._
+
+**Flight is a navigator type, not an entity move type.** `CAI_Navigator` names type `0` Ground,
+`1` Jump, `2` Fly, `3` Climb (`0x1027e760`; the literal `Fly` at `0x105cd440`). Every NPC keeps
+entity move type `4` — `CAI_BaseNPCTroika::Spawn` sets it through slot 93 (`0x10298d30`,
+`10298fe1`-`10298fed`) and `PhysicsSimulate` dispatches `4` to `PhysicsStep` (`0x10040390`) — so a
+flying crow is a `PhysicsStep` entity whose NAVIGATOR is in type 2 with flag `0x400` set. Takeoff
+sets both (`0x103580d0` crow, `0x1038c170` manbat); landing clears the flag, returns the navigator
+to type 0 and reasserts entity move type 4 in the same two bodies.
+
+**Only two species fly.** The slot-525 movement overrides are `CNPC_Crow 0x10357ba0` and
+`CNPC_VManBat 0x1038b120`; **`CNPC_VGargoyle` inherits the base override `0x1027da90` and has no
+flight task or type-2 transition at all** (`0x10377c70`, `0x103790d0`, `0x103793e0`), despite its
+hull 14 in both hull words (`0x10377a60`). Story 12's premise that the gargoyle is a flyer does not
+survive the binary.
+
+**Speeds.** The crow is a flat **170** source units/second (`.rdata 0x10454028`), written straight
+to `SetAbsVelocity` by `0x10357be0` with no ramp; takeoff uses the same 170 with a random heading
+and a vertical factor between 0.1 and 0.5 (`0x10358330`, `10358433`-`10358485`). Its arrival latch
+`m_bReachedMoveGoal +0x5f54` trips when the pre-avoidance distance falls under that same 170.
+`m_flGroundSpeed +0x654` has no reader on either flyer, so sequence ground speed drives nothing
+here. The ManBat accelerates: `0x1038b370` wants **700** when the target's delta-Z is below `-30`
+(`.rdata 0x10462868`) and **500** otherwise, clamped toward current velocity by the cvar at
+`0x1093b7cc`, with the downward limit scaled by `3.0` (`0x10450010`); its takeoff is **200**
+(`0x104492b8`, through `0x1038c250`) and `TASK_MANBAT_FLY_RANDOM` is **500** (`0x10457f5c`,
+`0x1038c390`). Four activities (`0x30`, `0xb0`, `0x4b`, `0x1171`) zero velocity before the
+calculation.
+
+**The fly arm of `MoveLimit 0x102e6d70`.** The switch caches the PATHING hull `+0x156c` into the
+probe and dispatches: case 0 ground `0x102e5d80`, case 1 jump `0x102e6290`, **case 2 fly
+`0x102e6090`**, case 3 climb `0x102e6be0`, default status `-4`; the function returns
+`status >= 0`. The fly arm is a **3-D hull sweep, not a ray**: it takes the owner's collision
+bounds from `+0x270`, calls `CAI_MoveProbe::TraceHull 0x1026e940`, and compares the fraction
+against `1.0` (`_DAT_104454c0`). Clear, it writes the requested endpoint and leaves status 0.
+Blocked, there are two arms — if the blocker is the caller's EXPECTED blocker (`param_4`) the hit
+point is accepted as a partial move with status untouched; otherwise it stores the blocker at
+`+0x1c`/`+0x28`, measures the distance reached into `+0x24`, and classifies through `0x102e2d70`:
+**`-3` an NPC, `-1` another entity, `-2` world geometry.** A negative status reaching the navigator
+is `CAI_Navigator::Move 0x102eff40` -> `OnNavFailed 0x102eeae0` -> `TaskFail` with code **`0x0c`**.
+The ground arm differs materially: it is segmented 2-D movement through `0x102e7ba0` / `0x102e4f50`
+with step-up, step-down and a final-Z test, and only then the same classifier. **Flight has no step
+or floor contract at all** — one sweep, and the generic consumer `0x103048d0` may triangulate
+(`0x103059d0`) or retry an NPC blocker under mask `0x2400b`.
+
+**But the two flyers do not consume that generic failure.** The crow steers with its own avoidance
+helper `0x10357e50`, so a blocked sweep yields a steer vector, never a code. The ManBat sweeps with
+its own mask `0x202400b` in `0x1038bec0` and, on any fraction below 1.0, returns straight up
+`(0,0,1)` and arms its flap timer — it does not distinguish an NPC from a wall. The conditions
+`COND_FLYING_WALL_HIT 0x36` and `COND_FLYING_NPC_HIT 0x37` are the schedule-visible half.
+
+**Landing.** The ManBat lands properly: `TASK_MANBAT_LAND 0x150` (registered by `0x10389f80`),
+run by `SCHED_MANBAT_FLY_END` as `FIND_LANDNODE -> FLY_TO_HINT -> STOP_MOVING -> LAND -> wait 1 s`
+(`0x106423b8`). `StartTask 0x1038c390` sets `ACT_LAND 0x30` and zeroes velocity; `RunTask
+0x1038d130` waits out the activity, calls `0x1038c170(this, 0)` and settles on `ACT_IDLE 1`. The
+stun route is separate — `SCHED_MANBAT_FLY_STUN` (`0x106422d0`) runs `FIND_LANDNODE ->
+FALL_TO_GROUND`, waits 10 s and breaks the spotlight; `TASK_MANBAT_FALL_TO_GROUND 0x14c` sets
+`ACT_FALLING 0x2f`. **The crow has no land task.** Its flight tasks are
+`TASK_CROW_FLY_TO_HINT 0x14d` and `TASK_CROW_FALL_TO_GROUND 0x151` (`0x10359270`); the failure
+schedule runs the fall then `SCHED_CROW_HOP_AWAY` (`0x10628ca0`), and because
+`CNPC_Crow::SelectSchedule 0x10358ce0` answers `SCHED_CROW_IDLE_FLY` while the navigator is type 2,
+a crow that reaches its hint keeps flying rather than perching. **Neither species reads hint yaw on
+arrival** — both take only the position through slot `+0x370`. On death the ManBat clears its
+flight state (`0x1038e8c0` -> `0x1038c170(this, 2)`); the crow has no death override (it inherits
+`CAI_BaseNPC::Event_Killed 0x10265ad0`) and so dies with flag `0x400` still set.
+
+**The two fly-to-hint tasks.** `TASK_CROW_FLY_TO_HINT 0x14d`'s own `StartTask` arm is empty
+(`0x10358330`); the search is the PRECEDING `TASK_FIND_HINTNODE 0x40`, type **700**, flags **3**,
+radius **5000.0**, storing `m_pHintNode`, and a miss pushes failure code 4 before slot 448
+(`103583f5`-`103586a5`). The crow builds no `AI_NavGoal_t` and writes no tolerance — arrival is the
+170-unit latch. `TASK_MANBAT_FLY_TO_HINT 0x14b` likewise does not search; `TASK_MANBAT_FIND_LANDNODE
+0x14e` searches `(20000, flags 2, r 5000.0)` and `TASK_MANBAT_FIND_FLYNODE 0x14f` searches
+`(20000, flags 0, r 5000.0)` with one retry at node mode 1 (`0x1038c390`, misses at `1038c571` /
+`1038c5ee`). Its arrival is `m_bReachedMoveGoal +0x6664`, set when the remaining distance drops
+under `0.2 x |velocity|` (`0x10449198`).
+
+**`TASK_MANBAT_FLY_TO_HINT` is named by THREE schedules, not six** — `SCHED_MANBAT_MISSILE_ATTACK`,
+`SCHED_MANBAT_FLY_END` and `SCHED_MANBAT_FLY_CONTINUE` (`0x10642080`, `0x106423b8`, `0x106424b0`,
+all registered through `0x10389f80`), against the task text at `0x10642a4c`. Two independent passes
+reached the same three. The fly simplifier `0x102f1690` (the `& 0x22` test) has **zero callers** and
+is on neither species' path.
+
+**Unrecovered**: the name and authored default of the ManBat acceleration cvar `0x1093b7cc`; the
+client-side ragdoll decision for a crow that dies with flag `0x400` set; the semantic names of
+`MoveLimit`'s fifth and seventh arguments (every flight-like caller passes zero).
+
+### The crosswalk wait, walked — `0x102a0bc0` and the inert four-phase clock (2026-09-21, 0018 story 7)
+
+`0x102a0bc0` (reached from the path advance `0x102f0400` and the NPC body `0x10298340`) is the
+whole "must I wait at this curb" test, and it is gated four ways before it looks at anything:
+
+```
+waypoint != 0
+waypoint+0x10 (node index) >= 0
+waypoint+0x30 (link) != 0
+waypoint+0x28 & 4            // the crosswalk waypoint flag
+goal type == 8               // 0x102ee620 — PEDESTRIAN only
+```
+
+so a non-pedestrian never waits, exactly as the story says. It then indexes the node array
+(`navigator+0x5d34` -> `+0x2c`) with a bounds check whose failure bumps the counter `DAT_106c994c`
+and yields a null node, resolves the link with `0x102f96e0`, and tests
+
+```
+link+0x64 & (0x10 << (((int)curtime >> 4) & 3))
+```
+
+— a **four-phase clock**: bits `0x10`, `0x20`, `0x40`, `0x80` selected by `(curtime >> 4) & 3`, so
+the selected phase advances every 16 seconds and wraps every 64. A set bit means red and the NPC
+is sent to the wait `0x102a0b90`.
+
+**That rotation is unobservable in the shipped game.** The only writer of those bits is
+`0x102f97c0`, reached from `CAI_Hint::InputWalk 0x102d0a50` and `InputDontWalk 0x102d0a80`, and it
+clears or sets the whole nibble `0xf0` at once. So every shipped link is either all-four-set
+(always red, whichever phase is current) or all-four-clear (always green), and the map's own
+`logic_timer` — 40 s on `sm_hub_1` and `hw_hub_1`, absent on `sm_hub_2` and `sp_theatre` — is the
+only thing that changes the state. **A port that models the crosswalk state as one boolean per
+link pair is behaviourally identical to retail for all shipped content**; a port that implements
+the 16-second phase rotation is implementing an arm no map can reach. The rotation is recorded
+here so the choice is a decision rather than an omission.

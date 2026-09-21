@@ -2518,8 +2518,9 @@ The census above counts a fixed classname list. A scan of every `ai_*`, `logic_*
 
 Authored values: both `hw_tawni_1` rows are named `check_condition`, target
 `npc_tawni_boyfriend`, and test `COND_SEE_PLAYER` and `COND_HEAR_PLAYER`; `floor_2_vis_check`
-tests `COND_SEE_PLAYER` over squad `floor_2`; both `ai_changetarget` rows set `!player`. No
-body of these four classes is walked yet.
+tests `COND_SEE_PLAYER` over squad `floor_2`; both `ai_changetarget` rows set `!player`. All
+four bodies were walked 2026-09-19 and are in `entity_io.md` § "The AI logic entities" (this
+sentence said "not walked yet" until 2026-09-21).
 
 **Graph-node classnames carrying no `hinttype`** (0018 story 4's places, not hints):
 `info_node_werewolf` (80, `sp_observatory_2`), `info_node_tzimisce` (19, `ch_temple_4` 18 and

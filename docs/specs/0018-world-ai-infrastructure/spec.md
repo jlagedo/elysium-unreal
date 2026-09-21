@@ -752,6 +752,36 @@ its recovery is written in the oracle section it names.
   Provides: movement and its outcomes to 0002 and 0003. Consumes: 3, 4.
   Oracle: `navigation-jump-links.md` § "The route gates, walked" (its `SetGoal`,
   `0x102f1dc0` and `DoFindPath` paragraphs; the builders below them are engine record).
+  **Three corrections to the paragraph above, read off `vampire.dll` 2026-09-21.**
+  *(a)* **Goal type 5 exists and this story omits it.** `DoFindPath 0x102f2330`'s switch reads
+  `case 4: case 5: case 6: case 9: break;` — type 5 takes no preparation and falls into the route
+  builder `0x102f2060` exactly as 4, 6 and 9 do, so the port needs the arm even though what issues
+  it is not yet recovered. (Type 8's arm is visible in the same switch as the single store
+  `*(goal+1) = 1`, the pedestrian byte.)
+  *(b)* **The 0.8 s gate is the LOADED-graph case only.** `0x102f6690` sets the network manager's
+  first think at `curtime + 0.8` (`_DAT_104491a8`); if the graph is out of date its think
+  `0x102f6a50` prints `Node Graph out of Date. Rebuilding...` and re-arms at `curtime + 1.0`
+  (`_DAT_104454c0`), and the network is not marked built (`+0x658 = 1`) until that SECOND think —
+  so a rebuilding map starts NPC thinking at ~1.8 s. The port bakes from the graphs retail loads,
+  so 0.8 s is the case it reproduces; say so rather than implying 0.8 s is unconditional.
+  *(c)* **The blocked-move rule above is necessary but not sufficient** (`0x10303850`, read
+  2026-09-21). After `MoveLimit` returns a negative status, the partial move is accepted — a
+  waypoint built at the blocked endpoint — only when ALL FOUR hold: route flag `0x100` set, goal
+  flag `0x8` set, the remaining distance under the tolerance, and `|dz| < 2.0` (`_DAT_10449400`).
+  Fail any one and retail instead tries triangulation `0x10304020` when route flag `0x20` is set,
+  and then, only for status `-3` (an NPC) with route flag `0x10`, re-runs `MoveLimit` under the
+  plain mask `0x2400b` and admits the move if `0x10303fd0` accepts the blocker. The trace mask is
+  itself route-flag-driven: `(~flags & 0x40) << 0x13 | 0x2400b`, so flag `0x40` is what drops
+  `MONSTER 0x2000000` from the sweep.
+  *(d)* **The goal survives mid-CLIMB too, and the tolerance does not survive either way**
+  (`CAI_BaseNPCTroika::OnScheduleChange 0x102a0940`, read 2026-09-21). `PRESERVE_PATH` is bit `8`
+  of `m_bfAINPCFlags`; with it clear, the body skips the navigator's goal clear `0x102ee270` when
+  the nav type is **3 (Climb) or 1 (Jump)** — this story names only jump. Everything after the
+  skip runs regardless: `m_flGoalTolerance`, both interrupt distances and `m_flInterruptTime` are
+  zeroed, `m_bShouldMove` cleared, `m_hMoveTargetEnt` released, an `m_hOpeningDoor` sent input 8,
+  and the interesting-place cache `+0x6300` and patrol-interest cache `+0x659c` both wiped. So
+  "the goal and the pedestrian byte survive a schedule change mid-traversal" is true; "the
+  schedule's tolerance survives" is not.
   Size: L. Effort: Opus / high.
 
 - [ ] **6. Geometry services.**
@@ -826,8 +856,17 @@ its recovery is written in the oracle section it names.
   hub 117 / 103; door brushes crossed tutorial 8 of 36, hub the smoke-shop pair; crosswalk
   nodes hub 6.
   Provides: special traversal to 5. Consumes: 3, 4, 5, 6.
-  Oracle: `navigation-jump-links.md` § "Doors and NPC-clip, the retail contract";
+  Oracle: `navigation-jump-links.md` § "Doors and NPC-clip, the retail contract",
+  § "The crosswalk wait, walked — `0x102a0bc0` and the inert four-phase clock";
   `conditions-and-states.md` (the crosswalk wait); `schedule-kernel.md` (slot 531).
+  **Recovered 2026-09-21, and it simplifies the crosswalk job.** `0x102a0bc0` gates on waypoint
+  flag `4` AND goal type 8 before anything else, so a non-pedestrian provably never waits. The
+  red/green test is `link+0x64 & (0x10 << (((int)curtime >> 4) & 3))` — a **four-phase clock**
+  rotating every 16 s — but its only writer `0x102f97c0` sets or clears the whole nibble `0xf0`
+  at once, so every shipped link is always-red or always-green and the rotation is unreachable by
+  content. **Model the pair's state as one boolean; that is behaviourally identical to retail
+  here.** Implementing the phase rotation would be building an arm no map can observe — record
+  the choice either way.
   Size: L. Effort: Opus / high.
 
 - [ ] **8. Hint nodes.**
@@ -897,8 +936,10 @@ its recovery is written in the oracle section it names.
   the pick); the walk; the trio as the registry's API; the two outputs. The programs
   `0xff` / `0x100` / `0x102` and the selector arms stay in 0002's story 11.
   Provides: the trio to 0002's 11 and 27. Consumes: 2, 5, 8.
-  Oracle: `schedule-kernel.md` § "Interesting places: the selector, the programs, the wait",
-  § "Interesting-place eligibility", `shape.md` § "The interesting-place wait and its loop".
+  Oracle: `programs.md` § "Interesting places: the selector, the programs, the wait",
+  § "Interesting-place eligibility" (both corrected 2026-09-21 — they are in `programs.md`, not
+  `schedule-kernel.md`); the `0x102daac0` visitor walk is `lifecycle.md`;
+  `shape.md` § "The interesting-place wait and its loop".
   Size: M. Effort: Opus / high.
 
 - [ ] **11. Patrol paths and the patrol-point interest record.**
@@ -924,7 +965,27 @@ its recovery is written in the oracle section it names.
   has NO upstream route — `SCHED_TROIKA_IDLE_PATROL` sets an activity and stands, no shipped
   patrol names it, and the walking programs are `0x65` / `0x67` / `0x69`, one type-4 goal per
   point; the path object, its loop / ping-pong type table and the installer are pinned there.
-  Size: S–M. Effort: Fable / medium; corpus pass on the node keys first.
+  **The corpus pass is done (2026-09-21, `programs.md` § "The patrol-point interest record and
+  the path object"), so this story starts from an answer, not a read.** The roll is one
+  `RandomInt(0, 99)` at `0x1029f650` compared **strictly `<`** against `+0x46c`, made at path
+  install / `NEXT_PATROL_POINT` / schedule selection, not per read. `0x1029f730` answers nothing
+  while `+0x65a0` is zero; `0x1029f780` caches at `+0x6300`, falls back to the empty-string global
+  `DAT_106b8540` on a null name, and applies **no classname test**. `CAI_PatrolPath` is a pooled
+  record (32 slots of `0x114` at `DAT_10934158`) with a SAVE-only, **externally nameless** datamap
+  `0x106117c0`, and it **is** reached by shipped content (`sp_tutorial_1` row 1627 wires
+  `SetupPatrolType` + `FollowPatrolPath` on `sentry2`), so it is built, not skipped. The loop /
+  ping-pong table is `0x1049df20` and belongs to the path object alone — a type-10000 hint carries
+  no path type. Hint-list order is **head insertion** (`0x102d2e30`), so the later hint wins a
+  duplicate `Group`.
+  Three data facts change the tests. `ip_percent` is authored on all 582 rows and is **`100` on
+  556 of them**, which under the strict `<` always takes the interest — the fixture must not
+  assume a coin flip. `target_angle_range`, `target_dist_min`, `target_dist_max` and `hint_rating`
+  are **inert on a type-10000 hint** (`0x102d0b60` has no branch reading them), so the record need
+  not carry them as behaviour. And **7 of the 60 `target_name` rows resolve to nothing**, five of
+  them on `sp_tutorial_1` (`sentry1_ip_cigarette`, `sentry2_ip_whistle`, `monk1_ip_pray`,
+  `monk1_ip_idle`, `cellar_ip_whistle`) — the witness map's own dangles are the unresolved-name
+  fixture. Still unrecovered: the absent-key default of `+0x46c`, which no shipped row exercises.
+  Size: S–M. Effort: Fable / medium.
 
 - [ ] **12. The flying mover.**
   Retail: no link in any shipped graph flies (0 of 29,523), so every flight is a straight
@@ -942,8 +1003,28 @@ its recovery is written in the oracle section it names.
   tolerance, arrival and `0x0c` are the same contract as on the ground; the nav type reported
   to the schedule host.
   Acceptance: a crow reaches a hint across open air and refuses one behind a wall.
-  Consumes: 5, 6, 8. Unrecovered, reads before it lands: the species' flight speeds; what the
-  fly arm of `MoveLimit 0x102e6d70` does when blocked; landing.
+  Consumes: 5, 6, 8.
+  **The three reads are done (2026-09-21, `navigation-jump-links.md` § "The flying movers,
+  walked"), and two of this story's premises did not survive.** *(a)* **`CNPC_VGargoyle` does not
+  fly** — it inherits the base movement override `0x1027da90` and has no flight task or type-2
+  transition (`0x10377c70`, `0x103790d0`, `0x103793e0`); only Crow (`0x10357ba0`) and ManBat
+  (`0x1038b120`) do. Its hull 14 stays unused, and the "a mesh nothing paths on" worry is moot.
+  *(b)* **`TASK_MANBAT_FLY_TO_HINT` is named by three schedules, not six** —
+  `SCHED_MANBAT_MISSILE_ATTACK`, `SCHED_MANBAT_FLY_END`, `SCHED_MANBAT_FLY_CONTINUE`
+  (`0x10642080`, `0x106423b8`, `0x106424b0`); two independent passes agree.
+  Speeds: the crow is a flat **170** u/s (`0x10454028`), no ramp, and its arrival latch
+  `+0x5f54` uses that same 170 as its radius; the ManBat ramps to **700** below delta-Z `-30`
+  (`0x10462868`) and **500** above, takeoff **200**, `FLY_RANDOM` **500**, arrival at
+  `0.2 x |velocity|`. Blocked: the fly arm `0x102e6090` is a **3-D hull sweep** with no step or
+  floor contract, classifying `-3` NPC / `-1` entity / `-2` world (`0x102e2d70`) into
+  `OnNavFailed 0x102eeae0` -> `0x0c` — **but neither flyer consumes that**: the crow steers
+  (`0x10357e50`) and the ManBat returns `(0,0,1)` and flaps (`0x1038bec0`), so the port's flying
+  gait answers `COND_FLYING_WALL_HIT 0x36` / `COND_FLYING_NPC_HIT 0x37`, not a route failure.
+  Landing: `TASK_MANBAT_LAND 0x150` under `SCHED_MANBAT_FLY_END`; **the crow has no land task**
+  and keeps flying at its hint (`SelectSchedule 0x10358ce0` answers `SCHED_CROW_IDLE_FLY` while
+  navigator type is 2). Neither reads hint yaw on arrival. Flight is navigator type 2 + flag
+  `0x400` over entity move type 4, never an entity-movetype change.
+  Oracle: `navigation-jump-links.md` § "The flying movers, walked".
   Size: M. Effort: Opus / medium.
 
 - [ ] **13. The AI sound list and its volume table.**
@@ -963,6 +1044,19 @@ its recovery is written in the oracle section it names.
   Oracle: `senses.md` (the sound world), `docs/vtmb/footsteps.md`, `docs/vtmb/stealth.md`.
   Recovered 2026-09-19 (`senses.md` § "The shared list itself"): 64 records, a full list DROPS
   the new sound (no eviction), freed at `expire + 4.0 <= curtime` on a 0.3 s think.
+  **Corrected and walked 2026-09-21 (`senses.md` § "`CommitBestSound 0x102b4090` — the priority
+  ladder and the ninth record"):** the nine records are **seven raw plus two derived**, not nine
+  copies. `0x102b39e0` writes one raw snapshot per hearing condition; `CommitBestSound 0x102b4090`
+  is a **strict first-match ladder** — `HEAR_COMBAT 0x6d`, `HEAR_BULLET_IMPACT 0x70`,
+  `HEAR_FLINCH 0x72`, `HEAR_PLAYER 0x6f`, `HEAR_DANGER 0x6a`, `HEAR_PHYSICS_DANGER 0x71`,
+  `HEAR_WORLD 0x6e` — whose winner becomes `BestSound +0x60b0`, then `InvestigateSound +0x60dc`
+  is copied from it in the same call. **`HEAR_DANGER` is fifth, not first**, and `HEAR_THUMPER` /
+  `HEAR_BUGBAIT` have no slot at all. With no condition set neither derived record is rewritten,
+  so a stale best sound outlives the raw slot that made it — a retail behaviour the port must
+  keep, not a bug to fix. This ladder, not "nine copies", is what 10a's sweep re-reads from the
+  shared list.
+  Oracle: `senses.md` § "Hearing, walked" and § "The shared list itself" (the story's
+  parenthetical "the sound world" is not a heading in that file).
   Size: M. Effort: Opus / high.
 
 - [ ] **14. Squads.** The object half of 0002's story 17, moved here; 17 keeps the consumers.
@@ -1005,14 +1099,37 @@ its recovery is written in the oracle section it names.
   Job: the maker as a baked actor the runtime adopts, keyfields from the datamap seam, the
   inheritance and lifecycle rules verified against the hub's 48 requests and the tutorial's 14.
   Consumes: 2, 0019 story 2. Oracle: `population.md` § "How a map defines an NPC",
-  § "Templates and inheritance". Size: S–M. Effort: Sonnet / medium.
+  § "Templates and inheritance".
+  **Measured 2026-09-21, and the "150 in 36 files" pin needs its source named**: the patch's LOOSE
+  `Unofficial_Patch/vdata/system/` holds **29 `npctemplate*.txt` files with 130 `TemplateName`
+  declarations, all distinct**. `Vampire/vdata/` does not exist as a directory — retail's copies
+  are inside a VPK — so 36/150 can only be the patch-first RESOLVED set (loose patch files
+  shadowing the VPK, plus the VPK files the patch does not shadow). The lane must state which set
+  it loads and reproduce its own count; a bake that reads only the loose tree is 20 templates
+  short. Size: S–M. Effort: Sonnet / medium.
 
 - [ ] **17. Relationship defaults and the player-law bus.**
-  Retail: `AddClassRelationship`, `Rules.txt`; `SetRelationship` (native `D_*` table),
+  Retail: `AddClassRelationship`; `SetRelationship` (native `D_*` table),
   `SetDisposition` (stance) and `reaction.txt` (RPG score) kept separate; the player's law
   levels, offenders and the closest-NPC cache on `CBasePlayer` (`0x101828b0`, `0x10182a90`).
+  **Corrected 2026-09-21: there is no relationship table in vdata, and `Rules.txt` is not its
+  source.** The shipped `vdata/system/rules.txt` has no relationship, disposition or `D_*` block
+  at all — its blocks are frenzy, damage, heal, occult, discipline, ladder, knockback, jumping,
+  animal friendship, physics hand, zombie grapple, npc combat, Ming Xiao, npc follower and melee
+  reactions. Every one of the 19 `AddClassRelationship` sites in `vampire.dll` is a **hard-coded
+  C++ constant**: `CNPC_Crow::Spawn 0x10357440` (`0xe, 4, 0`), `CNPC_VVampire::Spawn 0x103c4ef0`
+  (`1, 1, 0`), `CNPC_VPlayerController::Spawn 0x103a4510` (`1, 3, 0`),
+  `CNPC_VGhoulCroucher::NPCInit 0x1037b290`, `CNPC_VManBat::Spawn 0x1038b030`,
+  `CNPC_VWerewolf::NPCInit 0x103caef0`, `CNPC_VZombie::NPCInit 0x103defc0` and the
+  transformation/trigger arms (`CNPC_VSabbatLeader 0x103aa3b0`, `CNPC_VHengeyokai 0x10383170`,
+  `CNPC_VMingXiao 0x1039a700`, `CNPC_VSheriffMan 0x103b1470`, `CNPC_VAndreiBlood 0x1035dd00` /
+  `0x1035e980`), all `(1, 1, 10)` unless noted. The only data-driven path is
+  `InputSetRelationship 0x10273790`, which is the map/script surface, not a default table.
   Gap: `ElysiumRelationships`, `ElysiumLaw` and the law event bus exist.
-  Job: the class-relationship table loaded once from vdata; the bus as the world object NPCs
+  Job: the class-relationship defaults as a **generated table from those 16 code sites**, one row
+  per class with its address, applied where retail applies it (`Spawn`, `NPCInit`, or the named
+  transformation/input arm — they are not all spawn-time, so the table cannot simply be a
+  constructor sweep); `InputSetRelationship` on top of it. The bus as the world object NPCs
   read (levels, offender, location, timers). The acts stay in 0005 / 0006, the witnessing in
   0002.
   Oracle: `social.md`, `population.md` § "Player-law observation transaction". Size: S.
@@ -1781,22 +1898,46 @@ its recovery is written in the oracle section it names.
   asset carries every legacy reading, the `sm_hub_1` embedded-quote corruption included, and the
   only reason was byte-comparability with a differ 21-1 deleted. The reader also refuses three
   maps outright when a keyvalue re-escapes to a different length (`:461-465`).
+  **The `sm_hub_1` corruption is worse than "a pinned quirk" (measured 2026-09-21).** Retail's
+  tokeniser `0x10136ce0` unescapes `\"`, `\\` and `\n` inside a quoted token
+  (`10136d7a-10136d9e`), so its `logic_auto` runs `setArea("santa_monica")` on map load. The port's
+  staged `.ents` stops at the `\"`, records the Python as `setArea(\`, **and reads the remainder
+  as a further keyvalue, minting the key `"),"` with the value `origin` and destroying the
+  entity's real `origin`.** The hub therefore loses both a map-load script call and a placement
+  today. Same shape on `lilly_trunk.OnOpen`. That escape rule is also what unblocks the three
+  refused maps: `_requote` exists only to re-corrupt the value for the deleted differ.
   Job:
   1. Measure first: for the six maps, the rows the asset carries today against a structural
      read of `entities[].keyValues[]`, flag by flag. The delta is the work list.
   2. `entity_lump_text` / `_requote` are replaced by the structural read in every caller —
      `prepare_join`, `map_ai_infra.py:262` — and its corruption-pinning test goes.
-  3. The five flags (`datamap_output_typing`, `fold_keys`, `strip_param`, `delay_atof`,
-     `keep_extra`; the sixth divergence, `times`, landed without one) flip to the corrected
-     reading ONE PER COMMIT, each with its retail evidence — the datamap record for output
-     typing, the engine's key compare for folding, `atof` for the delay — and each with the
-     rows it changed on the six maps listed. A flag with no recovered retail answer stays
-     where it is and says so; when all five are settled the class goes.
+  3. The five flags flip ONE PER COMMIT, each with the rows it changed on the six maps listed.
+     **The retail evidence is recovered (2026-09-21, `entity_io.md` § "The lump tokeniser and what
+     a keyvalue actually becomes"); each flag's answer is below, so this job is now mechanical.**
+     | flag | retail | verdict |
+     |---|---|---|
+     | `datamap_output_typing` | the datamap decides, never the key text — `0x101a5a80` admits a record only on `FTYPEDESC_KEY 0x4` and dispatches type 10 custom at `101a5c3b`; outputs arrive through `0x100cdb20` -> `0x100cd6d0`. Both counterexamples ship: `CMomentaryRotButton.Position` is an output named neither `On*` nor `Out*`, `CNPC_VGhoulCroucher.on_fire` a plain bool that looks like one | **flip** |
+     | `fold_keys` | `__strcmpi` at `101a5b0a`; `ParseMapData 0x1009e280` applies pairs in order, so the last spelling's write is what the field holds | **flip** |
+     | `strip_param` | the splitter `0x101d16c0` trims **nothing**. The flag is aimed the wrong way: the correction is for the port to **stop** stripping `target`, `input` and `python`, not to start stripping `param` | **stays legacy; restate the flag** |
+     | `delay_atof` | CRT `_atof`, `100cd099` -> `0x1043136f`; an empty token skips the call and keeps `0.0` | **flip** |
+     | `keep_extra` | six splits and no seventh (`100cd0d9`, return `100cd109`); a written 7th field is inert residue | **stays legacy** |
+     When all five are settled the class goes.
+  3b. **Two divergences no flag covers, found by the same recovery and both live.** An output
+     whose input token is empty fires **`Use`** in retail (`0x100ccf90` substitutes
+     `DAT_10555f7c`, read from the shipped `.data` as `"Use"`); the port stores `""`. And
+     `split_output` leaves an authored `times` of `0` as `0` where retail rewrites it to `-1`
+     (`_atoi` result 0 -> `0xffffffff`) — its docstring claims the rewrite,
+     `int(number(parts[4], -1))` does not perform it. Each needs its own commit and its own
+     changed-row list.
   4. `seam_map_map.md` R3.4 and `:502-512` are rewritten to what is now true.
   Acceptance: the six maps re-bake; every changed row is accounted for by a named flip; the
   tutorial's and the hub's scripted witnesses (the `logic_failed_blueblood` chain, the hub's
   `logic_auto`) run as before or better, read against retail; the three refused maps stage.
   Consumes: 21-5. Size: M–L. Effort: Opus / high.
+  Oracle: `entity_io.md` § "The lump tokeniser and what a keyvalue actually becomes"
+  (recovered 2026-09-21: the tokeniser, the 256-byte key/value cap, the `{}()'` delimiter set,
+  the key-only trailing-space trim, the datamap type switch and the six-field row parser).
+  **Nothing here is unrecovered any more** — job 1's measurement is the only read still owed.
 
 - [ ] **21-8. The other 102 maps.** On the owner's approval, not automatically — run when a
   story's witness needs a map outside the six, not before.

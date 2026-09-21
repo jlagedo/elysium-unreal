@@ -1324,3 +1324,38 @@ records, which validates the mapping). So the name is literal: the player's woun
 risen by at least two since the mark.
 
 **Unrecovered:** nothing in this family's social half.
+
+## The class-relationship defaults are code, not vdata (2026-09-21, 0018 story 17)
+
+0018 story 17 said the class-relationship table is "loaded once from vdata", naming `Rules.txt`.
+**It is not.** The shipped `vdata/system/rules.txt` (540 lines) carries no relationship,
+disposition or `D_*` data of any kind; its blocks are `Tables`, `VampFrenzy_Info`, `Damage_Info`,
+`VampHeal_Info`, `Occult_Info`, `Discipline_Info`, `Ladder`, `Knockbacks`, `Jumping`,
+`Animal_Friendship`, `Physics_Hand`, `Zombie_Grapple_Info`, `Npc_Combat_Info`, `Ming_Xiao_Info`,
+`Npc_Follower_Info` and `Melee_Reactions`.
+
+Every default is a hard-coded call to `CBaseCombatCharacter::AddClassRelationship 0x10332aa0`.
+The 19 sites in `vampire.dll`, with their literal `(class, disposition, priority)`:
+
+| site | args | when |
+|---|---|---|
+| `CNPC_Crow::Spawn 0x10357440` | `0xe, 4, 0` | spawn |
+| `CNPC_VVampire::Spawn 0x103c4ef0` (and its thunk `0x10014876`) | `1, 1, 0` | spawn |
+| `CNPC_VPlayerController::Spawn 0x103a4510` | `1, 3, 0` | spawn |
+| `CNPC_VManBat::Spawn 0x1038b030` | `1, 1, 10` | spawn |
+| `CNPC_VGhoulCroucher::NPCInit 0x1037b290` | `1, 1, 10` | init |
+| `CNPC_VWerewolf::NPCInit 0x103caef0` | `1, 1, 10` | init |
+| `CNPC_VZombie::NPCInit 0x103defc0` | `1, 1, 10` | init |
+| `CNPC_VSabbatLeader::StartTransformation 0x103aa3b0` (and `0x1000eb3d`) | `1, 1, 10` | transform |
+| `CNPC_VHengeyokai::InputStartTransformation 0x10383170` | `1, 1, 10` | input |
+| `CNPC_VMingXiao::InputStartTransformation 0x1039a700` | `1, 1, 10` | input |
+| `CNPC_VSheriffMan::StartAttacking 0x103b1470` | `1, 1, 10` | on attack |
+| `CNPC_VAndreiBlood::InputTriggerCombat 0x1035dd00` | `1, 1, 10` | input |
+| `CNPC_VAndreiBlood::vfunc432 0x1035e980` | `1, 4, 10` | combat arm |
+| `InputSetRelationship 0x10273790` (and its thunk `0x1000421e`) | authored | map / script |
+
+Only the last is data-driven, and it is the map and script surface, not a default table. **The
+defaults are therefore a generated code table, and they are not all applied at spawn** — four of
+them arrive on a transformation or an input, so a port that sweeps constructors reproduces the
+wrong set. `reaction.txt` (the RPG score) and `SetDisposition` (stance) remain separate systems,
+as recorded above.

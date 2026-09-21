@@ -91,6 +91,103 @@ while an invalid direct target is skipped. Python errors print and continuation 
 The frame boundary, unbounded retail drain and starvation consequence are owned by
 `docs/vtmb/game_runtime.md`.
 
+## The lump tokeniser and what a keyvalue actually becomes (2026-09-21, 0018 story 21-7)
+
+_Recovered to settle the five `EntityDivergences` flags. Three of them the doc above had already
+answered without the spec noticing; the tokeniser and two parser details are new._
+
+**`CEntityMapData::GetNextKey 0x10136ee0`** pulls two tokens per pair from the tokeniser
+`0x10136ce0`, handing it the delimiter set `{}()'` (`PTR_10579478 -> 0x105794c0`). A `}` returned as
+the KEY rewinds the cursor and ends the entity; a `}` returned as the VALUE is the error
+`CEntityMapData::GetNextKey: closing brace without data` (`0x105795d8`), and a failed second read is
+`... EOF without closing brace` (`0x1057961c`). Both tokens are copied with `Q_strncpy(..., 0x100)`
+(`10136f3c`, `10136fcf`), so **key and value are 255 characters plus NUL**; a longer token is
+consumed and truncated with no diagnostic. The KEY then loses its trailing ASCII spaces
+(`10136f48-10136f5e`, `' '` only — not tabs). **The VALUE is never trimmed, at either end.**
+
+**The tokeniser honours backslash escapes inside a quoted token** (`10136d7a-10136d9e`): `\"` is a
+literal quote, `\\` a literal backslash, `\n` a newline, and any other `\x` is `x` with the
+backslash dropped. An UNescaped `"` ends the token; so does NUL. Outside quotes a token ends at
+whitespace, NUL or a delimiter, and `//` runs to end of line (`10136d53-10136d6e`).
+
+This is what settles `sm_hub_1`. Its `logic_auto` authors, at file byte `8778942` of the shipped
+`Vampire/maps/sm_hub_1.bsp` (and `11493774` of the patch's):
+
+```
+"OnMapLoad" ",,,0,-1,setArea(\"santa_monica\"),"
+```
+
+Retail unescapes that to `,,,0,-1,setArea("santa_monica"),` and stores `setArea("santa_monica")` as
+the action's Python. The port's legacy regex reader, which has no escape rule, stops at the `\"`,
+records the Python as `setArea(\` — **and then reads the remainder as a further keyvalue, minting
+the key `"),"` with the value `origin` and destroying the entity's real `origin` key.** So the
+defect is not cosmetic: on the hub the port loses both a map-load script call and a placement.
+`lilly_trunk.OnOpen` (BSP line 26017) carries the same shape.
+
+### The keyvalue dispatch
+
+`CBaseEntity::ParseMapData 0x1009e280` calls the virtual `KeyValue` (`1009e321`) once per pair and
+then fetches the next (`1009e336`) — **pairs are applied in authored order, so a repeated key's
+LAST occurrence is what the live field holds.** `CBaseEntity::KeyValue 0x1009e430` walks the
+datamap and follows `baseMap` at `1009e9a6`; an unmatched key returns false at `1009e9dd` and is
+dropped (printable under the `ent_messages` cvar, `0x106cf0d0`).
+
+The walker is `0x101a5a80`. A record is a candidate only when its flags carry
+**`FTYPEDESC_KEY 0x4`**, and the external name is compared with CRT **`__strcmpi`** (`101a5b0a`) —
+**key matching is case-insensitive**, which is the retail answer behind the `fold_keys` flag. A
+record of type 9 with subtype 1 recurses into its embedded chain. The type switch:
+
+| type | parse | | type | parse |
+|---|---|---|---|---|
+| 1, 0xf | `_atof` -> float | | 6 | `_atoi` -> short |
+| 2, 0x10, 0x11 | interned string | | 7 | `_atoi` -> char |
+| 3, 0xe | vector (`0x101d03e0`) | | 8 | rgba (`0x101d0630`) |
+| 4 | `_atoi` -> int | | 10 | **custom op**, vtable `+0x10` (`101a5c3b`) |
+| 5 | `_atoi` != 0 -> bool | | | |
+
+A name that matches but whose type is outside `1..0x11` warns `Bad field in entity!!` (`0x105934c4`).
+**Outputs arrive through type 10**, whose custom operation for an output record is
+`CEventsSaveDataOps::vfunc4 0x100cdb20` -> `0x100cd6d0` -> the row parser. The metadata bit
+`FTYPEDESC_OUTPUT 0x10` marks the record in the datamap (e.g. `CBaseEntity::m_OnUseBegin`, flags
+`0x16 = SAVE|KEY|OUTPUT`), but the runtime gate is KEY-plus-custom-type, not the bit and not the
+key's spelling. Hence both directions exist in the shipped datamaps: `CMomentaryRotButton.Position`
+is an output whose name starts with neither `On` nor `Out`, and `CNPC_VGhoulCroucher.on_fire` is a
+plain `SAVE|KEY` bool that looks like one.
+
+### The row parser, field by field — `0x100ccf90`
+
+The splitter is `0x101d16c0`, a bare copy-until-the-next-comma. **It trims nothing and knows
+nothing of quotes**, so a comma inside a parameter shifts every later field. Six splits, and the
+sixth is the last (`100cd0d9`); the body returns at `100cd109` without looking for a seventh.
+
+| field | offset | conversion | empty token |
+|---|---|---|---|
+| 0 target | `+0x00` | interned | stays null |
+| 1 input | `+0x04` | interned | **substituted with `Use`** (`DAT_10555f7c`, read from the shipped `.data` as `"Use"`) |
+| 2 param | `+0x08` | interned | stays null |
+| 3 delay | `+0x10` | CRT **`_atof`** (`100cd099` -> `0x1043136f`) | conversion skipped, stays `0.0` |
+| 4 times | `+0x14` | `_atoi`, and **`0` is rewritten to `-1`** | stays `-1` |
+| 5 python | `+0x0c` | interned | stays null |
+
+`+0x18` is the id stamp from the counter `DAT_106e70e8` (`100ccf9f`) and `+0x1c` the list link; the
+record is `0x20` bytes (`0x100cd6d0`). So `"1.5s"` reads `1.5`, `"abc"` reads `0.0`, and `""` reads
+`0.0` without calling `_atof` at all.
+
+### The five flags, answered
+
+| flag | retail says | verdict |
+|---|---|---|
+| `datamap_output_typing` | the datamap decides, never the key text (`0x101a5a80` type 10, `0x100cdb20`) | **flip to corrected** |
+| `fold_keys` | `__strcmpi` at `101a5b0a`; pairs applied in order, last write wins | **flip to corrected** |
+| `strip_param` | `0x101d16c0` trims **no** field — so the flag is aimed the wrong way: the correction is for the port to stop stripping `target`, `input` and `python`, not to start stripping `param` | **stays legacy, and the flag is restated** |
+| `delay_atof` | CRT `_atof` (`100cd099` -> `0x1043136f`) | **flip to corrected** |
+| `keep_extra` | six splits, no seventh (`100cd0d9`, `100cd109`); a 7th written token is inert residue | **stays legacy** |
+
+Two divergences no flag covers, both live: the port stores an empty `input` as `""` where retail
+stores `Use`, and `split_output` leaves an authored `times` of `0` as `0` where retail rewrites it
+to `-1` (its docstring claims the rewrite; `int(number(parts[4], -1))` does not perform it).
+
+
 ## Base inputs
 
 `Kill`, `ScriptHide` and `ScriptUnhide` are received by nearly every classname.

@@ -1697,3 +1697,46 @@ slot-566 species table story 29c-1 deliberately left it out of.
 
 **Unrecovered:** slot 566's own Troika-line body (`0x10295c20`) is still a generated stub, so the
 fall-through takes whatever it answers.
+
+## `CommitBestSound 0x102b4090` — the priority ladder and the ninth record (2026-09-21, 0018 story 13)
+
+The nine per-NPC `CSound` records are not nine copies of the sweep's work. **Seven are raw
+snapshots** the sweep `0x102b39e0` writes, one per hearing condition, and **two are derived** —
+`BestSound +0x60b0` and `InvestigateSound +0x60dc`. `CommitBestSound` is what turns the seven into
+the two, and it is a **strict first-match ladder over conditions**, not a volume or distance
+comparison:
+
+| order | condition | name | raw slot |
+|---:|---|---|---|
+| 1 | `0x6d` | `COND_HEAR_COMBAT` | `+0x6160` |
+| 2 | `0x70` | `COND_HEAR_BULLET_IMPACT` | `+0x618c` |
+| 3 | `0x72` | `COND_HEAR_FLINCH` | `+0x6210` |
+| 4 | `0x6f` | `COND_HEAR_PLAYER` | `+0x61b8` |
+| 5 | `0x6a` | `COND_HEAR_DANGER` | `+0x6108` |
+| 6 | `0x71` | `COND_HEAR_PHYSICS_DANGER` | `+0x6134` |
+| 7 | `0x6e` | `COND_HEAR_WORLD` | `+0x61e4` |
+
+The first condition set wins and the rest are not examined. **`COND_HEAR_DANGER` is fifth**, behind
+combat, bullet impact, flinch and the player — the ordering a port is most likely to get wrong by
+assuming danger outranks everything. `COND_HEAR_THUMPER 0x6b` and `COND_HEAR_BUGBAIT 0x6c` are in
+the condition enum but have **no slot and no arm here**: they are HL2 residue this ladder never
+reads.
+
+The copies are not uniform, which matters to anyone porting the record. The combat, bullet-impact
+and flinch arms copy **eleven words** inline through `+0x60d8`. The player, danger and
+physics-danger arms copy **eight words** and then assign `+0x60d0` through `0x1003e4b0` (the
+handle/vector assign) rather than as raw words. The world arm alone delegates the whole record to
+the copy helper `0x102b3d90`.
+
+The tail runs unconditionally, and both writes are the story's commit order:
+
+```
++0x5b78        = BestSound's first word     // the cached sound id/type
+InvestigateSound +0x60dc = BestSound +0x60b0   // via 0x102b3d90
+```
+
+So `InvestigateSound` is always a copy of whatever `BestSound` just became, taken in the same call
+— never independently selected. `0x102b4520` returns `+0x60b0`. If no hearing condition is set the
+ladder falls through and **neither derived record is rewritten**; the previous `BestSound` and
+`InvestigateSound` stand, which is why a stale sound can be read after the raw slot that produced
+it has expired.
