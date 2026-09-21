@@ -268,13 +268,6 @@ class EntityDivergences:
     keyvalue actually becomes") and removes it: a flag here is one that has not been answered yet.
     """
 
-    #: `False` (legacy, default): an output row's `param` field (index 2) is carried verbatim,
-    #: whitespace and all -- the one string field `split_output` does not `.strip()`.
-    #: `True`: `param` gets the same strip every other string field already gets. Measured zero
-    #: effect on the three-map
-    #: corpus: no output's `parameter` carries leading or trailing whitespace.
-    strip_param: bool = False
-
     #: `False` (legacy, default): an output row's `delay` field (index 3) is read with a plain
     #: `float()`, `0.0` on any parse failure -- reject-the-whole-token, unlike every positional
     #: keyvalue in `.ents` (`origin`, `hingeaxis`, `floor1..8`), which reads with `atof`, the
@@ -368,12 +361,14 @@ def split_output(
 ) -> dict[str, Any] | None:
     """`target,input,param,delay,times[,python[,extra]]` -> a `.ents` output row, or `None`.
 
-    Ported verbatim from `UE_bsp_to_scene._split_output` by default, including the R3.4 quirks:
-    `param` is **not** stripped, `delay` is a plain `float()` (not `atof`), `times` normalizes an
-    authored `0` to `-1`, and field 6 (`extra`) is dropped. A value with fewer than four commas is
-    not an output at all and stays a plain keyvalue. `fields.strip_param` opts field 2 into the
-    same whitespace strip every other string field already gets; `fields.delay_atof` opts field 3
-    into the module's own `atof()` instead of a plain `float()`.
+    **No field is trimmed** (0018 story 21-7). The splitter `0x101d16c0` is a bare
+    copy-until-the-next-comma: it knows nothing of quotes and strips nothing at either end, so a
+    leading or trailing space belongs to the interned string the row holds. The R3.4 flag was aimed
+    the wrong way -- it offered to start stripping `param`, where the correction is to stop
+    stripping `target`, `input` and `python`.
+
+    A value with fewer than four commas is not an output at all and stays a plain keyvalue.
+    `fields.delay_atof` opts field 3 into the module's own `atof()` instead of a plain `float()`.
     """
 
     if value.count(",") < 4:
@@ -387,12 +382,12 @@ def split_output(
             return default
 
     row = {
-        "target": parts[0].strip(),
-        "input": parts[1].strip(),
-        "param": parts[2].strip() if fields.strip_param else parts[2],
+        "target": parts[0],
+        "input": parts[1],
+        "param": parts[2],
         "delay": atof(parts[3]) if fields.delay_atof else number(parts[3], 0.0),
         "times": int(number(parts[4], -1)),
-        "python": parts[5].strip() if len(parts) > 5 else "",
+        "python": parts[5] if len(parts) > 5 else "",
     }
     if fields.keep_extra and len(parts) > 6:
         row["extra"] = ",".join(parts[6:])   # verbatim; commas past field 6 are part of it

@@ -107,28 +107,22 @@ def test_model_brushes_collects_only_leaves_under_the_given_headnode():
     assert model_brushes(nodes, leafs, leaf_brushes, 2) == {200, 201}
 
 
-def test_split_output_keeps_the_four_legacy_field_rules():
-    # `param` is not stripped, `delay` is a plain float(), `times` normalizes an unparsable
-    # field to -1, field 6 (`extra`) is dropped, and `python` is stripped.
+def test_split_output_trims_no_field():
+    # 0018 story 21-7: the splitter `0x101d16c0` is a bare copy-until-the-next-comma and strips
+    # nothing, so every space an author wrote is part of the interned string. `delay` is still a
+    # plain float(), `times` still reads -1 from an unparsable field, field 6 is still dropped.
     row = split_output(" door , Open , slow  , 0.35 , x , taxi() , dropped ")
 
     assert row == {
-        "target": "door",
-        "input": "Open",
+        "target": " door ",
+        "input": " Open ",
         "param": " slow  ",
         "delay": 0.35,
         "times": -1,
-        "python": "taxi()",
+        "python": " taxi() ",
     }
     # Fewer than four commas is not an output at all; it stays a plain keyvalue.
     assert split_output("door,Open,,0") is None
-
-
-def test_split_output_strip_param_opts_field_2_into_the_common_strip():
-    # R3.4: `param` gets the same strip every other string field already gets.
-    row = split_output(" door , Open , slow  , 0.35 , x , taxi() , dropped ",
-                        EntityDivergences(strip_param=True))
-    assert row["param"] == "slow"
 
 
 def test_split_output_keep_extra_adds_field_6_verbatim_only_when_authored():
