@@ -215,11 +215,22 @@ def validate_document(
     validate_ledgers(root, source_members)
     validate_capsules(document, binary, root, source_members)
 
-    # Every unit is scene-less with no BIN chunk.
-    # `validate_container` permits a *consistent* BIN chunk (buffer/view/binary agree); this seam
-    # never carries one at all, so any BIN payload -- consistent or not -- is itself the defect.
-    if binary or document.get("buffers") or document.get("bufferViews"):
-        raise UiResourceGlbValidationError("a ui-resource unit publishes a BIN chunk")
+    # Every unit is scene-less and declares no accessor, so the ONLY thing the BIN chunk may hold
+    # is the source capsule. `validate_capsules` above proved every capsuled member; what is
+    # refused here is a view the capsule did not author, which would be a payload this seam has no
+    # business carrying.
+    capsuled = {
+        int(member["capsule"]["bufferView"])
+        for member in ((root.get("sourceResolution") or {}).get("members") or ())
+        if isinstance(member, Mapping)
+        and isinstance(member.get("capsule"), Mapping)
+        and member["capsule"].get("bufferView") is not None
+    }
+    views = list(document.get("bufferViews") or [])
+    if set(range(len(views))) - capsuled:
+        raise UiResourceGlbValidationError(
+            "a ui-resource unit publishes a bufferView the source capsule did not author"
+        )
 
     grammar = root.get("grammar")
     if grammar not in GRAMMARS:

@@ -62,8 +62,15 @@ option descriptions `"cvar" { "Prompt" { type [type info] } { default } }` with 
 
 ## GLB structure
 
-Every unit is scene-less with no BIN chunk: the source is text and every value is a name, a
-number or a string.
+Every unit is scene-less and declares no accessor: every decoded value is a name, a number or a
+string. The BIN chunk it does carry is the **source capsule** alone
+(`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds the member's own bytes, one
+`bufferView` addresses them, and `sourceResolution` declares `"capsule": {"encoding": "raw"}` with
+the member row naming that view. The two UTF-16 members capsule as the source encoded them, BOM
+included, because the capsule is bytes and not text. `uv run elysium import ui-strings` deploys
+`resource/gameui_english.txt` to `Content/ElysiumCorpus/ui/resource/`, reading nothing but the
+unit; it is the one member with a runtime reader, and the other 51 units are design intent the
+port does not open.
 
 ```json
 {
@@ -71,7 +78,7 @@ number or a string.
   "extensionsRequired": ["ELYSIUM_vtmb_ui_resource"],
   "extensions": {
     "ELYSIUM_vtmb_ui_resource": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "encoding": "latin-1",

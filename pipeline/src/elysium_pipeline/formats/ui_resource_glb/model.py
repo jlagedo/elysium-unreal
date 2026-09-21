@@ -19,7 +19,10 @@ from elysium_pipeline.formats.unit_contract.origin import SourceMember
 
 KIND = "ui-resource"
 KIND_TITLE = "Ui-resource"
-SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 added the source capsule: the member's exact bytes travel in the unit's BIN
+#: chunk, so `uv run elysium import ui-strings` deploys the UTF-16 string table without
+#: the install.
+SCHEMA_VERSION = "1.1.0"
 UI_RESOURCE_EXTENSION = extension_name(KIND)
 
 #: The output family directory every unit is written below.

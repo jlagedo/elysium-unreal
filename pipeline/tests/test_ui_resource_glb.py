@@ -950,7 +950,15 @@ def test_export_builds_a_valid_scene_less_glb_and_validates(tmp_path):
     assert summary["unsupported"] == 0
 
     document, binary = validation.read_glb(path)
-    assert binary == b""
+    # The BIN chunk is the source capsule and nothing else: the member's own bytes, addressed by
+    # the one view its row names. The chunk itself is the container's, padded to four bytes.
+    assert binary.startswith(_SCHEME_BODY)
+    root_ext = document["extensions"]["ELYSIUM_vtmb_ui_resource"]
+    member = root_ext["sourceResolution"]["members"][0]
+    assert root_ext["sourceResolution"]["capsule"] == {"encoding": "raw"}
+    view = document["bufferViews"][member["capsule"]["bufferView"]]
+    assert binary[view["byteOffset"]:view["byteOffset"] + view["byteLength"]] == _SCHEME_BODY
+    assert document["buffers"] == [{"byteLength": len(_SCHEME_BODY)}]
     assert document["extensionsUsed"] == ["ELYSIUM_vtmb_ui_resource"]
     assert document["extensionsRequired"] == ["ELYSIUM_vtmb_ui_resource"]
     assert document["asset"]["generator"] == "Elysium Ui-resource GLB Exporter"

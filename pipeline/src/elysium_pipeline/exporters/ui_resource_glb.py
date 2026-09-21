@@ -1,7 +1,9 @@
 """Isolated one-file/one-GLB ui-resource product writer.
 
-Every unit is scene-less and carries no BIN chunk: a ui-resource member names strings, flags,
-numbers and geometry-free layout data, all of which the source wrote as text.
+Every unit is scene-less and declares no accessor: a ui-resource member names strings, flags,
+numbers and geometry-free layout data, all of which the source wrote as text. The BIN chunk it
+does carry is the source capsule alone -- the member's own bytes, which is how `gameui_english.txt`
+reaches the corpus as the UTF-16 LE file the runtime parses, BOM and all.
 """
 
 from __future__ import annotations
@@ -11,10 +13,11 @@ from typing import Callable
 
 from elysium_pipeline.formats.unit_contract import (
     asset_block,
+    buffer_table,
+    encapsulate,
     extension_root,
     identity_block,
     plain,
-    source_resolution,
     write_glb,
 )
 from elysium_pipeline.formats.ui_resource_glb import (
@@ -44,10 +47,11 @@ def build_document(model: UiResourceModel) -> tuple[dict, bytes]:
     if model.dormant_evidence:
         identity_extra["dormantEvidence"] = model.dormant_evidence
     identity = identity_block(model.asset, model.member.path, **identity_extra)
+    resolution, buffer_views, binary = encapsulate([model.member])
     root = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity,
-        source_resolution=source_resolution([model.member]),
+        source_resolution=resolution,
         dependencies=model.dependencies,
         coverage=coverage_block(
             mapped=mapped_fields(model),
@@ -74,15 +78,20 @@ def build_document(model: UiResourceModel) -> tuple[dict, bytes]:
         anomalies=model.anomalies,
         omissions=model.omissions,
     )
-    document = {
+    document: dict = {
         "asset": asset_block(KIND_TITLE),
         "extensionsUsed": [UI_RESOURCE_EXTENSION],
         "extensionsRequired": [UI_RESOURCE_EXTENSION],
-        "extensions": {UI_RESOURCE_EXTENSION: plain(root)},
     }
-    # A ui-resource unit carries no binary payload: every datum it owns is a name, a flag, a
-    # number or layout text the source wrote as plain bytes. One JSON chunk, no BIN chunk.
-    return document, b""
+    # Every datum the unit owns is a name, a flag, a number or layout text, so nothing a core
+    # accessor holds. The whole BIN chunk is the capsule: one buffer holding the member's own
+    # bytes, addressed by the one view `sourceResolution.members[0].capsule` names. The two UTF-16
+    # members travel as the source encoded them -- the capsule is bytes, not text.
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
+    document["extensions"] = {UI_RESOURCE_EXTENSION: plain(root)}
+    return document, binary
 
 
 def _material_resolver(index: dict) -> Callable[[str], bool]:
