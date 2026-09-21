@@ -17,14 +17,15 @@ escapes and all, so this is what `CEntityMapData::GetNextKey 0x10136ee0` hands `
 Until 21-7 the lump was rebuilt as text and read back with regexes that had no escape rule, which
 lost `sm_hub_1`'s `logic_auto` origin and refused three maps outright.
 
-**Retail decides.** The output WAS diffed against `UE_bsp_to_scene.py`'s sidecars by the R3.3
-differ, until 0018 story 21-5 deleted both the differ and the decoder. R3.4 kept the six places
-where the two readings disagreed as opt-in flags on an `EntityDivergences` struct, defaulting to
-the legacy one, because a byte diff was the only judge available. 21-7 recovered what retail does
-for each (`docs/vtmb/entity_io.md` -> "The lump tokeniser and what a keyvalue actually becomes"),
-landed them one per commit with the rows each changed, and the struct is gone: there is one
-reading here and it is the engine's. Changing it needs the same evidence the flags were retired
-with.
+**Retail decides, and only once.** The output WAS diffed against `UE_bsp_to_scene.py`'s sidecars
+by the R3.3 differ, until 0018 story 21-5 deleted both the differ and the decoder. R3.4 kept the
+six places where the two readings disagreed as opt-in flags on an `EntityDivergences` struct,
+defaulting to the legacy one, because a byte diff was the only judge available. 21-7 recovered
+what retail does for each (`docs/vtmb/entity_io.md` -> "The lump tokeniser and what a keyvalue
+actually becomes"), landed them one per commit with the rows each changed, and the struct is gone.
+With them settled this module's own copy of the output parser agreed with the entities unit's on
+every field of every output in the corpus, so the copy went too: `entity_outputs` reads the
+published table. Changing any of it needs the same evidence the flags were retired with.
 
 **Binary32.** Root positional tables are published in glTF metres and the BSP stores them as
 float32, so every recovered plane, vertex and bound is rounded back to binary32 before it is used
@@ -62,7 +63,6 @@ from elysium_pipeline.formats.bsp import (
     source_dir_to_unreal,
     source_to_unreal,
 )
-from elysium_pipeline.formats.map_entities_glb import model as entity_model
 from elysium_pipeline.formats.map_entities_glb.model import MAP_ENTITIES_EXTENSION
 from elysium_pipeline.formats.map_glb.model import MAP_EXTENSION
 from elysium_pipeline.formats.map_lighting_glb.model import MAP_LIGHTING_EXTENSION
@@ -99,18 +99,11 @@ ROPE_SLACK_FUDGE = -100
 #: C `atof`: the longest numeric prefix, 0.0 when there is none. Verbatim from the legacy `_ATOF`.
 _ATOF = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
 
-#: C `atoi`: the longest integer prefix, 0 when there is none. An output row's `times` is the one
-#: field retail reads with it (`0x100ccf90` field 4).
-_ATOI = re.compile(r"^[+-]?\d+")
-
 #: The `times` an output row spells when it never runs out. Retail seeds the record at -1 and
-#: rewrites an authored 0 back to it (`0xffffffff`), so both mean unlimited.
+#: rewrites an authored 0 back to it (`0xffffffff`), so both mean unlimited. The rewrite is the
+#: unit's (`map_entities_glb.decode._output_row`); this is the number a row that never ran out
+#: arrives here holding.
 UNLIMITED_TIMES = -1
-
-#: What an empty `input` token reads as: `DAT_10555f7c`, the shipped `.data` string the row parser
-#: substitutes rather than interning nothing (`0x100ccf90` field 1). The entities unit states the
-#: same constant as `entity_model.DEFAULT_INPUT`.
-DEFAULT_INPUT = "Use"
 
 _ACCESSOR_COMPONENT = {5120: "b", 5121: "B", 5122: "h", 5123: "H", 5125: "I", 5126: "f"}
 _ACCESSOR_WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
@@ -132,13 +125,6 @@ def atof(token: str) -> float:
 
     match = _ATOF.match((token or "").strip())
     return float(match.group(0)) if match else 0.0
-
-
-def atoi(token: str) -> int:
-    """C `atoi` of one keyvalue token -- the longest integer prefix, 0 when there is none."""
-
-    match = _ATOI.match((token or "").strip())
-    return int(match.group(0)) if match else 0
 
 
 def write_sidecar_lines(path: Path, lines: Iterable[str]) -> None:
@@ -278,61 +264,76 @@ def hull_vertices(points: np.ndarray) -> list[float]:
 # ---------------------------------------------------------------- the entity lump
 
 
+def entity_outputs(entity_row: dict[str, Any]) -> list[dict[str, Any]]:
+    """One entity's `.ents` output rows, from the unit's own published `outputs[]`.
 
-def is_output_key(classname: str, key: str) -> bool:
-    """Whether one keyvalue is an output row -- the gate `write_entities` applies before
-    `split_output`.
+    **There is one output parser in this tree and it is the unit's**
+    (`map_entities_glb.decode._output_row`, "one output keyvalue split the way `FUN_100ccf90`
+    splits it"), because there is one in retail. Until 0018 story 21-7 this module carried a
+    second implementation -- `is_output_key` mirroring `decode._is_output` and `split_output`
+    mirroring `_output_row` -- kept in step by hand. With the five R3.4 divergences settled the two
+    agreed on every field of every output in the corpus except one thing, so the duplicate is gone
+    and the seam's own table is read instead.
 
-    **The class's datamap decides, never the key's text** (0018 story 21-7). `0x101a5a80` admits a
-    record only when its flags carry `FTYPEDESC_KEY 0x4`, and an output is the type 10 custom
-    dispatch at `101a5c3b` -- `CEventsSaveDataOps::vfunc4 0x100cdb20` -> `0x100cd6d0` -> the row
-    parser. The key's spelling is not consulted, and both counterexamples ship:
-    `CMomentaryRotButton.Position` is an output named neither `On*` nor `Out*`, and
-    `CNPC_VGhoulCroucher.on_fire` is a plain `SAVE|KEY` bool that looks like one. The reading this
-    replaced was `^(On|Out)` case-insensitively.
+    That one thing was a **gate retail does not have**: this module refused to parse a
+    datamap-typed key whose value held fewer than four commas. `0x101d16c0` splits whatever it is
+    given and the missing fields come out empty, so `la_empire_2`'s two
+    `npc_VHumanCombatant.OnDeath` rows -- `"G.Dead_Russians = G.Dead_Russians + 1,"`, one comma --
+    are output rows in retail and are output rows here now.
 
-    Mirrors `map_entities_glb.decode._is_output` verbatim; restated here rather than imported
-    because that function is private to the entities-unit decode.
+    The field order is the one `.ents` has always written: target, input, param, delay, times,
+    python, name.
     """
 
-    folded = key.lower()
-    if folded.endswith(entity_model.DISABLED_KEY_SUFFIX):
-        return False
-    folded_class = (classname or "").strip().lower()
-    if (folded_class, folded) in entity_model.NOT_OUTPUT_KEYS:
-        return False
-    if entity_model.OUTPUT_KEY.match(key) is not None:
-        return True
-    return folded in entity_model.OUTPUT_KEYS_BY_CLASS.get(folded_class, frozenset())
+    rows: list[dict[str, Any]] = []
+    for output in entity_row.get("outputs") or []:
+        delay = output.get("delay") or {}
+        times = output.get("times") or {}
+        rows.append({
+            "target": str(output.get("target", "")),
+            "input": str(output.get("input", "")),
+            "param": str(output.get("parameter", "")),
+            "delay": float(delay.get("value", 0.0)),
+            "times": int(times.get("value", UNLIMITED_TIMES)),
+            "python": str(output.get("python", "")),
+            "name": str(output.get("key", "")),
+        })
+    return rows
 
 
-def collect_entity_fields(
-    pairs: Sequence[tuple[str, str]],
-) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    """One block's pairs split into output rows and the `keys` catch-all, the read
-    `write_entities` performs per entity.
+def output_pair_indexes(entity_row: dict[str, Any]) -> set[int]:
+    """Which of an entity's keyvalues became output rows, by their `keyValues[]` position.
 
-    The `keys` catch-all is emitted with **authored spelling** -- every remaining keyvalue,
-    authored spelling, last-wins -- and **two spellings of one key are one slot** (0018 story
-    21-7): `CBaseEntity::KeyValue` matches the external name with `__strcmpi` (`101a5b0a`), so
-    `"Origin"` and `"origin"` reach the same datamap record, and `ParseMapData 0x1009e280` applies
-    the pairs in authored order, so the live field holds the LAST one. The slot's spelling becomes
-    that last occurrence's own casing -- never a forced lowercase, because the authored-spelling
-    rule for `keys` still holds -- which is also the entities unit's identity rule (`decode.py`'s
-    `occurrences` map, keyed by the already-folded `pair.key`).
+    The unit back-links every output to the pair it was parsed from (`outputs[].keyValue`), which
+    is how the `keys` catch-all knows what to leave out without re-deciding it.
     """
 
-    classname_probe = next(
-        (v for k, v in reversed(pairs) if k.strip().lower() == "classname"), ""
-    )
-    outputs: list[dict[str, Any]] = []
+    return {int(output["keyValue"]) for output in entity_row.get("outputs") or []
+            if isinstance(output.get("keyValue"), int)}
+
+
+def entity_keys(
+    pairs: Sequence[tuple[str, str]], skip: set[int] | None = None
+) -> dict[str, str]:
+    """The `keys` catch-all: every keyvalue that is not an output row, folded and last-wins.
+
+    Emitted with **authored spelling** -- and **two spellings of one key are one slot**
+    (0018 story 21-7): `CBaseEntity::KeyValue` matches the external name with `__strcmpi`
+    (`101a5b0a`), so `"Origin"` and `"origin"` reach the same datamap record, and
+    `ParseMapData 0x1009e280` applies the pairs in authored order, so the live field holds the LAST
+    one. The slot's spelling becomes that last occurrence's own casing -- never a forced lowercase,
+    because the authored-spelling rule for `keys` still holds -- which is also the entities unit's
+    identity rule (`decode.py`'s `occurrences` map, keyed by the already-folded `pair.key`).
+
+    `skip` is `output_pair_indexes`' answer; passing nothing keeps every pair, which is what a
+    caller asking only about the fold wants.
+    """
+
+    skip = skip or set()
     keys: dict[str, str] = {}
     fold_index: dict[str, str] = {}   # folded key -> the spelling currently holding `keys`'s slot
-    for key, value in pairs:
-        row = split_output(value) if is_output_key(classname_probe, key) else None
-        if row:
-            row["name"] = key
-            outputs.append(row)
+    for position, (key, value) in enumerate(pairs):
+        if position in skip:
             continue
         folded = key.lower()
         previous = fold_index.get(folded)
@@ -340,52 +341,17 @@ def collect_entity_fields(
             del keys[previous]
         fold_index[folded] = key
         keys[key] = value                             # last wins for plain keyvalues
-    return outputs, keys
+    return keys
 
 
-def split_output(value: str) -> dict[str, Any] | None:
-    """`target,input,param,delay,times[,python[,extra]]` -> a `.ents` output row, or `None`.
+def collect_entity_fields(
+    entity_row: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """One entity's output rows and its `keys` catch-all -- the read `write_entities` performs."""
 
-    **No field is trimmed** (0018 story 21-7). The splitter `0x101d16c0` is a bare
-    copy-until-the-next-comma: it knows nothing of quotes and strips nothing at either end, so a
-    leading or trailing space belongs to the interned string the row holds. The R3.4 flag was aimed
-    the wrong way -- it offered to start stripping `param`, where the correction is to stop
-    stripping `target`, `input` and `python`.
-
-    `delay` reads with CRT `_atof` -- the longest numeric prefix, `0.0` when there is none
-    (`100cd099` -> `0x1043136f`) -- which is what every other number in `.ents` already reads with
-    and what an empty token skips entirely, keeping the seeded `0.0`.
-
-    An empty `input` is not interned as nothing: the parser substitutes `DAT_10555f7c`, read from
-    the shipped `.data` as `"Use"`, so `target,,,0,-1,,` addresses the receiver's `Use` input.
-
-    `times` reads with `_atoi`, **and an authored `0` is rewritten to `-1`**: the record is seeded
-    at `-1` and the parser puts it back, so both spellings mean unlimited and only a positive
-    value is a countdown. This function is the one owner of that rewrite (0018 story 21-7) --
-    it is retail's own, applied where retail applies it, at the parse.
-
-    **Six fields, and no seventh.** The row body splits six times (`100cd0d9`) and returns at
-    `100cd109` without looking further, so a 7th comma-separated token -- which retail's own
-    authoring tool writes on almost every output, usually empty -- is inert residue the engine
-    never reads. It is dropped here for the same reason.
-
-    A value with fewer than four commas is not an output at all and stays a plain keyvalue.
-    """
-
-    if value.count(",") < 4:
-        return None
-    parts = value.split(",")
-
-    times = atoi(parts[4])
-    row = {
-        "target": parts[0],
-        "input": parts[1] or DEFAULT_INPUT,
-        "param": parts[2],
-        "delay": atof(parts[3]),
-        "times": times if times != 0 else UNLIMITED_TIMES,
-        "python": parts[5] if len(parts) > 5 else "",
-    }
-    return row
+    pairs = [(str(kv.get("sourceKey", kv.get("key", ""))), str(kv.get("value", "")))
+             for kv in entity_row.get("keyValues") or []]
+    return entity_outputs(entity_row), entity_keys(pairs, output_pair_indexes(entity_row))
 
 
 #: The value tests the lump's own readers apply, at the same width they always had. Before 0018
@@ -1453,7 +1419,6 @@ def brush_cull_max_cm(classname: str, keys: dict[str, str]) -> float | None:
 def build_entities(
     units: MapUnits,
     sky: SkyScope,
-    blocks: Sequence[Sequence[tuple[str, str]]],
     brush_meshes: dict[int, str],
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """The `.ents` entity rows and this run's numbers -- the join, without the file.
@@ -1483,8 +1448,8 @@ def build_entities(
 
     out: list[dict[str, Any]] = []
     brush_count = hull_count = output_count = sky_count = 0
-    for pairs in blocks:
-        outputs, keys = collect_entity_fields(pairs)
+    for entity_row in units.entities["entities"]:
+        outputs, keys = collect_entity_fields(entity_row)
         output_count += len(outputs)
         entity: dict[str, Any] = {
             "classname": keys.pop("classname", ""),
@@ -1610,13 +1575,12 @@ def build_entities(
 def write_entities(
     units: MapUnits,
     sky: SkyScope,
-    blocks: Sequence[Sequence[tuple[str, str]]],
     brush_meshes: dict[int, str],
     out_dir: Path,
 ) -> dict[str, int]:
     """`<map>.ents`: `build_entities`' rows, written as the one JSON document the runtime reads."""
 
-    out, stats = build_entities(units, sky, blocks, brush_meshes)
+    out, stats = build_entities(units, sky, brush_meshes)
     path = out_dir / f"{units.name}.ents"
     with path.open("w", encoding="ascii") as handle:
         json.dump({"map": units.name, "entities": out}, handle, separators=(",", ":"))
@@ -1981,7 +1945,7 @@ def write_sidecars(
 
     report: dict[str, Any] = {"map": map_name, "outputDir": str(out_dir)}
     report["hulls"] = write_hulls(units, sky, out_dir)
-    report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir)
+    report["ents"] = write_entities(units, sky, brush_meshes, out_dir)
     report["lights"] = write_lights(units, sky, out_dir)
     report["env"] = write_environment(units, sky, pair_blocks, out_dir, root)
     report["sky"] = write_sky(units, sky, bool(scenes["sky"]), out_dir)

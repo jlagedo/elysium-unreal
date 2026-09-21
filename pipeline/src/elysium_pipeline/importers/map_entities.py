@@ -107,9 +107,7 @@ def stage_map(
     """
 
     join = producer.prepare_join(map_name, Path(export_v2_root) if export_v2_root else None)
-    rows, stats = producer.build_entities(
-        join.units, join.sky, join.pair_blocks, join.brush_meshes
-    )
+    rows, stats = producer.build_entities(join.units, join.sky, join.brush_meshes)
     return {
         "map": map_name,
         "packageRoot": package_root(map_name),

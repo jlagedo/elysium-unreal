@@ -97,7 +97,7 @@ def test_write_entities_only_writes_what_build_entities_returned(monkeypatch, tm
     class _Units:
         name = "sp_probe"
 
-    stats = producer.write_entities(_Units(), None, [], {}, tmp_path)
+    stats = producer.write_entities(_Units(), None, {}, tmp_path)
 
     assert stats == {"entities": 2}
     written = (tmp_path / "sp_probe.ents").read_text(encoding="ascii")

@@ -415,74 +415,56 @@ spelling.
 
 Key order in the emitted object is the order of that table; a byte-comparing differ depends on it.
 
-An output row is emitted for a keyvalue whose key matches `^(On|Out)` case-insensitively **and**
-whose value holds at least four commas, and carries `target`, `input`, `param`, `delay`, `times`,
-`python`, `name` in that order: `target`/`input`/`python` stripped, `param` **not** stripped,
-`delay` a plain `float()` with `0.0` on failure, `times` `int(float())` with `-1` on failure, field
-6 (`extra`) dropped. Every such keyvalue is removed from `keys`; an `On*`/`Out*` key with fewer
-than four commas stays a plain keyvalue.
+An output row is emitted for a keyvalue the entity's class datamap types as an output, and carries
+`target`, `input`, `param`, `delay`, `times`, `python`, `name` in that order. **The rows are the
+entities unit's own `outputs[]`** (`UE_map_sidecars.entity_outputs`, 0018 story 21-7): the unit's
+`decode._output_row` is the port of retail's row parser `0x100ccf90`, and the producer reads its
+table rather than carrying a second copy of it. Every such keyvalue is removed from `keys`, by the
+unit's `outputs[].keyValue` back-link rather than by a second decision.
 
-Six of those rules disagree with the entities unit's own reading — datamap output typing versus the
-`^(On|Out)` prefix test (the unit's `outputLike` demotions), key folding, `param` stripping, `delay`
-read with `atof` rather than `float()`, the dropped `extra` field, and `times` normalization of an
-authored `0` to unlimited. Each is a **named divergence with its own commit**, owned by
-R3.4, not something the producer decides while porting.
+`keys` is every remaining keyvalue, authored spelling, last-wins — and **two spellings of one key
+are one slot**, because `CBaseEntity::KeyValue` matches with `__strcmpi` (`101a5b0a`).
 
-### R3.4 — the six divergences
+### R3.4 — the six divergences, settled (0018 story 21-7)
 
 Each landed as an opt-in flag on `UE_map_sidecars.EntityDivergences`, defaulting to the legacy
-behaviour above so `write_sidecars` stays byte-comparable unless a caller asks for the corrected
-reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed at a scratch
-`_sidecars/` tree) to measure the delta it actually produces on the three-map corpus.
+behaviour so `write_sidecars` stayed byte-comparable with the R3.3 differ. That differ, the decoder
+it compared against and the parity check that consumed it are all deleted (21-1, 21-4, 21-5), so
+21-7 judged each against retail instead — `docs/vtmb/entity_io.md` → "The lump tokeniser and what a
+keyvalue actually becomes" — and removed the flag. **The struct is gone.** One commit per
+divergence, each naming the rows it changed over all 108 published maps:
 
-- **Datamap output typing** (`datamap_output_typing`). `True` swaps the `^(On|Out)` shape test for
-  the class's datamap (`entity_model.OUTPUT_KEY`/`NOT_OUTPUT_KEYS`/`OUTPUT_KEYS_BY_CLASS`/
-  `DISABLED_KEY_SUFFIX`, the same tables `map_entities_glb.decode._is_output` reads), matching the
-  entities unit's own `outputLike` demotions and promotions (`seam_map_map_entities.md` →
-  "Outputs"). **Measured delta: zero** on `sp_tutorial_1`/`sm_pawnshop_1`/`sm_hub_1` —
-  `entityDiffCount` stayed 0 on all three with the flag on, because both shipped examples
-  (`game_ui`'s promoted button events, `trigger_player_activity_level`'s demoted `OnTrigger`) are
-  authored on `la_hub_1` and `sm_diner_1`, outside the working corpus. The runtime side of this
-  divergence — `ElysiumEntityWorldPersistence.cpp`'s `OutputTimesRemaining` restore, which silently
-  dropped a cardinality mismatch — now logs a warning instead
-  (`Elysium.Substrate.SaveOutputCardinality`); no `FElysiumSaveVersion` bump, per the roadmap's
-  2026-09-01 "no save-file compatibility at build time" ruling, which supersedes the bump this
-  section's history once called for.
-- **Key folding** (`fold_keys`). `True` treats two spellings of one key (`"Origin"`/`"origin"`) as
-  the same `keys` slot instead of two independent ones, matching the entities unit's own identity
-  rule (`decode.py`'s `occurrences` map, keyed by the already-folded key). The slot's *value* and
-  its *printed spelling* both become the last occurrence's, in that occurrence's own casing — the
-  flag changes which occurrences collide, never the "authored spelling" rule this same section's
-  field-list table states for `keys`. **Measured delta: zero** — none of the 4,933 entities across
-  the three maps repeats a key under two spellings.
-- **`param` stripping** (`strip_param`). `True` strips the output row's `param` field (index 2)
-  the way `target`/`input`/`python` are already stripped, instead of carrying it verbatim
-  (`seam_map_map.md`'s field list above: "`param` **not** stripped"). **Measured delta: zero** —
-  no output's `parameter` on the three-map corpus carries leading or trailing whitespace.
-- **`delay` via `atof`** (`delay_atof`). `True` reads the output row's `delay` field (index 3)
-  with this module's own `atof()` — the longest numeric prefix, `0.0` when there is none — instead
-  of a plain `float()`, matching every other number `.ents` carries (`origin`, `hingeaxis`,
-  `floor1..8`). **Measured delta: zero** — every authored `delay` on the three-map corpus is
-  already a plain-`float()`-parseable token; the flag is pinned with a synthetic trailing-junk
-  case instead.
-- **`extra` field** (`keep_extra`). `True` adds field 6 (`extra`, everything past `python`,
-  verbatim including any further commas) to the output row, present only when the value's split
-  actually reaches it — matching the entities unit's own `Output.extra`
-  (`map_entities_glb.decode._output_row`'s `",".join(fields[residue:])`). **Not** a zero-effect
-  flag: retail writes seven comma-separated fields on almost every output even when the 7th is
-  empty, so `keep_extra` is measured to add `extra: ""` to **1,027 of 1,028** outputs on
-  `sp_tutorial_1`, **121 of 121** on `sm_pawnshop_1`, and **800 of 802** on `sm_hub_1` — moving
-  338/34/228 `.ents` entity rows off `byte_equal` (`entityDiffCount`; every difference is exactly
-  the added `outputs[].extra` key, nothing else).
-- **`times` normalization** — no flag; already landed with exactly one owner. Legacy `.ents`
-  carries an authored `0` as literal `0`, not `-1`, so this divergence cannot be a producer flag
-  the way the other five are: the exporter must keep shipping the literal value, because
-  `ElysiumEntityDefs.cpp`'s def loader already applies the `0` → `-1` rewrite once, at read time
-  (`if (OutDef.Times == 0) { OutDef.Times = -1; }`, "normalised here rather than in the exporter,
-  so an already-exported corpus behaves"). A producer-side option here would give the normalization
-  two owners and risk a double-application; the field list's existing `times` rule
-  (`int(float())` with `-1` on failure) is therefore final, and this bullet exists only to record
-  that R3.4 checked it and found nothing left to land.
+| divergence | retail | landed | rows changed |
+|---|---|---|---|
+| output typing | `0x101a5a80` admits a record on `FTYPEDESC_KEY 0x4` and dispatches an output through the type 10 custom op (`101a5c3b` → `0x100cdb20` → `0x100cd6d0`); the key's spelling is never consulted | the class's datamap alone | **18**, on 7 maps, 0 of the six |
+| key folding | `__strcmpi` at `101a5b0a`, and `ParseMapData 0x1009e280` applies pairs in authored order | one slot, last spelling wins | **0** |
+| `param` stripping | the splitter `0x101d16c0` trims **nothing** — the flag was aimed the wrong way | `target`, `input` and `python` **stop** being stripped; `param` stays verbatim | **1** (`hw_sinbin_1[128]`'s `python`) |
+| `delay` | CRT `_atof`, `100cd099` → `0x1043136f`; an empty token skips the call and keeps `0.0` | `atof` | **0** |
+| `extra` | six splits and no seventh (`100cd0d9`, return `100cd109`); a written 7th field is inert residue | stays dropped, unconditionally | **0** |
+| `times` | `_atoi`, then the result `0` is rewritten to `-1` | the producer's `split_output` became the single owner, then the unit's `_output_row` inherited it | **0** |
+
+Two the flags did not cover, found by the same recovery:
+
+- **An empty `input` is `Use`.** `0x100ccf90` substitutes `DAT_10555f7c`, read from the shipped
+  `.data` as `"Use"`, rather than interning nothing. **6,856 rows** author one; **two** of them name
+  a target (`sm_oceanhouse_2[1181]`, `sp_soc_1[189]`) and so change a delivery, neither on the six.
+- **There is no comma gate.** The producer refused to parse a datamap-typed key whose value held
+  fewer than four commas; retail's splitter has no such rule. `la_empire_2[412]` and `[413]`'s
+  `npc_VHumanCombatant.OnDeath` — `"G.Dead_Russians = G.Dead_Russians + 1,"`, one comma — are
+  output rows. **2 rows**, neither on the six.
+
+The `times` owner moved twice and is worth stating plainly, because this section previously named
+the wrong one. Retail rewrites an authored `0` in its ROW PARSER. The port had the rewrite in three
+READERS instead — `UElysiumMapEntities::Deserialize`, `FElysiumEntityDefs::Parse` and
+`AElysiumInfraActor::BuildDefOutputs` — while `split_output`'s docstring claimed it and
+`int(number(parts[4], -1))` did not perform it. All three readers now copy `times` verbatim: by the
+time a row reaches them it has been parsed, and a directly constructed def with `Times = 0` has
+always meant "spent before it fires".
+
+**With the six settled, the producer's own output parser agreed with the entities unit's on every
+field of every output in the corpus**, so the duplicate went: `entity_outputs` reads the published
+`outputs[]` table, and `is_output_key` / `split_output` are deleted. That is the same collapse
+21-7 performed on the lump reader — see the next section.
 
 ### R3.4 — the two the port surfaced
 
@@ -499,17 +481,40 @@ is where the roadmap assigns their decisions.
   R3.4's own scope (a producer-option task, not a root-unit schema task), the divergence stays
   named rather than chased: `classify_dispcol`'s tolerance-gated classification (already landed in
   R3.3) is the final answer, not an interim one.
-- **`sm_hub_1`'s embedded-quote entity block — decided: no producer option, already correct by
-  construction.** `entity_lump_text`/`_requote` reproduce the legacy corruption verbatim (R3.2,
-  pinned by `test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_on`)
-  because `write_sidecars` stays byte-comparable against a text-and-regex legacy reader. That
-  corruption is purely an artifact of *reconstructing lump text and re-running the legacy regexes*
-  — the entities unit's own `entities[].keyValues[]` never loses `logic_auto`'s `origin` in the
-  first place, because it reads the lump structurally and never re-derives it from reconstructed
-  text. R4.1's `UElysiumMapEntities` deserializes the entities unit directly, not through this
-  producer's regex path, so it inherits the fix by construction and needs no flag here — unlike the
-  six divergences above, there is no "byte-comparable default vs. corrected opt-in" axis to add:
-  the correct reading is simply *not running this producer's text reconstruction at all*.
+- **`sm_hub_1`'s embedded-quote entity block — fixed by reading the lump instead of rebuilding it
+  (0018 story 21-7). This section's earlier text was wrong on the fact that mattered.** It said
+  R4.1's `UElysiumMapEntities` "deserializes the entities unit directly, not through this
+  producer's regex path, so it inherits the fix by construction". It did not:
+  `importers/map_entities.stage_map` went through `producer.prepare_join`, which rebuilt the lump
+  as text with `entity_lump_text`/`_requote` and re-ran the legacy regexes over it, so the cooked
+  asset carried the corruption the `.ents` file carried. The correct reading was indeed "not
+  running this producer's text reconstruction at all", and nothing was running that reading.
+
+  The reconstruction is deleted. `entity_pair_blocks` hands every reader the unit's own
+  `keyValues[]`, which is retail's tokeniser `0x10136ce0` already run — escapes included
+  (`10136d7a-10136d9e`) — and `folded_keys` / `first_of_class` / `blocks_of_class` serve the five
+  scans that wanted one entity's scalar keys (`sky_camera`, `.env`'s fog and `skyname`, `.spawn`,
+  the brush-model origins, `infodecal`). Those scans now match a classname as a classname where the
+  text scan matched the literal string anywhere in the block; measured over the 105 maps that could
+  be reconstructed at all, that narrowing changes **no** `.env`, `.sky`, `.spawn`, `.hulls`,
+  `.lights`, `.ropes` or `.dispcol` line.
+
+  **Nine entities on eight maps change, and the damage was more than a Python string.** The
+  re-pairing consumed each entity's `origin` key, so all nine were placed at world zero, and it
+  swallowed most of their outputs as junk keys: `ch_hub_1[898]` 1 output → 12, `hw_hub_1[1202]`
+  4 → 11, `la_hub_1[1097]` 1 → 10, `sm_hub_1[1611]` 20 → 20 (the Python alone), 
+  `sp_endsequences_a[771]` 4 → 9, `sp_endsequences_a[833]` 0 → 3, `sp_endsequences_b[628]` 1 → 6,
+  `sp_epilogue[214]` 2 → 6, `sp_masquerade_1[38]` 13 → 14. `sp_endsequences_b[628]` also flips
+  `sky` false → true, because an entity parked at the origin classifies against the wrong BSP area.
+  Nine keyvalues in the whole corpus carry an embedded quote and these are their entities.
+  (`entity_io.md` names `lilly_trunk.OnOpen` beside the hub's `logic_auto`: it is real in the
+  SHIPPED `sm_hub_1.bsp` at line 26017, but the Unofficial Patch deletes that line and the corpus
+  is patch-first, so the published unit never carries it.)
+
+  **The three maps the reconstruction refused are unblocked.** `la_ventruetower_2`,
+  `la_ventruetower_3` and `sp_giovanni_2b` produce their eight sidecars, stage and validate:
+  `_requote` was a lossy inverse of the lexer's escape rule and the byteLength gate that caught it
+  existed only to prove the rebuilt text matched what the deleted differ compared. 108 of 108.
 
 ### Verification
 
@@ -892,8 +897,9 @@ So a decal the decoder bound to sculpted terrain has no face to bind here.
 
 Over all 92 maps with a legacy `.decals`, 5,037 lines
 (`research/tooling/probes/decal_weather_parity.py`, 2026-09-21): **84 byte-identical**; three
-refused by the entity-lump reader 21-7 owns (`la_ventruetower_2`, `la_ventruetower_3`,
-`sp_giovanni_2b`); **five differing by 22 rows in total** — `la_library_1` 11, `sm_oceanhouse_2` 6,
+refused by the entity-lump reader, which 21-7 has since deleted, so `la_ventruetower_2`,
+`la_ventruetower_3` and `sp_giovanni_2b` stage now and were never compared (the probe went with
+the decoder); **five differing by 22 rows in total** — `la_library_1` 11, `sm_oceanhouse_2` 6,
 `sp_soc_1` 2, `sm_warehouse_1` 1, `la_malkavian_5` 1. Every one of the 22 is this gap. Every one is
 an `unbound` row (no projector face) and never an `unresolved` one (no material size), so no
 published decal material fails to size anywhere in the corpus; 21 sit inside a displacement's own
@@ -958,8 +964,8 @@ six then travelled in one run of the game: `sp_genesisdevice_1`, `sp_tutorial_1`
 opening playing — the sentry's patrol, the sign popup, the idle timer), `sm_hub_1` with
 `elysium.weather.rain_on` bringing up two active `rain_follow_emitter`s, `sp_soc_3`,
 `sm_pawnshop_1` and `sp_theatre`. Staging the decal lane over the whole published corpus is clean
-too: **105 of 108 maps stage with zero validation failures**, the three that do not being 21-7's
-lump-reader refusals.
+too: **105 of 108 maps stage with zero validation failures**, the three that do not being the
+lump-reader refusals — which 21-7 removed, taking the corpus to 108 of 108.
 
 ### Deleting the decoder (0018 story 21-5)
 
@@ -2752,12 +2758,12 @@ actor each, and the runtime rebuilds their entity defs from those actors.
 ### The row contract
 
 The stage takes identity, origin and outputs from the same `collect_entity_fields` reading both
-entity-table transports are built from, and refuses a map it cannot stage faithfully: a family
-row whose legacy pair reading differs from the unit's structured pairs, a hint row the census rule
-and the retail rule classify differently, an authored hint type unlike its class-forced type, a
-parented hint row, or a row in the 3D-skybox miniature. Three maps' lumps cannot be reconstructed
-by the legacy reading at all (`la_ventruetower_2`, `la_ventruetower_3`, `sp_giovanni_2b`); every
-lane refuses them alike.
+entity-table transports are built from, and refuses a map it cannot stage faithfully: a hint row
+the census rule and the retail rule classify differently, an authored hint type unlike its
+class-forced type, a parented hint row, or a row in the 3D-skybox miniature. **All 108 maps
+stage** — `la_ventruetower_2`, `la_ventruetower_3` and `sp_giovanni_2b` were refused by the lump
+reconstruction that 0018 story 21-7 deleted, and the "legacy pair reading differs from the unit's
+structured pairs" refusal went with it: there is one reading now.
 
 The actor's typed keyfield structs (`AiInfra/ElysiumInfraKeyfields.h`, generated from the datamap
 replay) are authoritative. `AuthoredKeys` keeps every authored pair. The def is rebuilt by walking

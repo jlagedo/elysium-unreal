@@ -26,15 +26,16 @@ from elysium_pipeline.exporters.UE_map_sidecars import (
     brush_cull_max_cm,
     brush_hull,
     collect_entity_fields,
+    entity_keys,
+    entity_outputs,
     entity_pair_blocks,
     first_of_class,
-    is_output_key,
     meshed_faces,
     model_brushes,
+    output_pair_indexes,
     rope_material_id,
     source_planes,
     source_position,
-    split_output,
     write_ropes,
 )
 from elysium_pipeline.importers.materials import asset_path_for
@@ -106,68 +107,75 @@ def test_model_brushes_collects_only_leaves_under_the_given_headnode():
     assert model_brushes(nodes, leafs, leaf_brushes, 2) == {200, 201}
 
 
-def test_split_output_substitutes_use_for_an_empty_input():
-    # 0018 story 21-7: field 1 is the one field the row parser fills in for. An empty token is not
-    # interned as nothing -- `0x100ccf90` substitutes `DAT_10555f7c`, read from the shipped `.data`
-    # as `"Use"` -- so `target,,,0,-1,py,` addresses the receiver's `Use` input. Nothing is
-    # trimmed, so a token that is only whitespace is a name, not an absence.
-    assert split_output("door,,,0,-1,py")["input"] == "Use"
-    assert split_output(",,,0,-1,setArea(\"santa_monica\"),")["input"] == "Use"
-    assert split_output("door, ,,0,-1,py")["input"] == " "
-    assert split_output("door,Open,,0,-1,py")["input"] == "Open"
+def _row(*pairs, outputs=()):
+    """One entity as the unit publishes it: ordered keyValues, plus the outputs[] table the
+    unit's own parser produced, back-linked to the pairs it read them from."""
+
+    return {
+        "index": 0,
+        "keyValues": [{"index": i, "key": k.lower(), "sourceKey": k, "value": v}
+                      for i, (k, v) in enumerate(pairs)],
+        "outputs": [dict(row) for row in outputs],
+    }
 
 
-def test_split_output_times_is_atoi_and_an_authored_zero_is_unlimited():
-    # 0018 story 21-7: field 4 reads with `_atoi` -- the longest integer prefix -- and retail's
-    # parser rewrites the result 0 back to the -1 the record was seeded with, so both spellings
-    # mean unlimited and only a positive value is a countdown. This function is the one owner of
-    # that rewrite; `UElysiumMapEntities::Deserialize` and `FElysiumEntityDefs::Parse` no longer
-    # re-apply it, because by the time they read a row it has already been parsed.
-    assert split_output("door,Open,,0,0,py")["times"] == -1
-    assert split_output("door,Open,,0,-1,py")["times"] == -1
-    assert split_output("door,Open,,0,2,py")["times"] == 2
-    # `_atoi`, not `int(float())`: a numeric prefix, and 0 from a token with none.
-    assert split_output("door,Open,,0,3x,py")["times"] == 3
-    assert split_output("door,Open,,0,1e3,py")["times"] == 1
-    assert split_output("door,Open,,0,abc,py")["times"] == -1
-    assert split_output("door,Open,,0,,py")["times"] == -1
+def _output(key, keyvalue, raw, target="", input="Use", parameter="", delay=0.0, times=-1,
+            python=""):
+    return {"key": key, "keyValue": keyvalue, "raw": raw, "target": target, "input": input,
+            "parameter": parameter, "delay": {"raw": "", "value": delay},
+            "times": {"raw": "", "value": times, "unlimited": times == -1}, "python": python}
 
 
-def test_split_output_trims_no_field():
-    # 0018 story 21-7: the splitter `0x101d16c0` is a bare copy-until-the-next-comma and strips
-    # nothing, so every space an author wrote is part of the interned string. `delay` is still a
-    # plain float(), `times` still reads -1 from an unparsable field, field 6 is still dropped.
-    row = split_output(" door , Open , slow  , 0.35 , x , taxi() , dropped ")
+def test_entity_outputs_is_the_units_own_table_in_the_ents_field_order():
+    # 0018 story 21-7: there is one output parser in the tree and it is
+    # `map_entities_glb.decode._output_row`, the port of `FUN_100ccf90`. This module reads its
+    # table rather than carrying a second implementation of it. The row shape and field order are
+    # what `.ents` has always written.
+    row = _row(("classname", "logic_relay"),
+               ("OnTrigger", " door , Open , slow  , 0.35 , 2 , taxi() , dropped "),
+               ("origin", "0 0 0"),
+               outputs=[_output("OnTrigger", 1, " door , Open , slow  , 0.35 , 2 , taxi() , dropped ",
+                                target=" door ", input=" Open ", parameter=" slow  ",
+                                delay=0.35, times=2, python=" taxi() ")])
 
-    assert row == {
+    assert entity_outputs(row) == [{
         "target": " door ",
         "input": " Open ",
         "param": " slow  ",
         "delay": 0.35,
-        "times": -1,
+        "times": 2,
         "python": " taxi() ",
-    }
-    # Fewer than four commas is not an output at all; it stays a plain keyvalue.
-    assert split_output("door,Open,,0") is None
+        "name": "OnTrigger",
+    }]
+    assert list(entity_outputs(row)[0]) == [
+        "target", "input", "param", "delay", "times", "python", "name"]
 
 
-def test_split_output_never_reads_a_seventh_field():
-    # 0018 story 21-7: the row body splits six times (`100cd0d9`) and returns at `100cd109`, so a
-    # 7th token -- which retail's authoring tool writes on almost every output, usually empty --
-    # is residue the engine never reads. Commas past field 6 are residue too.
-    assert "extra" not in split_output(" door , Open , slow  , 0.35 , x , taxi() , a,b ")
-    assert "extra" not in split_output("door,Open,slow,0.35,1,py")
-    # The six fields it does read are unaffected by whatever follows them.
-    assert split_output("door,Open,slow,0.35,1,py,7th,8th")["python"] == "py"
+def test_the_keys_catch_all_leaves_out_exactly_the_pairs_that_became_outputs():
+    # The unit back-links every output to its keyvalue, so the catch-all subtracts a set rather
+    # than re-deciding which keys are outputs -- there is no second gate to drift.
+    row = _row(("classname", "logic_relay"),
+               ("OnTrigger", "door,Open,,0,-1,,"),
+               ("origin", "0 0 0"),
+               outputs=[_output("OnTrigger", 1, "door,Open,,0,-1,,", target="door", input="Open")])
+
+    assert output_pair_indexes(row) == {1}
+    _outputs, keys = collect_entity_fields(row)
+    assert keys == {"classname": "logic_relay", "origin": "0 0 0"}
 
 
-def test_split_output_delay_reads_the_longest_numeric_prefix():
-    # 0018 story 21-7: CRT `_atof` (`100cd099` -> `0x1043136f`), so a trailing-junk delay reads
-    # its numeric prefix rather than rejecting the whole token to 0.0. A token with no prefix, and
-    # an empty one (which retail does not call `_atof` for at all), both stay 0.0.
-    assert split_output("door,Open,slow,3.5s,5,x")["delay"] == 3.5
-    assert split_output("door,Open,slow,abc,5,x")["delay"] == 0.0
-    assert split_output("door,Open,slow,,5,x")["delay"] == 0.0
+def test_an_output_under_four_commas_is_still_an_output():
+    # Retail has no comma gate: `0x101d16c0` splits whatever it is given and the absent fields come
+    # out empty. `la_empire_2[412]`/`[413]` are the shipped case -- one comma, and a row.
+    row = _row(("classname", "npc_VHumanCombatant"),
+               ("OnDeath", "G.Dead_Russians = G.Dead_Russians + 1,"),
+               outputs=[_output("OnDeath", 1, "G.Dead_Russians = G.Dead_Russians + 1,",
+                                target="G.Dead_Russians = G.Dead_Russians + 1")])
+
+    assert [out["target"] for out in entity_outputs(row)] == [
+        "G.Dead_Russians = G.Dead_Russians + 1"]
+    _outputs, keys = collect_entity_fields(row)
+    assert "OnDeath" not in keys
 
 
 def test_source_position_inverts_the_transform_in_binary32():
@@ -186,31 +194,15 @@ def test_source_position_inverts_the_transform_in_binary32():
     assert list(planes[0]) == [0.0, 0.0, 1.0, np.float32(-134.0)]
 
 
-def test_is_output_key_is_the_class_datamap_not_the_key_text():
-    # 0018 story 21-7: `0x101a5a80` admits a record on `FTYPEDESC_KEY 0x4` and dispatches an
-    # output through the type 10 custom op, so the key's spelling decides nothing. `game_ui`'s
-    # `PlayerOn` is declared under a name the old shape test missed (promoted, `la_hub_1`);
-    # `trigger_player_activity_level`'s `OnTrigger` is shape-matched and undeclared (demoted,
-    # `sm_diner_1`); a `-wesp` key is the patch's disabled spelling and is never an output.
-    assert is_output_key("game_ui", "PlayerOn") is True
-    assert is_output_key("trigger_player_activity_level", "OnTrigger") is False
-    assert is_output_key("logic_relay", "OnTrigger-wesp") is False
-    # An ordinary output is unaffected.
-    assert is_output_key("logic_relay", "OnTrigger") is True
-
-
-def test_collect_entity_fields_folds_case_variants_and_keeps_the_last_spelling():
+def test_entity_keys_folds_case_variants_and_keeps_the_last_spelling():
     # 0018 story 21-7: `__strcmpi` at `101a5b0a` reaches one datamap record for both spellings and
     # `ParseMapData 0x1009e280` applies the pairs in order, so it is one slot holding the LAST
     # value -- spelled the way that occurrence authored it, never forced lowercase.
-    _outputs, keys = collect_entity_fields([("Frob", "1"), ("frob", "2")])
-    assert keys == {"frob": "2"}
-    _outputs, reversed_order = collect_entity_fields([("frob", "1"), ("Frob", "2")])
-    assert reversed_order == {"Frob": "2"}
+    assert entity_keys([("Frob", "1"), ("frob", "2")]) == {"frob": "2"}
+    assert entity_keys([("frob", "1"), ("Frob", "2")]) == {"Frob": "2"}
 
     # An entity that never repeats a key under two spellings is unaffected.
-    _outputs, unaffected = collect_entity_fields([("RenderColor", "255 0 0")])
-    assert unaffected == {"RenderColor": "255 0 0"}
+    assert entity_keys([("RenderColor", "255 0 0")]) == {"RenderColor": "255 0 0"}
 
 
 def test_entity_pair_blocks_keeps_the_embedded_quote_the_legacy_regex_tripped_on():
@@ -316,7 +308,7 @@ def test_a_sky_brush_entity_carries_no_hulls_in_the_ents(map_name):
         pytest.skip(f"no exported map root unit at {unit}")
 
     join = prepare_join(map_name)
-    rows, stats = build_entities(join.units, join.sky, join.pair_blocks, join.brush_meshes)
+    rows, stats = build_entities(join.units, join.sky, join.brush_meshes)
     brush_rows = [row for row in rows if "hulls" in row]
     sky_rows = [row for row in brush_rows if row.get("sky")]
 

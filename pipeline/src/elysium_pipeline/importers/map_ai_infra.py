@@ -151,13 +151,13 @@ def family_of(classname: str, pairs: Sequence[tuple[str, str]]) -> str | None:
     return None
 
 
-def _authored_keys(pairs: Sequence[tuple[str, str]], classname: str) -> list[list[str]]:
-    """The pairs `collect_entity_fields` keeps as keys, in order with repeats, minus the hoisted two."""
+def _authored_keys(pairs: Sequence[tuple[str, str]], skip: set[int]) -> list[list[str]]:
+    """The pairs `collect_entity_fields` keeps as keys, in order with repeats, minus the hoisted
+    two. `skip` is `producer.output_pair_indexes`' answer: which keyvalues the unit's own parser
+    turned into output rows."""
     out: list[list[str]] = []
-    for key, value in pairs:
-        if producer.is_output_key(classname, key) and producer.split_output(value) is not None:
-            continue
-        if key in HOISTED_KEYS:
+    for position, (key, value) in enumerate(pairs):
+        if position in skip or key in HOISTED_KEYS:
             continue
         out.append([key, value])
     return out
@@ -183,7 +183,7 @@ def stage_rows(map_name: str, entity_rows: Sequence[dict[str, Any]],
                                   "CNodeEnt::Spawn disagree on whether it is a hint")
         if family is None:
             continue
-        outputs, keys = producer.collect_entity_fields(pairs)
+        outputs, keys = producer.collect_entity_fields(entity)
         if family == "hint":
             authored = atoi(_folded_get(pairs, "hinttype") or "")
             forced = class_hint_type(classname, authored)
@@ -209,7 +209,7 @@ def stage_rows(map_name: str, entity_rows: Sequence[dict[str, Any]],
             "targetname": _last(pairs, "targetname", ""),
             "originCm": [round(float(c), 5) for c in source_to_unreal(*origin_src)],
             "rotationQuat": [round(float(c), 6) for c in source_angles_to_unreal_quat(*pitch_yaw_roll)],
-            "keys": _authored_keys(pairs, classname),
+            "keys": _authored_keys(pairs, producer.output_pair_indexes(entity)),
             "outputs": [
                 {"name": row["name"], "target": row["target"], "input": row["input"],
                  "param": row["param"], "delay": float(row["delay"]), "times": int(row["times"]),

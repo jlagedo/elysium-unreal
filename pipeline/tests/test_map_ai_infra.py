@@ -11,13 +11,43 @@ import pytest
 
 from elysium_pipeline import paths
 from elysium_pipeline.exporters import UE_map_sidecars as producer
+from elysium_pipeline.formats.map_entities_glb import model
 from elysium_pipeline.importers import map_ai_infra as infra
 
 
+def _output(position, key, value):
+    """One `outputs[]` row as the entities unit publishes it -- `FUN_100ccf90`'s six fields, the
+    empty-`input` substitution and the authored-0 `times` rewrite included."""
+    fields = value.split(",")
+
+    def at(index):
+        return fields[index] if index < len(fields) else ""
+
+    authored = model.atoi(at(4))
+    return {"key": key, "keyValue": position, "raw": value,
+            "target": at(0), "input": at(1) or model.DEFAULT_INPUT, "parameter": at(2),
+            "delay": {"raw": at(3), "value": model.atof(at(3))[0]},
+            "times": {"raw": at(4), "value": authored or model.UNLIMITED_TIMES},
+            "python": at(5), "fieldCount": len(fields)}
+
+
 def _row(index, pairs):
+    """One entity as the unit publishes it. A key the class's datamap types as an output gets an
+    `outputs[]` row back-linked to it, which is the only thing that makes it one."""
     classname = next((value for key, value in pairs if key == "classname"), "")
+    folded = classname.strip().lower()
+    outputs = []
+    for position, (key, value) in enumerate(pairs):
+        low = key.lower()
+        if low.endswith(model.DISABLED_KEY_SUFFIX) or (folded, low) in model.NOT_OUTPUT_KEYS:
+            continue
+        if (model.OUTPUT_KEY.match(key) is not None
+                or low in model.OUTPUT_KEYS_BY_CLASS.get(folded, frozenset())):
+            outputs.append(_output(position, key, value))
     return {"index": index, "classname": classname,
-            "keyValues": [{"key": key.lower(), "sourceKey": key, "value": value} for key, value in pairs]}
+            "keyValues": [{"index": i, "key": key.lower(), "sourceKey": key, "value": value}
+                          for i, (key, value) in enumerate(pairs)],
+            "outputs": outputs}
 
 
 def _stage(*blocks):
@@ -73,7 +103,7 @@ def test_keys_are_the_transport_keys_after_its_fold():
     pairs = [("classname", "intersting_place"), ("max_time", "23523235.0"), ("min_bounds", "0  0 72"),
              ("max_time", ".5"), ("testflags", "4"), ("origin", "1 2 3")]
     row = _stage(pairs)["rows"][0]
-    _, keys = producer.collect_entity_fields(pairs)
+    keys = producer.entity_keys(pairs)
     keys.pop("classname")
     folded = {}
     for key, value in row["keys"]:

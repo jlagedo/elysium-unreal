@@ -210,9 +210,7 @@ def stage_for_geometry(
     # already re-ran the weather half against the PRODUCER's entities rather than the decoder's,
     # so this is that join without the file in between.
     rows, _stats = producer.build_entities(
-        geometry.join.units, geometry.join.sky, geometry.join.pair_blocks,
-        geometry.join.brush_meshes,
-    )
+        geometry.join.units, geometry.join.sky, geometry.join.brush_meshes)
     entity_document = {"map": map_name, "entities": rows}
     if not weather._rain_entities(entity_document):
         return None
