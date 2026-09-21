@@ -17,7 +17,9 @@ from elysium_pipeline.formats.unit_contract.references import normalize_key as _
 
 KIND = "engine-config"
 KIND_TITLE = "Engine-config"
-SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 added the source capsule: the member's exact bytes travel in the unit's BIN
+#: chunk, so `uv run elysium import engine-config` deploys `cfg/` without the install.
+SCHEMA_VERSION = "1.1.0"
 ENGINE_CONFIG_EXTENSION = "ELYSIUM_vtmb_engine_config"
 
 GRAMMAR_CONSOLE_SCRIPT = "console-script"

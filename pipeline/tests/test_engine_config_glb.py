@@ -825,8 +825,10 @@ def test_a_corrupt_zlib_signature_falls_back_to_typed_unidentified():
 def test_build_document_opens_the_extension_root_with_the_contract_key_order():
     _, _, _, model = _decode({USER_CFG_PATH: USER_CFG}, USER_CFG_PATH)
     document, binary = exporter.build_document(model)
-    assert binary == b""
+    # The BIN chunk is the source capsule alone -- the member's own bytes, unaltered.
+    assert binary == USER_CFG
     root = document["extensions"][ENGINE_CONFIG_EXTENSION]
+    assert root["sourceResolution"]["capsule"] == {"encoding": "raw"}
     assert list(root)[:5] == ["schemaVersion", "identity", "sourceResolution", "dependencies", "coverage"]
     assert document["extensionsUsed"] == document["extensionsRequired"] == [ENGINE_CONFIG_EXTENSION]
     assert document["asset"]["generator"] == "Elysium Engine-config GLB Exporter"

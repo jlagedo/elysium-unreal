@@ -54,7 +54,14 @@ shipped code path reads it. It carries `identity.residue: true`.
 
 ## GLB structure
 
-Every unit is scene-less with no BIN chunk.
+Every unit is scene-less and declares no accessor. The BIN chunk it does carry is the **source
+capsule** alone (`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds the member's own
+bytes, one `bufferView` addresses them, and `sourceResolution` declares
+`"capsule": {"encoding": "raw"}` with the member row naming that view. The three binary members
+capsule exactly as the text ones do — the capsule is bytes, not text — and an empty member
+capsules to nothing. `uv run elysium import engine-config` deploys the `cfg/` members to
+`Content/ElysiumCorpus/cfg/`, reading nothing but the units; the compiler tables, the packer
+configuration and the binary state files have no runtime reader and are not deployed.
 
 ```json
 {
@@ -62,7 +69,7 @@ Every unit is scene-less with no BIN chunk.
   "extensionsRequired": ["ELYSIUM_vtmb_engine_config"],
   "extensions": {
     "ELYSIUM_vtmb_engine_config": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "grammar": "console-script",

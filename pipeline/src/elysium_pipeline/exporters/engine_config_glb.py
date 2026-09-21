@@ -1,7 +1,9 @@
 """Isolated one-member/one-GLB engine-config product writer.
 
-Every unit is scene-less and carries no BIN chunk: every engine-config member the seam names is
-text or a small typed binary blob, none of it a general glTF-drawable payload.
+Every unit is scene-less and declares no accessor: every engine-config member the seam names is
+text or a small typed binary blob, none of it a general glTF-drawable payload. The BIN chunk it
+does carry is the source capsule alone -- the member's own bytes, so the unit is everything a
+reader needs to reproduce the install file.
 """
 
 from __future__ import annotations
@@ -21,11 +23,12 @@ from elysium_pipeline.formats.engine_config_glb import source_keys as _source_ke
 from elysium_pipeline.formats.engine_config_glb.coverage import coverage_block
 from elysium_pipeline.formats.unit_contract import (
     asset_block,
+    buffer_table,
     dependency,
+    encapsulate,
     extension_root,
     identity_block,
     plain,
-    source_resolution,
     write_glb,
 )
 
@@ -40,6 +43,7 @@ def build_document(model) -> tuple[dict, bytes]:
         for row in model.dependencies
     ]
     identity_extra = {"residue": True} if model.key in _RESIDUE_KEYS() else {}
+    resolution, buffer_views, binary = encapsulate([model.member])
     # The extension root opens with the five contract keys, in order,
     # before any kind-specific one; the seam doc's own illustrative JSON interleaves `grammar`
     # and the per-grammar table keys before `dependencies` and `comments`/`anomalies`/`omissions`
@@ -48,7 +52,7 @@ def build_document(model) -> tuple[dict, bytes]:
     extension = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity_block(model.asset, model.member.path, **identity_extra),
-        source_resolution=source_resolution([model.member]),
+        source_resolution=resolution,
         dependencies=dependencies,
         coverage=coverage_block(
             ledger_row=model.ledger_row,
@@ -76,14 +80,20 @@ def build_document(model) -> tuple[dict, bytes]:
         anomalies=model.anomalies,
         omissions=model.omissions,
     )
-    document = {
+    document: dict = {
         "asset": asset_block(KIND_TITLE),
         "extensionsUsed": [ENGINE_CONFIG_EXTENSION],
         "extensionsRequired": [ENGINE_CONFIG_EXTENSION],
-        "extensions": {ENGINE_CONFIG_EXTENSION: plain(extension)},
     }
-    # No member this seam names holds a general glTF-drawable payload: one JSON chunk, no BIN.
-    return document, b""
+    # No member this seam names holds a general glTF-drawable payload, so the whole BIN chunk is
+    # the capsule: one buffer holding the member's own bytes, addressed by the one view
+    # `sourceResolution.members[0].capsule` names. `hl2.tmp` and the two tiny state files capsule
+    # exactly as the text members do; a zero-byte member capsules to nothing and carries no view.
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
+    document["extensions"] = {ENGINE_CONFIG_EXTENSION: plain(extension)}
+    return document, binary
 
 
 def _RESIDUE_KEYS() -> frozenset[str]:
