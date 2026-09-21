@@ -67,12 +67,9 @@ def test_every_unit_deploys_to_its_own_install_relative_path(tmp_path):
     result = importer.import_vdata(tmp_path / "exports_v2", corpus)
 
     assert result.failures == []
-    assert result.written == len(BODIES) - 1                       # every subtree but signs/
+    assert result.written == len(BODIES)                            # every subtree, signs included
     assert result.unchanged == 0
-    assert result.skipped == 1
-    assert _deployed(corpus) == {
-        f"vdata/{key}.txt": body for key, body in BODIES.items() if not key.startswith("signs/")
-    }
+    assert _deployed(corpus) == {f"vdata/{key}.txt": body for key, body in BODIES.items()}
 
 
 def test_a_file_name_keeps_its_spaces_and_its_variant_suffix(tmp_path):
@@ -87,11 +84,19 @@ def test_a_file_name_keeps_its_spaces_and_its_variant_suffix(tmp_path):
     assert hunter.read_bytes() == BODIES["system/stats - hunter"]
 
 
-def test_the_signs_subtree_is_deployed_nowhere(tmp_path):
+def test_the_signs_subtree_deploys_where_the_sign_reader_looks(tmp_path):
+    """0018 story 21-6: `FElysiumSignData` resolves `CorpusRoot()/vdata/signs/<leaf>.txt`.
+
+    The reader's own `LeafName` fold drops every directory from the authored `definition_file`
+    and lower-cases what is left, and the seam's key is already that spelling, so the deployed
+    path and the path the reader opens are the same string.
+    """
+
     _publish(tmp_path / "exports_v2")
     corpus = tmp_path / "Content" / "ElysiumCorpus"
     importer.import_vdata(tmp_path / "exports_v2", corpus)
-    assert not (corpus / "vdata" / "signs").exists()
+    panel = corpus / "vdata" / "signs" / "sign_smiling_jack.txt"
+    assert panel.read_bytes() == BODIES["signs/sign_smiling_jack"]
 
 
 def test_a_second_run_over_one_corpus_rewrites_nothing(tmp_path):
@@ -103,7 +108,7 @@ def test_a_second_run_over_one_corpus_rewrites_nothing(tmp_path):
     }
 
     again = importer.import_vdata(tmp_path / "exports_v2", corpus)
-    assert again.written == 0 and again.unchanged == len(BODIES) - 1
+    assert again.written == 0 and again.unchanged == len(BODIES)
     assert {path: path.stat().st_mtime_ns for path in corpus.rglob("*.txt")} == stamps
 
 
@@ -115,26 +120,29 @@ def test_a_stale_file_is_overwritten_with_what_the_unit_carries(tmp_path):
     target.write_bytes(b"stale")
 
     result = importer.import_vdata(tmp_path / "exports_v2", corpus)
-    assert result.written == 1 and result.unchanged == len(BODIES) - 2
+    assert result.written == 1 and result.unchanged == len(BODIES) - 1
     assert target.read_bytes() == BODIES["system/feats"]
 
 
-def test_a_stale_orphan_is_pruned_and_a_signs_file_is_left_alone(tmp_path):
+def test_a_stale_orphan_is_pruned_anywhere_under_vdata(tmp_path):
+    """The `signs/` carve-out is gone with 21-6: this lane owns the whole tree, prune included."""
+
     _publish(tmp_path / "exports_v2")
     corpus = tmp_path / "Content" / "ElysiumCorpus"
 
     orphan = corpus / "vdata" / "system" / "retired_stat.txt"
     orphan.parent.mkdir(parents=True)
     orphan.write_bytes(b"no longer exported")
-    signs_file = corpus / "vdata" / "signs" / "sign_smiling_jack.txt"
-    signs_file.parent.mkdir(parents=True)
-    signs_file.write_bytes(b"owned by another slice")
+    retired_sign = corpus / "vdata" / "signs" / "retired_sign.txt"
+    retired_sign.parent.mkdir(parents=True)
+    retired_sign.write_bytes(b"no longer exported")
 
     result = importer.import_vdata(tmp_path / "exports_v2", corpus)
 
-    assert not orphan.exists()
-    assert result.pruned == 1
-    assert signs_file.is_file() and signs_file.read_bytes() == b"owned by another slice"
+    assert not orphan.exists() and not retired_sign.exists()
+    assert result.pruned == 2
+    # And the sign the units do carry is deployed, not pruned with it.
+    assert (corpus / "vdata" / "signs" / "sign_smiling_jack.txt").is_file()
 
 
 def test_a_unit_from_before_the_capsule_is_one_failure_and_not_a_crash(tmp_path):
@@ -157,7 +165,7 @@ def test_a_unit_from_before_the_capsule_is_one_failure_and_not_a_crash(tmp_path)
     assert "capsule" in result.failures[0][1]
     assert not (corpus / "vdata" / "system" / "feats.txt").exists()
     # Every other unit still deployed.
-    assert result.written == len(BODIES) - 2
+    assert result.written == len(BODIES) - 1
 
 
 def test_a_unit_whose_capsule_disagrees_with_its_digest_deploys_nothing(tmp_path):
@@ -229,10 +237,9 @@ def test_the_command_deploys_the_corpus_and_reports_one_line(monkeypatch, tmp_pa
     result = RUNNER.invoke(cli.app, ["import", "vdata"])
     assert result.exit_code == 0, result.output
     assert "vdata corpus import:" in result.output
-    assert "1 signs skipped" in result.output
     deployed = importer.corpus_root(config.repo_root)
     assert (deployed / "vdata" / "system" / "feats.txt").read_bytes() == BODIES["system/feats"]
-    assert not (deployed / "vdata" / "signs").exists()
+    assert (deployed / "vdata" / "signs" / "sign_smiling_jack.txt").is_file()
 
 
 def test_the_command_fails_when_a_unit_cannot_be_imported(monkeypatch, tmp_path):
@@ -248,8 +255,10 @@ def test_the_command_fails_when_a_unit_cannot_be_imported(monkeypatch, tmp_path)
 # --- parity with the legacy mirror ---------------------------------------------------------------
 
 
-#: The five subtrees slice 1 moves. `signs/` stays on the legacy flat export until its own slice,
-#: and the legacy vdata mirror never carried it in the first place.
+#: The five subtrees slice 1 moved. `signs/` is not compared here even though 21-6 deploys it:
+#: the legacy vdata mirror never carried it at all -- `UE_extract_signs.py` wrote a FLAT
+#: `signs/<leaf>.txt` tree of its own -- so there is nothing under the legacy `vdata/` to compare
+#: against. The reader's own path is asserted above instead.
 MIGRATED_SUBTREES = ("system", "items", "camerashots", "hackterminals", "precache")
 
 

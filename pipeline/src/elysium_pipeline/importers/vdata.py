@@ -11,9 +11,11 @@ No install and no engine are involved: the unit is self-contained, so the deploy
 a file the export already validated, weighed once more against the `byteLength` and `sha256` that
 unit published for its member.
 
-The `signs/` subtree is excluded, matching the legacy mirror (`exporters/UE_extract_vdata.py`
-excludes it because `UE_extract_signs.py` owns the sign panels together with their background
-art). Signs migrate on their own slice; until then they stay on the legacy flat export.
+Every subtree deploys, `signs/` included (0018 story 21-6). It had been excluded to match the
+legacy mirror, where `UE_extract_signs.py` owned the sign panels because it also decoded their
+background art -- art that is an imported `T_` asset now (`UI/ElysiumUiArt.h`), so the split had
+outlived its reason. `FElysiumSignData` reads `CorpusRoot()/vdata/signs/<leaf>.txt`, and the
+seam's key is already the lower-cased path the reader's own `LeafName` fold looks for.
 
 Deploying is idempotent: a destination that already holds exactly these bytes is left alone, so
 running the command twice writes nothing the second time and touches no file the editor may have
@@ -21,8 +23,7 @@ open.
 
 A file left behind by a renamed or retired vdata unit is an orphan a re-export never cleans up on
 its own, so every deploy also prunes: anything under `Content/ElysiumCorpus/vdata` that this run
-did not just write, other than the `signs/` subtree, is deleted, and any directory the pruning
-empties is removed with it.
+did not just write is deleted, and any directory the pruning empties is removed with it.
 """
 
 from __future__ import annotations
@@ -48,10 +49,6 @@ CORPUS_DIRECTORY = "ElysiumCorpus"
 #: The family directory this importer reads, under both roots.
 FAMILY = "vdata"
 
-#: Subtrees slice 1 leaves on the legacy export. One entry, spelled as a key prefix.
-EXCLUDED_SUBTREES = ("signs/",)
-
-
 class VdataImportError(RuntimeError):
     """The vdata corpus could not be deployed."""
 
@@ -63,14 +60,13 @@ class ImportResult:
     destination_root: Path
     written: int = 0
     unchanged: int = 0
-    skipped: int = 0
     pruned: int = 0
     failures: list[tuple[str, str]] = field(default_factory=list)
 
     def summary(self) -> str:
         return (
             f"vdata corpus import: {self.written} written, {self.unchanged} unchanged, "
-            f"{self.skipped} signs skipped, {self.pruned} pruned, {len(self.failures)} failed "
+            f"{self.pruned} pruned, {len(self.failures)} failed "
             f"-> {self.destination_root}"
         )
 
@@ -97,10 +93,6 @@ def unit_key(export_v2_root: Path, unit: Path) -> str:
 
     relative = Path(unit).relative_to(unit_root(export_v2_root))
     return PurePosixPath(*relative.parts).with_suffix("").as_posix()
-
-
-def is_excluded(key: str) -> bool:
-    return key.startswith(EXCLUDED_SUBTREES)
 
 
 def _destination(destination_root: Path, source_path: str) -> Path:
@@ -155,19 +147,16 @@ def deploy(unit: Path, destination_root: Path) -> tuple[int, int, set[Path]]:
 def _prune_stale(destination_root: Path, deployed: set[Path]) -> int:
     """Remove every file under `destination_root/vdata` this deploy did not just write.
 
-    `signs/` is never touched -- it is out of this slice's remit and stays on the legacy flat
-    export until its own migration -- and the walk cleans up any empty directory it leaves behind.
+    The walk cleans up any empty directory it leaves behind. Nothing is carved out: since 0018
+    story 21-6 this lane owns the whole `vdata/` tree, `signs/` included.
     """
 
     family_root = Path(destination_root) / FAMILY
-    signs_root = family_root / "signs"
     if not family_root.is_dir():
         return 0
     pruned = 0
     for path in list(family_root.rglob("*")):
         if path.is_dir() or path in deployed:
-            continue
-        if signs_root in path.parents or path == signs_root:
             continue
         path.unlink()
         pruned += 1
@@ -176,8 +165,6 @@ def _prune_stale(destination_root: Path, deployed: set[Path]) -> int:
         key=lambda path: len(path.parts),
         reverse=True,
     ):
-        if directory == signs_root or signs_root in directory.parents:
-            continue
         try:
             directory.rmdir()
         except OSError:
@@ -186,7 +173,7 @@ def _prune_stale(destination_root: Path, deployed: set[Path]) -> int:
 
 
 def import_vdata(export_v2_root: Path, destination_root: Path) -> ImportResult:
-    """Deploy every non-`signs/` vdata unit under `export_v2_root` into `destination_root`.
+    """Deploy every vdata unit under `export_v2_root` into `destination_root`.
 
     A unit that carries no capsule -- an old-format GLB from before schema 1.1.0 -- is one
     failure among many rather than the end of the run, so a partial corpus still deploys and the
@@ -204,9 +191,6 @@ def import_vdata(export_v2_root: Path, destination_root: Path) -> ImportResult:
     deployed: set[Path] = set()
     for unit in found:
         key = unit_key(export_v2_root, unit)
-        if is_excluded(key):
-            result.skipped += 1
-            continue
         try:
             written, unchanged, unit_deployed = deploy(unit, result.destination_root)
         except (CapsuleError, GlbContainerError, VdataImportError, OSError, ValueError) as error:
