@@ -76,7 +76,11 @@ Three rules, decided 2026-09-15 and narrowed for navigation on 2026-09-17:
   import regenerate everything, so an edit made in the editor does not persist; an authored
   override layer would be a separate, named story. (`docs/vision.md`
   § "The build shape" still says the runtime builds "from the intermediates on disk"; that
-  sentence is superseded by this decision and awaits the owner's edit.)
+  sentence is superseded by this decision and awaits the owner's edit. **Flagged again
+  2026-09-21:** 21-6 made it false in fact rather than in intent -- there is no intermediates
+  tree left for the runtime to build from, `Root()` is deleted and the game opens no file outside
+  the project. The same bullet's "written to a gitignored, regenerable export tree" is now only
+  half true: an export tree still exists offline, but nothing the game opens is in it.)
 - **Every interaction reaches Unreal.** Walking, path following, traces, collision and line of
   sight go through Unreal's NavMesh, nav links and collision. Named by content → record;
   needed by the world → Unreal service. Keep only the AIN-derived data behaviour reads: node
@@ -1068,8 +1072,9 @@ its recovery is written in the oracle section it names.
   each using editor-only API unguarded: `Tests/ElysiumContentTests.cpp` (15 errors),
   `Tests/ElysiumSurfaceKnobTests.cpp` (11), `Tests/ElysiumTerminalProjectionTests.cpp` (1) and
   `Visual/ElysiumBipedAnimInstance.cpp` (1). A cook cannot pass until they are guarded; the log
-  is `$ELYSIUM_WORK_ROOT/logs/game-target-compile.log`. "No external export access" is 21-6's
-  to provide: until it lands the game cannot start without `-ElysiumContentRoot`.
+  is `$ELYSIUM_WORK_ROOT/logs/game-target-compile.log`. "No external export access" was 21-6's
+  to provide and it landed 2026-09-21: the game takes no content argument and opens no file
+  outside the project.
   Consumes: everything above, and 21-6. Size: M. Effort: Sonnet / medium, then played.
 
 - [ ] **21. Retiring the legacy map transport.** Added 2026-09-20 by owner decision: V2 is the
@@ -1662,7 +1667,75 @@ its recovery is written in the oracle section it names.
   path in source, config or tests.
   Consumes: 21-4. Size: M. Effort: Sonnet / medium (deletion).
 
-- [ ] **21-6. The game needs no export root.**
+- [x] **21-6. The game needs no export root.**
+  **Landed 2026-09-21: the running game opens no file outside its own project directory, and
+  `FElysiumContentPaths::Root()` does not exist.**
+
+  **One correction to this story's own text, and it doubled the work.** The three seams the four
+  lanes deploy from carried NO source capsule. `corpus_deploy` lifts a unit's capsule -- the exact
+  winning bytes in its BIN chunk -- and that is what makes a lane byte-exact; `script`,
+  `engine-config` and `ui-resource` were all still schema 1.0.0 with no BIN chunk at all, so
+  `source_capsules` refused every one of them outright. Three commits adopted the capsule before a
+  single lane could be written, on `exporters/vdata_glb.py`'s one-line pattern, each with its seam
+  doc and its round-trip test. Size M became L.
+
+  **Two things the job list named that turned out to be already dead.** `IsConfigured()` had zero
+  callers, and so did `SkipIncompleteCorpus` -- the ONLY C++ reader of the `.elysium-incomplete`
+  markers, whose abstentions had already been replaced by structural ones. The markers' runtime
+  half was a corpse, not a migration. `clean.py`'s offline half is untouched.
+
+  **And one the job list did not foresee: the bytecode the VM writes into its own corpus.**
+  CPython 2.1 compiles beside the source it imports and has no `dont_write_bytecode` -- the legacy
+  mirror held 17 `.pyc` no exporter ever wrote. Once `sys.path` points at
+  `Content/ElysiumCorpus/scripts/` they land there, and without a rule every `import scripts`
+  would delete the compiled tree the running game had just built. `Lane.kept_suffixes` is new for
+  it. So is `Lane.unit_guard`: the lane deploys the source and never the companion (a `.pyc` given
+  a fresh mtime by a deploy can never validate against its sibling, so the interpreter recompiles
+  and overwrites it anyway), which would silently deploy NOTHING for a source-less `pyc-only`
+  unit -- the guard makes that a named failure instead. No unit in the corpus is one.
+
+  **The `vdata/signs/` mount was deleted rather than repointed**, the `sound/` precedent: signs are
+  the `vdata/signs/` subtree of the table corpus now, so the `vdata/` mount already answers that
+  prefix, one sandbox path to one real path. It also retires the ordering constraint the mount
+  table carried. All 278 panels deployed byte-identical to the flat mirror they replace, name for
+  name, neither side holding one the other lacked.
+
+  **What the UI reader flip cost, measured before the extractor was deleted.** `strings.json` was
+  derived by one regex; the runtime parses the install's own KeyValues document now. **194 distinct
+  tokens on both sides, same keys, same values.** The file carries 195 rows -- `GameUI_Advanced` is
+  authored twice, "Advanced..." then "Advanced" -- and last-wins agrees through both readers.
+  Reading the `Tokens` block rather than the root is also what keeps `Language` out: the regex
+  dropped it by NAME, so a token genuinely called `Language` would have gone with it.
+
+  **`Elysium.Scripting` does not exist** and never did -- this acceptance line was its only
+  occurrence in the repository. The suites meant are `Elysium.Substrate.ScriptFS`,
+  `Elysium.Substrate.Console`, both `Elysium.Substrate.Sign*` and `Elysium.Content.*`. There was
+  no UI-string test at all either; `Elysium.Substrate.UiStrings` and `Elysium.Content.UiStrings`
+  are new.
+
+  As it was checked: `uv run elysium build` green; `uv run pytest` 4,173 passing with only the two
+  `test_check_mode_matches_committed_tables` failures already red on a clean `main`; `uv run
+  elysium test substrate` **1,242 of 1,242, 0 failed**, and `Elysium.Content` 14 of 14. Then the
+  witness, with `$ELYSIUM_WORK_ROOT/exports` renamed away and no `-ElysiumContentRoot` passed: the
+  game booted to its menu drawn off the deployed table (`UI string table: 194 entries`), the
+  console seeded `4 file(s) from .../Content/ElysiumCorpus/cfg -> 121 aliases, 129 cvars; patch
+  profile Plus` -- identical to the pre-flip run's numbers off the export root -- and all six maps
+  travelled and reached Playing, `sp_tutorial_1` raising its scripted opening's sign panel out of
+  `vdata/signs/` and each map importing its level script (`tutorial`, `santamonica`, `demo`) out of
+  `Content/ElysiumCorpus/scripts/`. Not one missing-file complaint in the whole run. The VM wrote
+  15 `.pyc` across the six travels and a re-run of `import scripts` reported `already current, 0
+  pruned` with all 41 sources intact.
+
+  Owed, and stated rather than absorbed: `importers/vdata.py` is still the one corpus lane not on
+  `corpus_deploy` -- no recipe stamps, no read-back verification, non-atomic writes -- and signs
+  now ride it. Eight of the seventeen `engine-config` units are published and not deployed. And
+  the `.pyc` is exempted from the prune rather than suppressed: story 20's cook has to decide
+  whether a packaged game's corpus directory is writable at all.
+
+  Recovery: `seam_map_map.md` § "The game needs no export root (0018 story 21-6)"; an `## Import`
+  section each in `seam_map_script.md`, `seam_map_engine_config.md` and `seam_map_ui_resource.md`
+  (the three seams' capsule adoption is in their `## GLB structure`), and `seam_map_vdata.md`'s
+  signs carve-out rewritten to what is now true.
   Retail: none.
   Port today: four loose trees are still read from `ElysiumContentPaths::Root()`, which is why
   the game cannot start without `-ElysiumContentRoot`: `scripts/` (`ElysiumPythonVM.cpp:523,

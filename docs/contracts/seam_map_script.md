@@ -178,3 +178,52 @@ source bytes and checks that `source.lines[]` concatenate to them exactly, re-to
 independently of the writer and compares the token stream, re-derives `structure` from the tokens,
 and — where a `.pyc` exists — re-unmarshals it and compares every code-object field and every
 instruction against `pyc`.
+
+## Import (2026-09-21, 0018 story 21-6)
+
+`uv run elysium import scripts` deploys the level-script tree out of the published units and
+nothing else — no install, no engine (`pipeline/src/elysium_pipeline/importers/scripts.py`, on the
+shared `importers/corpus_deploy.py`). Each unit's source capsule is lifted, weighed against the
+`byteLength` and `sha256` that unit published for its member, and written to
+
+```text
+Content/ElysiumCorpus/scripts/<path>.py
+```
+
+`FElysiumContentPaths::ScriptsDir()` is that directory: it is what `UElysiumPythonVM` puts on
+`sys.path` and what the script filesystem's `python/` mount serves.
+
+**Only the source member deploys.** CPython 2.1 reads a `.pyc` only when it has no `.py` sibling,
+or when the modification time the compiler wrote into it matches the sibling's on disk. A deploy
+gives both files fresh times, so a deployed companion could never validate: the interpreter would
+recompile from the source, overwrite it, and the next run would rewrite it, for ever. The bytes
+the game runs are the source's either way, and the 24 `.pyc` that ship only inside a VPK never ran
+at all — 2.1 predates `zipimport`. A unit that resolved a companion and NO source (`sourceKind:
+"pyc-only"`) would deploy nothing, so `Lane.unit_guard` makes it a named failure instead of a
+silently missing module; no unit in the corpus is one.
+
+**The bytecode the VM writes back is not an orphan.** CPython 2.1 compiles beside the source it
+imports and has no `dont_write_bytecode` to stop it, so this tree fills with `.pyc` files the lane
+never wrote. `Lane.kept_suffixes` names `.pyc` and the prune steps over them — witnessed
+2026-09-21: after one boot and six map travels the corpus held 15 of them, and a re-run reported
+0 pruned with all 41 sources intact.
+
+Measured 2026-09-21: 41 units, every one resolving a `.py`, and 41 files deployed — the same 41
+the legacy `UE_extract_scripts.py` mirror held (the install's 67 loose `.py` across retail and
+patch collapse to 41 distinct keys under UP-first). That extractor is deleted.
+
+Lane properties (all `corpus_deploy`'s, shared with `import dialogue` and `import sound`):
+
+- **Recipe stamps** in `Content/ElysiumCorpus/_import/scripts/recipes.json` — per unit, the GLB's
+  size and mtime, the lane's `recipeVersion`, and every file written with its size and digest. A
+  re-run over unchanged units opens no GLB at all and writes nothing.
+- **Per-unit failure isolation** — a unit that cannot be read, or whose capsule is missing (a
+  pre-1.1.0 export) or disagrees with its digest, is one named failure; the run continues and the
+  command exits non-zero. That unit's previously deployed files are kept, not pruned.
+- **Byte-equality verification** — every file is read back and compared with the capsule bytes
+  before the run is called a success.
+- **Pruning** — anything under `scripts/`, `.pyc` excepted, this run neither wrote nor kept is deleted.
+- **`import_report.json`** beside the stamps, carrying the counts and every failure.
+
+Reader flip: `ScriptsDir`/`ScriptModuleFile` and the script filesystem's `python/` mount move from
+`FElysiumContentPaths::Root()` — which 21-6 deleted — to `CorpusRoot()`.

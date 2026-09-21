@@ -793,8 +793,9 @@ disk, and it used to ask on the NEXT run. Two facts came out of standing it up:
 **No map-load path opens a file under `$ELYSIUM_EXPORT_ROOT/<map>/`, and no such accessor exists.**
 21-1 retired the sidecar arms for entities, environment and collision; three per-map reads survived
 it, ungated, and this story closed them. `FElysiumContentPaths::MapDir` and every accessor under it
-— `MapExportReady`, `MapEnts`, `MapRopes` — are deleted. `Root()` still serves the corpus trees
-(`scripts/`, `cfg/`, `signs/`, `ui/`) and the debug write roots; those are 21-6's.
+— `MapExportReady`, `MapEnts`, `MapRopes` — are deleted. `Root()` still served the corpus trees
+(`scripts/`, `cfg/`, `signs/`, `ui/`) and the debug write roots; 21-6 closed those and deleted
+`Root()` itself (§ "The game needs no export root").
 
 **Ropes (0018 story 21-3).** `<map>.ropes` is an offline intermediate. `UE_map_sidecars.rope_rows`
 is the derivation, split out of `write_ropes` as `light_rows` was for R5.6; `importers/map_ropes.py`
@@ -1055,6 +1056,94 @@ against the staged placements. The decoder's `source_visibility_backing_models` 
 warning per malformed `func_areaportalwindow` link and the producer's twin returns the model set
 alone, so the three diagnostic strings are no longer pinned. `mdl.write_obj_scene` is dead and
 `formats/mdl.py` was left alone.
+
+### The game needs no export root (0018 story 21-6)
+
+**The running game opens no file outside its own project directory, and
+`FElysiumContentPaths::Root()` does not exist.** 21-3 closed the last per-map read and named what
+was left standing — "`Root()` still serves the corpus trees (`scripts/`, `cfg/`, `signs/`, `ui/`)
+and the debug write roots; those are 21-6's". It was right about all five, and this closed them.
+Gone with the root: `IsConfigured()`, both `IncompleteMarker` overloads, both `IsIncomplete`
+overloads, the `-ElysiumContentRoot=` command-line pin and the `ELYSIUM_EXPORT_ROOT` environment
+fallback. The runtime has three roots now and all three are inside the project — the deployed
+corpus `CorpusRoot()`, the baked package mounts, and `ProjectSavedDir()` for what the game writes.
+
+| Was | Is |
+|---|---|
+| `ScriptsDir()` = `Root()/scripts` | `CorpusRoot()/scripts`, filled by `import scripts` |
+| `CfgDir()` = `Root()/cfg` | `CorpusRoot()/cfg`, filled by `import engine-config` |
+| `SignsDir()` = `Root()/signs` | `VdataDir()/signs`, filled by `import vdata` |
+| `UiDir()/strings.json` | `CorpusRoot()/ui/resource/gameui_english.txt`, filled by `import ui-strings` |
+| `_cast` `_compose` `_greenroom` `_move` `_profile` `_shots` `_wires` `_lights` under `Root()` | `SavedDebugDir(<kind>)` = `Saved/Elysium/<kind>/` |
+| ScriptFS mounts `cfg/`, `python/` on `Root()` | on `CfgDir()`, `ScriptsDir()` |
+| ScriptFS mount `vdata/signs/` on `Root()/signs` | **deleted** — the `vdata/` mount answers it |
+| `-ElysiumContentRoot=` on three command lines + `play.bat` | nothing passed at all |
+
+**The three seams had to carry their own bytes first.** `corpus_deploy` lifts a unit's source
+capsule and that is what makes a lane byte-exact, but `script`, `engine-config` and `ui-resource`
+were all still schema 1.0.0 with no BIN chunk — `source_capsules` refused them outright. Three
+commits adopted it before any lane could be written, on `exporters/vdata_glb.py`'s pattern. The
+story's own text had not counted that work, which is why its Size went M to L.
+
+**A mount retired rather than repointed.** `vdata/signs/` existed because the panels were mirrored
+FLAT by an extractor of their own. They are the `vdata/signs/` subtree of the table corpus now, so
+the `vdata/` mount already answers that prefix — one sandbox path to one real path. Deleting it
+also retires the ordering constraint the mount table carried ("`vdata/signs/` must precede
+`vdata/`"). That is the `sound/` precedent: a mount whose reason has gone is retired.
+
+**What the reader flip cost, measured against the reader it replaced.** The UI string table was a
+flat `strings.json` an extractor derived with one regex; it is the install's own KeyValues
+document now, parsed by `ElysiumKeyValues`. Three facts had to be right: the file is UTF-16 LE
+with a BOM, Source KeyValues folds its keys (so `Resolve` folds its token), and a repeated token
+is last-wins — which is how `GameUI_Advanced`, authored "Advanced..." then "Advanced", resolves
+the way retail shows it. Checked before the extractor was deleted: **194 distinct tokens on both
+sides, same keys, same values.** Reading the `Tokens` block rather than the root is also what
+keeps `Language` out; the regex dropped it by NAME, so a token genuinely called `Language` would
+have gone with it.
+
+**The bytecode the VM writes into its own corpus.** CPython 2.1 compiles beside the source it
+imports and has no `dont_write_bytecode`; the legacy mirror held 17 `.pyc` no exporter wrote. Once
+`sys.path` points at the corpus they land there, and without a rule every `import scripts` would
+delete the compiled tree the running game had just built. `Lane.kept_suffixes` names `.pyc` and
+the prune steps over them. The lane deploys the source and never the companion — a `.pyc` given a
+fresh mtime by a deploy could never validate against its sibling, so the interpreter would
+recompile and overwrite it anyway — and `Lane.unit_guard` makes a source-less `pyc-only` unit a
+named failure rather than a silently missing module.
+
+**A dead gate removed rather than migrated.** `SkipIncompleteCorpus` was the only C++ reader of
+the `.elysium-incomplete` markers and had ZERO call sites; the abstentions it implemented had
+already been replaced by structural ones. It goes with the markers' runtime half. `clean.py`'s
+offline half — repository policy, `reconstruct` — is untouched.
+
+**Witnessed 2026-09-21, with `$ELYSIUM_WORK_ROOT/exports` renamed away and no
+`-ElysiumContentRoot` passed.** The game booted to the front end and drew its menu from the
+deployed table — `UI string table: 194 entries`, the same count the pre-flip run logged off
+`strings.json`, and the labels rendered rather than falling back. The console store read `4
+file(s) from E:/dev/elysium-unreal/Content/ElysiumCorpus/cfg -> 121 aliases, 129 cvars; patch
+profile Plus` — identical to the 09:00 pre-flip run's numbers off the export root, only the
+directory differing. All six maps travelled and reached Playing: `sp_tutorial_1` (whose scripted
+opening raised its sign panel, a `SignData` file read out of `vdata/signs/`), `sm_hub_1`,
+`sp_soc_3`, `sm_pawnshop_1`, `sp_theatre` and `sp_genesisdevice_1`. Each loaded its level script
+out of `Content/ElysiumCorpus/scripts/` — `tutorial`, `santamonica` and `demo` in `sys.modules`
+beside `vamputil` and `fileutil`. **Not one missing-file complaint in the whole run.** The VM
+wrote 15 `.pyc` into the corpus across the six travels and a re-run of `import scripts` reported
+`already current, 0 pruned`, with all 41 sources intact.
+
+One log line the run does carry, and it is not new: six `DENY
+.../Content/ElysiumCorpus/scripts/demo\demo.py` from the script sandbox, on
+`sp_genesisdevice_1`, whose level script is `demo`. A drive-qualified path is in bounds only if it
+names the virtual root, and any absolute path under `ScriptsDir()` is outside `ScriptFsRoot()` —
+which was equally true when `ScriptsDir()` was `Root()/scripts`. The prefix in the message is the
+only thing that changed, and the module imported through `sys.path` regardless
+(`level_script_loaded: true`).
+
+**What this costs, stated rather than absorbed.** `importers/vdata.py` is still the one corpus
+lane not on `corpus_deploy` — no recipe stamps, no read-back verification, non-atomic writes — and
+signs now ride it. Porting it is its own story. Eight of the seventeen `engine-config` units are
+published and not deployed; if a runtime reader ever needs `maps/loadorder.txt` or `detail.vbsp`,
+the lane's `target_of` is where it is added. And the `.pyc` the VM writes is exempted from the
+prune rather than suppressed: story 20's cook has to decide whether a packaged game's corpus
+directory is writable at all.
 
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 

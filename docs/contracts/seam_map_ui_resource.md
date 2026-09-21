@@ -182,4 +182,53 @@ A complete unit has zero `unresolved` and zero `unsupported` rows. Export-time v
 re-parses the member independently of the writer and compares the tree, every projection row
 and every dependency; for the two UTF-16 members it re-decodes the code units and checks each
 token's UTF-8 text against its stated offset and length. Standalone validation checks the
-scene-less rule, the absence of a BIN chunk, the ledger and the encoding statement.
+scene-less rule, the source capsule against the member's own digest (and the refusal of any
+`bufferView` the capsule did not author), the ledger and the encoding statement.
+
+## Import (2026-09-21, 0018 story 21-6)
+
+`uv run elysium import ui-strings` deploys the authored string table out of the published units
+and nothing else — no install, no engine
+(`pipeline/src/elysium_pipeline/importers/ui_strings.py`, on the shared
+`importers/corpus_deploy.py`). The unit's source capsule is lifted, weighed against the
+`byteLength` and `sha256` it published for its member, and written to
+
+```text
+Content/ElysiumCorpus/ui/resource/gameui_english.txt
+```
+
+**One member of fifty-two.** The port reads no other unit of this family: its screens are a modern
+re-skin authored in Slate, VtMB's own layouts are structural reference (`docs/vtmb/vtmb-ui.md`),
+and every picture the UI draws is an imported `T_` asset (`UI/ElysiumUiArt.h`, R6.6).
+`scripts/kb_trans.lst`, the other UTF-16 member, has no runtime reader either.
+
+**It deploys as the file, not as the projection.** The unit publishes a decoded `strings.tokens[]`,
+but a projection is not a file: `FElysiumUIStrings` reads the table off disk as the Valve
+KeyValues document it is, UTF-16 LE with a byte-order mark. The capsule is bytes, so what lands is
+what the install encoded. This is why the seam had to adopt the capsule (schema 1.1.0) before the
+lane could exist.
+
+It replaces a derived `ui/strings.json` that `UE_extract_ui.parse_strings` produced with one
+regex over the decoded text. The two were checked against each other on 2026-09-21 before the
+extractor was deleted: **194 distinct tokens on both sides, same keys, same values, neither
+holding one the other lacked.** The file carries 195 token rows — `GameUI_Advanced` is authored
+twice, "Advanced..." then "Advanced" — and last-wins gives the same answer through the legacy
+dict and through `ElysiumKeyValues::FKvNode::Values`. Reading the `Tokens` block rather than the
+document root is also what keeps `Language` out of the table; the regex dropped it by NAME, so a
+token genuinely called `Language` would have gone with it.
+
+Lane properties (all `corpus_deploy`'s, shared with `import dialogue` and `import sound`):
+
+- **Recipe stamps** in `Content/ElysiumCorpus/_import/ui-strings/recipes.json` — per unit, the GLB's
+  size and mtime, the lane's `recipeVersion`, and every file written with its size and digest. A
+  re-run over unchanged units opens no GLB at all and writes nothing.
+- **Per-unit failure isolation** — a unit that cannot be read, or whose capsule is missing (a
+  pre-1.1.0 export) or disagrees with its digest, is one named failure; the run continues and the
+  command exits non-zero. That unit's previously deployed files are kept, not pruned.
+- **Byte-equality verification** — every file is read back and compared with the capsule bytes
+  before the run is called a success.
+- **Pruning** — anything under `ui/` this run neither wrote nor kept is deleted.
+- **`import_report.json`** beside the stamps, carrying the counts and every failure.
+
+Reader flip: `UiDir`/`UiStrings` move from `FElysiumContentPaths::Root()` — which 21-6 deleted —
+to `CorpusRoot()`, and `UiStrings()` names the install's own file rather than the derived JSON.

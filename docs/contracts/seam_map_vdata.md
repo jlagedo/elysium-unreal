@@ -46,8 +46,14 @@ capsule** alone (`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds 
 own bytes, one `bufferView` addresses them, and `sourceResolution` declares
 `"capsule": {"encoding": "raw"}` with the member row naming that view. An empty source file
 capsules to nothing and that unit carries no BIN chunk at all. `uv run elysium import vdata`
-deploys those bytes to `Content/ElysiumCorpus/vdata/**` reading nothing but the units, except for
-the `signs/` subtree: it is excluded and left on the legacy flat export until its own slice.
+deploys those bytes to `Content/ElysiumCorpus/vdata/**` reading nothing but the units, EVERY
+subtree included. `signs/` used to be the exception, left on a flat mirror an extractor of its own
+wrote because that extractor also decoded the panels' background art; the art has been an imported
+`T_` asset since R6.6, so 0018 story 21-6 removed the carve-out and deleted the extractor. All 278
+sign units deployed byte-identical to that mirror, file name for file name, with neither side
+holding one the other lacked. `FElysiumSignData::LeafName` drops a `definition_file` keyvalue's
+`vdata/Signs/` prefix and folds its case, which is exactly this seam's key, so the authored
+spelling and the deployed one meet without a rule of their own.
 
 ```json
 {

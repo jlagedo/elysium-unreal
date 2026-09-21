@@ -188,4 +188,65 @@ A complete unit has zero `unresolved` and zero `unsupported` rows; the `typedUni
 ranges of the two small binary members are carried, not dropped. Export-time validation
 re-tokenizes every console script, re-splits every alias body and binding string, and compares
 every table row and dependency with the writer's output. Standalone validation checks the
-scene-less rule, the absence of a BIN chunk and the ledger.
+scene-less rule, the source capsule against each member's own digest, and the ledger.
+
+## Import (2026-09-21, 0018 story 21-6)
+
+`uv run elysium import engine-config` deploys the console configuration out of the published units
+and nothing else — no install, no engine
+(`pipeline/src/elysium_pipeline/importers/engine_config.py`, on the shared
+`importers/corpus_deploy.py`). Each unit's source capsule is lifted, weighed against the
+`byteLength` and `sha256` that unit published for its member, and written to
+
+```text
+Content/ElysiumCorpus/cfg/<name>
+```
+
+`FElysiumContentPaths::CfgDir()` is that directory. Two readers open it: the console store the
+command bus and the Python VM seed their alias/cvar tables from
+(`FElysiumConsole::LoadFromCfgDir`, which execs a fixed four — `default`, `config`, `autoexec`,
+`user`), and the script filesystem's `cfg/` mount, which is what makes the patch's
+`FixKeyBindings` resolve.
+
+**Nine of the seventeen units deploy.** The other eight have no runtime reader and would put bytes
+into a cooked game that nothing opens: `lights.rad` and `detail.vbsp` are VBSP/VRAD compiler
+tables, `maps/loadorder.txt` is the retail launcher's, `pack_values.txt` and `localized_list.txt`
+are the VPK packer's, `vidcfg.bin` (20 bytes), `voice_ban.dt` (4) and `hl2.tmp` are retail's own
+state and residue. Each is still published and still decoded; what this lane decides is only what
+reaches `Content/`.
+
+Two differences from the legacy `UE_extract_cfg.py` mirror this replaces, measured 2026-09-21:
+
+- `cfg/config.cfg` deploys at 4,192 bytes against the mirror's 4,200. The corpus copy is
+  byte-identical to the install's own Unofficial_Patch file as it stands; the mirror is a stale
+  snapshot, because that extractor skipped a file already on disk unless `--force` and the install
+  file has changed since it was first copied.
+- `cfg/valve.rc` and `cfg/dummy.txt` were never mirrored at all — the extractor filtered on
+  `.cfg`. They reach the corpus now. The console store is unaffected (it execs a fixed four), so
+  what changes is that a script opening `cfg/valve.rc` through the sandbox gets the real file
+  instead of "no such file", which is what the engine would have given it.
+
+Every other deployed file compares byte-identical to the install member UP-first resolves, and the
+seeded store is unchanged: 4 files, 121 aliases, 129 cvars, patch profile Plus — the same numbers
+the pre-flip run logged off the export root.
+
+`cfg/` members whose names begin `elysium_` never arrive, and not by this lane's choice: they are
+this project's own retail-capture scripts written into the patch tree
+(`research/tooling/capture/`), which the corpus index classifies `foreign-file` and this seam does
+not export. The Unreal port reads none of them.
+
+Lane properties (all `corpus_deploy`'s, shared with `import dialogue` and `import sound`):
+
+- **Recipe stamps** in `Content/ElysiumCorpus/_import/engine-config/recipes.json` — per unit, the GLB's
+  size and mtime, the lane's `recipeVersion`, and every file written with its size and digest. A
+  re-run over unchanged units opens no GLB at all and writes nothing.
+- **Per-unit failure isolation** — a unit that cannot be read, or whose capsule is missing (a
+  pre-1.1.0 export) or disagrees with its digest, is one named failure; the run continues and the
+  command exits non-zero. That unit's previously deployed files are kept, not pruned.
+- **Byte-equality verification** — every file is read back and compared with the capsule bytes
+  before the run is called a success.
+- **Pruning** — anything under `cfg/` this run neither wrote nor kept is deleted.
+- **`import_report.json`** beside the stamps, carrying the counts and every failure.
+
+Reader flip: `CfgDir`/`CfgFile` and the script filesystem's `cfg/` mount move from
+`FElysiumContentPaths::Root()` — which 21-6 deleted — to `CorpusRoot()`.

@@ -13,9 +13,11 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - `uv run elysium build` — incremental editor build.
 - `uv run elysium test <prefix>` — automation test name prefix (`Elysium.Substrate.Npc`); results in
   `$ELYSIUM_WORK_ROOT/reports/tests/<timestamp>-<slug>/index.json`.
-- `$ELYSIUM_WORK_ROOT/exports/scripts/` — exported retail Python scripts.
+- `uv run elysium import <lane>` — deploy a corpus lane into `Content/ElysiumCorpus/`; the
+  retail Python scripts land at `Content/ElysiumCorpus/scripts/`.
 - `$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json` — datamap replay (field flags).
-- The running game receives `-ElysiumContentRoot` and reads the export corpus from disk.
+- The running game takes no content argument and opens no file outside the project: what it
+  reads is baked package content plus the deployed `Content/ElysiumCorpus/`.
 
 ## Project layout
 
