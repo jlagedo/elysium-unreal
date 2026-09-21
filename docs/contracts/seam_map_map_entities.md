@@ -313,17 +313,16 @@ classname `ai_hint`, its authored classname kept on `FElysiumEntityDef::SourceCl
 ### Cutover
 
 `ElysiumEntityDefSource::Load(Map, Out, SkyScale, SkyOrigin)` is the one entry point every
-consumer uses. Since R4.6 it first checks `ElysiumMapTransport::IsMapOnNewTransport(Map)`
-(`UElysiumMapTransportSettings`, `seam_map_map.md` -> "## Import" -> "The explicit per-map cutover
-flag (R4.6)") — only a listed map attempts `BakedMapEntities(Map)`; an unlisted map goes straight
-to `FElysiumEntityDefs::Parse(MapEnts(Map), …)`. Either way `Load` logs which source answered and
-returns it. Through R4.1–R4.5 the asset's own presence was the whole rule; R4.6 makes the decision
-explicit and tracked (`Config/DefaultElysium.ini`'s `MapsOnNewTransport`) rather than implicit in
-whichever producer last ran, with no change in outcome for a map that was already converted.
+consumer uses, and since 0018 story 21-1 it has one arm: `BakedMapEntities(Map)`. A map whose
+asset is missing or unreadable FAILS the load with an error naming the map, the asset path and
+`uv run elysium bake map --maps <map>` — it has no entities at all, which is a bake that did not
+run rather than an empty world. `Load` logs the source it answered from and returns `Asset` or
+`None`; the `Sidecar` value is gone.
 
-The `.ents` reader stays. It is the fallback for the 100+ maps not yet listed, and R4.6's
-converted-map proof needs both paths alive to diff one against the other. Deleting it is a later
-task, once every map is on the asset and listed.
+R4.1–R4.5 made the asset's presence the rule, R4.6 replaced that with a tracked
+`MapsOnNewTransport` list, and 21-1 retired both along with the `.ents` reader on this path.
+`FElysiumEntityDefs::Parse` itself stays: the `elysium.ents` console verb and the content tests
+still read a `.ents` directly, which 0018 story 21-3 owns.
 
 Consumers on the resolver: `AElysiumMapActor`'s map load (`ElysiumMapActorLifecycle.cpp`) and the
 green room's `sp_theatre` camera-track read (`ElysiumGreenRoomTheatre.cpp`), which was the one

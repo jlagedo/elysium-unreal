@@ -708,65 +708,18 @@ therefore always cooks, which is correct: it has no authored collision to have b
 
 **The asset's presence was the cutover flag through R4.2** — a map with a payload loaded cooked
 collision, a map without one kept the sidecars, and no map needed an entry anywhere saying which.
-R4.6 replaces that implicit rule with an explicit one (below); the outcome for an already-converted
-map is unchanged, but the decision now lives in a tracked, reviewable place instead of in whichever
-producer happened to run. The `.hulls`/`.dispcol` readers stay: they are the fallback for every
-unlisted map, and R8.1 owns their deletion once all 108 maps are converted and listed.
+R4.6 replaced that implicit rule with a tracked one, `UElysiumMapTransportSettings`'s
+`MapsOnNewTransport` list, so that "is this map on the new transport" had one reviewable answer
+per map rather than one per producer.
 
-### The explicit per-map cutover flag (R4.6)
-
-Four resolvers each independently grew an "asset wins when present" rule (R4.1's
-`ElysiumEntityDefSource::Load`, R4.2's `UElysiumMapCollision::AdoptPayload` above, R4.3's
-`UElysiumLightRig::Adopt`, R4.4's `ElysiumMapEnvironmentSource::Load`) — correct for landing each
-transport in isolation, but it means "is this map on the new transport" has no single answer: it is
-whatever a producer happened to leave on disk, map by map, feature by feature. R4.6 adds one
-tracked, explicit switch that answers that question for the three whole-swap transports (entities,
-collision, environment) and states, by omission, that lighting calibration is not one of them.
-
-`UElysiumMapTransportSettings` (`Config = Elysium, DefaultConfig`, Project Settings -> Elysium ->
-Map Transport) carries one property, `MapsOnNewTransport` (`TArray<FName>`, map stems,
-case-insensitive) — a tracked config list rather than a per-map asset, so adding a map to it is a
-one-line, reviewable `Config/DefaultElysium.ini` edit and needs no recompile.
-`ElysiumMapTransport::IsMapOnNewTransport(MapName)` (`ElysiumMapTransportSettings.h`) is the one
-entry point; a second, pure overload takes an explicit `UElysiumMapTransportSettings` reference so
-the resolution logic is testable without touching Project Settings or `GConfig`, matching
-`UElysiumLightRig::ApplySettings`'s own synthetic-settings test shape (R4.3).
-
-Each whole-swap resolver now checks the flag **before** its own `LoadObject` — an unlisted map
-never even attempts to load its asset and falls straight to the sidecar path, exactly as it would
-if the asset did not exist, regardless of whether one has in fact been baked for it:
-
-- `ElysiumEntityDefSource::Load` (`ElysiumMapEntities.cpp`)
-- `UElysiumMapCollision::AdoptPayload` (this file's `Build`, above) — `FElysiumEntityWorld::
-  BuildBrushBody` needs no separate gate, since it only ever sees a payload `AdoptPayload` chose to
-  set
-- `ElysiumMapEnvironmentSource::Load` (`ElysiumMapEnvironment.cpp`)
-
-A listed map whose asset is missing or unreadable still falls back to its sidecars — the flag names
-intent, not a hard requirement that the asset exist, so an owner can list a map ahead of its bake
-without bricking it. This means "unlisted maps boot the legacy path unchanged" is exact for the
-common case (no asset yet) and merely conservative for the corner case (an asset exists early); the
-line's actual guarantee is that an unlisted map's *behavior* never changes, not that its bytes are
-inert.
-
-**Deliberately not gated: R4.3's `UElysiumLightCalibration` merge-row apply.** That path is
-additive — it applies calibration rows *on top of* the sidecar-derived baseline, never *instead of*
-it (`seam_map_map_lighting.md` -> "Import" -> "Cutover") — so there is no legacy behavior for an
-unlisted map to fall back to; the calibration asset's own presence already answers "does this map
-have hand-tunes" for itself, and gating it on this list would only hide a hand-tune from a map an
-owner has not yet flagged for the *other* three transports. R5.6's bake is what eventually retires
-the `.lights` derivation this asset augments, and that is the task that gives lighting a real
-legacy-vs-new split to gate.
-
-`Elysium.Substrate.MapTransport.FlagResolution` exercises the pure resolver against synthetic
-`NewObject`-built settings: an empty list resolves every map to the legacy path, a listed stem
-resolves case-insensitively, and an unlisted stem stays on the legacy path even with others listed.
-(A `NewObject<UElysiumMapTransportSettings>()` inherits the CDO's config-loaded array rather than
-starting genuinely empty once `Config/DefaultElysium.ini` lists real maps, so the "empty list"
-case clears `MapsOnNewTransport` explicitly instead of assuming a fresh `NewObject` is empty.)
-`Elysium.Substrate.MapTransport.IniRoundTrip` proves the list round-trips through
-`TryUpdateDefaultConfigFile`/`GConfig` on a scratch ini, the same shape every other
-`Config = Elysium, DefaultConfig` page uses.
+**0018 story 21-1 retired both, and the question with them.** Every map is on the baked transport;
+there is no other. `AdoptPayload` loads `DA_<map>_Collision` unconditionally and a map with no
+readable payload fails the load naming `uv run elysium bake map --maps <map>`, as do
+`ElysiumEntityDefSource::Load` and `ElysiumMapEnvironmentSource::Load` for their own assets. The
+`.hulls` / `.dispcol` / `.ents` / `.env` / `.sky` / `.spawn` readers are gone from the runtime, and
+so is the settings page, its ini section and its Python twin `map_transport.py`. This supersedes
+R8.1's "once all 108 maps are converted and listed" precondition: a map that cannot load on the
+baked transport is a bake that has not run, not a map on another lane.
 
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 
@@ -928,12 +881,11 @@ exactly as `FElysiumEnvDef`/`FElysiumSkyDef`/`FElysiumSpawnDef::Parse` always ha
   `PendingSpawnLoc`/`PendingSpawnYaw` directly, still Source feet with the capsule-centre lift left
   to the readiness poll, exactly as before.
 
-**The explicit per-map cutover flag gates this resolver too**, as of R4.6 (this file's "## Import"
--> "The explicit per-map cutover flag (R4.6)", above): `ElysiumMapEnvironmentSource::Load` checks
-`ElysiumMapTransport::IsMapOnNewTransport(MapName)` before its `LoadObject`, so an unlisted map
-reads the three sidecars unconditionally, the same as before R4.4 existed. The `.env`/`.sky`/
-`.spawn` readers stay: they are the fallback for every unlisted map, and R8.1 owns their deletion
-once all 108 maps are converted and listed.
+**This resolver has no fallback** since 0018 story 21-1 (this file's "## Import" above):
+`ElysiumMapEnvironmentSource::Load` loads `DA_<map>_Environment` and nothing else, and a map
+without one fails the load by name rather than opening with no fog, no sky and no player start.
+The `.env`/`.sky`/`.spawn` readers are deleted; `EElysiumMapEnvironmentSource` answers `Asset` or
+`None`.
 
 ### Measured (2026-09-01, the three working maps)
 
@@ -1299,7 +1251,7 @@ chain and `ScriptUnhide` restores the last `bOn`; every change publishes `bOn &&
 `IElysiumEmbodiment::SetBakedSpriteVisible(EntityIndex, bVisible)` → `AElysiumMapActor` →
 `UElysiumMapVisuals::SetSpriteVisible`, which finds the actor by its `elysium.ent` tag (bucketed
 once in `AdoptBakedLevel`) and sets it hidden in game. `bOn` is the leaf's one save field. A map
-off `MapsOnV2Models` has no sprite actors: the write finds nothing and the input is still accepted.
+with no `env_sprite` has no sprite actors: the write finds nothing and the input is still accepted.
 
 **`<map>.sprites` retires.** `UE_bsp_to_scene.write_sprites` and its call are gone; the ledger
 row moves to *retired*.
@@ -1351,7 +1303,7 @@ miniature transform and the marker: a `sprites[]` row (`sprite_actor_values`: po
 `details.records[]` row (`detail_instance_rows` puts it in its own `(stem, sky)` component at the
 transform; `detail_actor_tags` adds `elysium.sky`), and that the lane's transform is the manifest's
 `sky` block (`miniature_transform`). `bake_verify.verify_sky_scope` loads the level of a
-`MapsOnV2Models` map whose manifest says `sky.ok` and counts every class back against the staged
+map whose manifest says `sky.ok` and counts every class back against the staged
 rows: sky props (`elysium.sky` static-mesh actors labelled `Prop_`, position and scale per row),
 sky detail components (`elysium.detail` + `elysium.sky`, one per staged sky model group, instance
 scale `scale`), sky sprites (`elysium.sprite` + `elysium.sky`, position and scale per row) — and
@@ -1362,34 +1314,23 @@ stamps the sky detail with the sky set and the world detail with the world set, 
 `ToggleSkybox` hides the miniature's detail and sprite with its chunk. Measured numbers are in the
 R6.7 Settled entry of `docs/project/seam_migration.md`.
 
-### The per-map cutover flag
+### The lane, and what retired the flag that chose it
 
-A second list on the R4.6 settings page, `UElysiumMapTransportSettings::MapsOnV2Models`, tracked in
-`Config/DefaultElysium.ini` beside `MapsOnNewTransport`. A listed map is authored from its root unit
-by `bake_map_v2` and resolves its prop meshes and skin table under `/ElysiumBaked/Meshes` (R1); an
-unlisted map keeps the legacy `.obj`/`.props` bake and `/ElysiumBaked/Shared/Meshes`, byte for byte.
+R5.1 introduced a second list on the R4.6 settings page, `MapsOnV2Models`, deliberately distinct
+from `MapsOnNewTransport`: the two answered different questions over different map sets, since a
+map's models being imported is a different event from its entity assets landing.
 
-**It is deliberately not the same list as `MapsOnNewTransport`.** The two answer different questions
-over different map sets: `sp_theatre` is on the entity/collision/environment transport because those
-assets exist for it, but the R1 model import is map-scoped and has staged only the three-map working
-corpus, so pointing `sp_theatre`'s prop resolver at the V2 root would resolve nothing. A map joins
-`MapsOnV2Models` when its models have been imported **and** its level re-baked on this lane — a
-different event from its entity assets landing.
+**0018 story 21-1 retired both.** Every map is authored from its root unit by `bake_map_v2` and
+resolves its prop meshes and skin table under `/ElysiumBaked/Meshes` (R1); the legacy
+`.obj`/`.props` bake and `/ElysiumBaked/Shared/Meshes` are gone, and with them
+`FElysiumContentPaths::BakedMeshesFor` and the three accessors that composed from it. The four
+substrate sites that recompute the stem live (`ElysiumItemContainer`, `ElysiumItemClasses`,
+`ElysiumLockable`, `ElysiumTerminal`) are untouched: they produce a stem and hand it to
+`UElysiumEntityBodies`, which knows the map.
 
-**The flip is one accessor.** `FElysiumContentPaths::BakedMeshesFor(Map)` returns `BakedMeshes()`
-(`/ElysiumBaked/Meshes`) for a listed map and `BakedSharedMeshes()` otherwise, and `BakedPropMesh`,
-`BakedItemMesh` and `BakedPropSkins` all compose from it. Each now **requires** a map argument, so no
-call site can silently land on the legacy root for a map that has been cut over. The four substrate
-sites that recompute the stem live (`ElysiumItemContainer`, `ElysiumItemClasses`, `ElysiumLockable`,
-`ElysiumTerminal`) are untouched: they produce a stem and hand it to `UElysiumEntityBodies`, which
-knows the map.
-
-**Travel's gate follows the same flag.** `UElysiumMapSubsystem::HasTravelableExport` still accepts
-the R2.4 `<map>.ready` marker for every map, but accepts the legacy `<map>.obj` **only** for a map
-not on `MapsOnV2Models`: once a map is cut over nothing reads its `.obj`, so a stale one left on disk
-must not vouch for the sidecars beside it. The `.obj` branch is not retired outright — 105 maps are
-still on the legacy lane and only the three converted maps carry a `.ready` marker today — and R8.1
-owns its deletion, as R2.4 said it would.
+**Travel's gate is the marker alone.** `UElysiumMapSubsystem::HasTravelableExport` accepts the R2.4
+`<map>.ready` marker and nothing else; the `<map>.obj` arm retired with the lane, as R2.4 said it
+would, so a stale `.obj` left on disk cannot vouch for the sidecars beside it.
 
 ### Verification
 
@@ -1534,9 +1475,8 @@ whether it is wetness-driven (`wetnessScale` authored on a Lit-family unit); and
 
 ### Verification: `verify_v2_materials` (R7.2)
 
-The legacy material walks in `bake_verify.py` cannot answer on this lane, so they are now gated
-`map_transport.is_map_on_v2_models(map_name)` off and `verify_v2_materials` is the converted lane's
-material check. Two things broke them: they keyed a world surface through `_material_slot`, whose
+The legacy material walks in `bake_verify.py` could not answer on this lane; 0018 story 21-1
+deleted them and `verify_v2_materials` is the material check. Two things broke them: they keyed a world surface through `_material_slot`, whose
 per-map `<map>/Materials/MI_...` answer is the package a converted map **prunes** (so every patched
 glass surface reported "material instance missing" and the check proved nothing), and their other
 answer, `SC.BAKED_MATERIALS`, is the legacy corpus bake — `/ElysiumBaked/Shared/Materials`,
@@ -1811,7 +1751,7 @@ the number alone points at none of them.
 
 `bake_verify.py` re-counts on the loaded level through the same library call
 (`CountBuiltReflectionCaptures`), and the Content tier's
-`Elysium.Content.MapBake.ReflectionCapturesBuilt` loads each `MapsOnV2Models` level package and
+`Elysium.Content.MapBake.ReflectionCapturesBuilt` loads each baked level package and
 checks every placed capture has its registry entry.
 
 **Recipe.** The level recipe names the capture table (index, position, radius) and the radius knob,
@@ -2058,15 +1998,13 @@ staged table. A row whose root is unresolved places no actor (VtMB's own behavio
 removes the entity). The level recipe names the effects tables so a re-export that changes a
 tree or a row re-authors the level.
 
-**The explicit per-map cutover.** A map on `UElysiumMapTransportSettings::MapsOnV2Models`
-(`Config/DefaultElysium.ini`, "The per-map cutover flag" above) gets its effects placed by this
-bake, and its `AElysiumMapActor::ApplyEmitter` drives the placed actor by entity index
-(`effects-architecture.md` §5). A map **not** on the list keeps the legacy path **unchanged**:
-`<map>.particles.json`, the per-map `NS_<root>` Fountain flatten under
-`/ElysiumBaked/<map>/Particles`, and `ApplyEmitter`'s lazily created `UNiagaraComponent` with
-`User.RateScale` — byte for byte, until R9 retires that lane once every map is listed. The
-substrate leaf `FElysiumEnvParticle` is the same object on both paths; only the embodiment's
-answer to `ApplyEmitter` differs, and it logs which path answered.
+**One path.** Every map gets its effects placed by this bake, and its
+`AElysiumMapActor::ApplyEmitter` drives the placed actor by entity index
+(`effects-architecture.md` §5). 0018 story 21-1 retired the alternative — `<map>.particles.json`,
+the per-map `NS_<root>` Fountain flatten under `/ElysiumBaked/<map>/Particles`, and
+`ApplyEmitter`'s lazily created `UNiagaraComponent` — along with the flag that chose between them.
+The one emitter that is still not a placed actor is the viewer-volume follow rain, which is the
+authored `NS_ElysiumRain` and is shared by every `rain_follow_emitter` on the map.
 
 **Deferred with a road, on this product** (`effects-architecture.md` §5, the fidelity ledger):
 the `precipitation` leaf gate (weather's, needs the visibility unit's leaf sky bit — the flag is
@@ -2346,22 +2284,15 @@ actor.
   with the deciding volume's `SurfaceZCm`, onto `UElysiumCameraComponent::SetWaterState`. The same
   actor is the map's underwater post-process volume (`IInterface_PostProcessVolume`, gated per
   view on `bIsEnabled`) — a second consumer of the same `Volumes` array, not a second actor.
-- **Verify.** `bake_verify.verify_water`, gated `map_transport.is_map_on_v2_models(map_name)` like
-  every V2-only verifier: exactly one `elysium.water` actor iff the stage carries rows, the row
+- **Verify.** `bake_verify.verify_water`: exactly one `elysium.water` actor iff the stage carries rows, the row
   count, and each row's `surface_z_cm` and brush count against the staged manifest, read fresh off
   disk (re-stage before verifying a schema change). `_verify_water_section_bindings` checks that
   every `#underside` section binds the twin. Errors reach `main()`'s exit code.
 
-### The per-map cutover
+### Who places it
 
-Water placement rides the existing V2 cutover, not a flag of its own: a map on
-`UElysiumMapTransportSettings::MapsOnV2Models` (`Config/DefaultElysium.ini`) is baked by
-`bake_map_v2.py`, which always calls `_place_water` when the manifest carries rows; a legacy-baked
-map places no water actor. `MapsOnV2Models` reads `sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`,
-`sm_pier_1`, `sp_soc_3`, each also on `MapsOnNewTransport` (the entity, collision and environment
-assets are read only for a listed map, and `Elysium.Content.MapEnvironment.FieldParity` fails on a
-map with the assets but not the flag — listing one flag without the other is the half-cutover this
-file warns against).
+Water placement needs no cutover of its own, and since 0018 story 21-1 there is none to ride:
+`bake_map_v2.py` calls `_place_water` whenever the manifest carries rows, on every map it bakes.
 ## Import — AI infrastructure actors (0018 story 2)
 
 The BSP-authored rows an NPC queries but does not own stand on the baked level as one native

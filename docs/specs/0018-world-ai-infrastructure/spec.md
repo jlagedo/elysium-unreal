@@ -19,6 +19,14 @@ are renumbered in execution order — a story's number is its place in the order
 12 (flying); 4 → 8; 5 → 10; 6 → 11; 7 → 13; 8 → 14; 9 → 15; 10 → 16; 11 → 17; 14 → 18;
 12 → 19; 13 → 20.
 
+**Revised 2026-09-20, story 21 audited and split:** the owner's rule for everything the game
+opens — **baked; or, when it cannot be baked, deployed into `Content/ElysiumCorpus/`; never read
+from outside the project** — extends story 21 from the transport selectors to the legacy BSP
+decoder and the export root itself. Audited against the code at `a7f448ed`, its first text had
+undercounted the work by half and misplaced three facts, so it is now 21-1 … 21-8, run in order.
+Only 21-1 is REQUIRED ahead of 4 (so 4–20 never carry a legacy arm) and 21-6 ahead of 20 (its
+cook check); the owner runs the group ahead of 4.
+
 
 ## Witness
 Two maps, baked into their levels and standing in the editor before any NPC program runs on
@@ -52,16 +60,18 @@ Three rules, decided 2026-09-15 and narrowed for navigation on 2026-09-17:
   `Content/ElysiumGenerated/`. The external export tree (`-ElysiumContentRoot`,
   `ElysiumContentPaths::Root()`, sixteen readers today against one `CorpusRoot()`) is
   offline-only; its remaining runtime readers — `.ents`, `.hulls`, `.dispcol`, the GLBs — are
-  the migration still to finish, owned by the map lane's own later spec, not here (story 3
-  takes only the slice navigation needs: the contents signatures and the level actor). The
+  the migration still to finish. (It had been left to the map lane's own later spec, story 3
+  taking only the slice navigation needs — the contents signatures and the level actor; since
+  2026-09-20 it is owned here, by 21-3 for the per-map readers and 21-6 for the root.) The
   placement rule, confirmed 2026-09-15: **what can stand on a map is baked onto the map as an
   actor; what cannot goes to the corpus; what is recovered from the binary is generated
   source.** The navigation exception is explicit: AIN nodes and ordinary edges describe a
   compiled network, and do not each require an actor. Hints, interesting places, patrol points
   and makers bake as actors; native nav links represent special traversal. Required network
   data lives in one cooked `UDataAsset` per map, referenced by its baked map content. Other
-  entities keep the existing entity-table transport (`UElysiumMapEntities` or `.ents`, according
-  to the map's migration state). Tables live under `CorpusRoot()`. The substrate reads these
+  entities keep the existing entity-table transport (`UElysiumMapEntities`; its `.ents` arm and
+  the per-map migration state that chose it are retired by 21-1). Tables live under
+  `CorpusRoot()`. The substrate reads these
   baked or deployed sources at activation. The bake and the
   import regenerate everything, so an edit made in the editor does not persist; an authored
   override layer would be a separate, named story. (`docs/vision.md`
@@ -1058,36 +1068,348 @@ its recovery is written in the oracle section it names.
   each using editor-only API unguarded: `Tests/ElysiumContentTests.cpp` (15 errors),
   `Tests/ElysiumSurfaceKnobTests.cpp` (11), `Tests/ElysiumTerminalProjectionTests.cpp` (1) and
   `Visual/ElysiumBipedAnimInstance.cpp` (1). A cook cannot pass until they are guarded; the log
-  is `$ELYSIUM_WORK_ROOT/logs/game-target-compile.log`.
-  Consumes: everything above. Size: M. Effort: Sonnet / medium, then played.
+  is `$ELYSIUM_WORK_ROOT/logs/game-target-compile.log`. "No external export access" is 21-6's
+  to provide: until it lands the game cannot start without `-ElysiumContentRoot`.
+  Consumes: everything above, and 21-6. Size: M. Effort: Sonnet / medium, then played.
 
 - [ ] **21. Retiring the legacy map transport.** Added 2026-09-20 by owner decision: V2 is the
-  pipeline, and a map that cannot load on it is a failure rather than a compatibility case. Story
-  3's own step 1 already makes a map with no baked collision actor and no baked mesh fail the load
-  with a named error, and deletes the arms 3 touched — `UElysiumMapCollision`'s `LoadHulls` sidecar
-  arm and its per-signature transient components, `EnsureRuntimeNavigation`'s run-time build and
-  `RestrictNavigationToUsableAgents`, and the pipeline's `LEGACY_BRUSH_SIGNATURE` and
-  `PAYLOAD_CONTENTS_MASK`. This story deletes what survives that gate: the legacy `Bake` beside
-  `MapBakeV2`, the `MapsOnV2Models` / `MapsOnNewTransport` selectors and every `IsMapOn*` test of
-  them, the sidecar-diff lane's legacy comparison (`classify_hulls` and `HULLS_NAMED_DIVERGENCE`,
-  which story 3 left standing because deleting only the classifier would fail `elysium verify` on
-  every map), and the `.hulls`/`.ents`/`.dispcol` readers no longer reached (the files stay as V2
-  intermediates the producer writes from the GLB units). ~80 references across 36 files.
-  Also dead and to be deleted with them, each unreachable since story 3: `bake_navmesh.py` (never
-  wired, and its `SetMapNavAgents` order is the one story 3 proved wrong),
-  `UElysiumNavBakeLibrary::SetMapNavAgents`, `UElysiumMapCollisionPayload::LegacyWorldSignature`,
-  and `UElysiumMapCollision::GetWorldBounds` / `RefreshNavigationData`.
-  Part B, on the owner's approval rather than automatically: the other 102 maps onto V2, including
-  the three the legacy lump reader refuses (`sp_giovanni_2b` and its pair) — run when a story's
-  witness needs a map outside the six, not before.
-  **Handed over by 3, and an owner decision 3 did not implement:** in planning the owner chose
-  "inside bake map" for the collision payload lane. It was built in `import map-collision`
-  instead, which also places the level actor, the nav-area marks and the meshes -- so `bake map`
-  alone yields a level that fails to load, and the procedure needs both commands in order. The
-  lane refuses loudly and names both, but the decision stands unimplemented; folding the lane
-  into `bake map` belongs here, with the rest of the lane restructuring.
-  Runs immediately after 3 and before 4, so stories 4–20 never carry a legacy arm.
-  Consumes: 3. Size: M. Effort: Sonnet / medium (deletion, then the six maps re-verified).
+  pipeline, and a map that cannot load on it is a failure rather than a compatibility case. This
+  entry is the group's frame; the work is 21-1 … 21-8 below, run in order, each landing green.
+
+  **Owner decisions, 2026-09-20.** (1) Everything the game opens is baked; what cannot be baked
+  is deployed into `Content/ElysiumCorpus/`; nothing is read from outside the project. (2) The
+  legacy BSP decoder, its two-pass export, `CorpusBake` and `/ElysiumBaked/Shared` go with the
+  transport. (3) Entities, collision and environment all fold into `bake map` — one command
+  yields a loadable level (3's handover: the owner chose "inside bake map" and 3 built
+  `import map-collision` instead). (4) The map set is six: `sp_tutorial_1`, `sm_hub_1`,
+  `sp_soc_3`, `sm_pawnshop_1`, `sp_theatre`, and `sp_genesisdevice_1` — the blank
+  character-creation room, never legacy-exported, so the CLEAN-ROOM witness that the lane stands
+  alone. It proves plumbing only; decals, weather, water and ropes are proven on the other five,
+  re-baked with their legacy directories deleted. `sm_pier_1` leaves the set for 21-8. (5) The
+  producer's byte-compatibility debt is paid here (21-7). This group supersedes the contracts'
+  R8.1 / R9.2 precondition "once all 108 maps are listed" (`seam_map_map.md:714,935`).
+
+  **What the audit corrected in this story's first text** (evidence is the audit at `a7f448ed`;
+  a line number below is where to start reading, not a pin). The selectors alone are 160
+  occurrences in 40 files, not "~80 across 36", and gate arms the text never named —
+  environment, the run-time sky assembly, the light rig, the rain emitters, the travel gate.
+  `Bake` cannot be deleted "beside `MapBakeV2`": `MapBakeV2(Bake)` (`bake_map_v2.py:321`) and
+  `CorpusBake(Bake)` (`bake_map.py:2633`) subclass it; what goes is its legacy source path. The
+  sidecar-diff lane is run by no `elysium verify` command — only by hand — and already
+  short-circuits to `self_comparison` on every map, so the whole module is legacy-only. The
+  "legacy lump reader" that refuses three maps is `UE_map_sidecars.entity_lump_text` (`:431-468`),
+  INSIDE the V2 producer, and the maps are `la_ventruetower_2`, `la_ventruetower_3` and
+  `sp_giovanni_2b` (`test_map_ai_infra.py:144`): deleting the transport does not unblock them,
+  21-7 does. `.hulls` / `.dispcol` / `.props` have no C++ reader already, while
+  `FElysiumEntityDefs::Parse` stays reached by tests. And only the two witnesses were re-baked
+  after 3: the other listed maps carry version-1 payloads (2026-09-01 … 09-07) and cannot load.
+  Confirmed as 3 left them: `LoadHulls`, `RestrictNavigationToUsableAgents`,
+  `LEGACY_BRUSH_SIGNATURE` and `PAYLOAD_CONTENTS_MASK` are gone; `EnsureRuntimeNavigation` is
+  adopt-only; an unlisted map hard-fails (`ElysiumMapCollision.cpp:231`).
+
+  **Where each thing lands.**
+
+  | Today | Reader | Lands | Story |
+  |---|---|---|---|
+  | `<map>.ents` | fallback arm, `elysium.ents`, two test fixtures | `DA_<map>_Entities` (exists) | 21-1, 21-3 |
+  | `.env` `.sky` `.spawn` | fallback arm | `DA_<map>_Environment` (exists) | 21-1 |
+  | `.hulls` `.dispcol` | none at run time | `DA_<map>_Collision`, the level actor, the meshes (exist) | 21-1 |
+  | `.lights` | `UElysiumLightRig::Adopt` | baked light actors, `AdoptBaked` (exist) | 21-1 |
+  | `.ropes` | `ElysiumMapVisuals.cpp:589`, ungated | baked rope actors in the `.umap` (new) | 21-3 |
+  | `.ready`, `.obj`, the per-map directory | travel gate, `ExportedMaps()` | nothing: the baked level and its three assets are the proof | 21-1, 21-3 |
+  | `.decals` | `bake_map_v2.py:380` | staged `decals[]` rows → the baked `ADecalActor`s (exist) | 21-4 |
+  | `.weather.json`, `weather/rain_height.png` | `bake_map_v2.py:381` | staged rows → `/ElysiumBaked/<map>/Weather` (exists) | 21-4 |
+  | `.props`, `<map>.materials.json` | weather cover, `bake_verify`, the level recipe | staged `placements`; the material units | 21-4 |
+  | the producer's eight sidecars | the three asset stages, the level recipe | offline scratch `exports_v2/_sidecars/<map>/`, never opened by the game | 21-4 |
+  | `.obj` `.mtl` `.blend` `_sky.obj` `brushes/*` `tex/cube/*` `.water` `.particles.json` | the legacy bake only | deleted | 21-5 |
+  | `/ElysiumBaked/Shared/{Textures,Materials,Meshes}`, `export bundle corpus` | `CorpusBake`, the legacy maps | deleted; V2's homes are `/ElysiumBaked/{Textures,Materials,Models/_Corpus}` | 21-5 |
+  | `/ElysiumBaked/Shared/Error/M_ElysiumError` | both bakes (`bake_lib.py:557`) | `/Game/ElysiumGenerated/Materials` | 21-5 |
+  | `scripts/` `cfg/` `signs/` `ui/strings.json` | the Python VM, ScriptFS, the command bus, signs, UI strings | `Content/ElysiumCorpus/{scripts,cfg,vdata/signs,ui}` from the `exports_v2` units | 21-6 |
+  | `_cast` `_compose` `_greenroom` `_move` `_profile` `_shots` `_lights` , the wire dump | debug WRITES under `Root()` | `Saved/Elysium/<kind>/` | 21-6 |
+
+- [x] **21-1. The selectors and the runtime's legacy arms.**
+  Retail: none for the transport. For job 5: retail loads a map whose graph is empty, and a
+  route asked for there fails.
+  Port today: `UElysiumMapTransportSettings` (`MapsOnNewTransport`, `MapsOnV2Models`,
+  `Config/DefaultElysium.ini:57-69`) and its Python twin `map_transport.py` choose an arm at
+  seven C++ sites — `ElysiumMapCollision.cpp:231`, `ElysiumMapEntities.cpp:105`,
+  `ElysiumMapEnvironment.cpp:69`, `ElysiumMapVisuals.cpp:439,686`, `ElysiumContentPaths.h:459`,
+  `ElysiumMapActorWeather.cpp:157`, `ElysiumMapSubsystem.cpp:319,355` — and in the pipeline at
+  `bake_map.py:2780`, `export_manager.py:1084-1093`, `unreal.py:847` and thirty lines of
+  `bake_verify.py`. Entities and environment load their asset `LOAD_NoWarn | LOAD_Quiet` and
+  fall through to the sidecar without a word (`ElysiumMapEntities.cpp:109`,
+  `ElysiumMapEnvironment.cpp:71`).
+  Job, in order:
+  1. The settings class, its ini section, `ElysiumMapTransport::IsMapOn*` and `map_transport.py`
+     go; `bake map` always builds `MapBakeV2`. (Their comments are already wrong: both say
+     `sp_theatre` is off `MapsOnV2Models`, and the ini lists it.)
+  2. Each site keeps its V2 arm alone. A missing or unreadable `DA_<map>_Entities` or
+     `DA_<map>_Environment` FAILS the load with a named error, as collision already does;
+     `EElysiumMapEnvironmentSource::Sidecar` goes. The light rig adopts baked actors only, and
+     `UElysiumLightRig::Adopt` goes with its synthetic test (`ElysiumWorldEffectsTests.cpp:505-522`;
+     R5.6 re-homed its assertions, `seam_map_map_lighting.md:682`). The run-time sky assembly
+     (`ElysiumMapVisuals.cpp:699-~790`) and the per-map Niagara rain path with
+     `BakedParticleSystem` (`ElysiumMapActorWeather.cpp:183-217`) go. The travel gate loses its
+     `.obj` arm; `.ready` stands until 21-3.
+  3. Dead code: `BakedMeshesFor` / `BakedPropMesh` / `BakedItemMesh` / `BakedPropSkins` and
+     `BakedShared*` (no non-test caller); the accessors nothing calls — `MapHulls`, `MapDispCol`,
+     `MapProps`, `MapDecals`, `MapSkyObj`, `MapTexDir`, the `Shared*` five; and what 3 left
+     unreachable — `UElysiumNavBakeLibrary::SetMapNavAgents`, `bake_navmesh.py` (its only caller,
+     imported by nothing), `UElysiumMapCollisionPayload::LegacyWorldSignature`,
+     `UElysiumMapCollision::GetWorldBounds` / `RefreshNavigationData`.
+  4. The verify lane: the eight "not on V2, skip" guards of `bake_verify.py` (`:403, 501, 603,
+     706, 851, 890, 1180, 1672`) become unconditional; the legacy material block `:1866-2132`
+     and `_material_slot` (`:105-128`) go; `verify_brush_cull`'s asset check (`:1446`) holds for
+     every map. `validation/map_sidecar_diff.py` goes whole, with `test_map_sidecar_diff.py` and
+     the six `classify_hulls` cases of `test_map_hulls_contents.py:48-104` (`:109-176` pin the
+     live `.hulls` row and stay).
+  5. ~~**The no-graph rule.**~~ **Dropped, 2026-09-20, owner decision, after reading the install.**
+     The rule's premise was wrong. Every one of the 108 patch `.ain` files names at least one hull.
+     ELEVEN declare `NumNodes: 0`, and all eleven still carry hull bits: `sp_genesisdevice_1` and
+     `sm_smoke_1` are `UsedHullBits: 1` (human), `hw_chateau_1` is `16385`, and the other eight are
+     `ch_cloud_1`, `la_malkavian_5`, `sm_oceanhouse_1`, `sm_shreknet_1`, `sm_tattoo`, `sp_epilogue`,
+     `sp_masquerade_1`, `sp_ninesintro`. **No map in the corpus has a zero agent word**, so the
+     EMPTY word, the `UPROPERTY` on the world-collision actor and the tightened runtime gate all
+     had no case to answer — and `ElysiumMapActorLifecycle.cpp:805-809` assigns that word's journey
+     to the runtime to story 4 anyway. `sp_genesisdevice_1`'s only real blocker is that its
+     nav-graph unit was never exported; `nav_graph_glb.py` already writes a scene-less unit for an
+     empty graph and `map_nav_acceptance.project` runs clean on zero nodes. Exporting it is one
+     command, and it belongs to 21-2 with the rest of that map's first bake. What this story kept
+     is the one-line correctness fix behind it: `import_map_collision.used_hull_bits` tested
+     `if bits else None`, conflating a staged 0 with "the lane never ran" and reporting the wrong
+     remedy; it is a presence test now.
+  6. Tests: `ElysiumMapTransportSettingsTests.cpp` and `ElysiumModelCorpusRootTests.cpp` go;
+     `ElysiumMapExportGateTests.cpp` is rewritten to the one arm left; the pipeline pins of the
+     selector go or take the V2 branch (`test_map_geometry.py:273`,
+     `test_bake_orchestration.py:522`, `test_bake_verify_water.py:239-255`,
+     `test_bake_map_sprites.py:240`, `test_bake_verify_lanes.py:127`). Comments still calling
+     `.hulls` the live collider are corrected (`ElysiumMapActor.h:191`,
+     `ElysiumMapActorLifecycle.cpp:347`, `ElysiumMapSubsystem.cpp:346`), as are the seven
+     "`MapsOnV2Models` maps only" notes of `ElysiumBakedTags.h`.
+  Acceptance: `uv run elysium build`, `uv run pytest` and `uv run elysium test Elysium.Content`
+  green; both witnesses boot Active adopting their meshes as 3 left them; no `MapsOn`,
+  `IsMapOn` or `is_map_on` outside `docs/`. The other listed maps fail to load with the named
+  error — they are stale, and 21-2 re-bakes them.
+  The eight maps with no nav-graph unit, read from the install 2026-09-20 — 108 `.ain` files,
+  100 units. Three ship a header-only AIN (142–146 bytes) with no nodes but a real hull word:
+  `sp_genesisdevice_1`, `sm_smoke_1`, `hw_chateau_1`. Five have a real graph that exists ONLY as
+  the patch's file, with no base copy (`Unofficial_Patch/maps/graphs/`: `la_malkavian_3b` 8,117
+  bytes, `la_bradbury_1` 4,990, `hw_warrens_2b` 4,910, `la_library_1` 3,154, `sm_coffee_1`
+  1,840). All eight are missing because the 2026-08-30 export read the base set, before 3's
+  patch-first rule; each exports under that rule and takes its own agent word.
+  `sp_genesisdevice_1` is 21-2's, with the rest of that map; the other seven are 21-8's.
+  Consumes: 3. Size: M. Effort: Sonnet / high.
+
+- [ ] **21-2. One command: the imports fold into `bake map`, and five maps stand.**
+  Retail: none.
+  Port today: `import map-collision` authors the payload, places the world-collision actor, the
+  nav-area marks and the meshes, and runs `verify nav` (`import_map_collision.py:123-519`,
+  `cli.py:3219-3315`); `import map-entities` and `import map-environment` author data assets
+  only and touch no level. After 21-1 all three are load-bearing, so the procedure is four
+  commands in a fixed order.
+  Job:
+  1. `bake map` runs, per map and in one editor session: the geometry and the level, the
+     entities asset, the environment asset, the collision payload COOK, the world-collision
+     actor, the nav-area marks, the meshes, the prune, the save, then `verify nav`. The order is
+     real: the actor names the cooked bodies, the marks precede the build
+     (`import_map_collision.py:349`), the meshes are cut from the actor. The gate stays
+     automatic and `--skip-nav-verify` stays for lane work. `level_collision_is_current`
+     (`:286-332`), which exists to notice a level `bake map` has just wiped, goes.
+  2. The three `import map-*` commands go. If lane work needs a partial run it is
+     `bake map --from <stage>`, which runs that stage and every one after it, so a level is
+     never left between stages.
+  3. The runtime's refusals name the one command (`ElysiumMapCollision.cpp:93,151,208`,
+     `ElysiumMapActorLifecycle.cpp:912`).
+  4. The five maps. The witnesses re-bake as the regression. `sp_soc_3`, `sm_pawnshop_1` and
+     `sp_theatre` re-export (`export map --intermediate-only`: the decoder still stands, and
+     this is its last use — their `.hulls` predate the contents word), re-export their nav graph
+     from the patch's loose AIN (3's rule; the units on disk for the last two are dated
+     2026-08-30, before it), and bake. The nav gate has never judged them: every finding is
+     judged — a mesh defect, a step-height outlier, a rat hole, reach that changed — and pinned
+     with its reason in `validation/nav_known_findings.py`, and their signature counts and door
+     cuts are recorded here as 3 recorded the witnesses'. An unjudged finding keeps this open.
+  5. `pipeline/CLAUDE.md` and `pipeline/AGENTS.md` state the procedure as it now is.
+  Acceptance: for each of the five, `uv run elysium bake map --maps <map>` alone yields a level
+  that boots Active; `verify nav` green with its pins; `Elysium.Content.MapCollision` and
+  `Elysium.Content.NavArea` green on the witnesses.
+  Consumes: 21-1. Size: L. Effort: Opus / medium (editor ordering; three maps judged).
+
+- [ ] **21-3. The level carries everything a map needs.**
+  Retail: none.
+  Port today: three per-map reads of the export root survive 21-1, none gated:
+  `BuildRopes` parses `<map>.ropes` (`ElysiumMapVisuals.cpp:589`); `HasTravelableExport` wants
+  `<map>.ready` and `Travel` refuses when no export root is configured
+  (`ElysiumMapSubsystem.cpp:315,330`); `ExportedMaps()` lists the root's DIRECTORIES (`:678`),
+  so with no per-map directory the map cycle, `elysium_maps_list` and `NextMap` see nothing.
+  And `.ents` is still opened by the `elysium.ents` console command
+  (`ElysiumEntityDefs.cpp:287`) and two fixtures (`Tests/ElysiumMapSlice.h:38`,
+  `Tests/ElysiumContentTests.cpp:184`).
+  Job:
+  1. Ropes bake. The stage reads the producer's rope rows (`UE_map_sidecars.py:1379`) and places
+     one baked rope actor per row carrying `FElysiumRopeDef`'s seven facts — material id, both
+     endpoints, width, rest length, nodes, texture scale — under its own baked tag; `BuildRopes`
+     builds its cables from the adopted actors, and `bake map --verify` counts them.
+  2. The travel gate and the map list ask the project: a map is travelable when its baked level
+     and its three `DA_<map>_*` assets exist, and the list comes from the asset registry.
+     `.ready` and the `IsConfigured()` refusal go.
+  3. The console command and the two fixtures read `DA_<map>_Entities` through
+     `ElysiumEntityDefSource::Load`. `FElysiumEntityDefs::Parse` stays: `ElysiumEntityIOTests`
+     writes and parses a synthetic `.ents` of its own.
+  4. `MapDir` and every `Map*` accessor under it go.
+  Acceptance: the five maps boot, travel and list with `$ELYSIUM_EXPORT_ROOT/<map>/` renamed
+  away; rope counts equal the producer's rows; the entity-reading suites green.
+  Consumes: 21-2. Size: M. Effort: Sonnet / medium.
+
+- [ ] **21-4. The bake needs no legacy directory.**
+  Retail: none — but a producer ported here must reproduce the decoder's output, which is
+  itself the port's reading of the BSP; a difference is named, not absorbed.
+  Port today: `export map` runs `UE_bsp_to_scene.main` and then
+  `rewrite_sidecars_via_producer` overwrites eight sidecars with V2 bytes
+  (`export_all.py:156-250`). Four decoder-only products still have a live V2 reader:
+  `.decals` (`bake_map_v2.py:380`), `.weather.json` with its height map (`:381`,
+  `bake_verify.py:157`), `.props` (`weather.py:61`, `bake_verify.py:61,1856,2113`,
+  `bake_map.py:479`) and `<map>.materials.json` (`bake_map.py:710`, `bake_verify.py:85`,
+  `map_geometry.py:2250`). `bake map` refuses a map with no `<map>.env` in the legacy directory
+  (`export_manager.py:1094`). The producer reads `shared/materials.json` and
+  `shared/manifest.json` (`UE_map_sidecars.py:1403-1423`) and uses them once, for the six
+  sky-face keys (`:1222`); the materials table is loaded and never read.
+  Job:
+  1. The decals producer: `infodecal` rows projected onto the nearest visible face, from the
+     planes, nodes, leafs, faces, texinfo and texture sizes the map root unit already publishes
+     (`seam_map_map.md:233-249`) — the port of `UE_bsp_to_scene.py:1268-1360` — staged as
+     `decals[]` in the geometry manifest, not as a file.
+  2. The weather producer: the entity half already runs on the producer's `.ents`; the geometry
+     half takes cover triangles from the staged world geometry under the decoder's own filter
+     (`UE_bsp_to_scene.py:1692-1703`), prop cover from the model units instead of
+     `shared/props/*.obj` (`weather.py:56-90`), bounds from the world AABB. `sm_hub_1` alone
+     ships it. The `weather_inputs` hand-over (`export_all.py:209-247`) goes.
+  3. **Diff before delete.** Each producer is compared with the decoder's output on the five
+     maps while the decoder still exists — after 21-5 nothing is left to compare with — and
+     every difference is named and recorded in `seam_map_map.md`, as R3.3 named its own.
+  4. The re-points: `.props` readers onto the staged `placements`; the `materials.json` reads
+     deleted; the sky-face check onto the texture units, `_corpus()` going with it (checked
+     2026-09-20: `exports_v2/textures/skybox/<sky><face>.glb` holds all six faces for every sky
+     the six maps name — `la`, `pier`, `santamonica`, `hav`); `load_corpus`
+     (`bake_map.py:701-714`) off `shared/`.
+  5. The intermediates: `bake map` invokes the producer itself, writing to the producer's own
+     default `exports_v2/_sidecars/<map>/` (`UE_map_sidecars.py:1433`); the collision,
+     environment and level-recipe reads follow it (`map_collision.py:492`,
+     `map_environment.py:266`, `bake_map.py:437-498`); the entity stage's parity check against
+     `<map>.ents` (`map_entities.py:161-179`) is a self-comparison now and goes; the `.env`
+     gate goes; `export map --intermediate-only` leaves the procedure.
+  Acceptance: `sp_genesisdevice_1` goes from its `exports_v2` units to a level that boots,
+  with no `$ELYSIUM_EXPORT_ROOT/sp_genesisdevice_1/` ever having existed; the other five
+  re-bake with their legacy directories DELETED and `bake map --verify` green — decal and rope
+  counts, the hub's weather package — against the values recorded before the deletion.
+  Consumes: 21-3. Size: L. Effort: Opus / high (two producers ported and diffed).
+
+- [ ] **21-5. Deleting the decoder.**
+  Retail: none.
+  Port today: after 21-4 nothing on the map lane calls it. `UE_bsp_to_scene.py` (~1,700 lines)
+  is still imported by `UE_extract_corpus.py` (`decode_prop_models`, `DRAWN_TOOL_MATERIALS`)
+  and by five tests for its helpers; `CorpusBake` (`bake_map.py:2633-2749`) authors
+  `/ElysiumBaked/Shared` from `shared/`, a corpus no live resolver reads; the error material
+  both bakes bind lives under that mount (`bake_lib.py:557`, `bake_map_v2.py:502`).
+  Job, in order:
+  1. `M_ElysiumError` moves to `/Game/ElysiumGenerated/Materials`; `_assert_prunable`
+     (`bake_lib.py:710`) stops guarding the `Shared` prefix.
+  2. `CorpusBake`, `bake_corpus`, `ensure_corpus_bake` and the `/ElysiumBaked/Shared` mount go,
+     then `UE_extract_corpus.py`, the `corpus` bundle and the `export prop` / `export texture`
+     commands it serves. `shared_corpus.py` keeps only what a V2 lane still imports.
+  3. `Bake` loses its legacy source path — the `.obj` / `.mtl` / `.blend` / `.props` / `.lights`
+     / `_sky.obj` / `brushes/*` reads of `load_sources` and the stages only they fed
+     (`bake_map.py:716-790, 1578, 1787, 2324-2380`) — and stays as the base `MapBakeV2` builds
+     on. `make_particle_systems.py` and `.particles.json` go with the emitter arm 21-1 removed.
+  4. `UE_bsp_to_scene.py` and `export_all`'s two-pass `export_maps` /
+     `rewrite_sidecars_via_producer` go. `export map`, `export all` and `export grid` lose the
+     map decode; what is left of each is listed, and a command left with nothing is deleted.
+  5. Tests: `test_map_sidecar_default_path.py` goes; `test_map_producer_join.py`,
+     `test_item_models.py`, `test_area_portal_window_translation.py` and `test_map_sidecars.py`
+     stop importing the decoder (a helper still needed moves into the producer); the
+     corpus-bake cases of `test_bake_orchestration.py:136-184,358-372` go; the `Shared/*` path
+     pins are re-pointed (`test_contracts.py:645-655,839`, `test_cook_roots.py:67`,
+     `test_models_canonical_paths.py:117`, `test_import_textures_editor.py:580-588,694`).
+  6. The stale baked folders are pruned: every `Plugins/ElysiumBaked/Content/<map>/` outside
+     the six — about a hundred legacy-baked levels that already cannot load, `sm_pier_1` with
+     them. Gitignored; 21-8 re-bakes what it needs.
+  7. The contracts are rewritten to the lane as it stands: the ~44 selector and legacy-path
+     mentions of `docs/contracts/seam_map_*.md`, the dangling `seam_migration.md` references,
+     and R8.1 / R9.2 marked superseded by this group.
+  Acceptance: 21-4's acceptance re-run unchanged; build and `uv run pytest` green; no import of
+  `UE_bsp_to_scene`, `UE_extract_corpus` or `CorpusBake` anywhere; no `/ElysiumBaked/Shared`
+  path in source, config or tests.
+  Consumes: 21-4. Size: M. Effort: Sonnet / medium (deletion).
+
+- [ ] **21-6. The game needs no export root.**
+  Retail: none.
+  Port today: four loose trees are still read from `ElysiumContentPaths::Root()`, which is why
+  the game cannot start without `-ElysiumContentRoot`: `scripts/` (`ElysiumPythonVM.cpp:523,
+  945,990`, `ElysiumScriptHost.cpp:65`, ScriptFS `python/`), `cfg/` (`ElysiumCommandBus.cpp:31`,
+  `ElysiumPythonVM.cpp:537`, ScriptFS `cfg/`), `signs/` (`ElysiumSignData.cpp:189,214`, ScriptFS
+  `vdata/signs/`) and `ui/strings.json` (`ElysiumUIStrings.cpp:27`). None can be baked: the
+  Python VM and ScriptFS read them as files. `exports_v2` already publishes the units —
+  `scripts/` 41, `engine-config/` 17, 278 sign units under `vdata/`, `ui-resources/` 52 — and
+  `dlg`, `lip`, `scenes`, `sound` and `vdata` are the precedent. The debug tools WRITE under the
+  same root: `_cast`, `_compose`, `_greenroom`, `_move`, `_profile`, `_shots`,
+  `_lights/<map>.probe.json`, the wire dump.
+  Job:
+  1. Four corpus lanes on `corpus_deploy`'s machinery (recipe stamps, byte-equality, pruning):
+     `import scripts` → `Content/ElysiumCorpus/scripts/`, `import engine-config` →
+     `…/cfg/`, signs through `import vdata` → `…/vdata/signs/`, UI strings → `…/ui/` (checked
+     2026-09-20: `strings.json` is `resource/gameui_english.txt` parsed by
+     `UE_extract_ui.parse_strings`, and `ui-resources/resource/gameui_english.txt.glb` carries
+     that token table, so the lane deploys the file and the parse moves to the reader or the
+     lane). The accessors and the ScriptFS mounts (`ElysiumScriptFS.cpp:56-63`) move to
+     `CorpusRoot()`.
+  2. Debug output lands under `Saved/Elysium/<kind>/`, beside `ScriptFsRoot`; the pipeline's
+     readers of `_shots`, `_lights` and `_profile` follow.
+  3. `Root()`, `IsConfigured()`, the `.elysium-incomplete` markers' runtime half and
+     `-ElysiumContentRoot` go; `uv run elysium run` stops passing it. The legacy extractors
+     these lanes replace (`UE_extract_scripts`, `UE_extract_cfg`, `UE_extract_signs`,
+     `UE_extract_ui`) go with whatever `export` command is left empty. `CLAUDE.md`'s
+     "Build & run" lines for `-ElysiumContentRoot` and `$ELYSIUM_WORK_ROOT/exports/scripts/` are
+     corrected, and `docs/vision.md` § "The build shape" is flagged to the owner again.
+  Acceptance: the six maps boot, travel and run their map scripts with NO
+  `-ElysiumContentRoot` and `$ELYSIUM_EXPORT_ROOT` renamed away; the tutorial's scripted opening
+  plays; `Elysium.Scripting` and the UI-string and sign suites green.
+  Provides: to 20, the precondition of its cook check — no external export access.
+  Consumes: 21-3 (21-5 for the commands it empties). Size: M. Effort: Sonnet / medium.
+
+- [ ] **21-7. The producer's debt: the lump reader and the entity divergences.**
+  Retail: each flip is a reading of retail's own entity parse, and lands with the address that
+  proves it — this is the one story of the group that changes what the game loads.
+  Port today: `DA_<map>_Entities` is NOT read structurally from the entities unit, whatever
+  `seam_map_map.md:509` says: `map_entities.stage_map` builds it through
+  `producer.prepare_join` — which rebuilds lump text with `entity_lump_text` and re-runs the
+  legacy regexes — and `build_entities` under the default `EntityDivergences()`
+  (`map_entities.py:156-159`, `UE_map_sidecars.py:253-307, 1454-1464`). So the game's entity
+  asset carries every legacy reading, the `sm_hub_1` embedded-quote corruption included, and the
+  only reason was byte-comparability with a differ 21-1 deleted. The reader also refuses three
+  maps outright when a keyvalue re-escapes to a different length (`:461-465`).
+  Job:
+  1. Measure first: for the six maps, the rows the asset carries today against a structural
+     read of `entities[].keyValues[]`, flag by flag. The delta is the work list.
+  2. `entity_lump_text` / `_requote` are replaced by the structural read in every caller —
+     `prepare_join`, `map_ai_infra.py:262` — and its corruption-pinning test goes.
+  3. The five flags (`datamap_output_typing`, `fold_keys`, `strip_param`, `delay_atof`,
+     `keep_extra`; the sixth divergence, `times`, landed without one) flip to the corrected
+     reading ONE PER COMMIT, each with its retail evidence — the datamap record for output
+     typing, the engine's key compare for folding, `atof` for the delay — and each with the
+     rows it changed on the six maps listed. A flag with no recovered retail answer stays
+     where it is and says so; when all five are settled the class goes.
+  4. `seam_map_map.md` R3.4 and `:502-512` are rewritten to what is now true.
+  Acceptance: the six maps re-bake; every changed row is accounted for by a named flip; the
+  tutorial's and the hub's scripted witnesses (the `logic_failed_blueblood` chain, the hub's
+  `logic_auto`) run as before or better, read against retail; the three refused maps stage.
+  Consumes: 21-5. Size: M–L. Effort: Opus / high.
+
+- [ ] **21-8. The other 102 maps.** On the owner's approval, not automatically — run when a
+  story's witness needs a map outside the six, not before.
+  Job: each map from its `exports_v2` units through `bake map`, its nav findings judged as 21-2
+  judged three. Owed first: the five patch-only graphs re-exported under 3's patch-first rule
+  (21-1 lists them); `sm_pier_1`, delisted by this group; and `la_ventruetower_2`,
+  `la_ventruetower_3`, `sp_giovanni_2b`, which 21-7 unblocks.
+  Consumes: 21-7. Size: L, by batch.
 
 ## Seams
 - Provides: the query surface to 0002 — hint searches, place selection and the trio, the next

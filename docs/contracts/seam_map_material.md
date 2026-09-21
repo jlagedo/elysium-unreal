@@ -1366,7 +1366,7 @@ silent fallback to another master. On the working corpus every rope is one of `c
 `cable/chain`, `cable/chainb` and `cable/cautiontape` (`MI_cable`, `MI_chain`, `MI_chainb`,
 `MI_cautiontape` under `/ElysiumBaked/Materials/cable/`), and `bake_verify.verify_ropes` asserts, for every line of the three maps' `.ropes`, that the id folds
 to a package under `/ElysiumBaked/Materials/` that exists and is a `MaterialInstanceConstant`.
-This resolution is not gated on `MapsOnV2Models`: the material lane imported the whole install,
+This resolution was never gated per map: the material lane imported the whole install,
 the `MI_` exists for every map's ropes, and one code path is the point.
 
 **`FElysiumMaterialFactory` is `Create(MI_, Outer)`, nothing else.** The factory no longer

@@ -227,11 +227,10 @@ R4.3 of `docs/project/seam_migration.md` -> "Roadmap — one pipeline" moves the
 rig's **calibration**, not its geometry, off cvars/C++ literals and a per-map JSON survey file and
 onto two editor surfaces: `UElysiumLightingSettings` (global, Project Settings -> Elysium ->
 Lighting) and `UElysiumLightCalibration` (per-map, a data asset). `worldLights[]` above is
-unaffected -- this section is about what a light's *raw* row is turned into at runtime, not about
-the row itself. On a map still on the legacy lane the runtime reads `<map>.lights`
-(`UE_map_sidecars`' restatement of `worldLights[]`) to adopt and derive every source; on a
-`MapsOnV2Models` map the bake writes the derived values once and the runtime derives nothing
-("Lights final (R5.6)" below). R4.3 is scoped to where the human-tunable numbers live.
+unaffected -- this section is about what a light's *raw* row is turned into, not about the row
+itself. The bake writes the derived values once and the runtime derives nothing for a placed light
+("Lights final (R5.6)" below); the one light that still derives at load is R6.2's `light_dynamic`,
+which has no `worldLights[]` row to have been baked from. R4.3 is scoped to where the human-tunable numbers live.
 
 ### `UElysiumLightingSettings` — the global half
 
@@ -317,13 +316,10 @@ every map today — runs exactly as R4.2 left it. No remapper exists or is plann
 survey was ever saved to disk on this corpus (confirmed empty at the time this task landed), so
 there is nothing to migrate, and the owner re-tunes each map fresh in the editor.
 
-**R4.6's explicit `UElysiumMapTransportSettings` list does not gate this path**
-(`seam_map_map.md` -> "## Import" -> "The explicit per-map cutover flag (R4.6)"), unlike the three
-whole-swap transports (entities, collision, environment). Those three replace a legacy read
-outright, so an unlisted map needs a flag telling its resolver to keep ignoring an asset that may
-already exist; calibration never replaces anything — it merges on top of the derivation this file
-states above, which keeps running unconditionally — so there is no legacy behavior for an unlisted
-map to fall back to, and the asset's own presence already is the only fact that matters. R5.6's
+**R4.6's explicit `UElysiumMapTransportSettings` list never gated this path** — and since 0018
+story 21-1 there is no such list at all. Unlike the three whole-swap transports (entities,
+collision, environment), calibration never replaces anything: it merges on top of what the bake
+wrote, so the asset's own presence always was the only fact that mattered. R5.6's
 bake, which retires the `.lights` derivation outright, is what eventually gives this path a real
 legacy-vs-new split to gate.
 
@@ -380,15 +376,15 @@ walks `SkyActors`, never touches it. `AdoptBakedLevel` captures it into `BakedSk
 `elysium.togglesky` (`ToggleSkybox`) hides/shows it alongside the miniature, the same as the
 runtime-built `SkyDomeMesh` it stands in for.
 
-**Cutover: `MapsOnV2Models`, not a new list.** R5.1's own entry already scoped the dome here ("the
-sky *dome* is R5.2's — this lane authors only the miniature's own geometry"); the cube and the
-SkyLight's real values ride the same flag because neither means anything without the geometry that
-displays them, and because a converted map's bake already runs the `_place_sky` stage this section
-changes on every pass. `ElysiumMapVisuals::ApplyEnvironment` gained a `MapName` parameter for
-exactly this test: on a `MapsOnV2Models` map it runs `ApplySceneFog` (unaffected — R5.3's) and
-returns, never touching `SkyLight`, `SkyDomeMesh` or `SkyMid`; every other map runs precisely the
-runtime path this file described before R5.2, unchanged. Deleting that runtime path outright is
-R8's, matching every other legacy-path retirement in this roadmap.
+**The bake is the only author.** R5.1's own entry already scoped the dome here ("the sky *dome*
+is R5.2's — this lane authors only the miniature's own geometry"); the cube and the SkyLight's real
+values ride with it, because neither means anything without the geometry that displays them, and
+because the bake already runs the `_place_sky` stage this section changes on every pass. R5.2
+gated the runtime assembly behind a per-map flag and left it standing for unlisted maps; 0018 story
+21-1 deleted it outright, along with `SkyDomeMesh`, `SkyMid`, `BuildSkyBox`, `SkyAmbientIntensity`
+and the `elysium.SkyBrightness` knob that drove the runtime backdrop's MID.
+`ElysiumMapVisuals::ApplyEnvironment` is now `ApplySceneFog` and nothing else, and lost the
+`MapName` parameter it carried only to ask which lane a map was on.
 
 Each map's own bake re-authors its sky's `TC_Sky_<name>`/`SM_SkyDome`/`MI_Sky_<name>` package rather
 than skipping a found asset: the six source PNGs never change between bakes, so a second map that
@@ -459,9 +455,10 @@ or cosine rides along: those are inputs to a derivation the runtime no longer pe
 skyambient row never places an actor; its first-wins `(colour, magnitude)` feeds `_place_sky`'s
 R5.2 join as before.
 
-**Runtime: `AdoptBaked`, gated on `MapsOnV2Models`.** `UElysiumMapVisuals::AdoptBakedLevel` calls
-`UElysiumLightRig::AdoptBaked(Adopted, MapName)` for a listed map and the legacy `Adopt(...,
-MapLights(MapName), SkyScale)` otherwise. `AdoptBaked` opens no file: each `FLightSource` is built
+**Runtime: `AdoptBaked`, unconditionally.** `UElysiumMapVisuals::AdoptBakedLevel` calls
+`UElysiumLightRig::AdoptBaked(Adopted, MapName)`; 0018 story 21-1 deleted the legacy
+`Adopt(..., MapLights(MapName), SkyScale)` beside it, with the `.lights`/`.lightfit` readers, the
+miniature reach scale and the `bApplyLightFit` page knob. `AdoptBaked` opens no file: each `FLightSource` is built
 from the actor itself (`bBaked = true`, the baked intensity/reach/colour/transform snapshot as its
 baseline, `Type`/`Style` from the tags) and `ApplyToSource` on a baked source **restores that
 snapshot** rather than deriving -- so `RevertSource` means "back to the bake", `ApplyLiveTuning`
@@ -469,10 +466,8 @@ snapshot** rather than deriving -- so `RevertSource` means "back to the bake", `
 applies through the same per-source setters keyed by the same `SourceIndex`. The settings page
 therefore reaches a converted map through the **bake**: every calibration field is in the level
 recipe, so an edited page re-authors the level on the next `export map` instead of re-deriving at
-load. Every map not on the flag runs the legacy path byte for byte; the `.lights` reader's deletion
-is R8.1's, matching every other legacy-path retirement in this roadmap. The rig's log line names
-the lane (`adopted N baked lights (final values, MapsOnV2Models)`), so a boot log proves which path
-ran.
+load. The rig's log line says what it adopted (`adopted N baked lights (final values, ...)`), so a
+boot log proves the level carried them.
 
 **Verification, re-homed.** `bake_verify.py` on a converted map: light-count parity -- the number
 of `elysium.light` actors equals the number of `.lights` rows that place one (type 0-3 with
