@@ -22,7 +22,7 @@ def _row(index, pairs):
 
 def _stage(*blocks):
     rows = [_row(i, pairs) for i, pairs in enumerate(blocks)]
-    return infra.stage_rows("synthetic", rows, [list(pairs) for pairs in blocks])
+    return infra.stage_rows("synthetic", rows)
 
 
 def test_partition_by_family():
@@ -90,9 +90,6 @@ def test_sha256_tracks_content():
 
 
 def test_refusals():
-    with pytest.raises(infra.MapAiInfraError, match="legacy pair reading"):
-        rows = [_row(0, [("classname", "npc_VRat"), ("origin", "0 0 0")])]
-        infra.stage_rows("m", rows, [[("classname", "npc_VRat"), ("origin", "9 9 9")]])
     with pytest.raises(infra.MapAiInfraError, match="parented hint"):
         _stage([("classname", "info_node_hint"), ("hinttype", "5"), ("parentname", "p")])
     with pytest.raises(infra.MapAiInfraError, match="class-forced"):
@@ -141,9 +138,10 @@ def test_tutorial_patrol_point_pt1():
     assert (keys["group_id"], keys["enabled"], keys["min_time"], keys["max_time"]) == ("2", "1", "30.0", "60.0")
 
 
-#: Maps whose entity lump the legacy text reading cannot reconstruct (their escaped output values
-#: re-escape to a different length): `UE_map_sidecars.entity_lump_text` refuses them for every lane.
-LUMP_UNREADABLE = {"la_ventruetower_2", "la_ventruetower_3", "sp_giovanni_2b"}
+#: The three maps the text reconstruction refused outright until 0018 story 21-7 read the lump
+#: structurally: their escaped output values re-escaped to a different length. They stage now, and
+#: `test_every_exported_map_stages` covers all 108 without an exception list.
+ONCE_LUMP_UNREADABLE = ("la_ventruetower_2", "la_ventruetower_3", "sp_giovanni_2b")
 
 
 def test_every_exported_map_stages():
@@ -151,10 +149,6 @@ def test_every_exported_map_stages():
     totals = collections.Counter()
     for path in sorted((root / "maps").glob("*.entities.glb")):
         map_name = path.name.split(".")[0]
-        if map_name in LUMP_UNREADABLE:
-            with pytest.raises(producer.MapSidecarError):
-                infra.stage_map(map_name, root)
-            continue
         payload = infra.stage_map(map_name, root)
         indices = [row["index"] for row in payload["rows"]]
         assert len(indices) == len(set(indices)), map_name
@@ -163,3 +157,13 @@ def test_every_exported_map_stages():
             totals[family] += payload["counts"][family]
     # Every family is exercised somewhere in the corpus, conversation places included.
     assert all(totals[family] > 0 for family in infra.FAMILIES), totals
+
+
+def test_the_three_once_unreadable_maps_stage():
+    # 0018 story 21-7: the text reconstruction refused these three outright, for every lane.
+    root = _export_root()
+    for map_name in ONCE_LUMP_UNREADABLE:
+        if not (root / "maps" / f"{map_name}.entities.glb").is_file():
+            pytest.skip(f"{map_name} entity unit unavailable")
+        payload = infra.stage_map(map_name, root)
+        assert payload["entityRows"] > 0 and payload["rows"], map_name

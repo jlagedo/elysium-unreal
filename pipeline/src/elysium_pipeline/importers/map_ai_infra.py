@@ -10,14 +10,14 @@ Five families, a disjoint partition of the entity lump, one baked actor per row:
 * ``npc`` -- every other ``npc_*`` classname.
 
 A staged row is the entity table's own row (``UE_map_sidecars.collect_entity_fields`` over the
-same legacy pair reading ``.ents`` and ``UElysiumMapEntities`` are built from), plus the ordered
-authored pairs that reading folds away. So the def the runtime rebuilds from a baked actor is the
-def the transports load, byte for byte, unless someone edited the actor.
+same pair reading ``.ents`` and ``UElysiumMapEntities`` are built from), plus the ordered authored
+pairs that reading folds away. So the def the runtime rebuilds from a baked actor is the def the
+transports load, byte for byte, unless someone edited the actor.
 
-Malformed input raises instead of being repaired: a family row whose legacy reading disagrees with
-the unit's structured pairs, a hint row the census rule and the retail rule classify differently,
-an authored hint type that disagrees with the class-forced one, a parented hint row (it would
-spawn out of BSP order and move the hint list), or a row in the 3D-skybox miniature.
+Malformed input raises instead of being repaired: a hint row the census rule and the retail rule
+classify differently, an authored hint type that disagrees with the class-forced one, a parented
+hint row (it would spawn out of BSP order and move the hint list), or a row in the 3D-skybox
+miniature.
 """
 from __future__ import annotations
 
@@ -151,11 +151,6 @@ def family_of(classname: str, pairs: Sequence[tuple[str, str]]) -> str | None:
     return None
 
 
-def _structured_pairs(row: dict[str, Any]) -> list[tuple[str, str]]:
-    return [(str(kv.get("sourceKey", kv.get("key", ""))), str(kv.get("value", "")))
-            for kv in row.get("keyValues") or []]
-
-
 def _authored_keys(pairs: Sequence[tuple[str, str]], classname: str) -> list[list[str]]:
     """The pairs `collect_entity_fields` keeps as keys, in order with repeats, minus the hoisted two."""
     out: list[list[str]] = []
@@ -169,15 +164,12 @@ def _authored_keys(pairs: Sequence[tuple[str, str]], classname: str) -> list[lis
 
 
 def stage_rows(map_name: str, entity_rows: Sequence[dict[str, Any]],
-               pair_blocks: Sequence[Sequence[tuple[str, str]]],
                sky: Any | None = None) -> dict[str, Any]:
-    """The staged payload for one map, from its structured entity rows and the legacy pair reading.
+    """The staged payload for one map, from its structured entity rows.
 
     `sky` is the map's `SkyScope`; a family row inside the miniature is refused.
     """
-    if len(entity_rows) != len(pair_blocks):
-        raise MapAiInfraError(f"{map_name}: {len(entity_rows)} entity rows but {len(pair_blocks)} "
-                              "legacy blocks")
+    pair_blocks = producer.entity_pair_blocks(entity_rows)
     rows: list[dict[str, Any]] = []
     counts = {family: 0 for family in FAMILIES}
     patrol = 0
@@ -185,17 +177,12 @@ def stage_rows(map_name: str, entity_rows: Sequence[dict[str, Any]],
         if int(entity.get("index", index)) != index:
             raise MapAiInfraError(f"{map_name}: entity row {index} carries index {entity.get('index')}")
         classname = str(entity.get("classname") or "")
-        structured = _structured_pairs(entity)
-        family = family_of(classname, structured)
-        if census_hint(classname, structured) != (family == "hint"):
+        family = family_of(classname, pairs)
+        if census_hint(classname, pairs) != (family == "hint"):
             raise MapAiInfraError(f"{map_name} entity {index} ({classname}): the census and "
                                   "CNodeEnt::Spawn disagree on whether it is a hint")
         if family is None:
             continue
-        pairs = [(str(key), str(value)) for key, value in pairs]
-        if pairs != structured:
-            raise MapAiInfraError(f"{map_name} entity {index} ({classname}): the legacy pair reading "
-                                  "differs from the unit's structured pairs")
         outputs, keys = producer.collect_entity_fields(pairs)
         if family == "hint":
             authored = atoi(_folded_get(pairs, "hinttype") or "")
@@ -253,13 +240,11 @@ def _last(pairs: Sequence[tuple[str, str]], key: str, default: str) -> str:
 
 def stage_for_join(join: Any, map_name: str) -> dict[str, Any]:
     """The payload from a prepared `MapJoin` (the map-geometry stage already holds one)."""
-    return stage_rows(map_name, join.units.entities["entities"], join.pair_blocks, join.sky)
+    return stage_rows(map_name, join.units.entities["entities"], join.sky)
 
 
 def stage_map(map_name: str, root: Path | None = None) -> dict[str, Any]:
     """The payload for one map straight from its units, without meshing its geometry."""
     units = producer.read_units(map_name, root)
-    lump_text = producer.entity_lump_text(units.entities["entities"])
-    sky = producer.SkyScope(units, producer.entity_block_texts(lump_text))
-    return stage_rows(map_name, units.entities["entities"],
-                      producer.parse_entity_blocks(lump_text), sky)
+    sky = producer.SkyScope(units, producer.entity_pair_blocks(units.entities["entities"]))
+    return stage_rows(map_name, units.entities["entities"], sky)

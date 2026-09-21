@@ -23,14 +23,15 @@ from elysium_pipeline import paths
 
 from elysium_pipeline.exporters.UE_map_sidecars import (
     EntityDivergences,
+    blocks_of_class,
     brush_cull_max_cm,
     brush_hull,
     collect_entity_fields,
-    entity_lump_text,
+    entity_pair_blocks,
+    first_of_class,
     is_output_key,
     meshed_faces,
     model_brushes,
-    parse_entity_blocks,
     rope_material_id,
     source_planes,
     source_position,
@@ -204,11 +205,12 @@ def test_collect_entity_fields_fold_keys_collapses_case_variants_and_keeps_last_
     assert unaffected == {"RenderColor": "255 0 0"}
 
 
-def test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_on():
-    # sm_hub_1's logic_auto authors setArea(\"santa_monica\") inside an output value. The unit
-    # unescapes it; the legacy pair regex stopped at the escaped quote and re-paired the rest of
-    # the block. The producer has to hand the regex the escaped text back, or the sidecar gains an
-    # `origin` the shipped one does not have.
+def test_entity_pair_blocks_keeps_the_embedded_quote_the_legacy_regex_tripped_on():
+    # sm_hub_1's logic_auto at block 1611. Retail's tokeniser (`0x10136ce0`, `10136d7a-10136d9e`)
+    # unescapes the authored `\"`, so the value IS `setArea("santa_monica")` and `origin` is the
+    # next pair. The reading this replaced rebuilt the block as text and re-ran a regex with no
+    # escape rule over it, which stopped at the `\"`, minted a key spelled `),` and destroyed the
+    # entity's origin (0018 story 21-7).
     rows = [
         {
             "index": 0,
@@ -223,15 +225,25 @@ def test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_o
         }
     ]
 
-    text = entity_lump_text(rows)
-    assert '\\"santa_monica\\"' in text
-
-    pairs = parse_entity_blocks(text)[0]
-    assert pairs == [
+    assert entity_pair_blocks(rows) == [[
         ("classname", "logic_auto"),
-        ("OnMapLoad", ",,,0,-1,setArea(\\"),
-        ("),", "origin"),
+        ("OnMapLoad", ',,,0,-1,setArea("santa_monica"),'),
+        ("origin", "-2586.48 -2091.1 -111"),
+    ]]
+
+
+def test_first_of_class_is_the_first_block_in_lump_order():
+    # `FindEntityByName(NULL, ...)`'s rule, and the reason la_malkavian_4's two sky_cameras
+    # resolve the way they do. The classname is matched as a classname, not as a string appearing
+    # anywhere in the block: the second entity below is named after the first one's class.
+    blocks = [
+        [("classname", "func_brush"), ("targetname", "sky_camera")],
+        [("classname", "sky_camera"), ("scale", "16")],
+        [("classname", "sky_camera"), ("scale", "32")],
     ]
+    assert first_of_class(blocks, "sky_camera") == {"classname": "sky_camera", "scale": "16"}
+    assert first_of_class(blocks, "info_player_start") == {}
+    assert len(blocks_of_class(blocks, "sky_camera")) == 2
 
 
 # --- R6.4: brush fade distances ------------------------------------------------------------------

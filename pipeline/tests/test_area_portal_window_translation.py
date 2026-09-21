@@ -13,19 +13,15 @@ third case below pins what is suppressed and no longer pins the diagnostic text.
 
 from __future__ import annotations
 
-from elysium_pipeline.exporters.UE_map_sidecars import (
-    parse_entity_blocks,
-    visibility_backing_models,
-)
+from elysium_pipeline.exporters.UE_map_sidecars import visibility_backing_models
 
 
-def _entity(**keys: str) -> str:
-    body = "\n".join('"%s" "%s"' % item for item in keys.items())
-    return "{\n%s\n}" % body
+def _entity(**keys: str) -> list[tuple[str, str]]:
+    return list(keys.items())
 
 
-def _models(*entities: str) -> set[int]:
-    return visibility_backing_models(parse_entity_blocks("\n".join(entities)))
+def _models(*entities: list[tuple[str, str]]) -> set[int]:
+    return visibility_backing_models(list(entities))
 
 
 def test_only_the_linked_backing_model_is_suppressed() -> None:

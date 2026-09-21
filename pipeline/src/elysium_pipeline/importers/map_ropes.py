@@ -95,5 +95,4 @@ def stage_for_join(join: Any, map_name: str) -> dict[str, Any]:
 def stage_map(map_name: str, root: Path | None = None) -> dict[str, Any]:
     """The payload for one map straight from its units, without meshing its geometry."""
     units = producer.read_units(map_name, root)
-    lump_text = producer.entity_lump_text(units.entities["entities"])
-    return stage_rows(map_name, producer.parse_entity_blocks(lump_text))
+    return stage_rows(map_name, producer.entity_pair_blocks(units.entities["entities"]))

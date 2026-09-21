@@ -836,20 +836,23 @@ def npc_carried(idx):
     Player obtainability is **not** derivable here -- it rests on secondary walkthrough evidence
     that `docs/vtmb/wielded_weapons.md` carries -- so only the measured half is reported.
     """
-    from elysium_pipeline.exporters.UE_map_sidecars import parse_entity_blocks
+    # The retail tokeniser itself (`0x10136ce0`), not a regex over the text: an authored `\"` ends
+    # no token, and reading the lump any other way re-pairs the rest of the block.
     from elysium_pipeline.formats import bsp, install
+    from elysium_pipeline.formats.map_entities_glb import lexer
 
     out = set()
     for name in sorted(install.all_map_names()):
         try:
             with open(install.map_path(name), "rb") as handle:
                 data = handle.read()
-            text = bsp.read_lump(data, 0).decode("ascii", "replace")
+            text = lexer.decode_text(bsp.read_lump(data, 0))
         except (OSError, struct.error) as exc:
             print(f"[wield] {name}: entity lump unreadable ({type(exc).__name__}: {exc})")
             continue
-        for pairs in parse_entity_blocks(text):
-            keys = {key.casefold(): value for key, value in pairs}
+        for block in lexer.parse(lexer.tokenize(text)).blocks:
+            keys = {pair.key.text.casefold(): (pair.value.text if pair.value else "")
+                    for pair in block.pairs}
             if not keys.get("classname", "").startswith("npc_"):
                 continue
             for field in ("additionalequipment", "alternateequipment"):

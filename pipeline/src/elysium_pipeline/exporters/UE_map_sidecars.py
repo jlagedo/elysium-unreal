@@ -8,7 +8,14 @@ so is the runtime's `.ropes` read. The join it performs is the entities+root joi
 `.ents`; this module is that specification executed, and nothing here decides anything the
 specification does not already state.
 
-Two rules govern every line below.
+Three rules govern every line below.
+
+**The lump is read, not reconstructed** (0018 story 21-7). Every reader here takes the entities
+unit's own `keyValues[]` -- `entity_pair_blocks`, and `folded_keys` / `first_of_class` for the
+scans that want one entity's scalar keys. The unit's lexer is retail's tokeniser `0x10136ce0`,
+escapes and all, so this is what `CEntityMapData::GetNextKey 0x10136ee0` hands `ParseMapData`.
+Until 21-7 the lump was rebuilt as text and read back with regexes that had no escape rule, which
+lost `sm_hub_1`'s `logic_auto` origin and refused three maps outright.
 
 **Byte-comparability, not equivalence.** The output WAS diffed against `UE_bsp_to_scene.py`'s
 sidecars by the R3.3 differ, until 0018 story 21-5 deleted both the differ and the decoder. The
@@ -417,81 +424,82 @@ def split_output(
     return row
 
 
-def _requote(text: str, quoted: bool) -> str:
-    """One decoded token back as the source wrote it.
-
-    The entities unit's lexer unescapes a quoted string -- `\\x` yields `x`, `\\n` yields a
-    newline -- so the published `value` is shorter than the bytes the legacy regex scanned.
-    `sm_hub_1`'s `logic_auto` authors `setArea(\\"santa_monica\\")` and the legacy `.ents` records
-    the value the embedded `\\"` truncates it to, so the escapes have to be put back before the
-    regex runs. `entity_lump_text` checks every reconstruction against the unit's own
-    `byteLength`, so an escape rule that does not round-trip fails loudly instead of quietly
-    producing a different lump.
-    """
-
-    if not quoted:
-        return text
-    escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-    return f'"{escaped}"'
+#: The value tests the lump's own readers apply, at the same width they always had. Before 0018
+#: story 21-7 each was written as `"key"\s+"(...)"` and run over a block's reconstructed text; the
+#: capture groups and the character classes are unchanged, only the subject is now the value.
+_NUMERIC = re.compile(r"-?[\d.]+")
+_NUMERIC_TRIPLE = re.compile(r"(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)")
 
 
-def entity_lump_text(entity_rows: Sequence[dict[str, Any]]) -> str:
-    """The ENTITIES lump text, rebuilt from the entities unit's ordered `keyValues[]`.
+def entity_pair_blocks(
+    entity_rows: Sequence[dict[str, Any]],
+) -> list[list[tuple[str, str]]]:
+    """Each entity's keyvalues as `(authored key, value)`, in authored order with repeats kept.
 
-    Every legacy reader of lump 0 is a regex over the raw text -- the pair scan behind `.ents`, the
-    `sky_camera` scope, `.env`'s fog blocks, `.spawn`. Reconstructing the text and running those
-    regexes verbatim is the only way to stay byte-comparable, because the legacy scan is **not**
-    equivalent to a structured read: `sm_hub_1`'s `logic_auto` at block 1611 authors
-    `setArea("santa_monica")` inside an output value, and the embedded quotes re-pair the whole
-    tail of that block -- the legacy `.ents` loses the entity's `origin` and gains a key spelled
-    `),`. A structured producer would silently "fix" that; this one reproduces it, and R3.3 sees
-    zero diff instead of an unexplained one.
+    This is what `CEntityMapData::GetNextKey 0x10136ee0` hands `CBaseEntity::ParseMapData
+    0x1009e280`, pair by pair. The entities unit's lexer **is** retail's tokeniser `0x10136ce0`
+    (`formats/map_entities_glb/lexer.py`), escapes included, so the unit's `keyValues[]` needs no
+    re-derivation: `sourceKey` is the authored spelling and `value` is the token the engine
+    actually stores.
 
-    The reconstruction is faithful where the regexes can see it: the quote characters (source
-    spelling and the unit's `quotedKey`/`quotedValue` flags) and the brace sequence, which is all
-    `\\{[^{}]*\\}` and `"([^"]*)"\\s+"([^"]*)"` depend on. Whitespace between tokens is free.
-    """
-
-    parts: list[str] = []
-    for row in entity_rows:
-        parts.append("{\n")
-        for keyvalue in row.get("keyValues") or []:
-            key = _requote(
-                str(keyvalue.get("sourceKey", keyvalue.get("key", ""))),
-                bool(keyvalue.get("quotedKey", True)),
-            )
-            value = _requote(
-                str(keyvalue.get("value", "")), bool(keyvalue.get("quotedValue", True))
-            )
-            length = int(keyvalue.get("byteLength", len(key) + len(value) + 1))
-            if len(key) + len(value) + 1 != length:
-                raise MapSidecarError(
-                    f"entity {row.get('index')} keyvalue {keyvalue.get('sourceKey')!r} re-escapes to "
-                    f"{len(key) + len(value) + 1} bytes, and the unit read it from {length}; the "
-                    "reconstructed lump would not be the text the legacy regexes ran over"
-                )
-            parts.append(f"{key} {value}\n")
-        parts.append("}\n")
-    return "".join(parts)
-
-
-def parse_entity_blocks(text: str) -> list[list[tuple[str, str]]]:
-    """ENTITIES lump text -> `[[(key, value), ...]]`, order and repeats preserved.
-
-    Verbatim from `UE_bsp_to_scene._parse_ent_blocks`; an entity may carry several outputs on the
-    same key, so repeats are kept and the last-wins rule is applied by the consumer.
+    Until 0018 story 21-7 this list was produced by rebuilding the lump as text and re-running the
+    legacy regexes over it. Those regexes have no escape rule, so an authored `\\"` ended the token
+    early and the remainder of the block re-paired: `sm_hub_1`'s `logic_auto` lost its `origin` and
+    gained a key spelled `),`, and three maps could not be reconstructed at all
+    (`la_ventruetower_2`, `la_ventruetower_3`, `sp_giovanni_2b`). Nine keyvalues in the whole
+    corpus carry an embedded quote and all nine are read correctly here.
     """
 
     return [
-        re.findall(r'"([^"]*)"\s+"([^"]*)"', block)
-        for block in re.findall(r"\{([^{}]*)\}", text, re.S)
+        [
+            (str(kv.get("sourceKey", kv.get("key", ""))), str(kv.get("value", "")))
+            for kv in (row.get("keyValues") or [])
+        ]
+        for row in entity_rows
     ]
 
 
-def entity_block_texts(text: str) -> list[str]:
-    """The same blocks with their braces, the form the legacy `re.finditer` scans hand around."""
+def folded_keys(pairs: Sequence[tuple[str, str]]) -> dict[str, str]:
+    """One block's keyvalues, folded and last-wins -- how the engine resolves a scalar key.
 
-    return [match.group(0) for match in re.finditer(r"\{[^{}]*\}", text)]
+    `CBaseEntity::KeyValue` compares the external name with `__strcmpi` (`101a5b0a`), so matching
+    is case-insensitive, and `ParseMapData 0x1009e280` applies the pairs in authored order, so the
+    last occurrence is what the live field holds. The key's trailing spaces are already gone in
+    retail (`10136f48-10136f5e`); this strips both ends, which is what the producer's own
+    `classname` probe has always done.
+    """
+
+    out: dict[str, str] = {}
+    for key, value in pairs:
+        out[key.strip().lower()] = value
+    return out
+
+
+def blocks_of_class(
+    pair_blocks: Sequence[Sequence[tuple[str, str]]], classname: str
+) -> list[dict[str, str]]:
+    """Every block whose `classname` is `classname`, folded, in lump order."""
+
+    wanted = classname.lower()
+    out: list[dict[str, str]] = []
+    for pairs in pair_blocks:
+        keys = folded_keys(pairs)
+        if keys.get("classname", "").strip().lower() == wanted:
+            out.append(keys)
+    return out
+
+
+def first_of_class(
+    pair_blocks: Sequence[Sequence[tuple[str, str]]], classname: str
+) -> dict[str, str]:
+    """The first block of a classname, folded, or an empty mapping.
+
+    First-in-lump-order is the engine's own `FindEntityByName(NULL, ...)` rule, which is what the
+    two-`sky_camera` map (`la_malkavian_4`) resolves by.
+    """
+
+    found = blocks_of_class(pair_blocks, classname)
+    return found[0] if found else {}
 
 
 def visibility_backing_models(blocks: Sequence[Sequence[tuple[str, str]]]) -> set[int]:
@@ -607,7 +615,9 @@ class SkyScope:
     own `FindEntityByName(NULL, ...)` rule.
     """
 
-    def __init__(self, units: MapUnits, blocks: Sequence[str]) -> None:
+    def __init__(
+        self, units: MapUnits, pair_blocks: Sequence[Sequence[tuple[str, str]]]
+    ) -> None:
         self.ok = False
         self.scale = 16.0
         self.origin_src: tuple[float, float, float] | None = None
@@ -625,19 +635,17 @@ class SkyScope:
                 (mins[k] + maxs[k]) * 0.5 for k in range(3)
             )
 
-        cameras = [block for block in blocks if '"sky_camera"' in block]
-        if not cameras:
+        camera = first_of_class(pair_blocks, "sky_camera")
+        if not camera:
             return
-        origin = re.search(
-            r'"origin"\s+"(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)"', cameras[0]
-        )
+        origin = _NUMERIC_TRIPLE.fullmatch(camera.get("origin", ""))
         if not origin:
             return
         self.origin_src = tuple(float(value) for value in origin.groups())
-        scale = re.search(r'"scale"\s+"(-?[\d.]+)"', cameras[0])
+        scale = _NUMERIC.fullmatch(camera.get("scale", ""))
         if scale:
             # CSkyCamera.scale is FIELD_INTEGER, so a fractional authored value truncates.
-            self.scale = float(int(float(scale.group(1)))) or 16.0
+            self.scale = float(int(float(scale.group(0)))) or 16.0
         self.area = self.area_of(self.origin_src)
         self.faces = self._area_faces(self.area)
         self.ok = True
@@ -871,12 +879,13 @@ DECAL_SOLIDITY_PROBE = 2.0
 #: returns 0.0 and the `or 1.0` in `vmt.parse` swallows it. Reproduced rather than corrected.
 DECAL_DEFAULT_SCALE = 1.0
 
-#: The legacy `infodecal` regexes, verbatim. The origin test is deliberately narrow -- a single
-#: space between components, no exponent, no comma decimal -- because a decal whose origin it
-#: cannot read is one the legacy exporter silently dropped.
-_DECAL_ORIGIN = re.compile(r'"origin"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"')
-_DECAL_TEXTURE = re.compile(r'"texture"\s+"([^"]+)"')
-_BRUSH_MODEL_KEY = re.compile(r'"model"\s+"\*(\d+)"')
+#: The tight vector test the `infodecal`, `info_player_start` and brush-origin readers share,
+#: kept exactly as narrow as it was: a single space between components, no exponent and no comma
+#: decimal, because a decal whose origin it cannot read is one the legacy exporter silently
+#: dropped. Only the text it is applied to changed in 0018 story 21-7: the keyvalue's own value,
+#: not the whole block.
+_SPACED_TRIPLE = re.compile(r"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)")
+_BRUSH_MODEL_KEY = re.compile(r"\*(\d+)")
 
 
 class MaterialUnits:
@@ -1006,20 +1015,23 @@ def _material_decal_scale(unit: dict[str, Any]) -> float:
     return DECAL_DEFAULT_SCALE
 
 
-def _brush_model_origins(blocks: Sequence[str]) -> dict[int, tuple[float, float, float]]:
+def _brush_model_origins(
+    pair_blocks: Sequence[Sequence[tuple[str, str]]],
+) -> dict[int, tuple[float, float, float]]:
     """Each brush model's authored world offset, from the entity that carries it.
 
     vbsp leaves a brush entity's faces at their authored coordinates and hands the entity an
     `origin` the engine adds back; the decal projector search needs the face where the player
-    sees it. `UE_bsp_to_scene` built the same table (`model_origin`) with the same two regexes.
+    sees it. `UE_bsp_to_scene` built the same table (`model_origin`) with the same two tests.
     """
 
     out: dict[int, tuple[float, float, float]] = {}
-    for block in blocks:
-        model = _BRUSH_MODEL_KEY.search(block)
+    for pairs in pair_blocks:
+        keys = folded_keys(pairs)
+        model = _BRUSH_MODEL_KEY.fullmatch(keys.get("model", ""))
         if not model:
             continue
-        origin = _DECAL_ORIGIN.search(block)
+        origin = _SPACED_TRIPLE.fullmatch(keys.get("origin", ""))
         if origin:
             out[int(model.group(1))] = tuple(float(value) for value in origin.groups())
     return out
@@ -1186,7 +1198,7 @@ def decal_rows(
 
     units = join.units
     materials = materials if materials is not None else MaterialUnits(root)
-    offsets = _brush_model_origins(join.text_blocks)
+    offsets = _brush_model_origins(join.pair_blocks)
     backings = visibility_backing_models(join.pair_blocks)
     normals, distances, polygons, basis = _projector_faces(units, backings, offsets)
 
@@ -1200,14 +1212,12 @@ def decal_rows(
     unresolved = 0
     unbound = 0
     keys: set[str] = set()
-    for block in join.text_blocks:
-        if '"infodecal"' not in block:
-            continue
-        origin = _DECAL_ORIGIN.search(block)
-        texture = _DECAL_TEXTURE.search(block)
+    for decal in blocks_of_class(join.pair_blocks, "infodecal"):
+        origin = _SPACED_TRIPLE.fullmatch(decal.get("origin", ""))
+        texture = decal.get("texture", "")
         if not (origin and texture):
             continue
-        key = shared_corpus.base_material(texture.group(1))
+        key = shared_corpus.base_material(texture)
         resolved = materials.decal_projector(key)
         if resolved is None or len(normals) == 0:
             unresolved += 1
@@ -1652,34 +1662,34 @@ def write_entities(
     return stats
 
 
-def _block_number(block: str, key: str, default: float = 0.0) -> float:
-    match = re.search(rf'"{key}"\s+"(-?[\d.]+)"', block, re.I)
-    return float(match.group(1)) if match else default
+def _key_number(keys: dict[str, str], key: str, default: float = 0.0) -> float:
+    match = _NUMERIC.fullmatch(keys.get(key, ""))
+    return float(match.group(0)) if match else default
 
 
-def _block_vector(block: str, key: str) -> list[float] | None:
-    match = re.search(rf'"{key}"\s+"([^"]+)"', block, re.I)
-    if not match:
+def _key_vector(keys: dict[str, str], key: str) -> list[float] | None:
+    raw = keys.get(key)
+    if not raw:
         return None
     try:
-        return [float(value) for value in match.group(1).split()][:3]
+        return [float(value) for value in raw.split()][:3]
     except ValueError:
         return None
 
 
-def _fog(block: str, distance_scale: float) -> dict[str, Any]:
-    colour = _block_vector(block, "fogcolor") or [0.0, 0.0, 0.0]
+def _fog(keys: dict[str, str], distance_scale: float) -> dict[str, Any]:
+    colour = _key_vector(keys, "fogcolor") or [0.0, 0.0, 0.0]
     return {
-        "on": _block_number(block, "fogenable") >= 1.0,
+        "on": _key_number(keys, "fogenable") >= 1.0,
         "rgb": [max(0.0, c) / 255.0 for c in colour],
-        "start": _block_number(block, "fogstart") * distance_scale * INCH_TO_CM,
-        "end": _block_number(block, "fogend") * distance_scale * INCH_TO_CM,
+        "start": _key_number(keys, "fogstart") * distance_scale * INCH_TO_CM,
+        "end": _key_number(keys, "fogend") * distance_scale * INCH_TO_CM,
     }
 
 
 def write_environment(
-    units: MapUnits, sky: SkyScope, blocks: Sequence[str], out_dir: Path,
-    root: Path | None = None,
+    units: MapUnits, sky: SkyScope, pair_blocks: Sequence[Sequence[tuple[str, str]]],
+    out_dir: Path, root: Path | None = None,
 ) -> dict[str, Any]:
     """`<map>.env`: the 2D sky name, the face-set flag and the two fog sets.
 
@@ -1694,19 +1704,20 @@ def write_environment(
     nothing outside `$ELYSIUM_EXPORT_V2_ROOT`.
     """
 
-    def first_block(classname: str) -> str:
-        for block in blocks:
-            if f'"{classname}"' in block:
-                return block
-        return ""
-
-    text = "".join(blocks)
-    match = re.search(r'"skyname"\s+"([^"]+)"', text, re.I)
-    skyname = match.group(1).lower() if match else None
+    # The first non-empty `skyname` in lump order, whichever entity authors it -- the legacy scan
+    # ran one case-insensitive search over the whole concatenated text and took the first hit.
+    skyname = None
+    for pairs in pair_blocks:
+        for key, value in pairs:
+            if key.strip().lower() == "skyname" and value:
+                skyname = value.lower()
+                break
+        if skyname is not None:
+            break
     sky_ok = bool(skyname) and sky_faces_published(skyname, root)
 
-    world_fog = _fog(first_block("worldspawn"), 1.0)
-    sky_fog = _fog(first_block("sky_camera"), sky.scale if sky.ok else 1.0)
+    world_fog = _fog(first_of_class(pair_blocks, "worldspawn"), 1.0)
+    sky_fog = _fog(first_of_class(pair_blocks, "sky_camera"), sky.scale if sky.ok else 1.0)
     lines = [f"skybox {1 if sky_ok else 0}"]
     if skyname:
         lines.append(f"skyname {skyname}")
@@ -1739,18 +1750,18 @@ def write_sky(units: MapUnits, sky: SkyScope, has_sky_geometry: bool, out_dir: P
     return True
 
 
-def write_spawn(units: MapUnits, blocks: Sequence[str], out_dir: Path) -> bool:
+def write_spawn(
+    units: MapUnits, pair_blocks: Sequence[Sequence[tuple[str, str]]], out_dir: Path
+) -> bool:
     """`<map>.spawn`: `info_player_start` origin and yaw, Unreal cm.
 
     Source angles are "pitch yaw roll"; yaw is the middle value and is negated, because the Y flip
     reverses its sense. The first `info_player_start` block wins, as in the legacy loop.
     """
 
-    for block in blocks:
-        if '"info_player_start"' not in block:
-            continue
-        origin = re.search(r'"origin"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"', block)
-        angles = re.search(r'"angles"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"', block)
+    for keys in blocks_of_class(pair_blocks, "info_player_start"):
+        origin = _SPACED_TRIPLE.fullmatch(keys.get("origin", ""))
+        angles = _SPACED_TRIPLE.fullmatch(keys.get("angles", ""))
         if not origin:
             return False
         yaw = float(angles.group(2)) if angles else 0.0
@@ -1957,7 +1968,6 @@ class MapJoin:
     units: MapUnits
     sky: SkyScope
     pair_blocks: list[list[tuple[str, str]]]
-    text_blocks: list[str]
     scenes: dict[str, Any]
     brush_meshes: dict[int, str]
 
@@ -1972,14 +1982,12 @@ def prepare_join(map_name: str, root: Path | None = None, compile_water=None) ->
     """
 
     units = read_units(map_name, root)
-    lump_text = entity_lump_text(units.entities["entities"])
-    pair_blocks = parse_entity_blocks(lump_text)
-    text_blocks = entity_block_texts(lump_text)
-    sky = SkyScope(units, text_blocks)
+    pair_blocks = entity_pair_blocks(units.entities["entities"])
+    sky = SkyScope(units, pair_blocks)
     backings = visibility_backing_models(pair_blocks)
     scenes = meshed_faces(units, sky, backings, compile_water)
     brush_meshes = {index: f"brush_{index}" for index in sorted(scenes["brush"])}
-    return MapJoin(units, sky, pair_blocks, text_blocks, scenes, brush_meshes)
+    return MapJoin(units, sky, pair_blocks, scenes, brush_meshes)
 
 
 def write_sidecars(
@@ -2009,7 +2017,6 @@ def write_sidecars(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     pair_blocks = join.pair_blocks
-    text_blocks = join.text_blocks
     sky = join.sky
     scenes = join.scenes
     brush_meshes = join.brush_meshes
@@ -2018,9 +2025,9 @@ def write_sidecars(
     report["hulls"] = write_hulls(units, sky, out_dir)
     report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir, entity_fields)
     report["lights"] = write_lights(units, sky, out_dir)
-    report["env"] = write_environment(units, sky, text_blocks, out_dir, root)
+    report["env"] = write_environment(units, sky, pair_blocks, out_dir, root)
     report["sky"] = write_sky(units, sky, bool(scenes["sky"]), out_dir)
-    report["spawn"] = write_spawn(units, text_blocks, out_dir)
+    report["spawn"] = write_spawn(units, pair_blocks, out_dir)
     report["ropes"] = write_ropes(units, pair_blocks, out_dir)
     report["dispcol"] = write_displacement_collision(units, scenes["world"], out_dir)
     report["brushMeshes"] = len(brush_meshes)
