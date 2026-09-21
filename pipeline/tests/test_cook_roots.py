@@ -64,7 +64,7 @@ def test_root_never_manages_itself_and_duplicate_exports_are_rejected():
     with pytest.raises(roots.CookRootError, match="duplicate"):
         roots.plan_roots(source, rows + [rows[0]])
     with pytest.raises(roots.CookRootError, match="escaped"):
-        roots.plan_roots(source, published(["/ElysiumBaked/Shared/SM_legacy"]))
+        roots.plan_roots(source, published(["/ElysiumBaked/Props/SM_legacy"]))
 
 
 def test_label_registration_is_specific_and_non_editor_only():

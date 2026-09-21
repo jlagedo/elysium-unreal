@@ -20,7 +20,7 @@ Findings (ch_hub_1 / sm_hub_1 / sp_tutorial_1 / hw_hub_1 / la_hub_1):
 """
 import struct, sys, collections
 from elysium_pipeline.formats import bsp, install
-from elysium_pipeline.exporters import UE_bsp_to_scene as B
+from elysium_pipeline.shared_corpus import base_material
 
 FS = 104
 LUMPS = {8: "LIGHTING", 15: "WORLDLIGHTS", 51: "LEAF_AMBIENT_HDR",
@@ -53,7 +53,7 @@ def main(name):
             return ""
         tb = struct.unpack_from("<i", texinfo, ti * 72 + 68)[0]
         nid = struct.unpack_from("<i", texdata, tb * 32 + 12)[0]
-        return B.base_material(names.get(table[nid], ""))
+        return base_material(names.get(table[nid], ""))
 
     style_idx = collections.Counter()
     daynight_nonzero = 0

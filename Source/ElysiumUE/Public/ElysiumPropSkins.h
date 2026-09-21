@@ -64,12 +64,11 @@ struct FElysiumPropSkinModel
 	UPROPERTY(EditAnywhere) int32 FamilyCount = 0;
 };
 
-// The corpus prop-skin table. Authored either by pipeline/unreal/bake_map.py (the legacy shared
-// bake, one asset for the whole corpus under `/ElysiumBaked/Shared/Meshes`) or by
-// pipeline/unreal/import_models.py (the V2 lane, `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`)
-// -- one asset either way, never
-// per map, so a single load reaches every alternate material in the corpus and the hard references
-// keep them all reachable from a level that places any of them.
+// The corpus prop-skin table, authored by pipeline/unreal/import_models.py at
+// `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`. One asset, never per map, so a single load reaches
+// every alternate material in the corpus and the hard references keep them all reachable from a
+// level that places any of them. (0018 story 21-5 deleted the legacy shared bake that authored a
+// second copy under `/ElysiumBaked/Shared/Meshes`.)
 UCLASS(BlueprintType)
 class ELYSIUMUE_API UElysiumPropSkinSet : public UDataAsset
 {

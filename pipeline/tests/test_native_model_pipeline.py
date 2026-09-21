@@ -84,17 +84,14 @@ def test_clean_profile_keeps_the_v2_corpus_and_kind_roots_it_reads(tmp_path):
         mock.patch.object(export_manager, "run_offline_profile", return_value=([], {})),
         mock.patch.object(export_manager, "_bake_profile_maps"),
         mock.patch.object(export_manager, "ensure_policy_content"),
-        mock.patch.object(export_manager, "ensure_corpus_bake"),
         mock.patch.object(flow, "import_map_dependencies") as deps,
         mock.patch.object(export_manager.ContentDigestCache, "write"),
     ):
         export_manager.export_profile(config, None, "all", clean=True)
     # The clean itself lives in run_offline_profile (mocked above): exercise it directly.
     with (
-        mock.patch.object(export_manager, "ensure_corpus_export"),
         mock.patch.object(export_manager, "_decoder_closures", side_effect=RuntimeError("stop")),
         mock.patch("elysium_pipeline.formats.install.build_index", return_value={}),
-        mock.patch("elysium_pipeline.exporters.export_all.maps_for_profile", return_value=[]),
         mock.patch("elysium_pipeline.exporters.export_all.bundles_for_profile", return_value=[]),
     ):
         with pytest.raises(RuntimeError, match="stop"):

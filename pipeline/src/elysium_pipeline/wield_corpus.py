@@ -121,14 +121,6 @@ def skeletal_asset(name):
     return "SK_" + safe_name(name)
 
 
-def baked_mesh(name):
-    return f"{BAKED_ROOT}/{name}/{mesh_asset(name)}"
-
-
-def baked_skeletal(name):
-    return f"{BAKED_ROOT}/{name}/{skeletal_asset(name)}"
-
-
 # --------------------------------------------------------------------- the item join
 
 class Row(NamedTuple):
@@ -844,7 +836,7 @@ def npc_carried(idx):
     Player obtainability is **not** derivable here -- it rests on secondary walkthrough evidence
     that `docs/vtmb/wielded_weapons.md` carries -- so only the measured half is reported.
     """
-    from elysium_pipeline.exporters.UE_bsp_to_scene import _parse_ent_blocks
+    from elysium_pipeline.exporters.UE_map_sidecars import parse_entity_blocks
     from elysium_pipeline.formats import bsp, install
 
     out = set()
@@ -856,7 +848,7 @@ def npc_carried(idx):
         except (OSError, struct.error) as exc:
             print(f"[wield] {name}: entity lump unreadable ({type(exc).__name__}: {exc})")
             continue
-        for pairs in _parse_ent_blocks(text):
+        for pairs in parse_entity_blocks(text):
             keys = {key.casefold(): value for key, value in pairs}
             if not keys.get("classname", "").startswith("npc_"):
                 continue

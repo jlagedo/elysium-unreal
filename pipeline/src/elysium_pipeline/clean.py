@@ -27,9 +27,6 @@ MANIFEST_FILE = ".elysium-manifest.json"
 DOMAINS = (
     "maps",
     "cfg",
-    # The shared static corpus: every texture, material and static model in the install, decoded
-    # once. Every map export and every bake resolves against it, so it is its own domain.
-    "corpus",
     "particles",
     # `policy` is not an export bundle in the exporters' sense: it is the generated
     # /Game/ElysiumGenerated packages `ensure_policy_content` writes, cleared by every profile

@@ -34,7 +34,6 @@ from pipeline.unreal import bake_lib as bl  # noqa: E402
 from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
 from elysium_pipeline import map_bake_stages  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
-from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.asset_names import (  # noqa: E402
     LIGHTSTYLE_KEY_SUFFIX, brush_slot_style)
 from elysium_pipeline.paths import export_root  # noqa: E402
@@ -226,14 +225,6 @@ FOG_CPD_FLOATS = 6
 LIGHT_STYLE_CPD_SLOT = 6
 LIGHT_STYLE_CPD_DEFAULT = 1.0
 
-# A map bakes only what carries its own inputs. Prop meshes and every surface texture and
-# material belong to the corpus scope, which runs `shared_corpus.STAGES` instead.
-
-# Static models per prop-stage checkpoint. The corpus builds thousands of meshes in one editor
-# process, so the stage saves, reports and releases each batch instead of holding the whole set
-# until the end -- a run that dies keeps every batch that landed.
-PROP_BATCH = 250
-
 # Commandlet frame cadence. A `-run=pythonscript` process never reaches `FEngineLoop::Tick`, so
 # every D3D12 free stays queued behind the frame fence until a frame is simulated
 # (`UElysiumMapBakeLibrary::TickCommandletFrames`), and the fast allocator retires at most one
@@ -241,13 +232,6 @@ PROP_BATCH = 250
 # commandlets pump on the same 256-item cadence -- and each release point ticks a short run.
 MESH_TICK_INTERVAL = 256
 RELEASE_TICK_FRAMES = 4
-
-# The shared, map-independent scope: every texture, material and static model in the install.
-# It is a scope name rather than a map name -- `$ELYSIUM_EXPORT_ROOT/shared` in,
-# `/ElysiumBaked/Shared` out -- and only the three stages a bodiless corpus has inputs for apply
-# to it. Its names are `elysium_pipeline.shared_corpus`'s; keep the C++ twin in
-# FElysiumContentPaths in sync with that module.
-
 
 # Both are named profiles from Config/DefaultEngine.ini rather than per-channel edits, because
 # only the profile name survives the .umap save/load round-trip: loading re-applies the profile
@@ -258,40 +242,6 @@ PROFILE_PROP_SOLID = "ElysiumPropSolid"  # blocks the pawn, occludes +use, picka
 
 def log(msg):
     unreal.log("[bake] %s" % msg)
-
-
-#: The shared corpus's two documents, parsed and validated once per process. Both are
-#: install-wide and identical for every map a batch bakes, so a multi-map run reads them
-#: once instead of per map. The cached dicts are read-only to every bake.
-_CORPUS_DOCUMENTS = None
-
-
-def _corpus_documents():
-    """(materials, manifest) for the shared corpus, validated, or None after a logged failure."""
-    global _CORPUS_DOCUMENTS
-    if _CORPUS_DOCUMENTS is not None:
-        return _CORPUS_DOCUMENTS
-    materials_file = os.fspath(SC.materials_path(OUT_ROOT))
-    manifest_file = os.fspath(SC.manifest_path(OUT_ROOT))
-    for path in (materials_file, manifest_file):
-        if not os.path.isfile(path):
-            fail("no shared corpus at %s (run: uv run elysium export bundle corpus)" % path)
-            return None
-    with open(materials_file, "r", encoding="utf-8") as handle:
-        materials = SC.check_materials(json.load(handle))["materials"]
-    with open(manifest_file, "r", encoding="utf-8") as handle:
-        manifest = SC.check_manifest(json.load(handle))
-    _CORPUS_DOCUMENTS = (materials, manifest)
-    return _CORPUS_DOCUMENTS
-
-
-#: Corpus material keys already arbitrated to an on-mount instance path this process.
-#: Paths only, never UObject references: a Python-held wrapper is a root for the editor's
-#: collector, and pinning every corpus instance (with its texture closure) across a
-#: multi-map batch would defeat the per-map garbage collection that bounds the bake's
-#: memory. A cache hit still loads the asset, but skips the per-key path derivation and
-#: `does_asset_exist` arbitration.
-_CORPUS_MIC_PATHS = {}
 
 
 def _make_movable(component):
@@ -632,10 +582,6 @@ class AssetTracker(object):
 
 
 class Bake(object):
-    #: The scope this bake may prune. Empty is a map: it authors only its own packages, so
-    #: `bake_lib` refuses it the shared corpus, whose wanted-set no map knows.
-    prune_scope = ""
-
     def __init__(self, map_name, tracker, digest_cache):
         self.map = map_name
         self.tracker = tracker
@@ -652,12 +598,6 @@ class Bake(object):
         # the rest of the map's export; `MapBakeV2` re-points it at the geometry staging tree
         # once it has read the staged weather payload.
         self.weather_dir = self.dir
-        # The shared corpus: one decode per source, so one asset per source. A map resolves these
-        # and never authors them -- the corpus scope owns their receipts and their pruning.
-        self.corpus_dir = os.fspath(SC.corpus_dir(OUT_ROOT))
-        self.shared_tex_pkg = SC.BAKED_TEXTURES
-        self.shared_mat_pkg = SC.BAKED_MATERIALS
-        self.shared_mesh_pkg = SC.BAKED_MESHES
         from elysium_pipeline.asset_paths import map_package
         self.pkg = map_package(map_name)
         # A map's own packages hold only what carries a map-specific input: the baked env cubemaps,
@@ -668,26 +608,15 @@ class Bake(object):
         self.decal_mat_pkg = "%s/Materials/Decals" % self.pkg
         self.mesh_pkg = "%s/Meshes" % self.pkg
         self.brush_pkg = "%s/Brushes" % self.pkg
-        self.prop_pkg = "%s/Props" % self.pkg
         self.weather_pkg = "%s/Weather" % self.pkg
-        self.corpus_materials = {}   # material key -> definition (the whole install)
-        self.local_materials = {}    # material key -> definition only this map carries
-        self.corpus_manifest = {}    # the whole census
-        self.corpus_textures = {}    # texture key -> {"files": {...}, "size": [...]}
 
         self.world_obj = None            # ObjModel
         self.world_mats = {}             # name -> MatDef
         self.blend = []                  # per-vertex WVT weight
         self.decals = []                 # DecalDef, in sidecar order
-        self.textures = {}               # (package, asset name) -> Texture2D
-        self.cubemaps = {}               # exact MTL envmap id -> TextureCube
         self.materials = {}              # (package, material key) -> MaterialInstanceConstant
-        self.prop_models = {}            # stem -> ObjModel
         self.brush_models = {}           # brush_<model> -> local-space ObjModel
         self.brush_blend = {}            # stem -> per-vertex WVT weight
-        self.prop_mats = {}              # stem -> {name: MatDef}
-        self.prop_skins = {}             # stem -> {family: {authored material: family material}}
-        self.prop_phys = {}              # stem -> {"mass": kg, "hulls": [(verts, tris)]}
         self.masters = {}
         self.error_material_asset = None  # the shared checkerboard, authored on the first miss
         self.error_keys = {}             # material name that resolved no VMT -> slots bound to it
@@ -727,166 +656,6 @@ class Bake(object):
             self.masters[key] = asset
         return True
 
-    def load_corpus(self):
-        """Bind the shared corpus's two documents plus this map's own local material overrides.
-
-        The documents themselves are parsed and validated once per process
-        (`_corpus_documents`); only the map-local overrides are this bake's own read."""
-        documents = _corpus_documents()
-        if documents is None:
-            return False
-        self.corpus_materials, self.corpus_manifest = documents
-        self.corpus_textures = self.corpus_manifest["textures"]
-        local_file = os.path.join(self.dir, "%s.materials.json" % self.map)
-        if os.path.isfile(local_file):
-            with open(local_file, "r", encoding="utf-8") as handle:
-                self.local_materials = SC.check_materials(json.load(handle))["materials"]
-        return True
-
-    def load_sources(self):
-        obj_path = os.path.join(self.dir, "%s.obj" % self.map)
-        if not os.path.isfile(obj_path):
-            fail("no export at %s" % obj_path)
-            return False
-        if not self.load_corpus():
-            return False
-        self.env = self._read_env()
-        start = time.time()
-        self.world_obj = bl.read_obj(obj_path)
-        self.world_mats = bl.read_mtl(
-            os.path.join(self.dir, "%s.mtl" % self.map),
-            corpus=self.corpus_materials, local=self.local_materials)
-        self.blend = bl.read_floats(os.path.join(self.dir, "%s.blend" % self.map))
-        self.decals = bl.read_decals(os.path.join(self.dir, "%s.decals" % self.map))
-        weather_path = os.path.join(self.dir, "%s.weather.json" % self.map)
-        if os.path.isfile(weather_path):
-            with open(weather_path, "r", encoding="utf-8") as handle:
-                self.weather = json.load(handle)
-            if (self.weather.get("schema") != "elysium.map-weather"
-                    or self.weather.get("version") != 1):
-                fail("unsupported weather sidecar: %s" % weather_path)
-                return False
-        log("world: %d verts / %d tris / %d groups / %d materials / %d decals (%.1fs)" % (
-            len(self.world_obj.positions), self.world_obj.tri_count,
-            len(self.world_obj.groups), len(self.world_mats), len(self.decals),
-            time.time() - start))
-
-        self._load_placed_prop_materials()
-
-        brush_dir = os.path.join(self.dir, "brushes")
-        if os.path.isdir(brush_dir):
-            for entry in sorted(os.listdir(brush_dir)):
-                if not entry.endswith(".obj"):
-                    continue
-                stem = entry[:-4]
-                self.brush_models[stem] = bl.read_obj(os.path.join(brush_dir, entry))
-                self.brush_blend[stem] = bl.read_floats(
-                    os.path.join(brush_dir, stem + ".blend"))
-            log("brushes: %d local-space models / %d tris" % (
-                len(self.brush_models),
-                sum(m.tri_count for m in self.brush_models.values())))
-        return True
-
-    def _load_placed_prop_materials(self):
-        """The material and skin tables for the models THIS map places.
-
-        A map builds no prop geometry -- the corpus owns every mesh -- but its level stage still
-        bakes a placement's alternate skin in as material overrides, because a GAME_LUMP prop is
-        not an entity and never changes skin at runtime. That needs two small joins and no mesh:
-        the manifest's own slot -> material key table, and the model's `.skins` sidecar.
-        """
-        stems = set()
-        props = os.path.join(self.dir, "%s.props" % self.map)
-        if os.path.isfile(props):
-            with open(props, "r", encoding="utf-8", errors="replace") as handle:
-                for line in handle:
-                    tok = line.split()
-                    if tok:
-                        stems.add(tok[0])
-        ents = os.path.join(self.dir, "%s.ents" % self.map)
-        if os.path.isfile(ents):
-            with open(ents, "r", encoding="utf-8") as handle:
-                for entity in json.load(handle).get("entities", []):
-                    stem = entity.get("model_mesh", "")
-                    if stem:
-                        stems.add(stem)
-        models = self.corpus_manifest.get("models", {})
-        prop_dir = os.path.join(self.corpus_dir, SC.PROPS)
-        missing = []
-        for stem in sorted(stems):
-            row = models.get(stem)
-            if row is None:
-                missing.append(stem)
-                continue
-            # The manifest already states each slot under the fold the OBJ's `usemtl`, the
-            # `.skins` sidecar and the corpus `.mtl` all use, so the join is verbatim. Applying a
-            # second fold here would silently miss the models whose names the two folds treat
-            # differently -- `bl.safe_name` collapses runs and drops `.` and `-`.
-            self.prop_mats[stem] = {
-                slot: bl.mat_from_record(slot, self.corpus_materials[key], key)
-                for slot, key in row.get("materials", {}).items()
-                if key in self.corpus_materials
-            }
-            skins = bl.read_skins(os.path.join(prop_dir, stem + ".skins"))
-            if skins:
-                self.prop_skins[stem] = skins
-        if missing:
-            fail("%d placed model(s) are absent from the shared corpus: %s"
-                 % (len(missing), ", ".join(missing[:8])))
-        log("placed props: %d model(s) joined to the corpus, %d with alternate skins"
-            % (len(stems) - len(missing), len(self.prop_skins)))
-
-    def _load_prop_sources(self):
-        """Read the corpus's `props/` -- one OBJ + MTL per model, plus its skin and physics
-        sidecars. One model, one decode, whichever maps place it."""
-        prop_dir = os.path.join(self.corpus_dir, SC.PROPS)
-        if os.path.isdir(prop_dir):
-            start = time.time()
-            for entry in sorted(os.listdir(prop_dir)):
-                if not entry.endswith(".obj"):
-                    continue
-                stem = entry[:-4]
-                model = bl.read_obj(os.path.join(prop_dir, entry))
-                self.prop_models[stem] = model
-                self.prop_mats[stem] = bl.read_mtl(
-                    os.path.join(prop_dir, model.mtl_name or (stem + ".mtl")),
-                    corpus=self.corpus_materials)
-                skins = bl.read_skins(os.path.join(prop_dir, stem + ".skins"))
-                if skins:
-                    self.prop_skins[stem] = skins
-                # A `.phys` marks a prop_physics model and carries VtMB's own convex
-                # collision + authored mass. Its absence is meaningful, not a gap: the
-                # model then has no collision model at all, and the runtime leaves the
-                # prop visible but inert, as CPhysicsProp::CreateVPhysics does.
-                phys = bl.read_phys(os.path.join(prop_dir, stem + ".phys"))
-                if phys and phys["hulls"]:
-                    self.prop_phys[stem] = phys
-            tris = sum(m.tri_count for m in self.prop_models.values())
-            hulls = sum(len(p["hulls"]) for p in self.prop_phys.values())
-            log("props: %d models / %d tris / %d with alternate skins / "
-                "%d physics (%d convex hulls) (%.1fs)" % (
-                    len(self.prop_models), tris, len(self.prop_skins),
-                    len(self.prop_phys), hulls, time.time() - start))
-
-    # ---------------------------------------------------------------- textures
-
-    def _texture_jobs(self, mats, base_dir, package):
-        """Collect (source file, asset name, role) for every texture the material set uses."""
-        roles = {}
-        for mat in mats.values():
-            for path, role in ((mat.albedo, "albedo"), (mat.emissive, "albedo"),
-                               (mat.base_tex2, "albedo"), (mat.bump, "normal"),
-                               (mat.refract_map, "normal"),
-                               (mat.env_mask, "mask")):
-                if not path:
-                    continue
-                src = os.path.join(base_dir, path.replace("/", os.sep))
-                name = SC.texture_asset(path)
-                # First use wins the role; a texture bound as both colour and mask is rare
-                # and the colour reading is the safe default.
-                roles.setdefault(name, (src, role))
-        return [(name, src, role) for name, (src, role) in sorted(roles.items())]
-
     def _import_texture_jobs(self, jobs, package, expected_class="Texture2D", prune_prefix=""):
         wanted = set()
         dirty = []
@@ -923,8 +692,8 @@ class Bake(object):
             result[name] = texture
             self.saved.append((object_path, texture))
             self.tracker.built("textures")
-        pruned = (bl.prune_package_prefix(package, prune_prefix, wanted, self.prune_scope)
-                  if prune_prefix else bl.prune_package(package, wanted, self.prune_scope))
+        pruned = (bl.prune_package_prefix(package, prune_prefix, wanted)
+                  if prune_prefix else bl.prune_package(package, wanted))
         self.tracker.pruned("textures", pruned)
         return result
 
@@ -948,7 +717,7 @@ class Bake(object):
         # rather than deleted -- the surface textures directly in it are the retired set.
         tex_pkg = "%s/Textures" % self.pkg
         if unreal.EditorAssetLibrary.does_directory_exist(tex_pkg):
-            dropped += bl.prune_package(tex_pkg, set(), self.prune_scope)
+            dropped += bl.prune_package(tex_pkg, set())
             # An emptied directory goes with its retired set: only `Cubes` can still hold
             # assets, and a directory that no longer exists ends this sweep at the
             # existence check on every later run.
@@ -968,41 +737,6 @@ class Bake(object):
         self._stage_wet_cubemaps()
         self._stage_weather_texture()
         log("textures: %s" % self.tracker.summary("textures"))
-
-    def _stage_wet_cubemaps(self):
-        """The legacy wetness path's `SourceCube`: sm_hub_1's baked `cubemapdefault`, stamped into
-        its per-map wet material instances. The V2 lane (R5.4) has no per-map material instance
-        to stamp it into -- wetness rides `MPC_ElysiumEnvironment` and the shared `MI_` (R5.3) --
-        and overrides this to prune the package instead."""
-        wet_materials = [mat for mat in self.world_mats.values() if mat.wet]
-        if self.map == "sm_hub_1":
-            if len(wet_materials) != 14:
-                raise SystemExit(
-                    "[bake] sm_hub_1 requires 14 GlobalWetness materials, found %d"
-                    % len(wet_materials))
-            cube_ids = {mat.env_cube for mat in wet_materials}
-            if cube_ids != {"cubemapdefault"}:
-                raise SystemExit(
-                    "[bake] sm_hub_1 wet materials require cubemapdefault, found %r"
-                    % sorted(cube_ids))
-            jobs = []
-            for cube_id in sorted(cube_ids):
-                source = os.path.join(self.dir, "tex", "cube", cube_id + ".dds")
-                if not os.path.isfile(source):
-                    raise SystemExit("[bake] wet cubemap missing: %s" % source)
-                jobs.append(("TC_" + bl.safe_name(cube_id), source, "cube"))
-            imported = self._import_texture_jobs(jobs, self.cube_pkg, "TextureCube")
-            for cube_id in sorted(cube_ids):
-                name = "TC_" + bl.safe_name(cube_id)
-                texture = imported.get(name)
-                if not texture or texture.get_class().get_name() != "TextureCube":
-                    raise SystemExit(
-                        "[bake] %s/%s did not import as TextureCube" % (self.cube_pkg, name))
-                self.cubemaps[cube_id] = texture
-            log("wet cubemaps: %d into %s" % (len(imported), self.cube_pkg))
-        else:
-            pruned = bl.prune_package(self.cube_pkg, set(), self.prune_scope)
-            self.tracker.pruned("textures", pruned)
 
     def _stage_weather_texture(self):
         """The rain height field, the one map-owned texture both lanes import.
@@ -1028,37 +762,6 @@ class Bake(object):
             if unreal.EditorAssetLibrary.does_asset_exist(path):
                 bl.delete_owned_asset(path)
                 self.tracker.pruned("textures", 1)
-
-    def _all_prop_mats(self):
-        """Every prop material, by its corpus key. A model names a material; the key it resolved
-        to is its identity, so two models drawing one material draw one instance."""
-        merged = {}
-        for mats in self.prop_mats.values():
-            for mat in mats.values():
-                merged[mat.material_key] = mat
-        return merged
-
-    def _material_sets(self):
-        """(materials, material package, texture package) for every set this scope AUTHORS.
-
-        A map authors only the materials that stamp something of its own into the instance: the
-        ones VBSP patched to a baked cubemap and the wetness-driven surfaces that carry its
-        weather. Everything else is the corpus's, and a map that authored a second copy would be
-        the duplication this whole scope split removes.
-
-        R7.2 ruling 2: a decal is no longer one of them. Its fog is not stamped into a per-map
-        instance any more -- the decal subsystem owns a load-time MID over the shared
-        `MI_<unit>_Decal` (ruling 4) -- so the per-map `Materials/Decals` package is authored by
-        nobody and pruned by the empty set below.
-        """
-        world = {}
-        for key, mat in self.world_mats.items():
-            if not SC.is_map_scoped_material(
-                    key, decal=mat.decal, wetness_driven=mat.wetness_driven, local=mat.local):
-                continue
-            world[key] = mat
-        return ((world, self.mat_pkg, self.shared_tex_pkg),
-                ({}, self.decal_mat_pkg, self.shared_tex_pkg))
 
     def error_material(self):
         """The material a slot binds when its own name resolved no `.vmt`. Authored on first use,
@@ -1089,216 +792,16 @@ class Bake(object):
         self.error_keys[key] += 1
         return self.error_material()
 
-    def material_for(self, key):
-        """The material instance one world surface binds.
-
-        Which package holds it follows the same predicate the material stage authored it under: a
-        surface whose material stamps this map's cubemap, fog or weather into the instance binds
-        the map's own copy; every other surface binds the corpus's single instance. Looking in one
-        package only would leave the other set bound to nothing, which draws the master's own
-        placeholder rather than failing.
-        """
-        mat = self.world_mats.get(key)
-        if mat is None:
-            # The `.mtl` carries this surface's `newmtl` with no `mat` line, so its material name
-            # resolved no `.vmt` -- the engine's own miss, answered the engine's own way.
-            return self.error_bind(key, self.map)
-        if SC.is_map_scoped_material(key, decal=mat.decal, wetness_driven=mat.wetness_driven,
-                                     local=mat.local):
-            # R7.2: one per-map package, never a `Materials/Decals` split -- a `$decal` world face
-            # on this lane is an ordinary world surface (its projector layer is the `.decals`
-            # sidecar's, on the shared `MI_<unit>_Decal`).
-            return self.materials.get((self.mat_pkg, key))
-        return self.materials.get((self.shared_mat_pkg, mat.material_key))
-
-    def _shared_material_keys(self):
-        """Every corpus material this scope only RESOLVES, so a mesh stage can bind it."""
-        keys = {}
-        for key, mat in self.world_mats.items():
-            if not SC.is_map_scoped_material(
-                    key, decal=mat.decal, wetness_driven=mat.wetness_driven, local=mat.local):
-                keys[mat.material_key] = mat
-        return keys
-
-    def _master_for(self, mat):
-        # R7.2 ruling 2: no decal branch. `M_Decal` is retired; a `$decal` world face here takes
-        # the master its blend selects, and the V2 lane rebinds it onto the projector instance.
-        if mat.additive:
-            return self.masters["additive"]
-        if mat.refract:
-            return self.masters["refract"]
-        if mat.glass:
-            return self.masters["glass"]
-        # Before `blend`, because the exporter writes `water 1` INSTEAD of `blend 1` -- a water
-        # surface never carries the translucent flag, so testing `blend` alone bakes every canal
-        # and sewer as an opaque Nanite card. Most water authors no $basetexture either, so that
-        # card resolves no albedo and draws the master's own placeholder.
-        if mat.water:
-            return self.masters["translucent"]
-        if mat.blend:
-            return self.masters["translucent"]
-        if mat.scissor:
-            return self.masters["masked"]
-        return self.masters["opaque"]
-
-    def _material_recipe(self, mat, tex_pkg):
-        values = {name: getattr(mat, name) for name in mat.__slots__}
-        values.update({
-            "opaque": mat.opaque,
-            "chromatic": mat.chromatic,
-            "tint_luma": mat.tint_luma,
-            "master": _asset_path(self._master_for(mat)),
-            "textures": {
-                key: ("%s/%s" % (tex_pkg, SC.texture_asset(path))) if path else ""
-                for key, path in {
-                    "albedo": mat.albedo,
-                    "emissive": mat.emissive,
-                    "base_tex2": mat.base_tex2,
-                    "bump": mat.bump,
-                    "refract_map": mat.refract_map,
-                    "env_mask": mat.env_mask,
-                }.items()
-            },
-            "constants": {
-                "emissive": EMISSIVE_SCALE,
-                "bump": BUMP_AMOUNT,
-                "env": ENV_STRENGTH,
-                "rough_base": ROUGH_BASE,
-                "rough_reflect": ROUGH_REFLECT,
-                "spec_base": SPEC_BASE,
-                "spec_reflect": SPEC_REFLECT,
-            },
-        })
-        if mat.env_mask:
-            # `_bind` stamps EnvMaskCoarseMip out of this file's own PNG header, so the mask's
-            # bytes are part of the instance rather than only of the texture asset it binds.
-            source = os.path.join(self.corpus_dir, mat.env_mask.replace("/", os.sep))
-            if os.path.isfile(source):
-                values["env_mask_sha256"] = self._file_sha256(source)
-            else:
-                fail("material %s names a missing env mask: %s" % (mat.name, source))
-                values["env_mask_sha256"] = "missing"
-        if mat.wet:
-            values["weather"] = self.weather
-        return values
-
-    def _bind(self, mic, mat, tex_pkg):
-        """Bind the same named parameters FElysiumMaterialFactory::Build binds."""
-        def tex(path):
-            if not path:
-                return None
-            return self.textures.get((tex_pkg, SC.texture_asset(path)))
-
-        if mat.refract:
-            normal = tex(mat.refract_map)
-            if normal:
-                bl.set_tex_param(mic, "RefractMap", normal)
-            bl.set_scalar_param(mic, "SourceRefractAmount", mat.refract_amount)
-            return
-
-        albedo = tex(mat.albedo)
-        if albedo:
-            bl.set_tex_param(mic, "Albedo", albedo)
-        # The additive master is unlit and carries none of the lit feature parameters.
-        if mat.additive:
-            return
-        emissive = tex(mat.emissive)
-        if emissive:
-            bl.set_tex_param(mic, "Emissive", emissive)
-            bl.set_scalar_param(mic, "EmissiveScale", EMISSIVE_SCALE)
-        bump = tex(mat.bump)
-        if bump:
-            bl.set_tex_param(mic, "BumpMap", bump)
-            bl.set_scalar_param(mic, "BumpAmount", BUMP_AMOUNT)
-        if mat.env_cube:
-            mask = tex(mat.env_mask)
-            if mask:
-                bl.set_tex_param(mic, "EnvMask", mask)
-                mask_source = os.path.join(self.corpus_dir, mat.env_mask.replace("/", os.sep))
-                bl.set_scalar_param(mic, "EnvMaskCoarseMip", png_coarse_mip(mask_source))
-            # An unmasked reflective surface reflects uniformly; the master's own white
-            # default stands in for the runtime's 1x1 white texture.
-            bl.set_scalar_param(mic, "EnvStrength", ENV_STRENGTH)
-            bl.set_scalar_param(mic, "RoughBase", ROUGH_BASE)
-            bl.set_scalar_param(mic, "RoughReflect", ROUGH_REFLECT)
-            bl.set_scalar_param(mic, "SpecBase", SPEC_BASE)
-            # $envmaptint splits two ways (docs/vtmb/reflections.md). Grey -- 362 of the game's
-            # 2,610 reflective materials -- is a reflection-strength dim-down, so its luma
-            # scales the specular level. Chromatic (102) names a metal, and a metal's
-            # reflection colour lives in BaseColor, which is what MetalMask + EnvTint drive;
-            # specular is ignored once Metallic is up, so the two paths do not overlap.
-            if mat.chromatic:
-                bl.set_scalar_param(mic, "MetalMask", 1.0)
-                bl.set_vector_param(mic, "EnvTint", unreal.LinearColor(
-                    mat.env_tint[0], mat.env_tint[1], mat.env_tint[2], 1.0))
-            else:
-                bl.set_scalar_param(mic, "SpecReflect", SPEC_REFLECT * mat.tint_luma)
-        if mat.wet:
-            bl.set_scalar_param(mic, "WetnessDriven", 1.0)
-            bl.set_scalar_param(mic, "WetnessScale", mat.wetness_scale)
-            if self.map == "sm_hub_1":
-                source_cube = self.cubemaps.get(mat.env_cube)
-                if not source_cube:
-                    raise SystemExit(
-                        "[bake] wet material %s has no imported SourceCube %r"
-                        % (mat.name, mat.env_cube))
-                bl.set_tex_param(mic, "SourceCube", source_cube)
-                bl.set_static_switch_param(mic, "WetnessUsesSourceCube", True)
-            if self.weather and self.rain_height:
-                bounds = self.weather["world_bounds_cm"]
-                minimum, maximum = bounds["min"], bounds["max"]
-                height = self.weather["height_texture"]
-                bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
-                bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
-                bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
-                bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
-                bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
-                bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
-                bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
-        tex2 = tex(mat.base_tex2)
-        if tex2:
-            bl.set_tex_param(mic, "BaseTex2", tex2)
-            bl.set_scalar_param(mic, "BlendAmount", 1.0)
+    #: The per-map material packages this stage owns. Both are PRUNED and never authored:
+    #: R7.2 ruling 2 retired the last per-map material a map wrote -- a surface and a decal
+    #: both bind the shared `MI_<unit>` the material lane staged -- and 0018 story 21-5 deleted
+    #: the legacy authoring body that was the only thing still writing into them.
+    MATERIAL_PACKAGE_ATTRS = ("mat_pkg", "decal_mat_pkg")
 
     def stage_materials(self):
-        for mats, mat_pkg, tex_pkg in self._material_sets():
-            if not mats:
-                pruned = bl.prune_package(mat_pkg, set(), self.prune_scope)
-                self.tracker.pruned("materials", pruned)
-                continue
-            start = time.time()
-            made = 0
-            wanted = set()
-            for key, mat in sorted(mats.items()):
-                name = "MI_" + bl.safe_name(key)
-                object_path = "%s/%s" % (mat_pkg, name)
-                if self.tracker.register(
-                        "materials", object_path, self._material_recipe(mat, tex_pkg),
-                        expected_class="MaterialInstanceConstant"):
-                    mic = bl.make_material_instance(name, mat_pkg, self._master_for(mat))
-                    if not mic:
-                        raise SystemExit("[bake] material instance failed: %s" % object_path)
-                    self._bind(mic, mat, tex_pkg)
-                    # One refresh per instance, after every parameter `_bind` wrote: the
-                    # setters defer it (`bake_lib`'s "written in a batch, refreshed once").
-                    bl.finish_material_instance(mic)
-                    self.saved.append((object_path, mic))
-                    self.tracker.built("materials")
-                else:
-                    mic = unreal.EditorAssetLibrary.load_asset(object_path)
-                    if not mic:
-                        raise SystemExit("[bake] cached material could not be loaded: %s" % object_path)
-                self.materials[(mat_pkg, key)] = mic
-                wanted.add(name)
-                made += 1
-            # This stage authors a package's whole material set in one pass, so anything else
-            # left in it is from an earlier bake of a different export -- an unreferenced asset
-            # the level would never load but the registry still carries.
-            pruned = bl.prune_package(mat_pkg, wanted, self.prune_scope)
+        for attr in self.MATERIAL_PACKAGE_ATTRS:
+            pruned = bl.prune_package(getattr(self, attr), set())
             self.tracker.pruned("materials", pruned)
-            log("materials: %d into %s%s (%.1fs)" % (
-                made, mat_pkg, ", %d stale pruned" % pruned if pruned else "",
-                time.time() - start))
         if self.weather:
             # The rain master and system are tracked authored assets
             # (Content/ElysiumAuthored/VFX); the bake instances the master per map and never
@@ -1360,75 +863,18 @@ class Bake(object):
         log("materials: %s" % self.tracker.summary("materials"))
 
     def resolve_textures(self):
-        """Load the textures this scope's own material instances bind.
+        """Re-adopt the rain height field a warm run did not rebuild.
 
-        Only the sets it AUTHORS: a map instances the materials that stamp its cubemap, fog or
-        weather, and those need their textures in hand. Every other material it draws is already a
-        finished instance in the corpus package, so pulling that material's textures into memory
-        would load most of the install's 8,000 texture assets to bind nothing.
+        The only texture a map still resolves by hand. Every material it draws is a finished
+        instance the material lane staged, so its textures are reached through that asset rather
+        than loaded here -- pulling them in would load most of the install's 8,000 texture assets
+        to bind nothing. 0018 story 21-5 deleted the legacy corpus-texture and `sm_hub_1`
+        wet-cubemap walks that were the rest of this method.
         """
-        for mats, _mat_pkg, _tex_pkg in self._material_sets():
-            for name, _, _ in self._texture_jobs(mats, self.corpus_dir, self.shared_tex_pkg):
-                if (self.shared_tex_pkg, name) in self.textures:
-                    continue
-                path = "%s/%s" % (self.shared_tex_pkg, name)
-                if unreal.EditorAssetLibrary.does_asset_exist(path):
-                    self.textures[(self.shared_tex_pkg, name)] = (
-                        unreal.EditorAssetLibrary.load_asset(path))
-        if self.map == "sm_hub_1":
-            for mat in self.world_mats.values():
-                if not mat.wet or mat.env_cube in self.cubemaps:
-                    continue
-                name = "TC_" + bl.safe_name(mat.env_cube)
-                path = "%s/%s" % (self.cube_pkg, name)
-                if unreal.EditorAssetLibrary.does_asset_exist(path):
-                    self.cubemaps[mat.env_cube] = unreal.EditorAssetLibrary.load_asset(path)
         if self.weather and not self.rain_height:
             path = "%s/T_RainHeight" % self.weather_pkg
             if unreal.EditorAssetLibrary.does_asset_exist(path):
                 self.rain_height = unreal.EditorAssetLibrary.load_asset(path)
-
-    def resolve_materials(self):
-        """Load already-baked material instances into the lookup, so a mesh or level stage can run
-        without re-authoring the materials it binds.
-
-        Two sources: the sets this scope authors, and every corpus material it merely draws --
-        the shared world surfaces and every prop material. A shared instance the corpus has not
-        baked yet is a named failure at bind time, not a silently grey surface.
-        """
-        for mats, mat_pkg, _ in self._material_sets():
-            for key in mats:
-                if (mat_pkg, key) in self.materials:
-                    continue
-                path = "%s/MI_%s" % (mat_pkg, bl.safe_name(key))
-                if unreal.EditorAssetLibrary.does_asset_exist(path):
-                    self.materials[(mat_pkg, key)] = unreal.EditorAssetLibrary.load_asset(path)
-        shared = set(self._shared_material_keys()) | set(self._all_prop_mats())
-        missing = []
-        for key in sorted(shared):
-            if (self.shared_mat_pkg, key) in self.materials:
-                continue
-            # `_CORPUS_MIC_PATHS` remembers keys already arbitrated onto the mount this
-            # process; the load stays per map, because the loaded objects are what the
-            # per-map garbage collection reclaims.
-            path = _CORPUS_MIC_PATHS.get(key)
-            if path is None:
-                candidate = "%s/%s" % (self.shared_mat_pkg, SC.material_asset(key))
-                if unreal.EditorAssetLibrary.does_asset_exist(candidate):
-                    path = candidate
-            asset = unreal.EditorAssetLibrary.load_asset(path) if path else None
-            if asset is None:
-                _CORPUS_MIC_PATHS.pop(key, None)
-                missing.append(key)
-            else:
-                _CORPUS_MIC_PATHS[key] = path
-                self.materials[(self.shared_mat_pkg, key)] = asset
-        if missing:
-            # Continuing would author meshes and a level whose slots bind nothing, and the
-            # per-asset receipts would then freeze that unbound state as current.
-            fail("%d shared material(s) are not baked (run: uv run elysium export bundle corpus): %s"
-                 % (len(missing), ", ".join(missing[:8])))
-            raise SystemExit(1)
 
     def _emit(self, stage, asset_path, sections, names, materials, nanite, phys=None,
               collision=True):
@@ -1558,7 +1004,7 @@ class Bake(object):
                 wanted.add(asset_path.rsplit("/", 1)[-1])
             if static_mesh:
                 self.world_meshes[asset_path] = static_mesh
-        pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_World_", wanted, self.prune_scope)
+        pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_World_", wanted)
         self.tracker.pruned("world", pruned)
         log("world: %d chunk meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
             built, tris, dropped, pruned, time.time() - start))
@@ -1601,342 +1047,13 @@ class Bake(object):
                 wanted.add("SM_%s" % stem)
             brush_tris += kept
             brush_dropped += lost
-        pruned = bl.prune_package(self.brush_pkg, wanted, self.prune_scope)
+        pruned = bl.prune_package(self.brush_pkg, wanted)
         self.tracker.pruned("world", pruned)
         log("brushes: %d meshes / %d tris / %d dropped / %d styled / %d stale pruned" % (
             len(wanted), brush_tris, brush_dropped, styled_brushes, pruned))
         log("world assets: %s" % self.tracker.summary("world"))
 
     # --------------------------------------------------------------------- sky
-
-    def stage_sky(self):
-        sky_path = os.path.join(self.dir, "%s_sky.obj" % self.map)
-        if not os.path.isfile(sky_path):
-            pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", set(), self.prune_scope)
-            self.tracker.pruned("sky", pruned)
-            log("sky: no _sky.obj, %d stale pruned" % pruned)
-            return
-        start = time.time()
-        model = bl.read_obj(sky_path)
-        normals = bl.vertex_normals(model.positions, model.groups.values())
-        buckets = self._chunk_world(model, self.world_mats, [], CELL_CM * 4)
-        bl.ensure_dir(self.mesh_pkg)
-        built = 0
-        tris = 0
-        dropped = 0
-        wanted = set()
-        cell = CELL_CM * 4
-        for key in sorted(buckets.keys()):
-            cx, cy, cz, opaque, style = key
-            pivot = ((cx + 0.5) * cell, (cy + 0.5) * cell, (cz + 0.5) * cell)
-            sections, names = self._sections(model, normals, [], buckets[key], pivot)
-            asset_path = "%s/SM_Sky_%s%d_%d_%d%s" % (
-                self.mesh_pkg, "" if opaque else "T_", cx, cy, cz, chunk_style_suffix(style))
-            materials = [self.material_for(name) for name in names]
-            kept, lost, _, static_mesh = self._emit(
-                "sky", asset_path, sections, names, materials, nanite=opaque)
-            tris += kept
-            dropped += lost
-            built += 1 if kept else 0
-            if kept:
-                wanted.add(asset_path.rsplit("/", 1)[-1])
-            if static_mesh:
-                self.world_meshes[asset_path] = static_mesh
-        pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted, self.prune_scope)
-        self.tracker.pruned("sky", pruned)
-        log("sky: %d meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
-            built, tris, dropped, pruned, time.time() - start))
-        log("sky assets: %s" % self.tracker.summary("sky"))
-
-    # ------------------------------------------------------------------- props
-
-    def stage_props(self):
-        bl.ensure_dir(self.shared_mesh_pkg)
-        start = time.time()
-        built = 0
-        tris = 0
-        dropped = 0
-        unbound = 0
-        error_slots = 0
-        error_props = 0
-        phys_meshes = 0
-        phys_shapes = 0
-        wanted = set()
-        stems = sorted(self.prop_models.keys())
-        for offset in range(0, len(stems), PROP_BATCH):
-            batch = stems[offset:offset + PROP_BATCH]
-            for stem in batch:
-                model = self.prop_models[stem]
-                mats = self.prop_mats.get(stem, {})
-                if not model.groups:
-                    continue
-                normals = bl.vertex_normals(model.positions, model.groups.values())
-                sections, names = self._sections(
-                    model, normals, [], model.groups, (0.0, 0.0, 0.0))
-                asset_path = "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem))
-                materials = []
-                missed = 0
-                for name in names:
-                    mat = mats.get(name)
-                    if mat is None:
-                        # No `mat` line for this slot: the exporter resolved no `.vmt` for its
-                        # material name, which is the engine's own routine miss.
-                        materials.append(self.error_bind(name, stem))
-                        missed += 1
-                        continue
-                    material = self.materials.get((self.shared_mat_pkg, mat.material_key))
-                    if material is None:
-                        # The material is defined but its instance is not on the mount, so the
-                        # corpus is unbaked or stale. A null slot saves a mesh that renders
-                        # Unreal's own default, and its receipt would then freeze that unbound
-                        # state as current. The prop is left unbuilt and unreceipted so the next
-                        # run retries it.
-                        fail("%s: slot %r resolves no loaded material for key %r"
-                             % (stem, name, mat.material_key))
-                        materials = None
-                        break
-                    materials.append(material)
-                if materials is None:
-                    unbound += 1
-                    # Keep the prop's already-baked package on the mount even though this run
-                    # will not receipt it -- the prune below deletes every SM_ name not in
-                    # `wanted`, and an unresolved slot must retry next run, not go missing now.
-                    wanted.add(asset_path.rsplit("/", 1)[-1])
-                    continue
-                if missed:
-                    error_slots += missed
-                    error_props += 1
-                # A prop model whose materials are all opaque/masked can be Nanite; a mixed model
-                # cannot (Nanite is a whole-mesh setting), so it falls back wholesale. The test
-                # spans the alternate skin families too: a skin swaps whole material instances, so
-                # a family that brings in a translucent/additive surface would leave one on a
-                # Nanite mesh -- and outside the editor no permutation can be compiled, which
-                # renders default grey.
-                skinned = set(names) | {rep for remap in self.prop_skins.get(stem, {}).values()
-                                        for rep in remap.values()}
-                nanite = all((mats[n].opaque if n in mats else True) for n in skinned)
-                phys = self.prop_phys.get(stem)
-                kept, lost, shapes, _ = self._emit(
-                    "props", asset_path, sections, names, materials, nanite=nanite, phys=phys)
-                tris += kept
-                dropped += lost
-                built += 1 if kept else 0
-                if kept:
-                    wanted.add(asset_path.rsplit("/", 1)[-1])
-                if phys:
-                    phys_meshes += 1
-                    phys_shapes += shapes
-                    if shapes != len(phys["hulls"]):
-                        fail("%s: %d hulls in the sidecar but %d collision shapes"
-                             % (stem, len(phys["hulls"]), shapes))
-            # The batch's source geometry is spent once its meshes are built, so the collector can
-            # reclaim it. Textures and material instances stay resident: every later model binds
-            # them, and so do the skin set and the level stage.
-            for stem in batch:
-                del self.prop_models[stem]
-            if offset + PROP_BATCH < len(stems):
-                if self.checkpoint("props %d/%d" % (offset + len(batch), len(stems))):
-                    raise SystemExit("[bake] prop checkpoint could not save every mesh")
-        pruned = bl.prune_package_prefix(self.shared_mesh_pkg, "SM_", wanted, self.prune_scope)
-        self.tracker.pruned("props", pruned)
-        log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) / "
-            "%d stale pruned%s%s (%.1fs)"
-            % (built, tris, dropped, phys_meshes, phys_shapes, pruned,
-               " / %d slots error-bound across %d props" % (error_slots, error_props)
-               if error_slots else "",
-               " / %d unbuilt for an unbound material" % unbound if unbound else "",
-               time.time() - start))
-        self._author_skin_set()
-        log("prop assets: %s" % self.tracker.summary("props"))
-
-    def _author_skin_set(self):
-        """Author the map's UElysiumPropSkinSet from the `.skins` sidecars, resolving each family
-        material to the instance the material stage already made. The runtime looks an override up
-        by mesh material *slot* name, which is the authored material's name -- the same key the
-        sidecar uses -- so no naming rule has to be reproduced on either side."""
-        object_path = "%s/%s" % (self.shared_mesh_pkg, SC.PROP_SKINS_ASSET)
-        if not self.prop_skins:
-            if unreal.EditorAssetLibrary.does_asset_exist(object_path):
-                bl.delete_owned_asset(object_path)
-                self.tracker.pruned("props", 1)
-            return
-        models, overrides, unresolved = [], 0, 0
-        for stem in sorted(self.prop_skins):
-            families = self.prop_skins[stem]
-            mats = self.prop_mats.get(stem, {})
-            rows = [{} for _ in range(max(families) + 1)]   # index = VtMB's skin number
-            for family, remap in families.items():
-                for slot, rep in remap.items():
-                    mat = mats.get(rep)
-                    # A family repaint resolves like any other slot: no `.vmt` for the name is the
-                    # engine's miss and takes the error material; a defined material with no
-                    # instance on the mount is a stale corpus and is named instead.
-                    mic = (self.materials.get((self.shared_mat_pkg, mat.material_key)) if mat
-                           else self.error_bind(rep, stem))
-                    if mic is None:
-                        unresolved += 1
-                        log("  ! %s skin %d: no material instance for %r" % (stem, family, rep))
-                        continue
-                    # Keyed by the mesh's material *slot* name, which is safe_name of the authored
-                    # material (create_static_mesh names the slots that way) -- so the runtime
-                    # looks up what the asset actually carries and reproduces no naming rule.
-                    rows[family][bl.safe_name(slot)] = mic
-                    overrides += 1
-            models.append((stem, rows))
-        recipe_models = []
-        for stem, rows in models:
-            recipe_models.append((stem, [
-                {slot: _asset_path(material) for slot, material in sorted(row.items())}
-                for row in rows
-            ]))
-        if not self.tracker.register(
-                "props", object_path, {"models": recipe_models},
-                expected_class="ElysiumPropSkinSet"):
-            log("prop skins: cached %d models / %d overrides" % (len(models), overrides))
-            return
-        asset = bl.make_skin_set(SC.PROP_SKINS_ASSET, self.shared_mesh_pkg, models)
-        if asset is None:
-            fail("prop skin set failed: %s" % self.shared_mesh_pkg)
-            return
-        self.saved.append((object_path, asset))
-        self.tracker.built("props")
-        log("prop skins: %d models / %d overrides%s" % (
-            len(models), overrides, ", %d unresolved" % unresolved if unresolved else ""))
-
-    # ------------------------------------------------------------------ lights
-
-    def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
-        """One light actor per WORLDLIGHTS `.lights` line, with UElysiumLightRig's calibration
-        applied verbatim: 16 fields `type x y z dx dy dz r g b radius stopdot stopdot2 _ style sky`,
-        soft non-inverse-square falloff, specular at the settings page's `LightSpecularScale`
-        (R5.5), everything Movable.
-
-        Lightstyle animation (field 15) has no baked equivalent -- a styled source is placed at
-        its unanimated base intensity.
-
-        Field 16 marks a source inside the 3D-skybox miniature. Those never lit the playable
-        world, but they were not dead either -- VtMB's light cache read exactly those lump-15
-        rows to light the miniature's props -- so they are carried into the sky transform
-        (position scaled, reach scaled by the same factor) rather than deleted, per the owner
-        call of 2026-07-26. Deleting them would un-light authored content."""
-        path = os.path.join(self.sidecar_dir, "%s.lights" % self.map)
-        if not os.path.isfile(path):
-            return 0, 0, None
-        placed = sky_placed = 0
-        sky_ambient = None
-        specular_scale = light_specular_scale()
-        with open(path, "r", encoding="utf-8", errors="replace") as handle:
-            for index, line in enumerate(handle):
-                tok = line.split()
-                if len(tok) < 15:
-                    continue
-                kind = int(tok[0])
-                is_sky = len(tok) >= 16 and int(tok[15]) != 0
-                pos = [float(tok[1]), float(tok[2]), float(tok[3])]
-                if is_sky:
-                    pos = [sky_scale * (pos[i] - sky_origin[i]) for i in range(3)]
-                origin = unreal.Vector(*pos)
-                direction = unreal.Vector(float(tok[4]), float(tok[5]), float(tok[6]))
-                rgb = (float(tok[7]), float(tok[8]), float(tok[9]))
-                radius_cm = float(tok[10])
-                stopdot = float(tok[11])
-                stopdot2 = float(tok[12])
-
-                mag = max(rgb)
-                if mag <= 0.0:
-                    continue
-                color = unreal.LinearColor(rgb[0] / mag, rgb[1] / mag, rgb[2] / mag, 1.0)
-
-                # Type 5 skyambient is not a light; it tints the SkyLight. FIRST wins, by
-                # lump-15 order: VRAD resolves the sky ambient once, globally, first-entity-wins
-                # and stamps that value on every type-5 row, and the engine's own multi-
-                # light_environment rule is first-wins too (RE-A3/RE-A5). Overwriting in the loop
-                # -- last-wins -- read the wrong row on the 5 maps with several.
-                if kind == 5:
-                    if sky_ambient is None:
-                        sky_ambient = (color, mag)
-                    continue
-
-                reach = (radius_cm if radius_cm > 1.0 else FALLBACK_RADIUS_CM) * RADIUS_SCALE
-                # A miniature light's reach is authored in miniature units, so it scales with the
-                # geometry it lights or it lights a 16th of what it did. The floor keeps a
-                # degenerate authored radius from collapsing to nothing after the scale.
-                if is_sky:
-                    reach = max(reach * sky_scale, MIN_SKY_REACH_CM)
-                soft = min(mag * POINT_SPOT_SCALE, MAX_BRIGHTNESS)
-
-                if kind in (0, 1):
-                    actor = actors.spawn_actor_from_class(unreal.PointLight, origin)
-                    component = actor.point_light_component if actor else None
-                    if component:
-                        _make_movable(component)
-                        component.set_attenuation_radius(reach)
-                        component.set_intensity(soft)
-                        # Texlights stay shadowless, as the rig has them.
-                        component.set_cast_shadows(kind != 0)
-                elif kind == 2:
-                    inner = math.degrees(math.acos(max(-1.0, min(1.0, stopdot))))
-                    outer = math.degrees(math.acos(max(-1.0, min(1.0, stopdot2))))
-                    inner = max(1.0, min(80.0, inner))
-                    outer = max(1.0, min(80.0, outer))
-                    actor = actors.spawn_actor_from_class(
-                        unreal.SpotLight, origin, _dir_rotator(direction))
-                    component = actor.spot_light_component if actor else None
-                    if component:
-                        _make_movable(component)
-                        component.set_attenuation_radius(reach)
-                        component.set_intensity(soft)
-                        component.set_outer_cone_angle(outer)
-                        component.set_inner_cone_angle(min(inner, outer))
-                        component.set_cast_shadows(True)
-                elif kind == 3:
-                    actor = actors.spawn_actor_from_class(
-                        unreal.DirectionalLight, origin, _dir_rotator(direction))
-                    # ADirectionalLight exposes only ALight's generic component property.
-                    component = actor.light_component if actor else None
-                    if component:
-                        _make_movable(component)
-                        component.set_intensity(max(mag * SUN_SCALE_LUX, 0.01))
-                        component.set_cast_shadows(True)
-                else:
-                    continue
-                if not actor or not component:
-                    continue
-                # One `set_editor_properties` for the whole component, not one call per field:
-                # the plural call brackets the batch in a single `PreEditChange`/`PostEditChange`
-                # pair, and each singular one runs a full `ULightComponent::PostEditChangeProperty`
-                # of its own. `specular_scale` is the one global knob, not the legacy zero (the
-                # matte-world premise is repudiated, 2026-08-31); the rig re-derives it at adopt.
-                properties = {"specular_scale": specular_scale}
-                if kind in (0, 1, 2):
-                    # VtMB light is ~flat within its authored radius, so gentle-exponent
-                    # falloff, not inverse-square.
-
-                    properties["use_inverse_squared_falloff"] = False
-                    properties["light_falloff_exponent"] = FALLOFF_EXPONENT
-                component.set_light_color(color)
-                component.set_editor_properties(properties)
-                actor.set_actor_label("Light_%d_%s%s" % (
-                    index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind],
-                    "_sky" if is_sky else ""))
-                # The line index is the binding UElysiumLightRig::Adopt needs: it re-derives
-                # every intensity and reach from this row at load, so the values written above
-                # are only what the level looks like in the editor before the game runs.
-                actor.tags = [TAG_LIGHT, "elysium.src=%d" % index]
-                actor.set_folder_path("Sky/Lights" if is_sky else "Lights")
-                placed += 1
-                sky_placed += is_sky
-        return placed, sky_placed, sky_ambient
-
-    def _place_captures(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
-        """Reflection captures are the V2 lane's (R5.5, `bake_map_v2.MapBakeV2._place_captures`):
-        the legacy lane reads no `cubemaps[]` and places none. Returns the placed count."""
-        return 0
-
-    def _build_captures(self, world, placed):
-        """Render the placed captures' contents into the level's MapBuildData (R5.5). Nothing to
-        build on the legacy lane; the V2 lane overrides and asserts the count."""
-        return 0
 
     def _assert_saved_captures(self, map_path, placed):
         """Re-count the built captures off the SAVED level, and fail the map when they are absent.
@@ -2185,12 +1302,6 @@ class Bake(object):
         self.collision_payload, _outcome = bake_map_collision.author_payload(
             entry, force=self.tracker.forced("collision"))
 
-    def _used_hull_bits(self):
-        """The map's own `UsedHullBits` -- which hulls its graph's links serve, so which agents it
-        owes a mesh. The V2 lane reads it off the staged graph; the legacy lane stages no graph and
-        has no answer, and `bake_map_collision.build_navigation` refuses on None by name."""
-        return None
-
     def _place_collision(self, actors):
         """The world-collision actor and the nav-area marks, in that order.
 
@@ -2220,6 +1331,13 @@ class Bake(object):
     # ------------------------------------------------------------------- level
 
     def _level_recipe(self):
+        """Everything the level is stamped against that is not this lane's own identity.
+
+        `MapBakeV2` extends this (its `_level_recipe`) with the staged digests and the placement
+        set. 0018 story 21-5 removed the `props` and `prop_skins` entries the legacy prop lane
+        filled from `<map>.props`: the V2 override already restated both from the staged
+        placements, so the host half never contributed either on a live bake.
+        """
         from elysium_pipeline.asset_paths import corpus_path
 
         # One recursive listing over the map's own package, bucketed into the two
@@ -2239,21 +1357,14 @@ class Bake(object):
             "placement": level_sidecar_recipe(
                 Path(self.sidecar_dir), self.map, digest=self._file_sha256),
             "world_sky_meshes": sorted(world_sky),
-            # Only the models this map places. Enumerating the whole shared package would make
-            # every level stale whenever any of the corpus's 3,000 meshes changed, which is the
-            # opposite of what one asset per source is for.
-            "props": sorted(
-                "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem))
-                for stem in self.prop_mats),
             "brushes": sorted(brushes),
             "materials": sorted(
                 _asset_path(material) for material in self.materials.values() if material),
-            # R7.2 ruling 2: the shared projector instances this level's `.decals` lines bind.
+            # R7.2 ruling 2: the shared projector instances this level's decal rows bind.
             # Named here rather than left to the sidecar's digest alone, because the binding is a
             # resolved asset path like every other entry in this recipe -- and a level baked
             # against the retired per-map `M_Decal` MICs must re-author, not be reused.
             "decal_materials": sorted({decal_instance_path(decal.mat) for decal in self.decals}),
-            "prop_skins": self.prop_skins,
             "model_catalogues": {
                 corpus_path("model", "DA", name): bl.stored_recipe(
                     corpus_path("model", "DA", name), producer="model-catalogues")
@@ -2454,173 +1565,6 @@ class Bake(object):
                         env[tok[0]] = tok[1:]
         return env
 
-    def _read_sky(self):
-        """(scale, origin) from the .sky sidecar. 16 / world origin is the Source default."""
-        scale = 16.0
-        origin = (0.0, 0.0, 0.0)
-        path = os.path.join(self.sidecar_dir, "%s.sky" % self.map)
-        if not os.path.isfile(path):
-            return scale, origin
-        with open(path, "r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                tok = line.split()
-                if len(tok) == 4 and tok[0] == "origin":
-                    origin = (float(tok[1]), float(tok[2]), float(tok[3]))
-                elif len(tok) == 2 and tok[0] == "scale":
-                    scale = float(tok[1])
-        return scale, origin
-
-    def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0),
-                     world_fog=None, sky_fog=None):
-        """Place GAME_LUMP props in storage-equivalent static or authored-rest form."""
-        from pipeline.unreal import model_catalogue_views as model_views
-        from elysium_pipeline.asset_paths import corpus_path
-
-        path = os.path.join(self.dir, "%s.props" % self.map)
-        if not os.path.isfile(path):
-            return 0, 0
-        placed = skinned = sky_placed = skeletal_placed = 0
-        cache = {}
-        placements = []
-        with open(path, "r", encoding="utf-8", errors="replace") as handle:
-            for placement_token, line in enumerate(handle):
-                tok = line.split()
-                if len(tok) < 9:
-                    continue
-                # R9 retains the static transport. Older rows recover their full identity
-                # from its shared manifest; never infer a model path from a lossy stem.
-                model_path = (tok[11] if len(tok) >= 12 else
-                              self.corpus_manifest.get("models", {}).get(tok[0], {}).get("model", ""))
-                identity = model_views.model_id(model_path)
-                placements.append((placement_token, tok, identity))
-        if not placements:
-            return 0, 0
-        needed = {identity for _, _, identity in placements}
-        placed_index = model_views.placed_view(unreal.EditorAssetLibrary.load_asset(
-            corpus_path("model", "DA", "PlacedModels")), needed)
-        missing = needed - placed_index.keys()
-        if missing:
-            raise RuntimeError("GAME_LUMP models absent from native placed catalogue: " + str(sorted(missing)))
-        skeletal_ids = {identity for identity, record in placed_index.items()
-                        if not record["canUseStatic"]}
-        skins = model_views.skin_view(unreal.EditorAssetLibrary.load_asset(
-            corpus_path("model", "DA", "PropSkins")), skeletal_ids) if skeletal_ids else {}
-        skin_materials = {}
-        for placement_token, tok, identity in placements:
-            stem = tok[0]
-            mesh = cache.get(stem)
-            if mesh is None:
-                mesh = unreal.EditorAssetLibrary.load_asset(
-                    "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem)))
-                cache[stem] = mesh
-            if not mesh:
-                raise RuntimeError("GAME_LUMP model %s has no baked static material/collision mesh" % stem)
-            # Field 11 marks a prop inside the 3D-skybox miniature: it is placed under the
-            # same transform the sky world meshes take, `world(v) = scale * (v - origin)`,
-            # rather than at its raw 1/scale coordinates in the middle of the playable map.
-            is_sky = len(tok) >= 11 and int(tok[10]) != 0
-            pos = [float(tok[1]), float(tok[2]), float(tok[3])]
-            if is_sky:
-                pos = [sky_scale * (pos[i] - sky_origin[i]) for i in range(3)]
-            location = unreal.Vector(*pos)
-            rotation = unreal.Quat(float(tok[4]), float(tok[5]),
-                                   float(tok[6]), float(tok[7])).rotator()
-            # The native catalogue owns the skeletal decision and prepared references.
-            # The retained shared static mesh still supplies the R9 collision proxy.
-            record = placed_index[identity]
-            use_skeletal = not record["canUseStatic"]
-            actor_class = unreal.ElysiumPlacedModelActor if use_skeletal else unreal.StaticMeshActor
-            actor = actors.spawn_actor_from_class(actor_class, location, rotation)
-            if not actor:
-                raise RuntimeError("GAME_LUMP model %s actor creation failed" % identity)
-            if use_skeletal:
-                rest_clip = model_views.select_rest(record, placement_token)
-                rest = rest_clip["name"]
-                skel = unreal.EditorAssetLibrary.load_asset(record["mesh"])
-                anim = unreal.EditorAssetLibrary.load_asset(rest_clip["sequence"] or rest_clip["baseCell"])
-                if not skel or not anim or not rest:
-                    raise RuntimeError("GAME_LUMP model %s has no native rest asset '%s'; import characters and model catalogues" %
-                                       (identity, rest))
-                solid = int(tok[8]) != 0 and not is_sky
-                if not actor.configure_rest(skel, anim, mesh, solid):
-                    raise RuntimeError("GAME_LUMP model %s refused rest configuration" % stem)
-                component = actor.skeletal_visual
-                proxy = actor.collision_proxy
-                proxy.set_collision_profile_name(PROFILE_PROP_SOLID if solid else PROFILE_PICK_ONLY)
-                skeletal_placed += 1
-            else:
-                component = actor.static_mesh_component
-                component.set_static_mesh(mesh)
-            # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
-            # A miniature prop is never solid whatever it says -- it is scenery the player can
-            # never reach, and at 16x it would wall off the map.
-            if not use_skeletal:
-                component.set_collision_profile_name(
-                    PROFILE_PROP_SOLID if (int(tok[8]) != 0 and not is_sky) else PROFILE_PICK_ONLY)
-            # Field 10 (DStaticPropV4.skin) names an alternate skin family. A GAME_LUMP prop is
-            # not an entity and never changes skin, so the remap is baked into the placement as
-            # material overrides rather than costing anything at runtime. Older 9-field exports
-            # simply have no skin.
-            if use_skeletal:
-                families = skins.get((identity, "skeletal"))
-                if not families:
-                    raise RuntimeError("GAME_LUMP model has no native skeletal skin: " + identity)
-                family = min(max(int(tok[9]) if len(tok) >= 10 else 0, 0), len(families) - 1)
-                slots = [str(name) for name in component.get_material_slot_names()]
-                for index, slot, material_path in families[family]:
-                    if index >= len(slots) or slots[index].casefold() != slot.casefold():
-                        raise RuntimeError("GAME_LUMP native skin slot differs: " + identity + " / " + slot)
-                    if material_path not in skin_materials:
-                        skin_materials[material_path] = unreal.EditorAssetLibrary.load_asset(material_path)
-                    material = skin_materials[material_path]
-                    if material is None:
-                        raise RuntimeError("GAME_LUMP native skin material absent: " + material_path)
-                    component.set_material(index, material)
-                skinned += int(family != 0)
-            elif len(tok) >= 10 and int(tok[9]) != 0:
-                skinned += self._apply_prop_skin(component, mesh, stem, int(tok[9]))
-            fog = sky_fog if is_sky else world_fog
-            if fog:
-                set_fog(component, fog)
-            if is_sky:
-                actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
-                # Same reasoning as the sky world meshes: blown up 16x the miniature encloses
-                # the playable space, which is the canonical hardware-ray-tracing overlap cost,
-                # and it is backdrop, so it casts nothing.
-                component.set_editor_property("visible_in_ray_tracing", False)
-                component.set_cast_shadow(False)
-                sky_placed += 1
-            actor.tags = [TAG_SKY if is_sky else TAG_PROP]
-            actor.set_folder_path("Sky/Props" if is_sky else "Props")
-            placed += 1
-        if skinned:
-            log("level: %d static props on an alternate skin" % skinned)
-        if skeletal_placed:
-            log("level: %d GAME_LUMP props held on authored skeletal rest poses" % skeletal_placed)
-        return placed, sky_placed
-
-    def _apply_prop_skin(self, component, mesh, stem, family):
-        """Override the material of every slot this model's skin family repaints. Returns 1 when
-        anything was applied. An out-of-range family is not an error -- Source's `skin` is an
-        unclamped int, and a map can name a family the model does not have."""
-        remap = self.prop_skins.get(stem, {}).get(family)
-        if not remap:
-            return 0
-        slots = [str(s.get_editor_property("material_slot_name"))
-                 for s in mesh.get_editor_property("static_materials")]
-        applied = 0
-        for slot, rep in sorted(remap.items()):
-            name = bl.safe_name(slot)
-            if name not in slots:
-                continue
-            mat = self.prop_mats.get(stem, {}).get(rep)
-            mic = (self.materials.get((self.shared_mat_pkg, mat.material_key)) if mat
-                   else self.error_bind(rep, stem))
-            if mic is not None:
-                component.set_material(slots.index(name), mic)
-                applied += 1
-        return 1 if applied else 0
-
     def _place_decals(self, actors):
         """One ADecalActor per `.decals` line -- VtMB's `infodecal` layer (blood, bullet holes,
         graffiti, posters, stains).
@@ -2676,18 +1620,6 @@ class Bake(object):
             # (run: uv run elysium import materials).
             fail("decal material has no projector instance: %s" % name)
         return placed
-
-    def _place_navigation(self, actors):
-        """The V2 lane authors its decoded AIN links into this level."""
-        return 0
-
-    def _place_ai_infra(self, actors):
-        """The V2 lane authors the baked AI infrastructure actors (0018 story 2) into this level."""
-        return 0
-
-    def _place_ropes(self, actors):
-        """The V2 lane authors the baked rope actors (0018 story 21-3) into this level."""
-        return 0
 
     def _place_player_start(self, actors):
         path = os.path.join(self.sidecar_dir, "%s.spawn" % self.map)
@@ -2756,126 +1688,6 @@ class Bake(object):
         return 0
 
 
-class CorpusBake(Bake):
-    """The shared corpus scope: `$ELYSIUM_EXPORT_ROOT/shared` -> /ElysiumBaked/Shared.
-
-    Every texture, every material and every static model in the user's install, baked once. A map
-    resolves these and authors none of them, so the doorknob 42 maps hang on a door is one
-    `StaticMesh`, its brick is one `Texture2D`, and changing either is one rebake rather than 42.
-
-    It runs no world, sky, particle or level stage, because it has none of those inputs. It is
-    also the only scope that prunes these packages: it authors them in full, so anything else left
-    in them is from an earlier corpus.
-    """
-
-    prune_scope = SC.SCOPE
-
-    def __init__(self, tracker, digest_cache):
-        super(CorpusBake, self).__init__(SC.SCOPE, tracker, digest_cache)
-        self.dir = self.corpus_dir
-
-    def load_sources(self):
-        if not self.load_corpus():
-            return False
-        if not os.path.isdir(os.path.join(self.corpus_dir, SC.PROPS)):
-            fail("no corpus models at %s (run: uv run elysium export bundle corpus)"
-                 % os.path.join(self.corpus_dir, SC.PROPS))
-            return False
-        # The world half of the corpus: every material no map has to stamp anything into. Their
-        # `MatDef`s come straight off the one definition, so nothing re-parses a VMT here.
-        self.world_mats = {
-            key: bl.mat_from_record(key, record, key)
-            for key, record in self.corpus_materials.items()
-            if not SC.is_map_scoped_material(
-                key, decal=record.get("decal"), wetness_driven=record.get("wetness") is not None)
-        }
-        self._load_prop_sources()
-        return True
-
-    def _material_sets(self):
-        """One set: every shared material, in the one package that holds them."""
-        merged = dict(self.world_mats)
-        merged.update(self._all_prop_mats())
-        return ((merged, self.shared_mat_pkg, self.shared_tex_pkg),)
-
-    def _shared_material_keys(self):
-        return {}
-
-    def stage_textures(self):
-        """Import every texture the manifest names, and prune the package to exactly that set.
-
-        The manifest is the wanted-set rather than what the material graph happens to reach: a sky
-        face belongs to no material, and a texture left from an earlier corpus is one nothing
-        references but the registry still carries.
-        """
-        start = time.time()
-        wanted = SC.texture_files({"textures": self.corpus_textures})
-        jobs = []
-        for name, role in sorted(wanted.items()):
-            source = os.path.join(self.corpus_dir, SC.TEX, name)
-            if not os.path.isfile(source):
-                raise SystemExit("[bake] corpus texture is missing: %s" % source)
-            jobs.append((SC.texture_asset(name), source, role))
-        imported = self._import_texture_jobs(jobs, self.shared_tex_pkg)
-        for asset_name, _source, _role in jobs:
-            texture = imported.get(asset_name)
-            if not texture:
-                raise SystemExit(
-                    "[bake] texture resolution failed: %s/%s" % (self.shared_tex_pkg, asset_name))
-            self.textures[(self.shared_tex_pkg, asset_name)] = texture
-        log("corpus textures: %d desired in %s (%.1fs)" % (
-            len(imported), self.shared_tex_pkg, time.time() - start))
-        log("textures: %s" % self.tracker.summary("textures"))
-
-    def resolve_textures(self):
-        """Load whatever the texture stage did not build this run, so the material stage binds a
-        complete set even on a cached run."""
-        for name in sorted(SC.texture_files({"textures": self.corpus_textures})):
-            asset_name = SC.texture_asset(name)
-            if (self.shared_tex_pkg, asset_name) in self.textures:
-                continue
-            path = "%s/%s" % (self.shared_tex_pkg, asset_name)
-            if unreal.EditorAssetLibrary.does_asset_exist(path):
-                self.textures[(self.shared_tex_pkg, asset_name)] = (
-                    unreal.EditorAssetLibrary.load_asset(path))
-
-    def resolve_materials(self):
-        for mats, mat_pkg, _ in self._material_sets():
-            for key in mats:
-                if (mat_pkg, key) in self.materials:
-                    continue
-                path = "%s/%s" % (mat_pkg, SC.material_asset(key))
-                if unreal.EditorAssetLibrary.does_asset_exist(path):
-                    self.materials[(mat_pkg, key)] = unreal.EditorAssetLibrary.load_asset(path)
-
-
-def bake_corpus(digest_cache, force=False):
-    """Bake the shared corpus in the current editor process.
-
-    The corpus is thousands of packages in one process, so each stage -- and each batch of prop
-    meshes inside the props stage -- checkpoints when it completes: the queued packages are
-    saved, each carrying its recipe stamp, and the editor collects what the batch no longer
-    holds. A run that dies later still leaves everything it saved current for the next run.
-    """
-    tracker = AssetTracker(SC.SCOPE, digest_cache, force=force)
-    bake = CorpusBake(tracker, digest_cache)
-    if not bake.load_masters() or not bake.load_sources():
-        return False
-    bake.stage_textures()
-    if bake.checkpoint("textures"):
-        return False
-    bake.resolve_textures()
-    bake.stage_materials()
-    if bake.checkpoint("materials"):
-        return False
-    bake.resolve_materials()
-    bake.stage_props()
-    if bake.flush():
-        return False
-    log("%s done" % SC.SCOPE)
-    return True
-
-
 def bake_one(map_name, digest_cache, lanes=None, force=False, force_stages=()):
     """Bake one map in the current editor process.
 
@@ -2918,12 +1730,6 @@ def bake_one(map_name, digest_cache, lanes=None, force=False, force_stages=()):
     bake.resolve_materials()
     bake.stage_world()
     bake.stage_sky()
-    if BAKE_PARTICLES[0]:
-        # One Niagara system per env_particle definition the map places. Independent of the mesh
-        # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
-        from pipeline.unreal import make_particle_systems
-        make_particle_systems.build(
-            map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
     # The two data-asset lanes: no world, no level, no ordering against anything here. The
     # collision cook DOES have one -- the level recipe carries its fingerprint, so the decision to
     # re-cook is made before the level is asked whether it may be reused.
@@ -2944,14 +1750,6 @@ def bake_one(map_name, digest_cache, lanes=None, force=False, force_stages=()):
 # than `sys.modules[__name__]` because `-run=pythonscript` execs the script into a namespace that is
 # not the interpreter's `__main__` module.
 v2.bind(globals())
-
-
-#: Whether this launch authors the map's Niagara systems, set from `-BakeParticles=1`.
-#: The pass is off by default: force-deleting a Niagara package the asset compiler still owns
-#: crashes the editor in CoreUObject, so the stage opts in rather than riding every bake. With
-#: the pass off a map's existing `NS_`, `T_` and `MI_P_` particle packages are left exactly as
-#: they are -- skipping the stage never prunes what it did not author.
-BAKE_PARTICLES = [False]
 
 
 def _collect_garbage():
@@ -3120,13 +1918,12 @@ def _scan_packages(paths):
     log("registry: %d package path(s) scanned (%.1fs)" % (len(scope), time.time() - start))
 
 
-#: The mount packages any map bake resolves against, whichever lane it runs: the shared corpus
-#: (textures, materials, prop meshes and the error material), the R1 model corpus with its skin
-#: table and the detail-sway children beside it, the shared unit material instances a surface or
-#: a decal binds, the per-blend sprite children, the placed-model units, and the shared sky
-#: package. Everything else a map touches lives under its own `/ElysiumBaked/<map>`.
+#: The mount packages any map bake resolves against: the R1 model corpus with its skin table and
+#: the detail-sway children beside it, the shared unit material instances a surface or a decal
+#: binds, the per-blend sprite children, the placed-model units, and the shared sky package.
+#: Everything else a map touches lives under its own `/ElysiumBaked/<map>`. 0018 story 21-5
+#: removed `/ElysiumBaked/Shared`, which the legacy corpus bake authored and nothing resolves.
 MAP_SCAN_PACKAGES = (
-    SC.BAKED_ROOT,
     v2.V2_MESH_PACKAGE,
     DECAL_MATERIALS_ROOT,
     v2.V2_SPRITE_MATERIAL_PACKAGE,
@@ -3135,25 +1932,6 @@ MAP_SCAN_PACKAGES = (
     SKY_MAT_PKG,
     SKY_MESH_PKG,
 )
-
-
-def _run_corpus():
-    """-BakeCorpus=1: the shared corpus scope."""
-    force = bool(cmdline_arg("BakeForce", ""))
-    # The corpus authors and prunes `/ElysiumBaked/Shared` and reads nothing else on the mount.
-    _scan_packages([SC.BAKED_ROOT])
-    digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
-    try:
-        ok = bake_corpus(digest_cache, force=force)
-    finally:
-        digest_cache.write()
-        _settle_and_collect()
-    if not ok:
-        fail("shared corpus bake failed")
-        raise SystemExit(1)
-    if FAILURES[0]:
-        fail("shared corpus bake finished with %d failure(s) above" % FAILURES[0])
-        raise SystemExit(1)
 
 
 #: The three per-map asset lanes the bake absorbed in 0018 story 21-2: the stage label, the flag
@@ -3188,9 +1966,6 @@ def _load_lane_manifests():
 
 
 def main():
-    if cmdline_arg("BakeCorpus", ""):
-        _run_corpus()
-        return
     raw_maps = cmdline_arg("BakeMaps", "")
     map_names = [item.strip() for item in raw_maps.split(",") if item.strip()]
     if not map_names:
@@ -3200,12 +1975,10 @@ def main():
         force_stages = map_bake_stages.stages_from(cmdline_arg("BakeFrom", "").strip())
     except ValueError as exc:
         raise SystemExit("[bake] -BakeFrom: %s" % exc)
-    BAKE_PARTICLES[0] = bool(cmdline_arg("BakeParticles", ""))
-    log("maps=%s%s%s%s" % (
+    log("maps=%s%s%s" % (
         ",".join(map_names),
         " (forced)" if force else "",
-        " (from %s)" % cmdline_arg("BakeFrom", "") if force_stages and not force else "",
-        " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)"))
+        " (from %s)" % cmdline_arg("BakeFrom", "") if force_stages and not force else ""))
 
     lanes = _load_lane_manifests()
 

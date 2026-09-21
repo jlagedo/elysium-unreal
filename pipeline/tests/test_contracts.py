@@ -82,16 +82,6 @@ def _triangle(material: str) -> mdl.Mesh:
     return mesh
 
 
-def _record_for_vmt(vmt_body: str, read_bytes=None) -> dict:
-    """One material's corpus definition. The `.mtl` names the material and the map's own
-    facts; every channel and flag is stated once here."""
-    def default_read(path):
-        return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
-
-    channels = mdl.material_channels("glasswin", SEARCH, read_bytes or default_read)
-    return shared_corpus.material_record(channels) if channels else {}
-
-
 def _mtl_for_vmt(vmt_body: str) -> str:
     """The `.mtl` a model writes: its slot names and the material key each draws."""
     mesh = _triangle("glasswin")
@@ -102,78 +92,6 @@ def _mtl_for_vmt(vmt_body: str) -> str:
     with tempfile.TemporaryDirectory() as out:
         mdl.write_obj_scene([mesh], "test", out, SEARCH, read_bytes, {})
         return (Path(out) / "test.mtl").read_text(encoding="utf-8")
-
-
-def test_translucent_prop_material_carries_blend_flag() -> None:
-    body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
-    assert _record_for_vmt(body)["blend"]
-    assert "mat models/props/glasswin" in _mtl_for_vmt(body)
-
-
-def test_alphatest_prop_material_carries_illum_flag() -> None:
-    body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
-    record = _record_for_vmt(body)
-    assert record["scissor"]
-    assert not record["blend"]
-
-
-def test_semantic_glass_prop_carries_glass_and_derived_normal() -> None:
-    vmt_body = (
-        '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n'
-        '"$translucent" "1"\n"$envmap" "env_cubemap"\n}\n'
-    )
-
-    def read_bytes(path):
-        if path == "materials/models/props/glasswin.vmt":
-            return vmt_body.encode("ascii")
-        if path in ("materials/props/glasswin.tth", "materials/props/glasswin.ttz"):
-            return b"synthetic"
-        return None
-
-    source = Image.new("RGBA", (5, 5), (110, 140, 160, 80))
-    source.putpixel((2, 2), (180, 200, 210, 80))
-    with tempfile.TemporaryDirectory() as out, mock.patch(
-        "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-    ):
-        mdl.write_obj_scene(
-            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
-        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-        normal = Path(out) / "tex" / "props_glasswin_glass_n.png"
-        assert normal.is_file()
-    assert "mat models/props/glasswin" in mtl
-    record = _record_for_vmt(vmt_body, read_bytes)
-    assert record["blend"]
-    assert record["glass"]
-    assert record["bump"] == "tex/props_glasswin_glass_n.png"
-
-
-def test_authored_glass_bumpmap_takes_precedence() -> None:
-    vmt_body = (
-        '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n'
-        '"$translucent" "1"\n"$envmap" "env_cubemap"\n'
-        '"$bumpmap" "props/authored"\n}\n'
-    )
-
-    def read_bytes(path):
-        if path == "materials/models/props/glasswin.vmt":
-            return vmt_body.encode("ascii")
-        if path.endswith((".tth", ".ttz")):
-            return path.encode("ascii")
-        return None
-
-    def decode(tth, _ttz):
-        color = (128, 128, 255, 255) if b"authored" in tth else (100, 130, 150, 80)
-        return Image.new("RGBA", (4, 4), color)
-
-    with tempfile.TemporaryDirectory() as out, mock.patch(
-        "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
-    ):
-        mdl.write_obj_scene(
-            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
-        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-        assert not (Path(out) / "tex" / "props_glasswin_glass_n.png").exists()
-    record = _record_for_vmt(vmt_body, read_bytes)
-    assert record["bump"] == "tex/props_authored_n.png"
 
 
 def test_one_fold_names_the_mtl_slot_the_skins_slot_and_the_manifest_slot() -> None:
@@ -204,75 +122,6 @@ def test_one_fold_names_the_mtl_slot_the_skins_slot_and_the_manifest_slot() -> N
     assert folded in skins
     # The other fold would have produced a different name in each place.
     assert folded != shared_corpus.material_asset(awkward)[len("MI_"):]
-
-
-def test_source_refract_prop_exports_dudv_as_distortion_not_albedo() -> None:
-    vmt_body = (
-        '"Refract"\n{\n"$dudvmap" "props/rain_dudv"\n'
-        '"$refractamount" ".01"\n"$model" "1"\n}\n'
-    )
-
-    def read_bytes(path):
-        if path == "materials/models/props/glasswin.vmt":
-            return vmt_body.encode("ascii")
-        if path in ("materials/props/rain_dudv.tth", "materials/props/rain_dudv.ttz"):
-            return b"synthetic"
-        return None
-
-    signed = Image.new("RGBA", (2, 1))
-    signed.putdata([(0, 0, 127, 255), (255, 1, 127, 255)])
-    with tempfile.TemporaryDirectory() as out, mock.patch(
-        "elysium_pipeline.formats.tex_to_png.decode", return_value=signed
-    ):
-        mdl.write_obj_scene(
-            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
-        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-        normal_path = Path(out) / "tex" / "props_rain_dudv_refract_n.png"
-        with Image.open(normal_path) as normal:
-            assert list(normal.get_flattened_data()) == [
-                (128, 128, 255), (127, 129, 255)]
-
-    record = _record_for_vmt(vmt_body, read_bytes)
-    assert record["refract"]
-    assert record["refract_amount"] == 0.01
-    assert record["refract_map"] == "tex/props_rain_dudv_refract_n.png"
-    assert not record["blend"]
-    assert not record["glass"]
-    assert record["albedo"] == ""
-
-
-def test_source_refract_prefers_authored_normal_over_dudv_fallback() -> None:
-    vmt_body = (
-        '"Refract"\n{\n"$dudvmap" "props/old_dudv"\n'
-        '"$normalmap" "props/authored_normal"\n"$refractamount" "2"\n}\n'
-    )
-    decoded = []
-
-    def read_bytes(path):
-        if path == "materials/models/props/glasswin.vmt":
-            return vmt_body.encode("ascii")
-        if path in (
-                "materials/props/authored_normal.tth",
-                "materials/props/authored_normal.ttz"):
-            return path.encode("ascii")
-        return None
-
-    def decode(tth, _ttz):
-        decoded.append(tth)
-        return Image.new("RGBA", (1, 1), (128, 128, 255, 255))
-
-    with tempfile.TemporaryDirectory() as out, mock.patch(
-        "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
-    ):
-        mdl.write_obj_scene(
-            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
-        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-
-    assert len(decoded) == 1
-    assert b"authored_normal" in decoded[0]
-    assert "mat models/props/glasswin" in mtl
-    record = _record_for_vmt(vmt_body, read_bytes)
-    assert record["refract_map"] == "tex/props_authored_normal_refract_n.png"
 
 
 def _export_texture(flag: str) -> Image.Image:
@@ -642,7 +491,7 @@ def test_stored_recipe_reads_the_registry_by_object_path() -> None:
             return self.tag if name == "ElysiumRecipe" else ""
 
     registry = SimpleNamespace(get_asset_by_object_path=lambda path: (
-        FakeData("abc123") if path == "/ElysiumBaked/Shared/Textures/T_x.T_x" else None))
+        FakeData("abc123") if path == "/ElysiumBaked/Textures/T_x.T_x" else None))
     fake_unreal = SimpleNamespace(
         AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
         MaterialEditingLibrary=object(),
@@ -650,195 +499,10 @@ def test_stored_recipe_reads_the_registry_by_object_path() -> None:
         AssetRegistryHelpers=SimpleNamespace(get_asset_registry=lambda: registry),
     )
     module = _load_bake_lib(fake_unreal)
-    assert module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x") == "abc123"
-    assert module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x.T_x") == "abc123"
-    assert module.stored_recipe("/ElysiumBaked/Shared/Textures/T_other") == ""
+    assert module.stored_recipe("/ElysiumBaked/Textures/T_x") == "abc123"
+    assert module.stored_recipe("/ElysiumBaked/Textures/T_x.T_x") == "abc123"
+    assert module.stored_recipe("/ElysiumBaked/Textures/T_other") == ""
 
-
-def test_bake_mtl_parser_keeps_semantic_glass_flag() -> None:
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-    )
-    module = _load_bake_lib(fake_unreal)
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "glass.mtl"
-        path.write_text("newmtl pane\nmat glass/pane\n", encoding="utf-8")
-        mat = module.read_mtl(path, corpus={"glass/pane": {
-            "albedo": "tex/pane.png", "blend": True, "glass": True,
-            "bump": "tex/pane_glass_n.png"}})["pane"]
-    assert mat.blend
-    assert mat.glass
-    assert mat.bump == "tex/pane_glass_n.png"
-
-
-def test_bake_mtl_parser_keeps_source_refract_contract() -> None:
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-    )
-    module = _load_bake_lib(fake_unreal)
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "refract.mtl"
-        path.write_text("newmtl rain\nmat effects/rain\n", encoding="utf-8")
-        mat = module.read_mtl(path, corpus={"effects/rain": {
-            "refract": True, "refract_amount": 0.01,
-            "refract_map": "tex/rain_refract_n.png"}})["rain"]
-    assert mat.refract
-    assert not mat.opaque
-    assert mat.refract_amount == 0.01
-    assert mat.refract_map == "tex/rain_refract_n.png"
-
-
-def test_bake_mtl_parser_keeps_exact_env_cube_identifier() -> None:
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-    )
-    module = _load_bake_lib(fake_unreal)
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "wet.mtl"
-        path.write_text("newmtl wet\nmat concrete/wet\ncube cubemapdefault\n",
-                        encoding="utf-8")
-        mat = module.read_mtl(path, corpus={"concrete/wet": {
-            "env_cube": "env_cubemap", "wetness": 0.6}})["wet"]
-    # The material names `env_cubemap`; the map's own `cube` line says which baked cube that
-    # resolved to here, and that is the one the bake must bind.
-    assert mat.env_cube == "cubemapdefault"
-    assert mat.wetness_driven
-    assert mat.wetness_scale == 0.6
-
-
-def test_two_maps_naming_one_material_read_one_definition() -> None:
-    """The regression the corpus exists for.
-
-    Each map's `.mtl` carries only its own facts -- which baked cubemap VBSP patched in, and
-    whether the surface is water or a decal here. Both join the same definition, so they cannot
-    disagree about the material however far apart the two exports were run.
-    """
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-    )
-    module = _load_bake_lib(fake_unreal)
-    corpus = {"brick/brickwall001a": {
-        "albedo": "tex/brick_brickwall001a.png", "scissor": True,
-        "env_cube": "env_cubemap"}}
-    with tempfile.TemporaryDirectory() as out:
-        first = Path(out) / "a.mtl"
-        second = Path(out) / "b.mtl"
-        first.write_text(
-            "newmtl brick/brickwall001a@cubemapdefault\nmat brick/brickwall001a\n"
-            "cube cubemapdefault\n", encoding="utf-8")
-        second.write_text(
-            "newmtl brick/brickwall001a@c12_34_56\nmat brick/brickwall001a\n"
-            "cube c12_34_56\n", encoding="utf-8")
-        a = module.read_mtl(first, corpus=corpus)["brick/brickwall001a@cubemapdefault"]
-        b = module.read_mtl(second, corpus=corpus)["brick/brickwall001a@c12_34_56"]
-
-    assert a.albedo == b.albedo
-    assert a.scissor == b.scissor
-    assert a.material_key == b.material_key
-    # ...and differ in exactly the one thing their maps own.
-    assert a.env_cube == "cubemapdefault"
-    assert b.env_cube == "c12_34_56"
-
-
-def test_a_surface_whose_material_no_document_names_is_dropped() -> None:
-    # Silently binding the master's placeholder would render a grey wall with nothing logged.
-    # Every caller passes the whole document set its `.mtl` can draw from, so the key resolving
-    # in none of them is a defect in the export that wrote it, named where it is noticed.
-    warnings: list[str] = []
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-        log_warning=warnings.append,
-    )
-    module = _load_bake_lib(fake_unreal)
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "gap.mtl"
-        path.write_text("newmtl wall\nmat brick/absent\n", encoding="utf-8")
-        assert module.read_mtl(path, corpus={}) == {}
-    assert len(warnings) == 1
-    assert "brick/absent" in warnings[0]
-    assert "wall" in warnings[0]
-
-
-def test_a_slot_with_no_mat_line_is_absent_and_unnamed() -> None:
-    """The exporter writes `newmtl` with no `mat` line when the slot's material name resolved
-    no `.vmt`. That absence is the bake's signal to bind the error material, not a defect in
-    the export, so the warning for an unknown key must not fire for it."""
-    warnings: list[str] = []
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-        log_warning=warnings.append,
-    )
-    module = _load_bake_lib(fake_unreal)
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "miss.mtl"
-        path.write_text("newmtl gone\n\nnewmtl lid\nmat props/lid\n", encoding="utf-8")
-        mats = module.read_mtl(path, corpus={"props/lid": {"albedo": "tex/lid.png"}})
-    assert sorted(mats) == ["lid"]
-    assert warnings == []
-
-
-def test_a_material_key_is_matched_exactly_and_a_case_mismatch_is_named() -> None:
-    """The corpus is keyed by `shared_corpus.material_key`, which is lower case, and this
-    lookup is a plain dict hit. A `.mtl` naming the model header's own mixed-case spelling
-    therefore resolves nothing -- which must be said, not appended as None."""
-    warnings: list[str] = []
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-        log_warning=warnings.append,
-    )
-    module = _load_bake_lib(fake_unreal)
-    corpus = {"models/scenery/furniture/milkcrate/milkcrate": {"albedo": "tex/crate.png"}}
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "crate.mtl"
-        path.write_text(
-            "newmtl milkcrate\nmat models/scenery/furniture/MilkCrate/MilkCrate\n",
-            encoding="utf-8")
-        assert module.read_mtl(path, corpus=corpus) == {}
-        path.write_text(
-            "newmtl milkcrate\nmat models/scenery/furniture/milkcrate/milkcrate\n",
-            encoding="utf-8")
-        assert module.read_mtl(path, corpus=corpus)["milkcrate"].albedo == "tex/crate.png"
-    assert len(warnings) == 1
-    assert "MilkCrate" in warnings[0]
-
-
-def test_a_map_local_definition_outranks_the_corpus() -> None:
-    # VBSP writes per-water-volume depth-blend instances into a map's own PAKFILE and nowhere
-    # else, so a map's local document wins for the keys it carries.
-    fake_unreal = SimpleNamespace(
-        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
-        MaterialEditingLibrary=object(),
-        GeometryScript_Collision=object(),
-    )
-    module = _load_bake_lib(fake_unreal)
-    with tempfile.TemporaryDirectory() as out:
-        path = Path(out) / "local.mtl"
-        path.write_text("newmtl pool\nmat dev/pool_water\nwater 1\n", encoding="utf-8")
-        mat = module.read_mtl(
-            path,
-            corpus={"dev/pool_water": {"albedo": "tex/shared.png"}},
-            local={"dev/pool_water": {"albedo": "tex/local.png"}})["pool"]
-    assert mat.albedo == "tex/local.png"
-    assert mat.water
-
-
-ERROR_PATH = "/ElysiumBaked/Shared/Error/M_ElysiumError"
-
-LID_PATH = "/ElysiumBaked/Shared/Materials/MI_props_lid"
 
 class _Tracker:
     """The recipe sink `_emit` registers against."""
@@ -909,75 +573,12 @@ def _load_bake_map(fake_unreal, export_root):
     return module
 
 
-def _prop_bake(module, tracker, stems):
-    """A corpus-shaped prop bake over `stems`, each carrying one resolved slot (`lid`) and one
-    whose material name resolved nothing (`gone`)."""
-    error_asset = SimpleNamespace(
-        get_path_name=lambda: ERROR_PATH + ".M_ElysiumError")
-    lid_asset = SimpleNamespace(get_path_name=lambda: LID_PATH + ".MI_props_lid")
-    module.bl.ensure_error_material = lambda: error_asset
-    module.bl.build_dynamic_mesh = lambda sections: SimpleNamespace(sections=sections)
-    module.bl.mesh_triangle_count = lambda mesh: sum(
-        len(section[4]) for section in mesh.sections) // 3
-    module.bl.create_static_mesh = lambda *args, **kwargs: SimpleNamespace()
-    module.bl.set_complex_collision = lambda mesh: None
-    module.bl.prune_package_prefix = lambda *args, **kwargs: 0
-
-    bake = module.Bake("sp_test", tracker, None)
-    for stem in stems:
-        model = module.bl.ObjModel()
-        model.positions = [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 10.0, 0.0),
-                           (0.0, 0.0, 10.0), (10.0, 0.0, 10.0), (0.0, 10.0, 10.0)]
-        model.uvs = [(0.0, 0.0)] * 6
-        model.groups = {"lid": [0, 1, 2], "gone": [3, 4, 5]}
-        bake.prop_models[stem] = model
-        lid = module.bl.MatDef("lid")
-        lid.material_key = "props/lid"
-        bake.prop_mats[stem] = {"lid": lid}
-    bake.materials[(bake.shared_mat_pkg, "props/lid")] = lid_asset
-    return bake
-
-
-def test_a_missed_slot_is_error_bound_receipted_and_named_once() -> None:
-    logs: list[str] = []
-    warnings: list[str] = []
-    with tempfile.TemporaryDirectory() as out:
-        module = _load_bake_map(_fake_unreal(logs, warnings), out)
-        tracker = _Tracker()
-        bake = _prop_bake(module, tracker, ["crate", "barrel"])
-        bake.stage_props()
-
-    # Built and receipted, with the error material on exactly the slot that missed. Slots are
-    # the mesh's own sorted material groups, so `gone` precedes `lid`.
-    recipe = tracker.recipes["%s/%s" % (bake.shared_mesh_pkg, shared_corpus.mesh_asset("crate"))]
-    assert recipe["slot_names"] == ["gone", "lid"]
-    assert recipe["materials"] == [ERROR_PATH, LID_PATH]
-    assert tracker.build_count == 2
-    # One warning for the one distinct missing name, naming the key and the first stem that
-    # hit it -- not one per slot instance.
-    assert len(warnings) == 1
-    assert "'gone'" in warnings[0]
-    assert "barrel" in warnings[0]
-    # ...and both slot instances counted in the stage summary.
-    assert bake.error_keys == {"gone": 2}
-    assert any("2 slots error-bound across 2 props" in line for line in logs)
-
-
-def test_two_runs_over_the_same_inputs_produce_the_same_recipes() -> None:
-    recipes = []
-    for _ in range(2):
-        logs: list[str] = []
-        warnings: list[str] = []
-        with tempfile.TemporaryDirectory() as out:
-            module = _load_bake_map(_fake_unreal(logs, warnings), out)
-            tracker = _Tracker()
-            _prop_bake(module, tracker, ["crate"]).stage_props()
-        recipes.append(tracker.recipes)
-    assert recipes[0] == recipes[1]
-    assert ERROR_PATH in str(recipes[0])
-
-
 def test_a_world_surface_with_no_definition_binds_the_error_material() -> None:
+    """`error_bind` warns once per distinct name and counts every slot instance.
+
+    0018 story 21-5 deleted `Bake.material_for`, the legacy resolver that called this; the miss
+    path itself is unchanged and is reached from `MapBakeV2.material_for`.
+    """
     logs: list[str] = []
     warnings: list[str] = []
     with tempfile.TemporaryDirectory() as out:
@@ -985,8 +586,8 @@ def test_a_world_surface_with_no_definition_binds_the_error_material() -> None:
         error_asset = SimpleNamespace(get_path_name=lambda: ERROR_PATH)
         module.bl.ensure_error_material = lambda: error_asset
         bake = module.Bake("sp_test", _Tracker(), None)
-        assert bake.material_for("brick/absent") is error_asset
-        assert bake.material_for("brick/absent") is error_asset
+        assert bake.error_bind("brick/absent", bake.map) is error_asset
+        assert bake.error_bind("brick/absent", bake.map) is error_asset
     assert len(warnings) == 1
     assert bake.error_keys == {"brick/absent": 2}
 

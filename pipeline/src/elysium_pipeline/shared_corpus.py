@@ -12,55 +12,33 @@ sets of bytes. Keyed by the sky's own name they are one asset, which is what the
 
 `character_partition` states the same discipline for bank rigs -- compute once over the whole
 corpus, write it down, and let readers join rather than recompute. This module owns the static
-half's keys, its shared/per-map predicate, and the two documents the corpus writes:
+half's key rules and its shared/per-map predicate.
 
-- ``shared/manifest.json`` is the census: which units landed, from which install key, and what the
-  decode could not resolve.
-- ``shared/materials.json`` is the definition: what each material *means*, once. Two maps can no
-  longer disagree about one material, because there is only one record to read.
-
-Both are game-derived like every other export product: regenerated, never tracked.
+It used to own two documents as well -- ``shared/manifest.json``, the census, and
+``shared/materials.json``, the per-material definition. 0018 story 21-5 deleted the decoder that
+wrote them and the corpus bake that read them; a texture, a material and a model are each a
+published ``export_v2`` unit now, and the lanes that import them carry their own manifests. What
+survives here is what those lanes still join on: how an install path folds to a key.
 """
 from __future__ import annotations
 
-import hashlib
 import re
 
-from elysium_pipeline import mounts
-
-MANIFEST_SCHEMA = "elysium.shared-corpus"
-MATERIALS_SCHEMA = "elysium.shared-corpus-materials"
-VERSION = 1
-#: Bumping this invalidates every corpus receipt. Bump it when the shape of a record changes, not
-#: when the install does -- the install is covered by ``corpus_fingerprint``.
-REVISION = "elysium-shared-corpus-v1"
-
-REGENERATE = "re-run: uv run elysium export bundle corpus"
-
 # --- the corpus on disk, under $ELYSIUM_EXPORT_ROOT --------------------------------------------
+# What is left of it. 0018 story 21-5 deleted the decoder that wrote `shared/manifest.json` and
+# `shared/materials.json` and the bake that read them, so this module no longer owns any
+# document -- only the key rules, which the V2 producers and importers join on.
 ROOT = "shared"
 TEX = "tex"
 #: The offline enhancement track's parallel set, same keys, same filenames.
 TEX_HI = "tex_hi"
-#: ``props`` rather than ``models``: it is the directory layout the bake's prop stage reads.
+#: ``props`` rather than ``models``: it is the directory layout the bake's prop stage read.
 PROPS = "props"
-MANIFEST = "manifest.json"
-MATERIALS = "materials.json"
 
-# --- the corpus on the /ElysiumBaked mount ------------------------------------------------------
-BAKED_ROOT = mounts.BAKED + "/Shared"
-BAKED_TEXTURES = BAKED_ROOT + "/Textures"
-BAKED_MATERIALS = BAKED_ROOT + "/Materials"
-BAKED_MESHES = BAKED_ROOT + "/Meshes"
-
-#: The bake scope name, in the same position `items` held: a receipt store, an asset run plan and
-#: a set of stages that is not a map's.
-SCOPE = "shared"
 #: The one prop skin table. VtMB's alternate skin families are a property of a model, and
 #: the material each family repaints is now one shared instance, so the table that joins them
 #: is global rather than one copy per map.
 PROP_SKINS_ASSET = "DA_ElysiumPropSkins"
-STAGES = ("textures", "materials", "props")
 
 #: A world material instance patched to a baked env cubemap carries this separator plus the cube's
 #: own id. The cube is per map and per position, so the tag is what makes such a material
@@ -87,14 +65,6 @@ def tex_hi_dir(export_root):
 
 def props_dir(export_root):
     return corpus_dir(export_root) / PROPS
-
-
-def manifest_path(export_root):
-    return corpus_dir(export_root) / MANIFEST
-
-
-def materials_path(export_root):
-    return corpus_dir(export_root) / MATERIALS
 
 
 # ------------------------------------------------------------------------ key rules
@@ -295,21 +265,6 @@ def mesh_asset(stem):
     return "SM_" + safe_name(stem)
 
 
-def baked_texture(file_name):
-    name = texture_asset(file_name)
-    return f"{BAKED_TEXTURES}/{name}"
-
-
-def baked_material(key):
-    name = material_asset(key)
-    return f"{BAKED_MATERIALS}/{name}"
-
-
-def baked_mesh(stem):
-    name = mesh_asset(stem)
-    return f"{BAKED_MESHES}/{name}"
-
-
 # --------------------------------------------------------------------- the predicate
 
 def is_map_scoped_material(key, *, decal=False, wetness_driven=False, local=False):
@@ -331,216 +286,3 @@ def is_map_scoped_material(key, *, decal=False, wetness_driven=False, local=Fals
     """
     return (bool(decal) or bool(wetness_driven) or bool(local)
             or CUBEMAP_TAG in str(key or ""))
-
-
-# ------------------------------------------------------------------------- documents
-
-def _digest(parts):
-    out = hashlib.sha256()
-    for part in parts:
-        out.update(str(part).encode("utf-8"))
-        out.update(b"\0")
-    return out.hexdigest()
-
-
-def corpus_fingerprint(texture_keys, material_keys, model_paths):
-    """A stable digest of what the corpus is *made of*, independent of decode order.
-
-    Sorted because the corpus is a set of source identities, not an ordered one: the map walk that
-    discovers them visits maps in whatever order the install lists them, and that must not change
-    the answer.
-    """
-    return _digest([
-        REVISION,
-        "textures", *sorted(texture_keys),
-        "materials", *sorted(material_keys),
-        "models", *sorted(model_paths),
-    ])
-
-
-def build_manifest(*, textures, materials, models, missing=None, fingerprint=""):
-    """The body of ``shared/manifest.json``.
-
-    ``textures`` is ``{key: {"files": {name: role}, "alpha": bool}}``. ``alpha`` states whether
-    the decoded albedo PNG carries an alpha channel -- a fact of the file itself, since the decode
-    writes alpha exactly as the source stores it. ``materials`` is
-    ``{key: {"map_scoped": bool}}``, and ``models`` is
-    ``{stem: {"model": install path, "materials": [key, ...]}}``.
-
-    Raises ``ValueError`` when two texture keys fold to one file name, which would otherwise
-    present one file as two assets with nothing logged.
-    """
-    seen = {}
-    for key, record in sorted((textures or {}).items()):
-        for name in record.get("files", {}):
-            previous = seen.setdefault(name, key)
-            if previous != key:
-                raise ValueError(
-                    f"texture file name collision: {previous!r} and {key!r} both fold to {name!r}"
-                )
-    return {
-        "schema": MANIFEST_SCHEMA,
-        "version": VERSION,
-        "revision": REVISION,
-        "corpus_fingerprint": fingerprint,
-        "textures": dict(sorted((textures or {}).items())),
-        "materials": dict(sorted((materials or {}).items())),
-        "models": dict(sorted((models or {}).items())),
-        "missing": missing or {},
-    }
-
-
-#: The fields of a `material_record` that state a decoded texture file. A reader that asks which
-#: materials draw a given texture asks these, not `albedo` alone: one install texture reaches
-#: different materials as a normal map, an env mask or a second blend layer.
-CHANNEL_FIELDS = ("albedo", "emissive", "bump", "refract_map", "env_mask", "base_tex2",
-                  "water_normal")
-
-
-def material_record(channels, files=None, *, decal=False):
-    """One `materials.json` row from `mdl.material_channels`.
-
-    Carries the same fields `bake_lib.MatDef` holds, with every texture stated as a corpus-relative
-    path, so a reader joins one document instead of re-parsing a `.mtl` per map. `files`, when
-    given, is the set of file names the corpus actually decoded: a channel whose file is absent is
-    stated empty rather than pointing at nothing. Left `None`, every named channel is stated --
-    which is what a map-local material needs, since it never went through the corpus decode.
-    """
-    def rel(key, suffix=ALBEDO):
-        if not key:
-            return ""
-        name = texture_file(key, suffix)
-        return f"{TEX}/{name}" if files is None or name in files else ""
-
-    albedo = channels.get("albedo")
-    env_mask = ""
-    if channels.get("envmap"):
-        if channels.get("envmask"):
-            env_mask = rel(channels["envmask"], ENV_MASK)
-        elif channels.get("envmask_from_alpha"):
-            env_mask = rel(albedo, ENV_MASK)
-    # An authored $bumpmap always outranks the normal semantic glass derives from its own albedo.
-    bump = (rel(channels["bump"], NORMAL) if channels.get("bump")
-            else rel(albedo, GLASS_NORMAL) if channels.get("glass") else "")
-    tint = channels.get("envtint") or [1.0, 1.0, 1.0]
-    wetness = channels.get("globalwetness")
-    return {
-        "albedo": rel(albedo),
-        "albedo_key": albedo or "",
-        "emissive": rel(albedo, EMISSIVE) if channels.get("selfillum") else "",
-        "bump": bump,
-        "refract_map": rel(channels.get("refract_map"), REFRACT_NORMAL),
-        "env_mask": env_mask,
-        "base_tex2": rel(channels.get("base_tex2")),
-        "scissor": bool(channels.get("alphatest")),
-        "blend": bool(channels.get("translucent")),
-        "additive": bool(channels.get("additive")),
-        "glass": bool(channels.get("glass")),
-        "refract": bool(channels.get("refract")),
-        "refract_amount": float(channels.get("refract_amount") or 0.0),
-        # The cube the VMT itself names: `env_cubemap` where the surface samples whatever VBSP
-        # patched in, otherwise a named cubemap. `env_cube` is the id the `.mtl` and the bake use;
-        # `env_cube_path` is the install key it decodes from, unfolded, because a sanitized id is
-        # not a path.
-        "env_cube": channels.get("envmap") or "",
-        "env_cube_path": channels.get("envmap_path") or "",
-        "env_tint": [float(c) for c in tint[:3]],
-        "wetness": float(wetness) if wetness is not None else None,
-        # The exporter's flag chain is an if/elif, so a water surface is written as `water` INSTEAD
-        # of `blend` and never carries the translucent flag. Reading only `blend` therefore calls
-        # every canal, sewer and pier surface opaque -- `bake_lib.MatDef` states the same trap.
-        "water": bool(channels.get("water")),
-        "water_normal": rel(channels.get("water_normal"), NORMAL),
-        "water_fog_color": channels.get("water_fog_color") or [0.10, 0.10, 0.13],
-        "water_fog_start": float(channels.get("water_fog_start") or 0.0),
-        "water_fog_end": float(channels.get("water_fog_end") or 128.0),
-        "water_reflect_tint": channels.get("water_reflect_tint") or [1.0, 1.0, 1.0],
-        "decal_scale": float(channels.get("decal_scale") or 0.0),
-        "unlit": bool(channels.get("unlit")),
-        # An `infodecal` material projects rather than surfaces. That is a placement fact, not a
-        # VMT one -- the same material can also skin a wall -- so it is recorded from the entity
-        # walk rather than read off the shader.
-        "decal": bool(decal),
-    }
-
-
-def build_materials(records, *, fingerprint=""):
-    """The body of ``shared/materials.json``: ``{key: record}``, one definition per material.
-
-    A record carries the same fields `bake_lib.MatDef` holds, with every texture stated as a
-    corpus-relative path, so the bake reads one document instead of re-parsing a ``.mtl`` per map.
-    """
-    return {
-        "schema": MATERIALS_SCHEMA,
-        "version": VERSION,
-        "revision": REVISION,
-        "corpus_fingerprint": fingerprint,
-        "materials": dict(sorted((records or {}).items())),
-    }
-
-
-def _check(document, schema, name):
-    if not isinstance(document, dict):
-        raise ValueError(f"{name} is not an object")
-    if document.get("schema") != schema:
-        raise ValueError(f"{name} is {document.get('schema')!r}, expected {schema!r}")
-    if document.get("version") != VERSION:
-        raise ValueError(
-            f"{name} is version {document.get('version')}, expected {VERSION} - {REGENERATE}"
-        )
-    return document
-
-
-def check_manifest(document):
-    """Raise ``ValueError`` unless ``document`` is a manifest this build can read."""
-    _check(document, MANIFEST_SCHEMA, MANIFEST)
-    for key in ("textures", "materials", "models"):
-        if not isinstance(document.get(key), dict):
-            raise ValueError(f"{MANIFEST} is missing '{key}' - {REGENERATE}")
-    return document
-
-
-def check_materials(document):
-    """Raise ``ValueError`` unless ``document`` is a material set this build can read."""
-    _check(document, MATERIALS_SCHEMA, MATERIALS)
-    if not isinstance(document.get("materials"), dict):
-        raise ValueError(f"{MATERIALS} is missing 'materials' - {REGENERATE}")
-    return document
-
-
-# ------------------------------------------------------------------------- accessors
-
-def texture_files(manifest):
-    """Every decoded file the corpus holds, as ``{file name: role}`` -- the wanted-set a
-    whole-corpus texture pass authors and prunes against."""
-    out = {}
-    for record in manifest.get("textures", {}).values():
-        out.update(record.get("files", {}))
-    return out
-
-
-def material_definition(materials, key):
-    """One material's definition out of a `materials.json` document, or ``None`` when the corpus
-    does not name it. `material_record` is the other direction -- it builds one."""
-    return materials.get("materials", {}).get(key)
-
-
-def model_record(manifest, stem):
-    """One model's census row, or ``None`` when the corpus does not name it."""
-    return manifest.get("models", {}).get(stem)
-
-
-def missing_models(models, stems):
-    """The stems, sorted and deduplicated, that `models` does not name.
-
-    `models` is a manifest's own model table. A map states the stem every prop it places folds
-    to; this is what turns a stem the corpus never decoded into a named failure rather than a
-    prop that silently places no mesh.
-    """
-    return sorted({stem for stem in stems if stem and stem not in models})
-
-
-def shared_material_keys(manifest):
-    """Every material key the corpus owns, in declared order."""
-    return [key for key, row in manifest.get("materials", {}).items()
-            if not row.get("map_scoped")]

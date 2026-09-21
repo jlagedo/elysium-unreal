@@ -392,20 +392,19 @@ def test_material_report_classifies_animation_and_appearance_class_from_provenan
     provenance = {**_BASE, "proxies": [{"kind": "texturescroll"}, {"kind": "animatedtexture"}],
                   "omissions": [{"reason": MG.FRAMES_UNAVAILABLE_OMISSION}],
                   "wetnessScale": None, "isDecalSurface": False}
-    row = MG.classify_material(binding, provenance, {"additive": True})
+    row = MG.classify_material(binding, provenance)
     # `texturescroll` runs live on the V2 instance; `animatedtexture` does not, because its frames
     # array never staged -- the provenance says so, and the row must say the same.
     assert row["animatedNow"] is True
     assert row["liveProxies"] == ["texturescroll"]
     assert row["animatedFramesUnavailable"] is True
-    # Legacy `additive 1` -> M_Additive -> class "additive"; V2 Additive blend -> "additive".
-    assert row["legacyMaster"] == "M_Additive"
-    assert row["classChanged"] is False
+    # V2 Additive blend on an unlit master -> class "additive". (0018 story 21-5 dropped the
+    # legacy half of the row: there is no corpus record left to have bound this before.)
+    assert row["v2Class"] == "additive"
 
     # R7.2 rulings 2 and 3: a `$decal 1` world face binds the PROJECTOR instance the material lane
     # staged beside its surface one, as its mesh slot -- so its class is "decal" (the class means
-    # "projector instance bound", not "a flag in the legacy .mtl"), it is never Nanite, and the
-    # rebind off the legacy lane's ordinary opaque card is the class change the report states.
+    # "projector instance bound"), and it is never Nanite.
     decal = MG.MaterialBinding(
         key="decals/n0", unit="vtmb:material:decals/n0", asset="/ElysiumBaked/Materials/decals/MI_n0",
         master="M_V2_LitTranslucent", blend_mode="Translucent", patched=False, provenance="decals/n0",
@@ -414,8 +413,8 @@ def test_material_report_classifies_animation_and_appearance_class_from_provenan
     assert decal.opaque is False
     assert decal.as_row()["decalAsset"] == "/ElysiumBaked/Materials/decals/MI_n0_Decal"
     assert decal.as_row()["isDecalSurface"] is True
-    row = MG.classify_material(decal, {**_BASE, "isDecalSurface": True}, {"decal": True})
-    assert (row["legacyClass"], row["v2Class"], row["classChanged"]) == ("opaque", "decal", True)
+    row = MG.classify_material(decal, {**_BASE, "isDecalSurface": True})
+    assert row["v2Class"] == "decal"
     assert row["isDecalSurface"] is True
     assert row["decalAsset"] == row["slotAsset"] == "/ElysiumBaked/Materials/decals/MI_n0_Decal"
 
@@ -423,20 +422,15 @@ def test_material_report_classifies_animation_and_appearance_class_from_provenan
     assert binding.as_row()["decalAsset"] is None
     assert binding.slot_asset == binding.asset
 
-    # No legacy record at all (a PAKFILE-only material the legacy corpus never saw) is stated,
-    # never guessed.
-    row = MG.classify_material(decal, {**_BASE}, None)
-    assert row["legacyRecordFound"] is False and row["classChanged"] is False
-
     report = MG.material_report(
         "sm_test", {"signs/ticker": binding, "decals/n0": decal},
-        _sidecars({"signs/ticker": provenance, "decals/n0": {**_BASE, "isDecalSurface": True}}),
-        legacy_materials={"signs/ticker": {"additive": True}, "decals/n0": {"decal": True}})
+        _sidecars({"signs/ticker": provenance, "decals/n0": {**_BASE, "isDecalSurface": True}}))
     assert report["counts"]["materials"] == 2
-    assert report["counts"]["animatedNow"] == 1 and report["counts"]["classChanged"] == 1
+    assert report["counts"]["animatedNow"] == 1
     assert report["counts"]["decalSurfaces"] == report["counts"]["decalProjectorsBound"] == 1
     assert [row["key"] for row in report["animatedNow"]] == ["signs/ticker"]
-    assert [row["key"] for row in report["classChanged"]] == ["decals/n0"]
+    # The legacy comparison is gone with the corpus it read.
+    assert "classChanged" not in report["counts"] and "classChanged" not in report
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)
@@ -468,7 +462,9 @@ def test_every_face_group_on_the_working_corpus_resolves_a_staged_and_imported_i
 
     report = MG.material_report(map_name, table, MG.sidecar_reader(staging))
     assert report["counts"]["materials"] == len(table)
-    assert report["counts"]["legacyRecordMissing"] == 0
+    # Every row classifies off the staged provenance alone (0018 story 21-5 retired the
+    # `legacyRecordMissing` column with the corpus that answered it).
+    assert all(row["v2Class"] for row in report["materials"])
     assert json.dumps(report)   # serialisable as written beside the staged pair
 
 

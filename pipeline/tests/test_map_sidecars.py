@@ -29,6 +29,7 @@ from elysium_pipeline.exporters.UE_map_sidecars import (
     entity_lump_text,
     is_output_key,
     meshed_faces,
+    model_brushes,
     parse_entity_blocks,
     rope_material_id,
     source_planes,
@@ -74,6 +75,35 @@ def test_brush_hull_abstains_when_fewer_than_four_sides_survive():
 
     assert contents == 0x4000
     assert points is None
+
+
+def test_brush_hull_dedupes_coincident_points_from_duplicate_planes():
+    # A duplicated +X plane makes every x = 10 corner come out of two accepted triples; the
+    # 0.1-Source-unit dedupe key is what collapses them back to eight. (Ported here from
+    # `test_map_producer_join.py` by 0018 story 21-5, which deleted the decoder twin it asked.)
+    planes = np.vstack([_BOX[:6], _BOX[0:1]])
+    contents, points = brush_hull(
+        planes, _sides([(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]), 0x1)
+
+    assert contents == 0x1
+    assert _corners(points) == _BOX_CORNERS
+
+
+def test_model_brushes_collects_only_leaves_under_the_given_headnode():
+    # Two disjoint sub-trees under one node array: asking for headnode 2 must not reach the
+    # brushes hanging under headnode 0. This is what keeps a brush entity's hulls its own.
+    nodes = [{"children": (-1, 1)}, {"children": (-2, -3)}, {"children": (-4, -5)}]
+    leafs = [
+        {"firstLeafBrush": 0, "numLeafBrushes": 1},
+        {"firstLeafBrush": 1, "numLeafBrushes": 1},
+        {"firstLeafBrush": 2, "numLeafBrushes": 1},
+        {"firstLeafBrush": 3, "numLeafBrushes": 2},
+        {"firstLeafBrush": 5, "numLeafBrushes": 1},
+    ]
+    leaf_brushes = [100, 101, 102, 200, 201, 201]
+
+    assert model_brushes(nodes, leafs, leaf_brushes, 0) == {100, 101, 102}
+    assert model_brushes(nodes, leafs, leaf_brushes, 2) == {200, 201}
 
 
 def test_split_output_keeps_the_four_legacy_field_rules():

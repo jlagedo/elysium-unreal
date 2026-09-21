@@ -12,7 +12,7 @@ import struct
 
 import unreal
 
-from elysium_pipeline import asset_names, shared_corpus
+from elysium_pipeline import asset_names, mounts
 
 _tools = unreal.AssetToolsHelpers.get_asset_tools()
 _mel = unreal.MaterialEditingLibrary
@@ -40,194 +40,7 @@ def read_glb_json(path):
         return json.loads(handle.read(chunk_length).decode("utf-8"))
 
 
-def glb_material_albedo(glb):
-    """{glTF material name: image uri} for the materials that declare one. A VtMB material carries
-    at most one map -- mdl_gltf.py writes either a baseColorTexture or a flat baseColorFactor."""
-    images = glb.get("images", [])
-    textures = glb.get("textures", [])
-    out = {}
-    for material in glb.get("materials", []):
-        entry = material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
-        if entry is None:
-            continue
-        source = textures[entry["index"]].get("source")
-        if source is None:
-            continue
-        uri = images[source].get("uri", "")
-        if uri:
-            out[material["name"]] = uri
-    return out
-
-
 # ---------------------------------------------------------------------------- sidecars
-
-
-class MatDef(object):
-    """One OBJ material, mirroring FElysiumMaterialDef so the bake selects the same master
-    and binds the same named parameters the runtime factory does."""
-
-    __slots__ = ("name", "material_key", "albedo", "emissive", "bump", "refract_map", "env_mask",
-                 "base_tex2", "scissor", "blend", "additive", "glass", "refract",
-                 "refract_amount", "env_cube", "env_tint", "wetness_driven",
-                 "wetness_scale", "decal", "water", "color", "local")
-
-    # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
-    # dim-down. The population is bimodal -- 361 of the game's 362 grey tints sit at exactly
-    # zero spread and the next value up is 0.05 -- so this separates them with a clear gap on
-    # either side rather than splitting a continuum (docs/vtmb/reflections.md).
-    CHROMATIC_SPREAD = 0.02
-
-    def __init__(self, name):
-        self.name = name
-        # The corpus key this surface's definition came from. It is the material's identity, and
-        # what the shared material instance is named after; `name` is the surface's own key, which
-        # additionally carries the map's cubemap tag.
-        self.material_key = name
-        # True when the definition came from the map's own PAKFILE rather than the corpus. The
-        # corpus reads the install, so it holds no such material and the map has to author it.
-        self.local = False
-        self.albedo = ""
-        self.emissive = ""
-        self.bump = ""
-        self.refract_map = ""
-        self.env_mask = ""
-        self.base_tex2 = ""
-        self.scissor = False      # illum 4    -> masked master
-        self.blend = False        # blend 1    -> translucent master
-        self.additive = False     # additive 1 -> additive master
-        self.glass = False        # glass 1    -> UE Thin Translucent glass master
-        self.refract = False      # refract N  -> Source framebuffer-distortion master
-        self.refract_amount = 0.0 # authored $refractamount, PNO-neutral when zero
-        self.env_cube = ""
-        self.env_tint = (1.0, 1.0, 1.0)   # envtint -> $envmaptint, white when unauthored
-        self.wetness_driven = False
-        self.wetness_scale = 0.0
-        self.decal = False        # decal 1    -> deferred-decal master
-        # water 1 -> a Source water surface. The exporter's flag chain is an if/elif, so a water
-        # material is written as `water 1` INSTEAD of `blend 1` and never carries the translucent
-        # flag -- reading only `blend` therefore calls every canal, sewer and pier surface opaque.
-        self.water = False
-        self.color = (0.6, 0.6, 0.65)
-
-    @property
-    def opaque(self):
-        """True when this surface can carry Nanite (Nanite is opaque/masked only)."""
-        return not (self.blend or self.additive or self.refract or self.water)
-
-    @property
-    def wet(self):
-        """True when this surface actually runs the wetness path.
-
-        `wetness_driven` is the material's authored fact -- its VMT carries GlobalWetness
-        proxies. A projected decal draws through `M_V2_Decal`, which carries albedo, self-illum
-        and the world fog and nothing else (R7.2 ruling 1: Roughness/Specular/Metallic/Normal are
-        not connected at all); the wall underneath owns the wetness. So a decal's proxies are
-        inert here, and the surface is not counted, fingerprinted or bound as wet."""
-        return self.wetness_driven and not self.decal
-
-    @property
-    def chromatic(self):
-        """True when $envmaptint names a metal: VtMB's own hand-authored metal mask.
-
-        Translucent and additive surfaces are excluded even when their tint is chromatic --
-        the blue/teal tints in that population are coloured GLASS, which stays dielectric.
-        Metalness is never inferred here; it is read off the game's own authoring."""
-        if not self.env_cube or not self.opaque:
-            return False
-        return max(self.env_tint) - min(self.env_tint) >= self.CHROMATIC_SPREAD
-
-    @property
-    def tint_luma(self):
-        """The grey half of $envmaptint, as a reflection-strength scale. Rec.709 luma of the
-        authored tint; 1.0 when unauthored, so it is neutral by construction."""
-        r, g, b = self.env_tint
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def mat_from_record(name, record, key=""):
-    """A `MatDef` from one `shared/materials.json` row.
-
-    Texture fields stay exactly as the record states them -- corpus-relative (`tex/<file>`) -- so
-    a caller joins them against the corpus directory, not against a map.
-    """
-    mat = MatDef(name)
-    mat.material_key = key or name
-    mat.albedo = record.get("albedo", "")
-    mat.emissive = record.get("emissive", "")
-    mat.bump = record.get("bump", "")
-    mat.refract_map = record.get("refract_map", "")
-    mat.env_mask = record.get("env_mask", "")
-    mat.base_tex2 = record.get("base_tex2", "")
-    mat.scissor = bool(record.get("scissor"))
-    mat.blend = bool(record.get("blend"))
-    mat.additive = bool(record.get("additive"))
-    mat.glass = bool(record.get("glass"))
-    mat.refract = bool(record.get("refract"))
-    mat.refract_amount = float(record.get("refract_amount") or 0.0)
-    mat.env_cube = record.get("env_cube", "")
-    tint = record.get("env_tint") or [1.0, 1.0, 1.0]
-    mat.env_tint = (float(tint[0]), float(tint[1]), float(tint[2]))
-    wetness = record.get("wetness")
-    mat.wetness_driven = wetness is not None
-    mat.wetness_scale = float(wetness or 0.0)
-    mat.decal = bool(record.get("decal"))
-    mat.water = bool(record.get("water"))
-    return mat
-
-
-def read_mtl(path, corpus=None, local=None):
-    """Parse an exported `.mtl` into `{surface key: MatDef}`.
-
-    The `.mtl` names each surface's material and the two facts only its map holds -- the baked
-    cubemap VBSP patched in, and whether the surface is water or a projected decal here. Every
-    channel and flag comes from `corpus`, the one definition per material, so two maps cannot
-    state different things about one authored material. `local` carries the definitions of
-    materials that exist only inside this map's own PAKFILE.
-
-    A surface whose material neither document names is skipped and named in the log: a silently
-    missing definition would bake as the master's own placeholder. Every caller passes the whole
-    set of documents its `.mtl` can draw from -- the corpus alone for a prop, the corpus plus the
-    map's own `materials.json` for a world surface -- so a key that resolves in neither is a defect
-    in the export that wrote the key, not an optional absence.
-    """
-    corpus = corpus or {}
-    local = local or {}
-    mats = {}
-    if not os.path.isfile(path):
-        return mats
-    cur = None
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            tok = line.split()
-            if not tok:
-                continue
-            key = tok[0]
-            if key == "newmtl" and len(tok) >= 2:
-                cur = tok[1]
-            elif cur is None:
-                continue
-            elif key == "mat" and len(tok) >= 2:
-                record = local.get(tok[1])
-                if record is None:
-                    record = corpus.get(tok[1])
-                    from_local = False
-                else:
-                    from_local = True
-                if record is None:
-                    unreal.log_warning(
-                        "[bake] %s: slot %r names material key %r, which neither the corpus nor "
-                        "this map's own document carries" % (path, cur, tok[1]))
-                    continue
-                mats[cur] = mat_from_record(cur, record, tok[1])
-                mats[cur].local = from_local
-            elif cur in mats and key == "cube" and len(tok) >= 2:
-                # The cube this surface samples is the map's, not the material's.
-                mats[cur].env_cube = tok[1]
-            elif cur in mats and key == "water" and len(tok) >= 2 and tok[1] == "1":
-                mats[cur].water = True
-            elif cur in mats and key == "decal" and len(tok) >= 2 and tok[1] == "1":
-                mats[cur].decal = True
-    return mats
 
 
 class ObjModel(object):
@@ -252,47 +65,6 @@ class ObjModel(object):
         return sum(len(v) for v in self.groups.values()) // 3
 
 
-def read_obj(path):
-    """Parse an exported OBJ. Positions and UVs are read verbatim (already Unreal space);
-    faces are already triangles with export-reversed winding."""
-    model = ObjModel()
-    model.path = path
-    raw_pos = []
-    raw_uv = []
-    corners = {}
-    cur = None
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            tok = line.split()
-            if not tok:
-                continue
-            key = tok[0]
-            if key == "v":
-                raw_pos.append((float(tok[1]), float(tok[2]), float(tok[3])))
-            elif key == "vt":
-                raw_uv.append((float(tok[1]), float(tok[2])))
-            elif key == "usemtl" and len(tok) >= 2:
-                cur = model.groups.setdefault(tok[1], [])
-            elif key == "mtllib" and len(tok) >= 2:
-                model.mtl_name = tok[1]
-            elif key == "f":
-                if cur is None:
-                    cur = model.groups.setdefault("__default", [])
-                for token in tok[1:4]:
-                    idx = corners.get(token)
-                    if idx is None:
-                        idx = len(model.positions)
-                        corners[token] = idx
-                        parts = token.split("/")
-                        model.positions.append(raw_pos[int(parts[0]) - 1])
-                        if len(parts) > 1 and parts[1]:
-                            model.uvs.append(raw_uv[int(parts[1]) - 1])
-                        else:
-                            model.uvs.append((0.0, 0.0))
-                    cur.append(idx)
-    return model
-
-
 class DecalDef(object):
     """One projected decal from a `.decals` line, mirroring FElysiumDecalDef. Every vector is
     Unreal space already, so the placer reads them verbatim: `normal` is the room-facing
@@ -300,92 +72,6 @@ class DecalDef(object):
     on-surface half-extents in cm. `mat` keys into the shared `<map>.mtl`."""
 
     __slots__ = ("mat", "loc", "normal", "s_dir", "t_dir", "half_w", "half_h")
-
-
-def read_decals(path):
-    """Parse a `.decals` sidecar into [DecalDef]:
-       `<material> lx ly lz  nx ny nz  sx sy sz  tx ty tz  hw hh`
-    15 whitespace-separated tokens; malformed lines are skipped."""
-    out = []
-    if not os.path.isfile(path):
-        return out
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            tok = line.split()
-            if len(tok) != 15:
-                continue
-            value = [float(t) for t in tok[1:]]
-            decal = DecalDef()
-            decal.mat = tok[0]
-            decal.loc = unreal.Vector(value[0], value[1], value[2])
-            decal.normal = unreal.Vector(value[3], value[4], value[5])
-            decal.s_dir = unreal.Vector(value[6], value[7], value[8])
-            decal.t_dir = unreal.Vector(value[9], value[10], value[11])
-            decal.half_w = value[12]
-            decal.half_h = value[13]
-            out.append(decal)
-    return out
-
-
-def read_skins(path):
-    """Parse a `props/<stem>.skins` sidecar into {family index: {authored material: family
-    material}}:
-        `<family> <authored>=<family> [...]`
-    One line per alternate skin family that repaints something; family 0 (the authored set) is
-    never written, and a family that repaints nothing is simply absent. Missing file -> {}."""
-    out = {}
-    if not os.path.isfile(path):
-        return out
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            tok = line.split()
-            if len(tok) < 2 or not tok[0].isdigit():
-                continue
-            remap = {}
-            for pair in tok[1:]:
-                if "=" in pair:
-                    base, rep = pair.split("=", 1)
-                    remap[base] = rep
-            if remap:
-                out[int(tok[0])] = remap
-    return out
-
-
-def read_phys(path):
-    """Parse a `props/<stem>.phys` sidecar -- VtMB's own VPhysics collision, decoded by
-    `phy.py` -- into {"mass": kg, "hulls": [(verts, tris), ...]}:
-        mass <kg>
-        hull <x y z x y z ...>      flat Unreal-cm verts, one convex hull
-        tris <i j k i j k ...>      its triangles, indexing that hull's verts
-    Two lines per hull, in that order. Missing file -> None, which is the runtime's signal
-    that the model carries no collision at all."""
-    if not os.path.isfile(path):
-        return None
-    mass, hulls, pending = 0.0, [], None
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            tok = line.split()
-            if not tok:
-                continue
-            if tok[0] == "mass" and len(tok) > 1:
-                mass = float(tok[1])
-            elif tok[0] == "hull":
-                nums = [float(v) for v in tok[1:]]
-                pending = [tuple(nums[i:i + 3]) for i in range(0, len(nums) - 2, 3)]
-            elif tok[0] == "tris" and pending is not None:
-                idx = [int(v) for v in tok[1:]]
-                hulls.append((pending, [tuple(idx[i:i + 3])
-                                        for i in range(0, len(idx) - 2, 3)]))
-                pending = None
-    return {"mass": mass, "hulls": hulls}
-
-
-def read_floats(path):
-    """One float per line (the `.blend` per-vertex WorldVertexTransition weight sidecar)."""
-    if not os.path.isfile(path):
-        return []
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        return [float(line) for line in handle if line.strip()]
 
 
 def vertex_normals(positions, index_lists):
@@ -554,7 +240,7 @@ def configure_texture(texture, role):
 # texture -- for every material name that resolves no `.vmt`, and reports it only through a
 # developer-level warning nobody ships (research case `material-resolution`). Misses are routine in
 # the shipped install, so the bake substitutes too rather than failing the surface.
-ERROR_MATERIAL_PACKAGE = shared_corpus.BAKED_ROOT + "/Error"
+ERROR_MATERIAL_PACKAGE = mounts.MATERIALS
 ERROR_MATERIAL_NAME = "M_ElysiumError"
 ERROR_MATERIAL_PATH = "%s/%s" % (ERROR_MATERIAL_PACKAGE, ERROR_MATERIAL_NAME)
 
@@ -566,10 +252,11 @@ ERROR_CHECKER_PURPLE = (0.35, 0.0, 0.42)
 
 
 def ensure_error_material():
-    """The checkerboard error material on the shared mount, authored once.
+    """The checkerboard error material, authored once under the generators' own package.
 
-    Its own package, not `BAKED_MATERIALS`: the corpus scope prunes that package to exactly the
-    material instances it authored, and this asset is in none of their wanted-sets.
+    `/Game/ElysiumGenerated/Materials`, not a bake mount (0018 story 21-5): it is authored from
+    constants rather than decoded from the install, every map's bake binds the one asset, and no
+    stage's prune ever states this package as its wanted-set.
 
     Every value in the graph is a constant of this module, so the asset is the same every run and
     a recipe naming it stays stable. An existing asset is reused -- the graph has no input that
@@ -650,72 +337,9 @@ def make_material_instance(name, package, parent):
     return mic
 
 
-def make_skin_set(name, package, models):
-    """Author the map's UElysiumPropSkinSet -- the prop-skin table the runtime binds.
-
-    `models` is [(stem, [family_overrides])] where family_overrides is a list indexed by skin
-    family, each a {slot name: UMaterialInterface} (empty for family 0 and for any family that
-    repaints nothing). Storing real material objects is the point: they are hard references, so
-    every alternate material stays reachable from the level and binds at exactly the quality the
-    authored one does.
-
-    Resolved by load-first, then create: does_asset_exist reports False for an asset already on
-    this mount even after a forced rescan, and create_asset then trips the unattended overwrite
-    guard. The whole Models array is overwritten, because a bake that died mid-run leaves a
-    half-populated asset behind. The load goes through `unreal.load_asset` (LoadObject) rather
-    than the EditorAssetLibrary one, which logs a hard *Error* when the registry has no such
-    asset -- on the first bake of a map that is the normal path, and it would make a clean run
-    report failure."""
-    ensure_dir(package)
-    target = "%s/%s" % (package, name)
-    asset = unreal.load_asset(target)
-    if asset is None:
-        factory = unreal.DataAssetFactory()
-        factory.set_editor_property("data_asset_class", unreal.ElysiumPropSkinSet)
-        asset = _tools.create_asset(name, package, unreal.ElysiumPropSkinSet, factory)
-    if asset is None:
-        return None
-
-    entries = []
-    for stem, families in models:
-        rows = []
-        for overrides in families:
-            # A USTRUCT's generated Python type takes no constructor kwargs unless its
-            # properties are Blueprint-exposed, so every field goes in by set_editor_property.
-            row = unreal.ElysiumSkinFamily()
-            items = []
-            for slot, material in sorted(overrides.items()):
-                item = unreal.ElysiumSkinOverride()
-                item.set_editor_property("slot_name", slot)
-                item.set_editor_property("material", material)
-                items.append(item)
-            row.set_editor_property("overrides", items)
-            rows.append(row)
-        entry = unreal.ElysiumPropSkinModel()
-        entry.set_editor_property("stem", stem)
-        entry.set_editor_property("families", rows)
-        entries.append(entry)
-    asset.set_editor_property("models", entries)
-    return asset
-
-
-def _assert_prunable(package, scope):
-    """Refuse to prune the shared corpus from a scope that does not author all of it.
-
-    Every map references the corpus packages, and a map -- or a single-unit run -- knows only the
-    handful of assets it wanted. Pruning one of those packages against that wanted set would
-    delete the install's textures, materials and meshes for every other map. Only the whole-corpus
-    pass, which authors the complete wanted set from `manifest.json`, may state this scope.
-    """
-    if package.startswith(shared_corpus.BAKED_ROOT) and scope != shared_corpus.SCOPE:
-        raise RuntimeError(
-            "refusing to prune the shared corpus package %s from scope %r" % (package, scope))
-
-
-def prune_package(package, keep, scope=""):
+def prune_package(package, keep):
     """Delete every asset directly in `package` whose object name is not in `keep`. Only safe
     for a package one stage owns outright and re-authors in full. Returns the number deleted."""
-    _assert_prunable(package, scope)
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return 0
     stale = []
@@ -728,10 +352,9 @@ def prune_package(package, keep, scope=""):
     return len(stale)
 
 
-def prune_package_prefix(package, prefix, keep, scope=""):
+def prune_package_prefix(package, prefix, keep):
     """Delete directly-owned assets whose object names start with `prefix` and are not in
     `keep`. Use this when several stages share one package but own disjoint name families."""
-    _assert_prunable(package, scope)
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return 0
     stale = []

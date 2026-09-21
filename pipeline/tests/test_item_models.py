@@ -12,7 +12,6 @@ import tempfile
 from unittest import mock
 
 from elysium_pipeline import item_models as items
-from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
 from elysium_pipeline.formats import mdl
 
 
@@ -99,21 +98,18 @@ def test_weapondata_reads_whether_or_not_the_parser_unwrapped_it() -> None:
 
 def test_the_corpus_stem_is_the_whole_model_path_folded() -> None:
     # The stem is the model path folded, not its base filename: two `pendant.mdl` under
-    # different directories are different items and must not collide. Reached through the map
-    # exporter's own decoder, which is where the rule lives.
+    # different directories are different items and must not collide. `mdl.sanitize` is where
+    # the rule lives; 0018 story 21-5 deleted the map decoder this used to be asked through,
+    # which only ever forwarded to it.
     keys = [
         "models/items/rings/ground/ring03.mdl",
         "models/items/occult/ground/pendant.mdl",
         "models/items/occult_gargoyle/ground/pendant.mdl",
     ]
-    expected = {key: mdl.sanitize(key[:-4]) for key in keys}
-    with tempfile.TemporaryDirectory() as propdir:
-        # Every stem pre-declared, so the decoder answers with its naming and reads no model.
-        resolved, ok, missing = decode_prop_models(
-            {}, keys, propdir, {}, set(expected.values())
-        )
+    stems = {key: mdl.sanitize(key[:-4]) for key in keys}
 
-    assert resolved == expected
-    assert (ok, missing) == (len(keys), 0)
-    assert len(set(expected.values())) == len(keys)
-    assert expected["models/items/rings/ground/ring03.mdl"] == "models_items_rings_ground_ring03"
+    assert len(set(stems.values())) == len(keys)
+    assert stems["models/items/rings/ground/ring03.mdl"] == "models_items_rings_ground_ring03"
+    assert stems["models/items/occult/ground/pendant.mdl"] == "models_items_occult_ground_pendant"
+    assert (stems["models/items/occult_gargoyle/ground/pendant.mdl"]
+            == "models_items_occult_gargoyle_ground_pendant")

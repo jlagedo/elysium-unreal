@@ -37,7 +37,7 @@ from elysium_pipeline.formats import install
 from elysium_pipeline.formats import bsp as B
 from elysium_pipeline.paths import export_root
 from research.tooling.probes import lightmap as LM
-from elysium_pipeline.exporters.UE_bsp_to_scene import base_material
+from elysium_pipeline.shared_corpus import base_material
 
 FS = 104
 FE, NE, TI = 36, 40, 42

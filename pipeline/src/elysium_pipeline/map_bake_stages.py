@@ -15,9 +15,10 @@ from __future__ import annotations
 #:
 #: There is deliberately no `nav` stage. The nav-area marks have to be placed before the meshes
 #: are cut, the meshes before the level is written, and the level is written by `level` -- so
-#: navigation is not separable from it. `props` is absent because only the corpus bake has one.
+#: navigation is not separable from it. 0018 story 21-5 removed `particles`, the legacy per-map
+#: Niagara pass, with the `<map>.particles.json` it read; `NS_<root>` is `make_root_systems.py`'s.
 STAGE_ORDER = (
-    "textures", "materials", "world", "sky", "particles",
+    "textures", "materials", "world", "sky",
     "entities", "environment", "collision", "level",
 )
 

@@ -106,137 +106,6 @@ def bundles_for_profile(name: str) -> list[str]:
     return list(dict.fromkeys(bundles))
 
 
-def export_maps(
-    names: Iterable[str],
-    *,
-    out_root: Path,
-    index: dict[str, Any] | None = None,
-    skip_existing: bool = False,
-    continue_on_error: bool = True,
-    available: Sequence[str] | None = None,
-) -> list[ExportTaskResult]:
-    """Export named maps with one shared patch-first install index.
-
-    ``available`` is the discovered map inventory; a profile run passes its one
-    `install.all_map_names()` result rather than re-walking the install."""
-
-    # `UE_map_sidecars`/`particles` are imported here, in `export_maps`'s own body,
-    # rather than inside `rewrite_sidecars_via_producer` below, so the incremental-build
-    # fingerprint sees them: `_map_tasks` hashes `_DecoderClosures.function_entries('...export_all',
-    # 'export_maps')`, which walks only this function's own AST, not a sibling function's. An
-    # import hidden in `rewrite_sidecars_via_producer` would be invisible to that closure, so an
-    # edit to `UE_map_sidecars` (etc.) would not invalidate the incremental cache.
-    from elysium_pipeline.exporters import UE_bsp_to_scene, UE_map_sidecars
-    from elysium_pipeline.formats import install, particles
-
-    requested = list(dict.fromkeys(names))
-    available = set(available if available is not None else install.all_map_names())
-    shared_index = index if index is not None else install.build_index()
-    results: list[ExportTaskResult] = []
-
-    for position, name in enumerate(requested, 1):
-        started = time.monotonic()
-        if name not in available:
-            result = ExportTaskResult(
-                name=name,
-                status="failed",
-                error=f"no map {name!r} in the patch-first install",
-            )
-            results.append(result)
-            if not continue_on_error:
-                break
-            continue
-        out_dir = out_root / name
-        if skip_existing and (out_dir / f"{name}.obj").is_file():
-            results.append(ExportTaskResult(name=name, status="skipped"))
-            continue
-        print(f"\n[{position}/{len(requested)}] {name} ...", flush=True)
-        try:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            UE_bsp_to_scene.main(
-                install.map_path(name),
-                out_dir,
-                index=shared_index,
-            )
-            rewrite_sidecars_via_producer(
-                name, out_dir, shared_index,
-                sidecars_module=UE_map_sidecars, particles_module=particles,
-            )
-            results.append(
-                ExportTaskResult(
-                    name=name,
-                    status="ok",
-                    seconds=time.monotonic() - started,
-                )
-            )
-        except (Exception, SystemExit) as exc:
-            traceback.print_exc()
-            results.append(
-                ExportTaskResult(
-                    name=name,
-                    status="failed",
-                    seconds=time.monotonic() - started,
-                    error=str(exc) or type(exc).__name__,
-                )
-            )
-            if not continue_on_error:
-                break
-    return results
-
-
-def rewrite_sidecars_via_producer(
-    name: str,
-    out_dir: Path,
-    index: dict[str, Any],
-    *,
-    sidecars_module: Any = None,
-    particles_module: Any = None,
-) -> dict[str, Any]:
-    """R3.5: the R3.2 producer is the default source of the eight legacy sidecars.
-
-    `UE_bsp_to_scene.main` has just written `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/
-    `.spawn`/`.ropes` into ``out_dir`` (plus `.obj`/`.mtl`/`.props`/`.decals`/`.water`,
-    which the producer does not reproduce and this call leaves alone). `UE_map_sidecars.write_sidecars`
-    overwrites the eight it does own with
-    its own bytes, reading the map's published V2 units rather than the BSP.
-
-    `.particles` reads `.ents` back off disk, so it is re-run here against the producer's `.ents`
-    instead of the legacy one `UE_bsp_to_scene.main` already used and discarded -- R3.5.
-
-    **Weather is no longer re-run here** (0018 story 21-4). Its geometry half is the producer's
-    now (`importers.map_weather`, off the meshed world scene and the model units) and the bake
-    reads it from the geometry manifest, so the `weather_inputs` hand-over -- the decoder passing
-    its own cover triangles and bounds back so this call could re-point the entity half -- has
-    nothing left to feed. `UE_bsp_to_scene.main` still writes its own `sm_hub_1.weather.json` from
-    its own `.ents`, which is what `research/tooling/probes/decal_weather_parity.py` compares the
-    port against for as long as the decoder exists (21-5 deletes both).
-
-    `UE_bsp_to_scene.py` itself is not deleted, and every sidecar it writes internally is still
-    written exactly as before. It is only unwired from this default path; deletion is 21-5's, once
-    the parity probe has been run against it.
-
-    ``sidecars_module``/``particles_module`` let `export_maps` hand in the
-    modules it already imported in its own body -- see the comment there -- rather than this
-    function re-importing them itself; a direct caller (a test) may omit them and get the same
-    lazily-imported singleton modules.
-    """
-
-    if sidecars_module is None:
-        from elysium_pipeline.exporters import UE_map_sidecars as sidecars_module
-    if particles_module is None:
-        from elysium_pipeline.formats import particles as particles_module
-
-    producer_report = sidecars_module.write_sidecars(name, out_dir=out_dir)
-
-    with open(out_dir / f"{name}.ents", encoding="utf-8") as ents_file:
-        entity_document = json.load(ents_file)
-    particles_path = particles_module.write_particles(name, out_dir, entity_document, index)
-    if particles_path:
-        print(f"wrote {particles_path}")
-
-    return producer_report
-
-
 def _run_bundle(
     name: str,
     *,
@@ -266,10 +135,6 @@ def _run_bundle(
         from elysium_pipeline.exporters import UE_extract_vdata
 
         UE_extract_vdata.main(force=force, index=index)
-    elif name == "corpus":
-        from elysium_pipeline.exporters import UE_extract_corpus
-
-        UE_extract_corpus.main(index=index, force=force)
     elif name == "cfg":
         from elysium_pipeline.exporters import UE_extract_cfg
 
@@ -336,33 +201,22 @@ def export_profile(
     force: bool = False,
     continue_on_error: bool = True,
 ) -> ExportBatchResult:
-    """Export one complete offline profile.
+    """Export one complete offline profile: its bundles.
 
-    Unreal policy packages and map baking intentionally remain separate: they
-    run in editor processes and are coordinated by the public CLI.
+    A profile used to decode its map list first. 0018 story 21-5 deleted the BSP decoder, so a
+    profile carries no map half at all -- a map is published as `export_v2` units and goes to a
+    level through `bake map`. Unreal policy packages and map baking remain separate: they run in
+    editor processes and are coordinated by the public CLI.
     """
 
     from elysium_pipeline.formats import install
 
-    available = install.all_map_names()
-    map_names = maps_for_profile(name, available=available)
-    shared_index = install.build_index()
     result = ExportBatchResult()
-    result.maps = export_maps(
-        map_names,
-        out_root=out_root,
-        index=shared_index,
-        skip_existing=False,
+    result.bundles = export_bundles(
+        bundles_for_profile(name),
+        maps=[],
+        force=force,
+        index=install.build_index(),
         continue_on_error=continue_on_error,
-        available=available,
     )
-    completed = [item.name for item in result.maps if item.ok]
-    if continue_on_error or not result.failures:
-        result.bundles = export_bundles(
-            bundles_for_profile(name),
-            maps=completed,
-            force=force,
-            index=shared_index,
-            continue_on_error=continue_on_error,
-        )
     return result

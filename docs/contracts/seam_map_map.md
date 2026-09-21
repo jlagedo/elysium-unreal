@@ -1725,9 +1725,11 @@ answer, `SC.BAKED_MATERIALS`, is the legacy corpus bake — `/ElysiumBaked/Share
 `/ElysiumBaked/Materials/<family>/MI_<stem>`. Checking assets no converted map draws is not a check.
 
 The V2 answer reads the lane's own documents: the staged map manifest names the instance bound to
-each surface slot, the corpus `.mtl` of every model the map places names the prop units, and
-`$ELYSIUM_WORK_ROOT/import/materials/manifest.json` (~19,700 rows) carries each staged `MI_`'s
-master, blend-mode override and texture bindings. A per-map patched unit under
+each surface slot, the model lane's manifest names the material unit each slot of every model the
+map places binds (`$ELYSIUM_WORK_ROOT/import/models/manifest.json`, `slots[].materialId` —
+0018 story 21-5 moved this off the shared corpus's per-model `.mtl`, which died with the corpus),
+and `$ELYSIUM_WORK_ROOT/import/materials/manifest.json` (~19,700 rows) carries each staged `MI_`'s
+master, blend-mode override, scalar overrides and texture bindings. A per-map patched unit under
 `/ElysiumBaked/Materials/maps/<map>/...` is a parameter override authored *on* the corpus instance —
 it states no blend mode and binds no texture of its own — so the join climbs its `parent` chain to
 the corpus row that does. Results are keyed by unit, not by slot: one broken corpus instance is one

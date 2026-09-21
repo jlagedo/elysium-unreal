@@ -16,7 +16,6 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import mounts  # noqa: E402
-from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.asset_names import brush_slot_style  # noqa: E402
 from elysium_pipeline.paths import export_root, work_root  # noqa: E402
 from elysium_pipeline.validation.dds_alpha import DdsAlphaError, alpha_minimum  # noqa: E402
@@ -58,38 +57,44 @@ def _material_group_key(key):
     return key
 
 
-_CORPUS_MATERIALS = None
+_STAGED_MODELS = None
 
 
-def _corpus_materials():
-    """The one material definition per key, which every `.mtl` joins against. Read once: the
-    document covers the whole install, and a caller in a per-model loop would otherwise re-read
-    several megabytes of JSON per model."""
-    global _CORPUS_MATERIALS
-    if _CORPUS_MATERIALS is None:
-        path = os.fspath(SC.materials_path(export_root()))
-        if not os.path.isfile(path):
-            _CORPUS_MATERIALS = {}
-        else:
+def _staged_models():
+    """The model lane's own manifest, indexed by R1 stem.
+
+    `$ELYSIUM_WORK_ROOT/import/models/manifest.json` is what `uv run elysium import models`
+    wrote: one row per staged `SM_`, carrying the material slots it binds. 0018 story 21-5 made
+    this the answer to "which materials does a placed model draw" -- the question the shared
+    corpus's `shared/props/<stem>.mtl` used to answer, on a corpus that no longer exists.
+
+    Empty when the lane has not staged on this machine; the caller names that as a missing input.
+    """
+    global _STAGED_MODELS
+    if _STAGED_MODELS is None:
+        path = os.path.join(os.fspath(work_root()), "import", "models", "manifest.json")
+        rows = []
+        if os.path.isfile(path):
             with open(path, "r", encoding="utf-8") as handle:
-                _CORPUS_MATERIALS = SC.check_materials(json.load(handle))["materials"]
-    return _CORPUS_MATERIALS
+                rows = json.load(handle).get("assets") or []
+        _STAGED_MODELS = {str(row.get("stem") or ""): row for row in rows}
+        _STAGED_MODELS.pop("", None)
+    return _STAGED_MODELS
 
 
-def _map_prop_mtls(map_name):
-    """The corpus `.mtl` files for the models THIS map places, as ``[(file name, path)]``.
+def _map_prop_material_units(map_name):
+    """`{material unit key: owner label}` for every model THIS map places.
 
     The corpus holds every model in the install. A map is answerable for the ones it places, so
-    the scan joins its own stems against the corpus rather than walking all of it -- which would
-    re-read three thousand models for every map verified and still say nothing about this one.
+    the join runs its own stems against the model lane's manifest rather than walking all of it.
+    The stems come from the staged `placements` rows and the staged entity rows.
 
-    0018 story 21-4: the stems come from the staged `placements` rows and the staged entity rows,
-    not from `<map>.props` and `<map>.ents` under the export root. The staged row carries the same
-    `stem` the legacy line's first column carried (`map_geometry.Placement`'s own docstring says
-    so), so the set is unchanged. The `.mtl` join itself is the shared corpus's and dies with it
-    in 21-5.
+    0018 story 21-5 replaced the `shared/props/<stem>.mtl` read this used to be. The `.mtl` was
+    the decoder's per-model material list; the model unit's own `slots[]` is the same list,
+    already resolved, and it is what the bake actually binds. The owner label keeps the shape the
+    `.mtl` join produced, so a material the lane never staged is still reported against the model
+    and slot that wanted it.
     """
-    prop_dir = os.fspath(SC.props_dir(os.fspath(export_root())))
     stems = set()
     manifest = _staged_manifest(map_name) or {}
     for placement in manifest.get("placements") or []:
@@ -101,13 +106,35 @@ def _map_prop_mtls(map_name):
             for entity in json.load(handle).get("entities", []):
                 if entity.get("model_mesh"):
                     stems.add(entity["model_mesh"])
-    out = []
+    models = _staged_models()
+    units = {}
     for stem in sorted(stems):
-        entry = stem + ".mtl"
-        path = os.path.join(prop_dir, entry)
-        if os.path.isfile(path):
-            out.append((entry, path))
-    return out
+        row = models.get(stem)
+        if row is None:
+            continue
+        for slot in row.get("slots") or []:
+            unit = str(slot.get("materialId") or "")
+            if not unit.startswith("vtmb:material:"):
+                # A `vtmb:missing-material:` slot is the model lane's own sentinel and is
+                # already reported there; it names no unit for this lane to ask about.
+                continue
+            units.setdefault(unit[len("vtmb:material:"):],
+                             "%s/%s" % (stem, slot.get("slotName") or slot.get("index")))
+    return units
+
+
+def _wetness_scale(row):
+    """A staged material row's `$globalwetness` scalar, or `None` when it is not wetness-driven.
+
+    The material lane writes `WetnessDriven`/`WetnessScale` into the instance's own scalar
+    overrides, so the staged manifest answers what `shared/materials.json`'s `MatDef.wet` and
+    `MatDef.wetness_scale` answered before 0018 story 21-5 retired that corpus.
+    """
+    scalars = (row or {}).get("scalars") or {}
+    if not scalars.get("WetnessDriven"):
+        return None
+    value = scalars.get("WetnessScale")
+    return None if value is None else float(value)
 
 
 # `_world_materials` is gone (0018 story 21-4). It read `<map>.mtl` and `<map>.materials.json`
@@ -227,15 +254,18 @@ def verify_sm_hub_1_weather(package, map_name):
         if height is None or bound_height != height:
             fail("per-map rain material has no matching height texture")
 
-    # 0018 story 21-4: the world half is read off the STAGED material table, which is what the
-    # map binds, rather than off `<map>.mtl` under the export root -- the last thing in this lane
-    # that needed a legacy directory, and the reason the check reported an empty corpus the first
-    # time the hub was baked without one. The join is on `provenance`, the ROOT unit's key, which
-    # is exactly the corpus key the `.mtl` named; the dedupe is on the group key with R7.4's
-    # `#underside`/`#style<n>` suffixes stripped, because the `.mtl` had one entry per
-    # `<material>@<cubemap>` group and those suffixes split a group without adding a material.
+    # 0018 story 21-4 moved the world half off `<map>.mtl` and onto the STAGED material table,
+    # which is what the map binds. 0018 story 21-5 moved the SCALAR off `shared/materials.json`
+    # and onto the material lane's own manifest, which is where it was going to end up anyway:
+    # the lane writes `WetnessDriven`/`WetnessScale` into the instance's scalar overrides, so the
+    # staged row states the number the corpus `MatDef` used to. Nothing here reads a corpus.
+    #
+    # The world dedupe is on the group key with R7.4's `#underside`/`#style<n>` suffixes
+    # stripped, because the `.mtl` had one entry per `<material>@<cubemap>` group and those
+    # suffixes split a group without adding a material. The prop half is the material units the
+    # map's placed models bind, which the model lane's `slots[]` names.
     wetness_values = []
-    corpus = _corpus_materials()
+    _by_asset, by_unit = _staged_materials()
     staged_materials = (_staged_manifest("sm_hub_1") or {}).get("materials") or {}
     by_group = {}
     for key, row in sorted(staged_materials.items()):
@@ -243,14 +273,13 @@ def verify_sm_hub_1_weather(package, map_name):
     # One value per GROUP, not per unit: two cubemap-patched copies of one material were two
     # `.mtl` entries and are two staged groups, and the expected 14 counts them that way.
     for provenance in by_group.values():
-        record = corpus.get(provenance) if provenance else None
-        mat = bl.mat_from_record(provenance, record, provenance) if record else None
-        if mat is not None and mat.wet:
-            wetness_values.append(float(mat.wetness_scale))
-    for _entry, path in _map_prop_mtls("sm_hub_1"):
-        for mat in bl.read_mtl(path, corpus=corpus).values():
-            if mat.wet:
-                wetness_values.append(float(mat.wetness_scale))
+        scale = _wetness_scale(by_unit.get(provenance)) if provenance else None
+        if scale is not None:
+            wetness_values.append(scale)
+    for unit in _map_prop_material_units("sm_hub_1"):
+        scale = _wetness_scale(by_unit.get(unit))
+        if scale is not None:
+            wetness_values.append(scale)
     expected_wetness = [0.56] + [0.60] * 6 + [1.0] * 7
     if sorted(wetness_values) != sorted(expected_wetness):
         fail("expected the exact 14-material GlobalWetness scalar corpus, found %r"
@@ -1834,17 +1863,16 @@ def _authored_alpha_minimum(row):
         return None
 
 
-def verify_v2_materials(map_name, registry, prop_mtls):
+def verify_v2_materials(map_name, registry, prop_units):
     """R5.1/R7.2, the materials a converted map binds, read back off
     the staged manifests instead of the legacy `.mtl`/PNG pair.
 
     Three assertions, each the V2 half of a legacy check that cannot answer on this lane:
 
     * **alpha** -- a unit whose blend reads the base texture's alpha binds a baked `Texture2D`
-      that has an alpha channel. The legacy check probed the exported PNG and then the LEGACY
-      corpus texture (`SC.BAKED_TEXTURES`, one flat package of `T_<stem>`), and a converted map
-      binds neither: its surfaces bind the material lane's `/ElysiumBaked/Textures/<family>/`
-      assets, imported from DDS.
+      that has an alpha channel. The legacy check probed the exported PNG and then the legacy
+      corpus texture package, and a converted map binds neither: its surfaces bind the material
+      lane's `/ElysiumBaked/Textures/<family>/` assets, imported from DDS.
     * **glass and Source Refract** -- every `$glass`/`$refract` unit the map's surfaces or its
       placed models bind is staged, and the instance on the mount parents to the master the lane
       recorded for it. The retired walk keyed these to a per-map `<map>/Materials/MI_...`
@@ -1873,10 +1901,6 @@ def verify_v2_materials(map_name, registry, prop_mtls):
                       % (map_name, map_name))
         return errors
 
-    prop_units = {}
-    for entry, mtl_path in prop_mtls:
-        for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
-            prop_units.setdefault(mat.material_key, "%s/%s" % (entry, mat.name))
     units, missing = v2_bound_units(
         manifest.get("materials") or {}, prop_units, by_asset, by_unit)
     for owner in missing:
@@ -1912,21 +1936,25 @@ def verify_v2_materials(map_name, registry, prop_mtls):
     for row in sorted(opaque_sources):
         unreal.log("[verify]   opaque-authored blend: %s" % row)
 
-    # The semantic pair the legacy walks owned. The flags are the corpus definition's, joined by
-    # unit key -- the staged manifest records the master a unit resolved to, never why.
-    # 0018 story 21-4 dropped the `<map>.materials.json` overlay that used to be merged in here:
-    # exactly one map in the export tree ever had one (`sm_pier_1`, delisted by this group), and
-    # a PAKFILE-only material is a first-class unit in the V2 lane rather than a map-local record.
-    # The shared corpus underneath is 21-5's to retire, and this join goes with it.
-    definitions = dict(_corpus_materials())
+    # The semantic pair the legacy walks owned. 0018 story 21-4 dropped the
+    # `<map>.materials.json` overlay that used to be merged in here: exactly one map in the
+    # export tree ever had one (`sm_pier_1`, delisted by this group), and a PAKFILE-only material
+    # is a first-class unit in the V2 lane rather than a map-local record. 0018 story 21-5
+    # retired the shared corpus underneath, so the SELECTOR is the staged row's own now rather
+    # than the corpus `MatDef`'s `glass`/`refract` flags.
+    #
+    # What the two flags picked out is what these three assertions are worth asking of: a unit
+    # that refracts (the Source framebuffer-distortion master, `M_V2_Refract`) or one that binds
+    # a normal map at all -- the legacy `glass 1` has no master of its own on this lane, it is a
+    # translucent lit instance like any other, and the normal is the thing the check is about.
     flagged = parented = normals = 0
     for key in sorted(units):
         row, owner = units[key]
-        record = definitions.get(key)
-        mat = bl.mat_from_record(key, record, key) if record else None
-        if mat is None or not (mat.glass or mat.refract):
+        master_name = str(row.get("parent") or "").rsplit("/", 1)[-1]
+        refracts = master_name == "M_V2_Refract"
+        if not refracts and not (row.get("textures") or {}).get("NormalMap"):
             continue
-        kind = "glass" if mat.glass else "Source Refract"
+        kind = "Source Refract" if refracts else "normal-mapped"
         flagged += 1
         asset = str(row.get("assetPath") or "")
         instance = unreal.EditorAssetLibrary.load_asset(asset)
@@ -1982,15 +2010,6 @@ def verify_map(map_name):
         by_class[name] = by_class.get(name, 0) + 1
         if name == "StaticMesh":
             meshes.append(data)
-    # Every surface texture is the shared corpus's, so there is one index rather than a prop set
-    # and a world set per map.
-    textures = {
-        str(data.asset_name): data
-        for data in registry.get_assets_by_path(SC.BAKED_TEXTURES, recursive=False)
-        if str(data.asset_class_path.asset_name) == "Texture2D"
-    }
-    world_textures = textures
-
     unreal.log("[verify] %s" % package)
     for name in sorted(by_class):
         unreal.log("[verify]   %-28s %d" % (name, by_class[name]))
@@ -2042,8 +2061,10 @@ def verify_map(map_name):
     unreal.log("[verify] physics props %d, %d convex collision shapes, %d with authored mass"
                % (phys_meshes, phys_shapes, massed))
 
-    # The `.mtl` of every model this map places: what the material questions are asked of.
-    prop_mtls = _map_prop_mtls(map_name)
+    # The material units every model this map places binds: what the material questions are
+    # asked of. 0018 story 21-5 moved this off the shared corpus's per-model `.mtl` and onto the
+    # model lane's own resolved `slots[]`.
+    prop_units = _map_prop_material_units(map_name)
     # The light lanes read `<map>.lights` and `<map>.sky`, two of the producer's own eight, so
     # they read them where the producer wrote them (0018 story 21-4). Nothing in this lane reads
     # `$ELYSIUM_EXPORT_ROOT/<map>/` any more; what is left of that root here is the shared corpus
@@ -2055,7 +2076,7 @@ def verify_map(map_name):
     # used to stand here read the retired lane's own output (the exported PNG corpus, the
     # per-map `<map>/Materials` package, the shared corpus) and answered about assets nobody
     # drew (0018 story 21-1).
-    errors.extend(verify_v2_materials(map_name, registry, prop_mtls))
+    errors.extend(verify_v2_materials(map_name, registry, prop_units))
 
     ents_path = os.path.join(_sidecar_dir(map_name), map_name + ".ents")
     annotated = set()

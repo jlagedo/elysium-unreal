@@ -1100,12 +1100,6 @@ def ide_clangd(ctx: typer.Context) -> None:
     )
 
 
-#: `--particles` on every command that bakes a map.
-PARTICLE_PASS_HELP = (
-    "Author each map's Niagara systems during the bake. Off by default: the pass force-deletes Niagara packages the asset compiler may still own, which crashes the editor. A bake without it leaves the mount's existing particle packages alone."
-)
-
-
 def _export_profile_command(
     ctx: typer.Context,
     profile: str,
@@ -1113,7 +1107,6 @@ def _export_profile_command(
     clean: bool,
     force: bool,
     jobs: int | None,
-    particles: bool,
     verify: bool,
 ) -> None:
     state = _state(ctx)
@@ -1128,7 +1121,6 @@ def _export_profile_command(
             clean=clean,
             force=force,
             jobs=jobs,
-            particles=particles,
             verify=verify,
             per_task=state.verbose,
         )
@@ -1156,7 +1148,6 @@ def export_grid(
     clean: bool = typer.Option(False, "--clean"),
     force: bool = typer.Option(False, "--force"),
     jobs: int | None = typer.Option(None, "--jobs", min=1),
-    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -1167,7 +1158,7 @@ def export_grid(
     ),
 ) -> None:
     _export_profile_command(
-        ctx, "grid", clean=clean, force=force, jobs=jobs, particles=particles, verify=verify
+        ctx, "grid", clean=clean, force=force, jobs=jobs, verify=verify
     )
 
 
@@ -1177,7 +1168,6 @@ def export_all_command(
     clean: bool = typer.Option(False, "--clean"),
     force: bool = typer.Option(False, "--force"),
     jobs: int | None = typer.Option(None, "--jobs", min=1),
-    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -1188,7 +1178,7 @@ def export_all_command(
     ),
 ) -> None:
     _export_profile_command(
-        ctx, "all", clean=clean, force=force, jobs=jobs, particles=particles, verify=verify
+        ctx, "all", clean=clean, force=force, jobs=jobs, verify=verify
     )
 
 
@@ -1197,15 +1187,6 @@ def export_map(
     ctx: typer.Context,
     maps: list[str] = typer.Argument(...),
     force: bool = typer.Option(False, "--force"),
-    intermediate_only: bool = typer.Option(
-        False,
-        "--intermediate-only",
-        help=(
-            "Decode only, no bake. No longer part of the map procedure (0018 story 21-4): "
-            "`bake map` produces the sidecars it needs from the published units itself."
-        ),
-    ),
-    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -1215,6 +1196,13 @@ def export_map(
         ),
     ),
 ) -> None:
+    """Import a map's model dependencies and bake it.
+
+    There is no decode step: 0018 story 21-5 deleted the BSP decoder, so a map's inputs are the
+    `export_v2` units published for it. `bake map` alone is the bake; this command is the bake
+    with the world-material masters and the shared model import in front of it.
+    """
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
@@ -1223,8 +1211,6 @@ def export_map(
             runner,
             maps,
             force=force,
-            intermediate_only=intermediate_only,
-            particles=particles,
             verify=verify,
         )
         console.print("map export complete: " + ", ".join(names))
@@ -1235,7 +1221,7 @@ def export_map(
         ExitCode.OFFLINE_EXPORT,
         action,
         require_game=True,
-        require_ue=not intermediate_only,
+        require_ue=True,
         activity=True,
     )
 
@@ -2632,7 +2618,6 @@ def bake_map(
             "they hold, so none can be skipped."
         ),
     ),
-    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -2663,7 +2648,7 @@ def bake_map(
         from elysium_pipeline import export_manager
 
         names = export_manager.bake_v2_maps(
-            config, runner, maps, force=force, from_stage=from_stage, particles=particles,
+            config, runner, maps, force=force, from_stage=from_stage,
             verify=verify, skip_nav_verify=skip_nav_verify, on_line=console.print)
         console.print("map bake complete: " + ", ".join(names))
 
@@ -3493,88 +3478,6 @@ def export_v2_export_all(ctx: typer.Context) -> None:
     )
 
 
-def _corpus_unit(ctx: typer.Context, label: str, **selectors) -> None:
-    """Re-decode and re-bake one shared-corpus unit. No map is exported and no `.umap` changes."""
-
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import export_manager
-
-        done = export_manager.export_corpus_unit(config, runner, **selectors)
-        console.print(
-            f"{label} complete: "
-            + ", ".join(filter(None, [
-                ", ".join(done["models"]),
-                ", ".join(done["materials"]),
-            ]))
-            + " (no map re-baked)"
-        )
-
-    _execute(
-        _state(ctx),
-        label,
-        ExitCode.OFFLINE_EXPORT,
-        action,
-        require_game=True,
-        require_ue=True,
-        activity=True,
-    )
-
-
-@export_app.command("prop")
-def export_prop(
-    ctx: typer.Context,
-    model: str = typer.Argument(..., help="Install model path, for example models/scenery/x.mdl."),
-    force: bool = typer.Option(False, "--force", help="Rebake even when the recipe is unchanged."),
-) -> None:
-    """Re-decode one static model and rebake its mesh, materials and textures."""
-    _corpus_unit(ctx, "export prop", models=[model], force=force)
-
-
-@export_app.command("material")
-def export_material(
-    ctx: typer.Context,
-    material: str = typer.Argument(..., help="Install material path, without materials/ or .vmt."),
-    force: bool = typer.Option(False, "--force", help="Rebake even when the recipe is unchanged."),
-) -> None:
-    """Re-resolve one material and rebake its instance and every texture it draws."""
-    _corpus_unit(ctx, "export material", materials=[material], force=force)
-
-
-@export_app.command("texture")
-def export_texture(
-    ctx: typer.Context,
-    texture: str = typer.Argument(..., help="Install texture path, without materials/ or .tth."),
-    force: bool = typer.Option(False, "--force", help="Rebake even when the recipe is unchanged."),
-) -> None:
-    """Re-decode one texture, through every corpus material that draws it."""
-    _corpus_unit(ctx, "export texture", textures=[texture], force=force)
-
-
-@export_app.command("placed-model")
-def export_placed_model(
-    ctx: typer.Context,
-    map_name: str = typer.Argument(..., help="Owning exported map, for example sp_tutorial_1."),
-    model: str = typer.Argument(..., help="Placed MDL path used by that map."),
-    force: bool = typer.Option(False, "--force", help="Rewrite and rebake this selected model."),
-) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import export_manager
-
-        stems = export_manager.export_placed_models(
-            config, runner, [map_name], [model], force=force)
-        console.print("placed-model export complete: " + ", ".join(stems))
-
-    _execute(
-        _state(ctx),
-        "export placed-model",
-        ExitCode.OFFLINE_EXPORT,
-        action,
-        require_game=True,
-        require_ue=True,
-        activity=True,
-    )
-
-
 @export_app.command("bundle")
 def export_bundle(
     ctx: typer.Context,
@@ -3582,14 +3485,14 @@ def export_bundle(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     allowed = {
-        "corpus", "particles", "scripts", "signs", "vdata", "cfg", "scenes",
+        "particles", "scripts", "signs", "vdata", "cfg", "scenes",
         "ui", "policy",
     }
     if bundle not in allowed:
         raise typer.BadParameter("bundle must be one of: " + ", ".join(sorted(allowed)))
-    # `corpus` decodes offline AND bakes the shared /ElysiumBaked/Shared packages, so it needs
-    # both the install and an editor; `policy` needs only the editor.
-    needs_editor = bundle in {"policy", "corpus"}
+    # `policy` is the only bundle that authors assets, so it is the only one needing an editor.
+    # 0018 story 21-5 retired `corpus`, the other one that did.
+    needs_editor = bundle == "policy"
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager

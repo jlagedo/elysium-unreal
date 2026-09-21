@@ -10,8 +10,10 @@ specification does not already state.
 
 Two rules govern every line below.
 
-**Byte-comparability, not equivalence.** The output is diffed against `UE_bsp_to_scene.py`'s
-sidecars by the R3.3 differ, so every legacy quirk is reproduced verbatim by default -- the
+**Byte-comparability, not equivalence.** The output WAS diffed against `UE_bsp_to_scene.py`'s
+sidecars by the R3.3 differ, until 0018 story 21-5 deleted both the differ and the decoder. The
+defaults below are what that diff settled on and they do not move on their own: every legacy
+quirk is still reproduced verbatim by default -- the
 `^(On|Out)` output test rather than the datamap typing the entities unit uses, unfolded keys,
 `param` left unstripped, `delay` through a plain `float()`, the dropped `extra` field, `times`
 normalized to `-1`. Those six are named divergences owned by R3.4. Six landed as an opt-in flag on
@@ -256,8 +258,10 @@ def hull_vertices(points: np.ndarray) -> list[float]:
 class EntityDivergences:
     """Opt-in switches for the `.ents` behaviours where the legacy sidecar and the entities unit's
     own reading disagree (the six-item list). Every flag defaults to the legacy behaviour, so
-    `write_sidecars` stays byte-comparable against `UE_bsp_to_scene.py` unless a caller asks for the corrected reading --
-    each flag is documented at its own R3.4 commit.
+    `write_sidecars` keeps the reading the decoder had unless a caller asks for the corrected one
+    -- each flag is documented at its own R3.4 commit. The decoder itself is gone (0018 story
+    21-5), so these defaults are now a written-down contract rather than a diffable one; 0018
+    story 21-7 owns flipping them with the retail evidence for each.
     """
 
     #: `False` (legacy, default): a key is an output when it matches `^(On|Out)` case-insensitively
@@ -305,8 +309,8 @@ class EntityDivergences:
     keep_extra: bool = False
 
 
-#: The default: every flag legacy, so a caller that asks for nothing gets the byte-comparable
-#: sidecars R3.3 diffs against `UE_bsp_to_scene.py`.
+#: The default: every flag legacy, so a caller that asks for nothing gets the reading the deleted
+#: decoder had. 0018 story 21-7 owns flipping these, one per commit, with retail evidence.
 LEGACY_ENTITY_FIELDS = EntityDivergences()
 
 
@@ -1922,7 +1926,7 @@ def sky_faces_published(sky_name: str, root: Path | None = None) -> bool:
 
     `<map>.env`'s `skybox` flag. Until 0018 story 21-4 this was a membership test over
     `shared/manifest.json`'s texture table -- the legacy exporter's own question, asked of the
-    corpus `UE_extract_corpus` builds. It is the same question asked of the published texture
+    corpus the deleted `UE_extract_corpus` built. It is the same question asked of the published texture
     units instead, which is the one thing that let this producer stop reading the legacy export
     root at all. `importers.sky_composites.plan_composites` already names exactly these files,
     and refuses a partial set the same way.
@@ -1991,7 +1995,7 @@ def write_sidecars(
     disk when it returns -- but it no longer writes a `<map>.ready` marker: 0018 story 21-3 moved
     the travel gate onto the bake's own four packages, and nothing reads the marker any more.
     `entity_fields` opts `.ents` into the R3.4 divergences one at
-    a time; the default keeps this run byte-comparable to `UE_bsp_to_scene.py`.
+    a time; the default keeps this run on the reading the deleted decoder had.
 
     **This run reads nothing outside `$ELYSIUM_EXPORT_V2_ROOT`** (0018 story 21-4). The one tie
     left was `corpus_root`, which fed `shared/manifest.json` to the `.env` sky-face test and is

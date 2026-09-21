@@ -9,11 +9,14 @@ from elysium_pipeline import export_manager, mounts
 from elysium_pipeline.exporters import export_all
 
 
-def test_all_profile_discovers_and_sorts_patch_first_names() -> None:
-    assert (export_all.maps_for_profile(
-        "all",
-        available=["sm_hub_1", "sp_tutorial_1", "sm_hub_1", "sp_theatre"],
-    ) == ["sm_hub_1", "sp_theatre", "sp_tutorial_1"])
+def test_no_profile_carries_a_map_half() -> None:
+    # 0018 story 21-5 deleted the BSP decoder, so a profile decodes no map: a map is published
+    # as `export_v2` units and goes to a level through `bake map`. `maps`/`discover` left
+    # `profiles.toml` with the pass that read them.
+    for name in ("grid", "all"):
+        profile = export_all.load_profiles()[name]
+        assert "maps" not in profile and "discover" not in profile
+        assert export_all.maps_for_profile(name, available=["sm_hub_1"]) == []
 
 
 def test_complete_profiles_include_every_global_bundle() -> None:

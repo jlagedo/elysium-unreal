@@ -125,34 +125,12 @@ NANITE_CAPABLE_MASTERS = frozenset({
     "M_V2_Lit", "M_V2_LitTranslucent", "M_V2_Unlit", "M_V2_TwoTexture",
 })
 
-#: The legacy `bake_map.Bake._master_for` selection, restated over a `shared/materials.json` record
-#: so the R5.4 report can say what master a surface WAS on before the rebind (data, not a look
-#: judgement). Same order as the bake's own if/elif chain.
-#: R7.2 (ruling 2): the `decal` row is gone with the master it named -- `M_Decal` is retired and
-#: the legacy bake's own decal branch with it, so a `$decal` world face falls through to the master
-#: its blend selects on either lane. The V2 lane then rebinds it onto the projector instance
-#: (`v2Class == "decal"`), which is the class change this report exists to state.
-LEGACY_MASTER_RULES = (
-    ("additive", "M_Additive"), ("refract", "M_Refract"),
-    ("glass", "M_World_Glass"), ("water", "M_World_Translucent"), ("blend", "M_World_Translucent"),
-    ("scissor", "M_World_Masked"),
-)
-LEGACY_MASTER_DEFAULT = "M_World_Opaque"
-
 #: The proxy kinds the V2 masters implement live: a
 #: material carrying one of these on its V2 instance is animated now where the legacy `.mtl` lane
 #: flattened it to a static bind. `animatedtexture` only animates when its frames array staged --
 #: the provenance omission `animatedFramesArrayUnavailable` says when it did not.
 ANIMATED_PROXY_KINDS = frozenset({"sine", "animatedtexture", "texturescroll"})
 FRAMES_UNAVAILABLE_OMISSION = "animatedFramesArrayUnavailable"
-
-#: The appearance CLASS a master + blend pair renders as, on either lane, so the report can say
-#: whether the rebind moved a surface between classes (translucent -> opaque, glass ->
-#: translucent, ...) rather than merely renamed its master. Data, never a look judgement.
-LEGACY_MASTER_CLASS = {
-    "M_World_Opaque": "opaque", "M_World_Masked": "masked", "M_World_Translucent": "translucent",
-    "M_World_Glass": "translucent", "M_Refract": "refract", "M_Additive": "additive",
-}
 
 #: glTF metres -> Unreal centimetres. One Source inch is 0.0254 glTF metres and 2.54 centimetres.
 GLTF_TO_UNREAL = 100.0
@@ -2098,17 +2076,6 @@ def resolve_water_volumes(
             f"material lane (run: uv run elysium import materials): " + ", ".join(unstaged[:8]))
     return volumes, dropped
 
-def legacy_master_for(record: dict[str, Any] | None) -> str | None:
-    """The legacy world master a `shared/materials.json` record selected (`Bake._master_for`)."""
-
-    if record is None:
-        return None
-    for flag, master in LEGACY_MASTER_RULES:
-        if record.get(flag):
-            return master
-    return LEGACY_MASTER_DEFAULT
-
-
 def appearance_class(master: str, blend_mode: str, *, decal_bound: bool = False) -> str:
     """The class a V2 (master, blend) pair renders as -- the blend mode, except where the master
     itself is the distinction (`M_V2_Refract`, `M_V2_Water`, `M_V2_Decal`).
@@ -2132,15 +2099,17 @@ def appearance_class(master: str, blend_mode: str, *, decal_bound: bool = False)
 
 def classify_material(
     binding: MaterialBinding, provenance: dict[str, Any] | None,
-    legacy_record: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """One report row: what the surface binds now, what it bound before, and whether the rebind
-    changed its appearance CLASS -- the blend/master class, or a proxy the legacy `.mtl` lane
-    flattened to a static bind and the V2 instance runs live. Data only; no look judgement.
+    """One report row: what the surface binds, and what its instance runs live. Data only; no
+    look judgement.
 
-    `provenance` is the ROOT unit's sidecar (the instance whose proxies the animation lanes were
-    written from), `legacy_record` the corpus row the legacy `.mtl` resolved for the same base
-    material.
+    `provenance` is the ROOT unit's sidecar -- the instance whose proxies the animation lanes
+    were written from.
+
+    0018 story 21-5 removed the legacy half of this row (`legacyMaster`, `legacyClass`,
+    `legacyRecordFound`, `classChanged`). It compared the V2 bind against the corpus row the
+    legacy `.mtl` resolved, and there is no corpus and no `.mtl` to compare against: the
+    comparison was the cutover's witness and the cutover is over.
     """
 
     provenance = provenance or {}
@@ -2152,8 +2121,6 @@ def classify_material(
         if kind in ANIMATED_PROXY_KINDS and not (kind == "animatedtexture" and frames_unavailable)
     })
     animated_now = bool(live)
-    legacy_master = legacy_master_for(legacy_record)
-    legacy_class = LEGACY_MASTER_CLASS.get(legacy_master or "", None)
     v2_class = appearance_class(binding.master, binding.blend_mode,
                                 decal_bound=binding.is_decal_surface and bool(binding.decal_asset))
     return {
@@ -2164,10 +2131,6 @@ def classify_material(
         "v2Master": binding.master,
         "v2BlendMode": binding.blend_mode,
         "v2Class": v2_class,
-        "legacyMaster": legacy_master,
-        "legacyClass": legacy_class,
-        "legacyRecordFound": legacy_record is not None,
-        "classChanged": legacy_class is not None and legacy_class != v2_class,
         "proxies": proxies,
         "liveProxies": live,
         "animatedNow": animated_now,
@@ -2185,25 +2148,20 @@ def classify_material(
 
 
 def material_report(
-    map_name: str, table: dict[str, MaterialBinding], read_sidecar, *,
-    legacy_materials: dict[str, Any] | None = None,
+    map_name: str, table: dict[str, MaterialBinding], read_sidecar,
 ) -> dict[str, Any]:
     """The R5.4 provenance report for one map: every bound material classified
     (`classify_material`) plus the summary counts the bake prints. Written beside the staged pair
-    as `materials_report.json` by `stage_map`."""
+    as `materials_report.json` by `stage_map`.
 
-    if legacy_materials is None:
-        legacy_materials = _legacy_material_records(map_name)
+    0018 story 21-5 dropped the legacy comparison -- `classChanged`, `byLegacyClass`,
+    `legacyRecordMissing` -- with the corpus it read.
+    """
 
-    rows = []
-    for key in sorted(table):
-        binding = table[key]
-        base_key = shared_corpus.base_material(binding.unit[len("vtmb:material:"):])
-        rows.append(classify_material(
-            binding, read_sidecar(binding.provenance), legacy_materials.get(base_key)))
+    rows = [classify_material(table[key], read_sidecar(table[key].provenance))
+            for key in sorted(table)]
 
     animated = [row["key"] for row in rows if row["animatedNow"]]
-    changed = [row for row in rows if row["classChanged"]]
     return {
         "schema": "elysium.map-materials-report",
         "version": 1,
@@ -2212,23 +2170,15 @@ def material_report(
             "materials": len(rows),
             "patched": sum(1 for row in rows if row["patched"]),
             "animatedNow": len(animated),
-            "classChanged": len(changed),
             "wetnessDriven": sum(1 for row in rows if row["wetnessDriven"]),
             "decalSurfaces": sum(1 for row in rows if row["isDecalSurface"]),
             "decalProjectorsBound": sum(1 for row in rows if row["v2Class"] == "decal"),
             "byV2Master": _count_by(rows, "v2Master"),
             "byV2Class": _count_by(rows, "v2Class"),
-            "byLegacyClass": _count_by(rows, "legacyClass"),
-            "legacyRecordMissing": sum(1 for row in rows if not row["legacyRecordFound"]),
         },
         "animatedNow": [
             {"key": row["key"], "liveProxies": row["liveProxies"], "v2Master": row["v2Master"]}
             for row in rows if row["animatedNow"]
-        ],
-        "classChanged": [
-            {"key": row["key"], "legacyMaster": row["legacyMaster"], "legacyClass": row["legacyClass"],
-             "v2Master": row["v2Master"], "v2Class": row["v2Class"]}
-            for row in changed
         ],
         "materials": rows,
     }
@@ -2239,27 +2189,6 @@ def _count_by(rows: list[dict[str, Any]], field_name: str) -> dict[str, int]:
     for row in rows:
         counts[str(row.get(field_name))] = counts.get(str(row.get(field_name)), 0) + 1
     return dict(sorted(counts.items()))
-
-
-def _legacy_material_records(map_name: str) -> dict[str, Any]:
-    """The corpus `shared/materials.json` rows plus the map's own PAKFILE-only rows, keyed as the
-    legacy `.mtl`'s `mat` lines key them. Empty when the legacy export is not on this machine --
-    the report then states `legacyRecordFound: false` rather than failing the stage."""
-
-    records: dict[str, Any] = {}
-    try:
-        export = paths.export_root()
-    except RuntimeError:
-        return records
-    corpus = shared_corpus.materials_path(export)
-    if corpus.is_file():
-        with open(corpus, "r", encoding="utf-8") as handle:
-            records.update(json.load(handle).get("materials") or {})
-    local = export / map_name / f"{map_name}.materials.json"
-    if local.is_file():
-        with open(local, "r", encoding="utf-8") as handle:
-            records.update(json.load(handle).get("materials") or {})
-    return records
 
 
 # --------------------------------------------------------------------------------- staging

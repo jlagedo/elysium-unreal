@@ -62,7 +62,6 @@ BUILD_TIMEOUT_SECONDS = 3600.0
 #: hold the build hostage for the hour `BUILD_TIMEOUT_SECONDS` allows.
 CLANG_DATABASE_TIMEOUT_SECONDS = 300.0
 POLICY_TIMEOUT_SECONDS = 1800.0
-CORPUS_TIMEOUT_SECONDS = 7200.0
 #: One batch is `MAP_BAKE_BATCH` maps of Nanite build, Lumen surface-cache fitting and texture
 #: compression, each a cold DDC miss on a first run -- and, since 0018 story 21-2 folded the
 #: collision lane in, the Chaos convex cook of a few thousand hulls plus a synchronous Recast
@@ -309,35 +308,6 @@ def generate_auxiliary_policy_content(config, runner) -> None:
     missing = [name for name in FONT_ASSETS if not (font_root / name).is_file()]
     if missing:
         raise UnrealFailure("font generation did not produce: " + ", ".join(missing))
-
-
-def bake_corpus(config, runner, *, force: bool = False) -> None:
-    """Bake the shared asset corpus onto /ElysiumBaked/Shared.
-
-    One scope, no map: a texture, a material and a static model belong to the install, so each is
-    baked once rather than once per map that draws it. The commandlet decides per asset whether
-    anything is authored, by comparing each recipe against the hash stamped on the asset, so a
-    fully current corpus launches, reports every asset reused, and exits.
-    """
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
-            "-BakeCorpus=1",
-            *(["-BakeForce=1"] if force else []),
-            "-AllowCommandletRendering",
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-        timeout=CORPUS_TIMEOUT_SECONDS,
-    )
 
 
 #: The whole texture corpus through one editor process: 11k DDS imports, each an Oodle encode on
@@ -829,7 +799,6 @@ def bake_maps(
     *,
     force: bool = False,
     from_stage: str = "",
-    particles: bool = False,
     batch_size: int | None = None,
 ) -> None:
     """Bake the named maps, `batch_size` maps per editor process (the whole list when None).
@@ -838,9 +807,6 @@ def bake_maps(
     entity table, the environment, the cooked collision payload, the world-collision actor, the
     nav-area marks, the Recast meshes, the prune, and one save carrying all of it.
 
-    `particles` opts the map's Niagara authoring pass in; it is off by default because
-    force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
-    launch without it leaves whatever particle packages the mount already carries untouched.
     `from_stage` forces one stage and every one after it (`bake_map.STAGE_ORDER`); it never skips
     one, because the level is authored from tables the earlier stages fill even when they reuse.
 
@@ -883,7 +849,6 @@ def bake_maps(
                 f"-BakeMapSidecars={config.export_v2_root / producer.SIDECAR_DIR_NAME}",
                 *(["-BakeForce=1"] if force else []),
                 *([f"-BakeFrom={from_stage}"] if from_stage else []),
-                *(["-BakeParticles=1"] if particles else []),
                 "-AllowCommandletRendering",
                 "-unattended",
                 "-nosplash",

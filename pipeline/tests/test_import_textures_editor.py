@@ -577,15 +577,15 @@ def test_prune_deletes_unlisted_assets_below_the_root_and_nothing_else(tmp_path)
     manifest = _stage(tmp_path, editor, [_entry("T_kept")])
     editor.assets[ROOT + "/old/dir/T_retired"] = FakeAsset(ROOT + "/old/dir/T_retired", "Texture2D", (4, 4, 1, 1))
     editor.assets[ROOT + "/old/dir/T_retired"].metadata["ElysiumProducer"] = 'textures'
-    editor.assets["/ElysiumBaked/Shared/Textures/T_legacy"] = FakeAsset(
-        "/ElysiumBaked/Shared/Textures/T_legacy", "Texture2D", (4, 4, 1, 1))
-    editor.assets["/ElysiumBaked/Shared/Textures/T_legacy"].metadata["ElysiumProducer"] = 'textures'
+    editor.assets["/ElysiumBaked/Meshes/T_legacy"] = FakeAsset(
+        "/ElysiumBaked/Meshes/T_legacy", "Texture2D", (4, 4, 1, 1))
+    editor.assets["/ElysiumBaked/Meshes/T_legacy"].metadata["ElysiumProducer"] = 'textures'
 
     report = module.run(manifest)
 
     assert report.pruned == 1
     assert ROOT + "/old/dir/T_retired" not in editor.assets
-    assert "/ElysiumBaked/Shared/Textures/T_legacy" in editor.assets
+    assert "/ElysiumBaked/Meshes/T_legacy" in editor.assets
     assert ROOT + "/hud/signs/T_kept" in editor.assets
     assert editor.deleted_dirs == [ROOT + "/old/dir/", ROOT + "/old/"]
 
@@ -691,7 +691,7 @@ def test_a_manifest_the_script_cannot_execute_is_refused(tmp_path):
     refused(dict(good, assets=[_entry("T_a"), _entry("T_a")]))
     refused(dict(good, select="/"))
     refused(dict(good, select=7))
-    refused(dict(good, pruneScope="/ElysiumBaked/Shared/"))
+    refused(dict(good, pruneScope="/ElysiumBaked/Meshes/"))
     refused(dict(good, pruneScope=ROOT + "/hud"))            # a folder ends with a slash
     refused(dict(good, keep="/ElysiumBaked/Textures/T_x"))
     refused(dict(good, keep=["/Game/T_x"]))

@@ -10,7 +10,8 @@ docs/vtmb/lighting.md.
 """
 import os, struct, sys
 import numpy as np
-from elysium_pipeline.exporters import UE_bsp_to_scene as B
+from elysium_pipeline.formats import bsp as B
+from elysium_pipeline.shared_corpus import base_material
 from elysium_pipeline.paths import research_root
 
 FS = 104
@@ -63,7 +64,7 @@ def main(bsp_path, out_png):
             continue
         tb = struct.unpack_from("<i", texinfo_l, ti*72 + 68)[0]
         nid = struct.unpack_from("<i", texdata_l, tb*32 + 12)[0]
-        if B.base_material(names.get(table[nid], "")).startswith("tools/"):
+        if base_material(names.get(table[nid], "")).startswith("tools/"):
             continue
         lm = face_lightmap(faces, lighting, fi)
         if lm is None:

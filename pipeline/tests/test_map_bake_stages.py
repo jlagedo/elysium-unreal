@@ -16,7 +16,7 @@ def test_the_stage_order_is_the_order_bake_one_runs() -> None:
     # The list is the `--from` vocabulary AND the sequence, so drift between it and `bake_one`
     # would silently mean `--from collision` forces the level but not the collision cook.
     assert STAGE_ORDER == (
-        "textures", "materials", "world", "sky", "particles",
+        "textures", "materials", "world", "sky",
         "entities", "environment", "collision", "level")
 
 

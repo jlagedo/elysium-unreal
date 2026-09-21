@@ -114,7 +114,7 @@ def test_editor_refuses_stale_or_cross_owner_publication(tmp_path, editor_module
     if mutation == "unit-path": doc["assets"][0]["unitGlb"] = "../other.glb"
     if mutation == "recipe": doc["assets"][0]["recipe"]["settingsVersion"] = "elysium-model-import-v2"
     if mutation == "scoped-prune": doc["selection"]["perMap"] = {"test": ["scenery/furniture/table"]}
-    if mutation == "keep": doc["keep"] = ["/ElysiumBaked/Shared/Meshes/SM_table"]
+    if mutation == "keep": doc["keep"] = ["/ElysiumBaked/Props/SM_table"]
     if mutation == "duplicate": doc["assets"].append(deepcopy(doc["assets"][0]))
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(doc))

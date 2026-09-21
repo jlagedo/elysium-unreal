@@ -70,7 +70,7 @@ demand. The three `import map-*` commands this replaced are gone.
 For lane work, `--from <stage>` re-runs one stage and every one after it:
 
 ```
-textures  materials  world  sky  particles  entities  environment  collision  level
+textures  materials  world  sky  entities  environment  collision  level
 ```
 
 It FORCES rather than skips. Every stage always runs -- the level is authored from tables the
@@ -102,6 +102,14 @@ manifest blocks beside `ropes`: the `infodecal` projectors (`UE_map_sidecars.dec
 `importers.map_decals`, verified by `bake_verify.verify_decals`) and the rain cover
 (`importers.map_weather`, which rasterises `rain_height.png` beside the manifest because the
 editor's Python carries neither numpy nor Pillow). `<map>.materials.json` is read by nothing:
-one map in the whole export tree ever had one. The differences the two ports could not match the
-BSP decoder on are named in `docs/contracts/seam_map_map.md` and measured by
-`uv run elysium research decal_weather_parity`, which only runs while the decoder still exists.
+one map in the whole export tree ever had one.
+
+**There is no BSP decoder** (0018 story 21-5). `UE_bsp_to_scene.py`, `UE_extract_corpus.py`, the
+two-pass `export map`, the `CorpusBake` that authored `/ElysiumBaked/Shared`, and the mount itself
+are deleted. A map is published as `export_v2` units and goes to a level through `bake map`; a
+texture, a material and a model are each a unit with their own import lane, so `shared/` is owed
+no replacement and `shared_corpus.py` keeps only the key rules those lanes join on. `export map`
+survives as "import this map's model dependencies, then bake it"; `export all` / `export grid`
+are bundle-only runs. The differences the two ported producers could not match the decoder on
+were measured while it still existed and are recorded in `docs/contracts/seam_map_map.md` --
+that measurement cannot be repeated, which is why it is written down rather than re-runnable.

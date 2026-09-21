@@ -462,20 +462,8 @@ def _build_class():
             """No per-map wet instance exists to stamp a `SourceCube` into (R5.3/R5.4): wetness
             rides `MPC_ElysiumEnvironment` and the shared `MI_`. The legacy lane's cube package is
             pruned rather than authored."""
-            pruned = bl.prune_package(self.cube_pkg, set(), self.prune_scope)
+            pruned = bl.prune_package(self.cube_pkg, set())
             self.tracker.pruned("textures", pruned)
-
-        def _material_sets(self):
-            """Both sets are EMPTY on this lane, so `stage_materials` PRUNES the per-map
-            `Materials` and `Materials/Decals` packages instead of authoring them. R7.2 ruling 2
-            retired the last per-map material a converted map wrote: a decal binds the same shared
-            `MI_<unit>_Decal` every other consumer of that unit binds."""
-            return (({}, self.mat_pkg, self.shared_tex_pkg),
-                    ({}, self.decal_mat_pkg, self.shared_tex_pkg))
-
-        def _shared_material_keys(self):
-            """Nothing is resolved out of the legacy shared corpus package on this lane."""
-            return {}
 
         def resolve_materials(self):
             """Every staged `MI_` this map's face groups bind, loaded by asset path -- the
@@ -484,7 +472,6 @@ def _build_class():
             the surface instance for every other. A missing instance is a named failure, not a grey
             surface: the material lane imports map-scoped, and the map it did not import is
             exactly the map this would silently unbind."""
-            Bake.resolve_materials(self)
             loaded = {}
             missing = []
             for key, mat in sorted(self.v2_materials.items()):
@@ -532,7 +519,7 @@ def _build_class():
             cell = HOST.CELL_CM * 4
             if not self.sky_model or not self.sky_model.groups:
                 pruned = bl.prune_package_prefix(
-                    self.mesh_pkg, "SM_Sky_", set(), self.prune_scope)
+                    self.mesh_pkg, "SM_Sky_", set())
                 self.tracker.pruned("sky", pruned)
                 log("sky: the unit meshes no miniature, %d stale pruned" % pruned)
                 return
@@ -565,7 +552,7 @@ def _build_class():
                     wanted.add(asset_path.rsplit("/", 1)[-1])
                 if static_mesh:
                     self.world_meshes[asset_path] = static_mesh
-            pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted, self.prune_scope)
+            pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted)
             self.tracker.pruned("sky", pruned)
             log("sky: %d meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
                 built, tris, dropped, pruned, time.time() - start))

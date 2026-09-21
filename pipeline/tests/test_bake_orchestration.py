@@ -67,7 +67,7 @@ def test_bake_launches_once_per_batch_and_trusts_the_exit() -> None:
         ):
             export_manager.bake_and_verify(config, object(), ["test_map", "test_map"])
         bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False,
-                                     from_stage="", particles=False,
+                                     from_stage="",
                                      batch_size=export_manager.unreal.MAP_BAKE_BATCH)
         verify.assert_not_called()
 
@@ -144,37 +144,6 @@ _STAGED_MANIFESTS = {
 }
 
 
-def test_particle_pass_is_an_explicit_opt_in() -> None:
-    """The map bake authors no Niagara system unless the caller asks for one.
-
-    The pass force-deletes packages the asset compiler may still own, which crashes the
-    editor, so it stays off the default path and rides `--particles` when wanted.
-    """
-    recorded: list[list[str]] = []
-
-    class _Runner:
-        def run(self, argv, **_kwargs):
-            recorded.append([str(item) for item in argv])
-            return SimpleNamespace(returncode=0)
-
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        config.ue_root = Path(temporary) / "ue"
-        config.project = config.repo_root / "ElysiumUE.uproject"
-        editor = config.ue_root / "Engine" / "Binaries" / "Win64"
-        editor.mkdir(parents=True)
-        (editor / "UnrealEditor-Cmd.exe").write_bytes(b"")
-
-        # The four staged inputs are read elsewhere; this test is about the command line.
-        with mock.patch.object(export_manager.unreal, "_stage_map_inputs",
-                               return_value=_STAGED_MANIFESTS):
-            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
-            assert "-BakeParticles=1" not in recorded[-1]
-
-            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"], particles=True)
-            assert "-BakeParticles=1" in recorded[-1]
-
-
 def test_one_launch_carries_the_three_per_map_asset_manifests() -> None:
     """0018 story 21-2: `bake map` is one editor boot for a loadable level.
 
@@ -230,16 +199,6 @@ def test_a_map_whose_offline_stage_failed_never_reaches_the_editor() -> None:
         run.assert_not_called()
 
 
-def test_particle_pass_is_part_of_the_profile_recipe() -> None:
-    """Turning the pass on or off changes the maps-bake receipt, so a toggled run relaunches."""
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        (config.export_root / "test_map").mkdir(parents=True, exist_ok=True)
-        off = export_manager._maps_bake_fingerprint(config, ["test_map"], particles=False)
-        on = export_manager._maps_bake_fingerprint(config, ["test_map"], particles=True)
-        assert off != on
-
-
 def test_map_receipt_keeps_deployed_root_and_tracks_native_catalogues(tmp_path) -> None:
     config = _config(str(tmp_path))
     expected = config.repo_root / "Plugins/ElysiumBaked/Content/test_map/test_map.umap"
@@ -249,58 +208,6 @@ def test_map_receipt_keeps_deployed_root_and_tracks_native_catalogues(tmp_path) 
     catalogue.parent.mkdir(parents=True)
     catalogue.write_bytes(b"native references")
     assert export_manager._maps_bake_fingerprint(config, ["test_map"]) != before
-
-
-def test_corpus_bake_gate_skips_a_warm_second_run_and_force_defeats_it() -> None:
-    # The launch rides a manifest receipt over the decoded shared corpus; per-asset reuse
-    # inside a launch remains the commandlet's own decision, read off each recipe stamp.
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        shared = config.export_root / "shared"
-        shared.mkdir()
-        (shared / "manifest.json").write_text("{}", encoding="utf-8")
-        mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Shared"
-        mount.mkdir(parents=True)
-        with mock.patch.object(export_manager.unreal, "bake_corpus") as bake:
-            export_manager.ensure_corpus_bake(config, object())
-            export_manager.ensure_corpus_bake(config, object())
-            export_manager.ensure_corpus_bake(config, object(), force=True)
-        assert [call.kwargs["force"] for call in bake.call_args_list] == [False, True]
-
-
-def test_corpus_bake_relaunches_when_a_shared_input_moves() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        shared = config.export_root / "shared"
-        shared.mkdir()
-        (shared / "manifest.json").write_text("{}", encoding="utf-8")
-        mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Shared"
-        mount.mkdir(parents=True)
-        with mock.patch.object(export_manager.unreal, "bake_corpus") as bake:
-            export_manager.ensure_corpus_bake(config, object())
-            (shared / "manifest.json").write_text('{"textures": {}}', encoding="utf-8")
-            export_manager.ensure_corpus_bake(config, object())
-        assert bake.call_count == 2
-
-
-def test_failed_corpus_bake_records_no_success() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        shared = config.export_root / "shared"
-        shared.mkdir()
-        (shared / "manifest.json").write_text("{}", encoding="utf-8")
-        mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Shared"
-        mount.mkdir(parents=True)
-        with mock.patch.object(
-            export_manager.unreal, "bake_corpus",
-            side_effect=export_manager.unreal.UnrealFailure("editor exited with 1"),
-        ):
-            with pytest.raises(export_manager.ExportBakeFailure):
-                export_manager.ensure_corpus_bake(config, object())
-        # The failed launch left no usable receipt, so the next run launches again.
-        with mock.patch.object(export_manager.unreal, "bake_corpus") as bake:
-            export_manager.ensure_corpus_bake(config, object())
-        bake.assert_called_once()
 
 
 def test_profile_map_bake_gate_skips_warm_and_verify_still_reads_back() -> None:
@@ -473,9 +380,6 @@ def test_export_profile_sequences_gated_launches_and_covers_particles() -> None:
                 side_effect=lambda *_a, **k: order.append(
                     ("policy", k.get("particles_covered")))),
             mock.patch.object(
-                export_manager, "ensure_corpus_bake",
-                side_effect=lambda *_a, **_k: order.append("corpus")),
-            mock.patch.object(
                 export_manager.native_model_pipeline, "import_map_dependencies",
                 side_effect=lambda *_a, **_k: order.append("native models")),
             mock.patch.object(
@@ -485,9 +389,9 @@ def test_export_profile_sequences_gated_launches_and_covers_particles() -> None:
             maps = export_manager.export_profile(config, object(), "all")
         assert maps == ["m1"]
         # The `all` profile carries the particles bundle, so the policy phase skips its
-        # duplicate mirror; the cast and wield mounts precede the map bake.
-        assert order == [
-            "offline", ("policy", True), "corpus", "native models", "maps"]
+        # duplicate mirror; the cast and wield mounts precede the map bake. 0018 story 21-5
+        # removed the `corpus` gate that used to sit between policy and the native models.
+        assert order == ["offline", ("policy", True), "native models", "maps"]
 
 
 def test_particle_mirror_is_gated_and_skipped_when_a_profile_covers_it() -> None:
@@ -634,7 +538,7 @@ def test_bake_v2_maps_bakes_each_named_map_once() -> None:
         prerequisites.assert_called_once_with(config)
         masters.assert_called_once()
         bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True,
-                                     from_stage="", particles=False, verify=True,
+                                     from_stage="", verify=True,
                                      skip_nav_verify=False, on_line=None)
 
 
