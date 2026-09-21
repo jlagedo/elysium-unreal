@@ -107,7 +107,8 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: per-map lanes -- `map-entities`, `map-collision`, `map-environment` (R4.1, R4.2, R4.4) -- were
 #: commands of their own, each with its own editor boot, and a level was not loadable between
 #: them. They are stages of `bake map` now; their offline halves still live under `importers/`.
-IMPORT_COMMANDS = ("vdata", "dialogue", "sound", "sound-schemes", "textures",
+IMPORT_COMMANDS = ("vdata", "dialogue", "sound", "sound-schemes", "scripts", "engine-config",
+                   "ui-strings", "textures",
                    "surface-properties", "materials",
                    "models", "characters", "model-catalogues", "expression-tables", "cook-roots")
 

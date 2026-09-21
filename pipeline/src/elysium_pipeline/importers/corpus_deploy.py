@@ -261,6 +261,15 @@ class Lane:
     #: this every `import sound` would delete them as orphans and every `import sound-schemes`
     #: would put them back.
     foreign_directories: tuple[str, ...] = ()
+    #: File suffixes below `owned_directories` that this lane deploys nothing to and prunes
+    #: nothing of. `import scripts` names `.pyc`: the embedded interpreter compiles beside the
+    #: source it imports, CPython 2.1 has no `dont_write_bytecode` to stop it, and those files are
+    #: the runtime's own -- not orphans of a retired unit.
+    kept_suffixes: tuple[str, ...] = ()
+    #: Asked once per unit with that unit's member paths, sorted, so a lane can refuse a unit whose
+    #: member set it cannot deploy. Raising `CorpusImportError` makes it one named failure with the
+    #: run's other failures rather than a unit silently deploying nothing.
+    unit_guard: Callable[[Sequence[str]], None] | None = None
 
 
 def _targets_current(destination_root: Path, targets: dict[str, Any]) -> bool:
@@ -356,8 +365,11 @@ def _deploy_unit(
 ) -> dict[str, dict[str, Any]]:
     """Write every corpus file one unit's capsuled members map to. Returns the stamp's targets."""
 
+    members = extract_unit(unit, extension)
+    if lane.unit_guard is not None:
+        lane.unit_guard(sorted(members))
     targets: dict[str, dict[str, Any]] = {}
-    for source_path, data in sorted(extract_unit(unit, extension).items()):
+    for source_path, data in sorted(members.items()):
         for relative in lane.target_of(source_path):
             destination = safe_destination(destination_root, relative)
             # Byte equality against the capsule is proven by reading the destination back, never
@@ -399,13 +411,16 @@ def _prune(destination_root: Path, lane: Lane, kept: set[Path]) -> int:
     def is_foreign(path: Path) -> bool:
         return any(path == root or root in path.parents for root in foreign)
 
+    def is_kept_suffix(path: Path) -> bool:
+        return bool(lane.kept_suffixes) and path.name.lower().endswith(lane.kept_suffixes)
+
     pruned = 0
     for owned in lane.owned_directories:
         root = Path(destination_root) / owned
         if not root.is_dir():
             continue
         for path in list(root.rglob("*")):
-            if path.is_dir() or path in kept or is_foreign(path):
+            if path.is_dir() or path in kept or is_foreign(path) or is_kept_suffix(path):
                 continue
             path.unlink()
             pruned += 1

@@ -2435,6 +2435,46 @@ def import_sound_schemes(ctx: typer.Context) -> None:
     )
 
 
+@import_app.command("scripts")
+def import_scripts(ctx: typer.Context) -> None:
+    """Deploy VtMB's Python level scripts into Content/ElysiumCorpus/scripts."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import scripts as importer
+
+        _run_corpus_lane(config, importer.import_scripts, "scripts")
+
+    _execute(_state(ctx), "import scripts", ExitCode.OFFLINE_EXPORT, action, require_work=False)
+
+
+@import_app.command("engine-config")
+def import_engine_config(ctx: typer.Context) -> None:
+    """Deploy the console config -- `cfg/*` -- into Content/ElysiumCorpus/cfg."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import engine_config as importer
+
+        _run_corpus_lane(config, importer.import_engine_config, "engine-config")
+
+    _execute(
+        _state(ctx), "import engine-config", ExitCode.OFFLINE_EXPORT, action, require_work=False
+    )
+
+
+@import_app.command("ui-strings")
+def import_ui_strings(ctx: typer.Context) -> None:
+    """Deploy the authored UI string table into Content/ElysiumCorpus/ui."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import ui_strings as importer
+
+        _run_corpus_lane(config, importer.import_ui_strings, "ui-strings")
+
+    _execute(
+        _state(ctx), "import ui-strings", ExitCode.OFFLINE_EXPORT, action, require_work=False
+    )
+
+
 @import_app.command("textures")
 def import_textures(
     ctx: typer.Context,
