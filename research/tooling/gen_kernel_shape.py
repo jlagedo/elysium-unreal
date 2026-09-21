@@ -56,6 +56,9 @@ a verdict stops being an undifferentiated stub:
   has to ANSWER through the seam rather than tally a stub, and which of the three
   verdicts the body carries says where the answer comes from, not whether the
   slot has one.
+* ``dead`` with either spelling (spec 0019 story 1) — the same emission as above.  A
+  ``dead`` row keeps its port target until 0019/6 deletes the body and writes ``-``,
+  so judging a slot dead changes nothing the runtime does.
 * anything else — the stub stays, and the verdict travels in its comment.
 
 Usage::
@@ -608,7 +611,10 @@ def build(repo: Path, module: str, depth: int) -> Model:
         # lands as that constant; a `rule` or `present` whose body is written by hand in the
         # substrate loses its definition here. Everything else keeps its stub and carries the
         # verdict in the comment.
-        if row.verdict in ("rule", "present", "mechanism"):
+        # `dead` rides along since 0019/1: a `dead` row keeps its port target until 0019/6 removes
+        # the body and writes `-`, so a slot the pass judged dead emits exactly what it emitted
+        # before and the judgment alone changes no runtime behaviour.
+        if row.verdict in ("rule", "present", "mechanism", "dead"):
             if row.verdict_target.startswith(DEFAULT_PREFIX):
                 literal = row.verdict_target[len(DEFAULT_PREFIX):].strip()
                 if not DEFAULT_LITERAL_RE.match(literal):
@@ -1098,7 +1104,7 @@ def render_slots_cpp(model: Model, module: str) -> str:
         out += _slot_comment(row, "")
         if row.default:
             statement, _, _ = default_body(row)
-            out += _comment(f"verdict `rule`: retail's whole body is "
+            out += _comment(f"verdict `{row.verdict}`: retail's whole body is "
                             f"`{'return;' if row.default == 'void' else f'return {row.default};'}`",
                             "")
         out += _wrapped(row.port_declaration("FElysiumNpc::"), "")

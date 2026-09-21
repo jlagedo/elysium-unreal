@@ -5,7 +5,7 @@ when the story's own box is ticked in its spec; the spec stays the source of tru
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/2 pass A · 0002/29e 4 of 16 families.
+Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0002/29e 4 of 16 families.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
 
 ## Decision owed (does not block 01–06)
@@ -19,7 +19,11 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 - [x] **01 · 0018/21-7** — The producer's debt: structural entity read, the five flags, `Use` and `times 0`. M–L · Opus/high.
   First because it changes what every later bake loads; recovery is done, the job is mechanical.
-- [ ] **02 · 0019/1** — The strict verdict pass → the delete list and the seam list. M · Fable/high.
+- [x] **02 · 0019/1** — The strict verdict pass → the delete list and the seam list. M · Fable/high.
+  Landed 2026-09-21: `rule` 2,205 → 1,354, `dead` 0 → 657, `mechanism` 175 → 380; the lists are
+  `docs/vtmb/npc-kernel/delete-list.md` and `seam-list.md`, held by `kernel_lists --check`.
+  It found twenty NPC classes nothing can instantiate (`population.md`), which shrinks rows 06,
+  10 and 11, and that `ai_goal_standoff` is unauthored, which halves row 21.
 - [ ] **03 · 0019/2 pass B** — Bindings: the 200 `CBaseEntity`/`CBaseCombatCharacter` keys, component-struct members, the `SAVE` walk + delete the nine `Serialize*Block`. M · Opus/high.
   The non-NPC classes are not part of this row: each lands with the 0018 story that stands it.
 - [ ] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the 19 hand programs deleted. L · Opus/high.
@@ -27,6 +31,8 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
   no family types a program id or an inline constant by hand.
+  Row 02 re-verdicted band 19–29: 380 `rule`, 4 `present`, 13 `mechanism`, 71 `dead` of 468 — the
+  family counts below predate it; port only the `rule` rows (`checklist-19-29.md`).
   - [ ] Conditions19 (23 rows) — in flight; review against row 02 before it merges
   - [ ] Spawn19 (60)
   - [ ] RunAi19 (34)

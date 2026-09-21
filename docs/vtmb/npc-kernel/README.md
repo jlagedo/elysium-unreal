@@ -36,9 +36,36 @@ A verdict is one word a porting story wrote against one retail function after re
 decompiled body, plus the port target and the one-line reason: **rule** (a formula, a threshold,
 an ordering or a state write; ported verbatim onto the port's virtual with a test), **mechanism**
 (Unreal supplies it; the target names the service seam and nothing is ported), **present** (the
-port already runs it; the target names the port function), **dead** (no closure caller and no
-slot), **unsettled** (read and not settled, with the reason — counted apart, because it is a
+port already runs it; the target names the port function), **dead** (nothing can observe it),
+**unsettled** (read and not settled, with the reason — counted apart, because it is a
 recorded failure to reach a verdict rather than a verdict).
+
+**The strict rule (spec 0019 story 1).** The 29-series verdicted by closure — "is it reachable?" —
+and came back 2,205 `rule`, 0 `dead`, with the `CAI_Motor` ground step, the physics tick, the debug
+overlays and SafeDisc's `CSecureType` scrambler all ported. Story 1 re-judged every row under one
+question: *what would notice this body's absence?* The answer leads the row's evidence as a tag:
+
+    [0019/1 obs=<kind>: <what names it>]     rule / present — the observable
+    [0019/1 seam=<Unreal service>]           mechanism — what replaces the body
+    [0019/1 dead=<why nothing sees it>]      dead
+
+with `; was <verdict>` inside the bracket where the pass changed the word. The kinds are
+`keyfield`, `input`, `output`, `schedule` (a `TASK_*`, `COND_*`, `SCHED_*` or operand a schedule
+text names), `script`, `dlg`, `rulebook`, `save`, `timing` (a number or state the player sees or
+hears), `witness`, and `via` — a helper observable only through the rule that uses it, written
+`via: 0x<row>` or `via: slot <N>`, which the check refuses when the row it leans on is not itself
+`rule` or `present`. A row nobody can name an observable for is `mechanism` or `dead`.
+
+    uv run elysium research kernel_lists            # render delete-list.md and seam-list.md
+    uv run elysium research kernel_lists --check    # every row tagged, both lists current
+    uv run elysium research kernel_lists --packs    # the judgment packs, out of repo
+    uv run elysium research kernel_lists --fold <judged.tsv>…   # judgments -> a merge_verdicts batch
+
+The target column keeps the PORT target through a re-verdict: a `dead` row whose target still names
+a port body is a body owed deletion (`delete-list.md`), a `mechanism` row whose target names one is
+a body owed a seam (`seam-list.md`), and spec 0019 story 6 writes `-` when the body is gone.
+`gen_kernel_shape` emits a `dead` row's `hand:` / `default:` spelling exactly as before, so a
+judgment changes nothing the runtime does.
 
 The overlay is the record and the rendered checklist is a view of it, which is the whole point: the
 checklist is regenerated from the corpus on every run, and a verdict has to survive that. A row
@@ -95,6 +122,8 @@ Start from the question:
 | Which functions still have no name? | `unnamed.md` |
 | What did the porting story decide about every function of layers 0–9, and why? | `checklist-0-9.md` |
 | The same, for the middle layers 10–18 | `checklist-10-18.md` |
+| Which port bodies did the strict pass judge unobservable, and where do they stand? | `delete-list.md` |
+| Which port bodies are mechanisms owed an Unreal seam, and which service? | `seam-list.md` |
 | Which `docs/vtmb` section walks address `0x10……`? | `index.md` |
 | The raw call graph inside the closure | `graph.tsv` |
 

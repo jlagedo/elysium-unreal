@@ -1155,6 +1155,11 @@ its recovery is written in the oracle section it names.
   family Motor10" (the standoff sections). Recovered 2026-09-19 (`social.md` § "The attack coordinator
   object"): three instances ("Normal", "Player", "Boss"), cap 2 each, rebuilt per map; a full
   coordinator evicts its furthest member for a nearer candidate.
+  **0019/1 (2026-09-21) judged the standoff half `dead`:** `ai_goal_standoff` is authored by no
+  map and created by no script (`population.md`), and slot 455 answers 0 on every NPC class, so
+  no NPC ever hosts `CAI_StandoffBehavior` — the goal's two inputs, `UpdateOnRemove` and
+  `TranslateActivity` are on `docs/vtmb/npc-kernel/delete-list.md`. What remains here is the
+  coordinator; slot 608's bind-by-name stays `rule`.
   Size: S–M. Effort: Opus / medium.
 
 - [ ] **16. Makers and templates.**

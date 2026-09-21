@@ -2651,6 +2651,59 @@ record), `npc_vghoulcroucher` 58, `npc_vzombie` 48, `npc_vsabbatgunman` 21, `npc
 `npc_vtzimisceheadclaw` 10, `npc_vlasombra` 6, `npc_vbrujah` 5. None stands on
 `sp_tutorial_1`, `sm_hub_1` or `sp_soc_3`.
 
+### NPC classes with no instance (2026-09-21, 0019 story 1)
+
+Twenty of the family's classnames are named by nothing that can make one. Measured two ways over
+the install (retail plus the Unofficial Patch): a case-insensitive search for the quoted classname
+in every `.bsp` entity lump, `.py`, `.txt`, `.cfg`, `.lmp` and `.ent` file (8,512 files), and the
+functions of `vampire.dll` that reference the classname string. A class is listed when the content
+search finds nothing **and** the only referencing function is its own factory registration — so no
+map places it, no maker names it in `NPCType`, no template or script spawns it, and no code creates
+it by name. (`0x1027f290` also names most of them in upper case; it is the debug name table of the
+`m_SelectScheduleTrace` stamp `+0x1b2c`, not a spawner.)
+
+| Classname | Class | Factory |
+|---|---|---|
+| `monster_generic` | `CGenericNPC` | `0x1034a250` |
+| `npc_generic` | `CGeneric_NPC` | `0x10359cf0` |
+| `npc_generic_bathack` | `CGeneric_NPC_bathack` | `0x1035ab40` |
+| `npc_sabbat` | `CGenericSabbat_NPC` | `0x1035b350` |
+| `npc_bullseye` | `CNPC_Bullseye` | `0x10356630` |
+| `npc_crow` | `CNPC_Crow` | `0x103572d0` |
+| `npc_TestBaseHumanoid` | `CAI_ExpressiveNPC` (and its base `CAI_BaseHumanoid`, which nothing else derives from) | `0x102609e0` |
+| `npc_VBatSwarm` | `CNPC_VBatSwarm` | `0x10366bc0` |
+| `npc_VSheriffSwarm` | `CNPC_VSheriffSwarm` | `0x103b1b70` |
+| `npc_VCombatman` | `CNPC_VCombatman` | `0x1036fa60` |
+| `npc_VMoleman` | `CNPC_VMoleman` | `0x1039f550` |
+| `npc_VStalker` | `CNPC_VStalker` | `0x103b2800` |
+| `npc_VTest` | `CNPC_VTest` | `0x103b3a70` |
+| `npc_VGangrel` | `CNPC_VGangrel` | `0x10376fc0` |
+| `npc_VMalkavian` | `CNPC_VMalkavian` | `0x103894b0` |
+| `npc_VNosferatu` | `CNPC_VNosferatu` | `0x103a13f0` |
+| `npc_VToreador` | `CNPC_VToreador` | `0x103b5280` |
+| `npc_VTremere` | `CNPC_VTremere` | `0x103b5a20` |
+| `npc_VVentrue` | `CNPC_VVentrue` | `0x103c7700` |
+| `scripted_target` | `CScriptedTarget` | `0x1034d370` |
+
+`npc_VGangrel`'s one content hit is a classname filter in the patch's
+`vdata/system/interestingplacetypelist.txt`, not a spawn. `scripted_sentence` is authored by no map
+either. `npc_VChangBros` is also unplaced but abstract: `npc_VChangBrosBlade` and
+`npc_VChangBrosClaw` are placed and inherit its bodies.
+
+**Placed by code, not by content** (content search empty, but a second function names the string):
+`npc_VPlayerController` (`CPlayerEvents::InputCreateControllerNPC 0x10227280` /
+`InputRemoveControllerNPC 0x102272b0`), `npc_VFrenzyShadow` (`CBasePlayer 0x10161fc0`),
+`npc_VWolfMorph` (`0x101f8620`, `0x101f8f30`), `npc_VPlaceholder` (`0x10161d20`). These are live.
+`CNPC_VWerewolf` is placed as `npc_VWerewolf` (two maps, one script) although the kernel ledger's
+classname column shows it blank: that column is read from the port's registry, which has no row
+for it yet.
+
+The verdict overlay judges a body `dead` on this ground only when every family vtable holding it
+belongs to a listed class and every closure caller is itself dead — a body a placed subclass
+inherits, or one a live body calls directly, stays. 246 overlay rows fall to it
+(`docs/vtmb/npc-kernel/delete-list.md`). Not covered: a save file restoring one, and the console's
+`npc_create`; neither is authored content.
+
 ## Patrol tokens against the retail lookup (2026-09-19, 0018 story 2)
 
 `0x102d2840` resolves a `FollowPatrolPath` token to the first hint of type 10000 or 800, in

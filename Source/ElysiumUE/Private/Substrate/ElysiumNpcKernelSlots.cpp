@@ -46,7 +46,7 @@ namespace
 
 // slot 0 0x10027450 (walked) `void SetRefEHandle(const CBaseHandle&)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetRefEHandle`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::SetRefEHandle`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 1 0x10027470 (sdk) `CBaseHandle& GetRefEHandle() const`
@@ -70,12 +70,12 @@ void* FElysiumNpc::GetCollideable()
 // slot 3 0x10027630 (walked) `IServerNetworkable* GetNetworkable()`
 //   returns `IServerNetworkable*`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetNetworkable`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::GetNetworkable`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 4 0x10027650 (walked) `CBaseEntity* GetBaseEntity()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetBaseEntity`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::GetBaseEntity`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 5 0x1028d5e0 (walked) `void* ~CBaseEntity(unsigned int)`
@@ -149,7 +149,7 @@ void FElysiumNpc::DebugSetClassName(const TCHAR*)
 
 // slot 14 0x1009af00 (walked) `const char* DebugGetClassName()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::DebugGetClassName`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::DebugGetClassName`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 16 0x1009b030 (walked) `Vector GetAttackExtents()`
@@ -159,22 +159,22 @@ void FElysiumNpc::DebugSetClassName(const TCHAR*)
 
 // slot 17 0x1028de90 (walked) `void TraceMessage(const char*, int) const`
 //   layer 12, story 29d
-// verdict `rule`: the body is `FElysiumNpc::TraceMessage`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::TraceMessage`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 18 0x1028de10 (walked) `void TraceMessage(const char*, int)`
 //   layer 12, story 29d
-// verdict `rule`: the body is `FElysiumNpc::TraceMessage`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::TraceMessage`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 19 0x1028dfb0 (walked) `void TraceMessageBare(const char*) const`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::TraceMessageBare`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::TraceMessageBare`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 20 0x1028df30 (walked) `void TraceMessageBare(const char*)`
 //   layer 12, story 29d
-// verdict `rule`: the body is `FElysiumNpc::TraceMessageBare`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::TraceMessageBare`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 21 0x1029f800 (walked) `void vfunc21(CBaseEntity*)`
@@ -189,7 +189,7 @@ void FElysiumNpc::DebugSetClassName(const TCHAR*)
 
 // slot 23 0x1029f890 (walked) `void vfunc23(CBaseEntity*)`
 //   layer 3, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot23`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot23`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 24 0x1029f8d0 (walked) `void OnVictimHitByMe(CBaseEntity*)`
@@ -236,7 +236,7 @@ void FElysiumNpc::Dump(int32)
 
 // slot 32 0x10026670 (walked) `bool CanBeInteractiveUsed(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::CanBeInteractiveUsed(FElysiumEntity*)
 {
 	return false;
@@ -244,7 +244,7 @@ bool FElysiumNpc::CanBeInteractiveUsed(FElysiumEntity*)
 
 // slot 33 0x10026690 (walked) `int vfunc33()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0xffffffff;`
+// verdict `dead`: retail's whole body is `return 0xffffffff;`
 int32 FElysiumNpc::Slot33()
 {
 	return static_cast<int32>(0xffffffff);
@@ -265,7 +265,7 @@ int32 FElysiumNpc::GetHighlightMaterial(FElysiumEntity*)
 
 // slot 36 0x100266f0 (walked) `const char* vfunc36()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 const TCHAR* FElysiumNpc::Slot36()
 {
 	return nullptr;
@@ -278,7 +278,7 @@ const TCHAR* FElysiumNpc::Slot36()
 
 // slot 38 0x10026730 (walked) `CBaseEntity* vfunc38(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot38`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot38`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 39 0x100a4fe0 (walked) `void OnUseBegin(CBaseEntity*)`
@@ -288,14 +288,14 @@ const TCHAR* FElysiumNpc::Slot36()
 
 // slot 40 0x10026750 (walked) `void vfunc40(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot40(FElysiumEntity*)
 {
 }
 
 // slot 41 0x10026770 (walked) `void vfunc41(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot41(FElysiumEntity*)
 {
 }
@@ -307,14 +307,14 @@ void FElysiumNpc::Slot41(FElysiumEntity*)
 
 // slot 43 0x10026790 (walked) `void vfunc43(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot43(FElysiumEntity*)
 {
 }
 
 // slot 44 0x100267b0 (walked) `bool vfunc44(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
+// verdict `dead`: retail's whole body is `return 1;`
 bool FElysiumNpc::Slot44(FElysiumEntity*)
 {
 	return true;
@@ -331,14 +331,14 @@ bool FElysiumNpc::PassesFindEntityFOVTrace(FElysiumEntity*, FVector, FVector, in
 
 // slot 46 0x100267d0 (walked) `void vfunc46()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot46()
 {
 }
 
 // slot 47 0x100267f0 (walked) `void vfunc47()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot47()
 {
 }
@@ -360,7 +360,7 @@ void FElysiumNpc::Slot47()
 
 // slot 55 0x102b5100 (walked) `void vfunc55(CBaseEntity*, Vector, Vector)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot55(FElysiumEntity*, FVector, FVector)
 {
 }
@@ -372,14 +372,14 @@ void FElysiumNpc::Slot55(FElysiumEntity*, FVector, FVector)
 
 // slot 57 0x102b51a0 (walked) `void vfunc57(CBaseEntity*, Vector, Vector)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot57(FElysiumEntity*, FVector, FVector)
 {
 }
 
 // slot 58 0x102b51c0 (walked) `void vfunc58(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot58(FElysiumEntity*)
 {
 }
@@ -423,8 +423,8 @@ void FElysiumNpc::SetAngles(const FRotator&)
 
 // slot 65 0x10026a50 (walked) `void SetAngles(float, float, float)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetAngles`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetAngles`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 66 0x1009d2a0 (walked) `void Hide()`
 //   layer 0, story 29c
@@ -442,13 +442,13 @@ void FElysiumNpc::Unhide()
 
 // slot 68 0x1029afc0 (walked) `bool ShouldIgnoreCollision(CBaseEntity*)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ShouldIgnoreCollision`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::ShouldIgnoreCollision`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 69 0x1029b180 (walked) `bool NavIgnoreCollision(CBaseEntity*)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::NavIgnoreCollision`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::NavIgnoreCollision`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 70 0x1009d820 (walked) `bool IsMonster()`
 //   layer 0, story 29c
@@ -499,7 +499,7 @@ void FElysiumNpc::TakeDamageFromCollision(int32, void*)
 
 // slot 76 0x1029c010 (walked) `void DrawDebugStatOverlays()`
 //   layer 7, story 29c
-// verdict `rule`: the body is `FElysiumNpc::DrawDebugStatOverlays`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::DrawDebugStatOverlays`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 79 0x10321670 (walked) `datamap_t* GetPredDescMap()`
@@ -516,7 +516,7 @@ void FElysiumNpc::TakeDamageFromCollision(int32, void*)
 
 // slot 81 0x102c5890 (walked) `int YouForgotToImplementOrDeclareServerClass()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 int32 FElysiumNpc::YouForgotToImplementOrDeclareServerClass()
 {
 	return static_cast<int32>(0);
@@ -556,7 +556,7 @@ void* FElysiumNpc::GetEdict()
 //   takes `const edict_t*`
 //   takes `const void*`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ShouldTransmit`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::ShouldTransmit`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 87 0x100ab280 (walked) `void SetTransmit(CCheckTransmitInfo*)`
@@ -574,8 +574,8 @@ void FElysiumNpc::SetTransmit(void*)
 
 // slot 89 0x10026b70 (walked) `void vfunc89()`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot89`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::Slot89`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 90 0x100aa840 (sdk) `bool IsTransparent() const`
 //   layer 0, story 29c
@@ -587,7 +587,7 @@ bool FElysiumNpc::IsTransparent() const
 
 // slot 91 0x100b4de0 (walked) `bool ShouldCollide(int, int) const`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ShouldCollide`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::ShouldCollide`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 92 0x10027570 (sdk) `SolidType_t GetSolid() const`
@@ -666,7 +666,7 @@ bool FElysiumNpc::TestHitboxes(void*, int32, void*)
 
 // slot 101 0x100ab430 (walked) `void ComputeWorldSpaceSurroundingBox(Vector*, Vector*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
 {
 }
@@ -680,18 +680,18 @@ void FElysiumNpc::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
 
 // slot 104 0x10298ad0 (sdk) `void Precache()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::Precache`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::Precache`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 105 0x10298ce0 (sdk) `void SetModel(char*)`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::SetModel`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetModel`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 106 0x1027bb20 (sdk) `void PostConstructor(char*)`
 //   layer 15, story 29d
-// verdict `rule`: the body is `FElysiumNpc::PostConstructor`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::PostConstructor`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 107 0x1009e280 (sdk) `void ParseMapData(CEntityMapData*)`
 //   takes `CEntityMapData*`
@@ -703,12 +703,12 @@ void FElysiumNpc::ParseMapData(void*)
 
 // slot 108 0x1004fbb0 (walked) `bool KeyValue(const char*, Vector)`
 //   layer 11, story 29d
-// verdict `rule`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 109 0x1004fbf0 (walked) `bool KeyValue(const char*, float)`
 //   layer 11, story 29d
-// verdict `rule`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::KeyValue`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 110 0x101c1480 (walked) `bool KeyValue(const char*, const char*)`
@@ -725,7 +725,7 @@ void FElysiumNpc::MemberSync()
 
 // slot 112 0x10026bd0 (walked) `void vfunc112(int, int)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot112(int32, int32)
 {
 }
@@ -739,15 +739,15 @@ void FElysiumNpc::PostClientMessagesSent()
 
 // slot 115 0x10026bf0 (walked) `void vfunc115(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot115(FElysiumEntity*)
 {
 }
 
 // slot 116 0x10027490 (walked) `bool IsMarkedForDeletion()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::IsMarkedForDeletion`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::IsMarkedForDeletion`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 118 0x100abc90 (sdk) `bool AcceptInput(char*, CBaseEntity*, CBaseEntity*, variant_t, int)`
 //   takes `variant_t`
@@ -784,12 +784,12 @@ void FElysiumNpc::SetClassname(TCHAR*)
 
 // slot 123 0x1029ca50 (sdk) `void DrawDebugGeometryOverlays()`
 //   layer 15, story 29d
-// verdict `rule`: the body is `FElysiumNpc::DrawDebugGeometryOverlays`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::DrawDebugGeometryOverlays`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 124 0x1029d4e0 (sdk) `int DrawDebugTextOverlays()`
 //   layer 15, story 29d
-// verdict `rule`: the body is `FElysiumNpc::DrawDebugTextOverlays`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::DrawDebugTextOverlays`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 125 0x1033e7e0 (walked) `void DrawMuzzleOverlay()`
@@ -802,18 +802,18 @@ void FElysiumNpc::DrawMuzzleOverlay()
 // slot 126 0x102993c0 (sdk) `int Save(ISave&)`
 //   takes `ISave&`
 //   layer 16, story 29d
-// verdict `rule`: the body is `FElysiumNpc::Save`, written by hand in the substrate. Declared here,
-// defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::Save`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 127 0x10299700 (walked) `int Restore(IRestore&)`
 //   takes `IRestore&`
 //   layer 10, story 29d
-// verdict `rule`: the body is `FElysiumNpc::Restore`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::Restore`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 128 0x101a6520 (sdk) `bool ShouldSavePhysics()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::ShouldSavePhysics()
 {
 	return false;
@@ -828,12 +828,12 @@ void FElysiumNpc::OnSave()
 
 // slot 130 0x102998c0 (walked) `void OnRestore(bool)`
 //   layer 22, story 29e
-// verdict `rule`: the body is `FElysiumNpc::OnRestore`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::OnRestore`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 131 0x10026c10 (walked) `int RequiredEdictIndex()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0xffffffff;`
+// verdict `dead`: retail's whole body is `return 0xffffffff;`
 int32 FElysiumNpc::RequiredEdictIndex()
 {
 	return static_cast<int32>(0xffffffff);
@@ -841,24 +841,24 @@ int32 FElysiumNpc::RequiredEdictIndex()
 
 // slot 132 0x10026c30 (walked) `void vfunc132()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot132()
 {
 }
 
 // slot 133 0x101c1720 (walked) `void MoveDone()`
 //   layer 9, story 29c
-// verdict `rule`: the body is `FElysiumNpc::MoveDone`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::MoveDone`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 135 0x101c10d0 (walked) `float vfunc135(float)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot135`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot135`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 136 0x101a6860 (walked) `bool vfunc136()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
+// verdict `dead`: retail's whole body is `return 1;`
 bool FElysiumNpc::Slot136()
 {
 	return true;
@@ -866,8 +866,8 @@ bool FElysiumNpc::Slot136()
 
 // slot 137 0x1004fc50 (walked) `CBaseAnimating* GetBaseAnimating()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetBaseAnimating`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::GetBaseAnimating`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 138 0x10299d80 (sdk) `Class_T Classify()`
 //   returns `Class_T`
@@ -938,12 +938,12 @@ int32 FElysiumNpc::BloodColor()
 //   takes `CVDmg_t*`
 //   takes `trace_t*`
 //   layer 4, story 29c
-// verdict `rule`: the body is `FElysiumNpc::TraceBleed`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::TraceBleed`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 147 0x10026db0 (walked) `bool IsTriggered(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
+// verdict `dead`: retail's whole body is `return 1;`
 bool FElysiumNpc::IsTriggered(FElysiumEntity*)
 {
 	return true;
@@ -951,21 +951,21 @@ bool FElysiumNpc::IsTriggered(FElysiumEntity*)
 
 // slot 148 0x10026dd0 (walked) `void AddPoints(int, bool)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::AddPoints(int32, bool)
 {
 }
 
 // slot 149 0x10026df0 (walked) `void AddPointsToTeam(int, bool)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::AddPointsToTeam(int32, bool)
 {
 }
 
 // slot 150 0x10026e10 (walked) `bool AddPlayerItem(CBaseCombatWeapon*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::AddPlayerItem(FElysiumEntity*)
 {
 	return false;
@@ -973,7 +973,7 @@ bool FElysiumNpc::AddPlayerItem(FElysiumEntity*)
 
 // slot 151 0x10026e30 (walked) `bool RemovePlayerItem(CBaseCombatWeapon*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::RemovePlayerItem(FElysiumEntity*)
 {
 	return false;
@@ -981,17 +981,17 @@ bool FElysiumNpc::RemovePlayerItem(FElysiumEntity*)
 
 // slot 152 0x1004fc10 (walked) `float GetDelay()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetDelay`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::GetDelay`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 153 0x10280300 (walked) `bool IsMoving()`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::IsMoving`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::IsMoving`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 154 0x100b4ea0 (walked) `int DamageDecal(int, int)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::DamageDecal`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::DamageDecal`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 155 0x100a6c50 (walked) `void DecalTrace(trace_t*, int, bool, int, CBaseEntity*, int, bool)`
@@ -1004,14 +1004,14 @@ void FElysiumNpc::DecalTrace(void*, int32, bool, int32, FElysiumEntity*, int32, 
 
 // slot 156 0x10026ee0 (unsettled) `void vfunc156(int)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot156(int32)
 {
 }
 
 // slot 157 0x10026f00 (walked) `bool OnControls(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::OnControls(FElysiumEntity*)
 {
 	return false;
@@ -1024,7 +1024,7 @@ bool FElysiumNpc::OnControls(FElysiumEntity*)
 
 // slot 159 0x10026f20 (walked) `bool ReflectGauss()`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ReflectGauss`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::ReflectGauss`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 160 0x100a1b40 (sdk) `bool HasTarget(string_t)`
@@ -1045,7 +1045,7 @@ bool FElysiumNpc::HasLinkedDoor(FName)
 
 // slot 162 0x10026f60 (walked) `bool IsPlayer()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::IsPlayer()
 {
 	return false;
@@ -1061,19 +1061,19 @@ bool FElysiumNpc::IsViewable()
 
 // slot 164 0x100b50a0 (walked) `bool IsStandable()`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::IsStandable`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::IsStandable`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 165 0x10026fb0 (walked) `bool CanStandOn(edict_t*)`
 //   takes `edict_t*`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CanStandOn`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::CanStandOn`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 166 0x10026f80 (walked) `bool CanStandOn(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CanStandOn`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::CanStandOn`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 167 0x101a67e0 (walked) `CBaseEntity* GetEnemy() const`
 //   layer 0, story 29c
@@ -1087,14 +1087,14 @@ bool FElysiumNpc::IsViewable()
 
 // slot 169 0x10027040 (walked) `void ViewPunch(const QAngle&)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::ViewPunch(const FRotator&)
 {
 }
 
 // slot 170 0x10027060 (walked) `void VelocityPunch(const Vector&)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::VelocityPunch(const FVector&)
 {
 }
@@ -1151,7 +1151,7 @@ void FElysiumNpc::Blocked(FElysiumEntity*)
 
 // slot 179 0x100270a0 (walked) `void EndBlocked()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::EndBlocked()
 {
 }
@@ -1170,7 +1170,7 @@ void FElysiumNpc::Teleport(FVector*, FRotator*, FVector*)
 
 // slot 182 0x100ad8f0 (unsettled) `void vfunc182(int, int, int, int)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot182(int32, int32, int32, int32)
 {
 }
@@ -1180,7 +1180,7 @@ void FElysiumNpc::Slot182(int32, int32, int32, int32)
 //   takes `notify_system_event_t`
 //   takes `const notify_system_event_params_t&`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::NotifySystemEvent(FElysiumEntity*, int32, void*)
 {
 }
@@ -1207,7 +1207,7 @@ bool FElysiumNpc::Slot186()
 
 // slot 187 0x100270e0 (walked) `CBaseEntity* Respawn()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 FElysiumEntity* FElysiumNpc::Respawn()
 {
 	return nullptr;
@@ -1215,7 +1215,7 @@ FElysiumEntity* FElysiumNpc::Respawn()
 
 // slot 188 0x10027100 (walked) `bool IsLockedByMaster()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::IsLockedByMaster()
 {
 	return false;
@@ -1231,7 +1231,7 @@ int32 FElysiumNpc::GetDamageType() const
 
 // slot 190 0x10027120 (walked) `float GetDamage()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0.0;`
+// verdict `dead`: retail's whole body is `return 0.0;`
 float FElysiumNpc::GetDamage()
 {
 	return static_cast<float>(0.0);
@@ -1239,7 +1239,7 @@ float FElysiumNpc::GetDamage()
 
 // slot 191 0x10027140 (walked) `void SetDamage(float)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::SetDamage(float)
 {
 }
@@ -1252,13 +1252,13 @@ void FElysiumNpc::SetDamage(float)
 // slot 194 0x100b4bc0 (walked) `const QAngle& EyeAngles()`
 //   returns `const QAngle&`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::EyeAngles`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::EyeAngles`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 195 0x100b4be0 (walked) `const QAngle& LocalEyeAngles()`
 //   returns `const QAngle&`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::LocalEyeAngles`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::LocalEyeAngles`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 196 0x100b4c00 (walked) `Vector EarPosition()`
@@ -1319,7 +1319,7 @@ float FElysiumNpc::GetReceivedDamageScale()
 
 // slot 205 0x10027330 (walked) `bool vfunc205()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::Slot205()
 {
 	return false;
@@ -1327,7 +1327,7 @@ bool FElysiumNpc::Slot205()
 
 // slot 206 0x10027350 (unsettled) `bool vfunc206(int, int, int, int, int)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::Slot206(int32, int32, int32, int32, int32)
 {
 	return false;
@@ -1358,7 +1358,7 @@ FElysiumEntity* FElysiumNpc::GetGroundEntity()
 
 // slot 210 0x10027370 (walked) `void GetGroundVelocityToApply(Vector&)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetGroundVelocityToApply`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::GetGroundVelocityToApply`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 211 0x100274d0 (sdk) `int GetSolidFlags() const`
@@ -1378,8 +1378,8 @@ void FElysiumNpc::SetModelName(FName)
 
 // slot 213 0x100b1890 (walked) `void SetSize(const Vector&)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetSize`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetSize`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 214 0x100b1960 (walked) `const Vector& GetSize()`
 //   returns `const Vector&`
@@ -1456,12 +1456,12 @@ FVector FElysiumNpc::GetSoundEmissionOrigin() const
 
 // slot 223 0x10273720 (walked) `bool CreateVPhysics()`
 //   layer 13, story 29d
-// verdict `rule`: the body is `FElysiumNpc::CreateVPhysics`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::CreateVPhysics`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 224 0x100273b0 (walked) `bool ForceVPhysicsCollide(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::ForceVPhysicsCollide(FElysiumEntity*)
 {
 	return false;
@@ -1475,7 +1475,7 @@ bool FElysiumNpc::ForceVPhysicsCollide(FElysiumEntity*)
 // slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
 //   takes `IPhysicsObject*`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::VPhysicsUpdate`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::VPhysicsUpdate`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`
@@ -1546,14 +1546,14 @@ void FElysiumNpc::PhysicsPushEntity(FVector&, void*)
 
 // slot 235 0x100273f0 (walked) `void OnPhysGunPickup(CBasePlayer*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::OnPhysGunPickup(FElysiumEntity*)
 {
 }
 
 // slot 236 0x10027410 (walked) `void OnPhysGunDrop(CBasePlayer*, bool)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::OnPhysGunDrop(FElysiumEntity*, bool)
 {
 }
@@ -1586,7 +1586,7 @@ FElysiumEntity* FElysiumNpc::PhysicsPushRotate(float)
 // slot 240 0x1014f8b0 (walked) `PyObject* vfunc240()`
 //   returns `PyObject*`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot240`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot240`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 241 0x1008c170 (walked) `void GetEventName(char*, animevent_t*)`
@@ -1773,17 +1773,17 @@ void FElysiumNpc::DrawServerHitboxes()
 
 // slot 265 0x10099690 (walked) `void AddFlinchGesture(Activity, float, float, const char*, float)`
 //   layer 6, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AddFlinchGesture`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::AddFlinchGesture`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 266 0x100997f0 (walked) `void vfunc266()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot266`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::Slot266`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 267 0x10098a40 (walked) `int GetFirstGestureLayer()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `mechanism`: retail's whole body is `return 0;`
 int32 FElysiumNpc::GetFirstGestureLayer()
 {
 	return static_cast<int32>(0);
@@ -1791,43 +1791,43 @@ int32 FElysiumNpc::GetFirstGestureLayer()
 
 // slot 268 0x10099020 (walked) `void SetLayer(int, Activity, int, bool)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetLayer`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetLayer`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 269 0x10099660 (walked) `void RemoveLayer(int)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RemoveLayer`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::RemoveLayer`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 270 0x10099540 (walked) `bool HasLayer(Activity)`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::HasLayer`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::HasLayer`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 271 0x100994c0 (walked) `int FindLayerByOwner(Activity)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::FindLayerByOwner`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::FindLayerByOwner`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 272 0x10099470 (walked) `int AllocateLayer()`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AllocateLayer`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::AllocateLayer`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 273 0x10099570 (walked) `void RestartGesture(Activity, bool, bool)`
 //   layer 4, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RestartGesture`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::RestartGesture`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 274 0x100995e0 (walked) `void RemoveLayerByOwner(Activity)`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RemoveLayerByOwner`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::RemoveLayerByOwner`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 275 0x10099630 (walked) `void RemoveAllGestures()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RemoveAllGestures`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::RemoveAllGestures`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 276 0x100b5ce0 (sdk) `void Blink()`
 //   layer 0, story 29c
@@ -1838,7 +1838,7 @@ void FElysiumNpc::Blink()
 
 // slot 277 0x100b5b00 (walked) `void SetViewtarget(const Vector&)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetViewtarget`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::SetViewtarget`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 278 0x100b5b40 (walked) `const Vector& GetViewtarget() const`
@@ -1852,28 +1852,28 @@ void* FElysiumNpc::GetViewtarget() const
 
 // slot 279 0x100b5ba0 (walked) `void SetFlexWeight(int, float)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetFlexWeight`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::SetFlexWeight`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 280 0x100b5b60 (walked) `void SetFlexWeight(char*, float)`
 //   layer 6, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetFlexWeight`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::SetFlexWeight`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 281 0x100b5c50 (walked) `float GetFlexWeight(int)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetFlexWeight`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::GetFlexWeight`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 282 0x100b5c20 (walked) `float GetFlexWeight(char*)`
 //   layer 6, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetFlexWeight`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::GetFlexWeight`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 283 0x100b6250 (walked) `void ProcessSceneEvents()`
 //   layer 9, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ProcessSceneEvents`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::ProcessSceneEvents`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 284 0x10105f30 (walked) `void AddSceneExpressions()`
 //   layer 8, story 29c
@@ -1885,8 +1885,8 @@ void FElysiumNpc::AddSceneExpressions()
 // slot 285 0x100b5d80 (walked) `void ClearSceneEvents(CChoreoScene*)`
 //   takes `CChoreoScene*`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ClearSceneEvents`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::ClearSceneEvents`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 286 0x102c1680 (walked) `void AddSceneEvent(CChoreoScene*, CChoreoEvent*)`
 //   takes `CChoreoScene*`
@@ -1898,33 +1898,33 @@ void FElysiumNpc::AddSceneExpressions()
 // slot 287 0x100b6180 (walked) `void RemoveSceneEvent(CChoreoEvent*)`
 //   takes `CChoreoEvent*`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RemoveSceneEvent`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::RemoveSceneEvent`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 288 0x100b6cf0 (walked) `void AddFlexSetting(const char*, float, const flexsettinghdr_t*,
 // const flexsettinghdr_t*, bool)`
 //   takes `const flexsettinghdr_t*`
 //   takes `const flexsettinghdr_t*`
 //   layer 6, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AddFlexSetting`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::AddFlexSetting`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 289 0x100b6960 (walked) `void AddFlexAnimation(CSceneEventInfo*)`
 //   takes `CSceneEventInfo*`
 //   layer 7, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AddFlexAnimation`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::AddFlexAnimation`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 290 0x100b70e0 (walked) `void ProcessSequenceSceneEvent(CSceneEventInfo*)`
 //   takes `CSceneEventInfo*`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ProcessSequenceSceneEvent`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::ProcessSequenceSceneEvent`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 291 0x100b7040 (walked) `void ProcessGestureSceneEvent(CSceneEventInfo*)`
 //   takes `CSceneEventInfo*`
 //   layer 3, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ProcessGestureSceneEvent`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::ProcessGestureSceneEvent`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 292 0x103229d0 (walked) `void DamageFlinch(const CTakeDamageInfo&, const Vector&, trace_t*)`
@@ -1948,7 +1948,7 @@ void FElysiumNpc::DamageFlinch(void*, const FVector&, void*)
 
 // slot 296 0x10348ba0 (walked) `bool vfunc296(int)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot296`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot296`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 297 0x10332ef0 (walked) `void AdjustDialogReaction(CBaseEntity*, int, const char*)`
@@ -2070,7 +2070,7 @@ void FElysiumNpc::UpdatePresenceEffect()
 
 // slot 314 0x102bf070 (walked) `void UpdatePoseParameters(float)`
 //   layer 12, story 29d
-// verdict `rule`: the body is `FElysiumNpc::UpdatePoseParameters`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::UpdatePoseParameters`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 315 0x10346cd0 (walked) `void MeleeSwingUpdate()`
@@ -2122,7 +2122,7 @@ bool FElysiumNpc::PlayerKnockbackReaction(FElysiumEntity*, int32)
 
 // slot 321 0x1014f7b0 (walked) `bool vfunc321(CBaseCombatCharacter*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::Slot321(FElysiumEntity*)
 {
 	return false;
@@ -2162,7 +2162,7 @@ bool FElysiumNpc::Slot325()
 
 // slot 327 0x10345460 (walked) `bool vfunc327()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
+// verdict `dead`: retail's whole body is `return 1;`
 bool FElysiumNpc::Slot327()
 {
 	return true;
@@ -2232,8 +2232,8 @@ void FElysiumNpc::NotifyChangeSizeNormal()
 
 // slot 337 0x1029a050 (walked) `int GetUsedHullBits()`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetUsedHullBits`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::GetUsedHullBits`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 338 0x1033cc30 (unsettled) `void AddPreDisciplineEffect(int, int, int)`
 //   layer 0, story 29c
@@ -2286,8 +2286,8 @@ float FElysiumNpc::GetShakyHandsIntensity()
 
 // slot 345 0x1032fb80 (walked) `float SetPoseParameter(const char*, float, bool)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetPoseParameter`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetPoseParameter`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 346 0x1032fc50 (walked) `float SetPoseParameter(int, float, bool)`
 //   layer 5, story 29c
@@ -2301,7 +2301,7 @@ float FElysiumNpc::GetShakyHandsIntensity()
 //   takes `float*`
 //   takes `float*`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetExpressionEventParams`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::GetExpressionEventParams`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 348 0x1032fe60 (walked) `int HealthToPercent()`
@@ -2371,7 +2371,7 @@ bool FElysiumNpc::Slot360()
 
 // slot 361 0x1014f950 (walked) `bool vfunc361()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::Slot361()
 {
 	return false;
@@ -2668,23 +2668,23 @@ int32 FElysiumNpc::IRelationPriority(FElysiumEntity*)
 
 // slot 406 0x1027e740 (walked) `const char* GetStateName(NPC_STATE)`
 //   layer 1, story 29c
-// verdict `present`: the body is `FElysiumNpc::GetStateName`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetStateName`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 407 0x1027e7d0 (walked) `const char* GetNavTypeName(Navigation_t)`
 //   takes `Navigation_t`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetNavTypeName`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetNavTypeName`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 408 0x1027ede0 (walked) `const char* GetShortConditionName(int)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetShortConditionName`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::GetShortConditionName`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 409 0x1027ee00 (walked) `int GetLastSharedCondition()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0x77;`
+// verdict `dead`: retail's whole body is `return 0x77;`
 int32 FElysiumNpc::GetLastSharedCondition()
 {
 	return static_cast<int32>(0x77);
@@ -2697,29 +2697,29 @@ int32 FElysiumNpc::GetLastSharedCondition()
 
 // slot 411 0x10280fd0 (walked) `void vfunc411()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::Slot411()
 {
 }
 
 // slot 412 0x101aa6d0 (walked) `float GetLastUpdateThink()`
 //   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpc::GetLastUpdateThink`, written by hand in the
-// substrate. Declared here, defined there.
+// verdict `dead`: the body is `FElysiumNpc::GetLastUpdateThink`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 413 0x101aa6f0 (walked) `float GetLastNormalThink()`
 //   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpc::GetLastNormalThink`, written by hand in the
-// substrate. Declared here, defined there.
+// verdict `dead`: the body is `FElysiumNpc::GetLastNormalThink`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 414 0x101aa710 (walked) `float GetLastMoveThink()`
 //   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpc::GetLastMoveThink`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetLastMoveThink`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 415 0x101aa730 (walked) `float GetLastAIThink()`
 //   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpc::GetLastAIThink`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetLastAIThink`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 416 0x101aa750 (walked) `void SetForceFrequentThink(bool)`
@@ -2729,7 +2729,7 @@ void FElysiumNpc::Slot411()
 
 // slot 417 0x101aa770 (walked) `bool GetForceFrequentThink()`
 //   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpc::GetForceFrequentThink`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::GetForceFrequentThink`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 418 0x102bf6e0 (walked) `float ResolveTaskDistance(float)`
@@ -2749,7 +2749,7 @@ void FElysiumNpc::Slot411()
 
 // slot 421 0x101a6540 (sdk) `void PostNPCInit()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::PostNPCInit()
 {
 }
@@ -2761,49 +2761,49 @@ void FElysiumNpc::PostNPCInit()
 
 // slot 423 0x1027e120 (walked) `bool IsTemplate()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::IsTemplate`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::IsTemplate`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 424 0x1027cae0 (walked) `bool CreateComponents()`
 //   layer 7, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreateComponents`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::CreateComponents`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 425 0x1027cc10 (walked) `CAI_Senses* CreateSenses()`
 //   returns `CAI_Senses*`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreateSenses`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::CreateSenses`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 426 0x1027cef0 (walked) `CAI_MoveProbe* CreateMoveProbe()`
 //   returns `CAI_MoveProbe*`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreateMoveProbe`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::CreateMoveProbe`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 427 0x1027cec0 (walked) `CAI_Motor* CreateMotor()`
 //   returns `CAI_Motor*`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreateMotor`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::CreateMotor`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 428 0x1027cf60 (walked) `CAI_LocalNavigator* CreateLocalNavigator()`
 //   returns `CAI_LocalNavigator*`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreateLocalNavigator`, written by hand in the
+// verdict `mechanism`: the body is `FElysiumNpc::CreateLocalNavigator`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 429 0x1027cf90 (walked) `CAI_Navigator* CreateNavigator()`
 //   returns `CAI_Navigator*`
 //   layer 6, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreateNavigator`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::CreateNavigator`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 430 0x1027cfc0 (walked) `CAI_Pathfinder* CreatePathfinder()`
 //   returns `CAI_Pathfinder*`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CreatePathfinder`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::CreatePathfinder`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 431 0x10292de0 (sdk) `void NPCThink()`
 //   layer 26, story 29e
@@ -2835,7 +2835,7 @@ void FElysiumNpc::PrescheduleThink()
 
 // slot 436 0x101a6580 (walked) `void OnStartSchedule(int)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::OnStartSchedule(int32)
 {
 }
@@ -2910,28 +2910,28 @@ int32 FElysiumNpc::RunTaskSlot444(void*)
 
 // slot 449 0x102cc350 (sdk) `char* TaskName(int)`
 //   layer 3, story 29c
-// verdict `rule`: the body is `FElysiumNpc::TaskName`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::TaskName`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 450 0x101a6640 (walked) `int GetLocalTaskId(int)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetLocalTaskId`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetLocalTaskId`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 451 0x101aa7b0 (sdk) `char* GetSchedulingErrorName()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetSchedulingErrorName`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::GetSchedulingErrorName`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 452 0x102b97f0 (sdk) `bool LoadedSchedules()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::LoadedSchedules`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::LoadedSchedules`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 454 0x101a6680 (walked) `CAI_BehaviorBase* GetRunningBehavior()`
 //   returns `CAI_BehaviorBase*`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 void* FElysiumNpc::GetRunningBehavior()
 {
 	return nullptr;
@@ -2940,7 +2940,7 @@ void* FElysiumNpc::GetRunningBehavior()
 // slot 455 0x101a66a0 (walked) `bool OnBehaviorChangeStatus(CAI_BehaviorBase*, bool)`
 //   takes `CAI_BehaviorBase*`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::OnBehaviorChangeStatus(void*, bool)
 {
 	return false;
@@ -2949,7 +2949,7 @@ bool FElysiumNpc::OnBehaviorChangeStatus(void*, bool)
 // slot 456 0x101a66c0 (walked) `CAI_BehaviorBase** AccessBehaviors()`
 //   returns `CAI_BehaviorBase**`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 void* FElysiumNpc::AccessBehaviors()
 {
 	return nullptr;
@@ -2957,7 +2957,7 @@ void* FElysiumNpc::AccessBehaviors()
 
 // slot 457 0x101a66e0 (walked) `int NumBehaviors()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 int32 FElysiumNpc::NumBehaviors()
 {
 	return static_cast<int32>(0);
@@ -2965,7 +2965,7 @@ int32 FElysiumNpc::NumBehaviors()
 
 // slot 458 0x102cc300 (walked) `const char* ConditionName(int)`
 //   layer 3, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ConditionName`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::ConditionName`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 459 0x1026d7f0 (walked) `void RemoveIgnoredConditions()`
@@ -3173,12 +3173,12 @@ void FElysiumNpc::GatherEnemyConditions(FElysiumEntity*)
 
 // slot 496 0x10294720 (walked) `void TargetAcquiredSound()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::TargetAcquiredSound`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::TargetAcquiredSound`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 497 0x102947e0 (walked) `void vfunc497()`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot497`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot497`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 498 0x10294870 (walked) `void FleeSound()`
@@ -3193,17 +3193,17 @@ void FElysiumNpc::GatherEnemyConditions(FElysiumEntity*)
 
 // slot 500 0x102949f0 (walked) `void ExertHvySound()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::ExertHvySound`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::ExertHvySound`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 501 0x10294ab0 (walked) `void ExertLightSound()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::ExertLightSound`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::ExertLightSound`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 502 0x10294b70 (walked) `void RiledSound()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::RiledSound`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::RiledSound`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 503 0x10294c30 (walked) `void ComfortSound()`
@@ -3218,12 +3218,12 @@ void FElysiumNpc::GatherEnemyConditions(FElysiumEntity*)
 
 // slot 505 0x10294db0 (walked) `void TargetGiveUpSound()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::TargetGiveUpSound`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::TargetGiveUpSound`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 506 0x10294e70 (walked) `void vfunc506()`
 //   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpc::Slot506`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot506`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 507 0x10294f40 (walked) `void FloatSound()`
@@ -3233,7 +3233,7 @@ void FElysiumNpc::GatherEnemyConditions(FElysiumEntity*)
 
 // slot 508 0x101a6b00 (walked) `void SpeakSentence(int)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::SpeakSentence(int32)
 {
 }
@@ -3250,13 +3250,13 @@ void FElysiumNpc::SpeakSentence(int32)
 
 // slot 511 0x1027caa0 (walked) `void StopLoopingSounds()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::StopLoopingSounds`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::StopLoopingSounds`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 512 0x101a6b20 (walked) `CAI_Expresser* GetExpresser()`
 //   returns `CAI_Expresser*`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 void* FElysiumNpc::GetExpresser()
 {
 	return nullptr;
@@ -3270,7 +3270,7 @@ void* FElysiumNpc::GetExpresser()
 // slot 514 0x1027d9d0 (walked) `bool MovementCost(int, const Vector&, const Vector&, float*)`
 //   takes `float*`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
+// verdict `dead`: retail's whole body is `return 0;`
 bool FElysiumNpc::MovementCost(int32, const FVector&, const FVector&, void*)
 {
 	return false;
@@ -3278,64 +3278,64 @@ bool FElysiumNpc::MovementCost(int32, const FVector&, const FVector&, void*)
 
 // slot 515 0x10274b30 (walked) `float CalcIdealYaw(const Vector&)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::CalcIdealYaw`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::CalcIdealYaw`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 516 0x10297ce0 (sdk) `float MaxYawSpeed()`
 //   layer 8, story 29c
-// verdict `rule`: the body is `FElysiumNpc::MaxYawSpeed`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::MaxYawSpeed`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 517 0x10278d90 (walked) `void AddFacingTarget(CBaseEntity*, const Vector&, float, float,
 // float)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AddFacingTarget`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::AddFacingTarget`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 518 0x10278d20 (walked) `void AddFacingTarget(const Vector&, float, float, float)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AddFacingTarget`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::AddFacingTarget`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 519 0x10278cb0 (walked) `void AddFacingTarget(CBaseEntity*, float, float, float)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::AddFacingTarget`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::AddFacingTarget`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 520 0x10278e00 (sdk) `float GetFacingDirection(Vector&)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetFacingDirection`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetFacingDirection`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 521 0x10280880 (sdk) `bool IsJumpLegal(Vector&, Vector&, Vector&) const`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::IsJumpLegal`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::IsJumpLegal`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 522 0x101a6b40 (sdk) `float StepHeight() const`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::StepHeight`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::StepHeight`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 523 0x101aa670 (sdk) `float GetMaxJumpSpeed() const`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetMaxJumpSpeed`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::GetMaxJumpSpeed`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 524 0x101a6b80 (sdk) `float GetJumpGravity() const`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetJumpGravity`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetJumpGravity`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 525 0x1027da90 (sdk) `bool OverrideMove(float)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::OverrideMove`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::OverrideMove`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 526 0x1027d9f0 (sdk) `bool OverrideMoveFacing(AILocalMoveGoal_t&, float)`
 //   takes `AILocalMoveGoal_t&`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::OverrideMoveFacing`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::OverrideMoveFacing`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 527 0x10293e80 (walked) `bool IsUnusableNode(CAI_Node*)`
@@ -3379,36 +3379,36 @@ bool FElysiumNpc::MovementCost(int32, const FVector&, const FVector&, void*)
 
 // slot 535 0x101a6be0 (walked) `void AddLookTarget(const Vector&, float, float, float)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::AddLookTarget(const FVector&, float, float, float)
 {
 }
 
 // slot 536 0x101a6bc0 (walked) `void AddLookTarget(CBaseEntity*, float, float, float)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::AddLookTarget(FElysiumEntity*, float, float, float)
 {
 }
 
 // slot 537 0x1026af70 (sdk) `void SetHeadDirection(Vector&, float)`
 //   layer 3, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetHeadDirection`, written by hand in the substrate.
-// Declared here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetHeadDirection`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 538 0x1026b4f0 (walked) `void AimGun()`
 //   layer 13, story 29d
-// verdict `rule`: the body is `FElysiumNpc::AimGun`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::AimGun`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 539 0x1026b480 (walked) `void SetAim(const Vector&)`
 //   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SetAim`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::SetAim`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 540 0x10279060 (walked) `float PlayScene(const char*)`
 //   layer 4, story 29c
-// verdict `rule`: the body is `FElysiumNpc::PlayScene`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::PlayScene`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 541 0x10273e10 (walked) `CAI_Enemies* GetEnemies()`
@@ -3424,7 +3424,7 @@ void FElysiumNpc::AddLookTarget(FElysiumEntity*, float, float, float)
 
 // slot 543 0x10273e40 (walked) `void RemoveMemory()`
 //   layer 5, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RemoveMemory`, written by hand in the substrate.
+// verdict `mechanism`: the body is `FElysiumNpc::RemoveMemory`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 544 0x102709c0 (walked) `bool UpdateEnemyMemory(CBaseEntity*, const Vector&, CBaseEntity*)`
@@ -3439,12 +3439,12 @@ void FElysiumNpc::AddLookTarget(FElysiumEntity*, float, float, float)
 
 // slot 546 0x101a6c00 (walked) `const char* SquadSlotName(int)`
 //   layer 3, story 29c
-// verdict `rule`: the body is `FElysiumNpc::SquadSlotName`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::SquadSlotName`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 547 0x1028b0f0 (walked) `int GetSlotSchedule(int)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetSlotSchedule`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetSlotSchedule`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 548 0x1028af20 (walked) `bool IsValidCover(const Vector&, const CAI_Hint*)`
@@ -3456,7 +3456,7 @@ void FElysiumNpc::AddLookTarget(FElysiumEntity*, float, float, float)
 // slot 549 0x1028b0b0 (walked) `bool IsValidShootPosition(const Vector&, const CAI_Hint*)`
 //   takes `const CAI_Hint*`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::IsValidShootPosition`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::IsValidShootPosition`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 550 0x101a6c20 (walked) `float CoverRadius()`
@@ -3466,7 +3466,7 @@ void FElysiumNpc::AddLookTarget(FElysiumEntity*, float, float, float)
 
 // slot 551 0x101a6c40 (walked) `void OnChangeHintGroup(string_t, string_t)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::OnChangeHintGroup(FName, FName)
 {
 }
@@ -3483,7 +3483,7 @@ void FElysiumNpc::OnChangeHintGroup(FName, FName)
 
 // slot 554 0x1026d920 (walked) `int RangeAttack2Conditions(float, float)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::RangeAttack2Conditions`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::RangeAttack2Conditions`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 555 0x1026d9a0 (walked) `int MeleeAttack1Conditions(float, float)`
@@ -3493,12 +3493,12 @@ void FElysiumNpc::OnChangeHintGroup(FName, FName)
 
 // slot 556 0x1026da90 (walked) `int MeleeAttack2Conditions(float, float)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::MeleeAttack2Conditions`, written by hand in the
+// verdict `dead`: the body is `FElysiumNpc::MeleeAttack2Conditions`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 557 0x101a6c60 (walked) `bool OnBeginMoveAndShoot()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
+// verdict `dead`: retail's whole body is `return 1;`
 bool FElysiumNpc::OnBeginMoveAndShoot()
 {
 	return true;
@@ -3506,7 +3506,7 @@ bool FElysiumNpc::OnBeginMoveAndShoot()
 
 // slot 558 0x101a6c80 (walked) `void OnEndMoveAndShoot()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::OnEndMoveAndShoot()
 {
 }
@@ -3546,7 +3546,7 @@ void FElysiumNpc::OnEndMoveAndShoot()
 
 // slot 565 0x101a6ca0 (walked) `void CheckAmmo()`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::CheckAmmo()
 {
 }
@@ -3567,7 +3567,7 @@ int32 FElysiumNpc::GetHintActivity(int16)
 
 // slot 568 0x1026a910 (walked) `float GetHintDelay(short)`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::GetHintDelay`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::GetHintDelay`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 569 0x10297560 (walked) `Activity GetCoverActivity(CAI_Hint*)`
@@ -3619,14 +3619,14 @@ int32 FElysiumNpc::GetHintActivity(int16)
 
 // slot 578 0x101a6cc0 (walked) `void NotifyDeadFriend(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
+// verdict `dead`: retail's whole body is `return;`
 void FElysiumNpc::NotifyDeadFriend(FElysiumEntity*)
 {
 }
 
 // slot 579 0x101a6ce0 (walked) `bool vfunc579(int)`
 //   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot579`, written by hand in the substrate. Declared
+// verdict `dead`: the body is `FElysiumNpc::Slot579`, written by hand in the substrate. Declared
 // here, defined there.
 
 // slot 580 0x101aa790 (walked) `CAI_ClassScheduleIdSpace* GetClassScheduleIdSpace()`
@@ -3637,7 +3637,7 @@ void FElysiumNpc::NotifyDeadFriend(FElysiumEntity*)
 
 // slot 581 0x102779a0 (walked) `void ReportAIState()`
 //   layer 4, story 29c
-// verdict `rule`: the body is `FElysiumNpc::ReportAIState`, written by hand in the substrate.
+// verdict `dead`: the body is `FElysiumNpc::ReportAIState`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 582 0x10277d90 (walked) `void ReportOverThinkLimit(float)`
@@ -3810,8 +3810,8 @@ float FElysiumNpc::Slot603(void*, void*)
 
 // slot 612 0x102c04b0 (walked) `int vfunc612()`
 //   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpc::Slot612`, written by hand in the substrate. Declared
-// here, defined there.
+// verdict `mechanism`: the body is `FElysiumNpc::Slot612`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 613 0x102c0b60 (walked) `bool vfunc613()`
 //   layer 0, story 29c

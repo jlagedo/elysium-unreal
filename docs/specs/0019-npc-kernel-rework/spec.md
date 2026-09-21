@@ -84,7 +84,7 @@ drop `FORCE_RELAXED_ANIMS`, two interrupts, and the whole failure program.
 In build order. A story is done when the code it names is gone or generated, the witness is
 green, and `coverage.md` shows the change.
 
-- [ ] **1. The strict verdict pass.**
+- [x] **1. The strict verdict pass.**
   Retail: none — a judgment over the 2,545 overlay rows, bands 0–29.
   Rule: a `rule` row must name its observable in `evidence` — the keyfield, schedule text,
   script name, output, save field, timing or witness test that would notice its absence — or
@@ -110,6 +110,57 @@ green, and `coverage.md` shows the change.
   And one correction to the ledger's vocabulary: in the goal record the `0x13` several rows call a
   "flag" is the ACTIVITY word `+0x14`.
   Size: M. Effort: Fable / high.
+  **Landed 2026-09-21.** All 2,544 overlay rows re-judged (the three `unsettled` rows stand as
+  they were): fifteen judges over address-ordered packs, then a lead pass that normalised every
+  slot the judges split on and ran the two checks below. Before → after: `rule` 2,205 → 1,354,
+  `present` 161 → 150, `mechanism` 175 → 380, `dead` 0 → 657. Band 19–29, which story 8 lands
+  under: 380 `rule`, 4 `present`, 13 `mechanism`, 71 `dead` of 468.
+  *The record:* every row's evidence now leads with `[0019/1 obs=<kind>: …]`, `[0019/1 seam=…]` or
+  `[0019/1 dead=…]` (`; was <verdict>` where the word changed), and
+  `uv run elysium research kernel_lists --check` holds every row to it — a `rule` with no named
+  observable fails, and so does a `via:` chain that leans on a row which is not itself a rule. Of
+  the 1,504 `rule` / `present` rows 716 are `via` a rule that uses them, 342 name a schedule text,
+  284 a player-visible timing or state, 64 a keyfield, 32 an output, 22 a dlg gate, 20 a rulebook
+  row, 12 an input, 11 a script name, 1 a save field.
+  *The outputs:* `docs/vtmb/npc-kernel/delete-list.md` (657 rows; 567 still name a port target, 300
+  of those with a hand-written port site, the rest generated stubs and registry values) and
+  `seam-list.md` (380 rows; 253 with a port body, 127 service-only), both rendered by
+  `kernel_lists` from the overlay. The target column KEEPS the port target through the pass —
+  a `dead` or `mechanism` row that still names a port body is one story 6 owes, and 6 writes `-`
+  when the body is gone — and `gen_kernel_shape` emits a `dead` row's `hand:` / `default:` spelling
+  as before, so the pass changes no runtime behaviour: the census C++ differs in verdict words
+  only, the build is green and `Elysium.Substrate.NpcKernelS*` runs 188 of 188.
+  *Where the 657 came from:* 252 on **classes nothing can instantiate** — a finding the pass made,
+  now in `population.md` § "NPC classes with no instance": twenty classnames (`npc_crow`,
+  `npc_generic*`, `npc_sabbat`, `npc_bullseye`, `monster_generic`, `npc_VTest`,
+  `npc_VSheriffSwarm`, `npc_VBatSwarm`, `npc_VStalker`, `npc_VCombatman`, `npc_VMoleman`, six clan
+  classes, `npc_TestBaseHumanoid` with the whole `CAI_BaseHumanoid` line, `scripted_target`) are in
+  no map, maker, template or script of the install and `vampire.dll` names each only at its factory;
+  172 debug and diagnostics (the overlays, the ring, the trace formatters, the stamps, slots 451 /
+  546 / 409 name lookups); 105 slots with no dispatch site (slots 23, 496, 497, 501, 502, 505, 506,
+  554, 556, the think-stamp getters); 44 empty or constant bodies nothing reads; 42 slot 452
+  `LoadedSchedules` (story 3's load error stands in for it); 19 `CAI_StandoffBehavior` /
+  `CAI_StandoffGoal` bodies — `ai_goal_standoff` is authored by nothing and slot 455 answers 0 on
+  every class, which halves 0018/15; 12 overrides whose only content is a debug stamp around the
+  body the class would inherit anyway. The `CSecureType` half of `RecordCriminalWitness` and of
+  the man-bat `OverrideMove` is named dead inside rows that stay `rule`.
+  *Expected and found:* every anchor above landed where the story said — `0x1027ef20`,
+  `0x1027efb0`, `0x1028d990`, `0x10292500`, `0x102779a0`, `0x10277d90` `dead`; `0x102e14a0`,
+  `0x102e1760`, `0x102efaa0`, `0x100b4f30` `mechanism` with their result codes and step factors
+  named as kept. **Five anchors have no overlay row** because the ledger does not count them core
+  (no family slot, no NPC-range offset) although the port cites them, so story 6 takes them from
+  here rather than from the lists: `0x102e1560` and `0x102efd50` (`mechanism`,
+  `ElysiumNpcKernelMotor10.cpp`), the scrambler pair `0x1042fde0` / `0x1042fe90` (`dead`,
+  `ElysiumNpcKernelSenses.cpp:97`, `ElysiumNpcKernelCombat10.cpp:82`,
+  `ElysiumNpcKernelLifecycle19.cpp:251`), and the `.sch` loader `0x1030f220` (`dead`, never
+  ported). Of the dead-by-content inputs, the climb is whole rows (`CAI_Motor` slots 3–5 and
+  `MoveClimb 0x102eebc0`, `dead`); the rest are ARMS inside bodies that stay `rule`. Two are named
+  dead in their row's tag — `COND_KNOCKBACK`'s two arms in `PreSelectSchedule 0x102ae920` and the
+  `TASK 0xae` arm in `0x10375f50`; goal type 5 and the hint-type-800 `|| 0x320` are not yet named
+  in a tag and ride with the stories that port those bodies (0018/5, 0002/10g); `m_flRadius` and
+  `nosferatu_tolerrant` are keys with no reader, which story 2's bindings leave unbound. Slot 580 (the class's id space) stays `rule` on every
+  class: story 3 keys its units by it. The six rows that called the goal record's `0x13` a flag
+  carry the correction in their tag.
 
 - [ ] **2. The datamap bindings, generated.**
   Retail: every class's `DATADESC` — `DEFINE_KEYFIELD` (name, member, type: fully data),
