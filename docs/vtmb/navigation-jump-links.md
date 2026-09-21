@@ -626,6 +626,61 @@ pairs diffed, every disputed instruction re-read from the DLL).**
 
 **Unrecovered:** nothing in this section.
 
+### The goal types, their issuers and the goal record (2026-09-21, 0018 story 5)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp03-goal-types`); `DoFindPath`'s switch and
+the type-9 issuer re-read by the lead._ `DoFindPath 0x102f2330` switches on the path's goal type
+(`path+0x5c`, read through `0x100113d8` — which is therefore the goal-TYPE getter, zero meaning
+"no goal"), filled by `SetGoal 0x102ecd20` from goal word `+0x00`. Names are the SDK's where the
+behaviour matches and contextual otherwise; no retail enum strings exist.
+
+| Type | Name (source) | What `DoFindPath` prepares | Tolerance in `SetGoal` | Issued by |
+|---:|---|---|---|---|
+| 0 | none | nothing; the default arm fails | — | only `GET_PATH_TO_GOAL 0x0e` replaying an unset stored type (`+0x5e04`) |
+| 1 | target entity (SDK) | the target's origin (slot 217) | half the sum of the two hulls | base `StartTask 0x102827f0` call site `0x10282fec`: `WALK_TO_TARGET 0x08`, `RUN_TO_TARGET 0x09`, `SCRIPT_CUSTOM_MOVE_TO_TARGET 0x0a`; `0x0e` replaying a stored 1 |
+| 2 | enemy (SDK) | the enemy's last known position (`0x102dfed0`) | half the sum of the two hulls | `GET_PATH_TO_ENEMY 0x0f` — base arm and Troika's own (`0x102a352c`); `0x0e` replaying a stored 2 |
+| 3 | path corner / goal-entity chain (SDK) | walks `m_pGoalEnt (+0x5de8)` through slot `+0x2b0` (next target), up to `0x80` entities, one waypoint each at slot 220's point; **the only arm that never calls the route builder `0x102f2060`** | as given | `ScheduledFollowPath 0x102801e0` (type hard-coded at `0x10280205`; the caller's argument is the ACTIVITY) from the scripted-schedule modes 4 / 5 (`0x101a98c0`); Troika task `0x120 GET_PATH_TO_PATHCORNER` |
+| 4 | location (SDK) | none — the vector at `+0x04`, or node `+0x10` when the vector is the no-destination sentinel | as given | nearly everything: 27 call sites in the base `StartTask`, 19 in Troika's, the patrol pair `0x102aa640` / `0x102aa860`, `ScheduledMoveToGoalEntity 0x102800c0` (type hard-coded at `0x102800ec`), the vector / wander / random wrappers `0x102ed610` / `0x102ed540` / `0x102ed940` / `0x102ed820`, and the Ming Xiao, tentacle, scurrying and zombie species arms |
+| 5 | (SDK candidate: location-nearest-node) | none; falls to the builder with 4, 6, 9 | as given | **no issuer**: none of the 15 functions that reach `SetGoal` (through its thunk `0x1000ce64`) builds a record with type 5, and no schedule text names a task that would. The arm is dead by content; port it as 4's twin or leave it a seam — either is unobservable |
+| 6 | cover (behaviour) | none | as given | the base and Troika cover / flee / cower / flank arms; `CAI_StandoffBehavior 0x102c7bd0` (`0x102c7d09`) |
+| 7 | best unknown (task string `0x105d4920`) | the object at NPC `+0x98` answers slot 586 — `m_hBestSeeUnknown`; that entity's origin becomes the destination, the NPC's translation hook (slot `+0x8cc`) adjusts it, and **path byte `+0x00` is set to 1** | half the sum of the two hulls | Troika task `0x79 GET_PATH_TO_BESTUNKNOWN` (`0x102a36ba`), named by six shipped texts: `SCHED_TROIKA_HUNT_INVESTIGATE_UNKNOWN`, `…_INVESTIGATE_UNKNOWN_OTHER`, `…_OTHER_RUN`, `SCHED_VFRENZYSHADOW_HUNT_INVESTIGATE_UNKNOWN`, `SCHED_VHENGEYOKAI_INVESTIGATE_UNKNOWN_ATTACK`, `SCHED_VTZIMISCE_HUNT_INVESTIGATE_UNKNOWN` |
+| 8 | interesting place, pedestrian | none but **path byte `+0x01` = 1, the pedestrian byte** | as given | Troika task `0xa5 GET_PATH_TO_INTERESTING_PLACE` (`0x102a76a4`); no held place is `TaskFail(0x22)` |
+| 9 | interesting place, animal | none — and NO pedestrian byte, so an animal walks to its place without the roadway pricing | as given (the arm passes `-1.0`, `_DAT_104a8730`) | `CNPC_VAnimal::StartTask 0x1035f650`, the same task id `0xa5` overridden: `m_vecInterestingPlace` with activity `-1`; no place `TaskFail(0x22)`, a refused route `TaskFail(0x0c)`, a granted one `TaskComplete` at once. Its texts are the animal, dog, scurrying and zombie families' (`0x1062beb0`, `0x10637080`, `0x1064fd80`, `0x10664d18`) |
+
+So 7 and 9, which the story listed without a meaning, are both reached by shipped schedules; 5 is
+reached by none.
+
+**The goal record `SetGoal` reads** — sixteen words: `+0x00` type; `+0x04..+0x0c` destination;
+`+0x10` destination node id; `+0x14` movement ACTIVITY (copied to `path+0x2c`); `+0x18` arrival
+activity; `+0x1c` arrival sequence; `+0x20` tolerance; `+0x24` goal FLAGS (copied to
+`path+0x60`); `+0x28` target entity; `+0x2c..+0x34` arrival direction; `+0x38` extrapolation
+time; `+0x3c` the bright-route penalty. **The `0x13` many ledger rows call a "flag" is the activity
+word `+0x14`, not a flag** (`checklist-19-29.md` rows `0x10278220`, `0x102c7bd0`, `0x1039c4c0`,
+`0x103ac740`, and `0x102800c0` / `0x102801e0`, whose "caller-supplied goal type" is the activity).
+Flag bits with a proven reader: `0x1` — `SetGoal` (`0x102ed161`) turns the motor toward the
+destination at once; `0x2` — `SetGoal` (`0x102ecf27`) takes the explicit node route (nearest node,
+destination node, `0x102fd240`), bypassing the local / retry find; `0x4` — `UpdateTargetPos
+0x10271b10` re-paths a type-1 goal when its target moves (and the comfort sweep's test,
+`conditions-and-states.md`); `0x8` — shifted into `0x102f1dc0`'s second argument
+(`0x102ed121`), where nothing recovered branches on it.
+
+**Failure codes by type.** A refused route is `0x0c` for every type, through `0x102f1dc0` →
+`OnNavFailed 0x102eeae0` (`npc-ai/schedule-kernel.md` § "`SetGoal` DOES complete the task").
+Type-specific codes are raised by the issuing ARM before `SetGoal`: `0x1d` no patrol node
+(`0x102aa640`; its reissue sibling `0x102aa860` ignores the route result); `0x22` no held
+interesting place (8, 9); `0x06` / `0x07` / `0x08` from the cover searches and `0x1b` from
+`ValidateNavGoal 0x10280360` when the cover-to-enemy line is clear (6). `0x0e` is not a goal
+failure at all — it is the door transaction `0x10290570`.
+
+**Unrecovered:** type 5's name; a writer of goal flag `0x4` on a type-1 record (the 15-caller
+census shows the target arm writing flags `0`; the reader is proven); what, if anything, consumes
+the `0x8` that `0x102f1dc0` receives; what path byte `+0x00` (set by type 7) is read by. (Type 3's
+chain end, closed 2026-09-21 with the `aiscripted_schedule` walk: a null `GetNextTarget` ends the
+chain SUCCESSFULLY at the last waypoint, a null initial `m_pGoalEnt` builds nothing and fails, and
+a chain longer than `0x80` is truncated, not refused.) The worker also could not tie the `0x8` in the
+blocked-move rule `0x10303850` (0018 story 5 correction *(c)*) to goal word `+0x24` — its callers
+`0x10304130` / `0x10303d10` pass a literal `8` as a route-control argument; not re-read by the lead.
+
 ### The node searches and the pedestrian cost — `0x102fd240`, `0x102fe9f0` (2026-09-19, 0018 story 5)
 
 _Two independent opencode walks, diffed (their x87 reads agree here); the draw, the multiplier and
@@ -1155,8 +1210,10 @@ Both opencode walks reported after this was written and agree arm for arm (one m
 the Troika sentinels by 8; the compares above are from the listing). They add: the BASE class's
 `GET_PATH_TO_HINTNODE` (`0x10285a9e`) is the same goal without the lean offset, and the base
 has no `SNAP_TO_HINT` / cower arms at all (`"No StartTask entry for %s"`); neither class has a
-`RunTask` arm for `0x16` or `0x84`, so after `SetGoal` those tasks are finished by the
-navigator's own completion or failure, never by the arm; `FACE_HINTNODE`'s run arm completes
+`RunTask` arm for `0x16` or `0x84`, so after `SetGoal` those tasks are finished by `SetGoal`'s own
+find wrapper `0x102f1dc0` — `TaskComplete` at route submission, `OnNavFailed(0x0c)` on a refusal
+(`npc-ai/schedule-kernel.md` § "`SetGoal` DOES complete the task", 2026-09-21; the cower task's
+hint branch also calls `TaskComplete` itself at `0x102a2a4b`) — never by a run arm; `FACE_HINTNODE`'s run arm completes
 on `FacingIdeal` — a yaw error within 0.006 (`0x10499568`, a double).
 
 ### The hunt selectors, walked — `0x10306700`, `0x10306f60` (2026-09-19, 0018 story 9)
@@ -1855,7 +1912,8 @@ all registered through `0x10389f80`), against the task text at `0x10642a4c`. Two
 reached the same three. The fly simplifier `0x102f1690` (the `& 0x22` test) has **zero callers** and
 is on neither species' path.
 
-**Unrecovered**: the name and authored default of the ManBat acceleration cvar `0x1093b7cc`; the
+The ManBat acceleration cvar `0x1093b7cc` is `manbat_delta`, default **600.0**, read as a float by
+`0x1038b370` (named 2026-09-21, `npc-ai/convars.md`). **Unrecovered**: the
 client-side ragdoll decision for a crow that dies with flag `0x400` set; the semantic names of
 `MoveLimit`'s fifth and seventh arguments (every flight-like caller passes zero).
 

@@ -338,9 +338,13 @@ the node's position for the hull (`0x102fb0d0`) becomes `AI_NavGoal_t{type 4 LOC
 `DevWarning("%s can't reach patrol point")` + `TaskFail(0x0c)`. A program without a fail schedule
 routes through `GetFailSchedule` (`0x1028abe0`): `m_failSchedule` (`+0x5c54`, zeroed by every
 `SetSchedule 0x10280e50`) or **base schedule `0x43`**, the last id before the Troika block starts
-at `0x44`. UNRECOVERED: `0x43`'s task list — the base (`CAI_BaseNPC`) programs are not text blobs
+at `0x44`. ~~UNRECOVERED: `0x43`'s task list — the base (`CAI_BaseNPC`) programs are not text blobs
 in `vampire.dll` (629 `Schedule` blobs, all Troika/`V*`/crow/manbat/tzimisce/test); only its name
-table `0x105d1488` (`SCHED_NONE` first) survives. Port divergence, owned by 0002/10g: `ThinkPatrol`
+table `0x105d1488` (`SCHED_NONE` first) survives.~~ **Corrected 2026-09-21: the base programs ARE
+text blobs — the base class feeds 64 texts from the pointer table `0x106034b8`, `FAIL` is its
+first cell (`0x10608238`), and the image holds 691 texts, not 629; `schedule-kernel.md` § "The
+schedule owners and their registrations", and story 25's walk of `FAIL` in § "The kernel's failure
+route and the base programs, walked".** Port divergence, owned by 0002/10g: `ThinkPatrol`
 re-issues the same point's route every think on a refusal, and the kernel's `Fail == None →
 State.Clear()` (`ElysiumSchedule.cpp`) re-selects at once where retail runs `0x43`.
 `0x80 HUNT_INVESTIGATE`: `SET_FAIL_SCHEDULE SCHED_TROIKA_HUNT_LOOK_AROUND; STOP_MOVING;
@@ -442,8 +446,9 @@ schedule's, flags −1}` → navigator `SetGoal`), `WALK_PATH 0x23` (`0x10286438
 (`0x102a4bd8`: `m_BestSound.type == 1 COMBAT || 0x10 BULLET_IMPACT` → `ACT_RUN` if the model has
 it, else `ACT_WALK`; `SetMovementSequence`; clear `MEMORY:INCOVER`), `PLAY_COWER 0xe6`
 (`0x102a5125`/`0x102ab83c`), `ALERT_LOOK_AT_BEST_SOUND 0xf9` (`0x102a5515`; shared run
-`0x102ab76a`: look at the point, complete when `m_flLookTimer +0x5db4` elapses or the head-turn
-virtual reports done, clearing `PLAYING_FACE_ANIM 0x08000000`), `LOOK_AT_PLAYER 0xfb`
+`0x102ab76a`: corrected 2026-09-21, "The look arms, walked" below — the "head-turn virtual" is
+slot 251 `IsActivityFinished`, and the arm completes only once `FacingIdeal` also holds, clearing
+`PLAYING_FACE_ANIM 0x08000000`), `LOOK_AT_PLAYER 0xfb`
 (`0x102a5599`), `LOOK_AT_BEST_UNKNOWN 0xfc` (`0x102a55e3`), `UNLOOK_AT 0xfe` (`0x102a56a2`),
 `CLEAR_NPC_FLAG 0x101` (`0x102a58ae` — the port's "no program clears a flag" premise is false:
 0x60/0x61 clear `NO_UNKNOWN_ATTACK`, 0x62/0x63 clear `LOOKED_AT_UNKNOWN`), `WALK_PATH_HUNT 0x104`
@@ -680,10 +685,149 @@ hand is confirmed entry for entry).
 
 `0x4c`, `0x4d` and `0x56` declare no fail schedule: a failed `GET_PATH_TO_BESTSOUND` in `0x4d`
 runs `FAIL` (story 25), not `ALERT_LOOK_AROUND`. `m_eAlertLevel`'s reset question is settled in
-"Sense and investigate leftovers" (nothing resets it). Unrecovered after this pass: the
-`TASK_RUN_DISPOSITION` arms' body, `TASK_FIND_COVER_FROM_SAVEPOSITION` /
-`GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK` / `FACE_PATH` arms (`0x8a`, `0x89` — combat-cover
-vocabulary, 12b's neighbourhood).
+"Sense and investigate leftovers" (nothing resets it). Unrecovered after this pass: nothing —
+the saved-position arms, the look arms and `TASK_RUN_DISPOSITION` were all closed 2026-09-21, in
+the three subsections that follow.
+
+#### The saved-position arms and the damage position, walked (2026-09-21, story 10k)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp08-saved-position`); the writer of
+`+0x5b9c` and the 15° cell re-read by the lead._ None of the four tasks has a run arm of its own:
+each ends inside `SetGoal` (`schedule-kernel.md` § "`SetGoal` DOES complete the task"), except
+`FACE_PATH`.
+
+- **`FIND_COVER_FROM_SAVEPOSITION 0xa2`** — Troika start `0x102a2231`. The threat position AND the
+  threat eye are both `m_vSavePosition (+0x5dd0)`: no view offset is added. Minimum distance the
+  literal `32.0`, maximum slot 550 `CoverRadius()` (`+0x898`, `0x101a6c20`). The search is the
+  shared cover entry `0x102edc80 → 0x10301720` (`navigation-jump-links.md` § "The cover search,
+  walked"), so its writes are that search's: the hint cooldown `curtime + 1.0`, `m_pHintNode`, the
+  claim (`0x102d1350`). Success: goal **type 4** (not 6 — 6 is the enemy-cover variants'), activity
+  `0x13`, tolerance `-2.0`, through the shared tail `0x102a76a4`, which also stamps
+  `m_flMoveWaitFinished (+0x5cf0) = curtime + operand`. No cover: `TaskFail(8)` (`0x102a2301`).
+- **`GET_PATH_TO_SAVEPOSITION 0x1d`** — base start `0x10285cb9`: goal type 4 at `m_vSavePosition`,
+  tolerance `-1.0` (`0x1049a160`), `SetGoal(…, 0)`. **The operand is never read**, so the `0` of
+  `0x8a` / `0x89` and the `2` of the base program are the same task. No cooldown, no claim.
+- **`GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK 0x11f`** — Troika start `0x102a7025`: the shoot-node
+  search `0x102edaa0 → 0x102ed9c0 → 0x10302e50` with `p1 = m_vSavePosition`, `p2 = that + the
+  NPC's view offset`, range strictly `0 < d < 4096.0`, node cooldown `1.0`, and **mode flag 1**.
+  Flag 1 is what "NOATTACK" means: it takes `0x10302e50`'s plain sight branch (`0x1026ff00`, the
+  candidate node's eye to the saved point's eye) where the ordinary `_LOS 0x1e` (`0x1028584b`,
+  flag 0) uses the weapon's min / max range capped by `m_flDistTooFar` and runs
+  `IsValidShootPosition` + `WeaponLOSCondition`. Success: goal type 4, activity `0x13`, tolerance
+  `-2.0`; the node takes `+0x9c = curtime + 1.0`; no hint is claimed. No node: `TaskFail(0x0b)`
+  (`0x102a70b9`).
+- **`FACE_PATH 0x2c`** — base start `0x10283cf7`, run `0x102887ad`. No route (`0x102ee6a0`) →
+  `TaskFail(0x0c)`. The yaw is toward the navigator's **current waypoint** (`0x102ee5e0`, `path+0x24`)
+  — not the path's goal — written through the motor (`0x102e2020`). Within **15.0°** (`0x1049a170`, a
+  double) it completes at once; otherwise slot 572 `SetTurnActivity` and the run arm: motor
+  `UpdateYaw(-1)`, complete on `FacingIdeal` (`0x10278c80`). No fail exit in the run arm.
+
+**`+0x5b9c` is `m_vecLastDamageAttackPos`** (the datamap's name; this file and 0002 called it
+`m_vecLastDamagePosition`). One writer, `CAI_BaseNPC::OnTakeDamage_Alive 0x10265ed0` (reached
+from Troika's `OnTakeDamage 0x102beda0`), behind four gates — base damage handling answered
+non-zero, the victim carries flag `0x2000`, the damage info has an attacker (`+0x2c`), and the
+attacker carries `0x2080`. Then: a live INFLICTOR (`info+0x28`) → **the inflictor's abs origin**; no
+inflictor → **the victim's own origin + `_DAT_1070ba40..48` × 64.0** (`_DAT_10451acc`). Read against
+the SDK's `OnTakeDamage_Alive`, that global triple is `g_vecAttackDir` and the two arms are its
+`UpdateEnemyMemory` positions (inferred from the matching shape; the image does not name the
+global, and its file bytes are not a value). It is never the attacker's origin and never a hit
+point. Beside it the chain writes `m_hLastDamageEnt (+0x5b7c)`, `m_bCondTookDamage (+0x5b80) = 1`,
+`m_flSumDamage (+0x5d94)` and `m_flLastDamageTime (+0x5d98)`; Troika's wrapper sets
+`m_bCondTookDamage` on its non-positive-damage arm too. One reader: the selector `0x102b8c40`
+above.
+
+**`m_vSavePosition (+0x5dd0)`, every site** (20 typed rows, thunks collapsed). Writers: `0x102ae8e0`
+(the blocked-door / cop-generator entry; also sets `m_fSavePositionWalk (+0x63e0) = 1`);
+`0x102b8c40` (the damage position); `0x102b93c0` (the follower boss's origin, within `+0x6484`);
+`0x102af660` (`m_vecPLCriminalLocation` / `m_vecPLSupernaturalLocation` ahead of the law
+programs); the base tasks `STORE_POSITION_IN_SAVEPOSITION 0x19` (own origin),
+`STORE_BESTSOUND_IN_SAVEPOSITION 0x1a` (the best sound's position, adjusted by twice the owner's
+`+0x31c`), `STORE_ENEMY_POSITION_IN_SAVEPOSITION 0x1b`; and species arms — Crow `0x10358330`,
+Gargoyle `0x103790d0`, Hengeyokai `0x103805d0`, Tzimisce `0x103ba7c0`, Tzimisce Runner
+`0x103c35d0`, Werewolf `0x103ccda0`. Readers: the four tasks above, Troika's back-away and saved
+cower arms, Crow `0x10357820`, Werewolf `0x103ce9b0`. `m_fSavePositionWalk`: set only by
+`0x102ae8e0`; zeroed by `NPCInit` (`0x1029a0b0`, and `CNPC_VCamera`'s) and by `TaskFail`
+(`0x1029adb0`); consumed by `GetSchedule 0x102ae920`, which clears it and answers `0x89`.
+
+#### The look arms, walked — `0xf8`–`0xff` and `PLAY_COWER` (2026-09-21, stories 10e and 10f)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp04-path-completion-look`), reviewed by the
+lead._ How the path tasks around them complete is `schedule-kernel.md` § "`SetGoal` DOES complete
+the task".
+
+- **One run arm, eight tasks.** `0x102ab76a` is the `RunTask` arm of `0xf8 LOOK_AT_BEST_SOUND`,
+  `0xf9 ALERT_LOOK_AT_BEST_SOUND`, `0xfa ALERT_LOOK_AT_RANDOM_LOC`, `0xfb LOOK_AT_PLAYER`, `0xfc
+  LOOK_AT_BEST_UNKNOWN`, `0xfd ALERT_LOOK_AT_DETECTED_ATTACK`, `0xfe UNLOOK_AT` and `0xff
+  UNLOOK_AT_FACE` (the Troika run byte table `0x102ac840`, enumerated). Each think: (1) the motor's
+  yaw update `0x102e1e20(-1)`; (2) if `curtime` has not reached `m_flWaitFinished (+0x5db4)` AND
+  slot 251 `IsActivityFinished` (`0x10272900`: `m_bSequenceFinished` and `m_nSequence ==
+  m_nIdealSequence`) is false → still running; (3) then `FacingIdeal` (`0x10278c80`) false → still
+  running; (4) clear `PLAYING_FACE_ANIM 0x08000000` (`0x102ab7b0`), `TaskComplete` (`0x102ab7c6`).
+  So the task ends on **(timer OR face clip finished) AND facing the ideal yaw**. The turn is the
+  motor's ideal-yaw path; the arm writes no pose parameter and no look target.
+- **The shared start tail** `0x10297940` derives the ideal yaw from the point and sets the
+  face-animation flag; `0x102a18a0` arms the timer: `curtime + operand` for a positive operand, else
+  `curtime + 1000.0` (`_DAT_10447ee0`).
+- **`LOOK_AT_BEST_UNKNOWN 0xfc` (`0x102a55e3`)**: slot 586 (`0x101aa5d0`) returns
+  `m_hBestSeeUnknown (+0x6088)`; a live handle gives the entity's **abs origin** (slot 217), not its
+  eyes; else a valid `m_hLastSeeUnknown (+0x608c)` gives `m_vecLastSeeUnknownPos (+0x6090)`; else
+  `TaskFail(0x21)` (`0x102a5637`).
+- **`ALERT_LOOK_AT_DETECTED_ATTACK 0xfd` (`0x102a5662`)**: `m_hDetectedAttacker (+0x65c0`, written
+  by `0x102bf560`)'s abs origin; an invalid handle is `TaskFail(0x21)` (`0x102a5675`).
+- **`UNLOOK_AT 0xfe` (`0x102a56a2`)**: a switch on `m_eFaceAnim (+0x63e4)` picks the matching
+  face activity (`0x1100`–`0x1107`, fallback `1`) through `SetIdealActivity`, sets
+  `PLAYING_FACE_ANIM`, turns the motor's ideal yaw back by `m_flFaceYawDiff (+0x63e8)` and arms the
+  same timer. No target, no fail exit.
+- **`PLAY_COWER 0xe6`** (start `0x102a5125`, run `0x102ab83c`): the operand is the activity; for
+  `ACT_COWER_INTO 0x1097` it draws `RandomInt(0,2) × 3` into `m_iCowerAnimOffset (+0x6414)` — the
+  variant offset the cower trio shares — then `SetIdealActivity`. The run arm is `AutoMovement`
+  then slot 251: complete when the clip finishes; no fail exit.
+
+#### `TASK_RUN_DISPOSITION 0xba` and `_RANDOM 0xbb`, walked (2026-09-21, story 10d)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp05-run-disposition`), the bodies re-read by
+the lead against the corpus._ The task is a **timer around the ordinary disposition idle**, nothing
+more. The registry `0x10316ff0` binds `TASK_RUN_DISPOSITION` to `0xba` and
+`TASK_RUN_DISPOSITION_RANDOM` to `0xbb`.
+
+- **Start `0x102a49bc`** (`0xba`): `m_flWaitFinished (+0x5db4) = curtime + operand` and return — the
+  operand is SECONDS, not a disposition index. No virtual, no activity write, no `TaskComplete`, no
+  fail exit. **Start `0x102a49da`** (`0xbb`): the same store with `curtime + RandomFloat(0,
+  operand)`.
+- **Run `0x102ab351`**, one arm for both ids: call **slot 588** (`vtable +0x930`), then the shared
+  deadline test `0x102aad3c` — `curtime >= m_flWaitFinished` → `TaskComplete` (`0x10273e80`);
+  otherwise the task keeps running. No `TaskFail`. Expiry resets nothing: not the stance, not the
+  fidget latch, not the activity.
+- **Slot 588 is `0x10293e50` on 62 of the 65 classes that fill it**: `if (IsActivityFinished()
+  /* slot 251, +0x3ec */) RestartIdealActivity(ACT_DISPOSITION 0xf1) /* 0x10289ee0 */`.
+  `RestartIdealActivity` clears `m_Activity` when it already equals `0xf1` and re-enters
+  `SetIdealActivity 0x10272650`, whose resolver `0x10272130` sends `0xf1` to slot 611 — the stance
+  selector `0x102c12a0` (`shape.md` § "The disposition stance selector", `animation_and_movers.md`).
+  So each time a clip ends the machine is asked again: idle, or a fidget on `RandomInt(1,100) <
+  Standing Fidget Chance`, or — once `curtime − m_flStanceTime` passes the record's threshold and a
+  second `RandomInt(1,100)` comes in under the stance-change chance — `ChangeStance 0x102c1230`
+  (`RandomInt(0,2)` until it differs) and the `trans[old][new]` clip. The three deviants:
+  `CAI_BaseHumanoid 0x1025ea00` (a head-target validity test), `CNPC_VTzimisceRunner 0x103c3fd0`
+  (`RestartIdealActivity(1)`, i.e. `ACT_IDLE`), `CNPC_VWolfMorph 0x103dcf00` (empty — it stands in
+  whatever it was playing).
+- **What it does not do**: neither arm sets or clears a condition, writes ideal yaw, or touches the
+  eye-look target (`m_hEyeLookTarget +0x0e64`, `m_vEyeLookTarget +0x0e44`). An NPC running it does
+  not look around; any gaze is the independent gaze maintenance. The thresholds and chances are
+  `dispositiontable.txt` columns read through `0x100ecee0` (record `+0x108..+0x118`), not `.rdata`
+  cells: `Neutral` is 3.0 s / 80 % / fidget 50, `Anger` 2.0 s / 30 % / 95.
+- **Issuers, complete** (the two task literals' string xrefs, five + two schedule texts):
+  `0x4b SCHED_TROIKA_ALERT_WAIT` `5`; `0x55 SCHED_TROIKA_IGNORE_SOUNDS_FOR_A_WHILE` `30` and, in the
+  same text, `_RANDOM 30`; `SCHED_VCOP_IDLE_DISPOSITION 0x15b` `5`; `SCHED_VGUARD1_IDLE_DISPOSITION
+  0x15a` `5`; `SCHED_VHUNTER_IDLE_DISPOSITION 0x15b` `5`; `0xfe SCHED_TROIKA_START_WAITING`
+  `_RANDOM 4`. Shipped operands: `{4, 5, 30}`.
+
+A naming correction the walk forces: `+0x5db4` is **`m_flWaitFinished`** (`npc-kernel/fields.md`).
+Where this file calls the same word "`m_flLookTimer +0x5db4`" (the shared look run arm, above) it
+is that one timer — the look tasks and the wait tasks share it, and no `m_flLookTimer` exists.
+
+**Unrecovered:** nothing in the two arms. The per-model stance records' sequence ids are run-time
+allocations of `0x100ec640`, recovered as templates (`stance_%s_idle_%d`, `_fidget_%d`,
+`_trans_%d_%d`) and fallback rules, not as a static table.
 
 #### The hunt programs and the expiry chain, verbatim (2026-09-12, story 10h)
 
@@ -726,6 +870,62 @@ They require live adjacency/capability state, not just a component label; see
 constants/caller variants, complete endpoint binding, `GET_PATH_TO_LASTENEMY_LKP`, and
 `m_flHuntExpireTimer`'s writer.
 
+**The hunt leftovers, closed 2026-09-21 (story 10h).** _A Codex worker's walk
+(`$ELYSIUM_WORK_ROOT/codex/re2/wp09-hunt-leftovers`); the arm's opening and the timer store re-read
+from the image by the lead._
+- **`GET_PATH_TO_LASTENEMY_LKP 0x114`** — Troika start `0x102a654b`, no run arm (it ends inside
+  the start arm). "Last enemy" is slot 168 (`+0x2a0`, `0x102b5360`): the CURRENT `m_hEnemy` if
+  there is one; only with none, and only while `m_bfNPCStateFlags (+0x5b64) & 0x40` stands, the
+  remembered `m_hLastEnemy (+0x1a94)` — the HUNT state sets that bit, which is what makes the
+  fallback reachable there. Null → `TaskFail(0x0c)`; slot 530 `IsUnreachable(enemy)` (`0x102741e0`)
+  true → `TaskFail(0x0c)`. The position is the enemy MEMORY record's last-known position
+  (`GetEnemies()` slot 541 → `CAI_Memory::GetLastKnownPosition 0x102dfed0`: the record whose handle
+  matches; failing that a position-only record flagged `+0x34 == 1`, with a warning; failing that
+  the zero vector, with a warning), never a field cached on the NPC. Goal type 4, activity `-1`,
+  tolerance **`-1.0`** (`0x1049a1ac`) — the sentinel that KEEPS a tolerance already installed, so
+  the hunt program's preceding `SET_TOLERANCE_DISTANCE 20` stands — `SetGoal(…, 2)`. Granted →
+  `TaskComplete` (`0x102a660c`); refused → `"GetPathToLastEnemyLKP failed!!"`, the enemy marked
+  unreachable (`0x10274080`), `TaskFail(0x0c)`. Against `GET_PATH_TO_ENEMY_LKP 0x10`
+  (`0x10284349`): that one reads slot 167 (the current enemy only), has no null guard, runs slot
+  563 `TranslateEnemyChasePosition` (`0x10295300`) on the point, and asks for activity `0x13` with
+  the `-2.0` hull tolerance.
+- **`m_hLastEnemy`'s writers** (through `0x1000333c`, six callers): `SetEnemy 0x10279a50` saves the
+  enemy it replaces; cleared by `0x102b4fe0` (a relationship change on the remembered enemy),
+  `0x102b5120` (its memory record removed on death), `0x102b52a0` (the reset used by possession,
+  frenzy, follower setup and task arms), `CNPC_VCop 0x10372dd0`, and the global pass `0x1019ab40`.
+- **`m_flHuntExpireTimer (+0x6474)`** has ONE writer and ONE reader. Writer: Troika `OnStateChange
+  0x102ae140`'s HUNT arm, `curtime + RandomFloat(10.0, 20.0)` (`0x102ae186`–`0x102ae1a3`) — as
+  `conditions-and-states.md` already said; the 0002 line calling it unrecovered was stale. Reader:
+  `SelectSchedule 0x102af660` (`0x102afad1`): with `MADE_HUNT_PATH` clear and the timer `<=
+  curtime`, answer **`0x85 SCHED_TROIKA_HUNT_FINISH`** (`0x105f7820`: `CLEAR_NPC_FLAG
+  MADE_HUNT_PATH; STOP_MOVING; SET_ACTIVITY ACT_IDLE; SET_TOLERANCE_DISTANCE 20;
+  GET_PATH_TO_LASTPOSITION; SET_NPC_FLAG FORCE_RELAXED_ANIMS; WALK_PATH_HUNT; WAIT_FOR_MOVEMENT;
+  FACE_LASTANGLE; FORGET INVESTIGATING; SUGGEST_STATE ALERT`). Expiry raises no condition; the
+  program's last task is what leaves the state. No task, `OnScheduleChange` or restore body
+  touches the timer; its `FIELD_TIME` datamap row is its only save seam.
+- **`WALK_PATH_HUNT 0x104`** (`0x102a5932`): `ACT_HUNT_WALK 0x1115` if the model has it, else
+  activity `9`; written to the navigator (`0x102ee250`); clears `MEMORY:INCOVER`; completes at
+  once. The only difference from `WALK_PATH` is the preferred activity.
+- **`+0x6598` is a POINTER**, the `CAI_PatrolPath*` of the hunt cell `m_sppPatrolPathHunt`
+  (`+0x6594` its valid byte), not a count or a timer: `+0x6598 == 0` is "no hunt path". The path
+  object: `+0x00` type, `+0x04` schedule, `+0x08` repeat count, `+0x0c` node count, `+0x10` current
+  index, `+0x14` node ids. Freed by `OnStateChange`, on removal (`0x1028d6e0`) and on a failed
+  restore validation (`0x102998c0`).
+- **The builders, completed.** Callers: `0x10306700` from Troika task `0xae` (`0x102a3bc7`) and
+  `CNPC_VFrenzyShadow::StartTask 0x10375f50` (heading = the enemy's origin, else the nearest entity
+  within 256 through `0x100f8580`, else none); `0x10306f60` from Troika task `0xaf` alone
+  (`0x102a3c5d`, output `m_vecHuntPatrolTarget +0x645c`) — FrenzyShadow's `0xaf` copies its chosen
+  entity's origin straight into `+0x645c` instead. Every caller passes **256.0**. The start node
+  comes from `0x102f3c10`: half-extents 800 / 800 / 200, or 2048 on all three when the NPC has
+  capability bit 4, mask `0x2400b`, node types 3 and 2 admitted by capability. **A candidate
+  endpoint is filtered by exactly this and nothing else, in order**: its position at the PATHING
+  hull `+0x156c` (`0x102fb0d0`); cumulative distance strictly greater than 256 → rejected; at most
+  64 nodes; each link through `0x102ff960` (the `0x1000` disabled bit, the capability mask, the
+  node-index guard `0x1027db30`, `IsJumpLegal` for motion class 2); the visited bitset, set even
+  for a loser; then the heading dot, strictly greater than the running floor (`-1.0` for the first
+  nine). **No node type, hint state, `node+0x9c` cooldown or zone is read.**
+
+
 ## The flee state and the cower, disoriented and lost programs (2026-09-08)
 
 Blob census: 691 blobs; 62 carry bare names without `SCHED_` (the base table's `COWER`,
@@ -746,7 +946,9 @@ of 627 named blobs.
 
 Neighbours: `0x6f FLEE_AND_DIE`, `0x107 FLEE`, `0x108 FLEE_RANDOM`, `0x12f COMFORT`, `0x130
 CALMED`, `0x132 LAUGHING`. The base-class `COWER` (`0x10604f98`: `STOP_MOVING; PLAY_SEQUENCE
-ACT_COWER`) is Source's `SCHED_COWER`; its base id is UNRECOVERED (compiled-in enum).
+ACT_COWER`) is Source's `SCHED_COWER`; its base id is **`0x1e`** (`0x102cadd0` registers it; text
+`0x10604f98`: `TASK_STOP_MOVING 0; TASK_PLAY_SEQUENCE ACTIVITY:ACT_COWER`, no interrupts — one of
+the 64 base texts, `schedule-kernel.md` § "The schedule owners and their registrations").
 
 **Programs.** `0x12d DISORIENTED`: `SET_NPC_FLAG DONT_INVESTIGATE; SET_NPC_FLAG NO_DIALOG;
 SET_FAIL_SCHEDULE Idle_Stand; SET_PRESERVE_PATH 0; STOP_MOVING; PLAY_SEQUENCE ACT_DISORIENTED;
@@ -828,6 +1030,21 @@ run `0x102ab83c`), `SET_COWER 0xe7` (`0x102a516c` / run `0x102ab4b2`), `LOOK_AT_
 `0x13`), `FLIP_NEXT_IDEAL_YAW 0x106` (`0x102a59eb`). **`DAT_10483aac = 512.0f`** (the "player near" distance for `0x71` vs `0x70`).
 `DAT_1072bc88`/`DAT_1072bcc2` are `.data` cells filled at startup from `sound_volume_table.txt`
 (the flee sound's radius row and type byte) — read them from the table, not the image.
+
+**`FLIP_NEXT_IDEAL_YAW 0x106` and `SET_COWER 0xe7`, walked (2026-09-21, story 21b).** _A Codex
+worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp13-small-code-reads`); the motor setter re-read by the
+lead._ `FLIP_NEXT_IDEAL_YAW` (`0x102a59eb` → `0x102a99c0`) stores its operand as a byte at
+**`CAI_Motor +0x28`** (the NPC's `m_pMotor`, `+0x5d44`): 1 sets, 0 clears. The byte is read by every
+body that commits a motor ideal yaw — `0x102e1c10`, `0x102e2020` (the point / target form the
+`FACE_*` arms reach) and `0x10288670`, plus eleven bodies that repeat the operation around their own
+yaw source — and while it is set the yaw written to `motor+0x34` is turned half a circle: `yaw <
+180.0 ? yaw + 180.0 : yaw − 180.0` (`_DAT_1044c3a8`). **It does not self-clear**, which is why
+`0x77 COWER` brackets its `FACE_ENEMY` with `… 1` and `… 0`; the other clears are
+`OnScheduleChange 0x102a0940` and `TaskFail 0x1029adb0`. The member has no retail name.
+`SET_COWER` start (`0x102a516c`): for `ACT_COWER_INTO 0x1097` draw `RandomInt(0,2) × 3` into
+`m_iCowerAnimOffset (+0x6414)`; `RestartIdealActivity(operand + offset)`. Run (`0x102ab4b2`): wait
+until `m_nSequence == m_nIdealSequence`, then until `m_flWaitFinished (+0x5db4)`; complete. No fail
+exit.
 
 **Story 21a recovery (2026-09-12).** The table cells: `CSoundVolumeTable` (loader `0x101af9f0`,
 `"VDATA\System\sound_volume_table.txt"`, blocks `VolumeLevels`, `OccludedVolumeLevels`,
@@ -920,7 +1137,20 @@ patrol points. `CNodeEnt::Spawn` `0x102d78d0` → `0x102d7d30` maps classnames t
 (`_cover_med` 100, `_cover_low` 101, `_cover_corner` 0x27d8, `_crosswalk` 11000, tzimisce claws
 14000/0x36b1, `_kick_over` 0x283c, `_kick_at` 0x283d, `_shoot_at` 0x28a0, werewolf/sabbat/bach/
 chang families 16000+, `_manbat_fly_to_point` 20000); 10000 is the FGD default on
-`info_node_hint`/`info_node_patrol_point`. UNRECOVERED: what authors type 800.
+`info_node_hint`/`info_node_patrol_point`. **Nothing authors type 800 (closed 2026-09-21).** A
+census of every entity row in all 108 `exports_v2` map units (71,096 rows; 3,156 carry
+`hinttype`) finds zero rows with 800; the classname → type mapper `0x102d7d30` (called from
+`CNodeEnt::Spawn`) writes 100, 101, 10200, 10300, 10301, 10400 and the 14000+ / 15000+ / 16000+ /
+17000+ / 18000+ / 20000 families but never 800; neither FGD lists it and no `HINT_*` string names
+it. Its one use in the image is the patrol lookup's acceptance test (`0x102d2840`: `102d2858 CMP
+0x2710` / `102d2860 CMP 0x320`), reached from `InputFollowPatrolPath 0x1029ed90` and
+`InputWalkToNode 0x1029e840`. So the `|| 800` arm is dead by content — port the compare, build no
+fixture for it. (The same read corrects the SDK FGD: it gives `info_node_kick_at` 10300, the binary
+gives kick-over 10300 `0x102d805a` and **kick-at 10301** `0x102d80bf`.) Shipped `hinttype`
+histogram, for the record: 10200 cover-corner 1,438; 10000 patrol point 582 (+34 `info_node_hint`,
++4 `info_node_climb`); 100 cover-med 431; 101 cover-low 269; 18002 / 18003 Chang 43 / 37; 15004
+werewolf 38; 17000 Bach 25; 11000 crosswalk 22; 10400 shoot-at 22; 10100 and 19000 `info_hint` 17
+and 12; 20000 manbat 13.
 
 **`FinViewCone3dNew` `0x103264d0`**, called by `FInViewCone 0x10326750` with the target's slot-192
 point, its cone scalar (slot 29) and `m_flFieldOfView`: test 1 `dot(target − eye, fwd) > 0`
@@ -1226,8 +1456,11 @@ type-10000 hint**: `CAI_Hint::Spawn 0x102d0b60` has no type-10000 branch that re
 
 `100` is outside the drawn range `0..99`, so under the strict `<` those 556 points **always** take
 their interest — the common case is not a chance at all. No shipped row omits the key, so the
-absent-key default of `+0x46c` stays unrecovered (neither `0x102d2e30` nor `0x102d0b60` writes it);
-either `0` or `-1` would make the test always fail.
+absent-key default of `+0x46c` is **`0`** (closed 2026-09-21): entities are allocated through the
+engine's slot 45 (`0x201092d0`), a `_calloc(1, size)`, neither the `CNodeEnt` ctor `0x102d7cd0` nor
+the `CAI_Hint` ctor `0x102d2e30` writes `+0x468` / `+0x46c`, and `ReadKeyField 0x100acab0` writes
+only a key that is present — so an absent `ip_percent` (`m_iIPPercent`, `FIELD_INTEGER`) is 0 and
+never wins the strict `<`, and an absent `target_name` (`m_strTargetName`) is the null string.
 
 **`target_name`**: 60 rows, 35 distinct names, of which **53 resolve to an `intersting_place` on the
 same map and 7 do not** — `ch_hub_1` rows 1175/1176 (`tong_look`) and five on `sp_tutorial_1`:

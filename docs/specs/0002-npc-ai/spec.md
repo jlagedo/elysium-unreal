@@ -929,8 +929,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumed by: every sight admission (6a) and 10a's `SEE_SOUND_SOURCE` stranger arm.
   Oracle: § "The sense pass for a hated player, walked" (Cone; "The Troika cone override
   `0x102b4540`, walked").
-  Unrecovered as a live producer: `m_hFollowerBoss` (16a) and the target's `m_bInPlayerLOS`
-  overlay (15). Arms 1-3, the sibling gates, and the base fall-through are ported; arm 4 is
+  Unrecovered as a live producer: `m_hFollowerBoss` (16a). (`m_bInPlayerLOS`'s producer was
+  closed 2026-09-21, `senses.md`: `SetPlayerLOS 0x10291610` — a 2 s cadence, PVS, a 512-unit
+  free pass, one eye line at mask `0x4091`, and an 8 s hold; no cone.) Arms 1-3, the sibling gates, and the base fall-through are ported; arm 4 is
   the named seam.
 - [x] **7. Obliviousness.** `TASK_MAKE_OBLIVIOUS` 0x131: `flags2 |= 0x80001000`,
   `SetEnemy(NULL)`, squad disconnect (`0x1026d050`, a seam until 17), `++m_iIsOblivious`
@@ -1103,9 +1104,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `0x102b11c0` (`0xc7 → 0xc9`, `0xca → 0xcc`, …) and the twelve species overrides of slot 440
   (25b); the non-task `ClearSchedule` callers (25a); the loop's other exits (25c).
   Oracle: § "The `INVESTIGATE` family, decoded" → "The kernel's failure route and the base
-  programs, walked". Unrecovered: the base `RunTask` arm that completes the base
-  `GET_PATH_TO_*` tasks after a bare `SetGoal` (not on this story's path: the port's path tasks
-  complete in their start arm).
+  programs, walked". Unrecovered: nothing. (Closed 2026-09-21, `schedule-kernel.md` § "`SetGoal`
+  DOES complete the task": there is no base `RunTask` path arm. `SetGoal`'s find wrapper
+  `0x102f1dc0` calls `TaskComplete` itself on a successful find unless the current task is `0x6e`,
+  `0x0b` or `0x72`, raises `OnNavFailed(0x0c)` on a refusal, and leaves the task RUNNING through
+  the retry window. The port's "complete in the start arm" is retail's shape; what it lacks is
+  the retry-window wait.)
   Size: S. Effort: Sonnet / medium — the oracle is complete and the gap is mechanical.
 - [ ] **25a. The `ClearSchedule` producers.**
   Retail: `0x10280d30` has twelve direct callers (`thunk 0x10006a8c`). Task bodies:
@@ -1309,8 +1313,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   record arm of the two tasks over 11's entry/loop/release.
   Consumes: 10g (the object and the roll sites), 11 (the entry, loop and release), 19's bake
   (the node record). Oracle: § "Patrol paths, walked" (The interest roll and the two interest
-  tasks). Unrecovered: the `info_node_patrol_point` key names that fill `+0x468`/`+0x46c`; which
-  shipped map authors one.
+  tasks). Unrecovered: nothing — the absent-key default of `+0x46c` is 0 (entities are
+  `calloc`ed and no ctor writes it), so an absent `ip_percent` never takes the interest. (Closed 2026-09-21, `programs.md` § "The patrol-point interest record and the path
+  object": the keys are `target_name` and `ip_percent`, authored on all 582 rows, 60 of them
+  naming a place; the roll is `RandomInt(0, 99)` strictly `<` `+0x46c`.)
   Size: S–M. Effort: Fable / medium; corpus pass on the node keys first.
 - [ ] **26. `GetSchedule`, the pre-selector.**
   Absorbed by 29e for its eight layer-19+ bodies (`0x102ae920`, base `0x1028a380`, the ideal-state
@@ -1368,9 +1374,20 @@ the retail contract the code must match, the job, what it consumes or provides, 
   install). Consumes: 17, 12b, 10f, 25 (`FAIL`), 0004 (the dialogue partner), 0006 (the flags
   and the effect record bytes).
   Oracle: § "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`" (incl. "Story 26
-  recovery"). Unrecovered: the HitGroup keys behind record bytes `+0x33`/`+0x34` (0006's
-  table), `TASK_RUN_DIALOG`'s arm (0004), `TASK_MELEE_KNOCKBACK` (0005), the `ON_FIRE_*` trio
-  and `TASK_JUMP`/`TASK_LAND` (the motor).
+  recovery"). Unrecovered: nothing. Closed 2026-09-21 (`conditions-and-states.md` § "The bump
+  and interrupt keys, `TASK_RUN_DIALOG`, `TASK_MELEE_KNOCKBACK`"): `+0x33` is the key
+  `ShouldRemove_OnWasBumped` (six shipped disciplines) and `+0x34` is DERIVED — set when any
+  HitGroup carries an `OnInterruptSchedule` block (Presence's mesmerize hits only);
+  `TASK_RUN_DIALOG` holds the disposition activity until `IsInDialog` clears, fires `OnDialogEnd`,
+  and a `COND_PROVOKED` interrupt ends the program but NOT the dialogue; `TASK_MELEE_KNOCKBACK`
+  is a root-motion clip of an activity chosen before it; and **`COND_KNOCKBACK 0x28` has no
+  producer anywhere**, so step 12's knockback arms are unreachable. Also closed 2026-09-21 (`conditions-and-states.md` § "The burning trio, `TASK_JUMP` / `TASK_LAND`,
+  and who arms `FINISH_JUMP`"): `0x151` has no interrupts and no movement — three clips, the
+  loop ending when its clip does, then slot 616 clears `ON_FIRE` and re-arms the burn 15 s out;
+  `ON_FIRE`'s producer is the body-fire particle scan in `GatherConditions`; `TASK_JUMP`
+  relaunches the stored arc with no resume branch; and step 9's `FINISH_SPECIAL_NAV` is written
+  only by `IsScheduleValid`, which also makes a schedule UNINTERRUPTIBLE while the navigator type
+  is jump or climb.
   Size: L. Effort: Opus / high.
 - [ ] **28. The player-on-head answer.**
   Retail: `GetSchedule` (`0x102ae920`), any state: `HasCondition(PLAYER_ON_HEAD 0x3b)` and
@@ -1386,8 +1403,13 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0x108` / `_FORWARD 0x109` / `GET_PATH_TO_RANDOM_NODE 0x1f` (shared with 10k/21b), the
   interrupt on the fourteen programs that name it.
   Consumes: 26 (the arm), 0004 (the dialogue partner). Oracle: § "`GetSchedule` `0x102ae920`
-  runs ahead of `SelectSchedule`" (Story 26 recovery). Unrecovered: the producer of
-  `COND_PLAYER_ON_HEAD` (the contact test that sets it), the two dive arms.
+  runs ahead of `SelectSchedule`" (Story 26 recovery). Unrecovered: nothing on this story's path.
+  (Closed 2026-09-21, `conditions-and-states.md` § "`COND_PLAYER_ON_HEAD 0x3b`: the producer and
+  the two dive tasks": the PLAYER's `PostThink` `0x1016be10` raises it on whatever Troika NPC is
+  its ground entity, at most every 2.0 s, with no contact test of its own and no gate; `DIVE_SIDE`
+  tries right then left over 60 units, `DIVE_FORWARD` 96 units, each a ground `MoveLimit` then a
+  root-motion clip under `ANIM_MOVEMENT`, `TaskFail(0x0e)` when blocked; `0x7b` has no interrupts.
+  The port needs a player-side producer seam: the ground entity is the player's, not the NPC's.)
   Size: M. Effort: Fable / medium; corpus pass on the producer first.
 - [ ] **10i. The comfort program.**
   Retail: `SCHED_TROIKA_COMFORT` 0x12f (blob `0x105df9d0`), selected by 26 on `COMFORT` in
@@ -1420,8 +1442,11 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0x12f readers; `GIVE_WAY` as an identity with no producer; the fail route through 25.
   Consumes: 10c (the target), 26 (selection), 0003/1 (`RUN_TO_TARGET`), 24 (the refusal), 25.
   Oracle: § "The comfort sweep `0x102b1a20`, walked" (What reads the result; "Stories 10i and
-  10j recovery"). Unrecovered: `SetIdealActivity`'s (`0x10272650`) transition rows — the
-  comfort chain is one of them.
+  10j recovery"). Unrecovered: nothing. (Closed 2026-09-21, `conditions-and-states.md`, the comfort
+  tasks: there ARE no transition rows. `DO_COMFORT_LOOP` / `PLAY_COMFORT_OUTOF`'s shared start arm
+  `0x102a51e8` is `SetIdealActivity(m_Activity + 1)` over consecutive ids — `INTO 0x106a`, `IDLE
+  0x106b`, `OUTOF 0x106c`, the second trio `0x106d`–`0x106f` — and `PLAY_COMFORT_INTO` draws
+  `0x106a + 3 × RandomInt(0, 1)`. The oracle had dropped the `INC` and invented a switch.)
   Size: M. Effort: Fable / medium; corpus pass on the transition switch first.
 - [ ] **10j. `CheckTarget`.**
   Retail: `CAI_BaseNPC::GatherConditions` (`0x1026ec30`), after `ChooseEnemy`, on a live
@@ -1437,8 +1462,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Job: the two conditions and the goal refresh, over 10c's target and 0003/2's cine.
   Consumes: 10c, the motor. Provides: 0x4b/0x49 to 10i and 0003/2.
   Oracle: § "The comfort sweep `0x102b1a20`, walked" (Stories 10i and 10j recovery).
-  Unrecovered: the goal flag 4's name; whether the comfort sweep's distance reads slot 217
-  (`GetAbsOrigin`) or slot 220 — a re-read of `0x102b1a20`'s asm, not on this story's path.
+  Unrecovered: the goal flag 4's retail name and any writer of it (its one reader is
+  `UpdateTargetPos 0x10271b10`; none of the 15 `SetGoal` callers sets it). Closed 2026-09-21: the
+  comfort sweep's distance reads **slot 220** (`+0x370`) on both endpoints, 3-D, against a running
+  nearest that starts at 1024.0; `0x100113d8` returns the goal TYPE.
   Size: S. Effort: Sonnet / medium.
 - [ ] **10d. The alert selectors and the ladder.**
   Absorbed by 29e for `SelectSchedule` case 3; this story keeps the alert programs' blobs and
@@ -1486,8 +1513,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 25 (`FAIL`), 10e (`ALERT_LOOK_AROUND` and the look/sound tasks). Provides: the
   ladder's `m_eAlertLevel` to 10e; `0x8a`'s selector site to 10k.
   Oracle: § "The `INVESTIGATE` family, decoded" (Selection; "The alert programs, verbatim").
-  Unrecovered: `TASK_RUN_DISPOSITION`'s arms (`0x102a49bc` / `0x102ab351`) beyond "the
-  disposition stance machine for the operand's seconds".
+  Unrecovered: nothing. (Closed 2026-09-21, `programs.md` § "`TASK_RUN_DISPOSITION 0xba` and
+  `_RANDOM 0xbb`, walked": the start arm only writes `m_flWaitFinished = curtime + operand`; the
+  run arm calls slot 588 — `0x10293e50`, which restarts `ACT_DISPOSITION 0xf1` whenever the clip
+  ends, so the stance selector `0x102c12a0` is re-asked — and completes at the deadline. No
+  condition, yaw or look write; no fail exit. `0xbb` is the same with a `RandomFloat(0, operand)`
+  deadline. Operands shipped: 4, 5, 30.)
   Size: L. Effort: Opus / high.
 - [ ] **10e. The sound-investigation programs.**
   Retail: 0x50, 0x51, 0x52, 0x53, 0x54, 0x58 with their task lists and interrupt sets; 0x53
@@ -1514,9 +1545,11 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 10d (selection, `m_eAlertLevel`), 25 (`FAIL` for `0x4c/0x4d/0x56`). Provides: the
   look/sound/last-position tasks to 10d, 10f, 10h, 10k, 21b.
   Oracle: § "The `INVESTIGATE` family, decoded" (The programs, verbatim; Tasks the port lacks;
-  "The alert programs, verbatim"). Unrecovered: the base `RunTask` arm that completes
-  `GET_PATH_TO_BESTSOUND` / `GET_PATH_TO_LASTPOSITION` after `SetGoal` (goal active → complete,
-  else fail — UNREAD), `PLAY_COWER`'s run arm beyond sequence-finished.
+  "The alert programs, verbatim"). Unrecovered: nothing. (Closed 2026-09-21: the path tasks
+  complete inside `SetGoal` — `schedule-kernel.md` § "`SetGoal` DOES complete the task"; no best
+  sound is `TaskFail(0x12)` before `SetGoal` is reached. `PLAY_COWER`'s run arm `0x102ab83c` is
+  `AutoMovement` plus sequence-finished and nothing else, and its start draws the cower variant
+  `RandomInt(0,2) × 3` into `+0x6414` — `programs.md` § "The look arms, walked".)
   Size: M–L. Effort: Fable / medium; corpus pass on the base `RunTask` path arm first.
 - [ ] **10f. The unknown-investigation programs.**
   Retail: 0x59–0x63 with their task lists and interrupt sets; 0x61 and 0x63 dead in code;
@@ -1534,9 +1567,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0x11d, `CLEAR_LASTPOSITION` 0x18, `FORGET` 0x6d, `PLAY_SEQUENCE` 0x52; the selector
   `FUN_102b8a60` at 10d's step 1; `0x5b`'s arm in 26.
   Consumes: 10d (the selector's position), 10e (the shared tasks), 26 (`0x5b`), 25.
-  Oracle: § "The `INVESTIGATE` family, decoded". Unrecovered: `LOOK_AT_BEST_UNKNOWN`'s look
-  target (`0x102a55e3`) and the shared look run arm `0x102ab76a`'s head-turn virtual, the
-  base `RunTask` path-completion arm (10e).
+  Oracle: § "The `INVESTIGATE` family, decoded". Unrecovered: nothing. (Closed 2026-09-21,
+  `programs.md` § "The look arms, walked": `LOOK_AT_BEST_UNKNOWN` looks at `m_hBestSeeUnknown`'s
+  abs ORIGIN, else `m_vecLastSeeUnknownPos`, else `TaskFail(0x21)`; the shared run arm's virtual
+  is slot 251 `IsActivityFinished`, and the task ends on (timer OR clip finished) AND
+  `FacingIdeal`; the eight tasks `0xf8`–`0xff` share it. The path-completion arm does not exist —
+  see 10e.)
   Size: L. Effort: Fable / high; corpus pass on the two look arms first.
 - [ ] **12a. The reaction keyfields.**
   Rework (2026-09-15): the parse is 0019 story 2, generated from the datamap; this story
@@ -1554,8 +1590,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   parsed on the prop (`ElysiumPropClasses.cpp:117`).
   Job: the parse, the normalization, the readers named (the interest predicate's arm 2 closed).
   Oracle: § "The navigation and reaction keyfields", § "The cover and kick chooser, and the
-  combat leftovers". Unrecovered: what authors hint type 800 (an authoring question; no arm of
-  this story reads it).
+  combat leftovers". Unrecovered: nothing. (Closed 2026-09-21, `programs.md`: NOTHING authors
+  hint type 800 — zero of 71,096 shipped entity rows, no classname maps to it, no FGD lists it;
+  its one use is the patrol lookup's `|| 0x320` compare, dead by content.)
   Size: S–M. Effort: Sonnet / medium.
 - [ ] **12b. The cover and kick chooser.**
   Retail: `0x102b7690` gated on `CanSeekCover` slot 592 and `allow_kick_hint_use`; the
@@ -1588,8 +1625,11 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 12a (`allow_kick_hint_use`, `stay_entrenched`, `hint_groups`), 26 (the entrenched
   call site), 0005 (the prop impact's damage). Provides: the cover search to 10k.
   Oracle: § "The cover and kick chooser, and the combat leftovers" (incl. "Story 12b recovery").
-  Unrecovered: `GET_PATH_TO_HINTNODE` / `SNAP_TO_HINT` arms (shared with the cover family), the
-  cells `0x1049a1b0`, `_DAT_10451ad0`, `_DAT_10447ee0`, `_DAT_10457f60`.
+  Unrecovered: nothing. (Closed 2026-09-19 / 20: the two hint arms are walked in
+  `navigation-jump-links.md` § "The hint-path, snap and cower arms, walked"; the four cells are
+  plain `.rdata` floats — `0x1049a1b0` −2.0 the goal tolerance, `_DAT_10451ad0` 16.0 the kick's z
+  lift, `_DAT_10447ee0` 1000.0 the mass-term cap, `_DAT_10457f60` 150.0 added to the impulse's z
+  — `programs.md` § "The cover and kick chooser, and the combat leftovers".)
   Size: M–L. Effort: Fable / medium; corpus pass on the two hint arms and the cells first.
 - [ ] **10k. The saved-position programs: shot by unknown, run to saved.**
   Retail: `FUN_102b8c40` (alert step 2, hunt step 2): `HasInterruptCondition(LIGHT_DAMAGE 0x4c
@@ -1614,8 +1654,14 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `FACE_PATH`, `GET_PATH_TO_RANDOM_NODE 0x1f`; `m_vecLastDamagePosition` from 0005's damage.
   Consumes: 10d (the site), 12b (the cover search the find task shares), 0005 (the damage
   position), 26 (`m_fSavePositionWalk`). Oracle: § "The alert programs, verbatim".
-  Unrecovered: the four task arms (`FIND_COVER_FROM_SAVEPOSITION`, `GET_PATH_TO_SAVEPOSITION`,
-  `_LOS_NOATTACK`, `FACE_PATH`), `m_vecLastDamagePosition`'s writer.
+  Unrecovered: nothing. (Closed 2026-09-21, `programs.md` § "The saved-position arms and the
+  damage position, walked". `FIND_COVER_FROM_SAVEPOSITION` is the shared cover search with the
+  saved point as both threat and threat eye, 32.0 to `CoverRadius()`, a TYPE-4 goal, `TaskFail(8)`;
+  `GET_PATH_TO_SAVEPOSITION` never reads its operand; `_LOS_NOATTACK` is the shoot-node search
+  with flag 1 — plain sight, `0 < d < 4096`, no weapon range or weapon LOS — `TaskFail(0x0b)`;
+  `FACE_PATH` faces the CURRENT WAYPOINT, done within 15°. `+0x5b9c` is `m_vecLastDamageAttackPos`,
+  written only by `OnTakeDamage_Alive 0x10265ed0`: the INFLICTOR's origin, or with none the
+  victim's origin + the attack direction × 64 — never the attacker's origin, never a hit point.)
   Size: M. Effort: Fable / medium; corpus pass on the four arms first.
 - [ ] **10h. The hunt-investigation programs.**
   Retail: 0x7f, 0x80, 0x81, 0x82 and the hunt-state case 0xb order (raw `HEAR_*` accepted
@@ -1642,9 +1688,14 @@ the retail contract the code must match, the job, what it consumes or provides, 
   tasks), 10k (`0x84`), 16c (`DoFrenzy`'s entry), 15 (the state byte).
   Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb; "The
   hunt programs and the expiry chain, verbatim") and `navigation-jump-links.md` § "Task readers
-  of network data". Unrecovered: remaining geometric constants/caller variants and endpoint
-  filters of `0x10306700` / `0x10306f60`, `GET_PATH_TO_LASTENEMY_LKP`'s arm,
-  `m_flHuntExpireTimer`'s writer.
+  of network data". Unrecovered: nothing. (Closed 2026-09-21, `programs.md` "The hunt leftovers,
+  closed": `GET_PATH_TO_LASTENEMY_LKP 0x114` paths to the MEMORY record's last-known position of
+  slot 168's enemy — the current one, else `m_hLastEnemy` while state flag `0x40` stands — as a
+  type-4 goal whose `-1.0` tolerance keeps the program's `SET_TOLERANCE_DISTANCE 20`;
+  `m_flHuntExpireTimer` has one writer, the HUNT arm of `OnStateChange`, and its expiry selects
+  `0x85 HUNT_FINISH`, raising no condition; `WALK_PATH_HUNT` only prefers `ACT_HUNT_WALK`;
+  `+0x6598` is the hunt path POINTER; the builders' endpoint filter reads no node type, hint,
+  cooldown or zone — so 0018/9's hunt target over the place set loses nothing by having none.)
   Size: M–L. Effort: Fable / medium; corpus pass on the list builders first.
 - [ ] **13b. The leak in the defect catalogue.**
   Job: the `TaskFail` obliviousness leak as an entry in `docs/vtmb/retail-defects.md`, from
@@ -1684,8 +1735,14 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 25 (`FAIL`), 24 (the refusal), 0006 (the possession caller). Provides:
   `m_hFollowerBoss` to 6b, 9, 16b, 16c.
   Oracle: § "`m_hFollowerBoss` — the follower controller" (incl. "Story 16a recovery"),
-  § "Followers, patrols, and loitering". Unrecovered: the arms of the five `DIST:` tasks and
-  the accumulator's offset, `TASKS_FACE_TARGET`'s bit and reader.
+  § "Followers, patrols, and loitering". Unrecovered: nothing. (Closed 2026-09-21, `social.md`
+  "The distance tasks and `TASKS_FACE_TARGET`, walked": operands resolve at run time through slot
+  418; the interrupt-distance tasks truncate then square into `+0x6324` / `+0x6328`; the
+  accumulator is the saved float `+0x5bac`, which `OnScheduleChange` does NOT clear though it
+  zeroes the thresholds; seven accumulator / distance tasks exist, two of them `_RND`; `_F` is
+  tested against `GetFollowerBoss()`, 3-D, strict; the radii come from `rules.txt`
+  `Npc_Follower_Info` by follower type, clamped 10 apart; `TASKS_FACE_TARGET` is flags2 `0x20`,
+  read only by the wait tasks' `0x102aab70`, motor yaw at `-2.0`.)
   Size: L–XL. Effort: Fable / high; corpus pass on the `DIST:` tasks first.
 - [ ] **16b. The composed relationship and the human ideal state.**
   Absorbed by 29e for `SelectIdealState` (`0x1026f660` / `0x102ad660` / VHuman `0x103851e0`);
@@ -1738,8 +1795,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Job: the squad object sharing 5's record store, the disconnect refcount replacing the seams
   in 7 and 8, the condition and its producer, the two tasks, the `SquadSeesPlayer` stub
   replaced, the overlay's clear removed.
-  Oracle: § "Squads, decoded" (unrecovered list closed 2026-09-12). Unrecovered: the six
-  `CAI_Squad` memory-forwarding wrappers (names only; their bodies forward to `AI_Enemies`).
+  Oracle: § "Squads, decoded" (unrecovered list closed 2026-09-12). Unrecovered: nothing — the
+  six `CAI_Squad` wrappers were closed 2026-09-19 (`social.md`, "The six wrappers"): member
+  fan-outs to NPC slots 54–58, of which only 54 and 56 do anything.
   Size: L–XL. Effort: Opus / high.
 - [ ] **16c. Possession and frenzy.**
   Retail: `Dominate_Possession`'s `DoPossession` byte runs `0x102c51a0`: squad disconnect,
@@ -1798,8 +1856,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 15 (the state byte, slot 614), 25 (the slot-440 seam), 10a (`CommitBestSound`), 10e
   (the look tasks), 26 (the state-2/0xe law arms share `ReportCriminalAct`).
   Oracle: § "The flee state and the cower, disoriented and lost programs" (incl. "Story 21a
-  recovery"). Unrecovered: bytes `+0x6360/+0x6361` beside the level, `0x1042fde0`'s transform
-  (the port keeps the level plain).
+  recovery"). Unrecovered: nothing. (Closed: bytes `+0x6360/+0x6361` are uninitialised stack the
+  writer `0x1028ea60` copies out of its own frame — a retail defect, `senses.md`; `0x1042fde0` is
+  SafeDisc's `CSecureType` scrambler over a plain integer, `dead` under 0019 § Witness data, so
+  the port keeps the level plain.)
   Size: L. Effort: Opus / high.
 - [ ] **21b. The cower, disoriented and lost programs.**
   Retail: 0x70/0x71 `FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR)`, 0x72 `_SCREAM`, 0x73
@@ -1822,9 +1882,12 @@ the retail contract the code must match, the job, what it consumes or provides, 
   which lands on `0x6b` through slot 440 — 25's "what a consumer observes"), 10e
   (`PLAY_COWER`), 12b (the hint search behind `GET_PATH_TO_COWER_NODE`). Provides: `COWERING`
   and `ONE_HIT_KILL`'s writers to 21c; `DISORIENTED` to 0006.
-  Oracle: § "The flee state and the cower, disoriented and lost programs". Unrecovered: the
-  cower-node query through slot `0x688` (the hint search's cower category), `FLIP_NEXT_IDEAL_YAW`'s
-  motor read.
+  Oracle: § "The flee state and the cower, disoriented and lost programs". Unrecovered:
+  nothing. (`FLIP_NEXT_IDEAL_YAW` closed 2026-09-21, `programs.md`: a byte at `CAI_Motor +0x28`
+  that turns every committed ideal yaw by 180° until the program clears it; `SET_COWER` walked
+  beside it.) (Closed 2026-09-19: the cower-node query —
+  slot 418 `+0x688` resolves the task operand's sentinel to a distance and the search is walked in
+  `navigation-jump-links.md` § "The hint-path, snap and cower arms, walked".)
   Size: L. Effort: Opus / high.
 - [ ] **21c. The incapacitated victim's consumers.**
   Absorbed by 29e for its seventeen loop-side bodies (`SetState`, `GatherConditions`, `RunAI`,

@@ -165,8 +165,184 @@ as follows, and two steps are corrected.
   8, 0xb, 0xc, 0xd, 0xe, so the base arms a Troika NPC can reach are 4, 6, 7 and the `0x43`
   defaults.
 
-Unrecovered after this pass: the HitGroup record keys behind bytes `+0x33`/`+0x34` (0006), the
-`TASK_ATTEMPT_DIVE_*` and `TASK_RUN_DIALOG` arms, `TASK_MELEE_KNOCKBACK`, the `ON_FIRE_*` trio.
+Unrecovered after this pass: nothing. (Closed 2026-09-21, the three sections that follow: the
+bump and interrupt keys with `TASK_RUN_DIALOG` and `TASK_MELEE_KNOCKBACK`;
+the `TASK_ATTEMPT_DIVE_*` arms and `PLAYER_ON_HEAD`'s producer; the `ON_FIRE_*` trio and
+`TASK_JUMP` / `TASK_LAND`.)
+
+### `COND_PLAYER_ON_HEAD 0x3b`: the producer and the two dive tasks (2026-09-21, story 28)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp06-on-head-dive`); the single-producer
+claim re-run by the lead (one `SetCondition(…, 0x3b)` in the whole corpus)._
+
+**The producer is the PLAYER, not the NPC.** The tail of `CBasePlayer::PostThink` (`0x1016be10`,
+`0x1016c709`–`0x1016c755`): `GetGroundEntity()` (slot 209, `0x100b1510` — it only resolves
+`m_hGroundEntity`); null → out; read the ground entity's `+0x98`, its Troika-NPC pointer (null on
+anything that is not one) → out; `curtime < m_flSetOnHeadTimer (player +0x1d20)` → out; else
+`m_flSetOnHeadTimer = curtime + 2.0` (`0x10452dc4`), a discarded read of the `ent_trace_conditions`
+ConVar (`0x10924a68`), and `SetCondition(npc, 0x3b)`. **There is no contact test of its own** — no Z
+delta, no hull test, no class, state, death, relationship or discipline gate: the condition means
+"the player's physics ground entity is a Troika NPC", raised at most once every two seconds. The
+condition is base-space, so local and global ids agree: bit `0x08000000` of the second condition
+word (`+0x5c60`). `CAI_BaseNPCTroika::ResolveStandingOnHead 0x102bf820` (called from `NPCThink`
+at `0x1029330c`) is NOT a producer: it is the NPC-side spring that moves the NPC out from under
+whatever stands on ITS ground entity, and it sets nothing. The player gets no push, slide or
+damage.
+
+**Who clears it**: `GetSchedule 0x102ae920` (`0x102aee3f`), and the wholesale condition resets —
+`SetSchedule 0x10280e50` zeroing all six words on every install, `NPCInit`, and `OnRestore` with
+no enemy. Neither sense-clear list (`0x105c97dc`, `0x105c97b4`) names it.
+
+**The ConVar**, completed: `debug_player_on_head` (`0x10924508`, ctor `0x1028bc20`, default `"3"`,
+`0..3`), help "What should I do if the player is on my head?  0 - run only : 1 - allow dive : 2 -
+allow fall." Mode 3 rolls `RandomInt(0, 99)`: below 80 → `0x79`, else `0x7a`.
+
+**The tasks.** Registry `0x10316ff0`: `0x107 ATTEMPT_DIVE` (not walked; start `0x102a5a45`), `0x108
+ATTEMPT_DIVE_SIDE` (start `0x102a5b32`), `0x109 ATTEMPT_DIVE_FORWARD` (start `0x102a5cd4`); `0x108`
+and `0x109` share the run arm `0x102ab7d8`.
+- `DIVE_SIDE` draws nothing: **right first, then left**. `ACT_DIVE_RIGHT 0x110b` through
+  `SelectWeightedSequence`; the endpoint is 60.0 units along `m_vecRight (+0x629c)`; a GROUND
+  `MoveLimit` (`0x102e6d70`, kind 0, mask `0x202400b`, extent 100.0 — the NPC's own hull, test
+  points raised by half the 18-unit step). A missing sequence or a refused move falls to
+  `ACT_DIVE_LEFT 0x110a` with the mirrored endpoint. Success: `m_bfAINPCFlags |= 0x4000`
+  (`ANIM_MOVEMENT`) and `SetIdealActivity(the dive)`. Both refused → `TaskFail(0x0e)`.
+- `DIVE_FORWARD`: `ACT_SCRIPTEDBACKHIT 0xf1d`, 96.0 units along `m_vecForward (+0x6290)`, the same
+  `MoveLimit`; success sets the same flag and activity; failure is `TaskFail(0x0e)`.
+- The run arm: wait for slot 251 `IsActivityFinished`; if the ideal activity is `0xf1d` request
+  `ACT_SLEEP_GETUP 0x1052` and keep running (so the forward dive is a fall and a get-up); otherwise
+  clear `0x4000` and `TaskComplete`. Neither arm writes a velocity or teleports: the displacement
+  is the clip's root motion, applied by `AutoMovement 0x10280a50` while `ANIM_MOVEMENT` stands
+  (`NPCThink`, `0x102930a7`; inferred from the flag's reader, not from the arms).
+- `0x7b SCHED_TROIKA_PLAYER_ON_HEAD_RUN` (`0x105f90e8`): `GET_PATH_TO_RANDOM_NODE 256; RUN_PATH 0;
+  WAIT_FOR_MOVEMENT 0`, **no interrupts at all** — one of the fifteen issuers of task `0x1f`
+  (`navigation-jump-links.md` § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked"), so this answer
+  too depends on 0018 story 4's open question.
+
+**Unrecovered:** `TASK_ATTEMPT_DIVE 0x107`'s arm (no shipped on-head program names it).
+
+### The burning trio, `TASK_JUMP` / `TASK_LAND`, and who arms `FINISH_JUMP` (2026-09-21, story 26)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp12-onfire-jump-land`); slot 616 and
+`IsScheduleValid` re-read by the lead._
+
+**`0x151 SCHED_TROIKA_ONFIRE`** (`0x105dab08`, the shared Troika bank; no species variant):
+`SET_FAIL_SCHEDULE SCHEDULE:SCHED_TROIKA_FLEE_AND_COWER_SCREAM; STOP_MOVING 0; ADD_EVENT_EXPRESSION
+EXPRESSION:KNOCKBACK; ON_FIRE_INTO 0; ON_FIRE_LOOP 0; ON_FIRE_OUTOF 0`, **no interrupts**. A burning
+NPC stands and burns: there is no run, no goal and no radius anywhere in the three arms.
+- `ON_FIRE_INTO 0x9c` (start `0x102a6f70`): slot 492 (`0x10294400`) plays the `Fear_Start`
+  vocalisation, then `ACT_BURNING_INTO 0x1082`. `ON_FIRE_LOOP 0x9d` (`0x102a6f93`):
+  `ACT_BURNING_LOOP 0x1083`. `ON_FIRE_OUTOF 0x9e` (`0x102a6fac`): `ACT_BURNING_OUTOF 0x1084`.
+- The three run arms (`0x102abfef`, `0x102abffe`, `0x102ac145`) are one test: slot 251
+  `IsActivityFinished` → `TaskComplete`, else `AutoMovement`. **The loop ends when its CLIP ends**
+  — not when the condition clears, not on a timer, not when the fire dies. On that completion the
+  loop arm (`0x102ac01a`–`0x102ac115`) drains every queued `CTakeDamageInfo` from
+  `m_QueuedBurnDamage (+0x65a8`, count `+0x65b4`) through `TakeDamage`, schedules each live
+  body-fire particle for removal in 2.0 s (`0x100fbbb0`) if the NPC is still alive, and calls
+  **slot 616** (`0x102ad110`): `ClearCondition(ON_FIRE)`; `m_flNextBurnTime (+0x65bc) = curtime +
+  15.0` (`0x10463584`).
+- **`COND_ON_FIRE 0x30`'s one producer** is Troika `GatherConditions 0x102b27f0`: clear it, then
+  scan the 18 handles of `m_hBodyFireParticles (+0xff8)` and set it if any resolved particle has a
+  non-zero `+0x484`. The damage path does not set it: `CreateDamageEffects 0x10330d00` (damage flag
+  `0x8`, gated by slot 615) queues the damage and INSTALLS `0x151` directly
+  (`0x10331042`–`0x1033105b`). Slot 615 `CanBeSetOnFire 0x102ad0c0` refuses while the condition
+  stands and otherwise needs `m_flNextBurnTime < curtime`, strictly; overridden by Gargoyle
+  `0x10377ae0`, GhoulCroucher `0x1037c420`, Hengeyokai `0x1037e7f0`, Rat `0x103ad790`, Werewolf
+  `0x103ca6b0` (and `CPayphone 0x101aa8f0`).
+
+**`TASK_JUMP 0x13a`, `TASK_LAND 0x13b`, `TASK_LAND_HARD 0x13c`** are Troika arms (the base
+`StartTask` rejects ids above `0x11f`).
+- `JUMP` start (`0x102a73fe`): read the stored jump — origin `+0x649c`, target `+0x64a8`, height
+  `+0x64b4`, gravity `+0x64b8` — set the NPC's gravity, compute the launch velocity (`0x102c4c50`),
+  motor slot 6 (`0x102e1180`: velocity, ground entity cleared, `ACT_LEAP 0x2c`), navigator type 1
+  (`0x102eeba0`), `m_bJumping (+0x6498) = 1`. **The arm never reads the navigator type, so
+  `FINISH_JUMP` has no resume path: re-entered mid-air it recomputes and relaunches the same stored
+  arc** (inferred from the arm having no such branch). In flight the navigator's `MoveJump
+  0x102eece0` calls motor slot 7 (`0x102e11f0`: `ACT_LEAP_ASCEND 0x2d` while rising, else
+  `ACT_LEAP_DESCEND 0x2e`); on ground contact slot 8 (`0x102e1270`: velocity zeroed, `ACT_LAND
+  0x30`), navigator type 0, and the path advances. Run (`0x102ac69c`): on the ground again → slot
+  8, clear the type and `m_bJumping`, `TaskComplete`. No deadline. `ACT_JUMP` and `ACT_GLIDE` are
+  never requested by it. Asian Vampire (`0x103612e0`) and the Chang brothers (`0x1036bfc0`)
+  override the run arm to hold `ACT_LEAP_ASCEND`.
+- `LAND` start (`0x102a7468`): clear the motor's movement state, `RestartIdealActivity(ACT_LAND
+  0x30)`; `LAND_HARD` the same with `0x32`. Shared run (`0x102ac743`): motor `UpdateYaw(-1)`, wait
+  for slot 251. The Chang brothers (`0x1036b750`) stamp their jump time first; the Sheriff
+  (`0x103aec70`) emits his landing blast and its area damage first.
+- `0xfc SCHED_TROIKA_FINISH_CLIMB` (`0x105e6ea0`) is only `WALK_PATH 0; WAIT_FOR_MOVEMENT 0`, no
+  interrupts — and no shipped link climbs (motion words 4 and 8 occur in none of the 29,523,
+  `navigation-jump-links.md` § "What the shipped graphs and maps actually use"), so the arm is
+  unreachable by content.
+
+**Who arms step 9.** `flags1 & 8` is `PRESERVE_PATH` and `flags2 & 2` is `FINISH_SPECIAL_NAV`. The
+ONE writer of the second is `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`, called only from
+`MaintainSchedule`): while the navigator type is 3 (climb) or 1 (jump), if `COND_TASK_FAILED 0x5c`
+or `COND_SCHEDULE_DONE 0x5d` stands it sets `flags1 |= 8`, `flags2 |= 0x80000002` and answers
+INVALID — and otherwise answers VALID without looking at the interrupt mask at all. **So a
+schedule cannot be interrupted mid-jump**: no condition breaks it until the task fails or the
+program ends, and then `GetSchedule`'s step 9 hands the NPC `FINISH_JUMP` with its path preserved.
+(Off a traversal, the same body consumes `CHOOSE_NEW_SCHEDULE 0x02000000` once, as invalid.)
+
+**Unrecovered:** what the body-fire particle's `+0x484` is by name; the fail program
+`SCHED_TROIKA_FLEE_AND_COWER_SCREAM`'s text was not read here.
+
+### The bump and interrupt keys, `TASK_RUN_DIALOG`, `TASK_MELEE_KNOCKBACK` (2026-09-21, story 26)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp11-hitgroup-dialog-knockback`); the data
+census re-run by the lead over the deployed `vdata/system/disciplinetgt_000..004.txt`._
+
+**Record bytes `+0x33` / `+0x34` (step 4).** They are not siblings. The discipline-target parser
+`0x101e06a0` reads five booleans, all defaulting to 0: `UserActivatable` → `+0x30`,
+`ShouldRemove_OnTakeDamage` → `+0x31`, `ShouldRemove_OnHearCombat` → `+0x32`,
+**`ShouldRemove_OnWasBumped` → `+0x33`**, `TriggerAISound` → `+0x35` (then `AoE.Range` → `+0x38`
+int, `AoE.Source` → `+0x3c` enum). **`+0x34` has no key of its own**: `0x101e08d0` (from
+`0x101e10e0`) sets it to 1 when ANY of the discipline's HitGroups carries an
+**`OnInterruptSchedule`** HitInfo block (parsed by `0x101dfa00` into HitGroup `+0x2b8`). Shipped
+authors, complete (six and six): `ShouldRemove_OnWasBumped "1"` on
+`Animalism_Nightwisp_Ravens` (`disciplinetgt_000.txt:47`), `Animalism_Bloodsuckers_Communion`
+(`:1888`), `Dementation_Hysteria` (`_001:27`), `Dominate_Command` (`_002:27`), `Dominate_Sleep`
+(`_002:1326`), `Thaumaturgy_Blood_Theft` (`_004:1606`) — being bumped ends those six;
+`OnInterruptSchedule` only in `disciplinetgt_003.txt` (Presence): `Hit_Human_Mesmerized` at
+levels 1, 3, 4, 5 (`:844`, `:1339`, `:1896`, `:2544`) and `Hit_Supernatural_Mesmerized` at 4 and 5
+(`:1992`, `:2640`) — which is why the consumer tests the installed schedule against `0x14a
+D_MESMERIZE`.
+
+**`TASK_RUN_DIALOG 0xb9`** (start `0x102a496b`, run `0x102ab303`; program `0x105fabd0`:
+`TASK_RUN_DIALOG 0`, interrupt `COND_PROVOKED`). Both arms call `0x102c1400`: while `IsInDialog`
+(`0x102c1170`: `m_bIsTalking +0x64c0`, a non-empty `m_szDialogQue +0x64ec`, a live
+`m_hDialogPartner +0xfe8`, or the word at `+0x6554`) it answers the disposition activity (slot
+611), which the arm commits through `SetActivity` (slot 310) and then resets the motor's yaw
+command; once all four are clear it runs `0x102c0360` — fires `m_OnDialogEnd (+0x5f5c)`, clears
+the partner — and answers `-1`, on which the arm calls `TaskComplete` (the run arm also clears
+`COND_HEAR_PLAYER 0x6f`). No `TaskFail`; it never faces the partner and never stops a route
+itself. **`COND_PROVOKED` ends the program, not the conversation**: `OnScheduleChange 0x102a0940`
+touches none of the dialogue words, so the dialogue outlives the schedule that was running it.
+`CNPC_VTaxiDriver` overrides both arms (`0x103b36d0` activity `0x114e`, `0x103b38a0` back to 1).
+
+**`TASK_MELEE_KNOCKBACK 0x92`** (start `0x102a6de4`, run `0x102ab83c` — the shared clip arm of
+`PLAY_COWER` and the comfort trio). Start: slot 266 (`+0x428`, `0x100997f0`) clears the three
+flinch sequence slots, then `RestartIdealActivity(m_knockbackType +0x6068)`. Run: the facing
+helper `0x102aab70`, `AutoMovement`, complete on slot 251. No fail exit, no velocity: a grounded
+knockback is a root-motion clip. The activity is chosen BEFORE the task — by the melee impact
+tail (`0x102579f0` → `GetKnockbackActivity 0x103449b0`, which classifies the away direction and
+reads the swing record's buckets) through `PlayerKnockbackReaction 0x102a01b0`, which stores it and
+FORCES `0x14c` (grounded) or `0x14d` (flying, activities `0x8b`–`0x93`, for which `0x102a0290`
+builds `m_KnockbackVelocity +0x6004` from the attacker / victim origins scaled by the raw attack
+value); or by `TASK_SET_KNOCKBACK_ACTIVITY 0xf1` (`0x102a52e9`), which the two discipline
+programs (`0x105dc1b0`, `0x105debc0`) issue with `ACT_KNOCKBACK_SMALLLOW 0x75`. `rules.txt`'s
+`Knockbacks` block holds only `KnockbackPreventTime 5.0`, the PLAYER's view-kick refractory
+(`0x10160a60`), which no NPC arm reads.
+
+**`COND_KNOCKBACK 0x28` has no producer.** No call site in the corpus passes `0x28`, literally or
+computed, to `SetCondition`; knockback always arrives as a forced schedule. `GetSchedule`'s two
+`KNOCKBACK → 0x14c` arms (step 12) and the three idle programs that list the condition are
+therefore unreachable by content — a verdict row for 0019 story 1, not a behaviour to port.
+
+**`ADD_EVENT_EXPRESSION 0xbe`** (`0x102a4a07`): the operand is the `EXPRESSION:` index (`FLINCH
+0`, `KNOCKBACK 1`; anything else prints "Invalid event expression" and still completes), handed to
+`AddExpressionForEvent`; Troika's slot `+0x56c` (`0x102c1c10`) names the FACIAL expression
+`"Knockback"`, stretches it by the chosen knockback clip's duration, and queues it as a scripted
+expression. It is a face, not an animation event.
+
+**Unrecovered:** the name of the fourth dialogue word `+0x6554`.
 
 ## `m_bReturnToInitialPos` is a one-shot armed only by alert or combat
 
@@ -432,11 +608,19 @@ readers, `Idle_Stand` and `CheckTarget`, closed.
   `PLAY_COWER`, `KICK_HINT`, `KICK_PROP`): `AutoMovement`, then complete when the sequence is
   finished (slot `0x3ec`).
 - **`TASK_DO_COMFORT_LOOP 0xed` and `TASK_PLAY_COMFORT_OUTOF 0xee` share one start arm**
-  (`0x102a51e8`): `m_Activity (+0xfec) != -1 ? SetIdealActivity(m_Activity) : m_Activity = 0`.
-  Re-submitting the current activity is how the INTO→IDLE→OUTOF chain advances:
-  `CAI_BaseNPC::SetIdealActivity` (`0x10272650`) is a `switch` on the activity (its jump table
-  is the damaged one the corpus flags) that maps an `_INTO` to its `_IDLE` and an `_IDLE` to its
-  `_OUTOF` — UNRECOVERED case by case; the comfort trio is one of its rows. **`DO_COMFORT_LOOP`'s
+  (`0x102a51e8`): `m_Activity (+0xfec) != -1 ? SetIdealActivity(m_Activity + 1) : m_Activity = 0`.
+  **Corrected 2026-09-21 from the listing** (`102a51e8 MOV EAX,[ESI+0xfec]` / `102a51ee INC EAX` /
+  `102a51ef JE` / `102a51f1 PUSH EAX` / `CALL SetIdealActivity`): this text had dropped the `INC`
+  and then invented a transition `switch` inside `SetIdealActivity` to explain the advance. There
+  is no such switch and no transition table anywhere — `SetIdealActivity 0x10272650` has exactly
+  the two arms `shape.md` § "The activity commit" gives (activity 0 tail-jumps to slot 310; any
+  other stores `m_IdealActivity` and re-resolves), and what the decompiler called a damaged jump
+  table is that virtual tail jump. **The chain advances by `+ 1` on consecutive activity ids**:
+  `ACT_COMFORT_INTO 0x106a` → `_IDLE 0x106b` → `_OUTOF 0x106c`, `COMFORT2` `0x106d`–`0x106f`,
+  `COMFORT3` `0x1070`–`0x1072` (registered in that order by `0x104126e0`). `PLAY_COMFORT_INTO`'s
+  start (`0x102a51b3`) picks `0x106a + 3 × RandomInt(0, 1)`, so only the first two trios are ever
+  drawn. (A Codex worker asked to find the transition rows also missed the `INC` and reported the
+  chain "not implemented"; the lead's read of the image settles it.) **`DO_COMFORT_LOOP`'s
   run arm is `0x102aad71`, a bare `RET`**: the loop never completes on its own; it ends only
   through the sweep's two `TaskComplete(false)` arms above (a new nearest comforter, or leaving
   idle / losing the candidate / getting busy / no schedule). `PLAY_COMFORT_OUTOF`'s run arm is
@@ -460,12 +644,20 @@ readers, `Idle_Stand` and `CheckTarget`, closed.
   than **`_DAT_104454c8 = 80.0` units** from the goal point (`0x102ee140`), re-path
   (`0x10007b4e` → `0x102f1dc0`, the navigator's route rebuild); a goal on another entity →
   `0x102ed310(target, vec3_origin)` (goal entity := target, offset zero, then the same rebuild).
-  Slot `0x364` (217) is **`CBaseEntity::GetAbsOrigin`** on all 497 classes; the "slot 220"
-  named in the sweep text above is `0x370`, a different accessor — re-read that line before
-  relying on it (UNRECOVERED which of the two the sweep's distance uses).
+  Slot `0x364` (217) is **`CBaseEntity::GetAbsOrigin`** on all 497 classes (`0x100b31b0`, returns
+  `this+0x404`); slot 220 is `0x370`, `0x100b3070`, returning `this+0x41c`. **The sweep's distance
+  uses slot 220 for BOTH endpoints** (settled 2026-09-21: `102b1ab4 CALL [EAX+0x370]` on the
+  candidate, `102b1ac0 CALL [EDX+0x370]` on the NPC), a 3-D distance through the square root at
+  `0x102b1af0`, compared against a running nearest that starts at **1024.0** (the immediate
+  `0x44800000` at `0x102b1a86`).
 
-Unrecovered after this pass: `SetIdealActivity`'s transition rows, whether the goal flag `4`
-carries a name, `FUN_100113d8`'s exact "has goal" answer.
+Closed 2026-09-21: there are no `SetIdealActivity` transition rows (the chain is the `+ 1` above);
+`FUN_100113d8` is `return path->m_goalType (+0x5c)` — "has goal" is `goalType != 0`, the boolean
+wrapper being `0x102ee680`; goal flag `4` lives in `CAI_Path::m_goalFlags (+0x60)`, copied by
+`SetGoal` from goal word `+0x24` (`102ecfd1`/`102ecfd5`), and its ONE reader is `UpdateTargetPos
+0x10271b10` (`10271bc5 TEST AL,0x4`). Unrecovered: the flag's retail name (by its reader,
+"re-path when the target moves") and any writer — none of the 15 `SetGoal` callers sets it on a
+type-1 record, so as shipped the comfort re-path arm may never fire.
 
 ### The sound sweep `0x102b1cd0`, walked
 
@@ -671,7 +863,9 @@ context.
 
 `DELAY_INTERRUPTS` is the **only** schedule flag the engine has. The token table `0x1030d7e0`
 answers exactly two spellings — `NONE` → 0 and `DELAY_INTERRUPTS` → **bit 0** — and makes anything
-else a load-time `Error`. The schedule-table parser `0x1030d850` OR-accumulates the `Flags` section
+else a load-time `Error` (and 0; the parser `DevMsg`s "Unknown schedule flag" for every 0 it gets,
+an authored `NONE` included, without failing the text — `schedule-kernel.md` § "The schedule-text
+parser `0x1030d850`, walked"). The schedule-table parser `0x1030d850` OR-accumulates the `Flags` section
 into `CAI_Schedule+0x18`, defaulting to 0 when a schedule declares none. `[VtMB]`
 
 Recovered `CAI_Schedule` layout, from that parser and `CAI_BaseNPC::CacheInterruptConditions`
@@ -1274,6 +1468,96 @@ a jump table below `0x52`, a `< 0xd26` band and a tail — and the members are `
 activity `0x1141` answers true outright — **skipping the gate entirely**, so a Sabbat leader in a
 choreographed scene is still interruptible in that one activity — and every other activity forwards
 to the Troika body above.
+
+## The port's NPC-core guesses, settled (2026-09-21)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp15-chosen-npc-core`) over the `CHOSEN, NOT
+RECOVERED` admissions in `ElysiumNpc.cpp`, `ElysiumNpcEnemy.cpp` and `ElysiumNpcConditions.*`; the
+constants and `0x1026fb40` re-read by the lead. Seven of the eight guesses were wrong._ Each entry
+names the port site it replaces.
+
+**1. The alert selector has no lookaround** (`ElysiumNpc.cpp:1624` returns `AlertLookAroundNi`).
+`SelectSchedule 0x102af660` case 3, in order: (1) `0x102b8a60`, the unknown ladder — `IGNORE_UNKNOWN`
+as an interrupt while not investigating → `0x60`; `SEE_UNKNOWN` / `UNKNOWN_ADVANCING` /
+`INVESTIGATE_SIGHT` → alert level 3 and `0x59` / `0x5a` / `0x5c` / `0x5e` by investigating,
+`LOOKED_AT_UNKNOWN` and `UNKNOWN_RUN_TIMER`; `LOST_UNKNOWN` → `0x5d` (`0x5f` investigating with the
+run timer); `LOOKED_AT_UNKNOWN` alone → `0x5c`; (2) `0x102b8c40`, the shot-by-unknown answer `0x8a`;
+(3) `DETECTED_ATTACK 0x0b` → `0x56`; (4) the door-obstruction selector `0x102b7370`; (5)
+`0x102b9060`, the sound ladder; (6) otherwise `m_bGoToIdleState = m_bForceStateChange = 1` and
+**`0x4b ALERT_WAIT`**. `m_bAllowAlertLookaround (+0x6434)` is read ONLY in case 1 (idle), where it
+gates `0x4f` beside the `RandomInt(0,99) < min(30, (m_iEnemySightings + 2) × 5)` roll.
+
+**2. `0x1026fb40` repairs nothing** (`ElysiumNpcEnemy.cpp:392` clears `NEW_ENEMY` there). It is the
+better-weapon search (the SDK's `Weapon_IsBetterAvailable`, by shape): capability bit `0x200000`
+(slot 513), `m_flNextWeaponSearchTime (+0x5da0) < curtime` then re-armed `+ 2.0`, no active weapon,
+`Weapon_FindUsable((300, 300, 100))`; true → the caller `GatherConditions 0x1026ec30` sets
+condition `0x67`. `NEW_ENEMY 0x54` is untouched; `social.md`'s "new-enemy-condition repair" was a
+misnomer.
+
+**3. The attack bands are fixed numbers, not the swing's reach** (`ElysiumNpcConditions.cpp:1145`,
+`:1173`). The distance is `0x10270890`: 3-D between abs origins with the vertical overlap of the
+two collision boxes removed. Producers, strict compares, dot against the facing:
+
+| Slot | Body | Rule |
+|---|---|---|
+| 553 range 1, innate | `0x1026d890` | `d < 100` → `TOO_CLOSE_FOR_RANGED 0x08`; `d < 200` → `TOO_CLOSE_TO_ATTACK 0x5f`; `d > 1024` → `TOO_FAR_TO_ATTACK 0x60`; else dot `>= 0.5` → `CAN_RANGE_ATTACK1 0x4f` |
+| 554 range 2 | `0x1026d920` | `d < 64` → `0x08`; `d > 512` → `0x60`; else dot `>= 0.5` → `0x50` |
+| weapon slot 365 | `0x1024f670` | empty clip → `0x40`; `d < 100` → `0x08`; `d < m_fMinRange1 (+0x8b8)` → `0x5f`; `d > m_fMaxRange1 (+0x8c0)` → `0x60`; dot `< 0.5` → `0x61`; else `0x4f` |
+| 555 melee 1 | `0x1026d9a0` | `d > 256` → `TOO_FAR_FOR_MELEE 0x09`; `d > 64` → `0x60`; dot `< 0.7` → nothing; else `0x51` |
+| 556 melee 2 | `0x1026da90` | `d > 180` → `0x09`; `d > 64` → `0x60`; dot `< 0.7` → nothing; else `0x52` |
+
+(`100.0` `0x10450564`, `200.0` `0x104492b8`, `1024.0` `0x1045d650`, `64.0` `0x10451acc`, `512.0`
+`0x10483aac`, `256.0` `0x1044ddb0`, `180.0` `0x1044c3a8`; `0.5` `0x10449270` and `0.7`
+`0x104492d0` are doubles.) So melee's `TOO_FAR_TO_ATTACK` edge is **64**, its outer edge 256, and
+melee has NO `0x5f` near edge. `ENEMY_TOO_FAR 0x55` is separate: the same distance against
+`m_flDistTooFar (+0x5de4)`, raised to `max(that, m_fMaxRange1)` while `SEE_ENEMY` with an active
+weapon; `>=` sets, below clears (`0x10270b20`). The item files' `Range` key is NOT `m_fMinRange1` /
+`m_fMaxRange1`.
+
+**4. Four traces, four conditions** (`ElysiumNpcConditions.cpp:1184` makes two of them agree).
+Enemy sight: `GatherEnemyConditions 0x10270b20` → slot 201 `FVisible` eye to eye, mask
+`0x2804091`; ten consecutive failures of `m_eEnemyOccludedCheck (+0x5b98)` flip `HAVE_ENEMY_LOS
+0x4a` to `ENEMY_OCCLUDED 0x48`. Weapon line: `WeaponLOSCondition 0x1026fbe0` → weapon slot 364
+(`0x1024f330`) → one line from `Weapon_ShootPosition` (slot 389) to the target, mask
+`0x46004003`, owner ignored (`0x1024f3d0`): clear or hitting the enemy passes, a hated character
+is shot through, a friendly one sets `WEAPON_BLOCKED_BY_FRIEND 0x63`, anything else
+`WEAPON_SIGHT_OCCLUDED 0x66` (collision-group-4 breakables are skipped and re-traced). Unarmed:
+`0x1026fcf0`, from `origin + m_vecViewOffset`. `WEAPON_THROUGH_WALL 0x3c` is neither: Troika
+`GatherConditions` sweeps 32 units forward of the origin at mask `0x2000b` every 3.0 s.
+
+**5. Light is `> 0`, heavy is `> 20`, repeated is `> 30 %`** (`ElysiumNpcConditions.h:544` picks a
+fifth of the pool). Slot 576 `0x10266630`: `damage > 0.0`; slot 577 `0x10266660`: `damage > 20.0`
+(`0x1044eb0c`); both strict, both blind to the damage type, one body each across all 77 classes.
+`OnTakeDamage_Alive 0x10265ed0` restarts `m_flSumDamage (+0x5d94)` when `curtime −
+m_flLastDamageTime >= 1.0`, else adds, and raises `REPEATED_DAMAGE 0x4e` when `m_iMaxHealth × 0.3 <
+sum` (`0x1047b868`, a double; `0x10266307`). **`combat-and-damage.md`'s "15 percent" was wrong.**
+Troika's wrapper additionally re-raises `LIGHT_DAMAGE` on a non-positive damage.
+
+**6. The sound's TYPE bit picks the condition; the table only sizes it**
+(`ElysiumNpcConditions.h:567` matches categories by name). `CAI_BaseNPC::OnListened 0x1026a5e0`:
+`0x1` → `HEAR_COMBAT 0x6d`, `0x2` → `HEAR_WORLD 0x6e`, `0x4` → `HEAR_PLAYER 0x6f`, `0x8` →
+`HEAR_DANGER 0x6a`, `0x10` → `HEAR_BULLET_IMPACT 0x70`, `0x100` → `HEAR_THUMPER 0x6b`, `0x200` →
+`HEAR_BUGBAIT 0x6c`, `0x400` → `HEAR_PHYSICS_DANGER 0x71`, `0x800` → `HEAR_FLINCH 0x72`, anything
+else → `SMELL 0x5e`. A `sound_volume_table.txt` row gives a radius level and an occlusion flag
+(`0x101afcf0` over the 34 names at `0x10597c4c`); the caller of `InsertSound` supplies the type.
+
+**7. A thrown weapon is ranged — except the Chang brothers'** (`ElysiumNpcConditions.h:634`).
+`CapabilitiesGet 0x1026db30` ORs the active weapon's slot 360: melee `0x40018000`, ranged
+`0x2000`, `CWeaponIThrown` and the frag grenade `0x2000`, but `CWeaponThrown_Chang_Energy_Ball` and
+`…_Chang_Ghost` inherit the base `0`.
+
+**8. `ChangeSchedule` and `StartSchedule` are different inputs on different entities**
+(`ElysiumNpc.h:319` treats them as one; `ElysiumNpc.cpp:2617` copies to `SavePosition`).
+`ChangeSchedule` is the NPC's `InputChangeSchedule 0x102c33f0`: resolve the name (`0x102c47e0`,
+`SCHED_` prefixed when absent, global → local through slot 580), write `m_iForcedSchedule
+(+0x65c8)`, `flags2 |= 0x82000000` (`CHOOSE_NEW_SCHEDULE`). `StartSchedule` is
+`CCineAISchedule::InputStartSchedule 0x101a9b30` on the `aiscripted_schedule` ENTITY: it ignores
+any name and just wakes its think. That entity's mode 3 (`0x101a98c0`) is the enemy injection:
+`SetEnemy(goal)`, `UpdateEnemyMemory(goal, goal origin)` (slot 544), `SetCondition(NEW_ENEMY)` —
+the position goes into the MEMORY record, not `m_vSavePosition`.
+
+**Unrecovered:** a given weapon instance's `m_fMinRange1` / `m_fMaxRange1` (where the fields are
+filled from); condition `0x67`'s retail name.
 
 ## Story 29c-1, family Dialogue — the payphone gate and the pedestrian crosswalk
 
@@ -1930,7 +2214,9 @@ order:
    beyond the bare convar, `0xe5` (0x5eba); else `0xe4` (0x5eb6). The roll is consumed either way.
 6. `102b88b8` — no usable weapon at all gives `0x98` (0x5ec1).
 
-**Unrecovered:** the console names and defaults of `DAT_10923d3c` and `DAT_10924a1c`, and the
+Named 2026-09-21 (`convars.md`): `DAT_10923d3c` is `debug_allow_fake_reload`, default **1**, and
+`DAT_10924a1c` is `debug_melee_advance_combatmove_dist`, default **100** — a plain ConVar read as a
+float, not a "melee-range singleton". **Unrecovered:** the
 identity of the weapon vtable slots `+0x5a0`, `+0x460` and `+0x450`.
 
 ### `FUN_102b7f40` — the dodge test
@@ -2017,8 +2303,10 @@ Slot 460, 629 bytes, and the one body that decides an NPC's ideal state ahead of
 an `NPC_STATE` as its first argument and stores it there beside `m_bForceStateChange` (`+0x1b28`)
 and `CHOOSE_NEW_SCHEDULE`; this slot is its only consumer and it consumes it as the ideal state.
 
-**Unrecovered:** the retail names of `NPC_STATE` `0xe` (the criminal-suspicion window) and of
-`m_iSubState`'s value space.
+**Unrecovered:** `m_iSubState`'s value space. (`NPC_STATE` `0xe`'s retail name was recovered
+2026-09-21 from the schedule parser's `State:` table `0x1030c600`: it is **`CRIMINAL_SUSPICION`**,
+and `0xd` is **`OBLIVIOUS`**; the full table is `schedule-kernel.md` § "The schedule-text parser
+`0x1030d850`, walked".)
 
 ## Hints10 — `FValidateHintType` and the Werewolf's hint endpoints
 

@@ -483,7 +483,7 @@ unrecoverable from this image. TVs, animals, bosses, placeholders and makers all
 (`CAI_BaseNPC`) programs are not text blobs in `vampire.dll`" is wrong. `CAI_BaseNPC`'s loader is
 `FUN_102cb690`, called through the slot-452 `LoadedSchedules` virtual that `Precache`
 (`0x1027bb50`) dispatches (a false return is `"ERROR: Rejecting spawn of %s as error in NPC's
-schedules"`). It feeds 63 blobs to the same parser (`0x1030d850`, class name `"CAI_BaseNPC"`)
+schedules"`). It feeds 64 blobs (corrected 2026-09-21 from 63: the pointer table `0x106034b8` has 64 cells, § "The schedule owners and their registrations") to the same parser (`0x1030d850`, class name `"CAI_BaseNPC"`)
 through a **pointer table** at `0x106034b8..0x106035b4` — which is why the byte scan for
 `"\n\tSchedule\n\t\t"` immediately followed by a registrar `call` missed them — and the blob
 names carry **no `SCHED_` prefix** (`IDLE_STAND`, `FAIL`, `COWER`, `DIE`…: the 62 "bare names"
@@ -632,15 +632,47 @@ author it) passes the operand unclamped, so under Source's `low + (high − low)
 `FRandRange(0.1, arg)` is the same expression. `TASK_WAIT` (task 2, arm `0x10286505`) is `curtime + arg` with no
 floor. Base `RunTask` completes both when `m_flWaitFinished <= curtime`.
 
-**`SetGoal` does not complete tasks.** Navigator `SetGoal` (`0x102ecd20`) returns a `char`; a
-third argument of `2` (the patrol arm) or `0` (the base arms) only changes whether it clears the
-goal entity / re-paths on failure (`& 4`). The Troika arms that follow it with `TaskComplete` /
-`TaskFail(0x0c)` themselves (patrol point, interesting place, kick prop) decide the task; the base
-`GET_PATH_TO_*` arms (`0x1c` `GET_PATH_TO_LASTPOSITION`, `0x20` `GET_PATH_TO_BESTSOUND`, `0x1d`
-`GET_PATH_TO_BESTUNKNOWN`'s base twin) return without either, so their completion is the base
-`RunTask`'s (`0x10288780`). UNRECOVERED: that `RunTask` arm's test (goal active → complete, else
-`TaskFail`), and the `TASK_WAIT_PVS` base arm's relation to Troika's (`0x102aad7e`, spawnflag bit
-10 or `0x102c2430` → complete at once).
+**`SetGoal` DOES complete the task — corrected 2026-09-21.** This paragraph used to say the
+opposite and sent three stories looking for a base `RunTask` path arm that does not exist.
+Navigator `SetGoal` (`0x102ecd20`) returns a `char`; a third argument of `2` (the patrol arm) or
+`0` (the base arms) only changes whether it clears the goal entity / re-paths on failure (`& 4`).
+But `SetGoal` calls the find wrapper `0x102f1dc0`, and that body decides the task:
+
+1. **Find succeeded** (`DoFindPath 0x102f2330` true): clear the retry bit (`m_afMemory +0x5d8c &=
+   ~0x20`), ask NPC slot 529 (`+0x844`, `0x10280330`) whether the CURRENT task is one of `0x6e`
+   `WAIT_FOR_MOVEMENT`, `0x0b` or `0x72` (by the SDK's `IsCurTaskContinuousMove` these are
+   `MOVE_TO_TARGET_RANGE` and `WEAPON_RUN_PATH` — names inferred, numbers read); if it is not, call
+   the navigator's slot 2 (`+0x8`, `0x102623c0`), which is `TaskComplete(outer)` (`0x10273e80`).
+   So every bare-`SetGoal` path task **completes synchronously, inside `SetGoal`, at route
+   submission** — not at arrival, and not in any `RunTask` arm.
+2. **Find failed, no retry word** (`nav+0x40 == 0`): navigator slot 10 `OnNavFailed(0x0c, 1)`
+   (`0x102eeae0`) → NPC slot 448 `TaskFail(0x0c)`, movement stopped.
+3. **Find failed, retry word set**: `m_afMemory |= 0x20`, deadline `nav+0x48 = curtime +
+   nav+0x40`, next try `nav+0x4c = curtime + nav+0x44`; return false with the task neither complete
+   nor failed — it sits RUNNING. Re-entered with the bit set: past the deadline → `OnNavFailed(0x0c,
+   1)`; past the next-try time → find again, and a success completes the task unless it is `0x6e`.
+
+The Troika arms that follow `SetGoal` with their own `TaskComplete` / `TaskFail(0x0c)` (patrol
+point, interesting place, kick prop, `GET_PATH_TO_ENEMY_LKP 0x10` at `0x10284470`, the cower
+task's hint branch at `0x102a2a4b`) are therefore completing a task that is usually already
+complete; the base `GET_PATH_TO_*` arms (`0x1c` `GET_PATH_TO_LASTPOSITION` `0x10285bb0`, `0x20`
+`GET_PATH_TO_BESTSOUND` `0x10285df8`, `0x15` `GET_PATH_TO_TARGET` `0x10285949`, `0x16`
+`GET_PATH_TO_HINTNODE` `0x10285a9e`) rely on it alone. The Troika `RunTask` byte table `0x102ac840`
+maps every one of those ids to its forward-to-base entry, and the base `RunTask` (`0x10288780`)
+has no case for any of them. Their own fail codes, before `SetGoal` is reached: no target
+`TaskFail(1)` (`0x10285980`), no hint `TaskFail(4)` (`0x10285aaa`), no best sound `TaskFail(0x12)`
+(`0x10285e08`), no cover for the cower node `TaskFail(0x18)` (`0x102a2bad`).
+
+**The move is a separate task.** `RUN_PATH 0x22` (`0x102863f1`: activity `0x13`, else `9`) and
+`WALK_PATH 0x23` (`0x10286438`: `0x22`, else `9`, else `0x13`) set the movement activity, clear
+`MEMORY:INCOVER` and complete at once. `WAIT_FOR_MOVEMENT 0x6e` (start `0x10286749`, run
+`0x10288f43`) is the only one that waits: goal type (`path+0x5c`, `0x102ee620`) zero → clear
+`m_bShouldMove`, `TaskComplete`, clear the goal; a goal with a current waypoint (`path+0x24`,
+`0x102ee6a0`) → keep moving and `ValidateNavGoal` (slot 528, `0x10280360`); a goal with no
+waypoint → stop the activity and wait. There is no "arrived" flag; a failed move leaves through
+`OnNavFailed 0x102eeae0`, never through the completing branch. UNRECOVERED: the `TASK_WAIT_PVS`
+base arm's relation to Troika's (`0x102aad7e`, spawnflag bit 10 or `0x102c2430` → complete at
+once).
 
 **Port (story 25, closed 2026-09-13; reopened and re-closed 2026-09-13 after review).**
 `IDLE_STAND` (1) and `FAIL` (0x43) are registered from their blobs with their decoded masks
@@ -931,9 +963,13 @@ answers 0x157. `[VtMB]`
 
 ### `0x102bf6e0` — `ResolveTaskDistance`, slot 418
 
-A four-entry jump table on `(int)param + 1000008`: -1000008 -> `m_flFollowerDistanceBackAway`
-(`+0x6484`), -1000007 -> `+0x6488`, -1000006 -> `+0x648c`, -1000005 -> the fixed `_DAT_1044e664`
-(10.0, the follower-distance overlap story 16a recovered). Anything else falls to
+A four-entry jump table on `(int)param + 1000008` (`0x102bf738`). **Corrected 2026-09-21 — this
+paragraph had the four rows reversed**; the table's dwords, read from the image, are index 0 →
+`0x102bf71b`, 1 → `0x102bf711`, 2 → `0x102bf707`, 3 → `0x102bf6fd`, so: -1000008 -> the fixed
+`_DAT_1044e664` (10.0, `FOLLOWER_DISTANCE_OVERLAP`), -1000007 -> `+0x648c` (`…_RUNTO`), -1000006 ->
+`+0x6488` (`…_WALKTO`), -1000005 -> `m_flFollowerDistanceBackAway` (`+0x6484`, `…_BACKAWAY`) —
+which is the order the parser's `DIST:` name table gives them (§ "The schedule-text parser
+`0x1030d850`, walked"). Anything else falls to
 `CAI_BaseNPC::ResolveTaskDistance` (`0x102702d0`), which splits -1000003 (through a global's
 slot 1), -1000002 and -1000000 and otherwise answers the truncated value.
 
@@ -942,7 +978,10 @@ answers `m_flIdealRange` (`+0x6748`) for -1000004, `CNPC_VTzimisce` (`0x103b9120
 `_DAT_10457f60` for -1000001. `[VtMB]`
 
 `_DAT_10457f60` = **150.0** (a `.rdata` float, no writer; read 2026-09-20).
-**Unrecovered:** the base body's three sentinel answers.
+The base body's three answers, closed 2026-09-21 (`0x102702d0`): -1000000 `ACCUM` ->
+`m_flSpecialDistanceAccum` (`+0x5bac`, `0x102702f9`); -1000002 `DIALOG` -> **160.0**
+(`0x1047a3ac`, `0x10270303`); -1000003 `COMBATMOVE` -> the melee-range singleton `DAT_10924a1c`'s
+slot 1 answer, zero or its `+0x28` (`0x1027030d`–`0x1027032d`). **Unrecovered:** nothing.
 
 ### `0x102ae840` — the scripted-schedule order push
 
@@ -992,7 +1031,7 @@ with Chang and Tzimisce inserting a 0xd2 arm gated on `dist <= range && !heightA
 `CNPC_VSabbatLeader` runs its first two arms and never reads the answer. `[VtMB]`
 
 **Unrecovered:** the melee-range convar `DAT_10924a1c` (its bool selects between `0.0` and its float
-at `+0x28`), `_DAT_10451acc`, `_DAT_104c3cd4` (SabbatLeader's `TOO_FAR_TO_ATTACK` bound), and the
+at `+0x28`), `_DAT_10451acc` (= **64.0f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_104c3cd4` (= **120.0f**, float32; read 2026-09-21, `rdata-cells.md`) (SabbatLeader's `TOO_FAR_TO_ATTACK` bound), and the
 semantics of slots 599 / 601 / 602.
 
 ### `0x102b7690` — the entrenched cover / kick-prop selector
@@ -1111,6 +1150,270 @@ a node guard; the port carries it as `FElysiumNpc::IsUnusableNodeIndex`. `[VtMB]
 (`0x10280d30`); 1 calls `SetSchedule(0x2a)` (`0x10280de0`) with **no** clear; anything else is
 `DevMsg(2, "FixScriptNPCSchedule - no case!")` and then the clear. `[VtMB]`
 
+## The schedule-text parser `0x1030d850`, walked (2026-09-21, 0019 story 3)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp01-sched-parser`); the compare chain, the
+`DIST:` and `MiscFlag:` resolvers, the flag table and the condition arm re-read by the lead against
+the corpus and the image._ This is the body 0019 story 3 ports. The spec knew six operand forms;
+there are **seventeen prefixes, four boolean words and a bare number**.
+
+**Tokens.** The reader is the engine's own (`VEngineServer` slot 98, `+0x188`; engine side
+`0x2003c800`): bytes `<= 0x20` separate tokens, `//` runs to end of line, double quotes group a
+token with no escape processing, and each of `{ } ( ) ' :` is a one-character token — so
+`NPCFlag:FORCE_RELAXED_ANIMS` arrives as three tokens and the parser tests the middle one against
+`":"` (`0x106142ec`). Every keyword, prefix and value compare is `strcmpi` / `strnicmp`:
+case-insensitive throughout.
+
+```ebnf
+text      ::= { record }
+record    ::= "Schedule" name "Tasks" { task } [ "Interrupts" { [ "!" ] cond } ] [ "Flags" { flag } ]
+task      ::= task_name operand
+operand   ::= prefix ":" value | "TRUE" | "ON" | "FALSE" | "OFF" | number
+```
+
+`Tasks` is required; `Interrupts` and `Flags` are optional and in that order — a `Flags` met inside
+the task loop is read as a task name and fails. A text whose first token is not `Schedule`
+(including an empty text) returns SUCCESS and loads nothing. Every task takes exactly one operand:
+a task followed directly by `Interrupts` or by another `TASK_…` token is the "Bad syntax at task
+#%d" failure. A `!` before a condition writes the INVERTED mask instead of the ordinary one.
+
+**The operand chain, in the order the body tests it** (`0x1030d9ce` … `0x1030e6b7`). The task
+record is two 32-bit words, id then data. Resolvers returning an int are stored as that number
+converted to float — except `NPCFlag:`, `MiscFlag:` and `Model:`, whose raw 32-bit word is stored
+unconverted.
+
+| # | Prefix | Resolver | Data word |
+|---:|---|---|---|
+| 1 | `Activity:` | `0x1025d760` over the activity registry `DAT_1090fbe0` | activity id |
+| 2 | `Task:` | `0x10316fd0` (global task space) then local translation | class-local task id |
+| 3 | `Schedule:` | `0x102cadb0` (global schedule space) then local translation | class-local schedule id |
+| 4 | `State:` | `0x1030c600` | state id |
+| 5 | `Memory:` | `0x1030c800` | memory mask |
+| 6 | `Path:` | `0x1030ca70` | `TRAVEL 0`, `LOS 1`, `COVER 2` |
+| 7 | `Goal:` | `0x1030cb00` | `ENEMY 0`, `TARGET 1`, `ENEMY_LKP 2`, `TARGET_LKP 3`, `SAVED_POSITION 4` |
+| 8 | `HintFlags:` | `0x102d3f50` | substring search of the lowercased token: `none 0`, `visible 1`, `nearest 2`, `random 4`; nearest + random warns and reads as nearest |
+| 9 | `NPCFlag:` | `0x1030cbd0` | raw flag word; the sign bit selects `m_bfAINPCFlags2` |
+| 10 | `MiscFlag:` | `0x1030d390` over the 22 names at `0x10619ec8` | raw **index** 0–21, not a mask; an unknown name silently reads as 0 (`Unconscious`) |
+| 11 | `Model:` | `0x1030d3d0` (symbol table `DAT_10936b74`) | raw 16-bit symbol id; the model is also precached |
+| 12 | `SOUND:` | `0x1030d400` over the run-time `{id, name}` array `DAT_1073dc3c` / `DAT_1073dc40` | sound id |
+| 13 | `EXPRESSION:` | `0x1030f5f0` | `FLINCH 0`, `KNOCKBACK 1` |
+| 14 | `STO:` | `0x1030d480` | `DEFAULT 0`, `SHOOT_AT_HINT 1` |
+| 15 | `DIST:` | `0x1030d4f0` | a negative sentinel slot 418 resolves at run time (below) |
+| 16 | `MXTPHASE:` | `0x1030d650` | `TENTACLE 0`, `TENTACLE_TO_GRUB 1`, `GRUB 2`, `GRUB_TO_PROXY 3` |
+| 17 | `TOMODE:` | `0x1030d710` | `NONE 0`, `PATHING 1`, `GRABBING 2`, `CARRYING 3`, `THROWING 4` |
+| — | `TRUE` / `ON` | — | `1.0` |
+| — | `FALSE` / `OFF` | — | `0.0` |
+| — | anything else | `_atof` | the number; a non-number reads as `0.0` |
+
+`State:` — `NONE 0`, `IDLE 1`, `COMBAT 2`, `ALERT 3`, `SCRIPT 4`, `PLAYDEAD 5`, `PRONE 6`, `DEAD 7`,
+`FLEEING 8`, `RETREATING 9`, `COWERING 10`, `HUNTING 11`, `OBLIVIOUS 13`, `CRIMINAL_SUSPICION 14`.
+**That table names the two states the oracle had as unnamed: `0xd` is `OBLIVIOUS` and `0xe` is
+`CRIMINAL_SUSPICION`.** 12 has no name.
+
+`Memory:` — `PROVOKED 0x1`, `INCOVER 0x2`, `SUSPICIOUS 0x4`, `PATH_FAILED 0x20`, `FLINCHED 0x40`,
+`TOURGUIDE 0x100`, `LOCKED_HINT 0x400`, `TURNING 0x2000`, `TURNHACK 0x4000`, `HAD_ENEMY 0x8000`,
+`HAD_PLAYER 0x10000`, `HAD_LOS 0x20000`, `INVESTIGATING 0x08000000`, `CUSTOM4 0x10000000`,
+`CUSTOM3 0x20000000`, `CUSTOM2 0x40000000`, `CUSTOM1 0x80000000`. (`0x1033cb00` / `0x1033cb50`, which
+0019's text credited with `MEMORY:` and `MiscFlag:`, are the separate misc name↔mask API and are
+NOT called by the parser.)
+
+`DIST:` (`0x1030d4f0`, a `strcmpi` chain, an unknown name is an `Error`) — `ACCUM −1000000`,
+`TZIMISCE_CLAW −1000001`, `DIALOG −1000002`, `COMBATMOVE −1000003`, `MINGXIAO_IDEAL_RANGE −1000004`,
+`FOLLOWER_DISTANCE_BACKAWAY −1000005`, `…_WALKTO −1000006`, `…_RUNTO −1000007`, `…_OVERLAP
+−1000008`. These are exactly the sentinels slot 418 `ResolveTaskDistance` turns into distances
+(§ "`0x102bf6e0` — `ResolveTaskDistance`, slot 418" above; `navigation-jump-links.md`): the name
+table and the run-time enum are one vocabulary, and `social.md`'s "resolves like `NPCFlag:`" was
+wrong about the mechanism.
+
+`NPCFlag:`'s 62 names are `0x1030cbd0`'s chain, already tabled in § "The incapacitation tasks and the
+NPC flag word"; the walk re-read it and agrees, `TASKS_FACE_TARGET` = word two bit `0x20`.
+
+**Name resolution.** Schedule, task and condition names are looked up in the GLOBAL spaces first
+(`0x102ea050` over `DAT_109203cc` schedules, `DAT_109203d4` tasks, `DAT_109203dc` conditions; the
+global id is the ordinal plus 1,000,000,000). A task id and a `Schedule:` / `Task:` operand are then
+translated to the class's local id by `0x102ea280` (the class's space for schedules, `+0x18` past
+it for tasks), which walks the parent chain at `+0x10` — so a text may name a base-class schedule.
+Because every init body registers ALL its names before it parses its first text, forward
+references inside a class resolve. **Conditions are not translated**: the interrupt arm takes the
+global ordinal, subtracts 1,000,000,000 and sets bit `ordinal & 31` of word `ordinal >> 5` in the
+six-word mask at `+0x28` (or, after `!`, at `+0x00`). The masks are in GLOBAL condition ordinals.
+
+**Failure.** Each of these returns false, and the calling init body stops loading that class's
+remaining texts (`0x10367a40`, `0x102cb690`): a duplicate schedule name; an unknown schedule name;
+a missing `Tasks`; a 65th task (64 are allowed); an unknown task; a missing operand; a missing `:`
+after a prefix or a stray `:` after an operand; an unknown `Activity:` / `Schedule:` / `State:` /
+`Memory:` / `Path:` / `Goal:` / `NPCFlag:` / `SOUND:` / `EXPRESSION:` / `STO:` / `DIST:` /
+`MXTPHASE:` / `TOMODE:` / `Model:` value. They report through the import `Error` (tier0's fatal
+spew); only the missing operand is a `Warning`. Two things do NOT fail the text: an unknown
+condition (`DevMsg`, the bit is skipped) and the `Flags` section's diagnostics — `0x1030d7e0`
+answers `DELAY_INTERRUPTS` → 1, `NONE` → 0 silently, and anything else → `Error` and 0; the parser
+then `DevMsg`s "Unknown schedule flag" for every 0, so an authored `Flags NONE` prints that
+diagnostic harmlessly. `MiscFlag:`, `HintFlags:` and a bare non-number never fail; they read as 0.
+The schedule node is linked into the manager BEFORE its tasks are parsed and no error path unlinks
+it, so a failed text leaves a task-less node behind (inferred from `0x1030c5b0` and the direct
+returns).
+
+**The record.** `0x1030c5b0` allocates `0x48` bytes and links the node at the head of the manager
+list `DAT_10936b68`; constructor `0x1030f680`. `+0x00..+0x17` the inverted mask (six words),
+`+0x18` flags, `+0x1c` the GLOBAL schedule id, `+0x20` the heap task array (`count × 8`), `+0x24`
+the count, `+0x28..+0x3f` the interrupt mask, `+0x40` a heap COPY of the name, `+0x44` next. Lookup
+by name is `0x1030f350` (`strcmpi` on `+0x40`), by id `0x1030f300` (on `+0x1c`, reached from
+`0x102cc260`).
+
+**Unrecovered:** the run-time contents of the `SOUND:` array (filled at load from the VSound table,
+not static) and `Model:`'s symbol numbers (interned at run time); neither is a parser fact.
+
+## The schedule owners and their registrations (2026-09-21, 0019 story 3)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp02-sched-registration`); the caller census,
+the base text table and the 691 sum re-checked by the lead._ This is what 0019 story 3's extractor
+reads. The spec expected "20 owners"; the image has **57 callers of the parser (through its thunk
+`0x10006398`): 56 class init bodies, 48 of which feed at least one text, plus one ownerless file
+loader**. 20 is a true number for something else — the classes that register class-local TASKS
+(184 task names between them).
+
+**The two calls.** `CAI_LocalIdSpace::Init` (`0x102ea0e0`): `this` = the space, arg 1 = the global
+namespace, arg 2 = the PARENT local space; it stores the namespace at `+0x14`, the parent at
+`+0x10`, the global base at `+0x00`, the local base / top / translated top at `+0x04` / `+0x08` /
+`+0x0c`. `Register` (`0x102ea130`, thunk `0x1000a948`): `this` = the space, then `(name, localId,
+category, className)` with category one of `"schedule"`, `"condition"`, `"squadslot"`; it extends
+the local range, translates the id (`0x102ea2d0`: `space[0] - space[4] + localId`, falling through
+the parent chain) and inserts name → global id into the namespace (`0x102e9fe0`). Both answer
+success in `AL`. A class's four spaces sit `0x18` apart: schedule, task (`+0x18`), condition
+(`+0x30`), and the squad-slot space elsewhere in the class's statics.
+
+**The call-site recipe.** The name and the local id are LITERAL IMMEDIATES in the init body — no
+counter, no enum table. A species body builds stack-local pair vectors (`MOV [pair.name], imm32
+string` / `MOV [pair.id], imm32` / `CALL 0x102c6a50` to append), sorts them, and only then loops
+`PUSH className / PUSH category / PUSH localId / PUSH name / MOV ECX, space / CALL 0x1000a948`.
+Texts are appended the same way (`MOV [local], imm32 text` / `CALL 0x102c6920`) and fed in a loop
+`PUSH classScheduleSpace / PUSH text / PUSH className / MOV ECX, 0x10936b68 / CALL 0x10006398`,
+breaking on the first false. So an extractor reads, per owner, the `imm32` pairs ahead of each
+append call; it never needs to execute the body. Brujah, concretely: `0x10367ac2` name
+`0x1062f4f0` "SCHED_VBRUJAH_WALK", id `0x158`; init `0x10367b3c`–`0x10367b8f`; registration
+`0x10367c13`–`0x10367cfc`; parse `0x10367d1e`–`0x10367d53`.
+
+**Order, inside one owner**: build the vectors; `Init` all four spaces; sort; register schedules,
+then tasks, then conditions, then squad slots; run the activity-registration callbacks; parse. ALL
+names are registered before the first text is parsed.
+
+**Order, across owners.** The base is rooted at `CWorld::Precache 0x1023c020` → `0x1030c560` →
+`0x1030c4e0` (init the base spaces; schedules `0x102cadd0`; conditions `0x102c8ce0`; tasks
+`0x10316ff0`; activities `0x1025d790`; the two global squad slots `0x10316e80`) and then
+`0x102cb690`, the 64 base parses. Troika is once-guarded (`0x102b97a0` compares the manager
+pointer it last loaded against, then `0x102b9810`). The species bodies are first-touch. A parent's
+space is always initialised before a child parses, because the child's `Init` names it and
+translation walks the chain; a SIBLING's private space is never searched.
+
+**Three deviations from the Brujah shape, and only three.**
+1. `CAI_BaseNPC` registers in three separate bodies (above) and feeds its texts from the one
+   static pointer table in the image, **64 cells at `0x106034b8`..`0x106035b4`** (`FAIL`,
+   `IDLE_STAND`, `WAIT_FOR_SCRIPT` … `DROPSHIP_DEPLOY_THIRD`, `SCHED_FLINCH_PHYSICS`), 64 calls
+   from `0x102cb6a5` to `0x102cbe70` — not 63. `0x102cadd0` registers 57 schedule names against
+   those 64 texts; where the other seven names are registered was not walked. **The base programs ARE text blobs**:
+   `programs.md`'s "UNRECOVERED: `0x43`'s task list — the base programs are not text blobs" is
+   wrong; `FAIL` is cell 0 (`0x10608238`).
+2. `CAI_BaseNPCTroika` does everything through helpers — spaces `0x102be9f0`, schedules
+   `0x102bea80`, tasks `0x102beab0` (`space+0x18`), conditions `0x102beae0` (`space+0x30`), texts
+   in two blocks (`158 × 0x102c6920 + 116 × 0x102c65d0`) — and registers 274 schedules (local
+   68–341) and NOTHING else: every Troika task and condition is in the base spaces.
+3. Four pairs of classes SHARE one space through a common slot-580 getter: `CNPC_VCamera` /
+   `CNPC_VCameraSecurity` (`0x103683b0`), `CNPC_VVampire` / `CNPC_VPlayerController`
+   (`0x103750e0`), `CNPC_VHumanCombatant` / `CNPC_ProneDialog` (`0x10386ae0`), `CNPC_VScurrying` /
+   `CNPC_VRat` (`0x103abba0`). The second of each pair has no init body of its own.
+Eight bodies feed zero texts and register nothing (`CAI_StandoffBehavior`, `CNPC_VChangBrosBlade`,
+`…Claw`, `CNPC_VLasombra`, `CNPC_VSabbatGunman`, `CNPC_VStalker`, `CNPC_VTaxiDriver`,
+`CNPC_VYukie`): they exist so the class has spaces with the right parents.
+
+**The 691, attributed**: 64 base + 274 Troika + 353 across the species bodies (the column below
+sums to it). Matched by `.rdata` address, not by name: no text is fed by two owners and none is
+left unfed. The 57th caller, `0x1030f220`, is a generic loader that opens
+`vdata/schedules/<name>.sch` and parses it with caller-supplied class and space; it has no caller
+in the image and no shipped `.sch` is known — a dead door, not an owner.
+
+**Squad slots.** No class registers a local squad-slot name (every `Q` below is 0). The namespace
+itself is seeded globally with two names, `SQUAD_SLOT_ATTACK1` = 1,000,000,000 and
+`SQUAD_SLOT_ATTACK2` = 1,000,000,001 (`0x10316e80`, straight through `0x102e9fe0`).
+
+Parent codes (the tuple is schedule / task / condition / squad-slot space):
+
+| Code | Parent spaces |
+|---|---|
+| `B` | `0x1090ff08/0x1090ff20/0x1090ff38`, `CAI_BaseNPC`; squad parent `0x10920484` |
+| `T` | `0x10924248/0x10924260/0x10924278`, `CAI_BaseNPCTroika`; squad parent `0x10920484` |
+| `V` | `0x1093d258/0x1093d270/0x1093d288/0x1093d2a4`, `CNPC_VVampire` |
+| `VB` | `0x1093d330/0x1093d348/0x1093d360/0x1093d30c`, `CNPC_VVampireBoss` |
+| `H` | `0x1093b3e0/0x1093b3f8/0x1093b410/0x1093b3c4`, `CNPC_VHuman` |
+| `HC` | `0x1093b498/0x1093b4b0/0x1093b4c8/0x1093b47c`, `CNPC_VHumanCombatant` |
+| `A` | `0x1093a4a8/0x1093a4c0/0x1093a4d8/0x1093a4f4`, `CNPC_VAnimal` |
+| `CB` | `0x1093a888/0x1093a8a0/0x1093a8b8/0x1093aa70`, `CNPC_VChangBros` |
+
+`R[n;a-b]` is `n` registrations whose local ids run from `a` to `b` (not necessarily densely).
+`Txt` is the number of texts fed; `V=local_xx` is the body's stack vector of text pointers.
+
+| Owner | Init body; parser caller | Own spaces S/T/C/Q | P | Txt | Registrations S / T / C / Q | Shape/deviation |
+|---|---|---|---|---:|---|---|
+| `CAI_BaseNPC` | init `0x1030c4e0`; feed `0x102cb690` | `0x1090ff08/0x1090ff20/0x1090ff38/—` | root | 64; static table `0x106034b8..0x106035b4` | `R[57;0-56] / R[330;0-329] / R[119;0-118] / 0` | Registration split across `0x102cadd0`, `0x10316ff0`, `0x102c8ce0`; 7 more texts than schedule pre-registration pairs |
+| `CAI_BaseNPCTroika` | guard `0x102b97a0`; body/feed `0x102b9810` | `0x10924248/0x10924260/0x10924278/—` | `B` | 274; `158×0x102c6920 + 116×0x102c65d0` | `R[274;68-341] / 0 / 0 / 0` | Helper-based init/registration; no local task, condition, or squad-slot pairs |
+| `CAI_StandoffBehavior` | `0x102c7f10` | `0x10925398/0x109253b0/0x109253c8/—` | `B` | 0 | `0 / 0 / 0 / 0` | Three-space empty body; parser loop has zero iterations |
+| `CNPC_Crow` | `0x10359270` | `0x1093a0d0/0x1093a0e8/0x1093a100/0x1093a070` | `B` | 8; `V=local_98` | `R[8;68-75] / R[9;330-338] / R[3;119-121] / 0` | Exact Brujah shape |
+| `CNPC_VAndreiBlood` | `0x1035c490` | `0x1093a420/0x1093a438/0x1093a450/0x1093a470` | `VB` | 5; `V=local_8c` | `R[5;346-350] / R[7;336-342] / R[1;121] / 0` | Exact |
+| `CNPC_VAnimal` | `0x1035ede0` | `0x1093a4a8/0x1093a4c0/0x1093a4d8/0x1093a4f4` | `T` | 8; `V=local_98` | `R[8;342-349] / 0 / 0 / 0` | Exact |
+| `CNPC_VAsianVampire` | `0x10360640` | `0x1093a530/0x1093a548/0x1093a560/0x1093a578` | `VB` | 3; `V=local_84` | `R[3;346-348] / R[3;336-338] / 0 / 0` | Exact |
+| `CNPC_VBach` | `0x10362e20` | `0x1093a620/0x1093a638/0x1093a650/0x1093a608` | `V` | 9; `V=local_9c` | `R[9;344-352] / R[8;330-337] / R[3;121-123] / 0` | Exact |
+| `CNPC_VBatSwarm` | `0x10366e40` | `0x1093a688/0x1093a6a0/0x1093a6b8/0x1093a6d0` | `V` | 1; `V=local_7c` | `R[1;344] / R[1;330] / R[1;121] / 0` | Exact |
+| `CNPC_VBrujah` | `0x10367a40` | `0x1093a740/0x1093a758/0x1093a770/0x1093a788` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Worked exact shape |
+| `CNPC_VCamera` | `0x10368580` | `0x1093a7d8/0x1093a7f0/0x1093a808/0x1093a7bc` | `T` | 1; `V=local_84` | `R[1;342] / 0 / 0 / 0` | Exact; slot 580 is shared with `CNPC_VCameraSecurity` by `0x103683b0` |
+| `CNPC_VChangBros` | `0x1036a420` | `0x1093a888/0x1093a8a0/0x1093a8b8/0x1093aa70` | `VB` | 5; `V=local_78` | `R[5;346-350] / R[14;336-349] / R[4;121-124] / 0` | Exact |
+| `CNPC_VChangBrosBlade` | `0x1036ed20` | `0x1093a8f0/0x1093a908/0x1093a920/0x1093a8d8` | `CB` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VChangBrosClaw` | `0x1036f520` | `0x1093a938/0x1093a950/0x1093a968/0x1093aa10` | `CB` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VCombatman` | `0x1036fce0` | `0x1093ab68/0x1093ab80/0x1093ab98/0x1093abb0` | `H` | 2; `V=local_88` | `R[2;343-344] / 0 / 0 / 0` | Exact |
+| `CNPC_VCop` | `0x10370b00` | `0x1093ac60/0x1093ac78/0x1093ac90/0x1093ac40` | `HC` | 27; `V=local_e4` | `R[27;344-370] / R[1;330] / 0 / 0` | Exact |
+| `CNPC_VDog` | `0x10373700` | `0x1093acd8/0x1093acf0/0x1093ad08/0x1093ad64` | `A` | 10; `V=local_a0` | `R[10;350-359] / 0 / R[7;120-126] / 0` | Exact |
+| `CNPC_VFrenzyShadow` | `0x10375470` | `0x1093ae48/0x1093ae60/0x1093ae78/0x1093ae28` | `V` | 9; `V=local_9c` | `R[9;344-353] / R[1;330] / R[1;121] / 0` | Exact |
+| `CNPC_VGangrel` | `0x10377240` | `0x1093aef8/0x1093af10/0x1093af28/0x1093aed8` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Exact |
+| `CNPC_VGargoyle` | `0x10377d00` | `0x1093aff0/0x1093b008/0x1093b020/0x1093b038` | `V` | 9; `V=local_9c` | `R[9;344-352] / 0 / 0 / 0` | Exact |
+| `CNPC_VGhoulCroucher` | `0x1037a980` | `0x1093b0f8/0x1093b110/0x1093b128/0x1093b0e0` | `HC` | 2; `V=local_80` | `R[2;344-345] / R[2;330-331] / R[1;121] / 0` | Exact |
+| `CNPC_VGuard1` | `0x1037c830` | `0x1093b168/0x1093b180/0x1093b198/0x1093b1b4` | `H` | 4; `V=local_88` | `R[4;343-346] / 0 / 0 / 0` | Exact |
+| `CNPC_VHengeyokai` | `0x1037ea90` | `0x1093b328/0x1093b340/0x1093b358/0x1093b27c` | `V` | 25; `V=local_dc` | `R[25;344-368] / R[5;330-334] / 0 / 0` | Exact |
+| `CNPC_VHuman` | `0x10384230` | `0x1093b3e0/0x1093b3f8/0x1093b410/0x1093b3c4` | `T` | 1; `V=local_84` | `R[1;342] / 0 / 0 / 0` | Exact |
+| `CNPC_VHumanCombatant` | `0x10386cb0` | `0x1093b498/0x1093b4b0/0x1093b4c8/0x1093b47c` | `H` | 1; `V=local_84` | `R[1;343] / 0 / 0 / 0` | Exact; slot 580 shared with `CNPC_ProneDialog` by `0x10386ae0` |
+| `CNPC_VHumanCombatPatrol` | `0x103878e0` | `0x1093b538/0x1093b550/0x1093b568/0x1093b580` | `HC` | 1; `V=local_84` | `R[1;344] / 0 / 0 / 0` | Exact |
+| `CNPC_VHunter` | `0x10388230` | `0x1093b608/0x1093b620/0x1093b638/0x1093b5e8` | `HC` | 4; `V=local_88` | `R[4;344-347] / 0 / 0 / 0` | Exact |
+| `CNPC_VLasombra` | `0x10388fb0` | `0x1093b698/0x1093b6b0/0x1093b6c8/0x1093b680` | `V` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VMalkavian` | `0x10389730` | `0x1093b718/0x1093b730/0x1093b748/0x1093b6fc` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Exact |
+| `CNPC_VManBat` | `0x10389f80` | `0x1093b778/0x1093b790/0x1093b7a8/0x1093b89c` | `V` | 13; `V=local_98` | `R[13;344-356] / R[27;330-356] / 0 / 0` | Exact |
+| `CNPC_VMingXiao` | `0x103913c0` | `0x1093b918/0x1093b930/0x1093b948/0x1093bacc` | `T` | 26; `V=local_e0` | `R[26;342-367] / R[22;330-351] / R[8;119-126] / 0` | Exact |
+| `CNPC_VMingXiaoTentacle` | `0x1039b260` | `0x1093bd38/0x1093bd50/0x1093bd68/0x1093bd80` | `T` | 24; `V=local_d8` | `R[24;342-365] / R[13;330-342] / R[3;119-121] / 0` | Exact |
+| `CNPC_VMoleman` | `0x1039f7d0` | `0x1093bdd8/0x1093bdf0/0x1093be08/0x1093bdb8` | `H` | 2; `V=local_88` | `R[2;343-344] / 0 / 0 / 0` | Exact |
+| `CNPC_VNosferatu` | `0x103a1670` | `0x1093bee8/0x1093bf00/0x1093bf18/0x1093bf30` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Exact |
+| `CNPC_VPedestrian` | `0x103a1fd0` | `0x1093bfb0/0x1093bfc8/0x1093bfe0/0x1093bffc` | `H` | 4; `V=local_88` | `R[4;343-346] / 0 / 0 / 0` | Exact |
+| `CNPC_VPlaceholder` | `0x103a3c80` | `0x1093c040/0x1093c058/0x1093c070/0x1093c08c` | `T` | 1; `V=local_84` | `R[1;343] / 0 / 0 / 0` | Exact |
+| `CNPC_VSabbatGunman` | `0x103a5270` | `0x1093c190/0x1093c1a8/0x1093c1c0/0x1093c1d8` | `HC` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VSabbatLeader` | `0x103a5e80` | `0x1093c3f0/0x1093c408/0x1093c420/0x1093c3d4` | `VB` | 13; `V=local_98` | `R[13;346-358] / R[20;336-355] / R[1;121] / 0` | Exact |
+| `CNPC_VScurrying` | `0x103abd70` | `0x1093c490/0x1093c4a8/0x1093c4c0/0x1093c4e0` | `A` | 6; `V=local_90` | `R[6;350-355] / R[2;330-331] / R[1;120] / 0` | Exact; slot 580 shared with `CNPC_VRat` by `0x103abba0` |
+| `CNPC_VSheriffMan` | `0x103adce0` | `0x1093c520/0x1093c538/0x1093c550/0x1093c568` | `VB` | 4; `V=local_74` | `R[4;346-349] / R[9;336-344] / R[1;121] / 0` | Exact |
+| `CNPC_VSheriffSwarm` | `0x103b1df0` | `0x1093c638/0x1093c650/0x1093c668/0x1093c680` | `V` | 1; `V=local_7c` | `R[1;344] / R[1;330] / R[1;121] / 0` | Exact |
+| `CNPC_VStalker` | `0x103b2a80` | `0x1093c6f0/0x1093c708/0x1093c720/0x1093c738` | `HC` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VTaxiDriver` | `0x103b31a0` | `0x1093c7a8/0x1093c7c0/0x1093c7d8/0x1093c7f0` | `H` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VTest` | `0x103b3cf0` | `0x1093c830/0x1093c848/0x1093c860/0x1093c8bc` | `V` | 3; `V=local_8c` | `R[3;344-346] / 0 / 0 / 0` | Exact |
+| `CNPC_VToreador` | `0x103b5500` | `0x1093c900/0x1093c918/0x1093c930/0x1093c948` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Exact |
+| `CNPC_VTremere` | `0x103b5ca0` | `0x1093c980/0x1093c998/0x1093c9b0/0x1093c9c8` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Exact |
+| `CNPC_VTzimisce` | `0x103b7120` | `0x1093ce70/0x1093ce88/0x1093cea0/0x1093ccc4` | `T` | 70; `V=local_190` | `R[70;342-411] / 0 / R[2;119-120] / 0` | Exact |
+| `CNPC_VTzimisceHeadClaw` | `0x103c0cc0` | `0x1093d160/0x1093d178/0x1093d190/0x1093d1ac` | `T` | 3; `V=local_8c` | `R[3;342-344] / 0 / 0 / 0` | Exact |
+| `CNPC_VTzimisceRunner` | `0x103c2a90` | `0x1093d1d8/0x1093d1f0/0x1093d208/0x1093d224` | `T` | 2; `V=local_88` | `R[2;342-343] / 0 / 0 / 0` | Exact |
+| `CNPC_VVampire` | `0x103c4ab0` | `0x1093d258/0x1093d270/0x1093d288/0x1093d2a4` | `H` | 1; `V=local_84` | `R[1;343] / 0 / 0 / 0` | Exact; slot 580 shared with `CNPC_VPlayerController` by `0x103750e0` |
+| `CNPC_VVampireBoss` | `0x103c52a0` | `0x1093d330/0x1093d348/0x1093d360/0x1093d30c` | `V` | 2; `V=local_6c` | `R[2;344-345] / R[6;330-335] / 0 / 0` | Exact |
+| `CNPC_VVentrue` | `0x103c7980` | `0x1093d3b0/0x1093d3c8/0x1093d3e0/0x1093d394` | `V` | 2; `V=local_88` | `R[2;344-345] / 0 / 0 / 0` | Exact |
+| `CNPC_VWerewolf` | `0x103c8f00` | `0x1093f9e8/0x1093fa00/0x1093fa18/0x1093d6d4` | `T` | 15; `V=local_a0` | `R[15;342-356] / R[24;330-353] / R[5;119-123] / 0` | Exact |
+| `CNPC_VWolfMorph` | `0x103dc980` | `0x109402a8/0x109402c0/0x109402d8/0x1094028c` | `V` | 1; `V=local_84` | `R[1;344] / 0 / 0 / 0` | Exact |
+| `CNPC_VYukie` | `0x103dd220` | `0x10940330/0x10940348/0x10940360/0x10940314` | `HC` | 0 | `0 / 0 / 0 / 0` | Exact empty leaf |
+| `CNPC_VZombie` | `0x103de500` | `0x10940398/0x109403b0/0x109403c8/0x109403e0` | `A` | 13; `V=local_ac` | `R[13;350-363] / R[9;330-339] / R[2;120-121] / 0` | Exact |
+
+**Unrecovered:** the run-time order in which the first-touch species bodies fire (it depends on
+which class is precached first, and nothing observable depends on it, since no space searches a
+sibling); a caller for `0x1030f220`.
+
 ## The three hint validators — `0x10295ed0`, `0x102961a0`, `0x10296c40` (2026-09-13)
 
 Three bodies that ask "is this hint node still somewhere I can stand", over the same five hint words
@@ -1151,8 +1454,8 @@ gives that literal away, `"Projection (%.2f) < 0.2"`. The facing projection is t
 under `m_bForceCoverLOSCheck` (`+0x6408`), `0x102968f0` must pass or the answer is
 `"Failed hint LOS"`.
 
-**Unrecovered:** `_DAT_1049ae28` (the height limit), `_DAT_1046a51c` (the normalise epsilon) and
-what `_DAT_104454d0` means as `0x10295ed0`'s forward floor; and `0x102968f0` itself is walked only as
+**Unrecovered:** `_DAT_1049ae28` (= **64.0**, float64; read 2026-09-21, `rdata-cells.md`) (the height limit), `_DAT_1046a51c` (= **1.1920928955e-7f**, float32; read 2026-09-21, `rdata-cells.md`) (the normalise epsilon) and
+what `_DAT_104454d0` (= **0.5f**, float32; read 2026-09-21, `rdata-cells.md`) means as `0x10295ed0`'s forward floor; and `0x102968f0` itself is walked only as
 "the hint LOS check" here.
 
 ## The face-anim turn ladder — `0x10297a20` (2026-09-13)
@@ -1169,7 +1472,7 @@ masked to 16 bits and scaled by `_DAT_1044ffdc`) where `0x10f8` writes the yaw d
 authoring none of the four falls to `ACT_IDLE` with `m_eFaceAnim = 0` and `m_flFaceYawDiff` still the
 delta.
 
-**Unrecovered:** `_DAT_104704b4` (the second rung's edge) and `_DAT_1044ffdc` (the duration scale);
+**Unrecovered:** `_DAT_104704b4` (= **-40.0f**, float32; read 2026-09-21, `rdata-cells.md`) (the second rung's edge) and `_DAT_1044ffdc` (= **0.0054931640625f**, float32; read 2026-09-21, `rdata-cells.md`) (the duration scale);
 and the body's retail name — it has one direct caller and no slot.
 
 ## The scripted custom move and the patrol interest draw — `0x10289fe0`, `0x1029f650`, `0x1029f730` (2026-09-13)
@@ -1234,10 +1537,10 @@ their own object's vtable — `CAI_Motor`'s 21-slot table, `CAI_Navigator`'s 18-
 `CAI_StandoffBehavior`'s 29-slot behaviour table and `CAI_StandoffGoal`'s 246-slot
 `CBaseEntity`-line goal entity — or no slot at all.
 
-**Ten constants, all read out of the pinned image.** `_DAT_10449270` **0.5** (double),
+**Ten constants, all read out of the pinned image.** `_DAT_10449270` (= **0.5**, float64; read 2026-09-21, `rdata-cells.md`) **0.5** (double),
 `_DAT_104454c0` **1.0f**, `_DAT_104454c4` **0.0f**, `_DAT_104493d0` **0.1** (double),
-`_DAT_1044fab0` **0.0**, `_DAT_1044e658` **0.01** (double — `lifecycle.md` lists it as unrecovered
-and this is its value), `_DAT_10451acc` **64.0f**, `_DAT_10449258` **3.0f**, `_DAT_104994e0`
+`_DAT_1044fab0` (= **0.0**, float64; read 2026-09-21, `rdata-cells.md`) **0.0**, `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`) **0.01** (double — `lifecycle.md` lists it as unrecovered
+and this is its value), `_DAT_10451acc` (= **64.0f**, float32; read 2026-09-21, `rdata-cells.md`) **64.0f**, `_DAT_10449258` **3.0f**, `_DAT_104994e0` (= **-30.0f**, float32; read 2026-09-21, `rdata-cells.md`)
 **-30.0f**, and the sweep's inline `0x42c80000` = **100.0f**.
 
 ### `CAI_Motor::MoveGroundExecute` `0x102e14a0` and its walk `0x102e1560`

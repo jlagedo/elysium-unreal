@@ -68,7 +68,9 @@ later `SetRelationship` call can deliberately alter it.
 The ordinary target-selection transaction is recovered from the pinned retail DLL. In
 `CAI_BaseNPC::GatherConditions` (`0x1026ec30`), senses and hostile-category conditions are gathered,
 the enemy-memory component refreshes its records, `ChooseEnemy` (`0x10279dd0`) runs, the
-new-enemy-condition repair at `0x1026fb40` runs, and only then are conditions for the committed
+better-weapon search at `0x1026fb40` runs (mis-named a "new-enemy-condition repair" here until
+2026-09-21: it touches no enemy condition — `conditions-and-states.md` § "The port's NPC-core
+guesses, settled", item 2), and only then are conditions for the committed
 current enemy gathered. Candidate discovery, memory, enemy choice and attack capability are
 separate stages.
 
@@ -231,20 +233,74 @@ INVESTIGATE_SIGHT IGNORE_UNKNOWN DETECTED_ATTACK` plus the distance conditions n
   2.0; WAIT_RANDOM 1.0`, no transfer). So the ladder is simple → (fail) → A*; `_NODE` is reached
   by name only.
 
-The `DIST:` operands are a second operand vocabulary the parser resolves like `NPCFlag:` —
+The `DIST:` operands are a second operand vocabulary — corrected 2026-09-21: the parser's own
+resolver `0x1030d4f0` turns each name into a negative SENTINEL (`ACCUM −1000000` …
+`FOLLOWER_DISTANCE_OVERLAP −1000008`) that slot 418 resolves at run time, not an `NPCFlag:`-style
+lookup (`schedule-kernel.md` § "The schedule-text parser `0x1030d850`, walked") —
 `FOLLOWER_DISTANCE_BACKAWAY/WALKTO/RUNTO` read `+0x6484/88/8c`, `FOLLOWER_DISTANCE_OVERLAP` is
 the 10.0 above, `ACCUM` the per-NPC accumulator the three `*_SPECIAL_DISTANCE_ACCUM` tasks
 write; `TASK_SET_INSIDE/OUTSIDE_INTERRUPT_DIST` are the producers of `COND_INSIDE/OUTSIDE_
-INTERRUPT_DIST_F 0x19/0x18` (tested against the boss each think). UNRECOVERED: their arms and
-the accumulator's offset. The three find tasks (Troika `StartTask` idx 26–28): `0x86 SIMPLE`
+INTERRUPT_DIST_F 0x19/0x18` (tested against the boss each think). Their arms and the
+accumulator were closed 2026-09-21 — "The distance tasks and `TASKS_FACE_TARGET`, walked" below. The three find tasks (Troika `StartTask` idx 26–28): `0x86 SIMPLE`
 (`0x102a2d9b`): no boss → `TaskFail(0x29)`; direction = normalise(me − boss) rotated by
 `RandomFloat(−45, 45)` about the boss, point = boss + `backAway` × dir, walk-probed
 (`0x102e6d70`, mask `0x202400b`, 100.0) → fail `TaskFail(7)`, else `SetGoal{type 4, tolerance
 [0x1049a1b0]}`; `0x87 NODE` (`0x102a2f94`): `0x102edae0(boss origin, walkTo − 10, 50000.0)`
 picks a node at least that far, fail 7; `0x88 ASTAR` (`0x102a3096`): `0x102edbb0(…, walkTo −
 10, 50000.0)`, fail 7. All three complete on the `SetGoal` alone (no explicit `TaskComplete`).
-`TASKS_FACE_TARGET` is an NPC flag (bit UNRECOVERED) the motor reads to keep facing
+`TASKS_FACE_TARGET` is an NPC flag — word two (`m_bfAINPCFlags2`) bit `0x20`, from the `NPCFlag:`
+chain `0x1030cbd0` (`0x80000020`), recovered 2026-09-21 — the motor reads to keep facing
 `m_hTargetEnt` while the wait runs.
+
+**The distance tasks and `TASKS_FACE_TARGET`, walked (2026-09-21, story 16a).** _A Codex worker's
+walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp10-follower-dist`); the slot-418 jump table re-read from the
+image by the lead._
+- **An operand is resolved at RUN time.** The parser stores a `DIST:` name as a negative sentinel
+  float; every task below hands its operand to slot 418 `ResolveTaskDistance` (`schedule-kernel.md`)
+  when it starts, so `DIST:ACCUM` reads the accumulator as it stands then, and a plain number
+  passes through unchanged.
+- **The tasks** (Troika `StartTask`; each ends in `TaskComplete`): `SET_INSIDE_INTERRUPT_DIST 0xcf`
+  (`0x102a4a5b`) and `SET_OUTSIDE_INTERRUPT_DIST 0xd0` (`0x102a4a97`) resolve, TRUNCATE to an int
+  (`__ftol`), square, and store `m_flInsideInterruptDistanceSqr (+0x6324)` /
+  `m_flOutsideInterruptDistanceSqr (+0x6328)`; `SET_SPECIAL_DISTANCE_ACCUM 0x129` (`0x102a71e4`)
+  stores, `ADD_… 0x12a` (`0x102a71fd`) adds and `SUB_… 0x12c` (`0x102a7252`) subtracts the
+  resolved value at `m_flSpecialDistanceAccum (+0x5bac)`; two more nobody had listed,
+  `ADD_…_RND 0x12b` (`0x102a7271`) and `SUB_…_RND 0x12d` (`0x102a721c`), do the same with
+  `RandomFloat(0, resolved)`. `SET_TOLERANCE_DISTANCE 0x4e` (`0x102a4289`) takes the same path:
+  `m_flGoalTolerance (+0x6320) = hull tolerance (0x102d61b0) + resolved`, pushed to the navigator
+  (`0x102ee1c0`, `0x102f2fe0`).
+- **The accumulator** is a SAVED float with no initialiser of its own; its other writers are
+  `InputStartPlayerDialog 0x1029ef80` and `…Unforced 0x1029f120` (the dialog distance, or 0).
+  Neither `OnScheduleChange 0x102a0940` nor `TaskFail 0x1029adb0` clears it — both zero the two
+  interrupt distances and `m_flInterruptTime (+0x632c)` (and `OnScheduleChange` the tolerance), so
+  the accumulator SURVIVES a schedule change where the thresholds built from it do not.
+- **The six conditions** are produced by Troika `GatherConditions 0x102b27f0`, which first clears
+  all six (`0x102b293f`–`0x102b294c`) and tests each pair only while its threshold is `> 0`,
+  inside strictly `<`, outside strictly `>`, all in 3-D squared distance: the bare pair
+  `0x14 OUTSIDE` / `0x15 INSIDE` against the navigator's path-to-endpoint distance²
+  (`navigator+0x14`, written by `0x102ed430`); `_E` `0x16` / `0x17` against `GetEnemy()`; **`_F`
+  `0x18` / `0x19` against `GetFollowerBoss()` (slot 293, `0x102c5470`) — F is "follower"**. Both
+  entity pairs use slot 220 on each side, never `m_hTargetEnt`.
+- **The three radii** `+0x6484 / +0x6488 / +0x648c` have one writer, `0x102c4680`: it looks the
+  NPC's follower TYPE up in `rules.txt`'s `Npc_Follower_Info` (`0x101e8c90`, case-insensitive) and
+  then clamps `walkTo >= backAway + 10.0` and `runTo >= walkTo + 10.0`. Called from `StartNPC`
+  (`0x1029a8f1`), `OnRestore` (`0x102999ae`), `SetFollowerType 0x102c4640` /
+  `InputSetFollowerType 0x102c33a0`, and the possession path `0x102c51a0` (type `"Combat"`).
+  Shipped rows: `Default` and `Combat` 64 / 100 / 150, `CombatNonCombatant` 384 / 500 / 550; the
+  loader's fallbacks for a missing key are 64 / 160 / 320 (`0x101e7072`…). No I/O or Python
+  writes the floats; `follower_type` is the authored surface.
+- **`TASKS_FACE_TARGET`** is `m_bfAINPCFlags2` bit `0x20`. One reader, `0x102aab70`, called from
+  the Troika `RunTask` arms of task ids `0x02` (`WAIT`), `0x67`, `0x68`, `0x10a`, `0x10b` and
+  `0x10c` (the other five not named here): `TASKS_FACE_ENEMY` (`0x10`) wins if set; else with this bit and a live
+  `m_hTargetEnt (+0x5ce4)`, take the target's abs origin, and if it is outside `FInAimCone`
+  (slot 364) call the motor's `SetIdealYawToTarget 0x102e20b0` at yaw speed `-2.0`. It sets a
+  motor yaw, never the entity's angles, and `MaintainActivity` does not read it. Besides
+  `CLEAR_NPC_FLAG` it is cleared by `TaskFail` (`flags2 &= 0x7fffe24f`) and by `OnScheduleChange`
+  without `PRESERVE_PATH` (`flags2 &= 0x77fff14f`), so a follower program's `SET_NPC_FLAG
+  TASKS_FACE_TARGET` lasts exactly as long as the program.
+
+**Unrecovered:** nothing — the facing-queue ConVar `DAT_10924f74` is `debug_allow_move_facing`,
+default **1** ("If this is on, NPCs will move facing the NPC when they run for cover"; `convars.md`).
 
 ## Reaction beyond immediate combat
 
@@ -667,11 +723,11 @@ is slot 404, `IRelationType`, and the constant compared is `D_LI` (3). The body,
 `this` the ally being told and the argument the attacker: the attacker is non-null; `m_NPCState`
 (`+0x5cc0`) is 1 (IDLE), 3 (COMBAT) or the custom `0xb` — **ALERT (2) is not admitted**;
 `attacker->m_pCombatCharacter` (`+0x9c`) is non-null; `IRelationType(attacker) != D_LI`; and either
-the squared distance between the two `GetAbsOrigin`s is under `_DAT_1049aea0` or `FVisible(attacker,
+the squared distance between the two `GetAbsOrigin`s is under `_DAT_1049aea0` (= **22500.0f**, float32; read 2026-09-21, `rdata-cells.md`) or `FVisible(attacker,
 0x2804091, 0, 0)` (slot 201) **and** `FInViewCone(attacker)` (slot 363) both pass. The effect is
 `0x102bf560`: unless `m_bIgnoreDetectedAttack` (`+0x65f5`), store the attacker in
 `m_hDetectedAttacker` (`+0x65c0`) and set `m_flDetectedAttackExpireTime` (`+0x65c4`) to curtime
-plus `_DAT_10454110`. **Unrecovered:** the literals `_DAT_1049aea0` and `_DAT_10454110`
+plus `_DAT_10454110` (= **5.0f**, float32; read 2026-09-21, `rdata-cells.md`). **Unrecovered:** the literals `_DAT_1049aea0` and `_DAT_10454110`
 (`docs/vtmb/combat-and-damage.md` recovers the radius as 150 Source units and the retention as five
 seconds from the same chain); retail's `0xb` state has no counterpart in this port's state set.
 
@@ -752,7 +808,7 @@ true; with one, `m_flMeleeMustLeaveTimer <= curtime` answers true. Everything el
 `0x1025de90`, a linear scan of the coordinator's handle array that answers "this NPC is not
 registered".
 
-**Unrecovered:** `DAT_10924a1c`'s name and default and `_DAT_10451acc`'s value, both of which live in
+**Unrecovered:** `DAT_10924a1c`'s name and default and `_DAT_10451acc` (= **64.0f**, float32; read 2026-09-21, `rdata-cells.md`)'s value, both of which live in
 uninitialised `.data`; the names of frenzied bits `0x2` and `0x1000`; and what `DAT_10924edc`'s
 `vfunc1` does with the event, which is fired on both entry and exit and so is one event and not two.
 

@@ -230,8 +230,11 @@ Cancel and map teardown must release the claim exactly once.
 
 ### `aiscripted_schedule`
 
-The corpus contains 13 `aiscripted_schedule` entities. Unlike a scripted sequence, this entity
-pushes an AI policy and goal rather than claiming the body for one exact animation.
+The corpus contains **30** `aiscripted_schedule` entities on nine maps (re-counted 2026-09-21 over
+all 108 V2 entity units; the 13 below was an earlier, partial export — the table and the counts
+that follow it are kept as written and superseded by "The modes, settled" further down). Unlike a
+scripted sequence, this entity pushes an AI policy and goal rather than claiming the body for one
+exact animation.
 
 | Map/use | Mode | Force state | Goal |
 |---|---:|---:|---|
@@ -264,17 +267,66 @@ Recovered schedule modes are:
 - mode 3 assigns the goal entity as enemy, copies its target position, and injects native
   condition `0x54`;
 - modes 4 and 5 call variants of scheduled follow-path;
-- the move/follow variants use internal schedule IDs 9 or 19, while a special NPC-type branch uses
-  `0x22`.
+- ~~the move/follow variants use internal schedule IDs 9 or 19, while a special NPC-type branch
+  uses `0x22`~~ — wrong: 9, `0x13` and `0x22` are ACTIVITIES; see below.
 
-The exact gait or policy label distinguishing 1 from 2 and 4 from 5 is not yet proven. A missing
-goal logs and stops. Spawn warns when neither a schedule nor forced state is supplied; spawn flag
+**The modes, settled (2026-09-21).** _A Codex worker's walk
+(`$ELYSIUM_WORK_ROOT/codex/re2/wp17-aiscripted-modes`); the executor re-read by the lead._
+`CCineAISchedule` (datamap `0x10593c9c`, factory `0x101a96b0`) has five keys of its own —
+`m_iszEntity +0x5f54`, `m_flRadius +0x5f68`, `goalent` `m_sGoalEnt +0x608c`, `schedule`
+`m_nSchedule +0x6090`, `forcestate` `m_nForceState +0x6094` — over `CCineNPC`'s, and one input,
+`StartSchedule` (`0x101a9b30`), which names nothing: it wakes the entity's think. There is NO
+`interruptability` key, no grab-all and no radius search in this binary: `m_flRadius` is parsed
+and has no reader; the target is `m_iszEntity` resolved by NAME at `Activate 0x101a8de0`
+(`FindEntityByName 0x100f7770`, case-insensitive, trailing `*` allowed), taking each match that
+is an NPC; `goalent` resolves the same way, `!player` through the alias table.
+
+The executor `0x101a98c0`, in order: resolve `goalent` — none → log "Can't find goal entity %s /
+Can't execute script %s" (`0x1059528c`) and RETURN BEFORE the force state is applied; apply
+`forcestate` (`SetState 0x1026e340`); then by `schedule`:
+
+| `schedule` | Call | Installed schedule | Goal | Activity |
+|---:|---|---|---|---|
+| 1 | `ScheduledMoveToGoalEntity 0x102800c0` | base `2` `IDLE_WALK` | type 4, the goal's position | `ACT_WALK 9` |
+| 2 | the same | the same | the same | `ACT_RUN 0x13` |
+| 3 | `SetEnemy(goal)`; `UpdateEnemyMemory(goal, goal abs origin)` (slot 544); `SetCondition(NEW_ENEMY 0x54)` | none | — | — |
+| 4 | `ScheduledFollowPath 0x102801e0` | base `2` `IDLE_WALK` | type 3, the goal-entity chain | `ACT_WALK 9` |
+| 5 | the same | the same | the same | `ACT_RUN 0x13` |
+
+**So 1 vs 2 and 4 vs 5 are walk vs run and nothing else**: the same program, the same goal, the
+activity word of the goal record. For an NPC whose `Classify()` (slot `+0x178`) is 5 or 6 the
+activity becomes `ACT_FLY 0x22`. The one program is the base text `0x10607ec8`: `IDLE_WALK` =
+`TASK_WALK_PATH 9999; TASK_WAIT_FOR_MOVEMENT 0; TASK_WAIT_PVS 0`, interrupts `NEW_ENEMY
+LIGHT_DAMAGE HEAVY_DAMAGE SMELL PROVOKED HEAR_COMBAT HEAR_BULLET_IMPACT` — that list IS the
+entity's interruptibility. (`SCRIPTED_WALK` / `SCRIPTED_RUN`, `0x10605848` / `0x10605648`, belong
+to the scripted SEQUENCE and are not selected here.) A refused route logs
+(`0x10595230` / `0x105951d8`) unless spawnflag `0x800`; spawnflag `0x20` is the inherited
+`m_interruptable (+0x5f90)`, and when it is CLEAR the dispatch `0x101a9790` calls `0x1026d130` on
+the target — drop its enemy, disconnect it from its squad — before the order. The type-3 chain is
+`navigation-jump-links.md` § "The goal types, their issuers and the goal record": `m_pGoalEnt
+(+0x5de8)`, then `GetNextTarget` (`0x100a1d20`, the ordinary `target` key, no classname test) up
+to `0x80` entities; a null next target ENDS the chain successfully.
+
+Shipped, by mode: **1 × 5** (`hw_hub_1` two, `sm_beachhouse_1` two, `sm_hub_1`
+`blue_blood_to_alley`), **2 × 18** (`sm_beachhouse_1` four, `sm_medical_1` three, `sm_warehouse_1`
+three at `!player`, `sp_soc_1` seven, `la_bradbury_3` one), **3 × 5** (`sm_diner_1` four at
+`!player`, `la_bradbury_3` one whose goal `plank_support_1` does not resolve), **4 × 1**
+(`sm_apartment_1` `mercurio_turn_around`, whose goal is the entity ITSELF with no `target`: a
+one-node chain to where it stands), **5 × 1** (`sm_medical_1` `guard_to_cs`, whose goal
+`cs_target` does not exist — the log-and-stop case, shipped). `sp_soc_1` `h_hunter_2` has a blank
+goal; two `sp_soc_1` rows aim at a `trigger_changelevel` and four at an `intersting_place`. No
+row authors `interruptability`.
+
+A missing goal logs and stops. Spawn warns when neither a schedule nor forced state is supplied; spawn flag
 `0x800` suppresses the route-failure warning.
 
 ### Direct schedule changes
 
-`ChangeSchedule` and `StartSchedule` name native schedules explicitly. They are policy-level
-commands: the named schedule still executes normal tasks, failures, interrupts, motor work, and
+**Corrected 2026-09-21: only `ChangeSchedule` names a schedule.** It is the NPC's
+`InputChangeSchedule 0x102c33f0` — resolve the name (`0x102c47e0`, `SCHED_` prefixed when absent,
+global → local), write `m_iForcedSchedule (+0x65c8)`, set `CHOOSE_NEW_SCHEDULE`. `StartSchedule`
+is the `aiscripted_schedule` ENTITY's input above and carries no schedule name. `ChangeSchedule`
+is a policy-level command: the named schedule still executes normal tasks, failures, interrupts, motor work, and
 activity translation. `BeginSequence`, by contrast, establishes sequence ownership. A rebuild
 needs distinct interfaces for these operations so cancellation and save/restore preserve the
 correct owner.

@@ -288,8 +288,8 @@ whisper queued while the player handle is dead is consumed and lost. `0x10182c40
 into the HUD's global whisper buffer, points the player's `+0x1ca4` at it, sets the display deadline
 `+0x1ca8` to `curtime - k` plus either the named sound's duration (`IEngineSound` slot 12, only when
 the player has a live dialogue partner and the sound name is non-empty) or a fixed fallback, and
-raises bit 0 of `+0x1cac`. **Unrecovered:** the two float constants `_DAT_10449270` and
-`_DAT_10471720`, and therefore how long a whisper with no sound stays up.
+raises bit 0 of `+0x1cac`. **Unrecovered:** the two float constants `_DAT_10449270` (= **0.5**, float64; read 2026-09-21, `rdata-cells.md`) and
+`_DAT_10471720` (= **0.6**, float64; read 2026-09-21, `rdata-cells.md`), and therefore how long a whisper with no sound stays up.
 
 `CAI_Hint::vfunc130` (`0x102d3ec0`, 108 bytes) is the hint NODE's reaction to an AI sound, not the
 NPC's. After the `CAISound` base handler (`0x100aa5a0`) it resolves the hint's owning node
@@ -937,8 +937,8 @@ is `_DAT_104454c4`, the shared `0.0f`, and the caller has already zeroed `D.z`, 
 carrying a Z term is a 2D distance. Compare `CNPC_VVampireBoss::DistToSegment`, which its jump-path
 caller uses and which DOES clamp.
 
-**Unrecovered:** the value of `_DAT_104ada34` (two referrers, both `CheckJumpPathToHintNode`); the
-width of `_DAT_104ce8c0`, `DistToSegment`'s degenerate floor (its ANSWER is recovered); what vtable
+**Unrecovered:** the value of `_DAT_104ada34` (= **100.0f**, float32; read 2026-09-21, `rdata-cells.md`) (two referrers, both `CheckJumpPathToHintNode`); the
+width of `_DAT_104ce8c0` (= **9.999999747e-6f**, float32; read 2026-09-21, `rdata-cells.md`), `DistToSegment`'s degenerate floor (its ANSWER is recovered); what vtable
 slot `+0x370` (220) returns; and what `CNPC_VChangBros::GetSector`'s sector 4 is.
 
 ## `PlayHintIdleActivity` `0x102aaa60` and the five hint-node activity lookups
@@ -1008,7 +1008,7 @@ neither 1 nor 3, and otherwise finishes the task outright. The body ends by rele
 zero cache it resolves the patrol node's interest record (`0x1029f730`), looks the record's `+0x468`
 name up by name, and stores that entity's own `+0xb0` — not the entity.
 
-**Unrecovered:** `_DAT_104454d0`, the OUTOF-phase wait `0x102aa210` adds; `_DAT_1044c3a8`, the
+**Unrecovered:** `_DAT_104454d0` (= **0.5f**, float32; read 2026-09-21, `rdata-cells.md`), the OUTOF-phase wait `0x102aa210` adds; `_DAT_1044c3a8` (= **180.0f**, float32; read 2026-09-21, `rdata-cells.md`), the
 half-turn constant the match-orientation arm adds or subtracts; which of the two yaw sources a given
 caller of `0x102a9f40` reaches (the decompiler's branch keys on a register the prologue never loads);
 and what `+0xb0` on the entity `0x1029f780` resolves is.
@@ -2541,7 +2541,7 @@ it offsets it along the hint's facing rotated by `+-_DAT_1049949c` — **plus wh
 CLEAR, minus when it is set** — scaled by slot 214's `+0x04` field times `_DAT_1049ae90` (the
 caller's second argument set) or `_DAT_1049ae8c` (clear).
 
-**Unrecovered:** the three `.rdata` cells `_DAT_1049949c`, `_DAT_1049ae8c` and `_DAT_1049ae90`; what
+**Unrecovered:** the three `.rdata` cells `_DAT_1049949c` (= **45.0f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_1049ae8c` (= **1.3999999762f**, float32; read 2026-09-21, `rdata-cells.md`) and `_DAT_1049ae90` (= **1.2000000477f**, float32; read 2026-09-21, `rdata-cells.md`); what
 slot 214 answers; and what the caller's second argument means beyond selecting between the two
 scales.
 
@@ -2693,7 +2693,7 @@ between that heading and the owner's own yaw (`UTIL_AngleDiff`, `0x1013d580`) is
 either to the owning NPC's `m_flDesiredMoveYaw` (`+0x63ec`) when `owner->field_0x98` resolves, or
 through `0x102e27d0` as the `"move_yaw"` pose parameter when it does not.
 
-**Unrecovered:** `_DAT_10450564`, `_DAT_10450aa4`, `_DAT_1044e658` and `_DAT_1044ffdc`; what slots
+**Unrecovered:** `_DAT_10450564` (= **100.0f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_10450aa4` (= **0.0099999998f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`) and `_DAT_1044ffdc` (= **0.0054931640625f**, float32; read 2026-09-21, `rdata-cells.md`); what slots
 220, 208 (`+0x340`), 62 (`+0xf8`) and 526 (`+0x838`) are; and the facing-queue entry's own layout
 beyond a target and a weight.
 
@@ -2912,7 +2912,7 @@ is set. Then, unconditionally and outside both flags:
 `ThinkSet(controller, 0x101c0b10, 0.0)`, `controller->m_flNextThink = curtime + _DAT_1044e658`, and
 `m_hControllerNPC = -1`. Retail arms the one-shot think on the entity it is *letting go of*.
 
-**Unrecovered:** `_DAT_1044e658`, and what `0x101c0b10` does when that think fires.
+**Unrecovered:** `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`), and what `0x101c0b10` does when that think fires.
 
 ### Autoaim — `0x10176520`, `0x10176930`
 
@@ -2967,7 +2967,7 @@ missing reserved slot and not a different order, and retail's world edict fails 
 screen in any case.
 
 **Unrecovered:** four things. The caller's `flDelta` (it arrives in the caller's frame); the score's
-three weights (`_DAT_10449198`, `_DAT_10449280`, `_DAT_10449270`, all shared `.rdata` words with no
+three weights (`_DAT_10449198`, `_DAT_10449280` (= **1.0**, float64; read 2026-09-21, `rdata-cells.md`), `_DAT_10449270` (= **0.5**, float64; read 2026-09-21, `rdata-cells.md`), all shared `.rdata` words with no
 value in the corpus) and the frame-local divisor beside them, of which only the SHAPE is recovered —
 a distance term times an off-axis term, smaller is better; `DAT_1070ba3c`, the branch selector, which
 sits exactly where the SDK's sticky-aim test `m_fOldTargetTime + 2.0 < curtime` does; and the two
@@ -3026,7 +3026,7 @@ arithmetic with — it collides with neither the low-byte truncation nor the bit
 
 **Unrecovered:** `candidate+0x19c`'s `0x40` bit; `0x100b5190`; the three perception folds
 (`0x1029c970`, `0x1029c9f0`, `0x1029ca30`); the integer `0x101e9000(0x10739d08)` scales by; and
-`_DAT_10450aa4`.
+`_DAT_10450aa4` (= **0.0099999998f**, float32; read 2026-09-21, `rdata-cells.md`).
 
 ### The player-animation arm — `0x10182c40`
 
@@ -3040,8 +3040,8 @@ non-empty string — or the fallback `_DAT_10471720`. Then `+0x1cac |= 1`.
 
 **Unrecovered:** `+0x1ca4`/`+0x1ca8`/`+0x1cac`'s retail names (the datamap covers
 `m_bPlayerAnimCyclePlaying` at `+0x1cb0` and `m_aLastplayerAnim` at `+0x1cb4` and nothing below
-them); `_DAT_10449270`, the lead-in subtracted from curtime, which is the same shared word the
-autoaim score multiplies by; and `_DAT_10471720`, the no-sound fallback duration, which this file
+them); `_DAT_10449270` (= **0.5**, float64; read 2026-09-21, `rdata-cells.md`), the lead-in subtracted from curtime, which is the same shared word the
+autoaim score multiplies by; and `_DAT_10471720` (= **0.6**, float64; read 2026-09-21, `rdata-cells.md`), the no-sound fallback duration, which this file
 already asks the same question of elsewhere.
 
 ### `CCineNPC`'s three — `0x101a7540`, `0x101a8930`, `0x101a8840`
@@ -4214,7 +4214,7 @@ the two registered entries falls out of the loop into `CBaseAnimating::SetPosePa
 `0x10091fe0`), the ordinary non-looping setter, which resolves the model, refuses a negative index,
 and writes `m_flPoseParameter[index]` through `thunk_FUN_100c43e0`.
 
-**Unrecovered:** the value of `_DAT_10449270` (the SDK wrap fraction) and the retail names of the
+**Unrecovered:** the value of `_DAT_10449270` (= **0.5**, float64; read 2026-09-21, `rdata-cells.md`) (the SDK wrap fraction) and the retail names of the
 two registry entries. Neither is reachable from this runtime, which stands no `studiohdr_t` and
 therefore no pose-parameter descriptors, so every call takes the fall-through — which is retail's own
 answer for an index the registry does not carry.

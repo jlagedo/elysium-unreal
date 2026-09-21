@@ -82,6 +82,17 @@ Arm 4 is not "accept the player at any angle". `+0x98` is the Troika self-pointe
 (`CAI_BaseNPCTroika` ctor `0x1028d3bc` `MOV [ESI+0x98], ESI`; `animation_and_movers.md`); a
 player does not write it, so a Look at the player cannot take the arm. The arm is: a follower
 of the closest player, looking at an NPC whose `m_bInPlayerLOS` is set, skip the cone.
+**`m_bInPlayerLOS (+0x6279)`'s producer, closed 2026-09-21** (`wp13-small-code-reads`):
+`CAI_BaseNPCTroika::SetPlayerLOS 0x10291610`. State-flag bit `+0x5b64 & 0x8` or frenzy bit `+0x5b84
+& 0x8` forces PVS and LOS true. Otherwise it refreshes only when `curtime >= +0x6284` and re-arms
+that **2.0 s** out (`0x10452dc4`): no valid `m_hClosestPlayer (+0x628c)` → true; outside the
+player's PVS (`0x101d1a90`) → false, no trace; in PVS within **512.0** (`0x10483aac`) → true, no
+trace; beyond that one line from the NPC's origin raised by its collision max-Z to the player's
+eye (slot `+0x304`), mask `0x4091` — clear → true and stamp `m_flLastInPlayerLOS (+0x6280)`, else
+false. On EVERY call, cadence-skipped ones included, LOS is held true while PVS is true and
+`curtime − +0x6280 < 8.0` (`0x1045597c`). No cone test. `NPCInit` (`0x1029a0b0`, and
+`CNPC_VCamera`'s) seed both true. Readers: the three think-cadence bodies `0x10290720`,
+`0x10290b60`, `0x10291230`, which stretch their intervals on it, and the cone override above.
 `thug_1` has no `follower_boss`. `+0x9c` is the CC self-pointer (`PrecacheSoundTable`
 `0x1009d460` calls `IsMale` on it; choreo `CAMERAMOVE` uses `tgtEnt+0x9c` the same way).
 `+0xa8` is the player self-pointer, the existing "is player" test. `OnLooked` (`0x1026a2c0`)
@@ -319,7 +330,7 @@ used as a substitute.
 - `FinViewCone3dNew` disassembly `0x103265af` rejects a negative front-plane dot before the
   apex offset; `0x1032669c` multiplies the normalized viewing cosine by the **target scalar**,
   then compares against the observer's FOV. A smaller scalar narrows the cone. The unnamed
-  `0x10937a8c` ConVar's default remains unrecovered; `ViewConeBodyOffsetCm` is its explicit
+  `0x10937a8c` ConVar is `debug_viewcone_back_dist`, default **40** (named 2026-09-21, `convars.md`); `ViewConeBodyOffsetCm` is its explicit
   zero-answer seam, not a claim that retail's default is zero.
 - `FVisible` `0x102b4630` calls `HasStatusEffect(Dominate_BrainWipe)` on **this observer**.
   `0x10146b20(target, observer)` returns permission to perceive: no active cloak, observer
@@ -526,7 +537,7 @@ result's `GetRefEHandle()` lands in `m_hDetectedAttacker` (`+0x65c0`), or `0xfff
 `m_flDetectedAttackTime` (`+0x65c4`) is then stamped with `curtime + _DAT_10454110` on **both** arms,
 so a refused notice still opens the window.
 
-**Unrecovered:** what a type-3 entity is. `_DAT_10454110` is **5.0f** — it is at `.rdata` file
+**Unrecovered:** what a type-3 entity is. `_DAT_10454110` (= **5.0f**, float32; read 2026-09-21, `rdata-cells.md`) is **5.0f** — it is at `.rdata` file
 offset `0x454110`, not past `.data`'s raw size, and story 29c-1 family Senses read it there while
 porting `OnDoorBlocked` (`0x1027de00`), which reads the same cell.
 
@@ -730,7 +741,7 @@ dispatches. Seven arms, in order:
    door-blocked reason, beside `1` (fully open, `0x1027dd10`), `4` (`0x1027dfb0`) and `8`
    (`OnScheduleChange`).
 3. `door+0x644 & 0x10` skips the whole retry block. The word's retail name is **unrecovered**.
-4. `door+0x644 & 0x40` selects `_DAT_10454110` = **5.0 s** over `_DAT_1044eb0c` = **20.0 s**. Under
+4. `door+0x644 & 0x40` selects `_DAT_10454110` (= **5.0f**, float32; read 2026-09-21, `rdata-cells.md`) = **5.0 s** over `_DAT_1044eb0c` = **20.0 s**. Under
    the navigator guard `0x102ee6a0` (a network with a node list), `0x102f1fa0` stamps the door's nav
    node unreachable for that long; unconditionally, `0x100f0e30` MAX-writes `curtime + seconds` into
    `door+0x640`.
@@ -796,7 +807,7 @@ fall-through becomes terminal. This is the wrapper's only write.
 
 **4.** `CAI_BaseNPC::MaintainEyeDirection` (`0x1026b810`), unchanged — the selection cascade itself.
 
-**Unrecovered:** the value of `_DAT_10483aac`, the image's single "the player is close enough to
+**Unrecovered:** the value of `_DAT_10483aac` (= **512.0f**, float32; read 2026-09-21, `rdata-cells.md`), the image's single "the player is close enough to
 matter" radius. It has eighteen readers (`SetPlayerLOS` `0x10291610`, `SelectSchedule` `0x102af660`,
 `CNPC_Crow::vfunc481` `0x10357680`, `CNPC_VPedestrian::vfunc461` `0x103a2e30` and this one among
 them) and no writer, and no read of the image has settled its value;
@@ -1402,7 +1413,7 @@ C misses, so the slot returns a **unit** direction.
 `CNPC_VMingXiao::GetShootEnemyDir` (`0x10395d00`) is the same body with `_DAT_1044eb0c` (**20.0**)
 added to the aim point's Z before the subtraction.
 
-**Unrecovered:** `_DAT_104994e0`, and the `CVStatList_t` join by retail list **type** that stat
+**Unrecovered:** `_DAT_104994e0` (= **-30.0f**, float32; read 2026-09-21, `rdata-cells.md`), and the `CVStatList_t` join by retail list **type** that stat
 `0x0b` is read through; the port's stat therefore reads not-5 and the Z bonus is not applied.
 
 ### `AimGun` `0x1026b4f0`
@@ -1478,7 +1489,7 @@ self filter `0x101d3190`, optionally draws it under a cvar, and on a clean trace
 clear **and** fraction equal to `_DAT_10449280` = **1.0**) calls `0x10273070` — which restores the
 normal hull from the navigator, clears `+0x5f2d` and re-runs `0x10272f40` when `+0x36c` stands.
 
-**Unrecovered:** `_DAT_104492e0`; and the whole hull swap, which is `CAI_Navigator`'s and has no
+**Unrecovered:** `_DAT_104492e0` (= **1e-6**, float64; read 2026-09-21, `rdata-cells.md`); and the whole hull swap, which is `CAI_Navigator`'s and has no
 port producer, so both latches ship clear and the body does nothing — which is retail's own answer
 for a body whose hull was never shrunk.
 
@@ -1595,7 +1606,7 @@ does nothing.
 
 Every exit but the teleport ends in `SetHullSizeSmall(1)`.
 
-**Unrecovered:** `_DAT_10449154`; and the hull sweeps, which are the navigator's — the port's probes
+**Unrecovered:** `_DAT_10449154` (= **0.4499999881f**, float32; read 2026-09-21, `rdata-cells.md`); and the hull sweeps, which are the navigator's — the port's probes
 answer CLEAR, retail's own not-stuck answer.
 
 ### `GetHintTargetGroundpoint` `0x103d68d0`
@@ -1627,7 +1638,7 @@ alike.** The final compare against `_DAT_10450568` (**360.0**) is a single-step 
 selection: `103d7347` subtracts 360.0 when the yaw is above it, and `103d736d`/`103d737a` add 360.0
 when it is below `_DAT_104454c4` (**0.0**).
 
-**Unrecovered:** `_DAT_10455050`, an `.rdata` cell this body is the only reader of; the port applies
+**Unrecovered:** `_DAT_10455050` (= **90.0f**, float32; read 2026-09-21, `rdata-cells.md`), an `.rdata` cell this body is the only reader of; the port applies
 the two adjust arms as a zero offset and names it rather than guessing a number.
 
 ### `InitializeHintData` `0x103d7710`

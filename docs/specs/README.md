@@ -28,3 +28,6 @@ shape. Renumbered 2026-09-12; the last column translates citations that predate 
 | 0019 | npc-kernel-rework | new 2026-09-15: the strict verdict, the data seams, the class tree, the reach cut |
 
 Retired 2026-09-12: 0000 play-tier — no beat-script driver is built; acceptance is played.
+
+**What is next** across 0019, 0018 and 0002: [`TRACKER.md`](TRACKER.md) — one serial sequence, first unticked box.
+**What still needs reverse engineering** for the same three: [`RE-BACKLOG.md`](RE-BACKLOG.md).

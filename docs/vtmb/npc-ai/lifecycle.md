@@ -670,8 +670,8 @@ row, `m_iGroupID` `1..32` folds to `1 << (id-1)` and anything else to `-1`.
 `JMP [[this]+0x1a0]` — **the spawn's last act is its precache**, which is the reverse of every other
 class.
 
-**Unrecovered:** `_DAT_10449280` and `_DAT_10449e10` (the cine's two delays), `_DAT_1044e658` (the
-standoff goal's), `_DAT_104454d0` and `_DAT_1049b998` (the hint's angle scale and bias). None has a
+**Unrecovered:** `_DAT_10449280` (= **1.0**, float64; read 2026-09-21, `rdata-cells.md`) and `_DAT_10449e10` (= **1,000,000.0**, float64; read 2026-09-21, `rdata-cells.md`) (the cine's two delays), `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`) (the
+standoff goal's), `_DAT_104454d0` (= **0.5f**, float32; read 2026-09-21, `rdata-cells.md`) and `_DAT_1049b998` (= **43.0f**, float32; read 2026-09-21, `rdata-cells.md`) (the hint's angle scale and bias). None has a
 reader in the corpus that pins its value.
 
 ## `CAI_InterestingPlace`'s spawn and restore — `0x102d9c20`, `0x102d9dd0`, `0x102dbbc0` (2026-09-13)
@@ -764,7 +764,7 @@ passing `FVisible` and `ValidHeadTarget`, and otherwise scores each candidate ag
 `RandomInt(1,100)` scaled ×10 for a live entity and ×100 for one that answers slot 152. The chosen
 target is handed to `AddLookTarget` (`+0x860`).
 
-**Unrecovered / seams:** `_DAT_10497cb0`, the goal-distance floor (two readers, both in this body).
+**Unrecovered / seams:** `_DAT_10497cb0` (= **96.0**, float64; read 2026-09-21, `rdata-cells.md`), the goal-distance floor (two readers, both in this body).
 There is no entity-in-radius query on this substrate's NPC leaf, no navigator goal beyond the feet
 destination of the move in flight, and no head-aim cone, so the scan arm answers nothing and
 `ValidHeadTarget` answers retail's accepting arm.
@@ -808,7 +808,7 @@ answers `0x25`, or latches `+0x54` when `+0x64` is older than `_DAT_10497530`. C
 `0x51` each **suppress** the `0x60` arm, which otherwise answers `0x21` — unless `0x48` also stands
 and `RandomInt(0,99) > 0x31`, which falls through to the base.
 
-**Unrecovered:** `_DAT_10497530`, the elapsed-seconds threshold both the re-roll and the blocked
+**Unrecovered:** `_DAT_10497530` (= **-0.001**, float64; read 2026-09-21, `rdata-cells.md`), the elapsed-seconds threshold both the re-roll and the blocked
 latch compare against — two readers, both in this body. `CAI_StandoffBehavior` has no counterpart in
 this substrate at all, so the rule is ported pure over the behaviour's own datamap words.
 
@@ -1489,7 +1489,7 @@ the same order and the two post-archive fix-ups.
 The no-schedule arm writes `name[0] = 0` and a literal zero CRC — and CRC32 over zero bytes is
 `~0xffffffff == 0`, so the two arms agree on the checksum and differ only in the name.
 
-**Unrecovered:** `DAT_10496f58`'s 1 KB of table bytes. "This is the standard reflected CRC-32 table"
+**Unrecovered:** `DAT_10496f58` (= the standard reflected CRC-32 table, first 16 entries verified; read 2026-09-21, `rdata-cells.md`)'s 1 KB of table bytes. "This is the standard reflected CRC-32 table"
 is an inference from the loop's shape, not a read; a different polynomial would change the
 checksum's value and nothing else about the body.
 

@@ -191,7 +191,24 @@ enemy assignment can all change the effective relation or behavior after spawn.
 ### Templates and inheritance
 
 The 36 `vdata/system/npctemplate*.txt` files declare 150 templates, with 64 non-empty parent links.
-One declaration is duplicated in the installed data. Forty-nine template names are referenced by
+One declaration is duplicated in the installed data. **Which 36 (measured 2026-09-21): the
+patch-first RESOLVED set** — 29 loose files under `Unofficial_Patch/vdata/system/` (130
+declarations, all distinct) shadowing their namesakes in `Vampire/pack101.vpk`, plus the 7 VPK
+files the patch does not shadow (`npctemplate003`, `006`, `010`, `019`, `021`, `_cabbie`, `_igor`:
+20 declarations, 19 distinct — `Test_Mle5_Def1_Sok5` is declared twice in `006`, identically).
+`Vampire/vdata/` does not exist loose; retail alone is 36 files / 148 declarations. The deployed
+`Content/ElysiumCorpus/vdata/system/` holds exactly this set (36 files, 150 `TemplateName` rows).
+**The loader** `0x101d58b0("NPCTemplate")` (from `0x101d59f0`, under the data-cache pass
+`0x10203990`) enumerates the wildcard `vdata\system\NPCTemplate*.txt` (`"%s%s*.txt"`
+`0x105a0f74`) through the filesystem's find-first / find-next, so it sees the mounted view: the
+search order is the `-game` directory loose, then `Vampire` loose, then its packs from the highest
+number down, and the first path holding a name wins — a loose file and its VPK namesake are never
+both parsed. Each `ClanData` block is appended (`0x101d5530`) with no duplicate check, and lookup
+(`0x101d5bd0`, used for `stattemplate` by `0x10206c30` and for `ParentTemplateName` by
+`0x101d3f10`) returns the FIRST case-insensitive match, so an earlier declaration shadows a later
+one; the only error is a parent not yet loaded when its child is parsed. None of the 19 VPK-only
+names (`CivilianGeneric`, `CivilianTest1/2`, the twelve `Test_Mle*`, `Zhao`, `Cabbie`,
+`RussianMafia_Igor`, `…_IgorCronies`) is named by any of the 400 shipped maker rows' `stattemplate`. Forty-nine template names are referenced by
 the current map rows. Common references include `NPCGeneric` (108), `Officer` (64), `Civilian`
 (30), `Rat` (24), `WarehouseThug` (24), `VampireGeneric` (23), `Bum` (16), and
 `VampireCritical` (15). `VampireGeneric` is itself the common parent of 24 templates.

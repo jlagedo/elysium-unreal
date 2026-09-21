@@ -165,10 +165,15 @@ green, and `coverage.md` shows the change.
   global namespaces and the base class's spaces as parents, registers its names against its
   numbers through `0x102ea130`, then runs the parser `0x1030d850` over its texts, breaking on
   the first failure into the byte slot 452 `LoadedSchedules` returns. The parser resolves task
-  names, `SCHEDULE:` targets and `COND_*` through the class's spaces, `NPCFlag:` through
-  `0x1030cbd0`, `MiscFlag:` and `MEMORY:` through the name↔mask tables `0x1033cb00` /
-  `0x1033cb50`, `ACTIVITY:` through the activity list, and `Flags` through the two-token table
-  `0x1030d7e0` (`NONE`, `DELAY_INTERRUPTS`). It fills a `CAI_Schedule`: inverted interrupt mask
+  names and `Schedule:` / `Task:` operands through the global spaces and then the class's local
+  ones; **`COND_*` through the GLOBAL condition space only — the masks are in global ordinals**;
+  and an operand through one of **seventeen prefixes** (`Activity`, `Task`, `Schedule`, `State`,
+  `Memory`, `Path`, `Goal`, `HintFlags`, `NPCFlag`, `MiscFlag`, `Model`, `SOUND`, `EXPRESSION`,
+  `STO`, `DIST`, `MXTPHASE`, `TOMODE`), the words `TRUE` / `ON` / `FALSE` / `OFF`, or `_atof`;
+  `Flags` through the two-token table `0x1030d7e0` (`NONE`, `DELAY_INTERRUPTS`). Walked whole
+  2026-09-21: `schedule-kernel.md` § "The schedule-text parser `0x1030d850`, walked" — the
+  grammar, every resolver table, the failure table. (`0x1033cb00` / `0x1033cb50` are NOT the
+  parser's: `Memory:` is `0x1030c800`, `MiscFlag:` is `0x1030d390` and stores an index.) It fills a `CAI_Schedule`: inverted interrupt mask
   `+0x00`, flags `+0x18`, id `+0x1c`, task array and count `+0x20` / `+0x24` (cap 64), interrupt
   mask `+0x28`, name `+0x40`. Ids are per class: `0x156` names six different schedules in six
   tables. The fourth space, squad slots, sits `0x18` past the third.
@@ -187,8 +192,9 @@ green, and `coverage.md` shows the change.
   under `Content/ElysiumCorpus/ai/schedules/<class>/` the way the vdata lane deploys
   `vdata/**` — the runtime reads the deployed corpus, never the GLB (0018 § Scope). Decided
   2026-09-15 by the owner: GLB unit as the export-stage product, deployed to the corpus.
-  Job, runtime: a port of the parser and its argument grammar (bare number, `SCHEDULE:`,
-  `ACTIVITY:`, `NPCFlag:`, `MEMORY:`, `MiscFlag:`, `Flags`), `CAI_LocalIdSpace` with parents,
+  Job, runtime: a port of the parser and its argument grammar (the seventeen prefixes, the four
+  boolean words, the bare number, `!`-inverted interrupts, `Flags` — the oracle section is the
+  contract), `CAI_LocalIdSpace` with parents,
   loading from the deployed corpus (`CorpusRoot()`) at class init in the tree's order, malformed text a load
   error as retail's is;
   `EElysiumTask` becomes a name table the parser resolves; the runner keeps "unknown task fails
@@ -200,9 +206,17 @@ green, and `coverage.md` shows the change.
   `MaintainSchedule`) stays.
   Provides: every program to 0002, loaded; the coverage meter. Consumes: 1, 2.
   Oracle: `schedule-kernel.md` § "The schedule host and the task surface, walked",
-  `conditions-and-states.md` § "`DELAY_INTERRUPTS`, decoded". Unrecovered: the parser's
-  argument grammar beyond the six forms seen (a read of `0x1030d850`'s body before the port);
-  the registration call-site shape in each of the 20 owners' init bodies.
+  `conditions-and-states.md` § "`DELAY_INTERRUPTS`, decoded". Unrecovered: nothing. Both reads
+  this story owed landed 2026-09-21 in `schedule-kernel.md`: § "The schedule-text parser
+  `0x1030d850`, walked" (the grammar) and § "The schedule owners and their registrations" (the
+  call-site recipe and the per-owner table). **Three numbers in this story's text change with
+  them.** There are not 20 owners but **56 init bodies, 48 of them feeding texts** (20 is the
+  count of classes registering class-local tasks) — so "a V2 unit per owning class" is 48 units,
+  or 56 if the empty eight are kept for their parent links; the base class feeds **64** texts
+  from a static pointer table and Troika **274**, leaving 353 to the species; and four class
+  pairs share one space through a common slot-580 getter, so the unit key is the SPACE, not the
+  classname. Names and ids are literal immediates ahead of each append call: the extractor reads
+  operands and never executes a body.
   Size: L. Effort: Opus / high.
 
 - [ ] **4. The tunables table.**

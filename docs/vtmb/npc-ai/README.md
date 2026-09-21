@@ -16,6 +16,8 @@ has been *walked*. `../npc-kernel/index.md` maps an address to the section that 
 | [`social.md`](./social.md) | Relationships, enemies, squads and reactions |
 | [`authored-control.md`](./authored-control.md) | Authored control: outputs, scripts, keyfields |
 | [`rebuild.md`](./rebuild.md) | What the rebuild needs |
+| [`convars.md`](./convars.md) | Every NPC ConVar the other files read: name, shipped default, readers (2026-09-21) |
+| [`rdata-cells.md`](./rdata-cells.md) | The `.rdata` constants once listed as unread: type by instruction, value (2026-09-21) |
 | [`shape.md`](./shape.md) | The object's shape: the layout past the datamaps, the vtable tail, retail signatures |
 
 Conventions for new sections: a walked retail function is a `###` whose header carries
@@ -45,8 +47,8 @@ fields, relationship token and priority decoding, the AI update loop, enemy elig
 ranking, schedule-gated enemy replacement, the state-switch cases, ordinary humanoid melee/ranged
 selection, damage-condition generation, death admission, schedule/task registrations, and the
 `aiscripted_schedule` execution modes. Confidence is lower for the exact meaning of several
-numeric map keyfields, the human-readable distinction between the two move and two follow modes of
-`aiscripted_schedule`, class-specific incapacitation policy, and frame-exact presentation during a
+numeric map keyfields, class-specific incapacitation policy (the two move and two follow modes of
+`aiscripted_schedule` were settled 2026-09-21: walk vs run, `authored-control.md`), and frame-exact presentation during a
 live aggression incident. Those open points need controlled retail capture rather than naming
 inference.
 

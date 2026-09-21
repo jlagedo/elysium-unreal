@@ -1658,8 +1658,11 @@ rounding points around scalar damage, remain open.
 3. Record attack position/attacker and update enemy memory.
 4. Ask the class light/heavy predicates to set `LIGHT_DAMAGE` (`0x4c`) and `HEAVY_DAMAGE`
    (`0x4d`).
-5. Accumulate damage for one second; a sum over 15 percent of Source max health sets
-   `REPEATED_DAMAGE` (`0x4e`), otherwise an expired window is reset.
+5. Accumulate damage for one second; a sum over **30 percent** of Source max health sets
+   `REPEATED_DAMAGE` (`0x4e`), otherwise an expired window is reset. (Corrected 2026-09-21 from
+   "15 percent": the multiplier is the double `0.3` at `0x1047b868`, `FMUL` at `0x10266307`, strict
+   `<`; the light / heavy predicates of step 4 are `damage > 0` and `damage > 20.0` —
+   `npc-ai/conditions-and-states.md` § "The port's NPC-core guesses, settled".)
 6. Emit the NPC damage sound/event path.
 
 The Troika NPC override at `0x102beda0` first saves the complete incoming damage packet at

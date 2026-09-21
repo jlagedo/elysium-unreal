@@ -807,9 +807,15 @@ its recovery is written in the oracle section it names.
   **Three corrections to the paragraph above, read off `vampire.dll` 2026-09-21.**
   *(a)* **Goal type 5 exists and this story omits it.** `DoFindPath 0x102f2330`'s switch reads
   `case 4: case 5: case 6: case 9: break;` — type 5 takes no preparation and falls into the route
-  builder `0x102f2060` exactly as 4, 6 and 9 do, so the port needs the arm even though what issues
-  it is not yet recovered. (Type 8's arm is visible in the same switch as the single store
-  `*(goal+1) = 1`, the pedestrian byte.)
+  builder `0x102f2060` exactly as 4, 6 and 9 do. (Type 8's arm is visible in the same switch as the single store
+  `*(goal+1) = 1`, the pedestrian byte.) **Closed 2026-09-21 (`navigation-jump-links.md` § "The goal
+  types, their issuers and the goal record"): type 5 has NO issuer** — none of the 15 functions that
+  reach `SetGoal` builds one and no text names a task that would — so its arm is unobservable; and
+  the two types this story lists bare are named by their issuers: **7 is the best-unknown goal**
+  (`GET_PATH_TO_BESTUNKNOWN 0x79`, six shipped texts; the two-hull tolerance; sets path byte 0)
+  and **9 is the ANIMAL's interesting-place goal** (`CNPC_VAnimal`'s override of task `0xa5`: the
+  same walk as 8 WITHOUT the pedestrian byte, so no roadway pricing). The section also lays out
+  the sixteen-word goal record (`+0x14` is the activity, `+0x24` the flags) and the flag bits.
   *(b)* **The 0.8 s gate is the LOADED-graph case only.** `0x102f6690` sets the network manager's
   first think at `curtime + 0.8` (`_DAT_104491a8`); if the graph is out of date its think
   `0x102f6a50` prints `Node Graph out of Date. Rebuilding...` and re-arms at `curtime + 1.0`
@@ -1036,7 +1042,9 @@ its recovery is written in the oracle section it names.
   not carry them as behaviour. And **7 of the 60 `target_name` rows resolve to nothing**, five of
   them on `sp_tutorial_1` (`sentry1_ip_cigarette`, `sentry2_ip_whistle`, `monk1_ip_pray`,
   `monk1_ip_idle`, `cellar_ip_whistle`) — the witness map's own dangles are the unresolved-name
-  fixture. Still unrecovered: the absent-key default of `+0x46c`, which no shipped row exercises.
+  fixture. The absent-key default of `+0x46c` is **0** (closed 2026-09-21, `programs.md`: the
+  entity allocator is a `calloc` and no constructor writes the word), so an unauthored point never
+  takes its interest; no shipped row exercises it.
   Size: S–M. Effort: Fable / medium.
 
 - [ ] **12. The flying mover.**
@@ -1157,7 +1165,12 @@ its recovery is written in the oracle section it names.
   declarations, all distinct**. `Vampire/vdata/` does not exist as a directory — retail's copies
   are inside a VPK — so 36/150 can only be the patch-first RESOLVED set (loose patch files
   shadowing the VPK, plus the VPK files the patch does not shadow). The lane must state which set
-  it loads and reproduce its own count; a bake that reads only the loose tree is 20 templates
+  it loads and reproduce its own count (**settled 2026-09-21, `population.md` § "Templates and
+  inheritance"**: 36 / 150 IS the patch-first resolved set — 29 loose patch files with 130
+  declarations plus the 7 `pack101.vpk` files the patch does not shadow with 20; the loader is a
+  wildcard find over the MOUNTED view, first search path wins per file, first declaration wins
+  per name; the deployed corpus already holds exactly that set, and no shipped maker names one of
+  the 19 VPK-only templates); a bake that reads only the loose tree is 20 templates
   short. Size: S–M. Effort: Sonnet / medium.
 
 - [ ] **17. Relationship defaults and the player-law bus.**
