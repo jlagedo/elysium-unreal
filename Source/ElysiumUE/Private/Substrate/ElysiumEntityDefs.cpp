@@ -1,6 +1,7 @@
 #include "ElysiumEntityDefs.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMapEntities.h"
 #include "ElysiumMapSubsystem.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -249,9 +250,15 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 }
 
 // --- Verification command ---------------------------------------------------------------
-// `elysium.ents [map]` parses a map's `.ents` off disk and logs a summary. It is a
-// standalone check that the parser round-trips the export before the entity world
-// consumes the defs; it spawns nothing. No arg uses the currently-loaded map.
+// `elysium.ents [map]` loads a map's entity table and logs a summary. It is a standalone check
+// that the table the entity world will consume reads back; it spawns nothing. No arg uses the
+// currently-loaded map.
+//
+// The verb keeps its name and its output. What changed (0018 story 21-3) is where the defs come
+// from: `DA_<map>_Entities`, through the one loader the map load itself uses, rather than
+// `<map>.ents` under the export root -- so the verb now answers for the table the game actually
+// reads. `FElysiumEntityDefs::Parse` survives for `ElysiumEntityIOTests`, which writes and parses
+// a synthetic `.ents` of its own.
 static FString ElysiumResolveEntsMap(UWorld* World, const TArray<FString>& Args)
 {
 	if (Args.Num() >= 1)
@@ -273,7 +280,7 @@ static FString ElysiumResolveEntsMap(UWorld* World, const TArray<FString>& Args)
 
 static FAutoConsoleCommandWithWorldAndArgs GElysiumEntsCmd(
 	TEXT("elysium.ents"),
-	TEXT("elysium.ents [map] — parse <map>.ents and log a summary (defaults to the current map)"),
+	TEXT("elysium.ents [map] — load DA_<map>_Entities and log a summary (defaults to the current map)"),
 	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 	{
 		const FString Map = ElysiumResolveEntsMap(World, Args);
@@ -284,9 +291,11 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumEntsCmd(
 		}
 
 		FElysiumEntityDefs Defs;
-		if (!FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(Map), Defs))
+		if (ElysiumEntityDefSource::Load(Map, Defs) == EElysiumEntityDefSource::None)
 		{
-			UE_LOG(LogElysiumDefs, Warning, TEXT("elysium.ents: no parseable %s.ents"), *Map);
+			UE_LOG(LogElysiumDefs, Warning,
+				TEXT("elysium.ents: no entity table for '%s' (%s); run: uv run elysium bake map --maps %s"),
+				*Map, *FElysiumContentPaths::BakedMapEntities(Map), *Map);
 			return;
 		}
 
@@ -315,6 +324,6 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumEntsCmd(
 		}
 
 		UE_LOG(LogElysiumDefs, Display,
-			TEXT("%s.ents: %d entities (%d brush, %d hulls, %d outputs [%d py-only], %d start_hidden, %d classnames)"),
+			TEXT("%s: %d entities (%d brush, %d hulls, %d outputs [%d py-only], %d start_hidden, %d classnames)"),
 			*Map, Defs.Num(), Brush, Hulls, Outputs, PyOnly, Hidden, Classes.Num());
 	}));

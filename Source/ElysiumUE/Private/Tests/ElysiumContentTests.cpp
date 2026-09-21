@@ -25,6 +25,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumMapEntities.h"
 #include "ElysiumMoveSolve.h"                 // ElysiumMove::StandHeight / U — the +use reach's units
 #include "ElysiumPawn.h"
 #include "ElysiumUseIcons.h"                  // ELYSIUM_USE_CHANNEL
@@ -178,20 +179,18 @@ namespace
 		}
 	};
 
-	// Parse a map's `.ents` if it was exported. Returns false (and logs a skip) when absent.
+	// Load a map's entity table if it is baked. Returns false (and logs a skip) when absent.
+	// 0018 story 21-3: `DA_<map>_Entities` through the production loader, not `<map>.ents` off the
+	// export root.
 	bool SurveyMap(FAutomationTestBase& Test, const TCHAR* Map, FEntsSurvey& Out)
 	{
-		const FString Path = FElysiumContentPaths::MapEnts(Map);
-		if (!IFileManager::Get().FileExists(*Path))
+		const FString AssetPath = FElysiumContentPaths::BakedMapEntities(Map);
+		FElysiumEntityDefs Defs;
+		if (ElysiumEntityDefSource::Load(Map, Defs) == EElysiumEntityDefSource::None)
 		{
 			Test.AddInfo(FString::Printf(
-				TEXT("skipping %s: no exported .ents at %s (run the pipeline to enable this test)"), Map, *Path));
-			return false;
-		}
-
-		FElysiumEntityDefs Defs;
-		if (!Test.TestTrue(FString::Printf(TEXT("%s parses"), Map), FElysiumEntityDefs::Parse(Path, Defs)))
-		{
+				TEXT("skipping %s: no baked entity table at %s ")
+				TEXT("(run: uv run elysium bake map --maps %s)"), Map, *AssetPath, Map));
 			return false;
 		}
 

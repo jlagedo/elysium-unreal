@@ -1331,6 +1331,11 @@ R6.5 (`seam_migration.md` → "Roadmap — one pipeline") takes the last runtime
 legacy world masters — the overhead cables — onto this lane, and with it retires the runtime
 material *builder*. Three rulings, all wiring:
 
+*(Updated by 0018 story 21-3: the `.ropes` sidecar is an offline intermediate — the rows reach the
+game as baked `AElysiumRopeActor`s, `seam_map_map.md` → "The level carries everything a map needs".
+Everything below about the material's identity and the fold is unchanged, and `bake_verify` still
+asserts it, now over the actors' ids rather than over the file's lines.)*
+
 **The `.ropes` sidecar carries the material's identity, not its pixels.** One line per cable
 segment, **12** whitespace-separated tokens:
 
@@ -1360,12 +1365,16 @@ vtmb:material:<dir>/<stem>  ->  /ElysiumBaked/Materials/<dir>/MI_<safe stem>
 ```
 
 `FElysiumContentPaths::BakedMaterial(id)` is that fold in C++, pinned against the Python by
-`Elysium.Substrate.Ropes`. One `MI_` per distinct id per map, loaded once; an id whose asset does
+`Elysium.Substrate.Ropes`. (Since 0018 story 21-3 the id reaches `BuildRopes` off the baked actor
+rather than off a parsed line, and `Elysium.Substrate.Ropes` pins the fold and the cable contract
+without a parser.) One `MI_` per distinct id per map, loaded once; an id whose asset does
 not load is a **warning naming the path** and a cable left on the engine default — never a
 silent fallback to another master. On the working corpus every rope is one of `cable/cable`,
 `cable/chain`, `cable/chainb` and `cable/cautiontape` (`MI_cable`, `MI_chain`, `MI_chainb`,
-`MI_cautiontape` under `/ElysiumBaked/Materials/cable/`), and `bake_verify.verify_ropes` asserts, for every line of the three maps' `.ropes`, that the id folds
-to a package under `/ElysiumBaked/Materials/` that exists and is a `MaterialInstanceConstant`.
+`MI_cautiontape` under `/ElysiumBaked/Materials/cable/`), and `bake_verify.verify_ropes` asserts, for every cable actor the level carries, that the id folds
+to a package under `/ElysiumBaked/Materials/` that exists and is a `MaterialInstanceConstant`
+(`rope_material_errors`; before 21-3 it read the `.ropes` file's lines instead, and nothing had ever
+asked whether the level carried the cables at all).
 This resolution was never gated per map: the material lane imported the whole install,
 the `MI_` exists for every map's ropes, and one code path is the point.
 

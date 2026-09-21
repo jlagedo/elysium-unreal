@@ -10,6 +10,7 @@ class AElysiumEffectActor;
 class AElysiumSpriteActor;
 class AElysiumInfraActor;
 class AElysiumInfraIndex;
+class AElysiumRopeActor;
 class AElysiumWaterVolumes;
 class AStaticMeshActor;
 class APostProcessVolume;
@@ -54,12 +55,12 @@ public:
 	// adopt. Returns the number of tagged actors found; 0 means this world is not a baked level.
 	int32 AdoptBakedLevel(const FString& MapName, const FElysiumSkyDef& SkyDef);
 
-	// Build the overhead cables from <map>.ropes: one Verlet UCableComponent per segment,
-	// fixed at both endpoints, rest length straight off the sidecar (below the span for a taut cable,
-	// above it for one that hangs), width from the sidecar, material a dynamic child of the `MI_`
-	// the sidecar's `vtmb:material:` id names (R6.5). No-op when the sidecar is absent or
-	// elysium.Ropes is 0.
-	void BuildRopes(const FString& MapName);
+	// Build the overhead cables from the rope actors AdoptBakedLevel just bucketed: one Verlet
+	// UCableComponent per baked segment, fixed at both endpoints, rest length straight off the def
+	// (below the span for a taut cable, above it for one that hangs), width from the def, material a
+	// dynamic child of the `MI_` the def's `vtmb:material:` id names (R6.5). No-op when the level
+	// carries no rope actors or elysium.Ropes is 0. Must run after AdoptBakedLevel.
+	void BuildRopes();
 
 	// Stamp this map's two fog sets onto everything the level placed. `Env` is the map's
 	// already-resolved environment values, read once by the caller from `DA_<map>_Environment`
@@ -174,8 +175,8 @@ public:
 	int32 LightStylePrimitiveCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
-	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
-	// elysium.Ropes is off).
+	// Ropes: number of UCableComponents built from the level's baked rope actors (0 if the map
+	// strings no cables or elysium.Ropes is off).
 	int32 RopeCount = 0;
 
 private:
@@ -223,8 +224,12 @@ private:
 	bool bPropsVisible = true;
 	bool bSkyVisible = true;
 
-	// Ropes: one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
-	// alive for the map's lifetime. Each binds a dynamic child of the imported `MI_` its line
-	// names; the cable's fixed endpoints and rest length come straight from the sidecar.
+	// 0018 story 21-3: the baked rope actors, in `SourceIndex` order -- the staged row order, so the
+	// cables are built in the order the producer resolved the chains.
+	UPROPERTY() TArray<TObjectPtr<AElysiumRopeActor>> RopeActors;
+
+	// Ropes: one Verlet UCableComponent per baked rope actor (an overhead cable), kept alive for
+	// the map's lifetime. Each binds a dynamic child of the imported `MI_` its def names; the
+	// cable's fixed endpoints and rest length come straight from the def.
 	UPROPERTY() TArray<TObjectPtr<UCableComponent>> Ropes;
 };

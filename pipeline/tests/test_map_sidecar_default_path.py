@@ -30,7 +30,7 @@ def test_rewrite_sidecars_via_producer_calls_the_producer_and_repoints_particles
             json.dumps({"entities": [{"classname": "worldspawn", "keys": {"producer": "yes"}}]}),
             encoding="utf-8",
         )
-        return {"map": name, "ready": True}
+        return {"map": name, "brushMeshes": 0}
 
     particle_calls = []
 
@@ -48,7 +48,7 @@ def test_rewrite_sidecars_via_producer_calls_the_producer_and_repoints_particles
     )
 
     assert producer_calls == [("sp_tutorial_1", out_dir)]
-    assert report == {"map": "sp_tutorial_1", "ready": True}
+    assert report == {"map": "sp_tutorial_1", "brushMeshes": 0}
     assert len(particle_calls) == 1
     name, out_dir_arg, entity_document, index = particle_calls[0]
     assert (name, out_dir_arg, index) == ("sp_tutorial_1", out_dir, {"idx": True})
@@ -68,7 +68,7 @@ def test_rewrite_sidecars_via_producer_repoints_weather_when_legacy_report_carri
         ents_path.write_text(
             json.dumps({"entities": [{"classname": "env_wind", "keys": {}}]}), encoding="utf-8"
         )
-        return {"map": name, "ready": True}
+        return {"map": name, "brushMeshes": 0}
 
     monkeypatch.setattr(UE_map_sidecars, "write_sidecars", fake_write_sidecars)
     monkeypatch.setattr(particles, "write_particles", lambda *a, **k: None)

@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumMapEntities.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
@@ -14,6 +15,9 @@
 #include "Debug/ElysiumProfiler.h"
 #include "Debug/ElysiumShotRun.h"
 
+#include "AssetRegistry/ARFilter.h"
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -44,7 +48,7 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// Engine-console mirrors of the dev-console commands, handy for -ExecCmds automation.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.map"),
-		TEXT("elysium.map <name>|next [landmark] — travel to an exported VtMB map (optional landmark = "
+		TEXT("elysium.map <name>|next [landmark] — travel to a baked VtMB map (optional landmark = "
 			"spawn at that info_landmark instead of info_player_start; the P4.6 direct-entry path)"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
@@ -60,7 +64,7 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			UElysiumSessionSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 			if (GameState && !FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
 			{
-				if (ExportedMaps().Contains(Target))
+				if (BakedMaps().Contains(Target))
 				{
 					if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
 					{
@@ -75,10 +79,10 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.maps"),
-		TEXT("elysium.maps — list exported VtMB maps"),
+		TEXT("elysium.maps — list the baked VtMB maps the project carries"),
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
 		{
-			for (const FString& Name : ExportedMaps())
+			for (const FString& Name : BakedMaps())
 			{
 				UE_LOG(LogElysiumMap, Display, TEXT("  %s%s"), *Name,
 					Name == GetCurrentMapName() ? TEXT("   <- current") : TEXT(""));
@@ -306,12 +310,39 @@ void UElysiumMapSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-bool UElysiumMapSubsystem::HasTravelableExport(const FString& Map)
+namespace
 {
-	// The producer's marker is the whole gate. 0018 story 21-1 retired the `.obj` arm with the
-	// legacy lane: nothing reads a `.obj` any more, so a stale one left on disk from an older
-	// export must not be allowed to say the sidecars beside it are current.
-	return FPaths::FileExists(FElysiumContentPaths::MapExportReady(Map));
+	// The four packages a baked map is: its level and the three `DA_<map>_*` assets the runtime
+	// loads its entities, its environment and its collision from. The accessors answer OBJECT
+	// paths (`<package>.<object>`), and `DoesPackageExist` wants the package.
+	bool BakedPackageExists(const FString& ObjectPath)
+	{
+		if (ObjectPath.IsEmpty())
+		{
+			return false;
+		}
+		const FString Package = FPackageName::ObjectPathToPackageName(ObjectPath);
+		return !Package.IsEmpty() && FPackageName::DoesPackageExist(Package);
+	}
+}
+
+bool UElysiumMapSubsystem::HasBakedMap(const FString& Map)
+{
+	// 0018 story 21-3: the bake's own products are the gate. Until then it was the producer's
+	// `<map>.ready` marker under the export root -- a file outside the project standing in for
+	// content inside it, which could say yes to a map whose level had since been wiped, and no to
+	// one that was baked from `exports_v2` alone.
+	// `BakedMapDir` is the identity check -- `BakedUnit` refuses a name with a separator, a `.` or
+	// a `:` in it. Ask it directly: `BakedLevel` composes on top of an empty directory, so a
+	// rejected name still yields a path-shaped string that `DoesPackageExist` would warn about.
+	if (FElysiumContentPaths::BakedMapDir(Map).IsEmpty())
+	{
+		return false;
+	}
+	return FPackageName::DoesPackageExist(FElysiumContentPaths::BakedLevel(Map))
+		&& BakedPackageExists(FElysiumContentPaths::BakedMapEntities(Map))
+		&& BakedPackageExists(FElysiumContentPaths::BakedMapEnvironment(Map))
+		&& BakedPackageExists(FElysiumContentPaths::BakedMapCollision(Map));
 }
 
 bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
@@ -321,31 +352,16 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	{
 		return false;
 	}
-	if (!FElysiumContentPaths::IsConfigured())
-	{
-		UE_LOG(LogElysiumMap, Error,
-			TEXT("export root is not configured; pass -ElysiumContentRoot=... or set ")
-			TEXT("ELYSIUM_EXPORT_ROOT / ELYSIUM_WORK_ROOT"));
-		return false;
-	}
-
+	// 0018 story 21-3: one gate, and it asks the project. The level and its three `DA_<map>_*`
+	// assets are everything a map is; nothing outside the project is consulted, so a game with no
+	// export root configured travels exactly as well as one with it.
 	const FString Level = FElysiumContentPaths::BakedLevel(Map);
-	if (!FPackageName::DoesPackageExist(Level))
+	if (!HasBakedMap(Map))
 	{
 		UE_LOG(LogElysiumMap, Warning,
-			TEXT("no baked level for '%s' (%s) — run: uv run elysium export map %s --force"),
-			*Map, *Level, *Map);
-		return false;
-	}
-	// The sidecar the runtime still reads (`.ropes`) lives beside the export, so a baked level with
-	// no export would build a world missing it. The producer's own proof that it ran satisfies this
-	// ("the export-readiness gate").
-	if (!HasTravelableExport(Map))
-	{
-		UE_LOG(LogElysiumMap, Warning,
-			TEXT("no exported map '%s' under %s (no '%s')"),
-			*Map, *FElysiumContentPaths::Root(),
-			*FElysiumContentPaths::MapExportReady(Map));
+			TEXT("'%s' is not baked whole (%s and its three DA_%s_* assets); ")
+			TEXT("run: uv run elysium bake map --maps %s"),
+			*Map, Level.IsEmpty() ? TEXT("<no level path>") : *Level, *Map, *Map);
 		return false;
 	}
 
@@ -642,7 +658,7 @@ bool UElysiumMapSubsystem::Reload()
 
 FString UElysiumMapSubsystem::NextMapName() const
 {
-	const TArray<FString> Maps = ExportedMaps();
+	const TArray<FString> Maps = BakedMaps();
 	if (Maps.Num() == 0)
 	{
 		return FString();
@@ -657,27 +673,74 @@ FString UElysiumMapSubsystem::GetCurrentMapName() const
 	return Map ? Map->LoadedMap : FString();
 }
 
-TArray<FString> UElysiumMapSubsystem::ExportedMaps() const
+namespace
 {
-	TArray<FString> Names;
-	if (!FElysiumContentPaths::IsConfigured())
+	// The baked-map list, built once per session. The scan is cheap in a cooked game (the registry
+	// already carries every baked package) and a real directory walk in an uncooked `-game` or
+	// editor run, which is why it happens lazily and only once -- the same shape, and for the same
+	// reason, as `ElysiumSoundAssets`' index.
+	FCriticalSection GBakedMapsMutex;
+	TOptional<TArray<FString>> GBakedMaps;
+
+	TArray<FString> ScanBakedMaps()
 	{
+		TArray<FString> Names;
+		IAssetRegistry* Registry = IAssetRegistry::Get();
+		if (Registry == nullptr)
+		{
+			UE_LOG(LogElysiumMap, Warning,
+				TEXT("no asset registry -- no map can be listed or travelled to"));
+			return Names;
+		}
+		const FString Mount = FElysiumContentPaths::BakedMount();
+		Registry->ScanPathsSynchronous({ Mount }, /*bForceRescan*/ false);
+
+		// One `DA_<map>_Entities` per baked map, and it sits beside the map's own `.umap`, so the
+		// asset's package FOLDER is the map name. Filtering on the class rather than on `World`
+		// keeps the mount's ~100 stale bare `.umap`s -- levels baked before the three assets
+		// existed -- out of the list without a second pass to recognise them.
+		FARFilter Filter;
+		Filter.ClassPaths.Add(UElysiumMapEntities::StaticClass()->GetClassPathName());
+		Filter.PackagePaths.Add(FName(*Mount));
+		Filter.bRecursivePaths = true;
+		TArray<FAssetData> Assets;
+		Registry->GetAssets(Filter, Assets);
+
+		for (const FAssetData& Asset : Assets)
+		{
+			FString Folder = Asset.PackagePath.ToString();
+			FString Map;
+			if (!Folder.Split(TEXT("/"), nullptr, &Map, ESearchCase::CaseSensitive,
+					ESearchDir::FromEnd)
+				|| Map.IsEmpty())
+			{
+				continue;
+			}
+			// The entities asset alone is not a map: `HasBakedMap` is the one predicate `Travel`
+			// also asks, so the list and the gate can never disagree.
+			if (UElysiumMapSubsystem::HasBakedMap(Map))
+			{
+				Names.AddUnique(Map);
+			}
+		}
+		Names.Sort();
+		UE_LOG(LogElysiumMap, Log, TEXT("%d baked map(s) under %s"), Names.Num(), *Mount);
 		return Names;
 	}
-	IFileManager& FM = IFileManager::Get();
-	TArray<FString> Dirs;
-	FM.FindFiles(Dirs, *(FElysiumContentPaths::Root() / TEXT("*")), false, true);
-	for (const FString& Dir : Dirs)
+}
+
+TArray<FString> UElysiumMapSubsystem::BakedMaps() const
+{
+	FScopeLock Lock(&GBakedMapsMutex);
+	if (!GBakedMaps.IsSet())
 	{
-		// Both halves are required to enter a map: the baked level carries the look, the export
-		// carries the sidecars the runtime still reads. An export with no bake is listed nowhere,
-		// because Travel would refuse it -- the same predicate Travel itself checks.
-		if (HasTravelableExport(Dir)
-			&& FPackageName::DoesPackageExist(FElysiumContentPaths::BakedLevel(Dir)))
-		{
-			Names.Add(Dir);
-		}
+		GBakedMaps = ScanBakedMaps();
 	}
-	Names.Sort();
-	return Names;
+	return GBakedMaps.GetValue();
+}
+
+void UElysiumMapSubsystem::InvalidateBakedMaps()
+{
+	FScopeLock Lock(&GBakedMapsMutex);
+	GBakedMaps.Reset();
 }

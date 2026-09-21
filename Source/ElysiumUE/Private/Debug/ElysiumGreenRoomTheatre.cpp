@@ -32,13 +32,13 @@ bool FElysiumGreenRoomRun::PrepareTheatreCase()
 
 	// sp_theatre's own entity table, read for the embrace camera track alone: the green room stands
 	// its case in whatever map is loaded, so the track's authored points come off the theatre's
-	// defs rather than the live world. Through the transport resolver (baked asset first,
-	// `.ents` second) like every other def read.
+	// defs rather than the live world. Through `ElysiumEntityDefSource::Load`, like every other
+	// def read.
 	FElysiumEntityDefs Defs;
 	if (ElysiumEntityDefSource::Load(TEXT("sp_theatre"), Defs) == EElysiumEntityDefSource::None)
 	{
 		UE_LOG(LogElysiumGreenRoom, Warning,
-			TEXT("embrace room found no sp_theatre entity table (no baked asset, no .ents)"));
+			TEXT("embrace room found no sp_theatre entity table; run: uv run elysium bake map --maps sp_theatre"));
 		return false;
 	}
 	TMap<FString, const FElysiumEntityDef*> Named;

@@ -112,6 +112,9 @@ TAG_CAPTURE = "elysium.capture"
 # The baked 2D-sky backdrop dome (R5.2). Distinct from TAG_SKY -- the
 # 3D-skybox miniature's own tag -- so the miniature's sky-fog stamping pass never walks the dome.
 TAG_SKYDOME = "elysium.skydome"
+# One overhead cable segment (0018 story 21-3, V2 lane only; `bake_ropes.TAG_ROPE`). Carries a
+# second `elysium.src=<index>` tag naming its row in the staged `ropes` block.
+TAG_ROPE = "elysium.rope"
 # R7.4 (water-complete contract 3): the lightstyle a world/sky chunk carries, restating
 # `ElysiumBakedTags::LightStyle`'s own format (`"elysium.style=%d"`) so `stage_level` can write it
 # without a C++ import. Beside TAG_WORLD/TAG_SKY, never instead of them.
@@ -2336,6 +2339,7 @@ class Bake(object):
         self._place_player_start(actors)
         self._place_navigation(actors)
         self._place_ai_infra(actors)
+        self._place_ropes(actors)
         # The world collision and the marks, before the captures only because they are authoring
         # and the capture pass is a render. Neither renders -- `UElysiumWorldCollisionComponent`
         # creates no scene proxy and a nav-area component is a plain `USceneComponent` -- so
@@ -2667,6 +2671,10 @@ class Bake(object):
 
     def _place_ai_infra(self, actors):
         """The V2 lane authors the baked AI infrastructure actors (0018 story 2) into this level."""
+        return 0
+
+    def _place_ropes(self, actors):
+        """The V2 lane authors the baked rope actors (0018 story 21-3) into this level."""
         return 0
 
     def _place_player_start(self, actors):

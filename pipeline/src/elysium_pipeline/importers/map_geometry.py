@@ -96,7 +96,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 14 (0018 story 2): `aiInfra` -- the BSP-authored AI infrastructure rows (hints, places,
 #: conversation places, makers, placed NPCs) the bake places one actor each for
 #: (`importers.map_ai_infra`).
-MANIFEST_VERSION = 14
+#: 15 (0018 story 21-3): the manifest carries `ropes` -- one row per cable segment
+#: (`UE_map_sidecars.rope_rows` through `importers.map_ropes`), the baked rope actors. It is the
+#: last per-map file the runtime opened from outside the project.
+MANIFEST_VERSION = 15
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -2355,6 +2358,7 @@ def stage_map(map_name: str, root: Path | None = None,
     from elysium_pipeline.importers import map_light_query as light_query_lane
     from elysium_pipeline.importers import map_ai_infra as ai_infra_lane
     from elysium_pipeline.importers import map_jump_links as jump_link_lane
+    from elysium_pipeline.importers import map_ropes as rope_lane
     from elysium_pipeline.importers import textures as texture_lane
 
     staging = material_staging_root(work_root)
@@ -2432,6 +2436,7 @@ def stage_map(map_name: str, root: Path | None = None,
         "lightQuery": light_query_lane.stage_for_join(geometry.join, root),
         "jumpLinks": jump_link_lane.stage_map(map_name, root),
         "aiInfra": ai_infra_lane.stage_for_join(geometry.join, geometry.map_name),
+        "ropes": rope_lane.stage_for_join(geometry.join, geometry.map_name),
         "details": {
             "fields": list(DETAIL_RECORD_FIELDS),
             "models": geometry.detail_models(),

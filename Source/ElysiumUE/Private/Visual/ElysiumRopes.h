@@ -2,11 +2,17 @@
 
 #include "CoreMinimal.h"
 
-// One cable segment recovered from a map's `.ropes` sidecar. VtMB strings its
-// overhead wires as chains of move_rope/keyframe_rope nodes linked by NextKey; both classnames
-// construct the same `CRopeKeyframe`, and the producer (UE_map_sidecars.write_ropes) resolves
-// each chain into per-segment lines, already in Unreal space (cm, Z-up, left-handed), so the
-// runtime reads them verbatim and builds one UCableComponent per def.
+#include "ElysiumRopes.generated.h"
+
+// One cable segment, carried by the `AElysiumRopeActor` the map bake stands in the level. VtMB
+// strings its overhead wires as chains of move_rope/keyframe_rope nodes linked by NextKey; both
+// classnames construct the same `CRopeKeyframe`, and the producer (UE_map_sidecars.rope_rows)
+// resolves each chain into per-segment rows, already in Unreal space (cm, Z-up, left-handed), so
+// the runtime reads them verbatim and builds one UCableComponent per def.
+//
+// 0018 story 21-3: these rows reach the game as baked actors. Until then the runtime parsed
+// `$ELYSIUM_EXPORT_ROOT/<map>/<map>.ropes` at map load, the last per-map file it opened from
+// outside the project. The sidecar survives as an offline intermediate and nothing reads it here.
 //
 // The numbers are the RE'd `CRopeKeyframe` state (vampire.dll + client.dll), not the raw Hammer
 // keyvalues: A/B are the two endpoints, WidthCm the strand thickness, Nodes the simulated node
@@ -28,9 +34,13 @@
 // Nodes == 2 is the important case: one segment between two locked points, which cannot sag. A
 // quarter of the game's rope nodes are `Type 2` and are meant to render as dead-straight taut
 // cable (the observatory lift cables, hanging-lamp chains).
+USTRUCT()
 struct FElysiumRopeDef
 {
-	// Flag bits, as `CRopeKeyframe::KeyValue` sets them.
+	GENERATED_BODY()
+
+	// Flag bits, as `CRopeKeyframe::KeyValue` sets them. Not a UENUM: `Flags` is the whole word and
+	// the bake hands it over as one integer, exactly as the producer computed it.
 	enum EFlags : uint8
 	{
 		Dangling  = 1 << 0,   // clears ROPE_LOCK_END_POINT — the far end hangs free
@@ -39,25 +49,27 @@ struct FElysiumRopeDef
 		Breakable = 1 << 3,
 	};
 
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	FString MaterialId;                // "vtmb:material:cable/cable"
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	FVector A = FVector::ZeroVector;   // start endpoint, cm
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	FVector B = FVector::ZeroVector;   // end endpoint, cm
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	float WidthCm = 5.f;
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	float RestCm = 0.f;                // simulated rest length; < |B-A| means taut
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	int32 Nodes = 10;                  // m_nSegments, [2, 10]; 2 == rigid straight segment
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	float TexScale = 1.f;
+
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Rope")
 	uint8 Flags = 0;
-};
-
-// Parses a `.ropes` sidecar: one segment per line,
-//   vtmb:material:<key> ax ay az  bx by bz  width_cm rest_cm nodes texscale flags
-// (12 whitespace-separated tokens). Malformed lines are skipped.
-struct FElysiumRopes
-{
-	// Read the sidecar file and parse it. Returns true when the file was read (even if it held zero
-	// valid segments); false when the file is absent/unreadable.
-	static bool Parse(const FString& Path, TArray<FElysiumRopeDef>& Out);
-
-	// Parse already-loaded lines (the file-free core, so it is unit-testable without disk I/O).
-	static void ParseLines(const TArray<FString>& Lines, TArray<FElysiumRopeDef>& Out);
 };

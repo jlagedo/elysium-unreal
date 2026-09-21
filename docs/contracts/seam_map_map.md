@@ -786,6 +786,62 @@ disk, and it used to ask on the NEXT run. Two facts came out of standing it up:
    `ULevel::Actors` and the level's own `MapBuildData`; there is no such shortcut for a tile
    count, so the navigation check re-opens the level through the editor's loader.
 
+### The level carries everything a map needs (0018 story 21-3)
+
+**No map-load path opens a file under `$ELYSIUM_EXPORT_ROOT/<map>/`, and no such accessor exists.**
+21-1 retired the sidecar arms for entities, environment and collision; three per-map reads survived
+it, ungated, and this story closed them. `FElysiumContentPaths::MapDir` and every accessor under it
+— `MapExportReady`, `MapEnts`, `MapRopes` — are deleted. `Root()` still serves the corpus trees
+(`scripts/`, `cfg/`, `signs/`, `ui/`) and the debug write roots; those are 21-6's.
+
+**Ropes (0018 story 21-3).** `<map>.ropes` is an offline intermediate. `UE_map_sidecars.rope_rows`
+is the derivation, split out of `write_ropes` as `light_rows` was for R5.6; `importers/map_ropes.py`
+stages it as the geometry manifest's `ropes` block (`MANIFEST_VERSION` 15) and `bake_ropes.author`
+stands one `AElysiumRopeActor` per segment at its own A endpoint, tagged `elysium.rope` and
+`elysium.src=<index>`, under the `Ropes` Outliner folder. `UElysiumMapVisuals::AdoptBakedLevel`
+buckets them and sorts by `SourceIndex` — the level's actor order is the editor's, not the bake's —
+and `BuildRopes()` builds the same `UCableComponent` per def it always did. The cable's arithmetic
+is untouched: `CableLength = RestCm`, `NumSegments = Nodes - 1`, `EndLocation` in world space, the
+`MI_` bound through the R5.4 fold, one MID per distinct id.
+
+**Eight facts, not seven.** `FElysiumRopeDef` is a `USTRUCT` now and the actor carries all of it —
+material id, both endpoints, width, rest length, node count, texture scale **and the flag word**.
+The flags are load-bearing: bit 0 (`Dangling`, `CRopeKeyframe::KeyValue` clearing
+`ROPE_LOCK_END_POINT`) becomes `UCableComponent::bAttachEnd`, so a lost flag word unpins every
+hanging end. `bake_verify.rope_errors` compares all eight per actor, and
+`rope_material_errors` keeps R6.5's `MI_` assertion — asked of the actors now rather than of a file.
+`FElysiumRopes::Parse` / `ParseLines` and `ElysiumRopes.cpp` are deleted; the 12-token shape is
+checked offline, in `pipeline/tests/test_map_ropes.py`.
+
+**The travel gate and the map list ask the project.** `HasTravelableExport` is `HasBakedMap`: the
+identity check `BakedMapDir` (so a name with a separator in it is refused before any package
+lookup), then `DoesPackageExist` for the level and for all three `DA_<map>_*` packages.
+`ExportedMaps` is `BakedMaps`, answered from the asset registry — `ScanPathsSynchronous` over
+`/ElysiumBaked`, an `FARFilter` on `UElysiumMapEntities`, the map name from each asset's package
+folder, then the same `HasBakedMap`, so the list and the gate cannot disagree. The pattern is
+`ElysiumSoundAssets`'; the list is built once behind a mutex with an `InvalidateBakedMaps()`.
+Filtering on the entities asset rather than on `World` is what keeps the mount's ~100 stale bare
+`.umap`s out of the list. `Travel`'s `IsConfigured()` refusal is gone — a game with no export root
+configured travels exactly as well as one with it.
+
+**`.ready` goes whole, producer included.** `write_sidecars` no longer writes the marker or reports
+it; nothing in the pipeline ever read it. The completeness check it stood for remains: the run
+raises if a sidecar a later lane reads is missing when it returns.
+
+**`elysium.ents` and the two test fixtures** read `DA_<map>_Entities` through
+`ElysiumEntityDefSource::Load` — the loader the map load itself uses, so the verb now answers for
+the table the game reads. `FElysiumEntityDefs::Parse` survives for `ElysiumEntityIOTests`, which
+writes and parses a synthetic `.ents` into `FPaths::AutomationTransientDir()`.
+
+**Witnessed 2026-09-21, with `$ELYSIUM_EXPORT_ROOT/<map>/` renamed away for all five.**
+`elysium_maps_list` returned the six maps on the mount that carry all four packages (`sm_hub_1`,
+`sm_pawnshop_1`, `sm_pier_1`, `sp_soc_3`, `sp_theatre`, `sp_tutorial_1`); each of the five 21-2 maps
+travelled and reached Playing; and each strung its cables from the level — `sp_tutorial_1` 70,
+`sm_hub_1` 76, `sm_pawnshop_1` 21, `sp_theatre` 12, `sp_soc_3` 4, one `UCableComponent` per
+`AElysiumRopeActor`, counted live. Those are the producer's own segment counts, and `bake map
+--verify` reports the same five against the staged rows with every material bound and 0 problems.
+`Elysium.Content` is 13 of 13, including the new `MapList` / `MapListMatchesGate`.
+
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 
 `sm_pawnshop_1`, `sp_tutorial_1` and `sm_hub_1` were headlessly booted (`uv run elysium debug
@@ -1397,9 +1453,10 @@ substrate sites that recompute the stem live (`ElysiumItemContainer`, `ElysiumIt
 `ElysiumLockable`, `ElysiumTerminal`) are untouched: they produce a stem and hand it to
 `UElysiumEntityBodies`, which knows the map.
 
-**Travel's gate is the marker alone.** `UElysiumMapSubsystem::HasTravelableExport` accepts the R2.4
-`<map>.ready` marker and nothing else; the `<map>.obj` arm retired with the lane, as R2.4 said it
-would, so a stale `.obj` left on disk cannot vouch for the sidecars beside it.
+**Travel's gate was the marker alone.** `UElysiumMapSubsystem::HasTravelableExport` accepted the
+R2.4 `<map>.ready` marker and nothing else; the `<map>.obj` arm retired with the lane, as R2.4 said
+it would, so a stale `.obj` left on disk could not vouch for the sidecars beside it. **0018 story
+21-3 retired the marker itself** — see "The level carries everything a map needs" below.
 
 ### Verification
 

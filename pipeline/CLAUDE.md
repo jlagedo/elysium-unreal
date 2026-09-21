@@ -87,3 +87,10 @@ The runtime reads a map's entities, collision and environment from its three bak
 `DA_<map>_*` assets and nowhere else (0018 story 21-1 retired the sidecar arms and the per-map
 flag that used to select between them), so a map that has not been through this procedure fails
 the load with an error naming the one command that fixes it.
+
+**The running game opens no file under `$ELYSIUM_EXPORT_ROOT/<map>/`** (0018 story 21-3). The
+overhead cables are baked actors in the level, not `<map>.ropes`; the travel gate and the map list
+are the baked level plus its three assets, answered from the asset registry, not the `<map>.ready`
+marker and a directory listing; and `elysium.ents` reads `DA_<map>_Entities`. The producer no longer
+writes `.ready` at all. `export map --intermediate-only` still runs once per map, because the
+collision, environment and level stages read the producer's other sidecars -- that is 21-4's.

@@ -19,6 +19,7 @@
 #include "ElysiumWaterVolumes.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMaterialFactory.h"
+#include "Visual/ElysiumRopeActor.h"
 #include "Visual/ElysiumRopes.h"
 
 #include "CableComponent.h"
@@ -132,6 +133,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	InfraActors.Reset();
 	InfraIndices.Reset();
 	InfraStrayCount = 0;
+	RopeActors.Reset();
 	LightStylePrimitiveCount = 0;
 	EffectCount = 0;
 	EffectSkyCount = 0;
@@ -210,6 +212,15 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 			else
 			{
 				++InfraStrayCount;
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Rope))
+		{
+			// 0018 story 21-3: the cables the level carries. Sorted into staged-row order below,
+			// so `BuildRopes` builds them in the order the producer resolved the chains.
+			if (AElysiumRopeActor* RopeActor = Cast<AElysiumRopeActor>(Actor))
+			{
+				RopeActors.Add(RopeActor);
 			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
@@ -344,6 +355,13 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	SkyActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
 	PropActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
 	DetailActors.RemoveAll([](const TObjectPtr<AElysiumDetailPropActor>& A) { return A == nullptr; });
+
+	// 0018 story 21-3: the level's actor order is the editor's, not the bake's, so put the cables
+	// back into staged-row order before anything builds from them.
+	RopeActors.Sort([](const AElysiumRopeActor& Left, const AElysiumRopeActor& Right)
+	{
+		return Left.SourceIndex < Right.SourceIndex;
+	});
 
 	WorldSurfaceCount = WorldActors.Num();
 	SkySurfaceCount = SkyActors.Num();
@@ -540,7 +558,7 @@ void UElysiumMapVisuals::AuditMaterials(const FString& MapName) const
 	}
 }
 
-void UElysiumMapVisuals::BuildRopes(const FString& MapName)
+void UElysiumMapVisuals::BuildRopes()
 {
 	RopeCount = 0;
 	AActor* Owner = GetOwner();
@@ -549,8 +567,16 @@ void UElysiumMapVisuals::BuildRopes(const FString& MapName)
 		return;
 	}
 
+	// 0018 story 21-3: the defs are the level's own, adopted a moment ago, in staged-row order. A
+	// map that strings no cables carries no rope actors and this is a no-op, exactly as an absent
+	// sidecar used to be.
 	TArray<FElysiumRopeDef> Defs;
-	if (!FElysiumRopes::Parse(FElysiumContentPaths::MapRopes(MapName), Defs) || Defs.Num() == 0)
+	Defs.Reserve(RopeActors.Num());
+	for (const TObjectPtr<AElysiumRopeActor>& RopeActor : RopeActors)
+	{
+		Defs.Add(RopeActor->Rope);
+	}
+	if (Defs.Num() == 0)
 	{
 		return;
 	}

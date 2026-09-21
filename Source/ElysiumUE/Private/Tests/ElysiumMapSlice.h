@@ -1,13 +1,17 @@
 #pragma once
 
-// A map slice: the real `<map>.ents` cut down to a named set of entities plus everything their
-// authored rows reach, parsed through the production parser and ready for a headless
+// A map slice: the real map's entity table cut down to a named set of entities plus everything
+// their authored rows reach, loaded through the production loader and ready for a headless
 // `FElysiumEntityWorld`. The authored rows are what the game loads, so a map/port mismatch is
 // caught by the slice test and nowhere later.
 //
 // The helper is generic — map name plus targetnames — so every tutorial beat (terminal, elevator,
 // lockpicks, fan, Jack's teleports) builds its fixture the same way. It is skipped, never failed,
-// without the export root, like the other content tests.
+// when the map is not baked, like the other content tests.
+//
+// 0018 story 21-3: the table is `DA_<map>_Entities`, read through `ElysiumEntityDefSource::Load`
+// — the one the map load itself uses. It used to be `$ELYSIUM_EXPORT_ROOT/<map>/<map>.ents`,
+// which was a different reader answering for a different file.
 //
 // An entity in the slice that needs something the headless world cannot give it — a brush body
 // for a touch or look trigger, a level-script Python namespace for a field-6 call, a target that
@@ -20,6 +24,8 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumMapEntities.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 
 struct FElysiumMapSlice
@@ -33,14 +39,11 @@ struct FElysiumMapSlice
 	// What the headless world cannot complete for this slice, one line each.
 	TArray<FString> Seams;
 
-	static FString EntsPath(const FString& Map)
-	{
-		return FElysiumContentPaths::Root() / Map / (Map + TEXT(".ents"));
-	}
-
 	static bool Available(const FString& Map)
 	{
-		return FElysiumContentPaths::IsConfigured() && FPaths::FileExists(EntsPath(Map));
+		const FString Package = FPackageName::ObjectPathToPackageName(
+			FElysiumContentPaths::BakedMapEntities(Map));
+		return !Package.IsEmpty() && FPackageName::DoesPackageExist(Package);
 	}
 
 	// Keep `Roots` and the closure of every output row's target, every `parentname` and every
@@ -54,9 +57,10 @@ struct FElysiumMapSlice
 		Out = FElysiumMapSlice();
 		Out.MapName = Map;
 		FElysiumEntityDefs All;
-		if (!FElysiumEntityDefs::Parse(EntsPath(Map), All))
+		if (ElysiumEntityDefSource::Load(Map, All) == EElysiumEntityDefSource::None)
 		{
-			OutError = FString::Printf(TEXT("could not parse %s"), *EntsPath(Map));
+			OutError = FString::Printf(TEXT("could not load %s"),
+				*FElysiumContentPaths::BakedMapEntities(Map));
 			return false;
 		}
 

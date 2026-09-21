@@ -1301,12 +1301,71 @@ def verify_sky_scope(actors, map_name):
     return errors
 
 
-def verify_ropes(world_dir, map_name):
-    """R6.5: every line of
-    `<map>.ropes` names a `vtmb:material:` id that folds, by the R5.4 rule
+#: 0018 story 21-3: the tags `bake_ropes.author` stamps on a baked cable, restated here because
+#: that module imports `unreal` at load and this half is imported by pure tests.
+ROPE_TAG = "elysium.rope"
+ROPE_SOURCE_PREFIX = "elysium.src="
+ROPE_MATERIAL_PREFIX = "vtmb:material:"
+#: A cm tolerance for the float round trip through the actor's reflected properties.
+ROPE_EPSILON = 0.01
+
+
+def rope_errors(map_name, placed, payload):
+    """The baked-cable check, pure: `placed` is one `(tags, facts)` per actor carrying the rope tag,
+    where `facts` is the eight-key dict the actor's reflected properties answer, and `payload` the
+    staged `ropes` block. Every staged row must stand exactly once, carrying `elysium.src=<index>`
+    and every one of its eight facts; nothing unstaged may stand.
+
+    Eight, not seven: `flags` is what the runtime turns into `UCableComponent::bAttachEnd` (bit 0,
+    `Dangling`, clears `ROPE_LOCK_END_POINT`), so a lost flag word unpins every hanging end."""
+    errors = []
+    staged = {int(row["index"]): row for row in payload.get("rows") or []}
+    seen = set()
+    for tags, facts in placed:
+        index = None
+        for tag in tags:
+            if tag.startswith(ROPE_SOURCE_PREFIX):
+                index = int(tag[len(ROPE_SOURCE_PREFIX):])
+        if index is None:
+            errors.append("%s: a rope actor carries no %s tag" % (map_name, ROPE_SOURCE_PREFIX))
+            continue
+        if index in seen:
+            errors.append("%s: rope %d placed twice" % (map_name, index))
+            continue
+        seen.add(index)
+        row = staged.get(index)
+        if row is None:
+            errors.append("%s: rope %d stands but was not staged" % (map_name, index))
+            continue
+        if facts["materialId"] != row["materialId"]:
+            errors.append("%s: rope %d staged as %s, placed as %s"
+                          % (map_name, index, row["materialId"], facts["materialId"]))
+        for key in ("aCm", "bCm"):
+            for axis in range(3):
+                if abs(facts[key][axis] - row[key][axis]) > ROPE_EPSILON:
+                    errors.append("%s: rope %d %s differs: staged %s, placed %s"
+                                  % (map_name, index, key, row[key], facts[key]))
+                    break
+        for key in ("widthCm", "restCm", "texScale"):
+            if abs(float(facts[key]) - float(row[key])) > ROPE_EPSILON:
+                errors.append("%s: rope %d %s differs: staged %s, placed %s"
+                              % (map_name, index, key, row[key], facts[key]))
+        for key in ("nodes", "flags"):
+            if int(facts[key]) != int(row[key]):
+                errors.append("%s: rope %d %s differs: staged %s, placed %s"
+                              % (map_name, index, key, row[key], facts[key]))
+    missing = sorted(set(staged) - seen)
+    if missing:
+        errors.append("%s: %d staged rope row(s) have no actor (first: %s)"
+                      % (map_name, len(missing), missing[:5]))
+    return errors
+
+
+def rope_material_errors(map_name, material_ids):
+    """R6.5, still asked: every id a cable binds folds, by the R5.4 rule
     (`importers.materials.asset_path_for`), to an existing `MaterialInstanceConstant` package under
-    `/ElysiumBaked/Materials/`. The runtime binds exactly that asset; nothing else on the line is
-    a look."""
+    `/ElysiumBaked/Materials/`. The runtime binds exactly that asset; nothing else on the row is a
+    look."""
     # `importers.materials.asset_path_for` restated: that module imports numpy transitively and
     # the editor's Python has none (`bake_map_v2` restates its roots for the same reason). The
     # fold is `asset_names.safe_name` per path part, `MI_` on the stem, under this root.
@@ -1320,28 +1379,13 @@ def verify_ropes(world_dir, map_name):
         name = "MI_" + safe_name(parts[-1])
         return f"{package_root}/{folded}/{name}" if folded else f"{package_root}/{name}"
 
-    errors = []
-    path = os.path.join(world_dir, map_name + ".ropes")
-    if not os.path.isfile(path):
-        unreal.log("[verify] ropes: no %s.ropes (the map strings no cables)" % map_name)
-        return errors
-    segments = 0
-    ids = {}
-    with open(path, "r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, 1):
-            tokens = line.split()
-            if not tokens:
-                continue
-            segments += 1
-            if len(tokens) != 12 or not tokens[0].startswith("vtmb:material:"):
-                errors.append("%s.ropes line %d: not a 12-token R6.5 line: %r"
-                              % (map_name, line_number, line.strip()[:80]))
-                continue
-            ids.setdefault(tokens[0], 0)
-            ids[tokens[0]] += 1
-    resolved = 0
-    for material_id in sorted(ids):
-        package = asset_path_for(material_id[len("vtmb:material:"):])
+    errors, resolved = [], 0
+    for material_id in sorted(material_ids):
+        if not material_id.startswith(ROPE_MATERIAL_PREFIX):
+            errors.append("%s: rope material %r is not a %s id"
+                          % (map_name, material_id, ROPE_MATERIAL_PREFIX))
+            continue
+        package = asset_path_for(material_id[len(ROPE_MATERIAL_PREFIX):])
         if not package.startswith(package_root + "/"):
             errors.append("%s: rope material %s folds outside %s: %s"
                           % (map_name, material_id, package_root, package))
@@ -1357,8 +1401,43 @@ def verify_ropes(world_dir, map_name):
                           % (map_name, material_id, package, asset.get_class().get_name()))
             continue
         resolved += 1
-    unreal.log("[verify] ropes: %d segments over %d material(s), %d bound under %s/"
-               % (segments, len(ids), resolved, package_root))
+    return errors, resolved
+
+
+def verify_ropes(actors, map_name):
+    """0018 story 21-3: the placed rope actors are exactly the staged `ropes` rows (`rope_errors`),
+    and every material they bind is imported (`rope_material_errors`). Before this story the
+    runtime parsed `<map>.ropes` off the export root at map load and no check ever asked whether the
+    level carried the cables at all."""
+    manifest = _staged_manifest(map_name)
+    if manifest is None or manifest.get("ropes") is None:
+        return ["%s: no staged rope rows to check the level against "
+                "(run: uv run elysium bake map --maps %s --force)" % (map_name, map_name)]
+    placed = []
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if ROPE_TAG not in tags:
+            continue
+        rope = actor.get_editor_property("rope")
+        a = rope.get_editor_property("a")
+        b = rope.get_editor_property("b")
+        placed.append((tags, {
+            "materialId": str(rope.get_editor_property("material_id")),
+            "aCm": [a.x, a.y, a.z],
+            "bCm": [b.x, b.y, b.z],
+            "widthCm": rope.get_editor_property("width_cm"),
+            "restCm": rope.get_editor_property("rest_cm"),
+            "nodes": rope.get_editor_property("nodes"),
+            "texScale": rope.get_editor_property("tex_scale"),
+            "flags": rope.get_editor_property("flags"),
+        }))
+    errors = rope_errors(map_name, placed, manifest["ropes"])
+    material_errors, resolved = rope_material_errors(
+        map_name, {facts["materialId"] for _, facts in placed})
+    errors.extend(material_errors)
+    unreal.log("[verify] ropes: %d cable actors, %d staged rows, %d material(s) bound, "
+               "%d problem(s)" % (len(placed), len(manifest["ropes"].get("rows") or []),
+                                  resolved, len(errors)))
     return errors
 
 
@@ -1907,7 +1986,7 @@ def verify_map(map_name):
         errors.extend(verify_water(actors, map_name))
         errors.extend(verify_ai_infra(actors, map_name))
         errors.extend(verify_sky_scope(actors, map_name))
-        errors.extend(verify_ropes(world_dir, map_name))
+        errors.extend(verify_ropes(actors, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:

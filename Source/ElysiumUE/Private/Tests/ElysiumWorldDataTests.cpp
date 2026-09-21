@@ -169,68 +169,47 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// FElysiumRopes — the `.ropes` cable sidecar parser + the rest-length contract BuildRopes builds
-// each UCableComponent from, and (R6.5) the material-id fold the cable binds its `MI_` through.
-// Pure data + math, no RHI.
+// FElysiumRopeDef — the rest-length contract BuildRopes builds each UCableComponent from, and
+// (R6.5) the material-id fold the cable binds its `MI_` through. Pure data + math, no RHI.
+//
+// 0018 story 21-3 retired the `.ropes` parser this used to open with: the defs reach the runtime
+// as baked `AElysiumRopeActor`s, and the 12-token shape is now checked offline, in
+// `pipeline/tests/test_map_ropes.py` and `bake_verify.rope_errors`.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRopesTest, "Elysium.Substrate.Ropes", GElysiumTestFlags)
 bool FElysiumRopesTest::RunTest(const FString&)
 {
-	// --- parse: 12 tokens -> one def with fields in order; malformed lines dropped ---
-	TArray<FString> Lines;
-	Lines.Add(TEXT("vtmb:material:cable/cable 0 0 300 400 0 300 2.54 203.2 10 0.2 0"));
-	Lines.Add(TEXT("# too few tokens -> skipped"));
-	// Type-2 + Dangling, on the chain material
-	Lines.Add(TEXT("vtmb:material:cable/chain 0 0 0 0 0 100 5 0 2 1 1"));
-	Lines.Add(TEXT("vtmb:material:cable/rope 0 0 0 0 0 100 5 0 99 1 0"));  // out-of-range node count -> clamped to 10
-	// A pre-R6.5 line (decoded texture path, 14 tokens) names no unit and is dropped, not bound.
-	Lines.Add(TEXT("../shared/tex/cable_cable.png 0 0 0 0 0 100 5 0 2 1 0 - 0"));
-	// A 12-token line whose first token is not a material id is dropped too.
-	Lines.Add(TEXT("cable/cable 0 0 0 0 0 100 5 0 2 1 0"));
-	Lines.Add(FString());   // blank -> skipped
+	// A four-metre span at 2.032 m rest: the producer's own numbers for a tutorial cable.
+	FElysiumRopeDef Taut;
+	Taut.MaterialId = TEXT("vtmb:material:cable/cable");
+	Taut.A = FVector(0, 0, 300);
+	Taut.B = FVector(400, 0, 300);
+	Taut.WidthCm = 2.54f;
+	Taut.RestCm = 203.2f;
+	Taut.Nodes = 10;
+	Taut.TexScale = 0.2f;
+	Taut.Flags = 0;
 
-	TArray<FElysiumRopeDef> Defs;
-	FElysiumRopes::ParseLines(Lines, Defs);
-	TestEqual(TEXT("three valid ropes parsed (four junk lines dropped)"), Defs.Num(), 3);
+	// --- rest-length contract: BuildRopes feeds RestCm straight into CableLength, and the
+	// producer has already resolved VtMB's own arithmetic into it. Rest *below* the straight
+	// span is the normal case, not a bug: `RecomputeSprings` subtracts a flat 100 units, so a
+	// 4 m span at 2.032 m rest is a taut cable the solver draws along the chord. ---
+	TestTrue(TEXT("rest length below the span -> taut, no sag"),
+		Taut.RestCm < static_cast<float>(FVector::Dist(Taut.A, Taut.B)));
+	TestEqual(TEXT("a ten-node rope is nine cable spans"), FMath::Max(1, Taut.Nodes - 1), 9);
 
-	if (Defs.Num() >= 1)
-	{
-		const FElysiumRopeDef& D = Defs[0];
-		TestEqual(TEXT("material id"), D.MaterialId, FString(TEXT("vtmb:material:cable/cable")));
-		TestTrue(TEXT("endpoint A parsed"), D.A.Equals(FVector(0, 0, 300)));
-		TestTrue(TEXT("endpoint B parsed"), D.B.Equals(FVector(400, 0, 300)));
-		TestEqual(TEXT("width cm"), D.WidthCm, 2.54f);
-		TestEqual(TEXT("rest cm"), D.RestCm, 203.2f);
-		TestEqual(TEXT("nodes"), D.Nodes, 10);
-		TestEqual(TEXT("texscale"), D.TexScale, 0.2f);
-		TestEqual(TEXT("flags"), static_cast<int32>(D.Flags), 0);
-
-		// --- rest-length contract: BuildRopes feeds RestCm straight into CableLength, and the
-		// producer has already resolved VtMB's own arithmetic into it. Rest *below* the straight
-		// span is the normal case, not a bug: `RecomputeSprings` subtracts a flat 100 units, so a
-		// 4 m span at 2.032 m rest is a taut cable the solver draws along the chord. ---
-		TestTrue(TEXT("rest length below the span -> taut, no sag"),
-			D.RestCm < static_cast<float>(FVector::Dist(D.A, D.B)));
-	}
-
-	if (Defs.Num() >= 2)
-	{
-		const FElysiumRopeDef& D = Defs[1];
-		TestEqual(TEXT("chain material id"), D.MaterialId, FString(TEXT("vtmb:material:cable/chain")));
-		// A Type-2 rope has two nodes, so BuildRopes gives it one span — a straight line that
-		// cannot sag, which is the whole point of the type.
-		TestEqual(TEXT("Type-2 rope keeps two nodes"), D.Nodes, 2);
-		TestEqual(TEXT("Type-2 rope is one cable span"), FMath::Max(1, D.Nodes - 1), 1);
-		TestTrue(TEXT("Dangling flag parsed"), (D.Flags & FElysiumRopeDef::Dangling) != 0);
-	}
-
-	if (Defs.Num() >= 3)
-	{
-		// Activate() clamps m_nSegments to [2, 10]; the parser holds the same bound so a bad
-		// sidecar cannot ask for an unbounded Verlet chain.
-		TestEqual(TEXT("node count clamped to VtMB's ROPE_MAX_SEGMENTS"), Defs[2].Nodes, 10);
-	}
+	// A Type-2 rope has two nodes, so BuildRopes gives it one span — a straight line that
+	// cannot sag, which is the whole point of the type — and Dangling unpins its far end.
+	FElysiumRopeDef Chain;
+	Chain.MaterialId = TEXT("vtmb:material:cable/chain");
+	Chain.Nodes = 2;
+	Chain.Flags = FElysiumRopeDef::Dangling;
+	TestEqual(TEXT("Type-2 rope is one cable span"), FMath::Max(1, Chain.Nodes - 1), 1);
+	TestTrue(TEXT("Dangling unpins the far end"),
+		(Chain.Flags & FElysiumRopeDef::Dangling) != 0);
+	TestFalse(TEXT("an unflagged rope stays pinned at both ends"),
+		(Taut.Flags & FElysiumRopeDef::Dangling) != 0);
 
 	// --- the R5.4 naming rule in C++ (`importers.materials.asset_path_for` + `asset_names.safe_name`),
 	// which is how a cable finds the `MI_` the material lane imported for its id. ---

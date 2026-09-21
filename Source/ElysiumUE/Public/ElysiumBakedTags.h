@@ -62,6 +62,12 @@ namespace ElysiumBakedTags
 	// navigation system consumes these actors; the runtime adopts nothing from the tag.
 	inline const FName NavJump(TEXT("elysium.nav-jump"));
 
+	// One overhead cable segment (0018 story 21-3): an `AElysiumRopeActor` carrying the eight facts
+	// `UElysiumMapVisuals::BuildRopes` builds its `UCableComponent` from. Carries a second tag,
+	// SourceIndex(i), naming its row in the staged `ropes` block -- the order the cables are built
+	// in, and what `bake_verify.rope_errors` matches an actor to its row by.
+	inline const FName Rope(TEXT("elysium.rope"));
+
 	// The BSP-authored AI infrastructure families (0018 story 2), one `AElysiumInfraActor` subclass
 	// each, every actor also tagged with `EntityIndex(i)` — its row in the map's entity table. The
 	// map adopts them before the entity world is built and rebuilds each def at its own index.

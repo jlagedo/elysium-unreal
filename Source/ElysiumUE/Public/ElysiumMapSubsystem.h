@@ -37,18 +37,19 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// Load a map, replacing the current one. Returns false unless the map has both a baked level
-	// and an export (the runtime reads sidecars from the export beside the baked look). A
-	// non-empty Landmark makes the fresh map place the player at that `info_landmark` (at the
-	// landmark's facing) instead of info_player_start — the console/direct entry to the landmark path.
+	// Load a map, replacing the current one. Returns false unless the map is baked whole
+	// (`HasBakedMap`). A non-empty Landmark makes the fresh map place the player at that
+	// `info_landmark` (at the landmark's facing) instead of info_player_start — the console/direct
+	// entry to the landmark path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
-	// Whether Travel would accept Map: the producer's own proof that it ran is on disk for it --
-	// the readiness marker, and since 0018 story 21-1 nothing else (the export-readiness gate).
-	// Static and file-only, so a
-	// test can drive it with a scratch content root and no UWorld or subsystem instance; `Travel` and
-	// `ExportedMaps` both route through this one predicate so the two can never disagree.
-	static bool HasTravelableExport(const FString& Map);
+	// Whether Travel would accept Map: the project carries the map's level and all three of its
+	// `DA_<map>_*` assets. 0018 story 21-3 moved the gate off the producer's `<map>.ready` marker
+	// under the export root -- the bake's four packages ARE the proof, and nothing outside the
+	// project is consulted. Static, so a test can drive it without a UWorld or a subsystem
+	// instance; `Travel` and `BakedMaps` both route through this one predicate so the two can
+	// never disagree.
+	static bool HasBakedMap(const FString& Map);
 
 	// Enter the empty `/Game/ElysiumGenerated/Boot` front-end shell. If it is already the current
 	// world (cold boot), this only latches front-end mode and reports no travel. From a game map it
@@ -121,14 +122,18 @@ public:
 	void RequestFreshMapState() { bFreshMapState = true; }
 	bool ConsumeFreshMapState();
 
-	// The map after Current in the sorted exported list (wrapping), for `map next`.
+	// The map after Current in the sorted baked list (wrapping), for `map next`.
 	FString NextMapName() const;
 
 	AElysiumMapActor* GetCurrentMap() const { return CurrentMap.Get(); }
 	FString GetCurrentMapName() const;
 
-	// Names of maps that are both exported and baked — i.e. the maps Travel will accept.
-	TArray<FString> ExportedMaps() const;
+	// The maps the project carries whole — i.e. the maps Travel will accept. Answered from the
+	// asset registry over `/ElysiumBaked` (0018 story 21-3), sorted, and built once per session.
+	TArray<FString> BakedMaps() const;
+
+	// Drop the cached list, so a bake that lands while the game runs is seen by the next ask.
+	static void InvalidateBakedMaps();
 
 	// The story entry, for the flow subsystem's New Game. Retail reaches this landmark from
 	// `sp_theatre`, and a direct entry uses the same one the real transition does.

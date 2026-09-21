@@ -9,13 +9,13 @@
 
 #include "ElysiumAudioSubsystem.h"        // the audio-catalog activation prerequisite
 #include "ElysiumCameraService.h"         // the LocalPlayer-scoped camera service handed to the world
-#include "ElysiumContentPaths.h"          // the map's sidecar paths (.sky/.ents/.spawn)
+#include "ElysiumContentPaths.h"          // the map's baked package paths
 #include "ElysiumEntity.h"                // FElysiumEntity — the landmark resolve
-#include "ElysiumEntityDefs.h"            // FElysiumEntityDefs — the .ents parse
+#include "ElysiumEntityDefs.h"            // FElysiumEntityDefs — the loaded entity table
 #include "ElysiumEntityWorld.h"           // the Track-B world this actor builds and owns
 #include "ElysiumSessionSubsystem.h"    // the clock, the level script, map snapshots
-#include "ElysiumMapEntities.h"           // ElysiumEntityDefSource::Load — the asset-or-sidecar transport
-#include "ElysiumMapEnvironment.h"        // ElysiumMapEnvironmentSource::Load — the .env/.sky/.spawn transport
+#include "ElysiumMapEntities.h"           // ElysiumEntityDefSource::Load — DA_<map>_Entities
+#include "ElysiumMapEnvironment.h"        // ElysiumMapEnvironmentSource::Load — DA_<map>_Environment
 #include "ElysiumMapSubsystem.h"          // epochs, backdrop state, landmark/restore placements
 #include "ElysiumPlayerBody.h"            // IElysiumPlayerBody — placement and the movement freeze
 #include "ElysiumPresentationSubsystem.h" // the fourth world service
@@ -349,7 +349,7 @@ void AElysiumMapActor::LoadMap()
 	Collision->Build(MapName);
 	Phase(TEXT("Collision"));
 
-	Visuals->BuildRopes(MapName);
+	Visuals->BuildRopes();
 	Phase(TEXT("Ropes"));
 
 	// The map's two fog sets, onto everything the level placed. The sky itself is the bake's
@@ -383,7 +383,7 @@ void AElysiumMapActor::LoadMap()
 		UE_LOG(LogElysium, Log, TEXT("menu backdrop '%s': full build, no player placement"), *MapName);
 	}
 
-	// Track-B entity substrate: parse `.ents`, build the live world, run the spawn pass.
+	// Track-B entity substrate: load the entity table, build the live world, run the spawn pass.
 	// Map-load ignition (OnMapLoad) is the logic_auto class's own first-think, not a
 	// separate pass. The world ticks from AElysiumMapActor::Tick.
 	if (UGameInstance* GI = GetGameInstance())
@@ -391,9 +391,8 @@ void AElysiumMapActor::LoadMap()
 		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			FElysiumEntityDefs EntDefs;
-			// The baked `UElysiumMapEntities` when this map has one, the `.ents` sidecar when it
-			// does not. Same defs
-			// either way; nothing below this line knows which transport answered.
+			// `DA_<map>_Entities`, the only transport since 0018 story 21-1; a map without one
+			// fails the load naming the bake command.
 			const EElysiumEntityDefSource DefSource = ElysiumEntityDefSource::Load(
 				MapName, EntDefs, SkyDef.Scale, SkyDef.OriginCm);
 			// 0018 story 2: the baked AI infrastructure actors rewrite their own rows, in place,

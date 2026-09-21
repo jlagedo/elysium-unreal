@@ -191,8 +191,12 @@ code-created-rope path only: `CalcRopeStartingConditions(v1, v2, ROPE_MAX_SEGMEN
 `m_RopeLength` 0x6cc, `m_Slack` 0x6d0, `m_TextureScale` 0x6d4, `m_fLockedPoints` 0x6d8, `m_Width` 0x6dc.
 The embedded `CRopePhysics<10>` starts at 0x458, so its node count is 0x464 and its node array 0x460.
 
-**The `.ropes` sidecar** (`write_ropes`) emits one line per segment, 12 whitespace-separated tokens
-(R6.5): `vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags`. The first
+**The rope rows** (`UE_map_sidecars.rope_rows`) are one per segment, eight facts each; the
+`.ropes` sidecar (`write_ropes`, an offline intermediate since 0018 story 21-3) writes the same rows
+as 12 whitespace-separated tokens
+(R6.5): `vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags`. The rows
+reach the game as one baked `AElysiumRopeActor` per segment, which `UElysiumMapVisuals::BuildRopes`
+builds its `UCableComponent`s from; the runtime opens no `.ropes` file. The first
 token is the rope material's unit id (`RopeShader` 0/1/2 → `cable/cable`/`cable/rope`/`cable/chain`,
 else `RopeMaterial`, else `cable/cable`), which the runtime resolves to the imported `MI_`;
 `a`/`b` are the two node origins

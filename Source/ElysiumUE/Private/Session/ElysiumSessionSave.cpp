@@ -301,9 +301,9 @@ bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 
 	// Check the destination before touching the session, the same precondition New Game asks: a load
 	// that cannot travel must not have thrown the current run away on the way to failing.
-	if (!Maps->ExportedMaps().Contains(Payload.World.CurrentMap))
+	if (!Maps->BakedMaps().Contains(Payload.World.CurrentMap))
 	{
-		OutError = FString::Printf(TEXT("saved map '%s' is not exported+baked"), *Payload.World.CurrentMap);
+		OutError = FString::Printf(TEXT("saved map '%s' is not baked"), *Payload.World.CurrentMap);
 		UE_LOG(LogElysiumSave, Warning, TEXT("load '%s' refused: %s"), *Slot, *OutError);
 		return false;
 	}

@@ -1360,7 +1360,43 @@ its recovery is written in the oracle section it names.
   `Elysium.Content.NavArea` green on the witnesses.
   Consumes: 21-1. Size: L. Effort: Opus / medium (editor ordering; three maps judged).
 
-- [ ] **21-3. The level carries everything a map needs.**
+- [x] **21-3. The level carries everything a map needs.**
+  **Landed 2026-09-21: the running game opens no file under `$ELYSIUM_EXPORT_ROOT/<map>/`.**
+  Witnessed with the five maps' export directories renamed away — `elysium_maps_list` returned the
+  six maps the mount carries whole, each of the five travelled and reached Playing, and each strung
+  its cables from the level: `sp_tutorial_1` 70, `sm_hub_1` 76, `sm_pawnshop_1` 21, `sp_theatre` 12,
+  `sp_soc_3` 4, one `UCableComponent` per `AElysiumRopeActor`, counted live. Those are the
+  producer's own segment counts, and `bake map --verify` reports the same five against the staged
+  rows, every material bound, 0 problems. `MapDir`, `MapExportReady`, `MapEnts` and `MapRopes` are
+  deleted; `.ready` is gone from the producer too, since nothing ever read it.
+
+  **Two corrections to this story's own text, both found by the audit and both material.**
+   * **`FElysiumRopeDef` carries EIGHT facts, not seven.** The list below omits the flag word, and
+     it is load-bearing: bit 0 is `Dangling`, `CRopeKeyframe::KeyValue` clearing
+     `ROPE_LOCK_END_POINT`, which `BuildRopes` turns into `UCableComponent::bAttachEnd`
+     (`ElysiumMapVisuals.cpp:607`). A cable baked without it hangs pinned at an end retail leaves
+     swinging. The actor carries all eight and `bake_verify.rope_errors` compares all eight.
+   * **Both "fixtures" of job 3 were dead code.** `FElysiumMapSlice` is reachable only through
+     `Tests/ElysiumTerminalGym.h`, which no translation unit includes, plus an unused include in
+     `ElysiumCameraCinematicTests.cpp`; `SurveyMap`/`FEntsSurvey` have no call sites at all, left
+     behind by `44ac84f6`'s retirement of the corpus test tier. Owner decision: re-point both as
+     written rather than delete, so the slice harness stays ready for the terminal gym's own TU.
+
+  **What the gate's move cost, and what it bought.** `ElysiumMapExportGateTests.cpp` could not
+  survive it: both its tests drove `HasTravelableExport` over a scratch export root
+  (`FElysiumScratchContentRoot`), and a scratch root cannot fabricate a `/ElysiumBaked` package. It
+  is replaced by `Elysium.Content.MapList` / `MapListMatchesGate`, which ask the mount itself —
+  every map the gate accepts carries all four packages, every bare `.umap` is refused (the mount
+  holds ~100 of those, levels baked before the three assets existed, so that half is not
+  hypothetical), and `BakedMaps()` is exactly the accepted set. Filtering the registry on
+  `UElysiumMapEntities` rather than on `World` is what keeps those ~100 out of the list without a
+  second pass. One sharp edge, found by the test's own path-traversal case: `BakedLevel` composes on
+  top of an empty `BakedMapDir`, so a name `BakedUnit` refuses still yields a path-shaped string —
+  `HasBakedMap` asks `BakedMapDir` directly rather than testing `BakedLevel` for emptiness.
+
+  Recovery: `seam_map_map.md` § "The level carries everything a map needs (0018 story 21-3)";
+  `seam_map_material.md` § R6.5 and `entity_visuals.md` §5 (the sidecar is now an offline
+  intermediate); `seam_map.md`'s Ropes row.
   Retail: none.
   Port today: three per-map reads of the export root survive 21-1, none gated:
   `BuildRopes` parses `<map>.ropes` (`ElysiumMapVisuals.cpp:589`); `HasTravelableExport` wants
@@ -1384,6 +1420,11 @@ its recovery is written in the oracle section it names.
   4. `MapDir` and every `Map*` accessor under it go.
   Acceptance: the five maps boot, travel and list with `$ELYSIUM_EXPORT_ROOT/<map>/` renamed
   away; rope counts equal the producer's rows; the entity-reading suites green.
+  As it was checked: `uv run pytest` green (`test_map_ropes.py` 16, `test_bake_map_ropes.py` 7;
+  the two `kernel_ledger`/`kernel_shape` `--check` failures reproduce on a clean tree and are not
+  this story's); `Elysium.Substrate.Ropes` and `Elysium.Content` 13 of 13; all five re-baked and
+  `bake map --verify` clean; then the five directories renamed away and the five maps travelled in
+  one run of the game.
   Consumes: 21-2. Size: M. Effort: Sonnet / medium.
 
 - [ ] **21-4. The bake needs no legacy directory.**

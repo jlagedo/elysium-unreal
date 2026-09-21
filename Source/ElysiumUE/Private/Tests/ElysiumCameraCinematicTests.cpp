@@ -4,8 +4,9 @@
 //
 // Everything here runs on a bare `FElysiumEntityWorld` + `FElysiumRecordingServices`: no UWorld, no
 // pawn, no renderer. The shot files are seeded into the parse cache with `ElysiumCameraShots::Install`
-// so the cases drive the real solver with no export mounted. The one content-tier case at the bottom
-// loads `sp_tutorial_1`'s real `.ents` through `FElysiumMapSlice` and abstains without the corpus.
+// so the cases drive the real solver with no export mounted. Every case builds its own defs in
+// place; the content-tier case this comment used to describe was retired with the corpus test tier
+// (44ac84f6), which is why the file no longer reaches for `FElysiumMapSlice`.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -22,7 +23,6 @@
 #include "Substrate/ElysiumCameraCinematic.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumSaveTypes.h"   // the map snapshot: the port's whole ObjectCaps transition carry
-#include "Tests/ElysiumMapSlice.h"
 #include "Tests/ElysiumTestServices.h"
 
 namespace ElysiumCameraCinematicTests

@@ -722,11 +722,11 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 	// Check the destination before touching the session. Seeding is destructive — it clears `G`,
 	// the quests, the snapshots, the sheet and the clock, and disclaims the running world — so a New
 	// Game that cannot travel must not throw the current run away on the way to failing. This is
-	// Travel's own precondition (an export beside a baked level), asked in advance.
-	if (!Maps->ExportedMaps().Contains(Map))
+	// Travel's own precondition (the map baked whole), asked in advance.
+	if (!Maps->BakedMaps().Contains(Map))
 	{
 		UE_LOG(LogElysiumFlow, Warning,
-			TEXT("New Game: entry map '%s' is not exported+baked — session left untouched"), *Map);
+			TEXT("New Game: entry map '%s' is not baked — session left untouched"), *Map);
 		return false;
 	}
 

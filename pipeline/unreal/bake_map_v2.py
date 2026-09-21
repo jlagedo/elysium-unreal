@@ -116,7 +116,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 12 (0005 requirement 1): `lightQuery`. 13 (0005 requirement 19): `jumpLinks`.
 #: 14 (0018 story 2): `aiInfra` -- the BSP-authored AI infrastructure rows this lane places one
 #: actor each for (`bake_ai_infra.author`), and their declared-set index.
-MANIFEST_VERSION = 14
+#: 15 (0018 story 21-3): `ropes` -- one row per cable segment this lane places one actor each for
+#: (`bake_ropes.author`), so `UElysiumMapVisuals::BuildRopes` builds its cables from the level
+#: instead of from `<map>.ropes` under the export root.
+MANIFEST_VERSION = 15
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -573,6 +576,8 @@ def _build_class():
             recipe["jump_links"] = self.geometry.manifest.get("jumpLinks", {}).get("sha256")
             recipe["ai_infra"] = self.geometry.manifest.get("aiInfra", {}).get("sha256")
             recipe["ai_infra_shape"] = _ai_infra_actor_shape()
+            recipe["ropes"] = self.geometry.manifest.get("ropes", {}).get("sha256")
+            recipe["rope_shape"] = _rope_actor_shape()
             # R7.2 ruling 3: the SLOT each face group binds, so a unit that gained (or lost) its
             # projector twin -- or, R7.4, its `_Underside` twin -- re-authors the level instead of
             # reusing a level bound to the other one. `slot_asset` already resolves both.
@@ -1493,6 +1498,16 @@ def _build_class():
             log("level: %d AI infrastructure actors" % placed)
             return placed
 
+        def _place_ropes(self, actors):
+            """Author the map's overhead cables as baked actors (0018 story 21-3)."""
+            from pipeline.unreal import bake_ropes
+            payload = self.geometry.manifest.get("ropes")
+            if payload is None:
+                raise ValueError("map manifest has no rope rows; stage the V2 map again")
+            placed = bake_ropes.author(actors, payload)
+            log("level: %d rope actors" % placed)
+            return placed
+
         # ---------------------------------------------------------------- captures (R5.5)
 
         def _place_captures(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
@@ -1734,6 +1749,12 @@ def _ai_infra_actor_shape():
     """`bake_ai_infra.INFRA_ACTOR_SHAPE`, read lazily: that module imports `unreal` itself."""
     from pipeline.unreal import bake_ai_infra
     return bake_ai_infra.INFRA_ACTOR_SHAPE
+
+
+def _rope_actor_shape():
+    """`bake_ropes.ROPE_ACTOR_SHAPE`, read lazily: that module imports `unreal` itself."""
+    from pipeline.unreal import bake_ropes
+    return bake_ropes.ROPE_ACTOR_SHAPE
 
 
 def miniature_transform(sky_block):

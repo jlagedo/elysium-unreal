@@ -8,8 +8,8 @@ struct FElysiumEntityDefs;
 
 // 0018 story 2: the baked AI infrastructure actors become the source of their entity defs.
 //
-// Runs once per map load, after the entity table is loaded (`UElysiumMapEntities` or `.ents`,
-// whichever answered) and before anything reads it — the level script, the model preload walk,
+// Runs once per map load, after the entity table is loaded (`DA_<map>_Entities`) and before
+// anything reads it — the level script, the model preload walk,
 // `FElysiumEntityWorld::Load`. Each actor rewrites the def at its OWN BSP index, in place: the
 // table is never appended to, filtered or renumbered, because the index is the entity's handle
 // and its save key.

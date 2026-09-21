@@ -797,7 +797,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_maps_list"),
-				TEXT("List the VtMB maps the offline pipeline has exported (folders under $ELYSIUM_EXPORT_ROOT holding a <name>.obj), and which one is loaded right now. Call this first — every other map tool takes a name from here."),
+				TEXT("List the VtMB maps the project carries baked (a level plus its three DA_<map>_* assets under /ElysiumBaked), and which one is loaded right now. Call this first — every other map tool takes a name from here."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -808,7 +808,7 @@ namespace ElysiumMcpImpl
 					}
 					TSharedRef<FJsonObject> Body = Obj();
 					TArray<TSharedPtr<FJsonValue>> Names;
-					for (const FString& Name : Maps->ExportedMaps())
+					for (const FString& Name : Maps->BakedMaps())
 					{
 						Names.Add(MakeShared<FJsonValueString>(Name));
 					}
@@ -866,7 +866,8 @@ namespace ElysiumMcpImpl
 					if (!bOk)
 					{
 						Body->SetStringField(TEXT("error"),
-							FString::Printf(TEXT("map '%s' has no exported .obj under $ELYSIUM_EXPORT_ROOT"), *Map));
+							FString::Printf(TEXT("map '%s' is not baked whole; run: uv run elysium bake map --maps %s"),
+								*Map, *Map));
 					}
 					return Structured(Body);
 				}));

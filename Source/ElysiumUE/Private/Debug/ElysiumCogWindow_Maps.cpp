@@ -63,10 +63,10 @@ void FElysiumCogWindow_Maps::RenderContent()
 
 	if (ImGui::BeginTabItem("Travel"))
 	{
-	const TArray<FString> Names = Maps->ExportedMaps();
+	const TArray<FString> Names = Maps->BakedMaps();
 	if (Names.Num() == 0)
 	{
-		ImGui::TextDisabled("No exported maps under $ELYSIUM_EXPORT_ROOT. Run the pipeline first.");
+		ImGui::TextDisabled("No baked maps. Run: uv run elysium bake map --maps <map>");
 	}
 	else if (ImGui::BeginTable("##Maps", 2,
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp,

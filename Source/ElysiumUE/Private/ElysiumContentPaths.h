@@ -530,13 +530,12 @@ struct FElysiumContentPaths
 		return Out;
 	}
 
-	static FString MapDir(const FString& Map) { return Root() / Map; }
-	// The export lane's readiness marker (the ruling is "the export-readiness gate"). An empty file
-	// the producer writes only once every sidecar `Travel` still depends on is complete on disk for
-	// this map, and the whole of that gate since 0018 story 21-1 retired the `.obj` arm.
-	static FString MapExportReady(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ready")); }
-	static FString MapEnts(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ents")); }
-	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
+	// There is no per-map accessor under `Root()` any more. 0018 story 21-3 retired the last three
+	// -- `MapExportReady` (the travel gate, now the bake's own four packages), `MapEnts` (the
+	// `elysium.ents` verb and two test fixtures, now `DA_<map>_Entities`) and `MapRopes`
+	// (`BuildRopes`, now the level's baked rope actors) -- and `MapDir` with them. The runtime
+	// opens no file under `$ELYSIUM_EXPORT_ROOT/<map>/`; what still reads `Root()` is the corpus
+	// trees below, which 21-6 moves into `Content/ElysiumCorpus/`.
 
 	// The corpus tree is deployed all-lower-case (`uv run elysium import`), while VtMB keyvalues and
 	// `dialogname` fields carry the authoring case ("dlg/Main Characters/jack_tutorial.dlg",

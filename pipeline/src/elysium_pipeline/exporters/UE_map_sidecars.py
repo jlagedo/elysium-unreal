@@ -2,8 +2,9 @@
 
 R3.2 asks for one producer that reads
 a map's four published GLB units and writes the sidecars the running game already reads --
-`.ents`, `.hulls`, `.dispcol`, `.lights`, `.env`, `.sky`, `.spawn`, `.ropes` -- plus the R2.4
-export-readiness marker `<map>.ready`. The join it performs is the entities+root join behind
+`.ents`, `.hulls`, `.dispcol`, `.lights`, `.env`, `.sky`, `.spawn`, `.ropes`. The R2.4
+export-readiness marker `<map>.ready` is gone with the travel gate that read it (0018 story 21-3);
+so is the runtime's `.ropes` read. The join it performs is the entities+root join behind
 `.ents`; this module is that specification executed, and nothing here decides anything the
 specification does not already state.
 
@@ -1314,28 +1315,42 @@ def rope_material_id(start: dict[str, str]) -> str:
     return "vtmb:material:" + shared_corpus.material_key(material)
 
 
-def write_ropes(
-    units: MapUnits,
-    blocks: Sequence[Sequence[tuple[str, str]]],
-    out_dir: Path,
-) -> dict[str, int]:
-    """`<map>.ropes`: the overhead cables VtMB strings between poles and buildings.
+#: The two classnames that construct `CRopeKeyframe`. Roles are resolved topologically, so which
+#: one a node carries decides nothing.
+ROPE_CLASSNAMES = ("keyframe_rope", "move_rope")
+
+
+def rope_nodes(blocks: Sequence[Sequence[tuple[str, str]]]) -> list[dict[str, str]]:
+    """Every rope node the map authors, folded case-insensitively, in lump order."""
+    return [
+        folded
+        for pairs in blocks
+        for folded in ({key.lower(): value for key, value in pairs},)
+        if folded.get("classname") in ROPE_CLASSNAMES
+    ]
+
+
+def rope_rows(blocks: Sequence[Sequence[tuple[str, str]]]) -> list[dict[str, Any]]:
+    """One row per cable segment: the overhead cables VtMB strings between poles and buildings.
 
     A rope is a chain of `move_rope`/`keyframe_rope` nodes linked by `NextKey`; both classnames
     construct the same `CRopeKeyframe`, so the roles are resolved topologically. Every parameter
     here is the RE'd runtime state rather than the raw keyvalue -- the rest length applies `Slack`
     twice, subtracts a flat 100 units and truncates through an integer divide; `nodes` comes from
-    `Type`, not `Subdiv`. All of it is ported from `UE_bsp_to_scene.write_ropes`. R6.5: the line
+    `Type`, not `Subdiv`. All of it is ported from `UE_bsp_to_scene.write_ropes`. R6.5: the row
     carries the material's `vtmb:material:` id and no
     decoded texture or shader flag -- the imported `MI_` owns those.
+
+    0018 story 21-3 split this out of `write_ropes`, as `light_rows` was split for R5.6: the
+    map-geometry stage projects these rows into the manifest and the map bake stands one actor per
+    row in the level, so the runtime opens no `.ropes` file. `write_ropes` below still formats the
+    same rows into the same bytes, because the sidecar remains an offline intermediate.
     """
 
-    nodes: list[dict[str, str]] = []
+    nodes = rope_nodes(blocks)
     by_name: dict[str, dict[str, str]] = {}
     for pairs in blocks:
         folded = {key.lower(): value for key, value in pairs}
-        if folded.get("classname") in ("keyframe_rope", "move_rope"):
-            nodes.append(folded)
         name = folded.get("targetname", "").lower()
         if name and name not in by_name:
             by_name[name] = folded                    # engine's FindEntityByName: first wins
@@ -1348,7 +1363,7 @@ def write_ropes(
         value = entity.get(key, "")
         return atof(value) if value else float(default)
 
-    lines: list[str] = []
+    rows: list[dict[str, Any]] = []
     for start in nodes:
         next_key = start.get("nextkey", "")
         if not next_key:
@@ -1381,14 +1396,44 @@ def write_ropes(
             | (4 if number(start, "barbed", "0") else 0)
             | (8 if number(start, "breakable", "0") else 0)
         )
-        lines.append(
-            f"{material_id} "
-            f"{a[0]:.4f} {a[1]:.4f} {a[2]:.4f} {b[0]:.4f} {b[1]:.4f} {b[2]:.4f} "
-            f"{width_cm:.4f} {rest_cm:.4f} {node_count} {texscale:.4f} {flags}"
+        rows.append(
+            {
+                "index": len(rows),
+                "materialId": material_id,
+                "aCm": [a[0], a[1], a[2]],
+                "bCm": [b[0], b[1], b[2]],
+                "widthCm": width_cm,
+                "restCm": rest_cm,
+                "nodes": node_count,
+                "texScale": texscale,
+                "flags": flags,
+            }
         )
+    return rows
+
+
+def rope_line(row: dict[str, Any]) -> str:
+    """One `rope_rows` row as its 12-token `.ropes` line, the only place the format is written."""
+    a, b = row["aCm"], row["bCm"]
+    return (
+        f"{row['materialId']} "
+        f"{a[0]:.4f} {a[1]:.4f} {a[2]:.4f} {b[0]:.4f} {b[1]:.4f} {b[2]:.4f} "
+        f"{row['widthCm']:.4f} {row['restCm']:.4f} {row['nodes']} "
+        f"{row['texScale']:.4f} {row['flags']}"
+    )
+
+
+def write_ropes(
+    units: MapUnits,
+    blocks: Sequence[Sequence[tuple[str, str]]],
+    out_dir: Path,
+) -> dict[str, int]:
+    """`<map>.ropes`, an offline intermediate since 0018 story 21-3: `rope_rows` formatted one line
+    per segment. The bytes are unchanged -- the runtime reads the baked actors instead."""
+    lines = [rope_line(row) for row in rope_rows(blocks)]
     if lines:
         write_sidecar_lines(out_dir / f"{units.name}.ropes", lines)
-    return {"segments": len(lines), "nodes": len(nodes)}
+    return {"segments": len(lines), "nodes": len(rope_nodes(blocks))}
 
 
 def write_displacement_collision(
@@ -1492,8 +1537,9 @@ def write_sidecars(
 ) -> dict[str, Any]:
     """Produce one map's legacy sidecars from its published units and return the run's numbers.
 
-    The `.ready` marker is written **last** and only when every sidecar Travel depends on is on
-    disk, which is exactly what the export-readiness gate is defined to mean (R2.4).
+    The run still fails rather than half-finishing -- every sidecar a later lane reads must be on
+    disk when it returns -- but it no longer writes a `<map>.ready` marker: 0018 story 21-3 moved
+    the travel gate onto the bake's own four packages, and nothing reads the marker any more.
     `entity_fields` opts `.ents` into the R3.4 divergences one at
     a time; the default keeps this run byte-comparable to `UE_bsp_to_scene.py`.
     """
@@ -1510,11 +1556,6 @@ def write_sidecars(
     scenes = join.scenes
     brush_meshes = join.brush_meshes
 
-    # The marker vouches for the sidecars of *this* run, so a stale one comes off before the run
-    # starts: a crash halfway through must leave the directory un-ready, not falsely ready.
-    marker = out_dir / f"{map_name}.ready"
-    marker.unlink(missing_ok=True)
-
     report: dict[str, Any] = {"map": map_name, "outputDir": str(out_dir)}
     report["hulls"] = write_hulls(units, sky, out_dir)
     report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir, entity_fields)
@@ -1527,13 +1568,12 @@ def write_sidecars(
     report["brushMeshes"] = len(brush_meshes)
     report["skyArea"] = sky.area if sky.ok else None
 
-    # R2.4: presence-only, empty, and written only after the sidecars it vouches for exist.
+    # The completeness check the retired `.ready` marker used to stand for: the run fails rather
+    # than leaving a later lane to read a sidecar that was never written.
     required = [f"{map_name}{suffix}" for suffix in (".ents", ".hulls", ".lights", ".env")]
     missing = [name for name in required if not (out_dir / name).is_file()]
     if missing:
         raise MapSidecarError(f"{map_name}: sidecars missing after the run: {', '.join(missing)}")
-    marker.write_bytes(b"")
-    report["ready"] = True
     return report
 
 
