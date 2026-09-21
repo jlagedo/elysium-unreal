@@ -1619,7 +1619,8 @@ its recovery is written in the oracle section it names.
   decoder while it still exists (`research/tooling/probes/decal_weather_parity.py`), and the
   result is better than the story assumed and worse in exactly one named place.
    * **Decals reproduce byte for byte on 84 of the 92 maps with a legacy `.decals`**, 5,037 lines
-     compared. Three maps are the entity-lump refusals 21-7 owns. **Five differ, by 22 rows in
+     compared. Three maps were the entity-lump refusals 21-7 has since removed, so they stage now
+     and were never compared (the probe went with the decoder). **Five differ, by 22 rows in
      total, and every one is the same cause**: a displacement face states its geometry through
      its own mesh and its FLAT winding — which is what a decal projects onto — is published
      nowhere, so a decal the decoder bound to sculpted terrain has no face to bind here. Each of
@@ -1671,7 +1672,8 @@ its recovery is written in the oracle section it names.
   six; `verify maps` green. Then all six travelled in one run of the game — the tutorial's
   scripted opening playing, `elysium.weather.rain_on` bringing up the hub's two
   `rain_follow_emitter`s. Staging the decal lane over the whole published corpus is clean as well:
-  105 of 108 maps with zero validation failures, the three that are not being 21-7's refusals. The
+  105 of 108 maps with zero validation failures, the three that are not being the lump-reader
+  refusals 21-7 removed, taking the corpus to 108 of 108. The
   six legacy directories were restored afterwards: they were the parity probe's comparison
   subject until 21-5 deleted the decoder, and nothing read them. (21-5 moved them away again for
   its own witness and left them there; the probe is gone with the decoder.)
@@ -1939,64 +1941,96 @@ its recovery is written in the oracle section it names.
   Provides: to 20, the precondition of its cook check — no external export access.
   Consumes: 21-3 (21-5 for the commands it empties). Size: M. Effort: Sonnet / medium.
 
-- [ ] **21-7. The producer's debt: the lump reader and the entity divergences.**
-  Retail: each flip is a reading of retail's own entity parse, and lands with the address that
-  proves it — this is the one story of the group that changes what the game loads.
-  Port today: `DA_<map>_Entities` is NOT read structurally from the entities unit, whatever
-  `seam_map_map.md:509` says: `map_entities.stage_map` builds it through
-  `producer.prepare_join` — which rebuilds lump text with `entity_lump_text` and re-runs the
-  legacy regexes — and `build_entities` under the default `EntityDivergences()`
-  (`map_entities.py:156-159`, `UE_map_sidecars.py:253-307, 1454-1464`). So the game's entity
-  asset carries every legacy reading, the `sm_hub_1` embedded-quote corruption included, and the
-  only reason was byte-comparability with a differ 21-1 deleted. The reader also refuses three
-  maps outright when a keyvalue re-escapes to a different length (`:461-465`).
-  **The `sm_hub_1` corruption is worse than "a pinned quirk" (measured 2026-09-21).** Retail's
-  tokeniser `0x10136ce0` unescapes `\"`, `\\` and `\n` inside a quoted token
-  (`10136d7a-10136d9e`), so its `logic_auto` runs `setArea("santa_monica")` on map load. The port's
-  staged `.ents` stops at the `\"`, records the Python as `setArea(\`, **and reads the remainder
-  as a further keyvalue, minting the key `"),"` with the value `origin` and destroying the
-  entity's real `origin`.** The hub therefore loses both a map-load script call and a placement
-  today. Same shape on `lilly_trunk.OnOpen`. That escape rule is also what unblocks the three
-  refused maps: `_requote` exists only to re-corrupt the value for the deleted differ.
-  Job:
-  1. Measure first: for the six maps, the rows the asset carries today against a structural
-     read of `entities[].keyValues[]`, flag by flag. The delta is the work list.
-  2. `entity_lump_text` / `_requote` are replaced by the structural read in every caller —
-     `prepare_join`, `map_ai_infra.py:262` — and its corruption-pinning test goes.
-  3. The five flags flip ONE PER COMMIT, each with the rows it changed on the six maps listed.
-     **The retail evidence is recovered (2026-09-21, `entity_io.md` § "The lump tokeniser and what
-     a keyvalue actually becomes"); each flag's answer is below, so this job is now mechanical.**
-     | flag | retail | verdict |
-     |---|---|---|
-     | `datamap_output_typing` | the datamap decides, never the key text — `0x101a5a80` admits a record only on `FTYPEDESC_KEY 0x4` and dispatches type 10 custom at `101a5c3b`; outputs arrive through `0x100cdb20` -> `0x100cd6d0`. Both counterexamples ship: `CMomentaryRotButton.Position` is an output named neither `On*` nor `Out*`, `CNPC_VGhoulCroucher.on_fire` a plain bool that looks like one | **flip** |
-     | `fold_keys` | `__strcmpi` at `101a5b0a`; `ParseMapData 0x1009e280` applies pairs in order, so the last spelling's write is what the field holds | **flip** |
-     | `strip_param` | the splitter `0x101d16c0` trims **nothing**. The flag is aimed the wrong way: the correction is for the port to **stop** stripping `target`, `input` and `python`, not to start stripping `param` | **stays legacy; restate the flag** |
-     | `delay_atof` | CRT `_atof`, `100cd099` -> `0x1043136f`; an empty token skips the call and keeps `0.0` | **flip** |
-     | `keep_extra` | six splits and no seventh (`100cd0d9`, return `100cd109`); a written 7th field is inert residue | **stays legacy** |
-     When all five are settled the class goes.
-  3b. **Two divergences no flag covers, found by the same recovery and both live.** An output
-     whose input token is empty fires **`Use`** in retail (`0x100ccf90` substitutes
-     `DAT_10555f7c`, read from the shipped `.data` as `"Use"`); the port stores `""`. And
-     `split_output` leaves an authored `times` of `0` as `0` where retail rewrites it to `-1`
-     (`_atoi` result 0 -> `0xffffffff`) — its docstring claims the rewrite,
-     `int(number(parts[4], -1))` does not perform it. Each needs its own commit and its own
-     changed-row list.
-  4. `seam_map_map.md` R3.4 and `:502-512` are rewritten to what is now true.
-  Acceptance: the six maps re-bake; every changed row is accounted for by a named flip; the
-  tutorial's and the hub's scripted witnesses (the `logic_failed_blueblood` chain, the hub's
-  `logic_auto`) run as before or better, read against retail; the three refused maps stage.
-  Consumes: 21-5. Size: M–L. Effort: Opus / high.
+- [x] **21-7. The producer's debt: the lump reader and the entity divergences.**
+  **Landed 2026-09-21 in nine commits: the entity lump is read rather than rebuilt, the five R3.4
+  divergence flags are gone, and there is one output parser in the tree.** The story's own account
+  of the damage was too small in both directions — the corruption was worse than a pinned quirk,
+  and every flag but one measured zero on the six maps.
+
+  **What the measurement found** (job 1, `research/tooling/probes/entity_reading_delta.py`, all 108
+  published units; recorded in `entity_io.md` § "What the corpus actually authors"). The debt was
+  two things and not six:
+
+  | rule | rows it moved |
+  |---|---:|
+  | an empty `input` reads `Use` | 6,856 (2 of them name a target) |
+  | the lump is read, not rebuilt | 9 entities on 8 maps, + 3 maps unblocked |
+  | the datamap types an output | 18 on 7 maps |
+  | retail has no comma gate | 2 |
+  | no field is trimmed | 1 |
+  | `delay` `_atof`, `times` `_atoi` + 0 → −1, key folding, the 255-byte cap, the key trailing-space trim | 0 |
+  | field 6 (`extra`) stays dropped | 0 — and turning it on would have moved 24,114 |
+
+  **The escaped-quote corruption destroyed placements, not a string.** Nine keyvalues in the corpus
+  carry an embedded quote; the regex reader consumed the `origin` key of all nine of their
+  entities, parking each at world zero, and swallowed most of their outputs as junk keys:
+  `ch_hub_1[898]` 1 output → 12, `hw_hub_1[1202]` 4 → 11, `la_hub_1[1097]` 1 → 10,
+  `sm_hub_1[1611]` 20 → 20 (the Python alone), `sp_endsequences_a[771]` 4 → 9, `[833]` 0 → 3,
+  `sp_endsequences_b[628]` 1 → 6, `sp_epilogue[214]` 2 → 6, `sp_masquerade_1[38]` 13 → 14.
+  `sp_endsequences_b[628]` also flipped `sky` false → true, because an entity at the origin
+  classifies against the wrong BSP area. `la_hub_1` had lost `posterCheck()` and
+  `checkMasquerade()` as well as `setArea("downtown")`. **`lilly_trunk.OnOpen` is not reachable
+  here**: it is real in the shipped `sm_hub_1.bsp` (line 26017) and the Unofficial Patch deletes
+  that line, so the patch-first corpus never carries it — a correction to `entity_io.md`'s own text.
+
+  **Two findings the story did not have.** (1) Retail's splitter `0x101d16c0` has **no comma gate**:
+  the port refused to parse a datamap-typed key with fewer than four commas, and `la_empire_2[412]`
+  / `[413]`'s `npc_VHumanCombatant.OnDeath` = `"G.Dead_Russians = G.Dead_Russians + 1,"` is an
+  output row in retail (addressing an entity that does not exist, so it drops — reproduced, not
+  corrected). (2) The `times` rewrite had **three** owners, none of them the parser:
+  `UElysiumMapEntities::Deserialize`, `FElysiumEntityDefs::Parse` and
+  `AElysiumInfraActor::BuildDefOutputs` each applied it while `split_output`'s docstring claimed it
+  and `int(number(parts[4], -1))` did not. It is the parser's now and the three readers copy
+  verbatim.
+
+  **How it landed.** Job 2 was bigger than the story's two callers: the reconstructed text also fed
+  `SkyScope`'s `sky_camera` scan, `.env`'s fog and `skyname`, `.spawn`, the brush-model origins and
+  `decal_rows`' `infodecal`, plus `map_ropes` and `wield_corpus`. All of them read
+  `entity_pair_blocks` / `folded_keys` / `first_of_class` now; `entity_lump_text`, `_requote`,
+  `parse_entity_blocks`, `entity_block_texts` and `MapJoin.text_blocks` are deleted, and
+  `wield_corpus` — which reads a real BSP lump — uses the unit's lexer, the port of the tokeniser.
+  The five scans match a classname as a classname where the text scan matched the literal string
+  anywhere in the block; a before/after snapshot of all eight sidecars over the 105 maps that could
+  be reconstructed at all shows that narrowing changing **no** `.env`, `.sky`, `.spawn`, `.hulls`,
+  `.lights`, `.ropes` or `.dispcol` line (`research/tooling/probes/sidecar_snapshot.py`,
+  `sidecar_diff_trees.py`).
+
+  Then, with the five settled, the producer's own output parser agreed with the entities unit's on
+  every field of every output in the corpus except the comma gate — so **the duplicate went**:
+  `is_output_key`, `_is_datamap_output` and `split_output` are deleted and `entity_outputs` reads
+  the unit's published `outputs[]`, whose `decode._output_row` is the port of `0x100ccf90`. The
+  `Use` substitution landed in that parser, so all 108 entity units were re-exported
+  (`export_v2 map-entities-glb --all`, validation clean on every one).
+
+  Recovery: `seam_map_map.md` R3.4 (rewritten to "settled", one row per divergence with its retail
+  address and measured count) and its `sm_hub_1` bullet, whose claim that `UElysiumMapEntities`
+  "inherits the fix by construction" was the false statement this story existed to correct;
+  `seam_map_map_entities.md` → "Outputs"; `entity_io.md` § "What the corpus actually authors".
   Oracle: `entity_io.md` § "The lump tokeniser and what a keyvalue actually becomes"
   (recovered 2026-09-21: the tokeniser, the 256-byte key/value cap, the `{}()'` delimiter set,
   the key-only trailing-space trim, the datamap type switch and the six-field row parser).
-  **Nothing here is unrecovered any more** — job 1's measurement is the only read still owed.
+  Consumes: 21-5. Size: M–L. Effort: Opus / high.
+
+  As it was checked: `uv run elysium build` green; `uv run pytest` 4,166 passed with only the two
+  `kernel_ledger` / `kernel_shape` `--check` failures that reproduce on a clean tree;
+  `Elysium.Substrate` 458 of 458. All six maps re-baked `--force --verify`, `verify nav` clean on
+  each. All 108 entity units re-exported with the exporter's validation clean, and all 108 maps
+  stage through `map_ai_infra` and `map_decals`. Then all six travelled in one run of the game:
+  **`sm_hub_1`'s `logic_auto` is entity 1611 with its `origin` back (`-2586.48 -2091.1 -111`), no
+  key spelled `"),"`, 20 outputs, and the FIRST line of the map's I/O history is
+  `py: __main__.setArea("santa_monica") => Void`** followed by the `basementdr` close and lock that
+  call performs — the map-load script call the port had been losing since R3.2. The tutorial's
+  scripted opening plays (`unhidePlus()`, the front doors lock, `masterRefill`, the sentry patrol,
+  the move popup) and the `logic_failed_blueblood` chain fires all eight rows in reverse parsed
+  order with both Python payloads, unchanged. Every row whose `input` is now `Use` and whose target
+  is empty is still routed `<py-only>`, so the substitution adds no dead wire.
 
 - [ ] **21-8. The other 102 maps.** On the owner's approval, not automatically — run when a
   story's witness needs a map outside the six, not before.
   Job: each map from its `exports_v2` units through `bake map`, its nav findings judged as 21-2
   judged three. Owed first: the five patch-only graphs re-exported under 3's patch-first rule
   (21-1 lists them); `sm_pier_1`, delisted by this group; and `la_ventruetower_2`,
-  `la_ventruetower_3`, `sp_giovanni_2b`, which 21-7 unblocks.
+  `la_ventruetower_3`, `sp_giovanni_2b`, which 21-7 unblocked.
   Consumes: 21-7. Size: L, by batch.
 
 ## Seams

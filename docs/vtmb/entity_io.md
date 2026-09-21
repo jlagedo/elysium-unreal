@@ -183,9 +183,42 @@ record is `0x20` bytes (`0x100cd6d0`). So `"1.5s"` reads `1.5`, `"abc"` reads `0
 | `delay_atof` | CRT `_atof` (`100cd099` -> `0x1043136f`) | **flip to corrected** |
 | `keep_extra` | six splits, no seventh (`100cd0d9`, `100cd109`); a 7th written token is inert residue | **stays legacy** |
 
-Two divergences no flag covers, both live: the port stores an empty `input` as `""` where retail
-stores `Use`, and `split_output` leaves an authored `times` of `0` as `0` where retail rewrites it
-to `-1` (its docstring claims the rewrite; `int(number(parts[4], -1))` does not perform it).
+Two divergences no flag covers: the port stores an empty `input` as `""` where retail stores `Use`,
+and `split_output` leaves an authored `times` of `0` as `0` where retail rewrites it to `-1` (its
+docstring claimed the rewrite; `int(number(parts[4], -1))` did not perform it).
+
+### What the corpus actually authors (measured 2026-09-21, 0018 story 21-7)
+
+All 108 published entity units, against the reading above
+(`research/tooling/probes/entity_reading_delta.py`). The point of the count is which of these rules
+a shipped map can tell the difference on:
+
+| rule | rows it moves |
+|---|---|
+| an empty `input` -> `Use` | **6,856**, of which **2** name a target and so change a delivery (`sm_oceanhouse_2[1181]`, `sp_soc_1[189]`) |
+| the datamap types the key, not its spelling | **18** on 7 maps; 38 demotions and 3 promotions among the keyvalues, most of them the Unofficial Patch's `-wesp` disabled spelling, and `la_hub_1`'s `game_ui` the promotion |
+| no comma gate | **2** (`la_empire_2[412]`, `[413]`: `"G.Dead_Russians = G.Dead_Russians + 1,"`) |
+| no field is trimmed | **1** (`hw_sinbin_1[128]`'s `python`, `'G.Sin_Peeper1 = 1 '`); `la_ventruetower_1b` has the only untrimmed `param` and it was already verbatim |
+| `delay` via `_atof` | **0** — every authored `delay` is a plain float token |
+| `times` via `_atoi`, 0 -> -1 | **0** once the `-wesp` demotion lands; the corpus's only authored `0` is on `hw_netcafe_1[596]`'s disabled key |
+| a key repeated under two spellings | **0** over 71,096 entities |
+| the 255-byte key/value cap | **0** |
+| a key with trailing ASCII spaces | **0** |
+| a written 7th field (dropped) | 24,114 rows carry one; retail reads none of them |
+
+Two corrections to this document's own text, from the same measurement:
+
+* **`lilly_trunk.OnOpen` is not in the corpus.** It is real in the SHIPPED `sm_hub_1.bsp` (line
+  26017, `RemoveItem(\"item_k_lilly_key\")`), but the Unofficial Patch deletes that line and the
+  export is patch-first, so the published unit never carries it. The hub's `logic_auto` is the only
+  escaped-quote value on that map.
+* **Nine keyvalues in the whole corpus carry an embedded quote**, on eight maps: the four hubs'
+  `logic_auto` `setArea(...)` calls (`ch_hub_1`, `hw_hub_1`, `la_hub_1`, `sm_hub_1`), four
+  `PlayEndCredits` rows naming a `vdata/System/*.txt` file (`sp_endsequences_a`,
+  `sp_endsequences_b`, `sp_epilogue`, `sp_masquerade_1`) and `sp_endsequences_a`'s
+  `logic_pythoncheck.python_script`. The port's regex reader destroyed the `origin` key of every
+  one of their entities, so all nine were placed at world zero, and swallowed most of their outputs
+  as junk keys — not a Python string alone.
 
 
 ## Base inputs
