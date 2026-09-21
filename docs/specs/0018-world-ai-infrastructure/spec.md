@@ -654,7 +654,22 @@ its recovery is written in the oracle section it names.
   How the six species acquire `m_eHull` is **closed** (2026-09-20; § "The two hull words"): a
   constructor writes it, the ledger never saw those stores, and there are two hull words — the
   agent follows `+0x156c`, the capsule `+0x1568`.
-  Unrecovered: the open `146–184` pair on the tutorial's zone 11 / 12 boundary. (Why links run through standing doors is
+  **The `146–184` pair is closed (2026-09-21, `navigation-jump-links.md` § "The `146-184` pair,
+  closed — a barrel, and a ray where retail sweeps a hull"), and this story's last open item with
+  it.** Node 146's hull-0 offset is `+48.01` where every other node on the map is `-3.87` or
+  `-8.87`: it stands on top of the static prop `models/scenery/structural/society/barrel.mdl`
+  (patch BSP row 679; absent from retail's, the patch-first pairing again), whose collision top
+  `6910.88` is its stand height `6911.01`. A centre ray misses the barrel; **`CAI_Node::InitLinks
+  0x102fb4e0` sweeps the human hull**, which enters it immediately on leaving 146, so no link is
+  built. `soc_int_locked_door` is disjoint in X from the segment at every height and is not the
+  cause for THIS pair. Zones are a connected-components pass over links (`0x102f49c0` /
+  `0x102f4940`, reading no geometry) computed at REBUILD only — the load path `0x102f5bd0` takes
+  the serialized zone word — so "why no link" was always the right question.
+  **The lesson, which outlives the finding:** an open-ray check against BSP brushes is not
+  retail's admission test — it misses static props and hull width entirely. 4's zone report and
+  any later "these should be joined" claim must reproduce with a hull sweep against props, not a
+  ray against brushes.
+  (Why links run through standing doors is
   closed: `MOVEABLE 0x4000` is the bit that hits doors, and the graph-build mask `0x2000b` is
   the only one without it — which is 7's door rule.)
   Size: L. Effort: Opus / high (exporter, payload, editor bake, nav config, verify).
@@ -702,8 +717,45 @@ its recovery is written in the oracle section it names.
   from the registry. Pins, patch graphs: tutorial 203 places, all ground; hub 578, all ground.
   Provides: places to 7–12. Consumes: 2, 3.
   Oracle: `navigation-jump-links.md` § "The loader, walked", § "Which graph the patched install
-  runs on", § "What the shipped graphs and maps actually use". Unrecovered, a read before it
-  lands: `TASK_GET_PATH_TO_RANDOM_NODE`'s body.
+  runs on", § "What the shipped graphs and maps actually use",
+  § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked".
+  **OPEN QUESTION FOR THE OWNER, raised 2026-09-21: the read this story owed came back against the
+  "no links" decision.** `TASK_GET_PATH_TO_RANDOM_NODE` is task `0x1f` (`0x10316ff0`), and it is
+  **not a draw from a set of places**. Its arm `0x10285d7f` runs a random WALK over the AIN
+  adjacency lists (`0x102ff3e0`), and the per-link predicate `0x102ff960` reads, at RUN TIME:
+  `link+0x64` link info (bit `0x1000` rejects outright), the **per-hull motion word**
+  `link+0x0c + 4*hull` AND-ed with the NPC capability word (slot 513), the far endpoint
+  (`0x102dda40`), `IsJumpLegal` when the motion word is exactly `2`, and the **stale bit**
+  `link+0x64 & 1` with its expiry `link+0x68` (`0x102fce80`, a failed re-probe notifying the
+  blocker through `0x1027de00`). It also needs adjacency `node+0x78`/`+0x7c` and the **rotating
+  per-node neighbour cursor `node+0xa4`** (`0x102f9750` / `0x102f9780`), which is mutable run-time
+  state rather than serialized order. It reads no zone `+0x94`, no neighbour bitvector `+0x90`, and
+  never calls `IsConnected`; and it needs only the ONE motion word the pathing hull `+0x156c`
+  selects, not all 22.
+  This matters because of WHO issues it: **15 schedules**, among them the base wander programs
+  `IDLE_WANDER`, `PATROL_WALK`, `PATROL_RUN` and `RUN_RANDOM` (`0x102cb690`) and four cop programs
+  `SCHED_VCOP_WANDER_PATROL` / `_SHORT` / `_AND_VANISH` / `SCHED_VCOP_RUN_TO_SAVED`
+  (`0x10370b00`). **Story 20's witness — "pedestrians visit places, cops patrol" — runs through
+  this task**, so it cannot be deferred as an unreached arm.
+  Three ways out, the owner's call, none of them free: **(i)** carry a reduced adjacency in the
+  cooked asset (endpoints, `link+0x64`, one motion word per baked agent) and port the walk
+  verbatim — the asset stops being "places only"; **(ii)** declare the walk a named modernization
+  and re-express it over the NavMesh (a bounded random reachable point at the resolved distance,
+  biased by body heading), keeping the observable contract — fail code `0x18`, synchronous
+  completion, the two-tier `node+0x9c` cooldown, the type-4 exclusion; or **(iii)** keep places
+  only and accept that these 15 schedules do not run, which forfeits the hub witness.
+  Whatever is chosen, the observable contract is recovered and must hold: **failure is
+  `TaskFail(0x18)`**, not `0x0c`; `RunTask` is an empty break because the task completes
+  synchronously in `StartTask`; the result is installed straight into the navigator's PATH object
+  (`0x1030ba50(path, 4)`, `0x1030b4d0`, `0x1030b8e0`, endpoint distance² at `navigator+0x14`) and
+  **`SetGoal` is never called**, so there is no goal type and no tolerance; the cooldown
+  `node+0x9c` defers rather than filters; a type-4 node is never the final node; the walk stops at
+  the resolved distance or an iteration guard of `0x14`; and selection is `RandomInt(0, count-1)`
+  once per step, with a directed variant that keeps only a STRICTLY greater dot product and then
+  replaces the heading with the step taken.
+  *(For the avoidance of the doubt this paragraph caused once: "links, zones … never run-time
+  data" above is a statement about the PORT's cooked asset, not about retail — retail plainly
+  reads them, as `0x102ff960` shows.)*
   Size: M. Effort: Opus / high.
 
 - [ ] **5. The navigator and the movement seam.**

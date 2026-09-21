@@ -1893,3 +1893,175 @@ only thing that changes the state. **A port that models the crosswalk state as o
 link pair is behaviourally identical to retail for all shipped content**; a port that implements
 the 16-second phase rotation is implementing an arm no map can reach. The rotation is recorded
 here so the choice is a decision rather than an omission.
+
+### The `146-184` pair, closed — a barrel, and a ray where retail sweeps a hull (2026-09-21, 0018 story 3)
+
+§ "Zones end where the geometry does" left one finding open: on `sp_tutorial_1` the zone 11 / 12
+boundary at `soc_int_locked_door` has a pair, nodes `146-184`, that "reads open at chest height and
+is unexplained". **It is explained, the door is not involved, and the earlier test was the wrong
+test.**
+
+**What a zone is.** A zone is a connected component of the node adjacency list, nothing spatial.
+`0x102f49c0` runs only AFTER links are built: isolated nodes get zone `1`, flood fills start at
+zone `4`, and `0x102f4940` writes `node+0x94` while following every entry of `node+0x7c`, taking
+the opposite endpoint from link `+0x04`/`+0x08`. It inspects no hull motion, link info, node type,
+flag, distance or geometry. **Zones are computed at REBUILD, not at load**: the load path
+`0x102f5bd0` reads the serialized zone word straight out of the file and never calls `InitLinks`
+or the zone pass (the rebuild chain is `0x102f6610 -> 0x102f4e00 -> 0x102fb4e0 -> 0x102f49c0`,
+chosen by the BSP-vs-AIN timestamp compare at `0x102f688d`). So the question is never "why are
+these two zones apart" but "why is there no link", and the answer is in the builder.
+
+**The candidate pass is open; the link test is not.** `0x102fa630` (from `0x102fac00`) proposes
+neighbours by tracing hull-2 node positions under mask `0x2000b`, keeping ordinary nodes within
+**800** units (`0x10457ac4`) and type-3 nodes within **2048** (`0x1046bacc`). At 109.56 units the
+pair is well inside. `CAI_Node::InitLinks 0x102fb4e0` then runs the real per-hull fit, stand, walk,
+jump and climb traces (`102fb706`-`102fbe4b`) under the same `0x2000b` — which carries SOLID,
+WINDOW, GRATE and MONSTERCLIP but **not `MOVEABLE 0x4000`**, the reason links run through standing
+doors. There is no zone-count cap that could split a component; the only limit is 1,500 nodes at
+`0x102f47f0`, which aborts a rebuild rather than dividing a zone.
+
+**The shipped data** (`Unofficial_Patch/maps/graphs/sp_tutorial_1.ain`, `Version 30`,
+`NumHulls 22`, `UsedHullBits 0x80001`, `ZoneCount 13`, 203 nodes, 429 links; every figure below
+re-parsed from the file):
+
+| node | origin | type | flags | zone | links | hull-0 offset |
+|---:|---|---:|---:|---:|---:|---:|
+| 146 | `-7046, 3167, 6863` | 2 | 0 | 11 | 1 | **`+48.01`** |
+| 184 | `-7078, 3255, 6859` | 2 | 0 | 12 | 1 | `-4.87` |
+
+At hull 0 they stand at `(-7046, 3167, 6911.01)` and `(-7078, 3255, 6854.13)` — **109.5597** apart
+and **56.9 units apart vertically**. Node 146's only link is 301 (`146 -> 190`); node 184's only
+link is 398 (`183 -> 184`). **No link in the file joins 146 to 184, and no link joins zone 11
+(64 nodes) to zone 12 (22 nodes) anywhere.** They are each other's nearest cross-zone pair
+(next: `190-184` at 139.07, `144-175` at 144.40, `145-165` at 145.29).
+
+**Why.** That `+48.01` hull-0 offset is the whole answer: every other node on this map offsets
+`-3.87` or `-8.87`, so **node 146 does not stand on the floor — it stands 48 units up, on top of a
+prop.** The prop is static-prop row 679, `models/scenery/structural/society/barrel.mdl` at
+`(-7030.38, 3193.49, 6884)`, angles `(-90, 160, 0)`, solid byte 6, whose transformed collision
+envelope is about `x -7050.50..-7010.26, y 3173.68..3213.30, z 6857.12..6910.88` — and
+`6910.88` is node 146's own stand height to within a hundredth. The model is in the **patch**
+BSP's static-prop dictionary and **not in retail's**, which is exactly the patch-first pairing this
+document already requires.
+
+A centre ray from 146 to 184 at floor, chest or head height misses that envelope, which is why the
+earlier pass reported "open". **Retail does not cast a ray; `InitLinks` sweeps the hull.** The
+human hull `(-13,-13,0)..(13,13,72)` enters the barrel immediately on leaving node 146 and stays
+inside it for roughly the first half of the segment, so the walk trace fails and no link is built.
+
+`soc_int_locked_door` (entity row 1546, `func_door_rotating`, model `*163`, brush 2986, contents
+`0x1`, closed world box `x -7156..-7153, y 3143..3197, z 6854..6961`) is **disjoint in X from the
+segment at every height** and has nothing to do with this pair — the section's attribution of the
+11/12 boundary to that door is wrong for `146-184` specifically, though the door still separates
+the zones elsewhere. Both nodes are plain `info_node` rows (`WCLookup` 532 and 586) carrying no
+`hinttype`, so `CNodeEnt::Spawn 0x102d78d0` builds no hint for either and both node hint pointers
+stay empty.
+
+**The lesson for the port**, and the reason this was worth chasing: an open-ray check against BSP
+brushes is not retail's admission test. It misses static props entirely and it misses hull width.
+Any future "these two nodes should be joined" finding has to be reproduced with a hull sweep
+against props as well as brushes before it is called a defect.
+
+### `TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked (2026-09-21, 0018 story 4)
+
+_The read story 4 owed. **It is not a draw from a set of places.** It is a random WALK over the
+AIN adjacency lists, and it reads links, link info, per-hull motion words and stale-link state at
+run time._
+
+**Registration.** `0x10316ff0` calls `0x102ea130(&DAT_1090ff20, "TASK_GET_PATH_TO_RANDOM_NODE"
+0x105d52a8, 0x1f, ...)`, so the task id is **`0x1f`**. The base `StartTask` dispatcher indexes
+`iTask - 1` through the byte table `0x10287138`; entry `0x1b` at `0x10287156` lands on the arm
+**`0x10285d7f`**. Troika delegates (byte `0xaf` at `0x102a7ad2` -> `0x102a77e2` -> the base thunk).
+
+**The arm, entire:**
+
+```
+direction = BodyDirection2D()                 // slot 368 -> 0x10331950
+distance  = ResolveTaskDistance(flTaskData)   // slot 418; base 0x102702d0, Troika 0x102bf6e0
+if (!0x102ed940(navigator, distance, direction, 0))  TaskFail(0x18)
+else                                                 TaskComplete(false)   // 0x10273e80
+```
+
+The failure code is **`0x18`**, not `0x0c`, `0x1d` or `0x0e`. `RunTask` for `0x1f` is an empty
+`break` (`0x10288780`, via byte `0x04` at `0x102897b1`) — **the task completes synchronously in
+`StartTask`** and has no run phase.
+
+**The hull is the PATHING word.** `0x102ed940` caches `npc+0x156c` into both `navigator+0x08` and
+`pathfinder+0x08` (`102ed946`-`102ed977`) before anything else, and the nearest-node query loads
+`+0x156c` at `102f3c7c` and hands it to `CAI_Node::GetPosition 0x102fb0d0` at `102f3e23`. So the
+Sheriff / Hengeyokai / Ming Xiao split between `+0x1568` and `+0x156c` is observable here.
+
+**The start node** comes from `0x102f3c10` (via `0x102ed430`), which may reuse the 20-entry cache
+`0x102f4520` and otherwise searches a box of half-extents `(800, 800, 200)` — `(2048, 2048, 2048)`
+for a mover with capability bit `0x4` — keeping ten candidates. A candidate must pass, in order:
+node type 3 requires capability `0x4` and type 2 requires capability `0x1` (`102f3c9e`-`102f3cb3`);
+virtual slot 527 must not call it unusable (`0x1027db30`); `CanFitAtNode` under mask `0x2400b`
+(`0x102f1900`); and the connection trace `0x102f3900`, which prefers a candidate with no
+intervening NPC. No start node means `-1`, and the task fails with `0x18`.
+
+**The walk, `0x102ff3e0`.** The start node must have a nonzero adjacency count at `node+0x78` or
+the walk returns null at once. Neighbours come from `node+0x7c` through a **rotating per-node
+cursor at `node+0xa4`** (advanced and wrapped by `0x102f9750`, read by `0x102f9780`) — so
+neighbour order is MUTABLE RUN-TIME STATE, not serialized link order. A destination already in the
+locally allocated visited bitset (`0x102fe9a0` — not the serialized neighbour bitvector at
+`+0x90`) or equal to the previous node is rejected.
+
+The **cooldown `node+0x9c` is two-tier, not a filter**: a node whose cooldown has expired joins the
+primary candidate list, one still cooling joins a DEFERRED list, and the deferred list is used only
+when the primary list is empty (`102ff799`-`102ff7ce`).
+
+Selection: with a zero direction vector it is `RandomInt(0, count - 1)` on `0x1070b244` slot 2 (the
+engine stream) over the primary list, falling back to the deferred list when primary is empty —
+**one draw per selected step, no fixed draw count, and no `RandomFloat` anywhere in the task**.
+With a nonzero direction it dots the normalized step against the current direction and keeps only a
+STRICTLY greater score, so ties keep the earlier candidate; the direction is then REPLACED by the
+step taken, so the body's heading only really steers the first choice. Accumulated distance is the
+sum of 3-D distances between RAW node origins (`102ff6c9`-`102ff70b`). The walk ends when that
+reaches the resolved distance or the iteration guard passes `0x14`, and **a type-4 node is never
+accepted as the final node**.
+
+**The link predicate `0x102ff960` is where the run-time link reads live**, and it is the reason
+this task cannot run on a links-free asset:
+
+| read | offset | effect |
+|---|---|---|
+| link info | `link+0x64 & 0x1000` | rejects the link outright |
+| **per-hull motion word** | `link+0x0c + 4*hull` | AND-ed with the NPC capability word (slot 513, `+0x804`); zero rejects |
+| far endpoint | via `0x102dda40` (`link+0x04`/`+0x08`) | the destination node id |
+| destination usability | slot 527 -> `0x1027db30` | rejects |
+| jump legality | motion word exactly `2` -> slot `+0x824` | three `GetPosition` calls at the cached pathing hull |
+| **stale bit** | `link+0x64 & 1` -> `0x102fce80` (expiry `link+0x68`) | a failed re-probe notifies the blocker through `0x1027de00` and rejects |
+
+Only the ONE motion word the pathing hull selects is read — not all 22. The task reads **no zone
+`+0x94`**, no serialized neighbour bitvector `+0x90`, and never calls `IsConnected 0x102f48b0`.
+
+**The winner is installed as a PATH, not a goal.** `0x102fcbd0` rebuilds the predecessor chain,
+calling `GetPosition` at the cached pathing hull for each node, and `0x102ed430` writes it straight
+into the navigator's path object at `+0x30`: `0x1030ba50(path, 4)` writes path type 4,
+`0x1030b4d0(path, chain, false)` installs the chain, `0x1030b8e0(path)` finalises, and the squared
+distance to the endpoint goes to `navigator+0x14`. **`CAI_Navigator::SetGoal 0x102ecd20` is never
+called and no `AI_NavGoal_t` or goal tolerance is built** — the `4` is the path object's own
+`+0x5c` type field, not a goal type.
+
+**Who issues it: 15 schedules** (the task text occurs 16 times in `vampire.dll`, once as the
+registration literal and 15 times inside schedule blobs; operands verified in file order):
+
+| schedule | operand | | schedule | operand |
+|---|---:|---|---|---:|
+| `SCHED_TROIKA_FLEE_RANDOM` | 3000 | | `PATROL_RUN` | 200 |
+| `SCHED_TROIKA_RUN_TO_SAVED` | 2048 | | `SCHED_VANIMAL_FLEE` | 500 |
+| `SCHED_TROIKA_PLAYER_ON_HEAD_RUN` | 256 | | `SCHED_VCOP_WANDER_PATROL_SHORT` | 2048.0 |
+| `SCHED_TROIKA_FLEE_AND_COWER_STALL` | 1024 | | `SCHED_VCOP_WANDER_PATROL` | 4096.0 |
+| `RUN_RANDOM` | 500 | | `SCHED_VCOP_WANDER_AND_VANISH` | 2048.0 |
+| `PATROL_WALK` | 200 | | `SCHED_VCOP_RUN_TO_SAVED` | 2048 |
+| `IDLE_WANDER` | 200 | | `SCHED_VMING_XIAO_TENTACLE_SCATTER_RANDOM` | 256 |
+| | | | `SCHED_VWEREWOLF_RUN_TO_TELEPORT` | 5000 |
+
+**`IDLE_WANDER`, `PATROL_WALK`, `PATROL_RUN` and `RUN_RANDOM` are base schedules** loaded by
+`0x102cb690`, and four more are the COP wander/patrol programs (`0x10370b00`). No exported script
+names the task; the run-time issuer is always schedule bytecode.
+
+**Consequence for the port.** The hub-at-idle witness — "pedestrians visit places, cops patrol" —
+runs through this task, and this task needs adjacency (`+0x78`/`+0x7c`), the rotating cursor
+(`+0xa4`), link endpoints, `link+0x64` link info, the pathing-hull motion word and stale-link
+state. A run-time asset of "places and no links" cannot host it.
