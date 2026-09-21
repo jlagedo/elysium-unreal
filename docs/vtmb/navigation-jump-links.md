@@ -2123,3 +2123,50 @@ names the task; the run-time issuer is always schedule bytecode.
 runs through this task, and this task needs adjacency (`+0x78`/`+0x7c`), the rotating cursor
 (`+0xa4`), link endpoints, `link+0x64` link info, the pathing-hull motion word and stale-link
 state. A run-time asset of "places and no links" cannot host it.
+
+**Decided 2026-09-21 (0018 story 4): the port does not host the walk.** It picks a retail place at
+the order's distance — capped at `20 x` the map's median hop, in place of the guard `0x14` — and
+lets Unreal route there. The contract above is kept where a place draw can keep it: fail `0x18`,
+synchronous completion, a path and no goal, no type-4 endpoint, the two-tier cooldown, the draw on
+the engine stream. The spec's story 4 carries the rule and names what it gives up.
+
+### How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4)
+
+_The links are DERIVED data: designers placed nodes, the engine laid the links. Read to answer
+whether the hop graph can be rebuilt from places plus walkable floor. Engine record — nothing here
+runs on a loaded graph (`InitLinks` is reached only from the rebuild, § "The loader, walked")._
+
+**The rebuild, `0x102f4e00`, in order:** per node `0x102fa510` (type checks; a ground node whose
+hull offset is under `-200.0` `0x1049df14` prints `ERROR: Node ... too low`); per node
+**`InitNeighbors 0x102fac00`**; `0x102cc9f0`; every adjacency count `node+0x78` zeroed; per node
+`InitLinks 0x102fb4e0`; `0x102f99b0`; zones `0x102f49c0`.
+
+**Candidates — the visibility pass `0x102fa630`.** Skipped whole for a type-1 node. A node at
+EXACTLY another's origin (and not climb, type 4) is retyped 1 — the duplicate is deleted. When
+`node+0x74` bit 28 is set, a squared-distance pre-filter runs first: `640000.0` `0x1049da5c`
+(800²) to a non-air node, `4194304.0` `0x1049adfc` (2048²) to an air one. Then up to four line
+traces under mask `0x2000b`, from `GetPosition(hull 2)` to the other's: as placed; both ends raised
+`70.0` `0x104528d4`; this end raised; the other end raised. Any clear trace sets the other's bit in
+the neighbour bitvector `node+0x90`.
+
+**The cull, `0x102fac00`.** For each set bit `i`: its own bit is cleared; the offset to `i` is
+normalised in place (`0x1057966c`, length kept at `[ESP+0x10]`); **over `800.0` `0x10457ac4` —
+`2048.0` `0x1046bacc` when `i` is air — the bit is cleared.** Otherwise `i` is tried against every
+other set bit `j`: skipped when exactly one of the two is air, and skipped when `i` is climb; else
+the two unit directions are dotted and **at `dot >= 0.9` (`double 0x104493f0`, `FCOMP` at
+`102faf51` — a 25.8° cone) the FARTHER of the two loses its
+bit; on equal distances `j` loses** (`102faf60`–`102faf99`). The inner loop does not break when
+`i` itself is cleared, so a culled candidate goes on culling — the result depends on node order.
+This cone is why the shipped graphs average about six links a node.
+
+**`InitLinks 0x102fb4e0` adds no rule of its own.** Per set bit not already connected
+(`Nodes already connected` / `Sharing previously establish connection` — the relation is
+per-node, so a link exists when EITHER end kept the other): for each of the 22 hulls some entity
+uses (`0x102f9950`; else `Skipping hull %s because no entities use it`), fit at both nodes
+(`0x102f1900`, `0x2000b`); air–air a hull trace, motion 4; climb–climb the same, motion 8; a
+ground end, stand at both (`0x102e7270`) then the ground walk `0x102e4f50` → motion 1, and on hull
+0 alone `0x102e7e80(…, 0x2000)` sets link info `0x2000`; walk failed with both ends ground, the
+jump probe `0x102e6d70` each way → motion `|= 2`. No hull connects → the neighbour bit is cleared
+and `NO LINK` logged. Link length is bounded by the 800 above and by nothing else, which the
+shipped graphs bear out: across 27,956 human-hull links the longest is 800
+(`research/tooling/probes/census_link_lengths.py`; median 174, p10–p90 72–391).

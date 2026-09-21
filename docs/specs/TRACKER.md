@@ -12,10 +12,12 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 ## Decision owed (does not block 01–06)
 
-- [ ] **0018/4's open question** (spec line 722): `TASK_GET_PATH_TO_RANDOM_NODE` is a random walk
-  over AIN links, not a draw from places. Pick **(i)** reduced adjacency in the cooked asset,
-  **(ii)** named modernization over the NavMesh, or **(iii)** places only and forfeit the hub
-  witness. Needed before row 07.
+- [x] **0018/4's open question**: `TASK_GET_PATH_TO_RANDOM_NODE` is a random walk over AIN links,
+  not a draw from places. **Decided by the owner 2026-09-21: (ii), as the capped point pick** — a
+  retail place at the order's distance, the route Unreal's, the walk's guard `0x14` one baked
+  number per map and agent (`20 x` the median hop). The asset stays places and no links; the rule,
+  what it gives up and the upgrade held in reserve are in story 4's decided block. Row 07 is
+  unblocked.
 
 ## A — finish the in-flight group, then the data seams
 

@@ -27,6 +27,13 @@ undercounted the work by half and misplaced three facts, so it is now 21-1 … 2
 Only 21-1 is REQUIRED ahead of 4 (so 4–20 never carry a legacy arm) and 21-6 ahead of 20 (its
 cook check); the owner runs the group ahead of 4.
 
+**Revised 2026-09-21, the wander decided:** story 4's open question — `TASK_GET_PATH_TO_RANDOM_NODE`
+is a random walk over AIN links, not a draw from places — is closed by the owner as the **capped
+point pick**: a retail place at the order's distance, chosen by retail's tests, the route Unreal's,
+the walk's iteration guard replaced by one baked number per map and agent. The asset stays places
+and no links; the Navigation boundary below is untouched. Story 4 carries the rule, what it gives
+up, and the upgrade held in reserve.
+
 
 ## Witness
 Two maps, baked into their levels and standing in the editor before any NPC program runs on
@@ -136,7 +143,9 @@ iteration order is not; exact tie order and RNG stream parity are not reproduced
 cover and shoot-node order turns on a process-global written by every NPC), while the draws a
 ported function makes stay where retail makes them; a stale link becomes the door's own
 failure timer; a door is handled when the NPC reaches it, not from the simplifier's
-look-ahead.
+look-ahead; the wander (`TASK_GET_PATH_TO_RANDOM_NODE`) picks a retail place at the order's
+distance instead of walking the links to one, its iteration guard a baked distance (story 4,
+decided 2026-09-21).
 
 **NPCs use only the doors retail's graph runs through** (decided 2026-09-20): 8 of the
 tutorial's 36 door brushes, the smoke-shop pair on the hub. Designers chose them; opening more
@@ -696,7 +705,8 @@ its recovery is written in the oracle section it names.
   index, type, position, yaw, the Z offset of each agent the map bakes, the hint association
   by positional pairing with its unresolved and out-of-range outcomes kept, the authored
   `nodeid` as provenance — and the crosswalk pairs (two type-11000 hint nodes a link joins).
-  No links, zones or masks. At run time a registry keyed by network index carries the
+  No links, zones or masks. One number per baked agent rides beside the rows: the WANDER CAP
+  (decided below). At run time a registry keyed by network index carries the
   cooldown; hints get their `NodeId`; a hint's stand position and a patrol point resolve to
   the node at hull height; `TASK_GET_PATH_TO_RANDOM_NODE` draws from the set. **"At hull height"
   is two questions, and the row carries both offsets** — retail's `CAI_Node::GetPosition
@@ -714,13 +724,19 @@ its recovery is written in the oracle section it names.
   Acceptance: both witness levels load the asset with no external export access; the pairing
   reproduces retail's on the patch graphs (standalone hints, duplicate authored ids, the
   out-of-range arm); the thug's `pt1..pt3` resolve to node positions; the seams above answer
-  from the registry. Pins, patch graphs: tutorial 203 places, all ground; hub 578, all ground.
+  from the registry. The wander draw, called as the task arm calls it: an order of 200 on the hub
+  picks a place within 200 units and ahead of the body; an order of 4096 never picks beyond the
+  cap; a type-4 place is never picked; a cooling place is picked only when no expired one stands;
+  no place in range is `0x18` inside `StartTask`; the installed path carries no goal type and no
+  tolerance. Pins, patch graphs: tutorial 203 places, all ground; hub 578, all ground; each
+  agent's wander cap equal to `census_link_lengths`' `20xmed` for that map and hull (human:
+  hub 3,113, tutorial 2,942).
   Provides: places to 7–12. Consumes: 2, 3.
   Oracle: `navigation-jump-links.md` § "The loader, walked", § "Which graph the patched install
   runs on", § "What the shipped graphs and maps actually use",
   § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked".
-  **OPEN QUESTION FOR THE OWNER, raised 2026-09-21: the read this story owed came back against the
-  "no links" decision.** `TASK_GET_PATH_TO_RANDOM_NODE` is task `0x1f` (`0x10316ff0`), and it is
+  **Raised 2026-09-21 and DECIDED the same day (below): the read this story owed came back against
+  the "no links" decision.** `TASK_GET_PATH_TO_RANDOM_NODE` is task `0x1f` (`0x10316ff0`), and it is
   **not a draw from a set of places**. Its arm `0x10285d7f` runs a random WALK over the AIN
   adjacency lists (`0x102ff3e0`), and the per-link predicate `0x102ff960` reads, at RUN TIME:
   `link+0x64` link info (bit `0x1000` rejects outright), the **per-hull motion word**
@@ -737,14 +753,59 @@ its recovery is written in the oracle section it names.
   `SCHED_VCOP_WANDER_PATROL` / `_SHORT` / `_AND_VANISH` / `SCHED_VCOP_RUN_TO_SAVED`
   (`0x10370b00`). **Story 20's witness — "pedestrians visit places, cops patrol" — runs through
   this task**, so it cannot be deferred as an unreached arm.
-  Three ways out, the owner's call, none of them free: **(i)** carry a reduced adjacency in the
-  cooked asset (endpoints, `link+0x64`, one motion word per baked agent) and port the walk
-  verbatim — the asset stops being "places only"; **(ii)** declare the walk a named modernization
-  and re-express it over the NavMesh (a bounded random reachable point at the resolved distance,
-  biased by body heading), keeping the observable contract — fail code `0x18`, synchronous
-  completion, the two-tier `node+0x9c` cooldown, the type-4 exclusion; or **(iii)** keep places
-  only and accept that these 15 schedules do not run, which forfeits the hub witness.
-  Whatever is chosen, the observable contract is recovered and must hold: **failure is
+  Three ways out were weighed: **(i)** a reduced adjacency in the cooked asset (endpoints,
+  `link+0x64`, one motion word per baked agent) and the walk ported verbatim; **(ii)** a named
+  modernization over the NavMesh; **(iii)** places only, the 15 schedules not running and the hub
+  witness forfeited. Two more stood beside them and were set aside: MassEntity + ZoneGraph lanes
+  (experimental in the 5.8 install, a second movement stack under one body, and a lane model the
+  area-covering AIN does not fit), and the hop graph REBUILT from the places — held in reserve,
+  last paragraph.
+  **DECIDED BY THE OWNER, 2026-09-21: (ii), as the CAPPED POINT PICK** — the least build for the
+  value. Retail's everyday orders are 200 units against a median hop of 156–174, so an idle wander
+  is one or two hops and "a nearby place ahead" IS that walk; the designs differ only on the long
+  orders (2048 and up), by some 25–30 % of distance at most. (i) was refused on the boundary's own
+  terms: every run-time link read in `0x102ff960` is dead by content or already translated —
+  link-off `0x1000` unreachable, motion only ever 1 or 2 (the per-agent meshes and jump links),
+  the stale bit the door's failure timer — so it would carry a second connectivity truth beside
+  the NavMesh to buy exactness in what the boundary already names noise.
+  **The pick, entire.** `direction = BodyDirection2D()`; `distance = min(ResolveTaskDistance(
+  flTaskData), the agent's WANDER CAP)`. Candidates are the place rows within `distance` of the
+  NPC in a straight line, a type-4 place never among them and slot 527's usability test
+  (`0x1027db30`) kept. The two-tier cooldown `node+0x9c` orders them — expired places first, a
+  cooling one only when no expired place stands. Within the tier, the preferred band is the places
+  AHEAD (positive 2-D dot against `direction`) in the outer half of the range
+  (`>= distance / 2`); that empty, every place ahead; that empty, every candidate; a zero
+  `direction` skips the ahead test. ONE `RandomInt(0, count - 1)` on the engine stream picks within
+  the band. Unreal routes to the pick on the agent the pathing hull `+0x156c` selects, under the
+  DEFAULT filter — this task never sets the pedestrian byte, so the roadway is not priced. A pick
+  with no route, or whose route runs far past `distance` (the far side of a wall), is dropped and
+  the next drawn; the detour ratio and the retry count are port constants, named where they are
+  defined. None left is `TaskFail(0x18)`. The route is installed as a PATH through 5's seam — no
+  goal, no tolerance — inside `StartTask`.
+  **The wander cap** stands in for the iteration guard `0x14`: `20 x` the median 3-D length of the
+  links carrying motion for that agent's hull, computed by the bake from the graph it already
+  reads and written as ONE NUMBER per baked agent beside the place rows — no link ships, and an
+  agent whose hull carries no link takes the human figure.
+  `research/tooling/probes/census_link_lengths.py` is the measure (2026-09-21, 97 graphs, 27,956
+  human-hull links): median 174, p10–p90 72–391, longest 800 — the builder's own reach — so a cap
+  of 3,113 on `sm_hub_1` and 2,942 on `sp_tutorial_1`. By that measure the guard never fires ahead
+  of an order of 1024 or less on any map, and ahead of 2048 only on eleven small interiors; the
+  cop's 4096 meets it on `sm_hub_1` / `sm_hub_2` and not on the other three hubs. A central
+  estimate, named as one: the walk takes the straightest hop, not a median one.
+  **Named modernization:** the wander's route and the places it passes are Unreal's; its endpoint
+  is a retail place chosen by retail's tests; the guard is a baked distance. Given up, knowingly:
+  the dot-to-dot meander, the rotating neighbour cursor `node+0xa4`, the per-step replacement of
+  the heading, the visited set, and accumulated path length (a straight line checked against the
+  route stands for it).
+  **Held in reserve.** If the hub witness (20) shows the pick wanting — cop beats that read wrong,
+  pedestrians converging — the upgrade replaces this one function and nothing around it: the hop
+  graph rebuilt at bake from the places by retail's OWN neighbour rule
+  (`navigation-jump-links.md` § "How the graph builder picks a node's links": 800 units, the `0.9`
+  cone, the farther loses) over Unreal's straight-line walk test and the baked jump links, and
+  the walk ported over it. That one does amend the boundary's "no adjacency" sentence, so it is
+  the owner's call again when it comes.
+  What retail's task observably does is recovered, and the pick keeps the part of it a place
+  draw can keep (the last two clauses are what the paragraph above gives up): **failure is
   `TaskFail(0x18)`**, not `0x0c`; `RunTask` is an empty break because the task completes
   synchronously in `StartTask`; the result is installed straight into the navigator's PATH object
   (`0x1030ba50(path, 4)`, `0x1030b4d0`, `0x1030b8e0`, endpoint distance² at `navigator+0x14`) and
@@ -777,7 +838,10 @@ its recovery is written in the oracle section it names.
   Job: a navigator object on the NPC holding the goal (type, target, tolerance, gait, flags),
   the pedestrian byte, the retry window and the outcome, which every `GET_PATH_TO_*`,
   `RUN_PATH` / `WALK_PATH` and `WAIT_FOR_MOVEMENT` arm goes through and the kernel's goal
-  readers read. The seam, in the NPC's words: request a move; outcomes arrived, failed with a
+  readers read. One arm installs a PATH and no goal: `GET_PATH_TO_RANDOM_NODE` (4's decided
+  block) hands the seam a route to a place with no goal type and no tolerance, the squared
+  distance to its endpoint at `navigator+0x14`, and `SetGoal` is never called
+  (`0x1030ba50(path, 4)`). The seam, in the NPC's words: request a move; outcomes arrived, failed with a
   code, blocked by a door, blocked by an NPC; a route sample (has a path, distance left, next
   corner). Under it, on the body: a path-following component that raises those events; the
   default and the pedestrian query filters, the pedestrian one pricing 3's area UP by ONE
