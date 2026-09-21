@@ -810,6 +810,17 @@ def displacement_triangles(units: MapUnits, world_faces: Sequence[int]) -> list[
     byte-identical, 17,908 of 32,256 and 372 of 2,592 printed floats differ, max |delta| 0.0019 cm
     and 0.0006 cm. That is a seam-precision limit, not a choice made here; R3.3 must expect it by
     name; R3.4 decided to accept it rather than publish DISP_VERTS numerically in the root unit.
+
+    **The winding is reversed from the legacy fan, deliberately (0018 story 21-2).** The coordinate
+    contract pairs the Source-to-Unreal Y reflection with a winding reversal, and the legacy fan
+    never applied it here: nothing drew this soup and a Chaos trimesh collides from both sides, so
+    nothing could tell. Recast can. Once the terrain stood in the level, the engine's own chain --
+    `bFlipNormals` swaps v0/v1 at the cook (`ChaosCooking.cpp:41`), the navigation export feeds
+    indices `{2,1,0}` (`RecastNavMeshGenerator.cpp:417`), `Unreal2RecastPoint` reflects, and Recast
+    walks a triangle whose normal then has +Y (`Recast.cpp:379`) -- read every displacement floor
+    as a ceiling and every ceiling as a floor. Measured on `sp_soc_3`: the mesh stood 5.75-6.5 m
+    above six graph nodes, on the cavern's roof, with nothing on the floor under them. Rows stay
+    one per legacy row and in legacy order; only the corner order inside a row is reversed.
     """
 
     faces = units.root["faces"]
@@ -835,8 +846,8 @@ def displacement_triangles(units: MapUnits, world_faces: Sequence[int]) -> list[
                 v01 = v00 + 1
                 v10 = v00 + side
                 v11 = v10 + 1
-                rows.append([c for corner in (v00, v10, v11) for c in unreal[corner]])
-                rows.append([c for corner in (v00, v11, v01) for c in unreal[corner]])
+                rows.append([c for corner in (v00, v11, v10) for c in unreal[corner]])
+                rows.append([c for corner in (v00, v01, v11) for c in unreal[corner]])
     return rows
 
 
