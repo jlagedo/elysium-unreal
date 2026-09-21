@@ -166,24 +166,17 @@ def test_source_position_inverts_the_transform_in_binary32():
     assert list(planes[0]) == [0.0, 0.0, 1.0, np.float32(-134.0)]
 
 
-def test_is_output_key_default_is_the_legacy_shape_test():
-    # `^(On|Out)` case-insensitively, regardless of what any datamap declares -- the legacy
-    # sidecar's rule, and `write_entities`'s default.
-    assert is_output_key("game_ui", "PlayerOn", EntityDivergences()) is False
-    assert is_output_key("logic_relay", "OnTrigger", EntityDivergences()) is True
-    assert is_output_key("trigger_player_activity_level", "OnTrigger", EntityDivergences()) is True
-
-
-def test_is_output_key_datamap_typing_promotes_and_demotes():
-    # R3.4: opting in swaps the shape test for the class's datamap. `game_ui`'s `PlayerOn` is
-    # declared under a name the shape test misses (promoted); `trigger_player_activity_level`'s
-    # `OnTrigger` is shape-matched but the datamap does not declare it (demoted) -- the shipped
-    # example is on `sm_diner_1`.
-    typed = EntityDivergences(datamap_output_typing=True)
-    assert is_output_key("game_ui", "PlayerOn", typed) is True
-    assert is_output_key("trigger_player_activity_level", "OnTrigger", typed) is False
-    # An ordinary output is unaffected either way.
-    assert is_output_key("logic_relay", "OnTrigger", typed) is True
+def test_is_output_key_is_the_class_datamap_not_the_key_text():
+    # 0018 story 21-7: `0x101a5a80` admits a record on `FTYPEDESC_KEY 0x4` and dispatches an
+    # output through the type 10 custom op, so the key's spelling decides nothing. `game_ui`'s
+    # `PlayerOn` is declared under a name the old shape test missed (promoted, `la_hub_1`);
+    # `trigger_player_activity_level`'s `OnTrigger` is shape-matched and undeclared (demoted,
+    # `sm_diner_1`); a `-wesp` key is the patch's disabled spelling and is never an output.
+    assert is_output_key("game_ui", "PlayerOn") is True
+    assert is_output_key("trigger_player_activity_level", "OnTrigger") is False
+    assert is_output_key("logic_relay", "OnTrigger-wesp") is False
+    # An ordinary output is unaffected.
+    assert is_output_key("logic_relay", "OnTrigger") is True
 
 
 def test_collect_entity_fields_default_keeps_case_variants_as_separate_slots():

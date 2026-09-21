@@ -17,17 +17,14 @@ escapes and all, so this is what `CEntityMapData::GetNextKey 0x10136ee0` hands `
 Until 21-7 the lump was rebuilt as text and read back with regexes that had no escape rule, which
 lost `sm_hub_1`'s `logic_auto` origin and refused three maps outright.
 
-**Byte-comparability, not equivalence.** The output WAS diffed against `UE_bsp_to_scene.py`'s
-sidecars by the R3.3 differ, until 0018 story 21-5 deleted both the differ and the decoder. The
-defaults below are what that diff settled on and they do not move on their own: every legacy
-quirk is still reproduced verbatim by default -- the
-`^(On|Out)` output test rather than the datamap typing the entities unit uses, unfolded keys,
-`param` left unstripped, `delay` through a plain `float()`, the dropped `extra` field, `times`
-normalized to `-1`. Those six are named divergences owned by R3.4. Six landed as an opt-in flag on
-`EntityDivergences` (default: legacy/off, so a caller that asks for nothing still gets the
-byte-comparable sidecars R3.3 diffs) plus a doc line at the flag; the sixth -- `times`
-normalization -- has exactly one owner already (`ElysiumEntityDefs.cpp`, not the exporter) and
-needed no flag. Silently changing a default would be the one thing this task must not produce.
+**Retail decides, one answered question at a time.** The output WAS diffed against
+`UE_bsp_to_scene.py`'s sidecars by the R3.3 differ, until 0018 story 21-5 deleted both the differ
+and the decoder. R3.4 kept the six places where the two readings disagreed as opt-in flags on
+`EntityDivergences`, defaulting to the legacy one, because a byte diff was the only judge
+available. 21-7 recovered what retail does for each (`docs/vtmb/entity_io.md`) and settles them
+one per commit, each with the rows it changed named; a flag still on `EntityDivergences` is a
+question not yet answered. Silently changing one without that evidence is the one thing this
+module must not produce.
 
 **Binary32.** Root positional tables are published in glTF metres and the BSP stores them as
 float32, so every recovered plane, vertex and bound is rounded back to binary32 before it is used
@@ -263,22 +260,13 @@ def hull_vertices(points: np.ndarray) -> list[float]:
 
 @dataclass(frozen=True)
 class EntityDivergences:
-    """Opt-in switches for the `.ents` behaviours where the legacy sidecar and the entities unit's
-    own reading disagree (the six-item list). Every flag defaults to the legacy behaviour, so
-    `write_sidecars` keeps the reading the decoder had unless a caller asks for the corrected one
-    -- each flag is documented at its own R3.4 commit. The decoder itself is gone (0018 story
-    21-5), so these defaults are now a written-down contract rather than a diffable one; 0018
-    story 21-7 owns flipping them with the retail evidence for each.
-    """
+    """What is left of the R3.4 opt-in switches, as 0018 story 21-7 settles them one at a time.
 
-    #: `False` (legacy, default): a key is an output when it matches `^(On|Out)` case-insensitively
-    #: and its value holds >= 4 commas. `True`: the class's datamap decides instead
-    #: (`entity_model.OUTPUT_KEY`/`NOT_OUTPUT_KEYS`/`OUTPUT_KEYS_BY_CLASS`/`DISABLED_KEY_SUFFIX`),
-    #: matching the entities unit's own `outputLike` demotions and promotions.
-    #: Measured zero effect on the three-map corpus:
-    #: `game_ui`'s promoted keys and `trigger_player_activity_level`'s demotion are both authored
-    #: on maps outside it (`la_hub_1`, `sm_diner_1`).
-    datamap_output_typing: bool = False
+    Each flag was a place the legacy sidecar and the entities unit's own reading disagreed, kept
+    at the legacy default so `write_sidecars` stayed byte-comparable with a differ 21-1 deleted.
+    21-7 answers each against retail (`docs/vtmb/entity_io.md` -> "The lump tokeniser and what a
+    keyvalue actually becomes") and removes it: a flag here is one that has not been answered yet.
+    """
 
     #: `False` (legacy, default): a repeated key is the same `keys` slot only when it repeats under
     #: the *exact same spelling*, so `"Origin"` and `"origin"` survive as two independent last-wins
@@ -316,38 +304,36 @@ class EntityDivergences:
     keep_extra: bool = False
 
 
-#: The default: every flag legacy, so a caller that asks for nothing gets the reading the deleted
-#: decoder had. 0018 story 21-7 owns flipping these, one per commit, with retail evidence.
+#: The default: every flag still here is legacy. 0018 story 21-7 removes them one per commit, with
+#: the retail evidence and the rows each one changed.
 LEGACY_ENTITY_FIELDS = EntityDivergences()
 
 
-def _is_datamap_output(classname: str, source_key: str) -> bool:
-    """Mirrors `map_entities_glb.decode._is_output` verbatim: whether the class's datamap types
-    `source_key` as an output. Restated here rather than imported because that function is private
-    to the entities-unit decode, and this producer's byte-comparable default must not depend on it
-    -- only the opt-in `datamap_output_typing` path does."""
+def is_output_key(classname: str, key: str) -> bool:
+    """Whether one keyvalue is an output row -- the gate `write_entities` applies before
+    `split_output`.
 
-    folded = source_key.lower()
+    **The class's datamap decides, never the key's text** (0018 story 21-7). `0x101a5a80` admits a
+    record only when its flags carry `FTYPEDESC_KEY 0x4`, and an output is the type 10 custom
+    dispatch at `101a5c3b` -- `CEventsSaveDataOps::vfunc4 0x100cdb20` -> `0x100cd6d0` -> the row
+    parser. The key's spelling is not consulted, and both counterexamples ship:
+    `CMomentaryRotButton.Position` is an output named neither `On*` nor `Out*`, and
+    `CNPC_VGhoulCroucher.on_fire` is a plain `SAVE|KEY` bool that looks like one. The reading this
+    replaced was `^(On|Out)` case-insensitively.
+
+    Mirrors `map_entities_glb.decode._is_output` verbatim; restated here rather than imported
+    because that function is private to the entities-unit decode.
+    """
+
+    folded = key.lower()
     if folded.endswith(entity_model.DISABLED_KEY_SUFFIX):
         return False
     folded_class = (classname or "").strip().lower()
     if (folded_class, folded) in entity_model.NOT_OUTPUT_KEYS:
         return False
-    if entity_model.OUTPUT_KEY.match(source_key) is not None:
+    if entity_model.OUTPUT_KEY.match(key) is not None:
         return True
     return folded in entity_model.OUTPUT_KEYS_BY_CLASS.get(folded_class, frozenset())
-
-
-def is_output_key(
-    classname: str, key: str, fields: EntityDivergences = LEGACY_ENTITY_FIELDS
-) -> bool:
-    """Whether one keyvalue's key is tried as an output row at all -- the gate `write_entities`
-    applies before `split_output`. `fields.datamap_output_typing` picks which of the two rules
-    decides it."""
-
-    if fields.datamap_output_typing:
-        return _is_datamap_output(classname, key)
-    return bool(re.match(r"^(On|Out)", key, re.I))
 
 
 def collect_entity_fields(
@@ -373,7 +359,7 @@ def collect_entity_fields(
     keys: dict[str, str] = {}
     fold_index: dict[str, str] = {}   # folded key -> the spelling currently holding `keys`'s slot
     for key, value in pairs:
-        row = split_output(value, fields) if is_output_key(classname_probe, key, fields) else None
+        row = split_output(value, fields) if is_output_key(classname_probe, key) else None
         if row:
             row["name"] = key
             outputs.append(row)
