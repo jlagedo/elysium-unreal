@@ -17,14 +17,14 @@ escapes and all, so this is what `CEntityMapData::GetNextKey 0x10136ee0` hands `
 Until 21-7 the lump was rebuilt as text and read back with regexes that had no escape rule, which
 lost `sm_hub_1`'s `logic_auto` origin and refused three maps outright.
 
-**Retail decides, one answered question at a time.** The output WAS diffed against
-`UE_bsp_to_scene.py`'s sidecars by the R3.3 differ, until 0018 story 21-5 deleted both the differ
-and the decoder. R3.4 kept the six places where the two readings disagreed as opt-in flags on
-`EntityDivergences`, defaulting to the legacy one, because a byte diff was the only judge
-available. 21-7 recovered what retail does for each (`docs/vtmb/entity_io.md`) and settles them
-one per commit, each with the rows it changed named; a flag still on `EntityDivergences` is a
-question not yet answered. Silently changing one without that evidence is the one thing this
-module must not produce.
+**Retail decides.** The output WAS diffed against `UE_bsp_to_scene.py`'s sidecars by the R3.3
+differ, until 0018 story 21-5 deleted both the differ and the decoder. R3.4 kept the six places
+where the two readings disagreed as opt-in flags on an `EntityDivergences` struct, defaulting to
+the legacy one, because a byte diff was the only judge available. 21-7 recovered what retail does
+for each (`docs/vtmb/entity_io.md` -> "The lump tokeniser and what a keyvalue actually becomes"),
+landed them one per commit with the rows each changed, and the struct is gone: there is one
+reading here and it is the engine's. Changing it needs the same evidence the flags were retired
+with.
 
 **Binary32.** Root positional tables are published in glTF metres and the BSP stores them as
 float32, so every recovered plane, vertex and bound is rounded back to binary32 before it is used
@@ -258,31 +258,6 @@ def hull_vertices(points: np.ndarray) -> list[float]:
 # ---------------------------------------------------------------- the entity lump
 
 
-@dataclass(frozen=True)
-class EntityDivergences:
-    """What is left of the R3.4 opt-in switches, as 0018 story 21-7 settles them one at a time.
-
-    Each flag was a place the legacy sidecar and the entities unit's own reading disagreed, kept
-    at the legacy default so `write_sidecars` stayed byte-comparable with a differ 21-1 deleted.
-    21-7 answers each against retail (`docs/vtmb/entity_io.md` -> "The lump tokeniser and what a
-    keyvalue actually becomes") and removes it: a flag here is one that has not been answered yet.
-    """
-
-    #: `False` (legacy, default): field 6 (`extra`, everything after `python`) is dropped -- the
-    #: legacy split reads exactly six fields and never looks past them. `True`: `extra` is added
-    #: to the row, verbatim and
-    #: unjoined-comma-restored (`",".join(fields[6:])`, matching the entities unit's own
-    #: `Output.extra`), present only when the value's split actually reached a 7th field. **Not**
-    #: zero effect: retail always writes seven comma-separated fields even when the 7th is empty,
-    #: so this is the one R3.4 flag whose measured delta is the size of the whole `outputs` list,
-    #: not a rare edge case.
-    keep_extra: bool = False
-
-
-#: The default: every flag still here is legacy. 0018 story 21-7 removes them one per commit, with
-#: the retail evidence and the rows each one changed.
-LEGACY_ENTITY_FIELDS = EntityDivergences()
-
 
 def is_output_key(classname: str, key: str) -> bool:
     """Whether one keyvalue is an output row -- the gate `write_entities` applies before
@@ -312,9 +287,9 @@ def is_output_key(classname: str, key: str) -> bool:
 
 
 def collect_entity_fields(
-    pairs: Sequence[tuple[str, str]], fields: EntityDivergences = LEGACY_ENTITY_FIELDS
+    pairs: Sequence[tuple[str, str]],
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    """One block's pairs split into output rows and the `keys` catch-all, the R3.4-aware read
+    """One block's pairs split into output rows and the `keys` catch-all, the read
     `write_entities` performs per entity.
 
     The `keys` catch-all is emitted with **authored spelling** -- every remaining keyvalue,
@@ -334,7 +309,7 @@ def collect_entity_fields(
     keys: dict[str, str] = {}
     fold_index: dict[str, str] = {}   # folded key -> the spelling currently holding `keys`'s slot
     for key, value in pairs:
-        row = split_output(value, fields) if is_output_key(classname_probe, key) else None
+        row = split_output(value) if is_output_key(classname_probe, key) else None
         if row:
             row["name"] = key
             outputs.append(row)
@@ -348,9 +323,7 @@ def collect_entity_fields(
     return outputs, keys
 
 
-def split_output(
-    value: str, fields: EntityDivergences = LEGACY_ENTITY_FIELDS
-) -> dict[str, Any] | None:
+def split_output(value: str) -> dict[str, Any] | None:
     """`target,input,param,delay,times[,python[,extra]]` -> a `.ents` output row, or `None`.
 
     **No field is trimmed** (0018 story 21-7). The splitter `0x101d16c0` is a bare
@@ -362,6 +335,11 @@ def split_output(
     `delay` reads with CRT `_atof` -- the longest numeric prefix, `0.0` when there is none
     (`100cd099` -> `0x1043136f`) -- which is what every other number in `.ents` already reads with
     and what an empty token skips entirely, keeping the seeded `0.0`.
+
+    **Six fields, and no seventh.** The row body splits six times (`100cd0d9`) and returns at
+    `100cd109` without looking further, so a 7th comma-separated token -- which retail's own
+    authoring tool writes on almost every output, usually empty -- is inert residue the engine
+    never reads. It is dropped here for the same reason.
 
     A value with fewer than four commas is not an output at all and stays a plain keyvalue.
     """
@@ -384,8 +362,6 @@ def split_output(
         "times": int(number(parts[4], -1)),
         "python": parts[5] if len(parts) > 5 else "",
     }
-    if fields.keep_extra and len(parts) > 6:
-        row["extra"] = ",".join(parts[6:])   # verbatim; commas past field 6 are part of it
     return row
 
 
@@ -1456,18 +1432,16 @@ def build_entities(
     sky: SkyScope,
     blocks: Sequence[Sequence[tuple[str, str]]],
     brush_meshes: dict[int, str],
-    fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """The `.ents` entity rows and this run's numbers -- the join, without the file.
 
     The field list, its emission order and every rounding are what `.ents` must
     reproduce. `entities[]` is one row per lump block in lump order with no drops and
     no reorders: `ElysiumEntityWorldPersistence.cpp` applies saved entity state by index, so the
-    ordinal is a save key. `fields` opts into the R3.4 divergences one at a time; the default
-    reproduces `UE_bsp_to_scene.py` byte for byte **except** for one unconditional ruling: a
-    3D-skybox brush entity carries no hulls (R7.4 / G25, at the model branch below). That one is not
-    a flag because it is not a disagreement about how to read the lump -- both readings agree on the
-    vertices, and the ruling is that a miniature has no collider in the play volume at all.
+    ordinal is a save key. The reading is retail's throughout (0018 story 21-7), plus one ruling
+    that is not a reading at all: a 3D-skybox brush entity carries no hulls (R7.4 / G25, at the
+    model branch below) -- both readings agree on the vertices, and the ruling is that a miniature
+    has no collider in the play volume.
     the retired sidecar differ reported it as a real `.ents` delta on every map with a sky brush entity,
     which is what that report is for.
 
@@ -1487,7 +1461,7 @@ def build_entities(
     out: list[dict[str, Any]] = []
     brush_count = hull_count = output_count = sky_count = 0
     for pairs in blocks:
-        outputs, keys = collect_entity_fields(pairs, fields)
+        outputs, keys = collect_entity_fields(pairs)
         output_count += len(outputs)
         entity: dict[str, Any] = {
             "classname": keys.pop("classname", ""),
@@ -1616,11 +1590,10 @@ def write_entities(
     blocks: Sequence[Sequence[tuple[str, str]]],
     brush_meshes: dict[int, str],
     out_dir: Path,
-    fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
 ) -> dict[str, int]:
     """`<map>.ents`: `build_entities`' rows, written as the one JSON document the runtime reads."""
 
-    out, stats = build_entities(units, sky, blocks, brush_meshes, fields)
+    out, stats = build_entities(units, sky, blocks, brush_meshes)
     path = out_dir / f"{units.name}.ents"
     with path.open("w", encoding="ascii") as handle:
         json.dump({"map": units.name, "entities": out}, handle, separators=(",", ":"))
@@ -1960,15 +1933,12 @@ def write_sidecars(
     *,
     root: Path | None = None,
     out_dir: Path | None = None,
-    entity_fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
 ) -> dict[str, Any]:
     """Produce one map's legacy sidecars from its published units and return the run's numbers.
 
     The run still fails rather than half-finishing -- every sidecar a later lane reads must be on
     disk when it returns -- but it no longer writes a `<map>.ready` marker: 0018 story 21-3 moved
     the travel gate onto the bake's own four packages, and nothing reads the marker any more.
-    `entity_fields` opts `.ents` into the R3.4 divergences one at
-    a time; the default keeps this run on the reading the deleted decoder had.
 
     **This run reads nothing outside `$ELYSIUM_EXPORT_V2_ROOT`** (0018 story 21-4). The one tie
     left was `corpus_root`, which fed `shared/manifest.json` to the `.env` sky-face test and is
@@ -1988,7 +1958,7 @@ def write_sidecars(
 
     report: dict[str, Any] = {"map": map_name, "outputDir": str(out_dir)}
     report["hulls"] = write_hulls(units, sky, out_dir)
-    report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir, entity_fields)
+    report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir)
     report["lights"] = write_lights(units, sky, out_dir)
     report["env"] = write_environment(units, sky, pair_blocks, out_dir, root)
     report["sky"] = write_sky(units, sky, bool(scenes["sky"]), out_dir)

@@ -22,7 +22,6 @@ import pytest
 from elysium_pipeline import paths
 
 from elysium_pipeline.exporters.UE_map_sidecars import (
-    EntityDivergences,
     blocks_of_class,
     brush_cull_max_cm,
     brush_hull,
@@ -125,14 +124,14 @@ def test_split_output_trims_no_field():
     assert split_output("door,Open,,0") is None
 
 
-def test_split_output_keep_extra_adds_field_6_verbatim_only_when_authored():
-    # R3.4: `extra` (field 6, everything past `python`) is present only when the split actually
-    # reaches it, verbatim including any further commas (`FUN_100ccf90`'s residue join).
-    fields = EntityDivergences(keep_extra=True)
-    assert split_output(" door , Open , slow  , 0.35 , x , taxi() , a,b ", fields)["extra"] == " a,b "
-    six_field = split_output("door,Open,slow,0.35,1,py", fields)
-    assert "extra" not in six_field
-    assert "extra" not in split_output("door,Open,slow,0.35,1,py")   # legacy default: dropped
+def test_split_output_never_reads_a_seventh_field():
+    # 0018 story 21-7: the row body splits six times (`100cd0d9`) and returns at `100cd109`, so a
+    # 7th token -- which retail's authoring tool writes on almost every output, usually empty --
+    # is residue the engine never reads. Commas past field 6 are residue too.
+    assert "extra" not in split_output(" door , Open , slow  , 0.35 , x , taxi() , a,b ")
+    assert "extra" not in split_output("door,Open,slow,0.35,1,py")
+    # The six fields it does read are unaffected by whatever follows them.
+    assert split_output("door,Open,slow,0.35,1,py,7th,8th")["python"] == "py"
 
 
 def test_split_output_delay_reads_the_longest_numeric_prefix():
