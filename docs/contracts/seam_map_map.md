@@ -1033,6 +1033,18 @@ corpus bake), and both are gone. What survives is what the V2 producers and impo
 on: `texture_key`, `material_key`, `base_material`, `cubemap_of`, `world_material_key`,
 `static_stem`, the sky-face names, the asset-name folds and `is_map_scoped_material`.
 
+**Witnessed 2026-09-21, with all six `$ELYSIUM_EXPORT_ROOT/<map>/` directories moved away.**
+`sp_genesisdevice_1` baked from its published units alone — 7 world hulls, 3 brush bodies, 0 nav
+nodes, 21-4's numbers — and the other five re-baked `--force --verify` clean with decals
+**123 / 219 / 0 / 38 / 29**, each equal to 21-4's count. `verify nav` 6 maps / **0 findings**;
+`verify maps` 6 maps / zero errors. All six then travelled in one run of the game: the tutorial's
+scripted opening playing from `new_game`, the hub's 18 queued events with `rain_on` raising both
+`rain_emitter`s and the `rain_light_loop` bed, and the clean-room `sp_genesisdevice_1` adopting
+its baked navmesh with no build, running its `logic_auto` and chargen script to the entry popup,
+and auditing **14 mesh assets with 0 unbound or default-bound slots** — which is the check that
+the error material's move to `/Game/ElysiumGenerated/Materials` binds nothing wrongly. Its wire
+report: 49 authored, 3 fired, 3 delivered, 0 unknown target or input.
+
 **What this costs, stated rather than absorbed.** The producer's `.ents` divergence flags
 (`EntityDivergences`) still default to the reading the decoder had, but that default is now a
 written-down contract rather than a diffable one — nothing is left to diff against, which is why

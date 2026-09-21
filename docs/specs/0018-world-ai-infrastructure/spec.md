@@ -1602,9 +1602,18 @@ its recovery is written in the oracle section it names.
   all six export directories renamed away, `sp_genesisdevice_1` baked from its published units
   alone — 7 world hulls, 3 brush bodies, 0 nav nodes, the numbers 21-4 recorded — and the other
   five re-baked `--force --verify` clean: decals **123 / 219 / 0 / 38 / 29**, each equal to 21-4's
-  count, and the hub's weather package passing. No import of `UE_bsp_to_scene`,
-  `UE_extract_corpus` or `CorpusBake` anywhere; no `/ElysiumBaked/Shared` in source, config or
-  tests. The 102 stale baked levels and the 1.8 GB `Shared/` package were pruned from the mount.
+  count. `verify nav` **6 maps, 0 findings**; `verify maps` 6 maps, zero verify errors. Then all
+  six travelled in **one run of the game**: `sp_tutorial_1` from `new_game` with its scripted
+  opening playing (the sign popup raised, the queue draining 4 -> 0), `sm_hub_1` with 18 queued
+  events and `elysium.weather.rain_on` bringing up both `rain_emitter`s and the
+  `rain_light_loop` bed, then `sp_soc_3`, `sm_pawnshop_1`, `sp_theatre` and finally the
+  clean-room `sp_genesisdevice_1` — which adopted its baked navmesh with no build, ran its
+  `logic_auto` and chargen script to the entry popup, and audited **14 mesh assets with 0 unbound
+  or default-bound slots**, so the error material's move off the dead mount binds nothing wrongly.
+  Its wire report is 49 authored / 3 fired / 3 delivered / **0 unknown target or input**. No
+  import of `UE_bsp_to_scene`, `UE_extract_corpus` or `CorpusBake` anywhere; no
+  `/ElysiumBaked/Shared` in source, config or tests. The 102 stale baked levels and the 1.8 GB
+  `Shared/` package were pruned from the mount.
 
   **Owed, and stated rather than absorbed.** `test_legacy_map_native_props.py` tested the deleted
   `Bake._place_props`, so `MapBakeV2`'s native-reference embedding has no direct unit coverage
