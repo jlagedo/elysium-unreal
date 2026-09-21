@@ -1,7 +1,6 @@
 #include "ElysiumMapEnvironment.h"
 
 #include "ElysiumContentPaths.h"
-#include "ElysiumMapTransportSettings.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMapEnvironment, Log, All);
 
@@ -49,7 +48,6 @@ namespace ElysiumMapEnvironmentSource
 		switch (Source)
 		{
 		case EElysiumMapEnvironmentSource::Asset:   return TEXT("asset");
-		case EElysiumMapEnvironmentSource::Sidecar: return TEXT("sidecar");
 		default:                                    return TEXT("none");
 		}
 	}
@@ -64,38 +62,24 @@ namespace ElysiumMapEnvironmentSource
 		OutSpawnYaw = 0.f;
 
 		const FString AssetPath = FElysiumContentPaths::BakedMapEnvironment(MapName);
-		// R4.6: an unlisted map never attempts the asset, even if one exists on disk -- the tracked
-		// flag list, not asset presence, decides the transport from here forward.
-		if (ElysiumMapTransport::IsMapOnNewTransport(MapName))
+		if (const UElysiumMapEnvironment* Asset = LoadObject<UElysiumMapEnvironment>(nullptr, *AssetPath))
 		{
-			// Quiet: a listed map whose asset is not yet baked falls back below rather than warning.
-			if (const UElysiumMapEnvironment* Asset = LoadObject<UElysiumMapEnvironment>(
-				nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
-			{
-				OutEnv = Asset->ToEnvDef();
-				OutSky = Asset->ToSkyDef();
-				const FElysiumSpawnDef Spawn = Asset->ToSpawnDef();
-				bOutHasSpawn = Spawn.bValid;
-				OutSpawnLocation = Spawn.OriginCm;
-				OutSpawnYaw = Spawn.YawDeg;
-				UE_LOG(LogElysiumMapEnvironment, Log, TEXT("%s: environment from %s"), *MapName,
-					*AssetPath);
-				return EElysiumMapEnvironmentSource::Asset;
-			}
+			OutEnv = Asset->ToEnvDef();
+			OutSky = Asset->ToSkyDef();
+			const FElysiumSpawnDef Spawn = Asset->ToSpawnDef();
+			bOutHasSpawn = Spawn.bValid;
+			OutSpawnLocation = Spawn.OriginCm;
+			OutSpawnYaw = Spawn.YawDeg;
+			UE_LOG(LogElysiumMapEnvironment, Log, TEXT("%s: environment from %s"), *MapName,
+				*AssetPath);
+			return EElysiumMapEnvironmentSource::Asset;
 		}
 
-		const bool bHaveEnv = FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), OutEnv);
-		const bool bHaveSky = FElysiumSkyDef::Parse(FElysiumContentPaths::MapSky(MapName), OutSky);
-		FElysiumSpawnDef Spawn;
-		bOutHasSpawn = FElysiumSpawnDef::Parse(FElysiumContentPaths::MapSpawn(MapName), Spawn);
-		OutSpawnLocation = Spawn.OriginCm;
-		OutSpawnYaw = Spawn.YawDeg;
-		if (!bHaveEnv && !bHaveSky && !bOutHasSpawn)
-		{
-			return EElysiumMapEnvironmentSource::None;
-		}
-		UE_LOG(LogElysiumMapEnvironment, Log,
-			TEXT("%s: environment from .env/.sky/.spawn (no %s)"), *MapName, *AssetPath);
-		return EElysiumMapEnvironmentSource::Sidecar;
+		// 0018 story 21-1: no sidecar arm behind this any more. A map with no environment asset has
+		// no fog, no sky and no player start, so it fails rather than opening into the defaults.
+		UE_LOG(LogElysiumMapEnvironment, Error,
+			TEXT("'%s': no environment asset at %s; run: uv run elysium bake map --maps %s"),
+			*MapName, *AssetPath, *MapName);
+		return EElysiumMapEnvironmentSource::None;
 	}
 }

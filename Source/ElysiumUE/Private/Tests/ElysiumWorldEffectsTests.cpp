@@ -491,35 +491,31 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigTest,
 	"Elysium.Substrate.LightRig", GElysiumTestFlags)
 
-// R4.3: the derivation-math assertions below (non-inverse-square
-// falloff, MegaLights, shadows-from-calibration, spot cone from stopdot/stopdot2) exercise exactly
-// the formulas `ApplyToSource` computes fresh on every map load today and R5.6 will instead compute
-// once at bake time -- the roadmap line's "re-homed to bake verification" describes moving these
-// assertions onto that bake's own output once it exists, not something R5.6's own predecessor task
-// can do yet (there is no baked light asset to verify against before R5.6 lands). Until then this is
-// where the formulas they check are proven, and R5.6 re-homes them rather than duplicating them.
+// R6.2: a `light_dynamic` is the one light with no lump-15 row, so nothing baked its values and
+// `ApplyToSource` derives them at load under the page's calibration. These assertions
+// (non-inverse-square falloff, MegaLights, shadows-from-calibration, spot cone from
+// stopdot/stopdot2) are where those formulas are proven; a BAKED source runs none of them, and
+// `Elysium.Substrate.LightRigBaked` below asserts exactly that. Synthetic sources rather than a
+// file: 0018 story 21-1 retired the `.lights` lane, and this path never had one.
 bool FElysiumLightRigTest::RunTest(const FString&)
 {
-	IFileManager::Get().MakeDirectory(*FPaths::AutomationTransientDir(), /*Tree*/ true);
-	const FString LightsPath = FPaths::CreateTempFilename(
-		*FPaths::AutomationTransientDir(), TEXT("ElysiumLightRig_"), TEXT(".lights"));
-	const FString Sidecar =
-		TEXT("1 0 0 0 0 0 0 100 50 25 1000 0 0 1 0 0\n")
-		TEXT("2 0 0 0 1 0 0 50 40 30 2000 0.9396926 0.7660444 1 0 0\n")
-		TEXT("3 0 0 0 0 0 -1 1 1 1 0 0 0 1 0 0\n");
-	TestTrue(TEXT("synthetic light sidecar writes"), FFileHelper::SaveStringToFile(Sidecar, *LightsPath));
-
 	UElysiumLightRig* Rig = NewObject<UElysiumLightRig>();
 	UPointLightComponent* Point = NewObject<UPointLightComponent>();
 	USpotLightComponent* Spot = NewObject<USpotLightComponent>();
 	UDirectionalLightComponent* Sun = NewObject<UDirectionalLightComponent>();
 	Point->SetWorldLocation(FVector(100.f, 200.f, 300.f));
 
-	TArray<UElysiumLightRig::FAdoptedLight> Adopted;
-	Adopted.Add({Point, 0});
-	Adopted.Add({Spot, 1});
-	Adopted.Add({Sun, 2});
-	TestEqual(TEXT("all synthetic sources adopt"), Rig->Adopt(Adopted, LightsPath), 3);
+	// The three rows the retired sidecar fixture carried, stated as the runtime source they are:
+	// a point, a spot whose cosines are 20 degrees inside 40, and the sun.
+	TestEqual(TEXT("point runtime source adopts"),
+		Rig->AddRuntimeSource(Point, /*Type*/ 1, FLinearColor(1.f, 0.5f, 0.25f), /*Mag*/ 100.f,
+			/*RadiusCm*/ 1000.f, /*StopDot*/ 0.f, /*StopDot2*/ 0.f, /*Style*/ 0), 0);
+	TestEqual(TEXT("spot runtime source adopts"),
+		Rig->AddRuntimeSource(Spot, /*Type*/ 2, FLinearColor(1.f, 0.8f, 0.6f), /*Mag*/ 50.f,
+			/*RadiusCm*/ 2000.f, /*StopDot*/ 0.9396926f, /*StopDot2*/ 0.7660444f, /*Style*/ 0), 1);
+	TestEqual(TEXT("sun runtime source adopts"),
+		Rig->AddRuntimeSource(Sun, /*Type*/ 3, FLinearColor::White, /*Mag*/ 1.f,
+			/*RadiusCm*/ 0.f, /*StopDot*/ 0.f, /*StopDot2*/ 0.f, /*Style*/ 0), 2);
 
 	TestFalse(TEXT("point baseline is non-inverse-square"), Point->bUseInverseSquaredFalloff != 0);
 	TestTrue(TEXT("local source explicitly allows MegaLights"), Point->bAllowMegaLights != 0);
@@ -549,7 +545,7 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 
 	// R4.3: global calibration comes from `UElysiumLightingSettings`, not the rig's own hardcoded
 	// defaults. `ApplySettings` is a pure field copy plus `ApplyLiveTuning`, exercised directly
-	// (not through the CDO `GetDefault<>` Adopt() reads) so the test needs no project-settings
+	// (not through the CDO `GetDefault<>` the adopt reads) so the test needs no project-settings
 	// fixture and cannot see another test's mutation of the real settings object.
 	UElysiumLightingSettings* Settings = NewObject<UElysiumLightingSettings>();
 	Settings->PointSpotScale = 0.004f;
@@ -571,50 +567,15 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 	TestTrue(TEXT("LightSpecularScale reaches a non-overridden light's SpecularScale"),
 		FMath::IsNearlyEqual(Point->SpecularScale, 0.7f));
 
-	// R4.3: a per-map `UElysiumLightCalibration`'s merge rows apply through the same per-source
-	// setters a hand edit uses, so an overridden row survives the next `ApplyLiveTuning` untouched.
-	UElysiumLightCalibration* Calibration = NewObject<UElysiumLightCalibration>();
-	FElysiumLightCalibrationRow Row;
-	Row.SourceIndex = 1;   // the spot's `.lights` line
-	Row.bOverrideIntensity = true;
-	Row.Intensity = 2.5f;
-	Row.bOverrideReach = true;
-	Row.ReachCm = 3456.f;
-	Row.bOverrideColor = true;
-	Row.Color = FLinearColor(0.2f, 0.4f, 0.8f);
-	Calibration->Rows.Add(Row);
-	FElysiumLightCalibrationRow StaleRow;
-	StaleRow.SourceIndex = 99;   // no live source at this line -- must be skipped, not asserted on
-	StaleRow.bDisabled = true;
-	Calibration->Rows.Add(StaleRow);
-
-	TestEqual(TEXT("calibration asset applies exactly its matching row"),
-		Rig->ApplyCalibrationAsset(Calibration), 1);
-	TestTrue(TEXT("calibration row marks its source overridden"), Rig->IsSourceOverridden(1));
-	TestTrue(TEXT("calibration row's intensity reaches the component"),
-		FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
-	TestTrue(TEXT("calibration row's reach reaches the component"),
-		FMath::IsNearlyEqual(Spot->AttenuationRadius, 3456.f));
-	// `ULightComponentBase::LightColor` is an 8-bit sRGB `FColor`; `SetLightColor`/`GetLightColor`
-	// round-trip through it, so the expected value is the same quantization, not the authored float.
-	const FLinearColor SpotColor = Spot->GetLightColor();
-	const FLinearColor ExpectedSpotColor(Row.Color.ToFColor(/*bSRGB*/ true));
-	TestTrue(TEXT("calibration row's colour reaches the component"),
-		SpotColor.Equals(ExpectedSpotColor, 0.001f));
-
-	Rig->ApplyLiveTuning();
-	TestTrue(TEXT("an overridden source survives the next ApplyLiveTuning unchanged"),
-		FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
-
-	IFileManager::Get().Delete(*LightsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+	// The R4.3 calibration asset keys on the lump-15 ordinal, which a runtime source has none of.
+	// `Elysium.Substrate.LightRigBaked` proves that merge on the path that carries the key.
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigBakedTest,
 	"Elysium.Substrate.LightRigBaked", GElysiumTestFlags)
 
-// R5.6: on a `MapsOnV2Models` map the
-// bake wrote every derived value, so `AdoptBaked` opens no sidecar and derives nothing -- the
+// R5.6: the bake wrote every derived value, so `AdoptBaked` opens no file and derives nothing -- the
 // actor's values are the baseline, a settings push leaves them alone, a revert returns to them,
 // and the R4.3 calibration asset still applies by the same lump-15 ordinal. No tick here: an
 // unregistered component asserts in `UActorComponent::TickComponent`, so the per-frame lightstyle

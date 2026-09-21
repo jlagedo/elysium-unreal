@@ -64,14 +64,6 @@ public:
 	// `UElysiumSurfaceSettings::LightSpecularScale`, one global knob on the surfaces page, and a
 	// second field for the same number would be a second writer.
 
-	// --- per-area rebalance --------------------------------------------------------------------
-	/**
-	 * Apply `<map>.lightfit`'s per-area brightness rebalance (was `elysium.LightFit`), one multiplier
-	 * per `.lights` line, reverse-engineered by `probe_light_attribution.py`.
-	 */
-	UPROPERTY(EditAnywhere, Config, Category = "Per-area rebalance")
-	bool bApplyLightFit = false;
-
 	// --- Lumen / fog ---------------------------------------------------------------------------
 	/** Per-light Lumen surface-cache injection multiplier (not the post-process precomputed-lighting control). */
 	UPROPERTY(EditAnywhere, Config, Category = "Lumen", meta = (ClampMin = "0.0"))

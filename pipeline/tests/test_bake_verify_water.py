@@ -235,13 +235,7 @@ def test_verify_water_lightstyle_tags_still_flags_a_style_no_carrier_names(modul
 
 # --------------------------------------------------------------------------------- verify_water
 
-def test_verify_water_short_circuits_off_v2_models(module, monkeypatch) -> None:
-    monkeypatch.setattr(module.map_transport, "is_map_on_v2_models", lambda name: False)
-    assert module.verify_water([], "some_legacy_map") == []
-
-
 def test_verify_water_names_the_missing_manifest(module, monkeypatch) -> None:
-    monkeypatch.setattr(module.map_transport, "is_map_on_v2_models", lambda name: True)
     monkeypatch.setattr(module, "_staged_manifest", lambda name: None)
     errors = module.verify_water([], "sm_hub_1")
     assert len(errors) == 1
@@ -252,7 +246,6 @@ def test_verify_water_runs_underside_and_lightstyle_checks_even_with_no_water_vo
         module, monkeypatch) -> None:
     # A map can carry a styled or undersided surface with no `water.volumes[]` row at all (e.g. a
     # lightstyle on ordinary geometry) -- those two checks must not be gated on a water actor.
-    monkeypatch.setattr(module.map_transport, "is_map_on_v2_models", lambda name: True)
     monkeypatch.setattr(module, "_staged_manifest", lambda name: {
         "water": {"volumes": []},
         "materials": {"objects/surf#style1": {"lightStyle": 1}},

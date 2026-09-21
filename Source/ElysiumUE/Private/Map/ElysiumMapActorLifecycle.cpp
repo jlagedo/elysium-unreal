@@ -344,18 +344,18 @@ void AElysiumMapActor::LoadMap()
 		GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
 	bMenuBackdrop = MapSubsystem && MapSubsystem->IsMenuBackdrop();
 
-	// The walkable surface. Baked world geometry carries no gameplay collision, so the brush
-	// sidecars are the only world collider: .hulls convex (which carries the invisible PLAYERCLIP
-	// volumes and drops geometry the designer clipped off) plus the .dispcol displacement trimesh.
+	// The walkable surface. Baked render geometry carries no gameplay collision, so the payload's
+	// cooked bodies are the only world collider: the brush convex set (which carries the invisible
+	// PLAYERCLIP volumes and drops geometry the designer clipped off) plus the displacement trimesh.
 	Collision->Build(MapName);
 	Phase(TEXT("Collision"));
 
 	Visuals->BuildRopes(MapName);
 	Phase(TEXT("Ropes"));
 
-	// Sky cubemap + backdrop and the sky light's IBL off the same cube (skipped on a baked,
-	// `MapsOnV2Models` map — R5.2 — whose SkyLight and dome already carry the real values).
-	Visuals->ApplyEnvironment(EnvDef, MapName);
+	// The map's two fog sets, onto everything the level placed. The sky itself is the bake's
+	// (R5.2): its SkyLight and backdrop dome already carry the real values.
+	Visuals->ApplyEnvironment(EnvDef);
 	Phase(TEXT("Environment"));
 
 	UE_LOG(LogElysium, Log,

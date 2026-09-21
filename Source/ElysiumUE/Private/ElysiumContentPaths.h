@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ElysiumMapTransportSettings.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
@@ -200,18 +199,6 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_Environment");
 		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
 	}
-	// Shared corpus (`pipeline/unreal/bake_map.py` CorpusBake).
-	// A texture, a material and a static model belong to the user's install, not to a map:
-	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob
-	// model is one doorknob however many maps hang it on a door. So each is decoded once and baked
-	// once here, and every map references the single asset rather than carrying a copy.
-	//
-	// Its Python twin is `elysium_pipeline.shared_corpus`, which owns the key rules and the
-	// shared/per-map predicate; these paths must agree with it exactly.
-	static FString BakedSharedDir() { return BakedMount() / TEXT("Shared"); }
-	static FString BakedSharedTextures() { return BakedSharedDir() / TEXT("Textures"); }
-	static FString BakedSharedMaterials() { return BakedSharedDir() / TEXT("Materials"); }
-	static FString BakedSharedMeshes() { return BakedSharedDir() / TEXT("Meshes"); }
 	// The texture lane's package root (`uv run elysium import textures`): one `T_` per
 	// `vtmb:texture:` unit.
 	static FString BakedTexturesDir() { return BakedMount() / TEXT("Textures"); }
@@ -442,46 +429,11 @@ struct FElysiumContentPaths
 		while (Out.RemoveFromEnd(TEXT("_"))) {}
 		return Out.IsEmpty() ? FString(TEXT("unnamed")) : Out;
 	}
-	// The V2 model corpus (R1): one `UStaticMesh` per referenced model unit, imported from the
-	// published GLB with its slots bound to the V2 material instances and its collision cooked from
-	// VtMB's own convex hulls. A sibling of the legacy shared bake at the mount root, never over it: the two
-	// corpora carry the same asset names, stems and slot names, so which root a map reads is the
-	// only difference between them. Its Python twin is
+	// The model corpus (R1): one `UStaticMesh` per referenced model unit, imported from the
+	// published GLB with its slots bound to the material instances and its collision cooked from
+	// VtMB's own convex hulls. Its Python twin is
 	// `elysium_pipeline.importers.models.PACKAGE_ROOT`.
 	static FString BakedMeshes() { return BakedMount() / TEXT("Meshes"); }
-	// Which model corpus one map's props resolve against (R5.1). Per map, never per system: a map
-	// listed under `MapsOnV2Models` reads the V2 corpus, every other map keeps the legacy shared
-	// bake exactly as it always has. The two lists on that settings page are deliberately distinct
-	// -- `sp_theatre` is on the R4.6 entity/collision/environment transport but its models have not
-	// been imported, so its props must keep resolving at the legacy root.
-	static FString BakedMeshesFor(const FString& Map)
-	{
-		return ElysiumMapTransport::IsMapOnV2Models(Map) ? BakedMeshes() : BakedSharedMeshes();
-	}
-	// One baked static model, by the same stem the `.props` sidecar, `model_mesh` and the V2 lane
-	// all name (the whole model path folded -- `PropModelStem` below). Package path is
-	// <dir>/SM_<stem>.SM_<stem>. The map is required rather than defaulted so no call site can
-	// silently land on the legacy root for a map that has been cut over.
-	static FString BakedPropMesh(const FString& Stem, const FString& Map)
-	{
-		const FString Asset = TEXT("SM_") + SafeName(Stem);
-		return BakedMeshesFor(Map) / Asset + TEXT(".") + Asset;
-	}
-	// An item's ground model is a static model like any other and sits in the same corpus. The
-	// separate name is kept because the caller's intent differs, not because the asset does.
-	static FString BakedItemMesh(const FString& Stem, const FString& Map)
-	{
-		return BakedPropMesh(Stem, Map);
-	}
-	// The prop skin table: every alternate skin family of every model, resolved to the material
-	// instances at bake time. One table per corpus, because a model's skin families and the
-	// materials they repaint are both properties of the install rather than of a map -- but which
-	// of the two corpora a map reads is still the map's own cutover call.
-	static FString BakedPropSkins(const FString& Map)
-	{
-		const FString Asset = TEXT("DA_ElysiumPropSkins");
-		return BakedMeshesFor(Map) / Asset + TEXT(".") + Asset;
-	}
 	static FString BakedBrushMesh(const FString& Map, const FString& Stem)
 	{
 		const FString Asset = TEXT("SM_") + Stem;
@@ -578,36 +530,12 @@ struct FElysiumContentPaths
 		return Out;
 	}
 
-	// The shared corpus on disk (pipeline/src/elysium_pipeline/exporters/UE_extract_corpus.py):
-	// every decoded texture, every static model, and the two documents that describe them. One
-	// decode per source identity, so nothing here is addressed by a map.
-	static FString SharedDir() { return Root() / TEXT("shared"); }
-	static FString SharedTexDir() { return SharedDir() / TEXT("tex"); }
-	static FString SharedPropsDir() { return SharedDir() / TEXT("props"); }
-	static FString SharedManifest() { return SharedDir() / TEXT("manifest.json"); }
-	static FString SharedMaterials() { return SharedDir() / TEXT("materials.json"); }
 	static FString MapDir(const FString& Map) { return Root() / Map; }
-	// A map's own texture directory. It holds only `tex/cube/` now -- the env cubemaps VBSP baked
-	// per map and per position. Every surface texture is the corpus's.
-	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
-	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
-	// The new export lane's readiness marker (the ruling is "the export-readiness gate"). An empty file a new-lane
-	// producer writes only once every sidecar `Travel` depends on is complete on disk for this map --
-	// `UElysiumMapSubsystem::HasTravelableExport` accepts this OR MapObj, so the gate never goes
-	// without both while the lanes coexist. Nothing writes it yet; R3.2 is the first producer.
+	// The export lane's readiness marker (the ruling is "the export-readiness gate"). An empty file
+	// the producer writes only once every sidecar `Travel` still depends on is complete on disk for
+	// this map, and the whole of that gate since 0018 story 21-1 retired the `.obj` arm.
 	static FString MapExportReady(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ready")); }
-	static FString MapSkyObj(const FString& Map) { return MapDir(Map) / (Map + TEXT("_sky.obj")); }
-	static FString MapSpawn(const FString& Map) { return MapDir(Map) / (Map + TEXT(".spawn")); }
-	static FString MapSky(const FString& Map) { return MapDir(Map) / (Map + TEXT(".sky")); }
-	static FString MapEnv(const FString& Map) { return MapDir(Map) / (Map + TEXT(".env")); }
-	static FString MapLights(const FString& Map) { return MapDir(Map) / (Map + TEXT(".lights")); }
-	static FString MapProps(const FString& Map) { return MapDir(Map) / (Map + TEXT(".props")); }
 	static FString MapEnts(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ents")); }
-	static FString MapHulls(const FString& Map) { return MapDir(Map) / (Map + TEXT(".hulls")); }
-	static FString MapDispCol(const FString& Map) { return MapDir(Map) / (Map + TEXT(".dispcol")); }
-	// Decals: one deferred-decal projector per line (material + centre + normal + s/t axes +
-	// half-extents, Unreal cm), written by UE_bsp_to_scene.py. Materials ride the shared <map>.mtl.
-	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
 	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
 
 	// The corpus tree is deployed all-lower-case (`uv run elysium import`), while VtMB keyvalues and

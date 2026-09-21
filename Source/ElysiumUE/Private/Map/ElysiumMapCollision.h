@@ -87,13 +87,6 @@ public:
 	bool Build(const FString& MapName);
 	EElysiumCollisionBuildState GetBuildState() const;
 	const FString& GetFailureReason() const { return FailureReason; }
-	// Union of the live hull/displacement collision components. Valid once Build has produced at
-	// least one collider; used to size the runtime Recast bounds around the actual playable world.
-	FBox GetWorldBounds() const;
-	// Re-register the completed BodySetups with the navigation octree immediately before the one
-	// runtime Recast build. Async Chaos cooking completes after component registration.
-	void RefreshNavigationData();
-
 	// Convex-hull count and displacement-triangle count, for the debug overlay.
 	int32 HullCount = 0;
 	int32 DispTriCount = 0;

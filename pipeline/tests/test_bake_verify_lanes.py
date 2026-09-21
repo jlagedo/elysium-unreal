@@ -1,11 +1,9 @@
-"""`pipeline/unreal/bake_verify.py`: the two lanes its material checks answer for.
+"""`pipeline/unreal/bake_verify.py`: the assets its material checks answer about.
 
-A converted map (`MapsOnV2Models`) and a legacy one bind different assets for the same surface,
-and the checks that could not tell them apart were reporting about packages nobody draws -- the
-per-map `<map>/Materials/MI_...` the V2 bake prunes rather than writes, and the legacy PNG/shared
-corpus pair a converted map never binds. What is pinned here is the join each lane makes: the
-legacy slot for a patched surface, the V2 slot the staged manifests name for that same surface,
-and the alpha set the V2 check derives from them.
+The checks the bake once carried reported about packages nobody draws -- the per-map
+`<map>/Materials/MI_...` the bake prunes rather than writes, and the PNG/shared corpus pair a
+baked map never binds. What is pinned here is the join the live lane makes: the slot the staged
+manifests name for a patched surface, and the alpha set the check derives from them.
 
 The module is an editor entry point, so it is loaded with a fake `unreal` -- and it can be loaded
 at all because `main()` refuses an empty map selection instead of defaulting to one map.
@@ -63,12 +61,6 @@ def module():
     return loaded
 
 
-def _surface(name, material_key, *, local=False):
-    """The fields `_material_slot` reads off a `bake_lib` MatDef."""
-    return SimpleNamespace(name=name, material_key=material_key, decal=False,
-                           wetness_driven=False, local=local)
-
-
 #: One `$envmap` surface as the two lanes record it. The slot carries the cubemap the map's own
 #: VBSP patched in (`shared_corpus.CUBEMAP_TAG`); the unit underneath it is corpus-wide.
 PATCHED_SLOT = "glass/glass01@c-1868_-2601_184"
@@ -122,17 +114,6 @@ MAP_MATERIALS = {
 
 def _indexes(module):
     return STAGED, {module._unit_key(row): row for row in STAGED.values()}
-
-
-def test_the_legacy_slot_is_still_this_map_s_own_package_for_a_patched_surface(module):
-    # Unchanged, and pinned because the V2 branch is now the one that moved: a legacy map DOES
-    # author `<map>/Materials/MI_<slot>` for a surface VBSP patched a cubemap into, and every
-    # other surface reads the legacy shared corpus under its material key.
-    package = "/ElysiumBaked/sp_theatre"
-    assert module._material_slot(package, _surface(PATCHED_SLOT, "glass/glass01")) == (
-        "/ElysiumBaked/sp_theatre/Materials", "MI_glass_glass01_c_1868__2601_184")
-    assert module._material_slot(package, _surface("glass/glass01", "glass/glass01")) == (
-        "/ElysiumBaked/Shared/Materials", "MI_glass_glass01")
 
 
 def test_the_v2_slot_is_the_staged_corpus_instance_a_patched_surface_overrides(module):

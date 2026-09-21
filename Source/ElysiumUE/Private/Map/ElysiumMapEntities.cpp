@@ -1,7 +1,6 @@
 #include "ElysiumMapEntities.h"
 
 #include "ElysiumContentPaths.h"
-#include "ElysiumMapTransportSettings.h"
 #include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMapEntities, Log, All);
@@ -91,7 +90,6 @@ namespace ElysiumEntityDefSource
 		switch (Source)
 		{
 		case EElysiumEntityDefSource::Asset:   return TEXT("asset");
-		case EElysiumEntityDefSource::Sidecar: return TEXT("sidecar");
 		default:                               return TEXT("none");
 		}
 	}
@@ -100,31 +98,22 @@ namespace ElysiumEntityDefSource
 		float SkyScale, const FVector& SkyOrigin)
 	{
 		const FString AssetPath = FElysiumContentPaths::BakedMapEntities(MapName);
-		// R4.6: an unlisted map never attempts the asset, even if one exists on disk -- the tracked
-		// flag list, not asset presence, decides the transport from here forward.
-		if (ElysiumMapTransport::IsMapOnNewTransport(MapName))
+		// The asset is used and released inside this call; nothing retains it, so the defs it
+		// produced outlive it by value.
+		if (const UElysiumMapEntities* Asset = LoadObject<UElysiumMapEntities>(nullptr, *AssetPath))
 		{
-			// The asset is used and released inside this call; nothing retains it, so the defs it
-			// produced outlive it by value the same way the parsed sidecar's do.
-			// Quiet: a listed map whose asset is not yet baked falls back below rather than warning.
-			if (const UElysiumMapEntities* Asset = LoadObject<UElysiumMapEntities>(
-				nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
-			{
-				Asset->Deserialize(Out, SkyScale, SkyOrigin);
-				UE_LOG(LogElysiumMapEntities, Log, TEXT("%s: %d entity def(s) from %s"),
-					*MapName, Out.Num(), *AssetPath);
-				return EElysiumEntityDefSource::Asset;
-			}
+			Asset->Deserialize(Out, SkyScale, SkyOrigin);
+			UE_LOG(LogElysiumMapEntities, Log, TEXT("%s: %d entity def(s) from %s"),
+				*MapName, Out.Num(), *AssetPath);
+			return EElysiumEntityDefSource::Asset;
 		}
 
-		if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), Out,
-			SkyScale, SkyOrigin))
-		{
-			UE_LOG(LogElysiumMapEntities, Log, TEXT("%s: %d entity def(s) from %s.ents (no %s)"),
-				*MapName, Out.Num(), *MapName, *AssetPath);
-			return EElysiumEntityDefSource::Sidecar;
-		}
-
+		// 0018 story 21-1: there is no sidecar arm behind this any more, so a map whose asset is
+		// missing or unreadable has no entities at all -- which is a failure, not a quiet empty
+		// world. The error names the command that authors the asset.
+		UE_LOG(LogElysiumMapEntities, Error,
+			TEXT("'%s': no entity asset at %s; run: uv run elysium bake map --maps %s"),
+			*MapName, *AssetPath, *MapName);
 		return EElysiumEntityDefSource::None;
 	}
 }

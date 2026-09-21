@@ -188,8 +188,8 @@ struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTyp
 //   UElysiumMapVisuals    the LOOK — adopting the baked level, the material-override MIDs, the sky
 //                         cube and backdrop, the sky light's level, the two fog sets, the Lumen
 //                         knobs on the map's PPV, the light rig, the cables, the visibility A/Bs
-//   UElysiumMapCollision  the WALKABLE SURFACE — `<map>.hulls` convex + `<map>.dispcol` trimesh,
-//                         which is the only world collider (baked geometry carries none)
+//   UElysiumMapCollision  the WALKABLE SURFACE — the baked `DA_<map>_Collision` payload's cooked
+//                         bodies, which are the only world collider (render geometry carries none)
 //   UElysiumEntityBodies  the BODY FACTORY behind IElysiumEmbodiment's mesh half — NPC skeletal and
 //                         prop static bodies, their skins, and the per-map asset caches
 //
@@ -680,7 +680,6 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraSystem> RainSystem;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraComponent> RainFollowComponent;
-	UPROPERTY(Transient) TMap<int32, TObjectPtr<UNiagaraComponent>> RainComponents;
 	// Runtime-only target bounds. Brush entities register their existing body; model props receive
 	// a query-only box component and remain ordinary components of this one map actor.
 	UPROPERTY(Transient) TArray<TObjectPtr<UPrimitiveComponent>> OwnedUseAnchorComponents;
@@ -713,10 +712,8 @@ private:
 		UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	/** Apply the recovered origin/tree/point attachment rule to one emitter component. */
-	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);
-	// R7.3 (`ElysiumMapActorEffects.cpp`): the retarget for a `MapsOnV2Models` map -- drive the
-	// bake-placed AElysiumEffectActor by entity index instead of creating a component.
+	// R7.3 (`ElysiumMapActorEffects.cpp`): drive the bake-placed AElysiumEffectActor by entity
+	// index. Since 0018 story 21-1 this is the only emitter arm.
 	void ApplyEmitterToPlacedActor(const struct FElysiumWeatherEmitterState& Emitter);
 	// Resolve what an attach mode needs off the parent entity (§5.7): its body, its skeletal
 	// mesh, the socket the bone names, the reconstructed world location of a tree attach. False

@@ -6,8 +6,8 @@
 // `Spawn` turns an unnamed or Start-On (spawnflag 1) sprite on and every other one off;
 // HideSprite / TurnOff clear the draw, ShowSprite / TurnOn restore it, ToggleSprite flips it.
 // ScriptHide / Kill hide through the base chain and ScriptUnhide restores the last `bOn`. Every
-// change publishes `bOn && !IsInert()` through `IElysiumEmbodiment::SetBakedSpriteVisible`; a map
-// off `MapsOnV2Models` has no sprite actor and the write lands nowhere.
+// change publishes `bOn && !IsInert()` through `IElysiumEmbodiment::SetBakedSpriteVisible`, which
+// finds the bake-placed sprite actor by entity index.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"

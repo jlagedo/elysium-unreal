@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import shutil
 
-from elysium_pipeline import map_transport, workspace_lock
+from elysium_pipeline import workspace_lock
 from elysium_pipeline.importers import map_geometry
 
 
@@ -839,13 +839,12 @@ def bake_maps(
     failed batch is reported by the editor log naming the failing map.
     """
     maps = list(dict.fromkeys(maps))
-    # R5.1: a map on the V2 geometry lane is authored from its published root unit, and decoding
-    # that unit needs numpy, which Unreal's embedded CPython does not carry. So the read happens
-    # here, in this interpreter, immediately before the commandlet launches -- the staged pair it
-    # leaves is what `bake_map_v2` reads. Staging every launch rather than caching it keeps the
-    # bake's inputs and the published unit in step; it costs ~1.5 s per map.
-    on_v2 = [name for name in maps if map_transport.is_map_on_v2_models(name)]
-    for name in on_v2:
+    # R5.1: a map is authored from its published root unit, and decoding that unit needs numpy,
+    # which Unreal's embedded CPython does not carry. So the read happens here, in this
+    # interpreter, immediately before the commandlet launches -- the staged pair it leaves is what
+    # `bake_map_v2` reads. Staging every launch rather than caching it keeps the bake's inputs and
+    # the published unit in step; it costs ~1.5 s per map.
+    for name in maps:
         manifest = map_geometry.stage_map(name)
         print(f"staged V2 geometry for {name}: {manifest['counts']} "
               f"({manifest['vertexBytes']} vertex bytes, "

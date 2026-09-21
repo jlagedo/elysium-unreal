@@ -308,16 +308,10 @@ void UElysiumMapSubsystem::Deinitialize()
 
 bool UElysiumMapSubsystem::HasTravelableExport(const FString& Map)
 {
-	// The new lane's marker always vouches for an export. The legacy `.obj` vouches for one only
-	// while the map still HAS a legacy lane: once a map is cut over to the V2 geometry bake (R5.1)
-	// nothing reads its `.obj` any more, so a stale one left on disk from an older export must not
-	// be allowed to say the sidecars beside it are current.
-	if (FPaths::FileExists(FElysiumContentPaths::MapExportReady(Map)))
-	{
-		return true;
-	}
-	return !ElysiumMapTransport::IsMapOnV2Models(Map)
-		&& FPaths::FileExists(FElysiumContentPaths::MapObj(Map));
+	// The producer's marker is the whole gate. 0018 story 21-1 retired the `.obj` arm with the
+	// legacy lane: nothing reads a `.obj` any more, so a stale one left on disk from an older
+	// export must not be allowed to say the sidecars beside it are current.
+	return FPaths::FileExists(FElysiumContentPaths::MapExportReady(Map));
 }
 
 bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
@@ -343,18 +337,15 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 			*Map, *Level, *Map);
 		return false;
 	}
-	// The sidecars the runtime still reads (.ents, .hulls, .ropes, .spawn) live beside the export,
-	// so a baked level with no export would build a world with no entities at all. Either producer's
-	// own proof that it ran satisfies this ("the export-readiness gate").
+	// The sidecar the runtime still reads (`.ropes`) lives beside the export, so a baked level with
+	// no export would build a world missing it. The producer's own proof that it ran satisfies this
+	// ("the export-readiness gate").
 	if (!HasTravelableExport(Map))
 	{
 		UE_LOG(LogElysiumMap, Warning,
-			TEXT("no exported map '%s' under %s (no '%s'%s)"),
+			TEXT("no exported map '%s' under %s (no '%s')"),
 			*Map, *FElysiumContentPaths::Root(),
-			*FElysiumContentPaths::MapExportReady(Map),
-			ElysiumMapTransport::IsMapOnV2Models(Map)
-				? TEXT("; this map is on the V2 lane, so its '.obj' no longer counts")
-				: *FString::Printf(TEXT(" and no '%s'"), *FElysiumContentPaths::MapObj(Map)));
+			*FElysiumContentPaths::MapExportReady(Map));
 		return false;
 	}
 

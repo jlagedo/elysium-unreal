@@ -226,7 +226,7 @@ namespace ElysiumImpactDecals
 	 * `Private/Debug/ElysiumPick.h` (which is `!UE_BUILD_SHIPPING`, so the constant is restated
 	 * here rather than shared -- a shot marks a wall in a shipping build too).
 	 *
-	 * **Not `ECC_Visibility`.** A converted map's solid body is the `.hulls` convex collider, which
+	 * **Not `ECC_Visibility`.** A map's solid body is the payload's cooked convex set, which
 	 * is `BlockAll`, invisible, material-less and includes PLAYERCLIP; the *render* geometry wears
 	 * the `ElysiumPickOnly` profile and is the only thing in the level that blocks this channel --
 	 * and it is the half that carries the face's `MI_<unit>` and therefore its

@@ -22,7 +22,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from elysium_pipeline import asset_names, map_transport, paths, shared_corpus
+from elysium_pipeline import asset_names, paths, shared_corpus
 from elysium_pipeline.formats.bsp import source_quat_to_unreal, source_to_unreal
 from elysium_pipeline.importers import map_geometry as MG
 
@@ -38,12 +38,10 @@ def _bake_map_v2_manifest_version() -> int:
 #: The three-map working corpus (R1); a whole-corpus run is a separate,
 #: owner-approved step and this module never asks for one.
 WORKING_MAPS = ("sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1")
-#: The maps on the V2 model root. R7.1 adds `sm_pier_1` (the water scope) and, on the owner's call
-#: of 2026-09-04, `sp_soc_3` -- the deep-water witness (Society of Leopold: a 464-inch
-#: `dev_water2_cheap` basin, 40 drip emitters). Both are in `MapsOnV2Models` in
-#: `Config/DefaultElysium.ini` and neither is in `WORKING_MAPS`, because the parametrized corpus
-#: cases above walk the three-map corpus and neither ruling authorized a wider run of those.
-V2_MODEL_MAPS = WORKING_MAPS + ("sm_pier_1", "sp_soc_3", "sp_theatre")
+#: Two more maps carry scope the three above do not: R7.1's `sm_pier_1` (the water scope) and, on
+#: the owner's call of 2026-09-04, `sp_soc_3` -- the deep-water witness (Society of Leopold: a
+#: 464-inch `dev_water2_cheap` basin, 40 drip emitters). Neither is in `WORKING_MAPS`, because the
+#: parametrized corpus cases above walk the three-map corpus and neither ruling widened them.
 
 
 def test_gltf_frame_matches_source_to_unreal_through_the_units_own_transform():
@@ -268,19 +266,6 @@ def test_reader_places_every_detail_record_of_the_root_unit(map_name):
     # Every staged row carries the eleven columns the editor half reads positionally.
     assert all(len(MG.detail_record_row(d)) == len(MG.DETAIL_RECORD_FIELDS)
                for d in geometry.details)
-
-
-def test_the_v2_model_flag_is_its_own_list():
-    # The V2 model root is its own ini list, read from its own key rather than derived from the
-    # R4.6 entity/collision/environment transport list, so a map joins it only by being named.
-    v2 = map_transport.read_array(map_transport.V2_MODELS_KEY)
-    transport = map_transport.read_array(map_transport.NEW_TRANSPORT_KEY)
-    assert set(v2) == set(V2_MODEL_MAPS)
-    assert "sp_theatre" in transport
-    assert map_transport.is_map_on_v2_models("sp_theatre") is True
-    assert map_transport.is_map_on_v2_models("sm_hub_2") is False
-    # Matched case-insensitively, exactly as `ElysiumMapTransport::IsMapOnV2Models` matches.
-    assert map_transport.is_map_on_v2_models("SP_Tutorial_1") is True
 
 
 def _read_obj_groups(path):

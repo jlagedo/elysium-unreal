@@ -173,201 +173,9 @@ void UElysiumLightRig::RemoveRuntimeSource(ULightComponent* Light)
 	LightCount -= Removed;
 }
 
-int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath,
-	float SkyReach)
-{
-	AdoptGameplayLight(FPaths::GetBaseFilename(LightsPath));
-	SkyReachScale = SkyReach > 0.f ? SkyReach : 1.f;
-
-	Lights.Reset();
-	LightSources.Reset();
-	LightCount = 0;
-	bHasSun = false;
-	bHasSkyAmbient = false;
-
-	TArray<FString> Lines;
-	if (!FFileHelper::LoadFileToStringArray(Lines, *LightsPath))
-	{
-		UE_LOG(LogElysiumLights, Warning, TEXT("LightRig: no %s — baked lights left as authored"),
-			*LightsPath);
-		return 0;
-	}
-
-	// Global calibration always starts from the current Project Settings page (R4.3), so a fresh map
-	// load never disagrees with the page an owner is looking at, whether or not any live rig has had
-	// a settings push yet.
-	ApplySettings(*GetDefault<UElysiumLightingSettings>(), *GetDefault<UElysiumSurfaceSettings>());
-
-	// Optional per-area rebalance: one multiplier per `.lights` line, in the same order.
-	TArray<float> Fit;
-	if (bApplyLightFit)
-	{
-		TArray<FString> FitLines;
-		if (FFileHelper::LoadFileToStringArray(FitLines, *FPaths::ChangeExtension(LightsPath, TEXT("lightfit"))))
-		{
-			for (const FString& FL : FitLines)
-			{
-				const FString T = FL.TrimStartAndEnd();
-				if (!T.IsEmpty() && !T.StartsWith(TEXT("#")))
-				{
-					Fit.Add(FCString::Atof(*T));
-				}
-			}
-		}
-	}
-	const bool bApplyFit = Fit.Num() > 0;
-
-	// The sidecar row behind each line, indexed the way the bake tagged its actors. Type 5
-	// (skyambient) is not a light and never has an actor; it only tints the sky fallback.
-	struct FRow
-	{
-		int32 Type = 1;
-		float Mag = 0.f;
-		float RadiusCm = 0.f;
-		float StopDot = 0.f;
-		float StopDot2 = 0.f;
-		int32 Style = 0;
-		FLinearColor Color = FLinearColor::White;
-		bool bSky = false;
-	};
-	TArray<FRow> Rows;
-	Rows.SetNum(Lines.Num());
-	for (int32 LineIdx = 0; LineIdx < Lines.Num(); ++LineIdx)
-	{
-		TArray<FString> P;
-		Lines[LineIdx].ParseIntoArray(P, TEXT(" "), true);
-		if (P.Num() < 15)
-		{
-			continue;
-		}
-		const int32 Type = FCString::Atoi(*P[0]);
-		const FVector Inten(FCString::Atod(*P[7]), FCString::Atod(*P[8]), FCString::Atod(*P[9]));
-		const float Mag = FMath::Max3(Inten.X, Inten.Y, Inten.Z);
-		if (Mag <= 0.f)
-		{
-			continue;
-		}
-		const FLinearColor Color(Inten.X / Mag, Inten.Y / Mag, Inten.Z / Mag);
-
-		if (Type == 5)
-		{
-			// FIRST wins, by `.lights` line order (which preserves lump-15 order): VRAD resolves
-			// the sky ambient once, globally, first-entity-wins and stamps it on every type-5
-			// row, and the engine's own multi-light_environment rule is first-wins as well
-			// (RE-A3/RE-A5). Assigning unconditionally read the last row instead.
-			if (!bHasSkyAmbient)
-			{
-				SkyAmbient = Color;
-				SkyAmbientMag = Mag;
-				bHasSkyAmbient = true;
-			}
-			continue;
-		}
-
-		FRow& Row = Rows[LineIdx];
-		Row.Type = Type;
-		Row.Mag = Mag;
-		Row.RadiusCm = FCString::Atof(*P[10]);
-		Row.StopDot = FCString::Atof(*P[11]);
-		Row.StopDot2 = FCString::Atof(*P[12]);
-		// Field 16 (optional on older exports): the source lights the 3D-skybox miniature.
-		Row.bSky = P.Num() >= 16 && FCString::Atoi(*P[15]) != 0;
-		Row.Style = ClampStyle(FCString::Atoi(*P[14]));
-		Row.Color = Color;
-	}
-
-	int32 Unmatched = 0;
-	for (const FAdoptedLight& Entry : Adopted)
-	{
-		if (Entry.Light == nullptr)
-		{
-			continue;
-		}
-		if (!Rows.IsValidIndex(Entry.SourceIndex) || Rows[Entry.SourceIndex].Mag <= 0.f)
-		{
-			// A light with no readable source row keeps whatever the bake gave it, but it cannot
-			// be tuned or animated — so say so rather than silently leaving a dead light.
-			++Unmatched;
-			continue;
-		}
-		const FRow& Row = Rows[Entry.SourceIndex];
-		const float FitMult = (bApplyFit && Fit.IsValidIndex(Entry.SourceIndex)) ? Fit[Entry.SourceIndex] : 1.f;
-
-		// Colour is fixed data, so it is set once here; everything derived from the calibration
-		// constants is left to ApplyLiveTuning, which is the single place those live.
-		Entry.Light->SetLightColor(Row.Color);
-		Lights.Add(Entry.Light);
-		FLightSource Source;
-		Source.Light = Entry.Light;
-		Source.SourceIndex = Entry.SourceIndex;
-		Source.Type = Row.Type;
-		Source.Mag = Row.Mag;
-		Source.RadiusCm = Row.RadiusCm;
-		Source.StopDot = Row.StopDot;
-		Source.StopDot2 = Row.StopDot2;
-		Source.FitMult = FitMult;
-		Source.Style = Row.Style;
-		Source.Color = Row.Color;
-		Source.AuthoredTransform = Entry.Light->GetComponentTransform();
-		Source.bAuthoredCastVolumetricShadow = Entry.Light->bCastVolumetricShadow;
-		if (const UPointLightComponent* Point = Cast<UPointLightComponent>(Entry.Light))
-		{
-			Source.AuthoredSourceRadiusCm = Point->SourceRadius;
-			Source.AuthoredSoftSourceRadiusCm = Point->SoftSourceRadius;
-			Source.AuthoredSourceLengthCm = Point->SourceLength;
-		}
-		Source.bSky = Row.bSky;
-		LightSources.Add(MoveTemp(Source));
-		bHasSun |= (Row.Type == 3);
-		++LightCount;
-	}
-
-	// One pass derives every intensity/reach/falloff/specular from the current tuning fields — the
-	// same call UElysiumLightingSettings::PushToWorlds makes, so a fresh load and a settings edit
-	// agree exactly.
-	ApplyLiveTuning();
-
-	int32 AnimatedNum = 0;
-	// How many sources the ceiling is actually clipping — the number the A/B turns on, so it is
-	// reported rather than inferred from the look.
-	int32 ClippedNum = 0;
-	const float Ceiling = bExtendedRange ? ExtendedMaxBrightness : MaxBrightness;
-	for (const FLightSource& S : LightSources)
-	{
-		AnimatedNum += (S.Style >= 1) ? 1 : 0;
-		ClippedNum += (S.Type != 3 && S.Mag * PointSpotScale * S.FitMult > Ceiling) ? 1 : 0;
-	}
-	UE_LOG(LogElysiumLights, Log,
-		TEXT("LightRig: adopted %d baked lights (%d animated, %d switched)%s%s%s%s · ceiling %.1f%s clips %d"),
-		LightCount, AnimatedNum, SwitchedSourceCount(),
-		bHasSun ? TEXT(" +sun") : TEXT(""),
-		bHasSkyAmbient ? TEXT(" +skyambient") : TEXT(""),
-		bApplyFit ? TEXT(" +lightfit") : TEXT(""),
-		Unmatched > 0 ? *FString::Printf(TEXT(" (%d unmatched)"), Unmatched) : TEXT(""),
-		Ceiling, bExtendedRange ? TEXT(" (extended)") : TEXT(""), ClippedNum);
-
-	// The map's hand-tuned overrides, when it has any (R4.3): a `UElysiumLightCalibration` merge-row
-	// asset applied on top of the calibrated baseline. A missing asset is the normal case -- every
-	// map today -- and stays silent; its absence leaves the rig exactly as the settings page and the
-	// sidecar rows alone would produce.
-	MapName = FPaths::GetBaseFilename(LightsPath);
-	const UElysiumLightCalibration* Calibration = LoadObject<UElysiumLightCalibration>(
-		nullptr, *FElysiumContentPaths::BakedMapLightCalibration(MapName), nullptr,
-		LOAD_NoWarn | LOAD_Quiet);
-	if (Calibration != nullptr)
-	{
-		const int32 NumApplied = ApplyCalibrationAsset(Calibration);
-		UE_LOG(LogElysiumLights, Log, TEXT("LightRig: applied %d calibration row%s from %s"),
-			NumApplied, NumApplied == 1 ? TEXT("") : TEXT("s"),
-			*FElysiumContentPaths::BakedMapLightCalibration(MapName));
-	}
-	return LightCount;
-}
-
 int32 UElysiumLightRig::AdoptBaked(const TArray<FAdoptedLight>& Adopted, const FString& InMapName)
 {
 	AdoptGameplayLight(InMapName);
-	SkyReachScale = 1.f;
 	Lights.Reset();
 	LightSources.Reset();
 	LightCount = 0;
@@ -429,7 +237,7 @@ int32 UElysiumLightRig::AdoptBaked(const TArray<FAdoptedLight>& Adopted, const F
 		AnimatedNum += (S.Style >= 1) ? 1 : 0;
 	}
 	UE_LOG(LogElysiumLights, Log,
-		TEXT("LightRig: adopted %d baked lights (final values, MapsOnV2Models; %d animated, %d switched)%s%s"),
+		TEXT("LightRig: adopted %d baked lights (final values; %d animated, %d switched)%s%s"),
 		LightCount, AnimatedNum, SwitchedSourceCount(),
 		bHasSun ? TEXT(" +sun") : TEXT(""),
 		Untagged > 0 ? *FString::Printf(TEXT(" (%d untagged)"), Untagged) : TEXT(""));
@@ -463,7 +271,6 @@ void UElysiumLightRig::ApplySettings(const UElysiumLightingSettings& Settings,
 	// The one global light-specular knob lives on the surfaces page (R5.5), beside the surface
 	// knobs it is balanced against; the lighting page carries no second copy of it.
 	SpecularScale = Surfaces.LightSpecularScale;
-	bApplyLightFit = Settings.bApplyLightFit;
 	IndirectLightingScale = Settings.IndirectLightingScale;
 	VolumetricScatteringScale = Settings.VolumetricScatteringScale;
 	SunScaleLux = Settings.SunScaleLux;
@@ -720,14 +527,15 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 	else
 	{
 		float Reach = (S.RadiusCm > 1.f ? S.RadiusCm : FallbackRadiusCm) * RadiusScale;
-		// A miniature light's radius is authored in miniature units, so it scales with the
-		// geometry it lights or it reaches a 16th of what it did.
+		// A miniature light's radius is authored in miniature units; the bake already scales it
+		// with the geometry it lights, and the floor keeps an authored radius near zero lighting
+		// something rather than collapsing.
 		if (S.bSky)
 		{
-			Reach = FMath::Max(Reach * SkyReachScale, MinSkyReachCm);
+			Reach = FMath::Max(Reach, MinSkyReachCm);
 		}
 		const float Ceiling = bExtendedRange ? ExtendedMaxBrightness : MaxBrightness;
-		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, Ceiling);
+		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale, Ceiling);
 		if (ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
 		{
 			Local->SetAttenuationRadius(Reach);

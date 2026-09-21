@@ -15,8 +15,8 @@ struct FHitResult;
  * `0x102ef870` caches it on the NPC at `+0x5b90`. In Source the collision brush and the drawn
  * brush are the same object, so one trace answers both "is there a floor" and "what is it made of".
  *
- * **This port split them, and that is why the rules below exist.** A converted map's solid body is
- * the `.hulls` convex collider — `BlockAll`, invisible and material-less — while the `$surfaceprop`
+ * **This port split them, and that is why the rules below exist.** A map's solid body is the
+ * payload's cooked convex set — `BlockAll`, invisible and material-less — while the `$surfaceprop`
  * rides the drawn geometry, which wears `ElysiumPickOnly` and blocks nothing but
  * `ElysiumImpactDecals::SurfaceTraceChannel` (`ElysiumDecalSubsystem.h` states the same split for
  * the ranged shot's stain, and this uses that channel for the same reason). So a floor query on the

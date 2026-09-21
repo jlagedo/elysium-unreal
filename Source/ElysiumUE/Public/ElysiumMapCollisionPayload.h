@@ -124,10 +124,6 @@ public:
 	UBodySetup* GetWorldHulls() const { return WorldHulls; }
 	// The per-signature bodies. Empty on a version-1 payload.
 	const TArray<FElysiumSignatureCollisionBody>& GetWorldBodies() const { return WorldBodies; }
-	// The signature this payload's whole world answers with when it carries only one body: what a
-	// version-1 payload's `WorldHulls` stands for, which is the player-solid set (blocks both
-	// pawns, silent about sight -- exactly what its `BlockAll` component did).
-	static uint8 LegacyWorldSignature();
 	UBodySetup* GetDisplacement() const { return Displacement; }
 	// This entity's cooked body, or null when the ordinal has none (a point entity, or an entity
 	// created at runtime past the map's def array). A null answer means "cook it", not "fail".

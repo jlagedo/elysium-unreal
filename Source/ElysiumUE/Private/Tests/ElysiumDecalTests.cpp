@@ -301,8 +301,8 @@ bool FElysiumDecalImpactTraceTest::RunTest(const FString&)
 	Wall->SetWorldLocation(FVector(200.f, 0.f, 0.f));
 	Wall->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Wall->SetCollisionResponseToAllChannels(ECR_Ignore);
-	// The render-surface channel, the one a converted map's drawn geometry blocks and its
-	// material-less `.hulls` collider does not (ElysiumImpactDecals::SurfaceTraceChannel).
+	// The render-surface channel, the one a map's drawn geometry blocks and its material-less
+	// cooked world body does not (ElysiumImpactDecals::SurfaceTraceChannel).
 	Wall->SetCollisionResponseToChannel(ElysiumImpactDecals::SurfaceTraceChannel, ECR_Block);
 	Wall->RegisterComponent();
 	WallOwner->AddInstanceComponent(Wall);

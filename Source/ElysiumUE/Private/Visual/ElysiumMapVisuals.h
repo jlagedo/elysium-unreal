@@ -61,21 +61,15 @@ public:
 	// elysium.Ropes is 0.
 	void BuildRopes(const FString& MapName);
 
-	// Assemble the six exported sky faces into one UTextureCube and use it twice: as the visible
-	// backdrop on SkyDomeMesh (through M_Sky), and as the adopted SkyLight's IBL source. A real
-	// cubemap on the sky light is what gives Lumen sky occlusion — interiors then darken because
-	// they cannot see the sky, instead of receiving a constant fill through solid walls.
-	// `Env` is the map's already-resolved `.env` values — the baked `UElysiumMapEnvironment` when
-	// R4.4 converted this map, the sidecar otherwise — resolved once by the caller alongside SkyDef
+	// Stamp this map's two fog sets onto everything the level placed. `Env` is the map's
+	// already-resolved environment values, read once by the caller from `DA_<map>_Environment`
 	// (`ElysiumMapEnvironmentSource::Load`), not re-read here.
 	//
-	// `MapName` is used for exactly one question (R5.2): is this map on `MapsOnV2Models`? A map on
-	// that flag was baked with its own real SkyLight (`SLS_SpecifiedCubemap`, the true cube, the
-	// true intensity) and its own real backdrop dome, both bound to the texture-lane composite
-	// and stored mean. This function returns right after `ApplySceneFog` and touches neither:
-	// resetting their bindings here would silently fight the baked asset on the
-	// SkyLight's next `RecaptureSky`.
-	void ApplyEnvironment(const FElysiumEnvDef& Env, const FString& MapName);
+	// The sky itself is NOT assembled here: R5.2 moved it to the bake, which stands the map's own
+	// SkyLight (`SLS_SpecifiedCubemap`, the real cube, the real intensity) and its backdrop dome
+	// from the texture-lane composite and stored mean. Re-binding either at load would silently
+	// fight the baked asset on the SkyLight's next `RecaptureSky`.
+	void ApplyEnvironment(const FElysiumEnvDef& Env);
 
 	// Run at map activation, once everything the map places is standing: walk every mesh component
 	// in the level and report the mesh assets carrying a slot bound to nothing or to the engine's
@@ -85,9 +79,6 @@ public:
 	void AuditMaterials(const FString& MapName) const;
 
 	// The live knobs (each is also a cvar callback, so each is idempotent).
-	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
-	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
-	void ApplySkyBrightness();
 	// Stamp each adopted primitive with the fog set that owns it: `worldspawn`'s on the world,
 	// its props and its detail components, the `sky_camera`'s on the 3D-skybox miniature -- its
 	// chunks, its props and (R6.7) the detail components whose actor carries the `elysium.sky`
@@ -148,7 +139,7 @@ public:
 	UElysiumLightRig* GetLightRig() const { return LightRig; }
 	// The baked sky light and height fog, adopted from the level. Null if the bake did not place
 	// them. Ambience tuning has no live surface yet (R4.4's per-map environment asset owns it); this
-	// is exposed for the actors that already touch it directly (SkyAmbientIntensity, ApplySceneFog).
+	// is exposed for the actors that already touch it directly.
 	USkyLightComponent* GetSkyLight() const { return SkyLight; }
 	UExponentialHeightFogComponent* GetHeightFog() const { return HeightFog; }
 	APostProcessVolume* GetPostProcess() const { return PostProcess; }
@@ -188,21 +179,9 @@ public:
 	int32 RopeCount = 0;
 
 private:
-	// The SkyLight's intensity for this map, from the type-5 `emit_skyambient` magnitude and the
-	// cube's own upper-hemisphere mean radiance (C1/C2, D2). Zero on the 83 maps with no sky pair,
-	// zero where the pair authors a zero, and otherwise the factor that makes the cube deliver
-	// VtMB's stated sky radiance. `CubeUpperMean` 0 means "no cube".
-	float SkyAmbientIntensity(float CubeUpperMean) const;
-
-	// The 2D six-face skybox backdrop: a large inward box sampling the sky cubemap through M_Sky.
-	// Built at runtime because its cubemap is assembled from the six exported face images, which is
-	// also what feeds the SkyLight's IBL. Distinct from the baked 3D-skybox miniature geometry.
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyDomeMesh;
-	// The backdrop's own MID (off M_Sky), kept so elysium.SkyBrightness can re-apply live.
-	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SkyMid;
-	// The BAKED backdrop (R5.2, `MapsOnV2Models` maps only): a StaticMeshActor adopted off the
-	// `elysium.skydome` tag instead of built at runtime. `SkyDomeMesh`/`SkyMid` stay null on
-	// these maps — `ApplyEnvironment` returns before ever touching them.
+	// The 2D six-face skybox backdrop (R5.2): a StaticMeshActor adopted off the `elysium.skydome`
+	// tag, sampling the texture lane's sky cube through M_Sky. Distinct from the baked 3D-skybox
+	// miniature geometry. Null on a map with no sky pair.
 	UPROPERTY() TObjectPtr<AStaticMeshActor> BakedSkyDomeActor;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 

@@ -76,15 +76,6 @@ const FElysiumBrushCollisionBody* UElysiumMapCollisionPayload::FindBrushRow(
 	return nullptr;
 }
 
-uint8 UElysiumMapCollisionPayload::LegacyWorldSignature()
-{
-	// A version-1 payload was staged from the `BLOCK_MASK`-filtered sidecar, so its one body is
-	// the player-solid set: blocks both pawns, says nothing about sight. That is exactly what the
-	// `BlockAll` component it wore did, the sight channel defaulting to Ignore.
-	return static_cast<uint8>(
-		EElysiumContentsSignature::Player | EElysiumContentsSignature::Npc);
-}
-
 int32 UElysiumMapCollisionPayload::WorldHullCount() const
 {
 	if (WorldBodies.Num() > 0)

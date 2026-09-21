@@ -8,7 +8,6 @@
 #include "ElysiumEntity.h"         // FElysiumEntity — the emitter parent attach resolve
 #include "ElysiumEntityDefs.h"     // FElysiumEntityDef — an emitter parent's authored origin
 #include "ElysiumEntityWorld.h"    // FindByName / EnqueueInput — the weather timer's entity I/O door
-#include "ElysiumMapTransportSettings.h"   // IsMapOnV2Models -- the effects cutover
 #include "Map/ElysiumMapLog.h"
 
 #include "Engine/World.h"
@@ -152,12 +151,10 @@ bool IsFollowRainDefinition(const FString& Definition)
 
 void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 {
-	// On a converted map the emitter is a bake-placed actor; the viewer-box modes 10/11 are
-	// weather's rain follow on either path.
-	const bool bPlacedEffects = ElysiumMapTransport::IsMapOnV2Models(MapName);
+	// The emitter is a bake-placed actor; the viewer-box modes 10/11 are weather's rain follow.
 	const bool bViewerBox = Emitter.AttachType == 10 || Emitter.AttachType == 11;
 	// One viewer-volume system for every rain_follow_emitter. Two hub entities share it.
-	if (IsFollowRainDefinition(Emitter.ParticleDefinition) || (bPlacedEffects && bViewerBox))
+	if (IsFollowRainDefinition(Emitter.ParticleDefinition) || bViewerBox)
 	{
 		if (!Emitter.bActive)
 		{
@@ -169,154 +166,7 @@ void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 		RefreshFollowRain();
 		return;
 	}
-	if (bPlacedEffects)
-	{
-		ApplyEmitterToPlacedActor(Emitter);
-		return;
-	}
-	if (!Emitter.bActive)
-	{
-		RemoveEmitter(Emitter.Entity);
-		return;
-	}
-
-	UNiagaraComponent* Component = RainComponents.FindRef(Emitter.Entity.Index);
-	if (!Component)
-	{
-		const FString Path = FElysiumContentPaths::BakedParticleSystem(MapName, Emitter.ParticleDefinition);
-		UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *Path);
-		if (!System)
-		{
-			WarnEmitterOnce(FString::Printf(TEXT("system|%d|%s"),
-				Emitter.Entity.Index, *Emitter.ParticleDefinition.ToLower()),
-				[&]
-				{
-					return FString::Printf(
-						TEXT("particle emitter %d on map '%s' cannot load definition '%s' from '%s'"),
-						Emitter.Entity.Index, *MapName, *Emitter.ParticleDefinition, *Path);
-				});
-			return;
-		}
-		Component = NewObject<UNiagaraComponent>(this);
-		if (!Component)
-		{
-			WarnEmitterOnce(FString::Printf(TEXT("component|%d"), Emitter.Entity.Index),
-				[&]
-				{
-					return FString::Printf(
-						TEXT("particle emitter %d ('%s') could not create a Niagara component on map '%s'"),
-						Emitter.Entity.Index, *Emitter.ParticleDefinition, *MapName);
-				});
-			return;
-		}
-		Component->SetAsset(System);
-		Component->SetAutoActivate(false);
-		Component->SetupAttachment(GetRootComponent());
-		Component->RegisterComponent();
-		AddInstanceComponent(Component);
-		RainComponents.Add(Emitter.Entity.Index, Component);
-	}
-
-	AttachEmitter(Emitter, Component);
-	Component->SetVariableFloat(TEXT("User.RateScale"), Emitter.RateScale);
-	Component->Activate();
-	RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
-}
-
-// `attach_type` 1 is `tree`: preserve the authored parent offset while following the named root.
-// `attach_type` 2 is `point`: snap to a named bone (or the body root when the bone is absent).
-// Parents resolve here rather than at PostSpawn because cinematic receivers may be made after map
-// activation.
-void AElysiumMapActor::AttachEmitter(
-	const FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component)
-{
-	if (!Component)
-	{
-		return;
-	}
-	auto WarnAttachmentOnce = [this, &Emitter](const TCHAR* Kind, const FString& Message)
-	{
-		WarnEmitterOnce(FString::Printf(TEXT("attach|%s|%d"), Kind, Emitter.Entity.Index),
-			[&Message] { return Message; });
-	};
-	USceneComponent* ParentBody = nullptr;
-	FElysiumEntity* ParentEntity = nullptr;
-	const bool bWantsParent = Emitter.AttachType == 1 || Emitter.AttachType == 2;
-	if (bWantsParent && !Emitter.ParentName.IsEmpty() && EntityWorld)
-	{
-		ParentEntity = EntityWorld->FindByName(Emitter.ParentName);
-		if (ParentEntity)
-		{
-			ParentBody = ParentEntity->GetAttachBody();
-		}
-		if (!ParentBody)
-		{
-			WarnEmitterOnce(FString::Printf(TEXT("parent|%d|%s"),
-				Emitter.Entity.Index, *Emitter.ParentName.ToLower()),
-				[&]
-				{
-					return FString::Printf(
-						TEXT("particle emitter %d ('%s') cannot attach to parent '%s' on map '%s'; using map root"),
-						Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName, *MapName);
-				});
-		}
-	}
-	if (!ParentBody)
-	{
-		if (!Component->AttachToComponent(GetRootComponent(),
-			FAttachmentTransformRules::KeepRelativeTransform))
-		{
-			WarnAttachmentOnce(TEXT("root"), FString::Printf(
-				TEXT("particle emitter %d ('%s') could not attach to the map root"),
-				Emitter.Entity.Index, *Emitter.ParticleDefinition));
-		}
-		Component->SetRelativeLocation(Emitter.LocationCm);
-		return;
-	}
-	if (Emitter.AttachType == 1)
-	{
-		// Retail parents these at map setup, before the cinematic moves its actor. Components are
-		// created lazily here, so reconstruct that same authored offset against the parent's live
-		// position before establishing the persistent component attachment.
-		FVector WorldLocation = Emitter.LocationCm;
-		if (ParentEntity && ParentEntity->Def)
-		{
-			WorldLocation += ParentEntity->Origin - ParentEntity->Def->Origin;
-		}
-		if (!Component->AttachToComponent(ParentBody, FAttachmentTransformRules::KeepWorldTransform))
-		{
-			WarnAttachmentOnce(TEXT("tree"), FString::Printf(
-				TEXT("particle emitter %d ('%s') could not tree-attach to parent '%s'"),
-				Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName));
-		}
-		Component->SetWorldLocation(WorldLocation);
-		return;
-	}
-	// VtMB bone names carry spaces (`Bip01 Neck`) and survive the glTF export unchanged, so the
-	// authored name is used verbatim. A body that has not got the bone falls back to its root.
-	const FName Bone(*Emitter.AttachBone);
-	const bool bHasBone = !Emitter.AttachBone.IsEmpty()
-		&& ParentBody->DoesSocketExist(Bone);
-	if (!Component->AttachToComponent(ParentBody,
-		FAttachmentTransformRules::SnapToTargetNotIncludingScale, bHasBone ? Bone : NAME_None))
-	{
-		WarnAttachmentOnce(TEXT("point"), FString::Printf(
-			TEXT("particle emitter %d ('%s') could not point-attach to parent '%s'"),
-			Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName));
-	}
-	Component->SetRelativeLocation(FVector::ZeroVector);
-	if (!bHasBone && !Emitter.AttachBone.IsEmpty())
-	{
-		WarnEmitterOnce(FString::Printf(TEXT("bone|%d|%s|%s"), Emitter.Entity.Index,
-			*Emitter.ParentName.ToLower(), *Emitter.AttachBone.ToLower()),
-			[&]
-			{
-				return FString::Printf(
-					TEXT("particle emitter %d ('%s') cannot find bone '%s' on parent '%s'; using body root"),
-					Emitter.Entity.Index, *Emitter.ParticleDefinition,
-					*Emitter.AttachBone, *Emitter.ParentName);
-			});
-	}
+	ApplyEmitterToPlacedActor(Emitter);
 }
 
 void AElysiumMapActor::RemoveEmitter(const FElysiumEntityHandle& Entity)
@@ -328,10 +178,6 @@ void AElysiumMapActor::RemoveEmitter(const FElysiumEntityHandle& Entity)
 		ApplyEmitterToPlacedActor(Dead);
 	}
 	RainEmitterStates.Remove(Entity.Index);
-	if (TObjectPtr<UNiagaraComponent> Component; RainComponents.RemoveAndCopyValue(Entity.Index, Component))
-	{
-		if (Component) { Component->DestroyComponent(); }
-	}
 	RefreshFollowRain();
 }
 
@@ -523,17 +369,9 @@ void AElysiumMapActor::ApplyWeatherTuning()
 			TEXT("RainReflectionDebug"), static_cast<float>(FMath::Clamp(
 				CVarRainReflectionDebug.GetValueOnGameThread(), 0, 6)));
 	}
-	const float ParticleRate = FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread());
-	const float LightResponse = FMath::Clamp(
-		CVarRainLightResponse.GetValueOnGameThread() * 4.0f, 0.0f, 2.0f);
-	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
-	{
-		if (UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key))
-		{
-			Component->SetVariableFloat(TEXT("User.RateScale"), Pair.Value.RateScale * ParticleRate);
-			Component->SetVariableFloat(TEXT("User.LightResponse"), LightResponse);
-		}
-	}
+	// The rain particles themselves are one system, the viewer-volume follow, and it reads
+	// `elysium.RainRateScale` when it is refreshed -- so a live cvar flip has to refresh it.
+	RefreshFollowRain();
 }
 
 bool AElysiumMapActor::IsFollowRainActive() const
@@ -560,10 +398,10 @@ void AElysiumMapActor::FireWeatherTimer(bool bRainOn)
 FString AElysiumMapActor::GetWeatherDebugSummary() const
 {
 	FString Result = FString::Printf(
-		TEXT("wet authored %.3f->%.3f presented %.3f x%.2f override=%d components %d follow=%d force=%d"),
+		TEXT("wet authored %.3f->%.3f presented %.3f x%.2f override=%d emitters %d follow=%d force=%d"),
 		WetnessTransition.CurrentWetness, WetnessTransition.TargetWetness,
 		PresentedWetness, PresentedWetnessScale, bEnvironmentWetnessOverride ? 1 : 0,
-		RainComponents.Num(),
+		RainEmitterStates.Num(),
 		RainFollowComponent && RainFollowComponent->IsActive() ? 1 : 0,
 		CVarRainForce.GetValueOnGameThread());
 	if (RainFollowComponent)
@@ -599,61 +437,13 @@ FString AElysiumMapActor::GetWeatherDebugSummary() const
 			}
 		}
 	}
+	// One row per live emitter STATE. They all drive the single follow-rain system, reported above:
+	// since 0018 story 21-1 there is no per-emitter Niagara component to introspect here.
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
 	{
-		const UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key);
-		FString Materials;
-		if (Component)
-		{
-			TArray<UMaterialInterface*> UsedMaterials;
-			Component->GetUsedMaterials(UsedMaterials, false);
-			for (const UMaterialInterface* Material : UsedMaterials)
-			{
-				Materials += Materials.IsEmpty() ? TEXT("") : TEXT(",");
-				Materials += GetNameSafe(Material);
-			}
-			if (const FNiagaraSystemInstanceControllerConstPtr Controller =
-					Component->GetSystemInstanceController())
-			{
-				if (const FNiagaraSystemInstance* Instance = Controller->GetSystemInstance_Unsafe())
-				{
-					for (const FNiagaraEmitterInstanceRef& EmitterRef : Instance->GetEmitters())
-					{
-						const FNiagaraEmitterInstance& Emitter = EmitterRef.Get();
-						const FNiagaraDataSet& Data = Emitter.GetParticleData();
-						const FNiagaraDataSetAccessor<FNiagaraPosition> Accessor(
-							Data, FName(TEXT("Position")));
-						const FNiagaraDataSetReaderFloat<FNiagaraPosition> Reader =
-							Accessor.GetReader(Data);
-						const FNiagaraDataSetAccessor<int32> VisibilityAccessor(
-							Data, FName(TEXT("VisibilityTag")));
-						const FNiagaraDataSetReaderInt32<int32> VisibilityReader =
-							VisibilityAccessor.GetReader(Data);
-						FNiagaraPosition Min(ForceInit), Max(ForceInit);
-						if (Reader.IsValid() && Emitter.GetNumParticles() > 0)
-						{
-							Reader.GetMinMax(Min, Max);
-						}
-						Materials += FString::Printf(TEXT(";%s:n=%d,p=%s..%s,visibility=%d"),
-							*Emitter.GetEmitterHandle().GetName().ToString(), Emitter.GetNumParticles(),
-							*FVector3f(Min).ToString(), *FVector3f(Max).ToString(),
-							VisibilityReader.IsValid() && Emitter.GetNumParticles() > 0
-								? VisibilityReader.Get(0) : INDEX_NONE);
-					}
-				}
-			}
-		}
-		Result += FString::Printf(
-			TEXT(" | #%d active=%d component=%d visible=%d render=%d rate=%.3f "
-				"loc=%s world_bounds=%s materials=%s"),
-			Pair.Key, Pair.Value.bActive ? 1 : 0,
-			Component && Component->IsActive() ? 1 : 0,
-			Component && Component->IsVisible() ? 1 : 0,
-			Component && Component->IsRenderStateCreated() ? 1 : 0,
-			Pair.Value.RateScale,
-			Component ? *Component->GetComponentLocation().ToCompactString() : TEXT("<none>"),
-			Component ? *Component->Bounds.GetBox().ToString() : TEXT("<none>"),
-			Materials.IsEmpty() ? TEXT("<none>") : *Materials);
+		Result += FString::Printf(TEXT(" | #%d active=%d rate=%.3f bounds=%.1f def=%s"),
+			Pair.Key, Pair.Value.bActive ? 1 : 0, Pair.Value.RateScale, Pair.Value.BoundsCm,
+			*Pair.Value.ParticleDefinition);
 	}
 	return Result;
 }

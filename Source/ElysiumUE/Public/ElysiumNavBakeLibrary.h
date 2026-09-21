@@ -45,18 +45,6 @@ class ELYSIUMUE_API UElysiumNavBakeLibrary final : public UBlueprintFunctionLibr
 
 public:
 	/**
-	 * Restrict `World` to the agents named by `HullBits` (bit N is hull N, as `UsedHullBits`
-	 * spells it) and give it a navigation system configured for exactly those.
-	 *
-	 * Returns the agent names that survived, or empty when the world has no navigation system or
-	 * the mask names no supported agent. A hull the project does not declare an agent for is
-	 * reported and skipped rather than silently dropped: that is a map whose graph uses a hull
-	 * carrying no links anywhere, which should not be possible and is worth failing over.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
-	static TArray<FString> SetMapNavAgents(UWorld* World, int32 HullBits);
-
-	/**
 	 * Create `World`'s navigation system already restricted to the agents `HullBits` names, and
 	 * return those agent names.
 	 *

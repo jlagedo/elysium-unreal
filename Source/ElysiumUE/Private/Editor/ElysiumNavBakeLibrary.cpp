@@ -64,8 +64,7 @@ FBox UElysiumNavBakeLibrary::NavigationBoundsOf(UWorld* World)
 	// bounds: the union came out +/-500,000 cm, a 10 km cube, against a map that is 290 m across.
 	// Recast was then asked for 3,084,588 tiles and clamped. The brushes the map is built from
 	// ARE the playable volume -- every prop stands inside them -- so they are what the mesh is
-	// cut over, and this is the same volume the run-time path takes from
-	// `UElysiumMapCollision::GetWorldBounds`.
+	// cut over.
 	for (TActorIterator<AElysiumWorldCollisionActor> It(World); It; ++It)
 	{
 		for (const UElysiumWorldCollisionComponent* Component : It->Bodies)
@@ -179,72 +178,6 @@ FString UElysiumNavBakeLibrary::NavAreaAt(UWorld* World, const FString& AgentNam
 	}
 	const UClass* Area = Mesh->GetAreaClass(Mesh->GetPolyAreaID(Landed.NodeRef));
 	return Area != nullptr ? Area->GetName() : TEXT("NavArea_Default");
-}
-
-TArray<FString> UElysiumNavBakeLibrary::SetMapNavAgents(UWorld* World, int32 HullBits)
-{
-	TArray<FString> Kept;
-	UNavigationSystemV1* Nav = NavSystem(World);
-	if (Nav == nullptr)
-	{
-		UE_LOG(LogElysiumNavBake, Error, TEXT("no navigation system in this world"));
-		return Kept;
-	}
-
-	// `UsedHullBits` names hulls; the project's SupportedAgents name agents. The hull table is what
-	// ties the two together, and it is generated from the same recovered rows the ini is, so a
-	// disagreement here is a generator that was not re-run.
-	const TArray<FNavDataConfig>& Agents = Nav->GetSupportedAgents();
-	TMap<FName, int32> IndexByName;
-	for (int32 Index = 0; Index < Agents.Num(); ++Index)
-	{
-		IndexByName.Add(Agents[Index].Name, Index);
-	}
-
-	FNavAgentSelector Mask;
-	Mask.Empty();
-	for (int32 Hull = 0; Hull < ElysiumRetailHulls::Count; ++Hull)
-	{
-		if ((HullBits & (1 << Hull)) == 0)
-		{
-			continue;
-		}
-		const FName AgentName = ElysiumRetailHulls::AgentName(Hull);
-		if (AgentName.IsNone())
-		{
-			// A hull the graph declares but no shipped link uses -- nothing can path on a mesh cut
-			// for it, so no agent is declared for it either.
-			UE_LOG(LogElysiumNavBake, Warning,
-				TEXT("hull %d (%s) is declared by this map's graph but carries no links anywhere; "
-					"no agent is built for it"),
-				Hull, ElysiumRetailHulls::Find(Hull) ? ElysiumRetailHulls::Find(Hull)->Name
-					: TEXT("?"));
-			continue;
-		}
-		const int32* Index = IndexByName.Find(AgentName);
-		if (Index == nullptr)
-		{
-			UE_LOG(LogElysiumNavBake, Error,
-				TEXT("hull %d wants agent '%s', which DefaultEngine.ini does not declare; "
-					"re-run `elysium research gen_hull_table`"), Hull, *AgentName.ToString());
-			continue;
-		}
-		Mask.Set(*Index);
-		Kept.Add(AgentName.ToString());
-	}
-
-	if (Kept.IsEmpty())
-	{
-		UE_LOG(LogElysiumNavBake, Error, TEXT("hull bits %#x name no supported agent"), HullBits);
-		return Kept;
-	}
-
-	// The mask is only honoured once it says it has been set at all.
-	Mask.MarkInitialized();
-	Nav->SetSupportedAgentsMask(Mask);
-	UE_LOG(LogElysiumNavBake, Log, TEXT("map nav agents from UsedHullBits %#x: %s"),
-		HullBits, *FString::Join(Kept, TEXT(", ")));
-	return Kept;
 }
 
 TArray<FString> UElysiumNavBakeLibrary::CreateNavigationForAgents(UWorld* World, int32 HullBits)

@@ -83,21 +83,18 @@ public:
 // transport it actually got rather than the one it assumed.
 enum class EElysiumMapEnvironmentSource : uint8
 {
-	None,      // neither an asset nor a readable sidecar
+	None,      // no readable asset -- a failure, and `Load` says so
 	Asset,     // /ElysiumBaked/<map>/DA_<map>_Environment
-	Sidecar,   // <map>.env / <map>.sky / <map>.spawn
 };
 
 namespace ElysiumMapEnvironmentSource
 {
-	// The one entry point for "give me this map's environment". A map listed in
-	// `UElysiumMapTransportSettings::MapsOnNewTransport` (R4.6) tries the baked asset first, falling
-	// back if it turns out missing; an unlisted map goes straight to the `.env`/`.sky`/`.spawn`
-	// sidecars, each parsed independently as `AElysiumMapActor`/`UElysiumMapVisuals` have always
-	// parsed them.
+	// The one entry point for "give me this map's environment": the map's baked table, or nothing.
+	// The fog, the miniature's placement and the player start all arrive together, because the one
+	// asset states all three.
 	ELYSIUMUE_API EElysiumMapEnvironmentSource Load(const FString& MapName, FElysiumEnvDef& OutEnv,
 		FElysiumSkyDef& OutSky, bool& bOutHasSpawn, FVector& OutSpawnLocation, float& OutSpawnYaw);
 
-	// "asset" / "sidecar" / "none", for logs and test messages.
+	// "asset" / "none", for logs and test messages.
 	ELYSIUMUE_API const TCHAR* ToString(EElysiumMapEnvironmentSource Source);
 }

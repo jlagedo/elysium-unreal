@@ -11,7 +11,6 @@
 #include "ElysiumBakedTags.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapBakeLibrary.h"
-#include "ElysiumMapTransportSettings.h"
 
 #include "Engine/Level.h"
 #include "Engine/World.h"

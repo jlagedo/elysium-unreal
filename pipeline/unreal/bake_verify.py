@@ -15,7 +15,6 @@ import re
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
-from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.asset_names import brush_slot_style  # noqa: E402
@@ -100,32 +99,6 @@ def _world_materials(map_name):
     world_dir = os.path.join(os.fspath(export_root()), map_name)
     return bl.read_mtl(os.path.join(world_dir, map_name + ".mtl"),
                        corpus=_corpus_materials(), local=_local_materials(map_name))
-
-
-def _material_slot(package, mat):
-    """(package, MIC name) for one surface, on the same split the LEGACY material stage authored.
-
-    A surface that stamps this map's cubemap, fog or weather is the map's own instance; every
-    other surface is the corpus's one instance, under its material key rather than its slot.
-
-    R7.2 retired the `Materials/Decals` split this used to answer for a `$decal` surface: neither
-    lane authors a per-map decal material any more (`bake_map._material_sets` returns an empty
-    decal set and `bake_map_v2` the same), so the one per-map package left is `Materials`. The
-    projector a decal actually draws through is the corpus-wide `MI_<unit>_Decal`, which is not a
-    surface slot and never appears here.
-
-    Legacy only, and asked only from behind a `MapsOnV2Models` guard: a converted map authors
-    NEITHER answer this returns. Its per-map `Materials` package is pruned rather than written
-    (`bake_map_v2._material_sets`) and its surfaces bind the material lane's own instances under
-    `/ElysiumBaked/Materials/<family>/`, not the legacy shared corpus under
-    `SC.BAKED_MATERIALS`. `verify_v2_materials` is that lane's answer.
-    """
-    # The surface's own key, not the material's: the cubemap tag the predicate reads is what the
-    # map added to the slot, and the material key is the untagged definition underneath it.
-    if SC.is_map_scoped_material(mat.name, decal=mat.decal,
-                                 wetness_driven=mat.wetness_driven, local=mat.local):
-        return ("%s/Materials" % package, "MI_" + bl.safe_name(mat.name))
-    return (SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))
 
 
 def arg(key, default=""):
@@ -386,7 +359,7 @@ def _lights_rows_that_place(path):
 
 
 def verify_lights_baked(actors, world_dir, map_name):
-    """R5.6, `MapsOnV2Models` maps only: light-count parity against the legacy `.lights`, and the
+    """R5.6, light-count parity against the legacy `.lights`, and the
     four derivation assertions re-homed from `Elysium.Substrate.LightRig` onto the bake's own
     output.
 
@@ -400,11 +373,9 @@ def verify_lights_baked(actors, world_dir, map_name):
     `elysium.type`/`elysium.style` tags equal to the row's -- the two facts the slim rig reads.
     """
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     path = os.path.join(world_dir, "%s.lights" % map_name)
     if not os.path.isfile(path):
-        errors.append("%s: on MapsOnV2Models but no %s.lights to check parity against"
+        errors.append("%s: no %s.lights to check parity against"
                       % (map_name, map_name))
         return errors
     rows = _lights_rows_that_place(path)
@@ -492,17 +463,15 @@ def _staged_details(map_name):
 
 
 def verify_details(actors, map_name):
-    """R6.3, `MapsOnV2Models` maps only: every
+    """R6.3, every
     `elysium.detail` actor's instanced component counted back against the staged `details`
     table -- one component per `(model, sky)` group, the same instance count, no model missing and
     none extra -- plus the cull range the Models page names and exactly one custom-data float per
     component (the `swayAmount / 255` slot)."""
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     details = _staged_details(map_name)
     if details is None:
-        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+        errors.append("%s: no staged map_geometry manifest to count "
                       "detail props against (run: uv run elysium export map %s)"
                       % (map_name, map_name))
         return errors
@@ -595,16 +564,14 @@ def _staged_sprites(map_name):
 
 
 def verify_sprites(actors, map_name):
-    """R6.1, `MapsOnV2Models` maps only: every
+    """R6.1, every
     `elysium.sprite` actor matched to its staged row by the entity index tag -- size, colour,
     mode, orientation, the spawn-hidden state, and the material child's parent and blend -- no
     row missing and no actor extra."""
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     rows = _staged_sprites(map_name)
     if rows is None:
-        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+        errors.append("%s: no staged map_geometry manifest to count "
                       "sprites against (run: uv run elysium export map %s)" % (map_name, map_name))
         return errors
     expected = {int(row["index"]): row for row in rows}
@@ -698,16 +665,14 @@ EFFECT_ACTOR_CLASSES = {
 
 
 def verify_effects(actors, map_name):
-    """R7.3, `MapsOnV2Models` maps only: every
+    """R7.3, every
     `elysium.effect` actor matched to its staged row by the entity index tag -- the class per
     table, and for an `effects[]` row the root, the attach data and the tree's leaf count -- no
     row missing (an unresolved root places no actor, by VtMB's own rule) and no actor extra."""
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     manifest = _staged_manifest(map_name)
     if manifest is None:
-        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+        errors.append("%s: no staged map_geometry manifest to count "
                       "effects against (run: uv run elysium export map %s)" % (map_name, map_name))
         return errors
     expected = {}
@@ -846,13 +811,11 @@ def ai_infra_errors(map_name, placed, payload, index_count):
 
 
 def verify_ai_infra(actors, map_name):
-    """0018 story 2, `MapsOnV2Models` maps only: the placed infrastructure actors are exactly the
+    """0018 story 2, the placed infrastructure actors are exactly the
     staged `aiInfra` rows (`ai_infra_errors`)."""
-    if not map_transport.is_map_on_v2_models(map_name):
-        return []
     manifest = _staged_manifest(map_name)
     if manifest is None or manifest.get("aiInfra") is None:
-        return ["%s: on MapsOnV2Models but no staged aiInfra rows to check the level against "
+        return ["%s: no staged aiInfra rows to check the level against "
                 "(run: uv run elysium bake map --maps %s --force)" % (map_name, map_name)]
     placed, index_count = [], 0
     for actor in actors:
@@ -870,7 +833,7 @@ def verify_ai_infra(actors, map_name):
 
 
 def verify_water(actors, map_name):
-    """R7.1, `MapsOnV2Models` maps only: exactly one
+    """R7.1, exactly one
     `elysium.water` actor iff the map stages a `water.volumes[]` row, the actor's row count, and
     each row's `surface_z_cm` and brush count against the staged manifest -- no volume the actor
     disagrees with the stage on, and no actor at all when the stage places none.
@@ -887,11 +850,9 @@ def verify_water(actors, map_name):
     check cannot see.
     """
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     manifest = _staged_manifest(map_name)
     if manifest is None:
-        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+        errors.append("%s: no staged map_geometry manifest to count "
                       "water against (run: uv run elysium export map %s)" % (map_name, map_name))
         return errors
     rows = list((manifest.get("water") or {}).get("volumes") or [])
@@ -1169,7 +1130,7 @@ def _fog_slots(component):
 
 
 def verify_sky_scope(actors, map_name):
-    """R6.7, `MapsOnV2Models` maps whose
+    """R6.7, maps whose
     manifest says `sky.ok`: every class the corpus places in the miniature counted back against
     the staged rows through the one transform -- sky props (`elysium.sky` static-mesh actors
     labelled `Prop_`; position `scale * (p - origin)` and actor scale `scale` per row), sky detail
@@ -1177,11 +1138,9 @@ def verify_sky_scope(actors, map_name):
     `scale`), sky sprites (`elysium.sprite` + `elysium.sky`, position and scale per row) -- and
     that every sky prop and sky detail component carries the same fog slots the sky chunks do."""
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     manifest = _staged_manifest(map_name)
     if manifest is None:
-        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count the "
+        errors.append("%s: no staged map_geometry manifest to count the "
                       "3D skybox against (run: uv run elysium export map %s)" % (map_name, map_name))
         return errors
     sky = manifest.get("sky") or {}
@@ -1443,8 +1402,7 @@ def verify_brush_cull(map_name, ents_path):
     asset_rows = asset.get_editor_property("entities") if asset else None
     matched = 0
     if asset_rows is None:
-        if map_transport.is_map_on_new_transport(map_name):
-            errors.append("%s: on MapsOnNewTransport but %s does not load" % (map_name, asset_path))
+        errors.append("%s: %s does not load" % (map_name, asset_path))
     elif len(asset_rows) != len(rows):
         errors.append("%s: %s has %d rows, %s has %d" % (
             map_name, asset_path, len(asset_rows), os.path.basename(ents_path), len(rows)))
@@ -1644,7 +1602,7 @@ def _authored_alpha_minimum(row):
 
 
 def verify_v2_materials(map_name, registry, prop_mtls):
-    """R5.1/R7.2, `MapsOnV2Models` maps only: the materials a converted map binds, read back off
+    """R5.1/R7.2, the materials a converted map binds, read back off
     the staged manifests instead of the legacy `.mtl`/PNG pair.
 
     Three assertions, each the V2 half of a legacy check that cannot answer on this lane:
@@ -1656,9 +1614,9 @@ def verify_v2_materials(map_name, registry, prop_mtls):
       assets, imported from DDS.
     * **glass and Source Refract** -- every `$glass`/`$refract` unit the map's surfaces or its
       placed models bind is staged, and the instance on the mount parents to the master the lane
-      recorded for it. The legacy walk keyed these through `_material_slot`, whose per-map
-      `<map>/Materials/MI_...` answer is a package the V2 bake prunes rather than writes, so every
-      patched glass surface reported "material instance missing" and the check proved nothing.
+      recorded for it. The retired walk keyed these to a per-map `<map>/Materials/MI_...`
+      package the bake prunes rather than writes, so every patched glass surface reported
+      "material instance missing" and the check proved nothing.
     * **normals** -- a `NormalMap` the manifest names is a linear normal-compressed texture and is
       what the instance binds. The legacy `BumpMap` sub-check re-keyed: the V2 masters take
       `NormalMap`, and a unit the lane staged without one (`glass/glass01` is one) has nothing to
@@ -1669,17 +1627,15 @@ def verify_v2_materials(map_name, registry, prop_mtls):
     surfaces draw it.
     """
     errors = []
-    if not map_transport.is_map_on_v2_models(map_name):
-        return errors
     by_asset, by_unit = _staged_materials()
     if not by_asset:
-        errors.append("%s: on MapsOnV2Models but the material lane has staged nothing to check "
+        errors.append("%s: the material lane has staged nothing to check "
                       "the bound instances against (run: uv run elysium import materials)"
                       % map_name)
         return errors
     manifest = _staged_manifest(map_name)
     if manifest is None:
-        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to read the "
+        errors.append("%s: no staged map_geometry manifest to read the "
                       "bound materials from (run: uv run elysium export map %s)"
                       % (map_name, map_name))
         return errors
@@ -1850,287 +1806,16 @@ def verify_map(map_name):
     unreal.log("[verify] physics props %d, %d convex collision shapes, %d with authored mass"
                % (phys_meshes, phys_shapes, massed))
 
-    # The corpus documents both lanes read: the exported PNG payloads, the `.mtl` of every model
-    # this map places, and the map's own world surfaces.
-    corpus_dir = os.fspath(SC.corpus_dir(export_root()))
+    # The `.mtl` of every model this map places: what the material questions are asked of.
     prop_mtls = _map_prop_mtls(map_name)
     world_dir = os.path.join(os.fspath(export_root()), map_name)
-    world_materials = _world_materials(map_name)
-    # The three material walks below read the LEGACY lane's own output -- the exported PNG
-    # corpus, the per-map `<map>/Materials` package and the shared `SC.BAKED_MATERIALS` corpus --
-    # and a converted map authors or binds none of the three: `bake_map_v2._material_sets` prunes
-    # the per-map package instead of writing it, and `resolve_materials` binds the material lane's
-    # `/ElysiumBaked/Materials/<family>/` instances. On that lane the walks answered about assets
-    # nobody draws; `verify_v2_materials` asks the same three questions of what the map does bind.
+    # `verify_v2_materials` asks the three material questions -- alpha capability, glass and
+    # refract staging and parentage, NormalMap linearity -- of what the map actually binds:
+    # the material lane's `/ElysiumBaked/Materials/<family>/` instances. The three walks that
+    # used to stand here read the retired lane's own output (the exported PNG corpus, the
+    # per-map `<map>/Materials` package, the shared corpus) and answered about assets nobody
+    # drew (0018 story 21-1).
     errors.extend(verify_v2_materials(map_name, registry, prop_mtls))
-    if not map_transport.is_map_on_v2_models(map_name):
-        # A blend flag with an RGB-only source was the prop-transparency failure: the material
-        # correctly selected a translucent/masked master, but Albedo.A arrived as implicit 1. Check
-        # the exported payload and the independently loaded Texture2D so a stale pre-fix asset
-        # cannot pass merely because the mesh has a bound material slot.
-        flagged = 0
-        nonopaque = {}
-        for entry, mtl_path in prop_mtls:
-            for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
-                if mat.refract:
-                    continue
-                if not (mat.blend or mat.scissor or mat.additive):
-                    continue
-                flagged += 1
-                if not mat.albedo:
-                    message = "%s/%s: alpha material has no albedo" % (entry, mat.name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                    continue
-                source = os.path.join(corpus_dir, mat.albedo.replace("/", os.sep))
-                try:
-                    source_alpha = alpha_range(source)
-                except (OSError, ValueError) as exc:
-                    message = "%s/%s: alpha source invalid: %s" % (entry, mat.name, exc)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                    continue
-                if source_alpha is None:
-                    message = "%s/%s: alpha material exported an RGB albedo" % (entry, mat.name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                    continue
-                if source_alpha[0] < 255:
-                    asset_name = SC.texture_asset(mat.albedo)
-                    nonopaque[asset_name] = "%s/%s" % (entry, mat.name)
-
-        alpha_capable = 0
-        for asset_name, owner in sorted(nonopaque.items()):
-            data = textures.get(asset_name)
-            if data is None:
-                message = "%s: baked alpha texture missing: %s" % (owner, asset_name)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            if asset_tag(data, "HasAlphaChannel").lower() != "true":
-                message = "%s: baked texture has no alpha channel: %s" % (owner, asset_name)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            alpha_capable += 1
-        unreal.log("[verify] prop alpha %d flagged / %d non-opaque / %d alpha-capable" % (
-            flagged, len(nonopaque), alpha_capable))
-
-        # Semantic glass must reach the dedicated Thin Translucent master with both pieces the
-        # refraction graph needs: exact authored alpha on Albedo and a linear normal-compressed
-        # BumpMap. Inspect the exported contract and independently load the baked MIC/Texture2D
-        # assets, so stale material parents or texture settings cannot pass on MTL intent alone.
-        glass_records = {}
-        for mat in world_materials.values():
-            if not mat.glass:
-                continue
-            glass_records[_material_slot(package, mat)] = (
-                "%s/%s" % (map_name + ".mtl", mat.name), mat, corpus_dir,
-                world_textures)
-        for entry, mtl_path in prop_mtls:
-            for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
-                if not mat.glass:
-                    continue
-                glass_records[(SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))] = (
-                    "%s/%s" % (entry, mat.name), mat, corpus_dir, textures)
-
-        glass_alpha = 0
-        glass_normals = 0
-        glass_parented = 0
-        expected_parent = MATERIALS + "/M_World_Glass.M_World_Glass"
-        for (mat_package, mic_name), (owner, mat, source_dir, tex_index) in sorted(
-                glass_records.items()):
-            if not mat.blend:
-                message = "%s: glass material is not alpha blended" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-
-            if not mat.albedo:
-                message = "%s: glass material has no albedo" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-            else:
-                source = os.path.join(source_dir, mat.albedo.replace("/", os.sep))
-                try:
-                    source_alpha = alpha_range(source)
-                except (OSError, ValueError) as exc:
-                    source_alpha = None
-                    message = "%s: glass alpha source invalid: %s" % (owner, exc)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                if source_alpha is None or source_alpha[0] >= 255:
-                    message = "%s: glass albedo has no non-opaque source alpha" % owner
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                else:
-                    albedo_name = SC.texture_asset(mat.albedo)
-                    albedo_data = tex_index.get(albedo_name)
-                    if albedo_data is None or asset_tag(
-                            albedo_data, "HasAlphaChannel").lower() != "true":
-                        message = "%s: baked glass albedo is not alpha-capable: %s" % (
-                            owner, albedo_name)
-                        unreal.log_error("[verify] " + message)
-                        errors.append(message)
-                    else:
-                        glass_alpha += 1
-
-            normal_asset = None
-            if not mat.bump:
-                message = "%s: glass material has no bumpmap" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-            else:
-                normal_name = SC.texture_asset(mat.bump)
-                normal_data = tex_index.get(normal_name)
-                normal_asset = normal_data.get_asset() if normal_data is not None else None
-                if normal_asset is None:
-                    message = "%s: baked glass normal missing: %s" % (owner, normal_name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                elif normal_asset.get_editor_property("srgb") or normal_asset.get_editor_property(
-                        "compression_settings") != unreal.TextureCompressionSettings.TC_NORMALMAP:
-                    message = "%s: glass normal is not linear normal-compressed: %s" % (
-                        owner, normal_name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                else:
-                    glass_normals += 1
-
-            mic_path = "%s/%s" % (mat_package, mic_name)
-            mic = unreal.EditorAssetLibrary.load_asset(mic_path)
-            if mic is None:
-                message = "%s: baked glass material instance missing: %s" % (owner, mic_path)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            parent = mic.get_editor_property("parent")
-            if parent is None or parent.get_path_name() != expected_parent:
-                message = "%s: glass MIC parent is not M_World_Glass" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            bound_normal = (unreal.MaterialEditingLibrary
-                            .get_material_instance_texture_parameter_value(mic, "BumpMap"))
-            if normal_asset is None or bound_normal != normal_asset:
-                message = "%s: glass MIC has no matching BumpMap binding" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            glass_parented += 1
-
-        if map_name == "sp_theatre" and len(glass_records) != 2:
-            message = ("sp_theatre expected 2 semantic glass materials, found %d"
-                       % len(glass_records))
-            unreal.log_error("[verify] " + message)
-            errors.append(message)
-        unreal.log("[verify] glass %d flagged / %d alpha-capable / %d normal-bound / %d parented"
-                   % (len(glass_records), glass_alpha, glass_normals, glass_parented))
-
-        # Source Refract is the authored distortion overlay, independent of glass albedo. Its
-        # converted DUDV/normal must be a linear normal texture, bound to the dedicated clear PNO
-        # master along with the original $refractamount. This is the path the pawnshop rain-window
-        # cards use; treating their UVWQ texture as colour is the opaque "bubble" failure.
-        refract_records = {}
-        for mat in world_materials.values():
-            if not mat.refract:
-                continue
-            refract_records[_material_slot(package, mat)] = (
-                "%s/%s" % (map_name + ".mtl", mat.name), mat, corpus_dir,
-                world_textures)
-        for entry, mtl_path in prop_mtls:
-            for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
-                if not mat.refract:
-                    continue
-                refract_records[(SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))] = (
-                    "%s/%s" % (entry, mat.name), mat, corpus_dir, textures)
-
-        refract_normals = 0
-        refract_parented = 0
-        expected_refract_parent = MATERIALS + "/M_Refract.M_Refract"
-        for (mat_package, mic_name), (owner, mat, source_dir, tex_index) in sorted(
-                refract_records.items()):
-            normal_asset = None
-            if not mat.refract_map:
-                message = "%s: Source Refract has no refractmap" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-            else:
-                source = os.path.join(source_dir, mat.refract_map.replace("/", os.sep))
-                if not os.path.isfile(source):
-                    message = "%s: Source Refract PNG missing: %s" % (owner, source)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                normal_name = SC.texture_asset(mat.refract_map)
-                normal_data = tex_index.get(normal_name)
-                normal_asset = normal_data.get_asset() if normal_data is not None else None
-                if normal_asset is None:
-                    message = "%s: baked Source Refract normal missing: %s" % (
-                        owner, normal_name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                elif normal_asset.get_editor_property("srgb") or normal_asset.get_editor_property(
-                        "compression_settings") != unreal.TextureCompressionSettings.TC_NORMALMAP:
-                    message = "%s: Source Refract map is not linear normal-compressed: %s" % (
-                        owner, normal_name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                else:
-                    refract_normals += 1
-
-            mic_path = "%s/%s" % (mat_package, mic_name)
-            mic = unreal.EditorAssetLibrary.load_asset(mic_path)
-            if mic is None:
-                message = "%s: baked Source Refract material instance missing: %s" % (
-                    owner, mic_path)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            parent = mic.get_editor_property("parent")
-            if parent is None or parent.get_path_name() != expected_refract_parent:
-                message = "%s: Source Refract MIC parent is not M_Refract" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            bound_normal = (unreal.MaterialEditingLibrary
-                            .get_material_instance_texture_parameter_value(mic, "RefractMap"))
-            if normal_asset is None or bound_normal != normal_asset:
-                message = "%s: Source Refract MIC has no matching RefractMap binding" % owner
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            bound_amount = (unreal.MaterialEditingLibrary
-                            .get_material_instance_scalar_parameter_value(
-                                mic, "SourceRefractAmount"))
-            if abs(float(bound_amount) - mat.refract_amount) > 1e-6:
-                message = "%s: Source Refract amount binding drifted (%.6f != %.6f)" % (
-                    owner, float(bound_amount), mat.refract_amount)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-                continue
-            refract_parented += 1
-
-        rain_placements = 0
-        props_path = os.path.join(world_dir, map_name + ".props")
-        if os.path.isfile(props_path):
-            with open(props_path, "r", encoding="utf-8", errors="replace") as handle:
-                rain_placements = sum(
-                    1 for line in handle
-                    if line.split() and line.split()[0] ==
-                    "models_scenery_structural_santamonica_rain_window")
-        if map_name == "sp_theatre":
-            if len(refract_records) != 1:
-                message = "sp_theatre expected 1 Source Refract material, found %d" % len(
-                    refract_records)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-            if rain_placements != 6:
-                message = "sp_theatre expected 6 rain-window Refract cards, found %d" % (
-                    rain_placements)
-                unreal.log_error("[verify] " + message)
-                errors.append(message)
-        unreal.log("[verify] Source Refract %d flagged / %d normal / %d parented / "
-                   "%d rain-window placements" % (
-                       len(refract_records), refract_normals, refract_parented, rain_placements))
 
     ents_path = os.path.join(os.fspath(export_root()), map_name, map_name + ".ents")
     annotated = set()

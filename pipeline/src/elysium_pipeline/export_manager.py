@@ -1075,22 +1075,15 @@ def bake_v2_maps(
     nothing when they are current). This is the V2 lane's own entry: the prerequisite check,
     the world-material masters, the staged root unit and `bake_map.py`.
 
-    Only a map listed under `MapsOnV2Models` is accepted -- any other map would take the legacy
-    `.obj`/`.props` lane, which this verb does not own. The V2 lane still reads `.env`,
-    `.decals` and `.weather.json` off the map's export directory, so that directory must exist
-    from one `export map <map> --intermediate-only`; that residue is R9's to remove.
+    The lane still reads `.env`, `.decals` and `.weather.json` off the map's export directory,
+    so that directory must exist from one `export map <map> --intermediate-only`; that residue is
+    21-4's to remove.
     """
     _require_export_config(config)
-    from elysium_pipeline import map_transport
 
     names = list(dict.fromkeys(maps))
     if not names:
         return []
-    off_lane = [name for name in names if not map_transport.is_map_on_v2_models(name)]
-    if off_lane:
-        raise ExportBakeFailure(
-            "not on MapsOnV2Models in Config/DefaultElysium.ini: " + ", ".join(off_lane)
-            + "; list the map there (and on MapsOnNewTransport) before baking it on the V2 lane")
     unexported = [str(config.export_root / name) for name in names
                   if not (config.export_root / name / f"{name}.env").is_file()]
     if unexported:

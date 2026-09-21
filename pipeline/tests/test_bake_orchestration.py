@@ -84,6 +84,11 @@ def test_verify_is_an_explicit_opt_in() -> None:
         verify.assert_called_once_with(config, mock.ANY, ["test_map"])
 
 
+#: The fields `unreal.bake_maps` prints out of a staged manifest, and nothing more -- enough for a
+#: test that is about the commandlet's argv rather than about the staging read.
+_STAGED_STUB = {"counts": {}, "vertexBytes": 0, "placements": []}
+
+
 def test_particle_pass_is_an_explicit_opt_in() -> None:
     """The map bake authors no Niagara system unless the caller asks for one.
 
@@ -105,11 +110,14 @@ def test_particle_pass_is_an_explicit_opt_in() -> None:
         editor.mkdir(parents=True)
         (editor / "UnrealEditor-Cmd.exe").write_bytes(b"")
 
-        export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
-        assert "-BakeParticles=1" not in recorded[-1]
+        # The staging read needs a published root unit; this test is about the command line.
+        with mock.patch.object(export_manager.unreal.map_geometry, "stage_map",
+                               return_value=_STAGED_STUB):
+            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
+            assert "-BakeParticles=1" not in recorded[-1]
 
-        export_manager.unreal.bake_maps(config, _Runner(), ["test_map"], particles=True)
-        assert "-BakeParticles=1" in recorded[-1]
+            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"], particles=True)
+            assert "-BakeParticles=1" in recorded[-1]
 
 
 def test_particle_pass_is_part_of_the_profile_recipe() -> None:
@@ -499,11 +507,10 @@ def _v2_config(temporary: str, map_name: str = "test_map"):
     return config
 
 
-def test_bake_v2_maps_runs_only_the_v2_lane() -> None:
+def test_bake_v2_maps_bakes_each_named_map_once() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         config = _v2_config(temporary)
         with (
-            mock.patch("elysium_pipeline.map_transport.is_map_on_v2_models", return_value=True),
             mock.patch.object(export_manager.native_model_pipeline, "require_map_prerequisites")
             as prerequisites,
             mock.patch.object(export_manager, "adopt_export_root"),
@@ -519,26 +526,10 @@ def test_bake_v2_maps_runs_only_the_v2_lane() -> None:
                                      particles=False, verify=True)
 
 
-def test_bake_v2_maps_refuses_a_map_off_the_v2_flag() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _v2_config(temporary)
-        with (
-            mock.patch("elysium_pipeline.map_transport.is_map_on_v2_models", return_value=False),
-            mock.patch.object(export_manager, "bake_and_verify") as bake,
-        ):
-            with pytest.raises(export_manager.ExportBakeFailure) as caught:
-                export_manager.bake_v2_maps(config, object(), ["test_map"])
-        assert "MapsOnV2Models" in str(caught.value)
-        bake.assert_not_called()
-
-
 def test_bake_v2_maps_refuses_a_map_with_no_export_directory() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         config = _v2_config(temporary)
-        with (
-            mock.patch("elysium_pipeline.map_transport.is_map_on_v2_models", return_value=True),
-            mock.patch.object(export_manager, "bake_and_verify") as bake,
-        ):
+        with mock.patch.object(export_manager, "bake_and_verify") as bake:
             with pytest.raises(export_manager.ExportBakeFailure) as caught:
                 export_manager.bake_v2_maps(config, object(), ["never_exported"])
         assert "--intermediate-only" in str(caught.value)

@@ -9,8 +9,7 @@
 
 // env_particle -- CEnvParticle (`docs/vtmb/effects.md` §3.1). The leaf owns the I/O and the linear rate ramp and publishes one
 // `FElysiumWeatherEmitterState` through `IElysiumWeather::ApplyEmitter` on every change; the
-// embodiment decides what draws it -- the bake-placed `AElysiumEffectActor` by entity index on a
-// `MapsOnV2Models` map, the legacy per-map `NS_<root>` component elsewhere.
+// embodiment draws it through the bake-placed `AElysiumEffectActor`, found by entity index.
 //
 // The keyfield is `spawnbounds` (m_fSpawnBounds +0x49c, default 512): the FGD's `bounds` is not a
 // keyfield on this class and no engine code reads it. `JetLength` is accepted as VtMB's own no-op.

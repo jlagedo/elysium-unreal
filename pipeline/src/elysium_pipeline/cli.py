@@ -2676,7 +2676,7 @@ def bake_map(
         "--maps",
         help=(
             "Map stem to bake (repeatable: --maps sp_tutorial_1 --maps sm_hub_1). Required -- "
-            "the lane refuses to run unscoped. The map must be listed under MapsOnV2Models."
+            "the lane refuses to run unscoped."
         ),
     ),
     force: bool = typer.Option(

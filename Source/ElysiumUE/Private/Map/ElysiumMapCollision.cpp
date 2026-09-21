@@ -5,7 +5,6 @@
 #include "ElysiumMapCollisionPayload.h"
 #include "ElysiumWorldCollisionActor.h"
 #include "EngineUtils.h"
-#include "ElysiumMapTransportSettings.h"
 #include "ElysiumUseIcons.h"
 
 #include "AI/NavigationSystemBase.h"
@@ -226,22 +225,14 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 	{
 		return false;
 	}
-	// An unlisted map never attempts the payload -- the tracked flag list, not asset presence,
-	// decides the transport. With the sidecar gone, an unlisted map now simply fails to load.
-	if (!ElysiumMapTransport::IsMapOnNewTransport(MapName))
-	{
-		UE_LOG(LogElysiumCollision, Error,
-			TEXT("'%s' is not on the V2 transport; add it to MapsOnNewTransport and bake it"),
-			*MapName);
-		return false;
-	}
-
 	const FString AssetPath = FElysiumContentPaths::BakedMapCollision(MapName);
 	UElysiumMapCollisionPayload* Asset = LoadObject<UElysiumMapCollisionPayload>(
 		nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (Asset == nullptr)
 	{
-		UE_LOG(LogElysiumCollision, Error, TEXT("%s: no collision payload"), *AssetPath);
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: no collision payload; run: uv run elysium bake map --maps %s"),
+			*AssetPath, *MapName);
 		return false;
 	}
 	// One body per signature is the only shape this build adopts. A version-1 payload carried a
@@ -327,43 +318,3 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 	// displacement is still a component this object registers.
 	return ComponentState(DispCollision);
 }
-
-FBox UElysiumMapCollision::GetWorldBounds() const
-{
-	FBox WorldBox(ForceInit);
-	// The level's own bodies, when this map's collision stands in it rather than being built.
-	if (LevelCollision)
-	{
-		for (const UElysiumWorldCollisionComponent* Component : LevelCollision->Bodies)
-		{
-			if (Component)
-			{
-				WorldBox += Component->Bounds.GetBox();
-			}
-		}
-	}
-	if (DispCollision)
-	{
-		WorldBox += DispCollision->Bounds.GetBox();
-	}
-	return WorldBox;
-}
-
-void UElysiumMapCollision::RefreshNavigationData()
-{
-	if (LevelCollision)
-	{
-		for (UElysiumWorldCollisionComponent* Component : LevelCollision->Bodies)
-		{
-			if (Component && Component->IsRegistered())
-			{
-				FNavigationSystem::UpdateComponentData(*Component);
-			}
-		}
-	}
-	if (DispCollision && DispCollision->IsRegistered())
-	{
-		FNavigationSystem::UpdateComponentData(*DispCollision);
-	}
-}
-

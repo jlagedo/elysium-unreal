@@ -20,36 +20,36 @@ namespace ElysiumBakedTags
 	inline const FName Sky(TEXT("elysium.sky"));
 	// One GAME_LUMP static prop.
 	inline const FName Prop(TEXT("elysium.prop"));
-	// One GAME_LUMP detail model's instanced component (R6.3, `MapsOnV2Models` maps only): an
+	// One GAME_LUMP detail model's instanced component (R6.3): an
 	// AElysiumDetailPropActor carrying every `dprp` record of one model in lump order. Carries a
 	// second tag, DetailModel(stem), naming the corpus mesh it draws.
 	inline const FName Detail(TEXT("elysium.detail"));
-	// One `env_sprite` billboard (R6.1, `MapsOnV2Models` maps only): an AElysiumSpriteActor
+	// One `env_sprite` billboard (R6.1): an AElysiumSpriteActor
 	// carrying every value the bake wrote. Carries a second tag, EntityIndex(i), naming the
 	// entity's lump ordinal so the leaf's visibility writes find it.
 	inline const FName Sprite(TEXT("elysium.sprite"));
-	// One effects entity (R7.3, `MapsOnV2Models` maps only): an AElysiumEffectActor (or its
+	// One effects entity (R7.3): an AElysiumEffectActor (or its
 	// Dust / Steam / Beam subclass) carrying its staged row. Carries a second tag, EntityIndex(i),
 	// so the leaf's `ApplyEmitter` / `ApplyDust` / `ApplySteam` / `ApplyBeam` writes find it, and
 	// -- inside the miniature -- `Sky` beside it, like a sprite.
 	inline const FName Effect(TEXT("elysium.effect"));
-	// One WORLDLIGHTS source. Carries a second tag, Source(i), naming its `.lights` line so the
-	// light rig can bind it back to the raw source data it re-derives intensity and reach from.
+	// One WORLDLIGHTS source. Carries a second tag, Source(i), naming its lump-15 ordinal so the
+	// light rig can bind it back to the calibration rows keyed by it.
 	inline const FName Light(TEXT("elysium.light"));
 	// The sky light and the height fog, adopted so `UElysiumMapVisuals` can drive their values.
 	inline const FName SkyLight(TEXT("elysium.skylight"));
 	inline const FName Fog(TEXT("elysium.fog"));
-	// The baked 2D-sky backdrop dome (R5.2, `MapsOnV2Models` maps only) — a StaticMeshActor,
+	// The baked 2D-sky backdrop dome (R5.2) — a StaticMeshActor,
 	// distinct from `Sky` (the 3D-skybox miniature) so it does not fall into the miniature's
 	// sky-fog stamping bucket.
 	inline const FName SkyDome(TEXT("elysium.skydome"));
 	// One projected decal.
 	inline const FName Decal(TEXT("elysium.decal"));
-	// One reflection capture at a `cubemaps[]` sample (R5.5, `MapsOnV2Models` maps only). Carries a
+	// One reflection capture at a `cubemaps[]` sample (R5.5). Carries a
 	// second tag, Source(i), naming its lump-42 row. Its image lives in the level's MapBuildData,
 	// uploaded at registration; the runtime adopts nothing from it.
 	inline const FName Capture(TEXT("elysium.capture"));
-	// The map's water volumes (R7.1, `MapsOnV2Models` maps only): one AElysiumWaterVolumes carrying
+	// The map's water volumes (R7.1): one AElysiumWaterVolumes carrying
 	// every `water.volumes[]` row the stage emitted -- the CONTENTS_WATER brush hulls, their surface
 	// plane and the volume's authored fog. One actor per map, not one per volume, because the runtime
 	// asks "which volume is this point in" against all of them at once.
@@ -79,7 +79,7 @@ namespace ElysiumBakedTags
 		return FName(*FString::Printf(TEXT("elysium.src=%d"), Index));
 	}
 
-	// R5.6 (`MapsOnV2Models` maps): the two facts a baked light carries because the runtime rig
+	// R5.6: the two facts a baked light carries because the runtime rig
 	// still needs them after every derived value is baked -- the VtMB light type (0 texlight,
 	// 1 point, 2 spot, 3 sun) for the viewer's readout and the non-spot batch toggle, and the
 	// lightstyle index the rig animates per frame. Nothing else rides along: magnitude, radius and

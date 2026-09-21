@@ -32,7 +32,6 @@ from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
-from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.asset_names import (  # noqa: E402
     LIGHTSTYLE_KEY_SUFFIX, brush_slot_style)
@@ -108,7 +107,7 @@ TAG_WATER = "elysium.water"
 # One reflection capture at a `cubemaps[]` sample (R5.5, V2 lane only). Carries a second
 # `elysium.src=<index>` tag naming its lump-42 row, like a light names its `.lights` line.
 TAG_CAPTURE = "elysium.capture"
-# The baked 2D-sky backdrop dome (R5.2, `MapsOnV2Models` maps only). Distinct from TAG_SKY -- the
+# The baked 2D-sky backdrop dome (R5.2). Distinct from TAG_SKY -- the
 # 3D-skybox miniature's own tag -- so the miniature's sky-fog stamping pass never walks the dome.
 TAG_SKYDOME = "elysium.skydome"
 # R7.4 (water-complete contract 3): the lightstyle a world/sky chunk carries, restating
@@ -2030,24 +2029,19 @@ class Bake(object):
         a placeholder constant -- 0 on the 83 maps with no sky pair, which is the policy, not an
         absence.
 
-        On a `MapsOnV2Models` map (R5.2), this stage finishes the job instead of deferring it: it
-        bakes the real cube, joins it with the same magnitude through
-        `ElysiumMapVisuals::SkyAmbientIntensity`'s own policy, and authors the backdrop dome --
-        the runtime then skips its half of this entirely (`ApplyEnvironment`'s `MapsOnV2Models`
-        early return)."""
+        This stage finishes the job rather than deferring it (R5.2): it bakes the real cube,
+        joins it with the same magnitude the runtime's own policy used to apply, and authors the
+        backdrop dome -- the runtime assembles no sky at all."""
         color, mag = sky_ambient if sky_ambient else (None, 0.0)
-        baked_sky = map_transport.is_map_on_v2_models(self.map)
         skybox = self.env.get("skybox", ["0"])[0] == "1"
         sky_name = self.env.get("skyname", [""])[0]
 
         cube = None
-        intensity = mag   # the legacy placeholder; only meaningful when not baked_sky
-        if baked_sky:
-            intensity = 0.0
-            if skybox and sky_name:
-                cube, upper_mean = self._bake_sky_cube(sky_name)
-                if cube is not None:
-                    intensity = sky_join_intensity(mag, upper_mean, sky_name)
+        intensity = 0.0
+        if skybox and sky_name:
+            cube, upper_mean = self._bake_sky_cube(sky_name)
+            if cube is not None:
+                intensity = sky_join_intensity(mag, upper_mean, sky_name)
 
         actor = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0.0, 0.0, 0.0))
         if actor:
@@ -2753,10 +2747,8 @@ def bake_corpus(digest_cache, force=False):
 def bake_one(map_name, digest_cache, force=False):
     """Bake one map in the current editor process.
 
-    Which lane authors its geometry and placements is the tracked per-map flag's call, never this
-    process's: a map listed under `MapsOnV2Models` in `Config/DefaultElysium.ini` is authored from
-    its published root unit (R5.1, `bake_map_v2`), and every other map keeps the legacy `.obj`/
-    `.props` path byte for byte.
+    Geometry and placements are authored from the map's published root unit (R5.1,
+    `bake_map_v2`); 0018 story 21-1 retired the `.obj`/`.props` lane and the flag that chose it.
 
     The previous map's world goes first, before anything of this map's is read, and
     unconditionally. It used to go inside `stage_level`, which is both too late and conditional:
@@ -2777,9 +2769,7 @@ def bake_one(map_name, digest_cache, force=False):
         return False
     _collect_garbage()
     tracker = AssetTracker(map_name, digest_cache, force=force)
-    on_v2 = map_transport.is_map_on_v2_models(map_name)
-    log("%s: %s lane" % (map_name, "V2 (map root unit)" if on_v2 else "legacy (.obj/.props)"))
-    bake = (v2.bake_class() if on_v2 else Bake)(map_name, tracker, digest_cache)
+    bake = v2.bake_class()(map_name, tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
         return False
     bake.stage_textures()

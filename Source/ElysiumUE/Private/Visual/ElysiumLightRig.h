@@ -12,14 +12,13 @@ class UElysiumSurfaceSettings;
 class UElysiumMapLightQueryData;
 
 // Real-time light rig: one Unreal light per VtMB WORLDLIGHTS source. The light *actors* are baked
-// into the map's level (pipeline/unreal/bake_map.py, one per `<map>.lights` line, tagged with its line
-// index); this rig adopts them and owns their behaviour — it re-derives every intensity and reach
-// from the raw sidecar row at load, animates the lightstyles, and re-applies the whole calibration
-// on demand. Global calibration comes from `UElysiumLightingSettings` (R4.3), per-light hand-tunes
-// from the map's own `UElysiumLightCalibration` asset when one exists; the Cog Lights window is a
-// read-only viewer, not an editor, since both are edited the ordinary Unreal way. The sidecar
-// (UE_bsp_to_scene) is already Unreal cm / Z-up / left-handed. A component on the map actor, so it
-// unloads with the map.
+// into the map's level (pipeline/unreal/bake_map.py, one per `worldLights[]` row, tagged with its
+// lump-15 ordinal) carrying every derived value already; this rig adopts them, animates the
+// lightstyles, and re-applies the calibration on demand. Global calibration comes from
+// `UElysiumLightingSettings` (R4.3), per-light hand-tunes from the map's own
+// `UElysiumLightCalibration` asset when one exists; the Cog Lights window is a read-only viewer,
+// not an editor, since both are edited the ordinary Unreal way. A component on the map actor, so
+// it unloads with the map.
 //
 //   type 1 point      -> UPointLightComponent
 //   type 2 spot       -> USpotLightComponent   (inner/outer cone from stopdot/stopdot2)
@@ -42,9 +41,8 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
-	// One light actor the baked level offered up, with the `<map>.lights` line it was baked from.
-	// `Type` and `Style` are the R5.6 `elysium.type=`/`elysium.style=` tags a converted map's
-	// actors carry; the legacy `Adopt` ignores them (it reads both off the sidecar row).
+	// One light actor the baked level offered up, with the lump-15 ordinal it was baked from.
+	// `Type` and `Style` are the R5.6 `elysium.type=`/`elysium.style=` tags its actor carries.
 	struct FAdoptedLight
 	{
 		ULightComponent* Light = nullptr;
@@ -53,19 +51,6 @@ public:
 		int32 Style = 0;
 	};
 
-	// Legacy lane. Bind the baked level's light components to their sidecar rows and take
-	// ownership of their values: every intensity, reach and falloff is re-derived here from the
-	// raw source data, so the live calibration — not whatever the bake happened to write — is
-	// what the map renders. Returns the number of lights bound.
-	//
-	// `SkyReach` is the 3D-skybox miniature's uniform scale (`<map>.sky`, 16 where there is one,
-	// 1 otherwise). A source flagged sky in the sidecar lit the *miniature*, never the playable
-	// world — VtMB's light cache read exactly those lump-15 rows to light the skybox props — so
-	// its reach is authored in miniature units and has to scale with the geometry it lights.
-	// Its position is already scaled by the bake; only the reach is re-derived here.
-	int32 Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath, float SkyReach = 1.f);
-
-	// V2 lane.
 	// The bake already wrote every derived value -- intensity, reach, falloff, cone, shadows,
 	// specular, Lumen/fog scales and the MegaLights policy -- from `worldLights[]` through the same
 	// formulas `ApplyToSource` holds, so this opens no file and derives nothing: each source is
@@ -81,7 +66,7 @@ public:
 	// 0-11 the engine's own animated patterns, everything else "m" (full) until an entity writes
 	// it -- a named `light`'s TurnOn/TurnOff/SetPattern/FadeToPattern lands here, keyed by the
 	// style VRAD gave it (>= 32), and reaches every source carrying that style on the next tick.
-	// The table outlives Adopt/AdoptBaked, so the entity world may spawn before or after the rig
+	// The table outlives `AdoptBaked`, so the entity world may spawn before or after the rig
 	// adopts. Returns false for a style outside 0..63 or an empty pattern (nothing written).
 	static constexpr int32 MaxLightStyles = 64;
 	bool SetStylePattern(int32 Style, const FString& Pattern);
@@ -131,10 +116,10 @@ public:
 	// compare the stamped slot against. Same value `StyleMultiplier` answers.
 	float StyledPrimitiveBrightness(int32 Style) const { return StyleMultiplier(Style); }
 
-	// R6.2: a `light_dynamic` -- the one light with no lump-15 row -- stands through the legacy
-	// derivation: `Light` becomes a non-baked source with the raw magnitude, reach (cm), spot
-	// cosines and style, and `ApplyToSource` derives it under the page's calibration exactly as a
-	// `.lights` row is (retires with that lane, R9). Returns the source index, or INDEX_NONE.
+	// R6.2: a `light_dynamic` -- the one light with no lump-15 row, so nothing baked its values --
+	// is derived at run time: `Light` becomes a non-baked source with the raw magnitude, reach (cm),
+	// spot cosines and style, and `ApplyToSource` derives it under the page's calibration.
+	// Returns the source index, or INDEX_NONE.
 	int32 AddRuntimeSource(ULightComponent* Light, int32 Type, const FLinearColor& Color, float Mag,
 		float RadiusCm, float StopDot, float StopDot2, int32 Style);
 	void RemoveRuntimeSource(ULightComponent* Light);
@@ -158,7 +143,6 @@ public:
 		float RadiusCm = 0.f;       // authored cutoff radius (0 -> FallbackRadiusCm)
 		float StopDot = 0.f;        // spotlight inner-cone cosine
 		float StopDot2 = 0.f;       // spotlight outer-cone cosine
-		float FitMult = 1.f;        // per-area .lightfit rebalance multiplier
 		int32 Style = 0;            // animated lightstyle index (0 = unanimated)
 		float BaseIntensity = 0.f;  // current pre-style intensity (styled lights scale this per frame)
 		FLinearColor Color = FLinearColor::White;   // the sidecar's normalized hue, for revert
@@ -279,11 +263,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunSourceAngleDegrees = 0.5357f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunSoftSourceAngleDegrees = 0.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float FallbackRadiusCm = 2500.f;
-	// The 3D-skybox miniature's uniform scale, applied to a sky source's reach only (its
-	// position is baked already scaled). Set from `<map>.sky` at Adopt; 1 on a map with no
-	// miniature. Per-map (not a `UElysiumLightingSettings` field) and MinSkyReachCm floors it, so an
-	// authored radius near zero still lights something after the scale rather than collapsing.
-	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SkyReachScale = 1.f;
+	// The floor under a miniature light's reach, so an authored radius near zero still lights
+	// something rather than collapsing. The miniature's own uniform scale is the bake's: it writes
+	// a sky source's reach already scaled.
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float MinSkyReachCm = 5000.f;
 	// The same calibration shows the moody contrast is driven by *shadowing*, not falloff —
 	// so points shadow too (MegaLights keeps hundreds of shadowed lights ~constant cost).
@@ -324,10 +306,8 @@ private:
 	FString StylePatterns[MaxLightStyles];
 	bool bLightsVisible = true;
 
-	// Per-area rebalance and extended-ceiling toggles, mirrored from `UElysiumLightingSettings` by
-	// `ApplySettings` alongside the fields above. Not `UPROPERTY`-exposed: neither is meaningful to
-	// edit per-instance (the per-area table is loaded once, at Adopt, from `<map>.lightfit`).
-	bool bApplyLightFit = false;
+	// The extended-ceiling toggle, mirrored from `UElysiumLightingSettings` by `ApplySettings`
+	// alongside the fields above. Not `UPROPERTY`-exposed: it is not meaningful per-instance.
 	bool bExtendedRange = false;
 
 	// The map this rig adopted (the `.lights` base name), which keys its `UElysiumLightCalibration`

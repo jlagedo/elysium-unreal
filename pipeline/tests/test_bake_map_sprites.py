@@ -20,7 +20,7 @@ from unittest import mock
 
 import pytest
 
-from elysium_pipeline import map_transport, shared_corpus
+from elysium_pipeline import shared_corpus
 from elysium_pipeline.formats.bsp import source_to_unreal
 from elysium_pipeline.importers import map_geometry as MG
 
@@ -237,8 +237,6 @@ def test_every_env_sprite_of_the_working_corpus_is_a_row(map_name):
     unit = MG.sidecars.unit_paths(map_name)["root"]
     if not unit.is_file():
         pytest.skip(f"no exported map root unit at {unit}")
-    if not map_transport.is_map_on_v2_models(map_name):
-        pytest.skip(f"{map_name} is not on MapsOnV2Models")
     geometry = MG.read_geometry(map_name)
     join = MG.sidecars.prepare_join(map_name)
     blocks = join.pair_blocks

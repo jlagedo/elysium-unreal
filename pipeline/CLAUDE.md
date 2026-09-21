@@ -53,7 +53,7 @@ effect of the import.
 
 ```
 uv run elysium export_v2 map-glb <map>
-# add <map> to MapsOnV2Models and MapsOnNewTransport in Config/DefaultElysium.ini
+uv run elysium export_v2 nav-graph-glb <map>
 uv run elysium export map <map> --intermediate-only   # once: the sidecars the lane still reads
 uv run elysium bake map --maps <map>
 uv run elysium import map-entities    --maps <map>
@@ -67,8 +67,9 @@ its level and bakes its navigation meshes, so a level is not loadable until it h
 `bake map` -- the runtime has no fallback and fails the load naming both commands. It judges the
 meshes it built against retail's graph before it may succeed (`verify nav`, skippable only with
 `--skip-nav-verify` while iterating on the lane); `uv run elysium verify nav --maps <map>` asks
-again on demand. It needs the map's nav graph exported first (`export_v2 nav-graph-glb <map>`).
+again on demand. It needs the map's nav graph exported first.
 
-`MapsOnV2Models` selects `MapBakeV2` over the legacy `Bake`; `bake map` refuses a map that is
-not listed. `export map <map>` (no flag) reaches the same bake through the legacy decode plus
-an unconditional re-verification of the character and catalogue corpora, ~20 minutes.
+The runtime reads a map's entities, collision and environment from its three baked
+`DA_<map>_*` assets and nowhere else (0018 story 21-1 retired the sidecar arms and the per-map
+flag that used to select between them), so a map that has not been through this procedure fails
+the load with an error naming the command that fixes it.

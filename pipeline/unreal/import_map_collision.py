@@ -441,6 +441,11 @@ def used_hull_bits(map_name):
 
     It is the graph's answer to "which hulls do my links serve", so it is also the answer to
     "which agents does this map need a mesh for". Both witnesses are `0x80001`: human and rat.
+
+    PRESENCE, not truth: a staged 0 is a graph that names no hull at all, which is a different
+    failure from a lane that never ran, and the two get different diagnostics. No shipped `.ain`
+    carries one -- the eleven whose `NumNodes` is 0 all still name a hull -- but conflating them
+    would report the wrong remedy on the day one does.
     """
     root = os.environ.get("ELYSIUM_WORK_ROOT")
     if not root:
@@ -451,7 +456,7 @@ def used_hull_bits(map_name):
     with open(path, "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
     bits = (manifest.get("jumpLinks") or {}).get("usedHullBits")
-    return int(bits) if bits else None
+    return None if bits is None else int(bits)
 
 
 def build_navigation(map_name, world):

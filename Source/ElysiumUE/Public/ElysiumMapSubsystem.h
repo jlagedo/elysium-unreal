@@ -44,9 +44,8 @@ public:
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
 	// Whether Travel would accept Map: the producer's own proof that it ran is on disk for it --
-	// the new lane's readiness marker (the export-readiness gate), or, for a map still on the legacy
-	// geometry lane, the legacy exporter's `.obj`. A map on `MapsOnV2Models` needs the marker: nothing
-	// reads its `.obj` any more, so a stale one cannot vouch for the sidecars beside it. Static and file-only, so a
+	// the readiness marker, and since 0018 story 21-1 nothing else (the export-readiness gate).
+	// Static and file-only, so a
 	// test can drive it with a scratch content root and no UWorld or subsystem instance; `Travel` and
 	// `ExportedMaps` both route through this one predicate so the two can never disagree.
 	static bool HasTravelableExport(const FString& Map);

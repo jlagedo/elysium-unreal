@@ -122,20 +122,16 @@ public:
 // it actually got rather than the one it assumed.
 enum class EElysiumEntityDefSource : uint8
 {
-	None,      // neither an asset nor a readable sidecar
+	None,      // no readable asset -- a failure, and `Load` says so
 	Asset,     // /ElysiumBaked/<map>/DA_<map>_Entities
-	Sidecar,   // <map>.ents
 };
 
 namespace ElysiumEntityDefSource
 {
-	// The one entry point for "give me this map's defs". A map listed in
-	// `UElysiumMapTransportSettings::MapsOnNewTransport` (R4.6) tries the baked asset first, falling
-	// back to the `.ents` sidecar if it turns out missing; an unlisted map goes straight to the
-	// sidecar.
+	// The one entry point for "give me this map's defs": the map's baked table, or nothing.
 	ELYSIUMUE_API EElysiumEntityDefSource Load(const FString& MapName, FElysiumEntityDefs& Out,
 		float SkyScale = 1.f, const FVector& SkyOrigin = FVector::ZeroVector);
 
-	// "asset" / "sidecar" / "none", for logs and test messages.
+	// "asset" / "none", for logs and test messages.
 	ELYSIUMUE_API const TCHAR* ToString(EElysiumEntityDefSource Source);
 }

@@ -1,8 +1,8 @@
-// AElysiumMapActor's effects domain: on a
-// `MapsOnV2Models` map the env_particle / func_particle publish drives the bake-placed
-// AElysiumEffectActor by entity index; the three Valve classes drive their own actors the same
-// way; and `SpawnParticleRoot` stands a transient root for a code producer. The legacy per-map
-// component path stays in `ElysiumMapActorWeather.cpp`, byte for byte, for every unlisted map.
+// AElysiumMapActor's effects domain: the env_particle / func_particle publish drives the
+// bake-placed AElysiumEffectActor by entity index; the three Valve classes drive their own actors
+// the same way; and `SpawnParticleRoot` stands a transient root for a code producer. The
+// viewer-volume follow rain, the one system that is not a placed actor, stays in
+// `ElysiumMapActorWeather.cpp`.
 
 #include "ElysiumMapActor.h"
 

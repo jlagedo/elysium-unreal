@@ -15,9 +15,7 @@
 # `.lights` producer's own rows), with every value `UElysiumLightRig::ApplyToSource` used to derive
 # at load written here once by `derive_light` from the `UElysiumLightingSettings` page, plus the
 # MegaLights policy. The runtime rig on a converted map snapshots the actor (`AdoptBaked`) and
-# applies only the R4.3 calibration asset and the lightstyle animation. The two lanes are selected per map by
-# `elysium_pipeline.map_transport.is_map_on_v2_models`, the tracked list in
-# `Config/DefaultElysium.ini`.
+# applies only the R4.3 calibration asset and the lightstyle animation.
 #
 # **Materials (R5.4).** A V2 surface binds the
 # imported `MI_` the material lane already made for its `vtmb:material:*` unit -- a PAKFILE-patched
