@@ -132,7 +132,7 @@ def test_the_agents_are_installed_only_beside_the_thing_that_restricts_them():
 
     With auto-creation left on, the navigation system spawns and builds every supported agent --
     14 Recast meshes on every load of every map, most for creatures the map never spawns. The two
-    restrictions are `UElysiumNavBakeLibrary::SetMapNavAgents` (the agents a map's own graph
+    restrictions are `UElysiumNavBakeLibrary::CreateNavigationForAgents` (the agents a map's own graph
     names) and `AElysiumMapActor::RestrictNavigationToUsableAgents` (the one agent a body stands
     on). Verified on both witnesses: each reached Active having built exactly one mesh, `Human`
     at radius 33.0.

@@ -24,8 +24,8 @@ FElysiumEnvDef UElysiumMapEnvironment::ToEnvDef() const
 FElysiumSkyDef UElysiumMapEnvironment::ToSkyDef() const
 {
 	FElysiumSkyDef Out;
-	// The identity (scale 1, bValid false) when this map has no miniature -- exactly what
-	// `FElysiumSkyDef::Parse` leaves an unread map at.
+	// The identity (scale 1, bValid false) when this map has no miniature -- which is 65 of the
+	// 108 maps, and not an error.
 	Out.bValid = bHasSkyMiniature;
 	Out.OriginCm = SkyOriginCm;
 	Out.Scale = bHasSkyMiniature ? SkyScale : 1.f;

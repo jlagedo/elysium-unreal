@@ -374,7 +374,7 @@ as a `StaticMeshActor` at the origin, tagged `elysium.skydome` (`ElysiumBakedTag
 than `elysium.sky` — the 3D-skybox miniature's own tag — so `ApplySceneFog`'s sky-fog stamping, which
 walks `SkyActors`, never touches it. `AdoptBakedLevel` captures it into `BakedSkyDomeActor`, and
 `elysium.togglesky` (`ToggleSkybox`) hides/shows it alongside the miniature, the same as the
-runtime-built `SkyDomeMesh` it stands in for.
+runtime-built backdrop it replaced (deleted by 0018 story 21-1).
 
 **The bake is the only author.** R5.1's own entry already scoped the dome here ("the sky *dome*
 is R5.2's — this lane authors only the miniature's own geometry"); the cube and the SkyLight's real

@@ -645,6 +645,8 @@ bool FElysiumLightRigBakedTest::RunTest(const FString&)
 	Row.Intensity = 2.5f;
 	Row.bOverrideReach = true;
 	Row.ReachCm = 3456.f;
+	Row.bOverrideColor = true;
+	Row.Color = FLinearColor(0.2f, 0.4f, 0.8f);
 	Calibration->Rows.Add(Row);
 	FElysiumLightCalibrationRow StaleRow;
 	StaleRow.SourceIndex = 99;
@@ -653,6 +655,10 @@ bool FElysiumLightRigBakedTest::RunTest(const FString&)
 	TestEqual(TEXT("calibration applies its one matching row"), Rig->ApplyCalibrationAsset(Calibration), 1);
 	TestTrue(TEXT("calibration intensity reaches the baked spot"), FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
 	TestTrue(TEXT("calibration reach reaches the baked spot"), FMath::IsNearlyEqual(Spot->AttenuationRadius, 3456.f));
+	// `ULightComponentBase::LightColor` is an 8-bit sRGB `FColor`; `SetLightColor`/`GetLightColor`
+	// round-trip through it, so the expected value is the same quantization, not the authored float.
+	TestTrue(TEXT("calibration colour reaches the baked spot"),
+		Spot->GetLightColor().Equals(FLinearColor(Row.Color.ToFColor(/*bSRGB*/ true)), 0.001f));
 	Rig->ApplyLiveTuning();
 	TestTrue(TEXT("an overridden baked source survives the next push"), FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
 

@@ -858,7 +858,7 @@ def write_hulls(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]
 
     The leading token makes every row an odd token count where the old format was a multiple of
     three, so a reader built for the old format fails loudly instead of reading a contents word as
-    a coordinate. `validation/map_sidecar_diff` carries the divergence: strip column 0, keep the
+    a coordinate. The retired sidecar differ carried the divergence: strip column 0, keep the
     rows answering `BLOCK_MASK`, and the bytes are the legacy exporter's again.
     """
 
@@ -1010,7 +1010,7 @@ def build_entities(
     3D-skybox brush entity carries no hulls (R7.4 / G25, at the model branch below). That one is not
     a flag because it is not a disagreement about how to read the lump -- both readings agree on the
     vertices, and the ruling is that a miniature has no collider in the play volume at all.
-    `map_sidecar_diff` reports it as a real `.ents` delta on every map with a sky brush entity,
+    the retired sidecar differ reported it as a real `.ents` delta on every map with a sky brush entity,
     which is what that report is for.
 
     `write_entities` writes these rows to `<map>.ents`; R4.1's `UElysiumMapEntities` stage

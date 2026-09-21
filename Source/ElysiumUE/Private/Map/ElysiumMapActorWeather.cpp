@@ -369,9 +369,9 @@ void AElysiumMapActor::ApplyWeatherTuning()
 			TEXT("RainReflectionDebug"), static_cast<float>(FMath::Clamp(
 				CVarRainReflectionDebug.GetValueOnGameThread(), 0, 6)));
 	}
-	// The rain particles themselves are one system, the viewer-volume follow, and it reads
-	// `elysium.RainRateScale` when it is refreshed -- so a live cvar flip has to refresh it.
-	RefreshFollowRain();
+	// Nothing to push at a particle component here: the rain is one system, the viewer-volume
+	// follow, and `TickWeatherPresentation` refreshes it every tick ahead of calling this --
+	// which is what makes `elysium.RainRateScale` live, since `RefreshFollowRain` reads it.
 }
 
 bool AElysiumMapActor::IsFollowRainActive() const

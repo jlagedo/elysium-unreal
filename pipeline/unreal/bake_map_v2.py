@@ -6,7 +6,7 @@
 #
 # **Beside the legacy bake, not over it.** This module holds only the inputs and the stages that
 # differ; everything else -- decals, fog stamping, the player start, pruning, recipes and
-# receipts -- is `bake_map.Bake`'s, unchanged, and a map that is not on the R5.1 flag never
+# receipts -- is `bake_map.Bake`'s, unchanged, and the retired legacy lane never
 # reaches a line of this file. The 3D-skybox transform is this lane's own since R6.7
 # (`_read_sky` answers from the staged manifest, never from `<map>.sky`).
 #

@@ -715,9 +715,11 @@ per map rather than one per producer.
 **0018 story 21-1 retired both, and the question with them.** Every map is on the baked transport;
 there is no other. `AdoptPayload` loads `DA_<map>_Collision` unconditionally and a map with no
 readable payload fails the load naming `uv run elysium bake map --maps <map>`, as do
-`ElysiumEntityDefSource::Load` and `ElysiumMapEnvironmentSource::Load` for their own assets. The
-`.hulls` / `.dispcol` / `.ents` / `.env` / `.sky` / `.spawn` readers are gone from the runtime, and
-so is the settings page, its ini section and its Python twin `map_transport.py`. This supersedes
+`ElysiumEntityDefSource::Load` and `ElysiumMapEnvironmentSource::Load` for their own assets. No
+map-load path reads `.hulls`, `.dispcol`, `.ents`, `.env`, `.sky` or `.spawn` any more; the
+`.env`/`.sky`/`.spawn` parsers are deleted outright, and `FElysiumEntityDefs::Parse` survives only
+for the `elysium.ents` debug verb and the content tests, which 0018 story 21-3 owns. So does the
+settings page, its ini section and its Python twin `map_transport.py`. This supersedes
 R8.1's "once all 108 maps are converted and listed" precondition: a map that cannot load on the
 baked transport is a bake that has not run, not a map on another lane.
 
@@ -882,10 +884,13 @@ exactly as `FElysiumEnvDef`/`FElysiumSkyDef`/`FElysiumSpawnDef::Parse` always ha
   to the readiness poll, exactly as before.
 
 **This resolver has no fallback** since 0018 story 21-1 (this file's "## Import" above):
-`ElysiumMapEnvironmentSource::Load` loads `DA_<map>_Environment` and nothing else, and a map
-without one fails the load by name rather than opening with no fog, no sky and no player start.
-The `.env`/`.sky`/`.spawn` readers are deleted; `EElysiumMapEnvironmentSource` answers `Asset` or
-`None`.
+`ElysiumMapEnvironmentSource::Load` loads `DA_<map>_Environment` and nothing else, logs an error
+naming the bake command when it cannot, and answers `Asset` or `None` -- the `Sidecar` value and
+the three `.env`/`.sky`/`.spawn` parsers are deleted. A gameplay map with no environment asset
+then has no spawn transform, which `FElysiumMapRuntimePrerequisites::Evaluate` fails the load on.
+A **menu backdrop** (`bMenuBackdrop`) is excused from that check, as it is from the navigation
+one, so it stands with default fog and sky and only the error line to say so; it has no player to
+place.
 
 ### Measured (2026-09-01, the three working maps)
 

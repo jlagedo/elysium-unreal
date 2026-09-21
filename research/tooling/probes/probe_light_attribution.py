@@ -247,7 +247,8 @@ def main(map_name, p_exp=2.0, cell_in=128.0, budget=60000):
             for j in range(len(wl)):
                 f.write(f"{fit_by_line.get(j, 1.0):.4f}\n")
         print(f"\nwrote {path}  ({len(wl)} lines)")
-        print("  runtime: set  elysium.LightFit 1  then re-travel to apply it.")
+        print("  NOTE: nothing reads this file -- `elysium.LightFit` retired with the `.lights`")
+        print("  lane (0018 story 21-1). It is a measurement, not an input.")
     else:
         print(f"\n(no $ELYSIUM_EXPORT_ROOT/{map_name}/ -- export the map first to write the .lightfit sidecar)")
 

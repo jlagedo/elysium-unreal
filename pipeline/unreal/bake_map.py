@@ -162,7 +162,7 @@ SKY_MAT_PKG = "%s/Materials/skybox" % MOUNT
 # `ElysiumMapVisuals.cpp`'s own `SkyDomeHalfExtentCm` -- the baked dome has to be the identical
 # box the runtime built at load, or the two would silently draw different backdrops.
 SKY_DOME_HALF_EXTENT_CM = 500000.0
-# UE's own KINDA_SMALL_NUMBER -- the black-cube guard `SkyAmbientIntensity` applies before
+# UE's own KINDA_SMALL_NUMBER -- the black-cube guard applied before
 # dividing `emit_skyambient`'s magnitude by the cube's upper-hemisphere mean.
 KINDA_SMALL_NUMBER = 1e-4
 
@@ -356,7 +356,7 @@ def set_fog(component, data):
 
 
 def sky_join_intensity(mag, upper_mean, sky_name=""):
-    """`ElysiumMapVisuals::SkyAmbientIntensity`'s own policy (C1/C2), computed once at bake
+    """The C1/C2 sky-ambience policy, computed once at bake
     (R5.2) instead of every load: no pair or a pair reading zero -> 0 (an authored zero is a
     reading, not a missing one); a cube whose upper hemisphere is at or below UE's own
     `KINDA_SMALL_NUMBER` -> 0, logged, rather than a divide that would ship an infinity;
@@ -373,7 +373,7 @@ def sky_join_intensity(mag, upper_mean, sky_name=""):
 
 def sky_dome_geometry():
     """`(positions, normals, uvs, tris)` for the baked 2D-sky backdrop (R5.2):
-    `ElysiumMapVisuals.cpp`'s own `BuildSkyBox(SkyDomeHalfExtentCm, ...)`, reproduced
+    The inward box the runtime used to build at load (retired by 0018 story 21-1), reproduced
     vertex-for-vertex (same 8 corners, same six-quad/twelve-triangle winding, same all-up
     normals and all-zero UVs — the runtime's box has neither, since M_Sky samples the cube by
     view direction, not by surface attribute) so the mesh the bake authors is the identical box
@@ -1967,7 +1967,7 @@ class Bake(object):
 
     def _place_sky_dome(self, actors, sky_name, cube):
         """The baked 2D-sky backdrop (R5.2): the shared `SM_SkyDome` box
-        (`_build_sky_dome_dynamic_mesh`, the runtime's own `BuildSkyBox`) through a per-sky
+        (`_build_sky_dome_dynamic_mesh`) through a per-sky
         `MI_Sky_<SkyName>` bound to `cube`. Tagged `elysium.skydome`, not `elysium.sky` -- see
         `TAG_SKYDOME`'s own comment."""
         bl.ensure_dir(SKY_MAT_PKG)
@@ -1982,7 +1982,7 @@ class Bake(object):
             return
         bl.set_tex_param(mi, "SkyCube", cube)
         # The faithful default: VtMB's own sky transfer is the identity (D7), matching
-        # ElysiumMapVisuals::ApplySkyBrightness's un-driven CVarSkyBrightness default.
+        # the identity the retired `elysium.SkyBrightness` knob defaulted to.
         bl.set_scalar_param(mi, "Brightness", 1.0)
         bl.finish_material_instance(mi)
         unreal.EditorAssetLibrary.save_asset("%s/%s" % (mi_package, mi_name))
@@ -2003,7 +2003,7 @@ class Bake(object):
         component = actor.static_mesh_component
         component.set_static_mesh(dome_mesh)
         component.set_material(0, mi)
-        # Non-solid backdrop, same as the runtime's own SkyDomeMesh: no collision, no shadow, and
+        # Non-solid backdrop: no collision, no shadow, and
         # excluded from ray tracing (a box that encloses the whole scene is the canonical
         # hardware-ray-tracing overlap cost).
         component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
@@ -2057,7 +2057,7 @@ class Bake(object):
             actor.tags = [TAG_SKYLIGHT]
             actor.set_folder_path("Environment")
 
-        if baked_sky and cube is not None:
+        if cube is not None:
             self._place_sky_dome(actors, sky_name, cube)
 
         # The height fog is NOT the map's distance fog -- that is a per-primitive material term

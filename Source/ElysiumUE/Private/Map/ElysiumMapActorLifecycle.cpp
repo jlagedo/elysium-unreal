@@ -310,11 +310,10 @@ void AElysiumMapActor::LoadMap()
 	LoadedMap = MapName;
 	Bodies->SetMap(MapName);
 
-	// This map's environment: the baked `UElysiumMapEnvironment` when this map has one, the
-	// `.env`/`.sky`/`.spawn` sidecars otherwise. Resolved first because three later steps need
-	// SkyDef: the light rig scales a miniature source's reach by it, the `.ents` parser carries
-	// sky-scope entities through it, and a miniature body takes its mesh scale from it. The
-	// identity (scale 1) on a map with no `sky_camera`.
+	// This map's environment, from its baked `UElysiumMapEnvironment`. Resolved first because two
+	// later steps need SkyDef: the entity table carries sky-scope entities through it, and a
+	// miniature body takes its mesh scale from it. The identity (scale 1) on a map with no
+	// `sky_camera`.
 	SkyDef = FElysiumSkyDef();
 	FElysiumEnvDef EnvDef;
 	bool bHasSpawnDef = false;
@@ -539,7 +538,8 @@ void AElysiumMapActor::LoadMap()
 			else if (!bInfrastructureAdoptionFailed)
 			{
 				UE_LOG(LogElysium, Log,
-					TEXT("no entity table for %s (no baked asset, no .ents) — entity world not built"),
+					TEXT("no entity table for %s — entity world not built; the load fails on its own "
+						"readiness arm"),
 					*MapName);
 			}
 		}

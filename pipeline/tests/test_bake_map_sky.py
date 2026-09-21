@@ -2,10 +2,10 @@
 the bake-side half of the sky join `pipeline/unreal/bake_map.py::_place_sky` now finishes for a
 map instead of deferring to the runtime.
 
-`sky_join_intensity` is `ElysiumMapVisuals::SkyAmbientIntensity`'s own C1/C2 policy
+`sky_join_intensity` is the C1/C2 sky-ambience policy
 (`Source/ElysiumUE/Private/Visual/ElysiumMapVisuals.cpp`), restated here so the bake computes the
 same three-case join instead of a fourth implementation that merely claims to agree. `sky_dome_geometry`
-is `ElysiumMapVisuals.cpp`'s own `BuildSkyBox`, restated the same way. Both are plain functions with
+is the backdrop box the runtime used to build at load, restated the same way. Both are plain functions with
 no `unreal` import, reusing `test_level_sidecar_recipe.py`'s fake-editor-module loader only because
 `bake_map.py` itself is an editor entry point that cannot otherwise import.
 """

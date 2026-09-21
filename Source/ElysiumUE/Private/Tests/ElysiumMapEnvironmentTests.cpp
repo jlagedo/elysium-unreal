@@ -80,9 +80,8 @@ bool FElysiumMapEnvironmentConvertsFieldForFieldTest::RunTest(const FString&)
 	return true;
 }
 
-// A default-constructed asset (no miniature, no spawn authored) reads back exactly the identity
-// `FElysiumSkyDef`/`FElysiumSpawnDef::Parse` leaves an unread map at — scale 1, both invalid — so a
-// caller cannot tell "converted asset with nothing authored" from "no asset, no sidecar" by the
+// A default-constructed asset (no miniature, no spawn authored) reads back the identity — scale 1,
+// both invalid — so a caller cannot tell "asset with nothing authored" from "no asset" by the
 // struct alone; only the source enum `Load` returns can.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEnvironmentDefaultsMatchTheSidecarIdentityTest,
 	"Elysium.Substrate.MapEnvironment.DefaultsMatchTheSidecarIdentity",

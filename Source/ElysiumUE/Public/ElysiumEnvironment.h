@@ -31,7 +31,6 @@ struct FElysiumEnvDef
 	float SkyFogStartCm = 0.f;
 	float SkyFogEndCm = 0.f;
 
-	static bool Parse(const FString& EnvPath, FElysiumEnvDef& Out);
 };
 
 // The `<map>.sky` sidecar: where the 3D-skybox miniature goes. VtMB renders the miniature as a
@@ -48,7 +47,6 @@ struct FElysiumSkyDef
 	// Carry a raw miniature-space point into world space.
 	FVector ToWorld(const FVector& V) const { return (V - OriginCm) * Scale; }
 
-	static bool Parse(const FString& SkyPath, FElysiumSkyDef& Out);
 };
 
 // The `<map>.spawn` sidecar: `info_player_start`'s origin (Source feet, carried verbatim) and yaw.
@@ -60,7 +58,6 @@ struct FElysiumSpawnDef
 	FVector OriginCm = FVector::ZeroVector;   // feet, not the capsule center
 	float YawDeg = 0.f;                       // already Unreal-space (UE_bsp_to_scene negates it)
 
-	static bool Parse(const FString& SpawnPath, FElysiumSpawnDef& Out);
 };
 
 namespace ElysiumEnvironment
