@@ -188,6 +188,100 @@ The dominance of neutral rows does not mean most NPCs cannot become hostile. Dam
 criminal/supernatural state, class relations, scripted `SetRelationship`, encounter logic, and
 enemy assignment can all change the effective relation or behavior after spawn.
 
+### The law transaction's guesses, settled (2026-09-21)
+
+_A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp16-witness-law`) over the `CHOSEN, NOT
+RECOVERED` admissions in `ElysiumNpcWitness.*` and `ElysiumLaw.*`; the `Spawn` normalisation and the
+ConVar defaults re-read by the lead._ For 0018 story 17 (the bus) and 0002's witnessing.
+
+**The thresholds.** `pl_investigate +0x6348`, `pl_criminal_flee +0x634c`, `pl_criminal_attack
++0x6350`, `pl_supernatural_flee +0x6354`, `pl_supernatural_attack +0x6358`, all `FIELD_INTEGER`
+keys with inputs. **`CAI_BaseNPCTroika::Spawn 0x10298d30` rewrites every one that is `< 1` to `6`**
+(with a warning; `CNPC_VCamera::Spawn 0x10368b70` repeats it) — so unauthored, `-1` AND an authored
+`0` all become 6, once, at spawn; there is no reader-side sentinel (the port's `ResolveThreshold`
+gets the right number by the wrong mechanism, and must treat 0 the same). Readers compare the
+stored word: `threshold <= level` (`0x1028efc0`, `CNPC_VGuard1 0x1037cdf0`, `CNPC_VPedestrian
+0x103a2c30`). 6 disables because the player inputs (`0x1017e560`, `0x1017e5f0`) and the level
+ConVars cap at 5. `CNPC_VGhoulCroucher::Spawn 0x1037b040` and `CNPCMaker_Zombie::Spawn 0x1034cc60`
+write 999999 instead.
+
+**Three stores, three lifetimes — none of them 4 or 5 seconds.**
+1. *The player's act channels* (`CBasePlayer`): supernatural level `+0x1ccc`, expiry `+0x1ce4`,
+   count `+0x1cec`; criminal level `+0x1cd0` (encoded copy `+0x1cd8`), expiry `+0x1ce0`, count
+   `+0x1ce8`. The setters (`0x1017e150` criminal, `0x1017df50` supernatural) write `curtime +
+   duration` and BUMP THE COUNT; expiry (`0x1017e900`, `0x1017e980`) clears when `timer != -1 &&
+   timer < curtime`. The duration (`0x1017deb0`) is the explicit one if `> 0`, else
+   `max(previously retained level, pl_min_act_timer)` — and **`pl_min_act_timer` defaults to 5**,
+   not the port's 2.
+2. *The NPC's witnessed record* (`+0x635c..+0x6394`, `senses.md`): written by `0x1028ea60` /
+   `0x1028eb30`; **no gameplay expiry exists** — the two `…WitnessedTimer` words (`+0x63a4`,
+   `+0x63a8`) are initialised and drawn by the debug think and written by nothing. What does expire
+   is the OBSERVATION window: feeding opens both for 3.0 s (`0x10293e20`), entering state `0xe`
+   opens the criminal one for 2.0 s (`0x10293d90`), the Nosferatu special 5.0 s (`0x10293df0`).
+3. *The global act list* `CAI_CsActList` (`DAT_109253f8`, 64 records of `0x28`: kind, ignored
+   entity, origin, level `+0x14`, expiry `+0x18`, offender `+0x1c`, owner `+0x20`, corpse flag
+   `+0x24`). Published by `0x102ca2a0` with the caller's duration; its callers are an NPC's DEATH
+   (`Event_Killed 0x102bf340`, criminal, 100000 s — a body lies there), the supernatural action
+   task and the type-7 action dispatcher `0x101f8620`. Swept by `0x102ca780`: drop when `curtime >
+   expiry`, else test, keeping the strongest criminal and the strongest supernatural record.
+   And the player's *scare queue* (`CBasePlayer +0x1d90`, count `+0x1d9c`, 16-byte records:
+   timestamp, NPC index, severity): a repeat refreshes the timestamp and keeps the larger
+   severity (`0x1017fd60`); the consumer `0x10169960` drops records older than **`scarednpc_time`
+   = 180.0 s** and, over **`scarednpc_count` = 3**, evicts the OLDEST — not the strongest.
+
+**Who publishes.** The player's ACT sites — feeding `0x1033a400` / `0x1033a9e0`, weapon fire
+`0x10238580`, lockpicking `0x1017e900`, the activity trigger `0x102108e0` / `0x102109b0`, the
+inputs — only set the player's level, expiry and count. They never touch the global list.
+`ReportCriminalAct 0x1017f2a0` / `ReportSupernaturalAct 0x1017f4a0` are called by the WITNESS when
+its schedule consumes the incident (`GetSchedule 0x102ae920`, `SelectSchedule 0x102af660`,
+`CNPC_VPedestrian 0x103a2e30`, and the scare-queue consumer) and enter the common police-response
+body `0x1017ed00`. `player-entity.md`'s "publishes the changed player state" means that, not the
+list.
+
+**The re-raise guard** is the per-NPC processed count: `+0x636c` (criminal) and `+0x6370`
+(supernatural) against the player's act counts. With the observation window closed the NPC's
+count is advanced WITHOUT raising the condition; when a selector consumes the incident it copies
+the player's count in. **The global list has no cursor, serial or per-NPC mark at all** — a live
+record is re-observed on every gather until it expires; the port's `GlobalCursor` is invented.
+A list record is accepted by `0x1028ebc0` in the order cone (`0x103268e0`), then squared distance
+against `m_flSeekDistInspection (+0x63b8)`, then an unobstructed eye-to-origin line.
+
+**"Nearby".** That same `m_flSeekDistInspection` for a list record; the closest-player cache
+(`SetClosestPlayer 0x10293a80` → `0x101828b0`: handle `+0x1cc0`, distance `+0x1cc4`, sense code
+`+0x1cc8`) admits a player inside squared distance 20000 (about 141 units); the Nosferatu special
+needs `m_flPlayerDist (+0x6264) < 64.0`, `SEE_PLAYER`, the `Player_Nosferatu` template and the
+cone. **`nosferatu_tolerrant` has a string in the image and NO reader** — the key does nothing in
+retail.
+
+**The four conditions and their order.** `0x1f CRIMINAL_FLEE_LEVEL`, `0x20 CRIMINAL_ATTACK_LEVEL`,
+`0x21 SUPERNATURAL_FLEE_LEVEL`, `0x22 SUPERNATURAL_ATTACK_LEVEL`. There is no "attack outranks
+flee": `PreSelectIdealState 0x102ad340` tests flee `0x21`, `0x1f`, THEN attack `0x22`, `0x20`
+(supernatural before criminal in each); `SelectIdealState 0x102ad660` promotes flee to state 8
+from idle and alert. The attack arm is `GetSchedule`'s, in COMBAT only: report the incident, copy
+the act count, `SetEnemy` (slot `0x950`) and slot `0x954` (`0x102b4fb0`) —
+**`AddEntityRelationship(player, D_HT, 5)`**, so the port's relationship row at priority 5 is
+retail's mechanism. `CNPC_VCop 0x103726c0` and `CNPC_VGuard1 0x1037d290` use priority 10 (the guard
+through `InputSetRelationship "player D_HT 10"`). The flee arm is `SelectSchedule` case 8:
+supernatural before criminal; offender not the closest player → the cower family or the saved
+location; the player → report, then `0x71` within 512 on an 80 % roll, else `0x70`; a flee-only
+supernatural record feeds the scare queue instead, and only once `SEE_PLAYER` holds.
+
+**State `0xe` is `CRIMINAL_SUSPICION`** (the parser's `State:` table). Entered from
+`PreSelectIdealState` when `0x20` is interrupting, the witnessed criminal level is `<= 2`, the
+state is neither 2 nor `0xe`, the offender is not already hostile and
+`m_bAllowCriminalSuspicion` is set. `SelectSchedule` case `0xe` walks `m_iSubState`: → 1 `0x116
+CRIMSUSP_APPROACH_ENEMY`; 1 → 2 `0x117 …_FACE_ENEMY`; 2 → 3 `0x118 …_WAIT_FOR_OCCLUSION`; 3 → 4
+`0x119 …_GO_TO_LKP`; 4 → 5 `0x11b …_WAIT_AT_LKP` with `SEE_ENEMY`, else `0x11a
+…_WAIT_AT_LKP_LOOKAROUND`; 5 → 2 `0x117`. Nothing times the state out; it leaves through the
+ordinary ideal-state transitions (damage, a detected attack).
+
+**The `pl_*` ConVars**: `pl_supernatural_level`, `pl_criminal_level`, `pl_investigate_level` all
+default **-1** (`-1..5`; a negative value means "use the player's stored level"); `pl_min_act_timer`
+**5**; `pl_autopickup_wpns` 0 (no reader in `vampire.dll`).
+
+**Unrecovered:** two words of the scare record; the type-7 action dispatcher `0x101f8620`'s name;
+whether any internal caller passes a level above 5.
+
 ### Templates and inheritance
 
 The 36 `vdata/system/npctemplate*.txt` files declare 150 templates, with 64 non-empty parent links.

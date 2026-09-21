@@ -1117,6 +1117,12 @@ its recovery is written in the oracle section it names.
   shared list.
   Oracle: `senses.md` § "Hearing, walked" and § "The shared list itself" (the story's
   parenthetical "the sound world" is not a heading in that file).
+  **Read 2026-09-21 (`conditions-and-states.md` § "The port's NPC-core guesses, settled", item
+  6):** the `HEAR_*` condition is chosen by the sound's TYPE BIT, which the caller of `InsertSound`
+  supplies (`0x1` combat, `0x2` world, `0x4` player, `0x8` danger, `0x10` bullet impact, `0x400`
+  physics danger, `0x800` flinch); a `sound_volume_table.txt` row contributes only the radius
+  level and the occlusion flag. So a producer writing into the list must carry a type, and the
+  port's match-the-category-by-name rule goes.
   Size: M. Effort: Opus / high.
 
 - [ ] **14. Squads.** The object half of 0002's story 17, moved here; 17 keeps the consumers.
@@ -1198,6 +1204,16 @@ its recovery is written in the oracle section it names.
   read (levels, offender, location, timers). The acts stay in 0005 / 0006, the witnessing in
   0002.
   Oracle: `social.md`, `population.md` § "Player-law observation transaction". Size: S.
+  **The bus, read 2026-09-21 (`population.md` § "The law transaction's guesses, settled").** It is
+  THREE stores, and the port's two invented lifetimes go: the player's act channels (level,
+  expiry, COUNT — the count is what an NPC's processed counter `+0x636c` / `+0x6370` is compared
+  with; duration = the explicit one, else `max(retained level, pl_min_act_timer)` with
+  `pl_min_act_timer` **5**); the 64-record global `CAI_CsActList` (published by NPC death and the
+  supernatural action task, NOT by the player's acts; swept by expiry only, **no cursor** — a live
+  record is re-observed every gather); and the player's scare queue (`scarednpc_time` **180 s**,
+  over `scarednpc_count` **3** the OLDEST is evicted). The five `pl_*` thresholds are normalised
+  once, at `Spawn`: anything `< 1` — unauthored, `-1`, or `0` — becomes 6. `nosferatu_tolerrant`
+  has no reader in retail.
   Effort: Sonnet / medium.
 
 - [ ] **18. The AI logic entities.** Added 2026-09-19: found by the classname scan beside

@@ -100,6 +100,15 @@ green, and `coverage.md` shows the change.
   bodies (`0x102e14a0`, `0x102e1560`, `0x102e1760`, `0x102efaa0`, `0x102efd50`), the physics
   tick, network change-state, the trace and push-out bodies, the sector partition.
   Provides: the lists every story below consumes; the re-verdicted 19–29 checklist to 8.
+  **Inputs the 2026-09-21 RE pass adds (`docs/specs/RE-BACKLOG.md`).** Rows that are `dead` by
+  CONTENT, each with its proof in the oracle: `COND_KNOCKBACK 0x28` has no producer anywhere, so
+  `GetSchedule`'s two knockback arms and the idle programs' listing of it are unreachable; goal
+  type 5 has no issuer; hint type 800 is authored by nothing, so the patrol lookup's `|| 0x320`
+  never matches; `TASK_CREATE_HUNT_PATROL_LIST 0xae` has no issuer; `FINISH_CLIMB 0xfc` cannot
+  run (no shipped link climbs); the generic `.sch` file loader `0x1030f220` has no caller and no
+  file; `m_flRadius` on `aiscripted_schedule` and the `nosferatu_tolerrant` key have no reader.
+  And one correction to the ledger's vocabulary: in the goal record the `0x13` several rows call a
+  "flag" is the ACTIVITY word `+0x14`.
   Size: M. Effort: Fable / high.
 
 - [ ] **2. The datamap bindings, generated.**
@@ -231,6 +240,11 @@ green, and `coverage.md` shows the change.
   C++, as the ledger's addresses and values already are — decided 2026-09-15 by the owner over
   a corpus file, because these are recovered numbers, not retail content.
   Provides: the thresholds 6's mechanism seams keep. Consumes: 1.
+  **Two oracle pages feed the overlay directly (2026-09-21):** `docs/vtmb/npc-ai/rdata-cells.md`
+  — 32 cells the oracle had marked unread, each TYPED by its reading instruction (eight are
+  doubles that read as `0.0` when taken for floats) — and `docs/vtmb/npc-ai/convars.md` — 42
+  ConVars with name, default and reader member; no shipped file overrides any, so the default is
+  the retail value. `--check` should read a cell at the width the row states.
   Size: S–M. Effort: Sonnet / medium.
 
 - [ ] **5. The class tree: one port class per retail class.**

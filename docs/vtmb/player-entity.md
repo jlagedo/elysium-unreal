@@ -316,7 +316,10 @@ removes consumed/expired records. Seeing a sufficiently close `Player_Nosferatu`
 severity-2 flee-only admission and does not require a new Discipline cast.
 
 Activity levels and witnessed incidents are separate stages. `PlayerCriminalIncident`
-(`0x1017f2a0`) publishes the changed player state and enters common police-response admission; it
+(`0x1017f2a0`) — called by the WITNESSING NPC's selector, not by the act — enters common
+police-response admission (it does not write the global `CAI_CsActList`; the act's own setter
+`0x1017e150` already wrote the player's level, expiry and count — `npc-ai/population.md` § "The law
+transaction's guesses, settled", 2026-09-21); it
 does not change Masquerade. `PlayerSupernaturalIncident` (`0x1017f4a0`) has two independent
 consumers in an active game:
 

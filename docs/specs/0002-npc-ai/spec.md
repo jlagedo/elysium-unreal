@@ -852,6 +852,18 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Select19 owns. Remaining families, in order: Conditions19 (23), Spawn19 (60), RunAi19 (34),
   StartTask19 (28), RunTask19 (24), Select19 (39), Damage19 (26), Script19 (32), Think19 (15),
   Boss19 (19), Werewolf19 (17), Misc19 (34).
+  **RE pass 2026-09-21 — read before porting the remaining families (`docs/specs/RE-BACKLOG.md`).**
+  Conditions19, Select19, StartTask19 and RunTask19 each touch a body the port currently GUESSES,
+  and seven of eight guesses were wrong (`conditions-and-states.md` § "The port's NPC-core guesses,
+  settled"): the alert selector (case 3 ends in `0x4b ALERT_WAIT`, never the lookaround); the
+  attack bands (melee 64 / 256 / 180, ranged 100 / 200 / 1024 or the weapon's min / max, dot 0.5
+  and 0.7); four separate sight / weapon-line traces; heavy damage `> 20`, repeated `> 30 %`;
+  `0x1026fb40` is the better-weapon search, not a `NEW_ENEMY` repair. For the task families:
+  a bare-`SetGoal` path task completes INSIDE `SetGoal` and sits running through the retry window
+  (`schedule-kernel.md` § "`SetGoal` DOES complete the task"); `IsScheduleValid` makes a schedule
+  uninterruptible while the navigator type is jump or climb; the comfort chain advances by
+  `SetIdealActivity(m_Activity + 1)`. The witness code's guesses are settled in `population.md`
+  § "The law transaction's guesses, settled".
 
 ### The mind
 
