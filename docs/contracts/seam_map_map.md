@@ -842,6 +842,101 @@ travelled and reached Playing; and each strung its cables from the level — `sp
 --verify` reports the same five against the staged rows with every material bound and 0 problems.
 `Elysium.Content` is 13 of 13, including the new `MapList` / `MapListMatchesGate`.
 
+### The bake needs no legacy directory (0018 story 21-4)
+
+**Nothing in the bake opens a file under `$ELYSIUM_EXPORT_ROOT/<map>/`, and a map goes from its
+published units to a level in one command.** 21-3 closed the runtime's per-map reads; this closed
+the bake's. `bake map` runs `UE_map_sidecars.write_sidecars` itself inside `_stage_map_inputs`,
+into the producer's own `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/`, and names that root to both
+commandlets as `-BakeMapSidecars=`. The `.env` gate that refused a map without an export directory
+is gone, and so is `export map --intermediate-only` from the procedure.
+
+Four decoder-only products stood in the way. Two had no producer at all and are ported below; two
+had a V2 replacement already and were re-pointed:
+
+| Was | Is |
+|---|---|
+| `<map>.decals` | `decal_rows` → the geometry manifest's `decals` block → the baked `ADecalActor`s, checked by `verify_decals` |
+| `<map>.weather.json` + `weather/rain_height.png` | `importers.map_weather` → the manifest's `weather` block, the raster staged beside `manifest.json` |
+| `<map>.props` | the staged `placements` rows, which carry the same `stem` the line's first column did |
+| `<map>.materials.json` | deleted; **one map in the whole export tree ever had one** (`sm_pier_1`, which this group delisted), and the V2 lane represents a PAKFILE-only material as a first-class unit keyed `maps/<map>/…` with its own `patchBase` chain |
+
+**The `.env` sky-face flag moved onto the texture units.** `skybox` asked whether the shared
+corpus held all six faces of a map's sky, which was the producer's one remaining tie to
+`$ELYSIUM_EXPORT_ROOT`. It asks `exports_v2/textures/skybox/<sky><face>.glb` instead
+(`sky_faces_published`), the same six files `importers.sky_composites.plan_composites` names, and
+`_corpus`, `_corpus_textures` and the `corpus_root` argument go with it. Measured: all six maps'
+`.env` files are byte-identical across the change.
+
+**Decals: the decoder's pass, ported.** `decal_rows` is `UE_bsp_to_scene`'s `infodecal` pass with
+its constants intact — the 64-inch plane radius, the seam-tolerant convex test (`_inplane`, either
+winding counts as inside), the nearest-plane-distance win, the room normal resolved from BSP leaf
+solidity at `proj ± 2` with the entity origin as the tiebreak, and the `s_dir` handedness flip
+taken **in Source space, before the reflection** (`source_dir_to_unreal` negates Y, so the same
+comparison afterwards chooses the opposite sign). The projector index is the decoder's filter, not
+`meshed_faces`': three or more edges, a texinfo, not a `func_areaportalwindow` backing, outside
+`tools/` except `DRAWN_TOOL_MATERIALS` — **and no `SURF_NODRAW` test**, which `meshed_faces` has
+since R7.1. Sizing needs the albedo's pixel dimensions and `$decalscale`; both were corpus facts
+and are now unit facts (`MaterialUnits`), including `vmt.parse`'s own quirk that an absent
+`$decalscale` *and* a literal `0` both size at 1.0.
+
+**The one thing the port cannot do, measured rather than asserted.** A displacement face states
+its geometry through its own displacement mesh, contributes no vertices to a model mesh, and its
+FLAT winding — which is what a decal projects onto, not the sculpted surface — is published
+nowhere: the root unit carries neither VERTEXES numerically nor the DISP_VERTS offsets that would
+let the flat quad be recovered, and R3.4 already declined to publish those for `.dispcol`'s sake.
+So a decal the decoder bound to sculpted terrain has no face to bind here.
+
+Over all 92 maps with a legacy `.decals`, 5,037 lines
+(`research/tooling/probes/decal_weather_parity.py`, 2026-09-21): **84 byte-identical**; three
+refused by the entity-lump reader 21-7 owns (`la_ventruetower_2`, `la_ventruetower_3`,
+`sp_giovanni_2b`); **five differing by 22 rows in total** — `la_library_1` 11, `sm_oceanhouse_2` 6,
+`sp_soc_1` 2, `sm_warehouse_1` 1, `la_malkavian_5` 1. Every one of the 22 is this gap. Every one is
+an `unbound` row (no projector face) and never an `unresolved` one (no material size), so no
+published decal material fails to size anywhere in the corpus; 21 sit inside a displacement's own
+bounds, and the 22nd was walked to its face — `la_malkavian_5`'s `decals/damage/malkfire3` at
+Source (946.022, 1582.15, −16) projects onto face 2610, `dispInfo 103`, whose flat plane is z = −64
+exactly, which is where the legacy line stands. **All six maps of this story are byte-identical**;
+the five are 21-8's to judge. `decal_rows` reports `dispFacesSkipped` per map so the exposure is
+visible rather than inferred.
+
+**Weather: the entity half was already the producer's, the geometry half is now.** The cover set is
+the decoder's filter for filter (`UE_bsp_to_scene` 1691-1709): the **world scene only** — not the
+miniature, not a brush model — minus water, `$refract` and `$additive` groups, plus every solid
+non-sky static prop placed at its own transform, with bounds taken over the world's vertices
+**before** the prop triangles join. The world triangles are `map_geometry`'s meshed `Scene` rather
+than a second triangulation, because two implementations of "which faces are the world" is exactly
+the divergence R3.3 exists to catch; the decal projector had to go the other way only because it
+needs a face class the mesh deliberately drops. Prop cover is each model unit's `:lod0` mesh, which
+is the mesh `UE_extract_corpus.decode_prop_models` wrote into `shared/props/<stem>.obj`. The
+`weather_inputs` hand-over through `export_all` and `UE_bsp_to_scene.main`'s additive `return` are
+gone.
+
+Measured on `sm_hub_1`, the only map in the install that ships rain: **the inputs reproduce** —
+245,571 cover triangles either way (24,214 world, 221,357 prop), the same 278 world groups keeping
+the same 24,214 triangles under the filter, world vertices within 7.9e-4 cm of the decoder's and
+prop vertices within 4.0e-4 cm, bounds within 6e-4 cm, so the pinned footprint
+28971.24 × 19639.28 cm holds. **The raster's coverage reproduces exactly**: 964,071 covered texels,
+zero sentinel disagreements. **The encoded heights differ on 0.75% of samples** — 31,614 of
+4,194,304, ±1 to ±4 LSB (0.25–1 cm) for the bulk and 156 LSB (38.8 cm) at the tail. Re-rasterising
+with the decoder's own bounds moves the count by 460, so quantisation is not the cause: **27.65% of
+the cover triangles are near edge-on seen from above** (a sub-texel footprint with a median 22.7 cm
+and up to 15.8 m of vertical extent; a further 42,719 are fully degenerate and the rasteriser skips
+them), and for those the barycentric denominator is ill-conditioned, so the binary32 vertex
+recovery moves the interpolated height by decimetres and flips which triangle wins the max at an
+edge texel. It is a rain-occlusion height map read by a material to fade a raindrop; the difference
+is named rather than chased.
+
+**The entity lane's parity check is retired.** R4.1 introduced it to prove the cooked asset equalled
+the `<map>.ents` it replaced, and it was a real assertion while that file was the decoder's. Since
+R3.5 the sidecar is written from the same `prepare_join` + `build_entities` the stage calls, and
+since this story the bake writes it moments earlier in the same run, so the comparison had become
+the join against itself. What the join's flags may diverge on is 21-7's, measured against retail
+rather than against another copy of the same reading. `load_stage_manifest` asks for a parity
+verdict only from a lane whose `required` keys name one; collision and environment still carry
+theirs, against files the decoder did not write either but which state geometry the stage
+transforms rather than merely re-reads.
+
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 
 `sm_pawnshop_1`, `sp_tutorial_1` and `sm_hub_1` were headlessly booted (`uv run elysium debug

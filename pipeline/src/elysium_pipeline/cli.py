@@ -1197,7 +1197,14 @@ def export_map(
     ctx: typer.Context,
     maps: list[str] = typer.Argument(...),
     force: bool = typer.Option(False, "--force"),
-    intermediate_only: bool = typer.Option(False, "--intermediate-only"),
+    intermediate_only: bool = typer.Option(
+        False,
+        "--intermediate-only",
+        help=(
+            "Decode only, no bake. No longer part of the map procedure (0018 story 21-4): "
+            "`bake map` produces the sidecars it needs from the published units itself."
+        ),
+    ),
     particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,

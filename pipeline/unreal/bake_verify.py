@@ -40,6 +40,24 @@ def _sidecar_dir(map_name):
     return os.path.join(root or os.fspath(export_root()), map_name)
 
 
+#: `map_geometry.UNDERSIDE_SUFFIX` / `LIGHTSTYLE_SUFFIX` restated (that module imports numpy, which
+#: the editor's Python has not). Both name a per-face BINDING the bake makes on a section, so a
+#: suffixed group key is the same material as its unsuffixed sibling.
+UNDERSIDE_SUFFIX = "#underside"
+LIGHTSTYLE_SUFFIX = "#style"
+
+
+def _material_group_key(key):
+    """`map_geometry.split_section_key`'s first element: the material group key, R7.4's two
+    per-face suffixes stripped."""
+    head, sep, tail = key.rpartition(LIGHTSTYLE_SUFFIX)
+    if sep and tail.isdigit():
+        key = head
+    if key.endswith(UNDERSIDE_SUFFIX):
+        key = key[: -len(UNDERSIDE_SUFFIX)]
+    return key
+
+
 _CORPUS_MATERIALS = None
 
 
@@ -92,22 +110,14 @@ def _map_prop_mtls(map_name):
     return out
 
 
-def _world_materials(map_name):
-    """The map's surfaces, joined to their definitions the same way the bake joins them.
-
-    A `.mtl` states slot names and material keys; every channel and flag lives in the corpus.
-    Reading the `.mtl` without that document yields nothing at all, which would pass every check
-    by verifying an empty set.
-
-    0018 story 21-4 dropped the `local=` half. It read `<map>.materials.json`, the decoder's
-    record of materials only a map's own PAKFILE carries -- and exactly one map in the whole
-    export tree has ever had one (`sm_pier_1`, which this group delisted). The V2 material lane
-    represents a PAKFILE-only material as a first-class unit keyed `maps/<map>/...` with its own
-    `patchBase` chain, so nothing is owed a replacement.
-    """
-    world_dir = os.path.join(os.fspath(export_root()), map_name)
-    return bl.read_mtl(os.path.join(world_dir, map_name + ".mtl"),
-                       corpus=_corpus_materials())
+# `_world_materials` is gone (0018 story 21-4). It read `<map>.mtl` and `<map>.materials.json`
+# under the legacy export root to give the hub's wetness check the map's own surfaces, and it was
+# the last thing in this lane that needed a legacy directory -- the check reported an empty corpus
+# the first time the hub was baked without one. The surfaces are the STAGED material table's now,
+# joined to the corpus on each row's `provenance` (see `verify_sm_hub_1_weather`). The map-local
+# document is owed no replacement: exactly one map in the export tree ever had one (`sm_pier_1`,
+# which this group delisted), and the V2 lane stages a PAKFILE-only material as a first-class unit
+# keyed `maps/<map>/...` with its own `patchBase` chain.
 
 
 def arg(key, default=""):
@@ -217,10 +227,25 @@ def verify_sm_hub_1_weather(package, map_name):
         if height is None or bound_height != height:
             fail("per-map rain material has no matching height texture")
 
+    # 0018 story 21-4: the world half is read off the STAGED material table, which is what the
+    # map binds, rather than off `<map>.mtl` under the export root -- the last thing in this lane
+    # that needed a legacy directory, and the reason the check reported an empty corpus the first
+    # time the hub was baked without one. The join is on `provenance`, the ROOT unit's key, which
+    # is exactly the corpus key the `.mtl` named; the dedupe is on the group key with R7.4's
+    # `#underside`/`#style<n>` suffixes stripped, because the `.mtl` had one entry per
+    # `<material>@<cubemap>` group and those suffixes split a group without adding a material.
     wetness_values = []
     corpus = _corpus_materials()
-    for mat in _world_materials("sm_hub_1").values():
-        if mat.wet:
+    staged_materials = (_staged_manifest("sm_hub_1") or {}).get("materials") or {}
+    by_group = {}
+    for key, row in sorted(staged_materials.items()):
+        by_group.setdefault(_material_group_key(key), row.get("provenance"))
+    # One value per GROUP, not per unit: two cubemap-patched copies of one material were two
+    # `.mtl` entries and are two staged groups, and the expected 14 counts them that way.
+    for provenance in by_group.values():
+        record = corpus.get(provenance) if provenance else None
+        mat = bl.mat_from_record(provenance, record, provenance) if record else None
+        if mat is not None and mat.wet:
             wetness_values.append(float(mat.wetness_scale))
     for _entry, path in _map_prop_mtls("sm_hub_1"):
         for mat in bl.read_mtl(path, corpus=corpus).values():
@@ -1469,25 +1494,33 @@ DECAL_HALF_DEPTH = 16.0
 
 def decal_errors(map_name, placed, payload):
     """The baked-projector check, pure: `placed` is one `facts` dict per actor carrying the decal
-    tag -- its material asset path, its world location and its `decal_size` -- and `payload` the
-    staged `decals` block.
+    tag -- its sort order, its material asset path, its world location and its `decal_size` -- and
+    `payload` the staged `decals` block.
 
-    Placement order IS the check's index. `_place_decals` walks the staged rows in order and the
-    level keeps that order per `ADecalActor` label, so row `i` is compared with actor `i`: a decal
-    carries no source tag of its own, and the ORDER is load-bearing anyway -- it is the sort order
-    two decals on one wall layer by.
+    **Keyed on the component's sort order, never on list position.** `_place_decals` stamps the
+    staged row's own index as `UDecalComponent::SortOrder` -- which is load-bearing in its own
+    right, because it is how two decals on one wall layer -- and `get_all_level_actors` returns
+    the editor's order, not the bake's. The rope lane learned the same lesson with
+    `elysium.src=<index>`; a decal needs no extra tag because the index is already on the
+    component.
 
     `decal_size` is `(half depth, half height, half width)`: a deferred decal maps its texture U
     to the component's local Z and V to local Y, which is why the staged half-extents arrive
     swapped.
     """
     errors = []
-    rows = list(payload.get("rows") or [])
-    if len(placed) != len(rows):
-        errors.append("%s: %d decal actor(s) stand, %d staged row(s)"
-                      % (map_name, len(placed), len(rows)))
-        return errors
-    for index, (facts, row) in enumerate(zip(placed, rows)):
+    staged = {int(row["index"]): row for row in payload.get("rows") or []}
+    seen = set()
+    for facts in placed:
+        index = int(facts["sortOrder"])
+        if index in seen:
+            errors.append("%s: decal %d placed twice" % (map_name, index))
+            continue
+        seen.add(index)
+        row = staged.get(index)
+        if row is None:
+            errors.append("%s: decal %d stands but was not staged" % (map_name, index))
+            continue
         expected = _decal_instance_path(row["materialId"])
         if facts["material"] != expected:
             errors.append("%s: decal %d binds %s, staged as %s"
@@ -1506,6 +1539,10 @@ def decal_errors(map_name, placed, payload):
             if abs(value - want) > DECAL_EPSILON:
                 errors.append("%s: decal %d half %s is %.4f, staged %.4f"
                               % (map_name, index, label, value, want))
+    missing = sorted(set(staged) - seen)
+    if missing:
+        errors.append("%s: %d staged decal row(s) have no actor (first: %s)"
+                      % (map_name, len(missing), missing[:5]))
     return errors
 
 
@@ -1544,6 +1581,7 @@ def verify_decals(actors, map_name):
         material = component.get_editor_property("decal_material")
         location = actor.get_actor_location()
         placed.append({
+            "sortOrder": component.get_editor_property("sort_order"),
             "material": (material.get_path_name().split(".", 1)[0] if material else ""),
             "locCm": [location.x, location.y, location.z],
             "sizeCm": [size.x, size.y, size.z],
@@ -2007,9 +2045,9 @@ def verify_map(map_name):
     # The `.mtl` of every model this map places: what the material questions are asked of.
     prop_mtls = _map_prop_mtls(map_name)
     # The light lanes read `<map>.lights` and `<map>.sky`, two of the producer's own eight, so
-    # they read them where the producer wrote them (0018 story 21-4). `_world_materials` above
-    # still reads `<map>.mtl` off the legacy export root; that file is the decoder's and goes
-    # with it in 21-5.
+    # they read them where the producer wrote them (0018 story 21-4). Nothing in this lane reads
+    # `$ELYSIUM_EXPORT_ROOT/<map>/` any more; what is left of that root here is the shared corpus
+    # (`shared/materials.json`, `shared/props/*.mtl`), which 21-5 retires.
     world_dir = _sidecar_dir(map_name)
     # `verify_v2_materials` asks the three material questions -- alpha capability, glass and
     # refract staging and parentage, NormalMap linearity -- of what the map actually binds:

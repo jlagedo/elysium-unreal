@@ -32,8 +32,10 @@ MANIFEST_SCHEMA = "1.0.0"
 #: The one class this lane authors.
 ASSET_CLASS = "ElysiumMapEntities"
 
-#: What an entry must carry to be executable.
-REQUIRED_KEYS = ("map", "assetPath", "packageRoot", "entities", "parity")
+#: What an entry must carry to be executable. `parity` left the entry in 0018 story 21-4: the
+#: stage's comparison against `<map>.ents` had become the producer's join against itself, and the
+#: bake writes that file itself moments before staging now.
+REQUIRED_KEYS = ("map", "assetPath", "packageRoot", "entities")
 
 
 def log(msg):

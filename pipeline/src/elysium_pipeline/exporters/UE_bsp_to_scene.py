@@ -1723,12 +1723,14 @@ def main(bsp_path, out_dir, *, index=None):
     if particles_path:
         print(f"wrote {particles_path}")
 
-    # R3.5: `cover_triangles`/`bounds_min`/`bounds_max` are pure mesh geometry -- independent of
-    # which `.ents` a caller reads -- so a caller that overwrites `.ents` with a different producer
-    # (`UE_map_sidecars.write_sidecars`) can re-run `weather.write_weather` against the new entity
-    # document without recomputing the geometry. `None` on every map but `sm_hub_1`, which is the
-    # only one with a weather sidecar at all.
-    return {"weather_inputs": (cover_triangles, bounds_min, bounds_max) if base == "sm_hub_1" else None}
+    # 0018 story 21-4: the `weather_inputs` hand-over this used to return is gone with its one
+    # caller. `cover_triangles`/`bounds_min`/`bounds_max` existed so `export_all` could re-run
+    # `weather.write_weather` against the producer's `.ents` without recomputing the geometry;
+    # the geometry half is the producer's own now (`importers.map_weather`), off the meshed world
+    # scene and the model units, and the bake reads it from the geometry manifest. What this
+    # function writes above stays exactly as it was, because it is what the parity probe compares
+    # the port against for as long as this file exists.
+    return None
 
 # The default library output is the configured external export root.
 from elysium_pipeline.paths import export_root

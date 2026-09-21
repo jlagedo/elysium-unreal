@@ -1075,9 +1075,12 @@ def load_stage_manifest(path, *, schema, required, lane):
     the schema version and the keys an entry must carry, so those are arguments and the rest is
     shared.
 
-    The parity check is the load-bearing one. Each stage refuses to WRITE an entry whose parity
-    against the sidecar it replaces failed, so an unchecked or unequal entry arriving here is a
-    manifest that must not be executed at all -- not one bad map to skip.
+    The parity check is the load-bearing one for the lanes that still carry one. Each such stage
+    refuses to WRITE an entry whose parity against the sidecar it replaces failed, so an unchecked
+    or unequal entry arriving here is a manifest that must not be executed at all -- not one bad
+    map to skip. **The entity lane carries none since 0018 story 21-4** (its sidecar and its rows
+    are one producer's, so the comparison was the join against itself), which is why the verdict
+    is asked of an entry only when `parity` is one of that lane's `required` keys.
     """
     with open(path, "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
@@ -1099,10 +1102,11 @@ def load_stage_manifest(path, *, schema, required, lane):
         if not entry["assetPath"].startswith(mount + "/"):
             raise ManifestError("%s maps[%d] %s is outside %s"
                                 % (lane, index, entry["assetPath"], mount))
-        parity = entry["parity"]
-        if not parity.get("checked") or not parity.get("equal"):
-            raise ManifestError("%s maps[%d] %s carries no passing parity verdict: %r"
-                                % (lane, index, entry["map"], parity))
+        if "parity" in required:
+            parity = entry["parity"]
+            if not parity.get("checked") or not parity.get("equal"):
+                raise ManifestError("%s maps[%d] %s carries no passing parity verdict: %r"
+                                    % (lane, index, entry["map"], parity))
     return manifest
 
 

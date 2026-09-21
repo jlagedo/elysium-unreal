@@ -120,14 +120,14 @@ def export_maps(
     ``available`` is the discovered map inventory; a profile run passes its one
     `install.all_map_names()` result rather than re-walking the install."""
 
-    # `UE_map_sidecars`/`particles`/`weather` are imported here, in `export_maps`'s own body,
+    # `UE_map_sidecars`/`particles` are imported here, in `export_maps`'s own body,
     # rather than inside `rewrite_sidecars_via_producer` below, so the incremental-build
     # fingerprint sees them: `_map_tasks` hashes `_DecoderClosures.function_entries('...export_all',
     # 'export_maps')`, which walks only this function's own AST, not a sibling function's. An
     # import hidden in `rewrite_sidecars_via_producer` would be invisible to that closure, so an
     # edit to `UE_map_sidecars` (etc.) would not invalidate the incremental cache.
     from elysium_pipeline.exporters import UE_bsp_to_scene, UE_map_sidecars
-    from elysium_pipeline.formats import install, particles, weather
+    from elysium_pipeline.formats import install, particles
 
     requested = list(dict.fromkeys(names))
     available = set(available if available is not None else install.all_map_names())
@@ -153,15 +153,14 @@ def export_maps(
         print(f"\n[{position}/{len(requested)}] {name} ...", flush=True)
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
-            legacy_report = UE_bsp_to_scene.main(
+            UE_bsp_to_scene.main(
                 install.map_path(name),
                 out_dir,
                 index=shared_index,
             )
             rewrite_sidecars_via_producer(
-                name, out_dir, shared_index, legacy_report,
+                name, out_dir, shared_index,
                 sidecars_module=UE_map_sidecars, particles_module=particles,
-                weather_module=weather,
             )
             results.append(
                 ExportTaskResult(
@@ -189,11 +188,9 @@ def rewrite_sidecars_via_producer(
     name: str,
     out_dir: Path,
     index: dict[str, Any],
-    legacy_report: dict[str, Any] | None,
     *,
     sidecars_module: Any = None,
     particles_module: Any = None,
-    weather_module: Any = None,
 ) -> dict[str, Any]:
     """R3.5: the R3.2 producer is the default source of the eight legacy sidecars.
 
@@ -203,18 +200,22 @@ def rewrite_sidecars_via_producer(
     overwrites the eight it does own with
     its own bytes, reading the map's published V2 units rather than the BSP.
 
-    `.weather`/`.particles` read `.ents` back off disk, so they are re-run here against the
-    producer's `.ents` instead of the legacy one `UE_bsp_to_scene.main` already used and discarded
-    -- R3.5. Weather's mesh-derived inputs
-    (`cover_triangles`/bounds) are geometry, not entity data, so `UE_bsp_to_scene.main` hands them
-    back in ``legacy_report`` rather than this call recomputing them.
+    `.particles` reads `.ents` back off disk, so it is re-run here against the producer's `.ents`
+    instead of the legacy one `UE_bsp_to_scene.main` already used and discarded -- R3.5.
+
+    **Weather is no longer re-run here** (0018 story 21-4). Its geometry half is the producer's
+    now (`importers.map_weather`, off the meshed world scene and the model units) and the bake
+    reads it from the geometry manifest, so the `weather_inputs` hand-over -- the decoder passing
+    its own cover triangles and bounds back so this call could re-point the entity half -- has
+    nothing left to feed. `UE_bsp_to_scene.main` still writes its own `sm_hub_1.weather.json` from
+    its own `.ents`, which is what `research/tooling/probes/decal_weather_parity.py` compares the
+    port against for as long as the decoder exists (21-5 deletes both).
 
     `UE_bsp_to_scene.py` itself is not deleted, and every sidecar it writes internally is still
-    written exactly as before -- the only change there is one additive `return` at the end of
-    `main`, handing back the geometry `.weather` needs. It is only unwired from this default path
-    (deletion is R8, once the 108-map differ has run against it).
+    written exactly as before. It is only unwired from this default path; deletion is 21-5's, once
+    the parity probe has been run against it.
 
-    ``sidecars_module``/``particles_module``/``weather_module`` let `export_maps` hand in the
+    ``sidecars_module``/``particles_module`` let `export_maps` hand in the
     modules it already imported in its own body -- see the comment there -- rather than this
     function re-importing them itself; a direct caller (a test) may omit them and get the same
     lazily-imported singleton modules.
@@ -222,10 +223,8 @@ def rewrite_sidecars_via_producer(
 
     if sidecars_module is None:
         from elysium_pipeline.exporters import UE_map_sidecars as sidecars_module
-    if particles_module is None or weather_module is None:
-        from elysium_pipeline.formats import particles as _particles, weather as _weather
-        particles_module = particles_module or _particles
-        weather_module = weather_module or _weather
+    if particles_module is None:
+        from elysium_pipeline.formats import particles as particles_module
 
     producer_report = sidecars_module.write_sidecars(name, out_dir=out_dir)
 
@@ -234,15 +233,6 @@ def rewrite_sidecars_via_producer(
     particles_path = particles_module.write_particles(name, out_dir, entity_document, index)
     if particles_path:
         print(f"wrote {particles_path}")
-
-    weather_inputs = (legacy_report or {}).get("weather_inputs")
-    if weather_inputs:
-        cover_triangles, bounds_min, bounds_max = weather_inputs
-        weather_path = weather_module.write_weather(
-            name, out_dir, entity_document, index, cover_triangles, bounds_min, bounds_max
-        )
-        if weather_path:
-            print(f"weather: re-pointed at the producer's .ents -> {weather_path.name}")
 
     return producer_report
 

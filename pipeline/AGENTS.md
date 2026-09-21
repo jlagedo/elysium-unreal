@@ -54,7 +54,6 @@ effect of the import.
 ```
 uv run elysium export_v2 map-glb <map>
 uv run elysium export_v2 nav-graph-glb <map>
-uv run elysium export map <map> --intermediate-only   # once: the sidecars the lane still reads
 uv run elysium bake map --maps <map>
 uv run elysium verify
 ```
@@ -92,5 +91,17 @@ the load with an error naming the one command that fixes it.
 overhead cables are baked actors in the level, not `<map>.ropes`; the travel gate and the map list
 are the baked level plus its three assets, answered from the asset registry, not the `<map>.ready`
 marker and a directory listing; and `elysium.ents` reads `DA_<map>_Entities`. The producer no longer
-writes `.ready` at all. `export map --intermediate-only` still runs once per map, because the
-collision, environment and level stages read the producer's other sidecars -- that is 21-4's.
+writes `.ready` at all.
+
+**Neither does the bake** (0018 story 21-4), which is why `export map --intermediate-only` left the
+procedure above. `bake map` runs `UE_map_sidecars.write_sidecars` itself, into the producer's own
+`$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/`, and names that root to both commandlets as
+`-BakeMapSidecars=`; the producer reads only the published units, so there is nothing to decode
+first. The two products that had a live reader and no producer are ported and staged as geometry
+manifest blocks beside `ropes`: the `infodecal` projectors (`UE_map_sidecars.decal_rows` through
+`importers.map_decals`, verified by `bake_verify.verify_decals`) and the rain cover
+(`importers.map_weather`, which rasterises `rain_height.png` beside the manifest because the
+editor's Python carries neither numpy nor Pillow). `<map>.materials.json` is read by nothing:
+one map in the whole export tree ever had one. The differences the two ports could not match the
+BSP decoder on are named in `docs/contracts/seam_map_map.md` and measured by
+`uv run elysium research decal_weather_parity`, which only runs while the decoder still exists.

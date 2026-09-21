@@ -1083,7 +1083,8 @@ its recovery is written in the oracle section it names.
   yields a loadable level (3's handover: the owner chose "inside bake map" and 3 built
   `import map-collision` instead). (4) The map set is six: `sp_tutorial_1`, `sm_hub_1`,
   `sp_soc_3`, `sm_pawnshop_1`, `sp_theatre`, and `sp_genesisdevice_1` — the blank
-  character-creation room, never legacy-exported, so the CLEAN-ROOM witness that the lane stands
+  character-creation room, never BAKED from the legacy lane (it had been legacy-EXPORTED at some
+  point; 21-4 found the directory and deleted it), so the CLEAN-ROOM witness that the lane stands
   alone. It proves plumbing only; decals, weather, water and ropes are proven on the other five,
   re-baked with their legacy directories deleted. `sm_pier_1` leaves the set for 21-8. (5) The
   producer's byte-compatibility debt is paid here (21-7). This group supersedes the contracts'
@@ -1427,7 +1428,58 @@ its recovery is written in the oracle section it names.
   one run of the game.
   Consumes: 21-2. Size: M. Effort: Sonnet / medium.
 
-- [ ] **21-4. The bake needs no legacy directory.**
+- [x] **21-4. The bake needs no legacy directory.**
+  **Landed 2026-09-21: a map goes from its published units to a level in one command, and nothing
+  in the bake opens a file under `$ELYSIUM_EXPORT_ROOT/<map>/`.** Witnessed with all six export
+  directories renamed away: `sp_genesisdevice_1` — which HAD one, contrary to this story's first
+  text, so the clean-room witness meant deleting it — baked from its four `exports_v2` units
+  alone, 7 world hulls, 3 brush bodies, 0 nodes, and `verify nav` clean; the other five re-baked
+  with `--force --verify`. `bake map` runs `UE_map_sidecars.write_sidecars` itself inside
+  `_stage_map_inputs`, into the producer's own `exports_v2/_sidecars/<map>/`, and names that root
+  to both commandlets as `-BakeMapSidecars=`. The `.env` gate and `export map --intermediate-only`
+  leave the procedure.
+
+  **What the diff found, and what it cost.** The two ported producers were compared with the
+  decoder while it still exists (`research/tooling/probes/decal_weather_parity.py`), and the
+  result is better than the story assumed and worse in exactly one named place.
+   * **Decals reproduce byte for byte on 84 of the 92 maps with a legacy `.decals`**, 5,037 lines
+     compared. Three maps are the entity-lump refusals 21-7 owns. **Five differ, by 22 rows in
+     total, and every one is the same cause**: a displacement face states its geometry through
+     its own mesh and its FLAT winding — which is what a decal projects onto — is published
+     nowhere, so a decal the decoder bound to sculpted terrain has no face to bind here. Each of
+     the 22 is an `unbound` row (no face), never an `unresolved` one (no material size), so no
+     published decal material fails to size anywhere in the corpus; 21 sit inside a
+     displacement's own bounds and the 22nd was walked to its face (`la_malkavian_5`'s
+     `decals/damage/malkfire3` → face 2610, `dispInfo 103`, flat plane z = −64, which is the
+     legacy line's own position). **All six maps here are byte-identical**, so the acceptance is
+     unaffected; `la_library_1` 11, `sm_oceanhouse_2` 6, `sp_soc_1` 2, `sm_warehouse_1` 1,
+     `la_malkavian_5` 1 are 21-8's to judge. `decal_rows` reports `dispFacesSkipped` per map.
+   * **The rain cover's inputs reproduce exactly** — 245,571 triangles (24,214 world, 221,357
+     prop), the same 278 world groups keeping the same 24,214 under the filter, world vertices
+     within 7.9e-4 cm and prop vertices within 4.0e-4 cm, bounds within 6e-4 cm so the pinned
+     footprint 28971.24 × 19639.28 holds — and so does the raster's COVERAGE: 964,071 covered
+     texels, zero sentinel disagreements. The encoded heights differ on 0.75% of samples (31,614
+     of 4,194,304; ±1–4 LSB for the bulk, 156 LSB at the tail) because **27.65% of the cover
+     triangles are near edge-on seen from above**, where the top-down barycentric denominator is
+     ill-conditioned and a sub-millimetre vertex shift moves the interpolated height by
+     decimetres. Re-rasterising with the decoder's own bounds moves the count by 460, so it is
+     the vertices and not the quantisation. Named, not chased.
+   * **`<map>.materials.json` is owed no replacement.** Exactly one map in the whole export tree
+     has ever had one — `sm_pier_1`, which this group delisted — and the V2 material lane already
+     represents a PAKFILE-only material as a first-class unit keyed `maps/<map>/…` with its own
+     `patchBase` chain. All three readers are deleted, and `MapBakeV2` stops calling
+     `load_corpus` at all: no field it set had a reader on this lane.
+   * **The entity lane's parity check was a self-comparison and is gone**, with
+     `bake_map_entities`' `parity` required key. Since R3.5 the sidecar is written from the same
+     join the stage calls; since this story the bake writes it moments earlier in the same run.
+
+  **A check the story did not ask for, added because nothing had it.** There was no
+  `verify_decals`: the decal count was a line in the bake log and nothing compared it with
+  anything, so a level that had lost every projector passed every lane. `bake map --verify` now
+  counts the `ADecalActor`s against the staged rows — material instance, location, and the
+  `(half depth, half height, half width)` triple a deferred decal's `DecalSize` carries.
+
+  Recovery: `seam_map_map.md` § "The bake needs no legacy directory (0018 story 21-4)".
   Retail: none — but a producer ported here must reproduce the decoder's output, which is
   itself the port's reading of the BSP; a difference is named, not absorbed.
   Port today: `export map` runs `UE_bsp_to_scene.main` and then

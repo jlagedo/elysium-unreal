@@ -93,7 +93,6 @@ That path restores dependencies, rebuilds Unreal, and re-exports every map from 
 ```powershell
 uv run elysium build
 uv run elysium export map sp_tutorial_1
-uv run elysium export map sp_tutorial_1 --intermediate-only
 uv run elysium bake map --maps sp_tutorial_1
 uv run elysium test substrate
 uv run elysium test policy
