@@ -273,10 +273,11 @@ function `write_entities` writes the `.ents` document from — run over the publ
 from a re-read of the sidecar file. The R3.4 divergence flags stay at their legacy defaults: the
 asset must reproduce the file the runtime reads today, and flipping a flag is that flag's own task.
 
-`uv run elysium import map-entities --maps <map>…` stages one manifest under
-`$ELYSIUM_WORK_ROOT/import/map_entities/` and then authors the assets in a headless editor
-(`pipeline/unreal/import_map_entities.py`), the same two-phase shape `import models` has. The
-stage refuses to run unscoped.
+`uv run elysium bake map --maps <map>…` stages one manifest under
+`$ELYSIUM_WORK_ROOT/import/map_entities/` before it launches the editor, and authors the assets
+inside the bake's own session (`pipeline/unreal/bake_map_entities.py`), the same two-phase shape
+`import models` has. The stage refuses to run unscoped. 0018 story 21-2 retired the
+`import map-entities` command this used to be.
 
 **Parity is asserted at both ends, and the two assertions are not the same assertion.**
 

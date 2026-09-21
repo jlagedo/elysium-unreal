@@ -1200,7 +1200,133 @@ its recovery is written in the oracle section it names.
   `sp_genesisdevice_1` is 21-2's, with the rest of that map; the other seven are 21-8's.
   Consumes: 3. Size: M. Effort: Sonnet / high.
 
-- [ ] **21-2. One command: the imports fold into `bake map`, and five maps stand.**
+- [x] **21-2. One command: the imports fold into `bake map`, and five maps stand.**
+  **Landed 2026-09-21: all five maps stand and pass the gate.**
+  `uv run elysium bake map --maps <map>` alone yields a loadable level: one editor session authors
+  the geometry, the level's actors, `DA_<map>_Entities`, `DA_<map>_Environment`, the cooked
+  `DA_<map>_Collision`, the world-collision actor, the nav-area marks and the Recast meshes, and
+  one `save_map` carries all of it; then `verify nav` judges the meshes that run just built. The
+  three `import map-*` commands, their launchers and `level_collision_is_current` are gone, the
+  four runtime refusals name the one command, and `--from <stage>` is a scoped `--force` over
+  `textures materials world sky particles entities environment collision level` (it cannot be a
+  scoped SKIP: `stage_level` authors from tables the earlier stages fill on their reuse paths and
+  stamps the level against a recipe computed from them). `MAP_BAKE_BATCH` is 1 — the cook and the
+  Recast build now live in the bake process.
+
+  **What the fold's own new check found, and what it cost.** The bake asserts after its save that
+  the level on disk carries a mesh with tiles for every agent its graph names — the only thing in
+  the project that had ever asked whether baked navigation reached disk, and
+  `level_collision_is_current` had asked it on the NEXT run. Standing it up settled two things and
+  found one defect:
+   * Recast builds into the unsaved `/Temp/Untitled_N` world and the data survives `save_map`'s
+     rename intact. No second save is needed.
+   * The check itself cannot be a `LoadPackage` read, which is how it was written first: it
+     reported "no meshes" on a level that had just built 2,150 tiles, because `TActorIterator`
+     walks `UWorld::Levels` (empty on a package-loaded world) and `GetNumActiveTiles` reads a
+     generator that only exists once a navigation system has registered the data. It re-opens the
+     level through the editor's loader instead. (`CountBuiltReflectionCapturesInPackage` escapes
+     both by reading `ULevel::Actors` and the level's own registry; there is no such shortcut for
+     a tile count.)
+   * **The displacement terrain was never in the level.** `AuthorFromPayload` placed the signature
+     bodies only, so story 3's level actor left the payload's displacement trimesh out; the
+     runtime still built its own transient component, so collision was right in game and the
+     BAKE saw no terrain — every map whose floor is displacement got a mesh with a hole where its
+     ground is. It stands in the level now, one component wearing `PNS-` (what its transient twin
+     answered: `BlockAll` less the +use and pick channels), its body `RF_Public` like the others
+     because a level may not name a private sub-object, and `NavigationBoundsOf` counts it. The
+     tutorial's 3,584 triangles and the hub's 288 now cut their meshes and both stay clean —
+     and standing it is what exposed `.dispcol`'s reversed winding, below.
+
+  | map | bodies (signature: hulls) | disp tris | marks (roadway / doors cut) | agents | tiles | gate |
+  |---|---|---|---|---|---|---|
+  | `sp_tutorial_1` | `PNS-` 2,128, `PN--` 243, `--S-` 15, `-N--` 5 | 3,584 | 44 (0 / 28 of 36) | Human, Rat | 945 / 1,303 | clean, 5 excused |
+  | `sm_hub_1` | `PNS-` 3,662, `PN--` 87, `PN-p` 93, `-N-p` 31, `---p` 9 | 288 | 61 (9 / 27 of 29) | Human, Rat | 1,123 / 1,608 | clean, 30 excused, 3 pinned |
+  | `sp_soc_3` | `PNS-` 197, `PN-p` 36, `PN--` 32, `-N-p` 10 | 20,448 | 19 (0 / 4 of 5) | Human | 383 | clean, 13 excused |
+  | `sm_pawnshop_1` | `PNS-` 1,327, `PN--` 41, `PN-p` 8 | 0 | 10 (0 / 10 of 10) | Human | 255 | clean |
+  | `sp_theatre` | `PNS-` 1,045, `PN--` 71, `PN-p` 5, `-N-p` 3, `---p` 1 | 0 | 14 (1 / 9 of 9) | Human | 496 | clean, 2 excused, 5 pinned |
+
+  All five boot Active adopting the level's baked mesh with NO build, in one run of the game
+  (2026-09-21): `sp_tutorial_1` 20.4 s, `sm_hub_1` 19.7 s, `sm_pawnshop_1` 18.5 s, `sp_theatre`
+  38.6 s (its first load, cold DDC), `sp_soc_3` 12.6 s. The three displacement maps were re-baked
+  after `.dispcol`'s winding was corrected and booted again: `sp_soc_3` 18.4 s, `sp_tutorial_1`
+  23.3 s, `sm_hub_1` 20.6 s, each Active with no build. Each reports its displacement triangle
+  count from the level it adopted rather than from a component it built.
+  `Elysium.Content` is 11 of 11, `MapCollision.{Tutorial,Hub}` and `NavArea.{Tutorial,Hub}`
+  included, so the fold and the displacement both left the witnesses' levels as story 3 measured
+  them.
+
+  The witnesses' figures are story 3's own, re-measured through the fold; their hull counts are the
+  staged-hull numbers `Elysium.Content.MapCollision` pins, not the census pins of § "Job 3's level
+  actor". The three new maps are all `UsedHullBits 0x1` — human only, no rat — so none of them
+  builds a rat mesh and no door can be partial by agent. Their graphs, re-exported under 3's
+  patch-first rule: `sp_soc_3` 116 nodes / 335 links, `sp_theatre` 104 / 311, `sm_pawnshop_1` 5 / 6.
+  The exporter flagged a `node-count-mismatch` anomaly on the last, and examining it found the
+  flag wrong rather than the graph: the decoder's check assumed 32 tokens per node, a number read
+  off one 116-node graph, and so fired on 79 of 101 published units. The law is
+  `NumHulls + 6 + ceil(NumNodes / 32)` — exact on all 97 non-empty patch graphs — because a node's
+  record ends in a bitset of one bit per node, which selects among that node's own link neighbours
+  (never a non-neighbour, over 11,558 nodes) by a rule the link rows do not carry. The check uses
+  the law now and flags none of them; the bitset's meaning stays typed-unidentified until the
+  retail loader is walked (`seam_map_nav_graph.md` § Node stream).
+  `sp_genesisdevice_1`'s unit is exported too, and says what 21-1 predicted: 0 nodes, 0 links,
+  `UsedHullBits 0x1`. Its bake is 21-4's.
+
+  **`sp_theatre`'s five, judged and pinned.** Five links, one destination: node 26 stands 132 cm
+  below every node that links to it (0, 1, 2, 20, 21, all at z −162). Both ends project and the
+  mesh will not join them, because 132 cm is a DROP — past retail's own step height of 18 units
+  (45.7 cm) and past even its graph builder's 40 (101.6). Retail's NPC gets down by falling;
+  nothing in the port falls yet, the AIN marks no jump link here, and the harness's step-outlier
+  excuse does not reach a rise that large. Pinned by index in `nav_known_findings.py`; story 5
+  owns what an NPC does on reaching a link its mesh does not offer.
+
+  **`sp_soc_3` was the map that kept this open, and what it took is worth the space.** Its graph
+  asserted 19 ground links whose endpoints project nowhere and one whose ends project and cannot be
+  joined, in two rooms (x 3,000…4,550 / y −1,285…−538 and x −10,400…−9,200 / y 10…584). Both
+  rooms' ground is displacement, not brush: 20,448 triangles spanning z −2,111…+3,057, sculpted
+  rock with floor, walls and cavern ceiling in one soup and no per-face contents word to partition
+  by.
+
+  **What the mesh actually did, measured** (`research/tooling/probes/probe_soc3_displacement_mesh.py`,
+  which sweeps z at each failing node's XY and reports every height the agent's mesh answers at).
+  The mesh is not missing over those rooms — it is at the WRONG HEIGHT. At six of the sixteen
+  nodes (0, 7, 9, 73, 74, 75) the only answer is 5.75–6.5 m ABOVE the node, on the storey above;
+  the floor the node stands on is not on the mesh at all. At the other ten the floor answers and,
+  on six of those, the upper surface answers too. Every answer is `NavArea_Default`, so no mark is
+  covering anything.
+
+  **It was the winding, and the first measurement of it was wrong.** The soup's floor triangles
+  carry component-cross normal z ≈ +0.99 and its ceilings ≈ −0.99 (2,463 up, 4,426 down, 13,559
+  steep over the whole soup), and that was first read as "correctly up-facing, not the winding".
+  It is the opposite. What decides walkability is not the arithmetic normal but the engine's own
+  chain, every link of it in source: the cook swaps v0/v1 when `bFlipNormals` is set
+  (`ChaosCooking.cpp:41`, and the payload sets it as `UStaticMesh` does); the navigation export
+  feeds each triangle's indices as `{2,1,0}` (`RecastNavMeshGenerator.cpp:417`);
+  `Unreal2RecastPoint` is the reflection (−x, z, −y) (`RecastHelpers.cpp:7`); and Recast walks a
+  triangle iff the normal of what it was FED has +y (`Recast.cpp:379`). Run a component-cross-up
+  triangle through that and it arrives with normal.y = −1 — a ceiling — and a component-cross-down
+  one arrives walkable. Engine meshes are wound the other way, which is why the chain works for
+  them. So Recast read every displacement floor as a ceiling and every ceiling as a floor, which
+  is precisely what the probe saw: mesh on the cavern's roof, none on the ground.
+
+  The defect is in the seam, not the bake. `pipeline/CLAUDE.md`'s coordinate contract pairs the
+  Source-to-Unreal Y reflection with a winding reversal, and `displacement_triangles`
+  (`UE_map_sidecars.py`) reproduced the legacy fan `v00,v10,v11` / `v00,v11,v01` verbatim, for row
+  parity with the decoder. Nothing could tell: no one draws `.dispcol`, and a Chaos trimesh
+  collides from both sides. It is `v00,v11,v10` / `v00,v01,v11` now — same rows, same order, the
+  corners inside a row reversed — and on disk the counts exchange exactly, 4,426 up / 2,463 down.
+  **`sp_soc_3` is clean: 20 findings to 0, 13 step-height outliers excused, nothing pinned, 383
+  tiles.**
+
+  Three more suspects were measured on the way and are recorded so nobody re-runs them:
+  *clearance* (floor at node z − 2…6 cm, next surface 4.8–6.2 m above, agent 1.83 m); *the
+  bounds* (standing the terrain moved `NavigationBoundsOf` by 38 cm on one axis; the volume was
+  already 216 × 90 × 74 m); and *both faces of the sheet* (`bDoubleSidedGeometry` one-sided
+  rebuilds the identical mesh — the navigation export does not read the flag — so it is back
+  where it was). Recast logged no layer, clamp or tile-limit warning on any run. The lesson is the
+  one 21-1's review already wrote down in another form: a normal computed by hand answers a
+  question about arithmetic, and the question was about what four pieces of engine code do to a
+  triangle in sequence.
+
   Retail: none.
   Port today: `import map-collision` authors the payload, places the world-collision actor, the
   nav-area marks and the meshes, and runs `verify nav` (`import_map_collision.py:123-519`,

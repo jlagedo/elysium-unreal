@@ -657,10 +657,13 @@ rule: `write_hulls` drops the miniature's own brushes outright.
 
 ### Producer and stage
 
-`uv run elysium import map-collision --maps <map>…` stages one manifest under
-`$ELYSIUM_WORK_ROOT/import/map_collision/` and then authors the assets in a headless editor
-(`pipeline/unreal/import_map_collision.py`) — the same two-phase shape `import models` and
-`import map-entities` have, and it refuses to run unscoped. The rows come from the loose sidecars
+`uv run elysium bake map --maps <map>…` stages one manifest under
+`$ELYSIUM_WORK_ROOT/import/map_collision/` before it launches the editor, and authors the assets
+inside the bake's own session (`pipeline/unreal/bake_map_collision.py`) — the same two-phase shape
+`import models` has, and it refuses to run unscoped. 0018 story 21-2 retired the
+`import map-collision` command this used to be: the payload, the world-collision actor, the
+nav-area marks and the Recast meshes now land in the level the same command authors, before its
+one save, so there is no window in which a level stands without them. The rows come from the loose sidecars
 this lane replaces rather than from a second port of the hull solver: `<map>.hulls`,
 `<map>.dispcol` and the `.ents` join's `hulls`, which since R3.5 are all written by the R3.2
 producer from the published GLB units. Re-deriving them here would be a second implementation of
@@ -722,6 +725,66 @@ for the `elysium.ents` debug verb and the content tests, which 0018 story 21-3 o
 settings page, its ini section and its Python twin `map_transport.py`. This supersedes
 R8.1's "once all 108 maps are converted and listed" precondition: a map that cannot load on the
 baked transport is a bake that has not run, not a map on another lane.
+
+**0018 story 21-2 made the bake that has not run one command.** The payload cook, the
+world-collision actor, the nav-area marks, the Recast meshes and the prune are stages of
+`bake map` now, inside its own editor session and inside the level's one save; `import
+map-collision`, `import map-entities` and `import map-environment` are gone, and so is
+`level_collision_is_current`, the routine whose only job was to notice a level `bake map` had
+just wiped. Ordering inside the level stage, and the reason for each step:
+
+- the actor and the marks after `_place_ai_infra` and before the reflection captures. Neither
+  renders — `UElysiumWorldCollisionComponent::CreateSceneProxy` returns null and a nav-area
+  component is a plain `USceneComponent` — so neither can reach a capture probe;
+- the Recast build after the capture RENDER. The meshes go into the `.umap` and the capture cubes
+  into the `_BuiltData` sibling, so the two products never meet; building last keeps a
+  `UNavMeshRenderingComponent` proxy out of the probes, costs no Recast time when a capture
+  build fails, and leaves the longest step on the side of the stamp where failing is free;
+- one `save_map`, carrying the level, its actors, its marks and its meshes together.
+
+The level recipe gained three keys, because the level now carries products whose inputs it did
+not name: `collision_payload`, the payload's own fingerprint — `reset_authoring` replaces every
+`UBodySetup` subobject, so a re-cooked payload leaves a saved actor pointing at objects that no
+longer exist and nothing the recipe already digests can say so; `nav_build_shape`
+(`UElysiumNavBakeLibrary::NavBuildShape`), the per-agent radius, height, cell, tile, step and
+slope, which live in the generated ini, the generated hull table and a constant in
+`ElysiumNavBakeLibrary.cpp` rather than in any file; and `nav_area_shape`, bumped when the marks
+are written differently for the same staged rows.
+
+**The displacement terrain stands in the level too, and `.dispcol`'s winding is reversed for
+it.** Story 3's level actor placed the signature bodies only; the runtime built the displacement
+as a transient component, so collision was right in game and the bake saw no terrain. It is one
+more `UElysiumWorldCollisionComponent` now (`AElysiumWorldCollisionActor::Displacement`, wearing
+`PNS-`, body `RF_Public`, counted by `NavigationBoundsOf`, adopted rather than spawned). Standing
+it exposed a seam defect no other reader could see: `displacement_triangles` reproduced the legacy
+fan without the winding reversal the coordinate contract pairs with the Y reflection. Nothing
+draws the soup and a Chaos trimesh collides from both sides — but Recast walks a triangle only if
+the normal of what it is FED has +y, after the cook's `bFlipNormals` swap
+(`ChaosCooking.cpp:41`), the navigation export's `{2,1,0}` index order
+(`RecastNavMeshGenerator.cpp:417`) and `Unreal2RecastPoint`'s reflection (`RecastHelpers.cpp:7`).
+Through that chain a component-cross-UP triangle arrives as a ceiling. On `sp_soc_3` the mesh
+stood 5.75–6.5 m above six graph nodes, on the cavern roof; with the fan reversed
+(`v00,v11,v10` / `v00,v01,v11`) the map is clean. `test_displacement_winding.py` asks the question
+the way Recast does, because an arithmetic normal answers the opposite.
+
+**Recovered 2026-09-20, both by the check that replaced `level_collision_is_current`.** The bake
+asserts, after its save, that the level on disk carries a mesh with tiles for every agent its
+graph named — the only thing in the project that had ever asked whether baked navigation reached
+disk, and it used to ask on the NEXT run. Two facts came out of standing it up:
+
+1. **Recast builds fine into the unsaved world.** `bake_one` opens `/Temp/Untitled_N`, the bake
+   authors into it, and `save_map` renames it onto the mount. The navigation built there survives
+   that rename-save intact: `sp_tutorial_1` Human 915 / Rat 1,235 tiles and `sm_hub_1` 1,122 /
+   1,598, read back off the saved `.umap`, are the same counts story 3 measured on a level opened
+   from disk. No second save is needed.
+2. **A package-loaded world cannot answer the question.** The check was written first as a C++
+   helper in the shape of `CountBuiltReflectionCapturesInPackage` — `LoadPackage`, find the world,
+   count tiles — and it reported "no meshes" on the level that had just built 2,150 of them. Two
+   independent reasons: `TActorIterator` walks `UWorld::Levels`, which a package-loaded world
+   leaves empty, and `ARecastNavMesh::GetNumActiveTiles` reads its GENERATOR, which exists only
+   once a navigation system has registered the data. The capture counter escapes both by reading
+   `ULevel::Actors` and the level's own `MapBuildData`; there is no such shortcut for a tile
+   count, so the navigation check re-opens the level through the editor's loader.
 
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 
@@ -845,10 +908,11 @@ plain structs — a field-for-field copy, asserted by `Elysium.Substrate.MapEnvi
 
 ### Producer and stage
 
-`uv run elysium import map-environment --maps <map>…` stages one manifest under
-`$ELYSIUM_WORK_ROOT/import/map_environment/` and then authors the assets in a headless editor
-(`pipeline/unreal/import_map_environment.py`) — the same two-phase shape `import map-entities` and
-`import map-collision` have, and it refuses to run unscoped. The rows come from the sidecars
+`uv run elysium bake map --maps <map>…` stages one manifest under
+`$ELYSIUM_WORK_ROOT/import/map_environment/` before it launches the editor, and authors the assets
+inside the bake's own session (`pipeline/unreal/bake_map_environment.py`) — the same two-phase
+shape the entity and collision stages have, and it refuses to run unscoped (0018 story 21-2
+retired the `import map-environment` command this used to be). The rows come from the sidecars
 themselves: since R3.5 `<map>.env`/`.sky`/`.spawn` are written by the R3.2 producer straight off the
 BSP entity lump (`UE_map_sidecars.write_environment`/`write_sky`/`write_spawn`), so this stage is a
 pure carry rather than a second implementation of anything.
