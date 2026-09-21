@@ -263,13 +263,19 @@ not survive a package save at its authored width — an authored `0.707107` read
 226 of the three test maps' 4,933 entities differed on `model_quat` alone on the first authored
 pass. `FElysiumMapEntityRow::ModelRotation()` composes the `FQuat` the def carries.
 
-Two reads that the JSON path performs at parse time stay exactly where they are, in
-`UElysiumMapEntities::Deserialize`, so the asset carries the authored value and one owner
-normalizes it:
+**`Deserialize` derives nothing from a row** (0018 story 21-7). Every output field travels
+verbatim, because by the time a row reaches this asset it has been parsed: retail parses a keyvalue
+in its row parser `0x100ccf90`, and the port of that parser is the entities unit's
+`decode._output_row`, read through `UE_map_sidecars.entity_outputs`. So the authored-`times`
+0 → −1 rewrite and the empty-`input` → `Use` substitution are both already applied upstream, and
+this reader must not apply them again — it once did, in three places at once
+(`UElysiumMapEntities::Deserialize`, `FElysiumEntityDefs::Parse`,
+`AElysiumInfraActor::BuildDefOutputs`), which contradicted what a directly constructed def with
+`Times = 0` has always meant.
 
-- **`times` 0 → −1.** Retail seeds `times` at −1 and rewrites an authored `0` back to unlimited
-  (R3.4 confirmed `ElysiumEntityDefs.cpp` as that rule's single owner). The row stores what was
-  authored; `Deserialize` applies the rewrite.
+One read the JSON path performs at parse time does stay here, because its input is not in this
+asset:
+
 - **The 3D-skybox transform.** `world(v) = scale · (v − skyOrigin)` for a `bSky` row, with hulls
   taking the scale and not the translation. The scale and origin are the map's `.sky` values,
   which are **not** in this asset (they are R4.4's), so `Deserialize` takes them as arguments
@@ -280,8 +286,10 @@ normalizes it:
 
 The rows come from the R3.2 producer's own entity join — `UE_map_sidecars.build_entities`, the
 function `write_entities` writes the `.ents` document from — run over the published GLB units, not
-from a re-read of the sidecar file. The R3.4 divergence flags stay at their legacy defaults: the
-asset must reproduce the file the runtime reads today, and flipping a flag is that flag's own task.
+from a re-read of the sidecar file. **The R3.4 divergence flags are gone** (0018 story 21-7): each
+was judged against retail and removed, one per commit, so there is one reading and the asset and
+the `.ents` document are two writings of it. `seam_map_map.md` → "R3.4 — the six divergences,
+settled" carries each answer and the rows it moved.
 
 `uv run elysium bake map --maps <map>…` stages one manifest under
 `$ELYSIUM_WORK_ROOT/import/map_entities/` before it launches the editor, and authors the assets
