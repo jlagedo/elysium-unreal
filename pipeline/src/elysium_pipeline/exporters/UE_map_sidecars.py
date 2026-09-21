@@ -268,14 +268,6 @@ class EntityDivergences:
     keyvalue actually becomes") and removes it: a flag here is one that has not been answered yet.
     """
 
-    #: `False` (legacy, default): an output row's `delay` field (index 3) is read with a plain
-    #: `float()`, `0.0` on any parse failure -- reject-the-whole-token, unlike every positional
-    #: keyvalue in `.ents` (`origin`, `hingeaxis`, `floor1..8`), which reads with `atof`, the
-    #: engine's own longest-numeric-prefix rule. `True`: `delay` reads with this module's own
-    #: `atof()` instead, matching every other number `.ents` carries. Measured zero effect on the
-    #: three-map corpus: every authored `delay` is already a plain `float()`-parseable token.
-    delay_atof: bool = False
-
     #: `False` (legacy, default): field 6 (`extra`, everything after `python`) is dropped -- the
     #: legacy split reads exactly six fields and never looks past them. `True`: `extra` is added
     #: to the row, verbatim and
@@ -367,8 +359,11 @@ def split_output(
     the wrong way -- it offered to start stripping `param`, where the correction is to stop
     stripping `target`, `input` and `python`.
 
+    `delay` reads with CRT `_atof` -- the longest numeric prefix, `0.0` when there is none
+    (`100cd099` -> `0x1043136f`) -- which is what every other number in `.ents` already reads with
+    and what an empty token skips entirely, keeping the seeded `0.0`.
+
     A value with fewer than four commas is not an output at all and stays a plain keyvalue.
-    `fields.delay_atof` opts field 3 into the module's own `atof()` instead of a plain `float()`.
     """
 
     if value.count(",") < 4:
@@ -385,7 +380,7 @@ def split_output(
         "target": parts[0],
         "input": parts[1],
         "param": parts[2],
-        "delay": atof(parts[3]) if fields.delay_atof else number(parts[3], 0.0),
+        "delay": atof(parts[3]),
         "times": int(number(parts[4], -1)),
         "python": parts[5] if len(parts) > 5 else "",
     }

@@ -135,13 +135,13 @@ def test_split_output_keep_extra_adds_field_6_verbatim_only_when_authored():
     assert "extra" not in split_output("door,Open,slow,0.35,1,py")   # legacy default: dropped
 
 
-def test_split_output_delay_atof_reads_the_longest_numeric_prefix():
-    # R3.4: a trailing-junk delay parses the way every other `.ents` number does (`atof`, the
-    # longest numeric prefix) instead of rejecting the whole token to 0.0.
-    value = "door,Open,slow,3.5s,5,x"
-    assert split_output(value)["delay"] == 0.0   # legacy: not a plain float() -> the 0.0 default
-    row = split_output(value, EntityDivergences(delay_atof=True))
-    assert row["delay"] == 3.5
+def test_split_output_delay_reads_the_longest_numeric_prefix():
+    # 0018 story 21-7: CRT `_atof` (`100cd099` -> `0x1043136f`), so a trailing-junk delay reads
+    # its numeric prefix rather than rejecting the whole token to 0.0. A token with no prefix, and
+    # an empty one (which retail does not call `_atof` for at all), both stay 0.0.
+    assert split_output("door,Open,slow,3.5s,5,x")["delay"] == 3.5
+    assert split_output("door,Open,slow,abc,5,x")["delay"] == 0.0
+    assert split_output("door,Open,slow,,5,x")["delay"] == 0.0
 
 
 def test_source_position_inverts_the_transform_in_binary32():
