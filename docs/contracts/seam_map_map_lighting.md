@@ -223,7 +223,7 @@ the `samples` accessor.
 
 ## Import
 
-R4.3 of `docs/project/seam_migration.md` -> "Roadmap — one pipeline" moves the real-time light
+R4.3 moves the real-time light
 rig's **calibration**, not its geometry, off cvars/C++ literals and a per-map JSON survey file and
 onto two editor surfaces: `UElysiumLightingSettings` (global, Project Settings -> Elysium ->
 Lighting) and `UElysiumLightCalibration` (per-map, a data asset). `worldLights[]` above is
@@ -239,7 +239,7 @@ which has no `worldLights[]` row to have been baked from. R4.3 is scoped to wher
 (`seam_map_material.md` -> "Import" -> "Knob contract"). Every field is `UElysiumLightRig`'s own
 former hardcoded default (`ElysiumLightRig.h`, historically lines ~157-188) or one of three retired
 console variables, carried over at the same faithful value -- this task moves *where* the numbers
-live, never what they are (`docs/project/seam_migration.md`, "Wire first, tune later"):
+live, never what they are (the deleted roadmap (`seam_map.md` § "The R-numbers"), "Wire first, tune later"):
 
 | Settings field | Was |
 |---|---|
@@ -394,12 +394,12 @@ not by an existence check.
 **Measured (2026-09-01, the three working maps).** Two distinct skies across the three:
 `sp_tutorial_1` is `la` (cube upper-hemisphere mean 0.00335), `sm_pawnshop_1` and `sm_hub_1` both
 `pier` (0.01120, identical to five significant figures on both bakes — the same bytes, reproduced,
-not cached). Numbers, boot and shot-diff results are in `docs/project/seam_migration.md` under this
+not cached). Numbers, boot and shot-diff results are in the deleted roadmap (`seam_map.md` § "The R-numbers") under this
 task's Settled entry.
 
 ### Lights final (R5.6)
 
-R5.6 of `docs/project/seam_migration.md` -> "Roadmap -- one pipeline" [MP-4.5] makes the baked
+R5.6 [MP-4.5] makes the baked
 light actor the truth on a converted map: the bake writes every VtMB-derived value `ApplyToSource`
 used to compute at every load -- the same math, computed once -- plus the two MegaLights properties
 the rig used to restate, and the runtime rig on that map derives nothing. It applies the R4.3
@@ -514,7 +514,7 @@ interpolation remains on its rendering path. The worldlight sum is raw luminance
 `CHL2_Player::vfunc471` is the sole aggregate `[0,1]` clamp. Full retail branches and addresses are
 recorded in `docs/vtmb/stealth.md`, "The light query, recovered".
 
-R6.2 of `docs/project/seam_migration.md` -> "Roadmap -- one pipeline" [R7.1 / MP-5.1] wires the
+R6.2 [R7.1 / MP-5.1] wires the
 light entities to the rig's lightstyle clock. Nothing here is a bake change: the bake already tags
 every actor `elysium.style=<s>` (R5.6) and the rig already animates styles per frame; what was
 missing is the writer of a style's **pattern** -- in Source that is `engine->LightStyle(style,
@@ -673,7 +673,8 @@ shadows-from-calibration, spot cone from `stopdot`/`stopdot2`) are **not yet mov
 line's "re-homed to bake verification" describes where they belong once R5.6 bakes final light
 values and gives them something to be verified against — there is no baked light asset to compare
 before that task lands, so re-homing them now would mean deleting coverage of `ApplyToSource`'s
-formulas with nothing to replace it. They stay in `Elysium.Substrate.LightRig` for as long as the legacy
-`Adopt` path exists (105 maps, R8.1's deletion); R5.6 re-homed the same four assertions onto the
+formulas with nothing to replace it. They stayed in `Elysium.Substrate.LightRig` for as long as the legacy
+`Adopt` path existed — R8.1's deletion, which 0018 story 21-1 performed: `UElysiumLightRig::Adopt`
+and its synthetic test are gone and every map adopts baked light actors. R5.6 re-homed the same four assertions onto the
 bake's own output in `bake_verify.py` ("Lights final (R5.6)" above), which is where a converted
 map's values are proven.

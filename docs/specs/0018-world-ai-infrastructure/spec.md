@@ -1498,8 +1498,9 @@ its recovery is written in the oracle section it names.
   scripted opening playing, `elysium.weather.rain_on` bringing up the hub's two
   `rain_follow_emitter`s. Staging the decal lane over the whole published corpus is clean as well:
   105 of 108 maps with zero validation failures, the three that are not being 21-7's refusals. The
-  six legacy directories were restored afterwards: they are the parity probe's comparison subject
-  until 21-5 deletes the decoder, and nothing reads them.
+  six legacy directories were restored afterwards: they were the parity probe's comparison
+  subject until 21-5 deleted the decoder, and nothing read them. (21-5 moved them away again for
+  its own witness and left them there; the probe is gone with the decoder.)
 
   Recovery: `seam_map_map.md` § "The bake needs no legacy directory (0018 story 21-4)".
   Retail: none — but a producer ported here must reproduce the decoder's output, which is
@@ -1544,7 +1545,78 @@ its recovery is written in the oracle section it names.
   counts, the hub's weather package — against the values recorded before the deletion.
   Consumes: 21-3. Size: L. Effort: Opus / high (two producers ported and diffed).
 
-- [ ] **21-5. Deleting the decoder.**
+- [x] **21-5. Deleting the decoder.**
+  **Landed 2026-09-21: `UE_bsp_to_scene.py`, `UE_extract_corpus.py`, `CorpusBake` and
+  `/ElysiumBaked/Shared` are gone, and nothing imports or names any of them.** With them went the
+  two-pass `export map`, the `corpus` bundle, the `export prop` / `export material` /
+  `export texture` unit commands, the `--particles` Niagara pass with `make_particle_systems.py`
+  and the `<map>.particles.json` writer, and 8,018 lines net. `export map` survives as "import
+  this map's model dependencies, then bake it"; `export all` / `export grid` are bundle-only runs.
+
+  **This story is the recovered R9.2**, and R8.1 is the retire track's R9.1 — both defined only in
+  `docs/project/seam_migration.md`, which `2f0f604d` deleted. Recovering that text
+  (`git show 2f0f604d^:...`) is what let the docs half close rather than defer: R9.2 named
+  `/ElysiumBaked/Shared/Textures`, the legacy `bake_map.py` lanes and the `<map>.particles.json`
+  writer explicitly, which is this story almost verbatim.
+
+  **Three targets the job list did not name, and two things already dead.** `wield_corpus`
+  imported `_parse_ent_blocks` (the producer's `parse_entity_blocks` has a byte-identical body);
+  four lighting probes imported the decoder only to reach `formats.bsp` re-exports and
+  `base_material`; and **`bake_map.py:3129` still put `/ElysiumBaked/Shared` first in
+  `MAP_SCAN_PACKAGES`, so every V2 map bake was registry-scanning the dead mount**. Already dead:
+  `<map>.water` has no reader anywhere in the bake, and `export placed-model` called an
+  `export_manager.export_placed_models` that does not exist.
+
+  **`Bake` lost every dead member, not just its source path** (owner's decision). With `CorpusBake`
+  gone `MapBakeV2` is the only subclass, so its 15 overridden base bodies had no live caller, as
+  did the corpus-only `stage_props` / `_author_skin_set` and ten `bake_lib` readers (`MatDef`,
+  `read_mtl`, `mat_from_record`, `read_obj`, `read_decals`, `read_skins`, `read_phys`,
+  `read_floats`, `make_skin_set`, `glb_material_albedo`). **One correction on the way**: the base
+  `_level_recipe` was NOT dead — `MapBakeV2` calls it and overwrites only its `props`/`prop_skins`
+  — so it was restored minus those two entries. `shared_corpus.py` is 288 lines, down from 546,
+  and owns no document at all.
+
+  **Two verify checks needed a new source rather than deletion, and one lost half of itself.**
+  The hub's 14 `GlobalWetness` scalars now come from the material lane's own manifest, which
+  writes `WetnessDriven`/`WetnessScale` into each instance's scalar overrides — 19 rows carry one
+  install-wide, 1×0.56 / 8×0.60 / 10×1.0, which is exactly where the hub's expected
+  `[0.56] + [0.60]*6 + [1.0]*7` comes from. `_map_prop_mtls` became `_map_prop_material_units`,
+  reading the model lane's `slots[].materialId` — the same list the `.mtl` carried, already
+  resolved. The glass/refract check keeps only its refract half: `M_V2_Refract` is a master and
+  states itself, but legacy `glass 1` has no V2 master (`glass/glass01` parents to
+  `M_V2_LitTranslucent` like any translucent instance) and the corpus flag that distinguished it
+  is deleted.
+
+  **What widening that selector found, and why it was reverted.** Selecting on "binds a
+  `NormalMap`" instead was tried, and **failed 4 of 4 maps on 15 units whose `T_<stem>_normal` is
+  not `TC_NORMALMAP`** — `brick/sewwllb`, `concrete/sewer_sm_base`, `concrete/sewer_sm_hole`,
+  `wood/boardwalka`, `blends/searocka` (twice), `blends/seaflra`, `.../pier/cliffa`, two phone
+  cords, two rusty-pipe units, a sewerpipe cap and two vehicle skins. Those are real and they are
+  the TEXTURE lane's question; asking it from a deletion story would have made this a corpus-wide
+  regression report. Reverted, and the list is written into `seam_map_map.md` for whoever owns
+  that lane. The material report also loses its legacy comparison columns (`classChanged`,
+  `byLegacyClass`, `legacyRecordMissing`) with the corpus they compared against.
+
+  As it was checked: `uv run elysium build` green; `uv run pytest` green apart from the two
+  `kernel_ledger`/`kernel_shape` `--check` failures, confirmed identical on a stashed tree. With
+  all six export directories renamed away, `sp_genesisdevice_1` baked from its published units
+  alone — 7 world hulls, 3 brush bodies, 0 nav nodes, the numbers 21-4 recorded — and the other
+  five re-baked `--force --verify` clean: decals **123 / 219 / 0 / 38 / 29**, each equal to 21-4's
+  count, and the hub's weather package passing. No import of `UE_bsp_to_scene`,
+  `UE_extract_corpus` or `CorpusBake` anywhere; no `/ElysiumBaked/Shared` in source, config or
+  tests. The 102 stale baked levels and the 1.8 GB `Shared/` package were pruned from the mount.
+
+  **Owed, and stated rather than absorbed.** `test_legacy_map_native_props.py` tested the deleted
+  `Bake._place_props`, so `MapBakeV2`'s native-reference embedding has no direct unit coverage
+  until someone writes it against the staged placements. The producer's `EntityDivergences`
+  defaults are now a written-down contract rather than a diffable one — which is why 21-4 measured
+  the two ported producers *before* this story. The decoder's
+  `source_visibility_backing_models` returned a warning per malformed link and the producer's twin
+  does not, so those three diagnostic strings are no longer pinned. `mdl.write_obj_scene` is dead
+  and `formats/mdl.py` was left alone.
+
+  Recovery: `seam_map_map.md` § "Deleting the decoder (0018 story 21-5)"; the R-number scheme and
+  the deleted roadmap's provenance are now in `seam_map.md` § "The R-numbers".
   Retail: none.
   Port today: after 21-4 nothing on the map lane calls it. `UE_bsp_to_scene.py` (~1,700 lines)
   is still imported by `UE_extract_corpus.py` (`decode_prop_models`, `DRAWN_TOOL_MATERIALS`)

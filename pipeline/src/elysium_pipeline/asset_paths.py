@@ -16,8 +16,11 @@ KIND_ROOTS = {
     "expression-table": "ExpressionTables", "sound": "Sounds",
     "particle": "Particles", "scene": "Scenes",
 }
+#: Mount roots that receive nothing new, each with the task that empties it. `Shared/` left this
+#: list with 0018 story 21-5 (R9.2), which deleted the corpus bake that authored it and the mount
+#: with it.
 LEGACY_ROOTS = {
-    "Shared": "R9.2", "Characters": "R8.2", "Props": "R8.4", "Items": "R8.3",
+    "Characters": "R8.2", "Props": "R8.4", "Items": "R8.3",
 }
 PREFIXES = frozenset({"T", "TC", "TA", "MI", "SM", "SK", "SKEL", "A", "BS",
                       "CLOTH", "PHYS", "DYN", "PM", "DA", "NS", "SW"})

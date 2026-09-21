@@ -276,7 +276,7 @@ The legacy `.ents` sidecar is a **join, not a projection**. The entities unit ow
 nothing else, so `hulls`, `contents`, `blocks_player`, `brush_mesh` and the 3D-skybox `sky` flag —
 five of the fields the running game reads — are root-lump facts that no entities row carries. This
 section states that join, the hull solver it runs and the field list it emits, so the sidecar
-producer of `docs/project/seam_migration.md` → "Roadmap — one pipeline" (R3.2) is written from a
+producer (R3.2) is written from a
 specification rather than from a reading of `exporters/UE_bsp_to_scene.py::write_entities`.
 
 Every number below is measured over the three-map working corpus — `sp_tutorial_1`,
@@ -426,7 +426,7 @@ Six of those rules disagree with the entities unit's own reading — datamap out
 `^(On|Out)` prefix test (the unit's `outputLike` demotions), key folding, `param` stripping, `delay`
 read with `atof` rather than `float()`, the dropped `extra` field, and `times` normalization of an
 authored `0` to unlimited. Each is a **named divergence with its own commit**, owned by
-`seam_migration.md` → R3.4, not something the producer decides while porting.
+R3.4, not something the producer decides while porting.
 
 ### R3.4 — the six divergences
 
@@ -530,7 +530,7 @@ field list above, not the join.
 
 ## Import
 
-R4.2 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves the map's **collision**
+R4.2 moves the map's **collision**
 off the loose `<map>.hulls` / `<map>.dispcol` documents and off the per-entity runtime cook, into
 cooked content: one `UElysiumMapCollisionPayload` per map. Like R4.1's entity table this changes
 transport and not geometry — the convex sets and the triangle soup are the same numbers the
@@ -724,7 +724,9 @@ map-load path reads `.hulls`, `.dispcol`, `.ents`, `.env`, `.sky` or `.spawn` an
 for the `elysium.ents` debug verb and the content tests, which 0018 story 21-3 owns. So does the
 settings page, its ini section and its Python twin `map_transport.py`. This supersedes
 R8.1's "once all 108 maps are converted and listed" precondition: a map that cannot load on the
-baked transport is a bake that has not run, not a map on another lane.
+baked transport is a bake that has not run, not a map on another lane. (R8.1 is the retire track's
+R9.1 of the deleted `docs/project/seam_migration.md`; group 21 supersedes it, and 21-5 deleted the
+lane it was waiting on.)
 
 **0018 story 21-2 made the bake that has not run one command.** The payload cook, the
 world-collision actor, the nav-area marks, the Recast meshes and the prune are stages of
@@ -908,7 +910,8 @@ non-sky static prop placed at its own transform, with bounds taken over the worl
 than a second triangulation, because two implementations of "which faces are the world" is exactly
 the divergence R3.3 exists to catch; the decal projector had to go the other way only because it
 needs a face class the mesh deliberately drops. Prop cover is each model unit's `:lod0` mesh, which
-is the mesh `UE_extract_corpus.decode_prop_models` wrote into `shared/props/<stem>.obj`. The
+is the mesh the decoder's `decode_prop_models` wrote into `shared/props/<stem>.obj` (both deleted
+by 0018 story 21-5; the equivalence is what the measurement below pins). The
 `weather_inputs` hand-over through `export_all` and `UE_bsp_to_scene.main`'s additive `return` are
 gone.
 
@@ -956,6 +959,90 @@ opening playing — the sentry's patrol, the sign popup, the idle timer), `sm_hu
 `sm_pawnshop_1` and `sp_theatre`. Staging the decal lane over the whole published corpus is clean
 too: **105 of 108 maps stage with zero validation failures**, the three that do not being 21-7's
 lump-reader refusals.
+
+### Deleting the decoder (0018 story 21-5)
+
+**There is no BSP decoder, no shared corpus and no `/ElysiumBaked/Shared`.** 21-4 closed the last
+live reader on the map lane; this removed what was still holding `UE_bsp_to_scene.py` (1,747 lines)
+up, none of which was about maps: `UE_extract_corpus.py` borrowed two helpers from it, five tests
+imported helpers that already had twins in the producer, and `CorpusBake` authored a mount no live
+resolver read. All of it is gone, with the two-pass `export map`, the `corpus` bundle, the
+`export prop` / `export material` / `export texture` unit commands, and the `--particles` Niagara
+pass with `make_particle_systems.py` and the `<map>.particles.json` writer.
+
+This story is the recovered **R9.2** ("Legacy bake, masters and Cog tuning deleted") of the deleted
+`docs/project/seam_migration.md`, which named `/ElysiumBaked/Shared/Textures`, the legacy
+`bake_map.py` lanes and the `<map>.particles.json` writer explicitly. **R8.1** (the retire track's
+R9.1, "runtime readers deleted once all 108 maps are converted and listed") was settled by 21-1 and
+21-3. Both are superseded by group 21 and neither has a precondition left to wait on.
+
+**What the job list did not name.** `wield_corpus.npc_carried` imported `_parse_ent_blocks`; the
+producer's `parse_entity_blocks` has a byte-identical body, so it is a pure swap. Four lighting
+probes (`lightmap`, `probe_lighting`, `probe_light_calibration`, `probe_light_attribution`)
+imported the decoder only to reach `formats.bsp` re-exports and `base_material`, which
+`shared_corpus` also has. And `bake_map.py`'s `MAP_SCAN_PACKAGES` still put `/ElysiumBaked/Shared`
+first, so **every V2 map bake was synchronously registry-scanning the dead mount**. Two things were
+already dead: `<map>.water` has no reader anywhere in the bake (it was written and never read), and
+`export placed-model` called an `export_manager.export_placed_models` that does not exist.
+
+**`Bake` keeps only what `MapBakeV2` reaches.** With `CorpusBake` gone `MapBakeV2` is the only
+subclass, so every base body it overrides had no live caller. Fifteen went — `stage_sky`,
+`_read_sky`, `_place_props`, `_apply_prop_skin`, `_level_recipe`, `_place_lights`, `_material_sets`,
+`material_for`, `_shared_material_keys`, `_stage_wet_cubemaps`, `_used_hull_bits` and the five
+placement stubs — along with the corpus-only `stage_props` / `_author_skin_set` and the
+`.obj` / `.mtl` / `.blend` / `.props` / `brushes/` / `tex/cube/` readers of `load_sources`.
+`stage_materials` is now the pruner V2 actually reached plus the weather stamp; `resolve_textures`
+is the rain-height reload. `bake_lib` loses `MatDef`, `read_mtl`, `mat_from_record`, `read_obj`,
+`read_decals`, `read_skins`, `read_phys`, `read_floats`, `make_skin_set` and `glb_material_albedo`.
+
+**One correction the sweep produced.** The base `_level_recipe` was NOT dead. `MapBakeV2` calls it
+and overwrites only its `props` and `prop_skins` entries; its `placement`, `world_sky_meshes`,
+`brushes`, `materials`, `decal_materials`, `model_catalogues`, `cell_cm` and `profiles` entries are
+what every level is stamped against. It was restored minus the two the override replaced.
+
+**Two verify checks needed a new source, not deletion.** Both read the dying corpus:
+
+| Was | Is |
+|---|---|
+| the hub's 14 `GlobalWetness` scalars, from `shared/materials.json` through `MatDef.wet` | the material lane's own manifest: `import materials` writes `WetnessDriven`/`WetnessScale` into each instance's scalar overrides. **19 rows carry one install-wide — 1x0.56, 8x0.60, 10x1.0 — which is where the hub's `[0.56] + [0.60]*6 + [1.0]*7` comes from** |
+| `_map_prop_mtls`, the corpus `shared/props/<stem>.mtl` naming each placed model's materials | `_map_prop_material_units`, the model lane's `slots[].materialId` — the same list, already resolved, and the one the bake binds |
+| the glass/refract selector, the corpus `MatDef`'s `glass`/`refract` flags | the staged row's own master: `M_V2_Refract`, 11 rows install-wide. **The glass half does not survive** — see below |
+
+**The glass half of the glass/refract check is lost, and that is measured rather than asserted.**
+`refract` is a master (`M_V2_Refract`), so the staged row states it exactly. `glass 1` is not:
+`glass/glass01` parents to `M_V2_LitTranslucent` like any other translucent instance, so no V2
+row distinguishes a legacy glass material and the corpus flag that did is deleted. Widening the
+selector to "every unit that binds a `NormalMap`" was tried and **rejected on the evidence**: it
+turns a two-unit check into a corpus-wide one and fails **15 units across the six maps** whose
+`T_<stem>_normal` is not `TC_NORMALMAP` — `brick/sewwllb`, `concrete/sewer_sm_base`,
+`concrete/sewer_sm_hole`, `wood/boardwalka`, `blends/searocka` (twice), `blends/seaflra`,
+`models/scenery/structural/pier/cliffa`, the two phone cords, the two rusty-pipe units, the
+sewerpipe cap, and the two vehicle skins. **Those are real**, and they are the TEXTURE lane's
+question: asking it from here would have turned a deletion into a corpus-wide regression report.
+Named here so the next reader of that lane has the list.
+
+**The material report loses its legacy half.** `classChanged`, `byLegacyClass`,
+`legacyRecordMissing`, `legacyMaster` and `legacyRecordFound` compared the V2 bind against the
+corpus row the legacy `.mtl` resolved. There is no corpus and no `.mtl`: the comparison was the
+cutover's witness and the cutover is over. `LEGACY_MASTER_RULES`, `LEGACY_MASTER_CLASS` and
+`legacy_master_for` go with it.
+
+**`shared_corpus.py` is 288 lines, down from 546.** It owns no document — `shared/manifest.json`
+and `shared/materials.json` had exactly one writer (the decoder's corpus pass) and one reader (the
+corpus bake), and both are gone. What survives is what the V2 producers and importers still join
+on: `texture_key`, `material_key`, `base_material`, `cubemap_of`, `world_material_key`,
+`static_stem`, the sky-face names, the asset-name folds and `is_map_scoped_material`.
+
+**What this costs, stated rather than absorbed.** The producer's `.ents` divergence flags
+(`EntityDivergences`) still default to the reading the decoder had, but that default is now a
+written-down contract rather than a diffable one — nothing is left to diff against, which is why
+21-4 measured the decal and rain-cover ports **before** this story and wrote the numbers into the
+sections above. `test_legacy_map_native_props.py` tested the deleted `Bake._place_props`, so
+`MapBakeV2`'s native-reference embedding has no direct unit coverage until someone writes it
+against the staged placements. The decoder's `source_visibility_backing_models` also returned a
+warning per malformed `func_areaportalwindow` link and the producer's twin returns the model set
+alone, so the three diagnostic strings are no longer pinned. `mdl.write_obj_scene` is dead and
+`formats/mdl.py` was left alone.
 
 ### Shot-diff against the R2.1 baseline (2026-09-01)
 
@@ -1025,7 +1112,7 @@ tuning question and deliberately not this task's.
 
 ## Import — environment
 
-R4.4 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves the map's **environment**
+R4.4 moves the map's **environment**
 — `<map>.env`'s 2D-sky flag and its two fog sets, `<map>.sky`'s 3D-skybox miniature placement
 transform, and `<map>.spawn`'s initial player spawn — off the three loose sidecars and onto one
 `UElysiumMapEnvironment` per map. Like R4.1/R4.2 this is a transport change and nothing else: every
@@ -1141,7 +1228,7 @@ All three maps carry all three sidecars, so all three assets have `bHasSkyMiniat
 
 ## Import — geometry and placements
 
-R5.1 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves a map's **geometry** and
+R5.1 moves a map's **geometry** and
 its **static-prop placements** off the legacy `<map>.obj`, `<map>_sky.obj`, `brushes/*.obj` and
 `<map>.props` sidecars and onto the published map root unit — the `world`, `brushModels`,
 `displacements` and `placements` scenes this document defines above. It is the first task that
@@ -1247,7 +1334,7 @@ other node family (`dprp`, 143,412 records over 41 models corpus-wide) is placed
 
 ### Brush fade distances (R6.4)
 
-R6.4 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" gives the two distance-culled
+R6.4 gives the two distance-culled
 brush classes the FADES treatment above. **The bake has no brush actor to write onto**: a brush
 entity's mesh is `SM_brush_<N>` under `/ElysiumBaked/<map>/Brushes`, never placed in the level —
 the runtime attaches it to the convex entity body that owns movement, collision, hiding and
@@ -1289,7 +1376,7 @@ asserts, per map, every `func_lod` row's `cull_max_cm` against its own `Disappea
 
 ### Detail props (R6.3)
 
-R6.3 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" places the `dprp` game lump.
+R6.3 places the `dprp` game lump.
 The corpus: **143,412 records over 41 models on 52 of 108 maps**, every one a `dprp` version 2
 record (`formats/map_glb/gamelump.py`: origin, angles, `detailModel`, `leaf`, `lighting`,
 `lightStyles`, `lightStyleCount`, `swayAmount`, `shapeAngle`, `shapeSize`; no sprite dictionary —
@@ -1360,11 +1447,11 @@ and none extra — and checks the cull range against the settings page and that 
 carries exactly one custom-data float. `Elysium.Substrate.DetailProps` pins the settings defaults
 (`600 × 2.54`, `300 × 2.54`, `5 × 2.54`), the `DetailSwayAmplitude` binding, the tag helpers and
 the actor's own shape (ISM root, `NoCollision`, no shadow). Measured numbers are in the R6.3
-Settled entry of `docs/project/seam_migration.md`.
+Settled entry of the deleted roadmap (`seam_map.md` § "The R-numbers").
 
 ### Sprites (R6.1)
 
-R6.1 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" draws every `env_sprite`.
+R6.1 draws every `env_sprite`.
 The corpus: **6,449** rows over 108 maps, 1,286 named, 86 `start_hidden`; by `rendermode` **3
 (Glow) 4,347 + 9 (WorldGlow) 77** — Source's coronas (`glowa`/`glowb`) — **5 (Additive) 1,552**
 and **1 (Color) 472** — the plain billboards (`volumelight*` shafts, `candle`, `coplights`,
@@ -1511,7 +1598,7 @@ and blend), no row missing and no actor extra. `Elysium.Substrate.EnvSprite` pin
 spawn rule and every input on the recording double, and `Elysium.Substrate.SpriteGlow` pins the
 settings defaults, the glow size/brightness/smoothing formulas (`ElysiumSpriteGlow.h`, the pure
 functions the proxy calls), the tag helpers and the actor's shape. Measured numbers are in the
-R6.1 Settled entry of `docs/project/seam_migration.md`.
+R6.1 Settled entry of the deleted roadmap (`seam_map.md` § "The R-numbers").
 
 ### 3D-skybox composition (R6.7)
 
@@ -1552,7 +1639,7 @@ that every sky prop and sky detail component carries the same fog slots the sky 
 prop, a world and a sky detail actor and a sky sprite buckets by class first, `ApplySceneFog`
 stamps the sky detail with the sky set and the world detail with the world set, and
 `ToggleSkybox` hides the miniature's detail and sprite with its chunk. Measured numbers are in the
-R6.7 Settled entry of `docs/project/seam_migration.md`.
+R6.7 Settled entry of the deleted roadmap (`seam_map.md` § "The R-numbers").
 
 ### The lane, and what retired the flag that chose it
 
@@ -1594,7 +1681,7 @@ same seam-precision limit R3.2 measured on `.dispcol` and not a difference in th
 
 ## Import — materials (R5.4)
 
-R5.4 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves a converted map's
+R5.4 moves a converted map's
 **surface materials** off the legacy `<map>.mtl` table and the per-map material packages the legacy
 bake authored from it, and onto the `MI_` instances the material lane already imported for every
 `vtmb:material:*` unit (`seam_map_material.md` → "## Import"). R5.1 left the geometry lane binding
@@ -1873,7 +1960,7 @@ before and after, which they did before this task too.
 
 ## Import — reflection captures (R5.5)
 
-R5.5 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" [MP-4.4, SF-6.2] gives a
+R5.5 [MP-4.4, SF-6.2] gives a
 converted map its **reflection captures**: one `ASphereReflectionCapture` per `cubemaps[]` row of
 the map root unit, built inside the bake, and the light rig's specular response flipped off the
 legacy zero. Nothing here binds a texture to a material: the reflection contract
@@ -1884,7 +1971,7 @@ from these captures and from Lumen, never from the VtMB probe pixels, which stay
 **A Lumen fallback lane, not the reflection.** Under Lumen the captures are what a surface reads
 when Lumen reflections have nothing better — the rough end of the roughness range, ray misses, the
 Lumen-off scalability tier — and a capture of the Lumen-lit baked scene is the intended image
-(`seam_migration.md` → the maps-plan Settled entry: "reflection captures build headlessly under
+(the deleted roadmap (`seam_map.md` § "The R-numbers") → the maps-plan Settled entry: "reflection captures build headlessly under
 `-AllowCommandletRendering` and remain a Lumen *fallback* lane"). Where VtMB placed an
 `env_cubemap` is exactly where its artists wanted a local reflection sampled from, which is the one
 fact the sample rows carry that a runtime cannot invent; the size field is `0` on all 57 samples of
@@ -2005,7 +2092,7 @@ reusing it.
 
 The legacy bake wrote `specular_scale = 0` onto every light and `UElysiumLightRig` re-applied a
 `SpecularScale = 0` at adopt ("VtMB world is pure Lambert") — the third of the three zeroes the
-owner repudiated (`seam_migration.md` → "The matte-world premise is repudiated"; the surface
+owner repudiated (the deleted roadmap (`seam_map.md` § "The R-numbers") → "The matte-world premise is repudiated"; the surface
 two, Specular 0 / Roughness 1, already flipped with the V2 masters). R5.5 flips the light one:
 
 - **One knob.** `UElysiumSurfaceSettings::LightSpecularScale` (default **1.0**, the ini) is the
@@ -2028,7 +2115,7 @@ two, Specular 0 / Roughness 1, already flipped with the V2 masters). R5.5 flips 
 
 ## Import — effects (R7.3)
 
-R7.3 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" places a converted map's
+R7.3 places a converted map's
 **effects entities** as actors in the baked level: every `env_particle` / `func_particle` on the
 generated per-root system `NS_<root>` (or its family override), every `func_dustmotes`,
 `env_steam` and `env_beam` on its own authored family system. The owner's rulings (2026-09-02,

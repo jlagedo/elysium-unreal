@@ -15,8 +15,9 @@ FORBIDDEN = (
     re.compile(r"UnrealEditor-ElysiumUE\.dll"),
     re.compile(r"native_source_files|_source_hash\("),
 )
-# The task graph of the loose export lane still fingerprints its decoder closure by content;
-# it retires with that lane in R9.2 and is the one allowed exception until then.
+# The task graph of the offline export lane still fingerprints its reached-module closure by
+# content, and is the one allowed exception. R9.2 (0018 story 21-5) deleted the map decode this
+# was built for; the graph survives for the global bundles, which is why the exception does too.
 ALLOWED = {PIPELINE / "src" / "elysium_pipeline" / "export_manager.py",
            PIPELINE / "src" / "elysium_pipeline" / "tasking.py"}
 

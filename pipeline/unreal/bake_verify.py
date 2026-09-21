@@ -1943,18 +1943,24 @@ def verify_v2_materials(map_name, registry, prop_units):
     # retired the shared corpus underneath, so the SELECTOR is the staged row's own now rather
     # than the corpus `MatDef`'s `glass`/`refract` flags.
     #
-    # What the two flags picked out is what these three assertions are worth asking of: a unit
-    # that refracts (the Source framebuffer-distortion master, `M_V2_Refract`) or one that binds
-    # a normal map at all -- the legacy `glass 1` has no master of its own on this lane, it is a
-    # translucent lit instance like any other, and the normal is the thing the check is about.
+    # **Only the refract half survives, and that is a loss this story names rather than hides.**
+    # `refract` is the Source framebuffer-distortion master, `M_V2_Refract`, so the V2 row states
+    # it exactly. `glass 1` does NOT have a master of its own on this lane -- `glass/glass01`
+    # parents to `M_V2_LitTranslucent` like any other translucent instance -- so there is no V2
+    # selector for it and the corpus flag that was one is deleted.
+    #
+    # Widening the selector to "every unit that binds a NormalMap" was tried and rejected: it
+    # turns a 2-unit check into a corpus-wide one and fails 15 units on the six maps whose
+    # `T_<stem>_normal` is not `TC_NORMALMAP` (`brick/sewwllb`, `wood/boardwalka`,
+    # `blends/searocka`, the two phone cords, the rusty pipes, the two vehicles, ...). Those are
+    # real and they are the TEXTURE lane's question, not this one's; asking it here would have
+    # made a deletion into a corpus-wide regression report.
     flagged = parented = normals = 0
     for key in sorted(units):
         row, owner = units[key]
-        master_name = str(row.get("parent") or "").rsplit("/", 1)[-1]
-        refracts = master_name == "M_V2_Refract"
-        if not refracts and not (row.get("textures") or {}).get("NormalMap"):
+        if str(row.get("parent") or "").rsplit("/", 1)[-1] != "M_V2_Refract":
             continue
-        kind = "Source Refract" if refracts else "normal-mapped"
+        kind = "Source Refract"
         flagged += 1
         asset = str(row.get("assetPath") or "")
         instance = unreal.EditorAssetLibrary.load_asset(asset)

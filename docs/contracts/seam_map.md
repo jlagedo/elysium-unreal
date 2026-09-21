@@ -9,6 +9,20 @@ Retail loose files shadow the same install-relative VPK member, and loose files 
 retail VPK. Canonical intermediates are generated from that winning source. A retail-only decode is
 an explicit research comparison and does not change the production selection.
 
+## The R-numbers
+
+These contracts cite tasks as bare `R<group>.<n>` identifiers — R3.4, R5.1, R7.2, R9.2. They were
+defined by `docs/project/seam_migration.md` ("Roadmap — one pipeline", with the "Plan — surfaces
+track" SF-numbers beside it), which commit `2f0f604d` deleted when the docs tree was reworked into
+vision / oracle / contracts / specs. The R-number stayed as the stable name of the task, and the
+task's own account now lives in whichever `docs/specs/` story performed it or in the recovery
+section of the contract it changed; 0018 story 21-5 repaired the citations that still named the
+deleted file. To read a roadmap entry as it stood, recover it:
+
+```
+git show 2f0f604d^:docs/project/seam_migration.md
+```
+
 The division below assigns **canonical ownership**. A glTF asset may reference a non-glTF resource
 by stable ID, and a non-glTF record may reference a glTF node or asset, but neither duplicates the
 other's authoritative data.

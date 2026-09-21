@@ -193,7 +193,7 @@ every `entities[i].outputs[]` row back-links to an existing `keyValues[]` index.
 
 ## Import
 
-R4.1 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves the map's entity table
+R4.1 moves the map's entity table
 off the loose `<map>.ents` file and into cooked content: one `UElysiumMapEntities` data asset per
 map. The asset is a **transport change and nothing else** — it carries the same rows the `.ents`
 document carries, in the same order, and deserializes into the same plain `FElysiumEntityDef`

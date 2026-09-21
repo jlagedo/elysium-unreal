@@ -200,7 +200,7 @@ property, and dependency identities with the semantic model reconstructed from t
 `uv run elysium import materials` turns every published material unit into one Unreal material
 instance below `/ElysiumBaked/Materials`, parented to a small set of generated masters under
 `/Game/ElysiumGenerated/Materials/V2`. It is the fourth slice of the seam migration
-(`docs/project/seam_migration.md` → "Plan — surfaces track", phases 3 and 4) and it follows the
+(the deleted roadmap (`seam_map.md` § "The R-numbers") → "Plan — surfaces track", phases 3 and 4) and it follows the
 texture lane's shape exactly: an offline stage phase, a headless editor import phase, one
 `manifest.json` between them, recipe stamps, a prune scope, and provenance carried on the asset.
 
@@ -235,7 +235,7 @@ the static frame-0 fallback cannot resolve (none is a multi-frame array), and ea
 texture is coverage, not colour), `envmap/gioint`/`skybox/hav_env` by the cube-`$basetexture` named
 divergence (`CUBE_BASE_TEXTURE_DIVERGENCE_UNITS`, below). `uv run elysium import materials --lookdev` places
 every tracked review-set entry still named in `lookdev_set.json`. Real numbers:
-`docs/project/seam_migration.md` → "Material import landed (2026-08-31)".
+the deleted roadmap (`seam_map.md` § "The R-numbers") → "Material import landed (2026-08-31)".
 
 ### Identity and naming
 
@@ -282,7 +282,7 @@ referenced by no `.decals` line and no face group anywhere in the 108-map export
 empty instance each.
 
 **Class index and physical material** come from one resolution, run once per unit (owner rule,
-`seam_migration.md` 2026-08-31). It always terminates, and it always records which tier answered,
+the deleted roadmap (`seam_map.md` § "The R-numbers"), 2026-08-31). It always terminates, and it always records which tier answered,
 as `surfaceClassSource`:
 
 1. **`$surfaceprop`, lower-cased — 4,605 units.** `defualt` (10) folds to `default`. The four
@@ -1122,7 +1122,7 @@ declares no wetness lane at all.
 
 Two axes vary **per map** (decal fog) or **live, per tick, world-scoped** (wetness), and neither
 had a home on a V2 master before this revision — both are new here, not a "provenance only" call
-being reversed like `WetnessScale`'s table row above is. The life sweep (`seam_migration.md`
+being reversed like `WetnessScale`'s table row above is. The life sweep (the deleted roadmap (`seam_map.md` § "The R-numbers")
 → "## Roadmap — one pipeline") named the defect: *"the shared-MI switch is blocked until decal
 fog and wetness have a home that is not a per-map material instance."* R5.4's plan is one shared
 `MI_<unit>` per corpus material, resolved by `vtmb:material:*` and used identically on every map
@@ -1305,7 +1305,7 @@ shipped without. So there is no VtMB amplitude to transcribe; the closest faithf
 first Source build that *did* read it, whose sprite-sway amplitude is `swayAmount / 255 ×
 cl_detail_max_sway` with Valve's shipped value **5 world units**, and that is the default:
 **12.7 cm**. The choice — keep Source's 5 units, or another number once the weeds are seen live —
-is filed in the R7 list of `seam_migration.md`; nothing here is tuned.
+is filed in the R7 list of the deleted roadmap (`seam_map.md` § "The R-numbers"); nothing here is tuned.
 
 **Why a static switch and a child instance, not a term on the shared `MI_`.** The translator
 marks a material as using WPO only when the compiled chain is not a constant zero
@@ -1327,7 +1327,7 @@ pins the switch on the three, and `_probe_all_switches_true` compiles the WPO br
 
 #### Ropes on `MI_`, and the factory shape (R6.5)
 
-R6.5 (`seam_migration.md` → "Roadmap — one pipeline") takes the last runtime consumer of the six
+R6.5 takes the last runtime consumer of the six
 legacy world masters — the overhead cables — onto this lane, and with it retires the runtime
 material *builder*. Three rulings, all wiring:
 
@@ -1389,8 +1389,10 @@ per-map-actor home that dies with the map — today nothing writes one, and
 `Elysium.Substrate.MaterialFactory` pins both halves (parent is the instance; zero scalar, vector
 and texture overrides; `nullptr` in → `nullptr` out). With the builder gone the six legacy world
 masters (`M_World_Opaque`/`_Masked`/`_Translucent`/`_Glass`, `M_Refract`, `M_Additive`) have **no
-runtime reader**; the assets, `make_world_materials.py` and the legacy `bake_map.py` lane that
-still binds them on unconverted maps stay until R9.2.
+runtime reader**. R9.2 is 0018 story 21-5, which deleted the legacy `bake_map.py` lane that was
+the last thing binding them: no map is on it, so nothing binds these masters at all now. The
+assets and `make_world_materials.py` outlive it — `make_world_materials.py` also authors the V2
+masters and the rain material this lane still uses.
 
 **What retires with the builder.** `elysium.EmissiveScale`, `elysium.BumpScale` and
 `elysium.EnvReflect` (the three cvars only the builder read; enhancement is post-roadmap tuning on
@@ -2121,7 +2123,7 @@ editor, from the three published registry tags above without loading the asset, 
 ### Knob contract
 
 Every value that a human might want to change, and where it lives. Nothing that needs taste is a
-Python or C++ literal (`seam_migration.md`, "Calibration happens on knobs inside the editor").
+Python or C++ literal (the deleted roadmap (`seam_map.md` § "The R-numbers"), "Calibration happens on knobs inside the editor").
 
 | Knob | Kind | Home | Read by |
 |---|---|---|---|

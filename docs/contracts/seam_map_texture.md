@@ -584,7 +584,7 @@ zero needs the source bytes, so that check runs only in the export-time path abo
 
 `uv run elysium import textures` turns every published texture unit into one Unreal texture asset
 below `/ElysiumBaked/Textures`. It is the second slice of the seam migration
-(`docs/project/seam_migration.md` → "Settled", "Slice 2 is textures"), and the template the
+(the deleted roadmap (`seam_map.md` § "The R-numbers") → "Settled", "Slice 2 is textures"), and the template the
 material, model and map lanes follow: the unit is the only input, the asset carries everything
 the unit knows, and nothing here reads the install.
 
@@ -788,7 +788,7 @@ authored as seen from inside the cube; that is the handedness the material corre
 slip. A rerun is the `cubedemo` unit through `stage_textures` and `decode_cubemap` side by side.
 The exporter's in-face block rotation is exact only for levels of at least 4×4; import applies the
 exact inverse, so a 2×2 or 1×1 BC face round-trips byte-for-byte, but the payload's own
-orientation at those levels is an open exporter defect (tracked in `seam_migration.md` open
+orientation at those levels is an open exporter defect (tracked in the deleted roadmap (`seam_map.md` § "The R-numbers") open
 questions).
 
 ### Provenance

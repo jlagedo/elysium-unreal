@@ -66,7 +66,8 @@ from elysium_pipeline.formats.unit_contract import read_glb
 RECIPE_VERSION = 1
 
 #: A model unit publishes one mesh per VTX LOD, named `<path>:lod<n>`. Cover is LOD0's, which is
-#: the mesh `UE_extract_corpus.decode_prop_models` wrote into `shared/props/<stem>.obj`.
+#: the mesh the decoder's `decode_prop_models` wrote into `shared/props/<stem>.obj`, before
+#: 0018 story 21-5 deleted both. The equivalence is measured in `seam_map_map.md`.
 LOD0_SUFFIX = ":lod0"
 
 _ACCESSOR_COMPONENT = {5120: "b", 5121: "B", 5122: "h", 5123: "H", 5125: "I", 5126: "f"}

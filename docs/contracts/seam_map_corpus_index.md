@@ -194,7 +194,7 @@ by construction, bytes the BSP's own zip actually holds.
 
 `texture-material-roles` accepts a map's own `cubemaps[]` binding (`role: texture`, source kind
 `map`) as well as a material's: the owner call "Baked reflection probes are not reflection
-content" (`seam_migration.md`, 2026-08-31) is that a probe's pixels are never sampled by a
+content" (the deleted roadmap (`seam_map.md` § "The R-numbers"), 2026-08-31) is that a probe's pixels are never sampled by a
 surface, only its origin placed as a capture, so the 1,325 SF-1.3 probe texture units are
 legitimately bound only by the map that places them and never by a material.
 
@@ -215,7 +215,7 @@ how many of those rows carry `asset: null` — no seam claims the PAKFILE member
 `embeddedUnclaimedByExtension` breaks the unclaimed count down by the member's extension. `uv run
 elysium doctor` reports `embeddedUnclaimed` as a warning, not a failure — unlike
 `summary.unclaimed`, an unclaimed PAKFILE member does not fail the corpus export
-(`seam_migration.md` → "Plan — surfaces track" → SF-1.1). SF-1.5 is the task that drives
+(the deleted roadmap (`seam_map.md` § "The R-numbers") → "Plan — surfaces track" → SF-1.1). SF-1.5 is the task that drives
 `embeddedUnclaimed` to zero: the texture and material seams' `source_keys()` now claim every
 `.vmt`/`.tth`/`.ttz` PAKFILE key regardless of whether it also selects an install member, so
 `embeddedUnclaimed` is 0 whenever the plural texture and material exports have published every

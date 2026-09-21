@@ -161,7 +161,7 @@ consumer's concern, not a property one GLB can be validated against.
 
 `uv run elysium import surface-properties` turns every published surface-property unit into one
 `UElysiumPhysicalMaterial` below `/ElysiumBaked/SurfaceProperties`. It is the third slice of the
-seam migration (`docs/project/seam_migration.md` → "Settled", "Surface properties import"), and it
+seam migration (the deleted roadmap (`seam_map.md` § "The R-numbers") → "Settled", "Surface properties import"), and it
 follows the texture lane's shape exactly: the unit is the only input, the asset carries everything
 the unit knows, and nothing here reads the install.
 

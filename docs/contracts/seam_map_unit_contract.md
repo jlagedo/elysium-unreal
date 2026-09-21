@@ -120,7 +120,7 @@ it is refused exactly as before. What the capsule adds is that the bytes the led
 *in the file*, so validation compares the capsule against the member's own `byteLength` and
 `sha256` on every read, and at export time against the bytes the exporter actually read.
 
-Rollout is per slice, tracked in `docs/project/seam_migration.md`:
+Rollout is per slice, tracked in the deleted roadmap (`seam_map.md` § "The R-numbers"):
 
 | Seam | Capsule |
 |---|---|
@@ -430,8 +430,8 @@ exports_v2/<kind>/<dir>/<base>.glb  ->  /ElysiumBaked/<Kind>/<dir'>/<Prefix>_<ba
   (`bake_lib.RecipeLedger`), so "0 reused" always comes with its reason.
   `pipeline/tests/test_recipe_policy.py` enforces the rule.
 - **Legacy roots are named, each with the task that empties it.** A tracked list beside the
-  resolver's kind roots — `Shared/` (the legacy map bake's corpus, R9.2), `Characters/` (R8.2),
-  `Props/` (R8.4), `Items/` (R8.3) — receives nothing new, and a registry test asserts that every
+  resolver's kind roots — `Characters/` (R8.2), `Props/` (R8.4), `Items/` (R8.3) — receives
+  nothing new, and a registry test asserts that every
   asset on the mount is under a kind root, under `/Game/ElysiumGenerated`, or under a listed
   legacy root. "Beside, not over" was the rule while two producers had to coexist for a bisect;
   under one resolver the roots differ by kind, not by lane, and coexistence is per unit through

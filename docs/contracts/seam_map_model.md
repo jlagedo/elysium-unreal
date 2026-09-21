@@ -351,7 +351,7 @@ tables are separately hashed dependencies whose payload belongs to their own uni
 `uv run elysium import models` turns every **referenced** model unit into one `UStaticMesh` below
 `/ElysiumBaked/Meshes`, with its slots bound to the landed V2 material instances, its collision
 cooked from VtMB's own convex hulls and its skin families written into one corpus-wide table. It is
-the props lane of the one-pipeline roadmap (`docs/project/seam_migration.md` → "Roadmap — one
+the props lane of the one-pipeline roadmap (the deleted roadmap (`seam_map.md` § "The R-numbers") → "Roadmap — one
 pipeline", R1.3–R1.5), and it follows the material and texture lanes' shape exactly: an offline
 stage phase, a headless editor import phase, one `manifest.json` between them, recipe stamps, a
 prune scope, and provenance carried on the asset as `UAssetUserData`.
@@ -359,7 +359,7 @@ prune scope, and provenance carried on the asset as `UAssetUserData`.
 Every count in this section is measured over the **4,445 model units** under
 `$ELYSIUM_EXPORT_V2_ROOT/models/**` and the corpus index's inverse reference graph
 (`index.glb` → `ELYSIUM_vtmb_corpus_index.inverse`), 2026-08-31 — the same run that produced the
-validation record in `seam_migration.md` → "Props/models seam validated". The ranked gap list in
+validation record in the deleted roadmap (`seam_map.md` § "The R-numbers") → "Props/models seam validated". The ranked gap list in
 that entry is what this section decides; the decisions there are transcribed, not reopened.
 
 **No silent drop, and no silent guess.** Every input this lane reads — every slot, every family
@@ -649,7 +649,7 @@ Neither fires in today's corpus; both exist so that if the day comes it is a rep
 than a silently reordered LOD chain.
 
 **No `TEXCOORD_1`, and no generated lightmap UVs.** No model unit in the corpus carries a second UV
-set. Lighting is Lumen-only (`seam_migration.md` → "The matte-world premise is repudiated"), so
+set. Lighting is Lumen-only (the deleted roadmap (`seam_map.md` § "The R-numbers") → "The matte-world premise is repudiated"), so
 static lighting is never built, a lightmap UV set would be dead data in 3,657 assets, and the
 import sets `generate_lightmap_u_vs = False` explicitly rather than accepting the importer default.
 `UStaticMesh::LightMapCoordinateIndex` is left at 0 and `LightMapResolution` untouched.
@@ -744,7 +744,7 @@ material lane's tier 1.
 `vtmb:surface-property:` unit gets `PM_default`, keeps its authored spelling in provenance, and
 records `surfacePropertyUnknown`. Over the 3,661 units in scope this lane's own input yields
 exactly **3 unknown names**, one solid row each: `cloth`, `floorblock`, `metaldetector`. The
-larger figure in `seam_migration.md` — 79 edges over 17 unknown names, including `bone` and the
+larger figure in the deleted roadmap (`seam_map.md` § "The R-numbers") — 79 edges over 17 unknown names, including `bone` and the
 shipped typo `defualt` — is measured over the whole `surface-property` dependency role, which also
 covers the material lane's `$surfaceprop` join; the two are consistent, they count different edge
 sets. Unknown-name coverage is not this lane's to widen: adding class rows is the material lane's
@@ -821,7 +821,7 @@ non-zero when any unit failed. The report rolls every anomaly and omission up by
 |---|---|
 | a slot with neither a `vtmb:material:` id nor a `vtmb:missing-material:` sentinel | **fail the unit** — the export is incomplete, not the source |
 | a material id whose `asset_path_for` path holds no asset | **fail the unit**, naming model, slot and id |
-| no admitted VTX topology — the unit declares body parts and publishes no `meshes` | **skip the unit loudly** and name it. 19 such units corpus-wide, **4 in scope**: `null`, `w_null`, `weapons/w_null` and `character/npc/unique/hollywood/and/and`. Every one is skeletal-shape, no static-shape unit in scope lacks a mesh, and **none is placed by any map** — which is why a skip is safe. (`seam_migration.md` counts 7 by the export's own admitted-topology measure; the two count different things and neither set is placed.) |
+| no admitted VTX topology — the unit declares body parts and publishes no `meshes` | **skip the unit loudly** and name it. 19 such units corpus-wide, **4 in scope**: `null`, `w_null`, `weapons/w_null` and `character/npc/unique/hollywood/and/and`. Every one is skeletal-shape, no static-shape unit in scope lacks a mesh, and **none is placed by any map** — which is why a skip is safe. (the deleted roadmap counts 7 by the export's own admitted-topology measure; the two count different things and neither set is placed.) |
 | joint 0's transform is not identity on a static-shape unit | **fail the unit**, naming the transform |
 | a cooked shape count that disagrees with the ledge count | **fail the unit**, naming both |
 | a higher LOD naming a slot LOD 0 lacks | **fail the unit** |
