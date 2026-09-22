@@ -69,6 +69,30 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   id against it, and the old body bounds against the local top, which is a live range bug the
   moment real ranges land. `Elysium.Substrate.ScheduleIdSpace` 5 of 5; `Elysium.Substrate`
   1249 of 1249.
+  **Resume at pass B**, on branch `0019-3-schedule-seam` (5 commits, tree clean, corpus deployed:
+  748 files under `Content/ElysiumCorpus/ai/schedules/`). Nothing in the runtime is wired to any of
+  it yet — passes P and A are purely additive, which is why stopping here costs nothing.
+  - **B** ports the parser into C++. It has a fixture that did not exist before: the Python
+    `formats/ai_schedule_glb/parser.py` is the same body from the same oracle section, and it reads
+    all 691 shipped texts, so the C++ port is written against a reference that already agrees with
+    retail. Also in B: `ElysiumScheduleTokenizer`, `ElysiumScheduleOperands` (the 17 prefixes; the
+    13 tables are already recovered and deployed in `vocabulary.json`), `ElysiumScheduleManager`,
+    `ElysiumActivityRegistry`, `ElysiumTaskOps`, `ElysiumMiscFlags::ParseScheduleIndex`, and
+    `FElysiumNpcConditions::SetOrdinal`/`HasOrdinal`/`Difference`. Driven by inline test text; the
+    hand registry and all 295 sites stay untouched, so B is green by construction.
+  - **C** stands `FElysiumScheduleCorpus` on the deployed corpus and runs the witness as a test.
+    The sidecar already carries what the loader needs: `classNames`, the four spaces with
+    `parentUnit`, the registrations and the texts in feed order. Load order is the sidecar's
+    `parent_space` graph, NOT the C++ base chain — they genuinely differ (`CNPC_VTzimisce`'s census
+    base is `CNPC_VBaseBoss`, its space parent is Troika).
+  - **D is indivisible and wants a fresh session with room**: the 295-site type change, the save CRC
+    re-key, the inverted mask, the id-space stubs re-pointed. The moment `Tick` reads the manager,
+    `Step.Target` has no meaning, so it cannot be split.
+  - **E** deletes the 28 hand programs and lands the coverage meter.
+  The witness text is read and known: `SCHED_TROIKA_CHASE_ENEMY_FAILED` at `0x105ef068` is **twelve**
+  tasks, not the eleven the spec's prose lists (it omits `TASK_WAIT_FOR_MOVEMENT`), with twelve
+  interrupts; of its task tokens the port has ten, `TASK_FIND_COVER_FROM_ENEMY` is new, and
+  `TASK_REMEMBER` re-types to a memory mask.
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
