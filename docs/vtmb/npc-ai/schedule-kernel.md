@@ -1297,6 +1297,18 @@ append call; it never needs to execute the body. Brujah, concretely: `0x10367ac2
 then tasks, then conditions, then squad slots; run the activity-registration callbacks; parse. ALL
 names are registered before the first text is parsed.
 
+**The sort is by LOCAL ID and it is load-bearing** (measured 2026-09-22, porting this order). A
+space takes its local base from its FIRST registration (`SetFirstLocal 0x102ea240`) and `Register`
+refuses every later id below that base, so the order names arrive in decides how many of them
+register at all. The append order is not ascending, in exactly **three** of the fifty-six owners:
+`CNPC_VZombie` appends schedule `0x161` before `0x15e` and would lose `0x15e`–`0x160`,
+`CNPC_VAndreiBlood` appends `0x15b` before `0x15a` and would lose one, and `CNPC_VWerewolf` opens
+its conditions at `0x78` with `0x77` behind it. The cost is not those five names: the first text
+that names a lost schedule is an `unknown schedule name` failure, and the owner then stops, so
+those three classes lose every remaining text as well. The extractor reads the APPEND order,
+because that is what the image states; a consumer replaying the recipe sorts before it registers,
+as the body does.
+
 **Order, across owners.** The base is rooted at `CWorld::Precache 0x1023c020` → `0x1030c560` →
 `0x1030c4e0` (init the base spaces; schedules `0x102cadd0`; conditions `0x102c8ce0`; tasks
 `0x10316ff0`; activities `0x1025d790`; the two global squad slots `0x10316e80`) and then

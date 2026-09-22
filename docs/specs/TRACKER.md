@@ -81,24 +81,44 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   Two stated divergences: a task record stores the global task id (an operand still stores the
   local one — the data word is a float), and `Activity:`/`Model:`/`SOUND:` intern instead of
   Erroring. `Elysium.Substrate.ScheduleText` 9 of 9; `Elysium.Substrate` 1258 of 1258.
-  **Resume at pass C**, on branch `0019-3-schedule-seam` (7 commits, tree clean, corpus deployed:
-  748 files under `Content/ElysiumCorpus/ai/schedules/`). Nothing in the runtime is wired to any of
-  it yet — P, A and B are purely additive, which is why stopping here costs nothing.
-  - **C** stands `FElysiumScheduleCorpus` on the deployed corpus and runs the witness as a test.
-    The sidecar already carries what the loader needs: `classNames`, the four spaces with
-    `parentUnit`, the registrations and the texts in feed order. Load order is the sidecar's
-    `parent_space` graph, NOT the C++ base chain — they genuinely differ (`CNPC_VTzimisce`'s census
-    base is `CNPC_VBaseBoss`, its space parent is Troika). Also C: `ElysiumScheduleNumbers.h` with
-    `VerifyNumbers`, and the new `TASK_FIND_COVER_FROM_ENEMY` op. The parse half is done, so C is
-    a loader and an ordering, not a grammar.
-  - **D is indivisible and wants a fresh session with room**: the 295-site type change, the save CRC
-    re-key, the inverted mask (`Difference` is already there for it), the id-space stubs re-pointed.
+  **Pass P repaired 2026-09-22**: the census read `Init` only out of init bodies, and neither root
+  makes one there — `CAI_BaseNPC` initialises in `0x1030c4e0` (not an owner, it calls no parser)
+  and `CAI_BaseNPCTroika` through the helper `0x102be9f0`, whose three arguments arrive as the
+  return values of one-line getters. Twelve of the fifty-six units had no parent at all. Both are
+  read now, and `_prove_parents` refuses the seam if a SCHEDULE space ever parents on a space no
+  unit initialises. `_attach_shared_spaces` also does what its docstring promised: an MSVC RTTI
+  walk (`rtti.py`) reads slot 580 off every vtable whose base chain names `CAI_BaseNPC`. That is
+  **77 classes over 58 spaces against 56 init bodies** — not four pairs: 21 classes have no body
+  and run the vocabulary of the class above them (`CPayphone` runs Troika's, `CGenericNPC` the
+  base's). Every count unchanged; the graph now has one root and a maximum depth of six.
+  **Pass C landed 2026-09-22**: `FElysiumScheduleCorpus` loads the deployed corpus —
+  `schedules 691 in 56 spaces (0 skipped), 0 parse failures; tasks 4138 steps over 514 identities,
+  24 ported (5%), 490 unported reached by 1611 steps`. That last clause is the story's real
+  deliverable: the first honest measurement of how much of VtMB's task vocabulary this runtime
+  runs, with the per-identity reference count that makes it a work queue. Also landed:
+  `ElysiumScheduleNumbers.h` (nineteen ids, each checked against the corpus by `VerifyNumbers`,
+  which Errors with BOTH numbers), `TASK_FIND_COVER_FROM_ENEMY`, and the witness as a test —
+  `SCHED_TROIKA_CHASE_ENEMY_FAILED` runs retail's own twelve-task text with its operands asserted.
+  One recovery banked: **retail SORTS its (name, id) pairs by local id before registering**, and
+  the oracle said so in one word that the first port skipped. A space takes its local base from its
+  first registration and refuses every later id below it, so append order silently loses names —
+  three owners (`CNPC_VZombie`, `CNPC_VAndreiBlood`, `CNPC_VWerewolf`) and then every remaining
+  text those classes own. `Elysium.Substrate` 1264 of 1264.
+  **Resume at pass D**, on branch `0019-3-schedule-seam` (tree clean, corpus deployed: 748 files
+  under `Content/ElysiumCorpus/ai/schedules/`). Nothing in the runtime is wired to any of it yet:
+  the 28 hand programs still run the game and all 295 `EElysiumScheduleId` sites are untouched,
+  which is why P, A, B and C are all safe places to stop.
+  - **D is indivisible and wants a fresh session with room.** `EElysiumScheduleId` -> `int32` at
+    295 sites across 35 files; `EElysiumTask` -> `EElysiumTaskOp` (already declared, unused);
+    `FElysiumTaskStep` -> `FElysiumScheduleStep`'s two words, so `Step.Target`, `Step.Param`,
+    `Step.Activity` and `Step.Flag` all go; `BeginTask`/`ContinueTask` switch on the op;
+    `FElysiumSchedule` -> `FElysiumScheduleProgram`; the id-space stubs re-pointed at
+    `FElysiumScheduleCorpus::SpaceFor`; the save CRC re-keyed on `TaskId` + `RawWord()`; the
+    inverted mask wired into `Tick` (`FElysiumNpcConditions::Difference` is already there for it).
     The moment `Tick` reads the manager, `Step.Target` has no meaning, so it cannot be split.
-  - **E** deletes the 28 hand programs and lands the coverage meter and `elysium.schedules`.
-  The witness text is read and known: `SCHED_TROIKA_CHASE_ENEMY_FAILED` at `0x105ef068` is **twelve**
-  tasks, not the eleven the spec's prose lists (it omits `TASK_WAIT_FOR_MOVEMENT`), with twelve
-  interrupts; of its task tokens the port has ten, `TASK_FIND_COVER_FROM_ENEMY` is new, and
-  `TASK_REMEMBER` re-types to a memory mask.
+  - **E** deletes the 28 hand programs, `FScheduleMeta`, the program-content tests, and lands the
+    coverage meter and `elysium.schedules`. `FElysiumTaskOpTable::Measure` and
+    `FElysiumScheduleCorpus::DescribeCensus` are the meter's engine and already exist.
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
