@@ -820,7 +820,14 @@ int32 FElysiumNpc::GlobalToLocalId(const FScheduleIdSpace* Space, int32 GlobalId
 	{
 		return INDEX_NONE;
 	}
-	// `m_localBase != 9999 && m_globalBase <= id && id <= m_localTop`.
+	// `m_localBase != 9999 && m_globalBase <= id && id <= m_translatedTop`.
+	//
+	// The upper bound is the TRANSLATED top (`+0x0c`), not `m_localTop` (`+0x08`). This port
+	// compared a global id against the local top, which is a global number weighed against a local
+	// one; it was invisible because every row below is the 9999 sentinel and this body answers -1
+	// for every id, and `FScheduleIdSpace` carries no `+0x0c` field to compare against yet.
+	// `FElysiumLocalIdSpace` (0019/3 pass A) has all six words and does this correctly; these rows
+	// are retired when the corpus loader stands the real spaces.
 	if (Space->LocalBase != 9999 && Space->GlobalBase <= GlobalId && GlobalId <= Space->LocalTop)
 	{
 		return (Space->LocalBase - Space->GlobalBase) + GlobalId;
