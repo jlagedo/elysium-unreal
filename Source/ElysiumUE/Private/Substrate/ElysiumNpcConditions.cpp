@@ -177,13 +177,25 @@ FString FElysiumNpcConditions::Describe() const
 		{
 			const uint32 BitIndex = static_cast<uint32>(FMath::CountTrailingZeros64(Remaining));
 			Remaining &= Remaining - 1;
-			const EElysiumNpcCond Cond =
-				static_cast<EElysiumNpcCond>((WordIndex << 6) + static_cast<int32>(BitIndex));
+			const int32 Ordinal = (WordIndex << 6) + static_cast<int32>(BitIndex);
+			const EElysiumNpcCond Cond = static_cast<EElysiumNpcCond>(Ordinal);
 			if (!Out.IsEmpty())
 			{
 				Out.AppendChar(TEXT('|'));
 			}
-			Out.Append(ElysiumNpcCondName(Cond));
+			// A parsed interrupt mask may carry an ordinal this runtime has no enumerator for --
+			// the corpus registers 164 condition names and `EElysiumNpcCond` spells fewer. Naming
+			// the number is what keeps such a bit legible in a trace instead of reading as the
+			// same `COND_?` as every other one.
+			const TCHAR* const Name = ElysiumNpcCondName(Cond);
+			if (FCString::Strcmp(Name, TEXT("COND_?")) == 0)
+			{
+				Out.Appendf(TEXT("COND_%d"), Ordinal);
+			}
+			else
+			{
+				Out.Append(Name);
+			}
 		}
 	}
 	return Out.IsEmpty() ? FString(TEXT("(none)")) : Out;

@@ -26,6 +26,20 @@ namespace ElysiumMiscFlags
 	inline constexpr uint32 NoResistFeeding = 0x40000;
 
 	bool ParseName(const FString& Name, uint32& OutMask);
+
+	// `0x1030d390`, the schedule parser's `MiscFlag:` resolver -- and NOT the same body as
+	// `ParseName` (`0x1033cb00`) even though both walk the same 22 names. This one answers the raw
+	// INDEX 0-21, which the parser stores as an unconverted 32-bit word, where `ParseName` answers
+	// the MASK. The difference is live: `MiscFlag:Unconscious` and `MiscFlag:D_Targeted` store 0
+	// and 1, not 1 and 2.
+	//
+	// It cannot fail. An unknown name silently reads 0, which is `Unconscious` -- retail's own
+	// behaviour, and one of the three operand forms that never refuse a text.
+	int32 ParseScheduleIndex(const FString& Name);
+
+	// The table itself, for the parser's diagnostics and the corpus cross-check.
+	int32 NumNames();
+	const TCHAR* NameAt(int32 Index);
 	inline void Set(uint32& Word, uint32 Mask) { Word |= Mask; }
 	inline void Clear(uint32& Word, uint32 Mask) { Word &= ~Mask; }
 	inline bool Has(uint32 Word, uint32 Mask) { return Mask != 0 && (Word & Mask) == Mask; }

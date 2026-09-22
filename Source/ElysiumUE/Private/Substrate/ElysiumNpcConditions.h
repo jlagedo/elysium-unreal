@@ -254,6 +254,60 @@ struct FElysiumNpcConditions
 	void Clear(EElysiumNpcCond Cond) { Words[Word(Cond)] &= ~Bit(Cond); }
 	bool Has(EElysiumNpcCond Cond) const { return (Words[Word(Cond)] & Bit(Cond)) != 0; }
 
+	// --- By ordinal ------------------------------------------------------------------------------
+	//
+	// The schedule parser's interrupt arm does not know these identities. It looks a condition name
+	// up in the global condition namespace, subtracts 1,000,000,000 and sets bit `ordinal & 31` of
+	// word `ordinal >> 5` -- so an authored mask is in GLOBAL condition ordinals, and the retail
+	// registration order is what decides which ordinal a name has. `EElysiumNpcCond`'s enumerators
+	// ARE those ordinals, which is why no renumbering was needed; but a corpus may name a condition
+	// this runtime carries no enumerator for, and dropping its bit would silently widen the
+	// schedule's interrupt set. These three take the number instead of the identity so such a bit
+	// survives the round trip, and `Describe` prints it as `COND_<n>`.
+	//
+	// An ordinal outside the 256 this type holds is refused rather than wrapped: retail's mask is
+	// 192 bits and its top identity is `0x76`, so an ordinal past 255 is a corpus defect, not a
+	// condition.
+
+	static constexpr int32 NumOrdinals = NumWords * 64;
+
+	static bool IsValidOrdinal(int32 Ordinal) { return Ordinal >= 0 && Ordinal < NumOrdinals; }
+
+	void SetOrdinal(int32 Ordinal)
+	{
+		if (IsValidOrdinal(Ordinal))
+		{
+			Words[Ordinal >> 6] |= (1ull << (static_cast<uint32>(Ordinal) & 63u));
+		}
+	}
+
+	void ClearOrdinal(int32 Ordinal)
+	{
+		if (IsValidOrdinal(Ordinal))
+		{
+			Words[Ordinal >> 6] &= ~(1ull << (static_cast<uint32>(Ordinal) & 63u));
+		}
+	}
+
+	bool HasOrdinal(int32 Ordinal) const
+	{
+		return IsValidOrdinal(Ordinal)
+			&& (Words[Ordinal >> 6] & (1ull << (static_cast<uint32>(Ordinal) & 63u))) != 0;
+	}
+
+	// `this \ Other` -- the bits set here and not there. `Tick`'s inverted-interrupt test is
+	// `inverted \ conditions`: an inverted interrupt fires on the ABSENCE of its condition, so what
+	// interrupts is the part of the inverted mask the NPC is not currently reporting.
+	FElysiumNpcConditions Difference(const FElysiumNpcConditions& Other) const
+	{
+		FElysiumNpcConditions Out;
+		for (int32 i = 0; i < NumWords; ++i)
+		{
+			Out.Words[i] = Words[i] & ~Other.Words[i];
+		}
+		return Out;
+	}
+
 	void Reset()
 	{
 		for (uint64& W : Words)
