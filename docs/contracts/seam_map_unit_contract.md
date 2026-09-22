@@ -80,6 +80,18 @@ file (a surface-property entry, a map lump family). The ledger of such a unit is
 span alone, and the seam that cuts the file proves the whole file partitions into unit spans plus
 named non-unit bytes before it publishes any unit from it.
 
+Where the containing file is an **executable image** rather than a content container, that proof
+is carried by the seam's **root unit**: it names the image as its member and its ledger partitions
+it, every other unit's span claimed under that unit's identity and every remaining byte graded
+`omitted-proven` under one named owner whose reason says why the seam decodes no content there.
+The seam states, in its own document, the rule by which a byte of that image becomes a unit span,
+and **the rule must be decidable from the image without reference to the units** — so a span the
+rule admits and no unit claims refuses the whole seam, which is what stops "the cut region" from
+being spelled "whatever the units happened to take". A root unit of such a seam may carry the image
+without a capsule and therefore declares none, while the units cut from it declare and carry theirs;
+this is the one place the capsule rollout is stated per unit rather than per seam, and the reason is
+that reproducing an engine binary is not a thing any consumer of this corpus needs.
+
 An empty member (zero bytes) is recorded with `byteLength: 0`, the SHA-256 of the empty string and
 an `omissions` row `empty-member`; a unit whose selecting member is empty publishes with a warning.
 
@@ -131,6 +143,17 @@ Rollout is per slice, tracked in the deleted roadmap (`seam_map.md` § "The R-nu
 A sound unit's BIN chunk holds its decoded payload *and* its capsules; the payload keeps
 `bufferView` 0 and the capsules are appended after it, which is what `encapsulate`'s `binary` and
 `buffer_views` arguments are for. Adopting the capsule renumbers nothing a seam already emitted.
+
+### Derived products
+
+A corpus lane normally deploys capsule bytes and nothing else. A seam whose source is code rather
+than content has facts the runtime needs that no byte of the source spells — a registration table
+recovered from call sites, a parent link read from an argument — and those may be deployed as a
+**derived product**: a deterministic serialization of a sub-tree of the unit's own extension root,
+written through the same atomic write, byte-equality read-back, recipe stamp and prune as a capsule,
+and carrying no information the unit does not already publish. A derived product is never a second
+source of truth: if it and the unit disagree the unit is right, and regenerating it from the unit
+must reproduce it byte for byte, which is what lets the lane's stamp fast path stay honest.
 
 ## Container
 

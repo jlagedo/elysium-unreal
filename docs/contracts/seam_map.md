@@ -61,6 +61,7 @@ they share; each seam file owns one unit kind:
 | `vtmb:shader-source:`, `vtmb:shader-program:` | `seam_map_shader_program.md` |
 | `vtmb:ui-resource:` | `seam_map_ui_resource.md` |
 | `vtmb:engine-config:` | `seam_map_engine_config.md` |
+| `vtmb:ai-schedule:` | `seam_map_ai_schedule.md` |
 | `vtmb:corpus-index` | `seam_map_corpus_index.md` |
 
 `seam_map_model.md` owns the character-body and animation-bank units; `seam_map_character.md`

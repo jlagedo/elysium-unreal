@@ -1309,10 +1309,21 @@ translation walks the chain; a SIBLING's private space is never searched.
 1. `CAI_BaseNPC` registers in three separate bodies (above) and feeds its texts from the one
    static pointer table in the image, **64 cells at `0x106034b8`..`0x106035b4`** (`FAIL`,
    `IDLE_STAND`, `WAIT_FOR_SCRIPT` … `DROPSHIP_DEPLOY_THIRD`, `SCHED_FLINCH_PHYSICS`), 64 calls
-   from `0x102cb6a5` to `0x102cbe70` — not 63. `0x102cadd0` registers 57 schedule names against
-   those 64 texts; where the other seven names are registered was not walked. **The base programs ARE text blobs**:
+   from `0x102cb6a5` to `0x102cbe70` — not 63. `0x102cadd0` registers **68 schedule names, local
+   ids `0x00`–`0x43` dense**, against those 64 texts, and it does so through **two** entry points:
+   57 (`0x00`–`0x38`) through the five-argument `thunk_FUN_102ea130` (`0x1000a948`), then 11
+   (`0x39`, `0x3b`, `0x3c`, `0x3d`, `0x43`, `0x3e`, `0x3f`, `0x40`, `0x41`, `0x3a`, `0x42`, in
+   that order) through the four-argument `thunk_FUN_102bea80` (`0x10007068`), which supplies the
+   `"schedule"` category itself. The second entry point is the SAME shared helper Troika uses
+   (deviation 2 below), which is why Troika's range starts at 68 and not at 57 — an earlier read
+   that counted only the five-argument thunk reported "57 names, where the other seven are
+   registered was not walked"; there are no unregistered names. Four registered ids have no text.
+   Three names the decompiler leaves unnamed are `NONE` = `0x00` (`0x1059a350`), `DIE` = `0x2b`
+   (`0x10608528`) and **`FAIL` = `0x43`** (`0x10608410`). Base names carry NO `SCHED_` prefix
+   (`IDLE_STAND`, `CHASE_ENEMY`, `FAIL`) except `SCHED_DIE_RAGDOLL` `0x2c` and
+   `SCHED_FLINCH_PHYSICS` `0x42`; Troika's all do. **The base programs ARE text blobs**:
    `programs.md`'s "UNRECOVERED: `0x43`'s task list — the base programs are not text blobs" is
-   wrong; `FAIL` is cell 0 (`0x10608238`).
+   wrong; `FAIL` is cell 0 (`0x10608238`), read whole 2026-09-21.
 2. `CAI_BaseNPCTroika` does everything through helpers — spaces `0x102be9f0`, schedules
    `0x102bea80`, tasks `0x102beab0` (`space+0x18`), conditions `0x102beae0` (`space+0x30`), texts
    in two blocks (`158 × 0x102c6920 + 116 × 0x102c65d0`) — and registers 274 schedules (local
@@ -1353,7 +1364,7 @@ Parent codes (the tuple is schedule / task / condition / squad-slot space):
 
 | Owner | Init body; parser caller | Own spaces S/T/C/Q | P | Txt | Registrations S / T / C / Q | Shape/deviation |
 |---|---|---|---|---:|---|---|
-| `CAI_BaseNPC` | init `0x1030c4e0`; feed `0x102cb690` | `0x1090ff08/0x1090ff20/0x1090ff38/—` | root | 64; static table `0x106034b8..0x106035b4` | `R[57;0-56] / R[330;0-329] / R[119;0-118] / 0` | Registration split across `0x102cadd0`, `0x10316ff0`, `0x102c8ce0`; 7 more texts than schedule pre-registration pairs |
+| `CAI_BaseNPC` | init `0x1030c4e0`; feed `0x102cb690` | `0x1090ff08/0x1090ff20/0x1090ff38/—` | root | 64; static table `0x106034b8..0x106035b4` | `R[68;0-67] / R[330;0-329] / R[119;0-118] / 0` | Registration split across `0x102cadd0`, `0x10316ff0`, `0x102c8ce0`; `0x102cadd0` itself uses two entry points (`0x1000a948` × 57, `0x10007068` × 11); 4 registered ids carry no text |
 | `CAI_BaseNPCTroika` | guard `0x102b97a0`; body/feed `0x102b9810` | `0x10924248/0x10924260/0x10924278/—` | `B` | 274; `158×0x102c6920 + 116×0x102c65d0` | `R[274;68-341] / 0 / 0 / 0` | Helper-based init/registration; no local task, condition, or squad-slot pairs |
 | `CAI_StandoffBehavior` | `0x102c7f10` | `0x10925398/0x109253b0/0x109253c8/—` | `B` | 0 | `0 / 0 / 0 / 0` | Three-space empty body; parser loop has zero iterations |
 | `CNPC_Crow` | `0x10359270` | `0x1093a0d0/0x1093a0e8/0x1093a100/0x1093a070` | `B` | 8; `V=local_98` | `R[8;68-75] / R[9;330-338] / R[3;119-121] / 0` | Exact Brujah shape |
