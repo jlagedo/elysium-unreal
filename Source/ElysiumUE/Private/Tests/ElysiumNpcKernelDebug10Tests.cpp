@@ -386,9 +386,9 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->IdealActivityNumber = INDEX_NONE;
 
 	// The two scheduling-diagnostic lines the checklist's walk left as "two non-zero ints".
-	Npc->ScheduleHost.InterruptSchedule = EElysiumScheduleId::IdleStand;
+	Npc->ScheduleHost.InterruptSchedule = ElysiumSched::IDLE_STAND;
 	Npc->ScheduleHost.InterruptText = TEXT("saw enemy");
-	Npc->ScheduleHost.FailedSchedule = EElysiumScheduleId::IdleStand;
+	Npc->ScheduleHost.FailedSchedule = ElysiumSched::IDLE_STAND;
 	Npc->ScheduleHost.FailText = TEXT("no route");
 	FElysiumNpc::BeginDebugCapture();
 	Npc->BaseDrawDebugTextOverlays();
@@ -398,8 +398,8 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 			Debug10RetailOrder(Lines).Contains(
 				TEXT("Actv: INVALID|Intr: %s (%s)\n|Fail: %s (%s)\n")));
 	}
-	Npc->ScheduleHost.InterruptSchedule = EElysiumScheduleId::None;
-	Npc->ScheduleHost.FailedSchedule = EElysiumScheduleId::None;
+	Npc->ScheduleHost.InterruptSchedule = ElysiumScheduleId::None;
+	Npc->ScheduleHost.FailedSchedule = ElysiumScheduleId::None;
 
 	// `COND_ENEMY_TOO_FAR` prints a bare literal with no `Q_snprintf` at all.
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyTooFar);

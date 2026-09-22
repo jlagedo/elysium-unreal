@@ -4,6 +4,11 @@
 
 #include "Substrate/ElysiumNpcConditions.h"   // the interrupt mask a schedule declares
 #include "Substrate/ElysiumNpcFlags.h"        // the flag word `TASK_SET_NPC_FLAG` names
+#include "Substrate/ElysiumLocalIdSpace.h"    // the class space an id is translated through
+#include "Substrate/ElysiumScheduleId.h"      // local vs global, and the two constants that tell them apart
+#include "Substrate/ElysiumScheduleNumbers.h" // the local ids a C++ body still has to name
+#include "Substrate/ElysiumScheduleText.h"    // `FElysiumScheduleProgram` / `FElysiumScheduleStep`
+#include "Substrate/ElysiumTaskOps.h"         // the opcode set the task bodies below implement
 
 class IElysiumNpcMotor;   // the reachability query `TASK_MOVE_AWAY_PATH` asks the world
 
@@ -16,289 +21,94 @@ class IElysiumNpcMotor;   // the reachability query `TASK_MOVE_AWAY_PATH` asks t
 // file stays free of the world, the engine and the clip vocabulary.
 //
 // Recovered facts: `docs/vtmb/npc-ai/conditions-and-states.md` -> "The idle branch, decided" for the
-// state-1 selection order, and "Door-obstruction schedule selection" for step 6. The IDs below are
-// retail's own registered numbers, kept so a trace row reads like the binary's.
+// state-1 selection order, and "Door-obstruction schedule selection" for step 6.
 //
-// Only the tasks the implemented schedules need are enumerated. Every other task ID is deliberately
-// absent rather than stubbed: an unknown task is a schedule this runtime cannot honestly run, and
-// the runner fails it by name instead of quietly skipping a step.
+// The PROGRAMS are not here and are not typed here. They are VtMB's own 691 schedule texts,
+// compiled at load by `FElysiumScheduleCorpus`; this file is only the interpreter that runs them.
+// A task identity this runtime has no body for fails by name and is counted, which is the honest
+// answer to an open task vocabulary and the reason the coverage meter can exist at all.
 
-enum class EElysiumTask : uint8
-{
-	// The disposition stance machine's per-completion selection (`TASK_SPECIAL_IDLE_ACTIVITY`).
-	SpecialIdleActivity,
-	// Hold until the body is in the player's PVS (`TASK_WAIT_PVS`). Our oracle is a render-time
-	// query; the divergence is stated on `IElysiumEmbodiment::IsNpcBodyVisible`.
-	WaitPvs,
-	// Play a named ACT_* activity on the body (`TASK_SET_ACTIVITY`).
-	SetActivity,
-	// Hold for `Param` seconds (`TASK_WAIT`).
-	Wait,
-	// Hold for `RandomFloat(0.1, Param)` seconds (`TASK_WAIT_RANDOM` 0x67, base arm `0x10283dae`).
-	// The low bound is 0.1, not 0; `TASK_WAIT` (2) has no floor.
-	WaitRandom,
-	// Turn to face the position saved by the door-obstruction selector (`TASK_FACE_SAVEPOSITION`).
-	FaceSavePosition,
-	// Step back from the saved position (`TASK_MOVE_AWAY_PATH` and its follow-ups).
-	MoveAwayFromSavePosition,
+// Identity lives in the corpus, not in this header.
+//
+// This file used to open with two enums. `EElysiumTask` enumerated 23 task identities and
+// `int32` 29 schedule ones, and both were the same mistake in two sizes: a closed
+// C++ set standing where VtMB has an open table of authored names. The corpus registers 514 task
+// identities and 695 schedule names, and a program this runtime has never heard of is not a thing
+// the port gets to be unable to spell.
+//
+// So both are gone, and what replaces them is retail's own answer:
+//
+//   - a SCHEDULE is an `int32`. Below `ElysiumScheduleId::GlobalBase` it is a class-LOCAL number,
+//     the number a selector, a task operand or a script names; at or above it, the GLOBAL id the
+//     owning space translated it to, which is what `FElysiumScheduleManager` keys on and what
+//     `FElysiumScheduleState::Current` holds. `ElysiumScheduleNumbers.h` carries the handful of
+//     local numbers a C++ body has to name, each checked against the corpus at load.
+//   - a TASK is a global task id in `FElysiumScheduleStep::TaskId`, and `EElysiumTaskOp`
+//     (`Substrate/ElysiumTaskOps.h`) is the separate, small set of identities this runtime has a
+//     BODY for. An id with no op is not an error; it is the coverage meter's row.
+//
+// The programs themselves are `FElysiumScheduleProgram` (`Substrate/ElysiumScheduleText.h`),
+// compiled from retail's own schedule texts by `FElysiumScheduleCorpus`.
 
-	// The combat vocabulary.
-	// The 12 additional task identities the registered combat families use, under their recovered
-	// names (`docs/vtmb/npc-ai/schedule-kernel.md` -> "Schedules and tasks"). Everything else in
-	// the 441-identity library stays absent: an unknown task is a schedule this runtime cannot
-	// honestly run, and the runner fails it by name.
+/** The program a GLOBAL schedule id names, or null. `FElysiumScheduleManager::FindById` over the
+ *  loaded corpus, which is the only registry this runtime has. */
+const FElysiumScheduleProgram* ElysiumScheduleFor(int32 GlobalId);
 
-	// Redirect this program's failure route (`TASK_SET_FAIL_SCHEDULE`, 328 invocations). Reads
-	// `FElysiumTaskStep::Target`.
-	SetFailSchedule,
-	// TASK_STOP_MOVING 0x69. StartTask clears an active goal; RunTask waits out Jump/Climb
-	// and fails a motionless airborne jump with reason 0x1c (0x10288963).
-	StopMoving,
-	// How close to the goal counts as arrived, in SOURCE UNITS (`TASK_SET_TOLERANCE_DISTANCE`, 175).
-	// The one conversion to centimetres happens at the motor call, like every other recovered
-	// distance in this runtime.
-	SetToleranceDistance,
-	// Path to the committed enemy at the tolerance in force (`TASK_GET_PATH_TO_ENEMY`, 37).
-	GetPathToEnemy,
-	// Take the path at running locomotion (`TASK_RUN_PATH`, 133).
-	RunPath,
-	// Hold until the outstanding request arrives or fails (`TASK_WAIT_FOR_MOVEMENT`, 230).
-	WaitForMovement,
-	// Turn in place toward the committed enemy (`TASK_FACE_ENEMY`, 69).
-	FaceEnemy,
-	// The incoming-attack notice the aimed opponent receives (`TASK_ANNOUNCE_ATTACK`). No health or
-	// damage changes: it is opponent reservation (`docs/vtmb/combat-and-damage.md`).
-	AnnounceAttack,
-	// Drive the active weapon's primary attack (`TASK_MELEE_ATTACK1` / `TASK_RANGE_ATTACK1`). The
-	// weapon controller owns the transaction; the task only presses.
-	MeleeAttack1,
-	RangeAttack1,
-	// Transfer to another program (`TASK_SET_SCHEDULE`, 145). Reads `FElysiumTaskStep::Target`.
-	SetSchedule,
-	// Record a fact for later selection (`TASK_REMEMBER`, 41).
-	//
-	// SEAM (traced, no consumer): the operand names one of retail's memory bits and the bit table is
-	// not decoded, so what is remembered is carried as a number and read by nobody. The task is here
-	// because `SCHED_SMALL_FLINCH` opens with it and dropping a step would misreport the program.
-	Remember,
+/** The GLOBAL id a class-LOCAL retail number names, in the corpus's `CAI_BaseNPCTroika` space --
+ *  the space `IElysiumScheduleRunner`'s own default translates through, and the one every class
+ *  with no slot-580 body of its own runs. `INDEX_NONE` when no space in the chain holds it.
+ *
+ *  A body that has an NPC asks the NPC (`IdSpace`); this is for the bodies that do not. */
+int32 ElysiumScheduleGlobalId(int32 LocalId);
 
-	// The death vocabulary.
-	// `TASK_PLAY_DEATH_SEQUENCE` (0x149, the last identity in the recovered 441-task library). It
-	// walks the recovered ladder — the task's own argument as an activity, then `ACT_DIESIMPLE`, then
-	// `ACT_IDLE` — and hands the surviving choice to the body
-	// (`docs/vtmb/animation_and_movers.md` -> the `RunTask` activity table). The argument rides in
-	// `FElysiumTaskStep::Activity`; empty means the program named none.
-	PlayDeathSequence,
+/** The authored name of a global schedule id, or `SCHED_?`. Retail's `CAI_Schedule+0x40`. */
+const TCHAR* ElysiumScheduleName(int32 GlobalId);
 
-	// The incapacitation vocabulary.
-	// Both are `StartTask`-only in retail — neither has a `RunTask` arm, so both complete on the
-	// think that begins them.
+/** `name (global/local)` for a trace row. The local half is the number the oracle and the
+ *  retail-side prose use, so a row reads like the binary's; it is `(?)` where the runner carries no
+ *  space that holds the id. */
+FString ElysiumScheduleLabel(int32 GlobalId, const class IElysiumScheduleRunner* Runner = nullptr);
 
-	// `TASK_MAKE_OBLIVIOUS` (0x131, arm `0x102a72e3`). Reads `FElysiumTaskStep::Param`, which the
-	// schedule compiler writes as 1.0 for `TRUE` and 0.0 for `FALSE`.
-	MakeOblivious,
-	// `TASK_SET_NPC_FLAG` (0x100, arm `0x102a585d`). Reads `FElysiumTaskStep::Flag`.
-	//
-	// `TASK_CLEAR_NPC_FLAG` (0x101) is its exact mirror and is deliberately ABSENT: no registered
-	// program clears a flag, and every bit the registered programs set is released by
-	// `IElysiumScheduleRunner::OnScheduleChange` instead. Add it with the schedule that needs it.
-	SetNpcFlag,
+/** How a step's single data word reads, given the op that consumes it -- the activity name, the
+ *  schedule the transfer names, the raw flag word, or the float. One body, because the two debug
+ *  surfaces that print a task program must not each decide what the word means. */
+FString ElysiumTaskOperandLabel(const FElysiumScheduleStep& Step);
 
-	// The scripted-director vocabulary.
-	// Path to the goal an `aiscripted_schedule` pushed (`TASK_GET_PATH_TO_GOAL`). It reads no
-	// operand: the goal, the route and the gait are the pushed order's, exactly as
-	// `TASK_GET_PATH_TO_ENEMY` reads the committed enemy off memory rather than off a task column.
-	GetPathToGoal,
-};
-
-enum class EElysiumScheduleId : uint8
-{
-	None,
-	// The two base programs the kernel itself routes to (story 25): `SetSchedule(int)`'s miss arm
-	// installs `IDLE_STAND`, `GetFailSchedule` answers `FAIL` when no fail schedule was set.
-	IdleStand,                // 0x01 IDLE_STAND
-	Fail,                     // 0x43 FAIL
-	IdleDisposition,          // 0x6b SCHED_TROIKA_IDLE_DISPOSITION
-	AlertLookAroundNi,        // 0x4f SCHED_TROIKA_ALERT_LOOK_AROUND_NI
-	BackAwayFromDoorNe,       // 0x91 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE
-	BackAwayFromDoorWaitNe,   // 0x96 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE
-	TakeCoverHintDoor,        // 0x9c SCHED_TROIKA_TAKE_COVER_HINT_DOOR
-
-	// The combat families (`Substrate/ElysiumNpcCombatSchedules.cpp` registers every one).
-	MeleeAttack1,             // 0xdc SCHED_TROIKA_MELEE_ATTACK1
-	MeleeAttack1Nr,           // 0xdd SCHED_TROIKA_MELEE_ATTACK1_NR
-	MeleeAttack1Swing,        //      SCHED_TROIKA_MELEE_ATTACK1_SWING (number not decoded)
-	MeleeDodge,               // 0xd5 SCHED_TROIKA_MELEE_DODGE
-	MeleePreblock,            // 0xd6 SCHED_TROIKA_MELEE_PREBLOCK
-	MeleeKick,                // 0xdb SCHED_TROIKA_MELEE_KICK
-	MeleeStepback,            // 0xd3 SCHED_TROIKA_MELEE_STEPBACK
-	MeleeIdle,                // 0xc7 SCHED_TROIKA_MELEE_IDLE
-	MeleeAdvance,             // 0xca SCHED_TROIKA_MELEE_ADVANCE
-	MeleeCircle,              // 0xe0 SCHED_TROIKA_MELEE_CIRCLE
-	ChaseEnemy,               // 0xb1 SCHED_TROIKA_CHASE_ENEMY
-	ChaseEnemyFailed,         //      SCHED_TROIKA_CHASE_ENEMY_FAILED (number not decoded)
-	RangeAttack1,             // 0xec SCHED_TROIKA_RANGE_ATTACK1
-	RunAway,                  // 0xb9 SCHED_TROIKA_RUN_AWAY
-	SmallFlinch,              // 0x14 SCHED_SMALL_FLINCH
-	AlertSmallFlinch,         // 0x07 SCHED_ALERT_SMALL_FLINCH
-	TakeCoverFromOrigin,      // 0x19 SCHED_TAKE_COVER_FROM_ORIGIN
-
-	// The death family (`Substrate/ElysiumNpcCombatSchedules.cpp` registers it).
-	Die,                      // SCHED_DIE (number not decoded)
-
-	// The post-feed trance (`Substrate/ElysiumFeedSchedules.cpp` registers it beside its producer).
-	Mesmerized,               // 0xfb SCHED_TROIKA_MESMERIZED
-
-	// The scripted-director family (`Substrate/ElysiumAiScriptedSchedule.cpp` registers both).
-	ScriptedMoveToGoal,       // `aiscripted_schedule` modes 1 and 2
-	ScriptedFollowPath,       // `aiscripted_schedule` modes 4 and 5
-};
-
-// Retail's registered number for a schedule, so a trace row and the binary agree.
-int32 ElysiumScheduleNumber(EElysiumScheduleId Id);
-const TCHAR* ElysiumScheduleName(EElysiumScheduleId Id);
-const TCHAR* ElysiumTaskName(EElysiumTask Task);
 const TCHAR* ElysiumTaskFailureName(int32 Reason);
-
-// The name -> id direction, for the two script-facing schedule commands.
-//
-// `ChangeSchedule` and `StartSchedule` "name native schedules explicitly"
-// (`docs/vtmb/npc-ai/authored-control.md` -> "Direct schedule changes"), so schedule identity is
-// authored API and needs a lookup rather than a number. Only a REGISTERED program resolves: a name
-// this runtime carries no program for has to fail by name, because starting some other schedule
-// under an authored name would be a behaviour invented out of a string.
-//
-// Matching is case-insensitive over `ElysiumScheduleName`.
-bool ElysiumScheduleIdFromName(const FString& Name, EElysiumScheduleId& OutId);
-
-struct FElysiumTaskStep
-{
-	EElysiumTask Task;
-	// The task's single authored operand. Retail spells these as floats in the schedule tables.
-	float Param = 0.f;
-	// The activity name for `SetActivity`; empty for every other task.
-	FString Activity;
-	// The program `SetFailSchedule` / `SetSchedule` names. Retail spells a schedule operand as a
-	// registered number in the same float column; it is kept as the identity here so a program reads
-	// as the schedule it transfers to rather than as a magic constant.
-	EElysiumScheduleId Target = EElysiumScheduleId::None;
-	// The bit `TASK_SET_NPC_FLAG` names; `None` for every other task. Retail spells this operand as
-	// `NPCFlag:<name>` and resolves it to a mask at schedule-load time (`0x1030cbd0`), so it is a
-	// typed identity here rather than a number in the float column.
-	EElysiumNpcFlag Flag = EElysiumNpcFlag::None;
-};
-
-struct FElysiumSchedule
-{
-	EElysiumScheduleId Id = EElysiumScheduleId::None;
-	TArray<FElysiumTaskStep> Tasks;
-	// Where a failed task goes. `None` takes retail's default: `GetFailSchedule` (slot 439,
-	// `0x1028abe0`, no override on any class) answers base `FAIL` (0x43).
-	EElysiumScheduleId FailSchedule = EElysiumScheduleId::None;
-
-	// Which newly gathered conditions may abort this task program
-	// (`docs/vtmb/npc-ai/conditions-and-states.md` -> "Interrupt conditions").
-	//
-	// **Empty means interruptible by nothing**, and that is a real recovered posture rather than an
-	// unfilled default: `SCHED_TROIKA_MELEE_ATTACK1_SWING` declares no interrupts at all, "so once
-	// that terminal attack task owns the NPC it is not reevaluated as a fresh attack choice each
-	// tick". The schedule — not the mere existence of a condition — decides whether a new stimulus
-	// pre-empts behaviour, which is why a faithful AI cannot be one global priority list.
-	//
-	// A mask is filled in from a decoded registration site wherever there is one, and is otherwise
-	// either left empty or filled from the interrupt census with a CHOSEN mark beside the program —
-	// the distinction between those two, and why the idle pair could not stay empty, is stated at
-	// the registry and at `MinimalCombatMask` in `Substrate/ElysiumNpcCombatSchedules.cpp`.
-	//
-	// An interrupt is NOT a task failure: a failed task goes to `FailSchedule`, while an interrupt
-	// ends the program and returns the NPC to selection ("until it completes, fails, or an interrupt
-	// condition forces reselection"). Routing an interrupt through the fail schedule would send an
-	// NPC that just acquired an enemy into a cover or flinch program instead of re-selecting.
-	FElysiumNpcConditions Interrupts;
-
-	// `DELAY_INTERRUPTS`, the ONLY schedule flag retail has. Its token table
-	// (`vampire.dll 0x1030d7e0`) answers exactly two spellings — `NONE` -> 0 and `DELAY_INTERRUPTS`
-	// -> bit 0 — and makes anything else a load-time `Error`, so `bDelayInterrupts` is the whole
-	// flag word rather than one bit of a set.
-	//
-	// It is NOT a property the interrupt check can consult on its own. The sole tester,
-	// `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`, called only from `MaintainSchedule`
-	// `0x102817c0`), ANDs it with the NPC's own `m_bDidMaintainSchedule` (`+0x5bb8`):
-	//
-	//     if (!(!m_bDidMaintainSchedule && (schedule->flags & 1)))  evaluate the interrupt mask
-	//
-	// so the flag buys a schedule exactly ONE think of immunity, re-armed by every install and
-	// bounded by nothing else — no timer, no task boundary, no deferral store. See
-	// `FElysiumScheduleState::bDidMaintainSchedule` for the other half and for what "one think"
-	// buys, and `ElysiumSchedule::Start` for the condition clear that goes with it.
-	//
-	// 42 of retail's 691 schedules carry it, and they are one family: the Discipline effects and the
-	// externally forced states (`D_MESMERIZE`, `D_DAZE`, `D_BERSERK`, `D_TRANCE`, `FLEE_AND_DIE`,
-	// `TROIKA_MESMERIZED`). All of them are installed from OUTSIDE the AI think, which is the case
-	// the flag exists for: without it a forced state is re-selected away on the same think that
-	// forced it.
-	bool bDelayInterrupts = false;
-
-	bool IsValid() const { return Id != EElysiumScheduleId::None && !Tasks.IsEmpty(); }
-};
-
-// The registry. Schedules are data, so they are stated once here rather than built per NPC.
-const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id);
-
-namespace ElysiumSchedule
-{
-	// The registry's one growth point.
-	//
-	// A domain file states its own programs and installs them here at static init — the combat
-	// families live in `Substrate/ElysiumNpcCombatSchedules.cpp` beside the selectors that choose
-	// them, because a program and the policy that picks it are one decision. This kernel carries the
-	// task vocabulary and the two idle/door programs it was written around, and nothing else.
-	//
-	// Registering an id twice replaces the earlier program and says so: a duplicate is a build
-	// mistake, not a merge.
-	void Register(FElysiumSchedule&& Program);
-}
 
 #if WITH_DEV_AUTOMATION_TESTS
 namespace ElysiumSchedule
 {
-	// Test-only: install an interrupt mask on a registered program for the lifetime of the scope,
-	// restoring the previous one on destruction.
+	// Test-only: borrow a LOADED program's interrupt mask for the lifetime of the scope, restoring
+	// the authored one on destruction. `LocalId` is the class-local number, resolved through the
+	// same fallback space `ElysiumSchedule::Start` uses.
 	//
 	// It exists so a kernel case can drive the interrupt path against a mask of its own choosing
-	// rather than against whatever the registered program authors: the idle pair here carries a
-	// CHOSEN mask, the door programs an empty one, and the combat families in
-	// `ElysiumNpcCombatSchedules.cpp` either a decoded mask or the CHOSEN `MinimalCombatMask`, so a
-	// case that wants to prove "this
+	// rather than against whatever the loaded program declares: a case that wants to prove "this
 	// condition, and only this condition, ends the program" needs a mask it controls. Nothing
-	// outside a test may install one: a mask is authored data, and inventing one at runtime is a
-	// behavioural change.
+	// outside a test may install one -- a compiled mask is authored data, and writing one at
+	// runtime is a behavioural change.
 	struct FInterruptMaskScope
 	{
-		FInterruptMaskScope(EElysiumScheduleId Id, const FElysiumNpcConditions& Mask);
+		FInterruptMaskScope(int32 LocalId, const FElysiumNpcConditions& Mask);
 		~FInterruptMaskScope();
 
 		FInterruptMaskScope(const FInterruptMaskScope&) = delete;
 		FInterruptMaskScope& operator=(const FInterruptMaskScope&) = delete;
 
 	private:
-		EElysiumScheduleId Target;
+		int32 Target = ElysiumScheduleId::None;
 		FElysiumNpcConditions Previous;
 		bool bInstalled = false;
 	};
 
-	// Test-only: install a task's authored ACTIVITY operand on a registered program for the lifetime
-	// of the scope, restoring the previous one on destruction.
+	// Test-only: borrow one task's data word, same reason and same rule.
 	//
-	// Same reason as the mask scope beside it, for the same kind of value.
 	// `TASK_PLAY_DEATH_SEQUENCE` takes an activity argument and its first ladder rung is that
-	// argument, but no registered program authors one — retail spells the operand as an
-	// activity-index number and this runtime has no decoded index table — so the rung would
-	// otherwise have no content-free driver at all. Nothing outside a test may install an operand:
-	// authoring one at runtime is the behavioural change the empty default exists to refuse.
+	// argument; a case that wants to drive that rung needs an operand it controls.
 	struct FTaskActivityScope
 	{
-		FTaskActivityScope(EElysiumScheduleId Id, int32 TaskIndex, const FString& Activity);
+		FTaskActivityScope(int32 LocalId, int32 TaskIndex, const FString& Activity);
 		~FTaskActivityScope();
 
 		FTaskActivityScope(const FTaskActivityScope&) = delete;
@@ -307,9 +117,9 @@ namespace ElysiumSchedule
 		bool IsInstalled() const { return bInstalled; }
 
 	private:
-		EElysiumScheduleId Target;
-		int32 Index;
-		FString Previous;
+		int32 Target = ElysiumScheduleId::None;
+		int32 Index = 0;
+		float Previous = 0.f;
 		bool bInstalled = false;
 	};
 }
@@ -383,7 +193,18 @@ public:
 	virtual void RecordScheduleEvent(const FString& Row) {}
 	// Read-only observability hook. The gameplay owner may attach a Visual Logger event after the
 	// schedule install; the default keeps engine-neutral test runners unchanged.
-	virtual void DebugScheduleInstalled(EElysiumScheduleId) {}
+	virtual void DebugScheduleInstalled(int32 GlobalScheduleId) { (void)GlobalScheduleId; }
+
+	// --- Slot 580's two translations, which is how an id reaches a program -----------------------
+	//
+	// `GetScheduleOfType` (`0x102cc260`) begins every `SetSchedule(int)` with
+	// `if (id < 0x3b9aca00 || id == -1) id = ScheduleLocalToGlobal(GetClassScheduleIdSpace(), id)`,
+	// and slot 447 (`0x101a6620`) is the inverse. A runner that carries no class of its own runs the
+	// corpus's `CAI_BaseNPCTroika` space, which is the same fallback `ClassScheduleIdSpace()` takes
+	// for a class with no slot-580 body of its own -- so a plain test runner still reaches every
+	// base and Troika program by its retail number.
+	virtual int32 ResolveScheduleId(int32 Id) const;
+	virtual int32 LocalScheduleId(int32 GlobalId) const;
 
 	// The combat verbs.
 	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs
@@ -408,8 +229,15 @@ public:
 	// ineligible weapon, which is what fails the swing into its melee-idle fail schedule.
 	virtual bool MeleeAttack1() { return false; }
 	virtual bool RangeAttack1() { return false; }
-	// `TASK_REMEMBER`, traced and otherwise inert (see `EElysiumTask::Remember`).
-	virtual void RememberFact(float What) {}
+	// `TASK_REMEMBER` (`0x10288e1e`). The operand is a `Memory:` word -- one of the seventeen
+	// resolved prefixes, and one of the fourteen that store a signed-converted float rather than a
+	// raw one. SEAM, traced and otherwise inert: nothing in this runtime reads the memory word yet.
+	virtual void RememberFact(uint32 MemoryMask) { (void)MemoryMask; }
+
+	// `TASK_FIND_COVER_FROM_ENEMY`. New with the corpus -- the witness text
+	// `SCHED_TROIKA_CHASE_ENEMY_FAILED` is the fifth of its twelve tasks and the port carried no
+	// body for it, because it carried no program that named it. Refusing fails the task by name.
+	virtual bool FindCoverFromEnemy() { return false; }
 
 	// `TASK_PLAY_DEATH_SEQUENCE`'s one rung — try ONE activity on the body and answer with its
 	// authored length, or a negative value when this body's vocabulary does not carry it. The kernel
@@ -457,7 +285,7 @@ public:
 	// This is why `SCHED_TROIKA_MESMERIZED` needs no teardown tasks and why the trance unwinds
 	// completely: the NEXT schedule this NPC is given is what ends it. It is also why the mesmerize
 	// tasks always write onto a cleared word — the same virtual ran when the program was installed.
-	virtual void OnScheduleChange(EElysiumScheduleId NewSchedule) { (void)NewSchedule; }
+	virtual void OnScheduleChange(int32 NewGlobalScheduleId) { (void)NewGlobalScheduleId; }
 	// `gpGlobals->curtime`, used by base SetSchedule to stamp both schedule clocks. A plain runner
 	// has no world clock and therefore starts at retail's zero-initialised value.
 	virtual double ScheduleTime() const { return 0.0; }
@@ -476,22 +304,20 @@ public:
 	virtual void PrepareScheduleReselect() {}
 	virtual bool ConsumeBlockedDoorForSchedule(double Now) { (void)Now; return false; }
 	virtual void CommitIdealStateForSchedule() {}
-	virtual EElysiumScheduleId SelectScheduleForMaintenance(double Now,
-		int32& OutIdealScheduleRetail)
+	/** The selector's answer, as the LOCAL retail number it names -- which is what every selector
+	 *  in this port already computes and what `SetSchedule(int)` takes. The kernel translates. */
+	virtual int32 SelectScheduleForMaintenance(double Now, int32& OutIdealScheduleRetail)
 	{
 		(void)Now;
 		OutIdealScheduleRetail = 0;
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 	virtual void SetIdealScheduleForMaintenance(int32 RetailId) { (void)RetailId; }
 	virtual void MissingSchedule() {}
 	virtual void MaintainActivity() {}
-	virtual int32 LocalScheduleIdForStart(EElysiumScheduleId Id)
-	{
-		return ElysiumScheduleNumber(Id);
-	}
+	virtual int32 LocalScheduleIdForStart(int32 GlobalId) { return LocalScheduleId(GlobalId); }
 	virtual void MaintenanceOnStartSchedule(int32 LocalScheduleId) { (void)LocalScheduleId; }
-	virtual void DebugTaskStart(const FElysiumTaskStep& Step) { (void)Step; }
+	virtual void DebugTaskStart(const FElysiumScheduleStep& Step) { (void)Step; }
 	virtual void MaintenanceStartTaskOverlay() {}
 	virtual bool MaintenanceIsCurTaskContinuousMove() { return false; }
 	virtual void RememberContinuousMove() {}
@@ -524,7 +350,7 @@ public:
 	// `ChangeSchedule`. The kernel applies it on the fail route; the selectors' answers are already
 	// translated Troika ids and never pass through it. Identity for a runner with no class table.
 	// The miss arm's literal 1 (`0x102cc229`) does NOT go through it.
-	virtual EElysiumScheduleId TranslateSchedule(EElysiumScheduleId Id) { return Id; }
+	virtual int32 TranslateSchedule(int32 LocalId) { return LocalId; }
 
 	// `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), the per-NPC interrupt overlay.
 	//
@@ -540,7 +366,9 @@ public:
 // The per-NPC runner state. Saved as part of the NPC, so a schedule survives a save.
 struct FElysiumScheduleState
 {
-	EElysiumScheduleId Current = EElysiumScheduleId::None;
+	/** The GLOBAL id of the installed program -- retail's `m_pSchedule` (`+0x5c38`) by identity
+	 *  rather than by pointer. `ElysiumScheduleFor` turns it back into the program. */
+	int32 Current = ElysiumScheduleId::None;
 	int32 TaskIndex = 0;
 	// Set when a timed task starts; the substrate clock decides when it completes.
 	double TaskEndsAt = 0.0;
@@ -554,7 +382,11 @@ struct FElysiumScheduleState
 	// program. Both are per-run rather than per-program: the same schedule reached from two
 	// selectors carries whatever its own tasks set, and `Start` resets them so a previous program's
 	// tolerance can never leak into the next one's path request.
-	EElysiumScheduleId FailScheduleOverride = EElysiumScheduleId::None;
+	//
+	// `m_failSchedule` (`+0x5c54`) holds the operand as authored, which is a class-LOCAL number:
+	// `GetFailSchedule` answers it raw and `SetSchedule(int)` is what translates. So this field is
+	// LOCAL where `Current` above is GLOBAL, and that asymmetry is retail's, not a slip.
+	int32 FailScheduleOverride = ElysiumScheduleId::None;
 	// Source units, and negative means "the task never ran, so the motor's own acceptance decides".
 	float ToleranceUnits = -1.f;
 
@@ -572,16 +404,16 @@ struct FElysiumScheduleState
 	// player can observe.
 	bool bDidMaintainSchedule = false;
 
-	bool IsRunning() const { return Current != EElysiumScheduleId::None; }
+	bool IsRunning() const { return Current != ElysiumScheduleId::None; }
 	void Clear()
 	{
-		Current = EElysiumScheduleId::None;
+		Current = ElysiumScheduleId::None;
 		TaskIndex = 0;
 		TaskEndsAt = 0.0;
 		ScheduleStartedAt = 0.0;
 		TaskStartedAt = 0.0;
 		TaskStatus = EElysiumTaskStatus::New;
-		FailScheduleOverride = EElysiumScheduleId::None;
+		FailScheduleOverride = ElysiumScheduleId::None;
 		ToleranceUnits = -1.f;
 		bDidMaintainSchedule = false;
 	}
@@ -592,14 +424,14 @@ namespace ElysiumSchedule
 	// `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`): install a schedule pointer that has
 	// already passed the id lookup. `None` is a null pointer and is installed as null; unlike
 	// `Start`, it does not take `GetScheduleOfType`'s IDLE_STAND miss arm.
-	void Install(FElysiumScheduleState& State, EElysiumScheduleId Id,
+	void Install(FElysiumScheduleState& State, int32 GlobalId,
 		IElysiumScheduleRunner& Runner);
 
 	// `SetSchedule(int)` (`0x102cc1f0`): begin Id after running the outgoing program's teardown. A
 	// program this runtime does not carry is `GetScheduleOfType`'s miss — a trace row
 	// (`"GetScheduleOfType(): No CASE for %d"`) and base `IDLE_STAND` installed in its place. False
 	// only if `IDLE_STAND` itself is missing, which is a build defect.
-	bool Start(FElysiumScheduleState& State, EElysiumScheduleId Id, IElysiumScheduleRunner& Runner);
+	bool Start(FElysiumScheduleState& State, int32 Id, IElysiumScheduleRunner& Runner);
 
 	// `ClearSchedule` (`0x10280d30`): zero the six schedule words `+0x5c38..+0x5c4c` (program, schedule
 	// id, task index, status, both stamps), clear `PRESERVE_PATH`, dispatch slot 435 with no program.

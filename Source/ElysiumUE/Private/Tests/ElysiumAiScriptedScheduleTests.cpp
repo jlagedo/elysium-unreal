@@ -38,7 +38,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 using ECond = EElysiumNpcCond;
-using EId = EElysiumScheduleId;
+using EId = int32;
 
 namespace
 {
@@ -283,13 +283,13 @@ bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 		ElysiumAiScriptedSchedule::IsMoveToGoal(3) || ElysiumAiScriptedSchedule::IsFollowPath(3));
 
 	TestEqual(TEXT("the move variants share one registered program"),
-		ElysiumAiScriptedSchedule::ProgramFor(1), EId::ScriptedMoveToGoal);
+		ElysiumAiScriptedSchedule::ProgramFor(1), ElysiumSched::TARGET_CHASE);
 	TestEqual(TEXT("...both of them"),
-		ElysiumAiScriptedSchedule::ProgramFor(2), EId::ScriptedMoveToGoal);
+		ElysiumAiScriptedSchedule::ProgramFor(2), ElysiumSched::TARGET_CHASE);
 	TestEqual(TEXT("the follow variants share the other"),
-		ElysiumAiScriptedSchedule::ProgramFor(5), EId::ScriptedFollowPath);
+		ElysiumAiScriptedSchedule::ProgramFor(5), ElysiumSched::AISCRIPT);
 	TestEqual(TEXT("mode 3 names no program"),
-		ElysiumAiScriptedSchedule::ProgramFor(3), EId::None);
+		ElysiumAiScriptedSchedule::ProgramFor(3), ElysiumScheduleId::None);
 
 	// CHOSEN, NOT RECOVERED — asserted so the choice is visible in one place and a decoded
 	// discriminator changes exactly one function and this block.
@@ -299,25 +299,30 @@ bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 	TestTrue(TEXT("CHOSEN: mode 5 runs"), ElysiumAiScriptedSchedule::IsRunVariant(5));
 
 	// Both programs are registered into the SHARED kernel registry, and both are reachable by name.
-	for (const EId Program : { EId::ScriptedMoveToGoal, EId::ScriptedFollowPath })
+	for (const EId Program : { ElysiumSched::TARGET_CHASE, ElysiumSched::AISCRIPT })
 	{
-		TestNotNull(FString::Printf(TEXT("%s is registered"), ElysiumScheduleName(Program)),
-			ElysiumScheduleFor(Program));
+		const int32 GlobalId = ElysiumScheduleGlobalId(Program);
+		TestNotNull(FString::Printf(TEXT("%s is loaded"), ElysiumScheduleName(GlobalId)),
+			ElysiumScheduleFor(GlobalId));
 		TestTrue(TEXT("...and is recognised as a scripted program"),
-			ElysiumAiScriptedSchedule::IsScriptedProgram(Program));
-		EId ByName = EId::None;
-		TestTrue(TEXT("...and resolves from its own name"),
-			ElysiumScheduleIdFromName(ElysiumScheduleName(Program), ByName));
-		TestEqual(TEXT("...to itself"), ByName, Program);
+			ElysiumAiScriptedSchedule::IsScriptedProgram(GlobalId));
+		const FElysiumScheduleProgram* ByName = FElysiumScheduleCorpus::Get().Manager().FindByName(
+			ElysiumScheduleName(GlobalId));
+		if (TestNotNull(TEXT("...and resolves from its own name"), ByName))
+		{
+			TestEqual(TEXT("...to itself"), ByName->GlobalId, GlobalId);
+		}
 	}
 	TestFalse(TEXT("an ordinary combat program is not a scripted one"),
-		ElysiumAiScriptedSchedule::IsScriptedProgram(EId::ChaseEnemy));
+		ElysiumAiScriptedSchedule::IsScriptedProgram(
+			ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_CHASE_ENEMY)));
 
 	// The scripted programs declare NO interrupts, and that is the family's decision rather than an
 	// unfilled default: an authored director is not re-decided by ordinary stimulus.
-	for (const EId Program : { EId::ScriptedMoveToGoal, EId::ScriptedFollowPath })
+	for (const EId Program : { ElysiumSched::TARGET_CHASE, ElysiumSched::AISCRIPT })
 	{
-		if (const FElysiumSchedule* Schedule = ElysiumScheduleFor(Program))
+		if (const FElysiumScheduleProgram* Schedule =
+			ElysiumScheduleFor(ElysiumScheduleGlobalId(Program)))
 		{
 			TestTrue(TEXT("a scripted director's program admits no interrupts"),
 				Schedule->Interrupts.IsEmpty());
@@ -416,7 +421,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		TestEqual(TEXT("a follow-path mode starts the follow-path program"),
-			F.Guard->Schedule.Current, EId::ScriptedFollowPath);
+			F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::AISCRIPT));
 		F.Step(0.1);
 		if (FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Guard))
 		{
@@ -431,7 +436,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		// SET_ACTIVITY ACT_IDLE (a one-second watchdog on this headless body), WAIT 1, then its PVS
 		// hold — before the order ends.
 		F.Step(0.4);
-		TestEqual(TEXT("an exhausted route fails into FAIL"), F.Guard->Schedule.Current, EId::Fail);
+		TestEqual(TEXT("an exhausted route fails into FAIL"), F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 		F.Step(1.4);
 		F.Step(2.4);
 		TestTrue(TEXT("an exhausted route ends the follow-path program once FAIL completes"),
@@ -495,11 +500,17 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 	TestTrue(TEXT("...and leaves no order behind"),
 		!F.Guard->ScriptedScheduleOrder.IsSet());
 
-	// Ordinary combat selection follows from the state the director pushed.
+	// Ordinary combat selection follows from the state the director pushed. Which program it lands
+	// on is the recovered slot-604/605 body's answer and nothing else now: this used to assert
+	// `SCHED_TROIKA_MELEE_IDLE`, which was the CHOSEN fall-through standing in for a number the port
+	// registered no program for.
 	const EId Selected = F.Guard->SelectSchedule();
 	TestFalse(TEXT("combat selection follows the push rather than the idle stance"),
-		Selected == EId::IdleDisposition);
-	TestEqual(TEXT("...into a registered combat program"), Selected, EId::MeleeIdle);
+		Selected == ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
+	TestTrue(TEXT("...into a loaded combat program"),
+		ElysiumScheduleFor(ElysiumScheduleGlobalId(Selected)) != nullptr);
+	TestTrue(TEXT("...which is one of the Troika melee family"),
+		FString(ElysiumScheduleName(ElysiumScheduleGlobalId(Selected))).Contains(TEXT("MELEE")));
 	return true;
 }
 
@@ -581,7 +592,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		F.FireStartSchedule();
 		F.Step(0.1);
 		F.Step(0.2);   // the failing pass, then the routing pass (story 25)
-		TestEqual(TEXT("a refused route fails into FAIL"), F.Guard->Schedule.Current, EId::Fail);
+		TestEqual(TEXT("a refused route fails into FAIL"), F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 		F.Step(1.2);
 		F.Step(2.2);
 		TestTrue(TEXT("a refused route ends the order once FAIL has run out"),
@@ -667,41 +678,59 @@ bool FElysiumAiScriptedScheduleNamedTest::RunTest(const FString&)
 	F.World.AcceptInput(TEXT("!self"), FName(TEXT("ChangeSchedule")),
 		FElysiumVariant::String(TEXT("SCHED_TROIKA_MELEE_IDLE")), F.Guard->Handle, F.Guard->Handle);
 	TestEqual(TEXT("a registered name starts its own program"),
-		F.Guard->Schedule.Current, EId::MeleeIdle);
+		F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_IDLE));
 
 	// Case folding is retail's own posture for every named surface in this runtime.
 	F.World.AcceptInput(TEXT("!self"), FName(TEXT("StartSchedule")),
 		FElysiumVariant::String(TEXT("sched_troika_chase_enemy")), F.Guard->Handle,
 		F.Guard->Handle);
 	TestEqual(TEXT("the lookup is case-insensitive, and StartSchedule takes the same door"),
-		F.Guard->Schedule.Current, EId::ChaseEnemy);
+		F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_CHASE_ENEMY));
 
-	// The unknown names, which is every name the shipped scripts actually use.
-	AddExpectedError(TEXT("SCHED_VDOG_SNARL"), EAutomationExpectedErrorFlags::Contains, 1);
+	// The names the shipped scripts actually use. All five `ChangeSchedule` sites in the corpus ask
+	// for `SCHED_VDOG_SNARL`, `SCHED_VDOG_MADEFRIEND` or the literal `-`, and this port resolved
+	// NONE of them: it registered 28 programs of its own and the dog's two were not among them. The
+	// corpus registers `CNPC_VDog`'s ten, 0x15e..0x167, so the first two resolve now -- and they
+	// resolve into a SPECIES space, through a guard that is not a dog, which is the whole point of
+	// the schedule NAMESPACE being global while the id spaces are per class.
 	F.World.AcceptInput(TEXT("!self"), FName(TEXT("ChangeSchedule")),
 		FElysiumVariant::String(TEXT("SCHED_VDOG_SNARL")), F.Guard->Handle, F.Guard->Handle);
-	TestEqual(TEXT("an unregistered name changes nothing"),
-		F.Guard->Schedule.Current, EId::ChaseEnemy);
-
-	TArray<ElysiumStub::FTally> Tally;
-	ElysiumStub::CollectTally(Tally);
-	const ElysiumStub::FTally* SnarlRow = Tally.FindByPredicate(
-		[](const ElysiumStub::FTally& Row)
-		{ return Row.Surface.Contains(TEXT("SCHED_VDOG_SNARL")); });
-	if (TestNotNull(TEXT("the unknown name reports through the stub funnel"), SnarlRow))
+	const FElysiumScheduleProgram* Snarl =
+		FElysiumScheduleCorpus::Get().Manager().FindByName(TEXT("SCHED_VDOG_SNARL"));
+	if (TestNotNull(TEXT("SCHED_VDOG_SNARL is a loaded program"), Snarl))
 	{
-		TestEqual(TEXT("...keyed on the NAME, so the tally is a per-schedule work list"),
-			SnarlRow->Kind, FString(TEXT("schedule")));
+		TestEqual(TEXT("...and a script's ChangeSchedule now starts it"),
+			F.Guard->Schedule.Current, Snarl->GlobalId);
 	}
-
-	// A different unknown name is a different row rather than the same one twice.
-	AddExpectedError(TEXT("SCHED_VDOG_MADEFRIEND"), EAutomationExpectedErrorFlags::Contains, 1);
 	F.World.AcceptInput(TEXT("!self"), FName(TEXT("ChangeSchedule")),
 		FElysiumVariant::String(TEXT("SCHED_VDOG_MADEFRIEND")), F.Guard->Handle, F.Guard->Handle);
+	const FElysiumScheduleProgram* MadeFriend =
+		FElysiumScheduleCorpus::Get().Manager().FindByName(TEXT("SCHED_VDOG_MADEFRIEND"));
+	if (TestNotNull(TEXT("SCHED_VDOG_MADEFRIEND is loaded too"), MadeFriend))
+	{
+		TestEqual(TEXT("...and starts"), F.Guard->Schedule.Current, MadeFriend->GlobalId);
+	}
+
+	// The stub funnel survives, and it is keyed on the NAME -- but it fires only for a name the
+	// corpus really does not carry. `-` is the third thing the shipped scripts ask for.
+	AddExpectedError(TEXT("CAI_BaseNPC.ChangeSchedule"), EAutomationExpectedErrorFlags::Contains, 1);
+	const int32 BeforeDash = F.Guard->Schedule.Current;
+	F.World.AcceptInput(TEXT("!self"), FName(TEXT("ChangeSchedule")),
+		FElysiumVariant::String(TEXT("-")), F.Guard->Handle, F.Guard->Handle);
+	TestEqual(TEXT("a name no class registers changes nothing"),
+		F.Guard->Schedule.Current, BeforeDash);
+	TArray<ElysiumStub::FTally> Tally;
 	ElysiumStub::CollectTally(Tally);
-	const int32 ScheduleRows = Tally.FilterByPredicate(
-		[](const ElysiumStub::FTally& Row) { return Row.Kind == TEXT("schedule"); }).Num();
-	TestEqual(TEXT("two unregistered names are two rows"), ScheduleRows, 2);
+	const ElysiumStub::FTally* DashRow = Tally.FindByPredicate(
+		[](const ElysiumStub::FTally& Row) { return Row.Kind == TEXT("schedule"); });
+	if (TestNotNull(TEXT("the unknown name reports through the stub funnel"), DashRow))
+	{
+		TestTrue(TEXT("...keyed on the NAME, so the tally is a per-schedule work list"),
+			DashRow->Surface.Contains(TEXT("-")));
+	}
+	TestEqual(TEXT("and it is the ONLY schedule row: the other two resolved"),
+		Tally.FilterByPredicate(
+			[](const ElysiumStub::FTally& Row) { return Row.Kind == TEXT("schedule"); }).Num(), 1);
 
 	// An empty parameter is refused by name rather than starting something arbitrary.
 	AddExpectedError(TEXT("was fired with no schedule name"),
@@ -778,7 +807,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		TestTrue(TEXT("the pushed order leaves with the body"),
 			!F.Guard->ScriptedScheduleOrder.IsSet());
 		TestEqual(TEXT("...and so does the program it was running"),
-			F.Guard->Schedule.Current, EId::None);
+			F.Guard->Schedule.Current, ElysiumScheduleId::None);
 
 		F.Guard->ReleaseScriptBody(TEXT("test beat ended"));
 		TestTrue(TEXT("the beat's release restores an unowned body"),
@@ -803,7 +832,11 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		// These cases are about the body arbiter, so the state write is `SetState(2)`.
 		F.Guard->SetState(2);
 		F.Step(0.6);
+		// Driven directly: the arbiter is the subject, not which program selection picked. See
+		// `CombatPreemption` for why the claim no longer rides on a selected program's task.
 		TestTrue(TEXT("the combat claim took the route"),
+			F.Guard->AcquireScheduleBody(TEXT("test: the combat claim")));
+		TestTrue(TEXT("...and parked it"),
 			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule
 			&& F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
 
@@ -853,10 +886,7 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	TestTrue(TEXT("the acquisition promotes the mind to combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 
-	// A committed enemy must reach combat selection: the melee selector answers `CAN_MELEE_ATTACK1`
-	// with `SCHED_TROIKA_MELEE_ATTACK1`, whose `TASK_FACE_ENEMY` claims the body and turns it. A
-	// patrol executor issues `MoveTo` and never `Face`, so the turn is the discriminator. Routing
-	// a patrolling NPC to `ThinkPatrol` skips combat selection entirely.
+	// A committed enemy must reach combat selection.
 	F.Step(0.6);
 	// Asked of the PRODUCER directly rather than read off the NPC's condition set after the think,
 	// because the condition does not outlive the selection it drove: `ElysiumSchedule::Start` clears
@@ -868,12 +898,22 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	ElysiumNpcCond::GatherAttackConditions(*F.Guard, 0.6, Attack);
 	TestTrue(TEXT("the committed enemy raises CAN_MELEE_ATTACK1"),
 		Attack.Has(EElysiumNpcCond::CanMeleeAttack1));
-	TestTrue(TEXT("a patrolling NPC in combat reaches its combat program"),
-		F.Services.Saw(TEXT("NpcMotor Face")));
-	TestTrue(TEXT("...and the program's movement claim displaced the route"),
+	TestTrue(TEXT("a patrolling NPC in combat is running a schedule at all"),
+		F.Guard->Schedule.IsRunning());
+
+	// The ARBITER is what this case is about, and the claim is driven directly rather than through
+	// whichever program selection lands on. It used to ride on `SCHED_TROIKA_MELEE_ATTACK1`'s
+	// `TASK_FACE_ENEMY`, reached because the port folded every unregistered selector answer back to
+	// a program it did carry; the recovered slot body answers its own program now, and most of
+	// those programs' tasks have no body in this runtime yet -- which the coverage meter counts and
+	// this case must not depend on.
+	TestTrue(TEXT("a program's movement claim displaces the route"),
+		F.Guard->AcquireScheduleBody(TEXT("test: the program's movement claim")));
+	TestTrue(TEXT("...so the schedule owns the body"),
 		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 	TestTrue(TEXT("...with the route PARKED rather than lost"),
 		F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
+	F.Guard->ReleaseScheduleBody(TEXT("test: the claim ends"));
 
 	// The enemy dies. The transaction clears it, the ideal state falls back, and the route resumes.
 	F.Victim->Kill();

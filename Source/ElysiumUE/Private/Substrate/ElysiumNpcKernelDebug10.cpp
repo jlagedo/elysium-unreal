@@ -621,7 +621,7 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 			ScheduleName != nullptr ? ScheduleName : GDebug10Unknown));
 		++Line;
 
-		const FElysiumSchedule* const Program = ElysiumScheduleFor(Schedule.Current);
+		const FElysiumScheduleProgram* const Program = ElysiumScheduleFor(Schedule.Current);
 		if ((DebugOverlays & GDebug10BitTaskList) != 0)
 		{
 			// One line per task, re-reading `m_pSchedule->numTasks` at the top of every iteration:
@@ -641,7 +641,7 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 					const TCHAR* const Lead = bCurrent ? GDebug10TaskLead : GDebug10TaskNoLead;
 					const TCHAR* const Trail = bCurrent ? GDebug10TaskTrail : TEXT("");
 					EmitEntityText(Line, GDebug10FmtTaskRow, FString::Printf(GDebug10FmtTaskRow,
-						Prefix, Lead, ElysiumTaskName(Program->Tasks[Index].Task), Trail));
+						Prefix, Lead, *FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[Index].TaskId), Trail));
 					++Line;
 				}
 			}
@@ -657,7 +657,7 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 			else
 			{
 				EmitEntityText(Line, GDebug10FmtTask, FString::Printf(GDebug10FmtTask,
-					ElysiumTaskName(Program->Tasks[Schedule.TaskIndex].Task), Schedule.TaskIndex));
+					*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[Schedule.TaskIndex].TaskId), Schedule.TaskIndex));
 			}
 			++Line;
 		}
@@ -698,14 +698,14 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 	// decompiler's view"; the listing names all four words and both strings. A null schedule NAME
 	// prints `"Unknown"`; the text pointer is printed raw, so a null one reaches `printf` as a null
 	// `%s` — which is the empty string here.
-	if (ScheduleHost.InterruptSchedule != EElysiumScheduleId::None)
+	if (ScheduleHost.InterruptSchedule != ElysiumScheduleId::None)
 	{
 		const TCHAR* const Name = ElysiumScheduleName(ScheduleHost.InterruptSchedule);
 		EmitEntityText(Line, GDebug10FmtIntr, FString::Printf(GDebug10FmtIntr,
 			Name != nullptr ? Name : GDebug10Unknown, *ScheduleHost.InterruptText));
 		++Line;
 	}
-	if (ScheduleHost.FailedSchedule != EElysiumScheduleId::None)
+	if (ScheduleHost.FailedSchedule != ElysiumScheduleId::None)
 	{
 		const TCHAR* const Name = ElysiumScheduleName(ScheduleHost.FailedSchedule);
 		EmitEntityText(Line, GDebug10FmtFail, FString::Printf(GDebug10FmtFail,

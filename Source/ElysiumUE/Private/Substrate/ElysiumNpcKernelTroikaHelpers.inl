@@ -234,7 +234,7 @@ int32 NavResets = 0;
  *  behaviour-local schedule id `StandoffVfunc20` / `StandoffVfunc21` compare `m_pSchedule` against.
  *  There is no behaviour-local id space here; answers `None`, so the compare fails and neither body
  *  clears its condition. */
-EElysiumScheduleId StandoffScheduleForLocalId(int32 LocalId) const;
+int32 StandoffScheduleForLocalId(int32 LocalId) const;
 
 /** SEAM for slot 513 (vtable `+0x804`), the owner capability word `StandoffVfunc3` tests
  *  `0x8000000` in. Answers `0`, which CLOSES the gate — and closing it is what clears

@@ -554,10 +554,10 @@ int32 FElysiumNpc::SelectScheduleMeleeCombatHuman()
 	// no port body of its own; family Schedule left it as the entrenched-cover helper's sibling and
 	// it is reached here through `ScheduleEntrenchedCoverOffer`, which answers 0.
 	// `thunk_FUN_102b7370(this)` — `SelectDoorObstructionSchedule`, which `FElysiumNpc` already
-	// carries (`ElysiumNpc.cpp`) as an `EElysiumScheduleId`; converted back to retail's number
+	// carries (`ElysiumNpc.cpp`) as an `int32`; converted back to retail's number
 	// because retail's `if (answer != 0) return answer` is over the raw one.
 	const int32 DoorOffer =
-		ElysiumScheduleNumber(SelectDoorObstructionSchedule());
+		SelectDoorObstructionSchedule();
 	if (DoorOffer != 0)
 	{
 		return DoorOffer;
@@ -736,10 +736,10 @@ int32 FElysiumNpc::SelectScheduleMeleeCombatMingXiao()
 	// **DIFFERENCE 3**: the common tail offers ONLY `0x102b7370`; there is no second
 	// `0x102b6fe0` offer.
 	// `thunk_FUN_102b7370(this)` — `SelectDoorObstructionSchedule`, which `FElysiumNpc` already
-	// carries (`ElysiumNpc.cpp`) as an `EElysiumScheduleId`; converted back to retail's number
+	// carries (`ElysiumNpc.cpp`) as an `int32`; converted back to retail's number
 	// because retail's `if (answer != 0) return answer` is over the raw one.
 	const int32 DoorOffer =
-		ElysiumScheduleNumber(SelectDoorObstructionSchedule());
+		SelectDoorObstructionSchedule();
 	if (DoorOffer != 0)
 	{
 		return DoorOffer;
@@ -990,7 +990,7 @@ bool FElysiumNpc::ShouldPlayIdleSoundZombie()
 	bool bComforting = false;
 	if (Schedule.IsRunning())
 	{
-		if (GetLocalScheduleId(ElysiumScheduleNumber(Schedule.Current)) == GAnim10_2ScheduleComfort)
+		if (GetLocalScheduleId(Schedule.Current) == GAnim10_2ScheduleComfort)
 		{
 			Weight = GAnim10_2ZombieComfortWeight;
 			bComforting = true;

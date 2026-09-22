@@ -170,13 +170,13 @@ int32 FElysiumNpc::NavCurrentLinkActivity() const
 	return INDEX_NONE;
 }
 
-EElysiumScheduleId FElysiumNpc::StandoffScheduleForLocalId(int32 LocalId) const
+int32 FElysiumNpc::StandoffScheduleForLocalId(int32 LocalId) const
 {
 	// `thunk_FUN_102cc1f0(this, localId)` — `CAI_Behavior::GetSchedule(localId)`. **SEAM**: there is
 	// no behaviour-local id space on this substrate. `None`, so the compare against a RUNNING
 	// program fails and neither `vfunc20` nor `vfunc21` clears its condition.
 	(void)LocalId;
-	return EElysiumScheduleId::None;
+	return ElysiumScheduleId::None;
 }
 
 uint32 FElysiumNpc::StandoffOwnerCapabilityWord() const
@@ -1202,7 +1202,7 @@ void FElysiumNpc::StandoffClearNewEnemyOnLocalSchedule()
 	// `StandoffScheduleForLocalId` is a seam answering `None`, so a running program never matches
 	// and the condition is never cleared. That is the recovered refusal: the behaviour-local id
 	// space has no source here.
-	if (Schedule.Current == EElysiumScheduleId::None)
+	if (Schedule.Current == ElysiumScheduleId::None)
 	{
 		return;
 	}

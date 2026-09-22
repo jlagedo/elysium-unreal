@@ -825,11 +825,11 @@ bool FElysiumNpcKernelConditions10TaskFailPathTest::RunTest(const FString&)
 	}
 
 	// `CNPC_VChangBros::TaskFail` (`0x1036d1d0`): the same window, a different write.
-	const EElysiumScheduleId Expected = FElysiumNpc::ScheduleFromRetailNumber(0x15d);
-	F.Guard->Schedule.FailScheduleOverride = EElysiumScheduleId::None;
+	const int32 Expected = 0x15d;
+	F.Guard->Schedule.FailScheduleOverride = ElysiumScheduleId::None;
 	F.Guard->ChangBrosTaskFail(11);
 	TestTrue(TEXT("code 11 writes no fail schedule (1036d205)"),
-		F.Guard->Schedule.FailScheduleOverride == EElysiumScheduleId::None);
+		F.Guard->Schedule.FailScheduleOverride == ElysiumScheduleId::None);
 	F.Guard->ChangBrosTaskFail(12);
 	TestTrue(TEXT("code 12 writes m_failSchedule 0x15d (+0x5c54)"),
 		F.Guard->Schedule.FailScheduleOverride == Expected);

@@ -424,5 +424,5 @@ namespace ElysiumNpcWitness
 	 * runtime and is what the flee arm selects; it is a stand-in for a named family, and it is the
 	 * program that changes when one of those is decoded, not the branch.
 	 */
-	EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now);
+	int32 SelectLawSchedule(FElysiumNpc& Npc, double Now);
 }

@@ -81,13 +81,13 @@ namespace ElysiumAiScriptedSchedule
 	// How many nodes a follow-path route may chain before it is refused as authored nonsense.
 	inline constexpr int32 MaxRouteNodes = 32;
 
-	// Is `Id` one of the two programs this family registers? The save path asks, because the order
-	// behind them is not save state.
-	bool IsScriptedProgram(EElysiumScheduleId Id);
+	// Is this GLOBAL id one of the two programs this family composes? The save path asks, because
+	// the order behind them is not save state.
+	bool IsScriptedProgram(int32 GlobalId);
 
-	// Which program a mode runs, or `None` for mode 3 (which runs no program at all) and for an
-	// unknown mode.
-	EElysiumScheduleId ProgramFor(int32 AuthoredMode);
+	// Which program a mode runs, as the class-LOCAL retail number, or `ElysiumScheduleId::None`
+	// for mode 3 (which runs no program at all) and for an unknown mode.
+	int32 ProgramFor(int32 AuthoredMode);
 
 	/**
 	 * Build the route a follow-path order walks: the goal's own origin, then each entity its

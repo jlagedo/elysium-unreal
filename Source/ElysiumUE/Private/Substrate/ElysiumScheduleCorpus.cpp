@@ -55,6 +55,15 @@ namespace
 	}
 }
 
+namespace
+{
+	TArray<TFunction<void(FElysiumScheduleCorpus&)>>& PortProgramProviders()
+	{
+		static TArray<TFunction<void(FElysiumScheduleCorpus&)>> Providers;
+		return Providers;
+	}
+}
+
 const TCHAR* ElysiumIdCategoryName(EElysiumIdCategory Category)
 {
 	return SpaceKey(Category);
@@ -180,6 +189,15 @@ bool FElysiumScheduleCorpus::LoadFrom(const FString& Directory, FString& OutErro
 	}
 
 	Ops.Build(Namespace(EElysiumIdCategory::Task));
+
+	// The port's own bodies for registered names the corpus has no text for. After the texts,
+	// because they name their steps out of the task namespace; before the census, because their
+	// steps are steps.
+	for (const TFunction<void(FElysiumScheduleCorpus&)>& Provider : PortProgramProviders())
+	{
+		Provider(*this);
+	}
+
 	Measured.PortedTasks = Ops.NumPorted();
 	Measured.UnportedTasks = Ops.NumUnported();
 	Measured.UnportedSteps = Ops.Measure(Programs);
@@ -508,6 +526,31 @@ void FElysiumScheduleCorpus::LoadUnit(const FString& Directory, FElysiumSchedule
 	}
 }
 
+void FElysiumScheduleCorpus::AddPortProgramProvider(TFunction<void(FElysiumScheduleCorpus&)> Provider)
+{
+	PortProgramProviders().Add(MoveTemp(Provider));
+}
+
+int32 FElysiumScheduleCorpus::AddPortProgram(FElysiumScheduleProgram&& Program)
+{
+	EnsureLoaded();
+	const int32 GlobalId =
+		Namespace(EElysiumIdCategory::Schedule).Find(Program.Name);
+	if (GlobalId == INDEX_NONE)
+	{
+		// Verbose, not an Error: a scratch corpus in a test legitimately registers none of these
+		// names, and the provider is run on every load. A real miss is visible at the consumer --
+		// `ElysiumAiScriptedSchedule::ProgramFor` answers `None` and the director pushes nothing.
+		UE_LOG(LogElysiumSchedules, Verbose,
+			TEXT("Elysium: no class registers the schedule name '%s', so the port body that would "
+				"supply it is not loaded"), *Program.Name);
+		return ElysiumScheduleId::None;
+	}
+	Program.GlobalId = GlobalId;
+	Programs.Add(MoveTemp(Program));
+	return GlobalId;
+}
+
 const FElysiumScheduleSpaceUnit* FElysiumScheduleCorpus::Unit(const FString& Key) const
 {
 	const FElysiumScheduleSpaceUnit* const* Found = ByKey.Find(Key);
@@ -571,3 +614,11 @@ FString FElysiumScheduleCorpus::DescribeCensus() const
 		Measured.Steps, Identities, Measured.PortedTasks, PortedShare,
 		Measured.UnportedTasks, Measured.UnportedSteps);
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+FElysiumScheduleProgram* FElysiumScheduleCorpus::MutableProgram(int32 GlobalId)
+{
+	EnsureLoaded();
+	return const_cast<FElysiumScheduleProgram*>(Programs.FindById(GlobalId));
+}
+#endif

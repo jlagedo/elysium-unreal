@@ -216,21 +216,21 @@ bool FElysiumNpcKernelLifecycle19RestoreChecksumTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 
 	// A saved header that names a live schedule and carries ITS checksum is kept.
-	ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 	TArray<uint8> TaskBytes;
 	N.ScheduleTaskBytes(TaskBytes);
 	uint32 Crc = FElysiumNpc::SaveCrc32Init();
 	Crc = FElysiumNpc::SaveCrc32Update(Crc, TaskBytes.GetData(), TaskBytes.Num());
 	N.LastSavedExtendedHeader.Version = 1;
 	N.LastSavedExtendedHeader.Flags = 0;
-	N.LastSavedExtendedHeader.ScheduleName = ElysiumScheduleName(EElysiumScheduleId::IdleStand);
+	N.LastSavedExtendedHeader.ScheduleName = ElysiumScheduleName(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 	N.LastSavedExtendedHeader.ScheduleCrc = FElysiumNpc::SaveCrc32Final(Crc);
 	N.OnRestore(true);
 	TestTrue(TEXT("1027c064 a matching task checksum keeps the schedule"), N.Schedule.IsRunning());
 
 	// `1027c068`: a checksum that does NOT match the resolved schedule's task list drops it, and
 	// the drop takes the give-up arm.
-	ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 	N.LastSavedExtendedHeader.ScheduleCrc ^= 0xffffffffu;
 	N.OnRestore(true);
 	TestFalse(TEXT("1027c068 a stale task checksum drops the restored schedule"),

@@ -601,10 +601,10 @@ int32 FElysiumNpc::HumanSelectScheduleRangedCombat(int32 Arg)
 	{
 		return PrePass;
 	}
-	const EElysiumScheduleId Door = SelectDoorObstructionSchedule();   // 0x102b7370
-	if (Door != EElysiumScheduleId::None)
+	const int32 Door = SelectDoorObstructionSchedule();   // 0x102b7370
+	if (Door != ElysiumScheduleId::None)
 	{
-		return ElysiumScheduleNumber(Door);
+		return Door;
 	}
 	if (const int32 Reaction = SelectCombatReactionSchedule(); Reaction != 0)
 	{
@@ -878,10 +878,10 @@ int32 FElysiumNpc::MingXiaoSelectScheduleRangedCombat(int32 Arg)
 	{
 		return PrePass;
 	}
-	const EElysiumScheduleId Door = SelectDoorObstructionSchedule();   // 0x102b7370
-	if (Door != EElysiumScheduleId::None)
+	const int32 Door = SelectDoorObstructionSchedule();   // 0x102b7370
+	if (Door != ElysiumScheduleId::None)
 	{
-		return ElysiumScheduleNumber(Door);
+		return Door;
 	}
 	if (const int32 Reaction = SelectCombatReactionSchedule(); Reaction != 0)
 	{
@@ -988,10 +988,10 @@ int32 FElysiumNpc::SheriffManSelectScheduleRangedCombat(int32 /*Arg*/)
 	{
 		return PrePass;
 	}
-	const EElysiumScheduleId Door = SelectDoorObstructionSchedule();   // 0x102b7370
-	if (Door != EElysiumScheduleId::None)
+	const int32 Door = SelectDoorObstructionSchedule();   // 0x102b7370
+	if (Door != ElysiumScheduleId::None)
 	{
-		return ElysiumScheduleNumber(Door);
+		return Door;
 	}
 	if (const int32 Reaction = SelectCombatReactionSchedule(); Reaction != 0)
 	{

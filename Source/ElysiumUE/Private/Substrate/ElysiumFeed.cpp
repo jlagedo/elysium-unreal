@@ -231,7 +231,7 @@ bool FElysiumCombatCharacter::IsFeedAutoAcceptState() const
 	// behaviour reproduced rather than approximated, and it closes the loop with
 	// `ElysiumFeedSchedules::BeginPostFeedTrance`.
 	if (const FElysiumNpc* Npc = AsNpc();
-		Npc != nullptr && Npc->Schedule.Current == EElysiumScheduleId::Mesmerized)
+		Npc != nullptr && Npc->Schedule.Current == ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED))
 	{
 		return true;
 	}

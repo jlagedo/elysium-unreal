@@ -15,7 +15,7 @@
 // fills by parsing that class's schedule text — `CNPC_VBrujah`'s is `0x10367a40`, which registers
 // `SCHED_VBRUJAH_WALK` 0x158 and `SCHED_VBRUJAH_WATCH` 0x159 into `DAT_1093a740` and records the
 // parse result in `DAT_1062f278`, the flag slot 452 answers. The port registers its programs by
-// identity (`EElysiumScheduleId`) and parses no schedule text, so the id-space ROWS below carry the
+// identity (`int32`) and parses no schedule text, so the id-space ROWS below carry the
 // retail globals and the translation answers -1 through the seam named at
 // `ScheduleLocalToGlobal`. Nothing here invents a range.
 
@@ -57,7 +57,7 @@ static const FScheduleIdSpace* ScheduleIdSpaceOf(const TCHAR* InRetailClass);
 
 /** Slot 580 for THIS NPC: the nearest species override of slot 580 walking its class chain, else
  *  the Troika line's own row. Never null — every chain ends at `CAI_BaseNPCTroika`. */
-const FScheduleIdSpace* ClassScheduleIdSpace() const;
+const FElysiumLocalIdSpace* ClassScheduleIdSpace() const;
 
 /** `CAI_ClassScheduleIdSpace::ScheduleLocalToGlobal` (`0x102ea2d0`, the same walk family Squad
  *  ports for squad slots over the space at `+0x48`): -1 stays -1, otherwise walk the chain and
@@ -66,7 +66,7 @@ const FScheduleIdSpace* ClassScheduleIdSpace() const;
  *  SEAM: every row's range is the empty one the static constructor left, because the port parses no
  *  schedule text, so this answers -1 for every id. Retail's ranges are filled by the class's own
  *  `InitCustomSchedules`. */
-static int32 ScheduleLocalToGlobal(const FScheduleIdSpace* Space, int32 LocalId);
+static int32 ScheduleLocalToGlobal(const FElysiumLocalIdSpace* Space, int32 LocalId);
 
 // --- Slot 452 `LoadedSchedules`: one method and a species table -----------------------------------
 //
@@ -111,7 +111,7 @@ int32 ResolveIdealScheduleStamp(int32 RawRetailId) const;
  *
  *  Stamp raw `ScheduleHost.IdealScheduleRetail`, then run `SetSchedule(int)` (`0x102cc1f0`) →
  *  `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`), which is `ElysiumSchedule::Start`. */
-void ChangeSchedule(EElysiumScheduleId Id);
+void ChangeSchedule(int32 Id);
 
 /** `CCineAI::FixScriptNPCSchedule`, slot 586 (`0x101a95d0`), applied to THIS NPC.
  *
@@ -207,11 +207,6 @@ int32 SpeciesPreSelectSchedule();
  *  `FElysiumNpc::SelectSchedule` consults it first and falls through when the number names no
  *  registered program, which is how `TranslateSchedule` already handles an unported id. */
 int32 SpeciesSelectSchedule();
-
-/** A raw retail schedule number back to the identity this runtime registers, or `None` when no
- *  registered program carries it. The direction `ElysiumScheduleNumber` does not have, needed
- *  wherever a recovered body answers retail's number and a caller has to install something. */
-static EElysiumScheduleId ScheduleFromRetailNumber(int32 RetailNumber);
 
 /** `0x102b6fe0` — the melee selector's failure gate, called before every other arm of
  *  `SelectScheduleMeleeCombat` and again after the in-melee branch.

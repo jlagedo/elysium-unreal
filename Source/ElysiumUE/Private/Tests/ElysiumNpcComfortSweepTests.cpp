@@ -63,7 +63,7 @@ namespace
 				Npc->Origin = FVector::ZeroVector;
 				Npc->NextComfortCheckTime = 0.0;
 				// A running schedule so the eligibility gate passes by default.
-				ElysiumSchedule::Start(Npc->Schedule, EElysiumScheduleId::IdleDisposition, *Npc);
+				ElysiumSchedule::Start(Npc->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *Npc);
 			}
 			if (Near != nullptr)
 			{
@@ -196,7 +196,7 @@ bool FElysiumNpcComfortSweepEligibilityTest::RunTest(const FString&)
 	TestFalse(TEXT("no installed schedule is ineligible"), F.Sweep(0.0).Has(ECond::Comfort));
 	F.Npc->NextComfortCheckTime = 0.0;
 
-	ElysiumSchedule::Start(F.Npc->Schedule, EElysiumScheduleId::IdleDisposition, *F.Npc);
+	ElysiumSchedule::Start(F.Npc->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Npc);
 	TestTrue(TEXT("eligible once both gates are clear"), F.Sweep(0.0).Has(ECond::Comfort));
 	return true;
 }

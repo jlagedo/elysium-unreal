@@ -577,7 +577,7 @@ namespace
 	}
 }
 
-EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now)
+int32 SelectLawSchedule(FElysiumNpc& Npc, double Now)
 {
 	(void)Now;
 	const FElysiumNpcConditions& Cond = Npc.Cognition.Conditions;
@@ -593,13 +593,13 @@ EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now)
 		// `investigate_mode` / `investigate_mode_combat` / `full_investigate` are unrecovered — so
 		// there is no program to select and no policy to select it with. The condition is gathered and
 		// the three keyfields are carried; nothing reads either until one of those is decoded.
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 
 	FElysiumPlayer* Player = Npc.World ? Npc.World->FindPlayer() : nullptr;
 	if (Player == nullptr)
 	{
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 
 	bool bAttack = false;
@@ -667,7 +667,7 @@ EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now)
 		}
 		// Attack outranks flee (the reasoning is on the declaration): the ordinary selection below
 		// this branch is what runs, so the NPC fights rather than retreating from the fight.
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 	if (bFlee)
 	{
@@ -676,9 +676,9 @@ EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now)
 		// uses.
 		Npc.SavePosition = FleeFrom;
 		Npc.RecordScheduleEvent(TEXT("law: flee threshold passed -> SCHED_TROIKA_RUN_AWAY"));
-		return EElysiumScheduleId::RunAway;
+		return ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY;
 	}
-	return EElysiumScheduleId::None;
+	return ElysiumScheduleId::None;
 }
 
 }   // namespace ElysiumNpcWitness

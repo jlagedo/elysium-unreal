@@ -4,443 +4,172 @@
 #include "ElysiumWorldServices.h"          // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
 #include "Substrate/ElysiumNpcGait.h"      // the authored travel speed a retreat step commands
 #include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
+#include "Substrate/ElysiumScheduleCorpus.h"   // the loaded programs, the id spaces and the activity names
+#include "Substrate/ElysiumScheduleNumbers.h"  // the handful of local ids this kernel itself has to name
 #include "ElysiumStub.h"                   // the miss arm's tally row, so an unported program stays listed
 
 namespace
 {
-	// The registered numbers, decoded from their registration sites
-	// (`docs/vtmb/npc-ai/README.md`). Carried so a trace row cites the binary.
-	struct FScheduleMeta
+	/** The one registry: the corpus, loaded on first touch. */
+	const FElysiumScheduleCorpus& Corpus()
 	{
-		int32 Number;
-		const TCHAR* Name;
-	};
-
-	const FScheduleMeta& MetaFor(EElysiumScheduleId Id)
-	{
-		static const FScheduleMeta None{ 0, TEXT("SCHED_NONE") };
-		// Numbered from the base registrar `FUN_102cadd0`, never from the stale debug name table
-		// `0x105d1488` (it drops `IDLE_PATHCORNER` and reads one slot early past id 2).
-		static const FScheduleMeta IdleStand{ 0x01, TEXT("SCHED_IDLE_STAND") };
-		static const FScheduleMeta Fail{ 0x43, TEXT("SCHED_FAIL") };
-		static const FScheduleMeta IdleDisposition{ 0x6b, TEXT("SCHED_TROIKA_IDLE_DISPOSITION") };
-		static const FScheduleMeta AlertLook{ 0x4f, TEXT("SCHED_TROIKA_ALERT_LOOK_AROUND_NI") };
-		static const FScheduleMeta BackAway{ 0x91, TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE") };
-		static const FScheduleMeta BackAwayWait{ 0x96,
-			TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE") };
-		static const FScheduleMeta TakeCover{ 0x9c, TEXT("SCHED_TROIKA_TAKE_COVER_HINT_DOOR") };
-
-		// The combat families. Two of them carry number 0: the survey names
-		// `SCHED_TROIKA_MELEE_ATTACK1_SWING` and `CHASE_ENEMY_FAILED` and decodes their contents and
-		// their callers, but not their registration sites — so the NAME is the identity for those
-		// two and a trace row says `(0x0)`. Replace the number, not the row, when one is decoded.
-		static const FScheduleMeta MeleeAttack1{ 0xdc, TEXT("SCHED_TROIKA_MELEE_ATTACK1") };
-		static const FScheduleMeta MeleeAttack1Nr{ 0xdd, TEXT("SCHED_TROIKA_MELEE_ATTACK1_NR") };
-		static const FScheduleMeta MeleeSwing{ 0, TEXT("SCHED_TROIKA_MELEE_ATTACK1_SWING") };
-		static const FScheduleMeta MeleeDodge{ 0xd5, TEXT("SCHED_TROIKA_MELEE_DODGE") };
-		static const FScheduleMeta MeleePreblock{ 0xd6, TEXT("SCHED_TROIKA_MELEE_PREBLOCK") };
-		static const FScheduleMeta MeleeKick{ 0xdb, TEXT("SCHED_TROIKA_MELEE_KICK") };
-		static const FScheduleMeta MeleeStepback{ 0xd3, TEXT("SCHED_TROIKA_MELEE_STEPBACK") };
-		static const FScheduleMeta MeleeIdle{ 0xc7, TEXT("SCHED_TROIKA_MELEE_IDLE") };
-		static const FScheduleMeta MeleeAdvance{ 0xca, TEXT("SCHED_TROIKA_MELEE_ADVANCE") };
-		static const FScheduleMeta MeleeCircle{ 0xe0, TEXT("SCHED_TROIKA_MELEE_CIRCLE") };
-		static const FScheduleMeta Chase{ 0xb1, TEXT("SCHED_TROIKA_CHASE_ENEMY") };
-		static const FScheduleMeta ChaseFailed{ 0, TEXT("SCHED_TROIKA_CHASE_ENEMY_FAILED") };
-		static const FScheduleMeta RangeAttack1{ 0xec, TEXT("SCHED_TROIKA_RANGE_ATTACK1") };
-		static const FScheduleMeta RunAway{ 0xb9, TEXT("SCHED_TROIKA_RUN_AWAY") };
-		static const FScheduleMeta SmallFlinch{ 0x14, TEXT("SCHED_SMALL_FLINCH") };
-		static const FScheduleMeta AlertSmallFlinch{ 0x07, TEXT("SCHED_ALERT_SMALL_FLINCH") };
-		static const FScheduleMeta TakeCoverOrigin{ 0x19, TEXT("SCHED_TAKE_COVER_FROM_ORIGIN") };
-
-		// The scripted-director family. CHOSEN, NOT RECOVERED — the NAMES, and only the names. The
-		// survey states that `aiscripted_schedule`'s "move/follow variants use internal schedule IDs
-		// 9 or 19, while a special NPC-type branch uses `0x22`" and never says which program takes
-		// which number, so neither number is claimed here — 0, the same posture the two combat
-		// programs with undecoded registration sites already take. The spellings are this runtime's
-		// own and are what `ChangeSchedule`/`StartSchedule` would have to name to reach them; no
-		// shipped script names either, which is the honest consequence of not having the real ones.
-		static const FScheduleMeta ScriptedMove{ 0, TEXT("SCHED_SCRIPTED_MOVE_TO_GOAL") };
-		static const FScheduleMeta ScriptedFollow{ 0, TEXT("SCHED_SCRIPTED_FOLLOW_PATH") };
-
-		// The death program. Its TASK is recovered by number (`TASK_PLAY_DEATH_SEQUENCE` 0x149) and
-		// its selection is recovered in prose — "death sound/solid-body policy leads to the death
-		// schedule" (`docs/vtmb/combat-and-damage.md`) — but the schedule's own registration site is
-		// not decoded, so it takes 0 and the NAME is the identity, the same posture the two combat
-		// programs with undecoded registration sites already take.
-		static const FScheduleMeta Die{ 0, TEXT("SCHED_DIE") };
-
-		// The post-feed trance. Its number IS decoded, from its one and only producer:
-		// `CBaseCombatCharacter::FeedInterrupt` (`0x1033a9e0`) calls `SetSchedule(0xfb)` on a
-		// surviving victim. No other `SetSchedule(0xfb)` site exists in `vampire.dll`, and no script,
-		// `disciplinetgt` record or vdata file in the shipped install names the string.
-		static const FScheduleMeta Mesmerized{ 0xfb, TEXT("SCHED_TROIKA_MESMERIZED") };
-
-		switch (Id)
-		{
-		case EElysiumScheduleId::IdleStand:              return IdleStand;
-		case EElysiumScheduleId::Fail:                   return Fail;
-		case EElysiumScheduleId::IdleDisposition:        return IdleDisposition;
-		case EElysiumScheduleId::AlertLookAroundNi:      return AlertLook;
-		case EElysiumScheduleId::BackAwayFromDoorNe:     return BackAway;
-		case EElysiumScheduleId::BackAwayFromDoorWaitNe: return BackAwayWait;
-		case EElysiumScheduleId::TakeCoverHintDoor:      return TakeCover;
-		case EElysiumScheduleId::MeleeAttack1:           return MeleeAttack1;
-		case EElysiumScheduleId::MeleeAttack1Nr:         return MeleeAttack1Nr;
-		case EElysiumScheduleId::MeleeAttack1Swing:      return MeleeSwing;
-		case EElysiumScheduleId::MeleeDodge:             return MeleeDodge;
-		case EElysiumScheduleId::MeleePreblock:          return MeleePreblock;
-		case EElysiumScheduleId::MeleeKick:              return MeleeKick;
-		case EElysiumScheduleId::MeleeStepback:          return MeleeStepback;
-		case EElysiumScheduleId::MeleeIdle:              return MeleeIdle;
-		case EElysiumScheduleId::MeleeAdvance:           return MeleeAdvance;
-		case EElysiumScheduleId::MeleeCircle:            return MeleeCircle;
-		case EElysiumScheduleId::ChaseEnemy:             return Chase;
-		case EElysiumScheduleId::ChaseEnemyFailed:       return ChaseFailed;
-		case EElysiumScheduleId::RangeAttack1:           return RangeAttack1;
-		case EElysiumScheduleId::RunAway:                return RunAway;
-		case EElysiumScheduleId::SmallFlinch:            return SmallFlinch;
-		case EElysiumScheduleId::AlertSmallFlinch:       return AlertSmallFlinch;
-		case EElysiumScheduleId::TakeCoverFromOrigin:    return TakeCoverOrigin;
-		case EElysiumScheduleId::Die:                    return Die;
-		case EElysiumScheduleId::Mesmerized:             return Mesmerized;
-		case EElysiumScheduleId::ScriptedMoveToGoal:     return ScriptedMove;
-		case EElysiumScheduleId::ScriptedFollowPath:     return ScriptedFollow;
-		default:                                        return None;
-		}
+		FElysiumScheduleCorpus& Loaded = FElysiumScheduleCorpus::Get();
+		Loaded.EnsureLoaded();
+		return Loaded;
 	}
 
-	FElysiumTaskStep Step(EElysiumTask Task, float Param = 0.f)
+	/** The space a runner with no class of its own runs: `CAI_BaseNPCTroika`'s, which is what
+	 *  `ClassScheduleIdSpace()` falls back to for every class with no slot-580 body. */
+	const FElysiumLocalIdSpace* FallbackScheduleSpace()
 	{
-		FElysiumTaskStep Out;
-		Out.Task = Task;
-		Out.Param = Param;
-		return Out;
+		return Corpus().SpaceFor(TEXT("CAI_BaseNPCTroika"), EElysiumIdCategory::Schedule);
 	}
-
-	FElysiumTaskStep ActivityStep(const TCHAR* Activity)
-	{
-		FElysiumTaskStep Out;
-		Out.Task = EElysiumTask::SetActivity;
-		Out.Activity = Activity;
-		return Out;
-	}
-
-	// Retail's step-back distance for the near-door schedules. The schedules step back repeatedly
-	// rather than pathing to a point, which is why this is a per-task distance and not a goal.
-	constexpr float DoorStepBackCm = 64.f;
 }
 
-int32 ElysiumScheduleNumber(EElysiumScheduleId Id) { return MetaFor(Id).Number; }
-const TCHAR* ElysiumScheduleName(EElysiumScheduleId Id) { return MetaFor(Id).Name; }
-
-const TCHAR* ElysiumTaskName(EElysiumTask Task)
+const FElysiumScheduleProgram* ElysiumScheduleFor(int32 GlobalId)
 {
-	switch (Task)
+	if (!ElysiumScheduleId::IsSet(GlobalId))
 	{
-	case EElysiumTask::SpecialIdleActivity:      return TEXT("TASK_SPECIAL_IDLE_ACTIVITY");
-	case EElysiumTask::WaitPvs:                  return TEXT("TASK_WAIT_PVS");
-	case EElysiumTask::SetActivity:              return TEXT("TASK_SET_ACTIVITY");
-	case EElysiumTask::Wait:                     return TEXT("TASK_WAIT");
-	case EElysiumTask::WaitRandom:               return TEXT("TASK_WAIT_RANDOM");
-	case EElysiumTask::FaceSavePosition:         return TEXT("TASK_FACE_SAVEPOSITION");
-	case EElysiumTask::MoveAwayFromSavePosition: return TEXT("TASK_MOVE_AWAY_PATH");
-	case EElysiumTask::SetFailSchedule:          return TEXT("TASK_SET_FAIL_SCHEDULE");
-	case EElysiumTask::StopMoving:               return TEXT("TASK_STOP_MOVING");
-	case EElysiumTask::SetToleranceDistance:     return TEXT("TASK_SET_TOLERANCE_DISTANCE");
-	case EElysiumTask::GetPathToEnemy:           return TEXT("TASK_GET_PATH_TO_ENEMY");
-	case EElysiumTask::RunPath:                  return TEXT("TASK_RUN_PATH");
-	case EElysiumTask::WaitForMovement:          return TEXT("TASK_WAIT_FOR_MOVEMENT");
-	case EElysiumTask::FaceEnemy:                return TEXT("TASK_FACE_ENEMY");
-	case EElysiumTask::AnnounceAttack:           return TEXT("TASK_ANNOUNCE_ATTACK");
-	case EElysiumTask::MeleeAttack1:             return TEXT("TASK_MELEE_ATTACK1");
-	case EElysiumTask::RangeAttack1:             return TEXT("TASK_RANGE_ATTACK1");
-	case EElysiumTask::SetSchedule:              return TEXT("TASK_SET_SCHEDULE");
-	case EElysiumTask::Remember:                 return TEXT("TASK_REMEMBER");
-	case EElysiumTask::MakeOblivious:            return TEXT("TASK_MAKE_OBLIVIOUS");
-	case EElysiumTask::SetNpcFlag:               return TEXT("TASK_SET_NPC_FLAG");
-	case EElysiumTask::PlayDeathSequence:        return TEXT("TASK_PLAY_DEATH_SEQUENCE");
-	case EElysiumTask::GetPathToGoal:            return TEXT("TASK_GET_PATH_TO_GOAL");
+		return nullptr;
 	}
-	return TEXT("TASK_?");
+	return Corpus().Manager().FindById(GlobalId);
+}
+
+int32 ElysiumScheduleGlobalId(int32 LocalId)
+{
+	const FElysiumLocalIdSpace* Space = FallbackScheduleSpace();
+	return Space != nullptr ? Space->LocalToGlobal(LocalId) : INDEX_NONE;
+}
+
+const TCHAR* ElysiumScheduleName(int32 GlobalId)
+{
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(GlobalId);
+	return Program != nullptr ? *Program->Name : TEXT("SCHED_?");
+}
+
+FString ElysiumScheduleLabel(int32 GlobalId, const IElysiumScheduleRunner* Runner)
+{
+	if (!ElysiumScheduleId::IsSet(GlobalId))
+	{
+		return TEXT("SCHED_NONE");
+	}
+	const int32 Local = Runner != nullptr ? Runner->LocalScheduleId(GlobalId)
+		: (FallbackScheduleSpace() != nullptr ? FallbackScheduleSpace()->GlobalToLocal(GlobalId)
+			: INDEX_NONE);
+	if (Local == INDEX_NONE)
+	{
+		return FString::Printf(TEXT("%s (%d)"), ElysiumScheduleName(GlobalId), GlobalId);
+	}
+	return FString::Printf(TEXT("%s (0x%x)"), ElysiumScheduleName(GlobalId), Local);
+}
+
+FString ElysiumTaskOperandLabel(const FElysiumScheduleStep& Step)
+{
+	const FElysiumScheduleCorpus& Loaded = Corpus();
+	switch (Loaded.TaskOps().Find(Step.TaskId))
+	{
+	case EElysiumTaskOp::SetActivity:
+	case EElysiumTaskOp::PlayDeathSequence:
+	{
+		const FString* Name = Loaded.Activities().NameOf(static_cast<int32>(Step.Data));
+		return Name != nullptr ? FString::Printf(TEXT("ACTIVITY:%s"), **Name) : FString();
+	}
+	case EElysiumTaskOp::SetFailSchedule:
+	case EElysiumTaskOp::SetSchedule:
+	{
+		const int32 Local = static_cast<int32>(Step.Data);
+		const FElysiumLocalIdSpace* Space = FallbackScheduleSpace();
+		const int32 Global = Space != nullptr ? Space->LocalToGlobal(Local) : INDEX_NONE;
+		return FString::Printf(TEXT("SCHEDULE:%s (0x%x)"), ElysiumScheduleName(Global), Local);
+	}
+	case EElysiumTaskOp::SetNpcFlag:
+		return FString::Printf(TEXT("NPCFlag:0x%x"), Step.RawWord());
+	case EElysiumTaskOp::Remember:
+		return FString::Printf(TEXT("Memory:0x%x"),
+			static_cast<uint32>(static_cast<int32>(Step.Data)));
+	default:
+		break;
+	}
+	return FMath::IsNearlyZero(Step.Data) ? FString() : FString::Printf(TEXT("%.3f"), Step.Data);
+}
+
+// `GetScheduleOfType` (`0x102cc260`) and slot 447 (`0x101a6620`) for a runner that carries no class.
+int32 IElysiumScheduleRunner::ResolveScheduleId(int32 Id) const
+{
+	if (ElysiumScheduleId::IsGlobal(Id) && Id != ElysiumScheduleId::Sentinel)
+	{
+		return Id;
+	}
+	const FElysiumLocalIdSpace* Space = FallbackScheduleSpace();
+	return Space != nullptr ? Space->LocalToGlobal(Id) : INDEX_NONE;
+}
+
+int32 IElysiumScheduleRunner::LocalScheduleId(int32 GlobalId) const
+{
+	const FElysiumLocalIdSpace* Space = FallbackScheduleSpace();
+	return Space != nullptr ? Space->GlobalToLocal(GlobalId) : INDEX_NONE;
 }
 
 namespace
 {
-	// The one storage. Non-const only so the test-only interrupt-mask scope below can borrow a
-	// program for the length of a case; nothing in the runtime writes it.
-	TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage();
-}
-
-const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id)
-{
-	for (const FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
+	/** The op this runtime runs for a step, or `Unknown` -- the coverage meter's row. */
+	EElysiumTaskOp OpOf(const FElysiumScheduleStep& Step)
 	{
-		if (Schedule.Id == Id)
+		return Corpus().TaskOps().Find(Step.TaskId);
+	}
+
+	/** The retail name the step's identity was registered under. Always available, op or no op:
+	 *  naming an unported task is the whole point of carrying the identity rather than an enum. */
+	const TCHAR* TaskNameOf(const FElysiumScheduleStep& Step)
+	{
+		const FString& Name = Corpus().TaskOps().NameOf(Step.TaskId);
+		return Name.IsEmpty() ? TEXT("TASK_?") : *Name;
+	}
+
+	/** `Activity:`'s operand, back as the name `PlayActivity` takes.
+	 *
+	 *  The two-word task record stores the activity's id in the data word (`0x1025d760` over
+	 *  `DAT_1090fbe0`), and this is the reverse lookup that makes it a string again -- the one
+	 *  consumer any of the three interning registries has. */
+	FString ActivityOf(const FElysiumScheduleStep& Step)
+	{
+		const FString* Name = Corpus().Activities().NameOf(static_cast<int32>(Step.Data));
+		return Name != nullptr ? *Name : FString();
+	}
+
+	/** A schedule operand: the class-LOCAL id the parser stored, exactly as retail stores it. */
+	int32 ScheduleOperandOf(const FElysiumScheduleStep& Step)
+	{
+		return static_cast<int32>(Step.Data);
+	}
+
+	/** `TASK_FAILED`'s reason where the runner named none (`0x10288780`'s table). One body, called
+	 *  from both the StartTask and the RunTask failure arms, which used to carry it twice. */
+	int32 TaskFailureReasonFor(EElysiumTaskOp Op, int32 RunnerReason)
+	{
+		if (RunnerReason != 0)
 		{
-			return &Schedule;
+			return RunnerReason;
+		}
+		switch (Op)
+		{
+		case EElysiumTaskOp::GetPathToEnemy:
+		case EElysiumTaskOp::FaceEnemy:           return 0x06;
+		case EElysiumTaskOp::MeleeAttack1:
+		case EElysiumTaskOp::RangeAttack1:        return 0x03;
+		case EElysiumTaskOp::SpecialIdleActivity: return 0x15;
+		default:                                  return 0x0c;
 		}
 	}
-	return nullptr;
-}
 
-namespace
-{
-TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
-{
-	// Built once. These are the recovered task lists verbatim; the operands are retail's own.
-	static TArray<FElysiumSchedule> Registry = []
-	{
-		TArray<FElysiumSchedule> Out;
-
-		// The kernel's two base programs, from their blobs (`CAI_BaseNPC` loader `FUN_102cb690`,
-		// pointer table `0x106034b8`); masks decoded, not chosen.
-		//
-		// `IDLE_STAND` (1, blob `0x106080b0`): what `SetSchedule(int)` installs when the requested
-		// program is missing — the one arm that reaches it untranslated. The comfort, calmed, follow,
-		// disoriented and interesting-place programs name it as their fail schedule, but that id goes
-		// through slot 440 first and a Troika NPC lands on `0x6b IDLE_DISPOSITION` (`0x102b12f0`), so
-		// this program runs only through the miss arm.
-		FElysiumSchedule& IdleStand = Out.AddDefaulted_GetRef();
-		IdleStand.Id = EElysiumScheduleId::IdleStand;
-		IdleStand.Tasks = {
-			Step(EElysiumTask::StopMoving),
-			ActivityStep(TEXT("ACT_IDLE")),
-			Step(EElysiumTask::Wait, 5.f),
-			Step(EElysiumTask::WaitPvs),
-		};
-		IdleStand.Interrupts = FElysiumNpcConditions::Of({
-			EElysiumNpcCond::NewEnemy, EElysiumNpcCond::SeeFear, EElysiumNpcCond::LightDamage,
-			EElysiumNpcCond::HeavyDamage, EElysiumNpcCond::Smell, EElysiumNpcCond::Provoked,
-			EElysiumNpcCond::GiveWay, EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearDanger,
-			EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearBulletImpact });
-
-		// `FAIL` (0x43, blob `0x10608238`): `GetFailSchedule`'s answer when `m_failSchedule` is 0.
-		// One second standing, then the PVS hold, then selection again.
-		FElysiumSchedule& FailProgram = Out.AddDefaulted_GetRef();
-		FailProgram.Id = EElysiumScheduleId::Fail;
-		FailProgram.Tasks = {
-			Step(EElysiumTask::StopMoving),
-			ActivityStep(TEXT("ACT_IDLE")),
-			Step(EElysiumTask::Wait, 1.f),
-			Step(EElysiumTask::WaitPvs),
-		};
-		FailProgram.Interrupts = FElysiumNpcConditions::Of({
-			EElysiumNpcCond::CanRangeAttack1, EElysiumNpcCond::CanRangeAttack2,
-			EElysiumNpcCond::CanMeleeAttack1, EElysiumNpcCond::CanMeleeAttack2,
-			EElysiumNpcCond::GiveWay });
-
-		// `TASK_SPECIAL_IDLE_ACTIVITY 5; TASK_WAIT_PVS 0`. The 5 is the activity operand retail
-		// passes and the stance machine ignores -- it selects from the disposition table, not from
-		// an activity -- so it is carried for fidelity rather than read.
-		//
-		// The three door-obstruction masks below are left EMPTY on purpose. The interrupt-condition
-		// census counts masks across the whole 691-schedule corpus but names none of those three
-		// programs' own masks, and an invented mask is a behavioural change wearing a compiled
-		// schedule's name. Empty is also a real recovered posture
-		// (`FElysiumSchedule::Interrupts`), so the wrong answer there is silent rather than loud:
-		// fill one in only from a decoded registration site.
-		//
-		// CHOSEN, NOT RECOVERED -- the two idle programs' masks, and only those two. Retail's own
-		// registration sites for `0x6b` and `0x4f` are not decoded either, but an empty mask on
-		// them is not a neutral default: it is the mask under which the enemy transaction's
-		// starvation gate refuses every acquisition, so a standing NPC could not enter combat until
-		// its idle happened to finish. The census is the evidence for the shape of the answer --
-		// `NEW_ENEMY` is declared by 332 of the 691 schedules, `HEAVY_DAMAGE` by 279,
-		// `LIGHT_DAMAGE` by 224, `ENEMY_DEAD` by 182 and `HEAR_DANGER`/`HEAR_COMBAT` by 54/29 --
-		// so the four commonest stimuli plus the hear family are what an ordinary idle admits.
-		// Nothing narrower would let live acquisition happen at all, and nothing wider is
-		// defensible from a census. Replace this with the decoded mask, not with an empty one.
-		//
-		// The four law conditions used to be CHOSEN into this mask by the same argument. They are
-		// no longer here, and they are still interrupts: `CAI_BaseNPCTroika::BuildScheduleTestBits`
-		// (`0x102ad140`, ported on the runner) overlays them onto EVERY schedule of a non-busy,
-		// non-investigating NPC each think -- the flee levels always, the attack levels only with no
-		// committed enemy in idle or alert -- together with `COND_INVESTIGATE_LEVEL`, `COMFORT` and
-		// `HEAR_FLINCH`. The decoded rule replaces the chosen mark, and it is narrower than the mark
-		// was: an NPC with an enemy did not get the attack-level interrupts in retail.
-		const FElysiumNpcConditions IdleInterrupts = FElysiumNpcConditions::Of({
-			EElysiumNpcCond::NewEnemy, EElysiumNpcCond::EnemyDead,
-			EElysiumNpcCond::LightDamage, EElysiumNpcCond::HeavyDamage,
-			EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearDanger,
-			EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearWorld });
-
-		FElysiumSchedule& Idle = Out.AddDefaulted_GetRef();
-		Idle.Id = EElysiumScheduleId::IdleDisposition;
-		Idle.Tasks = { Step(EElysiumTask::SpecialIdleActivity, 5.f), Step(EElysiumTask::WaitPvs) };
-		Idle.Interrupts = IdleInterrupts;
-
-		// `SET_ACTIVITY ACT_ALERT_FIDGET_LOOKAROUND; WAIT 3; WAIT_RANDOM 3; SET_ACTIVITY ACT_IDLE;
-		//  WAIT_RANDOM 2`.
-		FElysiumSchedule& Alert = Out.AddDefaulted_GetRef();
-		Alert.Id = EElysiumScheduleId::AlertLookAroundNi;
-		Alert.Tasks = {
-			ActivityStep(TEXT("ACT_ALERT_FIDGET_LOOKAROUND")),
-			Step(EElysiumTask::Wait, 3.f),
-			Step(EElysiumTask::WaitRandom, 3.f),
-			ActivityStep(TEXT("ACT_IDLE")),
-			Step(EElysiumTask::WaitRandom, 2.f),
-		};
-		Alert.Interrupts = IdleInterrupts;
-
-		// The near-door reaction: face what blocked you, then step back repeatedly. `_NE` is the
-		// no-enemy variant; its two enemy-carrying siblings (0x90 / 0x94) are not registered, and
-		// the selector records that by name when an NPC with an enemy reaches this policy.
-		FElysiumSchedule& BackAway = Out.AddDefaulted_GetRef();
-		BackAway.Id = EElysiumScheduleId::BackAwayFromDoorNe;
-		BackAway.Tasks = {
-			Step(EElysiumTask::FaceSavePosition),
-			Step(EElysiumTask::MoveAwayFromSavePosition, DoorStepBackCm),
-			Step(EElysiumTask::MoveAwayFromSavePosition, DoorStepBackCm),
-			Step(EElysiumTask::WaitRandom, 1.f),
-		};
-
-		// Already clear of the obstruction: wait facing the saved position instead of backing away.
-		FElysiumSchedule& BackAwayWait = Out.AddDefaulted_GetRef();
-		BackAwayWait.Id = EElysiumScheduleId::BackAwayFromDoorWaitNe;
-		BackAwayWait.Tasks = {
-			Step(EElysiumTask::FaceSavePosition),
-			Step(EElysiumTask::Wait, 2.f),
-			Step(EElysiumTask::WaitRandom, 2.f),
-		};
-
-		// A claimed cover hint. Reaching the hint is the hint machinery's job; what the schedule
-		// owns is the pose held once there.
-		FElysiumSchedule& Cover = Out.AddDefaulted_GetRef();
-		Cover.Id = EElysiumScheduleId::TakeCoverHintDoor;
-		Cover.Tasks = {
-			ActivityStep(TEXT("ACT_IDLE")),
-			Step(EElysiumTask::Wait, 2.f),
-			Step(EElysiumTask::WaitRandom, 2.f),
-		};
-		// Cover that cannot be held falls back to backing away, which is what leaves an NPC out of
-		// the doorway either way.
-		Cover.FailSchedule = EElysiumScheduleId::BackAwayFromDoorNe;
-
-		return Out;
-	}();
-
-	return Registry;
-}
-}   // namespace
-
-bool ElysiumScheduleIdFromName(const FString& Name, EElysiumScheduleId& OutId)
-{
-	OutId = EElysiumScheduleId::None;
-	if (Name.IsEmpty())
-	{
-		return false;
-	}
-	for (const FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
-	{
-		if (Name.Equals(ElysiumScheduleName(Schedule.Id), ESearchCase::IgnoreCase))
-		{
-			OutId = Schedule.Id;
-			return true;
-		}
-	}
-	return false;
-}
-
-void ElysiumSchedule::Register(FElysiumSchedule&& Program)
-{
-	if (!Program.IsValid())
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("Elysium: refused a schedule registration with no id or no tasks"));
-		return;
-	}
-	TArray<FElysiumSchedule>& Registry = ElysiumScheduleRegistryStorage();
-	for (FElysiumSchedule& Existing : Registry)
-	{
-		if (Existing.Id == Program.Id)
-		{
-			UE_LOG(LogElysiumNpcEnt, Warning,
-				TEXT("Elysium: schedule %s (0x%x) was registered twice; the later program wins"),
-				ElysiumScheduleName(Program.Id), ElysiumScheduleNumber(Program.Id));
-			Existing = MoveTemp(Program);
-			return;
-		}
-	}
-	Registry.Add(MoveTemp(Program));
-}
-
-#if WITH_DEV_AUTOMATION_TESTS
-ElysiumSchedule::FInterruptMaskScope::FInterruptMaskScope(EElysiumScheduleId Id,
-	const FElysiumNpcConditions& Mask)
-	: Target(Id)
-{
-	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
-	{
-		if (Schedule.Id == Id)
-		{
-			Previous = Schedule.Interrupts;
-			Schedule.Interrupts = Mask;
-			bInstalled = true;
-			return;
-		}
-	}
-}
-
-ElysiumSchedule::FInterruptMaskScope::~FInterruptMaskScope()
-{
-	if (!bInstalled)
-	{
-		return;
-	}
-	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
-	{
-		if (Schedule.Id == Target)
-		{
-			Schedule.Interrupts = Previous;
-			return;
-		}
-	}
-}
-
-ElysiumSchedule::FTaskActivityScope::FTaskActivityScope(EElysiumScheduleId Id, int32 TaskIndex,
-	const FString& Activity)
-	: Target(Id)
-	, Index(TaskIndex)
-{
-	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
-	{
-		if (Schedule.Id == Id && Schedule.Tasks.IsValidIndex(TaskIndex))
-		{
-			Previous = Schedule.Tasks[TaskIndex].Activity;
-			Schedule.Tasks[TaskIndex].Activity = Activity;
-			bInstalled = true;
-			return;
-		}
-	}
-}
-
-ElysiumSchedule::FTaskActivityScope::~FTaskActivityScope()
-{
-	if (!bInstalled)
-	{
-		return;
-	}
-	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
-	{
-		if (Schedule.Id == Target && Schedule.Tasks.IsValidIndex(Index))
-		{
-			Schedule.Tasks[Index].Activity = Previous;
-			return;
-		}
-	}
-}
-#endif
-
-namespace
-{
 	// Start one task. Returns its first result, so a task that completes immediately (a wait of
 	// zero, a PVS test that already passes) does not cost a whole think.
-	EElysiumTaskResult BeginTask(const FElysiumTaskStep& Step, FElysiumScheduleState& State,
+	EElysiumTaskResult BeginTask(const FElysiumScheduleStep& Step, FElysiumScheduleState& State,
 		IElysiumScheduleRunner& Runner, double Now)
 	{
-		switch (Step.Task)
+		switch (OpOf(Step))
 		{
-		case EElysiumTask::SpecialIdleActivity:
+		case EElysiumTaskOp::SpecialIdleActivity:
 		{
 			const float Seconds = Runner.RunSpecialIdleActivity(Now);
 			if (Seconds < 0.f)
@@ -453,12 +182,13 @@ namespace
 			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.25f, Seconds));
 			return EElysiumTaskResult::Running;
 		}
-		case EElysiumTask::WaitPvs:
+		case EElysiumTaskOp::WaitPvs:
 			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 
-		case EElysiumTask::SetActivity:
+		case EElysiumTaskOp::SetActivity:
 		{
-			const float Seconds = Runner.PlayActivity(Step.Activity);
+			const FString Activity = ActivityOf(Step);
+			const float Seconds = Runner.PlayActivity(Activity);
 			if (Seconds < 0.f)
 			{
 				// Troika `StartTask` arm 0x102a1c0f sets the ideal activity and its one-second
@@ -468,7 +198,7 @@ namespace
 				// schedule failure.
 				Runner.RecordScheduleEvent(FString::Printf(
 					TEXT("TASK_SET_ACTIVITY %s unresolved (PlayActivity=%.3f); completing (0x102a1c0f)"),
-					*Step.Activity, Seconds));
+					*Activity, Seconds));
 			}
 			// Troika stamps m_flWaitFinished to curtime + 1.0 in StartTask. RunTask then completes when
 			// current sequence equals ideal, or when this watchdog expires; neither path TaskFails.
@@ -479,68 +209,75 @@ namespace
 			return Runner.IsIdealActivityCurrent() ? EElysiumTaskResult::Complete
 				: EElysiumTaskResult::Running;
 		}
-		case EElysiumTask::Wait:
-			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.f, Step.Param));
-			return Step.Param > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
+		case EElysiumTaskOp::Wait:
+			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.f, Step.Data));
+			return Step.Data > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
 
-		case EElysiumTask::WaitRandom:
+		case EElysiumTaskOp::WaitRandom:
 		{
 			// `m_flWaitFinished = curtime + RandomFloat(0.1, arg)`: the operand goes to the draw as
 			// authored, so `WAIT_RANDOM 0.00` still holds up to 0.1 s.
-			const float Seconds = Runner.RandomSeconds(Step.Param);
+			const float Seconds = Runner.RandomSeconds(Step.Data);
 			State.TaskEndsAt = Now + static_cast<double>(Seconds);
 			return Seconds > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
 		}
-		case EElysiumTask::FaceSavePosition:
+		case EElysiumTaskOp::FaceSavePosition:
 			return Runner.FaceSavePosition() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::MoveAwayFromSavePosition:
-			return Runner.StepAwayFromSavePosition(Step.Param)
+		case EElysiumTaskOp::MoveAwayFromSavePosition:
+			return Runner.StepAwayFromSavePosition(Step.Data)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
 		// The combat vocabulary.
-		case EElysiumTask::SetFailSchedule:
-			// Bookkeeping, not work: it redirects this run's failure route and completes.
-			State.FailScheduleOverride = Step.Target;
+		case EElysiumTaskOp::SetFailSchedule:
+			// Bookkeeping, not work: it redirects this run's failure route and completes. The
+			// operand is stored LOCAL, which is what `m_failSchedule` holds.
+			State.FailScheduleOverride = ScheduleOperandOf(Step);
 			return EElysiumTaskResult::Complete;
 
-		case EElysiumTask::SetToleranceDistance:
-			State.ToleranceUnits = Step.Param;
-			Runner.SetGoalTolerance(Step.Param);
+		case EElysiumTaskOp::SetToleranceDistance:
+			State.ToleranceUnits = Step.Data;
+			Runner.SetGoalTolerance(Step.Data);
 			return EElysiumTaskResult::Complete;
 
-		case EElysiumTask::StopMoving:
+		case EElysiumTaskOp::StopMoving:
 			return Runner.BeginStopMovingTask();
 
-		case EElysiumTask::Remember:
-			Runner.RememberFact(Step.Param);
+		case EElysiumTaskOp::Remember:
+			// `Memory:` resolves through the signed-converted path, so the word comes back out of
+			// the float the same way it went in.
+			Runner.RememberFact(static_cast<uint32>(static_cast<int32>(Step.Data)));
 			return EElysiumTaskResult::Complete;
 
-		// The incapacitation vocabulary. Both are `StartTask`-only in retail and complete here for
-		// the same reason `TASK_SET_ACTIVITY` does: the arm does its write and calls `TaskComplete`.
-		case EElysiumTask::MakeOblivious:
+		case EElysiumTaskOp::MakeOblivious:
 			// The operand is the compiler's float: `TRUE`/`ON` -> 1.0, `FALSE`/`OFF` -> 0.0. Retail
 			// compares against 0.0 exactly and takes the clear branch on equality.
-			Runner.MakeOblivious(Step.Param != 0.f);
+			Runner.MakeOblivious(Step.Data != 0.f);
 			return EElysiumTaskResult::Complete;
 
-		case EElysiumTask::SetNpcFlag:
-			Runner.SetNpcFlag(Step.Flag);
+		case EElysiumTaskOp::SetNpcFlag:
+			// One of the three prefixes that store the raw 32-bit word rather than a converted
+			// float, which is why this reads `RawWord` and its neighbours read `Data`.
+			Runner.SetNpcFlag(static_cast<EElysiumNpcFlag>(Step.RawWord()));
 			return EElysiumTaskResult::Complete;
 
-		case EElysiumTask::GetPathToEnemy:
+		case EElysiumTaskOp::GetPathToEnemy:
 			return Runner.GetPathToEnemy(State.ToleranceUnits)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::GetPathToGoal:
+		case EElysiumTaskOp::GetPathToGoal:
 			return Runner.GetPathToScriptedGoal()
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::RunPath:
+		case EElysiumTaskOp::FindCoverFromEnemy:
+			return Runner.FindCoverFromEnemy()
+				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTaskOp::RunPath:
 			Runner.RunPath();
 			return EElysiumTaskResult::Complete;
 
-		case EElysiumTask::WaitForMovement:
+		case EElysiumTaskOp::WaitForMovement:
 		{
 			// Sampled on the first ask too: a body already standing on its goal must not cost the
 			// schedule a whole think before the attack task that follows it can run.
@@ -549,29 +286,29 @@ namespace
 				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
 					: EElysiumTaskResult::Running);
 		}
-		case EElysiumTask::FaceEnemy:
+		case EElysiumTaskOp::FaceEnemy:
 			// A turn-in-place completes the task rather than holding it. Retail's own melee approach
 			// puts `TASK_STOP_MOVING` after the face and transfers straight to the swing, so the
 			// program does not wait on alignment -- and the swing's own opponent acquisition is what
 			// decides whether the NPC was pointed at anything.
 			return Runner.FaceEnemy() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::AnnounceAttack:
-			return Runner.AnnounceAttack(Step.Param)
+		case EElysiumTaskOp::AnnounceAttack:
+			return Runner.AnnounceAttack(Step.Data)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::MeleeAttack1:
+		case EElysiumTaskOp::MeleeAttack1:
 			return Runner.MeleeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::RangeAttack1:
+		case EElysiumTaskOp::RangeAttack1:
 			return Runner.RangeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTask::SetSchedule:
+		case EElysiumTaskOp::SetSchedule:
 			// Handled by the caller: a transfer replaces the running program, which is a change to
 			// the state this function only advances.
 			return EElysiumTaskResult::Complete;
 
-		case EElysiumTask::PlayDeathSequence:
+		case EElysiumTaskOp::PlayDeathSequence:
 		{
 			// The recovered ladder, in order: "try the argument as an activity, then `ACT_DIESIMPLE`,
 			// then `ACT_IDLE`, and pass the surviving choice to `SetIdealActivity`"
@@ -584,7 +321,7 @@ namespace
 				ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::DieSimple);
 			const TCHAR* const Idle =
 				ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::Idle);
-			const FString Argument = Step.Activity;
+			const FString Argument = ActivityOf(Step);
 			const TCHAR* const Rungs[] = { *Argument, DieSimple, Idle };
 			float Seconds = -1.f;
 			const TCHAR* Chosen = nullptr;
@@ -631,58 +368,75 @@ namespace
 			State.TaskEndsAt = Now + static_cast<double>(Seconds);
 			return EElysiumTaskResult::Running;
 		}
+
+		case EElysiumTaskOp::Unknown:
+			break;
 		}
+
+		// The corpus named a task this runtime carries no body for. This is the coverage meter's
+		// dynamic half: the identity is named, the stub is tallied, and the task fails by name --
+		// which is exactly what the old closed enum could not do, because a task outside it could
+		// not be represented at all.
+		Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s has no body in this runtime"),
+			TaskNameOf(Step)));
+		ElysiumStub::Fired(TEXT("schedule-task"), TaskNameOf(Step), FString(),
+			FString::Printf(TEXT("%d"), Step.TaskId),
+			TEXT("the story that builds the task body; the step fails by name"));
 		return EElysiumTaskResult::Failed;
 	}
 
 	// Re-ask a task that reported Running. Only the timed tasks, the PVS hold and the movement watch
 	// get here.
-	EElysiumTaskResult ContinueTask(const FElysiumTaskStep& Step, FElysiumScheduleState& State,
+	EElysiumTaskResult ContinueTask(const FElysiumScheduleStep& Step, FElysiumScheduleState& State,
 		IElysiumScheduleRunner& Runner, double Now)
 	{
-		if (Step.Task == EElysiumTask::WaitPvs)
+		switch (OpOf(Step))
 		{
+		case EElysiumTaskOp::WaitPvs:
 			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
-		}
-		if (Step.Task == EElysiumTask::StopMoving) return Runner.StopMovingTask();
-		if (Step.Task == EElysiumTask::WaitForMovement)
+		case EElysiumTaskOp::StopMoving:
+			return Runner.StopMovingTask();
+		case EElysiumTaskOp::WaitForMovement:
 		{
 			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
 			return Watch == EElysiumMoveWatch::Arrived ? EElysiumTaskResult::Complete
 				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
 					: EElysiumTaskResult::Running);
 		}
-		if (Step.Task == EElysiumTask::SetActivity)
-		{
+		case EElysiumTaskOp::SetActivity:
 			return Runner.IsIdealActivityCurrent() || Now >= State.TaskEndsAt
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+		default:
+			break;
 		}
 		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 	}
 
-	// The fail route's id, `0x10281730`: `GetFailSchedule` (slot 439, `0x1028abe0`, no override on
-	// any of 79 classes) answers `m_failSchedule ? m_failSchedule : 0x43 FAIL`, and `SetSchedule(int)`
-	// (`0x102cc1f0`) then runs slot 440 on it before the lookup. `TASK_SET_FAIL_SCHEDULE` wins over
-	// the program's declared route when it ran — retail's chase sets `CHASE_ENEMY_FAILED` from inside
-	// the program.
-	EElysiumScheduleId FailScheduleFor(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner)
+	// The fail route, `0x10281730`: `GetFailSchedule` (slot 439, `0x1028abe0`, no override on any of
+	// 79 classes) answers `m_failSchedule ? m_failSchedule : 0x43 FAIL`, and `SetSchedule(int)`
+	// (`0x102cc1f0`) then runs slot 440 on it before the lookup. Both numbers are class-LOCAL, which
+	// is why nothing here translates to a global: `Start` does that.
+	//
+	// A program declares no fail route of its own. That used to be a field on the port's schedule
+	// type and it was an invention: no retail schedule text carries one, and the only way a route is
+	// redirected is `TASK_SET_FAIL_SCHEDULE` running from inside the program -- which is exactly what
+	// retail's chase does when it sets `CHASE_ENEMY_FAILED`.
+	int32 FailScheduleFor(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner)
 	{
-		EElysiumScheduleId Fail = State.FailScheduleOverride;
-		if (Fail == EElysiumScheduleId::None)
-		{
-			const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
-			Fail = Active != nullptr && Active->FailSchedule != EElysiumScheduleId::None
-				? Active->FailSchedule : EElysiumScheduleId::Fail;
-		}
+		const int32 Fail = State.FailScheduleOverride != ElysiumScheduleId::None
+			? State.FailScheduleOverride : ElysiumSched::FAIL;
 		return Runner.TranslateSchedule(Fail);
 	}
 }
 
-bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
+bool ElysiumSchedule::Start(FElysiumScheduleState& State, int32 Id,
 	IElysiumScheduleRunner& Runner)
 {
-	const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
-	if (Schedule == nullptr || !Schedule->IsValid())
+	// `GetScheduleOfType` (`0x102cc260`) translates first: a number below 1e9, and -1, goes through
+	// slot 580's schedule space; a global id is already the answer.
+	const int32 GlobalId = Runner.ResolveScheduleId(Id);
+	const FElysiumScheduleProgram* Schedule = ElysiumScheduleFor(GlobalId);
+	if (Schedule == nullptr || Schedule->Tasks.IsEmpty())
 	{
 		// `SetSchedule(int)` (`0x102cc1f0`) → `GetScheduleOfType` (`0x102cc260`) misses: retail
 		// DevMsgs and installs base schedule 1 in its place. No TaskFail; the NPC stands.
@@ -691,23 +445,23 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 		// not registered yet, and standing in `IDLE_STAND` would hide that behind a retail-shaped
 		// trace row. The tally keeps the unported program on the work list.
 		Runner.RecordScheduleEvent(FString::Printf(
-			TEXT("GetScheduleOfType(): No CASE for %s (0x%x); installing SCHED_IDLE_STAND"),
-			ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
+			TEXT("GetScheduleOfType(): No CASE for 0x%x (global %d); installing IDLE_STAND"),
+			Id, GlobalId));
 		ElysiumStub::Fired(TEXT("schedule"),
-			FString::Printf(TEXT("SetSchedule(%s)"), ElysiumScheduleName(Id)), FString(),
-			FString::Printf(TEXT("0x%x"), ElysiumScheduleNumber(Id)),
-			TEXT("the story that registers the program; IDLE_STAND stands in"));
-		if (Id == EElysiumScheduleId::IdleStand)
+			FString::Printf(TEXT("SetSchedule(0x%x)"), Id), FString(),
+			FString::Printf(TEXT("%d"), GlobalId),
+			TEXT("the corpus text that carries the program; IDLE_STAND stands in"));
+		if (Id == ElysiumSched::IDLE_STAND)
 		{
 			return false;   // the fallback itself is missing: a build defect, not a retail path
 		}
-		return Start(State, EElysiumScheduleId::IdleStand, Runner);
+		return Start(State, ElysiumSched::IDLE_STAND, Runner);
 	}
-	Install(State, Id, Runner);
+	Install(State, GlobalId, Runner);
 	return true;
 }
 
-void ElysiumSchedule::Install(FElysiumScheduleState& State, EElysiumScheduleId Id,
+void ElysiumSchedule::Install(FElysiumScheduleState& State, int32 GlobalId,
 	IElysiumScheduleRunner& Runner)
 {
 	// A clear asked for before this install is superseded by it: retail's `ClearSchedule` then
@@ -715,8 +469,9 @@ void ElysiumSchedule::Install(FElysiumScheduleState& State, EElysiumScheduleId I
 	Runner.TakeClearScheduleRequest();
 	// A null pointer is a real input to `CAI_BaseNPC::SetSchedule(CAI_Schedule*)`; the selection
 	// loop uses it to clear the outgoing program before trying the selector once more.
-	const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
-	check(Id == EElysiumScheduleId::None || (Schedule != nullptr && Schedule->IsValid()));
+	const FElysiumScheduleProgram* Schedule = ElysiumScheduleFor(GlobalId);
+	check(GlobalId == ElysiumScheduleId::None
+		|| (Schedule != nullptr && !Schedule->Tasks.IsEmpty()));
 	// Everything retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) does besides installing the
 	// program, in its order. All three producers reach it here rather than at their own call sites,
 	// which is what keeps a script's `ChangeSchedule`, a discipline's `AI_Schedule` and the feed's
@@ -725,10 +480,10 @@ void ElysiumSchedule::Install(FElysiumScheduleState& State, EElysiumScheduleId I
 	// 1. The schedule-change virtual (slot 435). It releases the bits and the obliviousness the
 	//    PREVIOUS program was holding, which is how an incapacitating schedule unwinds without
 	//    carrying teardown tasks of its own.
-	Runner.OnScheduleChange(Id);                                         // 0x10280e53
+	Runner.OnScheduleChange(GlobalId);                                   // 0x10280e53
 	// The old task is visible to the callback, including HitInfo expiry's TaskComplete.
 	State.Clear();
-	State.Current = Schedule != nullptr ? Id : EElysiumScheduleId::None;
+	State.Current = Schedule != nullptr ? GlobalId : ElysiumScheduleId::None;
 	const double Now = Runner.ScheduleTime();
 	State.ScheduleStartedAt = Now;                                      // 0x10280e69, +0x5c48
 	State.TaskStartedAt = Now;                                          // 0x10280e73, +0x5c4c
@@ -740,9 +495,9 @@ void ElysiumSchedule::Install(FElysiumScheduleState& State, EElysiumScheduleId I
 	State.bDidMaintainSchedule = false;
 	if (Schedule != nullptr)
 	{
-		Runner.RecordScheduleEvent(FString::Printf(TEXT("schedule %s (0x%x)"),
-			ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
-		Runner.DebugScheduleInstalled(Id);
+		Runner.RecordScheduleEvent(FString::Printf(TEXT("schedule %s"),
+			*ElysiumScheduleLabel(GlobalId, &Runner)));
+		Runner.DebugScheduleInstalled(GlobalId);
 	}
 }
 
@@ -752,14 +507,14 @@ void ElysiumSchedule::ClearSchedule(FElysiumScheduleState& State, IElysiumSchedu
 	// stamps), clear `PRESERVE_PATH`, dispatch slot 435 with NULL. The conditions are untouched, and
 	// so is `m_failSchedule` (`+0x5c54`): a `TASK_FAILED` still standing on the next pass routes to
 	// whatever `TASK_SET_FAIL_SCHEDULE` last wrote, not to base `FAIL`.
-	const EElysiumScheduleId Cleared = State.Current;
-	const EElysiumScheduleId KeptFailSchedule = State.FailScheduleOverride;
+	const int32 Cleared = State.Current;
+	const int32 KeptFailSchedule = State.FailScheduleOverride;
 	State.Clear();
 	State.FailScheduleOverride = KeptFailSchedule;
 	Runner.ClearPreservePath();
-	Runner.OnScheduleChange(EElysiumScheduleId::None);
-	Runner.RecordScheduleEvent(FString::Printf(TEXT("ClearSchedule: %s (0x%x) cleared"),
-		ElysiumScheduleName(Cleared), ElysiumScheduleNumber(Cleared)));
+	Runner.OnScheduleChange(ElysiumScheduleId::None);
+	Runner.RecordScheduleEvent(FString::Printf(TEXT("ClearSchedule: %s cleared"),
+		*ElysiumScheduleLabel(Cleared, &Runner)));
 }
 
 FElysiumNpcConditions ElysiumSchedule::EffectiveInterrupts(const FElysiumScheduleState& State,
@@ -768,7 +523,7 @@ FElysiumNpcConditions ElysiumSchedule::EffectiveInterrupts(const FElysiumSchedul
 	// No installed program is no mask. Retail's testers both read `m_ScheduleTestBits` only after
 	// checking `m_pSchedule != NULL` (`+0x5c38`), so an NPC between programs lists nothing rather
 	// than inheriting whatever the last program cached.
-	const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
+	const FElysiumScheduleProgram* Active = ElysiumScheduleFor(State.Current);
 	if (Active == nullptr)
 	{
 		return FElysiumNpcConditions();
@@ -794,7 +549,7 @@ void IElysiumScheduleRunner::NextScheduledTaskForMaintenance(FElysiumScheduleSta
 {
 	State.TaskStatus = EElysiumTaskStatus::New;
 	++State.TaskIndex;
-	const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
+	const FElysiumScheduleProgram* Schedule = ElysiumScheduleFor(State.Current);
 	if (Schedule == nullptr || !Schedule->Tasks.IsValidIndex(State.TaskIndex))
 	{
 		ScheduleDone();
@@ -828,7 +583,7 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		if (State.IsRunning() && State.TaskStatus == EElysiumTaskStatus::Complete)
 		{
 			Runner.NextScheduledTaskForMaintenance(State);                   // 0x10281980
-			const FElysiumSchedule* Advanced = ElysiumScheduleFor(State.Current);
+			const FElysiumScheduleProgram* Advanced = ElysiumScheduleFor(State.Current);
 			bCompletedScheduleAtTop = Advanced == nullptr
 				|| !Advanced->Tasks.IsValidIndex(State.TaskIndex);
 			if (Runner.IsAiStepMode())                                      // 0x10281987
@@ -841,7 +596,7 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				// The port's out-of-table executor resumes at the caller boundary. This is the old
 				// ScheduleDone handoff moved to the exact completion edge; ordinary schedules do not
 				// take it and continue through retail's reselect block below.
-				Install(State, EElysiumScheduleId::None, Runner);
+				Install(State, ElysiumScheduleId::None, Runner);
 				return false;
 			}
 		}
@@ -864,24 +619,33 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		}
 		else if (bScheduleValid)
 		{
-			const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
-			const bool bDelayed = Active != nullptr && Active->bDelayInterrupts
+			const FElysiumScheduleProgram* Active = ElysiumScheduleFor(State.Current);
+			const bool bDelayed = Active != nullptr
+				&& Active->HasFlag(ElysiumScheduleFlags::DelayInterrupts)
 				&& !State.bDidMaintainSchedule;                               // 0x102819c7
 			if (bDelayed)
 			{
 				Runner.RecordScheduleEvent(FString::Printf(
-					TEXT("schedule %s (0x%x) DELAY_INTERRUPTS: interrupts held for this think"),
-					ElysiumScheduleName(State.Current), ElysiumScheduleNumber(State.Current)));
+					TEXT("schedule %s DELAY_INTERRUPTS: interrupts held for this think"),
+					*ElysiumScheduleLabel(State.Current, &Runner)));
 			}
 			else if (Conditions != nullptr && Active != nullptr)
 			{
-				const FElysiumNpcConditions Firing =
+				// `IsScheduleValid` (`0x10280ff0`) evaluates BOTH masks:
+				//
+				//     (conds & m_ScheduleTestBits) | (~conds & m_ScheduleInvertedTestBits)
+				//
+				// so a `!COND_*` interrupt fires on the ABSENCE of its condition. The per-NPC overlay is
+				// not part of the inverted word -- `SetScheduleTestBits` (`0x10269eb0`) ORs into the
+				// normal one only -- which is why the inverted mask is read off the program directly.
+				FElysiumNpcConditions Firing =
 					EffectiveInterrupts(State, Runner).Intersection(*Conditions);
+				Firing |= Active->InvertedInterrupts.Difference(*Conditions);
 				if (!Firing.IsEmpty())
 				{
 					Runner.RecordScheduleEvent(FString::Printf(
-						TEXT("schedule %s (0x%x) interrupted by %s"),
-						ElysiumScheduleName(State.Current), ElysiumScheduleNumber(State.Current),
+						TEXT("schedule %s interrupted by %s"),
+						*ElysiumScheduleLabel(State.Current, &Runner),
 						*Firing.Describe()));
 					bScheduleValid = false;                                     // 0x10281340
 				}
@@ -902,23 +666,37 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			{
 				Runner.CommitIdealStateForSchedule();                           // 0x10281b5a
 				int32 IdealRetail = 0;
-				const EElysiumScheduleId Selected =
+				const int32 Selected =
 					Runner.SelectScheduleForMaintenance(Now, IdealRetail);         // 0x10281b89
-				Runner.SetIdealScheduleForMaintenance(IdealRetail);              // 0x102814d0
+				// `m_IdealSchedule` (`+0x5c3c`) is retail's GLOBAL stamp: `0x10280de0` translates a
+				// number below 1e9 through slot 580 before storing it. The selectors answer local
+				// numbers, so the translate belongs here.
+				Runner.SetIdealScheduleForMaintenance(
+					Runner.ResolveScheduleId(IdealRetail));                        // 0x102814d0
 				if (Runner.TakeExternalExecutorReturn())
 				{
 					// Patrol and interesting-place schedules live outside this registry. Their selector
 					// answer is represented by the owning executor, so hand the null answer to the caller
 					// at the same selection edge instead of treating it as a registry miss.
-					Install(State, EElysiumScheduleId::None, Runner);                  // 0x10281be5 adapter
+					Install(State, ElysiumScheduleId::None, Runner);                  // 0x10281be5 adapter
 					return false;
 				}
-				Install(State, Selected, Runner);                               // 0x10281be5
+				if (Selected != ElysiumScheduleId::None)
+				{
+					Start(State, Selected, Runner);                               // 0x10281be5
+				}
+				else
+				{
+					// A selector with no opinion installs nothing, which is the null program retail's
+					// `SetSchedule(CAI_Schedule*)` takes and the selection loop's own way of clearing.
+					Install(State, ElysiumScheduleId::None, Runner);
+				}
 			}
 			else
 			{
-				const EElysiumScheduleId Fail = FailScheduleFor(State, Runner);   // 0x10281ab8
-				Runner.SetIdealScheduleForMaintenance(ElysiumScheduleNumber(Fail)); // 0x10281ac1
+				const int32 Fail = FailScheduleFor(State, Runner);               // 0x10281ab8
+				Runner.SetIdealScheduleForMaintenance(
+					Runner.ResolveScheduleId(Fail));                               // 0x10281ac1
 				Start(State, Fail, Runner);                                      // 0x10281730
 			}
 			// SetSchedule cleared the live condition set, so the old pass snapshot is spent.
@@ -928,21 +706,21 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		if (!State.IsRunning())                                             // 0x10281c1d
 		{
 			int32 IdealRetail = 0;
-			const EElysiumScheduleId Selected =
+			const int32 Selected =
 				Runner.SelectScheduleForMaintenance(Now, IdealRetail);          // 0x10281c46
-			Runner.SetIdealScheduleForMaintenance(IdealRetail);
+			Runner.SetIdealScheduleForMaintenance(Runner.ResolveScheduleId(IdealRetail));
 			if (Runner.TakeExternalExecutorReturn())
 			{
-				Install(State, EElysiumScheduleId::None, Runner);                  // 0x10281ca6 adapter
+				Install(State, ElysiumScheduleId::None, Runner);                  // 0x10281ca6 adapter
 				return false;
 			}
-			if (Selected != EElysiumScheduleId::None)
+			if (Selected != ElysiumScheduleId::None)
 			{
-				Install(State, Selected, Runner);                               // 0x10281ca6
+				Start(State, Selected, Runner);                                 // 0x10281ca6
 			}
 		}
 
-		const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
+		const FElysiumScheduleProgram* Schedule = ElysiumScheduleFor(State.Current);
 		if (Schedule == nullptr || Schedule->Tasks.IsEmpty())               // 0x10281ce4
 		{
 			Runner.MissingSchedule();                                        // 0x1028226c
@@ -956,11 +734,11 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				int32 Local = Runner.LocalScheduleIdForStart(State.Current);     // 0x10281d17
 				if (Local == INDEX_NONE)
 				{
-					Local = ElysiumScheduleNumber(State.Current);
+					Local = State.Current;   // no space holds it: the global id is the only number there is
 				}
 				Runner.MaintenanceOnStartSchedule(Local);                       // 0x10281d29
 			}
-			const FElysiumTaskStep& Step = Schedule->Tasks[State.TaskIndex];
+			const FElysiumScheduleStep& Step = Schedule->Tasks[State.TaskIndex];
 			Runner.DebugTaskStart(Step);                                      // 0x10281d5c
 			State.TaskStatus = EElysiumTaskStatus::Running;                    // 0x10281d91
 			Runner.TaskStarting();                                            // +0x5c50 = 0
@@ -973,9 +751,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			}
 			else if (Result == EElysiumTaskResult::Complete)
 			{
-				if (Step.Task == EElysiumTask::SetSchedule)
+				if (OpOf(Step) == EElysiumTaskOp::SetSchedule)
 				{
-					Start(State, Step.Target, Runner);
+					Start(State, ScheduleOperandOf(Step), Runner);
 					Conditions = nullptr;
 					continue;
 				}
@@ -983,22 +761,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			}
 			else if (Result == EElysiumTaskResult::Failed)
 			{
-				int32 Reason = Runner.TaskFailureReason();
-				if (Reason == 0)
-				{
-					switch (Step.Task)
-					{
-					case EElysiumTask::GetPathToEnemy:
-					case EElysiumTask::FaceEnemy: Reason = 0x06; break;
-					case EElysiumTask::MeleeAttack1:
-					case EElysiumTask::RangeAttack1: Reason = 0x03; break;
-					case EElysiumTask::SpecialIdleActivity: Reason = 0x15; break;
-					default: Reason = 0x0c; break;
-					}
-				}
-				Runner.TaskFail(Reason);
+				Runner.TaskFail(TaskFailureReasonFor(OpOf(Step), Runner.TaskFailureReason()));
 				Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
-					ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
+					TaskNameOf(Step), *ElysiumScheduleLabel(State.Current, &Runner)));
 			}
 			const bool bRunning = State.TaskStatus != EElysiumTaskStatus::Complete
 				&& State.TaskStatus != EElysiumTaskStatus::RunningMovement;
@@ -1017,7 +782,7 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			{
 				break;                                                          // 0x102821ae
 			}
-			const FElysiumTaskStep& Step = Schedule->Tasks[State.TaskIndex];
+			const FElysiumScheduleStep& Step = Schedule->Tasks[State.TaskIndex];
 			const EElysiumTaskResult Result = ContinueTask(Step, State, Runner, Now); // 0x1028202c
 			const bool bClearedByRunTask = Runner.TakeClearScheduleRequest();
 			if (bClearedByRunTask)
@@ -1026,9 +791,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			}
 			else if (Result == EElysiumTaskResult::Complete)
 			{
-				if (Step.Task == EElysiumTask::SetSchedule)
+				if (OpOf(Step) == EElysiumTaskOp::SetSchedule)
 				{
-					Start(State, Step.Target, Runner);
+					Start(State, ScheduleOperandOf(Step), Runner);
 					Conditions = nullptr;
 					continue;
 				}
@@ -1036,22 +801,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			}
 			else if (Result == EElysiumTaskResult::Failed)
 			{
-				int32 Reason = Runner.TaskFailureReason();
-				if (Reason == 0)
-				{
-					switch (Step.Task)
-					{
-					case EElysiumTask::GetPathToEnemy:
-					case EElysiumTask::FaceEnemy: Reason = 0x06; break;
-					case EElysiumTask::MeleeAttack1:
-					case EElysiumTask::RangeAttack1: Reason = 0x03; break;
-					case EElysiumTask::SpecialIdleActivity: Reason = 0x15; break;
-					default: Reason = 0x0c; break;
-					}
-				}
-				Runner.TaskFail(Reason);
+				Runner.TaskFail(TaskFailureReasonFor(OpOf(Step), Runner.TaskFailureReason()));
 				Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
-					ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
+					TaskNameOf(Step), *ElysiumScheduleLabel(State.Current, &Runner)));
 			}
 			const bool bStillRunning = State.TaskStatus != EElysiumTaskStatus::Complete
 				&& State.TaskStatus != EElysiumTaskStatus::RunningMovement;
@@ -1149,3 +901,69 @@ ElysiumSchedule::ERetreat ElysiumSchedule::StepAwayFromSavePosition(IElysiumNpcM
 		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk)
 		? ERetreat::Moving : ERetreat::MotorRefused;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+namespace
+{
+	/** A borrow scope's target: the loaded program a class-local number names. */
+	FElysiumScheduleProgram* BorrowTarget(int32 LocalId, int32& OutGlobalId)
+	{
+		const FElysiumLocalIdSpace* Space = FallbackScheduleSpace();
+		OutGlobalId = Space != nullptr ? Space->LocalToGlobal(LocalId) : INDEX_NONE;
+		return FElysiumScheduleCorpus::Get().MutableProgram(OutGlobalId);
+	}
+}
+
+ElysiumSchedule::FInterruptMaskScope::FInterruptMaskScope(int32 LocalId,
+	const FElysiumNpcConditions& Mask)
+{
+	if (FElysiumScheduleProgram* Program = BorrowTarget(LocalId, Target))
+	{
+		Previous = Program->Interrupts;
+		Program->Interrupts = Mask;
+		bInstalled = true;
+	}
+}
+
+ElysiumSchedule::FInterruptMaskScope::~FInterruptMaskScope()
+{
+	if (!bInstalled)
+	{
+		return;
+	}
+	if (FElysiumScheduleProgram* Program = FElysiumScheduleCorpus::Get().MutableProgram(Target))
+	{
+		Program->Interrupts = Previous;
+	}
+}
+
+ElysiumSchedule::FTaskActivityScope::FTaskActivityScope(int32 LocalId, int32 TaskIndex,
+	const FString& Activity)
+	: Index(TaskIndex)
+{
+	FElysiumScheduleProgram* Program = BorrowTarget(LocalId, Target);
+	if (Program != nullptr && Program->Tasks.IsValidIndex(TaskIndex))
+	{
+		Previous = Program->Tasks[TaskIndex].Data;
+		// The word is an ACTIVITY id, so the name is interned first -- exactly what a parse does
+		// with an `ACTIVITY:` operand.
+		Program->Tasks[TaskIndex].Data = static_cast<float>(
+			const_cast<FElysiumSymbolRegistry&>(FElysiumScheduleCorpus::Get().Activities())
+				.Intern(Activity));
+		bInstalled = true;
+	}
+}
+
+ElysiumSchedule::FTaskActivityScope::~FTaskActivityScope()
+{
+	if (!bInstalled)
+	{
+		return;
+	}
+	FElysiumScheduleProgram* Program = FElysiumScheduleCorpus::Get().MutableProgram(Target);
+	if (Program != nullptr && Program->Tasks.IsValidIndex(Index))
+	{
+		Program->Tasks[Index].Data = Previous;
+	}
+}
+#endif

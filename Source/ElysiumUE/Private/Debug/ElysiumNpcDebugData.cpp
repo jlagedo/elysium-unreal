@@ -43,21 +43,10 @@ namespace
 		}
 	}
 
-	FString TaskOperand(const FElysiumTaskStep& Step)
+	FString TaskOperand(const FElysiumScheduleStep& Step)
 	{
-		if (!Step.Activity.IsEmpty())
-		{
-			return Step.Activity;
-		}
-		if (Step.Target != EElysiumScheduleId::None)
-		{
-			return ElysiumScheduleName(Step.Target);
-		}
-		if (Step.Flag != EElysiumNpcFlag::None)
-		{
-			return FString::Printf(TEXT("NPCFlag:%d"), static_cast<int32>(Step.Flag));
-		}
-		return FString::Printf(TEXT("%.3f"), Step.Param);
+		// One body decides what a task's single data word means, and it is the kernel's.
+		return ElysiumTaskOperandLabel(Step);
 	}
 }
 
@@ -109,27 +98,28 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 	if (ScheduleState.IsRunning())
 	{
 		ScheduleName = ElysiumScheduleName(ScheduleState.Current);
-		ScheduleNumber = ElysiumScheduleNumber(ScheduleState.Current);
+		ScheduleNumber = ScheduleState.Current;
 		TaskIndex = ScheduleState.TaskIndex;
-		FailSchedule = ScheduleState.FailScheduleOverride == EElysiumScheduleId::None
-			? TEXT("(program default)") : ElysiumScheduleName(ScheduleState.FailScheduleOverride);
+		FailSchedule = ScheduleState.FailScheduleOverride == ElysiumScheduleId::None
+			? TEXT("(base FAIL)")
+			: ElysiumScheduleName(ElysiumScheduleGlobalId(ScheduleState.FailScheduleOverride));
 		ToleranceUnits = ScheduleState.ToleranceUnits;
 		bTaskStarted = ScheduleState.TaskStatus != EElysiumTaskStatus::New;
-		if (const FElysiumSchedule* Program = ElysiumScheduleFor(ScheduleState.Current))
+		if (const FElysiumScheduleProgram* Program = ElysiumScheduleFor(ScheduleState.Current))
 		{
 			TaskCount = Program->Tasks.Num();
 			if (Program->Tasks.IsValidIndex(TaskIndex))
 			{
-				const FElysiumTaskStep& Step = Program->Tasks[TaskIndex];
-				CurrentTask = ElysiumTaskName(Step.Task);
+				const FElysiumScheduleStep& Step = Program->Tasks[TaskIndex];
+				CurrentTask = *FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId);
 				CurrentTaskOperand = TaskOperand(Step);
 			}
 			for (int32 Index = 0; bWithRows && Index < Program->Tasks.Num() && Index < MaxTaskRows;
 				++Index)
 			{
-				const FElysiumTaskStep& Step = Program->Tasks[Index];
+				const FElysiumScheduleStep& Step = Program->Tasks[Index];
 				TaskRows.Add(FString::Printf(TEXT("%d%s %s (%s)"), Index,
-					Index == TaskIndex ? TEXT(" *") : TEXT(""), ElysiumTaskName(Step.Task),
+					Index == TaskIndex ? TEXT(" *") : TEXT(""), *FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId),
 					*TaskOperand(Step)));
 			}
 		}
@@ -138,7 +128,7 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 	const FElysiumNpcConditions& Gathered = Npc.Cognition.Conditions;
 	Conditions = Gathered.Describe();
 	GatheredAt = Npc.Cognition.GatheredAt;
-	if (const FElysiumSchedule* Program = ScheduleState.IsRunning()
+	if (const FElysiumScheduleProgram* Program = ScheduleState.IsRunning()
 		? ElysiumScheduleFor(ScheduleState.Current) : nullptr)
 	{
 		Interrupts = Program->Interrupts.Describe();

@@ -6,7 +6,6 @@
 class FElysiumEntity;
 class FElysiumEntityWorld;
 class FElysiumNpc;
-enum class EElysiumScheduleId : uint8;
 
 // Requirement 23: Visual Logger events attached to the NPC's body actor. Compiled to empty
 // inlines outside a Visual Logger build so the Substrate callers stay unguarded and pay nothing.
@@ -32,12 +31,12 @@ namespace ElysiumNpcDebugLogging
 		const FElysiumNpcSightingDebug& Sighting);
 	void EnemyChoice(const FElysiumNpc& Npc, const FElysiumEntityWorld& World,
 		const FElysiumEntityHandle& OldEnemy, const FElysiumEntityHandle& NewEnemy);
-	void ScheduleInstalled(const FElysiumNpc& Npc, EElysiumScheduleId Schedule);
+	void ScheduleInstalled(const FElysiumNpc& Npc, int32 Schedule);
 #else
 	inline void Sighting(const FElysiumNpc&, const FElysiumEntity&,
 		const FElysiumNpcSightingDebug&) {}
 	inline void EnemyChoice(const FElysiumNpc&, const FElysiumEntityWorld&,
 		const FElysiumEntityHandle&, const FElysiumEntityHandle&) {}
-	inline void ScheduleInstalled(const FElysiumNpc&, EElysiumScheduleId) {}
+	inline void ScheduleInstalled(const FElysiumNpc&, int32) {}
 #endif
 }

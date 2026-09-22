@@ -960,7 +960,7 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	// decides who drives. The moving half of the rule is `Elysium.Substrate.Npc.TravelSpeed`,
 	// whose walker has no schedule to park it.
 	TestTrue(TEXT("the forced program stays running while a patrol is armed"),
-		ScheduledJack->Schedule.Current == EElysiumScheduleId::Mesmerized);
+		ScheduledJack->Schedule.Current == ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED));
 	FElysiumRecordingNpcMotor* JackMotor = Services.NpcMotors.IsEmpty()
 		? nullptr : Services.NpcMotors[0].Get();
 	if (TestNotNull(TEXT("Jack owns the recording motor"), JackMotor))

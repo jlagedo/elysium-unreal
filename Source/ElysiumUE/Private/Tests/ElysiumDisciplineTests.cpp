@@ -1496,7 +1496,7 @@ bool FElysiumDisciplineAiScheduleTest::RunTest(const FString&)
 	Player->Origin = FVector::ZeroVector;
 
 	TArray<FElysiumNpc*> Victims;
-	TArray<EElysiumScheduleId> Before;
+	TArray<int32> Before;
 	for (int32 i = 0; i < 3; ++i)
 	{
 		FElysiumCombatCharacter* Victim =
@@ -1554,7 +1554,7 @@ bool FElysiumDisciplineAiScheduleTest::RunTest(const FString&)
 	for (FElysiumNpc* Victim : Victims)
 	{
 		TestEqual(TEXT("every committed target is running the named program"),
-			Victim->Schedule.Current, EElysiumScheduleId::MeleeIdle);
+			Victim->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_IDLE));
 		TestTrue(TEXT("...through the ordinary kernel, from its first task"),
 			Victim->Schedule.IsRunning() && Victim->Schedule.TaskIndex == 0);
 		TestTrue(TEXT("...and is due a think, so the program advances"),

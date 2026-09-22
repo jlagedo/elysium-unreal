@@ -60,16 +60,18 @@ void FElysiumNpc::SetSchedule(int32 RawRetailId, bool bForce)
 
 	const int32 Translated = TranslateScheduleRetail(RawRetailId); // 0x102ae758
 	LastTranslateScheduleRetail = Translated;
-	EElysiumScheduleId Resolved = ScheduleFromRetailNumber(Translated); // 0x102ae75d
-	if (Resolved == EElysiumScheduleId::None)
+	// `GetScheduleOfType` (`0x102cc260`): the translated number is class-LOCAL, so it goes through
+	// slot 580's schedule space before the lookup.
+	int32 Resolved = ResolveScheduleId(Translated); // 0x102ae75d
+	if (ElysiumScheduleFor(Resolved) == nullptr)
 	{
 		// `GetScheduleOfType`'s miss installs literal 1 without translating it again.
 		RecordScheduleEvent(FString::Printf(
 			TEXT("GetScheduleOfType(): No CASE for 0x%x; installing SCHED_IDLE_STAND"), Translated));
 		ElysiumStub::Fired(TEXT("schedule"), TEXT("SetSchedule retail registry miss"), DebugString(),
 			FString::Printf(TEXT("0x%x"), Translated),
-			TEXT("0002/25: IDLE_STAND stands in for the unregistered program"));
-		Resolved = EElysiumScheduleId::IdleStand; // 0x102cc229
+			TEXT("the corpus text that carries the program; IDLE_STAND stands in"));
+		Resolved = ResolveScheduleId(ElysiumSched::IDLE_STAND); // 0x102cc229
 	}
 
 	// Troika `SetSchedule(CAI_Schedule*, bool)` refuses both DEAD words first.
@@ -86,7 +88,7 @@ void FElysiumNpc::SetSchedule(int32 RawRetailId, bool bForce)
 	ElysiumSchedule::Install(Schedule, Resolved, *this); // 0x102ae7bf
 }
 
-void FElysiumNpc::ForceScheduleChange(EElysiumScheduleId NewSchedule, bool bForce)
+void FElysiumNpc::ForceScheduleChange(int32 NewSchedule, bool bForce)
 {
 	if (!OkToDisturb()) // 0x102ae495
 	{
@@ -129,7 +131,7 @@ void FElysiumNpc::ForceScheduleChange(EElysiumScheduleId NewSchedule, bool bForc
 	OnScheduleChange(NewSchedule); // 0x102ae6b2
 }
 
-void FElysiumNpc::OnScheduleChange(EElysiumScheduleId NewSchedule)
+void FElysiumNpc::OnScheduleChange(int32 NewSchedule)
 {
 	const FElysiumNpcClassSlot* Override = SpeciesDispatchingSlot != GMaintainSlotOnScheduleChange
 		? ElysiumNpcKernelClass::OverrideOf(RetailClass(), GMaintainSlotOnScheduleChange)
@@ -145,7 +147,7 @@ void FElysiumNpc::OnScheduleChange(EElysiumScheduleId NewSchedule)
 	SpeciesOnScheduleChange(NewSchedule, Override->Address);
 }
 
-void FElysiumNpc::TroikaOnScheduleChange(EElysiumScheduleId NewSchedule)
+void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 {
 	(void)NewSchedule;
 	// Base slot 435 (`0x1027a700`) first: navigator notification, move-wait zero, strategy reset.
@@ -213,7 +215,7 @@ void FElysiumNpc::TroikaOnScheduleChange(EElysiumScheduleId NewSchedule)
 	ScheduleHost.MemoryBits &= ~0x2000u; // 0x102a0aed
 }
 
-void FElysiumNpc::SpeciesOnScheduleChange(EElysiumScheduleId NewSchedule, const TCHAR* RetailBody)
+void FElysiumNpc::SpeciesOnScheduleChange(int32 NewSchedule, const TCHAR* RetailBody)
 {
 	if (FCString::Strcmp(RetailBody, TEXT("0x10378fc0")) == 0)
 	{
@@ -254,7 +256,7 @@ void FElysiumNpc::SpeciesOnScheduleChange(EElysiumScheduleId NewSchedule, const 
 		{
 			WerewolfScheduleStack.RemoveAt(0, 1, EAllowShrinking::No); // 0x103ceda3
 		}
-		WerewolfScheduleStack.Add(NewSchedule == EElysiumScheduleId::None
+		WerewolfScheduleStack.Add(NewSchedule == ElysiumScheduleId::None
 				? FString()
 				: FString(ElysiumScheduleName(NewSchedule))); // 0x103cee0e
 	}
@@ -467,7 +469,7 @@ void FElysiumNpc::CacheInterruptConditionsForMaintenance(double Now)
 	Cognition.Conditions.Clear(EElysiumNpcCond::NpcFreeze); // 0x1026a274
 }
 
-EElysiumScheduleId FElysiumNpc::SelectScheduleForMaintenance(double Now,
+int32 FElysiumNpc::SelectScheduleForMaintenance(double Now,
 	int32&															OutIdealScheduleRetail)
 {
 	if (ScheduleHost.CacheInterruptTime < Now) // 0x102814d0
@@ -478,26 +480,26 @@ EElysiumScheduleId FElysiumNpc::SelectScheduleForMaintenance(double Now,
 	{
 		ElysiumNpcEnemy::GatherConditions(*this, Now); // 0x102814d0 slot 433
 	}
-	const EElysiumScheduleId Selected = SelectSchedule(); // 0x102814d0 slot 438
-	if (Selected == EElysiumScheduleId::None && (bPatrolActive || bUseInteresting))
+	const int32 Selected = SelectSchedule(); // 0x102814d0 slot 438
+	if (Selected == ElysiumScheduleId::None && (bPatrolActive || bUseInteresting))
 	{
 		// Retail's patrol/interesting answers are schedules. This runtime already represents those
 		// two programs as external executors, so their slot-438 null adapter returns control at the
 		// selection edge rather than flowing into the missing-ID fallback below.
 		OutIdealScheduleRetail = 0;
 		bReturnToExternalExecutorAfterSchedule = true;
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 	// Today's selector surface is typed and therefore exposes only registered ids. Preserve its raw
 	// retail number in the int32 ideal word before slot 440 transforms the installed pointer. The
 	// later Select19 body owns returning local/-1/>=1e9 values; this adapter is already wide enough
 	// to preserve them when that selector surface lands.
-	OutIdealScheduleRetail = ElysiumScheduleNumber(Selected); // 0x102814d0, +0x5c3c
-	const int32 SelectedNumber = ElysiumScheduleNumber(Selected);
+	OutIdealScheduleRetail = Selected; // 0x102814d0, +0x5c3c
+	const int32 SelectedNumber = Selected;
 	const int32 TranslatedNumber = TranslateScheduleRetail(SelectedNumber); // 0x102cc1f0 slot 440
 	LastTranslateScheduleRetail = TranslatedNumber;
-	const EElysiumScheduleId Translated = ScheduleFromRetailNumber(TranslatedNumber);
-	if (Translated != EElysiumScheduleId::None)
+	const int32 Translated = TranslatedNumber;
+	if (Translated != ElysiumScheduleId::None)
 	{
 		return Translated; // 0x102cc260 lookup hit
 	}
@@ -507,7 +509,7 @@ EElysiumScheduleId FElysiumNpc::SelectScheduleForMaintenance(double Now,
 	ElysiumStub::Fired(TEXT("schedule"), TEXT("GetNewSchedule registry miss"), DebugString(),
 		FString::Printf(TEXT("0x%x"), TranslatedNumber),
 		TEXT("0002/25: IDLE_STAND stands in for the unregistered selected program"));
-	return EElysiumScheduleId::IdleStand; // 0x102cc229
+	return ElysiumSched::IDLE_STAND; // 0x102cc229
 }
 
 void FElysiumNpc::SetIdealScheduleForMaintenance(int32 RetailId)
@@ -521,9 +523,9 @@ void FElysiumNpc::MissingSchedule()
 	SetActivity(GMaintainActIdle);													// 0x10282280, slot 310
 }
 
-int32 FElysiumNpc::LocalScheduleIdForStart(EElysiumScheduleId Id)
+int32 FElysiumNpc::LocalScheduleIdForStart(int32 Id)
 {
-	return GetLocalScheduleId(ElysiumScheduleNumber(Id)); // 0x10281d17
+	return GetLocalScheduleId(Id); // 0x10281d17
 }
 
 void FElysiumNpc::MaintenanceOnStartSchedule(int32 LocalScheduleId)
@@ -531,11 +533,11 @@ void FElysiumNpc::MaintenanceOnStartSchedule(int32 LocalScheduleId)
 	OnStartSchedule(LocalScheduleId); // 0x10281d29, slot 436
 }
 
-void FElysiumNpc::DebugTaskStart(const FElysiumTaskStep& Step)
+void FElysiumNpc::DebugTaskStart(const FElysiumScheduleStep& Step)
 {
 	if ((DebugOverlays & 0x08000000) != 0) // 0x10281d68
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("Task: %s"), ElysiumTaskName(Step.Task)); // 0x10281d83
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("Task: %s"), *FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId)); // 0x10281d83
 	}
 }
 

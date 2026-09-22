@@ -488,13 +488,14 @@ bool FElysiumNpc::ReadyForUnited() const
 	// schedule id (`CAI_Schedule+0x00`) against 0x15a or 0x15b, false when there is no schedule.
 	//
 	// The port's schedule set does not carry the two ChangBros `UNITED` programs yet — the
-	// comparison is retail's and nothing in `EElysiumScheduleId` numbers 0x15a/0x15b — so this
+	// comparison is retail's and nothing in `int32` numbers 0x15a/0x15b — so this
 	// answers false until they are registered. Not a stub: the two numbers ARE the rule.
 	if (!Schedule.IsRunning())
 	{
 		return false;
 	}
-	const int32 Number = ElysiumScheduleNumber(Schedule.Current);
+	const int32 Number =
+		IdSpace(EElysiumIdCategory::Schedule)->GlobalToLocal(Schedule.Current);
 	return Number == 0x15a || Number == 0x15b;
 }
 

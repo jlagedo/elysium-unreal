@@ -89,7 +89,7 @@ namespace ElysiumNpcDebugLogging
 		}
 	}
 
-	void ScheduleInstalled(const FElysiumNpc& Npc, EElysiumScheduleId Schedule)
+	void ScheduleInstalled(const FElysiumNpc& Npc, int32 Schedule)
 	{
 		AActor* Owner = BodyActor(Npc);
 		if (Owner == nullptr)
@@ -98,9 +98,9 @@ namespace ElysiumNpcDebugLogging
 		}
 		UE_VLOG_LOCATION(Owner, LogElysiumNpcEnt, Log, Npc.Origin, 14.0f,
 			FColor(255, 220, 80), TEXT("schedule installed: %s (%d)"),
-			ElysiumScheduleName(Schedule), ElysiumScheduleNumber(Schedule));
+			ElysiumScheduleName(Schedule), Schedule);
 		UE_VLOG(Owner, LogElysiumNpcEnt, Log, TEXT("schedule installed: %s (%d)"),
-			ElysiumScheduleName(Schedule), ElysiumScheduleNumber(Schedule));
+			ElysiumScheduleName(Schedule), Schedule);
 	}
 }
 

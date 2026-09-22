@@ -55,7 +55,7 @@ namespace
 	struct FMaintainRunner final : IElysiumScheduleRunner
 	{
 		FElysiumNpcConditions Conditions;
-		EElysiumScheduleId	  Selected = EElysiumScheduleId::IdleStand;
+		int32	  Selected = ElysiumSched::IDLE_STAND;
 		int32				  Ideal = 0;
 		bool				  bStateMismatch = false;
 		bool				  bDoor = false;
@@ -106,7 +106,7 @@ namespace
 			++ScheduleDoneCalls;
 			Conditions.Set(EElysiumNpcCond::ScheduleDone);
 		}
-		virtual void OnScheduleChange(EElysiumScheduleId) override { ++ScheduleChanges; }
+		virtual void OnScheduleChange(int32) override { ++ScheduleChanges; }
 		virtual double ScheduleTime() const override { return Time; }
 		virtual bool IsSpecialNavigation() const override { return bSpecialNav; }
 		virtual void MarkSpecialNavigationScheduleEnd() override { ++SpecialMarks; }
@@ -124,11 +124,11 @@ namespace
 			++CommitCalls;
 			bStateMismatch = false;
 		}
-		virtual EElysiumScheduleId SelectScheduleForMaintenance(double,
+		virtual int32 SelectScheduleForMaintenance(double,
 			int32& OutIdealScheduleRetail) override
 		{
 			++SelectCalls;
-			OutIdealScheduleRetail = ElysiumScheduleNumber(Selected);
+			OutIdealScheduleRetail = Selected;
 			return Selected;
 		}
 		virtual void SetIdealScheduleForMaintenance(int32 RetailId) override { Ideal = RetailId; }
@@ -152,12 +152,13 @@ namespace
 
 	struct FEmptyTaskScope
 	{
-		FElysiumSchedule*		 Program = nullptr;
-		TArray<FElysiumTaskStep> Saved;
+		FElysiumScheduleProgram*		 Program = nullptr;
+		TArray<FElysiumScheduleStep> Saved;
 
-		explicit FEmptyTaskScope(EElysiumScheduleId Id)
+		explicit FEmptyTaskScope(int32 LocalId)
 		{
-			Program = const_cast<FElysiumSchedule*>(ElysiumScheduleFor(Id));
+			Program = FElysiumScheduleCorpus::Get().MutableProgram(
+				ElysiumScheduleGlobalId(LocalId));
 			check(Program != nullptr);
 			Saved = MoveTemp(Program->Tasks);
 		}
@@ -169,18 +170,20 @@ namespace
 
 	struct FWaitPvsTaskScope
 	{
-		FElysiumSchedule*		 Program = nullptr;
-		TArray<FElysiumTaskStep> Saved;
+		FElysiumScheduleProgram*		 Program = nullptr;
+		TArray<FElysiumScheduleStep> Saved;
 
-		FWaitPvsTaskScope(EElysiumScheduleId Id, int32 Count)
+		FWaitPvsTaskScope(int32 LocalId, int32 Count)
 		{
-			Program = const_cast<FElysiumSchedule*>(ElysiumScheduleFor(Id));
+			Program = FElysiumScheduleCorpus::Get().MutableProgram(
+				ElysiumScheduleGlobalId(LocalId));
 			check(Program != nullptr);
 			Saved = MoveTemp(Program->Tasks);
 			for (int32 Index = 0; Index < Count; ++Index)
 			{
-				FElysiumTaskStep Step;
-				Step.Task = EElysiumTask::WaitPvs;
+				FElysiumScheduleStep Step;
+				Step.TaskId = FElysiumScheduleCorpus::Get()
+					.Namespace(EElysiumIdCategory::Task).Find(TEXT("TASK_WAIT_PVS"));
 				Program->Tasks.Add(Step);
 			}
 		}
@@ -211,7 +214,7 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 	TestEqual(TEXT("102ae7b7 + 10280e53 dispatch slot 435 twice"),
 		N.WerewolfScheduleStack.Num(), 2);
 	TestEqual(TEXT("102cc229 installs literal IDLE_STAND on the miss"), N.Schedule.Current,
-		EElysiumScheduleId::IdleStand);
+		ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 
 	N.WerewolfScheduleStack.Reset();
 	N.SetState(7);
@@ -239,11 +242,11 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 		return false;
 	N.NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
 	Motor->Navigation.Type = EElysiumNpcNavType::Climb;
-	N.ForceScheduleChange(EElysiumScheduleId::IdleStand, false);
+	N.ForceScheduleChange(ElysiumSched::IDLE_STAND, false);
 	TestTrue(TEXT("102ae68d NAV_CLIMB preserves the path bit"),
 		N.NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH));
 	Motor->Navigation.Type = EElysiumNpcNavType::Ground;
-	N.ForceScheduleChange(EElysiumScheduleId::IdleStand, false);
+	N.ForceScheduleChange(ElysiumSched::IDLE_STAND, false);
 	TestFalse(TEXT("102ae69b ordinary navigation clears the path bit"),
 		N.NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH));
 
@@ -254,7 +257,7 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 			FElysiumVariant::Void(), 0.0, FElysiumEntityHandle::Invalid(), Open->Handle);
 		F.World.World.Tick(0.0);
 		TestTrue(TEXT("102ae546 resolves the live cine owner"), N.ScriptOwner == Open->Handle);
-		N.ForceScheduleChange(EElysiumScheduleId::IdleStand, false);
+		N.ForceScheduleChange(ElysiumSched::IDLE_STAND, false);
 		TestFalse(TEXT("102ae654 cancels the interruptable cine"), N.ScriptOwner.IsSet());
 	}
 
@@ -266,7 +269,7 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 		F.World.World.Tick(0.1);
 		TestFalse(TEXT("102ae5ad reads the locked cine's +0x5f90"),
 			Locked->IsScriptedSequenceInterruptable());
-		N.ForceScheduleChange(EElysiumScheduleId::IdleStand, false);
+		N.ForceScheduleChange(ElysiumSched::IDLE_STAND, false);
 		TestFalse(TEXT("102ae60e warning is non-refusing and cancellation still runs"),
 			N.ScriptOwner.IsSet());
 	}
@@ -288,7 +291,7 @@ bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 	N.NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	N.ScheduleHost.SavedSleepExtents = FVector(3.f);
 	N.ScheduleHost.MemoryBits = 0x2000u;
-	N.OnScheduleChange(EElysiumScheduleId::Fail);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 	TestFalse(TEXT("102a09f8/102a0a07 closes and forgets m_hOpeningDoor"), N.OpeningDoor.IsSet());
 	TestFalse(TEXT("slot 532 also clears the wait byte"), N.bOpeningDoorWait);
 	TestFalse(TEXT("102a0a79 clears SLEEP_BOUNDING_BOX"),
@@ -297,24 +300,24 @@ bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 
 	N.SetRetailClassForTests(TEXT("CNPC_VGargoyle"));
 	N.SpeciesShunnedFindCount = 2;
-	N.OnScheduleChange(EElysiumScheduleId::IdleStand);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 	TestEqual(TEXT("10378fe4 decrements Gargoyle pillar shun"), N.SpeciesShunnedFindCount, 1);
 	N.NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
-	N.OnScheduleChange(EElysiumScheduleId::IdleStand);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 	TestEqual(TEXT("10378fd8 PRESERVE_PATH freezes it"), N.SpeciesShunnedFindCount, 1);
 
 	N.NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
 	N.SetRetailClassForTests(TEXT("CNPC_VHengeyokai"));
 	N.PathMode = 7;
 	N.SpeciesShunnedFindCount = 2;
-	N.OnScheduleChange(EElysiumScheduleId::IdleStand);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 	TestEqual(TEXT("103830b0 clears Hengeyokai path mode"), N.PathMode, 0);
 	TestEqual(TEXT("103830be decrements fish shun"), N.SpeciesShunnedFindCount, 1);
 
 	N.SetRetailClassForTests(TEXT("CNPC_VTzimisce"));
 	N.PathMode = 4;
 	N.SpeciesShunnedFindCount = 3;
-	N.OnScheduleChange(EElysiumScheduleId::IdleStand);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 	TestEqual(TEXT("103bf630 clears Tzimisce path mode"), N.PathMode, 0);
 	TestEqual(TEXT("103bf63e decrements body shun"), N.SpeciesShunnedFindCount, 2);
 
@@ -322,10 +325,10 @@ bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 	N.WerewolfScheduleStack.Reset();
 	for (int32 Index = 0; Index < 51; ++Index)
 		N.WerewolfScheduleStack.Add(TEXT("old"));
-	N.OnScheduleChange(EElysiumScheduleId::Fail);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 	TestEqual(TEXT("103ced8a drops before append and holds 51"), N.WerewolfScheduleStack.Num(), 51);
 	TestEqual(TEXT("103cee0e appends the incoming schedule"), N.WerewolfScheduleStack.Last(),
-		FString(TEXT("SCHED_FAIL")));
+		FString(TEXT("FAIL")));
 	return true;
 }
 
@@ -444,17 +447,17 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 	// A reduced pass admits one completed task. The ordinary pass also stops after the recovered
 	// 8 ms cycle budget, independently of its ten-completion ceiling.
 	{
-		FWaitPvsTaskScope WaitTasks(EElysiumScheduleId::IdleStand, 3);
+		FWaitPvsTaskScope WaitTasks(ElysiumSched::IDLE_STAND, 3);
 		State.Clear();
 		Runner.WaitPvsCalls = 0;
-		ElysiumSchedule::Start(State, EElysiumScheduleId::IdleStand, Runner);
+		ElysiumSchedule::Start(State, ElysiumSched::IDLE_STAND, Runner);
 		ElysiumSchedule::Tick(State, Runner, 1.1, &Runner.Conditions, true);
 		TestEqual(TEXT("1028190e reduced maintenance completes one task"), Runner.WaitPvsCalls, 1);
 
 		State.Clear();
 		Runner.WaitPvsCalls = 0;
 		Runner.WaitPvsDelaySeconds = 0.012;
-		ElysiumSchedule::Start(State, EElysiumScheduleId::IdleStand, Runner);
+		ElysiumSchedule::Start(State, ElysiumSched::IDLE_STAND, Runner);
 		ElysiumSchedule::Tick(State, Runner, 1.2, &Runner.Conditions, false);
 		TestEqual(TEXT("10282179 8 ms budget stops before the second task"), Runner.WaitPvsCalls, 1);
 		Runner.WaitPvsDelaySeconds = 0.0;
@@ -462,7 +465,7 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 
 	// The continuous-move tail writes memory before RunTaskOverlay, with both calls observable.
 	Runner.bContinuous = true;
-	State.Current = EElysiumScheduleId::IdleStand;
+	State.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	State.TaskIndex = 2; // TASK_WAIT, a running task with a future deadline
 	State.TaskStatus = EElysiumTaskStatus::Running;
 	State.TaskEndsAt = 10.0;
@@ -473,7 +476,7 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 
 	// `ai_step` returns immediately after NextScheduledTask and skips the common +0x5bb8 store.
 	Runner.bAiStep = true;
-	State.Current = EElysiumScheduleId::IdleStand;
+	State.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	State.TaskIndex = 0;
 	State.TaskStatus = EElysiumTaskStatus::Complete;
 	State.bDidMaintainSchedule = false;
@@ -491,9 +494,9 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 
 	// A zero-task program reaches the exact error exit and also skips +0x5bb8.
 	{
-		FEmptyTaskScope Empty(EElysiumScheduleId::IdleStand);
+		FEmptyTaskScope Empty(ElysiumSched::IDLE_STAND);
 		State.Clear();
-		State.Current = EElysiumScheduleId::IdleStand;
+		State.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 		State.bDidMaintainSchedule = false;
 		Runner.MissingCalls = 0;
 		TestFalse(TEXT("1028226c zero-task program exits"),
@@ -504,7 +507,7 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 
 	// Special navigation marks both bits before the ordinary failure route.
 	State.Clear();
-	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleStand, Runner);
+	ElysiumSchedule::Start(State, ElysiumSched::IDLE_STAND, Runner);
 	Runner.Conditions.Set(EElysiumNpcCond::TaskFailed);
 	Runner.bSpecialNav = true;
 	ElysiumSchedule::Tick(State, Runner, 5.0, &Runner.Conditions, true);
@@ -512,7 +515,7 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 
 	// The independent CHOOSE_NEW_SCHEDULE and state-mismatch invalidators both select immediately.
 	Runner = FMaintainRunner();
-	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleStand, Runner);
+	ElysiumSchedule::Start(State, ElysiumSched::IDLE_STAND, Runner);
 	Runner.bChooseNew = true;
 	ElysiumSchedule::Tick(State, Runner, 6.0, &Runner.Conditions, true);
 	TestTrue(TEXT("10281075 CHOOSE_NEW_SCHEDULE reaches selection"), Runner.SelectCalls > 0);
@@ -526,14 +529,14 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 	// slot-438 adapter therefore returns at the same 10281b89 selection edge and must not take
 	// 102cc229's missing-ID fallback.
 	Runner = FMaintainRunner();
-	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleStand, Runner);
-	Runner.Selected = EElysiumScheduleId::None;
+	ElysiumSchedule::Start(State, ElysiumSched::IDLE_STAND, Runner);
+	Runner.Selected = ElysiumScheduleId::None;
 	Runner.bStateMismatch = true;
 	Runner.bExternalReturn = true;
 	TestFalse(TEXT("10281b89 external schedule answer returns to the caller"),
 		ElysiumSchedule::Tick(State, Runner, 8.0, &Runner.Conditions, true));
 	TestEqual(TEXT("10281be5 adapter leaves no substitute program"), State.Current,
-		EElysiumScheduleId::None);
+		ElysiumScheduleId::None);
 	TestEqual(TEXT("10280e53 external handoff still dispatches slot 435"),
 		Runner.ScheduleChanges, 2);
 	TestEqual(TEXT("the executor answer does not reach the missing error"), Runner.MissingCalls, 0);
@@ -551,7 +554,7 @@ bool FElysiumNpcKernelMaintain19DoorAndMissingTest::RunTest(const FString&)
 	N.SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 	N.SetState(1);
 	N.Schedule.Clear();
-	ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
 	N.NpcFlags.Set(EElysiumNpcFlag2::IGNORE_DOOR_FAILURE);
 	N.NpcFlags.SetRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31);
@@ -565,7 +568,7 @@ bool FElysiumNpcKernelMaintain19DoorAndMissingTest::RunTest(const FString&)
 		N.NpcFlags.HasRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31));
 
 	N.Schedule.Clear();
-	ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
 	N.NpcFlags.Set(EElysiumNpcFlag2::IGNORE_DOOR_FAILURE);
 	N.BlockedDoor = F.Other->Handle;
@@ -581,20 +584,20 @@ bool FElysiumNpcKernelMaintain19DoorAndMissingTest::RunTest(const FString&)
 		N.ActivityNumber, 1);
 	TestFalse(TEXT("10282336 missing exit skips +0x5bb8"), N.Schedule.bDidMaintainSchedule);
 
-	ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 	N.ScheduleHost.CacheInterruptTime = -1.0;
 	N.Cognition.CustomInterruptConditions.Reset();
 	N.Cognition.GatheredAt = 8.0;
 	int32					 Ideal = 0;
-	const EElysiumScheduleId Selected = N.SelectScheduleForMaintenance(8.0, Ideal);
+	const int32 Selected = N.SelectScheduleForMaintenance(8.0, Ideal);
 	TestEqual(TEXT("102814de refreshes m_flCacheInterruptTime before selection"),
 		N.ScheduleHost.CacheInterruptTime, 8.0);
 	TestTrue(TEXT("1026a1d9 caches the running program's positive interrupt mask"),
 		N.Cognition.CustomInterruptConditions.Has(EElysiumNpcCond::NewEnemy));
 	TestEqual(TEXT("102814d0 stores the selector's global id as m_IdealSchedule"),
-		Ideal, ElysiumScheduleNumber(EElysiumScheduleId::IdleDisposition));
+		Ideal, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	TestEqual(TEXT("102cc1f0 resolves the selector through slot 440 and lookup"),
-		Selected, EElysiumScheduleId::IdleDisposition);
+		Selected, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 
 	FElysiumEntity* Open = F.World.World.FindByName(TEXT("open_sequence"));
 	FElysiumEntity* Locked = F.World.World.FindByName(TEXT("locked_sequence"));

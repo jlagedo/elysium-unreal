@@ -316,7 +316,7 @@ bool FElysiumThinkCadenceLiveTest::RunTest(const FString&)
 	// (story 25), which now holds on `WAIT_PVS` out of the player's PVS. No program is installed
 	// inside these thinks, so nothing sets `SCHEDULE_CHANGED` and the normal clock leaves the pin.
 	TestEqual(TEXT("the hidden body holds FAIL's PVS wait rather than reselecting each pass"),
-		Guard->Schedule.Current, EElysiumScheduleId::Fail);
+		Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 	TestTrue(TEXT("...so its normal clock is off the in-think install pin"),
 		Guard->ScheduleHost.NextNormal - Now > 0.1 + 1e-3);
 	return true;

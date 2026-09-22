@@ -870,7 +870,7 @@ void FElysiumNpc::BaseDrawDebugStatOverlays()
 	// 8. `GetCurTask()`: `"Task: None"` for no task, else `"Task: %s (#%d), "` with `TaskName(id)`
 	//    and `m_ScheduleState`. The listing pre-pushes `m_ScheduleState` before the `TaskName` call
 	//    so that the one `%d` is fed by it; the decompiler dropped that push.
-	const FElysiumSchedule* Program = ElysiumScheduleFor(Schedule.Current);
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(Schedule.Current);
 	if (Program == nullptr || !Program->Tasks.IsValidIndex(Schedule.TaskIndex))
 	{
 		EmitDebugMsg(TEXT("Task: None"), TEXT("Task: None"));
@@ -878,7 +878,7 @@ void FElysiumNpc::BaseDrawDebugStatOverlays()
 	else
 	{
 		EmitDebugMsg(TEXT("Task: %s (#%d), "), FString::Printf(TEXT("Task: %s (#%d), "),
-			ElysiumTaskName(Program->Tasks[Schedule.TaskIndex].Task), Schedule.TaskIndex));
+			*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[Schedule.TaskIndex].TaskId), Schedule.TaskIndex));
 	}
 
 	// 9. Then EVERY task of the program, one line each, re-reading `m_pSchedule->numTasks` at the
@@ -905,7 +905,7 @@ void FElysiumNpc::BaseDrawDebugStatOverlays()
 			const TCHAR* Lead = bCurrent ? TEXT("->") : TEXT("   ");
 			const TCHAR* Trail = bCurrent ? TEXT("<-") : TEXT("");
 			EmitDebugMsg(TEXT("%s%s%s%s"), FString::Printf(TEXT("%s%s%s%s"), Prefix, Lead,
-				ElysiumTaskName(Program->Tasks[Index].Task), Trail));
+				*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[Index].TaskId), Trail));
 		}
 	}
 }

@@ -115,27 +115,6 @@ namespace
 		return Npc.HintWords(Npc.ScheduleHost.HintNode, Out) ? Out.HintType : INDEX_NONE;
 	}
 
-	// The one place this file turns a retail schedule NUMBER into a port schedule id. The enum is
-	// contiguous and `ScriptedFollowPath` is its last member; number 0 is the ledger's "registration
-	// site not decoded" marker (`SCHED_DIE`, both scripted programs, two combat programs) and must
-	// never match, or every undecoded number would resolve to whichever of them came first.
-	EElysiumScheduleId ClosureScheduleIdForNumber(int32 Number)
-	{
-		if (Number == 0)
-		{
-			return EElysiumScheduleId::None;
-		}
-		const int32 Last = static_cast<int32>(EElysiumScheduleId::ScriptedFollowPath);
-		for (int32 Index = 1; Index <= Last; ++Index)
-		{
-			const EElysiumScheduleId Id = static_cast<EElysiumScheduleId>(Index);
-			if (ElysiumScheduleNumber(Id) == Number)
-			{
-				return Id;
-			}
-		}
-		return EElysiumScheduleId::None;
-	}
 
 	// `ClassTranslate_Troika`'s single row, looked up by the body NAME the port's committed table
 	// gives it. Returning the ROW rather than copying its two ids keeps
@@ -702,10 +681,10 @@ int32 FElysiumNpc::SelectFailSchedule(int32 FailedSchedule, int32 FailedTask, in
 	(void)FailedSchedule;
 	(void)FailedTask;
 	(void)TaskFailCode;
-	const EElysiumScheduleId Override = Schedule.FailScheduleOverride;
-	return Override != EElysiumScheduleId::None
-		? ElysiumScheduleNumber(Override)
-		: ElysiumScheduleNumber(EElysiumScheduleId::Fail);
+	const int32 Override = Schedule.FailScheduleOverride;
+	return Override != ElysiumScheduleId::None
+		? Override
+		: ElysiumSched::FAIL;
 }
 
 // =================================================================================================
@@ -722,19 +701,23 @@ void* FElysiumNpc::GetScheduleOfType(int32 ScheduleNumber)
 	//     if (n < 1000000000 || n == -1) n = idSpace->Translate(n);   // 0x102ea2d0, local -> global
 	//     return g_ScheduleTable.Get(n);                              // thunk_FUN_1030f300
 	//
-	// -> `ElysiumScheduleFor`, this runtime's schedule registry, keyed by the retail NUMBER through
-	// the port's own `ElysiumScheduleNumber`. There is no id-space indirection to reproduce: this
-	// runtime registers every program in one global namespace, so the `< 1e9` local-id translation
-	// has no operand and the `idSpace == -1` arm has no state that can reach it.
+	// The id-space indirection is REAL now, and it is the third line above: a number below 1e9 --
+	// and -1 -- goes through this class's schedule space (`ResolveScheduleId`, slot 580) before the
+	// table lookup. It used to have no operand, because every program was registered in one flat
+	// namespace under the port's own numbering, and a fold from a retail number to one of 29 typed
+	// identities stood where the translation belongs.
 	//
 	// **The miss answers null, not `IDLE_STAND`.** Retail's miss returns schedule 1 and Warnings;
 	// the port's equivalent of that whole arm is `ElysiumSchedule::Start`, which records the miss
-	// (`"GetScheduleOfType(): No CASE for %s (0x%x); installing SCHED_IDLE_STAND"`) and then installs
-	// `IDLE_STAND` — 29c's named target, and the right place for it, because the substitution is
+	// and then installs `IDLE_STAND` — the right place for it, because the substitution is
 	// `SetSchedule`'s decision and not the lookup's. A lookup that answered `IDLE_STAND` for every
-	// unregistered number would make an unported program indistinguishable from an idle one.
+	// unloaded number would make an unported program indistinguishable from an idle one.
+	if (ScheduleNumber == ElysiumScheduleId::None)
+	{
+		return nullptr;
+	}
 	return const_cast<void*>(static_cast<const void*>(
-		ElysiumScheduleFor(ClosureScheduleIdForNumber(ScheduleNumber))));
+		ElysiumScheduleFor(ResolveScheduleId(ScheduleNumber))));
 }
 
 // =================================================================================================

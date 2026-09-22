@@ -182,7 +182,7 @@ void FElysiumNpc::BaseDrawDebugGeometryOverlays()
 	// latch with no port counterpart — nothing in this runtime sets it, which is the arm-ENABLING
 	// state, so the schedule test is what decides. The colour is magenta at alpha 0 (wireframe).
 	if (Schedule.IsRunning()
-		&& ElysiumScheduleNumber(Schedule.Current) == GNpcKernelDebug2SchedForcedGo)
+		&& GetLocalScheduleId(Schedule.Current) == GNpcKernelDebug2SchedForcedGo)
 	{
 		EmitOverlayBox(GNpcKernelDebug2Box, LastPosition / ElysiumMove::U,
 			GNpcKernelDebug2Box5Mins, GNpcKernelDebug2Box5Maxs, 255, 0, 255, 0);

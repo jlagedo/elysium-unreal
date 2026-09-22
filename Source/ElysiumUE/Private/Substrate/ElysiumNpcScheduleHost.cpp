@@ -67,7 +67,7 @@ bool FElysiumNpcScheduleHost::IsTaskIndexCurrent(const FElysiumScheduleState& St
 		// no task count to compare against, and answering false is the only honest reading.
 		return false;
 	}
-	const FElysiumSchedule* Program = ElysiumScheduleFor(State.Current);
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(State.Current);
 	return Program != nullptr && State.TaskIndex == Program->Tasks.Num();
 }
 

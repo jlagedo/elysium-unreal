@@ -51,7 +51,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 
 using ElysiumSaveTestHelpers::SaveTestCounterValue;
 using ECond = EElysiumNpcCond;
-using EId = EElysiumScheduleId;
+using EId = int32;
 
 namespace
 {
@@ -438,8 +438,12 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 		// dodge branch is one no ranged program carries.
 		F.Fighter->Cognition.Conditions.Reset();
 		F.Fighter->Cognition.Conditions.Set(ECond::ShouldDodge);
+		// The PROGRAM the branch answers is the recovered slot body's, not the CHOSEN ladder this
+		// case used to read: those ladders are gone with the fold that made them necessary. What
+		// the case is about -- which branch the capability split routes into -- is asserted against
+		// the slot body's own answer.
 		TestEqual(TEXT("melee capability enters the melee selector"), F.Fighter->SelectSchedule(),
-			EId::MeleeDodge);
+			F.Fighter->SelectScheduleMeleeCombat(0));
 	}
 
 	// --- A firearm routes to the ranged selector -----------------------------------------------
@@ -459,8 +463,13 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 		// has no such branch, so it must NOT be what decides here.
 		F.Fighter->Cognition.Conditions.Set(ECond::ShouldDodge);
 		F.Fighter->Cognition.Conditions.Set(ECond::CanRangeAttack1);
-		TestEqual(TEXT("ranged capability enters the ranged selector"), F.Fighter->SelectSchedule(),
-			EId::RangeAttack1);
+		// The ranged branch declines here -- slot 605 answers zero -- and the composition rule then
+		// hands the decision to `CAI_BaseNPCTroika::SelectSchedule`, which is the idle. That it is
+		// NOT the melee branch's answer is the claim.
+		TestEqual(TEXT("ranged capability does not enter the melee selector"),
+			F.Fighter->SelectScheduleRangedCombat(0), ElysiumScheduleId::None);
+		TestEqual(TEXT("...so the composition rule answers the base idle"),
+			F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	}
 
 	// --- Unarmed takes the melee branch with bare-hands defaults -------------------------------
@@ -475,7 +484,7 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 		F.Fighter->Cognition.Conditions.Reset();
 		F.Fighter->Cognition.Conditions.Set(ECond::ShouldBlock);
 		TestEqual(TEXT("an unarmed NPC still fights, on the melee branch"),
-			F.Fighter->SelectSchedule(), EId::MeleePreblock);
+			F.Fighter->SelectSchedule(), F.Fighter->SelectScheduleMeleeCombat(0));
 	}
 	return true;
 }
@@ -644,106 +653,24 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 }
 
 
-// The melee selector's recovered order, and the retained binary draw.
+// The two pre-kernel selectors, which are now pass-throughs.
+//
+// Their CHOSEN, NOT RECOVERED precedence ladders -- dodge, block, the kick/step-back binary draw,
+// advance, circle, melee idle on one side; attack, occlusion, distance, back-off on the other --
+// are GONE. They existed because the recovered slot bodies answer raw retail numbers and most of
+// those numbers named no program this port carried, so the answer had to be folded back to
+// something registered. The corpus registers all 691, so the slot body's answer IS the answer, and
+// the recovered bodies' own arms are asserted where they belong:
+// `Elysium.Substrate.NpcKernelSchedule.SelectScheduleMeleeCombat` and
+// `Elysium.Substrate.NpcKernelCombat10.SelectorAgreement`.
+//
+// What remains testable here is the composition rule, which is recovered: a selector answering zero
+// declines, and `CAI_BaseNPCTroika::SelectSchedule` gets its turn.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatMeleeSelectorTest,
-	"Elysium.Substrate.NpcCombat.MeleeSelectorOrder", GElysiumTestFlags)
-bool FElysiumNpcCombatMeleeSelectorTest::RunTest(const FString&)
-{
-	// Find one seed for each side of the binary draw, from the same stream the selector reads.
-	int32 SeedKick = INDEX_NONE;
-	int32 SeedStepback = INDEX_NONE;
-	for (int32 Seed = 1; Seed <= 64 && (SeedKick == INDEX_NONE || SeedStepback == INDEX_NONE); ++Seed)
-	{
-		ElysiumRng::SeedAll(Seed);
-		const bool bKick = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 1) != 0;
-		if (bKick && SeedKick == INDEX_NONE)
-		{
-			SeedKick = Seed;
-		}
-		else if (!bKick && SeedStepback == INDEX_NONE)
-		{
-			SeedStepback = Seed;
-		}
-	}
-	if (!TestTrue(TEXT("both sides of the binary draw are reachable"),
-		SeedKick != INDEX_NONE && SeedStepback != INDEX_NONE))
-	{
-		return false;
-	}
-
-	FCombatFixture F(GKatana);
-	if (F.Fighter == nullptr || F.Target == nullptr)
-	{
-		return false;
-	}
-	F.RunAdmissionAndLoadout();
-	F.CommitToTarget(10.0);
-
-	auto Select = [&F](std::initializer_list<ECond> Conditions)
-	{
-		F.Fighter->Cognition.Conditions = FElysiumNpcConditions::Of(Conditions);
-		return F.Fighter->SelectSchedule();
-	};
-
-	// --- The precedence ladder, in the recovered order ------------------------------------------
-	// "`SHOULD_DODGE` returns `SCHED_TROIKA_MELEE_DODGE` (0xd5); `SHOULD_BLOCK` returns
-	// `SCHED_TROIKA_MELEE_PREBLOCK` (0xd6). ... either condition outranks an ordinary attack."
-	TestEqual(TEXT("dodge outranks block, kick, stepback and the attack"),
-		Select({ ECond::ShouldDodge, ECond::ShouldBlock, ECond::ShouldKick, ECond::ShouldStepback,
-			ECond::CanMeleeAttack1 }), EId::MeleeDodge);
-	TestEqual(TEXT("block outranks kick, stepback and the attack"),
-		Select({ ECond::ShouldBlock, ECond::ShouldKick, ECond::ShouldStepback,
-			ECond::CanMeleeAttack1 }), EId::MeleePreblock);
-	TestEqual(TEXT("a lone kick request outranks the attack"),
-		Select({ ECond::ShouldKick, ECond::CanMeleeAttack1 }), EId::MeleeKick);
-	TestEqual(TEXT("a lone stepback request outranks the attack"),
-		Select({ ECond::ShouldStepback, ECond::CanMeleeAttack1 }), EId::MeleeStepback);
-	TestEqual(TEXT("an ordinary usable attack selects SCHED_TROIKA_MELEE_ATTACK1 (0xdc)"),
-		Select({ ECond::CanMeleeAttack1 }), EId::MeleeAttack1);
-	TestEqual(TEXT("too far selects the advance"),
-		Select({ ECond::TooFarToAttack }), EId::MeleeAdvance);
-	TestEqual(TEXT("in reach but on the attack timer circles"),
-		Select({ ECond::WaitingAttackTime }), EId::MeleeCircle);
-	TestEqual(TEXT("in reach, off the timer and unaligned holds in melee"),
-		Select({}), EId::MeleeIdle);
-
-	// --- The binary draw, seeded both ways ------------------------------------------------------
-	F.Fighter->CombatSelector.Reset();
-	ElysiumRng::SeedAll(SeedKick);
-	TestEqual(TEXT("kick and stepback together take the binary draw — kick"),
-		Select({ ECond::ShouldKick, ECond::ShouldStepback }), EId::MeleeKick);
-
-	F.Fighter->CombatSelector.Reset();
-	ElysiumRng::SeedAll(SeedStepback);
-	TestEqual(TEXT("...and stepback"),
-		Select({ ECond::ShouldKick, ECond::ShouldStepback }), EId::MeleeStepback);
-	TestTrue(TEXT("the stepback stamps the enemy as the position it retreats from"),
-		F.Fighter->SavePosition.Equals(F.Target->Origin));
-
-	// --- The retention: repeated ticks do not independently reroll -------------------------------
-	// The stream is re-seeded to the OTHER outcome between the two selections. A selector that
-	// rerolled would change its answer; the recovered one does not.
-	ElysiumRng::SeedAll(SeedKick);
-	TestEqual(TEXT("the retained decision survives a stream that would now draw the other way"),
-		Select({ ECond::ShouldKick, ECond::ShouldStepback }), EId::MeleeStepback);
-
-	// Past the stated retention, the draw is taken again.
-	F.Fighter->CombatSelector.DrawnReactionExpiresAt = -1.0;
-	ElysiumRng::SeedAll(SeedKick);
-	TestEqual(TEXT("an expired decision is redrawn"),
-		Select({ ECond::ShouldKick, ECond::ShouldStepback }), EId::MeleeKick);
-	return true;
-}
-
-
-// The ranged selector's recovered order.
-
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRangedSelectorTest,
-	"Elysium.Substrate.NpcCombat.RangedSelectorOrder", GElysiumTestFlags)
-bool FElysiumNpcCombatRangedSelectorTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatSelectorCompositionTest,
+	"Elysium.Substrate.NpcCombat.SelectorComposition", GElysiumTestFlags)
+bool FElysiumNpcCombatSelectorCompositionTest::RunTest(const FString&)
 {
 	FCombatFixture F(GPistol);
 	if (F.Fighter == nullptr || F.Target == nullptr)
@@ -759,24 +686,23 @@ bool FElysiumNpcCombatRangedSelectorTest::RunTest(const FString&)
 		return F.Fighter->SelectSchedule();
 	};
 
-	TestEqual(TEXT("an attack-ready shot selects SCHED_TROIKA_RANGE_ATTACK1 (0xec)"),
-		Select({ ECond::CanRangeAttack1 }), EId::RangeAttack1);
-	TestEqual(TEXT("an occluded enemy routes through the chase"),
-		Select({ ECond::EnemyOccluded }), EId::ChaseEnemy);
-	TestEqual(TEXT("...as does the weapon-sight occlusion arm"),
-		Select({ ECond::WeaponSightOccluded }), EId::ChaseEnemy);
-	TestEqual(TEXT("excessive distance selects SCHED_TROIKA_CHASE_ENEMY (0xb1)"),
-		Select({ ECond::TooFarToAttack }), EId::ChaseEnemy);
-	TestEqual(TEXT("an enemy too close to shoot backs off"),
-		Select({ ECond::TooCloseToAttack }), EId::RunAway);
-	TestEqual(TEXT("no ammunition falls through to the spacing arms rather than dry-firing"),
-		Select({ ECond::NoPrimaryAmmo, ECond::TooFarToAttack }), EId::ChaseEnemy);
+	// The pre-kernel selector hands the slot body's number through unchanged.
+	F.Fighter->Cognition.Conditions = FElysiumNpcConditions::Of({ ECond::CanRangeAttack1 });
+	TestEqual(TEXT("the pre-kernel ranged selector is slot 605's answer"),
+		ElysiumNpcCombat::SelectRangedSchedule(*F.Fighter, 10.0),
+		F.Fighter->SelectScheduleRangedCombat(0));
+
+	// And every number it answers is a program that is actually loaded, which is what retired the
+	// fold: an unloaded answer used to be the common case.
+	const int32 Ranged = Select({ ECond::CanRangeAttack1 });
+	TestTrue(TEXT("...and that number names a loaded program"),
+		ElysiumScheduleFor(ElysiumScheduleGlobalId(Ranged)) != nullptr);
 
 	// A zero return falls through to the Troika base selector: the composition rule.
 	TestEqual(TEXT("merely waiting on the attack timer composes down to the base idle"),
-		Select({ ECond::WaitingAttackTime }), EId::IdleDisposition);
+		Select({ ECond::WaitingAttackTime }), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	TestEqual(TEXT("...and the base branch's damage reaction is SMALL_FLINCH (0x14)"),
-		Select({ ECond::WaitingAttackTime, ECond::HeavyDamage }), EId::SmallFlinch);
+		Select({ ECond::WaitingAttackTime, ECond::HeavyDamage }), ElysiumSched::SMALL_FLINCH);
 	return true;
 }
 
@@ -806,10 +732,10 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
 	TestTrue(TEXT("a distant enemy raises TOO_FAR_TO_ATTACK"),
 		F.Fighter->Cognition.Conditions.Has(ECond::TooFarToAttack));
-	TestEqual(TEXT("...and the ranged selector chases"), F.Fighter->SelectSchedule(), EId::ChaseEnemy);
+	TestEqual(TEXT("...and the ranged selector chases"), F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_CHASE_ENEMY);
 
 	TestTrue(TEXT("the chase starts"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, EId::ChaseEnemy, *F.Fighter));
+		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
 
 	TestTrue(TEXT("the first think reaches the movement watch"),
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
@@ -844,7 +770,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		F.Fighter->Schedule.IsRunning());
 	TestEqual(TEXT("102814d0 recorded that replacement as m_IdealSchedule"),
 		F.Fighter->ScheduleHost.IdealScheduleRetail,
-		ElysiumScheduleNumber(F.Fighter->Schedule.Current));
+		F.Fighter->Schedule.Current);
 	TestTrue(TEXT("the replacement keeps the schedule body owner"),
 		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 
@@ -854,8 +780,11 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 11.0);
 	TestTrue(TEXT("an enemy back inside the band is shootable"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanRangeAttack1));
-	TestEqual(TEXT("...and reselection takes the shot"), F.Fighter->SelectSchedule(),
-		EId::RangeAttack1);
+	// The shot itself is slot 605's arm and is asserted there; what this case owns is that the
+	// reselection happens at all and lands on a loaded program.
+	const int32 Reselected = F.Fighter->SelectSchedule();
+	TestTrue(TEXT("...and reselection answers a loaded program"),
+		ElysiumScheduleFor(ElysiumScheduleGlobalId(Reselected)) != nullptr);
 	return true;
 }
 
@@ -878,8 +807,11 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 0.0);
 	TestTrue(TEXT("an enemy in reach and faced is attackable"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanMeleeAttack1));
-	TestEqual(TEXT("the melee selector takes the approach"), F.Fighter->SelectSchedule(),
-		EId::MeleeAttack1);
+	// The recovered slot-604/605 body's own answer. It used to be folded back to whichever of the
+	// port's 29 programs matched, and 0xe7 matched none -- so the CHOSEN fall-through stood in.
+	// Every number those bodies answer is a loaded program now.
+	TestEqual(TEXT("the melee selector takes the recovered approach"), F.Fighter->SelectSchedule(),
+		0xe7);
 
 	// The swing's contact is the per-frame swept walk over the clip's own authored records, and
 	// retail runs it on the CHARACTER — so an NPC's swing reaches contact through exactly the pass
@@ -909,7 +841,7 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	// The whole approach plus its transfer to the terminal swing runs inside one think: face, stop,
 	// transfer, announce, attack.
 	TestTrue(TEXT("the approach starts"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1, *F.Fighter));
+		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Fighter));
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0,
 		&F.Fighter->Cognition.Conditions);
 
@@ -957,8 +889,8 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 		SaveTestCounterValue(F.World.FindByName(TEXT("damagedcount"))), 1.0f);
 
 	// The recovered EMPTY mask: once the terminal task owns the NPC it is not reevaluated.
-	const FElysiumSchedule* Swing = ElysiumScheduleFor(EId::MeleeAttack1Swing);
-	if (TestNotNull(TEXT("the swing program is registered"), Swing))
+	const FElysiumScheduleProgram* Swing = ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING));
+	if (TestNotNull(TEXT("the swing program is loaded"), Swing))
 	{
 		TestTrue(TEXT("its recovered interrupt mask is empty"), Swing->Interrupts.IsEmpty());
 	}
@@ -969,10 +901,10 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	// The control, so "the mask holds" is a statement about the mask and not about the kernel: with
 	// a mask installed the same storm ends the program before its terminal task can run.
 	{
-		ElysiumSchedule::FInterruptMaskScope Scope(EId::MeleeAttack1Swing,
+		ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING,
 			FElysiumNpcConditions::Of({ ECond::NewEnemy }));
 		TestTrue(TEXT("the swing program restarts"),
-			ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
+			ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Fighter));
 		F.Fighter->Cognition.Conditions = Storm;
 		// Fixture correction: `10281340` invalidates the swing, then `10281b89` selects and starts
 		// the replacement in this same loop. The install's `10280e7x` condition clear is the durable
@@ -986,14 +918,23 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 
 	// The registered posture: no interrupts, so the same storm cannot stop the swing.
 	TestTrue(TEXT("the swing program restarts"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
+		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Fighter));
 	F.Fighter->Cognition.Conditions = Storm;
+	// Read BEFORE the tick: the program ends on this pass -- `TASK_ANNOUNCE_ATTACK`, the swing's
+	// first task in retail's own text, has no enemy to announce to in this fixture -- and after it
+	// ends the effective mask is the fail route's, not the swing's.
+	const FElysiumNpcConditions SwingMask =
+		ElysiumSchedule::EffectiveInterrupts(F.Fighter->Schedule, *F.Fighter);
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5,
 		&F.Fighter->Cognition.Conditions);
 	TestTrue(TEXT("a NEW_ENEMY mid-swing does not abort the terminal attack"),
 		Weapon->Swing.Serial > SerialBefore);
-	TestTrue(TEXT("...and without a mask the condition is not consumed by an install"),
-		F.Fighter->Cognition.Conditions.Has(ECond::NewEnemy));
+	// The mask is empty, so nothing INTERRUPTS. The program still ends on this pass, because
+	// `TASK_ANNOUNCE_ATTACK` -- the swing's first task in retail's own text -- has no enemy to
+	// announce to in this fixture and fails, and the fail route's install clears the conditions.
+	// The claim is about the mask, so it is made of the mask.
+	TestTrue(TEXT("...and the empty mask lists nothing the storm could fire"),
+		SwingMask.Intersection(Storm).IsEmpty());
 	return true;
 }
 
@@ -1016,14 +957,14 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
 
 	TestTrue(TEXT("the chase starts"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, EId::ChaseEnemy, *F.Fighter));
+		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
 	TestTrue(TEXT("the chase reaches its movement watch"),
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
 			&F.Fighter->Cognition.Conditions));
 
 	// The recovered mask: a chase interrupts on a new, dead, unreachable, occluded or lost enemy and
 	// on any newly available attack. "Pathing cannot monopolize an attack-ready NPC."
-	if (const FElysiumSchedule* Chase = ElysiumScheduleFor(EId::ChaseEnemy))
+	if (const FElysiumScheduleProgram* Chase = ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_CHASE_ENEMY)))
 	{
 		for (const ECond Admitted : { ECond::NewEnemy, ECond::EnemyDead, ECond::EnemyUnreachable,
 			ECond::EnemyOccluded, ECond::LostEnemy, ECond::CanMeleeAttack1, ECond::CanRangeAttack1,
@@ -1060,21 +1001,43 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatIdleAcquisitionTest,
 	"Elysium.Substrate.NpcCombat.IdleAcquisition", GElysiumTestFlags)
 bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 {
-	// The registered masks themselves. This is the cycle-6 change stated as data.
-	for (const EId Idle : { EId::IdleDisposition, EId::AlertLookAroundNi })
+	// The two idle masks, as retail's own texts declare them. This block used to assert a mask
+	// CHOSEN off the interrupt census -- `NEW_ENEMY`, the damage pair, `ENEMY_DEAD` and the hear
+	// family -- and the census guess was close on the first two and wrong on the rest: neither
+	// program admits `COND_ENEMY_DEAD` or any `HEAR_*` condition, and `SCHED_TROIKA_IDLE_DISPOSITION`
+	// admits `COND_GIVE_WAY`, `COND_INVESTIGATE_SOUND`, `COND_INVESTIGATE_SIGHT`,
+	// `COND_IGNORE_UNKNOWN`, `COND_DETECTED_ATTACK` and `COND_PLAYER_ON_HEAD` instead.
+	for (const EId Idle : { ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION,
+		ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI })
 	{
-		const FElysiumSchedule* Program = ElysiumScheduleFor(Idle);
-		if (!TestNotNull(TEXT("the idle program is registered"), Program))
+		const FElysiumScheduleProgram* Program =
+			ElysiumScheduleFor(ElysiumScheduleGlobalId(Idle));
+		if (!TestNotNull(TEXT("the idle program is loaded"), Program))
 		{
 			return false;
 		}
-		TestTrue(*FString::Printf(TEXT("%s admits NEW_ENEMY"), ElysiumScheduleName(Idle)),
+		const FString Name = ElysiumScheduleName(ElysiumScheduleGlobalId(Idle));
+		// The one condition live acquisition turns on, which is why this case exists at all.
+		TestTrue(*FString::Printf(TEXT("%s admits NEW_ENEMY"), *Name),
 			Program->Interrupts.Has(ECond::NewEnemy));
 		TestTrue(TEXT("...and the damage pair"),
-			Program->Interrupts.Has(ECond::LightDamage) && Program->Interrupts.Has(ECond::HeavyDamage));
-		TestTrue(TEXT("...and ENEMY_DEAD"), Program->Interrupts.Has(ECond::EnemyDead));
-		TestTrue(TEXT("...and the hear family"),
-			Program->Interrupts.Has(ECond::HearCombat) && Program->Interrupts.Has(ECond::HearDanger));
+			Program->Interrupts.Has(ECond::LightDamage)
+				&& Program->Interrupts.Has(ECond::HeavyDamage));
+		TestFalse(TEXT("...and NOT ENEMY_DEAD, which the census guess added"),
+			Program->Interrupts.Has(ECond::EnemyDead));
+		TestFalse(TEXT("...nor the hear family"),
+			Program->Interrupts.Has(ECond::HearCombat)
+				|| Program->Interrupts.Has(ECond::HearDanger));
+		// `COND_PLAYER_ON_HEAD` is one of the 164 condition names the corpus registers and
+		// `EElysiumNpcCond` does not spell. It is carried as a global ORDINAL, which is the whole
+		// reason the mask has an ordinal-addressed face.
+		const int32 OnHead = FElysiumScheduleCorpus::Get()
+			.Namespace(EElysiumIdCategory::Condition).Find(TEXT("COND_PLAYER_ON_HEAD"));
+		if (TestTrue(TEXT("COND_PLAYER_ON_HEAD is a registered condition"), OnHead != INDEX_NONE))
+		{
+			TestTrue(TEXT("...and the idle mask declares it, though this runtime cannot spell it"),
+				Program->Interrupts.HasOrdinal(OnHead - ElysiumScheduleId::GlobalBase));
+		}
 	}
 
 	FCombatFixture F(GKatana);
@@ -1093,7 +1056,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 	F.Fighter->Senses.Memory.bPlayerInRange = true;
 
 	TestTrue(TEXT("the NPC is running its disposition idle"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, EId::IdleDisposition, *F.Fighter));
+		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Fighter));
 
 	F.Fighter->Senses.TickSight(*F.Fighter, 20.0);
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 20.0);
@@ -1113,7 +1076,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Combat);
 	TestNotEqual(TEXT("...and combat selects a fight program, not the idle it just left"),
-		F.Fighter->SelectSchedule(), EId::IdleDisposition);
+		F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	return true;
 }
 
@@ -1155,7 +1118,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	// combatant has, then verify the damage path writes its existing actor into CAI_Memory.
 	Victim.Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 	TestTrue(TEXT("the victim is running its disposition idle"),
-		ElysiumSchedule::Start(Victim.Schedule, EId::IdleDisposition, Victim));
+		ElysiumSchedule::Start(Victim.Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, Victim));
 
 	// --- The hit, through the one typed health commit --------------------------------------------
 	// A second later than the loadout thinks, so the packet is NEW to the pass that follows: the
@@ -1204,8 +1167,8 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	Victim.UpdateIdealState(1.0);
 	TestTrue(TEXT("the ideal-state pass takes the struck bystander to combat"),
 		Victim.GetMind().State() == EElysiumNpcState::Combat);
-	TestEqual(TEXT("...and combat selection picks the melee swing, not an idle"),
-		Victim.SelectSchedule(), EId::MeleeAttack1);
+	TestEqual(TEXT("...and combat selection picks a melee program, not an idle"),
+		Victim.SelectSchedule(), 0xe7);
 
 	// --- The terminal task presses the same weapon transaction the player uses --------------------
 	FElysiumWeapon* Fists = F.ActiveWeapon(&Victim);
@@ -1225,7 +1188,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 
 	const int32 SerialBefore = Fists->Swing.Serial;
 	TestTrue(TEXT("the swing program starts"),
-		ElysiumSchedule::Start(Victim.Schedule, EId::MeleeAttack1, Victim));
+		ElysiumSchedule::Start(Victim.Schedule, ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, Victim));
 	ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.1, &Victim.Cognition.Conditions);
 	TestTrue(TEXT("TASK_MELEE_ATTACK1 staged a real weapon transaction"), Fists->Swing.bActive);
 	TestTrue(TEXT("...pressing the controller rather than reporting one"),
@@ -1407,22 +1370,25 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 		ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
 		TestTrue(TEXT("an enemy inside the NPC's own reach is too close to shoot"),
 			F.Fighter->Cognition.Conditions.Has(ECond::TooCloseToAttack));
-		TestEqual(TEXT("...and the ranged selector backs off"), F.Fighter->SelectSchedule(),
-			EId::RunAway);
-		TestTrue(TEXT("the selector stamps the enemy as the position to leave"),
-			F.Fighter->SavePosition.Equals(F.Target->Origin));
+		// 0xf0 `SCHED_TROIKA_FORCED_RANGE_ATTACK1` is the recovered slot-605 answer here.
+		TestEqual(TEXT("...and the ranged selector answers its recovered program"),
+			F.Fighter->SelectSchedule(), 0xf0);
 
+		// Retail's `SCHED_TROIKA_RUN_AWAY_FROM_ENEMY` is not the three-task retreat this port
+		// invented. It is `TASK_SET_FAIL_SCHEDULE SCHEDULE:SCHED_TROIKA_STANDOFF`, two
+		// `TASK_SET_NPC_FLAG`s, `TASK_STOP_MOVING`, `TASK_SET_TOLERANCE_DISTANCE 24`, then
+		// `TASK_STORE_ENEMY_POSITION_IN_SAVEPOSITION` and `TASK_FIND_BACKAWAY_FROM_SAVEPOSITION` --
+		// so the enemy stamp the port's SELECTOR poked into `m_vSavePosition` is a TASK in the game,
+		// and the retreat itself is a task this runtime has no body for.
 		TestTrue(TEXT("the retreat starts"),
-			ElysiumSchedule::Start(F.Fighter->Schedule, EId::RunAway, *F.Fighter));
-		TestTrue(TEXT("the retreat reaches its movement watch"),
-			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
-				&F.Fighter->Cognition.Conditions));
-		TestTrue(TEXT("the world was asked where the extrapolated point lands"),
-			F.Services.Saw(TEXT("NpcMotor ProjectToNavigable")));
-		TestTrue(TEXT("the retreat moves directly away from the enemy"),
-			Motor->RequestedFeet.X < F.Fighter->Origin.X);
-		TestTrue(TEXT("...and claims the Schedule body owner to do it"),
-			F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
+			ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY, *F.Fighter));
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
+			&F.Fighter->Cognition.Conditions);
+		// Its first task names its own fail route, which is the rest of the program's story here:
+		// `TASK_STORE_ENEMY_POSITION_IN_SAVEPOSITION` and `TASK_FIND_BACKAWAY_FROM_SAVEPOSITION`
+		// have no body in this runtime, so the program stops and takes that route.
+		TestEqual(TEXT("TASK_SET_FAIL_SCHEDULE named SCHED_TROIKA_STANDOFF"),
+			F.Fighter->Schedule.FailScheduleOverride, ElysiumSched::SCHED_TROIKA_STANDOFF);
 	}
 
 	// --- The fail path: nowhere navigable to retreat to ------------------------------------------
@@ -1443,17 +1409,15 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 		F.Fighter->SavePosition = F.Target->Origin;
 
 		TestTrue(TEXT("the retreat starts"),
-			ElysiumSchedule::Start(F.Fighter->Schedule, EId::RunAway, *F.Fighter));
+			ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY, *F.Fighter));
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0, nullptr);
-		TestTrue(TEXT("an unprojectable retreat was asked and refused"),
-			F.Services.Saw(TEXT("NpcMotor ProjectToNavigable")));
-		TestFalse(TEXT("...and the retreat never became a move request"), Motor->bMoving);
+		TestFalse(TEXT("the retreat never became a move request"), Motor->bMoving);
 		TestTrue(TEXT("...the failure stands as TASK_FAILED for the next pass"),
 			F.Fighter->Cognition.Conditions.Has(ECond::TaskFailed));
 		// The route runs at the top of the next pass (story 25).
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1, &F.Fighter->Cognition.Conditions);
 		TestNotEqual(TEXT("...so the program left the retreat through its fail path"),
-			F.Fighter->Schedule.Current, EId::RunAway);
+			F.Fighter->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
 	}
 	return true;
 }
@@ -1477,7 +1441,7 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	F.CommitToTarget(0.0);
 
 	TestTrue(TEXT("the swing program starts"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
+		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Fighter));
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0, nullptr);
 
 	TestEqual(TEXT("no damage is dealt out of nothing"), F.DamageTaken(F.Target), 0);
@@ -1486,7 +1450,7 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	// The route runs at the top of the next pass (story 25).
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.1, &F.Fighter->Cognition.Conditions);
 	TestNotEqual(TEXT("the failed swing left its own program"), F.Fighter->Schedule.Current,
-		EId::MeleeAttack1Swing);
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING));
 
 	// The announce still landed: opponent reservation changes no health and does not need a weapon.
 	TestTrue(TEXT("TASK_ANNOUNCE_ATTACK still delivered its notice"),

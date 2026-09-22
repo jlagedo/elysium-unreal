@@ -692,11 +692,11 @@ bool FElysiumNpcKernelCombat10PreSelectIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::SeeFear);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
 		// The program is installed FIRST: `SetSchedule`'s own tail (slot 435 `OnScheduleChange`)
 		// runs on the way in, and the condition is raised after it so the install cannot consume it.
 		TestTrue(TEXT("the interrupt carrier installs"),
-			ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N));
+			ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N));
 		N.Cognition.Conditions.Set(EElysiumNpcCond::SeeFear);
 		TestEqual(TEXT("102ad3ef SEE_FEAR answers retail state 8"), N.PreSelectIdealStateRetail(), 8);
 		TestTrue(TEXT("...and INITIAL_FLEE (0x100) is armed on the way in"),
@@ -714,8 +714,8 @@ bool FElysiumNpcKernelCombat10PreSelectIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::SupernaturalAttackLevel);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 		N.Cognition.Conditions.Set(EElysiumNpcCond::SupernaturalAttackLevel);
 		TestEqual(TEXT("102ad429 SUPERNATURAL_ATTACK_LEVEL answers 2"),
 			N.PreSelectIdealStateRetail(), 2);
@@ -733,8 +733,8 @@ bool FElysiumNpcKernelCombat10PreSelectIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::CriminalAttackLevel);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 		N.Cognition.Conditions.Set(EElysiumNpcCond::CriminalAttackLevel);
 		TestEqual(TEXT("102ad578 the suspicion window answers retail state 0xe"),
 			N.PreSelectIdealStateRetail(), 0xe);
@@ -1427,20 +1427,20 @@ bool FElysiumNpcKernelCombat10SelectorAgreementTest::RunTest(const FString&)
 		Rifle->MagazineCount = 3;
 	}
 
-	// `0xb1` IS registered (`SCHED_TROIKA_CHASE_ENEMY`), so the slot body's answer is the pre-kernel
-	// selector's answer and the approximation below it is never consulted.
+	// `0xb1` is `SCHED_TROIKA_CHASE_ENEMY`, and the slot body's answer IS the pre-kernel selector's
+	// answer: the number is handed straight through.
 	TestEqual(TEXT("retail 0xb1 is SCHED_TROIKA_CHASE_ENEMY"),
-		FElysiumNpc::ScheduleFromRetailNumber(0xb1), EElysiumScheduleId::ChaseEnemy);
+		0xb1, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::TooFarToAttack);
 	TestEqual(TEXT("slot 605 answers 0xb1"), N.SelectScheduleRangedCombat(0), 0xb1);
 	TestEqual(TEXT("...and the pre-kernel selector answers the SAME program"),
-		ElysiumNpcCombat::SelectRangedSchedule(N, 0.0), EElysiumScheduleId::ChaseEnemy);
+		ElysiumNpcCombat::SelectRangedSchedule(N, 0.0), ElysiumSched::SCHED_TROIKA_CHASE_ENEMY);
 
-	// `0x98` is NOT registered, so the kernel answer is recorded as a miss and the CHOSEN, NOT
-	// RECOVERED approximation still stands in — which is family Schedule's standing fact two, not a
-	// second opinion.
-	TestEqual(TEXT("retail 0x98 names no registered program"),
-		FElysiumNpc::ScheduleFromRetailNumber(0x98), EElysiumScheduleId::None);
+	// `0x98` used to name no registered program, and the fold that discovered that is gone with the
+	// 29 typed identities it folded onto. Every number the slot bodies answer is a loaded program
+	// now -- `0x98` included -- which is what retired `KernelAnswerFirst`.
+	TestTrue(TEXT("retail 0x98 is a loaded program"),
+		ElysiumScheduleFor(ElysiumScheduleGlobalId(0x98)) != nullptr);
 	return true;
 }
 

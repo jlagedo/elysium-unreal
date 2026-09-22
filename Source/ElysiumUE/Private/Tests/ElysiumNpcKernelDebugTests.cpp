@@ -465,7 +465,7 @@ bool FElysiumNpcKernelDebugReportAIStateTest::RunTest(const FString&)
 
 	// With a schedule installed the "No Schedule, " arm is replaced by the schedule name, and the
 	// task line does NOT appear because `CurrentRetailTaskNumber` is a seam that answers false.
-	Npc->Schedule.Current = EElysiumScheduleId::IdleStand;
+	Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->ReportAIState();
 	const TArray<FElysiumNpc::FDebugLine> WithSchedule = FElysiumNpc::EndDebugCapture();
@@ -534,7 +534,7 @@ bool FElysiumNpcKernelDebugStatOverlaysTest::RunTest(const FString&)
 
 		// Run a schedule and the tail appears: the `Schd:` line, the current task and one line per
 		// task with `->`/`<-` on the current index and `Task:` only on the first.
-		Npc->Schedule.Current = EElysiumScheduleId::IdleStand;
+		Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 		Npc->Schedule.TaskIndex = 0;
 		FElysiumNpc::BeginDebugCapture();
 		Npc->DrawDebugStatOverlays();
@@ -543,7 +543,7 @@ bool FElysiumNpcKernelDebugStatOverlaysTest::RunTest(const FString&)
 		TestTrue(TEXT("the schedule line appears"), Order.Contains(TEXT("Schd: %s, ")));
 		TestTrue(TEXT("and the per-task lines after it"), Order.Contains(TEXT("%s%s%s%s")));
 
-		const FElysiumSchedule* Program = ElysiumScheduleFor(EElysiumScheduleId::IdleStand);
+		const FElysiumScheduleProgram* Program = ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 		if (Program != nullptr && Program->Tasks.Num() > 0)
 		{
 			// The first per-task line: prefix `Task:`, the current marker `->`, the step's name and
@@ -562,13 +562,13 @@ bool FElysiumNpcKernelDebugStatOverlaysTest::RunTest(const FString&)
 				TestEqual(TEXT("task 0 is prefixed and both markers bracket it"),
 					WithSchedule[First].Text,
 					FString::Printf(TEXT("Task:->%s<-"),
-						ElysiumTaskName(Program->Tasks[0].Task)));
+						*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[0].TaskId)));
 				if (Program->Tasks.Num() > 1)
 				{
 					TestEqual(TEXT("task 1 is indented seven spaces with no markers"),
 						WithSchedule[First + 1].Text,
 						FString::Printf(TEXT("          %s"),
-							ElysiumTaskName(Program->Tasks[1].Task)));
+							*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[1].TaskId)));
 				}
 			}
 		}
@@ -739,10 +739,10 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	// port-side enum comparison.
 	Npc->DebugOverlays = 0;
 	bool bFoundForcedGo = false;
-	for (int32 Raw = 0; Raw <= static_cast<int32>(EElysiumScheduleId::ScriptedFollowPath); ++Raw)
+	for (int32 Raw = 0; Raw <= static_cast<int32>(ElysiumSched::AISCRIPT); ++Raw)
 	{
-		const EElysiumScheduleId Id = static_cast<EElysiumScheduleId>(Raw);
-		if (ElysiumScheduleNumber(Id) == 0x39)
+		const int32 Id = static_cast<int32>(Raw);
+		if (Id == 0x39)
 		{
 			Npc->Schedule.Current = Id;
 			bFoundForcedGo = true;

@@ -138,7 +138,7 @@ bool ElysiumNpcEnemy::IsScheduleInterested(const FElysiumNpc& Npc, EElysiumNpcCo
 		// compensate for missing installation.
 		return true;
 	}
-	const FElysiumSchedule* Active = ElysiumScheduleFor(Npc.Schedule.Current);
+	const FElysiumScheduleProgram* Active = ElysiumScheduleFor(Npc.Schedule.Current);
 	if (Active == nullptr)
 	{
 		return false;
@@ -224,7 +224,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 	const EElysiumNpcCond Required = RequiredInterrupt(Npc);
 	if (!IsScheduleInterested(Npc, Required))
 	{
-		const int32 ScheduleNumber = ElysiumScheduleNumber(Npc.Schedule.Current);
+		const int32 ScheduleNumber = Npc.GetLocalScheduleId(Npc.Schedule.Current);
 		if (Npc.Cognition.StarvedScheduleNumber != ScheduleNumber)
 		{
 			// One record per NPC per schedule: a different program starving selection is a

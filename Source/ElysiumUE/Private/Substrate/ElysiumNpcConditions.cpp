@@ -644,7 +644,8 @@ namespace
 	bool IsRunningComfortSchedule(const FElysiumNpc& Npc)
 	{
 		return Npc.Schedule.IsRunning()
-			&& ElysiumScheduleNumber(Npc.Schedule.Current) == ElysiumNpcCond::ComfortScheduleNumber;
+			&& Npc.IdSpace(EElysiumIdCategory::Schedule)->GlobalToLocal(Npc.Schedule.Current)
+				== ElysiumNpcCond::ComfortScheduleNumber;
 	}
 }
 

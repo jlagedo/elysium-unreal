@@ -1317,7 +1317,7 @@ bool FElysiumNpc::ShouldMaintainActivity()
 	// `0x102bf510`, slot 466. Three arms, and the first one's answer is FALSE — retail returns
 	// `EAX & 0xffffff00`, whose low byte is zero.
 	if (Schedule.IsRunning()
-		&& ElysiumScheduleNumber(Schedule.Current) == GScheduleRefusingMaintain)
+		&& GetLocalScheduleId(Schedule.Current) == GScheduleRefusingMaintain)
 	{
 		return false;
 	}
@@ -1380,7 +1380,7 @@ int32 FElysiumNpc::IdleSequenceGate() const
 	//   -> schedule 8, after stamping the selector trace (+0x1b30 the source file, +0x1b34 line
 	//      0x5f20). The shape map calls that word ABSENT: this runtime records selections in the
 	//      mind's transition trace instead of carrying retail's file/line pair.
-	// Retail schedule number 8 has no row in `EElysiumScheduleId` yet, so the NUMBER is the answer;
+	// Retail schedule number 8 has no row in `int32` yet, so the NUMBER is the answer;
 	// 0 is `SCHED_NONE`.
 	if (!Cognition.Conditions.Has(EElysiumNpcCond::EnemyDead))
 	{

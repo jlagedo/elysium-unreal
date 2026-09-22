@@ -111,9 +111,9 @@ bool FElysiumNpcKernelState19TroikaSelectIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::NewEnemy);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
 		TestTrue(TEXT("the interrupt carrier installs"),
-			ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N));
+			ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N));
 		N.Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 		TestEqual(TEXT("102ad660 interrupt NEW_ENEMY from idle is COMBAT"),
 			N.SelectIdealStateRetail(), 2);
@@ -148,8 +148,8 @@ bool FElysiumNpcKernelState19BaseSelectIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::LightDamage);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 		N.Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
 		N.bNoAlertState = true;
 		TestEqual(TEXT("1026f660 base idle LIGHT_DAMAGE promotes with no m_bNoAlertState test"),
@@ -308,8 +308,8 @@ bool FElysiumNpcKernelState19NoAlertWithScheduleTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::LightDamage);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 		N.Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
 		TestEqual(TEXT("no_alert_state skips Troika damage then the base tail still promotes"),
 			N.SelectIdealStateRetail(), 3);
@@ -327,8 +327,8 @@ namespace
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(Cond);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(N.Schedule, EElysiumScheduleId::IdleStand, N);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 		N.Cognition.Conditions.Set(Cond);
 		const int32 Answer = N.SelectIdealStateRetail();
 		N.Schedule.Clear();

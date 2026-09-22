@@ -19,6 +19,7 @@
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumScriptedCharacter.h"
 
 struct FElysiumClanTemplate;
@@ -105,7 +106,6 @@ public:
 
 	// The melee selector's retained binary draw (`ElysiumNpcCombatSchedules.h`). Session state: it
 	// is a decision in flight, not memory, and a load re-draws on the next pass.
-	FElysiumNpcCombatSelector CombatSelector;
 
 	// `m_bAllowAlertLookaround` (+0x6434), authored per NPC.
 	bool bAllowAlertLookaround = false;
@@ -331,15 +331,20 @@ public:
 	 * names a schedule the victim is to run, which is the same operation a script's
 	 * `ChangeSchedule` performs and must not become a second one.
 	 *
-	 * Resolution is `ElysiumScheduleIdFromName` and nothing else, so only a REGISTERED program
-	 * starts; an unregistered name funnels to the stub surface keyed on the name and returns false.
-	 * That is the correct posture and not a gap to paper over — starting some other schedule under
-	 * an authored name would be behaviour invented out of a string.
+	 * Resolution is `FElysiumScheduleManager::FindByName` and nothing else, so only a LOADED
+	 * program starts; an unknown name funnels to the stub surface keyed on the name and returns
+	 * false. That is the correct posture and not a gap to paper over — starting some other schedule
+	 * under an authored name would be behaviour invented out of a string.
 	 *
 	 * `Surface` is the stub key (`CAI_BaseNPC.ChangeSchedule`, `DisciplineTgt.<record>/<hit>`) and
 	 * `Detail` the marshalled context that key's report carries. Returns whether a program started.
 	 */
 	bool StartNamedSchedule(const FString& Requested, const FString& Surface, const FString& Detail);
+
+	/** The same door reached by NUMBER rather than by name -- the retail shape of every producer
+	 *  that is not a script string (`FeedInterrupt`'s `SetSchedule(0xfb)`, a selector's answer). The
+	 *  id may be class-local or global; `ElysiumSchedule::Start` translates. */
+	bool StartScheduleId(int32 Id, const FString& Surface, const FString& Detail);
 
 	/**
 	 * The one door an `aiscripted_schedule` pushes through.
@@ -405,16 +410,16 @@ public:
 	 * records what would settle it -- a refusal that says nothing is indistinguishable from a step
 	 * that silently did not apply.
 	 */
-	EElysiumScheduleId SelectIdleSchedule();
+	int32 SelectIdleSchedule();
 
 	// The state switch of the base selector (`0x1028a380`): case 1 idle, case 3 alert, case 2
 	// combat. Everything else keeps the idle branch, which is where a state with no selector of its
 	// own belongs.
-	EElysiumScheduleId SelectSchedule();
+	int32 SelectSchedule();
 
 	// Case 3. The recovered alert branch's own damage reactions are refused by name; what remains
 	// is the lookaround program, which alert state is what makes reachable.
-	EElysiumScheduleId SelectAlertSchedule();
+	int32 SelectAlertSchedule();
 
 	/**
 	 * Case 2 — the concrete combat branch.
@@ -424,7 +429,7 @@ public:
 	 * `CAI_BaseNPCTroika::SelectSchedule` so the weapon policy COMPOSES with the door, damage and
 	 * idle reactions rather than replacing them. That composition is the tail of this function.
 	 */
-	EElysiumScheduleId SelectCombatSchedule();
+	int32 SelectCombatSchedule();
 
 	// `SelectIdealState` run for real: the two-layer rule over this pass's conditions, committed
 	// through the mind's ordinary transition path.
@@ -565,10 +570,10 @@ public:
 
 	// Slot 440 on this class: `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), the arms whose
 	// ids this runtime registers. See the body for the arms that are seams.
-	virtual EElysiumScheduleId TranslateSchedule(EElysiumScheduleId Id) override;
+	virtual int32 TranslateSchedule(int32 Id) override;
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
-	virtual void DebugScheduleInstalled(EElysiumScheduleId InstalledSchedule) override;
+	virtual void DebugScheduleInstalled(int32 InstalledSchedule) override;
 
 	virtual bool FaceSavePosition() override;
 
@@ -710,7 +715,7 @@ public:
 
 	virtual bool RangeAttack1() override;
 
-	virtual void RememberFact(float What) override;
+	virtual void RememberFact(uint32 MemoryMask) override;
 
 	virtual bool GetPathToScriptedGoal() override;
 
@@ -722,7 +727,7 @@ public:
 
 	virtual void ClearConditions() override;
 
-	virtual void OnScheduleChange(EElysiumScheduleId NewSchedule) override;
+	virtual void OnScheduleChange(int32 NewSchedule) override;
 
 	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
 
@@ -781,7 +786,7 @@ public:
 	 * those producers will feed; the third recovered source is gated on `COND_ENEMY_UNREACHABLE`,
 	 * which needs a reachability query this runtime's motor seam does not carry.
 	 */
-	EElysiumScheduleId SelectDoorObstructionSchedule();
+	int32 SelectDoorObstructionSchedule();
 
 	void BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now);
 

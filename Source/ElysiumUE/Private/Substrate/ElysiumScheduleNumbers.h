@@ -46,6 +46,9 @@ namespace ElysiumSched
 	inline constexpr int32 IDLE_STAND = 0x01;
 	inline constexpr int32 TARGET_FACE = 0x12;
 	inline constexpr int32 TARGET_CHASE = 0x13;
+	inline constexpr int32 ALERT_SMALL_FLINCH = 0x07;
+	inline constexpr int32 SMALL_FLINCH = 0x14;
+	inline constexpr int32 TAKE_COVER_FROM_ORIGIN = 0x19;
 	inline constexpr int32 STANDOFF = 0x25;
 	inline constexpr int32 DIE = 0x2b;
 	inline constexpr int32 SCHED_DIE_RAGDOLL = 0x2c;
@@ -75,6 +78,39 @@ namespace ElysiumSched
 	/** 0019 story 3's witness: twelve tasks, twelve interrupts, one task op this runtime did not
 	 *  have before pass C. */
 	inline constexpr int32 SCHED_TROIKA_CHASE_ENEMY_FAILED = 0xb7;
+
+	// The combat selectors' own answers. These were decoded numbers living in comments beside
+	// invented enum names; they are constants now, and the corpus checks every one. Three of the
+	// names the port carried beside them were WRONG, which is what the check is for: `0xe0` is
+	// `MELEE_CIRCLE_ADVANCE` rather than `MELEE_CIRCLE`, `0xec` is `RANGE_ATTACK1_SHOOT_AT_HINT`
+	// rather than `RANGE_ATTACK1`, and `0xb9` is `RUN_AWAY_FROM_ENEMY` rather than `RUN_AWAY`.
+	inline constexpr int32 SCHED_TROIKA_ALERT_LOOK_AROUND_NI = 0x4f;
+	inline constexpr int32 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE = 0x91;
+	inline constexpr int32 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE = 0x96;
+	inline constexpr int32 SCHED_TROIKA_TAKE_COVER_HINT_DOOR = 0x9c;
+	inline constexpr int32 SCHED_TROIKA_CHASE_ENEMY = 0xb1;
+	inline constexpr int32 SCHED_TROIKA_RUN_AWAY_FROM_ENEMY = 0xb9;
+	/** The Troika line's own standoff, which is NOT base `STANDOFF` 0x25 -- both names exist and
+	 *  `SCHED_TROIKA_RUN_AWAY_FROM_ENEMY`'s `TASK_SET_FAIL_SCHEDULE` names this one. */
+	inline constexpr int32 SCHED_TROIKA_STANDOFF = 0xc1;
+	inline constexpr int32 SCHED_TROIKA_MELEE_IDLE = 0xc7;
+	inline constexpr int32 SCHED_TROIKA_MELEE_ADVANCE = 0xca;
+	inline constexpr int32 SCHED_TROIKA_MELEE_STEPBACK = 0xd3;
+	inline constexpr int32 SCHED_TROIKA_MELEE_DODGE = 0xd5;
+	inline constexpr int32 SCHED_TROIKA_MELEE_PREBLOCK = 0xd6;
+	inline constexpr int32 SCHED_TROIKA_MELEE_KICK = 0xdb;
+	inline constexpr int32 SCHED_TROIKA_MELEE_ATTACK1 = 0xdc;
+	inline constexpr int32 SCHED_TROIKA_MELEE_ATTACK1_NR = 0xdd;
+	/** The terminal swing, and the one program whose EMPTY interrupt mask is recovered rather than
+	 *  merely undecoded: once that task owns the NPC it is not reevaluated as a fresh attack choice
+	 *  each tick. Its text declares `Interrupts` with nothing after it. */
+	inline constexpr int32 SCHED_TROIKA_MELEE_ATTACK1_SWING = 0xde;
+	inline constexpr int32 SCHED_TROIKA_MELEE_CIRCLE_ADVANCE = 0xe0;
+	inline constexpr int32 SCHED_TROIKA_RANGE_ATTACK1_SHOOT_AT_HINT = 0xec;
+
+	/** The post-feed trance, from its one producer `CBaseCombatCharacter::FeedInterrupt`
+	 *  (`0x1033a9e0`), which is the only `SetSchedule(0xfb)` site in the image. */
+	inline constexpr int32 SCHED_TROIKA_MESMERIZED = 0xfb;
 
 	/** Every row above, for `VerifyNumbers`. A constant that is not in this table is not checked,
 	 *  which is the one way to get a hand-decoded number back into the runtime -- so adding a

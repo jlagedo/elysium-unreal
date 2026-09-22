@@ -343,13 +343,16 @@ bool IsStandableSolid() const;
 
 // Family Schedule's slot-580 row type, declared here because this family's `.inl` is included
 // BEFORE `ElysiumNpcKernelSchedule.inl` and slot 580's Troika-line body is this family's.
-struct FScheduleIdSpace;
 
 /** `0x101a6d00` — slot 580's BASE body (`CAI_BaseNPC`), `return &DAT_1090ff08`. Not the slot: slot
  *  580 is `CAI_BaseNPCTroika`'s own (`0x101aa790`), which this family defines. The base answers a
  *  DIFFERENT `CAI_ClassScheduleIdSpace` from the Troika line's `&DAT_10924248`, and family
  *  Schedule's table has no row for it, so this is the row and the reading of it. */
-const FScheduleIdSpace* BaseClassScheduleIdSpace() const;
+const FElysiumLocalIdSpace* BaseClassScheduleIdSpace() const;
+
+/** This NPC's live `CAI_LocalIdSpace` for one category, out of the loaded corpus. Slot 580's own
+ *  answer, and never null while a corpus is loaded. */
+const FElysiumLocalIdSpace* IdSpace(EElysiumIdCategory Category) const;
 
 /** `0x101a67c0` — slot 476 `HearingSensitivity`'s BASE body. The slot itself is Troika's
  *  (`0x101aa5f0`, which reads `+0x63c0`), so this is the base under its own name. RECOVERED VALUE:
@@ -590,7 +593,7 @@ int32 SceneEventReleases = 0;
 
 /** `0x102ea280` — the GLOBAL-to-LOCAL range translation slots 447 and 450 both forward into.
  *  A null space is retail's end-of-chain and answers -1. */
-static int32 GlobalToLocalId(const FScheduleIdSpace* Space, int32 GlobalId);
+static int32 GlobalToLocalId(const FElysiumLocalIdSpace* Space, int32 GlobalId);
 
 /** **SEAM** for `CCineNPC::m_iDelay` (+0x5f70) and `m_startTime` (+0x5f74): the port's beat lives on
  *  the `scripted_sequence` entity and the kernel holds no pointer to it. Answers (0, 0), the state

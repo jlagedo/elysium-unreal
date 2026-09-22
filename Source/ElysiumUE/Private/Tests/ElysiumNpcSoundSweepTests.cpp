@@ -107,8 +107,8 @@ namespace
 		TUniquePtr<ElysiumSchedule::FInterruptMaskScope> RunWithMask(const FElysiumNpcConditions& Mask)
 		{
 			auto Scope = MakeUnique<ElysiumSchedule::FInterruptMaskScope>(
-				EElysiumScheduleId::IdleDisposition, Mask);
-			ElysiumSchedule::Start(Npc->Schedule, EElysiumScheduleId::IdleDisposition, *Npc);
+				ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, Mask);
+			ElysiumSchedule::Start(Npc->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *Npc);
 			return Scope;
 		}
 

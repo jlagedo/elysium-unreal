@@ -792,7 +792,7 @@ bool FElysiumNpcKernelCondRequestFleeTest::RunTest(const FString&)
 	// Install a program. `BuildScheduleTestBits` (`0x102ad140`) adds the three flee/investigate law
 	// conditions to every non-busy, non-investigating NPC's mask, so the gate now stands.
 	TestTrue(TEXT("a program installs"),
-		ElysiumSchedule::Start(F.Npc->Schedule, EElysiumScheduleId::IdleDisposition, *F.Npc));
+		ElysiumSchedule::Start(F.Npc->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Npc));
 	TestTrue(TEXT("and its effective mask lists SUPERNATURAL_FLEE_LEVEL"),
 		ElysiumSchedule::MaskHasCondition(F.Npc->Schedule, *F.Npc,
 			EElysiumNpcCond::SupernaturalFleeLevel));

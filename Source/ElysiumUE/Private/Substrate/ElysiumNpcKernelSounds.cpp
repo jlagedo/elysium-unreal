@@ -797,7 +797,7 @@ bool FElysiumNpc::BaseShouldPlayIdleSound()
 	bool bComforting = false;
 	if (Schedule.IsRunning())
 	{
-		const int32 Local = GetLocalScheduleId(ElysiumScheduleNumber(Schedule.Current));
+		const int32 Local = GetLocalScheduleId(Schedule.Current);
 		if (Local == GSoundsScheduleComfort)
 		{
 			Weight = GSoundsIdleSoundWeightComforting;

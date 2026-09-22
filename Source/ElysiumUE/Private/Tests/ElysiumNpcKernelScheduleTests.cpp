@@ -45,9 +45,6 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 		TestEqual(*FString::Printf(TEXT("%s is the row the lookup answers"), Row.RetailClass),
 			reinterpret_cast<UPTRINT>(FElysiumNpc::ScheduleIdSpaceOf(Row.RetailClass)),
 			reinterpret_cast<UPTRINT>(&Row));
-		// The state `0x102ea090(isRoot = false)` left: empty.
-		TestEqual(TEXT("its local base is the 9999 empty sentinel"), Row.LocalBase, 9999);
-		TestEqual(TEXT("its local top is -1"), Row.LocalTop, INDEX_NONE);
 	}
 
 	TestNull(TEXT("a class with no row answers nothing"),
@@ -61,23 +58,43 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 		FString(FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VPlayerController"))->Body),
 		FString(TEXT("0x103750e0")));
 
-	// `0x102ea2d0` over an empty range: -1 stays -1, and so does every other id.
-	const FElysiumNpc::FScheduleIdSpace* Brujah =
-		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VBrujah"));
+	// --- The LIVE spaces, which are the corpus's ------------------------------------------------
+	//
+	// Every assertion below used to read the other way round: the ranges were the empty state the
+	// static constructor left, `ScheduleLocalToGlobal` answered -1 for every id, and the test said
+	// so. 0019/3 loads the classes' own schedule texts, so the ranges are real and so is the walk.
+	FElysiumScheduleCorpus& Corpus = FElysiumScheduleCorpus::Get();
+	Corpus.EnsureLoaded();
+
+	const FElysiumLocalIdSpace* Brujah =
+		Corpus.SpaceFor(TEXT("CNPC_VBrujah"), EElysiumIdCategory::Schedule);
+	if (!TestNotNull(TEXT("CNPC_VBrujah has a loaded schedule space"), Brujah))
+	{
+		return false;
+	}
 	TestEqual(TEXT("ScheduleLocalToGlobal(-1) is -1"),
 		FElysiumNpc::ScheduleLocalToGlobal(Brujah, INDEX_NONE), INDEX_NONE);
-	TestEqual(TEXT("and an ordinary id is -1 too, because the range is empty (the seam)"),
-		FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x158), INDEX_NONE);
-	// A row whose range HAS been filled translates, so the walk is the retail walk and not a
-	// hard-coded refusal.
-	FElysiumNpc::FScheduleIdSpace Filled = *Brujah;
-	Filled.GlobalBase = 1000;
-	Filled.LocalBase = 0x158;
-	Filled.LocalTop = 0x159;
-	TestEqual(TEXT("a filled range answers (globalBase - localBase) + id"),
-		FElysiumNpc::ScheduleLocalToGlobal(&Filled, 0x159), 1001);
-	TestEqual(TEXT("and an id outside it is still -1"),
-		FElysiumNpc::ScheduleLocalToGlobal(&Filled, 0x15a), INDEX_NONE);
+
+	// `CNPC_VBrujah::InitCustomSchedules` (`0x10367a40`) registers exactly two names,
+	// `SCHED_VBRUJAH_WALK` 0x158 and `SCHED_VBRUJAH_WATCH` 0x159, into `DAT_1093a740` under
+	// `CNPC_VVampire`'s space as the parent.
+	const int32 Walk = FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x158);
+	const int32 Watch = FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x159);
+	TestTrue(TEXT("SCHED_VBRUJAH_WALK translates"), (Walk) != INDEX_NONE);
+	TestEqual(TEXT("...and SCHED_VBRUJAH_WATCH is the next global id"), Watch, Walk + 1);
+	TestEqual(TEXT("the round trip is the identity"), Brujah->GlobalToLocal(Walk), 0x158);
+	TestEqual(TEXT("an id this class never registered is -1"),
+		FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x15a), INDEX_NONE);
+
+	// The parent walk, which is the structural rule the id spaces have: a Brujah reaches its base
+	// class's programs and its grandparent's, because `LocalToGlobal` falls through `m_pParent`.
+	TestTrue(TEXT("a Brujah reaches CNPC_VVampire's SCHED_VVAMPIRE_IDLE_STAND (0x157)"), (FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x157)) != INDEX_NONE);
+	TestTrue(TEXT("...and the Troika line's SCHED_TROIKA_IDLE_DISPOSITION (0x6b)"), (FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
+	TestTrue(TEXT("...and the base's FAIL (0x43)"), (FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL)) != INDEX_NONE);
+	TestEqual(TEXT("the names agree with the numbers"),
+		FString(ElysiumScheduleName(
+			FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL))),
+		FString(TEXT("FAIL")));
 
 	// **No census class claims the entity classname `npc_VCop`.** `CNPC_VCop` is a census class with
 	// a slot-580 body of its own (`0x10370930` -> `DAT_1093ac60`, asserted by name above), but its
@@ -103,14 +120,27 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	const FElysiumLocalIdSpace* const Troika =
+		Corpus.SpaceFor(TEXT("CAI_BaseNPCTroika"), EElysiumIdCategory::Schedule);
 	TestEqual(TEXT("npc_VVampire answers CNPC_VVampire's own space"),
-		FString(Vampire->ClassScheduleIdSpace()->IdSpace), FString(TEXT("0x1093d258")));
-	// CNPC_VHumanCombatant has no slot-580 override, so the vtable's rule gives it the Troika line.
-	TestEqual(TEXT("a class with no slot-580 override answers the Troika line's DAT_10924248"),
-		FString(Combatant->ClassScheduleIdSpace()->IdSpace), FString(TEXT("0x10924248")));
+		Vampire->ClassScheduleIdSpace(),
+		Corpus.SpaceFor(TEXT("CNPC_VVampire"), EElysiumIdCategory::Schedule));
+	TestTrue(TEXT("...which is NOT the Troika line's"),
+		Vampire->ClassScheduleIdSpace() != Troika);
+	// `CNPC_VHumanCombatant` has no slot-580 override in the census -- the rule this test used to
+	// assert gave it the Troika line. The CORPUS places it in its own unit anyway: the class -> space
+	// map is the sidecar's, recovered from the image's own RTTI walk over slot 580, and it covers 77
+	// classes against 58 spaces. So the space is its own and it still reaches the Troika programs
+	// through the parent chain, which is the property that matters.
+	TestEqual(TEXT("a class the corpus places gets ITS space, not the line's"),
+		Combatant->ClassScheduleIdSpace(),
+		Corpus.SpaceFor(TEXT("CNPC_VHumanCombatant"), EElysiumIdCategory::Schedule));
+	TestTrue(TEXT("...and reaches the Troika line's programs through the parent chain"),
+		(Combatant->ClassScheduleIdSpace()->LocalToGlobal(
+			ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
 	TestNull(TEXT("a spawned npc_VCop resolves to no retail class"), Cop->RetailClass());
 	TestEqual(TEXT("so it answers the Troika line too, which is what this runtime does with it"),
-		FString(Cop->ClassScheduleIdSpace()->IdSpace), FString(TEXT("0x10924248")));
+		Cop->ClassScheduleIdSpace(), Troika);
 
 	return true;
 }
@@ -149,9 +179,9 @@ bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
 	TestNull(TEXT("a class with no row answers nothing"),
 		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNotAClass")));
 
-	// The slot itself. Every flag ships true and its only writer is the class's own schedule-text
-	// parse loop, which this runtime does not run — so the answer is true for every class, and that
-	// is the seam, not an unfilled default.
+	// The slot itself. Its only writer is the class's own schedule-text parse loop, and this runtime
+	// RUNS that loop now -- so the answer is the real parse result rather than the shipped `true`
+	// standing in for one. It is true for all 56 loaded spaces, because every shipped text parses.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_loaded"), 4102);
 	Builder.AddNpc(TEXT("vampire"), FVector::ZeroVector, TEXT("npc_VVampire"));
 	Builder.AddNpc(TEXT("combatant"), FVector(200.0, 0.0, 0.0), TEXT("npc_VHumanCombatant"));
@@ -164,10 +194,17 @@ bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
 		return false;
 	}
 	// A class with its own slot-452 body and one that inherits the Troika line's answer the same
-	// thing: every flag ships true and nothing here can clear one.
-	TestTrue(TEXT("a species with its own slot-452 flag answers the shipped true"),
+	// thing, because every one of the corpus's 691 texts parses.
+	TestTrue(TEXT("a species whose own texts all parsed answers true"),
 		Vampire->LoadedSchedules());
 	TestTrue(TEXT("and so does a class on the Troika line"), Combatant->LoadedSchedules());
+	// The answer is the UNIT's, not a literal: the corpus carries a parse result per space, and the
+	// two NPCs above read two different ones.
+	const FElysiumScheduleCorpus& Loaded = FElysiumScheduleCorpus::Get();
+	TestNotNull(TEXT("CNPC_VVampire has a loaded unit"),
+		Loaded.UnitForClass(TEXT("CNPC_VVampire")));
+	TestEqual(TEXT("no space in the shipped corpus failed a text"),
+		Loaded.Census().ParseFailures, 0);
 
 	return true;
 }
@@ -198,20 +235,23 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 		Guard->ResolveIdealScheduleStamp(1000000001), 1000000001);
 	TestEqual(TEXT("-1 goes through the id space and answers -1"),
 		Guard->ResolveIdealScheduleStamp(INDEX_NONE), INDEX_NONE);
-	TestEqual(TEXT("a registered program's own number does too — the empty-id-space seam"),
-		Guard->ResolveIdealScheduleStamp(ElysiumScheduleNumber(EElysiumScheduleId::IdleStand)),
-		INDEX_NONE);
+	// This used to answer -1 too, and the test called that "the empty-id-space seam". The seam is
+	// closed: a local number now translates to the global id the owning class registered.
+	TestEqual(TEXT("a loaded program's own number translates through the class space"),
+		Guard->ResolveIdealScheduleStamp(ElysiumSched::IDLE_STAND),
+		ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 
-	// `ChangeSchedule` installs through the existing kernel and leaves the stamp empty, which is
-	// the seam stated once per call.
-	Guard->ChangeSchedule(EElysiumScheduleId::IdleDisposition);
+	// `ChangeSchedule` installs through the existing kernel and stamps `m_IdealSchedule`, which is
+	// what retail does and what this runtime could not do while every translation answered -1.
+	Guard->ChangeSchedule(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	TestEqual(TEXT("ChangeSchedule installs the program"), Guard->Schedule.Current,
-		EElysiumScheduleId::IdleDisposition);
-	TestEqual(TEXT("and leaves m_IdealSchedule empty (no class schedule id space)"),
-		Guard->ScheduleHost.IdealScheduleRetail, INDEX_NONE);
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
+	TestEqual(TEXT("and stamps m_IdealSchedule with its GLOBAL id"),
+		Guard->ScheduleHost.IdealScheduleRetail,
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 
 	// --- `0x10280db0` `IsTaskIndexCurrent` and `0x10280f40` `NextScheduledTask` -------------------
-	const FElysiumSchedule* Program = ElysiumScheduleFor(EElysiumScheduleId::IdleDisposition);
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 	TestNotNull(TEXT("IDLE_DISPOSITION is registered"), Program);
 	if (Program == nullptr)
 	{
@@ -235,8 +275,8 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 	Guard->Cognition.Conditions.Reset();
 	Guard->Schedule.TaskIndex = TaskCount - 1;
 	Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
-	Guard->ScheduleHost.FailedSchedule = EElysiumScheduleId::Fail;
-	Guard->ScheduleHost.InterruptSchedule = EElysiumScheduleId::Fail;
+	Guard->ScheduleHost.FailedSchedule = ElysiumSched::FAIL;
+	Guard->ScheduleHost.InterruptSchedule = ElysiumSched::FAIL;
 	Guard->NextScheduledTask();
 	TestEqual(TEXT("NextScheduledTask advances the index"), Guard->Schedule.TaskIndex, TaskCount);
 	// Representation update: `10280f40 MOV [this+0x5c44],0` is the full status word, not the old
@@ -246,9 +286,9 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 	TestTrue(TEXT("exhausting the program raises COND_SCHEDULE_DONE"),
 		Guard->Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone));
 	TestEqual(TEXT("and zeroes m_failedSchedule"), Guard->ScheduleHost.FailedSchedule,
-		EElysiumScheduleId::None);
+		ElysiumScheduleId::None);
 	TestEqual(TEXT("and m_interuptSchedule"), Guard->ScheduleHost.InterruptSchedule,
-		EElysiumScheduleId::None);
+		ElysiumScheduleId::None);
 
 	Guard->Cognition.Conditions.Reset();
 	Guard->Schedule.TaskIndex = 0;
@@ -494,25 +534,22 @@ bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 	TestEqual(TEXT("a class with no slot-438 species body has no opinion"),
 		Guard->SpeciesSelectSchedule(), 0);
 
-	// The registry direction the caller installs through: none of the species numbers is a
-	// registered program, so `SelectSchedule` falls through rather than installing another one.
-	TestEqual(TEXT("0x156 names no registered program"),
-		FElysiumNpc::ScheduleFromRetailNumber(0x156), EElysiumScheduleId::None);
-	TestEqual(TEXT("0x15c names none either"),
-		FElysiumNpc::ScheduleFromRetailNumber(0x15c), EElysiumScheduleId::None);
-	TestEqual(TEXT("nor does 0x15d, the other side of the runner-budget gate"),
-		FElysiumNpc::ScheduleFromRetailNumber(0x15d), EElysiumScheduleId::None);
-	TestEqual(TEXT("but a registered number resolves — 0x6b is IDLE_DISPOSITION"),
-		FElysiumNpc::ScheduleFromRetailNumber(0x6b), EElysiumScheduleId::IdleDisposition);
-	TestEqual(TEXT("and 0 is no program"),
-		FElysiumNpc::ScheduleFromRetailNumber(0), EElysiumScheduleId::None);
+	// The species numbers ARE programs now, and that is 0019/3's whole effect on this selector.
+	// `ScheduleFromRetailNumber` -- the old fold from a retail number to one of 29 typed identities,
+	// which answered `None` for 0x156, 0x15c and 0x15d alike -- is gone with the identities it
+	// folded onto: a number a recovered body answers is the answer.
+	const FElysiumLocalIdSpace* const AndreiSpace = Andrei->ClassScheduleIdSpace();
+	if (TestNotNull(TEXT("CNPC_VAndreiBlood has a loaded schedule space"), AndreiSpace))
+	{
+		TestTrue(TEXT("0x15c is a loaded program"), (AndreiSpace->LocalToGlobal(0x15c)) != INDEX_NONE);
+		TestTrue(TEXT("and so is 0x15d, the other side of the runner-budget gate"), (AndreiSpace->LocalToGlobal(0x15d)) != INDEX_NONE);
+		TestTrue(TEXT("and 0x6b IDLE_DISPOSITION, through the parent chain"), (AndreiSpace->LocalToGlobal(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
+	}
 
-	// The composition: Andrei's species answer — 0x15d with the runner count back at zero — is
-	// unregistered, so the base selector still answers something rather than the NPC selecting
-	// nothing at all.
+	// The composition still holds: the species answer is installed rather than folded away.
 	Andrei->Cognition.Conditions.Reset();
-	TestNotEqual(TEXT("SelectSchedule falls through an unregistered species answer"),
-		Andrei->SelectSchedule(), EElysiumScheduleId::None);
+	TestNotEqual(TEXT("SelectSchedule answers the species number"),
+		Andrei->SelectSchedule(), ElysiumScheduleId::None);
 
 	return true;
 }
@@ -735,12 +772,12 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 
 	// --- `0x101a95d0` -----------------------------------------------------------------------------
 	FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
-	Guard->ChangeSchedule(EElysiumScheduleId::IdleDisposition);
+	Guard->ChangeSchedule(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	TestTrue(TEXT("a program is installed"), Guard->Schedule.IsRunning());
 	Guard->FixScriptNPCSchedule(0);
 	TestFalse(TEXT("m_iFinishSchedule 0 clears the schedule"), Guard->Schedule.IsRunning());
 
-	Guard->ChangeSchedule(EElysiumScheduleId::IdleDisposition);
+	Guard->ChangeSchedule(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	Guard->FixScriptNPCSchedule(1);
 	TestTrue(TEXT("m_iFinishSchedule 1 installs 0x2a with NO clear — unregistered, so the program "
 		"it was running survives and the miss is tallied"), Guard->Schedule.IsRunning());

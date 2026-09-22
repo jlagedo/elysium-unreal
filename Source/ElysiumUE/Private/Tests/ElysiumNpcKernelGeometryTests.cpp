@@ -702,7 +702,7 @@ bool FElysiumNpcKernelGeometryScatterTest::RunTest(const FString&)
 
 	// The body's three word gates, each measured on its own.
 	F.Other->TentaclePhase = 2;
-	F.Other->ScheduleHost.ForcedSchedule = static_cast<EElysiumScheduleId>(0x163);
+	F.Other->ScheduleHost.ForcedSchedule = static_cast<int32>(0x163);
 	F.Other->TentacleScatterCenterUnits = FVector::ZeroVector;
 	F.Guard->Origin = FVector::ZeroVector;
 	F.Other->Origin = FVector(100.f, 0.f, 0.f);
@@ -711,12 +711,12 @@ bool FElysiumNpcKernelGeometryScatterTest::RunTest(const FString&)
 	TestTrue(TEXT("forced schedule 0x163 refuses the scatter"),
 		F.Other->TentacleScatterCenterUnits.IsNearlyZero());
 
-	F.Other->ScheduleHost.ForcedSchedule = static_cast<EElysiumScheduleId>(0x165);
+	F.Other->ScheduleHost.ForcedSchedule = static_cast<int32>(0x165);
 	F.Guard->FUN_103998d0(F.Other);
 	TestTrue(TEXT("forced schedule 0x165 refuses it too"),
 		F.Other->TentacleScatterCenterUnits.IsNearlyZero());
 
-	F.Other->ScheduleHost.ForcedSchedule = EElysiumScheduleId::None;
+	F.Other->ScheduleHost.ForcedSchedule = ElysiumScheduleId::None;
 	F.Other->TentaclePhase = 1;
 	F.Guard->FUN_103998d0(F.Other);
 	TestTrue(TEXT("m_ePhase must be exactly 2"),

@@ -935,7 +935,7 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 void FElysiumCogWindow_Npc::RenderConditions(FElysiumNpc& Npc)
 {
 	const FElysiumNpcConditions& Gathered = Npc.Cognition.Conditions;
-	const FElysiumSchedule* Program = Npc.Schedule.IsRunning()
+	const FElysiumScheduleProgram* Program = Npc.Schedule.IsRunning()
 		? ElysiumScheduleFor(Npc.Schedule.Current) : nullptr;
 	const FElysiumNpcConditions Mask = Program ? Program->Interrupts : FElysiumNpcConditions();
 
@@ -1016,12 +1016,12 @@ void FElysiumCogWindow_Npc::RenderSchedule(FElysiumNpc& Npc)
 		return;
 	}
 
-	const FElysiumSchedule* Program = ElysiumScheduleFor(State.Current);
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(State.Current);
 	if (BeginFacts("##ScheduleFacts"))
 	{
 		Row(TEXT("schedule"), FString::Printf(TEXT("%s  (retail #%d / 0x%02x)"),
-			ElysiumScheduleName(State.Current), ElysiumScheduleNumber(State.Current),
-			ElysiumScheduleNumber(State.Current)), &ElysiumCogStyle::ColName);
+			ElysiumScheduleName(State.Current), State.Current,
+			State.Current), &ElysiumCogStyle::ColName);
 		Row(TEXT("task"), Program
 			? FString::Printf(TEXT("%d of %d"), State.TaskIndex + 1, Program->Tasks.Num())
 			: FString(TEXT("(unregistered program)")));
@@ -1029,10 +1029,11 @@ void FElysiumCogWindow_Npc::RenderSchedule(FElysiumNpc& Npc)
 		// Both are PER-RUN: `TASK_SET_FAIL_SCHEDULE` and `TASK_SET_TOLERANCE_DISTANCE` write them for
 		// this run of the program, and `Start` resets them, so a previous program's tolerance can
 		// never leak into the next one's path request.
-		Row(TEXT("fail route"), State.FailScheduleOverride != EElysiumScheduleId::None
-			? ElysiumScheduleName(State.FailScheduleOverride)
-			: (Program && Program->FailSchedule != EElysiumScheduleId::None
-				? ElysiumScheduleName(Program->FailSchedule) : TEXT("(ends the program)")));
+		// A program declares no fail route of its own -- no retail schedule text carries one -- so
+		// this is `TASK_SET_FAIL_SCHEDULE`'s per-run write, or base `FAIL`.
+		Row(TEXT("fail route"), State.FailScheduleOverride != ElysiumScheduleId::None
+			? FString::Printf(TEXT("0x%x"), State.FailScheduleOverride)
+			: FString::Printf(TEXT("0x%x FAIL"), ElysiumSched::FAIL));
 		Row(TEXT("tolerance"), State.ToleranceUnits < 0.0f
 			? FString(TEXT("(the motor's own acceptance)"))
 			: FString::Printf(TEXT("%.0f Source units"), State.ToleranceUnits));
@@ -1057,7 +1058,7 @@ void FElysiumCogWindow_Npc::RenderSchedule(FElysiumNpc& Npc)
 		ImGui::TableHeadersRow();
 		for (int32 Index = 0; Index < Program->Tasks.Num(); ++Index)
 		{
-			const FElysiumTaskStep& Step = Program->Tasks[Index];
+			const FElysiumScheduleStep& Step = Program->Tasks[Index];
 			const bool bCurrent = Index == State.TaskIndex;
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn();
@@ -1071,21 +1072,9 @@ void FElysiumCogWindow_Npc::RenderSchedule(FElysiumNpc& Npc)
 			}
 			ImGui::TableNextColumn();
 			ImGui::TextColored(bCurrent ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColDim,
-				"%s", COG_TCHAR_TO_CHAR(ElysiumTaskName(Step.Task)));
+				"%s", COG_TCHAR_TO_CHAR(*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId)));
 			ImGui::TableNextColumn();
-			FString Operand;
-			if (!Step.Activity.IsEmpty())
-			{
-				Operand = Step.Activity;
-			}
-			else if (Step.Target != EElysiumScheduleId::None)
-			{
-				Operand = ElysiumScheduleName(Step.Target);
-			}
-			else if (!FMath::IsNearlyZero(Step.Param))
-			{
-				Operand = FString::Printf(TEXT("%.2f"), Step.Param);
-			}
+			const FString Operand = ElysiumTaskOperandLabel(Step);
 			ImGui::TextUnformatted(Operand.IsEmpty() ? "—" : COG_TCHAR_TO_CHAR(*Operand));
 		}
 		ImGui::EndTable();

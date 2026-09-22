@@ -332,7 +332,7 @@ bool FElysiumNpc::Slot54(FElysiumEntity* Other)
 	if (Other != nullptr && World != nullptr)
 	{
 		const FElysiumEntity* Enemy = World->Resolve(Senses.Memory.Enemy);
-		if (Enemy == Other && Schedule.Current != EElysiumScheduleId::None)
+		if (Enemy == Other && Schedule.Current != ElysiumScheduleId::None)
 		{
 			if (!ElysiumSchedule::MaskHasCondition(Schedule, *this, EElysiumNpcCond::LostEnemy))
 			{

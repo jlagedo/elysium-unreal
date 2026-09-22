@@ -6,7 +6,7 @@ bool MaintainSchedule(double Now, bool bReduced);
 
 /** `ForceScheduleChange` (`0x102ae490`) and the translate/lookup entry `0x102ae750` feeding
  *  Troika `SetSchedule(CAI_Schedule*, bool)` (`0x102ae780`). */
-void ForceScheduleChange(EElysiumScheduleId NewSchedule, bool bForce);
+void ForceScheduleChange(int32 NewSchedule, bool bForce);
 void SetSchedule(int32 RawRetailId, bool bForce);
 
 /** `TaskMovementComplete` (`0x10273ec0`), including all four task-status arms. */
@@ -17,8 +17,8 @@ void TaskMovementComplete();
 bool SabbatLeaderTaskFail(int32 Reason);
 
 // Slot 435's Troika body and its four species tails. The public virtual remains the one dispatcher.
-void TroikaOnScheduleChange(EElysiumScheduleId NewSchedule);
-void SpeciesOnScheduleChange(EElysiumScheduleId NewSchedule, const TCHAR* RetailBody);
+void TroikaOnScheduleChange(int32 NewSchedule);
+void SpeciesOnScheduleChange(int32 NewSchedule, const TCHAR* RetailBody);
 
 virtual double ScheduleTime() const override;
 
@@ -32,13 +32,13 @@ virtual bool			   HasMaintenanceCondition(EElysiumNpcCond Cond) const override;
 virtual void			   PrepareScheduleReselect() override;
 virtual bool			   ConsumeBlockedDoorForSchedule(double Now) override;
 virtual void			   CommitIdealStateForSchedule() override;
-virtual EElysiumScheduleId SelectScheduleForMaintenance(double Now,
+virtual int32 SelectScheduleForMaintenance(double Now,
 	int32&													   OutIdealScheduleRetail) override;
 virtual void			   SetIdealScheduleForMaintenance(int32 RetailId) override;
 virtual void			   MissingSchedule() override;
-virtual int32			   LocalScheduleIdForStart(EElysiumScheduleId Id) override;
+virtual int32			   LocalScheduleIdForStart(int32 Id) override;
 virtual void			   MaintenanceOnStartSchedule(int32 LocalScheduleId) override;
-virtual void			   DebugTaskStart(const FElysiumTaskStep& Step) override;
+virtual void			   DebugTaskStart(const FElysiumScheduleStep& Step) override;
 virtual void			   MaintenanceStartTaskOverlay() override;
 virtual bool			   MaintenanceIsCurTaskContinuousMove() override;
 virtual void			   RememberContinuousMove() override;

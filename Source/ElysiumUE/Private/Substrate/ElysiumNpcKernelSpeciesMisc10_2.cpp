@@ -631,9 +631,9 @@ void FElysiumNpc::WerewolfTaskFail(int32 Reason)
 	// `0x160`, `0x161` or `0x162` resolved through `0x102cc1f0`.
 	// `ElysiumScheduleNumber` is this runtime's retail schedule number. The three ids `0x160`,
 	// `0x161` and `0x162` are `CNPC_VWerewolf`'s own programs and have no row in
-	// `EElysiumScheduleId` yet, so the comparison is made on the NUMBER and simply never matches
+	// `int32` yet, so the comparison is made on the NUMBER and simply never matches
 	// today — which is retail's own arm for a Werewolf running anything else. Named, not stubbed.
-	const int32 Running = ElysiumScheduleNumber(Schedule.Current);
+	const int32 Running = GetLocalScheduleId(Schedule.Current);
 	bool bDiagnostic = false;
 	for (const int32 Id : GWerewolfDiagnosticSchedules)
 	{

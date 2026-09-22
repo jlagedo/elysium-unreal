@@ -619,10 +619,10 @@ bool FElysiumNpcKernelSquadChangBrosTest::RunTest(const FString&)
 	// schedule at all. The port's schedule set does not carry the two `UNITED` programs yet, so
 	// nothing it CAN run satisfies the test — the two numbers are the rule and the gap is named.
 	TestFalse(TEXT("an NPC running no schedule is not ready for UNITED"), Chang->ReadyForUnited());
-	Chang->Schedule.Current = EElysiumScheduleId::IdleStand;
+	Chang->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	TestTrue(TEXT("IDLE_STAND is running"), Chang->Schedule.IsRunning());
 	TestNotEqual(TEXT("but IDLE_STAND is not 0x15a"),
-		ElysiumScheduleNumber(EElysiumScheduleId::IdleStand), 0x15a);
+		ElysiumSched::IDLE_STAND, 0x15a);
 	TestFalse(TEXT("so it is still not ready for UNITED"), Chang->ReadyForUnited());
 	Chang->Schedule.Clear();
 

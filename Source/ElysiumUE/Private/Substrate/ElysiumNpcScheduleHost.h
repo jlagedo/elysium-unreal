@@ -90,9 +90,9 @@ struct FElysiumNpcScheduleHost
 	FString FailText;  // +0x5f30 m_failText (sdk-order)
 	FString InterruptText;  // +0x5f34 m_interruptText (sdk-order)
 	// +0x5f38 m_failedSchedule (sdk-order)
-	EElysiumScheduleId FailedSchedule = EElysiumScheduleId::None;
+	int32 FailedSchedule = ElysiumScheduleId::None;
 	// +0x5f3c m_interuptSchedule (sdk-order)
-	EElysiumScheduleId InterruptSchedule = EElysiumScheduleId::None;
+	int32 InterruptSchedule = ElysiumScheduleId::None;
 	FString HintGroups;  // +0x62e0 m_sHintGroups (datamap) — the authored hint-group allowlist, KEY
 	                     // key=hint_groups
 	// +0x62e4 m_iHintGroups (datamap) — the parsed allowlist, as retail carries it: a 32-bit SET,
@@ -119,7 +119,7 @@ struct FElysiumNpcScheduleHost
 	FElysiumEntityHandle HintCoverObject;  // +0x6448 m_hHintCoverObject (datamap)
 	// +0x65c8 m_iForcedSchedule (datamap) — a registered schedule id, as every other schedule word
 	// here is
-	EElysiumScheduleId ForcedSchedule = EElysiumScheduleId::None;
+	int32 ForcedSchedule = ElysiumScheduleId::None;
 
 	/**
 	 * The five hint-node activity lookups, as one table (story 29c-1, family Hints).

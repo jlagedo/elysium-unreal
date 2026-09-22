@@ -39,6 +39,11 @@ enum class EElysiumTaskOp : uint8
 	Wait,
 	WaitRandom,
 	FaceSavePosition,
+	/** `TASK_MOVE_AWAY_PATH`. A registered task identity that **no shipped text names** -- the
+	 *  door family this body was written for actually runs `TASK_STEP_BACK`, which this runtime has
+	 *  no body for. The op stays bound to the task it implements rather than being re-pointed at a
+	 *  different one: `TASK_STEP_BACK`'s operand is `0.0` where this reads a distance, so what it
+	 *  does with that operand is a recovery this port has not made. The coverage meter carries it. */
 	MoveAwayFromSavePosition,
 
 	// The combat vocabulary.

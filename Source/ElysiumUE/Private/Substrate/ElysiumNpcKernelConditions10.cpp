@@ -944,7 +944,7 @@ void FElysiumNpc::ChangBrosTaskFail(int32 Reason)
 	// `m_failSchedule` (`+0x5c54`) `= 0x15d` rather than the path-blocked flag.
 	if (Reason >= GCond10PathFailFirst && Reason <= GCond10PathFailLast)
 	{
-		Schedule.FailScheduleOverride = ScheduleFromRetailNumber(GCond10ChangBrosFailSchedule);
+		Schedule.FailScheduleOverride = GCond10ChangBrosFailSchedule;
 	}
 }
 

@@ -60,7 +60,28 @@ struct FElysiumScheduleProgram
 	/** +0x00. The `!COND_*` mask: these interrupt on the ABSENCE of the condition. */
 	FElysiumNpcConditions InvertedInterrupts;
 
-	/** +0x18. `DELAY_INTERRUPTS` is bit 0 and the only flag the game has. */
+	/** +0x18. `DELAY_INTERRUPTS`, the ONLY schedule flag retail has.
+	 *
+	 *  The token table (`0x1030d7e0`) answers exactly two spellings -- `NONE` -> 0 and
+	 *  `DELAY_INTERRUPTS` -> bit 0 -- so this word is the whole flag set rather than one bit of a
+	 *  larger one.
+	 *
+	 *  It is NOT a property the interrupt check can consult on its own. The sole tester,
+	 *  `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`, called only from `MaintainSchedule`
+	 *  `0x102817c0`), ANDs it with the NPC's own `m_bDidMaintainSchedule` (`+0x5bb8`):
+	 *
+	 *      if (!(!m_bDidMaintainSchedule && (schedule->flags & 1)))  evaluate the interrupt mask
+	 *
+	 *  so the flag buys a schedule exactly ONE think of immunity, re-armed by every install and
+	 *  bounded by nothing else -- no timer, no task boundary, no deferral store. See
+	 *  `FElysiumScheduleState::bDidMaintainSchedule` for the other half, and `ElysiumSchedule::Start`
+	 *  for the condition clear that goes with it.
+	 *
+	 *  42 of retail's 691 schedules carry it, and they are one family: the Discipline effects and
+	 *  the externally forced states (`D_MESMERIZE`, `D_DAZE`, `D_BERSERK`, `D_TRANCE`,
+	 *  `FLEE_AND_DIE`, `TROIKA_MESMERIZED`). All of them are installed from OUTSIDE the AI think,
+	 *  which is the case the flag exists for: without it a forced state is re-selected away on the
+	 *  same think that forced it. */
 	int32 Flags = 0;
 
 	/** +0x1c. The GLOBAL schedule id, which is what `FindById` keys on. */
@@ -69,7 +90,19 @@ struct FElysiumScheduleProgram
 	/** +0x20 / +0x24. Retail caps the list at 64; a 65th task is a failure row. */
 	TArray<FElysiumScheduleStep> Tasks;
 
-	/** +0x28. The ordinary interrupt mask. */
+	/** +0x28. The ordinary interrupt mask: which newly gathered conditions may abort this program
+	 *  (`docs/vtmb/npc-ai/conditions-and-states.md` -> "Interrupt conditions").
+	 *
+	 *  **Empty means interruptible by nothing**, and that is a real authored posture rather than an
+	 *  unfilled default: `SCHED_TROIKA_MELEE_ATTACK1_SWING` declares no interrupts at all, so once
+	 *  that terminal attack task owns the NPC it is not reevaluated as a fresh attack choice each
+	 *  tick. The schedule -- not the mere existence of a condition -- decides whether a new stimulus
+	 *  pre-empts behaviour, which is why a faithful AI cannot be one global priority list.
+	 *
+	 *  An interrupt is NOT a task failure: a failed task goes to the fail route, while an interrupt
+	 *  ends the program and returns the NPC to selection. Routing an interrupt through the fail
+	 *  schedule would send an NPC that just acquired an enemy into a cover or flinch program instead
+	 *  of re-selecting. */
 	FElysiumNpcConditions Interrupts;
 
 	/** +0x40. A copy of the authored name, which is what `FindByName` compares. */

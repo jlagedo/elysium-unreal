@@ -476,56 +476,65 @@ bool FElysiumNpcKernelEntityChainIdSpaceTest::RunTest(const FString&)
 	}
 	FElysiumNpc& Npc = *Fixture.Guard;
 
-	// Slot 580 is this family's row (`0x101aa790`) and family Schedule's walk is its body: the
-	// nearest species override of slot 580, else the Troika line's own. It is never null.
+	// Slot 580 is this family's row (`0x101aa790`) and family Schedule's walk is its body: this
+	// NPC's own space out of the loaded corpus, or the Troika line's where its class has no
+	// slot-580 body. It is never null.
 	TestNotNull(TEXT("slot 580 answers an id space"), Npc.GetClassScheduleIdSpace());
-	TestTrue(TEXT("and it IS family Schedule's walk, not a second table"),
-		Npc.GetClassScheduleIdSpace()
-			== static_cast<void*>(const_cast<FElysiumNpc::FScheduleIdSpace*>(
-				Npc.ClassScheduleIdSpace())));
+	TestEqual(TEXT("and it IS family Schedule's walk, not a second table"),
+		Npc.GetClassScheduleIdSpace(),
+		static_cast<void*>(const_cast<FElysiumLocalIdSpace*>(Npc.ClassScheduleIdSpace())));
 
-	// 0x101a6d00 is slot 580's BASE body and answers a DIFFERENT global from the Troika line's.
-	const FElysiumNpc::FScheduleIdSpace* Base = Npc.BaseClassScheduleIdSpace();
-	if (TestNotNull(TEXT("the base row exists"), Base))
+	// 0x101a6d00 is slot 580's BASE body and answers a DIFFERENT space from the Troika line's. It
+	// is the corpus's `cai_basenpc` unit -- the root every other schedule space parents on.
+	const FElysiumLocalIdSpace* Base = Npc.BaseClassScheduleIdSpace();
+	if (TestNotNull(TEXT("the base space is loaded"), Base))
 	{
-		TestEqual(TEXT("the base row names CAI_BaseNPC"), FString(Base->RetailClass),
-			FString(TEXT("CAI_BaseNPC")));
-		TestEqual(TEXT("and 0x101a6d00 as its body"), FString(Base->Body),
-			FString(TEXT("0x101a6d00")));
-		TestEqual(TEXT("and DAT_1090ff08, not the Troika line's DAT_10924248"),
-			FString(Base->IdSpace), FString(TEXT("0x1090ff08")));
-		TestEqual(TEXT("its local range is the 9999 empty sentinel"), Base->LocalBase, 9999);
+		TestTrue(TEXT("and it is not the Troika line's"),
+			Base != FElysiumScheduleCorpus::Get().SpaceFor(TEXT("CAI_BaseNPCTroika"),
+				EElysiumIdCategory::Schedule));
+		TestNull(TEXT("the base schedule space is a ROOT: it has no parent"), Base->Parent);
+		TestFalse(TEXT("and it is not empty -- 68 names went into it"), Base->IsEmpty());
+		TestEqual(TEXT("its first local id is NONE, 0x00"), Base->LocalBase, ElysiumSched::NONE);
+		TestEqual(TEXT("and its last is FAIL, 0x43"), Base->LocalTop, ElysiumSched::FAIL);
 	}
 
-	// `0x102ea280`: -1 stays -1, a null space is the end of the chain, and the empty sentinel never
-	// matches. SEAM: every row in this runtime carries that sentinel, so both slots answer -1.
+	// `0x102ea280`: -1 stays -1, and a null space is the end of the chain.
 	TestEqual(TEXT("the translation refuses -1 outright"),
 		FElysiumNpc::GlobalToLocalId(Base, INDEX_NONE), INDEX_NONE);
 	TestEqual(TEXT("a null space is the end of the chain"),
 		FElysiumNpc::GlobalToLocalId(nullptr, 5), INDEX_NONE);
-	TestEqual(TEXT("the 9999 sentinel never matches"), FElysiumNpc::GlobalToLocalId(Base, 5),
-		INDEX_NONE);
+	TestEqual(TEXT("a global id below the base is not in the range"),
+		FElysiumNpc::GlobalToLocalId(Base, 5), INDEX_NONE);
 
-	// A hand-built row proves the arithmetic the sentinel hides: `(localBase - globalBase) + id`
-	// over the inclusive range `[globalBase, localTop]`.
-	FElysiumNpc::FScheduleIdSpace Row;
-	Row.GlobalBase = 100;
-	Row.LocalBase = 10;
-	Row.LocalTop = 120;
-	TestEqual(TEXT("in range, the id is rebased"), FElysiumNpc::GlobalToLocalId(&Row, 105), 15);
-	TestEqual(TEXT("the low bound is inclusive"), FElysiumNpc::GlobalToLocalId(&Row, 100), 10);
-	TestEqual(TEXT("the high bound is inclusive"), FElysiumNpc::GlobalToLocalId(&Row, 120), 30);
-	TestEqual(TEXT("below the range answers -1"), FElysiumNpc::GlobalToLocalId(&Row, 99),
-		INDEX_NONE);
-	TestEqual(TEXT("above the range answers -1"), FElysiumNpc::GlobalToLocalId(&Row, 121),
-		INDEX_NONE);
+	// The arithmetic, over the real range: `(localBase - globalBase) + id` on the inclusive span
+	// `[m_globalBase, m_translatedTop]`. The UPPER bound is the TRANSLATED top (`+0x0c`), which is
+	// the word this port was missing -- it compared a global id against `m_localTop`, a local
+	// number, and only the 9999 sentinel hid it.
+	if (Base != nullptr && !Base->IsEmpty())
+	{
+		TestEqual(TEXT("the low bound is inclusive and rebases to the local base"),
+			FElysiumNpc::GlobalToLocalId(Base, Base->GlobalBase), Base->LocalBase);
+		TestEqual(TEXT("the high bound is the TRANSLATED top, inclusive"),
+			FElysiumNpc::GlobalToLocalId(Base, Base->TranslatedTop), Base->LocalTop);
+		TestEqual(TEXT("one below the range answers -1"),
+			FElysiumNpc::GlobalToLocalId(Base, Base->GlobalBase - 1), INDEX_NONE);
+		TestEqual(TEXT("one above the TRANSLATED top answers -1"),
+			FElysiumNpc::GlobalToLocalId(Base, Base->TranslatedTop + 1), INDEX_NONE);
+	}
 
-	// Slots 447 and 450 both forward into it; 450 over the TASK sub-space (+0x18), which no row in
-	// this runtime carries, so it answers -1 for every id including one the schedule space holds.
-	TestEqual(TEXT("slot 447 answers -1 through the empty schedule space"),
-		Npc.GetLocalScheduleId(5), INDEX_NONE);
-	TestEqual(TEXT("slot 450 answers -1: no row carries the task sub-space"),
-		Npc.GetLocalTaskId(5), INDEX_NONE);
+	// Slots 447 and 450, both over this NPC's own sub-spaces. Both used to answer -1 for every id
+	// because no row in this runtime carried a range; both translate now.
+	const int32 IdleStandGlobal = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
+	TestEqual(TEXT("slot 447 translates a base schedule id back to its local number"),
+		Npc.GetLocalScheduleId(IdleStandGlobal), ElysiumSched::IDLE_STAND);
+	const int32 WaitTask = FElysiumScheduleCorpus::Get()
+		.Namespace(EElysiumIdCategory::Task).Find(TEXT("TASK_WAIT"));
+	TestTrue(TEXT("TASK_WAIT is a registered task identity"), (WaitTask) != INDEX_NONE);
+	TestTrue(TEXT("slot 450 translates it through the TASK sub-space (+0x18)"), (Npc.GetLocalTaskId(WaitTask)) != INDEX_NONE);
+	// The two sub-spaces are separate NAMESPACES whose counters are both seeded at 1e9, so their
+	// ids overlap numerically -- an id means nothing without the namespace it came out of, which is
+	// exactly why the four spaces are four and not one.
+
 	return true;
 }
 

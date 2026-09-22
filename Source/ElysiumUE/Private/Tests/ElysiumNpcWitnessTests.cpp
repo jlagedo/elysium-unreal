@@ -482,9 +482,9 @@ bool FElysiumNpcWitnessNosferatuTest::RunTest(const FString&)
 
 	// The flee-only branch queues a player-owned scare record instead of submitting, and the copy
 	// still happens so the same sighting is not re-queued every pass.
-	const EElysiumScheduleId Selected = F.Guard->SelectSchedule();
+	const int32 Selected = F.Guard->SelectSchedule();
 	TestEqual(TEXT("the flee arm selects the run-away program"),
-		static_cast<int32>(Selected), static_cast<int32>(EElysiumScheduleId::RunAway));
+		static_cast<int32>(Selected), static_cast<int32>(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
 	TestEqual(TEXT("one scare record was queued on the player"), F.Player->ScareQueue.Num(), 1);
 	if (F.Player->ScareQueue.Num() == 1)
 	{
@@ -719,8 +719,8 @@ bool FElysiumNpcWitnessDeadlineSetterTest::RunTest(const FString&)
 		{
 			FElysiumNpcConditions Mask;
 			Mask.Set(ECond::HearCombat);
-			const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+			const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+			ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::IDLE_STAND, *F.Guard);
 			F.Guard->Cognition.Conditions.Set(ECond::HearCombat);
 			F.Guard->UpdateIdealState(5.0);
 		}
@@ -768,21 +768,21 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 		TestFalse(TEXT("the disabled attack threshold raises nothing"),
 			F.Has(ECond::CriminalAttackLevel));
 
-		const EElysiumScheduleId Selected = F.Guard->SelectSchedule();
+		const int32 Selected = F.Guard->SelectSchedule();
 		TestEqual(TEXT("31 routes selection into the run-away family"),
-			static_cast<int32>(Selected), static_cast<int32>(EElysiumScheduleId::RunAway));
+			static_cast<int32>(Selected), static_cast<int32>(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
 		TestTrue(TEXT("the retreat is stamped away from where the crime was witnessed"),
 			FVector::Dist(F.Guard->SavePosition, F.Player->Origin) < 1.0);
 		// The retreat program is registered, so selection can actually start it.
 		TestNotNull(TEXT("the run-away program exists"),
-			ElysiumScheduleFor(EElysiumScheduleId::RunAway));
+			ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY)));
 		// An NPC that witnessed nothing takes exactly the selection it took before.
 		FWitnessFixture Q;
 		if (Q.Guard != nullptr)
 		{
 			TestEqual(TEXT("a quiet NPC still selects its disposition idle"),
 				static_cast<int32>(Q.Guard->SelectSchedule()),
-				static_cast<int32>(EElysiumScheduleId::IdleDisposition));
+				static_cast<int32>(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 		}
 	}
 
@@ -808,10 +808,10 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 			static_cast<int32>(F.Guard->Relationships.Resolve(F.Player->Handle, TEXT("player"))),
 			static_cast<int32>(EElysiumRelationship::Neutral));
 
-		const EElysiumScheduleId Selected = F.Guard->SelectSchedule();
+		const int32 Selected = F.Guard->SelectSchedule();
 		// The attack arm returns no program of its own: the ordinary selection below it runs.
 		TestNotEqual(TEXT("the attack arm does not select the retreat"),
-			static_cast<int32>(Selected), static_cast<int32>(EElysiumScheduleId::RunAway));
+			static_cast<int32>(Selected), static_cast<int32>(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
 		TestEqual(TEXT("32 installs a D_HT row toward the player"),
 			static_cast<int32>(F.Guard->Relationships.Resolve(F.Player->Handle, TEXT("player"))),
 			static_cast<int32>(EElysiumRelationship::Hate));
@@ -826,8 +826,8 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 		{
 			FElysiumNpcConditions Mask;
 			Mask.Set(ECond::NewEnemy);
-			const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+			const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+			ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::IDLE_STAND, *F.Guard);
 			F.Guard->Cognition.Conditions.Set(ECond::NewEnemy);
 			F.Guard->UpdateIdealState(0.1);
 		}
@@ -835,7 +835,7 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 		// selects a fighting program rather than the disposition idle.
 		TestNotEqual(TEXT("the promoted NPC no longer selects its disposition idle"),
 			static_cast<int32>(F.Guard->SelectSchedule()),
-			static_cast<int32>(EElysiumScheduleId::IdleDisposition));
+			static_cast<int32>(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 	}
 	return true;
 }

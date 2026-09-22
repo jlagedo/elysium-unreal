@@ -377,7 +377,7 @@ void FElysiumNpc::OnKilled()
 		ArmThinkNow(World ? World->NowSeconds() : 0.0);
 		return;
 	}
-	if (!ElysiumSchedule::Start(Schedule, EElysiumScheduleId::Die, *this))
+	if (!ElysiumSchedule::Start(Schedule, ElysiumSched::DIE, *this))
 	{
 		// Unreachable in a correct build: `Start` falls back to `IDLE_STAND` and answers false only
 		// when that program itself is missing. The handoff still has to happen, and the dead think
@@ -1475,7 +1475,7 @@ void FElysiumNpc::ThinkAutonomous(double Now, bool bReduced)
 	}
 }
 
-EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
+int32 FElysiumNpc::SelectIdleSchedule()
 {
 	// 0. A disposition transition clip is on the body. Not retail's -- this runtime's stance
 	//    machine plays a transition where retail cuts -- and it used to be expressed by holding
@@ -1484,7 +1484,7 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 	//    asking until it ends.
 	if (World && World->NowSeconds() < StanceTransitionUntil)
 	{
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 
 	// 1. Choreo scene or busy with a discipline -- `CAI_BaseNPCTroika::SelectSchedule`
@@ -1499,7 +1499,7 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 	//    OnScheduleChange`). One hop through 0x6b, then ordinary selection -- retail's exact exit.
 	if (Mind.Owner() == EElysiumBodyOwner::Sequence || IsBusyWithDiscipline())
 	{
-		return EElysiumScheduleId::IdleDisposition;
+		return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
 	}
 
 	// 2. The follower controller at virtual `+0x97c`. Refused: `EElysiumBodyOwner::Follower` is
@@ -1511,7 +1511,7 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 	//    is the arbitration this selection order would otherwise duplicate.
 	if (bPatrolActive || bUseInteresting)
 	{
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 
 	// 5. Alert lookaround. `m_iEnemySightings` counts committed-enemy acquisition episodes against
@@ -1523,13 +1523,13 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 		const int32 Chance = ElysiumNpcCond::AlertLookaroundChance(EnemySightings);
 		if (ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99) < Chance)
 		{
-			return EElysiumScheduleId::AlertLookAroundNi;
+			return ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI;
 		}
 	}
 
 	// 6. Door obstruction (`CAI_BaseNPCTroika::SelectDoorObstructionSchedule`).
-	if (const EElysiumScheduleId Door = SelectDoorObstructionSchedule();
-		Door != EElysiumScheduleId::None)
+	if (const int32 Door = SelectDoorObstructionSchedule();
+		Door != ElysiumScheduleId::None)
 	{
 		return Door;
 	}
@@ -1541,10 +1541,10 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 	//    the stance. That is the correct answer for an NPC that has only ever idled or been script-
 	//    driven; what is missing is the walk-home a real alert or combat episode should arm, which
 	//    needs `SCHED_TROIKA_IDLE_RETURN_TO_INITIAL` and a captured initial position to exist first.
-	return EElysiumScheduleId::IdleDisposition;
+	return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
 }
 
-EElysiumScheduleId FElysiumNpc::SelectSchedule()
+int32 FElysiumNpc::SelectSchedule()
 {
 	// A dead NPC selects nothing, ever. `ThinkDead` consumes the whole pass before anything can
 	// reach here, so this is unreachable through the think — it is stated anyway because selection
@@ -1553,7 +1553,7 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	// the selector rather than of one caller's ordering.
 	if (Mind.State() == EElysiumNpcState::Dead)
 	{
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 	// Story 29c-1, family Schedule: the species half of slot 438. Five classes replace the WHOLE
 	// selector — `CNPC_VAndreiBlood`, `CNPC_VCamera`/`CNPC_VCameraSecurity`, `CNPC_VManBat`,
@@ -1564,8 +1564,8 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	// an unported id rather than installing some other program under a recovered number.
 	if (const int32 SpeciesRetailId = SpeciesSelectSchedule(); SpeciesRetailId != 0)
 	{
-		const EElysiumScheduleId Species = ScheduleFromRetailNumber(SpeciesRetailId);
-		if (Species != EElysiumScheduleId::None)
+		const int32 Species = SpeciesRetailId;
+		if (Species != ElysiumScheduleId::None)
 		{
 			return Species;
 		}
@@ -1584,9 +1584,9 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	// switch, which is the one point every state passes through and which displaces no decoded
 	// order. It declines by returning `None` on all but the flee arm, so an NPC that witnessed
 	// nothing takes the ordinary selection.
-	if (const EElysiumScheduleId Law =
+	if (const int32 Law =
 			ElysiumNpcWitness::SelectLawSchedule(*this, World ? World->NowSeconds() : 0.0);
-		Law != EElysiumScheduleId::None)
+		Law != ElysiumScheduleId::None)
 	{
 		return Law;
 	}
@@ -1598,14 +1598,14 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	}
 }
 
-EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
+int32 FElysiumNpc::SelectAlertSchedule()
 {
 	// The executors keep their bodies in alert exactly as they do in idle: a patrol or an ambient
 	// place is owned through the mind's token, and re-expressing it as a task program here would
 	// duplicate the arbitration.
 	if (bPatrolActive || bUseInteresting)
 	{
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 	if (!Cognition.bReportedAlertRefusal)
 	{
@@ -1626,10 +1626,10 @@ EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
 	// lookaround — the one alert-named program the survey does decode, and the one the idle branch
 	// already reaches on a chance roll. `m_bAllowAlertLookaround` deliberately does NOT gate it: the
 	// recovered keyfield gates step 5 of the IDLE selector, not the alert state itself.
-	return EElysiumScheduleId::AlertLookAroundNi;
+	return ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI;
 }
 
-EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
+int32 FElysiumNpc::SelectCombatSchedule()
 {
 	// An NPC running the patrol or interesting-place executor DOES reach this function: `Think`
 	// routes a Combat state to schedule selection ahead of either executor, the patrol route is
@@ -1642,10 +1642,10 @@ EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
 	// takes the melee branch with bare-hands defaults, and its attack tasks then fail by name — the
 	// marked unarmed path, which is a visible refusal rather than an NPC that mimes a fight.
 	const ElysiumNpcCond::ECapability Capability = ElysiumNpcCond::WeaponCapability(*this);
-	const EElysiumScheduleId Chosen = Capability == ElysiumNpcCond::ECapability::Ranged
+	const int32 Chosen = Capability == ElysiumNpcCond::ECapability::Ranged
 		? ElysiumNpcCombat::SelectRangedSchedule(*this, Now)
 		: ElysiumNpcCombat::SelectMeleeSchedule(*this, Now);
-	if (Chosen != EElysiumScheduleId::None)
+	if (Chosen != ElysiumScheduleId::None)
 	{
 		return Chosen;
 	}
@@ -1654,8 +1654,8 @@ EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
 	// "A selector returning zero falls through to `CAI_BaseNPCTroika::SelectSchedule`, so the weapon
 	// policy composes with damage, door, fear and base state reactions rather than replacing them."
 	// What follows is that base branch, in the same order the idle selector runs it.
-	if (const EElysiumScheduleId Door = SelectDoorObstructionSchedule();
-		Door != EElysiumScheduleId::None)
+	if (const int32 Door = SelectDoorObstructionSchedule();
+		Door != ElysiumScheduleId::None)
 	{
 		return Door;
 	}
@@ -1663,11 +1663,11 @@ EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
 	if (Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage)
 		|| Cognition.Conditions.Has(EElysiumNpcCond::LightDamage))
 	{
-		return EElysiumScheduleId::SmallFlinch;
+		return ElysiumSched::SMALL_FLINCH;
 	}
 	// SEAM (comment only): the base branch's fear reaction. The `COWER`/`FLEE` families are 24
 	// schedules whose contents the survey does not decode, and `SEE_FEAR` alone does not say which.
-	return EElysiumScheduleId::IdleDisposition;
+	return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
 }
 
 bool FElysiumNpc::ClassHolstersOnState() const
@@ -2450,7 +2450,7 @@ void FElysiumNpc::RecordScheduleEvent(const FString& Row)
 	Mind.RecordExternal(Row);
 }
 
-void FElysiumNpc::DebugScheduleInstalled(EElysiumScheduleId InstalledSchedule)
+void FElysiumNpc::DebugScheduleInstalled(int32 InstalledSchedule)
 {
 	ElysiumNpcDebugLogging::ScheduleInstalled(*this, InstalledSchedule);
 }
@@ -2631,8 +2631,8 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		return true;
 	}
 
-	const EElysiumScheduleId Program = ElysiumAiScriptedSchedule::ProgramFor(Order.Mode);
-	if (Program == EElysiumScheduleId::None)
+	const int32 Program = ElysiumAiScriptedSchedule::ProgramFor(Order.Mode);
+	if (Program == ElysiumScheduleId::None)
 	{
 		// A forced state with no movement mode is an ordinary authored row: two corpus rows push a
 		// state alone. The push above already happened, so there is nothing left to refuse.
@@ -2781,18 +2781,36 @@ bool FElysiumNpc::StartNamedSchedule(const FString& Requested, const FString& Su
 		RecordScheduleEvent(FString::Printf(TEXT("refused '%s': this NPC is dead"), *Requested));
 		return false;
 	}
-	EElysiumScheduleId Id = EElysiumScheduleId::None;
-	if (!ElysiumScheduleIdFromName(Requested, Id))
+	// `CAI_ScheduleManager::FindByName` (`0x1030f350`) over the whole loaded corpus, which is one
+	// namespace of names across every class. Before 0019/3 this resolved against 28 hand-typed
+	// programs and the shipped content's own requests -- `SCHED_VDOG_SNARL`, `SCHED_VDOG_MADEFRIEND`
+	// and the Berserk/Possession families the `disciplinetgt` records name -- all missed. They
+	// resolve now.
+	const FElysiumScheduleProgram* Program =
+		FElysiumScheduleCorpus::Get().Manager().FindByName(Requested);
+	if (Program == nullptr)
 	{
-		// The gap is the NAMED program, not the producer. The corpus's five `ChangeSchedule` sites
-		// ask for `SCHED_VDOG_SNARL`, `SCHED_VDOG_MADEFRIEND` and the literal `-`, and the shipped
-		// `disciplinetgt` records name the Berserk/Possession families; this runtime registers none
-		// of them. The reported surface is keyed on the caller AND the name, so `elysium.stubs`
-		// reads back exactly which native schedules the shipped content wants, one row each.
+		// Still keyed on the caller AND the name, so `elysium.stubs` reads back exactly which native
+		// schedules the shipped content wants that the corpus does not carry -- which, after the
+		// switchover, should be only the literal `-` and anything genuinely misspelled.
 		ElysiumStub::Fired(TEXT("schedule"), Surface, DebugString(), Detail,
-			TEXT("no registered program carries that name"));
-		RecordScheduleEvent(FString::Printf(TEXT("refused: '%s' is not a registered program"),
+			TEXT("no loaded program carries that name"));
+		RecordScheduleEvent(FString::Printf(TEXT("refused: '%s' is not a loaded program"),
 			*Requested));
+		return false;
+	}
+	return StartScheduleId(Program->GlobalId, Surface, Detail);
+}
+
+bool FElysiumNpc::StartScheduleId(int32 Id, const FString& Surface, const FString& Detail)
+{
+	if (IsInert())
+	{
+		return false;
+	}
+	if (Mind.State() == EElysiumNpcState::Dead)
+	{
+		RecordScheduleEvent(FString::Printf(TEXT("refused schedule 0x%x: this NPC is dead"), Id));
 		return false;
 	}
 	// A named schedule starts through the ordinary kernel: interrupts, fail schedules, motor work and
@@ -2800,12 +2818,11 @@ bool FElysiumNpc::StartNamedSchedule(const FString& Requested, const FString& Su
 	// a script — or by a Discipline record — changes how it runs, which is the whole recovered point
 	// of these commands.
 	ReleaseScheduleBody(*Surface);
+	(void)Detail;
 	// No clock reset HERE: the `ChangeSchedule` / `StartSchedule` inputs are not slot-614 sites.
 	// The two callers that are -- the discipline applier `0x101de660` and `FeedInterrupt`
 	// `0x1033a9e0`, each "slot 614, then `SetSchedule`" -- re-base the clock themselves before
 	// they come through this door.
-	// Always true in a correct build: a named program this runtime carries installs, and `Start`
-	// answers false only when its own `IDLE_STAND` fallback is missing.
 	return ElysiumSchedule::Start(Schedule, Id, *this);
 }
 
@@ -2996,7 +3013,7 @@ void FElysiumNpc::EndDisciplineSchedule()
 	// HitInfo expiry 0x101def10 reconnects first, then TaskComplete(false) for only
 	// the two interruptible temporary programs. It neither clears nor replaces a schedule.
 	if (NpcFlags.Has(EElysiumNpcFlag2::D_DISCONNECT_SQUAD)) ReconnectToSquad();
-	const int32 Number = ElysiumScheduleNumber(Schedule.Current);
+	const int32 Number = GetLocalScheduleId(Schedule.Current);
 	if ((Number == 0xe1 || Number == 0xe3) && !Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed))
 		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 }
@@ -3245,10 +3262,10 @@ bool FElysiumNpc::RangeAttack1()
 	return Verdict == FElysiumWeapon::EVerdict::Accepted;
 }
 
-void FElysiumNpc::RememberFact(float What)
+void FElysiumNpc::RememberFact(uint32 MemoryMask)
 {
-	ScheduleHost.MemoryBits |= static_cast<uint32>(What);
-	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER 0x%x"), static_cast<uint32>(What)));
+	ScheduleHost.MemoryBits |= MemoryMask;
+	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER 0x%x"), MemoryMask));
 }
 
 void FElysiumNpc::MakeOblivious(bool bOblivious)
@@ -3362,7 +3379,7 @@ void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 	InOutMask.Set(EElysiumNpcCond::NpcFreeze);
 }
 
-EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()
+int32 FElysiumNpc::SelectDoorObstructionSchedule()
 {
 	const double Now = World ? World->NowSeconds() : 0.0;
 
@@ -3386,7 +3403,7 @@ EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()
 	}
 	if (Source == nullptr)
 	{
-		return EElysiumScheduleId::None;
+		return ElysiumScheduleId::None;
 	}
 
 	// With a source chosen, retail asks the hint machinery for cover and takes it when the claim
@@ -3408,8 +3425,8 @@ EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()
 		RecordScheduleEvent(TEXT("door obstruction with an enemy: SCHED_TROIKA_BACK_AWAY_FROM_DOOR "
 			"(0x90) / _WAIT (0x94) are not registered — taking the _NE variant"));
 	}
-	return bNear ? EElysiumScheduleId::BackAwayFromDoorNe
-		: EElysiumScheduleId::BackAwayFromDoorWaitNe;
+	return bNear ? ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE
+		: ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE;
 }
 
 void FElysiumNpc::BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now)
@@ -3940,7 +3957,6 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 	EndScriptedSchedule(Reason);
 	ReleaseScheduleBody(Reason);
 	ClearSchedule();
-	CombatSelector.Reset();
 	Mind.Invalidate(Reason, bDeadMind);
 	PatrolOwner.Reset();
 	AmbientOwner.Reset();
@@ -4099,7 +4115,7 @@ void FElysiumNpc::RestartRestoredSchedule()
 	{
 		return;
 	}
-	const EElysiumScheduleId Restored = Schedule.Current;
+	const int32 Restored = Schedule.Current;
 	if (ElysiumAiScriptedSchedule::IsScriptedProgram(Restored))
 	{
 		// A scripted director's program is not restartable without the order that pushed it, and
@@ -4188,7 +4204,6 @@ void FElysiumNpc::RestoreMindState()
 	// just above and, for mode 3, the committed enemy the senses record carries.
 	ScriptedScheduleOwner.Reset();
 	ScriptedScheduleOrder.Reset();
-	CombatSelector.Reset();
 	// A restore never resumes `Sequence` ownership, so any token from before the load is retired
 	// with it. The request survives: whichever order the two entities restore in, a beat that
 	// re-stamps its queue lock has its claim taken again on the next think.
@@ -4450,7 +4465,8 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("no_alert_state"), bNoAlertState ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Schedule"), Schedule.IsRunning()
 		? FString::Printf(TEXT("%s (0x%x) task %d"), ElysiumScheduleName(Schedule.Current),
-			ElysiumScheduleNumber(Schedule.Current), Schedule.TaskIndex)
+			IdSpace(EElysiumIdCategory::Schedule)->GlobalToLocal(Schedule.Current),
+			Schedule.TaskIndex)
 		: TEXT("(none)"));
 
 	// --- Loadout and the combat policy it selects ---

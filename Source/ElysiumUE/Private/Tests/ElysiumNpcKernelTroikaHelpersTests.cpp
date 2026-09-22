@@ -297,10 +297,10 @@ bool FElysiumNpcKernelTroikaHelpersNotifySlotsTest::RunTest(const FString&)
 	TestTrue(TEXT("54 answers true for an entity that is not my enemy"), Guard->Slot54(Foe));
 	Guard->Senses.Memory.Enemy = Foe->Handle;
 	TestTrue(TEXT("54 answers true for my enemy while no program is installed"), Guard->Slot54(Foe));
-	Guard->Schedule.Current = EElysiumScheduleId::IdleStand;
+	Guard->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	TestEqual(TEXT("54's answer is the mask test, not a condition test"), Guard->Slot54(Foe),
 		ElysiumSchedule::MaskHasCondition(Guard->Schedule, *Guard, EElysiumNpcCond::LostEnemy));
-	Guard->Schedule.Current = EElysiumScheduleId::None;
+	Guard->Schedule.Current = ElysiumScheduleId::None;
 
 	// Slot 56 `0x102b5120`. The `+0x200` seam refuses, so `m_hLastEnemy` survives even when the
 	// argument IS the last enemy — which is the recovered refusal and not an omission.
@@ -966,18 +966,18 @@ bool FElysiumNpcKernelTroikaHelpersStandoffTest::RunTest(const FString&)
 	// `0x102c7960` / `0x102c79a0` — byte-identical bodies. With no program the first test refuses;
 	// with one, the behaviour-local schedule seam answers None and the compare fails.
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
-	Npc->Schedule.Current = EElysiumScheduleId::None;
+	Npc->Schedule.Current = ElysiumScheduleId::None;
 	Npc->StandoffVfunc20();
 	TestTrue(TEXT("vfunc20 clears nothing with no program installed"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
-	Npc->Schedule.Current = EElysiumScheduleId::IdleStand;
+	Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	Npc->StandoffVfunc21();
 	TestTrue(TEXT("vfunc21 clears nothing while the behaviour-local id space is a seam"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
 	TestEqual(TEXT("and the seam is what refuses"),
 		static_cast<int32>(Npc->StandoffScheduleForLocalId(0x17)),
-		static_cast<int32>(EElysiumScheduleId::None));
-	Npc->Schedule.Current = EElysiumScheduleId::None;
+		static_cast<int32>(ElysiumScheduleId::None));
+	Npc->Schedule.Current = ElysiumScheduleId::None;
 
 	// `0x102b6120` — no hint node ZEROES the caller's point and answers false. That is the arm, not
 	// a refusal to write.

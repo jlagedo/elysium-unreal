@@ -685,11 +685,11 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	// constructor left and the walk falls off the end of the chain. -1 is the strongest answer
 	// this gate could get — it is not 0, so an untranslatable id can never be read as schedule 0,
 	// and it is not `0x12f`, so it can never take the comfort branch by accident.
-	F.Npc->Schedule.Current = EElysiumScheduleId::IdleStand;
+	F.Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	TestTrue(TEXT("a schedule is installed, so the translation arm is reached at all"),
 		F.Npc->Schedule.IsRunning());
 	TestEqual(TEXT("slot 447 translates the running schedule's global id to -1, not 0"),
-		F.Npc->GetLocalScheduleId(ElysiumScheduleNumber(EElysiumScheduleId::IdleStand)), -1);
+		F.Npc->GetLocalScheduleId(ElysiumSched::IDLE_STAND), -1);
 	TestEqual(TEXT("...and 0x12f itself does not translate either, so no program is COMFORT yet"),
 		F.Npc->GetLocalScheduleId(0x12f), -1);
 

@@ -303,8 +303,10 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		// as a fresh attack choice each tick". It is therefore the honest driver for the starvation
 		// rule — the two idle programs now carry a mask, which is what makes live acquisition work.
 		TestTrue(TEXT("the terminal swing program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::MeleeAttack1Swing, *F.Guard));
-		if (const FElysiumSchedule* Swing = ElysiumScheduleFor(EElysiumScheduleId::MeleeAttack1Swing))
+			ElysiumSchedule::Start(F.Guard->Schedule,
+				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Guard));
+		if (const FElysiumScheduleProgram* Swing = ElysiumScheduleFor(
+			ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING)))
 		{
 			TestTrue(TEXT("...and its recovered mask really is empty"), Swing->Interrupts.IsEmpty());
 		}
@@ -318,7 +320,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		// The disposition idle's own registered mask admits `NEW_ENEMY`, so the same pass under it
 		// takes the better candidate — no test-only mask installed.
 		TestTrue(TEXT("the idle program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleDisposition, *F.Guard));
+			ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Guard));
 		TestTrue(TEXT("a schedule that admits NEW_ENEMY lets the replacement through"),
 			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 11.0));
 		TestTrue(TEXT("...and the higher-priority candidate wins"),
@@ -353,7 +355,8 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		}
 		F.Guard->Senses.Memory.Enemy = StaleHandle(F.ThugA->Handle);
 		TestTrue(TEXT("the terminal swing program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::MeleeAttack1Swing, *F.Guard));
+			ElysiumSchedule::Start(F.Guard->Schedule,
+				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Guard));
 
 		FElysiumNpcConditions Cond;
 		for (int32 i = 0; i < 4; ++i)
@@ -923,8 +926,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::NewEnemy);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, ElysiumSched::IDLE_STAND, *Guard);
 		Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 		TestEqual(TEXT("...and does with one"), Guard->SelectIdealStateRetail(), 2);
 	}
@@ -949,8 +952,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::HeavyDamage);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, ElysiumSched::IDLE_STAND, *Guard);
 		Guard->Cognition.Conditions.Reset();
 		Guard->Cognition.Conditions.Set(EElysiumNpcCond::HeavyDamage);
 		Guard->bNoAlertState = true;
@@ -964,8 +967,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::LightDamage);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, ElysiumSched::IDLE_STAND, *Guard);
 		Guard->Cognition.Conditions.Reset();
 		Guard->Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
 		Guard->bNoAlertState = true;
@@ -980,8 +983,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::HearCombat);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, ElysiumSched::IDLE_STAND, *Guard);
 		Guard->Cognition.Conditions.Reset();
 		Guard->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
 		Guard->bNoAlertState = true;
@@ -1014,8 +1017,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::TaskFailed);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(Guard->Schedule, EElysiumScheduleId::IdleStand, *Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(Guard->Schedule, ElysiumSched::IDLE_STAND, *Guard);
 		Guard->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
 		const int32 ExitsBefore = Guard->SelectIdealStateScriptExitCalls;
 		TestEqual(TEXT("...and TASK_FAILED still answers it unchanged"),
@@ -1091,8 +1094,8 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::HearCombat);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::IDLE_STAND, *F.Guard);
 		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
 		F.Guard->UpdateIdealState(3.5);
 	}
@@ -1101,7 +1104,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 
 	// Alert selects the lookaround, which alert state is what makes reachable.
 	TestTrue(TEXT("alert selects the lookaround program"),
-		F.Guard->SelectSchedule() == EElysiumScheduleId::AlertLookAroundNi);
+		F.Guard->SelectSchedule() == ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI);
 
 	// A committed enemy takes it to combat, and combat selects a real fight program.
 	F.Hate(F.ThugA, 5);
@@ -1109,8 +1112,8 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::NewEnemy);
-		const ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleStand, Mask);
-		ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+		const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
+		ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::IDLE_STAND, *F.Guard);
 		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 		F.Guard->UpdateIdealState(4.0);
 	}
@@ -1123,10 +1126,16 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(*F.Guard, 4.0);
 	TestTrue(TEXT("a distant committed enemy raises TOO_FAR_TO_ATTACK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack));
-	TestTrue(TEXT("combat selects the melee advance rather than an idle stance"),
-		F.Guard->SelectSchedule() == EElysiumScheduleId::MeleeAdvance);
-	TestTrue(TEXT("...and does so every pass, with no once-latched refusal in the way"),
-		F.Guard->SelectSchedule() == EElysiumScheduleId::MeleeAdvance);
+	// The recovered slot-604/605 body's own answer. It used to be folded back to whichever of the
+	// port's 29 programs matched, and 0xe7 matched none -- so the CHOSEN fall-through stood in.
+	// Every number those bodies answer is a loaded program now.
+	TestEqual(TEXT("combat selects the recovered melee approach rather than an idle stance"),
+		F.Guard->SelectSchedule(), 0xe7);
+	TestEqual(TEXT("...which is SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE"),
+		FString(ElysiumScheduleName(ElysiumScheduleGlobalId(0xe7))),
+		FString(TEXT("SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE")));
+	TestEqual(TEXT("...and does so every pass, with no once-latched refusal in the way"),
+		F.Guard->SelectSchedule(), 0xe7);
 	return true;
 }
 
@@ -1214,7 +1223,7 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 			int32 Count = 0;
 			for (int32 i = 0; i < 400; ++i)
 			{
-				if (F.Guard->SelectIdleSchedule() == EElysiumScheduleId::AlertLookAroundNi)
+				if (F.Guard->SelectIdleSchedule() == ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI)
 				{
 					++Count;
 				}
@@ -1242,22 +1251,39 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	const FElysiumNpcConditions Firing =
 		FElysiumNpcConditions::Of({ EElysiumNpcCond::NewEnemy, EElysiumNpcCond::LightDamage });
 
-	// --- The door-obstruction family's masks are empty, which is a real posture ---------------------
-	// The two idle programs are deliberately NOT in this list any more: their masks are filled from
-	// the interrupt census, with the CHOSEN mark at the registry, because an empty mask on them is
-	// the one thing that stops live enemy acquisition from ever running
-	// (`Elysium.Substrate.NpcCombat.IdleAcquisition` owns that assertion).
-	for (const EElysiumScheduleId Id : { EElysiumScheduleId::BackAwayFromDoorNe,
-		EElysiumScheduleId::BackAwayFromDoorWaitNe, EElysiumScheduleId::TakeCoverHintDoor })
+	// --- The door-obstruction family's masks, as its texts declare them --------------------------
+	//
+	// This block used to assert that all three were EMPTY, and called that "a real recovered
+	// posture". It was not recovered -- it was the absence of a decoded registration site, and the
+	// hand-typed programs left the field default. Retail's own texts declare seven, nine and two
+	// conditions; `SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE` alone admits `COND_NEW_ENEMY`,
+	// `COND_SEE_ENEMY`, `COND_LIGHT_DAMAGE`, `COND_SEE_FEAR`, `COND_HEAVY_DAMAGE`,
+	// `COND_SQUAD_LOS_ENEMY` and `COND_HEAR_FLANK_SOUND`. An NPC backing out of a doorway was
+	// uninterruptible in this port and is not in the game.
+	for (const int32 Id : { ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE,
+		ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE,
+		ElysiumSched::SCHED_TROIKA_TAKE_COVER_HINT_DOOR })
 	{
-		const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
-		if (!TestNotNull(TEXT("the program is registered"), Schedule))
+		const FElysiumScheduleProgram* Schedule =
+			ElysiumScheduleFor(ElysiumScheduleGlobalId(Id));
+		if (!TestNotNull(TEXT("the program is loaded"), Schedule))
 		{
 			return false;
 		}
-		TestTrue(*FString::Printf(TEXT("%s declares no recovered interrupt mask"),
-			ElysiumScheduleName(Id)), Schedule->Interrupts.IsEmpty());
-		TestFalse(TEXT("...and does not claim DELAY_INTERRUPTS"), Schedule->bDelayInterrupts);
+		TestTrue(*FString::Printf(TEXT("%s declares an interrupt mask"),
+			ElysiumScheduleName(ElysiumScheduleGlobalId(Id))),
+			Schedule->Interrupts.Has(EElysiumNpcCond::NewEnemy));
+		TestFalse(TEXT("...and does not claim DELAY_INTERRUPTS"),
+			Schedule->HasFlag(ElysiumScheduleFlags::DelayInterrupts));
+	}
+
+	// The one mask that IS empty, and the only one whose emptiness was ever recovered rather than
+	// merely undecoded: the terminal swing declares `Interrupts` with nothing after it.
+	if (const FElysiumScheduleProgram* Swing = ElysiumScheduleFor(
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING)))
+	{
+		TestTrue(TEXT("SCHED_TROIKA_MELEE_ATTACK1_SWING really declares nothing"),
+			Swing->Interrupts.IsEmpty());
 	}
 
 	// --- A no-interrupt schedule finishes its task despite the conditions -------------------------
@@ -1266,13 +1292,19 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	{
 		FKernelRunner Runner;
 		FElysiumScheduleState State;
-		TestTrue(TEXT("the door-cover program starts"),
-			ElysiumSchedule::Start(State, EElysiumScheduleId::TakeCoverHintDoor, Runner));
-		TestTrue(TEXT("its first task runs"),
-			ElysiumSchedule::Tick(State, Runner, 0.0, &Firing));
-		TestTrue(TEXT("a schedule with no mask is not interrupted by anything"),
-			ElysiumSchedule::Tick(State, Runner, 0.1, &Firing));
-		TestTrue(TEXT("...and is still running"), State.IsRunning());
+		// The terminal swing, whose EMPTY mask is recovered. Its two tasks are
+		// `TASK_ANNOUNCE_ATTACK 1` and `TASK_MELEE_ATTACK1`, and a runner with no weapon refuses
+		// both -- so the claim is made of the MASK rather than of the program's survival, which is
+		// what the case is about.
+		TestTrue(TEXT("the terminal swing program starts"),
+			ElysiumSchedule::Start(State,
+				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, Runner));
+		TestTrue(TEXT("a schedule with no mask lists nothing to be interrupted by"),
+			ElysiumSchedule::EffectiveInterrupts(State, Runner)
+				.Intersection(Firing).IsEmpty());
+		TestFalse(TEXT("...so the storm does not raise an interrupt"),
+			ElysiumSchedule::HasInterruptCondition(State, Runner, Firing,
+				EElysiumNpcCond::NewEnemy));
 	}
 
 	// --- A masked condition aborts mid-schedule, into reselection rather than the fail schedule ---
@@ -1281,10 +1313,10 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 		FElysiumScheduleState State;
 		// The cover program is the only registered one with a fail schedule, so it is what proves
 		// an interrupt does not take that route.
-		ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::TakeCoverHintDoor,
+		ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::SCHED_TROIKA_TAKE_COVER_HINT_DOOR,
 			FElysiumNpcConditions::Of({ EElysiumNpcCond::NewEnemy }));
 		TestTrue(TEXT("the cover program starts"),
-			ElysiumSchedule::Start(State, EElysiumScheduleId::TakeCoverHintDoor, Runner));
+			ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_TAKE_COVER_HINT_DOOR, Runner));
 		TestTrue(TEXT("its first task runs"),
 			ElysiumSchedule::Tick(State, Runner, 0.0, nullptr));
 		TestTrue(TEXT("...leaving it mid-program"), State.IsRunning());
@@ -1293,13 +1325,13 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 			ElysiumSchedule::Tick(State, Runner, 0.1, &Firing));
 		TestFalse(TEXT("...and nothing is running afterwards"), State.IsRunning());
 		TestFalse(TEXT("...specifically NOT its fail schedule, which is task failure's route"),
-			State.Current == EElysiumScheduleId::BackAwayFromDoorNe);
+			State.Current == ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE));
 		TestTrue(TEXT("the trace names the condition that fired"), Runner.Saw(TEXT("NEW_ENEMY")));
 	}
 
 	// --- A condition outside the mask does not interrupt ------------------------------------------
 	FElysiumNpcConditions IdleMaskBefore;
-	if (const FElysiumSchedule* Idle = ElysiumScheduleFor(EElysiumScheduleId::IdleDisposition))
+	if (const FElysiumScheduleProgram* Idle = ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)))
 	{
 		IdleMaskBefore = Idle->Interrupts;
 	}
@@ -1308,9 +1340,9 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 		FElysiumScheduleState State;
 		// The scope REPLACES the registered mask rather than adding to it, which is what makes this
 		// a statement about the mask under test and not about the idle program's own.
-		ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleDisposition,
+		ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION,
 			FElysiumNpcConditions::Of({ EElysiumNpcCond::EnemyDead }));
-		ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
+		ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, Runner);
 		ElysiumSchedule::Tick(State, Runner, 0.0, nullptr);
 		TestTrue(TEXT("a condition the mask does not carry leaves the program alone"),
 			ElysiumSchedule::Tick(State, Runner, 0.1, &Firing));
@@ -1318,7 +1350,7 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 
 	// --- The mask scope restores what it borrowed --------------------------------------------------
 	{
-		const FElysiumSchedule* Idle = ElysiumScheduleFor(EElysiumScheduleId::IdleDisposition);
+		const FElysiumScheduleProgram* Idle = ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 		TestTrue(TEXT("the borrowed mask is given back"),
 			Idle != nullptr && Idle->Interrupts == IdleMaskBefore);
 	}

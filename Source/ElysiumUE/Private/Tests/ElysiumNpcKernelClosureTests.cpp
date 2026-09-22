@@ -335,17 +335,17 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 		{ 439, TEXT("0x1028abe0"), TEXT("SelectFailSchedule"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
 			{
-				F.Guard->Schedule.FailScheduleOverride = EElysiumScheduleId::None;
+				F.Guard->Schedule.FailScheduleOverride = ElysiumScheduleId::None;
 				T.TestEqual(L, F.Guard->SelectFailSchedule(0, 0, 0),
-					ElysiumScheduleNumber(EElysiumScheduleId::Fail));
+					ElysiumSched::FAIL);
 			} },
 		{ 446, TEXT("0x102cc260"), TEXT("GetScheduleOfType"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
 			{
-				const int32 Number = ElysiumScheduleNumber(EElysiumScheduleId::IdleStand);
+				const int32 Number = ElysiumSched::IDLE_STAND;
 				T.TestEqual(L, F.Guard->GetScheduleOfType(Number),
 					const_cast<void*>(static_cast<const void*>(
-						ElysiumScheduleFor(EElysiumScheduleId::IdleStand))));
+						ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND)))));
 			} },
 		{ 462, TEXT("0x101aa6b0"), TEXT("ShouldGoToIdleState"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
@@ -901,21 +901,21 @@ bool FElysiumNpcKernelClosureScheduleTest::RunTest(const FString&)
 	// The recovered literal is 0x43, and the port's `SCHED_FAIL` number is the same; asserted rather
 	// than assumed.
 	TestEqual(TEXT("SCHED_FAIL is retail's 0x43"),
-		ElysiumScheduleNumber(EElysiumScheduleId::Fail), 0x43);
-	N.Schedule.FailScheduleOverride = EElysiumScheduleId::None;
+		ElysiumSched::FAIL, 0x43);
+	N.Schedule.FailScheduleOverride = ElysiumScheduleId::None;
 	TestEqual(TEXT("no fail schedule set answers SCHED_FAIL"), N.SelectFailSchedule(0, 0, 0), 0x43);
 
-	N.Schedule.FailScheduleOverride = EElysiumScheduleId::ChaseEnemyFailed;
+	N.Schedule.FailScheduleOverride = ElysiumSched::SCHED_TROIKA_CHASE_ENEMY_FAILED;
 	TestEqual(TEXT("a set fail schedule wins"), N.SelectFailSchedule(0, 0, 0),
-		ElysiumScheduleNumber(EElysiumScheduleId::ChaseEnemyFailed));
-	N.Schedule.FailScheduleOverride = EElysiumScheduleId::IdleDisposition;
+		ElysiumSched::SCHED_TROIKA_CHASE_ENEMY_FAILED);
+	N.Schedule.FailScheduleOverride = ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
 	TestEqual(TEXT("...whichever it is"), N.SelectFailSchedule(0, 0, 0), 0x6b);
 
 	// All three arguments reach no instruction in the retail body, on the base line or in any
 	// override in the closure.
 	TestEqual(TEXT("the three arguments are ignored"), N.SelectFailSchedule(7, 9, 11),
 		N.SelectFailSchedule(0, 0, 0));
-	N.Schedule.FailScheduleOverride = EElysiumScheduleId::None;
+	N.Schedule.FailScheduleOverride = ElysiumScheduleId::None;
 
 	// --- Slot 446 `0x102cc260` -------------------------------------------------------------------
 	//
@@ -923,12 +923,12 @@ bool FElysiumNpcKernelClosureScheduleTest::RunTest(const FString&)
 	// no schedule id space to translate through: this runtime registers every program in one global
 	// namespace, so the `< 1e9` local-id arm has no operand.
 	TestEqual(TEXT("slot 446 answers the registry's SCHED_IDLE_STAND"),
-		N.GetScheduleOfType(ElysiumScheduleNumber(EElysiumScheduleId::IdleStand)),
+		N.GetScheduleOfType(ElysiumSched::IDLE_STAND),
 		const_cast<void*>(static_cast<const void*>(
-			ElysiumScheduleFor(EElysiumScheduleId::IdleStand))));
+			ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND)))));
 	TestEqual(TEXT("...and its SCHED_FAIL"), N.GetScheduleOfType(0x43),
 		const_cast<void*>(static_cast<const void*>(
-			ElysiumScheduleFor(EElysiumScheduleId::Fail))));
+			ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::FAIL)))));
 
 	// **The miss answers null, not `IDLE_STAND`.** Retail's miss Warnings and returns schedule 1;
 	// the port's equivalent of that whole arm is `ElysiumSchedule::Start`, which records the miss

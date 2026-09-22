@@ -221,7 +221,7 @@ namespace
 			{
 				Now += 1.0;
 				Step(Now);
-				if (Guard->Schedule.Current != EElysiumScheduleId::Mesmerized)
+				if (Guard->Schedule.Current != ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED))
 				{
 					return Now - Started;
 				}
@@ -295,8 +295,8 @@ bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 	TestFalse(TEXT("the pair is torn down"), F.Player->IsFeedPaired());
 	TestTrue(TEXT("the victim survived with blood"), F.Guard->BloodPoolValue() >= 1);
 	TestEqual(TEXT("SCHED_TROIKA_MESMERIZED is installed"),
-		static_cast<int32>(F.Guard->Schedule.Current),
-		static_cast<int32>(EElysiumScheduleId::Mesmerized));
+		F.Guard->Schedule.Current,
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED));
 	TestFalse(TEXT("...and has not run a task yet"), F.Guard->IsOblivious());
 
 	// The first think runs the four flag writes and starts `TASK_SET_ACTIVITY`. Its resolver keeps the
@@ -403,8 +403,8 @@ bool FElysiumFeedTranceHostileTest::RunTest(const FString&)
 	TestFalse(TEXT("the pair is torn down"), F.Player->IsFeedPaired());
 	TestTrue(TEXT("the victim survived with blood"), F.Guard->BloodPoolValue() >= 1);
 	TestNotEqual(TEXT("no trance for a D_HT victim"),
-		static_cast<int32>(F.Guard->Schedule.Current),
-		static_cast<int32>(EElysiumScheduleId::Mesmerized));
+		F.Guard->Schedule.Current,
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED));
 	Now += 0.1;
 	F.Step(Now);
 	TestFalse(TEXT("...and it is not oblivious"), F.Guard->IsOblivious());
@@ -436,14 +436,14 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 	double Now = F.SettledAt;
 	F.FeedAndInterrupt(Now);
 	TestEqual(TEXT("the trance is installed on a patroller"),
-		static_cast<int32>(F.Guard->Schedule.Current),
-		static_cast<int32>(EElysiumScheduleId::Mesmerized));
+		F.Guard->Schedule.Current,
+		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED));
 
 	// The program pre-empts the executor while the unresolved activity is still running.
 	Now += 0.1;
 	F.Step(Now);
 	TestTrue(TEXT("the mesmerized program still owns the patroller"),
-		F.Guard->Schedule.Current == EElysiumScheduleId::Mesmerized && F.Guard->Schedule.IsRunning());
+		F.Guard->Schedule.Current == ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED) && F.Guard->Schedule.IsRunning());
 	TestTrue(TEXT("the program made the patroller oblivious"), F.Guard->IsOblivious());
 	TestTrue(TEXT("...and marked it busy with the discipline"), F.Guard->IsBusyWithDiscipline());
 	TestTrue(TEXT("...and suppresses dialogue"), F.Guard->HasDialogSuppressFlag());

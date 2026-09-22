@@ -154,7 +154,7 @@ bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
 	// `m_iIsOblivious++`), the `m_OnGrappleBegin` output, then `CBaseCombatCharacter`'s body.
 	ElysiumNpcEnemy::SetEnemy(*F.Guard, F.Other->Handle);
 	F.Guard->Schedule.Clear();
-	ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleStand, *F.Guard);
+	ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::IDLE_STAND, *F.Guard);
 	TestTrue(TEXT("a program is installed before the grapple"), F.Guard->Schedule.IsRunning());
 	const bool bEntered = F.Guard->EnterGrappleState(F.Other->Handle,
 		EElysiumGrappleRole::Attacker, EElysiumGrappleType::Feed, 0, false);

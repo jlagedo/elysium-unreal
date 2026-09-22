@@ -215,14 +215,14 @@ void FElysiumNpc::InstallScheduleRetail(int32 RawId, bool bForce)
 	bLastSetScheduleForce = bForce;
 	const int32 Stamp = ResolveIdealScheduleStamp(RawId);                // 10280de0 first half
 	LastIdealScheduleStamp = Stamp;
-	const EElysiumScheduleId Mapped = ScheduleFromRetailNumber(Stamp);
-	if (Mapped != EElysiumScheduleId::None)
+	const int32 Mapped = Stamp;
+	if (Mapped != ElysiumScheduleId::None)
 	{
 		ChangeSchedule(Mapped);
 		return;
 	}
 	// Story 25 miss arm: registry miss installs `IDLE_STAND` untranslated.
-	ElysiumSchedule::Start(Schedule, EElysiumScheduleId::IdleStand, *this);
+	ElysiumSchedule::Start(Schedule, ElysiumSched::IDLE_STAND, *this);
 }
 
 void FElysiumNpc::SeedStatListOnNpcInit()
@@ -712,7 +712,7 @@ void FElysiumNpc::TroikaNPCInit()
 	IgnoreCollisionUntil = static_cast<double>(GFltMax);
 	Senses.Memory.DetectedAttackAttacker = FElysiumEntityHandle::Invalid();
 	Senses.Memory.DetectedAttackTime = 0.0;
-	ScheduleHost.ForcedSchedule = EElysiumScheduleId::None;
+	ScheduleHost.ForcedSchedule = ElysiumScheduleId::None;
 	Slot593();
 	SetAttackExtents(FVector(-1.f, -1.f, -1.f) * ElysiumMove::U);         // source (-1,-1,-1)
 	ResetFakeReloadCount();                                              // 102c54c0
@@ -748,7 +748,7 @@ void FElysiumNpc::TroikaNPCInit()
 		// `*(this + 0x65c8) = param_1`. It writes `m_iForcedSchedule` and installs nothing: the
 		// schedule the NPC is running is not touched here.
 		ScheduleHost.ForcedSchedule =
-			static_cast<EElysiumScheduleId>(TeleportForcedScheduleRetailId);
+			static_cast<int32>(TeleportForcedScheduleRetailId);
 		return;
 	}
 	TeleportMoveTimer = 0.f;                                             // 1029a704
@@ -1086,16 +1086,13 @@ void FElysiumNpc::BaseOnRestore(bool /*bFromLoad*/)
 	}
 	if (!bGiveUp)
 	{
-		EElysiumScheduleId Found = EElysiumScheduleId::None;
-		if (ElysiumScheduleIdFromName(LastSavedExtendedHeader.ScheduleName, Found))
-		{
-			Schedule.Current = Found;                                    // 1027c020 m_pSchedule
-		}
-		else
-		{
-			Schedule.Current = EElysiumScheduleId::None;
-		}
-		if (Schedule.Current != EElysiumScheduleId::None)                // 1027c026
+		// `CAI_ScheduleManager::FindByName` (`0x1030f350`), retail's own body, over the loaded
+		// corpus rather than over a registry of programs typed here.
+		const FElysiumScheduleProgram* Found = FElysiumScheduleCorpus::Get().Manager().FindByName(
+			LastSavedExtendedHeader.ScheduleName);
+		Schedule.Current = Found != nullptr ? Found->GlobalId    // 1027c020 m_pSchedule
+			: ElysiumScheduleId::None;
+		if (Schedule.Current != ElysiumScheduleId::None)                // 1027c026
 		{
 			// `1027c02d`/`1027c048`/`1027c052`: CRC32 over the resolved schedule's task array —
 			// `schedule+0x20` for `schedule+0x24 << 3` bytes, eight per task — compared against the
@@ -1108,11 +1105,11 @@ void FElysiumNpc::BaseOnRestore(bool /*bFromLoad*/)
 			Crc = SaveCrc32Update(Crc, TaskBytes.GetData(), TaskBytes.Num());
 			if (SaveCrc32Final(Crc) != LastSavedExtendedHeader.ScheduleCrc)   // 1027c064
 			{
-				Schedule.Current = EElysiumScheduleId::None;             // 1027c068
+				Schedule.Current = ElysiumScheduleId::None;             // 1027c068
 			}
 		}
 	}
-	if (Schedule.Current == EElysiumScheduleId::None || bGiveUp)
+	if (Schedule.Current == ElysiumScheduleId::None || bGiveUp)
 	{
 		ScheduleHost.bDoPostRestoreRefindPath = false;
 		RestoreGiveUp();

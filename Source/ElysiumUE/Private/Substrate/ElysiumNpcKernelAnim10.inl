@@ -524,7 +524,7 @@ int32 SelectScheduleMeleeCombatHuman();
 // `thunk_FUN_102b7370(this)` — `SelectDoorObstructionSchedule`, the first of the two offers the
 // human body's common tail makes and the ONLY one MingXiao's makes. `FElysiumNpc::
 // SelectDoorObstructionSchedule` (`ElysiumNpc.cpp`) already IS that body and answers an
-// `EElysiumScheduleId`; the two selectors call it and convert through `ElysiumScheduleNumber`,
+// `int32`; the two selectors call it and convert through `ElysiumScheduleNumber`,
 // rather than a second reading being stood beside it.
 
 /** `CNPC_VMingXiao::SelectScheduleMeleeCombat` (`0x10396050`), 1,522 bytes. The same skeleton as the

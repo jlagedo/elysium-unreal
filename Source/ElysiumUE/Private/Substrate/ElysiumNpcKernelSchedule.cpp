@@ -137,25 +137,6 @@ namespace
 
 }
 
-// The registry direction the species selectors need, and the one `SelectSchedule` installs through.
-EElysiumScheduleId FElysiumNpc::ScheduleFromRetailNumber(int32 RetailNumber)
-{
-	if (RetailNumber == 0)
-	{
-		return EElysiumScheduleId::None;
-	}
-	for (int32 Index = 1; Index <= static_cast<int32>(EElysiumScheduleId::ScriptedFollowPath);
-		++Index)
-	{
-		const EElysiumScheduleId Id = static_cast<EElysiumScheduleId>(Index);
-		if (ElysiumScheduleNumber(Id) == RetailNumber)
-		{
-			return Id;
-		}
-	}
-	return EElysiumScheduleId::None;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 580 `GetClassScheduleIdSpace` — one method and a species table.
 // -------------------------------------------------------------------------------------------------
@@ -218,18 +199,16 @@ const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::ScheduleIdSpaceOf(const TCHAR*
 }
 
 // slot 580, the species half of 0x101aa790
-const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::ClassScheduleIdSpace() const
+const FElysiumLocalIdSpace* FElysiumNpc::ClassScheduleIdSpace() const
 {
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 580);
-	const FScheduleIdSpace* Species =
-		Override != nullptr ? ScheduleIdSpaceOf(Override->Class) : nullptr;
-	// The vtable's own rule: a class with no body of its own at the slot runs the Troika line's,
-	// which is row 0. A species whose override this story's rows do not carry also lands there,
-	// because the twelve rows are the twelve bodies 29c routed to this family.
-	return Species != nullptr ? Species : &GNpcKernelScheduleIdSpaces[0];
+	// The table above is documentation now -- the retail class, the slot-580 body and the id space
+	// that body returns, all checkable against `docs/vtmb/npc-kernel/slots.md`. The LIVE space is
+	// the corpus's, keyed on this NPC's own retail class rather than on the slot-580 override row,
+	// because the sidecar already folds the classes that share one space.
+	return IdSpace(EElysiumIdCategory::Schedule);
 }
 
-int32 FElysiumNpc::ScheduleLocalToGlobal(const FScheduleIdSpace* Space, int32 LocalId)
+int32 FElysiumNpc::ScheduleLocalToGlobal(const FElysiumLocalIdSpace* Space, int32 LocalId)
 {
 	// 0x102ea2d0, arm for arm:
 	//
@@ -241,19 +220,10 @@ int32 FElysiumNpc::ScheduleLocalToGlobal(const FScheduleIdSpace* Space, int32 Lo
 	//   } while (space);
 	//   return -1;
 	//
-	// SEAM: the parent chain and every range are the static constructor's, because no schedule text
-	// is parsed here. The walk is written out rather than short-circuited so the day a registry
-	// lands it is the ranges that change and not this body.
-	if (Space == nullptr || LocalId == INDEX_NONE)
-	{
-		return INDEX_NONE;
-	}
-	if (Space->LocalBase != GScheduleEmptyIdSpace && Space->LocalBase <= LocalId
-		&& LocalId <= Space->LocalTop)
-	{
-		return (Space->GlobalBase - Space->LocalBase) + LocalId;
-	}
-	return INDEX_NONE;
+	// The seam is CLOSED: the parent chain and every range are the corpus's, filled by the
+	// registration pass that runs each class's `InitCustomSchedules` recipe. The arms themselves
+	// live on `FElysiumLocalIdSpace`, so this body and the global->local direction cannot drift.
+	return Space != nullptr ? Space->LocalToGlobal(LocalId) : INDEX_NONE;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -313,10 +283,13 @@ bool FElysiumNpc::LoadedSchedules()
 	// clears it. `CAI_BaseNPC::Precache` (`0x1027bb50`) is the reader: a false return is
 	// `"ERROR: Rejecting spawn of %s as error in NPC's schedules"`.
 	//
-	// SEAM: this runtime parses no schedule text, so no flag can be cleared and the answer is the
-	// shipped `true` for every class. The table beside it carries the retail class, the body and the
-	// flag global so the claim is checkable against `docs/vtmb/npc-kernel/slots.md`.
-	return true;
+	// The seam is CLOSED: this runtime parses the class's texts and records the parse, so the answer
+	// is the real one. It is `true` for all 56 loaded spaces today -- every shipped text parses --
+	// and it goes false the moment one does not, which is exactly what retail's `Precache` refusal
+	// (`"ERROR: Rejecting spawn of %s as error in NPC's schedules"`) reads.
+	const FElysiumScheduleSpaceUnit* Unit =
+		FElysiumScheduleCorpus::Get().UnitForClass(RetailClass() != nullptr ? FString(RetailClass()->Name) : FString());
+	return Unit == nullptr || Unit->bAllTextsLoaded;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -340,12 +313,12 @@ int32 FElysiumNpc::ResolveIdealScheduleStamp(int32 RawRetailId) const
 
 // 0x10280de0 `CAI_BaseNPC::SetSchedule(int)`, and the body slot 619's five species overrides forward
 // to unchanged
-void FElysiumNpc::ChangeSchedule(EElysiumScheduleId Id)
+void FElysiumNpc::ChangeSchedule(int32 Id)
 {
 	// The raw number retail passes. Every program this runtime registers carries retail's own
 	// registered number and every one of them is below 1,000,000,000, so the translate arm is the
 	// one taken — which is exactly what retail does for an id named in a schedule table.
-	const int32 RawRetailId = ElysiumScheduleNumber(Id);
+	const int32 RawRetailId = Id;
 	const int32 Stamp = ResolveIdealScheduleStamp(RawRetailId);
 
 	// `m_IdealSchedule = <stamp>` (`+0x5c3c`) keeps the raw int32 exactly, including -1 and the
@@ -444,8 +417,8 @@ void FElysiumNpc::NextScheduledTask()
 	{
 		// `m_failedSchedule (+0x5f38) = m_interuptSchedule (+0x5f3c) = 0`. The listing's `EDX` is
 		// zeroed at `0x10280f43` and never rewritten, so both stores are literal zero.
-		ScheduleHost.FailedSchedule = EElysiumScheduleId::None;
-		ScheduleHost.InterruptSchedule = EElysiumScheduleId::None;
+		ScheduleHost.FailedSchedule = ElysiumScheduleId::None;
+		ScheduleHost.InterruptSchedule = ElysiumScheduleId::None;
 		// `(*DAT_10924a6c + 4)()` — a global object's slot 1, taking no argument and discarding its
 		// answer. UNRECOVERED: the object is not identified and the call has no observable here.
 		// `SetCondition(COND_SCHEDULE_DONE 0x5d)`.
@@ -1199,7 +1172,7 @@ int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& R
 			// `m_pSchedule == NULL || m_pSchedule != GetScheduleOfType(0x9e)` — "I am not already
 			// running 0x9e" — and `COVER_VS_MELEE_MODE` (flags2 0x100) clear.
 			const bool bNotAlready9e = !Schedule.IsRunning()
-				|| ElysiumScheduleNumber(Schedule.Current) != 0x9e;
+				|| GetLocalScheduleId(Schedule.Current) != 0x9e;
 			const bool bCoverVsMelee = NpcFlags.Has(EElysiumNpcFlag2::COVER_VS_MELEE_MODE);
 			if (!bNoRangedThreat)
 			{

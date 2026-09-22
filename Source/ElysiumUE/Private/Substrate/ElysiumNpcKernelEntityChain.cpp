@@ -796,7 +796,7 @@ int32 FElysiumNpc::GetLocalScheduleId(int32 GlobalId)
 	// -1 stays -1; otherwise follow the chain at `+0x10`, and for the first space whose local base
 	// is not the 9999 sentinel and whose `[globalBase, localTop]` range holds the id, answer
 	// `(localBase - globalBase) + id`.
-	return GlobalToLocalId(ClassScheduleIdSpace(), GlobalId);
+	return GlobalToLocalId(IdSpace(EElysiumIdCategory::Schedule), GlobalId);
 }
 
 int32 FElysiumNpc::GetLocalTaskId(int32 GlobalId)
@@ -806,36 +806,35 @@ int32 FElysiumNpc::GetLocalTaskId(int32 GlobalId)
 	// at +0x18, conditions at +0x30 and squad slots at +0x48; family Squad reaches +0x48 the same
 	// way).
 	//
-	// SEAM: family Schedule's row carries the SCHEDULE sub-space only, and no row in this runtime
-	// carries the task one — the port parses no schedule text, so all four sub-spaces are the empty
-	// state the static constructor left. The translation therefore answers -1 for every id, which is
-	// what it would answer over the real task space too.
-	return GlobalToLocalId(nullptr, GlobalId);
+	// The seam is CLOSED. All four sub-spaces are the corpus's own, filled by the registration pass
+	// that runs each class's `InitCustomSchedules` recipe, so this is retail's translation over
+	// retail's ranges.
+	return GlobalToLocalId(IdSpace(EElysiumIdCategory::Task), GlobalId);
 }
 
-int32 FElysiumNpc::GlobalToLocalId(const FScheduleIdSpace* Space, int32 GlobalId)
+int32 FElysiumNpc::GlobalToLocalId(const FElysiumLocalIdSpace* Space, int32 GlobalId)
 {
-	// `0x102ea280`. A null space is retail's end-of-chain, which answers -1.
-	if (GlobalId == INDEX_NONE || Space == nullptr)
+	// `0x102ea280`, whole, including the parent walk at `+0x10` and the bound against the
+	// TRANSLATED top (`+0x0c`) rather than `m_localTop`. Both used to be missing here and both were
+	// invisible, because every row this runtime carried was the 9999 sentinel and the body answered
+	// -1 for every id. `FElysiumLocalIdSpace` carries all six words and is where the arms live now;
+	// a null space is retail's end-of-chain and still answers -1.
+	return Space != nullptr ? Space->GlobalToLocal(GlobalId) : INDEX_NONE;
+}
+
+const FElysiumLocalIdSpace* FElysiumNpc::IdSpace(EElysiumIdCategory Category) const
+{
+	// Slot 580 `GetClassScheduleIdSpace`, answered out of the corpus rather than out of a table
+	// typed here: the class -> space map is the sidecar's, so a class whose space is SHARED with a
+	// sibling gets the sibling's, and a class with no slot-580 body of its own falls to the Troika
+	// line exactly as the vtable would take it.
+	const FElysiumScheduleCorpus& Corpus = FElysiumScheduleCorpus::Get();
+	const FString ClassName = RetailClass() != nullptr ? FString(RetailClass()->Name) : FString();
+	if (const FElysiumLocalIdSpace* Own = Corpus.SpaceFor(ClassName, Category))
 	{
-		return INDEX_NONE;
+		return Own;
 	}
-	// `m_localBase != 9999 && m_globalBase <= id && id <= m_translatedTop`.
-	//
-	// The upper bound is the TRANSLATED top (`+0x0c`), not `m_localTop` (`+0x08`). This port
-	// compared a global id against the local top, which is a global number weighed against a local
-	// one; it was invisible because every row below is the 9999 sentinel and this body answers -1
-	// for every id, and `FScheduleIdSpace` carries no `+0x0c` field to compare against yet.
-	// `FElysiumLocalIdSpace` (0019/3 pass A) has all six words and does this correctly; these rows
-	// are retired when the corpus loader stands the real spaces.
-	if (Space->LocalBase != 9999 && Space->GlobalBase <= GlobalId && GlobalId <= Space->LocalTop)
-	{
-		return (Space->LocalBase - Space->GlobalBase) + GlobalId;
-	}
-	// SEAM: retail walks `space->m_pParent` at `+0x10`. `FScheduleIdSpace` carries no parent link —
-	// family Schedule's rows are the static state and every one of them is the empty sentinel — so
-	// the walk is one step long and falls off the end here.
-	return INDEX_NONE;
+	return Corpus.SpaceFor(TEXT("CAI_BaseNPCTroika"), Category);
 }
 
 bool FElysiumNpc::CanPlaySentence(bool bDisregardState)
@@ -870,15 +869,13 @@ void* FElysiumNpc::GetClassScheduleIdSpace()
 {
 	// 0x101aa790, slot 580 — `CAI_BaseNPCTroika`'s override, `return &DAT_10924248`.
 	//
-	// Family Schedule already stands the table of every class's id space and the chain walk that
-	// picks this NPC's row (`ClassScheduleIdSpace()`), and its `.inl` records that slot 580's own
-	// body "is still a generated stub ... not this story's to define". That stub is gone: this
-	// family owns `0x101aa790`, so the slot is defined here and it IS that walk — the nearest
-	// species override, else the Troika line's own row, which is the `&DAT_10924248` retail returns.
-	return const_cast<FScheduleIdSpace*>(ClassScheduleIdSpace());
+	// The space is the CORPUS's, keyed on this NPC's retail class (`IdSpace` below), so what this
+	// answers is the same `CAI_ClassScheduleIdSpace` retail returns -- filled, with its parent link
+	// and its four sub-spaces, rather than the empty static the port used to stand here.
+	return const_cast<FElysiumLocalIdSpace*>(IdSpace(EElysiumIdCategory::Schedule));
 }
 
-const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::BaseClassScheduleIdSpace() const
+const FElysiumLocalIdSpace* FElysiumNpc::BaseClassScheduleIdSpace() const
 {
 	// 0x101a6d00 — slot 580's BASE body, `return &DAT_1090ff08`. It is a DIFFERENT id space from the
 	// Troika line's `&DAT_10924248`, and family Schedule's table has no row for it, so the row is
@@ -886,12 +883,10 @@ const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::BaseClassScheduleIdSpace() con
 	//
 	// 49 dispatch sites reach slot 580 and every species subclass overrides it; the base is reached
 	// only by the classes between `CAI_BaseNPC` and `CAI_BaseNPCTroika`, none of which is an entity
-	// classname this runtime spawns. The row's ranges are the empty state the static constructor
-	// left (`0x102ea090(isRoot = false)`), because nothing in the image registers a schedule into
-	// `DAT_1090ff08`.
-	static const FScheduleIdSpace GBaseRow = {
-		TEXT("CAI_BaseNPC"), TEXT("0x101a6d00"), TEXT("0x1090ff08"), INDEX_NONE, 9999, INDEX_NONE };
-	return &GBaseRow;
+	// classname this runtime spawns. It is the corpus's `cai_basenpc` unit -- 68 registered schedule
+	// names for 64 texts, the root every other space parents on.
+	return FElysiumScheduleCorpus::Get().SpaceFor(TEXT("CAI_BaseNPC"),
+		EElysiumIdCategory::Schedule);
 }
 
 float FElysiumNpc::BaseHearingSensitivity() const

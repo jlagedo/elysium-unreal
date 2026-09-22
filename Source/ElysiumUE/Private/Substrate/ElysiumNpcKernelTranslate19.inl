@@ -1,7 +1,7 @@
 // Story 29e, family **Translate19** — slot 440 `TranslateSchedule` and the frenzied pre-table.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`. The Troika-line virtual is
-// already declared as `TranslateSchedule(EElysiumScheduleId)` (story 25); this family adds the
+// already declared as `TranslateSchedule(int32)` (story 25); this family adds the
 // raw-number body the overlay names and the species tables keyed on retail address.
 
 /** Slot 440's raw registrar-number body. `LastTranslateScheduleRetail` is the number the

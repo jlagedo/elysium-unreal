@@ -281,18 +281,22 @@ void FElysiumNpc::ScheduleTaskBytes(TArray<uint8>& OutBytes) const
 	{
 		return;
 	}
-	const FElysiumSchedule* Program = ElysiumScheduleFor(Schedule.Current);
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(Schedule.Current);
 	if (Program == nullptr)
 	{
 		return;
 	}
 	OutBytes.Reserve(Program->Tasks.Num() * GScheduleTaskRecordBytes);
-	for (const FElysiumTaskStep& Step : Program->Tasks)
+	for (const FElysiumScheduleStep& Step : Program->Tasks)
 	{
-		const int32 TaskId = static_cast<int32>(Step.Task);
-		const float TaskData = Step.Param;
+		// The two words retail hashes, as retail's `memcpy` sees them: the task ID and the raw 32
+		// bits of the data word. The port used to hash a declaration ordinal of its own closed task
+		// enum -- a number that silently renumbered whenever anyone edited the enum -- against a
+		// float it had already converted. Both halves are the corpus's own now.
+		const int32 TaskId = Step.TaskId;
+		const uint32 TaskData = Step.RawWord();
 		OutBytes.Append(reinterpret_cast<const uint8*>(&TaskId), sizeof(int32));
-		OutBytes.Append(reinterpret_cast<const uint8*>(&TaskData), sizeof(float));
+		OutBytes.Append(reinterpret_cast<const uint8*>(&TaskData), sizeof(uint32));
 	}
 }
 
