@@ -62,7 +62,13 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   the oracle's per-owner table against the image. Three of the story's own numbers were wrong and
   are corrected in the spec — the base registers 68 names not 57, the texts are in `.data` not
   `.rdata`, and there are 28 hand programs not 19 with 295 non-test `EElysiumScheduleId` sites
-  across 35 files, not 20 users. No C++ has changed yet.
+  across 35 files, not 20 users.
+  **Pass A landed 2026-09-22**: `FElysiumIdNamespace` and `FElysiumLocalIdSpace`, the four retail
+  id-space bodies ported arm for arm, nothing wired and nothing deleted. It carries
+  `m_translatedTop`, the sixth word `FScheduleIdSpace` never had — `GlobalToLocal` bounds a global
+  id against it, and the old body bounds against the local top, which is a live range bug the
+  moment real ranges land. `Elysium.Substrate.ScheduleIdSpace` 5 of 5; `Elysium.Substrate`
+  1249 of 1249.
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
