@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from elysium_pipeline.formats.ai_schedule_glb import census as census_module
+from elysium_pipeline.formats.ai_schedule_glb.image import ImageError
 from elysium_pipeline.formats.ai_schedule_glb.model import ROOT_KEY, SOURCE_MEMBER, normalize_key
 from elysium_pipeline.formats.unit_contract.origin import Origin, origin_of, read_member
 
@@ -54,8 +55,18 @@ def source_keys(
     rule and not "the classes, and then the odd one".
     """
 
-    data, _ = _read_image(index, read_bytes=read_bytes)
-    census = census_module.build(data)
+    try:
+        data, _ = _read_image(index, read_bytes=read_bytes)
+    except AiScheduleSourceError:
+        return []                      # an install with no image yields no units
+    try:
+        census = census_module.build(data)
+    except ImageError:
+        # The member is there and is not a PE32 at all, so it is not the image this seam reads and
+        # it yields nothing. A `CensusError` is the other case -- a PE whose shape this seam cannot
+        # recover -- and that is NOT swallowed: an image we half-understand must fail loudly rather
+        # than quietly publish zero schedules.
+        return []
     return sorted({owner.key for owner in census.owners} | {ROOT_KEY})
 
 

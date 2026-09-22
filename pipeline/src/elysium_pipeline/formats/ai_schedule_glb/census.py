@@ -376,9 +376,27 @@ def _read_owner(
     loop_categories: list[str | None] = []
     for call, label in labelled:
         if label == "register":
-            if not call.pushed_immediates:
+            immediates = call.pushed_immediates
+            if not immediates:
                 raise CensusError(f"{call.va:#010x}: a register loop naming no category")
-            stated = image.read_cstring_va(call.pushed_immediates[0]).lower()
+            # Two shapes reach the five-argument `Register`. In a LOOP the class, id and name are
+            # registers and the category is the only immediate. Called DIRECTLY, once per name,
+            # all four are immediates -- and because x86 pushes right to left they read backwards
+            # from the end: className, category, localId, name.
+            if len(immediates) >= 4:
+                name = image.read_cstring_va(immediates[-1])
+                stated = image.read_cstring_va(immediates[-3]).lower()
+                if name and stated in CATEGORIES:
+                    owner.registrations.append(
+                        Registration(
+                            category=stated,
+                            name=name,
+                            local_id=int(immediates[-2]),
+                            source_va=int(call.va),
+                        )
+                    )
+                    continue
+            stated = image.read_cstring_va(immediates[0]).lower()
             if stated not in CATEGORIES:
                 raise CensusError(f"{call.va:#010x}: unknown register category {stated!r}")
             loop_categories.append(stated)
@@ -387,13 +405,13 @@ def _read_owner(
             # pushed inline they are a registration on their own; called in a loop they are the
             # Nth walk.
             if len(call.pushed_immediates) >= 2:
-                name = image.read_cstring_va(call.pushed_immediates[0])
+                name = image.read_cstring_va(call.pushed_immediates[-1])
                 if name:
                     owner.registrations.append(
                         Registration(
                             category=_HELPER_CATEGORY[label],
                             name=name,
-                            local_id=int(call.pushed_immediates[1]),
+                            local_id=int(call.pushed_immediates[-2]),
                             source_va=int(call.va),
                         )
                     )

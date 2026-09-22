@@ -53,7 +53,16 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   restart's own slot 435 releases twelve of the walk's per-run rows.
   New net: `Elysium.Substrate.NpcKernelBindings.SaveRoundTrip` (218 rows, 23 named exceptions); six
   component suites moved off `Npc->Serialize(Ar)` onto the real `Freeze`/`ApplySnapshot` path.
-- [ ] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the 19 hand programs deleted. L · Opus/high.
+- [ ] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the hand
+  programs deleted. L · Opus/high. **In flight, landing as six passes** (owner's decision
+  2026-09-22): P the pipeline seam, then A id spaces, B parser + manager, C corpus loader + the
+  witness, D the switchover (indivisible), E the deletions and the coverage meter.
+  **Pass P landed 2026-09-22**: 57 units publish, `uv run elysium import ai-schedules` deploys 748
+  files, the parser reads all 691 texts and refuses none, and `schedule_owner_survey --check` holds
+  the oracle's per-owner table against the image. Three of the story's own numbers were wrong and
+  are corrected in the spec — the base registers 68 names not 57, the texts are in `.data` not
+  `.rdata`, and there are 28 hand programs not 19 with 295 non-test `EElysiumScheduleId` sites
+  across 35 files, not 20 users. No C++ has changed yet.
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so

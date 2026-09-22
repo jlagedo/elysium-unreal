@@ -227,4 +227,26 @@ def _validate_anomalies(root: Mapping[str, Any]) -> None:
             raise UnitValidationError(f"unknown anomaly row {name!r}")
 
 
-__all__ = ["ASSET_PREFIX", "validate", "validate_document"]
+def warnings_for(summary: Mapping[str, Any]) -> list[str]:
+    """What the export should say about a unit that published but is not silent.
+
+    A `typedUnidentified` row here is retail's own non-failing quirk -- an operand the resolver
+    answered as 0 without refusing the text -- so it is reported and never a failure.
+    """
+
+    warnings: list[str] = []
+    unidentified = int(summary.get("typedUnidentified") or 0)
+    if unidentified:
+        warnings.append(
+            f"typed but unidentified: {unidentified} operand(s) the resolver reads as zero"
+        )
+    unresolved = int(summary.get("unresolved") or 0)
+    if unresolved:
+        warnings.append(f"unresolved: {unresolved} row(s)")
+    unsupported = int(summary.get("unsupported") or 0)
+    if unsupported:
+        warnings.append(f"unsupported: {unsupported} row(s)")
+    return warnings
+
+
+__all__ = ["ASSET_PREFIX", "validate", "validate_document", "warnings_for"]

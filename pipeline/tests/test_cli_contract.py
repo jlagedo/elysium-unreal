@@ -80,6 +80,7 @@ EXPORT_V2_COMMANDS = (
     "map-entities-glb", "map-lighting-glb", "map-visibility-glb",
     "nav-graph-glb", "nav-graphs-glb",
     "engine-config-glb", "engine-configs-glb",
+    "ai-schedule-glb", "ai-schedules-glb",
     "corpus-index-glb",
     "export-all",
 )
@@ -108,6 +109,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: commands of their own, each with its own editor boot, and a level was not loadable between
 #: them. They are stages of `bake map` now; their offline halves still live under `importers/`.
 IMPORT_COMMANDS = ("vdata", "dialogue", "sound", "sound-schemes", "scripts", "engine-config",
+                   "ai-schedules",
                    "ui-strings", "textures",
                    "surface-properties", "materials",
                    "models", "characters", "model-catalogues", "expression-tables", "cook-roots")

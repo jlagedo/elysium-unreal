@@ -73,7 +73,9 @@ def asset_id(key: str) -> str:
 
 
 def output_relative_path(key: str) -> str:
-    return f"ai-schedules/{normalize_key(key)}.glb"
+    """Where the unit lands BELOW its family root, which `GlbUnitSeam.family` already names."""
+
+    return f"{normalize_key(key)}.glb"
 
 
 def corpus_directory(key: str) -> str:

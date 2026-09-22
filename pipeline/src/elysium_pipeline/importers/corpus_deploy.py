@@ -40,9 +40,10 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from elysium_pipeline.formats.unit_contract import (
+    declares_capsule,
     CapsuleError,
     GlbContainerError,
     read_glb,
@@ -159,14 +160,33 @@ def unit_key(family_root: Path, unit: Path) -> str:
     return PurePosixPath(*relative.parts).with_suffix("").as_posix()
 
 
-def extract_unit(unit: Path, extension: str) -> dict[str, bytes]:
-    """The source bytes one published unit carries, keyed by its install-relative member path."""
+def read_unit(
+    unit: Path, extension: str, *, require_capsule: bool = True
+) -> tuple[dict, dict[str, bytes]]:
+    """One published unit's extension root and its capsuled source bytes.
+
+    A lane that deploys capsule bytes alone wants `extract_unit`; a lane that also deploys derived
+    products needs the root those products are a function of.
+
+    `require_capsule=False` lets a unit that declares no capsule answer no members instead of
+    failing. One seam needs it: `ai-schedules`' root unit names an executable image as its member
+    and carries no capsule by the contract's executable-image rule, while everything it deploys is
+    derived. Its sibling space units still declare and carry theirs, so nothing is waived for them.
+    """
 
     document, binary = read_glb(unit)
     root = (document.get("extensions") or {}).get(extension)
     if not isinstance(root, dict):
         raise CorpusImportError(f"{Path(unit).name} is not a {extension} unit")
-    return source_capsules(document, binary, root)
+    if not require_capsule and not declares_capsule(root.get("sourceResolution") or {}):
+        return root, {}
+    return root, source_capsules(document, binary, root)
+
+
+def extract_unit(unit: Path, extension: str) -> dict[str, bytes]:
+    """The source bytes one published unit carries, keyed by its install-relative member path."""
+
+    return read_unit(unit, extension)[1]
 
 
 # --- recipe stamps --------------------------------------------------------------------------------
@@ -270,6 +290,14 @@ class Lane:
     #: member set it cannot deploy. Raising `CorpusImportError` makes it one named failure with the
     #: run's other failures rather than a unit silently deploying nothing.
     unit_guard: Callable[[Sequence[str]], None] | None = None
+    #: Asked once per unit with that unit's extension root, answering corpus-relative path ->
+    #: bytes. This is for a seam whose source is CODE rather than content: a registration table
+    #: recovered from call sites, or a parent link read from an argument, is a fact the runtime
+    #: needs that no byte of the source spells, so it can never be a capsule. A derived product
+    #: must be a deterministic function of the unit alone and carry nothing the unit does not
+    #: already publish (`seam_map_unit_contract.md`, "Derived products"); it is written through the
+    #: same atomic write, byte-equality read-back, stamp and prune as a capsule.
+    derived_of: Callable[[Mapping[str, Any]], Mapping[str, bytes]] | None = None
 
 
 def _targets_current(destination_root: Path, targets: dict[str, Any]) -> bool:
@@ -365,12 +393,23 @@ def _deploy_unit(
 ) -> dict[str, dict[str, Any]]:
     """Write every corpus file one unit's capsuled members map to. Returns the stamp's targets."""
 
-    members = extract_unit(unit, extension)
+    root, members = read_unit(unit, extension, require_capsule=lane.derived_of is None)
     if lane.unit_guard is not None:
         lane.unit_guard(sorted(members))
     targets: dict[str, dict[str, Any]] = {}
-    for source_path, data in sorted(members.items()):
-        for relative in lane.target_of(source_path):
+
+    # A capsule member deploys wherever `target_of` names; a derived product names its own
+    # corpus-relative path, because it is a function of the unit rather than a member of anything.
+    deployable: list[tuple[str, Sequence[str], bytes]] = [
+        (source_path, lane.target_of(source_path), data)
+        for source_path, data in sorted(members.items())
+    ]
+    if lane.derived_of is not None:
+        for relative, data in sorted(lane.derived_of(root).items()):
+            deployable.append((f"<derived>{relative}", (relative,), bytes(data)))
+
+    for source_path, relatives, data in deployable:
+        for relative in relatives:
             destination = safe_destination(destination_root, relative)
             # Byte equality against the capsule is proven by reading the destination back, never
             # assumed: the same read decides "already correct" for an existing file and confirms

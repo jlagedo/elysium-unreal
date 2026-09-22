@@ -1714,6 +1714,10 @@ ENGINE_CONFIG_GLB = GlbUnitSeam(
     "engine-config GLB", "configs", "engine_config_glb", family="engine-config"
 )
 
+AI_SCHEDULE_GLB = GlbUnitSeam(
+    "ai-schedule GLB", "units", "ai_schedule_glb", family="ai-schedules"
+)
+
 
 def export_image_glb(config, runner, key: str) -> Path:
     """Write and validate one isolated Image GLB product."""
@@ -1909,6 +1913,19 @@ def export_all_vdata_glbs(config, runner, *, jobs=None) -> list[Path]:
     return export_all_glb_units(
         config, runner, VDATA_GLB, jobs=jobs, worker=workers.vdata_glb_worker
     )
+
+
+def export_ai_schedule_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated AI-schedule GLB product."""
+    return export_glb_unit(config, runner, AI_SCHEDULE_GLB, key)
+
+
+def export_all_ai_schedule_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `CAI_ClassScheduleIdSpace` in the pinned image, plus the vocabulary root."""
+    # In-process, no worker pool. All 57 units come out of ONE 7.9 MB image analysis that the
+    # census memoizes on the image's digest; a pool would rebuild that analysis per worker and pay
+    # for it 57 times over, which is `export_all_image_glbs`' own argument about small units.
+    return export_all_glb_units(config, runner, AI_SCHEDULE_GLB, jobs=jobs)
 
 
 def export_ui_resource_glb(config, runner, key: str) -> Path:
@@ -2119,6 +2136,7 @@ GLB_SEAMS = (
     ("map", export_all_map_glbs),
     ("nav-graph", export_all_nav_graph_glbs),
     ("engine-config", export_all_engine_config_glbs),
+    ("ai-schedule", export_all_ai_schedule_glbs),
     # Last, and last for a reason: the corpus index is written over the published corpus, so
     # every seam above has to have run before it can name what it indexes.
     ("corpus-index", export_all_corpus_index_glbs),

@@ -42,6 +42,7 @@ MAP_LIGHTING_EXTENSION = "ELYSIUM_vtmb_map_lighting"
 MAP_VISIBILITY_EXTENSION = "ELYSIUM_vtmb_map_visibility"
 NAV_GRAPH_EXTENSION = "ELYSIUM_vtmb_nav_graph"
 ENGINE_CONFIG_EXTENSION = "ELYSIUM_vtmb_engine_config"
+AI_SCHEDULE_EXTENSION = "ELYSIUM_vtmb_ai_schedule"
 
 #: The one product over other products: the corpus index, written directly at the export root.
 CORPUS_INDEX_EXTENSION = "ELYSIUM_vtmb_corpus_index"
@@ -138,6 +139,7 @@ SEAM_EXTENSION = {
     ),
     "nav-graphs": (NAV_GRAPH_EXTENSION,),
     "engine-config": (ENGINE_CONFIG_EXTENSION,),
+    "ai-schedules": (AI_SCHEDULE_EXTENSION,),
     # The corpus index is the one unit that publishes at the export root itself, under no family
     # directory, so its key is the empty relative directory.
     "": (CORPUS_INDEX_EXTENSION,),

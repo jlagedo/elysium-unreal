@@ -43,31 +43,42 @@ class PEImage:
 
     def __init__(self, data: bytes) -> None:
         self.data = data
-        pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
-        if data[pe_offset:pe_offset + 4] != b"PE\0\0":
-            raise ImageError("not a PE image")
-        section_count = struct.unpack_from("<H", data, pe_offset + 6)[0]
-        optional_size = struct.unpack_from("<H", data, pe_offset + 20)[0]
-        optional = pe_offset + 24
-        magic = struct.unpack_from("<H", data, optional)[0]
-        if magic != 0x10B:
-            raise ImageError("the ai-schedule seam reads a PE32 image; this one is not")
-        self.image_base = struct.unpack_from("<I", data, optional + 28)[0]
-        section_table = optional + optional_size
-        self.sections: list[dict] = []
-        for index in range(section_count):
-            offset = section_table + index * 40
-            name = data[offset:offset + 8].split(b"\0", 1)[0].decode("ascii")
-            virtual_size, rva, raw_size, raw_offset = struct.unpack_from("<IIII", data, offset + 8)
-            self.sections.append(
-                {
-                    "name": name,
-                    "rva": rva,
-                    "size": max(virtual_size, raw_size),
-                    "raw_size": raw_size,
-                    "raw_offset": raw_offset,
-                }
-            )
+        # Every malformed input answers `ImageError`, never a `struct.error` or a decode error.
+        # Callers distinguish "this member is not the image this seam reads" from "this IS the
+        # image and its shape is wrong", and they can only do that if the first case is one
+        # nameable exception rather than whatever the parse happened to trip over first.
+        try:
+            pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+            if data[pe_offset:pe_offset + 4] != b"PE\0\0":
+                raise ImageError("not a PE image")
+            section_count = struct.unpack_from("<H", data, pe_offset + 6)[0]
+            optional_size = struct.unpack_from("<H", data, pe_offset + 20)[0]
+            optional = pe_offset + 24
+            magic = struct.unpack_from("<H", data, optional)[0]
+            if magic != 0x10B:
+                raise ImageError("the ai-schedule seam reads a PE32 image; this one is not")
+            self.image_base = struct.unpack_from("<I", data, optional + 28)[0]
+            section_table = optional + optional_size
+            self.sections: list[dict] = []
+            for index in range(section_count):
+                offset = section_table + index * 40
+                name = data[offset:offset + 8].split(b"\0", 1)[0].decode("ascii")
+                virtual_size, rva, raw_size, raw_offset = struct.unpack_from(
+                    "<IIII", data, offset + 8
+                )
+                self.sections.append(
+                    {
+                        "name": name,
+                        "rva": rva,
+                        "size": max(virtual_size, raw_size),
+                        "raw_size": raw_size,
+                        "raw_offset": raw_offset,
+                    }
+                )
+        except ImageError:
+            raise
+        except (struct.error, UnicodeDecodeError, IndexError, ValueError) as error:
+            raise ImageError(f"not a readable PE32 image: {error}") from error
 
     def section(self, name: str) -> dict:
         for section in self.sections:

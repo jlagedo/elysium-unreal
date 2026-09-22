@@ -357,6 +357,13 @@ SEAM_CLAIMS: tuple[SeamClaim, ...] = (
     SeamClaim("nav-graph", _seam_keys(_EXPORTERS + "nav_graph_glb"),
               _suffix_member("maps/graphs/", ".ain"), _asset("nav-graph"),
               _sibling_companions((".loc",), ".ain")),
+    # Every one of the 57 ai-schedule units is cut from the same executable image, so one member
+    # row carries all 57 in `assets[]` -- the same many-assets-one-member shape the four map
+    # claims have. Claiming it also moves `dlls/vampire.dll` out of the `engine-binary` residue
+    # class, which is right: the seam decodes content from it now.
+    SeamClaim("ai-schedule", _seam_keys(_FORMATS + "ai_schedule_glb"),
+              lambda key, index: _first_present(index, "dlls/vampire.dll"),
+              _asset("ai-schedule")),
     SeamClaim("engine-config", _seam_keys(_FORMATS + "engine_config_glb"), _identity_member,
               _asset("engine-config")),
 )

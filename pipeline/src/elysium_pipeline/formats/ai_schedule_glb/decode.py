@@ -36,6 +36,13 @@ IMAGE_RESIDUE = "image.notDecodedAsContent"
 
 
 def _space_rows(owner: Owner, by_space: dict[int, str]) -> dict[str, SpaceRow]:
+    """The owner's four spaces, each resolving its parent to the unit that owns it.
+
+    `by_space` is keyed on every space address of every owner, not on the schedule one alone: a
+    task space's parent is the parent class's TASK space, which sits `0x18` past its schedule
+    space, and keying on schedule addresses only would leave three of the four parents unnamed.
+    """
+
     rows: dict[str, SpaceRow] = {}
     for category, space in owner.spaces.items():
         rows[category] = SpaceRow(
@@ -47,6 +54,22 @@ def _space_rows(owner: Owner, by_space: dict[int, str]) -> dict[str, SpaceRow]:
             init_va=space.init_va,
         )
     return rows
+
+
+def _space_index(census: Census) -> dict[int, str]:
+    """Every space address in the image, mapped to the unit key that initialises it."""
+
+    index: dict[int, str] = {}
+    for owner in census.owners:
+        for space in owner.spaces.values():
+            index[space.address] = owner.key
+        if owner.schedule_space is not None:
+            # `CAI_BaseNPC` initialises its spaces in a body this seam never reads as an owner, so
+            # its three non-schedule spaces are named by their fixed offsets from the schedule one.
+            index.setdefault(owner.schedule_space, owner.key)
+            index.setdefault(owner.schedule_space + 0x18, owner.key)
+            index.setdefault(owner.schedule_space + 0x30, owner.key)
+    return index
 
 
 def _text_ledger(path: str, member: SourceMember, record: parser.ScheduleRecord) -> dict[str, Any]:
@@ -156,9 +179,7 @@ def decode_space_unit(
     if owner is None:
         raise CensusError(f"no ai-schedule owner named {key!r} in this image")
 
-    by_space = {
-        row.schedule_space: row.key for row in census.owners if row.schedule_space is not None
-    }
+    by_space = _space_index(census)
     local_of = {row.name: row.local_id for row in owner.registrations_of("schedule")}
 
     model = SpaceUnitModel(

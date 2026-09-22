@@ -2323,6 +2323,53 @@ def export_v2_vdata_glb(
     )
 
 
+@export_v2_app.command("ai-schedule-glb")
+def export_v2_ai_schedule_glb(
+    ctx: typer.Context,
+    key: str = typer.Argument(
+        ...,
+        help="The owning classname of one CAI_ClassScheduleIdSpace, lower-cased "
+             "(cnpc_vbrujah, cai_basenpctroika), or `vocabulary` for the parser's own tables.",
+    ),
+) -> None:
+    """Export one NPC schedule id space to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_ai_schedule_glb(config, runner, key)
+        console.print(f"ai-schedule GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 ai-schedule-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("ai-schedules-glb")
+def export_v2_ai_schedules_glb(ctx: typer.Context) -> None:
+    """Export every NPC schedule id space, plus the parser's vocabulary root."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_ai_schedule_glbs(config, runner)
+        console.print(f"ai-schedule GLB corpus export complete: {len(destinations)} units")
+
+    _execute(
+        _state(ctx),
+        "export_v2 ai-schedules-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
 @export_v2_app.command("vdatas-glb")
 def export_v2_vdatas_glb(ctx: typer.Context) -> None:
     """Export every vdata/<subtree>/<name>.txt identity."""
@@ -2445,6 +2492,20 @@ def import_scripts(ctx: typer.Context) -> None:
         _run_corpus_lane(config, importer.import_scripts, "scripts")
 
     _execute(_state(ctx), "import scripts", ExitCode.OFFLINE_EXPORT, action, require_work=False)
+
+
+@import_app.command("ai-schedules")
+def import_ai_schedules(ctx: typer.Context) -> None:
+    """Deploy the NPC schedule texts and id spaces into Content/ElysiumCorpus/ai/schedules."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import ai_schedules as importer
+
+        _run_corpus_lane(config, importer.import_ai_schedules, "ai-schedules")
+
+    _execute(
+        _state(ctx), "import ai-schedules", ExitCode.OFFLINE_EXPORT, action, require_work=False
+    )
 
 
 @import_app.command("engine-config")

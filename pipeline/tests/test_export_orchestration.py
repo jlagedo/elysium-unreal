@@ -206,6 +206,7 @@ GLB_SEAM_FAMILY = {
     "MAP_VISIBILITY_GLB": "",
     "NAV_GRAPH_GLB": "nav-graphs",
     "ENGINE_CONFIG_GLB": "engine-config",
+    "AI_SCHEDULE_GLB": "ai-schedules",
 }
 
 

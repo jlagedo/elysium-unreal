@@ -162,7 +162,7 @@ green, and `coverage.md` shows the change.
   class: story 3 keys its units by it. The six rows that called the goal record's `0x13` a flag
   carry the correction in their tag.
 
-- [ ] **2. The datamap bindings, generated.**
+- [x] **2. The datamap bindings, generated.**
   Retail: every class's `DATADESC` — `DEFINE_KEYFIELD` (name, member, type: fully data),
   `DEFINE_INPUT` (a field-setting input: fully data), `DEFINE_INPUTFUNC` (name and argument
   type data, the handler code), `DEFINE_OUTPUT` (fully data), `DEFINE_FIELD` with `SAVE`, and
@@ -380,6 +380,38 @@ green, and `coverage.md` shows the change.
   classname. Names and ids are literal immediates ahead of each append call: the extractor reads
   operands and never executes a body.
   Size: L. Effort: Opus / high.
+  **Pass P landed (2026-09-22): the pipeline half, no C++.** `uv run elysium export_v2
+  ai-schedules-glb` publishes **57 units** — 56 id spaces plus a root — in four seconds, each
+  validating standalone with no install and no writer, and a re-export is byte-identical.
+  `uv run elysium import ai-schedules` deploys **748 files**: 691 `.sch` texts, 56 `space.json`
+  sidecars and one `vocabulary.json`, under `Content/ElysiumCorpus/ai/schedules/`.
+  *Three decisions the owner took.* The unit key is the SPACE and all **57** units publish (the
+  eight text-less owners included, because they carry the parent links translation walks). The
+  parser's vocabulary rides on a **root `vocabulary` unit**, not on the Troika unit as this text
+  said — those thirteen tables are the parser's and a unit never carries data another owns. And the
+  source-capsule question is settled by an **executable-image rule** appended to
+  `seam_map_unit_contract.md`: the root carries the image without a capsule and its ledger
+  partitions it, while each space unit capsules its texts' exact bytes as spans. The contract also
+  gains a **derived-products** rule, because a registration table recovered from call sites is a
+  fact no byte of the source spells and can never be a capsule.
+  *What the image said that this text did not.* `CAI_BaseNPC` registers **68** schedule names, ids
+  `0x00`–`0x43` dense, not 57 — through TWO entry points, the second being the same shared helper
+  Troika uses, which is why Troika's range starts at 68. The "seven unregistered names" were a
+  missing call target, and exactly four registered ids carry no text (`NONE`, `TARGET_FACE`,
+  `TARGET_CHASE`, `AISCRIPT`). The texts live in **`.data`**, not `.rdata`. The cut region needs
+  BOTH halves of retail's acceptance test — first token `Schedule` AND third token `Tasks` —
+  because the parser's own diagnostics (`"Schedule has invalid state ID '%s'"` and eleven more)
+  live in the same pool: the first half alone admits 704 runs, the full rule admits exactly the
+  **691** that are fed, and the partition proves. MSVC emitted **three** bodies for one
+  pair-append template, and anchoring on fewer leaves one name (`0xe2`) unregistered.
+  *The parser is ported and run.* All 691 texts parse and none is refused, and four counts it never
+  saw fall out matching the oracle: **441** distinct task identities, **42** `DELAY_INTERRUPTS`
+  schedules, **0** inverted `!COND` interrupts and **35** boolean operands. Two facts for story 6:
+  three of the seventeen prefixes (`Path:`, `Goal:`, `HintFlags:`) are used by no shipped text, and
+  no bare operand fails `_atof`. Task statements measure **4,138**, not the witness table's 4,139.
+  *The check:* `uv run elysium research schedule_owner_survey --check` re-derives the per-owner
+  table from the image and diffs it against the committed one in `schedule-kernel.md`; it agrees on
+  all 56 owners. Passes A–E, the runtime half, remain.
 
 - [ ] **4. The tunables table.**
   Retail: the `.rdata` cells every kernel file cites — "every threshold below was read out of
