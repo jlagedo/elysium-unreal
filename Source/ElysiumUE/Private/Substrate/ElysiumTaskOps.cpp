@@ -24,6 +24,7 @@ namespace
 		{ EElysiumTaskOp::MoveAwayFromSavePosition, TEXT("TASK_MOVE_AWAY_PATH") },
 		{ EElysiumTaskOp::SetFailSchedule,          TEXT("TASK_SET_FAIL_SCHEDULE") },
 		{ EElysiumTaskOp::StopMoving,               TEXT("TASK_STOP_MOVING") },
+		{ EElysiumTaskOp::FindCoverFromEnemy,       TEXT("TASK_FIND_COVER_FROM_ENEMY") },
 		{ EElysiumTaskOp::SetToleranceDistance,     TEXT("TASK_SET_TOLERANCE_DISTANCE") },
 		{ EElysiumTaskOp::GetPathToEnemy,           TEXT("TASK_GET_PATH_TO_ENEMY") },
 		{ EElysiumTaskOp::RunPath,                  TEXT("TASK_RUN_PATH") },

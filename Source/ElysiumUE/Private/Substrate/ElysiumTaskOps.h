@@ -44,6 +44,11 @@ enum class EElysiumTaskOp : uint8
 	// The combat vocabulary.
 	SetFailSchedule,
 	StopMoving,
+	/** `TASK_FIND_COVER_FROM_ENEMY`. New with the corpus: the witness text
+	 *  `SCHED_TROIKA_CHASE_ENEMY_FAILED` is the fifth of its twelve tasks, and the port had no
+	 *  body for it because it had no program that named it. The runner verb's engine-neutral
+	 *  default refuses, so the task fails by name rather than silently completing. */
+	FindCoverFromEnemy,
 	SetToleranceDistance,
 	GetPathToEnemy,
 	RunPath,
