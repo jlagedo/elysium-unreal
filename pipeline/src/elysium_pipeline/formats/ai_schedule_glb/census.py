@@ -22,7 +22,12 @@ from elysium_pipeline.formats.ai_schedule_glb.image import (
     PINNED_BYTE_LENGTH,
     PINNED_SHA256,
     entry_points,
+    follow_jump,
     iter_call_sites,
+)
+from elysium_pipeline.formats.ai_schedule_glb.rtti import (
+    SCHEDULE_ID_SPACE_SLOT,
+    classes_deriving_from,
 )
 from elysium_pipeline.formats.ai_schedule_glb.walk import WalkError, body_bounds, walk_body
 
@@ -38,6 +43,11 @@ class CensusError(ValueError):
 ANCHORS: dict[str, int] = {
     "parse": 0x1030D850,            # the schedule-text parser
     "init": 0x102EA0E0,             # CAI_LocalIdSpace::Init
+    # `CAI_BaseNPCTroika` does not call `Init` three times; it calls one helper that does,
+    # deriving `+0x18` and `+0x30` from the space it is handed and `+8` / `+0x10` from the
+    # namespace. Its three arguments arrive as the return values of one-line getters rather
+    # than as immediates, which is why the plain `Init` reader cannot see them.
+    "space_init_triple": 0x102BE9F0,
     "register": 0x102EA130,         # CAI_LocalIdSpace::Register, five arguments
     "register_schedule": 0x102BEA80,  # the four-argument helper, category "schedule"
     "register_task": 0x102BEAB0,      # ... "task", space + 0x18
@@ -241,8 +251,10 @@ def _build(image: PEImage, digest: str, byte_length: int) -> Census:
             continue
         owners.append(_read_owner(image, body_start, body_end, anchor_targets))
 
+    _attach_outlying_spaces(image, owners, anchor_targets, set(bodies), anomalies)
     _attach_outlying_registrations(image, owners, anchor_targets, set(bodies))
     _attach_shared_spaces(image, owners, anomalies)
+    _prove_parents(owners, anomalies)
     region = _cut_region(image)
     _prove_partition(owners, region, anomalies)
     _check_registrations(owners, anomalies)
@@ -555,6 +567,162 @@ def _looks_like_class(text: str) -> bool:
     )
 
 
+#: The root of every class's schedule vocabulary. Slot 580 is read off the vtable of each class
+#: whose RTTI base chain names it, which is how a class that has no init body of its own -- and so
+#: no unit of its own -- is still placed on the space it actually uses.
+ROOT_CLASS = "CAI_BaseNPC"
+
+#: The three sub-space offsets, and the stride between the three namespace pointers. Both are the
+#: helper's own arithmetic (`0x102be9f0`), not a convention this seam chose.
+_SUB_SPACE_STRIDE = (0x00, 0x18, 0x30)
+_NAMESPACE_STRIDE = (0x00, 0x08, 0x10)
+
+
+def _constant_getter(image: PEImage, target: int) -> int | None:
+    """The immediate a one-line `MOV EAX, imm32 / RET` answers, or None for any other body.
+
+    Nothing else is accepted. The point of reading these at all is that they are decidable without
+    executing anything; a getter with a branch in it would be a different recovery, and should say
+    so by failing rather than by being guessed at.
+    """
+
+    offset = image.va_to_offset(follow_jump(image, target))
+    if offset is None:
+        return None
+    body = image.data[offset : offset + 6]
+    if len(body) < 6 or body[0] != 0xB8 or body[5] != 0xC3:
+        return None
+    return int(struct.unpack_from("<I", body, 1)[0])
+
+
+def _attach_outlying_spaces(
+    image: PEImage,
+    owners: list[Owner],
+    anchor_targets: dict[int, str],
+    owner_bodies: set[int],
+    anomalies: list[dict],
+) -> None:
+    """The two owners whose `Init` calls their own body does not make.
+
+    Every species initialises its four spaces inline and `_read_owner` reads those. The two roots do
+    not, for two different reasons:
+
+    * `CAI_BaseNPC` initialises its three spaces in `0x1030c4e0`, which calls no parser and is
+      therefore not an owner. The calls there are ordinary `Init` calls with literal operands, so
+      this is the same reader pointed at a body found by its `Init` sites and bound to an owner by
+      the space address that owner's own feed loop names.
+    * `CAI_BaseNPCTroika` calls one helper (`0x102be9f0`) that initialises all three, and hands it
+      `(space, namespaceBase, parentBase)` as the return values of three one-line getters. The
+      helper derives `+0x18` / `+0x30` and `+8` / `+0x10` itself, so three constants are the whole
+      answer -- but they arrive in registers, and which is which is decided by what they ARE: the
+      namespace is one other owners already name, the parent is a space they already name, and what
+      is left over is the space being initialised.
+
+    Without this, twelve of the fifty-six units carry no parent at all -- the two roots, and the ten
+    species whose parent is Troika's space and therefore mapped to no unit.
+    """
+
+    by_feed = {owner.feed_space: owner for owner in owners if owner.feed_space is not None}
+    by_body = {owner.init_body: owner for owner in owners}
+    known_namespaces = {space.namespace for owner in owners for space in owner.spaces.values()}
+    known_spaces = {
+        space.address for owner in owners for space in owner.spaces.values()
+    } | set(by_feed)
+
+    order = ("schedule", "task", "condition", "squadslot")
+
+    # --- the outlying `Init` body -----------------------------------------------------------------
+    seen_bodies: set[int] = set()
+    for site, target in iter_call_sites(image, frozenset(anchor_targets)):
+        if anchor_targets[target] != "init":
+            continue
+        try:
+            body_start, body_end = body_bounds(image, site)
+        except WalkError:
+            continue
+        if body_start in owner_bodies or body_start in seen_bodies:
+            continue
+        seen_bodies.add(body_start)
+        try:
+            walk = walk_body(image, body_start, body_end)
+        except WalkError:
+            continue
+        calls = [
+            call
+            for call in walk.calls
+            if anchor_targets.get(call.target) == "init"
+            and call.this_immediate is not None
+            and len(call.pushed_immediates) >= 2
+        ]
+        if not calls:
+            continue
+        owner = by_feed.get(int(calls[0].this_immediate))
+        if owner is None or owner.spaces:
+            continue
+        for index, call in enumerate(calls[: len(order)]):
+            owner.spaces[order[index]] = Space(
+                category=order[index],
+                address=int(call.this_immediate),
+                namespace=int(call.pushed_immediates[-1]),
+                parent=int(call.pushed_immediates[-2]) or None,
+                init_va=int(call.va),
+            )
+        owner.notes.append(f"spaces initialised in {body_start:#010x}")
+
+    # --- the helper that initialises three at once -------------------------------------------------
+    for site, target in iter_call_sites(image, frozenset(anchor_targets)):
+        if anchor_targets[target] != "space_init_triple":
+            continue
+        try:
+            body_start, body_end = body_bounds(image, site)
+            walk = walk_body(image, body_start, body_end)
+        except WalkError as error:
+            raise CensusError(f"{site:#010x}: {error}") from error
+        owner = by_body.get(body_start)
+        if owner is None or owner.spaces:
+            continue
+        index = next(
+            (position for position, call in enumerate(walk.calls) if call.va == site), None
+        )
+        if index is None or index < 3:
+            raise CensusError(
+                f"{site:#010x}: the three-space helper is not preceded by three calls"
+            )
+        constants = [
+            _constant_getter(image, call.target) for call in walk.calls[index - 3 : index]
+        ]
+        if any(value is None for value in constants):
+            raise CensusError(
+                f"{site:#010x}: the three-space helper's arguments are not one-line getters"
+            )
+        namespaces = [value for value in constants if value in known_namespaces]
+        parents = [
+            value
+            for value in constants
+            if value not in known_namespaces and value in known_spaces
+        ]
+        rest = [
+            value
+            for value in constants
+            if value not in known_namespaces and value not in known_spaces
+        ]
+        if len(namespaces) != 1 or len(parents) != 1 or len(rest) != 1:
+            raise CensusError(
+                f"{site:#010x}: cannot tell the helper's space, namespace and parent apart "
+                f"({[hex(value) for value in constants]})"
+            )
+        space, namespace, parent = rest[0], namespaces[0], parents[0]
+        for position, category in enumerate(order[:3]):
+            owner.spaces[category] = Space(
+                category=category,
+                address=space + _SUB_SPACE_STRIDE[position],
+                namespace=namespace + _NAMESPACE_STRIDE[position],
+                parent=(parent + _SUB_SPACE_STRIDE[position]) if parent else None,
+                init_va=int(site),
+            )
+        owner.notes.append(f"three spaces initialised through {target:#010x}")
+
+
 def _attach_outlying_registrations(
     image: PEImage,
     owners: list[Owner],
@@ -635,28 +803,117 @@ def _attach_outlying_registrations(
 
 
 def _attach_shared_spaces(image: PEImage, owners: list[Owner], anomalies: list[dict]) -> None:
-    """Fold every classname whose slot-580 getter answers an owner's space onto that owner.
+    """Place every `CAI_BaseNPC` subclass on the space its own slot 580 answers.
 
-    Four pairs of classes share one space, and the second of each pair has no init body. The getter
-    is a one-line `MOV EAX, imm32 / RET`, so the mapping is read rather than tabled.
+    A unit is an init BODY, and there are fifty-six of them; there are seventy-seven classes. The
+    difference is classes that have no init body of their own and therefore inherit the getter of
+    the class above them: `CNPC_VRat` uses `CNPC_VScurrying`'s space, `CNPC_VBaseBoss` and
+    `CPayphone` use Troika's, and nine classes including `CGenericNPC` and `CCineNPC` use the base's.
+    Nothing in any init body says so. What says so is slot 580 -- `GetClassScheduleIdSpace`, a
+    one-line `MOV EAX, imm32 / RET` -- answering the same address from two different vtables, so the
+    mapping is READ off the vtables rather than tabled here.
+
+    That matters beyond tidiness: a class this seam does not place is a class whose spawned NPC
+    finds no schedules at all, and the only signal would be an NPC that never chooses one.
+
+    A getter answering a space no owner claims is an anomaly row, not a refusal: it is a class whose
+    space nothing ever registers into, which is a true fact about the image rather than a failure of
+    this walk.
     """
 
-    by_space = {owner.schedule_space: owner for owner in owners if owner.schedule_space}
+    by_space: dict[int, Owner] = {}
     for owner in owners:
+        space = owner.schedule_space
+        if space is not None:
+            by_space.setdefault(space, owner)
         owner.class_names = [owner.class_name]
 
-    start, text = image.section_bytes(".text")
-    for relative in range(0, len(text) - 6):
-        if text[relative] != 0xB8 or text[relative + 5] != 0xC3:       # MOV EAX, imm32 ; RET
+    claimed: dict[int, list[str]] = {}
+    for entry in classes_deriving_from(image, ROOT_CLASS):
+        getter = entry.slot(image, SCHEDULE_ID_SPACE_SLOT)
+        if getter is None:
+            anomalies.append(
+                {
+                    "row": "class-without-schedule-id-space-slot",
+                    "className": entry.name,
+                    "vtable": f"{entry.vtable_va:#010x}",
+                    "reason": "the vtable is shorter than slot 580",
+                }
+            )
             continue
-        value = struct.unpack_from("<I", text, relative + 1)[0]
-        owner = by_space.get(value)
+        space = _constant_getter(image, getter)
+        if space is None:
+            anomalies.append(
+                {
+                    "row": "schedule-id-space-getter-not-constant",
+                    "className": entry.name,
+                    "getter": f"{getter:#010x}",
+                    "reason": "slot 580 is not a one-line MOV EAX, imm32 / RET",
+                }
+            )
+            continue
+        claimed.setdefault(space, []).append(entry.name)
+        owner = by_space.get(space)
         if owner is None:
             continue
-        va = image.offset_to_va(start + relative)
-        if va is None:
-            continue
-        owner.notes.append(f"slot-580 getter {va:#010x}")
+        if entry.name not in owner.class_names:
+            owner.class_names.append(entry.name)
+        owner.notes.append(f"slot-580 getter {getter:#010x} answers for {entry.name}")
+
+    for owner in owners:
+        owner.class_names = sorted(set(owner.class_names))
+
+    for space, names in sorted(claimed.items()):
+        if by_space.get(space) is None:
+            anomalies.append(
+                {
+                    "row": "schedule-space-with-no-owner",
+                    "space": f"{space:#010x}",
+                    "classNames": sorted(names),
+                    "reason": "slot 580 answers a space no init body registers into",
+                }
+            )
+
+
+def _prove_parents(owners: list[Owner], anomalies: list[dict]) -> None:
+    """Every space's parent must be a space some unit initialises -- or say why it is not.
+
+    The load order the runtime builds is this graph, so a parent that names no unit is a class whose
+    programs would be loaded before the class they inherit names from. For the SCHEDULE spaces that
+    is fatal and refuses the seam: it is exactly the failure that would otherwise appear as an NPC
+    silently choosing nothing.
+
+    One parent legitimately names no unit. The squad-slot root (`0x10920484`) is a `CAI_LocalIdSpace`
+    constructed on its own in `0x10265660` with the root flag set, and nothing ever registers into
+    it -- the two global squad slots are seeded straight into the namespace by `0x10316e80`. Every
+    class's squad-slot space parents on it, and falling through to it finds nothing, which is why it
+    is an anomaly row rather than a refusal.
+    """
+
+    index = {
+        space.address for owner in owners for space in owner.spaces.values()
+    }
+    orphans: dict[int, list[str]] = {}
+    for owner in owners:
+        for category, space in owner.spaces.items():
+            if space.parent is None or space.parent in index:
+                continue
+            if category == "schedule":
+                raise CensusError(
+                    f"{owner.class_name}: its schedule space parents on {space.parent:#010x}, "
+                    "which no unit initialises"
+                )
+            orphans.setdefault(space.parent, []).append(f"{owner.key}:{category}")
+
+    for parent, users in sorted(orphans.items()):
+        anomalies.append(
+            {
+                "row": "parent-space-with-no-unit",
+                "space": f"{parent:#010x}",
+                "users": sorted(users),
+                "reason": "a root space nothing registers into; falling through to it finds nothing",
+            }
+        )
 
 
 def _cut_region(image: PEImage) -> dict[int, tuple[int, int, bytes]]:

@@ -46,6 +46,14 @@ _ANOMALY_ROWS = {
     "text-name-not-registered",
     "image-differs-from-pin",
     "duplicate-schedule-name",
+    # The class -> space walk's own three. A class whose slot 580 answers a space no init body
+    # registers into is a real class with an empty vocabulary; a space that parents on one is the
+    # squad-slot root; and a vtable too short to hold slot 580, or a slot 580 that is not a one-line
+    # getter, would each be a shape this seam does not read and must not pretend to.
+    "schedule-space-with-no-owner",
+    "parent-space-with-no-unit",
+    "class-without-schedule-id-space-slot",
+    "schedule-id-space-getter-not-constant",
 }
 
 _SPACE_KEYS = ("spaces", "registrations", "texts", "records")

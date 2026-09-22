@@ -364,3 +364,80 @@ def test_the_census_reads_both_owners_out_of_the_synthetic_image(monkeypatch):
         ("IDLE_STAND", 1)
     ]
     census_module._MEMO.clear()
+
+
+def test_a_one_line_getter_is_read_and_anything_else_is_refused():
+    """`_constant_getter` accepts exactly `MOV EAX, imm32 / RET` and nothing else.
+
+    Three of the seam's recoveries stand on it -- Troika's three space-init arguments, and every
+    class's slot-580 answer -- and each of them is only decidable BECAUSE the body is that one
+    shape. A getter with a branch in it is a different recovery and has to say so.
+    """
+
+    builder = _Builder()
+    builder.pad()
+    getter = builder.here
+    builder.emit(b"\xB8" + struct.pack("<I", 0x1090FF08) + b"\xC3")   # MOV EAX, imm32 ; RET
+    builder.pad()
+    falls_through = builder.here
+    builder.emit(b"\xB8" + struct.pack("<I", 0x1090FF08) + b"\x90")   # ... NOP, so not a getter
+    builder.pad()
+    xor_eax = builder.here
+    builder.emit(b"\x33\xC0\xC3")                                    # XOR EAX, EAX ; RET
+    builder.pad()
+    # Reached through a JMP thunk, which is how slot 580 reaches it in the retail image.
+    thunk = builder.jmp(getter)
+    builder.pad()
+    image = PEImage(builder.build())
+
+    assert census_module._constant_getter(image, getter) == 0x1090FF08
+    assert census_module._constant_getter(image, thunk) == 0x1090FF08
+    assert census_module._constant_getter(image, falls_through) is None
+    assert census_module._constant_getter(image, xor_eax) is None
+    assert census_module._constant_getter(image, 0x7FFFFFFF) is None
+
+
+def test_a_schedule_space_parenting_on_nothing_refuses_the_seam():
+    """Every schedule space must parent on a space some unit initialises.
+
+    The load order the runtime builds IS this graph, so a schedule space whose parent names no unit
+    is a class loaded before the class it inherits names from -- which shows up not as an error but
+    as an NPC that silently chooses nothing. A squad-slot space parenting on nothing is a different
+    fact and only a row: the squad-slot root is real, and nothing registers into it.
+    """
+
+    def space(category, address, parent):
+        return census_module.Space(
+            category=category, address=address, namespace=0x109203CC, parent=parent, init_va=0
+        )
+
+    base = census_module.Owner(class_name="CAI_BaseNPC", init_body=0x1000)
+    base.spaces["schedule"] = space("schedule", 0x1090FF08, None)
+    child = census_module.Owner(class_name="CNPC_VStub", init_body=0x2000)
+    child.spaces["schedule"] = space("schedule", 0x1093A740, 0x1090FF08)
+    child.spaces["squadslot"] = space("squadslot", 0x1093A788, 0x10920484)
+
+    anomalies: list[dict] = []
+    census_module._prove_parents([base, child], anomalies)
+    assert [row["row"] for row in anomalies] == ["parent-space-with-no-unit"]
+    assert anomalies[0]["space"] == "0x10920484"
+
+    child.spaces["schedule"] = space("schedule", 0x1093A740, 0xDEADBEEF)
+    with pytest.raises(census_module.CensusError, match="0xdeadbeef"):
+        census_module._prove_parents([base, child], [])
+
+
+def test_the_rtti_walk_answers_nothing_for_an_image_with_no_rtti():
+    """A `.text` and a `.data` and nothing else names no classes -- an answer, not a failure.
+
+    Every synthetic image in this file is exactly that shape, so a walk that refused one would make
+    the whole seam untestable without the retail DLL.
+    """
+
+    from elysium_pipeline.formats.ai_schedule_glb import rtti
+
+    builder = _Builder()
+    builder.emit(b"\xC3")
+    builder.pad()
+    image = PEImage(builder.build())
+    assert rtti.classes_deriving_from(image, "CAI_BaseNPC") == []

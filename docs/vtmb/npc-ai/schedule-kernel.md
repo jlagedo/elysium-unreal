@@ -1328,10 +1328,39 @@ translation walks the chain; a SIBLING's private space is never searched.
    `0x102bea80`, tasks `0x102beab0` (`space+0x18`), conditions `0x102beae0` (`space+0x30`), texts
    in two blocks (`158 × 0x102c6920 + 116 × 0x102c65d0`) — and registers 274 schedules (local
    68–341) and NOTHING else: every Troika task and condition is in the base spaces.
-3. Four pairs of classes SHARE one space through a common slot-580 getter: `CNPC_VCamera` /
-   `CNPC_VCameraSecurity` (`0x103683b0`), `CNPC_VVampire` / `CNPC_VPlayerController`
-   (`0x103750e0`), `CNPC_VHumanCombatant` / `CNPC_ProneDialog` (`0x10386ae0`), `CNPC_VScurrying` /
-   `CNPC_VRat` (`0x103abba0`). The second of each pair has no init body of its own.
+3. Classes SHARE spaces through a common slot-580 getter, and more of them than four pairs. The
+   four pairs are real: `CNPC_VCamera` / `CNPC_VCameraSecurity` (`0x103683b0`), `CNPC_VVampire` /
+   `CNPC_VPlayerController` (`0x103750e0`), `CNPC_VHumanCombatant` / `CNPC_ProneDialog`
+   (`0x10386ae0`), `CNPC_VScurrying` / `CNPC_VRat` (`0x103abba0`), and the second of each has no
+   init body of its own. **So do two larger groups** (read 2026-09-22, by walking the vtable of
+   every class whose RTTI base chain names `CAI_BaseNPC` and reading slot 580 off each):
+   `CGenericNPC`, `CCineNPC`, `CCineAI`, `CCineAISchedule`, `CAI_BaseHumanoid`,
+   `CAI_ExpressiveNPC`, `CAI_TestHull`, `CNPC_Bullseye` and `CScriptedTarget` inherit
+   **`CAI_BaseNPC`'s** getter (`0x101a6d00` / `0x102beb30` → `0x1090ff08`); `CNPC_VBaseBoss`,
+   `CNPC_VNewscaster`, `CPayphone`, `CNPCMaker`, `CNPCMaker_Fleshpile` and `CNPCMaker_Zombie`
+   inherit **Troika's** (`0x101aa790` / `0x102bec90` → `0x10924248`). **77 classes over 58
+   distinct spaces**, against 56 init bodies: 21 classes have no body and run the vocabulary of the
+   class above them. Three have a space of their own that no body registers into and so an empty
+   vocabulary — `CGeneric_NPC` (`0x1093a1a8`), `CGeneric_NPC_bathack` (`0x1093a2c8`) and
+   `CGenericSabbat_NPC` (`0x1093a3b0`).
+
+**The two roots' own spaces.** Neither root initialises its spaces the way a species does, which is
+why a walk that reads only init bodies leaves both — and the ten species that parent on Troika —
+with no parent at all.
+- `CAI_BaseNPC`: `0x1030c4e0` calls `Init` three times with literal operands,
+  `0x1090ff08` / `0x1090ff20` / `0x1090ff38` against namespaces `0x109203cc` / `0x109203d4` /
+  `0x109203dc`, **parent 0** — it is the root of the whole graph. It initialises no squad-slot
+  space.
+- `CAI_BaseNPCTroika`: one call at `0x102bd799`, inside its own init body, to the helper
+  `0x102be9f0`, which initialises all three from `(space, namespaceBase, parentBase)` and derives
+  `+0x18` / `+0x30` and `+8` / `+0x10` itself. The three arguments arrive as the return values of
+  one-line getters — `0x102bec90` → `0x10924248` (the space), `0x102beb10` → `0x109203cc` (the
+  namespace base) and `0x102beb30` → `0x1090ff08` (**the parent: the base**). So Troika's spaces are
+  `0x10924248` / `0x10924260` / `0x10924278`, and it too has no squad-slot space.
+- The squad-slot spaces of every class that has one parent on `0x10920484`, a `CAI_LocalIdSpace`
+  constructed alone in `0x10265660` with the root flag set. Nothing registers into it — the two
+  global squad slots go straight into the namespace (`0x10316e80`) — so falling through to it finds
+  nothing, by construction.
 Eight bodies feed zero texts and register nothing (`CAI_StandoffBehavior`, `CNPC_VChangBrosBlade`,
 `…Claw`, `CNPC_VLasombra`, `CNPC_VSabbatGunman`, `CNPC_VStalker`, `CNPC_VTaxiDriver`,
 `CNPC_VYukie`): they exist so the class has spaces with the right parents.
