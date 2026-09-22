@@ -69,26 +69,32 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   id against it, and the old body bounds against the local top, which is a live range bug the
   moment real ranges land. `Elysium.Substrate.ScheduleIdSpace` 5 of 5; `Elysium.Substrate`
   1249 of 1249.
-  **Resume at pass B**, on branch `0019-3-schedule-seam` (5 commits, tree clean, corpus deployed:
+  **Pass B landed 2026-09-22**: the parser `0x1030d850` and the engine tokenizer it reads through,
+  ported arm for arm — `FElysiumScheduleProgram`/`FElysiumScheduleStep` (`CAI_Schedule` and
+  `CAI_Task` field for field), seventeen prefixes, every row of the failure table, the two things
+  that do NOT fail, `FElysiumScheduleManager`, `FElysiumSymbolRegistry` (the three interning
+  run-time tables), `ElysiumMiscFlags::ParseScheduleIndex` and
+  `FElysiumNpcConditions::SetOrdinal`/`HasOrdinal`/`ClearOrdinal`/`Difference`. The eleven
+  compiled-in operand tables were diffed row for row against the deployed `vocabulary.json` and
+  agree. `EElysiumTaskOp` splits a task's IDENTITY (the corpus's global id, 441 of them) from its
+  BODY (the 23 this runtime runs); `FElysiumTaskOpTable::Measure` is the coverage meter's engine.
+  Two stated divergences: a task record stores the global task id (an operand still stores the
+  local one — the data word is a float), and `Activity:`/`Model:`/`SOUND:` intern instead of
+  Erroring. `Elysium.Substrate.ScheduleText` 9 of 9; `Elysium.Substrate` 1258 of 1258.
+  **Resume at pass C**, on branch `0019-3-schedule-seam` (7 commits, tree clean, corpus deployed:
   748 files under `Content/ElysiumCorpus/ai/schedules/`). Nothing in the runtime is wired to any of
-  it yet — passes P and A are purely additive, which is why stopping here costs nothing.
-  - **B** ports the parser into C++. It has a fixture that did not exist before: the Python
-    `formats/ai_schedule_glb/parser.py` is the same body from the same oracle section, and it reads
-    all 691 shipped texts, so the C++ port is written against a reference that already agrees with
-    retail. Also in B: `ElysiumScheduleTokenizer`, `ElysiumScheduleOperands` (the 17 prefixes; the
-    13 tables are already recovered and deployed in `vocabulary.json`), `ElysiumScheduleManager`,
-    `ElysiumActivityRegistry`, `ElysiumTaskOps`, `ElysiumMiscFlags::ParseScheduleIndex`, and
-    `FElysiumNpcConditions::SetOrdinal`/`HasOrdinal`/`Difference`. Driven by inline test text; the
-    hand registry and all 295 sites stay untouched, so B is green by construction.
+  it yet — P, A and B are purely additive, which is why stopping here costs nothing.
   - **C** stands `FElysiumScheduleCorpus` on the deployed corpus and runs the witness as a test.
     The sidecar already carries what the loader needs: `classNames`, the four spaces with
     `parentUnit`, the registrations and the texts in feed order. Load order is the sidecar's
     `parent_space` graph, NOT the C++ base chain — they genuinely differ (`CNPC_VTzimisce`'s census
-    base is `CNPC_VBaseBoss`, its space parent is Troika).
+    base is `CNPC_VBaseBoss`, its space parent is Troika). Also C: `ElysiumScheduleNumbers.h` with
+    `VerifyNumbers`, and the new `TASK_FIND_COVER_FROM_ENEMY` op. The parse half is done, so C is
+    a loader and an ordering, not a grammar.
   - **D is indivisible and wants a fresh session with room**: the 295-site type change, the save CRC
-    re-key, the inverted mask, the id-space stubs re-pointed. The moment `Tick` reads the manager,
-    `Step.Target` has no meaning, so it cannot be split.
-  - **E** deletes the 28 hand programs and lands the coverage meter.
+    re-key, the inverted mask (`Difference` is already there for it), the id-space stubs re-pointed.
+    The moment `Tick` reads the manager, `Step.Target` has no meaning, so it cannot be split.
+  - **E** deletes the 28 hand programs and lands the coverage meter and `elysium.schedules`.
   The witness text is read and known: `SCHED_TROIKA_CHASE_ENEMY_FAILED` at `0x105ef068` is **twelve**
   tasks, not the eleven the spec's prose lists (it omits `TASK_WAIT_FOR_MOVEMENT`), with twelve
   interrupts; of its task tokens the port has ten, `TASK_FIND_COVER_FROM_ENEMY` is new, and
