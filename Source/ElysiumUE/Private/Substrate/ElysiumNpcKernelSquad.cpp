@@ -610,8 +610,7 @@ void FElysiumNpc::AlertNearbyAlly(FElysiumEntity* Attacker)
 	{
 		Senses.Memory.DetectedAttackAttacker = Attacker->Handle;
 		// Retail stores an EXPIRY, `curtime + _DAT_10454110`; this runtime stores the stamp and
-		// compares it against `ElysiumNpcCond::DetectedAttackRetentionSeconds`. The retail delta's
-		// literal is UNRECOVERED.
+		// compares it against `ElysiumNpcCond::DetectedAttackRetentionSeconds`, the same 5.0.
 		Senses.Memory.DetectedAttackTime = Now;
 	}
 }

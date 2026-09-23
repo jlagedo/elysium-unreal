@@ -284,8 +284,8 @@ bool ComputeHitboxSurroundingBox(FVector& OutMinsCm, FVector& OutMaxsCm) const;
  *  passes when the player is inside `_DAT_10457ac4`. */
 static bool EnemyInViewCone(const FElysiumEntity& Enemy, const FVector& PointCm);
 
-/** The Werewolf's own gate on slot 617 — `ConVar` `DAT_1093d694` read as `IsCommand() ? 0 : m_nValue`
- *  (+0x2c). **SEAM**, unrecovered name and default, answering 0, which CLOSES the gate and makes the
+/** The Werewolf's own gate on slot 617 — `ConVar` `DAT_1093d694` `werewolf_disregard_player_vision`
+ *  read as `IsCommand() ? 0 : m_nValue` (+0x2c). Shipped "0", which CLOSES the gate and makes the
  *  Werewolf's `EnemyCouldSeeHull` answer false without tracing. */
 static bool WerewolfSightConVar();
 /** The enemy predicate the same body asks second: the active enemy's own vtable `+0x278`
@@ -339,8 +339,9 @@ void ChaseLeadPosition(FElysiumEntity* Enemy, const FVector& VelocityCm, float G
 float GroundSpeedCm() const;
 FVector LocalVelocityCm() const;
 
-/** The `ConVar` `CNPC_VWerewolf`'s slot 563 adds to the goal tolerance — `DAT_1093d52c`, read as
- *  `IsCommand() ? 0.0f : m_fValue` (+0x28). **SEAM**, name and default unrecovered, answering 0. */
+/** The `ConVar` `CNPC_VWerewolf`'s slot 563 adds to the goal tolerance — `DAT_1093d52c`
+ *  `werewolf_translated_enemy_position_tolerance`, read as `IsCommand() ? 0.0f : m_fValue` (+0x28);
+ *  shipped "0". */
 static float WerewolfChaseToleranceConVar();
 
 // --- The Werewolf teleport pair -----------------------------------------------------------------
@@ -349,9 +350,9 @@ static float WerewolfChaseToleranceConVar();
 void TeleportOut();
 /** `CNPC_VWerewolf::TeleportIn` `0x103d4d60`. */
 void TeleportIn();
-/** The `ConVar` gate both halves put in front of their `dev/ww_tele_*.wav` — `DAT_1093f73c`, read as
- *  `IsCommand() ? 0 : m_nValue` (+0x2c). Recorded as UNRECOVERED in
- *  `docs/vtmb/npc-ai/lifecycle.md`; **SEAM**, answering 0, which is the arm that plays nothing. */
+/** The `ConVar` gate both halves put in front of their `dev/ww_tele_*.wav` — `DAT_1093f73c`
+ *  `werewolf_show_debug`, read as `IsCommand() ? 0 : m_nValue` (+0x2c); shipped "0", the arm that
+ *  plays nothing. */
 static bool WerewolfTeleportSoundConVar();
 /** `m_fEffects` (+0x019c) bit `0x20` — `EF_NODRAW`. `TeleportOut` raises it and `TeleportIn` clears
  *  it. This runtime has no effects word at the kernel tier; it is carried here because both bodies
@@ -370,9 +371,8 @@ void PlayTeleportSound(const TCHAR* Rel);
 void KillTeleportBats();
 /** `CNPC_VWerewolf::UpdateConditionCanTeleport` `0x103cc0d0`. */
 void UpdateConditionCanTeleport();
-/** The threshold `UpdateConditionCanTeleport` measures its stamp against — `ConVar` `DAT_1093d414`,
- *  `IsCommand() ? 0.0f : m_fValue`. **SEAM**, unrecovered, answering 0 — which is the value that
- *  OPENS the gate for any elapsed time above zero. */
+/** The threshold `UpdateConditionCanTeleport` measures its stamp against — `ConVar` `DAT_1093d414`
+ *  `werewolf_teleport_out_time`, `IsCommand() ? 0.0f : m_fValue`; shipped "4.0" seconds. */
 static float WerewolfTeleportDelayConVar();
 
 // --- What is left of `FUN_102c5570` -------------------------------------------------------------
@@ -415,9 +415,7 @@ bool WeaponShootPositionTzimisce(const FVector& SrcCm, FVector& OutCm) const;
 static FVector TzimisceAimOffset(const FVector& SrcCm, const FVector& Forward, const FVector& Right,
 	const FVector& Up, float ForwardScale, float RightScale, float UpScale, bool bAddRight);
 
-/** The three `ConVar`s the override scales the basis by — 0 `DAT_1093cbac` (up), 1 `DAT_1093cbf4`
- *  (right), 2 `DAT_1093cc3c` (forward). **SEAM**: names and defaults unrecovered (uninitialised
- *  `.data`, no constructor in the corpus), and retail's own `ConVar::GetFloat()` answers `0.0f` for
- *  a cvar it cannot read — the arm taken here. With all three at zero both activity arms answer
- *  `SrcCm`, exactly as the base does. */
+/** The three `ConVar`s the override scales the basis by — 0 `DAT_1093cbac` (up,
+ *  `tzimisce_claw_left_z` "40"), 1 `DAT_1093cbf4` (right, `tzimisce_claw_left_y` "25"), 2
+ *  `DAT_1093cc3c` (forward, `tzimisce_claw_left_x` "0"). */
 static float TzimisceAimConVar(int32 Which);

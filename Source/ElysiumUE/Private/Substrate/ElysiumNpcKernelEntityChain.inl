@@ -642,11 +642,10 @@ bool AutoaimBlendWeights(float& OutScale, float& OutOldWeight) const;
  *  closest-NPC candidate. Named by neither datamap; **unrecovered**. False admits. */
 bool ClosestNpcCandidateBitSet(const FElysiumEntity& Candidate) const;
 
-/** **SEAM** for `_DAT_10449270` (subtracted from curtime) and `_DAT_10471720` (the no-sound
- *  fallback duration) in `SetPlayerAnim`. Both **unrecovered**; both answer 0. */
-float PlayerAnimLeadIn() const;
-float PlayerAnimFallbackDuration() const;
+/** `_DAT_10449270` (0.5, subtracted from curtime) and `_DAT_10471720` (0.6, the no-sound fallback
+ *  duration) in `SetPlayerAnim` — both DOUBLES in `.rdata`. */
+double PlayerAnimLeadIn() const;
+double PlayerAnimFallbackDuration() const;
 
-/** **SEAM** for `_DAT_1044e658`, the delay the released controller NPC's one-shot think is armed
- *  at. **Unrecovered**; 0 arms it for the next pass. */
-float ControllerReleaseThinkDelay() const;
+/** `_DAT_1044e658`, the double 0.01 the released controller NPC's one-shot think is armed at. */
+double ControllerReleaseThinkDelay() const;

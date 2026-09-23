@@ -287,11 +287,11 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 	// That gate is the per-state capability byte (+0x5b64), which is `ELYSIUM_NPC_WORD_IMPLICIT` —
 	// a pure function of the state here. Bit 7 is set only for the combat (0x8f) and flee (0x85)
 	// states, and a fixture-spawned guard is neither, which is why the two cvar arms above are the
-	// ones reached. The other side of that gate is the turning-anims branch, whose cvar is the
-	// Facing family's SEAM for the unconstructed `0x109247ec` and answers false.
+	// ones reached. The other side of that gate is the turning-anims branch, whose cvar
+	// `0x109247ec` is `debug_turning`, shipped "0".
 	TestEqual(TEXT("an idle guard's state byte has bit 7 clear"),
 		static_cast<int32>(Guard->NpcStateFlags() & 0x80), 0);
-	TestFalse(TEXT("the turning-anims cvar seam refuses"), Guard->TurningAnimsEnabled());
+	TestFalse(TEXT("debug_turning ships off"), Guard->TurningAnimsEnabled());
 
 	// `PLAYING_FACE_ANIM` (word one, 0x8000000) suppresses the whole ladder.
 	Guard->ActivityNumber = 0x13;
@@ -300,8 +300,8 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 	Guard->NpcFlags.Clear(EElysiumNpcFlag::PLAYING_FACE_ANIM);
 
 	// The turning arm: `m_afMemory & 0x2000` beats every activity. `GetIdealYawSpeed()` is a
-	// generated slot stub and the scalar cvar is unrecovered, so the product is 0 and the arm lands
-	// on retail's own floor `_DAT_104454c0` = 1.0.
+	// generated slot stub answering 0, so the product with the ".15" scalar is 0 and the arm lands on
+	// retail's own floor `_DAT_104454c0` = 1.0.
 	Guard->ScheduleHost.MemoryBits |= 0x2000;
 	TestEqual(TEXT("the turning arm answers the recovered floor, 1.0"), Guard->MaxYawSpeed(), 1.0f);
 	TestEqual(TEXT("and that is what the arm itself answers for the Troika cvar"),
@@ -322,13 +322,13 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 	Guard->ActivityNumber = 9;
 	TestEqual(TEXT("the Dog has no walk arm and answers 45"), Guard->MaxYawSpeedDog(), 45.0f);
 	// The Dog's idle arm has NO state gate in front of it, so it is the one place this suite can
-	// reach the unrecovered cvar `0x10923e84` directly: with `TurningAnimsEnabled()` false it is
-	// consulted, and a cvar this substrate cannot construct answers retail's own `IsCommand()` arm.
+	// reach `0x10923e84` directly: with `TurningAnimsEnabled()` false it is consulted, and it is
+	// `debug_turning_speed`, shipped "90".
 	Guard->ActivityNumber = 1;
-	TestEqual(TEXT("the Dog's idle arm reaches the unrecovered cvar and answers 0"),
-		Guard->MaxYawSpeedDog(), 0.0f);
+	TestEqual(TEXT("the Dog's idle arm answers debug_turning_speed's 90"),
+		Guard->MaxYawSpeedDog(), 90.0f);
 	Guard->ActivityNumber = 5;
-	TestEqual(TEXT("0x5 takes the same arm"), Guard->MaxYawSpeedDog(), 0.0f);
+	TestEqual(TEXT("0x5 takes the same arm"), Guard->MaxYawSpeedDog(), 90.0f);
 	Guard->ActivityNumber = 1;
 	TestEqual(TEXT("the Tzimisce's ACT_IDLE is 5"), Guard->MaxYawSpeedTzimisce(), 5.0f);
 	Guard->ActivityNumber = 0xfc;
@@ -358,32 +358,33 @@ bool FElysiumNpcKernelMotorConVarsTest::RunTest(const FString&)
 	TestEqual(TEXT("the walk cvar's default is 25"),
 		FElysiumNpc::RetailYawConVarValue(TEXT("0x1092411c")), 25.0f);
 
-	// The four that live in uninitialised `.data` and are never constructed in the corpus: name and
-	// default **unrecovered**, so the seam answers retail's own `IsCommand()` arm.
-	const TCHAR* Unrecovered[] = { TEXT("0x10924c94"), TEXT("0x1093ad24"), TEXT("0x1093c9fc"),
-		TEXT("0x10923e84") };
-	for (const TCHAR* Address : Unrecovered)
-	{
-		TestEqual(FString::Printf(TEXT("%s answers 0"), Address),
-			FElysiumNpc::RetailYawConVarValue(Address), 0.0f);
-	}
+	// The other four are tunables-table rows (`docs/vtmb/npc-ai/convars.md`): the three turning
+	// scalars ship ".15" and `debug_turning_speed` ships "90".
+	TestEqual(TEXT("debug_turn_scalar is .15"),
+		FElysiumNpc::RetailYawConVarValue(TEXT("0x10924c94")), 0.15f);
+	TestEqual(TEXT("debug_dog_turn_scalar is .15"),
+		FElysiumNpc::RetailYawConVarValue(TEXT("0x1093ad24")), 0.15f);
+	TestEqual(TEXT("tzimisce_turn_scalar is .15"),
+		FElysiumNpc::RetailYawConVarValue(TEXT("0x1093c9fc")), 0.15f);
+	TestEqual(TEXT("debug_turning_speed is 90"),
+		FElysiumNpc::RetailYawConVarValue(TEXT("0x10923e84")), 90.0f);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugTurningSpeed, 12.f);
+	TestEqual(TEXT("and a set value is what the ladder reads"),
+		FElysiumNpc::RetailYawConVarValue(TEXT("0x10923e84")), 12.0f);
+	ElysiumNpcTunables::ResetConVars();
 
-	int32 Recovered = 0;
+	int32 Tabled = 0;
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
-		if (Rows[Index].bDefaultRecovered)
+		TestTrue(TEXT("every row carries its console name"), FCString::Strlen(Rows[Index].Name) > 0);
+		if (Rows[Index].Table != ElysiumNpcTunables::EConVar::Count)
 		{
-			++Recovered;
-			TestTrue(TEXT("a recovered row carries its name"),
-				FCString::Strlen(Rows[Index].Name) > 0);
-		}
-		else
-		{
-			TestEqual(TEXT("an unrecovered row carries no name"), FString(Rows[Index].Name),
-				FString());
+			++Tabled;
+			TestEqual(TEXT("and a tabled row's name is the table's"), FString(Rows[Index].Name),
+				FString(ElysiumNpcTunables::ConVarRow(Rows[Index].Table).ConsoleName));
 		}
 	}
-	TestEqual(TEXT("exactly two of the six are recovered"), Recovered, 2);
+	TestEqual(TEXT("four of the six are read through the tunables table"), Tabled, 4);
 	TestEqual(TEXT("an address in no row answers 0"),
 		FElysiumNpc::RetailYawConVarValue(TEXT("0xdeadbeef")), 0.0f);
 	return true;

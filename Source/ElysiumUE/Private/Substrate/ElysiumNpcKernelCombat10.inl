@@ -423,13 +423,10 @@ bool ShouldDodgeRangedAttack();
  *  `m_flNextDodgeTime` (`+0x65a4`) by. */
 int32 SelectCombatReactionSchedule();
 
-/** SEAM for the two ConVar objects the pre-pass and the prologue gate on: `DAT_10923d3c` (the weapon
- *  pre-pass's reload gate) and `DAT_109248f4` (the prologue's taunt gate). Retail reads each
- *  object's vtable `+0x04` bool and its `+0x2c` int and runs the block only when the bool is CLEAR
- *  and the int is non-zero. Neither convar's name nor its default is in the corpus, so both answer
- *  the SHIPPED-DEFAULT shape: bool clear, int non-zero — the ADMITTING arm, which is the one that
- *  lets the recovered block run rather than silently deleting it. */
-static bool RangedGateConVarEnabled(const TCHAR* RetailGlobal);
+/** The two ConVar gates the pre-pass and the prologue read as `!vtable[+0x04]() && m_nValue`:
+ *  `DAT_10923d3c` `debug_allow_fake_reload` (shipped "1", the reload gate) and `DAT_109248f4`
+ *  `debug_allow_dodge` (shipped "0", the no-cover dodge gate). */
+static bool RangedGateConVarEnabled(ElysiumNpcTunables::EConVar ConVar);
 
 /** SEAM for `0x101e3f50(&DAT_10739a4c, entity)` — the discipline test both the Troika base and the
  *  human arm put in front of their slot-606 branch (the base passes THIS body, the human passes

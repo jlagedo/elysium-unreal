@@ -127,6 +127,26 @@ def test_citation_regexes_match_the_two_spellings():
     assert kl.SEAM_RE.search("// CHOSEN, NOT RECOVERED — the position") is not None
 
 
+def test_inline_cells_recognizes_convar_reader_aliases(tmp_path):
+    substrate = tmp_path / "Source" / "ElysiumUE" / "Private" / "Substrate"
+    substrate.mkdir(parents=True)
+    (substrate / "ElysiumNpcCovered.cpp").write_text(
+        "// DAT_10924a18 DAT_10924a1c _DAT_10924F70 DAT_10924f74 DAT_104454c0\n",
+        encoding="utf-8")
+    (substrate / "ElysiumNpcOutstanding.cpp").write_text(
+        "// DAT_104454c4 DAT_109248f4\n", encoding="utf-8")
+    rows = [
+        kl.Tunable("10924a18", "MeleeRange", "convar_f32", "100", "melee range"),
+        kl.Tunable("10924f70", "MoveFacing", "convar_i32", "1", "facing gate"),
+        kl.Tunable("104454c0", "One", "f32", "1", "pooled one"),
+    ]
+    # Neither ConVar's object nor its reader remains in the queue. A neighbouring plain
+    # cell and an untabled ConVar reader must still remain, so aliases cannot be universal.
+    assert kl.inline_cells(tmp_path, rows) == {
+        "ElysiumNpcOutstanding.cpp": {"104454c4", "109248f4"},
+    }
+
+
 # --- the checklist, on a hand-built band ------------------------------------------------------
 
 

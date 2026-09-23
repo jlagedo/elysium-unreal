@@ -111,21 +111,13 @@ namespace
 	// `0x103be130` probe, and `0x10000 FORCE_RELAXED_ANIMS`.
 	// `m_bfAINPCFlags2` (+0x14bc) `0x400 MOVE_FACE_ENEMY` and `0x80000 D_MILDLY_CRAZY`.
 
-	// --- The ConVar globals, by address -----------------------------------------------------------
-	//
-	// Read through family **Debug10**'s `DebugConVar`, which is the kernel's ONE ConVar seam: it keys
-	// on the retail global's SPELLING and answers the `+0x2c` int, which is exactly the word all five
-	// of these arms read. Reused rather than stood in parallel, per the story's seam rule; the seam's
-	// name says "debug" because that family stood it, not because the set is debug-only.
-	constexpr TCHAR GAnim10CvGait[] = TEXT("DAT_10924d6c");        // 0x10295590's gait override
-	constexpr TCHAR GAnim10CvAggressive[] = TEXT("DAT_10924f74");  // 0x103854f0's combat-aggression
-	constexpr TCHAR GAnim10CvAlert[] = TEXT("DAT_10923f5c");       // ... for m_NPCState 3
-	constexpr TCHAR GAnim10CvHunt[] = TEXT("DAT_10924034");        // ... for m_NPCState 0xb
-	constexpr TCHAR GAnim10CvHitBuildup[] = TEXT("DAT_109245e4");  // slot 326's buildup ceiling
-
-	// The two FLOAT ConVars `MaintainEyeDirection` draws its cycler-actor duration between. They read
-	// `+0x28`, not `+0x2c`, so they take this family's own float seam.
-	TMap<FString, float> GAnim10FloatConVars;
+	// --- The ConVars, rows of the tunables table (0019/4), every one read at its `+0x2c` int --------
+	using EAnim10ConVar = ElysiumNpcTunables::EConVar;
+	constexpr EAnim10ConVar GAnim10CvGait = EAnim10ConVar::DebugForceAnim;             // 0x10295590's gait override
+	constexpr EAnim10ConVar GAnim10CvAggressive = EAnim10ConVar::DebugAllowMoveFacing; // 0x103854f0's combat-aggression
+	constexpr EAnim10ConVar GAnim10CvAlert = EAnim10ConVar::DebugAlertAggressive;      // ... for m_NPCState 3
+	constexpr EAnim10ConVar GAnim10CvHunt = EAnim10ConVar::DebugHuntingAggressive;     // ... for m_NPCState 0xb
+	constexpr EAnim10ConVar GAnim10CvHitBuildup = EAnim10ConVar::NpcHitBuildupAmount;  // slot 326's buildup ceiling
 
 	// The gait override's two live values.
 	constexpr int32 GAnim10GaitForceRun = 1;
@@ -288,30 +280,6 @@ namespace
 // The seams.
 // =================================================================================================
 
-float FElysiumNpc::Anim10FloatConVar(const TCHAR* RetailGlobal)
-{
-	// Retail: `cv->vtable[4]()` must answer 0 (the object is a ConVar, not a ConCommand) and the
-	// FLOAT at `cv + 0x28` is the value. Neither name nor shipped default of `DAT_1090fc0c` or
-	// `DAT_1090fc9c` is anywhere in the corpus, so both answer 0.0 — which is retail's own
-	// `IsCommand()` arm — and a test sets what it wants.
-	if (RetailGlobal == nullptr)
-	{
-		return 0.f;
-	}
-	const float* Value = GAnim10FloatConVars.Find(FString(RetailGlobal));
-	return Value != nullptr ? *Value : 0.f;
-}
-
-void FElysiumNpc::SetAnim10FloatConVar(const TCHAR* RetailGlobal, float Value)
-{
-	if (RetailGlobal == nullptr)
-	{
-		GAnim10FloatConVars.Reset();
-		return;
-	}
-	GAnim10FloatConVars.Add(FString(RetailGlobal), Value);
-}
-
 const TCHAR* FElysiumNpc::HumanoidPoseParamName(int32 Index)
 {
 	if (Index < 0 || Index >= NumHumanoidPoseParams)
@@ -396,11 +364,9 @@ bool FElysiumNpc::AimPointFor(const FElysiumEntity* AimTarget, FVector& OutPoint
 int32 FElysiumNpc::HitBuildupConVarValue()
 {
 	// `(**(code **)(*DAT_109245e4 + 4))()` then `DAT_109245e4[0xb]` (`+0x2c`), slot 326's buildup
-	// ceiling. `FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow` is the port's recovered value for
-	// the SAME ConVar (`docs/vtmb/combat-and-damage.md` → "Who may be knocked back"); a test can
-	// still drive the ConVar seam, and the seam wins when it carries a value.
-	const int32 Seam = DebugConVar(GAnim10CvHitBuildup);
-	return Seam != 0 ? Seam : FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow;
+	// ceiling: `npc_hit_buildup_amount`, "2". `FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow` is
+	// the player-side reading of the same ConVar (`docs/vtmb/combat-and-damage.md`).
+	return ElysiumNpcTunables::ConVarInt(GAnim10CvHitBuildup);
 }
 
 uint32 FElysiumNpc::ActiveWeaponDrawFlags() const
@@ -1072,8 +1038,9 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 	// `CAI_BaseNPCTroika::NPC_EarlyTranslateActivity` `0x10295590`, 295 bytes.
 	int32 Request = Activity;
 
-	// 1. The gait override ConVar `DAT_10924d6c`: 1 forces running, 2 forces walking.
-	const int32 Gait = DebugConVar(GAnim10CvGait);
+	// 1. The gait override ConVar `debug_force_anim` (`DAT_10924d6c`, ships 0): 1 forces running, 2
+	//    forces walking.
+	const int32 Gait = ElysiumNpcTunables::ConVarInt(GAnim10CvGait);
 	if (Gait == GAnim10GaitForceRun)
 	{
 		if (Request == GAnim10ActWalk || Request == GAnim10ActHuntWalk)
@@ -1221,10 +1188,10 @@ int32 FElysiumNpc::HumanNpcEarlyTranslateActivity(int32 Activity)
 	}
 
 	// 3. The decision tree, in retail's own nesting. The OUTER test is a four-term OR: the aggressive
-	//    arm is taken only when capability `0x40` is set AND the ConVar `DAT_10924f74` is LIVE with a
-	//    non-zero `+0x2c` AND `m_bfAINPCFlags2` carries `0x400 MOVE_FACE_ENEMY`.
+	//    arm is taken only when capability `0x40` is set AND the ConVar `debug_allow_move_facing`
+	//    (`DAT_10924f74`, ships 1) is non-zero AND `m_bfAINPCFlags2` carries `0x400 MOVE_FACE_ENEMY`.
 	const bool bCombatAggressive = (CapabilitiesGet() & GAnim10CapNoAimGait) != 0
-		&& DebugConVar(GAnim10CvAggressive) != 0
+		&& ElysiumNpcTunables::ConVarInt(GAnim10CvAggressive) != 0
 		&& NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY);
 	if (bCombatAggressive)
 	{
@@ -1258,8 +1225,8 @@ int32 FElysiumNpc::HumanNpcEarlyTranslateActivity(int32 Activity)
 			// ConVar is live and non-zero, OR `m_afMemory` carries `0x8000000`. The pack-07 walk had
 			// this arm inverted; the body wins.
 			const int32 StateConVar = State == 3
-				? DebugConVar(GAnim10CvAlert)
-				: DebugConVar(GAnim10CvHunt);
+				? ElysiumNpcTunables::ConVarInt(GAnim10CvAlert)   // `debug_alert_aggressive`, 0
+				: ElysiumNpcTunables::ConVarInt(GAnim10CvHunt);   // `debug_hunting_aggressive`, 1
 			const bool bMemory =
 				(ScheduleHost.MemoryBits & GAnim10MemoryAggressive) != 0;
 			if (StateConVar != 0 || bMemory)
@@ -1661,9 +1628,9 @@ bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 		return true;
 	case ENpcPredicate::GaitOverrideRun:
 		// `0x10295590` step 1: the ConVar `DAT_10924d6c` reads 1.
-		return DebugConVar(GAnim10CvGait) == GAnim10GaitForceRun;
+		return ElysiumNpcTunables::ConVarInt(GAnim10CvGait) == GAnim10GaitForceRun;
 	case ENpcPredicate::GaitOverrideWalk:
-		return DebugConVar(GAnim10CvGait) == GAnim10GaitForceWalk;
+		return ElysiumNpcTunables::ConVarInt(GAnim10CvGait) == GAnim10GaitForceWalk;
 	case ENpcPredicate::MovementPolicyFrenzy:
 		// `0x10295590` step 2: `m_bfNPCFrenziedFlags & 0x40`.
 		return NpcFlags.HasFrenzied(GAnim10FrenziedRunFrenzy);

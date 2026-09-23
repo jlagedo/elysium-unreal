@@ -721,20 +721,31 @@ bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 	FlyByNpc->bDead = false;
 	Bat->ManBatFlyByTarget = FlyBy->Handle;
 
-	// --- The fly-node arm and the overspeed latch. With the acceleration cvar unrecovered the
-	//     clamp is zero, so the produced velocity IS the current one; the latch then fires when the
-	//     remaining distance is under 0.2 of that velocity's length.
+	// --- The fly-node arm and the overspeed latch. With `manbat_delta` set to 0 the clamp is zero,
+	//     so the produced velocity IS the current one; the latch then fires when the remaining
+	//     distance is under 0.2 of that velocity's length.
 	FElysiumNpc::ResetManBatStationaryWatch();
 	Bat->ManBatMoveGoalNodeMode = 0;
 	Bat->ManBatFlyNode = Node->Handle;
 	Bat->bManBatReachedMoveGoal = false;
 	Bat->Velocity = FVector(1000.0 * U, 0.0, 0.0);   // |v| = 1000, 0.2 * 1000 = 200 > 20
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::ManbatDelta, 0.f);
 	Out = FVector::ZeroVector;
 	Bat->FUN_1038b370(0.1f, Out);
 	TestEqual(TEXT("a zero acceleration clamp hands back the current velocity"), Out.X, 1000.0,
 		0.01);
 	TestTrue(TEXT("20 units to the node under 0.2 * 1000 latches m_bReachedMoveGoal"),
 		Bat->bManBatReachedMoveGoal);
+
+	// At the shipped "600.0" the clamp is 600 * 0.1 = 60 units a second per axis.
+	ElysiumNpcTunables::ResetConVars();
+	FElysiumNpc::ResetManBatStationaryWatch();
+	Bat->bManBatReachedMoveGoal = false;
+	Out = FVector::ZeroVector;
+	Bat->FUN_1038b370(0.1f, Out);
+	TestTrue(TEXT("the shipped manbat_delta moves X at most 60 off the current velocity"),
+		FMath::Abs(Out.X - 1000.0) <= 60.0 + 0.01);
+	TestTrue(TEXT("and the latch still fires"), Bat->bManBatReachedMoveGoal);
 
 	// The same pass with a zero interval never reaches the latch at all.
 	FElysiumNpc::ResetManBatStationaryWatch();
@@ -1169,14 +1180,15 @@ bool FElysiumNpcKernelBossesPedestalSearchTest::RunTest(const FString&)
 	Ming->MingXiaoSeveredTentacleMask = 0;
 	Ming->Senses.Memory.ClosestPlayerDistanceCm = 400.f * U;
 
-	// The whole body is closed by the `DAT_1093ba8c` cvar seam, whose name and default are
-	// unrecovered: it answers 0, which is retail's own answer for an unconstructed cvar and the arm
-	// that never searches at all.
-	TestEqual(TEXT("the species cvar seam answers 0"), Ming->MingXiaoPedestalCvar(), 0);
+	// The `DAT_1093ba8c` cvar is `ming_xiao_pickup`, shipped "1": the search is open. Set to 0 it
+	// closes the whole body before any search runs.
+	TestEqual(TEXT("ming_xiao_pickup ships 1"), Ming->MingXiaoPedestalCvar(), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::MingXiaoPickup, 0.f);
 	int32 Task = -1;
 	FVector Aim = FVector::ZeroVector;
 	FVector Forward = FVector::ZeroVector;
-	TestNull(TEXT("so the whole pick answers null"), Ming->FUN_10398b20(Task, Aim, Forward));
+	TestNull(TEXT("at 0 the whole pick answers null"), Ming->FUN_10398b20(Task, Aim, Forward));
+	ElysiumNpcTunables::ResetConVars();
 
 	// The two gates in front of the cvar are recovered and are asserted through the same entry:
 	// under 150 units of closest-player distance, and with both tentacles severed, it refuses.
@@ -1252,8 +1264,8 @@ bool FElysiumNpcKernelBossesSeamsTest::RunTest(const FString&)
 		Boss->ManBatFindMoveGoalHint(20000, 15000.f));
 	TestFalse(TEXT("the navigator reachability probe answers false"),
 		Boss->NavigatorCanReach(FVector::ZeroVector));
-	TestEqual(TEXT("the ManBat acceleration cvar answers 0"), Boss->ManBatAccelerationCvar(), 0.f,
-		0.0001f);
+	TestEqual(TEXT("the ManBat acceleration cvar is manbat_delta's shipped 600"),
+		Boss->ManBatAccelerationCvar(), 600.f, 0.0001f);
 
 	// `SolveThrowImpulse` leaves its impulse exactly as it found it.
 	FVector Impulse(1.0, 2.0, 3.0);

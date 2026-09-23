@@ -437,7 +437,7 @@ green, and `coverage.md` shows the change.
   Current task census: 691 programs, 4,138 steps, 26 bound bodies, 488 unported identities reached
   by 1,602 steps. The unported work queue is visible through `elysium.schedules`.
 
-- [ ] **4. The tunables table.**
+- [x] **4. The tunables table.**
   Retail: the `.rdata` cells every kernel file cites — "every threshold below was read out of
   the pinned `vampire.dll` at its cited address".
   Gap: the constants are inline, per file, with a paragraph of provenance each; the DRM
@@ -455,6 +455,90 @@ green, and `coverage.md` shows the change.
   ConVars with name, default and reader member; no shipped file overrides any, so the default is
   the retail value. `--check` should read a cell at the width the row states.
   Size: S–M. Effort: Sonnet / medium.
+  **Landed 2026-09-22.** `research/tooling/ghidra/driver/kernel_tunables.tsv` holds **99 rows**:
+  39 `f32` and 12 `f64` cells, and 22 `convar_f32` / 26 `convar_i32` ConVars. Every one is re-read
+  out of the pinned image by `uv run elysium research gen_kernel_tunables --check`, at the width
+  the row states, compared bit for bit. A ConVar row is checked by finding its object's
+  `MOV ECX, object` static initialiser in `.text` and reading the console name and the default
+  string that initialiser pushes. The generator emits `ElysiumNpcKernelTunables.h`, one
+  `inline constexpr` per cell under `namespace ElysiumNpcTunables`, and `.cpp`, which holds the
+  ConVar rows and their live store. It is a header plus a `.cpp` rather than the `.cpp` this text
+  named, because the values must stay constant expressions.
+  - *What it reads:* `ConVarFloat` is retail's `+0x28` read and `ConVarInt` its `+0x2c` read. A
+    default parses as `ConVar::Create` does it (`atof` / `atoi`), and `SetConVar` behaves as
+    `SetValue(float)`. `ElysiumNpc.h` includes the header, so every kernel body sees the names.
+  - *How cells are named:* a cell MSVC pooled (1.0f, 0.5f, 100.0f…) is named by its value
+    (`One`, `Half`, `HalfDouble`). A cell that one body owns is named by what it bounds.
+  - *The ledger:* `kernel_ledger` counts the table into `coverage.md` § "Tunables". `--report`
+    lists the NPC substrate's remaining inline `DAT_` cells: **344 over 91 files**, which is story
+    6's migration queue. ConVar coverage includes both the object and its reader pointer at +4;
+    the review correction removed 37 already-covered reader aliases from the original count.
+  - *The seeds:* `rdata-cells.md` (31 of its 32 rows; the CRC-32 table stays out), `convars.md`
+    (all 42), and the movement cells the 0019/1 seam rows keep. The check then named **seven
+    more**: the six debug ConVars below, and `0x1044ffe0` (65536/360).
+
+  *What the check corrected in the oracle.* `werewolf_draw_hints` ships `"0"`, not `"40"`. It
+  named six debug ConVars the Debug families read that `convars.md` had not listed; one of them,
+  `ent_trace_conditions`, ships **`"1"`**. `DAT_10920534` / `DAT_10920535` are plain bytes, not
+  ConVars. The code's "taunt gate" `DAT_109248f4` is `debug_allow_dodge` (`0x102b7cf0`).
+
+  *The owner's decision: wire every seam, not just the store (2026-09-22).* **83 inline
+  constants** already held the image's value and now read the table. The rest were divergences,
+  each a single one against a body already ported, now corrected to retail:
+  - **The ConVar seams.** The kernel's two string-keyed stores (`DebugConVar`,
+    `Anim10FloatConVar`) are deleted. So is about a score of per-family ConVar seams, every one
+    of which answered 0 as "unrecovered". What now ships as retail defaults:
+    - the melee range, `debug_melee_advance_combatmove_dist` 100, read by every melee selector;
+      `MeleeRangeUnits()` is its one reader;
+    - `debug_allow_move_facing` 1, which arms facing requests and the combat-aggression arm;
+    - `debug_hunting_aggressive` 1;
+    - `npc_hit_buildup_amount` 2, with its 0-fallback deleted;
+    - flex 5 / 7;
+    - the view-cone apex, `debug_viewcone_back_dist` 40 units. `ViewConeBodyOffsetCm` is now an
+      accessor over the table;
+    - the turn scalars .15 and turn speed 90;
+    - `ming_xiao_pickup` 1 and `manbat_delta` 600;
+    - werewolf pursuit 3.0 s / 800, teleport-out 4.0 and fastbreak 40;
+    - Tzimisce claw 40 / 25 / 0, voice 100 / 65 / 1 and throw .007 / .0008;
+    - sabbat gunman .1 / 3 / 3.0;
+    - `sk_basenpctroika_health` 10, written by `NPCInit` exactly as retail does. A pedestrian's
+      restore, which re-runs `NPCInit`, therefore comes back at 10.
+  - **The 0.0 stand-ins for cells `rdata-cells.md` had read.** There are about twenty:
+    - the hint validator's height arm (64, double), which is no longer disarmed;
+    - the face-turn rung −40, the angle quantum and the normalise epsilon;
+    - `CAI_Hint::Spawn`'s ×0.5 and +43. These are STORED back over the angle range, the authored
+      one included (`102d0da5 FST`);
+    - the cine delays 1.0 / 10⁶ and the standoff 0.01 / −0.001;
+    - the werewolf hint yaw 90 and the whisper 0.5 / 0.6;
+    - the fire-immune window 15, the detected-attack window 5 and the melee height 64;
+    - the cover-lean 45 / 1.4 / 1.2;
+    - the Sabbat leader's too-far bound 120 and the Chang jump-path clearance 100;
+    - the OUTOF wait 0.5 and the segment floor 1e-5.
+  - **Misreadings corrected while wiring.** Each was read at the listing:
+    - `CNPC_Crow` `0x10357be0` took `(float)_DAT_10449280` as 0.0 and flattened every positive
+      scale. It is `FCOMP double ptr`, a clamp AT 1.0.
+    - `CAI_Motor#4` scaled the raw delta. The listing normalises in place first.
+    - `CAI_Motor#18` dropped the 65536/360 prescale.
+    - `CheckJumpPathToHintNode` fed centimetres into a SOURCE-unit test.
+    - Look-target arm 2 lacked its 96-unit goal floor.
+
+  *Review corrections (2026-09-23).* The Tzimisce claw-origin helper (`0x103bfd80`) converts all
+  three live ConVar distances from Source units to centimetres before adding them to the source
+  point; the two default offsets are 63.5 cm sideways and 101.6 cm upward. Regression coverage
+  exercises both claw activities, a nonzero forward value and the fallback. The migration queue
+  now recognizes ConVar reader aliases as covered, with a regression protecting adjacent ordinary
+  cells from being incorrectly excluded.
+
+  *Validation:* editor build green; **1,268 / 1,268 `Elysium.Substrate`**, including the new
+  `NpcKernelTunables.ConVars` suite and `ScheduleIntegration.ChaseFailureWitness`, plus
+  `Elysium.Content` 14 / 14 (the `sp_tutorial_1` content set) and `Elysium.PlayerWorld` 1 / 1. `gen_kernel_tunables`, `kernel_ledger` and `kernel_lists`
+  `--check` are all green. **Pre-existing and not this story's:** `gen_kernel_shape --check` (and
+  so `gen_kernel_bindings --check`) fails on HEAD, because `607efd52` added
+  `virtual void DeathSound()` to `ElysiumSchedule.h` without a `SLOT_PORT_MAP` row for slot 488.
+  *Still open, for story 6:* the queue above, and inputs that are still seams, so their cells are
+  named but their arms cannot run: `_DAT_104994e0` (−30) behind the stat-type join,
+  `_DAT_104492e0` (1e-6) behind the hull sweep, and `_DAT_10449154` (0.45) behind the navigator
+  re-probe.
 
 - [ ] **5. The class tree: one port class per retail class.**
   Retail: 77 classes in six lines under `CAI_BaseNPCTroika` (`classes.md`), each with its own

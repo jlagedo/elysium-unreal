@@ -26,8 +26,8 @@
 namespace
 {
 	// Retail's `.rdata`, one line per constant. Distances are SOURCE units.
-	constexpr float BossesZero = 0.0f;             // _DAT_104454c4 / _DAT_1044fab0
-	constexpr float BossesOne = 1.0f;              // _DAT_104454c0
+	constexpr float BossesZero = ElysiumNpcTunables::Zero;   // also `_DAT_1044fab0`, the double zero
+	constexpr float BossesOne = ElysiumNpcTunables::One;
 	// `0x10381e90`'s grab-bone search: the initial best is 1025 units SQUARED.
 	constexpr float PickupGrabBoneRangeSq = 1050625.0f;
 
@@ -38,7 +38,7 @@ namespace
 
 	// `UTIL_AngleDiff` `0x1013d580`'s two wrap bounds.
 	constexpr float AngleDiffLo = -180.0f;         // _DAT_10462948
-	constexpr float AngleDiffHi = 180.0f;          // _DAT_1044c3a8
+	constexpr float AngleDiffHi = ElysiumNpcTunables::OneEighty;
 	constexpr float DegreesPerTurn = 360.0f;       // _DAT_10450568
 
 	// `0x10382970`'s blacklist duration, seconds. The same 20.0 cell as the cone's upper bound;
@@ -55,9 +55,9 @@ namespace
 	// `0x1038b370`. `_DAT_10449270`, `_DAT_1046eca8`, `_DAT_10449280`, `_DAT_10450010` and
 	// `_DAT_10449198` are DOUBLES in `.rdata` that the body converts to float at the point of use;
 	// the decompiled C's `(float)_DAT_…` cast is what says so.
-	constexpr double ManBatStationarySeconds = 0.5;      // _DAT_10449270
+	constexpr double ManBatStationarySeconds = ElysiumNpcTunables::HalfDouble;
 	constexpr float ManBatChaseHeight = 150.0f;          // _DAT_1046eca8
-	constexpr float ManBatFlyByHeightPad = 1.0f;         // _DAT_10449280
+	constexpr float ManBatFlyByHeightPad = static_cast<float>(ElysiumNpcTunables::OneDouble);
 	constexpr float ManBatDownAccelScale = 3.0f;         // _DAT_10450010
 	constexpr float ManBatOverspeedScale = 0.2f;         // _DAT_10449198
 	constexpr float ManBatFastSpeed = 700.0f;
@@ -131,7 +131,7 @@ namespace
 	// `VectorNormalize` `0x10137220`: `1.0 / (FLT_EPSILON + length)`, so a zero vector normalizes to
 	// zero rather than to NaN and a unit vector comes back a hair short. Both are observable, and
 	// both are reproduced.
-	constexpr float BossesNormalizeEpsilon = 1.1920928955078125e-07f;   // _DAT_1046a51c
+	constexpr float BossesNormalizeEpsilon = ElysiumNpcTunables::FloatEpsilon;
 
 	FVector BossesNormalize(const FVector& V)
 	{
@@ -351,15 +351,14 @@ bool FElysiumNpc::NavigatorCanReach(const FVector& PositionUnits) const
 
 int32 FElysiumNpc::MingXiaoPedestalCvar() const
 {
-	// SEAM for `DAT_1093ba8c`. Unrecovered name and default; 0 closes the search.
-	return 0;
+	// `DAT_1093ba8c` `+0x2c`: `ming_xiao_pickup`, shipped "1", which opens the search.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::MingXiaoPickup);
 }
 
 float FElysiumNpc::ManBatAccelerationCvar() const
 {
-	// SEAM for `DAT_1093b7cc`. Unrecovered name and default; 0.0 makes the per-axis clamp zero, so
-	// the homing arm hands back exactly the current velocity.
-	return BossesZero;
+	// `DAT_1093b7cc` `+0x28`: `manbat_delta`, shipped "600.0".
+	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::ManbatDelta);
 }
 
 FVector FElysiumNpc::EntityVelocityUnits(const FElysiumEntity& Entity) const

@@ -30,11 +30,15 @@ namespace
 	constexpr int32 GDebug10_2BitCollisionBox = 0x1000;   // 0x1029cb39 `TEST AH,0x10`
 	constexpr int32 GDebug10_2BitWeaponRings = 0x20000000;// 0x1029cd68
 
-	// --- The ConVar globals this file gates on ----------------------------------------------------
-	constexpr TCHAR GDebug10_2CvEnemyBody[] = TEXT("DAT_10924f24");
-	constexpr TCHAR GDebug10_2CvThinkTrace[] = TEXT("DAT_1092479c");
-	constexpr TCHAR GDebug10_2CvThinkEye[] = TEXT("DAT_109244c4");
-	constexpr TCHAR GDebug10_2CvThinkExtra[] = TEXT("DAT_1092435c");
+	// --- The ConVars this file gates on, every one shipping 0 --------------------------------------
+	constexpr ElysiumNpcTunables::EConVar GDebug10_2CvEnemyBody =
+		ElysiumNpcTunables::EConVar::DebugShowBodyTargets;    // DAT_10924f24
+	constexpr ElysiumNpcTunables::EConVar GDebug10_2CvThinkTrace =
+		ElysiumNpcTunables::EConVar::DebugVisionLine;         // DAT_1092479c
+	constexpr ElysiumNpcTunables::EConVar GDebug10_2CvThinkEye =
+		ElysiumNpcTunables::EConVar::DebugWeaponShootPos;     // DAT_109244c4
+	constexpr ElysiumNpcTunables::EConVar GDebug10_2CvThinkExtra =
+		ElysiumNpcTunables::EConVar::DebugShowNpcSkeletons;   // DAT_1092435c
 
 	// --- Retail's `NDebugOverlay` entry points, by name --------------------------------------------
 	constexpr TCHAR GDebug10_2Box[] = TEXT("NDebugOverlay::Box");
@@ -81,7 +85,7 @@ namespace
 	constexpr float GDebug10_2WitnessScale = 0.2f;    // _DAT_10451ab4
 	constexpr float GDebug10_2Chan255 = 255.f;        // _DAT_1044fffc
 	constexpr float GDebug10_2Chan192 = 192.f;        // _DAT_1049ae14
-	constexpr float GDebug10_2Chan64 = 64.f;          // _DAT_10451acc
+	constexpr float GDebug10_2Chan64 = ElysiumNpcTunables::SixtyFour;
 	constexpr float GDebug10_2CriminalLiftUnits = 16.f;     // _DAT_10451ad0
 	constexpr float GDebug10_2SupernaturalLiftUnits = 12.f; // _DAT_1044faa4
 	constexpr float GDebug10_2BlockedLiftUnits = 20.f;      // _DAT_1044eb0c
@@ -92,8 +96,8 @@ namespace
 	constexpr float GDebug10_2MingXiaoRingHeightUnits = 8.f;// 0x41000000
 	constexpr float GDebug10_2HintLeanYawDegrees = 43.f;    // 0x422c0000 / 0xc22c0000
 	constexpr float GDebug10_2RelationRadiusUnits = 4096.f; // 0x45800000
-	// `0x10449280` is a DOUBLE and reads 1.0 — `tr.fraction`'s "nothing was hit" value.
-	constexpr double GDebug10_2TraceClearFraction = 1.0;
+	// `tr.fraction`'s "nothing was hit" value.
+	constexpr double GDebug10_2TraceClearFraction = ElysiumNpcTunables::OneDouble;
 
 	// The four MingXiao ring radii, in SOURCE units, in the order `0x10399d40` draws them. These are
 	// the reason the body is worth porting at all: they are the recovered range bands.
@@ -453,7 +457,7 @@ void FElysiumNpc::TroikaDrawDebugGeometryOverlays()
 	//
 	// Five identical `BodyTarget(…, bNoisy = true)` calls, so retail draws five DIFFERENT points:
 	// the noise is the whole reason the loop runs five times.
-	if (DebugConVar(GDebug10_2CvEnemyBody) != 0)
+	if (ElysiumNpcTunables::ConVarInt(GDebug10_2CvEnemyBody) != 0)
 	{
 		const FElysiumEntity* const Enemy = GetEnemy();
 		if (Enemy != nullptr)
@@ -748,7 +752,7 @@ void FElysiumNpc::TroikaNPCThinkDebugPre()
 	}
 
 	// --- Arm 3, `DAT_1092479c` — the line of sight and the blocker ----------------------------------
-	if (DebugConVar(GDebug10_2CvThinkTrace) != 0)
+	if (ElysiumNpcTunables::ConVarInt(GDebug10_2CvThinkTrace) != 0)
 	{
 		// 3a. `COND_SEE_PLAYER` (0x5a) plus a resolving `m_hClosestPlayer`: trace eye to eye, draw
 		//     the blocker's whole-entity box when it is neither the player nor null, and draw the
@@ -810,7 +814,7 @@ void FElysiumNpc::TroikaNPCThinkDebugPre()
 	//
 	// The checklist's walk has the two box sizes and the line; the colours, the alphas and the
 	// durations are the listing's.
-	if (DebugConVar(GDebug10_2CvThinkEye) != 0)
+	if (ElysiumNpcTunables::ConVarInt(GDebug10_2CvThinkEye) != 0)
 	{
 		// Slot 389 `Weapon_ShootPosition(GetAbsOrigin())` — story 29c's body, in layer 1.
 		const FVector EyeUnits = Weapon_ShootPosition(Origin) / ElysiumMove::U;
@@ -829,7 +833,7 @@ void FElysiumNpc::TroikaNPCThinkDebugPre()
 	//
 	// The value is an INT and not a flag: 1 and 2 select two different bodies and every other value
 	// selects neither.
-	RunThinkDebugPreExtra(DebugConVar(GDebug10_2CvThinkExtra));
+	RunThinkDebugPreExtra(ElysiumNpcTunables::ConVarInt(GDebug10_2CvThinkExtra));
 
 	// --- The tail: the ring dump request -------------------------------------------------------------
 	//

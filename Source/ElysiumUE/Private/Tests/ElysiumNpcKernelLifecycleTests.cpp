@@ -431,8 +431,8 @@ bool FElysiumNpcKernelLifecycleSpawnTest::RunTest(const FString&)
 	TestFalse(TEXT("spawnflag 0x20 clears interruptable"), NotInterruptable.bInterruptable);
 
 	// `CAI_StandoffGoal::Spawn` (0x102cd2d0) — the clock and nothing else.
-	TestEqual(TEXT("the standoff goal's think is curtime + _DAT_1044e658"),
-		FElysiumNpc::StandoffGoalSpawnNextThink(40.0), 40.0);
+	TestEqual(TEXT("the standoff goal's think is curtime + _DAT_1044e658 (0.01)"),
+		FElysiumNpc::StandoffGoalSpawnNextThink(40.0), 40.01);
 
 	// `CAI_InterestingPlaceConverstation::Spawn` (0x102dbc80): its own init and then a TAIL JUMP to
 	// slot 104, so the precache is last.
@@ -456,25 +456,28 @@ bool FElysiumNpcKernelLifecycleHintSpawnTest::RunTest(const FString&)
 		return Hint;
 	};
 
-	// 100..101, the cover band: 60 / 256 / FLT_MAX / 3, category bit 1.
+	// 100..101, the cover band: 60 / 256 / FLT_MAX / 3, category bit 1. Every row but 0x27d8 then
+	// STORES the range times `_DAT_104454d0` = 0.5 (`102d0d9f FMUL` / `102d0da5 FST +0x454`) and
+	// takes the dot of the halved value, so the default 60 reads back as 30.
 	FElysiumNpc::FHintWords Cover = Fill(100, 1);
-	TestEqual(TEXT("hint 100's angle range default is 60"), Cover.TargetAngleRange, 60.f);
+	TestEqual(TEXT("hint 100's angle range default 60 is stored halved"), Cover.TargetAngleRange, 30.f);
 	TestEqual(TEXT("its min distance is 256"), Cover.TargetDistMin, 256.f);
 	TestEqual(TEXT("its max distance is FLT_MAX"), Cover.TargetDistMax, MAX_FLT);
 	TestEqual(TEXT("its rating is 3"), Cover.HintRating, 3.f);
-	// The angle range becomes its own dot: cos(60 degrees) is 0.5.
-	TestTrue(TEXT("and the dot is cos(range)"),
-		FMath::IsNearlyEqual(Cover.TargetAngleRangeDot, 0.5f, 1e-4f));
-	TestEqual(TEXT("hint 101 is inside the same band"), Fill(101, 1).TargetAngleRange, 60.f);
+	// The stored range becomes its own dot: cos(30 degrees).
+	TestTrue(TEXT("and the dot is cos(stored range)"),
+		FMath::IsNearlyEqual(Cover.TargetAngleRangeDot, FMath::Cos(FMath::DegreesToRadians(30.f)), 1e-4f));
+	TestEqual(TEXT("hint 101 is inside the same band"), Fill(101, 1).TargetAngleRange, 30.f);
 	TestEqual(TEXT("hint 102 is not"), Fill(102, 1).TargetAngleRange, 0.f);
 
-	// 0x27d8 (10200) — 17 degrees, and the one row that BIASES the range instead of scaling it.
-	TestEqual(TEXT("hint 0x27d8's angle range default is 17"), Fill(0x27d8, 1).TargetAngleRange, 17.f);
-	// 0x283c (10300) — 60 again but category bit 4.
-	TestEqual(TEXT("hint 0x283c's angle range default is 60"), Fill(0x283c, 1).TargetAngleRange, 60.f);
+	// 0x27d8 (10200) — 17 degrees, and the one row that BIASES the range instead of scaling it:
+	// `102d0cd3 FADD _DAT_1049b998` (43) stores 60.
+	TestEqual(TEXT("hint 0x27d8's default 17 is stored plus 43"), Fill(0x27d8, 1).TargetAngleRange, 60.f);
+	// 0x283c (10300) — 60 again but category bit 4, halved.
+	TestEqual(TEXT("hint 0x283c's default 60 is stored halved"), Fill(0x283c, 1).TargetAngleRange, 30.f);
 	// 0x283d (10301) — the only row with a FINITE max distance.
 	FElysiumNpc::FHintWords Near = Fill(0x283d, 1);
-	TestEqual(TEXT("hint 0x283d's angle range default is 10"), Near.TargetAngleRange, 10.f);
+	TestEqual(TEXT("hint 0x283d's default 10 is stored halved"), Near.TargetAngleRange, 5.f);
 	TestEqual(TEXT("its min distance is 64"), Near.TargetDistMin, 64.f);
 	TestEqual(TEXT("and its max distance is 256, not FLT_MAX"), Near.TargetDistMax, 256.f);
 	// 0x28a0 (10400) — 10 / 64 / FLT_MAX.
@@ -482,14 +485,15 @@ bool FElysiumNpcKernelLifecycleHintSpawnTest::RunTest(const FString&)
 	TestEqual(TEXT("hint 0x28a0's min distance is 64"), Far.TargetDistMin, 64.f);
 	TestEqual(TEXT("and its max is FLT_MAX"), Far.TargetDistMax, MAX_FLT);
 
-	// An AUTHORED value always wins: only the unset sentinel is filled.
+	// An AUTHORED value is never replaced by the default — only the unset sentinel is filled — but
+	// it is halved like any other, which is retail's own `FST` over the authored word.
 	FElysiumNpc::FHintWords Authored;
 	Authored.bValid = true;
 	Authored.HintType = 100;
 	Authored.TargetAngleRange = 25.f;
 	Authored.GroupMask = 1;
 	FElysiumNpc::HintSpawn(Authored);
-	TestEqual(TEXT("an authored angle range is not overwritten"), Authored.TargetAngleRange, 25.f);
+	TestEqual(TEXT("an authored angle range is kept, and halved"), Authored.TargetAngleRange, 12.5f);
 	TestEqual(TEXT("but its unset neighbours still fill"), Authored.TargetDistMin, 256.f);
 
 	// The group fold runs for EVERY hint, including a type with no default row. 1..32 becomes one

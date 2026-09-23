@@ -41,15 +41,12 @@ namespace
 	// of the same arm states it. Anything else says UNRECOVERED and the arm that reads it says what
 	// it does instead.
 
-	// `docs/vtmb/npc-ai/conditions-and-states.md` § "The two ranged attack bands — `0x1026d890`,
-	// `0x1026d920` (2026-09-13)" pins `_DAT_10451acc = 64.0f`, the band both melee-condition
-	// bodies share with the two ranged ones.
-	constexpr float GDatAttackBandUnits = 64.0f;             // _DAT_10451acc
+	// The band both melee-condition bodies share with the two ranged ones.
+	constexpr float GDatAttackBandUnits = ElysiumNpcTunables::SixtyFour;
 	// `FCOMP double ptr [0x104492d0]` — a DOUBLE, and SDK 2013's `MeleeAttack1Conditions` reads the
 	// same arm as `if (flDot < 0.7)`. Recovered from the twin, not from the bytes.
 	constexpr double GDatMeleeDotMin = 0.7;                  // _DAT_104492d0, as a double
-	// `docs/vtmb/animation_and_movers.md` (line 725) pins `_DAT_1044c3a8 = 180.0f`.
-	constexpr float GDatMelee2TooFarUnits = 180.0f;          // _DAT_1044c3a8
+	constexpr float GDatMelee2TooFarUnits = ElysiumNpcTunables::OneEighty;
 	// UNRECOVERED. `MeleeAttack1Conditions`'s outer band must exceed 64 for the `0x60` rung below
 	// it to be reachable at all, and nothing pins it. Standing it at +inf makes the `0x09` arm
 	// UNREACHABLE, which is a stated refusal rather than a guessed threshold; every other arm of
@@ -60,16 +57,12 @@ namespace
 	// `docs/vtmb/npc-ai/conditions-and-states.md` (line 1010) and `entity_io.md` pin
 	// `_DAT_10449258 = 3.0f` — the unreachable record's retention.
 	constexpr float GDatUnreachableSeconds = 3.0f;           // _DAT_10449258
-	// `docs/vtmb/npc-ai/conditions-and-states.md` (line 583) pins `_DAT_104454c0 = 1.0f` and
-	// `_DAT_104454c4 = 0.0f`; `combat-and-damage.md` (line 1785) and `footsteps.md` pin
-	// `_DAT_10449280 = 1.0f`, the clear-trace fraction both LOS arms compare against.
-	constexpr float GDatOne = 1.0f;                          // _DAT_104454c0
-	constexpr float GDatZero = 0.0f;                         // _DAT_104454c4
-	constexpr float GDatClearFraction = 1.0f;                // _DAT_10449280
-	// `docs/vtmb/npc-ai/programs.md` (line 756) pins `DAT_10483aac = 512.0f`.
-	constexpr float GDatNearDistanceUnits = 512.0f;          // _DAT_10483aac
-	// `docs/vtmb/footsteps.md` (line 962) pins `0x10462950 = 40.0`.
-	constexpr float GDatFaceAnimTurnYaw = 40.0f;             // _DAT_10462950
+	constexpr float GDatOne = ElysiumNpcTunables::One;
+	constexpr float GDatZero = ElysiumNpcTunables::Zero;
+	// The clear-trace fraction both LOS arms compare against: a DOUBLE cell, compared as a float.
+	constexpr float GDatClearFraction = static_cast<float>(ElysiumNpcTunables::OneDouble);
+	constexpr float GDatNearDistanceUnits = ElysiumNpcTunables::FiveHundredTwelve;
+	constexpr float GDatFaceAnimTurnYaw = ElysiumNpcTunables::Forty;
 	// Family Facing recovered the Troika turn ladder's own pair, and the top rung of `0x10297a20`
 	// reads the SAME two addresses: `_DAT_1049ae3c = -140.0f`, `_DAT_1049ae38 = 140.0f`.
 	constexpr float GDatFaceAnimYawLow = -140.0f;            // _DAT_1049ae3c
@@ -81,7 +74,6 @@ namespace
 	// UNRECOVERED literals. Each is named so the arm reads as retail's and the value is the one
 	// thing waiting; each site says what the stand-in does.
 	constexpr float GDatFollowRunDistanceUnits = 0.f;        // _DAT_1049a17c — slot 571's walk/run
-	constexpr float GDatHintHeightDiffUnits = 0.f;           // _DAT_1049ae28 — 0x10296c40's height
 	// NO LONGER UNRECOVERED. Story 29d, family **Anim10** read `_DAT_10497ca0` out of the pinned
 	// image while porting `CAI_BaseHumanoid::MaintainEyeDirection` (`0x1025fa50`), whose
 	// `1025fda5 FCOMP double ptr [0x10497ca0]` settles both its width and its value: it is a
@@ -89,10 +81,14 @@ namespace
 	// direction, not the forward half-plane the 0.0 stand-in made it. `0x1025ea00` reads the same
 	// cell and its gate is still STRICT, so a target dead behind (dot -1) is still refused.
 	constexpr double GDatValidHeadTargetDotMin = -0.5;       // _DAT_10497ca0 — ValidHeadTarget
-	constexpr float GDatFaceAnimYawMid = 0.f;                // _DAT_104704b4 — 0x10297a20's rung 2
-	constexpr float GDatFaceAnimRandomScale = 0.f;           // _DAT_1044ffdc — 0x10297a20's draw
-	constexpr float GDatDistanceEpsilon = 0.f;               // _DAT_1046a51c — the 1/(d+eps) guard
-	constexpr float GDatCoverForwardMin = 0.f;               // _DAT_104454d0 is 0.5f; see the site
+
+	// Read 2026-09-21 (`docs/vtmb/npc-ai/rdata-cells.md`) and held by the tunables table since
+	// 0019/4; each stood at a 0.0 stand-in before. The height limit is `FCOMP double ptr`: a DOUBLE.
+	constexpr double GDatHintHeightDiffUnits = ElysiumNpcTunables::SixtyFourDouble;  // 0x10296c40
+	constexpr float GDatFaceAnimYawMid = ElysiumNpcTunables::FaceTurnSecondEdge;   // 0x10297a20's rung 2
+	constexpr float GDatFaceAnimRandomScale = ElysiumNpcTunables::AngleQuantum;    // 0x10297a20's draw
+	constexpr float GDatDistanceEpsilon = ElysiumNpcTunables::FloatEpsilon;        // the 1/(d+eps) guard
+	constexpr float GDatCoverForwardMin = ElysiumNpcTunables::Half;                // 0x10295ed0's 0x283d arm
 
 	// `CAI_Hint::m_nHintType` 0x283d — `0x10295ed0`'s one type-specific extra projection test.
 	constexpr int32 GHintTypeCoverForward = 0x283d;
@@ -703,12 +699,10 @@ bool FElysiumNpc::CoverHintStillValid(const FHintWords& Hint, const FVector& Cov
 	{
 		return false;
 	}
-	// `_DAT_104454c0 / (dist + _DAT_1046a51c)` is the 1/length normalise. The epsilon is
-	// UNRECOVERED; at zero a coincident pair would divide by zero, which retail's epsilon exists to
-	// stop, so the port guards instead of dividing.
-	const double Scale = (Dist + static_cast<double>(GDatDistanceEpsilon)) > 0.0
-		? static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon))
-		: 0.0;
+	// `_DAT_104454c0 / (dist + _DAT_1046a51c)` is the 1/length normalise; the epsilon is what keeps
+	// a coincident pair finite.
+	const double Scale =
+		static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon));
 	const double Yaw = FMath::DegreesToRadians(Hint.Angles.Y);   // `0x102d12e0`, the hint's yaw
 	const double FaceX = FMath::Cos(Yaw);
 	const double FaceY = FMath::Sin(Yaw);
@@ -729,8 +723,7 @@ bool FElysiumNpc::CoverHintStillValid(const FHintWords& Hint, const FVector& Cov
 	if (Hint.HintType == GHintTypeCoverForward)
 	{
 		const double ForwardProjection = ToHintUnits.X * FaceX + ToHintUnits.Y * FaceY;
-		// `_DAT_104454d0` is 0.5 in every oracle that pins it; used here as a projection floor its
-		// meaning is UNRECOVERED, so the stand-in is 0.0 and the arm rejects a body behind the hint.
+		// `_DAT_104454d0`, the pooled 0.5f, as a projection floor.
 		if (ForwardProjection <= static_cast<double>(GDatCoverForwardMin))
 		{
 			return false;
@@ -791,9 +784,8 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::CoverHintRejectReason(const FHintWor
 	{
 		return EHintRejectReason::DistanceOutOfBand;    // "Distance (%d) < %d or > %d"
 	}
-	const double Scale = (Dist + static_cast<double>(GDatDistanceEpsilon)) > 0.0
-		? static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon))
-		: 0.0;
+	const double Scale =
+		static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon));
 	const double Yaw = FMath::DegreesToRadians(Hint.Angles.Y);
 	const double Projection =
 		DeltaUnits.X * Scale * FMath::Cos(Yaw) + FMath::Sin(Yaw) * DeltaUnits.Y * Scale;
@@ -883,15 +875,9 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::AttackHintRejectReason(const FHintWo
 	}
 	const double HeightDiffUnits =
 		FMath::Abs(Hint.OriginCm.Z - MyOriginCm.Z) / static_cast<double>(ElysiumMove::U);
-	if (HeightDiffUnits > static_cast<double>(GDatHintHeightDiffUnits))
+	if (HeightDiffUnits > GDatHintHeightDiffUnits)
 	{
-		// "Height diff (%d) > %d". `_DAT_1049ae28` is UNRECOVERED; at the 0.0 stand-in this arm
-		// would reject every hint that is not exactly level, so it is DISARMED and says so —
-		// leaving the rule visible and the threshold the one thing waiting.
-		if (GDatHintHeightDiffUnits > 0.f)
-		{
-			return EHintRejectReason::HeightDiff;
-		}
+		return EHintRejectReason::HeightDiff;          // "Height diff (%d) > %d"
 	}
 	const FVector DeltaUnits = (EnemyCm - Hint.OriginCm) / ElysiumMove::U;
 	const double Dist = FMath::Sqrt(DeltaUnits.X * DeltaUnits.X + DeltaUnits.Y * DeltaUnits.Y);
@@ -929,9 +915,8 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::AttackHintRejectReason(const FHintWo
 			return EHintRejectReason::Projection;       // "Projection (%.2f) < 0.2"
 		}
 	}
-	const double Scale = (Dist + static_cast<double>(GDatDistanceEpsilon)) > 0.0
-		? static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon))
-		: 0.0;
+	const double Scale =
+		static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon));
 	const double Yaw = FMath::DegreesToRadians(Hint.Angles.Y);
 	const double Facing =
 		DeltaUnits.X * Scale * FMath::Cos(Yaw) + FMath::Sin(Yaw) * DeltaUnits.Y * Scale;
@@ -994,9 +979,7 @@ FElysiumNpc::FFaceAnimPick FElysiumNpc::FaceAnimLadder(float YawDelta,
 	}
 	if (YawDelta <= GDatFaceAnimYawMid && HasSequence(GFaceAnimAct90))
 	{
-		// `_DAT_104704b4` is UNRECOVERED. The rung's shape is exact — a `<=` against a NEGATIVE
-		// band edge, which the ladder's descent requires — and the stand-in leaves it firing for
-		// every delta at or below zero.
+		// A `<=` against the NEGATIVE band edge -40, which the ladder's descent requires.
 		return FFaceAnimPick{ GFaceAnimAct90, 6, true };
 	}
 	if (YawDelta >= GDatFaceAnimTurnYaw && HasSequence(GFaceAnimAct45))
@@ -1023,8 +1006,7 @@ void FElysiumNpc::FUN_10297a20()
 	FaceAnim = Pick.FaceAnim;
 	if (Pick.bRandomDuration)
 	{
-		// `_DAT_1044ffdc` is UNRECOVERED, so the draw is made (the RNG stream IS observable) and
-		// scaled by it; at the 0.0 stand-in the duration lands at zero and says so.
+		// The 16-bit draw scaled by `_DAT_1044ffdc` = 360 / 65536.
 		const int32 Draw =
 			ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 0xffff) & 0xffff;
 		FaceYawDiff = static_cast<float>(Draw) * GDatFaceAnimRandomScale;

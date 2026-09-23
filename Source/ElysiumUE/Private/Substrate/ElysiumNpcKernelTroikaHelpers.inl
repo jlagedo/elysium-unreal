@@ -117,14 +117,12 @@ bool MeleeCoordinatorAdmits599() const;
 bool MeleeCoordinatorAdmits600() const;
 bool MeleeCoordinatorHoldsMe() const;
 
-/** `DAT_10924a1c`'s melee range, read by retail as `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`.
- *  **UNRECOVERED**: neither the object's name nor its default is in the corpus. Family **Schedule**
- *  made the same reading for the same global and answers `0.0`; this answers the same number through
- *  the same reasoning, so the two selectors cannot drift. SOURCE units. */
+/** `DAT_10924a1c`'s melee range, read by retail as `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`:
+ *  the ConVar `debug_melee_advance_combatmove_dist`, shipped "100". SOURCE units. */
 static float MeleeRangeUnits();
 
-/** `_DAT_10451acc` — the height difference slot 599 compares `m_flEnemyHeightDiff` against.
- *  **UNRECOVERED** float; family Schedule records the same cell and the same `0.0`. */
+/** `_DAT_10451acc` — the height difference slot 599 compares `m_flEnemyHeightDiff` against, the
+ *  pooled 64.0f (family Schedule's melee height-difference threshold too). */
 static float MeleeHeightDiffLimitUnits();
 
 /** `(*DAT_10924edc)->vfunc1()` — the global melee-ENTERED event slots 599 and 600 fire. It is the

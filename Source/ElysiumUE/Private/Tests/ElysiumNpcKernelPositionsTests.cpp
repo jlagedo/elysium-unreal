@@ -718,9 +718,8 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 	TestEqual(TEXT("OnTeleportOut fired once"), Fixture.Counter(TEXT("outcount")), 1.f);
 	TestEqual(TEXT("OnTeleportIn fired once"), Fixture.Counter(TEXT("incount")), 1.f);
 
-	// The sound gate is the unrecovered cvar `DAT_1093f73c`, and it answers the arm that plays
-	// nothing.
-	TestFalse(TEXT("the ww_tele wav gate is the unrecovered cvar and refuses"),
+	// The sound gate is `DAT_1093f73c` `werewolf_show_debug`, shipped "0": the arm that plays nothing.
+	TestFalse(TEXT("the ww_tele wav gate is werewolf_show_debug, shipped 0, and refuses"),
 		FElysiumNpc::WerewolfTeleportSoundConVar());
 
 	// `KillTeleportBats` `0x103b0560`: the handle is invalidated whether or not it resolved.
@@ -742,8 +741,8 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 		Wolf->Cognition.Conditions.Has(EElysiumNpcCond::CanTeleport));
 	TestFalse(TEXT("and the IsViewable gate stops the pass, so it is never set back"),
 		Wolf->Cognition.Conditions.Has(EElysiumNpcCond::CanTeleport));
-	TestEqual(TEXT("its delay threshold is the unrecovered cvar, answering 0"),
-		FElysiumNpc::WerewolfTeleportDelayConVar(), 0.f);
+	TestEqual(TEXT("its delay threshold is werewolf_teleport_out_time, shipped 4.0"),
+		FElysiumNpc::WerewolfTeleportDelayConVar(), 4.f);
 
 	return true;
 }
@@ -805,7 +804,8 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	// The sight seams.
 	TestFalse(TEXT("the enemy view cone answers false"),
 		FElysiumNpc::EnemyInViewCone(*Npc, FVector::ZeroVector));
-	TestFalse(TEXT("the Werewolf sight cvar closes its gate"), FElysiumNpc::WerewolfSightConVar());
+	TestFalse(TEXT("werewolf_disregard_player_vision ships 0 and closes the Werewolf's gate"),
+		FElysiumNpc::WerewolfSightConVar());
 	TestFalse(TEXT("so its EnemyCouldSeeHull refuses without tracing"),
 		Npc->EnemyCouldSeeHullWerewolf(FVector::ZeroVector, true, false, FVector::ZeroVector));
 	FVector Mins;
@@ -824,21 +824,49 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	TestTrue(TEXT("and the no-target arm is sqrt(1 / divisor), not the distance"),
 		FMath::IsNearlyEqual(Npc->ShootTargetFalloff(0.f, 4.f, 1.f), 0.5f, 1e-4f));
 
-	// The three `CNPC_VTzimisce` aim cvars.
-	for (int32 Which = 0; Which < 3; ++Which)
-	{
-		TestEqual(TEXT("the Tzimisce aim cvars answer retail's unreadable-cvar zero"),
-			FElysiumNpc::TzimisceAimConVar(Which), 0.f);
-	}
-	FVector Aim = FVector(1.0, 2.0, 3.0);
+	// The three `CNPC_VTzimisce` aim cvars: up `tzimisce_claw_left_z` 40, right
+	// `tzimisce_claw_left_y` 25, forward `tzimisce_claw_left_x` 0.
+	TestEqual(TEXT("aim cvar 0 is tzimisce_claw_left_z, shipped 40"),
+		FElysiumNpc::TzimisceAimConVar(0), 40.f);
+	TestEqual(TEXT("aim cvar 1 is tzimisce_claw_left_y, shipped 25"),
+		FElysiumNpc::TzimisceAimConVar(1), 25.f);
+	TestEqual(TEXT("aim cvar 2 is tzimisce_claw_left_x, shipped 0"),
+		FElysiumNpc::TzimisceAimConVar(2), 0.f);
+	// `0x103bfd80`, reached by SCHED_VTZIMISCE_CLAW_LEFT_ATTACK / _RIGHT_ATTACK: the
+	// nonzero defaults must be converted before they offset the centimetre source point.
+	const FVector SrcCm(5.0, 6.0, 7.0);
+	FVector Aim = FVector::ZeroVector;
+	Npc->Angles = FVector::ZeroVector;
+	Npc->ActivityNumber = 0x106;
+	TestTrue(TEXT("ACT_CLAW_LEFT takes the offset origin"),
+		Npc->WeaponShootPositionTzimisce(SrcCm, Aim));
+	TestTrue(TEXT("its default offsets are -63.5 cm right and 101.6 cm up"),
+		Aim.Equals(SrcCm + FVector(0.0, -63.5, 101.6), 1e-4));
+	Npc->ActivityNumber = 0x107;
+	TestTrue(TEXT("ACT_CLAW_RIGHT takes the offset origin"),
+		Npc->WeaponShootPositionTzimisce(SrcCm, Aim));
+	TestTrue(TEXT("its default offsets are +63.5 cm right and 101.6 cm up"),
+		Aim.Equals(SrcCm + FVector(0.0, 63.5, 101.6), 1e-4));
+	// The forward default is zero; give it a value to cover conversion on the third axis too.
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::TzimisceClawLeftX, 10.f);
+	Npc->WeaponShootPositionTzimisce(SrcCm, Aim);
+	TestTrue(TEXT("a live 10-unit forward offset adds 25.4 cm"),
+		Aim.Equals(SrcCm + FVector(25.4, 63.5, 101.6), 1e-4));
+	ElysiumNpcTunables::ResetConVars();
+	// Zeroed, the override's arithmetic answers the source point itself.
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::TzimisceClawLeftZ, 0.f);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::TzimisceClawLeftY, 0.f);
+	Aim = FVector(1.0, 2.0, 3.0);
 	Npc->ActivityNumber = 0x105;
 	TestFalse(TEXT("an activity outside 0x106/0x107 falls through to the base shoot position"),
 		Npc->WeaponShootPositionTzimisce(FVector::ZeroVector, Aim));
+	TestEqual(TEXT("and leaves the output untouched"), Aim, FVector(1.0, 2.0, 3.0));
 	Npc->ActivityNumber = 0x106;
 	TestTrue(TEXT("and 0x106 takes the override"),
 		Npc->WeaponShootPositionTzimisce(FVector(5.0, 6.0, 7.0), Aim));
 	TestEqual(TEXT("which, with all three cvars at zero, is the source point itself"), Aim,
 		FVector(5.0, 6.0, 7.0));
+	ElysiumNpcTunables::ResetConVars();
 
 	return true;
 }

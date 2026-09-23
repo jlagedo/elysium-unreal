@@ -401,8 +401,9 @@ bool FElysiumNpcDialogue::OpenConversation(FElysiumNpc& Npc, const FElysiumEntit
 // different producer and lands on the audio bus, not on a caption. The forward is made and answers
 // nothing; the day a caption surface exists it is the one thing this body has to call.
 //
-// UNRECOVERED: the two float constants `ShowWhisper` adds to `curtime` (`_DAT_10449270` and
-// `_DAT_10471720`), and therefore how long a whisper with no sound stays up.
+// The deadline `ShowWhisper` would stamp is `curtime - 0.5 + (sound length or 0.6)` — the two
+// doubles `_DAT_10449270` / `_DAT_10471720`, which `FElysiumNpc::SetPlayerAnim` (the same body,
+// `0x10182c40`) carries.
 void FElysiumNpcDialogue::PlayWhisper(FElysiumNpc& Npc, const FString& SoundName)
 {
 	if (PendingWhisper.IsEmpty())

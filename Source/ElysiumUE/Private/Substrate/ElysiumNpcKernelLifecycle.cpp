@@ -2,6 +2,7 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"   // story 29d: `RestoreExtendedHeader`'s `IRestore` is this archive
 #include "Substrate/ElysiumInterestingPlace.h"
@@ -52,23 +53,21 @@ namespace
 	constexpr int32 GEffectNoShadow = 0x20;
 	constexpr int32 GEffectNoReceiveShadow = 0x80;
 
-	// `CCineNPC::Spawn` (`0x101a6f10`): the two spawnflags it reads and the two compiled constants it
-	// adds to `curtime`. **Unrecovered**: `_DAT_10449280` (the auto-remove think delay) and
-	// `_DAT_10449e10` (the named cine's start-time offset) have no reader in the corpus that pins
-	// their value. Declared as named constants so the day they are read the change is one line.
+	// `CCineNPC::Spawn` (`0x101a6f10`): the two spawnflags it reads and the two compiled DOUBLES it
+	// adds to `curtime` — the auto-remove think delay and the named cine's start-time offset. Both
+	// stood at 0.0 as unrecovered until the cells were read (2026-09-21, held by the tunables table
+	// since 0019/4).
 	constexpr int32 GCineSpawnFlagAutoRemove = 0x10;
 	constexpr int32 GCineSpawnFlagNotInterruptable = 0x20;
-	constexpr double GCineAutoRemoveDelaySeconds = 0.0;   // _DAT_10449280 — unrecovered
-	constexpr double GCineStartTimeOffsetSeconds = 0.0;   // _DAT_10449e10 — unrecovered
+	constexpr double GCineAutoRemoveDelaySeconds = ElysiumNpcTunables::OneDouble;
+	constexpr double GCineStartTimeOffsetSeconds = ElysiumNpcTunables::CineStartTimeOffset;
 
 	// `CAI_StandoffGoal::Spawn` (`0x102cd2d0`): `m_flNextThink = curtime + _DAT_1044e658`.
-	// **Unrecovered**, same situation.
-	constexpr double GStandoffGoalThinkDelaySeconds = 0.0;   // _DAT_1044e658
+	constexpr double GStandoffGoalThinkDelaySeconds = ElysiumNpcTunables::HundredthDouble;
 
-	// `CAI_StandoffBehavior::vfunc13` (`0x102c7600`): `_DAT_10497530`, the elapsed-seconds threshold
-	// the reaction re-roll and the blocked latch both compare against. **Unrecovered**: two readers,
-	// both in that body, and nothing pins the value.
-	constexpr double GStandoffElapsedThresholdSeconds = 0.0;   // _DAT_10497530
+	// `CAI_StandoffBehavior::vfunc13` (`0x102c7600`): the elapsed-seconds threshold the reaction
+	// re-roll and the blocked latch both compare against.
+	constexpr double GStandoffElapsedThresholdSeconds = ElysiumNpcTunables::MinusThousandthDouble;
 
 	// The camera's model fallback (`0x103689c0`), verbatim from `.rdata` `0x1062f790`.
 	const TCHAR* const GCameraNullModel = TEXT("models/null.mdl");
@@ -125,19 +124,17 @@ namespace
 		float TargetDistMin = 0.f;
 		float TargetDistMax = 0.f;
 		float HintRating = 0.f;
-		/** Bit 0x27d8 ADDS `_DAT_1049b998` to the angle range; every other row MULTIPLIES it by
-		 *  `_DAT_104454d0`. Both constants are unrecovered, so both operations are identities here
-		 *  and the arm that was taken is what the test states. */
+		/** Bit 0x27d8 ADDS `_DAT_1049b998` (43) to the angle range; every other row MULTIPLIES it
+		 *  by `_DAT_104454d0` (0.5). */
 		bool bAddsInsteadOfScales = false;
 		int32 CategoryBits = 0;   // +0x474
 		const TCHAR* Body = nullptr;
 	};
 
-	// `_DAT_104454d0` (the angle-range scale) and `_DAT_1049b998` (the `0x27d8` bias) have no reader
-	// in the corpus that pins them. Identity and zero keep the recovered ARMS observable without
-	// claiming a value.
-	constexpr float GHintAngleRangeScale = 1.0f;   // _DAT_104454d0 — unrecovered
-	constexpr float GHintAngleRangeBias = 0.0f;    // _DAT_1049b998 — unrecovered
+	// The angle-range scale and the `0x27d8` bias; identity and zero stood in for them until the
+	// cells were read (2026-09-21).
+	constexpr float GHintAngleRangeScale = ElysiumNpcTunables::Half;
+	constexpr float GHintAngleRangeBias = ElysiumNpcTunables::HintType27d8AngleBias;
 	// `_DAT_1044eb08` — the degrees-to-radians factor the `fcos` is taken in. Recovered by its use.
 	const float GHintDegToRad = PI / 180.f;
 
@@ -1000,8 +997,8 @@ FElysiumNpc::FLookTargetPick FElysiumNpc::PickLookTarget(bool bExcludePlayers, f
 	// SEAMS, named: there is no entity-in-radius query on this substrate's NPC leaf, no navigator
 	// goal other than `MoveGoal` (the feet destination of the move in flight), and no head-target
 	// cone. What lands is arms 1 and 2, which have their inputs here; arm 3 answers nothing and says
-	// so. `_DAT_10497cb0`, the goal-distance floor, is **unrecovered** (two readers, both in this
-	// body) and is 0 here, which is the arm that ACCEPTS any goal.
+	// so. `_DAT_10497cb0`, the goal-distance floor, is the DOUBLE 96.0 (`1025f36f FCOMP double
+	// ptr`), measured from slot 220 `GetOrigin()` to the path point, in SOURCE units.
 	FLookTargetPick Pick;
 	Pick.MinDuration = MinTime;
 	Pick.MaxDuration = MaxTime;
@@ -1027,8 +1024,11 @@ FElysiumNpc::FLookTargetPick FElysiumNpc::PickLookTarget(bool bExcludePlayers, f
 		Pick.MaxDuration = 0.2f;
 	}
 
-	// Arm 2 — the navigator's goal. `bMoveIssued`'s destination is the port's `MoveGoal`.
-	if (bMoveIssued && LifecycleRandomInt(1, 10) < 4)
+	// Arm 2 — the navigator's goal. `bMoveIssued`'s destination is the port's `MoveGoal`. The roll
+	// is drawn before the distance is taken, and a goal inside the floor falls through to arm 3.
+	if (bMoveIssued && LifecycleRandomInt(1, 10) < 4
+		&& static_cast<double>(((MoveGoal - Origin) / ElysiumMove::U).Size())
+			> ElysiumNpcTunables::LookTargetGoalDistanceFloor)
 	{
 		Pick.Importance = LifecycleRandomInt(1, 10) < 6
 			? LifecycleRandomFloat(0.2f, 0.4f)

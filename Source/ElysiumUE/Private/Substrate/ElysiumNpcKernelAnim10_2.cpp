@@ -26,11 +26,11 @@ namespace
 	// Unit-prefixed: adaptive unity merges anonymous namespaces.
 
 	// --- `0x1025fa50`'s `.rdata`, all read out of the pinned image ---------------------------------
-	constexpr float GAnim10_2Zero = 0.0f;          // _DAT_104454c4
-	constexpr float GAnim10_2One = 1.0f;           // _DAT_104454c0
-	constexpr double GAnim10_2OneDouble = 1.0;     // _DAT_10449280, a DOUBLE
+	constexpr float GAnim10_2Zero = ElysiumNpcTunables::Zero;
+	constexpr float GAnim10_2One = ElysiumNpcTunables::One;
+	constexpr double GAnim10_2OneDouble = ElysiumNpcTunables::OneDouble;
 	constexpr float GAnim10_2Three = 3.0f;         // _DAT_10449258 — the cubic's 3
-	constexpr float GAnim10_2LookScale = 100.0f;   // _DAT_10450564 — how far ahead the look point is
+	constexpr float GAnim10_2LookScale = ElysiumNpcTunables::Hundred;   // how far ahead the look point is
 	constexpr float GAnim10_2HeadDecay = 0.8f;     // _DAT_1047049c — what the stored head keeps
 	constexpr float GAnim10_2HeadBlend = 0.2f;     // _DAT_10451ab4 — ... and what the current adds
 	constexpr float GAnim10_2ForwardScale = 128.0f;// _DAT_1046dcd0 — the fallback look distance
@@ -53,19 +53,21 @@ namespace
 	constexpr float GAnim10_2JitterUp = 32.0f;
 
 	constexpr TCHAR GAnim10_2CyclerActor[] = TEXT("cycler_actor");   // 0x105c8ee0
-	constexpr TCHAR GAnim10_2CvLookMin[] = TEXT("DAT_1090fc0c");
-	constexpr TCHAR GAnim10_2CvLookMax[] = TEXT("DAT_1090fc9c");
+	// `flex_minplayertime` "5" and `flex_maxplayertime` "7" (`DAT_1090fc0c` / `DAT_1090fc9c`).
+	constexpr ElysiumNpcTunables::EConVar GAnim10_2CvLookMin =
+		ElysiumNpcTunables::EConVar::FlexMinplayertime;
+	constexpr ElysiumNpcTunables::EConVar GAnim10_2CvLookMax =
+		ElysiumNpcTunables::EConVar::FlexMaxplayertime;
 	// `m_NPCState == 4` (`NPC_STATE_SCRIPT`), the state whose arm is cycler-only.
 	constexpr int32 GAnim10_2StateScript = 4;
 
 	// --- The melee selectors' `.rdata` and schedule numbers ----------------------------------------
 	//
-	// `DAT_10924a1c` is the melee-range ConVar every selector thresholds on and story 29c-1 recorded
-	// its name and default as UNRECOVERED; family Schedule answers 0.0, which is the arm a SET bool
-	// takes. `MeleeRangeUnits()` (family TroikaHelpers) reads the same global and is called here so
-	// the six bodies cannot drift.
+	// `DAT_10924a1c` is the melee-range ConVar every selector thresholds on,
+	// `debug_melee_advance_combatmove_dist` "100". `MeleeRangeUnits()` (family TroikaHelpers) reads
+	// it and is called here so the six bodies cannot drift.
 	constexpr float GAnim10_2FarMargin = 200.0f;       // _DAT_104492b8
-	constexpr float GAnim10_2HeightBand = 64.0f;       // _DAT_10451acc
+	constexpr float GAnim10_2HeightBand = ElysiumNpcTunables::SixtyFour;
 	constexpr double GAnim10_2TimerUnarmed = -1.0;     // 0xbf800000
 	constexpr float GAnim10_2RetryMin = 3.0f;          // RandomFloat(3.0, 4.0)
 	constexpr float GAnim10_2RetryMax = 4.0f;
@@ -79,7 +81,7 @@ namespace
 	// Bach's two authored weapon classnames.
 	constexpr TCHAR GAnim10_2BachRifle[] = TEXT("item_w_rem_m_700_bach");  // 0x105c1c70
 	constexpr TCHAR GAnim10_2BachKatana[] = TEXT("item_w_katana");         // 0x10587668
-	constexpr float GAnim10_2BachFailDelay = 15.0f;   // _DAT_10463584
+	constexpr float GAnim10_2BachFailDelay = ElysiumNpcTunables::Fifteen;
 
 	// `CNPC_VZombie::vfunc509`'s two weights and the schedule id that swaps them.
 	constexpr int32 GAnim10_2ZombieIdleWeight = 999;
@@ -473,8 +475,8 @@ void FElysiumNpc::MaintainEyeDirectionCyclerArm()
 	//     AddLookTarget(UTIL_PlayerByIndex(1), 0.5, RandomFloat(min, max));
 	//
 	// with no fourth argument, so the ramp takes the slot's default.
-	const float Max = Anim10FloatConVar(GAnim10_2CvLookMax);
-	const float Min = Anim10FloatConVar(GAnim10_2CvLookMin);
+	const float Max = ElysiumNpcTunables::ConVarFloat(GAnim10_2CvLookMax);
+	const float Min = ElysiumNpcTunables::ConVarFloat(GAnim10_2CvLookMin);
 	const float Duration = Anim10_2Rng().FRandRange(Min, Max);
 	FElysiumEntity* Player = World != nullptr ? World->FindPlayer() : nullptr;
 	// `thunk_FUN_101cd9e0(1)` — `UTIL_PlayerByIndex(1)`. Retail does NOT null-check it and

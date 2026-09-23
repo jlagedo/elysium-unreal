@@ -53,13 +53,8 @@ namespace
 	constexpr int32 TroikaShootAtHintType = 8;
 	constexpr uint8 TroikaShootAtHintSearchFlags = 0x10;
 
-	// `_DAT_10463584` — slot 616's fire-immune window. **UNRECOVERED**: the cell lives past
-	// `.data`'s raw size in the pinned image. `0.0` arms the timer at `curtime`, which is "already
-	// expired" and therefore the arm that suppresses nothing; any positive value only widens it.
-	constexpr float TroikaFireImmuneSeconds = 0.0f;
-
-	// `_DAT_10454110` — `RecordDetectedAttack`'s cooldown stamp. **UNRECOVERED**, same reason.
-	constexpr float TroikaDetectedAttackWindowSeconds = 0.0f;
+	// `_DAT_10463584` — slot 616's fire-immune window, the pooled 15.0f.
+	constexpr float TroikaFireImmuneSeconds = ElysiumNpcTunables::Fifteen;
 
 	// The weapon capability bits slot 600 requires (`weapon->slot360() & 0x18000`).
 	constexpr uint32 TroikaMeleeWeaponCapabilityBits = 0x18000u;
@@ -169,18 +164,15 @@ bool FElysiumNpc::MeleeCoordinatorHoldsMe() const
 
 float FElysiumNpc::MeleeRangeUnits()
 {
-	// `DAT_10924a1c`, read as `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`. **UNRECOVERED** name and
-	// default — the object lives in uninitialised `.data` and no corpus function constructs it.
-	// Family **Schedule** answers `0.0` for the same global (`GScheduleMeleeRangeUnits`); this
-	// answers the same number so the two melee readers cannot drift.
-	return 0.0f;
+	// `DAT_10924a1c`, read as `IsCommand() ? _DAT_104454c4 (0.0) : +0x28` — the ConVar
+	// `debug_melee_advance_combatmove_dist`, shipped "100". Every melee reader goes through here.
+	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::DebugMeleeAdvanceCombatmoveDist);
 }
 
 float FElysiumNpc::MeleeHeightDiffLimitUnits()
 {
-	// `_DAT_10451acc`. **UNRECOVERED**; family Schedule records the same cell and the same `0.0`,
-	// which makes an enemy at or below this NPC's own height "level".
-	return 0.0f;
+	// `_DAT_10451acc`, the pooled 64.0f — family Schedule's melee height-difference threshold too.
+	return ElysiumNpcTunables::SixtyFour;
 }
 
 const FElysiumEntity* FElysiumNpc::RedirectDetectedAttacker(const FElysiumEntity* Candidate) const
@@ -1138,7 +1130,7 @@ void FElysiumNpc::Slot616()
 	//
 	// The companion setter to slot 615 `CanBeSetOnFire` (`0x102ad0c0`, family **Damage**'s row):
 	// this is what a body runs when the fire goes out, and the stamp is the immunity window before
-	// it can catch again. `_DAT_10463584` is **UNRECOVERED** — see `TroikaFireImmuneSeconds`.
+	// it can catch again: 15 s (`TroikaFireImmuneSeconds`).
 	Cognition.Conditions.Clear(EElysiumNpcCond::OnFire);
 	NextBurnTime = (World != nullptr ? World->NowSeconds() : 0.0)
 		+ static_cast<double>(TroikaFireImmuneSeconds);

@@ -31,9 +31,9 @@
 namespace
 {
 	// Retail's `.rdata`, one line per constant. Distances are SOURCE units.
-	constexpr float DamageZero = 0.0f;            // _DAT_104454c4
-	constexpr double DamageBleedFloor = 1.0;      // _DAT_10449280, a DOUBLE
-	constexpr float GearDamage = 0.01f;           // _DAT_10450aa4, SDK 2013's HITGROUP_GEAR damage
+	constexpr float DamageZero = ElysiumNpcTunables::Zero;
+	constexpr double DamageBleedFloor = ElysiumNpcTunables::OneDouble;
+	constexpr float GearDamage = ElysiumNpcTunables::Hundredth;   // SDK 2013's HITGROUP_GEAR damage
 	constexpr float HeavyDamageThreshold = 20.0f; // _DAT_1044eb0c — `IsHeavyDamage`'s only number
 	constexpr float BleedNoiseLowDamage = 10.0f;  // _DAT_1044e664
 	constexpr float BleedNoiseHighDamage = 25.0f; // _DAT_10462994
@@ -41,7 +41,7 @@ namespace
 	constexpr float BleedTraceReach = -172.0f;    // _DAT_10499514 — SDK 2013's own -172
 	constexpr float BlockedReactionShort = 0.5f;  // _DAT_1049a1b8
 	constexpr float BlockedReactionLong = 1.5f;   // _DAT_1049a1bc
-	constexpr double DeadDamageScale = 0.1;       // _DAT_104493d0, a DOUBLE
+	constexpr double DeadDamageScale = ElysiumNpcTunables::TenthDouble;
 	constexpr float DeadImpulseZDrop = 10.0f;     // _DAT_1044e664, reused as a Z offset
 	constexpr float EmitterFadeSeconds = 0.1f;    // `thunk_FUN_100fbbb0`'s second argument
 

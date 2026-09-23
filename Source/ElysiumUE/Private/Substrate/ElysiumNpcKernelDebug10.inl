@@ -173,28 +173,24 @@ void ClearDebugRingDumpRequest();
 FString TraceMessageFormat(const TCHAR* Message, int32 IndentLevel) const;
 
 /** `DAT_10920534` — retail's verbose-trace toggle: set routes a trace message to a ring, clear to
- *  `DevMsg`. **SEAM**: no console byte here. Answers the port's ring-vs-DevMsg choice through
- *  `DebugConVar`, so a test can drive both arms; the shipped default is clear. */
+ *  `DevMsg`. A plain byte, answered through `DebugTraceByte` so a test can drive both arms; it
+ *  ships clear. */
 bool TraceMessagesGoToRing() const;
 
-// --- The five debug ConVars these bodies gate on ---------------------------------------------------
+// --- The two trace bytes ----------------------------------------------------------------------------
 //
-// `NPCThinkDebugPre` reads three (`DAT_1092479c`, `DAT_109244c4`, `DAT_1092435c`), the Troika
-// geometry body one (`DAT_10924f24`) and the Troika text body one (`DAT_1092429c`); the trace
-// messages read the byte `DAT_10920534`. Every one is tested the same way — `cv->vtable[4]()` must
-// answer 0 (the object is a variable, not a command) and the int at `cv + 0x2c` must be non-zero —
-// which is the same idiom story 29c recorded for `DAT_1092053c` and friends.
-//
-// **SEAM**: this runtime has no console-variable registry. Each answers its shipped default, 0
-// (every one of these arms is off until a developer types the command), and a test sets the value it
-// wants. The value is the ConVar's own `+0x2c` int, which is exactly the word retail's arms read —
-// `DAT_1092435c` is not a bool but selects `0x1028e030` on 1 and `0x1028e060` on 2.
+// The debug ConVars these bodies gate on — `ent_trace_doors`, `debug_vision_line`,
+// `debug_weapon_shoot_pos`, `debug_show_npc_skeletons`, `debug_show_body_targets` and
+// `ent_trace_conditions` — are rows of the tunables table (`ElysiumNpcTunables::EConVar`, 0019/4),
+// read at their `+0x2c` int. What is left here is the pair of plain BYTES the trace path and the
+// condition debug string gate on, `DAT_10920534` / `DAT_10920535`: `.data` words no static
+// initialiser constructs as a ConVar and nothing in the image writes.
 
-/** The current value of one of retail's debug ConVars, by its global's address. 0 when unset. */
-static int32 DebugConVar(const TCHAR* RetailGlobal);
+/** One of the two trace bytes, by its global's spelling. 0 when unset. */
+static int32 DebugTraceByte(const TCHAR* RetailGlobal);
 
-/** Set one, for a test. Clears every value when `RetailGlobal` is null. */
-static void SetDebugConVar(const TCHAR* RetailGlobal, int32 Value);
+/** Set one, for a test. Clears both when `RetailGlobal` is null. */
+static void SetDebugTraceByte(const TCHAR* RetailGlobal, int32 Value);
 
 // --- The seams the bodies read through ------------------------------------------------------------
 

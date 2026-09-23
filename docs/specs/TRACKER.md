@@ -121,7 +121,25 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   character sight occluders and the flying mover. Lateral cover uses native capsule probes,
   a named geometry modernization; candidate order, 48-unit steps and task timing stay retail's.
 
-- [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
+- [x] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium. **Landed 2026-09-22, grown to M**
+  by the owner's call to wire every seam, not just the store.
+  - *The table:* `kernel_tunables.tsv` has 99 rows (51 cells, 48 ConVars). `gen_kernel_tunables
+    --check` re-reads every row out of the image at its width; ConVars are checked through their
+    static initialisers. It renders `ElysiumNpcKernelTunables.h/.cpp`.
+  - *The oracle:* the check corrected `werewolf_draw_hints` (`"0"`, not `"40"`) and named six
+    debug ConVars, one of which, `ent_trace_conditions`, ships `"1"`.
+  - *The migration:* 83 inline constants now read the table, the two ConVar stores and about a
+    score of per-family ConVar seams are deleted, and about twenty 0.0 stand-ins are retired.
+    Among the values that now ship are the melee range 100, move-facing 1, the view-cone apex 40,
+    the hint height 64, `CAI_Hint::Spawn`'s stored ×0.5 / +43, and `NPCInit`'s health 10.
+  - *Misreadings fixed at the listing:* five, among them the crow's scale clamp (a clamp AT 1.0,
+    not a flatten) and `CAI_Motor#4`'s missing normalise.
+  - *Validation:* 1,268 / 1,268 `Elysium.Substrate`, `Elysium.Content` 14 / 14.
+  - *Review corrections (2026-09-23):* convert the claw-origin ConVars to centimetres at their
+    consumer and count ConVar reader aliases as covered; both have regression coverage.
+  - *Hand-offs:* 344 inline cells over 91 files stay as row 11's queue (`--report`). Found
+    pre-existing, not fixed: `gen_kernel_shape --check` fails on HEAD (slot 488 `DeathSound` has no
+    `SLOT_PORT_MAP` row since `607efd52`).
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
   no family types a program id or an inline constant by hand.

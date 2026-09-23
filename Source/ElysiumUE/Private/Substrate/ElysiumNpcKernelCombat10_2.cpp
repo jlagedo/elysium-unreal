@@ -32,12 +32,6 @@ namespace
 	// `_DAT_104492b8` — 200.0, the margin `0x102b8620` adds to the melee-range convar.
 	constexpr float GRangedSpacingMargin = 200.0f;
 
-	// `DAT_10924a1c` — the melee-range convar. Retail substitutes `0.0` when the convar's bool
-	// (`vtable +0x04`) is SET and otherwise reads its float at `+0x28`. Neither the name nor the
-	// default is in the corpus; `ElysiumNpcKernelSchedule.cpp` stands the same cell at `0.0`, which
-	// is the SET arm, and this family answers identically so the two selectors cannot disagree.
-	constexpr float GRangedMeleeRangeUnits = 0.0f;
-
 	// The three roll thresholds, all literals in the bodies.
 	constexpr int32 GDodgeRollThreshold = 0x4b;      // 75 — `0x102b7f40` and the two inlined twins
 	constexpr int32 GMeleeSwitchRollThreshold = 0x19;  // 25 — the `0xe8` arm
@@ -173,13 +167,11 @@ bool FElysiumNpc::RangedDisciplineGate(const FElysiumEntity* /*Subject*/) const
 	return false;
 }
 
-bool FElysiumNpc::RangedGateConVarEnabled(const TCHAR* /*RetailGlobal*/)
+bool FElysiumNpc::RangedGateConVarEnabled(ElysiumNpcTunables::EConVar ConVar)
 {
-	// SEAM for `DAT_10923d3c` (the reload gate) and `DAT_109248f4` (the taunt gate). Retail runs the
-	// block only when the object's vtable `+0x04` bool is CLEAR and its `+0x2c` int is non-zero.
-	// Neither name nor default is in the corpus; the SHIPPED-DEFAULT shape (bool clear, int
-	// non-zero) is the ADMITTING arm and is what lets the recovered block run.
-	return true;
+	// Retail runs the block only when the object's vtable `+0x04` bool is CLEAR and its `+0x2c` int
+	// is non-zero; the object is a ConVar, so the int decides.
+	return ElysiumNpcTunables::ConVarInt(ConVar) != 0;
 }
 
 // =================================================================================================
@@ -220,7 +212,7 @@ int32 FElysiumNpc::RangedWeaponPrePass()
 	// `102b8626`: the reload gate — the convar block, a live weapon, its `+0x5a0 & 0x6000`, and
 	// `m_iFakeReloadCount` (`+0x65f0`) below 1.
 	const FElysiumEntity* const Weapon = ActiveWeaponEntity();
-	if (RangedGateConVarEnabled(TEXT("DAT_10923d3c")) && Weapon != nullptr
+	if (RangedGateConVarEnabled(ElysiumNpcTunables::EConVar::DebugAllowFakeReload) && Weapon != nullptr
 		&& (ActiveWeaponCapabilityWord() & 0x6000u) != 0 && FakeReloadCount < 1)
 	{
 		// `102b867e`: `thunk_FUN_102c54c0(this)` — unported, counted.
@@ -287,7 +279,7 @@ int32 FElysiumNpc::RangedWeaponPrePass()
 			return 0xe3;
 		}
 		// `102b8824`: the melee-range convar, plus `_DAT_104492b8` (200.0).
-		if (GRangedMeleeRangeUnits + GRangedSpacingMargin < ScheduleHost.EnemyDistUnits)
+		if (MeleeRangeUnits() + GRangedSpacingMargin < ScheduleHost.EnemyDistUnits)
 		{
 			RecordScheduleEvent(FString::Printf(
 				TEXT("RangedWeaponPrePass %s:%d -> 0xe7"), GTroikaFile, 0x5eae));
@@ -296,7 +288,7 @@ int32 FElysiumNpc::RangedWeaponPrePass()
 		// `102b8860`: the roll is drawn BEFORE the second distance test, so it is consumed either
 		// way. `> 0x18`, not `>=`.
 		if (RangedRoll() > GSpacingRollThreshold
-			&& GRangedMeleeRangeUnits <= ScheduleHost.EnemyDistUnits)
+			&& MeleeRangeUnits() <= ScheduleHost.EnemyDistUnits)
 		{
 			RecordScheduleEvent(FString::Printf(
 				TEXT("RangedWeaponPrePass %s:%d -> 0xe5"), GTroikaFile, 0x5eba));
@@ -345,8 +337,9 @@ int32 FElysiumNpc::SelectCombatReactionSchedule()
 		return Cover;
 	}
 
-	// `102b7d69`: the taunt convar.
-	if (!RangedGateConVarEnabled(TEXT("DAT_109248f4")))
+	// `102b7d69`: `DAT_109248f4`, `debug_allow_dodge` — shipped "0", so as shipped this body
+	// answers 0 here: no dodge when the cover offer found nothing (the ConVar's own help text).
+	if (!RangedGateConVarEnabled(ElysiumNpcTunables::EConVar::DebugAllowDodge))
 	{
 		return 0;
 	}

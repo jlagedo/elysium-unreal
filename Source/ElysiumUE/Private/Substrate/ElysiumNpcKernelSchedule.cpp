@@ -64,42 +64,24 @@ namespace
 	// threshold. `CNPC_VChangBros` / `CNPC_VTzimisceRunner` add it to the melee-range convar.
 	constexpr float GScheduleChangMeleeMargin = 200.0f;
 
-	// `DAT_10924a1c` — the melee-range convar every melee selector thresholds on. Retail reads its
-	// bool through the ConVar vtable (`+0x04`) and substitutes `0.0` when it is SET, otherwise reads
-	// the float at `+0x28`.
-	//
-	// UNRECOVERED: neither the convar's name nor its default is in the corpus. Answering 0.0 is the
-	// arm a SET bool takes, which is why it is the stand-in rather than an invented range — with a
-	// range of zero every `m_flEnemyDist <= range` test reads false and every selector takes its
-	// far arm. One edit closes it.
-	constexpr float GScheduleMeleeRangeUnits = 0.0f;
 
-	// `_DAT_10451acc` — the height-difference threshold the melee height-diff timer arms above.
-	//
-	// **RECOVERED as 64.0f by story 29d** and no longer the 0.0 stand-in this line carried. The cell
-	// is at file offset `0x451acc` of the pinned `vampire.dll` (`.rdata` is identity-mapped off
-	// image base `0x10000000`) and reads `00 00 80 42`. Three of 29d's families reached it
-	// independently from three different bodies — family Combat10 as the yaw sweep's right leg
-	// (`0x102a1650`, paired with `_DAT_10462950` = 40.0), family Debug10 as the witness-box clamp in
-	// `0x10292500`, and this one — and the reviewer read the bytes back a fourth time before the
-	// constant was changed, because it is a live threshold rather than a comment.
-	//
-	// It matters: at 0.0 only an enemy exactly level or below disarmed the timer, so nearly every
-	// melee selector armed it. At retail's 64.0 an enemy within 64 units of this NPC's own height
-	// counts as level and the timer is held at -1.0 instead.
-	constexpr float GScheduleMeleeHeightDiffUnits = 64.0f;
+	// `_DAT_10451acc` — the height-difference threshold the melee height-diff timer arms above, the
+	// pooled 64.0f: an enemy within 64 units of this NPC's own height counts as level and the timer
+	// is held at -1.0.
+	constexpr float GScheduleMeleeHeightDiffUnits = ElysiumNpcTunables::SixtyFour;
 
-	// `_DAT_104c3cd4` — `CNPC_VSabbatLeader`'s `TOO_FAR_TO_ATTACK` distance bound. UNRECOVERED.
-	constexpr float GScheduleSabbatTooFarUnits = 0.0f;
+	// `_DAT_104c3cd4` — `CNPC_VSabbatLeader`'s `TOO_FAR_TO_ATTACK` distance bound, 120 units
+	// (`103aa25f FCOMP float ptr`).
+	constexpr float GScheduleSabbatTooFarUnits = ElysiumNpcTunables::SabbatLeaderTooFarToAttack;
 
 	// `_DAT_1044ddb0` — `CNPC_VMingXiaoTentacle`'s enemy-distance split. UNRECOVERED.
 	constexpr float GScheduleTentacleEnemyDistUnits = 0.0f;
 
 	// `_DAT_10450aa0`, `_DAT_10449270`, `_DAT_104bea38` — the tentacle's phase-0/3, phase-1 and
-	// phase-3 expire durations. Phase 2's is `_DAT_1044e664`, which IS recovered (10.0).
-	// UNRECOVERED.
+	// phase-3 expire durations. Phase 2's is `_DAT_1044e664` (10.0) and phase 1's the pooled double
+	// 0.5; the other two are UNRECOVERED.
 	constexpr float GScheduleTentaclePhase0Seconds = 0.0f;
-	constexpr float GScheduleTentaclePhase1Seconds = 0.0f;
+	constexpr float GScheduleTentaclePhase1Seconds = static_cast<float>(ElysiumNpcTunables::HalfDouble);
 	constexpr float GScheduleTentaclePhase3Seconds = 0.0f;
 
 	// `_DAT_10457f60` — `CNPC_VTzimisce`'s answer for task distance sentinel -1000001. UNRECOVERED.
@@ -820,7 +802,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 			// SEAM: slot 599 takes the enemy in retail (`GetEnemy()` then `vfunc599(enemy)`); the
 			// ledger types its parameter `int`, so the generated signature cannot carry a pointer
 			// and the port passes 0. Named rather than hidden.
-			const float Threshold = GScheduleMeleeRangeUnits + GScheduleChangMeleeMargin;
+			const float Threshold = MeleeRangeUnits() + GScheduleChangMeleeMargin;
 			if (ScheduleHost.EnemyDistUnits <= Threshold)
 			{
 				return 0xe4;
@@ -856,7 +838,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 		{
 			return bChang ? 0x15a : 0xe1;
 		}
-		if (ScheduleHost.EnemyDistUnits <= GScheduleMeleeRangeUnits && !bHeightArmed)
+		if (ScheduleHost.EnemyDistUnits <= MeleeRangeUnits() && !bHeightArmed)
 		{
 			return 0xd2;
 		}
@@ -882,7 +864,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 			}
 			// `if (range + range < dist != (range + range == dist))` — the decompiler's spelling of
 			// the FPU compare; it is `dist > 2 * range`.
-			return ScheduleHost.EnemyDistUnits > GScheduleMeleeRangeUnits * 2.0f ? 0xe7 : 0xe4;
+			return ScheduleHost.EnemyDistUnits > MeleeRangeUnits() * 2.0f ? 0xe7 : 0xe4;
 		}
 		if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
 		{
@@ -961,7 +943,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 	{
 		if (!bInMelee && !Slot599(0))
 		{
-			return ScheduleHost.EnemyDistUnits <= GScheduleMeleeRangeUnits * 2.0f ? 0x15f : 0xe7;
+			return ScheduleHost.EnemyDistUnits <= MeleeRangeUnits() * 2.0f ? 0x15f : 0xe7;
 		}
 		if (Conds.Has(EElysiumNpcCond::EnemyOccluded))
 		{
@@ -1011,7 +993,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 		{
 			return 0xe9;
 		}
-		return ScheduleHost.EnemyDistUnits > GScheduleMeleeRangeUnits * 2.0f ? 0xe7 : 0xe4;
+		return ScheduleHost.EnemyDistUnits > MeleeRangeUnits() * 2.0f ? 0xe7 : 0xe4;
 	}
 	if (const int32 Gate = MeleeScheduleFailureGate(Enemy); Gate != 0)
 	{

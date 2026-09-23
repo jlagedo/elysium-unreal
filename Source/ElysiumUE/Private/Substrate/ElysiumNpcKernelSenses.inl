@@ -68,12 +68,8 @@ void SetDoorNextTryTime(FElysiumEntity& Door, double At);
 int32 DoorNextTryWrites = 0;
 
 /** `DAT_1093f8ec` and `DAT_1093d574` — the two ConVar objects `CNPC_VWerewolf::ShouldPursueEnemy`
- *  (`0x103cf5f0`) thresholds on, each read as retail reads every ConVar in this band:
- *  `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`. **UNRECOVERED**: neither name nor default is in
- *  the corpus (both objects live in uninitialised `.data`). `0.0` is the arm a COMMAND takes, and
- *  family **Schedule**'s `GScheduleMeleeRangeUnits` answers the same number for the same reason,
- *  so the two cannot drift. With both at zero every werewolf pursues, which is retail's own answer
- *  for an unset pair. */
+ *  (`0x103cf5f0`) thresholds on, each read `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`:
+ *  `werewolf_pursuit_unseen_time` "3.0" and `werewolf_pursuit_distance` "800". */
 static float WerewolfPursueElapsedLimitSeconds();
 static float WerewolfPursuePlayerDistLimitUnits();
 

@@ -31,7 +31,7 @@ namespace
 
 	// `_DAT_1044fab0` — a **DOUBLE**, `0.0` (`103c1db6` is `FCOMP double ptr [0x1044fab0]`). The "no
 	// slow running" sentinel the ManBat and the head claw both compare their expiry against.
-	constexpr double GSlowExpireSentinel = 0.0;
+	constexpr double GSlowExpireSentinel = ElysiumNpcTunables::ZeroDouble;
 
 	// `_DAT_104ad9f8` = **0.1**, `CNPC_VChangBros`'s teleport health-loss threshold.
 	constexpr float GChangTeleportHealthLoss = 0.1f;

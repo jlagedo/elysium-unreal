@@ -50,8 +50,8 @@ namespace
 		return Candidate != nullptr && Candidate->AsNpc() != nullptr;
 	}
 
-	// `DAT_1093fac4` / the `werewolf_show_debug` ConVar, as one process-wide word. Retail's IS
-	// process-wide — the same shape family SaveRestore10 gave `DAT_1093acac`/`DAT_1093acb0`.
+	// `DAT_1093fac4`, the process-wide debug word beside the `werewolf_show_debug` ConVar — the same
+	// shape family SaveRestore10 gave `DAT_1093acac`/`DAT_1093acb0`. The ConVar itself is the table's.
 	int32 GWerewolfShowDebug = 0;
 }
 
@@ -502,8 +502,10 @@ void FElysiumNpc::DestroyWerewolf()
 {
 	// `CNPC_VWerewolf::~CNPC_VWerewolf` `0x103ca7c0`.
 
-	// The one thing outside this object the body touches: the debug global and the ConVar behind it.
+	// The one thing outside this object the body touches: the debug global, then the ConVar's
+	// `SetValue(0)` (slot 4).
 	GWerewolfShowDebug = 0;
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::WerewolfShowDebug, 0.f);
 
 	// The five outputs, in the listing's order: `m_OnTeleportIn`, `m_OnTeleportOut`,
 	// `m_OnFinishCrushAnimation`, `m_OnBeginCrushAnimation`, `m_OnConditionDeathTriggered`.

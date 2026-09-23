@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumNpcMindTypes.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include <initializer_list>
 
@@ -729,9 +730,11 @@ namespace ElysiumNpcCond
 	// recovery"): an accepted melee target receives an incoming-melee notice, and "the NPC notice
 	// path accepts the warning in its eligible states when the attacker is within 150 Source units
 	// or satisfies its visibility route, remembers the attacker for five seconds and lets the
-	// concrete combatant schedule its response". No health or damage changes.
+	// concrete combatant schedule its response". No health or damage changes. Retail stores the
+	// EXPIRY, `curtime + _DAT_10454110` (`0x102bf560`); this runtime stores the stamp and compares
+	// it against the same cell, the pooled 5.0f.
 	inline constexpr float MeleeNoticeAcceptanceUnits = 150.0f;
-	inline constexpr double DetectedAttackRetentionSeconds = 5.0;
+	inline constexpr double DetectedAttackRetentionSeconds = ElysiumNpcTunables::Five;
 
 	/**
 	 * Deliver one notice to `Victim`. Returns whether it was accepted.

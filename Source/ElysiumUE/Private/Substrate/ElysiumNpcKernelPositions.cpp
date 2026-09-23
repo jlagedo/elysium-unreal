@@ -23,9 +23,9 @@
 namespace
 {
 	// Retail's `.rdata`, one line per constant, in Source units unless noted.
-	constexpr float RetailOne = 1.0f;              // _DAT_104454c0
-	constexpr float RetailZero = 0.0f;             // _DAT_104454c4
-	constexpr float NormalizeEpsilon = 1.1920928955078125e-07f;   // _DAT_1046a51c
+	constexpr float RetailOne = ElysiumNpcTunables::One;
+	constexpr float RetailZero = ElysiumNpcTunables::Zero;
+	constexpr float NormalizeEpsilon = ElysiumNpcTunables::FloatEpsilon;
 	constexpr float DegreesPerTurnRecip = 0.0055555556900799274f; // _DAT_104c6d40, 1/180
 
 	// `CNPC_VChangBros::GetSector` `0x1036e580`.
@@ -46,7 +46,7 @@ namespace
 	constexpr float AsianLedgeClearance = 150.0f;         // DAT_104a9320
 
 	// `CNPC_VSheriffMan::SelectTeleportNode` `0x103b0630`.
-	constexpr float SheriffTeleportZScale = 100.0f;       // _DAT_10450564, a DIMENSIONLESS weight
+	constexpr float SheriffTeleportZScale = ElysiumNpcTunables::Hundred;   // a DIMENSIONLESS weight
 	constexpr float SheriffScoreDistCap = 1000.0f;        // DAT_104c6144
 	constexpr float SheriffScoreYawWeight = 0.4f;         // _DAT_1044a2bc
 	constexpr float SheriffScoreDistWeight = 0.6f;        // _DAT_104c6d3c
@@ -57,14 +57,11 @@ namespace
 	constexpr float DiveMinSelfDist = 45.0f;              // _DAT_104c3d00
 	constexpr float DiveLengthEpsilon = 9.999999747378752e-05f;   // _DAT_104c3ce4
 
-	// `_DAT_104ce8c0`, `DistToSegment`'s degenerate-length floor, is not here: the body collapsed
-	// onto family Hints' `FElysiumNpc::DistToSegment`, which owns the constant and records that its
-	// WIDTH is unrecovered — the datum has four readers (`0x103c6b70` and
-	// `CNPC_VVampireBoss::GetCurrHealthPercent 0x103c6830`, each twice) and no writer, so nothing
-	// pins its value. What is recovered is the arm's ANSWER, `_DAT_104454c4` = `0.0f`.
+	// `_DAT_104ce8c0`, `DistToSegment`'s degenerate-length floor (the float 1e-5), is not here: the
+	// body collapsed onto family Hints' `FElysiumNpc::DistToSegment`, which owns it.
 
 	// `FUN_103d0bf0`'s refresh interval, seconds.
-	constexpr float NearestNodeRefreshSeconds = 0.009999999776482582f;  // _DAT_10450aa4
+	constexpr float NearestNodeRefreshSeconds = ElysiumNpcTunables::Hundredth;
 
 	// Retail's hint-type words. Named here once so the selectors below read as retail reads.
 	constexpr int32 HintTeleport17000 = 17000;

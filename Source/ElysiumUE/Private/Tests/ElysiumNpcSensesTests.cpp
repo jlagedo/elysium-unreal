@@ -863,11 +863,14 @@ bool FElysiumNpcSensesAdmissionTest::RunTest(const FString&)
 	F.Player->Disciplines.TargetEffects.Add(BrainWipe);
 	F.Guard->Senses.TickSight(*F.Guard, 5.0);
 	TestTrue(TEXT("a brain-wiped target is still visible"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
-	F.Guard->Senses.ViewConeBodyOffsetCm = Cm(1000.f);
+	TestEqual(TEXT("debug_viewcone_back_dist ships 40 units"),
+		FElysiumNpcSenses::ViewConeBodyOffsetCm(), Cm(40.f));
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugViewconeBackDist, 1000.f);
 	TestFalse(TEXT("the front-plane test runs before the apex shift"),
 		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Guard->EyePosition() + FVector(-1, 0, 0)));
 	TestTrue(TEXT("the pulled-back apex admits a front-side target"),
 		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Guard->EyePosition() + FVector(1, 100, 0)));
+	ElysiumNpcTunables::ResetConVars();
 	return true;
 }
 

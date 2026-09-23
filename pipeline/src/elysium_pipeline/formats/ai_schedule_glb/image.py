@@ -122,6 +122,14 @@ class PEImage:
             return None
         return struct.unpack_from("<I", self.data, offset)[0]
 
+    def read_scalar_va(self, va: int, fmt: str) -> int | float | None:
+        """One little-endian `struct` scalar (`"<f"`, `"<d"`, `"<i"`, …) at a VA, or None."""
+
+        offset = self.va_to_offset(va)
+        if offset is None or offset + struct.calcsize(fmt) > len(self.data):
+            return None
+        return struct.unpack_from(fmt, self.data, offset)[0]
+
     def read_cstring_va(self, va: int) -> str:
         """The NUL-terminated ASCII at a VA, or `""` when the VA is unmapped or the run is not ASCII.
 

@@ -491,11 +491,10 @@ float FElysiumNpc::GetForwardYawForHint(const FHintWords& Hint) const
 	const FVector Delta = (EndUnits - ForwardOriginUnits).GetSafeNormal();
 	float Yaw = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(Delta.Y, Delta.X)));
 
-	// `103d730b`: the switch on the hint type at `+0x5dc`. `_DAT_10455050` is **UNRECOVERED** — an
-	// `.rdata` cell this body is the only reader of — so the two adjust arms are named and applied
-	// as a ZERO offset rather than guessed at a number. The two arms that discard the computed yaw
-	// entirely are exact.
-	constexpr float GHintYawAdjustDegrees = 0.f;   // _DAT_10455050, UNRECOVERED
+	// `103d730b`: the switch on the hint type at `+0x5dc`. `_DAT_10455050`, the adjust arms' 90
+	// degrees, stood at a zero offset until the cell was read (2026-09-21); the two arms that
+	// discard the computed yaw entirely were always exact.
+	constexpr float GHintYawAdjustDegrees = ElysiumNpcTunables::WerewolfHintYawAdjust;
 	switch (Hint.HintType)
 	{
 	case 0x3a9a:
@@ -789,7 +788,8 @@ void FElysiumNpc::WerewolfCheckStuck()
 		HullMaxsUnits(false), 0x202400b, Probe);
 	// `103cba9c`: the CLEAR branch (`cStack_55 == 0`, the start-solid byte) re-probes through the
 	// navigator with the SMALL hull when `+0x5f2d` is set and the third extent scaled by
-	// `_DAT_10449154` (**UNRECOVERED**), and only when THAT probe reports blocked does it
+	// `_DAT_10449154` (0.45, `ElysiumNpcTunables::WerewolfStuckHullScale`), and only when THAT
+	// probe reports blocked does it
 	// `DevWarning "attempting alt unstuck..."` and run slot `0x360`.
 	const bool bStartSolid = bTraced && Probe.Fraction < 1.f;
 	if (!bStartSolid)

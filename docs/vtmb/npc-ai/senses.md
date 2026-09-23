@@ -330,8 +330,8 @@ used as a substitute.
 - `FinViewCone3dNew` disassembly `0x103265af` rejects a negative front-plane dot before the
   apex offset; `0x1032669c` multiplies the normalized viewing cosine by the **target scalar**,
   then compares against the observer's FOV. A smaller scalar narrows the cone. The unnamed
-  `0x10937a8c` ConVar is `debug_viewcone_back_dist`, default **40** (named 2026-09-21, `convars.md`); `ViewConeBodyOffsetCm` is its explicit
-  zero-answer seam, not a claim that retail's default is zero.
+  `0x10937a8c` ConVar is `debug_viewcone_back_dist`, default **40** (named 2026-09-21, `convars.md`); since
+  0019/4 `FElysiumNpcSenses::ViewConeBodyOffsetCm` reads it from the tunables table (40 units).
 - `FVisible` `0x102b4630` calls `HasStatusEffect(Dominate_BrainWipe)` on **this observer**.
   `0x10146b20(target, observer)` returns permission to perceive: no active cloak, observer
   active stat `0xe` or `1`, or the ready observer detection record admitting the distance.
@@ -827,8 +827,8 @@ This is NOT slot 363. That one is `CAI_BaseNPCTroika::FInViewCone(CBaseEntity*)`
 Troika override, which adds a null guard, the `npc_ignore_senses` / `npc_ignore_player` ConVars and
 the follower any-angle bypass before it reaches the base body at the target's EYE.
 
-**Unrecovered:** the name and default of the 2-D/3-D ConVar behind `0x103268e0`. The port takes the
-3-D branch unconditionally.
+The 2-D/3-D ConVar behind `0x103268e0` is `debug_view_cone_2d3d`, default **3** (`convars.md`), so
+the port's unconditional 3-D branch is the shipped behaviour.
 
 ## Story 29d, family Sounds10 — the sound hooks, the `KeyValue` formatters and `FireBullets` (2026-09-14)
 

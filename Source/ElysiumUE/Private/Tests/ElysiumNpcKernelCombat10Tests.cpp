@@ -932,12 +932,23 @@ bool FElysiumNpcKernelCombat10CombatReactionTest::RunTest(const FString&)
 	TestTrue(TEXT("...so the 0x800 bit is NOT consumed"),
 		N.NpcFlags.Has(EElysiumNpcFlag::DODGING));
 
-	// With an enemy and cover seeking allowed the taunt arm runs and CONSUMES the bit. Both answers
-	// (`0x8e` and `0x8f`) are the roll's; whichever lands, the bit is gone and one of the two
-	// observable writes happened.
+	// `102b7d69`: the arm below the cover offer is gated on `debug_allow_dodge`, which ships "0" —
+	// as shipped the body answers 0 there and the 0x800 bit is left alone.
 	N.Senses.Memory.Enemy = F.Foe->Handle;
+	ElysiumNpcTunables::ResetConVars();
+	if (N.SelectCombatReactionSchedule() == 0)
+	{
+		TestTrue(TEXT("102b7d69 debug_allow_dodge 0 (shipped) leaves the 0x800 bit unconsumed"),
+			N.NpcFlags.Has(EElysiumNpcFlag::DODGING));
+	}
+
+	// With the ConVar on, an enemy and cover seeking allowed, the dodge arm runs and CONSUMES the
+	// bit. Both answers (`0x8e` and `0x8f`) are the roll's; whichever lands, the bit is gone and one
+	// of the two observable writes happened.
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowDodge, 1.f);
 	const double BeforeDodgeTime = N.NextDodgeTime;
 	const int32 Answer = N.SelectCombatReactionSchedule();
+	ElysiumNpcTunables::ResetConVars();
 	if (Answer != 0)
 	{
 		TestTrue(TEXT("102b7d8a the taunt arm answers 0x8e or 0x8f"),

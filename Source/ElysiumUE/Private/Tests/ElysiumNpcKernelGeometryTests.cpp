@@ -604,7 +604,7 @@ bool FElysiumNpcKernelGeometryFakeHullTest::RunTest(const FString&)
 	TestTrue(TEXT("a hair over one second is"), 10.0 + 1.0 < 11.0001);
 
 	// The seams all answer the recovered refusal.
-	TestEqual(TEXT("the debug-hull cvar is unrecovered and answers 0"),
+	TestEqual(TEXT("the debug-hull cvar is werewolf_show_debug, shipped 0"),
 		F.Guard->FakeHullDebugCvar(), 0);
 	const FVector Point(5.f, 6.f, 7.f);
 	TestTrue(TEXT("CalcNearestPoint answers the point unchanged"),

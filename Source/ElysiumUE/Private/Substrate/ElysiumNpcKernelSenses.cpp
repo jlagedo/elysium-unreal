@@ -56,18 +56,17 @@ namespace
 	// `_DAT_1044f02c` = 1.5f — Yukie's melee-range multiplier.
 	constexpr float GYukieMeleeRangeScale = 1.5f;
 
-	// `_DAT_10454110` = 5.0f and `_DAT_1044eb0c` = 20.0f — `OnDoorBlocked`'s two retry windows.
-	// The 5.0 cell is the one `TroikaHelpers` and `senses.md` § "The detected-attack notice" both
-	// record as UNRECOVERED; it is in `.rdata`, not past `.data`'s raw size, and it is 5.0.
-	constexpr float GDoorRetryShortSeconds = 5.0f;
+	// `_DAT_10454110` = 5.0f and `_DAT_1044eb0c` = 20.0f — `OnDoorBlocked`'s two retry windows. The
+	// 5.0 cell is also the detected-attack window.
+	constexpr float GDoorRetryShortSeconds = ElysiumNpcTunables::Five;
 	constexpr float GDoorRetryLongSeconds = 20.0f;
 
 	// `_DAT_104454c0` = 1.0f — the alternate-AI hit-info window `OnDoorBlocked` re-arms.
 	constexpr float GDoorAlternateAiWindowSeconds = 1.0f;
 
-	// `_DAT_10463584` = 15.0f — `SetSquadFocus`'s own expiry (`squad+0x74`). `TroikaHelpers` records
-	// the same cell as UNRECOVERED for slot 616; it reads 15.0.
-	constexpr float GSquadFocusLifetimeSeconds = 15.0f;
+	// `_DAT_10463584` = 15.0f — `SetSquadFocus`'s own expiry (`squad+0x74`); slot 616's fire-immune
+	// window reads the same pooled cell.
+	constexpr float GSquadFocusLifetimeSeconds = ElysiumNpcTunables::Fifteen;
 
 	// `CBaseDoor+0x644`'s two tested bits. Their retail names are **unrecovered** — no corpus body
 	// in layers 0–9 declares the word — so they are carried by value beside the body that reads
@@ -712,9 +711,7 @@ bool FElysiumNpc::YukieShouldLeaveMelee()
 	// `<=`, not `<`.
 	//
 	// The melee range is `DAT_10924a1c` read as `IsCommand() ? 0.0 : +0x28` — family
-	// **TroikaHelpers**' `MeleeRangeUnits`, UNRECOVERED and answering 0.0, so the first arm reduces
-	// to `0.0 <= m_flEnemyDist`, which is true for any non-negative distance. That is the
-	// consequence of the unrecovered ConVar and not a decision taken here.
+	// **TroikaHelpers**' `MeleeRangeUnits`, `debug_melee_advance_combatmove_dist` "100".
 	//
 	// Against the Troika line (`FElysiumNpc::Slot602`) this body drops FOUR terms: the
 	// `m_bfNPCFrenziedFlags & 2` gate, the follower-boss gate, the attack-coordinator null test and
@@ -920,14 +917,14 @@ void FElysiumNpc::OnDoorBlocked(FElysiumEntity& Door)
 
 float FElysiumNpc::WerewolfPursueElapsedLimitSeconds()
 {
-	// `DAT_1093f8ec`, read as `vfunc1() ? _DAT_104454c4 : +0x28`. **UNRECOVERED** ConVar.
-	return GSharedZero;
+	// `DAT_1093f8ec`, read as `vfunc1() ? _DAT_104454c4 : +0x28`: `werewolf_pursuit_unseen_time` "3.0".
+	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfPursuitUnseenTime);
 }
 
 float FElysiumNpc::WerewolfPursuePlayerDistLimitUnits()
 {
-	// `DAT_1093d574`, the same shape. **UNRECOVERED** ConVar.
-	return GSharedZero;
+	// `DAT_1093d574`, the same shape: `werewolf_pursuit_distance` "800".
+	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfPursuitDistance);
 }
 
 bool FElysiumNpc::WerewolfShouldPursueEnemy() const
@@ -950,9 +947,8 @@ bool FElysiumNpc::WerewolfShouldPursueEnemy() const
 	// `WerewolfUnhideStamp` (`ScriptUnhide` stamps it with `curtime`), so the elapsed term is "how
 	// long since the werewolf was last un-hidden by a script".
 	//
-	// With both ConVars unrecovered at 0.0, neither `0.0 > elapsed` nor `0.0 > dist` can hold, so
-	// the body answers FALSE for every werewolf whose flag bit is clear. That is the honest
-	// consequence of the two unpinned cells and is why they are named seams rather than numbers.
+	// As shipped (3.0 s, 800 units) a werewolf keeps pursuing for three seconds after an unhide,
+	// and after that while the player is inside 800 units.
 	constexpr uint32 WerewolfFlagSkipPursueTest = 0x4u;
 	if ((WerewolfHintFlags & WerewolfFlagSkipPursueTest) == WerewolfFlagSkipPursueTest)
 	{

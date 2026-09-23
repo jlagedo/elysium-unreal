@@ -93,9 +93,8 @@ void FinishTalking();
  *  0x101c0b10, 0.0)` followed by `partner->m_flNextThink (+0x17c) = curtime + 0.1`. The partner is
  *  `m_hDialogScene` (`+0x6554`), a `logic_choreographed_scene`; this runtime's scene player carries
  *  its own completion and exposes no per-entity think word to the kernel, so the request is COUNTED
- *  and named. `_DAT_104493d0` is **0.1** — a DOUBLE, read out of the pinned image at
- *  `0x104493d0` (`102c0e29 FADD qword ptr [0x104493d0]`). */
-static constexpr double DialogPartnerThinkDelaySeconds = 0.1;   // _DAT_104493d0
+ *  and named. The delay is `102c0e29 FADD qword ptr [0x104493d0]`. */
+static constexpr double DialogPartnerThinkDelaySeconds = ElysiumNpcTunables::TenthDouble;
 int32 DialogPartnerStopRequests = 0;
 
 /** SEAM for `thunk_FUN_101cd940(partner)` — `UTIL_Remove` on a dialog partner that reports NOT done
@@ -150,10 +149,9 @@ enum class ETweakParamKey : uint8
  *  order and reaches the ignore message on the twelfth miss. */
 static ETweakParamKey TweakParamKeyOf(const TCHAR* Key);
 
-/** `_DAT_104454c4` — the shared `0.0f` of `vampire.dll`, the floor `VISION` and `HEARING` compare
- *  against (`1029ab17 FCOM dword ptr [0x104454c4]`). A FLOAT, not a double: family Hints recovered
- *  the same cell as `0.0f` and the `FCOM dword` confirms the width. */
-static constexpr float TweakParamNegativeFloor = 0.0f;      // _DAT_104454c4
+/** The shared `0.0f` of `vampire.dll`, the floor `VISION` and `HEARING` compare against
+ *  (`1029ab17 FCOM dword ptr [0x104454c4]`). */
+static constexpr float TweakParamNegativeFloor = ElysiumNpcTunables::Zero;
 
 /** `_DAT_104492dc` — **-1.0f**, read out of the pinned image at `0x104492dc`
  *  (`1029ab31 FCOMP dword ptr [0x104492dc]`). The sentinel that exempts a negative `VISION` or

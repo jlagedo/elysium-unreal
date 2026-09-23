@@ -345,10 +345,8 @@ bool OwnerIsThePlayer() const;
 // mask or from its own cvar. Three arms, in retail's order.
 void BodyGroup();
 
-// The cvar `BodyGroup` reads (`DAT_1093bb14`, through `ConVar::IsCommand()` and `m_nValue`). Its
-// NAME and its DEFAULT are **unrecovered** — the pointer lives in uninitialised `.data` and no
-// corpus function constructs it. **SEAM**: `bIsCommand` answers false and `Value` answers -1, which
-// is the arm that takes the tentacle mask, i.e. the shipped default behaviour.
+// The cvar `BodyGroup` reads (`DAT_1093bb14`, through `ConVar::IsCommand()` and `m_nValue`):
+// `debug_tentacle_mask`, shipped "-1", the arm that takes the tentacle mask.
 bool BodyGroupCvarIsCommand() const;
 int32 BodyGroupCvarValue() const;
 

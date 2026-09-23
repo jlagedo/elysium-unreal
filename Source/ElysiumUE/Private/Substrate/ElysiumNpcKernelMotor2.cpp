@@ -38,14 +38,14 @@ namespace
 	// `vec3_invalid` — `DAT_10713de0/de4/de8`, which `staticinit_101371a0` fills with `0x7f7fffff`.
 	// `GetGroundpoint`'s no-hit answer, and `CNPC_VWerewolf::GetForwardYawForHint`'s sentinel.
 	constexpr float GVecInvalid = 3.4028234663852886e+38f;
-	constexpr float GMotorTailTraceClearFraction = 1.0f;     // _DAT_10449280
+	constexpr float GMotorTailTraceClearFraction = static_cast<float>(ElysiumNpcTunables::OneDouble);
 	constexpr int32 GMotorTailGroundTraceMask = 0x202400b;
 	constexpr int32 GJumpbaseHintType = 18000;
 	constexpr int32 GNoJumpHintType = 0x3e84;
 	constexpr float GStuckDegenerate = 9.999999974752427e-07f;  // _DAT_104c3d14
-	constexpr float GStuckHalf = 0.5f;                          // _DAT_104454d0
-	constexpr float GStuckOne = 1.0f;                           // _DAT_104454c0
-	constexpr float GStuckLift = 5.0f;                          // _DAT_10454110
+	constexpr float GStuckHalf = ElysiumNpcTunables::Half;
+	constexpr float GStuckOne = ElysiumNpcTunables::One;
+	constexpr float GStuckLift = ElysiumNpcTunables::Five;
 	constexpr int32 GActSuperJump = 0x7b;
 	constexpr int32 GSchedJumpDown = 0x15b;
 	constexpr int32 GSchedJumpAcross = 0x15a;

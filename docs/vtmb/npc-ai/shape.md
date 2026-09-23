@@ -1863,10 +1863,19 @@ The two arms differ in ONE sign — the right term — and in nothing else. Reta
 two statements (the sum without the up term, then `Vector::operator+` at `0x1011e060` with it) and
 the first as one expression; the split is the compiler's and the result is the same.
 
-**Unrecovered:** all three cvars' names and defaults. They live in uninitialised `.data` and no
-corpus function constructs them, which is the same finding the Facing family recorded for the
-facing-target gate. With all three unreadable, retail's own `ConVar::GetFloat()` answers `0.0f`, and
-both arms then answer `src` exactly as the base body does.
+**ConVars recovered, 0019/4; unit correction 2026-09-23.** The static initialisers
+`0x103b6660`, `0x103b66f0` and `0x103b6780` register `tzimisce_claw_left_x/y/z` with defaults
+`0`, `25` and `40` (see `convars.md`). These are distances in Source units, multiplied by the
+dimensionless body basis before being added to the origin in `0x103bfd80`. The two arms are
+reached by `SCHED_VTZIMISCE_CLAW_LEFT_ATTACK` (text `0x10657138`) and
+`SCHED_VTZIMISCE_CLAW_RIGHT_ATTACK` (`0x10656d30`), whose `TASK_PLAY_CLAW_SEQUENCE` selects
+`ACT_CLAW_LEFT` / `ACT_CLAW_RIGHT` (`0x106` / `0x107`). The port's species helper already carries
+both signs and the other-activity fallback; its missing conversion was the single divergence:
+the centimetre origin needs offsets of **63.5 cm sideways and 101.6 cm upward**. Convert all
+three live ConVar distances at that consumer; the table and its accessors retain retail units.
+The species helper's connection to generated slot 389 remains outstanding; this corrects its
+arithmetic, not that pre-existing dispatch gap.
+
 ## `CNPC_VHengeyokai`'s pickup chain — `0x10381e90`, `0x103822a0`, `0x10382670`, `0x10382400`
 
 _Recovered 2026-09-13, story 29c-1._

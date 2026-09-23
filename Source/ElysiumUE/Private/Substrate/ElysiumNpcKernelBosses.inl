@@ -498,21 +498,17 @@ bool FUN_103989b0(const FVector& TargetOriginUnits, int32& OutTask) const;
  *  Answers the chosen entity, having written the aim point and forward through `0x10398890`. */
 FElysiumEntity* FUN_10398b20(int32& InOutTask, FVector& OutAimPointUnits, FVector& OutForward);
 
-/** SEAM for the `DAT_1093ba8c` cvar gate `0x10398b20` puts in front of its whole search
- *  (`!cvar->vfunc1() && cvar->m_nValue != 0`, retail's inlined `ConVar::GetInt`). The cell lives
- *  past `.data`'s raw size and no corpus function constructs it, so its NAME and DEFAULT are
- *  **unrecovered** — the same finding the Facing family recorded for the facing-target cvars. It
- *  answers 0, which is retail's own answer for an unconstructed cvar and closes the search. */
+/** The `DAT_1093ba8c` cvar gate `0x10398b20` puts in front of its whole search
+ *  (`!cvar->vfunc1() && cvar->m_nValue != 0`, retail's inlined `ConVar::GetInt`):
+ *  `ming_xiao_pickup`, shipped "1" — the search runs. */
 int32 MingXiaoPedestalCvar() const;
 
 /** The search itself, behind the cvar gate, so the recovered rule is measurable. `RadiusUnits` is
  *  retail's 257.0 starting radius, which shrinks to each accepted winner's distance. */
 FElysiumEntity* FindNearestPedestal(float RadiusUnits, int32& OutTask);
 
-/** SEAM for the `DAT_1093b7cc` cvar `0x1038b370` multiplies by the think interval to get its
- *  per-axis acceleration clamp (retail's inlined `ConVar::GetFloat`). Same situation as
- *  `MingXiaoPedestalCvar`: **unrecovered**, answers 0.0f — and with a zero clamp the homing arm
- *  hands back exactly the current velocity, which is retail's own answer for that cvar. */
+/** The `DAT_1093b7cc` cvar `0x1038b370` multiplies by the think interval to get its per-axis
+ *  acceleration clamp (retail's inlined `ConVar::GetFloat`): `manbat_delta`, shipped "600.0". */
 float ManBatAccelerationCvar() const;
 
 /** SEAM for `0x10398890` — the aim point `0x10398b20` hands its caller: the pedestal's origin pushed

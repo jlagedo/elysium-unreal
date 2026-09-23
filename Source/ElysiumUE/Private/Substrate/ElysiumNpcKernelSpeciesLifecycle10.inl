@@ -401,10 +401,8 @@ int32 OutputListDestroys = 0;
  *  Step 2 is the whole observable body: Andrei's blood pieces do not outlive him. */
 void DestroyAndreiBlood();
 
-/** `DAT_1093fac4` and the `werewolf_show_debug` ConVar, which `~CNPC_VWerewolf` forces back to 0.
- *  **SEAM:** this runtime stands no such console variable. The pair is carried as one process-wide
- *  int (retail's global IS process-wide, and the ConVar is the same state under a name) so the reset
- *  is a real write with a real reader. */
+/** `DAT_1093fac4`, the process-wide debug word `~CNPC_VWerewolf` forces back to 0 before it sets
+ *  the `werewolf_show_debug` ConVar (`ElysiumNpcTunables::EConVar::WerewolfShowDebug`) to 0. */
 static int32& WerewolfShowDebug();
 
 /** `CNPC_VWerewolf::~CNPC_VWerewolf` (`0x103ca7c0`). Retail, in order:

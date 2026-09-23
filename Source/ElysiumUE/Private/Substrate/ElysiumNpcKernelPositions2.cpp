@@ -20,17 +20,17 @@
 
 namespace
 {
-	constexpr float GPositionsTailRetailOne = 1.0f;             // _DAT_104454c0
-	constexpr float GPositionsTailRetailZero = 0.0f;            // _DAT_104454c4
-	constexpr float RetailHalf = 0.5f;            // _DAT_104454d0
-	constexpr double ValidCoverDrop = 0.01;       // _DAT_1044e658, a DOUBLE
+	constexpr float GPositionsTailRetailOne = ElysiumNpcTunables::One;
+	constexpr float GPositionsTailRetailZero = ElysiumNpcTunables::Zero;
+	constexpr float RetailHalf = ElysiumNpcTunables::Half;
+	constexpr double ValidCoverDrop = ElysiumNpcTunables::HundredthDouble;
 
 	// `CAI_BaseNPC::IsUnreachable` `0x102741e0`'s squared-distance threshold, Source units squared.
 	constexpr float UnreachableDistSq = 14400.0f;   // _DAT_10499560 — 120 units, squared
 
 	// `CNPC_VWerewolf::UpdateConditionCanTeleport` `0x103cc0d0`.
 	constexpr float WerewolfCloseEnough = 800.0f;   // _DAT_10457ac4, Source units
-	constexpr float WerewolfTeleportDistanceFloor = 100.0f;   // _DAT_10450564
+	constexpr float WerewolfTeleportDistanceFloor = ElysiumNpcTunables::Hundred;
 
 	// The three trace masks, as retail spells them.
 	constexpr int32 MaskValidCover = 0x202400b;     // `IsValidCover`'s downward hull trace
@@ -292,10 +292,9 @@ bool FElysiumNpc::EnemyInViewCone(const FElysiumEntity& Enemy, const FVector& Po
 bool FElysiumNpc::WerewolfSightConVar()
 {
 	// `(**(code **)(*DAT_1093d694 + 4))()` / `DAT_1093d694[0xb]` — `ConVar::GetBool()` inlined as
-	// `!IsCommand() && m_nValue (+0x2c) != 0`. **SEAM**: the pointer is in uninitialised `.data` and
-	// no corpus function constructs it, so its NAME and DEFAULT are **unrecovered**; answering false
-	// is what retail answers for a cvar it cannot read, and it CLOSES the Werewolf's gate.
-	return false;
+	// `!IsCommand() && m_nValue (+0x2c) != 0`: `werewolf_disregard_player_vision`, shipped "0", which
+	// CLOSES the Werewolf's gate as shipped.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfDisregardPlayerVision) != 0;
 }
 
 bool FElysiumNpc::EnemySightPredicate(const FElysiumEntity& Enemy)
@@ -442,11 +441,11 @@ FVector FElysiumNpc::LocalVelocityCm() const
 
 float FElysiumNpc::WerewolfChaseToleranceConVar()
 {
-	// `ConVar` `DAT_1093d52c`, read as `IsCommand() ? 0.0f : m_fValue (+0x28)`. **SEAM**, name and
-	// default **unrecovered** — uninitialised `.data`, no constructor in the corpus. Answering 0 is
-	// retail's own arm for a cvar it cannot read, and it makes the Werewolf's tolerance the plain
-	// `m_flGoalTolerance`.
-	return 0.f;
+	// `ConVar` `DAT_1093d52c`, read as `IsCommand() ? 0.0f : m_fValue (+0x28)`:
+	// `werewolf_translated_enemy_position_tolerance`, shipped "0", so as shipped the Werewolf's
+	// tolerance is the plain `m_flGoalTolerance`.
+	return ElysiumNpcTunables::ConVarFloat(
+		ElysiumNpcTunables::EConVar::WerewolfTranslatedEnemyPositionTolerance);
 }
 
 void FElysiumNpc::ChaseLeadTolerance(FElysiumEntity* Enemy, const FVector& ChasePositionCm,
@@ -633,9 +632,8 @@ void FElysiumNpc::TranslateEnemyChasePositionSpecies(FElysiumEntity* Enemy,
 bool FElysiumNpc::WerewolfTeleportSoundConVar()
 {
 	// `(**(code **)(*DAT_1093f73c + 4))()` / `DAT_1093f73c[0xb]` — the same inlined
-	// `ConVar::GetBool()` shape. Recorded as UNRECOVERED in `docs/vtmb/npc-ai/lifecycle.md`;
-	// **SEAM**, answering false, which is the arm that plays nothing.
-	return false;
+	// `ConVar::GetBool()` shape: `werewolf_show_debug`, shipped "0", the arm that plays nothing.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfShowDebug) != 0;
 }
 
 void FElysiumNpc::TeleportOut()
@@ -750,10 +748,9 @@ void FElysiumNpc::KillTeleportBats()
 
 float FElysiumNpc::WerewolfTeleportDelayConVar()
 {
-	// `ConVar` `DAT_1093d414`, `IsCommand() ? 0.0f : m_fValue (+0x28)`. Its two readers are this
-	// body and its own thunk, and nothing constructs it — **unrecovered**. **SEAM** answering 0,
-	// which OPENS the gate for any elapsed time above zero.
-	return 0.f;
+	// `ConVar` `DAT_1093d414`, `IsCommand() ? 0.0f : m_fValue (+0x28)`: `werewolf_teleport_out_time`,
+	// shipped "4.0" — four seconds out of the enemy's sight before the Werewolf may teleport.
+	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfTeleportOutTime);
 }
 
 void FElysiumNpc::UpdateConditionCanTeleport()
@@ -824,12 +821,16 @@ void FElysiumNpc::UpdateConditionCanTeleport()
 float FElysiumNpc::TzimisceAimConVar(int32 Which)
 {
 	// 0 `DAT_1093cbac` (the UP term), 1 `DAT_1093cbf4` (RIGHT), 2 `DAT_1093cc3c` (FORWARD), each
-	// read as `IsCommand() ? 0.0f : m_fValue (+0x28)`. **SEAM**: all three live in uninitialised
-	// `.data` with no constructor in the corpus, so their names and defaults are **unrecovered**;
-	// 0.0 is retail's own answer for a cvar it cannot read, and with all three at zero both activity
-	// arms below answer `SrcCm` exactly as the base body does.
-	(void)Which;
-	return 0.f;
+	// read as `IsCommand() ? 0.0f : m_fValue (+0x28)`: `tzimisce_claw_left_z` "40",
+	// `tzimisce_claw_left_y` "25" and `tzimisce_claw_left_x` "0". Any other index answers 0.
+	using ElysiumNpcTunables::EConVar;
+	switch (Which)
+	{
+	case 0: return ElysiumNpcTunables::ConVarFloat(EConVar::TzimisceClawLeftZ);
+	case 1: return ElysiumNpcTunables::ConVarFloat(EConVar::TzimisceClawLeftY);
+	case 2: return ElysiumNpcTunables::ConVarFloat(EConVar::TzimisceClawLeftX);
+	default: return 0.f;
+	}
 }
 
 FVector FElysiumNpc::TzimisceAimOffset(const FVector& SrcCm, const FVector& Forward,
@@ -863,7 +864,10 @@ bool FElysiumNpc::WeaponShootPositionTzimisce(const FVector& SrcCm, FVector& Out
 	FVector Rgt = FVector::ZeroVector;
 	FVector Upv = FVector::ZeroVector;
 	RetailAngleVectors(Angles, Fwd, Rgt, Upv);
-	OutCm = TzimisceAimOffset(SrcCm, Fwd, Rgt, Upv, TzimisceAimConVar(2), TzimisceAimConVar(1),
-		TzimisceAimConVar(0), /*bAddRight*/ ActivityNumber == 0x107);
+	// `0x103bfd80` adds Source-unit distances to its source point. Here the point is in
+	// centimetres and the basis is dimensionless, so convert all three ConVar distances once.
+	OutCm = TzimisceAimOffset(SrcCm, Fwd, Rgt, Upv, TzimisceAimConVar(2) * GPositionsTailU,
+		TzimisceAimConVar(1) * GPositionsTailU, TzimisceAimConVar(0) * GPositionsTailU,
+		/*bAddRight*/ ActivityNumber == 0x107);
 	return true;
 }

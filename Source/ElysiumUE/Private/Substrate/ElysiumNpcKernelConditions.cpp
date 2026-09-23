@@ -39,14 +39,14 @@ namespace
 {
 	// --- The recovered constants, by their `.rdata` address ------------------------------------
 	// `CAI_BaseNPC::RangeAttack1Conditions` (`0x1026d890`), in SOURCE UNITS.
-	constexpr float GCondRange1TooCloseForRangedUnits = 100.0f;   // `_DAT_10450564`
+	constexpr float GCondRange1TooCloseForRangedUnits = ElysiumNpcTunables::Hundred;
 	constexpr float GCondRange1TooCloseToAttackUnits = 200.0f;    // `_DAT_104492b8`
 	constexpr float GCondRange1TooFarUnits = 1024.0f;             // `_DAT_1045d650`
 	// `CAI_BaseNPC::RangeAttack2Conditions` (`0x1026d920`).
-	constexpr float GCondRange2TooCloseForRangedUnits = 64.0f;    // `_DAT_10451acc`
-	constexpr float GCondRange2TooFarUnits = 512.0f;              // `_DAT_10483aac`
-	// `_DAT_10449270`, a DOUBLE (`FCOMP double ptr`) — the facing dot both bodies share.
-	constexpr double GCondAttackFacingDot = 0.5;
+	constexpr float GCondRange2TooCloseForRangedUnits = ElysiumNpcTunables::SixtyFour;
+	constexpr float GCondRange2TooFarUnits = ElysiumNpcTunables::FiveHundredTwelve;
+	// The facing dot both bodies share (`FCOMP double ptr [0x10449270]`).
+	constexpr double GCondAttackFacingDot = ElysiumNpcTunables::HalfDouble;
 
 	// `FUN_102b2570`'s attack-period numerator: the re-raise window is
 	// `m_flLastMeleeStepbackTime + 3.0 / m_flSpeedScale`.
@@ -62,8 +62,8 @@ namespace
 	// carries no flag word at all, so the arm asks the seam below.
 
 	// `FUN_10290040`, the door transaction's two mode-2 expiries.
-	constexpr double GCondDoorWaitExpireSeconds = 1.0;            // `_DAT_104454c0`
-	constexpr double GCondDoorOpenExpireSeconds = 5.0;            // `_DAT_10454110`
+	constexpr double GCondDoorWaitExpireSeconds = static_cast<double>(ElysiumNpcTunables::One);
+	constexpr double GCondDoorOpenExpireSeconds = static_cast<double>(ElysiumNpcTunables::Five);
 
 	// `CAI_BaseNPCTroika::OnStateChange`'s hunt-state re-arm, `RandomFloat(10, 20)`
 	// (`0x41200000` / `0x41a00000` pushed at `102ae1c0`).

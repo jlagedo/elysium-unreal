@@ -75,7 +75,8 @@ namespace
 	// every arm off) is what an untouched case sees.
 	void Debug10ResetConVars()
 	{
-		FElysiumNpc::SetDebugConVar(nullptr, 0);
+		FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+		ElysiumNpcTunables::ResetConVars();
 	}
 }
 
@@ -218,7 +219,7 @@ bool FElysiumNpcKernelDebug10TraceMessagesTest::RunTest(const FString&)
 
 	// `DAT_10920534` SET: the three route to two DIFFERENT rings, and slot 17 rings the RAW message
 	// where slot 18 rings the formatted one. Both asymmetries are retail's.
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10920534"), 1);
+	FElysiumNpc::SetDebugTraceByte(TEXT("DAT_10920534"), 1);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TraceMessage(TEXT("slot 18"), 0);
 	ConstNpc->TraceMessage(TEXT("slot 17"), 0);
@@ -527,7 +528,7 @@ bool FElysiumNpcKernelDebug10TroikaTextTest::RunTest(const FString&)
 	TestFalse(TEXT("with the ConVar off the EALTAI line is absent"),
 		Debug10RetailOrder(FElysiumNpc::EndDebugCapture()).Contains(TEXT("EALTAI")));
 
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_1092429c"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::EntTraceDoors, 1);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaDrawDebugTextOverlays();
 	{
@@ -773,7 +774,7 @@ bool FElysiumNpcKernelDebug10TroikaGeometryTest::RunTest(const FString&)
 	// --- `DAT_10924f24`: five boxes at the enemy's NOISY body target --------------------------------
 	Npc->DebugOverlays = 0;
 	Npc->Senses.Memory.Enemy = Other->Handle;
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924f24"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugShowBodyTargets, 1);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaDrawDebugGeometryOverlays();
 	{
@@ -910,7 +911,7 @@ bool FElysiumNpcKernelDebug10ThinkDebugPreTest::RunTest(const FString&)
 	//
 	// The trace is a seam that answers "clear", which is retail's GREEN line; the line itself is the
 	// arm's output and the checklist's walk omitted it entirely.
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_1092479c"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugVisionLine, 1);
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::SeePlayer);
 	Npc->Senses.Memory.ClosestPlayer = Other->Handle;
 	FElysiumNpc::BeginDebugCapture();
@@ -958,7 +959,7 @@ bool FElysiumNpcKernelDebug10ThinkDebugPreTest::RunTest(const FString&)
 	Debug10ResetConVars();
 
 	// --- `DAT_109244c4`: the eye box, the ideal box and the line between them ------------------------
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_109244c4"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugWeaponShootPos, 1);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaNPCThinkDebugPre();
 	{
@@ -983,7 +984,7 @@ bool FElysiumNpcKernelDebug10ThinkDebugPreTest::RunTest(const FString&)
 	for (const TPair<int32, const TCHAR*> Row : { TPair<int32, const TCHAR*>(1, TEXT("0x1028e030")),
 		TPair<int32, const TCHAR*>(2, TEXT("0x1028e060")) })
 	{
-		FElysiumNpc::SetDebugConVar(TEXT("DAT_1092435c"), Row.Key);
+		ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugShowNpcSkeletons, Row.Key);
 		FElysiumNpc::BeginDebugCapture();
 		Npc->TroikaNPCThinkDebugPre();
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
@@ -992,7 +993,7 @@ bool FElysiumNpcKernelDebug10ThinkDebugPreTest::RunTest(const FString&)
 	}
 	for (const int32 Mode : { 0, 3, 99 })
 	{
-		FElysiumNpc::SetDebugConVar(TEXT("DAT_1092435c"), Mode);
+		ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugShowNpcSkeletons, Mode);
 		FElysiumNpc::BeginDebugCapture();
 		Npc->TroikaNPCThinkDebugPre();
 		TestEqual(*FString::Printf(TEXT("mode %d selects neither"), Mode),

@@ -896,6 +896,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10WerewolfDestroyTest::RunTest(const FStri
 	// The one thing outside the object the body touches: `DAT_1093fac4` and the `werewolf_show_debug`
 	// ConVar behind it, both driven to 0.
 	FElysiumNpc::WerewolfShowDebug() = 1;
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::WerewolfShowDebug, 1.f);
 	N.OutputListDestroys = 0;
 
 	// `+0x6714` / `+0x6720` is the hint-data array, not an unnamed vector: `InitializeHintData`
@@ -905,7 +906,10 @@ bool FElysiumNpcKernelSpeciesLifecycle10WerewolfDestroyTest::RunTest(const FStri
 
 	N.DestroyWerewolf();
 
-	TestEqual(TEXT("werewolf_show_debug is driven back to 0"), FElysiumNpc::WerewolfShowDebug(), 0);
+	TestEqual(TEXT("DAT_1093fac4 is driven back to 0"), FElysiumNpc::WerewolfShowDebug(), 0);
+	TestEqual(TEXT("and so is the werewolf_show_debug ConVar"),
+		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfShowDebug), 0);
+	ElysiumNpcTunables::ResetConVars();
 	// The five outputs: `m_OnTeleportIn`, `m_OnTeleportOut`, `m_OnFinishCrushAnimation`,
 	// `m_OnBeginCrushAnimation`, `m_OnConditionDeathTriggered`.
 	TestEqual(TEXT("five output lists are torn down"), N.OutputListDestroys, 5);

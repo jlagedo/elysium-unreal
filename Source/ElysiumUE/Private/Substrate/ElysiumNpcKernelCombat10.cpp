@@ -32,11 +32,11 @@ namespace
 	// eight cells the corpus does not carry.
 
 	// `_DAT_104ce8c0` — the shared epsilon `GetCurrHealthPercent` guards its DIVISOR with.
-	constexpr float GCombatEpsilon = 1e-05f;
+	constexpr float GCombatEpsilon = ElysiumNpcTunables::VampireBossSegmentLengthFloor;
 	// `_DAT_104454c4` — the shared float zero, and `GetCurrHealthPercent`'s refusal answer.
-	constexpr float GCombatZero = 0.0f;
+	constexpr float GCombatZero = ElysiumNpcTunables::Zero;
 	// `_DAT_104454c0` — 1.0, `ComputeKnockbackVelocity`'s blend parameter on the NULL-source path.
-	constexpr float GCombatOne = 1.0f;
+	constexpr float GCombatOne = ElysiumNpcTunables::One;
 	// `_DAT_104491b4` — **0.1**, the scale applied to the source's raw attack value.
 	constexpr float GKnockbackRawAttackScale = 0.1f;
 	// `_DAT_1049a1d8` / `_DAT_1049a1dc` — **220** and **400**, the XY factor's two ends.
@@ -47,14 +47,11 @@ namespace
 	constexpr float GKnockbackZHigh = 310.0f;
 	// `_DAT_1044eb08` — pi/180, the degrees-to-radians scale the yaw sweep opens with.
 	constexpr float GDegreesToRadians = 0.01745329238474369f;
-	// `_DAT_10462950` — **40.0**, the yaw sweep's FORWARD leg. Recovered; the checklist left it
-	// unnamed.
-	constexpr float GYawSweepForwardUnits = 40.0f;
-	// `_DAT_10451acc` — **64.0**, the yaw sweep's RIGHT leg. Recovered out of the pinned image.
-	// The same cell is family Schedule's melee height-difference threshold; it read UNRECOVERED
-	// (0.0) there when this was written and the story's close corrected it to 64.0, so the two
-	// agree now.
-	constexpr float GYawSweepRightUnits = 64.0f;
+	// `_DAT_10462950` — the yaw sweep's FORWARD leg.
+	constexpr float GYawSweepForwardUnits = ElysiumNpcTunables::Forty;
+	// `_DAT_10451acc` — the yaw sweep's RIGHT leg; the same pooled 64.0f is family Schedule's melee
+	// height-difference threshold.
+	constexpr float GYawSweepRightUnits = ElysiumNpcTunables::SixtyFour;
 	// The move probe's trace mask and its literal float argument (`102a17fa`, `102a17e6`).
 	constexpr int32 GYawSweepTraceMask = 0x202400b;
 	constexpr float GYawSweepTraceArg = 100.0f;

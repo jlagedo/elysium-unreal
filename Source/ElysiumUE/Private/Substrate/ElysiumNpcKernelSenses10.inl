@@ -106,10 +106,8 @@ void HunterOnSeeEntity(FElysiumEntity* Seen);
  *  `_DAT_1093b658` (the hunter's). They are STATIC IN RETAIL — every cop in the map shares one
  *  grudge — so they are file statics here too, reached through these accessors rather than copied
  *  per NPC. Family **Debug10**'s `CopSuspectIs` and family **Conditions10**'s two slot-404 species
- *  arms are the readers; this family is the writer.
- *
- *  The window is `_DAT_104492a8` = **30.0** seconds (`docs/vtmb/npc-ai/`). */
-static constexpr float SpeciesSuspectWindowSeconds = 30.f;   // _DAT_104492a8
+ *  arms are the readers; this family is the writer. The window is 30 seconds. */
+static constexpr float SpeciesSuspectWindowSeconds = ElysiumNpcTunables::Thirty;
 static FElysiumEntityHandle CopSuspectHandle();
 static double CopSuspectExpiry();
 static FElysiumEntityHandle HunterSuspectHandle();
@@ -167,9 +165,8 @@ bool bFrenzyShadowFailedGrapple = false;   // +0x6668
  *       where retail's degenerate arm lands for a body with no enemy.
  *    3. an enemy → the enemy-memory LKP (`0x102dfed0`) plus `BodyTarget(shootPos)` minus the
  *       enemy's `GetAbsOrigin`, with `+_DAT_104994e0` added to Z when the enemy's stat `0x0b` reads
- *       `5`. **SEAM**: `_DAT_104994e0` is UNRECOVERED (an `.rdata` cell with no reader that pins
- *       it) and the `CVStatList_t` join by retail list TYPE does not exist on this sheet, so the
- *       stat reads not-5 and the bonus is not applied. Named rather than guessed. */
+ *       `5` (-30.0). **SEAM**: the `CVStatList_t` join by retail list TYPE does not exist on this
+ *       sheet, so the stat reads not-5 and the offset is not applied. */
 FVector ShootEnemyAimPoint(const FVector& ShootPositionCm);
 
 /** `CNPC_VMingXiao::GetShootEnemyDir` (`0x10395d00`), slot 574's one species arm: the base body with

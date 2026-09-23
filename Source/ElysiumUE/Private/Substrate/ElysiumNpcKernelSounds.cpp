@@ -354,11 +354,11 @@ namespace
 
 		// --- CNPC_VTzimisce: two SENTENCE hooks -------------------------------------------------
 		//
-		// Both take their volume, soundlevel and pitch from three ConVar objects
-		// (`0x1093cf94`, `0x1093cfdc`, `0x1093cebc`) shared by the whole Tzimisce sound family.
-		// UNRECOVERED: the three ConVar NAMES and their defaults — the corpus has the objects but
-		// no registration string reaches them — so the row carries retail's ordinary pair and the
-		// sentence seam refuses before the numbers matter.
+		// Both take their volume, soundlevel and pitch from three ConVars shared by the whole
+		// Tzimisce sound family: `tzimisce_voice_volume` "1" (`0x1093cebc`), `tzimisce_voice_attn`
+		// "65" dB (`0x1093cfdc`) and `tzimisce_voice_pitch` "100" (`0x1093cf94`). The row carries
+		// the ordinary pair because the sentence seam refuses before the numbers matter; the day it
+		// emits, it reads `ElysiumNpcTunables::ConVar*` for all three.
 		//
 		// `0x103b9380` slot 490 IdleSound: gated on `FOkToMakeSound()`, then `"SPI_IDLE"`.
 		FElysiumNpc::FVocalization{ TEXT("CNPC_VTzimisce"), 490, TEXT("0x103b9380"),

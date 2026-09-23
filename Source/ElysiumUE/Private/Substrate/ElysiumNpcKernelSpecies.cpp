@@ -30,20 +30,21 @@ namespace
 {
 	// --- Retail `.rdata`, one line per cell, each value read out of the pinned image ---------------
 
-	constexpr float SpeciesZero = 0.0f;            // _DAT_104454c4 / _DAT_1044fab0 / _DAT_10449280
-	constexpr float SpeciesOne = 1.0f;             // _DAT_104454c0
+	// The pooled zeroes (`_DAT_104454c4`, and the double `_DAT_1044fab0`) and one.
+	constexpr float SpeciesZero = ElysiumNpcTunables::Zero;
+	constexpr float SpeciesOne = ElysiumNpcTunables::One;
 
 	// Slot 323 (`0x10344dd0`). The direction's 2-D length must clear this before an angle is taken
 	// at all — a hair over zero, so the too-slow arm is only a genuinely stationary direction.
 	constexpr float MoveDirectionMinLength2D = 1.0e-07f;    // _DAT_1049e028
 
 	// Slot 323's `UTIL_AngleMod`: `(360/65536) * (ftol(a * 65536/360) & 0xffff)`.
-	constexpr float AngleModScale = 0.0054931640625f;       // _DAT_1044ffdc  (= 360 / 65536)
+	constexpr float AngleModScale = ElysiumNpcTunables::AngleQuantum;   // 360 / 65536
 	constexpr float GSpeciesDegreesPerTurn = 360.0f;                // _DAT_10450568
 
 	// Slot 323's four band boundaries. **316, not 315** — read out of the image; the bands are 89,
 	// 90, 90 and 91 degrees wide and that asymmetry is retail's.
-	constexpr float MoveDirectionAheadBand = 45.0f;         // _DAT_1049949c
+	constexpr float MoveDirectionAheadBand = ElysiumNpcTunables::FortyFive;
 	constexpr float MoveDirectionLeftBand = 135.0f;         // _DAT_1049e8a0
 	constexpr float MoveDirectionBehindBand = 225.0f;       // _DAT_1049e89c
 	constexpr float MoveDirectionRightBand = 316.0f;        // _DAT_1049e8a4
@@ -855,10 +856,9 @@ bool FElysiumNpc::FUN_103c1b10()
 	// when the coordinator is not holding it — and never because a timer ran out.
 	//
 	// `range + range` is the DOUBLED melee range, the same doubling the Troika line uses.
-	// `MeleeRangeUnits()` (family TroikaHelpers) reads the same ConVar and answers 0.0
-	// (UNRECOVERED), so the doubled range is 0 and the first arm's distance test passes for any
-	// positive `m_flEnemyDist`; `MeleeCoordinatorHasRoom()` answers false, so that arm returns true
-	// whenever the enemy is at any distance at all. Both seams are named at the call site.
+	// `MeleeRangeUnits()` (family TroikaHelpers) reads the same ConVar,
+	// `debug_melee_advance_combatmove_dist` "100", so the doubled range is 200 units;
+	// `MeleeCoordinatorHasRoom()` answers false, so past 200 units that arm returns true.
 	//
 	// The last line negates `MeleeCoordinatorHoldsMe()` because that seam is spelled "is this NPC IN
 	// the array" while `0x1025de90` answers "is it NOT" — family TroikaHelpers' own `Slot602` writes

@@ -40,22 +40,18 @@ namespace
 	constexpr int32 GDebug10BitViewCones = 0x400000;   // 0x1029ca59
 	constexpr int32 GDebug10BitZombieConds = 0x40000;  // 0x103e0e9a
 
-	// --- The ConVar globals, by address. `DebugConVar` keys on the SPELLING, so a body names the
-	//     global it read and a test names the same one. --------------------------------------------
+	// --- The debug globals these bodies read ---------------------------------------------------------
 	// Retail's own trace buffer, `1028de9a PUSH 0x200` on slot 17 and the same on slot 18. It is
 	// handed to the formatter as an argument rather than baked in, so `0x1028d990`'s
 	// "size <= 0 writes nothing at all" arm stays reachable.
 	constexpr int32 GDebug10TraceBufferBytes = 0x200;
 
-	constexpr TCHAR GDebug10CvTraceRing[] = TEXT("DAT_10920534");   // the trace-message toggle
-	constexpr TCHAR GDebug10CvAltAi[] = TEXT("DAT_1092429c");       // Troika text: the EALTAI line
-	constexpr TCHAR GDebug10CvThinkTrace[] = TEXT("DAT_1092479c");  // think-pre: the LOS/blocked block
-	constexpr TCHAR GDebug10CvThinkEye[] = TEXT("DAT_109244c4");    // think-pre: the eye/ideal pair
-	constexpr TCHAR GDebug10CvThinkExtra[] = TEXT("DAT_1092435c");  // think-pre: 1 -> 0x1028e030, 2 -> 0x1028e060
-	constexpr TCHAR GDebug10CvEnemyBody[] = TEXT("DAT_10924f24");   // geometry: the five body-target boxes
+	constexpr TCHAR GDebug10CvTraceRing[] = TEXT("DAT_10920534");   // the trace-message toggle, a byte
+	// Troika text: the EALTAI line, under `ent_trace_doors` (`DAT_1092429c`).
+	constexpr ElysiumNpcTunables::EConVar GDebug10CvAltAi = ElysiumNpcTunables::EConVar::EntTraceDoors;
 
-	// The open ConVar set. Game-thread only, like the rest of the substrate.
-	TMap<FString, int32> GDebug10ConVars;
+	// The two trace bytes. Game-thread only, like the rest of the substrate.
+	TMap<FString, int32> GDebug10TraceBytes;
 
 	// --- The census addresses the two slot methods dispatch on -----------------------------------
 	constexpr TCHAR GDebug10Body_BaseText[] = TEXT("0x102767d0");
@@ -227,31 +223,27 @@ namespace
 }
 
 // -------------------------------------------------------------------------------------------------
-// The ConVar seam.
+// The trace bytes.
 // -------------------------------------------------------------------------------------------------
 
-int32 FElysiumNpc::DebugConVar(const TCHAR* RetailGlobal)
+int32 FElysiumNpc::DebugTraceByte(const TCHAR* RetailGlobal)
 {
-	// Retail's gate, spelled once: `cv->vtable[4]()` must answer 0 (the object is a ConVar and not a
-	// ConCommand) and the int at `cv + 0x2c` must be non-zero. The vtable half is a property of the
-	// object's TYPE and is constant for all six of these globals, so what remains is the int — which
-	// is what this answers. Shipped default 0 for every one of them.
 	if (RetailGlobal == nullptr)
 	{
 		return 0;
 	}
-	const int32* Value = GDebug10ConVars.Find(FString(RetailGlobal));
+	const int32* Value = GDebug10TraceBytes.Find(FString(RetailGlobal));
 	return Value != nullptr ? *Value : 0;
 }
 
-void FElysiumNpc::SetDebugConVar(const TCHAR* RetailGlobal, int32 Value)
+void FElysiumNpc::SetDebugTraceByte(const TCHAR* RetailGlobal, int32 Value)
 {
 	if (RetailGlobal == nullptr)
 	{
-		GDebug10ConVars.Reset();
+		GDebug10TraceBytes.Reset();
 		return;
 	}
-	GDebug10ConVars.Add(FString(RetailGlobal), Value);
+	GDebug10TraceBytes.Add(FString(RetailGlobal), Value);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -346,8 +338,8 @@ FString FElysiumNpc::TraceMessageFormat(const TCHAR* Message, int32 IndentLevel)
 
 bool FElysiumNpc::TraceMessagesGoToRing() const
 {
-	// SEAM for `DAT_10920534`. Shipped default clear, so every trace message takes the `DevMsg` arm.
-	return DebugConVar(GDebug10CvTraceRing) != 0;
+	// `DAT_10920534`, a byte. It ships clear, so every trace message takes the `DevMsg` arm.
+	return DebugTraceByte(GDebug10CvTraceRing) != 0;
 }
 
 void FElysiumNpc::TraceMessage(const TCHAR* Message, int32 IndentLevel)
@@ -863,7 +855,7 @@ int32 FElysiumNpc::TroikaDrawDebugTextOverlays()
 	// The float is `m_flAlternateAIExpireTimer (+0x6450) - curtime` — the REMAINING time, which the
 	// checklist's walk left as "a %f". Mode 0 and anything above 4 print nothing: the switch's own
 	// `JA 4` and `default:` both fall past the line.
-	if (DebugConVar(GDebug10CvAltAi) != 0)
+	if (ElysiumNpcTunables::ConVarInt(GDebug10CvAltAi) != 0)
 	{
 		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 		const float Remaining = static_cast<float>(AlternateAiExpireTime - Now);

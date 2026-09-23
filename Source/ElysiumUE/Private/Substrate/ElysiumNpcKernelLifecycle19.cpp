@@ -604,10 +604,12 @@ void FElysiumNpc::TroikaNPCInit()
 	// `Weapon_TranslateActivity` reads; clearing the word therefore UNHIDES. Retail does exactly
 	// that here, before the base body runs, and `CNPC_VZombie::NPCInit` re-hides itself afterwards.
 	bHidden = false;                                                     // 1029a0c0 m_fEffects +0x19c
-	// `1029a0c6`–`1029a0ef`: `m_iHealth = ftol(DAT_10923f14->IsCommand() ? 0.0 : cvar+0x28)`.
-	// SEAM: `DAT_10923f14` is an unnamed `ConCommandBase*` this image never writes — its four
-	// referrers are this body and its three thunks — so the value it seeds is unrecoverable from
-	// the corpus and `Health` is left where `SeedSheet` put it. Counted so the arm is visible.
+	// `1029a0c6`–`1029a0ef`: `m_iHealth = ftol(DAT_10923f14->IsCommand() ? 0.0 : cvar+0x28)` —
+	// `sk_basenpctroika_health`, shipped "10". Written verbatim over what `SeedSheet` derived: this
+	// body is the only Troika-typed writer of `+0x210`, and the sheet's next projection
+	// (`SyncHealthFromSheet`, on damage) is what replaces it, as retail's `HealthToPercent` does.
+	Health = static_cast<int32>(
+		ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SkBasenpctroikaHealth));
 	++NpcInitHealthSeeds;
 	WriteNpcStateRetail(0);                                              // 1029a0f5 m_NPCState = NONE
 	Senses.ResetListenClock();                                           // 1029a0fb +0x63d0 = 0

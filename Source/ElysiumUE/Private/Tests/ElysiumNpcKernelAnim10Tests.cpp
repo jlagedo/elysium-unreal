@@ -81,9 +81,9 @@ namespace
 			Cop = World.Npc(TEXT("cop"));
 			Other = World.Npc(TEXT("other"));
 			FElysiumNpcWorldFixture::Quiet({ Npc, Cop, Other });
-			// Every case drives one slot on a standing body; the ConVar seams start clear.
-			FElysiumNpc::SetDebugConVar(nullptr, 0);
-			FElysiumNpc::SetAnim10FloatConVar(nullptr, 0.f);
+			// Every case drives one slot on a standing body; the ConVars start at their shipped defaults.
+			FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+			ElysiumNpcTunables::ResetConVars();
 		}
 
 		static FElysiumNpcWorldBuilder Build(uint32 Seed)
@@ -658,15 +658,16 @@ bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 		N.NPC_EarlyTranslateActivity(GTActRun), GTActRun);
 
 	// 1. The gait override.
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924d6c"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 1);
 	TestEqual(TEXT("0x10295590 step 1: gait 1 rewrites ACT_WALK to ACT_RUN"),
 		N.NPC_EarlyTranslateActivity(GTActWalk), GTActRun);
 	TestEqual(TEXT("...and ACT_HUNT_WALK too"), N.NPC_EarlyTranslateActivity(GTActHuntWalk),
 		GTActRun);
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924d6c"), 2);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 2);
 	TestEqual(TEXT("0x10295590 step 1: gait 2 rewrites ACT_RUN to ACT_WALK"),
 		N.NPC_EarlyTranslateActivity(GTActRun), GTActWalk);
-	FElysiumNpc::SetDebugConVar(nullptr, 0);
+	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+	ElysiumNpcTunables::ResetConVars();
 
 	// 2. The frenzy word. Bit 0x40 wins OUTRIGHT over bit 0x20 — they are an `else if`.
 	N.NpcFlags.SetFrenziedWord(0x40);
@@ -781,13 +782,14 @@ bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 	// only when the ConVar is dead or zero AND the memory bit is clear.
 	N.BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Alert);
 	N.ScheduleHost.MemoryBits &= ~0x8000000u;
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10923f5c"), 0);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAlertAggressive, 0);
 	TestFalse(TEXT("0x103854f0 step 3: alert with a dead cvar and a clear memory bit stays CLEAR"),
-		FElysiumNpc::DebugConVar(TEXT("DAT_10923f5c")) != 0);
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10923f5c"), 1);
+		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAlertAggressive) != 0);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAlertAggressive, 1);
 	TestTrue(TEXT("0x103854f0 step 3: a LIVE non-zero cvar is the SET side of the polarity"),
-		FElysiumNpc::DebugConVar(TEXT("DAT_10923f5c")) != 0);
-	FElysiumNpc::SetDebugConVar(nullptr, 0);
+		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAlertAggressive) != 0);
+	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+	ElysiumNpcTunables::ResetConVars();
 	return true;
 }
 
@@ -1269,14 +1271,15 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 
 	TestTrue(TEXT("Always is always"), Ask(ENpcPredicate::Always));
 
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924d6c"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 1);
 	TestTrue(TEXT("GaitOverrideRun reads the same cvar 0x10295590 step 1 does"),
 		Ask(ENpcPredicate::GaitOverrideRun));
 	TestFalse(TEXT("...and GaitOverrideWalk is the other value"),
 		Ask(ENpcPredicate::GaitOverrideWalk));
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924d6c"), 2);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 2);
 	TestTrue(TEXT("GaitOverrideWalk reads value 2"), Ask(ENpcPredicate::GaitOverrideWalk));
-	FElysiumNpc::SetDebugConVar(nullptr, 0);
+	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+	ElysiumNpcTunables::ResetConVars();
 
 	N.NpcFlags.SetFrenziedWord(0x40);
 	TestTrue(TEXT("MovementPolicyFrenzy is m_bfNPCFrenziedFlags 0x40"),
@@ -1405,12 +1408,13 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 	N.NpcFlags.SetFrenziedWord(0);
 
 	// 3. The gait-override ConVar.
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924d6c"), 1);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 1);
 	TestEqual(TEXT("gait 1: the table walk rewrites ACT_WALK to ACT_RUN"),
 		WalkVisual(TEXT("ACT_WALK")).Activity, FString(TEXT("ACT_RUN")));
 	TestEqual(TEXT("gait 1: and slot 375 agrees"), N.NPC_EarlyTranslateActivity(GTActWalk),
 		GTActRun);
-	FElysiumNpc::SetDebugConVar(nullptr, 0);
+	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+	ElysiumNpcTunables::ResetConVars();
 
 	// 4. The two capability-gated delegates, which the table left ungated before this story.
 	N.CapabilityWord = 0;

@@ -380,9 +380,8 @@ int32 BaseUpdatePoseParameterCalls = 0;
  *  `m_lifeState == 0`. */
 bool BaseKnockbackAllowed(void* SwingRecord, FElysiumEntity* Attacker);
 
-/** `DAT_109245e4`'s int (`+0x2c`) — the hit-buildup ConVar slot 326's Troika arm compares
- *  `m_iHitBuildupCount` (`+0x6064`) against. `FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow` is
- *  the port's recovered value for the same ConVar and is read rather than restated. */
+/** `DAT_109245e4`'s int (`+0x2c`) — `npc_hit_buildup_amount`, "2", the ceiling slot 326's Troika
+ *  arm compares `m_iHitBuildupCount` (`+0x6064`) against. */
 static int32 HitBuildupConVarValue();
 
 // --- Slot 330, the near-miss flinch ----------------------------------------------------------------
@@ -498,12 +497,6 @@ void MaintainEyeDirectionCyclerArm();
  *  port member and ARE cleared. */
 void ClearHeadPoseParameters();
 
-/** SEAM for `DAT_1090fc0c` / `DAT_1090fc9c`, the two FLOAT ConVars (`+0x28`, not the `+0x2c` int
- *  form `DebugConVar` carries) whose pair is the cycler-actor look duration
- *  `RandomFloat(DAT_1090fc0c, DAT_1090fc9c)`. Neither name nor default is in the corpus; both answer
- *  `0.0`, which is retail's own `IsCommand()` arm, and a test sets the value it wants. */
-static float Anim10FloatConVar(const TCHAR* RetailGlobal);
-static void SetAnim10FloatConVar(const TCHAR* RetailGlobal, float Value);
 
 // =================================================================================================
 // Family **SpeciesAnim10** — four species arms of slots 604 and 509.

@@ -29,7 +29,7 @@ is OFF as shipped); `debug_allow_fake_reload` **1**; `debug_turning` **0** with
 | `0x10923d3c` · object `0x10923d38` | `debug_allow_fake_reload` | `"1"` | 0 / 1 | “Allows or disallows faked NPC reloading.” | `0x1028c5e0` | `0x102b8620 FUN_102b8620`: `+0x2c` int |
 | `0x10924a1c` · object `0x10924a18` | `debug_melee_advance_combatmove_dist` | `"100"` | — | “How close a melee combatant needs to be to player in order to do the combat move. Outside of this distance they will run to close the distance.” | `0x1028bb90` | `0x102702d0`, `0x102b5650`, `0x102b5900`, `0x102b6c30`, `0x102b8620`, `0x10361be0`, `0x1036d800`, `0x10385ab0`, `0x10385d70`, `0x10385e40`, `0x10396050`, `0x103aa060`, `0x103c1b10`, `0x103c3ab0`, `0x103c4430`, `0x103dda10`: `+0x28` float |
 | `0x109248f4` · object `0x109248f0` | `debug_allow_dodge` | `"0"` | 0 / 1 | “Allows or disallows NPC dodging when no cover nodes are found.” | `0x1028c540` | `0x102b7cf0 FUN_102b7cf0`: `+0x2c` int |
-| `0x1093f95c` · object `0x1093f958` | `werewolf_draw_hints` | `"40"` | — | NULL | `0x103cb440` | `0x103cb4b0`, `0x103cb590`: `+0x2c` int |
+| `0x1093f95c` · object `0x1093f958` | `werewolf_draw_hints` | `"0"` | — | NULL | `0x103cb440` | `0x103cb4b0`, `0x103cb590`: `+0x2c` int |
 | `0x1093f73c` · object `0x1093f738` | `werewolf_show_debug` | `"0"` | — | NULL | `0x103c82c0` | `0x103cb590`, `0x103d4a60`, `0x103d4d60`, `0x103d93b0`: `+0x2c` int |
 | `0x10923f14` · object `0x10923f10` | `sk_basenpctroika_health` | `"10"` | — | NULL | `0x1028b4c0` | `0x1029a0b0 NPCInit`: `+0x28` float |
 | `0x1093c34c` · object `0x1093c348` | `andrei_force_awaken` | `"0"` | — | NULL | `0x103a5950` | `0x103a8990 RunTask`: `+0x2c` int |
@@ -67,6 +67,18 @@ is OFF as shipped); `debug_allow_fake_reload` **1**; `debug_turning` **0** with
 | `0x109245e4` · object `0x109245e0` | `npc_hit_buildup_amount` | `"2"` | — | NULL | `0x1029fe50` | `0x1029fec0`: `+0x2c` int |
 | `0x1090fc0c` · object `0x1090fc08` | `flex_minplayertime` | `"5"` | — | NULL | `0x1025e230` | `0x1025fa50`: `+0x28` float |
 | `0x1090fc9c` · object `0x1090fc98` | `flex_maxplayertime` | `"7"` | — | NULL | `0x1025e2c0` | `0x1025fa50`: `+0x28` float |
+
+**Held by the tunables table since 0019/4 (2026-09-22).** Every row above is a `convar_*` row of
+`research/tooling/ghidra/driver/kernel_tunables.tsv`; `gen_kernel_tunables --check` finds each
+object's `MOV ECX, object` static initialiser in `.text` and compares the console name and the
+default string it pushes. That check corrected one row here: `werewolf_draw_hints` pushes `"0"`
+(`0x103cb440 PUSH 0x105399a0`), not `"40"`. It also named six the port's debug families read and
+this table had not listed, all `+0x2c` ints: `ent_trace_doors` (object `0x10924298`),
+`debug_vision_line` (`0x10924798`), `debug_weapon_shoot_pos` (`0x109244c0`),
+`debug_show_npc_skeletons` (`0x10924358`), `debug_show_body_targets` (`0x10924f20`), all `"0"`,
+and `ent_trace_conditions` (`0x10924a68`, ctor `0x1028bde0`) — **`"1"`**. `DAT_10920534` /
+`DAT_10920535` are plain bytes no initialiser constructs. The kernel reads every one through
+`ElysiumNpcTunables::ConVarFloat` / `ConVarInt`.
 
 ## Not ConVars, though the oracle wondered
 

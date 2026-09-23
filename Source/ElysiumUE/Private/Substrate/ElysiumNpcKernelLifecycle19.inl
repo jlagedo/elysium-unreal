@@ -95,15 +95,15 @@ static FElysiumEntityHandle& MingXiaoTentacleCache();
 // `.rdata` constants, named once
 // -------------------------------------------------------------------------------------------------
 
-static constexpr double MapFirstSecond = 1.0;            // `_DAT_10449280`
-static constexpr double NpcInitThinkDelay = 0.1;         // `_DAT_104493d0`
-static constexpr float MotorYawHalfTurn = 180.f;         // `_DAT_1044c3a8`
-static constexpr float TeleportMoveTimerFloor = 0.f;     // `_DAT_104454c4`
+static constexpr double MapFirstSecond = ElysiumNpcTunables::OneDouble;
+static constexpr double NpcInitThinkDelay = ElysiumNpcTunables::TenthDouble;
+static constexpr float MotorYawHalfTurn = ElysiumNpcTunables::OneEighty;
+static constexpr float TeleportMoveTimerFloor = ElysiumNpcTunables::Zero;
 static constexpr float TeleportMoveTimerExtra = 4.f;     // `_DAT_10450aa0`
 static constexpr float SpeciesShunWindowSeconds = 3.f;   // `_DAT_10449258`
 static constexpr double ManBatFlapDelaySeconds = 2.3;    // `_DAT_104bc690`
 static constexpr double WerewolfTeleportFloorSquare = 512.0; // `_DAT_104704c0`
-static constexpr float HullCentreHalf = 0.5f;            // `_DAT_104454d0`
+static constexpr float HullCentreHalf = ElysiumNpcTunables::Half;
 static constexpr double WerewolfFieldOfViewRadians = 2.0943951023931953; // `_DAT_104d0080`
 static constexpr float SheriffManJumpGravity = 2.f;      // `_DAT_104c6148`
 static constexpr float AsianVampireJumpGravity = 2.f;    // `_DAT_104a9300`

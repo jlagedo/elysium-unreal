@@ -308,19 +308,16 @@ float MotorMinStoppingDistanceUnits() const;
 
 // --- The console variables this family's ladders read --------------------------------------------
 //
-// Four `ConVar*` globals, read as `IsCommand() ? 0.0f : m_fValue` (the object's `+0x28`). Two are
-// constructed in `MaxYawSpeed`'s own body and so their NAME and DEFAULT are recovered facts read out
-// of `.rdata`; two live in uninitialised `.data` that no corpus function ever constructs, exactly
-// like the pair the Facing family recorded, and are **unrecovered**.
-//
-// The seam answers "this substrate has no console", which lands every read on retail's own
-// `IsCommand()` arm — 0.0 — except for the two whose registered default IS recovered.
+// The `ConVar*` globals the yaw ladders read, as `IsCommand() ? 0.0f : m_fValue` (the object's
+// `+0x28`). Two are constructed in `MaxYawSpeed`'s own body and carry their recovered name and
+// default here; the other four (the three turning scalars and `debug_turning_speed`) are rows of the
+// tunables table (`docs/vtmb/npc-ai/convars.md`) and are read through it.
 struct FRetailYawConVar
 {
-	const TCHAR* Name;       // empty where the name is unrecovered
-	const TCHAR* Address;
-	float Default;
-	bool bDefaultRecovered;
+	const TCHAR* Name;
+	const TCHAR* Address;    // the `DAT_` pointer the ladder reads (object + 4)
+	float Default;           // the local default, when `Table` is `EConVar::Count`
+	ElysiumNpcTunables::EConVar Table;
 };
 static const FRetailYawConVar* RetailYawConVars(int32& OutCount);
 /** The value a retail `ConVar::GetFloat()` on one of the four answers today. */

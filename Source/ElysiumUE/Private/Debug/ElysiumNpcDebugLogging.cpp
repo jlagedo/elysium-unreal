@@ -59,7 +59,7 @@ namespace ElysiumNpcDebugLogging
 		const float HalfAngle = FMath::Acos(ConeDot);
 		const FVector Forward = FElysiumNpcSenses::ViewForward(Npc);
 		const FVector Eye = Npc.EyePosition();
-		const FVector Apex = Eye - Forward * Npc.Senses.ViewConeBodyOffsetCm;
+		const FVector Apex = Eye - Forward * FElysiumNpcSenses::ViewConeBodyOffsetCm();
 
 		UE_VLOG_CIRCLE(Owner, LogElysiumNpcEnt, Log, Eye, FVector::UpVector,
 			Sighting.EffectiveRadiusCm, BandColour, TEXT("vision radius %.0fcm%s"),

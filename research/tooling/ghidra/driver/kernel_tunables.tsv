@@ -1,0 +1,128 @@
+# The NPC kernel's tunables: one row per retail number a kernel body reads (spec 0019 story 4).
+#
+# `uv run elysium research gen_kernel_tunables` renders this file into
+# `Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelTunables.h/.cpp`; its `--check` compares the
+# committed files AND reads every row back out of the pinned `Vampire/dlls/vampire.dll` at the
+# width the row states. A body reads the NAME; the address and its provenance live here, once.
+#
+#   address   the image VA, lower-case, no `0x`: the cell, the instruction (imm_*), or the ConVar
+#             OBJECT (the oracle's `DAT_` pointer is object + 4)
+#   name      PascalCase, unique; the C++ name in `namespace ElysiumNpcTunables`. A cell MSVC
+#             pooled (one literal every body that spelled it shares — 1.0f, 0.5f, 100.0f) has no
+#             single meaning and is named by its VALUE (`One`, `Half`, `HalfDouble`); a cell one
+#             body owns is named by what it bounds. A body binds its own role name to the tunable.
+#   type      f32 | f64 | i32 | u32    an .rdata/.data cell at that width (the reading
+#                                      instruction's: `dword ptr` f32, `qword` / `double ptr` f64)
+#             imm_f32 | imm_i32        a PUSH imm32 / MOV r/m32, imm32 at the address
+#             convar_f32 | convar_i32  a ConVar read at +0x28 (float) or +0x2c (int)
+#   value     the shortest decimal that rounds to the stored bits, or a ConVar's default string
+#             verbatim (`ConVar::Create` parses it with atof and atoi)
+#   evidence  one line: the reading instruction, the readers, what it bounds; a ConVar row opens
+#             with the console name in backticks
+#
+# Seeded 2026-09-22 from `docs/vtmb/npc-ai/rdata-cells.md` (31 of its 32 cells: the reflected
+# CRC-32 table at 0x10496f58 is a standard table under a mechanism body, not a threshold),
+# `convars.md` (all 42), and the movement cells the 0019/1 seam rows keep "as a tunable". The rest
+# of the kernel's inline cells move here family by family as 0019/6 touches them; `--report` is
+# that queue.
+#
+address	name	type	value	evidence
+104454c4	Zero	f32	0.0	the pooled float 0.0; `_DAT_104454c4` in the species, boss and base-helper families' zero tests
+104454d0	Half	f32	0.5	`0x102d0d9f FMUL float ptr`; readers `0x102d0b60`, `0x102aa210`, `0x10295ed0`, `0x1026ab50`, `0x1026e5e0` (244 refs); hint-angle, OUTOF-wait and forward-floor scale, and CheckOnGround's deadline interval
+10449154	WerewolfStuckHullScale	f32	0.45	`0x103cbe9d FMUL float ptr`; `CNPC_VWerewolf::CheckStuck 0x103cb920` (4 refs); small-hull third-extent scale
+10449270	HalfDouble	f64	0.5	`0x10182c76 FSUB double ptr`; `0x10182c40`, `0x1032fc50`, `0x102e14a0` (185 refs); shared half-factor: whisper lead-in, motor step, pose wrap
+10449280	OneDouble	f64	1.0	`0x101a7059 FADD double ptr`; `CCineNPC::Spawn 0x101a6f10`, `0x1026ab50`, `0x1026fcf0`, `0x10357be0` (303 refs); cine delay and clear-trace fraction
+104492e0	HeadProbeExtentEpsilon	f64	1e-06	`0x1026ac73 FCOMP double ptr`; `0x1026ab50` (40 refs); head-probe extent epsilon
+10449e10	CineStartTimeOffset	f64	1000000.0	`0x101a7076 FADD double ptr`; `CCineNPC::Spawn 0x101a6f10` (6 refs); named-cine start-time offset
+1044c3a8	OneEighty	f32	180.0	`0x102aa09c FCOMP float ptr`; `0x102a9f40`, `0x10297a20` (61 refs); half-turn yaw
+1044e658	HundredthDouble	f64	0.01	`0x102cd2e9 FADD double ptr`; `0x102cd2d0`, `0x102e0f90`, `0x101618e0` (64 refs); think/arrival-radius offset
+1044fab0	ZeroDouble	f64	0.0	`0x102e15e2 FCOMP double ptr`; `0x102e1560`, `0x102e1300` (111 refs); zero-step / no-slow sentinel, CAI_Motor slot 16's speed threshold
+1044ffdc	AngleQuantum	f32	0.0054931640625	`0x102e1a61 FMUL float ptr`; `0x102e19e0`, `0x10297a20` (33 refs); quantized-yaw duration scale
+1044ffe0	AngleQuantumInverse	f32	182.04445	`0x102e1a41` / `0x102e1afc` FMUL float ptr; `CAI_Motor#18 0x102e19e0`; the 65536 / 360 prescale ahead of the ftol and mask that AngleQuantum undoes
+10450564	Hundred	f32	100.0	`0x102e0fec FMUL float ptr`; `0x102e0f90` (64 refs); motor velocity and height scale
+10450aa4	Hundredth	f32	0.01	`0x102e106c FMUL float ptr`; `0x102e0f90` (43 refs); interval-distance factor
+10451acc	SixtyFour	f32	64.0	`0x102b56d6 FCOMP float ptr`; `0x102b5650`, `0x103aa060`, `0x10295ed0`, `0x102961a0` (45 refs); melee height and hint-distance tolerance
+10454110	Five	f32	5.0	`0x1027de9e FADD float ptr`; `0x1027de00`, `0x102bf560`, and the Tzimisce idle yaw-speed arm (58 refs); detection / door-block / attack window
+10455050	WerewolfHintYawAdjust	f32	90.0	`0x103d7339 FADD float ptr`; `CNPC_VWerewolf::GetForwardYawForHint 0x103d7210` (12 refs); hint yaw adjustment
+1046a51c	FloatEpsilon	f32	1.1920929e-07	`0x10295fe7 FADD float ptr`; `0x10295ed0`, `0x102961a0`, `0x10296c40` (12 refs); normalisation epsilon
+104704b4	FaceTurnSecondEdge	f32	-40.0	`0x10297ab1 FCOMP float ptr`; `0x10297a20` (4 refs); the face-turn ladder's second edge
+10471720	WhisperNoSoundFallback	f64	0.6	`0x10182d07 FADD double ptr`; `0x10182c40` (4 refs); no-sound whisper fallback
+10483aac	FiveHundredTwelve	f32	512.0	`0x10291777 FCOMP float ptr`; `0x10291610`, `0x10295ed0`, `0x102961a0` (18 refs); player-near / hint range
+10497530	MinusThousandthDouble	f64	-0.001	`0x102c76f4 FCOMP double ptr`; `0x102c7600`, `0x102c7bd0` (15 refs); standoff elapsed-time threshold
+10497cb0	LookTargetGoalDistanceFloor	f64	96.0	`0x1025f36f FCOMP double ptr`; `CAI_BaseHumanoid::vfunc585 0x1025f1c0` (1 ref); look-target goal-distance floor
+1049949c	FortyFive	f32	45.0	`0x102b6176 FSUB float ptr`; `CAI_BaseNPC::MaxYawSpeed 0x10280bb0` (slot 516's default arm) and the cover-lean yaw offset in `0x102b6120` (18 refs)
+104994e0	EnemyAimPointZOffset	f32	-30.0	`0x102787ae FLD float ptr`; `0x10278650` (2 refs); enemy aim-point Z offset
+1049ae28	SixtyFourDouble	f64	64.0	`0x10296d2d FCOMP double ptr`; `0x10296c40` (4 refs); hint-validator height limit
+1049ae8c	CoverLeanClearScale	f32	1.4	`0x102b621a FMUL float ptr`; `0x102b6120` (6 refs); clear-side lean scale
+1049ae90	CoverLeanSetScale	f32	1.2	`0x102b61e5 FMUL float ptr`; `0x102b6120` (4 refs); set-side lean scale
+1049aea0	AllyAlertRadiusSquared	f32	22500.0	`0x102bf64f FCOMP float ptr`; `0x102bf5d0` (5 refs); squared ally-alert radius, 150 units (inferred)
+1049b998	HintType27d8AngleBias	f32	43.0	`0x102d0cd3 FADD float ptr`; `CAI_Hint::Spawn 0x102d0b60` (1 ref); hint-type `0x27d8` angle bias
+104ada34	ChangBrosJumpPathThreshold	f32	100.0	`0x1036e04c FCOMP float ptr`; `CNPC_VChangBros::CheckJumpPathToHintNode 0x1036df50` (2 refs); jump-path point-to-segment threshold
+104c3cd4	SabbatLeaderTooFarToAttack	f32	120.0	`0x103aa25f FCOMP float ptr`; `CNPC_VSabbatLeader::SelectScheduleMeleeCombat 0x103aa060` (1 ref); the `TOO_FAR_TO_ATTACK` bound
+104ce8c0	VampireBossSegmentLengthFloor	f32	1e-05	`0x103c6c02 FCOMP float ptr`; `CNPC_VVampireBoss::DistToSegment 0x103c6b70` (4 refs); degenerate segment squared-length floor
+10453b94	StepHeightBase	f32	18.0	`CAI_BaseNPC::StepHeight 0x101a6b40` (slot 522, the Troika line's body) and `CAI_BaseNPC::GetMaxJumpSpeed 0x101a6b60` (slot 523) both return it
+1044faa8	MaxJumpSpeedTroika	f32	36.0	`CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523) returns it
+10477ce8	JumpGravity	f32	350.0	`0x101a6b80`; the jump arc's gravity
+10462950	Forty	f32	40.0	`CAI_TestHull::StepHeight 0x102d72b0` and `::GetMaxJumpSpeed 0x102d72d0` both return it
+104493d0	TenthDouble	f64	0.1	`FUN_10280790`'s slack, a qword load the x87 widens
+10460020	JumpApexScale	f64	1.25	`FUN_10280790`'s apex scale, a qword load the x87 widens
+1047a3ac	YawSpeedRun	f32	160.0	the yaw-speed ladder `0x10297ce0`'s run arm
+104492a8	Thirty	f32	30.0	the yaw-speed ladder's crouch arm; also `CNPC_VMingXiao::StepHeight 0x10391030` and `CNPC_VMingXiaoTentacle::GetMaxJumpSpeed 0x1039b070`
+10463584	Fifteen	f32	15.0	the humanoid yaw-speed ladder's move arm
+104492a4	YawSpeedHumanoidCrouch	f32	60.0	the humanoid yaw-speed ladder's crouch arm
+1044f00c	OneTwenty	f32	120.0	the generic yaw-speed ladder's crouch arm
+104cc504	YawSpeedTzimisceDefault	f32	11.0	`CNPC_VTzimisce::MaxYawSpeed 0x103ba020`'s default arm
+104454c0	One	f32	1.0	the clamp every turning arm of the yaw-speed ladders ends on (`0x10374130`)
+1044ffe8	MingXiaoMaxJumpSpeed	f32	50.0	`CNPC_VMingXiao::GetMaxJumpSpeed 0x10391050` returns it
+104cc4fc	TzimisceStepHeight	f32	26.0	`CNPC_VTzimisce::StepHeight 0x103b6dd0` returns it
+104cc500	TzimisceMaxJumpSpeed	f32	56.0	`CNPC_VTzimisce::GetMaxJumpSpeed 0x103b6df0` returns it
+1049aea8	StandOnHeadSpringPositive	f32	0.707	`CAI_BaseNPCTroika::ResolveStandingOnHead 0x102bf820`'s spring direction component
+1049aea4	StandOnHeadSpringNegative	f32	-0.707	`CAI_BaseNPCTroika::ResolveStandingOnHead 0x102bf820`'s spring direction component
+1093b7c8	ManbatDelta	convar_f32	600.0	`manbat_delta` ctor `0x1038ad30`, read through `DAT_1093b7cc` (object + 4); readers `0x1038b370 FUN_1038b370`: `+0x28` float
+10923d38	DebugAllowFakeReload	convar_i32	1	`debug_allow_fake_reload` ctor `0x1028c5e0`, read through `DAT_10923d3c` (object + 4); readers `0x102b8620 FUN_102b8620`: `+0x2c` int; min / max 0 / 1; help “Allows or disallows faked NPC reloading.”
+10924a18	DebugMeleeAdvanceCombatmoveDist	convar_f32	100	`debug_melee_advance_combatmove_dist` ctor `0x1028bb90`, read through `DAT_10924a1c` (object + 4); readers `0x102702d0`, `0x102b5650`, `0x102b5900`, `0x102b6c30`, `0x102b8620`, `0x10361be0`, `0x1036d800`, `0x10385ab0`, `0x10385d70`, `0x10385e40`, `0x10396050`, `0x103aa060`, `0x103c1b10`, `0x103c3ab0`, `0x103c4430`, `0x103dda10`: `+0x28` float; help “How close a melee combatant needs to be to player in order to do the combat move. Outside of this distance they will run to close the distance.”
+109248f0	DebugAllowDodge	convar_i32	0	`debug_allow_dodge` ctor `0x1028c540`, read through `DAT_109248f4` (object + 4); readers `0x102b7cf0 FUN_102b7cf0`: `+0x2c` int; min / max 0 / 1; help “Allows or disallows NPC dodging when no cover nodes are found.”
+1093f958	WerewolfDrawHints	convar_i32	0	`werewolf_draw_hints` ctor `0x103cb440`, read through `DAT_1093f95c` (object + 4); readers `0x103cb4b0`, `0x103cb590`: `+0x2c` int
+1093f738	WerewolfShowDebug	convar_i32	0	`werewolf_show_debug` ctor `0x103c82c0`, read through `DAT_1093f73c` (object + 4); readers `0x103cb590`, `0x103d4a60`, `0x103d4d60`, `0x103d93b0`: `+0x2c` int
+10923f10	SkBasenpctroikaHealth	convar_f32	10	`sk_basenpctroika_health` ctor `0x1028b4c0`, read through `DAT_10923f14` (object + 4); readers `0x1029a0b0 NPCInit`: `+0x28` float
+1093c348	AndreiForceAwaken	convar_i32	0	`andrei_force_awaken` ctor `0x103a5950`, read through `DAT_1093c34c` (object + 4); readers `0x103a8990 RunTask`: `+0x2c` int
+10937a88	DebugViewconeBackDist	convar_f32	40	`debug_viewcone_back_dist` ctor `0x1031a4f0`, read through `DAT_10937a8c` (object + 4); readers `0x103264d0`, `0x1029c4a0`, `0x103e9e00`: `+0x28` float; help “Change the distance we bump back the view cone.”
+1093f8e8	WerewolfPursuitUnseenTime	convar_f32	3.0	`werewolf_pursuit_unseen_time` ctor `0x103c86b0`, read through `DAT_1093f8ec` (object + 4); readers `0x103cf5f0`: `+0x28` float
+1093d570	WerewolfPursuitDistance	convar_f32	800	`werewolf_pursuit_distance` ctor `0x103c8620`, read through `DAT_1093d574` (object + 4); readers `0x103cf5f0`, `0x103cfc50`, `0x103d2810`: `+0x28` float
+10936f70	DebugViewCone2d3d	convar_i32	3	`debug_view_cone_2d3d` ctor `0x10326170`, read through `DAT_10936f74` (object + 4); readers `0x103268e0`: `+0x2c` int; dispatched by `0x10326750`; min / max 2 / 3; help “Set the view cone tests to be in 2d or 3d.”
+1093cf90	TzimisceVoicePitch	convar_i32	100	`tzimisce_voice_pitch` ctor `0x103b6af0`, read through `DAT_1093cf94` (object + 4); readers `0x103b92a0`, `0x103b9380`, `0x103b9440`, `0x103b9500`, `0x103b9980`, `0x103b9a50`, `0x103b9b20`, `0x103b9be0`, `0x103b9ca0`, `0x103b9d60`, `0x103b9e30`: `+0x2c` int; help “Set this var to override the voice pitch (100 = normal, 120 = high).”
+1093cfd8	TzimisceVoiceAttn	convar_i32	65	`tzimisce_voice_attn` ctor `0x103b6a60`, read through `DAT_1093cfdc` (object + 4); readers Same 11 Tzimisce sentence emitters: `+0x2c` int; help “Set this var to override the voice attenuation (75 decibels = normal).”
+1093ceb8	TzimisceVoiceVolume	convar_f32	1	`tzimisce_voice_volume` ctor `0x103b69c0`, read through `DAT_1093cebc` (object + 4); readers Same 11 Tzimisce sentence emitters: `+0x28` float; min / max 0 / 1; help “Set this var to override the voice volume (1 = normal).”
+10924f70	DebugAllowMoveFacing	convar_i32	1	`debug_allow_move_facing` ctor `0x1028c720`, read through `DAT_10924f74` (object + 4); readers `0x10278cb0`, `0x10278d20`, `0x10278d90`, `0x10292de0`, `0x102b93c0`, `0x103854f0`: `+0x2c` int; help “If this is on, NPCs will move facing the NPC when they run for cover.”
+109247e8	DebugTurning	convar_i32	0	`debug_turning` ctor `0x1028b710`, read through `DAT_109247ec` (object + 4); readers `0x10297640`, `0x10297ce0`, `0x10374130`: `+0x2c` int; help “Toggles turn animations.”
+1093c100	SabbatGunmanSpeedThreshold	convar_f32	0.1	`sabbat_gunman_speed_threshold` ctor `0x103a4e60`, read through `DAT_1093c104` (object + 4); readers `0x103a56f0`: `+0x28` float; help “Determines how fast the guy needs to be going to scale the speed.”
+1093c148	SabbatGunmanSpeedTrails	convar_i32	3	`sabbat_gunman_speed_trails` ctor `0x103a4ef0`, read through `DAT_1093c14c` (object + 4); readers `0x103a56f0`: `+0x2c` int; help “Determines what level of motion trails to use for a speedy guy.”
+1093c1f0	SabbatGunmanSpeedScalar	convar_f32	3.0	`sabbat_gunman_speed_scalar` ctor `0x103a4dd0`, read through `DAT_1093c1f4` (object + 4); readers `0x103a5650`, `0x103a56f0`: `+0x28` float; help “Determines how much faster than normal a sabbat gunman will move.”
+1093f858	WerewolfFastbreakChance	convar_i32	40	`werewolf_fastbreak_chance` ctor `0x103c8350`, read through `DAT_1093f85c` (object + 4); readers `0x103d6000`: `+0x2c` int
+10924c90	DebugTurnScalar	convar_f32	.15	`debug_turn_scalar` ctor `0x10297c70`, read through `DAT_10924c94` (object + 4); readers `0x10297ce0`: `+0x28` float; help “Set this var to override turn animation speed.”
+1093ad20	DebugDogTurnScalar	convar_f32	.15	`debug_dog_turn_scalar` ctor `0x103740c0`, read through `DAT_1093ad24` (object + 4); readers `0x10374130`: `+0x28` float; help “Set this var to override turn animation speed.”
+1093c9f8	TzimisceTurnScalar	convar_f32	.15	`tzimisce_turn_scalar` ctor `0x103b6540`, read through `DAT_1093c9fc` (object + 4); readers `0x103ba020`: `+0x28` float; help “Set this var to override turn animation speed.”
+10923e80	DebugTurningSpeed	convar_f32	90	`debug_turning_speed` ctor `0x1028b7a0`, read through `DAT_10923e84` (object + 4); readers `0x10297ce0`, `0x10374130`: `+0x28` float; help “Toggles turn animations.”
+1093d690	WerewolfDisregardPlayerVision	convar_i32	0	`werewolf_disregard_player_vision` ctor `0x103c7f60`, read through `DAT_1093d694` (object + 4); readers `0x103da230`: `+0x2c` int
+1093d528	WerewolfTranslatedEnemyPositionTolerance	convar_f32	0	`werewolf_translated_enemy_position_tolerance` ctor `0x103d9d90`, read through `DAT_1093d52c` (object + 4); readers `0x103d9e00`: `+0x28` float
+1093d410	WerewolfTeleportOutTime	convar_f32	4.0	`werewolf_teleport_out_time` ctor `0x103c83e0`, read through `DAT_1093d414` (object + 4); readers `0x103cc0d0`: `+0x28` float
+1093cc38	TzimisceClawLeftX	convar_f32	0	`tzimisce_claw_left_x` ctor `0x103b6660`, read through `DAT_1093cc3c` (object + 4); readers `0x103bfd80`: `+0x28` float; help “Set this var to override the claw reach around attack pos.”
+1093cbf0	TzimisceClawLeftY	convar_f32	25	`tzimisce_claw_left_y` ctor `0x103b66f0`, read through `DAT_1093cbf4` (object + 4); readers `0x103bfd80`: `+0x28` float; help Same claw-reach help
+1093cba8	TzimisceClawLeftZ	convar_f32	40	`tzimisce_claw_left_z` ctor `0x103b6780`, read through `DAT_1093cbac` (object + 4); readers `0x103bfd80`: `+0x28` float; help Same claw-reach help
+1093ba88	MingXiaoPickup	convar_i32	1	`ming_xiao_pickup` ctor `0x10390b50`, read through `DAT_1093ba8c` (object + 4); readers `0x10398b20`: `+0x2c` int; help “Set this to 1 to allow ming xiao to pickup and throw bodies.”
+1093bb10	DebugTentacleMask	convar_i32	-1	`debug_tentacle_mask` ctor `0x10398790`, read through `DAT_1093bb14` (object + 4); readers `0x10398800`: `+0x2c` int
+109241f8	DialogFacialDebug	convar_i32	0	`dialog_facial_debug` ctor `0x1028c410`, read through `DAT_109241fc` (object + 4); readers `0x102c0360`, `0x102c0520`: `+0x2c` int; help “Turns on debug text for the NPC you are talking to.”
+1093ca88	TzimisceThrowPower	convar_f32	.007	`tzimisce_throw_power` ctor `0x103b6420`, read through `DAT_1093ca8c` (object + 4); readers `0x103be8e0`, `0x103bea90`: `+0x28` float; help “Set this var to override the throw power.”
+1093ca40	TzimisceThrowHds	convar_f32	.0008	`tzimisce_throw_hds` ctor `0x103b64b0`, read through `DAT_1093ca44` (object + 4); readers `0x103bea90`: `+0x28` float; help “Set this var to override the throw height to distance scalar.”
+10924d68	DebugForceAnim	convar_i32	0	`debug_force_anim` ctor `0x1028cb10`, read through `DAT_10924d6c` (object + 4); readers `0x10295590`: `+0x2c` int; help “Set to 1 to force walk anims to use run instead, or 2 to force run to walk.”
+10923f58	DebugAlertAggressive	convar_i32	0	`debug_alert_aggressive` ctor `0x1028c9f0`, read through `DAT_10923f5c` (object + 4); readers `0x103854f0`: `+0x2c` int; help “Set to true to have alert states use the aggressive animations.”
+10924030	DebugHuntingAggressive	convar_i32	1	`debug_hunting_aggressive` ctor `0x1028ca80`, read through `DAT_10924034` (object + 4); readers `0x103854f0`: `+0x2c` int; help “Set to true to have hunting states use the aggressive animations.”
+109245e0	NpcHitBuildupAmount	convar_i32	2	`npc_hit_buildup_amount` ctor `0x1029fe50`, read through `DAT_109245e4` (object + 4); readers `0x1029fec0`: `+0x2c` int
+1090fc08	FlexMinplayertime	convar_f32	5	`flex_minplayertime` ctor `0x1025e230`, read through `DAT_1090fc0c` (object + 4); readers `0x1025fa50`: `+0x28` float
+1090fc98	FlexMaxplayertime	convar_f32	7	`flex_maxplayertime` ctor `0x1025e2c0`, read through `DAT_1090fc9c` (object + 4); readers `0x1025fa50`: `+0x28` float
+10924298	EntTraceDoors	convar_i32	0	`ent_trace_doors` read through `DAT_1092429c` (object + 4): +0x2c int, the alternate-AI line of Troika's entity text `0x1029d4e0`; a dead debug body (0019/1); constructor found by --check
+10924798	DebugVisionLine	convar_i32	0	`debug_vision_line` read through `DAT_1092479c` (object + 4): +0x2c int, think-pre's line-of-sight / blocker arm; a dead debug body (0019/1)
+109244c0	DebugWeaponShootPos	convar_i32	0	`debug_weapon_shoot_pos` read through `DAT_109244c4` (object + 4): +0x2c int, think-pre's eye / ideal boxes; a dead debug body (0019/1)
+10924358	DebugShowNpcSkeletons	convar_i32	0	`debug_show_npc_skeletons` read through `DAT_1092435c` (object + 4): +0x2c int, think-pre's mode selector (1 -> `0x1028e030`, 2 -> `0x1028e060`); a dead debug body (0019/1)
+10924f20	DebugShowBodyTargets	convar_i32	0	`debug_show_body_targets` read through `DAT_10924f24` (object + 4): +0x2c int, the geometry overlay's five enemy body-target boxes; a dead debug body (0019/1)
+10924a68	EntTraceConditions	convar_i32	1	`ent_trace_conditions` ctor `0x1028bde0`, read through `DAT_10924a6c` (object + 4): +0x2c int > 0 gates the CONDS: block of the condition debug string `0x1028d990`; a dead debug body (0019/1). Ships ON

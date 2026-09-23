@@ -172,20 +172,17 @@ void FElysiumNpc::MotorAddFacingTarget(const FFacingTargetRequest& Request)
 
 bool FElysiumNpc::FacingTargetsEnabled() const
 {
-	// The retail cvar at `0x10924f74`, read as `!vtable[1]() && m_nValue != 0`. Its name and its
-	// default are **unrecovered** — the pointer is uninitialised `.data` and no corpus function
-	// constructs it. **SEAM**, answering false, which is what leaves slots 517/518/519 adding
-	// nothing on top of the unmodelled queue below them.
-	return false;
+	// The retail cvar at `0x10924f74`, read as `!vtable[1]() && m_nValue != 0`:
+	// `debug_allow_move_facing`, shipped "1" — the facing-target family is ON.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing) != 0;
 }
 
 bool FElysiumNpc::TurningAnimsEnabled() const
 {
 	// The retail cvar at `0x109247ec`, the same `ConVar::GetBool()` shape, ORed with
-	// `m_bAllowTurningAnims` by `SetTurnActivity` and read by both `MaxYawSpeed` overrides. Name and
-	// default **unrecovered**. **SEAM**, answering false, which leaves the authored
-	// `m_bAllowTurningAnims` (+0x65f9) as the live gate.
-	return false;
+	// `m_bAllowTurningAnims` by `SetTurnActivity` and read by both `MaxYawSpeed` overrides:
+	// `debug_turning`, shipped "0", so the authored `m_bAllowTurningAnims` (+0x65f9) is the live gate.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugTurning) != 0;
 }
 
 int32 FElysiumNpc::SelectWeightedSequenceForActivity(int32) const
@@ -836,12 +833,15 @@ void FElysiumNpc::OnChangeActivitySpecies(int32 Activity)
 	}
 	else if (FCString::Strcmp(BodyAddress, TEXT("0x103a56f0")) == 0)
 	{
-		// `CNPC_VSabbatGunman::OnChangeActivity`, 160 bytes. **SEAM** on all four inputs: the three
-		// convars `DAT_1093c104`/`DAT_1093c14c`/`DAT_1093c1f4` and `m_flGroundSpeed` (+0x0654). A
-		// convar retail cannot read answers 0 — the body spells that arm itself — so the threshold
-		// is 0, the stopped arm is the one taken, and the trail is cleared.
+		// `CNPC_VSabbatGunman::OnChangeActivity`, 160 bytes. The three convars are
+		// `sabbat_gunman_speed_threshold` ("0.1", `+0x28`), `sabbat_gunman_speed_trails` ("3",
+		// `+0x2c`) and `sabbat_gunman_speed_scalar` ("3.0", `+0x28`). **SEAM** on the fourth input,
+		// `m_flGroundSpeed` (+0x0654): no ground-speed word stands here, so it answers 0 and the
+		// stopped arm is the one taken.
 		const FMotionTrailPick Pick = SabbatGunmanMotionTrail(/*GroundSpeed*/ 0.f,
-			/*SpeedThreshold*/ 0.f, /*TrailId*/ 0, /*TrailScalar*/ 0.f);
+			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedThreshold),
+			ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedTrails),
+			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedScalar));
 		MotionTrail = Pick.MotionTrail;   // +0x1484
 	}
 	else if (FCString::Strcmp(BodyAddress, TEXT("0x103d5f60")) == 0)

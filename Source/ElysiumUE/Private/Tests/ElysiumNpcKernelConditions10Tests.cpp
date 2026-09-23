@@ -79,7 +79,8 @@ namespace
 			FElysiumNpcWorldFixture::Quiet(
 				{ Guard, Other, Boss, Pedestrian, Hunter, Cop, Newscaster });
 			FElysiumNpc::ResetSpeciesSuspectGlobals();
-			FElysiumNpc::SetDebugConVar(nullptr, 0);
+			FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+			ElysiumNpcTunables::ResetConVars();
 		}
 	};
 
@@ -688,7 +689,7 @@ bool FElysiumNpcKernelConditions10DebugStringTest::RunTest(const FString&)
 
 	// `1028dbd6`: `DAT_10920534` set and `DAT_10920535` clear selects the SHORT format, and that is
 	// also the one arm in which none of the optional blocks was built.
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10920534"), 1);
+	FElysiumNpc::SetDebugTraceByte(TEXT("DAT_10920534"), 1);
 	const FString Short = F.Guard->BuildConditionDebugString(TEXT("hello"), 0, 512);
 	TestTrue(TEXT("the short arm ends in one newline (0x105d8854)"),
 		Short.EndsWith(TEXT("hello\n")));
@@ -696,7 +697,7 @@ bool FElysiumNpcKernelConditions10DebugStringTest::RunTest(const FString&)
 		Short.StartsWith(TEXT("guard")));
 
 	// Both set selects the FULL format, which is the `DevMsg` arm without the name prefix.
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10920535"), 1);
+	FElysiumNpc::SetDebugTraceByte(TEXT("DAT_10920535"), 1);
 	const FString Full = F.Guard->BuildConditionDebugString(TEXT("hello"), 0, 512);
 	TestFalse(TEXT("the full arm carries no name prefix (1028dc3c)"),
 		Full.StartsWith(TEXT("guard")));
@@ -736,13 +737,14 @@ bool FElysiumNpcKernelConditions10DebugStringTest::RunTest(const FString&)
 		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("NAV       JUMP")));
 	F.Guard->NavSetType(0);
 
-	// --- The `CONDS:` block, gated by `DAT_10924a6c` alone -----------------------------------------
-	TestFalse(TEXT("the schedule-debug ConVar is off by default (1028da14)"),
+	// --- The `CONDS:` block, gated by `ent_trace_conditions` (`DAT_10924a6c`) alone ---------------
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::EntTraceConditions, 0);
+	TestFalse(TEXT("with the schedule-debug ConVar cleared (1028da14)"),
 		F.Guard->ScheduleDebugConditionsEnabled());
-	TestFalse(TEXT("so no CONDS: block is built (1028da0d)"),
+	TestFalse(TEXT("no CONDS: block is built (1028da0d)"),
 		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("CONDS:")));
-	FElysiumNpc::SetDebugConVar(TEXT("DAT_10924a6c"), 1);
-	TestTrue(TEXT("with the ConVar set the block is built (1028da19)"),
+	ElysiumNpcTunables::ResetConVars();
+	TestTrue(TEXT("it ships \"1\", so the block is built as shipped (1028da19)"),
 		F.Guard->ScheduleDebugConditionsEnabled());
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
 	const FString Conds = F.Guard->ConditionDebugList();
@@ -752,7 +754,8 @@ bool FElysiumNpcKernelConditions10DebugStringTest::RunTest(const FString&)
 			static_cast<int32>(EElysiumNpcCond::TaskFailed))));
 	TestTrue(TEXT("the list ends in a newline (0x10547e40)"), Conds.EndsWith(TEXT("\n")));
 
-	FElysiumNpc::SetDebugConVar(nullptr, 0);
+	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
+	ElysiumNpcTunables::ResetConVars();
 	return true;
 }
 

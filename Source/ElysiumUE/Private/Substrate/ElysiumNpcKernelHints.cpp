@@ -31,24 +31,20 @@ namespace
 	// `0x1026a910`'s whole body is `FLD [0x104454c4] / RET 4`). It is what `GetHintDelay` answers
 	// and the Z scale `DistToHintCenterLine2D_3` multiplies the line direction's Z by — which is why
 	// that body is a 2D distance despite carrying a Z term.
-	constexpr float GHintsZero = 0.0f;
+	constexpr float GHintsZero = ElysiumNpcTunables::Zero;
 
 	// `_DAT_104ada34` — the segment-distance threshold `CheckJumpPathToHintNode` (`0x1036df50`)
-	// tests against, in SOURCE UNITS. **Unrecovered**: the corpus holds no reader that pins its
-	// value, and it has exactly two referrers, both that one body. Declared as a named constant so
-	// the day it is read the change is one line.
-	constexpr float GHintsJumpPathClearanceUnits = 0.0f;
+	// tests against (`1036e04c FCOMP float ptr`), 100 SOURCE UNITS.
+	constexpr float GHintsJumpPathClearanceUnits = ElysiumNpcTunables::ChangBrosJumpPathThreshold;
 
 	// `_DAT_104454d0` — the OUTOF-phase wait the interest loop adds to `m_flWaitFinished`
-	// (`0x102aa210`). **Unrecovered**: same situation.
-	constexpr float GHintsInterestOutOfWaitSeconds = 0.0f;
+	// (`0x102aa210`), the pooled 0.5f.
+	constexpr float GHintsInterestOutOfWaitSeconds = ElysiumNpcTunables::Half;
 
 	// `_DAT_104ce8c0` — the squared-length floor `DistToSegment` (`0x103c6b70`) calls degenerate
-	// before dividing by it. **Unrecovered**: its WIDTH; it has one reader and nothing pins the
-	// value. What IS recovered is the arm's ANSWER — `_DAT_104454c4`, the shared `0.0f` — and that
-	// is what the body returns. `UE_SMALL_NUMBER` stands in for the width so the divide stays
-	// guarded and a truly zero-length segment reaches the arm; it claims nothing about retail's.
-	constexpr float GHintsSegmentEpsilon = UE_SMALL_NUMBER;
+	// before dividing by it: `103c6c02 FCOMP float ptr`, the float 1e-5 (in squared SOURCE units).
+	// The arm answers `_DAT_104454c4`, the shared `0.0f`.
+	constexpr float GHintsSegmentEpsilon = ElysiumNpcTunables::VampireBossSegmentLengthFloor;
 
 	// `vec3_invalid`, `DAT_10713de0/de4/de8`. `staticinit_101371a0` writes `0x7f7fffff` — `FLT_MAX` —
 	// into all three, and `CNPC_VWerewolf::GetGroundpoint` (`0x103d6a40`) answers it for a ground
@@ -693,11 +689,10 @@ bool FElysiumNpc::SetHintActivity(const FHintWords& Hint)
 	}
 
 	// `cVar3 = DAT_1093f85c->vtable[1](); iVar7 = cVar3 ? 0 : DAT_1093f85c[0xb];` — a `ConVar`,
-	// `IsCommand()` on slot 1 and the int value at `+0x2c`, used as a percentage.
-	// **Unrecovered**: the cvar's NAME. `DAT_1093f85c` has exactly two referrers and both are this
-	// body, so nothing in the corpus names it. Zero is the honest stand-in: `RandomInt(1, 100) <= 0`
-	// is never true, which is the same answer a default-zero percentage cvar gives.
-	constexpr int32 HintActivityVariantPercent = 0;
+	// `IsCommand()` on slot 1 and the int value at `+0x2c`, used as a percentage:
+	// `werewolf_fastbreak_chance`, shipped "40".
+	const int32 HintActivityVariantPercent =
+		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfFastbreakChance);
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
 	const bool bPercentRollPassed = Stream.RandRange(1, 100) <= HintActivityVariantPercent;
 	const bool bCoinFlip = Stream.RandRange(0, 1) != 0;
@@ -921,12 +916,14 @@ bool FElysiumNpc::CheckJumpPathToHintNode(const FHintWords& Hint) const
 	{
 		return false;
 	}
-	FVector From = Origin;
+	// Retail's numbers are SOURCE units, so the segment and both probes are taken in them.
+	FVector From = Origin / ElysiumMove::U;
 	From.Z = 0.0;
-	FVector To = Hint.OriginCm;
+	FVector To = Hint.OriginCm / ElysiumMove::U;
 	To.Z = 0.0;
 
-	if (DistToSegment(From, To, ClosestPlayer->Origin) < GHintsJumpPathClearanceUnits)
+	if (DistToSegment(From, To, ClosestPlayer->Origin / ElysiumMove::U)
+		< GHintsJumpPathClearanceUnits)
 	{
 		// The player stands on the jump line. Blocked.
 		return false;
@@ -935,7 +932,7 @@ bool FElysiumNpc::CheckJumpPathToHintNode(const FHintWords& Hint) const
 	// line blocks. `GetOtherBrother` is family Squad's ported body (`0x1036e2f0`).
 	if (const FElysiumNpc* Brother = GetOtherBrother())
 	{
-		if (DistToSegment(From, To, Brother->Origin) < GHintsJumpPathClearanceUnits)
+		if (DistToSegment(From, To, Brother->Origin / ElysiumMove::U) < GHintsJumpPathClearanceUnits)
 		{
 			return false;
 		}

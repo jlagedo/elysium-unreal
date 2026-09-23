@@ -31,14 +31,13 @@
 
 namespace
 {
-	// `.rdata` words this family's bodies compare against, at their cited addresses. All four are
-	// shared pool constants with hundreds of readers; the values are the ones already recovered and
-	// cited in `docs/vtmb/`, not guesses.
-	constexpr float GMiscZeroFloat = 0.f;          // _DAT_104454c4 (npc-ai/conditions-and-states.md)
-	constexpr float GMiscOneFloat = 1.f;           // _DAT_104454c0 (animation_and_movers.md:659, asm)
-	constexpr double GMiscHalfDouble = 0.5;        // _DAT_10449270 (npc-ai/conditions-and-states.md)
-	constexpr float GMiscYawHigh = 120.f;          // _DAT_1044f00c (npc-ai/shape.md:1044)
-	constexpr double GMiscZeroDouble = 0.0;        // _DAT_1044fab0 (footsteps.md:319)
+	// `.rdata` words this family's bodies compare against: shared pool constants with hundreds of
+	// readers, bound to the tunables table.
+	constexpr float GMiscZeroFloat = ElysiumNpcTunables::Zero;
+	constexpr float GMiscOneFloat = ElysiumNpcTunables::One;
+	constexpr double GMiscHalfDouble = ElysiumNpcTunables::HalfDouble;
+	constexpr float GMiscYawHigh = ElysiumNpcTunables::OneTwenty;
+	constexpr double GMiscZeroDouble = ElysiumNpcTunables::ZeroDouble;
 
 	// `m_bfAINPCFlags` (+0x14b8) bit `0x20`, the carry bit `0x10381c00` toggles.
 	constexpr EElysiumNpcFlag GMiscCarryingBody = EElysiumNpcFlag::CARRYING_BODY;

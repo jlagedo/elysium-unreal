@@ -175,9 +175,9 @@ int32 EngineFrameNumber() const;
  *  `MeleeCoordinatorHoldsMe()`; it is CALLED rather than restated, so the two cannot drift. Named
  *  here only so the two species bodies below have the call site recorded. */
 
-/** SEAM for `(**(code **)(*DAT_10924a1c + 4))()` and `DAT_10924a1c[10]` — the melee-range ConVar the
- *  species slot-602 bodies threshold `m_flEnemyDist` against. TroikaHelpers' `MeleeRangeUnits()`
- *  reads the SAME global and answers `0.0` (UNRECOVERED); it is called here for the same reason. */
+/** `(**(code **)(*DAT_10924a1c + 4))()` and `DAT_10924a1c[10]` — the melee-range ConVar
+ *  (`debug_melee_advance_combatmove_dist`, "100") the species slot-602 bodies threshold
+ *  `m_flEnemyDist` against, read through TroikaHelpers' `MeleeRangeUnits()`. */
 
 /** SEAM for `thunk_FUN_1039ede0(this)` — the MingXiao HEAD a `CNPC_VMingXiaoTentacle` forwards its
  *  slots 21, 22 and 23 to. Family **Motor** already stands the same retail call
@@ -190,12 +190,10 @@ FElysiumEntity* MingXiaoTentacleHead() const;
  *  the three slots can be told apart, and reaches nothing. */
 int32 TentacleHeadForwards = 0;
 
-/** SEAM for the three world singletons `CNPC_VTzimisce`'s slot 488 reads before firing `SPI_DIES`
- *  — `DAT_1093cf94`, `DAT_1093cfdc` and `DAT_1093cebc`, each substituted with 0 when its own
- *  `vtable+0x4` answers true and otherwise handing over `+0x2c`, `+0x2c` and `+0x28`. Nothing in
- *  this substrate stands them. Answers `false` (the singleton is not available), which is the arm
- *  that substitutes 0 — so all three arguments are 0 and the event still fires, which is what the
- *  script host observes. */
+/** The three ConVars `CNPC_VTzimisce`'s slot 488 reads before firing `SPI_DIES` — `DAT_1093cf94`
+ *  `tzimisce_voice_pitch` "100", `DAT_1093cfdc` `tzimisce_voice_attn` "65" (`+0x2c` ints) and
+ *  `DAT_1093cebc` `tzimisce_voice_volume` "1" (`+0x28`, handed over as the float's dword). Answers
+ *  true for indices 0..2; any other index answers false and 0. */
 bool TzimisceDeathScriptArgument(int32 SingletonIndex, int32& OutArgument) const;
 
 /** SEAM for `thunk_FUN_10289ee0(this, 1)` — `RestartIdealActivity(1)`, which

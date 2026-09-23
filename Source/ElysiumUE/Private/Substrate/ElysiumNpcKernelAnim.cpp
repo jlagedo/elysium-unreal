@@ -321,17 +321,16 @@ void FElysiumNpc::RemoveExtraAnimationModelsPlayerController()
 
 bool FElysiumNpc::BodyGroupCvarIsCommand() const
 {
-	// `ConVar::IsCommand()` on `DAT_1093bb14`. **SEAM**: the object lives in uninitialised `.data`
-	// and no corpus function constructs it, so its NAME and DEFAULT are **unrecovered**. False is
-	// "this is a real convar", which is what a registered one answers.
+	// `ConVar::IsCommand()` on `DAT_1093bb14` (`debug_tentacle_mask`): a ConVar object, never a
+	// ConCommand.
 	return false;
 }
 
 int32 FElysiumNpc::BodyGroupCvarValue() const
 {
-	// `ConVar::m_nValue` on the same object. **SEAM**, answering -1 — the negative arm, which is the
-	// one that takes the severed-tentacle mask and therefore the shipped behaviour.
-	return -1;
+	// `ConVar::m_nValue` (`+0x2c`) on the same object: `debug_tentacle_mask`, shipped "-1" — the
+	// negative arm, which takes the severed-tentacle mask.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugTentacleMask);
 }
 
 void FElysiumNpc::BodyGroup()

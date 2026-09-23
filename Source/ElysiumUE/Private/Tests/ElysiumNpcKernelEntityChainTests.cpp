@@ -1227,14 +1227,13 @@ bool FElysiumNpcKernelEntityChainUseAndControllerTest::RunTest(const FString&)
 	TestEqual(TEXT("and lands in the one global buffer"), Npc.PlayerAnimNameBuffer,
 		FString(TEXT("player_reload")));
 	TestEqual(TEXT("bit 0 of +0x1cac is raised"), Npc.PlayerAnimFlags & 1, 1);
-	// SEAM: both the lead-in and the no-sound fallback are unrecovered and answer 0, so the deadline
-	// is bare curtime and the animation is over on the frame it is armed.
-	TestEqual(TEXT("the _DAT_10449270 lead-in is unrecovered, answering 0"), Npc.PlayerAnimLeadIn(),
-		0.f);
-	TestEqual(TEXT("and the _DAT_10471720 fallback duration too"),
-		Npc.PlayerAnimFallbackDuration(), 0.f);
-	TestEqual(TEXT("so the deadline is bare curtime"), Npc.PlayerAnimEndTime,
-		static_cast<float>(Fixture.World.World.NowSeconds()));
+	// No sound: the deadline is `curtime - 0.5 + 0.6`, both DOUBLES, stored as a float.
+	TestEqual(TEXT("the _DAT_10449270 lead-in is the double 0.5"), Npc.PlayerAnimLeadIn(), 0.5);
+	TestEqual(TEXT("and the _DAT_10471720 fallback duration the double 0.6"),
+		Npc.PlayerAnimFallbackDuration(), 0.6);
+	TestEqual(TEXT("so a no-sound deadline stands 0.1 s past curtime"), Npc.PlayerAnimEndTime,
+		static_cast<float>(static_cast<double>(static_cast<float>(Fixture.World.World.NowSeconds()))
+			- 0.5 + 0.6));
 
 	Npc.SetPlayerAnim(TEXT(""), nullptr);
 	TestFalse(TEXT("an empty name disarms the pointer"), Npc.bPlayerAnimNameSet);
@@ -1278,12 +1277,11 @@ bool FElysiumNpcKernelEntityChainUseAndControllerTest::RunTest(const FString&)
 	TestEqual(TEXT("the absolute velocity transfers"), Npc.Velocity, FVector(1.f, 2.f, 3.f));
 	TestEqual(TEXT("and the angular velocity"), Npc.AngularVelocity, FVector(4.f, 5.f, 6.f));
 	TestFalse(TEXT("and the link is detached"), Npc.ControllerNpc.IsSet());
-	// The one-shot think is armed on the CONTROLLER, not on the releaser; the delay is unrecovered
-	// and answers 0, which is the next pass.
-	TestEqual(TEXT("the released controller's think is armed at curtime + the seam's 0"),
-		static_cast<double>(Controller.NextThink), Fixture.World.World.NowSeconds());
-	TestEqual(TEXT("the _DAT_1044e658 think delay is unrecovered, answering 0"),
-		Npc.ControllerReleaseThinkDelay(), 0.f);
+	// The one-shot think is armed on the CONTROLLER, not on the releaser, 0.01 s out.
+	TestEqual(TEXT("the released controller's think is armed at curtime + 0.01"),
+		Controller.NextThink, static_cast<float>(Fixture.World.World.NowSeconds() + 0.01));
+	TestEqual(TEXT("the _DAT_1044e658 think delay is the double 0.01"),
+		Npc.ControllerReleaseThinkDelay(), 0.01);
 	return true;
 }
 

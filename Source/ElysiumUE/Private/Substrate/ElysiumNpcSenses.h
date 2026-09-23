@@ -276,9 +276,9 @@ class FElysiumNpcSenses
 public:
 	FElysiumNpcPerception Perception;
 	FElysiumNpcMemory Memory;
-	// 0x10937a8c's unnamed ConVar supplies the pulled-back apex distance in retail.
-	// Its default/writer remains unrecovered; the substrate seam answers zero until recovered.
-	float ViewConeBodyOffsetCm = 0.f;
+	// The pulled-back apex distance `FinViewCone3dNew` shifts the cone by: the `0x10937a8c` ConVar
+	// `debug_viewcone_back_dist`, shipped "40" SOURCE units, answered here in centimetres.
+	static float ViewConeBodyOffsetCm();
 	FElysiumNpcConditions HeardConditions;
 	bool bSeeUnknownThisPass = false;
 

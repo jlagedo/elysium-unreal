@@ -154,7 +154,7 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 	SenseForward = FElysiumNpcSenses::ViewForward(Npc);
 	// The apex the cone test shifts back to (`ViewConeBodyOffsetCm`), so the drawn cone is the
 	// tested cone. The radius and the LOS line still hang off the eye.
-	ConeApex = SenseOrigin - SenseForward * Npc.Senses.ViewConeBodyOffsetCm;
+	ConeApex = SenseOrigin - SenseForward * FElysiumNpcSenses::ViewConeBodyOffsetCm();
 	VisionRadiusCm = Npc.Senses.Perception.VisionDistanceCm;
 	ViewConeHalfAngleRadians = FMath::Acos(ElysiumNpcSense::DefaultViewConeDot);
 	HearingScalar = Npc.Senses.Perception.HearingScalar;

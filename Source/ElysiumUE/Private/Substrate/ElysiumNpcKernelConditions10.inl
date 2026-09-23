@@ -288,8 +288,6 @@ static FString DebugMaskLadder(const TCHAR* Template, uint32 Mask, int32 Count);
  *  calls `GetNavType()` FIVE times building it. */
 FString NavDebugPair() const;
 
-/** `DAT_10924a6c` — the schedule-debug ConVar object the `CONDS:` block gates on. **SEAM**: this
- *  runtime has no console-variable registry; answered through family Debug10's `DebugConVar` store
- *  by the global's own spelling, so a test names the same global retail's arm reads. The shipped
- *  default is 0 and the gate is `> 0`. */
+/** `DAT_10924a6c` — `ent_trace_conditions`, the ConVar the `CONDS:` block gates on (`> 0`). It ships
+ *  "1" (`ElysiumNpcTunables::EConVar::EntTraceConditions`). */
 bool ScheduleDebugConditionsEnabled() const;

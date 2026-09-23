@@ -325,11 +325,9 @@ bool PushedEntityKnockback(FElysiumEntity* Pushed, int32 Activity);
 void PushFakeHullDamage(FElysiumEntity* Pushed, float Damage, const FVector& ForceUnits,
 	const FVector& PositionUnits);
 
-/** SEAM for the `DAT_1093f73c` cvar `UpdateFakeHull` gates its `DrawDebugHullAtPoint` on
- *  (`!cvar->IsCommand() && cvar->m_nValue != 0`, retail's inlined `ConVar::GetInt`). The cell lives
- *  past `.data`'s raw size and no corpus function constructs it, so its NAME and DEFAULT are
- *  **unrecovered** — the finding families Bosses, Facing and Motor each recorded for their own
- *  cvars. Answers 0, which closes the draw. */
+/** The `DAT_1093f73c` cvar `UpdateFakeHull` gates its `DrawDebugHullAtPoint` on
+ *  (`!cvar->IsCommand() && cvar->m_nValue != 0`, retail's inlined `ConVar::GetInt`):
+ *  `werewolf_show_debug`, shipped "0", which closes the draw. */
 int32 FakeHullDebugCvar() const;
 
 // --- `CNPC_VMingXiao`'s two severed-tentacle scatter notices -------------------------------------

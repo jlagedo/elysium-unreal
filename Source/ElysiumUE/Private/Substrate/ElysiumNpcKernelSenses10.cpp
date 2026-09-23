@@ -1004,9 +1004,9 @@ FVector FElysiumNpc::ShootEnemyAimPoint(const FVector& ShootPositionCm)
 		LastKnownCm = Record->LastPosition;
 	}
 	const FVector BodyTargetCm = Enemy->EyePosition();
-	// `1027879f`: `+_DAT_104994e0` is added to Z when the enemy's stat `0x0b` reads `5`. SEAM:
-	// `_DAT_104994e0` is UNRECOVERED and the `CVStatList_t` join by retail list TYPE does not exist
-	// on this sheet, so the stat reads not-5 and the bonus is not applied.
+	// `1027879f`: `+_DAT_104994e0` (-30.0, `ElysiumNpcTunables::EnemyAimPointZOffset`) is added to
+	// Z when the enemy's stat `0x0b` reads `5`. SEAM: the `CVStatList_t` join by retail list TYPE
+	// does not exist on this sheet, so the stat reads not-5 and the offset is not applied.
 	(void)ShootPositionCm;
 	return LastKnownCm + (BodyTargetCm - Enemy->Origin);
 }
@@ -1280,7 +1280,8 @@ void FElysiumNpc::HeadProbe()
 	// `1026ab72`: the box is centred on `GetAbsOrigin` raised by `_DAT_104454c0` (1.0), the hull
 	// extents are halved by `_DAT_104454d0` (0.5) and scaled by `_DAT_104492dc` (-1.0), and the two
 	// box flag bytes come from the zero-delta test against `_DAT_104454c4` (0.0) and the
-	// `_DAT_104492e0` extent tests (`_DAT_104492e0` is UNRECOVERED).
+	// `_DAT_104492e0` extent tests (the double 1e-6, `ElysiumNpcTunables::HeadProbeExtentEpsilon`;
+	// the flag bytes feed only the hull sweep, which is a seam here).
 	const FVector MinsUnits = HullMinsUnits(false);
 	const FVector MaxsUnits = HullMaxsUnits(false);
 	const FVector HalfExtentsUnits = (MaxsUnits - MinsUnits) * GHalf;

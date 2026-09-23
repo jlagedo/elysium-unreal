@@ -346,15 +346,22 @@ FVector FElysiumNpcSenses::ViewForward(const FElysiumNpc& Npc)
 		FMath::Cos(PitchRadians) * FMath::Sin(YawRadians), -FMath::Sin(PitchRadians));
 }
 
+float FElysiumNpcSenses::ViewConeBodyOffsetCm()
+{
+	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::DebugViewconeBackDist)
+		* ElysiumMove::U;
+}
+
 bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
 	float TargetConeScalar)
 {
-	// `FInViewCone` at 0x103264d0 is a strict 3-D apex test.
+	// `FInViewCone` at 0x103264d0 is a strict 3-D apex test. `0x103268e0` would take the 2-D body
+	// when `debug_view_cone_2d3d` reads 2; it ships "3", so the 3-D body is the shipped one.
 	const FVector Forward = ViewForward(Npc);
 	const FVector ToTarget = TargetCm - Npc.EyePosition();
 	// 0x103265af rejects strictly behind the original eye before shifting the apex.
 	if (FVector::DotProduct(Forward, ToTarget) < 0.0) return false;
-	const FVector FromApex = ToTarget + Forward * Npc.Senses.ViewConeBodyOffsetCm;
+	const FVector FromApex = ToTarget + Forward * ViewConeBodyOffsetCm();
 	// 0x1032669c multiplies the COSINE by the target scalar, then compares to the FOV.
 	return FVector::DotProduct(Forward, FromApex.GetSafeNormal()) * TargetConeScalar
 		>= ElysiumNpcSense::DefaultViewConeDot;

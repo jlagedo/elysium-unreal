@@ -50,3 +50,13 @@ read). A cell's reader having no recovered caller (several helpers above have no
 `vtmb_callers`) says nothing about the cell — only that the read does not prove the path runs.
 
 The paragraphs that named these cells now carry the value inline, marked `read 2026-09-21`.
+
+**Held by the tunables table since 0019/4 (2026-09-22).** 31 of the 32 rows (all but the CRC-32
+table) are rows of `research/tooling/ghidra/driver/kernel_tunables.tsv`, re-read out of the
+image at their stated width by `uv run elysium research gen_kernel_tunables --check`, and the
+kernel bodies read them by name from the generated `ElysiumNpcKernelTunables.h`. Wiring them
+retired eleven 0.0 stand-ins in the port, among them `0x1049ae28` (the hint validator's height
+arm, disarmed at 0), `0x104704b4`, `0x1044ffdc`, `0x1046a51c`, `0x10455050`, `0x1049b998` and the
+cine / standoff delays, and one misreading: `CNPC_Crow`'s `0x10357be0` read `(float)_DAT_10449280`
+as the float 0.0 and flattened every positive scale to 1; the listing is `FCOMP double ptr`, a
+clamp AT 1.0.

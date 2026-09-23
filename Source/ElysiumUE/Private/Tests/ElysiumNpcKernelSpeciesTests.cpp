@@ -515,8 +515,8 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	TestEqual(TEXT("still releasing the slot"), Npc->MeleeCoordinatorReleases, 1);
 
 	// --- slot 602: the far arm only ---------------------------------------------------------------
-	// `MeleeRangeUnits()` answers 0.0 (UNRECOVERED ConVar) so the doubled range is 0, and
-	// `MeleeCoordinatorHasRoom()` answers false — so any positive enemy distance takes the first arm.
+	// `MeleeRangeUnits()` answers `debug_melee_advance_combatmove_dist`'s 100, so the doubled range
+	// is 200, and `MeleeCoordinatorHasRoom()` answers false — so past 200 units the first arm wins.
 	Npc->ScheduleHost.EnemyDistUnits = 500.f;
 	TestTrue(TEXT("0x103c1b10 leaves melee when out of double range and the coordinator is full"),
 		Npc->FUN_103c1b10());
@@ -1231,8 +1231,7 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	TestNotEqual(TEXT("which is not this body's own world-space centre"),
 		Npc->WorldSpaceCenter(), Asked);
 
-	// --- `0x10357be0`: the scale clamp is a FLATTEN -----------------------------------------------
-	// `0.0 < scale` is true for every positive argument, so the caller's number is replaced by 1.0.
+	// --- `0x10357be0`: the scale is clamped AT one (`FCOMP double ptr [0x10449280]`) -----------------
 	// `CrowFlyStep` is the pure half and takes the already-clamped scale.
 	{
 		// 100 units away, arriving threshold `scale * 170`: at scale 1 the body has arrived.
@@ -1329,11 +1328,15 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VTzimisceRunner"), 588) != nullptr);
 	TestTrue(TEXT("and the dispatcher runs it"), Npc->SpeciesSlot588());
 
-	// --- `0x103b92a0`, slot 488: three singleton seams, all refusing, event still fired ----------
+	// --- `0x103b92a0`, slot 488: the three voice ConVars, then the event -------------------------
 	int32 Argument = -1;
-	TestFalse(TEXT("the SPI_DIES singleton seam refuses"),
+	TestTrue(TEXT("SPI_DIES argument 0 is tzimisce_voice_pitch"),
 		Npc->TzimisceDeathScriptArgument(0, Argument));
-	TestEqual(TEXT("substituting zero, which is retail's own arm"), Argument, 0);
+	TestEqual(TEXT("shipped 100"), Argument, 100);
+	TestTrue(TEXT("argument 1 is tzimisce_voice_attn"), Npc->TzimisceDeathScriptArgument(1, Argument));
+	TestEqual(TEXT("shipped 65"), Argument, 65);
+	TestTrue(TEXT("argument 2 is tzimisce_voice_volume"), Npc->TzimisceDeathScriptArgument(2, Argument));
+	TestEqual(TEXT("handed over as 1.0f's dword"), static_cast<uint32>(Argument), 0x3f800000u);
 	Npc->FUN_103b92a0();   // fires the recorded event; the tail call is slot 487's
 
 	// --- `0x103bf560`: the motor yaw release ------------------------------------------------------

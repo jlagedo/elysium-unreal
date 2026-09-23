@@ -771,8 +771,8 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		TestFalse(TEXT("and so does a hint the seam could not resolve"),
 			Npc->CheckJumpPathToHintNode(None));
 
-		// With a player cached the two segment arms pass — `_DAT_104ada34` is unrecovered and
-		// stands at zero, so `dist < threshold` is never true — and the sector gate is what refuses.
+		// With a player cached, the segment arms test against `_DAT_104ada34` (100 units); whether
+		// or not the fixture player stands within it, the sector gate below refuses.
 		TestEqual(TEXT("the sector seam answers 4, the value that CLOSES the gate"),
 			Npc->JumpPathSector(FVector::ZeroVector), 4);
 		TestTrue(TEXT("the fixture cached a closest player"),

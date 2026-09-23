@@ -1699,7 +1699,6 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 		Expected.Record, FString(GDazeRecord));
 	TestTrue(TEXT("...and carries a live expiry serial"), Expected.Serial != 0);
 
-	const int32 HealthBefore = Restored->Health;
 	TestEqual(TEXT("a freshly built NPC tracks nothing"),
 		Restored->Disciplines.TargetEffects.Num(), 0);
 	TestFalse(TEXT("...and carries none of the cast's groups"), HasEffect(*Restored, DazeGroup));
@@ -1725,8 +1724,11 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 	TestEqual(TEXT("...exactly once per tracked row, never twice"),
 		Restored->Effects.FilterByPredicate([DazeGroup](const FString& E)
 			{ return E.Equals(DazeGroup, ESearchCase::IgnoreCase); }).Num(), 1);
-	TestEqual(TEXT("...and the restored health keyfield is not re-derived over"),
-		Restored->Health, HealthBefore);
+	// A pedestrian's restore re-runs `NPCInit` (`CNPC_VPedestrian::OnRestore`, slot 420), whose first
+	// write is `m_iHealth = sk_basenpctroika_health` — the discipline restore does not touch it.
+	TestEqual(TEXT("...and the pedestrian's restore re-seeds health from sk_basenpctroika_health"),
+		Restored->Health, static_cast<int32>(ElysiumNpcTunables::ConVarFloat(
+			ElysiumNpcTunables::EConVar::SkBasenpctroikaHealth)));
 	// The caster's epoch is re-stamped, so expiry can still resolve who cast it.
 	TestTrue(TEXT("the caster handle rebases onto the restored world"),
 		!Expected.Source.IsSet() || Dest.World.Resolve(R.Source) != nullptr);

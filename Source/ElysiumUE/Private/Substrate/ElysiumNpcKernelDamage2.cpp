@@ -23,7 +23,7 @@ namespace
 {
 	// Retail's `.rdata`, one line per constant. Distances are SOURCE units.
 	constexpr float ThrowIgnoreCollisionSeconds = 0.75f;   // `0x102c43b0`'s argument
-	constexpr float ThrowLeadZScale = 0.5f;         // _DAT_104454d0
+	constexpr float ThrowLeadZScale = ElysiumNpcTunables::Half;
 	constexpr float ThrowConeLo = -20.0f;           // _DAT_1049ae98
 	constexpr float ThrowConeHi = 20.0f;            // _DAT_1044eb0c
 	constexpr float ThrowSpeedFloor = 1000.0f;      // _DAT_10447ee0
@@ -31,9 +31,9 @@ namespace
 	constexpr float EnergyBallRight = 40.0f;        // _DAT_104ada28
 	constexpr float EnergyBallUp = -10.0f;          // _DAT_104ada2c
 	constexpr float EnergyBallSpeed = 800.0f;       // DAT_104ada30
-	constexpr float GrenadeCooldown = 5.0f;         // _DAT_10454110
+	constexpr float GrenadeCooldown = ElysiumNpcTunables::Five;
 	constexpr float GrenadeThinkDelay = 3.0f;       // _DAT_10449258
-	constexpr float GrenadeThinkSlack = 0.01f;      // _DAT_10450aa4
+	constexpr float GrenadeThinkSlack = ElysiumNpcTunables::Hundredth;
 	constexpr float ThrownModelThinkDelay = 20.0f;  // _DAT_1044eb0c
 
 	// `CVDmg_t::Set(1, 0x40, …)` in `CausePlayerAOEDamage`: family LETHAL, `DMG_BLAST`.

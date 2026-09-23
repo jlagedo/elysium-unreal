@@ -29,15 +29,14 @@ namespace
 {
 	// --- Retail `.rdata`, read out of the pinned image --------------------------------------------
 
-	constexpr float Species2Zero = 0.0f;       // _DAT_104454c4 / _DAT_1044fab0
-	constexpr float Species2One = 1.0f;        // _DAT_104454c0
+	constexpr float Species2Zero = ElysiumNpcTunables::Zero;   // also the double `_DAT_1044fab0`
+	constexpr float Species2One = ElysiumNpcTunables::One;
 
-	// `0x10357be0`'s scale clamp. `_DAT_10449280` is **0.0f** as a float (it is `1.0` read as a
-	// DOUBLE at the same address, which is how families Damage and BaseHelpers read it; this body's
-	// decompiled C casts it to float explicitly, `(float)_DAT_10449280`, so the float is what it
-	// compares). The arm is therefore `if (0.0f < scale) scale = 1.0f` — **any positive scale
-	// becomes exactly 1.0**, which is a clamp to one and not a clamp at one.
-	constexpr float CrowScaleClampFloor = 0.0f;      // (float)_DAT_10449280
+	// `0x10357be0`'s scale clamp: `10357be4 FCOMP double ptr [0x10449280]`, the DOUBLE 1.0, then
+	// `AND EAX,0x4100 / JNZ` — so a scale that is not below or equal to 1.0 becomes 1.0. A clamp AT
+	// one. (The decompiler's `(float)_DAT_10449280` is a conversion, not a reinterpretation; the
+	// port read it as the float 0.0 and flattened every positive scale until 0019/4.)
+	constexpr double CrowScaleCeiling = ElysiumNpcTunables::OneDouble;
 
 	// `0x10357be0`'s speed. The same 170.0 appears twice: as the distance threshold the offset is
 	// compared against and as the metres-per-second the offset is scaled by.
@@ -191,12 +190,28 @@ FElysiumEntity* FElysiumNpc::MingXiaoTentacleHead() const
 
 bool FElysiumNpc::TzimisceDeathScriptArgument(int32 SingletonIndex, int32& OutArgument) const
 {
-	// SEAM for `DAT_1093cf94`, `DAT_1093cfdc` and `DAT_1093cebc`. See the declaration: false is the
-	// arm that substitutes 0, which is what retail does for a singleton whose own `vtable+0x4`
-	// answers true, so the event still fires with three zeroes.
-	(void)SingletonIndex;
-	OutArgument = 0;
-	return false;
+	// `DAT_1093cf94` `tzimisce_voice_pitch` "100" and `DAT_1093cfdc` `tzimisce_voice_attn` "65"
+	// hand over their `+0x2c` ints; `DAT_1093cebc` `tzimisce_voice_volume` "1" hands over its
+	// `+0x28` FLOAT, whose dword is pushed as it stands. All three are ConVars, so none substitutes 0.
+	using ElysiumNpcTunables::EConVar;
+	switch (SingletonIndex)
+	{
+	case 0:
+		OutArgument = ElysiumNpcTunables::ConVarInt(EConVar::TzimisceVoicePitch);
+		return true;
+	case 1:
+		OutArgument = ElysiumNpcTunables::ConVarInt(EConVar::TzimisceVoiceAttn);
+		return true;
+	case 2:
+	{
+		const float Volume = ElysiumNpcTunables::ConVarFloat(EConVar::TzimisceVoiceVolume);
+		FMemory::Memcpy(&OutArgument, &Volume, sizeof(OutArgument));
+		return true;
+	}
+	default:
+		OutArgument = 0;
+		return false;
+	}
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -297,7 +312,7 @@ void FElysiumNpc::FUN_10357be0(float Scale)
 	// index cannot be resolved and the body takes retail's NULL arm: read the origin, zero the
 	// velocity, return. `CrowFlyStep` below is the pure half and carries the arithmetic of the
 	// non-null arm, so the recovered numbers are exercised rather than parked behind the seam.
-	if (CrowScaleClampFloor < Scale)
+	if (static_cast<double>(Scale) > CrowScaleCeiling)
 	{
 		Scale = Species2One;
 	}
@@ -727,8 +742,7 @@ bool FElysiumNpc::FUN_103be8e0(FElysiumEntity* InTarget)
 	// body reports "close enough" rather than refusing.
 	//
 	// **Seams:** `ChaseLeadPosition` (family Positions) stands `0x102c36d0` and answers the input
-	// position unchanged; `DAT_1093ca8c` is an unnamed `ConVar` whose value is **UNRECOVERED** and
-	// is passed as 0.0, which is retail's own `IsCommand()` arm.
+	// position unchanged; `DAT_1093ca8c` is `tzimisce_throw_power`, shipped ".007".
 	if (InTarget == nullptr)
 	{
 		return true;
@@ -736,8 +750,9 @@ bool FElysiumNpc::FUN_103be8e0(FElysiumEntity* InTarget)
 	const FElysiumEntity* Held = World != nullptr ? World->Resolve(PickupTarget) : nullptr;
 	const FVector FromUnits = Held != nullptr ? Held->Origin / ElysiumMove::U : FVector::ZeroVector;
 	FVector LeadUnits = FromUnits;
-	ChaseLeadPosition(InTarget, FVector::ZeroVector, Species2Zero, FromUnits * ElysiumMove::U,
-		LeadUnits);
+	ChaseLeadPosition(InTarget, FVector::ZeroVector,
+		ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::TzimisceThrowPower),
+		FromUnits * ElysiumMove::U, LeadUnits);
 	const FVector DeltaUnits = LeadUnits - Origin / ElysiumMove::U;
 	const float Yaw = Species2VecToYaw(DeltaUnits);
 	// `UTIL_AngleDiff` `0x1013d580` — family Bosses keeps a private copy for the same reason; this
@@ -867,11 +882,8 @@ void FElysiumNpc::FUN_103bea90(FElysiumEntity* AimTarget)
 	// `m_hPickupTarget` is cleared to INVALID whether or not there was anything to throw at.
 	//
 	// **Seams:** `RemovePhysAnimlink`, `ApplyThrowImpulse` and `ArmIgnoreCollisionExpiry` are family
-	// Bosses'; `ChaseLeadPosition` is family Positions'; `DAT_1093ca8c` and `DAT_1093ca44` are two
-	// unnamed `ConVar`s whose values are **UNRECOVERED** and are read as 0.0, which is retail's own
-	// `IsCommand()` arm. With both at zero the impulse's magnitude collapses to the 1000-unit floor,
-	// which is the value the floor exists to guarantee — so the THROW still happens and its
-	// direction is the recovered one.
+	// Bosses'; `ChaseLeadPosition` is family Positions'. `DAT_1093ca8c` is `tzimisce_throw_power`
+	// ".007" and `DAT_1093ca44` `tzimisce_throw_hds` ".0008" (the height-to-distance scalar).
 	RemovePhysAnimlink(TzimiscePhysicsAnimlink);
 	TzimiscePhysicsAnimlink = FElysiumEntityHandle();
 
@@ -881,7 +893,11 @@ void FElysiumNpc::FUN_103bea90(FElysiumEntity* AimTarget)
 		const FVector FromUnits = Held != nullptr
 			? Held->Origin / ElysiumMove::U : FVector::ZeroVector;
 		FVector AimUnits = FromUnits;
-		ChaseLeadPosition(AimTarget, FVector::ZeroVector, Species2Zero,
+		const float ThrowPower =
+			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::TzimisceThrowPower);
+		const float ThrowHds =
+			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::TzimisceThrowHds);
+		ChaseLeadPosition(AimTarget, FVector::ZeroVector, ThrowPower,
 			FromUnits * ElysiumMove::U, AimUnits);
 		AimUnits.Z += TzimisceThrowAimHeightUnits;
 
@@ -903,15 +919,14 @@ void FElysiumNpc::FUN_103bea90(FElysiumEntity* AimTarget)
 		// left as it stands, which is retail's own middle arm (within the cone, nothing rotated).
 		(void)Diff;
 
-		// `speed = max(distSq * gravityScale, 1000.0)`, with the ConVar at its unrecovered 0.0 —
-		// so the floor is what survives, which is the number the floor exists to guarantee.
-		float Speed = DistSq * Species2Zero;
+		// `speed = distSq * throw_power`, floored at 1000.
+		float Speed = DistSq * ThrowPower;
 		if (Speed <= TzimisceThrowSpeedFloor)
 		{
 			Speed = TzimisceThrowSpeedFloorImpulse;
 		}
 		FVector ImpulseUnits(DeltaUnits.X * Speed, DeltaUnits.Y * Speed,
-			Species2Zero * DistSq + DeltaUnits.Z * Speed);
+			ThrowHds * DistSq + DeltaUnits.Z * Speed);
 		ApplyThrowImpulse(PickupTarget, ImpulseUnits);
 	}
 
@@ -967,9 +982,8 @@ void FElysiumNpc::FUN_103b92a0()
 	//     frame, so slot 488's own work happens BEFORE the base's and the base's return value is
 	//     what the caller sees.
 	//
-	// **Seam:** `TzimisceDeathScriptArgument` stands all three singletons and answers "not
-	// available", which is the arm that substitutes 0 — so the event fires with three zeroes. The
-	// event itself is the observable and it IS fired.
+	// `TzimisceDeathScriptArgument` reads the three ConVars (pitch 100, attn 65, volume 1.0f's
+	// dword). The event itself is the observable and it IS fired.
 	int32 A = 0;
 	int32 B = 0;
 	int32 C = 0;

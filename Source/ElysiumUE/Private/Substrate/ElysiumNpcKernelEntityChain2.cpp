@@ -19,13 +19,13 @@ namespace
 	// The constants part 1 states in full; restated here because the two translation units do not
 	// share an anonymous namespace and the module builds adaptive-unity, where a second definition
 	// of the same name would collide. Unit-prefixed for that reason.
-	constexpr float GChain2Zero = 0.0f;            // _DAT_104454c4
-	constexpr float GChain2One = 1.0f;             // _DAT_104454c0
+	constexpr float GChain2Zero = ElysiumNpcTunables::Zero;
+	constexpr float GChain2One = ElysiumNpcTunables::One;
 	constexpr float GChain2AutoaimNewWeight = 0.7f;   // _DAT_10457f54
 	constexpr float GChain2ClosestNpcReset = 100000.0f;   // the 0x47c34ff3 immediate
 	constexpr float GChain2AutoaimDistance = 16384.0f;    // the 0x46800000 immediate
 	constexpr float GChain2AutoaimWrap = 360.0f;          // _DAT_10450568
-	constexpr float GChain2AutoaimHalfWrap = 180.0f;      // _DAT_1044c3a8 / _DAT_10462948
+	constexpr float GChain2AutoaimHalfWrap = ElysiumNpcTunables::OneEighty;   // negated, `_DAT_10462948`
 	constexpr float GChain2AutoaimPitchClamp = 25.0f;
 	constexpr float GChain2AutoaimYawClamp = 12.0f;
 	constexpr int32 GChain2FlAimTarget = 0x10000;         // FL_AIMTARGET
@@ -626,17 +626,17 @@ void FElysiumNpc::SetPlayerAnim(const TCHAR* Name, const TCHAR* Sound)
 	//         (`(*DAT_1070b248 + 0x30)(sound)`); otherwise add `_DAT_10471720`, the fallback.
 	// STEP 5. `+0x1cac |= 1`.
 	//
-	// **Unrecovered:** `_DAT_10449270` (subtracted from curtime before the duration is added — a
-	// lead-in, and it is the same constant the autoaim score multiplies by, so it is a shared
-	// `.rdata` word with no value in the corpus) and `_DAT_10471720` (the no-sound fallback
-	// duration; `docs/vtmb/npc-ai/shape.md` line 292 asks the same question of the same word —
-	// "how long a whisper with no sound stays up" — and does not answer it either). Both are seams
-	// answering 0, so the deadline is bare curtime and the animation is already over.
+	// Both constants are DOUBLES (`10182c76 FSUB double ptr [0x10449270]`, 0.5, and
+	// `10182d07 FADD double ptr [0x10471720]`, 0.6). The subtraction is `FST`ored to `+0x1ca8` as a
+	// float while the x87 keeps the unrounded value: the sound arm adds the duration to the STORED
+	// float (`10182cff FADD float ptr [ESI + 0x1ca8]`), the fallback arm adds 0.6 to the unrounded
+	// one. Both then `FSTP float`.
 	PlayerAnimNameBuffer = Name != nullptr ? FString(Name) : FString();
 	bPlayerAnimNameSet = !PlayerAnimNameBuffer.IsEmpty();
 
 	const float Now = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f;
-	float End = Now - PlayerAnimLeadIn();
+	const double LeadIn = static_cast<double>(Now) - PlayerAnimLeadIn();
+	float End = static_cast<float>(LeadIn);
 
 	// `m_hDialogPartner` (+0x0fe8) resolving live is family Anim's `HasLiveDialogPartner()`, which
 	// is the reading `ElysiumNpcKernelSounds.cpp` already made for the same word and is reused
@@ -652,27 +652,23 @@ void FElysiumNpc::SetPlayerAnim(const TCHAR* Name, const TCHAR* Sound)
 	}
 	if (!bUsedSound)
 	{
-		End += PlayerAnimFallbackDuration();
+		End = static_cast<float>(LeadIn + PlayerAnimFallbackDuration());
 	}
 
 	PlayerAnimEndTime = End;
 	PlayerAnimFlags |= 1;
 }
 
-float FElysiumNpc::PlayerAnimLeadIn() const
+double FElysiumNpc::PlayerAnimLeadIn() const
 {
-	// **SEAM** for `_DAT_10449270`. **Unrecovered** — a shared `.rdata` word with no value in the
-	// corpus (the autoaim score's off-axis weight reads the same one). 0 makes the deadline bare
-	// curtime.
-	return GChain2Zero;
+	// `_DAT_10449270`, the pooled double 0.5, subtracted from curtime.
+	return ElysiumNpcTunables::HalfDouble;
 }
 
-float FElysiumNpc::PlayerAnimFallbackDuration() const
+double FElysiumNpc::PlayerAnimFallbackDuration() const
 {
-	// **SEAM** for `_DAT_10471720`, the no-sound fallback duration.
-	// **Unrecovered** — `docs/vtmb/npc-ai/shape.md` line 292 records the same open question about
-	// the same word. 0 makes a no-sound animation expire on the frame it is armed.
-	return GChain2Zero;
+	// `_DAT_10471720`, the double 0.6: how long a whisper with no sound stays up.
+	return ElysiumNpcTunables::WhisperNoSoundFallback;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -705,8 +701,8 @@ void FElysiumNpc::ReleaseControllerNpc(bool bCopyAnimation, bool bCopyVelocity)
 	//   controller->m_flNextThink = curtime + _DAT_1044e658;
 	//   m_hControllerNPC = -1;
 	//
-	// **Unrecovered:** `_DAT_1044e658` (the think delay) and what `0x101c0b10` does. The think is
-	// armed through the port's own `NextThink`, at curtime plus the seam's 0.
+	// **Unrecovered:** what `0x101c0b10` does. The think is armed through the port's own
+	// `NextThink`, at curtime plus `_DAT_1044e658` (the double 0.01).
 	if (World == nullptr || !ControllerNpc.IsSet())
 	{
 		return;
@@ -747,14 +743,12 @@ void FElysiumNpc::ReleaseControllerNpc(bool bCopyAnimation, bool bCopyVelocity)
 	// The one-shot think on the CONTROLLER — retail arms it on the entity it is letting go of, not
 	// on itself.
 	Controller->NextThink = (World != nullptr ? World->NowSeconds() : 0.0)
-		+ static_cast<double>(ControllerReleaseThinkDelay());
+		+ ControllerReleaseThinkDelay();
 	ControllerNpc = FElysiumEntityHandle::Invalid();
 }
 
-float FElysiumNpc::ControllerReleaseThinkDelay() const
+double FElysiumNpc::ControllerReleaseThinkDelay() const
 {
-	// **SEAM** for `_DAT_1044e658`, the delay the released controller's one-shot think is armed at.
-	// **Unrecovered**; 0 arms it for the very next think pass, which is the soonest retail could
-	// have meant and never later than it.
-	return GChain2Zero;
+	// `_DAT_1044e658`, the double 0.01 the released controller's one-shot think is armed at.
+	return ElysiumNpcTunables::HundredthDouble;
 }

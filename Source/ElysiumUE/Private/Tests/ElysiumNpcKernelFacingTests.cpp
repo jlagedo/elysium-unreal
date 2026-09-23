@@ -122,9 +122,9 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard });
 
-	// The gate: `cvar(0x109247ec) || m_bAllowTurningAnims`. The cvar is a seam answering false and
-	// its name and default are unrecovered, so the authored key is the live half.
-	TestFalse(TEXT("the turning-anims cvar seam answers nothing"), Guard->TurningAnimsEnabled());
+	// The gate: `cvar(0x109247ec) || m_bAllowTurningAnims`. The cvar is `debug_turning`, shipped
+	// "0", so the authored key is the live half.
+	TestFalse(TEXT("debug_turning ships off"), Guard->TurningAnimsEnabled());
 
 	Guard->ScheduleHost.MemoryBits = 0;
 	Guard->IdealActivityNumber = 0;
@@ -188,14 +188,29 @@ bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ Guard, Subject });
 
 	// All three overloads are the same shape: a cvar gate, then a tail jump into the motor. The
-	// cvar at `0x10924f74` is a seam whose name and default are unrecovered, and it answers false,
-	// so all three add nothing — which is the refusal, stated.
-	TestFalse(TEXT("the facing-target cvar seam answers nothing"), Guard->FacingTargetsEnabled());
+	// cvar at `0x10924f74` is `debug_allow_move_facing`, shipped "1", so all three reach the motor
+	// on their own overload (519 -> motor slot 14, 518 -> 13, 517 -> 12).
+	TestTrue(TEXT("debug_allow_move_facing ships on"), Guard->FacingTargetsEnabled());
+	Guard->FacingTargetRequests.Reset();
 	Guard->AddFacingTarget(Subject, 1.f, 2.f, 3.f);
 	Guard->AddFacingTarget(FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
 	Guard->AddFacingTarget(Subject, FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
-	TestEqual(TEXT("so slots 517, 518 and 519 all queue nothing"),
+	TestEqual(TEXT("so slots 519, 518 and 517 each queue one"), Guard->FacingTargetRequests.Num(), 3);
+	if (Guard->FacingTargetRequests.Num() == 3)
+	{
+		TestEqual(TEXT("519 reaches motor slot 14"), Guard->FacingTargetRequests[0].MotorSlot, 14);
+		TestEqual(TEXT("518 reaches motor slot 13"), Guard->FacingTargetRequests[1].MotorSlot, 13);
+		TestEqual(TEXT("517 reaches motor slot 12"), Guard->FacingTargetRequests[2].MotorSlot, 12);
+	}
+	// Cleared, all three add nothing — retail's refusal arm.
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing, 0.f);
+	Guard->FacingTargetRequests.Reset();
+	Guard->AddFacingTarget(Subject, 1.f, 2.f, 3.f);
+	Guard->AddFacingTarget(FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
+	Guard->AddFacingTarget(Subject, FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
+	TestEqual(TEXT("with the cvar cleared slots 517, 518 and 519 queue nothing"),
 		Guard->FacingTargetRequests.Num(), 0);
+	ElysiumNpcTunables::ResetConVars();
 
 	// The seam below them, exercised directly: which of the motor's three overloads each slot
 	// reaches is a recovered fact (519 -> motor slot 14, 518 -> 13, 517 -> 12) and is what the

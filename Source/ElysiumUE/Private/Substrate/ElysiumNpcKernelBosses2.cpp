@@ -19,11 +19,11 @@
 
 namespace
 {
-	constexpr float Bosses2Zero = 0.0f;               // _DAT_104454c4
-	constexpr float Bosses2One = 1.0f;                // _DAT_104454c0
+	constexpr float Bosses2Zero = ElysiumNpcTunables::Zero;
+	constexpr float Bosses2One = ElysiumNpcTunables::One;
 
 	// `0x10398030`'s distance bands against `m_flClosestPlayerDistance` (+0x6264), SOURCE units.
-	constexpr float MingXiaoNearBand = 100.0f;        // _DAT_10450564
+	constexpr float MingXiaoNearBand = ElysiumNpcTunables::Hundred;
 	constexpr float MingXiaoFarBand300 = 300.0f;      // _DAT_10462b84
 	constexpr float MingXiaoFarBand200 = 200.0f;      // _DAT_104492b8
 	constexpr float MingXiaoReachBand = 150.0f;       // _DAT_10457f60
@@ -41,9 +41,9 @@ namespace
 	constexpr float MingXiaoThrowDefault = 20.0f;     // _DAT_1044eb0c
 
 	// `0x103989b0`'s abeam test.
-	constexpr float PedestalHeightTolerance = 64.0f;  // _DAT_1049ae28, a double in `.rdata`
+	constexpr float PedestalHeightTolerance = static_cast<float>(ElysiumNpcTunables::SixtyFourDouble);
 	constexpr float PedestalForwardLo = -0.17f;       // _DAT_104bde64
-	constexpr float PedestalForwardHi = 0.5f;         // _DAT_104454d0
+	constexpr float PedestalForwardHi = ElysiumNpcTunables::Half;
 
 	// `0x10398b20`'s search radius, its stationary tolerance and its name prefix.
 	constexpr float PedestalSearchRadius = 257.0f;
@@ -54,7 +54,7 @@ namespace
 	// `VectorNormalize` `0x10137220`: `1.0 / (FLT_EPSILON + length)`, so a zero vector normalizes to
 	// zero rather than to NaN and a unit vector comes back a hair short. Both are observable, and the
 	// first is what makes `PedestalTaskForSide` answer for a candidate standing on top of the boss.
-	constexpr float Bosses2NormalizeEpsilon = 1.1920928955078125e-07f;   // _DAT_1046a51c
+	constexpr float Bosses2NormalizeEpsilon = ElysiumNpcTunables::FloatEpsilon;
 
 	FVector Bosses2Normalize(const FVector& V)
 	{

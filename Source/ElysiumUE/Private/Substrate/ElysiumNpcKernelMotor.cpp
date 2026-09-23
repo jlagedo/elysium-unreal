@@ -16,10 +16,11 @@
 // motor: the step and jump tunables, the jump setup/legality chain, the two collision-ignore
 // chains, the yaw-speed ladder, the ground and stuck probes, and the move-done / nav-failure hooks.
 //
-// 73 rows of `order.md` layers 0–9, ported arm by arm in retail's order. Every threshold below was
-// read out of the pinned retail `vampire.dll`'s `.rdata` at its cited address (image base
-// `0x10000000`), so the numbers are recovered facts, not estimates. The walked prose is
-// `docs/vtmb/npc-ai/shape.md`.
+// 73 rows of `order.md` layers 0–9, ported arm by arm in retail's order. The step, jump, yaw-ladder
+// and ground-probe thresholds are bound to the tunables table (`ElysiumNpcKernelTunables.h`, every
+// row re-read from the pinned `vampire.dll` by `gen_kernel_tunables --check`); every other threshold
+// below was read out of the image's `.rdata` at its cited address (image base `0x10000000`), so the
+// numbers are recovered facts, not estimates. The walked prose is `docs/vtmb/npc-ai/shape.md`.
 //
 // Two conventions govern the whole file and are stated once:
 //
@@ -37,33 +38,33 @@ namespace
 {
 	// --- The recovered constants, by address ----------------------------------------------------
 
-	constexpr float GStepHeightBase = 18.0f;        // _DAT_10453b94, `0x101a6b40` / `0x101a6b60`
-	constexpr float GMaxJumpSpeedTroika = 36.0f;    // _DAT_1044faa8, `0x101aa670`
-	constexpr float GJumpGravity = 350.0f;          // _DAT_10477ce8, `0x101a6b80`
-	constexpr float GTestHullTunable = 40.0f;       // _DAT_10462950, `0x102d72b0` / `0x102d72d0`
+	constexpr float GStepHeightBase = ElysiumNpcTunables::StepHeightBase;   // `0x101a6b40` / `0x101a6b60`
+	constexpr float GMaxJumpSpeedTroika = ElysiumNpcTunables::MaxJumpSpeedTroika;   // `0x101aa670`
+	constexpr float GJumpGravity = ElysiumNpcTunables::JumpGravity;   // `0x101a6b80`
+	constexpr float GTestHullTunable = ElysiumNpcTunables::Forty;   // `0x102d72b0` / `0x102d72d0`
 
 	// `FUN_10280790`'s slack and its apex scale. Both are qword loads the x87 widens, so they are
 	// doubles in `.rdata` and floats at the comparison.
-	constexpr float GJumpLegalSlack = 0.1f;         // _DAT_104493d0
-	constexpr float GJumpApexScale = 1.25f;         // _DAT_10460020
+	constexpr float GJumpLegalSlack = static_cast<float>(ElysiumNpcTunables::TenthDouble);
+	constexpr float GJumpApexScale = static_cast<float>(ElysiumNpcTunables::JumpApexScale);
 
 	// The yaw-speed ladder's constants. `GYawFloor` is also the clamp every "turning" arm ends on.
-	constexpr float GYawDefault = 45.0f;            // _DAT_1049949c
-	constexpr float GYawRun = 160.0f;               // _DAT_1047a3ac
-	constexpr float GYawCrouch = 30.0f;             // _DAT_104492a8
-	constexpr float GYawHumanoidMove = 15.0f;       // _DAT_10463584
-	constexpr float GYawHumanoidCrouch = 60.0f;     // _DAT_104492a4
-	constexpr float GYawGenericCrouch = 120.0f;     // _DAT_1044f00c
-	constexpr float GYawTzimisceIdle = 5.0f;        // _DAT_10454110
-	constexpr float GYawTzimisceDefault = 11.0f;    // _DAT_104cc504
-	constexpr float GYawFloor = 1.0f;               // _DAT_104454c0
+	constexpr float GYawDefault = ElysiumNpcTunables::FortyFive;
+	constexpr float GYawRun = ElysiumNpcTunables::YawSpeedRun;
+	constexpr float GYawCrouch = ElysiumNpcTunables::Thirty;
+	constexpr float GYawHumanoidMove = ElysiumNpcTunables::Fifteen;
+	constexpr float GYawHumanoidCrouch = ElysiumNpcTunables::YawSpeedHumanoidCrouch;
+	constexpr float GYawGenericCrouch = ElysiumNpcTunables::OneTwenty;
+	constexpr float GYawTzimisceIdle = ElysiumNpcTunables::Five;
+	constexpr float GYawTzimisceDefault = ElysiumNpcTunables::YawSpeedTzimisceDefault;
+	constexpr float GYawFloor = ElysiumNpcTunables::One;
 
 	// `CheckOnGround` `0x1026e5e0`.
-	constexpr float GCheckOnGroundInterval = 0.5f;  // _DAT_104454d0
-	constexpr double GCheckOnGroundSlack = -0.001;  // _DAT_10497530, a qword
-	constexpr float GCheckOnGroundUp = 0.1f;        // _DAT_104493d0
+	constexpr float GCheckOnGroundInterval = ElysiumNpcTunables::Half;
+	constexpr double GCheckOnGroundSlack = ElysiumNpcTunables::MinusThousandthDouble;
+	constexpr float GCheckOnGroundUp = static_cast<float>(ElysiumNpcTunables::TenthDouble);
 	constexpr float GCheckOnGroundDown = 4.0f;      // _DAT_10449148
-	constexpr float GTraceClearFraction = 1.0f;     // _DAT_10449280
+	constexpr float GTraceClearFraction = static_cast<float>(ElysiumNpcTunables::OneDouble);
 	constexpr int32 GGroundTraceMask = 0x202400b;
 	constexpr int32 GCoverTraceMask = 0x2804091;    // `ValidateNavGoal`'s
 
@@ -168,22 +169,20 @@ namespace
 			1024.0f, 1024.0f, 1024.0f },
 	};
 
-	// The four `ConVar*` globals this family's ladders read, as `IsCommand() ? 0.0f : m_fValue`.
-	// The two `MaxYawSpeed` constructs in its own body carry a recovered name and default (read from
-	// `.rdata` at the ctor's argument addresses); the other two live in uninitialised `.data` that no
-	// corpus function constructs, exactly like the pair the Facing family recorded.
+	// The `ConVar*` globals this family's ladders read, as `IsCommand() ? 0.0f : m_fValue`. The two
+	// `MaxYawSpeed` constructs in its own body carry a recovered name and default (read from
+	// `.rdata` at the ctor's argument addresses); the other four are tunables-table rows.
 	constexpr FElysiumNpc::FRetailYawConVar GRetailYawConVars[] =
 	{
-		{ TEXT("debug_slow_idle_yaw_speed"), TEXT("0x10924e94"), 20.0f, true },
-		{ TEXT("debug_slow_walk_yaw_speed"), TEXT("0x1092411c"), 25.0f, true },
+		{ TEXT("debug_slow_idle_yaw_speed"), TEXT("0x10924e94"), 20.0f, ElysiumNpcTunables::EConVar::Count },
+		{ TEXT("debug_slow_walk_yaw_speed"), TEXT("0x1092411c"), 25.0f, ElysiumNpcTunables::EConVar::Count },
 		// The turning-arm scalar. `CAI_BaseNPCTroika` reads `0x10924c94`, `CNPC_VDog` reads
-		// `0x1093ad24` and `CNPC_VTzimisce` reads `0x1093c9fc` — three distinct cvars, all three
-		// unconstructed in the corpus, so all three are unrecovered.
-		{ TEXT(""), TEXT("0x10924c94"), 0.0f, false },
-		{ TEXT(""), TEXT("0x1093ad24"), 0.0f, false },
-		{ TEXT(""), TEXT("0x1093c9fc"), 0.0f, false },
-		// The idle-arm alternative `MaxYawSpeed` falls to when turning anims are ON.
-		{ TEXT(""), TEXT("0x10923e84"), 0.0f, false },
+		// `0x1093ad24` and `CNPC_VTzimisce` reads `0x1093c9fc` — three distinct cvars, ".15" each.
+		{ TEXT("debug_turn_scalar"), TEXT("0x10924c94"), 0.0f, ElysiumNpcTunables::EConVar::DebugTurnScalar },
+		{ TEXT("debug_dog_turn_scalar"), TEXT("0x1093ad24"), 0.0f, ElysiumNpcTunables::EConVar::DebugDogTurnScalar },
+		{ TEXT("tzimisce_turn_scalar"), TEXT("0x1093c9fc"), 0.0f, ElysiumNpcTunables::EConVar::TzimisceTurnScalar },
+		// The idle-arm alternative `MaxYawSpeed` falls to when turning anims are ON: "90".
+		{ TEXT("debug_turning_speed"), TEXT("0x10923e84"), 0.0f, ElysiumNpcTunables::EConVar::DebugTurningSpeed },
 	};
 
 	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s playback/turn tuning record, read by
@@ -441,10 +440,9 @@ const FElysiumNpc::FRetailYawConVar* FElysiumNpc::RetailYawConVars(int32& OutCou
 
 float FElysiumNpc::RetailYawConVarValue(const TCHAR* Address)
 {
-	// Retail reads each of these as `cvar->IsCommand() ? 0.0f : cvar->m_fValue` (`+0x28`). This
-	// substrate has no console, so a cvar whose registered DEFAULT is recovered answers that default
-	// — which is what a fresh game answers — and one whose default is not recovered answers 0.0,
-	// which is retail's own `IsCommand()` arm.
+	// Retail reads each of these as `cvar->IsCommand() ? 0.0f : cvar->m_fValue` (`+0x28`); a ConVar
+	// object is never a ConCommand, so the answer is the value. An address that names none of them
+	// answers 0.0.
 	if (Address == nullptr)
 	{
 		return 0.f;
@@ -453,7 +451,7 @@ float FElysiumNpc::RetailYawConVarValue(const TCHAR* Address)
 	{
 		if (FCString::Strcmp(Row.Address, Address) == 0)
 		{
-			return Row.bDefaultRecovered ? Row.Default : 0.f;
+			return Row.Table == ElysiumNpcTunables::EConVar::Count ? Row.Default : ElysiumNpcTunables::ConVarFloat(Row.Table);
 		}
 	}
 	return 0.f;
@@ -773,8 +771,7 @@ float FElysiumNpc::MaxYawSpeedTurningArm(const TCHAR* ConVarAddress)
 	//     float r = ABS(v) * s;
 	//     return r <= 1.0f ? 1.0f : r;                  // _DAT_104454c0
 	//
-	// The cvar differs per species and all three are **unrecovered**, so `s` is 0 and the arm lands
-	// on retail's own floor.
+	// The cvar differs per species; all three ship ".15".
 	const float Ideal = GetIdealYawSpeed();
 	const float Scale = RetailYawConVarValue(ConVarAddress);
 	const float Result = FMath::Abs(Ideal) * Scale;
@@ -815,7 +812,7 @@ float FElysiumNpc::MaxYawSpeedDog()
 		if (Activity == GActIdle || Activity == GActIdleAngry)
 		{
 			// `m_bAllowTurningAnims` ORed with the cvar the Facing family recorded (`0x109247ec`):
-			// when neither is on, the unrecovered `0x10923e84` decides; when either is, 30.0.
+			// when neither is on, `debug_turning_speed` (`0x10923e84`, 90) decides; when either is, 30.0.
 			if (!TurningAnimsEnabled())
 			{
 				return RetailYawConVarValue(TEXT("0x10923e84"));

@@ -141,8 +141,8 @@ bool FElysiumNpcKernelTroikaHelpersEnterMeleeTest::RunTest(const FString&)
 	TestFalse(TEXT("and clears m_bInMelee"), Thug->bInMelee);
 
 	// Arm 3: past the timer, with the coordinator seam refusing and the frenzy bypass clear, the
-	// whole gate closes on the coordinator. The height term passes (the limit is the unrecovered
-	// 0.0 and `EnemyHeightDiffUnits` defaults to 5000, so `ENEMY_UNREACHABLE` decides) and the
+	// whole gate closes on the coordinator. The height term is decided by `ENEMY_UNREACHABLE` (the
+	// limit is `_DAT_10451acc` = 64 and the enemy is 5000 units above it) and the
 	// range term passes because slot 308 is a stub answering false.
 	Thug->MeleeCanEnterTimer = 0.0;
 	Thug->ScheduleHost.EnemyHeightDiffUnits = 5000.f;
@@ -258,8 +258,9 @@ bool FElysiumNpcKernelTroikaHelpersLeaveMeleeTest::RunTest(const FString&)
 
 	// With a coordinator index in hand the tail runs and the two lines agree, which is retail's own
 	// state. The must-leave arm is unreachable while slot 308 is a stub answering false, so the far
-	// arm is what runs: `MeleeRange` is unrecovered at 0.0 and `EnemyDistUnits` sits at its
-	// no-enemy 5000, `2 * 0 <= 5000` holds, and the "has room" seam answers false.
+	// arm is what runs: `MeleeRange` is `debug_melee_advance_combatmove_dist`'s 100 and
+	// `EnemyDistUnits` sits at its no-enemy 5000, `2 * 100 <= 5000` holds, and the "has room" seam
+	// answers false.
 	BloodNpc->ScheduleHost.EnemyDistUnits = 5000.f;
 	TestTrue(TEXT("the far arm answers true: no room in the coordinator"), BloodNpc->Slot602());
 	TroikaNpc->AttackCoordinator = 2;
@@ -375,8 +376,8 @@ bool FElysiumNpcKernelTroikaHelpersDisciplineTest::RunTest(const FString&)
 	Caster->Slot616();
 	TestFalse(TEXT("616 clears COND_ON_FIRE"),
 		Caster->Cognition.Conditions.Has(EElysiumNpcCond::OnFire));
-	TestEqual(TEXT("616 stamps m_flNextBurnTime with curtime + the (unrecovered) window"),
-		Caster->NextBurnTime, Caster->World->NowSeconds(), 0.001);
+	TestEqual(TEXT("616 stamps m_flNextBurnTime with curtime + the 15 s _DAT_10463584 window"),
+		Caster->NextBurnTime, Caster->World->NowSeconds() + 15.0, 0.001);
 	return true;
 }
 
@@ -501,9 +502,25 @@ bool FElysiumNpcKernelTroikaHelpersFollowerTest::RunTest(const FString&)
 	Follower->FollowerDistanceWalkTo = 500.f;
 	TestEqual(TEXT("inside both rings answers 0x115"), Follower->Slot607(), 0x115);
 
-	// The facing request is behind family Facing's cvar seam, which answers false.
-	TestFalse(TEXT("the queued facing request was not made — the cvar seam refuses"),
-		Follower->FacingTargetsEnabled());
+	// The back-away arm's facing request is behind `debug_allow_move_facing`, which ships 1: the
+	// request is queued on slot 517's path, with retail's 1.0 / 1.0 / 0 arguments.
+	TestTrue(TEXT("debug_allow_move_facing ships on"), Follower->FacingTargetsEnabled());
+	Follower->FacingTargetRequests.Reset();
+	Follower->FollowerDistanceBackAway = 200.f;
+	Follower->Slot607();
+	TestEqual(TEXT("so the back-away arm queues one facing request"),
+		Follower->FacingTargetRequests.Num(), 1);
+	if (Follower->FacingTargetRequests.Num() == 1)
+	{
+		TestTrue(TEXT("on the boss"), Follower->FacingTargetRequests[0].Target == Boss->Handle);
+		TestEqual(TEXT("for 1.0 s"), Follower->FacingTargetRequests[0].Duration, 1.0f);
+	}
+	// Cleared, the request is not made.
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing, 0.f);
+	Follower->FacingTargetRequests.Reset();
+	Follower->Slot607();
+	TestEqual(TEXT("with the cvar cleared nothing is queued"), Follower->FacingTargetRequests.Num(), 0);
+	ElysiumNpcTunables::ResetConVars();
 	return true;
 }
 
@@ -840,16 +857,22 @@ bool FElysiumNpcKernelTroikaHelpersMotorTest::RunTest(const FString&)
 	TestEqual(TEXT("#6 reissues at the goal's yaw"), Npc->TroikaMotor.LastReissueYaw, 90.0f, 0.01f);
 	TestEqual(TEXT("and at speed -1"), Npc->TroikaMotor.LastReissueSpeed, -1.0f, 0.0001f);
 
-	// `CAI_Motor#4` `0x102e0f90` — with the deceleration scale unrecovered at 0.0 the interval
-	// bound is 0, so the FAR arm is the one that runs: the interval is zeroed and the move
-	// reissued. The velocity is written on BOTH arms, before the branch.
-	Npc->TroikaMotor.MoveInterval = 5.f;
+	// `CAI_Motor#4` `0x102e0f90` — the bound is `m_flMoveInterval * 100` (`_DAT_10450564`), and the
+	// velocity, written on BOTH arms before the branch, is the UNIT direction times 100.
+	const FVector Goal4 = Npc->Origin / ElysiumMove::U + FVector(100.0, 0.0, 0.0);
+	Npc->TroikaMotor.MoveInterval = 0.5f;   // bound 50 < 100 units: the far arm
 	const int32 Reissues = Npc->TroikaMotor.MoveReissues;
-	TestFalse(TEXT("#4 takes the restart arm"), Npc->FUN_102e0f90(FVector(100.0, 0.0, 0.0), 45.0f));
+	TestFalse(TEXT("#4 takes the restart arm past the bound"), Npc->FUN_102e0f90(Goal4, 45.0f));
 	TestEqual(TEXT("#4 zeroes the move interval on that arm"), Npc->TroikaMotor.MoveInterval, 0.f,
 		0.0001f);
 	TestEqual(TEXT("#4 reissues once"), Npc->TroikaMotor.MoveReissues, Reissues + 1);
 	TestEqual(TEXT("at the caller's yaw"), Npc->TroikaMotor.LastReissueYaw, 45.0f, 0.0001f);
+	TestEqual(TEXT("and the velocity is the unit direction times 100"),
+		static_cast<float>(Npc->TroikaMotor.LastVelocityUnits.X), 100.f, 0.001f);
+	Npc->TroikaMotor.MoveInterval = 5.f;    // bound 500 > 100 units: the near arm
+	TestTrue(TEXT("#4 inside the bound keeps the move"), Npc->FUN_102e0f90(Goal4, 45.0f));
+	TestEqual(TEXT("and drains distance * 0.01 (`_DAT_10450aa4`) off the interval"),
+		Npc->TroikaMotor.MoveInterval, 4.f, 0.001f);
 
 	// `CAI_Motor#17` `0x102e2580` — BOTH bounds are floors, so a hull floor above the base speed
 	// wins. 29c's walk reads the first as an upper bound; it is not.

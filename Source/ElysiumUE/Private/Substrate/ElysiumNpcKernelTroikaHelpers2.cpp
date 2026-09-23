@@ -27,42 +27,39 @@ namespace
 	// `m_flIgnoreCollisionTimer` (`+0x6458`) to.
 	const double TroikaIgnoreCollisionNever = static_cast<double>(TNumericLimits<float>::Max());
 
-	// `_DAT_10454110` — `RecordDetectedAttack`'s window. **UNRECOVERED** (past `.data`'s raw size).
-	constexpr float GTroikaTailDetectedAttackWindowSeconds = 0.0f;
-
 	// The lean hint's type, the one literal `ApplyHintLeanOffset` and `FindTacticalHintNode` both
 	// switch on. Family **Schedule** reads the same `0x27d8` as `GScheduleHintTypeLean`.
 	constexpr int32 TroikaHintTypeLean = 0x27d8;
 
 	// `FindTacticalHintNode`'s hint type and `ApplyHintLeanOffset`'s lean constants.
 	constexpr int32 TroikaTacticalHintType = 8;
-	// `_DAT_1049949c` — the yaw offset the lean adds to or subtracts from the hint's own facing.
-	// **UNRECOVERED**; `0.0` leans along the hint's facing itself, which is the degenerate arm.
-	constexpr float TroikaHintLeanYawOffset = 0.0f;
-	// `_DAT_1049ae8c` (the `bStanding == false` scale) and `_DAT_1049ae90` (the `true` one).
-	// **UNRECOVERED**; `0.0` applies no offset, which is the arm that leaves the point where the
-	// hint put it.
-	constexpr float TroikaHintLeanScaleCrouch = 0.0f;
-	constexpr float TroikaHintLeanScaleStand = 0.0f;
+	// `_DAT_1049949c` — the yaw offset the lean adds to or subtracts from the hint's own facing,
+	// 45 degrees (`102b6176 FSUB` / `102b61a5 FADD float ptr`).
+	constexpr float TroikaHintLeanYawOffset = ElysiumNpcTunables::FortyFive;
+	// `_DAT_1049ae8c` (the `bStanding == false` scale, 1.4, `102b621a`) and `_DAT_1049ae90` (the
+	// `true` one, 1.2, `102b61e5`).
+	constexpr float TroikaHintLeanScaleCrouch = ElysiumNpcTunables::CoverLeanClearScale;
+	constexpr float TroikaHintLeanScaleStand = ElysiumNpcTunables::CoverLeanSetScale;
 
-	// `_DAT_104454c4` / `_DAT_104454c0` — the shared `0.0` and `1.0` cells, both recovered.
-	constexpr float TroikaSharedZero = 0.0f;
-	constexpr float TroikaSharedOne = 1.0f;
+	// `_DAT_104454c4` / `_DAT_104454c0` — the shared `0.0` and `1.0` cells.
+	constexpr float TroikaSharedZero = ElysiumNpcTunables::Zero;
+	constexpr float TroikaSharedOne = ElysiumNpcTunables::One;
 
-	// `_DAT_10450564` — `CAI_Motor#4`'s deceleration scale, applied to BOTH the interval bound and
-	// the velocity it issues. **UNRECOVERED**.
-	constexpr float TroikaMotorDecelScale = 0.0f;
+	// `_DAT_10450564` — `CAI_Motor#4`'s deceleration scale (100.0), applied to BOTH the interval
+	// bound and the velocity it issues.
+	constexpr float TroikaMotorDecelScale = ElysiumNpcTunables::Hundred;
 	// `_DAT_10450aa4` — how much of the remaining distance `CAI_Motor#4` draws off the interval per
-	// call. **UNRECOVERED**.
-	constexpr float TroikaMotorDecelDrain = 0.0f;
-	// `_DAT_1044e658` — the distance below which `CAI_Motor#4` treats the goal as reached and draws
-	// nothing off the interval. **UNRECOVERED**; family **Lifecycle** reads the same cell for
-	// `CAI_StandoffGoal::Spawn`'s next-think.
-	constexpr float TroikaMotorArrivedDistanceUnits = 0.0f;
-	// `_DAT_1044ffdc` — the scale `CAI_Motor#18` applies to `ftol(yaw) & 0xffff`. The mask says it
-	// is the 16-bit angle quantum; the CELL's value is **UNRECOVERED** and is not guessed at, so
-	// `0.0` lands and every reissued yaw is zero.
-	constexpr float TroikaMotorYawQuantum = 0.0f;
+	// call (0.01).
+	constexpr float TroikaMotorDecelDrain = ElysiumNpcTunables::Hundredth;
+	// `_DAT_1044e658` — the distance at or below which `CAI_Motor#4` treats the goal as reached and
+	// draws nothing off the interval: the DOUBLE 0.01 (`102e1050 FCOMP double ptr`).
+	constexpr double TroikaMotorArrivedDistanceUnits = ElysiumNpcTunables::HundredthDouble;
+	// `_DAT_1044ffdc` — the scale `CAI_Motor#18` applies to `ftol(yaw * 65536/360) & 0xffff`, the
+	// 16-bit angle quantum 360 / 65536.
+	constexpr float TroikaMotorYawQuantum = ElysiumNpcTunables::AngleQuantum;
+	// `_DAT_1044ffe0` — its inverse, 65536 / 360, which the yaw is multiplied by BEFORE the `ftol`
+	// (`102e1a41` / `102e1afc FMUL float ptr`).
+	constexpr float TroikaMotorYawQuantumInverse = ElysiumNpcTunables::AngleQuantumInverse;
 
 	// The literal activity ids the three `CAI_Motor` bodies force through the owner's vtable
 	// `+0x4d8` (slot 342, `ForcePreTranslatedSequenceAndActivity`).
@@ -411,7 +408,9 @@ void FElysiumNpc::RecordDetectedAttack(const FElysiumEntity* Attacker)
 	//
 	// The stamp is written on BOTH arms, including the null one: a refused notice still opens the
 	// window. The two words are `FElysiumNpcMemory::DetectedAttackAttacker` /
-	// `DetectedAttackTime`, which family **Squad**'s `HasDetectedAttack` is the reader of.
+	// `DetectedAttackTime`, which family **Squad**'s `HasDetectedAttack` is the reader of. This
+	// runtime stores the stamp, not retail's expiry; the reader adds `_DAT_10454110` (5.0,
+	// `ElysiumNpcCond::DetectedAttackRetentionSeconds`).
 	if (bIgnoreDetectedAttack)
 	{
 		return;
@@ -419,8 +418,7 @@ void FElysiumNpc::RecordDetectedAttack(const FElysiumEntity* Attacker)
 	const FElysiumEntity* Redirected = RedirectDetectedAttacker(Attacker);
 	Senses.Memory.DetectedAttackAttacker =
 		Redirected != nullptr ? Redirected->Handle : FElysiumEntityHandle();
-	Senses.Memory.DetectedAttackTime = (World != nullptr ? World->NowSeconds() : 0.0)
-		+ static_cast<double>(GTroikaTailDetectedAttackWindowSeconds);
+	Senses.Memory.DetectedAttackTime = World != nullptr ? World->NowSeconds() : 0.0;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -469,8 +467,8 @@ void FElysiumNpc::OnDialogRelease()
 	// path carried before.
 	//
 	// The tail is a DEBUG hook — `thunk_FUN_10245660("entity_debug_stats")` and a `+0x10` dispatch,
-	// behind an unrecovered cvar (`DAT_109241fc`, the same `ConVar::GetBool()` shape families Facing
-	// and Motor record). It reaches no game state and is named rather than ported.
+	// behind `DAT_109241fc`, the `dialog_facial_debug` ConVar (shipped "0", so as shipped the hook
+	// never runs). It reaches no game state and is named rather than ported.
 	if (!HasLiveDialogPartner())
 	{
 		return;
@@ -797,8 +795,9 @@ void FElysiumNpc::FUN_102e0ea0()
 bool FElysiumNpc::FUN_102e0f90(const FVector& GoalUnits, float Yaw)
 {
 	// `CAI_Motor#4` `0x102e0f90`:
-	//     d = VectorNormalize(goal - owner->slot220());                  // vtable +0x370
-	//     SetAbsVelocity((goal - pos) * _DAT_10450564);                  // thunk_FUN_102e2690
+	//     dir = goal - owner->slot220();                                 // vtable +0x370
+	//     d = VectorNormalize(dir);                                      // 102e0fde, in place
+	//     SetAbsVelocity(dir * _DAT_10450564);                           // the UNIT direction
 	//     if (d < m_flMoveInterval * _DAT_10450564) {                    // +0x30
 	//         if (d <= _DAT_1044e658) d = 0;
 	//         m_flMoveInterval -= d * _DAT_10450aa4;
@@ -821,11 +820,14 @@ bool FElysiumNpc::FUN_102e0f90(const FVector& GoalUnits, float Yaw)
 	const float Distance = static_cast<float>(Delta.Size());
 
 	++TroikaMotor.VelocitySets;
-	TroikaMotor.LastVelocityUnits = Delta * TroikaMotorDecelScale;
+	// `VectorNormalize` leaves a zero vector zero and answers 0.
+	const FVector Direction = Distance > 0.f ? Delta / static_cast<double>(Distance) : FVector::ZeroVector;
+	TroikaMotor.LastVelocityUnits = Direction * TroikaMotorDecelScale;
 
 	if (Distance < TroikaMotor.MoveInterval * TroikaMotorDecelScale)
 	{
-		const float Drain = Distance <= TroikaMotorArrivedDistanceUnits ? 0.f : Distance;
+		const float Drain =
+			static_cast<double>(Distance) <= TroikaMotorArrivedDistanceUnits ? 0.f : Distance;
 		TroikaMotor.MoveInterval -= Drain * TroikaMotorDecelDrain;
 		++TroikaMotor.OwnerMoveDispatches;
 		return true;
@@ -949,14 +951,14 @@ void FElysiumNpc::FUN_102e19e0(const FVector& GoalUnits)
 	//     seq = owner->m_nSequence;                                      // +0x6f0
 	//     thunk_FUN_102e2790(this, seq);
 	//     if (!HasPoseParameter(this, seq, "move_yaw")) {                 // thunk_FUN_102e2820
-	//         ReissueMove(this, (ftol(...) & 0xffff) * _DAT_1044ffdc, -1.0);
+	//         ReissueMove(this, (ftol(yaw * _DAT_1044ffe0) & 0xffff) * _DAT_1044ffdc, -1.0);
 	//         return;
 	//     }
 	//     this->vtable[+0x3c](&avg);                                     // motor slot 15 — the
 	//                                                                    // facing-queue average
 	//     VectorNormalize(avg);
 	//     yaw = UTIL_VecToYaw(avg);
-	//     ReissueMove(this, (ftol(yaw) & 0xffff) * _DAT_1044ffdc, -1.0);
+	//     ReissueMove(this, (ftol(yaw * _DAT_1044ffe0) & 0xffff) * _DAT_1044ffdc, -1.0);
 	//     diff = UTIL_AngleDiff(yaw, owner->slot221()[1]);               // 0x1013d580
 	//     if (owner->field_0x98) owner->field_0x98->m_flDesiredMoveYaw = -diff;   // +0x63ec
 	//     else SetPoseParameter(this, "move_yaw", -diff);                // thunk_FUN_102e27d0
@@ -975,9 +977,9 @@ void FElysiumNpc::FUN_102e19e0(const FVector& GoalUnits)
 	if (!TroikaMotor.bHasMoveYawPoseParam)
 	{
 		++TroikaMotor.MoveReissues;
-		TroikaMotor.LastReissueYaw = static_cast<float>(FMath::TruncToInt(
-			FMath::RadiansToDegrees(FMath::Atan2(GoalUnits.Y, GoalUnits.X))) & 0xffff)
-			* TroikaMotorYawQuantum;
+		TroikaMotor.LastReissueYaw = static_cast<float>(FMath::TruncToInt(static_cast<float>(
+			FMath::RadiansToDegrees(FMath::Atan2(GoalUnits.Y, GoalUnits.X)))
+			* TroikaMotorYawQuantumInverse) & 0xffff) * TroikaMotorYawQuantum;
 		TroikaMotor.LastReissueSpeed = -1.0f;
 		return;
 	}
@@ -990,7 +992,8 @@ void FElysiumNpc::FUN_102e19e0(const FVector& GoalUnits)
 		FMath::RadiansToDegrees(FMath::Atan2(Average.Y, Average.X)));
 	++TroikaMotor.MoveReissues;
 	TroikaMotor.LastReissueYaw =
-		static_cast<float>(FMath::TruncToInt(Yaw) & 0xffff) * TroikaMotorYawQuantum;
+		static_cast<float>(FMath::TruncToInt(Yaw * TroikaMotorYawQuantumInverse) & 0xffff)
+			* TroikaMotorYawQuantum;
 	TroikaMotor.LastReissueSpeed = -1.0f;
 
 	// `UTIL_AngleDiff(yaw, myAngles.yaw)` — the wrapped difference family **Bosses** already

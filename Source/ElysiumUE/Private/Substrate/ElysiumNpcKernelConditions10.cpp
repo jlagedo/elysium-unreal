@@ -84,11 +84,12 @@ namespace
 	constexpr int32 GCond10MemoryLadderBits = 0x20;
 	constexpr int32 GCond10FlagsLadderBits = 0x1e;
 
-	// The two debug BYTES the block gates on, and the schedule-debug ConVar object. All three are
-	// answered through family Debug10's open `DebugConVar` store, keyed on the global's spelling.
+	// The two debug BYTES the block gates on — family Debug10's `DebugTraceByte`, keyed on the
+	// global's spelling — and the schedule-debug ConVar `ent_trace_conditions`, which ships "1".
 	constexpr TCHAR GCond10CvTraceRing[] = TEXT("DAT_10920534");
 	constexpr TCHAR GCond10CvTraceVerbose[] = TEXT("DAT_10920535");
-	constexpr TCHAR GCond10CvScheduleDebug[] = TEXT("DAT_10924a6c");
+	constexpr ElysiumNpcTunables::EConVar GCond10CvScheduleDebug =
+		ElysiumNpcTunables::EConVar::EntTraceConditions;          // DAT_10924a6c
 
 	// `GetLastSharedCondition()` (slot 409, `0x1027ee00`) — `return 0x77;`.
 	constexpr int32 GCond10LastSharedCondition = 0x77;
@@ -1077,10 +1078,9 @@ void FElysiumNpc::SheriffManTaskFail(int32 Reason)
 bool FElysiumNpc::ScheduleDebugConditionsEnabled() const
 {
 	// `1028d9fd`: `DAT_10924a6c`'s `vtable[4]()` must answer 0 (the object is a variable, not a
-	// command) and the int at `+0x2c` must be `> 0` — the same ConVar idiom story 29c recorded.
-	// **SEAM**: no console-variable registry here; answered through family Debug10's open store by
-	// the global's own spelling. The shipped default is 0.
-	return DebugConVar(GCond10CvScheduleDebug) > 0;
+	// command) and the int at `+0x2c` must be `> 0`. `ent_trace_conditions` ships "1", so the
+	// `CONDS:` block is on as shipped.
+	return ElysiumNpcTunables::ConVarInt(GCond10CvScheduleDebug) > 0;
 }
 
 FString FElysiumNpc::ConditionDebugList() const
@@ -1175,8 +1175,8 @@ FString FElysiumNpc::BuildConditionDebugString(const TCHAR* Message, int32 Inden
 	// which is spelled out four separate times in the listing (`1028daad`, `1028db07`, `1028db49`,
 	// `1028db5e`) against the SAME two bytes. `BL` is loaded once at `1028da99` and reloaded at
 	// `1028dbd0`, so a byte that changed mid-body would be read twice — nothing changes it.
-	const int32 TraceRing = DebugConVar(GCond10CvTraceRing);
-	const int32 TraceVerbose = DebugConVar(GCond10CvTraceVerbose);
+	const int32 TraceRing = DebugTraceByte(GCond10CvTraceRing);
+	const int32 TraceVerbose = DebugTraceByte(GCond10CvTraceVerbose);
 	const bool bBuildBlocks = TraceRing == 0 || TraceVerbose != 0;
 
 	FString MemoryLadder;

@@ -1140,7 +1140,7 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 	// rather than off the cached `m_flEnemyHeightDiff`.
 	if (Npc.IsRetailClass(TEXT("CNPC_VWerewolf")))
 	{
-		constexpr double WerewolfZoneHeightUnits = 40.0;   // `_DAT_10462950`
+		constexpr double WerewolfZoneHeightUnits = static_cast<double>(ElysiumNpcTunables::Forty);
 		constexpr uint32 WerewolfZoneMeleeSuppressBits = 0x4u | 0x100u;
 		const double HeightDeltaUnits =
 			FMath::Abs(Npc.Origin.Z - Enemy->Origin.Z) / ElysiumMove::U;

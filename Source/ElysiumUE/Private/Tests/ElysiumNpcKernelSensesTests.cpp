@@ -664,29 +664,40 @@ bool FElysiumNpcKernelSensesVisionTest::RunTest(const FString&)
 	TestTrue(TEXT("0x10270180: and a set flag is never re-tested"), Memory.bEnemyWentOccluded);
 
 	// `0x103cf5f0` — the werewolf's pursuit test. The flag bit skips it entirely; without the bit
-	// both ConVar gates must fail, and both are UNRECOVERED at 0.0, so they do.
+	// both ConVar gates must fail: `werewolf_pursuit_unseen_time` 3.0 s and
+	// `werewolf_pursuit_distance` 800 units, as shipped.
 	F.Guard->WerewolfHintFlags = 0x4u;
 	TestTrue(TEXT("0x103cf5f0: +0x66e8 bit 2 skips the whole test"),
 		F.Guard->WerewolfShouldPursueEnemy());
 	F.Guard->WerewolfHintFlags = 0u;
-	TestEqual(TEXT("0x103cf5f0: DAT_1093f8ec is an unrecovered ConVar answering 0.0"),
-		FElysiumNpc::WerewolfPursueElapsedLimitSeconds(), 0.f);
-	TestEqual(TEXT("0x103cf5f0: DAT_1093d574 likewise"),
-		FElysiumNpc::WerewolfPursuePlayerDistLimitUnits(), 0.f);
-	F.Guard->WerewolfUnhideStamp = 0.0;
-	Memory.ClosestPlayerDistanceCm = 500.f;
-	TestFalse(TEXT("0x103cf5f0: with both at 0.0 neither gate can pass, so the werewolf gives up"),
+	TestEqual(TEXT("0x103cf5f0: DAT_1093f8ec is werewolf_pursuit_unseen_time, shipped 3.0"),
+		FElysiumNpc::WerewolfPursueElapsedLimitSeconds(), 3.f);
+	TestEqual(TEXT("0x103cf5f0: DAT_1093d574 is werewolf_pursuit_distance, shipped 800"),
+		FElysiumNpc::WerewolfPursuePlayerDistLimitUnits(), 800.f);
+	const double PursueNow = F.Guard->World != nullptr ? F.Guard->World->NowSeconds() : 0.0;
+	F.Guard->WerewolfUnhideStamp = PursueNow - 10.0;
+	Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
+	TestFalse(TEXT("0x103cf5f0: 10 s since the unhide and the player past 800: the werewolf gives up"),
+		F.Guard->WerewolfShouldPursueEnemy());
+	Memory.ClosestPlayerDistanceCm = 500.f * ElysiumMove::U;
+	TestTrue(TEXT("0x103cf5f0: a player inside 800 units keeps it pursuing"),
+		F.Guard->WerewolfShouldPursueEnemy());
+	Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
+	F.Guard->WerewolfUnhideStamp = PursueNow;
+	TestTrue(TEXT("0x103cf5f0: and so does an unhide inside the last 3 s"),
 		F.Guard->WerewolfShouldPursueEnemy());
 
 	// `0x103dda10` — Yukie's melee exit. Slot 308 is a declared stub answering false, so the
-	// distance arm is the one this runtime reaches; the melee range is TroikaHelpers' unrecovered
-	// ConVar at 0.0, which makes `0.0 <= dist` true for every non-negative distance.
+	// distance arm is the one this runtime reaches; the melee range is
+	// `debug_melee_advance_combatmove_dist` 100, so the exit distance is 2 * 100 * 1.5 = 300.
 	TestFalse(TEXT("0x103dda10: slot 308 HasUsableRangedWeapon is still a stub"),
 		F.Guard->HasUsableRangedWeapon());
-	TestEqual(TEXT("0x103dda10: and the melee range ConVar is unrecovered at 0.0"),
-		FElysiumNpc::MeleeRangeUnits(), 0.f);
+	TestEqual(TEXT("0x103dda10: and the melee range ConVar ships 100"),
+		FElysiumNpc::MeleeRangeUnits(), 100.f);
+	F.Guard->ScheduleHost.EnemyDistUnits = 299.f;
+	TestFalse(TEXT("0x103dda10: 299 units stays in melee"), F.Guard->YukieShouldLeaveMelee());
 	F.Guard->ScheduleHost.EnemyDistUnits = 300.f;
-	TestTrue(TEXT("0x103dda10: so the distance arm leaves melee"),
+	TestTrue(TEXT("0x103dda10: 300 units leaves it - the compare is <="),
 		F.Guard->YukieShouldLeaveMelee());
 	F.Guard->ScheduleHost.EnemyDistUnits = -1.f;
 	TestFalse(TEXT("0x103dda10: and the compare really is 2*range*1.5 <= dist"),

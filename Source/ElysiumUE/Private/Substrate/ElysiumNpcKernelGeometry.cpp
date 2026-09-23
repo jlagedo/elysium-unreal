@@ -28,9 +28,9 @@ namespace
 	// delta subtracted from the bounds centre to get the point the blend starts at.
 	constexpr float GBodyTargetAnchorFraction = 0.25f;
 
-	// `_DAT_104454d0` = 0.5f, read by both of this family's bodies that need a half — `BodyTarget`'s
-	// plain midpoint arm and `StandingOnPlayer`'s half-diagonal.
-	constexpr float GRetailHalf = 0.5f;
+	// The pooled half, read by both of this family's bodies that need one — `BodyTarget`'s plain
+	// midpoint arm and `StandingOnPlayer`'s half-diagonal.
+	constexpr float GRetailHalf = ElysiumNpcTunables::Half;
 
 	// `BodyTarget`'s two noise draws, `RandomFloat(0, 0.5)` twice (`PUSH 0x3f000000; PUSH 0x0`). The
 	// arm adds BOTH, so the blend parameter spans 0..1 with a triangular distribution rather than
@@ -48,15 +48,15 @@ namespace
 	constexpr int32 GDebugEyeOffsetActivityA = 0x57;
 	constexpr int32 GDebugEyeOffsetActivityB = 8;
 
-	// `_DAT_104454c4` = 0.0f, the image's shared zero. `ResolveStandingOnHead` tests the XY delta
-	// against it for EXACT equality, which is what selects the four-diagonal arm.
-	constexpr float GGeometrySharedZero = 0.f;
+	// The image's shared zero. `ResolveStandingOnHead` tests the XY delta against it for EXACT
+	// equality, which is what selects the four-diagonal arm.
+	constexpr float GGeometrySharedZero = ElysiumNpcTunables::Zero;
 
-	// `_DAT_1049aea8` = +0.707f and `_DAT_1049aea4` = -0.707f, with the immediates `0x3f34fdf4` and
-	// `0xbf34fdf4` (the same two numbers) stored to the X slot. Not 1/sqrt(2) to full precision —
-	// retail's is the three-digit 0.707, and the vector it makes is 0.99985 long, not 1.
-	constexpr float GDiagonalPlus = 0.707f;
-	constexpr float GDiagonalMinus = -0.707f;
+	// The two cells, with the immediates `0x3f34fdf4` and `0xbf34fdf4` (the same two numbers) stored
+	// to the X slot. Not 1/sqrt(2) to full precision — retail's is the three-digit 0.707, and the
+	// vector it makes is 0.99985 long, not 1.
+	constexpr float GDiagonalPlus = ElysiumNpcTunables::StandOnHeadSpringPositive;
+	constexpr float GDiagonalMinus = ElysiumNpcTunables::StandOnHeadSpringNegative;
 
 	// `RandomFloat(-0.1, 0.1)` (`PUSH 0xbdcccccd; PUSH 0x3dcccccd`), the jitter added to the
 	// normalised away-direction before it is normalised a SECOND time.
@@ -67,13 +67,13 @@ namespace
 	constexpr float GStandingOnHeadLiftUnits = 0.1f;
 	constexpr float GStandingOnHeadSpeedUnits = 40.0f;
 
-	// `_DAT_10454110` = 5.0f seconds — the ceiling `m_flStandingOnHeadTimer` ramps to.
-	constexpr float GStandingOnHeadTimerCeiling = 5.0f;
+	// Seconds — the ceiling `m_flStandingOnHeadTimer` ramps to.
+	constexpr float GStandingOnHeadTimerCeiling = ElysiumNpcTunables::Five;
 
-	// `_DAT_104454c0` = 1.0f, read twice as a CLEAR trace fraction (`ResolveStandingOnHead`) and
-	// once as a one-second interval (`UpdateFakeHull`'s damage gate).
-	constexpr float GGeometryTraceClearFraction = 1.0f;
-	constexpr double GFakeHullPushIntervalSeconds = 1.0;
+	// The pooled 1.0f, read twice as a CLEAR trace fraction (`ResolveStandingOnHead`) and once as a
+	// one-second interval (`UpdateFakeHull`'s damage gate).
+	constexpr float GGeometryTraceClearFraction = ElysiumNpcTunables::One;
+	constexpr double GFakeHullPushIntervalSeconds = static_cast<double>(ElysiumNpcTunables::One);
 
 	// `0x202400b` — the trace mask both of `ResolveStandingOnHead`'s hull traces use, the same one
 	// family Motor records for `CheckOnGround`, `ValidateNavGoal` and `GetGroundpoint`.
@@ -787,9 +787,8 @@ int32 FElysiumNpc::FakeHullKnockbackActivity(int32 DirectionClass)
 
 int32 FElysiumNpc::FakeHullDebugCvar() const
 {
-	// SEAM for `DAT_1093f73c`. **Unrecovered**: past `.data`'s raw size, constructed by no corpus
-	// body. Answers 0, which closes the debug draw.
-	return 0;
+	// `DAT_1093f73c` `+0x2c`: `werewolf_show_debug`, shipped "0", which closes the debug draw.
+	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfShowDebug);
 }
 
 FElysiumEntity* FElysiumNpc::FakeHullPushTarget() const

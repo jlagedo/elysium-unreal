@@ -402,12 +402,14 @@ bool FElysiumNpcKernelBaseHelpersFaceAnimTest::RunTest(const FString&)
 	Pick = FElysiumNpc::FaceAnimLadder(-170.f, Any);
 	TestEqual(TEXT("and so does -170"), Pick.Activity, 0x10ff);
 
-	// Rung 2 reads `_DAT_104704b4`, which is UNRECOVERED and stands at 0.0 — so the rung fires for
-	// every delta at or below zero. The rung's SHAPE (a `<=` against a negative band edge) is
-	// exact; the literal is the one thing waiting.
-	Pick = FElysiumNpc::FaceAnimLadder(-10.f, Any);
-	TestEqual(TEXT("a negative delta inside 140 picks 0x10fd"), Pick.Activity, 0x10fd);
+	// Rung 2: at or below `_DAT_104704b4` = -40 -> 0x10fd, face anim 6. The edge is INCLUSIVE.
+	Pick = FElysiumNpc::FaceAnimLadder(-50.f, Any);
+	TestEqual(TEXT("a -50-degree delta picks 0x10fd"), Pick.Activity, 0x10fd);
 	TestEqual(TEXT("and records face anim 6"), Pick.FaceAnim, 6);
+	Pick = FElysiumNpc::FaceAnimLadder(-40.f, Any);
+	TestEqual(TEXT("and so does exactly -40"), Pick.Activity, 0x10fd);
+	Pick = FElysiumNpc::FaceAnimLadder(-10.f, Any);
+	TestEqual(TEXT("but a -10-degree delta falls through to the small rung"), Pick.Activity, 0x10f8);
 
 	// Rung 3: at or past 40 degrees (`_DAT_10462950`) -> 0x10fa, face anim 3.
 	Pick = FElysiumNpc::FaceAnimLadder(50.f, Any);
@@ -554,12 +556,15 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), AtUnits(150.0), true, true, Good, Bad),
 		EReason::None);
 	// The two band gates are NOT symmetric: good range is `<=` and bad range is `>=`. At 50 units
-	// the facing projection is exactly 1.0, so each bound set to 1.0 lands on its own boundary.
-	TestEqual(TEXT("a facing dot at exactly the good-range floor is OUTSIDE it"),
+	// the facing projection is `50 / (50 + _DAT_1046a51c)` — FLT_EPSILON keeps it a hair under 1.0.
+	TestEqual(TEXT("a facing dot at the good-range floor 1.0 is OUTSIDE it"),
 		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, 1.0f, Bad),
 		EReason::OutsideGoodRange);
-	TestEqual(TEXT("and one at exactly the bad-range ceiling is INSIDE it"),
+	TestNotEqual(TEXT("the epsilon keeps it below a bad-range ceiling of 1.0"),
 		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, Good, 1.0f),
+		EReason::InsideBadRange);
+	TestEqual(TEXT("and a ceiling just under it is reached — the bad range is `>=`"),
+		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, Good, 0.9999f),
 		EReason::InsideBadRange);
 
 	// The seams every entry point depends on, asked and refusing.

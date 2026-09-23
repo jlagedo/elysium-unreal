@@ -685,6 +685,15 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 		Leader->SelectScheduleMeleeCombat(0), 0x15b);
 	TestFalse(TEXT("the leader's 0x15b arm dispatches slot 601 too, so it leaves melee"),
 		Leader->bInMelee);
+	// `_DAT_104c3cd4` = 120 units: TOO_FAR_TO_ATTACK inside it still attacks, outside it closes.
+	Leader->bInMelee = true;
+	Leader->Cognition.Conditions.Reset();
+	Leader->Cognition.Conditions.Set(EElysiumNpcCond::TooFarToAttack);
+	Leader->ScheduleHost.EnemyDistUnits = 100.f;
+	TestEqual(TEXT("TOO_FAR_TO_ATTACK under the leader's 120-unit bound answers 0xdd"),
+		Leader->SelectScheduleMeleeCombat(0), 0xdd);
+	Leader->ScheduleHost.EnemyDistUnits = 150.f;
+	TestEqual(TEXT("and past it answers 0xcb"), Leader->SelectScheduleMeleeCombat(0), 0xcb);
 
 	// --- CNPC_VTzimisceRunner, `0x103c4430` -------------------------------------------------------
 	Runner->Cognition.Conditions.Reset();

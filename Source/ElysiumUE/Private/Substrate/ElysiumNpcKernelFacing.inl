@@ -78,15 +78,14 @@ TArray<FFacingTargetRequest> FacingTargetRequests;
 void MotorAddFacingTarget(const FFacingTargetRequest& Request);
 
 // The retail cvar the whole facing-target family is gated on (`0x10924f74`, read as
-// `!IsCommand() && m_nValue != 0` — `ConVar::GetBool()` inlined). Its NAME and its DEFAULT are
-// **unrecovered**: the pointer lives in uninitialised `.data` and no corpus function constructs it,
-// so the eight readers are all the evidence there is. **SEAM**, answering false.
+// `!IsCommand() && m_nValue != 0` — `ConVar::GetBool()` inlined): `debug_allow_move_facing`,
+// shipped "1".
 bool FacingTargetsEnabled() const;
 
 // The retail cvar `CAI_BaseNPCTroika::SetTurnActivity` ORs with `m_bAllowTurningAnims`
 // (`0x109247ec`, the same `ConVar::GetBool()` shape; also read by both `MaxYawSpeed` overrides).
-// Name and default **unrecovered** for the same reason. **SEAM**, answering false — which leaves
-// `m_bAllowTurningAnims` (+0x65f9) as the live gate, and that is an authored per-NPC key.
+// `debug_turning`, shipped "0" — which leaves `m_bAllowTurningAnims` (+0x65f9), an authored
+// per-NPC key, as the live gate.
 bool TurningAnimsEnabled() const;
 
 // --- The animation seam the turn ladder ends in -------------------------------------------------
