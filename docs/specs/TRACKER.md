@@ -138,8 +138,10 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   - *Review corrections (2026-09-23):* convert the claw-origin ConVars to centimetres at their
     consumer and count ConVar reader aliases as covered; both have regression coverage.
   - *Hand-offs:* 344 inline cells over 91 files stay as row 11's queue (`--report`). Found
-    pre-existing, not fixed: `gen_kernel_shape --check` fails on HEAD (slot 488 `DeathSound` has no
-    `SLOT_PORT_MAP` row since `607efd52`).
+    pre-existing: `kernel_shape --check` failed on HEAD. Fixed 2026-09-23 before story 5: the cause
+    was `83b8402b` hand-editing the generated `layout.md` (the two hull words) instead of the
+    `kernel_fields.tsv` overlay; the recovery now lives in the overlay, a `doc`-tier row may
+    annotate a datamap word, and the tables are regenerated.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
   no family types a program id or an inline constant by hand.

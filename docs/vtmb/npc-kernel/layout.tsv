@@ -653,7 +653,7 @@ CAI_BaseNPCTroika	0x155c	0x4	m_hProteanTransformOther	EHANDLE	FIELD_EHANDLE	1		C
 CAI_BaseNPCTroika	0x1560	0x4	m_flProteanTransformStartTime	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
 CAI_BaseNPCTroika	0x1564	0x4	m_flNextAttack	float	FIELD_TIME	1		CBaseCombatCharacter	datamap		
 CAI_BaseNPCTroika	0x1568	0x4	m_eHull	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap	16	7
-CAI_BaseNPCTroika	0x156c		m_eDefaultHull	int		1		CBaseCombatCharacter	walked	19	1
+CAI_BaseNPCTroika	0x156c		m_ePathingHull	int		1		CBaseCombatCharacter	walked	19	1
 CAI_BaseNPCTroika	0x1570	0x4	m_bloodColor	int	FIELD_INTEGER	1		CBaseCombatCharacter	datamap		
 CAI_BaseNPCTroika	0x1574	0x4	m_flFieldOfView	float	FIELD_FLOAT	1		CBaseCombatCharacter	datamap		
 CAI_BaseNPCTroika	0x1578	0xc	m_HackedGunPos	Vector	FIELD_VECTOR	1		CBaseCombatCharacter	datamap	1	0

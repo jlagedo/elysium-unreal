@@ -545,11 +545,15 @@ class Shape:
         for m in members:
             ev = evidence.get(m.off)
             source_type, note = m.source_type, ("" if m.width_source == "fieldType width" else m.width_source)
-            if not m.parent and source_type == "custom":
-                # the records say only "custom"; a reading names the type
+            if not m.parent:
+                # A reading may add to a datamap word: when the records say only "custom" it names
+                # the type; either way its evidence becomes the note, so a recovery about a
+                # datamap member lives in the overlay and not in a hand edit of this table.
                 typed = next((o for o in self.overlays(table, m.off) if o["name"] == m.name), None)
                 if typed:
-                    source_type, note = typed["type"], f"{typed['tier']}: {typed['evidence']}"
+                    if source_type == "custom":
+                        source_type = typed["type"]
+                    note = f"{typed['tier']}: {typed['evidence']}" if source_type != typed["type"]                         or note else typed["evidence"] if typed["tier"] == "doc" else f"{typed['tier']}: {typed['evidence']}"
             rows.append(Row(table, m.off, m.width, m.name, source_type,
                             dl.FIELD_TYPES.get(m.field_type, (m.field_type,))[0], m.count,
                             " ".join(f for f in m.flags if f != "SAVE") + (f" key={m.key}" if m.key else ""),
