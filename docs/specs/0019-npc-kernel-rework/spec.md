@@ -701,6 +701,12 @@ green, and `coverage.md` shows the change.
     `contra-brief`, `check-packet` — with `pipeline/tests/test_kernel_packet.py` on pinned walks;
     `check-packet --all` refuses a packet missing a `rule` row, a skeleton arm without a branch
     row or a call without an argument row, and is green on the thirteen.
+    *Settled after the landing (owner's ask, same day):* the 60 contradiction rows where the first
+    judge sided with the packet or could not decide got a second judge (Opus 5.5, three briefs):
+    35 packet, 19 checklist, 3 both wrong, 3 both right (a thunk versus its body); the 18 drilled
+    rows settled as "neither reading" got the same second judge: 14 upheld, 4 corrected; the 84
+    one-sided rows were filled in by the reader that had left them (one remains). The second
+    judge's tables sit under each packet's contra list. Cost: 4 Opus subagents, ~0.9M tokens.
   - *Pass I, implementation.* One family at a time per lane, two lanes in two worktrees, each
     family ported from its packet: every `rule` arm in retail order with its instruction address,
     one test per arm, the slot rows flipped to `hand:`, the generators re-run, build, the family

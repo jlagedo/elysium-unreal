@@ -413,7 +413,7 @@ def rows(section: str, kind: str) -> dict[str, list[str]]:
             in_block = False
         if in_block and line.startswith("|"):
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            m = re.match(r"`?(0x[0-9a-fA-F]{8})", cells[0])
+            m = re.match(r"[`\[]*(0x[0-9a-fA-F]{8})", cells[0])      # `0x…`, [0x…](#) and bare
             if m and not set(cells[0]) <= set("-: "):
                 out[m.group(1).lower()] = cells
     return out
@@ -705,7 +705,7 @@ def merge_row(kind, at, verdict, ra, rb, settled, ra_name, rb_name):
 
 
 def build_packet(fam: str, A: dict[str, str], B: dict[str, str], drills: dict[str, str], contra: str,
-                 readers: str, note: str = "") -> tuple[str, dict]:
+                 readers: str, note: str = "", contra2: str = "", neither2: str = "") -> tuple[str, dict]:
     v, cl, sk, skmd, w1 = verdicts(), checklist(), skeletons(fam), skeleton_sections(fam), wave1_corrections()
     settled = _settled(drills)
     ra_name, rb_name = "A", "B"
@@ -730,6 +730,27 @@ def build_packet(fam: str, A: dict[str, str], B: dict[str, str], drills: dict[st
                    f"`{vv}` | {'yes' if a in rule else 'no — ' + vv} |")
     out += ["", "## Packet versus checklist", "",
             contra.strip() if contra else "_Not yet produced (contra-brief → reader → `--contra`)._", ""]
+    if contra2:
+        mine = set(rows_all)
+        kept = [l for l in contra2.splitlines()
+                if (m := re.match(r"\|\s*`?0x([0-9a-fA-F]{8})", l)) and m.group(1).lower() in mine]
+        out += ["### Second judge on the rows above where the packet was right or undecided", "",
+                "| address | verdict (PACKET / CHECKLIST / BOTH WRONG) | the correct statement | listing lines |",
+                "|---|---|---|---|"] + kept + [""]
+    if neither2:
+        # A row's first cell holds the branch or call address; it belongs here when a skeleton
+        # of this family has that arm or call.
+        mine_rows = {x["at"].lower()[2:] for s in sk.values() for x in s["arms"] + s["calls"]}
+        kept = []
+        for l in neither2.splitlines():
+            if not l.startswith("|"):
+                continue
+            first = l.split("|")[1] if l.count("|") > 1 else ""
+            if any(a.lower() in mine_rows for a in re.findall(r"0x([0-9a-fA-F]{8})", first)):
+                kept.append(l)
+        if kept:
+            out += ["### Second judge on the drilled rows the first judge settled as neither reading", "",
+                    "| row | JUDGE RIGHT / JUDGE WRONG | corrected cells | listing lines |", "|---|---|---|---|"] + kept + [""]
     for a in rule:
         s = sk[a]
         row = cl.get(a, {})
@@ -787,7 +808,9 @@ def cmd_packet(a) -> int:
     A, B = read_sections(_expand(a.a)), read_sections(_expand(a.b))
     drills = {p: Path(p).read_text(encoding="utf-8") for p in _expand(a.drill or [])}
     contra = Path(a.contra).read_text(encoding="utf-8") if a.contra else ""
-    text, stats = build_packet(a.family, A, B, drills, contra, a.readers, a.note or "")
+    contra2 = "\n".join(Path(p).read_text(encoding="utf-8") for p in _expand(a.contra2 or []))
+    neither2 = "\n".join(Path(p).read_text(encoding="utf-8") for p in _expand(a.neither2 or []))
+    text, stats = build_packet(a.family, A, B, drills, contra, a.readers, a.note or "", contra2, neither2)
     out = Path(a.out) if a.out else families_dir() / f"{a.family}-READING.md"
     out.write_text(text, encoding="utf-8")
     print(f"{a.family}: {stats} → {out}")
@@ -940,6 +963,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--b", nargs="+", required=True, help="reader B walks (globs)")
     p.add_argument("--drill", nargs="*", help="judge outputs (globs)")
     p.add_argument("--contra", help="the packet-versus-checklist table")
+    p.add_argument("--contra2", nargs="*", help="second-judge tables over the contra rows (globs); rows kept by address")
+    p.add_argument("--neither2", nargs="*", help="second-judge tables over drilled rows settled as neither (globs)")
     p.add_argument("--readers", default="A=luna; B=Sol", help='short labels, "A=<name>; B=<name>"')
     p.add_argument("--note", help="a sentence on the readers and tiers, printed in the header")
     p.add_argument("--out")
