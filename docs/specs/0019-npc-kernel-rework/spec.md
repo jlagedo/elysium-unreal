@@ -707,6 +707,11 @@ green, and `coverage.md` shows the change.
     rows settled as "neither reading" got the same second judge: 14 upheld, 4 corrected; the 84
     one-sided rows were filled in by the reader that had left them (one remains). The second
     judge's tables sit under each packet's contra list. Cost: 4 Opus subagents, ~0.9M tokens.
+    The 38 rows where the packet or both were wrong are closed as recoveries, not decisions: each
+    owning verdict row's evidence in `kernel_verdicts.tsv` carries a `CORRECTED 0019/8 pass R`
+    clause with the settled statement and the listing lines (32 rows amended, some with two), the
+    checklist regenerated, `kernel_ledger --check` and `kernel_lists --check` green. Verdicts
+    unchanged.
   - *Pass I, implementation.* One family at a time per lane, two lanes in two worktrees, each
     family ported from its packet: every `rule` arm in retail order with its instruction address,
     one test per arm, the slot rows flipped to `hand:`, the generators re-run, build, the family

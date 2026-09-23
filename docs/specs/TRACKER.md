@@ -157,8 +157,9 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     - [x] The two readers on the skeleton brief, the diff, the drills, the packets, the contra lists
       (`kernel_packet.py`, 231 codex runs + 10 Opus subagents, 58 min wall).
     - [x] Second judge (Opus) on the 60 open contradictions and the 18 "neither" drills; the 84
-      one-sided rows filled in by the other reader. Owner reads the 35 + 3 rows where the packet
-      corrects the checklist.
+      one-sided rows filled in by the other reader. The 38 rows where the packet corrects the
+      checklist are written back as `CORRECTED` clauses on the verdict evidence (32 rows), the
+      checklist regenerated, both ledger checks green.
   - [ ] **Pass I, lane A** (the interpreter, in order; gate then full read then commit per family)
     - [ ] Conditions19 (20/23)
     - [ ] RunAi19 (17/34)
