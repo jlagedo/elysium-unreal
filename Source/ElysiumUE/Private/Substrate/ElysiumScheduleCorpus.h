@@ -167,35 +167,6 @@ public:
 	/** The units, in the order they were loaded. */
 	const TArray<TUniquePtr<FElysiumScheduleSpaceUnit>>& Units() const { return Order; }
 
-	/**
-	 * Supply the BODY of a registered schedule name that ships with no text, and answer its global
-	 * id. The only door through which a program this runtime composes itself reaches the manager.
-	 *
-	 * **Stated divergence, and the only one of its kind left.** The base space registers 68 schedule
-	 * names for 64 texts, and the four names with no text of their own are `NONE`, `TARGET_FACE`,
-	 * `TARGET_CHASE` and `AISCRIPT` -- which is exactly where retail's `aiscripted_schedule` director
-	 * lands (the survey's "internal schedule IDs 9 or 19"). `TASK_GET_PATH_TO_GOAL`, the task that
-	 * family turns on, is registered as an identity and named by no shipped text either. So there is
-	 * nothing in the corpus to load for them, and the port composes the two bodies itself.
-	 *
-	 * `Program.Name` must already be in the schedule namespace: this door supplies a BODY, it does
-	 * not invent an identity, and the id it answers is the one the owning class registered. A name
-	 * the corpus never registered is refused with `ElysiumScheduleId::None`.
-	 *
-	 * Nothing else may use it. A program that has a retail text is loaded from that text.
-	 */
-	int32 AddPortProgram(FElysiumScheduleProgram&& Program);
-
-	/**
-	 * Register a supplier of port programs, to be run at the end of every load.
-	 *
-	 * A body composed in C++ has to arrive AFTER the texts, because it needs the task namespace to
-	 * name its steps and the schedule namespace to find its id -- and it has to arrive on every
-	 * load, because a reload rebuilds the manager. Static init is too early for both, so a provider
-	 * is registered at static init and run here.
-	 */
-	static void AddPortProgramProvider(TFunction<void(FElysiumScheduleCorpus&)> Provider);
-
 	/** Every constant in `ElysiumScheduleNumbers.h`, against the corpus's own registration table.
 	 *
 	 *  Appends one line per disagreement to `OutErrors` naming the unit, the name and BOTH numbers.

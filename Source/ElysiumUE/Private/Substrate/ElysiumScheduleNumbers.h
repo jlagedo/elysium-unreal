@@ -44,6 +44,7 @@ namespace ElysiumSched
 	 *  would translate `0x01` to -1 and insert nothing. */
 	inline constexpr int32 NONE = 0x00;
 	inline constexpr int32 IDLE_STAND = 0x01;
+	inline constexpr int32 IDLE_WALK = 0x02;
 	inline constexpr int32 TARGET_FACE = 0x12;
 	inline constexpr int32 TARGET_CHASE = 0x13;
 	inline constexpr int32 ALERT_SMALL_FLINCH = 0x07;

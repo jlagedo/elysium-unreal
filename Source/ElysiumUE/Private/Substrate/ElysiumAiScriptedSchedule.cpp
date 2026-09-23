@@ -46,9 +46,7 @@ bool ElysiumAiScriptedSchedule::IsFollowPath(int32 Authored)
 
 bool ElysiumAiScriptedSchedule::IsRunVariant(int32 AuthoredMode)
 {
-	// The CHOSEN reading, stated once at the declaration: within each pair the lower authored value
-	// is the unhurried variant and the higher one the urgent variant. That is 1 walk / 2 run and
-	// 4 walk / 5 run — not a parity rule, which would put mode 5 on a stroll.
+	// 0x101a98c0: lower mode in each pair is ACT_WALK, upper is ACT_RUN.
 	return static_cast<EMode>(AuthoredMode) == EMode::MoveToGoalB
 		|| static_cast<EMode>(AuthoredMode) == EMode::FollowPathB;
 }
@@ -83,16 +81,9 @@ void ElysiumAiScriptedSchedule::BuildRoute(FElysiumEntityWorld& World, const FEl
 	TArray<FVector>& OutRoute)
 {
 	OutRoute.Reset();
-	TSet<int32> Visited;
 	const FElysiumEntity* Node = &Goal;
 	for (int32 Guard = 0; Guard < MaxRouteNodes && Node != nullptr; ++Guard)
 	{
-		bool bAlreadySeen = false;
-		Visited.Add(Node->Handle.Index, &bAlreadySeen);
-		if (bAlreadySeen)
-		{
-			break;   // an authored cycle ends the route rather than walking it forever
-		}
 		OutRoute.Add(Node->Origin);
 		if (Node->Target.IsEmpty())
 		{
@@ -102,147 +93,13 @@ void ElysiumAiScriptedSchedule::BuildRoute(FElysiumEntityWorld& World, const FEl
 	}
 }
 
-// --- The two programs, and why they are the last two composed in C++ ------------------------------
-//
-// Every other program this runtime ran used to be typed by hand and is now VtMB's own text. These
-// two are not, and the reason is a recovered fact rather than an omission: the base space registers
-// 68 schedule names for 64 texts, and the four names that ship with no text of their own are `NONE`,
-// `TARGET_FACE`, `TARGET_CHASE` (0x13) and `AISCRIPT` (0x2e) -- which is exactly where the survey
-// puts this director ("modes 1 and 2 call variants of scheduled move-to-goal-entity ... internal
-// schedule IDs 9 or 19", and 19 is 0x13). `TASK_GET_PATH_TO_GOAL`, the task the family turns on, is
-// registered as an identity and named by no shipped text either.
-//
-// So the port supplies the BODY of two registered names, through
-// `FElysiumScheduleCorpus::AddPortProgram`, and the ids stay retail's own.
-//
-// CHOSEN, NOT RECOVERED: which name takes which mode. Nothing decoded says. Move-to-goal takes
-// `TARGET_CHASE` because chasing a target entity is what the mode does and 19 is the number the
-// survey names; follow-path takes `AISCRIPT`, the family's generic name.
-
-namespace
-{
-	int32 AiScriptedTaskId(const TCHAR* Name)
-	{
-		return FElysiumScheduleCorpus::Get().Namespace(EElysiumIdCategory::Task).Find(Name);
-	}
-
-	FElysiumScheduleStep AiScriptedStep(const TCHAR* TaskName, float Data = 0.f)
-	{
-		FElysiumScheduleStep Out;
-		Out.TaskId = AiScriptedTaskId(TaskName);
-		Out.Data = Data;
-		return Out;
-	}
-
-	/** The two programs' global ids, composed on the first ask. */
-	struct FAiScriptedPrograms
-	{
-		int32 MoveToGoal = ElysiumScheduleId::None;
-		int32 FollowPath = ElysiumScheduleId::None;
-	};
-
-	FAiScriptedPrograms& AiScriptedProgramIds()
-	{
-		static FAiScriptedPrograms Ids;
-		return Ids;
-	}
-
-	void ComposeAiScriptedPrograms(FElysiumScheduleCorpus& Corpus)
-	{
-		{
-			FAiScriptedPrograms& Out = AiScriptedProgramIds();
-
-			// --- Move to the goal entity (modes 1 and 2) ------------------------------------------
-			// CHOSEN, NOT RECOVERED (contents). The survey names the family — "modes 1 and 2 call
-			// variants of scheduled move-to-goal-entity" — and decodes no task list for either
-			// variant. The program is composed from the recovered vocabulary only: cancel whatever
-			// the NPC was doing, issue the route's one leg, hold until the body arrives or gives up.
-			// The gait is NOT a task: `TASK_RUN_PATH` states a locomotion for a whole program, and
-			// this family's locomotion is the pushed ORDER's (the 1-vs-2 variant), so the path task
-			// places it.
-			//
-			// The interrupt mask is EMPTY, and that is the decision this family turns on rather than
-			// an unfilled default. `aiscripted_schedule` is an authored director: the recovered
-			// entity "pushes an AI policy and goal", and a program that a fresh stimulus could abort
-			// would make the push advisory. The starvation this costs is bounded — the program ends
-			// on arrival or on the first refused leg and hands the NPC straight back to ordinary
-			// selection, at which point the enemy transaction's interrupt gate opens again.
-			{
-				FElysiumScheduleProgram Program;
-				Program.Name = TEXT("TARGET_CHASE");
-				Program.Tasks = {
-					AiScriptedStep(TEXT("TASK_STOP_MOVING")),
-					AiScriptedStep(TEXT("TASK_GET_PATH_TO_GOAL")),
-					AiScriptedStep(TEXT("TASK_WAIT_FOR_MOVEMENT")),
-				};
-				Out.MoveToGoal = Corpus.AddPortProgram(MoveTemp(Program));
-			}
-
-			// --- Follow the goal's path (modes 4 and 5) ------------------------------------------
-			// Same composition, plus the leg loop: `TASK_SET_SCHEDULE` back to this program is the
-			// kernel's own in-place transfer, and `TASK_GET_PATH_TO_GOAL` fails by name once the
-			// route is exhausted, which ends the program and returns the NPC to selection. For every
-			// row the corpus authors the route has exactly one leg, so the loop runs once and stops.
-			//
-			// The transfer's operand is the class-LOCAL number, exactly as a loaded text stores it:
-			// a global id does not survive the float the data word is (24 bits of mantissa against a
-			// number above 1e9), which is why every schedule operand in this runtime is local.
-			{
-				FElysiumScheduleProgram Program;
-				Program.Name = TEXT("AISCRIPT");
-				Program.Tasks = {
-					AiScriptedStep(TEXT("TASK_STOP_MOVING")),
-					AiScriptedStep(TEXT("TASK_GET_PATH_TO_GOAL")),
-					AiScriptedStep(TEXT("TASK_WAIT_FOR_MOVEMENT")),
-					AiScriptedStep(TEXT("TASK_SET_SCHEDULE"),
-						static_cast<float>(ElysiumSched::AISCRIPT)),
-				};
-				Out.FollowPath = Corpus.AddPortProgram(MoveTemp(Program));
-			}
-		}
-	}
-
-	/** Registered at static init; run at the end of every corpus load. */
-	struct FAiScriptedProgramRegistrar
-	{
-		FAiScriptedProgramRegistrar()
-		{
-			FElysiumScheduleCorpus::AddPortProgramProvider(&ComposeAiScriptedPrograms);
-		}
-	};
-	const FAiScriptedProgramRegistrar GAiScriptedProgramRegistrar;
-
-	const FAiScriptedPrograms& AiScriptedPrograms()
-	{
-		FElysiumScheduleCorpus::Get().EnsureLoaded();
-		return AiScriptedProgramIds();
-	}
-}
-
-bool ElysiumAiScriptedSchedule::IsScriptedProgram(int32 GlobalId)
-{
-	return ElysiumScheduleId::IsSet(GlobalId)
-		&& (GlobalId == AiScriptedPrograms().MoveToGoal
-			|| GlobalId == AiScriptedPrograms().FollowPath);
-}
-
+// 0x101a98c0 passes base IDLE_WALK (2) to both ScheduledMoveToGoalEntity and
+// ScheduledFollowPath. The 9/19 arguments are ACT_WALK/ACT_RUN, never program IDs.
 int32 ElysiumAiScriptedSchedule::ProgramFor(int32 AuthoredMode)
 {
-	// Touching the pair is what composes their bodies, on the first ask and once.
-	const FAiScriptedPrograms& Composed = AiScriptedPrograms();
-	if (IsMoveToGoal(AuthoredMode))
-	{
-		return Composed.MoveToGoal != ElysiumScheduleId::None ? ElysiumSched::TARGET_CHASE
-			: ElysiumScheduleId::None;
-	}
-	if (IsFollowPath(AuthoredMode))
-	{
-		return Composed.FollowPath != ElysiumScheduleId::None ? ElysiumSched::AISCRIPT
-			: ElysiumScheduleId::None;
-	}
-	return ElysiumScheduleId::None;
+	return IsMoveToGoal(AuthoredMode) || IsFollowPath(AuthoredMode)
+		? ElysiumSched::IDLE_WALK : ElysiumScheduleId::None;
 }
-
 // --- FElysiumAiScriptedSchedule — the entity ---
 
 // A point entity that carries five keyvalues and one input. It derives from the base rather than

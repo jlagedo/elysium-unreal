@@ -283,11 +283,11 @@ bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 		ElysiumAiScriptedSchedule::IsMoveToGoal(3) || ElysiumAiScriptedSchedule::IsFollowPath(3));
 
 	TestEqual(TEXT("the move variants share one registered program"),
-		ElysiumAiScriptedSchedule::ProgramFor(1), ElysiumSched::TARGET_CHASE);
+		ElysiumAiScriptedSchedule::ProgramFor(1), ElysiumSched::IDLE_WALK);
 	TestEqual(TEXT("...both of them"),
-		ElysiumAiScriptedSchedule::ProgramFor(2), ElysiumSched::TARGET_CHASE);
+		ElysiumAiScriptedSchedule::ProgramFor(2), ElysiumSched::IDLE_WALK);
 	TestEqual(TEXT("the follow variants share the other"),
-		ElysiumAiScriptedSchedule::ProgramFor(5), ElysiumSched::AISCRIPT);
+		ElysiumAiScriptedSchedule::ProgramFor(5), ElysiumSched::IDLE_WALK);
 	TestEqual(TEXT("mode 3 names no program"),
 		ElysiumAiScriptedSchedule::ProgramFor(3), ElysiumScheduleId::None);
 
@@ -298,36 +298,6 @@ bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 	TestFalse(TEXT("CHOSEN: mode 4 walks"), ElysiumAiScriptedSchedule::IsRunVariant(4));
 	TestTrue(TEXT("CHOSEN: mode 5 runs"), ElysiumAiScriptedSchedule::IsRunVariant(5));
 
-	// Both programs are registered into the SHARED kernel registry, and both are reachable by name.
-	for (const EId Program : { ElysiumSched::TARGET_CHASE, ElysiumSched::AISCRIPT })
-	{
-		const int32 GlobalId = ElysiumScheduleGlobalId(Program);
-		TestNotNull(FString::Printf(TEXT("%s is loaded"), ElysiumScheduleName(GlobalId)),
-			ElysiumScheduleFor(GlobalId));
-		TestTrue(TEXT("...and is recognised as a scripted program"),
-			ElysiumAiScriptedSchedule::IsScriptedProgram(GlobalId));
-		const FElysiumScheduleProgram* ByName = FElysiumScheduleCorpus::Get().Manager().FindByName(
-			ElysiumScheduleName(GlobalId));
-		if (TestNotNull(TEXT("...and resolves from its own name"), ByName))
-		{
-			TestEqual(TEXT("...to itself"), ByName->GlobalId, GlobalId);
-		}
-	}
-	TestFalse(TEXT("an ordinary combat program is not a scripted one"),
-		ElysiumAiScriptedSchedule::IsScriptedProgram(
-			ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_CHASE_ENEMY)));
-
-	// The scripted programs declare NO interrupts, and that is the family's decision rather than an
-	// unfilled default: an authored director is not re-decided by ordinary stimulus.
-	for (const EId Program : { ElysiumSched::TARGET_CHASE, ElysiumSched::AISCRIPT })
-	{
-		if (const FElysiumScheduleProgram* Schedule =
-			ElysiumScheduleFor(ElysiumScheduleGlobalId(Program)))
-		{
-			TestTrue(TEXT("a scripted director's program admits no interrupts"),
-				Schedule->Interrupts.IsEmpty());
-		}
-	}
 	return true;
 }
 
@@ -365,7 +335,6 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		TestTrue(TEXT("forcestate 2 put the mind in ALERT, not in a scripted hold"),
 			F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 
-		F.Step(0.1);
 		FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Guard);
 		if (!TestNotNull(TEXT("the directed NPC owns a motor"), Motor))
 		{
@@ -376,6 +345,9 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 			Motor->RequestedFeet.Equals(GGoalOrigin));
 		TestEqual(TEXT("...at the running gait mode 2 chose"),
 			Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::RunSpeed);
+		F.Step(0.1);
+		TestEqual(TEXT("Troika's translated program then selects its patrol gait"),
+			Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::WalkSpeed);
 
 		// Arrival ends the program, which is what releases the claim.
 		Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
@@ -421,7 +393,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		TestEqual(TEXT("a follow-path mode starts the follow-path program"),
-			F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::AISCRIPT));
+			F.Guard->Schedule.Current, F.Guard->ResolveScheduleId(F.Guard->TranslateSchedule(ElysiumSched::IDLE_WALK)));
 		F.Step(0.1);
 		if (FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Guard))
 		{
@@ -432,14 +404,9 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		}
 		F.Step(0.2);
 		F.Step(0.3);
-		// The exhausted leg fails on one pass and routes on the next (story 25): base `FAIL` —
-		// SET_ACTIVITY ACT_IDLE (a one-second watchdog on this headless body), WAIT 1, then its PVS
-		// hold — before the order ends.
-		F.Step(0.4);
-		TestEqual(TEXT("an exhausted route fails into FAIL"), F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
-		F.Step(1.4);
-		F.Step(2.4);
-		TestTrue(TEXT("an exhausted route ends the follow-path program once FAIL completes"),
+		// Sample the order, not the later autonomous program's TASK_FAILED bit: the latter may
+		// already have attempted a stance on this deliberately headless fixture.
+		TestTrue(TEXT("an exhausted route ends the corpus program"),
 			!F.Guard->ScriptedScheduleOrder.IsSet());
 	}
 	return true;
@@ -487,9 +454,9 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 		F.Guard->Cognition.Conditions.Has(ECond::NewEnemy));
 	TestEqual(TEXT("NEW_ENEMY is retail's own 0x54"), static_cast<int32>(ECond::NewEnemy), 0x54);
 
-	// "copies its target position".
-	TestTrue(TEXT("the goal's position is copied onto the NPC"),
-		F.Guard->SavePosition.Equals(F.Player->Origin));
+	const auto* Memory = F.Guard->EnemyMemory.Find(F.Player->Handle);
+	TestTrue(TEXT("slot 544 stores the goal in enemy memory"),
+		Memory != nullptr && Memory->LastPosition.Equals(F.Player->Origin));
 
 	// `forcestate 3` is COMBAT, and mode 3 supplied the enemy that state needs.
 	TestTrue(TEXT("forcestate 3 put the mind in combat"),
@@ -592,7 +559,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		F.FireStartSchedule();
 		F.Step(0.1);
 		F.Step(0.2);   // the failing pass, then the routing pass (story 25)
-		TestEqual(TEXT("a refused route fails into FAIL"), F.Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
+		TestFalse(TEXT("a refused route releases the directed order"), F.Guard->ScriptedScheduleOrder.IsSet());
 		F.Step(1.2);
 		F.Step(2.2);
 		TestTrue(TEXT("a refused route ends the order once FAIL has run out"),

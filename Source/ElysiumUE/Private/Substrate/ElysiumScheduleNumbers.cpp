@@ -8,6 +8,7 @@ namespace
 	const FElysiumScheduleNumberRow GCheckedRows[] = {
 		{ TEXT("cai_basenpc"), TEXT("NONE"), ElysiumSched::NONE },
 		{ TEXT("cai_basenpc"), TEXT("IDLE_STAND"), ElysiumSched::IDLE_STAND },
+		{ TEXT("cai_basenpc"), TEXT("IDLE_WALK"), ElysiumSched::IDLE_WALK },
 		{ TEXT("cai_basenpc"), TEXT("TARGET_FACE"), ElysiumSched::TARGET_FACE },
 		{ TEXT("cai_basenpc"), TEXT("TARGET_CHASE"), ElysiumSched::TARGET_CHASE },
 		{ TEXT("cai_basenpc"), TEXT("ALERT_SMALL_FLINCH"), ElysiumSched::ALERT_SMALL_FLINCH },

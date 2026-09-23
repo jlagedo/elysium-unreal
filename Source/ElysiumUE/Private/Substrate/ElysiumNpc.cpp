@@ -368,6 +368,7 @@ void FElysiumNpc::OnKilled()
 	//    which is right and is also the only way: the mind is already dead, and a dead mind selects
 	//    nothing.
 	bDeathHandoffDone = false;
+	bDeathCommitted = false;
 	if (bStealthDeathCommitted)
 	{
 		// The paired death already supplied its terminal pose. The existing corpse handoff
@@ -1162,6 +1163,13 @@ FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
 		{
 			return Npc.PlayDeathActivity(Activity);
 		}
+		virtual void DeathSound() override { Npc.DeathSound(); }
+		virtual void BeginDying() override { Npc.BeginDying(); }
+		virtual bool IsDeathPerformanceFinished() const override
+		{
+			return Npc.IsDeathPerformanceFinished();
+		}
+		virtual void CommitDeath() override { Npc.CommitDeath(); }
 		virtual void TaskFail(int32 Reason) override { Npc.TaskFail(Reason); }
 		virtual int32 TaskFailureReason() const override { return Npc.TaskFailureReason(); }
 		virtual void TaskStarting() override { Npc.TaskStarting(); }
@@ -1169,11 +1177,17 @@ FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
 	};
 	FDeathClipRunner DeathRunner(*this);
 	if (Schedule.IsRunning()
-		&& ElysiumSchedule::Tick(Schedule, DeathRunner, Now, &Cognition.Conditions))
+		&& ElysiumSchedule::Tick(Schedule, DeathRunner, Now, &Cognition.Conditions)
+		&& !bDeathCommitted)
 	{
 		NextThink = static_cast<float>(Now + ElysiumNpcThink::DeadProgramPollSeconds);
 		return EDeadThink::Running;
 	}
+	// `bDeathCommitted` is the second half of that test because retail's `DIE` program NEVER ENDS.
+	// `TASK_DIE` holds forever: its Troika arm (`0x102abb90`) calls `Die` and returns without
+	// completing, and what stops the NPC thinking is `CreateCorpse` (`0x1032c0e0`) taking the entity
+	// out of the world -- a body this runtime has not built. So the commit stands in for the removal,
+	// and the program is torn down here rather than by finishing.
 	ClearSchedule();
 	// The solid-body policy, re-asserted on EVERY terminal pass rather than once with the handoff.
 	// Anything that hands a corpse's body back un-freezes it and re-arms this think — the feed
@@ -2412,7 +2426,60 @@ float FElysiumNpc::PlayDeathActivity(const FString& Activity)
 	// A refusal is an ordinary negative the resolver's own record already names: no body, no
 	// embodiment, a vocabulary carrying no such activity, or a choreographed scene that outranks the
 	// Reaction band and keeps the body. The ladder simply tries its next rung.
-	return PlayReactionActivity(Request, &Seconds) ? FMath::Max(0.f, Seconds) : -1.f;
+	if (!PlayReactionActivity(Request, &Seconds))
+	{
+		return -1.f;
+	}
+	Seconds = FMath::Max(0.f, Seconds);
+	// `TASK_DIE`'s gate reads this. A death clip and the task that waits it out are authored in
+	// DIFFERENT programs -- the Discipline death schedules play the clip, base `DIE` waits -- so the
+	// end time lives on the NPC rather than in either program's task state.
+	DeathPerformanceEndsAt = (World != nullptr ? World->NowSeconds() : 0.0)
+		+ static_cast<double>(Seconds);
+	return Seconds;
+}
+
+// `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal, write `m_lifeState = 1`.
+void FElysiumNpc::BeginDying()
+{
+	// The navigator reset is the port's stop -- `0x102ee270` clears the goal and the path, which is
+	// what `StopMoving` already does here. `m_lifeState` has no field in this runtime: the mind's
+	// dead state carries it, and `OnKilled` set that before the program ever started.
+	StopMoving();
+	Mind.RecordExternal(TEXT("TASK_DIE: dying, waiting out the death performance"));
+}
+
+// `TASK_DIE`'s Troika gate (`0x102abb90`):
+//   (IsActivityFinished() && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE
+//
+// The second arm decides the ordinary case. Base `DIE` names NO activity task -- retail's only
+// death poses come from `BecomeClientRagdoll`'s `ACT_DIERAGDOLL` seed, from
+// `TASK_PLAY_DEATH_SEQUENCE` in the named Discipline schedules, and from Troika's interesting-place
+// death activity (`+0x6308`) -- so an NPC that reaches this task with nothing playing is idle and
+// commits on its first think, exactly as retail's does.
+bool FElysiumNpc::IsDeathPerformanceFinished() const
+{
+	// UNPORTED, and named rather than approximated: `IsActivityFinished` (slot 251, `0x10272900`) and
+	// `m_flCycle` are sequence-level state this runtime does not mirror, so the first arm of retail's
+	// gate has no input here. What stands in is the one death performance this port CAN see -- the
+	// clip `PlayDeathActivity` started -- which is the same set of producers retail's first arm is
+	// waiting on. When none is running, both retail and this answer "finished" immediately.
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	return Now >= DeathPerformanceEndsAt;
+}
+
+// `TASK_DIE`'s commit. Retail: target the NPC itself, write `m_lifeState` 1 -> 0, and call
+// `CBaseCombatCharacter::Die` (`0x103392c0`), which re-enters `Event_Killed` -- and it is that
+// SECOND `Event_Killed` whose `CreateCorpse` (`0x1032c0e0`) makes the corpse and takes the entity
+// out of the world.
+//
+// This runtime has the handoff half of that and none of the entity half, so the handoff runs here
+// and `bDeathCommitted` stands in for the removal. The task itself still does not complete, because
+// retail's does not.
+void FElysiumNpc::CommitDeath()
+{
+	bDeathCommitted = true;
+	CompleteDeathHandoff();
 }
 
 float FElysiumNpc::RandomSeconds(float Max)
@@ -2610,22 +2677,15 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		// injects native condition 0x54". The assignment goes through the ordinary `SetEnemy`
 		// transaction rather than writing the handle, so the last-enemy transfer, the LOS-episode
 		// reset and everything else an acquisition means all happen exactly once and in one place.
-		const FElysiumEntity* Goal = World ? World->Resolve(Order.Goal) : nullptr;
+		FElysiumEntity* Goal = World ? World->Resolve(Order.Goal) : nullptr;
 		ElysiumNpcEnemy::SetEnemy(*this, Order.Goal);
 		if (Goal != nullptr)
 		{
-			// "copies its target position". CHOSEN, NOT RECOVERED — WHICH slot. The recovered
-			// sentence names a target position and this chain carries exactly one recovered position
-			// member, `m_vSavePosition` (+0x5dd0), which is also what the retreat and cover tasks
-			// read and what the combat selector stamps with an enemy origin for the same purpose.
-			SavePosition = Goal->Origin;
+			UpdateEnemyMemory(Goal, Goal->Origin, nullptr); // 0x101a99d0, slot 544
 		}
 		// The injected condition, by its recovered number: `NEW_ENEMY` is 0x54.
 		Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
-		// The running program was chosen by an NPC that did not have this enemy. It ends here rather
-		// than finishing on behalf of a decision the director has just overruled.
-		ClearSchedule();
-		ReleaseScheduleBody(TEXT("aiscripted_schedule assigned an enemy"));
+		// No schedule replacement: the standing program decides whether NEW_ENEMY interrupts it.
 		RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode 3: enemy := %s"),
 			World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
 		return true;
@@ -2661,9 +2721,19 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		ScriptedScheduleOrder.Reset();
 		return false;
 	}
-	if (!ElysiumSchedule::Start(Schedule, Program, *this))
+	ScheduleHost.IdealScheduleRetail = ResolveScheduleId(Program); // 0x10280de0, before slot 440
+	if (!ElysiumSchedule::Start(Schedule, TranslateSchedule(Program), *this))
 	{
 		EndScriptedSchedule(TEXT("scripted program would not start"));
+		return false;
+	}
+	ScriptedScheduleOrder.Program = Schedule.Current;
+	ScheduleHost.GoalEnt = Order.Goal; // 0x102800c0 / 0x102801e0, after the schedule install
+	// The director builds the goal immediately. The text only selects a movement activity and
+	// waits; neither a synthetic GET_PATH_TO_GOAL nor a SET_SCHEDULE loop belongs to it.
+	if (!GetPathToScriptedGoal())
+	{
+		TaskFail(0x0c);
 		return false;
 	}
 	RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode %d (%s, %s) goal %s"),
@@ -2682,8 +2752,9 @@ void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
 	{
 		return;
 	}
+	const int32 PushedProgram = ScriptedScheduleOrder.Program;
 	ScriptedScheduleOrder.Reset();
-	if (ElysiumAiScriptedSchedule::IsScriptedProgram(Schedule.Current))
+	if (PushedProgram != 0 && Schedule.Current == PushedProgram)
 	{
 		// The program and the order are one thing. A scripted program left running with no order
 		// behind it would fail its next leg by name for a reason no reader could act on.
@@ -2717,11 +2788,32 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 			LexToString(Mind.Owner())));
 		return false;
 	}
-	const FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
+	FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
 	const EElysiumNpcGaitKind RouteGait = ScriptedScheduleOrder.bRun
 		? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
+	// 0x102800c0 authors 128; 0x102801e0 authors -1 (keep the current tolerance, or hull
+	// width if unset). Slot 563 gets the goal and tolerance before the navigator receives them.
+	float ToleranceCm = 128.f * ElysiumMove::U;
+	if (ElysiumAiScriptedSchedule::IsFollowPath(ScriptedScheduleOrder.Mode))
+	{
+		FVector Mins, Maxs;
+		RetailHullExtents(HullKind, EElysiumHullExtents::Full, Mins, Maxs);
+		ToleranceCm = ScheduleHost.GoalToleranceCm > 0.f ? ScheduleHost.GoalToleranceCm
+			: static_cast<float>(Maxs.Y - Mins.Y) * ElysiumMove::U;
+	}
+	float UnusedTolerance = ToleranceCm;
+	TranslateEnemyChasePositionSpecies(World ? World->Resolve(ScriptedScheduleOrder.Goal) : nullptr,
+		Destination, ToleranceCm, UnusedTolerance);
+	ScheduleHost.GoalToleranceCm = ToleranceCm;
+	ScheduleHost.NavigationActivity = ScriptedScheduleOrder.bRun ? 0x13 : 9;
+	if (GetMoveType() == 5 || GetMoveType() == 6)
+	{
+		ScheduleHost.NavigationActivity = 0x22; // authored ACT_FLY; 0018/12 owns the flying mover
+		RecordScheduleEvent(TEXT("aiscripted_schedule ACT_FLY: the flying mover is not built"));
+		return false;
+	}
 	MoveGoal = Destination;
-	bMoveIssued = Motor->MoveTo(Destination, ElysiumNpcGait::ScriptAcceptanceCm,
+	bMoveIssued = Motor->MoveTo(Destination, ToleranceCm,
 		ElysiumNpcGait::TravelSpeed(Motor, RouteGait), /*bAllowPartialPath=*/false, RouteGait);
 	if (!bMoveIssued)
 	{
@@ -3072,6 +3164,88 @@ void FElysiumNpc::RunPath()
 	}
 }
 
+void FElysiumNpc::RunPatrolPathTask()
+{
+	// TASK_PATROL_PATH 0x105, 0x102a594d -> 0x102a595d -> 0x102a5904. Translate
+	// ACT_WALK_PATROL, probe its sequence, fall back to translated ACT_WALK; assign the
+	// navigator activity, forget INCOVER, complete. The task never reads its operand.
+	int32 WeaponActivity = 0;
+	int32 Activity = TranslateActivityNumber(0x1115, WeaponActivity);
+	if (SelectWeightedSequenceForActivity(Activity) == INDEX_NONE)
+		Activity = TranslateActivityNumber(9, WeaponActivity);
+	ScheduleHost.NavigationActivity = Activity;
+	if (Motor != nullptr)
+		Motor->SetTravelGait(EElysiumNpcGaitKind::Walk,
+			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk));
+	bWalkingAnimation = StartWalkingAnimation(false);
+	ScheduleHost.MemoryBits &= ~0x2u;
+}
+
+bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
+{
+	// Base StartTask 0x10283558; Troika forwards task 0x58 unchanged. No enemy means self,
+	// not FAIL_NO_ENEMY. FindLateralCover 0x102784a0 tries origin, then left/right at 48-unit
+	// increments five times. TestLateralCover 0x10278220 orders sight, valid-cover, MoveLimit,
+	// then SetGoal. SetGoal's route submission completes the task (0x102f1dc0).
+	const FElysiumEntity* Threat = GazeEnemy();
+	if (Threat == nullptr) Threat = this;
+	const FVector ThreatEye = Threat->EyePosition();
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	FVector HullMins, HullMaxs;
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
+	const float DefaultTolerance = static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U;
+	auto Submit = [this](const FVector& Point, float ToleranceCm)
+	{
+		if (Motor == nullptr || !AcquireScheduleBody(TEXT("TASK_FIND_COVER_FROM_ENEMY"))) return false;
+		MoveGoal = Point;
+		bMoveIssued = Motor->MoveTo(Point, ToleranceCm,
+			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Run), false,
+			EElysiumNpcGaitKind::Run);
+		if (!bMoveIssued) TaskFail(0x0c); // SetGoal -> OnNavFailed, synchronous before the next candidate
+		return bMoveIssued;
+	};
+	auto TryLateral = [&](const FVector& Point)
+	{
+		// The shared sight service carries the brush half of 0x2804091. Its existing character-
+		// occluder gap is documented on QueryLineOfSight; no collision world means no cover.
+		if (Embodiment == nullptr || Embodiment->QueryLineOfSight(ThreatEye, Point + (EyePosition() - Origin)))
+			return false;
+		if (!IsValidCover(Point, nullptr) || Motor == nullptr || !Motor->CanReachLateralCover(Point))
+			return false;
+		return Submit(Point, ScheduleHost.GoalToleranceCm > 0.f
+			? ScheduleHost.GoalToleranceCm : DefaultTolerance);
+	};
+	bool bFound = TryLateral(Origin);
+	// Source AngleVectors' right after the pipeline's Y reflection, z deliberately unchanged.
+	const float Yaw = FMath::DegreesToRadians(Angles.Y);
+	const float Pitch = FMath::DegreesToRadians(Angles.X);
+	const float Roll = FMath::DegreesToRadians(Angles.Z);
+	const FVector RightStep(-FMath::Sin(Roll) * FMath::Sin(Pitch) * FMath::Cos(Yaw)
+		+ FMath::Cos(Roll) * FMath::Sin(Yaw),
+		FMath::Sin(Roll) * FMath::Sin(Pitch) * FMath::Sin(Yaw)
+		+ FMath::Cos(Roll) * FMath::Cos(Yaw), 0);
+	for (int32 Index = 1; !bFound && Index <= 5; ++Index)
+	{
+		const FVector Offset = RightStep * (48.f * ElysiumMove::U * Index);
+		bFound = TryLateral(Origin - Offset) || TryLateral(Origin + Offset);
+	}
+	if (!bFound)
+	{
+		FVector Cover;
+		if (Motor == nullptr || !Motor->FindNodeCover(Threat->Origin, ThreatEye,
+			CoverRadius() * ElysiumMove::U, Cover))
+		{
+			TaskFail(0x08); // 0x102836cd, FAIL_NO_COVER
+			return false;
+		}
+		// Node goal uses -2: the hull's default tolerance (0x102ecd20). The node/hint producer
+		// remains absent; its eventual implementation owns the claim and cooldown it returns.
+		bFound = Submit(Cover, DefaultTolerance);
+	}
+	ScheduleHost.MoveWaitFinished = (World != nullptr ? World->NowSeconds() : 0.0) + MoveWait;
+	return bFound;
+}
+
 // --- The gaze cascade's NPC arms ---
 
 const FElysiumEntity* FElysiumNpc::GazeTargetEntity() const
@@ -3136,6 +3310,12 @@ EElysiumMoveWatch FElysiumNpc::WaitForMovement()
 	switch (Status)
 	{
 	case EElysiumNpcMoveStatus::Reached:
+		// A type-3 goal is one route. Advancing a corner is navigator work, not a schedule loop.
+		if (ScriptedScheduleOrder.IsSet()
+			&& ScriptedScheduleOrder.Route.IsValidIndex(ScriptedScheduleOrder.Leg))
+		{
+			return GetPathToScriptedGoal() ? EElysiumMoveWatch::Moving : EElysiumMoveWatch::Failed;
+		}
 		bMoveIssued = false;
 		return EElysiumMoveWatch::Arrived;
 	case EElysiumNpcMoveStatus::Failed:
@@ -3302,11 +3482,20 @@ void FElysiumNpc::MakeOblivious(bool bOblivious)
 		bOblivious ? TEXT("TRUE") : TEXT("FALSE"), *NpcFlags.Describe()));
 }
 
-void FElysiumNpc::SetNpcFlag(EElysiumNpcFlag Flag)
+void FElysiumNpc::SetNpcFlag(uint32 EncodedFlag)
 {
-	NpcFlags.Set(Flag);
-	RecordScheduleEvent(FString::Printf(TEXT("TASK_SET_NPC_FLAG NPCFlag:%s"),
-		FElysiumNpcFlags::LexToString(Flag)));
+	// 0x102a585d -> 0x102a97a0 / 0x102a9800. The sign bit selects the second word;
+	// it is not itself a flag. Both arms complete in StartTask.
+	if ((EncodedFlag & 0x80000000u) != 0)
+	{
+		NpcFlags.Set(static_cast<EElysiumNpcFlag2>(EncodedFlag & 0x7fffffffu));
+	}
+	else
+	{
+		NpcFlags.Set(static_cast<EElysiumNpcFlag>(EncodedFlag));
+	}
+	RecordScheduleEvent(FString::Printf(TEXT("TASK_SET_NPC_FLAG 0x%08x -> %s"),
+		EncodedFlag, *NpcFlags.Describe()));
 }
 
 void FElysiumNpc::ClearConditions()
@@ -4116,20 +4305,6 @@ void FElysiumNpc::RestartRestoredSchedule()
 		return;
 	}
 	const int32 Restored = Schedule.Current;
-	if (ElysiumAiScriptedSchedule::IsScriptedProgram(Restored))
-	{
-		// A scripted director's program is not restartable without the order that pushed it, and
-		// that order is not save state. `SaveBlockReason` refuses a save while the
-		// `ScriptedSchedule` owner holds the body, so a record can only carry this program from the
-		// narrow window between the push and its first movement claim. Restarting it would fail its
-		// first task by name on the next think; refusing it here says so once, and the NPC selects
-		// normally instead.
-		Schedule.Clear();
-		RecordScheduleEvent(FString::Printf(
-			TEXT("restore refused %s: the pushed order it needs is not save state"),
-			ElysiumScheduleName(Restored)));
-		return;
-	}
 	// `Clear` and not `ClearSchedule`: nothing is running here, the record is being replaced by the
 	// one the header named. Dispatching slot 435 would release the NPC flag word the record has
 	// just restored, and the program would come back conversable and un-oblivious.
@@ -4227,6 +4402,7 @@ void FElysiumNpc::RestoreDeathBodyState()
 	// returns and is the authoritative one there. The body already exists -- `Spawn` builds it, and a
 	// snapshot is applied over a fully-spawned world.
 	bDeathHandoffDone = false;
+	bDeathCommitted = false;
 	SetBodyFrozen(true);
 	SetIgnoreCharacterCollision(true);
 	if (!Schedule.IsRunning())

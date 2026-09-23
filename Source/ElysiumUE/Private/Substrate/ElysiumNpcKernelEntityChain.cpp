@@ -799,6 +799,20 @@ int32 FElysiumNpc::GetLocalScheduleId(int32 GlobalId)
 	return GlobalToLocalId(IdSpace(EElysiumIdCategory::Schedule), GlobalId);
 }
 
+int32 FElysiumNpc::ResolveScheduleId(int32 Id) const
+{
+	// `GetScheduleOfType` 0x102cc260: slot 580 belongs to the receiving NPC, not Troika.
+	if (ElysiumScheduleId::IsGlobal(Id)) return Id;
+	const FElysiumLocalIdSpace* Space = IdSpace(EElysiumIdCategory::Schedule);
+	return Space != nullptr ? Space->LocalToGlobal(Id) : INDEX_NONE;
+}
+
+int32 FElysiumNpc::LocalScheduleId(int32 GlobalId) const
+{
+	const FElysiumLocalIdSpace* Space = IdSpace(EElysiumIdCategory::Schedule);
+	return Space != nullptr ? Space->GlobalToLocal(GlobalId) : INDEX_NONE;
+}
+
 int32 FElysiumNpc::GetLocalTaskId(int32 GlobalId)
 {
 	// 0x101a6640, slot 450 — the same call with the space pointer advanced by `+0x18`, which is the
@@ -828,7 +842,8 @@ const FElysiumLocalIdSpace* FElysiumNpc::IdSpace(EElysiumIdCategory Category) co
 	// typed here: the class -> space map is the sidecar's, so a class whose space is SHARED with a
 	// sibling gets the sibling's, and a class with no slot-580 body of its own falls to the Troika
 	// line exactly as the vtable would take it.
-	const FElysiumScheduleCorpus& Corpus = FElysiumScheduleCorpus::Get();
+	FElysiumScheduleCorpus& Corpus = FElysiumScheduleCorpus::Get();
+	Corpus.EnsureLoaded();
 	const FString ClassName = RetailClass() != nullptr ? FString(RetailClass()->Name) : FString();
 	if (const FElysiumLocalIdSpace* Own = Corpus.SpaceFor(ClassName, Category))
 	{

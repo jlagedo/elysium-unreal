@@ -38,7 +38,9 @@ namespace
 		{ EElysiumTaskOp::MakeOblivious,            TEXT("TASK_MAKE_OBLIVIOUS") },
 		{ EElysiumTaskOp::SetNpcFlag,               TEXT("TASK_SET_NPC_FLAG") },
 		{ EElysiumTaskOp::PlayDeathSequence,        TEXT("TASK_PLAY_DEATH_SEQUENCE") },
-		{ EElysiumTaskOp::GetPathToGoal,            TEXT("TASK_GET_PATH_TO_GOAL") },
+		{ EElysiumTaskOp::SoundDie,                 TEXT("TASK_SOUND_DIE") },
+		{ EElysiumTaskOp::Die,                      TEXT("TASK_DIE") },
+		{ EElysiumTaskOp::PatrolPath,               TEXT("TASK_PATROL_PATH") },
 	};
 
 	const FString GNoName;

@@ -53,8 +53,8 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   restart's own slot 435 releases twelve of the walk's per-run rows.
   New net: `Elysium.Substrate.NpcKernelBindings.SaveRoundTrip` (218 rows, 23 named exceptions); six
   component suites moved off `Npc->Serialize(Ar)` onto the real `Freeze`/`ApplySnapshot` path.
-- [ ] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the hand
-  programs deleted. L · Opus/high. **In flight, landing as six passes** (owner's decision
+- [x] **04 · 0019/3** — The schedule seam: 691 texts, id spaces, flag tables, the parser; the hand
+  programs deleted. L · Opus/high. **Complete, delivered in six passes** (owner's decision
   2026-09-22): P the pipeline seam, then A id spaces, B parser + manager, C corpus loader + the
   witness, D the switchover (indivisible), E the deletions and the coverage meter.
   **Pass P landed 2026-09-22**: 57 units publish, `uv run elysium import ai-schedules` deploys 748
@@ -104,21 +104,23 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   first registration and refuses every later id below it, so append order silently loses names —
   three owners (`CNPC_VZombie`, `CNPC_VAndreiBlood`, `CNPC_VWerewolf`) and then every remaining
   text those classes own. `Elysium.Substrate` 1264 of 1264.
-  **Resume at pass D**, on branch `0019-3-schedule-seam` (tree clean, corpus deployed: 748 files
-  under `Content/ElysiumCorpus/ai/schedules/`). Nothing in the runtime is wired to any of it yet:
-  the 28 hand programs still run the game and all 295 `EElysiumScheduleId` sites are untouched,
-  which is why P, A, B and C are all safe places to stop.
-  - **D is indivisible and wants a fresh session with room.** `EElysiumScheduleId` -> `int32` at
-    295 sites across 35 files; `EElysiumTask` -> `EElysiumTaskOp` (already declared, unused);
-    `FElysiumTaskStep` -> `FElysiumScheduleStep`'s two words, so `Step.Target`, `Step.Param`,
-    `Step.Activity` and `Step.Flag` all go; `BeginTask`/`ContinueTask` switch on the op;
-    `FElysiumSchedule` -> `FElysiumScheduleProgram`; the id-space stubs re-pointed at
-    `FElysiumScheduleCorpus::SpaceFor`; the save CRC re-keyed on `TaskId` + `RawWord()`; the
-    inverted mask wired into `Tick` (`FElysiumNpcConditions::Difference` is already there for it).
-    The moment `Tick` reads the manager, `Step.Target` has no meaning, so it cannot be split.
-  - **E** deletes the 28 hand programs, `FScheduleMeta`, the program-content tests, and lands the
-    coverage meter and `elysium.schedules`. `FElysiumTaskOpTable::Measure` and
-    `FElysiumScheduleCorpus::DescribeCensus` are the meter's engine and already exist.
+  **Passes D–E complete 2026-09-22.** The runner now
+  reads the corpus, its task records are the two retail words, and the closed schedule enum and
+  28 hand programs are gone. The last two were based on a misreading: the director's 9 / 19 are
+  activities, not schedule IDs; its local 2 goes through slot 440 to Troika's loaded IDLE_PATROL.
+  Review connected the NPC's own schedule space, removed the old translation whitelist, routed
+  NPCFlag operands into both words and joined local live conditions to global parsed masks.
+  The chase-failure witness now executes through the real NPC and recording geometry/motor,
+  including its successful twelve-task route and its failure to translated STANDOFF.
+  `elysium.schedules [filter]` reports every unported identity and its reference count.
+  Validation: editor build green, **1,267 / 1,267 `Elysium.Substrate` tests**, and
+  `kernel_ledger --check` matches all 13 generated tables (coverage refreshed). Live census:
+  **691 programs, 4,138 steps, 26 bound task bodies, 488 unported identities / 1,602 steps**.
+  Test report: `$ELYSIUM_WORK_ROOT/reports/tests/20260923T003145.743425Z-elysium-substrate/index.json`.
+  **World seams still owed by later rows:** cover-node positions/cooldowns/hint claims (0018/4–5),
+  character sight occluders and the flying mover. Lateral cover uses native capsule probes,
+  a named geometry modernization; candidate order, 48-unit steps and task timing stay retail's.
+
 - [ ] **05 · 0019/4** — The tunables table. S–M · Sonnet/medium.
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so

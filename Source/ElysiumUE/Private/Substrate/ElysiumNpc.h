@@ -543,6 +543,9 @@ public:
 	// the base channel and hold it — `PlayActivity`'s ambient claim is outranked by the next
 	// locomotion publish, which would stand a corpse back up.
 	virtual float PlayDeathActivity(const FString& Activity) override;
+	virtual void BeginDying() override;
+	virtual bool IsDeathPerformanceFinished() const override;
+	virtual void CommitDeath() override;
 
 	virtual float RandomSeconds(float Max) override;
 
@@ -571,6 +574,12 @@ public:
 	// Slot 440 on this class: `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), the arms whose
 	// ids this runtime registers. See the body for the arms that are seams.
 	virtual int32 TranslateSchedule(int32 Id) override;
+	virtual int32 ResolveScheduleId(int32 Id) const override;
+	virtual int32 LocalScheduleId(int32 GlobalId) const override;
+	virtual const FElysiumLocalIdSpace* ConditionIdSpace() const override
+	{
+		return IdSpace(EElysiumIdCategory::Condition);
+	}
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
 	virtual void DebugScheduleInstalled(int32 InstalledSchedule) override;
@@ -716,14 +725,16 @@ public:
 	virtual bool RangeAttack1() override;
 
 	virtual void RememberFact(uint32 MemoryMask) override;
+	virtual bool FindCoverFromEnemy(float MoveWait) override;
 
-	virtual bool GetPathToScriptedGoal() override;
+	bool GetPathToScriptedGoal();
+	virtual void RunPatrolPathTask() override;
 
 	// --- The incapacitation task bodies and the install rules -----------------------------------
 
 	virtual void MakeOblivious(bool bOblivious) override;
 
-	virtual void SetNpcFlag(EElysiumNpcFlag Flag) override;
+	virtual void SetNpcFlag(uint32 EncodedFlag) override;
 
 	virtual void ClearConditions() override;
 
@@ -1448,6 +1459,14 @@ private:
 	// Whether the death handoff has already run. Session state, not save state: it is derivable from
 	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
 	bool bDeathHandoffDone = false;
+	// `TASK_DIE`'s commit has run. Retail has no such flag: there, the commit re-enters `Event_Killed`
+	// and `CreateCorpse` (`0x1032c0e0`) takes the entity out of the world, so the parked task simply
+	// stops existing along with the NPC. This runtime has no corpse entity and no removal, so the
+	// flag is what stands in for "the body this program was running on is gone".
+	bool bDeathCommitted = false;
+	// When the death clip `PlayDeathActivity` started runs out. `TASK_DIE`'s gate waits on it; zero
+	// means nothing is playing, which is the ordinary case because base `DIE` names no activity task.
+	double DeathPerformanceEndsAt = 0.0;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
 	// A disposition transition clip is playing: do not re-decide the stance until it ends. This is

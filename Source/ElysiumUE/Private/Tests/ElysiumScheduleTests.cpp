@@ -38,9 +38,7 @@ namespace
 		int32 CompletedSchedules = 0;
 		const FElysiumScheduleState* ObservedState = nullptr;
 		TArray<int32> OutgoingSchedules;
-		bool bPathAvailable = false;
 		EElysiumMoveWatch MovementResult = EElysiumMoveWatch::Failed;
-		virtual bool GetPathToScriptedGoal() override { return bPathAvailable; }
 		virtual EElysiumMoveWatch WaitForMovement() override { return MovementResult; }
 		// The one condition the kernel itself raises. `TaskFail` (`0x10273fc0`) sets `TASK_FAILED` and
 		// the install (`SetSchedule`) zeroes it; a case passes `&Conditions` on the tick after a
@@ -180,8 +178,14 @@ namespace
 				Flags.RemoveOblivious();
 			}
 		}
-		virtual void SetNpcFlag(EElysiumNpcFlag Flag) override
+		virtual void SetNpcFlag(uint32 EncodedFlag) override
 		{
+			if ((EncodedFlag & 0x80000000u) != 0)
+			{
+				Flags.Set(static_cast<EElysiumNpcFlag2>(EncodedFlag & 0x7fffffffu));
+				return;
+			}
+			const EElysiumNpcFlag Flag = static_cast<EElysiumNpcFlag>(EncodedFlag);
 			Calls.Add(FString::Printf(TEXT("SetNpcFlag %s"), FElysiumNpcFlags::LexToString(Flag)));
 			Flags.Set(Flag);
 		}
@@ -958,17 +962,18 @@ bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
 	FElysiumScheduleState State;
 	Runner.ObservedState = &State;
 	ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, Runner);
-	ElysiumSchedule::Start(State, ElysiumSched::TARGET_CHASE, Runner);
+	// Troika's actual three-step path program replaces the deleted synthetic TARGET_CHASE.
+	ElysiumSchedule::Start(State, 0x46, Runner);
 	TestTrue(TEXT("schedule change observes the outgoing program"),
 		Runner.OutgoingSchedules.Last()
 			== ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
-	Runner.bPathAvailable = true;
 	Runner.MovementResult = EElysiumMoveWatch::Arrived;
 	TestFalse(TEXT("an immediately arrived goal finishes the program"), ElysiumSchedule::Tick(State, Runner, 0.0));
 	TestEqual(TEXT("schedule done is emitted once at the last completion"), Runner.CompletedSchedules, 1);
-	ElysiumSchedule::Start(State, ElysiumSched::AISCRIPT, Runner);
+	Runner.MovementResult = EElysiumMoveWatch::Moving;
+	ElysiumSchedule::Start(State, 0x46, Runner);
 	TestTrue(TEXT("a continuing path yields at the maintenance bound"), ElysiumSchedule::Tick(State, Runner, 1.0));
-	TestTrue(TEXT("the bounded pass retains the path program"), State.Current == ElysiumScheduleGlobalId(ElysiumSched::AISCRIPT));
+	TestTrue(TEXT("the bounded pass retains the path program"), State.Current == ElysiumScheduleGlobalId(0x46));
 	TestTrue(TEXT("the bounded pass closes DELAY_INTERRUPTS"), State.bDidMaintainSchedule);
 	FElysiumNpcConditions Failed = FElysiumNpcConditions::Of({EElysiumNpcCond::TaskFailed});
 	const int32 PreviousFailures = Runner.FailureReasons.Num();
@@ -1203,13 +1208,13 @@ bool FElysiumScheduleTroikaTranslateTest::RunTest(const FString&)
 	// installs the literal 1 IDLE_STAND UNTRANSLATED (`102cc227 PUSH 0x1` / `102cc229 CALL
 	// [EAX+0x6f8]`). The earlier IDLE_DISPOSITION answer here was port-invented.
 	Guard->NpcFlags.Set(EElysiumNpcFlag2::D_MILDLY_CRAZY);
-	TestEqual(TEXT("D_MILDLY_CRAZY's 0x132 is unregistered; the miss arm is IDLE_STAND"),
-		Guard->TranslateSchedule(ElysiumSched::IDLE_STAND), ElysiumSched::IDLE_STAND);
+	TestEqual(TEXT("D_MILDLY_CRAZY preserves the loaded 0x132"),
+		Guard->TranslateSchedule(ElysiumSched::IDLE_STAND), 0x132);
 	TestEqual(TEXT("...and the raw number slot 440 answered is 0x132 (102b1335)"),
 		Guard->LastTranslateScheduleRetail, 0x132);
 	Guard->NpcFlags.SetFrenziedWord(0x100);
-	TestEqual(TEXT("the frenzied pre-table's 0xc9 is unregistered; the miss arm is IDLE_STAND"),
-		Guard->TranslateSchedule(ElysiumSched::SCHED_TROIKA_MELEE_IDLE), ElysiumSched::IDLE_STAND);
+	TestEqual(TEXT("the frenzied pre-table preserves the loaded 0xc9"),
+		Guard->TranslateSchedule(ElysiumSched::SCHED_TROIKA_MELEE_IDLE), 0xc9);
 	TestEqual(TEXT("...and the raw number is 0xc9 (102b120c MOV EAX,0xc9)"),
 		Guard->LastTranslateScheduleRetail, 0xc9);
 	return true;

@@ -67,9 +67,13 @@ weapon overlay layers — **0015**; paired actions — **0010**.
   overlay unless a family extends the codes and the projection together.
 - **Retaliation.** Damage feeds a 5-second derived enemy memory that stated relationships
   supersede; a struck neutral reaches Combat and swings back through the same transaction.
-- **Death.** `OnKilled` (claims released, Mind Dead, frozen-not-hidden, collision off);
-  `TASK_PLAY_DEATH_SEQUENCE` ladder (arg → `ACT_DIESIMPLE` → `ACT_IDLE`); the handoff holds the
-  final pose; corpse state restored synchronously on load.
+- **Death.** `OnKilled` (claims released, Mind Dead, frozen-not-hidden, collision off); base `DIE`
+  (`0x2b`) is `TASK_STOP_MOVING`, `TASK_SOUND_DIE`, `TASK_DIE` and names NO activity task, so the
+  ordinary death pose is `BecomeClientRagdoll`'s own `ACT_DIERAGDOLL` seed and not a program step;
+  the `TASK_PLAY_DEATH_SEQUENCE` ladder (arg → `ACT_DIESIMPLE` → `ACT_IDLE`) belongs to the named
+  Discipline death schedules only. The handoff holds the final pose; corpse state restored
+  synchronously on load. Corrected by 0019/3 pass D, which found story 4 had built an invented
+  ladder — see `npc-ai/lifecycle.md` § "The death chain, kill to corpse".
 
 ## Stories
 In build order. A story is done when every behaviour it lists is in the substrate and its
@@ -135,10 +139,33 @@ model / effort tier recommended for it.
   live-only coverage.
   Size: S. Effort: Sonnet / medium.
 
+- [ ] **11. The corpse chain: `CreateCorpse` and what follows the death program.**
+  Retail: `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` calls slot 301 `CreateCorpse`
+  `0x1032c0e0`, which keeps the dying NPC as the corpse when `BecomeClientRagdoll` `0x10090180`
+  answers true and otherwise spawns a second entity through `SpawnStaticCorpse` `0x1032be80` and
+  schedules the original for removal; `Event_Dying` (slot 403) fires from `Die` `0x103392c0`
+  immediately after `Event_Killed`; slot 552 `ShouldFadeOnDeath` `0x1027a400` (spawnflag bit 9)
+  chooses `SUB_StartFadeOut` `0x102695d0` over inserting `SOUND_CARCASS 0x20` at volume 384 for
+  30 s (`0x101babc0`); removal is `curtime + 10.0` ordinary and burning, `curtime + 0.5` static
+  no-ragdoll.
+  Job: build that chain. It is what ENDS a dead NPC in retail -- `TASK_DIE`'s Troika arm
+  (`0x102abb90`) calls `Die` and never completes, so the `DIE` program runs until the entity is
+  taken out of the world underneath it. This runtime has no corpse entity and no removal, so
+  0019/3 pass D stands `bDeathCommitted` in for the swap and tears the program down at the commit;
+  the seven missing bodies are tallied through `ElysiumStub` under kind `npc-death` and are visible
+  in `elysium.stubs` today.
+  Why it is here and not in 0014: 0014 scopes the rig, the impulse and the handoff and defers "the
+  death family" to this spec; story 4 closed having built the port's INVENTED death ladder, which
+  pass D deleted on recovering that base `DIE` names no activity task at all.
+  Consumes: 0019/3's ported `TASK_SOUND_DIE` / `TASK_DIE`; 0014/5's handoff.
+  Oracle: `npc-ai/lifecycle.md` § "The death chain, kill to corpse".
+  Size: M. Effort: Opus / high.
+
 ## Seams
 - Provides: the damage spine and typed health commit to 0006's Bloodshield/Fortitude/Potence
   joins and to 0008; the `HitInfo` AI-schedule channel 0002's kernel reads; the reaction and
   death pose machinery 0010's paired actions build on; the death handoff 0014 completes.
 - Consumes: 0002 (senses, conditions, the enemy transaction's programs, the motor); 0008 for the
   fire mode's `Major`/`MinorKnockbackDist` the flying chain reads.
-- Open recoveries: none beyond the `+0x644` default activity (9).
+- Open recoveries: the `+0x644` default activity (9); the corpse chain (11) -- `SUB_FadeOut`'s body `0x100152b2`, the vdata "Death" sound entry behind `0x101f4600`, and the
+  death-force envelope composed in `0x1032b9b0`.

@@ -319,7 +319,7 @@ green, and `coverage.md` shows the change.
   port's persistence still does not call — stay with story 6, as story 1 assigned them; pass C only
   shares their CRC helpers and their header struct.
 
-- [ ] **3. The schedule seam: texts, id spaces, flag tables.**
+- [x] **3. The schedule seam: texts, id spaces, flag tables.**
   Retail: the 691 schedule descriptions are null-terminated ASCII in `.rdata`, one per
   schedule — `Schedule <name> Tasks <TASK_* arg>… Interrupts <COND_*>… [Flags …]`. Each class's
   `InitCustomSchedules` (the worked example `CNPC_VBrujah` `0x10367a40`) calls
@@ -411,7 +411,31 @@ green, and `coverage.md` shows the change.
   no bare operand fails `_atof`. Task statements measure **4,138**, not the witness table's 4,139.
   *The check:* `uv run elysium research schedule_owner_survey --check` re-derives the per-owner
   table from the image and diffs it against the committed one in `schedule-kernel.md`; it agrees on
-  all 56 owners. Passes A–E, the runtime half, remain.
+  all 56 owners. The runtime passes follow below.
+
+  **D–E integration complete, 2026-09-22.** All 691 texts now run through the
+  corpus manager. The 28 hand programs, closed ID enum, metadata registry and C++ program-provider
+  API are deleted. The last two programs had misread `aiscripted_schedule`'s activity arguments
+  9/19 as program IDs; the recovered local-2 install and slot-440 translation now select the
+  corpus's actual program, with its interrupts. `TASK_PATROL_PATH` supplies the movement activity;
+  the director submits the goal before the next think and route exhaustion succeeds.
+  The review repaired class-space dispatch, second-word NPCFlag routing, the remaining enum
+  whitelist in slot 440, and local/global condition-mask integration. Schedule corpus loading is
+  guaranteed even when a named input or restore arrives before the first schedule think.
+  The new `ScheduleIntegration` suite executes the chase-failure witness through the real NPC,
+  covering the lateral-cover route, all twelve task entries, final wait and translated fail route.
+  `elysium.schedules [filter]` exposes the census and per-task reference counts.
+  Cover-node selection still awaits the world navigation inputs assigned to 0018/4–5; its hook
+  answers nothing. Character sight occluders and the flying mover remain explicit world seams.
+  The lateral geometry uses Unreal capsule overlap/sweep as a named modernization, with retail
+  candidate order, distances and timing. Recovery: `schedule-kernel.md`'s integration section and
+  `authored-control.md`'s corrected director call chain.
+  **Validation:** editor build green; all **1,267 `Elysium.Substrate` tests executed and passed**,
+  including `ScheduleIntegration.ChaseFailureWitness`, both ID-space/condition regressions and
+  the two-word flag execution test. `kernel_ledger --check` matches all 13 generated tables;
+  the refreshed ledger cites 2,089 closure functions in the port and 2,324 in the oracle.
+  Current task census: 691 programs, 4,138 steps, 26 bound bodies, 488 unported identities reached
+  by 1,602 steps. The unported work queue is visible through `elysium.schedules`.
 
 - [ ] **4. The tunables table.**
   Retail: the `.rdata` cells every kernel file cites — "every threshold below was read out of

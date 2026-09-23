@@ -82,6 +82,7 @@ struct FElysiumNpcScheduleHost
 	// bWaitFinishedSet
 	double WaitFinished = 0.0;
 	FElysiumEntityHandle GoalEnt;  // +0x5de8 m_pGoalEnt (datamap)
+	int32 NavigationActivity = -1; // CAI_Navigator::m_pPath->m_movementActivity (+0x2c), 0x102ee250
 	FElysiumEntityHandle StoredPathTarget;  // +0x5df4 m_hStoredPathTarget (sdk-order)
 	FVector StoredPathGoal = FVector::ZeroVector;  // +0x5df8 m_vecStoredPathGoal (sdk-order)
 	// +0x5e04 m_nStoredPathType (sdk-order) — GoalType_t has no port enum

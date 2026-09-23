@@ -295,10 +295,19 @@ Can't execute script %s" (`0x1059528c`) and RETURN BEFORE the force state is app
 
 **So 1 vs 2 and 4 vs 5 are walk vs run and nothing else**: the same program, the same goal, the
 activity word of the goal record. For an NPC whose `Classify()` (slot `+0x178`) is 5 or 6 the
-activity becomes `ACT_FLY 0x22`. The one program is the base text `0x10607ec8`: `IDLE_WALK` =
+activity becomes `ACT_FLY 0x22`. The requested base text `0x10607ec8` is `IDLE_WALK` =
 `TASK_WALK_PATH 9999; TASK_WAIT_FOR_MOVEMENT 0; TASK_WAIT_PVS 0`, interrupts `NEW_ENEMY
-LIGHT_DAMAGE HEAVY_DAMAGE SMELL PROVOKED HEAR_COMBAT HEAR_BULLET_IMPACT` — that list IS the
-entity's interruptibility. (`SCRIPTED_WALK` / `SCRIPTED_RUN`, `0x10605848` / `0x10605648`, belong
+LIGHT_DAMAGE HEAVY_DAMAGE SMELL PROVOKED HEAR_COMBAT HEAR_BULLET_IMPACT`.
+**Integration correction, 2026-09-22:** the caller passes local 2 to `0x10280de0`, whose
+listing preserves that original argument at `10280e0b` while stamping its global translation,
+then calls `0x102cc1f0`. Slot 440 therefore still runs: on Troika, 2 becomes `0x46
+SCHED_TROIKA_IDLE_PATROL`. Its loaded text is `TASK_PATROL_PATH 0; TASK_WAIT_FOR_MOVEMENT 0;
+TASK_WAIT_PVS 0`, with its OWN interrupts. `TASK_PATROL_PATH 0x105` enters `102a594d`, translates
+`ACT_WALK_PATROL 0x1115`, probes the sequence, falls back to translated `ACT_WALK 9`, sets
+the navigator activity (`102ee250`), clears `INCOVER` and completes (`102a5904`). Thus a run
+goal's initial gait may be replaced by this task on the next think. The old port's two synthetic
+programs and uninterruptible masks are deleted. (`SCRIPTED_WALK` / `SCRIPTED_RUN`,
+`0x10605848` / `0x10605648`, belong
 to the scripted SEQUENCE and are not selected here.) A refused route logs
 (`0x10595230` / `0x105951d8`) unless spawnflag `0x800`; spawnflag `0x20` is the inherited
 `m_interruptable (+0x5f90)`, and when it is CLEAR the dispatch `0x101a9790` calls `0x1026d130` on

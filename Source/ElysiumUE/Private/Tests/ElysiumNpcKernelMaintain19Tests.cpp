@@ -207,14 +207,14 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 	N.bNpcIsAlive = true;
 	N.WerewolfScheduleStack.Reset();
 
-	// 102ae750 translates first; Werewolf 0x43 -> 0x15c, whose missing blob takes story 25's
-	// untranslated IDLE_STAND fallback. ForceScheduleChange and base SetSchedule each dispatch 435.
+	// 102ae750 translates first; Werewolf 0x43 -> its own loaded 0x15c.
+	// ForceScheduleChange and base SetSchedule each dispatch 435.
 	N.SetSchedule(0x43, false);
 	TestEqual(TEXT("102ae758 translated through slot 440"), N.LastTranslateScheduleRetail, 0x15c);
 	TestEqual(TEXT("102ae7b7 + 10280e53 dispatch slot 435 twice"),
 		N.WerewolfScheduleStack.Num(), 2);
-	TestEqual(TEXT("102cc229 installs literal IDLE_STAND on the miss"), N.Schedule.Current,
-		ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
+	TestEqual(TEXT("the class space resolves the loaded werewolf program"), N.Schedule.Current,
+		N.ResolveScheduleId(0x15c));
 
 	N.WerewolfScheduleStack.Reset();
 	N.SetState(7);

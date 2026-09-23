@@ -2336,3 +2336,147 @@ engine query; occluded-delay and zombie-grapple cvars; `CVStatList_t` type-0 lis
 reset `0x103b9f50`; ghoul particle create `0x100fbc90`; `m_flNextListenTime` (bound private as
 last-listen); `m_bCineScriptHidden` (`+0x5d78` bound to `bHidden`, not cleared on `NPCInit`).
 
+
+## The death chain, kill to corpse -- `0x10265ad0`, `0x103392c0`, `0x1032c0e0`, `0x10286801` (2026-09-22)
+
+Recovered for 0019/3 pass D, which needed bodies for base `DIE`'s second and third tasks. Every
+dispatch claim below was re-derived from the `vampire.dll` jump tables rather than from the
+decompiler's switch reconstruction, because the two functions at the centre of this chain
+(`CBaseCombatCharacter::Die`, `GetDeathActivity`) are reached only through thunks and so report
+**zero callers** in the call graph.
+
+### There is no `CAI_BaseNPC::Die`
+
+No such body exists. The generic force-death helper is **`CBaseCombatCharacter::Die`
+`0x103392c0`** -- non-virtual, in no vtable, `RET 0xc` (three stack arguments), reached only through
+the thunk `0x100034f9`, which has exactly six call sites: `0x101de7c2`, `0x102abc1e` (`TASK_DIE`),
+`0x102abc7e` (`TASK_DIE_IMMEDIATE`), `0x10339165`, `0x1033951e`, `0x1033ad0e`.
+
+Its body guards on `m_lifeState != 2` (`+0x200`), builds a synthetic `CVDmg_t` with `SetSrc(this)`,
+`m_iDiceAmt = 1`, `m_iToHitSuccesses = 1` and damage `1.0f`, sets stat `(0xf, 0x11)`, then
+dispatches **`Event_Killed` (slot 144, `+0x240`)** and **`Event_Dying` (slot 403, `+0x64c`)**. So
+`Die` does not kill anything itself: it re-enters the ordinary kill path with a manufactured blow.
+
+### The two death tasks
+
+`DIE` (`0x2b`) is `TASK_STOP_MOVING 0x69`, `TASK_SOUND_DIE 0x49`, `TASK_DIE 0x5f`.
+`SCHED_DIE_RAGDOLL` (`0x2c`) is the first two only.
+
+Troika's `StartTask` dispatch (`0x102a1910`: `idx = id - 5`, bound `0x144`, byte table `0x102a7ab8`,
+targets `0x102a77f8`) sends **both** `0x49` and `0x5f` to its default forwarder `0x102a77e2`, which
+thunks through `0x10013ef3` to `CAI_BaseNPC::StartTask` `0x102827f0` (`idx = id - 1`, bound `0x11f`,
+byte table `0x10287138`, targets `0x10286f8c`).
+
+- **`TASK_SOUND_DIE` `0x49` -> base arm `0x10286843`.** Four instructions: call vtable slot 488
+  (`+0x7a0`), then `TaskComplete(false)` through thunk `0x1000ac68` -> `0x10273e80`. It reads no
+  float argument and writes no field. It has **no `RunTask` arm** -- base `RunTask`'s table maps
+  `0x49` to the no-entry handler `0x102896f5`, which only DevMsgs "No RunTask entry for %s"
+  (`0x105ce044`) and completes; normal execution never reaches it.
+- **`TASK_DIE` `0x5f` -> base arm `0x10286801`,** shared with `TASK_DIE_IMMEDIATE` `0xdf` (both tag
+  `0x4f`). Three instructions: clear the navigator goal through `0x10001d98` -> `0x102ee270`, write
+  `m_lifeState +0x200 = 1`, return. **No `TaskComplete`, no `TaskFail`, no wait deadline** -- the
+  program parks on this task.
+
+### `TASK_DIE`'s `RunTask` arm is Troika's, not the base's
+
+This is the correction that matters, because every VtMB NPC is `CAI_BaseNPCTroika`-derived.
+Troika's `RunTask` (`0x102aacf0`: `idx = id - 2`, bound `0x147`, byte table `0x102ac844`, targets
+`0x102ac760`) maps `0x5f` to **`0x102abb90`**, *not* to its default `0x102aad69`. The base arm
+`0x10288fc4` -- `m_lifeState = 2`, `ThinkSet(null)`, `m_flPlaybackRate = 0`, collision collapse,
+`ShouldFadeOnDeath` -> fade or carcass sound -- therefore **does not run on any ordinary NPC**.
+
+The Troika arm (shared with `TASK_DIE_GIB` `0xe9` and `TASK_DIE_DUE_TO_PLAYER` `0xeb`):
+
+1. Gate: `(IsActivityFinished() [slot 251, +0x3ec] && m_flCycle +0x6f8 >= 1.0 [0x10449280])
+   || m_IdealActivity +0xff0 == 1 (ACT_IDLE)`. Otherwise return and keep waiting.
+2. Resolve `m_hClosestPlayer +0x628c` through the entity table `0x10566458`; then for `0xe9` **and**
+   `0x5f` alike, overwrite that target with `this` (`0x102abbf4`).
+3. If `m_lifeState +0x200 == 1`, write it to `0`.
+4. Call `Die(target, 0, 0)` through `0x100034f9`.
+
+It never calls `TaskComplete` or `TaskFail`. **Nothing ends the `DIE` program.** What ends the NPC
+is `CreateCorpse` taking the entity out of the world underneath it.
+
+The `|| m_IdealActivity == ACT_IDLE` arm is load-bearing: it is why an NPC with no death performance
+commits on its first poll instead of hanging forever on a clip that will never play.
+
+### Nothing in base `DIE` plays a death animation
+
+`GetDeathActivity` `0x10327e20` (returns `0x43` at `0x10327e91`) is **dead code**: zero direct
+calls, its only thunk `0x1000b082` has zero call sites, and no vtable or data table contains its
+address. It must not be ported.
+
+Retail's visible death pose has exactly three producers, all outside base `DIE`:
+
+- **`BecomeClientRagdoll` `0x10090180`** -- the ordinary case. When `forceBone == -1` it calls
+  `SelectWeightedSequence(ACT_DIERAGDOLL = 0x21, -1)`, writes `m_nSequence +0x6f0` and
+  `m_flCycle +0x6f8 = 0`, and runs `ResetSequenceInfo` `0x10090950` before handing to physics. It
+  answers false when the model interface (`VModelInfoServer001` at `0x1070b250`, slot 18) reports no
+  ragdoll, and then only collapses collision bounds. This is why `SCHED_DIE_RAGDOLL` needs no
+  `TASK_DIE`: the seed pose *is* the death, and physics finishes it.
+- **`TASK_PLAY_DEATH_SEQUENCE` `0x149`**, Troika `StartTask` arm `0x102a779d` -- the argument, then
+  `ACT_DIESIMPLE 0x1d`, then `ACT_IDLE 1`, through `0x10295460` to `SetIdealActivity` `0x10272650`.
+  Named only by the Discipline death schedules, **never** by base `DIE`.
+- **`m_iInterestingDeathActivity +0x6308`** -- exactly four sites in the image: written and read in
+  Troika `OnTakeDamage` `0x102beda0` (`0x102beecd`, `0x102beef2`), read by the Troika `StartTask`
+  arm `0x102a650b`, cleared to `-1` at `0x102a6454`.
+
+**So on the ordinary non-ragdoll `SCHED_DIE` path there is no death-activity setter at all.** The
+NPC keeps whatever it was playing, `TASK_DIE` waits it out, and commits. This is a recovered
+negative, not a gap.
+
+### The ordered chain
+
+1. `CBaseEntity::TakeDamage` `0x100a1250` -> slot 142 -> `CAI_BaseNPC::OnTakeDamage` `0x10265e90` ->
+   `CBaseCombatCharacter::OnTakeDamage` `0x1032ef60`, which dispatches slot 144 at the health
+   threshold.
+2. **`CAI_BaseNPC::Event_Killed` `0x10265ad0`** (slot 144): refuse re-entry when the running
+   schedule is `NPC_FREEZE 0x3a`; the scripted-sequence deferral (`m_hCine`, `spawnflags & 0x2080`);
+   stop looping sounds (slot 511, base `0x1027caa0`); **`DeathSound` (slot 488) at `0x10265cb8`**;
+   the `OnDeath` output; optional `BecomeDead` `0x10265a40`; then
+   `CBaseCombatCharacter::Event_Killed` `0x1032b9b0`.
+3. `0x1032b9b0` writes `m_lifeState = 1`, computes and clamps the death force, and calls slot 301
+   **`CreateCorpse` `0x1032c0e0`** -- death bone or `Bip01 Spine2`; `BecomeClientRagdoll` for normal
+   NPCs; `SpawnStaticCorpse` `0x1032be80` for `No_Ragdoll_Death`, burning and static cases. The
+   ragdoll branch keeps the dying NPC as the corpse; the static branch spawns a second entity and
+   schedules the original for removal. Cleanup at `curtime + 10.0` (`_DAT_1044e664`); static
+   no-ragdoll at `curtime + 0.5` (`_DAT_104454d0`).
+4. Back in `0x10265ad0`: `m_IdealNPCState +0x5cc4 = 7`, `COND_LIGHT_DAMAGE 0x4c`,
+   `m_hLastDamageEnt +0x5b7c`, `m_bCondTookDamage +0x5b80 = 1`, squad vacate; then slot 552
+   `ShouldFadeOnDeath` `0x1027a400` (spawnflag bit 9) choosing `SUB_StartFadeOut` `0x102695d0` or
+   `SOUND_CARCASS 0x20` at volume 384 for 30 s through `0x101babc0`; finally `SetState(7)`
+   `0x1026e340`.
+5. Next think: `CAI_BaseNPC::SelectSchedule` `0x1028a380` (slot 438), state 7, at
+   `0x1028a8ec-0x1028a92b`: `BecomeClientRagdoll(vec3_origin, -1, 0) ? 0x2c : 0x2b`.
+   `CAI_BaseNPCTroika::SelectSchedule` `0x102af660` has **no** state-7 case and falls through to the
+   base, so this decision is authoritative.
+6. The program runs, and `TASK_DIE` commits by calling `Die` -- which re-enters step 2. It is that
+   **second** `Event_Killed` whose `CreateCorpse` makes the corpse on the non-ragdoll path.
+
+### A death sounds more than once
+
+The slot-488 call at `0x10265cb8` is guarded **only** by the grapple-role/partner test on `+0x153c`
+and `+0x1538`. There is no life-state guard. So `Event_Killed` plays the death sound,
+`TASK_SOUND_DIE` plays it again, and on the non-ragdoll path the second `Event_Killed` plays it a
+third time. Troika's hook `0x10293ec0` caches the vdata sound-table entry named "Death"
+(`0x105d8c30`) once in `DAT_10924d64` under the guard byte `DAT_10923f0d`, then plays it as sound
+type 2 at volume `1.0` (`0x3f800000`) and pitch `1.25` (`0x3fa00000`) -- unconditionally, every
+call. This is retail's behaviour and is reproduced.
+
+### What the port does not have
+
+`TASK_SOUND_DIE` and `TASK_DIE` are ported verbatim; slot 488 was already ported (story 29d,
+`FElysiumNpc::DeathSound`). The rest of the chain is **unimplemented**, not diverged, and each body
+is tallied through `ElysiumStub` at the commit so `elysium.stubs` names it: `CreateCorpse`
+`0x1032c0e0`, `SpawnStaticCorpse` `0x1032be80`, `Event_Dying` `0x10339413`, `ShouldFadeOnDeath`
+`0x1027a400`, `SUB_StartFadeOut` `0x102695d0`, `SOUND_CARCASS` `0x101babc0`, and the corpse removal
+timers. Because retail's `TASK_DIE` never completes and this runtime has no entity removal, the
+commit tears the program down in place of the corpse swap.
+
+**No spec story owns this chain.** 0014 (ragdoll) scopes the rig, the impulse and the handoff, and
+defers "the death family" to 0005; 0005 story 4 is closed and what it built was the port's invented
+death ladder, which pass D deleted. The corpse chain above needs an owner.
+
+**Unrecovered:** `SUB_FadeOut`'s body (label `0x100152b2`, identified through the `CBaseEntity`
+datamap builder `0x1001311a`); the concrete `.wav` behind the vdata "Death" entry, whose trail ends
+at the VSnd variant resolver `0x101f4600`; the death-force envelope composed in `0x1032b9b0`.

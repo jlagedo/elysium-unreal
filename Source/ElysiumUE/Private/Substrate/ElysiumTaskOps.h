@@ -67,7 +67,18 @@ enum class EElysiumTaskOp : uint8
 	MakeOblivious,
 	SetNpcFlag,
 	PlayDeathSequence,
-	GetPathToGoal,
+	/** `TASK_SOUND_DIE` (`0x49`), the second task of base `DIE` and of `SCHED_DIE_RAGDOLL`. Troika
+	 *  forwards it to the base through its default dispatch arm (`0x102a77e2`); the base arm is
+	 *  `0x10286843` and is two calls long -- the death-sound hook, vtable slot 488, and then
+	 *  `TaskComplete`. */
+	SoundDie,
+	/** `TASK_DIE` (`0x5f`), the third and last task of base `DIE`. Unlike every other op here it
+	 *  spans both halves of the dispatch: the base `StartTask` arm `0x10286801` (shared with
+	 *  `TASK_DIE_IMMEDIATE` `0xdf`) clears the navigator goal and writes `m_lifeState = 1` without
+	 *  completing, and Troika's `RunTask` arm `0x102abb90` (shared with `TASK_DIE_GIB` `0xe9` and
+	 *  `TASK_DIE_DUE_TO_PLAYER` `0xeb`) waits, then commits -- and never completes either. */
+	Die,
+	PatrolPath,
 };
 
 namespace ElysiumTaskOps

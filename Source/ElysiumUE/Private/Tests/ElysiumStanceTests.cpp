@@ -19,6 +19,7 @@
 #include "ElysiumStanceTypes.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumRng.h"
 #include "ElysiumPlayer.h"   // FElysiumAnimating::SetDisposition
 #include "Tests/ElysiumTestServices.h"
 
@@ -283,6 +284,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceDriverTest,
 	"Elysium.Substrate.Stance.Driver", GElysiumStanceTestFlags)
 bool FElysiumStanceDriverTest::RunTest(const FString&)
 {
+	// This integration case uses the global NPC stream. Own its seed, as the isolated cases
+	// above own theirs, so the preceding automation case cannot choose this body's transitions.
+	ElysiumRng::SeedAll(11);
 	auto BuildDefs = [](FElysiumEntityDefs& Defs)
 	{
 		Defs.MapName = TEXT("__stance_driver__");
@@ -328,9 +332,29 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		}).Num();
 		TestEqual(TEXT("one selection per clip, not one per think"), AfterOpening, 1);
 
+		// Select the authored 1->2 branch deterministically. The table also legitimately permits
+		// 1->3 (whose transition falls back to an idle), so an arbitrary stream cannot promise
+		// this particular clip even after forty seconds. The policy's roll and destination draw
+		// choose the scenario; the real world/think driver below must still execute it.
+		for (int32 Seed = 0; Seed < 256; ++Seed)
+		{
+			FRandomStream Trial(Seed);
+			if (Trial.RandRange(1, 100) < Services.DispositionRow.StandingStanceChangeChance
+				&& Trial.RandRange(0, 1) == 0)
+			{
+				ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).Initialize(Seed);
+				break;
+			}
+		}
+
 		// Past the 3 s change floor with an 80 % roll, the stance has to move — and a move plays the
 		// authored transition rather than snapping to the destination idle.
 		for (int32 i = 0; i < 400; ++i) { World.Tick(Now); Now += 0.1; }
+		if (!Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Trans_1_2 loop=0")))
+		{
+			for (const FString& Call : Services.Calls)
+				if (Call.StartsWith(TEXT("PlayNpcClip smiling_jack Stance_"))) AddInfo(Call);
+		}
 		TestTrue(TEXT("the stance eventually changes, through its authored transition"),
 			Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Trans_1_2 loop=0")));
 		TestTrue(TEXT("and settles onto the destination idle after it"),

@@ -205,6 +205,7 @@ public:
 	// base and Troika program by its retail number.
 	virtual int32 ResolveScheduleId(int32 Id) const;
 	virtual int32 LocalScheduleId(int32 GlobalId) const;
+	virtual const FElysiumLocalIdSpace* ConditionIdSpace() const;
 
 	// The combat verbs.
 	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs
@@ -237,7 +238,7 @@ public:
 	// `TASK_FIND_COVER_FROM_ENEMY`. New with the corpus -- the witness text
 	// `SCHED_TROIKA_CHASE_ENEMY_FAILED` is the fifth of its twelve tasks and the port carried no
 	// body for it, because it carried no program that named it. Refusing fails the task by name.
-	virtual bool FindCoverFromEnemy() { return false; }
+	virtual bool FindCoverFromEnemy(float MoveWait) { return false; }
 
 	// `TASK_PLAY_DEATH_SEQUENCE`'s one rung — try ONE activity on the body and answer with its
 	// authored length, or a negative value when this body's vocabulary does not carry it. The kernel
@@ -248,10 +249,39 @@ public:
 	// hold it, where an idle-schedule activity is an ambient claim any locomotion publish outranks.
 	virtual float PlayDeathActivity(const FString& Activity) { return -1.f; }
 
+	// `TASK_SOUND_DIE`'s whole body -- the death-sound hook, vtable slot 488. The base body
+	// (`0x101a6880`) is EMPTY; Troika's (`0x10293ec0`) walks the vdata sound table once for the entry
+	// named "Death", caches its index in `DAT_10924d64` under the one-shot guard `DAT_10923f0d`, and
+	// plays it as sound type 2 at volume 1.0 and pitch 1.25.
+	//
+	// Retail fires this same hook from `Event_Killed` (`0x10265cb8`) under no life-state guard, so a
+	// single death plays it more than once. That is retail's behaviour, not a defect to smooth here.
+	virtual void DeathSound() {}
+
+	// `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal through `0x102ee270` and write
+	// `m_lifeState = 1`. The arm does NOT complete the task -- it falls off the dispatch without
+	// touching `TaskComplete`, which is what leaves the program parked on this task.
+	virtual void BeginDying() {}
+
+	// `TASK_DIE`'s Troika `RunTask` gate (`0x102abb90`):
+	//   (IsActivityFinished() [slot 251] && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE
+	// The second arm is load-bearing: a body with no death performance running is already idle, so it
+	// commits on the first think instead of waiting for a clip that will never play.
+	virtual bool IsDeathPerformanceFinished() const { return true; }
+
+	// `TASK_DIE`'s commit. Retail sets the damage target to the NPC ITSELF, writes `m_lifeState` 1 ->
+	// 0, and calls `CBaseCombatCharacter::Die` (`0x103392c0`, reached only through thunk
+	// `0x100034f9` -- which is why the decompiler reports it with no callers at all).
+	//
+	// `Die` guards on `m_lifeState != 2`, builds a synthetic 1.0-damage packet sourced from the NPC,
+	// and dispatches `Event_Killed` (slot 144) and `Event_Dying` (slot 403). So the commit RE-ENTERS
+	// the kill path; it is the second `Event_Killed` whose `CreateCorpse` makes the corpse.
+	virtual void CommitDeath() {}
+
 	// `TASK_GET_PATH_TO_GOAL` — issue the next leg of the scripted order this NPC was pushed, at the
 	// order's own gait. False means no order, no body, an exhausted route or a body that would not
 	// take the request; all four fail the task, and the runner names which.
-	virtual bool GetPathToScriptedGoal() { return false; }
+	virtual void RunPatrolPathTask() {}
 
 	// `TASK_MAKE_OBLIVIOUS` (0x131, `StartTask` arm `0x102a72e3`). The operand is a float the schedule
 	// compiler writes from `TRUE`/`ON` -> 1.0 and `FALSE`/`OFF` -> 0.0 (`0x1030e65f`); all 35 shipped
@@ -259,7 +289,7 @@ public:
 	virtual void MakeOblivious(bool bOblivious) {}
 
 	// `TASK_SET_NPC_FLAG` (0x100, `StartTask` arm `0x102a585d`). One bit of the NPC flag word.
-	virtual void SetNpcFlag(EElysiumNpcFlag Flag) {}
+	virtual void SetNpcFlag(uint32 EncodedFlag) {}
 
 	// Discard every gathered condition, because a schedule was just installed.
 	//

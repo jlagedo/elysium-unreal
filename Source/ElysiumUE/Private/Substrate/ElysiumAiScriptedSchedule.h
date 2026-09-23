@@ -27,84 +27,29 @@ class FElysiumEntityWorld;
 
 namespace ElysiumAiScriptedSchedule
 {
-	/**
-	 * The authored `schedule` keyvalue.
-	 *
-	 * The `A`/`B` suffixes are deliberate: the survey states that modes 1 and 2 call *variants* of
-	 * scheduled move-to-goal-entity and 4 and 5 *variants* of scheduled follow-path, and that "the
-	 * exact gait or policy label distinguishing 1 from 2 and 4 from 5 is not yet proven". Naming the
-	 * members after a guessed label would hide the open question inside the type.
-	 */
-	enum class EMode : uint8
-	{
-		None        = 0,
-		MoveToGoalA = 1,
-		MoveToGoalB = 2,
-		AssignEnemy = 3,
-		FollowPathA = 4,
-		FollowPathB = 5,
-	};
+    // 0x101a98c0: 1/4 ACT_WALK (9), 2/5 ACT_RUN (19); MoveType 5/6 uses ACT_FLY (34).
+    enum class EMode : uint8
+    {
+        None = 0, MoveToGoalA = 1, MoveToGoalB = 2, AssignEnemy = 3,
+        FollowPathA = 4, FollowPathB = 5,
+    };
+    bool IsKnownMode(int32 Authored);
+    const TCHAR* ModeName(int32 Authored);
+    bool IsMoveToGoal(int32 Authored);
+    bool IsFollowPath(int32 Authored);
+    bool IsRunVariant(int32 AuthoredMode);
+    bool ForcedState(int32 Authored, EElysiumNpcState& OutState);
+    bool IsKnownForceState(int32 Authored);
+    inline constexpr int32 SpawnFlagSuppressRouteWarning = 0x800;
+    inline constexpr int32 MaxRouteNodes = 128;
 
-	bool IsKnownMode(int32 Authored);
-	const TCHAR* ModeName(int32 Authored);
-	bool IsMoveToGoal(int32 Authored);
-	bool IsFollowPath(int32 Authored);
+    // The number passed to ScheduledMoveToGoalEntity/FollowPath: base IDLE_WALK (2).
+    // Slot 440 then translates it for the receiving NPC, normally to Troika IDLE_PATROL.
+    int32 ProgramFor(int32 AuthoredMode);
 
-	/**
-	 * CHOSEN, NOT RECOVERED — the 1 vs 2 and 4 vs 5 distinction, taken as WALK versus RUN.
-	 *
-	 * Quoted from `docs/vtmb/npc-ai/README.md`: "The exact gait or policy label
-	 * distinguishing 1 from 2 and 4 from 5 is not yet proven." Gait is chosen over a policy label
-	 * because gait is the one difference between two otherwise identical move orders that a player
-	 * can see, and because the corpus splits cleanly along it: the two rows carrying `forcestate 0`
-	 * are the unhurried ones (mode 1, the Santa Monica blueblood strolling into an alley; mode 4,
-	 * Mercurio turning around in the apartment), while every row carrying an alert or combat force
-	 * state is an urgent response (the three warehouse thug retreats and the three clinic guards
-	 * answering a security camera, all mode 2, plus the one mode 5). The LOWER value of each pair is
-	 * therefore read as the walking variant and the higher one as the running variant: 1 walks and 2
-	 * runs, 4 walks and 5 runs.
-	 *
-	 * Replace this function when the discriminator is decoded; nothing else in the family depends on
-	 * which way round it is.
-	 */
-	bool IsRunVariant(int32 AuthoredMode);
-
-	// The recovered authored->native `forcestate` table. Returns false for authored 0 ("no forced
-	// state", an ordinary value on two corpus rows) and for a value outside the table.
-	bool ForcedState(int32 Authored, EElysiumNpcState& OutState);
-	bool IsKnownForceState(int32 Authored);
-
-	// Spawn flag 0x800 — "suppresses the route-failure warning". No corpus row authors it; the one
-	// row with any spawnflags at all writes 4.
-	inline constexpr int32 SpawnFlagSuppressRouteWarning = 0x800;
-
-	// How many nodes a follow-path route may chain before it is refused as authored nonsense.
-	inline constexpr int32 MaxRouteNodes = 32;
-
-	// Is this GLOBAL id one of the two programs this family composes? The save path asks, because
-	// the order behind them is not save state.
-	bool IsScriptedProgram(int32 GlobalId);
-
-	// Which program a mode runs, as the class-LOCAL retail number, or `ElysiumScheduleId::None`
-	// for mode 3 (which runs no program at all) and for an unknown mode.
-	int32 ProgramFor(int32 AuthoredMode);
-
-	/**
-	 * Build the route a follow-path order walks: the goal's own origin, then each entity its
-	 * `target` keyfield chains to.
-	 *
-	 * CHOSEN, NOT RECOVERED, and deliberately degenerate for everything the corpus ships. No mode 4
-	 * or 5 row wires a multi-node path: the one live mode-4 goal is the `aiscripted_schedule`
-	 * entity's own targetname and the one mode-5 goal (`cs_target`) does not exist in its map at
-	 * all, which is the recovered log-and-stop case firing in shipped content. VtMB's own patrol
-	 * routes are addressed by an `info_node_patrol_point`'s `Group` key rather than by `goalent`, so
-	 * the patrol substrate is not what `goalent` names and reusing it here would be inventing a
-	 * wire. What is used instead is Source's own `target` chain, which costs nothing and collapses
-	 * to a single leg — identical to a move-to-goal — for every authored row.
-	 */
-	void BuildRoute(FElysiumEntityWorld& World, const FElysiumEntity& Goal, TArray<FVector>& OutRoute);
+    // Type-3 navigator goal: follow ordinary target keys until NULL or 128 entries.
+    void BuildRoute(FElysiumEntityWorld& World, const FElysiumEntity& Goal, TArray<FVector>& OutRoute);
 }
-
 /**
  * The order one `aiscripted_schedule` pushed onto one NPC, and the whole of what the two moving
  * programs read.
@@ -122,6 +67,7 @@ struct FElysiumScriptedScheduleOrder
 	FElysiumEntityHandle Goal;
 	TArray<FVector> Route;
 	int32 Leg = 0;
+	int32 Program = 0; // Installed GLOBAL id; ordinary corpus programs can also run without an order.
 	bool bRun = false;
 	bool bSuppressRouteWarning = false;
 

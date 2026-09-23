@@ -110,6 +110,11 @@ int32 IElysiumScheduleRunner::LocalScheduleId(int32 GlobalId) const
 	return Space != nullptr ? Space->GlobalToLocal(GlobalId) : INDEX_NONE;
 }
 
+const FElysiumLocalIdSpace* IElysiumScheduleRunner::ConditionIdSpace() const
+{
+	return Corpus().SpaceFor(TEXT("CAI_BaseNPCTroika"), EElysiumIdCategory::Condition);
+}
+
 namespace
 {
 	/** The op this runtime runs for a step, or `Unknown` -- the coverage meter's row. */
@@ -158,6 +163,7 @@ namespace
 		case EElysiumTaskOp::MeleeAttack1:
 		case EElysiumTaskOp::RangeAttack1:        return 0x03;
 		case EElysiumTaskOp::SpecialIdleActivity: return 0x15;
+		case EElysiumTaskOp::FindCoverFromEnemy:  return 0x08;
 		default:                                  return 0x0c;
 		}
 	}
@@ -258,20 +264,26 @@ namespace
 		case EElysiumTaskOp::SetNpcFlag:
 			// One of the three prefixes that store the raw 32-bit word rather than a converted
 			// float, which is why this reads `RawWord` and its neighbours read `Data`.
-			Runner.SetNpcFlag(static_cast<EElysiumNpcFlag>(Step.RawWord()));
+			Runner.SetNpcFlag(Step.RawWord());
 			return EElysiumTaskResult::Complete;
 
 		case EElysiumTaskOp::GetPathToEnemy:
 			return Runner.GetPathToEnemy(State.ToleranceUnits)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
-		case EElysiumTaskOp::GetPathToGoal:
-			return Runner.GetPathToScriptedGoal()
-				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+		case EElysiumTaskOp::PatrolPath:
+			Runner.RunPatrolPathTask();
+			return EElysiumTaskResult::Complete;
 
 		case EElysiumTaskOp::FindCoverFromEnemy:
-			return Runner.FindCoverFromEnemy()
-				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+		{
+			const bool bFound = Runner.FindCoverFromEnemy(Step.Data);
+			// SetGoal can already have called TaskFail while testing an earlier lateral point.
+			// A later successful point must not erase that write or complete over it.
+			if (Runner.HasMaintenanceCondition(EElysiumNpcCond::TaskFailed))
+				return EElysiumTaskResult::Running;
+			return bFound ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+		}
 
 		case EElysiumTaskOp::RunPath:
 			Runner.RunPath();
@@ -369,6 +381,21 @@ namespace
 			return EElysiumTaskResult::Running;
 		}
 
+		case EElysiumTaskOp::SoundDie:
+			// `0x10286843`, whole. The operand is authored `0` on both texts that name the task and the
+			// arm never reads it. `TaskComplete` follows the hook with no gate, so the task is done on
+			// the think that begins it and has no `RunTask` arm at all -- base `RunTask` maps `0x49` to
+			// the no-entry handler `0x102896f5`, which normal execution never reaches.
+			Runner.DeathSound();
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTaskOp::Die:
+			// `0x10286801`, whole -- and then nothing. Retail's arm clears the navigator goal, writes
+			// `m_lifeState = 1`, and RETURNS: no `TaskComplete`, no `TaskFail`, no wait deadline. The
+			// program parks here and the Troika `RunTask` arm below decides when the NPC actually dies.
+			Runner.BeginDying();
+			return EElysiumTaskResult::Running;
+
 		case EElysiumTaskOp::Unknown:
 			break;
 		}
@@ -383,6 +410,41 @@ namespace
 			FString::Printf(TEXT("%d"), Step.TaskId),
 			TEXT("the story that builds the task body; the step fails by name"));
 		return EElysiumTaskResult::Failed;
+	}
+
+	// The corpse chain `TASK_DIE`'s commit reaches in retail, and that this runtime has not built.
+	//
+	// None of these is a divergence -- the port does not choose to do something else here, it does
+	// not do this yet. Each row is a real body with a recovered address, tallied once per death so
+	// `elysium.stubs` answers "what does dying still not do" with the same readout every other
+	// unported surface uses.
+	void DeathChainStubs(IElysiumScheduleRunner& Runner)
+	{
+		struct FRow { const TCHAR* Surface; const TCHAR* Address; const TCHAR* What; };
+		static const FRow Rows[] =
+		{
+			{ TEXT("CreateCorpse"),       TEXT("0x1032c0e0"),
+			  TEXT("slot 301: keeps the ragdoll as the corpse, or spawns a static one and removes this") },
+			{ TEXT("SpawnStaticCorpse"),  TEXT("0x1032be80"),
+			  TEXT("the second entity a no-ragdoll body leaves behind") },
+			{ TEXT("Event_Dying"),        TEXT("0x10339413"),
+			  TEXT("slot 403, dispatched by Die right after Event_Killed") },
+			{ TEXT("ShouldFadeOnDeath"),  TEXT("0x1027a400"),
+			  TEXT("slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound") },
+			{ TEXT("SUB_StartFadeOut"),   TEXT("0x102695d0"),
+			  TEXT("not-solid, relink, and the SUB_FadeOut think at 0x100152b2") },
+			{ TEXT("SOUND_CARCASS"),      TEXT("0x101babc0"),
+			  TEXT("AI sound type 0x20 at the body, volume 384, for 30 seconds") },
+			{ TEXT("corpse removal"),     TEXT("0x1032c0e0"),
+			  TEXT("curtime + 10.0 ordinary and burning, curtime + 0.5 static no-ragdoll") },
+		};
+		for (const FRow& Row : Rows)
+		{
+			ElysiumStub::Fired({ TEXT("npc-death"), Row.Surface, Row.Address, TEXT("0019/3") },
+				FString(), FString(), Row.What);
+		}
+		Runner.RecordScheduleEvent(
+			TEXT("TASK_DIE committed; the corpse chain (CreateCorpse and below) is not built"));
 	}
 
 	// Re-ask a task that reported Running. Only the timed tasks, the PVS hold and the movement watch
@@ -406,6 +468,24 @@ namespace
 		case EElysiumTaskOp::SetActivity:
 			return Runner.IsIdealActivityCurrent() || Now >= State.TaskEndsAt
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+		case EElysiumTaskOp::Die:
+		{
+			// Troika's `RunTask` arm `0x102abb90`. This is the body that runs on every VtMB NPC: they
+			// are all `CAI_BaseNPCTroika`, and Troika's dispatch table maps `0x5f` to this arm rather
+			// than to its default forwarder, so the base arm `0x10288fc4` -- which writes
+			// `m_lifeState = 2` and runs the fade/carcass policy -- is NOT the death a player sees.
+			if (!Runner.IsDeathPerformanceFinished())
+			{
+				return EElysiumTaskResult::Running;
+			}
+			Runner.CommitDeath();
+			// Retail calls `Die` and returns. It never completes the task, so nothing ends the `DIE`
+			// program: what ends the NPC is `CreateCorpse` dissolving the entity underneath it. This
+			// runtime has none of that chain, so the task stays parked and the bodies below are tallied
+			// at the one moment they would have run.
+			DeathChainStubs(Runner);
+			return EElysiumTaskResult::Running;
+		}
 		default:
 			break;
 		}
@@ -528,7 +608,7 @@ FElysiumNpcConditions ElysiumSchedule::EffectiveInterrupts(const FElysiumSchedul
 	{
 		return FElysiumNpcConditions();
 	}
-	FElysiumNpcConditions Mask = Active->Interrupts;
+	FElysiumNpcConditions Mask = Active->Interrupts.ToLocalOrdinals(Runner.ConditionIdSpace());
 	Runner.BuildScheduleTestBits(Mask);
 	return Mask;
 }
@@ -640,13 +720,16 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				// normal one only -- which is why the inverted mask is read off the program directly.
 				FElysiumNpcConditions Firing =
 					EffectiveInterrupts(State, Runner).Intersection(*Conditions);
-				Firing |= Active->InvertedInterrupts.Difference(*Conditions);
-				if (!Firing.IsEmpty())
+				const FElysiumNpcConditions InvertedFiring = Active->InvertedInterrupts.Difference(
+					Conditions->ToGlobalOrdinals(Runner.ConditionIdSpace()));
+				if (!Firing.IsEmpty() || !InvertedFiring.IsEmpty())
 				{
+					FElysiumNpcConditions TraceBits = Firing.ToGlobalOrdinals(Runner.ConditionIdSpace());
+					TraceBits |= InvertedFiring;
 					Runner.RecordScheduleEvent(FString::Printf(
 						TEXT("schedule %s interrupted by %s"),
 						*ElysiumScheduleLabel(State.Current, &Runner),
-						*Firing.Describe()));
+						*TraceBits.Describe()));
 					bScheduleValid = false;                                     // 0x10281340
 				}
 			}

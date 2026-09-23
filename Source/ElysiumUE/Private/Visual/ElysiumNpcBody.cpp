@@ -1309,3 +1309,27 @@ bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutPro
 	OutProjectedCm = Projected.Location;
 	return true;
 }
+
+bool AElysiumNpcBody::CanReachLateralCover(const FVector& FeetDestination) const
+{
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	UWorld* World = GetWorld();
+	if (World == nullptr || Capsule == nullptr) return false;
+	const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const FVector End = FeetDestination + FVector(0, 0, HalfHeight);
+	const FCollisionShape Shape = FCollisionShape::MakeCapsule(
+		Capsule->GetScaledCapsuleRadius(), HalfHeight);
+	FCollisionQueryParams Params(FName(TEXT("ElysiumLateralCover")), false, this);
+	if (World->OverlapBlockingTestByChannel(End, FQuat::Identity, ECC_Pawn, Shape, Params))
+		return false;
+	FHitResult Hit;
+	return !World->SweepSingleByChannel(Hit, Capsule->GetComponentLocation(), End,
+		FQuat::Identity, ECC_Pawn, Shape, Params);
+}
+
+void AElysiumNpcBody::SetTravelGait(EElysiumNpcGaitKind Gait, float SpeedCmPerSecond)
+{
+	RequestedGaitKind = Gait;
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+		Movement->MaxWalkSpeed = FMath::Max(1.f, SpeedCmPerSecond);
+}

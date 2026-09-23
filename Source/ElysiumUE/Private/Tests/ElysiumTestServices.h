@@ -75,6 +75,17 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// ProjectedOverride is how a projection that MOVED the point is expressed. Both branches matter:
 	// the consumer's re-test only fires on the second.
 	bool bProjectsToNavigable = true;
+	bool bLateralCoverReachable = true;
+	TFunction<bool(const FVector&)> LateralCoverQuery;
+	virtual bool CanReachLateralCover(const FVector& Point) const override
+	{
+		return LateralCoverQuery ? LateralCoverQuery(Point) : bLateralCoverReachable;
+	}
+	virtual void SetTravelGait(EElysiumNpcGaitKind Gait, float Speed) override
+	{
+		RequestedGaitKind = Gait;
+		RequestedSpeedCmPerSecond = Speed;
+	}
 	TOptional<FVector> ProjectedOverride;
 	// The body's own authored forward cell per gait. Zero is the default and means
 	// "this body resolves no fan", which is how the caller's fallback to the stated constants is

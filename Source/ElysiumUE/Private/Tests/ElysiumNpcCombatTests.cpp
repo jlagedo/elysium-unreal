@@ -1617,51 +1617,41 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 
 	TestTrue(TEXT("the death schedule is selected from the death commit itself"),
 		F.Fighter->Schedule.IsRunning());
-	TestEqual(TEXT("...and it is SCHED_DIE"),
-		FString(ElysiumScheduleName(F.Fighter->Schedule.Current)), FString(TEXT("SCHED_DIE")));
+	// Retail's BASE schedule names carry no `SCHED_` prefix -- only Troika's do. The corpus spells
+	// this one `DIE`, and the port reads the name off the loaded program rather than its own table.
+	TestEqual(TEXT("...and it is base DIE"),
+		FString(ElysiumScheduleName(F.Fighter->Schedule.Current)), FString(TEXT("DIE")));
 
-	// --- The program runs, then the body hands over -----------------------------------------------
-	// **The stream, pinned exactly.** Every ladder rung goes through the Reaction producer, and that
-	// producer draws its weighted variant before it knows whether the rung resolves — so a death
-	// costs one draw per rung TRIED. The count has to be a function of the body's own vocabulary and
-	// of nothing else, or how many deaths a fight contained would silently reshuffle every reaction
-	// after it. This body answers the first rung, so the whole death is one draw.
+	// --- The program runs, and it is retail's three tasks -----------------------------------------
+	// `DIE` (`0x2b`) is `TASK_STOP_MOVING`, `TASK_SOUND_DIE`, `TASK_DIE`. It names NO activity task,
+	// so nothing in this program plays a death clip and nothing here draws from the Reaction stream.
+	// Retail's only ordinary death pose is the `ACT_DIERAGDOLL` seed inside `BecomeClientRagdoll`
+	// (`0x10090180`), which is the handoff below, not a task.
 	FRandomStream& Reaction = ElysiumRng::Stream(EElysiumRngStream::Reaction);
-	FRandomStream OneDraw(Reaction.GetCurrentSeed());
-	OneDraw.RandHelper(MAX_int32);
+	const int32 ReactionSeedBefore = Reaction.GetCurrentSeed();
 
 	F.Services.Calls.Reset();
 	F.World.Tick(0.0);
 
-	TestEqual(TEXT("the death ladder advances the Reaction stream by exactly one draw"),
-		Reaction.GetCurrentSeed(), OneDraw.GetCurrentSeed());
+	TestEqual(TEXT("base DIE draws from the Reaction stream not at all"),
+		Reaction.GetCurrentSeed(), ReactionSeedBefore);
+	TestFalse(TEXT("...and plays no death clip, because it names no activity task"),
+		F.Services.Saw(TEXT("ResolveNpcActivityClip")));
 
-	const FString Played = [&F]() -> FString
-	{
-		for (const FString& Call : F.Services.Calls)
-		{
-			if (Call.StartsWith(TEXT("PlayNpcOneShot")))
-			{
-				return Call;
-			}
-		}
-		return FString();
-	}();
-	TestTrue(TEXT("the death pose is played on the reaction branch, over whatever owned the base"),
-		Played.Contains(TEXT("route=reaction")) && Played.Contains(TEXT("prio=reaction")));
-	TestTrue(TEXT("the death clip holds the program open for its own length"),
-		F.Fighter->Schedule.IsRunning());
-
-	// Past the clip: the program ends and the handoff runs.
-	F.Fighter->NextThink = 0.0f;
-	F.Services.Calls.Reset();
-	F.World.Tick(F.Services.OneShotSeconds + 0.1);
-
-	TestFalse(TEXT("the program ends when the death clip does"), F.Fighter->Schedule.IsRunning());
+	// --- TASK_DIE's commit ------------------------------------------------------------------------
+	// The Troika `RunTask` gate (`0x102abb90`) is
+	// `(IsActivityFinished() && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE`. With no death
+	// performance running the second arm is already open, so the whole program -- stop, sound, die,
+	// commit -- resolves inside the first dead think rather than waiting out a clip.
 	TestTrue(TEXT("the body is offered to physics, seeded from its current pose"),
 		F.Services.Saw(TEXT("StartBodyRagdoll -> 0")));
 	TestTrue(TEXT("a body with no physics asset holds its final frame instead"),
 		F.Services.Saw(TEXT("HoldBodyFinalPose")));
+	// Retail's task is STILL RUNNING here and stays running forever: the commit calls `Die` and
+	// returns without completing. What ends the NPC there is `CreateCorpse` (`0x1032c0e0`) taking the
+	// entity out of the world -- unbuilt here, so the commit tears the program down in its place.
+	TestFalse(TEXT("the program is torn down by the commit, standing in for the corpse swap"),
+		F.Fighter->Schedule.IsRunning());
 	TestEqual(TEXT("and nothing on a dead NPC schedules work again"),
 		F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
 

@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumLocalIdSpace.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -15,6 +16,35 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"      // the running program's interrupt mask, the sweep's gate
 #include "Substrate/ElysiumWeaponClasses.h"    // FElysiumWeapon — the reach, cone and deadlines
+
+FElysiumNpcConditions FElysiumNpcConditions::ToGlobalOrdinals(const FElysiumLocalIdSpace* Space) const
+{
+	FElysiumNpcConditions Out;
+	if (Space == nullptr) return Out;
+	for (int32 Id = 0; Id < NumOrdinals; ++Id)
+	{
+		if (HasOrdinal(Id))
+		{
+			const int32 Global = Space->LocalToGlobal(Id);
+			if (Global != INDEX_NONE) Out.SetOrdinal(Global - ElysiumScheduleId::GlobalBase);
+		}
+	}
+	return Out;
+}
+
+FElysiumNpcConditions FElysiumNpcConditions::ToLocalOrdinals(const FElysiumLocalIdSpace* Space) const
+{
+	FElysiumNpcConditions Out;
+	if (Space == nullptr) return Out;
+	for (int32 Ordinal = 0; Ordinal < NumOrdinals; ++Ordinal)
+	{
+		if (HasOrdinal(Ordinal))
+		{
+			Out.SetOrdinal(Space->GlobalToLocal(ElysiumScheduleId::GlobalBase + Ordinal));
+		}
+	}
+	return Out;
+}
 
 namespace
 {

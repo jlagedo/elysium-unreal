@@ -18,49 +18,6 @@ namespace
 	constexpr int32 GTranslate19HintTypeDoor = 0x2774;
 	constexpr TCHAR GTranslate19BachKatana[] = TEXT("item_w_katana");   // 0x10587668
 
-	int32 Translate19FromEnum(int32 Id)
-	{
-		return Id;
-	}
-
-	int32 Translate19ToEnum(int32 Number)
-	{
-		static const int32 All[] = {
-			ElysiumScheduleId::None,
-			ElysiumSched::IDLE_STAND,
-			ElysiumSched::FAIL,
-			ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION,
-			ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI,
-			ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE,
-			ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE,
-			ElysiumSched::SCHED_TROIKA_TAKE_COVER_HINT_DOOR,
-			ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1,
-			ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_NR,
-			ElysiumSched::SCHED_TROIKA_MELEE_DODGE,
-			ElysiumSched::SCHED_TROIKA_MELEE_PREBLOCK,
-			ElysiumSched::SCHED_TROIKA_MELEE_KICK,
-			ElysiumSched::SCHED_TROIKA_MELEE_STEPBACK,
-			ElysiumSched::SCHED_TROIKA_MELEE_IDLE,
-			ElysiumSched::SCHED_TROIKA_MELEE_ADVANCE,
-			ElysiumSched::SCHED_TROIKA_MELEE_CIRCLE_ADVANCE,
-			ElysiumSched::SCHED_TROIKA_CHASE_ENEMY,
-			ElysiumSched::SCHED_TROIKA_RANGE_ATTACK1_SHOOT_AT_HINT,
-			ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY,
-			ElysiumSched::SMALL_FLINCH,
-			ElysiumSched::ALERT_SMALL_FLINCH,
-			ElysiumSched::TAKE_COVER_FROM_ORIGIN,
-			ElysiumSched::SCHED_TROIKA_MESMERIZED,
-		};
-		for (const int32 Id : All)
-		{
-			if (Id == Number && Number != 0)
-			{
-				return Id;
-			}
-		}
-		return ElysiumSched::IDLE_STAND;
-	}
-
 	int32 Translate19SpeciesTable(FElysiumNpc& Npc, int32 Id, const TCHAR* Address);
 }
 
@@ -212,20 +169,9 @@ int32 FElysiumNpc::TranslateScheduleRetail(int32 ScheduleNumber)
 
 int32 FElysiumNpc::TranslateSchedule(int32 Id)
 {
-	LastTranslateScheduleRetail = TranslateScheduleRetail(Translate19FromEnum(Id));
-	if (LastTranslateScheduleRetail == Translate19FromEnum(Id))
-	{
-		return Id;
-	}
-	const int32 Mapped = Translate19ToEnum(LastTranslateScheduleRetail);
-	if (Mapped == ElysiumSched::IDLE_STAND
-		&& LastTranslateScheduleRetail != 1 && LastTranslateScheduleRetail != 0)
-	{
-		ElysiumStub::Fired(TEXT("schedule"), TEXT("TranslateSchedule registry miss"),
-			DebugString(), *FString::Printf(TEXT("0x%x"), LastTranslateScheduleRetail),
-			TEXT("0002/25: untranslated IDLE_STAND"));
-	}
-	return Mapped;
+	// Slot 440 returns the number verbatim. Only GetScheduleOfType may decide it is absent.
+	LastTranslateScheduleRetail = TranslateScheduleRetail(Id);
+	return LastTranslateScheduleRetail;
 }
 
 namespace

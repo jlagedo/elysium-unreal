@@ -10,6 +10,7 @@ class FElysiumCombatCharacter;
 class FElysiumEntity;
 class FElysiumEntityWorld;
 class FElysiumNpc;
+struct FElysiumLocalIdSpace;
 struct FElysiumEntityHandle;
 struct FElysiumNpcMemory;
 
@@ -259,11 +260,12 @@ struct FElysiumNpcConditions
 	// The schedule parser's interrupt arm does not know these identities. It looks a condition name
 	// up in the global condition namespace, subtracts 1,000,000,000 and sets bit `ordinal & 31` of
 	// word `ordinal >> 5` -- so an authored mask is in GLOBAL condition ordinals, and the retail
-	// registration order is what decides which ordinal a name has. `EElysiumNpcCond`'s enumerators
-	// ARE those ordinals, which is why no renumbering was needed; but a corpus may name a condition
-	// this runtime carries no enumerator for, and dropping its bit would silently widen the
-	// schedule's interrupt set. These three take the number instead of the identity so such a bit
-	// survives the round trip, and `Describe` prints it as `COND_<n>`.
+	// registration order decides which ordinal a name has. The live cognition words and enum API
+	// are CLASS-LOCAL; parsed masks are GLOBAL. Convert at the schedule boundary using the
+	// receiving NPC's condition space (retail Set/Has/ClearCondition 0x10269a20/aa0/b50).
+	// Base conditions happen to share their ordinal in both spaces; species conditions do not.
+	FElysiumNpcConditions ToGlobalOrdinals(const FElysiumLocalIdSpace* Space) const;
+	FElysiumNpcConditions ToLocalOrdinals(const FElysiumLocalIdSpace* Space) const;
 	//
 	// An ordinal outside the 256 this type holds is refused rather than wrapped: retail's mask is
 	// 192 bits and its top identity is `0x76`, so an ordinal past 255 is a corpus defect, not a

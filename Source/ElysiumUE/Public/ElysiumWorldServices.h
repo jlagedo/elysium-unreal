@@ -281,6 +281,16 @@ public:
 		return false;
 	}
 
+	// TestLateralCover 0x10278220: stand at the candidate, then MoveLimit with MASK_NPCSOLID
+	// (0x202400b). Geometry only; candidate order and the sight/hint tests belong to the NPC.
+	virtual bool CanReachLateralCover(const FVector& FeetDestination) const { return false; }
+	// CAI_Navigator::FindCoverPos 0x102edc80 -> 0x10301720. The retail node positions,
+	// cooldowns and hint claims have no source until the place/navigation seam (0018/4-5).
+	virtual bool FindNodeCover(const FVector& ThreatOrigin, const FVector& ThreatEye,
+		float RadiusCm, FVector& OutCover) { return false; }
+	// SetMovementActivity 0x102ee250 changes the gait of the existing route, never rebuilds it.
+	virtual void SetTravelGait(EElysiumNpcGaitKind Gait, float SpeedCmPerSecond) {}
+
 	// The body's realized locomotion — **the same record the player's mover publishes**, so
 	// the cast's locomotion and the player's cannot become two systems that happen to play the same
 	// files. Distinct from `Sample` above, which

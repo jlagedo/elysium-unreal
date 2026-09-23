@@ -133,6 +133,13 @@ void FElysiumNpc::ForceScheduleChange(int32 NewSchedule, bool bForce)
 
 void FElysiumNpc::OnScheduleChange(int32 NewSchedule)
 {
+	// The director runs an ordinary corpus program, so its authored interrupts can replace it.
+	// Drop only the port's body claim here; recursively clearing the schedule would reorder slot 435.
+	if (ScriptedScheduleOrder.Program != 0 && NewSchedule != ScriptedScheduleOrder.Program)
+	{
+		ScriptedScheduleOrder.Reset();
+		ReleaseScriptedScheduleBody(TEXT("directed schedule replaced"));
+	}
 	const FElysiumNpcClassSlot* Override = SpeciesDispatchingSlot != GMaintainSlotOnScheduleChange
 		? ElysiumNpcKernelClass::OverrideOf(RetailClass(), GMaintainSlotOnScheduleChange)
 		: nullptr;

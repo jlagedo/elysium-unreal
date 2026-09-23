@@ -5,6 +5,52 @@ Part of the [NPC AI oracle](./README.md). Sections moved verbatim from
 
 ## Schedules and tasks: the behavior program
 
+### Schedule seam integration (0019/3 D–E, 2026-09-22)
+
+All 691 running programs now come from the corpus; the C++ program-provider API is deleted.
+The four registered base names without texts remain without texts. `elysium.schedules [filter]`
+reports the census and each unported task's reference count, largest first.
+
+`GetScheduleOfType 0x102cc260` converts through the RECEIVING NPC's slot-580 space, and slot 447
+uses the same space in reverse (`0x102ea2d0` / `0x102ea280`). The runner now does both. The old
+enum whitelist is gone: slot 440's answer is preserved, and only the manager lookup can miss.
+In particular the chase-failure text's `STANDOFF 0x25` translates through `0x102b12f0` to the
+loaded Troika `0xc1`, not `IDLE_STAND`.
+
+Re-read `SetCondition 0x10269a20`, `HasCondition 0x10269aa0` and `ClearCondition 0x10269b50`:
+local IDs go through slot 580's condition space at `+0x30`, then `global - 1000000000` selects
+the bit. The port retains its class-local live cognition representation and converts at the
+schedule boundary: positive masks to local for overlays/intersection, live conditions to global
+for the inverted test. This is an internal representation difference, not a gameplay change.
+An inverted foreign-class bit still fires on absence. Base IDs coincide; species IDs do not:
+werewolf teleport is local `0x77`, currently global ordinal `0x8f`. The regression executes
+`SCHED_VWEREWOLF_FAIL`'s interrupt against the local producer.
+
+`TASK_SET_NPC_FLAG 0x100`, arm `0x102a585d`, routes the raw operand via its sign bit to
+`0x102a97a0` (word one) or `0x102a9800` (word two, marker stripped). The regression executes
+`SCHED_TROIKA_COMBAT_WAIT`: `TASKS_FACE_ENEMY` must not write `FINDING_BODY` in word one.
+
+**Executable witness:** task `0x58` enters base `0x10283558`; Troika forwards it at `0x102a77e2`.
+Threat is enemy or self. `FindLateralCover 0x102784a0` tests origin, then five left/right pairs,
+48 Source units per step (`0x10447ee8`), with Z unchanged. `TestLateralCover 0x10278220` orders
+blocked sight, slot 548 with NULL hint, clear MoveLimit, then a type-4 run goal with tolerance
+-1. Success stamps `m_flMoveWaitFinished = curtime + operand` and completes. The node fallback
+`0x102edc80 -> 0x10301720` gets threat origin/eye, minimum zero and slot-550 radius. No node
+fails with 8; a node submits a type-6 run goal with tolerance -2 (hull width), keeps its hint's
+arrival activity/direction and stamps the deadline. `SetGoal -> FindPath 0x102f1dc0` owns route
+submission's task completion/failure, as documented below.
+
+The lateral arm is wired and the witness executes its twelve tasks, including movement and the
+final wait; a second run exercises no-cover failure and translated standoff. **Unimplemented
+world input:** `IElysiumNpcMotor::FindNodeCover` answers nothing until 0018/4–5 supply retail
+places, cooldowns and hint claims. No invented point replaces a node. Task-body coverage does
+not claim every world input is implemented.
+
+**Named geometry modernization:** lateral stand/movement probes use Unreal's current NPC
+capsule overlap/sweep, while retail uses its box and MoveProbe. Candidate order, 48-unit steps,
+hint-group rejection and deadlines stay retail's. The shared sight service keeps its existing
+documented gap: brush sight signatures are live, character occluders are not yet wired.
+
 The recovered native schedule corpus contains 691 schedules and 4,139 task invocations over 441
 distinct task identities. A schedule is an ordered task program with failure and interrupt policy;
 it is not an animation clip and it is not merely a state label. The schedule can ask for a path,
