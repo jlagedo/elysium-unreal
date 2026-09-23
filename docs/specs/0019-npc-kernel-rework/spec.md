@@ -564,8 +564,17 @@ green, and `coverage.md` shows the change.
   member per own word on that class, and one override per retail (class, slot) row verdicted
   `rule`. Lands alone on a branch with the witness green before and after; no other story
   touches `ElysiumNpc.h` while it is open.
+  **Order amended 2026-09-23: this story runs before story 8's pass I.** Pass R measured the
+  port: 227 of its 295 `rule` rows are species overrides, which on the flat class would each be
+  written as a `RetailClass()` prologue and then moved here. The one coupling that put 8 first was
+  the census clause above, which reads as "every `rule` override exists" and so needed 8's bodies;
+  it is a definition, not a dependency, and is amended: the census asserts an override for every
+  (class, slot) `rule` row that the port carries, and lists the `rule` rows not yet ported as
+  residue (`kernel_shape --residue`), a number that must only fall as 8's families land. 8's
+  retrieval (pass R) stays where it was, since a packet does not depend on the class shape.
   Consumes: 1 (the delete list first, so nothing dead is re-homed), 3 (programs load per
-  class in the tree's order). Provides: the tree every species story in 0002 lands on.
+  class in the tree's order). Provides: the tree every species story in 0002 lands on, and the
+  tree story 8's pass I ports onto.
   Size: XL. Effort: Opus / high.
 
 - [ ] **6. The deletions and the mechanism seams.**
@@ -730,7 +739,8 @@ green, and `coverage.md` shows the change.
     concern file already exists (Lifecycle, Conditions) and keeping every file.
 
 ## Build order
-1 → 2 → 3 → 4, with 8 in parallel from 1 on → 5 → 6 → 7. Relevant bindings from 2 precede
+1 → 2 → 3 → 4, with 8's pass R in parallel from 1 on → 5 → 8's passes I and C → 6 → 7 (amended
+2026-09-23; the stated order had all of 8 before 5, see story 5). Relevant bindings from 2 precede
 completion of 0018 story 2's bake/adoption, while its native class declarations can precede
 binding completion. AIN projection is 0018/4's independent format boundary. 5 lands
 alone on a branch. When 7 lands this spec closes and 0002's build order takes over.

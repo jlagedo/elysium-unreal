@@ -1,6 +1,6 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box.** One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 06's pass I and C boxes read "after 06b", so 06b is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
@@ -145,6 +145,9 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
   no family types a program id or an inline constant by hand.
+  **Status 2026-09-23: pass R complete (below); passes I and C wait for row 06b, the class tree,
+  and port onto it.** The reasons and the review of the earlier order are under "Where this
+  differs" at the end of this file.
   Row 02 re-verdicted band 19–29: 380 `rule`, 4 `present`, 13 `mechanism`, 71 `dead` of 468.
   Joined to the family files 2026-09-23: **286 `rule` rows of 351** in the twelve families, and
   that is the port (counts below are rule / rows). Nothing of Conditions19 exists in the tree.
@@ -162,6 +165,9 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
       one-sided rows filled in by the other reader. The 38 rows where the packet corrects the
       checklist are written back as `CORRECTED` clauses on the verdict evidence (32 rows), the
       checklist regenerated, both ledger checks green.
+  - [ ] **Pass I** — after row 06b. Each family ports onto its retail classes as overrides
+    (`Super::` where retail called the base directly, per the packet's skeleton); the Damaged19
+    rows land on their own classes, so the "which family" question dissolves. Lanes as below.
   - [ ] **Pass I, lane A** (the interpreter, in order; gate then full read then commit per family)
     - [ ] Conditions19 (20/23)
     - [ ] RunAi19 (17/34)
@@ -176,6 +182,12 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     - [ ] Boss19 (11/19)
     - [ ] Werewolf19 (17/17)
   - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
+- [ ] **06b · 0019/5** — The class tree, one port class per retail class. XL · Opus/high. **NEXT.**
+  Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.
+  Moved up from row 10 on 2026-09-23 (decision recorded under "Where this differs"). Its inputs
+  are landed (rows 02 and 04); its census clause is amended in the spec so unported `rule`
+  overrides are residue, not failures, until row 06's pass I closes. Baseline is green:
+  `kernel_shape --check` fixed the same day (row 05's hand-off).
 
 ## B — the movement base 0019/6 stands on
 
@@ -187,8 +199,7 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 ## C — close 0019
 
-- [ ] **10 · 0019/5** — The class tree, one port class per retail class. XL · Opus/high.
-  Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.
+- **10 · 0019/5** — moved to row 06b (2026-09-23).
 - [ ] **11 · 0019/6** — The deletions (dead rows) and the mechanism seams (Motor, Navigator, traces, push-outs). L · Opus/high.
 - [ ] **12 · 0019/7** — The reach cut: `kernel_ledger --reach <map>`. S–M · Sonnet/medium.
   **0019 closes here.** Re-read the sizes of rows 26–48 from the tutorial's reach list.
@@ -271,6 +282,26 @@ Each move follows a `Consumes:` line the stated order skipped; revert any by swa
   seams call; 0019/6 names only 0018/5.
 - **0019/8 (29e) after 0019/3 and 0019/4** instead of beside them: serial, so it goes where it
   retypes nothing.
+- **0019/5 (the class tree) before 0019/8's passes I and C, as row 06b** (decided 2026-09-23,
+  owner and Fable). The spec's build order had all of 8 before 5, and this tracker had gone
+  further and put 5 behind 0018/4–6 in section B. Review of that earlier ordering, by the one who
+  made it:
+  - *What was right:* 8's pass R first. A reading packet does not depend on the port's class
+    shape, and its measurement is what settled this question.
+  - *What was wrong, twice.* (1) Placing 5 in section C after 0018/4–6: nothing in B feeds 5 —
+    5 consumes 1 and 3, both landed by 2026-09-22 — so that placement followed section headings,
+    not `Consumes:` lines, which is the one rule this file claims to follow. (2) Keeping the
+    spec's "all of 8 before 5" after pass R had measured 227 of 8's 295 `rule` rows as species
+    overrides. On the flat `final` class each lands as a `RetailClass()` prologue that 5 then
+    re-homes: 227 bodies and their tests written twice, added to the 155 prologue sites 5 already
+    has to move. The only thing that made 8-before-5 look necessary was 5's census clause
+    ("one override per `rule` (class, slot)"), which wanted 8's bodies to exist; that is a
+    definition and is amended in the spec, not a dependency.
+  - *What it costs:* 5 is XL and exclusive on `ElysiumNpc.h`, so 8's two lanes wait for it. That
+    wait exists in either order; it is shorter with 5 first because 5 then moves what exists today
+    and not 295 more bodies.
+  - *What stays after 5:* 8's pass I, then 6 and 7 as before. 0018/4–6 (rows 07–09) keep their
+    place; they are 0019/6's base, not 5's.
 - **0002/12a and 25b given slots**: 0002's build order lists neither. 12a sits ahead of 12b,
   which reads its keys; 25b needs the class tree (row 10).
 - **12b → 10k → 10g → 10h** where 0002 lists 10h, 10g, …, 10k, …, 12b: 10k consumes 12b's cover
