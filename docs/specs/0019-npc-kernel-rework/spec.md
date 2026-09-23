@@ -604,6 +604,119 @@ green, and `coverage.md` shows the change.
   record; the in-flight Conditions19 reviewed against the pass before it merges. 29e keeps its
   number and its text in 0002; this story is the rule it finishes under.
   Consumes: 1. Size: what remains of 29e. Effort: as 29e.
+  **Scope after 1 (measured 2026-09-23):** the twelve families hold 351 rows, of which **286 are
+  `rule`** and are the port; 55 `dead`, 8 `mechanism` and 2 `present` get no body. Per family
+  (rule / rows): Conditions19 20/23, Spawn19 48/60, RunAi19 17/34, StartTask19 27/28, RunTask19
+  23/24, Select19 31/39, Damage19 26/26, Script19 20/32, Think19 15/15, Boss19 11/19, Werewolf19
+  17/17, Misc19 31/34. Nothing of Conditions19 is in the tree: the tracker's "in flight" predates
+  the stop after Maintain19, and the `Conditions19` git branch is the 0019/2 bindings work, already
+  an ancestor of `main`.
+  **Delivered in three passes (owner's decision 2026-09-23): R the retrieval, I the
+  implementation, C the close.** The split separates reading the corpus, which is parallel and
+  needs no build, from porting, which is serial on the class, the overlay and the build.
+  - *Pass R, retrieval.* One reading packet per family beside the briefs
+    (`$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/<Family>19-READING.md`), in
+    the shape of the cancelled wave-1 `READING.md` the four landed families were ported from. Per
+    `rule` row: the arm inventory (every conditional branch with both targets), every memory
+    operand with its shape-map name, every global with its value at the instruction's width, every
+    call with thunks followed and virtual calls as slot numbers, the argument mapping settled by
+    the callee's `RET n`, the stack locals a callee may rewrite through a pointer, the datamap name
+    of every offset read, the banked wave-1 corrections that apply, and the verdict line verbatim.
+    Verdicts do not change here; a packet claim that contradicts its checklist row is listed for
+    the owner, because it changes what the porter was told. Done when 12 packets cover 286 rows and
+    a check refuses a packet missing any address of its family's row file.
+    *The method, piloted on `UpdateEnemyPos 0x10271900`* (artifacts `$ELYSIUM_WORK_ROOT/bench/pair-read/`):
+    (1) a **script** writes the skeleton — arms, operands, globals, calls, slots — from the listing
+    database in seconds, complete by construction, so no model transcribes structure; (2) **luna 6
+    at `high` on the Fast service tier** (`-c service_tier='"priority"'`) fills the walk on the
+    skeleton — branch meaning, argument mapping, locals, object identity — in about four minutes
+    and cents per function; (3) **GLM 5.3** reads the same skeleton brief as the second reader on
+    the flat plan; (4) the two walks are **diffed row by row on the skeleton's addresses**, agreed
+    rows accepted, disagreements sent to luna `max` with both readings and the listing excerpt;
+    (5) the packet is diffed against the checklist row. What the pilot measured: on the full
+    (skeleton-less) brief luna mis-attributed the pushed arguments at every effort and tier, and the
+    skeleton brief fixed it at `high`; `max` bought one more row (a swapped branch consequence) at
+    four times the time; the Fast tier cut `max` from 24 to 14 minutes for the same answer; every
+    error any luna run made was a row where GLM disagreed; the one error no pair catches — the
+    checklist's `+0x20` "yaw", which the datamap names `CAI_Path::m_moveTolerance` — is caught by
+    the checklist diff. GLM-5.3-Flash answers a bare prompt but hung twice on the turn after corpus
+    tool results, and the 2026-09-20 bench had already disqualified it on accuracy; it is not a
+    reader.
+    **Tier 0 landed 2026-09-23:** `uv run elysium research kernel_skeleton` (`kernel_skeleton.py`
+    beside the ledger; `<addr>`, `--family <name>`, `--all`, `--check`). It reads the listing
+    database and the image and writes `skeletons-19-29/<Family>.md` + `.json` beside the family
+    files: every conditional jump with both targets, every `RET`, every jump table read out of the
+    image while its entries fall inside the body (base `StartTask` 107 entries at `0x10286f8c`,
+    Troika 176 at `0x102a77f8`, as the reading banked them), every memory operand with its base
+    resolved to `this` or to a word loaded off `this` and joined to the datamap through the
+    function's own class and base chain, to `layout.tsv` and to the shape map, every global at the
+    instruction's width, every call with thunks followed through their own `JMP` (the edge table
+    has no edge out of a thunk), virtual calls as slot numbers named from the port's slot table
+    when the vtable came off `this`, and a `JMP dword ptr [reg+0xNNN]` in an epilogue as the
+    virtual tail call it is (`CNPC_VHunter::NPCInit 0x10388b4f` → slot 66 on the weapon). `this`
+    survives an early-return epilogue's `POP`s. All 468 band rows in about two seconds;
+    `--check` holds every family row to a section. `pipeline/tests/test_kernel_skeleton.py`
+    exercises the walk on the pinned pilot listing and the real corpus when present.
+    *Scope correction the tool found:* the band's **eleven ‼ rows are in no family file** — they
+    were verdicted one at a time and the family split never took them back — and nine are `rule`
+    (`ScriptHide 0x102c1ce0`, `CNPC_VGuard1` / `CNPC_VHumanCombatant` / `CNPC_VYukie::NPCInit`,
+    `CNPC_VTzimisceRunner::vfunc330` and `::HandleAnimEvent`, `CNPC_VPlayerController` and
+    `CNPC_VWerewolf::NPCThink`, `CNPC_VCop::StartTask`). They are collected as
+    `families-19-29/Damaged19.tsv` for pass R; which port family lands each, and which of the
+    three `NPCInit`s Lifecycle19 already carried, is the owner's call at pass I.
+    **Pass R landed 2026-09-23** (log with every measurement: `$ELYSIUM_WORK_ROOT/bench/pair-read/LOG.md`).
+    Thirteen packets, `families-19-29/<Family>19-READING.md`, the twelve families plus Damaged19:
+    **295 `rule` rows** (286 + 9), every row a section holding the checklist verdict line verbatim,
+    the skeleton, the merged walk with a provenance cell per row, both readers' Effect and
+    Unrecovered, the banked wave-1 corrections that cite the address, and the family's
+    packet-versus-checklist table. Rows verdicted `dead` / `mechanism` / `present` are listed with
+    the verdict and get no walk. The merged walk holds **10,113 branch and argument rows**: 4,472
+    agreed, 5,428 where one reader names more (kept, the deeper cell first), **128 conflicts, all
+    drilled** with both readings and the judge's settlement beside the listing line, 85 one-sided
+    (a reader's omission the other covered), none unsettled. **115 packet-versus-checklist
+    contradictions** for the owner (StartTask19 32, Conditions19 14, Damage19 11, RunTask19 10,
+    Select19 10, Think19 8, Werewolf19 8, Misc19 7, Spawn19 5, Boss19 4, Script19 3, Damaged19 2,
+    RunAi19 1), each with the listing line that decides it; verdicts unchanged.
+    *Runs and cost:* 231 codex runs, 78M input / 3.3M output tokens (luna 6 high Fast: 102 first
+    reads and bounces, 18.6M; Sol 6 high: 91 second reads, 34.5M; luna 6 max: 18 drills, 10.4M; luna
+    high: 18 contra reads, 14.0M), ten Opus 5.5 subagents (~1.9M Claude tokens: nine 2.5–4 KB first
+    walks before measurement retired them, one drill as the judge control). Reader waves ran 03:35
+    → 04:33, 58 minutes wall at 8–9 concurrent codex runs; run-time sum 610 minutes.
+    *Routing as measured, changed from the pilot's plan:* GLM-5.3-Flash is not a reader (hung on
+    every batch brief, one 9-function batch in 744 s by file attachment; Sol did it in 120 s) —
+    **Sol high is the second reader on every band**. The diff signal was tightened on the first
+    pairs (`->` is not a sense, `0xa` = `10`, `RET n` and address citations are not arguments, a
+    different *order* of the shared literals is the only argument conflict): the tiny pair fell
+    from 10 flagged rows to 0 real ones. On the 2.8 KB pilot with that signal luna high Fast
+    disagreed with Opus on 0 of 174 rows (Sol 3), at 2 min versus 10, so **luna reads every band
+    first**, the four giants as weight-balanced chunks plus a chunk 0 for the dispatch prologue,
+    and **Opus is not used**: the same Misc19 drill to luna max and to Opus settled all 12 rows
+    the same way (luna max 530 s, Opus 212 s and 120k tokens), so **luna max is the judge**. luna
+    high is short by one or two rows on a fifth of its batches and is bounced per function or
+    chunk (23 bounces, 41–164 s); six calls in the giants it omits on a second read stay as
+    Sol-only rows. Sol was complete on every batch and every giant chunk on the first run.
+    *Tool changes:* the reading side of the tool landed as `kernel_packet.py` behind
+    `kernel_skeleton` subcommands — `brief` (rule rows only, bands, batches, chunks with case ids,
+    shared continuations and chunk 0), `check-walk`, `diff`, `drill-brief`, `packet`,
+    `contra-brief`, `check-packet` — with `pipeline/tests/test_kernel_packet.py` on pinned walks;
+    `check-packet --all` refuses a packet missing a `rule` row, a skeleton arm without a branch
+    row or a call without an argument row, and is green on the thirteen.
+  - *Pass I, implementation.* One family at a time per lane, two lanes in two worktrees, each
+    family ported from its packet: every `rule` arm in retail order with its instruction address,
+    one test per arm, the slot rows flipped to `hand:`, the generators re-run, build, the family
+    suite plus `Elysium.Substrate.Npc` and `Elysium.Substrate.Schedule`. Lane A, the interpreter:
+    Conditions19 → RunAi19 → StartTask19 → RunTask19 → Select19 → Think19. Lane B, independent of
+    the loop: Spawn19 → Damage19 → Script19 → Boss19 → Werewolf19 (the last two after lane A's base
+    bodies exist). Before any review, a script gates the family: every packet address appears in
+    the family files, the coverage table matches the arm inventory, and the three seam searches are
+    run and pasted. A family that fails the gate goes back to its porter. A green gate reaches the
+    full read by a fresh reviewer on a different model than the porter, then one commit per
+    family. Merges at family boundaries; the known conflicts are the include list in
+    `ElysiumNpc.h`, disjoint overlay rows and the generated slot stubs.
+  - *Pass C, close.* After both lanes merge: Misc19's own 31 rows, the absorbed stories' sentences
+    (25b, 25c, 26, 16b, 10d), the `[x]` on 29e and here, the build-order line, and the file rename
+    dropping the `19` suffix as a separate pure-move commit, allocating numbered parts where a
+    concern file already exists (Lifecycle, Conditions) and keeping every file.
 
 ## Build order
 1 → 2 → 3 → 4, with 8 in parallel from 1 on → 5 → 6 → 7. Relevant bindings from 2 precede

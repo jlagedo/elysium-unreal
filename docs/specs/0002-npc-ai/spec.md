@@ -864,6 +864,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   uninterruptible while the navigator type is jump or climb; the comfort chain advances by
   `SetIdealActivity(m_Activity + 1)`. The witness code's guesses are settled in `population.md`
   § "The law transaction's guesses, settled".
+  **Passes (2026-09-23).** The remaining twelve families run as 0019 story 8's three passes — R the
+  retrieval packets, I the two-lane implementation, C the close — with the scope counted after the
+  strict verdict (286 `rule` rows of 351) and the retrieval method as piloted, all recorded there.
 
 ### The mind
 

@@ -143,20 +143,33 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 - [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
   no family types a program id or an inline constant by hand.
-  Row 02 re-verdicted band 19–29: 380 `rule`, 4 `present`, 13 `mechanism`, 71 `dead` of 468 — the
-  family counts below predate it; port only the `rule` rows (`checklist-19-29.md`).
-  - [ ] Conditions19 (23 rows) — in flight; review against row 02 before it merges
-  - [ ] Spawn19 (60)
-  - [ ] RunAi19 (34)
-  - [ ] StartTask19 (28)
-  - [ ] RunTask19 (24)
-  - [ ] Select19 (39)
-  - [ ] Damage19 (26)
-  - [ ] Script19 (32)
-  - [ ] Think19 (15)
-  - [ ] Boss19 (19)
-  - [ ] Werewolf19 (17)
-  - [ ] Misc19 (34)
+  Row 02 re-verdicted band 19–29: 380 `rule`, 4 `present`, 13 `mechanism`, 71 `dead` of 468.
+  Joined to the family files 2026-09-23: **286 `rule` rows of 351** in the twelve families, and
+  that is the port (counts below are rule / rows). Nothing of Conditions19 exists in the tree.
+  **Three passes (owner's decision 2026-09-23), text in the spec:** R retrieval, I implementation
+  in two lanes, C close.
+  - [x] **Pass R** (2026-09-23) — the skeleton script, then luna 6 `high` Fast + Sol 6 `high` on the
+    skeleton brief, diffed, conflicts drilled by luna `max`; **13 packets covering 295 rows** (the
+    twelve families' 286 + Damaged19's 9), `check-packet --all` green; 115 packet-versus-checklist
+    contradictions listed per family for the owner. Numbers and the routing as measured in the spec.
+    - [x] Tier 0, `kernel_skeleton` (2026-09-23): all 468 band rows, `--check` green. Found the
+      eleven ‼ rows outside every family; bucketed as `Damaged19.tsv`, 9 of them `rule`.
+    - [x] The two readers on the skeleton brief, the diff, the drills, the packets, the contra lists
+      (`kernel_packet.py`, 231 codex runs + 10 Opus subagents, 58 min wall).
+  - [ ] **Pass I, lane A** (the interpreter, in order; gate then full read then commit per family)
+    - [ ] Conditions19 (20/23)
+    - [ ] RunAi19 (17/34)
+    - [ ] StartTask19 (27/28)
+    - [ ] RunTask19 (23/24)
+    - [ ] Select19 (31/39)
+    - [ ] Think19 (15/15)
+  - [ ] **Pass I, lane B** (independent of the loop; Boss and Werewolf after lane A's base bodies)
+    - [ ] Spawn19 (48/60)
+    - [ ] Damage19 (26/26)
+    - [ ] Script19 (20/32)
+    - [ ] Boss19 (11/19)
+    - [ ] Werewolf19 (17/17)
+  - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
 
 ## B — the movement base 0019/6 stands on
 
