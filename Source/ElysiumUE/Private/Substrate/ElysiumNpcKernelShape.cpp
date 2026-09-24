@@ -737,7 +737,7 @@ namespace
 			TEXT("CBaseCombatCharacter"), ETier::Datamap, 4, 1, 0 },
 		{ 0x1568, TEXT("CAI_BaseNPCTroika"), TEXT("m_eHull"), TEXT("int"),
 			TEXT("CBaseCombatCharacter"), ETier::Datamap, 4, 1, 0 },
-		{ 0x156c, TEXT("CAI_BaseNPCTroika"), TEXT("m_eDefaultHull"), TEXT("int"),
+		{ 0x156c, TEXT("CAI_BaseNPCTroika"), TEXT("m_ePathingHull"), TEXT("int"),
 			TEXT("CBaseCombatCharacter"), ETier::Walked, 0, 1, 0 },
 		{ 0x1570, TEXT("CAI_BaseNPCTroika"), TEXT("m_bloodColor"), TEXT("int"),
 			TEXT("CBaseCombatCharacter"), ETier::Datamap, 4, 1, 0 },
@@ -8941,7 +8941,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* DefaultSlots     */ 83,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 451,
-		/* RowDigest        */ 0xb1a1508551396e3aull,
+		/* RowDigest        */ 0x8634e2876c759476ull,
 	};
 	return GCensus;
 }

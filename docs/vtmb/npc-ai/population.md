@@ -2670,7 +2670,7 @@ it by name. (`0x1027f290` also names most of them in upper case; it is the debug
 | `npc_sabbat` | `CGenericSabbat_NPC` | `0x1035b350` |
 | `npc_bullseye` | `CNPC_Bullseye` | `0x10356630` |
 | `npc_crow` | `CNPC_Crow` | `0x103572d0` |
-| `npc_TestBaseHumanoid` | `CAI_ExpressiveNPC` (and its base `CAI_BaseHumanoid`, which nothing else derives from) | `0x102609e0` |
+| `npc_TestBaseHumanoid` | `CAI_BaseHumanoid` (construction also writes `CAI_ExpressiveNPC`'s table; see the boundary replay below) | `0x102609e0` |
 | `npc_VBatSwarm` | `CNPC_VBatSwarm` | `0x10366bc0` |
 | `npc_VSheriffSwarm` | `CNPC_VSheriffSwarm` | `0x103b1b70` |
 | `npc_VCombatman` | `CNPC_VCombatman` | `0x1036fa60` |
@@ -2695,8 +2695,62 @@ either. `npc_VChangBros` is also unplaced but abstract: `npc_VChangBrosBlade` an
 `InputRemoveControllerNPC 0x102272b0`), `npc_VFrenzyShadow` (`CBasePlayer 0x10161fc0`),
 `npc_VWolfMorph` (`0x101f8620`, `0x101f8f30`), `npc_VPlaceholder` (`0x10161d20`). These are live.
 `CNPC_VWerewolf` is placed as `npc_VWerewolf` (two maps, one script) although the kernel ledger's
-classname column shows it blank: that column is read from the port's registry, which has no row
-for it yet.
+classname column shows it blank. That column does not come from the port's registry: see the next
+section for where it comes from and why it misses the werewolf.
+
+### The classname → class map, read from the factories (2026-09-24, 0019 story 5 review)
+
+Every NPC classname has exactly one `LINK_ENTITY_TO_CLASS` factory in `vampire.dll`:
+`alloc(size)`, the constructor, then `obj->vfunc(+0x1a8)("npc_X")` with the classname. The class
+it builds is the last primary-vtable write at `[this]` — in the factory itself when the derived
+constructor is inlined (Andrei, the Chang brothers, the three `CNPC_VPlayerController`-line
+classes, …), else in the constructor it calls. Read that way, the map is one class per classname
+and needs no tie-break. The walk is `$ELYSIUM_WORK_ROOT/scratch/0019-5/factory_map.py`, over the
+pinned image (`c546f4de2003624d…`); 68 NPC classnames resolve, and `npc_maker*` and
+`aiscripted_*` were read separately.
+
+The kernel ledger's *Entity classnames* column (`classes.md`) is not this map. It comes from
+`research/tooling/probes/npc_translation_survey.py::_constructor_aliases`, which takes any
+entity-prefixed string PUSHed within a fixed radius of a reference to the class's vtable. That
+proximity rule both over-claims (`CNPC_VBaseBoss` "claims" four boss classnames,
+`CNPC_VPlayerController` claims `npc_VFrenzyShadow` and `npc_VWolfMorph`) and under-claims (a
+factory placed far from its constructor is missed). The port's "most-derived claimant" rule
+(`ElysiumNpcKernelClass::OfClassname`) exists only to undo the over-claims. It cannot recover the
+misses, and nine classnames resolve differently from the factories:
+
+| Classname | Factory | Builds | Census resolves to |
+|---|---|---|---|
+| `npc_VCop` | `0x103704f0` (ctor `0x103708e0`, size `0x6674`) | `CNPC_VCop` | nothing |
+| `npc_VGhoulCroucher` | `0x1037a670` | `CNPC_VGhoulCroucher` | nothing |
+| `npc_VZombie` | `0x103ddd70` | `CNPC_VZombie` | nothing |
+| `npc_VWerewolf` | `0x103c8760` (ctor `0x103ca4b0`) | `CNPC_VWerewolf` | nothing |
+| `npc_VSheriffMan` | `0x103ada30` | `CNPC_VSheriffMan` | nothing |
+| `npc_VPlaceholder` | `0x103a3a20` | `CNPC_VPlaceholder` | nothing |
+| `npc_VVampireBoss` | `0x103c4fa0` (inline) | `CNPC_VVampireBoss` | nothing |
+| `scripted_target` | `0x1034d370` (inline) | `CScriptedTarget` | nothing |
+| `npc_TestBaseHumanoid` | `0x102609e0` | `CAI_BaseHumanoid` line | `CAI_ExpressiveNPC` |
+
+The first seven are live. `npc_VCop` is authored 72 times and named by makers 33 times in
+`sm_hub_1` alone. `npc_VVampireBoss` is never authored: `CNPC_VVampireBoss::MakeNPC`
+(`0x103c75f0`, slot 617) writes it as the protean swap's target classname. A port that resolves a
+classname through the census therefore runs a placed Cop as the bare Troika line: none of
+`CNPC_VCop`'s, `CNPC_VHumanCombatant`'s or `CNPC_VHuman`'s overrides, and Troika's schedule
+space instead of the Cop's.
+
+Three more NPC-vtable classes use non-`npc_` classnames and constructor `0x101a62d0`.
+The sequences allocate `0x608c`; `aiscripted_schedule` allocates `0x6098` (boundary replay below):
+
+- `scripted_sequence` builds `CCineNPC` (factory `0x101a6260`; the constructor writes
+  `0x104771e4`).
+- `aiscripted_sequence` builds `CCineAI` (`0x1000886e` runs the same constructor, then overwrites
+  the vtable with `vftable_CCineAI` `0x10477d1c`). It is a whole second class with five own
+  bodies, not a patched slot.
+- `aiscripted_schedule` builds `CCineAISchedule` (`0x1000da58` → `0x101a96b0`, writing
+  `0x10478854`).
+
+Retail's script directors are therefore `CAI_BaseNPC` subclasses with a full NPC vtable, just as
+the three `CNPCMaker` classes are `CAI_BaseNPCTroika` subclasses. No factory builds
+`CAI_BaseNPC`, `CAI_BaseNPCTroika`, `CNPC_VBaseBoss` or `CAI_TestHull` by classname.
 
 The verdict overlay judges a body `dead` on this ground only when every family vtable holding it
 belongs to a listed class and every closure caller is itself dead — a body a placed subclass
@@ -2807,3 +2861,53 @@ _Computed by `uv run elysium research ai_infra_surface` from the recovered addre
 | coordinator | 5 | 0 | 5 | 5 |
 | standoff | 4 | 4 | 4 | 4 |
 | sound | 4 | 4 | 4 | 4 |
+
+### Step 0 factory boundary replay (2026-09-24)
+
+Replayed all 74 factories on `vampire.dll` SHA-256
+`c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f`: the 68 observations
+above, the three makers and the three directors. Function and instruction boundaries come from
+the pinned corpus/listing pair; constructor thunks are followed as direct jumps. Each successful
+path passes the allocated receiver to its constructor and then to slot 106 (`+0x1a8`) with the
+classname string. A secondary vtable or a member object's constructor is not the primary receiver.
+There are 55 constructor-final-write factories and 19 inline-final-write factories. Each name has
+one factory answer; shared constructors do not merge distinct classes, and aliases retain distinct
+factory identities. These observations do not decide whether content ever creates an instance.
+
+Two earlier statements above needed correction:
+
+- `npc_TestBaseHumanoid`: factory `0x102609e0` allocates `0x6058`, calls thunk `0x1000c635`
+  to `0x10260b30`. That constructor writes `CAI_ExpressiveNPC`'s primary table `0x1049885c`
+  at `0x10260b4c`, then overwrites it with `CAI_BaseHumanoid`'s `0x10497d04` at `0x10260c64`
+  before returning the same receiver. The final class is exactly `CAI_BaseHumanoid`, not merely
+  a humanoid-line inference. Both classes remain in the previously established no-instance set.
+- `aiscripted_schedule`: its factory body `0x101a96b0` pushes allocation size `0x6098` at
+  `0x101a96b1`, calls the shared director constructor through `0x1000ee9e`, and writes
+  `CCineAISchedule`'s primary table `0x10478854` at `0x101a96cb`. The earlier blanket `0x608c`
+  allocation statement was wrong for this director; the additional twelve bytes agree with its
+  three own layout words. `scripted_sequence` and `aiscripted_sequence` do allocate `0x608c`.
+
+The makers are independently covered:
+
+| Classname | Factory | Allocation | Constructor | Final primary table write |
+|---|---|---|---|---|
+| `npc_maker` | `0x1034aae0` | `0x76d0` | `0x1034ad80` | `0x1034adab` → `CNPCMaker` `0x1049f404` |
+| `npc_maker_fleshpile` | `0x1034bd50` | `0x76d0` | `0x1034be50` | `0x1034be5a` → `CNPCMaker_Fleshpile` `0x1049ffe4` |
+| `npc_maker_zombie` | `0x1034c980` | `0x76dc` | `0x1034ca80` | `0x1034ca8a` → `CNPCMaker_Zombie` `0x104a0bbc` |
+
+The nine differences in the original 68-name comparison are confirmed. Extending that comparison
+to the six infrastructure factories adds four omissions: the three directors and `npc_maker`.
+No liveness verdict changes follow from those omissions. The no-classname cases also stay distinct:
+`CAI_BaseNPC`, `CAI_BaseNPCTroika`, `CAI_TestHull`, `CNPC_VBaseBoss` and `CAI_ExpressiveNPC`
+have no final primary table in these 74 classname factories; that observation alone says nothing
+about internal construction, inherited contracts or direct callers.
+
+The allocation-failure arm is also present in each factory's boundary: it zeros the receiver,
+then attempts the same classname virtual call through that null receiver. It is not a second
+constructed-class answer. The replay retains this arm rather than treating it as another factory.
+
+Reproducible instrument: `uv run elysium research kernel_factory_map`; reviewed address mappings
+and full input hashes are under `docs/specs/0019-npc-kernel-rework/story-5/`. Generated listings
+and evidence reports stay under `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/`. The bounded
+reader rejects unsupported receiver/control-flow shapes; arbitrary constructor analysis and
+liveness inference are outside this evidence claim.

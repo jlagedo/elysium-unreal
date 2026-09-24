@@ -182,12 +182,38 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     - [ ] Boss19 (11/19)
     - [ ] Werewolf19 (17/17)
   - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
-- [ ] **06b · 0019/5** — The class tree, one port class per retail class. XL · Opus/high. **NEXT.**
+- [ ] **06b · 0019/5** — The class tree, one port class per live retail class. XL · Opus/high. **NEXT.**
   Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.
   Moved up from row 10 on 2026-09-23 (decision recorded under "Where this differs"). Its inputs
   are landed (rows 02 and 04); its census clause is amended in the spec so unported `rule`
   overrides are residue, not failures, until row 06's pass I closes. Baseline is green:
   `kernel_shape --check` fixed the same day (row 05's hand-off).
+  **Validated and settled 2026-09-24; step 0 accepted, step 1 not started.** The story's claims were checked against
+  the image, the ledger and the code. Three did not survive and are replaced in the spec's job
+  text: the "most-derived claimant" rule, the vocalisation sound-table getter, and "one class
+  per retail class".
+  - *Defect found.* The census's classname column is a proximity guess. Retail's factories map
+    each classname to exactly one class, and nine resolve differently from the census, seven of
+    them live. A placed `npc_VCop` runs as the bare Troika line with Troika's schedules; the hub
+    has 37. The map is in `population.md` § "The classname → class map, read from the
+    factories".
+  - *Owner's decisions.*
+    - The base splits into `FElysiumNpcBase` (`CAI_BaseNPC`) and `FElysiumNpc` (Troika).
+    - One class per live retail class, named `FElysiumNpcBach` and so on, one header and one
+      cpp each. Dead classes get no class.
+    - Species `dead` bodies are deleted first; that part moves from row 11.
+    - The resolution fix lands with the tree.
+    - Every live classname is registered.
+    - Generated slot bodies move to their retail owning classes.
+    - Fixtures are rewritten to spawn by classname.
+    - Bodies, words and bindings land in one commit.
+    - The controller folds in with retail AI.
+    - Makers, script directors and the test hull fold in as the last pass.
+  - *Reviewed execution plan:*
+    [story-5-execution-plan.md](0019-npc-kernel-rework/story-5-execution-plan.md). Twelve steps;
+    the fixed 28-build estimate was withdrawn. Step 0's source replay, representative build and
+    focused tests passed; evidence and remaining questions are in [progress](0019-npc-kernel-rework/story-5/progress.md). Baseline:
+    `Elysium.Substrate` 1,268 of 1,268, `Elysium.Content` 14 of 14, `Elysium.PlayerWorld` 1 of 1.
 
 ## B — the movement base 0019/6 stands on
 
@@ -302,6 +328,9 @@ Each move follows a `Consumes:` line the stated order skipped; revert any by swa
     and not 295 more bodies.
   - *What stays after 5:* 8's pass I, then 6 and 7 as before. 0018/4–6 (rows 07–09) keep their
     place; they are 0019/6's base, not 5's.
+- **0019/6's species `dead` rows moved into 0019/5's step 1** (owner, 2026-09-24): 228
+  hand-written bodies and 195 census rows. Moving them onto the class tree only for row 11 to delete them would do
+  the work twice, and story 5 already consumes story 1's delete list for exactly that reason.
 - **0002/12a and 25b given slots**: 0002's build order lists neither. 12a sits ahead of 12b,
   which reads its keys; 25b needs the class tree (row 10).
 - **12b → 10k → 10g → 10h** where 0002 lists 10h, 10g, …, 10k, …, 12b: 10k consumes 12b's cover

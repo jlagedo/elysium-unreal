@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "scope": "Step 0 only. Production bodies, fields and fixtures remain at their current homes; exact source migrations exist only in the isolated rehearsal.",
+  "body_resolutions": {
+    "1027a530": {
+      "current_symbol": "FElysiumNpc::BaseShouldPlayFloatSound",
+      "final_owner": "FElysiumNpcBase",
+      "final_name": "ShouldPlayFloatSound",
+      "retail_signature": "bool()",
+      "step": 5,
+      "reason": "Base frequency/time/RNG body; overlay names the Troika surface too. The const port helper is distinct from the virtual entry."
+    },
+    "10294070": {
+      "current_symbol": "FElysiumNpc::ShouldPlayFloatSound",
+      "final_owner": "FElysiumNpc",
+      "final_name": "ShouldPlayFloatSound",
+      "retail_signature": "bool()",
+      "step": 5,
+      "reason": "Troika gates precede the qualified BaseNPC call; it must not own the base body."
+    },
+    "103e1080": {
+      "current_symbol": "FElysiumNpc::FUN_103e1080",
+      "final_owner": "FElysiumNpcZombie",
+      "final_name": "ShouldPlayFloatSound",
+      "retail_signature": "bool()",
+      "step": 3,
+      "reason": "The bArg port parameter is artificial. Assembly returns without popping an argument; the tail jump selects BaseNPC directly. Rehearsal also restores skipped gates and row-3 distance 250."
+    },
+    "10372cc0": {
+      "current_symbol": "FElysiumNpc::CopSlot597Prologue",
+      "final_owner": "FElysiumNpcCop",
+      "final_name": "Slot597",
+      "retail_signature": "void(CBaseEntity*,int)",
+      "step": 3,
+      "reason": "Current implementation is prologue plus FElysiumNpc::Slot597's Troika tail. CopPursuitPlayer is a storage reader citing this writer, not another implementation of this body."
+    },
+    "103ad7f0": {
+      "current_symbol": "FElysiumNpc::RetailHeadDirection",
+      "final_owner": "FElysiumNpcRat",
+      "final_name": "HeadDirection2D",
+      "retail_signature": "Vector()",
+      "step": 3,
+      "reason": "Table-driven forward to virtual slot 368. The current BodyDirection2D port declaration is const/nonvirtual; rehearse retaining const and adding virtual dispatch."
+    },
+    "103ad820": {
+      "current_symbol": "FElysiumNpc::RetailHeadDirection",
+      "final_owner": "FElysiumNpcRat",
+      "final_name": "HeadDirection3D",
+      "retail_signature": "Vector()",
+      "step": 3,
+      "reason": "Table-driven forward to virtual slot 369. Underlying BodyDirection3D mechanism remains a separately visible backlog item."
+    },
+    "1025e510": {
+      "current_symbol": "FElysiumNpc::BaseHumanoidSetModel",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "void(const char*)",
+      "step": 1,
+      "reason": "ClearHeadPoseParameters cites this cache writer but implements 0x1025efc0; it is a dependency, not this body."
+    },
+    "1025e920": {
+      "current_symbol": "FElysiumNpc::HumanoidValidEyeTarget",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "bool(const Vector&)",
+      "step": 1,
+      "reason": "EyeTargetConeAdmits is the extracted arithmetic helper. The whole receiver/eye/head body is HumanoidValidEyeTarget."
+    },
+    "10312cd0": {
+      "current_symbol": "FElysiumNpc::CreateExpresser",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "bool()",
+      "step": 1,
+      "reason": "ExpresserBaseGate is the separately called 0x1027cae0 predicate; CreateExpresser owns the allocation/back-link/setup sequence."
+    },
+    "1034aa40": {
+      "current_symbol": "FElysiumNpc::GenericNpcLinePrecache",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "void()",
+      "step": 1,
+      "reason": "The wired entry consumes GenericNpcPrecache as an ordered request-builder dependency. Remove neither by a misleading shared Precache target string."
+    },
+    "103567e0": {
+      "current_symbol": "FElysiumNpc::BullseyeSpawn",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "void()",
+      "step": 1,
+      "reason": "FElysiumNpc::Spawn contains only the dispatch arm; BullseyeSpawn is the specific body. Preserve the shared Spawn method."
+    },
+    "1035a7e0": {
+      "current_symbol": "FElysiumNpc::GenericNpcSoundInterests",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "int()",
+      "step": 1,
+      "reason": "Shared implementation with 1035be50; both retail identities are dead-only and must be considered together."
+    },
+    "1035be50": {
+      "current_symbol": "FElysiumNpc::GenericNpcSoundInterests",
+      "final_owner": "-",
+      "final_name": "-",
+      "retail_signature": "int()",
+      "step": 1,
+      "reason": "Shared implementation with 1035a7e0; preserve both identities until their common implementation is removed."
+    }
+  },
+  "call_edges": [
+    {
+      "module": "vampire.dll",
+      "caller": "103e1080",
+      "site": "103e11f9",
+      "callee": "1027a530",
+      "via": [
+        "10005f97"
+      ],
+      "kind": "direct-tail",
+      "required_call": "FElysiumNpcBase::ShouldPlayFloatSound()",
+      "evidence": "pinned listing, tail JMP and thunk"
+    },
+    {
+      "module": "vampire.dll",
+      "caller": "103ad7f0",
+      "site": "103ad7f8",
+      "kind": "virtual",
+      "slot": 368,
+      "receiver": "this",
+      "required_call": "BodyDirection2D()",
+      "evidence": "CALL [EAX+0x5c0]; same receiver"
+    },
+    {
+      "module": "vampire.dll",
+      "caller": "103ad820",
+      "site": "103ad828",
+      "kind": "virtual",
+      "slot": 369,
+      "receiver": "this",
+      "required_call": "BodyDirection3D()",
+      "evidence": "CALL [EAX+0x5c4]; same receiver"
+    }
+  ],
+  "field_policy": {
+    "identity": [
+      "module",
+      "declaring_class",
+      "offset",
+      "member"
+    ],
+    "flags": "Join raw datamap flags by declaring class and member. Layout display flags alone omit SAVE. No datamap means no invented SAVE/KEY/INPUT contract.",
+    "inheritance": "Inherited rows use their declaring owner; sibling offsets never alias. A derived override of a binding requires an explicit row and preserved flags.",
+    "schedule_host": "Split by declaring layer at step 5: the 20 mapped CAI_BaseNPC words go to a base-owned aggregate; the 36 mapped CAI_BaseNPCTroika words remain in a Troika-owned aggregate. Keep helpers with explicit receiver parameters or split them; do not move the entire mixed component to either base.",
+    "non_shape_component_fields": "Inventory source declarations and dependencies; keep port-only/navigation-service state separate from recovered NPC words. PendingFailureReason is a transient maintenance value, NavigationActivity and bMotorAnimationMovement belong to navigation/motor seams, and AttackExtentsCm is an inherited entity concern.",
+    "float_sound_words": "CBaseCombatCharacter owns +0x10e8 FloatSoundFrequency and +0x10ec NextFloatSoundTime. The rehearsal moves both from the flat NPC into FElysiumCombatCharacter, allowing the BaseNPC/director path without Troika storage.",
+    "maker_duplicates": [
+      "RetailSolidType",
+      "PlInvestigate",
+      "PlCriminalFlee",
+      "PlCriminalAttack",
+      "PlSupernaturalFlee",
+      "PlSupernaturalAttack",
+      "bDisableAi"
+    ],
+    "maker_fold": "Step 8 must remove all seven duplicate stores, preserve maker initial values (police thresholds are 0, unlike NPC defaults), resolve the private inherited bDisableAi accessor, and audit all AsNpc participants. Naive reparenting is refused. No maker fold is authorized by this preflight."
+  },
+  "fixture_policy": {
+    "all": "Retain every test and assertion at phase 0. Generated classification is a retrieval aid; ambiguous/mixed cases remain explicit manual migrations, never deletion candidates.",
+    "multi_reclass": "Recreate the appropriate concrete type for each distinct class and deliberately reproduce prerequisite state; do not mutate one concrete object's class identity. Repeated assignment of the same class is recorded separately from a true type change.",
+    "multi_slot": "Keep a case together when it establishes state for several slots; migrate its fixture once and preserve assertion order.",
+    "internal_construction": "CAI_TestHull remains live without a classname. Use FElysiumNpcTestHull typed construction in step 10, never a fabricated factory.",
+    "dead_coverage": "Step 1 must give exact assertion dispositions. Shared/mixed tests are retained; no test is removed merely because its setup uses a dead class or a codemod cannot handle it."
+  },
+  "compatibility_policy": {
+    "inventory": "Every current matched site is fingerprinted with file, exact source line and containing consumer. New sites require an explicit inventory/decision update.",
+    "dispatch": "Ordinary species dispatch moves in steps 3-6. Exact consumers needed by the ten deferred classes stay until their 7/8/9/10 folds; remaining support machinery closes at 11.",
+    "type_test": "Replace real type tests with the supported final type mechanism; do not turn a type test into virtual behavior by guesswork.",
+    "data_query": "Keep documented census/diagnostic queries with no dispatch effect. Review OfClassname separately from Find/SlotRow metadata readers.",
+    "participation": "AsNpc admission is a consumer dependency, not just a helper to delete. Makers/directors/controller folds must audit the listed timer, sense, save, world and interaction consumers."
+  },
+  "unresolved": [
+    "Most overlay target strings are surfaces, not proof that a species body is implemented. Unresolved/overloaded/shared targets remain retained until their exact owner packet; the checker never authorizes a move by those strings.",
+    "Incoming non-dead or unjudged retail callers block proposed deletion; they are listed explicitly in the generated deletion review.",
+    "The current dialogue-partner producer is the dialogue session, not a raw +0xfe8 field. The rehearsal uses that existing seam and does not claim recovery of every future conversation path.",
+    "The director rehearsal covers the BaseNPC inheritance/sound path. Full possession, interruption, restore and new world participation remain step 9 acceptance work.",
+    "The maker boundary is a deliberate failed naive-fold rehearsal plus existing-state assertions. Full maker inheritance/lifecycle migration remains step 8."
+  ]
+}

@@ -1,0 +1,78 @@
+retail_class	retail_base	vtable	port_class	port_base	step	liveness	evidence
+CAI_BaseHumanoid	CAI_BaseActor	10497d04	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CAI_BaseNPC	CBaseCombatCharacter	104995c4	FElysiumNpcBase	FElysiumScriptedCharacter	5	live	plan Appendix A; population.md liveness and factories
+CAI_BaseNPCTroika	CAI_BaseNPC	1049a25c	FElysiumNpc	FElysiumNpcBase	2	live	plan Appendix A; population.md liveness and factories
+CAI_ExpressiveNPC	CAI_BaseNPC	1049885c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CAI_TestHull	CAI_BaseNPC	1049be5c	FElysiumNpcTestHull	FElysiumNpcBase	10	live	plan Appendix A; population.md liveness and factories
+CCineAI	CCineNPC	10477d1c	FElysiumAiScriptedSequence	FElysiumScriptedSequence	9	live	plan Appendix A; population.md liveness and factories
+CCineAISchedule	CCineNPC	10478854	FElysiumAiScriptedSchedule	FElysiumScriptedSequence	9	live	plan Appendix A; population.md liveness and factories
+CCineNPC	CAI_BaseNPC	104771e4	FElysiumScriptedSequence	FElysiumNpcBase	9	live	plan Appendix A; population.md liveness and factories
+CGeneric_NPC	CAI_BaseNPCTroika	104a4da4	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CGeneric_NPC_bathack	CAI_BaseNPC	104a596c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CGenericNPC	CAI_BaseNPC	1049e8e4	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CGenericSabbat_NPC	CAI_BaseNPC	104a648c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_Bullseye	CAI_BaseNPC	104a374c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_Crow	CAI_BaseNPC	104a426c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_ProneDialog	CNPC_VHumanCombatant	104c2554	FElysiumNpcProneDialog	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VAndreiBlood	CNPC_VVampireBoss	104a6fc4	FElysiumNpcAndreiBlood	FElysiumNpcVampireBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VAnimal	CAI_BaseNPCTroika	104a876c	FElysiumNpcAnimal	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VAsianVampire	CNPC_VVampireBoss	104a935c	FElysiumNpcAsianVampire	FElysiumNpcVampireBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VBach	CNPC_VVampire	104a9f2c	FElysiumNpcBach	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VBaseBoss	CAI_BaseNPCTroika	104bd2cc	FElysiumNpcBaseBoss	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VBatSwarm	CNPC_VVampire	104aab04	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VBrujah	CNPC_VVampire	104ab6cc	FElysiumNpcBrujah	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VCamera	CAI_BaseNPCTroika	104ac294	FElysiumNpcCamera	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VCameraSecurity	CNPC_VCamera	104ace5c	FElysiumNpcCameraSecurity	FElysiumNpcCamera	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VChangBros	CNPC_VVampireBoss	104adabc	FElysiumNpcChangBros	FElysiumNpcVampireBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VChangBrosBlade	CNPC_VChangBros	104ae68c	FElysiumNpcChangBrosBlade	FElysiumNpcChangBros	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VChangBrosClaw	CNPC_VChangBros	104af25c	FElysiumNpcChangBrosClaw	FElysiumNpcChangBros	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VCombatman	CNPC_VHuman	104afe2c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VCop	CNPC_VHumanCombatant	104b09f4	FElysiumNpcCop	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VDog	CNPC_VAnimal	104b15bc	FElysiumNpcDog	FElysiumNpcAnimal	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VFrenzyShadow	CNPC_VPlayerController	104b2184	FElysiumNpcFrenzyShadow	FElysiumNpcPlayerController	7	live	plan Appendix A; population.md liveness and factories
+CNPC_VGangrel	CNPC_VVampire	104b3914	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VGargoyle	CNPC_VVampire	104b44dc	FElysiumNpcGargoyle	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VGhoulCroucher	CNPC_VHumanCombatant	104b50ac	FElysiumNpcGhoulCroucher	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VGuard1	CNPC_VHuman	104b5c74	FElysiumNpcGuard1	FElysiumNpcHuman	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VHengeyokai	CNPC_VVampire	104b683c	FElysiumNpcHengeyokai	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VHuman	CAI_BaseNPCTroika	104b742c	FElysiumNpcHuman	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VHumanCombatant	CNPC_VHuman	104b7ff4	FElysiumNpcHumanCombatant	FElysiumNpcHuman	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VHumanCombatPatrol	CNPC_VHumanCombatant	104b8bbc	FElysiumNpcHumanCombatPatrol	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VHunter	CNPC_VHumanCombatant	104b9784	FElysiumNpcHunter	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VLasombra	CNPC_VVampire	104ba34c	FElysiumNpcLasombra	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VMalkavian	CNPC_VVampire	104baf14	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VManBat	CNPC_VVampire	104bbaec	FElysiumNpcManBat	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VMingXiao	CNPC_VBaseBoss	104bc704	FElysiumNpcMingXiao	FElysiumNpcBaseBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VMingXiaoTentacle	CAI_BaseNPCTroika	104bdea4	FElysiumNpcMingXiaoTentacle	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VMoleman	CNPC_VHuman	104bea6c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VNewscaster	CAI_BaseNPCTroika	104bf634	FElysiumNpcNewscaster	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VNosferatu	CNPC_VVampire	104c01fc	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VPedestrian	CNPC_VHuman	104c0dc4	FElysiumNpcPedestrian	FElysiumNpcHuman	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VPlaceholder	CAI_BaseNPCTroika	104c198c	FElysiumNpcPlaceholder	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VPlayerController	CNPC_VVampire	104b2d4c	FElysiumNpcPlayerController	FElysiumNpcVampire	7	live	plan Appendix A; population.md liveness and factories
+CNPC_VRat	CNPC_VScurrying	104c558c	FElysiumNpcRat	FElysiumNpcScurrying	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VSabbatGunman	CNPC_VHumanCombatant	104c311c	FElysiumNpcSabbatGunman	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VSabbatLeader	CNPC_VVampireBoss	104c3d64	FElysiumNpcSabbatLeader	FElysiumNpcVampireBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VScurrying	CNPC_VAnimal	104c4944	FElysiumNpcScurrying	FElysiumNpcAnimal	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VSheriffMan	CNPC_VVampireBoss	104c619c	FElysiumNpcSheriffMan	FElysiumNpcVampireBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VSheriffSwarm	CNPC_VVampire	104c7284	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VStalker	CNPC_VHumanCombatant	104c7e4c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VTaxiDriver	CNPC_VHuman	104c8a14	FElysiumNpcTaxiDriver	FElysiumNpcHuman	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VTest	CNPC_VVampire	104c95dc	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VToreador	CNPC_VVampire	104ca1a4	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VTremere	CNPC_VVampire	104cad6c	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VTzimisce	CNPC_VBaseBoss	104cb934	FElysiumNpcTzimisce	FElysiumNpcBaseBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VTzimisceHeadClaw	CNPC_VBaseBoss	104cc564	FElysiumNpcTzimisceHeadClaw	FElysiumNpcBaseBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VTzimisceRunner	CNPC_VBaseBoss	104cd144	FElysiumNpcTzimisceRunner	FElysiumNpcBaseBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VVampire	CNPC_VHuman	104cdd24	FElysiumNpcVampire	FElysiumNpcHuman	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VVampireBoss	CNPC_VVampire	104a7b94	FElysiumNpcVampireBoss	FElysiumNpcVampire	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VVentrue	CNPC_VVampire	104ce8fc	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit
+CNPC_VWerewolf	CNPC_VBaseBoss	104cf4d4	FElysiumNpcWerewolf	FElysiumNpcBaseBoss	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VWolfMorph	CNPC_VPlayerController	104d05a4	FElysiumNpcWolfMorph	FElysiumNpcPlayerController	7	live	plan Appendix A; population.md liveness and factories
+CNPC_VYukie	CNPC_VHumanCombatant	104d116c	FElysiumNpcYukie	FElysiumNpcHumanCombatant	2	live	plan Appendix A; population.md liveness and factories
+CNPC_VZombie	CNPC_VAnimal	104d1d3c	FElysiumNpcZombie	FElysiumNpcAnimal	2	live	plan Appendix A; population.md liveness and factories
+CNPCMaker	CAI_BaseNPCTroika	1049f404	FElysiumNpcMaker	FElysiumNpc	8	live	plan Appendix A; population.md liveness and factories
+CNPCMaker_Fleshpile	CNPCMaker	1049ffe4	FElysiumNpcMakerFleshpile	FElysiumNpcMaker	8	live	plan Appendix A; population.md liveness and factories
+CNPCMaker_Zombie	CNPCMaker	104a0bbc	FElysiumNpcMakerZombie	FElysiumNpcMaker	8	live	plan Appendix A; population.md liveness and factories
+CPayphone	CAI_BaseNPCTroika	10479814	FElysiumNpcPayphone	FElysiumNpc	2	live	plan Appendix A; population.md liveness and factories
+CScriptedTarget	CAI_BaseNPC	104a1794	-	-	1	dead-census-retained	population.md NPC classes with no instance; overlay deletion still requires caller audit

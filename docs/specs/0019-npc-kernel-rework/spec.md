@@ -540,37 +540,113 @@ green, and `coverage.md` shows the change.
   `_DAT_104492e0` (1e-6) behind the hull sweep, and `_DAT_10449154` (0.45) behind the navigator
   re-probe.
 
-- [ ] **5. The class tree: one port class per retail class.**
-  Retail: 77 classes in six lines under `CAI_BaseNPCTroika` (`classes.md`), each with its own
-  words past `+0x665c` and its overrides at the slots `signatures.md` lists; a species body
-  that calls the body it replaces does so by a **direct** call to the base's own function,
-  never through the vtable (`shape.md` § "How a species body reaches the body it replaces").
+- [ ] **5. The class tree: one port class per live retail class.**
+  Retail: 77 classes whose primary vtable spans the NPC range (`classes.md`). 63 sit below
+  `CAI_BaseNPCTroika` in ten direct lines, 12 more sit below `CAI_BaseNPC` beside it, and the
+  two bases complete the set. 21 are dead (`population.md` § "NPC classes with no instance").
+  Each of the 56 live classes carries its own words past its base's end (309 live words over 33
+  classes past Troika's `+0x665c`) and its overrides at the slots `signatures.md` lists. A
+  species body that calls the body it replaces does so by a **direct** call to the base's own
+  function, never through the vtable (`shape.md` § "How a species body reaches the body it
+  replaces"). Every classname has exactly one factory, which builds exactly one class
+  (`population.md` § "The classname → class map, read from the factories"). The script
+  directors are NPC classes too: `scripted_sequence` builds `CCineNPC`, `aiscripted_sequence`
+  `CCineAI`, `aiscripted_schedule` `CCineAISchedule`, all below `CAI_BaseNPC`. The three makers
+  sit below Troika.
   Gap: `FElysiumNpc` is `final`; species are rows keyed on the retail class name; the vtable
   is rebuilt by hand — `ElysiumNpcKernelClassLookup` (`Find`, `OfClassname`, `DerivesFrom`,
   `OverrideOf`, `BodyOf`), `RetailClass()` / `IsRetailClass` string checks inside bodies, the
-  "prologue must decline while the species body runs" re-entry rule, 6,009 lines of numbered
-  slot stubs, slot numbers in the API (`RunTaskSlot444`), and every NPC carrying every
-  species' words. Decided 2026-09-15 by the owner: **the whole tree, uniformly** — a class
-  whose only difference is its sound table is a twenty-line class; two dispatch mechanisms is
-  worse than either.
-  Job: `FElysiumNpc` becomes the Troika base (`final` dropped); one subclass per retail class
-  in the retail tree, own words on the owning class, overrides `virtual`, `Super::` where retail
-  called the base directly; a classname → constructor factory replacing `OfClassname` (the
-  most-derived claimant rule kept); `FElysiumPlayerControllerNpc` folded in as
-  `CNPC_VPlayerController`'s port; the vocalisation slots 488–508 as one base body over a
-  virtual sound-table getter each species overrides; the dispatcher, the string checks, the
-  re-entry rule, the slot stubs and the species `if` prologues deleted; `gen_kernel_shape.py`
-  emits the census only, and the census test asserts one port class per retail class, one
-  member per own word on that class, and one override per retail (class, slot) row verdicted
-  `rule`. Lands alone on a branch with the witness green before and after; no other story
-  touches `ElysiumNpc.h` while it is open.
+  "prologue must decline while the species body runs" re-entry rule, the generated slot
+  surface, slot numbers in the API (`RunTaskSlot444`), and every NPC carrying every species'
+  words. Measured 2026-09-24, outside tests: 110 `RetailClass()` calls, 50 `IsRetailClass`, 68
+  lookup calls, 54 dispatch-scope sites, 21 slot-numbered names, about 174 species words on the
+  one class, and 6,013 lines of generated slot surface holding 268 bodies (186 stubs that count
+  calls, 82 one-constant bodies).
+  The dispatcher also answers the wrong class. Its classname column is a proximity guess in
+  `npc_translation_survey.py`, and the "most-derived claimant" rule only undoes its
+  over-claims. Nine classnames resolve differently from retail's factories, and seven of those
+  are live. A placed `npc_VCop` (72 authored, 37 in `sm_hub_1`) runs as the bare Troika line
+  with Troika's schedule space. `npc_VGhoulCroucher`, `npc_VZombie`, `npc_VWerewolf`,
+  `npc_VSheriffMan`, `npc_VVampireBoss` and `npc_VPlaceholder` resolve to nothing, and four of
+  them are not registered at all. Tests pin the wrong answer
+  (`TestNull("no census class claims npc_VCop")`) and use the Cop as a stand-in Troika NPC.
+  Species datamap rows are unbound: 230 live words, 42 of them `KEY` or `INPUT`. The tutorial's
+  three rats author eight such keys that the port drops, and a ported sense body reads three
+  of them as zero.
+  Decided 2026-09-15 by the owner: **the whole tree, uniformly** — a class whose only
+  difference is its sound table is a twenty-line class; two dispatch mechanisms is worse than
+  either.
+  Job (settled by the owner 2026-09-24; replaces the 2026-09-15 job text, whose "most-derived
+  claimant rule kept", "sound-table getter" and "one class per retail class" did not survive
+  validation):
+  - *The tree.* `FElysiumNpcBase` is `CAI_BaseNPC`, and `FElysiumNpc` is `CAI_BaseNPCTroika`
+    with `final` dropped. Below them stands one class per live retail class, named `FElysiumNpc`
+    plus the retail name without its prefix: `FElysiumNpcBach`, `FElysiumNpcCop`,
+    `FElysiumNpcVampireBoss`, `FElysiumNpcPayphone`. Each class has one header and one cpp.
+    Dead classes get no class, only their census row. Own words sit on the owning class,
+    overrides are `virtual`, and a direct call to the base's own function (`Super::` or the
+    qualified name) stands where retail calls it directly.
+  - *The factory.* A classname → constructor map read from retail's factories replaces
+    `OfClassname` and the most-derived claimant rule. `_constructor_aliases` is replaced by the
+    factory walk and the census is regenerated. Every live retail classname is registered,
+    including the seven the census missed.
+  - *Class checks.* A check that imitates vtable dispatch becomes an override. A check that
+    ports a retail runtime type cast becomes a type test on the tree, for example the Fleshpile
+    maker's runner test or `CBasePlayer::StartPlayerDialog`'s `CPayphone` cast.
+  - *The generated slot bodies.* Each moves to its retail owning class. The entity chain's go
+    onto the port's entity, animating and combat-character classes, and the NPC layers' go onto
+    `FElysiumNpcBase` or `FElysiumNpc`. The 38 linker-folded bodies go onto the class that
+    first declares the slot. The 8 whose name is already a port entity method merge into that
+    method: `AcceptInput`, `GetAbsOrigin`, `GetAngles`, `GetModelIndex`, `GetOrigin`,
+    `SetMoveType`, `SetOrigin` and `Weapon_Switch`. Stubs keep counting when fired, unreached
+    stubs are deleted, and one-constant bodies stay.
+  - *Vocalisation* is plain overrides. The live species bodies at 488–508 are one-byte silent
+    bodies (Camera, CameraSecurity, Newscaster, FrenzyShadow, WolfMorph), Tzimisce's sentence
+    groups and Werewolf's event emits. Every wav-table species is dead. The `FVocalization`
+    table goes.
+  - *Bindings.* Story 2's generator runs per stood class.
+  - *The controller.* `FElysiumPlayerControllerNpc` becomes `FElysiumNpcPlayerController`
+    below `FElysiumNpcVampire`, with FrenzyShadow and WolfMorph below it. It runs retail's AI:
+    its `NPCThink` `0x103a4700` runs the base think and then slot 614 `ResetThinkTimers`, and
+    its `PreSelectSchedule` `0x103a46b0` answers `0x6b` when idle.
+  - *The folds.* The three makers go below `FElysiumNpc`. `CCineNPC`, `CCineAI`,
+    `CCineAISchedule` and `CAI_TestHull` go below `FElysiumNpcBase`. Today's maker and director
+    entity classes are rewritten as these, and the port's one class for both sequence
+    classnames splits in two.
+  - *Tests.* Fixtures are rewritten to spawn by classname, replacing the 139
+    `SetRetailClassForTests` calls in 15 files; the hook is deleted.
+  - *The census.* `gen_kernel_shape.py` emits the census only. The census test asserts one port
+    class per live retail class with the dead ones listed, one member per own datamap word on
+  that class, and one override per ported (class, slot) `rule` row. A new `kernel_shape` flag
+    lists the unported `rule` overrides, a number that must only fall. `--residue` already names
+    the unsettled layout and slot rows.
+  **Execution: [story-5-execution-plan.md](story-5-execution-plan.md)** (reviewed 2026-09-24;
+  step 0 accepted; step 1 not started). The plan owns the detailed sequence, phase gates and session
+  handoff contract so they do not need to be duplicated here.
+  Twelve steps on `0019-5-class-tree`: evidence/manifest and rehearsal; dead species deletion;
+  species tree and factories; dispatch conversion; the atomic bodies/words/bindings move; base
+  split; available slot-owner migration; controller, maker, director and test-hull folds; final
+  compatibility removal and closure. The ten deferred classes keep only explicitly inventoried
+  compatibility until their folds. Step 4 lands in one commit; its bounded work packets may span
+  several sessions without claiming the step is complete.
+  Expected behaviour changes include the seven corrected resolutions, 30 additional active
+  ordinary-NPC classnames, newly effective bindings, controller AI and evidenced corrections
+  found during migration. Exact retail direct callees, field ownership and lifecycle participation
+  are acceptance conditions. Test/report deltas are regression bookkeeping, not equivalence proof.
+  Cheap Python, manifest, ledger and generated-source checks precede the build and the complete
+  Substrate/Content/PlayerWorld gate. The saved 2026-09-24 baseline is 1,268 / 14 / 1 completed
+  tests with zero failures; report provenance and focused observable assertions remain required.
+  Build and session estimates follow the rehearsal rather than a fixed build count. One integration
+  owner controls shared headers and runtime builds; independent evidence review and disjoint
+  tooling may proceed alongside it. Story 8 implementation waits for final closure.
   **Order amended 2026-09-23: this story runs before story 8's pass I.** Pass R measured the
   port: 227 of its 295 `rule` rows are species overrides, which on the flat class would each be
   written as a `RetailClass()` prologue and then moved here. The one coupling that put 8 first was
   the census clause above, which reads as "every `rule` override exists" and so needed 8's bodies;
   it is a definition, not a dependency, and is amended: the census asserts an override for every
   (class, slot) `rule` row that the port carries, and lists the `rule` rows not yet ported as
-  residue (`kernel_shape --residue`), a number that must only fall as 8's families land. 8's
+  residue (a new `kernel_shape` flag, since `--residue` is taken; see the job above), a number
+  that must only fall as 8's families land. 8's
   retrieval (pass R) stays where it was, since a packet does not depend on the class shape.
   Consumes: 1 (the delete list first, so nothing dead is re-homed), 3 (programs load per
   class in the tree's order). Provides: the tree every species story in 0002 lands on, and the
@@ -578,7 +654,9 @@ green, and `coverage.md` shows the change.
   Size: XL. Effort: Opus / high.
 
 - [ ] **6. The deletions and the mechanism seams.**
-  Job, dead: every `dead` row's body and test removed — the Debug, Debug10 and Debug10_2
+  The species `dead` rows are deleted by story 5's step 1 instead: 228 hand-written bodies and
+  195 census rows, moved there by the owner on 2026-09-24 so that nothing dead is re-homed.
+  Job, dead: every other `dead` row's body and test removed — the Debug, Debug10 and Debug10_2
   families, the ring and stamps and their words, the scrambler in Senses and Combat10 (the
   criminal level stored plain, the retail field noted as a `CSecureType` so the ledger still
   lines up), the secure ints.

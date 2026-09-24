@@ -17,3 +17,7 @@ Content/ElysiumAuthored/**/*.uptnl filter=lfs diff=lfs merge=lfs -text
 # Committed movement-gym baselines are compared byte-for-byte against a fresh run,
 # so a checkout that rewrote their line endings would turn every bracket red.
 dev/baselines/move/** text eol=lf
+
+# Story-5 acceptance pins these authored decisions by byte hash.
+docs/specs/0019-npc-kernel-rework/story-5/decisions.json text eol=lf
+docs/specs/0019-npc-kernel-rework/story-5/field-decisions.tsv text eol=lf

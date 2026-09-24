@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "phase": 0,
+  "revision": "step-0-reviewed-preflight-v2",
+  "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
+  "inputs": {
+    "module": {
+      "root": "retail",
+      "path": "Vampire/dlls/vampire.dll",
+      "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f"
+    },
+    "datamaps": {
+      "root": "research",
+      "path": "ghidra/types/datamap_records-vampire.dll.json",
+      "sha256": "96a4905397dc45d02004196caf0d187a9ff88e731bff4f6da2839cd7c88dac10"
+    },
+    "census": {
+      "root": "repo",
+      "path": "docs/vtmb/npc-kernel/classes.md",
+      "sha256": "178eced3770568df9e8b1bfeaad3331eb83885d1d97416350aba4736ae5c7ca3"
+    },
+    "verdicts": {
+      "root": "repo",
+      "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
+      "sha256": "255a346a8c54a2965057eebd989f81f871662c6a310182b354d26362f5612320"
+    },
+    "registry": {
+      "root": "repo",
+      "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
+      "sha256": "a17b794207e2e79656044c8d5e33180f18bb04003c35dd4c115d360c3580b484"
+    },
+    "stub_registry": {
+      "root": "repo",
+      "path": "Source/ElysiumUE/Private/Substrate/ElysiumStubClasses.cpp",
+      "sha256": "f868c6c4652e1bc3898f05fd2eae6c7a85b621fc66b8de99780a0368801e84d6"
+    },
+    "sequence_registry": {
+      "root": "repo",
+      "path": "Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp",
+      "sha256": "c3e6720ca195278a303e37da9dc75fbf62f0cf26607aed92a8f5d05b083f4ce0"
+    },
+    "schedule_registry": {
+      "root": "repo",
+      "path": "Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp",
+      "sha256": "e33fb46042aad5a25aa219b9443a8c8f27770e179f482563c2cda2da87a1e99d"
+    },
+    "corpus": {
+      "root": "research",
+      "path": "ghidra/corpus/corpus.sqlite",
+      "sha256": "c3ea72dbc147738502af7b130d0f55044ee93ec12f398d92b4ce7ce76122b64f"
+    },
+    "listing": {
+      "root": "research",
+      "path": "ghidra/corpus/listing.sqlite",
+      "sha256": "814da0448b58b5a797b8fdcf5c8047765773daaa5daaa4e0f3bd5fe81714fe20"
+    }
+  },
+  "packets": {
+    "factories": "accepted",
+    "field-body-identity": "accepted",
+    "calls-fixtures-compatibility": "accepted",
+    "regression-comparison": "accepted",
+    "composable-codemods": "accepted",
+    "representative-rehearsals": "accepted"
+  },
+  "deferred_classes": [
+    "CAI_TestHull",
+    "CCineNPC",
+    "CCineAI",
+    "CCineAISchedule",
+    "CNPCMaker",
+    "CNPCMaker_Fleshpile",
+    "CNPCMaker_Zombie",
+    "CNPC_VPlayerController",
+    "CNPC_VFrenzyShadow",
+    "CNPC_VWolfMorph"
+  ],
+  "unresolved": [
+    "See decisions.json: ambiguous future joins remain retained; shared live surfaces are protected.",
+    "All 246 no-instance verdict rows are inventoried; exact assertion removal must be reviewed in the consuming step-1 packet.",
+    "Full controller/maker/director/hull participation and lifecycle folds remain steps 7-10."
+  ],
+  "factory_evidence": "docs/vtmb/npc-ai/population.md#step-0-factory-boundary-replay-2026-09-24",
+  "acceptance": "step-0-passed"
+}

@@ -231,10 +231,13 @@ def lower_type(retail: str, family: set[str]) -> tuple[str, str]:
 #
 # A retail slot name the port's entity chain already declares is a decision. `PORT` says the
 # existing method IS that slot's body and no virtual is generated for it; `SUFFIX` says the
-# collision is accidental and the slot takes `<Name>Slot<N>`; the third column is why.
+# collision is accidental and the slot takes `<Name>Slot<N>`. `GENERATED_OVERRIDE` retains the
+# generated declaration that deliberately overrides a runner interface; it is not a second
+# implementation or an inherited base body. The last column records why.
 
 PORT = "port"
 SUFFIX = "suffix"
+GENERATED_OVERRIDE = "generated-override"
 
 SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 
@@ -287,6 +290,9 @@ def _load_slot_map() -> None:
          "the schedule translation, ported in story 25"),
         (448, PORT, "FElysiumNpc::TaskFail", "the failure route, ported in story 13"),
         (453, PORT, "FElysiumNpc::BuildScheduleTestBits", "the interrupt mask, ported in story 25"),
+        (488, GENERATED_OVERRIDE, "DeathSound",
+         "IElysiumScheduleRunner's void DeathSound() is implemented by the generated declaration "
+         "and hand body for Troika 0x10293ec0; TASK_SOUND_DIE and Event_Killed call the same hook"),
         (534, PORT, "FElysiumCombatCharacter::EyeLookTargetHandle",
          "the gaze cascade's chosen subject; `EyeLookTarget` beside it is the point it resolved to"),
         (614, PORT, "FElysiumNpc::ResetThinkTimers", "the four think stamps, ported in story 21"),
@@ -513,6 +519,15 @@ def reserved_names(repo: Path) -> set[str]:
     return names
 
 
+def check_generated_override(row: Slot) -> None:
+    """Fail if the one reviewed interface override loses its signature or hand implementation."""
+    if row.port_kind == GENERATED_OVERRIDE and (
+            row.slot != 488 or row.declaration != "void DeathSound()"
+            or row.port_name != "DeathSound" or row.hand != "FElysiumNpc::DeathSound"):
+        raise SystemExit(f"gen_kernel_shape: generated override {row.slot} no longer matches "
+                         "the reviewed interface signature and hand body")
+
+
 def build(repo: Path, module: str, depth: int) -> Model:
     shape, rows, sigs = ks.build(module, depth, repo)
     ledger = shape.ledger
@@ -634,6 +649,7 @@ def build(repo: Path, module: str, depth: int) -> Model:
                 default_body(row)   # fail here, not at the C++ compiler, on a type it cannot lower
             elif row.verdict_target.startswith(HAND_PREFIX):
                 row.hand = row.verdict_target[len(HAND_PREFIX):].strip()
+        check_generated_override(row)
 
     if collisions:
         print("gen_kernel_shape: the port's entity chain already declares these slot names; add a "

@@ -3462,13 +3462,26 @@ are **2, 3, 5 and 6** — not a contiguous band, and 1 and 4 are the two that do
 can reach the side effect through its reroll.
 
 `0x103e1080` is slot 510. `m_iFloatSoundFrequency` (`+0x10e8`) is set to **9 first and on every
-call**, before any gate. The gates then are: not already moaning (`0x102c1170`); no live cached
-float sound (`+0x1538` resolves and `+0x153c != -1`); not unconscious; `m_bfAINPCFlags` `SLEEPING`
+call**, before any gate. The gates then are: not in dialogue (`0x102c1170`); no live
+grapple (`+0x1538` resolves and `+0x153c != -1`); not unconscious; `m_bfAINPCFlags` `SLEEPING`
 (`0x20000`) clear; a resolvable `m_hClosestPlayer` whose own `+0xfe8` does NOT resolve; and finally
-`m_flPlayerDist <= _DAT_10940490`, which is lazily read once out of a `"Float Sound Info"` KeyValues
-block under the `DAT_10940495` bits 1 and 2. Only then does it chain to the base `0x1027a530`.
-**Unrecovered:** `_DAT_10940490` — it lives in `.data` and is filled at runtime, so it is not a
-`.rdata` cell that can be read out of the image.
+`m_flPlayerDist <= _DAT_10940490`, which is lazily read once from the `Float_Sound_Info` rulebook
+table under the `DAT_10940495` bits 1 and 2. Only then does it chain to the base `0x1027a530`.
+**Recovered 2026-09-24:** `_DAT_10940490` is row **3** of `Float_Sound_Info`, **250.0 Source units**
+in the install-selected `vdata/system/rules_tables.txt`. `0x103e11b8` pushes 3; `0x103e11ce`
+gets the table through `0x100038be` → `0x1006cff0`; `0x103e11d5` calls `0x1000c874` →
+`0x1006caa0`, whose listing loads `table+0x14[index*4]` onto the FPU stack. Its decompilation
+incorrectly presents the float return as a pointer. The selected Unofficial Patch file and the
+deployed capsule bytes match at SHA-256 `012d7dc6d41837fe5ae5cc7c90875fbe214ca5e2a66b29a6a73b435acb294a56`.
+The two guard bits retain the table ID and numeric value once per process. This is the rulebook
+table API, not an unrecovered KeyValues input or a random distance roll.
+
+The accepting arm at `0x103e11f9` tails through `0x10005f97` directly to `0x1027a530`, bypassing
+Troika `0x10294070` and its current/ideal-state tests. All three slot-510 bodies have zero explicit
+argument words; the decompiler's `param_1` is not a parameter to preserve. The refusal `RET` is
+plain, and the tail-jump arm forwards no stack argument. `0x102c1170` tests the talking byte,
+queued-line string, live dialogue partner, then live scene; `+0x1538/+0x153c` are the grapple
+partner/role, as the combat-character ledger records, not a cached float-sound instance.
 
 `0x103e12c0` and `0x103e12f0` are byte-identical: both fire `m_OnAttackedVictim` (`+0x66e8`, mapper
 key `OnAttackedVictim`) with the victim as ACTIVATOR and this NPC as CALLER, and **neither forwards
