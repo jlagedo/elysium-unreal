@@ -12,7 +12,7 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Slots with a single body across the family | 358 |
 | Closure functions | 5185 |
 | … cited by the port | 2022 |
-| … cited by the oracle | 2325 |
+| … cited by the oracle | 2326 |
 | … cited by neither | 2603 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3267 |
@@ -39,7 +39,7 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by port | Cited by oracle | **Neither** |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1474 | 658 | 215 | 110 | 488 | 3 | 0 | 791 | 737 | **0** |
+| 0–4 | 1474 | 659 | 215 | 109 | 488 | 3 | 0 | 791 | 738 | **0** |
 | 5–9 | 258 | 149 | 47 | 27 | 35 | 0 | 0 | 226 | 232 | **0** |
 | 10–18 | 344 | 167 | 105 | 9 | 63 | 0 | 0 | 265 | 267 | **0** |
 | 19–29 | 468 | 380 | 13 | 4 | 71 | 0 | 0 | 212 | 208 | **0** |

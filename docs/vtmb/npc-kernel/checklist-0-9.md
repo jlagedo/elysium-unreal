@@ -16,15 +16,15 @@ One row per *core* function (a family or helper class method, or a body touching
 | Measure | Count |
 |---|---|
 | Core functions, layers 0–9 | 1732 |
-| … `rule` | 807 |
+| … `rule` | 808 |
 | … `mechanism` | 262 |
-| … `present` | 137 |
+| … `present` | 136 |
 | … `dead` | 523 |
 | … `unsettled` | 3 |
 | … no verdict yet | 0 |
 | … damaged decompilation | 21 |
 | … cited by the port | 1017 |
-| … cited by the oracle | 969 |
+| … cited by the oracle | 970 |
 | … cited by neither and unverdicted | 0 |
 
 | Address | Function | Size | Layer | Slots | Writes | Reads | Callers | Verdict | Target | Evidence |
@@ -936,7 +936,7 @@ One row per *core* function (a family or helper class method, or a body touching
 | `0x103c4f20` | CNPC_VVampire::Classify | 6 | 0 | `CNPC_VAndreiBlood#138`, `CNPC_VAsianVampire#138`, `CNPC_VLasombra#138`, +3 more | — | — | 0d/0v/1c | `rule` | registry:138 | [0019/1 obs=via: slot 138 Classify, class id 0xf row of the default relationship table for the six vampire and boss classes] CNPC_VVampire::Classify (body named CNPC_VAndreiBlood::FUN_103c4f20) returns literal 0xf, shared by CNPC_VAndreiBlood/VAsianVampire/VLasombra/VSheriffMan/VVampire/VVampireBoss at slot 138 |
 | `0x103c5060` | CNPC_VVampireBoss::vfunc82 | 6 | 0 | `CNPC_VVampireBoss#82` | — | — | 0d/0v/0c | `mechanism` | RTTI:GetDataDescMap | [0019/1 seam=RTTI GetDataDescMap; datamap pointer for the generated SAVE walk (0019/2)] CNPC_VVampireBoss::vfunc82 returns &datamap_CNPC_VVampireBoss for slot 82 |
 | `0x103c5210` | CNPC_VVampireBoss::LoadedSchedules | 6 | 0 | `CNPC_VVampireBoss#452` | — | — | 0d/0v/2c | `dead` | registry:452 | [0019/1 dead=slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead; was rule] CNPC_VVampireBoss::LoadedSchedules returns static DAT_1065e6c4 flag |
-| `0x103c5fe0` | CNPC_VVampireBoss::OverrideMove | 14 | 0 | `CNPC_VAndreiBlood#525`, `CNPC_VAsianVampire#525`, `CNPC_VChangBros#525`, +5 more | — | `+0x6498` | 0d/0v/0c | `present` | FElysiumNpc::bJumping | [0019/1 obs=timing: a boss with m_bJumping set suppresses the navigator move for that tick, so a jump is never pulled off course] CNPC_VVampireBoss::OverrideMove (body named CNPC_VAndreiBlood::FUN_103c5fe0) returns this->m_bJumping != 0 (+0x6498, a bound word), a plain accessor shared at slot 525 by 8 VampireBoss-family classes |
+| `0x103c5fe0` | CNPC_VVampireBoss::OverrideMove | 14 | 0 | `CNPC_VAndreiBlood#525`, `CNPC_VAsianVampire#525`, `CNPC_VChangBros#525`, +5 more | — | `+0x6498` | 0d/0v/0c | `rule` | FElysiumNpc::OverrideMove | [0019/1 obs=timing: a boss with m_bJumping set suppresses the navigator move for that tick, so a jump is never pulled off course; was present] CNPC_VVampireBoss::OverrideMove (body named CNPC_VAndreiBlood::FUN_103c5fe0) returns this->m_bJumping != 0 (+0x6498, a bound word), a plain accessor shared at slot 525 by 8 VampireBoss-family classes (0019/5 step-1 review: re-judged present -> rule. The port carries the word but no port body reads it: FElysiumNpc::OverrideMove answers the base false for every class. The writer is the jump arms of CAI_BaseNPCTroika::StartTask 0x102a1910 via the setter 0x102a99a0; RunTask 0x102aacf0 clears it.) |
 | `0x103c67f0` | FUN_103c67f0 | 37 | 0 | — | — | `+0x5d9c` | 2d/0v/0c | `rule` | FElysiumNpc::LastAttackTimeElapsed | [0019/1 obs=via: 0x103ae8c0 CNPC_VSheriffMan::SelectSchedule, seconds since m_flLastAttackTime against the caller threshold] FUN_103c67f0 computes curtime minus this->LastAttackTime (+0x5d9c, a bound word) and compares the elapsed time to the caller's param_1 threshold |
 | `0x103c6df0` | CNPC_VVampireBoss::SetBodyEmitterName | 105 | 0 | — | — | `+0x6684` | 6d/0v/0c +1 outside | `rule` | FElysiumNpc::SetBodyEmitterName | [0019/1 obs=via: 0x1036b750 CNPC_VChangBros::StartTask, names the per-region body particle emitter the boss phase shows] CNPC_VVampireBoss::SetBodyEmitterName writes param_2 into this->m_pBodyEmitterNames[param_1] (+0x6684 array), the per-body-region gore emitter names |
 | `0x103c6eb0` | CNPC_VVampireBoss::ClearBodyEmitterNames | 107 | 0 | — | — | `+0x6684` | 4d/0v/0c | `rule` | FElysiumNpc::ClearBodyEmitterNames | [0019/1 obs=via: 0x103c5840 CNPC_VVampireBoss::NPCInit, clears the four body emitter names so no phase emitter spawns] CNPC_VVampireBoss::ClearBodyEmitterNames zeroes all 4 entries of this->m_pBodyEmitterNames (+0x6684) |

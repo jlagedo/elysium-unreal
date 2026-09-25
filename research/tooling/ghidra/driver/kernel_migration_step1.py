@@ -11,7 +11,8 @@ record to the tree:
 * no step-0 definition of a body outside the no-instance rows was lost (matched by symbol AND
   parameter list), except through a reviewed exemption whose evidence is re-derived: a named live
   home still defined, or a retail caller set equal to the ledger's and dead or explained;
-* the dead classes stay in the census and the live rule inventory keeps its identity.
+* the dead classes stay in the census, and the live rule inventory keeps step 0's identity up to
+  an exactly listed, reviewed delta (a verdict correction may add contracts; deletion removes none).
 
     uv run elysium research kernel_migration --check step1
 """
@@ -266,6 +267,31 @@ def ledger_callers(root: Path) -> Callable[[str], set[str]]:
     return lambda address: set(incoming.get(address, set()))
 
 
+RuleKey = tuple[str, str, str, int, str]
+
+
+def check_rule_delta(step0_inventory: dict, current_inventory: dict, delta: dict) -> dict[str, int]:
+    """The live rule inventory equals step 0's, changed by exactly the reviewed delta.
+
+    Deleting dead port code removes no live retail rule contract. A verdict correction (a row
+    wrongly judged `present` or `dead`) may add contracts; each is listed as
+    `[module, address, receiver, slot, family]` with a reason, and the listed delta must be the
+    whole difference — an unlisted addition or removal refuses, and so does an unused entry."""
+    key = lambda row: (row["module"], row["address"], row["receiver"], int(row["slot"]), row["family"])
+    before = {key(row) for row in step0_inventory["live_rule_inventory"]}
+    after = {key(row) for row in current_inventory["live_rule_inventory"]}
+    added = {tuple(entry[:4]) + (entry[4],) for entry in delta.get("added", [])}
+    removed = {tuple(entry[:4]) + (entry[4],) for entry in delta.get("removed", [])}
+    if added and not delta.get("reason") or removed and not delta.get("reason"):
+        raise km.InvalidManifest("a rule identity delta needs its reviewed reason")
+    if after - before != added or before - after != removed:
+        raise km.InvalidManifest(
+            f"live rule inventory differs from step 0 beyond the reviewed delta: "
+            f"unlisted additions {sorted(after - before - added)}, unlisted removals "
+            f"{sorted(before - after - removed)}, unused entries {sorted((added - (after - before)) | (removed - (before - after)))}")
+    return {"added": len(added), "removed": len(removed)}
+
+
 def check_census(classes: list[dict], after: Path) -> int:
     shape = (after / SHAPE).read_text(encoding="utf-8")
     dead = [row["retail_class"] for row in classes if row["liveness"] != "live"]
@@ -309,8 +335,7 @@ def check_step1(directory: Path | None = None) -> dict:
     # hashes to that tree, and its rule identity must equal the accepted step-0 identity: deleting
     # dead port code removes no live retail rule contract.
     current = check_inventory(artifacts["inventory"], repo_root())
-    if current["rule_identity_sha256"] != step0["rule_identity_sha256"]:
-        raise km.InvalidManifest("live rule inventory identity changed at step 1")
+    rule_delta = check_rule_delta(inventory, artifacts["inventory"], decisions.get("rule_identity_delta", {}))
     delta = artifacts["delta"]
     if not delta.get("comparison_passed") or delta.get("differences"):
         raise km.InvalidManifest("step-1 regression comparison has unmatched differences")
@@ -322,6 +347,7 @@ def check_step1(directory: Path | None = None) -> dict:
         raise km.InvalidManifest("step-1 runtime gate incomplete/failing")
     if not artifacts["cheap_checks"] or any(r["exit"] for r in artifacts["cheap_checks"]):
         raise km.InvalidManifest("step-1 cheap/Python gates incomplete/failing")
-    return {"rows": counts, "completeness": completeness, "guarded_live_definitions": guarded,
+    return {"rows": counts, "completeness": completeness, "rule_identity_delta": rule_delta,
+            "guarded_live_definitions": guarded,
             "dead_census_classes": dead_classes,
             "rule_identity_sha256": current["rule_identity_sha256"], "step0": step0}

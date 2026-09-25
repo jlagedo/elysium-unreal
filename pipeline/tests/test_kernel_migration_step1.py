@@ -205,6 +205,27 @@ def test_an_overlay_target_may_not_name_a_removed_symbol(tmp_path):
         s1.check_overlay_targets(before, after)
 
 
+def rules(*addresses):
+    return {"live_rule_inventory": [{"module": "vampire.dll", "address": a, "receiver": "CNPC_VVampireBoss",
+                                     "slot": 525, "family": "CAI_BaseNPC"} for a in addresses]}
+
+
+def test_the_rule_identity_changes_only_by_the_listed_delta():
+    step0, current = rules("10000000"), rules("10000000", "10000001")
+    entry = ["vampire.dll", "10000001", "CNPC_VVampireBoss", 525, "CAI_BaseNPC"]
+    assert s1.check_rule_delta(step0, step0, {}) == {"added": 0, "removed": 0}
+    with pytest.raises(km.InvalidManifest, match="unlisted additions"):
+        s1.check_rule_delta(step0, current, {})
+    with pytest.raises(km.InvalidManifest, match="reason"):
+        s1.check_rule_delta(step0, current, {"added": [entry]})
+    assert s1.check_rule_delta(step0, current, {"added": [entry], "reason": "re-judged"}) == {"added": 1, "removed": 0}
+    # An entry the inventory does not show is refused, and a deletion may not remove a rule.
+    with pytest.raises(km.InvalidManifest, match="unused entries"):
+        s1.check_rule_delta(step0, step0, {"added": [entry], "reason": "re-judged"})
+    with pytest.raises(km.InvalidManifest, match="unlisted removals"):
+        s1.check_rule_delta(current, step0, {})
+
+
 def test_record_refuses_unknown_kinds_and_duplicates(tmp_path):
     path = tmp_path / "deletions.tsv"
     good = "\t".join(row("row", "x").values())

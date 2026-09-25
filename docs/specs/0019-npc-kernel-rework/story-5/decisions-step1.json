@@ -53,7 +53,7 @@
   },
   "findings_for_later_steps": {
     "npc_ProneDialog": "FElysiumNpc::ClassHolstersOnState lists npc_ProneDialog; retail's CNPC_ProneDialog classnames are npc_VProneDialog and npc_VMercurio (factories.tsv). Pre-existing; step 2's factory correction owns it.",
-    "slot_525_override_move": "FElysiumNpc::OverrideMove dispatches no live species arm: CNPC_VManBat 0x1038b120 (rule, flight step at navigator state 2, unported) and CNPC_VVampireBoss 0x103c5fe0 with seven heirs (present: m_bJumping != 0) are census rows the leaf never consults, so a jumping boss's move is not suppressed. Pre-existing; found by the step-1 review; the species migration (steps 3-4) owns it."
+    "slot_525_override_move": "Resolved into the backlog: 0x103c5fe0 is now a rule row (see rule_identity_delta), and ManBat 0x1038b120 / 0x1038b1a0 were already rule rows. FElysiumNpc::OverrideMove still dispatches neither; steps 3-4 give the classes their overrides and story 8 lands the jump chain."
   },
   "guard_exemptions": {
     "FElysiumNpc::FUN_1025e780": {
@@ -120,5 +120,67 @@
   "restored_by_guard": {
     "FElysiumNpc::CharTemplateModelName": "Seam for FUN_10207e60, whose live retail caller is CAI_BaseNPCTroika::Spawn 0x10298d30 (also the dead CGenericSabbat_NPC::Precache). Packet 1c deleted it with the Sabbat body; the live-definition guard refused, and it is restored as a retained contract. The port Spawn does not yet make the 0x10207e60 call: a pre-existing unported rule, not a step-1 change."
   },
-  "guard_policy": "Only step 1's own scope (dead=class ... no instance, no live receiver) is unguarded. Every other step-0 body's definitions, matched by symbol and parameter list, must survive unless an exemption below re-derives: a live_home still defined, or a retail_callers list equal to the ledger's thunk-resolved callers, each a dead row or explained in caller_notes."
+  "guard_policy": "Only step 1's own scope (dead=class ... no instance, no live receiver) is unguarded. Every other step-0 body's definitions, matched by symbol and parameter list, must survive unless an exemption below re-derives: a live_home still defined, or a retail_callers list equal to the ledger's thunk-resolved callers, each a dead row or explained in caller_notes.",
+  "rule_identity_delta": {
+    "reason": "Verdict correction from the step-1 review: CNPC_VVampireBoss::OverrideMove 0x103c5fe0 (slot 525, return m_bJumping != 0) was judged present because the port carries the word +0x6498, but no port body reads it: FElysiumNpc::OverrideMove answers the base false for every class. As present it sat outside every backlog (live-rule inventory, step-4 moves, step-11 residue). Re-judged rule, target FElysiumNpc::OverrideMove: steps 3-4 give each boss class its override, story 8 ports the writer (the jump arms of CAI_BaseNPCTroika::StartTask 0x102a1910; RunTask 0x102aacf0 clears it).",
+    "added": [
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VAndreiBlood",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VAsianVampire",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VChangBros",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VChangBrosBlade",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VChangBrosClaw",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VSabbatLeader",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VSheriffMan",
+        525,
+        "CAI_BaseNPC"
+      ],
+      [
+        "vampire.dll",
+        "103c5fe0",
+        "CNPC_VVampireBoss",
+        525,
+        "CAI_BaseNPC"
+      ]
+    ],
+    "removed": []
+  }
 }

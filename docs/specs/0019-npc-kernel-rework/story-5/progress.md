@@ -32,8 +32,10 @@ Carried forward (see [decisions-step1.json](decisions-step1.json)):
   step-1-scope candidates; they are live and not deletion candidates.
 - `CharTemplateModelName` is a retained seam: the port's `Spawn` does not yet make retail's
   `FUN_10207e60` call from `CAI_BaseNPCTroika::Spawn` `0x10298d30` (a pre-existing unported rule).
-- For steps 3–4: `OverrideMove` (slot 525) dispatches neither live arm — ManBat `0x1038b120`
-  (unported flight step) nor the VampireBoss family's `0x103c5fe0` (`m_bJumping != 0`).
+- Slot 525: `OverrideMove` dispatches neither live arm — ManBat `0x1038b120` (unported flight
+  step) nor the VampireBoss family's `0x103c5fe0` (`m_bJumping != 0`). The latter was mis-judged
+  `present` and is now a `rule` (8 contracts, the reviewed `rule_identity_delta`), so steps 3–4 and
+  story 8 carry both; the flag's writer is Troika `StartTask` `0x102a1910`'s jump arms (story 8).
 - For step 2: `ClassHolstersOnState` lists `npc_ProneDialog`, but retail's classnames are
   `npc_VProneDialog` and `npc_VMercurio`.
 

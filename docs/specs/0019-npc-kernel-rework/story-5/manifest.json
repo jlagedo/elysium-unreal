@@ -22,7 +22,7 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "deecc38253e19db92d85f96b6e03bedd580c2191421b68dfb83b32890ee9bf12"
+      "sha256": "733fb9b5bd4e2326c55b0dbef786494452c827c806bfdc95f2745b25647f8cf5"
     },
     "registry": {
       "root": "repo",
@@ -92,6 +92,10 @@
     "step1_review": {
       "note": "verdicts pin refreshed after the review follow-up: 0x10260670's evidence names its second caller, and 0x10260670/0x10260750/0x10357be0 (dead rows outside the no-instance scope whose port helpers step 1 removed) take target '-'",
       "previous_verdicts_sha256": "06597b7f43b7b4fc66e698074ce4042aa452be90fb804a79c5ff871bef1a95ae"
+    },
+    "step1_verdict_correction": {
+      "note": "verdicts pin refreshed after 0x103c5fe0 was re-judged present -> rule (decisions-step1.json rule_identity_delta)",
+      "previous_verdicts_sha256": "deecc38253e19db92d85f96b6e03bedd580c2191421b68dfb83b32890ee9bf12"
     }
   },
   "step1_packets": {

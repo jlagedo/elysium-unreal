@@ -7,14 +7,14 @@
     "fixtures": 934,
     "sites": 741,
     "bodies": 2982,
-    "rule_contracts": 11375,
-    "rule_identity_sha256": "000873c0a2108a0b09be85acc2227d561b080d192ba62ddb1a8a2128de19838f"
+    "rule_contracts": 11383,
+    "rule_identity_sha256": "e99d571391782b0e7f53d73c9a021671cdecd2ee90e54f99a398467fb658d73d"
   },
-  "rule_identity_sha256": "000873c0a2108a0b09be85acc2227d561b080d192ba62ddb1a8a2128de19838f",
+  "rule_identity_sha256": "e99d571391782b0e7f53d73c9a021671cdecd2ee90e54f99a398467fb658d73d",
   "reports": {
-    "Elysium.Substrate": "E:/elysium-work/reports/tests/20260925T031940.042166Z-elysium-substrate",
-    "Elysium.Content": "E:/elysium-work/reports/tests/20260925T032140.981029Z-elysium-content",
-    "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260925T032209.478998Z-elysium-playerworld"
+    "Elysium.Substrate": "E:/elysium-work/reports/tests/20260925T035552.414877Z-elysium-substrate",
+    "Elysium.Content": "E:/elysium-work/reports/tests/20260925T035810.635836Z-elysium-content",
+    "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260925T035843.646229Z-elysium-playerworld"
   },
   "results": {
     "Elysium.Substrate": 1255,
@@ -26,20 +26,21 @@
   "artifacts": {
     "inventory": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/inventory-step1.json",
-      "sha256": "7092a8a4a38909df89f7a9f209825d4364617bf35eed855a37c4a9904c138729"
+      "sha256": "a31108533a7078973eaf7d3a222c35afd276189661bdbcccb6cb76b410ece2bc"
     },
     "delta": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/delta.json",
-      "sha256": "9e48d4db97c8ea4f9cd94e958765fbd12f3e4eeefc1731a8d1f261ff45b28ccc"
+      "sha256": "b0b1428144fda3fb156d20b4397052a8e23704bb58e346e653923eb654b371b2"
     },
     "runtime": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/runtime-results.json",
-      "sha256": "747c9b42c3feefa908e64e83561c26d15e987cdb4e97d7306da18d4431ce4db8"
+      "sha256": "f1609ee350c24b8badb27afc087256a39e5a84c743e249cbdf278e2903c0cae0"
     },
     "cheap_checks": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/checks.json",
-      "sha256": "8068bdd0a47a1c556bcffaab93138d065126908bd95bfca6c84ac0bb358b1a01"
+      "sha256": "59bb110b9bf7e4d11bd1f88f8cea922a63cefbde152d5de27f8cd72d07189c10"
     }
   },
-  "review": "Opus review of ecfa9d82: no blockers; follow-up fixes (checker completeness/strictness, record test rows, comments, seam assertion) gated here."
+  "review": "Opus review of ecfa9d82: no blockers; follow-up fixes (checker completeness/strictness, record test rows, comments, seam assertion) gated here.",
+  "rule_identity_delta": "step 0 plus 8 contracts of 0x103c5fe0 (decisions-step1.json rule_identity_delta)"
 }

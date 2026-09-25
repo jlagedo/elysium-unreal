@@ -262,7 +262,11 @@ NPC stands and burns: there is no run, no goal and no radius anywhere in the thr
   0x30`), navigator type 0, and the path advances. Run (`0x102ac69c`): on the ground again → slot
   8, clear the type and `m_bJumping`, `TaskComplete`. No deadline. `ACT_JUMP` and `ACT_GLIDE` are
   never requested by it. Asian Vampire (`0x103612e0`) and the Chang brothers (`0x1036bfc0`)
-  override the run arm to hold `ACT_LEAP_ASCEND`.
+  override the run arm to hold `ACT_LEAP_ASCEND`. **The flag's reader:** the VampireBoss family's
+  slot 525 `OverrideMove` (`0x103c5fe0`, shared by `CNPC_VVampireBoss` and its seven heirs) is
+  `return m_bJumping != 0`, so a boss in flight tells the navigator not to move it and the arc is
+  never pulled off course. The port's `FElysiumNpc::OverrideMove` does not read it yet; the row was
+  mis-judged `present` and is a `rule` since 0019 story 5 step 1's review.
 - `LAND` start (`0x102a7468`): clear the motor's movement state, `RestartIdealActivity(ACT_LAND
   0x30)`; `LAND_HARD` the same with `0x32`. Shared run (`0x102ac743`): motor `UpdateYaw(-1)`, wait
   for slot 251. The Chang brothers (`0x1036b750`) stamp their jump time first; the Sheriff
