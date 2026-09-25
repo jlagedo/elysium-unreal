@@ -831,47 +831,6 @@ int32 FElysiumNpc::PedestrianSelectIdealState()
 	return IdealStateRetail();
 }
 
-int32 FElysiumNpc::TestNpcSelectIdealState()
-{
-	SelectIdealStateSelector = 0x23;
-	const int32 State = NpcStateRetail();
-	if (State == 2)
-	{
-		if (GetEnemy() == nullptr)
-		{
-			State19_2Stamp(*this, 3, 0x267);
-			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s ***Combat state with no enemy!"),
-				*DebugString());
-			return IdealStateRetail();
-		}
-		if (State19_2HasInterrupt(*this, EElysiumNpcCond::LostEnemy))
-		{
-			Cognition.Conditions.Clear(EElysiumNpcCond::LostEnemy);
-			State19_2Stamp(*this, 0xb, 0x271);
-			return IdealStateRetail();
-		}
-	}
-	else if (State == 0xb)
-	{
-		if (State19_2HasInterrupt(*this, EElysiumNpcCond::NewEnemy))
-		{
-			State19_2Stamp(*this, 2, 0x284);
-			return IdealStateRetail();
-		}
-		if (State19_2HasInterrupt(*this, EElysiumNpcCond::SeeEnemy))
-		{
-			State19_2Stamp(*this, 2, 0x289);
-			return IdealStateRetail();
-		}
-		if (ShouldGoToIdleState())
-		{
-			State19_2Stamp(*this, 1, 0x28e);
-			return IdealStateRetail();
-		}
-	}
-	return State19_2ChainHuman(*this);
-}
-
 int32 FElysiumNpc::ZombieSelectIdealState()
 {
 	SelectIdealStateSelector = 0x2b;

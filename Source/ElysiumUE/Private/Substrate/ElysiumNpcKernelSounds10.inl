@@ -11,7 +11,7 @@
 //
 // This family is **the seventeen sound hooks of slots 488–507, the three `KeyValue` overloads
 // (slots 108/109/110) with the two `CBaseEntity` formatters behind them, slot 185 `FireBullets`,
-// and the two `CNPC_VWerewolf` / one `CNPC_Crow` species arms over them**. It is NOT family
+// and the two `CNPC_VWerewolf` species arms over them**. It is NOT family
 // **Sounds** (story 29c-1), which owns the layer 0–9 gates in front of these hooks — slot 486
 // `FOkToMakeSound`, slot 487 `JustMadeSound`, slots 509/510 and the per-species vocalization table
 // — and whose `ElysiumNpcKernelSounds.cpp` still carries the two slot definitions (488 and 506)
@@ -149,16 +149,6 @@ static float FloatSoundAttenuation(bool bHasDialogName);
  *  (`1029505f`). The checklist's walk did not name the row; `1029502c` pushes `1`. The table is
  *  `Clamping`, so the row index is clamped rather than missed. */
 int32 FloatSoundMinDelaySeconds() const;
-
-// --- `CNPC_Crow`'s slot 511 arm ----------------------------------------------------------------
-
-/** SEAM: `CBaseEntity::StopSound(const char*)` (`0x101b0d80`) — stop the named SOUNDSCRIPT this
- *  entity is playing. `IElysiumAudio::StopEntitySounds` is "stop everything this entity is
- *  playing" and cannot express "stop this one script"; nothing in this substrate indexes a live
- *  voice by script name. Records the request and answers nothing, which is retail's answer for a
- *  script that is not playing. */
-TArray<FString> StopNamedSoundCalls;
-void StopNamedSound(const TCHAR* SoundScript);
 
 // --- Slot 185 `FireBullets` --------------------------------------------------------------------
 

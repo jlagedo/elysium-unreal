@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "phase": 0,
-  "revision": "step-0-reviewed-preflight-v2",
+  "phase": 1,
+  "revision": "step-1-dead-species-deletion",
   "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
   "inputs": {
     "module": {
@@ -22,7 +22,7 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "255a346a8c54a2965057eebd989f81f871662c6a310182b354d26362f5612320"
+      "sha256": "06597b7f43b7b4fc66e698074ce4042aa452be90fb804a79c5ff871bef1a95ae"
     },
     "registry": {
       "root": "repo",
@@ -76,10 +76,27 @@
     "CNPC_VWolfMorph"
   ],
   "unresolved": [
-    "See decisions.json: ambiguous future joins remain retained; shared live surfaces are protected.",
-    "All 246 no-instance verdict rows are inventoried; exact assertion removal must be reviewed in the consuming step-1 packet.",
+    "See decisions.json and decisions-step1.json: ambiguous future joins remain retained; shared live surfaces are protected.",
+    "Generated activity-table and hull-table rows of dead classes are retained retail-survey census (PreTranslate_Stalker, CNPC_Crow task handlers, dead hull rows); census-only generation is step 11.",
     "Full controller/maker/director/hull participation and lifecycle folds remain steps 7-10."
   ],
   "factory_evidence": "docs/vtmb/npc-ai/population.md#step-0-factory-boundary-replay-2026-09-24",
-  "acceptance": "step-0-passed"
+  "acceptance": "step-1-passed",
+  "history": {
+    "step0": {
+      "commit": "aa1c3c86b8684c4760e1dd506d114a0a260fb225",
+      "acceptance": "acceptance.json",
+      "verdicts_sha256": "255a346a8c54a2965057eebd989f81f871662c6a310182b354d26362f5612320",
+      "note": "--check step0 reads this tree once a later phase is current"
+    }
+  },
+  "step1_packets": {
+    "1a-deletion-manifest": "accepted",
+    "1b-humanoid-expressive": "accepted",
+    "1c-generic-vtest": "accepted",
+    "1d-crow-bullseye-scripted-target": "accepted",
+    "1e-dead-leaves": "accepted",
+    "1f-overlay-regeneration": "accepted",
+    "1g-gate-records": "accepted"
+  }
 }

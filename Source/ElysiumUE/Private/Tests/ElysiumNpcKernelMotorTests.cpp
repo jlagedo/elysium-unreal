@@ -180,27 +180,6 @@ bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
 	// `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — one constant, `_DAT_1049949c`.
 	TestEqual(TEXT("the base line is 45 for everything"), FElysiumNpc::MaxYawSpeedBase(), 45.0f);
 
-	// `CAI_BaseHumanoid::MaxYawSpeed` `0x102624b0`: 9/0x12/0x13 -> 15.0, 0x3b/0x3c -> 60.0,
-	// default 45.0.
-	TestEqual(TEXT("humanoid ACT_WALK is 15"), FElysiumNpc::MaxYawSpeedHumanoid(9), 15.0f);
-	TestEqual(TEXT("humanoid 0x12 is 15"), FElysiumNpc::MaxYawSpeedHumanoid(0x12), 15.0f);
-	TestEqual(TEXT("humanoid ACT_RUN is 15"), FElysiumNpc::MaxYawSpeedHumanoid(0x13), 15.0f);
-	TestEqual(TEXT("humanoid 0x3b is 60"), FElysiumNpc::MaxYawSpeedHumanoid(0x3b), 60.0f);
-	TestEqual(TEXT("humanoid 0x3c is 60"), FElysiumNpc::MaxYawSpeedHumanoid(0x3c), 60.0f);
-	TestEqual(TEXT("humanoid 0x3d falls to 45"), FElysiumNpc::MaxYawSpeedHumanoid(0x3d), 45.0f);
-	TestEqual(TEXT("humanoid ACT_IDLE falls to 45"), FElysiumNpc::MaxYawSpeedHumanoid(1), 45.0f);
-
-	// `CGeneric_NPC::MaxYawSpeed` `0x1035a810`, and byte-identically `CGeneric_NPC_bathack`
-	// `0x1035b080` and `CGenericSabbat_NPC` `0x1035be80`: 0x13 -> 160.0, 0x3b..0x3c -> 120.0,
-	// else 45.0. Note the band is EXCLUSIVE at both ends of `0x3a` and `0x3d`.
-	TestEqual(TEXT("generic ACT_RUN is 160"), FElysiumNpc::MaxYawSpeedGeneric(0x13), 160.0f);
-	TestEqual(TEXT("generic 0x3b is 120"), FElysiumNpc::MaxYawSpeedGeneric(0x3b), 120.0f);
-	TestEqual(TEXT("generic 0x3c is 120"), FElysiumNpc::MaxYawSpeedGeneric(0x3c), 120.0f);
-	TestEqual(TEXT("generic 0x3a is not"), FElysiumNpc::MaxYawSpeedGeneric(0x3a), 45.0f);
-	TestEqual(TEXT("generic 0x3d is not"), FElysiumNpc::MaxYawSpeedGeneric(0x3d), 45.0f);
-	TestEqual(TEXT("generic ACT_WALK is 45 — it has no walk arm"),
-		FElysiumNpc::MaxYawSpeedGeneric(9), 45.0f);
-
 	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` — the tuning record's +0x48 inside the
 	// (0x1129, 0x112e) band and +0x44 outside it. The SEAM answers 0 for every field, so the case
 	// stands the record to prove which offset each arm reaches.
@@ -216,27 +195,35 @@ bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
 	TestEqual(TEXT("and through the SEAM every arm answers 0"),
 		FElysiumNpc::MaxYawSpeedMingXiao(0x112a, ZeroTuning), 0.0f);
 
-	// The species table, every row by name with its retail address.
+	// The species table, every row by name with its retail address. Keyed by class name, not by
+	// row index. `CAI_BaseHumanoid#516` (`0x102624b0`) and the three generic classes' `0x1035a810`
+	// / `0x1035b080` / `0x1035be80` have no instance and no row since 0019 story 5 step 1.
 	int32 Count = 0;
 	const FElysiumNpc::FMaxYawSpeedSpecies* Rows = FElysiumNpc::MaxYawSpeedSpeciesRows(Count);
-	TestEqual(TEXT("nine classes replace slot 516"), Count, 9);
 	const TCHAR* Expected[][2] = {
-		{ TEXT("CAI_BaseHumanoid"), TEXT("0x102624b0") },
-		{ TEXT("CGeneric_NPC"), TEXT("0x1035a810") },
-		{ TEXT("CGeneric_NPC_bathack"), TEXT("0x1035b080") },
-		{ TEXT("CGenericSabbat_NPC"), TEXT("0x1035be80") },
 		{ TEXT("CNPC_VDog"), TEXT("0x10374130") },
 		{ TEXT("CNPC_VMingXiao"), TEXT("0x10394930") },
 		{ TEXT("CNPC_VTzimisce"), TEXT("0x103ba020") },
 		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d0a30") },
 		{ TEXT("CAI_BaseNPC"), TEXT("0x10280bb0") },
 	};
-	for (int32 Index = 0; Index < Count && Index < UE_ARRAY_COUNT(Expected); ++Index)
+	TestEqual(TEXT("the table carries exactly the expected rows"), Count,
+		static_cast<int32>(UE_ARRAY_COUNT(Expected)));
+	for (const TCHAR* const (&Row)[2] : Expected)
 	{
-		TestEqual(FString::Printf(TEXT("row %d class"), Index), FString(Rows[Index].RetailClass),
-			FString(Expected[Index][0]));
-		TestEqual(FString::Printf(TEXT("row %d body"), Index), FString(Rows[Index].Body516),
-			FString(Expected[Index][1]));
+		const FElysiumNpc::FMaxYawSpeedSpecies* Found = nullptr;
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			if (FCString::Strcmp(Rows[Index].RetailClass, Row[0]) == 0)
+			{
+				Found = &Rows[Index];
+			}
+		}
+		if (TestNotNull(*FString::Printf(TEXT("%s has a slot-516 row"), Row[0]), Found))
+		{
+			TestEqual(*FString::Printf(TEXT("%s's slot-516 body"), Row[0]), FString(Found->Body516),
+				FString(Row[1]));
+		}
 	}
 	return true;
 }
@@ -538,9 +525,8 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("and refuses a real one while IsStandable is a seam"),
 		Guard->CanStandOn(Other));
 
-	// Slot 525 `0x1027da90` — the base declines unconditionally, and the guard is not a `CNPC_Crow`.
+	// Slot 525 `0x1027da90` — the base declines unconditionally.
 	TestFalse(TEXT("slot 525 declines"), Guard->OverrideMove(0.1f));
-	TestEqual(TEXT("and the Crow handler was not reached"), Guard->MotorSeams.CrowOverrideMoves, 0);
 
 	// Slot 153 `0x10280300` forwards to the navigator's `IsGoalActive`. With no motor in a headless
 	// fixture there is no goal.

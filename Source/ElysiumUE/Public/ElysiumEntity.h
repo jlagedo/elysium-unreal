@@ -31,18 +31,14 @@ namespace ElysiumEntityCaps
 	// across a `trigger_changelevel`.
 	inline constexpr int32 AcrossTransition = 0x2;
 
-	// `0x8`, the bit `CGeneric_NPC_bathack::ObjectCaps` (`0x1035ad50`) ORs in. The port reads only
-	// `AcrossTransition`, so this bit is RECORDED and unread; the Source name for it is
-	// `FCAP_NOTIFY_ON_TRANSITION`, which this does not claim to have recovered from `vampire.dll`.
-	inline constexpr int32 Bit3 = 0x8;
-
 	// --- Story 29c-1, family Lifecycle: the four slot-117 species overrides -------------------------
 	//
 	// Four classes on the `CAI_BaseNPC` line override `ObjectCaps` and none of them has a port class
 	// of its own, so they land as the census-keyed table retail's override set really is. Each row
 	// carries the retail class and the address of the body that fills slot 117 for it, so a reader
 	// can check it against `docs/vtmb/npc-kernel/slots.md`. Every one of them chains the base first
-	// (`CBaseEntity::ObjectCaps` `0x100b4320`) and then applies one mask.
+	// (`CBaseEntity::ObjectCaps` `0x100b4320`) and then applies one mask. `CGeneric_NPC_bathack`
+	// (`0x1035ad50`) has no instance in the install and carries no row.
 	struct FSpeciesRow
 	{
 		const TCHAR* RetailClass = nullptr;
@@ -51,7 +47,7 @@ namespace ElysiumEntityCaps
 		int32 OrMask = 0;     // then this
 	};
 
-	// The four rows, for a test that exercises each by name.
+	// The rows, for a test that exercises each by name.
 	const FSpeciesRow* SpeciesRows(int32& OutCount);
 
 	// The row for a retail class, or null when that class overrides nothing.

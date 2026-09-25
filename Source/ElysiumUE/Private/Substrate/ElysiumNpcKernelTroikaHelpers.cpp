@@ -963,9 +963,9 @@ int32 FElysiumNpc::FindShootAtHintNode(bool bForce)
 void* FElysiumNpc::Slot609(bool bForce)
 {
 	// The vtable dispatch first, and slot 609's species arm is a GATE rather than a replacement:
-	// `CNPC_VBach` `0x103661f0`, `CNPC_VBatSwarm` `0x10367740` and `CNPC_VSheriffSwarm` `0x103b26f0`
-	// (family **Species**, three byte-identical bodies) admit only retail `m_NPCState` 4 or 0xc and
-	// otherwise ZERO `m_pShootAtHintNode` and answer NULL. An admitted body tail-calls the base
+	// `CNPC_VBach` `0x103661f0` (family **Species**; the dead swarms' `0x10367740` / `0x103b26f0`
+	// are byte-identical copies with no instance) admits only retail `m_NPCState` 4 or 0xc and
+	// otherwise ZEROES `m_pShootAtHintNode` and answers NULL. An admitted body tail-calls the base
 	// (`thunk_FUN_102b6b50`), which is the search below — so the dispatcher hands back "may the base
 	// run" and the refusal is the only arm that returns early.
 	bool bRunBase = false;

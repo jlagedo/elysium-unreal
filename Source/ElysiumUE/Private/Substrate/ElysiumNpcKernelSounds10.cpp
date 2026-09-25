@@ -9,8 +9,8 @@
 //     (`0x101c1480`), with the two `CBaseEntity` formatters they forward through (`0x1009eca0`,
 //     `0x1009ebb0`);
 //   * slot 185 **`FireBullets`** (`0x10268900`), the shared bullet pass;
-//   * the **species arms** `CNPC_VWerewolf#500` (`0x103d8660`), `CNPC_VWerewolf#491`
-//     (`0x103d87a0`) and `CNPC_Crow#511` (`0x10357800`).
+//   * the **species arms** `CNPC_VWerewolf#500` (`0x103d8660`) and `CNPC_VWerewolf#491`
+//     (`0x103d87a0`). `CNPC_Crow#511` (`0x10357800`) carries no arm: no map stands that class.
 //
 // The walked prose is `docs/vtmb/npc-ai/senses.md` § "Story 29d, family Sounds10 — …".
 //
@@ -83,9 +83,6 @@ namespace
 	const TCHAR* const GSounds10FloatSoundTable = TEXT("Float_Sound_Info");
 	constexpr int32 GSounds10FloatSoundMinDelayRow = 1;
 	constexpr float GSounds10FloatSoundMinDelayFallback = 5.0f;
-
-	// `CNPC_Crow::vfunc511` `10357800`: the one string it stops.
-	const TCHAR* const GSounds10CrowFlapSound = TEXT("NPC_Crow.Flap");
 
 	// --- `FireBullets`' recovered constants ------------------------------------------------
 
@@ -304,8 +301,8 @@ void FElysiumNpc::SpeakSoundConcept(const TCHAR* ConceptName, float Attenuation)
 // `CAI_BaseNPCTroika::FUN_10293ec0` (`0x10293ec0`), slot 488 `DeathSound`. 138 bytes, and the plain
 // shape: once-flag `DAT_10923f0d` over the concept `"Death"` into `DAT_10924d64`, then the speak.
 //
-// The vtable dispatch in front of it (`CNPC_VTzimisce` `0x103b92a0`, `CGeneric_NPC` `0x1035a500`,
-// `CNPC_VCamera` `0x103680b0`, …) is `FElysiumNpc::DeathSound` in family **Sounds**' file, which is
+// The vtable dispatch in front of it (`CNPC_VTzimisce` `0x103b92a0`, `CNPC_VCamera` `0x103680b0`,
+// …) is `FElysiumNpc::DeathSound` in family **Sounds**' file, which is
 // where story 29c-1 put the prologue; this is the arm it falls through to.
 void FElysiumNpc::TroikaDeathSound()
 {
@@ -323,9 +320,9 @@ void FElysiumNpc::AlertSound()
 // `"Idle_Calm"` (`0x105d8c60`) through `DAT_109240c0` / `DAT_10924504`.
 //
 // NOTE what is NOT here: retail's slot 490 has no `FOkToMakeSound()` gate. The rate limit lives on
-// the CALLER — slot 509 `ShouldPlayIdleSound` (family **Sounds**) is what rolls — and the two
-// species overrides that DO gate (`CNPC_VTest` `0x103b4600`, `CNPC_VTzimisce` `0x103b9380`) carry
-// the gate themselves, in the vocalization table.
+// the CALLER — slot 509 `ShouldPlayIdleSound` (family **Sounds**) is what rolls — and the species
+// override that DOES gate (`CNPC_VTzimisce` `0x103b9380`) carries the gate itself, in the
+// vocalization table.
 void FElysiumNpc::IdleSound()
 {
 	SpeakSoundConcept(GSounds10ConceptIdleCalm, GSounds10Attenuation);
@@ -559,15 +556,6 @@ void FElysiumNpc::FloatSound()
 		GSounds10Volume, Attenuation);
 
 	NextFloatSoundTime = Sounds10Now(*this) + static_cast<double>(FloatSoundMinDelaySeconds());
-}
-
-// =================================================================================================
-// `CNPC_Crow`'s slot 511 arm
-// =================================================================================================
-
-void FElysiumNpc::StopNamedSound(const TCHAR* SoundScript)
-{
-	StopNamedSoundCalls.Add(FString(SoundScript != nullptr ? SoundScript : TEXT("")));
 }
 
 // =================================================================================================

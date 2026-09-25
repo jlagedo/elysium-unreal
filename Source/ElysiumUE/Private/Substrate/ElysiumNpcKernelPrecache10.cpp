@@ -6,9 +6,10 @@
 #include "Substrate/ElysiumNpcLog.h"
 
 // Story 29d, family **Precache10** — slot 104 `Precache`: the `CAI_BaseNPC` base body, the
-// `CAI_BaseNPCTroika` body that owns the slot, and its twenty-three species arms. 25 of the
-// family's 28 rows; the three `CNPCMaker*` bodies are in `Substrate/ElysiumNpcMaker.cpp`, on the
-// separate type this port models a maker as.
+// `CAI_BaseNPCTroika` body that owns the slot, and its species arms. The three `CNPCMaker*` bodies
+// are in `Substrate/ElysiumNpcMaker.cpp`, on the separate type this port models a maker as; the
+// arms of the classes with no instance (`population.md` § "NPC classes with no instance") are not
+// ported.
 //
 // Every constant below was read off the decompiled C and, where the decompiler folded an argument,
 // off the listing. `ElysiumNpcKernelPrecache10.inl` carries the family's reading notes; the walked
@@ -59,29 +60,6 @@ namespace
 
 	// Slot 104's index, spelled once.
 	constexpr int32 GPrecacheSlot = 104;
-
-	// --- `CNPC_Crow` `0x10358ec0` --------------------------------------------------------------
-	const TCHAR* const GCrowModel = TEXT("models/crow.mdl");
-
-	// --- `CGeneric_NPC` `0x10359f70`, `CGeneric_NPC_bathack` `0x1035ade0`,
-	//     `CGenericSabbat_NPC` `0x1035b5d0` ------------------------------------------------------
-	//
-	// Three classes, three SEPARATE `.rdata` copies of the same four wav names (`0x10629a18…`,
-	// `0x10629d80…`, `0x1062a004…`) — family Sounds recorded the same duplication for the
-	// vocalization hooks and the tables are repeated here for the same reason: a reader checking
-	// one class against its `Precache` finds its own table.
-	const TCHAR* const GMetropoliceAlert = TEXT("npc/metropolice/alert1.wav");
-	const TCHAR* const GMetropoliceSurprise = TEXT("npc/metropolice/surprise1.wav");
-	const TCHAR* const GMetropoliceDie = TEXT("npc/metropolice/die1.wav");
-	const TCHAR* const GCitizenPain[] = {
-		TEXT("npc/citizen/pain1.wav"),
-		TEXT("npc/citizen/pain2.wav"),
-		TEXT("npc/citizen/pain3.wav"),
-		TEXT("npc/citizen/pain4.wav"),
-	};
-	// `0x10629c00`, and `CGenericSabbat_NPC`'s pointer `0x1062a000` resolves to the SAME string.
-	const TCHAR* const GSabbatFemaleModel = TEXT("models/character/npc/sabbat/sabbat_female.mdl");
-	const TCHAR* const GBathackModel = TEXT("models/bats.mdl");
 
 	// --- `CNPC_VAndreiBlood` `0x1035cb90` ------------------------------------------------------
 	//
@@ -302,25 +280,6 @@ namespace
 	const TCHAR* const GSheriffModel = TEXT("models/character/monster/manbat/manbat.mdl");
 	const TCHAR* const GSheriffLandblastEmitter = TEXT("sheriff_landblast_emitter");
 	const TCHAR* const GSheriffWeapon = TEXT("item_w_sheriff_sword");
-
-	// --- `CNPC_VTest` `0x103b41e0` -------------------------------------------------------------
-	//
-	// Twelve sounds and then the base, LAST. Family Sounds already carries eight of these names as
-	// vocalization data (`ElysiumNpcKernelSounds.cpp`); `knockout1` is precached and never spoken.
-	const TCHAR* const GTestDeath = TEXT("character/npc/test/death1.wav");
-	const TCHAR* const GTestAlert = TEXT("character/npc/test/alert1.wav");
-	const TCHAR* const GTestIdle = TEXT("character/npc/test/idle1.wav");
-	const TCHAR* const GTestPains[] = {   // 0x10652194, to 0x10
-		TEXT("character/npc/test/pain1.wav"),
-		TEXT("character/npc/test/pain2.wav"),
-		TEXT("character/npc/test/pain3.wav"),
-		TEXT("character/npc/test/pain4.wav"),
-	};
-	const TCHAR* const GTestFear = TEXT("character/npc/test/fear1.wav");
-	const TCHAR* const GTestLostEnemy = TEXT("character/npc/test/lostenemy1.wav");
-	const TCHAR* const GTestFoundEnemy = TEXT("character/npc/test/foundenemy1.wav");
-	const TCHAR* const GTestSurprise = TEXT("character/npc/test/surprise1.wav");
-	const TCHAR* const GTestKnockout = TEXT("character/npc/test/knockout1.wav");
 
 	// --- `CNPC_VTzimisce` `0x103b8fa0` ---------------------------------------------------------
 	const TCHAR* const GSpiderchickFootsteps[] = {   // 0x106530fc, to 0x18 — six
@@ -732,11 +691,7 @@ bool FElysiumNpc::PrecacheSpecies()
 {
 	static const FPrecache10Arm Arms[] =
 	{
-		// The twenty-three species arms of story 29d, family Precache10.
-		{ TEXT("0x10358ec0"), TEXT("CNPC_Crow"),            &FElysiumNpc::CrowPrecache },
-		{ TEXT("0x10359f70"), TEXT("CGeneric_NPC"),         &FElysiumNpc::GenericNpcTroikaPrecache },
-		{ TEXT("0x1035ade0"), TEXT("CGeneric_NPC_bathack"), &FElysiumNpc::GenericNpcBathackPrecache },
-		{ TEXT("0x1035b5d0"), TEXT("CGenericSabbat_NPC"),   &FElysiumNpc::GenericSabbatNpcPrecache },
+		// The species arms of story 29d, family Precache10.
 		{ TEXT("0x1035cb90"), TEXT("CNPC_VAndreiBlood"),    &FElysiumNpc::AndreiBloodPrecache },
 		{ TEXT("0x10360bc0"), TEXT("CNPC_VAsianVampire"),   &FElysiumNpc::AsianVampirePrecache },
 		{ TEXT("0x103637b0"), TEXT("CNPC_VBach"),           &FElysiumNpc::BachPrecache },
@@ -750,17 +705,15 @@ bool FElysiumNpc::PrecacheSpecies()
 		{ TEXT("0x103a03e0"), TEXT("CNPC_VNewscaster"),     &FElysiumNpc::NewscasterPrecache },
 		{ TEXT("0x103a6ab0"), TEXT("CNPC_VSabbatLeader"),   &FElysiumNpc::SabbatLeaderPrecache },
 		{ TEXT("0x103ae540"), TEXT("CNPC_VSheriffMan"),     &FElysiumNpc::SheriffManPrecache },
-		{ TEXT("0x103b41e0"), TEXT("CNPC_VTest"),           &FElysiumNpc::TestNpcPrecache },
 		{ TEXT("0x103b8fa0"), TEXT("CNPC_VTzimisce"),       &FElysiumNpc::TzimiscePrecache },
 		{ TEXT("0x103c1400"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawPrecache },
 		{ TEXT("0x103c31e0"), TEXT("CNPC_VTzimisceRunner"), &FElysiumNpc::TzimisceRunnerPrecache },
 		{ TEXT("0x103cb2a0"), TEXT("CNPC_VWerewolf"),       &FElysiumNpc::WerewolfPrecache },
 		{ TEXT("0x103df120"), TEXT("CNPC_VZombie"),         &FElysiumNpc::ZombiePrecache },
 
-		// Two slot-104 overrides story 29c-1 already ported as PURE bodies in family Lifecycle and
-		// left unwired, because slot 104 itself was a generated stub then. They are wired here — the
-		// arms are theirs and are cited, not re-recovered.
-		{ TEXT("0x1034aa40"), TEXT("CGenericNPC"),          &FElysiumNpc::GenericNpcLinePrecache },
+		// The slot-104 override story 29c-1 already ported as a PURE body in family Lifecycle and
+		// left unwired, because slot 104 itself was a generated stub then. It is wired here — the
+		// arm is its and is cited, not re-recovered.
 		{ TEXT("0x103689c0"), TEXT("CNPC_VCamera"),         &FElysiumNpc::CameraPrecache },
 
 		// The three maker bodies. `FElysiumNpcMaker::Precache` carries them; see the struct.
@@ -807,82 +760,6 @@ bool FElysiumNpc::PrecacheSpecies()
 // -------------------------------------------------------------------------------------------------
 // The species arms, in retail address order.
 // -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::CrowPrecache()
-{
-	// `CNPC_Crow::Precache` `0x10358ec0` — 24 bytes, and the ONLY arm in the band that chains the
-	// base FIRST and then precaches. No model keyfield is read and no fallback is set, so a crow's
-	// model is hard-coded and a map cannot override it.
-	//
-	// The chain is `CAI_BaseNPC::Precache` `0x1027bb50` — the BASE, not the Troika body: `CNPC_Crow`
-	// is a `CAI_BaseNPC` in the census, so the Troika half (the model fallback, the alt equipment,
-	// the dialogue directory, the disposition row and the coordinator bind) never runs for one.
-	BasePrecache();
-	Precache10Model(*this, GCrowModel, /*Preload=*/0);
-}
-
-void FElysiumNpc::GenericNpcTroikaPrecache()
-{
-	// `CGeneric_NPC::Precache` `0x10359f70` — the Troika-line `CGeneric_NPC` (`npc_generic`), a
-	// different class from `CGenericNPC` whose `0x1034aa40` family Lifecycle carries.
-	//
-	// Model keyfield first: unset or empty falls back to the SABBAT FEMALE model, which is the
-	// recovered oddity of this class.
-	if (Model.IsEmpty())
-	{
-		Model = GSabbatFemaleModel;   // slot 212 `SetModelName`, `0x10629c00`
-	}
-	Precache10Model(*this, *Model, /*Preload=*/0);
-
-	// Its own copies of the four metropolice/citizen names, in table order.
-	Precache10Sound(*this, GMetropoliceAlert);
-	Precache10Sound(*this, GMetropoliceSurprise);
-	Precache10Sound(*this, GMetropoliceDie);
-	Precache10SoundTable(*this, GCitizenPain, UE_ARRAY_COUNT(GCitizenPain));
-
-	// And ONLY THEN the Troika body — this arm chains LAST, unlike every other Troika-line arm here.
-	Precache();
-}
-
-void FElysiumNpc::GenericNpcBathackPrecache()
-{
-	// `CGeneric_NPC_bathack::Precache` `0x1035ade0` — `models/bats.mdl` hard-coded, its own private
-	// copy of the same four sound names, and `CAI_BaseNPC::Precache` LAST. No model keyfield and no
-	// fallback: this class is a `CAI_BaseNPC` in the census, so the base is what it chains.
-	//
-	// The decompiled C shows the surprise1 call with ONE argument; the LISTING (`1035ae13`) shows
-	// `PUSH 0x0` before every one of the four. There is no stack quirk in this body.
-	Precache10Model(*this, GBathackModel, /*Preload=*/0);
-	Precache10Sound(*this, GMetropoliceAlert);
-	Precache10Sound(*this, GMetropoliceSurprise);
-	Precache10Sound(*this, GMetropoliceDie);
-	Precache10SoundTable(*this, GCitizenPain, UE_ARRAY_COUNT(GCitizenPain));
-	BasePrecache();
-}
-
-void FElysiumNpc::GenericSabbatNpcPrecache()
-{
-	// `CGenericSabbat_NPC::Precache` `0x1035b5d0`.
-	//
-	// `thunk_FUN_10207e60(this)` FIRST: resolve this entity's char template (`0x10207c40`), read the
-	// template's `+0x78` (`0x101d4f20`) and `PrecacheModel` it with preload 0. The name is a seam
-	// that answers the empty string — which is also retail's answer for a null template pointer.
-	Precache10Model(*this, *CharTemplateModelName(), /*Preload=*/0);
-
-	if (Model.IsEmpty())
-	{
-		Model = GSabbatFemaleModel;   // `PTR_..._1062a000`, the same string `CGeneric_NPC` falls to
-	}
-	Precache10Model(*this, *Model, /*Preload=*/0);
-
-	Precache10Sound(*this, GMetropoliceAlert);
-	Precache10Sound(*this, GMetropoliceSurprise);
-	Precache10Sound(*this, GMetropoliceDie);
-	Precache10SoundTable(*this, GCitizenPain, UE_ARRAY_COUNT(GCitizenPain));
-
-	// `CAI_BaseNPC::Precache` LAST — a `CAI_BaseNPC` class, like the bathack.
-	BasePrecache();
-}
 
 void FElysiumNpc::AndreiBloodPrecache()
 {
@@ -1104,26 +981,6 @@ void FElysiumNpc::SheriffManPrecache()
 	Precache10Other(*this, GSheriffWeapon);
 }
 
-void FElysiumNpc::TestNpcPrecache()
-{
-	// `CNPC_VTest::Precache` `0x103b41e0` — twelve sounds and only THEN the Troika body. Base-last,
-	// like `CNPC_VTzimisce` and unlike its siblings.
-	//
-	// The decompiled C shows the surprise1 call with ONE argument; the LISTING (`103b427f`) shows
-	// `PUSH 0x0` before all twelve. The checklist's "retail stack quirk" is a decompiler artifact
-	// and is NOT reproduced.
-	Precache10Sound(*this, GTestDeath);
-	Precache10Sound(*this, GTestAlert);
-	Precache10Sound(*this, GTestIdle);
-	Precache10SoundTable(*this, GTestPains, UE_ARRAY_COUNT(GTestPains));
-	Precache10Sound(*this, GTestFear);
-	Precache10Sound(*this, GTestLostEnemy);
-	Precache10Sound(*this, GTestFoundEnemy);
-	Precache10Sound(*this, GTestSurprise);
-	Precache10Sound(*this, GTestKnockout);
-	Precache();
-}
-
 void FElysiumNpc::TzimiscePrecache()
 {
 	// `CNPC_VTzimisce::Precache` `0x103b8fa0` — the six-entry spiderchick footstep table, the
@@ -1207,29 +1064,8 @@ void FElysiumNpc::ZombiePrecache()
 }
 
 // -------------------------------------------------------------------------------------------------
-// The two arms story 29c-1 ported and left unwired.
+// The arm story 29c-1 ported and left unwired.
 // -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::GenericNpcLinePrecache()
-{
-	// `CGenericNPC::Precache` `0x1034aa40`. The BODY is family Lifecycle's
-	// `GenericNpcPrecache(model, out)` — the three-entry `PTR_s_weapons_ar2_ar2_fire1_wav_106244c0`
-	// table, then this entity's own model — and it is called rather than re-recovered here. What
-	// this arm adds is the wiring: slot 104 was a generated stub when that body landed, so nothing
-	// ran it.
-	//
-	// `CGenericNPC` is a `CAI_BaseNPC` line class and the body chains NOTHING: no base call at all,
-	// which is why this arm ends where it ends.
-	TArray<FPrecacheRequest> Requests;
-	GenericNpcPrecache(Model, Requests);
-	for (const FPrecacheRequest& Request : Requests)
-	{
-		FPrecacheOp Op;
-		Op.Channel = Request.bModel ? EPrecacheChannel::Model : EPrecacheChannel::Sound;
-		Op.Name = Request.Name;
-		IssuePrecache(Op);
-	}
-}
 
 void FElysiumNpc::CameraPrecache()
 {

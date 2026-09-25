@@ -515,8 +515,8 @@ bool FElysiumNpcKernelClosureWorldSpaceCenterTest::RunTest(const FString&)
 	TestEqual(TEXT("the centre follows the origin"), F.Guard->WorldSpaceCenter(),
 		Before + FVector(0.f, 250.f, 0.f));
 
-	// Family Geometry's `CNPC_Crow` override falls through to this body for every other class, so
-	// the two must agree on a combatant.
+	// Family Geometry's species-dispatched slot 192 answers this body for every class, so the two
+	// must agree on a combatant.
 	TestTrue(TEXT("SpeciesWorldSpaceCenter falls through to slot 192"),
 		F.Guard->SpeciesWorldSpaceCenter().Equals(F.Guard->WorldSpaceCenter(), 0.001));
 	return true;

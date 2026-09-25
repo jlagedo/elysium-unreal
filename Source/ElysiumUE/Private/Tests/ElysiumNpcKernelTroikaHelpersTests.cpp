@@ -606,7 +606,7 @@ bool FElysiumNpcKernelTroikaHelpersTailSlotsTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// `0x102b8980`, `0x102bf560`, `0x102bf770`, `0x102c0360`, `0x102a0b90`, `0x102aa9e0`, `0x10312cd0`.
+// `0x102b8980`, `0x102bf560`, `0x102bf770`, `0x102c0360`, `0x102a0b90`, `0x102aa9e0`.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTroikaHelpersFreeBodiesTest,
@@ -712,14 +712,6 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	// literal status 4 to `+0x5c44`.
 	TestEqual(TEXT("and completes the task"), Npc->Schedule.TaskStatus,
 		EElysiumTaskStatus::Complete);
-
-	// `0x10312cd0` — the expresser factory. The base gate is `IsAlive`, and only a live body
-	// reaches the factory at all.
-	const int32 FactoryBefore = Npc->ExpresserFactoryCalls;
-	TestFalse(TEXT("CreateExpresser answers false — there is no expresser substrate"),
-		Npc->CreateExpresser());
-	TestEqual(TEXT("but the factory WAS asked, because the base gate opened"),
-		Npc->ExpresserFactoryCalls, FactoryBefore + 1);
 	return true;
 }
 

@@ -14,22 +14,21 @@
 //
 // 40 rows: the fifteen Troika-line vtable slots whose stubs the generator left for this family, and
 // the twenty-five helpers, free functions and branch overrides beside them. The walked prose is
-// spread by concern, as the brief asks: `docs/vtmb/npc-ai/shape.md` for the `CAI_BaseActor` branch
-// and the geometry helpers, `conditions-and-states.md` for the attack-condition ladder and the
-// victim-side reaction slots, `schedule-kernel.md` for the hint validators and the turn ladder,
-// `lifecycle.md` for the think-clock forwards.
+// spread by concern, as the brief asks: `docs/vtmb/npc-ai/shape.md` for the geometry helpers,
+// `conditions-and-states.md` for the attack-condition ladder and the victim-side reaction slots,
+// `schedule-kernel.md` for the hint validators and the turn ladder, `lifecycle.md` for the
+// think-clock forwards.
 //
-// THE TWO STANDING FACTS OF THIS FAMILY:
+// THE STANDING FACT OF THIS FAMILY:
 //
-//   1. **Five rows are `CAI_BaseHumanoid`'s, not the Troika line's.** `classes.md` gives
-//      `CAI_BaseHumanoid` no entity classname, so no map stands one and `RetailClass()` never
-//      answers it. They are ported because they are rows; they read `CAI_BaseActor`'s own words,
-//      declared in the `.inl`, and nothing on the Troika line dispatches through them.
-//   2. **Three rows are already carried by the port and are NOT re-stood here.** `0x10272790`
-//      (`ShouldMaintainActivity`'s base arm) is family Anim's `FElysiumNpc::ShouldMaintainActivity`;
-//      `0x10298910` and `0x102989e0` are `FElysiumNpc::ParseGroupMask` and its two setters. Adding
-//      a second copy of a rule the port already reproduces arm for arm is the drift this story
-//      exists to end.
+//   * The six `CAI_BaseHumanoid` / `CAI_BaseActor` rows it once carried (`0x1025e780`,
+//     `0x1025f1a0`, `0x1025ea00`, `0x10260540`, `0x10260670`, `0x10260750`) were deleted by 0019
+//     story 5 step 1: the class has no instance (`population.md`), and the rows stay in the census.
+//   * **Three rows are already carried by the port and are NOT re-stood here.** `0x10272790`
+//     (`ShouldMaintainActivity`'s base arm) is family Anim's `FElysiumNpc::ShouldMaintainActivity`;
+//     `0x10298910` and `0x102989e0` are `FElysiumNpc::ParseGroupMask` and its two setters. Adding a
+//     second copy of a rule the port already reproduces arm for arm is the drift this story exists
+//     to end.
 
 namespace
 {
@@ -74,14 +73,6 @@ namespace
 	// UNRECOVERED literals. Each is named so the arm reads as retail's and the value is the one
 	// thing waiting; each site says what the stand-in does.
 	constexpr float GDatFollowRunDistanceUnits = 0.f;        // _DAT_1049a17c — slot 571's walk/run
-	// NO LONGER UNRECOVERED. Story 29d, family **Anim10** read `_DAT_10497ca0` out of the pinned
-	// image while porting `CAI_BaseHumanoid::MaintainEyeDirection` (`0x1025fa50`), whose
-	// `1025fda5 FCOMP double ptr [0x10497ca0]` settles both its width and its value: it is a
-	// **double** and it reads **-0.5**. So the head-target cone is 120 degrees off the head
-	// direction, not the forward half-plane the 0.0 stand-in made it. `0x1025ea00` reads the same
-	// cell and its gate is still STRICT, so a target dead behind (dot -1) is still refused.
-	constexpr double GDatValidHeadTargetDotMin = -0.5;       // _DAT_10497ca0 — ValidHeadTarget
-
 	// Read 2026-09-21 (`docs/vtmb/npc-ai/rdata-cells.md`) and held by the tunables table since
 	// 0019/4; each stood at a 0.0 stand-in before. The height limit is `FCOMP double ptr`: a DOUBLE.
 	constexpr double GDatHintHeightDiffUnits = ElysiumNpcTunables::SixtyFourDouble;  // 0x10296c40
@@ -113,128 +104,6 @@ namespace
 	// `m_iszCustomMove` sits at `+0x5f50` on the cine. There is no port field for it, so
 	// `GetScriptCustomMoveActivity` reads this empty key and says so.
 	const FString GUnrecoveredCustomMove;
-}
-
-// =================================================================================================
-// `CAI_BaseHumanoid` / `CAI_BaseActor`'s branch. Five rows; no map stands the class.
-// =================================================================================================
-
-// 0x1025e780 `CAI_BaseHumanoid::vfunc277`, the slot-277 `SetViewtarget` override
-void FElysiumNpc::FUN_1025e780(const FVector& ViewTarget)
-{
-	// The whole 19-byte body: clear bit 0 of `m_fLatchedPositions` (`+0x5f4c`), then chain the base
-	// `CBaseFlex::SetViewtarget` (`0x100b5b00`, the body the generated slot-277 virtual carries).
-	LatchedPositions &= ~1;
-	SetViewtarget(ViewTarget);
-}
-
-// 0x1025f1a0 `CAI_BaseActor::HasActiveLookTargets`, `CAI_BaseHumanoid#586`
-bool FElysiumNpc::HasActiveLookTargets() const
-{
-	// `return *(int *)(this + 0x5f94) != 0;` — the look-queue `CUtlVector`'s COUNT, whose vector
-	// base is `+0x5f88` with 0x24-byte elements. Family Facing already carries that list as
-	// `LookTargets` (`AddLookTargetHumanoid`, slots 535/536), so this asks it.
-	return LookTargets.Num() != 0;
-}
-
-// 0x1025ea00 `CAI_BaseActor::ValidHeadTarget(const Vector&)`, `CAI_BaseHumanoid#588`
-bool FElysiumNpc::ValidHeadTargetBaseActor(const FVector& LookTargetPosCm) const
-{
-	// Arm for arm:
-	//   vFacing = HeadDirection3D()            (vtable +0x5c4)
-	//   dir     = lookTargetPos - EyePosition() (vtable +0x304), normalised
-	//   if (dot(vFacing, dir) < _DAT_10497ca0)            return false
-	//   return ABS(lookTargetPos.z - eye.z) < _DAT_104492d0
-	//
-	// Retail's dot gate is `>` and not `>=`: the decompiler renders it as
-	// `if (fVar1 >= fVar2 && (fVar1 == fVar2) == 0)`, which admits only a strictly greater dot.
-	const FVector Eye = EyePosition();
-	FVector Dir = LookTargetPosCm - Eye;
-	// `PTR_thunk_FUN_10137220` is `VectorNormalize`; a zero-length direction leaves the vector
-	// alone in retail, which lands on a zero dot.
-	Dir.Normalize();
-	// SEAM: `HeadDirection3D` (slot 369, vtable `+0x5c4`) has no port body — the gaze cascade
-	// publishes a look POINT, not a head basis. `ViewForward` is the observer's own forward and is
-	// the nearest recovered axis; the head's own deflection from it is UNRECOVERED.
-	const FVector Facing = FElysiumNpcSenses::ViewForward(*this);
-	const double Dot = FVector::DotProduct(Facing, Dir);
-	// `_DAT_10497ca0` = **-0.5**, a double, recovered 2026-09-14 by story 29d (family Anim10) out of
-	// the pinned image at `0x1025fa50`'s `FCOMP double ptr` — the gate admits anything within 120
-	// degrees of the head direction, and still refuses a target dead behind.
-	if (!(Dot > GDatValidHeadTargetDotMin))
-	{
-		return false;
-	}
-	// The height limit reads the same address as the melee dot minimum and the decompiler flags the
-	// overlap; the value is UNRECOVERED as a height and the port carries the double it pins.
-	const double HeightCm = static_cast<double>(GDatMeleeDotMin) * ElysiumMove::U;
-	return FMath::Abs(LookTargetPosCm.Z - Eye.Z) < HeightCm;
-}
-
-// 0x10260540 `CAI_BaseActor::SelectRandomExpressionForState(NPC_STATE)`, `CAI_BaseHumanoid#589`
-const FString* FElysiumNpc::SelectRandomExpressionForState(int32 NpcState) const
-{
-	// `if (m_iszExpressionOverride == NULL || state == 7) { switch … } else return override`.
-	// State 7 is `NPC_STATE_DEAD`: a dead body takes the per-state table even with an override set.
-	if (!ExpressionOverride.IsEmpty() && NpcState != 7)
-	{
-		return &ExpressionOverride;
-	}
-	// The switch, exactly as the decompiled C reads it. NOTE the pairing: retail answers `+0x5fb0`
-	// for state 2 and `+0x5fac` for state 3, which is the REVERSE of SDK 2013's alert/combat field
-	// order — the bodies are what this follows.
-	const FString* Answer = nullptr;
-	switch (NpcState)
-	{
-		case 1:   Answer = &IdleExpression;   break;   // NPC_STATE_IDLE   -> +0x5fa8
-		case 2:   Answer = &AlertExpression;  break;   // NPC_STATE_ALERT  -> +0x5fb0
-		case 3:   Answer = &CombatExpression; break;   // NPC_STATE_COMBAT -> +0x5fac
-		case 5:
-		case 7:   Answer = &DeathExpression;  break;   // PLAYDEAD / DEAD  -> +0x5fb4
-		default:  return nullptr;
-	}
-	// A state whose word is the `string_t` null answers NULL and falls out of the switch; a word
-	// that is set answers the string, and retail's `STRING()` maps a null one to `DAT_106b8540`,
-	// the shared empty string. Both distinctions are kept by answering a pointer.
-	return Answer->IsEmpty() ? nullptr : Answer;
-}
-
-// 0x10260670 `CAI_BaseActor::SetExpression(const char*)`
-void FElysiumNpc::SetExpression(const FString& SceneName)
-{
-	// 1. a null or empty name clears and returns;
-	// 2. a name equal to `m_iszExpressionScene` under `__strcmpi` is a no-op;
-	// 3. otherwise `m_iszExpressionScene = NULL`, `InstancedScriptedScene(this, name)`
-	//    (`thunk_FUN_10084b40`) into `m_hExpressionSceneEnt` (`+0x5fa0`), and the pooled string is
-	//    stored ONLY when the returned handle resolves to a live entity.
-	if (SceneName.IsEmpty())
-	{
-		ClearExpression();
-		return;
-	}
-	if (!ExpressionScene.IsEmpty() && ExpressionScene.Equals(SceneName, ESearchCase::IgnoreCase))
-	{
-		return;
-	}
-	ExpressionScene.Reset();
-	// SEAM for `InstancedScriptedScene` (`0x10084b40`): this runtime has no instanced-scene spawner
-	// for an expression `.vcd`, so the handle stays unset and step 3's cache is never taken — which
-	// is retail's own dead-handle arm.
-	ExpressionSceneEnt = FElysiumEntityHandle();
-	if (World != nullptr && ExpressionSceneEnt.IsSet()
-		&& World->Resolve(ExpressionSceneEnt) != nullptr)
-	{
-		ExpressionScene = SceneName;
-	}
-}
-
-// 0x10260750 `CAI_BaseActor::ClearExpression`
-void FElysiumNpc::ClearExpression()
-{
-	// The whole 11-byte body. SDK 2013's `ClearExpression` also removes the actor from its scene;
-	// retail's does NOT — it writes the one word and returns, and the scene entity at `+0x5fa0` is
-	// deliberately left standing.
-	ExpressionScene.Reset();
 }
 
 // =================================================================================================
@@ -1199,7 +1068,7 @@ void FElysiumNpc::Slot588()
 	// `0x10289ee0`. Dispatched three times from `CAI_BaseNPCTroika::RunTask` (`0x102aacf0`).
 	//
 	// NOT `CAI_BaseHumanoid`'s slot 588: that is `0x1025ea00`, `CAI_BaseActor::ValidHeadTarget`, a
-	// one-word body of another table, ported above under its own name.
+	// body of another table whose class has no instance (dead; census only).
 	if (IsActivityFinished())
 	{
 		RestartIdealActivityId(GBaseHelpersActDisposition);

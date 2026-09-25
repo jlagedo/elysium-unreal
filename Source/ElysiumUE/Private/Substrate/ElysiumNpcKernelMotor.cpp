@@ -52,9 +52,6 @@ namespace
 	constexpr float GYawDefault = ElysiumNpcTunables::FortyFive;
 	constexpr float GYawRun = ElysiumNpcTunables::YawSpeedRun;
 	constexpr float GYawCrouch = ElysiumNpcTunables::Thirty;
-	constexpr float GYawHumanoidMove = ElysiumNpcTunables::Fifteen;
-	constexpr float GYawHumanoidCrouch = ElysiumNpcTunables::YawSpeedHumanoidCrouch;
-	constexpr float GYawGenericCrouch = ElysiumNpcTunables::OneTwenty;
 	constexpr float GYawTzimisceIdle = ElysiumNpcTunables::Five;
 	constexpr float GYawTzimisceDefault = ElysiumNpcTunables::YawSpeedTzimisceDefault;
 	constexpr float GYawFloor = ElysiumNpcTunables::One;
@@ -77,7 +74,6 @@ namespace
 	constexpr int32 GActIdle = 1;
 	constexpr int32 GActIdleAngry = 5;
 	constexpr int32 GActWalk = 9;
-	constexpr int32 GActRunHumanoid = 0x12;
 	constexpr int32 GActRun = 0x13;
 	constexpr int32 GActCrouchIdle = 0x3b;
 	constexpr int32 GActCrouchWalk = 0x3c;
@@ -122,10 +118,6 @@ namespace
 	// Troika body, so it is listed for the ledger's sake and answers the family default.
 	constexpr FElysiumNpc::FMaxYawSpeedSpecies GMaxYawSpeedSpecies[] =
 	{
-		{ TEXT("CAI_BaseHumanoid"),     TEXT("0x102624b0") },
-		{ TEXT("CGeneric_NPC"),         TEXT("0x1035a810") },
-		{ TEXT("CGeneric_NPC_bathack"), TEXT("0x1035b080") },
-		{ TEXT("CGenericSabbat_NPC"),   TEXT("0x1035be80") },
 		{ TEXT("CNPC_VDog"),            TEXT("0x10374130") },
 		{ TEXT("CNPC_VMingXiao"),       TEXT("0x10394930") },
 		{ TEXT("CNPC_VTzimisce"),       TEXT("0x103ba020") },
@@ -560,15 +552,6 @@ FElysiumEntity* FElysiumNpc::RatIgnoredGlobalEntity() const
 	return nullptr;
 }
 
-void FElysiumNpc::CrowOverrideMove(float Interval)
-{
-	// `thunk_FUN_10357be0(this, interval)` — `CNPC_Crow`'s own move handler. **SEAM**: recorded,
-	// moves nothing. The ANSWER slot 525 gives on this arm ("true, I handled the move") is the
-	// ported half and is what the caller observes.
-	(void)Interval;
-	++MotorSeams.CrowOverrideMoves;
-}
-
 bool FElysiumNpc::IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const
 {
 	// `CBaseAnimating::IsIgnoreCollisionEntity` `0x1008be20`: resolve `m_hIgnoreCollisionEntity`
@@ -729,38 +712,6 @@ float FElysiumNpc::MaxYawSpeedBase()
 	return GYawDefault;
 }
 
-float FElysiumNpc::MaxYawSpeedHumanoid(int32 Activity)
-{
-	// `CAI_BaseHumanoid::MaxYawSpeed` `0x102624b0`, a three-arm switch on `m_Activity` (+0xfec).
-	switch (Activity)
-	{
-	case GActWalk:
-	case GActRunHumanoid:
-	case GActRun:
-		return GYawHumanoidMove;      // _DAT_10463584 = 15.0
-	case GActCrouchIdle:
-	case GActCrouchWalk:
-		return GYawHumanoidCrouch;    // _DAT_104492a4 = 60.0
-	default:
-		return GYawDefault;           // _DAT_1049949c = 45.0
-	}
-}
-
-float FElysiumNpc::MaxYawSpeedGeneric(int32 Activity)
-{
-	// `CGeneric_NPC::MaxYawSpeed` `0x1035a810`, duplicated byte for byte at
-	// `CGeneric_NPC_bathack` `0x1035b080` and `CGenericSabbat_NPC` `0x1035be80`.
-	if (Activity == GActRun)
-	{
-		return GYawRun;               // _DAT_1047a3ac = 160.0
-	}
-	if (GActCrouchIdle - 1 < Activity && Activity < GActCrouchWalk + 1)
-	{
-		return GYawGenericCrouch;     // _DAT_1044f00c = 120.0
-	}
-	return GYawDefault;
-}
-
 float FElysiumNpc::MaxYawSpeedTurningArm(const TCHAR* ConVarAddress)
 {
 	// The arm all three of `CAI_BaseNPCTroika` (`0x10297ce0`), `CNPC_VDog` (`0x10374130`) and
@@ -871,11 +822,6 @@ float FElysiumNpc::MaxYawSpeed()
 	if (IsRetailClass(TEXT("CNPC_VMingXiao")))
 	{
 		return MaxYawSpeedMingXiao(ActivityNumber, MingXiaoTuningField);
-	}
-	if (IsRetailClass(TEXT("CGeneric_NPC")) || IsRetailClass(TEXT("CGeneric_NPC_bathack"))
-		|| IsRetailClass(TEXT("CGenericSabbat_NPC")))
-	{
-		return MaxYawSpeedGeneric(ActivityNumber);
 	}
 
 	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, arm for arm.
@@ -1205,13 +1151,9 @@ void FElysiumNpc::GetGroundVelocityToApply(FVector& OutVelocity)
 
 bool FElysiumNpc::OverrideMove(float Interval)
 {
-	// slot 525. `CNPC_Crow::vfunc525` `0x10357ba0` is the only species arm: at nav type 2 (Fly) it
-	// hands the move to its own handler and answers true, otherwise it declines like the base.
-	if (IsRetailClass(TEXT("CNPC_Crow")) && NavGetType() == 2)
-	{
-		CrowOverrideMove(Interval);
-		return true;
-	}
+	// slot 525. The census's only species arm, `CNPC_Crow::vfunc525` `0x10357ba0`, is on a class no
+	// map stands and carries no port arm.
+	(void)Interval;
 	// `CAI_BaseNPC::OverrideMove` `0x1027da90` — a scope-trace push/pop around an unconditional
 	// false. The base DECLINES, and that is what every species override is measured against.
 	return false;

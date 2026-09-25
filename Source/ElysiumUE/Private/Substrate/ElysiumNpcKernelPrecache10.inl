@@ -18,7 +18,9 @@
 // `CAI_BaseNPCTroika::Precache` `0x10298ad0`, the latter owning slot 104 — plus twenty-three
 // species overrides of that one slot and three `CNPCMaker*` bodies that land on
 // `FElysiumNpcMaker::Precache` instead (`Substrate/ElysiumNpcMaker.h`), because this port models
-// makers as a separate type and an `FElysiumNpc` arm would never run on one.
+// makers as a separate type and an `FElysiumNpc` arm would never run on one. Six of the
+// twenty-three overrides sit on classes with no instance in the install (`CNPC_Crow`, the three
+// generic classes, `CNPC_VTest`, `CGenericNPC`) and carry no port arm.
 //
 // A species override is an `OverrideOf(RetailClass(), 104)` case inside slot 104's one port
 // method, keyed through `Substrate/ElysiumNpcKernelClassLookup.h` — the convention story 29c-1 set
@@ -217,31 +219,30 @@ void PrecacheDirectory(const FString& Directory, const TCHAR* Extension, bool bS
 static int32 VSoundGroupRowFor(const TCHAR* GroupName);
 
 /** SEAM for `FUN_10207e60`'s model name — `GetCharTemplate(this)` (`0x10207c40`) then the
- *  template's `+0x78` (`0x101d4f20`). `CGenericSabbat_NPC::Precache` opens by precaching it.
+ *  template's `+0x78` (`0x101d4f20`), which `FUN_10207e60` hands to `PrecacheModel` with preload 0.
  *  Which template column `+0x78` is has no recovered name, and this runtime's template records
  *  expose none, so this answers the empty string — which is also what retail precaches when the
- *  template's pointer is null (`DAT_106b8540`). */
+ *  template's pointer is null (`DAT_106b8540`).
+ *
+ *  **No port caller today.** Its one port reader was the dead `CGenericSabbat_NPC::Precache`
+ *  (`0x1035b5d0`), removed by 0019 story 5 step 1. Its live retail caller is
+ *  `CAI_BaseNPCTroika::Spawn` (`0x10298d30`), whose call to `FUN_10207e60` the port's `Spawn` does
+ *  not make yet; the seam stays as that unported rule's named input. */
 FString CharTemplateModelName() const;
 
-// --- The twenty-three species arms ---------------------------------------------------------------
+// --- The species arms ----------------------------------------------------------------------------
 //
 // One per distinct retail body, named after the class the census names it on and carrying that
 // class's `0x10……` address at the definition. `PrecacheSpecies` is what selects one; a body that
 // wants the base calls `Precache()` (the Troika body, reached through `FSpeciesDispatchScope`) or
-// `BasePrecache()` (`CAI_BaseNPC`'s, which the four `CAI_BaseNPC`-line classes chain instead).
+// `BasePrecache()` (`CAI_BaseNPC`'s, which a `CAI_BaseNPC`-line class chains instead).
 //
 // WHERE EACH ONE CHAINS, because it is the fact that separates them: **first** for Andrei Blood,
 // the Asian Vampire, Bach, the Chang brothers, the Gargoyle, the Ghoul Croucher, the Hengeyokai,
 // the ManBat, Ming Xiao, the Newscaster, the Sabbat Leader, the Sheriff, the Tzimisce Head Claw,
-// the Tzimisce Runner, the Werewolf and the Zombie; **last** for `CGeneric_NPC`,
-// `CGeneric_NPC_bathack`, `CGenericSabbat_NPC`, `CNPC_VTest` and `CNPC_VTzimisce`; **first, and
-// then a hard-coded model** for `CNPC_Crow`; **after its own model fallback** for
-// `CNPC_VMingXiaoTentacle`; and **not at all** for `CGenericNPC`.
+// the Tzimisce Runner, the Werewolf and the Zombie; **last** for `CNPC_VTzimisce`; and **after its
+// own model fallback** for `CNPC_VMingXiaoTentacle`.
 
-void CrowPrecache();                  // 0x10358ec0
-void GenericNpcTroikaPrecache();      // 0x10359f70 — CGeneric_NPC, npc_generic
-void GenericNpcBathackPrecache();     // 0x1035ade0
-void GenericSabbatNpcPrecache();      // 0x1035b5d0
 void AndreiBloodPrecache();           // 0x1035cb90
 void AsianVampirePrecache();          // 0x10360bc0
 void BachPrecache();                  // 0x103637b0
@@ -255,18 +256,16 @@ void MingXiaoTentaclePrecache();      // 0x1039c220
 void NewscasterPrecache();            // 0x103a03e0
 void SabbatLeaderPrecache();          // 0x103a6ab0
 void SheriffManPrecache();            // 0x103ae540
-void TestNpcPrecache();               // 0x103b41e0
 void TzimiscePrecache();              // 0x103b8fa0
 void TzimisceHeadClawPrecache();      // 0x103c1400
 void TzimisceRunnerPrecache();        // 0x103c31e0
 void WerewolfPrecache();              // 0x103cb2a0
 void ZombiePrecache();                // 0x103df120
 
-// --- The two slot-104 arms story 29c-1 ported and left unwired ------------------------------------
+// --- The slot-104 arm story 29c-1 ported and left unwired ----------------------------------------
 //
-// Both bodies are family **Lifecycle**'s and are CALLED, not re-recovered. Slot 104 was a generated
-// stub when they landed, so nothing ran them; these two arms are the wiring, plus the tail
-// `CameraPrecacheModel`'s own comment names as "a later story's" — which is this one.
+// The body is family **Lifecycle**'s and is CALLED, not re-recovered. Slot 104 was a generated stub
+// when it landed, so nothing ran it; this arm is the wiring, plus the tail `CameraPrecacheModel`'s
+// own comment names as "a later story's" — which is this one.
 
-void GenericNpcLinePrecache();        // 0x1034aa40 — CGenericNPC, via `GenericNpcPrecache`
 void CameraPrecache();                // 0x103689c0 — CNPC_VCamera / …Security, via `CameraPrecacheModel`

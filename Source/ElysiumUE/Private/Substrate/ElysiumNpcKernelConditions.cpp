@@ -349,8 +349,9 @@ bool FElysiumNpc::FCanCheckAttacks()
 namespace
 {
 	const FElysiumNpc::FStateChangeSpecies GCondStateChangeSpecies[] = {
-		// The seven holster/draw classes. `FElysiumNpc::ApplyStateWeaponVisibility` already carries
-		// the body; these rows are what says WHICH classes reach it, joined to the census.
+		// The holster/draw classes. `FElysiumNpc::ApplyStateWeaponVisibility` already carries the
+		// body; these rows are what says WHICH classes reach it, joined to the census.
+		// `CNPC_VStalker` shares `0x103871c0` but has no instance and no row.
 		{ TEXT("CNPC_VGuard1"),            TEXT("0x1037d020"),
 			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
 		{ TEXT("CNPC_VHunter"),            TEXT("0x10388880"),
@@ -362,8 +363,6 @@ namespace
 		{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("0x103871c0"),
 			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
 		{ TEXT("CNPC_VSabbatGunman"),      TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VStalker"),           TEXT("0x103871c0"),
 			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
 		{ TEXT("CNPC_VYukie"),             TEXT("0x103871c0"),
 			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
@@ -377,9 +376,6 @@ namespace
 			FElysiumNpc::EStateChangeSpecies::Suppressed },
 		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10368ea0"),
 			FElysiumNpc::EStateChangeSpecies::Suppressed },
-		// The HL2 line. No `npc_V*` classname reaches it; carried so the census can be checked.
-		{ TEXT("CAI_BaseHumanoid"),        TEXT("0x10260630"),
-			FElysiumNpc::EStateChangeSpecies::HumanoidPreStep },
 		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0"),
 			FElysiumNpc::EStateChangeSpecies::BachSnapBack },
 		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20"),
@@ -412,8 +408,7 @@ const FElysiumNpc::FStateChangeSpecies* FElysiumNpc::StateChangeSpeciesOf(const 
 const FElysiumNpc::FStateChangeSpecies* FElysiumNpc::StateChangeSpecies() const
 {
 	// The vtable's own rule: walk the base chain upward and stop at the first class that fills the
-	// slot. A class the census does not carry still answers its own row, which is what lets a test
-	// exercise `CAI_BaseHumanoid` by name.
+	// slot.
 	const FElysiumNpcClass* Cls = RetailClass();
 	while (Cls != nullptr)
 	{
@@ -583,13 +578,6 @@ void FElysiumNpc::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewS
 				}
 			}
 			break;
-		case EStateChangeSpecies::HumanoidPreStep:
-			// `CAI_BaseHumanoid::OnStateChange` (`0x10260630`) skips the Troika body entirely and
-			// chains STRAIGHT to `CAI_BaseNPC::OnStateChange`. Its two-call pre-step (vtable `+0x934`
-			// with the new state, then `0x10260670` with the result) is UNRECOVERED — both are HL2-line
-			// bodies outside this closure — and no `npc_V*` classname reaches this row.
-			(void)FElysiumNpcFlags::NpcStateFlagsForRetailState(CondRetailStateId(NewState));
-			return;
 		case EStateChangeSpecies::BachSnapBack:
 			if (BachOnStateChange(LastOnStateChangeOldRetail, LastOnStateChangeNewRetail))
 			{

@@ -10,8 +10,8 @@
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29d, family **Sounds10** — the seventeen sound hooks of slots 488–507, the three `KeyValue`
-// overloads and the two formatters behind them, slot 185 `FireBullets`, and the three species arms
-// over them (`CNPC_VWerewolf#500`, `CNPC_VWerewolf#491`, `CNPC_Crow#511`).
+// overloads and the two formatters behind them, slot 185 `FireBullets`, and the two species arms
+// over them (`CNPC_VWerewolf#500`, `CNPC_VWerewolf#491`).
 //
 // Every assertion is read off the decompiled C or the listing, and the address it came from is named
 // beside it. The concept-name constants were read out of the pinned `vampire.dll` at `0x105d8c30`…
@@ -564,44 +564,6 @@ bool FElysiumNpcKernelSounds10FloatSoundTest::RunTest(const FString&)
 		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
 		F.Npc->FloatSound();
 		CheckPlainHook(*this, *F.Npc, TEXT("slot 507 in dialogue"), { TEXT("Float"), 0.0f });
-	}
-	return true;
-}
-
-// =================================================================================================
-// `CNPC_Crow`'s slot 511 arm — `0x10357800`
-// =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10CrowStopLoopingSoundsTest,
-	"Elysium.Substrate.NpcKernelSounds10.CrowStopLoopingSounds", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10CrowStopLoopingSoundsTest::RunTest(const FString&)
-{
-	// `0x10357800` is ELEVEN bytes: `PUSH "NPC_Crow.Flap"; CALL StopSound; RET`. It does NOT chain
-	// to the base, so the generic "stop everything this entity is playing" never runs for a crow.
-	{
-		FSounds10Fixture F;
-		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->SetRetailClassForTests(TEXT("CNPC_Crow"));
-		TestNotNull(TEXT("the census carries CNPC_Crow"),
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_Crow")));
-		F.Npc->StopLoopingSounds();
-		TestEqual(TEXT("a crow stops exactly one named script"),
-			F.Npc->StopNamedSoundCalls.Num(), 1);
-		if (F.Npc->StopNamedSoundCalls.Num() == 1)
-		{
-			TestEqual(TEXT("...and it is NPC_Crow.Flap (0x10628bb4)"),
-				F.Npc->StopNamedSoundCalls[0], FString(TEXT("NPC_Crow.Flap")));
-		}
-	}
-	{
-		// A plain `npc_VCop` runs the Troika-line body (`0x1027caa0`, family Sounds), which stops
-		// nothing by name.
-		FSounds10Fixture F;
-		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->SetRetailClassForTests(nullptr);
-		F.Npc->StopLoopingSounds();
-		TestEqual(TEXT("a plain npc_VCop stops no named script"),
-			F.Npc->StopNamedSoundCalls.Num(), 0);
 	}
 	return true;
 }

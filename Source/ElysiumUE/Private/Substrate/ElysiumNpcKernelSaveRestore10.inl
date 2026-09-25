@@ -290,11 +290,6 @@ int32 MingXiaoTentacleSave(void* Archive);
  *  around the Troika body. */
 int32 TzimisceHeadClawSave(void* Archive);
 
-/** `CScriptedTarget::Save` (`0x1034e320`) — `m_flPauseDoneTime` (`+0x5f64`) at mode **3** around
- *  **`BaseSave`**, not the Troika body: `CScriptedTarget` is a `CAI_BaseNPC` in the census and its
- *  slot 126 chains `0x1027bc60` directly. */
-int32 ScriptedTargetSave(void* Archive);
-
 // --- Slot 127 `Restore` ----------------------------------------------------------------------------
 
 /** `CAI_BaseNPCTroika::Restore` (`0x10299700`) — slot 127's own body. `CAI_BaseNPC::Restore`
@@ -332,10 +327,6 @@ int32 TzimisceHeadClawRestore(void* Archive);
  *  between the Troika body and those rows — which is why the arm keys on `CNPC_VVampireBoss` by
  *  the CHAIN walk (`IsRetailClass`) and not by a name compare. */
 int32 VampireBossRestore(void* Archive);
-
-/** `CScriptedTarget::Restore` (`0x1034e370`) — `CAI_BaseNPC::Restore` and ITS answer, then
- *  `m_flPauseDoneTime` decoded at mode **3**. Nothing else. */
-int32 ScriptedTargetRestore(void* Archive);
 
 // --- Slot 180 `UpdateOnRemove` ---------------------------------------------------------------------
 
@@ -503,10 +494,6 @@ double MingXiaoRegrowTimers[MingXiaoRegrowTimerCount] = { 0.0, 0.0, 0.0, 0.0, 0.
 
 /** `+0x6674 CNPC_VMingXiaoTentacle::m_flPhaseExpireTimer` — the tentacle's phase deadline. */
 double MingXiaoTentaclePhaseExpireTimer = 0.0;
-
-/** `+0x5f64 CScriptedTarget::m_flPauseDoneTime`. The same offset is `CCineNPC::m_iFinishSchedule`
- *  on the cine line, which is exactly why it is declared by retail class. */
-double ScriptedTargetPauseDoneTime = 0.0;
 
 /** `+0x6680 CNPC_VVampireBoss::m_pMonsterModelName` and `+0x6694 m_pszMonsterClassname` — the two
  *  words `CNPC_VVampireBoss::Restore` resets. Neither had a carrier before this story. */

@@ -293,7 +293,6 @@ struct FMotorSeamLedger
 	int32 PostRunWeaponUpdates = 0;      // `PostRun`'s ordered pair, tallied on the second half
 	float PostRunInterval = 0.f;
 	int32 SetupJumpCommits = 0;          // `thunk_FUN_102c4e80`
-	int32 CrowOverrideMoves = 0;         // `thunk_FUN_10357be0`
 	int32 MoveProbeChecks = 0;           // `CanStandAt`'s `thunk_FUN_102e7270`
 	int32 HullTraces = 0;                // every `KernelHullTrace` caller
 	int32 JumpArcSolves = 0;             // `thunk_FUN_102c4cc0`
@@ -375,11 +374,6 @@ FElysiumEntity* MingXiaoTentacleCompanion() const;
  *  reads a global; answers null. */
 FElysiumEntity* RatIgnoredGlobalEntity() const;
 
-/** `thunk_FUN_10357be0(this, interval)` — `CNPC_Crow`'s own move handler, the arm its slot 525
- *  `OverrideMove` takes at nav type 2 (Fly). **SEAM**: records the call and moves nothing; the
- *  ANSWER slot 525 gives (true, "I handled the move") is the ported half. */
-void CrowOverrideMove(float Interval);
-
 /** `CBaseAnimating::IsIgnoreCollisionEntity(other)` (`0x1008be20`) — the tail of both
  *  collision-ignore chains: `m_hIgnoreCollisionEntity` resolved and compared against the candidate. */
 bool IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const;
@@ -437,14 +431,6 @@ int32 GetJumpSchedule() const;
 
 /** `CNPC_VAsianVampire::IsPosNearStoredJumpPositions` `0x103618a0`. */
 bool IsPosNearStoredJumpPositions(const FVector& PositionUnits) const;
-
-/** `CAI_BaseHumanoid::MaxYawSpeed` `0x102624b0`, the branch answer for `CAI_BaseHumanoid#516`.
- *  Slot 516 itself is the Troika body (`0x10297ce0`) and every spawnable species dispatches there. */
-static float MaxYawSpeedHumanoid(int32 Activity);
-
-/** `CGeneric_NPC::MaxYawSpeed` `0x1035a810`, byte-identical at `CGeneric_NPC_bathack`
- *  (`0x1035b080`) and `CGenericSabbat_NPC` (`0x1035be80`). */
-static float MaxYawSpeedGeneric(int32 Activity);
 
 /** `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — the base line's single constant. */
 static float MaxYawSpeedBase();

@@ -5,7 +5,6 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
-#include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
@@ -280,8 +279,8 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 	// fills that slot for it.
 	int32 Count = 0;
 	const FElysiumNpc::FComponentFactory* Rows = FElysiumNpc::ComponentFactoryRows(Count);
-	TestEqual(TEXT("six Troika-line factories plus three species overrides, plus slot 424"), Count,
-		10);
+	TestEqual(TEXT("six Troika-line factories plus the rat's live override, plus slot 424"), Count,
+		8);
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const FElysiumNpc::FComponentFactory& Row = Rows[Index];
@@ -296,10 +295,10 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 			FString(ElysiumNpcKernelClass::BodyOf(Cls, Row.Slot)), FString(Row.Body));
 	}
 
-	// The recovered allocation sizes, by row — the one fact each factory exists to state. The two
-	// humanoid variants are FOUR bytes larger than their bases and the rat's local navigator is the
-	// same size as its base but a different constructor, which is why size alone does not identify
-	// a row.
+	// The recovered allocation sizes, by row — the one fact each factory exists to state. The rat's
+	// local navigator is the same size as its base but a different constructor, which is why size
+	// alone does not identify a row. (`CAI_BaseHumanoid`'s motor/navigator rows have no instance
+	// and were deleted by 0019 story 5 step 1.)
 	auto RowFor = [Rows, Count](const TCHAR* Class, int32 Slot)
 		-> const FElysiumNpc::FComponentFactory*
 	{
@@ -313,16 +312,14 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 		return nullptr;
 	};
 	const FElysiumNpc::FComponentFactory* BaseMotor = RowFor(TEXT("CAI_BaseNPC"), 427);
-	const FElysiumNpc::FComponentFactory* HumanoidMotor = RowFor(TEXT("CAI_BaseHumanoid"), 427);
 	const FElysiumNpc::FComponentFactory* BaseNav = RowFor(TEXT("CAI_BaseNPC"), 429);
-	const FElysiumNpc::FComponentFactory* HumanoidNav = RowFor(TEXT("CAI_BaseHumanoid"), 429);
 	const FElysiumNpc::FComponentFactory* BaseLocalNav = RowFor(TEXT("CAI_BaseNPC"), 428);
 	const FElysiumNpc::FComponentFactory* RatLocalNav = RowFor(TEXT("CNPC_VRat"), 428);
 	const FElysiumNpc::FComponentFactory* Senses = RowFor(TEXT("CAI_BaseNPC"), 425);
 	const FElysiumNpc::FComponentFactory* Probe = RowFor(TEXT("CAI_BaseNPC"), 426);
 	const FElysiumNpc::FComponentFactory* Pathfinder = RowFor(TEXT("CAI_BaseNPC"), 430);
-	if (BaseMotor == nullptr || HumanoidMotor == nullptr || BaseNav == nullptr
-		|| HumanoidNav == nullptr || BaseLocalNav == nullptr || RatLocalNav == nullptr
+	if (BaseMotor == nullptr || BaseNav == nullptr || BaseLocalNav == nullptr
+		|| RatLocalNav == nullptr
 		|| Senses == nullptr || Probe == nullptr || Pathfinder == nullptr)
 	{
 		AddError(TEXT("a named component-factory row is missing"));
@@ -332,15 +329,11 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 	TestEqual(TEXT("CAI_MoveProbe is 0x14 bytes"), Probe->SizeBytes, 0x14);
 	TestEqual(TEXT("CAI_Pathfinder is 0x18 bytes"), Pathfinder->SizeBytes, 0x18);
 	TestEqual(TEXT("the base motor is 0x6c bytes"), BaseMotor->SizeBytes, 0x6c);
-	TestEqual(TEXT("the humanoid motor is four bytes larger"), HumanoidMotor->SizeBytes,
-		BaseMotor->SizeBytes + 4);
-	TestEqual(TEXT("both motors share the 0x102e0900 constructor"),
-		FString(HumanoidMotor->Constructor), FString(BaseMotor->Constructor));
+	TestEqual(TEXT("the base motor is built by 0x102e0900"), FString(BaseMotor->Constructor),
+		FString(TEXT("0x102e0900")));
 	TestEqual(TEXT("the base navigator is 0x68 bytes"), BaseNav->SizeBytes, 0x68);
-	TestEqual(TEXT("the humanoid navigator is four bytes larger"), HumanoidNav->SizeBytes,
-		BaseNav->SizeBytes + 4);
-	TestEqual(TEXT("both navigators share the 0x102eca50 constructor"),
-		FString(HumanoidNav->Constructor), FString(BaseNav->Constructor));
+	TestEqual(TEXT("the base navigator is built by 0x102eca50"), FString(BaseNav->Constructor),
+		FString(TEXT("0x102eca50")));
 	TestEqual(TEXT("the rat's local navigator is the SAME size as the base's"),
 		RatLocalNav->SizeBytes, BaseLocalNav->SizeBytes);
 	TestNotEqual(TEXT("but a different constructor"), FString(RatLocalNav->Constructor),
@@ -685,29 +678,13 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 473's `CGeneric_NPC` pair, `CNPC_Bullseye`'s slot 576 and `CNPC_VBach`'s slots 553/554.
+// Slot 473's Troika answer and `CNPC_VBach`'s slots 553/554.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMiscSpeciesThresholdTest,
 	"Elysium.Substrate.NpcKernelMisc.SpeciesThresholds", GElysiumNpcKernelMiscFlags)
 bool FElysiumNpcKernelMiscSpeciesThresholdTest::RunTest(const FString&)
 {
-	// Slot 473's two rows by name — `CGeneric_NPC` and `CGenericSabbat_NPC`, byte-identical bodies.
-	int32 Count = 0;
-	const FElysiumNpc::FSoundInterestSpecies* Rows = FElysiumNpc::SoundInterestSpeciesRows(Count);
-	TestEqual(TEXT("two classes carry the slot-473 override"), Count, 2);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		const FString Name(Rows[Index].RetailClass);
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Rows[Index].RetailClass);
-		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
-		if (Cls != nullptr)
-		{
-			TestEqual(*FString::Printf(TEXT("%s fills slot 473 with %s"), *Name, Rows[Index].Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 473)), FString(Rows[Index].Body));
-		}
-	}
-
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_misc_species"), 0x1035a7e0);
 	Builder.AddNpc(TEXT("npc"), FVector::ZeroVector, GMiscSpawnableCombatant);
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
@@ -719,32 +696,9 @@ bool FElysiumNpcKernelMiscSpeciesThresholdTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 
-	// `m_NPCState == 1` (retail `NPC_STATE_IDLE`) answers 0x19, everything else 0x17. The state is
-	// forced through the scripted-schedule order the same way family Squad's own state case does —
-	// the mind is private and its transitions are arbitrated, so a case states the state it wants.
-	FElysiumScriptedScheduleOrder Order;
-	Npc->BeginScriptedSchedule(Order, /*bHasForcedState=*/true, EElysiumNpcState::Idle);
-	TestEqual(TEXT("the NPC is IDLE"), Npc->GetMind().State(), EElysiumNpcState::Idle);
-	TestEqual(TEXT("an idle generic NPC answers 0x19"), Npc->GenericNpcSoundInterests(), 0x19);
-	Npc->BeginScriptedSchedule(Order, /*bHasForcedState=*/true, EElysiumNpcState::Combat);
-	TestEqual(TEXT("the NPC is COMBAT"), Npc->GetMind().State(), EElysiumNpcState::Combat);
-	TestEqual(TEXT("any other state answers 0x17"), Npc->GenericNpcSoundInterests(), 0x17);
-	Npc->BeginScriptedSchedule(Order, /*bHasForcedState=*/true, EElysiumNpcState::Alert);
-	TestEqual(TEXT("ALERT answers 0x17 too — only retail's 1 is special"),
-		Npc->GenericNpcSoundInterests(), 0x17);
-	TestEqual(TEXT("and 0x19 is 0x17 plus exactly one extra sound class"), 0x19 & ~0x17, 0x8);
-	TestEqual(TEXT("while the Troika line's own answer is 0x81f"), Npc->GetSoundInterests(), 0x81f);
-
-	// `CNPC_Bullseye::vfunc576` (`0x10356f30`): `damage > 0.0f`, byte-identical to the Troika line.
-	const FElysiumNpcClass* Bullseye = ElysiumNpcKernelClass::Find(TEXT("CNPC_Bullseye"));
-	TestNotNull(TEXT("CNPC_Bullseye is a census class"), Bullseye);
-	TestEqual(TEXT("and fills slot 576 with 0x10356f30"),
-		FString(ElysiumNpcKernelClass::BodyOf(Bullseye, 576)), FString(TEXT("0x10356f30")));
-	TestFalse(TEXT("zero damage is not light damage"), Npc->BullseyeIsLightDamage(0.f, 0));
-	TestFalse(TEXT("negative damage is not"), Npc->BullseyeIsLightDamage(-1.f, 0));
-	TestTrue(TEXT("any damage above zero is"), Npc->BullseyeIsLightDamage(0.001f, 0));
-	TestEqual(TEXT("and the answer is the Troika line's, bit for bit"),
-		Npc->BullseyeIsLightDamage(5.f, 0), Npc->IsLightDamage(5.f, 0));
+	// Slot 473's two species overrides (`CGeneric_NPC`, `CGenericSabbat_NPC`) are on classes with
+	// no instance; every class with one answers the Troika line's own mask.
+	TestEqual(TEXT("the Troika line's own answer is 0x81f"), Npc->GetSoundInterests(), 0x81f);
 
 	// `CNPC_VBach`'s slots 553/554 (`0x10364500`, `0x10364550`): an OR of two thresholds, 0.5 on the
 	// dot and 120 units on the distance, with the answer the only difference between the two.

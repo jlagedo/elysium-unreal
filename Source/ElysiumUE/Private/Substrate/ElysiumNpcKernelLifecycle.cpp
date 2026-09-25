@@ -72,17 +72,6 @@ namespace
 	// The camera's model fallback (`0x103689c0`), verbatim from `.rdata` `0x1062f790`.
 	const TCHAR* const GCameraNullModel = TEXT("models/null.mdl");
 
-	// `CGenericNPC::Precache` (`0x1034aa40`) walks `PTR_s_weapons_ar2_ar2_fire1_wav_106244c0` for
-	// `0xc` bytes at stride 4 — THREE entries. Only the first is named by the pointer's own symbol;
-	// the other two are the table's next two slots and are recorded by index, because the corpus
-	// names the array by its head and nothing pins the remaining two strings.
-	const TCHAR* const GGenericNpcWeaponSounds[] =
-	{
-		TEXT("weapons/ar2/ar2_fire1.wav"),
-		TEXT("PTR_s_weapons_ar2_ar2_fire1_wav_106244c0[1]"),   // unrecovered
-		TEXT("PTR_s_weapons_ar2_ar2_fire1_wav_106244c0[2]"),   // unrecovered
-	};
-
 	// `CAI_BaseNPC::FindNamedEntity` (`0x10279090`): the selector names, verbatim from `.rdata`, and
 	// the two retired literals with their own rate-limit counters.
 	const TCHAR* const GSelPlayer = TEXT("!player");                    // 0x10549184
@@ -649,25 +638,6 @@ void FElysiumNpc::ConversationPlacePrecache(const FString& SoundLoop, const FStr
 	Out.Add(FPrecacheRequest{ SoundOnce, /*bModel=*/false, /*bWarnedInvalid=*/false });
 }
 
-const TCHAR* const* FElysiumNpc::GenericNpcWeaponSounds(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GGenericNpcWeaponSounds);
-	return GGenericNpcWeaponSounds;
-}
-
-void FElysiumNpc::GenericNpcPrecache(const FString& InModel, TArray<FPrecacheRequest>& Out)
-{
-	// 0x1034aa40: the three-entry weapon-sound table first, in table order, then this entity's own
-	// model through the MODEL precacher.
-	int32 Count = 0;
-	const TCHAR* const* Sounds = GenericNpcWeaponSounds(Count);
-	for (int32 i = 0; i < Count; ++i)
-	{
-		Out.Add(FPrecacheRequest{ FString(Sounds[i]), /*bModel=*/false, /*bWarnedInvalid=*/false });
-	}
-	Out.Add(FPrecacheRequest{ InModel, /*bModel=*/true, /*bWarnedInvalid=*/false });
-}
-
 FString FElysiumNpc::CameraPrecacheModel(const FString& AuthoredModel)
 {
 	// 0x103689c0, shared with `CNPC_VCameraSecurity`: the model key falls back to `models/null.mdl`
@@ -933,7 +903,7 @@ void FElysiumNpc::BaseNpcUpdateOnRemove()
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 434 `PrescheduleThink`, slot 512 `GetExpresser`, slot 585.
+// Slot 434 `PrescheduleThink`.
 // -------------------------------------------------------------------------------------------------
 
 FElysiumNpc::EPrescheduleSpecies FElysiumNpc::PrescheduleSpecies() const
@@ -950,97 +920,6 @@ FElysiumNpc::EPrescheduleSpecies FElysiumNpc::PrescheduleSpecies() const
 		return EPrescheduleSpecies::ForwardToAndreiBlood;
 	}
 	return EPrescheduleSpecies::Base;
-}
-
-void* FElysiumNpc::ExpressiveNpcExpresser() const
-{
-	// 0x10260da0 — `return *(undefined4 *)((int)this + 0x5f48);`. SEAM: `+0x5f48` is unbound in the
-	// shape map and this runtime stands no expression substrate, so there is no expresser object to
-	// point at. Null is also what the BASE body (`0x101a6b20`) answers, so a caller that dispatches
-	// slot 512 sees the base's answer rather than an invented one.
-	return nullptr;
-}
-
-bool FElysiumNpc::ValidHeadTarget(const FVector& EyePointCm) const
-{
-	// SEAM for `ValidHeadTarget` (vtable `+0x930`), the predicate every `PickLookTarget` arm applies
-	// before accepting a candidate. Answers TRUE — retail's "accept" — so the arm ORDER stays
-	// observable; a false here would empty every arm and make the body untestable.
-	(void)EyePointCm;
-	return true;
-}
-
-FElysiumNpc::FLookTargetPick FElysiumNpc::PickLookTarget(bool bExcludePlayers, float MinTime,
-	float MaxTime) const
-{
-	// 0x1025f1c0, the body that occupies `ProcessTweakParam`'s physical slot in the base branch:
-	// `CAI_BaseActor::PickLookTarget(bExcludePlayers, minTime, maxTime)`. `MaintainEyeDirection`
-	// dispatches it with `(false, 1.5, 2.5)`.
-	//
-	// Arm order, read off the decompiled C:
-	//
-	//   1. THE ENEMY. `GetEnemy()` (vtable `+0x29c`). When it stands, and either `FVisible` (mask
-	//      `0x2804091`) passes or `RandomInt(0,3) == 0`, and `ValidHeadTarget(enemy->EyePosition())`
-	//      accepts, the pick is the enemy with importance `RandomFloat(0.7, 1.0)` and the CALLER's
-	//      durations. Otherwise the arms below run with the durations re-drawn to
-	//      `RandomFloat(0.5, 0.8)` / `0.2`.
-	//   2. THE NAVIGATION GOAL. A navigator with a path, `RandomInt(1,10) < 4`, and a goal further
-	//      than `_DAT_10497cb0` away: the pick is the goal POINT (importance `RandomFloat(0.2,0.4)`
-	//      when `RandomInt(1,10) < 6`, else `RandomFloat(1.0, 2.0)`).
-	//   3. THE SCAN. Skipped entirely when slot 464 `GetState()` is 2 (COMBAT) and `RandomInt(1,10)`
-	//      is 8 or under. Otherwise a 1024-unit entity query around `GetAbsOrigin()`, rejecting
-	//      self, rejecting a player when `bExcludePlayers`, preferring a character
-	//      (`GetFlags() & 0x80`) that passes `FVisible` and `ValidHeadTarget`, and otherwise scoring
-	//      each candidate against `RandomInt(1,100)` scaled by 10 for a live entity and 100 for one
-	//      that answers slot 152.
-	//
-	// SEAMS, named: there is no entity-in-radius query on this substrate's NPC leaf, no navigator
-	// goal other than `MoveGoal` (the feet destination of the move in flight), and no head-target
-	// cone. What lands is arms 1 and 2, which have their inputs here; arm 3 answers nothing and says
-	// so. `_DAT_10497cb0`, the goal-distance floor, is the DOUBLE 96.0 (`1025f36f FCOMP double
-	// ptr`), measured from slot 220 `GetOrigin()` to the path point, in SOURCE units.
-	FLookTargetPick Pick;
-	Pick.MinDuration = MinTime;
-	Pick.MaxDuration = MaxTime;
-
-	FElysiumEntity* Enemy =
-		(World && Senses.Memory.Enemy.IsSet())
-			? const_cast<FElysiumEntityWorld*>(World)->Resolve(Senses.Memory.Enemy)
-			: nullptr;
-	if (Enemy != nullptr)
-	{
-		const bool bVisible = FElysiumNpcSenses::IsVisible(*this, *Enemy,
-			World ? World->NowSeconds() : 0.0);
-		if ((bVisible || LifecycleRandomInt(0, 3) == 0) && ValidHeadTarget(Enemy->EyePosition()))
-		{
-			Pick.Target = Enemy->Handle;
-			Pick.Importance = LifecycleRandomFloat(0.7f, 1.0f);
-			Pick.Arm = FLookTargetPick::EArm::Enemy;
-			return Pick;
-		}
-		// Retail re-draws the durations on the way past the enemy arm, and the later arms use THOSE
-		// rather than the caller's.
-		Pick.MinDuration = LifecycleRandomFloat(0.5f, 0.8f);
-		Pick.MaxDuration = 0.2f;
-	}
-
-	// Arm 2 — the navigator's goal. `bMoveIssued`'s destination is the port's `MoveGoal`. The roll
-	// is drawn before the distance is taken, and a goal inside the floor falls through to arm 3.
-	if (bMoveIssued && LifecycleRandomInt(1, 10) < 4
-		&& static_cast<double>(((MoveGoal - Origin) / ElysiumMove::U).Size())
-			> ElysiumNpcTunables::LookTargetGoalDistanceFloor)
-	{
-		Pick.Importance = LifecycleRandomInt(1, 10) < 6
-			? LifecycleRandomFloat(0.2f, 0.4f)
-			: LifecycleRandomFloat(1.0f, 2.0f);
-		Pick.Arm = FLookTargetPick::EArm::NavigationGoal;
-		return Pick;
-	}
-
-	// Arm 3 — the scan. SEAM: no radius query here. `bExcludePlayers` is carried so the day the
-	// query lands the filter is already stated.
-	(void)bExcludePlayers;
-	return Pick;
 }
 
 // -------------------------------------------------------------------------------------------------

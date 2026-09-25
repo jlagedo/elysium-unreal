@@ -54,7 +54,6 @@ namespace
 	constexpr TCHAR GDebug10_2Body_VCop[] = TEXT("0x10372f00");
 	constexpr TCHAR GDebug10_2Body_MingXiao[] = TEXT("0x10399d40");
 	constexpr TCHAR GDebug10_2Body_Maker[] = TEXT("0x1034bd30");
-	constexpr TCHAR GDebug10_2Body_ScriptedTarget[] = TEXT("0x1034e070");
 
 	// --- Every box extent `0x1029ca50` and `0x10292500` push, in SOURCE units ----------------------
 	// `0xc0400000`/`0x40400000` = -3.0/3.0; `0xc0000000`/`0x40000000` = -2.0/2.0;
@@ -306,7 +305,7 @@ void FElysiumNpc::MakerDrawDebugGeometryOverlays()
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 123 — the dispatcher and the four arms.
+// Slot 123 — the dispatcher and its three arms.
 // -------------------------------------------------------------------------------------------------
 
 void FElysiumNpc::DrawDebugGeometryOverlays()
@@ -314,6 +313,7 @@ void FElysiumNpc::DrawDebugGeometryOverlays()
 	// slot 123, dispatched on the census body for this NPC's retail class, as story 29c-1's slot-76
 	// dispatcher does. A spawned `npc_VCop` answers a NULL `RetailClass()` (the census gives
 	// `CNPC_VCop` no entity classname) and therefore takes the TROIKA body — the recovered answer.
+	// `CScriptedTarget#123` (`0x1034e070`) carries no arm: no map stands that class.
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 123);
 	if (SlotBody != nullptr)
 	{
@@ -330,12 +330,6 @@ void FElysiumNpc::DrawDebugGeometryOverlays()
 		if (FCString::Strcmp(SlotBody, GDebug10_2Body_Maker) == 0)
 		{
 			MakerDrawDebugGeometryOverlays();
-			return;
-		}
-		if (FCString::Strcmp(SlotBody, GDebug10_2Body_ScriptedTarget) == 0)
-		{
-			// `CScriptedTarget#123` (`0x1034e070`) is story 29c-1's body, in band 0–4.
-			ScriptedTargetDrawDebugGeometryOverlays();
 			return;
 		}
 	}

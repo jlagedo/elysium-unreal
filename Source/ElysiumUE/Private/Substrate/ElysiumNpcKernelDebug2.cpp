@@ -26,8 +26,7 @@ namespace
 
 	// The `m_debugOverlays` bits this family's bodies gate on, with the listing offset that tests
 	// each. Retail tests several of them as a byte compare on `AH`, which is the same bit.
-	constexpr int32 GNpcKernelDebug2BitText = 0x1;           // 0x102d160d, 0x1034de0b
-	constexpr int32 GNpcKernelDebug2BitScriptedTarget = 0x24; // 0x1034e07d — 0x4 OR 0x20, one test
+	constexpr int32 GNpcKernelDebug2BitText = 0x1;           // 0x102d160d
 	constexpr int32 GNpcKernelDebug2BitCollisionBox = 0x1000; // 0x1027583b `TEST AH,0x10`
 	constexpr int32 GNpcKernelDebug2BitNavNode = 0x2000;      // 0x10275951 `TEST AH,0x20`
 	constexpr int32 GNpcKernelDebug2BitRoute = 0x4000;        // 0x102757a7 `TEST AH,0x40`
@@ -47,11 +46,6 @@ namespace
 	const FVector GNpcKernelDebug2ConeMaxs(200.f, 0.f, 40.f);
 	const FVector GNpcKernelDebug2ConeEyeMins(0.f, 0.f, -10.f);
 	const FVector GNpcKernelDebug2ConeEyeMaxs(40.f, 0.f, 10.f);
-
-	// `CScriptedTarget::DrawDebugGeometryOverlays`'s own extents, `0x1034e070`: ±8 for the enabled
-	// box and ±5 for the disabled one.
-	const FVector GNpcKernelDebug2Box8Mins(-8.f, -8.f, -8.f);
-	const FVector GNpcKernelDebug2Box8Maxs(8.f, 8.f, 8.f);
 
 	// `SCHED_FORCED_GO`, the one program `0x10275760`'s third arm asks for by number
 	// (`PUSH 0x39` into `GetSchedule`). `0x102cadd0` registers id 0x39 under the name
@@ -116,7 +110,7 @@ void FElysiumNpc::DrawPathfinderDebugOverlays(int32 DebugOverlayBits) const
 void FElysiumNpc::EntityDrawDebugGeometryOverlays() const
 {
 	// SEAM for `CBaseEntity::DrawDebugGeometryOverlays()`, slot 123's other tail call and the last
-	// statement of both `0x10275760` and `0x1034e070`.
+	// statement of `0x10275760`.
 }
 
 int32 FElysiumNpc::EntityDrawDebugTextOverlays() const
@@ -447,109 +441,6 @@ void FElysiumNpc::DrawEnemyMemoryOverlays()
 		EmitOverlayBox(GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
 		EmitOverlayBox(GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
 	}
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CScriptedTarget` — slots 123 and 124 on a class no map stands here.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::ScriptedTargetDrawDebugGeometryOverlays()
-{
-	// `0x1034e070`. `CScriptedTarget` has no entity classname in `classes.md`, so `RetailClass()`
-	// never answers it and nothing dispatches here at runtime; the body is ported against the two
-	// words family Species already declared for the class (`ScriptedTargetLastPositionUnits`,
-	// `bScriptedTargetDisabled`), exactly as that family ported `CScriptedTarget::Spawn`.
-	//
-	// The gate is ONE test of two bits: `TEST byte [m_debugOverlays], 0x24` — 0x4 OR 0x20.
-	if ((DebugOverlays & GNpcKernelDebug2BitScriptedTarget) != 0)
-	{
-		if (!bScriptedTargetDisabled)
-		{
-			// Enabled: an ±8 white box at `m_vLastPosition`, then a ±5 red box at the ORIGIN — the
-			// second `Box` takes a local mins/maxs pair and the entity's own `GetAbsOrigin()` — and
-			// then a line from the origin to `m_vLastPosition`.
-			EmitOverlayBox(GNpcKernelDebug2Box, ScriptedTargetLastPositionUnits,
-				GNpcKernelDebug2Box8Mins, GNpcKernelDebug2Box8Maxs, 255, 255, 255, 0);
-			EmitOverlayBox(GNpcKernelDebug2Box, Origin / ElysiumMove::U,
-				GNpcKernelDebug2Box5Mins, GNpcKernelDebug2Box5Maxs, 255, 0, 0, 0);
-			EmitOverlayLine(GNpcKernelDebug2Line, Origin / ElysiumMove::U,
-				ScriptedTargetLastPositionUnits, 255, 0, 0, true);
-		}
-		else
-		{
-			// Disabled: one box, and the listing pushes its MAXS where the mins go — the local pair
-			// is filled `(+5,+5,+5)` then `(-5,-5,-5)` and handed over in that order. Colour
-			// (200, 100, 100).
-			EmitOverlayBox(GNpcKernelDebug2Box, Origin / ElysiumMove::U,
-				GNpcKernelDebug2Box5Maxs, GNpcKernelDebug2Box5Mins, 200, 100, 100, 0);
-		}
-
-		// The line to the Next target (`GetNextTarget()`, slot 172), colour (200, 100, 100).
-		const FElysiumEntity* Next = GetNextTarget();
-		if (Next != nullptr)
-		{
-			EmitOverlayLine(GNpcKernelDebug2Line, Origin / ElysiumMove::U,
-				Next->Origin / ElysiumMove::U, 200, 100, 100, true);
-		}
-
-		// And the line to the resolved User target (`m_hTargetEnt`), colour (0, 255, 0). Retail
-		// checks the handle's validity TWICE — once for the guard and once to resolve it — and a
-		// handle that passed the first test but fails the second resolves to NULL and is
-		// dereferenced. Reproduced as one resolve, which is the same answer for every live handle.
-		const FElysiumEntity* TargetEntity = World != nullptr ? World->Resolve(GetTarget()) : nullptr;
-		if (TargetEntity != nullptr)
-		{
-			EmitOverlayLine(GNpcKernelDebug2Line, Origin / ElysiumMove::U,
-				TargetEntity->Origin / ElysiumMove::U, 0, 255, 0, true);
-		}
-	}
-
-	EntityDrawDebugGeometryOverlays();
-}
-
-int32 FElysiumNpc::ScriptedTargetDrawDebugTextOverlays()
-{
-	// `0x1034ddf0`. Three lines, numbered from whatever the base body left, and the return is that
-	// base number plus three — so a caller stacking further lines starts where this one stopped.
-	// Every line is white and opaque.
-	const int32 Base = EntityDrawDebugTextOverlays();
-	if ((DebugOverlays & GNpcKernelDebug2BitText) == 0)
-	{
-		return Base;
-	}
-
-	// 1. `Q_strncpy(buf, m_iDisabled ? "State: Off" : "State: On", 512)`.
-	EmitEntityText(Base, bScriptedTargetDisabled ? TEXT("State: Off") : TEXT("State: On"),
-		bScriptedTargetDisabled ? TEXT("State: Off") : TEXT("State: On"));
-
-	// 2. The Next target: `"Next: -NONE-"` or `"Next: %s"` with `GetDebugName()`.
-	const FElysiumEntity* Next = GetNextTarget();
-	if (Next == nullptr)
-	{
-		EmitEntityText(Base + 1, TEXT("Next: -NONE-"), TEXT("Next: -NONE-"));
-	}
-	else
-	{
-		EmitEntityText(Base + 1, TEXT("Next: %s"),
-			FString::Printf(TEXT("Next: %s"), *Next->DebugString()));
-	}
-
-	// 3. The User target, and the no-target arm has TWO spellings decided by `m_iDisabled`:
-	//      enabled  -> "User: -LOOKING-"     disabled -> "User: -NONE-"
-	//    a resolved handle -> `"User: %s"`.
-	const FElysiumEntity* TargetEntity = World != nullptr ? World->Resolve(GetTarget()) : nullptr;
-	if (TargetEntity == nullptr)
-	{
-		const TCHAR* NoTarget =
-			bScriptedTargetDisabled ? TEXT("User: -NONE-") : TEXT("User: -LOOKING-");
-		EmitEntityText(Base + 2, NoTarget, NoTarget);
-	}
-	else
-	{
-		EmitEntityText(Base + 2, TEXT("User: %s"),
-			FString::Printf(TEXT("User: %s"), *TargetEntity->DebugString()));
-	}
-	return Base + 3;
 }
 
 // -------------------------------------------------------------------------------------------------

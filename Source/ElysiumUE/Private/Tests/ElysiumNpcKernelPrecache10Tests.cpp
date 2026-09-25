@@ -8,6 +8,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29d, family **Precache10**. Every expectation below is read off the decompiled C of the
@@ -70,9 +71,9 @@ namespace
 	{
 		Npc.SetRetailClassForTests(RetailClass);
 		Npc.PrecacheLog.Reset();
-		// Three arms WRITE the model keyfield (the Troika fallback, `CGeneric_NPC`'s and the
-		// tentacle's), so the next arm must start from an unset keyfield or it would see the
-		// previous one's fallback as an authored model.
+		// Two arms WRITE the model keyfield (the Troika fallback and the tentacle's), so the next
+		// arm must start from an unset keyfield or it would see the previous one's fallback as an
+		// authored model.
 		Npc.Model.Reset();
 		Npc.Precache();
 	}
@@ -355,7 +356,8 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 	int32 Rows = 0;
 	for (const FElysiumNpcClassSlot& Row : ElysiumNpcKernelShape::Overrides())
 	{
-		if (Row.Slot != GPrecacheSlotIndex)
+		// The classes with no instance keep their census rows but carry no port arm.
+		if (Row.Slot != GPrecacheSlotIndex || ElysiumNpcDeadClasses::Contains(Row.Class))
 		{
 			continue;
 		}
@@ -366,9 +368,12 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 		TestTrue(*FString::Printf(TEXT("%s's slot-104 override is claimed by an arm"), Row.Class),
 			Fix.Species->PrecacheSpecies());
 	}
-	// 31 rows over 28 distinct bodies: the three Chang forms share `0x1036ae60` and the two camera
-	// forms share `0x103689c0`, which is why the table keys on the address.
-	TestEqual(TEXT("the census carries 31 slot-104 override rows"), Rows, 31);
+	// 25 rows over 22 distinct bodies: the three Chang forms share `0x1036ae60` and the two camera
+	// forms share `0x103689c0`, which is why the table keys on the address. The census's other six
+	// slot-104 rows are the classes with no instance (`CNPC_Crow`, `CGeneric_NPC`, its bathack,
+	// `CGenericSabbat_NPC`, `CNPC_VTest`, `CGenericNPC`).
+	TestEqual(TEXT("the census carries 25 slot-104 override rows on classes with an instance"),
+		Rows, 25);
 
 	// And a class with NO slot-104 row runs the Troika body: `CNPC_VHumanCombatant` is on the
 	// Troika line and carries no override.
@@ -399,82 +404,8 @@ bool FElysiumNpcKernelPrecache10ThunkTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// The twenty-three species arms, in retail address order.
+// The species arms, in retail address order.
 // =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10CrowTest,
-	"Elysium.Substrate.NpcKernelPrecache10.Crow", GPrecache10TestFlags)
-bool FElysiumNpcKernelPrecache10CrowTest::RunTest(const FString&)
-{
-	// `0x10358ec0` — the only arm that chains FIRST and then precaches, and the chain is
-	// `CAI_BaseNPC::Precache` (a `CAI_BaseNPC` class), so NO Troika op appears at all: no model
-	// fallback, no coordinator bind. A crow's model is hard-coded and a map cannot override it.
-	return Precache10Case(*this, TEXT("CNPC_Crow"), { TEXT("model:models/crow.mdl:0") });
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10GenericNpcTest,
-	"Elysium.Substrate.NpcKernelPrecache10.GenericNpc", GPrecache10TestFlags)
-bool FElysiumNpcKernelPrecache10GenericNpcTest::RunTest(const FString&)
-{
-	// `0x10359f70`, the Troika-line `CGeneric_NPC` (`npc_generic`). The empty model keyfield falls
-	// back to the SABBAT FEMALE model — this class's recovered oddity — and the Troika body then
-	// precaches that same fallback when the chain runs LAST.
-	return Precache10Case(*this, TEXT("CGeneric_NPC"),
-		{
-			TEXT("model:models/character/npc/sabbat/sabbat_female.mdl:0"),
-			TEXT("sound:npc/metropolice/alert1.wav:0"),
-			TEXT("sound:npc/metropolice/surprise1.wav:0"),
-			TEXT("sound:npc/metropolice/die1.wav:0"),
-			TEXT("sound:npc/citizen/pain1.wav:0"),
-			TEXT("sound:npc/citizen/pain2.wav:0"),
-			TEXT("sound:npc/citizen/pain3.wav:0"),
-			TEXT("sound:npc/citizen/pain4.wav:0"),
-			// The chain, LAST — and it sees the fallback this arm already wrote.
-			TEXT("model:models/character/npc/sabbat/sabbat_female.mdl:0"),
-		});
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10BathackTest,
-	"Elysium.Substrate.NpcKernelPrecache10.GenericNpcBathack", GPrecache10TestFlags)
-bool FElysiumNpcKernelPrecache10BathackTest::RunTest(const FString&)
-{
-	// `0x1035ade0` — `models/bats.mdl` hard-coded, its own copy of the four names, and
-	// `CAI_BaseNPC::Precache` LAST (so no Troika op). The decompiled C shows the surprise1 call
-	// with ONE argument; the listing at `1035ae13` shows `PUSH 0x0` before all four, so there is no
-	// stack quirk to reproduce.
-	return Precache10Case(*this, TEXT("CGeneric_NPC_bathack"),
-		{
-			TEXT("model:models/bats.mdl:0"),
-			TEXT("sound:npc/metropolice/alert1.wav:0"),
-			TEXT("sound:npc/metropolice/surprise1.wav:0"),
-			TEXT("sound:npc/metropolice/die1.wav:0"),
-			TEXT("sound:npc/citizen/pain1.wav:0"),
-			TEXT("sound:npc/citizen/pain2.wav:0"),
-			TEXT("sound:npc/citizen/pain3.wav:0"),
-			TEXT("sound:npc/citizen/pain4.wav:0"),
-		});
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10SabbatNpcTest,
-	"Elysium.Substrate.NpcKernelPrecache10.GenericSabbatNpc", GPrecache10TestFlags)
-bool FElysiumNpcKernelPrecache10SabbatNpcTest::RunTest(const FString&)
-{
-	// `0x1035b5d0` — `thunk_FUN_10207e60` FIRST (the char template's `+0x78` model, a seam that
-	// answers the empty string, which is also retail's answer for a null template), then the same
-	// fallback and the same four names, and `CAI_BaseNPC::Precache` LAST.
-	return Precache10Case(*this, TEXT("CGenericSabbat_NPC"),
-		{
-			TEXT("model::0"),   // the char-template seam: an empty name, precached all the same
-			TEXT("model:models/character/npc/sabbat/sabbat_female.mdl:0"),
-			TEXT("sound:npc/metropolice/alert1.wav:0"),
-			TEXT("sound:npc/metropolice/surprise1.wav:0"),
-			TEXT("sound:npc/metropolice/die1.wav:0"),
-			TEXT("sound:npc/citizen/pain1.wav:0"),
-			TEXT("sound:npc/citizen/pain2.wav:0"),
-			TEXT("sound:npc/citizen/pain3.wav:0"),
-			TEXT("sound:npc/citizen/pain4.wav:0"),
-		});
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10AndreiBloodTest,
 	"Elysium.Substrate.NpcKernelPrecache10.AndreiBlood", GPrecache10TestFlags)
@@ -794,32 +725,6 @@ bool FElysiumNpcKernelPrecache10SheriffManTest::RunTest(const FString&)
 		});
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10TestNpcTest,
-	"Elysium.Substrate.NpcKernelPrecache10.TestNpc", GPrecache10TestFlags)
-bool FElysiumNpcKernelPrecache10TestNpcTest::RunTest(const FString&)
-{
-	// `0x103b41e0` — twelve sounds and only THEN the Troika body. Base-last, like `CNPC_VTzimisce`.
-	// The decompiled C shows surprise1 with ONE argument; the listing at `103b427f` shows `PUSH
-	// 0x0` before all twelve, so the checklist's "retail stack quirk" is a decompiler artifact and
-	// is NOT reproduced.
-	return Precache10Case(*this, TEXT("CNPC_VTest"),
-		{
-			TEXT("sound:character/npc/test/death1.wav:0"),
-			TEXT("sound:character/npc/test/alert1.wav:0"),
-			TEXT("sound:character/npc/test/idle1.wav:0"),
-			TEXT("sound:character/npc/test/pain1.wav:0"),
-			TEXT("sound:character/npc/test/pain2.wav:0"),
-			TEXT("sound:character/npc/test/pain3.wav:0"),
-			TEXT("sound:character/npc/test/pain4.wav:0"),
-			TEXT("sound:character/npc/test/fear1.wav:0"),
-			TEXT("sound:character/npc/test/lostenemy1.wav:0"),
-			TEXT("sound:character/npc/test/foundenemy1.wav:0"),
-			TEXT("sound:character/npc/test/surprise1.wav:0"),
-			TEXT("sound:character/npc/test/knockout1.wav:0"),
-			GTroikaOnly,
-		});
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10TzimisceTest,
 	"Elysium.Substrate.NpcKernelPrecache10.Tzimisce", GPrecache10TestFlags)
 bool FElysiumNpcKernelPrecache10TzimisceTest::RunTest(const FString&)
@@ -948,26 +853,8 @@ bool FElysiumNpcKernelPrecache10ZombieTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// The two arms story 29c-1 ported and left unwired.
+// The arm story 29c-1 ported and left unwired.
 // =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10GenericNpcLineTest,
-	"Elysium.Substrate.NpcKernelPrecache10.GenericNpcLine", GPrecache10TestFlags)
-bool FElysiumNpcKernelPrecache10GenericNpcLineTest::RunTest(const FString&)
-{
-	// `CGenericNPC::Precache` `0x1034aa40` — family Lifecycle's `GenericNpcPrecache`, now reached
-	// through slot 104. The body chains NOTHING: no Troika op and no base op, which is why this is
-	// four entries and not five. Two of the three table names are unrecovered and carried by index.
-	return Precache10Case(*this, TEXT("CGenericNPC"),
-		{
-			TEXT("sound:weapons/ar2/ar2_fire1.wav:0"),
-			TEXT("sound:PTR_s_weapons_ar2_ar2_fire1_wav_106244c0[1]:0"),
-			TEXT("sound:PTR_s_weapons_ar2_ar2_fire1_wav_106244c0[2]:0"),
-			// The entity's own model keyfield, unset on the fixture row and precached as the empty
-			// string — this class runs no fallback at all.
-			TEXT("model::0"),
-		});
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10CameraTest,
 	"Elysium.Substrate.NpcKernelPrecache10.Camera", GPrecache10TestFlags)

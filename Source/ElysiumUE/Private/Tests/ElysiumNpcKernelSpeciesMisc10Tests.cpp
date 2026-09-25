@@ -168,58 +168,6 @@ bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// `CNPC_Bullseye::Spawn` — `0x103567e0`.
-// =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10BullseyeSpawnTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.BullseyeSpawn", GSpeciesMisc10Flags)
-bool FElysiumSpeciesMisc10BullseyeSpawnTest::RunTest(const FString&)
-{
-	FSpeciesMisc10Fixture F;
-	if (F.Guard == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
-	// `CNPC_Bullseye` carries no entity classname in the census, so the arm is unreachable at
-	// runtime today and is driven here.
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_Bullseye"));
-	F.Guard->SpawnFlags = 0;
-	F.Guard->BullseyeSpawn();
-	const FElysiumNpc::FBullseyeSpawnRecord& R = F.Guard->BullseyeSpawn_Record;
-	TestTrue(TEXT("the body ran"), R.bRan);
-	TestEqual(TEXT("`1035680d`: the hull is -16..16 on every axis"), R.HullMaxsUnits.X, 16.0, 0.001);
-	TestEqual(TEXT("`1035681f`: the FIRST SetBloodColor is always 0xf7"), R.BloodColorFirst, 0xf7);
-	// `10356850`: without spawnflag 0x80000 the SECOND call — the one that decides — is -1.
-	TestEqual(TEXT("`10356850`: the second SetBloodColor is -1 without spawnflag 0x80000"),
-		R.BloodColorSecond, -1);
-	TestEqual(TEXT("`10356840`: m_flFieldOfView is 0.5"), R.FieldOfView, 0.5f, 0.0001f);
-	TestEqual(TEXT("`1035685f`/`1035693f`: AddFlag(0x2000) and AddFlag2(0x10)"), R.Flags, 0x2000);
-	TestEqual(TEXT("AddFlag2(0x10)"), R.Flags2, 0x10);
-	TestEqual(TEXT("`103568b4`: SetSolid(2) with solid flags 0x10 and no 0x4"), R.Solid, 2);
-	TestEqual(TEXT("solid flags without spawnflag 0x10000"), R.SolidFlags, 0x10);
-	TestEqual(TEXT("`10356916`: m_takedamage is 2 without spawnflag 0x20000"), R.TakeDamage, 2);
-	TestEqual(TEXT("`10356928`: m_fEffects gains 0x40 at the tail"), R.Effects, 0x40);
-	// `_DAT_104493d0` is a DOUBLE 0.1 read out of the pinned image — NOT the 0.0 `ThinkSet` takes.
-	// `curtime` is the fixture's clock, which stands at the NPC's first think
-	// (`FirstThinkSeconds`) because `NPCInit` (`0x1029a0b0`) arms that think a tenth of a second
-	// after Activate rather than at Activate.
-	TestEqual(TEXT("`1035688c`: m_flNextThink = curtime + 0.1"), R.NextThink,
-		FElysiumNpcWorldFixture::FirstThinkSeconds + 0.1, 0.0001);
-
-	// The three spawnflag arms, each in its own pass.
-	F.Guard->SpawnFlags = 0x80000 | 0x10000 | 0x20000;
-	F.Guard->BullseyeSpawn();
-	TestEqual(TEXT("`10356850`: spawnflag 0x80000 makes the deciding call 0xf7"),
-		F.Guard->BullseyeSpawn_Record.BloodColorSecond, 0xf7);
-	TestEqual(TEXT("`10356906`: spawnflag 0x10000 adds solid flag 4"),
-		F.Guard->BullseyeSpawn_Record.SolidFlags, 0x14);
-	TestEqual(TEXT("`10356916`: spawnflag 0x20000 makes m_takedamage 0"),
-		F.Guard->BullseyeSpawn_Record.TakeDamage, 0);
-	return true;
-}
-
-// =================================================================================================
 // `CNPC_VBach::GatherAttackConditions` — `0x10363db0`.
 // =================================================================================================
 

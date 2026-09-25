@@ -257,17 +257,6 @@ int32 TaskArgumentClears = 0;
  *  completes the task. Counted. */
 int32 TaskArgumentForwards = 0;
 
-/** SEAM for `thunk_FUN_10312b20(expresser)` — the setup call `CreateExpresser` (`0x10312cd0`) ends
- *  on, and for the factory at vtable `+0x91c` (slot 583) above it. Family **Lifecycle** already
- *  states that there is no expression substrate here (`ExpressiveNpcExpresser`); the factory answers
- *  false, which is retail's null-result arm. */
-bool CreateExpresserObject();
-
-/** SEAM for `thunk_FUN_1027cae0(this)` — the base gate `CreateExpresser` opens with. Retail's base
- *  body answers true for a live NPC; this answers `IsAlive()`, which is the same fact through the
- *  slot family **Lifecycle** landed. */
-bool ExpresserBaseGate() const;
-
 // --- The melee quartet: which retail line this NPC's class takes ----------------------------------
 
 /** Slots 599/600/601/602 each have two bodies. `Troika` is `CAI_BaseNPCTroika`'s, `AndreiBlood` the
@@ -351,10 +340,6 @@ static FVector BlendTargetLeadPoint(const FVector& PredictedUnits, const FVector
 int32 SetActivityIdCalls = 0;
 int32 LastSetActivityId = INDEX_NONE;
 
-/** How many times the expresser factory (vtable `+0x91c`, slot 583) was asked. The seam answers
- *  false, so the count is the only evidence the gate opened. */
-int32 ExpresserFactoryCalls = 0;
-
 /** One live `CAI_Motor` facing-queue entry as `FUN_102e2180` reads it: the target position
  *  (`thunk_FUN_102d8a90`) and the blend weight (`thunk_FUN_102d8bc0`). SOURCE units. */
 struct FFacingQueueEntry
@@ -395,12 +380,6 @@ void FUN_102c43f0();
  *  target is pulled back along the planar delta by `Backoff` — and retail leaves Z alone on that
  *  arm (`fVar6 - param_3 * 0.0`), which is reproduced verbatim. SOURCE units. */
 void SetJumpOriginAndTarget(const FElysiumEntity* Goal, float Height, float Backoff);
-
-/** `0x10312cd0`, slot 424 on `CAI_BaseHumanoid` / `CAI_ExpressiveNPC` — the EXPRESSER factory
- *  (`docs/vtmb/npc-ai/lifecycle.md` names it): the base gate, the vtable `+0x91c` factory, the
- *  back-link to this NPC and to `+0x5f44`, then the setup call. False is retail's own null-factory
- *  answer. */
-bool CreateExpresser();
 
 /** `0x102aa9e0` — no slot and no recovered name. When the argument and its `+0x4` member are both
  *  live it runs the clear/forward/`TaskComplete(false)` chain; otherwise it stamps the ASSERT

@@ -5,13 +5,21 @@ is review-complete at this checkpoint. The whole step-0 gate refuses pending pac
 
     uv run elysium research kernel_migration --check factories
     uv run elysium research kernel_migration --check step0
+    uv run elysium research kernel_migration --check step1
+
+Once a later phase is current, `--check step0` verifies the accepted receipt against the tree it
+accepted (`manifest.json` `history.step0.commit`), not against the edited working tree.
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import re
+import subprocess
+import tarfile
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,6 +38,10 @@ REGISTRY_DISPOSITIONS = {"shared-npc", "controller-leaf", "maker-leaf", "sequenc
                          "schedule-leaf", "stub-base-entity", "unregistered-base-fallback"}
 REQUIRED_PINS = {"module", "corpus", "listing", "datamaps", "census", "verdicts", "registry",
                  "stub_registry", "sequence_registry", "schedule_registry"}
+
+
+# A phase is listed here only when its checker exists; no later phase is implicitly accepted.
+ACCEPTED_PHASES = (0, 1)
 
 
 class InvalidManifest(ValueError):
@@ -133,7 +145,7 @@ def validate(classes: list[dict], factories: list[dict]) -> None:
 def load(directory: Path | None = None) -> tuple[dict, list[dict], list[dict]]:
     directory = directory or repo_root() / STORY
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8-sig"))
-    if manifest.get("schema_version") != 1 or manifest.get("phase") != 0:
+    if manifest.get("schema_version") != 1 or manifest.get("phase") not in ACCEPTED_PHASES:
         raise InvalidManifest("unsupported manifest version/phase; no future phase is implicitly accepted")
     if set(manifest.get("packets", {})) != REQUIRED_PACKETS:
         raise InvalidManifest("missing or unknown step-0 packet")
@@ -193,11 +205,38 @@ def check_factories(manifest: dict, rows: list[dict]) -> None:
         corpus.listing.close()
 
 
+def historical_source(commit: str, destination: Path) -> Path:
+    """Materialize `Source/ElysiumUE` exactly as `commit` holds it, for an accepted phase's receipt.
+
+    A later phase edits the source the step-0 inventory hashed; the receipt stays checkable against
+    the tree it accepted instead of being refreshed to hide the edit."""
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise InvalidManifest(f"historical commit must be a full hash: {commit!r}")
+    archive = subprocess.run(["git", "-C", str(repo_root()), "archive", "--format=tar", commit,
+                              "Source/ElysiumUE"], capture_output=True, check=False)
+    if archive.returncode != 0:
+        raise InvalidManifest(f"cannot read accepted tree {commit}: {archive.stderr.decode(errors='replace').strip()}")
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        tar.extractall(destination, filter="data")
+    return destination
+
+
 def check_step0(directory: Path | None = None) -> dict:
-    """Accept receipts and real source checks, never status strings alone."""
-    from kernel_migration_audit import check_inventory, maker_shadows, file_sha
+    """Accept receipts and real source checks, never status strings alone.
+
+    At phase 0 the inventory is checked against the working tree. Once a later phase is current,
+    the manifest's `history.step0.commit` names the accepted tree and the check reads that."""
     directory = directory or repo_root() / STORY
     manifest, _, _ = load(directory)
+    if manifest["phase"] == 0:
+        return _check_step0(directory, manifest, repo_root())
+    commit = manifest.get("history", {}).get("step0", {}).get("commit", "")
+    with tempfile.TemporaryDirectory(prefix="step0-") as scratch:
+        return _check_step0(directory, manifest, historical_source(commit, Path(scratch)))
+
+
+def _check_step0(directory: Path, manifest: dict, source_root: Path) -> dict:
+    from kernel_migration_audit import check_inventory, maker_shadows, file_sha
     record = json.loads((directory / 'acceptance.json').read_text(encoding='utf-8-sig'))
     if record.get('scope') != 'step-0-only' or record.get('production_migrations') != []:
         raise InvalidManifest('step-0 receipt may not authorize a production migration')
@@ -218,11 +257,11 @@ def check_step0(directory: Path | None = None) -> dict:
     if not required <= set(artifacts):
         raise InvalidManifest('missing required acceptance artifact')
     read = lambda name: json.loads(artifacts[name].read_text(encoding='utf-8-sig'))
-    counts = check_inventory(read('inventory'), repo_root())
+    counts = check_inventory(read('inventory'), source_root)
     if counts != record['inventory_counts']:
         raise InvalidManifest('inventory coverage/residue differs from reviewed acceptance')
     decisions = json.loads((directory / 'decisions.json').read_text(encoding='utf-8'))
-    if maker_shadows(repo_root()) != sorted(decisions['field_policy']['maker_duplicates']):
+    if maker_shadows(source_root) != sorted(decisions['field_policy']['maker_duplicates']):
         raise InvalidManifest('maker boundary changed')
     body_map = {row['address']: row for row in read('inventory')['bodies']}
     for address, decision in decisions['body_resolutions'].items():
@@ -275,7 +314,7 @@ def check_step0(directory: Path | None = None) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", choices=("factories", "step0"), required=True)
+    parser.add_argument("--check", choices=("factories", "step0", "step1"), required=True)
     args = parser.parse_args(argv)
     try:
         manifest, classes, factories = load()
@@ -287,6 +326,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.check == "step0":
             counts = check_step0()
             print('PASS: step 0 acceptance; inventory, source replay, representative build, focused tests and integration gate verified.')
+            print(json.dumps(counts, sort_keys=True))
+        if args.check == "step1":
+            from kernel_migration_step1 import check_step1
+            counts = check_step1()
+            print('PASS: step 1 acceptance; accepted step-0 receipt, deletion record, live-definition '
+                  'guard, dead census, rule identity, regression comparison and runtime gate verified.')
             print(json.dumps(counts, sort_keys=True))
     except (InvalidManifest, ValueError, OSError) as exc:
         print(f"REFUSED: {exc}")

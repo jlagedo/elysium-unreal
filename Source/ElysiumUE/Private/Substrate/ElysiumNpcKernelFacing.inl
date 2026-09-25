@@ -13,10 +13,10 @@
 // The family is the facing-target queue and the turn-activity ladder. Two of its rows fill slots
 // the GENERATOR already defines (`HeadDirection2D`/`HeadDirection3D` at 370/371, `OnChangeActivity`
 // at 465, `AddLookTarget` at 535/536): 29c's verdict for those is the TROIKA-LINE body, and the
-// rows this family carries are other branches' fills of the same slot — `CAI_BaseHumanoid`'s real
-// implementations and the species overrides. Those land as named methods here, because a second
-// definition of a generated slot is a duplicate symbol, and each says in its comment which slot it
-// is the branch answer for.
+// rows this family carries are other branches' fills of the same slot — the species overrides.
+// (`CAI_BaseHumanoid`'s own fills were deleted by 0019 story 5 step 1: the class has no instance.)
+// Those land as named methods here, because a second definition of a generated slot is a duplicate
+// symbol, and each says in its comment which slot it is the branch answer for.
 
 // --- Words this family needed that 29b did not declare ------------------------------------------
 //
@@ -133,51 +133,6 @@ static FTurnActivityPick TurnActivityBaseLadder(float YawDelta,
 // to for every spawnable species.
 static FTurnActivityPick TurnActivityTroikaLadder(float YawDelta,
 	TFunctionRef<bool(int32)> HasSequence);
-
-// --- `CAI_BaseHumanoid`'s look-target list (slots 535/536) --------------------------------------
-//
-// `CAI_BaseHumanoid::vfunc536` `0x1025f760` (entity) and `vfunc535` `0x1025f8e0` (position). One
-// 0x24-byte record per target in a `CUtlVector` at +0x5f88 with its count at +0x5f94. The Troika
-// line's own fills of 535/536 are `return;` — that is 29c's verdict and the generator's body — so
-// nothing a spawned `npc_*` dispatches through reaches this; it is `CAI_BaseHumanoid`'s branch
-// answer, recovered and standing.
-struct FLookTargetRecord
-{
-	int32 Kind = 0;                  // +0x00: 0 = entity, 1 = position
-	FElysiumEntityHandle Target;     // +0x04
-	FVector Position = FVector::ZeroVector;  // +0x08..+0x10
-	double StartTime = 0.0;          // +0x14: curtime when the record was added
-	double EndTime = 0.0;            // +0x18: curtime + duration
-	float Rate = 0.f;                // +0x1c: influence / duration
-	int32 Priority = 0;              // +0x20
-};
-TArray<FLookTargetRecord> LookTargets;
-
-void AddLookTargetHumanoid(FElysiumEntity* Target, int32 Priority, float Duration, float Influence);
-void AddLookTargetHumanoid(const FVector& Position, int32 Priority, float Duration,
-	float Influence);
-
-// --- `CAI_BaseHumanoid`'s cached head/eye basis (slots 370..373) ---------------------------------
-//
-// `0x1025e7b0` refreshes an attachment-derived head origin and the normalized direction from it to
-// the eye point, latched behind two bits of +0x5f4c; `0x1025f160`/`0x1025f0b0` return the two
-// cached vectors and `0x1025f0f0`/`0x1025f040` flatten them. **SEAM**: reaching the "head"
-// attachment needs the animating tier's bone cache, which this substrate does not expose to the
-// kernel, so the refresh answers "no attachment" and both cached vectors stay at the fallback
-// retail itself takes in that case — `GetAbsAngles()`' forward.
-mutable FVector HumanoidEyeDirection = FVector::ZeroVector;   // +0x5f5c..+0x5f64
-mutable FVector HumanoidHeadDirection = FVector::ZeroVector;  // +0x5f68..+0x5f70
-mutable uint32 HumanoidHeadCacheBits = 0;                     // +0x5f4c, bits 0x1 and 0x2
-
-void RefreshHumanoidHeadCache() const;         // `0x1025e7b0`
-FVector HeadDirection3DHumanoid() const;       // `CAI_BaseHumanoid#371` `0x1025f160`
-FVector HeadDirection2DHumanoid() const;       // `CAI_BaseHumanoid#370` `0x1025f0f0`
-FVector EyeDirection3DHumanoid() const;        // `CAI_BaseHumanoid#373` `0x1025f0b0`
-FVector EyeDirection2DHumanoid() const;        // `CAI_BaseHumanoid#372` `0x1025f040`
-
-// `CAI_BaseHumanoid::SetHeadDirection` `0x1025eaf0`, slot 537's branch override — the pose-parameter
-// version, richer than the base at `0x1026af70` that slot 537 carries for the Troika line.
-void SetHeadDirectionHumanoid(const FVector& LookTarget, float Interval);
 
 // Whether the class this NPC actually is answers slots 370/371 with its BODY direction rather than
 // with a head of its own — `CCineNPC`/`CCineAI`/`CCineAISchedule`, `CPayphone`, the three

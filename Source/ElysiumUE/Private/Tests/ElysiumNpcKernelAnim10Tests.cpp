@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumReactions.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "ElysiumAnimationIntent.h"
 #include "Visual/ElysiumActionTables.h"
@@ -151,39 +152,6 @@ bool FAnim10TroikaSetModelTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10BaseHumanoidSetModelTest,
-	"Elysium.Substrate.NpcKernelAnim10.BaseHumanoidSetModel", GAnim10TestFlags)
-bool FAnim10BaseHumanoidSetModelTest::RunTest(const FString&)
-{
-	// `0x1025e510`, `CAI_BaseHumanoid#105`. The CORRECTION this case pins: the 26 cached indices are
-	// NOT one lookup repeated. Indices 0..12 go through `LookupPoseParameter`, which answers -1 on a
-	// miss, and 13..25 through `LookupFlexController`, which answers **0**.
-	FAnim10Fixture F;
-	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
-	{
-		return false;
-	}
-	TCHAR ModelName[] = TEXT("models/character/npc/male/male01.mdl");
-	F.Npc->BaseHumanoidSetModel(ModelName);
-
-	TestEqual(TEXT("0x1025e510: the first name is body_trans_Y (+0x5fb8)"),
-		FString(FElysiumNpc::HumanoidPoseParamName(0)), FString(TEXT("body_trans_Y")));
-	TestEqual(TEXT("0x1025e510: index 10 is head_yaw, the first of 0x1025efc0's three"),
-		FString(FElysiumNpc::HumanoidPoseParamName(10)), FString(TEXT("head_yaw")));
-	TestEqual(TEXT("0x1025e510: index 12 is head_roll, the last of them"),
-		FString(FElysiumNpc::HumanoidPoseParamName(12)), FString(TEXT("head_roll")));
-	TestEqual(TEXT("0x1025e510: the last name is head_tilt (+0x601c)"),
-		FString(FElysiumNpc::HumanoidPoseParamName(25)), FString(TEXT("head_tilt")));
-
-	TestEqual(TEXT("0x1025e510: the LookupPoseParameter half misses with -1"),
-		F.Npc->HumanoidPoseParams[0], INDEX_NONE);
-	TestEqual(TEXT("...for every one of its thirteen"), F.Npc->HumanoidPoseParams[12], INDEX_NONE);
-	TestEqual(TEXT("0x1025e510: the LookupFlexController half misses with 0, not -1"),
-		F.Npc->HumanoidPoseParams[13], 0);
-	TestEqual(TEXT("...for every one of its thirteen"), F.Npc->HumanoidPoseParams[25], 0);
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10ZombieLineSetModelTest,
 	"Elysium.Substrate.NpcKernelAnim10.ZombieLineSetModel", GAnim10TestFlags)
 bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
@@ -234,15 +202,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10SetModelArmCoverageTest,
 	"Elysium.Substrate.NpcKernelAnim10.SetModelArmCoverage", GAnim10TestFlags)
 bool FAnim10SetModelArmCoverageTest::RunTest(const FString&)
 {
-	// Every slot-105 override row the census carries has an arm, so a class this file does not know
-	// cannot silently take the Troika body.
-	static const TCHAR* const Known[] = { TEXT("0x1025e510"), TEXT("0x1037b1f0"),
-		TEXT("0x103e0540") };
+	// Every slot-105 override row the census carries for a LIVE class has an arm, so a class this
+	// file does not know cannot silently take the Troika body. `CAI_BaseHumanoid#105`
+	// (`0x1025e510`) stays a census row with no port arm: the class has no instance (0019
+	// story 5 step 1).
+	static const TCHAR* const Known[] = { TEXT("0x1037b1f0"), TEXT("0x103e0540") };
 	int32 Rows = 0;
 	for (const FElysiumNpcClass& Cls : ElysiumNpcKernelShape::Classes())
 	{
 		const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(&Cls, 105);
-		if (Override == nullptr)
+		if (Override == nullptr || ElysiumNpcDeadClasses::Contains(Cls.Name))
 		{
 			continue;
 		}
@@ -255,7 +224,7 @@ bool FAnim10SetModelArmCoverageTest::RunTest(const FString&)
 		TestTrue(*FString::Printf(TEXT("slot 105 on %s (%s) has an arm"), Cls.Name,
 			Override->Address), bKnown);
 	}
-	TestTrue(TEXT("the census carries at least the three slot-105 override rows"), Rows >= 3);
+	TestTrue(TEXT("the census carries at least the two live slot-105 override rows"), Rows >= 2);
 	return true;
 }
 
@@ -1108,10 +1077,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10Slot584Test,
 	"Elysium.Substrate.NpcKernelAnim10.Slot584", GAnim10TestFlags)
 bool FAnim10Slot584Test::RunTest(const FString&)
 {
-	// `0x10260dc0`, the `CAI_ExpressiveNPC` expresser forward. **Half of it is reachable**:
-	// `CAI_BaseHumanoid` claims no entity classname but `CAI_ExpressiveNPC` claims
-	// `npc_TestBaseHumanoid`, which the checklist's walk had wrong. The arm is driven directly and
-	// the reachability of each half is asserted rather than assumed.
+	// Slot 584's Troika body `0x1028d910`, `ResetAllThinkStamps`. The `CAI_BaseHumanoid` /
+	// `CAI_ExpressiveNPC` fill (`0x10260dc0`) has no instance and was deleted by 0019 story 5
+	// step 1.
 	FAnim10Fixture F;
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
@@ -1119,131 +1087,10 @@ bool FAnim10Slot584Test::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Npc;
 
-	for (const TCHAR* Cls : { TEXT("CAI_BaseHumanoid"), TEXT("CAI_ExpressiveNPC") })
-	{
-		const FElysiumNpcClass* Row = ElysiumNpcKernelClass::Find(Cls);
-		if (TestNotNull(*FString::Printf(TEXT("%s is a census class"), Cls), Row))
-		{
-			const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(Row, 584);
-			if (TestNotNull(*FString::Printf(TEXT("%s overrides slot 584"), Cls), Override))
-			{
-				TestEqual(*FString::Printf(TEXT("%s#584 is 0x10260dc0"), Cls),
-					FString(Override->Address), FString(TEXT("0x10260dc0")));
-			}
-		}
-	}
-	// **The checklist's walk called both halves unreachable; the census disagrees.**
-	{
-		const FElysiumNpcClass* Humanoid = ElysiumNpcKernelClass::Find(TEXT("CAI_BaseHumanoid"));
-		if (TestNotNull(TEXT("CAI_BaseHumanoid is a census class"), Humanoid))
-		{
-			TestEqual(TEXT("CAI_BaseHumanoid claims no entity classname, so ITS half is unreachable"),
-				Humanoid->ClassnameCount, 0);
-		}
-		const FElysiumNpcClass* Expressive = ElysiumNpcKernelClass::Find(TEXT("CAI_ExpressiveNPC"));
-		if (TestNotNull(TEXT("CAI_ExpressiveNPC is a census class"), Expressive))
-		{
-			TestEqual(TEXT("CAI_ExpressiveNPC claims exactly one classname"),
-				Expressive->ClassnameCount, 1);
-			if (Expressive->ClassnameCount == 1)
-			{
-				TestEqual(TEXT("...and it is npc_TestBaseHumanoid, so THAT half IS reachable"),
-					FString(Expressive->Classnames[0]), FString(TEXT("npc_TestBaseHumanoid")));
-			}
-		}
-	}
-
-	N.ExpresserSpeaks.Reset();
-	N.ExpressiveNpcSpeak(0x42, TEXT("angry"));
-	if (TestEqual(TEXT("0x10260dc0: the forward is recorded"), N.ExpresserSpeaks.Num(), 1))
-	{
-		TestEqual(TEXT("...with the concept id"), N.ExpresserSpeaks[0].ConceptId, 0x42);
-		TestEqual(TEXT("...and the modifier"), N.ExpresserSpeaks[0].Modifier,
-			FString(TEXT("angry")));
-	}
-
-	// The Troika line's own body is `ResetAllThinkStamps` and is unaffected.
-	N.ExpresserSpeaks.Reset();
 	N.ScheduleHost.LastAI = -1.0;
 	N.Slot584(0);
-	TestEqual(TEXT("slot 584 on a plain body is still the Troika ResetAllThinkStamps"),
-		N.ExpresserSpeaks.Num(), 0);
-	TestEqual(TEXT("...which stamps LastAI to now"), N.ScheduleHost.LastAI,
-		F.World.World.NowSeconds());
-	return true;
-}
-
-// =================================================================================================
-// Slot 333's `CAI_BaseHumanoid` body.
-// =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10MaintainEyeDirectionTest,
-	"Elysium.Substrate.NpcKernelAnim10.BaseHumanoidMaintainEyeDirection", GAnim10TestFlags)
-bool FAnim10MaintainEyeDirectionTest::RunTest(const FString&)
-{
-	// `0x1025fa50`, 2,226 bytes, read off the listing. The three corrections to the checklist's walk
-	// are each pinned here.
-	FAnim10Fixture F;
-	if (!TestNotNull(TEXT("the subject spawned"), F.Npc) || !TestNotNull(TEXT("the other"), F.Other))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *F.Npc;
-	const double Now = F.World.World.NowSeconds();
-
-	// **CORRECTION 1**: the gate at vt+0x928 is `HasActiveLookTargets`, not "am I in a scene".
-	N.LookTargets.Reset();
-	TestFalse(TEXT("0x1025f1a0: an empty queue has no active look targets"),
-		N.HasActiveLookTargets());
-
-	// `0x1025efc0` clears the two cached head-direction bits so the next read recomputes.
-	N.HumanoidHeadCacheBits = 0x7;
-	N.ClearHeadPoseParameters();
-	TestEqual(TEXT("0x1025efc0: the two cached-direction bits of +0x5f4c are cleared"),
-		static_cast<int32>(N.HumanoidHeadCacheBits), 0x4);
-
-	// The prune pass drops an expired entry AND does not skip its neighbour.
-	N.LookTargets.Reset();
-	for (int32 Index = 0; Index < 3; ++Index)
-	{
-		FElysiumNpc::FLookTargetRecord Record;
-		Record.Kind = 1;
-		Record.Position = FVector(100.0 * (Index + 1), 0.0, 0.0);
-		Record.StartTime = Now - 10.0;
-		Record.EndTime = Now - 1.0;   // all three are past
-		Record.Rate = 0.25f;
-		Record.Priority = 1;
-		N.LookTargets.Add(Record);
-	}
-	N.BaseHumanoidMaintainEyeDirection(0.1f);
-	TestEqual(TEXT("0x1025fa50: the prune pass drops EVERY expired entry, adjacent ones included"),
-		N.LookTargets.Num(), 0);
-
-	// The decay arm: with nothing accepted the stored vector decays by 0.8, takes 0.2 of the current
-	// head and is then NORMALISED — which the accepted arm does not do.
-	N.LookTargets.Reset();
-	N.HumanoidHeadVector = FVector(10.0, 0.0, 0.0);
-	N.BaseHumanoidMaintainEyeDirection(0.1f);
-	TestTrue(TEXT("0x1025fa50: the decay arm normalises the stored head vector"),
-		FMath::IsNearlyEqual(N.HumanoidHeadVector.Size(), 1.0, 1e-3));
-
-	// **CORRECTION 3**: the dot floor is the DOUBLE -0.5, so a target 90 degrees off is ACCEPTED.
-	TestTrue(TEXT("_DAT_10497ca0 = -0.5: a target square to the side passes the look cone"),
-		-0.5 <= 0.0);
-
-	// The blink toggle: the compare is STRICT, so a deadline exactly at curtime does NOT fire.
-	N.FlexToggleWord = 0;
-	N.HumanoidBlinkToggleTime = Now;
-	N.BaseHumanoidMaintainEyeDirection(0.1f);
-	TestEqual(TEXT("0x1025fa50: a blink deadline exactly at curtime does NOT fire"),
-		N.FlexToggleWord, 0);
-	N.HumanoidBlinkToggleTime = Now - 1.0;
-	N.BaseHumanoidMaintainEyeDirection(0.1f);
-	TestEqual(TEXT("0x1025fa50: a past deadline TOGGLES +0x0854"), N.FlexToggleWord, 1);
-	TestTrue(TEXT("...and re-arms to curtime + RandomFloat(1.5, 4.5)"),
-		N.HumanoidBlinkToggleTime >= Now + 1.5 && N.HumanoidBlinkToggleTime <= Now + 4.5);
-	N.BaseHumanoidMaintainEyeDirection(0.1f);
-	TestEqual(TEXT("...and the re-armed deadline holds the toggle"), N.FlexToggleWord, 1);
+	TestEqual(TEXT("slot 584 is the Troika ResetAllThinkStamps, which stamps LastAI to now"),
+		N.ScheduleHost.LastAI, F.World.World.NowSeconds());
 	return true;
 }
 

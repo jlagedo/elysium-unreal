@@ -112,7 +112,7 @@ static constexpr float StartNpcDelayMin = 0.1f;
 static constexpr float StartNpcDelayMax = 0.4f;
 static constexpr float ShootAtHintRearmMin = 2.f;
 static constexpr float ShootAtHintRearmMax = 2.5f;
-static constexpr float SwarmDistTooFar = 65535.f;        // `0x477fff00`
+static constexpr float SwarmDistTooFar = 65535.f;        // `0x477fff00`, Bach's
 static constexpr float BaseInitDistTooFar = 1024.f;
 static constexpr float BaseInitDistLookUnits = 3072.f;
 static constexpr float FarSightDistTooFar = 1.0e9f;
@@ -384,7 +384,6 @@ void PayphoneNPCInit();             // `0x101aab90`
 void AndreiBloodNPCInit();          // `0x1035cec0`
 void AsianVampireNPCInit();         // `0x10360ce0`
 void BachNPCInit();                 // `0x10363940`
-void BatSwarmNPCInit();             // `0x103673b0`
 void CameraNPCInit();               // `0x103692c0`
 void ChangBrosNPCInit();            // `0x1036b050`
 void ChangBrosBladeNPCInit();       // `0x1036f100`
@@ -404,7 +403,6 @@ void PlaceholderNPCInit();          // `0x103a4350`
 void PlayerControllerNPCInit();     // `0x103a4580`
 void SabbatLeaderNPCInit();         // `0x103a6d40`
 void SheriffManNPCInit();           // `0x103ae6c0`
-void SheriffSwarmNPCInit();         // `0x103b2360`
 void TaxiDriverNPCInit();           // `0x103b35c0`
 void TzimisceNPCInit();             // `0x103b91d0`
 void TzimisceHeadClawNPCInit();     // `0x103c1c80`

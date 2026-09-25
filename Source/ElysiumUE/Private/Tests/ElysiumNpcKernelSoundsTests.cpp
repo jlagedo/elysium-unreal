@@ -63,9 +63,10 @@ bool FElysiumNpcKernelSoundsTableTest::RunTest(const FString&)
 	int32 Count = 0;
 	const FElysiumNpc::FVocalization* Rows = FElysiumNpc::Vocalizations(Count);
 	TestNotNull(TEXT("the table exists"), Rows);
-	// 4 CGeneric_NPC + 4 CGenericSabbat_NPC + 19 CNPC_VCamera + 2 CNPC_VSabbatLeader
-	// + 8 CNPC_VTest + 2 CNPC_VTzimisce.
-	TestEqual(TEXT("39 recovered species sound bodies"), Count, 39);
+	// 19 CNPC_VCamera + 2 CNPC_VSabbatLeader + 2 CNPC_VTzimisce. `CGeneric_NPC`,
+	// `CGenericSabbat_NPC` and `CNPC_VTest` override sound hooks too, but have no instance and
+	// carry no row.
+	TestEqual(TEXT("23 recovered species sound bodies on classes with an instance"), Count, 23);
 
 	// Every row names a class the census carries and a slot inside the sound band (or the Sabbat
 	// leader's two extended slots), and every retail address is spelled the ledger's way.
@@ -100,87 +101,11 @@ bool FElysiumNpcKernelSoundsTableTest::RunTest(const FString&)
 		}
 	}
 
-	// --- CGeneric_NPC, `0x10359f70`'s four precached tables -------------------------------------
+	// --- The classes with no instance carry no row -----------------------------------------------
+	for (const TCHAR* Dead :
+		{ TEXT("CGeneric_NPC"), TEXT("CGenericSabbat_NPC"), TEXT("CNPC_VTest") })
 	{
-		const FElysiumNpc::FVocalization* Death = SoundsRow(TEXT("CGeneric_NPC"), 488);
-		TestNotNull(TEXT("CGeneric_NPC#488 DeathSound"), Death);
-		if (Death != nullptr)
-		{
-			TestEqual(TEXT("...is 0x1035a500"), FString(Death->RetailAddress),
-				FString(TEXT("0x1035a500")));
-			TestEqual(TEXT("...draws RandomInt(0, 0) over one wav"), Death->WavCount, 1);
-			TestEqual(TEXT("...npc/metropolice/die1.wav"), FString(Death->Wavs[0]),
-				FString(TEXT("npc/metropolice/die1.wav")));
-			// `0x3f000000` at `1035a54c` — the death hook is the only one that is not 1.0.
-			TestEqual(TEXT("...at volume 0.5"), Death->Volume, 0.5f);
-			TestEqual(TEXT("...on CHAN_VOICE"), Death->Channel, 2);
-			TestFalse(TEXT("...and is not gated"), Death->bGatedByFOkToMakeSound);
-		}
-		const FElysiumNpc::FVocalization* Alert = SoundsRow(TEXT("CGeneric_NPC"), 489);
-		TestNotNull(TEXT("CGeneric_NPC#489 AlertSound"), Alert);
-		if (Alert != nullptr)
-		{
-			TestEqual(TEXT("...is 0x1035a390"), FString(Alert->RetailAddress),
-				FString(TEXT("0x1035a390")));
-			TestEqual(TEXT("...npc/metropolice/alert1.wav"), FString(Alert->Wavs[0]),
-				FString(TEXT("npc/metropolice/alert1.wav")));
-			TestEqual(TEXT("...at volume 1.0"), Alert->Volume, 1.0f);
-		}
-		const FElysiumNpc::FVocalization* Pain = SoundsRow(TEXT("CGeneric_NPC"), 491);
-		TestNotNull(TEXT("CGeneric_NPC#491 PainSound"), Pain);
-		if (Pain != nullptr)
-		{
-			TestEqual(TEXT("...is 0x1035a670"), FString(Pain->RetailAddress),
-				FString(TEXT("0x1035a670")));
-			// `RandomInt(0, 3)` — the citizen pain table is four entries, the only pool wider
-			// than one on either generic class.
-			TestEqual(TEXT("...draws RandomInt(0, 3) over four wavs"), Pain->WavCount, 4);
-			TestEqual(TEXT("...first is npc/citizen/pain1.wav"), FString(Pain->Wavs[0]),
-				FString(TEXT("npc/citizen/pain1.wav")));
-			TestEqual(TEXT("...last is npc/citizen/pain4.wav"), FString(Pain->Wavs[3]),
-				FString(TEXT("npc/citizen/pain4.wav")));
-		}
-		const FElysiumNpc::FVocalization* Surprise = SoundsRow(TEXT("CGeneric_NPC"), 495);
-		TestNotNull(TEXT("CGeneric_NPC#495 SurprisedSound"), Surprise);
-		if (Surprise != nullptr)
-		{
-			TestEqual(TEXT("...is 0x1035a220"), FString(Surprise->RetailAddress),
-				FString(TEXT("0x1035a220")));
-			TestEqual(TEXT("...npc/metropolice/surprise1.wav"), FString(Surprise->Wavs[0]),
-				FString(TEXT("npc/metropolice/surprise1.wav")));
-		}
-		// The hooks CGeneric_NPC does NOT override: the Troika-line body runs instead.
-		TestNull(TEXT("CGeneric_NPC has no FearSound override"),
-			SoundsRow(TEXT("CGeneric_NPC"), 492));
-	}
-
-	// --- CGenericSabbat_NPC: the same four hooks, its own copies of the same four wavs ----------
-	{
-		const int32 Slots[] = { 488, 489, 491, 495 };
-		const TCHAR* const Addresses[] = { TEXT("0x1035bb70"), TEXT("0x1035ba00"),
-			TEXT("0x1035bce0"), TEXT("0x1035b890") };
-		for (int32 Index = 0; Index < 4; ++Index)
-		{
-			const FElysiumNpc::FVocalization* Sabbat = SoundsRow(TEXT("CGenericSabbat_NPC"),
-				Slots[Index]);
-			const FElysiumNpc::FVocalization* Generic = SoundsRow(TEXT("CGeneric_NPC"),
-				Slots[Index]);
-			TestNotNull(*FString::Printf(TEXT("CGenericSabbat_NPC#%d"), Slots[Index]), Sabbat);
-			if (Sabbat == nullptr || Generic == nullptr)
-			{
-				continue;
-			}
-			TestEqual(*FString::Printf(TEXT("CGenericSabbat_NPC#%d is %s"), Slots[Index],
-				Addresses[Index]), FString(Sabbat->RetailAddress), FString(Addresses[Index]));
-			// Two separate `.rdata` pointer tables holding the same strings — the ports agree
-			// because retail's bodies do.
-			TestEqual(*FString::Printf(TEXT("...same pool width as CGeneric_NPC#%d"),
-				Slots[Index]), Sabbat->WavCount, Generic->WavCount);
-			TestEqual(*FString::Printf(TEXT("...same first wav as CGeneric_NPC#%d"),
-				Slots[Index]), FString(Sabbat->Wavs[0]), FString(Generic->Wavs[0]));
-			TestEqual(*FString::Printf(TEXT("...same volume as CGeneric_NPC#%d"), Slots[Index]),
-				Sabbat->Volume, Generic->Volume);
-		}
+		TestNull(*FString::Printf(TEXT("%s#488 has no row"), Dead), SoundsRow(Dead, 488));
 	}
 
 	// --- CNPC_VCamera: nineteen empty overrides, inherited by CNPC_VCameraSecurity --------------
@@ -246,43 +171,6 @@ bool FElysiumNpcKernelSoundsTableTest::RunTest(const FString&)
 				FString(TEXT("character/monster/andrei_transformed/exert_heavy_1.wav")));
 			TestEqual(TEXT("...on CHAN_BODY"), Attack->Channel, 4);
 		}
-	}
-
-	// --- CNPC_VTest: eight hooks, exactly one of them gated -------------------------------------
-	{
-		const int32 Slots[] = { 488, 489, 490, 491, 492, 493, 494, 495 };
-		const TCHAR* const Addresses[] = { TEXT("0x103b4320"), TEXT("0x103b4490"),
-			TEXT("0x103b4600"), TEXT("0x103b4780"), TEXT("0x103b48f0"), TEXT("0x103b4a60"),
-			TEXT("0x103b4bd0"), TEXT("0x103b4d40") };
-		const TCHAR* const FirstWav[] = { TEXT("character/npc/test/death1.wav"),
-			TEXT("character/npc/test/alert1.wav"), TEXT("character/npc/test/idle1.wav"),
-			TEXT("character/npc/test/pain1.wav"), TEXT("character/npc/test/fear1.wav"),
-			TEXT("character/npc/test/lostenemy1.wav"),
-			TEXT("character/npc/test/foundenemy1.wav"),
-			TEXT("character/npc/test/surprise1.wav") };
-		for (int32 Index = 0; Index < UE_ARRAY_COUNT(Slots); ++Index)
-		{
-			const FElysiumNpc::FVocalization* Row = SoundsRow(TEXT("CNPC_VTest"), Slots[Index]);
-			TestNotNull(*FString::Printf(TEXT("CNPC_VTest#%d"), Slots[Index]), Row);
-			if (Row == nullptr)
-			{
-				continue;
-			}
-			TestEqual(*FString::Printf(TEXT("CNPC_VTest#%d is %s"), Slots[Index],
-				Addresses[Index]), FString(Row->RetailAddress), FString(Addresses[Index]));
-			TestEqual(*FString::Printf(TEXT("CNPC_VTest#%d plays %s"), Slots[Index],
-				FirstWav[Index]), FString(Row->Wavs[0]), FString(FirstWav[Index]));
-			// `103b4609` is the ONLY `CALL [EAX+0x798]` in the eight bodies: slot 490 is the
-			// only CNPC_VTest hook the sound gate rate-limits.
-			TestEqual(*FString::Printf(TEXT("CNPC_VTest#%d gate"), Slots[Index]),
-				Row->bGatedByFOkToMakeSound, Slots[Index] == 490);
-		}
-		// The death hook is the only one at volume 0.5 (`0x3f000000` at `103b436c`); the pain
-		// hook is the only four-wide pool (`PUSH 0x3` at `103b47cc`).
-		TestEqual(TEXT("CNPC_VTest#488 is volume 0.5"),
-			SoundsRow(TEXT("CNPC_VTest"), 488)->Volume, 0.5f);
-		TestEqual(TEXT("CNPC_VTest#491 draws RandomInt(0, 3)"),
-			SoundsRow(TEXT("CNPC_VTest"), 491)->WavCount, 4);
 	}
 
 	// --- CNPC_VTzimisce: two sentence hooks -----------------------------------------------------

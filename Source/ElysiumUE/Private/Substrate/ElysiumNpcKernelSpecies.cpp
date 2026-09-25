@@ -14,9 +14,9 @@
 // Story 29c-1, family **Species** — the per-species bodies of layers 0–9. This file carries slot
 // 323, the species slot table and its dispatchers, the two `CUtlVector<{EHANDLE, expiry}>` stores
 // (`CNPC_VBaseBoss`'s and `CNPC_VTzimisce`'s) and the melee quartet's species replacements (slots
-// 599, 600, 601, 602) plus slots 606 and 609. Everything else — `CNPC_Crow`, `CNPC_VNewscaster`,
+// 599, 600, 601, 602) plus slots 606 and 609. Everything else — `CNPC_VNewscaster`,
 // `CNPC_VTzimisce`'s carry chain, `CNPC_VWerewolf`, `CNPC_VZombie`, `CNPC_VMingXiaoTentacle`,
-// `CNPC_VCamera`, `CScriptedTarget` and `CNPC_VAndreiBlood` — is
+// `CNPC_VCamera` and `CNPC_VAndreiBlood` — is
 // `Substrate/ElysiumNpcKernelSpecies2.cpp`. The declarations and this family's three standing facts
 // are `Substrate/ElysiumNpcKernelSpecies.inl`; the walked prose is `docs/vtmb/npc-ai/shape.md`.
 //
@@ -203,12 +203,8 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRows(int32& OutCount
 		// `CNPC_VZombie` fires `m_OnAttackedVictim` from two slots with no base forward.
 		{ TEXT("CNPC_VZombie"), 25, TEXT("0x103e12c0") },
 		{ TEXT("CNPC_VZombie"), 26, TEXT("0x103e12f0") },
-		// Slot 103 `Spawn` on a class no map stands: `CScriptedTarget`.
-		{ TEXT("CScriptedTarget"), 103, TEXT("0x1034d6e0") },
 		// Slot 139 `DeathNotice` — `CNPCMaker_Fleshpile`'s, which lands on `FElysiumNpcMaker`.
 		{ TEXT("CNPCMaker_Fleshpile"), 139, TEXT("0x1034c8e0") },
-		// Slot 197 `BodyTarget` — `CNPC_Crow`'s same-object forward to slot 192.
-		{ TEXT("CNPC_Crow"), 197, TEXT("0x103577d0") },
 		// Slot 482 `CanPlaySequence`. Five classes, every body byte-identical to the base.
 		{ TEXT("CNPC_VAnimal"), 482, TEXT("0x1035fd40") },
 		{ TEXT("CNPC_VTzimisce"), 482, TEXT("0x103bd270") },
@@ -240,10 +236,10 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRows(int32& OutCount
 		{ TEXT("CNPC_VTzimisceRunner"), 602, TEXT("0x103c3ab0") },
 		// Slot 606 — `CNPC_VBach`'s arm-then-fire gate around `COND_ENEMY_OCCLUDED`.
 		{ TEXT("CNPC_VBach"), 606, TEXT("0x10364280") },
-		// Slot 609 — three byte-identical state gates in front of the base hint search.
+		// Slot 609 — Bach's state gate in front of the base hint search. Its two byte-identical
+		// copies (`CNPC_VBatSwarm` `0x10367740`, `CNPC_VSheriffSwarm` `0x103b26f0`) are on classes
+		// with no instance and carry no port row.
 		{ TEXT("CNPC_VBach"), 609, TEXT("0x103661f0") },
-		{ TEXT("CNPC_VBatSwarm"), 609, TEXT("0x10367740") },
-		{ TEXT("CNPC_VSheriffSwarm"), 609, TEXT("0x103b26f0") },
 		// Slot 617 `MakeNPC` — `CNPCMaker_Fleshpile`'s, which lands on `FElysiumNpcMaker`.
 		{ TEXT("CNPCMaker_Fleshpile"), 617, TEXT("0x1034c2d0") },
 	};
@@ -954,8 +950,8 @@ bool FElysiumNpc::SpeciesSlot606(int32 Arg, int32& OutAnswer)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 609 — the three byte-identical state gates of `CNPC_VBach`, `CNPC_VBatSwarm` and
-// `CNPC_VSheriffSwarm`.
+// Slot 609 — `CNPC_VBach`'s state gate (byte-identical to the dead swarms' `0x10367740` and
+// `0x103b26f0`).
 // -------------------------------------------------------------------------------------------------
 
 bool FElysiumNpc::FUN_103661f0(bool bArg)
@@ -985,18 +981,6 @@ bool FElysiumNpc::FUN_103661f0(bool bArg)
 	return true;
 }
 
-bool FElysiumNpc::FUN_10367740(bool bArg)
-{
-	// `0x10367740`, `CNPC_VBatSwarm`'s — byte-identical to `0x103661f0`.
-	return FUN_103661f0(bArg);
-}
-
-bool FElysiumNpc::FUN_103b26f0(bool bArg)
-{
-	// `0x103b26f0`, `CNPC_VSheriffSwarm`'s — byte-identical to `0x103661f0`.
-	return FUN_103661f0(bArg);
-}
-
 bool FElysiumNpc::SpeciesSlot609(bool bArg, bool& OutRunBase)
 {
 	const FSpeciesSlotRow* Row = SpeciesDispatchRow(609);
@@ -1008,16 +992,6 @@ bool FElysiumNpc::SpeciesSlot609(bool bArg, bool& OutRunBase)
 	if (FCString::Strcmp(Row->Address, TEXT("0x103661f0")) == 0)
 	{
 		OutRunBase = FUN_103661f0(bArg);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x10367740")) == 0)
-	{
-		OutRunBase = FUN_10367740(bArg);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103b26f0")) == 0)
-	{
-		OutRunBase = FUN_103b26f0(bArg);
 		return true;
 	}
 	return false;

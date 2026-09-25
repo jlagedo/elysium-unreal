@@ -357,8 +357,8 @@ void FElysiumNpc::MakeTracer(const FVector& StartCm, void* Trace, int32 TracerTy
 // collision prop as closely as a body-less state can answer it. Both slots go through it, so there
 // is exactly one bounds accessor in the runtime.
 //
-// This is also the body `FElysiumNpc::SpeciesWorldSpaceCenter()` (family Geometry) falls through to
-// for every class that is not `CNPC_Crow`.
+// This is also the body `FElysiumNpc::SpeciesWorldSpaceCenter()` (family Geometry) answers for
+// every class.
 
 FVector FElysiumNpc::WorldSpaceCenter()
 {
@@ -982,13 +982,10 @@ void FElysiumNpc::Slot583(const FVector& PointCm)
 
 void FElysiumNpc::Slot584(int32 Unused)
 {
-	// Story 29d, family **Anim10**: `CAI_BaseHumanoid#584` and `CAI_ExpressiveNPC#584` fill this slot
-	// with `FUN_10260dc0` (`0x10260dc0`) instead — an 11-byte tail jump through the Expresser at
-	// `+0x5f48` — so the species prologue runs FIRST and the body below is the Troika line's.
-	if (Slot584Species(Unused))
-	{
-		return;
-	}
+	// `CAI_BaseHumanoid#584` and `CAI_ExpressiveNPC#584` fill this slot with `FUN_10260dc0` instead
+	// (a tail jump through the Expresser at `+0x5f48`). Neither class has an instance, so 0019
+	// story 5 step 1 removed that species prologue; the body below is the Troika line's.
+	//
 	//     ResetThinkTimers();                              // vtable +0x998, slot 614
 	//     m_flLastThink = m_flLastUpdateThink = m_flLastNormalThink
 	//                   = m_flLastMoveThink = m_flLastAIThink = gpGlobals->curtime;

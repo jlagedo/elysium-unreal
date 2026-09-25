@@ -36,9 +36,9 @@ namespace
 	//   `npc_VTzimisceRunner`  — registered, and claimed by `CNPC_VBaseBoss` AND by
 	//                            `CNPC_VTzimisceRunner`; the most derived claimant is the latter and
 	//                            it fills slot 76 with the BOSS body `0x10366290`.
-	// `CNPC_VWerewolf`, `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle` and `CScriptedTarget` are
-	// exercised by retail class NAME through the family's own tables and the census, because no
-	// registered classname reaches them.
+	// `CNPC_VWerewolf`, `CNPC_VMingXiao` and `CNPC_VMingXiaoTentacle` are exercised by retail
+	// class NAME through the family's own tables and the census, because no registered classname
+	// reaches them.
 	const TCHAR* const GDebugCombatant = TEXT("npc_VHumanCombatant");
 	const TCHAR* const GDebugBoss = TEXT("npc_VTzimisceRunner");
 
@@ -783,106 +783,14 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// `CScriptedTarget` and `CAI_Hint` — slots 123 and 124 on two classes no map stands here.
+// `CAI_Hint` — slot 124 on a class no map stands on this leaf. `CScriptedTarget`'s slots 123/124
+// (`0x1034e070`, `0x1034ddf0`) carry no port body: no map stands that class.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebugForeignOverlaysTest,
 	"Elysium.Substrate.NpcKernelDebug.ForeignOverlays", GElysiumNpcKernelDebugFlags)
 bool FElysiumNpcKernelDebugForeignOverlaysTest::RunTest(const FString&)
 {
-	FElysiumNpcWorldFixture Fixture(DebugBuilder(GDebugCombatant));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
-	if (!TestNotNull(TEXT("the combatant spawned"), Npc))
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Npc });
-
-	// `CScriptedTarget` is not a spawnable leaf; the census gives it no entity classname. The body
-	// is exercised against the two words family Species declared for it.
-	TestNull(TEXT("no classname resolves to CScriptedTarget"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("scripted_target")));
-
-	// The gate is one test of two bits, 0x4 OR 0x20.
-	Npc->DebugOverlays = 0;
-	FElysiumNpc::BeginDebugCapture();
-	Npc->ScriptedTargetDrawDebugGeometryOverlays();
-	TestEqual(TEXT("neither 0x4 nor 0x20 draws nothing"),
-		FElysiumNpc::EndDebugCapture().Num(), 0);
-
-	Npc->bScriptedTargetDisabled = false;
-	Npc->ScriptedTargetLastPositionUnits = FVector(10.f, 0.f, 0.f);
-	for (const int32 Bit : { 0x4, 0x20 })
-	{
-		Npc->DebugOverlays = Bit;
-		FElysiumNpc::BeginDebugCapture();
-		Npc->ScriptedTargetDrawDebugGeometryOverlays();
-		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestEqual(*FString::Printf(TEXT("bit 0x%x opens the same gate"), Bit), Lines.Num(), 3);
-		if (Lines.Num() == 3)
-		{
-			TestEqual(TEXT("the enabled arm's white +-8 box at m_vLastPosition"), Lines[0].Text,
-				FString(TEXT("(10.0 0.0 0.0) mins=(-8.0 -8.0 -8.0) maxs=(8.0 8.0 8.0) ")
-					TEXT("rgba=(255 255 255 0)")));
-			TestEqual(TEXT("then the red +-5 box at the origin"), Lines[1].Text,
-				FString(TEXT("(0.0 0.0 0.0) mins=(-5.0 -5.0 -5.0) maxs=(5.0 5.0 5.0) ")
-					TEXT("rgba=(255 0 0 0)")));
-			TestEqual(TEXT("then the line to m_vLastPosition"), FString(Lines[2].Retail),
-				FString(TEXT("NDebugOverlay::Line")));
-		}
-	}
-
-	// Disabled: ONE box, colour (200,100,100), and the listing hands its maxs where the mins go.
-	Npc->bScriptedTargetDisabled = true;
-	Npc->DebugOverlays = 0x24;
-	FElysiumNpc::BeginDebugCapture();
-	Npc->ScriptedTargetDrawDebugGeometryOverlays();
-	{
-		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestEqual(TEXT("the disabled arm draws one box"), Lines.Num(), 1);
-		if (Lines.Num() == 1)
-		{
-			TestEqual(TEXT("with the mins and maxs the listing pushes, in that order"),
-				Lines[0].Text,
-				FString(TEXT("(0.0 0.0 0.0) mins=(5.0 5.0 5.0) maxs=(-5.0 -5.0 -5.0) ")
-					TEXT("rgba=(200 100 100 0)")));
-		}
-	}
-
-	// Slot 124 on the same class: three numbered lines and a return of base + 3.
-	Npc->DebugOverlays = 0;
-	TestEqual(TEXT("without the 0x1 bit the line count is unchanged"),
-		Npc->ScriptedTargetDrawDebugTextOverlays(), 0);
-
-	Npc->DebugOverlays = 0x1;
-	Npc->bScriptedTargetDisabled = false;
-	FElysiumNpc::BeginDebugCapture();
-	const int32 Next = Npc->ScriptedTargetDrawDebugTextOverlays();
-	const TArray<FElysiumNpc::FDebugLine> Text = FElysiumNpc::EndDebugCapture();
-	TestEqual(TEXT("three lines"), Text.Num(), 3);
-	TestEqual(TEXT("and the next free line is base + 3"), Next, 3);
-	if (Text.Num() == 3)
-	{
-		TestEqual(TEXT("line 0 is the enabled state"), Text[0].Text, FString(TEXT("State: On")));
-		TestEqual(TEXT("numbered 0"), Text[0].Line, 0);
-		TestEqual(TEXT("line 1 is the absent Next target"), Text[1].Text,
-			FString(TEXT("Next: -NONE-")));
-		TestEqual(TEXT("line 2 is -LOOKING- while enabled"), Text[2].Text,
-			FString(TEXT("User: -LOOKING-")));
-		TestEqual(TEXT("numbered 2"), Text[2].Line, 2);
-	}
-	// Disabled flips the third line's no-target spelling and nothing else.
-	Npc->bScriptedTargetDisabled = true;
-	FElysiumNpc::BeginDebugCapture();
-	Npc->ScriptedTargetDrawDebugTextOverlays();
-	const TArray<FElysiumNpc::FDebugLine> Off = FElysiumNpc::EndDebugCapture();
-	if (TestEqual(TEXT("still three lines"), Off.Num(), 3))
-	{
-		TestEqual(TEXT("State: Off"), Off[0].Text, FString(TEXT("State: Off")));
-		TestEqual(TEXT("and -NONE- rather than -LOOKING-"), Off[2].Text,
-			FString(TEXT("User: -NONE-")));
-	}
-
 	// `CAI_Hint::DrawDebugTextOverlays` — the two words are parameters because no hint store carries
 	// them. The first format is a BARE `%i`, with no label at all.
 	TestEqual(TEXT("without the 0x1 bit the hint adds no lines"),

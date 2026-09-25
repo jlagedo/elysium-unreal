@@ -28,10 +28,6 @@ namespace
 {
 	// --- Retail `.rdata`, one line per constant ---------------------------------------------------
 
-	// `_DAT_10449270`, a DOUBLE (`1025e9a5  FCOMP double ptr [0x10449270]`). The facing-cone floor
-	// `CAI_BaseActor::ValidEyeTarget` requires the dot to exceed: 0.5, a 60-degree half-angle.
-	constexpr double GValidEyeTargetDotFloor = 0.5;
-
 	// `_DAT_1049e0c8`, a DOUBLE (`10326cbf  FCOMP double ptr [0x1049e0c8]`) with exactly ONE reader
 	// in the image — slot 364. 0.994 is a 6.28-degree half-angle: the aim cone is far narrower than
 	// the view cone (`0.2`, `ElysiumNpcSense::DefaultViewConeDot`), which is what makes
@@ -160,18 +156,6 @@ bool FElysiumNpc::AimConeAdmits(const FVector& OriginCm, const FVector& TargetCm
 		return false;
 	}
 	return FVector::DotProduct(Delta, Aim) > GAimConeDotFloor;
-}
-
-bool FElysiumNpc::EyeTargetConeAdmits(const FVector& EyeCm, const FVector& PointCm,
-	const FVector& HeadDirection)
-{
-	// `0x1025e920`'s arithmetic, same lift. 3-D normalise, `> 0.5`.
-	FVector Delta = PointCm - EyeCm;
-	if (!Delta.Normalize())
-	{
-		return false;
-	}
-	return FVector::DotProduct(Delta, HeadDirection) > GValidEyeTargetDotFloor;
 }
 
 bool FElysiumNpc::FInAimCone(const FVector& TargetCm)
@@ -451,29 +435,6 @@ void FElysiumNpc::OnListened()
 	{
 		Senses.ExtendVisionOverride(*this, Memory.LastSoundBulletImpact.Source, Now, 1.0);
 	}
-}
-
-// =================================================================================================
-// `CAI_BaseHumanoid#587` — `ValidEyeTarget`, `0x1025e920`
-// =================================================================================================
-
-bool FElysiumNpc::HumanoidValidEyeTarget(const FVector& PointCm)
-{
-	// `0x1025e920`, 164 bytes. The listing:
-	//
-	//     head = HeadDirection3D()              (slot 371, vtable +0x5cc)
-	//     eye  = EyePosition()                  (slot 193, vtable +0x304)
-	//     d    = point - eye                    (1025e948..1025e960, point MINUS eye)
-	//     VectorNormalize(&d)                   (3-D here, unlike slot 364 — no Z zeroing)
-	//     return dot(d, head) > 0.5             (FCOMP double [0x10449270])
-	//
-	// Strictly greater: a point exactly on the cone edge is not a valid eye target. This is the
-	// sibling of `ValidHeadTarget` (`0x1025ea00`, `CAI_BaseHumanoid#588`) already in `senses.md`,
-	// which adds a height term this one does not have.
-	//
-	// **SEAM, named**: slot 371 `HeadDirection3D` is a generated stub answering the zero vector, so
-	// this body refuses on every call today. `EyeTargetConeAdmits` carries the rule.
-	return EyeTargetConeAdmits(EyePosition(), PointCm, HeadDirection3D());
 }
 
 // =================================================================================================

@@ -163,7 +163,9 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FSpeciesSlotRow* Rows = FElysiumNpc::SpeciesSlotRows(Count);
-	TestEqual(TEXT("the table carries this family's 34 (class, slot) rows"), Count, 34);
+	// 34 before 0019 story 5 step 1 removed the rows of classes no map stands
+	// (`CScriptedTarget#103`, `CNPC_Crow#197`, `CNPC_VBatSwarm#609`, `CNPC_VSheriffSwarm#609`).
+	TestEqual(TEXT("the table carries this family's 30 (class, slot) rows"), Count, 30);
 
 	// Every row, BY NAME: the class is a census class, and the census agrees that the row's retail
 	// address is the body that fills that slot for it. A row that does not match `slots.md` fails
@@ -597,11 +599,14 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 	// --- slot 609: the state gate ----------------------------------------------------------------
 	// Only retail states 4 (`NPC_STATE_SCRIPT`) and 0xc admit the base hint search; every other
 	// state ZEROES `m_pShootAtHintNode` as a side effect of asking.
-	for (const TCHAR* Name : { TEXT("CNPC_VBach"), TEXT("CNPC_VBatSwarm"),
-		TEXT("CNPC_VSheriffSwarm") })
+	TestNotNull(TEXT("CNPC_VBach has a slot-609 row"),
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VBach"), 609));
+	// Retail's byte-identical `CNPC_VBatSwarm` / `CNPC_VSheriffSwarm` copies are on classes with no
+	// instance and carry no port row (0019 story 5 step 1).
+	for (const TCHAR* Name : { TEXT("CNPC_VBatSwarm"), TEXT("CNPC_VSheriffSwarm") })
 	{
-		const FElysiumNpc::FSpeciesSlotRow* Row = FElysiumNpc::SpeciesSlotRowOf(Name, 609);
-		TestNotNull(*FString::Printf(TEXT("%s has a slot-609 row"), Name), Row);
+		TestNull(*FString::Printf(TEXT("%s, a class with no instance, has no slot-609 row"), Name),
+			FElysiumNpc::SpeciesSlotRowOf(Name, 609));
 	}
 	Npc->ScheduleHost.ShootAtHintNode = 77;
 	Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
@@ -612,14 +617,6 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 	Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
 	TestTrue(TEXT("a scripted body (retail state 4) does reach it"), Npc->FUN_103661f0(false));
 	TestEqual(TEXT("and its cached hint is left alone"), Npc->ScheduleHost.ShootAtHintNode, 77);
-
-	// The other two are byte-identical, verified by driving them through the same two states.
-	Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
-	TestFalse(TEXT("0x10367740 (CNPC_VBatSwarm) is the same gate"), Npc->FUN_10367740(false));
-	TestFalse(TEXT("0x103b26f0 (CNPC_VSheriffSwarm) is the same gate"), Npc->FUN_103b26f0(false));
-	Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
-	TestTrue(TEXT("and both admit a scripted body"), Npc->FUN_10367740(false));
-	TestTrue(TEXT("both of them"), Npc->FUN_103b26f0(false));
 	return true;
 }
 
@@ -1222,37 +1219,10 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		return false;
 	}
 
-	// --- `0x103577d0`, slot 197: the forward answers its own ARGUMENT back ------------------------
-	// Every other class's slot 197 answers the body's own centre; a crow's answers the caller's
-	// point, unchanged.
-	const FVector Asked(11.0, 22.0, 33.0);
-	TestEqual(TEXT("CNPC_Crow's slot 197 answers the point it was asked about"),
-		Npc->FUN_103577d0(Asked), Asked);
-	TestNotEqual(TEXT("which is not this body's own world-space centre"),
-		Npc->WorldSpaceCenter(), Asked);
-
-	// --- `0x10357be0`: the scale is clamped AT one (`FCOMP double ptr [0x10449280]`) -----------------
-	// `CrowFlyStep` is the pure half and takes the already-clamped scale.
-	{
-		// 100 units away, arriving threshold `scale * 170`: at scale 1 the body has arrived.
-		const FElysiumNpc::FCrowFlyStep Near =
-			FElysiumNpc::CrowFlyStep(1.f, FVector(100.0, 0.0, 0.0), FVector::ZeroVector);
-		TestTrue(TEXT("100 units is inside the 170-unit arrival radius"), Near.bArrived);
-		// The velocity is the RAW offset scaled by 170 — NOT normalised first.
-		TestEqual(TEXT("and the velocity is the raw offset times 170"), Near.VelocityUnits,
-			FVector(100.0 * 170.0, 0.0, 0.0));
-		TestEqual(TEXT("with the motor yaw pointing along it"), Near.MotorYaw, 0.f, 1.0e-03f);
-
-		const FElysiumNpc::FCrowFlyStep Far =
-			FElysiumNpc::CrowFlyStep(1.f, FVector(400.0, 0.0, 0.0), FVector::ZeroVector);
-		TestFalse(TEXT("400 units is outside it"), Far.bArrived);
-		const FElysiumNpc::FCrowFlyStep Left =
-			FElysiumNpc::CrowFlyStep(1.f, FVector(0.0, -400.0, 0.0), FVector::ZeroVector);
-		TestEqual(TEXT("a Source +Y offset is yaw 90"), Left.MotorYaw, 90.f, 1.0e-03f);
-		const FElysiumNpc::FCrowFlyStep Up =
-			FElysiumNpc::CrowFlyStep(1.f, FVector(0.0, 0.0, 400.0), FVector::ZeroVector);
-		TestEqual(TEXT("and a straight-up offset is pitch -90"), Up.Pitch, -90.f, 1.0e-03f);
-	}
+	// `CNPC_Crow`'s slot 197 (`0x103577d0`) and fly step (`0x10357be0`) are on a class no map
+	// stands and carry no port body.
+	TestNull(TEXT("CNPC_Crow carries no slot-197 row"),
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_Crow"), 197));
 
 	// --- `0x1036c7f0`: the ChangBros setter writes family Squad's word ---------------------------
 	Npc->ChangType = 0;
@@ -1300,16 +1270,9 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("and m_flTargetLeadWeightScale 0.01"), Npc->TargetLeadWeightScale, 0.01f,
 		1.0e-06f);
 
-	// --- `0x1034d6e0`: `CScriptedTarget::Spawn` caches the origin --------------------------------
-	Npc->Origin = FVector(254.0, 0.0, 0.0);   // 100 SOURCE units
-	Npc->ScriptedTargetLastPositionUnits = FVector::ZeroVector;
-	Npc->FUN_1034d6e0();
-	TestEqual(TEXT("CScriptedTarget::Spawn caches m_vLastPosition in SOURCE units"),
-		Npc->ScriptedTargetLastPositionUnits, FVector(100.0, 0.0, 0.0));
-	TestNull(TEXT("and CScriptedTarget is a census class with no entity classname"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("scripted_target")));
-	TestNotNull(TEXT("though the class itself is in the census"),
-		ElysiumNpcKernelClass::Find(TEXT("CScriptedTarget")));
+	// `CScriptedTarget::Spawn` (`0x1034d6e0`) is on a class no map stands and carries no port body.
+	TestNull(TEXT("CScriptedTarget carries no slot-103 row"),
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CScriptedTarget"), 103));
 
 	// --- `0x103681d0` / `0x103682f0`: two EMPTY bodies, and emptiness is the point ---------------
 	// The rows exist so the base sound hooks do NOT run for a camera. Nothing to assert but that

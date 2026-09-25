@@ -452,13 +452,11 @@ bool FElysiumNpcKernelLifecycle19SwarmDistTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	const TCHAR* Classes[] = { TEXT("CNPC_VBach"), TEXT("CNPC_VBatSwarm"), TEXT("CNPC_VSheriffSwarm") };
-	for (const TCHAR* Cls : Classes)
-	{
-		Lifecycle19Stand(*F.Npc, Cls);
-		F.Npc->NPCInit();
-		TestEqual(FString::Printf(TEXT("%s DistTooFar 65535"), Cls), F.Npc->DistTooFar, 65535.f);
-	}
+	// `CNPC_VBatSwarm` (`0x103673b0`) and `CNPC_VSheriffSwarm` (`0x103b2360`) write the same word,
+	// but neither class has an instance and neither carries a port arm (0019 story 5 step 1).
+	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VBach"));
+	F.Npc->NPCInit();
+	TestEqual(TEXT("CNPC_VBach DistTooFar 65535"), F.Npc->DistTooFar, 65535.f);
 	return true;
 }
 
@@ -693,15 +691,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ArmCoverageTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.ArmCoverage", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ArmCoverageTest::RunTest(const FString&)
 {
-	// Every slot-420/422/130 override this family ports is named. Addresses from the census.
+	// Every slot-420/422/130 override this family ports is named. Addresses from the census. The
+	// swarms' `0x103673b0` / `0x103b2360` are census rows only: neither class has an instance.
 	const TCHAR* Slot420[] = {
 		TEXT("0x101aab90"), TEXT("0x1035cec0"), TEXT("0x10360ce0"), TEXT("0x10363940"),
-		TEXT("0x103673b0"), TEXT("0x103692c0"), TEXT("0x1036b050"), TEXT("0x1036f100"),
+		TEXT("0x103692c0"), TEXT("0x1036b050"), TEXT("0x1036f100"),
 		TEXT("0x1036f900"), TEXT("0x10372b00"), TEXT("0x10375c80"), TEXT("0x103785f0"),
 		TEXT("0x1037b290"), TEXT("0x1037e240"), TEXT("0x1037fa70"), TEXT("0x10387140"),
 		TEXT("0x10388b30"), TEXT("0x1038b070"), TEXT("0x103a0420"), TEXT("0x103a2570"),
 		TEXT("0x103a4350"), TEXT("0x103a4580"), TEXT("0x103a6d40"), TEXT("0x103ae6c0"),
-		TEXT("0x103b2360"), TEXT("0x103b35c0"), TEXT("0x103b91d0"), TEXT("0x103c1c80"),
+		TEXT("0x103b35c0"), TEXT("0x103b91d0"), TEXT("0x103c1c80"),
 		TEXT("0x103c5840"), TEXT("0x103caef0"), TEXT("0x103dce00"), TEXT("0x103dd800"),
 		TEXT("0x103defc0"),
 	};
@@ -815,7 +814,6 @@ bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x1035cec0") },
 		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10360ce0") },
 		{ TEXT("CNPC_VBach"), TEXT("0x10363940") },
-		{ TEXT("CNPC_VBatSwarm"), TEXT("0x103673b0") },
 		{ TEXT("CNPC_VCamera"), TEXT("0x103692c0") },
 		{ TEXT("CNPC_VChangBros"), TEXT("0x1036b050") },
 		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036f100") },
@@ -835,7 +833,6 @@ bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 		{ TEXT("CNPC_VPlayerController"), TEXT("0x103a4580") },
 		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a6d40") },
 		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103ae6c0") },
-		{ TEXT("CNPC_VSheriffSwarm"), TEXT("0x103b2360") },
 		{ TEXT("CNPC_VTaxiDriver"), TEXT("0x103b35c0") },
 		{ TEXT("CNPC_VTzimisce"), TEXT("0x103b91d0") },
 		{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c1c80") },

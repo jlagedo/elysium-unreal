@@ -197,40 +197,6 @@ namespace
 
 namespace
 {
-	// --- CGeneric_NPC (`0x10359f70` precaches them) and CGenericSabbat_NPC (`0x1035b5d0`) --------
-	//
-	// The two classes keep SEPARATE pointer tables (`0x10629a18`… and `0x1062a004`…) holding the
-	// same four wav paths, so the rows below name the same strings twice on purpose: a reader
-	// checking either class against `Precache` finds its own table.
-	const TCHAR* const GSoundsMetropoliceAlert[] = { TEXT("npc/metropolice/alert1.wav") };
-	const TCHAR* const GSoundsMetropoliceDie[] = { TEXT("npc/metropolice/die1.wav") };
-	const TCHAR* const GSoundsMetropoliceSurprise[] = { TEXT("npc/metropolice/surprise1.wav") };
-	// `PTR_s_npc_citizen_pain1_wav` + 0x10 bytes, i.e. four entries; `RandomInt(0, 3)`.
-	const TCHAR* const GSoundsCitizenPain[] = {
-		TEXT("npc/citizen/pain1.wav"),
-		TEXT("npc/citizen/pain2.wav"),
-		TEXT("npc/citizen/pain3.wav"),
-		TEXT("npc/citizen/pain4.wav"),
-	};
-
-	// --- CNPC_VTest (`0x103b41e0` precaches them) ------------------------------------------------
-	//
-	// The symbol names read `character_npc_test_*`; the strings themselves are
-	// `character/npc/test/*.wav` (`0x106523c4` is the death one, verbatim).
-	const TCHAR* const GSoundsTestDeath[] = { TEXT("character/npc/test/death1.wav") };
-	const TCHAR* const GSoundsTestAlert[] = { TEXT("character/npc/test/alert1.wav") };
-	const TCHAR* const GSoundsTestIdle[] = { TEXT("character/npc/test/idle1.wav") };
-	const TCHAR* const GSoundsTestPain[] = {
-		TEXT("character/npc/test/pain1.wav"),
-		TEXT("character/npc/test/pain2.wav"),
-		TEXT("character/npc/test/pain3.wav"),
-		TEXT("character/npc/test/pain4.wav"),
-	};
-	const TCHAR* const GSoundsTestFear[] = { TEXT("character/npc/test/fear1.wav") };
-	const TCHAR* const GSoundsTestLostEnemy[] = { TEXT("character/npc/test/lostenemy1.wav") };
-	const TCHAR* const GSoundsTestFoundEnemy[] = { TEXT("character/npc/test/foundenemy1.wav") };
-	const TCHAR* const GSoundsTestSurprise[] = { TEXT("character/npc/test/surprise1.wav") };
-
 	// --- CNPC_VSabbatLeader (`0x103a6ab0` precaches them) ---------------------------------------
 	//
 	// `0x1064c480`, seven entries, `RandomInt(0, 6)`; and `0x1064c49c`, three entries,
@@ -272,30 +238,6 @@ namespace
 
 	const FElysiumNpc::FVocalization GSoundsVocalizations[] =
 	{
-		// --- CGeneric_NPC ---------------------------------------------------------------------
-		// `0x1035a500` slot 488 DeathSound: `RandomInt(0, 0)`, volume 0.5 (`0x3f000000`).
-		SoundsWavRow(TEXT("CGeneric_NPC"), 488, TEXT("0x1035a500"), GSoundsMetropoliceDie,
-			UE_ARRAY_COUNT(GSoundsMetropoliceDie), 0.5f, GSoundsChanVoice, false),
-		// `0x1035a390` slot 489 AlertSound: `RandomInt(0, 0)`, volume 1.0.
-		SoundsWavRow(TEXT("CGeneric_NPC"), 489, TEXT("0x1035a390"), GSoundsMetropoliceAlert,
-			UE_ARRAY_COUNT(GSoundsMetropoliceAlert), 1.0f, GSoundsChanVoice, false),
-		// `0x1035a670` slot 491 PainSound: `RandomInt(0, 3)`, volume 1.0.
-		SoundsWavRow(TEXT("CGeneric_NPC"), 491, TEXT("0x1035a670"), GSoundsCitizenPain,
-			UE_ARRAY_COUNT(GSoundsCitizenPain), 1.0f, GSoundsChanVoice, false),
-		// `0x1035a220` slot 495 SurprisedSound: `RandomInt(0, 0)`, volume 1.0.
-		SoundsWavRow(TEXT("CGeneric_NPC"), 495, TEXT("0x1035a220"), GSoundsMetropoliceSurprise,
-			UE_ARRAY_COUNT(GSoundsMetropoliceSurprise), 1.0f, GSoundsChanVoice, false),
-
-		// --- CGenericSabbat_NPC: the same four hooks, its own copies of the same four wavs ------
-		SoundsWavRow(TEXT("CGenericSabbat_NPC"), 488, TEXT("0x1035bb70"), GSoundsMetropoliceDie,
-			UE_ARRAY_COUNT(GSoundsMetropoliceDie), 0.5f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CGenericSabbat_NPC"), 489, TEXT("0x1035ba00"), GSoundsMetropoliceAlert,
-			UE_ARRAY_COUNT(GSoundsMetropoliceAlert), 1.0f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CGenericSabbat_NPC"), 491, TEXT("0x1035bce0"), GSoundsCitizenPain,
-			UE_ARRAY_COUNT(GSoundsCitizenPain), 1.0f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CGenericSabbat_NPC"), 495, TEXT("0x1035b890"), GSoundsMetropoliceSurprise,
-			UE_ARRAY_COUNT(GSoundsMetropoliceSurprise), 1.0f, GSoundsChanVoice, false),
-
 		// --- CNPC_VCamera: nineteen empty overrides ---------------------------------------------
 		SoundsMuteRow(488, TEXT("0x103680b0")),   // DeathSound
 		SoundsMuteRow(489, TEXT("0x103680d0")),   // AlertSound
@@ -330,27 +272,6 @@ namespace
 		// `0x103aa7a0` slot 621 AttackSound: `RandomInt(0, 2)`, volume 1.0, CHAN_BODY.
 		SoundsWavRow(TEXT("CNPC_VSabbatLeader"), 621, TEXT("0x103aa7a0"), GSoundsAndreiExertHeavy,
 			UE_ARRAY_COUNT(GSoundsAndreiExertHeavy), 1.0f, GSoundsChanBody, false),
-
-		// --- CNPC_VTest: eight hooks ------------------------------------------------------------
-		SoundsWavRow(TEXT("CNPC_VTest"), 488, TEXT("0x103b4320"), GSoundsTestDeath,
-			UE_ARRAY_COUNT(GSoundsTestDeath), 0.5f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CNPC_VTest"), 489, TEXT("0x103b4490"), GSoundsTestAlert,
-			UE_ARRAY_COUNT(GSoundsTestAlert), 1.0f, GSoundsChanVoice, false),
-		// Slot 490 is the ONLY CNPC_VTest hook that opens with `if (!FOkToMakeSound()) return;`
-		// (`103b4609`, vtable `+0x798`) — the idle vocalization is rate-limited, the reactive ones
-		// are not.
-		SoundsWavRow(TEXT("CNPC_VTest"), 490, TEXT("0x103b4600"), GSoundsTestIdle,
-			UE_ARRAY_COUNT(GSoundsTestIdle), 1.0f, GSoundsChanVoice, true),
-		SoundsWavRow(TEXT("CNPC_VTest"), 491, TEXT("0x103b4780"), GSoundsTestPain,
-			UE_ARRAY_COUNT(GSoundsTestPain), 1.0f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CNPC_VTest"), 492, TEXT("0x103b48f0"), GSoundsTestFear,
-			UE_ARRAY_COUNT(GSoundsTestFear), 1.0f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CNPC_VTest"), 493, TEXT("0x103b4a60"), GSoundsTestLostEnemy,
-			UE_ARRAY_COUNT(GSoundsTestLostEnemy), 1.0f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CNPC_VTest"), 494, TEXT("0x103b4bd0"), GSoundsTestFoundEnemy,
-			UE_ARRAY_COUNT(GSoundsTestFoundEnemy), 1.0f, GSoundsChanVoice, false),
-		SoundsWavRow(TEXT("CNPC_VTest"), 495, TEXT("0x103b4d40"), GSoundsTestSurprise,
-			UE_ARRAY_COUNT(GSoundsTestSurprise), 1.0f, GSoundsChanVoice, false),
 
 		// --- CNPC_VTzimisce: two SENTENCE hooks -------------------------------------------------
 		//
@@ -958,18 +879,10 @@ bool FElysiumNpc::BaseShouldPlayFloatSound() const
 // site — the only other use of the interface in this family is slot 3 (`EmitSound`) and slot 4
 // (`EmitSentenceByIndex`) — so the second argument is passed through as the recovered literal.
 //
-// SPECIES ARM (story 29d, family **Sounds10**): `CNPC_Crow::vfunc511` (`0x10357800`), the whole body
-// of which is ELEVEN bytes — `PUSH "NPC_Crow.Flap"; CALL thunk_FUN_101b0d80; RET`, i.e.
-// `CBaseEntity::StopSound("NPC_Crow.Flap")`. It does NOT chain to the base: a crow's slot 511
-// replaces the generic "stop everything this entity is playing" with a single named-script stop, so
-// nothing the base body would have stopped is stopped for a crow.
+// The census's only species override, `CNPC_Crow::vfunc511` (`0x10357800`), is on a class no map
+// stands and carries no port arm.
 void FElysiumNpc::StopLoopingSounds()
 {
-	if (IsRetailClass(TEXT("CNPC_Crow")))
-	{
-		StopNamedSound(TEXT("NPC_Crow.Flap"));
-		return;
-	}
 	if (IElysiumAudio* Audio = World != nullptr ? World->Audio() : nullptr)
 	{
 		Audio->StopEntitySounds(Handle, /*retail's literal second argument*/ 1);

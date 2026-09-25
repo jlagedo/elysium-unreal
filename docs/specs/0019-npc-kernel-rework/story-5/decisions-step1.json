@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "scope": "Step 1 only. Corrections to step 0's deletion review found by the step-1 source audit. decisions.json stays as accepted at step 0; its hash is pinned by acceptance.json.",
+  "identity_corrections": {
+    "1025fa50": {
+      "step0_symbol": "FElysiumNpc::MaintainEyeDirectionCyclerArm",
+      "actual_symbol": "FElysiumNpc::BaseHumanoidMaintainEyeDirection",
+      "reason": "The step-0 join took the leading citation of the helper (arm 1025fb7a) for the body. The whole CAI_BaseHumanoid#333 body is BaseHumanoidMaintainEyeDirection; the cycler arm is its callee. Both are dead-only."
+    },
+    "10260dc0": {
+      "step0_symbol": "FElysiumNpc::Slot584",
+      "actual_symbol": "FElysiumNpc::Slot584Species",
+      "reason": "Slot584 is the live Troika slot-584 dispatcher for 0x1028d910 (ResetAllThinkStamps). The dead CAI_BaseHumanoid/CAI_ExpressiveNPC body is the prologue arm Slot584Species; only that arm and its call are removed."
+    }
+  },
+  "shared_live_corrections": {
+    "10357760": {
+      "symbol": "FElysiumNpc::SpeciesWorldSpaceCenter",
+      "reason": "Step 0 classed it dead-only on retail callers. The port calls it from the live werewolf ApplyFakeHullPush, so the function stays and only its CNPC_Crow branch is removed."
+    }
+  },
+  "arm_policy": "A live dispatcher shared with a dead class (the 26 keep-shared-live definitions and every member-pointer/address table) keeps its definition; only the arm, row or table entry whose retail identity is a step-1 dead row with no live receiver is removed, together with bodies reachable only through it.",
+  "helper_policy": "A helper orphaned by a deletion is removed only when its own retail address is dead/no-instance or it is uncensused port support used only by removed code. A helper whose address is a live or unjudged row stays as a live contract with no current caller. ExpresserBaseGate was removed: it was only an IsAlive() forward for the dead CreateExpresser, and 0x1027cae0's own port home is hand:FElysiumNpc::CreateComponents, which stays.",
+  "census_policy": "Dead classes keep their census rows: GClasses and classnames, GWords, GOverrides class/slot/address/verdict, classes.md, population.md and the ledger. A dead-class overlay target becomes '-' only when its port implementation is gone or never existed; for registry: rows that removes the emitted Default value, the implementation those rows carried.",
+  "retail_findings": {
+    "npc_bullseye": "Retail registers npc_bullseye at factory 0x10356630 (string 0x106287ac). The census row is right; the port comments calling CNPC_Bullseye classname-less were stale and were removed with the Bullseye code. The class stays dead: npc_bullseye is placed by no map, script or template."
+  },
+  "retained_live_dispatchers": {
+    "note": "The regenerated step-1 inventory still lists these as step-1-scope candidates because their leading comment names the removed dead arm's address first. Each is a live dispatcher or table that keeps its live rows; they are not deletion candidates.",
+    "symbols": [
+      "FElysiumNpc::EyePositionSpeciesRows",
+      "FElysiumNpc::ComponentFactoryRows",
+      "FElysiumNpc::OverrideMove",
+      "FElysiumNpc::DrawDebugGeometryOverlays",
+      "FElysiumNpc::SpeciesWorldSpaceCenter",
+      "FElysiumNpc::OnChangeActivitySpecies",
+      "FElysiumNpc::DrawDebugTextOverlays"
+    ]
+  },
+  "retained_generated_census": {
+    "ElysiumNpcActivityTables.cpp": "gen_action_tables is a retail translation survey indexed per class and alias. PreTranslate_Stalker (0x103b2e60, overlay target kept) and the CNPC_Crow task-handler/policy rows stay; dropping them would need an invented inherited answer or a new runtime refusal. Census-only generation is step 11.",
+    "ElysiumRetailHullTable.h": "The CNPC_Crow, CGeneric_NPC, CGeneric_NPC_bathack and CGenericSabbat_NPC constructor hull rows are recovered retail facts consulted through IsRetailClass; unreachable without an instance and retained as census.",
+    "ElysiumNpcKernelTunables.h": "LookTargetGoalDistanceFloor and YawSpeedHumanoidCrouch lost their only readers; generated rulebook constants are retained."
+  },
+  "overlay": {
+    "rows_set_to_dash": 189,
+    "registry_rows_among_them": "dead-class registry: Default values stop being emitted",
+    "retained_targets": [
+      "103b2e60 ElysiumNpcActivityTables.cpp:PreTranslate_Stalker"
+    ],
+    "evidence": "E:/elysium-work/research/npc-kernel/story-5/step1/1f-overlay.json"
+  },
+  "findings_for_later_steps": {
+    "npc_ProneDialog": "FElysiumNpc::ClassHolstersOnState lists npc_ProneDialog; retail's CNPC_ProneDialog classnames are npc_VProneDialog and npc_VMercurio (factories.tsv). Pre-existing; step 2's factory correction owns it."
+  },
+  "guard_exemptions": {
+    "FElysiumNpc::FUN_1025e780": {
+      "address": "100b5b00",
+      "live_home": "FElysiumNpc::SetViewtarget",
+      "reason": "The step-0 join took the dead CAI_BaseHumanoid#277 prologue (0x1025e780) for CBaseFlex::SetViewtarget by its citation; SetViewtarget is the live home and stays."
+    },
+    "FElysiumNpc::Slot584Species": {
+      "address": "1028d910",
+      "live_home": "FElysiumNpc::Slot584",
+      "reason": "Joined to the Troika slot-584 body by citation; Slot584 is that body's live home and stays."
+    },
+    "FElysiumNpc::HumanoidEyeCache": {
+      "address": "1025e7b0",
+      "retail_callers": [
+        "1025e8e0",
+        "1025f0b0",
+        "1025f160"
+      ],
+      "reason": "0x1025e7b0 is called only through its thunk by three CAI_BaseHumanoid bodies, all dead no-instance rows (corpus grep of thunk_FUN_1025e7b0)."
+    },
+    "FElysiumNpc::RefreshHumanoidHeadCache": {
+      "address": "1025e7b0",
+      "retail_callers": [
+        "1025e8e0",
+        "1025f0b0",
+        "1025f160"
+      ],
+      "reason": "Same body as HumanoidEyeCache's; same dead-only callers."
+    },
+    "FElysiumNpc::ExpressiveNpcSpeak": {
+      "address": "10311c10",
+      "retail_callers": [
+        "10260dc0"
+      ],
+      "reason": "0x10311c10 is reached only through thunk_FUN_10311c10 from 0x10260dc0, the dead CAI_BaseHumanoid/CAI_ExpressiveNPC slot-584 body (corpus grep)."
+    }
+  },
+  "restored_by_guard": {
+    "FElysiumNpc::CharTemplateModelName": "Seam for FUN_10207e60, whose live retail caller is CAI_BaseNPCTroika::Spawn 0x10298d30 (also the dead CGenericSabbat_NPC::Precache). Packet 1c deleted it with the Sabbat body; the live-definition guard refused, and it is restored as a retained contract. The port Spawn does not yet make the 0x10207e60 call: a pre-existing unported rule, not a step-1 change."
+  }
+}

@@ -159,7 +159,8 @@ FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 
 namespace
 {
-	// The 60 census classes that override slot 546 (56 distinct bodies; `CNPC_ProneDialog` shares
+	// The census classes that override slot 546, less the classes with no instance (`population.md`
+	// § "NPC classes with no instance"), whose rows carry no port code (`CNPC_ProneDialog` shares
 	// `CNPC_VHumanCombatant`'s, `CNPC_VCameraSecurity` shares `CNPC_VCamera`'s, `CNPC_VRat` shares
 	// `CNPC_VScurrying`'s and `CNPC_VPlayerController` shares `CNPC_VVampire`'s), plus the Troika
 	// line, which carries no id space at all. Columns: the retail class, the body that fills slot
@@ -169,27 +170,20 @@ namespace
 	constexpr FElysiumNpc::FSquadSlotSpecies GNpcKernelSquadSlotSpecies[] = {
 		// The Troika line itself: `CAI_BaseNPC::SquadSlotName` looks the id up directly.
 		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x101a6c00"), TEXT("") },
-		{ TEXT("CGenericSabbat_NPC"), TEXT("0x1035b4f0"), TEXT("0x1093a350") },
-		{ TEXT("CGeneric_NPC"), TEXT("0x10359e90"), TEXT("0x1093a234") },
-		{ TEXT("CGeneric_NPC_bathack"), TEXT("0x1035ace0"), TEXT("0x1093a314") },
-		{ TEXT("CNPC_Crow"), TEXT("0x10359240"), TEXT("0x1093a070") },
 		{ TEXT("CNPC_ProneDialog"), TEXT("0x10386c80"), TEXT("0x1093b47c") },
 		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x1035c460"), TEXT("0x1093a470") },
 		{ TEXT("CNPC_VAnimal"), TEXT("0x1035edb0"), TEXT("0x1093a4f4") },
 		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10360610"), TEXT("0x1093a578") },
 		{ TEXT("CNPC_VBach"), TEXT("0x10362df0"), TEXT("0x1093a608") },
-		{ TEXT("CNPC_VBatSwarm"), TEXT("0x10366e10"), TEXT("0x1093a6d0") },
 		{ TEXT("CNPC_VBrujah"), TEXT("0x10367a10"), TEXT("0x1093a788") },
 		{ TEXT("CNPC_VCamera"), TEXT("0x10368550"), TEXT("0x1093a7bc") },
 		{ TEXT("CNPC_VCameraSecurity"), TEXT("0x10368550"), TEXT("0x1093a7bc") },
 		{ TEXT("CNPC_VChangBros"), TEXT("0x1036a3f0"), TEXT("0x1093aa70") },
 		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036ecf0"), TEXT("0x1093a8d8") },
 		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036f4f0"), TEXT("0x1093aa10") },
-		{ TEXT("CNPC_VCombatman"), TEXT("0x1036fcb0"), TEXT("0x1093abb0") },
 		{ TEXT("CNPC_VCop"), TEXT("0x10370ad0"), TEXT("0x1093ac40") },
 		{ TEXT("CNPC_VDog"), TEXT("0x103736d0"), TEXT("0x1093ad64") },
 		{ TEXT("CNPC_VFrenzyShadow"), TEXT("0x10375440"), TEXT("0x1093ae28") },
-		{ TEXT("CNPC_VGangrel"), TEXT("0x10377210"), TEXT("0x1093aed8") },
 		{ TEXT("CNPC_VGargoyle"), TEXT("0x10377cd0"), TEXT("0x1093b038") },
 		{ TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037a950"), TEXT("0x1093b0e0") },
 		{ TEXT("CNPC_VGuard1"), TEXT("0x1037c800"), TEXT("0x1093b1b4") },
@@ -199,12 +193,9 @@ namespace
 		{ TEXT("CNPC_VHumanCombatant"), TEXT("0x10386c80"), TEXT("0x1093b47c") },
 		{ TEXT("CNPC_VHunter"), TEXT("0x10388200"), TEXT("0x1093b5e8") },
 		{ TEXT("CNPC_VLasombra"), TEXT("0x10388f80"), TEXT("0x1093b680") },
-		{ TEXT("CNPC_VMalkavian"), TEXT("0x10389700"), TEXT("0x1093b6fc") },
 		{ TEXT("CNPC_VManBat"), TEXT("0x10389f50"), TEXT("0x1093b89c") },
 		{ TEXT("CNPC_VMingXiao"), TEXT("0x10391390"), TEXT("0x1093bacc") },
 		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039b230"), TEXT("0x1093bd80") },
-		{ TEXT("CNPC_VMoleman"), TEXT("0x1039f7a0"), TEXT("0x1093bdb8") },
-		{ TEXT("CNPC_VNosferatu"), TEXT("0x103a1640"), TEXT("0x1093bf30") },
 		{ TEXT("CNPC_VPedestrian"), TEXT("0x103a1fa0"), TEXT("0x1093bffc") },
 		{ TEXT("CNPC_VPlaceholder"), TEXT("0x103a3c50"), TEXT("0x1093c08c") },
 		{ TEXT("CNPC_VPlayerController"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") },
@@ -213,18 +204,12 @@ namespace
 		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a5e50"), TEXT("0x1093c3d4") },
 		{ TEXT("CNPC_VScurrying"), TEXT("0x103abd40"), TEXT("0x1093c4e0") },
 		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103adcb0"), TEXT("0x1093c568") },
-		{ TEXT("CNPC_VSheriffSwarm"), TEXT("0x103b1dc0"), TEXT("0x1093c680") },
-		{ TEXT("CNPC_VStalker"), TEXT("0x103b2a50"), TEXT("0x1093c738") },
 		{ TEXT("CNPC_VTaxiDriver"), TEXT("0x103b3170"), TEXT("0x1093c7f0") },
-		{ TEXT("CNPC_VTest"), TEXT("0x103b3cc0"), TEXT("0x1093c8bc") },
-		{ TEXT("CNPC_VToreador"), TEXT("0x103b54d0"), TEXT("0x1093c948") },
-		{ TEXT("CNPC_VTremere"), TEXT("0x103b5c70"), TEXT("0x1093c9c8") },
 		{ TEXT("CNPC_VTzimisce"), TEXT("0x103b70f0"), TEXT("0x1093ccc4") },
 		{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c0c90"), TEXT("0x1093d1ac") },
 		{ TEXT("CNPC_VTzimisceRunner"), TEXT("0x103c2a60"), TEXT("0x1093d224") },
 		{ TEXT("CNPC_VVampire"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") },
 		{ TEXT("CNPC_VVampireBoss"), TEXT("0x103c5270"), TEXT("0x1093d30c") },
-		{ TEXT("CNPC_VVentrue"), TEXT("0x103c7950"), TEXT("0x1093d394") },
 		{ TEXT("CNPC_VWerewolf"), TEXT("0x103c8ed0"), TEXT("0x1093d6d4") },
 		{ TEXT("CNPC_VWolfMorph"), TEXT("0x103dc950"), TEXT("0x1094028c") },
 		{ TEXT("CNPC_VYukie"), TEXT("0x103dd1f0"), TEXT("0x10940314") },

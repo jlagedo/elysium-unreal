@@ -45,13 +45,12 @@
 // `FElysiumNpc::DrawDebugTextOverlays()` (the generated virtual, defined by this family) is the one
 // port method. It resolves the census body for this NPC's retail class
 // (`ElysiumNpcKernelClass::BodyOf(RetailClass(), 124)`) and runs that arm; the arms themselves are
-// named below because three of them are several hundred lines. `CScriptedTarget#124` (`0x1034ddf0`)
-// is story 29c-1's `ScriptedTargetDrawDebugTextOverlays` and is dispatched to, not re-ported.
+// named below because three of them are several hundred lines. The two bodies on classes no map
+// stands, `CNPC_Crow#124` (`0x10358f90`) and `CScriptedTarget#124` (`0x1034ddf0`), carry no arm.
 
 /** `CAI_BaseNPC::DrawDebugTextOverlays` (`0x102767d0`) — slot 124's BASE body, a distinct retail
- *  function beside the Troika override that owns the slot. Every slot-124 body in the census reaches
- *  it: the Troika one calls it first for its starting line index, and `CNPC_Crow`'s calls it INSTEAD
- *  of the Troika one. Returns the next free entity-text line. */
+ *  function beside the Troika override that owns the slot. The Troika body calls it first for its
+ *  starting line index. Returns the next free entity-text line. */
 int32 BaseDrawDebugTextOverlays();
 
 /** `CAI_BaseNPCTroika::DrawDebugTextOverlays` (`0x1029d4e0`) — the Troika-line body proper, 3,754
@@ -65,10 +64,6 @@ int32 TroikaDrawDebugTextOverlays();
  *  the interrupt arm, and a final flush gated on the WRONG loop's leftover) are what the row is
  *  observable for. Takes the first free line and returns the next one. */
 int32 EmitConditionDump(int32 FirstLine);
-
-/** `CNPC_Crow::DrawDebugTextOverlays` (`0x10358f90`) — chains the BASE (`0x102767d0`), not the
- *  Troika body, and adds `morale:` and `enemy (dist):` under bit 0. */
-int32 CrowDrawDebugTextOverlays();
 
 /** `CNPC_VHengeyokai::DrawDebugTextOverlays` (`0x10383560`) — the Troika body, then slot 9's string
  *  on one further line under bit 0. */
@@ -252,12 +247,6 @@ bool ActiveWeaponTextWords(FString& OutName, int32& OutClip1, int32& OutAmmo1, i
  *  recovered mapping is that `InitSquad` stands one for any NPC whose `m_SquadName` is set and that
  *  the object's `+0x4` IS that name, so a non-empty `SquadName` answers true with it. */
 bool SquadObjectName(FString& OutName) const;
-
-/** `CNPC_Crow::m_nMorale` (`+0x5f50`) and `m_flEnemyDist` (`+0x5f4c`), the crow overlay's two words.
- *  **SEAM**: `CNPC_Crow` stands no port words (it is not a registered spawn leaf here); the morale
- *  answers 0 and the distance 0.0. */
-int32 CrowMorale() const;
-float CrowEnemyDistUnits() const;
 
 /** `CNPC_VCop::m_hPursuitPlayer` (`+0x6664`), the ` Pursuit` suffix of the cop's relationship label.
  *  **SEAM**: no port word; answers null. */

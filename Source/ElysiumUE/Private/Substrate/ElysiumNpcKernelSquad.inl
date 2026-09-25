@@ -100,7 +100,8 @@ struct FSquadSlotSpecies
 	int32 LocalTop = INDEX_NONE;
 };
 
-/** The table: 61 rows — 60 census classes that override slot 546, plus the Troika line itself. */
+/** The table: the census classes with an instance that override slot 546, plus the Troika line
+ *  itself. The 21 classes with no instance carry no row. */
 static const FSquadSlotSpecies* SquadSlotSpeciesRows(int32& OutCount);
 
 /** The row for a retail class name, or null when no row carries it. */

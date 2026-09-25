@@ -13,34 +13,13 @@
 // THIS FAMILY IS `CAI_BaseNPC`'S OWN UNNAMED LAYER — the `0x1025…`–`0x1029…` bodies 29a's naming
 // pass could not name. Two things follow from that and are worth stating once:
 //
-//   * **Five rows are not on the Troika line at all.** `0x1025e780`, `0x1025f1a0`, `0x1025ea00`,
-//     `0x10260540`, `0x10260670`/`0x10260750` fill slots on `CAI_BaseHumanoid`'s table and read
-//     `CAI_BaseActor`'s own words. `classes.md` gives `CAI_BaseHumanoid` NO entity classname, so no
-//     map stands one and `RetailClass()` never answers it; the offsets they touch mean an OUTPUT on
-//     the Troika line (`ElysiumNpcKernelShapeMap.cpp` calls `+0x5f44…+0x5fbc` `_IMPLICIT`). They are
-//     ported all the same, with `CAI_BaseActor`'s words declared by retail name below, exactly as
-//     families Squad and Hints declared the species words their bodies read.
-//   * **`signatures.md` names four of them** — `HasActiveLookTargets` (586 on `CAI_BaseActor`),
-//     `ValidHeadTarget` (588), `SelectRandomExpressionForState` (589) — and the SDK twin settles
-//     four more on the base line. Those carry the name; everything whose concern did not settle
-//     keeps its `FUN_<address>` spelling, because inventing a name for an unrecovered concern is the
-//     guess `CLAUDE.md` forbids.
-
-// --- `CAI_BaseActor`'s own words, read by the `CAI_BaseHumanoid` rows ------------------------------
-//
-// Declared by retail name with the class that owns the offset. 29b did not declare them: the shape
-// 29b landed is the FLATTENED `CAI_BaseNPCTroika` layout, and on that layout these offsets are the
-// NPC's output descriptors. Both readings are true of different classes; the shape map's rows are
-// the Troika-line ones and stay as they are.
-
-int32 LatchedPositions = 0;               // +0x5f4c CAI_BaseActor::m_fLatchedPositions
-FString ExpressionScene;                  // +0x5f9c CAI_BaseActor::m_iszExpressionScene
-FElysiumEntityHandle ExpressionSceneEnt;  // +0x5fa0 CAI_BaseActor::m_hExpressionSceneEnt
-FString ExpressionOverride;               // +0x5fa4 CAI_BaseActor::m_iszExpressionOverride
-FString IdleExpression;                   // +0x5fa8 CAI_BaseActor::m_iszIdleExpression
-FString CombatExpression;                 // +0x5fac CAI_BaseActor::m_iszCombatExpression
-FString AlertExpression;                  // +0x5fb0 CAI_BaseActor::m_iszAlertExpression
-FString DeathExpression;                  // +0x5fb4 CAI_BaseActor::m_iszDeathExpression
+//   * **The `CAI_BaseHumanoid` / `CAI_BaseActor` rows** (`0x1025e780`, `0x1025f1a0`,
+//     `0x1025ea00`, `0x10260540`, `0x10260670`/`0x10260750`) and the `CAI_BaseActor` words they
+//     read were deleted by 0019 story 5 step 1: the class has no instance (`population.md`). The
+//     census keeps them.
+//   * **The SDK twin settles four names on the base line.** Those carry the name; everything whose
+//     concern did not settle keeps its `FUN_<address>` spelling, because inventing a name for an
+//     unrecovered concern is the guess `CLAUDE.md` forbids.
 
 // --- `CAI_BaseNPC::m_UnreachableEnts` (`+0x5d48`, count `+0x5d54`) --------------------------------
 //
@@ -128,44 +107,7 @@ struct FHintWords;
 
 // --- The bodies -----------------------------------------------------------------------------------
 //
-// `CAI_BaseHumanoid` / `CAI_BaseActor`'s branch first, then `CAI_BaseNPC`'s own.
-
-/** `CAI_BaseHumanoid::vfunc277` (`0x1025e780`), the `SetViewtarget` override: clear bit 0 of
- *  `m_fLatchedPositions` (`+0x5f4c`), then chain `CBaseFlex::SetViewtarget` (`0x100b5b00`, slot 277).
- *  Retail name unrecovered for the OVERRIDE — slot 277 is `SetViewtarget` and that name belongs to
- *  the generated virtual, which carries the base body, not this one. */
-void FUN_1025e780(const FVector& ViewTarget);
-
-/** `CAI_BaseActor::HasActiveLookTargets` (`0x1025f1a0`, `CAI_BaseHumanoid#586`) — the look-queue
- *  count at `+0x5f94` is non-zero. NAMED from `signatures.md`'s `CAI_BaseActor` row for slot 586.
- *  The queue itself is family Facing's `LookTargets`; this asks it rather than standing a second. */
-bool HasActiveLookTargets() const;
-
-/** `CAI_BaseActor::ValidHeadTarget(const Vector&)` (`0x1025ea00`, `CAI_BaseHumanoid#588`). NAMED
- *  from `signatures.md`. NOT `Slot588`: the Troika line's slot 588 is `0x10293e50`, a different
- *  table and a different body, and the generated `Slot588()` takes no argument.
- *
- *  SPELLED `…BaseActor` because family **Lifecycle** already declares `ValidHeadTarget(const
- *  FVector&)` as a SEAM for `thunk_FUN_10325da0` (vtable `+0x930`), which is `CBaseCombatCharacter`'s
- *  own 149-byte body and not this one. Two classes, two bodies, one retail name — the port cannot
- *  give both the bare name and this is the one with an address behind it. */
-bool ValidHeadTargetBaseActor(const FVector& LookTargetPosCm) const;
-
-/** `CAI_BaseActor::SelectRandomExpressionForState(NPC_STATE)` (`0x10260540`,
- *  `CAI_BaseHumanoid#589`). NAMED from `signatures.md`. Answers a POINTER so retail's three answers
- *  stay distinct: null (the state authors none), an empty string (`DAT_106b8540`, the `string_t`
- *  null sentinel) and the authored expression. */
-const FString* SelectRandomExpressionForState(int32 NpcState) const;
-
-/** `CAI_BaseActor::SetExpression(const char*)` (`0x10260670`). NAMED: the body is the SDK 2013
- *  function arm for arm — the empty/null clear, the `stricmp` no-op, then
- *  `InstancedScriptedScene` into `m_hExpressionSceneEnt` and the pooled string only on a live
- *  handle. */
-void SetExpression(const FString& SceneName);
-
-/** `CAI_BaseActor::ClearExpression` (`0x10260750`). NAMED by the same twin. Retail's 11-byte body is
- *  ONLY `m_iszExpressionScene = NULL`; SDK 2013's also stops the scene, and retail's does not. */
-void ClearExpression();
+// `CAI_BaseNPC`'s own.
 
 /** `CAI_BaseNPC::GetNavTargetEntity` (`0x102729d0`). NAMED: the SDK twin's two arms
  *  (`GOALTYPE_ENEMY` -> `GetEnemy()`, `GOALTYPE_TARGETENT` -> `GetTarget()`) are retail's modes 2

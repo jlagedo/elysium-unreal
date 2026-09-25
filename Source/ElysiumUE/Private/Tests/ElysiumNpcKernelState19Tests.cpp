@@ -175,18 +175,17 @@ bool FElysiumNpcKernelState19FifteenByteTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Guard;
 	
+	// Retail's twelve fifteen-byte bodies, less `CNPC_VBatSwarm`, `CNPC_VCombatman`,
+	// `CNPC_VMoleman` and `CNPC_VSheriffSwarm`, which have no instance and no port arm (0019
+	// story 5 step 1).
 	struct FRow { const TCHAR* Cls; const TCHAR* Addr; int32 Tag; };
 	const FRow Rows[] = {
 		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361060"), 6 },
 		{ TEXT("CNPC_VBach"),         TEXT("0x10363b40"), 0xe },
-		{ TEXT("CNPC_VBatSwarm"),     TEXT("0x103674a0"), 7 },
 		{ TEXT("CNPC_VChangBros"),    TEXT("0x1036b500"), 0xa },
-		{ TEXT("CNPC_VCombatman"),    TEXT("0x10370320"), 0xb },
 		{ TEXT("CNPC_VGargoyle"),     TEXT("0x10378b60"), 0x11 },
 		{ TEXT("CNPC_VHengeyokai"),   TEXT("0x10380100"), 0x13 },
-		{ TEXT("CNPC_VMoleman"),      TEXT("0x1039fe10"), 0x1b },
 		{ TEXT("CNPC_VSheriffMan"),   TEXT("0x103aeac0"), 0x21 },
-		{ TEXT("CNPC_VSheriffSwarm"), TEXT("0x103b2450"), 0x22 },
 		{ TEXT("CNPC_VHunter"),       TEXT("0x10388ab0"), 0x17 },
 		{ TEXT("CNPC_VYukie"),        TEXT("0x103dd780"), 0x2a },
 	};

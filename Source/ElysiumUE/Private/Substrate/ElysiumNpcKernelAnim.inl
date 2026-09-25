@@ -402,12 +402,6 @@ FString ScriptCustomMoveSequenceName() const;
 // than respelt; what this adds is the reset arm and the translation.
 void SetIdealActivity(int32 Activity);
 
-// `CAI_BaseHumanoid::vfunc250` `0x1025e4e0` — slot 250's humanoid branch. The slot itself is
-// `CBaseAnimating`'s (`0x10098bb0`) and stays the generator's stub. Clears the two cached
-// head/eye-direction bits family Facing declared (`HumanoidHeadCacheBits`, +0x5f4c) so the next
-// read recomputes, then chains to the base.
-float StudioFrameAdvanceHumanoid(float Interval);
-
 // `CNPC_VCamera::HandleAnimEvent` `0x10368ec0` — slot 259's camera branch, an EMPTY body that
 // swallows every animation event. `FElysiumNpc::HandleAnimEvent` reads this before its footstep arm.
 // True for the two census classes that carry the empty override.

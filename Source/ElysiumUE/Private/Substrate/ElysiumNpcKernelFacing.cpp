@@ -3,7 +3,6 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
-#include "ElysiumRng.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -130,7 +129,6 @@ namespace
 
 	constexpr FElysiumFacingActivityRow GOnChangeActivity[] =
 	{
-		{ TEXT("CNPC_Crow"),          TEXT("0x10357b30") },
 		{ TEXT("CNPC_VMingXiao"),     TEXT("0x103947b0") },
 		{ TEXT("CNPC_VSabbatGunman"), TEXT("0x103a56f0") },
 		{ TEXT("CNPC_VWerewolf"),     TEXT("0x103d5f60") },
@@ -384,38 +382,6 @@ void FElysiumNpc::SetHeadDirection(FVector& LookTarget, float Interval)
 	// yaw. Reproduced as the asymmetry it is.
 }
 
-void FElysiumNpc::SetHeadDirectionHumanoid(const FVector& LookTarget, float Interval)
-{
-	// `CAI_BaseHumanoid::SetHeadDirection` `0x1025eaf0`, slot 537's branch override — 972 bytes, and
-	// a different mechanism from the base above: pose parameters rather than bone controllers.
-	//
-	// Recovered shape, in order:
-	//   * the same `CapabilitiesGet() & bits_CAP_TURN_HEAD` gate (+0x804);
-	//   * `GetAttachment( "head", &pos, &ang )` (`0x105c8ed8` is the attachment name);
-	//   * head yaw:   `AngleDiff( VecToYaw(target - pos), ang.y ) + GetPoseParameter(+0x5fe0)`,
-	//                 written back through `SetPoseParameter(+0x5fe0, …)` (vtable +0x564);
-	//   * head pitch: the same with the attachment's own pitch folded in, onto +0x5fe4;
-	//   * chest yaw:  the third of the triple, onto +0x5fe8;
-	//   * ten more paired `GetPoseParameter`/`SetPoseParameter` copies, from the source indices at
-	//     +0x5fec..+0x6010 onto the destination indices at +0x5fb8..+0x5fdc;
-	//   * `FlushBoneCache()`, then `m_flags(+0x5f4c) &= ~0x3` — the two cache bits
-	//     `RefreshHumanoidHeadCache` sets, dropped so the next read re-derives.
-	//
-	// **SEAM**: the pose-parameter indices at +0x5fb8..+0x6010 are `CAI_BaseHumanoid`'s own words,
-	// which no port member carries, and reaching the "head" attachment needs the animating tier's
-	// bone cache, which this substrate does not expose to the kernel. Past the gate the body
-	// therefore drops the cache bits — the one effect it can reproduce — and writes nothing.
-	// Nothing a spawned `npc_*` dispatches through reaches it: slot 537 on the Troika line is the
-	// base body above.
-	if ((CapabilityWord & 0x1000) == 0)
-	{
-		return;
-	}
-	(void)LookTarget;
-	(void)Interval;
-	HumanoidHeadCacheBits &= ~static_cast<uint32>(0x3);
-}
-
 // --- Slots 372/373 `EyeDirection2D` / `EyeDirection3D` -------------------------------------------
 
 FVector FElysiumNpc::EyeDirection2D()
@@ -430,75 +396,6 @@ FVector FElysiumNpc::EyeDirection3D()
 {
 	// `0x1026b240`, 20 bytes: the same forward through +0x5cc, slot 371 — `HeadDirection3D`.
 	return HeadDirection3D();
-}
-
-// --- `CAI_BaseHumanoid`'s cached head/eye basis --------------------------------------------------
-
-void FElysiumNpc::RefreshHumanoidHeadCache() const
-{
-	// `0x1025e7b0`, the refresh both cached readers call first. Two independent latches in
-	// +0x5f4c:
-	//
-	//   bit 0x2 — the head ORIGIN and the head DIRECTION. `GetAttachment("head", &origin, &ang)`;
-	//             on success the direction is `AngleVectors(ang)`, on failure the origin falls back
-	//             to `EyePosition()` (`0x100b4b40`) and the direction to `AngleVectors(GetAngles())`
-	//             (vtable +0x374). Either way `0x10139550` writes the unit forward at +0x5f68.
-	//   bit 0x1 — the EYE direction: `EyePosition()` (vtable +0x458) minus the cached head origin,
-	//             normalized, at +0x5f5c.
-	//
-	// **SEAM**: the "head" attachment is the animating tier's, which the kernel cannot reach here,
-	// so the refresh takes retail's own no-attachment arm every time — the head origin is the eye
-	// point and the head direction is the body's forward. The eye direction is then the zero vector,
-	// because the eye point and the head origin coincide on that arm; retail normalizes it anyway,
-	// which is why nothing here guards the degenerate case either.
-	if ((HumanoidHeadCacheBits & 0x2) == 0)
-	{
-		HumanoidHeadCacheBits |= 0x2;
-		HumanoidHeadDirection = RetailForward(Angles);
-		HumanoidHeadCacheBits &= ~static_cast<uint32>(0x1);
-	}
-	if ((HumanoidHeadCacheBits & 0x1) == 0)
-	{
-		HumanoidHeadCacheBits |= 0x1;
-		// `EyePosition() - m_vHeadOrigin`, normalized. On the no-attachment arm above the head
-		// origin IS the eye point, so the difference is the zero vector and the normalize leaves it
-		// there — which is the recovered answer, not a placeholder.
-		HumanoidEyeDirection = FVector::ZeroVector;
-	}
-}
-
-FVector FElysiumNpc::HeadDirection3DHumanoid() const
-{
-	// `CAI_BaseHumanoid#371` `0x1025f160`: refresh, then return the cached vector at
-	// +0x5f68/+0x5f6c/+0x5f70.
-	RefreshHumanoidHeadCache();
-	return HumanoidHeadDirection;
-}
-
-FVector FElysiumNpc::HeadDirection2DHumanoid() const
-{
-	// `CAI_BaseHumanoid#370` `0x1025f0f0`: call `HeadDirection3D` through +0x5cc, zero Z, normalize
-	// (`0x10137220`). The 2-D form is the 3-D one flattened, the same pattern `EyeDirection2D` and
-	// `BodyDirection2D` take.
-	FVector Flat = HeadDirection3DHumanoid();
-	Flat.Z = 0.0;
-	return Flat.GetSafeNormal();
-}
-
-FVector FElysiumNpc::EyeDirection3DHumanoid() const
-{
-	// `CAI_BaseHumanoid#373` `0x1025f0b0`: refresh, then the cached vector at +0x5f5c/+0x5f60/
-	// +0x5f64.
-	RefreshHumanoidHeadCache();
-	return HumanoidEyeDirection;
-}
-
-FVector FElysiumNpc::EyeDirection2DHumanoid() const
-{
-	// `CAI_BaseHumanoid#372` `0x1025f040`: `EyeDirection3D` through +0x5d4, Z zeroed, normalized.
-	FVector Flat = EyeDirection3DHumanoid();
-	Flat.Z = 0.0;
-	return Flat.GetSafeNormal();
 }
 
 bool FElysiumNpc::HeadDirectionIsBodyDirection() const
@@ -534,69 +431,7 @@ bool FElysiumNpc::RetailHeadDirection(bool b2D, FVector& OutDirection) const
 			: const_cast<FElysiumNpc*>(this)->BodyDirection3D();
 		return true;
 	}
-	if (IsRetailClass(TEXT("CAI_BaseHumanoid")))
-	{
-		OutDirection = b2D ? HeadDirection2DHumanoid() : HeadDirection3DHumanoid();
-		return true;
-	}
 	return false;
-}
-
-// --- Slots 535/536 `AddLookTarget`, `CAI_BaseHumanoid`'s list ------------------------------------
-
-void FElysiumNpc::AddLookTargetHumanoid(FElysiumEntity* LookAt, int32 Priority, float Duration,
-	float Influence)
-{
-	// `CAI_BaseHumanoid::vfunc536` `0x1025f760`, 293 bytes. Remove any record already holding this
-	// entity — resolving each stored handle and comparing the POINTER, so a stale handle never
-	// matches — by shifting the tail down 0x24 bytes per record and decrementing the count; then
-	// grow by one and fill the new tail record.
-	const FElysiumEntityHandle LookAtHandle =
-		LookAt != nullptr ? LookAt->Handle : FElysiumEntityHandle();
-	for (int32 Index = 0; Index < LookTargets.Num(); ++Index)
-	{
-		const FElysiumEntity* Stored =
-			World != nullptr ? World->Resolve(LookTargets[Index].Target) : nullptr;
-		if (Stored == LookAt)
-		{
-			LookTargets.RemoveAt(Index);
-			break;   // retail breaks on the first match, so a duplicate would survive
-		}
-	}
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	FLookTargetRecord Record;
-	Record.Kind = 0;                       // +0x00
-	Record.Target = LookAtHandle;          // +0x04, `0xffffffff` for a null entity
-	Record.Priority = Priority;            // +0x20
-	Record.StartTime = Now;                // +0x14, gpGlobals->curtime
-	Record.EndTime = Now + Duration;       // +0x18
-	Record.Rate = Influence / Duration;    // +0x1c — retail divides unguarded
-	LookTargets.Add(Record);
-}
-
-void FElysiumNpc::AddLookTargetHumanoid(const FVector& Position, int32 Priority, float Duration,
-	float Influence)
-{
-	// `CAI_BaseHumanoid::vfunc535` `0x1025f8e0`, 275 bytes. The same list management, matching an
-	// existing record by its stored POSITION (all three components, by exact float equality) instead
-	// of by entity, and writing kind 1 with the position at +0x08.
-	for (int32 Index = 0; Index < LookTargets.Num(); ++Index)
-	{
-		if (LookTargets[Index].Position == Position)
-		{
-			LookTargets.RemoveAt(Index);
-			break;
-		}
-	}
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	FLookTargetRecord Record;
-	Record.Kind = 1;
-	Record.Position = Position;
-	Record.Priority = Priority;
-	Record.StartTime = Now;
-	Record.EndTime = Now + Duration;
-	Record.Rate = Influence / Duration;
-	LookTargets.Add(Record);
 }
 
 // --- Slot 572 `SetTurnActivity` -----------------------------------------------------------------
@@ -780,8 +615,9 @@ FElysiumNpc::FMingXiaoPlayback FElysiumNpc::MingXiaoPlaybackScalar(int32 Activit
 
 void FElysiumNpc::OnChangeActivitySpecies(int32 Activity)
 {
-	// Slot 465's four species overrides, dispatched through the census rather than through a name
-	// compare. `CAI_BaseNPCTroika::OnChangeActivity` `0x10295a60` — the body the generator emits on
+	// Slot 465's species overrides, dispatched through the census rather than through a name
+	// compare. `CNPC_Crow#465` (`0x10357b30`) carries no arm: no map stands that class.
+	// `CAI_BaseNPCTroika::OnChangeActivity` `0x10295a60` — the body the generator emits on
 	// `FElysiumNpc::OnChangeActivity` — is `return;`, and every arm here ends by chaining to it, so
 	// the base's emptiness IS the shared algorithm.
 	const FElysiumNpcClassSlot* Row = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 465);
@@ -789,7 +625,7 @@ void FElysiumNpc::OnChangeActivitySpecies(int32 Activity)
 	if (Row != nullptr && Row->Address != nullptr)
 	{
 		// The table is the gate as well as the record: an override this family did not recover is
-		// not one of these four, and it takes the base chain rather than a guess.
+		// not one of these, and it takes the base chain rather than a guess.
 		for (const FElysiumFacingActivityRow& Known : GOnChangeActivity)
 		{
 			if (FCString::Strcmp(Row->Address, Known.Body465) == 0)
@@ -805,22 +641,7 @@ void FElysiumNpc::OnChangeActivitySpecies(int32 Activity)
 		return;
 	}
 
-	if (FCString::Strcmp(BodyAddress, TEXT("0x10357b30")) == 0)
-	{
-		// `CNPC_Crow::OnChangeActivity`, 40 bytes: one activity, one write.
-		//     if (act == 0x22) m_flCycle = RandomFloat( 0.0f, 0.75f );
-		// `0x3f400000` is the 0.75 in the listing and `DAT_1070b244` is `VEngineRandom001`. A crow
-		// entering activity 0x22 starts its clip at a random phase so a flock does not beat in step.
-		// **SEAM**: the kernel reaches no `m_flCycle` here — the animating tier owns the phase — so
-		// the draw is taken (the stream must advance identically) and discarded. Named decision: the
-		// draw goes on `EElysiumRngStream::Ambient`, the stream this runtime's other idle-phase
-		// picks use.
-		if (Activity == 0x22)
-		{
-			ElysiumRng::Stream(EElysiumRngStream::Ambient).FRandRange(0.f, 0.75f);
-		}
-	}
-	else if (FCString::Strcmp(BodyAddress, TEXT("0x103947b0")) == 0)
+	if (FCString::Strcmp(BodyAddress, TEXT("0x103947b0")) == 0)
 	{
 		// `CNPC_VMingXiao::OnChangeActivity`, 303 bytes. **SEAM** on all three inputs: the gate
 		// `0x10398870`, the tuning record `0x101e8da0(0x10739d08)` and the tentacle count (+0x670c)

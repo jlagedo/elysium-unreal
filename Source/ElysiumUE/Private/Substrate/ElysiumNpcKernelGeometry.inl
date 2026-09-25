@@ -10,8 +10,8 @@
 // `Tests/ElysiumNpcKernelGeometryTests.cpp`. One file per family rather than 915 declarations
 // appended to an already-oversized header: the family boundary is what this story ports by.
 //
-// The family is **where a body sits and how big it is**: the six eye/anchor points (slots 193, 194,
-// 195, 197, 533 and the `CNPC_Crow` override of 192), the hull-bit query (slot 337), `SetSize`
+// The family is **where a body sits and how big it is**: the eye/anchor points (slots 193, 194,
+// 195, 197, 533 and the species-dispatched 192), the hull-bit query (slot 337), `SetSize`
 // (slot 213), and the four bodies that push one body out of another —
 // `CAI_BaseNPCTroika::ResolveStandingOnHead`, `CNPC_VAsianVampire::StandingOnPlayer`,
 // `CNPC_VWerewolf::UpdateFakeHull` and `CNPC_VMingXiao`'s two severed-tentacle scatter notices.
@@ -78,17 +78,18 @@ FElysiumEntityHandle TentacleMingXiao;
  *  2 is a fact of this family's rows. */
 int32 TentaclePhase = 0;
 
-// --- Slot 193 `EyePosition`, and its two species overrides ---------------------------------------
+// --- Slot 193 `EyePosition`, and its species override --------------------------------------------
 
-/** `CBaseEntity::EyePosition` (`0x100b4b40`, slot 193) with the family's two species overrides in
- *  front of it. The Troika-line body is `GetAbsOrigin() + m_vecViewOffset`, which this chain
- *  already answers through `FElysiumCombatCharacter::EyePosition()`; what lands here is the
- *  dispatch and the two overrides:
+/** `CBaseEntity::EyePosition` (`0x100b4b40`, slot 193) with the family's species override in front
+ *  of it. The Troika-line body is `GetAbsOrigin() + m_vecViewOffset`, which this chain already
+ *  answers through `FElysiumCombatCharacter::EyePosition()`; what lands here is the dispatch and
+ *  the override:
  *
  *    * `CPayphone::vfunc193` (`0x101aae60`) looks up the bone `"Phone_bone_01"` and answers its
  *      world position, falling back to the base body when `LookupBone` answers -1.
- *    * `CAI_BaseHumanoid::vfunc193` (`0x1025e8e0`) refreshes a lazily-invalidated cache
- *      (`0x1025e7b0`) and answers the cached vector at `+0x5f50`/`+0x5f54`/`+0x5f58`.
+ *
+ *  `CAI_BaseHumanoid::vfunc193` (`0x1025e8e0`) was deleted by 0019 story 5 step 1: the class has no
+ *  instance (`population.md`); its census row remains.
  *
  *  CENTIMETRES, because every caller of `EyePosition()` in this runtime is. */
 virtual FVector EyePosition() const override;
@@ -112,16 +113,6 @@ static const FEyePositionSpecies* EyePositionSpeciesOf(const TCHAR* InRetailClas
  *  hull where it was. `BoneWorldPositionCalls` is what a test reads to prove the seam was asked. */
 bool BoneWorldPosition(const TCHAR* BoneName, FVector& OutPositionCm) const;
 mutable int32 BoneWorldPositionCalls = 0;
-
-/** SEAM for `0x1025e7b0`, the cache refresh `CAI_BaseHumanoid::vfunc193` runs in front of its read:
- *  `GetAttachment01(DAT_105c8ed8, &m_vecHumanoidEye, &ang)` — a NAMED attachment whose string the
- *  decompiler folded away and which is therefore **unrecovered** — with `CBaseEntity::EyePosition()`
- *  plus `GetAngles()` as the attachment-missing fallback, then a second lazy half that caches the
- *  vector from the eye to slot 278 (`+0x458`). Answers false; the humanoid arm then answers the
- *  fallback the retail body itself answers when the attachment is missing, which is the base
- *  `EyePosition()`. `+0x5f50..+0x5f58` has no shape-map row — it is a `CAI_BaseHumanoid` word and
- *  29b's band is `CAI_BaseNPC`'s — so nothing is cached here either. */
-bool HumanoidEyeCache(FVector& OutPositionCm) const;
 
 // --- Slot 194 / 195, the two angle aliases -------------------------------------------------------
 //
@@ -148,18 +139,15 @@ static FVector BodyTargetBlend(const FVector& AnchorCm, const FVector& EyeCm, bo
  *  through a SECOND slot-192 dispatch, which is why the body calls slot 192 twice. */
 static FVector BodyTargetAnchor(const FVector& CentreCm, const FVector& OriginCm);
 
-// --- Slot 192 `WorldSpaceCenter`, `CNPC_Crow`'s override -----------------------------------------
+// --- Slot 192 `WorldSpaceCenter`, species-dispatched ---------------------------------------------
 
-/** `CNPC_Crow::vfunc192` (`0x10357760`) — three chained dispatches of slot 220 `GetOrigin()`, whose
- *  X is taken from the second call, Y from the first and Z from the third plus `_DAT_1046bac0`
- *  (6.0 Source units). All three answer the same vector, so the whole of it is
- *  `GetOrigin() + (0, 0, 6)`.
+/** Slot 192 as the species line dispatches it. Its only census override, `CNPC_Crow::vfunc192`
+ *  (`0x10357760`), is on a class no map stands and carries no arm, so every class answers the
+ *  Troika-line body (`0x10027160`).
  *
- *  **This is NOT the slot definition.** Slot 192's Troika-line body (`0x10027160`) is another
- *  story's row and the generator already emits `FElysiumNpc::WorldSpaceCenter()` in
- *  `ElysiumNpcKernelSlots.cpp`, so defining it here would be a duplicate symbol. The Crow override
- *  lands as a named method that walks the census chain itself and answers the base value for every
- *  other class. */
+ *  **This is NOT the slot definition.** Slot 192's Troika-line body is another story's row and the
+ *  generator already emits `FElysiumNpc::WorldSpaceCenter()` in `ElysiumNpcKernelSlots.cpp`, so
+ *  defining it here would be a duplicate symbol. */
 FVector SpeciesWorldSpaceCenter() const;
 
 // --- Slot 213 `SetSize` --------------------------------------------------------------------------

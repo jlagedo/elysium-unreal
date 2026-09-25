@@ -1,44 +1,38 @@
-# Story 5 — step 0 accepted
+# Story 5 — step 1 accepted
 
-**Step 0 passed its acceptance gate on 2026-09-24. Step 1 has not started.**
-`uv run elysium research kernel_migration --check step0` exits 0. Evidence is pinned in
-[acceptance.json](acceptance.json); the complete report is
-[step 0, items 3–6](packets/step-0-inventory-and-rehearsals.md).
+**Step 1 passed its acceptance gate on 2026-09-25. Step 2 has not started.**
+`uv run elysium research kernel_migration --check step1` exits 0 (it re-verifies the step-0
+receipt against the accepted tree `aa1c3c86`). Evidence is pinned in
+[acceptance-step1.json](acceptance-step1.json); step 0's stays in [acceptance.json](acceptance.json).
 
-Checkout: `E:/dev/elysium-unreal`, branch `0019-5-class-tree`. The execution baseline was
-`cb115e31cc8ec6b985096349398ad910d8395fec`, with the original seven documentation edits preserved
-at index tree `4c981b5876251ff40288d4af2b78fbc8cc6bf705`. At the owner's request, the step-0 commit
-includes those reviewed-plan prerequisites and the accepted preflight work. No reset/stash/clean occurred.
-The runtime integration diff is still only the regenerated hull label and census digest.
+Checkout: `E:/dev/elysium-unreal`, branch `0019-5-class-tree`, base `aa1c3c86` (step 0 accepted).
+Manifest phase 1, revision `step-1-dead-species-deletion`; the verdicts pin is refreshed and the
+step-0 pin kept under `history.step0`.
 
-Completed under the reviewed plan's step 0:
+Completed:
 
-- Items 1–2: 74 pinned factory mappings; 56 live / 21 retained dead classes; nine original census
-  differences confirmed. Production survey/registration activation remains step 2.
-- Items 3–5: source/field/call/fixture/compatibility inventory, thirteen reviewed exceptional
-  identities, 67 field decisions, preserved rule inventory and explicit unresolved/protected rows.
-- Item 6: composed Cop, Rat, Zombie, base/director and maker-boundary rehearsals. Their code is
-  isolated outside the integration branch; exact-precondition replay and repeat-refusal checks pass.
-- Shared reader, step-0 checker, regression comparison and the first source-replay operations.
+- [Step 0](packets/step-0-inventory-and-rehearsals.md): manifest, factory identities, inventory,
+  rehearsals.
+- [Step 1, packet 1a](packets/1a-deletion-manifest.md): deletion record, step-1 decisions,
+  historical `--check step0`, `--check step1` with a live-definition guard.
+- [Step 1, packets 1b–1g](packets/1b-1g-deletion.md): the dead species subset deleted, overlay and
+  generated outputs regenerated, full gate. Record: [deletions-step1.tsv](deletions-step1.tsv).
 
-Validation: **five generation checks, 92 Python tests, a representative build and ten focused
-rehearsal tests passed**. The refreshed integration build and complete suites passed:
-**1,268 Substrate + 14 Content + 1 PlayerWorld**, with zero report differences and no expectations.
-A final 33-test preflight run covers the last scanner/decision changes. Existing SyntaxWarnings
-and third-party compiler deprecations are retained in the logs; no failing test was waived.
+Validation: build green; **1,255 Substrate + 14 Content + 1 PlayerWorld**, zero failures;
+`test_delta` against step 0's final gate passes with the 29 reviewed expectations in
+[expectations/step-1.json](expectations/step-1.json); five generator checks and 100 Python tests
+pass. Reports: `E:/elysium-work/research/npc-kernel/story-5/step1/gate/`.
 
-Generated evidence root: **`E:/elysium-work/research/npc-kernel/story-5/`**.
-`final-gate/` holds final commands/reports, `inventory-final.json` the detailed inventory,
-`rehearsals/` the composed patches/receipts, and `rehearsal-gate/` the compiled probe evidence.
-`checkpoint-final/` records the final diff, file backups/hashes and exact preserved index.
-The rehearsal checkout and local roots/asset links are recorded in `rehearsal-setup.json`.
+Carried forward (see [decisions-step1.json](decisions-step1.json)):
 
-Remaining questions are explicitly retained in [decisions.json](decisions.json): unresolved future
-body joins, shared live targets, exact assertion dispositions for deletion, missing behavior
-producers, and the later folds' participation/lifecycle contracts. They block the affected future
-transformation; they are not hidden by a green compilation or a smaller stub count.
+- Generated activity-table and hull-table rows of dead classes are retained census until step 11.
+- Seven live dispatchers still lead-cite a removed dead address, so the inventory lists them as
+  step-1-scope candidates; they are live and not deletion candidates.
+- `CharTemplateModelName` is a retained seam: the port's `Spawn` does not yet make retail's
+  `FUN_10207e60` call from `CAI_BaseNPCTroika::Spawn` `0x10298d30` (a pre-existing unported rule).
+- For step 2: `ClassHolstersOnState` lists `npc_ProneDialog`, but retail's classnames are
+  `npc_VProneDialog` and `npc_VMercurio`.
 
-**Stop here for this request.** When step 1 is separately requested, read the reviewed plan and the
-scoped no-instance deletion review first. Protect shared definitions; review exact assertion
-coverage before deleting. Keep all dead census records. Do not tick story 5 or tracker 06b until
-step 11; no later story-5 implementation step has been performed in this integration checkout.
+**Next:** step 2 (species shells and factory correction) when separately requested. Read the
+reviewed plan's step 2, `factories.tsv`, and the compatibility inventory in
+`step1/inventory-step1.json` first. Do not tick story 5 or tracker 06b until step 11.

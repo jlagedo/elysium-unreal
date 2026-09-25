@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29c-1, family **Squad**. The assertions come from the decompiled C of the 74 rows, not from
@@ -26,7 +27,7 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelSquadFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // -------------------------------------------------------------------------------------------------
-// Slot 546: the 61-row species table, every row by name.
+// Slot 546: the species table, every row by name.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadSlotNameTableTest,
@@ -35,11 +36,13 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FSquadSlotSpecies* Rows = FElysiumNpc::SquadSlotSpeciesRows(Count);
-	TestEqual(TEXT("the table carries the Troika line plus 60 census override classes"), Count, 61);
+	// Retail has 60 census override classes; the 16 of them with no instance (`population.md`
+	// § "NPC classes with no instance") carry no row.
+	TestEqual(TEXT("the table carries the Troika line plus 44 census override classes"), Count, 45);
 
 	// Every row, by name: the class resolves in the census, the census says the same body fills
 	// slot 546 for it, and the recovered id space translates NOTHING — the local range is the 9999
-	// "empty" sentinel on all 56 species, so every id answers `<<null>>`.
+	// "empty" sentinel on all 44 species, so every id answers `<<null>>`.
 	TSet<FString> Bodies;
 	TSet<FString> IdSpaces;
 	int32 SpeciesRows = 0;
@@ -85,20 +88,21 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 				FElysiumNpc::SquadSlotLocalToGlobal(&Row, 0))),
 			FString(TEXT("<<null>>")));
 	}
-	TestEqual(TEXT("60 species rows"), SpeciesRows, 60);
-	TestEqual(TEXT("across 57 distinct retail bodies (56 species + the Troika line)"), Bodies.Num(),
-		57);
+	TestEqual(TEXT("44 species rows"), SpeciesRows, 44);
+	TestEqual(TEXT("across 41 distinct retail bodies (40 species + the Troika line)"), Bodies.Num(),
+		41);
 	// `CNPC_ProneDialog`/`CNPC_VHumanCombatant`, `CNPC_VCamera`/`CNPC_VCameraSecurity`,
 	// `CNPC_VRat`/`CNPC_VScurrying` and `CNPC_VPlayerController`/`CNPC_VVampire` each share a body,
 	// and a shared body shares its id space too.
-	TestEqual(TEXT("and 56 distinct species id spaces"), IdSpaces.Num(), 56);
+	TestEqual(TEXT("and 40 distinct species id spaces"), IdSpaces.Num(), 40);
 
-	// The join the other way: every census override of slot 546 has a row here, with the same body.
+	// The join the other way: every census override of slot 546 on a class with an instance has a
+	// row here, with the same body. The classes with no instance keep their census rows only.
 	int32 CensusOverrides = 0;
 	bool bEveryOverrideHasARow = true;
 	for (const FElysiumNpcClassSlot& Override : ElysiumNpcKernelShape::Overrides())
 	{
-		if (Override.Slot != 546)
+		if (Override.Slot != 546 || ElysiumNpcDeadClasses::Contains(Override.Class))
 		{
 			continue;
 		}
@@ -112,8 +116,14 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 				Override.Class, Override.Address));
 		}
 	}
-	TestEqual(TEXT("the census records 60 slot-546 overrides"), CensusOverrides, 60);
+	TestEqual(TEXT("the census records 44 slot-546 overrides on classes with an instance"),
+		CensusOverrides, 44);
 	TestTrue(TEXT("and every one of them is a row of this family's table"), bEveryOverrideHasARow);
+	for (const TCHAR* Dead : ElysiumNpcDeadClasses::Names)
+	{
+		TestNull(*FString::Printf(TEXT("%s, a class with no instance, has no row"), Dead),
+			FElysiumNpc::SquadSlotSpeciesOf(Dead));
+	}
 
 	TestNull(TEXT("a class outside the table has no row"),
 		FElysiumNpc::SquadSlotSpeciesOf(TEXT("CNotAClass")));

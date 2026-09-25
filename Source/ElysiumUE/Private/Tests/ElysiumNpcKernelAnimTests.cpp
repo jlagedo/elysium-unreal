@@ -733,12 +733,6 @@ bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("by name"), Guard->PoseParameterWrites.Last().Name, FString(TEXT("aim_yaw")));
 	TestEqual(TEXT("and value"), Guard->PoseParameterWrites.Last().Value, 0.25f);
 
-	// `StudioFrameAdvanceHumanoid` `0x1025e4e0` — clear bits 0 and 1 of +0x5f4c, keep the rest.
-	Guard->HumanoidHeadCacheBits = 0xFu;
-	Guard->StudioFrameAdvanceHumanoid(0.1f);
-	TestEqual(TEXT("the humanoid frame advance invalidates only the two cache bits"),
-		static_cast<int32>(Guard->HumanoidHeadCacheBits), 0xC);
-
 	// `0x102c0aa0` on `FElysiumNpcDialogue` — the two arms and the STRICT comparison.
 	Guard->TalkingUntil = 10.0;
 	TestTrue(TEXT("still before the talk-end stamp is still talking"),

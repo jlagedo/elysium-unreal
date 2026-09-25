@@ -575,7 +575,6 @@ namespace
 
 	const FSaveRestore10Arm GSaveArms[] =
 	{
-		{ TEXT("0x1034e320"), TEXT("CScriptedTarget"),        &FElysiumNpc::ScriptedTargetSave },
 		{ TEXT("0x10395f80"), TEXT("CNPC_VMingXiao"),         &FElysiumNpc::MingXiaoSave },
 		{ TEXT("0x1039ed50"), TEXT("CNPC_VMingXiaoTentacle"), &FElysiumNpc::MingXiaoTentacleSave },
 		{ TEXT("0x103c2810"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawSave },
@@ -583,7 +582,6 @@ namespace
 
 	const FSaveRestore10Arm GRestoreArms[] =
 	{
-		{ TEXT("0x1034e370"), TEXT("CScriptedTarget"),        &FElysiumNpc::ScriptedTargetRestore },
 		{ TEXT("0x10396000"), TEXT("CNPC_VMingXiao"),         &FElysiumNpc::MingXiaoRestore },
 		{ TEXT("0x1039eda0"), TEXT("CNPC_VMingXiaoTentacle"), &FElysiumNpc::MingXiaoTentacleRestore },
 		{ TEXT("0x103c2860"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawRestore },
@@ -691,19 +689,6 @@ int32 FElysiumNpc::TzimisceHeadClawSave(void* Archive)
 	return Result;
 }
 
-int32 FElysiumNpc::ScriptedTargetSave(void* Archive)
-{
-	// `CScriptedTarget::Save` `0x1034e320` — `m_flPauseDoneTime` (`+0x5f64`) at mode 3 around
-	// **`CAI_BaseNPC::Save`**, not the Troika body: the decompiled C's chain is
-	// `CAI_BaseNPC::thunk_FUN_1027bc60`. `CScriptedTarget` is a `CAI_BaseNPC` in the census, so the
-	// Troika half — the eleven stamps, the nine sounds and the pedestrian-link block — never runs
-	// for one.
-	SaveStampEncode(ScriptedTargetPauseDoneTime, ESaveStampMode::Zero);
-	const int32 Result = BaseSave(Archive);
-	SaveStampDecode(ScriptedTargetPauseDoneTime, ESaveStampMode::Zero);
-	return Result;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 127 `Restore`.
 // -------------------------------------------------------------------------------------------------
@@ -808,15 +793,6 @@ int32 FElysiumNpc::VampireBossRestore(void* Archive)
 	VampireBossMonsterModelName.Reset();   // m_pMonsterModelName +0x6680 := 0
 	ClearBodyEmitterNames();               // 0x103c6eb0, family Damage's
 	VampireBossMonsterClassname = GVampireBossDefaultClassname;   // +0x6694
-	return Result;
-}
-
-int32 FElysiumNpc::ScriptedTargetRestore(void* Archive)
-{
-	// `CScriptedTarget::Restore` `0x1034e370` — `CAI_BaseNPC::Restore` and ITS answer, then one
-	// mode-3 decode on `m_flPauseDoneTime`. Nothing else is read or written.
-	const int32 Result = RestoreExtendedHeader(Archive);
-	SaveStampDecode(ScriptedTargetPauseDoneTime, ESaveStampMode::Zero);
 	return Result;
 }
 

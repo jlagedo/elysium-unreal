@@ -56,12 +56,10 @@ namespace
 	// --- The census addresses the two slot methods dispatch on -----------------------------------
 	constexpr TCHAR GDebug10Body_BaseText[] = TEXT("0x102767d0");
 	constexpr TCHAR GDebug10Body_TroikaText[] = TEXT("0x1029d4e0");
-	constexpr TCHAR GDebug10Body_CrowText[] = TEXT("0x10358f90");
 	constexpr TCHAR GDebug10Body_HengeyokaiText[] = TEXT("0x10383560");
 	constexpr TCHAR GDebug10Body_NewscasterText[] = TEXT("0x103a1250");
 	constexpr TCHAR GDebug10Body_TzimisceText[] = TEXT("0x103c08d0");
 	constexpr TCHAR GDebug10Body_ZombieText[] = TEXT("0x103e0e80");
-	constexpr TCHAR GDebug10Body_ScriptedTargetText[] = TEXT("0x1034ddf0");
 
 	// --- Retail's `NDebugOverlay` entry points, by name, so a captured line names its call --------
 	constexpr TCHAR GDebug10Box[] = TEXT("NDebugOverlay::Box");
@@ -140,8 +138,6 @@ namespace
 	constexpr TCHAR GDebug10SceneUnknown[] = TEXT("??? scene");          // 0x105d9aac
 
 	// --- The species text bodies ------------------------------------------------------------------
-	constexpr TCHAR GDebug10FmtMorale[] = TEXT("morale: %d");            // 0x10628c84
-	constexpr TCHAR GDebug10FmtCrowEnemy[] = TEXT("enemy (dist): %s (%g)");// 0x10628c68
 	constexpr TCHAR GDebug10FmtTzimisceBody[] = TEXT("Body - %5.1f|%5.1f|%s"); // 0x1065c904
 	constexpr TCHAR GDebug10FmtZombieCond[] = TEXT("Cond: %s\n");        // 0x10665864
 
@@ -187,17 +183,6 @@ namespace
 			return Entity->TargetName;
 		}
 		return Entity->Def != nullptr ? Entity->Def->Classname : FString();
-	}
-
-	// `CBaseEntity::GetClassname()` — the classname alone, which is what `CNPC_Crow#124` prints and
-	// is NOT `GetDebugName`.
-	FString GDebug10Classname(const FElysiumEntity* Entity)
-	{
-		if (Entity == nullptr || Entity->Def == nullptr)
-		{
-			return FString();
-		}
-		return Entity->Def->Classname;
 	}
 
 	// The three-character condition abbreviation `0x1029d4e0` builds for one id: copy three bytes of
@@ -410,23 +395,21 @@ void FElysiumNpc::TraceMessageBare(const TCHAR* Message)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 124 — the dispatcher and the eight arms.
+// Slot 124 — the dispatcher and its arms.
 // -------------------------------------------------------------------------------------------------
 
 int32 FElysiumNpc::DrawDebugTextOverlays()
 {
-	// slot 124. Eight retail bodies fill it across the census and this leaf resolves between them by
-	// the address the census says fills the slot for this NPC's retail class, exactly as story
-	// 29c-1's slot-76 dispatcher does. `CNPC_VCop` has a NULL classname list in the census, so a
-	// spawned `npc_VCop` answers a null `RetailClass()` and lands on the Troika-line body — which is
-	// the recovered answer, not a gap (see `docs/specs/0002-npc-ai/spec.md`, story 29c-1's cleanup).
+	// slot 124. Eight retail bodies fill it across the census; the two on classes no map stands
+	// (`CNPC_Crow` `0x10358f90`, `CScriptedTarget` `0x1034ddf0`) carry no port arm. This leaf
+	// resolves between the rest by the address the census says fills the slot for this NPC's retail
+	// class, exactly as story 29c-1's slot-76 dispatcher does. `CNPC_VCop` has a NULL classname
+	// list in the census, so a spawned `npc_VCop` answers a null `RetailClass()` and lands on the
+	// Troika-line body — which is the recovered answer, not a gap (see
+	// `docs/specs/0002-npc-ai/spec.md`, story 29c-1's cleanup).
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 124);
 	if (SlotBody != nullptr)
 	{
-		if (FCString::Strcmp(SlotBody, GDebug10Body_CrowText) == 0)
-		{
-			return CrowDrawDebugTextOverlays();
-		}
 		if (FCString::Strcmp(SlotBody, GDebug10Body_HengeyokaiText) == 0)
 		{
 			return HengeyokaiDrawDebugTextOverlays();
@@ -442,12 +425,6 @@ int32 FElysiumNpc::DrawDebugTextOverlays()
 		if (FCString::Strcmp(SlotBody, GDebug10Body_ZombieText) == 0)
 		{
 			return ZombieDrawDebugTextOverlays();
-		}
-		if (FCString::Strcmp(SlotBody, GDebug10Body_ScriptedTargetText) == 0)
-		{
-			// `CScriptedTarget#124` (`0x1034ddf0`) is story 29c-1's body, in band 0–4. Dispatched
-			// to rather than re-ported.
-			return ScriptedTargetDrawDebugTextOverlays();
 		}
 	}
 	return TroikaDrawDebugTextOverlays();
@@ -1021,37 +998,8 @@ int32 FElysiumNpc::EmitConditionDump(int32 FirstLine)
 }
 
 // -------------------------------------------------------------------------------------------------
-// The five species arms of slot 124.
+// The species arms of slot 124.
 // -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpc::CrowDrawDebugTextOverlays()
-{
-	// `0x10358f90`, 259 bytes. The one body in the census that chains the BASE (`0x102767d0`) and NOT
-	// the Troika one — a crow never gets the sequence, pose, disposition or condition lines.
-	const int32 Base = BaseDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitText) == 0)
-	{
-		return Base;
-	}
-
-	// `Q_snprintf(buf, 512, "morale: %d", m_nMorale)`.
-	EmitEntityText(Base, GDebug10FmtMorale, FString::Printf(GDebug10FmtMorale, CrowMorale()));
-	int32 Line = Base + 1;
-
-	// Only with an enemy: `"enemy (dist): %s (%g)"` with the enemy's CLASSNAME (not its debug name)
-	// and the cached distance at `+0x5f4c`. Retail pushes the float FIRST and re-dispatches
-	// `GetEnemy()` afterwards for the classname, so a body that changed enemies between the two
-	// would print the new one's name beside the old one's distance; reproduced as one resolve,
-	// which is the same answer for every NPC that does not.
-	if (GetEnemy() != nullptr)
-	{
-		const float DistUnits = CrowEnemyDistUnits();
-		EmitEntityText(Line, GDebug10FmtCrowEnemy,
-			FString::Printf(GDebug10FmtCrowEnemy, *GDebug10Classname(GetEnemy()), DistUnits));
-		return Base + 2;
-	}
-	return Line;
-}
 
 int32 FElysiumNpc::HengeyokaiDrawDebugTextOverlays()
 {
@@ -1250,19 +1198,6 @@ bool FElysiumNpc::SquadObjectName(FString& OutName) const
 	}
 	OutName = SquadName;
 	return true;
-}
-
-int32 FElysiumNpc::CrowMorale() const
-{
-	// SEAM for `CNPC_Crow::m_nMorale` (`+0x5f50`).
-	return 0;
-}
-
-float FElysiumNpc::CrowEnemyDistUnits() const
-{
-	// SEAM for `CNPC_Crow::m_flEnemyDist` (`+0x5f4c`), the CACHED distance the crow's own
-	// `GatherConditions` writes — not `EnemyDistUnits`, which is the Troika line's word.
-	return 0.f;
 }
 
 FElysiumEntity* FElysiumNpc::CopPursuitPlayer() const

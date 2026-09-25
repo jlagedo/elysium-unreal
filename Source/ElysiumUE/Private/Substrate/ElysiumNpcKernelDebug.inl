@@ -208,15 +208,6 @@ void DrawEnemyMemoryOverlays();
  *  is dead — which is the recovered answer for every NPC on that chain in retail too. */
 bool IsBaseNpcTroika() const;
 
-/** `CScriptedTarget::DrawDebugGeometryOverlays` (`0x1034e070`) — slot 123 on a class no map stands
- *  here (`classes.md` gives `CScriptedTarget` no entity classname); ported against the two words
- *  family Species already declared for it. */
-void ScriptedTargetDrawDebugGeometryOverlays();
-
-/** `CScriptedTarget::DrawDebugTextOverlays` (`0x1034ddf0`) — slot 124 on the same class. Returns the
- *  next free text-overlay line, which is the base's answer plus three when the `0x1` bit is set. */
-int32 ScriptedTargetDrawDebugTextOverlays();
-
 /** `CAI_Hint::DrawDebugTextOverlays` (`0x102d1600`) — slot 124 on `CAI_Hint`, which is not this leaf
  *  either: the hint's own two words are passed in. Returns the next free line. */
 static int32 HintDrawDebugTextOverlays(int32 EntityTextLine, int32 DebugOverlayBits, int32 HintType,

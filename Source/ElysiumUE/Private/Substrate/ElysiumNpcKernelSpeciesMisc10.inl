@@ -7,7 +7,7 @@
 // The definitions are in `Substrate/ElysiumNpcKernelSpeciesMisc10.cpp` (the species words, the
 // Newscaster, the Chang brothers, the ghoul croucher, the guard and the ManBat) and
 // `Substrate/ElysiumNpcKernelSpeciesMisc10_2.cpp` (the Sabbat leader, the Tzimisce pair, the vampire
-// boss, the Werewolf and the Bullseye/Pedestrian spawn-side bodies); the tests are
+// boss, the Werewolf and the Pedestrian spawn-side body); the tests are
 // `Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp`. The walked prose is
 // `docs/vtmb/npc-ai/social.md`, `shape.md` and `lifecycle.md`
 // § "Story 29d, family SpeciesMisc10 — …".
@@ -60,36 +60,6 @@
  *
  *  `FElysiumNpc::LeaveGrappleState` (`ElysiumNpc.cpp`) calls this and then slot 614. */
 void BaseLeaveGrappleState();
-
-// --- `CNPC_Bullseye::Spawn` `0x103567e0` (slot 103) ----------------------------------------------
-
-/** `CNPC_Bullseye::Spawn` (`0x103567e0`), slot 103's species body — the aim-target dummy's whole
- *  spawn, in retail's order. `CNPC_Bullseye` carries NO entity classname in the census, so this arm
- *  is unreachable at runtime today and is driven in the suite through `SetRetailClassForTests`. */
-void BullseyeSpawn();
-
-/** What `BullseyeSpawn` wrote, so a headless case can read a body this substrate has no collision
- *  or think surface for. Every field is retail's, named by the offset it came from. */
-struct FBullseyeSpawnRecord
-{
-	bool bRan = false;
-	FVector HullMinsUnits = FVector::ZeroVector;   // `0x101cf390 SetSize(-16,-16,-16 .. 16,16,16)`
-	FVector HullMaxsUnits = FVector::ZeroVector;
-	int32 BloodColorFirst = 0;    // the first `SetBloodColor`, always 0xf7
-	int32 BloodColorSecond = 0;   // the second, 0xf7 under spawnflag 0x80000 and -1 otherwise
-	int32 Effects = 0;            // `m_fEffects` (+0x17c): 0, then `|= 0x40` at the tail
-	float FieldOfView = 0.f;      // `m_flFieldOfView` (+0x19c) = 0.5
-	float Gravity = 0.f;          // `m_flGravity` (+0x1fc) = 0
-	int32 Flags = 0;              // `AddFlag(0x2000)`
-	int32 Flags2 = 0;             // `AddFlag2(0x10)`
-	double NextThink = 0.0;       // `curtime + _DAT_104493d0` (0.1, a DOUBLE in `.rdata`)
-	int32 Solid = 0;              // `SetSolid(2)`
-	int32 SolidFlags = 0;         // `|= 0x10`, and `|= 4` under spawnflag 0x10000
-	int32 TakeDamage = 0;         // 0 under spawnflag 0x20000, else 2
-	bool bRelinked = false;
-	bool bPhysicsCheckedWater = false;
-};
-FBullseyeSpawnRecord BullseyeSpawn_Record;
 
 // --- `CNPC_VBach::GatherAttackConditions` `0x10363db0` (slot 561) --------------------------------
 

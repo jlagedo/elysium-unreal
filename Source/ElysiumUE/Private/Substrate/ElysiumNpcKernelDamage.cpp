@@ -50,9 +50,6 @@ namespace
 	constexpr int32 HitGroupGeneric = 0;
 	constexpr int32 HitGroupHead = 1;
 	constexpr int32 HitGroupGear = 10;
-	// `CNPC_Bullseye::TraceAttack`'s two spawnflags.
-	constexpr uint32 BullseyeOwnerOnlyFlag = 0x40000u;
-	constexpr uint32 BullseyeDeadPreCallFlag = 0x80000u;
 	// The two bits `CNPC_VSheriffMan::KillSheriff` raises on its active weapon.
 	constexpr uint32 EffectNoDraw = 0x20u;        // m_fEffects |= 0x20
 	constexpr uint32 SolidNotSolid = 0x4u;        // AddSolidFlags(4)
@@ -489,7 +486,7 @@ bool FElysiumNpc::CanBeSetOnFire()
 }
 
 // =================================================================================================
-// Slot 141 `0x10266780` — `CAI_BaseNPC::TraceAttack`, and its three species prologues.
+// Slot 141 `0x10266780` — `CAI_BaseNPC::TraceAttack`, and its species prologues.
 // Argument layout recovered from the LISTING (`RET 0xc`, args at `ESP+0x60/0x64/0x68`): the
 // decompiler lost them to `unaff_retaddr` / `unaff_EBP`.
 // =================================================================================================
@@ -497,7 +494,6 @@ bool FElysiumNpc::CanBeSetOnFire()
 const FElysiumNpc::FTraceAttackSpecies* FElysiumNpc::TraceAttackSpeciesRows(int32& OutCount)
 {
 	static const FTraceAttackSpecies Rows[] = {
-		{ TEXT("CNPC_Bullseye"), TEXT("0x10356f60"), ETraceAttackPrologue::BullseyeGate },
 		{ TEXT("CNPC_VWerewolf"), TEXT("0x103ccbf0"), ETraceAttackPrologue::ZeroAmmoType },
 		{ TEXT("CNPC_VZombie"), TEXT("0x103e0430"), ETraceAttackPrologue::ZombieGib },
 	};
@@ -572,25 +568,6 @@ void FElysiumNpc::TraceAttack(void* InInfo, const FVector& DirUnits, void* InTra
 	{
 		switch (Species->Prologue)
 		{
-		case ETraceAttackPrologue::BullseyeGate:
-		{
-			// 0x10356f60. Spawnflag 0x40000: the hit is only taken when the vtable `+0x94`/`+0x29c`
-			// chain off `info[0xb]` (`m_hInflictor`'s owner) reports THIS entity as its owner —
-			// `param_1[0xb]+0x94` null returns immediately. Neither word has a source in this
-			// substrate (`m_hInflictor`'s owner chain), so the gate takes its REFUSAL arm and the
-			// hit is dropped, which is the conservative half of retail's own two answers.
-			if ((SpawnFlags & BullseyeOwnerOnlyFlag) != 0)
-			{
-				return;
-			}
-			// Spawnflag 0x80000 with `m_takedamage == 0` runs slot 146 (`TraceBleed`) on the
-			// packet's own descriptor FIRST, and then falls through into the base body anyway.
-			if ((SpawnFlags & BullseyeDeadPreCallFlag) != 0 && TakeDamageMode == 0)
-			{
-				TraceBleed(Info->Dmg, DirUnits, Trace);
-			}
-			break;
-		}
 		case ETraceAttackPrologue::ZeroAmmoType:
 			// 0x103ccbf0: `thunk_FUN_101c2a50(info, 0)` — zero the packet's damage-type word — then
 			// the base body. Nothing else at all.

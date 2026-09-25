@@ -114,35 +114,10 @@ bool FElysiumNpcKernelSensesConesTest::RunTest(const FString&)
 	TestFalse(TEXT("0x10326ae0: and a live one falls to slot 364's stubbed aim"),
 		F.Guard->FInAimCone(F.Other));
 
-	// `0x1025e920` — `CAI_BaseActor::ValidEyeTarget`, the 0.5 cone, normalised in 3-D.
-	TestTrue(TEXT("0x1025e920: dead ahead passes the 0.5 eye-target floor"),
-		FElysiumNpc::EyeTargetConeAdmits(At, Ahead, FVector(1.f, 0.f, 0.f)));
-	{
-		// dot == 0.5 exactly is 60 degrees, and the compare is STRICT, so it refuses.
-		const float Sixty = FMath::DegreesToRadians(60.f);
-		const FVector HeadSixty(FMath::Cos(Sixty), FMath::Sin(Sixty), 0.f);
-		TestFalse(TEXT("0x1025e920: exactly 60 degrees is refused - the compare is strict"),
-			FElysiumNpc::EyeTargetConeAdmits(At, Ahead, HeadSixty));
-		const float Fifty = FMath::DegreesToRadians(50.f);
-		const FVector HeadFifty(FMath::Cos(Fifty), FMath::Sin(Fifty), 0.f);
-		TestTrue(TEXT("0x1025e920: 50 degrees passes"),
-			FElysiumNpc::EyeTargetConeAdmits(At, Ahead, HeadFifty));
-	}
-	// Unlike the aim cone, this one does NOT zero the Z. A target almost straight up but barely
-	// ahead is refused here; the planar rule of slot 364 would have admitted the same pair.
-	TestFalse(TEXT("0x1025e920: no Z zeroing - a near-vertical target is dotted in 3-D and fails"),
-		FElysiumNpc::EyeTargetConeAdmits(At, FVector(100.f, 0.f, 1000.f),
-			FVector(1.f, 0.f, 0.f)));
-	TestTrue(TEXT("0x10326bd0: while the aim cone's planar rule admits that very pair"),
+	// The planar rule: slot 364 zeroes Z before normalising, so a target almost straight up but
+	// barely ahead is still admitted.
+	TestTrue(TEXT("0x10326bd0: the aim cone's planar rule admits a near-vertical target ahead"),
 		FElysiumNpc::AimConeAdmits(At, FVector(100.f, 0.f, 1000.f), FVector(1.f, 0.f, 0.f)));
-	TestFalse(TEXT("0x1025e920: slot 371 is a stub too, so the humanoid body refuses"),
-		F.Guard->HumanoidValidEyeTarget(Ahead));
-
-	// The census row this species body came from.
-	const FElysiumNpcClass* Humanoid = ElysiumNpcKernelClass::Find(TEXT("CAI_BaseHumanoid"));
-	TestNotNull(TEXT("CAI_BaseHumanoid is a census class"), Humanoid);
-	TestEqual(TEXT("and its slot 587 body is 0x1025e920"),
-		FString(ElysiumNpcKernelClass::BodyOf(Humanoid, 587)), FString(TEXT("0x1025e920")));
 	return true;
 }
 

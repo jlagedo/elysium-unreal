@@ -16,7 +16,7 @@
 // `PlayerAttackerBlockedReaction`, and the per-species death, throw and emitter work of
 // `CNPC_VVampireBoss`, `CNPC_VChangBros`, `CNPC_VSabbatLeader`, `CNPC_VAndreiBlood`,
 // `CNPC_VSheriffMan`, `CNPC_VBach`, `CNPC_VManBat`, `CNPC_VTzimisce`, `CNPC_VMingXiao`,
-// `CNPC_VZombie`, `CNPC_VWerewolf`, `CNPC_Bullseye` and `CNPC_VFrenzyShadow`.
+// `CNPC_VZombie`, `CNPC_VWerewolf` and `CNPC_VFrenzyShadow`.
 //
 // FOUR STANDING FACTS OF THIS FAMILY, stated once here rather than at forty call sites.
 //
@@ -574,12 +574,10 @@ static const TCHAR* TookLifeEventSource();
 
 /** One row of slot 141's (`TraceAttack`) species table: the census class, the retail body that
  *  fills the slot for it, and what that body does BEFORE it falls into the Troika line. Every arm
- *  in the table delegates to `0x10266780` in the end — the three species bodies are prologues. */
+ *  in the table delegates to `0x10266780` in the end — the species bodies are prologues. */
 enum class ETraceAttackPrologue : uint8
 {
 	None,          // the Troika line's own body, `0x10266780`
-	BullseyeGate,  // `0x10356f60`: spawnflag 0x40000 restricts the hit to the closest owner, and
-	               // spawnflag 0x80000 with `m_takedamage == 0` runs slot 146 first
 	ZeroAmmoType,  // `0x103ccbf0`: `SetAmmoType(info, 0)`
 	ZombieGib      // `0x103e0430`: pick the gib latch and force a cvar-driven ammo type
 };

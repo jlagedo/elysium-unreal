@@ -23,7 +23,8 @@
 // (29d/29e) and whose generated stub is therefore still standing: slot 77/78 `ScriptHide`/
 // `ScriptUnhide`, 103 `Spawn`, 104 `Precache`, 110 `KeyValue`, 113 `Activate`, 117 `ObjectCaps`,
 // 119 `Kill`, 127 `Restore`, 130 `OnRestore`, 175 `Touch`, 180 `UpdateOnRemove`, 412–414 the think
-// stamps, 434 `PrescheduleThink`, 512 `GetExpresser` and 585 `ProcessTweakParam`. Each lands under
+// stamps and 434 `PrescheduleThink` (the `CAI_ExpressiveNPC` / `CAI_BaseHumanoid` fills of 512
+// `GetExpresser` and 585 were deleted by 0019 story 5 step 1: no instance). Each lands under
 // a NAMED method here that the slot's own body routes to when its story lands — the shape family
 // **Hints** used for its slot-566/567 species halves, and for the same reason: defining the slot
 // twice is a link error, and guessing at the Troika-line body is not this story's licence.
@@ -244,14 +245,6 @@ struct FPrecacheRequest
 static void ConversationPlacePrecache(const FString& SoundLoop, const FString& SoundOnce,
 	TArray<FPrecacheRequest>& Out);
 
-/** `CGenericNPC::Precache` (`0x1034aa40`) — the three weapon sounds of the
- *  `PTR_s_weapons_ar2_ar2_fire1_wav` table (`uVar3 < 0xc`, stride 4: three entries), then this
- *  entity's own model. */
-static void GenericNpcPrecache(const FString& Model, TArray<FPrecacheRequest>& Out);
-
-/** The three sound names `CGenericNPC::Precache` walks, in table order. */
-static const TCHAR* const* GenericNpcWeaponSounds(int32& OutCount);
-
 /** `CNPC_VCamera::Precache` (`0x103689c0`), shared with `CNPC_VCameraSecurity` — fall the model key
  *  back to `models/null.mdl` when it is unset or empty, precache it, then run the link-table
  *  integrity check. Answers the model that was precached; `OutLinkWarning` is retail's
@@ -358,37 +351,6 @@ void BaseNpcUpdateOnRemove();
  *  for `CNPC_VSabbatLeader`, `Base` for everybody else. */
 enum class EPrescheduleSpecies : uint8 { Base, Empty, ForwardToAndreiBlood };
 EPrescheduleSpecies PrescheduleSpecies() const;
-
-// --- Slot 512 `GetExpresser`, slot 585 `ProcessTweakParam` -----------------------------------------
-
-/** `CAI_ExpressiveNPC::GetExpresser` (`0x10260da0`) — the per-instance expresser pointer at
- *  `+0x5f48`. SEAM: there is no expression substrate here and the offset is unbound in the shape
- *  map, so this answers null, which is exactly what the base body (`0x101a6b20`) answers. */
-void* ExpressiveNpcExpresser() const;
-
-/** `CAI_BaseHumanoid::vfunc585` (`0x1025f1c0`) — the body that occupies `ProcessTweakParam`'s
- *  physical slot in the base branch is **`CAI_BaseActor::PickLookTarget`**, not a tweak-param
- *  handler. Its recovered shape is below; the answer is the entity the gaze should be aimed at plus
- *  the importance/duration randomised for it. */
-struct FLookTargetPick
-{
-	FElysiumEntityHandle Target;
-	float Importance = 0.f;
-	float MinDuration = 0.f;
-	float MaxDuration = 0.f;
-	/** The arm that produced the pick, so a test can state WHICH one fired. */
-	enum class EArm : uint8 { None, Enemy, NavigationGoal, Scan } Arm = EArm::None;
-};
-
-/** `PickLookTarget(bExcludePlayers, minTime, maxTime)`. `MaintainEyeDirection` dispatches it with
- *  `(false, 1.5, 2.5)`, the SDK-2013 defaults. */
-FLookTargetPick PickLookTarget(bool bExcludePlayers, float MinTime, float MaxTime) const;
-
-/** SEAM for `ValidHeadTarget` (`thunk_FUN_10325da0`, dispatched at vtable `+0x930`), the predicate
- *  every arm of `PickLookTarget` applies to a candidate's eye point before accepting it. This
- *  runtime carries no head-aim cone, so it answers true — the arm that ACCEPTS, which keeps retail's
- *  first-match order observable rather than emptying every arm. */
-bool ValidHeadTarget(const FVector& EyePointCm) const;
 
 // --- The free functions and the unnamed tables ------------------------------------------------------
 

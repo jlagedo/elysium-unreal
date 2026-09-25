@@ -22,7 +22,8 @@
 //     with the value read at ENTRY** — the pre-write state is re-read after the `SetEnemy(NULL)`
 //     strip to decide whether to dispatch, but the arguments are `(oldAtEntry, new)`.
 //   * **`+0x1b38` is `SelectIdealStateSelector`.** The twelve fifteen-byte slot-461 species bodies
-//     write a class tag there and chain; they are data rows, not no-ops.
+//     write a class tag there and chain; they are data rows, not no-ops. The port carries the
+//     eight whose class has an instance; BatSwarm, Combatman, Moleman and SheriffSwarm have none.
 
 // --- Raw NPC_STATE words --------------------------------------------------------------------------
 
@@ -138,7 +139,6 @@ int32 TzimisceSelectIdealState();
 int32 DogSelectIdealState();
 int32 Guard1SelectIdealState();
 int32 PedestrianSelectIdealState();
-int32 TestNpcSelectIdealState();
 int32 ZombieSelectIdealState();
 int32 CopSelectIdealState();
 int32 WerewolfSelectIdealState();

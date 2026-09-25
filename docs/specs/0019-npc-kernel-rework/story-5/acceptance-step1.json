@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "scope": "step-1-dead-species-deletion",
+  "base_commit": "aa1c3c86b8684c4760e1dd506d114a0a260fb225",
+  "inventory_counts": {
+    "fields": 761,
+    "fixtures": 934,
+    "sites": 741,
+    "bodies": 2982,
+    "rule_contracts": 11375,
+    "rule_identity_sha256": "000873c0a2108a0b09be85acc2227d561b080d192ba62ddb1a8a2128de19838f"
+  },
+  "rule_identity_sha256": "000873c0a2108a0b09be85acc2227d561b080d192ba62ddb1a8a2128de19838f",
+  "reports": {
+    "Elysium.Substrate": "E:/elysium-work/reports/tests/20260925T023840.339116Z-elysium-substrate",
+    "Elysium.Content": "E:/elysium-work/reports/tests/20260925T024113.064170Z-elysium-content",
+    "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260925T024202.383745Z-elysium-playerworld"
+  },
+  "results": {
+    "Elysium.Substrate": 1255,
+    "Elysium.Content": 14,
+    "Elysium.PlayerWorld": 1,
+    "failed": 0,
+    "expectations_consumed": 29
+  },
+  "artifacts": {
+    "inventory": {
+      "path": "E:/elysium-work/research/npc-kernel/story-5/step1/inventory-step1.json",
+      "sha256": "9360dc6fb2b5821a5f46ac384c5b0731ae19798dfc14624b04b99e18b0108c1b"
+    },
+    "delta": {
+      "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/delta.json",
+      "sha256": "1977058667f88ca2c8dddbf26471e0a9793b891dc1d4418218cb4cc4e9956751"
+    },
+    "runtime": {
+      "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/runtime-results.json",
+      "sha256": "5cabd31f988394aa79d21409a45b3afa389f2850d01842a1dc2e0124e43010b0"
+    },
+    "cheap_checks": {
+      "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/checks.json",
+      "sha256": "6418d5992147f9287b89c16958991b0430b8f9bf2a5a6324dd6437b881a789c8"
+    }
+  }
+}

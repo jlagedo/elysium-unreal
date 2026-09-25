@@ -15,22 +15,20 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityBase, Log, All);
 
-// --- Story 29c-1, family Lifecycle: slot 117's four species overrides -----------------------------
+// --- Story 29c-1, family Lifecycle: slot 117's species overrides ---------------------------------
 
 namespace ElysiumEntityCaps
 {
 	namespace
 	{
-		// `& 0xfffffffd` is `& ~FCAP_ACROSS_TRANSITION`: three classes say "I am never carried
-		// across a level change". Since the base answers `AcrossTransition` and nothing else, all
-		// three answer **0** — the same thing `CBaseCineCam::ObjectCaps` answers, for the same
-		// reason. `CGeneric_NPC_bathack` is the odd one: it ORs bit 3 in instead of clearing bit 1.
+		// `& 0xfffffffd` is `& ~FCAP_ACROSS_TRANSITION`: these classes say "I am never carried
+		// across a level change". Since the base answers `AcrossTransition` and nothing else, both
+		// answer **0** — the same thing `CBaseCineCam::ObjectCaps` answers, for the same reason.
+		// `CScriptedTarget`'s row (`0x1034d410`) was retired with the class: no map stands one.
 		constexpr FSpeciesRow GSpeciesRows[] =
 		{
 			{ TEXT("CAI_Hint"),             TEXT("0x102d2ee0"), ~AcrossTransition, 0 },
 			{ TEXT("CAI_TestHull"),         TEXT("0x102d7290"), ~AcrossTransition, 0 },
-			{ TEXT("CScriptedTarget"),      TEXT("0x1034d410"), ~AcrossTransition, 0 },
-			{ TEXT("CGeneric_NPC_bathack"), TEXT("0x1035ad50"), ~0,                Bit3 },
 		};
 	}
 

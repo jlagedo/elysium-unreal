@@ -375,19 +375,6 @@ bool FElysiumNpcKernelFacingHeadDirectionTest::RunTest(const FString&)
 	TestEqual(TEXT("a body already facing its target decays its head yaw toward zero"),
 		Guard->HeadYaw, 40.f, 0.01f);
 
-	// `CAI_BaseHumanoid`'s branch override `0x1025eaf0` takes the same capability gate and, past
-	// it, drops the two head-cache bits — the one effect this substrate can reproduce, because the
-	// pose-parameter indices at +0x5fb8..+0x6010 have no port member.
-	Guard->HumanoidHeadCacheBits = 0x3;
-	Guard->CapabilityWord = 0;
-	Guard->SetHeadDirectionHumanoid(Target, 1.f);
-	TestEqual(TEXT("the humanoid override takes the same capability gate"),
-		static_cast<int32>(Guard->HumanoidHeadCacheBits), 0x3);
-	Guard->CapabilityWord = 0x1000;
-	Guard->SetHeadDirectionHumanoid(Target, 1.f);
-	TestEqual(TEXT("and past it drops both cache bits"),
-		static_cast<int32>(Guard->HumanoidHeadCacheBits), 0);
-
 	return true;
 }
 
@@ -430,20 +417,6 @@ bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 			FString(ElysiumNpcKernelClass::BodyOf(Cls, 371)), FString(Row.Body371));
 	}
 
-	// `CAI_BaseHumanoid` is the one class in this family's rows that keeps a head of its own
-	// (`0x1025f0f0` / `0x1025f160`, the attachment-cached pair) rather than forwarding to its body.
-	{
-		const FElysiumNpcClass* Humanoid = ElysiumNpcKernelClass::Find(TEXT("CAI_BaseHumanoid"));
-		TestNotNull(TEXT("CAI_BaseHumanoid is a census class"), Humanoid);
-		if (Humanoid != nullptr)
-		{
-			TestEqual(TEXT("and fills slot 370 with its own cached reader"),
-				FString(ElysiumNpcKernelClass::BodyOf(Humanoid, 370)), FString(TEXT("0x1025f0f0")));
-			TestEqual(TEXT("and slot 371 with its 3-D twin"),
-				FString(ElysiumNpcKernelClass::BodyOf(Humanoid, 371)), FString(TEXT("0x1025f160")));
-		}
-	}
-
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_dirs"), 4215);
 	Builder.AddNpc(TEXT("guard"));
 	Builder.AddNpc(TEXT("rat"), FVector(200.0, 0.0, 0.0), TEXT("npc_VRat"));
@@ -482,101 +455,6 @@ bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 	TestFalse(TEXT("the combatant's own class has no recovered species answer"),
 		Guard->RetailHeadDirection(/*b2D*/ true, GuardHead2D));
 
-	// `CAI_BaseHumanoid`'s cached pair, `0x1025f160` / `0x1025f0b0` behind the refresh at
-	// `0x1025e7b0`. **SEAM**: the "head" attachment is the animating tier's, so the refresh takes
-	// retail's own no-attachment arm — the head direction is the body's forward and the eye
-	// direction, whose two endpoints then coincide, is the zero vector.
-	Guard->Angles = FVector(0.0, 90.0, 0.0);
-	Guard->HumanoidHeadCacheBits = 0;
-	const FVector Head3D = Guard->HeadDirection3DHumanoid();
-	TestEqual(TEXT("the no-attachment arm answers the body's own forward"), Head3D,
-		FVector(0.0, -1.0, 0.0), 0.001f);
-	TestEqual(TEXT("and the cache latches both bits"),
-		static_cast<int32>(Guard->HumanoidHeadCacheBits), 0x3);
-	Guard->Angles = FVector(0.0, 0.0, 0.0);
-	TestEqual(TEXT("a second read is the LATCHED vector, not a re-derivation"),
-		Guard->HeadDirection3DHumanoid(), Head3D);
-	TestEqual(TEXT("the eye direction's endpoints coincide on that arm, so it is zero"),
-		Guard->EyeDirection3DHumanoid(), FVector::ZeroVector);
-	TestEqual(TEXT("and its 2-D form normalizes the zero vector to itself"),
-		Guard->EyeDirection2DHumanoid(), FVector::ZeroVector);
-
-	Guard->HumanoidHeadCacheBits = 0;
-	Guard->Angles = FVector(0.0, 90.0, 0.0);
-	TestEqual(TEXT("the 2-D head reader is the 3-D one flattened and renormalized"),
-		Guard->HeadDirection2DHumanoid(), FVector(0.0, -1.0, 0.0), 0.001f);
-
-	return true;
-}
-
-// --- Slots 535/536, `CAI_BaseHumanoid`'s look-target list ---------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingLookTargetsTest,
-	"Elysium.Substrate.NpcKernelFacing.LookTargets", GElysiumNpcKernelFacingFlags)
-bool FElysiumNpcKernelFacingLookTargetsTest::RunTest(const FString&)
-{
-	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_looks"), 4216);
-	Builder.AddNpc(TEXT("guard"));
-	Builder.AddNpc(TEXT("a"), FVector(100.0, 0.0, 0.0));
-	Builder.AddNpc(TEXT("b"), FVector(200.0, 0.0, 0.0));
-	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
-	FElysiumNpc* A = Fixture.Npc(TEXT("a"));
-	FElysiumNpc* B = Fixture.Npc(TEXT("b"));
-	TestNotNull(TEXT("the guard spawned"), Guard);
-	TestNotNull(TEXT("a spawned"), A);
-	TestNotNull(TEXT("b spawned"), B);
-	if (Guard == nullptr || A == nullptr || B == nullptr)
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Guard, A, B });
-
-	// `0x1025f760` — the entity overload. The record is 0x24 bytes: kind, handle, position, start,
-	// end and rate, with the priority last. Duration 2 s and influence 1 gives rate 0.5, and the end
-	// stamp is `curtime + duration`.
-	const double Now = Fixture.World.NowSeconds();
-	Guard->AddLookTargetHumanoid(A, /*Priority*/ 5, /*Duration*/ 2.f, /*Influence*/ 1.f);
-	TestEqual(TEXT("one record is added"), Guard->LookTargets.Num(), 1);
-	if (Guard->LookTargets.Num() == 1)
-	{
-		const FElysiumNpc::FLookTargetRecord& R = Guard->LookTargets[0];
-		TestEqual(TEXT("kind 0 is the entity form"), R.Kind, 0);
-		TestTrue(TEXT("holding the entity's handle"), R.Target == A->Handle);
-		TestEqual(TEXT("the priority is the caller's"), R.Priority, 5);
-		TestEqual(TEXT("the start stamp is curtime"), R.StartTime, Now, 0.001);
-		TestEqual(TEXT("the end stamp is curtime plus the duration"), R.EndTime, Now + 2.0, 0.001);
-		TestEqual(TEXT("and the rate is influence / duration"), R.Rate, 0.5f, 0.0001f);
-	}
-
-	// Re-adding the same entity REPLACES: retail removes the existing record first, then appends,
-	// so the new one is at the tail and the count does not grow.
-	Guard->AddLookTargetHumanoid(B, 1, 4.f, 4.f);
-	Guard->AddLookTargetHumanoid(A, 9, 1.f, 3.f);
-	TestEqual(TEXT("re-adding an entity does not grow the list"), Guard->LookTargets.Num(), 2);
-	if (Guard->LookTargets.Num() == 2)
-	{
-		TestTrue(TEXT("and the re-added entity moves to the tail"),
-			Guard->LookTargets[1].Target == A->Handle);
-		TestEqual(TEXT("with the new priority"), Guard->LookTargets[1].Priority, 9);
-		TestEqual(TEXT("and the new rate"), Guard->LookTargets[1].Rate, 3.0f, 0.0001f);
-		TestTrue(TEXT("the untouched record keeps its place"),
-			Guard->LookTargets[0].Target == B->Handle);
-	}
-
-	// `0x1025f8e0` — the position overload matches an existing record by its stored POSITION rather
-	// than by entity, and writes kind 1.
-	Guard->LookTargets.Reset();
-	Guard->AddLookTargetHumanoid(FVector(1.0, 2.0, 3.0), 2, 2.f, 2.f);
-	Guard->AddLookTargetHumanoid(FVector(4.0, 5.0, 6.0), 3, 2.f, 2.f);
-	TestEqual(TEXT("two distinct positions are two records"), Guard->LookTargets.Num(), 2);
-	TestEqual(TEXT("and the kind is 1"), Guard->LookTargets[0].Kind, 1);
-	Guard->AddLookTargetHumanoid(FVector(1.0, 2.0, 3.0), 8, 2.f, 2.f);
-	TestEqual(TEXT("re-adding the same position replaces rather than appends"),
-		Guard->LookTargets.Num(), 2);
-	TestEqual(TEXT("with the replacement at the tail"), Guard->LookTargets[1].Priority, 8);
-	TestEqual(TEXT("and the other position untouched"), Guard->LookTargets[0].Priority, 3);
-
 	return true;
 }
 
@@ -586,7 +464,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingActivityTest,
 	"Elysium.Substrate.NpcKernelFacing.OnChangeActivity", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 {
-	// Slot 465's four species rows, by name, against the census.
+	// Slot 465's ported species rows, by name, against the census. `CNPC_Crow#465` (`0x10357b30`)
+	// is on a class no map stands and carries no port arm.
 	struct FRow
 	{
 		const TCHAR* Class;
@@ -594,7 +473,6 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 	};
 	const FRow Rows[] =
 	{
-		{ TEXT("CNPC_Crow"),          TEXT("0x10357b30") },
 		{ TEXT("CNPC_VMingXiao"),     TEXT("0x103947b0") },
 		{ TEXT("CNPC_VSabbatGunman"), TEXT("0x103a56f0") },
 		{ TEXT("CNPC_VWerewolf"),     TEXT("0x103d5f60") },
@@ -609,7 +487,7 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 				FString(ElysiumNpcKernelClass::BodyOf(Cls, 465)), FString(Row.Body));
 		}
 	}
-	// And the base the four of them chain to.
+	// And the base they all chain to.
 	{
 		const FElysiumNpcClass* Troika = ElysiumNpcKernelClass::Find(TEXT("CAI_BaseNPCTroika"));
 		TestEqual(TEXT("the Troika line's own slot 465 is the empty body they all chain to"),

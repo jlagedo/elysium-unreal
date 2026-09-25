@@ -14,10 +14,10 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 
-// Story 29c-1, family **Species**, the second half — `CNPC_Crow`, `CNPC_VAndreiBlood`,
-// `CNPC_VChangBros`, `CNPC_VMingXiaoTentacle`, `CNPC_VNewscaster`, `CNPC_VTzimisce`'s carry chain,
-// `CNPC_VTzimisceHeadClaw`'s slow read, `CNPC_VWerewolf`, `CNPC_VZombie`, `CNPC_VCamera` and
-// `CScriptedTarget`. Slot 323, the species slot table, its dispatchers and the melee quartet are
+// Story 29c-1, family **Species**, the second half — `CNPC_VAndreiBlood`, `CNPC_VChangBros`,
+// `CNPC_VMingXiaoTentacle`, `CNPC_VNewscaster`, `CNPC_VTzimisce`'s carry chain,
+// `CNPC_VTzimisceHeadClaw`'s slow read, `CNPC_VWerewolf`, `CNPC_VZombie` and `CNPC_VCamera`.
+// Slot 323, the species slot table, its dispatchers and the melee quartet are
 // `Substrate/ElysiumNpcKernelSpecies.cpp`; the declarations are
 // `Substrate/ElysiumNpcKernelSpecies.inl`.
 //
@@ -30,21 +30,6 @@ namespace
 	// --- Retail `.rdata`, read out of the pinned image --------------------------------------------
 
 	constexpr float Species2Zero = ElysiumNpcTunables::Zero;   // also the double `_DAT_1044fab0`
-	constexpr float Species2One = ElysiumNpcTunables::One;
-
-	// `0x10357be0`'s scale clamp: `10357be4 FCOMP double ptr [0x10449280]`, the DOUBLE 1.0, then
-	// `AND EAX,0x4100 / JNZ` — so a scale that is not below or equal to 1.0 becomes 1.0. A clamp AT
-	// one. (The decompiler's `(float)_DAT_10449280` is a conversion, not a reinterpretation; the
-	// port read it as the float 0.0 and flattened every positive scale until 0019/4.)
-	constexpr double CrowScaleCeiling = ElysiumNpcTunables::OneDouble;
-
-	// `0x10357be0`'s speed. The same 170.0 appears twice: as the distance threshold the offset is
-	// compared against and as the metres-per-second the offset is scaled by.
-	constexpr float CrowFlySpeed = 170.0f;           // _DAT_10454028
-	// And a third time, as the literal `0x432a0000` handed to `thunk_FUN_10357e50`.
-	constexpr float CrowAvoidRadius = 170.0f;        // 0x432a0000
-	// `thunk_FUN_102e1c10(motor, yaw, -2.0)` — the yaw-hold mode the fly step asks for.
-	constexpr float CrowMotorYawMode = -2.0f;
 
 	// `CNPC_VAndreiBlood`'s runner cap, `_DAT_10452dc4`. TWO bodies threshold on it and both read
 	// it as a float against `m_iActiveRunnerCount`: `0x1035e920` (`count < 2`) and `0x1034c2d0`
@@ -138,9 +123,9 @@ namespace
 	// `0x103bef20`'s carrier bone, a plain `__strcmpi` against the model's own bone table.
 	constexpr const TCHAR* TzimisceAttachCarrierBone = TEXT("Bip01 R Finger1");
 
-	// `UTIL_VecToYaw` `0x101d2c70` and `UTIL_VecToPitch` `0x101d2ce0` over a delta in THIS world's
-	// axes, whose Y is the negated Source one. Private copies for the same file-ownership reason
-	// families Bosses, Facing and Positions each keep one.
+	// `UTIL_VecToYaw` `0x101d2c70` over a delta in THIS world's axes, whose Y is the negated Source
+	// one. Private copies for the same file-ownership reason families Bosses, Facing and Positions
+	// each keep one.
 	float Species2VecToYaw(const FVector& PortDelta)
 	{
 		if (PortDelta.X == 0.0 && PortDelta.Y == 0.0)
@@ -154,18 +139,6 @@ namespace
 			Yaw += 360.0f;
 		}
 		return Yaw;
-	}
-
-	float Species2VecToPitch(const FVector& PortDelta)
-	{
-		// `0x101d2ce0`: `-atan2(z, sqrt(x*x + y*y))` in degrees, answering 90 or -90 for a purely
-		// vertical delta. Source's pitch is DOWN-POSITIVE, hence the negation.
-		const double Flat = FMath::Sqrt(PortDelta.X * PortDelta.X + PortDelta.Y * PortDelta.Y);
-		if (Flat == 0.0)
-		{
-			return PortDelta.Z > 0.0 ? -90.0f : 90.0f;
-		}
-		return -FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(PortDelta.Z, Flat)));
 	}
 }
 
@@ -212,157 +185,6 @@ bool FElysiumNpc::TzimisceDeathScriptArgument(int32 SingletonIndex, int32& OutAr
 		OutArgument = 0;
 		return false;
 	}
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CScriptedTarget::Spawn` — `0x1034d6e0`, slot 103.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::FUN_1034d6e0()
-{
-	// `0x1034d6e0`, arm by arm:
-	//
-	//     if (DAT_10938054 == 0) DAT_10938054 = GetInteractionID();   // one-time global registration
-	//     VPROF("CBaseEntity::SetSolid", m_iName);                     // a scope push/pop
-	//     SetSolid(&m_Collision, SOLID_NONE 0);
-	//     Relink();
-	//     m_vLastPosition = GetAbsOrigin();                            // vtable +0x364, slot 217
-	//     if (m_iDisabled == 0) thunk_FUN_1034d5b0(this);              // arm the think
-	//     AddFlag2(FL_NOTARGET-family bit 0x10);
-	//
-	// `CScriptedTarget` is NOT the NPC leaf — `classes.md` gives it no entity classname, so no map
-	// stands one and `RetailClass()` never answers it. The body is ported all the same, against the
-	// two words the `.inl` declares for it, exactly as family **BaseHelpers** ported
-	// `CAI_BaseHumanoid`'s five off-line rows.
-	//
-	// **Seams, all named and none guessed:**
-	//   * `CBaseCombatCharacter::GetInteractionID()` into the file-static `DAT_10938054` is a global
-	//     interaction-id allocator this substrate has no counterpart for. Nothing in layers 0–9
-	//     reads the id back, so the allocation is recorded and reaches nothing.
-	//   * `SetSolid(SOLID_NONE)` + `Relink()` are the collision tier's; this runtime's entity has no
-	//     solidity word on the kernel surface.
-	//   * `thunk_FUN_1034d5b0` is the enabled-arm think arm and is no row of this family's.
-	//   * `AddFlag2(0x10)` writes `m_fFlags2`, which the shape map does not bind.
-	//
-	// What IS written is the one word a reader can check: the cached position.
-	ScriptedTargetLastPositionUnits = Origin / ElysiumMove::U;
-	ElysiumStub::Fired(TEXT("method"), TEXT("CScriptedTarget::Spawn 0x1034d6e0 tail"),
-		DebugString(),
-		FString::Printf(TEXT("disabled=%d"), bScriptedTargetDisabled ? 1 : 0),
-		TEXT("0002/29c-1: no solidity, relink, interaction-id or m_fFlags2 surface"));
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CNPC_Crow` — `0x103577d0` (slot 197) and `0x10357be0`.
-// -------------------------------------------------------------------------------------------------
-
-FVector FElysiumNpc::FUN_103577d0(const FVector& InUnits)
-{
-	// `0x103577d0`, twenty bytes and the whole of slot 197:
-	//     (**(this + 0x300))(param_1);    // slot 192, WorldSpaceCenter
-	//     return param_1;
-	//
-	// A same-object vtable forward that DISCARDS what it called and answers its own argument back.
-	// The call is still made — slot 192 is `WorldSpaceCenter` and has no side effect, so the forward
-	// is observationally a no-op — and the return is the input, unchanged. So a crow's body target
-	// is wherever the caller asked, never its own centre: the opposite of what slot 197 does on
-	// every other class.
-	//
-	// The call is reproduced because it is what the body does, and its result is dropped because
-	// that is what the body does with it.
-	(void)WorldSpaceCenter();
-	return InUnits;
-}
-
-void FElysiumNpc::FUN_10357be0(float Scale)
-{
-	// `0x10357be0`, `CNPC_Crow`'s fly step toward the entity at `m_pHintNode` (`+0x5ddc`):
-	//
-	//     if ((float)_DAT_10449280 (0.0) < param_1) param_1 = 1.0;       // ANY positive -> exactly 1
-	//     if (m_pHintNode == NULL) { GetOrigin(); SetAbsVelocity(vec3_origin); return; }
-	//     to      = m_pHintNode->GetOrigin();                            // vtable +0x370, slot 220
-	//     offset  = to - GetOrigin();
-	//     if (Length(offset) < param_1 * 170.0) field_0x5f54 = 1;        // "arrived"
-	//     if (AvoidStep(this, &offset, 170.0, &adjusted)) offset = adjusted;   // thunk 0x10357e50
-	//     SetAbsVelocity(offset * 170.0);
-	//     SetMotorYaw(m_pMotor, VecToYaw(offset), -2.0);                 // thunk 0x102e1c10
-	//     angles    = GetAngles();                                       // vtable +0x374, slot 221
-	//     angles.x  = VecToPitch(offset);                                // thunk 0x101d2ce0
-	//     SetAngles(angles);                                             // vtable +0x100, slot 64
-	//
-	// Three retail facts worth stating because each looks like a slip and is not:
-	//   * **the clamp is a flatten.** `0.0 < scale` is true for every positive argument, so the
-	//     parameter is replaced by 1.0 on every ordinary call and only a zero or negative scale
-	//     survives. The caller's number is therefore almost never used.
-	//   * **the offset is NOT normalised before it becomes a velocity.** It is the raw delta scaled
-	//     by 170, so a crow far from its hint is given an enormous velocity; the arrival latch at
-	//     `field_0x5f54` is what stops that mattering.
-	//   * **the "arrived" test compares a LENGTH against `scale * 170`**, i.e. against 170 units on
-	//     every ordinary call, using the pre-avoidance offset.
-	//
-	// The three `_DAT_10454028` reads are one cell and one number — **170.0** — and the literal
-	// `0x432a0000` handed to the avoidance step is the same 170.
-	//
-	// **Seams:** `thunk_FUN_10357e50` (the avoidance adjust) has no counterpart here and answers
-	// "no adjustment"; `SetAbsVelocity` and the motor yaw are the movement tier's, reached through
-	// family Hints' `SetMotorHintYaw` and recorded. `field_0x5f54` is `ElysiumNpcKernelShapeMap.cpp`
-	// `_IMPLICIT` — no port member — so the arrival latch is recorded, not stored, and says so.
-	// `m_pHintNode` (+0x5ddc) is family Schedule's `ScheduleHost.HintNode` — a hint NODE INDEX in
-	// this runtime and a `CAI_Hint*` in retail. There is no hint store, so the ENTITY behind the
-	// index cannot be resolved and the body takes retail's NULL arm: read the origin, zero the
-	// velocity, return. `CrowFlyStep` below is the pure half and carries the arithmetic of the
-	// non-null arm, so the recovered numbers are exercised rather than parked behind the seam.
-	if (static_cast<double>(Scale) > CrowScaleCeiling)
-	{
-		Scale = Species2One;
-	}
-	const FElysiumEntity* To = nullptr;   // SEAM: `m_pHintNode`'s entity, see above
-	if (To == nullptr)
-	{
-		(void)Origin;                     // `GetOrigin()`, called and discarded on this arm too
-		Velocity = FVector::ZeroVector;   // `SetAbsVelocity(vec3_origin)`
-		return;
-	}
-	const FCrowFlyStep Step = CrowFlyStep(Scale, To->Origin / ElysiumMove::U,
-		Origin / ElysiumMove::U);
-	if (Step.bArrived)
-	{
-		// `field_0x5f54 = 1`. `ElysiumNpcKernelShapeMap.cpp` calls `+0x5f44..+0x5fbc` `_IMPLICIT` —
-		// no port member — so the arrival latch is recorded and not stored, and says so.
-		ElysiumStub::Fired(TEXT("field"), TEXT("CNPC_Crow field_0x5f54 (arrival latch)"),
-			DebugString(), TEXT("value=1"), TEXT("0002/29c-1: +0x5f54 has no port member"));
-	}
-	Velocity = Step.VelocityUnits * ElysiumMove::U;
-	SetMotorHintYaw(Step.MotorYaw);     // `thunk_FUN_102e1c10(m_pMotor, yaw, -2.0)`
-	Angles.X = Step.Pitch;              // `GetAngles()`, overwrite pitch, `SetAngles()`
-}
-
-FElysiumNpc::FCrowFlyStep FElysiumNpc::CrowFlyStep(float Scale, const FVector& ToUnits,
-	const FVector& FromUnits)
-{
-	// The pure half of `0x10357be0`'s non-null arm, in retail's order and with retail's numbers.
-	// `Scale` arrives ALREADY CLAMPED — the flatten is the caller's, because it happens before the
-	// null test and therefore on both arms.
-	FCrowFlyStep Step;
-	const FVector Offset = ToUnits - FromUnits;
-	// `if (Length(offset) < scale * 170.0) field_0x5f54 = 1;` — a LENGTH, not a squared length, and
-	// against the PRE-avoidance offset.
-	if (static_cast<float>(Offset.Size()) < Scale * CrowFlySpeed)
-	{
-		Step.bArrived = true;
-	}
-	// `thunk_FUN_10357e50(this, &offset, 170.0, &adjusted)` — the avoidance adjust. **SEAM**: no
-	// counterpart here, so the answer is "no adjustment" and the raw offset survives, which is
-	// retail's own arm when nothing is in the way. `CrowAvoidRadius` names the radius it is asked
-	// with so the number is not lost.
-	(void)CrowAvoidRadius;
-	// `SetAbsVelocity(offset * 170.0)` — the offset is NOT normalised first. See the walk.
-	Step.VelocityUnits = Offset * CrowFlySpeed;
-	Step.MotorYaw = Species2VecToYaw(Offset);
-	Step.Pitch = Species2VecToPitch(Offset);
-	// `thunk_FUN_102e1c10(m_pMotor, yaw, -2.0)` — the mode the caller passes on.
-	(void)CrowMotorYawMode;
-	return Step;
 }
 
 // -------------------------------------------------------------------------------------------------

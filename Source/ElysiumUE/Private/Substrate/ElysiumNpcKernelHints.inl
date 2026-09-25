@@ -171,7 +171,7 @@ TArray<FWerewolfHintGroundpoint> WerewolfHintGroundpoints;  // +0x6714 / +0x6720
 //
 // THE SLOT ITSELF IS NOT THIS STORY'S. Slot 566's Troika-line body (`0x10295c20`, layer 11) is
 // story 29d's and the generator still emits its stub, so `FElysiumNpc::FValidateHintType(void*)` is
-// taken. What 29c-1 owns is the SPECIES half — five bodies with a real per-species rule and six
+// taken. What 29c-1 owns is the SPECIES half — the bodies with a real per-species rule and six
 // with a constant — and it lands under the name below until 29d's body can route to it.
 //
 // Every species body reads the hint's `m_nHintType` (`+0x5dc`) and nothing else. The base body is
@@ -231,19 +231,6 @@ static bool HintTypeSpeciesFallsThroughToBase(const FHintTypeSpecies* Row);
 /** This NPC's row applied to a hint node — the entry point the slot will call. False when the seam
  *  cannot resolve the node, and false when no row carries this species. */
 bool FValidateHintTypeForSpecies(int32 HintNode) const;
-
-// --- Slot 567 `GetHintActivity`: the species half -------------------------------------------------
-//
-// Same shape as 566: slot 567's Troika-line body (`0x1026a8f0`) is a `rule` row 29c already landed
-// as `return 1`, so `FElysiumNpc::GetHintActivity(int16)` is taken by the generator. `CNPC_Crow`
-// (`0x10358c90`) is the one species override and lands here.
-
-/** `CNPC_Crow::GetHintActivity` (`0x10358c90`), the rule: hint type 700 answers activity `0x22`,
- *  anything else falls through to `BaseAnswer`, which is the Troika line's `1`. */
-static int32 CrowHintActivity(int16 HintType, int32 BaseAnswer);
-
-/** The dispatch: `CrowHintActivity` for a `CNPC_Crow`, slot 567's own body for anything else. */
-int32 GetHintActivitySpecies(int16 HintType) const;
 
 // --- The bodies -----------------------------------------------------------------------------------
 

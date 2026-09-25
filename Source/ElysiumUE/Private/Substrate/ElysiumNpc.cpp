@@ -1686,11 +1686,12 @@ int32 FElysiumNpc::SelectCombatSchedule()
 
 bool FElysiumNpc::ClassHolstersOnState() const
 {
-	// The seven classes that fill vtable slot 463 with the holster/draw body, mapped from the retail
-	// class names onto the classnames a map AUTHORS. Four of them have no registered leaf in this
-	// runtime yet (`ElysiumNpcClasses.cpp` registers fourteen npc_* names); they are listed anyway,
-	// because the rule belongs to the classname and a map that spawns one must not have to wait for
-	// this table to be remembered.
+	// The classes that fill vtable slot 463 with the holster/draw body, mapped from the retail
+	// class names onto the classnames a map AUTHORS, less `CNPC_VStalker`, which has no instance
+	// (`population.md` § "NPC classes with no instance"). Several of them have no registered leaf
+	// in this runtime yet (`ElysiumNpcClasses.cpp`); they are listed anyway, because the rule
+	// belongs to the classname and a map that spawns one must not have to wait for this table to be
+	// remembered.
 	//
 	// Story 29e, family State19: `CNPC_VCop` (`0x10371c20`) and `CNPC_VBach` (`0x103639b0`) now
 	// fill slot 463. `CNPC_VTzimisce` (`0x103ba2c0`) is the FacialExpression row. SabbatLeader's
@@ -1701,7 +1702,6 @@ bool FElysiumNpc::ClassHolstersOnState() const
 		TEXT("npc_VHumanCombatant"),    // CNPC_VHumanCombatant    0x103871c0
 		TEXT("npc_VHumanCombatPatrol"), // CNPC_VHumanCombatPatrol 0x103871c0
 		TEXT("npc_VSabbatGunman"),      // CNPC_VSabbatGunman      0x103871c0
-		TEXT("npc_VStalker"),           // CNPC_VStalker           0x103871c0
 		TEXT("npc_VYukie"),             // CNPC_VYukie             0x103871c0
 		TEXT("npc_ProneDialog"),        // CNPC_ProneDialog        0x103871c0
 		TEXT("npc_VGhoulCroucher"),     // CNPC_VGhoulCroucher     0x103871c0
@@ -3995,17 +3995,6 @@ void FElysiumNpc::SeedSheet()
 
 void FElysiumNpc::Spawn()
 {
-	// Story 29d, family **SpeciesMisc10**: `CNPC_Bullseye#103` (`0x103567e0`) REPLACES slot 103
-	// outright — the aim-target dummy has no sheet, no body and no motor, and its whole spawn is the
-	// hull, the two blood-colour calls, the think arm and the solid/damage words. `CNPC_Bullseye`
-	// carries no entity classname in the census, so this arm is unreachable at runtime today.
-	if (ElysiumNpcKernelClass::BodyOf(RetailClass(), 103) != nullptr
-		&& FCString::Strcmp(ElysiumNpcKernelClass::BodyOf(RetailClass(), 103),
-			TEXT("0x103567e0")) == 0)
-	{
-		BullseyeSpawn();
-		return;
-	}
 	SeedSheet();
 	// BEFORE the body, because the body is sized from these: retail writes both hull words in a
 	// CONSTRUCTOR, long before anything can read them, and the port's nearest equivalent is here.

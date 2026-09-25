@@ -51,19 +51,19 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	// Every row, by name, with the retail address it came from.
 	int32 Count = 0;
 	const FRow* Rows = FElysiumNpc::HintTypeSpeciesRows(Count);
-	// Eleven DISTINCT bodies: five with a real rule, four `return 1`, one `return 0`, and — added by
+	// Ten DISTINCT bodies: four with a real rule, four `return 1`, one `return 0`, and — added by
 	// story 29d, family Senses10 — `CNPC_VBach` (`0x10365800`), which accepts 17000..17005 outright
-	// and FALLS THROUGH to the base body for everything else.
+	// and FALLS THROUGH to the base body for everything else. `CNPC_Crow`'s (`0x10358c60`) is on a
+	// class no map stands and carries no row.
 	// `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw` share `CNPC_VChangBros`'s body and reach it
 	// by inheritance, which is why they are not rows.
-	TestEqual(TEXT("the table carries the eleven recovered slot-566 species bodies"), Count, 11);
+	TestEqual(TEXT("the table carries the ten ported slot-566 species bodies"), Count, 10);
 	TMap<FString, FString> ByClass;
 	for (int32 i = 0; i < Count; ++i)
 	{
 		ByClass.Add(FString(Rows[i].RetailClass), FString(Rows[i].Body));
 	}
-	TestEqual(TEXT("CNPC_Crow's body"), ByClass.FindRef(TEXT("CNPC_Crow")),
-		FString(TEXT("0x10358c60")));
+	TestFalse(TEXT("CNPC_Crow carries no row"), ByClass.Contains(TEXT("CNPC_Crow")));
 	// Story 29d, family Senses10.
 	TestEqual(TEXT("CNPC_VBach's body"), ByClass.FindRef(TEXT("CNPC_VBach")),
 		FString(TEXT("0x10365800")));
@@ -96,11 +96,6 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	TestEqual(TEXT("CNPC_VZombie's body"), ByClass.FindRef(TEXT("CNPC_VZombie")),
 		FString(TEXT("0x103e03b0")));
 
-	// `CNPC_Crow` (`0x10358c60`): `== 700`, nothing else.
-	TestTrue(TEXT("Crow accepts 700"), Ask(TEXT("CNPC_Crow"), 700));
-	TestFalse(TEXT("Crow rejects 699"), Ask(TEXT("CNPC_Crow"), 699));
-	TestFalse(TEXT("Crow rejects 701"), Ask(TEXT("CNPC_Crow"), 701));
-
 	// `CNPC_VDog` (`0x10374aa0`): `== 12000`.
 	TestTrue(TEXT("VDog accepts 12000"), Ask(TEXT("CNPC_VDog"), 12000));
 	TestFalse(TEXT("VDog rejects 12001"), Ask(TEXT("CNPC_VDog"), 12001));
@@ -118,7 +113,7 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	TestFalse(TEXT("VTzimisce rejects 14002"), Ask(TEXT("CNPC_VTzimisce"), 14002));
 	TestTrue(TEXT("and VTzimisce is the one body that null-checks its hint"),
 		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VTzimisce"))->bNullChecks);
-	TestFalse(TEXT("the other four do not"),
+	TestFalse(TEXT("the others do not"),
 		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VWerewolf"))->bNullChecks);
 
 	// `CNPC_VWerewolf` (`0x103d7ce0`): `t != 0x3a9f && 14999 < t && t < 0x3aab`.
@@ -149,12 +144,6 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 		FElysiumNpc::HintTypeSpeciesOf(TEXT("CAI_BaseNPCTroika")));
 	TestFalse(TEXT("and a null row cannot answer for the base body"),
 		FElysiumNpc::FValidateHintTypeSpecies(nullptr, 700));
-
-	// Slot 567's one species override, `0x10358c90`.
-	TestEqual(TEXT("Crow answers activity 0x22 for hint type 700"),
-		FElysiumNpc::CrowHintActivity(700, 1), 0x22);
-	TestEqual(TEXT("and falls through to the base body's 1 for anything else"),
-		FElysiumNpc::CrowHintActivity(701, 1), 1);
 	return true;
 }
 

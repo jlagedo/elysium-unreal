@@ -73,12 +73,6 @@ void FElysiumNpc::BachNPCInit()
 	DistTooFar = SwarmDistTooFar;                                        // 0x477fff00
 }
 
-void FElysiumNpc::BatSwarmNPCInit()
-{
-	TroikaNPCInit();
-	DistTooFar = SwarmDistTooFar;
-}
-
 void FElysiumNpc::CameraNPCInit()
 {
 	// `0x103692c0` — replacement. Never calls Troika.
@@ -475,12 +469,6 @@ void FElysiumNpc::SheriffManNPCInit()
 	RecordHealthPercent();                                               // 103c6a00
 	JumpGravity = SheriffManJumpGravity;
 	NodeGraphHullIndex() = HullIndexSheriffMan;
-}
-
-void FElysiumNpc::SheriffSwarmNPCInit()
-{
-	TroikaNPCInit();
-	DistTooFar = SwarmDistTooFar;
 }
 
 void FElysiumNpc::TaxiDriverNPCInit()

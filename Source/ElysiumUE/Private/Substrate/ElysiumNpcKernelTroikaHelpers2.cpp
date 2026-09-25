@@ -208,24 +208,6 @@ bool FElysiumNpc::TaskArgumentNeedsClear(const void* TaskArgument) const
 	return false;
 }
 
-bool FElysiumNpc::CreateExpresserObject()
-{
-	// The factory at vtable `+0x91c` (slot 583). **SEAM**: family **Lifecycle** already states that
-	// there is no expression substrate here (`ExpressiveNpcExpresser` answers null and the offset
-	// `+0x5f48` is unbound in the shape map). False is retail's own null-result arm, which answers
-	// the whole body false.
-	++ExpresserFactoryCalls;
-	return false;
-}
-
-bool FElysiumNpc::ExpresserBaseGate() const
-{
-	// `thunk_FUN_1027cae0(this)` — the base gate `0x10312cd0` opens with. Retail's base body answers
-	// true for a live NPC, which is the fact family **Lifecycle** landed as slot 158 `IsAlive`, so
-	// that slot is asked rather than a second gate stood beside it.
-	return const_cast<FElysiumNpc*>(this)->IsAlive();
-}
-
 // -------------------------------------------------------------------------------------------------
 // `0x102b6120` — the cover-lean position offset.
 // -------------------------------------------------------------------------------------------------
@@ -685,34 +667,6 @@ void FElysiumNpc::SetJumpOriginAndTarget(const FElysiumEntity* Goal, float Heigh
 	JumpTarget = FVector(GoalUnits.X - (GoalUnits.X - MyUnits.X) * Backoff,
 		GoalUnits.Y - (GoalUnits.Y - MyUnits.Y) * Backoff,
 		GoalUnits.Z - static_cast<double>(Backoff) * TroikaSharedZero);
-}
-
-// -------------------------------------------------------------------------------------------------
-// `0x10312cd0` — the expresser factory (slot 424 on `CAI_BaseHumanoid` / `CAI_ExpressiveNPC`).
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpc::CreateExpresser()
-{
-	// `0x10312cd0`, the whole body:
-	//     if (!BaseGate(this)) return false;                        // 0x1027cae0
-	//     e = this->vtable[+0x91c]();                               // slot 583, the factory
-	//     m_pExpresser = e;                                         // +0x5f48
-	//     if (e == NULL) return false;
-	//     e->+0x04 = this;                                          // the owner back-link
-	//     e->+0x10 = &this->+0x5f44;                                // the list-node back-link
-	//     Setup(e);                                                 // 0x10312b20
-	//     return true;
-	//
-	// `docs/vtmb/npc-ai/lifecycle.md` names it the expresser factory on `CAI_BaseNPC`. The
-	// store — `+0x5f48` — is unbound in the shape map and family **Lifecycle**'s
-	// `ExpressiveNpcExpresser` answers null for the same reason, so the factory seam answers false
-	// and the whole body answers false AFTER the gate. The gate is what is observable: a dead body
-	// never reaches the factory at all.
-	if (!ExpresserBaseGate())
-	{
-		return false;
-	}
-	return CreateExpresserObject();
 }
 
 // -------------------------------------------------------------------------------------------------

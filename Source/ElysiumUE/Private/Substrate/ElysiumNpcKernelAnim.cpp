@@ -26,7 +26,8 @@
 //   * **The activity commit** — `SetIdealActivity`, `ResolveActivityToSequence`,
 //     `ForcePreTranslatedSequenceAndActivity`, `IsActivityFinished`, `ShouldMaintainActivity`,
 //     `CanPlaySequence` — is the kernel's own, and lands whole.
-//   * **The species branches** of four slots the generator still carries (245, 246, 250, 259).
+//   * **The species branches** of three slots the generator still carries (245, 246, 259); slot
+//     250's `CAI_BaseHumanoid` branch was deleted by 0019 story 5 step 1 (no instance).
 //
 // The walked prose is `docs/vtmb/npc-ai/shape.md`.
 //
@@ -233,18 +234,7 @@ bool FElysiumNpc::SceneEntityForcesCutsceneLod(const void* SceneEntity) const
 	return false;
 }
 
-// --- Slot 250's humanoid branch, and slot 259's camera branch -----------------------------------
-
-float FElysiumNpc::StudioFrameAdvanceHumanoid(float Interval)
-{
-	// `CAI_BaseHumanoid::vfunc250` `0x1025e4e0`, the whole 27-byte body: clear bits 0 and 1 of
-	// +0x5f4c — family Facing's `HumanoidHeadCacheBits`, the "cached eye/head direction is valid"
-	// pair — then chain to `CBaseAnimating::StudioFrameAdvance` (`0x10098bb0`, slot 250's own body
-	// and still the generator's stub). Clearing first is the point: the cached vectors recompute on
-	// the next read rather than lagging the frame the model just advanced.
-	HumanoidHeadCacheBits &= ~3u;
-	return StudioFrameAdvance(Interval);
-}
+// --- Slot 259's camera branch --------------------------------------------------------------------
 
 bool FElysiumNpc::SwallowsAnimEvents() const
 {

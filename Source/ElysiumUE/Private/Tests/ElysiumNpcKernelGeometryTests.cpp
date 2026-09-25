@@ -34,8 +34,8 @@
 // classname and a registered spawn leaf so `CPayphone` gets a real body; `npc_VCop` is a registered
 // leaf that NO census class claims, so its `RetailClass()` is null and slot 337 falls to the Troika
 // line — asserted rather than worked around; and every other species row (`CNPC_VTzimisce`,
-// `CNPC_VWerewolf`, `CNPC_VCamera`, `CAI_BaseHumanoid`, `CNPC_Crow`, …) is exercised by retail
-// class NAME through the table's own lookup, because no registered classname reaches it.
+// `CNPC_VWerewolf`, `CNPC_VCamera`, …) is exercised by retail class NAME through the table's own
+// lookup, because no registered classname reaches it.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelGeometryFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -77,7 +77,7 @@ namespace
 }
 
 // =================================================================================================
-// Slot 193 `EyePosition` — `0x100b4b40`, `0x101aae60`, `0x1025e8e0`
+// Slot 193 `EyePosition` — `0x100b4b40`, `0x101aae60`
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryEyePositionTest,
@@ -114,17 +114,11 @@ bool FElysiumNpcKernelGeometryEyePositionTest::RunTest(const FString&)
 	TestEqual(TEXT("a Troika-line NPC never asks the bone seam"),
 		F.Guard->BoneWorldPositionCalls, GuardBoneCalls);
 
-	// The species table, by name, including the row no registered classname reaches.
+	// The species table, by name.
 	TestNotNull(TEXT("CPayphone has a slot 193 row"),
 		FElysiumNpc::EyePositionSpeciesOf(TEXT("CPayphone")));
-	TestNotNull(TEXT("CAI_BaseHumanoid has a slot 193 row"),
-		FElysiumNpc::EyePositionSpeciesOf(TEXT("CAI_BaseHumanoid")));
 	TestNull(TEXT("CNPC_VHumanCombatant does not replace slot 193"),
 		FElysiumNpc::EyePositionSpeciesOf(TEXT("CNPC_VHumanCombatant")));
-
-	// The humanoid arm's seam refuses, which is `0x1025e7b0`'s own attachment-missing arm.
-	FVector Cached = FVector(1.f, 2.f, 3.f);
-	TestFalse(TEXT("the humanoid eye cache seam answers nothing"), F.Guard->HumanoidEyeCache(Cached));
 	return true;
 }
 
@@ -205,31 +199,22 @@ bool FElysiumNpcKernelGeometryBodyTargetTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// Slot 192 — `CNPC_Crow::vfunc192`, `0x10357760`
+// Slot 192 — the species-dispatched `WorldSpaceCenter`
 // =================================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryCrowCentreTest,
-	"Elysium.Substrate.NpcKernelGeometry.CrowCentre", GElysiumNpcKernelGeometryFlags)
-bool FElysiumNpcKernelGeometryCrowCentreTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometrySpeciesCentreTest,
+	"Elysium.Substrate.NpcKernelGeometry.SpeciesCentre", GElysiumNpcKernelGeometryFlags)
+bool FElysiumNpcKernelGeometrySpeciesCentreTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
 	if (!TestNotNull(TEXT("the guard spawned"), F.Guard))
 	{
 		return false;
 	}
-	// `CNPC_Crow` is a census class that no registered classname reaches, so the row is exercised by
-	// retail class name through the census itself.
-	TestNotNull(TEXT("CNPC_Crow is in the census"),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_Crow")));
-	TestEqual(TEXT("CNPC_Crow fills slot 192 with 0x10357760"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_Crow")), 192)),
-		FString(TEXT("0x10357760")));
-
-	// A Troika-line NPC is not a crow, so the named method falls through to slot 192's own body —
-	// another story's generated stub, which answers the zero vector.
-	TestFalse(TEXT("a combatant does not derive from CNPC_Crow"),
-		ElysiumNpcKernelClass::DerivesFrom(F.Guard->RetailClass(), TEXT("CNPC_Crow")));
-	TestTrue(TEXT("and therefore takes slot 192's own (still stubbed) body"),
+	// Slot 192's only census override, `CNPC_Crow::vfunc192` (`0x10357760`), is on a class no map
+	// stands and carries no port arm, so every class takes slot 192's own body — another story's
+	// generated stub, which answers the zero vector.
+	TestTrue(TEXT("a combatant takes slot 192's own (still stubbed) body"),
 		F.Guard->SpeciesWorldSpaceCenter().Equals(F.Guard->WorldSpaceCenter(), 0.001));
 	return true;
 }

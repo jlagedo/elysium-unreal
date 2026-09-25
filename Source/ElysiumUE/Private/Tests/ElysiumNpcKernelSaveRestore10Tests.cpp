@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29d, family **SaveRestore10 + Lifecycle10**. Every expectation below is read off the
@@ -443,17 +444,6 @@ bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
 	N.Save(nullptr);
 	TestEqual(TEXT("the head claw's slow stamp round-trips at mode 3"), N.HeadClawSlowedExpire, 0.0);
 
-	// `CScriptedTarget::Save` `0x1034e320` — `m_flPauseDoneTime` at mode 3 around the BASE body, so
-	// the Troika half never runs and the link bool is never written.
-	SaveRestore10RunSpecies(N, TEXT("CScriptedTarget"));
-	N.ScriptedTargetPauseDoneTime = 0.0;
-	N.Save(nullptr);
-	TestEqual(TEXT("the scripted target's pause stamp round-trips at mode 3"),
-		N.ScriptedTargetPauseDoneTime, 0.0);
-	TestEqual(TEXT("and its arm chains the BASE body, not the Troika one"),
-		SaveRestore10LogText(N.SaveArchiveLog),
-		TArray<FString>({ TEXT("fields:AIExtendedSaveHeader_t:0") }));
-
 	// The control: a plain `npc_VCop` takes no species arm and runs the Troika body.
 	Fix.Troika->SaveArchiveLog.Reset();
 	Fix.Troika->Save(nullptr);
@@ -552,16 +542,6 @@ bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 	TestTrue(TEXT("ClearBodyEmitterNames ran"), N.BodyEmitterNames[0].IsEmpty());
 	TestEqual(TEXT("and m_pszMonsterClassname is reset to the literal"),
 		N.VampireBossMonsterClassname, FString(TEXT("npc_VVampireBoss")));
-
-	// `CScriptedTarget::Restore` `0x1034e370` — the base body's answer and one mode-3 decode.
-	SaveRestore10RunSpecies(N, TEXT("CScriptedTarget"));
-	N.ScriptedTargetPauseDoneTime = Sentinel;
-	N.CanSeekCoverTimer = Sentinel;
-	N.Restore(nullptr);
-	TestEqual(TEXT("the scripted target's pause stamp decodes to 0.0"),
-		N.ScriptedTargetPauseDoneTime, 0.0);
-	TestEqual(TEXT("and the Troika half never ran: its stamps are untouched"),
-		N.CanSeekCoverTimer, Sentinel);
 
 	// The control.
 	Fix.Troika->SaveArchiveLog.Reset();
@@ -756,23 +736,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10ArmCoverageTest,
 	"Elysium.Substrate.NpcKernelSaveRestore10.ArmCoverage", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 {
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Species;
-
 	// Every class the census gives an override of 126, 127 or 180 must take a named arm — which is
-	// what stops a class this family does not know from silently falling through to the Troika body.
-	// The probe: stand as that class and run the slot; a claimed arm leaves a fingerprint the Troika
-	// body does not, and an unclaimed one is caught by the dispatcher's own fall-through returning
-	// false. The check here is that the census holds no override row this file has not listed.
+	// what stops a class this family does not know from silently falling through to the Troika
+	// body. The probe: stand as that class and run the slot; a claimed arm leaves a fingerprint the
+	// Troika body does not, and an unclaimed one is caught by the dispatcher's own fall-through
+	// returning false. The check here is that the census holds no override row this file has not
+	// listed. Classes with no instance (`CScriptedTarget`'s `0x1034e320` / `0x1034e370`) carry no
+	// arm and are skipped; every other class still fails loudly on an unlisted row.
 	const TCHAR* const KnownSave[] = {
-		TEXT("0x1034e320"), TEXT("0x10395f80"), TEXT("0x1039ed50"), TEXT("0x103c2810") };
+		TEXT("0x10395f80"), TEXT("0x1039ed50"), TEXT("0x103c2810") };
 	const TCHAR* const KnownRestore[] = {
-		TEXT("0x1034e370"), TEXT("0x10396000"), TEXT("0x1039eda0"), TEXT("0x103c2860"),
-		TEXT("0x103c5910"),
+		TEXT("0x10396000"), TEXT("0x1039eda0"), TEXT("0x103c2860"), TEXT("0x103c5910"),
 		// The five other bosses' own slot-127 bodies. This family's briefs do not carry them, so
 		// each one's own half is unrecovered here and the arm routes to the base every one of them
 		// chains (`0x103c5910`); the table lists them so a census row is never unknown to this file.
@@ -785,9 +759,15 @@ bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 		TEXT("0x101a7140") };
 
 	int32 ClassCount = 0;
+	int32 DeadSkipped = 0;
 	for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
 	{
 		++ClassCount;
+		if (ElysiumNpcDeadClasses::Contains(Row.Name))
+		{
+			++DeadSkipped;
+			continue;
+		}
 		struct FSlotProbe { int32 Slot; const TCHAR* const* Known; int32 Count; };
 		const FSlotProbe Probes[] = {
 			{ 126, KnownSave,    UE_ARRAY_COUNT(KnownSave) },
@@ -816,18 +796,8 @@ bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 		}
 	}
 	TestTrue(TEXT("the census was walked"), ClassCount > 0);
-
-	// The recovered gap, named rather than papered over: `CScriptedTarget` carries no entity
-	// classname in the census, so no map in this runtime can stand one and its two arms are
-	// unreachable except through the test latch — the same gap `CNPC_VCop` and four other classes
-	// share (`npc-kernel/classes.md`).
-	const FElysiumNpcClass* ScriptedTarget = ElysiumNpcKernelClass::Find(TEXT("CScriptedTarget"));
-	if (TestNotNull(TEXT("the census carries CScriptedTarget"), ScriptedTarget))
-	{
-		N.SetRetailClassForTests(TEXT("CScriptedTarget"));
-		TestNotNull(TEXT("and the latch selects it"), N.RetailClass());
-		N.SetRetailClassForTests(nullptr);
-	}
+	TestEqual(TEXT("and every class with no instance was skipped, keeping its census row"),
+		DeadSkipped, static_cast<int32>(UE_ARRAY_COUNT(ElysiumNpcDeadClasses::Names)));
 	return true;
 }
 

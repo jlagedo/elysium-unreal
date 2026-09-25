@@ -17,8 +17,7 @@
 // Story 29c-1, family **BaseHelpers** — `CAI_BaseNPC`'s own unnamed layer 0–9 bodies.
 //
 // Every assertion below comes from the decompiled C: the two melee ladders' thresholds and the
-// three ways they differ, `SelectRandomExpressionForState`'s state-to-word pairing (which is NOT
-// SDK 2013's field order), `SetExpression`'s three arms, `RememberUnreachable`'s backward scan,
+// three ways they differ, `RememberUnreachable`'s backward scan,
 // `CalcIdealYaw`'s three delta forms, the face-anim ladder's four rungs, the hint validators' bands
 // and projections, and the victim-side slots' condition writes.
 //
@@ -145,113 +144,6 @@ bool FElysiumNpcKernelBaseHelpersMeleeConditionsTest::RunTest(const FString&)
 	F.Other->Flags &= ~1;
 	TestEqual(TEXT("2: and an airborne one too — no ground read in this body"),
 		F.Npc->MeleeAttack2Conditions(0.9f, 10.f), CanMelee2);
-
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CAI_BaseHumanoid`'s branch — five bodies on a class no map stands.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersBaseActorTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.BaseActorBranch", GElysiumNpcKernelBaseHelpersFlags)
-bool FElysiumNpcKernelBaseHelpersBaseActorTest::RunTest(const FString&)
-{
-	FBaseHelpersFixture F;
-	if (!TestNotNull(TEXT("the guard spawned"), F.Npc))
-	{
-		return false;
-	}
-
-	// The census confirms the standing fact: no classname resolves to `CAI_BaseHumanoid`, so
-	// nothing a map stands ever dispatches these.
-	TestFalse(TEXT("no spawnable leaf resolves to CAI_BaseHumanoid — it stands no entity classname"),
-		F.Npc->IsRetailClass(TEXT("CAI_BaseHumanoid")));
-
-	// 0x1025f1a0 `HasActiveLookTargets` — the look-queue COUNT at +0x5f94, which family Facing's
-	// `LookTargets` carries.
-	F.Npc->LookTargets.Reset();
-	TestFalse(TEXT("an empty look queue has no active targets"), F.Npc->HasActiveLookTargets());
-	F.Npc->LookTargets.AddDefaulted();
-	TestTrue(TEXT("one record is enough"), F.Npc->HasActiveLookTargets());
-
-	// 0x1025e780 — the slot-277 override clears ONLY bit 0 of `m_fLatchedPositions`.
-	F.Npc->LatchedPositions = 0xff;
-	F.Npc->FUN_1025e780(FVector(1.0, 2.0, 3.0));
-	TestEqual(TEXT("SetViewtarget's override clears bit 0 and nothing else"),
-		F.Npc->LatchedPositions, 0xfe);
-
-	// 0x10260540 `SelectRandomExpressionForState`. The pairing is the BODY's, not SDK 2013's: state
-	// 2 reads +0x5fb0 (alert) and state 3 reads +0x5fac (combat), which is the reverse of the SDK's
-	// field order, and the port follows the body.
-	F.Npc->IdleExpression = TEXT("idle");
-	F.Npc->AlertExpression = TEXT("alert");
-	F.Npc->CombatExpression = TEXT("combat");
-	F.Npc->DeathExpression = TEXT("death");
-	F.Npc->ExpressionOverride.Reset();
-	const FString* Answer = F.Npc->SelectRandomExpressionForState(1);
-	TestEqual(TEXT("state 1 answers the idle expression"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("idle")));
-	Answer = F.Npc->SelectRandomExpressionForState(2);
-	TestEqual(TEXT("state 2 answers the alert expression"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("alert")));
-	Answer = F.Npc->SelectRandomExpressionForState(3);
-	TestEqual(TEXT("state 3 answers the combat expression"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("combat")));
-	Answer = F.Npc->SelectRandomExpressionForState(5);
-	TestEqual(TEXT("state 5 (PLAYDEAD) answers the death expression"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("death")));
-	Answer = F.Npc->SelectRandomExpressionForState(7);
-	TestEqual(TEXT("state 7 (DEAD) answers it too"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("death")));
-	TestNull(TEXT("a state with no case answers nothing"),
-		F.Npc->SelectRandomExpressionForState(4));
-	F.Npc->IdleExpression.Reset();
-	TestNull(TEXT("a state whose word is the string_t null answers nothing"),
-		F.Npc->SelectRandomExpressionForState(1));
-
-	// The override wins for every state BUT 7 — a dead body takes the per-state table even with an
-	// override set, which is the one arm of this body that is not obvious.
-	F.Npc->ExpressionOverride = TEXT("override");
-	Answer = F.Npc->SelectRandomExpressionForState(3);
-	TestEqual(TEXT("the override replaces the combat expression"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("override")));
-	Answer = F.Npc->SelectRandomExpressionForState(7);
-	TestEqual(TEXT("but NOT the death one — state 7 skips the override"),
-		Answer != nullptr ? *Answer : FString(), FString(TEXT("death")));
-
-	// 0x10260670 / 0x10260750 — `SetExpression` / `ClearExpression`.
-	F.Npc->ExpressionScene = TEXT("Scenes/Talk.vcd");
-	F.Npc->SetExpression(FString());
-	TestTrue(TEXT("an empty name clears the scene word"), F.Npc->ExpressionScene.IsEmpty());
-
-	F.Npc->ExpressionScene = TEXT("Scenes/Talk.vcd");
-	F.Npc->SetExpression(TEXT("scenes/TALK.vcd"));
-	TestEqual(TEXT("the same name under __strcmpi is a no-op, cache intact"),
-		F.Npc->ExpressionScene, FString(TEXT("Scenes/Talk.vcd")));
-
-	F.Npc->SetExpression(TEXT("Scenes/Other.vcd"));
-	TestTrue(TEXT("a different name clears the cache and the scene seam refuses, so it stays clear"),
-		F.Npc->ExpressionScene.IsEmpty());
-	TestFalse(TEXT("and no expression scene entity was spawned — the seam is the refusal"),
-		F.Npc->ExpressionSceneEnt.IsSet());
-
-	F.Npc->ExpressionScene = TEXT("Scenes/Talk.vcd");
-	F.Npc->ExpressionSceneEnt = F.Other->Handle;
-	F.Npc->ClearExpression();
-	TestTrue(TEXT("ClearExpression writes the one word"), F.Npc->ExpressionScene.IsEmpty());
-	TestTrue(TEXT("and deliberately leaves the scene entity standing — retail's 11 bytes"),
-		F.Npc->ExpressionSceneEnt.IsSet());
-
-	// 0x1025ea00 `ValidHeadTarget`, the facing/height cone. The dot gate is STRICT.
-	F.Npc->Origin = FVector::ZeroVector;
-	F.Npc->Angles = FVector::ZeroVector;
-	TestTrue(TEXT("a point straight ahead at eye height passes both gates"),
-		F.Npc->ValidHeadTargetBaseActor(F.Npc->EyePosition() + FVector(100.0, 0.0, 0.0)));
-	TestFalse(TEXT("a point directly behind fails the dot gate"),
-		F.Npc->ValidHeadTargetBaseActor(F.Npc->EyePosition() + FVector(-100.0, 0.0, 0.0)));
-	TestFalse(TEXT("a point ahead but far above fails the height gate"),
-		F.Npc->ValidHeadTargetBaseActor(F.Npc->EyePosition() + FVector(100.0, 0.0, 10000.0)));
 
 	return true;
 }

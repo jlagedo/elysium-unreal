@@ -76,10 +76,6 @@ namespace
 	constexpr EElysiumNpcCond GMiscCoverEnemyOccluded = EElysiumNpcCond::EnemyOccluded;      // 0x48
 	constexpr EElysiumNpcCond GMiscCoverCanRangeAttack1 = EElysiumNpcCond::CanRangeAttack1;  // 0x4f
 
-	// `CGeneric_NPC::vfunc473`'s two answers.
-	constexpr int32 GMiscSoundInterestIdle = 0x19;
-	constexpr int32 GMiscSoundInterestOther = 0x17;
-
 	// `CNPC_VBach`'s two answers per slot, and the shared refusal.
 	constexpr int32 GMiscBachRange1Answer = 0x4f;   // COND_CAN_RANGE_ATTACK1
 	constexpr int32 GMiscBachRange2Answer = 0x50;   // COND_CAN_RANGE_ATTACK2
@@ -362,10 +358,11 @@ int32 FElysiumNpc::CapabilitiesGet() const
 
 const FElysiumNpc::FComponentFactory* FElysiumNpc::ComponentFactoryRows(int32& OutCount)
 {
-	// Every row was read off the decompiled C of the body it names, not off a summary. The three
-	// species rows are the whole of this family's override set for the band: `CAI_BaseHumanoid`
-	// replaces the motor and the navigator with their humanoid variants, and `CNPC_VRat` replaces
-	// the local navigator. Nothing else in the census overrides 424–430.
+	// Every row was read off the decompiled C of the body it names, not off a summary. The species
+	// row is the whole of this family's live override set for the band: `CNPC_VRat` replaces the
+	// local navigator. The only other overrides of 424–430 are `CAI_BaseHumanoid`'s humanoid motor
+	// (`0x10260f40`) and navigator (`0x10262430`); the class has no instance, and 0019 story 5
+	// step 1 removed their rows (census only).
 	static constexpr FComponentFactory Rows[] =
 	{
 		// slot, class, body, bytes, constructor, vftable assigned after construction
@@ -375,13 +372,9 @@ const FElysiumNpc::FComponentFactory* FElysiumNpc::ComponentFactoryRows(int32& O
 		{ 426, TEXT("CAI_BaseNPC"), TEXT("0x1027cef0"), 0x14, TEXT(""),
 			TEXT("vftable_CAI_MoveProbe") },
 		{ 427, TEXT("CAI_BaseNPC"), TEXT("0x1027cec0"), 0x6c, TEXT("0x102e0900"), TEXT("") },
-		{ 427, TEXT("CAI_BaseHumanoid"), TEXT("0x10260f40"), 0x70, TEXT("0x102e0900"),
-			TEXT("vftable_CAI_HumanoidMotor") },
 		{ 428, TEXT("CAI_BaseNPC"), TEXT("0x1027cf60"), 0x20, TEXT("0x102ddab0"), TEXT("") },
 		{ 428, TEXT("CNPC_VRat"), TEXT("0x103ad6a0"), 0x20, TEXT("0x103ad540"), TEXT("") },
 		{ 429, TEXT("CAI_BaseNPC"), TEXT("0x1027cf90"), 0x68, TEXT("0x102eca50"), TEXT("") },
-		{ 429, TEXT("CAI_BaseHumanoid"), TEXT("0x10262430"), 0x6c, TEXT("0x102eca50"),
-			TEXT("vftable_CAI_HumanoidNavigator") },
 		{ 430, TEXT("CAI_BaseNPC"), TEXT("0x1027cfc0"), 0x18, TEXT(""),
 			TEXT("vftable_CAI_Pathfinder") },
 	};
@@ -456,12 +449,6 @@ void* FElysiumNpc::CreateMotor()
 	// `0x1027cec0`, slot 427: `operator new(0x6c)` then `thunk_FUN_102e0900(p, this)` — the base
 	// `CAI_Motor`, whose own constructor installs its vftable.
 	//
-	// `CAI_BaseHumanoid::vfunc427` (`0x10260f40`) is the species override: `operator new(0x70)` —
-	// FOUR bytes larger — the same `0x102e0900` base constructor, then `vftable_CAI_HumanoidMotor`
-	// at `[0]` and `vftable_CAI_HumanoidMotor_at16` at `[4]` (the second base's adjustor thunk
-	// table), and `p[0x1b] = -1`. So the humanoid motor is the base plus one word, and the retail
-	// choice slot 427 exists to make is which of the two a class gets.
-	//
 	// SEAM: `+0x5d34` is an `ELYSIUM_NPC_WORD_CHAIN` row on `FElysiumScriptedCharacter::Motor`, the
 	// one `IElysiumNpcMotor` seam, which the services provide rather than the NPC allocating.
 	// `ComponentFactoryFor(427)` still says WHICH motor this class would have been given.
@@ -484,10 +471,6 @@ void* FElysiumNpc::CreateLocalNavigator()
 void* FElysiumNpc::CreateNavigator()
 {
 	// `0x1027cf90`, slot 429: `operator new(0x68)` then `thunk_FUN_102eca50(p, this)`.
-	// `CAI_BaseHumanoid::vfunc429` (`0x10262430`) allocates `0x6c` — four bytes larger, the same
-	// relationship the motor pair has — calls the SAME `0x102eca50` constructor, then installs
-	// `vftable_CAI_HumanoidNavigator` at `[0]`, its `_at16` adjustor table at `[4]`, and clears the
-	// byte at `+0x68`.
 	//
 	// SEAM: `+0x5d34`'s chain row already says the navigator is the motor seam's concern here.
 	++ComponentFactoryRefusals;
@@ -865,47 +848,8 @@ void FElysiumNpc::OnVictimHitByMe(FElysiumEntity* Victim)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 473 `GetSoundInterests` — the `CGeneric_NPC` pair.
+// The per-species threshold answers.
 // -------------------------------------------------------------------------------------------------
-
-const FElysiumNpc::FSoundInterestSpecies* FElysiumNpc::SoundInterestSpeciesRows(int32& OutCount)
-{
-	static constexpr FSoundInterestSpecies Rows[] =
-	{
-		{ TEXT("CGeneric_NPC"), TEXT("0x1035a7e0") },
-		{ TEXT("CGenericSabbat_NPC"), TEXT("0x1035be50") },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-int32 FElysiumNpc::GenericNpcSoundInterests() const
-{
-	// `0x1035a7e0` and `0x1035be50` are byte-identical 20-byte bodies:
-	//     return (m_NPCState (+0x5cc0) == 1) ? 0x19 : 0x17;
-	//
-	// `1` is retail's `NPC_STATE_IDLE`. This runtime's `EElysiumNpcState` starts at `Idle = 0` and
-	// carries no `NPC_STATE_NONE`, so the retail number 1 is `EElysiumNpcState::Idle` here — the
-	// same mapping family **Squad** used at `0x102bf5d0`.
-	//
-	// The two answers are sound-interest MASKS, not schedule ids: `0x19` is `0x17 | 0x8`, so an idle
-	// generic NPC listens to one extra sound class. The Troika line's own answer is `0x81f`.
-	return Mind.State() == EElysiumNpcState::Idle ? GMiscSoundInterestIdle : GMiscSoundInterestOther;
-}
-
-// -------------------------------------------------------------------------------------------------
-// The three per-species threshold answers.
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpc::BullseyeIsLightDamage(float Damage, int32 DamageBits)
-{
-	// `CNPC_Bullseye::vfunc576` `0x10356f30`: `return _DAT_104454c4 < param_1`, i.e. `damage > 0.0f`.
-	// That is BYTE-IDENTICAL to the Troika line's own slot-576 body (`0x10266630`), which family
-	// **Damage** landed as `IsLightDamage`, so this asks the slot instead of restating the compare.
-	// It exists as its own method because it is its own census row (`CNPC_Bullseye#576`) and the
-	// story's acceptance is per row.
-	return IsLightDamage(Damage, DamageBits);
-}
 
 int32 FElysiumNpc::BachRangeAttack1Conditions(float Dot, float DistUnits) const
 {

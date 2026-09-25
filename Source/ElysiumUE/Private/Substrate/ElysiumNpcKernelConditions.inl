@@ -75,10 +75,6 @@ enum class EStateChangeSpecies : uint8
 	/** `CNPC_VCamera::OnStateChange` (0x10368ea0) — an EMPTY body. It does not chain: a camera's
 	 *  state change writes nothing at all, not even the base state-flag byte. */
 	Suppressed,
-	/** `CAI_BaseHumanoid::OnStateChange` (0x10260630) — a pre-step, then a chain that SKIPS the
-	 *  Troika body and goes straight to `CAI_BaseNPC::OnStateChange`. No `npc_V*` classname reaches
-	 *  it; the row is carried so the census can be checked against it. */
-	HumanoidPreStep,
 	/** `CNPC_VBach::OnStateChange` (`0x103639b0`) — while `m_bCanFightYet` is 0, ALERT/COMBAT
 	 *  snap back through `SetState(old)` and never reach the Troika body. */
 	BachSnapBack,

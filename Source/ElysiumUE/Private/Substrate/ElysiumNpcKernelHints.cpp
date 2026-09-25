@@ -13,9 +13,10 @@
 #include "Substrate/ElysiumSchedule.h"
 
 // Story 29c-1, family **Hints** — the hint nodes and the interesting places of `order.md` layers
-// 0–9. 38 rows: the slot-566/567 species halves, the Werewolf's whole hint surface (move, teleport,
-// break, imperative, activity, groundpoint, schedule), the two `IsHintCoverValid` forwards, the two
-// `FindHintNode` bodies, the Boss's centre-line geometry, the two interest-place bodies and the
+// 0–9. 38 rows: the slot-566/567 species halves (`CNPC_Crow`'s two rows carry no port body: no map
+// stands that class), the Werewolf's whole hint surface (move, teleport, break, imperative,
+// activity, groundpoint, schedule), the two `IsHintCoverValid` forwards, the two `FindHintNode`
+// bodies, the Boss's centre-line geometry, the two interest-place bodies and the
 // five hint-node activity lookups (those live on `FElysiumNpcScheduleHost`). The walked prose is
 // `docs/vtmb/npc-ai/shape.md`.
 //
@@ -375,9 +376,8 @@ const FElysiumNpc::FHintTypeSpecies* FElysiumNpc::HintTypeSpeciesRows(int32& Out
 {
 	using ERule = FElysiumNpc::EHintTypeRule;
 	static const FHintTypeSpecies Rows[] = {
-		// The five rules, each read from its decompiled body.
-		// `CNPC_Crow`: `return *(int *)(param_1 + 0x5dc) == 700;`
-		{ TEXT("CNPC_Crow"), TEXT("0x10358c60"), ERule::Equals, 700, 700, 0, false },
+		// The four rules, each read from its decompiled body. `CNPC_Crow`'s
+		// (`0x10358c60`, `== 700`) carries no row: no map stands that class.
 		// `CNPC_VDog`: `== 12000`.
 		{ TEXT("CNPC_VDog"), TEXT("0x10374aa0"), ERule::Equals, 12000, 12000, 0, false },
 		// `CNPC_VSabbatLeader`: `15999 < t && t < 0x3e86` — 16000..16005 inclusive.
@@ -496,23 +496,6 @@ bool FElysiumNpc::FValidateHintTypeForSpecies(int32 HintNode) const
 		return const_cast<FElysiumNpc*>(this)->FValidateHintType(&Hint);
 	}
 	return false;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 567 `GetHintActivity` — the one species override.
-// -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpc::CrowHintActivity(int16 HintType, int32 BaseAnswer)
-{
-	// `0x10358c90`: `if (param_1 == 700) return 0x22;` then a tail-call into the base body
-	// `CAI_BaseNPC::GetHintActivity` (`0x1026a8f0`), whose whole text is `return 1`.
-	return HintType == 700 ? 0x22 : BaseAnswer;
-}
-
-int32 FElysiumNpc::GetHintActivitySpecies(int16 HintType) const
-{
-	const int32 BaseAnswer = const_cast<FElysiumNpc*>(this)->GetHintActivity(HintType);
-	return IsRetailClass(TEXT("CNPC_Crow")) ? CrowHintActivity(HintType, BaseAnswer) : BaseAnswer;
 }
 
 // -------------------------------------------------------------------------------------------------

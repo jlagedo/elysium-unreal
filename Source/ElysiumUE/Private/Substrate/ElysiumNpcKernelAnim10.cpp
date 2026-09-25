@@ -30,7 +30,6 @@ namespace
 	constexpr int32 GAnim10SlotSetActivity = 310;
 	constexpr int32 GAnim10SlotUpdatePose = 314;
 	constexpr int32 GAnim10SlotEarlyTranslate = 375;
-	constexpr int32 GAnim10SlotExpresserSpeak = 584;
 	constexpr int32 GAnim10SlotMeleeCombat = 604;
 	constexpr int32 GAnim10SlotShouldPlayIdleSound = 509;
 
@@ -125,7 +124,6 @@ namespace
 
 	// --- The census addresses the slot methods dispatch on ----------------------------------------
 	constexpr TCHAR GAnim10Body_TroikaSetModel[] = TEXT("0x10298ce0");
-	constexpr TCHAR GAnim10Body_BaseHumanoidSetModel[] = TEXT("0x1025e510");
 	constexpr TCHAR GAnim10Body_GhoulCroucherSetModel[] = TEXT("0x1037b1f0");
 	constexpr TCHAR GAnim10Body_ZombieSetModel[] = TEXT("0x103e0540");
 	constexpr TCHAR GAnim10Body_HeadClawSetActivity[] = TEXT("0x103c1cd0");
@@ -135,7 +133,6 @@ namespace
 	constexpr TCHAR GAnim10Body_HumanTranslate[] = TEXT("0x103854f0");
 	constexpr TCHAR GAnim10Body_TzimisceTranslate[] = TEXT("0x103bde40");
 	constexpr TCHAR GAnim10Body_RunnerTranslate[] = TEXT("0x103c3e10");
-	constexpr TCHAR GAnim10Body_ExpresserSpeak[] = TEXT("0x10260dc0");
 
 	// --- The two vocalization-group literals `0x1037b1f0` and `0x103e0540` write ------------------
 	//
@@ -144,44 +141,6 @@ namespace
 	constexpr TCHAR GAnim10ZombieMale[] = TEXT("Zombie_Male");      // 0x1063b150
 	constexpr TCHAR GAnim10ZombieFemale[] = TEXT("Zombie_Female");  // 0x1063b140
 	constexpr int32 GAnim10ZombieVSoundTableIndex = 2;              // the literal written to +0x00bc
-
-	// --- The 26 pose-parameter names `0x1025e510` caches, in retail's push order ------------------
-	//
-	// 0..12 go through `CBaseAnimating::LookupPoseParameter` (family Anim's seam, answering -1) and
-	// 13..25 through `thunk_FUN_100b5d10`, which is `LookupFlexController` — family Anim ported that
-	// body and recorded that it answers **0** on a miss, not -1.
-	const TCHAR* const GAnim10PoseParamNames[] = {
-		TEXT("body_trans_Y"),      // +0x5fb8, 0x105c8ec8
-		TEXT("body_trans_X"),      // +0x5fbc, 0x105c8eb8
-		TEXT("body_lift"),         // +0x5fc0, 0x105c8eac
-		TEXT("body_yaw"),          // +0x5fc4, 0x105c8ea0
-		TEXT("body_pitch"),        // +0x5fc8, 0x10589114
-		TEXT("body_roll"),         // +0x5fcc, 0x105c8e94
-		TEXT("spine_yaw"),         // +0x5fd0, 0x105c8e88
-		TEXT("spine_pitch"),       // +0x5fd4, 0x105c8e78
-		TEXT("spine_roll"),        // +0x5fd8, 0x105c8e68
-		TEXT("neck_trans"),        // +0x5fdc, 0x105c8e58
-		TEXT("head_yaw"),          // +0x5fe0, 0x105c8e4c — index 10, the first of 0x1025efc0's three
-		TEXT("head_pitch"),        // +0x5fe4, 0x105c8e3c
-		TEXT("head_roll"),         // +0x5fe8, 0x105c8e30 — index 12, the last
-		TEXT("move_rightleft"),    // +0x5fec, 0x105c8e1c — the LookupFlexController half begins
-		TEXT("move_forwardback"),  // +0x5ff0, 0x105c8e08
-		TEXT("move_updown"),       // +0x5ff4, 0x105c8df8
-		TEXT("body_rightleft"),    // +0x5ff8, 0x105c8de4
-		TEXT("body_updown"),       // +0x5ffc, 0x105c8dd4
-		TEXT("body_tilt"),         // +0x6000, 0x105c8dc8
-		TEXT("chest_rightleft"),   // +0x6004, 0x105c8db4
-		TEXT("chest_updown"),      // +0x6008, 0x105c8da4
-		TEXT("chest_tilt"),        // +0x600c, 0x105c8d94
-		TEXT("head_forwardback"),  // +0x6010, 0x105c8d80
-		TEXT("head_rightleft"),    // +0x6014, 0x105c8d6c
-		TEXT("head_updown"),       // +0x6018, 0x105c8d5c
-		TEXT("head_tilt"),         // +0x601c, 0x105c8d50
-	};
-	static_assert(UE_ARRAY_COUNT(GAnim10PoseParamNames) == 26,
-		"0x1025e510 caches exactly 26 pose parameters into +0x5fb8..+0x601c");
-	// The split point: below it `LookupPoseParameter`, at or above it `LookupFlexController`.
-	constexpr int32 GAnim10PoseParamFlexFirst = 13;
 
 	// `_DAT_104629b8` — the scale `SetDefaultEyeOffset`'s fallback applies to `mins + maxs`.
 	// **UNRECOVERED**: no reader outside `0x10274ca0` and the corpus does not hold the cell. 0.5 is
@@ -279,15 +238,6 @@ namespace
 // =================================================================================================
 // The seams.
 // =================================================================================================
-
-const TCHAR* FElysiumNpc::HumanoidPoseParamName(int32 Index)
-{
-	if (Index < 0 || Index >= NumHumanoidPoseParams)
-	{
-		return TEXT("");
-	}
-	return GAnim10PoseParamNames[Index];
-}
 
 void* FElysiumNpc::CurrentHintPointer()
 {
@@ -426,25 +376,8 @@ bool FElysiumNpc::NearMissBands(const FElysiumEntity* Weapon, float& OutNearUnit
 	return false;
 }
 
-void FElysiumNpc::ExpressiveNpcSpeak(int32 ConceptId, const TCHAR* Modifier)
-{
-	// `FUN_10260dc0` (`CAI_BaseHumanoid#584`, `CAI_ExpressiveNPC#584`): `MOV ECX,[ECX+0x5f48]` then
-	// `JMP 0x100116d0` — a tail jump through the Expresser pointer into `0x10311c10` with the concept
-	// id and the modifier text. There is no pre- or post-work at all; the Troika body `0x1028d910`
-	// (`ResetAllThinkStamps`, family Closure) has nothing to do with it.
-	//
-	// SEAM: family Lifecycle's `ExpressiveNpcExpresser()` answers null — this runtime stands no
-	// expression substrate — and retail would fault on a null expresser. NAMED CRASH GUARD: the
-	// request is recorded instead.
-	FExpresserSpeak Speak;
-	Speak.ConceptId = ConceptId;
-	Speak.Modifier = Modifier != nullptr ? FString(Modifier) : FString();
-	ExpresserSpeaks.Add(Speak);
-	(void)ExpressiveNpcExpresser();
-}
-
 // =================================================================================================
-// Slot 105 `SetModel` — one slot, four retail bodies.
+// Slot 105 `SetModel` — one slot, three retail bodies.
 // =================================================================================================
 
 void FElysiumNpc::SetModel(TCHAR* ModelName)
@@ -465,7 +398,6 @@ namespace
 	{
 		const TCHAR* Address = nullptr;
 		const TCHAR* RetailClass = nullptr;
-		void (FElysiumNpc::*Body)(TCHAR*) = nullptr;
 	};
 }
 
@@ -473,13 +405,10 @@ bool FElysiumNpc::SetModelSpecies(TCHAR* ModelName)
 {
 	static const FAnim10SetModelArm Arms[] =
 	{
-		// `CAI_BaseHumanoid#105`. UNREACHABLE: the class carries no entity classname in the census.
-		{ GAnim10Body_BaseHumanoidSetModel, TEXT("CAI_BaseHumanoid"),
-			&FElysiumNpc::BaseHumanoidSetModel },
 		// The two vocalization-group arms share one 119-byte body, so they share one port method and
 		// are told apart by the address handed to it.
-		{ GAnim10Body_GhoulCroucherSetModel, TEXT("CNPC_VGhoulCroucher"), nullptr },
-		{ GAnim10Body_ZombieSetModel, TEXT("CNPC_VZombie"), nullptr },
+		{ GAnim10Body_GhoulCroucherSetModel, TEXT("CNPC_VGhoulCroucher") },
+		{ GAnim10Body_ZombieSetModel, TEXT("CNPC_VZombie") },
 	};
 
 	// Retail's non-virtual thunk: while slot 105's species body runs, slot 105's dispatcher answers
@@ -504,18 +433,13 @@ bool FElysiumNpc::SetModelSpecies(TCHAR* ModelName)
 			continue;
 		}
 		const FSpeciesDispatchScope Scope(*this, GAnim10SlotSetModel);
-		if (Arm.Body != nullptr)
-		{
-			(this->*Arm.Body)(ModelName);
-		}
-		else
-		{
-			ZombieLineSetModel(ModelName, Arm.Address);
-		}
+		ZombieLineSetModel(ModelName, Arm.Address);
 		return true;
 	}
-	// Unreachable: `Elysium.Substrate.NpcKernelAnim10.SetModelArmCoverage` asserts the table carries
-	// every slot-105 override row the census holds.
+	// Unreachable for a live class: `Elysium.Substrate.NpcKernelAnim10.SetModelArmCoverage` asserts
+	// the table carries every slot-105 override row the census holds for one.
+	// `CAI_BaseHumanoid#105` (`0x1025e510`) is census-only since 0019 story 5 step 1: the class has
+	// no instance.
 	return false;
 }
 
@@ -538,29 +462,6 @@ void FElysiumNpc::TroikaSetModel(TCHAR* ModelName)
 
 	// 4. `*(undefined4 *)&this->field_0x64e8 = thunk_FUN_100ec640(this)`.
 	ResolveStanceTableRow();
-}
-
-void FElysiumNpc::BaseHumanoidSetModel(TCHAR* ModelName)
-{
-	// `CAI_BaseHumanoid::SetModel` `0x1025e510`, 485 bytes, `CAI_BaseHumanoid#105`.
-	//
-	// ARGUED, and this is why the arm exists at all: `CAI_BaseHumanoid` sits under `CAI_BaseActor`
-	// on a sibling SDK branch with 590 vtable slots and NO entity classname anywhere in the 77-class
-	// census, while the spawnable chain is `CBaseCombatCharacter -> CAI_BaseNPC ->
-	// CAI_BaseNPCTroika -> species`. So this is a registry-style species arm of slot 105 that no
-	// spawned `npc_*` can reach today, and not a base beneath the Troika body. It is ported because
-	// it is the ONLY recovered reading of what the 26 words at `+0x5fb8`..`+0x601c` are.
-	SetRuntimeModel(ModelName != nullptr ? FString(ModelName) : FString());
-	for (int32 Index = 0; Index < NumHumanoidPoseParams; ++Index)
-	{
-		// The two halves take different misses, and that asymmetry is retail's: the first thirteen go
-		// through `CBaseAnimating::LookupPoseParameter` (family Anim's seam, -1) and the last thirteen
-		// through `thunk_FUN_100b5d10`, which is `LookupFlexController` — whose recovered body answers
-		// **0**, not -1, when nothing matches. A misspelt flex name therefore caches controller zero.
-		HumanoidPoseParams[Index] = Index < GAnim10PoseParamFlexFirst
-			? LookupPoseParameter(GAnim10PoseParamNames[Index])
-			: LookupFlexController(GAnim10PoseParamNames[Index]);
-	}
 }
 
 void FElysiumNpc::ZombieLineSetModel(TCHAR* ModelName, const TCHAR* RetailBody)
@@ -1562,37 +1463,6 @@ int32 FElysiumNpc::Slot359(FElysiumEntity* Observer)
 		}
 		return GAnim10AuraNeutral;
 	}
-}
-
-// =================================================================================================
-// Slot 584 — `CAI_ExpressiveNPC`'s expresser forward.
-// =================================================================================================
-
-bool FElysiumNpc::Slot584Species(int32 ConceptId)
-{
-	// The species prologue of slot 584. `CAI_BaseHumanoid#584` and `CAI_ExpressiveNPC#584` both carry
-	// `FUN_10260dc0`; the Troika line's own body is `0x1028d910` (`ResetAllThinkStamps`, family
-	// Closure) and is what runs for everything else.
-	//
-	// **Half of it is reachable.** `CAI_BaseHumanoid` carries no entity classname in the 77-class
-	// census, so that half never runs; `CAI_ExpressiveNPC` claims `npc_TestBaseHumanoid`, so a body
-	// spawned under that classname DOES take this arm. The checklist's walk called both unreachable.
-	if (SpeciesDispatchingSlot == GAnim10SlotExpresserSpeak)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GAnim10SlotExpresserSpeak);
-	if (Override == nullptr
-		|| FCString::Strcmp(Override->Address, GAnim10Body_ExpresserSpeak) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, GAnim10SlotExpresserSpeak);
-	// The generated slot signature carries the TROIKA body's arity (one int), so the modifier string
-	// has no way through and this arm speaks with an empty one. Stated rather than invented.
-	ExpressiveNpcSpeak(ConceptId, nullptr);
-	return true;
 }
 
 // =================================================================================================

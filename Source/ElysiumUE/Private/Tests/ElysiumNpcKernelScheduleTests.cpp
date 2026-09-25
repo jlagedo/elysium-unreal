@@ -19,7 +19,8 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelScheduleFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // -------------------------------------------------------------------------------------------------
-// Slot 580 `GetClassScheduleIdSpace` — the twelve species bodies plus the Troika line.
+// Slot 580 `GetClassScheduleIdSpace` — the species bodies on classes with an instance, plus the
+// Troika line.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleIdSpaceTest,
@@ -28,7 +29,7 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FScheduleIdSpace* Rows = FElysiumNpc::ScheduleIdSpaceRows(Count);
-	TestEqual(TEXT("the slot-580 table carries fifteen rows"), Count, 15);
+	TestEqual(TEXT("the slot-580 table carries thirteen rows"), Count, 13);
 
 	// Every row by name: the class resolves in the census, the census agrees the row's body fills
 	// slot 580 for it, and the row carries an id-space global.
@@ -49,8 +50,14 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 
 	TestNull(TEXT("a class with no row answers nothing"),
 		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNotAClass")));
+	// `CNPC_VCombatman` and `CNPC_VGangrel` override slot 580 in retail but have no instance
+	// (0019 story 5 step 1): their census rows stand, their table rows do not.
+	TestNull(TEXT("CNPC_VCombatman, a class with no instance, has no row"),
+		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VCombatman")));
+	TestNull(TEXT("nor does CNPC_VGangrel"), FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VGangrel")));
 
-	// The two classes that SHARE a body, which is why the table has fifteen rows and twelve bodies.
+	// The two classes that SHARE a body, which is why the table has twelve species rows and ten
+	// species bodies.
 	TestEqual(TEXT("CNPC_VCameraSecurity shares CNPC_VCamera's 0x103683b0"),
 		FString(FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VCameraSecurity"))->Body),
 		FString(TEXT("0x103683b0")));
@@ -155,7 +162,7 @@ bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FScheduleLoadFlag* Rows = FElysiumNpc::LoadedSchedulesRows(Count);
-	TestEqual(TEXT("the slot-452 table carries thirteen rows"), Count, 13);
+	TestEqual(TEXT("the slot-452 table carries eleven rows"), Count, 11);
 
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
@@ -178,6 +185,10 @@ bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
 		FString(TEXT("0x1062f278")));
 	TestNull(TEXT("a class with no row answers nothing"),
 		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNotAClass")));
+	TestNull(TEXT("CNPC_VCombatman, a class with no instance, has no row"),
+		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNPC_VCombatman")));
+	TestNull(TEXT("nor does CNPC_VGangrel"),
+		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNPC_VGangrel")));
 
 	// The slot itself. Its only writer is the class's own schedule-text parse loop, and this runtime
 	// RUNS that loop now -- so the answer is the real parse result rather than the shipped `true`

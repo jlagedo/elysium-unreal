@@ -13,7 +13,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 
 // Story 29d, family **SpeciesMisc10** — the Sabbat leader, the Tzimisce runner and head claw, the
-// vampire boss, the Werewolf, and the Bullseye/Pedestrian spawn-side bodies. The first half is in
+// vampire boss, the Werewolf, and the Pedestrian spawn-side body. The first half is in
 // `ElysiumNpcKernelSpeciesMisc10.cpp`; the declarations are in `ElysiumNpcKernelSpeciesMisc10.inl`.
 
 namespace
@@ -82,22 +82,6 @@ namespace
 		{ 0x7a, TEXT("COND_VWEREWOLF_DEATH_TRIGGERED") },
 	};
 
-	// `CNPC_Bullseye::Spawn`'s literals (`103567e0`…`1035693f`).
-	constexpr float GBullseyeHullUnits = 16.f;
-	constexpr int32 GBullseyeBloodColor = 0xf7;
-	constexpr float GBullseyeFieldOfView = 0.5f;          // 0x3f000000
-	// `_DAT_104493d0` is a **DOUBLE** reading **0.1** — the think delay the spawn arms.
-	constexpr double GBullseyeThinkDelaySeconds = 0.1;
-	constexpr int32 GBullseyeFlag = 0x2000;
-	constexpr int32 GBullseyeFlag2 = 0x10;
-	constexpr int32 GBullseyeSolid = 2;
-	constexpr int32 GBullseyeSolidFlagBase = 0x10;
-	constexpr int32 GBullseyeSolidFlagTrigger = 4;
-	constexpr int32 GBullseyeEffectsNoDraw = 0x40;
-	constexpr int32 GBullseyeSpawnflagBloodColor = 0x80000;
-	constexpr int32 GBullseyeSpawnflagSolidFlag = 0x10000;
-	constexpr int32 GBullseyeSpawnflagNoDamage = 0x20000;
-
 	double SpeciesMisc10_2Now(const FElysiumNpc& Npc)
 	{
 		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
@@ -108,58 +92,6 @@ namespace
 		return Candidate != nullptr && Npc.World != nullptr
 			&& Candidate->Handle == Npc.World->PlayerHandle();
 	}
-}
-
-// =================================================================================================
-// `CNPC_Bullseye::Spawn` — `0x103567e0`, slot 103's species body.
-// =================================================================================================
-
-void FElysiumNpc::BullseyeSpawn()
-{
-	FBullseyeSpawnRecord& R = BullseyeSpawn_Record;
-	R = FBullseyeSpawnRecord();
-	R.bRan = true;
-	// `103567e6`: slot 0x1a0 (416/4 is not this one — `vt+0x1a0` is slot 104, `Precache`).
-	Precache();
-	// `1035680d`: `SetSize(-16,-16,-16 .. 16,16,16)` through `0x101cf390`, with the MAXS built first
-	// on the stack and the MINS handed as the first argument.
-	R.HullMinsUnits = FVector(-GBullseyeHullUnits, -GBullseyeHullUnits, -GBullseyeHullUnits);
-	R.HullMaxsUnits = FVector(GBullseyeHullUnits, GBullseyeHullUnits, GBullseyeHullUnits);
-	// The port's slot 213 `SetSize` (`0x100b1890`) takes the SIZE vector — `m_vecSize` (+0x038c) —
-	// which is what `0x101cf390` writes from the mins/maxs pair; the pair itself is recorded above.
-	SetSize((R.HullMaxsUnits - R.HullMinsUnits) * ElysiumMove::U);
-	// `10356818`: slot 0x174 (93) with (0, 0).
-	// `1035681f`: `SetBloodColor(0xf7)` — the FIRST of two.
-	R.BloodColorFirst = GBullseyeBloodColor;
-	// `1035682a`..`10356840`: `m_fEffects = 0`, `m_flFieldOfView = 0.5`, `m_flGravity = 0`.
-	R.Effects = 0;
-	R.FieldOfView = GBullseyeFieldOfView;
-	R.Gravity = 0.f;
-	// `10356850`: `SetBloodColor` AGAIN — `0xf7` under spawnflag `0x80000` and `-1` otherwise. The
-	// SECOND call is what actually decides the blood colour.
-	R.BloodColorSecond = (SpawnFlags & GBullseyeSpawnflagBloodColor) != 0
-		? GBullseyeBloodColor : -1;
-	// `1035685f`: `AddFlag(0x2000)`.
-	R.Flags = GBullseyeFlag;
-	// `1035686c`: `ThinkSet(LAB_100097fa, 0.0)` then `m_flNextThink = curtime + _DAT_104493d0` — a
-	// **DOUBLE** 0.1 in `.rdata`, not the 0.0 the `ThinkSet` argument carries.
-	R.NextThink = SpeciesMisc10_2Now(*this) + GBullseyeThinkDelaySeconds;
-	// `103568b4`: `SetSolid(2)` then `AddSolidFlags(+0x2b4 | 0x10)`.
-	R.Solid = GBullseyeSolid;
-	R.SolidFlags = GBullseyeSolidFlagBase;
-	// `10356906`: `AddSolidFlags(| 4)` ONLY under spawnflag `0x10000`.
-	if ((SpawnFlags & GBullseyeSpawnflagSolidFlag) != 0)
-	{
-		R.SolidFlags |= GBullseyeSolidFlagTrigger;
-	}
-	// `10356916`: `m_takedamage = 0` under spawnflag `0x20000`, else 2.
-	R.TakeDamage = (SpawnFlags & GBullseyeSpawnflagNoDamage) != 0 ? 0 : 2;
-	// `10356928`: `Relink`, then `m_fEffects |= 0x40`, then `PhysicsCheckWater`, then
-	// `AddFlag2(0x10)` — in that order.
-	R.bRelinked = true;
-	R.Effects |= GBullseyeEffectsNoDraw;
-	R.bPhysicsCheckedWater = true;
-	R.Flags2 = GBullseyeFlag2;
 }
 
 // =================================================================================================

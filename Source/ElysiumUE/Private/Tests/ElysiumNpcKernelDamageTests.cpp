@@ -366,28 +366,30 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageTraceAttackSpeciesTest,
 	"Elysium.Substrate.NpcKernelDamage.TraceAttackSpecies", GDamageTestFlags)
 bool FElysiumNpcKernelDamageTraceAttackSpeciesTest::RunTest(const FString&)
 {
-	// The table: three prologues, and `vtmb_slot 141` names exactly these three classes beside the
-	// Troika line's 74 inheritors.
+	// The table: `vtmb_slot 141` names three species prologues beside the Troika line's 74
+	// inheritors. `CNPC_Bullseye`'s (`0x10356f60`) is on a class no map stands and carries no row,
+	// so two remain. Keyed by class, not by row position.
 	int32 Count = 0;
 	const FElysiumNpc::FTraceAttackSpecies* Rows = FElysiumNpc::TraceAttackSpeciesRows(Count);
-	TestEqual(TEXT("slot 141 has three species prologues"), Count, 3);
-	TestEqual(TEXT("row 0 is CNPC_Bullseye"), FString(Rows[0].RetailClass),
-		FString(TEXT("CNPC_Bullseye")));
-	TestEqual(TEXT("filled by 0x10356f60"), FString(Rows[0].Body), FString(TEXT("0x10356f60")));
-	TestEqual(TEXT("row 1 is CNPC_VWerewolf"), FString(Rows[1].RetailClass),
-		FString(TEXT("CNPC_VWerewolf")));
-	TestEqual(TEXT("filled by 0x103ccbf0"), FString(Rows[1].Body), FString(TEXT("0x103ccbf0")));
-	TestEqual(TEXT("row 2 is CNPC_VZombie"), FString(Rows[2].RetailClass),
-		FString(TEXT("CNPC_VZombie")));
-	TestEqual(TEXT("filled by 0x103e0430"), FString(Rows[2].Body), FString(TEXT("0x103e0430")));
+	TestEqual(TEXT("slot 141 has two ported species prologues"), Count, 2);
+	TMap<FString, FString> ByClass;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		ByClass.Add(FString(Rows[Index].RetailClass), FString(Rows[Index].Body));
+	}
+	TestEqual(TEXT("CNPC_VWerewolf is filled by 0x103ccbf0"),
+		ByClass.FindRef(TEXT("CNPC_VWerewolf")), FString(TEXT("0x103ccbf0")));
+	TestEqual(TEXT("CNPC_VZombie is filled by 0x103e0430"), ByClass.FindRef(TEXT("CNPC_VZombie")),
+		FString(TEXT("0x103e0430")));
+	TestFalse(TEXT("CNPC_Bullseye carries no row"), ByClass.Contains(TEXT("CNPC_Bullseye")));
 
-	// None of the three is a registered spawn leaf, so each is reached by retail class name.
-	TestNotNull(TEXT("CNPC_Bullseye is reachable by name"),
-		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_Bullseye")));
+	// Neither is a registered spawn leaf, so each is reached by retail class name.
 	TestNotNull(TEXT("CNPC_VWerewolf is reachable by name"),
 		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_VWerewolf")));
 	TestNotNull(TEXT("CNPC_VZombie is reachable by name"),
 		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_VZombie")));
+	TestNull(TEXT("CNPC_Bullseye takes the Troika line's body"),
+		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_Bullseye")));
 	TestNull(TEXT("and the Troika line has no row"),
 		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_VHumanCombatant")));
 

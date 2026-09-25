@@ -135,33 +135,7 @@ int32 VictimHitReactionDispatches = 0;
  *  Retail name unrecovered; named for what the body answers. */
 bool OkToDisturb() const;
 
-// --- Slot 473 `GetSoundInterests` — the `CGeneric_NPC` pair ---------------------------------------
-//
-// Two byte-identical 20-byte bodies at two classes. Slot 473's Troika line is another family's row
-// (a `value`: `return 0x81f`), so this species arm lands under its own name rather than routing
-// through the slot.
-
-/** One row of the slot-473 species table. */
-struct FSoundInterestSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-};
-
-/** The table: `CGeneric_NPC` (`0x1035a7e0`) and `CGenericSabbat_NPC` (`0x1035be50`). */
-static const FSoundInterestSpecies* SoundInterestSpeciesRows(int32& OutCount);
-
-/** `CGeneric_NPC::vfunc473` (`0x1035a7e0`) and `CGenericSabbat_NPC::vfunc473` (`0x1035be50`) —
- *  `m_NPCState` (`+0x5cc0`) `== 1` (`NPC_STATE_IDLE`) answers `0x19`, everything else `0x17`. */
-int32 GenericNpcSoundInterests() const;
-
-// --- The three per-species threshold answers ------------------------------------------------------
-
-/** `CNPC_Bullseye::vfunc576` (`0x10356f30`) — slot 576 `IsLightDamage`, and BYTE-IDENTICAL to the
- *  Troika line's own body (`0x10266630`, family **Damage**'s `IsLightDamage`): `damage > 0.0f`
- *  (`_DAT_104454c4`). Landed under its own name because it is its own census row; it asks the slot
- *  rather than restating the compare, so the two cannot drift. */
-bool BullseyeIsLightDamage(float Damage, int32 DamageBits);
+// --- The per-species threshold answers -----------------------------------------------------------
 
 /** `CNPC_VBach::vfunc553` (`0x10364500`) and `::vfunc554` (`0x10364550`) — slots 553/554
  *  `RangeAttack1Conditions` / `RangeAttack2Conditions`. One shape, one differing answer. */
@@ -192,8 +166,8 @@ struct FComponentFactory
 	const TCHAR* VTable = nullptr;
 };
 
-/** The table: the six Troika-line factories plus the three species overrides this family carries
- *  (`CAI_BaseHumanoid`'s motor and navigator, `CNPC_VRat`'s local navigator). */
+/** The table: the six Troika-line factories plus the one live species override this family carries
+ *  (`CNPC_VRat`'s local navigator). */
 static const FComponentFactory* ComponentFactoryRows(int32& OutCount);
 
 /** The row this NPC's class takes at `Slot`, resolved through `ElysiumNpcKernelClass::BodyOf` so a

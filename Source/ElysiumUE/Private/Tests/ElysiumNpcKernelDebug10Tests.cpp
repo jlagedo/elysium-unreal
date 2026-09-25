@@ -1012,9 +1012,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10SlotDispatchTest,
 bool FElysiumNpcKernelDebug10SlotDispatchTest::RunTest(const FString&)
 {
 	// The census IS the dispatch table, and this is what the two slot methods read. Every row here
-	// is a `rule` row of this family.
+	// is a `rule` row of this family; `CNPC_Crow#124` (`0x10358f90`) is on a class no map stands
+	// and carries no port arm.
 	const TPair<const TCHAR*, const TCHAR*> Slot124[] = {
-		{ TEXT("CNPC_Crow"), TEXT("0x10358f90") },
 		{ TEXT("CNPC_VHengeyokai"), TEXT("0x10383560") },
 		{ TEXT("CNPC_VNewscaster"), TEXT("0x103a1250") },
 		{ TEXT("CNPC_VTzimisce"), TEXT("0x103c08d0") },
@@ -1079,71 +1079,6 @@ bool FElysiumNpcKernelDebug10SlotDispatchTest::RunTest(const FString&)
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestTrue(TEXT("and slot 124 the Troika text body, which ends on the HG/HB line"),
 			Debug10RetailOrder(Lines).EndsWith(TEXT("HG - %d : HB - %d")));
-	}
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// `0x10358f90` — `CNPC_Crow::DrawDebugTextOverlays`.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10CrowTextTest,
-	"Elysium.Substrate.NpcKernelDebug10.CrowTextOverlays", GElysiumNpcKernelDebug10Flags)
-bool FElysiumNpcKernelDebug10CrowTextTest::RunTest(const FString&)
-{
-	Debug10ResetConVars();
-	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Combatant));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
-	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
-	if (!TestNotNull(TEXT("the combatant spawned"), Npc) || !TestNotNull(TEXT("and a second"), Other))
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Npc, Other });
-	Npc->Schedule.Clear();
-	Npc->ActivityNumber = INDEX_NONE;
-	Npc->IdealActivityNumber = INDEX_NONE;
-
-	// `CNPC_Crow` is not a registered spawn leaf here, so the arm is exercised by name. The census
-	// is what routes to it and the dispatch case is asserted in `SlotDispatch` above.
-	TestEqual(TEXT("CNPC_Crow fills slot 124 with its own body"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_Crow")), 124)),
-		FString(TEXT("0x10358f90")));
-
-	// Bit 0 clear: the base runs and the crow adds nothing.
-	Npc->DebugOverlays = 0;
-	FElysiumNpc::BeginDebugCapture();
-	TestEqual(TEXT("with bit 0 clear the crow adds nothing"),
-		Npc->CrowDrawDebugTextOverlays(), 0);
-	TestEqual(TEXT("and emits nothing"), FElysiumNpc::EndDebugCapture().Num(), 0);
-
-	// Bit 0 set, no enemy: exactly ONE extra line, and the chained body is the BASE
-	// (`0x102767d0`) and NOT the Troika one — a crow never gets `Seq:`, `Cycle:` or `pos:`.
-	Npc->DebugOverlays = 0x1;
-	FElysiumNpc::BeginDebugCapture();
-	const int32 Lines1 = Npc->CrowDrawDebugTextOverlays();
-	{
-		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestEqual(TEXT("the crow chains the BASE body, not the Troika one"),
-			Debug10RetailOrder(Lines),
-			FString(TEXT("Health: %i|UNARMED|Stat: %s, |Move: %s, |Actv: INVALID|morale: %d")));
-		TestEqual(TEXT("returning base + 1"), Lines1, 6);
-		TestEqual(TEXT("with the morale seam's 0"), Lines.Last().Text,
-			FString(TEXT("morale: 0")));
-	}
-
-	// With an enemy: a SECOND line, printing the enemy's CLASSNAME (not its debug name) and the
-	// crow's own cached distance at `+0x5f4c`.
-	Npc->Senses.Memory.Enemy = Other->Handle;
-	FElysiumNpc::BeginDebugCapture();
-	const int32 Lines2 = Npc->CrowDrawDebugTextOverlays();
-	{
-		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestEqual(TEXT("an enemy adds the second line"), FString(Lines.Last().Retail),
-			FString(TEXT("enemy (dist): %s (%g)")));
-		TestEqual(TEXT("naming the CLASSNAME, not the debug name"), Lines.Last().Text,
-			FString(TEXT("enemy (dist): npc_VHumanCombatant (0)")));
-		TestEqual(TEXT("and the return is base + 2"), Lines2, Lines1 + 1);
 	}
 	return true;
 }

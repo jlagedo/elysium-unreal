@@ -272,19 +272,17 @@ bool FElysiumNpcKernelCondStateChangeSpeciesTest::RunTest(const FString&)
 		{ TEXT("CNPC_VHumanCombatant"),    TEXT("0x103871c0"), ESpecies::HolsterOnState },
 		{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("0x103871c0"), ESpecies::HolsterOnState },
 		{ TEXT("CNPC_VSabbatGunman"),      TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VStalker"),           TEXT("0x103871c0"), ESpecies::HolsterOnState },
 		{ TEXT("CNPC_VYukie"),             TEXT("0x103871c0"), ESpecies::HolsterOnState },
 		{ TEXT("CNPC_ProneDialog"),        TEXT("0x103871c0"), ESpecies::HolsterOnState },
 		{ TEXT("CNPC_VTzimisce"),          TEXT("0x103ba2c0"), ESpecies::FacialExpression },
 		{ TEXT("CNPC_VCamera"),            TEXT("0x10368ea0"), ESpecies::Suppressed },
 		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10368ea0"), ESpecies::Suppressed },
-		{ TEXT("CAI_BaseHumanoid"),        TEXT("0x10260630"), ESpecies::HumanoidPreStep },
 		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0"), ESpecies::BachSnapBack },
 		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20"), ESpecies::Cop },
 	};
 	int32 Count = 0;
 	FElysiumNpc::StateChangeSpeciesRows(Count);
-	TestEqual(TEXT("the table is fifteen rows"), Count, static_cast<int32>(UE_ARRAY_COUNT(Rows)));
+	TestEqual(TEXT("the table is thirteen rows"), Count, static_cast<int32>(UE_ARRAY_COUNT(Rows)));
 	for (const FExpect& E : Rows)
 	{
 		const FElysiumNpc::FStateChangeSpecies* Row = FElysiumNpc::StateChangeSpeciesOf(E.Cls);
@@ -299,6 +297,9 @@ bool FElysiumNpcKernelCondStateChangeSpeciesTest::RunTest(const FString&)
 	}
 	TestNull(TEXT("a class with no override runs the Troika body"),
 		FElysiumNpc::StateChangeSpeciesOf(TEXT("CNPC_VPedestrian")));
+	// `CNPC_VStalker` shares `0x103871c0` in retail but has no instance (0019 story 5 step 1).
+	TestNull(TEXT("CNPC_VStalker, a class with no instance, carries no row"),
+		FElysiumNpc::StateChangeSpeciesOf(TEXT("CNPC_VStalker")));
 
 	// `CNPC_VTzimisce`'s expression map, off `PTR_s_normal_10653120` — "normal", "angry", "scream",
 	// "dead". "scream" (index 2) is reached by no state.

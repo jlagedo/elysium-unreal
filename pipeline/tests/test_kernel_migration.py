@@ -37,7 +37,8 @@ def test_shared_bodies_and_branch_slots_do_not_collapse_contracts():
 
 def test_authored_scope_separates_liveness_factories_and_deferred_classes():
     manifest, classes, factories = km.load()
-    assert manifest["phase"] == 0
+    assert manifest["phase"] == 1
+    assert manifest["history"]["step0"]["commit"] == "aa1c3c86b8684c4760e1dd506d114a0a260fb225"
     assert len(manifest["deferred_classes"]) == 10
     by_class = {r["retail_class"]: r for r in classes}
     assert by_class["CAI_TestHull"]["liveness"] == "live"

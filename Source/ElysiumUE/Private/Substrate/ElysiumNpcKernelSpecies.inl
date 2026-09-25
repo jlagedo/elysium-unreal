@@ -147,13 +147,6 @@ FVector WerewolfChasePosUnits = FVector::ZeroVector;          // +0x6674/+0x6678
 // `0x103cade0` (the zone opener that FILLS them). `0x103d1e50` is the READER of the same pair and
 // goes through Misc's members rather than standing a second copy.
 
-// `CScriptedTarget`'s two, which are NOT NPC words at all: `0x1034d6e0` is that class's `Spawn`
-// and the census gives `CScriptedTarget` no entity classname, so no map stands one here. They are
-// declared for the same reason family **BaseHelpers** declared `CAI_BaseActor`'s: the body is
-// ported and it has to have somewhere to write.
-FVector ScriptedTargetLastPositionUnits = FVector::ZeroVector;   // +0x5f44 m_vLastPosition (datamap)
-bool bScriptedTargetDisabled = false;                            // m_iDisabled (datamap)
-
 // --- The seams this family stands ------------------------------------------------------------------
 //
 // Each answers NOTHING and names the retail call it stands for. Nothing below invents a value.
@@ -336,25 +329,6 @@ bool SpeciesCanPlaySequence(bool bDisregardState, int32 InterruptLevel, int32& O
 // The naming is 29c's overlay target verbatim, so the ledger's `hand:` claim is checkable. A body
 // whose retail name IS recovered says so in its definition comment; none of these has one.
 
-/** `CScriptedTarget::Spawn` `0x1034d6e0`, slot 103 on a class no map stands here. */
-void FUN_1034d6e0();
-
-/** `CNPC_Crow::vfunc197` `0x103577d0` — slot 197's whole body, a same-object forward to slot 192. */
-FVector FUN_103577d0(const FVector& InUnits);
-
-/** `0x10357be0` — `CNPC_Crow`'s fly-toward-the-hint-node step. `m_pHintNode`'s ENTITY has no source
- *  in this substrate (hints are node indices here), so the wrapper takes retail's NULL arm; the
- *  arithmetic of the other arm is `CrowFlyStep`, which is pure and is what the suite drives. */
-struct FCrowFlyStep
-{
-	bool bArrived = false;                            // field_0x5f54 = 1
-	FVector VelocityUnits = FVector::ZeroVector;      // SetAbsVelocity's argument, SOURCE units
-	float MotorYaw = 0.f;                             // thunk_FUN_102e1c10's yaw
-	float Pitch = 0.f;                                // the pitch written back through SetAngles
-};
-static FCrowFlyStep CrowFlyStep(float Scale, const FVector& ToUnits, const FVector& FromUnits);
-void FUN_10357be0(float Scale);
-
 /** `0x1035e920` — `CNPC_VAndreiBlood`: may another runner be made? */
 bool FUN_1035e920() const;
 
@@ -438,11 +412,10 @@ bool FUN_103dd900(FElysiumEntity* Enemy);
  *  through on the delegating arm and read by nothing in the gate. */
 int32 FUN_10364280(int32 Arg);
 
-/** `0x103661f0` / `0x10367740` / `0x103b26f0` — the three byte-identical slot-609 gates of
- *  `CNPC_VBach`, `CNPC_VBatSwarm` and `CNPC_VSheriffSwarm`. */
+/** `0x103661f0` — `CNPC_VBach`'s slot-609 gate. `CNPC_VBatSwarm` (`0x10367740`) and
+ *  `CNPC_VSheriffSwarm` (`0x103b26f0`) carry byte-identical copies; neither class has an
+ *  instance. */
 bool FUN_103661f0(bool bArg);
-bool FUN_10367740(bool bArg);
-bool FUN_103b26f0(bool bArg);
 
 /** `0x103d1e50` — `CNPC_VWerewolf`: are the two door halves near enough to count as shut? */
 bool FUN_103d1e50() const;

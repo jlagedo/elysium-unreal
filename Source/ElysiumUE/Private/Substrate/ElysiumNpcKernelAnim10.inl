@@ -8,27 +8,27 @@
 // overrides, the per-species arms the one slot method dispatches to, and the seams they read
 // through.
 //
-// The definitions are in `Substrate/ElysiumNpcKernelAnim10.cpp` (activity, sequence, pose and model)
-// and `Substrate/ElysiumNpcKernelAnim10_2.cpp` (`MaintainEyeDirection`, the three melee selectors and
-// the zombie idle gate). The tests are `Tests/ElysiumNpcKernelAnim10Tests.cpp`. The walked prose is
+// The definitions are in `Substrate/ElysiumNpcKernelAnim10.cpp` (activity, sequence, pose and
+// model) and `Substrate/ElysiumNpcKernelAnim10_2.cpp` (the three melee selectors and the zombie
+// idle gate). The tests are `Tests/ElysiumNpcKernelAnim10Tests.cpp`. The walked prose is
 // `docs/vtmb/npc-ai/shape.md` § "Story 29d, families Anim10 and SpeciesAnim10".
 //
 // --- What this family is -------------------------------------------------------------------------
 //
-// Twenty-seven rows across seven retail surfaces:
+// The rows across seven retail surfaces (the `CAI_BaseHumanoid` / `CAI_ExpressiveNPC` rows
+// `0x1025e510`, `0x10260dc0` and `0x1025fa50` were deleted by 0019 story 5 step 1: no instance):
 //
-//   * **slot 105 `SetModel`** — the Troika body `0x10298ce0`, the `CAI_BaseHumanoid` pose-parameter
-//     cache `0x1025e510`, and the two vocalization-group arms `0x1037b1f0` / `0x103e0540`.
+//   * **slot 105 `SetModel`** — the Troika body `0x10298ce0` and the two vocalization-group arms
+//     `0x1037b1f0` / `0x103e0540`.
 //   * **the activity triple** — `SetActivityAndSequence` `0x10272490`, the base `SetActivity`
 //     `0x102725d0`, `MaintainActivity` `0x102727d0` and `AdvanceToIdealActivity` `0x102726a0`.
 //   * **slot 310 `SetActivity`** — the Troika body `0x10295750` and the two Tzimisce arms.
 //   * **slot 375 `NPC_EarlyTranslateActivity`** — the Troika body `0x10295590` and its five species
 //     arms.
 //   * **slot 314 `UpdatePoseParameters`** — `0x102bf070`.
-//   * **slots 326 / 330 / 359 / 584** — the Troika knockback gate, the near-miss flinch, the Auspex
-//     aura index, and `CAI_ExpressiveNPC`'s expresser forward.
-//   * **slot 333's `CAI_BaseHumanoid` body** `0x1025fa50`, and family **SpeciesAnim10**'s four
-//     species arms of slots 604 and 509.
+//   * **slots 326 / 330 / 359** — the Troika knockback gate, the near-miss flinch and the Auspex
+//     aura index.
+//   * family **SpeciesAnim10**'s four species arms of slots 604 and 509.
 //
 // **ANIMATION IS STATE, NOT A PICTURE.** An activity id, the sequence chosen for it, a translation
 // table's answer and the ORDER of a pose write against a dispatch are all things a retail program
@@ -58,21 +58,6 @@ void TroikaSetModel(TCHAR* ModelName);
  *  override row's retail ADDRESS, the convention family **Precache10** set for slot 104. */
 bool SetModelSpecies(TCHAR* ModelName);
 
-/** `CAI_BaseHumanoid::SetModel` (`0x1025e510`), `CAI_BaseHumanoid#105`. 485 bytes:
- *  `CBaseCombatCharacter::SetModel` and then TWENTY-SIX pose-parameter indices cached into the
- *  consecutive words `+0x5fb8`..`+0x601c`, in retail's own order.
- *
- *  **The first thirteen go through `CBaseAnimating::LookupPoseParameter` and the last thirteen
- *  through `thunk_FUN_100b5d10`, which is `LookupFlexController`** — story 29c-1's family Anim
- *  ported that body and recorded that it answers **0**, not -1, on a miss. So the two halves of this
- *  cache take different miss values, and that asymmetry is retail's.
- *
- *  UNREACHABLE TODAY, and named: `CAI_BaseHumanoid` sits under `CAI_BaseActor` on a sibling SDK
- *  branch with no entity classname anywhere in the 77-class census, so no spawned `npc_*` resolves
- *  to it and this arm never runs in this runtime. It is ported because it is the only recovered
- *  reading of what the 26 words at `+0x5fb8` ARE. */
-void BaseHumanoidSetModel(TCHAR* ModelName);
-
 /** `CNPC_VGhoulCroucher::SetModel` (`0x1037b1f0`) and `CNPC_VZombie::SetModel` (`0x103e0540`) — the
  *  SAME 119 bytes twice, one per class, and so one port body with the retail address of the arm it
  *  is running as. The Troika base runs FIRST (so the model write happens before `IsMale` is ever
@@ -80,16 +65,6 @@ void BaseHumanoidSetModel(TCHAR* ModelName);
  *  `"Zombie_Male"` or `"Zombie_Female"`, then `+0x00bc` takes the literal 2, then the group is
  *  resolved through the vocalization registry into `+0x00b4`. */
 void ZombieLineSetModel(TCHAR* ModelName, const TCHAR* RetailBody);
-
-/** The 26 pose-parameter cache `0x1025e510` fills, `+0x5fb8`..`+0x601c`. Declared by offset and
- *  retail name as family Lifecycle declares its unbound words: no port member claimed them, and
- *  `0x1025efc0` (the head-pose clear `MaintainEyeDirection` runs) writes three of them by index. */
-static constexpr int32 NumHumanoidPoseParams = 26;
-int32 HumanoidPoseParams[NumHumanoidPoseParams] = {};
-
-/** The 26 retail strings, in the order `0x1025e510` pushes them. Index 0..12 are the
- *  `LookupPoseParameter` half and 13..25 the `LookupFlexController` half. */
-static const TCHAR* HumanoidPoseParamName(int32 Index);
 
 // Steps 2 and 3 of the Troika body are already ported and are CALLED, not re-read:
 // `SetHullSizeNormal(bool)` is family **Motor10**'s `0x10273070` and `SetDefaultEyeOffset()` is
@@ -426,77 +401,6 @@ bool NearMissBands(const FElysiumEntity* Weapon, float& OutNearUnits, float& Out
  *  **UNRECOVERED** as a port concept: nothing in this substrate marks an entity unselectable. It
  *  answers FALSE, the arm that lets the rest of the ladder run, so no aura is silently refused. */
 bool EntityUnselectable() const;
-
-// --- Slot 584, `CAI_ExpressiveNPC`'s expresser forward ---------------------------------------------
-
-/** `FUN_10260dc0` (`CAI_BaseHumanoid#584`, `CAI_ExpressiveNPC#584`), an 11-byte tail jump through
- *  the expresser pointer at `+0x5f48` into `0x10311c10` with the concept id and a modifier string.
- *
- *  Two facts are recorded rather than hidden. (1) **The arities differ.** The generated slot-584
- *  signature carries the TROIKA body's (`0x1028d910`, `ResetAllThinkStamps`, one int), so the
- *  modifier string has no way through the slot and this arm is dispatched with an empty one.
- *  (2) **Half of it is reachable, and the checklist's walk said otherwise.** The census gives
- *  `CAI_BaseHumanoid` no entity classname, so that half is unreachable; but `CAI_ExpressiveNPC`
- *  claims **`npc_TestBaseHumanoid`**, so a body spawned under that classname DOES take this arm.
- *  The census also names slot 584 `Speak(AIConcept_t, const char*)`, which is the retail name the
- *  coined `BaseSpeak` was standing in for.
- *
- *  **SEAM**: family Lifecycle's `ExpressiveNpcExpresser()` answers null (no expression substrate),
- *  which is retail's own null-expresser fault; the port records the speak request instead of
- *  faulting. NAMED CRASH GUARD. */
-struct FExpresserSpeak
-{
-	int32 ConceptId = 0;
-	FString Modifier;
-};
-TArray<FExpresserSpeak> ExpresserSpeaks;
-void ExpressiveNpcSpeak(int32 ConceptId, const TCHAR* Modifier);
-
-/** The species prologue of slot 584, called from the TOP of `FElysiumNpc::Slot584`
- *  (`ElysiumNpcKernelClosure.cpp`, story 29c-1's `ResetAllThinkStamps`). True means the arm above
- *  ran and the Troika body must not. */
-bool Slot584Species(int32 ConceptId);
-
-// --- Slot 333's `CAI_BaseHumanoid` body, `0x1025fa50` ----------------------------------------------
-//
-// The look queue (`LookTargets`, family Facing), the named expression scene (`ExpressionScene` /
-// `ExpressionSceneEnt`, family BaseHelpers), `HasActiveLookTargets` and `HumanoidValidEyeTarget`
-// (families BaseHelpers and Senses) and `PickLookTarget` (family Lifecycle) all already exist; what
-// this body adds is the head vector it accumulates into and the two stamps around it.
-
-/** `+0x5f74`..`+0x5f7c` — the blended head direction `MaintainEyeDirection` writes and re-reads. */
-FVector HumanoidHeadVector = FVector::ZeroVector;
-
-/** `+0x5f80` — the curtime deadline the body toggles `+0x0854` on, re-armed to
- *  `curtime + RandomFloat(1.5, 4.5)`. */
-double HumanoidBlinkToggleTime = 0.0;
-
-/** `+0x0854` — the `CBaseFlex` word the deadline above TOGGLES (`x = (x == 0)`). Retail's only use
- *  of it in this body is the toggle itself. */
-int32 FlexToggleWord = 0;
-
-/** `CAI_BaseHumanoid::MaintainEyeDirection` (`0x1025fa50`), `CAI_BaseHumanoid#333`. 2,226 bytes.
- *  A DISTINCT retail function beside the Troika slot-333 body (`0x102bff20`, story 29c) that owns
- *  the slot, so it takes its own name and is never `hand:`. UNREACHABLE TODAY for the same census
- *  reason `BaseHumanoidSetModel` is, and named there.
- *
- *  Read off the LISTING: the decompiler aliases six stack floats across the three passes and loses
- *  which vector is which. See the definition for the five passes. */
-void BaseHumanoidMaintainEyeDirection(float Interval);
-
-/** `1025fb7a`, the cycler-actor acquisition arm of the body above. Split out because BOTH of its
- *  callers are inside one `if`/`else` in retail and the arm itself is fifteen lines: the two FLOAT
- *  ConVars, `RandomFloat` between them, and `AddLookTarget(UTIL_PlayerByIndex(1), 0.5, duration)`. */
-void MaintainEyeDirectionCyclerArm();
-
-/** `0x1025efc0` — the head-pose clear `MaintainEyeDirection` runs third. Writes pose parameters
- *  `HumanoidPoseParams[10..12]` (head_yaw / head_pitch / head_roll) to 0 through the animating
- *  tier's `SetPoseParameter`, flushes the bone cache, and clears the two cached-direction bits of
- *  `HumanoidHeadCacheBits` (+0x5f4c, family Facing) so the next read recomputes.
- *  **SEAM**: the pose write and the bone-cache flush have no callee here; the two cache bits are a
- *  port member and ARE cleared. */
-void ClearHeadPoseParameters();
-
 
 // =================================================================================================
 // Family **SpeciesAnim10** — four species arms of slots 604 and 509.

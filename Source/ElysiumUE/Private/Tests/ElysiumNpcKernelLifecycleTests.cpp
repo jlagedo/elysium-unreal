@@ -347,7 +347,7 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 117 `ObjectCaps` — the four species overrides.
+// Slot 117 `ObjectCaps` — the species overrides.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleObjectCapsTest,
@@ -356,7 +356,9 @@ bool FElysiumNpcKernelLifecycleObjectCapsTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const ElysiumEntityCaps::FSpeciesRow* Rows = ElysiumEntityCaps::SpeciesRows(Count);
-	TestEqual(TEXT("four classes override slot 117"), Count, 4);
+	// Retail has four slot-117 overrides; `CGeneric_NPC_bathack`'s and `CScriptedTarget`'s have no
+	// instance and no row.
+	TestEqual(TEXT("two classes with an instance override slot 117"), Count, 2);
 	TMap<FString, FString> ByClass;
 	for (int32 i = 0; i < Count; ++i)
 	{
@@ -366,27 +368,21 @@ bool FElysiumNpcKernelLifecycleObjectCapsTest::RunTest(const FString&)
 	TestEqual(TEXT("CAI_Hint's body"), ByClass.FindRef(TEXT("CAI_Hint")), FString(TEXT("0x102d2ee0")));
 	TestEqual(TEXT("CAI_TestHull's body"), ByClass.FindRef(TEXT("CAI_TestHull")),
 		FString(TEXT("0x102d7290")));
-	TestEqual(TEXT("CScriptedTarget's body"), ByClass.FindRef(TEXT("CScriptedTarget")),
-		FString(TEXT("0x1034d410")));
-	TestEqual(TEXT("CGeneric_NPC_bathack's body"), ByClass.FindRef(TEXT("CGeneric_NPC_bathack")),
-		FString(TEXT("0x1035ad50")));
+	TestNull(TEXT("CScriptedTarget has no instance and no row"),
+		ElysiumEntityCaps::SpeciesRowOf(TEXT("CScriptedTarget")));
+	TestNull(TEXT("CGeneric_NPC_bathack has no instance and no row"),
+		ElysiumEntityCaps::SpeciesRowOf(TEXT("CGeneric_NPC_bathack")));
 
 	const int32 Base = ElysiumEntityCaps::AcrossTransition;
-	// The three `& 0xfffffffd` classes end at ZERO from the base's single bit, which is retail
+	// The two `& 0xfffffffd` classes end at ZERO from the base's single bit, which is retail
 	// saying "I am never carried across a level change".
 	TestEqual(TEXT("CAI_Hint clears the transition bit"),
 		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CAI_Hint")), 0);
 	TestEqual(TEXT("CAI_TestHull clears it too"),
 		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CAI_TestHull")), 0);
-	TestEqual(TEXT("CScriptedTarget clears it too"),
-		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CScriptedTarget")), 0);
 	// The mask is a CLEAR, not a replace: every other bit survives it.
 	TestEqual(TEXT("CAI_Hint leaves the other bits alone"),
 		ElysiumEntityCaps::SpeciesObjectCaps(Base | 0x40, TEXT("CAI_Hint")), 0x40);
-	// `CGeneric_NPC_bathack` is the odd one: it ORs bit 3 in and keeps the transition bit.
-	TestEqual(TEXT("CGeneric_NPC_bathack adds bit 3 and keeps the transition bit"),
-		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CGeneric_NPC_bathack")),
-		Base | ElysiumEntityCaps::Bit3);
 	// A class with no row does not override the slot at all, which is the base's own answer.
 	TestEqual(TEXT("an unlisted class answers the base"),
 		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CNPC_VHumanCombatant")), Base);
@@ -531,21 +527,6 @@ bool FElysiumNpcKernelLifecyclePrecacheTest::RunTest(const FString&)
 	FElysiumNpc::ConversationPlacePrecache(TEXT("loop.wav"), FString(), Requests);
 	TestFalse(TEXT("an empty ONE-SHOT is never warned about — the asymmetry is retail's"),
 		Requests[1].bWarnedInvalid);
-
-	// `CGenericNPC::Precache` (0x1034aa40) — three weapon sounds then the model, in that order.
-	Requests.Reset();
-	FElysiumNpc::GenericNpcPrecache(TEXT("models/thug.mdl"), Requests);
-	TestEqual(TEXT("three sounds plus the model"), Requests.Num(), 4);
-	for (int32 i = 0; i < 3; ++i)
-	{
-		TestFalse(TEXT("the first three go through the SOUND precacher"), Requests[i].bModel);
-	}
-	TestTrue(TEXT("and the last through the MODEL precacher"), Requests[3].bModel);
-	TestEqual(TEXT("which is this entity's own model"), Requests[3].Name,
-		FString(TEXT("models/thug.mdl")));
-	int32 SoundCount = 0;
-	FElysiumNpc::GenericNpcWeaponSounds(SoundCount);
-	TestEqual(TEXT("the table's loop bound 0xc at stride 4 is three entries"), SoundCount, 3);
 
 	// `CNPC_VCamera::Precache` (0x103689c0) — the model-key fallback.
 	TestEqual(TEXT("an authored camera model is kept"),
@@ -753,7 +734,7 @@ bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 434 `PrescheduleThink`, slot 512 `GetExpresser`, slot 585 `PickLookTarget`.
+// Slot 434 `PrescheduleThink`.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSpeciesTest,
@@ -788,22 +769,6 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 	TestNull(TEXT("npc_VCop resolves to no census class"),
 		ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCop"))));
 
-	// Slot 512 (0x10260da0): the per-instance expresser at +0x5f48. SEAM — null, which is also the
-	// base body's answer.
-	TestNull(TEXT("there is no expresser to point at"), N.ExpressiveNpcExpresser());
-
-	// Slot 585 (0x1025f1c0) = `PickLookTarget`. With no enemy and no move in flight both live arms
-	// decline and the scan arm has no query, so the pick is empty and the caller's durations stand.
-	FElysiumNpc::FLookTargetPick Pick = N.PickLookTarget(/*bExcludePlayers=*/false, 1.5f, 2.5f);
-	TestEqual(TEXT("no arm fires with no enemy and no path"),
-		Pick.Arm, FElysiumNpc::FLookTargetPick::EArm::None);
-	TestEqual(TEXT("and the caller's min duration stands"), Pick.MinDuration, 1.5f);
-	TestEqual(TEXT("and its max"), Pick.MaxDuration, 2.5f);
-	TestFalse(TEXT("with no target"), Pick.Target.IsSet());
-	// The head-target predicate is the seam every arm consults, and it ACCEPTS — which is what keeps
-	// the arm order observable rather than emptying every arm.
-	TestTrue(TEXT("ValidHeadTarget accepts, which is retail's accepting arm"),
-		N.ValidHeadTarget(FVector::ZeroVector));
 	return true;
 }
 

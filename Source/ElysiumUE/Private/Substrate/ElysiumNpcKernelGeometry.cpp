@@ -8,8 +8,8 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 
-// Story 29c-1, family **Geometry** — the six eye/anchor slots (193, 194, 195, 197, 533 and
-// `CNPC_Crow`'s override of 192), the hull-bit query (slot 337), `SetSize` (slot 213) and the four
+// Story 29c-1, family **Geometry** — the eye/anchor slots (193, 194, 195, 197, 533 and the
+// species-dispatched 192), the hull-bit query (slot 337), `SetSize` (slot 213) and the four
 // bodies that push one body out of another. The declarations, the family's four standing facts and
 // every seam are `Substrate/ElysiumNpcKernelGeometry.inl`; the walked prose is
 // `docs/vtmb/npc-ai/shape.md`.
@@ -37,9 +37,6 @@ namespace
 	// the uniform 0..0.5 a single draw would give.
 	constexpr float GBodyTargetNoiseMin = 0.f;
 	constexpr float GBodyTargetNoiseMax = 0.5f;
-
-	// `_DAT_1046bac0` = 6.0f, SOURCE units — `CNPC_Crow::vfunc192`'s Z lift over `GetOrigin()`.
-	constexpr float GCrowCentreLiftUnits = 6.0f;
 
 	// The fixed eye-offset override `CAI_BaseNPC::FUN_10274db0` answers when the debug-overlay bit is
 	// set: an immediate `0x41c00000` on Z with X and Y zeroed, i.e. 1.5 SOURCE units.
@@ -125,19 +122,20 @@ namespace
 }
 
 // =================================================================================================
-// Slot 193 — `EyePosition`, `0x100b4b40` with `0x101aae60` and `0x1025e8e0` in front of it
+// Slot 193 — `EyePosition`, `0x100b4b40` with `0x101aae60` in front of it
 // =================================================================================================
 
 const FElysiumNpc::FEyePositionSpecies* FElysiumNpc::EyePositionSpeciesRows(int32& OutCount)
 {
-	// Slot 193 is filled by 713 classes across both modules; these are the two whose body is not
-	// `CAISound::FUN_100b4b40` AND whose class is in the `CAI_BaseNPC` census this leaf dispatches
-	// over. `CBaseCineCam` (`0x1006d910`) and `CBasePlayer` (`0x100b7f70`) are not NPC classes and
-	// `CItemContainerLock` (`0x102243c0`) is an item; none of the three is reachable from here.
+	// Slot 193 is filled by 713 classes across both modules; this is the one live class whose body
+	// is not `CAISound::FUN_100b4b40` AND whose class is in the `CAI_BaseNPC` census this leaf
+	// dispatches over. `CAI_BaseHumanoid` (`0x1025e8e0`) is the other, and has no instance: its arm
+	// was deleted by 0019 story 5 step 1. `CBaseCineCam` (`0x1006d910`) and `CBasePlayer`
+	// (`0x100b7f70`) are not NPC classes and `CItemContainerLock` (`0x102243c0`) is an item; none
+	// of the three is reachable from here.
 	static const FEyePositionSpecies Rows[] =
 	{
 		{ TEXT("CPayphone"),        TEXT("0x101aae60") },
-		{ TEXT("CAI_BaseHumanoid"), TEXT("0x1025e8e0") },
 	};
 	OutCount = UE_ARRAY_COUNT(Rows);
 	return Rows;
@@ -191,25 +189,6 @@ FVector FElysiumNpc::EyePosition() const
 		return FElysiumCombatCharacter::EyePosition();
 	}
 
-	// `CAI_BaseHumanoid::vfunc193` `0x1025e8e0`, 40 bytes: `thunk_FUN_1025e7b0(this)` then the three
-	// cached words at `+0x5f50`/`+0x5f54`/`+0x5f58`. The refresh (`0x1025e7b0`) is lazily latched on
-	// two bits of `+0x5f4c`: bit 1 guards the eye point itself, which comes from a NAMED attachment
-	// and falls back to `CBaseEntity::EyePosition()` plus `GetAngles()` when the model has no such
-	// attachment, and bit 0 guards a second cached vector from that eye to slot 278. No class in the
-	// spawnable census derives from `CAI_BaseHumanoid` — the Troika line does not — so this arm is
-	// reached only by retail class name.
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x1025e8e0")) == 0)
-	{
-		FVector CachedCm = FVector::ZeroVector;
-		if (HumanoidEyeCache(CachedCm))
-		{
-			return CachedCm;
-		}
-		// The attachment is missing, which is the arm `0x1025e7b0` itself takes: it seeds the cache
-		// from `CAISound::FUN_100b4b40`, so the cached read answers the base body.
-		return FElysiumCombatCharacter::EyePosition();
-	}
-
 	// `CAISound::FUN_100b4b40` `0x100b4b40`, 85 bytes, the Troika line's own and the body 21 classes
 	// in this family and 24 call sites reach: `GetAbsOrigin()` (slot 217) plus `m_vecViewOffset`
 	// (`+0x0184`), component by component. `FElysiumCombatCharacter::EyePosition()` is that sum with
@@ -223,13 +202,6 @@ bool FElysiumNpc::BoneWorldPosition(const TCHAR* /*BoneName*/, FVector& /*OutPos
 	// `GetBoneTransform` + two `VectorTransform`s for the werewolf's `Bip01`. Nothing in this
 	// substrate hands the kernel a bone table.
 	++BoneWorldPositionCalls;
-	return false;
-}
-
-bool FElysiumNpc::HumanoidEyeCache(FVector& /*OutPositionCm*/) const
-{
-	// SEAM for `0x1025e7b0`'s attachment read. The attachment NAME is **unrecovered**: the string
-	// pointer is `&DAT_105c8ed8` and the decompiler folded the `PUSH` away.
 	return false;
 }
 
@@ -331,29 +303,15 @@ FVector FElysiumNpc::BodyTarget(const FVector& /*PosSrc*/, bool bNoisy, bool bAi
 }
 
 // =================================================================================================
-// Slot 192 — `CNPC_Crow::vfunc192`, `0x10357760`
+// Slot 192 — the species-dispatched `WorldSpaceCenter`
 // =================================================================================================
 
 FVector FElysiumNpc::SpeciesWorldSpaceCenter() const
 {
-	// `0x10357760`, 69 bytes. Three chained dispatches of slot 220 `GetOrigin()` (vtable `+0x370`),
-	// whose results are kept in EDI, EBX and EAX, and then:
-	//
-	//     out.x = EBX[0]          (the SECOND call's X)
-	//     out.y = EDI[1]          (the FIRST call's Y)
-	//     out.z = EAX[2] + 6.0    (the THIRD call's Z, plus `_DAT_1046bac0`)
-	//
-	// All three answer the same vector, so the whole of it is `GetOrigin() + (0, 0, 6)`. The crow
-	// does not use the base body's bounds midpoint: its centre is a fixed lift off its own origin,
-	// which is what keeps a flying bird's centre from breathing with the wing animation.
-	if (ElysiumNpcKernelClass::DerivesFrom(RetailClass(), TEXT("CNPC_Crow")))
-	{
-		// Slot 220 `GetOrigin()` is the LOCAL origin, which is this chain's `Origin`.
-		return Origin + FVector(0.f, 0.f, GCrowCentreLiftUnits * ElysiumMove::U);
-	}
-
-	// Every other class takes the Troika line's `0x10027160`, slot 192's own body, which is another
-	// story's row and is still a generated stub.
+	// Slot 192's only species override in the census is `CNPC_Crow::vfunc192` (`0x10357760`,
+	// `GetOrigin() + (0, 0, 6)`), and no map stands that class, so it carries no arm here. Every
+	// class takes the Troika line's `0x10027160`, slot 192's own body, which is another story's row
+	// and is still a generated stub.
 	return const_cast<FElysiumNpc*>(this)->WorldSpaceCenter();
 }
 
