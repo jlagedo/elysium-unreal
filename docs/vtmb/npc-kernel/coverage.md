@@ -11,7 +11,7 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5185 |
-| … cited by the port | 2019 |
+| … cited by the port | 2022 |
 | … cited by the oracle | 2325 |
 | … cited by neither | 2603 |
 | … damaged decompilation | 80 |
@@ -40,9 +40,9 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by port | Cited by oracle | **Neither** |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0–4 | 1474 | 658 | 215 | 110 | 488 | 3 | 0 | 791 | 737 | **0** |
-| 5–9 | 258 | 149 | 47 | 27 | 35 | 0 | 0 | 225 | 232 | **0** |
+| 5–9 | 258 | 149 | 47 | 27 | 35 | 0 | 0 | 226 | 232 | **0** |
 | 10–18 | 344 | 167 | 105 | 9 | 63 | 0 | 0 | 265 | 267 | **0** |
-| 19–29 | 468 | 380 | 13 | 4 | 71 | 0 | 0 | 210 | 208 | **0** |
+| 19–29 | 468 | 380 | 13 | 4 | 71 | 0 | 0 | 212 | 208 | **0** |
 
 ## Tunables
 
@@ -395,7 +395,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000b186` | CBaseEntity::IsFloating | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:449 |
 | `0x1000b4f6` | CBaseAnimating::GetSeqDesc | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDebug.cpp:1103 |
 | `0x1000b5cd` | CBaseEntity::GetDebugName | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelConditions10.cpp:163, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDebug10.cpp:172 |
-| `0x1000c6da` | thunk_FUN_101a8930 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:556 |
+| `0x1000c6da` | thunk_FUN_101a8930 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:557 |
 | `0x1000cb94` | CBaseEntity::UpdateOnRemove | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMotor10.cpp:941 |
 | `0x1000d2c9` | CBaseVampireSkillEntity::vfunc39 | Source/ElysiumUE/Private/Substrate/ElysiumSkillClasses.h:31 |
 | `0x1000e854` | CBaseCombatCharacter::OnTakeDamage | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1502 |
@@ -577,7 +577,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1020e740` | FUN_1020e740 | Source/ElysiumUE/Private/Substrate/ElysiumElevator.cpp:1 |
 | `0x1020f220` | CFuncElevator::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumElevator.cpp:23 |
 | `0x10212430` | FUN_10212430 | Source/ElysiumUE/Private/Substrate/ElysiumSignClasses.cpp:9 |
-| `0x10212600` | CGameSign::vfunc44 | Source/ElysiumUE/Private/Tests/ElysiumInteractionTests.cpp:146, Source/ElysiumUE/Public/ElysiumEntity.h:347 |
+| `0x10212600` | CGameSign::vfunc44 | Source/ElysiumUE/Private/Tests/ElysiumInteractionTests.cpp:146, Source/ElysiumUE/Public/ElysiumEntity.h:348 |
 | `0x10212da0` | CGameSign::LoadSignData | Source/ElysiumUE/Private/Substrate/ElysiumSignClasses.cpp:8, Source/ElysiumUE/Private/Substrate/ElysiumSignData.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumSignData.h:11 |
 | `0x10214d60` | FUN_10214d60 | Source/ElysiumUE/Private/Substrate/ElysiumPropLeaves.h:10 |
 | `0x10214e30` | datamap_CPropButton_builder | Source/ElysiumUE/Private/Substrate/ElysiumPropLeaves.h:10 |
@@ -711,7 +711,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1033cb00` | FUN_1033cb00 | Source/ElysiumUE/Private/Substrate/ElysiumMiscFlags.h:6, Source/ElysiumUE/Private/Substrate/ElysiumMiscFlags.h:31, Source/ElysiumUE/Private/Tests/ElysiumScheduleTextTests.cpp:552 |
 | `0x1033f750` | CBaseCombatCharacter::PrecacheOnce | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelPrecache10.cpp:500 |
 | `0x103418f0` | CBaseCombatCharacter::InputWillTalk | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.h:17, +3 more |
-| `0x10342590` | FUN_10342590 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:747, Source/ElysiumUE/Private/Tests/ElysiumTerminalPinTests.cpp:169, Source/ElysiumUE/Public/ElysiumEntity.h:311 |
+| `0x10342590` | FUN_10342590 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:747, Source/ElysiumUE/Private/Tests/ElysiumTerminalPinTests.cpp:169, Source/ElysiumUE/Public/ElysiumEntity.h:312 |
 | `0x1034bbf0` | FUN_1034bbf0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:90, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:152, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:196 |
 | `0x1034c8b0` | FUN_1034c8b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:91, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:196, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:205 |
 | `0x1034d2d0` | FUN_1034d2d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:364, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:33, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:92, +2 more |
@@ -1640,7 +1640,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:303 | ``inline constexpr float kVolDefaultRun  = 0.50f;   // `0x10449270``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelConditions.cpp:48 | ``// The facing dot both bodies share (`FCOMP double ptr [0x10449270]`).`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelEntityChain2.cpp:629 | ``// Both constants are DOUBLES (`10182c76 FSUB double ptr [0x10449270]`, 0.5, and`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:867 | ``// The listing settles both polarities: `FCOMP double [0x10449270]` with `TEST AH,0x5 / JP` is`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:868 | ``// The listing settles both polarities: `FCOMP double [0x10449270]` with `TEST AH,0x5 / JP` is`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:306 | ``inline constexpr float kVolDuckScale = 0.35f;   // `0x10462918``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:307 | ``inline constexpr float kVolClamp     = 1.0f;    // `0x10449280``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:410 | ``// `x footstep_pc_vol`, then clamped at 1 (`0x1011ec9c`..`0x10449280`). Split out from the clock`` |
@@ -1721,8 +1721,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDebug2.cpp:458 | ``//   1. `Q_snprintf(buf, 512, "%i", m_nHintType)` — the FORMAT IS BARE `"%i"` (`0x1057ae88`),`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDialogue.cpp:11 | ``//      not the 5 s the walk states (`corpus asm 102a0d20`, `FADD float ptr [0x104454c0]`).`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDialogue.cpp:45 | ``// `corpus asm 102a0d20` shows the `FADD float ptr [0x104454c0]` the decompiler folded into a`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:671 | ``// **The slop window is ONE second, not five.** `0x10295414` is `FSUB [0x104454c0]` and`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:673 | ``// `docs/vtmb/animation_and_movers.md:659` (`FLD dword ptr [0x104454c0] ; 1.0f`). 29c's walk says`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:672 | ``// **The slop window is ONE second, not five.** `0x10295414` is `FSUB [0x104454c0]` and`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelMisc.cpp:674 | ``// `docs/vtmb/animation_and_movers.md:659` (`FLD dword ptr [0x104454c0] ; 1.0f`). 29c's walk says`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:659 | ``// The 29c walk says curtime+5s; `corpus asm 102a0d20` shows `FADD [0x104454c0]` = 1.0.`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMiscTests.cpp:518 | ``// Arm 3: the slop window is ONE second (`FSUB [0x104454c0]`, the shared 1.0f), not five, and it`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDialogue.cpp:44 | ``// pinned `vampire.dll`'s `.rdata` (image base `0x10000000`, VA `0x10445000`, raw `0x445000`);`` |

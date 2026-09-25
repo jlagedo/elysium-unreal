@@ -10,6 +10,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29c-1, family **Sounds** — the NPC's sound and speech surface.
@@ -77,6 +78,9 @@ bool FElysiumNpcKernelSoundsTableTest::RunTest(const FString&)
 			Row.Slot);
 		TestNotNull(*(Where + TEXT(" names a census class")),
 			ElysiumNpcKernelClass::Find(Row.RetailClass));
+		// Every slot, not just the first: a class with no instance carries no row at all.
+		TestFalse(*(Where + TEXT(" is not on a class with no instance")),
+			ElysiumNpcDeadClasses::Contains(Row.RetailClass));
 		TestTrue(*(Where + TEXT(" cites a retail address")),
 			Row.RetailAddress != nullptr && FString(Row.RetailAddress).StartsWith(TEXT("0x10")));
 		TestTrue(*(Where + TEXT(" is a sound slot")),

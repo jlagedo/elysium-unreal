@@ -2701,9 +2701,10 @@ section for where it comes from and why it misses the werewolf.
 **The port no longer carries these classes' code (2026-09-25, 0019 story 5 step 1).** Every
 hand-written body, dispatcher arm, table row and storage word that served only these classes is
 deleted. Their census stays: `ElysiumNpcKernelShape.cpp` keeps each class row, classname, layout
-word and override row (address and verdict), and the overlay rows stay `dead` with target `-`.
-Kept as census as well: the generated activity-table rows (`PreTranslate_Stalker`, the
-`CNPC_Crow` task handlers) and the hull-table rows. Retail confirms `npc_bullseye`'s factory
+word and override row (address and verdict), and the overlay rows stay `dead` with target `-`,
+all but one. Kept as census as well: the generated activity-table rows (`PreTranslate_Stalker`,
+the `CNPC_Crow` task handlers) and the hull-table rows; `0x103b2e60` keeps its target,
+`ElysiumNpcActivityTables.cpp:PreTranslate_Stalker`, because that generated row still stands. Retail confirms `npc_bullseye`'s factory
 (`0x10356630`); the port comments calling `CNPC_Bullseye` classname-less were stale. The record is
 `docs/specs/0019-npc-kernel-rework/story-5/deletions-step1.tsv`.
 

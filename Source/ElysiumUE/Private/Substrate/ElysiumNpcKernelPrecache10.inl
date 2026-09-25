@@ -13,14 +13,15 @@
 //
 // --- What this family is -------------------------------------------------------------------------
 //
-// **One port method with twenty-six arms, not twenty-six methods.** Twenty-eight `rule` rows fill
-// exactly two retail functions on the NPC line — `CAI_BaseNPC::Precache` `0x1027bb50` and
-// `CAI_BaseNPCTroika::Precache` `0x10298ad0`, the latter owning slot 104 — plus twenty-three
-// species overrides of that one slot and three `CNPCMaker*` bodies that land on
+// **One port method with twenty-two arms, not twenty-two methods.** The family's rows fill two
+// retail functions on the NPC line — `CAI_BaseNPC::Precache` `0x1027bb50` and
+// `CAI_BaseNPCTroika::Precache` `0x10298ad0`, the latter owning slot 104 — plus the census's
+// twenty-five distinct species bodies of that one slot and three `CNPCMaker*` bodies that land on
 // `FElysiumNpcMaker::Precache` instead (`Substrate/ElysiumNpcMaker.h`), because this port models
 // makers as a separate type and an `FElysiumNpc` arm would never run on one. Six of the
-// twenty-three overrides sit on classes with no instance in the install (`CNPC_Crow`, the three
-// generic classes, `CNPC_VTest`, `CGenericNPC`) and carry no port arm.
+// twenty-five sit on classes with no instance in the install (`CNPC_Crow`, the three generic
+// classes, `CNPC_VTest`, `CGenericNPC`) and carry no port arm; the other nineteen and the three
+// maker rows are the twenty-two arms.
 //
 // A species override is an `OverrideOf(RetailClass(), 104)` case inside slot 104's one port
 // method, keyed through `Substrate/ElysiumNpcKernelClassLookup.h` — the convention story 29c-1 set

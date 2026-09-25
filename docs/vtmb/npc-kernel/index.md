@@ -2093,7 +2093,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103b2590` | CNPC_VSheriffSwarm::vfunc553 | docs/vtmb/npc-ai/conditions-and-states.md § The two ranged attack bands — `0x1026d890`, `0x1026d920` (2026-09-13) |
 | `0x103b25c0` | CNPC_VSheriffSwarm::vfunc554 | docs/vtmb/npc-ai/conditions-and-states.md § The two ranged attack bands — `0x1026d890`, `0x1026d920` (2026-09-13) |
 | `0x103b26f0` | FUN_103b26f0 | docs/vtmb/npc-ai/shape.md § Slot 609 — the three state gates, `0x103661f0`, `0x10367740`, `0x103b26f0` |
-| `0x103b2e60` | CNPC_VStalker::NPC_EarlyTranslateActivity | docs/vtmb/animation_and_movers.md § The complete NPC translation-virtual surface [VtMB decompiled + data-verified] |
+| `0x103b2e60` | CNPC_VStalker::NPC_EarlyTranslateActivity | docs/vtmb/animation_and_movers.md § The complete NPC translation-virtual surface [VtMB decompiled + data-verified], docs/vtmb/npc-ai/population.md § NPC classes with no instance (2026-09-21, 0019 story 1) |
 | `0x103b36d0` | CNPC_VTaxiDriver::StartTask | docs/vtmb/npc-ai/conditions-and-states.md § The bump and interrupt keys, `TASK_RUN_DIALOG`, `TASK_MELEE_KNOCKBACK` (2026-09-21, story 26) |
 | `0x103b38a0` | CNPC_VTaxiDriver::RunTask | docs/vtmb/npc-ai/conditions-and-states.md § The bump and interrupt keys, `TASK_RUN_DIALOG`, `TASK_MELEE_KNOCKBACK` (2026-09-21, story 26) |
 | `0x103b41e0` | CNPC_VTest::Precache | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VTest` — `0x103b41e0`, docs/vtmb/npc-ai/shape.md § The species vocalization table — slots 488–508, 620, 621 |

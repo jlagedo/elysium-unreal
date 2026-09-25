@@ -304,6 +304,13 @@ bool FElysiumNpcKernelPrecache10TroikaTest::RunTest(const FString&)
 	N.Precache();
 	TestFalse(TEXT("the disposition row was resolved at precache (+0x64e8)"),
 		N.StanceResolvedFor.IsEmpty());
+
+	// The char-template model seam for `FUN_10207e60` (template `+0x78`). Its one port reader went
+	// with the dead `CGenericSabbat_NPC::Precache` in 0019 story 5 step 1; it stays as the named
+	// input of the live `CAI_BaseNPCTroika::Spawn` `0x10298d30` call the port does not make yet.
+	// No template column is recovered, so it answers retail's null-template name: the empty string.
+	TestEqual(TEXT("the char-template model seam answers the empty name"),
+		N.CharTemplateModelName(), FString());
 	return true;
 }
 

@@ -31,14 +31,15 @@ namespace ElysiumEntityCaps
 	// across a `trigger_changelevel`.
 	inline constexpr int32 AcrossTransition = 0x2;
 
-	// --- Story 29c-1, family Lifecycle: the four slot-117 species overrides -------------------------
+	// --- Story 29c-1, family Lifecycle: the slot-117 species overrides ---------------------------
 	//
 	// Four classes on the `CAI_BaseNPC` line override `ObjectCaps` and none of them has a port class
-	// of its own, so they land as the census-keyed table retail's override set really is. Each row
-	// carries the retail class and the address of the body that fills slot 117 for it, so a reader
-	// can check it against `docs/vtmb/npc-kernel/slots.md`. Every one of them chains the base first
-	// (`CBaseEntity::ObjectCaps` `0x100b4320`) and then applies one mask. `CGeneric_NPC_bathack`
-	// (`0x1035ad50`) has no instance in the install and carries no row.
+	// of its own, so the two with an instance land as the census-keyed table retail's override set
+	// really is. Each row carries the retail class and the address of the body that fills slot 117
+	// for it, so a reader can check it against `docs/vtmb/npc-kernel/slots.md`. Every one of them
+	// chains the base first (`CBaseEntity::ObjectCaps` `0x100b4320`) and then applies one mask.
+	// `CScriptedTarget` (`0x1034d410`) and `CGeneric_NPC_bathack` (`0x1035ad50`) have no instance
+	// in the install and carry no row (0019 story 5 step 1).
 	struct FSpeciesRow
 	{
 		const TCHAR* RetailClass = nullptr;

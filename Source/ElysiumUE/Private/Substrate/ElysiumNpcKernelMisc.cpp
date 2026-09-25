@@ -360,9 +360,10 @@ const FElysiumNpc::FComponentFactory* FElysiumNpc::ComponentFactoryRows(int32& O
 {
 	// Every row was read off the decompiled C of the body it names, not off a summary. The species
 	// row is the whole of this family's live override set for the band: `CNPC_VRat` replaces the
-	// local navigator. The only other overrides of 424–430 are `CAI_BaseHumanoid`'s humanoid motor
-	// (`0x10260f40`) and navigator (`0x10262430`); the class has no instance, and 0019 story 5
-	// step 1 removed their rows (census only).
+	// local navigator. The only other overrides of 424–430 are `CAI_ExpressiveNPC`'s expresser
+	// factory at 424 (`0x10312cd0`) and `CAI_BaseHumanoid`'s humanoid motor (`0x10260f40`) and
+	// navigator (`0x10262430`); neither class has an instance, and 0019 story 5 step 1 removed
+	// their rows (census only).
 	static constexpr FComponentFactory Rows[] =
 	{
 		// slot, class, body, bytes, constructor, vftable assigned after construction

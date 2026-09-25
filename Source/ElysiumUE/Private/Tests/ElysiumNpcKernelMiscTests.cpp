@@ -685,7 +685,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMiscSpeciesThresholdTest,
 	"Elysium.Substrate.NpcKernelMisc.SpeciesThresholds", GElysiumNpcKernelMiscFlags)
 bool FElysiumNpcKernelMiscSpeciesThresholdTest::RunTest(const FString&)
 {
-	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_misc_species"), 0x1035a7e0);
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_misc_species"), 0x10364500);
 	Builder.AddNpc(TEXT("npc"), FVector::ZeroVector, GMiscSpawnableCombatant);
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));

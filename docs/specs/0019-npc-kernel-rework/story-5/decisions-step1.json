@@ -43,15 +43,17 @@
     "ElysiumNpcKernelTunables.h": "LookTargetGoalDistanceFloor and YawSpeedHumanoidCrouch lost their only readers; generated rulebook constants are retained."
   },
   "overlay": {
-    "rows_set_to_dash": 189,
+    "rows_set_to_dash": 192,
     "registry_rows_among_them": "dead-class registry: Default values stop being emitted",
     "retained_targets": [
       "103b2e60 ElysiumNpcActivityTables.cpp:PreTranslate_Stalker"
     ],
-    "evidence": "E:/elysium-work/research/npc-kernel/story-5/step1/1f-overlay.json"
+    "evidence": "E:/elysium-work/research/npc-kernel/story-5/step1/1f-overlay.json",
+    "outside_scope": "0x10260670 SetExpression, 0x10260750 ClearExpression and 0x10357be0 (crow fly step) are dead rows outside the 246 no-instance rows; their port helpers went with the dead bodies that called them, so their targets are '-' too (review follow-up). kernel_migration --check step1 now refuses any overlay target naming a symbol the step-0 tree defined and the step removed."
   },
   "findings_for_later_steps": {
-    "npc_ProneDialog": "FElysiumNpc::ClassHolstersOnState lists npc_ProneDialog; retail's CNPC_ProneDialog classnames are npc_VProneDialog and npc_VMercurio (factories.tsv). Pre-existing; step 2's factory correction owns it."
+    "npc_ProneDialog": "FElysiumNpc::ClassHolstersOnState lists npc_ProneDialog; retail's CNPC_ProneDialog classnames are npc_VProneDialog and npc_VMercurio (factories.tsv). Pre-existing; step 2's factory correction owns it.",
+    "slot_525_override_move": "FElysiumNpc::OverrideMove dispatches no live species arm: CNPC_VManBat 0x1038b120 (rule, flight step at navigator state 2, unported) and CNPC_VVampireBoss 0x103c5fe0 with seven heirs (present: m_bJumping != 0) are census rows the leaf never consults, so a jumping boss's move is not suppressed. Pre-existing; found by the step-1 review; the species migration (steps 3-4) owns it."
   },
   "guard_exemptions": {
     "FElysiumNpc::FUN_1025e780": {
@@ -88,9 +90,35 @@
         "10260dc0"
       ],
       "reason": "0x10311c10 is reached only through thunk_FUN_10311c10 from 0x10260dc0, the dead CAI_BaseHumanoid/CAI_ExpressiveNPC slot-584 body (corpus grep)."
+    },
+    "FElysiumNpc::SetExpression": {
+      "address": "10260670",
+      "retail_callers": [
+        "10260630",
+        "10260790"
+      ],
+      "caller_notes": {
+        "10260790": "CAI_BaseActor::InputSetExpressionOverride, an input handler only CAI_BaseActor's line carries; its one subclass CAI_BaseHumanoid has no instance, and no live class derives from CAI_BaseActor (classes.tsv)."
+      },
+      "reason": "dead=SetExpression row outside the no-instance scope; every retail caller is dead or on the dead CAI_BaseActor line."
+    },
+    "FElysiumNpc::ClearExpression": {
+      "address": "10260750",
+      "retail_callers": [
+        "10260670"
+      ],
+      "reason": "dead row outside the no-instance scope; its one retail caller is SetExpression, itself dead."
+    },
+    "FElysiumNpc::FUN_10357be0": {
+      "address": "10357be0",
+      "retail_callers": [
+        "10357ba0"
+      ],
+      "reason": "dead=crow flight step; its one retail caller is CNPC_Crow::OverrideMove, a no-instance row."
     }
   },
   "restored_by_guard": {
     "FElysiumNpc::CharTemplateModelName": "Seam for FUN_10207e60, whose live retail caller is CAI_BaseNPCTroika::Spawn 0x10298d30 (also the dead CGenericSabbat_NPC::Precache). Packet 1c deleted it with the Sabbat body; the live-definition guard refused, and it is restored as a retained contract. The port Spawn does not yet make the 0x10207e60 call: a pre-existing unported rule, not a step-1 change."
-  }
+  },
+  "guard_policy": "Only step 1's own scope (dead=class ... no instance, no live receiver) is unguarded. Every other step-0 body's definitions, matched by symbol and parameter list, must survive unless an exemption below re-derives: a live_home still defined, or a retail_callers list equal to the ledger's thunk-resolved callers, each a dead row or explained in caller_notes."
 }

@@ -10,11 +10,12 @@
 // `Tests/ElysiumNpcKernelFacingTests.cpp`. One file per family rather than 915 declarations
 // appended to an already-oversized header: the family boundary is what this story ports by.
 //
-// The family is the facing-target queue and the turn-activity ladder. Two of its rows fill slots
+// The family is the facing-target queue and the turn-activity ladder. Some of its rows fill slots
 // the GENERATOR already defines (`HeadDirection2D`/`HeadDirection3D` at 370/371, `OnChangeActivity`
-// at 465, `AddLookTarget` at 535/536): 29c's verdict for those is the TROIKA-LINE body, and the
-// rows this family carries are other branches' fills of the same slot — the species overrides.
-// (`CAI_BaseHumanoid`'s own fills were deleted by 0019 story 5 step 1: the class has no instance.)
+// at 465): 29c's verdict for those is the TROIKA-LINE body, and the rows this family carries are
+// other branches' fills of the same slot — the species overrides. (`CAI_BaseHumanoid`'s own fills,
+// including its `AddLookTarget` at 535/536, were deleted by 0019 story 5 step 1: the class has no
+// instance.)
 // Those land as named methods here, because a second definition of a generated slot is a duplicate
 // symbol, and each says in its comment which slot it is the branch answer for.
 

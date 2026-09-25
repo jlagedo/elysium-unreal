@@ -20,8 +20,10 @@ Completed:
 
 Validation: build green; **1,255 Substrate + 14 Content + 1 PlayerWorld**, zero failures;
 `test_delta` against step 0's final gate passes with the 29 reviewed expectations in
-[expectations/step-1.json](expectations/step-1.json); five generator checks and 100 Python tests
-pass. Reports: `E:/elysium-work/research/npc-kernel/story-5/step1/gate/`.
+[expectations/step-1.json](expectations/step-1.json); five generator checks and 104 Python tests
+pass. An independent review of `ecfa9d82` found no blocker; its follow-up (stricter checker, record
+and comment corrections) was re-gated green.
+Reports: `E:/elysium-work/research/npc-kernel/story-5/step1/gate/`.
 
 Carried forward (see [decisions-step1.json](decisions-step1.json)):
 
@@ -30,6 +32,8 @@ Carried forward (see [decisions-step1.json](decisions-step1.json)):
   step-1-scope candidates; they are live and not deletion candidates.
 - `CharTemplateModelName` is a retained seam: the port's `Spawn` does not yet make retail's
   `FUN_10207e60` call from `CAI_BaseNPCTroika::Spawn` `0x10298d30` (a pre-existing unported rule).
+- For steps 3–4: `OverrideMove` (slot 525) dispatches neither live arm — ManBat `0x1038b120`
+  (unported flight step) nor the VampireBoss family's `0x103c5fe0` (`m_bJumping != 0`).
 - For step 2: `ClassHolstersOnState` lists `npc_ProneDialog`, but retail's classnames are
   `npc_VProneDialog` and `npc_VMercurio`.
 

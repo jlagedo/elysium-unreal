@@ -22,7 +22,7 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "06597b7f43b7b4fc66e698074ce4042aa452be90fb804a79c5ff871bef1a95ae"
+      "sha256": "deecc38253e19db92d85f96b6e03bedd580c2191421b68dfb83b32890ee9bf12"
     },
     "registry": {
       "root": "repo",
@@ -88,6 +88,10 @@
       "acceptance": "acceptance.json",
       "verdicts_sha256": "255a346a8c54a2965057eebd989f81f871662c6a310182b354d26362f5612320",
       "note": "--check step0 reads this tree once a later phase is current"
+    },
+    "step1_review": {
+      "note": "verdicts pin refreshed after the review follow-up: 0x10260670's evidence names its second caller, and 0x10260670/0x10260750/0x10357be0 (dead rows outside the no-instance scope whose port helpers step 1 removed) take target '-'",
+      "previous_verdicts_sha256": "06597b7f43b7b4fc66e698074ce4042aa452be90fb804a79c5ff871bef1a95ae"
     }
   },
   "step1_packets": {

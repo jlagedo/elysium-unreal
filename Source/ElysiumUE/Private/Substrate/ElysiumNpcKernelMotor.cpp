@@ -1151,8 +1151,12 @@ void FElysiumNpc::GetGroundVelocityToApply(FVector& OutVelocity)
 
 bool FElysiumNpc::OverrideMove(float Interval)
 {
-	// slot 525. The census's only species arm, `CNPC_Crow::vfunc525` `0x10357ba0`, is on a class no
-	// map stands and carries no port arm.
+	// slot 525. The census holds three species bodies and this leaf dispatches none of them:
+	//   * `CNPC_VManBat` `0x1038b120` (`rule`) — the flight step at navigator state 2. UNPORTED.
+	//   * `CNPC_VVampireBoss` `0x103c5fe0` and its seven heirs (`present`) — `m_bJumping != 0`
+	//     (`+0x6498`, `bJumping`). The word is carried; this arm does NOT read it yet, so a jumping
+	//     boss's move is not suppressed here. A named divergence, not a step-5 change.
+	//   * `CNPC_Crow` `0x10357ba0` — on a class no map stands; no port arm (0019 story 5 step 1).
 	(void)Interval;
 	// `CAI_BaseNPC::OverrideMove` `0x1027da90` — a scope-trace push/pop around an unconditional
 	// false. The base DECLINES, and that is what every species override is measured against.

@@ -12,9 +12,9 @@
   },
   "rule_identity_sha256": "000873c0a2108a0b09be85acc2227d561b080d192ba62ddb1a8a2128de19838f",
   "reports": {
-    "Elysium.Substrate": "E:/elysium-work/reports/tests/20260925T023840.339116Z-elysium-substrate",
-    "Elysium.Content": "E:/elysium-work/reports/tests/20260925T024113.064170Z-elysium-content",
-    "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260925T024202.383745Z-elysium-playerworld"
+    "Elysium.Substrate": "E:/elysium-work/reports/tests/20260925T031940.042166Z-elysium-substrate",
+    "Elysium.Content": "E:/elysium-work/reports/tests/20260925T032140.981029Z-elysium-content",
+    "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260925T032209.478998Z-elysium-playerworld"
   },
   "results": {
     "Elysium.Substrate": 1255,
@@ -26,19 +26,20 @@
   "artifacts": {
     "inventory": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/inventory-step1.json",
-      "sha256": "9360dc6fb2b5821a5f46ac384c5b0731ae19798dfc14624b04b99e18b0108c1b"
+      "sha256": "7092a8a4a38909df89f7a9f209825d4364617bf35eed855a37c4a9904c138729"
     },
     "delta": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/delta.json",
-      "sha256": "1977058667f88ca2c8dddbf26471e0a9793b891dc1d4418218cb4cc4e9956751"
+      "sha256": "9e48d4db97c8ea4f9cd94e958765fbd12f3e4eeefc1731a8d1f261ff45b28ccc"
     },
     "runtime": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/runtime-results.json",
-      "sha256": "5cabd31f988394aa79d21409a45b3afa389f2850d01842a1dc2e0124e43010b0"
+      "sha256": "747c9b42c3feefa908e64e83561c26d15e987cdb4e97d7306da18d4431ce4db8"
     },
     "cheap_checks": {
       "path": "E:/elysium-work/research/npc-kernel/story-5/step1/gate/checks.json",
-      "sha256": "6418d5992147f9287b89c16958991b0430b8f9bf2a5a6324dd6437b881a789c8"
+      "sha256": "8068bdd0a47a1c556bcffaab93138d065126908bd95bfca6c84ac0bb358b1a01"
     }
-  }
+  },
+  "review": "Opus review of ecfa9d82: no blockers; follow-up fixes (checker completeness/strictness, record test rows, comments, seam assertion) gated here."
 }
