@@ -42,20 +42,8 @@ bool BaseShouldPlayIdleSound();
 // Troika override `0x10294070` tail-calls it once its own seven gates pass.
 bool BaseShouldPlayFloatSound() const;
 
-// --- `CBaseCombatCharacter`'s two float-sound words --------------------------------------------
-//
-// `m_iFloatSoundFrequency` (`+0x10e8`, keyfield `floatfreq`) and `m_flNextFloatSoundTime`
-// (`+0x10ec`, `FIELD_TIME`). Retail declares both on `CBaseCombatCharacter`, so the 388-word
-// `CAI_BaseNPCTroika` shape map does not cover them and 29b declared neither.
-//
-// NAMED DECISION: they are carried on the NPC leaf rather than on `FElysiumCombatCharacter`.
-// Every reader and every writer retail has for the pair is an NPC virtual — slot 510 reads both,
-// slot 507 (`FloatSound`, story 29d) re-arms the stamp — and the player's copy is dead weight.
-int32 FloatSoundFrequency = 0;
-// SEAM: the one writer is slot 507 `FloatSound` (`0x10294f40`, layer 14, story 29d), which re-arms
-// it from the `Float_Sound_Info` rule rows. Nothing in this runtime writes it yet, so the window
-// test in `BaseShouldPlayFloatSound` always passes.
-double NextFloatSoundTime = 0.0;
+// `CBaseCombatCharacter`'s two float-sound words (`FloatSoundFrequency`, `NextFloatSoundTime`) are
+// declared on `FElysiumCombatCharacter`, where retail declares them (story 5 step 5).
 
 // --- The species vocalization table (slots 488–508, 620, 621) ----------------------------------
 //

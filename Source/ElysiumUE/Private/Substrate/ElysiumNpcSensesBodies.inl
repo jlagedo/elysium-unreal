@@ -36,13 +36,6 @@
 
 // --- Words and seams this family needs ------------------------------------------------------------
 
-/** SEAM for `CAI_Navigator::MarkNodeUnreachable` (`0x102f1fa0`), which `OnDoorBlocked`
- *  (`0x1027de00`) calls with `5.0` or `20.0` seconds and the blocking door. It reaches the AI
- *  NETWORK — it looks the door's nav link up in the node graph and stamps `node+0x64 |= 1`,
- *  `node+0x68 = curtime + seconds`. This runtime has no node graph, so the call is COUNTED and
- *  marks nothing; the retail word it stands for is the node's own unreachable-until stamp. */
-int32 NavigatorUnreachableMarks = 0;
-
 /** SEAM for `0x102ee6a0`, the guard retail puts in front of that call: "the navigator has a
  *  network AND that network has a node list". Answers false — there is no network — so retail's
  *  own refusal arm is the one taken and `NavigatorUnreachableMarks` never moves. */
@@ -55,7 +48,6 @@ bool NavigatorHasNodeGraph() const;
  *  because `OnDoorBlocked` reads before it writes and the read's answer decides the write. */
 const FElysiumEntity* SquadFocus() const;
 void SetSquadFocus(const FElysiumEntity* Focus);
-int32 SquadFocusWrites = 0;
 
 /** `CBaseDoor+0x644` and `+0x640`, the two words `OnDoorBlocked` reads and writes on the DOOR.
  *  `+0x644` is a flag word tested `& 0x10` (the whole retry is skipped) and `& 0x40` (the retry
@@ -65,7 +57,6 @@ int32 SquadFocusWrites = 0;
  *  20-second arm — and the stamp is counted. Their retail names are **unrecovered**. */
 static uint32 DoorBlockFlags(const FElysiumEntity& Door);
 void SetDoorNextTryTime(FElysiumEntity& Door, double At);
-int32 DoorNextTryWrites = 0;
 
 // --- Non-slot bodies ------------------------------------------------------------------------------
 

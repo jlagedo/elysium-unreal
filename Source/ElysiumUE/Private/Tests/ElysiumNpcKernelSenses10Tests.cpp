@@ -184,7 +184,7 @@ bool FElysiumNpcKernelSenses10Slot594Test::RunTest(const FString&)
 	// false either way; what this pins is that the DEBOUNCE alone changes nothing, which is exactly
 	// what the old reader made it do.
 	F.Guard->Senses.Memory.bEnemyOccluded = true;
-	F.Guard->Senses.Memory.bEnemyWentOccluded = false;
+	F.Guard->BaseMemory.bEnemyWentOccluded = false;
 	TestFalse(TEXT("0x102b479b the ten-failure debounce alone does not bypass the range block"),
 		F.Guard->Slot594(F.Other, 0x2804091, nullptr, 0));
 	F.Guard->Senses.Memory.bEnemyOccluded = false;
@@ -360,7 +360,7 @@ bool FElysiumNpcKernelSenses10BaseOnLookedTest::RunTest(const FString&)
 	F.Guard->Senses.Perception.VisionDistanceCm = Senses10Cm(4000.f);
 	F.Guard->Senses.Perception.bResolved = true;
 	F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
-	F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+	F.Guard->BaseMemory.Enemy = F.Other->Handle;
 
 	// `1026a3d1`: a NEUTRAL committed enemy raises no `SEE_ENEMY`, however plainly it is seen.
 	FElysiumNpcConditions Out;
@@ -648,7 +648,7 @@ bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 	// --- Slot 538 `AimGun` (`0x1026b4f0`) ---------------------------------------------------------
 	// The whole body is gated on slot 167 `GetEnemy()` and does nothing without an enemy. No member
 	// is written here, so "does nothing" is the assertion the row supports.
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	TestNull(TEXT("0x1026b4fd with no enemy AimGun does nothing"), F.Guard->GetEnemy());
 	F.Guard->AimGun();
 
@@ -755,7 +755,7 @@ bool FElysiumNpcKernelSenses10WeaponLosTest::RunTest(const FString&)
 	// --- Slot 574 `GetShootEnemyDir` (`0x10278900`) ----------------------------------------------
 	// `10278959`: the slot answers a UNIT direction — the listing stores the three components AFTER
 	// `VectorNormalize`, which the decompiled C hides.
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	F.Guard->ShootTargetOverride = F.Player->Handle;
 	F.Player->Origin = FVector(Senses10Cm(300.f), Senses10Cm(400.f), 0.0);
 	const FVector Direction = F.Guard->GetShootEnemyDir(FVector::ZeroVector, 0, 0);
@@ -861,7 +861,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		Senses10SeeFar(F);
 		// The other NPC stands where the Tzimisce arm left it on the shared guard.
 		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
-		F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+		F.Guard->BaseMemory.Enemy = F.Other->Handle;
 		TestTrue(TEXT("0x103e0bef the zombie's own enemy is answered by the obfuscate test, not sight"),
 			F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
 		// A DIFFERENT entity falls through to the base, which at 4000 units is out of range.
@@ -882,7 +882,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		// The positions and enemy the earlier arms left on the shared guard.
 		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
 		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
-		F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+		F.Guard->BaseMemory.Enemy = F.Other->Handle;
 		FElysiumNpc::ResetSpeciesSuspectGlobals();
 		F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
@@ -910,7 +910,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		// cleared suspect globals.
 		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
 		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
-		F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+		F.Guard->BaseMemory.Enemy = F.Other->Handle;
 		F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
@@ -937,7 +937,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		}
 		Senses10SeeFar(F);
 		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
-		F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		F.Guard->ShootTargetOverride = F.Other->Handle;
 		F.Other->Origin = FVector(Senses10Cm(400.f), 0.0, 0.0);
 		const FVector MingXiao = F.Guard->GetShootEnemyDir(FVector::ZeroVector, 0, 0);
@@ -963,7 +963,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
-		F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		F.Guard->ShootTargetOverride = F.Other->Handle;
 		F.Guard->SetRetailClassForTests(TEXT("CNPC_VFrenzyShadow"));
 		F.Guard->EnemyMemory.Update(*F.Guard, F.Other->Handle, 1.0);

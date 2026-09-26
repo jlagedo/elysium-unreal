@@ -39,7 +39,7 @@ namespace NpcKernelCombat10_2Shared
 		// Slot 167 `GetEnemy` (`vt+0x29c`).
 		return Npc.World != nullptr
 			? const_cast<FElysiumEntity*>(
-				ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.Senses.Memory.Enemy))
+				ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.BaseMemory.Enemy))
 			: nullptr;
 	}
 	// Slot 599 on `GetEnemy()` — the pair every selector runs together.

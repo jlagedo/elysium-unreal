@@ -146,7 +146,7 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 	(void)NewSchedule;
 	// Base slot 435 (`0x1027a700`) first: navigator notification, move-wait zero, strategy reset.
 	// Navigator slot 4 is retail `0x102eea30`, a literal `RET 4`, so it has no state to carry.
-	ScheduleHost.MoveWaitFinished = 0.0; // 0x1027a716
+	BaseScheduleHost.MoveWaitFinished = 0.0; // 0x1027a716
 	VacateSquadSlot();                       // 0x1027a71f -> 0x1028ae60
 	NpcFlags.BeginScheduleChange();					   // 0x102a095d
 	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x102a0965
@@ -172,7 +172,7 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 		{
 			Motor->ResetSteering(); // 0x102a09bc
 		}
-		ScheduleHost.bShouldMove = false; // 0x102a09c8
+		BaseScheduleHost.bShouldMove = false; // 0x102a09c8
 		bMoveIssued = false;
 		bWalkingAnimation = false;
 		ScheduleHost.GoalToleranceCm = 0.f;								// 0x102a09ce
@@ -195,7 +195,7 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 			ScheduleHost.SavedSleepExtents = FVector(-1.0);		  // 0x102a0a6b
 			NpcFlags.Clear(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX); // 0x102a0a79
 		}
-		ScheduleHost.bMotorAnimationMovement = false; // 0x102a0a8a
+		BaseScheduleHost.bMotorAnimationMovement = false; // 0x102a0a8a
 		ScheduleHost.DesiredMoveYaw = 0.f;			  // 0x102a0a8d
 		ScheduleHost.bWaitFinishedSet = false;		  // 0x102a0a93
 	}
@@ -206,12 +206,12 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 		bInvincible = false;							  // 0x102a0ac3
 	}
 	NpcFlags.FinishScheduleChange();	 // 0x102a0adb
-	ScheduleHost.MemoryBits &= ~0x2000u; // 0x102a0aed
+	BaseScheduleHost.MemoryBits &= ~0x2000u; // 0x102a0aed
 }
 
 void FElysiumNpc::TaskMovementComplete()
 {
-	ScheduleHost.bShouldMove = false; // 0x10273ec9
+	BaseScheduleHost.bShouldMove = false; // 0x10273ec9
 	bMoveIssued = false;
 	switch (Schedule.TaskStatus)
 	{
@@ -370,7 +370,7 @@ void FElysiumNpc::CommitIdealStateForSchedule()
 
 void FElysiumNpc::CacheInterruptConditionsForMaintenance(double Now)
 {
-	ScheduleHost.CacheInterruptTime = Now; // 0x1026a16d, +0x1b24
+	BaseScheduleHost.CacheInterruptTime = Now; // 0x1026a16d, +0x1b24
 	if (!Schedule.IsRunning())
 	{
 		Cognition.CustomInterruptConditions.Reset();  // 0x1026a18d
@@ -389,7 +389,7 @@ void FElysiumNpc::CacheInterruptConditionsForMaintenance(double Now)
 int32 FElysiumNpc::SelectScheduleForMaintenance(double Now,
 	int32&															OutIdealScheduleRetail)
 {
-	if (ScheduleHost.CacheInterruptTime < Now) // 0x102814d0
+	if (BaseScheduleHost.CacheInterruptTime < Now) // 0x102814d0
 	{
 		CacheInterruptConditionsForMaintenance(Now); // 0x102814de
 	}
@@ -431,7 +431,7 @@ int32 FElysiumNpc::SelectScheduleForMaintenance(double Now,
 
 void FElysiumNpc::SetIdealScheduleForMaintenance(int32 RetailId)
 {
-	ScheduleHost.IdealScheduleRetail = RetailId; // 0x10281ac1 / 0x102814d0
+	BaseScheduleHost.IdealScheduleRetail = RetailId; // 0x10281ac1 / 0x102814d0
 }
 
 void FElysiumNpc::MissingSchedule()
@@ -470,7 +470,7 @@ bool FElysiumNpc::MaintenanceIsCurTaskContinuousMove()
 
 void FElysiumNpc::RememberContinuousMove()
 {
-	ScheduleHost.MemoryBits |= 0x00040000u; // 0x102820e6
+	BaseScheduleHost.MemoryBits |= 0x00040000u; // 0x102820e6
 }
 
 void FElysiumNpc::RunTaskOverlay()

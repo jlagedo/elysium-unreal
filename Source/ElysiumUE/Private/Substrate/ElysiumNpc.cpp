@@ -291,8 +291,8 @@ bool FElysiumNpc::GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 {
 	const double Now = World ? World->NowSeconds() : 0.0;
-	Senses.Memory.LastDamageAttacker = Dmg.Source;
-	Senses.Memory.LastDamageTime = Now;
+	BaseMemory.LastDamageAttacker = Dmg.Source;
+	BaseMemory.LastDamageTime = Now;
 	Senses.Memory.LastDamageAmount = Dmg.CommittedDamage();
 	// The other half of step 3 — "records the attack position and attacker, updates enemy memory".
 	// The record above is the transient damage notice; `RememberDamage` selects the recovered
@@ -308,7 +308,7 @@ void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 	ElysiumNpcEnemy::RememberDamage(*this, Dmg, Now);
 	// Step 5 of the recovered damage-to-AI transaction: the one-second accumulation window
 	// `REPEATED_DAMAGE` is derived from. The window arithmetic is the conditions layer's rule.
-	ElysiumNpcCond::AccumulateDamage(Senses.Memory, Dmg.CommittedDamage(), Now);
+	ElysiumNpcCond::AccumulateDamage(BaseMemory, Dmg.CommittedDamage(), Now);
 }
 
 void FElysiumNpc::OnKilled()
@@ -2194,7 +2194,7 @@ void FElysiumNpc::UpdateEnemyDistances()
 	// enemy (`0x102dfed0`).
 	constexpr float None = 5000.f;
 	const FElysiumEntity* Enemy =
-		Senses.Memory.Enemy.IsSet() && World ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+		BaseMemory.Enemy.IsSet() && World ? World->Resolve(BaseMemory.Enemy) : nullptr;
 	if (Enemy == nullptr || Enemy->IsDead())
 	{
 		ScheduleHost.EnemyDistUnits = ScheduleHost.EnemyHeightDiffUnits =
@@ -2205,7 +2205,7 @@ void FElysiumNpc::UpdateEnemyDistances()
 		static_cast<float>(FVector::Dist(Origin, Enemy->Origin)) / ElysiumMove::U;
 	ScheduleHost.EnemyHeightDiffUnits =
 		static_cast<float>(FMath::Abs(Origin.Z - Enemy->Origin.Z)) / ElysiumMove::U;
-	const FElysiumNpcEnemyMemoryRecord* Record = EnemyMemory.Find(Senses.Memory.Enemy);
+	const FElysiumNpcEnemyMemoryRecord* Record = EnemyMemory.Find(BaseMemory.Enemy);
 	const FVector LastKnown = Record ? Record->LastPosition : Enemy->Origin;
 	ScheduleHost.EnemyLastKnownDistUnits =
 		static_cast<float>(FVector::Dist(Origin, LastKnown)) / ElysiumMove::U;
@@ -2620,14 +2620,14 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		ScriptedScheduleOrder.Reset();
 		return false;
 	}
-	ScheduleHost.IdealScheduleRetail = ResolveScheduleId(Program); // 0x10280de0, before slot 440
+	BaseScheduleHost.IdealScheduleRetail = ResolveScheduleId(Program); // 0x10280de0, before slot 440
 	if (!ElysiumSchedule::Start(Schedule, TranslateSchedule(Program), *this))
 	{
 		EndScriptedSchedule(TEXT("scripted program would not start"));
 		return false;
 	}
 	ScriptedScheduleOrder.Program = Schedule.Current;
-	ScheduleHost.GoalEnt = Order.Goal; // 0x102800c0 / 0x102801e0, after the schedule install
+	BaseScheduleHost.GoalEnt = Order.Goal; // 0x102800c0 / 0x102801e0, after the schedule install
 	// The director builds the goal immediately. The text only selects a movement activity and
 	// waits; neither a synthetic GET_PATH_TO_GOAL nor a SET_SCHEDULE loop belongs to it.
 	if (!GetPathToScriptedGoal())
@@ -2903,8 +2903,8 @@ void FElysiumNpc::TaskFail(int32 Reason)
 			static_cast<FElysiumPhysProp*>(Prop)->bNpcKickable = false;
 		ScheduleHost.KickProp = FElysiumEntityHandle::Invalid();
 	}
-	ScheduleHost.MemoryBits &= ~0x2000u;
-	ScheduleHost.MemoryBits &= 0x0fffffffu;
+	BaseScheduleHost.MemoryBits &= ~0x2000u;
+	BaseScheduleHost.MemoryBits &= 0x0fffffffu;
 	const bool RestoreSleep = NpcFlags.Has(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	if (NpcFlags.OnTaskFail())
 		RecordScheduleEvent(TEXT("TaskFail retail leak: MADE_OBLIVIOUS cleared, refcount retained (0x1029adb0)"));
@@ -2916,7 +2916,7 @@ void FElysiumNpc::TaskFail(int32 Reason)
 	}
 	ScheduleHost.bSavePositionWalk = false;
 	ClearScheduleHint(5.f);
-	ScheduleHost.bMotorAnimationMovement = false;
+	BaseScheduleHost.bMotorAnimationMovement = false;
 	ScheduleHost.Unknown6300 = ScheduleHost.Unknown659c = 0;
 	ScheduleHost.bPatrolPathUseHint = false;
 	bMoveIssued = false;
@@ -2942,13 +2942,13 @@ void FElysiumNpc::ClearScheduleHint(float ReuseDelay)
 {
 	// 0x10295ab0: a missing hint performs no writes, and another owner's hint is
 	// forgotten locally without imposing our cooldown on that owner.
-	if (ScheduleHost.HintNode == INDEX_NONE) return;
-	if (ScheduleHost.bOwnsHint)
+	if (BaseScheduleHost.HintNode == INDEX_NONE) return;
+	if (BaseScheduleHost.bOwnsHint)
 	{
-		ScheduleHost.bOwnsHint = false;
+		BaseScheduleHost.bOwnsHint = false;
 		ScheduleHost.HintReusableAt = (World ? World->NowSeconds() : 0.0) + ReuseDelay;
 	}
-	ScheduleHost.HintNode = INDEX_NONE;
+	BaseScheduleHost.HintNode = INDEX_NONE;
 	ScheduleHost.FailedCoverLosChecks = 0;
 	NpcFlags.Clear(EElysiumNpcFlag::AT_COVER_HINT);
 	ScheduleHost.SavedSleepExtents = FVector(-1.0);
@@ -2965,7 +2965,7 @@ void FElysiumNpc::DisconnectFromSquad()
 {
 	// 0x1026d050: the refcount is real even while no named squad exists. R17 supplies
 	// the shared/global enemy-memory redirection; this host must not invent a local squad.
-	++ScheduleHost.SquadDisconnected;
+	++BaseScheduleHost.SquadDisconnected;
 	NpcFlags.Set(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
 }
 
@@ -2982,8 +2982,8 @@ void FElysiumNpc::ReconnectToSquad()
 	// The clamp below is retail's `< 1 -> 0` arm; the mask clears D_DISCONNECT_SQUAD (0x00800000)
 	// and bit 31, which `docs/vtmb/npc-ai/schedule-kernel.md` records as the flag-name resolver's
 	// word-two routing marker and not a flag, so the one named bit is the whole observable clear.
-	const bool bReachedZero = ScheduleHost.SquadDisconnected - 1 < 1;
-	ScheduleHost.SquadDisconnected = FMath::Max(0, ScheduleHost.SquadDisconnected - 1);
+	const bool bReachedZero = BaseScheduleHost.SquadDisconnected - 1 < 1;
+	BaseScheduleHost.SquadDisconnected = FMath::Max(0, BaseScheduleHost.SquadDisconnected - 1);
 	if (bReachedZero)
 	{
 		// The squad seam (`ElysiumNpcSquad.cpp`): no `CAI_Squad`, so nothing to rejoin.
@@ -3006,7 +3006,7 @@ bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 {
 	ScheduleHost.PendingFailureReason = 0;
 	const FElysiumEntity* Enemy = World
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr;
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr;
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: no live committed enemy"));
@@ -3070,7 +3070,7 @@ void FElysiumNpc::RunPatrolPathTask()
 		Motor->SetTravelGait(EElysiumNpcGaitKind::Walk,
 			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk));
 	bWalkingAnimation = StartWalkingAnimation(false);
-	ScheduleHost.MemoryBits &= ~0x2u;
+	BaseScheduleHost.MemoryBits &= ~0x2u;
 }
 
 bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
@@ -3134,7 +3134,7 @@ bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
 		// remains absent; its eventual implementation owns the claim and cooldown it returns.
 		bFound = Submit(Cover, DefaultTolerance);
 	}
-	ScheduleHost.MoveWaitFinished = (World != nullptr ? World->NowSeconds() : 0.0) + MoveWait;
+	BaseScheduleHost.MoveWaitFinished = (World != nullptr ? World->NowSeconds() : 0.0) + MoveWait;
 	return bFound;
 }
 
@@ -3150,11 +3150,11 @@ const FElysiumEntity* FElysiumNpc::GazeEnemy() const
 {
 	// `GetEnemy()`: the committed enemy, dead or alive — the cascade itself refuses an inert one,
 	// which is the `IsInert()` half of retail's handle test, not an extra rule.
-	if (World == nullptr || !Senses.Memory.Enemy.IsSet())
+	if (World == nullptr || !BaseMemory.Enemy.IsSet())
 	{
 		return nullptr;
 	}
-	return ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy);
+	return ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy);
 }
 
 bool FElysiumNpc::GazeNavigationGoal(FVector& OutPoint) const
@@ -3227,7 +3227,7 @@ EElysiumMoveWatch FElysiumNpc::WaitForMovement()
 bool FElysiumNpc::FaceEnemy()
 {
 	const FElysiumEntity* Enemy = World
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr;
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr;
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		Mind.RecordExternal(TEXT("TASK_FACE_ENEMY refused: no live committed enemy"));
@@ -3267,7 +3267,7 @@ bool FElysiumNpc::FaceEnemy()
 
 bool FElysiumNpc::AnnounceAttack(float Param)
 {
-	FElysiumEntity* Enemy = World ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+	FElysiumEntity* Enemy = World ? World->Resolve(BaseMemory.Enemy) : nullptr;
 	if (Enemy == nullptr)
 	{
 		Mind.RecordExternal(TEXT("TASK_ANNOUNCE_ATTACK refused: no live committed enemy"));
@@ -3328,7 +3328,7 @@ bool FElysiumNpc::RangeAttack1()
 	// trace and spread cone are a producer that joins with the perception cycle, and the committed
 	// enemy IS this NPC's answer to it.
 	const FElysiumWeapon::EVerdict Verdict =
-		Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary, Senses.Memory.Enemy);
+		Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary, BaseMemory.Enemy);
 	Mind.RecordExternal(FString::Printf(TEXT("TASK_RANGE_ATTACK1 -> %s"),
 		FElysiumWeapon::VerdictName(Verdict)));
 	return Verdict == FElysiumWeapon::EVerdict::Accepted;
@@ -3336,7 +3336,7 @@ bool FElysiumNpc::RangeAttack1()
 
 void FElysiumNpc::RememberFact(uint32 MemoryMask)
 {
-	ScheduleHost.MemoryBits |= MemoryMask;
+	BaseScheduleHost.MemoryBits |= MemoryMask;
 	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER 0x%x"), MemoryMask));
 }
 
@@ -3416,7 +3416,7 @@ void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 			InOutMask.Set(EElysiumNpcCond::InvestigateLevel);
 			InOutMask.Set(EElysiumNpcCond::CriminalFleeLevel);
 			InOutMask.Set(EElysiumNpcCond::SupernaturalFleeLevel);
-			if (!Senses.Memory.Enemy.IsSet())
+			if (!BaseMemory.Enemy.IsSet())
 			{
 				// `m_bfNPCStateFlags` bits 4 and 5 -- the per-state capability byte `0x1026e3e0`
 				// writes on every state change: set in idle (0x31) and alert (0x39), clear in
@@ -3485,7 +3485,7 @@ int32 FElysiumNpc::SelectDoorObstructionSchedule()
 	// (0x90) and `_WAIT` (0x94), the no-enemy rows their `_NE` variants (0x91 / 0x96). Only the two
 	// `_NE` programs are registered here, so an NPC that HAS an enemy is a divergence rather than a
 	// branch -- and it is recorded by name instead of taken quietly.
-	if (Senses.Memory.Enemy.IsSet())
+	if (BaseMemory.Enemy.IsSet())
 	{
 		RecordScheduleEvent(TEXT("door obstruction with an enemy: SCHED_TROIKA_BACK_AWAY_FROM_DOOR "
 			"(0x90) / _WAIT (0x94) are not registered — taking the _NE variant"));
@@ -4078,11 +4078,14 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	// pair is a concern the shape map reaches no compiled path into.
 	NpcFlags.Serialize(Ar);
 	Relationships.Serialize(Ar);
+	BaseMemory.Serialize(Ar);
 	Senses.Serialize(Ar);
+	FElysiumNpcPendingSound::SerializeQueue(Ar, PendingSounds);
 	EnemyMemory.Serialize(Ar);
 	Ar << bLoadoutResolved;
 	Disciplines.Serialize(Ar);
 	SerializeDisciplineFlags(Ar);
+	BaseScheduleHost.Serialize(Ar);
 	ScheduleHost.Serialize(Ar);
 	// `m_flNextComfortCheckTime` and `m_hTargetEnt`. Both are retail `SAVE` rows, and both are
 	// recorded gaps in the generated walk (`ElysiumNpcKernelBindings.cpp`: "the port member exists
@@ -4125,6 +4128,15 @@ void FElysiumNpc::OnPostRestore(FElysiumEntityWorld& InWorld)
 	// Each of these is a component saying what its own restored words mean; the order is the order
 	// the components depend on one another in, and no component reads an archive.
 	ScheduleHost.OnPostRestore();
+	// The base layer's memory first: the senses' own rebase reads its enemy.
+	if (World)
+	{
+		BaseMemory.Rebase(*World);
+	}
+	else
+	{
+		BaseMemory.Reset();
+	}
 	Senses.OnPostRestore(*this);
 	EnemyMemory.Rebase(InWorld);
 	Relationships.Rebase(InWorld);
@@ -4480,23 +4492,23 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			Mem.bPlayerInCone ? TEXT(", in cone") : TEXT(", out of cone"),
 			Mem.bPlayerInOuterBand ? TEXT(", outer band") : TEXT(""))
 		: TEXT("(none)"));
-	Out.Emplace(TEXT("Enemy"), Mem.Enemy.IsSet()
-		? FString::Printf(TEXT("%s (%s, %d failed LOS checks%s)"), *Mem.Enemy.ToString(),
+	Out.Emplace(TEXT("Enemy"), BaseMemory.Enemy.IsSet()
+		? FString::Printf(TEXT("%s (%s, %d failed LOS checks%s)"), *BaseMemory.Enemy.ToString(),
 			Mem.bEnemyOccluded ? TEXT("OCCLUDED") : TEXT("has LOS"), Mem.EnemyLosFailures,
-			EnemyMemory.IsEluded(Mem.Enemy) ? TEXT(", ELUDED") : TEXT(""))
+			EnemyMemory.IsEluded(BaseMemory.Enemy) ? TEXT(", ELUDED") : TEXT(""))
 		: TEXT("(none)"));
-	Out.Emplace(TEXT("Last enemy"), Mem.LastEnemy.IsSet()
-		? Mem.LastEnemy.ToString() : FString(TEXT("(none)")));
+	Out.Emplace(TEXT("Last enemy"), BaseMemory.LastEnemy.IsSet()
+		? BaseMemory.LastEnemy.ToString() : FString(TEXT("(none)")));
 	Out.Emplace(TEXT("Enemy sightings"), FString::FromInt(EnemySightings));
 	Out.Emplace(TEXT("Last heard"), Mem.LastHeardTime < 0.0
 		? TEXT("(nothing)")
 		: FString::Printf(TEXT("%s at %s, t=%.2f"), *Mem.LastHeardCategory,
 			*Mem.LastHeardPosition.ToString(), Mem.LastHeardTime));
-	Out.Emplace(TEXT("Last damage"), Mem.LastDamageTime < 0.0
+	Out.Emplace(TEXT("Last damage"), BaseMemory.LastDamageTime < 0.0
 		? TEXT("(none)")
 		: FString::Printf(TEXT("%d from %s at t=%.2f (window sum %d)"), Mem.LastDamageAmount,
-			*Mem.LastDamageAttacker.ToString(), Mem.LastDamageTime,
-			Mem.RepeatedDamageAccumulated));
+			*BaseMemory.LastDamageAttacker.ToString(), BaseMemory.LastDamageTime,
+			BaseMemory.RepeatedDamageAccumulated));
 
 	// --- Decision pass ---
 	Out.Emplace(TEXT("Conditions"), FString::Printf(TEXT("%s (gathered t=%.2f)"),

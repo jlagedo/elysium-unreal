@@ -53,11 +53,11 @@ int32 FElysiumNpc::HumanSelectIdealState()
 		return NpcKernelState19_2Shared::State19_2ChainTroika(*this);
 	}
 
-	if ((ScheduleHost.MemoryBits & 0x2) != 0
+	if ((BaseScheduleHost.MemoryBits & 0x2) != 0
 		&& (NpcKernelState19_2Shared::State19_2HasCondition(*this, EElysiumNpcCond::SeeEnemy)
 			|| NpcKernelState19_2Shared::State19_2HasCondition(*this, EElysiumNpcCond::NewEnemy)))
 	{
-		ScheduleHost.MemoryBits &= ~0x2u;
+		BaseScheduleHost.MemoryBits &= ~0x2u;
 		Cognition.Conditions.Set(EElysiumNpcCond::ScheduleDone);
 	}
 
@@ -183,7 +183,7 @@ int32 FElysiumNpc::CopSelectIdealStatePrePass()
 		|| NpcKernelState19_2Shared::State19_2HasCondition(*this, EElysiumNpcCond::RepeatedDamage))
 	{
 		Cognition.bCondTookDamage = false;
-		if (NpcKernelState19_2Shared::State19_2Resolve(*this, Senses.Memory.LastDamageAttacker) == Closest)
+		if (NpcKernelState19_2Shared::State19_2Resolve(*this, BaseMemory.LastDamageAttacker) == Closest)
 		{
 			bTake = true;
 		}

@@ -254,7 +254,7 @@ bool FElysiumNpcSoundSweepFlankTest::RunTest(const FString&)
 	FElysiumNpcMemory& Memory = F.Npc->Senses.Memory;
 	// The flank test only fires for the committed enemy, so it doubles as a probe for WHICH record
 	// the arms left as the winner.
-	Memory.Enemy = F.Owner->Handle;
+	F.Npc->BaseMemory.Enemy = F.Owner->Handle;
 	const FElysiumNpcConditions FlankMask = FElysiumNpcConditions::Of({ ECond::HearFlankSound });
 
 	// --- Last passing arm wins: combat is evaluated after world --------------------------------
@@ -302,10 +302,10 @@ bool FElysiumNpcSoundSweepFlankTest::RunTest(const FString&)
 			F.Sweep(Combat).Has(ECond::HearFlankSound));
 
 		F.Record(Memory.LastSoundCombat, F.Owner, FVector(-100.0, 0.0, 0.0));
-		Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		TestFalse(TEXT("with no committed enemy there is nothing to flank me"),
 			F.Sweep(Combat).Has(ECond::HearFlankSound));
-		Memory.Enemy = F.Owner->Handle;
+		F.Npc->BaseMemory.Enemy = F.Owner->Handle;
 
 		// No winner at all: the raw condition is absent, so no arm claimed one.
 		TestFalse(TEXT("no winner, no flank"),
@@ -355,13 +355,13 @@ bool FElysiumNpcSoundSweepFlankTest::RunTest(const FString&)
 		F.Record(Memory.LastSoundCombat, F.Owner, FVector(-100.0, 0.0, 0.0));
 		Memory.LastSoundCombat.TypeMask = ElysiumGameSounds::Combat;
 		// Structurally set, but the epoch no longer resolves -- retail's `GetEnemy()` answers null.
-		Memory.Enemy = F.Owner->Handle;
-		Memory.Enemy.Epoch += 1;
-		Memory.LastSoundCombat.Source = Memory.Enemy;
-		TestTrue(TEXT("the stale handle still reads as set"), Memory.Enemy.IsSet());
+		F.Npc->BaseMemory.Enemy = F.Owner->Handle;
+		F.Npc->BaseMemory.Enemy.Epoch += 1;
+		Memory.LastSoundCombat.Source = F.Npc->BaseMemory.Enemy;
+		TestTrue(TEXT("the stale handle still reads as set"), F.Npc->BaseMemory.Enemy.IsSet());
 		TestFalse(TEXT("...but a stale enemy cannot flank: retail compares resolved pointers"),
 			F.Sweep(FElysiumNpcConditions::Of({ ECond::HearCombat })).Has(ECond::HearFlankSound));
-		Memory.Enemy = F.Owner->Handle;
+		F.Npc->BaseMemory.Enemy = F.Owner->Handle;
 	}
 
 	// --- The mask term ------------------------------------------------------------------------------
@@ -392,7 +392,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	// --- No mask: cleared outright ----------------------------------------------------------------
 	{
 		auto Scope = F.RunWithMask(FElysiumNpcConditions());
-		Memory.BestSoundSource = F.Owner->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
 		FElysiumNpcConditions Raised;
 		Raised.Set(ECond::SeeSoundSource);
 		TestFalse(TEXT("a program that does not list SEE_SOUND_SOURCE has it cleared"),
@@ -403,7 +403,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	for (const EElysiumRelationship Blocking : { EElysiumRelationship::Hate, EElysiumRelationship::Fear })
 	{
 		auto Scope = F.RunWithMask(TailMask);
-		Memory.BestSoundSource = F.Owner->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
 		F.Npc->Relationships.SetEntity(F.Owner->Handle, Blocking, 5);
 		FElysiumNpcConditions Raised;
 		Raised.Set(ECond::SeeSoundSource);
@@ -416,7 +416,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	// --- An unresolvable source is the same sticky return -----------------------------------------
 	{
 		auto Scope = F.RunWithMask(TailMask);
-		Memory.BestSoundSource = FElysiumEntityHandle::Invalid();
+		F.Npc->BaseMemory.BestSoundSource = FElysiumEntityHandle::Invalid();
 		FElysiumNpcConditions Raised;
 		Raised.Set(ECond::SeeSoundSource);
 		TestTrue(TEXT("no committed source leaves the condition untouched"),
@@ -427,7 +427,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	{
 		auto Scope = F.RunWithMask(TailMask);
 		F.Npc->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Neutral, 5);
-		Memory.BestSoundSource = F.Player->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Player->Handle;
 		Memory.ClosestPlayer = F.Player->Handle;
 		TestTrue(TEXT("the source IS the closest player and SEE_PLAYER stands"),
 			F.Sweep(FElysiumNpcConditions::Of({ ECond::SeePlayer })).Has(ECond::SeeSoundSource));
@@ -440,13 +440,13 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 		auto Scope = F.RunWithMask(TailMask);
 		// `CAI_BaseNPC::OnLooked` (`0x1026a2c0`) writes `m_hLastSeenHateEnt` on a `D_HT` sighting
 		// with `IRelationPriority < 0xb`; `Memory.LastSeen[Hate]` is this runtime's copy of it.
-		Memory.LastSeen[static_cast<int32>(FElysiumNpcMemory::ESeen::Hate)] = F.Owner->Handle;
+		F.Npc->BaseMemory.LastSeen[static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Hate)] = F.Owner->Handle;
 		// The relation must have LEFT D_HT since that sighting, or step 1's `FUN_102b8cd0` gate
 		// rejects the source before the chain is reached at all.
 		F.Npc->Relationships.SetEntity(F.Owner->Handle, EElysiumRelationship::Neutral, 5);
-		Memory.BestSoundSource = F.Owner->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
 		Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-		Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		Memory.NextSeeSoundSourceTime = 0.0;
 		// Put the source BEHIND the NPC so the stranger arm below would CLEAR. That makes this a
 		// statement about the rung rather than about whatever the fallback happens to answer.
@@ -465,7 +465,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 			F.Sweep(FElysiumNpcConditions()).Has(ECond::SeeSoundSource));
 
 		// A rung that was never written resolves to null and cannot match a non-null source.
-		Memory.LastSeen[static_cast<int32>(FElysiumNpcMemory::ESeen::Hate)] =
+		F.Npc->BaseMemory.LastSeen[static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Hate)] =
 			FElysiumEntityHandle::Invalid();
 		FElysiumNpcConditions StillHate;
 		StillHate.Set(ECond::SeeHate);
@@ -481,7 +481,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	// The chain's six (comparand, condition) pairs come straight from the decompilation; a swapped
 	// pairing would be invisible if only one rung were exercised.
 	{
-		using ESeen = FElysiumNpcMemory::ESeen;
+		using ESeen = FElysiumNpcBaseMemory::ESeen;
 		const TPair<ESeen, ECond> Rungs[] = {
 			{ ESeen::Hate,    ECond::SeeHate    },
 			{ ESeen::Fear,    ECond::SeeFear    },
@@ -492,14 +492,14 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 		{
 			auto Scope = F.RunWithMask(TailMask);
 			F.Npc->Relationships.SetEntity(F.Owner->Handle, EElysiumRelationship::Neutral, 5);
-			Memory.BestSoundSource = F.Owner->Handle;
+			F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
 			Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-			Memory.Enemy = FElysiumEntityHandle::Invalid();
+			F.Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 			for (int32 i = 0; i < static_cast<int32>(ESeen::Count); ++i)
 			{
-				Memory.LastSeen[i] = FElysiumEntityHandle::Invalid();
+				F.Npc->BaseMemory.LastSeen[i] = FElysiumEntityHandle::Invalid();
 			}
-			Memory.LastSeen[static_cast<int32>(Rung.Key)] = F.Owner->Handle;
+			F.Npc->BaseMemory.LastSeen[static_cast<int32>(Rung.Key)] = F.Owner->Handle;
 			// Behind the NPC, so the stranger-arm fallback would answer FALSE: a pass can only come
 			// from the rung itself.
 			F.Owner->Origin = FVector(-100.0, 0.0, 0.0);
@@ -524,19 +524,19 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 		auto Scope = F.RunWithMask(TailMask);
 		// Reachable only for an enemy the NPC does NOT hate or fear -- step 1 rejects the rest.
 		F.Npc->Relationships.SetEntity(F.Owner->Handle, EElysiumRelationship::Neutral, 5);
-		Memory.BestSoundSource = F.Owner->Handle;
-		Memory.Enemy = F.Owner->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
+		F.Npc->BaseMemory.Enemy = F.Owner->Handle;
 		Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcMemory::ESeen::Count); ++i)
+		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Count); ++i)
 		{
-			Memory.LastSeen[i] = FElysiumEntityHandle::Invalid();
+			F.Npc->BaseMemory.LastSeen[i] = FElysiumEntityHandle::Invalid();
 		}
 		F.Owner->Origin = FVector(-100.0, 0.0, 0.0);
 		TestTrue(TEXT("the enemy rung admits on SEE_ENEMY"),
 			F.Sweep(FElysiumNpcConditions::Of({ ECond::SeeEnemy }), 0.0).Has(ECond::SeeSoundSource));
 		TestFalse(TEXT("...and clears without it"),
 			F.Sweep(FElysiumNpcConditions(), 0.0).Has(ECond::SeeSoundSource));
-		Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		F.Owner->Origin = FVector::ZeroVector;
 	}
 
@@ -548,12 +548,12 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 		// If the tail read the winner, the ClosestPlayer rung below could not answer.
 		F.Record(Memory.LastSoundPlayer, F.Second, FVector(100.0, 0.0, 0.0));
 		F.Npc->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Neutral, 5);
-		Memory.BestSoundSource = F.Player->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Player->Handle;
 		Memory.ClosestPlayer = F.Player->Handle;
-		Memory.Enemy = FElysiumEntityHandle::Invalid();
-		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcMemory::ESeen::Count); ++i)
+		F.Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
+		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Count); ++i)
 		{
-			Memory.LastSeen[i] = FElysiumEntityHandle::Invalid();
+			F.Npc->BaseMemory.LastSeen[i] = FElysiumEntityHandle::Invalid();
 		}
 		const FElysiumNpcConditions Out =
 			F.Sweep(FElysiumNpcConditions::Of({ ECond::HearPlayer, ECond::SeePlayer }), 0.0);
@@ -566,9 +566,9 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	// --- A hated source never reaches the chain at all ---------------------------------------------
 	{
 		auto Scope = F.RunWithMask(TailMask);
-		Memory.LastSeen[static_cast<int32>(FElysiumNpcMemory::ESeen::Hate)] = F.Owner->Handle;
+		F.Npc->BaseMemory.LastSeen[static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Hate)] = F.Owner->Handle;
 		F.Npc->Relationships.SetEntity(F.Owner->Handle, EElysiumRelationship::Hate, 5);
-		Memory.BestSoundSource = F.Owner->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
 		FElysiumNpcConditions Raised;
 		Raised.Set(ECond::SeeHate);
 		TestFalse(TEXT("step 1 rejects a hated source before the last-seen-hate rung is reached"),
@@ -580,13 +580,13 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 	{
 		auto Scope = F.RunWithMask(TailMask);
 		F.Npc->Relationships.SetEntity(F.Owner->Handle, EElysiumRelationship::Neutral, 5);
-		Memory.BestSoundSource = F.Owner->Handle;
+		F.Npc->BaseMemory.BestSoundSource = F.Owner->Handle;
 		Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-		Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		// Every earlier rung must miss, or the chain returns before the stranger arm is reached.
-		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcMemory::ESeen::Count); ++i)
+		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Count); ++i)
 		{
-			Memory.LastSeen[i] = FElysiumEntityHandle::Invalid();
+			F.Npc->BaseMemory.LastSeen[i] = FElysiumEntityHandle::Invalid();
 		}
 		Memory.NextSeeSoundSourceTime = 0.0;
 		// In the cone, in range, unoccluded.
@@ -636,9 +636,9 @@ bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 	// `CommitBestSound` is what writes the source the tail reads. It has no runtime caller until
 	// 10d installs the selectors, so this is also the assertion that it writes the field at all.
 	F.Record(Memory.LastSoundCombat, F.Owner, FVector(100.0, 0.0, 0.0));
-	F.Npc->Senses.CommitBestSound(FElysiumNpcConditions::Of({ ECond::HearCombat }));
+	F.Npc->Senses.CommitBestSound(*F.Npc, FElysiumNpcConditions::Of({ ECond::HearCombat }));
 	TestTrue(TEXT("CommitBestSound copies the winner's owner into the committed source"),
-		Memory.BestSoundSource == F.Owner->Handle);
+		F.Npc->BaseMemory.BestSoundSource == F.Owner->Handle);
 
 	Memory.NextInvestigateSoundTime = 12.25;
 	Memory.NextSeeSoundSourceTime = 3.5;
@@ -653,8 +653,8 @@ bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 	// The archive drops a handle's epoch by design (`ElysiumSaveArchive.h`) and the applier
 	// re-stamps it, so what has to survive is the INDEX and the resolution.
 	TestTrue(TEXT("the committed source rebases onto the live owner"),
-		Restored.BestSoundSource == G.Owner->Handle);
-	TestNotNull(TEXT("...and resolves"), G.World.Resolve(Restored.BestSoundSource));
+		G.Npc->BaseMemory.BestSoundSource == G.Owner->Handle);
+	TestNotNull(TEXT("...and resolves"), G.World.Resolve(G.Npc->BaseMemory.BestSoundSource));
 
 	// An index the restored world has no slot for drops rather than pointing at whatever now
 	// occupies it.
@@ -665,11 +665,11 @@ bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		H.Npc->Senses.Memory.BestSoundSource =
+		H.Npc->BaseMemory.BestSoundSource =
 			FElysiumEntityHandle(H.World.Entities().Num() + 64, 1);
 		ElysiumRoundTripSnapshot(H.World, I.World);
 		TestFalse(TEXT("an unresolvable committed source restores as invalid"),
-			I.Npc->Senses.Memory.BestSoundSource.IsSet());
+			I.Npc->BaseMemory.BestSoundSource.IsSet());
 	}
 	return true;
 }

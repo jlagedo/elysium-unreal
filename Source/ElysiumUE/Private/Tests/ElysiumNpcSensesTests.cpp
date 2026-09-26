@@ -509,7 +509,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 
 	// Cycle 5 owns the writer; a test injects the handle directly, which is the whole point of
 	// keeping the debounce testable before enemy selection exists.
-	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 
 	// --- The first admitted LOS is one edge, and it fires both surfaces for the player ----------
 	F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
@@ -558,7 +558,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	TestEqual(TEXT("further failures do not re-fire the loss edge"),
 		F.Counter(TEXT("c_lostenemylos")), 1.f);
 	TestTrue(TEXT("losing sight does NOT clear the enemy"),
-		F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+		F.Guard->BaseMemory.Enemy == F.Player->Handle);
 
 	// --- Regaining sight is a new acquisition episode --------------------------------------------
 	F.Services.bLineOfSightClear = true;
@@ -581,7 +581,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		G.Guard->Senses.Memory.Enemy = Other->Handle;
+		G.Guard->BaseMemory.Enemy = Other->Handle;
 		G.Guard->Senses.GatherEnemyLos(*G.Guard, 1.0);
 		G.Flush(1.0);
 		TestEqual(TEXT("a non-player enemy fires OnFoundEnemy"),
@@ -617,15 +617,15 @@ bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 	TestTrue(TEXT("the sound snapshot is immediate"), F.Guard->Senses.Memory.LastSoundPlayer.Serial != 0);
 	TestTrue(TEXT("hearing never acquires enemy memory"), F.Guard->EnemyMemory.Num() == 0);
 	F.Guard->Senses.TickHearing(*F.Guard, 1.199);
-	TestFalse(TEXT("no player condition before minimum delay"), F.Guard->Senses.HeardConditions.Has(EElysiumNpcCond::HearPlayer));
+	TestFalse(TEXT("no player condition before minimum delay"), F.Guard->HeardConditions.Has(EElysiumNpcCond::HearPlayer));
 	F.Guard->Senses.TickHearing(*F.Guard, 1.9);
 	F.Flush(1.9);
-	TestTrue(TEXT("player condition promoted by maximum delay"), F.Guard->Senses.HeardConditions.Has(EElysiumNpcCond::HearPlayer));
+	TestTrue(TEXT("player condition promoted by maximum delay"), F.Guard->HeardConditions.Has(EElysiumNpcCond::HearPlayer));
 	TestEqual(TEXT("raw PLAYER publishes OnHearPlayer"), F.Counter(TEXT("c_hearplayer")), 1.f);
 	F.Guard->Senses.TickHearing(*F.Guard, 2.0);
 	F.Flush(2.0);
 	TestEqual(TEXT("the serial cursor does not replay"), F.Counter(TEXT("c_hearplayer")), 1.f);
-	TestTrue(TEXT("heard conditions last one Listen"), F.Guard->Senses.HeardConditions.IsEmpty());
+	TestTrue(TEXT("heard conditions last one Listen"), F.Guard->HeardConditions.IsEmpty());
 
 	Sound.TypeMask = ElysiumGameSounds::World;
 	Sound.Position.X = Cm(600.f);
@@ -649,7 +649,7 @@ bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 	F.Guard->Senses.TickHearing(*F.Guard, 5.9);
 	F.Flush(5.9);
 	TestEqual(TEXT("nonoccludable combat reaches through that wall"), F.Counter(TEXT("c_hearcombat")), 1.f);
-	F.Guard->Senses.CommitBestSound(F.Guard->Senses.HeardConditions);
+	F.Guard->Senses.CommitBestSound(*F.Guard, F.Guard->HeardConditions);
 	TestTrue(TEXT("commit uses this pass's promoted combat condition"), F.Guard->Senses.Memory.BestSound.TypeMask == ElysiumGameSounds::Combat);
 	F.Services.bLineOfSightClear = true;
 	Sound.Category = FName(TEXT("DOOR_NORMAL"));
@@ -657,13 +657,13 @@ bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 	F.World.GameSounds().Emit(Sound, 6.0);
 	F.Guard->Senses.TickHearing(*F.Guard, 6.0);
 	F.Guard->Senses.TickHearing(*F.Guard, 6.9);
-	F.Guard->Senses.CommitBestSound(F.Guard->Senses.HeardConditions);
+	F.Guard->Senses.CommitBestSound(*F.Guard, F.Guard->HeardConditions);
 	TestTrue(TEXT("an old combat snapshot does not outrank a newly heard player"), F.Guard->Senses.Memory.BestSound.TypeMask == ElysiumGameSounds::Player);
 	Sound.Source = F.Guard->Handle;
 	F.World.GameSounds().Emit(Sound, 7.0);
 	F.Guard->Senses.TickHearing(*F.Guard, 7.0);
 	F.Guard->Senses.TickHearing(*F.Guard, 7.9);
-	TestTrue(TEXT("the observer ignores itself"), F.Guard->Senses.HeardConditions.IsEmpty());
+	TestTrue(TEXT("the observer ignores itself"), F.Guard->HeardConditions.IsEmpty());
 	return true;
 }
 
@@ -689,16 +689,16 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	}
 
 	FElysiumNpcMemory& Mem = F.Guard->Senses.Memory;
-	Mem.Enemy = F.Player->Handle;
-	Mem.LastEnemy = F.Player->Handle;
-	Mem.LastSeen[static_cast<int32>(FElysiumNpcMemory::ESeen::Hate)] = F.Player->Handle;
-	Mem.LastSeenTime[static_cast<int32>(FElysiumNpcMemory::ESeen::Hate)] = 12.5;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.LastEnemy = F.Player->Handle;
+	F.Guard->BaseMemory.LastSeen[static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Hate)] = F.Player->Handle;
+	F.Guard->BaseMemory.LastSeenTime[static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Hate)] = 12.5;
 	Mem.LastHeardSource = F.Player->Handle;
 	Mem.LastHeardPosition = FVector(11.0, 22.0, 33.0);
 	Mem.LastHeardCategory = TEXT("PLAYER_GUNSHOT_BASE");
 	Mem.LastHeardTime = 7.25;
-	Mem.LastDamageAttacker = F.Player->Handle;
-	Mem.LastDamageTime = 3.5;
+	F.Guard->BaseMemory.LastDamageAttacker = F.Player->Handle;
+	F.Guard->BaseMemory.LastDamageTime = 3.5;
 	Mem.LastDamageAmount = 9;
 	Mem.EnemyLosFailures = 4;
 	Mem.bEnemyLosLatched = true;
@@ -708,19 +708,19 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 
 	const FElysiumNpcMemory& Restored = G.Guard->Senses.Memory;
 	TestTrue(TEXT("the committed enemy survives the round trip"),
-		Restored.Enemy == G.Player->Handle);
-	TestTrue(TEXT("...and the last enemy beside it"), Restored.LastEnemy == G.Player->Handle);
+		G.Guard->BaseMemory.Enemy == G.Player->Handle);
+	TestTrue(TEXT("...and the last enemy beside it"), G.Guard->BaseMemory.LastEnemy == G.Player->Handle);
 	TestTrue(TEXT("the last-seen hate slot survives"),
-		Restored.Seen(FElysiumNpcMemory::ESeen::Hate) == G.Player->Handle);
+		G.Guard->BaseMemory.Seen(FElysiumNpcBaseMemory::ESeen::Hate) == G.Player->Handle);
 	TestTrue(TEXT("...with its timestamp"), NearlyEqual(
-		static_cast<float>(Restored.LastSeenTime[static_cast<int32>(FElysiumNpcMemory::ESeen::Hate)]),
+		static_cast<float>(G.Guard->BaseMemory.LastSeenTime[static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Hate)]),
 		12.5f));
 	TestEqual(TEXT("the last-heard category survives"), Restored.LastHeardCategory,
 		FString(TEXT("PLAYER_GUNSHOT_BASE")));
 	TestTrue(TEXT("...with its position"),
 		Restored.LastHeardPosition.Equals(FVector(11.0, 22.0, 33.0)));
 	TestEqual(TEXT("the last damage amount survives"), Restored.LastDamageAmount, 9);
-	TestTrue(TEXT("...and its attacker"), Restored.LastDamageAttacker == G.Player->Handle);
+	TestTrue(TEXT("...and its attacker"), G.Guard->BaseMemory.LastDamageAttacker == G.Player->Handle);
 	TestEqual(TEXT("the debounce counter survives"), Restored.EnemyLosFailures, 4);
 	TestTrue(TEXT("...and the edge latch, so a restore does not re-fire OnFoundEnemy"),
 		Restored.bEnemyLosLatched);
@@ -735,12 +735,12 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 			return false;
 		}
 		// An index no world ever had: the applier answers Invalid, as it does for a killed entity.
-		H.Guard->Senses.Memory.Enemy = FElysiumEntityHandle(9999, 1);
+		H.Guard->BaseMemory.Enemy = FElysiumEntityHandle(9999, 1);
 		H.Guard->Senses.Memory.EnemyLosFailures = 3;
 		H.Guard->Senses.Memory.bEnemyLosLatched = true;
 		ElysiumRoundTripSnapshot(H.World, I.World);
 		TestFalse(TEXT("an enemy the restored world does not carry comes back unset"),
-			I.Guard->Senses.Memory.Enemy.IsSet());
+			I.Guard->BaseMemory.Enemy.IsSet());
 		TestEqual(TEXT("...and the debounce taken for it drops with it"),
 			I.Guard->Senses.Memory.EnemyLosFailures, 0);
 		TestFalse(TEXT("...and so does the edge latch"),
@@ -1138,7 +1138,7 @@ bool FElysiumNpcSensesOverrideDebounceTest::RunTest(const FString&)
 	F.Guard->Senses.TickSight(*F.Guard, 11.91);
 	TestFalse(TEXT("override expires at equality"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
 	F.Player->Origin.X = Cm(100.f);
-	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 	F.Guard->Senses.GatherEnemyLos(*F.Guard, 12.0);
 	FElysiumActiveDisciplineEffect BrainWipe;
 	BrainWipe.Record = TEXT("Dominate_BrainWipe");

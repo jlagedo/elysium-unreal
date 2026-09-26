@@ -107,7 +107,7 @@ bool FElysiumScheduleExecutableWitnessTest::RunTest(const FString&)
 	if (!Npc || !Enemy) return false;
 	FElysiumNpcWorldFixture::Quiet({Npc, Enemy});
 	FElysiumNpcWorldFixture::PrepareForKernelDrive(Npc);
-	Npc->Senses.Memory.Enemy = Enemy->Handle;
+	Npc->BaseMemory.Enemy = Enemy->Handle;
 	FElysiumRecordingNpcMotor* Motor = nullptr;
 	for (const auto& Candidate : F.Services.NpcMotors)
 		if (Candidate->Owner == Npc->Handle) Motor = Candidate.Get();
@@ -132,7 +132,7 @@ bool FElysiumScheduleExecutableWitnessTest::RunTest(const FString&)
 	ElysiumSchedule::Tick(Npc->Schedule, *Npc, 0.3);
 	ElysiumSchedule::Tick(Npc->Schedule, *Npc, 1.4);
 	TestEqual(TEXT("all twelve tasks reached, final authored wait running"), Npc->Schedule.TaskIndex, 11);
-	TestTrue(TEXT("INCOVER remembered"), (Npc->ScheduleHost.MemoryBits & 2u) != 0);
+	TestTrue(TEXT("INCOVER remembered"), (Npc->BaseScheduleHost.MemoryBits & 2u) != 0);
 	TestFalse(TEXT("no task failed along the successful witness"), Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	const int32 WitnessId = Npc->Schedule.Current;
 	const double LastWaitEnd = Npc->Schedule.TaskEndsAt;

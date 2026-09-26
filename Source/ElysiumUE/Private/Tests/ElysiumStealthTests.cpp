@@ -842,7 +842,7 @@ bool FElysiumStealthObserverTest::RunTest(const FString&)
 	TestTrue(TEXT("the committed observation identifies the observer"), F.Player->Observer.Observer == F.Guard->Handle);
 	TestFalse(TEXT("sight without enemy commitment is searching"), F.Player->Observer.bDetected);
 	const int32 Searching = F.Player->Observer.Generation;
-	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 	F.Guard->Senses.GatherEnemyLos(*F.Guard, .2);
 	TestFalse(TEXT("the committed enemy edge still waits for snapshot publication"), F.Player->Observer.bDetected);
 	ElysiumStealth::PublishObservers(*F.Player, .2);
@@ -856,9 +856,9 @@ bool FElysiumStealthObserverTest::RunTest(const FString&)
 	F.Guard->bDead = true;
 	ElysiumStealth::PublishObservers(*F.Player, .22);
 	TestFalse(TEXT("dead observer disappears in the committed frame"), F.Player->Observer.IsSet());
-	TestTrue(TEXT("presentation cleanup does not change enemy identity"), F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+	TestTrue(TEXT("presentation cleanup does not change enemy identity"), F.Guard->BaseMemory.Enemy == F.Player->Handle);
 	F.Guard->bDead = false;
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	F.Guard->Senses.Memory.BestSeeUnknown = F.Player->Handle;
 	F.Player->Origin = FVector(-500.f * ElysiumMove::U, 0, 0);
 	F.Guard->Senses.TickSight(*F.Guard, 1.0);

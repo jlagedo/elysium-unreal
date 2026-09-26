@@ -103,23 +103,83 @@ struct FElysiumNpcPerception
 		UElysiumRulebookSubsystem* Rules, FString& OutWarning);
 };
 
+// The `CAI_BaseNPC` half of `FElysiumNpcMemory` (story 5 step 5): the base layer's words, held by
+// `FElysiumNpcBase::BaseMemory`; the Troika's stay on `FElysiumNpcMemory`.
+struct FElysiumNpcBaseMemory
+{
+	// The four relation categories the recovered `SEE_*` conditions name.
+	enum class ESeen : uint8 { Hate, Fear, Dislike, Nemesis, Count };
+
+	FElysiumEntityHandle Enemy;
+
+	FElysiumEntityHandle LastEnemy;
+
+	// The last-seen target per relation category, and when each was seen.
+	FElysiumEntityHandle LastSeen[static_cast<int32>(ESeen::Count)];
+	double LastSeenTime[static_cast<int32>(ESeen::Count)] = { -1.0, -1.0, -1.0, -1.0 };
+
+	// `m_hBestSoundSource` (+0x5b78), written by `CommitBestSound` alongside the record copy and
+	// read only by the sound sweep's `SEE_SOUND_SOURCE` tail. It is deliberately the COMMITTED
+	// sound's owner, not the sound the current sweep just picked: the tail answers about the
+	// sound the NPC decided to act on, which the selector commits (10d), one pass earlier.
+	FElysiumEntityHandle BestSoundSource;
+
+	// Retail's NPC override saves the complete incoming packet before composing the base
+	// transaction, and a surviving positive hit remembers its attacker. The typed commit
+	// (`FElysiumNpc::OnDamageCommitted`) is the one writer.
+	FElysiumEntityHandle LastDamageAttacker;
+
+	double LastDamageTime = -1.0;
+
+	// The repeated-damage window (`+0x5d94` accumulated, `+0x5d98` window root). Damage sums for one
+	// second; a sum over 15 percent of Source max health raises `REPEATED_DAMAGE`, and an expired
+	// window is RESET rather than decayed. The rule lives on `ElysiumNpcCond::AccumulateDamage`;
+	// these are the two bytes it keeps. Negative start means "no window open".
+	double RepeatedDamageWindowStart = -1.0;
+
+	int32 RepeatedDamageAccumulated = 0;
+
+	// --- The retail words, declared and unwritten ------------------------------------------------
+	//
+	// Every word of `CAI_BaseNPC` this struct owns that no port system writes yet
+	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
+	// retail name and the tier that typed it. They are the shape 29b landed so a later story
+	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset and the shape test fails if one goes missing.
+	int32 EnemyOccludedCheck = 0;  // +0x5b98 m_eEnemyOccludedCheck (datamap)
+
+	// +0x5b9c m_vecLastDamageAttackPos (datamap)
+	FVector LastDamageAttackPosition = FVector::ZeroVector;
+
+	// +0x5bc5 m_bEnemyWentOccluded (datamap) — the occlusion edge, distinct from bEnemyOccluded
+	// which is the ten-failure debounce
+	bool bEnemyWentOccluded = false;
+
+	// +0x5bc8 m_vecEnemyWentOccluded (datamap)
+	FVector EnemyWentOccludedPosition = FVector::ZeroVector;
+
+	// +0x5ce8 m_flSoundWaitTime (datamap) — an absolute curtime deadline, beside the other two
+	// sound clocks
+	double SoundWaitTime = 0.0;
+
+	FElysiumEntityHandle EnemyOccluder;  // +0x5d90 m_hEnemyOccluder (sdk-order)
+
+	const FElysiumEntityHandle& Seen(ESeen Category) const
+	{
+		return LastSeen[static_cast<int32>(Category)];
+	}
+
+	void Reset();
+	void Serialize(FElysiumSaveArchive& Ar);
+	void Rebase(const FElysiumEntityWorld& World);
+};
+
 // What the native object retains across the loss of current sight: enemy, last enemy, the
 // last-seen target per relation category, the last heard stimulus, the last damage packet, the
 // committed-enemy occlusion state and the closest-player cache. "Not currently visible" is not
 // "forgotten and neutral", which is exactly what this struct exists to keep separate.
 struct FElysiumNpcMemory
 {
-	// The four relation categories the recovered `SEE_*` conditions name.
-	enum class ESeen : uint8 { Hate, Fear, Dislike, Nemesis, Count };
-
-	// --- Enemy selection (cognition owns the writer) ---
-	FElysiumEntityHandle Enemy;
-	FElysiumEntityHandle LastEnemy;
-
-	// --- Last seen, by relation category -------------------------------------------------------
-	FElysiumEntityHandle LastSeen[static_cast<int32>(ESeen::Count)];
-	double LastSeenTime[static_cast<int32>(ESeen::Count)] = { -1.0, -1.0, -1.0, -1.0 };
-
 	// --- Last heard ----------------------------------------------------------------------------
 	FElysiumEntityHandle LastHeardSource;      // invalid means "the world made it" (a door)
 	FVector LastHeardPosition = FVector::ZeroVector;
@@ -136,11 +196,6 @@ struct FElysiumNpcMemory
 	FElysiumGameSoundEvent LastSoundPhysicsDanger;
 	FElysiumGameSoundEvent LastSoundWorld;
 	FElysiumGameSoundEvent BestSound;
-	// `m_hBestSoundSource` (+0x5b78), written by `CommitBestSound` alongside the record copy and
-	// read only by the sound sweep's `SEE_SOUND_SOURCE` tail. It is deliberately the COMMITTED
-	// sound's owner, not the sound the current sweep just picked: the tail answers about the
-	// sound the NPC decided to act on, which the selector commits (10d), one pass earlier.
-	FElysiumEntityHandle BestSoundSource;
 
 	// --- The sound sweep's two clocks ----------------------------------------------------------
 	// `m_flNextInvestigateSoundTime` (+0x623c), `FIELD_TIME`, saved, zeroed at Spawn. Gates the
@@ -155,11 +210,6 @@ struct FElysiumNpcMemory
 	double NextSeeSoundSourceTime = 0.0;
 
 	// --- Last damage ---------------------------------------------------------------------------
-	// Retail's NPC override saves the complete incoming packet before composing the base
-	// transaction, and a surviving positive hit remembers its attacker. The typed commit
-	// (`FElysiumNpc::OnDamageCommitted`) is the one writer.
-	FElysiumEntityHandle LastDamageAttacker;
-	double LastDamageTime = -1.0;
 	int32 LastDamageAmount = 0;
 
 	// --- The incoming-attack notice ------------------------------------------------------------
@@ -174,13 +224,6 @@ struct FElysiumNpcMemory
 	// conditions in `ElysiumNpcConditions.h`).
 	FElysiumEntityHandle DetectedAttackAttacker;
 	double DetectedAttackTime = -1.0;
-
-	// The repeated-damage window (`+0x5d94` accumulated, `+0x5d98` window root). Damage sums for one
-	// second; a sum over 15 percent of Source max health raises `REPEATED_DAMAGE`, and an expired
-	// window is RESET rather than decayed. The rule lives on `ElysiumNpcCond::AccumulateDamage`;
-	// these are the two bytes it keeps. Negative start means "no window open".
-	double RepeatedDamageWindowStart = -1.0;
-	int32 RepeatedDamageAccumulated = 0;
 
 	// --- Committed-enemy LOS (`GatherEnemyConditions`) -----------------------------------------
 	int32 EnemyLosFailures = 0;                // consecutive failed checks, capped at the limit
@@ -233,24 +276,6 @@ struct FElysiumNpcMemory
 	double SeeUnknownGraceUntil = -1.0;
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
-	//
-	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
-	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
-	// retail name and the tier that typed it. They are the shape 29b landed so a later story
-	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
-	// them to its offset and the shape test fails if one goes missing.
-	int32 EnemyOccludedCheck = 0;  // +0x5b98 m_eEnemyOccludedCheck (datamap)
-	// +0x5b9c m_vecLastDamageAttackPos (datamap)
-	FVector LastDamageAttackPosition = FVector::ZeroVector;
-	// +0x5bc5 m_bEnemyWentOccluded (datamap) — the occlusion edge, distinct from bEnemyOccluded
-	// which is the ten-failure debounce
-	bool bEnemyWentOccluded = false;
-	// +0x5bc8 m_vecEnemyWentOccluded (datamap)
-	FVector EnemyWentOccludedPosition = FVector::ZeroVector;
-	// +0x5ce8 m_flSoundWaitTime (datamap) — an absolute curtime deadline, beside the other two
-	// sound clocks
-	double SoundWaitTime = 0.0;
-	FElysiumEntityHandle EnemyOccluder;  // +0x5d90 m_hEnemyOccluder (sdk-order)
 	FElysiumGameSoundEvent InvestigateSound;  // +0x60dc m_InvestigateSound (datamap)
 	// +0x6288 m_flNextCheckEnterPVSTime (datamap) — an absolute curtime deadline, carried as
 	// double
@@ -261,16 +286,27 @@ struct FElysiumNpcMemory
 
 	void Reset();
 	void Serialize(FElysiumSaveArchive& Ar);
-	void Rebase(const FElysiumEntityWorld& World);
+	// `Base` is the NPC's base-layer memory, rebased first: a restored NPC with no enemy clears
+	// the committed-enemy LOS state.
+	void Rebase(const FElysiumEntityWorld& World, const FElysiumNpcBaseMemory& Base);
 
-	const FElysiumEntityHandle& Seen(ESeen Category) const
-	{
-		return LastSeen[static_cast<int32>(Category)];
-	}
 };
 
 // The per-NPC senses runner. Owned by value on `FElysiumNpc`; every entry point takes the owning
 // NPC so the object holds no back pointer to rebind across a save.
+class FElysiumNpcSenses;
+
+// One heard condition waiting for its reaction delay: `m_DelayedSoundConditionList` (`+0x1ae0`), a
+// `CAI_BaseNPC` word (`FElysiumNpcBase::PendingSounds`). The listen pass queues at most eight and
+// promotes each into `HeardConditions` once `PromoteAt` passes.
+struct FElysiumNpcPendingSound
+{
+	EElysiumNpcCond Condition = EElysiumNpcCond::None;
+	double PromoteAt = -1.0;
+
+	static void SerializeQueue(FElysiumSaveArchive& Ar, TArray<FElysiumNpcPendingSound>& Queue);
+};
+
 class FElysiumNpcSenses
 {
 public:
@@ -279,7 +315,6 @@ public:
 	// The pulled-back apex distance `FinViewCone3dNew` shifts the cone by: the `0x10937a8c` ConVar
 	// `debug_viewcone_back_dist`, shipped "40" SOURCE units, answered here in centimetres.
 	static float ViewConeBodyOffsetCm();
-	FElysiumNpcConditions HeardConditions;
 	bool bSeeUnknownThisPass = false;
 
 	// `CAI_Senses::m_bCanPerformSenses`, `senses+0x80` — the gate `CAI_Senses::PerformSensing`
@@ -325,7 +360,6 @@ public:
 	// retail name and the tier that typed it. They are the shape 29b landed so a later story
 	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
 	// them to its offset and the shape test fails if one goes missing.
-	bool bKeepSound = false;  // +0x5cd8 m_bKeepSound (datamap)
 	// +0x63c4 m_flStealthVisionScalar (datamap) — this body's own stealth surface, which an
 	// observer's cone test multiplies in
 	float StealthVisionScalar = 0.f;
@@ -355,7 +389,7 @@ public:
 	void GatherEnemyLos(FElysiumNpc& Npc, double Now);
 	void TickHearing(FElysiumNpc& Npc, double Now);
 	const TArray<FElysiumEntityHandle>& Sighted() const { return SeenThisPass; }
-	void CommitBestSound(const FElysiumNpcConditions& Conditions);
+	void CommitBestSound(FElysiumNpc& Npc, const FElysiumNpcConditions& Conditions);
 	void ExtendVisionOverride(FElysiumNpc& Npc, FElysiumEntityHandle Source, double Now, double Duration);
 
 	// Where this NPC's hearing has consumed the game-sound bus up to. Serial 0 is "nothing seen
@@ -392,7 +426,6 @@ public:
 	// `thunk_FUN_102cc7e0(&m_DelayedSoundConditionList)` — the SECOND of the two delayed-list clears
 	// `CAI_BaseNPC::NPCInit` (`0x10273390`) issues. The first is the delayed CONDITION list, which
 	// the cognition half owns; this is the sound one at `+0x1ae0`, private to this struct.
-	void ClearPendingSounds() { PendingSounds.Reset(); }
 
 	// `m_flNextListenTime = 0` (`+0x63d0`), written by `CAI_BaseNPCTroika::NPCInit` at `1029a0fb`
 	// before it chains the base. The shape map binds the word here as `LastListenTime` because this
@@ -401,13 +434,7 @@ public:
 	void ResetListenClock() { LastListenTime = 0.0; }
 
 private:
-	struct FPendingSound
-	{
-		EElysiumNpcCond Condition = EElysiumNpcCond::None;
-		double PromoteAt = -1.0;
-	};
 	uint64 Cursor = 0;
-	TArray<FPendingSound> PendingSounds;
 	// `CAI_Senses::Look` keeps per-candidate throttles separate from closest-player/PVS cache.
 	double NextLookTime[3] = { -1.0, -1.0, -1.0 };
 	TArray<FElysiumEntityHandle> SeenByChannel[3];

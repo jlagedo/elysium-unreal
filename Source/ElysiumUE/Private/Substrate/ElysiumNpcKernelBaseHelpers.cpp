@@ -116,8 +116,8 @@ int32 FElysiumNpc::MeleeAttack1Conditions(float Dot, float Dist)
 	// Arm for arm, and NOTE that `GetEnemy()` (slot 167, vtable `+0x29c`) is dispatched THREE
 	// times: once up front for the combat-character cache, once as a null gate after the dot, and
 	// once more for the ground-flag read. Retail re-reads it each time.
-	const FElysiumEntity* Enemy = (World != nullptr && Senses.Memory.Enemy.IsSet())
-		? World->Resolve(Senses.Memory.Enemy) : nullptr;
+	const FElysiumEntity* Enemy = (World != nullptr && BaseMemory.Enemy.IsSet())
+		? World->Resolve(BaseMemory.Enemy) : nullptr;
 	// `enemy->+0x9c` is `CBaseEntity`'s self-downcast cache: non-null exactly for a combat
 	// character.
 	const FElysiumCombatCharacter* EnemyCombatant =
@@ -164,8 +164,8 @@ int32 FElysiumNpc::MeleeAttack2Conditions(float Dot, float Dist)
 	// The sibling, and the three differences are the whole of it: a DIFFERENT outer band
 	// (`_DAT_1044c3a8`, 180 units), NO second `GetEnemy()` null gate, and NO ground test — a
 	// passing body answers `COND_CAN_MELEE_ATTACK2` outright.
-	const FElysiumEntity* Enemy = (World != nullptr && Senses.Memory.Enemy.IsSet())
-		? World->Resolve(Senses.Memory.Enemy) : nullptr;
+	const FElysiumEntity* Enemy = (World != nullptr && BaseMemory.Enemy.IsSet())
+		? World->Resolve(BaseMemory.Enemy) : nullptr;
 	const FElysiumCombatCharacter* EnemyCombatant =
 		Enemy != nullptr ? Enemy->AsCombatCharacter() : nullptr;
 
@@ -211,7 +211,7 @@ FElysiumEntity* FElysiumNpc::GetNavTargetEntity() const
 	const int32 GoalType = NavGoalState();
 	if (GoalType == 2)
 	{
-		return MutableWorld->Resolve(Senses.Memory.Enemy);
+		return MutableWorld->Resolve(BaseMemory.Enemy);
 	}
 	if (GoalType == 1)
 	{
@@ -616,7 +616,7 @@ bool FElysiumNpc::FUN_10295ed0(int32 HintNode) const
 	{
 		return false;
 	}
-	const bool bIsCurrentHint = HintNode == ScheduleHost.HintNode;
+	const bool bIsCurrentHint = HintNode == BaseScheduleHost.HintNode;
 	if (!CoverHintStillValid(Hint, CoverObject->Origin, Origin, bIsCurrentHint))
 	{
 		return false;
@@ -690,7 +690,7 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_102961a0(int32 HintNode) const
 	{
 		return EHintRejectReason::NoCoverObject;        // "No cover object"
 	}
-	const bool bIsCurrentHint = HintNode == ScheduleHost.HintNode;
+	const bool bIsCurrentHint = HintNode == BaseScheduleHost.HintNode;
 	const EHintRejectReason Reason = CoverHintRejectReason(Hint, CoverObject->Origin,
 		bIsCurrentHint);
 	if (Reason != EHintRejectReason::None)
@@ -810,7 +810,7 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_10296c40(int32 HintNode,
 	{
 		return EHintRejectReason::Disabled;   // retail's top arm covers a null hint too
 	}
-	const bool bIsCurrentHint = HintNode == ScheduleHost.HintNode;
+	const bool bIsCurrentHint = HintNode == BaseScheduleHost.HintNode;
 	if ((bIsCurrentHint && bStayEntrenched) || Enemy == nullptr)
 	{
 		return EHintRejectReason::None;

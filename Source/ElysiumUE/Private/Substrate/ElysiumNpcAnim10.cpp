@@ -164,9 +164,9 @@ namespace
 void* FElysiumNpc::CurrentHintPointer()
 {
 	// `m_pHintNode` (`+0x5ddc`). Story 29c-1's slots 569/570 read the node off
-	// `ScheduleHost.HintNode` and use their `void*` only as a non-null marker, so this hands them
+	// `BaseScheduleHost.HintNode` and use their `void*` only as a non-null marker, so this hands them
 	// exactly the null/non-null retail hands them.
-	return ScheduleHost.HintNode != INDEX_NONE ? static_cast<void*>(&ScheduleHost) : nullptr;
+	return BaseScheduleHost.HintNode != INDEX_NONE ? static_cast<void*>(&ScheduleHost) : nullptr;
 }
 
 void FElysiumNpc::ResolveStanceTableRow()
@@ -707,7 +707,7 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 		}
 		if (Request == GAnim10ActCover
 			|| (Request == NpcKernelAnim10Shared::GAnim10ActIdle
-				&& (ScheduleHost.MemoryBits & GAnim10MemoryCoverIdle) != 0))
+				&& (BaseScheduleHost.MemoryBits & GAnim10MemoryCoverIdle) != 0))
 		{
 			return GetCoverActivity(CurrentHintPointer());    // slot 569, vtable +0x8e4
 		}
@@ -1009,7 +1009,7 @@ bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 		return (const_cast<FElysiumNpc*>(this)->CapabilitiesGet() & GAnim10CapCoverAndReload) != 0;
 	case ENpcPredicate::CoverIdleFlagged:
 		// `m_afMemory & 2`, the bit that turns `ACT_IDLE` into a cover request.
-		return (ScheduleHost.MemoryBits & GAnim10MemoryCoverIdle) != 0;
+		return (BaseScheduleHost.MemoryBits & GAnim10MemoryCoverIdle) != 0;
 	case ENpcPredicate::NoAimGait:
 		// `0x103854f0` step 1: capability bit `0x40`.
 		return (const_cast<FElysiumNpc*>(this)->CapabilitiesGet() & NpcKernelAnim10Shared::GAnim10CapNoAimGait) != 0;

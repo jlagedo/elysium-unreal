@@ -431,7 +431,7 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 
 	// A previous acquisition episode, so the last-enemy transfer and the latch reset are observable
 	// rather than vacuous.
-	F.Guard->Senses.Memory.Enemy = F.Victim->Handle;
+	F.Guard->BaseMemory.Enemy = F.Victim->Handle;
 	F.Guard->Senses.Memory.bEnemyLosLatched = true;
 	F.Guard->Senses.Memory.EnemyLosFailures = 7;
 	F.Guard->Senses.Memory.bEnemyOccluded = true;
@@ -440,9 +440,9 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 	F.FireStartSchedule();
 
 	TestTrue(TEXT("the goal is committed as the enemy"),
-		F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+		F.Guard->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...through SetEnemy, so the old handle went down the last-enemy path"),
-		F.Guard->Senses.Memory.LastEnemy == F.Victim->Handle);
+		F.Guard->BaseMemory.LastEnemy == F.Victim->Handle);
 	TestFalse(TEXT("...and the previous LOS episode's latch was forgotten"),
 		F.Guard->Senses.Memory.bEnemyLosLatched);
 	TestEqual(TEXT("...along with its failure debounce"),
@@ -794,7 +794,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 			return false;
 		}
 		F.Guard->Relationships.SetEntity(F.Victim->Handle, EElysiumRelationship::Hate, 5);
-		F.Guard->Senses.Memory.Enemy = F.Victim->Handle;
+		F.Guard->BaseMemory.Enemy = F.Victim->Handle;
 		// `0x102ad660` needs `HasInterruptCondition`; a patrol executor has no schedule mask.
 		// These cases are about the body arbiter, so the state write is `SetState(2)`.
 		F.Guard->SetState(2);
@@ -845,7 +845,7 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	// (`0x1026e340`) — exactly as `FCombatFixture` does. A patrol executor installs no schedule
 	// mask, so `0x102ad660`'s idle→combat arm (`HasInterruptCondition 0x10269d30`) cannot answer.
 	F.Guard->Relationships.SetEntity(F.Victim->Handle, EElysiumRelationship::Hate, 5);
-	F.Guard->Senses.Memory.Enemy = F.Victim->Handle;
+	F.Guard->BaseMemory.Enemy = F.Victim->Handle;
 	F.Guard->SetState(2);
 	// `1026e35d`/`1026e368`: `SetState` writes BOTH state words, so the ideal matches the current.
 	TestEqual(TEXT("1026e340 writes m_NPCState"), F.Guard->NpcStateRetail(), 2);
@@ -889,7 +889,7 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 		F.Step(0.7 + 0.1 * i);
 	}
 	TestFalse(TEXT("the dead enemy is no longer committed"),
-		F.Guard->Senses.Memory.Enemy.IsSet() && F.Guard->Senses.Memory.Enemy == F.Victim->Handle);
+		F.Guard->BaseMemory.Enemy.IsSet() && F.Guard->BaseMemory.Enemy == F.Victim->Handle);
 	TestFalse(TEXT("the mind has left combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 	TestTrue(TEXT("the parked patrol route owns the body again"),

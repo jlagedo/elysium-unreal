@@ -414,7 +414,7 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 		//    `SETLE AL; DEC AL; AND AL,9; ADD AL,0x4f` over `m_iSquadDisconnected` — 'O' (0x4f) when
 		//    it is at or below zero and 'X' (0x58) when it is above. Then `m_pSquad`'s name, or the
 		//    literal `" - \n"` when there is no squad; the name arm appends `"\n"` after it.
-		const TCHAR SquadMark = ScheduleHost.SquadDisconnected < 1 ? TEXT('O') : TEXT('X');
+		const TCHAR SquadMark = BaseScheduleHost.SquadDisconnected < 1 ? TEXT('O') : TEXT('X');
 		FString SquadLine = FString::Printf(GDebug10FmtSquad, SquadMark);
 		FString SquadNameText;
 		if (!SquadObjectName(SquadNameText))
@@ -621,18 +621,18 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 	// decompiler's view"; the listing names all four words and both strings. A null schedule NAME
 	// prints `"Unknown"`; the text pointer is printed raw, so a null one reaches `printf` as a null
 	// `%s` — which is the empty string here.
-	if (ScheduleHost.InterruptSchedule != ElysiumScheduleId::None)
+	if (BaseScheduleHost.InterruptSchedule != ElysiumScheduleId::None)
 	{
-		const TCHAR* const Name = ElysiumScheduleName(ScheduleHost.InterruptSchedule);
+		const TCHAR* const Name = ElysiumScheduleName(BaseScheduleHost.InterruptSchedule);
 		EmitEntityText(Line, GDebug10FmtIntr, FString::Printf(GDebug10FmtIntr,
-			Name != nullptr ? Name : GDebug10Unknown, *ScheduleHost.InterruptText));
+			Name != nullptr ? Name : GDebug10Unknown, *BaseScheduleHost.InterruptText));
 		++Line;
 	}
-	if (ScheduleHost.FailedSchedule != ElysiumScheduleId::None)
+	if (BaseScheduleHost.FailedSchedule != ElysiumScheduleId::None)
 	{
-		const TCHAR* const Name = ElysiumScheduleName(ScheduleHost.FailedSchedule);
+		const TCHAR* const Name = ElysiumScheduleName(BaseScheduleHost.FailedSchedule);
 		EmitEntityText(Line, GDebug10FmtFail, FString::Printf(GDebug10FmtFail,
-			Name != nullptr ? Name : GDebug10Unknown, *ScheduleHost.FailText));
+			Name != nullptr ? Name : GDebug10Unknown, *BaseScheduleHost.FailText));
 		++Line;
 	}
 

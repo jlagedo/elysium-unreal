@@ -358,8 +358,8 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 		{
 			// `m_OnStateFleeing` fires with the ENEMY as activator, or with this NPC when there is
 			// no enemy — retail substitutes `this`, it does not skip the output.
-			const FElysiumEntity* Enemy = World != nullptr && Senses.Memory.Enemy.IsSet()
-				? World->Resolve(Senses.Memory.Enemy) : nullptr;
+			const FElysiumEntity* Enemy = World != nullptr && BaseMemory.Enemy.IsSet()
+				? World->Resolve(BaseMemory.Enemy) : nullptr;
 			FireOutput(FName(TEXT("OnStateFleeing")), Enemy != nullptr ? Enemy->Handle : Handle);
 			break;
 		}
@@ -386,7 +386,7 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 
 		// The changed-half tail: drop the top five bits of `m_afMemory` (+0x5d8c) and, unless the
 		// body is climbing or jumping, clear `PRESERVE_PATH` (+0x14b8 bit 0x8).
-		ScheduleHost.MemoryBits &= GCondMemoryKeepMask;
+		BaseScheduleHost.MemoryBits &= GCondMemoryKeepMask;
 		if (NavType() != GCondNavClimb && NavType() != GCondNavJump)
 		{
 			NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
@@ -450,7 +450,7 @@ int32 FElysiumNpc::RequestFleeDesiredState(EElysiumNpcCond GateCondition, int32 
 void FElysiumNpc::EnterAlternateAi()
 {
 	// `FUN_10298800`, three stores in order.
-	ScheduleHost.bShouldMove = false;                 // +0x1a40
+	BaseScheduleHost.bShouldMove = false;                 // +0x1a40
 	StopMoving();                                     // 0x102ee2a0 on m_pNavigator (+0x5d34)
 	AlternateAi = 1;                                  // +0x644c
 }

@@ -302,13 +302,13 @@ bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 		N.AlternateAi = 1;
 		N.NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 		N.ScheduleHost.SavedSleepExtents = FVector(3.f);
-		N.ScheduleHost.MemoryBits = 0x2000u;
+		N.BaseScheduleHost.MemoryBits = 0x2000u;
 		N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 		TestFalse(TEXT("102a09f8/102a0a07 closes and forgets m_hOpeningDoor"), N.OpeningDoor.IsSet());
 		TestFalse(TEXT("slot 532 also clears the wait byte"), N.bOpeningDoorWait);
 		TestFalse(TEXT("102a0a79 clears SLEEP_BOUNDING_BOX"),
 			N.NpcFlags.Has(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX));
-		TestEqual(TEXT("102a0af8 clears memory 0x2000"), N.ScheduleHost.MemoryBits, 0u);
+		TestEqual(TEXT("102a0af8 clears memory 0x2000"), N.BaseScheduleHost.MemoryBits, 0u);
 	}
 
 	{
@@ -617,13 +617,13 @@ bool FElysiumNpcKernelMaintain19DoorAndMissingTest::RunTest(const FString&)
 	TestFalse(TEXT("10282336 missing exit skips +0x5bb8"), N.Schedule.bDidMaintainSchedule);
 
 	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
-	N.ScheduleHost.CacheInterruptTime = -1.0;
+	N.BaseScheduleHost.CacheInterruptTime = -1.0;
 	N.Cognition.CustomInterruptConditions.Reset();
 	N.Cognition.GatheredAt = 8.0;
 	int32					 Ideal = 0;
 	const int32 Selected = N.SelectScheduleForMaintenance(8.0, Ideal);
 	TestEqual(TEXT("102814de refreshes m_flCacheInterruptTime before selection"),
-		N.ScheduleHost.CacheInterruptTime, 8.0);
+		N.BaseScheduleHost.CacheInterruptTime, 8.0);
 	TestTrue(TEXT("1026a1d9 caches the running program's positive interrupt mask"),
 		N.Cognition.CustomInterruptConditions.Has(EElysiumNpcCond::NewEnemy));
 	TestEqual(TEXT("102814d0 stores the selector's global id as m_IdealSchedule"),

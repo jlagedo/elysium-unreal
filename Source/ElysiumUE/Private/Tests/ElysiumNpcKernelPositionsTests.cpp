@@ -563,10 +563,10 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 
 	// `IsValidShootPosition` `0x1028b0b0`, slot 549 — the hint group and nothing else, and the
 	// position argument is never read.
-	Npc->ScheduleHost.HintGroup.Reset();
+	Npc->BaseScheduleHost.HintGroup.Reset();
 	TestTrue(TEXT("an NPC with no hint group accepts every shoot position"),
 		Npc->IsValidShootPosition(FVector::ZeroVector, nullptr));
-	Npc->ScheduleHost.HintGroup = TEXT("rooftops");
+	Npc->BaseScheduleHost.HintGroup = TEXT("rooftops");
 	TestFalse(TEXT("one with a hint group refuses a null hint"),
 		Npc->IsValidShootPosition(FVector::ZeroVector, nullptr));
 	FElysiumNpc::FHintWords Hint;
@@ -585,7 +585,7 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 	Hint.Group = TEXT("alley");
 	TestFalse(TEXT("and the hint-group arm still refuses"),
 		Npc->IsValidCover(FVector::ZeroVector, &Hint));
-	Npc->ScheduleHost.HintGroup.Reset();
+	Npc->BaseScheduleHost.HintGroup.Reset();
 
 	// `IsAreaClear` `0x102a0fb0` — the flag is raised for exactly the trace and dropped after it.
 	Npc->bForceNpcCheck = false;

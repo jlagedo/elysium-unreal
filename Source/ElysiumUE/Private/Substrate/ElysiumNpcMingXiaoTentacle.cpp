@@ -172,7 +172,7 @@ int32 FElysiumNpcMingXiaoTentacle::SelectIdealStateRetail()
 	else
 	{
 		// `GetEnemy() ? 2 : 1`: COMBAT or IDLE.
-		Mind.WriteIdealStateRetail(Senses.Memory.Enemy.IsSet() ? 2 : 1);
+		Mind.WriteIdealStateRetail(BaseMemory.Enemy.IsSet() ? 2 : 1);
 	}
 	return IdealStateRetail();
 }

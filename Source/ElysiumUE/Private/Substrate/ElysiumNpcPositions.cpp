@@ -86,7 +86,7 @@ bool FElysiumNpc::EnemyLastKnownPosition(FVector& OutPositionCm) const
 	// `FElysiumNpcEnemyMemory` is the same store, so the fact is carried; the record's position is
 	// what retail's helper copies out.
 	const FElysiumEntity* Enemy =
-		World != nullptr ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+		World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;
 	if (Enemy == nullptr)
 	{
 		return false;

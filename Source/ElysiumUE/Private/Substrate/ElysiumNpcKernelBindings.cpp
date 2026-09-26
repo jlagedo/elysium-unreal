@@ -451,6 +451,8 @@ namespace ElysiumNpcKernelBindings
 			/*bBase=*/false, EElysiumField::Save);  // +0x126c m_iVAbilitiesCurrent[ v_ability_finance ]
 		ElysiumAddSheetField(D, TEXT("firearms"), EElysiumTraitContainer::Abilities, 5,
 			/*bBase=*/false, EElysiumField::Save);  // +0x1258 m_iVAbilitiesCurrent[ v_ability_firearms ]
+		ElysiumAddClassField(D, TEXT("floatfreq"), &FElysiumCombatCharacter::FloatSoundFrequency,
+			EElysiumField::Save);  // +0x10e8 m_iFloatSoundFrequency
 		ElysiumAddSheetField(D, TEXT("fortitude"), EElysiumTraitContainer::Disciplines, 7,
 			/*bBase=*/false, EElysiumField::Save);  // +0x12e0 m_iVDisciplinesCurrent[ v_discipline_fortitude ]
 		ElysiumAddSheetField(D, TEXT("frenzy_check_mod"), EElysiumTraitContainer::Attributes, 21,
@@ -523,8 +525,6 @@ namespace ElysiumNpcKernelBindings
 		// UNBOUND +0x1468 m_iCurVReaction "cur_reaction" — `m_iCurVReaction` is the reaction row a
 		// character is currently playing; this port carries the live reaction on
 		// `FElysiumCombatCharacter`'s reaction state, not as an index
-		// UNBOUND +0x10e8 m_iFloatSoundFrequency "floatfreq" — bound by binding class Npc
-		// (`FElysiumNpc::FloatSoundFrequency`)
 		// UNBOUND +0x158c m_LootableType "lootable_type" — `m_LootableType` selects the corpse's
 		// loot table; this port's inventory has no loot-table seam yet
 		// UNBOUND +0xdc m_impactEnergyScale "physdamagescale" — `m_impactEnergyScale` scales the
@@ -539,21 +539,221 @@ namespace ElysiumNpcKernelBindings
 		// this port stores the History index on `FElysiumPlayerRecord`, which no NPC has
 	}
 
+	void AddNpcBaseFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("additionalequipment"), &FElysiumNpcBase::AdditionalEquipment,
+			EElysiumField::Save);  // +0x5dec m_spawnEquipment
+		ElysiumAddClassField(D, TEXT("alternateequipment"), &FElysiumNpcBase::AlternateEquipment,
+			EElysiumField::Save);  // +0x1a98 m_altEquipment
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("hintgroup"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.HintGroup; }, EElysiumField::Save);  // +0x5db0 m_strHintGroup
+		ElysiumAddClassField(D, TEXT("squadname"), &FElysiumNpcBase::SquadName,
+			EElysiumField::Save);  // +0x5da8 m_SquadName
+	}
+
+	void AddNpcBaseSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_IdealSchedule"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.IdealScheduleRetail; },
+			EElysiumField::Save);  // +0x5c3c int
+		ElysiumAddClassField(D, TEXT("m_IdealTranslatedActivity"),
+			&FElysiumNpcBase::IdealTranslatedActivity, EElysiumField::Save);  // +0x5cd0 int
+		ElysiumAddClassField(D, TEXT("m_IdealWeaponActivity"),
+			&FElysiumNpcBase::IdealWeaponActivity, EElysiumField::Save);  // +0x5cd4 int
+		ElysiumAddClassField(D, TEXT("m_RelativeEyeTarget"), &FElysiumNpcBase::RelativeEyeTarget,
+			EElysiumField::Save);  // +0x5b94 int
+		ElysiumAddClassField(D, TEXT("m_afCapability"), &FElysiumNpcBase::CapabilityWord,
+			EElysiumField::Save);  // +0x5cec int
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_afMemory"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.MemoryBits; }, EElysiumField::Save);  // +0x5d8c int
+		ElysiumAddClassField(D, TEXT("m_bCineScriptHidden"), &FElysiumNpcBase::bCineScriptHidden,
+			EElysiumField::Save);  // +0x5d78 bool
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_bCondTookDamage"),
+			[](auto& E) -> auto&{ return E.Cognition.bCondTookDamage; }, EElysiumField::Save);  // +0x5b80 bool
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_bDidMaintainSchedule"),
+			[](auto& E) -> auto&{ return E.Schedule.bDidMaintainSchedule; }, EElysiumField::Save);  // +0x5bb8 bool
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_bEnemyWentOccluded"),
+			[](auto& E) -> auto&{ return E.BaseMemory.bEnemyWentOccluded; }, EElysiumField::Save);  // +0x5bc5 bool
+		ElysiumAddClassField(D, TEXT("m_bInChoreoScene"), &FElysiumNpcBase::bInChoreoScene,
+			EElysiumField::Save);  // +0x5bc4 bool
+		ElysiumAddClassField(D, TEXT("m_bKeepSound"), &FElysiumNpcBase::bKeepSound,
+			EElysiumField::Save);  // +0x5cd8 bool
+		ElysiumAddClassField(D, TEXT("m_bOpeningDoorWait"), &FElysiumNpcBase::bOpeningDoorWait,
+			EElysiumField::Save);  // +0x5d30 bool
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_bShouldMove"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.bShouldMove; }, EElysiumField::Save);  // +0x1a40 bool
+		ElysiumAddClassField(D, TEXT("m_bWantsLargeHull"), &FElysiumNpcBase::bWantsLargeHull,
+			EElysiumField::Save);  // +0x5f2c bool
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_eEnemyOccludedCheck"),
+			[](auto& E) -> auto&{ return E.BaseMemory.EnemyOccludedCheck; }, EElysiumField::Save);  // +0x5b98 int
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_failSchedule"),
+			[](auto& E) -> auto&{ return E.Schedule.FailScheduleOverride; }, EElysiumField::Save);  // +0x5c54 int
+		ElysiumAddClassField(D, TEXT("m_flBurstShootPauseMax"),
+			&FElysiumNpcBase::BurstShootPauseMax, EElysiumField::Save);  // +0x5bc0 float
+		ElysiumAddClassField(D, TEXT("m_flBurstShootPauseMin"),
+			&FElysiumNpcBase::BurstShootPauseMin, EElysiumField::Save);  // +0x5bbc float
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flCacheInterruptTime"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.CacheInterruptTime; },
+			EElysiumField::Save);  // +0x1b24 time
+		ElysiumAddClassField(D, TEXT("m_flDistTooFar"), &FElysiumNpcBase::DistTooFar,
+			EElysiumField::Save);  // +0x5de4 float
+		ElysiumAddClassField(D, TEXT("m_flExtendedBlockedByFriendTimer"),
+			&FElysiumNpcBase::ExtendedBlockedByFriendTimer, EElysiumField::Save);  // +0x5b8c time
+		ElysiumAddClassField(D, TEXT("m_flLastAttackTime"), &FElysiumNpcBase::LastAttackTime,
+			EElysiumField::Save);  // +0x5d9c time
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flLastDamageTime"),
+			[](auto& E) -> auto&{ return E.BaseMemory.RepeatedDamageWindowStart; },
+			EElysiumField::Save);  // +0x5d98 time
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flMoveWaitFinished"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.MoveWaitFinished; },
+			EElysiumField::Save);  // +0x5cf0 time
+		ElysiumAddClassField(D, TEXT("m_flNextDoorUseTime"), &FElysiumNpcBase::NextDoorUseTime,
+			EElysiumField::Save);  // +0x5b60 time
+		ElysiumAddClassField(D, TEXT("m_flNextWeaponSearchTime"),
+			&FElysiumNpcBase::NextWeaponSearchTime, EElysiumField::Save);  // +0x5da0 time
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flSoundWaitTime"),
+			[](auto& E) -> auto&{ return E.BaseMemory.SoundWaitTime; }, EElysiumField::Save);  // +0x5ce8 time
+		ElysiumAddClassField(D, TEXT("m_flSpecialDistanceAccum"),
+			&FElysiumNpcBase::SpecialDistanceAccum, EElysiumField::Save);  // +0x5bac float
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flSumDamage"),
+			[](auto& E) -> auto&{ return E.BaseMemory.RepeatedDamageAccumulated; },
+			EElysiumField::Save);  // +0x5d94 float
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flWaitFinished"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.WaitFinished; }, EElysiumField::Save);  // +0x5db4 time
+		ElysiumAddClassField(D, TEXT("m_flWeaponBlockedByFriendTimer"),
+			&FElysiumNpcBase::WeaponBlockedByFriendTimer, EElysiumField::Save);  // +0x5b88 time
+		ElysiumAddClassField(D, TEXT("m_hBlockedDoor"), &FElysiumNpcBase::BlockedDoor,
+			EElysiumField::Save);  // +0x5d28 ehandle
+		ElysiumAddClassField(D, TEXT("m_hCondHitByDoor"), &FElysiumNpcBase::CondHitByDoor,
+			EElysiumField::Save);  // +0x5d2c ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hEnemy"),
+			[](auto& E) -> auto&{ return E.BaseMemory.Enemy; }, EElysiumField::Save);  // +0x5ce0 ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastDamageEnt"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastDamageAttacker; }, EElysiumField::Save);  // +0x5b7c ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastEnemy"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastEnemy; }, EElysiumField::Save);  // +0x1a94 ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastHeardEnt"),
+			[](auto& E) -> auto&{ return E.BaseMemory.BestSoundSource; }, EElysiumField::Save);  // +0x5b78 ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastSeenDislikeEnt"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastSeen[2]; }, EElysiumField::Save);  // +0x5b70 ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastSeenFearEnt"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastSeen[1]; }, EElysiumField::Save);  // +0x5b6c ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastSeenHateEnt"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastSeen[0]; }, EElysiumField::Save);  // +0x5b68 ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_hLastSeenNemesisEnt"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastSeen[3]; }, EElysiumField::Save);  // +0x5b74 ehandle
+		ElysiumAddClassField(D, TEXT("m_hOpeningDoor"), &FElysiumNpcBase::OpeningDoor,
+			EElysiumField::Save);  // +0x5d24 ehandle
+		ElysiumAddClassField(D, TEXT("m_hShootTargetOverride"),
+			&FElysiumNpcBase::ShootTargetOverride, EElysiumField::Save);  // +0x5ba8 ehandle
+		ElysiumAddClassField(D, TEXT("m_iCollisionMask"), &FElysiumNpcBase::CollisionMask,
+			EElysiumField::Save);  // +0x1a44 int
+		ElysiumAddClassField(D, TEXT("m_iMySquadSlot"), &FElysiumNpcBase::MySquadSlot,
+			EElysiumField::Save);  // +0x5dac int
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_iSquadDisconnected"),
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.SquadDisconnected; },
+			EElysiumField::Save);  // +0x5bb0 int
+		ElysiumAddClassField(D, TEXT("m_nIdealSequence"), &FElysiumNpcBase::IdealSequence,
+			EElysiumField::Save);  // +0x5ccc int
+		ElysiumAddClassField(D, TEXT("m_qaLastFacing"), &FElysiumNpcBase::LastFacing,
+			EElysiumField::Save);  // +0x5dc4 vector
+		ElysiumAddClassField(D, TEXT("m_vSavePosition"), &FElysiumNpcBase::SavePosition,
+			EElysiumField::Save);  // +0x5dd0 position
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_vecEnemyWentOccluded"),
+			[](auto& E) -> auto&{ return E.BaseMemory.EnemyWentOccludedPosition; },
+			EElysiumField::Save);  // +0x5bc8 vector
+		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_vecLastDamageAttackPos"),
+			[](auto& E) -> auto&{ return E.BaseMemory.LastDamageAttackPosition; },
+			EElysiumField::Save);  // +0x5b9c vector
+		ElysiumAddClassField(D, TEXT("m_vecLastPosition"), &FElysiumNpcBase::LastPosition,
+			EElysiumField::Save);  // +0x5db8 position
+		// NOT SAVED +0x1a9c m_DelayedConditionList (embedded) — a FIELD_EMBEDDED row: retail's
+		// datamap points at a second `datamap_t` and recurses, and this port's matching member
+		// carries its own typed `Serialize`, which is the same shape
+		// NOT SAVED +0x1ae0 m_DelayedSoundConditionList (embedded) — a FIELD_EMBEDDED row: retail's
+		// datamap points at a second `datamap_t` and recurses, and this port's matching member
+		// carries its own typed `Serialize`, which is the same shape
+		// NOT SAVED +0x5cc4 m_IdealNPCState (int) — the port member exists but its owner keeps it
+		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
+		// which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5cf4 m_MoveAndShootOverlay (embedded) — this port declares no member for the
+		// word (the shape map's row says why), so there is nothing for the save walk to carry
+		// NOT SAVED +0x5cc0 m_NPCState (int) — the port member exists but its owner keeps it
+		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
+		// which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5c40 m_ScheduleState (embedded) — a FIELD_EMBEDDED row: retail's datamap
+		// points at a second `datamap_t` and recurses, and this port's matching member carries its
+		// own typed `Serialize`, which is the same shape
+		// NOT SAVED +0x5d48 m_UnreachableEnts (custom) — this port declares no member for the word
+		// (the shape map's row says why), so there is nothing for the save walk to carry
+		// NOT SAVED +0x5ca4 m_bConditionsGathered (bool) — `m_bConditionsGathered` is retail's BOOL
+		// latch for `has this pass gathered yet`, and this port carries the same fact as the pass
+		// EDGE itself -- `FElysiumNpcCognition::GatheredAt`, a `double` every stimulus producer
+		// measures against. Binding the two would marshal a timestamp under a bool's name, and the
+		// restore hook re-stamps the edge to the load's own `now` in any case, so there is no
+		// member here to save
+		// NOT SAVED +0x1b28 m_bForceStateChange (bool) — the port member exists but its owner keeps
+		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
+		// it, which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5b84 m_bfNPCFrenziedFlags (int) — the port member exists but its owner keeps
+		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
+		// it, which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5b64 m_bfNPCStateFlags (int) — the language or an existing mechanism
+		// provides the word, so there is no member to persist
+		// NOT SAVED +0x5de0 m_cAmmoLoaded (int) — the port carries this concern on the entity chain
+		// BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x5cc8 m_flLastStateChangeTime (time) — the port member exists but its owner
+		// keeps it private, so no compiled path reaches it; the owning struct's own `Serialize`
+		// carries it, which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5d74 m_hCine (ehandle) — the port carries this concern on the entity chain
+		// BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x5ce4 m_hTargetEnt (ehandle) — the port member exists but its owner keeps it
+		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
+		// which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5bb4 m_iIsOblivious (int) — the port member exists but its owner keeps it
+		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
+		// which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x5de8 m_pGoalEnt (classptr) — `m_pGoalEnt` is a FIELD_CLASSPTR, the same case
+		// as `m_pHintNode`
+		// NOT SAVED +0x5ddc m_pHintNode (classptr) — `m_pHintNode` is a FIELD_CLASSPTR: retail
+		// saves the pointer through its own entity table, and this port holds the hint as a handle
+		// the navigator re-resolves
+		// NOT SAVED +0x5d44 m_pMotor (embedded) — the port carries this concern on the entity chain
+		// BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x5d34 m_pNavigator (embedded) — the port carries this concern on the entity
+		// chain BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x5d3c m_pPathfinder (embedded) — the port carries this concern on the entity
+		// chain BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x5cdc m_pSenses (embedded) — a FIELD_EMBEDDED row: retail's datamap points at
+		// a second `datamap_t` and recurses, and this port's matching member carries its own typed
+		// `Serialize`, which is the same shape
+		// NOT SAVED +0x5d70 m_scriptState (int) — the port carries this concern on the entity chain
+		// BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x5d60 m_vDefaultEyeOffset (vector) — the port carries this concern on the
+		// entity chain BELOW the NPC, and the class that owns the member is the class that persists
+		// it
+	}
+
 	void AddNpcFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
 		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
 		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
 		// keyvalues regardless of Key.
-		ElysiumAddClassField(D, TEXT("additionalequipment"), &FElysiumNpc::AdditionalEquipment,
-			EElysiumField::Save);  // +0x5dec m_spawnEquipment
 		ElysiumAddClassField(D, TEXT("allow_alert_lookaround"),
 			&FElysiumNpc::bAllowAlertLookaround, EElysiumField::Save);  // +0x6434 m_bAllowAlertLookaround
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("allow_kick_hint_use"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bAllowKickHintUse; },
 			EElysiumField::Save);  // +0x6436 m_bAllowKickHintUse
-		ElysiumAddClassField(D, TEXT("alternateequipment"), &FElysiumNpc::AlternateEquipment,
-			EElysiumField::Save);  // +0x1a98 m_altEquipment
 		ElysiumAddClassField(D, TEXT("bright_route_penalty"), &FElysiumNpc::BrightRoutePenalty,
 			EElysiumField::Save);  // +0x6344 m_iBrightRoutePenalty
 		ElysiumAddClassField(D, TEXT("combat_start_activity"), &FElysiumNpc::CombatStartActivity,
@@ -568,8 +768,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6340 m_bFullInvestigate
 		ElysiumAddClassField(D, TEXT("hearing"), &FElysiumNpc::AuthoredHearing,
 			EElysiumField::Save);  // +0x63bc m_flHearingScalarBase
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("hintgroup"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.HintGroup; }, EElysiumField::Save);  // +0x5db0 m_strHintGroup
 		ElysiumAddClassField(D, TEXT("ignore_detected_attack"),
 			&FElysiumNpc::bIgnoreDetectedAttack, EElysiumField::Save);  // +0x65f5 m_bIgnoreDetectedAttack
 		ElysiumAddClassField(D, TEXT("investigate_mode"), &FElysiumNpc::InvestigateMode,
@@ -607,7 +805,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save | EElysiumField::Key);  // +0x6354 m_iPLSupernaturalFleeLevel
 		ElysiumAddClassField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction,
 			EElysiumField::Save);  // +0x63ac m_sPlayerReaction
-		ElysiumAddClassField(D, TEXT("squadname"), &FElysiumNpc::SquadName, EElysiumField::Save);  // +0x5da8 m_SquadName
 		ElysiumAddClassField(D, TEXT("stay_entrenched"), &FElysiumNpc::bStayEntrenched,
 			EElysiumField::Save);  // +0x6435 m_bStayEntrenched
 		ElysiumAddClassField(D, TEXT("teleport_move_timer"), &FElysiumNpc::TeleportMoveTimer,
@@ -634,23 +831,10 @@ namespace ElysiumNpcKernelBindings
 		// and they cannot collide with the externals above.
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_CurrStance"),
 			[](auto& E) -> auto&{ return E.Stance.Current; }, EElysiumField::Save);  // +0x64c8 int
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_IdealSchedule"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.IdealScheduleRetail; },
-			EElysiumField::Save);  // +0x5c3c int
-		ElysiumAddClassField(D, TEXT("m_IdealTranslatedActivity"),
-			&FElysiumNpc::IdealTranslatedActivity, EElysiumField::Save);  // +0x5cd0 int
-		ElysiumAddClassField(D, TEXT("m_IdealWeaponActivity"), &FElysiumNpc::IdealWeaponActivity,
-			EElysiumField::Save);  // +0x5cd4 int
 		ElysiumAddClassField(D, TEXT("m_KnockbackVelocity"), &FElysiumNpc::KnockbackVelocity,
 			EElysiumField::Save);  // +0x6004 vector
-		ElysiumAddClassField(D, TEXT("m_RelativeEyeTarget"), &FElysiumNpc::RelativeEyeTarget,
-			EElysiumField::Save);  // +0x5b94 int
 		ElysiumAddClassField(D, TEXT("m_actPreOpenDoor"), &FElysiumNpc::PreOpenDoorActivity,
 			EElysiumField::Save);  // +0x6454 int
-		ElysiumAddClassField(D, TEXT("m_afCapability"), &FElysiumNpc::CapabilityWord,
-			EElysiumField::Save);  // +0x5cec int
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_afMemory"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.MemoryBits; }, EElysiumField::Save);  // +0x5d8c int
 		ElysiumAddClassField(D, TEXT("m_bAggressiveAnims"), &FElysiumNpc::bAggressiveAnims,
 			EElysiumField::Save);  // +0x6410 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bAllowCriminalSuspicion"),
@@ -660,15 +844,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x65f9 bool
 		ElysiumAddClassField(D, TEXT("m_bCameFromSpawner"), &FElysiumNpc::bCameFromSpawner,
 			EElysiumField::Save);  // +0x65f4 bool
-		ElysiumAddClassField(D, TEXT("m_bCineScriptHidden"), &FElysiumNpc::bCineScriptHidden,
-			EElysiumField::Save);  // +0x5d78 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bCondTookDamage"),
-			[](auto& E) -> auto&{ return E.Cognition.bCondTookDamage; }, EElysiumField::Save);  // +0x5b80 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bDidMaintainSchedule"),
-			[](auto& E) -> auto&{ return E.Schedule.bDidMaintainSchedule; }, EElysiumField::Save);  // +0x5bb8 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bEnemyWentOccluded"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.bEnemyWentOccluded; },
-			EElysiumField::Save);  // +0x5bc5 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bForceCoverLOSCheck"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bForceCoverLosCheck; },
 			EElysiumField::Save);  // +0x6408 bool
@@ -682,8 +857,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x63da bool
 		ElysiumAddClassField(D, TEXT("m_bGoToIdleState"), &FElysiumNpc::bGoToIdleState,
 			EElysiumField::Save);  // +0x63fc bool
-		ElysiumAddClassField(D, TEXT("m_bInChoreoScene"), &FElysiumNpc::bInChoreoScene,
-			EElysiumField::Save);  // +0x5bc4 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bInDispositionFidget"),
 			[](auto& E) -> auto&{ return E.Stance.bInFidget; }, EElysiumField::Save);  // +0x64e0 bool
 		ElysiumAddClassField(D, TEXT("m_bInMelee"), &FElysiumNpc::bInMelee, EElysiumField::Save);  // +0x6078 bool
@@ -696,12 +869,8 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_bIsTalking"), &FElysiumNpc::bIsTalking,
 			EElysiumField::Save);  // +0x64c0 bool
 		ElysiumAddClassField(D, TEXT("m_bJumping"), &FElysiumNpc::bJumping, EElysiumField::Save);  // +0x6498 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bKeepSound"),
-			[](auto& E) -> auto&{ return E.Senses.bKeepSound; }, EElysiumField::Save);  // +0x5cd8 bool
 		ElysiumAddClassField(D, TEXT("m_bLeaningLeft"), &FElysiumNpc::bLeaningLeft,
 			EElysiumField::Save);  // +0x63fd bool
-		ElysiumAddClassField(D, TEXT("m_bOpeningDoorWait"), &FElysiumNpc::bOpeningDoorWait,
-			EElysiumField::Save);  // +0x5d30 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bPLSupernaturalActFleeOnly"),
 			[](auto& E) -> auto&{ return E.Witness.bSupernaturalFleeOnly; }, EElysiumField::Save);  // +0x6394 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bPatrolPathUseHint"),
@@ -709,19 +878,12 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x65a0 bool
 		ElysiumAddClassField(D, TEXT("m_bReturnToInitialPos"), &FElysiumNpc::bReturnToInitialPos,
 			EElysiumField::Save);  // +0x6494 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bShouldMove"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.bShouldMove; }, EElysiumField::Save);  // +0x1a40 bool
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_bWaitFinishedSet"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bWaitFinishedSet; }, EElysiumField::Save);  // +0x6334 bool
-		ElysiumAddClassField(D, TEXT("m_bWantsLargeHull"), &FElysiumNpc::bWantsLargeHull,
-			EElysiumField::Save);  // +0x5f2c bool
 		ElysiumAddClassField(D, TEXT("m_eAlertLevel"), &FElysiumNpc::AlertLevel,
 			EElysiumField::Save);  // +0x63f4 int
 		ElysiumAddClassField(D, TEXT("m_eAlternateAI"), &FElysiumNpc::AlternateAi,
 			EElysiumField::Save);  // +0x644c int
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_eEnemyOccludedCheck"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.EnemyOccludedCheck; },
-			EElysiumField::Save);  // +0x5b98 int
 		ElysiumAddClassField(D, TEXT("m_eFaceAnim"), &FElysiumNpc::FaceAnim, EElysiumField::Save);  // +0x63e4 int
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_eForcedState"),
 			[](auto& E) -> auto&{ return E.ScriptedScheduleOrder.ForcedState; },
@@ -739,17 +901,8 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_fSavePositionWalk"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bSavePositionWalk; },
 			EElysiumField::Save);  // +0x63e0 bool
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_failSchedule"),
-			[](auto& E) -> auto&{ return E.Schedule.FailScheduleOverride; }, EElysiumField::Save);  // +0x5c54 int
 		ElysiumAddClassField(D, TEXT("m_flAlternateAIExpireTimer"),
 			&FElysiumNpc::AlternateAiExpireTime, EElysiumField::Save);  // +0x6450 time
-		ElysiumAddClassField(D, TEXT("m_flBurstShootPauseMax"), &FElysiumNpc::BurstShootPauseMax,
-			EElysiumField::Save);  // +0x5bc0 float
-		ElysiumAddClassField(D, TEXT("m_flBurstShootPauseMin"), &FElysiumNpc::BurstShootPauseMin,
-			EElysiumField::Save);  // +0x5bbc float
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flCacheInterruptTime"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.CacheInterruptTime; },
-			EElysiumField::Save);  // +0x1b24 time
 		ElysiumAddClassField(D, TEXT("m_flCanSeekCoverTimer"), &FElysiumNpc::CanSeekCoverTimer,
 			EElysiumField::Save);  // +0x607c time
 		ElysiumAddClassField(D, TEXT("m_flCorpseConditionTimer"),
@@ -761,8 +914,6 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Witness.CriminalWitnessedTime; }, EElysiumField::Save);  // +0x63a4 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flDesiredMoveYaw"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.DesiredMoveYaw; }, EElysiumField::Save);  // +0x63ec float
-		ElysiumAddClassField(D, TEXT("m_flDistTooFar"), &FElysiumNpc::DistTooFar,
-			EElysiumField::Save);  // +0x5de4 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flEnemyDist"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.EnemyDistUnits; }, EElysiumField::Save);  // +0x6268 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flEnemyHeightDiff"),
@@ -771,8 +922,6 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flEnemyLastKnownDist"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.EnemyLastKnownDistUnits; },
 			EElysiumField::Save);  // +0x6270 float
-		ElysiumAddClassField(D, TEXT("m_flExtendedBlockedByFriendTimer"),
-			&FElysiumNpc::ExtendedBlockedByFriendTimer, EElysiumField::Save);  // +0x5b8c time
 		ElysiumAddClassField(D, TEXT("m_flFaceYawDiff"), &FElysiumNpc::FaceYawDiff,
 			EElysiumField::Save);  // +0x63e8 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flGoalTolerance"),
@@ -794,11 +943,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6438 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastAIThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastAI; }, EElysiumField::Save);  // +0x6260 time
-		ElysiumAddClassField(D, TEXT("m_flLastAttackTime"), &FElysiumNpc::LastAttackTime,
-			EElysiumField::Save);  // +0x5d9c time
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastDamageTime"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.RepeatedDamageWindowStart; },
-			EElysiumField::Save);  // +0x5d98 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastInPlayerLOS"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.PlayerLosLastClearTime; },
 			EElysiumField::Save);  // +0x6280 float
@@ -821,8 +965,6 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpc::MeleeHeightDiffTimer, EElysiumField::Save);  // +0x6274 time
 		ElysiumAddClassField(D, TEXT("m_flMeleeMustLeaveTimer"), &FElysiumNpc::MeleeMustLeaveTimer,
 			EElysiumField::Save);  // +0x6074 time
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flMoveWaitFinished"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.MoveWaitFinished; }, EElysiumField::Save);  // +0x5cf0 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextAIThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextAI; }, EElysiumField::Save);  // +0x6250 time
 		ElysiumAddClassField(D, TEXT("m_flNextBurnTime"), &FElysiumNpc::NextBurnTime,
@@ -835,8 +977,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6400 time
 		ElysiumAddClassField(D, TEXT("m_flNextCrosswalkUpdateTime"),
 			&FElysiumNpc::NextCrosswalkUpdateTime, EElysiumField::Save);  // +0x6318 time
-		ElysiumAddClassField(D, TEXT("m_flNextDoorUseTime"), &FElysiumNpc::NextDoorUseTime,
-			EElysiumField::Save);  // +0x5b60 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextFleeSoundTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextFleeSoundTime; },
 			EElysiumField::Save);  // +0x641c time
@@ -857,8 +997,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6418 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextUpdateThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextUpdate; }, EElysiumField::Save);  // +0x6244 time
-		ElysiumAddClassField(D, TEXT("m_flNextWeaponSearchTime"),
-			&FElysiumNpc::NextWeaponSearchTime, EElysiumField::Save);  // +0x5da0 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNosferatuIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.NosferatuIgnoreUntil; }, EElysiumField::Save);  // +0x63a0 time
 		ElysiumAddClassField(D, TEXT("m_flOccludedDelay"), &FElysiumNpc::OccludedDelay,
@@ -891,10 +1029,6 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeekDistInspection"),
 			[](auto& E) -> auto&{ return E.Senses.Perception.VisionDistanceCm; },
 			EElysiumField::Save);  // +0x63b8 float
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSoundWaitTime"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.SoundWaitTime; }, EElysiumField::Save);  // +0x5ce8 time
-		ElysiumAddClassField(D, TEXT("m_flSpecialDistanceAccum"),
-			&FElysiumNpc::SpecialDistanceAccum, EElysiumField::Save);  // +0x5bac float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSpeechVol"),
 			[](auto& E) -> auto&{ return E.Dialogue.SpeechVolume; }, EElysiumField::Save);  // +0x6550 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStanceTime"),
@@ -910,9 +1044,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6604 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStealthVisionScalar"),
 			[](auto& E) -> auto&{ return E.Senses.StealthVisionScalar; }, EElysiumField::Save);  // +0x63c4 float
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSumDamage"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.RepeatedDamageAccumulated; },
-			EElysiumField::Save);  // +0x5d94 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSupernaturalIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[1].IgnoreUntil; },
 			EElysiumField::Save);  // +0x639c time
@@ -921,29 +1052,19 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x63a8 time
 		ElysiumAddClassField(D, TEXT("m_flTalkTime"), &FElysiumNpc::TalkingUntil,
 			EElysiumField::Save);  // +0x64cc time
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flWaitFinished"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.WaitFinished; }, EElysiumField::Save);  // +0x5db4 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flWaitFinishedDelta"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.WaitFinishedDelta; },
 			EElysiumField::Save);  // +0x6330 float
-		ElysiumAddClassField(D, TEXT("m_flWeaponBlockedByFriendTimer"),
-			&FElysiumNpc::WeaponBlockedByFriendTimer, EElysiumField::Save);  // +0x5b88 time
 		ElysiumAddClassField(D, TEXT("m_flWeaponScareTime"), &FElysiumNpc::WeaponScareTime,
 			EElysiumField::Save);  // +0x63dc time
 		ElysiumAddClassField(D, TEXT("m_flWeaponThroughWallTime"),
 			&FElysiumNpc::WeaponThroughWallTime, EElysiumField::Save);  // +0x6600 time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hBestSeeUnknown"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.BestSeeUnknown; }, EElysiumField::Save);  // +0x6088 ehandle
-		ElysiumAddClassField(D, TEXT("m_hBlockedDoor"), &FElysiumNpc::BlockedDoor,
-			EElysiumField::Save);  // +0x5d28 ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hClosestPlayer"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.ClosestPlayer; }, EElysiumField::Save);  // +0x628c ehandle
-		ElysiumAddClassField(D, TEXT("m_hCondHitByDoor"), &FElysiumNpc::CondHitByDoor,
-			EElysiumField::Save);  // +0x5d2c ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hCriminalOffender"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].Offender; }, EElysiumField::Save);  // +0x638c ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hEnemy"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.Enemy; }, EElysiumField::Save);  // +0x5ce0 ehandle
 		ElysiumAddClassField(D, TEXT("m_hFriendPlayer"), &FElysiumNpc::FriendPlayer,
 			EElysiumField::Save);  // +0x60ac ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hHintCoverObject"),
@@ -952,35 +1073,14 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.ScheduleHost.KickProp; }, EElysiumField::Save);  // +0x643c ehandle
 		ElysiumAddClassField(D, TEXT("m_hKnockbackHitEntity"), &FElysiumNpc::KnockbackHitEntity,
 			EElysiumField::Save);  // +0x6010 ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastDamageEnt"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastDamageAttacker; },
-			EElysiumField::Save);  // +0x5b7c ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastEnemy"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastEnemy; }, EElysiumField::Save);  // +0x1a94 ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastHeardEnt"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.BestSoundSource; }, EElysiumField::Save);  // +0x5b78 ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastSeeUnknown"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeeUnknown; }, EElysiumField::Save);  // +0x608c ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastSeenDislikeEnt"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeen[2]; }, EElysiumField::Save);  // +0x5b70 ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastSeenFearEnt"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeen[1]; }, EElysiumField::Save);  // +0x5b6c ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastSeenHateEnt"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeen[0]; }, EElysiumField::Save);  // +0x5b68 ehandle
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hLastSeenNemesisEnt"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeen[3]; }, EElysiumField::Save);  // +0x5b74 ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hMoveTargetEnt"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.MoveTarget; }, EElysiumField::Save);  // +0x6240 ehandle
-		ElysiumAddClassField(D, TEXT("m_hOpeningDoor"), &FElysiumNpc::OpeningDoor,
-			EElysiumField::Save);  // +0x5d24 ehandle
-		ElysiumAddClassField(D, TEXT("m_hShootTargetOverride"), &FElysiumNpc::ShootTargetOverride,
-			EElysiumField::Save);  // +0x5ba8 ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hSupernaturalOffender"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[1].Offender; }, EElysiumField::Save);  // +0x6390 ehandle
 		ElysiumAddClassField(D, TEXT("m_iBurstFireCount"), &FElysiumNpc::BurstFireCount,
 			EElysiumField::Save);  // +0x6490 int
-		ElysiumAddClassField(D, TEXT("m_iCollisionMask"), &FElysiumNpc::CollisionMask,
-			EElysiumField::Save);  // +0x1a44 int
 		ElysiumAddClassField(D, TEXT("m_iCowerAnimOffset"), &FElysiumNpc::CowerAnimOffset,
 			EElysiumField::Save);  // +0x6414 int
 		ElysiumAddClassField(D, TEXT("m_iEnemySightings"), &FElysiumNpc::EnemySightings,
@@ -998,8 +1098,6 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpc::InterestingDeathActivity, EElysiumField::Save);  // +0x6308 int
 		ElysiumAddClassField(D, TEXT("m_iInterestingPlaceGroups"),
 			&FElysiumNpc::InterestingPlaceGroupMask, EElysiumField::Save);  // +0x62dc int
-		ElysiumAddClassField(D, TEXT("m_iMySquadSlot"), &FElysiumNpc::MySquadSlot,
-			EElysiumField::Save);  // +0x5dac int
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iPLCriminalActProcessed"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].Processed; }, EElysiumField::Save);  // +0x636c int
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iPLCriminalLevelWitnessed"),
@@ -1013,18 +1111,11 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iSeeUnknownRepeatSightings"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownRepeatSightings; },
 			EElysiumField::Save);  // +0x60a4 int
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iSquadDisconnected"),
-			[](auto& E) -> auto&{ return E.ScheduleHost.SquadDisconnected; },
-			EElysiumField::Save);  // +0x5bb0 int
 		ElysiumAddClassField(D, TEXT("m_iSubState"), &FElysiumNpc::SubState, EElysiumField::Save);  // +0x63f8 int
 		ElysiumAddClassField(D, TEXT("m_knockbackType"), &FElysiumNpc::KnockbackType,
 			EElysiumField::Save);  // +0x6068 int
-		ElysiumAddClassField(D, TEXT("m_nIdealSequence"), &FElysiumNpc::IdealSequence,
-			EElysiumField::Save);  // +0x5ccc int
 		ElysiumAddClassField(D, TEXT("m_qaInitialAngles"), &FElysiumNpc::InitialAngles,
 			EElysiumField::Save);  // +0x62b4 vector
-		ElysiumAddClassField(D, TEXT("m_qaLastFacing"), &FElysiumNpc::LastFacing,
-			EElysiumField::Save);  // +0x5dc4 vector
 		ElysiumAddClassField(D, TEXT("m_sAttackCoordinatorName"),
 			&FElysiumNpc::AttackCoordinatorName, EElysiumField::Save);  // +0x65ec string
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_szDialogQue"),
@@ -1035,11 +1126,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x649c vector
 		ElysiumAddClassField(D, TEXT("m_vJumpTarget"), &FElysiumNpc::JumpTarget,
 			EElysiumField::Save);  // +0x64a8 vector
-		ElysiumAddClassField(D, TEXT("m_vSavePosition"), &FElysiumNpc::SavePosition,
-			EElysiumField::Save);  // +0x5dd0 position
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecEnemyWentOccluded"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.EnemyWentOccludedPosition; },
-			EElysiumField::Save);  // +0x5bc8 vector
 		ElysiumAddClassField(D, TEXT("m_vecForward"), &FElysiumNpc::Forward, EElysiumField::Save);  // +0x6290 vector
 		ElysiumAddClassField(D, TEXT("m_vecHeldPosition"), &FElysiumNpc::HeldPosition,
 			EElysiumField::Save);  // +0x6468 vector
@@ -1049,11 +1135,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x62a8 position
 		ElysiumAddClassField(D, TEXT("m_vecInterestingPlace"),
 			&FElysiumNpc::InterestingPlacePosition, EElysiumField::Save);  // +0x62f0 position
-		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecLastDamageAttackPos"),
-			[](auto& E) -> auto&{ return E.Senses.Memory.LastDamageAttackPosition; },
-			EElysiumField::Save);  // +0x5b9c vector
-		ElysiumAddClassField(D, TEXT("m_vecLastPosition"), &FElysiumNpc::LastPosition,
-			EElysiumField::Save);  // +0x5db8 position
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecLastSeeUnknownPos"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeeUnknownPosition; },
 			EElysiumField::Save);  // +0x6090 position
@@ -1068,15 +1149,6 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x60b0 m_BestSound (embedded) — a FIELD_EMBEDDED row: retail's datamap points
 		// at a second `datamap_t` and recurses, and this port's matching member carries its own
 		// typed `Serialize`, which is the same shape
-		// NOT SAVED +0x1a9c m_DelayedConditionList (embedded) — a FIELD_EMBEDDED row: retail's
-		// datamap points at a second `datamap_t` and recurses, and this port's matching member
-		// carries its own typed `Serialize`, which is the same shape
-		// NOT SAVED +0x1ae0 m_DelayedSoundConditionList (embedded) — the port member exists but its
-		// owner keeps it private, so no compiled path reaches it; the owning struct's own
-		// `Serialize` carries it, which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5cc4 m_IdealNPCState (int) — the port member exists but its owner keeps it
-		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
-		// which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x60dc m_InvestigateSound (embedded) — a FIELD_EMBEDDED row: retail's datamap
 		// points at a second `datamap_t` and recurses, and this port's matching member carries its
 		// own typed `Serialize`, which is the same shape
@@ -1101,40 +1173,14 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x61e4 m_LastSoundWorld (embedded) — a FIELD_EMBEDDED row: retail's datamap
 		// points at a second `datamap_t` and recurses, and this port's matching member carries its
 		// own typed `Serialize`, which is the same shape
-		// NOT SAVED +0x5cf4 m_MoveAndShootOverlay (embedded) — this port declares no member for the
-		// word (the shape map's row says why), so there is nothing for the save walk to carry
-		// NOT SAVED +0x5cc0 m_NPCState (int) — the port member exists but its owner keeps it
-		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
-		// which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5c40 m_ScheduleState (embedded) — a FIELD_EMBEDDED row: retail's datamap
-		// points at a second `datamap_t` and recurses, and this port's matching member carries its
-		// own typed `Serialize`, which is the same shape
-		// NOT SAVED +0x5d48 m_UnreachableEnts (custom) — this port declares no member for the word
-		// (the shape map's row says why), so there is nothing for the save walk to carry
-		// NOT SAVED +0x5ca4 m_bConditionsGathered (bool) — `m_bConditionsGathered` is retail's BOOL
-		// latch for `has this pass gathered yet`, and this port carries the same fact as the pass
-		// EDGE itself -- `FElysiumNpcCognition::GatheredAt`, a `double` every stimulus producer
-		// measures against. Binding the two would marshal a timestamp under a bool's name, and the
-		// restore hook re-stamps the edge to the load's own `now` in any case, so there is no
-		// member here to save
 		// NOT SAVED +0x6080 m_bDisableAI (bool) — the port member exists but its owner keeps it
 		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
 		// which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x1b28 m_bForceStateChange (bool) — the port member exists but its owner keeps
-		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
-		// it, which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x62e8 m_bInterestingPlaceArrived (bool) — the port member exists but its
 		// owner keeps it private, so no compiled path reaches it; the owning struct's own
 		// `Serialize` carries it, which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5b84 m_bfNPCFrenziedFlags (int) — the port member exists but its owner keeps
-		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
-		// it, which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5b64 m_bfNPCStateFlags (int) — the language or an existing mechanism
-		// provides the word, so there is no member to persist
 		// NOT SAVED +0x6570 m_blinkTimer (float) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5de0 m_cAmmoLoaded (int) — the port carries this concern on the entity chain
-		// BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x6304 m_eInterestingPlaceMode (int) — the port member exists but its owner
 		// keeps it private, so no compiled path reaches it; the owning struct's own `Serialize`
 		// carries it, which is where it stays until that struct exposes an accessor
@@ -1143,9 +1189,6 @@ namespace ElysiumNpcKernelBindings
 		// it
 		// NOT SAVED +0x657c m_flEyeFidgetTime (time) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5cc8 m_flLastStateChangeTime (time) — the port member exists but its owner
-		// keeps it private, so no compiled path reaches it; the owning struct's own `Serialize`
-		// carries it, which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x64dc m_flMaxBlink (float) — `m_flMaxBlink` is the same resolved-row word as
 		// `m_flMinBlink`
 		// NOT SAVED +0x6588 m_flMaxEyeFidget (float) — the port carries this concern on the entity
@@ -1162,45 +1205,18 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x63d0 m_flNextListenTime (time) — the port member exists but its owner keeps
 		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
 		// it, which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5d74 m_hCine (ehandle) — the port carries this concern on the entity chain
-		// BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5ce4 m_hTargetEnt (ehandle) — the port member exists but its owner keeps it
-		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
-		// which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x6064 m_iHitBuildupCount (int) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5bb4 m_iIsOblivious (int) — the port member exists but its owner keeps it
-		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
-		// which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x64d4 m_nCurrDisposition (int) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x6578 m_nEyeFidgetStep (int) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5de8 m_pGoalEnt (classptr) — `m_pGoalEnt` is a FIELD_CLASSPTR, the same case
-		// as `m_pHintNode`
-		// NOT SAVED +0x5ddc m_pHintNode (classptr) — `m_pHintNode` is a FIELD_CLASSPTR: retail
-		// saves the pointer through its own entity table, and this port holds the hint as a handle
-		// the navigator re-resolves
-		// NOT SAVED +0x5d44 m_pMotor (embedded) — the port carries this concern on the entity chain
-		// BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5d34 m_pNavigator (embedded) — the port carries this concern on the entity
-		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5d3c m_pPathfinder (embedded) — the port carries this concern on the entity
-		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x5cdc m_pSenses (embedded) — a FIELD_EMBEDDED row: retail's datamap points at
-		// a second `datamap_t` and recurses, and this port's matching member carries its own typed
-		// `Serialize`, which is the same shape
-		// NOT SAVED +0x5d70 m_scriptState (int) — the port carries this concern on the entity chain
-		// BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x658c m_sppPatrolPath (custom) — the port member exists but its owner keeps
 		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
 		// it, which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x6594 m_sppPatrolPathHunt (custom) — a FIELD_EMBEDDED row: retail's datamap
 		// points at a second `datamap_t` and recurses, and this port's matching member carries its
 		// own typed `Serialize`, which is the same shape
-		// NOT SAVED +0x5d60 m_vDefaultEyeOffset (vector) — the port carries this concern on the
-		// entity chain BELOW the NPC, and the class that owns the member is the class that persists
-		// it
 	}
 
 	void AddNpcMakerFields(FElysiumClassDesc& D)
@@ -2353,12 +2369,10 @@ namespace ElysiumNpcKernelBindings
 		TEXT("WillTalk"),
 	};
 
-	const TCHAR* const GNpcOutputs[] =
+	const TCHAR* const GNpcBaseOutputs[] =
 	{
 		TEXT("OnDamaged"),
 		TEXT("OnDeath"),
-		TEXT("OnDialogBegin"),
-		TEXT("OnDialogEnd"),
 		TEXT("OnFedUponBegin"),
 		TEXT("OnFedUponEnd"),
 		TEXT("OnFoundEnemy"),
@@ -2369,14 +2383,25 @@ namespace ElysiumNpcKernelBindings
 		TEXT("OnHearCombat"),
 		TEXT("OnHearPlayer"),
 		TEXT("OnHearWorld"),
-		TEXT("OnIncapacitatedEnd"),
-		TEXT("OnIncapacitatedStart"),
-		TEXT("OnInterestingPlaceArrived"),
-		TEXT("OnInterestingPlaceLeft"),
 		TEXT("OnLostEnemy"),
 		TEXT("OnLostEnemyLOS"),
 		TEXT("OnLostPlayer"),
 		TEXT("OnLostPlayerLOS"),
+	};
+
+	const TCHAR* const GNpcBaseInputFuncs[] =
+	{
+		TEXT("SetRelationship"),
+	};
+
+	const TCHAR* const GNpcOutputs[] =
+	{
+		TEXT("OnDialogBegin"),
+		TEXT("OnDialogEnd"),
+		TEXT("OnIncapacitatedEnd"),
+		TEXT("OnIncapacitatedStart"),
+		TEXT("OnInterestingPlaceArrived"),
+		TEXT("OnInterestingPlaceLeft"),
 		TEXT("OnStateFleeing"),
 		TEXT("OnUnknownVisionPlayer"),
 	};
@@ -2404,7 +2429,6 @@ namespace ElysiumNpcKernelBindings
 		TEXT("SetInvestigateMode"),
 		TEXT("SetInvestigateModeCombat"),
 		TEXT("SetMovementMultiplier"),
-		TEXT("SetRelationship"),
 		TEXT("SetScriptedDiscipline"),
 		TEXT("SetSpeechVolume"),
 		TEXT("SetupPatrolType"),
@@ -2602,6 +2626,8 @@ namespace ElysiumNpcKernelBindings
 				return TConstArrayView<const TCHAR*>();
 			case EClass::CombatCharacter:
 				return MakeArrayView(GCombatCharacterOutputs);
+			case EClass::NpcBase:
+				return MakeArrayView(GNpcBaseOutputs);
 			case EClass::NpcMaker:
 				return MakeArrayView(GNpcMakerOutputs);
 			case EClass::InterestingPlace:
@@ -2683,6 +2709,8 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GAnimatingInputFuncs);
 			case EClass::CombatCharacter:
 				return MakeArrayView(GCombatCharacterInputFuncs);
+			case EClass::NpcBase:
+				return MakeArrayView(GNpcBaseInputFuncs);
 			case EClass::NpcMaker:
 				return MakeArrayView(GNpcMakerInputFuncs);
 			case EClass::InterestingPlace:
@@ -2763,7 +2791,9 @@ namespace ElysiumNpcKernelBindings
 			case EClass::Animating:
 				return {1, 10, 0, 4, 0};
 			case EClass::CombatCharacter:
-				return {149, 9, 2, 25, 0};
+				return {150, 8, 2, 25, 0};
+			case EClass::NpcBase:
+				return {4, 0, 16, 1, 53};
 			case EClass::NpcMaker:
 				return {12, 0, 3, 4, 0};
 			case EClass::InterestingPlace:
@@ -2829,7 +2859,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::Zombie:
 				return {3, 0, 1, 1, 2};
 			default:
-				return {37, 3, 24, 34, 198};
+				return {33, 3, 8, 33, 145};
 		}
 	}
 }

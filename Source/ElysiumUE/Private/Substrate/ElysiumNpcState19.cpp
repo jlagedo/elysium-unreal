@@ -454,7 +454,7 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 			Cognition.bCondTookDamage = false;
 			FElysiumEntity* const Enemy = GetEnemy();
 			FElysiumEntity* const Attacker = World != nullptr
-				? World->Resolve(Senses.Memory.LastDamageAttacker) : nullptr;
+				? World->Resolve(BaseMemory.LastDamageAttacker) : nullptr;
 			if (Attacker == Enemy)
 			{
 				NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x45f0);

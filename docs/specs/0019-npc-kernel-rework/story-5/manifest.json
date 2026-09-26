@@ -27,7 +27,7 @@
     "registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
-      "sha256": "84d40d1b24bf91c443940491c89e2fcd473180f7e195e0b69a31a5624d3af066"
+      "sha256": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87"
     },
     "stub_registry": {
       "root": "repo",
@@ -174,9 +174,23 @@
         "registry": {
           "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
           "previous_sha256": "b77bb0a8cecb31d7c909b7ddb27e054923b5c4e80ce8d0c140e83dcf38b17d22",
-          "sha256": "84d40d1b24bf91c443940491c89e2fcd473180f7e195e0b69a31a5624d3af066"
+          "sha256": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87"
         }
-      }
+      },
+      "log": [
+        {
+          "input": "registry",
+          "from": "84d40d1b24bf91c443940491c89e2fcd473180f7e195e0b69a31a5624d3af066",
+          "to": "af6678c73f798f27764b62ec866eacb99c3cba2e87a2403cb3711eaa0f5708d7",
+          "note": "5c: CAI_BaseNPC abstract descriptor registered under the combat character, CAI_BaseNPCTroika beneath it"
+        },
+        {
+          "input": "registry",
+          "from": "af6678c73f798f27764b62ec866eacb99c3cba2e87a2403cb3711eaa0f5708d7",
+          "to": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87",
+          "note": "5d: CAI_BaseNPC rows registered on its own descriptor (BuildNpcBaseClass); the float-sound keyfield binds on the combat character"
+        }
+      ]
     }
   },
   "step1_packets": {
@@ -224,8 +238,8 @@
   "step5_packets": {
     "5a": "accepted",
     "5b": "accepted",
-    "5c": "pending",
-    "5d": "pending",
+    "5c": "done-uncommitted",
+    "5d": "done-uncommitted",
     "5e": "pending",
     "5f": "pending",
     "5g": "pending",

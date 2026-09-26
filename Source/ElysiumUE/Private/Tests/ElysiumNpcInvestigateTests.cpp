@@ -162,7 +162,7 @@ bool FElysiumNpcInvestigateGatesTest::RunTest(const FString&)
 
 	// The committed enemy is always of interest, whatever the mode says.
 	F.Npc->InvestigateMode = static_cast<int32>(EMode::Never);
-	F.Npc->Senses.Memory.Enemy = F.Other->Handle;
+	F.Npc->BaseMemory.Enemy = F.Other->Handle;
 	TestTrue(TEXT("the committed enemy is of interest under mode 0"), F.Ask(*F.Other));
 	// ...but the flag reject still comes first.
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::DONT_INVESTIGATE);

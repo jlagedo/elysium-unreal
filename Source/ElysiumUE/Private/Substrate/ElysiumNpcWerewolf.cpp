@@ -233,7 +233,7 @@ void FElysiumNpcWerewolf::NPCInit()
 	CapabilityWord |= 0x200000;
 	CapabilityWord |= 0x8000;
 	CapabilityWord |= 0x10000;
-	ScheduleHost.HintNode = INDEX_NONE;
+	BaseScheduleHost.HintNode = INDEX_NONE;
 	TeleportHintNode = INDEX_NONE;
 	WerewolfLastUsedTeleportHint = INDEX_NONE;
 	MoveHintNode = INDEX_NONE;
@@ -705,8 +705,8 @@ void FElysiumNpcWerewolf::UpdateConditionDeathTriggered()
 	{
 		// `thunk_FUN_10265a90(this, GetEnemy())` — retail's "myself" self-reference write, then the
 		// output with the enemy as activator and this NPC as caller.
-		const FElysiumEntity* Enemy = World != nullptr && Senses.Memory.Enemy.IsSet()
-			? World->Resolve(Senses.Memory.Enemy) : nullptr;
+		const FElysiumEntity* Enemy = World != nullptr && BaseMemory.Enemy.IsSet()
+			? World->Resolve(BaseMemory.Enemy) : nullptr;
 		FireOutput(FName(TEXT("OnConditionDeathTriggered")),
 			Enemy != nullptr ? Enemy->Handle : FElysiumEntityHandle::Invalid());
 	}
@@ -1723,7 +1723,7 @@ bool FElysiumNpcWerewolf::EnemyCouldSeeHullWerewolf(const FVector& OriginCm, boo
 		return false;
 	}
 	const FElysiumEntity* EnemyEntity =
-		World != nullptr ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+		World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;
 	if (EnemyEntity != nullptr && !EnemySightPredicate(*EnemyEntity))
 	{
 		return false;
@@ -1768,7 +1768,7 @@ void FElysiumNpcWerewolf::TeleportOut()
 	WerewolfWord66ac = 0;
 	ClearTeleportHint();                        // family Hints' `0x103d4760`
 	WerewolfHintFlags = 0;                      // family Hints' +0x66e8
-	FireOutput(FName(TEXT("OnTeleportOut")), Senses.Memory.Enemy);
+	FireOutput(FName(TEXT("OnTeleportOut")), BaseMemory.Enemy);
 	if (WerewolfTeleportSoundConVar())
 	{
 		PlayTeleportSound(TEXT("dev/ww_tele_out.wav"));
@@ -1800,7 +1800,7 @@ void FElysiumNpcWerewolf::TeleportIn()
 	EffectsWord &= ~GPositionsTailEffectNoDraw;
 	SolidFlagsWord &= ~GPositionsTailSolidNotSolid;
 	WerewolfLastSeenTime = World != nullptr ? World->NowSeconds() : 0.0;
-	FireOutput(FName(TEXT("OnTeleportIn")), Senses.Memory.Enemy);
+	FireOutput(FName(TEXT("OnTeleportIn")), BaseMemory.Enemy);
 	if (WerewolfTeleportSoundConVar())
 	{
 		PlayTeleportSound(TEXT("dev/ww_tele_in.wav"));
@@ -2535,7 +2535,7 @@ void FElysiumNpcWerewolf::FUN_103d9c90(FVector& OutPositionUnits)
 	const bool bStale = Frame == INDEX_NONE || WerewolfChaseFrame != Frame;
 	if (bStale)
 	{
-		FElysiumEntity* Enemy = World != nullptr ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+		FElysiumEntity* Enemy = World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;
 		if (Enemy != nullptr)
 		{
 			float Tolerance = ScheduleHost.GoalToleranceCm;

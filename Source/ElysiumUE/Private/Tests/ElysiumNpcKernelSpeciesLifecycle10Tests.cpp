@@ -696,27 +696,27 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 	// vtable `+0x29c` is slot 167, and slot 167's body is `CAI_BaseNPC::FUN_101a67e0` — whose whole
 	// text resolves `m_hEnemy`. **The checklist's walk calls it "a door reference resolved twice"
 	// and `0x1037e2d0` "an obstructing-door hook"; there is no door in either body.**
-	N.Senses.Memory.Enemy = FElysiumEntityHandle();
+	N.BaseMemory.Enemy = FElysiumEntityHandle();
 	TestNull(TEXT("GetEnemy() with no enemy answers null"), N.GetEnemyEntity());
-	N.Senses.Memory.Enemy = OtherNpc->Handle;
+	N.BaseMemory.Enemy = OtherNpc->Handle;
 	TestTrue(TEXT("GetEnemy() resolves m_hEnemy"),
 		N.GetEnemyEntity() == static_cast<FElysiumEntity*>(OtherNpc));
 
 	// No enemy at all: the arm does nothing, whatever the states.
-	N.Senses.Memory.Enemy = FElysiumEntityHandle();
+	N.BaseMemory.Enemy = FElysiumEntityHandle();
 	N.PlayerHateRelationshipSets = 0;
 	N.bGuard1HatesPlayer = false;
 	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("no enemy: nothing"), N.PlayerHateRelationshipSets, 0);
 
 	// An enemy that is not the player: still nothing — the second term is `enemy->m_pPlayer`.
-	N.Senses.Memory.Enemy = OtherNpc->Handle;
+	N.BaseMemory.Enemy = OtherNpc->Handle;
 	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("an enemy that is not the player: nothing"), N.PlayerHateRelationshipSets, 0);
 
 	// The player as enemy: `0x1037e2d0` — the latch byte at `+0x6660` AND
 	// `InputSetRelationship("player D_HT 10")`.
-	N.Senses.Memory.Enemy = N.World->PlayerHandle();
+	N.BaseMemory.Enemy = N.World->PlayerHandle();
 	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("my enemy is the player: the relationship is set"),
 		N.PlayerHateRelationshipSets, 1);
@@ -744,7 +744,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 		return false;
 	}
 	FElysiumNpcHumanCombatant& Combatant = *ElysiumTestAsSpecies<FElysiumNpcHumanCombatant>(CombatantFix.Species);
-	Combatant.Senses.Memory.Enemy = Combatant.World->PlayerHandle();
+	Combatant.BaseMemory.Enemy = Combatant.World->PlayerHandle();
 	Combatant.PlayerHateRelationshipSets = 0;
 	Combatant.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 	TestEqual(TEXT("a holster class with no pre-step writes nothing"),
@@ -781,14 +781,14 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 
 	// Arm 1 needs all four terms: an enemy, that enemy being the player, and the NEW state being
 	// COMBAT (retail's `m_NPCState` id 2).
-	N.Senses.Memory.Enemy = OtherNpc->Handle;
+	N.BaseMemory.Enemy = OtherNpc->Handle;
 	N.HunterPursuitStarts = 0;
 	N.PlayerHateRelationshipSets = 0;
 	N.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
 	TestEqual(TEXT("an enemy that is not the player does not start a pursuit"),
 		N.HunterPursuitStarts, 0);
 
-	N.Senses.Memory.Enemy = N.World->PlayerHandle();
+	N.BaseMemory.Enemy = N.World->PlayerHandle();
 	N.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 	TestEqual(TEXT("the player as enemy but NewState != COMBAT does not start a pursuit"),
 		N.HunterPursuitStarts, 0);

@@ -315,7 +315,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	// is `" - \n"` (`0x105cc8b4`) and not `"none"`.
 	Npc->DebugOverlays = 0x80000;
 	Npc->Health = 47;
-	Npc->ScheduleHost.SquadDisconnected = 0;
+	Npc->BaseScheduleHost.SquadDisconnected = 0;
 	Npc->SquadName.Reset();
 	FElysiumNpc::BeginDebugCapture();
 	const int32 SquadLines = Npc->BaseDrawDebugTextOverlays();
@@ -339,7 +339,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 
 	// `m_iSquadDisconnected > 0` flips the character to 'X'; the test is `< 1`, so zero and every
 	// negative are 'O'.
-	Npc->ScheduleHost.SquadDisconnected = 1;
+	Npc->BaseScheduleHost.SquadDisconnected = 1;
 	Npc->SquadName = TEXT("alpha");
 	FElysiumNpc::BeginDebugCapture();
 	Npc->BaseDrawDebugTextOverlays();
@@ -348,19 +348,19 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 		TestEqual(TEXT("a disconnected squad member is 'X' and the squad NAME is appended"),
 			Lines[1].Text, FString(TEXT("Squad: X : alpha\n")));
 	}
-	Npc->ScheduleHost.SquadDisconnected = 0;
+	Npc->BaseScheduleHost.SquadDisconnected = 0;
 	Npc->SquadName.Reset();
 
 	// The enemy line takes `GetDebugName`'s own two arms — `m_iName` when set, the classname
 	// otherwise — and appends `"\n"` rather than the `" - \n"` block.
-	Npc->Senses.Memory.Enemy = Other->Handle;
+	Npc->BaseMemory.Enemy = Other->Handle;
 	FElysiumNpc::BeginDebugCapture();
 	Npc->BaseDrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("a live enemy is named"), Lines[2].Text, FString(TEXT("Enemy: other\n")));
 	}
-	Npc->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Npc->BaseMemory.Enemy = FElysiumEntityHandle();
 
 	// --- The `0x1` arm ------------------------------------------------------------------------------
 	Npc->DebugOverlays = 0x1;
@@ -409,10 +409,10 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->IdealActivityNumber = INDEX_NONE;
 
 	// The two scheduling-diagnostic lines the checklist's walk left as "two non-zero ints".
-	Npc->ScheduleHost.InterruptSchedule = ElysiumSched::IDLE_STAND;
-	Npc->ScheduleHost.InterruptText = TEXT("saw enemy");
-	Npc->ScheduleHost.FailedSchedule = ElysiumSched::IDLE_STAND;
-	Npc->ScheduleHost.FailText = TEXT("no route");
+	Npc->BaseScheduleHost.InterruptSchedule = ElysiumSched::IDLE_STAND;
+	Npc->BaseScheduleHost.InterruptText = TEXT("saw enemy");
+	Npc->BaseScheduleHost.FailedSchedule = ElysiumSched::IDLE_STAND;
+	Npc->BaseScheduleHost.FailText = TEXT("no route");
 	FElysiumNpc::BeginDebugCapture();
 	Npc->BaseDrawDebugTextOverlays();
 	{
@@ -421,8 +421,8 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 			Debug10RetailOrder(Lines).Contains(
 				TEXT("Actv: INVALID|Intr: %s (%s)\n|Fail: %s (%s)\n")));
 	}
-	Npc->ScheduleHost.InterruptSchedule = ElysiumScheduleId::None;
-	Npc->ScheduleHost.FailedSchedule = ElysiumScheduleId::None;
+	Npc->BaseScheduleHost.InterruptSchedule = ElysiumScheduleId::None;
+	Npc->BaseScheduleHost.FailedSchedule = ElysiumScheduleId::None;
 
 	// `COND_ENEMY_TOO_FAR` prints a bare literal with no `Q_snprintf` at all.
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyTooFar);
@@ -795,7 +795,7 @@ bool FElysiumNpcKernelDebug10TroikaGeometryTest::RunTest(const FString&)
 
 	// --- `DAT_10924f24`: five boxes at the enemy's NOISY body target --------------------------------
 	Npc->DebugOverlays = 0;
-	Npc->Senses.Memory.Enemy = Other->Handle;
+	Npc->BaseMemory.Enemy = Other->Handle;
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugShowBodyTargets, 1);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaDrawDebugGeometryOverlays();
@@ -810,7 +810,7 @@ bool FElysiumNpcKernelDebug10TroikaGeometryTest::RunTest(const FString&)
 		}
 	}
 	// With no enemy the arm is silent, even with the ConVar on.
-	Npc->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Npc->BaseMemory.Enemy = FElysiumEntityHandle();
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaDrawDebugGeometryOverlays();
 	TestEqual(TEXT("and none without an enemy"), FElysiumNpc::EndDebugCapture().Num(), 0);
@@ -968,7 +968,7 @@ bool FElysiumNpcKernelDebug10ThinkDebugPreTest::RunTest(const FString&)
 				Lines[0].Text.Contains(TEXT("\"Blocked by **UNKNOWN**\"")));
 		}
 	}
-	Npc->Senses.Memory.EnemyOccluder = Other->Handle;
+	Npc->BaseMemory.EnemyOccluder = Other->Handle;
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaNPCThinkDebugPre();
 	{
@@ -977,7 +977,7 @@ bool FElysiumNpcKernelDebug10ThinkDebugPreTest::RunTest(const FString&)
 			Lines.Num() == 1 && Lines[0].Text.Contains(TEXT("\"Blocked by other\"")));
 	}
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
-	Npc->Senses.Memory.EnemyOccluder = FElysiumEntityHandle();
+	Npc->BaseMemory.EnemyOccluder = FElysiumEntityHandle();
 	Debug10ResetConVars();
 
 	// --- `DAT_109244c4`: the eye box, the ideal box and the line between them ------------------------

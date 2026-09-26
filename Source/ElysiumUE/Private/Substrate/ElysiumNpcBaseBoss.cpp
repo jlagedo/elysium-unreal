@@ -245,7 +245,7 @@ bool FElysiumNpcBaseBoss::EnemyCouldSeeHull(const FVector& OriginCm, bool bSkipV
 	// the mask `0x4081` is `CONTENTS_SOLID | CONTENTS_OPAQUE | CONTENTS_MOVEABLE`: no character bit,
 	// so another body standing in the way does not break the line, which is why the filter's two
 	// ignores are belt and braces.
-	FElysiumEntity* EnemyEntity = World != nullptr ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+	FElysiumEntity* EnemyEntity = World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;
 	if (EnemyEntity == nullptr)
 	{
 		return false;

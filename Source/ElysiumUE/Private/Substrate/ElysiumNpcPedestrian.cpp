@@ -173,7 +173,7 @@ int32 FElysiumNpcPedestrian::SelectIdealStateRetail()
 		|| NpcKernelState19_2Shared::State19_2HasInterrupt(*this, EElysiumNpcCond::RepeatedDamage))
 	{
 		Cognition.bCondTookDamage = false;
-		Slot596(NpcKernelState19_2Shared::State19_2Resolve(*this, Senses.Memory.LastDamageAttacker));
+		Slot596(NpcKernelState19_2Shared::State19_2Resolve(*this, BaseMemory.LastDamageAttacker));
 		NpcKernelState19_2Shared::State19_2Stamp(*this, 8, 0x308);
 		return IdealStateRetail();
 	}

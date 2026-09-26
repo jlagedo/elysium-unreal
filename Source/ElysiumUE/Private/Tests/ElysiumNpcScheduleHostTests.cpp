@@ -59,12 +59,12 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->NpcFlags.Set(EElysiumNpcFlag::NO_DIALOG);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	Npc->ScheduleHost.SavedSleepExtents = FVector(10,10,30);
-	Npc->ScheduleHost.MemoryBits = 0xffffffffu;
+	Npc->BaseScheduleHost.MemoryBits = 0xffffffffu;
 	Npc->ScheduleHost.GoalToleranceCm = 25.f;
 	Npc->ScheduleHost.InsideInterruptDistanceSqr = 64.f;
 	Npc->ScheduleHost.OutsideInterruptDistanceSqr = 256.f;
-	Npc->ScheduleHost.HintNode = 5;
-	Npc->ScheduleHost.bOwnsHint = true;
+	Npc->BaseScheduleHost.HintNode = 5;
+	Npc->BaseScheduleHost.bOwnsHint = true;
 	Npc->ScheduleHost.FailedCoverLosChecks = 3;
 	Npc->NpcFlags.Set(EElysiumNpcFlag::AT_COVER_HINT);
 	Npc->ScheduleHost.NextAI = Npc->ScheduleHost.NextNormal = Npc->ScheduleHost.NextMove = Npc->ScheduleHost.NextUpdate = 50.0;
@@ -74,7 +74,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestFalse(TEXT("NO_DIALOG is released by the failure mask"), Npc->HasDialogSuppressFlag());
 	TestTrue(TEXT("the bounded retail refcount leak is retained"), Npc->IsOblivious());
 	TestFalse(TEXT("the leak loses its bookkeeping bit"), Npc->NpcFlags.Has(EElysiumNpcFlag2::MADE_OBLIVIOUS));
-	TestEqual(TEXT("both native memory masks apply"), Npc->ScheduleHost.MemoryBits, 0x0fffdfffu);
+	TestEqual(TEXT("both native memory masks apply"), Npc->BaseScheduleHost.MemoryBits, 0x0fffdfffu);
 	TestEqual(TEXT("all next clocks reset"), Npc->ScheduleHost.NextAI + Npc->ScheduleHost.NextNormal
 		+ Npc->ScheduleHost.NextMove + Npc->ScheduleHost.NextUpdate, 0.0);
 	TestEqual(TEXT("goal tolerance reset"), Npc->ScheduleHost.GoalToleranceCm, 0.f);
@@ -109,12 +109,12 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->TaskFail(Npc->TaskFailureReason());
 	TestFalse(TEXT("StopMoving failure observes the ground transition"), Npc->NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH));
 	Npc->ReconnectToSquad();
-	TestEqual(TEXT("reconnect clamps a missing disconnect at zero"), Npc->ScheduleHost.SquadDisconnected, 0);
+	TestEqual(TEXT("reconnect clamps a missing disconnect at zero"), Npc->BaseScheduleHost.SquadDisconnected, 0);
 	Npc->ScheduleHost.HintReusableAt = 77.0;
 	Npc->ClearScheduleHint(5.f);
 	TestEqual(TEXT("a missing hint does not change a cooldown"), Npc->ScheduleHost.HintReusableAt, 77.0);
-	Npc->ScheduleHost.HintNode = 8;
-	Npc->ScheduleHost.bOwnsHint = false;
+	Npc->BaseScheduleHost.HintNode = 8;
+	Npc->BaseScheduleHost.bOwnsHint = false;
 	Npc->ClearScheduleHint(5.f);
 	TestEqual(TEXT("another owner's hint is not put on cooldown"), Npc->ScheduleHost.HintReusableAt, 77.0);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
@@ -125,7 +125,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN);
 	Npc->ScheduleHost.SavedSleepExtents = FVector(4,5,6);
-	Npc->ScheduleHost.SquadDisconnected = 1;
+	Npc->BaseScheduleHost.SquadDisconnected = 1;
 	Npc->NpcFlags.AddOblivious();
 	Npc->bInvincible = true;
 	// Slot 435's recovered signature is `void OnScheduleChange(CAI_Schedule*)`; `102a0940` ignores
@@ -134,7 +134,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestTrue(TEXT("schedule replacement also restores attack margins"), Npc->ScheduleHost.AttackExtentsCm.Equals(FVector(4,5,6)));
 	TestFalse(TEXT("activity-copy cleanup clears invincibility"), Npc->bInvincible);
 	TestFalse(TEXT("activity-copy bit is consumed by unconditional tail"), Npc->NpcFlags.Has(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN));
-	TestEqual(TEXT("UnOblivious reconnects even without disconnect bookkeeping bit"), Npc->ScheduleHost.SquadDisconnected, 0);
+	TestEqual(TEXT("UnOblivious reconnects even without disconnect bookkeeping bit"), Npc->BaseScheduleHost.SquadDisconnected, 0);
 	Npc->ScheduleDone();
 	TestTrue(TEXT("host publishes the native schedule-done condition"), Npc->Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone));
 	return true;

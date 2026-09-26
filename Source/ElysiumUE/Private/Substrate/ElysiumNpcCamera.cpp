@@ -89,7 +89,7 @@ void FElysiumNpcCamera::NPCInit()
 	// `1036932d`: `thunk_FUN_102e0b40(m_pMotor)` — `*(motor+0x2c) = -1.0`, the same motor-reset seam
 	// the base body names. Then the yaw block, `1036937a` gating `motor+0x1c == 180.0`.
 	ScheduleHost.DesiredMoveYaw = static_cast<float>(Angles.Y);
-	if (ScheduleHost.bMotorAnimationMovement)
+	if (BaseScheduleHost.bMotorAnimationMovement)
 	{
 		if (ScheduleHost.DesiredMoveYaw < MotorYawHalfTurn)
 		{
@@ -104,7 +104,7 @@ void FElysiumNpcCamera::NPCInit()
 	bDead = false;
 	SetDeathReportedForRestore(false);
 	WriteIdealStateRetail(1);
-	ScheduleHost.bShouldMove = false;
+	BaseScheduleHost.bShouldMove = false;
 	// `103693d5`: `*(m_pNavigator + 0x2c) = DAT_1093407c`, the node network — the same seam the base
 	// body names. Then `ClearSchedule`, the navigator goal clear and `0x1008f540`
 	// `ResetActivityIndexes`, which this runtime counts with the other animating resets.
@@ -115,8 +115,8 @@ void FElysiumNpcCamera::NPCInit()
 	}
 	++NavigationGoalClears;
 	++BaseInitAnimatingResets;                                           // 103693f3 1008f540
-	ScheduleHost.HintNode = INDEX_NONE;
-	ScheduleHost.MemoryBits = 0;
+	BaseScheduleHost.HintNode = INDEX_NONE;
+	BaseScheduleHost.MemoryBits = 0;
 	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
 	bKeepSound = false;
 	Cognition.Conditions.Reset();
@@ -138,7 +138,7 @@ void FElysiumNpcCamera::NPCInit()
 	NpcInitTime = Now;
 	WeaponBlockedByFriendTimer = 0.0;
 	ExtendedBlockedByFriendTimer = static_cast<double>(NeverThinkSentinel);
-	Senses.Memory.EnemyOccludedCheck = 10;
+	BaseMemory.EnemyOccludedCheck = 10;
 	ShootTargetOverride = FElysiumEntityHandle::Invalid();
 	// `103694c2`/`103694c9`/`103694d0`: the camera seeds the two PVS/LOS bytes and clears
 	// `m_flNextPlayerLOS` ONLY. The three stamps Troika writes beside them (`+0x627c`, `+0x6280`,
@@ -261,7 +261,7 @@ void FElysiumNpcCamera::StartNPC()
 	if (!Target.IsEmpty())                                               // gated m_target != 0
 	{
 		FElysiumEntity* Found = World != nullptr ? World->FindByName(Target) : nullptr;
-		ScheduleHost.GoalEnt = Found != nullptr ? Found->Handle : FElysiumEntityHandle();
+		BaseScheduleHost.GoalEnt = Found != nullptr ? Found->Handle : FElysiumEntityHandle();
 		if (Found == nullptr)
 		{
 			UE_LOG(LogElysiumNpcEnt, Warning,

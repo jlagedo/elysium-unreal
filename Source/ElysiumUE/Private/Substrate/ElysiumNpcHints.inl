@@ -29,42 +29,6 @@
 // list, walked by ordinal and answering an `FElysiumEntity*`. It is left exactly as it is: the two
 // are the same missing store seen from two sides, and the day a hint store lands it replaces both.
 
-/**
- * One `CAI_Hint`'s own words, by retail offset and datamap name (`vtmb_fields CAI_Hint`).
- *
- * This is a VIEW, not a store: `HintWords()` fills it and nothing keeps it. `bValid` is false when
- * the seam could not resolve the node, which today is always.
- */
-struct FHintWords
-{
-	bool bValid = false;
-	// The hint entity itself — retail holds the `CAI_Hint*`; this runtime holds its entity index
-	// (0018 story 2). Distinct from `NodeId`, the network node the hint is bound to.
-	int32 HintIndex = INDEX_NONE;
-	FString Name;                     // +0x026c m_iName                 key targetname
-	FString Activity;                 // +0x0450 m_strActivity
-	float TargetAngleRange = 0.f;     // +0x0454 m_flTargetAngleRange    key target_angle_range
-	float TargetAngleRangeDot = 0.f;  // +0x0458 m_flTargetAngleRangeDot
-	float TargetDistMin = 0.f;        // +0x045c m_flTargetDistMin       key target_dist_min
-	float TargetDistMax = 0.f;        // +0x0460 m_flTargetDistMax       key target_dist_max
-	float HintRating = 0.f;           // +0x0464 m_flHintRating          key hint_rating
-	FString TargetName;               // +0x0468 m_strTargetName         key target_name
-	int32 IpPercent = 0;              // +0x046c m_iIPPercent            key ip_percent
-	// +0x0470 m_iGroupID, key group_id — the 32-BIT SET `FValidateHintType` (`0x10295c20`) ANDs
-	// against `FElysiumNpcScheduleHost::HintGroupMask` (`m_iHintGroups +0x62e4`), NOT a plain id.
-	int32 GroupMask = 0;
-	int32 HintType = 0;               // +0x05dc m_nHintType             key HintType
-	FElysiumEntityHandle HintOwner;   // +0x05e0 m_hHintOwner
-	int32 NodeId = INDEX_NONE;        // +0x05e4 m_nNodeID — the AI-network node, not a hint index
-	int32 Disabled = 0;               // +0x05e8 m_iDisabled             key StartHintDisabled
-	double NextUseTime = 0.0;         // +0x05ec m_flNextUseTime
-	FString Group;                    // +0x05f0 m_strGroup              key Group
-	// Retail reads these through the entity vtable, `+0x364 GetAbsOrigin` and `+0x36c GetAbsAngles`.
-	// The origin is in CENTIMETRES here, as every port position is; retail's is Source units.
-	FVector OriginCm = FVector::ZeroVector;
-	FVector Angles = FVector::ZeroVector;
-};
-
 /** Resolve `HintNode` — a hint's entity index, the form a `ScheduleHost::HintNode` holds — into the
  *  live `ai_hint`'s words (`FElysiumHint::ToWords`). Answers false and leaves `Out` untouched when
  *  the index is not a live hint. */
@@ -113,15 +77,6 @@ bool ValidateHintCoverRange(const FHintWords& Hint, const FElysiumEntity* CoverO
  *  opaque `int32`. The ported bodies therefore DECIDE the id (that half is tested) and hand it here,
  *  which records nothing. */
 void RestartIdealActivityId(int32 RetailActivityId);
-
-/** What `CAI_Hint::OnRestore` (slot 130, `0x102d3ec0`) did. `bNodeFound` false is retail's
- *  `"Warning: AI hint has incorrect origin"` arm — see the definition. */
-struct FHintRestoreResult
-{
-	bool bNodeFound = false;
-	bool bClaimedNode = false;
-	FVector NodeOriginCm = FVector::ZeroVector;
-};
 
 /** `CAI_Hint::OnRestore` (`0x102d3ec0`). The hint's own save-restore fixup, handed over from family
  *  Sounds. `this` is the hint, not the NPC, so it is a static helper rather than a member rule. */
@@ -179,7 +134,7 @@ int32 CurrentRetailActivityId() const;
 void ClaimInterestingPlace(FElysiumInterestingPlace* Place, bool bClaimSecondary, double Now);
 
 /** `0x10365780` — the task-side hint install: search within 5000 units, install at
- *  `ScheduleHost.HintNode` and complete the task, or write the fail text and `TaskFail(4)`. */
+ *  `BaseScheduleHost.HintNode` and complete the task, or write the fail text and `TaskFail(4)`. */
 bool FindHintNode(int32 HintType, uint8 SearchFlags);
 
 // `CNPC_VWerewolf::GetGroundpoint` (`0x103d6a40`), the fallback `GetHintGroundpoint` ends at, is

@@ -336,10 +336,10 @@ bool FElysiumNpcKernelSquadSeamTest::RunTest(const FString&)
 	Npc->VacateSquadSlot();
 	TestEqual(TEXT("VacateSquadSlot stops at the squad seam and keeps the slot"), Npc->MySquadSlot,
 		3);
-	Npc->ScheduleHost.SquadDisconnected = 1;
+	Npc->BaseScheduleHost.SquadDisconnected = 1;
 	Npc->VacateSquadSlot();
 	TestEqual(TEXT("a disconnected NPC does not vacate either"), Npc->MySquadSlot, 3);
-	Npc->ScheduleHost.SquadDisconnected = 0;
+	Npc->BaseScheduleHost.SquadDisconnected = 0;
 	Npc->MySquadSlot = INDEX_NONE;
 	Npc->VacateSquadSlot();
 	TestEqual(TEXT("and -1 means there is no slot to vacate"), Npc->MySquadSlot, INDEX_NONE);
@@ -355,9 +355,9 @@ bool FElysiumNpcKernelSquadSeamTest::RunTest(const FString&)
 		ElysiumNpcKernelClass::DerivesFrom(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VChangBros")), TEXT("CNPC_VVampireBoss")));
 	TestNull(TEXT("a squadless NPC finds no brother"), Npc->GetOtherBrother());
-	Npc->ScheduleHost.SquadDisconnected = 1;
+	Npc->BaseScheduleHost.SquadDisconnected = 1;
 	TestNull(TEXT("and a disconnected one refuses before the walk"), Npc->GetOtherBrother());
-	Npc->ScheduleHost.SquadDisconnected = 0;
+	Npc->BaseScheduleHost.SquadDisconnected = 0;
 	return true;
 }
 
@@ -380,17 +380,17 @@ bool FElysiumNpcKernelSquadReconnectTest::RunTest(const FString&)
 	// flag clear UNCONDITIONALLY — a nested disconnect that has not unwound still loses the bit.
 	Npc->DisconnectFromSquad();
 	Npc->DisconnectFromSquad();
-	TestEqual(TEXT("two disconnects nest"), Npc->ScheduleHost.SquadDisconnected, 2);
+	TestEqual(TEXT("two disconnects nest"), Npc->BaseScheduleHost.SquadDisconnected, 2);
 	Npc->ReconnectToSquad();
 	TestEqual(TEXT("one reconnect decrements rather than clearing"),
-		Npc->ScheduleHost.SquadDisconnected, 1);
+		Npc->BaseScheduleHost.SquadDisconnected, 1);
 	TestFalse(TEXT("but the D_DISCONNECT_SQUAD bit is cleared on every reconnect"),
 		Npc->NpcFlags.Has(EElysiumNpcFlag2::D_DISCONNECT_SQUAD));
 	Npc->ReconnectToSquad();
-	TestEqual(TEXT("the second reconnect reaches zero"), Npc->ScheduleHost.SquadDisconnected, 0);
+	TestEqual(TEXT("the second reconnect reaches zero"), Npc->BaseScheduleHost.SquadDisconnected, 0);
 	Npc->ReconnectToSquad();
 	TestEqual(TEXT("and the counter never goes negative (retail's `< 1 -> 0` arm)"),
-		Npc->ScheduleHost.SquadDisconnected, 0);
+		Npc->BaseScheduleHost.SquadDisconnected, 0);
 	// The rejoin arm at zero asks `AddSelfToSquadMemory` (`0x10316720`); there is no `CAI_Squad`,
 	// so it answers nothing and the NPC keeps its own enemy memory.
 	TestNull(TEXT("and there is still no squad memory to rejoin"), Npc->ConnectedSquad());
@@ -659,9 +659,9 @@ bool FElysiumNpcKernelSquadChangBrosTest::RunTest(const FString&)
 	// `0x1036e2f0 GetOtherBrother` on the brother itself: the disconnect gate first, then the squad
 	// walk, which finds nothing without a squad object.
 	TestNull(TEXT("a squadless brother finds no brother"), Chang->GetOtherBrother());
-	Chang->ScheduleHost.SquadDisconnected = 1;
+	Chang->BaseScheduleHost.SquadDisconnected = 1;
 	TestNull(TEXT("and a disconnected one refuses before the walk"), Chang->GetOtherBrother());
-	Chang->ScheduleHost.SquadDisconnected = 0;
+	Chang->BaseScheduleHost.SquadDisconnected = 0;
 
 	// `0x1036e820 ReadyForUnited`: `GetCurSchedule()`'s id against 0x15a or 0x15b, false with no
 	// schedule at all. The port's schedule set does not carry the two `UNITED` programs yet, so

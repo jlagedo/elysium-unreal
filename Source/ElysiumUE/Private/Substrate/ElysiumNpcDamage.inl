@@ -95,9 +95,6 @@ struct FElysiumMeleeDiceRollResult
 int32 LastHitGroup = 0;       // +0x1594 m_LastHitGroup (datamap, CBaseCombatCharacter)
 int32 ForceBone = 0;          // +0x0660 m_nForceBone (datamap, CBaseAnimating)
 int32 RenderMode = 0;         // +0x016c m_nRenderMode (CBaseEntity); 4 is kRenderTransAlpha
-// +0x01fc m_takedamage (datamap, CBaseEntity). 0 = DAMAGE_NO, 1 = DAMAGE_EVENTS_ONLY,
-// 2 = DAMAGE_YES. Retail's default for a live NPC is 2, which is what this seeds.
-int32 TakeDamageMode = 2;
 // `+0x1564 m_flNextAttack` is family **Conditions**' declaration (`ElysiumNpcConditionsBodies.inl`),
 // which records that nothing in this runtime writes it yet. `PlayerAttackerBlockedReaction`
 // (`0x1029fdb0`) is its first writer and uses that member rather than standing a second.
@@ -108,11 +105,6 @@ int32 TakeDamageMode = 2;
  *  carried as such here — a per-NPC copy would be a divergence. SOURCE units, normalized. */
 static FVector& DeathThrowImpulse();
 static void ResetDeathThrowImpulse();
-
-// `CNPC_VAndreiBlood`'s `SelectIdealState` tag. The port's mind transition trace does not carry
-// retail's `{selector, file, line}` triple — the shape map calls `+0x1b38` ABSENT — so the one word
-// `0x1035d150` writes is kept here so the arm is measurable.
-int32 SelectIdealStateSelector = 0;          // +0x1b38 m_SelectIdealStateTrace.m_iSelector (walked)
 
 // --- The seams this family stands --------------------------------------------------------------
 

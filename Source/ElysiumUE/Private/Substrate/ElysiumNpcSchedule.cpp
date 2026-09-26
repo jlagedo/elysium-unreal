@@ -277,7 +277,7 @@ void FElysiumNpc::ChangeSchedule(int32 Id)
 
 	// `m_IdealSchedule = <stamp>` (`+0x5c3c`) keeps the raw int32 exactly, including -1 and the
 	// global >=1e9 namespace that the typed installed-program enum cannot spell.
-	ScheduleHost.IdealScheduleRetail = Stamp;
+	BaseScheduleHost.IdealScheduleRetail = Stamp;
 	if (Stamp == INDEX_NONE)
 	{
 		// SEAM, stated once per call rather than swallowed: with no class schedule id space the
@@ -363,8 +363,8 @@ void FElysiumNpc::NextScheduledTask()
 	{
 		// `m_failedSchedule (+0x5f38) = m_interuptSchedule (+0x5f3c) = 0`. The listing's `EDX` is
 		// zeroed at `0x10280f43` and never rewritten, so both stores are literal zero.
-		ScheduleHost.FailedSchedule = ElysiumScheduleId::None;
-		ScheduleHost.InterruptSchedule = ElysiumScheduleId::None;
+		BaseScheduleHost.FailedSchedule = ElysiumScheduleId::None;
+		BaseScheduleHost.InterruptSchedule = ElysiumScheduleId::None;
 		// `(*DAT_10924a6c + 4)()` — a global object's slot 1, taking no argument and discarding its
 		// answer. UNRECOVERED: the object is not identified and the call has no observable here.
 		// `SetCondition(COND_SCHEDULE_DONE 0x5d)`.
@@ -557,7 +557,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 	(void)Unused;   // retail's argument is read by no arm of any of the six bodies
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr);
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
 	// Eight species classes override slot 604 on their C++ classes (story 5 step 3): the human line
@@ -621,7 +621,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombatChangLine(bool bChang)
 {
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr);
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
 	if (!bInMelee && !Slot599(0))
@@ -679,7 +679,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombatChangLine(bool bChang)
 int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& Request)
 {
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const bool bHasHintNode = ScheduleHost.HintNode != INDEX_NONE;
+	const bool bHasHintNode = BaseScheduleHost.HintNode != INDEX_NONE;
 	const bool bDodging = NpcFlags.Has(EElysiumNpcFlag::DODGING);   // flags1 0x800
 	FElysiumEntity* Prop = World != nullptr ? World->Resolve(ScheduleHost.KickProp) : nullptr;
 
@@ -705,7 +705,7 @@ int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& R
 	if (!bHasHintNode && !bDodging && Prop == nullptr)
 	{
 		const FElysiumEntity* Enemy = World != nullptr
-			? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr;
+			? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr;
 		ScheduleHost.HintCoverObject =
 			Enemy != nullptr ? Enemy->Handle : FElysiumEntityHandle::Invalid();
 		uint32 SearchMask = Request.bRequest1 ? 1u : 0u;
@@ -726,7 +726,7 @@ int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& R
 
 	// D. The hint-type table. Retail reads `m_pHintNode->m_nHintType` (`+0x5dc`).
 	FHintWords Hint;
-	if (ScheduleHost.HintNode == INDEX_NONE || !HintWords(ScheduleHost.HintNode, Hint))
+	if (BaseScheduleHost.HintNode == INDEX_NONE || !HintWords(BaseScheduleHost.HintNode, Hint))
 	{
 		return 0;
 	}
@@ -758,7 +758,7 @@ int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& R
 	// `0x6000` in its capability word (slot 360). `bNoRangedThreat` is retail's `bVar1`.
 	bool bNoRangedThreat = true;
 	if (const FElysiumEntity* Enemy = World != nullptr
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr)
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr)
 	{
 		// SEAM: retail reads `enemy->+0x9c` — `CBaseCombatCharacter`'s cached downcast of ITSELF
 		// (`docs/vtmb/npc-ai/schedule-kernel.md` § "The three cached downcasts") — and asks that

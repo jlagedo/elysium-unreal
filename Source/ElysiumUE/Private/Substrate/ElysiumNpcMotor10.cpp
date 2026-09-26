@@ -983,7 +983,7 @@ int32 FElysiumNpc::StandoffTranslateActivity(FStandoffWords& Words, int32 Activi
 	// 1. The hint arm. `(*(this+4))[0x1777]` is owner `+0x5ddc` `m_pHintNode`, and its `+0x5dc`
 	//    `m_nHintType` must be `0x65`. Slot 569 is asked TWICE: once into a local, and again to
 	//    replace an incoming activity of 1. Both calls are made in retail and both are made here.
-	if (ScheduleHost.HintNode != INDEX_NONE)
+	if (BaseScheduleHost.HintNode != INDEX_NONE)
 	{
 		int32 HintType = INDEX_NONE;
 		float HintYaw = 0.f;
@@ -994,10 +994,10 @@ int32 FElysiumNpc::StandoffTranslateActivity(FStandoffWords& Words, int32 Activi
 		if (HintOverlayWords(HintType, HintYaw, NodeYaw, HintOriginUnits)
 			&& HintType == GMotor10HintTypeLowAim)
 		{
-			const int32 First = HintActivityForNode(ScheduleHost.HintNode);
+			const int32 First = HintActivityForNode(BaseScheduleHost.HintNode);
 			if (Activity == GMotor10ActIdle)
 			{
-				Activity = HintActivityForNode(ScheduleHost.HintNode);
+				Activity = HintActivityForNode(BaseScheduleHost.HintNode);
 			}
 			if (Words.Posture == 0 && First == GMotor10ActCoverLow)
 			{

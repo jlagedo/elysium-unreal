@@ -411,7 +411,7 @@ void FElysiumNpc::ValidateRestoredInterestingPlace()
 void FElysiumNpc::BaseNPCInit()
 {
 	bNpcTransparent = true;                                              // 1027339x SetNPCTransparent(1)
-	Senses.Memory.LastDamageAttacker = FElysiumEntityHandle::Invalid();  // m_hLastDamageEnt = -1
+	BaseMemory.LastDamageAttacker = FElysiumEntityHandle::Invalid();  // m_hLastDamageEnt = -1
 	Cognition.bCondTookDamage = false;                                   // 102733xx
 	++BaseInitAnimatingResets;                                           // ClearAllClientRagdolling
 	Flags |= NpcInitAddFlags;                                            // AddFlag(0x12000)
@@ -423,7 +423,7 @@ void FElysiumNpc::BaseNPCInit()
 	// `motor+0x1c == 180.0` writes `motor+0x34` directly while anything else goes through
 	// `0x102e0a80`. SEAM: no motor `+0x1c`; `DesiredMoveYaw` takes the direct write.
 	ScheduleHost.DesiredMoveYaw = static_cast<float>(Angles.Y);
-	if (ScheduleHost.bMotorAnimationMovement)
+	if (BaseScheduleHost.bMotorAnimationMovement)
 	{
 		if (ScheduleHost.DesiredMoveYaw < MotorYawHalfTurn)
 		{
@@ -456,7 +456,7 @@ void FElysiumNpc::BaseNPCInit()
 	{
 		SetIdealActivity(1);
 	}
-	ScheduleHost.bShouldMove = false;                                    // +0x1a40
+	BaseScheduleHost.bShouldMove = false;                                    // +0x1a40
 	CollisionMask = NpcInitCollisionMask;                                // +0x1a44
 	// `102734cb`: `*(m_pNavigator + 0x2c) = DAT_1093407c` — the process-wide node network the map's
 	// `.ain` loaded (`0x102f65b0` / `0x102f6690` are its only writers). SEAM: no navigator and no
@@ -469,8 +469,8 @@ void FElysiumNpc::BaseNPCInit()
 	}
 	++NavigationGoalClears;
 	++BaseInitAnimatingResets;                                           // 10095be0 + 1008f540
-	ScheduleHost.HintNode = INDEX_NONE;                                  // m_pHintNode = 0
-	ScheduleHost.MemoryBits = 0;                                         // m_afMemory
+	BaseScheduleHost.HintNode = INDEX_NONE;                                  // m_pHintNode = 0
+	BaseScheduleHost.MemoryBits = 0;                                         // m_afMemory
 	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
 	DistTooFar = BaseInitDistTooFar;
 	SetDistLook(BaseInitDistLookUnits * ElysiumMove::U);                 // 1026a2a0(3072)
@@ -483,7 +483,7 @@ void FElysiumNpc::BaseNPCInit()
 	Cognition.Conditions.Reset();                                        // six words +0x5c5c
 	Cognition.DelayedConditions.Reset();                                 // 102cc7e0 +0x1a9c
 	++DelayedConditionListClears;
-	Senses.ClearPendingSounds();                                         // 102cc7e0 +0x1ae0
+	PendingSounds.Reset();                                               // 102cc7e0 +0x1ae0
 	++DelayedConditionListClears;
 	SetDefaultEyeOffset();                                               // 10274ca0
 	++BaseInitTailCalls;
@@ -506,19 +506,19 @@ void FElysiumNpc::BaseNPCInit()
 	WeaponBlockedByFriendTimer = 0.0;
 	ExtendedBlockedByFriendTimer = static_cast<double>(GFltMax);
 	Mind.StampLastStateChangeTime(0.0);                                  // +0x5cc8
-	Senses.Memory.EnemyOccludedCheck = 10;
+	BaseMemory.EnemyOccludedCheck = 10;
 	ShootTargetOverride = FElysiumEntityHandle::Invalid();
 	// +0x5b90 m_pSurfaceData ABSENT.
 	bCineScriptHidden = false;                                           // 102735xx +0x5d78
 	bInChoreoScene = false;
 	UpdateEnemyWentOccluded(nullptr, false);                             // 10270180(NULL, 0)
 	++BaseInitChoreoClears;
-	Senses.Memory.LastDamageTime = 0.0;
+	BaseMemory.LastDamageTime = 0.0;
 	LastAttackTime = 0.0;
-	Senses.Memory.SoundWaitTime = 0.0;
+	BaseMemory.SoundWaitTime = 0.0;
 	NextEyeLookTime = 0.f;                                               // +0x5d6c
 	NextWeaponSearchTime = 0.0;
-	ScheduleHost.WaitFinished = 0.0;
+	BaseScheduleHost.WaitFinished = 0.0;
 }
 
 // =================================================================================================
@@ -745,7 +745,7 @@ void FElysiumNpc::NPCInit()
 void FElysiumNpc::BaseStartNPC()
 {
 	Schedule.bDidMaintainSchedule = false;                               // +0x5bb8
-	ScheduleHost.bRanAi = false;                                         // +0x1b4c
+	BaseScheduleHost.bRanAi = false;                                         // +0x1b4c
 	const int32 MoveType = GetMoveType();
 	const uint32 Caps = static_cast<uint32>(CapabilitiesGet());
 	const bool bSkipDrop = MoveType == 5 || MoveType == 6
@@ -773,7 +773,7 @@ void FElysiumNpc::BaseStartNPC()
 	if (!Target.IsEmpty())
 	{
 		FElysiumEntity* Found = World != nullptr ? World->FindByName(Target) : nullptr;
-		ScheduleHost.GoalEnt = Found != nullptr ? Found->Handle : FElysiumEntityHandle();
+		BaseScheduleHost.GoalEnt = Found != nullptr ? Found->Handle : FElysiumEntityHandle();
 		if (Found == nullptr)
 		{
 			// `10273bd9`: THREE pushes — the classname AND the target name.
@@ -886,17 +886,17 @@ void FElysiumNpc::BaseOnRestore(bool /*bFromLoad*/)
 	}
 	if (Schedule.Current == ElysiumScheduleId::None || bGiveUp)
 	{
-		ScheduleHost.bDoPostRestoreRefindPath = false;
+		BaseScheduleHost.bDoPostRestoreRefindPath = false;
 		RestoreGiveUp();
 	}
 	else
 	{
-		ScheduleHost.bDoPostRestoreRefindPath =
+		BaseScheduleHost.bDoPostRestoreRefindPath =
 			((LastSavedExtendedHeader.Flags >> 2) & 1u) != 0;
 	}
 	// CBaseCombatCharacter::OnRestore `0x10323b60` — SEAM, no port body.
 	// +0x5b90 m_pSurfaceData ABSENT.
-	if (!ScheduleHost.bDoPostRestoreRefindPath)
+	if (!BaseScheduleHost.bDoPostRestoreRefindPath)
 	{
 		if (Motor != nullptr)
 		{

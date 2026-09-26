@@ -251,7 +251,7 @@ bool ElysiumNpcCond::IsHearFamily(EElysiumNpcCond Cond)
 		|| Cond == EElysiumNpcCond::HearThumper || Cond == EElysiumNpcCond::HearBugbait;
 }
 
-void ElysiumNpcCond::AccumulateDamage(FElysiumNpcMemory& Memory, int32 CommittedDamage, double Now)
+void ElysiumNpcCond::AccumulateDamage(FElysiumNpcBaseMemory& Memory, int32 CommittedDamage, double Now)
 {
 	if (CommittedDamage <= 0)
 	{
@@ -292,7 +292,7 @@ void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherT
 	// mid-pass hook to set a bit in, so the same one-pass life is reconstructed from the commit's
 	// own timestamp against the previous pass's. That is a mechanism difference with no behavioural
 	// one: the condition is live for the first pass after the hit and gone for the second.
-	const bool bNewPacket = Memory.LastDamageTime >= 0.0 && Memory.LastDamageTime > PreviousGatherTime;
+	const bool bNewPacket = Npc.BaseMemory.LastDamageTime >= 0.0 && Npc.BaseMemory.LastDamageTime > PreviousGatherTime;
 	if (bNewPacket && Memory.LastDamageAmount > 0)
 	{
 		Out.Set(EElysiumNpcCond::LightDamage);
@@ -309,10 +309,10 @@ void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherT
 
 	// `REPEATED_DAMAGE` is the window's own answer, not an edge: while the accumulated sum inside a
 	// live one-second window is over 15 percent of Source max health the condition stands.
-	if (Npc.MaxHealth > 0 && Memory.RepeatedDamageWindowStart >= 0.0
-		&& Memory.LastDamageTime >= 0.0
-		&& (Memory.LastDamageTime - Memory.RepeatedDamageWindowStart) <= RepeatedDamageWindowSeconds
-		&& static_cast<float>(Memory.RepeatedDamageAccumulated)
+	if (Npc.MaxHealth > 0 && Npc.BaseMemory.RepeatedDamageWindowStart >= 0.0
+		&& Npc.BaseMemory.LastDamageTime >= 0.0
+		&& (Npc.BaseMemory.LastDamageTime - Npc.BaseMemory.RepeatedDamageWindowStart) <= RepeatedDamageWindowSeconds
+		&& static_cast<float>(Npc.BaseMemory.RepeatedDamageAccumulated)
 			> RepeatedDamageFraction * static_cast<float>(Npc.MaxHealth))
 	{
 		Out.Set(EElysiumNpcCond::RepeatedDamage);
@@ -322,7 +322,7 @@ void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherT
 void ElysiumNpcCond::GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime,
 	FElysiumNpcConditions& Out)
 {
-	if (!Npc.IsOblivious()) Out |= Npc.Senses.HeardConditions;
+	if (!Npc.IsOblivious()) Out |= Npc.HeardConditions;
 }
 bool ElysiumNpcCond::ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate,
 	bool bCombatMode)
@@ -337,7 +337,7 @@ bool ElysiumNpcCond::ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEnt
 	//    carried by this substrate yet.
 	// 3. is folded into the reference parameter.
 	// 5. The committed enemy is always of interest.
-	if (Npc.Senses.Memory.Enemy.IsSet() && Npc.Senses.Memory.Enemy == Candidate.Handle)
+	if (Npc.BaseMemory.Enemy.IsSet() && Npc.BaseMemory.Enemy == Candidate.Handle)
 	{
 		return true;
 	}
@@ -446,7 +446,7 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 		// for the committed enemy (slot 0x29c) when it is the entity this iteration is looking at —
 		// so it is subject to the skip-entity exclusion and the `D_NU` gate above. The port raised it
 		// unconditionally from `GatherCommittedEnemy`, off `Sighted().Contains(Enemy)`.
-		if (Memory.Enemy.IsSet() && Handle == Memory.Enemy)
+		if (Npc.BaseMemory.Enemy.IsSet() && Handle == Npc.BaseMemory.Enemy)
 		{
 			Out.Set(EElysiumNpcCond::SeeEnemy);
 		}
@@ -461,7 +461,7 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 		// simulated, because manufacturing a `D_ER` would be inventing a relation the store has no
 		// value for.
 		const int32 Priority = Npc.Relationships.ResolvePriority(Handle, NpcCondClassnameOf(*Target));
-		FElysiumNpcMemory::ESeen Slot = FElysiumNpcMemory::ESeen::Count;
+		FElysiumNpcBaseMemory::ESeen Slot = FElysiumNpcBaseMemory::ESeen::Count;
 		switch (Relation)
 		{
 		case EElysiumRelationship::Hate:
@@ -470,31 +470,31 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 			if (Priority < 0)
 			{
 				Out.Set(EElysiumNpcCond::SeeDislike);
-				Slot = FElysiumNpcMemory::ESeen::Dislike;
+				Slot = FElysiumNpcBaseMemory::ESeen::Dislike;
 			}
 			else if (Priority <= 10)
 			{
 				Out.Set(EElysiumNpcCond::SeeHate);
-				Slot = FElysiumNpcMemory::ESeen::Hate;
+				Slot = FElysiumNpcBaseMemory::ESeen::Hate;
 			}
 			else
 			{
 				Out.Set(EElysiumNpcCond::SeeNemesis);
-				Slot = FElysiumNpcMemory::ESeen::Nemesis;
+				Slot = FElysiumNpcBaseMemory::ESeen::Nemesis;
 			}
 			break;
 		case EElysiumRelationship::Fear:
 			if (Npc.NpcFlags.Has(EElysiumNpcFlag2::D_CALM)) break;
 			Out.Set(EElysiumNpcCond::SeeFear);
-			Slot = FElysiumNpcMemory::ESeen::Fear;
+			Slot = FElysiumNpcBaseMemory::ESeen::Fear;
 			break;
 		default:
 			break;   // D_LI and D_NU raise no sight condition
 		}
-		if (Slot != FElysiumNpcMemory::ESeen::Count)
+		if (Slot != FElysiumNpcBaseMemory::ESeen::Count)
 		{
-			Memory.LastSeen[static_cast<int32>(Slot)] = Handle;
-			Memory.LastSeenTime[static_cast<int32>(Slot)] = Now;
+			Npc.BaseMemory.LastSeen[static_cast<int32>(Slot)] = Handle;
+			Npc.BaseMemory.LastSeenTime[static_cast<int32>(Slot)] = Now;
 			if (Relation == EElysiumRelationship::Hate || Relation == EElysiumRelationship::Fear)
 			{
 				// A sighting is the admission write; hearing and cached sight flags never manufacture
@@ -829,7 +829,7 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 		//    POINTER comparison -- `GetEnemy()` (slot 167) against the record owner's resolved
 		//    entity -- not a handle compare: a committed handle whose entity is gone is still
 		//    `IsSet()`, and retail's `GetEnemy()` answers null for it.
-		const FElysiumEntity* FlankEnemy = World ? ResolveEnemyHandle(*World, Memory.Enemy) : nullptr;
+		const FElysiumEntity* FlankEnemy = World ? ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy) : nullptr;
 		const FElysiumEntity* WinnerOwner = (World && Winner != nullptr)
 			? ResolveEnemyHandle(*World, Winner->Source) : nullptr;
 		if (MaskLists(EElysiumNpcCond::HearFlankSound) && Winner != nullptr
@@ -871,7 +871,7 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 	// `ResolveEnemyHandle`, not `Resolve`: retail dereferences an EHANDLE here, which answers with a
 	// dead actor as readily as a live one. `Resolve` collapses dead into null for the script
 	// contract, and that would silently take the null gate below.
-	const FElysiumEntity* Source = World ? ResolveEnemyHandle(*World, Memory.BestSoundSource) : nullptr;
+	const FElysiumEntity* Source = World ? ResolveEnemyHandle(*World, Npc.BaseMemory.BestSoundSource) : nullptr;
 
 	// `FUN_102b8cd0(this, source)`: true only when the source is non-null and my `IRelationType`
 	// to it is NEITHER `D_HT` (1) NOR `D_FR` (2). False and the tail returns WITHOUT touching the
@@ -894,7 +894,7 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 	}
 
 	const FElysiumEntity* ClosestPlayer = World ? ResolveEnemyHandle(*World, Memory.ClosestPlayer) : nullptr;
-	const FElysiumEntity* Enemy = World ? ResolveEnemyHandle(*World, Memory.Enemy) : nullptr;
+	const FElysiumEntity* Enemy = World ? ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy) : nullptr;
 
 	// The comparison chain. First match wins and demands its own sight condition; a match whose
 	// condition is unset, or no match at all, falls through past the loop.
@@ -915,17 +915,17 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 		const FElysiumEntity* Comparand;
 		EElysiumNpcCond Requires;
 	};
-	const auto LastSeen = [&](FElysiumNpcMemory::ESeen Slot) -> const FElysiumEntity*
+	const auto LastSeen = [&](FElysiumNpcBaseMemory::ESeen Slot) -> const FElysiumEntity*
 	{
-		return World ? ResolveEnemyHandle(*World, Memory.Seen(Slot)) : nullptr;
+		return World ? ResolveEnemyHandle(*World, Npc.BaseMemory.Seen(Slot)) : nullptr;
 	};
 	const FSourceArm Chain[] = {
 		{ ClosestPlayer,                                    EElysiumNpcCond::SeePlayer  },
 		{ Enemy,                                            EElysiumNpcCond::SeeEnemy   },
-		{ LastSeen(FElysiumNpcMemory::ESeen::Hate),         EElysiumNpcCond::SeeHate    },
-		{ LastSeen(FElysiumNpcMemory::ESeen::Fear),         EElysiumNpcCond::SeeFear    },
-		{ LastSeen(FElysiumNpcMemory::ESeen::Dislike),      EElysiumNpcCond::SeeDislike },
-		{ LastSeen(FElysiumNpcMemory::ESeen::Nemesis),      EElysiumNpcCond::SeeNemesis },
+		{ LastSeen(FElysiumNpcBaseMemory::ESeen::Hate),         EElysiumNpcCond::SeeHate    },
+		{ LastSeen(FElysiumNpcBaseMemory::ESeen::Fear),         EElysiumNpcCond::SeeFear    },
+		{ LastSeen(FElysiumNpcBaseMemory::ESeen::Dislike),      EElysiumNpcCond::SeeDislike },
+		{ LastSeen(FElysiumNpcBaseMemory::ESeen::Nemesis),      EElysiumNpcCond::SeeNemesis },
 	};
 	for (const FSourceArm& Arm : Chain)
 	{
@@ -968,11 +968,11 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 {
 	const FElysiumEntityWorld* World = Npc.World;
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (World == nullptr || !Memory.Enemy.IsSet())
+	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
 	{
 		return;
 	}
-	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Memory.Enemy);
+	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy);
 	if (Enemy == nullptr)
 	{
 		// The handle is gone entirely rather than dead. That is `LOST_ENEMY`, and it belongs to the
@@ -1113,11 +1113,11 @@ bool ElysiumNpcCond::WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiu
 {
 	const FElysiumEntityWorld* World = Npc.World;
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (World == nullptr || !Memory.Enemy.IsSet())
+	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
 	{
 		return false;
 	}
-	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Memory.Enemy);
+	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy);
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		return false;
@@ -1156,11 +1156,11 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 {
 	const FElysiumEntityWorld* World = Npc.World;
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (World == nullptr || !Memory.Enemy.IsSet())
+	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
 	{
 		return;
 	}
-	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Memory.Enemy);
+	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy);
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		// `ENEMY_DEAD` / `LOST_ENEMY` already describe this; range against a corpse is not a fact.

@@ -611,10 +611,10 @@ void FElysiumNpc::ReportAIState()
 	{
 		EmitDevMsg(TEXT(" Moving "), TEXT(" Moving "));
 		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-		if (ScheduleHost.MoveWaitFinished > Now)
+		if (BaseScheduleHost.MoveWaitFinished > Now)
 		{
 			EmitDevMsg(TEXT(": Stopped for %.2f. "), FString::Printf(TEXT(": Stopped for %.2f. "),
-				ScheduleHost.MoveWaitFinished - Now));
+				BaseScheduleHost.MoveWaitFinished - Now));
 		}
 		else if (IsIdealActivityCurrent())
 		{

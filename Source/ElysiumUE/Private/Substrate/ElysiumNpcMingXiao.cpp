@@ -290,7 +290,7 @@ int32 FElysiumNpcMingXiao::SelectIdealStateRetail()
 	const bool bDeadWrite = !(!IsInert() && Mind.State() != EElysiumNpcState::Dead);
 	(void)bDeadWrite;
 	// `GetEnemy() ? 2 : 1`: COMBAT or IDLE.
-	Mind.WriteIdealStateRetail(Senses.Memory.Enemy.IsSet() ? 2 : 1);
+	Mind.WriteIdealStateRetail(BaseMemory.Enemy.IsSet() ? 2 : 1);
 	return IdealStateRetail();
 }
 
@@ -1476,8 +1476,8 @@ void FElysiumNpcMingXiao::LaunchRagdollTowardTarget()
 	}
 
 	// 2. Everything else is inside `GetEnemy() != null` (slot 167, `+0x29c`).
-	FElysiumEntity* Enemy = (World != nullptr && Senses.Memory.Enemy.IsSet())
-		? World->Resolve(Senses.Memory.Enemy) : nullptr;
+	FElysiumEntity* Enemy = (World != nullptr && BaseMemory.Enemy.IsSet())
+		? World->Resolve(BaseMemory.Enemy) : nullptr;
 	if (Enemy != nullptr)
 	{
 		// 3. The held object's CENTRE (`+0x370`), not its origin, is the launch point.

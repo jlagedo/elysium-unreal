@@ -662,7 +662,7 @@ void FElysiumNpc::TroikaNPCThinkDebugPre()
 			FVector LabelUnits = EyePosition() / ElysiumMove::U;
 			LabelUnits.Z += GDebug10_2BlockedLiftUnits;
 			const FElysiumEntity* const Occluder =
-				World != nullptr ? World->Resolve(Senses.Memory.EnemyOccluder) : nullptr;
+				World != nullptr ? World->Resolve(BaseMemory.EnemyOccluder) : nullptr;
 			const FString Name = Occluder != nullptr
 				? GDebug10_2DebugName(Occluder) : FString(GDebug10_2UnknownName);
 			EmitOverlayText(NpcKernelDebug10_2Shared::GDebug10_2Text, LabelUnits,

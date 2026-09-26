@@ -1195,7 +1195,7 @@ bool FElysiumGazeTest::RunTest(const FString&)
 
 		// The enemy arm: the committed enemy inside the cone is the subject.
 		Player->Origin = FVector(500.f, 0.f, 0.f);
-		Npc->Senses.Memory.Enemy = Player->Handle;
+		Npc->BaseMemory.Enemy = Player->Handle;
 		Npc->TickGaze(0.f, 0.f, Head, Forward, Tuning);
 		TestTrue(TEXT("the enemy arm aims at the enemy's EyePosition"),
 			Npc->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
@@ -1206,7 +1206,7 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		const FVector Ahead = Head + Forward * (500.f * ElysiumMove::U);
 		TestTrue(TEXT("an enemy outside the cone is passed over"),
 			Npc->EyeLookTarget.Equals(Ahead, 0.1f));
-		Npc->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+		Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 
 		// The heard-sound arm is DIRECT: the point is returned as the eyes' target this think, and
 		// neither the commanded nor the smoothed target is written.
@@ -1607,11 +1607,11 @@ bool FElysiumGazeDialogueTest::RunTest(const FString&)
 		// The partner behind the head fails the cone. Retail jumps to the next arm (`0x1026b8d3`
 		// → `0x1026b8d9`), so the committed enemy — dead ahead — is what the eyes take.
 		Player->Origin = FVector(-500.f, 0.f, 0.f);
-		Watcher->Senses.Memory.Enemy = Other->Handle;
+		Watcher->BaseMemory.Enemy = Other->Handle;
 		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
 		TestTrue(TEXT("a dialogue partner outside the cone is rejected for the next arm"),
 			Watcher->EyeLookTarget.Equals(Other->EyePosition(), 0.1f));
-		Watcher->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+		Watcher->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 
 		// With no lower arm answering, rejection means straight ahead — never the partner.
 		Watcher->EyeLookTargetHandle = FElysiumEntityHandle::Invalid();

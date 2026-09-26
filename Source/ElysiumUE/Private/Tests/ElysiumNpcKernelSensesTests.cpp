@@ -147,7 +147,7 @@ bool FElysiumNpcKernelSensesEnemyTest::RunTest(const FString&)
 	// `0x101a67e0` — slot 167 resolves `m_hEnemy` through the handle table.
 	TestNull(TEXT("0x101a67e0: no enemy resolves to null"),
 		static_cast<const FElysiumNpc*>(F.Guard)->GetEnemy());
-	F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+	F.Guard->BaseMemory.Enemy = F.Other->Handle;
 	TestEqual(TEXT("0x101a67e0: a live m_hEnemy resolves to the entity"),
 		static_cast<const FElysiumNpc*>(F.Guard)->GetEnemy(),
 		static_cast<FElysiumEntity*>(F.Other));
@@ -160,8 +160,8 @@ bool FElysiumNpcKernelSensesEnemyTest::RunTest(const FString&)
 	// `m_bfNPCStateFlags & 0x40`, which belongs to retail states 0xb and 0xe alone.
 	TestEqual(TEXT("0x102b5360: with a live enemy the Troika line answers it too"),
 		F.Guard->GetEnemy(), static_cast<FElysiumEntity*>(F.Other));
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle();
-	F.Guard->Senses.Memory.LastEnemy = F.Other->Handle;
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle();
+	F.Guard->BaseMemory.LastEnemy = F.Other->Handle;
 	TestEqual(TEXT("0x102b5360: bit 6 of m_bfNPCStateFlags is clear for every port state"),
 		static_cast<int32>(F.Guard->NpcStateFlags() & 0x40), 0);
 	TestNull(TEXT("0x102b5360: so the m_hLastEnemy fallback is unreachable and it answers null"),
@@ -173,20 +173,20 @@ bool FElysiumNpcKernelSensesEnemyTest::RunTest(const FString&)
 		static_cast<int32>(FElysiumNpcFlags::NpcStateFlagsForRetailState(2) & 0x40), 0);
 
 	// `0x10273e10` — slot 541. The gate is `m_iSquadDisconnected < 1`, not `== 0`.
-	F.Guard->ScheduleHost.SquadDisconnected = 0;
+	F.Guard->BaseScheduleHost.SquadDisconnected = 0;
 	TestEqual(TEXT("0x10273e10: a connected NPC gets its own CAI_Memory"), F.Guard->GetEnemies(),
 		static_cast<void*>(&F.Guard->EnemyMemory));
-	F.Guard->ScheduleHost.SquadDisconnected = -2;
+	F.Guard->BaseScheduleHost.SquadDisconnected = -2;
 	TestEqual(TEXT("0x10273e10: a NEGATIVE count is still connected - the test is < 1"),
 		F.Guard->GetEnemies(), static_cast<void*>(&F.Guard->EnemyMemory));
-	F.Guard->ScheduleHost.SquadDisconnected = 1;
-	F.Other->ScheduleHost.SquadDisconnected = 1;
+	F.Guard->BaseScheduleHost.SquadDisconnected = 1;
+	F.Other->BaseScheduleHost.SquadDisconnected = 1;
 	TestNotEqual(TEXT("0x10273e10: disconnected gets the one shared global store instead"),
 		F.Guard->GetEnemies(), static_cast<void*>(&F.Guard->EnemyMemory));
 	TestEqual(TEXT("0x10273e10: and every disconnected NPC gets the SAME global"),
 		F.Guard->GetEnemies(), F.Other->GetEnemies());
-	F.Other->ScheduleHost.SquadDisconnected = 0;
-	F.Guard->ScheduleHost.SquadDisconnected = 0;
+	F.Other->BaseScheduleHost.SquadDisconnected = 0;
+	F.Guard->BaseScheduleHost.SquadDisconnected = 0;
 
 	// `0x10273e40` — slot 543 frees the store only when there is no squad, and this substrate has
 	// none, so the free always runs.
@@ -232,28 +232,28 @@ bool FElysiumNpcKernelSensesListenTest::RunTest(const FString&)
 		Senses.ClosestSound(*F.Guard, ElysiumGameSounds::World)->Position, OtherType.Position);
 	TestNull(TEXT("0x103105d0: a type nobody emitted answers null"),
 		Senses.ClosestSound(*F.Guard, ElysiumGameSounds::Bugbait));
-	Memory.Enemy = F.Other->Handle;
+	F.Guard->BaseMemory.Enemy = F.Other->Handle;
 	TestEqual(TEXT("0x103105d0: the ENEMY's sound outranks a nearer one and ends the walk"),
 		Senses.ClosestSound(*F.Guard, ElysiumGameSounds::Combat)->Position, Far.Position);
-	Memory.Enemy = FElysiumEntityHandle();
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle();
 
 	// `0x102b39e0` — the seven snapshots, each gated on its own `m_HeardConditions` bit. Nothing
 	// heard, nothing written.
 	Memory.LastSoundCombat = FElysiumGameSoundEvent();
 	Memory.LastSoundWorld = FElysiumGameSoundEvent();
-	Senses.HeardConditions.Reset();
+	F.Guard->HeardConditions.Reset();
 	F.Guard->OnListened();
 	TestEqual(TEXT("0x102b39e0: an unheard category is not snapshotted"),
 		Memory.LastSoundCombat.Position, FVector::ZeroVector);
 
-	Senses.HeardConditions.Set(EElysiumNpcCond::HearCombat);
+	F.Guard->HeardConditions.Set(EElysiumNpcCond::HearCombat);
 	F.Guard->OnListened();
 	TestEqual(TEXT("0x102b39e0: HEAR_COMBAT snapshots the closest combat sound"),
 		Memory.LastSoundCombat.Position, Near.Position);
 	TestEqual(TEXT("0x102b39e0: and leaves the world record alone - one bit, one record"),
 		Memory.LastSoundWorld.Position, FVector::ZeroVector);
 
-	Senses.HeardConditions.Set(EElysiumNpcCond::HearWorld);
+	F.Guard->HeardConditions.Set(EElysiumNpcCond::HearWorld);
 	F.Guard->OnListened();
 	TestEqual(TEXT("0x102b39e0: HEAR_WORLD snapshots the world record"),
 		Memory.LastSoundWorld.Position, OtherType.Position);
@@ -261,7 +261,7 @@ bool FElysiumNpcKernelSensesListenTest::RunTest(const FString&)
 	// The tail reads `m_Conditions` (+0x5c5c), NOT `m_HeardConditions` (+0x5ca8) — a sound still
 	// inside its reaction delay snapshots but does not extend the stealth-vision override. The
 	// heard bits are cleared first so only the tail runs and the record under test stays put.
-	Senses.HeardConditions.Reset();
+	F.Guard->HeardConditions.Reset();
 	Memory.StealthVisionOverrideUntil = -1.0;
 	Memory.LastSoundCombat.Source = F.Other->Handle;
 	F.Guard->Cognition.Conditions.Clear(EElysiumNpcCond::HearCombat);
@@ -591,12 +591,12 @@ bool FElysiumNpcKernelSensesDoorTest::RunTest(const FString&)
 
 	// Arm 6 — the write that names this body. 29c filed it as `SetEnemy`; it writes
 	// `m_hBlockedDoor` (+0x5d28) and never touches `m_hEnemy`.
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle();
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle();
 	F.Guard->OnDoorBlocked(*F.Other);
 	TestTrue(TEXT("0x1027de00: the door lands in m_hBlockedDoor"),
 		F.Guard->BlockedDoor == F.Other->Handle);
 	TestFalse(TEXT("0x1027de00: and m_hEnemy is untouched - this is not SetEnemy"),
-		F.Guard->Senses.Memory.Enemy.IsSet());
+		F.Guard->BaseMemory.Enemy.IsSet());
 
 	// Arm 4 — the door's own retry stamp is written whatever the flags say, because the seam
 	// answers "a plain door" (no 0x10) and so the block runs.
@@ -675,7 +675,7 @@ bool FElysiumNpcKernelSensesVisionTest::RunTest(const FString&)
 	// `0x1029c970` — the effective look distance. The default is the resolved vision channel.
 	Senses.Perception.VisionDistanceCm = 1200.f;
 	Memory.StealthVisionOverrideUntil = -1.0;
-	Memory.bEnemyWentOccluded = false;
+	F.Guard->BaseMemory.bEnemyWentOccluded = false;
 	TestEqual(TEXT("0x1029c970: with no override it is m_flVisionDistance"),
 		Senses.EffectiveVisionDistanceCm(*F.Guard, 10.0), 1200.f);
 	Memory.StealthVisionOverrideUntil = 20.0;
@@ -694,43 +694,43 @@ bool FElysiumNpcKernelSensesVisionTest::RunTest(const FString&)
 	// arm is asserted through its OTHER operand, `m_bEnemyWentOccluded` (+0x5bc5) rather than
 	// `bEnemyOccluded`, which is the field the recovered body reads.
 	Memory.StealthVisionOverrideUntil = -1.0;
-	Memory.bEnemyWentOccluded = true;
+	F.Guard->BaseMemory.bEnemyWentOccluded = true;
 	TestEqual(TEXT("0x1029c970: an idle body is on the default whatever the occlusion edge says"),
 		Senses.EffectiveVisionDistanceCm(*F.Guard, 10.0), 1200.f);
 
 	// `0x10270180` — the occlusion edge, three arms.
-	Memory.bEnemyWentOccluded = false;
-	Memory.EnemyWentOccludedPosition = FVector(9.f, 9.f, 9.f);
+	F.Guard->BaseMemory.bEnemyWentOccluded = false;
+	F.Guard->BaseMemory.EnemyWentOccludedPosition = FVector(9.f, 9.f, 9.f);
 	F.Guard->UpdateEnemyWentOccluded(nullptr, true);
 	TestEqual(TEXT("0x10270180: a null enemy resets the remembered position to vec3_origin"),
-		Memory.EnemyWentOccludedPosition, FVector::ZeroVector);
+		F.Guard->BaseMemory.EnemyWentOccludedPosition, FVector::ZeroVector);
 	TestTrue(TEXT("0x10270180: and stores the LOS BYTE itself, not 0 - retail writes param_2"),
-		Memory.bEnemyWentOccluded);
+		F.Guard->BaseMemory.bEnemyWentOccluded);
 	F.Guard->UpdateEnemyWentOccluded(nullptr, false);
-	TestFalse(TEXT("0x10270180: so a null enemy without LOS clears it"), Memory.bEnemyWentOccluded);
+	TestFalse(TEXT("0x10270180: so a null enemy without LOS clears it"), F.Guard->BaseMemory.bEnemyWentOccluded);
 
 	F.Other->Origin = FVector(500.f, 0.f, 0.f);
-	Memory.bEnemyWentOccluded = true;
+	F.Guard->BaseMemory.bEnemyWentOccluded = true;
 	F.Guard->UpdateEnemyWentOccluded(F.Other, false);
 	TestEqual(TEXT("0x10270180: losing sight snapshots the enemy's current origin"),
-		Memory.EnemyWentOccludedPosition, FVector(500.f, 0.f, 0.f));
-	TestFalse(TEXT("0x10270180: and CLEARS the edge flag"), Memory.bEnemyWentOccluded);
+		F.Guard->BaseMemory.EnemyWentOccludedPosition, FVector(500.f, 0.f, 0.f));
+	TestFalse(TEXT("0x10270180: and CLEARS the edge flag"), F.Guard->BaseMemory.bEnemyWentOccluded);
 
 	// The gate is 4096.0 SQUARED in Source units, i.e. 64 units of drift.
 	const float SixtyThreeUnitsCm = 63.f * ElysiumMove::U;
 	F.Other->Origin = FVector(500.f + SixtyThreeUnitsCm, 0.f, 0.f);
 	F.Guard->UpdateEnemyWentOccluded(F.Other, true);
 	TestFalse(TEXT("0x10270180: 63 units of drift does not trip the edge"),
-		Memory.bEnemyWentOccluded);
+		F.Guard->BaseMemory.bEnemyWentOccluded);
 	const float SixtyFiveUnitsCm = 65.f * ElysiumMove::U;
 	F.Other->Origin = FVector(500.f + SixtyFiveUnitsCm, 0.f, 0.f);
 	F.Guard->UpdateEnemyWentOccluded(F.Other, true);
 	TestTrue(TEXT("0x10270180: 65 units does - the constant is 4096.0 SQUARED"),
-		Memory.bEnemyWentOccluded);
+		F.Guard->BaseMemory.bEnemyWentOccluded);
 	// A flag already set is never re-tested, so moving back does not clear it.
 	F.Other->Origin = FVector(500.f, 0.f, 0.f);
 	F.Guard->UpdateEnemyWentOccluded(F.Other, true);
-	TestTrue(TEXT("0x10270180: and a set flag is never re-tested"), Memory.bEnemyWentOccluded);
+	TestTrue(TEXT("0x10270180: and a set flag is never re-tested"), F.Guard->BaseMemory.bEnemyWentOccluded);
 
 	// `0x103cf5f0` — the werewolf's pursuit test, on a werewolf.
 	FSensesFixture WolfF(TEXT("CNPC_VWerewolf"));

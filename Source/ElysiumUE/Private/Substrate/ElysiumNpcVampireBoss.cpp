@@ -275,7 +275,7 @@ void FElysiumNpcVampireBoss::SetupJumpRise(float Enabled, float Rise)
 	}
 	const FVector SelfUnits = NpcKernelMotor2Shared::MotorTailSourceOf(Origin);
 	FVector HintUnits = FVector::ZeroVector;
-	if (!NavHintNodeOrigin(ScheduleHost.HintNode, HintUnits))
+	if (!NavHintNodeOrigin(BaseScheduleHost.HintNode, HintUnits))
 	{
 		// **SEAM**, as in `SetupSuperJump`: no hint origins.
 		return;

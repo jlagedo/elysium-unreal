@@ -449,10 +449,10 @@ bool FElysiumNpcKernelState19CopTest::RunTest(const FString&)
 	N.Cognition.Conditions.Reset();
 	N.Cognition.bCondTookDamage = true;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
-	N.Senses.Memory.LastDamageAttacker = FElysiumEntityHandle::Invalid();
+	N.BaseMemory.LastDamageAttacker = FElysiumEntityHandle::Invalid();
 	TestEqual(TEXT("103723f0 damage from someone else refuses"), N.CopSelectIdealStatePrePass(), 0);
 	TestFalse(TEXT("...but m_bCondTookDamage is cleared anyway"), N.Cognition.bCondTookDamage);
-	N.Senses.Memory.LastDamageAttacker = F.Player->Handle;
+	N.BaseMemory.LastDamageAttacker = F.Player->Handle;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
 	TestEqual(TEXT("103723f0 damage from the closest player answers COMBAT"),
 		N.CopSelectIdealStatePrePass(), 2);
@@ -568,7 +568,7 @@ bool FElysiumNpcKernelState19PedestrianTest::RunTest(const FString&)
 	// `103a2e6b`: the three damage interrupts all answer FLEE, and the arm hands slot 596 the
 	// ATTACKER, not the closest player.
 	N.WriteNpcStateRetail(1);
-	N.Senses.Memory.LastDamageAttacker = F.Player->Handle;
+	N.BaseMemory.LastDamageAttacker = F.Player->Handle;
 	TestEqual(TEXT("103a2e30 0x308 idle LIGHT_DAMAGE -> FLEE"),
 		State19TestsIdealUnderMask(N, EElysiumNpcCond::LightDamage), 8);
 	N.WriteNpcStateRetail(3);

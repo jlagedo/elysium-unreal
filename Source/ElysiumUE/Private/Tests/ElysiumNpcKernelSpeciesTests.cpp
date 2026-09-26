@@ -936,7 +936,7 @@ bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 	// --- `0x103d9c90`: the chase cache ------------------------------------------------------------
 	// `EngineFrameNumber()` answers INDEX_NONE — the named decision — so the stamp never matches and
 	// the position is recomputed on every call, which is retail's behaviour at retail's call rate.
-	Npc->Senses.Memory.Enemy = DoorA->Handle;
+	Npc->BaseMemory.Enemy = DoorA->Handle;
 	DoorA->Origin = FVector(300.0 * ElysiumMove::U, 0.0, 0.0);
 	FVector Out = FVector::ZeroVector;
 	Npc->FUN_103d9c90(Out);
@@ -950,7 +950,7 @@ bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 		FVector(500.0, 0.0, 0.0));
 	// **With no enemy the stamp is still written and the PREVIOUS point is what is answered** — the
 	// retail detail the walk leaves out.
-	Npc->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Npc->BaseMemory.Enemy = FElysiumEntityHandle();
 	Npc->FUN_103d9c90(Out);
 	TestEqual(TEXT("with no enemy the last cached point is answered, not a zero"), Out,
 		FVector(500.0, 0.0, 0.0));
@@ -1952,12 +1952,12 @@ bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
 	// runner's copy caches `m_hPotentialEnemy` from it — and every recovered dispatch site pushes
 	// `GetEnemy()`. The prologue hands the species arm this NPC's own enemy, so a live enemy is
 	// what lands in the word and a cleared one is what lands when there is none.
-	Runner->Senses.Memory.Enemy = Cop->Handle;
+	Runner->BaseMemory.Enemy = Cop->Handle;
 	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
 	Runner->Slot599(0);
 	TestEqual(TEXT("slot 599 hands the species arm GetEnemy(), which it caches"),
 		Runner->RunnerPotentialEnemy, Cop->Handle);
-	Runner->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Runner->BaseMemory.Enemy = FElysiumEntityHandle();
 	Runner->Slot599(0);
 	TestFalse(TEXT("and with no enemy the cache is cleared, retail's null arm"),
 		Runner->RunnerPotentialEnemy.IsSet());

@@ -105,9 +105,9 @@ FElysiumEntity* FElysiumNpc::GetEnemyEntity() const
 {
 	// `CAI_BaseNPC::FUN_101a67e0` `0x101a67e0`, vtable `+0x29c` (slot 167): `m_hEnemy` resolved
 	// through the global entity table, null when the handle is stale.
-	if (!Senses.Memory.Enemy.IsSet() || World == nullptr)
+	if (!BaseMemory.Enemy.IsSet() || World == nullptr)
 	{
 		return nullptr;
 	}
-	return const_cast<FElysiumEntityWorld*>(World)->Resolve(Senses.Memory.Enemy);
+	return const_cast<FElysiumEntityWorld*>(World)->Resolve(BaseMemory.Enemy);
 }

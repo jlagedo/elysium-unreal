@@ -242,7 +242,7 @@ int32 FElysiumNpcSabbatLeader::SelectScheduleMeleeCombat(int32 Unused)
 	(void)Unused;
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr);
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
 	if (!bInMelee && !Slot599(0))

@@ -233,7 +233,7 @@ bool FElysiumNpc::Slot594(FElysiumEntity* SeenTarget, int32 /*Mask*/, FElysiumEn
 	// (`bEnemyOccluded`) here. `102b479b` reads `[ESI+0x5bc5]`, which the shape map binds to
 	// `m_bEnemyWentOccluded` — the occlusion EDGE that `0x10270180` writes, a different word.
 	const bool bCombatBypass = GetMind().State() == EElysiumNpcState::Combat
-		&& !Senses.Memory.bEnemyWentOccluded;
+		&& !BaseMemory.bEnemyWentOccluded;
 	const bool bOverrideActive = NpcKernelSenses10Shared::NowOf(*this) < Senses.Memory.StealthVisionOverrideUntil;
 	if (!bCombatBypass && !bOverrideActive)
 	{
@@ -1052,7 +1052,7 @@ bool FElysiumNpc::InnateWeaponLOSCondition(const FVector& OwnerPosCm, const FVec
 			Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x66));
 			// `1026fe73`: `0x10270aa0(this, blocker)` records the blocker into `+0x5d90`
 			// `m_hEnemyOccluder`.
-			Senses.Memory.EnemyOccluder = Blocker != nullptr
+			BaseMemory.EnemyOccluder = Blocker != nullptr
 				? Blocker->Handle : FElysiumEntityHandle::Invalid();
 		}
 		return false;

@@ -228,18 +228,18 @@ bool FElysiumNpc::ApplyHintLeanOffset(FVector& InOutPointUnits, bool bStanding) 
 	// **NOT leaning left ADDS the offset and leaning left SUBTRACTS it** — retail tests
 	// `m_bLeaningLeft == 0` for the `+` arm, which reads backwards and is reproduced as written.
 	// SOURCE units throughout.
-	if (ScheduleHost.HintNode == INDEX_NONE)
+	if (BaseScheduleHost.HintNode == INDEX_NONE)
 	{
 		InOutPointUnits = FVector::ZeroVector;
 		return false;
 	}
-	HintStandPosition(ScheduleHost.HintNode, InOutPointUnits);
+	HintStandPosition(BaseScheduleHost.HintNode, InOutPointUnits);
 
 	int32 HintType = INDEX_NONE;
-	if (NavHintNodeType(ScheduleHost.HintNode, HintType) && HintType == TroikaHintTypeLean)
+	if (NavHintNodeType(BaseScheduleHost.HintNode, HintType) && HintType == TroikaHintTypeLean)
 	{
 		float Yaw = 0.f;
-		if (HintYaw(ScheduleHost.HintNode, Yaw))
+		if (HintYaw(BaseScheduleHost.HintNode, Yaw))
 		{
 			const float LeanYaw =
 				bLeaningLeft ? Yaw - TroikaHintLeanYawOffset : Yaw + TroikaHintLeanYawOffset;
@@ -287,22 +287,22 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 	// The 29c walk reads the retry gate as "retries once if dialog-flagged"; `+0x6435` is
 	// `m_bStayEntrenched` (29b's name) and that is what this reads.
 	ScheduleHost.bForceCoverLosCheck = true;
-	ScheduleHost.HintNode = FindHintNear(TroikaTacticalHintType,
+	BaseScheduleHost.HintNode = FindHintNear(TroikaTacticalHintType,
 		static_cast<uint8>(SearchType & 0xffu), IdealHintSearchRangeUnits());
 	ScheduleHost.bForceCoverLosCheck = false;
-	if (bStayEntrenched && ScheduleHost.HintNode == INDEX_NONE)
+	if (bStayEntrenched && BaseScheduleHost.HintNode == INDEX_NONE)
 	{
-		ScheduleHost.HintNode = FindHintNear(TroikaTacticalHintType,
+		BaseScheduleHost.HintNode = FindHintNear(TroikaTacticalHintType,
 			static_cast<uint8>(SearchType & 0xffu), IdealHintSearchRangeUnits());
 	}
 
-	if (ScheduleHost.HintNode != INDEX_NONE)
+	if (BaseScheduleHost.HintNode != INDEX_NONE)
 	{
 		PeekOutCount = 0;
 		ScheduleHost.FailedCoverLosChecks = 0;
-		if (!ClaimHintNode(ScheduleHost.HintNode))
+		if (!ClaimHintNode(BaseScheduleHost.HintNode))
 		{
-			ScheduleHost.HintNode = INDEX_NONE;
+			BaseScheduleHost.HintNode = INDEX_NONE;
 		}
 		else
 		{
@@ -312,10 +312,10 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 			const FElysiumEntity* Cover = (World != nullptr && ScheduleHost.HintCoverObject.IsSet())
 				? World->Resolve(ScheduleHost.HintCoverObject)
 				: nullptr;
-			if (NavHintNodeType(ScheduleHost.HintNode, HintType) && HintType == TroikaHintTypeLean
+			if (NavHintNodeType(BaseScheduleHost.HintNode, HintType) && HintType == TroikaHintTypeLean
 				&& Cover != nullptr
-				&& NavHintNodeOrigin(ScheduleHost.HintNode, HintOriginUnits)
-				&& HintYaw(ScheduleHost.HintNode, Yaw))
+				&& NavHintNodeOrigin(BaseScheduleHost.HintNode, HintOriginUnits)
+				&& HintYaw(BaseScheduleHost.HintNode, Yaw))
 			{
 				const FVector HintForward = FRotator(0.0, static_cast<double>(Yaw), 0.0).Vector();
 				const FVector Delta = (Cover->Origin / ElysiumMove::U) - HintOriginUnits;
@@ -324,7 +324,7 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 		}
 	}
 
-	if (ScheduleHost.HintNode != INDEX_NONE)
+	if (BaseScheduleHost.HintNode != INDEX_NONE)
 	{
 		const FVector ExtentsUnits = HintAttackExtentsUnits();
 		ScheduleHost.SavedSleepExtents = ExtentsUnits;
@@ -368,7 +368,7 @@ TCHAR FElysiumNpc::AdvanceAlertLevelGrade()
 		// `m_afMemory & 0x8000000` (+0x5d8c, `FElysiumNpcScheduleHost::MemoryBits`) adds one to the
 		// letter, so 'Q' becomes 'R'. The bit's name is **unrecovered**.
 		return static_cast<TCHAR>(TEXT('Q')
-			+ ((ScheduleHost.MemoryBits & 0x8000000u) != 0 ? 1 : 0));
+			+ ((BaseScheduleHost.MemoryBits & 0x8000000u) != 0 ? 1 : 0));
 	default:
 		break;
 	}
@@ -424,7 +424,7 @@ void FElysiumNpc::StopScheduledMove()
 		LastSetActivityId = ResolveLinkActivity();
 		++SetActivityIdCalls;
 	}
-	ScheduleHost.bShouldMove = false;
+	BaseScheduleHost.bShouldMove = false;
 	++NavResets;
 	ScheduleHost.DesiredMoveYaw = 0.f;
 }
@@ -1135,16 +1135,16 @@ void FElysiumNpc::StandoffVfunc5()
 	// leak the schedule kernel's own release path exists to avoid.
 	//
 	// `IsHintUnusable` and `ReleaseHintNode` are family **Hints**' bodies and are called rather than
-	// restated; `thunk_FUN_102d1450` (does this NPC own the hint) is `ScheduleHost.bOwnsHint`.
-	if (ScheduleHost.HintNode != INDEX_NONE)
+	// restated; `thunk_FUN_102d1450` (does this NPC own the hint) is `BaseScheduleHost.bOwnsHint`.
+	if (BaseScheduleHost.HintNode != INDEX_NONE)
 	{
 		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-		if (IsHintUnusable(ScheduleHost.HintNode, Now) && ScheduleHost.bOwnsHint)
+		if (IsHintUnusable(BaseScheduleHost.HintNode, Now) && BaseScheduleHost.bOwnsHint)
 		{
-			ReleaseHintNode(ScheduleHost.HintNode, 0.f);
+			ReleaseHintNode(BaseScheduleHost.HintNode, 0.f);
 		}
 	}
-	ScheduleHost.HintNode = INDEX_NONE;
+	BaseScheduleHost.HintNode = INDEX_NONE;
 	DistTooFar = StandoffDistTooFar;
 	Field_0x01fc = TroikaStandoffOwnerWord0x1fcValue;
 }

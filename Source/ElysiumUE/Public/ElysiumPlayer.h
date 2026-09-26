@@ -1106,6 +1106,16 @@ public:
 
 	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
 
+	// `m_iFloatSoundFrequency` (`+0x10e8`, keyfield `floatfreq`) and `m_flNextFloatSoundTime`
+	// (`+0x10ec`, `FIELD_TIME`): `CBaseCombatCharacter`'s two float-sound words. Every reader and
+	// writer retail has for the pair is an NPC virtual — slot 510 (`ShouldPlayFloatSound`, both
+	// halves) reads both, slot 507 (`FloatSound`, story 29d) re-arms the stamp — but the words are
+	// the combat character's, so a base-only NPC reads them without Troika storage (story 5 step 5).
+	int32 FloatSoundFrequency = 0;
+	// SEAM: the one writer is slot 507 `FloatSound` (`0x10294f40`, layer 14, story 29d), which
+	// re-arms it from the `Float_Sound_Info` rule rows.
+	double NextFloatSoundTime = 0.0;
+
 	// `trigger_stealth_mod`'s raw aggregate (retail `+0x1084`, which is a
 	// CBaseCombatCharacter offset: the trigger's own body is guarded by combat-character
 	// embodiment, not by player-ness, so every character can carry one).

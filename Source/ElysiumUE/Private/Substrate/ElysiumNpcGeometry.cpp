@@ -313,7 +313,7 @@ FVector FElysiumNpc::EyeOffset(int32 Activity, int32 /*SecondActivity*/)
 	// Note what the hint arm does NOT consult: the debug-overlay bit, the second activity, and the
 	// two special-cased activities of the base body. And note that `hint` is an UNINITIALISED stack
 	// vector on the way into `0x102d1180` — retail reads whatever the hint query leaves.
-	const int32 HintNode = ScheduleHost.HintNode;
+	const int32 HintNode = BaseScheduleHost.HintNode;
 	if (HintNode != INDEX_NONE)
 	{
 		int32 Count = 0;

@@ -280,7 +280,7 @@ FElysiumEntity* FElysiumNpc::FindNamedEntity(const TCHAR* Name)
 	if (FCString::Stricmp(Name, GSelEnemy) == 0)
 	{
 		FElysiumEntity* Enemy =
-			(World && Senses.Memory.Enemy.IsSet()) ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+			(World && BaseMemory.Enemy.IsSet()) ? World->Resolve(BaseMemory.Enemy) : nullptr;
 		return Enemy != nullptr ? Enemy : static_cast<FElysiumEntity*>(this);
 	}
 	// 4. `!self` and `!target1` — matched, and then deliberately NOT handled: retail's `if` body is
@@ -771,7 +771,7 @@ int32 FElysiumNpc::RestoreExtendedHeader(void* Archive)
 	const int32 ChainResult = 1;   // `CBaseCombatCharacter::Restore`; see `GChainRestoreResult`.
 
 	SaveStampDecode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
-	SaveStampDecode(ScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
+	SaveStampDecode(BaseScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
 
 	if (Motor != nullptr)
 	{

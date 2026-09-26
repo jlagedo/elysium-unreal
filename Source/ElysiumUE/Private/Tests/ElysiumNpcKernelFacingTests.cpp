@@ -131,14 +131,14 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 	// "0", so the authored key is the live half.
 	TestFalse(TEXT("debug_turning ships off"), Guard->TurningAnimsEnabled());
 
-	Guard->ScheduleHost.MemoryBits = 0;
+	Guard->BaseScheduleHost.MemoryBits = 0;
 	Guard->IdealActivityNumber = 0;
 	Guard->bAllowTurningAnims = false;
 	Guard->MotorIdealYawDelta = -100.f;
 	Guard->SetTurnActivity();
 	TestEqual(TEXT("with the gate closed the body still lands on ACT_IDLE"),
 		Guard->IdealActivityNumber, 1);
-	TestEqual(TEXT("and tags nothing"), static_cast<int32>(Guard->ScheduleHost.MemoryBits & 0x2000),
+	TestEqual(TEXT("and tags nothing"), static_cast<int32>(Guard->BaseScheduleHost.MemoryBits & 0x2000),
 		0);
 
 	// With the gate open the ladder runs — and stops at its tail, because the sequence seam answers
@@ -151,7 +151,7 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 	Guard->SetTurnActivity();
 	TestEqual(TEXT("so the open gate lands on ACT_IDLE too"), Guard->IdealActivityNumber, 1);
 	TestEqual(TEXT("and still tags nothing"),
-		static_cast<int32>(Guard->ScheduleHost.MemoryBits & 0x2000), 0);
+		static_cast<int32>(Guard->BaseScheduleHost.MemoryBits & 0x2000), 0);
 
 	// The motor seam: `CAI_Motor::DeltaIdealYaw` has no source, so it stands at retail's
 	// already-aligned answer.

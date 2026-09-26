@@ -25,8 +25,8 @@ struct FElysiumClassDesc;
 
 namespace ElysiumNpcKernelBindings
 {
-	enum class EClass : uint8 { BaseEntity, Toggle, Animating, CombatCharacter, Npc, NpcMaker,
-		InterestingPlace, Hint, ConversationPlace, NpcMakerZombie, AndreiBlood, Animal,
+	enum class EClass : uint8 { BaseEntity, Toggle, Animating, CombatCharacter, NpcBase, Npc,
+		NpcMaker, InterestingPlace, Hint, ConversationPlace, NpcMakerZombie, AndreiBlood, Animal,
 		AsianVampire, Bach, CameraSecurity, ChangBros, Cop, Gargoyle, GhoulCroucher, Guard1,
 		Hengeyokai, Hunter, Lasombra, ManBat, MingXiao, MingXiaoTentacle, Pedestrian, SabbatLeader,
 		Scurrying, SheriffMan, TaxiDriver, Tzimisce, TzimisceHeadClaw, TzimisceRunner, VampireBoss,
@@ -36,6 +36,7 @@ namespace ElysiumNpcKernelBindings
 	void AddToggleFields(FElysiumClassDesc& D);
 	void AddAnimatingFields(FElysiumClassDesc& D);
 	void AddCombatCharacterFields(FElysiumClassDesc& D);
+	void AddNpcBaseFields(FElysiumClassDesc& D);
 	void AddNpcFields(FElysiumClassDesc& D);
 	void AddNpcMakerFields(FElysiumClassDesc& D);
 	void AddInterestingPlaceFields(FElysiumClassDesc& D);
@@ -49,6 +50,7 @@ namespace ElysiumNpcKernelBindings
 	void AddScurryingFields(FElysiumClassDesc& D);
 	void AddVampireBossFields(FElysiumClassDesc& D);
 	void AddZombieFields(FElysiumClassDesc& D);
+	void AddNpcBaseSaveFields(FElysiumClassDesc& D);
 	void AddNpcSaveFields(FElysiumClassDesc& D);
 	void AddAndreiBloodSaveFields(FElysiumClassDesc& D);
 	void AddAnimalSaveFields(FElysiumClassDesc& D);

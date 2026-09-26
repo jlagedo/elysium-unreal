@@ -320,7 +320,7 @@ bool FElysiumNpc::FindHintNode(int32 HintType, uint8 SearchFlags)
 {
 	// `0x10365780` — the task-side hint install.
 	const int32 Node = FindHintNear(HintType, SearchFlags, 5000.0f);
-	ScheduleHost.HintNode = Node;   // `m_pHintNode +0x5ddc` is written on BOTH paths
+	BaseScheduleHost.HintNode = Node;   // `m_pHintNode +0x5ddc` is written on BOTH paths
 	if (Node != INDEX_NONE)
 	{
 		// `thunk_FUN_10273e80(this, '\0')` — `TaskComplete(false)`.
@@ -387,8 +387,8 @@ void FElysiumNpc::SetHintGroup(const FString& NewHintGroup)
 	// `0x102781e0`. Retail reads the old `m_strHintGroup` (`+0x5db0`), assigns the new one, and
 	// dispatches slot 551 `OnChangeHintGroup(old, new)` — vtable `+0x89c`, `0x89c / 4 == 551` —
 	// ONLY when the two differ. Both arguments are the string_t values, old first.
-	const FString Old = ScheduleHost.HintGroup;
-	ScheduleHost.HintGroup = NewHintGroup;
+	const FString Old = BaseScheduleHost.HintGroup;
+	BaseScheduleHost.HintGroup = NewHintGroup;
 	if (!Old.Equals(NewHintGroup, ESearchCase::CaseSensitive))
 	{
 		// NAMED MODERNIZATION, one word wide: retail compares the two `string_t` POINTERS, so two
@@ -407,7 +407,7 @@ bool FElysiumNpc::PlayHintIdleActivity(double Now)
 	LastAttackTime = Now;
 
 	FHintWords Hint;
-	const bool bResolved = HintWords(ScheduleHost.HintNode, Hint);
+	const bool bResolved = HintWords(BaseScheduleHost.HintNode, Hint);
 	if (bResolved)
 	{
 		// Three typed arms, each gated on `0x102b5de0`. A gate that FAILS returns the gate's own
@@ -539,7 +539,7 @@ void FElysiumNpc::ClaimInterestingPlace(FElysiumInterestingPlace* Place, bool bC
 
 	// 5. `m_flWaitFinished` (`+0x5db4`), UNCONDITIONALLY and after both arms: the place's own
 	//    `m_fMinStayTime` / `m_fMaxStayTime` (`+0x568` / `+0x56c`).
-	ScheduleHost.WaitFinished = Now + Stream.FRandRange(Place->MinTime, Place->MaxTime);
+	BaseScheduleHost.WaitFinished = Now + Stream.FRandRange(Place->MinTime, Place->MaxTime);
 
 	// 6. `thunk_FUN_102e0b40(m_pMotor)` — the motor's yaw hold.
 	ReleaseMotorHintYaw();
@@ -587,7 +587,7 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 			// the wait immediately, and consume `INTERESTING_LOST` if it is standing.
 			NpcFlags.Clear(EElysiumNpcFlag::INTERESTING_INTO);
 			MoveToBoneOriginAngles(TEXT("Bip01"), /*bMoveOrigin=*/false, /*bMoveAngles=*/true);
-			ScheduleHost.WaitFinished = Now;
+			BaseScheduleHost.WaitFinished = Now;
 			if (NpcFlags.Has(EElysiumNpcFlag2::INTERESTING_LOST))
 			{
 				bFinished = true;
@@ -644,7 +644,7 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 	}
 
 	// The wait's end. `INTERESTING_LOST` short-circuits the deadline.
-	if (Now >= ScheduleHost.WaitFinished || NpcFlags.Has(EElysiumNpcFlag2::INTERESTING_LOST))
+	if (Now >= BaseScheduleHost.WaitFinished || NpcFlags.Has(EElysiumNpcFlag2::INTERESTING_LOST))
 	{
 		if (NpcFlags.Has(EElysiumNpcFlag::INTERESTING_INTO))
 		{
@@ -665,7 +665,7 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 				AmbientPhase = EAmbientPhase::Out;                 // `+0x6304 = 3`
 				RestartIdealActivityId(Activity);
 				AmbientNextActivityAt = GHintsNoActivityRefresh;
-				ScheduleHost.WaitFinished = Now + GHintsInterestOutOfWaitSeconds;
+				BaseScheduleHost.WaitFinished = Now + GHintsInterestOutOfWaitSeconds;
 			}
 		}
 		else

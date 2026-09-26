@@ -129,30 +129,6 @@ namespace ElysiumNpcKernelClass
 	}
 }
 
-// --- The leaf's own answer ----------------------------------------------------------------------
-
-const FElysiumNpcClass* FElysiumNpc::RetailClass() const
-{
-	// The C++ class is the answer: the classname's factory built it (story 5 step 2), so nothing
-	// here reads the classname. The test latch stands only for the enumerated deferred classes.
-	return bRetailClassForTests ? RetailClassForTests : OwnRetailClass();
-}
-
-const FElysiumNpcClass* FElysiumNpc::OwnRetailClass() const
-{
-	return nullptr;
-}
-
-bool FElysiumNpc::IsRetailClass(const TCHAR* RetailClassName) const
-{
-	return ElysiumNpcKernelClass::DerivesFrom(RetailClass(), RetailClassName);
-}
-
-bool FElysiumNpc::OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const
-{
-	return ElysiumNpcKernelClass::DerivesFrom(OwnRetailClass(), RetailClassName);
-}
-
 // --- The two hull words -------------------------------------------------------------------------
 
 void FElysiumNpc::ApplyRetailHulls()

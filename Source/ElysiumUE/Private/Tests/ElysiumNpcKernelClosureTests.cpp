@@ -656,9 +656,9 @@ bool FElysiumNpcKernelClosureCoverReloadTest::RunTest(const FString&)
 	TestEqual(TEXT("COWER_PATH short-circuits slot 569 to ACT_COVER_LOW, unconditionally"),
 		N.GetCoverActivity(nullptr), GClosureTestActCoverLow);
 	// Not even a hint changes it: retail returns before it looks at `param_1`.
-	N.ScheduleHost.HintNode = 7;
+	N.BaseScheduleHost.HintNode = 7;
 	TestEqual(TEXT("...ahead of the hint arm"), N.GetCoverActivity(&N), GClosureTestActCoverLow);
-	N.ScheduleHost.HintNode = INDEX_NONE;
+	N.BaseScheduleHost.HintNode = INDEX_NONE;
 	N.NpcFlags.Clear(EElysiumNpcFlag::COWER_PATH);
 
 	// Without the flag and without a hint, retail falls straight through the three crunch-idle arms
@@ -691,13 +691,13 @@ bool FElysiumNpcKernelClosureCoverReloadTest::RunTest(const FString&)
 	// The hint argument. THERE IS NO HINT NODE IN THIS SUBSTRATE, so family Hints' seam answers
 	// false and the hint type is `INDEX_NONE` whichever pointer arrives — which takes retail's
 	// `param_1 == 0` arm. Asserted rather than worked around; every retail call site passes
-	// `m_pHintNode`, which is `ScheduleHost.HintNode` here.
+	// `m_pHintNode`, which is `BaseScheduleHost.HintNode` here.
 	FElysiumNpc::FHintWords Words;
-	N.ScheduleHost.HintNode = 3;
-	TestFalse(TEXT("the hint store seam refuses"), N.HintWords(N.ScheduleHost.HintNode, Words));
+	N.BaseScheduleHost.HintNode = 3;
+	TestFalse(TEXT("the hint store seam refuses"), N.HintWords(N.BaseScheduleHost.HintNode, Words));
 	TestEqual(TEXT("so a non-null hint still takes the no-hint arm"), N.GetReloadActivity(&N),
 		GClosureTestActReloadFast);
-	N.ScheduleHost.HintNode = INDEX_NONE;
+	N.BaseScheduleHost.HintNode = INDEX_NONE;
 	return true;
 }
 

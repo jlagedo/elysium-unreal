@@ -289,7 +289,7 @@ int32 FElysiumNpcHuman::HumanNpcEarlyTranslateActivity(int32 Activity)
 				? ElysiumNpcTunables::ConVarInt(GAnim10CvAlert)   // `debug_alert_aggressive`, 0
 				: ElysiumNpcTunables::ConVarInt(GAnim10CvHunt);   // `debug_hunting_aggressive`, 1
 			const bool bMemory =
-				(ScheduleHost.MemoryBits & GAnim10MemoryAggressive) != 0;
+				(BaseScheduleHost.MemoryBits & GAnim10MemoryAggressive) != 0;
 			if (StateConVar != 0 || bMemory)
 			{
 				bAggressiveAnims = true;

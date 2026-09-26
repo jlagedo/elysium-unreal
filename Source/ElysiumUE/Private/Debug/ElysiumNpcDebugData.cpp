@@ -168,11 +168,11 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 		HearingCategory = Memory.BestSound.Category.ToString();
 	}
 
-	bHasEnemy = Memory.Enemy.IsSet();
-	Enemy = HandleLabel(World, Memory.Enemy);
+	bHasEnemy = Npc.BaseMemory.Enemy.IsSet();
+	Enemy = HandleLabel(World, Npc.BaseMemory.Enemy);
 	bEnemyOccluded = Memory.bEnemyOccluded;
 	EnemyLosFailures = Memory.EnemyLosFailures;
-	if (const FElysiumEntity* EnemyEntity = ElysiumNpcCond::ResolveEnemyHandle(World, Memory.Enemy))
+	if (const FElysiumEntity* EnemyEntity = ElysiumNpcCond::ResolveEnemyHandle(World, Npc.BaseMemory.Enemy))
 	{
 		EnemyPosition = EnemyEntity->EyePosition();
 	}

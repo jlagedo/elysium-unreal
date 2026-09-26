@@ -330,7 +330,7 @@ bool FElysiumNpcKernelSoundsOkToMakeSoundTest::RunTest(const FString&)
 
 	// `0x102b4c10`: twenty-four bytes, `return !IsInDialog();`. Nothing else gags a Troika NPC —
 	// the sound-wait clock the base body reads is not consulted at all.
-	F.Npc->Senses.Memory.SoundWaitTime = Now + 100.0;
+	F.Npc->BaseMemory.SoundWaitTime = Now + 100.0;
 	TestTrue(TEXT("the Troika gate ignores the sound-wait clock"), F.Npc->FOkToMakeSound());
 
 	F.Npc->TalkingUntil = Now + 5.0;
@@ -343,12 +343,12 @@ bool FElysiumNpcKernelSoundsOkToMakeSoundTest::RunTest(const FString&)
 
 	// `0x1027a5c0`, the base half: the clock first, and the comparison is `<=` (the `AND 0x4100`
 	// mask at `1027a5d8` carries the equal bit), so a sound at exactly the deadline is refused.
-	F.Npc->Senses.Memory.SoundWaitTime = Now + 100.0;
+	F.Npc->BaseMemory.SoundWaitTime = Now + 100.0;
 	TestFalse(TEXT("the base gate refuses inside the sound-wait window"),
 		F.Npc->BaseFOkToMakeSound());
-	F.Npc->Senses.Memory.SoundWaitTime = Now;
+	F.Npc->BaseMemory.SoundWaitTime = Now;
 	TestFalse(TEXT("...and refuses at exactly the deadline"), F.Npc->BaseFOkToMakeSound());
-	F.Npc->Senses.Memory.SoundWaitTime = Now - 0.001;
+	F.Npc->BaseMemory.SoundWaitTime = Now - 0.001;
 	TestTrue(TEXT("...and allows past it"), F.Npc->BaseFOkToMakeSound());
 
 	// `SF_NPC_GAG` (`m_spawnflags & 2`) plus `m_NPCState != NPC_STATE_COMBAT`. Idle is the
@@ -365,7 +365,7 @@ bool FElysiumNpcKernelSoundsOkToMakeSoundTest::RunTest(const FString&)
 	TestTrue(TEXT("the squad the second gate reads is not built yet"),
 		F.Npc->ConnectedSquad() == nullptr);
 	TestEqual(TEXT("and the NPC is squad-connected as far as the test goes"),
-		F.Npc->ScheduleHost.SquadDisconnected, 0);
+		F.Npc->BaseScheduleHost.SquadDisconnected, 0);
 	return true;
 }
 
@@ -391,9 +391,9 @@ bool FElysiumNpcKernelSoundsJustMadeSoundTest::RunTest(const FString&)
 	bool bInRange = true;
 	for (int32 Pass = 0; Pass < 256; ++Pass)
 	{
-		F.Npc->Senses.Memory.SoundWaitTime = 0.0;
+		F.Npc->BaseMemory.SoundWaitTime = 0.0;
 		F.Npc->JustMadeSound();
-		const double Wait = F.Npc->Senses.Memory.SoundWaitTime - Now;
+		const double Wait = F.Npc->BaseMemory.SoundWaitTime - Now;
 		bInRange &= (Wait >= 0.25 - KINDA_SMALL_NUMBER) && (Wait <= 0.75 + KINDA_SMALL_NUMBER);
 		Low = FMath::Min(Low, Wait);
 		High = FMath::Max(High, Wait);
@@ -407,9 +407,9 @@ bool FElysiumNpcKernelSoundsJustMadeSoundTest::RunTest(const FString&)
 	High = -TNumericLimits<double>::Max();
 	for (int32 Pass = 0; Pass < 256; ++Pass)
 	{
-		F.Npc->Senses.Memory.SoundWaitTime = 0.0;
+		F.Npc->BaseMemory.SoundWaitTime = 0.0;
 		F.Npc->BaseJustMadeSound();
-		const double Wait = F.Npc->Senses.Memory.SoundWaitTime - Now;
+		const double Wait = F.Npc->BaseMemory.SoundWaitTime - Now;
 		bInRange &= (Wait >= 1.5 - KINDA_SMALL_NUMBER) && (Wait <= 2.0 + KINDA_SMALL_NUMBER);
 		Low = FMath::Min(Low, Wait);
 		High = FMath::Max(High, Wait);

@@ -90,6 +90,18 @@ static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FEl
 static TUniquePtr<FElysiumEntity> MakeHint()      { return MakeUnique<FElysiumHint>(); }
 static TUniquePtr<FElysiumEntity> MakeConversationPlace() { return MakeUnique<FElysiumConversationPlace>(); }
 
+// `CAI_BaseNPC`'s own surface (story 5 step 5): its datamap's keyed fields and SAVE walk, on the
+// base's abstract descriptor, so the Troika line and every class beneath it inherit them.
+static void BuildNpcBaseClass(FElysiumClassDesc& D)
+{
+	ElysiumNpcKernelBindings::AddNpcBaseFields(D);
+	ElysiumNpcKernelBindings::AddNpcBaseSaveFields(D);
+
+	// The remaining map-fired gap is 8 `SetScriptedDiscipline` wires across the exported maps, all
+	// of them aimed at an `npc_*` receiver.
+	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FElysiumNpcBase, SetScriptedDiscipline, "P13 — disciplines");
+}
+
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
 	ElysiumNpcKernelBindings::AddNpcFields(D);
@@ -156,10 +168,6 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	D.Input(TEXT("TweakParam"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputTweakParam(Args); });
 
-	// The remaining map-fired gap is 8 `SetScriptedDiscipline` wires across the exported maps, all
-	// of them aimed at an `npc_*` receiver.
-	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, SetScriptedDiscipline, "P13 — disciplines");
-
 	// `TakeDamage` — 4 map wires, plus the same name as a Character method the script surface
 	// dispatches (K1: two bindings, one implementation). The wire's own datamap record is
 	// unrecovered, so its argument's FIELD TYPE is a genuine unknown; what the corpus passes is a
@@ -214,10 +222,8 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// them that retail's datamap also carries. The restore-time clamp the stance index had here is
 	// gone with them: `FElysiumStanceState::Current` addresses a three-slot array, and the
 	// selector is what validates it, the same way retail's reader does.
-	// `floatfreq` -> `m_iFloatSoundFrequency` (`CBaseCombatCharacter +0x10e8`, `fieldType 0`): the
-	// authored "the float sound plays 1 time in X" frequency both halves of slot 510 roll against
-	// (`Substrate/ElysiumNpcSounds.cpp`). 0 and 8 disable the hook.
-	ElysiumAddClassField(D, TEXT("floatfreq"), &FElysiumNpc::FloatSoundFrequency, EElysiumField::Save);
+	// `floatfreq` -> `m_iFloatSoundFrequency` (`CBaseCombatCharacter +0x10e8`) is the combat
+	// character's own row (`AddCombatCharacterFields`, story 5 step 5).
 
 	// --- Combat: the three authored loadout keyfields ---
 	// `additionalequipment` (267 authored rows), `alternateequipment` (184) and `cantdropweapons`
@@ -269,9 +275,10 @@ static void BuildNpcMakerClass(FElysiumClassDesc& D)
 // factory builds for it (`story-5/factories.tsv`, replayed from the 74 factories); two retail
 // classes carry two classnames each (`CNPC_VPedestrian`, `CNPC_ProneDialog`). Above the classnames
 // stand the retail classes as abstract descriptors, chained as retail derives them, so a row a
-// class declares is reached by exactly its descendants. `CAI_BaseNPCTroika` is the combined
-// `CAI_BaseNPC`/`CAI_BaseNPCTroika` projection until step 5 separates the two; the NPC surface
-// `BuildNpcClass` registers is written there once.
+// class declares is reached by exactly its descendants. `CAI_BaseNPC` stands under the combat
+// character and `CAI_BaseNPCTroika` beneath it (story 5 step 5); the NPC surface `BuildNpcClass`
+// registers is split the same way: `BuildNpcBaseClass` for the base's rows, `BuildNpcClass` for the
+// Troika's.
 //
 // The census (`Substrate/ElysiumNpcKernelShape.cpp`) is the same tree read as data; each species
 // class answers its own row (`FElysiumNpc::OwnRetailClass`).
@@ -483,8 +490,10 @@ struct FElysiumNpcRegistrar
 			ElysiumBaseClassName(), &MakeInterestingPlace));
 
 		// CAI_BaseNPC's place in VtMB's chain: under CBaseCombatCharacter, which is under
-		// CBaseAnimating. The sheet, the counters and the body all arrive through it.
-		BuildNpcClass(Reg.RegisterAbstract(TEXT("CAI_BaseNPCTroika"), ElysiumCombatCharacterClassName()));
+		// CBaseAnimating. The sheet, the counters and the body all arrive through it; the Troika
+		// line stands beneath it, as retail's `CAI_BaseNPCTroika` derives from `CAI_BaseNPC`.
+		BuildNpcBaseClass(Reg.RegisterAbstract(TEXT("CAI_BaseNPC"), ElysiumCombatCharacterClassName()));
+		BuildNpcClass(Reg.RegisterAbstract(TEXT("CAI_BaseNPCTroika"), TEXT("CAI_BaseNPC")));
 		for (const FElysiumNpcRetailClassRow& Row : GNpcRetailClasses)
 		{
 			FElysiumClassDesc& D = Reg.RegisterAbstract(FName(Row.RetailClass), FName(Row.RetailBase));

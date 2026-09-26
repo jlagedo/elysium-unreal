@@ -459,7 +459,7 @@ void FElysiumNpc::NavigatorDoorCleanup()
 	{
 		NavStopMoving();
 	}
-	ScheduleHost.bShouldMove = true;                                     // +0x1a40
+	BaseScheduleHost.bShouldMove = true;                                     // +0x1a40
 }
 
 void FElysiumNpc::BaseSlot532(int32 FailureBits)
@@ -817,7 +817,7 @@ FString FElysiumNpc::BuildConditionDebugString(const TCHAR* Message, int32 Inden
 	FString Nav;
 	if (bBuildBlocks)
 	{
-		MemoryLadder = DebugMaskLadder(GCond10MemoryLegend, ScheduleHost.MemoryBits,
+		MemoryLadder = DebugMaskLadder(GCond10MemoryLegend, BaseScheduleHost.MemoryBits,
 			GCond10MemoryLadderBits);                                    // +0x5d8c
 		FlagsLadder = DebugMaskLadder(GCond10FlagsLegend, NpcFlags.RawWord1(),
 			GCond10FlagsLadderBits);                                     // +0x14b8

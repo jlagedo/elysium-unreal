@@ -66,7 +66,7 @@ bool ElysiumNpcEnemy::RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, d
 	{
 		return false;
 	}
-	const FElysiumEntityHandle Current = Npc.Senses.Memory.Enemy;
+	const FElysiumEntityHandle Current = Npc.BaseMemory.Enemy;
 	const FElysiumEntity* CurrentEntity = World->Resolve(Current);
 	if (CurrentEntity != nullptr && Npc.EnemyMemory.Find(Dmg.Source) == nullptr
 		&& !Npc.Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy))
@@ -88,17 +88,17 @@ bool ElysiumNpcEnemy::RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, d
 bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpc& Npc, const FElysiumNpcConditions& Cond)
 {
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (!Memory.Enemy.IsSet() || Npc.World == nullptr)
+	if (!Npc.BaseMemory.Enemy.IsSet() || Npc.World == nullptr)
 	{
 		return true;
 	}
 	const FElysiumEntity* Enemy =
-		ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Memory.Enemy);
+		ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.BaseMemory.Enemy);
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		return true;   // the actor is dead, or gone; this is the same pass that noticed it
 	}
-	if (Npc.EnemyMemory.IsEluded(Memory.Enemy))
+	if (Npc.EnemyMemory.IsEluded(Npc.BaseMemory.Enemy))
 	{
 		return true;
 	}
@@ -112,11 +112,11 @@ bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpc& Npc, const FElysiu
 EElysiumNpcCond ElysiumNpcEnemy::RequiredInterrupt(const FElysiumNpc& Npc)
 {
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (Memory.Enemy.IsSet() && Npc.World != nullptr)
+	if (Npc.BaseMemory.Enemy.IsSet() && Npc.World != nullptr)
 	{
 		const FElysiumEntity* Enemy =
-			ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Memory.Enemy);
-		if (Enemy == nullptr || Npc.EnemyMemory.IsEluded(Memory.Enemy))
+			ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.BaseMemory.Enemy);
+		if (Enemy == nullptr || Npc.EnemyMemory.IsEluded(Npc.BaseMemory.Enemy))
 		{
 			return EElysiumNpcCond::LostEnemy;   // eluded, or the handle went null
 		}
@@ -174,12 +174,12 @@ FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 void ElysiumNpcEnemy::SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& NewEnemy)
 {
 	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	const FElysiumEntityHandle Old = Memory.Enemy;
+	const FElysiumEntityHandle Old = Npc.BaseMemory.Enemy;
 	if (Old.IsSet())
 	{
-		Memory.LastEnemy = Old;   // the old handle goes through the last-enemy path first
+		Npc.BaseMemory.LastEnemy = Old;   // the old handle goes through the last-enemy path first
 	}
-	Memory.Enemy = NewEnemy;
+	Npc.BaseMemory.Enemy = NewEnemy;
 
 	// "forgets the previous LOS claim": the debounce, its occlusion flag and the edge latch all
 	// belong to ONE acquisition episode, so a new enemy starts a new one. Without this the found
@@ -242,7 +242,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 			// but is the ordinary steady state of every civilian in the corpus — warning on it
 			// would report the game working as a fault, and one map's cast would bury the real one.
 			if (Required == EElysiumNpcCond::LostEnemy
-				&& ElysiumNpcCond::ResolveEnemyHandle(*World, Memory.Enemy) == nullptr)
+				&& ElysiumNpcCond::ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy) == nullptr)
 			{
 				UE_LOG(LogElysiumNpcEnt, Warning,
 					TEXT("%s lost its enemy to a null handle and the active schedule %s (0x%x) does "
@@ -256,7 +256,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 	// A pass that got through the gate clears the latch: the next refusal, even by the same
 	// schedule, is a fresh episode rather than one already reported.
 	Npc.Cognition.StarvedScheduleNumber = -1;
-	const FElysiumEntityHandle Old = Memory.Enemy;
+	const FElysiumEntityHandle Old = Npc.BaseMemory.Enemy;
 	const FElysiumEntity* OldEntity = ElysiumNpcCond::ResolveEnemyHandle(*World, Old);
 	const bool bOldWentNull = Old.IsSet() && OldEntity == nullptr;
 	const bool bOldDead = OldEntity != nullptr && OldEntity->IsInert();
@@ -298,12 +298,12 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 	// last-seen record the previous target owned, which no longer describes the committed one.
 	if (bOldWentNull || bOldEluded || bOldDead)
 	{
-		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcMemory::ESeen::Count); ++i)
+		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Count); ++i)
 		{
-			if (Memory.LastSeen[i].IsSet() && Memory.LastSeen[i] == Old)
+			if (Npc.BaseMemory.LastSeen[i].IsSet() && Npc.BaseMemory.LastSeen[i] == Old)
 			{
-				Memory.LastSeen[i] = FElysiumEntityHandle::Invalid();
-				Memory.LastSeenTime[i] = -1.0;
+				Npc.BaseMemory.LastSeen[i] = FElysiumEntityHandle::Invalid();
+				Npc.BaseMemory.LastSeenTime[i] = -1.0;
 			}
 		}
 	}
@@ -375,10 +375,10 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	{
 		Npc.EnemyMemory.Refresh(*Npc.World, Now);
 	}
-	if (Npc.Senses.Memory.Enemy.IsSet() && Npc.World)
+	if (Npc.BaseMemory.Enemy.IsSet() && Npc.World)
 	{
 		const FElysiumEntity* Enemy = ElysiumNpcCond::ResolveEnemyHandle(*Npc.World,
-			Npc.Senses.Memory.Enemy);
+			Npc.BaseMemory.Enemy);
 		if (Enemy != nullptr && Enemy->IsInert())
 		{
 			Cond.Set(EElysiumNpcCond::EnemyDead);
@@ -393,7 +393,7 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	//    address but decodes no body. The one invariant the surrounding transaction depends on is
 	//    reproduced — `NEW_ENEMY` cannot stand with no enemy to be new — and nothing else is
 	//    invented. Decompiling `0x1026fb40` settles what else it repairs.
-	if (!Npc.Senses.Memory.Enemy.IsSet())
+	if (!Npc.BaseMemory.Enemy.IsSet())
 	{
 		Cond.Clear(EElysiumNpcCond::NewEnemy);
 	}
@@ -410,8 +410,8 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	// `ElysiumNpcCond::GatherAttackConditions` (story 5 step 3 — the pass used to call the base body
 	// directly, so Bach's block never ran from it).
 	{
-		FElysiumEntity* const EnemyEntity = Npc.World != nullptr && Npc.Senses.Memory.Enemy.IsSet()
-			? Npc.World->Resolve(Npc.Senses.Memory.Enemy)
+		FElysiumEntity* const EnemyEntity = Npc.World != nullptr && Npc.BaseMemory.Enemy.IsSet()
+			? Npc.World->Resolve(Npc.BaseMemory.Enemy)
 			: nullptr;
 		const float DistanceUnits = EnemyEntity != nullptr
 			? static_cast<float>(FVector::Dist(Npc.Origin, EnemyEntity->Origin) / ElysiumMove::U)

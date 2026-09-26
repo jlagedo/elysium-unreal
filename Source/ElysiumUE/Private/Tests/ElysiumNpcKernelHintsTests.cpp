@@ -574,13 +574,13 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 
 	// `SetHintGroup` (`0x102781e0`) — the write always lands; the slot-551 dispatch only on a change.
 	Npc->SetHintGroup(TEXT("alpha"));
-	TestEqual(TEXT("SetHintGroup writes m_strHintGroup"), Npc->ScheduleHost.HintGroup,
+	TestEqual(TEXT("SetHintGroup writes m_strHintGroup"), Npc->BaseScheduleHost.HintGroup,
 		FString(TEXT("alpha")));
 	Npc->SetHintGroup(TEXT("alpha"));
-	TestEqual(TEXT("re-setting the same group leaves it"), Npc->ScheduleHost.HintGroup,
+	TestEqual(TEXT("re-setting the same group leaves it"), Npc->BaseScheduleHost.HintGroup,
 		FString(TEXT("alpha")));
 	Npc->SetHintGroup(TEXT("beta"));
-	TestEqual(TEXT("and a change writes the new one"), Npc->ScheduleHost.HintGroup,
+	TestEqual(TEXT("and a change writes the new one"), Npc->BaseScheduleHost.HintGroup,
 		FString(TEXT("beta")));
 	return true;
 }
@@ -633,7 +633,7 @@ bool FElysiumNpcKernelHintsInterestTest::RunTest(const FString&)
 	Spot->MaxTime = 4.0f;   // a degenerate range pins the deadline exactly
 	Npc->ClaimInterestingPlace(Spot, /*bClaimSecondary=*/false, 100.0);
 	TestEqual(TEXT("the wait deadline is curtime + RandomFloat(min_time, max_time)"),
-		Npc->ScheduleHost.WaitFinished, 104.0, 0.001);
+		Npc->BaseScheduleHost.WaitFinished, 104.0, 0.001);
 	TestTrue(TEXT("the place is claimed"), Spot->IsEnabledFor(Npc->Handle));
 	TestFalse(TEXT("no INTO activity means INTERESTING_INTO is NOT raised"),
 		Npc->NpcFlags.Has(EElysiumNpcFlag::INTERESTING_INTO));
@@ -728,23 +728,23 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// `FindHintNode` (`0x10365780`) — the miss arm: `m_pHintNode` is written on BOTH paths, then
 	// `TaskFail(4)`.
 	AddExpectedError(TEXT("TaskFail 0x4"), EAutomationExpectedErrorFlags::Contains, 0);
-	Npc->ScheduleHost.HintNode = 5;
+	Npc->BaseScheduleHost.HintNode = 5;
 	Npc->ScheduleHost.FailureReason = 0;
 	TestFalse(TEXT("FindHintNode misses"), Npc->FindHintNode(15000, 0));
 	TestEqual(TEXT("and still clears m_pHintNode, as retail's unconditional store does"),
-		Npc->ScheduleHost.HintNode, int32(INDEX_NONE));
+		Npc->BaseScheduleHost.HintNode, int32(INDEX_NONE));
 	TestEqual(TEXT("and fails the task with retail's reason 4"),
 		Npc->ScheduleHost.FailureReason, 4);
 
 	// `SelectTzimisceHintNode` (`0x103bfa50`) — the null-target arm zeroes the hint, and a
 	// double miss returns 0 without touching it.
-	Tzim->ScheduleHost.HintNode = 5;
+	Tzim->BaseScheduleHost.HintNode = 5;
 	TestEqual(TEXT("a null target answers 0"), Tzim->SelectTzimisceHintNode(nullptr), 0);
-	TestEqual(TEXT("and zeroes m_pHintNode"), Tzim->ScheduleHost.HintNode, int32(INDEX_NONE));
-	Tzim->ScheduleHost.HintNode = 5;
+	TestEqual(TEXT("and zeroes m_pHintNode"), Tzim->BaseScheduleHost.HintNode, int32(INDEX_NONE));
+	Tzim->BaseScheduleHost.HintNode = 5;
 	TestEqual(TEXT("two missed searches also answer 0"), Tzim->SelectTzimisceHintNode(Tzim), 0);
 	TestEqual(TEXT("but leave m_pHintNode alone — only the null-target arm clears it"),
-		Tzim->ScheduleHost.HintNode, 5);
+		Tzim->BaseScheduleHost.HintNode, 5);
 
 	// The two cover forwards. `0x10297430` refuses before calling the validator when the handle is
 	// unset; `0x102974f0` has no such pre-check but still cannot resolve a hint.

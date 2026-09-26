@@ -196,7 +196,7 @@ FElysiumEntity* FElysiumNpc::GetEnemy() const
 	{
 		return nullptr;
 	}
-	return World->Resolve(Senses.Memory.Enemy);
+	return World->Resolve(BaseMemory.Enemy);
 }
 
 FElysiumEntity* FElysiumNpc::GetEnemy()
@@ -220,7 +220,7 @@ FElysiumEntity* FElysiumNpc::GetEnemy()
 	FElysiumEntity* Live = static_cast<const FElysiumNpc*>(this)->GetEnemy();
 	if (Live == nullptr && (NpcStateFlags() & GStateFlagLastEnemyFallback) != 0)
 	{
-		return World != nullptr ? World->Resolve(Senses.Memory.LastEnemy) : nullptr;
+		return World != nullptr ? World->Resolve(BaseMemory.LastEnemy) : nullptr;
 	}
 	return Live;
 }
@@ -259,7 +259,7 @@ void* FElysiumNpc::GetEnemies()
 	// The shape map's own note on `+0x5d88` states the redirection this answers: "squad redirection
 	// replaces the ownership, not the object". Until a squad store lands, `EnemyMemory` IS the
 	// connected answer.
-	if (ScheduleHost.SquadDisconnected < 1)
+	if (BaseScheduleHost.SquadDisconnected < 1)
 	{
 		return &EnemyMemory;
 	}
@@ -377,7 +377,7 @@ void FElysiumNpc::OnListened()
 	};
 	for (const FSnapshot& Row : Snapshots)
 	{
-		if (!Senses.HeardConditions.Has(Row.Heard))
+		if (!HeardConditions.Has(Row.Heard))
 		{
 			continue;
 		}
@@ -598,7 +598,7 @@ void FElysiumNpc::OnDoorBlocked(FElysiumEntity& Door)
 	//      SetSquadFocus(door); }` — keep the squad looking at the obstruction, but only change it
 	//      when it is not already the door. The squad object is a seam, so `ConnectedSquad()` is
 	//      null and the whole arm is skipped, which is retail's answer for a squadless NPC.
-	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
+	if (BaseScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
 	{
 		if (SquadFocus() != &Door)
 		{
@@ -647,24 +647,24 @@ void FElysiumNpc::UpdateEnemyWentOccluded(const FElysiumEntity* Enemy, bool bHav
 	FElysiumNpcMemory& Memory = Senses.Memory;
 	if (Enemy == nullptr)
 	{
-		Memory.EnemyWentOccludedPosition = FVector::ZeroVector;
-		Memory.bEnemyWentOccluded = bHaveLos;
+		BaseMemory.EnemyWentOccludedPosition = FVector::ZeroVector;
+		BaseMemory.bEnemyWentOccluded = bHaveLos;
 		return;
 	}
 	if (!bHaveLos)
 	{
-		Memory.EnemyWentOccludedPosition = Enemy->Origin;
-		Memory.bEnemyWentOccluded = false;
+		BaseMemory.EnemyWentOccludedPosition = Enemy->Origin;
+		BaseMemory.bEnemyWentOccluded = false;
 		return;
 	}
-	if (Memory.bEnemyWentOccluded)
+	if (BaseMemory.bEnemyWentOccluded)
 	{
 		return;
 	}
 	const float LimitCm = GEnemyWentOccludedDistanceSqUnits * ElysiumMove::U * ElysiumMove::U;
-	if (FVector::DistSquared(Memory.EnemyWentOccludedPosition, Enemy->Origin) > LimitCm)
+	if (FVector::DistSquared(BaseMemory.EnemyWentOccludedPosition, Enemy->Origin) > LimitCm)
 	{
-		Memory.bEnemyWentOccluded = true;
+		BaseMemory.bEnemyWentOccluded = true;
 	}
 }
 

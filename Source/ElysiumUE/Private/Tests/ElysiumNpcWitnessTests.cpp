@@ -822,7 +822,7 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 		// The ordinary enemy transaction does the rest, on the next pass and through its own gate.
 		F.LookAndGather(0.1);
 		TestTrue(TEXT("the enemy transaction commits the player as the enemy"),
-			F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+			F.Guard->BaseMemory.Enemy == F.Player->Handle);
 		{
 			FElysiumNpcConditions Mask;
 			Mask.Set(ECond::NewEnemy);

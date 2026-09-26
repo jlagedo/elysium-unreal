@@ -141,7 +141,7 @@ int32 FElysiumNpc::RangedWeaponPrePass()
 		// `102b867e`: `thunk_FUN_102c54c0(this)` — unported, counted.
 		++RangedReloadPrepCalls;
 		// `102b8692`: `m_pHintNode` (`+0x5ddc`) decides which reload program.
-		if (ScheduleHost.HintNode == 0)
+		if (BaseScheduleHost.HintNode == 0)
 		{
 			RecordScheduleEvent(FString::Printf(
 				TEXT("RangedWeaponPrePass %s:%d -> 0xc4"), GTroikaFile, 0x5e8f));

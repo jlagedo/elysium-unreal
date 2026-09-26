@@ -76,7 +76,7 @@ bool FElysiumNpcScheduleHost::IsTaskIndexCurrent(const FElysiumScheduleState& St
 // makes the substitution a same-frame deadline; one edit closes it.
 static constexpr float GScheduleDefaultWaitSeconds = 0.0f;
 
-void FElysiumNpcScheduleHost::SetWaitFinished(float TaskSeconds, double Now)
+void FElysiumNpcBaseScheduleHost::SetWaitFinished(float TaskSeconds, double Now)
 {
 	// `if (_DAT_104454c4 < task->flTaskData)` — the shared float zero, so "a positive operand".
 	WaitFinished = Now + (TaskSeconds > 0.0f ? TaskSeconds : GScheduleDefaultWaitSeconds);
@@ -125,9 +125,17 @@ const TCHAR* FElysiumNpcScheduleHost::SetScheduleTraceName(const TCHAR* RetailCl
 void FElysiumNpcScheduleHost::Serialize(FElysiumSaveArchive& Ar)
 {
 	Ar << FailureReason;
-	Ar << HintNode << HintReusableAt << bOwnsHint;
-	Ar << AttackExtentsCm << bMotorAnimationMovement;
+	Ar << HintReusableAt;
+	Ar << AttackExtentsCm;
 	Ar << Unknown6300 << Unknown659c;
+}
+
+void FElysiumNpcBaseScheduleHost::Serialize(FElysiumSaveArchive& Ar)
+{
+	// The hint claim (`m_pHintNode` +0x5ddc and the claim flag) and the motor's animation-movement
+	// latch (`CAI_Motor+0x28`) are the base's.
+	Ar << HintNode << bOwnsHint;
+	Ar << bMotorAnimationMovement;
 }
 
 // The load-side half (slot 130). `PendingFailureReason` is the in-flight half of a failure the

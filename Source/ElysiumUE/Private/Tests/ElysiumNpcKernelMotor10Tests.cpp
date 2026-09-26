@@ -473,13 +473,13 @@ bool FElysiumNpcKernelMotor10StandoffActivityTest::RunTest(const FString&)
 	// `HintOverlayWords` is the type reader and answers false, so the arm is skipped and slot 569
 	// is never asked — which also means posture 0 is never promoted to 2 here.
 	Words.Posture = 0;
-	F.Npc->ScheduleHost.HintNode = 7;
+	F.Npc->BaseScheduleHost.HintNode = 7;
 	F.Npc->Motor10Seams.HintActivityAsks = 0;
 	TestEqual(TEXT("a claimed hint with no readable type leaves the activity alone"),
 		F.Npc->StandoffTranslateActivity(Words, 1), INDEX_NONE);
 	TestEqual(TEXT("...and slot 569 is never asked"), F.Npc->Motor10Seams.HintActivityAsks, 0);
 	TestEqual(TEXT("...and the posture is not promoted"), Words.Posture, 0);
-	F.Npc->ScheduleHost.HintNode = INDEX_NONE;
+	F.Npc->BaseScheduleHost.HintNode = INDEX_NONE;
 	return true;
 }
 

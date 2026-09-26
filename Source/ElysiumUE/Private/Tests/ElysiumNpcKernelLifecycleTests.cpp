@@ -224,10 +224,10 @@ bool FElysiumNpcKernelLifecycleFindNamedEntityTest::RunTest(const FString&)
 	// `!enemy` with no committed enemy falls to the tail, which is `this`.
 	TestEqual(TEXT("!enemy with no enemy answers this NPC"),
 		Npc->FindNamedEntity(TEXT("!enemy")), Self);
-	Npc->Senses.Memory.Enemy = Bystander->Handle;
+	Npc->BaseMemory.Enemy = Bystander->Handle;
 	TestEqual(TEXT("!enemy with one answers the enemy"),
 		Npc->FindNamedEntity(TEXT("!enemy")), static_cast<FElysiumEntity*>(Bystander));
-	Npc->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	// `!self` and `!target1` are MATCHED and then deliberately unhandled — the tail answers them.
 	TestEqual(TEXT("!self answers this NPC"), Npc->FindNamedEntity(TEXT("!self")), Self);
 	TestEqual(TEXT("!target1 answers this NPC too"), Npc->FindNamedEntity(TEXT("!target1")), Self);
@@ -691,25 +691,25 @@ bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 	FElysiumNpc& N = *Fix.Npc;
 	// Mode 4 catches the sentinel and writes FLT_MAX back; mode 3 writes 0.0 back.
 	N.ExtendedBlockedByFriendTimer = FElysiumNpc::SaveStampSentinel;
-	N.ScheduleHost.WaitFinished = FElysiumNpc::SaveStampSentinel;
+	N.BaseScheduleHost.WaitFinished = FElysiumNpc::SaveStampSentinel;
 	// Neither neighbour is touched: the body names two fields and only two.
 	N.WeaponBlockedByFriendTimer = FElysiumNpc::SaveStampSentinel;
-	N.ScheduleHost.MoveWaitFinished = FElysiumNpc::SaveStampSentinel;
+	N.BaseScheduleHost.MoveWaitFinished = FElysiumNpc::SaveStampSentinel;
 	TestEqual(TEXT("the base body answers the chain's result"),
 		N.RestoreExtendedHeader(/*Archive=*/nullptr), 1);
 	TestEqual(TEXT("m_flExtendedBlockedByFriendTimer decodes at mode 4"),
 		N.ExtendedBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
-	TestEqual(TEXT("m_flWaitFinished decodes at mode 3"), N.ScheduleHost.WaitFinished, 0.0);
+	TestEqual(TEXT("m_flWaitFinished decodes at mode 3"), N.BaseScheduleHost.WaitFinished, 0.0);
 	TestEqual(TEXT("the neighbour of the first is NOT one of the two fields"),
 		N.WeaponBlockedByFriendTimer, FElysiumNpc::SaveStampSentinel);
 	TestEqual(TEXT("nor is the neighbour of the second"),
-		N.ScheduleHost.MoveWaitFinished, FElysiumNpc::SaveStampSentinel);
+		N.BaseScheduleHost.MoveWaitFinished, FElysiumNpc::SaveStampSentinel);
 	// A stamp below the 1e+10 floor is left alone whatever its mode.
 	N.ExtendedBlockedByFriendTimer = 3.0;
-	N.ScheduleHost.WaitFinished = 7.0;
+	N.BaseScheduleHost.WaitFinished = 7.0;
 	N.RestoreExtendedHeader(/*Archive=*/nullptr);
 	TestEqual(TEXT("an ordinary stamp survives the decode"), N.ExtendedBlockedByFriendTimer, 3.0);
-	TestEqual(TEXT("and so does the wait stamp"), N.ScheduleHost.WaitFinished, 7.0);
+	TestEqual(TEXT("and so does the wait stamp"), N.BaseScheduleHost.WaitFinished, 7.0);
 	return true;
 }
 
@@ -735,12 +735,12 @@ bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 
 	// 0x1027ca30 — the hint release with a ZERO reuse delay. A claimed hint is given back and the
 	// node forgotten.
-	N.ScheduleHost.HintNode = 12;
-	N.ScheduleHost.bOwnsHint = true;
+	N.BaseScheduleHost.HintNode = 12;
+	N.BaseScheduleHost.bOwnsHint = true;
 	N.ScheduleHost.HintReusableAt = -1.0;
 	N.BaseNpcUpdateOnRemove();
-	TestEqual(TEXT("the hint node is forgotten"), N.ScheduleHost.HintNode, INDEX_NONE);
-	TestFalse(TEXT("the claim is released"), N.ScheduleHost.bOwnsHint);
+	TestEqual(TEXT("the hint node is forgotten"), N.BaseScheduleHost.HintNode, INDEX_NONE);
+	TestFalse(TEXT("the claim is released"), N.BaseScheduleHost.bOwnsHint);
 	TestEqual(TEXT("with a zero reuse delay, which is retail's 0.0"),
 		N.ScheduleHost.HintReusableAt, N.World->NowSeconds());
 	// A body with no hint writes nothing, which is `ClearScheduleHint`'s own first clause.
@@ -1302,8 +1302,8 @@ bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 	FElysiumNpc& N = *Fix.Npc;
 
 	// The owner is holding node 7 and owns it, with a cooldown that has not been set.
-	N.ScheduleHost.HintNode = 7;
-	N.ScheduleHost.bOwnsHint = true;
+	N.BaseScheduleHost.HintNode = 7;
+	N.BaseScheduleHost.bOwnsHint = true;
 	N.ScheduleHost.HintReusableAt = 0.0;
 	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x29));
 
@@ -1314,15 +1314,15 @@ bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 		N.Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x29)));
 	// `CAI_BaseNPCTroika::ClearHintNode(owner, 0.0)` — the reference goes, and the reuse delay is
 	// ZERO, not the 5.0 s every other caller of `ClearHintNode` passes.
-	TestEqual(TEXT("the hint reference is dropped"), N.ScheduleHost.HintNode, INDEX_NONE);
-	TestFalse(TEXT("ownership is released"), N.ScheduleHost.bOwnsHint);
+	TestEqual(TEXT("the hint reference is dropped"), N.BaseScheduleHost.HintNode, INDEX_NONE);
+	TestFalse(TEXT("ownership is released"), N.BaseScheduleHost.bOwnsHint);
 	TestEqual(TEXT("with a ZERO reuse delay: the node is gone, nothing to cool down"),
 		N.ScheduleHost.HintReusableAt, N.World != nullptr ? N.World->NowSeconds() : 0.0);
 
 	// Retail raises the condition unconditionally once the owner resolves — `ClearHintNode`'s own
 	// "no hint" arm performs no writes, but the condition has already been set by then.
 	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x29));
-	N.ScheduleHost.HintNode = INDEX_NONE;
+	N.BaseScheduleHost.HintNode = INDEX_NONE;
 	N.HintDeletingDestructor();
 	TestTrue(TEXT("and it is raised even when the owner holds no hint"),
 		N.Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x29)));

@@ -54,7 +54,7 @@ void RepointEnemyMemoryToSquad(void* Squad);
 
 /** Retail's global `CAI_Hint` list (`DAT_10925450`, next link `+0x5d8`, `m_nHintType +0x5dc`),
  *  walked for the `Ordinal`-th node of `HintType`. This substrate has no hint-node store carrying
- *  hint types — `ScheduleHost.HintNode` is a bare index — so the walk answers null. */
+ *  hint types — `BaseScheduleHost.HintNode` is a bare index — so the walk answers null. */
 FElysiumEntity* NthHintOfType(int32 HintType, int32 Ordinal) const;
 
 // --- Species words this family's bodies read ------------------------------------------------------

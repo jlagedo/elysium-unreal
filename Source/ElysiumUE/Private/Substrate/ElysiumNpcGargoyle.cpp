@@ -138,7 +138,7 @@ void FElysiumNpcGargoyle::TaskFail(int32 Reason)
 		&& ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
 			EElysiumNpcCond::TaskFailed))
 	{
-		ScheduleHost.MemoryBits &= ~NpcKernelConditions10Shared::GCond10MemoryTopBit;                 // 10379077
+		BaseScheduleHost.MemoryBits &= ~NpcKernelConditions10Shared::GCond10MemoryTopBit;                 // 10379077
 	}
 
 	// **CORRECTION.** The checklist's walk records `1037908c CALL 0x10006613` as reached with a

@@ -139,8 +139,8 @@ namespace
 		return Chain;
 	}
 
-	// The census chain from `RetailClass` up to `CAI_BaseNPCTroika` (the combined base projection
-	// until step 5), then the combat character it hangs from.
+	// The census chain from `RetailClass` up to `CAI_BaseNPC` (through `CAI_BaseNPCTroika`, story 5
+	// step 5), then the combat character it hangs from.
 	TArray<FString> ProjectedChain(const TCHAR* RetailClass)
 	{
 		TArray<FString> Chain;
@@ -148,7 +148,7 @@ namespace
 			Row = ElysiumNpcKernelClass::Find(Row->Base))
 		{
 			Chain.Add(FString(Row->Name));
-			if (FCString::Strcmp(Row->Name, TEXT("CAI_BaseNPCTroika")) == 0)
+			if (FCString::Strcmp(Row->Name, TEXT("CAI_BaseNPC")) == 0)
 			{
 				break;
 			}
@@ -258,7 +258,7 @@ bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	// The retail classes no classname builds, plus every class a classname descriptor derives
 	// from: a def naming one is refused, never stood as a record or an NPC.
-	TArray<FString> Abstract = { TEXT("CAI_BaseNPCTroika"), TEXT("CNPC_VBaseBoss") };
+	TArray<FString> Abstract = { TEXT("CAI_BaseNPC"), TEXT("CAI_BaseNPCTroika"), TEXT("CNPC_VBaseBoss") };
 	for (const FFactoryRow& Row : GStep2Factories)
 	{
 		Abstract.AddUnique(Row.RetailClass);

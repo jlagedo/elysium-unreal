@@ -318,7 +318,7 @@ bool FElysiumNpcKernelTroikaHelpersNotifySlotsTest::RunTest(const FString&)
 	// list LOST_ENEMY" answers false.
 	TestTrue(TEXT("54 answers true for a null argument"), Guard->Slot54(nullptr));
 	TestTrue(TEXT("54 answers true for an entity that is not my enemy"), Guard->Slot54(Foe));
-	Guard->Senses.Memory.Enemy = Foe->Handle;
+	Guard->BaseMemory.Enemy = Foe->Handle;
 	TestTrue(TEXT("54 answers true for my enemy while no program is installed"), Guard->Slot54(Foe));
 	Guard->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	TestEqual(TEXT("54's answer is the mask test, not a condition test"), Guard->Slot54(Foe),
@@ -327,13 +327,13 @@ bool FElysiumNpcKernelTroikaHelpersNotifySlotsTest::RunTest(const FString&)
 
 	// Slot 56 `0x102b5120`. The `+0x200` seam refuses, so `m_hLastEnemy` survives even when the
 	// argument IS the last enemy — which is the recovered refusal and not an omission.
-	Guard->Senses.Memory.LastEnemy = Foe->Handle;
+	Guard->BaseMemory.LastEnemy = Foe->Handle;
 	Guard->Slot56(Foe, FVector::ZeroVector, FVector::ZeroVector, TEXT("x"));
 	TestTrue(TEXT("56 leaves m_hLastEnemy set while the +0x200 seam answers false"),
-		Guard->Senses.Memory.LastEnemy.IsSet());
+		Guard->BaseMemory.LastEnemy.IsSet());
 	Guard->Slot56(nullptr, FVector::ZeroVector, FVector::ZeroVector, nullptr);
 	TestTrue(TEXT("and a null argument returns before anything"),
-		Guard->Senses.Memory.LastEnemy.IsSet());
+		Guard->BaseMemory.LastEnemy.IsSet());
 
 	// Slot 322 `0x102a0910` — the ally notice and then slot 600 through the vtable. Slot 600 is
 	// asserted through its own observable: with no capability bits it must write nothing.
@@ -651,7 +651,7 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	// `0x102b8980` — the alert rung ladder, letter by letter.
 	Npc->FullInvestigate = 0;
 	Npc->AlertLevel = 0;
-	Npc->ScheduleHost.MemoryBits = 0;
+	Npc->BaseScheduleHost.MemoryBits = 0;
 	TestEqual(TEXT("level 0 advances to 1 and grades L"),
 		static_cast<int32>(Npc->AdvanceAlertLevelGrade()), static_cast<int32>(TEXT('L')));
 	TestEqual(TEXT("and wrote m_eAlertLevel 1"), Npc->AlertLevel, 1);
@@ -661,12 +661,12 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("level 2 pins at 3 and grades Q"),
 		static_cast<int32>(Npc->AdvanceAlertLevelGrade()), static_cast<int32>(TEXT('Q')));
 	TestEqual(TEXT("and wrote m_eAlertLevel 3"), Npc->AlertLevel, 3);
-	Npc->ScheduleHost.MemoryBits = 0x8000000u;
+	Npc->BaseScheduleHost.MemoryBits = 0x8000000u;
 	TestEqual(TEXT("the +0x5d8c bit 0x8000000 turns Q into R"),
 		static_cast<int32>(Npc->AdvanceAlertLevelGrade()),
 		static_cast<int32>(TEXT('R')));
 	// `m_bFullInvestigate` writes the level BEFORE the switch reads it, so it always lands on 'Q'.
-	Npc->ScheduleHost.MemoryBits = 0;
+	Npc->BaseScheduleHost.MemoryBits = 0;
 	Npc->AlertLevel = 0;
 	Npc->FullInvestigate = 1;
 	TestEqual(TEXT("full_investigate forces rung 3 ahead of the switch"),
@@ -693,11 +693,11 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 		Npc->Senses.Memory.DetectedAttackTime, Npc->World->NowSeconds(), 0.001);
 
 	// `0x102bf770` — the move stop. The three unconditional writes run whatever the activity does.
-	Npc->ScheduleHost.bShouldMove = true;
+	Npc->BaseScheduleHost.bShouldMove = true;
 	Npc->ScheduleHost.DesiredMoveYaw = 42.f;
 	const int32 NavResetsBefore = Npc->NavResets;
 	Npc->StopScheduledMove();
-	TestFalse(TEXT("m_bShouldMove is cleared"), Npc->ScheduleHost.bShouldMove);
+	TestFalse(TEXT("m_bShouldMove is cleared"), Npc->BaseScheduleHost.bShouldMove);
 	TestEqual(TEXT("m_flDesiredMoveYaw is zeroed"), Npc->ScheduleHost.DesiredMoveYaw, 0.f, 0.0001f);
 	TestEqual(TEXT("and the navigator reset was asked exactly once"), Npc->NavResets,
 		NavResetsBefore + 1);
@@ -989,12 +989,12 @@ bool FElysiumNpcKernelTroikaHelpersStandoffTest::RunTest(const FString&)
 
 	// `0x102c7530`. The hint is cleared UNCONDITIONALLY, the behaviour's `+0x50` lands in
 	// `m_flDistTooFar`, and `+0x1fc` is forced to 2.
-	Npc->ScheduleHost.HintNode = 4;
+	Npc->BaseScheduleHost.HintNode = 4;
 	Npc->StandoffDistTooFar = 512.f;
 	Npc->DistTooFar = 0.f;
 	Npc->Field_0x01fc = 0;
 	Npc->StandoffVfunc5();
-	TestEqual(TEXT("vfunc5 clears the hint node unconditionally"), Npc->ScheduleHost.HintNode,
+	TestEqual(TEXT("vfunc5 clears the hint node unconditionally"), Npc->BaseScheduleHost.HintNode,
 		static_cast<int32>(INDEX_NONE));
 	TestEqual(TEXT("vfunc5 copies the behaviour's +0x50 into m_flDistTooFar"), Npc->DistTooFar,
 		512.f, 0.0001f);
@@ -1018,7 +1018,7 @@ bool FElysiumNpcKernelTroikaHelpersStandoffTest::RunTest(const FString&)
 
 	// `0x102b6120` — no hint node ZEROES the caller's point and answers false. That is the arm, not
 	// a refusal to write.
-	Npc->ScheduleHost.HintNode = INDEX_NONE;
+	Npc->BaseScheduleHost.HintNode = INDEX_NONE;
 	FVector Point(5.0, 6.0, 7.0);
 	TestFalse(TEXT("the lean offset answers false with no hint node"),
 		Npc->ApplyHintLeanOffset(Point, true));
@@ -1035,7 +1035,7 @@ bool FElysiumNpcKernelTroikaHelpersStandoffTest::RunTest(const FString&)
 	TestFalse(TEXT("and leaves m_bForceCoverLOSCheck clear — the bracket is around the FIRST "
 			  "search only, and the entrenched retry runs outside it"),
 		Npc->ScheduleHost.bForceCoverLosCheck);
-	TestEqual(TEXT("and no hint is installed"), Npc->ScheduleHost.HintNode,
+	TestEqual(TEXT("and no hint is installed"), Npc->BaseScheduleHost.HintNode,
 		static_cast<int32>(INDEX_NONE));
 	return true;
 }

@@ -516,11 +516,11 @@ bool FElysiumNpc::FOkToMakeSound()
 bool FElysiumNpc::BaseFOkToMakeSound() const
 {
 	const double Now = NpcKernelSoundsShared::SoundsCurTime(*this);
-	if (Now <= Senses.Memory.SoundWaitTime)
+	if (Now <= BaseMemory.SoundWaitTime)
 	{
 		return false;
 	}
-	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
+	if (BaseScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
 	{
 		// The squad's own `m_flSoundWaitTime` at `+0x60`. Unreachable while `ConnectedSquad()`
 		// answers null; the field it stands for is named so the squad layer knows what to hand back.
@@ -536,10 +536,10 @@ bool FElysiumNpc::BaseFOkToMakeSound() const
 void FElysiumNpc::JustMadeSound()
 {
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this)
+	BaseMemory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this)
 		+ Stream.FRandRange(GSoundsTroikaSoundWaitMin, GSoundsTroikaSoundWaitMax);
 
-	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
+	if (BaseScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
 	{
 		// SEAM: the squad object's own `m_flSoundWaitTime` (`+0x60`). Retail draws a second
 		// `RandomFloat(0.25, 0.75)` here; with no squad layer there is nothing to write it to, and
@@ -552,9 +552,9 @@ void FElysiumNpc::JustMadeSound()
 void FElysiumNpc::BaseJustMadeSound()
 {
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this) + Stream.FRandRange(GSoundsBaseSoundWaitMin,
+	BaseMemory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this) + Stream.FRandRange(GSoundsBaseSoundWaitMin,
 		GSoundsBaseSoundWaitMax);
-	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
+	if (BaseScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
 	{
 		// SEAM: the squad's own copy, as above.
 	}

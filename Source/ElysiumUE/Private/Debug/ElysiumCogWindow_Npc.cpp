@@ -761,7 +761,7 @@ void FElysiumCogWindow_Npc::RenderRoster(FElysiumEntityWorld& World,
 		ImGui::TextUnformatted(Npc->Schedule.IsRunning()
 			? COG_TCHAR_TO_CHAR(ElysiumScheduleName(Npc->Schedule.Current)) : "—");
 		ImGui::TableNextColumn();
-		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*NameOf(World, Npc->Senses.Memory.Enemy)));
+		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*NameOf(World, Npc->BaseMemory.Enemy)));
 	}
 	ImGui::EndTable();
 }
@@ -876,8 +876,8 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 	ImGui::SeparatorText("The committed enemy");
 	if (BeginFacts("##Enemy"))
 	{
-		Row(TEXT("enemy"), NameOf(World, Memory.Enemy));
-		Row(TEXT("last enemy"), NameOf(World, Memory.LastEnemy));
+		Row(TEXT("enemy"), NameOf(World, Npc.BaseMemory.Enemy));
+		Row(TEXT("last enemy"), NameOf(World, Npc.BaseMemory.LastEnemy));
 		Row(TEXT("last had LOS"), AgeOf(Memory.EnemyLastLosTime, Now));
 		// The debounce, spelled as a fraction of its own limit. Ten consecutive failures is what
 		// flips `HAVE_ENEMY_LOS` to `ENEMY_OCCLUDED`, and a counter at 7 is a character about to
@@ -895,10 +895,10 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 	{
 		static const TCHAR* const Categories[] = {
 			TEXT("hate"), TEXT("fear"), TEXT("dislike"), TEXT("nemesis") };
-		for (int32 Index = 0; Index < static_cast<int32>(FElysiumNpcMemory::ESeen::Count); ++Index)
+		for (int32 Index = 0; Index < static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Count); ++Index)
 		{
 			Row(Categories[Index], FString::Printf(TEXT("%s   %s"),
-				*NameOf(World, Memory.LastSeen[Index]), *AgeOf(Memory.LastSeenTime[Index], Now)));
+				*NameOf(World, Npc.BaseMemory.LastSeen[Index]), *AgeOf(Npc.BaseMemory.LastSeenTime[Index], Now)));
 		}
 		ImGui::EndTable();
 	}
@@ -912,14 +912,14 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 				*NameOf(World, Memory.LastHeardSource), *AgeOf(Memory.LastHeardTime, Now)));
 		Row(TEXT("heard at"), Memory.LastHeardTime < 0.0
 			? FString(TEXT("—")) : Memory.LastHeardPosition.ToCompactString());
-		Row(TEXT("last damage"), Memory.LastDamageTime < 0.0
+		Row(TEXT("last damage"), Npc.BaseMemory.LastDamageTime < 0.0
 			? FString(TEXT("(none)"))
 			: FString::Printf(TEXT("%d from %s   %s"), Memory.LastDamageAmount,
-				*NameOf(World, Memory.LastDamageAttacker), *AgeOf(Memory.LastDamageTime, Now)));
-		Row(TEXT("repeated-damage window"), Memory.RepeatedDamageWindowStart < 0.0
+				*NameOf(World, Npc.BaseMemory.LastDamageAttacker), *AgeOf(Npc.BaseMemory.LastDamageTime, Now)));
+		Row(TEXT("repeated-damage window"), Npc.BaseMemory.RepeatedDamageWindowStart < 0.0
 			? FString(TEXT("closed"))
-			: FString::Printf(TEXT("%d accumulated, opened %s"), Memory.RepeatedDamageAccumulated,
-				*AgeOf(Memory.RepeatedDamageWindowStart, Now)));
+			: FString::Printf(TEXT("%d accumulated, opened %s"), Npc.BaseMemory.RepeatedDamageAccumulated,
+				*AgeOf(Npc.BaseMemory.RepeatedDamageWindowStart, Now)));
 		// The incoming-attack notice: written by `TASK_ANNOUNCE_ATTACK`, and read by the diagnostics
 		// only — its four `SHOULD_*` consumers are a policy the survey does not decode. Shown so the
 		// producer is observable even though nothing acts on it.
@@ -1226,7 +1226,7 @@ void FElysiumCogWindow_Npc::DrawWorldOverlay() const
 			// visible: a solid line means `HAVE_ENEMY_LOS`, a dashed one means the character is
 			// acting on memory.
 			if (const FElysiumEntity* Enemy =
-				ElysiumNpcCond::ResolveEnemyHandle(*World, Npc->Senses.Memory.Enemy))
+				ElysiumNpcCond::ResolveEnemyHandle(*World, Npc->BaseMemory.Enemy))
 			{
 				const FVector To = Enemy->Origin + FVector(0.0f, 0.0f, 100.0f);
 				const FVector From = Npc->Origin + FVector(0.0f, 0.0f, 140.0f);

@@ -9,7 +9,7 @@ class FElysiumNpc;
 struct FElysiumSaveArchive;
 
 // CAI_Memory's observed-actor record list. It is deliberately separate from the committed enemy:
-// the list is perception's admission store, while `Senses.Memory.Enemy` is the sticky choice made
+// the list is perception's admission store, while `BaseMemory.Enemy` is the sticky choice made
 // from it. Until squads land this is per NPC; R17 replaces member ownership with the squad's one
 // shared CAI_Memory store, matching retail's `m_pEnemies` redirection, without a second authority.
 struct FElysiumNpcEnemyMemoryRecord

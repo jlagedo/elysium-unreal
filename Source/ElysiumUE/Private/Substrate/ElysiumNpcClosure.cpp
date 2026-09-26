@@ -112,7 +112,7 @@ namespace
 		{
 			return INDEX_NONE;
 		}
-		return Npc.HintWords(Npc.ScheduleHost.HintNode, Out) ? Out.HintType : INDEX_NONE;
+		return Npc.HintWords(Npc.BaseScheduleHost.HintNode, Out) ? Out.HintType : INDEX_NONE;
 	}
 
 
@@ -804,7 +804,7 @@ void FElysiumNpc::GatherAttackConditions(FElysiumEntity* Enemy, float DistanceUn
 	//
 	// **The two arguments are the port's own state, not the port's input.** Retail is handed the
 	// enemy and its distance by `GatherEnemyConditions`; the port's gather reads the COMMITTED enemy
-	// off `Senses.Memory.Enemy` and measures the distance itself, so that a headless case can drive
+	// off `BaseMemory.Enemy` and measures the distance itself, so that a headless case can drive
 	// the pass without staging a caller. They are accepted and ignored, and a dispatch that passes a
 	// DIFFERENT entity than the committed enemy still gathers for the committed one — which is what
 	// retail does too, because its caller only ever passes `GetEnemy()`.

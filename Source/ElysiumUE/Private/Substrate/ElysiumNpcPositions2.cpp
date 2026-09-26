@@ -115,8 +115,8 @@ bool FElysiumNpc::IsValidCover(const FVector& CoverCm, void* Hint)
 	KernelHullTrace(CoverCm / NpcKernelPositions2Shared::GPositionsTailU, EndCm / NpcKernelPositions2Shared::GPositionsTailU, ObbMins, ObbMaxs, MaskValidCover, Trace);
 
 	const FHintWords* HintNode = static_cast<const FHintWords*>(Hint);
-	if (!ScheduleHost.HintGroup.IsEmpty()
-		&& (HintNode == nullptr || !HintNode->bValid || HintNode->Group != ScheduleHost.HintGroup))
+	if (!BaseScheduleHost.HintGroup.IsEmpty()
+		&& (HintNode == nullptr || !HintNode->bValid || HintNode->Group != BaseScheduleHost.HintGroup))
 	{
 		return false;
 	}
@@ -134,8 +134,8 @@ bool FElysiumNpc::IsValidShootPosition(const FVector& PositionCm, void* Hint)
 	// no-op for all but the hint-grouped cast.
 	(void)PositionCm;
 	const FHintWords* HintNode = static_cast<const FHintWords*>(Hint);
-	if (!ScheduleHost.HintGroup.IsEmpty()
-		&& (HintNode == nullptr || !HintNode->bValid || HintNode->Group != ScheduleHost.HintGroup))
+	if (!BaseScheduleHost.HintGroup.IsEmpty()
+		&& (HintNode == nullptr || !HintNode->bValid || HintNode->Group != BaseScheduleHost.HintGroup))
 	{
 		return false;
 	}

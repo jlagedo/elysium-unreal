@@ -533,7 +533,7 @@ bool FElysiumNpcChangBros::CheckForJumpAttack()
 	// The squad walk. `ConnectedSquad()` is the Squad family's seam and answers null, so a
 	// disconnected or squadless brother is the arm every ChangBros takes today — which is the arm
 	// that ALLOWS the jump, not the one that refuses it.
-	if (ScheduleHost.SquadDisconnected > 0 || ConnectedSquad() == nullptr)
+	if (BaseScheduleHost.SquadDisconnected > 0 || ConnectedSquad() == nullptr)
 	{
 		return true;
 	}
@@ -586,7 +586,7 @@ void FElysiumNpcChangBros::SetupSuperJump(float Enabled)
 	}
 	const FVector SelfUnits = NpcKernelMotor2Shared::MotorTailSourceOf(Origin);
 	FVector HintUnits = FVector::ZeroVector;
-	if (!NavHintNodeOrigin(ScheduleHost.HintNode, HintUnits))
+	if (!NavHintNodeOrigin(BaseScheduleHost.HintNode, HintUnits))
 	{
 		// **SEAM**: the hint store carries no origins, so retail's two reads of
 		// `m_pHintNode->GetAbsOrigin()` cannot be made. Retail would crash on a null hint here — it
@@ -994,7 +994,7 @@ FElysiumNpcChangBros* FElysiumNpcChangBros::GetOtherBrother() const
 	// 0x1036e2f0 `CNPC_VChangBros::GetOtherBrother`: with `m_iSquadDisconnected < 1` and a live
 	// `m_pSquad`, walk `0..NumMembers()` re-reading `NumMembers()` every iteration, `RTDynamicCast`
 	// each member to `CNPC_VChangBros` and answer the first one that is not me. Else 0.
-	if (ScheduleHost.SquadDisconnected >= 1)
+	if (BaseScheduleHost.SquadDisconnected >= 1)
 	{
 		return nullptr;
 	}

@@ -192,7 +192,7 @@ void FElysiumNpcHengeyokai::TaskFail(int32 Reason)
 		&& ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
 			EElysiumNpcCond::TaskFailed))
 	{
-		ScheduleHost.MemoryBits &= ~NpcKernelConditions10Shared::GCond10MemoryTopBit;                 // 10380536
+		BaseScheduleHost.MemoryBits &= ~NpcKernelConditions10Shared::GCond10MemoryTopBit;                 // 10380536
 	}
 
 	// `10380548`: `0x10381be0` is `(m_bfAINPCFlags >> 4) & 1` — `FINDING_BODY`, NOT a species word.

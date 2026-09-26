@@ -430,11 +430,11 @@ int32 FElysiumNpcTzimisce::SelectIdealStateRetail()
 
 	case 2:
 		// `103bd90d`: the provocation memory bit, the same pair `CNPC_VHuman` runs.
-		if ((ScheduleHost.MemoryBits & 0x2) != 0
+		if ((BaseScheduleHost.MemoryBits & 0x2) != 0
 			&& (NpcKernelState19_2Shared::State19_2HasCondition(*this, EElysiumNpcCond::SeeEnemy)
 				|| NpcKernelState19_2Shared::State19_2HasCondition(*this, EElysiumNpcCond::NewEnemy)))
 		{
-			ScheduleHost.MemoryBits &= ~0x2u;
+			BaseScheduleHost.MemoryBits &= ~0x2u;
 			Cognition.Conditions.Set(EElysiumNpcCond::ScheduleDone);
 		}
 		// `103bd95c`: no enemy OR `ENEMY_DEAD` — and the fallback is HUNT, not ALERT, unless the
@@ -549,7 +549,7 @@ void FElysiumNpcTzimisce::TaskFail(int32 Reason)
 		&& ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
 			EElysiumNpcCond::TaskFailed))
 	{
-		ScheduleHost.MemoryBits &= ~NpcKernelConditions10Shared::GCond10MemoryTopBit;                 // 103ba376
+		BaseScheduleHost.MemoryBits &= ~NpcKernelConditions10Shared::GCond10MemoryTopBit;                 // 103ba376
 	}
 
 	if (NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY))                     // 0x103be090
@@ -600,7 +600,7 @@ float FElysiumNpcTzimisce::MaxYawSpeed()
 {
 	// `CNPC_VTzimisce::MaxYawSpeed` `0x103ba020` — a four-arm switch and the shared turning arm,
 	// with the Tzimisce's own cvar `0x1093c9fc`.
-	if ((ScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
+	if ((BaseScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
 	{
 		return MaxYawSpeedTurningArm(TEXT("0x1093c9fc"));
 	}
@@ -740,7 +740,7 @@ void FElysiumNpcTzimisce::JustMadeSound()
 	// `CNPC_VTzimisce::vfunc487` `0x103b9f10`, the body of `FElysiumNpcTzimisce::JustMadeSound`: 41
 	// bytes that end at the write. No squad copy, and no call into the Troika body.
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this)
+	BaseMemory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this)
 		+ Stream.FRandRange(GSoundsTzimisceSoundWaitMin, GSoundsTzimisceSoundWaitMax);
 }
 
@@ -868,7 +868,7 @@ int32 FElysiumNpcTzimisce::SelectTzimisceHintNode(const FElysiumEntity* Anchor)
 	// the winner is usable.
 	if (Anchor == nullptr)
 	{
-		ScheduleHost.HintNode = INDEX_NONE;   // retail zeroes `m_pHintNode`
+		BaseScheduleHost.HintNode = INDEX_NONE;   // retail zeroes `m_pHintNode`
 		return 0;
 	}
 
@@ -877,7 +877,7 @@ int32 FElysiumNpcTzimisce::SelectTzimisceHintNode(const FElysiumEntity* Anchor)
 
 	auto Install = [this, Anchor](int32 Node, int32 BaseSchedule) -> int32
 	{
-		ScheduleHost.HintNode = Node;
+		BaseScheduleHost.HintNode = Node;
 		// `(-(uint)usable & 0xfffffff6) + Base` — usable subtracts 10 from the base id.
 		return IsTzimisceHintUsable(Node, Anchor) ? BaseSchedule - 10 : BaseSchedule;
 	};
@@ -933,8 +933,8 @@ bool FElysiumNpcTzimisce::TranslateNavGoalPositionTzimisce(const FVector& GoalUn
 	// pickup arm. That is retail's own control flow and it is kept.
 	if (PathMode == 1)
 	{
-		FElysiumEntity* Enemy = World != nullptr && Senses.Memory.Enemy.IsSet()
-			? World->Resolve(Senses.Memory.Enemy)
+		FElysiumEntity* Enemy = World != nullptr && BaseMemory.Enemy.IsSet()
+			? World->Resolve(BaseMemory.Enemy)
 			: nullptr;
 		if (Enemy != nullptr)
 		{

@@ -956,7 +956,7 @@ bool FElysiumNpcKernelCombat10CombatReactionTest::RunTest(const FString&)
 
 	// `102b7cf6`: `COND_LOST_ENEMY` is the ONE arm outside the enemy gate, and it answers 0x10.
 	N.Cognition.Conditions.Reset();
-	N.Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	N.BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	N.Cognition.Conditions.Set(EElysiumNpcCond::LostEnemy);
 	TestEqual(TEXT("0x102b7cf0 COND_LOST_ENEMY answers 0x10 with no enemy at all"),
 		N.SelectCombatReactionSchedule(), 0x10);
@@ -972,7 +972,7 @@ bool FElysiumNpcKernelCombat10CombatReactionTest::RunTest(const FString&)
 
 	// `102b7d69`: the arm below the cover offer is gated on `debug_allow_dodge`, which ships "0" —
 	// as shipped the body answers 0 there and the 0x800 bit is left alone.
-	N.Senses.Memory.Enemy = F.Foe->Handle;
+	N.BaseMemory.Enemy = F.Foe->Handle;
 	ElysiumNpcTunables::ResetConVars();
 	if (N.SelectCombatReactionSchedule() == 0)
 	{

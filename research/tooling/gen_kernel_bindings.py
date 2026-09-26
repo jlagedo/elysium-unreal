@@ -98,15 +98,17 @@ BINDINGS_CPP = ("Source", "ElysiumUE", "Private", "Substrate",
                 "ElysiumNpcKernelBindings.cpp")
 KEYFIELDS_H = ("Source", "ElysiumUE", "Private", "AiInfra", "ElysiumInfraKeyfields.h")
 
-# The binding classes, each over the retail datamap tables whose rows it registers. The NPC's
-# two tables are one binding class because the port stands one shared leaf for them; the maker
-# and the place stand their own.
+# The binding classes, each over the retail datamap tables whose rows it registers. The NPC's two
+# tables are two binding classes since story 5 step 5: `CAI_BaseNPC`'s rows register on the base's
+# own descriptor (`FElysiumNpcBase`) and `CAI_BaseNPCTroika`'s on the Troika's (`FElysiumNpc`), so a
+# descendant inherits both through the chain. The maker and the place stand their own.
 BINDING_CLASSES = (
     ("BaseEntity", ("CBaseEntity",)),
     ("Toggle", ("CBaseToggle",)),
     ("Animating", ("CBaseAnimating",)),
     ("CombatCharacter", ("CBaseCombatCharacter",)),
-    ("Npc", ("CAI_BaseNPC", "CAI_BaseNPCTroika")),
+    ("NpcBase", ("CAI_BaseNPC",)),
+    ("Npc", ("CAI_BaseNPCTroika",)),
     ("NpcMaker", ("CNPCMaker",)),
     ("InterestingPlace", ("CAI_InterestingPlace",)),
     ("Hint", ("CAI_Hint",)),
@@ -147,6 +149,7 @@ PORT_CLASS = {
     "Toggle": "FElysiumAnimating",
     "Animating": "FElysiumAnimating",
     "CombatCharacter": "FElysiumCombatCharacter",
+    "NpcBase": "FElysiumNpcBase",
     "Npc": "FElysiumNpc",
     **{species_binding(t): f"FElysiumNpc{species_binding(t)}" for t in SPECIES_TABLES},
 }
@@ -195,6 +198,7 @@ CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
         0x0670: ("FElysiumAnimating", "Skin"),
     },
     "CBaseCombatCharacter": {
+        0x10E8: ("FElysiumCombatCharacter", "FloatSoundFrequency"),
         0x13D8: ("FElysiumCombatCharacter", "Money"),
     },
 }
@@ -305,7 +309,6 @@ CHAIN_UNBOUND: dict[tuple[str, int], str] = {
 BOUND_ELSEWHERE: dict[tuple[str, int], str] = {
     ("CAI_BaseNPCTroika", 0x6558): "Animating (`FElysiumAnimating::Disposition`)",
     ("CBaseCombatCharacter", 0x10E4): "Npc (`FElysiumNpc::StatTemplate`)",
-    ("CBaseCombatCharacter", 0x10E8): "Npc (`FElysiumNpc::FloatSoundFrequency`)",
     ("CBaseCombatCharacter", 0x1589): "Npc (`FElysiumNpc::bCantDropWeapons`)",
 }
 
@@ -331,6 +334,8 @@ SHEET_ARRAY_BASE = {
 # pointer-to-member. `FElysiumNpcMemory` and `FElysiumNpcPerception` are two levels down because
 # `FElysiumNpcSenses` owns them, exactly as retail's `CAI_Senses` owns its.
 NPC_COMPONENT_PATHS: dict[str, str] = {
+    "FElysiumNpcBaseScheduleHost": "BaseScheduleHost",
+    "FElysiumNpcBaseMemory": "BaseMemory",
     "FElysiumNpcScheduleHost": "ScheduleHost",
     "FElysiumNpcMind": "Mind",
     "FElysiumNpcSenses": "Senses",
@@ -346,6 +351,19 @@ NPC_COMPONENT_PATHS: dict[str, str] = {
     "FElysiumStanceClips": "StanceClips",
     "FElysiumNpcCombatSelector": "CombatSelector",
 }
+
+# The storage a `CAI_BaseNPC` row may bind (story 5 step 5): the base's own members and the
+# components it holds. A base row resolving to Troika storage is a layer error, not a binding.
+BASE_PORT_TYPES = {"FElysiumNpcBase", "FElysiumCombatCharacter"}
+BASE_COMPONENTS = {"FElysiumNpcBaseScheduleHost", "FElysiumNpcBaseMemory", "FElysiumNpcMind",
+                   "FElysiumNpcEnemyMemory", "FElysiumNpcCognition", "FElysiumNpcFlags",
+                   "FElysiumScheduleState"}
+
+
+def check_base_storage(cls: str, offset: int, port_type: str) -> None:
+    if cls == "CAI_BaseNPC" and port_type not in BASE_PORT_TYPES | BASE_COMPONENTS:
+        raise SystemExit(f"gen_kernel_bindings: CAI_BaseNPC +0x{offset:x} binds {port_type} storage; "
+                         f"a base word lives on FElysiumNpcBase or one of its components")
 
 # Rows the generator must NOT emit even though the shape map binds a member, with the reason. One
 # row: `interesting_place_groups`' sibling `hint_groups` parses on the write the way retail's
@@ -374,10 +392,10 @@ HAND_OWNED_MEMBERS: dict[int, str] = {
 # story's rather than a later one's.
 SAVE_ROW_PATHS: dict[int, str] = {
     # The four seen-by-disposition slots, in `ESeen` order (HATE, FEAR, DISLIKE, NEMESIS).
-    0x5B68: "Senses.Memory.LastSeen[0]",
-    0x5B6C: "Senses.Memory.LastSeen[1]",
-    0x5B70: "Senses.Memory.LastSeen[2]",
-    0x5B74: "Senses.Memory.LastSeen[3]",
+    0x5B68: "BaseMemory.LastSeen[0]",
+    0x5B6C: "BaseMemory.LastSeen[1]",
+    0x5B70: "BaseMemory.LastSeen[2]",
+    0x5B74: "BaseMemory.LastSeen[3]",
     # The two witness channels, `EChannel` order (Criminal 0, Supernatural 1). `+0x635c` is the
     # `CSecureType` half 0019 story 1 named dead inside a row that stays a rule: the port stores the
     # criminal level plain, so the scrambler has no port word and the level binds like its sibling.
@@ -409,6 +427,7 @@ SAVE_ROW_PATHS: dict[int, str] = {
 # port re-derives rather than stores.
 SAVE_UNBOUND: dict[int, str] = {
     0x1A9C: "EMBEDDED",
+    0x1AE0: "EMBEDDED",
     0x5C40: "EMBEDDED",
     0x5CDC: "EMBEDDED",
     0x60B0: "EMBEDDED",
@@ -675,6 +694,7 @@ def _classify_field(cls: str, record: dict, base: dict, bound: dict, no_member: 
             return Row(kind="field", reason=f"bound by binding class {where}", **base)
         if offset in bound:
             port_type, member = bound[offset]
+            check_base_storage(cls, offset, port_type)
             path = NPC_COMPONENT_PATHS.get(port_type)
             if path is not None:
                 return Row(kind="field", via=(path, member), **base)
@@ -722,6 +742,7 @@ def _classify_save(cls: str, record: dict, base: dict, bound: dict, no_member: d
         return Row(kind="save", reason=EMBEDDED_REASON if reason == "EMBEDDED" else reason, **base)
     if offset in bound:
         port_type, member = bound[offset]
+        check_base_storage(cls, offset, port_type)
         component = NPC_COMPONENT_PATHS.get(port_type)
         if component is not None:
             return Row(kind="save", via=(component, member), **base)
@@ -805,7 +826,7 @@ def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassMod
                 if not external:
                     # Only the NPC's own two tables are this story's save walk; the chain's save
                     # rows are the port classes' own, and those classes already persist them.
-                    if binding == "Npc" and "SAVE" in flags:
+                    if binding in ("NpcBase", "Npc") and "SAVE" in flags:
                         row = _classify_save(cls, record, base, bound, no_member)
                         if row.via is not None or row.binding is not None:
                             model.saved.append(row)
@@ -839,7 +860,7 @@ def check_species_save_names(classes: list[ClassModel], species_map: dict) -> No
     one row per name, most-derived first. So a species row that reuses a Troika save name on a
     DIFFERENT word would silently stop the Troika word being saved on that class (the step-4 review).
     Only a shadow row -- the Troika word itself, re-declared -- may share a name."""
-    troika = {row.name for model in classes if model.name == "Npc" for row in model.saved}
+    troika = {row.name for model in classes if model.name in ("NpcBase", "Npc") for row in model.saved}
     for model in classes:
         if model.tables[0] not in SPECIES_TABLES:
             continue

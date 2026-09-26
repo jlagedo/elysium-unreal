@@ -550,14 +550,14 @@ bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 	FElysiumNpcTzimisceHeadClaw& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceHeadClaw>(F.Npc);
 
 	Anim10Reset(N);
-	N.Senses.Memory.Enemy = FElysiumEntityHandle();
+	N.BaseMemory.Enemy = FElysiumEntityHandle();
 	N.ActivityNumber = GTActIdle;
 	N.SetActivity(GTActWalk);
 	TestEqual(TEXT("0x103c1cd0: ACT_WALK with no enemy forwards unchanged"), N.ActivityNumber,
 		GTActWalk);
 
 	Anim10Reset(N);
-	N.Senses.Memory.Enemy = F.Other->Handle;
+	N.BaseMemory.Enemy = F.Other->Handle;
 	N.ActivityNumber = GTActIdle;
 	N.SetActivity(GTActWalk);
 	TestEqual(TEXT("0x103c1cd0: ACT_WALK with an enemy becomes ACT_TZ_WALK2"), N.ActivityNumber,
@@ -571,7 +571,7 @@ bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 
 	// The Troika body for the bare Troika line.
 	Anim10Reset(*F.Cop);
-	F.Cop->Senses.Memory.Enemy = F.Other->Handle;
+	F.Cop->BaseMemory.Enemy = F.Other->Handle;
 	F.Cop->ActivityNumber = GTActIdle;
 	F.Cop->SetActivity(GTActWalk);
 	TestEqual(TEXT("the bare Troika line takes the Troika body, so ACT_WALK stays ACT_WALK"),
@@ -690,10 +690,10 @@ bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 		N.NPC_EarlyTranslateActivity(GTActReloadFast), N.GetReloadActivity(nullptr));
 	TestEqual(TEXT("...and ACT_COVER returns slot 569's"),
 		N.NPC_EarlyTranslateActivity(GTActCover), N.GetCoverActivity(nullptr));
-	N.ScheduleHost.MemoryBits |= 0x2;
+	N.BaseScheduleHost.MemoryBits |= 0x2;
 	TestEqual(TEXT("0x10295590 step 4: m_afMemory bit 2 sends ACT_IDLE to the cover delegate too"),
 		N.NPC_EarlyTranslateActivity(GTActIdle), N.GetCoverActivity(nullptr));
-	N.ScheduleHost.MemoryBits &= ~2u;
+	N.BaseScheduleHost.MemoryBits &= ~2u;
 	N.CapabilityWord = 0;
 
 	// 5. Everything else is the identity.
@@ -763,7 +763,7 @@ bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 	// when the state ConVar is LIVE and non-zero, OR `m_afMemory` carries 0x8000000. It stays clear
 	// only when the ConVar is dead or zero AND the memory bit is clear.
 	N.BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Alert);
-	N.ScheduleHost.MemoryBits &= ~0x8000000u;
+	N.BaseScheduleHost.MemoryBits &= ~0x8000000u;
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAlertAggressive, 0);
 	TestFalse(TEXT("0x103854f0 step 3: alert with a dead cvar and a clear memory bit stays CLEAR"),
 		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAlertAggressive) != 0);
@@ -898,7 +898,7 @@ bool FAnim10UpdatePoseParametersTest::RunTest(const FString&)
 
 	// The no-aim arm: no target at all.
 	N.ShootTargetOverride = FElysiumEntityHandle();
-	N.Senses.Memory.Enemy = FElysiumEntityHandle();
+	N.BaseMemory.Enemy = FElysiumEntityHandle();
 	N.bAimWeaponAtTarget = true;
 	N.SetPoseParameterYaw = 12.f;
 	N.SetPoseParameterPitch = 12.f;
@@ -915,7 +915,7 @@ bool FAnim10UpdatePoseParametersTest::RunTest(const FString&)
 	N.Origin = FVector::ZeroVector;
 	N.Angles = FVector::ZeroVector;
 	F.Other->Origin = FVector(600.0, 0.0, 0.0);
-	N.Senses.Memory.Enemy = F.Other->Handle;
+	N.BaseMemory.Enemy = F.Other->Handle;
 	N.UpdatePoseParameters(0.1f);
 	TestTrue(TEXT("0x102bf070: an enemy raises m_bAimWeaponAtTarget"), N.bAimWeaponAtTarget);
 	TestEqual(TEXT("0x102bf070: m_hWeaponAimTarget takes the target's handle"),
@@ -1155,9 +1155,9 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 	TestFalse(TEXT("...which is not the delegate bit"), Ask(ENpcPredicate::CoverCapable));
 	N.CapabilityWord = 0;
 
-	N.ScheduleHost.MemoryBits |= 0x2;
+	N.BaseScheduleHost.MemoryBits |= 0x2;
 	TestTrue(TEXT("CoverIdleFlagged is m_afMemory bit 2"), Ask(ENpcPredicate::CoverIdleFlagged));
-	N.ScheduleHost.MemoryBits &= ~0x2u;
+	N.BaseScheduleHost.MemoryBits &= ~0x2u;
 
 	N.NpcFlags.Set(EElysiumNpcFlag2::D_MILDLY_CRAZY);
 	TestTrue(TEXT("LaughIdleFlagged is m_bfAINPCFlags2 0x80000, the same bit slot 359 reads"),
@@ -1415,7 +1415,7 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 
 	N.Cognition.Conditions.Set(EElysiumNpcCond::TooFarToAttack);
 	N.ScheduleHost.EnemyDistUnits = 5000.f;
-	N.Senses.Memory.Enemy = FElysiumEntityHandle();
+	N.BaseMemory.Enemy = FElysiumEntityHandle();
 	TestEqual(TEXT("0x10385e40: the distance is NOT strictly below the bare cvar, so the far pair "
 		"0xcb answers"), N.SelectScheduleMeleeCombat(0), 0xcb);
 

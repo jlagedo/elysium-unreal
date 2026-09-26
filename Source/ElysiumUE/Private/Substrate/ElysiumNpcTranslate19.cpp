@@ -142,7 +142,7 @@ int32 FElysiumNpc::TroikaTranslateScheduleRetail(int32 ScheduleNumber)
 		// `m_nHintType`, which family Hints owns as `FHintWords::HintType` — `HintWords()`
 		// answering false covers retail's null-pointer half.
 		FHintWords Hint;
-		if (HintWords(ScheduleHost.HintNode, Hint) && Hint.HintType == GTranslate19HintTypeDoor)
+		if (HintWords(BaseScheduleHost.HintNode, Hint) && Hint.HintType == GTranslate19HintTypeDoor)
 		{
 			return 0x78;
 		}

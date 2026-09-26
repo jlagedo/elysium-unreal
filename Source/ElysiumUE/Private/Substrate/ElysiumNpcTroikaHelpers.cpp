@@ -293,7 +293,7 @@ bool FElysiumNpc::Slot54(FElysiumEntity* Other)
 	// as `ElysiumSchedule::MaskHasCondition`, which is called rather than re-stated.
 	if (Other != nullptr && World != nullptr)
 	{
-		const FElysiumEntity* Enemy = World->Resolve(Senses.Memory.Enemy);
+		const FElysiumEntity* Enemy = World->Resolve(BaseMemory.Enemy);
 		if (Enemy == Other && Schedule.Current != ElysiumScheduleId::None)
 		{
 			if (!ElysiumSchedule::MaskHasCondition(Schedule, *this, EElysiumNpcCond::LostEnemy))
@@ -323,9 +323,9 @@ void FElysiumNpc::Slot56(FElysiumEntity* Other, FVector, FVector, const TCHAR*)
 	{
 		return;
 	}
-	if (World->Resolve(Senses.Memory.LastEnemy) == Other)
+	if (World->Resolve(BaseMemory.LastEnemy) == Other)
 	{
-		Senses.Memory.LastEnemy = FElysiumEntityHandle();
+		BaseMemory.LastEnemy = FElysiumEntityHandle();
 	}
 }
 

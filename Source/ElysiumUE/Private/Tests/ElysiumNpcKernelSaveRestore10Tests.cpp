@@ -233,19 +233,19 @@ bool FElysiumNpcKernelSaveRestore10BaseSaveTest::RunTest(const FString&)
 	// the second argument of `thunk_FUN_101cf250` is the sentinel MODE, not a count.
 	// `1027bc6c PUSH 0x4` on `+0x5b8c` and `1027bc80 PUSH 0x3` on `+0x5db4`.
 	N.ExtendedBlockedByFriendTimer = FElysiumNpc::SaveStampFloatMax();   // mode 4 catches it
-	N.ScheduleHost.WaitFinished = 0.0;                                  // mode 3 catches it
+	N.BaseScheduleHost.WaitFinished = 0.0;                                  // mode 3 catches it
 	N.WeaponBlockedByFriendTimer = FElysiumNpc::SaveStampFloatMax();    // NOT one of the two
-	N.ScheduleHost.MoveWaitFinished = 0.0;                              // NOT one of the two
+	N.BaseScheduleHost.MoveWaitFinished = 0.0;                              // NOT one of the two
 	N.SaveArchiveLog.Reset();
 
 	TestEqual(TEXT("the base answers the chain's result"), N.BaseSave(nullptr), 1);
 	// The encode and the decode bracket the archive call, so the fields are back where they started.
 	TestEqual(TEXT("the extended-block timer round-trips"),
 		N.ExtendedBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
-	TestEqual(TEXT("the wait stamp round-trips"), N.ScheduleHost.WaitFinished, 0.0);
+	TestEqual(TEXT("the wait stamp round-trips"), N.BaseScheduleHost.WaitFinished, 0.0);
 	TestEqual(TEXT("the neighbour of the first is untouched"),
 		N.WeaponBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
-	TestEqual(TEXT("and so is the neighbour of the second"), N.ScheduleHost.MoveWaitFinished, 0.0);
+	TestEqual(TEXT("and so is the neighbour of the second"), N.BaseScheduleHost.MoveWaitFinished, 0.0);
 
 	// The archive call: one `WriteFields` of `AIExtendedSaveHeader_t` and nothing else.
 	TestEqual(TEXT("the base writes exactly one block"), N.SaveArchiveLog.Num(), 1);
@@ -256,7 +256,7 @@ bool FElysiumNpcKernelSaveRestore10BaseSaveTest::RunTest(const FString&)
 
 	// The three flag bits, in the order `0x1027bc60` ORs them.
 	TestEqual(TEXT("a quiet NPC sets no flag bit"), N.LastSavedExtendedHeader.Flags, 0u);
-	N.Senses.Memory.Enemy = N.Handle;   // slot 0x29c `GetEnemy()` is non-null
+	N.BaseMemory.Enemy = N.Handle;   // slot 0x29c `GetEnemy()` is non-null
 	N.BaseSave(nullptr);
 	TestEqual(TEXT("bit 0x1 is the committed enemy"), N.LastSavedExtendedHeader.Flags, 1u);
 	N.SetTarget(N.Handle);              // `m_hTargetEnt` resolves onto a live entity

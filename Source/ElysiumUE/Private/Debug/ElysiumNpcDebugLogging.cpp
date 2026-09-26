@@ -40,7 +40,7 @@ namespace ElysiumNpcDebugLogging
 		// Senses re-confirms the committed enemy every tick it is in view. Drawing three shapes
 		// for each of those buries the timeline in combat, so an in-band reconfirmation of the
 		// current enemy logs nothing; admissions, band changes and bypasses still draw.
-		const bool bReconfirmation = Candidate.Handle == Npc.Senses.Memory.Enemy
+		const bool bReconfirmation = Candidate.Handle == Npc.BaseMemory.Enemy
 			&& !Sighting.bOuterBand && !Sighting.bRangeBypass && !Sighting.bDamageOverride;
 		if (bReconfirmation)
 		{

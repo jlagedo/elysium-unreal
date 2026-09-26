@@ -125,14 +125,14 @@ bool FElysiumNpcKernelBaseHelpersMeleeConditionsTest::RunTest(const FString&)
 
 	// THE SECOND DIFFERENCE: `0x1026d9a0` re-dispatches `GetEnemy()` as a null gate after the dot
 	// and `0x1026da90` does not — so with no committed enemy the two answer differently.
-	F.Npc->Senses.Memory.Enemy = FElysiumEntityHandle();
+	F.Npc->BaseMemory.Enemy = FElysiumEntityHandle();
 	TestEqual(TEXT("1: no enemy refuses after the dot gate"),
 		F.Npc->MeleeAttack1Conditions(0.9f, 10.f), None);
 	TestEqual(TEXT("2: no enemy still answers COND_CAN_MELEE_ATTACK2 — there is no null gate"),
 		F.Npc->MeleeAttack2Conditions(0.9f, 10.f), CanMelee2);
 
 	// THE THIRD DIFFERENCE: the `FL_ONGROUND` read. Only `0x1026d9a0` has it.
-	F.Npc->Senses.Memory.Enemy = F.Other->Handle;
+	F.Npc->BaseMemory.Enemy = F.Other->Handle;
 	F.Other->Flags &= ~1;
 	TestEqual(TEXT("1: an airborne enemy answers nothing"),
 		F.Npc->MeleeAttack1Conditions(0.9f, 10.f), None);

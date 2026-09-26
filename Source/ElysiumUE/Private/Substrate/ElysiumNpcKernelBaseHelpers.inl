@@ -99,12 +99,6 @@ enum class EHintRejectReason : uint8
 	FailedLos,           // "Failed LOS check (%s)" / "Failed hint LOS"
 };
 
-/** Family Hints owns `FHintWords`, the typed view of one `CAI_Hint`'s datamap. Forward-declared
- *  here because this family's `.inl` is included ahead of that one and the pure rules below take it
- *  by reference; reusing it is the point — a second copy of a hint's words is exactly what the two
- *  families must not stand. */
-struct FHintWords;
-
 // --- The bodies -----------------------------------------------------------------------------------
 //
 // `CAI_BaseNPC`'s own.

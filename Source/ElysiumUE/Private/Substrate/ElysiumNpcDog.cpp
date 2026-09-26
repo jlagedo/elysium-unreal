@@ -193,7 +193,7 @@ float FElysiumNpcDog::MaxYawSpeed()
 	// `CNPC_VDog::MaxYawSpeed` `0x10374130`. The Troika ladder with three differences: the fall-out
 	// for a recognised activity is 40.0 rather than 45.0, there is no `debug_slow_*` arm at all, and
 	// the turning cvar is the Dog's own `0x1093ad24`.
-	if ((ScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
+	if ((BaseScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
 	{
 		return MaxYawSpeedTurningArm(TEXT("0x1093ad24"));
 	}

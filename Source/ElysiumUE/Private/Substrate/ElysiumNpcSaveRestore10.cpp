@@ -378,7 +378,7 @@ FElysiumNpc::FAiExtendedSaveHeader FElysiumNpc::BuildExtendedSaveHeader() const
 	Header.Version = GExtendedHeaderVersion;
 	Header.Flags = 0;
 	// Bit 0x1: slot 0x29c `GetEnemy()` is non-null.
-	if (Senses.Memory.Enemy.IsSet())
+	if (BaseMemory.Enemy.IsSet())
 	{
 		Header.Flags |= GExtendedHeaderFlagEnemy;
 	}
@@ -421,7 +421,7 @@ int32 FElysiumNpc::BaseSave(void* Archive)
 	// two MODE arguments as counts. `1027bc6c PUSH 0x4 / LEA EBP,[ESI+0x5b8c]` and
 	// `1027bc80 PUSH 0x3 / LEA EBX,[ESI+0x5db4]`: exactly two encode calls.
 	SaveStampEncode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
-	SaveStampEncode(ScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
+	SaveStampEncode(BaseScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
 
 	// `if (m_pMotor +0x5d44) thunk_FUN_102e0b60(m_pMotor);` — the motor's pre-archive pointer
 	// fix-up, GUARDED; then `thunk_FUN_102e8aa0(&m_MoveAndShootOverlay +0x5cf4)`, which is NOT.
@@ -440,7 +440,7 @@ int32 FElysiumNpc::BaseSave(void* Archive)
 
 	// The decode, in the same order as the encode, then the two post-fixups.
 	SaveStampDecode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);
-	SaveStampDecode(ScheduleHost.WaitFinished, ESaveStampMode::Zero);
+	SaveStampDecode(BaseScheduleHost.WaitFinished, ESaveStampMode::Zero);
 	if (Motor != nullptr)
 	{
 		++MotorRestoreFixups;

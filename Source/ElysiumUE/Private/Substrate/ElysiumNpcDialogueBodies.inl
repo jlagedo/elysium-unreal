@@ -158,13 +158,6 @@ TArray<FString> DialogUserMessages;
  *  to -1 — rather than refusing the body. */
 FElysiumEntity* CreateControllerNpcEntity(const TCHAR* Classname);
 
-/** `m_pNavigator->GetPathType()` — retail's `path+0x30`, read through `0x102ee620` off `+0x5d34`.
- *  `8` is the pedestrian/crosswalk path type both crosswalk bodies gate on. **SEAM**: the shape map
- *  routes `+0x5d34` to `FElysiumScriptedCharacter::Motor`, "the one motor seam this chain stands
- *  beside the body", and that motor carries no path object at all. `-1` is neither `8` nor any
- *  other retail type; **nothing in this runtime writes it**, and it is a member rather than a
- *  literal so 0002's navigator half has one place to land it. */
-int32 NavigatorPathTypeWord = -1;   // navigator's path +0x30
 int32 NavigatorPathType() const;
 
 /** `0x102f96e0` — given a waypoint's owning entity and a link id, the path node whose id matches.

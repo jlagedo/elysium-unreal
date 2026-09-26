@@ -845,7 +845,7 @@ bool FElysiumNpcKernelLifecycle19OnRestoreGiveUpTest::RunTest(const FString&)
 	}
 	F.Npc->LastSavedExtendedHeader.Version = 0;
 	F.Npc->OnRestore(true);                                              // 0x102998c0 → give-up
-	TestFalse(TEXT("give-up clears refind latch"), F.Npc->ScheduleHost.bDoPostRestoreRefindPath);
+	TestFalse(TEXT("give-up clears refind latch"), F.Npc->BaseScheduleHost.bDoPostRestoreRefindPath);
 	TestFalse(TEXT("give-up clears schedule"), F.Npc->Schedule.IsRunning());
 	return true;
 }

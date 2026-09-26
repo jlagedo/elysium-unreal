@@ -72,7 +72,7 @@ void FElysiumNpcAsianVampire::NPCInit()
 	LastJumpPosition[0] = OriginUnits;                                   // 10360d45 slot 217
 	LastJumpPosition[1] = OriginUnits;
 	LastJumpPositionIdx = 0;                                             // +0x66d0 CORRECTION
-	ScheduleHost.HintNode = INDEX_NONE;                                  // +0x5ddc inherited
+	BaseScheduleHost.HintNode = INDEX_NONE;                                  // +0x5ddc inherited
 	bAsianVampirePathBlocked = false;                                    // +0x66d4
 	MovedTimeStamp = NpcKernelLifecycle19_2Shared::Lifecycle19_2Now(*this);                            // +0x66d8
 	MovedPosition = OriginUnits;                                         // +0x66dc
@@ -109,7 +109,7 @@ int32 FElysiumNpcAsianVampire::SelectScheduleMeleeCombat(int32 Unused)
 	(void)Unused;
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr);
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
 	if (!bInMelee)

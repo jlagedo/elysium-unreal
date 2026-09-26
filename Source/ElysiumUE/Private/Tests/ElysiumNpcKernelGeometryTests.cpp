@@ -390,7 +390,7 @@ bool FElysiumNpcKernelGeometryEyeOffsetTest::RunTest(const FString&)
 	TestTrue(TEXT("m_vDefaultEyeOffset is the chain's eye point minus the origin"),
 		DefaultOffset.Equals(FVector(0.f, 0.f, ElysiumMove::StandViewZ), 0.01));
 
-	TestEqual(TEXT("no hint node is claimed"), F.Guard->ScheduleHost.HintNode, INDEX_NONE);
+	TestEqual(TEXT("no hint node is claimed"), F.Guard->BaseScheduleHost.HintNode, INDEX_NONE);
 	TestTrue(TEXT("an ordinary activity answers m_vDefaultEyeOffset"),
 		F.Guard->EyeOffset(0x10, 0).Equals(DefaultOffset, 0.01));
 	TestTrue(TEXT("a hint activity with no hint node also answers it"),

@@ -266,7 +266,7 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 	TestEqual(TEXT("ChangeSchedule installs the program"), Guard->Schedule.Current,
 		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 	TestEqual(TEXT("and stamps m_IdealSchedule with its GLOBAL id"),
-		Guard->ScheduleHost.IdealScheduleRetail,
+		Guard->BaseScheduleHost.IdealScheduleRetail,
 		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 
 	// --- `0x10280db0` `IsTaskIndexCurrent` and `0x10280f40` `NextScheduledTask` -------------------
@@ -294,8 +294,8 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 	Guard->Cognition.Conditions.Reset();
 	Guard->Schedule.TaskIndex = TaskCount - 1;
 	Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
-	Guard->ScheduleHost.FailedSchedule = ElysiumSched::FAIL;
-	Guard->ScheduleHost.InterruptSchedule = ElysiumSched::FAIL;
+	Guard->BaseScheduleHost.FailedSchedule = ElysiumSched::FAIL;
+	Guard->BaseScheduleHost.InterruptSchedule = ElysiumSched::FAIL;
 	Guard->NextScheduledTask();
 	TestEqual(TEXT("NextScheduledTask advances the index"), Guard->Schedule.TaskIndex, TaskCount);
 	// Representation update: `10280f40 MOV [this+0x5c44],0` is the full status word, not the old
@@ -304,9 +304,9 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 		EElysiumTaskStatus::New);
 	TestTrue(TEXT("exhausting the program raises COND_SCHEDULE_DONE"),
 		Guard->Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone));
-	TestEqual(TEXT("and zeroes m_failedSchedule"), Guard->ScheduleHost.FailedSchedule,
+	TestEqual(TEXT("and zeroes m_failedSchedule"), Guard->BaseScheduleHost.FailedSchedule,
 		ElysiumScheduleId::None);
-	TestEqual(TEXT("and m_interuptSchedule"), Guard->ScheduleHost.InterruptSchedule,
+	TestEqual(TEXT("and m_interuptSchedule"), Guard->BaseScheduleHost.InterruptSchedule,
 		ElysiumScheduleId::None);
 
 	Guard->Cognition.Conditions.Reset();
@@ -342,15 +342,15 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 		Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 
 	// --- `0x102a18a0` `WaitFinished` --------------------------------------------------------------
-	Guard->ScheduleHost.SetWaitFinished(2.5f, 10.0);
-	TestEqual(TEXT("a positive operand stamps curtime + operand"), Guard->ScheduleHost.WaitFinished,
+	Guard->BaseScheduleHost.SetWaitFinished(2.5f, 10.0);
+	TestEqual(TEXT("a positive operand stamps curtime + operand"), Guard->BaseScheduleHost.WaitFinished,
 		12.5, 1e-6);
-	Guard->ScheduleHost.SetWaitFinished(0.0f, 10.0);
+	Guard->BaseScheduleHost.SetWaitFinished(0.0f, 10.0);
 	TestEqual(TEXT("a zero operand takes the retail default instead (UNRECOVERED, 0.0 here)"),
-		Guard->ScheduleHost.WaitFinished, 10.0, 1e-6);
-	Guard->ScheduleHost.SetWaitFinished(-3.0f, 10.0);
+		Guard->BaseScheduleHost.WaitFinished, 10.0, 1e-6);
+	Guard->BaseScheduleHost.SetWaitFinished(-3.0f, 10.0);
 	TestEqual(TEXT("and so does a negative one — not a same-frame deadline"),
-		Guard->ScheduleHost.WaitFinished, 10.0, 1e-6);
+		Guard->BaseScheduleHost.WaitFinished, 10.0, 1e-6);
 
 	// --- `0x1027db30` -----------------------------------------------------------------------------
 	TestFalse(TEXT("every node index is out of range with no node list (the seam)"),
@@ -957,7 +957,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 		Request.bRequest4 = true;
 		Guard->ScheduleHost.bAllowKickHintUse = true;
 		Guard->ScheduleHost.KickPropSearchTimer = 0.0;
-		Guard->ScheduleHost.HintNode = INDEX_NONE;
+		Guard->BaseScheduleHost.HintNode = INDEX_NONE;
 		const double Now = Fixture.World.NowSeconds();
 		TestEqual(TEXT("with no hint node and no kick prop the selector has no opinion"),
 			Guard->SelectCoverOrKickSchedule(Request), 0);

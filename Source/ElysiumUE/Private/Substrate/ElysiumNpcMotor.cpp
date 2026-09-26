@@ -369,7 +369,7 @@ float FElysiumNpc::RetailYawConVarValue(const TCHAR* Address)
 
 bool FElysiumNpc::NavHintNodeType(int32 HintNode, int32& OutType) const
 {
-	// `CAI_Hint+0x5dc m_nHintType`. **SEAM**: `ScheduleHost.HintNode` is a bare index and no store
+	// `CAI_Hint+0x5dc m_nHintType`. **SEAM**: `BaseScheduleHost.HintNode` is a bare index and no store
 	// carries hint types — the Squad family records the same gap for the global list.
 	(void)HintNode;
 	(void)OutType;
@@ -541,7 +541,7 @@ float FElysiumNpc::MaxYawSpeed()
 	// werewolf's body is a scope-trace push/pop around a direct call into this one.
 
 	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, arm for arm.
-	if ((ScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
+	if ((BaseScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
 	{
 		return MaxYawSpeedTurningArm(TEXT("0x10924c94"));
 	}
@@ -676,7 +676,7 @@ bool FElysiumNpc::ShouldIgnoreCollision(FElysiumEntity* Other)
 	// The hint-node arm: a claimed hint whose type is strictly inside `(0x283b, 0x283e)` combined
 	// with `m_edtDerivedType & 0x14` on the candidate.
 	int32 HintType = 0;
-	if (ScheduleHost.HintNode != INDEX_NONE && NavHintNodeType(ScheduleHost.HintNode, HintType)
+	if (BaseScheduleHost.HintNode != INDEX_NONE && NavHintNodeType(BaseScheduleHost.HintNode, HintType)
 		&& 0x283b < HintType && HintType < 0x283e && (RetailDerivedType(*Other) & 0x14) != 0)
 	{
 		return true;
@@ -798,8 +798,8 @@ bool FElysiumNpc::ShouldMoveAndShoot()
 	//         return false;      // note: the weapon arms fall out with ZERO, not with the enemy test
 	//     }
 	//     return false;
-	const bool bHasEnemy = Senses.Memory.Enemy.IsSet() && World != nullptr
-		&& World->Resolve(Senses.Memory.Enemy) != nullptr;
+	const bool bHasEnemy = BaseMemory.Enemy.IsSet() && World != nullptr
+		&& World->Resolve(BaseMemory.Enemy) != nullptr;
 	if (bHasEnemy
 		&& NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY))
 	{
@@ -844,8 +844,8 @@ bool FElysiumNpc::ValidateNavGoal()
 	{
 		return true;
 	}
-	FElysiumEntity* Enemy = World != nullptr && Senses.Memory.Enemy.IsSet()
-		? World->Resolve(Senses.Memory.Enemy)
+	FElysiumEntity* Enemy = World != nullptr && BaseMemory.Enemy.IsSet()
+		? World->Resolve(BaseMemory.Enemy)
 		: nullptr;
 	if (Enemy == nullptr)
 	{
@@ -1131,6 +1131,6 @@ void FElysiumNpc::ResumeScheduledMove()
 	{
 		NavStopMoving();
 	}
-	ScheduleHost.bShouldMove = true;
+	BaseScheduleHost.bShouldMove = true;
 }
 

@@ -287,7 +287,7 @@ namespace
 				return;
 			}
 			Hate(Target, 5);
-			Fighter->Senses.Memory.Enemy = Target->Handle;
+			Fighter->BaseMemory.Enemy = Target->Handle;
 			// `SelectIdealState` (`0x102ad660`) only promotes idle → combat through
 			// `HasInterruptCondition`, which answers 0 with no program installed, and these
 			// fixtures install none. `SetState(2)` (`0x1026e340`) is retail's OWN commit — it is
@@ -505,7 +505,7 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 			return false;
 		}
 		F.RunAdmissionAndLoadout();
-		F.Fighter->Senses.Memory.Enemy = F.Target->Handle;
+		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
 
 		// 100 cm is inside the recovered 64-Source-unit reach, and the fighter faces +X.
 		FElysiumNpcConditions Cond;
@@ -554,7 +554,7 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 			return false;
 		}
 		F.RunAdmissionAndLoadout();
-		F.Fighter->Senses.Memory.Enemy = F.Target->Handle;
+		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
 		FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
 		if (!TestNotNull(TEXT("the fighter holds its pistol"), Weapon))
 		{
@@ -622,7 +622,7 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 			return false;
 		}
 		F.RunAdmissionAndLoadout();
-		F.Fighter->Senses.Memory.Enemy = F.Target->Handle;
+		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
 		// A real notice, delivered: the record is written, and the response policy still raises
 		// nothing, because the policy is what is unrecovered.
 		TestTrue(TEXT("a swing from 100 cm is inside the recovered 150-unit notice radius"),
@@ -769,14 +769,14 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	TestTrue(TEXT("10281be5 installed the replacement selected after completion"),
 		F.Fighter->Schedule.IsRunning());
 	TestEqual(TEXT("102814d0 recorded that replacement as m_IdealSchedule"),
-		F.Fighter->ScheduleHost.IdealScheduleRetail,
+		F.Fighter->BaseScheduleHost.IdealScheduleRetail,
 		F.Fighter->Schedule.Current);
 	TestTrue(TEXT("the replacement keeps the schedule body owner"),
 		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 
 	// Back in the band, the attack window opens.
 	F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
-	F.Fighter->Senses.Memory.Enemy = F.Target->Handle;
+	F.Fighter->BaseMemory.Enemy = F.Target->Handle;
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 11.0);
 	TestTrue(TEXT("an enemy back inside the band is shootable"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanRangeAttack1));
@@ -1061,7 +1061,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 	F.Fighter->Senses.TickSight(*F.Fighter, 20.0);
 	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 20.0);
 	TestTrue(TEXT("the idle program does not starve the acquisition"),
-		F.Fighter->Senses.Memory.Enemy == F.Player->Handle);
+		F.Fighter->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...and the pass raises NEW_ENEMY"),
 		F.Fighter->Cognition.Conditions.Has(ECond::NewEnemy));
 
@@ -1113,7 +1113,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestEqual(TEXT("the victim starts neutral toward the player"),
 		static_cast<int32>(Victim.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
 		static_cast<int32>(EElysiumRelationship::Neutral));
-	TestFalse(TEXT("...and holds no enemy"), Victim.Senses.Memory.Enemy.IsSet());
+	TestFalse(TEXT("...and holds no enemy"), Victim.BaseMemory.Enemy.IsSet());
 	// Damage does not make this relationship hostile. Give the fixture the authored D_HT row a
 	// combatant has, then verify the damage path writes its existing actor into CAI_Memory.
 	Victim.Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
@@ -1138,7 +1138,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 		return false;
 	}
 	TestTrue(TEXT("the commit recorded the attacker"),
-		Victim.Senses.Memory.LastDamageAttacker == F.Player->Handle);
+		Victim.BaseMemory.LastDamageAttacker == F.Player->Handle);
 	TestEqual(TEXT("...and retains the authored hostile eligibility"),
 		static_cast<int32>(Victim.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
 		static_cast<int32>(EElysiumRelationship::Hate));
@@ -1154,7 +1154,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestTrue(TEXT("the pass raises the damage condition"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
 	TestTrue(TEXT("...commits the attacker as the enemy"),
-		Victim.Senses.Memory.Enemy == F.Player->Handle);
+		Victim.BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...raises NEW_ENEMY"), Victim.Cognition.Conditions.Has(ECond::NewEnemy));
 	TestTrue(TEXT("...and an enemy inside reach and faced is attackable"),
 		Victim.Cognition.Conditions.Has(ECond::CanMeleeAttack1));
@@ -1184,7 +1184,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestFalse(TEXT("the damage packet is not gathered twice"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
 	TestTrue(TEXT("...and the enemy stays committed"),
-		Victim.Senses.Memory.Enemy == F.Player->Handle);
+		Victim.BaseMemory.Enemy == F.Player->Handle);
 
 	const int32 SerialBefore = Fists->Swing.Serial;
 	TestTrue(TEXT("the swing program starts"),
@@ -1211,7 +1211,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestEqual(TEXT("...and a row that can never win was not stored at all"),
 		Friend.Relationships.NumDerivedRules(), 0);
 	ElysiumNpcEnemy::GatherConditions(Friend, 1.0);
-	TestFalse(TEXT("...so it acquires no enemy"), Friend.Senses.Memory.Enemy.IsSet());
+	TestFalse(TEXT("...so it acquires no enemy"), Friend.BaseMemory.Enemy.IsSet());
 
 	// --- The arms with no attacker to remember ---------------------------------------------------
 	// Three real producers commit positive damage that names no combat character to become hostile
@@ -1278,11 +1278,11 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
 	TestNotNull(TEXT("the subsequent sight pass writes the actor record"),
 		Victim.EnemyMemory.Find(F.Player->Handle));
-	TestTrue(TEXT("the pass commits the attacker"), Victim.Senses.Memory.Enemy == F.Player->Handle);
+	TestTrue(TEXT("the pass commits the attacker"), Victim.BaseMemory.Enemy == F.Player->Handle);
 	ElysiumNpcEnemy::GatherConditions(Victim, 1000.0);
 	TestNotNull(TEXT("the actor record has no time expiry"), Victim.EnemyMemory.Find(F.Player->Handle));
 	TestTrue(TEXT("...and the hostile enemy remains committed"),
-		Victim.Senses.Memory.Enemy == F.Player->Handle);
+		Victim.BaseMemory.Enemy == F.Player->Handle);
 	return true;
 }
 

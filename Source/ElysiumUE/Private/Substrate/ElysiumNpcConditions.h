@@ -13,6 +13,7 @@ class FElysiumEntityWorld;
 class FElysiumNpc;
 struct FElysiumLocalIdSpace;
 struct FElysiumEntityHandle;
+struct FElysiumNpcBaseMemory;
 struct FElysiumNpcMemory;
 
 // The AI condition bitset and the producers that fill it.
@@ -618,7 +619,7 @@ namespace ElysiumNpcCond
 
 	// The accumulator half of that rule, run from the typed damage commit. Kept here rather than on
 	// the leaf so the window arithmetic has one owner and one test.
-	void AccumulateDamage(FElysiumNpcMemory& Memory, int32 CommittedDamage, double Now);
+	void AccumulateDamage(FElysiumNpcBaseMemory& Memory, int32 CommittedDamage, double Now);
 
 	// --- Sound categories ---------------------------------------------------------------------------
 	// CHOSEN, NOT RECOVERED (stated once here because both hearing and the condition
@@ -649,7 +650,7 @@ namespace ElysiumNpcCond
 	void GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
 
 	// The seen set joined to the relationship table: `SEE_HATE` / `SEE_FEAR`, and the last-seen
-	// memory slots those categories own. Writes `Npc.Senses.Memory.LastSeen*`.
+	// memory slots those categories own. Writes `Npc.BaseMemory.LastSeen*`.
 	void GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
 
 	// `HAVE_ENEMY_LOS` / `ENEMY_OCCLUDED` / `ENEMY_DEAD` / `SEE_ENEMY` for the committed enemy.

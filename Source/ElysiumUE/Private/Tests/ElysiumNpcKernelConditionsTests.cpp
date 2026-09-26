@@ -327,7 +327,7 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 
 	// --- The CHANGED half: idle -> alert (retail 1 -> 3) ---
 	F.Npc->bReturnToInitialPos = false;
-	F.Npc->ScheduleHost.MemoryBits = 0xffffffffu;
+	F.Npc->BaseScheduleHost.MemoryBits = 0xffffffffu;
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::MADE_HUNT_PATH);
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::AT_CROSSWALK);
@@ -339,7 +339,7 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 
 	TestTrue(TEXT("ALERT arms m_bReturnToInitialPos (+0x6494)"), F.Npc->bReturnToInitialPos);
 	TestEqual(TEXT("m_afMemory keeps only the low 27 bits (&= 0x07ffffff)"),
-		static_cast<int64>(F.Npc->ScheduleHost.MemoryBits), static_cast<int64>(0x07ffffffu));
+		static_cast<int64>(F.Npc->BaseScheduleHost.MemoryBits), static_cast<int64>(0x07ffffffu));
 	TestFalse(TEXT("PRESERVE_PATH is cleared on the ground"),
 		F.Npc->NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH));
 	TestFalse(TEXT("MADE_HUNT_PATH is cleared"),
@@ -366,13 +366,13 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 
 	// --- The UNCHANGED half: old == new still runs the whole tail ---
 	F.Npc->bReturnToInitialPos = false;
-	F.Npc->ScheduleHost.MemoryBits = 0xffffffffu;
+	F.Npc->BaseScheduleHost.MemoryBits = 0xffffffffu;
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::AT_CROSSWALK);
 	F.Npc->Cognition.bCondTookDamage = true;
 	F.Npc->OnStateChangeTroika(EElysiumNpcState::Alert, EElysiumNpcState::Alert);
 	TestFalse(TEXT("no transition does not arm m_bReturnToInitialPos"), F.Npc->bReturnToInitialPos);
 	TestEqual(TEXT("and does NOT mask m_afMemory — that write is inside the changed half"),
-		static_cast<int64>(F.Npc->ScheduleHost.MemoryBits), static_cast<int64>(0xffffffffu));
+		static_cast<int64>(F.Npc->BaseScheduleHost.MemoryBits), static_cast<int64>(0xffffffffu));
 	TestFalse(TEXT("but the tail still clears AT_CROSSWALK"),
 		F.Npc->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
 	TestFalse(TEXT("and still clears m_bCondTookDamage"), F.Npc->Cognition.bCondTookDamage);
@@ -451,7 +451,7 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 	{
 		for (const bool bEnemy : { false, true })
 		{
-			Cam->Senses.Memory.Enemy = bEnemy ? Foe->Handle : FElysiumEntityHandle();
+			Cam->BaseMemory.Enemy = bEnemy ? Foe->Handle : FElysiumEntityHandle();
 			TestEqual(TEXT("a camera's slot 461 answers retail ALERT"), Cam->SelectIdealStateRetail(), 3);
 			TestEqual(TEXT("and writes it as the ideal state"), Cam->IdealStateRetail(), 3);
 		}
@@ -463,24 +463,24 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 
 	// `CNPC_VMingXiao::vfunc461` — the dead write is ALWAYS overwritten by the enemy test, which is
 	// retail's own dead code. So the answer depends on the enemy and on nothing else.
-	Xiao->Senses.Memory.Enemy = Foe->Handle;
+	Xiao->BaseMemory.Enemy = Foe->Handle;
 	TestEqual(TEXT("MingXiao with an enemy is COMBAT (retail 2)"), Xiao->SelectIdealStateRetail(), 2);
-	Xiao->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Xiao->BaseMemory.Enemy = FElysiumEntityHandle();
 	TestEqual(TEXT("MingXiao without one is IDLE (retail 1)"), Xiao->SelectIdealStateRetail(), 1);
 	// A DEAD MingXiao still answers from its enemy: the 7 write is unreachable (retail's own dead
 	// code, reproduced).
 	Xiao->SetState(7);
-	Xiao->Senses.Memory.Enemy = Foe->Handle;
+	Xiao->BaseMemory.Enemy = Foe->Handle;
 	TestEqual(TEXT("a dead MingXiao still answers from the enemy: the 7 write is unreachable"),
 		Xiao->SelectIdealStateRetail(), 2);
 
 	// `CNPC_VMingXiaoTentacle::vfunc461` — here the dead arm is REAL and short-circuits.
-	Tentacle->Senses.Memory.Enemy = Foe->Handle;
+	Tentacle->BaseMemory.Enemy = Foe->Handle;
 	TestEqual(TEXT("a live tentacle with an enemy is COMBAT"), Tentacle->SelectIdealStateRetail(), 2);
-	Tentacle->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Tentacle->BaseMemory.Enemy = FElysiumEntityHandle();
 	TestEqual(TEXT("and without one is IDLE"), Tentacle->SelectIdealStateRetail(), 1);
 	Tentacle->WriteIdealStateRetail(7);
-	Tentacle->Senses.Memory.Enemy = Foe->Handle;
+	Tentacle->BaseMemory.Enemy = Foe->Handle;
 	TestEqual(TEXT("a tentacle whose IDEAL state is dead stays dead, enemy or not"),
 		Tentacle->SelectIdealStateRetail(), 7);
 	// And one whose CURRENT state is dead stays dead too, with a live ideal state.
@@ -820,10 +820,10 @@ bool FElysiumNpcKernelCondAlternateAiTest::RunTest(const FString&)
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
 
 	// `FUN_10298800` — three stores.
-	F.Npc->ScheduleHost.bShouldMove = true;
+	F.Npc->BaseScheduleHost.bShouldMove = true;
 	F.Npc->AlternateAi = 0;
 	F.Npc->EnterAlternateAi();
-	TestFalse(TEXT("m_bShouldMove (+0x1a40) is cleared"), F.Npc->ScheduleHost.bShouldMove);
+	TestFalse(TEXT("m_bShouldMove (+0x1a40) is cleared"), F.Npc->BaseScheduleHost.bShouldMove);
 	TestEqual(TEXT("m_eAlternateAI (+0x644c) is armed to mode 1"), F.Npc->AlternateAi, 1);
 
 	// `FUN_10290040` with a dead `m_hOpeningDoor`: the ONE arm that resets the mode and lets go.

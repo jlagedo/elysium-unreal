@@ -200,7 +200,7 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	// Both hostile; the guard is already committed to thug A, who then dies.
 	F.Hate(F.ThugA, 5);
 	F.Hate(F.Player, 5);
-	F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 	F.ThugA->bDead = true;
 
 	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
@@ -209,10 +209,10 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	TestTrue(TEXT("the dead committed enemy raises ENEMY_DEAD in the same pass"),
 		Cond.Has(EElysiumNpcCond::EnemyDead));
 	TestTrue(TEXT("...and the pass replaces it rather than carrying a corpse"),
-		F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+		F.Guard->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...raising NEW_ENEMY"), Cond.Has(EElysiumNpcCond::NewEnemy));
 	TestTrue(TEXT("the old handle went through the last-enemy path"),
-		F.Guard->Senses.Memory.LastEnemy == F.ThugA->Handle);
+		F.Guard->BaseMemory.LastEnemy == F.ThugA->Handle);
 
 	// Step 5 gathers the committed enemy's own conditions AFTER the choice, so they describe the
 	// player and not the corpse: nothing has failed a LOS check for the new target yet.
@@ -246,7 +246,7 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 		ElysiumNpcEnemy::ShouldChooseNewEnemy(*F.Guard, Empty));
 
 	// A living, non-eluded enemy with none of the trigger conditions stays selected.
-	F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 	TestFalse(TEXT("a living, non-eluded enemy is sticky"),
 		ElysiumNpcEnemy::ShouldChooseNewEnemy(*F.Guard, Empty));
 
@@ -296,7 +296,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		}
 		F.Hate(F.ThugA, 1);
 		F.Hate(F.ThugB, 9);   // strictly better on step 2 of the arbitration
-		F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+		F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 
 		// `SCHED_TROIKA_MELEE_ATTACK1_SWING` is the one program whose EMPTY mask is recovered rather
 		// than merely undecoded: "once that terminal attack task owns the NPC it is not reevaluated
@@ -315,7 +315,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		TestFalse(TEXT("an uninterested schedule skips the search entirely"),
 			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0));
 		TestTrue(TEXT("...and keeps the enemy it already had"),
-			F.Guard->Senses.Memory.Enemy == F.ThugA->Handle);
+			F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 
 		// The disposition idle's own registered mask admits `NEW_ENEMY`, so the same pass under it
 		// takes the better candidate — no test-only mask installed.
@@ -324,7 +324,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		TestTrue(TEXT("a schedule that admits NEW_ENEMY lets the replacement through"),
 			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 11.0));
 		TestTrue(TEXT("...and the higher-priority candidate wins"),
-			F.Guard->Senses.Memory.Enemy == F.ThugB->Handle);
+			F.Guard->BaseMemory.Enemy == F.ThugB->Handle);
 	}
 
 	// --- An NPC running no program at all is interested in everything -----------------------------
@@ -340,7 +340,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		TestTrue(TEXT("with no schedule running the gate is open"),
 			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0));
 		TestTrue(TEXT("...so a first enemy can be acquired at all"),
-			F.Guard->Senses.Memory.Enemy == F.ThugA->Handle);
+			F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 	}
 
 	// --- A null enemy under an uninterested schedule warns, once ---------------------------------
@@ -353,7 +353,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		F.Guard->Senses.Memory.Enemy = StaleHandle(F.ThugA->Handle);
+		F.Guard->BaseMemory.Enemy = StaleHandle(F.ThugA->Handle);
 		TestTrue(TEXT("the terminal swing program starts"),
 			ElysiumSchedule::Start(F.Guard->Schedule,
 				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Guard));
@@ -367,7 +367,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 				ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0 + i));
 		}
 		TestTrue(TEXT("the enemy handle is left alone rather than given a plausible fallback"),
-			F.Guard->Senses.Memory.Enemy.IsSet());
+			F.Guard->BaseMemory.Enemy.IsSet());
 	}
 	return true;
 }
@@ -412,7 +412,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 		F.ThugA->bDead = false;
 
 		// The eluded marker excludes its own target.
-		F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+		F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 		F.Guard->EnemyMemory.MarkEluded(F.ThugA->Handle);
 		TestFalse(TEXT("an eluded target is excluded"),
 			ElysiumNpcEnemy::BestEnemy(*F.Guard).IsSet());
@@ -524,7 +524,7 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	TestFalse(TEXT("...and relationship alone cannot select it"),
 		ElysiumNpcEnemy::BestEnemy(*F.Guard).IsSet());
 	TestFalse(TEXT("...including through the real decision pass"),
-		F.Guard->Senses.Memory.Enemy.IsSet());
+		F.Guard->BaseMemory.Enemy.IsSet());
 
 	// Hearing records a sound stimulus only. It does not manufacture an enemy-memory candidate.
 	FElysiumGameSoundRequest Sound;
@@ -614,7 +614,7 @@ bool FElysiumNpcEnemyDamageMemoryTest::RunTest(const FString&)
 		if (!F.Guard || !F.Player || !F.ThugA) return false;
 		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
 		F.Guard->EnemyMemory.Update(*F.Guard, F.ThugA->Handle, 0.0);
-		F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+		F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 		Damage(*F.Guard, F.Player->Handle, FVector(99.f, 0.f, 0.f));
 		TestEqual(TEXT("current enemy receives the unknown attack position"),
 			F.Guard->EnemyMemory.Find(F.ThugA->Handle)->LastPosition, FVector(99.f, 0.f, 0.f));
@@ -639,7 +639,7 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 
 	// One acquisition episode against the player: the found edge fires once and latches.
-	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 	F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
 	F.Flush(1.0);
 	TestEqual(TEXT("the first committed-enemy LOS fires OnFoundEnemy"),
@@ -656,9 +656,9 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	F.Guard->Senses.Memory.bEnemyOccluded = true;
 	ElysiumNpcEnemy::SetEnemy(*F.Guard, F.ThugA->Handle);
 	TestTrue(TEXT("the old handle goes through the last-enemy path"),
-		F.Guard->Senses.Memory.LastEnemy == F.Player->Handle);
+		F.Guard->BaseMemory.LastEnemy == F.Player->Handle);
 	TestTrue(TEXT("the new handle is committed"),
-		F.Guard->Senses.Memory.Enemy == F.ThugA->Handle);
+		F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 	TestFalse(TEXT("the previous LOS claim is forgotten"),
 		F.Guard->Senses.Memory.bEnemyLosLatched);
 	TestEqual(TEXT("...along with its debounce"), F.Guard->Senses.Memory.EnemyLosFailures, 0);
@@ -692,7 +692,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 			return false;
 		}
 		F.Hate(F.Player, 5);
-		F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+		F.Guard->BaseMemory.Enemy = F.Player->Handle;
 		F.Guard->EnemyMemory.MarkEluded(F.Player->Handle);
 		F.Guard->Schedule.Clear();
 
@@ -719,7 +719,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		F.Guard->Senses.Memory.Enemy = StaleHandle(F.ThugA->Handle);
+		F.Guard->BaseMemory.Enemy = StaleHandle(F.ThugA->Handle);
 		F.Guard->Schedule.Clear();
 
 		FElysiumNpcConditions Cond;
@@ -730,7 +730,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 			F.Counter(TEXT("c_lostenemy")), 1.f);
 		TestEqual(TEXT("...and not OnLostPlayer"), F.Counter(TEXT("c_lostplayer")), 0.f);
 		TestFalse(TEXT("the committed enemy is cleared, not replaced with a guess"),
-			F.Guard->Senses.Memory.Enemy.IsSet());
+			F.Guard->BaseMemory.Enemy.IsSet());
 		TestFalse(TEXT("NEW_ENEMY is cleared when there is no enemy to be new"),
 			Cond.Has(EElysiumNpcCond::NewEnemy));
 	}
@@ -743,7 +743,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 			return false;
 		}
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
-		F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+		F.Guard->BaseMemory.Enemy = F.Player->Handle;
 		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
 		F.Services.bLineOfSightClear = false;
 		for (int32 i = 0; i <= ElysiumNpcSense::EnemyLosFailureLimit; ++i)
@@ -754,7 +754,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		TestEqual(TEXT("a full LOS debounce fires neither lost-the-actor output"),
 			F.Counter(TEXT("c_lostplayer")) + F.Counter(TEXT("c_lostenemy")), 0.f);
 		TestTrue(TEXT("...and the enemy is still committed"),
-			F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+			F.Guard->BaseMemory.Enemy == F.Player->Handle);
 	}
 	return true;
 }
@@ -774,11 +774,11 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 	}
 	FElysiumNpcMemory& Mem = F.Guard->Senses.Memory;
 
-	auto Hit = [&Mem](int32 Amount, double At)
+	auto Hit = [&Mem, &F](int32 Amount, double At)
 	{
 		Mem.LastDamageAmount = Amount;
-		Mem.LastDamageTime = At;
-		ElysiumNpcCond::AccumulateDamage(Mem, Amount, At);
+		F.Guard->BaseMemory.LastDamageTime = At;
+		ElysiumNpcCond::AccumulateDamage(F.Guard->BaseMemory, Amount, At);
 	};
 
 	// A small hit inside the pass window is LIGHT and nothing else. 5 of 100 is below both the
@@ -809,7 +809,7 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 		FElysiumNpcConditions C;
 		ElysiumNpcCond::GatherDamage(*F.Guard, 10.4, C);
 		TestEqual(TEXT("the window accumulates rather than replacing"),
-			Mem.RepeatedDamageAccumulated, 17);
+			F.Guard->BaseMemory.RepeatedDamageAccumulated, 17);
 		TestTrue(TEXT("a window sum over 15% of Source max health raises REPEATED_DAMAGE"),
 			C.Has(EElysiumNpcCond::RepeatedDamage));
 	}
@@ -820,7 +820,7 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 		FElysiumNpcConditions C;
 		ElysiumNpcCond::GatherDamage(*F.Guard, 11.9, C);
 		TestEqual(TEXT("an expired window is reset, not decayed"),
-			Mem.RepeatedDamageAccumulated, 12);
+			F.Guard->BaseMemory.RepeatedDamageAccumulated, 12);
 		TestFalse(TEXT("...so the sum no longer clears the threshold"),
 			C.Has(EElysiumNpcCond::RepeatedDamage));
 	}
@@ -941,7 +941,7 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	Guard->Cognition.Conditions.Reset();
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::HeavyDamage);
 	ElysiumNpcEnemy::SetEnemy(*Guard, Other->Handle);
-	Guard->Senses.Memory.LastDamageAttacker = Other->Handle;
+	Guard->BaseMemory.LastDamageAttacker = Other->Handle;
 	TestEqual(TEXT("102ad660 0x45f0: case 0xe HEAVY_DAMAGE from the enemy takes combat, bare"),
 		Guard->SelectIdealStateRetail(), 2);
 
@@ -1109,7 +1109,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 
 	// A committed enemy takes it to combat, and combat selects a real fight program.
 	F.Hate(F.ThugA, 5);
-	F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 	{
 		FElysiumNpcConditions Mask;
 		Mask.Set(EElysiumNpcCond::NewEnemy);
@@ -1177,7 +1177,7 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 			F.Guard->EnemySightings, 0);
 
 		// The committed-enemy LOS edge is NOT a writer, however many times it fires.
-		F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+		F.Guard->BaseMemory.Enemy = F.Player->Handle;
 		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
 		TestTrue(TEXT("the found edge latched"), F.Guard->Senses.Memory.bEnemyLosLatched);
 		TestEqual(TEXT("...but the LOS edge does not count a sighting: retail has no writer there"),
@@ -1426,7 +1426,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	}
 	F.Guard->EnemySightings = 3;
 	F.Guard->bNoAlertState = true;
-	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 	F.Guard->EnemyMemory.Update(*F.Guard, F.Player->Handle, 12.5);
 	F.Guard->EnemyMemory.MarkEluded(F.Player->Handle);
 	if (FElysiumNpcEnemyMemoryRecord* Record = F.Guard->EnemyMemory.FindMutable(F.Player->Handle))
@@ -1437,14 +1437,14 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 		Record->LastNavNode = 11;
 		Record->AnchorNavNode = 12;
 	}
-	F.Guard->Senses.Memory.RepeatedDamageWindowStart = 12.5;
-	F.Guard->Senses.Memory.RepeatedDamageAccumulated = 17;
+	F.Guard->BaseMemory.RepeatedDamageWindowStart = 12.5;
+	F.Guard->BaseMemory.RepeatedDamageAccumulated = 17;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
 
 	ElysiumRoundTripSnapshot(F.World, G.World);
 
 	const FElysiumNpcMemory& Restored = G.Guard->Senses.Memory;
-	TestTrue(TEXT("the committed enemy survives"), Restored.Enemy == G.Player->Handle);
+	TestTrue(TEXT("the committed enemy survives"), G.Guard->BaseMemory.Enemy == G.Player->Handle);
 	TestEqual(TEXT("the sighting count survives, through the generated walk"),
 		G.Guard->EnemySightings, 3);
 	TestTrue(TEXT("the eluded marker survives"), G.Guard->EnemyMemory.IsEluded(G.Player->Handle));
@@ -1460,9 +1460,9 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	TestEqual(TEXT("...velocity and nav identities"), RestoredRecord->LastNavNode, 11);
 	TestEqual(TEXT("...and its anchor nav identity"), RestoredRecord->AnchorNavNode, 12);
 	TestEqual(TEXT("the repeated-damage window sum survives"),
-		Restored.RepeatedDamageAccumulated, 17);
+		G.Guard->BaseMemory.RepeatedDamageAccumulated, 17);
 	TestTrue(TEXT("...with its window root"),
-		FMath::IsNearlyEqual(Restored.RepeatedDamageWindowStart, 12.5, 0.001));
+		FMath::IsNearlyEqual(G.Guard->BaseMemory.RepeatedDamageWindowStart, 12.5, 0.001));
 
 	// Conditions are NOT saved: they are rebuilt from the memory above on the first think after a
 	// load, which is what the recovered pass does on every think anyway.

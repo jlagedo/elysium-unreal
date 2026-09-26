@@ -293,7 +293,7 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 	// The turning arm: `m_afMemory & 0x2000` beats every activity. `GetIdealYawSpeed()` is a
 	// generated slot stub answering 0, so the product with the ".15" scalar is 0 and the arm lands on
 	// retail's own floor `_DAT_104454c0` = 1.0.
-	Guard->ScheduleHost.MemoryBits |= 0x2000;
+	Guard->BaseScheduleHost.MemoryBits |= 0x2000;
 	TestEqual(TEXT("the turning arm answers the recovered floor, 1.0"), Guard->MaxYawSpeed(), 1.0f);
 	TestEqual(TEXT("and that is what the arm itself answers for the Troika cvar"),
 		Guard->MaxYawSpeedTurningArm(TEXT("0x10924c94")), 1.0f);
@@ -301,7 +301,7 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 		Guard->MaxYawSpeedTurningArm(TEXT("0x1093ad24")), 1.0f);
 	TestEqual(TEXT("and the Tzimisce's"),
 		Guard->MaxYawSpeedTurningArm(TEXT("0x1093c9fc")), 1.0f);
-	Guard->ScheduleHost.MemoryBits &= ~0x2000u;
+	Guard->BaseScheduleHost.MemoryBits &= ~0x2000u;
 
 	// `CNPC_VDog` `0x10374130` and `CNPC_VTzimisce` `0x103ba020` replace the ladder wholesale; each
 	// is its class's slot, driven on an NPC of that class.
@@ -553,7 +553,7 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	// weapon's `0x6000` capability bits — the last of which is a SEAM answering 0, so the Troika
 	// gate closes before the base rung is ever reached.
 	TestFalse(TEXT("slot 575 declines with no enemy"), Guard->ShouldMoveAndShoot());
-	Guard->Senses.Memory.Enemy = Other->Handle;
+	Guard->BaseMemory.Enemy = Other->Handle;
 	Guard->NpcFlags.Set(EElysiumNpcFlag2::MOVE_FACE_ENEMY);
 	Guard->CapabilityWord |= (1 << 6);
 	TestEqual(TEXT("the weapon capability seam answers 0"),
@@ -561,7 +561,7 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("so slot 575 still declines even with bits_CAP_MOVE_SHOOT set"),
 		Guard->ShouldMoveAndShoot());
 	Guard->NpcFlags.Clear(EElysiumNpcFlag2::MOVE_FACE_ENEMY);
-	Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 
 	// `AutoMovement` `0x10280a50`. The recovered GATE is `GetMoveType() == 4` with `FL_FROZEN 0x400`
 	// clear; both fail here, so the apply is never reached — which is the whole point of porting the
@@ -631,10 +631,10 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 		Guard->ScheduleHost.FailureReason, 0x1b);
 
 	// `FUN_102bf7e0` `0x102bf7e0` — `m_bShouldMove` is set UNCONDITIONALLY, outside the stop.
-	Guard->ScheduleHost.bShouldMove = false;
+	Guard->BaseScheduleHost.bShouldMove = false;
 	Guard->ResumeScheduledMove();
 	TestTrue(TEXT("ResumeScheduledMove sets bShouldMove even with no active goal"),
-		Guard->ScheduleHost.bShouldMove);
+		Guard->BaseScheduleHost.bShouldMove);
 
 	// `FUN_1029f6c0` `0x1029f6c0` — the node-graph read. Every index is out of range on an empty
 	// array, which is retail's own counted-refusal arm.
@@ -1067,14 +1067,14 @@ bool FElysiumNpcKernelMotorTranslateGoalTest::RunTest(const FString&)
 	// Path mode 1 with an enemy: the enemy's position replaces the goal.
 	Guard->PathMode = 1;
 	Enemy->Origin = PortUnits(50.0, 60.0, 70.0);
-	Guard->Senses.Memory.Enemy = Enemy->Handle;
+	Guard->BaseMemory.Enemy = Enemy->Handle;
 	TestTrue(TEXT("path mode 1 with an enemy translates"),
 		Guard->TranslateNavGoalPositionTzimisce(Goal, Out));
 	TestTrue(TEXT("to the enemy's position"), Out.Equals(FVector(50.0, 60.0, 70.0), 1e-3));
 
 	// Path mode 1 with NO enemy falls THROUGH to the pickup arm rather than returning the goal —
 	// retail's own control flow, and the reason the pickup test is not nested under mode 2 alone.
-	Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	Guard->PickupTarget = Enemy->Handle;
 	Guard->PickupTargetPos = FVector(1.0, 2.0, 3.0);
 	TestTrue(TEXT("path mode 1 with no enemy falls through to the pickup arm"),

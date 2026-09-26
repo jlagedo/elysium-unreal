@@ -797,7 +797,7 @@ int32 FElysiumNpc::CacheDamagePosition()
 	// 2. `m_bCondTookDamage = 0` — the latch is spent here, not where the damage landed.
 	Cognition.bCondTookDamage = false;
 	// 3. `m_vSavePosition = m_vecLastDamageAttackPos`, three words copied straight across.
-	SavePosition = Senses.Memory.LastDamageAttackPosition;
+	SavePosition = BaseMemory.LastDamageAttackPosition;
 	// 4. The selector trace (`+0x1b30` file, `+0x1b34` line 0x5f8b) is ABSENT in this runtime's
 	//    shape map; the mind transition trace carries the same account.
 	(void)TookDamageTraceLine;

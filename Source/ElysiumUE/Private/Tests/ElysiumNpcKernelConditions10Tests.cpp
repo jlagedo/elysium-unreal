@@ -175,7 +175,7 @@ bool FElysiumNpcKernelConditions10RelationInsaneTest::RunTest(const FString&)
 	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Neutral, 20);
 	TestEqual(TEXT("a neutral closest player who is not the enemy falls through (10299e96)"),
 		F.Guard->IRelationType(F.Other), GCond10T_D_NU);
-	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 	TestEqual(TEXT("the closest player BEING my enemy is D_HT (10299e8e)"),
 		F.Guard->IRelationType(F.Other), GCond10T_D_HT);
 
@@ -206,11 +206,11 @@ bool FElysiumNpcKernelConditions10RelationBossTest::RunTest(const FString&)
 	TestEqual(TEXT("hating the candidate's boss makes the candidate D_HT (10299ee4)"),
 		F.Guard->IRelationType(F.Other), GCond10T_D_HT);
 	F.Guard->Relationships.SetEntity(F.Boss->Handle, EElysiumRelationship::Neutral, 20);
-	F.Guard->Senses.Memory.Enemy = F.Boss->Handle;
+	F.Guard->BaseMemory.Enemy = F.Boss->Handle;
 	TestEqual(TEXT("the candidate's boss BEING my enemy makes it D_HT (10299ef3)"),
 		F.Guard->IRelationType(F.Other), GCond10T_D_HT);
 	F.Other->FollowerBoss = FElysiumEntityHandle::Invalid();
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 
 	// --- Arm C, `10299f0f`: MY follower boss ------------------------------------------------------
 	F.Guard->FollowerBoss = F.Boss->Handle;
@@ -227,10 +227,10 @@ bool FElysiumNpcKernelConditions10RelationBossTest::RunTest(const FString&)
 	// `10299f6b`: the BOSS's slot 167 — the CONST `GetEnemy`, no last-enemy fallback. The
 	// asymmetry against arms A and B (slot 168) is retail's.
 	F.Boss->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Neutral, 20);
-	F.Boss->Senses.Memory.Enemy = F.Other->Handle;
+	F.Boss->BaseMemory.Enemy = F.Other->Handle;
 	TestEqual(TEXT("the boss's enemy being the candidate makes it D_HT (10299f6b)"),
 		F.Guard->IRelationType(F.Other), GCond10T_D_HT);
-	F.Boss->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Boss->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 
 	// **CORRECTION, pinned.** `10299f84` reassigns the return register with the CANDIDATE's opinion
 	// of the boss. The boss is NEUTRAL toward the candidate; the candidate FEARS the boss; retail
@@ -247,7 +247,7 @@ bool FElysiumNpcKernelConditions10RelationBossTest::RunTest(const FString&)
 
 	// `10299f8f`: the candidate's slot 168 against the boss.
 	F.Other->Relationships.SetEntity(F.Boss->Handle, EElysiumRelationship::Neutral, 30);
-	F.Other->Senses.Memory.Enemy = F.Boss->Handle;
+	F.Other->BaseMemory.Enemy = F.Boss->Handle;
 	TestEqual(TEXT("the candidate's enemy being my boss is D_HT (10299f8f)"),
 		F.Guard->IRelationType(F.Other), GCond10T_D_HT);
 	return true;
@@ -1071,11 +1071,11 @@ bool FElysiumNpcKernelConditions10TaskFailBodyTest::RunTest(const FString&)
 	// `10379063` clears the top bit of `m_afMemory` in COMBAT under the `0x5c` INTERRUPT. The Troika
 	// body the override then calls directly (`0x1029adb0`) masks `m_afMemory` to `0x0fffffff`, so
 	// after a whole `TaskFail` the arm's clear is subsumed: the top four bits are gone either way.
-	Gargoyle->ScheduleHost.MemoryBits = 0xffffffffu;
+	Gargoyle->BaseScheduleHost.MemoryBits = 0xffffffffu;
 	Gargoyle->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
 	Gargoyle->TaskFail(0);
 	TestEqual(TEXT("TaskFail leaves m_afMemory under the Troika body's 0x0fffffff mask"),
-		Gargoyle->ScheduleHost.MemoryBits & 0xf0000000u, 0u);
+		Gargoyle->BaseScheduleHost.MemoryBits & 0xf0000000u, 0u);
 
 	// --- The Gargoyle arm, `0x10379060` -----------------------------------------------------------
 	// **CORRECTION, pinned.** `0x10379040` never clobbers `ECX`, so `0x10379000` is reached with a

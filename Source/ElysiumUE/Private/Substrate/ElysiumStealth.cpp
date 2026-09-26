@@ -257,7 +257,7 @@ void PublishObservers(FElysiumPlayer& Player, double Now)
 			const FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
 			if (!Npc || Npc->IsInert() || Npc->IsOblivious()) continue;
 			const auto& Memory = Npc->Senses.Memory;
-			const bool EnemyIsPlayer = Memory.Enemy == Player.Handle;
+			const bool EnemyIsPlayer = Npc->BaseMemory.Enemy == Player.Handle;
 			if (!EnemyIsPlayer && Npc->Relationships.Resolve(Player.Handle, TEXT("player")) != EElysiumRelationship::Hate) continue;
 			const bool Detected = EnemyIsPlayer && Memory.bEnemyLosLatched && !Memory.bEnemyOccluded;
 			if (!Detected && !Npc->Senses.Sighted().Contains(Player.Handle)) continue;

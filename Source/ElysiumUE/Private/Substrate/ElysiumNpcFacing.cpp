@@ -380,7 +380,7 @@ void FElysiumNpc::SetTurnActivity()
 		{
 			if (Pick.bTagsTurnMemory)
 			{
-				ScheduleHost.MemoryBits |= 0x2000;   // +0x5d8c m_afMemory
+				BaseScheduleHost.MemoryBits |= 0x2000;   // +0x5d8c m_afMemory
 			}
 			SetIdealActivityNumber(Pick.Activity);
 			return;

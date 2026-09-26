@@ -205,15 +205,10 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		Ar << Occludable;
 		if (Ar.IsLoading()) { Sound.bOccludable = Occludable != 0; }
 	};
-	for (int32 i = 0; i < static_cast<int32>(ESeen::Count); ++i)
-	{
-		Ar << LastSeenTime[i];
-	}
 	Ar << LastHeardSource;
 	Ar << LastHeardPosition;
 	Ar << LastHeardCategory;
 	Ar << LastHeardTime;
-	Ar << LastDamageTime;
 	Ar << LastDamageAmount;
 	Ar << EnemyLosFailures;
 	Ar << EnemyLastLosTime;
@@ -257,15 +252,29 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 // handle on one path is what lets each dependent clear sit beside the handle it depends on. The
 // handles that genuinely have no registered row, and would otherwise carry a dead epoch, are
 // `LastHeardSource`, the eight embedded sound `Source`s and `DetectedAttackAttacker`.
-void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
+void FElysiumNpcBaseMemory::Reset()
 {
-	// A value another build wrote is refused rather than trusted: a negative LOS-failure count or
-	// damage accumulator would make the tests that read them unfalsifiable rather than merely wrong.
-	EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0, ElysiumNpcSense::EnemyLosFailureLimit);
+	*this = FElysiumNpcBaseMemory();
+}
+
+// The base layer's memory words are datamap rows the registry's save walk carries; the sighting
+// times and the damage time beside them are this port's own, carried here.
+void FElysiumNpcBaseMemory::Serialize(FElysiumSaveArchive& Ar)
+{
+	for (int32 i = 0; i < static_cast<int32>(ESeen::Count); ++i)
+	{
+		Ar << LastSeenTime[i];
+	}
+	Ar << LastDamageTime;
+}
+
+void FElysiumNpcBaseMemory::Rebase(const FElysiumEntityWorld& World)
+{
+	// A value another build wrote is refused rather than trusted: a negative damage accumulator
+	// would make the tests that read it unfalsifiable rather than merely wrong.
 	RepeatedDamageAccumulated = FMath::Max(0, RepeatedDamageAccumulated);
 	// Every remembered handle goes through the one rebase path. A handle that no longer resolves
-	// becomes invalid rather than pointing at whichever entity now occupies its slot; the LOS
-	// latch travels with the enemy it was taken for, so it drops with it.
+	// becomes invalid rather than pointing at whichever entity now occupies its slot.
 	Enemy = World.RebaseSavedHandle(Enemy);
 	LastEnemy = World.RebaseSavedHandle(LastEnemy);
 	for (int32 i = 0; i < static_cast<int32>(ESeen::Count); ++i)
@@ -276,6 +285,15 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 			LastSeenTime[i] = -1.0;
 		}
 	}
+	BestSoundSource = World.RebaseSavedHandle(BestSoundSource);
+	LastDamageAttacker = World.RebaseSavedHandle(LastDamageAttacker);
+}
+
+void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World, const FElysiumNpcBaseMemory& Base)
+{
+	// A value another build wrote is refused rather than trusted (see the base half).
+	EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0, ElysiumNpcSense::EnemyLosFailureLimit);
+	// The LOS latch travels with the enemy it was taken for, so it drops with it (below).
 	LastHeardSource = World.RebaseSavedHandle(LastHeardSource);
 	auto RebaseSoundOwner = [&World](FElysiumGameSoundEvent& Sound)
 	{
@@ -291,8 +309,6 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 	RebaseSoundOwner(LastSoundPhysicsDanger);
 	RebaseSoundOwner(LastSoundWorld);
 	RebaseSoundOwner(BestSound);
-	BestSoundSource = World.RebaseSavedHandle(BestSoundSource);
-	LastDamageAttacker = World.RebaseSavedHandle(LastDamageAttacker);
 	ClosestPlayer = World.RebaseSavedHandle(ClosestPlayer);
 	BestSeeUnknown = World.RebaseSavedHandle(BestSeeUnknown);
 	LastSeeUnknown = World.RebaseSavedHandle(LastSeeUnknown);
@@ -303,7 +319,7 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 		// could still be counting down for.
 		DetectedAttackTime = -1.0;
 	}
-	if (!Enemy.IsSet())
+	if (!Base.Enemy.IsSet())
 	{
 		EnemyLosFailures = 0;
 		bEnemyOccluded = false;
@@ -666,7 +682,7 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 	{
 		return;
 	}
-	if (!Memory.Enemy.IsSet())
+	if (!Npc.BaseMemory.Enemy.IsSet())
 	{
 		// No committed enemy is the state every NPC is in until enemy selection lands. The
 		// debounce and its edge latch belong to one acquisition episode, so they clear with it.
@@ -675,7 +691,7 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 		Memory.bEnemyLosLatched = false;
 		return;
 	}
-	const FElysiumEntity* Enemy = World->Resolve(Memory.Enemy);
+	const FElysiumEntity* Enemy = World->Resolve(Npc.BaseMemory.Enemy);
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		// A dead or hidden enemy is enemy SELECTION's transaction (`ENEMY_DEAD` / `LOST_ENEMY`),
@@ -683,7 +699,7 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 		return;
 	}
 
-	const bool bIsPlayer = Memory.Enemy == World->PlayerHandle();
+	const bool bIsPlayer = Npc.BaseMemory.Enemy == World->PlayerHandle();
 	// The committed enemy is tracked, not discovered, so this is the raw LOS query the recovered
 	// body runs — no cone and no range gate, which are the ADMISSION stage's rules.
 	const bool bClear = IsVisible(Npc, *Enemy, Now);
@@ -698,14 +714,14 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 			Memory.bEnemyLosLatched = true;
 			static const FName OnFoundEnemy(TEXT("OnFoundEnemy"));
 			static const FName OnFoundPlayer(TEXT("OnFoundPlayer"));
-			Npc.FireOutput(OnFoundEnemy, Memory.Enemy);
+			Npc.FireOutput(OnFoundEnemy, Npc.BaseMemory.Enemy);
 			if (bIsPlayer)
 			{
 				// This edge publishes detection. OnLooked/unknown attention own EnemySightings.
-				Npc.FireOutput(OnFoundPlayer, Memory.Enemy);
+				Npc.FireOutput(OnFoundPlayer, Npc.BaseMemory.Enemy);
 			}
 			Npc.RecordScheduleEvent(FString::Printf(TEXT("OnFoundEnemy%s: %s"),
-				bIsPlayer ? TEXT(" + OnFoundPlayer") : TEXT(""), *Memory.Enemy.ToString()));
+				bIsPlayer ? TEXT(" + OnFoundPlayer") : TEXT(""), *Npc.BaseMemory.Enemy.ToString()));
 		}
 		return;
 	}
@@ -728,10 +744,10 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 		Memory.bEnemyLosLatched = false;
 		static const FName OnLostEnemyLos(TEXT("OnLostEnemyLOS"));
 		static const FName OnLostPlayerLos(TEXT("OnLostPlayerLOS"));
-		Npc.FireOutput(OnLostEnemyLos, Memory.Enemy);
+		Npc.FireOutput(OnLostEnemyLos, Npc.BaseMemory.Enemy);
 		if (bIsPlayer)
 		{
-			Npc.FireOutput(OnLostPlayerLos, Memory.Enemy);
+			Npc.FireOutput(OnLostPlayerLos, Npc.BaseMemory.Enemy);
 		}
 		// `OnLostPlayer`/`OnLostEnemy` are deliberately NOT fired here: they belong to enemy
 		// selection's eluded/went-null transaction, and losing sight neither clears the enemy
@@ -743,7 +759,7 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 
 void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 {
-	HeardConditions.Reset();
+	Npc.HeardConditions.Reset();
 	// `CAI_Senses::Listen` rebuilds the sound list every pass, and `GetClosestSound`
 	// (`0x103105d0`) walks exactly that list. Story 29c-1, family Senses.
 	HeardThisPass.Reset();
@@ -810,8 +826,8 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 		if (Record)
 		{
 			// CAI_Senses::GetClosestSound 0x103105d0: prefer my enemy, else nearest in this Listen.
-			if (!Recorded.Contains(Condition) || (Record->Source != Memory.Enemy
-				&& (Event.Source == Memory.Enemy || FVector::DistSquared(Npc.EyePosition(), Event.Position)
+			if (!Recorded.Contains(Condition) || (Record->Source != Npc.BaseMemory.Enemy
+				&& (Event.Source == Npc.BaseMemory.Enemy || FVector::DistSquared(Npc.EyePosition(), Event.Position)
 					< FVector::DistSquared(Npc.EyePosition(), Record->Position)))) *Record = Event;
 			Recorded.Add(Condition);
 		}
@@ -829,31 +845,31 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 			: static_cast<double>(Npc.GetReactionDelay()));
 		// The eight-entry retail list (0x102cc6c0) min-updates a duplicate deadline (0x102cc590).
 		// The capacity check precedes even the duplicate lookup.
-		if (PendingSounds.Num() < 8)
+		if (Npc.PendingSounds.Num() < 8)
 		{
-			if (FPendingSound* Existing = PendingSounds.FindByPredicate([Condition](const FPendingSound& Item)
+			if (FElysiumNpcPendingSound* Existing = Npc.PendingSounds.FindByPredicate([Condition](const FElysiumNpcPendingSound& Item)
 				{ return Item.Condition == Condition; })) Existing->PromoteAt = FMath::Min(Existing->PromoteAt, At);
-			else PendingSounds.Add({ Condition, At });
+			else Npc.PendingSounds.Add({ Condition, At });
 		}
 	}
 	LastListenTime = Now;
-	for (int32 Index = PendingSounds.Num() - 1; Index >= 0; --Index)
+	for (int32 Index = Npc.PendingSounds.Num() - 1; Index >= 0; --Index)
 	{
-		if (Now >= PendingSounds[Index].PromoteAt)
+		if (Now >= Npc.PendingSounds[Index].PromoteAt)
 		{
-			HeardConditions.Set(PendingSounds[Index].Condition);
-			PendingSounds.RemoveAt(Index, 1, EAllowShrinking::No);
+			Npc.HeardConditions.Set(Npc.PendingSounds[Index].Condition);
+			Npc.PendingSounds.RemoveAt(Index, 1, EAllowShrinking::No);
 		}
 	}
 	// Outputs follow delayed promotion, once per condition family per Listen, activator = self.
-	if (HeardConditions.Has(EElysiumNpcCond::HearWorld)) Npc.FireOutput(FName(TEXT("OnHearWorld")), Npc.Handle);
-	if (HeardConditions.Has(EElysiumNpcCond::HearPlayer)) Npc.FireOutput(FName(TEXT("OnHearPlayer")), Npc.Handle);
-	if (HeardConditions.Has(EElysiumNpcCond::HearCombat) || HeardConditions.Has(EElysiumNpcCond::HearBulletImpact)
-		|| HeardConditions.Has(EElysiumNpcCond::HearDanger)) Npc.FireOutput(FName(TEXT("OnHearCombat")), Npc.Handle);
+	if (Npc.HeardConditions.Has(EElysiumNpcCond::HearWorld)) Npc.FireOutput(FName(TEXT("OnHearWorld")), Npc.Handle);
+	if (Npc.HeardConditions.Has(EElysiumNpcCond::HearPlayer)) Npc.FireOutput(FName(TEXT("OnHearPlayer")), Npc.Handle);
+	if (Npc.HeardConditions.Has(EElysiumNpcCond::HearCombat) || Npc.HeardConditions.Has(EElysiumNpcCond::HearBulletImpact)
+		|| Npc.HeardConditions.Has(EElysiumNpcCond::HearDanger)) Npc.FireOutput(FName(TEXT("OnHearCombat")), Npc.Handle);
 	for (const auto Pair : { TPair<EElysiumNpcCond, const FElysiumGameSoundEvent*>(EElysiumNpcCond::HearCombat, &Memory.LastSoundCombat),
 		TPair<EElysiumNpcCond, const FElysiumGameSoundEvent*>(EElysiumNpcCond::HearBulletImpact, &Memory.LastSoundBulletImpact) })
 	{
-		if (HeardConditions.Has(Pair.Key)) ExtendVisionOverride(Npc, Pair.Value->Source, Now, 1.0);
+		if (Npc.HeardConditions.Has(Pair.Key)) ExtendVisionOverride(Npc, Pair.Value->Source, Now, 1.0);
 	}
 }
 
@@ -864,12 +880,12 @@ void FElysiumNpcSenses::ExtendVisionOverride(FElysiumNpc& Npc, FElysiumEntityHan
 	if (!Owner) return;
 	const FElysiumNpc* OtherNpc = Owner->AsNpc();
 	// 0x1028e8b0: any live owner when no enemy, my enemy, or an NPC sharing my enemy.
-	if (!Memory.Enemy.IsSet() || Source == Memory.Enemy
-		|| (OtherNpc && OtherNpc->Senses.Memory.Enemy == Memory.Enemy))
+	if (!Npc.BaseMemory.Enemy.IsSet() || Source == Npc.BaseMemory.Enemy
+		|| (OtherNpc && OtherNpc->BaseMemory.Enemy == Npc.BaseMemory.Enemy))
 		Memory.StealthVisionOverrideUntil = FMath::Max(Memory.StealthVisionOverrideUntil, Now + Duration);
 }
 
-void FElysiumNpcSenses::CommitBestSound(const FElysiumNpcConditions& Conditions)
+void FElysiumNpcSenses::CommitBestSound(FElysiumNpc& Npc, const FElysiumNpcConditions& Conditions)
 {
 	const EElysiumNpcCond Priority[] = { EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearBulletImpact,
 		EElysiumNpcCond::HearFlinch, EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearDanger,
@@ -885,7 +901,7 @@ void FElysiumNpcSenses::CommitBestSound(const FElysiumNpcConditions& Conditions)
 			// `*(param_1 + 0x5b78) = *(param_1 + 0x60b0)`: the winner's owner handle, copied out of
 			// the record before the sticky mirror. The sweep's `SEE_SOUND_SOURCE` tail is its only
 			// reader.
-			Memory.BestSoundSource = Memory.BestSound.Source;
+			Npc.BaseMemory.BestSoundSource = Memory.BestSound.Source;
 			return;
 		}
 	}
@@ -904,7 +920,7 @@ const FElysiumGameSoundEvent* FElysiumNpcSenses::ClosestSound(const FElysiumNpc&
 	// owner handle resolves to it, RETURN IMMEDIATELY — the enemy's sound outranks a nearer one and
 	// ends the walk. Otherwise keep the smallest squared distance from the ear to the record's
 	// stored origin (`sound+0x20..0x28`), seeded at `0x4d800000` (2.68e8), and answer that.
-	const FElysiumEntity* Enemy = Npc.World != nullptr ? Npc.World->Resolve(Memory.Enemy) : nullptr;
+	const FElysiumEntity* Enemy = Npc.World != nullptr ? Npc.World->Resolve(Npc.BaseMemory.Enemy) : nullptr;
 	const FVector EarCm = const_cast<FElysiumNpc&>(Npc).EarPosition();
 	const FElysiumGameSoundEvent* Best = nullptr;
 	double BestDistanceSq = TNumericLimits<double>::Max();
@@ -945,7 +961,7 @@ float FElysiumNpcSenses::EffectiveVisionDistanceCm(const FElysiumNpc& Npc, doubl
 	float Distance = Perception.VisionDistanceCm;
 	const bool bStealthOverride = Now < Memory.StealthVisionOverrideUntil;
 	const bool bCombatUnoccluded = Npc.GetMind().State() == EElysiumNpcState::Combat
-		&& !Memory.bEnemyWentOccluded;
+		&& !Npc.BaseMemory.bEnemyWentOccluded;
 	if (bStealthOverride || bCombatUnoccluded)
 	{
 		Distance = LookDistCm;
@@ -957,10 +973,14 @@ void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar)
 {
 	Memory.Serialize(Ar);
 	Ar << LastListenTime;
-	int32 Count = PendingSounds.Num();
+}
+
+void FElysiumNpcPendingSound::SerializeQueue(FElysiumSaveArchive& Ar, TArray<FElysiumNpcPendingSound>& Queue)
+{
+	int32 Count = Queue.Num();
 	Ar << Count;
-	if (Ar.IsLoading()) PendingSounds.SetNum(FMath::Clamp(Count, 0, 8));
-	for (FPendingSound& Sound : PendingSounds)
+	if (Ar.IsLoading()) Queue.SetNum(FMath::Clamp(Count, 0, 8));
+	for (FElysiumNpcPendingSound& Sound : Queue)
 	{
 		uint8 Condition = static_cast<uint8>(Sound.Condition);
 		Ar << Condition;
@@ -974,7 +994,7 @@ void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar)
 // tuning is authored data the field walk has already restored in its keyfield form.
 void FElysiumNpcSenses::OnPostRestore(FElysiumNpc& Npc)
 {
-	HeardConditions.Reset();
+	Npc.HeardConditions.Reset();
 	SeenThisPass.Reset();
 	for (int32 Channel = 0; Channel < 3; ++Channel)
 	{
@@ -983,7 +1003,7 @@ void FElysiumNpcSenses::OnPostRestore(FElysiumNpc& Npc)
 	}
 	if (Npc.World)
 	{
-		Memory.Rebase(*Npc.World);
+		Memory.Rebase(*Npc.World, Npc.BaseMemory);
 	}
 	else
 	{

@@ -121,7 +121,7 @@ void FElysiumNpc::RepointEnemyMemoryToSquad(void* Squad)
 FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 {
 	// SEAM for the global `CAI_Hint` list walk (`DAT_10925450`, next `+0x5d8`, `m_nHintType
-	// +0x5dc`). `ScheduleHost.HintNode` is a bare node index here; no store carries hint types yet.
+	// +0x5dc`). `BaseScheduleHost.HintNode` is a bare node index here; no store carries hint types yet.
 	(void)HintType;
 	(void)Ordinal;
 	return nullptr;
@@ -350,7 +350,7 @@ void FElysiumNpc::SetSquad(const FString& NewSquadName)
 	// separate words in retail and this body only moves the object.
 	void* NewSquad = FindOrCreateSquad(NewSquadName, /*bFindOnly=*/false);
 	RepointEnemyMemoryToSquad(NewSquad);
-	if (ScheduleHost.SquadDisconnected > 0 && ConnectedSquad() != nullptr)
+	if (BaseScheduleHost.SquadDisconnected > 0 && ConnectedSquad() != nullptr)
 	{
 		// `LeaveSquad` `0x10316700` is `RET 4`.
 	}
@@ -385,7 +385,7 @@ void FElysiumNpc::VacateSquadSlot()
 	// field — `docs/vtmb/npc-ai/social.md`: "zero code readers, save-only" — and the squad gate
 	// below refuses first, so the difference is unobservable today. Reported so 29b's default can
 	// be corrected with the shape map.
-	if (MySquadSlot == INDEX_NONE || ScheduleHost.SquadDisconnected >= 1)
+	if (MySquadSlot == INDEX_NONE || BaseScheduleHost.SquadDisconnected >= 1)
 	{
 		return;
 	}

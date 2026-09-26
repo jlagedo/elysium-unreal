@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"   // 0019/4: the retail numbers the bodies read
+#include "Substrate/ElysiumNpcBase.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -21,7 +22,6 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
-#include "Substrate/ElysiumScriptedCharacter.h"
 
 struct FElysiumClanTemplate;
 struct FElysiumDmg;
@@ -30,12 +30,12 @@ struct FElysiumSaveArchive;
 struct FElysiumStatTable;
 class FElysiumPlayer;
 
-// `CAI_BaseNPCTroika` — still carrying `CAI_BaseNPC` until story 5 step 5 separates the two. Every
+// `CAI_BaseNPCTroika`, beneath `FElysiumNpcBase` (`CAI_BaseNPC`, story 5 step 5). Every
 // living `npc_*` classname builds one of its subclasses (`ElysiumNpc<Species>.h`, one per retail
 // class). It stands a skeletal model at its origin, follows named patrols or interesting-place
 // routes, and owns dialogue gates.
 
-class FElysiumNpc : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
+class FElysiumNpc : public FElysiumNpcBase
 {
 public:
 	// The `WillTalk` latch (`FElysiumCombatCharacter::bWillTalk`, retail virtual `+0x49c`) SHIPS
@@ -54,7 +54,6 @@ public:
 	FElysiumNpcDialogue Dialogue;
 	FString DefaultCamera;            // definition-derived Tier-1 `default_camera`, never save state
 	FString PlayerReaction;           // player_reaction — authored `D_* priority` seed
-	FElysiumRelationships Relationships;
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
 
 	// VtMB's disposition stance machine (`docs/vtmb/animation_and_movers.md`). The index and the
@@ -70,19 +69,11 @@ public:
 	FString StanceResolvedFor;        // "<stem>|<disposition>" the pair above was resolved for
 	bool bStanceUnavailable = false;  // this model authors no stance set; do not ask again
 
-	// The running schedule and the variant token its activity picks ride on.
-	FElysiumScheduleState Schedule;
 	int32 ScheduleActivityCycle = 0;
 	// The resolved (bank, label) pair `TASK_SET_ACTIVITY` most recently made ideal. It is session
 	// state: schedule restore restarts at task zero because neither the current body pose nor the
 	// watchdog survives a load. The body phase, not this record, is the current sequence authority.
 	FElysiumClipIdentity ScheduleIdealActivity;
-
-	// `m_bfAINPCFlags` / `m_bfAINPCFlags2` and the obliviousness refcount. Written by
-	// `TASK_SET_NPC_FLAG` / `TASK_MAKE_OBLIVIOUS` and released by every schedule install; saved,
-	// because retail's are datamap members and an NPC left mesmerized across a save must not wake up
-	// conversable.
-	FElysiumNpcFlags NpcFlags;
 
 	// --- The authored director's pushed order ---
 	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
@@ -90,11 +81,6 @@ public:
 	FElysiumScriptedScheduleOrder ScriptedScheduleOrder;
 
 	// --- Combat loadout ---
-	// `additionalequipment` (267 authored rows) and `alternateequipment` (184). The corpus authors
-	// ONE classname per row, with the literal `0` as the "none" sentinel on 78 of them; the
-	// resolution is `Substrate/ElysiumNpcLoadout.h`.
-	FString AdditionalEquipment;
-	FString AlternateEquipment;
 	// `cantdropweapons` (78 authored rows; 71 write 0 and 7 write 1).
 	//
 	// SEAM (parsed, unread): the drop it suppresses is the death-time weapon drop, and this runtime
@@ -129,19 +115,8 @@ public:
 	// It drives the recovered alert-lookaround chance `min(30, (sightings+2)*5)`.
 	int32 EnemySightings = 0;
 
-	// The decision pass's gathered conditions and its once-latch diagnostics. Conditions are
-	// session state by design (`ElysiumNpcConditions.h`); the memory they are derived from is what
-	// a save carries.
-	FElysiumNpcCognition Cognition;
-
-	// The door-obstruction selector's own state. `m_hBlockedDoor` (+0x5d28) and `m_hCondHitByDoor`
-	// (+0x5d2c) are the two obstruction sources this runtime can carry; `m_vSavePosition` (+0x5dd0)
-	// is where the chosen one was standing when the schedules were picked.
-	FElysiumEntityHandle BlockedDoor;
 	double BlockedDoorExpiresAt = 0.0;
-	FElysiumEntityHandle CondHitByDoor;
 	bool bCondHitByDoor = false;
-	FVector SavePosition = FVector::ZeroVector;
 
 	// The stance index is what selects among a disposition's three idles, so it is this chain's
 	// answer for the variant the animation layer asks for. Retail zero-initialises it, which is why
@@ -182,9 +157,6 @@ public:
 	// The sensory transaction and everything it remembers, including the last damaging hit this
 	// NPC took (`Senses.Memory.LastDamage*`, written by the typed commit below).
 	FElysiumNpcSenses Senses;
-	// CAI_Memory is the observed-actor admission store. This stays distinct from
-	// `Senses.Memory.Enemy`, the committed sticky enemy selected from it.
-	FElysiumNpcEnemyMemory EnemyMemory;
 
 	// --- Player-law witnessing (`ElysiumNpcWitness.h`) ---
 	// The four authored thresholds the two law lanes compare a player activity level against, and
@@ -959,71 +931,10 @@ public:
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
 	//
-	// Every word of `CAI_BaseNPCTroika` this struct owns that no port system writes yet
-	// (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
-	// retail name and the tier that typed it. They are the shape 29b landed so a later story
-	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of
-	// them to its offset and the shape test fails if one goes missing.
-	int32 CollisionMask = 0;  // +0x1a44 m_iCollisionMask (datamap)
-	// +0x1a48 m_DeferredDeathInfo (doc) — CTakeDamageInfo is this port's typed damage packet
-	FElysiumDmg DeferredDeathInfo;
-	// +0x1b4d m_bUnknown1b4d (unsettled) — unsettled in 29b-0; carried by offset name with its
-	// recorded type
-	bool bUnknown1b4d = false;
-	// +0x5b58 m_iUnknown5b58 (unsettled) — unsettled in 29b-0; carried by offset name with its
-	// recorded type
-	int32 Unknown5b58 = 0;
-	// +0x5b5c m_flNPCInitTime (walked) — an absolute curtime stamp, carried as double like every
-	// other stamp here
-	double NpcInitTime = 0.0;
-	// +0x5b60 m_flNextDoorUseTime (datamap) — an absolute curtime stamp, carried as double
-	double NextDoorUseTime = 0.0;
-	// +0x5b88 m_flWeaponBlockedByFriendTimer (datamap) — an absolute curtime deadline, carried as
-	// double
-	double WeaponBlockedByFriendTimer = 0.0;
-	// +0x5b8c m_flExtendedBlockedByFriendTimer (datamap) — an absolute curtime deadline, carried
-	// as double
-	double ExtendedBlockedByFriendTimer = 0.0;
-	int32 RelativeEyeTarget = 0;  // +0x5b94 m_RelativeEyeTarget (datamap)
-	FElysiumEntityHandle ShootTargetOverride;  // +0x5ba8 m_hShootTargetOverride (datamap)
-	float SpecialDistanceAccum = 0.f;  // +0x5bac m_flSpecialDistanceAccum (datamap)
-	float BurstShootPauseMin = 0.f;  // +0x5bbc m_flBurstShootPauseMin (datamap)
-	float BurstShootPauseMax = 0.f;  // +0x5bc0 m_flBurstShootPauseMax (datamap)
-	bool bInChoreoScene = false;  // +0x5bc4 m_bInChoreoScene (datamap)
-	// +0x5ccc m_nIdealSequence (datamap) — retail's resolved sequence index; this runtime's ideal
-	// is the clip identity beside it
-	int32 IdealSequence = 0;
-	// +0x5cd0 m_IdealTranslatedActivity (datamap) — an activity enum with no port counterpart, so
-	// the registered number
-	int32 IdealTranslatedActivity = 0;
-	// +0x5cd4 m_IdealWeaponActivity (datamap) — an activity enum with no port counterpart, so the
-	// registered number
-	int32 IdealWeaponActivity = 0;
-	// +0x5cec m_afCapability (datamap) — the whole capability word; ElysiumNpcCond::ECapability is
-	// only the two bits combat selection reads
-	int32 CapabilityWord = 0;
-	FElysiumEntityHandle OpeningDoor;  // +0x5d24 m_hOpeningDoor (datamap)
-	bool bOpeningDoorWait = false;  // +0x5d30 m_bOpeningDoorWait (datamap)
-	// +0x5d5c m_flCheckOnGroundTime (walked) — an absolute curtime deadline, carried as double
-	double CheckOnGroundTime = 0.0;
-	// +0x5d7c m_ScriptArrivalActivity (sdk-order) — an activity enum with no port counterpart, so
-	// the registered number
-	int32 ScriptArrivalActivity = 0;
-	FString ScriptArrivalSequence;  // +0x5d80 m_strScriptArrivalSequence (sdk-order)
-	// +0x5d9c m_flLastAttackTime (datamap) — an absolute curtime stamp, carried as double
-	double LastAttackTime = 0.0;
-	// +0x5da0 m_flNextWeaponSearchTime (datamap) — an absolute curtime stamp, carried as double
-	double NextWeaponSearchTime = 0.0;
-	FString SquadName;  // +0x5da8 m_SquadName (datamap)
-	int32 MySquadSlot = 0;  // +0x5dac m_iMySquadSlot (datamap)
-	FVector LastPosition = FVector::ZeroVector;  // +0x5db8 m_vecLastPosition (datamap)
-	// +0x5dc4 m_qaLastFacing (datamap) — retail types it Vector though it holds angles, as the
-	// chain stores Angles as FVector
-	FVector LastFacing = FVector::ZeroVector;
-	float DistTooFar = 0.f;  // +0x5de4 m_flDistTooFar (datamap)
-	bool bNoDamageDecal = false;  // +0x5df0 m_fNoDamageDecal (sdk-order)
-	bool bWantsLargeHull = false;  // +0x5f2c m_bWantsLargeHull (datamap)
-	bool bIsUsingSmallHull = false;  // +0x5f2d m_fIsUsingSmallHull (sdk-order)
+	// Every word of `CAI_BaseNPCTroika` (`+0x5f44..+0x665c`) this class owns that no port system
+	// writes yet (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset,
+	// its retail name and the tier that typed it; `ElysiumNpcKernelShapeMap.cpp` binds every one of
+	// them to its offset. The `CAI_BaseNPC` words are `FElysiumNpcBase`'s (story 5 step 5).
 	FVector KnockbackVelocity = FVector::ZeroVector;  // +0x6004 m_KnockbackVelocity (datamap)
 	FElysiumEntityHandle KnockbackHitEntity;  // +0x6010 m_hKnockbackHitEntity (datamap)
 	// +0x6014 m_fKnockbackWallHitFallTime (datamap) — an absolute curtime stamp, carried as double
@@ -1180,42 +1091,6 @@ public:
 	// reader; declared so the census stays whole
 	bool bUnread6658 = false;
 
-	// --- Which retail class this NPC IS (story 29c-1) ---------------------------------------------
-	/**
-	 * The census row for the retail class this NPC IS (`Substrate/ElysiumNpcKernelClassLookup.h`):
-	 * the C++ class's own answer (`OwnRetailClass`), which is the class retail's factory for the
-	 * authored classname builds (story 5 step 2). Null for a bare `FElysiumNpc`, the Troika line
-	 * itself, which no classname builds.
-	 *
-	 * Species behaviour is reached through overrides (story 5 step 3) and lives on the species
-	 * classes (step 4). What still reads this: retail's own `RTDynamicCast` type tests, the census
-	 * lookups, and the class-keyed data queries `story-5/decisions-step3.json` lists.
-	 */
-	const FElysiumNpcClass* RetailClass() const;
-
-	// Each species class answers its own census row; the Troika line answers null.
-	virtual const FElysiumNpcClass* OwnRetailClass() const;
-
-	// `RetailClass()` is `CNPC_VVampireBoss` or below, `CNPC_VBaseBoss` or below, … The chain walk a
-	// species body's "am I one of these" arm performs, so no body compares classnames by hand.
-	bool IsRetailClass(const TCHAR* RetailClassName) const;
-
-	// This NPC as species class `T` (`Substrate/ElysiumNpc<X>.h`), or null: the typed view a body
-	// takes of ANOTHER instance whose species words it reads (a tentacle's head, a pickup helper's
-	// ManBat). It tests the C++ class's own census row, never the test latch, so a non-null answer
-	// is always an object of class `T`: the species tree mirrors retail's (story 5 step 2).
-	template <class T>
-	T* AsSpecies()
-	{
-		return OwnRetailClassDerivesFrom(T::RetailClassName) ? static_cast<T*>(this) : nullptr;
-	}
-	template <class T>
-	const T* AsSpecies() const
-	{
-		return OwnRetailClassDerivesFrom(T::RetailClassName) ? static_cast<const T*>(this) : nullptr;
-	}
-	bool OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const;
-
 	// --- The retail vtable surface (`docs/vtmb/npc-kernel/signatures.md`) -------------------------
 	//
 	// One `virtual` per Troika-line slot the port does not already implement under a mapped name —
@@ -1224,9 +1099,8 @@ public:
 	// can drift from the ledger is the thing this story exists to end; the file is data, included
 	// here because a virtual can only be declared inside its class.
 	//
-	// This class stays `final`. A virtual here declares the surface retail dispatches through, not
-	// an extension point: species are rows in the class registry
-	// (`ElysiumNpcKernelShape.cpp`), as they are everywhere else in this runtime.
+	// A virtual here declares the surface retail dispatches through; the species classes
+	// (`Substrate/ElysiumNpc<X>.h`) override it (story 5 steps 3-4).
 	//
 	// The bodies are in `ElysiumNpcKernelSlots.cpp`: a named stub that tallies `elysium.stubs` with
 	// the retail address and the story that owns it (29c/29d/29e). A story replaces a stub with the
@@ -1333,10 +1207,6 @@ protected:
 	// (slot 433), and suppression is a plain SKIP: the standing condition set survives it.
 	void RunConditionPass(double Now, bool bReduced);
 
-	// The edge tracker `PumpStateChange` keeps (see the pump's own comment, in the public section).
-	EElysiumNpcState LastStateChange = EElysiumNpcState::Idle;
-	bool bStateChangeSeen = false;
-
 	// Watches a beat that stopped advancing its own move and releases the body rather than
 	// freezing it.
 	bool TickScriptWatchdog();
@@ -1441,7 +1311,6 @@ protected:
 	bool bReportedNoStepSurface = false;
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
-	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
 	FElysiumBodyOwnerToken ScheduleOwner;
@@ -1450,27 +1319,13 @@ protected:
 	FElysiumBodyOwnerToken DialogueBodyOwner;
 	TArray<FString> PatrolNames;
 	TArray<FVector> PatrolPoints;
-	// `m_hTargetEnt` (`+0x5ce4`); see `SetTarget`.
-	FElysiumEntityHandle TargetEnt;
 	bool bPatrolActive = false;
 	// A scripted beat has taken this NPC and has not given it back, and whether the arbiter claim
 	// behind that request is in hand. The two differ only while a claim is deferred: the beat-queue
 	// lock is stamped synchronously, the arbiter claim can arrive a think later.
 	bool bScriptBodyRequested = false;
 	bool bScriptBodyHeld = false;
-	bool bMoveIssued = false;
 	bool bWalkingAnimation = false;
-	// Whether the death handoff has already run. Session state, not save state: it is derivable from
-	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
-	bool bDeathHandoffDone = false;
-	// `TASK_DIE`'s commit has run. Retail has no such flag: there, the commit re-enters `Event_Killed`
-	// and `CreateCorpse` (`0x1032c0e0`) takes the entity out of the world, so the parked task simply
-	// stops existing along with the NPC. This runtime has no corpse entity and no removal, so the
-	// flag is what stands in for "the body this program was running on is gone".
-	bool bDeathCommitted = false;
-	// When the death clip `PlayDeathActivity` started runs out. `TASK_DIE`'s gate waits on it; zero
-	// means nothing is playing, which is the ordinary case because base `DIE` names no activity task.
-	double DeathPerformanceEndsAt = 0.0;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
 	// A disposition transition clip is playing: do not re-decide the stance until it ends. This is
@@ -1486,11 +1341,6 @@ protected:
 	int32 AmbientActivityCycle = 0;
 	bool bAmbientArrived = false;
 	TSet<int32> FailedSpotIndices;
-
-	// `SetRetailClassForTests`'s latch (test builds only write it). Kept only for the enumerated
-	// deferred-class cases of story 5 step 2; removed at step 11.
-	const FElysiumNpcClass* RetailClassForTests = nullptr;
-	bool bRetailClassForTests = false;
 };
 
 // npc_VPlayerController — the scene-owned duplicate of the player. It shares only the authored

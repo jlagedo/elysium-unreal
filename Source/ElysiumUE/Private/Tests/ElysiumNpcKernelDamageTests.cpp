@@ -742,7 +742,7 @@ bool FElysiumNpcKernelDamageCachePositionTest::RunTest(const FString&)
 		return false;
 	}
 
-	Npc->Senses.Memory.LastDamageAttackPosition = FVector(11.0, 22.0, 33.0);
+	Npc->BaseMemory.LastDamageAttackPosition = FVector(11.0, 22.0, 33.0);
 	Npc->SavePosition = FVector::ZeroVector;
 	Npc->Cognition.bCondTookDamage = true;
 
@@ -1189,7 +1189,7 @@ bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 	// `0x103990c0` — the SAME tail runs on every path, including the one with no enemy at all.
 	Ming->MingXiaoThrowObject = Object->Handle;
 	Ming->MingXiaoThrowableObjectMode = 5;
-	Ming->Senses.Memory.Enemy = FElysiumEntityHandle();
+	Ming->BaseMemory.Enemy = FElysiumEntityHandle();
 	Ming->LaunchRagdollTowardTarget();
 	TestFalse(TEXT("the launch clears m_hThrowObject even with no enemy"),
 		Ming->MingXiaoThrowObject.IsSet());

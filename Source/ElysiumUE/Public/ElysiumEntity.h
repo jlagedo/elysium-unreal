@@ -626,10 +626,21 @@ public:
 	// attack notice reaches its victim as an entity handle — and only `FElysiumNpc` carries the
 	// senses, memory and cognition those producers write. It is deliberately NOT a classname test:
 	// `npc_VPlayerController` shares the `npc_` prefix and is a different leaf entirely.
+	//
+	// Retail keeps the same answers as cached self-pointers on `CBaseEntity`: `+0x98
+	// m_pBaseNPCTroika` is `AsNpc()` (the `CAI_BaseNPCTroika` line), `+0x94 m_pBaseNPC` is
+	// `AsNpcBase()` (any `CAI_BaseNPC`, which also answers the script directors and the test hull).
+	// A retail test reads one or the other; `story-5/consumers-step5.tsv` records which each port
+	// consumer ports.
 	virtual class FElysiumNpc* AsNpc() { return nullptr; }
 	const class FElysiumNpc* AsNpc() const
 	{
 		return const_cast<FElysiumEntity*>(this)->AsNpc();
+	}
+	virtual class FElysiumNpcBase* AsNpcBase() { return nullptr; }
+	const class FElysiumNpcBase* AsNpcBase() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsNpcBase();
 	}
 
 	// --- Open-ended attribute names ---

@@ -20,14 +20,6 @@ int32 FrenziedTranslateSchedule(int32 ScheduleNumber);
  *  slot 440 virtually on the mapped id. */
 int32 BaseTranslateSchedule(int32 ScheduleNumber);
 
-/** SEAM for `CCineNPC::m_fMoveTo` (`cine +0x5f60`), the jump-table selector `0x102cc080`'s live
- *  arm switches on. The cine itself is NOT a seam — `m_hCine` (`+0x5d74`) is bound to
- *  `FElysiumEntity::ScriptOwner` and read through `ScriptOwnerIsLive()` — but this runtime's
- *  scripted-sequence record carries no `m_fMoveTo` column, so the selector answers 0, which is
- *  retail's own "no move" arm (shared with 4). */
-int32 TranslateCineMoveTo = 0;
-int32 TranslateCineCleanupCalls = 0;
-
 // `CNPC_VTzimisce` (`0x103bd390`) and `CNPC_VWerewolf` (`0x103d5e00`) stamp retail's own
 // `__FILE__`/`__LINE__` into `+0x1b30`/`+0x1b34` before answering. The shape map calls that pair
 // ABSENT; the mind's transition trace carries the same account, so no member stands for it.

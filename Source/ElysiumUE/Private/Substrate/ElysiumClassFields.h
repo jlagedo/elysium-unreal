@@ -13,7 +13,7 @@
 // generic lambda taking `auto&` and returning a reference to the word:
 //
 //     ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("hintgroup"),
-//         [](auto& N) -> auto& { return N.ScheduleHost.HintGroup; });
+//         [](auto& N) -> auto& { return N.BaseScheduleHost.HintGroup; });
 //
 // Retail reaches a component word the same way every other word is reached — by offset off the
 // entity, because `CAI_BaseNPCTroika` is one flat object and `CAI_Senses` and kin are embedded in
