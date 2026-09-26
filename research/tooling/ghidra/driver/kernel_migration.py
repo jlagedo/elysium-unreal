@@ -9,6 +9,7 @@ is review-complete at this checkpoint. The whole step-0 gate refuses pending pac
     uv run elysium research kernel_migration --check step2
     uv run elysium research kernel_migration --check step3
     uv run elysium research kernel_migration --check step4
+    uv run elysium research kernel_migration --check step5
 
 Once a later phase is current, `--check step0` verifies the accepted receipt against the tree it
 accepted (`manifest.json` `history.step0.commit`), not against the edited working tree.
@@ -44,7 +45,7 @@ REQUIRED_PINS = {"module", "corpus", "listing", "datamaps", "census", "verdicts"
 
 
 # A phase is listed here only when its checker exists; no later phase is implicitly accepted.
-ACCEPTED_PHASES = (0, 1, 2, 3, 4)
+ACCEPTED_PHASES = (0, 1, 2, 3, 4, 5)
 
 
 class InvalidManifest(ValueError):
@@ -319,7 +320,7 @@ def _check_step0(directory: Path, manifest: dict, source_root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2", "step3", "step4"), required=True)
+    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2", "step3", "step4", "step5"), required=True)
     args = parser.parse_args(argv)
     try:
         manifest, classes, factories = load()
@@ -363,6 +364,17 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print('PASS: step 4 acceptance; accepted step-3 receipt, moves, bindings, regression '
                       'comparison and runtime gate verified.')
+            print(json.dumps(counts, sort_keys=True))
+        if args.check == "step5":
+            from kernel_migration_step5 import check_step5
+            counts = check_step5()
+            if counts.get("pending"):
+                print('PENDING: step 5 in progress; the move, binding and consumer records match the '
+                      'accepted step-4 tree and the pinned datamap replay. Source dispositions are not '
+                      'yet enforced.')
+            else:
+                print('PASS: step 5 acceptance; accepted step-4 receipt, base/Troika moves, base '
+                      'bindings, consumers, registry chain, regression comparison and runtime gate verified.')
             print(json.dumps(counts, sort_keys=True))
     except (InvalidManifest, ValueError, OSError) as exc:
         print(f"REFUSED: {exc}")

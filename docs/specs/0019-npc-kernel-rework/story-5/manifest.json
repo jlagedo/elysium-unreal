@@ -157,6 +157,11 @@
           "sha256": "43840137d851907ecb5d111d22e7f407141b2d0e5d54712e41c7dfa074eb8d87"
         }
       }
+    },
+    "step4": {
+      "commit": "03c0d030181863cb6f5f96621c2cbe2e2ee2b9e5",
+      "acceptance": "acceptance-step4.json",
+      "note": "--check step4 reads this tree once it is recorded (step 5 started). The step-4 gate ran on bb690d7a, the 4r gate on 61aa2cd8 (acceptance-step4r.json); 03c0d030 renamed test locals and one moves-step4.tsv note."
     }
   },
   "step1_packets": {
@@ -200,5 +205,15 @@
     "4g": "accepted",
     "4h": "accepted",
     "4i": "accepted"
+  },
+  "step5_packets": {
+    "5a": "in-progress",
+    "5b": "pending",
+    "5c": "pending",
+    "5d": "pending",
+    "5e": "pending",
+    "5f": "pending",
+    "5g": "pending",
+    "5h": "pending"
   }
 }

@@ -1,0 +1,106 @@
+# Story 5 step 5: every AsNpc() consumer (retail +0x94 m_pBaseNPC -> AsNpcBase(); +0x98 m_pBaseNPCTroika -> AsNpc())
+path	consumer	sites	disposition	evidence	note
+Private/Debug/ElysiumArenaCast.cpp	declaration/table in Source/ElysiumUE/Private/Debug/ElysiumArenaCast.cpp:36	1	as-npc:port	no retail counterpart; arena debug spawner	keep AsNpc
+Private/Debug/ElysiumCastRun.cpp	FElysiumCastRun::IsCourseArmed	1	as-npc:port	no retail counterpart; Cast debug harness	keep AsNpc
+Private/Debug/ElysiumCogWindow_Npc.cpp	FElysiumCogWindow_Npc::GatherNpcs	1	as-npc:port	Cog debug window list	keep AsNpc
+Private/Debug/ElysiumCogWindow_Npc.cpp	FElysiumCogWindow_Npc::SelectedNpc	1	as-npc:port	Cog debug window	keep AsNpc; a base-only NPC (cine director) is invisible to the panel - optional AsNpcBase later
+Private/Map/ElysiumMapActor.cpp	declaration/table in Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:1414	1	as-npc:port	UE feed-target probe (cites engine CEnumRay 0x20042b70 for bounds only; no NPC-class test)	keep AsNpc
+Private/Map/ElysiumMapActor.cpp	declaration/table in Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:1742	1	as-npc:port	UE line trace over NPC hulls; no retail address	keep AsNpc
+Private/Map/ElysiumMapActor.cpp	declaration/table in Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:1787	1	as-npc:port	UE overlap test; no retail address	keep AsNpc
+Private/Substrate/ElysiumAiScriptedSchedule.cpp	FElysiumAiScriptedSchedule::ResolveNpc	1	as-npc-base	CCineAISchedule::vfunc583 0x101a9790: resolves m_hTargetEnt then `*(ent+0x94)` (m_pBaseNPC), null -> nothing; CCineAI::vfunc583 0x101a9080 same (checklist-19-29)	-> AsNpcBase; confirm consumer InputStartSchedule touches no Troika member
+Private/Substrate/ElysiumChoreoScene.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:543	1	as-npc	0x10081ed0: `this = piVar5[0x26]` (+0x98) guards 0x1029f2e0/0x1029f300 (Get/SetDisableAI)	keep AsNpc
+Private/Substrate/ElysiumChoreoScene.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:680	1	as-npc	0x100847e0: `*(actor+0x98)` then m_hCine/m_hDialogPartner, 0x1029f300, slot 614	keep AsNpc
+Private/Substrate/ElysiumCombatCharacter.cpp	FElysiumCombatCharacter::EnterGrapplePair	1	as-npc	CBaseCombatCharacter::GrappleSoundCmd 0x1033b100 case 0: `piVar13 = this+0x98`; InsertSound only when non-null	keep AsNpc
+Private/Substrate/ElysiumCombatCharacter.cpp	FElysiumCombatCharacter::FillActivityClipRequest	1	as-npc:port	port anim-resolver request (Embodiment); reads Mind.State (m_NPCState, CAI_BaseNPC +0x5cc0) but no retail call site with a class test	keep AsNpc
+Private/Substrate/ElysiumDisciplines.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1113	1	as-npc	0x101de660: 101de6c7..101de6e9 `[ESI+0x98]` then OR +0x14b8/+0x14bc	keep AsNpc
+Private/Substrate/ElysiumDisciplines.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:892	1	as-npc	0x101def10: `iVar1 = param_2+0x98` gates the +0x14b8/+0x14bc clear	keep AsNpc (flag words are CBCC-layer in layout.md but retail reaches them via +0x98)
+Private/Substrate/ElysiumDisciplines.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:900	1	as-npc	0x101def10: `this_00 = param_2+0x98` for the 0x800000 test and TaskComplete	keep AsNpc
+Private/Substrate/ElysiumDisciplines.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:980	1	as-npc	0x101de660: 101de6c7 `MOV EAX,[ESI+0x98]` saved; AI_Schedule arm 101de962 uses it (slot 614, schedule install)	keep AsNpc
+Private/Substrate/ElysiumEntityWorld.cpp	FElysiumEntityWorld::SetAiEnabled	1	as-npc	SetAIEnabled 0x10265680: walks FL_NPC(0x20) list; `piVar2[0x26]` (+0x98) non-null -> slot 614 + clock rebase	keep AsNpc; GAP: retail else-arm (no +0x98 = base-only NPC; FL_NPC 0x20 is set by CAI_BaseNPC ctor 0x1027c300) writes entity+0x17c = curtime - _DAT_104491b4 - unported
+Private/Substrate/ElysiumEntityWorld.cpp	FElysiumEntityWorld::SyncMovingNpcRecords	1	as-npc:port	named divergence (origin refresh from UE bodies); no retail counterpart	keep AsNpc
+Private/Substrate/ElysiumEntityWorld.cpp	FElysiumEntityWorld::WakeNpcsNear	1	as-npc	0x1028d820: flag-0x40 list, unconditional `*(ent+0x98)` vcall +0x91c (slot 583)	keep AsNpc
+Private/Substrate/ElysiumEntityWorldDialogue.cpp	FElysiumEntityWorld::OpenDialog	1	as-npc	reads npc+0x64C4 default_camera (Troika range) per StartPlayerDialog 0x10178280	keep AsNpc
+Private/Substrate/ElysiumFeed.cpp	FElysiumCombatCharacter::Feed	1	as-npc:unrecovered	docs/vtmb/feeding.md names the victim NPC's criminal/supernatural windows; no address or pointer test recovered	keep AsNpc (Witness state is port-held on FElysiumNpc; pl_* thresholds are Troika +0x634c..)
+Private/Substrate/ElysiumFeed.cpp	FElysiumCombatCharacter::FeedInterrupt	1	as-npc:unrecovered	same as Feed pulse: feeding.md, no address	keep AsNpc
+Private/Substrate/ElysiumFeed.cpp	FElysiumCombatCharacter::IsFeedAutoAcceptState	1	as-npc:unrecovered	AttemptFeed 0x10168910 reads victim `param_1[0x3fc]` (+0xff0 m_IdealActivity, CBaseCombatCharacter layer) with NO class test	retail test is none; port's Schedule==MESMERIZED stand-in needs a mind; revisit when IdealActivity lives on the CBCC tier
+Private/Substrate/ElysiumFeedSchedules.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumFeedSchedules.cpp:29	1	as-npc	feeding.md: `npc = victim->+0x98`, then SetSchedule(0xfb SCHED_TROIKA_MESMERIZED)	keep AsNpc
+Private/Substrate/ElysiumMover.cpp	FElysiumDoorBase::IsUseRefused	1	as-npc-base	CBaseDoor::IsUseRefused 0x100eec70: `(spawnflags & 0x200) && param_1 && param_1[0x25]` (+0x94 m_pBaseNPC)	-> AsNpcBase
+Private/Substrate/ElysiumNpc.cpp	FElysiumNpc::AnnounceAttack	1	as-npc	callee NoticeMeleeAttack ports 0x102bf560, which writes m_hDetectedAttacker +0x65c0/+0x65c4 and reads m_bIgnoreDetectedAttack +0x65f5 (Troika range; social.md, senses.md)	keep AsNpc; retail route from TASK_ANNOUNCE_ATTACK to the victim is not cited
+Private/Substrate/ElysiumNpcChangBros.cpp	FElysiumNpcChangBros::CheckForJumpAttack	1	as-npc	`___RTDynamicCast(member, CNPC_VChangBros)`	keep AsNpc (species cast)
+Private/Substrate/ElysiumNpcChangBros.cpp	FElysiumNpcChangBros::GetOtherBrother	1	as-npc	0x1036e2f0 RTDynamicCast to CNPC_VChangBros	keep AsNpc
+Private/Substrate/ElysiumNpcConditions.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:737	1	as-npc-base	0x102b1a20: `iVar5 = piVar6[0x25]` (+0x94) then comforter +0x5bb0/+0x5da4 (CAI_BaseNPC squad words)	-> AsNpcBase (ConnectedSquad must be reachable on the base tier)
+Private/Substrate/ElysiumNpcGargoyle.cpp	FElysiumNpcGargoyle::TouchSpecies	1	as-npc:unrecovered	retail dispatches slot 142 OnTakeDamage on the pillar entity (1037a3a5..), no NPC-class test; pillar is a prop	AsNpc is a port dispatch artefact (OnTakeDamage only on FElysiumNpc)
+Private/Substrate/ElysiumNpcGhoulCroucher.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumNpcGhoulCroucher.cpp:57	1	as-npc-base	CNPC_VGhoulCroucher::StartTouch 0x1037bf60: 1037bfe7 `MOV EAX,[EDI+0x94]; TEST EAX,EAX`	-> AsNpcBase
+Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp	FElysiumNpc::MeleeAttack1Conditions	1	as-npc:unrecovered	retail test is enemy +0x9c (CBaseCombatCharacter) then slot 327 vcall; base body 0x10345460 returns 1	AsNpc only reaches the port's Slot327; decided by which tier holds slot 327 overrides
+Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp	FElysiumNpc::MeleeAttack2Conditions	1	as-npc:unrecovered	slot 556 0x1026da90: same +0x9c / slot 327 pattern	as above
+Private/Substrate/ElysiumNpcKernelConditions10.cpp	FElysiumNpc::TroikaIRelationType	2	as-npc:unrecovered	0x10299da0: `piVar1 = cand+0x9c` (CBCC) for arm A (flags2 +0x14bc, CBCC layer) and the last arm; arm B reads `cand+0x98` (Troika) for +0x647c | 0x10299da0: my boss `*(boss+0x9c)` (CBCC) then vcalls 0x650/0x29c	mixed: one AsNpc stands for both +0x9c and +0x98; port comment mislabels +0x98 as m_pCombatCharacter | retail test is CBCC, not an NPC tier
+Private/Substrate/ElysiumNpcKernelDebug10_2.cpp	FElysiumNpc::RelationshipLineCandidates	1	as-npc:unrecovered	port comment: walk (0x100f8490 mask 0x820) tests `ent->+0x9c` (CBCC) and BREAKS on null	retail test is CBCC; debug overlay
+Private/Substrate/ElysiumNpcKernelDebug2.cpp	FElysiumNpc::DrawEnemyMemoryOverlays	1	as-npc:unrecovered	0x10275760 0x20000 arm: remembered entity's m_eHull +0x1568 (CBaseCombatCharacter per layout.md); filter is AsCombatCharacter	AsNpc only because HullKind sits on FElysiumNpc
+Private/Substrate/ElysiumNpcKernelDialogue.cpp	FElysiumNpc::DialogMessageSend	1	as-npc	0x100e58e0 -> SetDialogQue 0x102c0470 on the speaker writes +0x654c m_bDialogQueIsFinal / que buffer (Troika range); non-NPC speaker = null-this arm	keep AsNpc
+Private/Substrate/ElysiumNpcKernelDialogue.cpp	FElysiumNpc::GetControllerNpc	1	as-npc	CBasePlayer::GetControllerNPC 0x10161a70: `npc = ent->+0x98`; null -> 'created NULL Entity' arm	keep AsNpc (port comment calls +0x98 m_pCombatCharacter; it is m_pBaseNPCTroika)
+Private/Substrate/ElysiumNpcKernelEntityChain.cpp	FElysiumNpc::CineCanInterrupt	1	as-npc:unrecovered	0x101a8930: resolves m_hTargetEnt and vcalls slot 158 (+0x278) on the ENTITY; no class test	vcall artefact (IsAlive only on FElysiumNpc)
+Private/Substrate/ElysiumNpcKernelEntityChain2.cpp	FElysiumNpc::AutoaimDeflection	1	as-npc:unrecovered	CBasePlayer::AutoaimDeflection 0x10176930 step 3: slot 158 IsAlive on the base entity; no NPC-class test	vcall artefact; port drops every non-NPC candidate
+Private/Substrate/ElysiumNpcKernelEntityChain2.cpp	FElysiumNpc::ChainTakesDamage	1	as-npc:unrecovered	m_takedamage +0x1fc is CBaseEntity (layout.md); no class test in retail	port holds TakeDamageMode on the NPC leaf only
+Private/Substrate/ElysiumNpcKernelEntityChain2.cpp	FElysiumNpc::ReleaseControllerNpc	1	as-npc	0x101618e0: `iVar2 = controller->field_0x98` gates the anim-data copy	keep AsNpc
+Private/Substrate/ElysiumNpcKernelEntityChain2.cpp	FElysiumNpc::UpdateClosestNpc	2	as-npc:unrecovered	0x101828b0: slot 158 on candidate; no class test cited | 0x101828b0: slot 158 on cached entity	vcall artefact
+Private/Substrate/ElysiumNpcKernelGeometry.cpp	FElysiumNpc::NotifyScatterCenter	1	as-npc	FUN_1039ef90 writes +0x668c on CNPC_VMingXiaoTentacle (species field)	keep AsNpc
+Private/Substrate/ElysiumNpcKernelMisc.cpp	FElysiumNpc::DispatchVictimHitReaction	1	as-npc:unrecovered	0x1037a54a: slot 266 vcall on the victim (a pillar prop); no class test	vcall artefact
+Private/Substrate/ElysiumNpcKernelMotor.cpp	FElysiumNpc::IgnoreCollisionSharedHead	2	mixed:1/1	0x1029afc0 / 0x1029b180 head: NAV_IGNORE_NPC arm tests other+0x94 m_pBaseNPC (port walk; shape.md:1194 agrees) | same bodies: non-NAV_IGNORE_NPC arm tests other+0x98 m_pBaseNPCTroika && SLEEPING	-> AsNpcBase | keep AsNpc
+Private/Substrate/ElysiumNpcKernelSenses.cpp	FElysiumNpc::FInAimCone	1	as-npc:unrecovered	0x10326ae0: slot 197 BodyTarget vcall on target; no class test	vcall artefact (BodyTarget only on FElysiumNpc)
+Private/Substrate/ElysiumNpcKernelSenses10.cpp	FElysiumNpc::IsBccTargetable	1	as-npc:unrecovered	m_bIsBCCTargetable +0x1480 is CBaseCombatCharacter (layout.md); gate is on cand+0x9c	retail test is CBCC
+Private/Substrate/ElysiumNpcKernelSenses10.cpp	FElysiumNpc::UpdateEnemyMemory	1	as-npc-base	slot 544 0x102709c0: `iVar1 = param_1->field_0x94` then +0x5bb0/+0x5da4	-> AsNpcBase (SquadDisconnected/SquadWord must be base-tier)
+Private/Substrate/ElysiumNpcKernelSenses10_2.cpp	FElysiumNpc::FrenzyShadowBestEnemy	1	as-npc:unrecovered	CNPC_VFrenzyShadow::BestEnemy 0x103766d0: `pCVar3 = ent+0x9c` then vcall 0x650 IRelationType	retail test is CBCC
+Private/Substrate/ElysiumNpcKernelSocial10.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSocial10.cpp:38	1	as-npc:unrecovered	slot 158 IsAlive on any entity (CBaseEntity body m_lifeState==0)	vcall artefact
+Private/Substrate/ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpc::BaseEntityStartTouch	1	as-npc:unrecovered	CBaseEntity::StartTouch 0x100a49d0: parent slot 174 vcall; no class test	vcall artefact
+Private/Substrate/ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpc::BaseEntityTouch	1	as-npc:unrecovered	CBaseEntity::Touch 0x100a4af0: parent slot 175 vcall; no class test	vcall artefact
+Private/Substrate/ElysiumNpcKernelSquad.cpp	FElysiumNpc::ResolveNamedMaster	1	as-npc-base	0x101a8130: `piVar1[0x25] != 0` (+0x94) then RTDynamicCast(type 0x105947c8)	-> AsNpcBase (final cast class unrecovered; body returns null anyway)
+Private/Substrate/ElysiumNpcKernelState19.cpp	FElysiumNpc::BasePreSelectIdealState	1	as-npc	CAI_BaseNPC::PreSelectIdealState 0x1026f590: `iVar2 = this->field_0x98` (SELF Troika downcast), ORs 0x80002000 into its +0x14bc; else SquadNewEnemy(m_pSquad)	keep AsNpc; FINDING: retail reads THIS+0x98, the port resolves MoveParent - divergence; else-arm reachable only by base-only NPCs
+Private/Substrate/ElysiumNpcMaker.cpp	FElysiumNpcMaker::EquipZombieFists	1	as-npc	0x1034d140 consumes base MakeNPC 0x1034b7b0 whose child passed the +0x98 gate	keep AsNpc
+Private/Substrate/ElysiumNpcMaker.cpp	FElysiumNpcMaker::FUN_1034c8e0	1	as-npc	0x1034c8e0: dynamic_cast<CNPC_VTzimisceRunner*>	keep AsNpc
+Private/Substrate/ElysiumNpcMaker.cpp	FElysiumNpcMaker::FleshpileOwner	1	as-npc	dynamic_cast<CNPC_VAndreiBlood*> (DAT_10938040)	keep AsNpc
+Private/Substrate/ElysiumNpcMaker.cpp	FElysiumNpcMaker::TrySpawn	1	as-npc	MakeNPC 0x1034b7b0: `this_00 = ent+0x98`; null -> 'Non Troika Ent in NPCMaker'	keep AsNpc
+Private/Substrate/ElysiumNpcManBat.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:94	1	as-npc:unrecovered	slot 158 IsAlive 0x100b4dc0 is CBaseEntity; no class test	vcall artefact
+Private/Substrate/ElysiumNpcMingXiao.cpp	FElysiumNpcMingXiao::FUN_10397a50	1	as-npc	0x10397a50 reads proxy+0x6674 CNPC_VMingXiao::m_iTentacleID (species)	keep AsNpc
+Private/Substrate/ElysiumNpcMingXiao.cpp	FElysiumNpcMingXiao::FUN_103998d0	1	as-npc	0x103998d0 reads severed tentacle's species words	keep AsNpc
+Private/Substrate/ElysiumNpcMingXiao.cpp	FElysiumNpcMingXiao::ProxySlotIndexOf	1	as-npc	reads proxy+0x6660 CNPC_VMingXiaoTentacle::m_iTentacleID (species)	keep AsNpc
+Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp	FElysiumNpcMingXiaoTentacle::NotifyOwnerOfMyMove	1	as-npc	FUN_1039ef60: owner m_hMingXiao +0x665c -> CNPC_VMingXiao body	keep AsNpc
+Private/Substrate/ElysiumNpcPayphone.cpp	FElysiumNpcPayphone::PayphoneThink	1	as-npc:unrecovered	101aac36 `MOV EDI,[EBX+0xff0]` raw read of partner m_IdealActivity (CBaseCombatCharacter layer); no class test	field is CBCC-tier; AsNpc only because IdealActivityNumber sits on FElysiumNpc
+Private/Substrate/ElysiumNpcPedestrian.cpp	FElysiumNpcPedestrian::IRelationType	1	as-npc:unrecovered	0x103a2930 103a2946: cand+0x9c (CBCC) and m_bfAINPCFlags2 (+0x14bc, CBCC layer)	retail test is CBCC
+Private/Substrate/ElysiumNpcScurrying.cpp	FElysiumNpcScurrying::IsNosferatuTemplate	1	as-npc:port	0x103ad0f0 compares the character template to Player_Nosferatu; AsNpc()==nullptr is the port's stand-in for 'has a Player_* template'	keep AsNpc (not a retail class test)
+Private/Substrate/ElysiumNpcSenses.cpp	FElysiumNpcSenses::ExtendVisionOverride	1	as-npc	0x1028e8b0: `*(param_1+0x98)` then its slot 167 GetEnemy	keep AsNpc
+Private/Substrate/ElysiumNpcSenses.cpp	FElysiumNpcSenses::TickSight	1	as-npc-base	LookForNPCs 0x10310130 walks g_AI_Manager DAT_1090fe10; CAI_BaseNPC ctor 0x1027c300 registers every CAI_BaseNPC there (`thunk_FUN_10265310(&DAT_1090fe10,this)`) and sets +0x94=this	-> AsNpcBase for the 0.25 s NPC channel
+Private/Substrate/ElysiumNpcVampireBoss.cpp	FElysiumNpcVampireBoss::WaitForTransformation	1	as-npc	103c64c4: RTDynamicCast partner to the boss line, fires +0x6664 output	keep AsNpc
+Private/Substrate/ElysiumNpcWerewolf.cpp	FElysiumNpcWerewolf::PushedEntityDirectionClass	1	as-npc:unrecovered	slot 323 (0x10344dd0, CBCC body) vcall on the pushed entity	vcall artefact
+Private/Substrate/ElysiumNpcWerewolf.cpp	FElysiumNpcWerewolf::PushedEntityKnockback	1	as-npc:unrecovered	slot 320 PlayerKnockbackReaction vcall on the pushed entity; no class test	vcall artefact
+Private/Substrate/ElysiumPlayerEntity.cpp	FElysiumPlayer::PollTouchContacts	1	as-npc	player Touch 0x10147690: `this->+0xa8 && other->+0x98` before WAS_BUMPED	keep AsNpc (the +0x9c misc-flag arm for non-Troika characters is noted unported)
+Private/Substrate/ElysiumStealth.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumStealth.cpp:257	1	as-npc:port	HUD stealth-observer publication; no retail address	keep AsNpc
+Private/Substrate/ElysiumStealthKillRules.cpp	FElysiumStealthKillRules::FindVictim	2	as-npc:port	cached victim re-resolve; no retail address on FindVictim | embodiment trace hit; no retail address on FindVictim	keep AsNpc
+Private/Substrate/ElysiumStealthKillRules.cpp	declaration/table in Source/ElysiumUE/Private/Substrate/ElysiumStealthKillRules.cpp:105	1	as-npc:port	port hull-trace fallback; no retail address	keep AsNpc
+Private/Substrate/ElysiumWeaponClasses.cpp	FElysiumWeapon::StageSwingOpposedRoll	1	as-npc	NoticeMeleeAttack (0x102bf560 port) writes Troika +0x65c0/+0x65c4	keep AsNpc; retail route to the victim not cited
+Private/Tests/ElysiumAiScriptedScheduleTests.cpp	declaration/table in Source/ElysiumUE/Private/Tests/ElysiumAiScriptedScheduleTests.cpp:145	1	test	fixture for the AiScriptedSchedule tests	-
+Private/Tests/ElysiumAiScriptedScheduleTests.cpp	declaration/table in Source/ElysiumUE/Private/Tests/ElysiumAiScriptedScheduleTests.cpp:146	1	test	fixture for the AiScriptedSchedule tests	-
+Private/Tests/ElysiumDialogueEntryTests.cpp	FElysiumDialogHolsterTest::RunTest	2	test	-	-
+Private/Tests/ElysiumDialogueEntryTests.cpp	FElysiumDialogRefusalPredicateTest::RunTest	1	test	-	-
+Private/Tests/ElysiumDialogueEntryTests.cpp	FElysiumNpcUseStartsDialogTest::RunTest	1	test	-	-
+Private/Tests/ElysiumDisciplineTests.cpp	FElysiumDisciplineAiScheduleTest::RunTest	1	test	-	-
+Private/Tests/ElysiumDisciplineTests.cpp	FElysiumDisciplineAlertSoundTest::RunTest	1	test	-	-
+Private/Tests/ElysiumDisciplineTests.cpp	FElysiumDisciplineFlagLifecycleTest::RunTest	1	test	-	-
+Private/Tests/ElysiumDisciplineTests.cpp	FElysiumDisciplineFlagSaveTest::RunTest	4	test	-	-
+Private/Tests/ElysiumFeedTranceTests.cpp	declaration/table in Source/ElysiumUE/Private/Tests/ElysiumFeedTranceTests.cpp:133	1	test	fixture for the FeedTrance tests	-
+Private/Tests/ElysiumInteractionTests.cpp	FElysiumDialogueConditionTruthinessTest::RunTest	1	test	-	-
+Private/Tests/ElysiumKnockbackTests.cpp	FElysiumKnockbackProducerTest::RunTest	1	test	-	-
+Private/Tests/ElysiumNpcFootstepTests.cpp	declaration/table in Source/ElysiumUE/Private/Tests/ElysiumNpcFootstepTests.cpp:164	1	test	fixture helper	-
+Private/Tests/ElysiumNpcKernelClassFactoryTests.cpp	FElysiumNpcKernelClassAbstractTest::RunTest	1	test	-	-
+Private/Tests/ElysiumNpcKernelClassFactoryTests.cpp	FElysiumNpcKernelClassDeadAndDeferredTest::RunTest	2	test	asserts AsNpc()==nullptr for dead classnames | asserts AsNpc()==nullptr for deferred factories	-
+Private/Tests/ElysiumNpcKernelClassFactoryTests.cpp	FElysiumNpcKernelClassFactoriesTest::RunTest	1	test	asserts every factory row stands as FElysiumNpc	needs AsNpcBase rows once base-only classes are factoried
+Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp	FElysiumNpcKernelSaveRestore10MakerTest::RunTest	1	test	-	-
+Private/Tests/ElysiumNpcScheduleHostTests.cpp	FElysiumNpcTaskFailureTest::RunTest	1	test	-	-
+Private/Tests/ElysiumNpcTestFixture.h	declaration/table in Source/ElysiumUE/Private/Tests/ElysiumNpcTestFixture.h:230	1	test	shared fixture helper	-
+Private/Tests/ElysiumNpcTestFixture.h	declaration/table in Source/ElysiumUE/Private/Tests/ElysiumNpcTestFixture.h:40	1	test	shared fixture helper	-
+Private/Tests/ElysiumNpcTests.cpp	FElysiumNpcActivityResolveTest::RunTest	1	test	-	-
+Private/Tests/ElysiumNpcTests.cpp	FElysiumNpcTest::RunTest	3	test	-	-
+Private/Tests/ElysiumWeaponTests.cpp	Elysium.Substrate.Inventory.Selection	1	test	helper	-
+Private/Tests/ElysiumWieldRuleTests.cpp	FElysiumWieldNpcLoadoutTest::RunTest	1	test	-	-
+Private/Tests/ElysiumWorldEffectsTests.cpp	FElysiumGazeDialogueTest::RunTest	4	test	-	-
+Private/Tests/ElysiumWorldEffectsTests.cpp	FElysiumGazeTest::RunTest	1	test	-	-
+Private/Visual/ElysiumNpcBody.cpp	declaration/table in Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:535	1	as-npc:port	UE visual actor	keep AsNpc

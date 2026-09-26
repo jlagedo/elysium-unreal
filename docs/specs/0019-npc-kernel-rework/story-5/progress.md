@@ -1,4 +1,17 @@
-# Story 5 — step 4 accepted (`bb690d7a`)
+# Story 5 — step 5 in progress (packet 5a complete)
+
+**Step 5 (separate `CAI_BaseNPC` from Troika), 2026-09-26.** Packet 5a (records and checker, no
+C++) is complete: [packets/5a-preflight.md](packets/5a-preflight.md),
+[moves-step5.tsv](moves-step5.tsv), [fields-step5.tsv](fields-step5.tsv),
+[consumers-step5.tsv](consumers-step5.tsv), [decisions-step5.json](decisions-step5.json).
+`kernel_migration --check step5` is PENDING (records match the accepted step-4 tree `03c0d030`);
+`--check step4` passes on that tree. Manifest phase 4.
+
+Next: packet 5b, the pure rename of the Troika family files (`ElysiumNpcKernel<Family>` ->
+`ElysiumNpc<Family>`, collisions `…Bodies`), as its own commit with a full gate and an empty
+delta against step 4r's gate. Then 5c-5h as the one step-5 commit.
+
+## Step 4 (accepted, `bb690d7a`; 4r `61aa2cd8`; closed `03c0d030`)
 
 **Step 4 (species bodies, words and bindings), 2026-09-26.** 4a landed as its own commit
 (`9f087e42`). Packets 4b–4i landed as one commit, `bb690d7a` on `0019-5-class-tree`, recorded in

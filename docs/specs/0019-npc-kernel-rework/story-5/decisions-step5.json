@@ -1,0 +1,98 @@
+{
+  "scope": "Step 5 stands CAI_BaseNPC as FElysiumNpcBase : FElysiumScriptedCharacter and makes FElysiumNpc (CAI_BaseNPCTroika) derive from it. The base-layer words, bodies, bindings and descriptor move to the base; mixed components split by declaring layer; the step-3 temporary Base* direct calls become the base's own slot bodies. Species and deferred-class homes do not move (steps 7-10). The generated slot surface splits by introducing layer (5f); its entity-chain relocation, stub dispositions and diagnostic remaps stay step 6.",
+  "owner_decisions": {
+    "2026-09-26 file layout": "Class-prefixed family files. Base families become ElysiumNpcBase<Family>.inl/.cpp; Troika families are renamed ElysiumNpcKernel<Family> -> ElysiumNpc<Family> in a pure-rename prerequisite commit (packet 5b, .claude/rules/cpp.md). The three stems that collide with component files (Conditions, Dialogue, Senses) take ElysiumNpc<Family>Bodies. Infrastructure keeps its ElysiumNpcKernel* names (Shape, ShapeMap, SpeciesShapeMap, Bindings, ClassLookup, Tunables, Slots until 5f). Tests/ElysiumNpcKernel*Tests.cpp and the automation test ids keep their names.",
+    "2026-09-26 slot surface": "gen_kernel_shape splits the generated slot surface by layer in step 5: slots below 583 are declared on FElysiumNpcBase with the CAI_BaseNPC-chain body; Troika-introduced slots 583-616 and Troika bodies that differ on a lower slot are FElysiumNpc declarations or overrides. The stub diagnostic text is unchanged. Step 6 keeps the entity-chain relocation, the 8 entity-method merges, the stub dispositions and the diagnostic remaps.",
+    "2026-09-26 preflight commit": "Packet 5a (records and checker, no C++) lands as its own prerequisite commit, as 3a and 4a did. Packet 5b (the pure rename) is its own C++ commit with a full gate. Packets 5c-5h land as the one step-5 commit."
+  },
+  "rules": {
+    "layer": "A member's retail layer is read from the addresses its overlay targets and definitions cite (the ledger namespace of functions.md, else the namespace both named neighbours agree on) and from the words its shape-map path binds (layout.tsv's declaring layer). The entity chain and the base's support objects (motor, navigator, hints, sounds, squad) sit at or below the base. The address-derived layer is an identity column; the disposition is reviewed.",
+    "base_set": "The base set is the largest set grown from the base anchors along references in which no member reaches Troika state: a Troika-anchored member, a Troika component word, or the senses runner. A base member may call a virtual the base declares (the body may be Troika's). A member that would reach Troika state leaves the set and stays on FElysiumNpc (stay:transitional), cascading to its base callers, unless the review records the retail path.",
+    "plus_0x98": "Retail base bodies reach the Troika object through CBaseEntity +0x98 m_pBaseNPCTroika, which is null on a non-Troika entity; the port's AsNpc() is that word. A base body keeps such an arm as `if (FElysiumNpc* Troika = AsNpc())` with the recovered call, never a cast. +0x94 m_pBaseNPC is AsNpcBase() (new).",
+    "rename": "A Base* helper whose parameters match the slot virtual's becomes the base's own body of that virtual (rename:<Slot>); the Troika body's direct call becomes FElysiumNpcBase::<Slot>(). A const difference adopts the virtual's signature. A mismatch keeps the helper's name on the base (BaseOnLooked).",
+    "pair": "A hand virtual whose one port body stands for both a base and a Troika slot body is split: the base half becomes FElysiumNpcBase::<Name>, the Troika half an override that calls it where retail does.",
+    "collapse": "A duplicate port body of one retail function folds into the surviving member on the base; its tests move to the survivor.",
+    "components": "ScheduleHost's base words move to FElysiumNpcBase::BaseScheduleHost (FElysiumNpcBaseScheduleHost), its Troika and Troika-read port words stay (field-decisions.tsv). Senses.Memory's base words move to FElysiumNpcBase::BaseMemory (FElysiumNpcBaseMemory, with its own Reset/Serialize/Rebase); Senses' three base words (PendingSounds +0x1ae0, HeardConditions +0x5ca8, bKeepSound +0x5cd8) become FElysiumNpcBase members. The senses object itself stays on FElysiumNpc (transitional; see transitional.Senses). Cognition, Schedule, Mind, NpcFlags and EnemyMemory hold only base words and move whole.",
+    "senses_accessor": "FElysiumNpcBase declares SensesObject(), the m_pSenses +0x5cdc accessor: null on the base (a base-only NPC's CAI_Senses is unported until fold 9), the Troika's Senses on FElysiumNpc. SetDistLook 0x1026a2a0 and BestEnemyCandidateVisible reach the object through it.",
+    "chain": "FloatSoundFrequency / NextFloatSoundTime (CBaseCombatCharacter +0x10e8/+0x10ec) move to FElysiumCombatCharacter (field-decisions.tsv). Other entity-chain words and bodies FElysiumNpc hosts move to the base, the nearest existing owner at or below their retail class; step 6 relocates them up the chain.",
+    "deferred": "Controller-line and maker rows stay on FElysiumNpc (their final base is below Troika). TestHull and cine compatibility arms move with their base-layer bodies and stay on the compatibility list (steps 9-10).",
+    "name_hazard": "FElysiumNpcBase is a prefix of FElysiumNpcBaseBoss: every codemod and checker match uses word boundaries."
+  },
+  "packets": {
+    "5a": "Records and checker: moves-step5.tsv, fields-step5.tsv, consumers-step5.tsv, this file, kernel_migration_step5.py, check_step4's accepted-tree mode. No C++.",
+    "5b": "Pure rename: Troika families ElysiumNpcKernel<Family>.{inl,cpp} and *Shared.h -> ElysiumNpc<Family>; includes, generator and checker paths, file-qualified overlay targets. Own commit, full gate, empty delta.",
+    "5c": "ElysiumNpcBase.h/.cpp: the class shell with IElysiumScheduleRunner; FElysiumNpc : FElysiumNpcBase; the retail-class identity API; AsNpcBase() on FElysiumEntity; CAI_BaseNPC descriptor with Troika beneath it; the consumers-step5.tsv switches.",
+    "5d": "Words, components and bindings: the 5d rows of moves-step5.tsv; gen_kernel_bindings NpcBase binding class (AddNpcBaseFields / AddNpcBaseSaveFields) with per-owner component and save paths.",
+    "5e": "Bodies: the 5e rows (base moves, renames, pairs, the collapse); direct calls re-qualified; the retail corrections below.",
+    "5f": "gen_kernel_shape per-layer slot surface (ElysiumNpcBaseSlots / ElysiumNpcSlots).",
+    "5g": "Tests: the base-only typed probe, pair order, the two-layer registry chain, base binding inheritance and save round trip, the corrections.",
+    "5h": "Overlay retargets, ledger/shape/bindings regeneration, oracle, records, full gate, delta, smoke, acceptance."
+  },
+  "findings": [
+    {
+      "id": "appendix-b-body-headline",
+      "finding": "Plan Appendix B's 'about 172 + 157 bodies and 263 unnamed helpers' has no reproducible source (no committed or work-root artifact computes it). The step-0 inventory has 303 CAI_BaseNPC and 181 CAI_BaseNPCTroika body rows (inventory-final.json), and classes.md gives 285 / 170 own slot bodies. Step 5 counts members, not those headlines: moves-step5.tsv is the inventory.",
+      "evidence": ["inventory-final.json summary", "docs/vtmb/npc-kernel/classes.md"]
+    },
+    {
+      "id": "datamap-counts",
+      "finding": "The CAI_BaseNPC datamap has 98 named records (81 fields, 16 outputs, 1 input), not 160: the 160 counted layout tiers. 57 are bound or saved today through AddNpcFields / AddNpcSaveFields and move to the base's own functions; 24 carry the generator's unbound reason; 16 outputs and the input stay generated.",
+      "evidence": ["fields-step5.tsv", "research/ghidra/types/datamap_records-vampire.dll.json CAI_BaseNPC"]
+    },
+    {
+      "id": "overlay-owner",
+      "finding": "203 overlay targets name FElysiumNpc:: for CAI_BaseNPC addresses (168 live); 26 are already Base* names, beyond the 2 step 3 recorded. Packet 5h retargets every moved member; --check step5 refuses an FElysiumNpc:: target naming a member the step moved.",
+      "evidence": ["kernel_verdicts.tsv", "inventory-final.json bodies"]
+    },
+    {
+      "id": "step5-renames-callers",
+      "finding": "decisions-step3.json step5_renames names callers that step 4 moved: FElysiumNpc::FUN_103e1080 is now FElysiumNpcZombie::ShouldPlayFloatSound, and BossDrawDebugStatOverlays is on FElysiumNpcBaseBoss. Both renames are rows of moves-step5.tsv (rename:ShouldPlayFloatSound, rename:DrawDebugStatOverlays).",
+      "evidence": ["ElysiumNpcZombie.cpp ShouldPlayFloatSound", "ElysiumNpcBaseBoss.cpp BossDrawDebugStatOverlays"]
+    },
+    {
+      "id": "plus-0x98",
+      "finding": "Retail base bodies reach the Troika through CBaseEntity +0x98 m_pBaseNPCTroika without a cast: OnDoorBlocked 0x1027de00 (m_eAlternateAI +0x644c/+0x6450), ResolveActivityToSequence 0x10272130 (0xf1 arm, 0x10295a80), CAI_Motor slot 18 0x102e19e0 (+0x63ec, else the move_yaw pose parameter). AsNpc() is +0x98. Two port comments call +0x98 m_pCombatCharacter (ElysiumNpcKernelConditions10.cpp arm B, ElysiumNpcKernelDialogue.cpp GetControllerNpc); it is the Troika pointer (+0x9c is the combat character's).",
+      "evidence": ["0x1027c300 (the base constructor sets +0x94, the AI list DAT_1090fe10, FL_NPC)", "0x1027de00", "0x10272130", "0x102e19e0"]
+    },
+    {
+      "id": "senses-object",
+      "finding": "m_pSenses +0x5cdc is a base word, but the port's FElysiumNpcSenses runner reads Troika words throughout (perception +0x63b8/+0x63c0, stealth +0x63c4..+0x63d0, the Troika memory words) and its entry points take FElysiumNpc&. Moving it to the base would move 60 Troika words out (about 1,000 references); the base's 17 words move out instead, and the object stays on the Troika as a transitional home with the SensesObject() accessor.",
+      "evidence": ["ElysiumNpcSenses.h", "moves-step5.tsv Senses.* rows"]
+    },
+    {
+      "id": "asnpc-consumers",
+      "finding": "Of 118 AsNpc() call sites (104 definitions), 8 port a retail +0x94 m_pBaseNPC test and move to AsNpcBase() (CCineAISchedule/CCineAI target resolve 0x101a9790/0x101a9080, NONPCS doors 0x100eec70, GatherComfort 0x102b1a20, GhoulCroucher 0x1037bf60, IgnoreCollision NAV_IGNORE_NPC 0x1029afc0, UpdateEnemyMemory 0x102709c0, ResolveNamedMaster 0x101a8130, LookForNPCs 0x10310130). 32 are +0x98 or Troika-word reads; 16 are port-only; 27 have no retail evidence either way (+0x9c/combat-character reads the port keeps on FElysiumNpc, class-less virtual calls, the feed witness windows) and keep AsNpc(). Membership is unchanged in step 5: no base-only instance exists before steps 9-10.",
+      "evidence": ["consumers-step5.tsv"]
+    }
+  ],
+  "retail_corrections": [
+    {"id": "desired-move-yaw-carrier", "address": "0x10273390 / 0x10282d71 / 0x102e19e0", "correction": "The port's ScheduleHost.DesiredMoveYaw stands for three retail words. Base NPCInit 0x10273390 writes CAI_Motor m_IdealYaw (motor+0x34), not Troika +0x63ec, which it leaves 0; base StartTask's stop-moving arm 0x10282d71 sets the move_yaw pose parameter to 0 (LookupPoseParameter + slot 345), not +0x63ec; CAI_Motor slot 18 0x102e19e0 writes +0x63ec through +0x98 when the owner is Troika, else the pose parameter, and bumps one counter, not both.", "evidence": "review 5a (motor); +0x63ec's only writers are Troika TaskFail, OnScheduleChange, RunTask, 0x102a9940, 0x102bf770, FrenzyShadow, TzimisceRunner and 0x102e19e0"},
+    {"id": "last-damage-carrier", "address": "+0x5b7c / +0x660c", "correction": "Senses.Memory.LastDamageAttacker stands for m_hLastDamageEnt (+0x5b7c, base, written -1 by NPCInit 0x10273390) and m_LastTakeDamageInfo (+0x660c, Troika). The base word keeps the member on FElysiumNpcBase::BaseMemory; the Troika word gets its own member.", "evidence": "ElysiumNpcKernelShapeMap.cpp rows 0x5b7c and 0x660c"},
+    {"id": "update-on-remove-hint", "address": "0x1027ca30", "correction": "Base UpdateOnRemove releases the hint inline (0x102d1420(hint, 0.0): hint +0x5e0 = -1, +0x5ec = now; then +0x5ddc = 0), with no owner test and no +0x5c.. flag or extents writes. The port called Troika ClearHintNode 0x10295ab0. Not observable today: Troika 0x1028d6e0 clears the hint first.", "evidence": "review 5a (motor)"},
+    {"id": "last-think-slots", "address": "0x101a6440..0x101a64a0 / 0x101aa6d0..0x101aa730", "correction": "Slots 412-415: the base bodies return CBaseEntity::GetLastThink(NULL) (+0x178); the Troika overrides return the Troika think stamps +0x6254..+0x6260, which is what the port's bodies do. Their comments cite the base addresses; the members stay Troika and the citations are corrected.", "evidence": "review 5a (think)"},
+    {"id": "class-schedule-id-space", "address": "0x101a6d00 / 0x101aa790", "correction": "Slot 580 has a base body (MOV EAX, 0x1090ff08) as well as the Troika override (0x10924248); the port's ClassScheduleIdSpace is the Troika's and BaseClassScheduleIdSpace the base's. They become a base virtual and its Troika override.", "evidence": "review 5a (think)"},
+    {"id": "cine-can-interrupt", "address": "0x101a8930", "correction": "In 0x101a8930 `this` is the cine entity: +0x5f90 is CCineNPC::m_interruptable, not a Troika word. CineCanInterrupt is base-layer; whether retail reads the cine's own +0x5ce4 where the port reads the NPC's TargetEnt is left open (review item).", "evidence": "review 5a (think)"},
+    {"id": "base-pre-select-ideal-state", "address": "0x1026f590", "correction": "OPEN (not changed by 5a): 0x1026f590 reads the NPC's own +0x98 and ORs 0x80002000 into its +0x14bc; the port resolves MoveParent instead, and retail's else-arm SquadNewEnemy(m_pSquad) is reached only by base-only NPCs. Packet 5e re-reads it before moving the body.", "evidence": "asnpc consumer review"}
+  ],
+  "transitional": {
+    "Senses": "CAI_Senses object: m_pSenses +0x5cdc is a base word; the port runner reads Troika words throughout. Fold 9 (CCineNPC senses; its slots 362-365 answer false) re-homes it.",
+    "RunAi": "Base RunAI 0x1026f110 = gather (slot 433), 0x1026ab50, slot 434, MaintainSchedule, the 0x4c/0x4d/0x38 clears, m_bRanAI +0x1b4c = 1; Troika RunAI 0x1028fcc0 = 0x1028fc90 + UpdatePedestrianInfo 0x102a0d20 + the base. The port replaces MaintainSchedule with its routing; the Troika override owns the whole tail while it exists. The port never writes bRanAi = true.",
+    "RunConditionPass": "Part of base RunAI; calls the senses runner (Senses.Tick) typed FElysiumNpc&.",
+    "ThinkInDialog / ThinkSchedulePolicy / ThinkAutonomous / ThinkStanceOrIdle / AcquireSequenceBody": "Port routing with no retail anchor; see moves-step5.tsv notes.",
+    "MaintainActivity": "Port probe bookkeeping around BaseMaintainActivity 0x102727d0 (which moves to the base).",
+    "DialogMessageSend": "CDialog::message_send 0x100e58e0 parked on the NPC; its long-term home is the dialogue object.",
+    "FindCoverFromEnemy": "Base 0x10283558 submits tolerance -1 (the navigator's installed tolerance, which Troika SET_TOLERANCE_DISTANCE pushes via 0x102ee1c0); the port reads Troika m_flGoalTolerance +0x6320 in its place. Needs a navigator seam first."
+  },
+  "unported_base_bodies": [
+    "CAI_BaseNPC::Spawn 0x10273200 (AI-disabled test, m_spawnEquipment when +0x98 is null, slot 223, CBaseCombatCharacter::Spawn)",
+    "CAI_BaseNPC::NPCThink 0x1026ca80 (flat curtime + 0.1, RunAI(0))",
+    "SetAiEnabled 0x10265680's non-Troika arm (entity +0x17c = curtime - _DAT_104491b4)",
+    "CBaseEntity::GetLastThink bodies of slots 412-415 for a base-only NPC"
+  ],
+  "carried": [
+    "Story 8: the Scurrying callers 0x103ac500 / 0x103ac740 (unchanged from step 4).",
+    "Steps 7-10: deferred homes (controller line and makers on FElysiumNpc; TestHull and cine arms on FElysiumNpcBase) and the surviving tables (decisions-step4.json).",
+    "Fold 9: the senses object and RunAi's base half; the unported base bodies above.",
+    "Factory test Elysium.Substrate.NpcKernelClass.Factories asserts every factory row is an FElysiumNpc; base-only factories (steps 9-10) need AsNpcBase rows."
+  ]
+}

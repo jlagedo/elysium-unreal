@@ -615,7 +615,21 @@ def check_qualified_overlay_targets(before: Path, after: Path) -> int:
 # ---- the step ----------------------------------------------------------------------------------
 
 def check_step4(directory: Path | None = None) -> dict:
+    """While step 4 is the working phase the current tree is checked. Once its commit is recorded
+    (`manifest.json` `history.step4.commit`, written when step 5 starts), the accepted tree is:
+    step 5 moves the members this receipt holds on `FElysiumNpc`."""
     directory = directory or repo_root() / km.STORY
+    manifest, _, _ = km.load(directory)
+    accepted = manifest.get("history", {}).get("step4", {}).get("commit", "")
+    if not accepted:
+        if manifest["phase"] > 4:
+            raise km.InvalidManifest("a later phase needs history.step4.commit")
+        return _check_step4(directory, repo_root())
+    with tempfile.TemporaryDirectory(prefix="step4-accepted-") as scratch:
+        return _check_step4(directory, km.historical_source(accepted, Path(scratch), HISTORICAL_PATHS))
+
+
+def _check_step4(directory: Path, tree: Path) -> dict:
     manifest, classes, _ = km.load(directory)
     commit = manifest.get("history", {}).get("step3", {}).get("commit", "")
     if not commit:
@@ -632,11 +646,11 @@ def check_step4(directory: Path | None = None) -> dict:
                     "moves": dict(collections.Counter(r["disposition"].split(":")[0] for r in moves)),
                     "fields": dict(collections.Counter(r["disposition"].split(":")[0] for r in fields))}
         from kernel_migration_step1 import check_overlay_targets
-        removed = check_overlay_targets(before, repo_root())
-        qualified = check_qualified_overlay_targets(before, repo_root())
+        removed = check_overlay_targets(before, tree)
+        qualified = check_qualified_overlay_targets(before, tree)
     from kernel_migration_step3 import check_step3
     step3 = check_step3(directory)
-    root = repo_root()
+    root = tree
     counts = {"moves": dict(check_moves(moves, root)), "fields": dict(check_fields(fields, root)),
               "removed_symbols": removed, "qualified_overlay_targets": qualified}
     record = json.loads((directory / "acceptance-step4.json").read_text(encoding="utf-8"))
