@@ -1,0 +1,33 @@
+{
+ "schema_version": 1,
+ "scope": "step-4r-review-follow-up",
+ "base_commit": "c29a0a4a",
+ "compared_against": "step 4's accepted gate (acceptance-step4.json)",
+ "reports": {
+  "Elysium.Substrate": "E:/elysium-work/reports/tests/20260926T183109.009978Z-elysium-substrate",
+  "Elysium.Content": "E:/elysium-work/reports/tests/20260926T183320.200752Z-elysium-content",
+  "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260926T183400.600494Z-elysium-playerworld"
+ },
+ "results": {
+  "Elysium.Substrate": 1270,
+  "Elysium.Content": 14,
+  "Elysium.PlayerWorld": 1,
+  "failed": 0,
+  "expectations_consumed": 4
+ },
+ "artifacts": {
+  "delta": {
+   "path": "E:/elysium-work/research/npc-kernel/story-5/step4r/gate/delta.json",
+   "sha256": "92246944fec5ced076f69a7fa7b0664c850157321b5d3c9e4b5190bfe6b4455b"
+  },
+  "runtime": {
+   "path": "E:/elysium-work/research/npc-kernel/story-5/step4r/gate/runtime-results.json",
+   "sha256": "67dfa3da185e05bb2fae2385b5d66e65562799d7446ff8bad634ba867c6df424"
+  },
+  "cheap_checks": {
+   "path": "E:/elysium-work/research/npc-kernel/story-5/step4r/gate/checks.json",
+   "sha256": "df3f6dca5434bd66a289aaa07d3e6913d0c21918b2f67353cc013db494d8265e"
+  }
+ },
+ "smoke": "not re-run: the 4r changes are the Bach holy-light compare, Werewolf CheckStuck/TaskFail order, the MingXiao throw-mode merge and proxy-registered save, the zombie head-hit rename and the Sheriff seed unit; none changes spawn or activation, and the hull-trace seam keeps CheckStuck on its no-op arm in play. Step 4's smoke stands."
+}

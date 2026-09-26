@@ -1578,8 +1578,12 @@ no species datamap row was bound, so all eight were dropped and this body refuse
 
 _Recovered 2026-09-14, story 29d._
 
-Given a threat position and a distance it first asks the navigator (`+0x5d34`) for the nearest node
-within 30000 units (`0x102edae0` over `0x103008f0` and `0x102ee9c0`). On **success** it jitters that
+Given a threat position and a distance it first asks the navigator (`+0x5d34`) for a node:
+`0x102edae0(navigator, threat, distance, 30000.0, &node)`, over `0x103008f0` / `0x10300b50` (a
+recursive node walk around the threat that takes the flee distance and 30000.0 and ends on a node
+`CanStandAt` accepts) and `0x102ee9c0` (the node's position). **CORRECTION (story 5 step 4r):** this
+section and the port called it "the nearest node within 30000 units" and dropped the distance
+argument. On **success** it jitters that
 node: whichever of the x or y deltas to the threat is larger picks the axis (y on a tie), the sign
 of that delta picks a `0..-60` or `0..60` band on it and the other axis gets `-80..80`; z is the
 node z plus slot 522 `StepHeight` times `_DAT_104454d0`. Each try draws the y offset FIRST and x
@@ -1612,26 +1616,41 @@ destination.
 
 _Recovered 2026-09-14, story 29d._
 
-Scope-traced and gated on slot `0x28c`. Probe 1 is a hull trace from `GetAbsOrigin` to origin plus
-`_DAT_10452dc4` (**2.0**) in Z with mask `0x202400b`, using the `m_eHull` (`+0x1568`) normal
-mins/maxs (`0x102d6100` / `0x102d6120`) and the navigator's (`+0x5d40`) filter, inside a `CVProfile`
-`"CAI_MoveProbe::TraceHull"` scope.
+Scope-traced and gated on slot 163 (`+0x28c`) `IsViewable` (`0x100a9800`: `m_fEffects & 0x40`
+clear and a model). Its one argument is a **bool** (`[ESP+0xdc]` at `103cbd8f`), and both callers,
+`TaskFail` `0x103ce750` (`103ce900 PUSH 0`) and `StartTask` `0x103ccda0` (task `0x15b`), pass false.
+Every test below reads `trace.startsolid` (`+0x37`); the fraction matters only on the re-probe.
 
-**CLEAR** → re-probe through the navigator (`0x102a99e0`) using the **small** hull (`0x102d6140` /
-`0x102d6160`) when `+0x5f2d` is set, with the third extent scaled by `_DAT_10449154`, and only when
-that fraction is below `_DAT_104454c0` or either start-solid byte is set does it `DevWarning`
-`"attempting alt unstuck..."` and run slot `0x360`.
+- **Probe 1** (`103cb9a7`..`103cba95`): an engine hull trace from `GetAbsOrigin` to origin plus
+  `_DAT_10452dc4` (**2.0**) in Z, mask `0x202400b`, on the `m_eHull` (`+0x1568`) **full** mins/maxs
+  (`0x102d6100` / `0x102d6120`) through a `CTraceFilterSimple` on the move probe's collision group,
+  inside the `"CAI_MoveProbe_TraceHull"` profile scope.
+- **Clear start** (`103cbddb`): re-probe from slot 192 `WorldSpaceCenter` to `GetAbsOrigin` through
+  `CAI_MoveProbe::TraceHull` (`0x102a99e0`), on the **small** extents (`0x102d6140` / `0x102d6160`)
+  while `+0x5f2d` is set and the full ones otherwise, maxs.z times `_DAT_10449154` (0.45). A re-probe
+  with `fraction >= 1.0` and neither solid byte **returns at once** (`103cbefc` → `103cbf24`), with
+  no hull change. Otherwise `"attempting alt unstuck..."`, slot 216 `SetAbsOrigin(tr.endpos)` and
+  `SetHullSizeSmall(1)`.
+- **Solid start** (`103cbab8`): probe 2 is the same up-probe on the small extents (engine
+  `TraceRay`, `CTraceFilterSimple(this, 7)`). Clear → `SetHullSizeSmall(1)` and nothing else.
+  Solid → `"Werewolf stuck?"`, small maxs.z becomes **10.0**, and probe 3 traces slot 192
+  `WorldSpaceCenter` → slot 220 `GetOrigin`; if that starts solid, probe 4 traces slot 193
+  `EyePosition` → `GetOrigin`. The first clear one: `"Werewolf unstuck..."`, `SetAbsOrigin(endpos)`,
+  `SetHullSizeSmall(1)`.
+- **Still stuck:** with the argument set **and** COND `0x77`: `"Werewolf teleported out from
+  stuck."`, `TeleportOut` (`0x103d4a60`) and slot 448 `TaskFail("Werewolf stuck")`; otherwise
+  `"Werewolf STUCK!!!"`. Neither exit runs `SetHullSizeSmall`; the teleport arm is unreachable in
+  shipped content.
 
-**BLOCKED** → up to three escalating world traces (`0x1006dec0` with the `0x101d3190(this, 7)`
-filter): the first reports `"Werewolf stuck!"`; the second reports `"Werewolf unstuck..."` and runs
-slot `0x360`; the third either succeeds at `0x10269aa0(this, 0x77)` → `"Werewolf teleported out from
-stuck"`, `TeleportOut` and slot `0x700` with `"Werewolf stuck"`, or reports `"Werewolf STUCK!!"` and
-does nothing.
+**CORRECTION (story 5 step 4r).** The 29d reading said every exit but the teleport ends in
+`SetHullSizeSmall(1)`, that the probes test the fraction, that the escalation repeats one probe, and
+that the teleport needs only COND `0x77`. The port had all four; it now follows the listing. And
+`TaskFail` `0x103ce750` runs the Troika base (`103ce8fb`) **before** `CheckStuck` and its three word
+writes; the port had run it last.
 
-Every exit but the teleport ends in `SetHullSizeSmall(1)`.
-
-**Unrecovered:** `_DAT_10449154` (= **0.4499999881f**, float32; read 2026-09-21, `rdata-cells.md`); and the hull sweeps, which are the navigator's — the port's probes
-answer CLEAR, retail's own not-stuck answer.
+**Unrecovered:** the hull sweeps, which are the navigator's — the port's probes answer CLEAR, so the
+clear-start, clear-re-probe exit is the one taken; the text fail code (`TaskFail` takes a number
+here).
 
 ### `GetHintTargetGroundpoint` `0x103d68d0`
 

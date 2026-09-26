@@ -309,15 +309,27 @@ public:
 	bool WerewolfShouldPursueEnemy() const;
 
 	// From `ElysiumNpcKernelSenses10.inl`.
-	/** `CNPC_VWerewolf::CheckStuck` (`0x103cb920`), 1,558 bytes. Gated on slot 0x28c; probe 1 is the
-	 *  navigator hull trace, and the two halves below it are the CLEAR re-probe and the BLOCKED
-	 *  escalation. See the definition for every arm. **SEAM**: the hull sweeps are the navigator's and
-	 *  do not exist here, so the probes answer CLEAR — retail's own not-stuck answer — and the body's
-	 *  observable tail (`SetHullSizeSmall(1)`) still runs, which is what every exit but the teleport
-	 *  does. */
-	void WerewolfCheckStuck();
-	/** SEAM for `CNPC_VWerewolf::TeleportOut` — the third-probe escape. Counted; the teleport itself is
-	 *  family Positions' `PositionAtHint` story. */
+	/** `CNPC_VWerewolf::CheckStuck(bool)` (`0x103cb920`), 1,558 bytes, read off the listing (the
+	 *  decompiler aliases its stack). Gated on slot 163 `IsViewable`. Probe 1 is a full-hull trace
+	 *  from the origin 2.0 up. A clear START re-probes from `WorldSpaceCenter` to the origin through
+	 *  the move probe (small hull while `+0x5f2d`, maxs.z x 0.45), and only a blocked re-probe moves
+	 *  the body to its end and shrinks the hull. A solid start escalates through three small-hull
+	 *  traces (the up-probe, then `WorldSpaceCenter` and `EyePosition` to `GetOrigin` with maxs.z
+	 *  10): a clear up-probe ends in `SetHullSizeSmall(1)`, a clear later one in
+	 *  `SetAbsOrigin(endpos)` and `SetHullSizeSmall(1)`. All three solid: with `EStuckEscape::MayTeleport` and
+	 *  COND `0x77` it teleports out and fails the task, otherwise it only warns; neither stuck exit
+	 *  nor the clear re-probe touches the hull. Both retail callers (`TaskFail` `0x103ce750`,
+	 *  `StartTask` `0x103ccda0` task `0x15b`) pass 0 (`WarnOnly`). **SEAM**: the hull traces answer CLEAR
+	 *  (`KernelHullTrace`). */
+	/** `CheckStuck`'s one argument, retail's bool at `[ESP+0xdc]`: whether the still-stuck exit may
+	 *  teleport out (under COND `0x77`) or only warns. */
+	enum class EStuckEscape : uint8
+	{
+		WarnOnly,     // 0 -- both retail callers
+		MayTeleport,  // 1 -- no shipped caller
+	};
+	void WerewolfCheckStuck(EStuckEscape Escape);
+	/** How many times `CheckStuck`'s teleport arm ran `TeleportOut` (a test witness). */
 	int32 WerewolfTeleportOutCalls = 0;
 	/** `CNPC_VWerewolf::GetHintTargetGroundpoint` (`0x103d68d0`) — the TARGET variant of family Hints'
 	 *  `GetHintGroundpoint` (`0x103d6770`): a linear scan of `m_HintData` (`+0x6714`, count `+0x6720`,

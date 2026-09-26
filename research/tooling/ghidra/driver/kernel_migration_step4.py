@@ -62,7 +62,7 @@ FIELD_COLUMNS = ("declaring_class", "offset", "member", "type", "flags", "extern
                  "final_owner", "final_path", "disposition", "packet", "note")
 FIELD_IDENTITY = FIELD_COLUMNS[:7]
 FIELD_DISPOSITION = re.compile(r"^(bind|declare|shadow:\w+|input:\w+|input-seam|output|absent|investigate)$")
-PACKETS = {"4b", "4c", "4d", "4e", "4f", "4g", "4h"}
+PACKETS = {"4b", "4c", "4d", "4e", "4f", "4g", "4h", "4r"}  # 4r: the step-4 review follow-up
 
 
 # ---- the class tree ---------------------------------------------------------------------------
@@ -522,6 +522,11 @@ def check_moves(rows: list[dict], root: Path) -> collections.Counter:
             stem = row["final_owner"][1:]
             if name in members:
                 raise km.InvalidManifest(f"{name} is still declared on FElysiumNpc ({members[name]['file']})")
+            # A moved member renamed on its owner for a corrected retail identity (step-4 review,
+            # packet 4r) names its new spelling in the note: `renamed to <Name>: <why>`.
+            renamed = re.match(r"renamed to (\w+):", row.get("note", ""))
+            if renamed:
+                name = renamed.group(1)
             if not re.search(rf"\b{name}\b", _code(root, SUBSTRATE / f"{stem}.h")):
                 raise km.InvalidManifest(f"{name} is not declared on {row['final_owner']}")
             if row["kind"] == "method" and row["defined_in"] != "-" and not re.search(
@@ -536,8 +541,17 @@ def check_moves(rows: list[dict], root: Path) -> collections.Counter:
     return counts
 
 
+def _binding_functions(bindings: str) -> dict[str, str]:
+    """`AddXFields` / `AddXSaveFields` -> its body, from the generated bindings."""
+    out = {}
+    for match in re.finditer(r"\n\tvoid (Add\w+)\(FElysiumClassDesc& D\)\n\t\{(.*?)\n\t\}", bindings, re.S):
+        out[match.group(1)] = match.group(2)
+    return out
+
+
 def check_fields(rows: list[dict], root: Path) -> collections.Counter:
     bindings = _code(root, BINDINGS)
+    functions = _binding_functions(bindings)
     shape_map = _code(root, SPECIES_SHAPE_MAP)
     staying = npc_members(root)
     counts: collections.Counter = collections.Counter()
@@ -561,12 +575,41 @@ def check_fields(rows: list[dict], root: Path) -> collections.Counter:
                     rf"\b{member.split('.')[0]}\b", _code(root, SUBSTRATE / f"{owner[1:]}.h")):
                 raise km.InvalidManifest(f"{who} has no storage on {owner}")
             name = row["external"] if row["external"] != "-" else row["member"]
-            if f'TEXT("{name}' not in bindings:
-                raise km.InvalidManifest(f"{who} ({name}) is not generated")
+            # On the declaring class's own generated function, not anywhere in the file: a sibling
+            # or the Troika table can carry the same name (the step-4 review).
+            stem = row["declaring_class"].removeprefix("CNPC_V")
+            function = f"Add{stem}Fields" if row["external"] != "-" else f"Add{stem}SaveFields"
+            if not re.search(rf'TEXT\("{re.escape(name)}(?:\[\d+\])?"\)', functions.get(function, "")):
+                raise km.InvalidManifest(f"{who} ({name}) is not generated in {function}")
         elif row["kind"] == "output" and f'TEXT("{row["external"]}")' not in bindings:
             raise km.InvalidManifest(f"{row['declaring_class']} {row['external']} is not generated")
         counts[disposition.split(":")[0]] += 1
     return counts
+
+
+def check_qualified_overlay_targets(before: Path, after: Path) -> int:
+    """The `file.cpp:Symbol` overlay targets, which step 1's `hand:`-only check never matched (the
+    step-4 review found two naming a moved `FElysiumNpc` method): a symbol the predecessor tree
+    defined must still be defined, and in the file the target names."""
+    from kernel_migration_step1 import defined
+    then = {symbol for symbol, _ in defined(before)}
+    now: dict[str, set[str]] = collections.defaultdict(set)
+    for (symbol, _), path in defined(after).items():
+        now[symbol].add(Path(path).name)
+    stale, checked = [], 0
+    for line in (after / VERDICTS).read_text(encoding="utf-8").splitlines():
+        cells = line.split("\t")
+        if len(cells) > 3 and re.fullmatch(r"[0-9a-f]{8}", cells[0]):
+            match = re.fullmatch(r"(?:hand:)?([\w/]+\.(?:cpp|h|inl)):(\S+)", cells[3])
+            if not match:
+                continue
+            checked += 1
+            filename, symbol = Path(match.group(1)).name, match.group(2)
+            if symbol in then and filename not in now.get(symbol, set()):
+                stale.append(f"{cells[0]} {cells[3]}")
+    if stale:
+        raise km.InvalidManifest("file-qualified overlay targets name no definition there: " + ", ".join(stale))
+    return checked
 
 
 # ---- the step ----------------------------------------------------------------------------------
@@ -590,11 +633,12 @@ def check_step4(directory: Path | None = None) -> dict:
                     "fields": dict(collections.Counter(r["disposition"].split(":")[0] for r in fields))}
         from kernel_migration_step1 import check_overlay_targets
         removed = check_overlay_targets(before, repo_root())
+        qualified = check_qualified_overlay_targets(before, repo_root())
     from kernel_migration_step3 import check_step3
     step3 = check_step3(directory)
     root = repo_root()
     counts = {"moves": dict(check_moves(moves, root)), "fields": dict(check_fields(fields, root)),
-              "removed_symbols": removed}
+              "removed_symbols": removed, "qualified_overlay_targets": qualified}
     record = json.loads((directory / "acceptance-step4.json").read_text(encoding="utf-8"))
     if record.get("scope") != "step-4-species-bodies-words-bindings":
         raise km.InvalidManifest("acceptance-step4.json does not record step 4")
@@ -616,7 +660,39 @@ def check_step4(directory: Path | None = None) -> dict:
         raise km.InvalidManifest("step-4 runtime gate incomplete/failing")
     if not artifacts["cheap_checks"] or any(r["exit"] for r in artifacts["cheap_checks"]):
         raise km.InvalidManifest("step-4 cheap/Python gates incomplete/failing")
-    return {**counts, "step3": step3}
+    review = check_review_receipt(directory)
+    return {**counts, "step3": step3, **({"review_4r": review} if review else {})}
+
+
+def check_review_receipt(directory: Path) -> dict:
+    """The step-4 review follow-up (packet 4r), compared against step 4's own accepted gate: its
+    pinned evidence, a passing regression comparison that consumed every 4r expectation, and a
+    green runtime and cheap-check gate. Absent before the follow-up lands."""
+    path = directory / "acceptance-step4r.json"
+    if not path.is_file():
+        return {}
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("scope") != "step-4r-review-follow-up":
+        raise km.InvalidManifest("acceptance-step4r.json does not record the step-4 review follow-up")
+    artifacts = {}
+    for name in ("delta", "runtime", "cheap_checks"):
+        ref = record["artifacts"][name]
+        artifact = Path(ref["path"])
+        if not artifact.is_absolute() or not artifact.is_file() or file_sha(artifact) != ref["sha256"]:
+            raise km.InvalidManifest(f"step-4r evidence changed/missing: {name}")
+        artifacts[name] = json.loads(artifact.read_text(encoding="utf-8-sig"))
+    delta = artifacts["delta"]
+    if not delta.get("comparison_passed") or delta.get("differences"):
+        raise km.InvalidManifest("step-4r regression comparison has unmatched differences")
+    expectations = json.loads((directory / "expectations/step-4r.json").read_text(encoding="utf-8"))
+    unused = {c["id"] for c in expectations["changes"]} - set(delta.get("applied_expectations", []))
+    if unused:
+        raise km.InvalidManifest("unconsumed step-4r expectations: " + ", ".join(sorted(unused)))
+    if len(artifacts["runtime"]) != 4 or any(r["exit"] for r in artifacts["runtime"]):
+        raise km.InvalidManifest("step-4r runtime gate incomplete/failing")
+    if not artifacts["cheap_checks"] or any(r["exit"] for r in artifacts["cheap_checks"]):
+        raise km.InvalidManifest("step-4r cheap/Python gates incomplete/failing")
+    return {"expectations": len(expectations["changes"]), "results": record.get("results", {})}
 
 
 # ---- drafting ----------------------------------------------------------------------------------

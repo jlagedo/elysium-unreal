@@ -237,13 +237,26 @@ bool FElysiumSpeciesMisc10BachTest::RunTest(const FString&)
 		TestEqual(TEXT("attenuation 0.8"), Bach->NamedWavEmits[0].Attenuation, 0.8f, 0.0001f);
 	}
 
-	// `10363f6c`: below the threshold, and with the holy-light stamp in the future, the TELEPORT arm
-	// sets condition `0x7b` and the shield does not fire.
+	// `10363dfa`: below the threshold, a holy-light stamp still in the future (`curtime <=
+	// m_flNextHolyLightTime`, `AND 0x4100 / JNZ`) keeps the SHIELD arm: a fresh COND `0x7b` stamp
+	// closes the teleport for 15 seconds (story 5 step 4r: this compare was inverted).
 	Bach->bBachShieldActive = false;
 	Bach->BachNextShieldTime = -1.0;
 	Bach->NamedWavEmits.Reset();
+	C.Clear(static_cast<EElysiumNpcCond>(0x7b));
 	Bach->BachGatherAttackConditions(767.f);
-	TestTrue(TEXT("`10363f74`: condition 0x7b is raised"),
+	TestFalse(TEXT("`10363dfa`: a future holy-light stamp raises no 0x7b"),
+		C.Has(static_cast<EElysiumNpcCond>(0x7b)));
+	TestTrue(TEXT("and takes the shield arm"), Bach->bBachShieldActive);
+
+	// `10363e09`: below the threshold with the stamp PASSED, the TELEPORT arm sets condition `0x7b`
+	// and the shield does not fire.
+	Bach->bBachShieldActive = false;
+	Bach->BachNextShieldTime = -1.0;
+	Bach->BachNextHolyLightTime = -1.0;
+	Bach->NamedWavEmits.Reset();
+	Bach->BachGatherAttackConditions(767.f);
+	TestTrue(TEXT("`10363e14`: condition 0x7b is raised"),
 		C.Has(static_cast<EElysiumNpcCond>(0x7b)));
 	TestFalse(TEXT("and no shield"), Bach->bBachShieldActive);
 	TestEqual(TEXT("and no sound"), Bach->NamedWavEmits.Num(), 0);

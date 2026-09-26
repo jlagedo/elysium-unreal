@@ -64,3 +64,45 @@ overrides, stubs now on the real instance, and 8 map-epoch shifts. Cheap checks:
 - Deferred homes on `FElysiumNpc` until steps 7-10 (controller line, makers, cine, TestHull), and the
   surviving tables.
 - Step 5 renames the two `Base*` helpers.
+
+## Review follow-up (2026-09-26, packet 4r)
+
+An independent review of `bb690d7a` found three recorded retail corrections that did not match
+retail, a missed carrier merge, a saved word recorded absent, a wrong finding, stale overlay
+targets and test gaps. Resolved (`decisions-step4.json` `retail_corrections`, `review_4r`):
+
+- **Bach holy-light compare** `0x10363db0`: at `10363dfa` a close Bach keeps the shield arm while
+  `curtime <= m_flNextHolyLightTime`; the port had it inverted. Pre-existing, but step 4's `+0x6690`
+  merge had made the COND `0x7b` stamp reach it.
+- **Werewolf `CheckStuck`** `0x103cb920`: re-ported from the listing (startsolid tests, four
+  distinct probes, `SetAbsOrigin(endpos)`, no hull change on the clear or stuck exits, the teleport
+  gated on the bool argument both callers pass as 0). `TaskFail` `0x103ce750` now runs the Troika
+  base before it (`103ce8fb`). Step 4 had retargeted the call but kept the old body.
+- **MingXiao throw mode**: `SpeciesThrowableObjectMode` merged into `MingXiaoThrowableObjectMode`
+  (`+0x673c`), so `TaskFail` `0x10394090` reads the word the setter `0x10398d90` writes.
+- **MingXiao `m_rbProxyRegistered[6]`** (`+0x6684`) is bound and saved; the proxy-gate test stands
+  real tentacles and exercises the corrected arm.
+- **Zombie** finding corrected: `+0x66e0` `m_bShouldGib` and `+0x66e1` are two words; the port's
+  byte is the head-hit byte, renamed `bZombieHeadHit` (`combat-and-damage.md`).
+- **Scurrying** node search `0x102edae0` takes the flee distance; the seam now does (no behaviour
+  change).
+- **SheriffMan** `NPCInit` seeded its teleport cache in Source units while its reader works in
+  centimetres (a port unit error, pre-existing).
+- **Overlay**: `0x103871c0`, `0x103a6f70` (moved `ApplyStateWeaponVisibility`), `0x1028e940` and
+  `0x1027a700` (stale before step 3) retargeted. `--check step4` now verifies file-qualified
+  targets, checks each bound row inside its own class's generated function, accepts
+  `renamed to <Name>:` move notes, and verifies this receipt ([acceptance-step4r.json](../acceptance-step4r.json)).
+  The binding generator refuses a species save row reusing a Troika save name on another word.
+- **Tests**: `SaveRoundTrip` asserts the retail-rewritten values, reaches all 27 tables, stamps
+  shadow rows and values distinct from the rebuild's; `MergedAndSplitCarriers` drives each merge as
+  a correction (Bach, AsianVampire, MingXiao) and writes the split counters through their bindings;
+  `Chain` reads the shadow row off the species' own table. Restored: the three dropped
+  `SelectIdealStateSpecies` arms, `Positions.Seams`' fixed values (the Sheriff's seeded cache), the
+  quieted SheriffMan in `WerewolfTeleport`, and `Motor.Navigator` on a Troika NPC. Unobservable and
+  unexercised arms are listed in `review_4r.coverage`.
+
+Gate: build green; 1,270 Substrate + 14 Content + 1 PlayerWorld, zero failures. `test_delta`
+against step 4's gate passes with 4 reviewed expectations ([expectations/step-4r.json](../expectations/step-4r.json)).
+Five generator checks, pytest and `kernel_migration --check step0/1/2/factories/step3/step4` pass.
+Map smoke was not re-run (no spawn or activation change). Evidence:
+`$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/step4r/`.

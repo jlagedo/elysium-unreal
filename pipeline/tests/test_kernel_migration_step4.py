@@ -164,3 +164,29 @@ def test_the_committed_records_match_the_step3_tree_and_the_replay():
     assert {r["declaring_class"] for r in fields} <= {r["retail_class"] for r in classes if r["step"] == "2"}
     assert sum(r["kind"] == "input" for r in fields) == 15 and sum(r["kind"] == "output" for r in fields) == 11
     assert all(r["member"] for r in moves)
+
+
+def test_a_renamed_move_is_checked_under_its_new_spelling(tmp_path):
+    species = {"ElysiumNpcZombie.h": "class FElysiumNpcZombie { bool bZombieHeadHit = false; };\n"}
+    root = npc_tree(tmp_path, "void Stays();\n", "void FElysiumNpc::Stays() { }\n", species)
+    word = {**MOVE, "member": "bZombieShouldGib", "kind": "field", "defined_in": "-",
+            "note": "renamed to bZombieHeadHit: the +0x66e1 head-hit byte"}
+    assert s4.check_moves([word], root) == collections.Counter({"move": 1})
+    with pytest.raises(km.InvalidManifest):
+        s4.check_moves([{**word, "note": "-"}], root)
+
+
+def test_a_file_qualified_overlay_target_must_still_be_defined_in_its_file(tmp_path):
+    def tree(root: Path, cpp: dict[str, str], overlay: str) -> Path:
+        for name, text in cpp.items():
+            write(root, f"Source/ElysiumUE/Private/Substrate/{name}", text)
+        write(root, s4.VERDICTS, overlay)
+        return root
+    before = tree(tmp_path / "before", {"ElysiumNpc.cpp": "void FElysiumNpc::Moved()\n{\n}\n"}, "")
+    row = "103871c0\tpresent\t5-9\t{target}\tevidence\n"
+    moved = {"ElysiumNpcHuman.cpp": "void FElysiumNpcHuman::Moved()\n{\n}\n"}
+    stale = tree(tmp_path / "stale", moved, row.format(target="ElysiumNpc.cpp:FElysiumNpc::Moved"))
+    with pytest.raises(km.InvalidManifest, match="103871c0"):
+        s4.check_qualified_overlay_targets(before, stale)
+    fixed = tree(tmp_path / "fixed", moved, row.format(target="ElysiumNpcHuman.cpp:FElysiumNpcHuman::Moved"))
+    assert s4.check_qualified_overlay_targets(before, fixed) == 1

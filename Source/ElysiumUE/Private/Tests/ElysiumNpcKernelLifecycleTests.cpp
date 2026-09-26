@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcCamera.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -907,27 +908,76 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleMingXiaoProxyGateTest
 	"Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleMingXiaoProxyGateTest::RunTest(const FString&)
 {
-	// `FUN_10397b40` is a `CNPC_VMingXiao` body over the head's own words, so it runs on a head.
+	// `FUN_10397b40` is a `CNPC_VMingXiao` body over the head's own words, run on the head. Its one
+	// caller (`0x1039eee0`) hands in a TENTACLE, whose own `m_iTentacleID` (`+0x6660`) indexes back
+	// through the head's `m_rhSeveredTentacles` (`+0x66a8`, `10397b69`/`10397b79`).
 	FElysiumNpcWorldBuilder Builder(TEXT("lifecycle_proxygate"), 29140u);
 	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
+	Builder.AddNpcOfClass(TEXT("t2"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VMingXiaoTentacle"));
+	Builder.AddNpcOfClass(TEXT("t3"), FVector(800.0, 0.0, 0.0), TEXT("CNPC_VMingXiaoTentacle"));
+	Builder.AddNpc(TEXT("other"), FVector(0.0, 400.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
-	if (!TestNotNull(TEXT("the head spawned"), Ming))
+	FElysiumNpcMingXiaoTentacle* T2 = Fixture.NpcAs<FElysiumNpcMingXiaoTentacle>(TEXT("t2"));
+	FElysiumNpcMingXiaoTentacle* T3 = Fixture.NpcAs<FElysiumNpcMingXiaoTentacle>(TEXT("t3"));
+	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the head spawned"), Ming) || !TestNotNull(TEXT("tentacle 2 spawned"), T2)
+		|| !TestNotNull(TEXT("tentacle 3 spawned"), T3) || !TestNotNull(TEXT("other spawned"), Other))
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Ming });
+	FElysiumNpcWorldFixture::Quiet({ Ming, T2, T3, Other });
+	T2->TentacleId = 2;
+	T3->TentacleId = 3;
+	for (int32 i = 0; i < 6; ++i)
+	{
+		Ming->SeveredTentacles[i] = FElysiumEntityHandle::Invalid();
+		Ming->Proxies[i] = FElysiumEntityHandle::Invalid();
+		Ming->bProxyRegistered[i] = false;
+	}
 
-	// `FUN_10397b40` — the proxy gate. A null argument, a cooldown that has not expired and a slot
-	// that does not resolve each answer false, in retail's order.
+	// 1. A null argument answers false. 2. `curtime < m_flProxyReadyTimer` answers false.
 	TestFalse(TEXT("a null proxy answers false"), Ming->ProxyReadyTimer(nullptr, 100.0));
+	Ming->SeveredTentacles[2] = T2->Handle;
 	Ming->MingXiaoProxyReadyTimer = 500.0;
-	TestFalse(TEXT("a cooldown that has not expired answers false"), Ming->ProxyReadyTimer(Ming, 100.0));
+	TestFalse(TEXT("a cooldown that has not expired answers false"), Ming->ProxyReadyTimer(T2, 100.0));
+	TestFalse(TEXT("and registers nothing"), Ming->bProxyRegistered[2]);
 	Ming->MingXiaoProxyReadyTimer = 0.0;
-	// The slot index is a SEAM answering INDEX_NONE, so the third arm always refuses today.
-	TestEqual(TEXT("the proxy slot seam answers nothing"), Ming->ProxySlotIndexOf(Ming), INDEX_NONE);
-	TestFalse(TEXT("so a proxy whose slot does not resolve answers false"),
-		Ming->ProxyReadyTimer(Ming, 1000.0));
+
+	// 3. The slot resolves through the TENTACLE's own `+0x6660` and must index back to it through
+	//    `m_rhSeveredTentacles` (story 5 step 4 correction: not `m_rhProxies`).
+	TestEqual(TEXT("a tentacle's slot is its own m_iTentacleID"), Ming->ProxySlotIndexOf(T2), 2);
+	TestEqual(TEXT("a non-tentacle has no slot"), Ming->ProxySlotIndexOf(Other), INDEX_NONE);
+	TestFalse(TEXT("a non-tentacle answers false"), Ming->ProxyReadyTimer(Other, 1000.0));
+	Ming->SeveredTentacles[2] = FElysiumEntityHandle::Invalid();
+	Ming->Proxies[2] = T2->Handle;
+	TestFalse(TEXT("a tentacle held only in m_rhProxies does not resolve (10397b79 reads +0x66a8)"),
+		Ming->ProxyReadyTimer(T2, 1000.0));
+	Ming->Proxies[2] = FElysiumEntityHandle::Invalid();
+	Ming->SeveredTentacles[2] = T3->Handle;
+	TestFalse(TEXT("a slot holding a different tentacle answers false"), Ming->ProxyReadyTimer(T2, 1000.0));
+	Ming->SeveredTentacles[2] = T2->Handle;
+
+	// 5. With no live proxy and nothing registered the count is zero: the slot registers, true.
+	TestTrue(TEXT("the first proxy registers (10397c0a)"), Ming->ProxyReadyTimer(T2, 1000.0));
+	TestTrue(TEXT("m_rbProxyRegistered[2] is set"), Ming->bProxyRegistered[2]);
+
+	// 5. One proxy at a time: a second tentacle is refused while slot 2 is registered.
+	Ming->SeveredTentacles[3] = T3->Handle;
+	TestFalse(TEXT("a second tentacle is refused while one is registered"), Ming->ProxyReadyTimer(T3, 1000.0));
+	TestFalse(TEXT("and does not register"), Ming->bProxyRegistered[3]);
+
+	// 4. An already-registered slot answers true BEFORE the census, even with a live proxy standing.
+	Ming->Proxies[0] = Other->Handle;
+	TestTrue(TEXT("an already-registered slot answers true at once (10397ba9)"),
+		Ming->ProxyReadyTimer(T2, 1000.0));
+
+	// 5. A live `m_rhProxies` handle counts: with slot 2 released, tentacle 3 is still refused.
+	Ming->bProxyRegistered[2] = false;
+	TestFalse(TEXT("a live m_rhProxies handle blocks a new registration"), Ming->ProxyReadyTimer(T3, 1000.0));
+	Ming->Proxies[0] = FElysiumEntityHandle::Invalid();
+	TestTrue(TEXT("and with the census empty tentacle 3 registers"), Ming->ProxyReadyTimer(T3, 1000.0));
+	TestTrue(TEXT("m_rbProxyRegistered[3] is set"), Ming->bProxyRegistered[3]);
 	return true;
 }
 

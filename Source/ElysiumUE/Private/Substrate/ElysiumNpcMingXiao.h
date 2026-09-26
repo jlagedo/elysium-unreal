@@ -93,11 +93,11 @@ public:
 	 *  and 0xbe5) into the selector trace at `+0x1b30`/`+0x1b34`; that pair is `_ABSENT` in this
 	 *  runtime's shape map, whose mind transition trace carries the same account. */
 	int32 FUN_10396dc0() const;
-	/** `0x10397a50` — `CNPC_VMingXiao::Event_Killed`'s tentacle arm. Stamps `m_flProxyReadyTimer` with
+	/** `0x10397a50` — `CNPC_VMingXiao::Event_Killed`'s proxy arm. Stamps `m_flProxyReadyTimer` with
 	 *  `curtime + max(Tuning[100] + Tuning[0x68] * (6 - m_iConnectedTentacleCount), 0)` and, when the
-	 *  dead tentacle is still the registered proxy for its own `m_iTentacleID`, severs it through
-	 *  `0x10397930`. */
-	void FUN_10397a50(const FElysiumEntity* Tentacle, TFunctionRef<float(int32)> TuningField);
+	 *  dead proxy (a `CNPC_VMingXiao`, id `+0x6674`) is still `m_rhProxies[id]`, severs slot `id`
+	 *  through `0x10397930`. */
+	void FUN_10397a50(const FElysiumEntity* Proxy, TFunctionRef<float(int32)> TuningField);
 	int32 LastSeveredTentacle = INDEX_NONE;
 	/** `0x10398000` — `(m_iSeveredTentacleMask & (1 << n)) == 0`, which every MingXiao body spells as
 	 *  "tentacle n is still there". Not a row of this family; two lines, and three of this family's
@@ -171,11 +171,6 @@ public:
 	/** `CNPC_VMingXiao::TaskFail` (`0x10394090`) — switches on `m_eThrowableObjectMode` (`+0x673c`):
 	 *  modes 3 and 4 reset the motor's steering to 180.0 and touch nothing else; every other mode sets
 	 *  the mode to 0 and releases `m_hThrowObject` (`+0x6718`). */
-	/** `CNPC_VMingXiao::m_eThrowableObjectMode` (`+0x673c`). `0x10398d90` is
-	 *  `m_eThrowableObjectMode = arg` and nothing else — it is the MODE setter, not a prop release,
-	 *  which is this family's correction to the checklist's walk. (`m_hThrowObject` `+0x6718` is
-	 *  family Bosses' `MingXiaoThrowObject`.) */
-	int32 SpeciesThrowableObjectMode = 0;
 
 	// From `ElysiumNpcKernelDamage.inl`.
 	// `CNPC_VMingXiao`'s words this family touches and family Bosses did not declare.

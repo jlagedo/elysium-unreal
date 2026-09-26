@@ -1680,6 +1680,8 @@ namespace ElysiumNpcKernelBindings
 		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
 		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
 		// and they cannot collide with the externals above.
+		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::bProxyRegistered)> == 6,
+			"m_rbProxyRegistered has 6 elements");
 		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::Proxies)> == 6,
 			"m_rhProxies has 6 elements");
 		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::SeveredTentacles)> == 6,
@@ -1694,6 +1696,18 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcMingXiao::bMingXiaoHasTransformed, EElysiumField::Save);  // +0x6678 bool
 		ElysiumAddClassField(D, TEXT("m_hMeleeWeapon"), &FElysiumNpcMingXiao::MingXiaoMeleeWeapon,
 			EElysiumField::Save);  // +0x667c ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rbProxyRegistered[0]"),
+			[](auto& E) -> auto&{ return E.bProxyRegistered[0]; }, EElysiumField::Save);  // +0x6684[0] bool
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rbProxyRegistered[1]"),
+			[](auto& E) -> auto&{ return E.bProxyRegistered[1]; }, EElysiumField::Save);  // +0x6684[1] bool
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rbProxyRegistered[2]"),
+			[](auto& E) -> auto&{ return E.bProxyRegistered[2]; }, EElysiumField::Save);  // +0x6684[2] bool
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rbProxyRegistered[3]"),
+			[](auto& E) -> auto&{ return E.bProxyRegistered[3]; }, EElysiumField::Save);  // +0x6684[3] bool
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rbProxyRegistered[4]"),
+			[](auto& E) -> auto&{ return E.bProxyRegistered[4]; }, EElysiumField::Save);  // +0x6684[4] bool
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rbProxyRegistered[5]"),
+			[](auto& E) -> auto&{ return E.bProxyRegistered[5]; }, EElysiumField::Save);  // +0x6684[5] bool
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[0]"),
 			[](auto& E) -> auto&{ return E.Proxies[0]; }, EElysiumField::Save);  // +0x668c[0] ehandle
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[1]"),
@@ -1769,8 +1783,6 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x6670 m_hParentMingZhao (ehandle) — no port member (the species shape map's
 		// ABSENT row says why)
 		// NOT SAVED +0x6680 m_hRangedWeapon (ehandle) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x6684 m_rbProxyRegistered (bool) — no port member (the species shape map's
 		// ABSENT row says why)
 		// NOT SAVED +0x66dc m_rflHitPoints (float) — no port member (the species shape map's ABSENT
 		// row says why)
@@ -2791,7 +2803,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::ManBat:
 				return {0, 0, 0, 2, 14};
 			case EClass::MingXiao:
-				return {0, 0, 0, 1, 39};
+				return {0, 0, 0, 1, 45};
 			case EClass::MingXiaoTentacle:
 				return {0, 0, 0, 0, 9};
 			case EClass::Pedestrian:

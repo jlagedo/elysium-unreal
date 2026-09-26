@@ -334,9 +334,8 @@ namespace
 		"story-8 residue); retail accessors: 0x103927a0 MingXiao::Spawn (residue), 0x10392d80 "
 		"MingXiao::StartTask (task arm), 0x10393930 MingXiao::RunTask (task arm), 0x10394120 "
 		"MingXiao::PreSelectSchedule (residue), 0x10394e40 MingXiao::GatherConditions (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x6684,  // m_rbProxyRegistered
-		"no port member: the ported reader is a named SEAM answering the retail default (the "
-		"sever 0x10397930 SEAM); retail accessors: 0x103927a0 MingXiao::Spawn (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6684,
+		FElysiumNpcMingXiao, bProxyRegistered),  // m_rbProxyRegistered[6]
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x668c, FElysiumNpcMingXiao, Proxies),  // m_rhProxies
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66a4,
 		FElysiumNpcMingXiao, MingXiaoProxyReadyTimer),  // m_flProxyReadyTimer
@@ -617,10 +616,11 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66dc,
 		FElysiumNpcZombie, ZombieRemoveDistUnits),  // m_flRemoveDist
 	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VZombie, 0x66e0,  // m_bShouldGib
-		"no port member: retail writes the latch one byte past this row (+0x66e1, "
-		"`bZombieShouldGib`), so the saved word itself is never written and the latch is "
-		"unsaved, as retail; retail accessors: 0x103dfbb0 Zombie::CreateCorpse (residue), "
-		"0x103e0430 Zombie::vfunc141 (override), 0x103e06d0 Zombie::OnTakeDamage (residue)"),
+		"no port member: no ported body reads or writes the word (OnTakeDamage sets it on an "
+		"over-threshold hit at 103e0801, CreateCorpse reads it; both story-8 residue). The "
+		"neighbouring +0x66e1 is a different, unsaved head-hit byte (`bZombieHeadHit`); retail "
+		"accessors: 0x103dfbb0 Zombie::CreateCorpse (residue), 0x103e06d0 Zombie::OnTakeDamage "
+		"(residue)"),
 	};
 }
 

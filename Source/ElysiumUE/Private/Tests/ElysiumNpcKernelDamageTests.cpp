@@ -388,22 +388,22 @@ bool FElysiumNpcKernelDamageTraceAttackSpeciesTest::RunTest(const FString&)
 		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 141));
 
 	// `0x103e0430`'s pure rule, arm by arm off the decompiled C.
-	bool bGib = false;
+	bool bHeadHit = false;
 	int32 Forced = 0;
 	TestTrue(TEXT("a head hit forces an ammo type"),
-		FElysiumNpcZombie::ZombieTraceAttackPrologue(1, /*melee*/ false, 11, 22, bGib, Forced));
-	TestTrue(TEXT("and raises the gib latch"), bGib);
+		FElysiumNpcZombie::ZombieTraceAttackPrologue(1, /*melee*/ false, 11, 22, bHeadHit, Forced));
+	TestTrue(TEXT("and raises the +0x66e1 head-hit byte"), bHeadHit);
 	TestEqual(TEXT("with the SECOND cvar's value"), Forced, 22);
 
 	Forced = 0;
 	TestFalse(TEXT("a body hit from a non-melee weapon forces nothing"),
-		FElysiumNpcZombie::ZombieTraceAttackPrologue(2, /*melee*/ false, 11, 22, bGib, Forced));
-	TestFalse(TEXT("and clears the gib latch"), bGib);
+		FElysiumNpcZombie::ZombieTraceAttackPrologue(2, /*melee*/ false, 11, 22, bHeadHit, Forced));
+	TestFalse(TEXT("and clears the head-hit byte"), bHeadHit);
 	TestEqual(TEXT("leaving the forced type untouched"), Forced, 0);
 
 	TestTrue(TEXT("a body hit from a melee weapon forces one"),
-		FElysiumNpcZombie::ZombieTraceAttackPrologue(7, /*melee*/ true, 11, 22, bGib, Forced));
-	TestFalse(TEXT("still with no gib"), bGib);
+		FElysiumNpcZombie::ZombieTraceAttackPrologue(7, /*melee*/ true, 11, 22, bHeadHit, Forced));
+	TestFalse(TEXT("still with no head hit"), bHeadHit);
 	TestEqual(TEXT("with the FIRST cvar's value — the swap is inside the capability test"),
 		Forced, 11);
 	return true;

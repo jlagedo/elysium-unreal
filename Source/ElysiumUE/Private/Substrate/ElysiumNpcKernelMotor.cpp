@@ -260,11 +260,12 @@ bool FElysiumNpc::KernelHullTrace(const FVector& StartUnits, const FVector& EndU
 	// keeps its defaults — fraction 1.0, no entity — which is retail's own CLEAR result, and every
 	// caller below branches on the `false` return rather than on the defaults.
 	(void)StartUnits;
-	(void)EndUnits;
 	(void)HullMins;
 	(void)HullMaxs;
 	(void)Mask;
-	(void)OutTrace;
+	// A clear trace ends where it was aimed; `endpos` is the one word of the clear answer a caller
+	// can read back (`CNPC_VWerewolf::CheckStuck`'s `SetAbsOrigin(tr.endpos)`).
+	OutTrace.EndPosUnits = EndUnits;
 	++MotorSeams.HullTraces;
 	return false;
 }

@@ -105,7 +105,7 @@ public:
 
 	// From `ElysiumNpcKernelLifecycle19.inl`.
 	static constexpr int32 HullIndexHengeyokai = 0x12;   // `0x1037fa70`
-	/** `CNPC_VHengeyokai` species words. `SpeciesShunnedFindCount` already carries `+0x6678`. */
+	/** `CNPC_VHengeyokai` species words; `m_iShunnedFindFish` (`+0x6678`) is `HengeyokaiShunnedFindFish`. */
 	bool bHengeyokaiJustFoundFish = false;       // +0x667c
 	bool bHengeyokaiInSharkForm = false;         // +0x6694
 	double HengeyokaiShunnedFishTimer = 0.0;     // +0x6670

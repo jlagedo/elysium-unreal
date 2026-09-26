@@ -1159,7 +1159,7 @@ SpeciesStealthSenseGate	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses
 SpeciesSuppressesDamageFlinch	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	-	collapse:SuppressesDamageFlinch	4g	inlined into the Gargoyle/Hengeyokai overrides; the shared gate DamageFlinchSuppressed stays on FElysiumNpcVampire
 SpeciesSuspectWindowSeconds	field	ElysiumNpcKernelSenses10.inl	-	FElysiumNpcHumanCombatant	-	FElysiumNpcHumanCombatant	move	4f	-
 SpeciesThrowObject	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcMingXiao	-	-	collapse:merge	4c	a second carrier of the retail word MingXiaoThrowObject carries; merged into it (fields-step4.tsv)
-SpeciesThrowableObjectMode	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
+SpeciesThrowableObjectMode	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcMingXiao	-	-	collapse:merge	4r	a second carrier of the retail word MingXiaoThrowableObjectMode carries (CNPC_VMingXiao +0x673c m_eThrowableObjectMode); merged into it by the step-4 review (4r): TaskFail 0x10394090 read and reset this copy, which nothing else wrote
 SpeciesUsedHullBits	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	-	(base code)	-	collapse:GetUsedHullBits	4c	class table: rows become override bodies
 SpeciesVocalize	method	ElysiumNpcKernelSounds.inl	ElysiumNpcKernelSounds.cpp	-	-	FElysiumNpc	deferred:7	-	the controller-line rows stay until step 7; introduced rows collapse into their hook overrides
 SpeciesWorldSpaceCenter	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::ApplyFakeHullPush
@@ -1503,4 +1503,4 @@ bWasEverInCombat	field	ElysiumNpcKernelState19.inl	-	FElysiumNpcCop	-	FElysiumNp
 bWerewolfPlayFrustration	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 bWerewolfTaskFailed	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 bZombieNeedsCrawlOutOfGround	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcZombie	-	FElysiumNpcZombie	move	4d	-
-bZombieShouldGib	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcZombie	-	FElysiumNpcZombie	move	4d	-
+bZombieShouldGib	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcZombie	-	FElysiumNpcZombie	move	4d	renamed to bZombieHeadHit: the walked +0x66e1 head-hit byte TraceAttack 0x103e0430 writes and OnTakeDamage 0x103e06d0 reads for the headshot emitter; not m_bShouldGib (+0x66e0), which OnTakeDamage sets at 103e0801 and CreateCorpse 0x103dfbb0 reads (4r)

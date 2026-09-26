@@ -330,9 +330,13 @@ bool SecCameraInViewCone(const FElysiumEntity* Camera, const FElysiumEntity* Tar
 
 // --- `CNPC_VScurrying` ---------------------------------------------------------------------------
 
-/** SEAM for `0x102edae0` — "the nearest navigator node to `pos` within `radius`". No AI network
- *  stands here; answers false, which is the failure arm above. */
-bool NearestNavigatorNode(const FVector& PositionCm, float RadiusUnits, FVector& OutNodeCm) const;
+/** SEAM for `0x102edae0(navigator, threat, fleeDistance, 30000.0, &out)` -- the navigator's node
+ *  search `0x103008f0` / `0x10300b50` around the threat, which takes the caller's flee distance and
+ *  the constant 30000.0 (a recursive node walk that ends on a node `CanStandAt` accepts), then the
+ *  node's position (`0x102ee9c0`). Not "the nearest node within 30000" (story 5 step 4r). No AI
+ *  network stands here; answers false, which is the march arm's failure branch. */
+bool NearestNavigatorNode(const FVector& ThreatCm, float FleeDistanceUnits, float SearchLimitUnits,
+	FVector& OutNodeCm) const;
 
 /** SEAM for `CAI_BaseNPCTroika::IsAreaClear(pos, mask, 0, 0)` — the jitter arm's acceptance test.
  *  This runtime has no hull sweep; answers true, which admits the jittered point, and the march arm

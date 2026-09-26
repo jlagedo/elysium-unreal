@@ -134,9 +134,10 @@ int32 FElysiumNpcAndreiBlood::SpeciesSelectSchedule()
 {
 	// CNPC_VAndreiBlood, a strict priority ladder under `field_0x1b2c = 4`.
 	RecordScheduleEvent(TEXT("SelectSchedule trace 4 (CNPC_VAndreiBlood 0x1035d010)"));
-	// SEAM: `m_bActivated`, `m_bDead`, `m_bForceTeleport`, `m_iHitCounter` and `m_iHitMax` are
-	// SPECIES words above `+0x665c` with no port member. The ladder is written out and the first
-	// gate answers "activated" so the recovered order is visible; `AndreiBloodSelectGate`
+	// SEAM: `m_bDead` (`+0x66cd`), `m_bForceTeleport` (`+0x66d4`) and `m_iHitCounter` (`+0x66d8`)
+	// have no port member (their other accessors are story-8 residue); `m_bActivated` and
+	// `m_iHitMax` are `bAndreiActivated` / `AndreiHitMax` since step 4. The ladder is written out and
+	// the first gate answers "activated" so the recovered order is visible; `AndreiBloodSelectGate`
 	// carries the `0x1035e920` split and refuses.
 	if (AndreiBloodSelectGate())
 	{
@@ -379,8 +380,8 @@ void FElysiumNpcAndreiBlood::FUN_1035e950()
 	//
 	// `(*DAT_1070b244 + 8)` is `IUniformRandomStream::RandomInt`, INCLUSIVE at both ends — the same
 	// object and slot families Sounds, Damage and Positions read. So Andrei's hit budget for a phase
-	// is 2, 3 or 4, drawn once. `m_iHitCounter` (`+0x66e0`) is family **Damage**'s
-	// `AndreiBloodEmitter` neighbour and is not this row's.
+	// is 2, 3 or 4, drawn once. `m_iHitCounter` is `+0x66d8` (the datamap replay); `+0x66e0` is the
+	// walked blood-emitter handle `AndreiBloodEmitter`, not this row's.
 	//
 	// The draw IS made rather than skipped: the RNG stream's position is observable, and a body that
 	// refused to draw would walk every later draw on the same stream off by one.

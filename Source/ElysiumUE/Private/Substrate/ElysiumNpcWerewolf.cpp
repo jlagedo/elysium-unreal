@@ -29,6 +29,7 @@
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelCombat10Shared.h"
 #include "Substrate/ElysiumNpcKernelConditionsShared.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcKernelDamageShared.h"
 #include "Substrate/ElysiumNpcKernelDebug2Shared.h"
 #include "Substrate/ElysiumNpcKernelDebugShared.h"
@@ -327,7 +328,7 @@ bool FElysiumNpcWerewolf::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElys
 /** `CNPC_VWerewolf::TaskFail` (`0x103ce750`), slot 448's species body. The DIAGNOSTIC half runs only
  *  when the running schedule (`+0x5c38`) is one of `0x160`, `0x161` or `0x162`; the rest is
  *  unconditional: `SetHullSizeSmall(1)`, `ClearMoveHint`, `ClearTeleportHint`, `m_pBreakHint` = 0,
- *  `+0x66a4` = 0, `+0x66a1` = 1, the Troika base `0x1029adb0`, `CheckStuck(NULL)`, then the zone word
+ *  `+0x66a4` = 0, `+0x66a1` = 1, the Troika base `0x1029adb0`, `CheckStuck(0)`, then the zone word
  *  `+0x66e8` = 0 and `+0x6708` / `+0x670c` = -1.
  *
  *  The BREAK line prints the TELEPORT hint — a retail copy-paste bug, reproduced. */
@@ -377,16 +378,17 @@ void FElysiumNpcWerewolf::TaskFail(int32 Reason)
 	WerewolfMorphTimerA = 0.f;
 	// `103ce8eb`: `+0x66a1 = 1`.
 	bWerewolfTaskFailed = true;
-	// `103ce8f7`: the Troika base `0x1029adb0` — the caller runs it, so nothing is done here.
-	// `103ce902`: `CheckStuck(NULL)` through thunk `0x10012d46`, which is `CNPC_VWerewolf::CheckStuck`
+	// `103ce8fb`: the Troika base `0x1029adb0`, BEFORE `CheckStuck` and the three word writes below
+	// (story 5 step 4r: the port ran it last).
+	FElysiumNpc::TaskFail(Reason);
+	// `103ce900`: `CheckStuck(0)` through thunk `0x10012d46`, which is `CNPC_VWerewolf::CheckStuck`
 	// `0x103cb920` (story 5 step 4 CORRECTION: the port called `CNPC_VSabbatLeader::CheckStuck`
 	// `0x103ab580`, a class the Werewolf does not derive from).
-	WerewolfCheckStuck();
-	// `103ce90a`: the zone word cleared, then both hint-node caches to -1.
+	WerewolfCheckStuck(EStuckEscape::WarnOnly);
+	// `103ce909`: the zone word cleared, then both hint-node caches to -1.
 	WerewolfHintFlags = 0;
 	WerewolfHintNodeCacheA = INDEX_NONE;
 	RandomMoveHintNodeZone = INDEX_NONE;
-	FElysiumNpc::TaskFail(Reason);
 }
 
 // Slot 304: `0x103cc9b0`
@@ -2293,72 +2295,122 @@ bool FElysiumNpcWerewolf::IsValidMoveHint(const FHintWords& Hint, double Now)
 	return !FUN_10366400(HintEntity);
 }
 
-void FElysiumNpcWerewolf::WerewolfCheckStuck()
+namespace
 {
-	// `103cb9a4`: the whole body is gated on slot `0x28c`. `0x28c / 4` is slot 163 `IsViewable` on
-	// the hint line; on the NPC line it is the "may this body be probed" gate, and this runtime's
-	// nearest answer is `IsAlive`.
-	if (!IsAlive())
+	// `_DAT_10452dc4` (2.0), the up-probe's lift; `0x41200000` (10.0), the escalation's small-hull
+	// maxs.z; `_DAT_104454c0` (1.0), the clear fraction. `_DAT_10449154` (0.45) is
+	// `ElysiumNpcTunables::WerewolfStuckHullScale`.
+	constexpr double GWerewolfStuckLiftUnits = 2.0;
+	constexpr double GWerewolfStuckEscalationTopUnits = 10.0;
+	constexpr float GWerewolfStuckClearFraction = 1.f;
+	constexpr int32 GWerewolfStuckMask = 0x202400b;
+}
+
+void FElysiumNpcWerewolf::WerewolfCheckStuck(EStuckEscape Escape)
+{
+	// `CNPC_VWerewolf::CheckStuck` `0x103cb920`, from the listing. Story 5 step 4r re-port: the moved
+	// body tested `fraction < 1` where retail tests `startsolid`, ran `SetHullSizeSmall(1)` on exits
+	// retail leaves alone, repeated one probe three times and gated the teleport on COND 0x77 alone.
+	//
+	// `103cb994`: slot 163 (`+0x28c`), `CBaseEntity::IsViewable` (`0x100a9800`), over this runtime's
+	// words: `m_fEffects` (`+0x19c`) bit `0x40` clear, and a model. `IsBSPModel` (`0x100b5110`) is
+	// false for an NPC's bbox solid, so the model arm is slot 8's model pointer, which a spawned
+	// NPC's `Model` stands for. The Werewolf does not override slot 163; the generated slot-163 row
+	// stays another story's, and this is the one caller that needs its answer.
+	constexpr uint32 GEffectsBit0x40 = 0x40;
+	if ((EffectsWord & GEffectsBit0x40) != 0 || Model.IsEmpty())
 	{
 		return;
 	}
-	// `103cb9bc`: probe 1 is a hull trace from `GetAbsOrigin` to origin + `_DAT_10452dc4` (2.0) in
-	// Z with mask `0x202400b`, using the `m_eHull` normal mins/maxs and the navigator's filter,
-	// inside a `CVProfile` "CAI_MoveProbe::TraceHull" scope.
-	const FVector StartUnits = Origin / ElysiumMove::U;
-	const FVector EndUnits = StartUnits + FVector(0.0, 0.0, 2.0);
+	const double U = ElysiumMove::U;
+	// `103cb9a7`..`103cba95`: probe 1, the engine hull trace (`0x1026e940` through the move probe's
+	// filter, inside the "CAI_MoveProbe_TraceHull" profile scope) from `GetAbsOrigin()` to
+	// `GetAbsOrigin() + (0, 0, 2.0)` on the FULL extents (`0x102d6100` / `0x102d6120`).
+	const FVector OriginUnits = Origin / U;
+	const FVector UpUnits = OriginUnits + FVector(0.0, 0.0, GWerewolfStuckLiftUnits);
 	FKernelHullTrace Probe;
-	const bool bTraced = KernelHullTrace(StartUnits, EndUnits, HullMinsUnits(false),
-		HullMaxsUnits(false), 0x202400b, Probe);
-	// `103cba9c`: the CLEAR branch (`cStack_55 == 0`, the start-solid byte) re-probes through the
-	// navigator with the SMALL hull when `+0x5f2d` is set and the third extent scaled by
-	// `_DAT_10449154` (0.45, `ElysiumNpcTunables::WerewolfStuckHullScale`), and only when THAT
-	// probe reports blocked does it
-	// `DevWarning "attempting alt unstuck..."` and run slot `0x360`.
-	const bool bStartSolid = bTraced && Probe.Fraction < 1.f;
-	if (!bStartSolid)
+	KernelHullTrace(OriginUnits, UpUnits, HullMinsUnits(false), HullMaxsUnits(false), GWerewolfStuckMask,
+		Probe);
+
+	// `103cbaa9`: `trace.startsolid` (`+0x37`), NOT the fraction.
+	if (!Probe.bStartSolid)
 	{
-		// SEAM: the navigator re-probe (`0x102a99e0`) does not exist here and reports clear, so the
-		// alt-unstuck arm is not taken — retail's own not-stuck answer.
-		SetHullSizeSmall(true);
+		// `103cbddb`: the CLEAR start. Re-probe from `WorldSpaceCenter()` (slot 192) to
+		// `GetAbsOrigin()` through `CAI_MoveProbe::TraceHull` (`0x102a99e0`), on the SMALL extents
+		// while `m_fIsUsingSmallHull` (`+0x5f2d`) stands and the full ones otherwise, maxs.z scaled by
+		// 0.45 (`103cbe9d`).
+		const FVector CentreUnits = SpeciesWorldSpaceCenter() / U;
+		const bool bSmall = bIsUsingSmallHull;
+		FVector MaxsUnits = HullMaxsUnits(bSmall);
+		MaxsUnits.Z = static_cast<float>(MaxsUnits.Z) * ElysiumNpcTunables::WerewolfStuckHullScale;
+		FKernelHullTrace Reprobe;
+		KernelHullTrace(CentreUnits, OriginUnits, HullMinsUnits(bSmall), MaxsUnits, GWerewolfStuckMask,
+			Reprobe);
+		// `103cbed7`: `fraction >= 1.0 && !allsolid && !startsolid` returns at once (`103cbefc` ->
+		// `103cbf24`), with no hull change.
+		if (Reprobe.Fraction >= GWerewolfStuckClearFraction && !Reprobe.bAllSolid && !Reprobe.bStartSolid)
+		{
+			return;
+		}
+		// `103cbefe`: "attempting alt unstuck...", `SetAbsOrigin(tr.endpos)` (slot 216), then
+		// `SetHullSizeSmall(1)` (`103cbf1b`).
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 attempting alt unstuck..."), *DebugString());
+		Origin = Reprobe.EndPosUnits * U;
+		SetHullSizeSmall(/*bForce=*/true);
 		return;
 	}
-	// `103cbb44`: the BLOCKED branch — up to three escalating world traces (`0x1006dec0` with the
-	// `0x101d3190(this, 7)` filter). The first reports "Werewolf stuck!"; the second reports
-	// "Werewolf unstuck..." and runs slot `0x360`; the third either teleports out
-	// (`0x10269aa0(this, 0x77)` succeeding → "Werewolf teleported out from stuck", `TeleportOut` and
-	// slot `0x700` with "Werewolf stuck") or reports "Werewolf STUCK!!" and does nothing.
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf stuck!"), *DebugString());
+
+	// `103cbab8`: the SOLID start. Probe 2 is the same up-probe on the SMALL extents (`0x102d6140` /
+	// `0x102d6160`), an engine `TraceRay` through `CTraceFilterSimple(this, 7)`.
+	const FVector SmallMinsUnits = HullMinsUnits(true);
+	FVector SmallMaxsUnits = HullMaxsUnits(true);
 	FKernelHullTrace Second;
-	const bool bSecondBlocked = KernelHullTrace(StartUnits, EndUnits, HullMinsUnits(false),
-		HullMaxsUnits(false), 0x202400b, Second) && Second.Fraction < 1.f;
-	if (!bSecondBlocked)
+	KernelHullTrace(OriginUnits, UpUnits, SmallMinsUnits, SmallMaxsUnits, GWerewolfStuckMask, Second);
+	if (!Second.bStartSolid)
 	{
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf unstuck..."),
-			*DebugString());
-		SetHullSizeSmall(true);
+		// `103cbb95` -> `103cbf1b`: the small hull fits; shrink to it, no message.
+		SetHullSizeSmall(/*bForce=*/true);
 		return;
 	}
-	FKernelHullTrace Third;
-	const bool bThirdBlocked = KernelHullTrace(StartUnits, EndUnits, HullMinsUnits(false),
-		HullMaxsUnits(false), 0x202400b, Third) && Third.Fraction < 1.f;
-	if (!bThirdBlocked)
+	// `103cbb9b`: "Werewolf stuck?", and the small maxs.z becomes 10.0 (`103cbbb1`).
+	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf stuck?"), *DebugString());
+	SmallMaxsUnits.Z = GWerewolfStuckEscalationTopUnits;
+	// `103cbbbc`: probe 3, `WorldSpaceCenter()` (slot 192) to `GetOrigin()` (slot 220, the local
+	// origin; an unparented NPC's is its absolute one).
+	const FVector LocalOriginUnits = Origin / U;
+	FKernelHullTrace EscapeTrace;
+	KernelHullTrace(SpeciesWorldSpaceCenter() / U, LocalOriginUnits, SmallMinsUnits, SmallMaxsUnits,
+		GWerewolfStuckMask, EscapeTrace);
+	if (EscapeTrace.bStartSolid)
 	{
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf unstuck..."),
-			*DebugString());
-		SetHullSizeSmall(true);
+		// `103cbc9d`: probe 4, `EyePosition()` (slot 193) to `GetOrigin()`.
+		EscapeTrace = FKernelHullTrace();
+		KernelHullTrace(EyePosition() / U, LocalOriginUnits, SmallMinsUnits, SmallMaxsUnits,
+			GWerewolfStuckMask, EscapeTrace);
+	}
+	if (!EscapeTrace.bStartSolid)
+	{
+		// `103cbd71`: "Werewolf unstuck...", `SetAbsOrigin(tr.endpos)` (slot 216), `SetHullSizeSmall(1)`.
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf unstuck..."), *DebugString());
+		Origin = EscapeTrace.EndPosUnits * U;
+		SetHullSizeSmall(/*bForce=*/true);
 		return;
 	}
-	if (Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x77)))
+	// `103cbd8f`: the argument (`[ESP+0xdc]`, a bool) AND COND `0x77`. Neither stuck exit touches
+	// the hull (`103cbdc7` / `103cbdd6` jump past `SetHullSizeSmall`).
+	if (Escape == EStuckEscape::MayTeleport && Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x77)))
 	{
-		UE_LOG(LogElysiumNpcEnt, Verbose,
-			TEXT("%s: 0x103cb920 Werewolf teleported out from stuck"), *DebugString());
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf teleported out from stuck."),
+			*DebugString());
 		++WerewolfTeleportOutCalls;
-		// `103cbf07`: the teleport arm is the ONE exit that does NOT run `SetHullSizeSmall(1)`.
+		TeleportOut();                                   // `103cbdb3`, `0x103d4a60`
+		// `103cbdc1`: slot 448 with the text fail code "Werewolf stuck". SEAM: this runtime's
+		// `TaskFail` takes a numeric code and has no text form; the arm is unreachable in shipped
+		// content (both callers pass 0), so the code is left at 0.
+		TaskFail(0);
 		return;
 	}
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf STUCK!!"), *DebugString());
-	SetHullSizeSmall(true);
+	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf STUCK!!!"), *DebugString());
 }
 
 // --- Moved from `ElysiumNpcKernelSounds10.cpp` (story 5 step 4) ---

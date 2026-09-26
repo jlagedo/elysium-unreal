@@ -161,3 +161,17 @@ def test_the_committed_species_map_answers_every_species_field():
         "friendship_level", "warn_range", "conflict_range"}
     assert all("detection_distance" not in {r.external for r in m.bound}
                for t, m in models.items() if t != "CNPC_VScurrying")
+
+
+def test_a_species_save_row_may_not_reuse_a_troika_save_name_on_another_word():
+    troika = gkb.ClassModel(name="Npc", tables=("CAI_BaseNPCTroika",))
+    troika.saved.append(gkb.Row(kind="save", cls="CAI_BaseNPCTroika", name="m_flIgnoreCollisionTimer",
+                                type="time", offset=0x6458, external="", flags=["SAVE"]))
+    shadow = replay(CNPC_VTzimisce=[record("m_flIgnoreCollisionTimer", 0x6458, "time")])
+    species_map = gkb.parse_species_map(MAP)
+    ok = gkb.classify_species("Tzimisce", "CNPC_VTzimisce", shadow, species_map)
+    gkb.check_species_save_names([troika, ok], species_map)
+    clash = replay(CNPC_VMingXiao=[record("m_flIgnoreCollisionTimer", 0x668c, "ehandle", count=6)])
+    bad = gkb.classify_species("MingXiao", "CNPC_VMingXiao", clash, species_map)
+    with pytest.raises(SystemExit, match="a Troika save name"):
+        gkb.check_species_save_names([troika, bad], species_map)

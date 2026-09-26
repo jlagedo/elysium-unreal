@@ -952,16 +952,16 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 
 	// `0x10394090`: modes 3 and 4 touch only the motor; every other mode is set to 0 and the throw
 	// handle released.
-	MingXiao->SpeciesThrowableObjectMode = 3;
+	MingXiao->MingXiaoThrowableObjectMode = 3;
 	MingXiao->MingXiaoThrowObject = Target->Handle;
 	MingXiao->TaskFail(0);
 	TestEqual(TEXT("TaskFail on a MingXiao in mode 3 leaves the mode alone (103940a5)"),
-		MingXiao->SpeciesThrowableObjectMode, 3);
+		MingXiao->MingXiaoThrowableObjectMode, 3);
 	TestTrue(TEXT("and leaves m_hThrowObject alone"), MingXiao->MingXiaoThrowObject.IsSet());
-	MingXiao->SpeciesThrowableObjectMode = 1;
+	MingXiao->MingXiaoThrowableObjectMode = 1;
 	MingXiao->TaskFail(0);
 	TestEqual(TEXT("TaskFail on a MingXiao in mode 1 sets the mode to 0 (0x10398d90)"),
-		MingXiao->SpeciesThrowableObjectMode, 0);
+		MingXiao->MingXiaoThrowableObjectMode, 0);
 	TestFalse(TEXT("and releases m_hThrowObject (+0x6718)"), MingXiao->MingXiaoThrowObject.IsSet());
 
 	// `0x103b0290`: no arm at all — the SheriffMan carries none of the arms' words, and its
@@ -1191,11 +1191,11 @@ bool FElysiumNpcKernelConditions10TaskFailBossTest::RunTest(const FString&)
 	// in particular the mode and the throw handle survive.
 	for (const int32 Mode : { 3, 4 })
 	{
-		Ming->SpeciesThrowableObjectMode = Mode;
+		Ming->MingXiaoThrowableObjectMode = Mode;
 		Ming->MingXiaoThrowObject = F.Other->Handle;
 		Ming->TaskFail(0);
 		TestEqual(TEXT("modes 3 and 4 leave m_eThrowableObjectMode alone (103940a5)"),
-			Ming->SpeciesThrowableObjectMode, Mode);
+			Ming->MingXiaoThrowableObjectMode, Mode);
 		TestTrue(TEXT("and leave m_hThrowObject alone"), Ming->MingXiaoThrowObject.IsSet());
 	}
 
@@ -1203,11 +1203,11 @@ bool FElysiumNpcKernelConditions10TaskFailBossTest::RunTest(const FString&)
 	// sets the MODE to 0 and then releases the handle.
 	for (const int32 Mode : { 0, 1, 2, 5 })
 	{
-		Ming->SpeciesThrowableObjectMode = Mode;
+		Ming->MingXiaoThrowableObjectMode = Mode;
 		Ming->MingXiaoThrowObject = F.Other->Handle;
 		Ming->TaskFail(0);
 		TestEqual(TEXT("every other mode is set to 0 (0x10398d90)"),
-			Ming->SpeciesThrowableObjectMode, 0);
+			Ming->MingXiaoThrowableObjectMode, 0);
 		TestFalse(TEXT("and m_hThrowObject is released (+0x6718)"),
 			Ming->MingXiaoThrowObject.IsSet());
 	}

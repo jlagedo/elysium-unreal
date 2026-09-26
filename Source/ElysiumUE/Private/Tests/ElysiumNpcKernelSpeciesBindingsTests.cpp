@@ -149,7 +149,8 @@ bool FElysiumNpcKernelSpeciesBindingsChainTest::RunTest(const FString&)
 			Desc->Fields.Find(FName(TEXT("warn_range"))));
 		if (Warn != nullptr)
 		{
-			TestFalse(TEXT("a species KEY row carries no Key flag"), Warn->bKeyable);
+			// `bKeyable` is the INPUT flag (`FTYPEDESC_INPUT`, 0x8); a species KEY row is not one.
+			TestFalse(TEXT("a species KEY row is not an INPUT field"), Warn->bKeyable);
 			TestTrue(TEXT("and is saved"), Warn->bSave);
 		}
 	}
@@ -213,6 +214,23 @@ bool FElysiumNpcKernelSpeciesBindingsChainTest::RunTest(const FString&)
 		TestTrue(TEXT("and neither reached the other's word"), Cop->CopPursuitHandle == Other->Handle);
 		TestNull(TEXT("a Hengeyokai has no m_hPursuitPlayer"),
 			SpeciesBindingsRow(Hengeyokai, TEXT("m_hPursuitPlayer")));
+	}
+	// The shadow row is the Hengeyokai's OWN table's (the Troika table carries the same name, so a
+	// chain lookup alone cannot tell them apart), and it reaches the inherited storage.
+	{
+		FElysiumClassDesc Own;
+		ElysiumNpcKernelBindings::AddSpeciesFields(Own, TEXT("CNPC_VHengeyokai"));
+		const FElysiumFieldAccessor* OwnShadow = Own.Fields.Find(FName(TEXT("m_flIgnoreCollisionTimer")));
+		if (TestNotNull(TEXT("CNPC_VHengeyokai's own table declares m_flIgnoreCollisionTimer (+0x6458)"), OwnShadow))
+		{
+			OwnShadow->Set(*Hengeyokai, FElysiumVariant::Float(4321.f));
+			TestEqual(TEXT("and its own row writes the inherited IgnoreCollisionUntil"),
+				static_cast<float>(Hengeyokai->IgnoreCollisionUntil), 4321.f);
+		}
+		FElysiumClassDesc Sibling;
+		ElysiumNpcKernelBindings::AddSpeciesFields(Sibling, TEXT("CNPC_VManBat"));
+		TestNull(TEXT("a sibling's table does not re-declare it"),
+			Sibling.Fields.Find(FName(TEXT("m_flIgnoreCollisionTimer"))));
 	}
 	const FElysiumFieldAccessor* Shadow = SpeciesBindingsRow(Hengeyokai, TEXT("m_flIgnoreCollisionTimer"));
 	if (TestNotNull(TEXT("the Hengeyokai's shadow row"), Shadow))
@@ -328,6 +346,48 @@ bool FElysiumNpcKernelSpeciesBindingsCarriersTest::RunTest(const FString&)
 			Sabbat->bSabbatDiving);
 	}
 
+	// Each merge as the retail correction it is: one family's WRITE now reaches the other family's
+	// READER (the step-4 review: binding the survivor alone does not show that).
+	{
+		// Bach +0x6690: `SelectScheduleRangedCombat` `0x103642f0`'s COND 0x7b arm stamps curtime + 15;
+		// `GatherAttackConditions` `0x10363db0` then keeps a close, hurt Bach on the SHIELD arm
+		// (`10363dfa`) rather than raising 0x7b again.
+		Bach->Cognition.Conditions.Reset();
+		Bach->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x7b));
+		TestEqual(TEXT("Bach 0x103642f0: COND 0x7b answers 0x15a"), Bach->SelectScheduleRangedCombat(0), 0x15a);
+		Bach->Cognition.Conditions.Reset();
+		Bach->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x4c));
+		Bach->BachTeleportState = 0;
+		Bach->BachNextShieldTime = -1.0;
+		Bach->bBachShieldActive = false;
+		Bach->BachGatherAttackConditions(100.f);
+		TestFalse(TEXT("Bach 0x10363db0: the fresh holy-light stamp closes the teleport"),
+			Bach->Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x7b)));
+		TestTrue(TEXT("and takes the shield arm"), Bach->bBachShieldActive);
+	}
+	{
+		// AsianVampire +0x66e8: `NPCInit` `0x10360ce0` writes the word `SelectScheduleMeleeCombat`
+		// `0x10361be0` gates both ranged arms on.
+		Asian->bSuppressRanged = false;
+		Asian->NPCInit();
+		TestTrue(TEXT("AsianVampire 0x10360ce0 raises m_bSuppressRanged, the word the melee selector reads"),
+			Asian->bSuppressRanged);
+	}
+	{
+		// MingXiao +0x673c (the 4r merge): the mode setter `0x10398d90` writes the word `TaskFail`
+		// `0x10394090` switches on -- mode 3 keeps the throw object.
+		Xiao->ThrowableObjectMode(3);
+		Xiao->MingXiaoThrowObject = Other->Handle;
+		Xiao->TaskFail(0);
+		TestTrue(TEXT("MingXiao 0x10394090: mode 3 set through 0x10398d90 keeps m_hThrowObject"),
+			Xiao->MingXiaoThrowObject == Other->Handle);
+		TestEqual(TEXT("and the mode"), Xiao->MingXiaoThrowableObjectMode, 3);
+		Xiao->ThrowableObjectMode(1);
+		Xiao->TaskFail(0);
+		TestEqual(TEXT("mode 1 is reset to 0 on the one word"), Xiao->MingXiaoThrowableObjectMode, 0);
+		TestFalse(TEXT("and the throw object released"), Xiao->MingXiaoThrowObject.IsSet());
+	}
+
 	// The splits (4g): one port member stood for several classes' words; each class now has its own.
 	if (Write(Heng, TEXT("m_hPickupTarget"), FElysiumVariant::Handle(Other->Handle))
 		&& Write(Tzimisce, TEXT("m_hPickupTarget"), FElysiumVariant::Handle(Heng->Handle)))
@@ -337,15 +397,17 @@ bool FElysiumNpcKernelSpeciesBindingsCarriersTest::RunTest(const FString&)
 		TestTrue(TEXT("Tzimisce +0x6670 m_hPickupTarget is its own PickupTarget"),
 			Tzimisce->PickupTarget == Heng->Handle);
 	}
-	Gargoyle->GargoyleShunnedFindPillar = 3;
-	Heng->HengeyokaiShunnedFindFish = 5;
-	Tzimisce->TzimisceShunnedFindBody = 7;
-	TestEqual(TEXT("the Gargoyle's shunned-pillar count is its own word"),
-		Gargoyle->GargoyleShunnedFindPillar, 3);
-	TestEqual(TEXT("the Hengeyokai's shunned-fish count is its own word"),
-		Heng->HengeyokaiShunnedFindFish, 5);
-	TestEqual(TEXT("the Tzimisce's shunned-body count is its own word"),
-		Tzimisce->TzimisceShunnedFindBody, 7);
+	Gargoyle->GargoyleShunnedFindPillar = 0;
+	Heng->HengeyokaiShunnedFindFish = 0;
+	Tzimisce->TzimisceShunnedFindBody = 0;
+	if (Write(Gargoyle, TEXT("m_iShunnedFindPillar"), FElysiumVariant::Int(3))
+		&& Write(Heng, TEXT("m_iShunnedFindFish"), FElysiumVariant::Int(5))
+		&& Write(Tzimisce, TEXT("m_iShunnedFindBody"), FElysiumVariant::Int(7)))
+	{
+		TestEqual(TEXT("Gargoyle +0x6680 m_iShunnedFindPillar is its own word"), Gargoyle->GargoyleShunnedFindPillar, 3);
+		TestEqual(TEXT("Hengeyokai +0x6678 m_iShunnedFindFish is its own word"), Heng->HengeyokaiShunnedFindFish, 5);
+		TestEqual(TEXT("Tzimisce +0x66b8 m_iShunnedFindBody is its own word"), Tzimisce->TzimisceShunnedFindBody, 7);
+	}
 	if (Write(Tentacle, TEXT("m_iTentacleID"), FElysiumVariant::Int(4))
 		&& Write(Xiao, TEXT("m_iTentacleID"), FElysiumVariant::Int(-1)))
 	{
@@ -365,34 +427,56 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 {
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
-	// What retail's own bodies rewrite on the way back, each with the body that does it. The restore
-	// restarts the program (`NpcKernelBindings.SaveRoundTrip`'s restart divergence), and a restart
-	// runs slot 435; a Pedestrian's slot 130 re-inits it on every load.
-	struct FDerived { const TCHAR* Classname; const TCHAR* Row; const TCHAR* Why; };
+	// What retail's own bodies rewrite on the way back, each with the body that does it and the value
+	// it leaves. The restore restarts the program (`NpcKernelBindings.SaveRoundTrip`'s restart
+	// divergence), and a restart runs slot 435; a Pedestrian's slot 130 re-inits it on every load.
+	enum class EDerived : uint8 { Decrement, Zero, False };
+	struct FDerived { const TCHAR* Classname; const TCHAR* Row; EDerived Rule; const TCHAR* Why; };
 	static const FDerived Derived[] =
 	{
-		{ TEXT("npc_VGargoyle"), TEXT("m_iShunnedFindPillar"),
+		{ TEXT("npc_VGargoyle"), TEXT("m_iShunnedFindPillar"), EDerived::Decrement,
 		  TEXT("decremented by the Gargoyle's slot 435 `0x10378fe4` on the restart") },
-		{ TEXT("npc_VHengeyokai"), TEXT("m_iShunnedFindFish"),
+		{ TEXT("npc_VHengeyokai"), TEXT("m_iShunnedFindFish"), EDerived::Decrement,
 		  TEXT("decremented by the Hengeyokai's slot 435 `0x103830be` on the restart") },
-		{ TEXT("npc_VTzimisce"), TEXT("m_iShunnedFindBody"),
+		{ TEXT("npc_VTzimisce"), TEXT("m_iShunnedFindBody"), EDerived::Decrement,
 		  TEXT("decremented by the Tzimisce's slot 435 `0x103bf63e` on the restart") },
-		{ TEXT("npc_VTzimisce"), TEXT("m_ePathMode"),
+		{ TEXT("npc_VTzimisce"), TEXT("m_ePathMode"), EDerived::Zero,
 		  TEXT("cleared by the Tzimisce's slot 435 `0x103bf630` on the restart") },
-		{ TEXT("npc_VDialogPedestrian"), TEXT("m_bFirstThink"),
+		{ TEXT("npc_VDialogPedestrian"), TEXT("m_bFirstThink"), EDerived::False,
 		  TEXT("`CNPC_VPedestrian::OnRestore` `0x103a25a0` re-runs `NPCInit` `0x103a2570` on a load") },
 	};
-	auto IsDerived = [](const TCHAR* Classname, FName Row)
+	auto FindDerived = [](const TCHAR* Classname, FName Row) -> const FDerived*
 	{
 		for (const FDerived& D : Derived)
 		{
 			if (FCString::Strcmp(D.Classname, Classname) == 0 && Row == FName(D.Row))
 			{
-				return true;
+				return &D;
 			}
 		}
-		return false;
+		return nullptr;
 	};
+
+	// The 27 species tables' own save rows, by retail class. A class stamps every row of every table
+	// its chain declares -- shadow rows included, which share their names with Troika rows and so
+	// cannot be picked out of the chain's save walk by name.
+	TMap<FString, TArray<FName>> TableRows;
+	for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
+	{
+		FElysiumClassDesc Own;
+		if (ElysiumNpcKernelBindings::AddSpeciesFields(Own, Row.Name))
+		{
+			TArray<FName>& Names = TableRows.Add(Row.Name);
+			for (const TPair<FName, FElysiumFieldAccessor>& Pair : Own.Fields)
+			{
+				if (Pair.Value.bSave)
+				{
+					Names.Add(Pair.Key);
+				}
+			}
+		}
+	}
+	TestEqual(TEXT("the census names the 27 species tables"), TableRows.Num(), 27);
 
 	// One NPC per species class a classname builds, plus a live witness every saved handle can
 	// name. The controller line folds in step 7 and has no species table.
@@ -426,9 +510,8 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// The Troika line's own persistence is `NpcKernelBindings.SaveRoundTrip`'s; this case stamps only
-	// the rows a species descriptor adds.
-	const TSet<FName> Base(Reg.SaveFields(*Troika->Class));
+	// The Troika line's own persistence is `NpcKernelBindings.SaveRoundTrip`'s; this case stamps the
+	// rows the species tables declare, through the chain (the most-derived row answers).
 
 	struct FWritten
 	{
@@ -437,7 +520,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		FElysiumVariant Value;
 	};
 	TArray<FWritten> Written;
-	TSet<FString> StampedClasses;
+	TSet<FString> StampedTables;
 	int32 Salt = 0;
 	for (int32 Index = 0; Index < Classes.Num(); ++Index)
 	{
@@ -446,44 +529,58 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		{
 			continue;
 		}
-		for (const FName& Row : Reg.SaveFields(*Npc->Class))
+		TSet<FName> Rows;
+		for (const TPair<FString, TArray<FName>>& Table : TableRows)
+		{
+			if (Npc->IsRetailClass(*Table.Key))
+			{
+				Rows.Append(Table.Value);
+				StampedTables.Add(Table.Key);
+			}
+		}
+		for (const FName& Row : Rows)
 		{
 			const FElysiumFieldAccessor* Acc = Reg.FindField(*Npc->Class, Row);
-			if (Base.Contains(Row) || Acc == nullptr || !Acc->Set || !Acc->Get)
+			if (!TestNotNull(FString::Printf(TEXT("%s resolves %s"), Classes[Index], *Row.ToString()), Acc)
+				|| !Acc->Set || !Acc->Get)
 			{
 				continue;
 			}
+			// A stamp distinguishable from the value a rebuild would give, so a row the record
+			// dropped cannot "survive" by coincidence.
+			const FElysiumVariant Fresh = Acc->Get(*Npc);
 			++Salt;
 			FElysiumVariant Value;
 			switch (Acc->Type)
 			{
-			case EElysiumVariantType::Bool:   Value = FElysiumVariant::Bool(true); break;
-			case EElysiumVariantType::Int:    Value = FElysiumVariant::Int(100 + (Salt % 100)); break;
-			case EElysiumVariantType::Float:  Value = FElysiumVariant::Float(2000.f + Salt); break;
+			case EElysiumVariantType::Bool:   Value = FElysiumVariant::Bool(!Fresh.AsBool); break;
+			case EElysiumVariantType::Int:    Value = FElysiumVariant::Int(Fresh.AsInt + 100 + (Salt % 100)); break;
+			case EElysiumVariantType::Float:  Value = FElysiumVariant::Float(Fresh.AsFloat + 2000.f + Salt); break;
 			case EElysiumVariantType::String:
 				Value = FElysiumVariant::String(FString::Printf(TEXT("species_%d"), Salt)); break;
 			case EElysiumVariantType::Vector:
-				Value = FElysiumVariant::Vector(FVector(Salt, Salt + 1, Salt + 2)); break;
-			case EElysiumVariantType::Handle: Value = FElysiumVariant::Handle(Other->Handle); break;
-			default: continue;
+				Value = FElysiumVariant::Vector(Fresh.AsVector + FVector(Salt, Salt + 1, Salt + 2)); break;
+			case EElysiumVariantType::Handle:
+				Value = FElysiumVariant::Handle(Fresh.AsHandle == Other->Handle ? Troika->Handle : Other->Handle);
+				break;
+			default:
+				AddError(FString::Printf(TEXT("%s: %s has a type this case cannot stamp"), Classes[Index],
+					*Row.ToString()));
+				continue;
 			}
 			Acc->Set(*Npc, Value);
 			Written.Add({ Index, Row, Value });
-			StampedClasses.Add(Classes[Index]);
 		}
 	}
-	// Every one of the 27 species tables reaches at least one standing class.
-	if (!TestTrue(TEXT("species rows were stamped on many classes"), StampedClasses.Num() >= 20))
-	{
-		return false;
-	}
+	TestEqual(TEXT("every one of the 27 species tables reaches a standing class"), StampedTables.Num(), 27);
 
 	FElysiumMapSnapshot Snapshot;
 	F.World.Freeze(Snapshot);
 	FElysiumNpcWorldFixture G(Build());
 	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
 	FElysiumNpc* RestoredOther = G.Npc(TEXT("other"));
-	if (!TestNotNull(TEXT("the witness restores"), RestoredOther))
+	FElysiumNpc* RestoredTroika = G.Npc(TEXT("troika"));
+	if (!TestNotNull(TEXT("the witness restores"), RestoredOther) || !TestNotNull(TEXT("the Troika NPC restores"), RestoredTroika))
 	{
 		return false;
 	}
@@ -508,12 +605,31 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		case EElysiumVariantType::Float:  bSame = FMath::IsNearlyEqual(Back.AsFloat, W.Value.AsFloat, 0.01f); break;
 		case EElysiumVariantType::String: bSame = Back.AsString == W.Value.AsString; break;
 		case EElysiumVariantType::Vector: bSame = Back.AsVector.Equals(W.Value.AsVector, 0.01); break;
-		case EElysiumVariantType::Handle: bSame = Back.AsHandle.Index == RestoredOther->Handle.Index; break;
+		case EElysiumVariantType::Handle:
+			bSame = Back.AsHandle.Index
+				== (W.Value.AsHandle == Other->Handle ? RestoredOther->Handle.Index : RestoredTroika->Handle.Index);
+			break;
 		default: break;
 		}
-		if (IsDerived(Classes[W.Npc], W.Row))
+		if (const FDerived* D = FindDerived(Classes[W.Npc], W.Row))
 		{
-			++Survived;
+			// The value the named retail body leaves, not merely "something else".
+			bool bExpected = false;
+			switch (D->Rule)
+			{
+			case EDerived::Decrement: bExpected = Back.AsInt == W.Value.AsInt - 1; break;
+			case EDerived::Zero:      bExpected = Back.AsInt == 0; break;
+			case EDerived::False:     bExpected = !Back.AsBool; break;
+			}
+			if (bExpected)
+			{
+				++Survived;
+			}
+			else
+			{
+				AddError(FString::Printf(TEXT("%s: %s is not what %s leaves"), Classes[W.Npc],
+					*W.Row.ToString(), D->Why));
+			}
 		}
 		else if (bSame)
 		{

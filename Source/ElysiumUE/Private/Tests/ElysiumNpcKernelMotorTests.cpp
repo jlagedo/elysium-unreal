@@ -580,15 +580,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorNavigatorTest,
 	"Elysium.Substrate.NpcKernelMotor.Navigator", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 {
+	// The navigator bodies are the Troika line's and run on a Troika NPC; only `0x10382d20` is a
+	// Hengeyokai body, and it runs on a Hengeyokai (the step-4 review: the whole case had moved onto
+	// the species, so `OnNavFailed`'s `TaskFail` went through the Hengeyokai's own override).
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_nav"), 4305);
-	Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CNPC_VHengeyokai"));
+	Builder.AddTroikaNpc(TEXT("guard"), FVector::ZeroVector);
+	Builder.AddNpcOfClass(TEXT("heng"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VHengeyokai"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpcHengeyokai* Guard = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("guard"));
-	if (!TestNotNull(TEXT("guard"), Guard))
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpcHengeyokai* Heng = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("heng"));
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("heng"), Heng))
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Guard });
+	FElysiumNpcWorldFixture::Quiet({ Guard, Heng });
+	TestNull(TEXT("the guard is the bare Troika line"), Guard->RetailClass());
 
 	// `FUN_1027d990` / `FUN_1027d9b0` — the one navigator word this family reads and writes.
 	TestEqual(TEXT("the nav type starts at Ground 0"), Guard->NavGetType(), 0);
@@ -610,9 +616,9 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestEqual(TEXT("so the resolved activity is ACT_IDLE"), Guard->ResolveLinkActivity(), 1);
 
 	// `FUN_10382d20` `0x10382d20` — the cancel half of the same unrecovered link object.
-	TestEqual(TEXT("no cancels yet"), Guard->MotorSeams.LinkFacingCancels, 0);
-	Guard->ClearLinkActivity();
-	TestEqual(TEXT("one cancel"), Guard->MotorSeams.LinkFacingCancels, 1);
+	TestEqual(TEXT("no cancels yet"), Heng->MotorSeams.LinkFacingCancels, 0);
+	Heng->ClearLinkActivity();
+	TestEqual(TEXT("one cancel"), Heng->MotorSeams.LinkFacingCancels, 1);
 
 	// `CAI_Navigator::OnNavFailed` `0x102eeae0` — `TaskFail`, then the ideal activity from the link,
 	// then the failed latch. `CAI_Navigator#9` `0x102eeb50` is a tail-jump into the same body.

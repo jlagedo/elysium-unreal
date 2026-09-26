@@ -31,7 +31,8 @@
     "4f": "bodies: Human line (Human, HumanCombatant and its leaves, Guard1, Pedestrian, TaxiDriver)",
     "4g": "bodies: Vampire line (Vampire, its leaves, VampireBoss and its bosses, ChangBros Blade/Claw)",
     "4h": "tests: fixtures re-pinned on typed instances; binding, inheritance, sibling, flag and save round-trip cases; the rat's keys",
-    "4i": "records, oracle, overlay retargets, full gate, regression comparison, map smoke, acceptance"
+    "4i": "records, oracle, overlay retargets, full gate, regression comparison, map smoke, acceptance",
+    "4r": "review follow-up (2026-09-26): the independent review of bb690d7a; three retail divergences the step recorded as corrected, a missed carrier merge, a saved word recorded absent, a wrong finding, stale overlay targets, and the test gaps"
   },
   "test_inventory": {
     "note": "Test files naming a member that moves or collapses (tests-inventory.json in the evidence root); each reference is re-pinned on a typed instance of the owner, never by casting a different class.",
@@ -82,7 +83,7 @@
     },
     {
       "id": "duplicate-carriers",
-      "finding": "Families declared their own member for a retail word another family had already declared, so 11 retail words have two or three port carriers that can disagree (Bach +0x6690 has BachNextHolyLightTime, BachFailStamp and BachRepositionTimer; SabbatLeader +0x66c8/+0x66d5, AsianVampire +0x66d4/+0x66e8, MingXiao +0x66c4[4..5]/+0x6710/+0x6718, ManBat +0x6674, Hengeyokai/Tzimisce pickup target). One survivor each binds; the others collapse into it in 4c (moves-step4.tsv `collapse:merge`). Merging makes a write one family made visible to the other family's reader: each merge is a retail correction with a test.",
+      "finding": "Families declared their own member for a retail word another family had already declared, so 11 retail words have two or three port carriers that can disagree (Bach +0x6690 has BachNextHolyLightTime, BachFailStamp and BachRepositionTimer; SabbatLeader +0x66c8/+0x66d5, AsianVampire +0x66d4/+0x66e8, MingXiao +0x66c4[4..5]/+0x6710/+0x6718, ManBat +0x6674, Hengeyokai/Tzimisce pickup target). One survivor each binds; the others collapse into it in 4c (moves-step4.tsv `collapse:merge`). Merging makes a write one family made visible to the other family's reader: each merge is a retail correction with a test. The step-4 review found a twelfth: SpeciesThrowableObjectMode duplicated MingXiaoThrowableObjectMode (+0x673c); merged in 4r.",
       "evidence": [
         "fields-step4.tsv notes `merge ... (4c)`",
         "moves-step4.tsv collapse:merge rows"
@@ -97,11 +98,13 @@
       ]
     },
     {
-      "id": "zombie-gib-latch-off-by-one",
-      "finding": "CNPC_VZombie's datamap saves m_bShouldGib (+0x66e0), but retail writes the latch one byte past it (+0x66e1, 0x103e0430); the saved word is never written and the latch is not saved. The port's bZombieShouldGib stands for +0x66e1 and stays unsaved; the +0x66e0 row is absent.",
+      "id": "zombie-gib-word-and-head-hit-byte",
+      "finding": "CORRECTED by the step-4 review (4r). There is no off-by-one: +0x66e0 and +0x66e1 are two words. CNPC_VZombie::OnTakeDamage 0x103e06d0 sets m_bShouldGib (+0x66e0, SAVE) when the damage reaches its threshold (103e0801) and CreateCorpse 0x103dfbb0 reads it (gib the body). +0x66e1 is a walked head-hit byte: TraceAttack 0x103e0430 raises it on hitgroup 1 and clears it otherwise, and OnTakeDamage reads it (103e0883) to choose zombie_headshot_dmg_emitter or zombie_headshot_death_emitter. The port's bZombieShouldGib is the head-hit byte and is renamed bZombieHeadHit (unsaved, as retail). The +0x66e0 row stays absent under rules.declare: both of its accessors are story-8 residue.",
       "evidence": [
-        "ElysiumNpcKernelDamage.inl bZombieShouldGib",
-        "0x103e0430"
+        "0x103e06d0 103e0801 / 103e0883",
+        "0x103dfbb0",
+        "0x103e0430",
+        "docs/vtmb/combat-and-damage.md"
       ]
     },
     {
@@ -223,10 +226,79 @@
       "correction": "SpeciesShunnedFindCount, SpeciesPickupTarget and PathMode each stood for several classes' words; each class now owns its word (the Tzimisce TaskFail blacklist/release acts on the target its pickup bodies set, retail's one word).",
       "record": "fields-step4.tsv",
       "test": "Elysium.Substrate.NpcKernelSpeciesBindings.MergedAndSplitCarriers"
+    },
+    {
+      "id": "bach-holy-light-compare",
+      "bodies": [
+        "0x10363db0"
+      ],
+      "correction": "GatherAttackConditions 10363dfa FCOMP [ESI+0x6690] / AND 0x4100 / JNZ takes the SHIELD arm while curtime <= m_flNextHolyLightTime: only a close Bach whose stamp has passed teleports (COND 0x7b). The port had the compare inverted. Pre-existing; step 4's merge of the three +0x6690 carriers made the COND 0x7b stamp reach this reader.",
+      "record": "packets/4-species-bodies-words-bindings.md (4r)",
+      "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.Bach, NpcKernelSpeciesBindings.MergedAndSplitCarriers"
+    },
+    {
+      "id": "werewolf-checkstuck-body",
+      "bodies": [
+        "0x103cb920",
+        "0x103ce750"
+      ],
+      "correction": "CheckStuck re-ported from the listing: gated on slot 163 IsViewable; every probe tests startsolid; a clear start re-probes WorldSpaceCenter -> origin and returns with no hull change when clear; the solid-start escalation is the small-hull up-probe, then WorldSpaceCenter and EyePosition to GetOrigin with maxs.z 10, each escape ending SetAbsOrigin(endpos) + SetHullSizeSmall(1); the teleport needs the bool argument (both callers pass 0) and COND 0x77; neither stuck exit touches the hull. TaskFail 0x103ce750 runs the Troika base before CheckStuck (103ce8fb). Step 4 had retargeted the call but kept the old body.",
+      "record": "docs/vtmb/npc-ai/senses.md, docs/vtmb/npc-ai/shape.md",
+      "test": "Elysium.Substrate.NpcKernelSenses10.Werewolf (the seam-reachable arms)"
+    },
+    {
+      "id": "mingxiao-throwable-mode-merge",
+      "bodies": [
+        "0x10394090",
+        "0x10398d90"
+      ],
+      "correction": "TaskFail switches on and resets m_eThrowableObjectMode (+0x673c), the word the mode setter 0x10398d90 writes; the port read and reset a second carrier nothing else wrote, so modes 3/4 never kept the throw object and the real mode was never reset.",
+      "record": "moves-step4.tsv SpeciesThrowableObjectMode collapse:merge",
+      "test": "Elysium.Substrate.NpcKernelConditions10, NpcKernelSpeciesBindings.MergedAndSplitCarriers"
+    },
+    {
+      "id": "mingxiao-proxy-registered-saved",
+      "bodies": [
+        "0x10397b40"
+      ],
+      "correction": "m_rbProxyRegistered[6] (+0x6684, SAVE) is bound to bProxyRegistered and saved per element; step 4 recorded it absent although the proxy gate reads and writes it. The proxy-gate test now stands real tentacles and exercises the m_rhSeveredTentacles arm, the registered arm and the one-at-a-time census.",
+      "record": "fields-step4.tsv",
+      "test": "Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate"
+    },
+    {
+      "id": "scurrying-node-search-argument",
+      "bodies": [
+        "0x103acba0",
+        "0x102edae0"
+      ],
+      "correction": "103acbb0 calls 0x102edae0(navigator, threat, distance, 30000.0, &node): the flee distance is an argument of the node search. The seam now takes it; it still answers false (no AI network), so behaviour is unchanged.",
+      "record": "docs/vtmb/npc-ai/senses.md"
     }
   ],
   "step5_renames": [
     "BaseShouldPlayFloatSound",
     "BaseDrawDebugStatOverlays"
-  ]
+  ],
+  "review_4r": {
+    "coverage": {
+      "restored": [
+        "SelectIdealStateSpecies: a dead camera reports ALERT; a dead MingXiao answers from its enemy; a tentacle whose current state is dead stays dead",
+        "Positions.Seams: the Sheriff and Chang caches start at their constructor values; the four species NPCs are quieted and a missing one fails with a message",
+        "Motor.Navigator: the Troika navigator bodies run on a Troika NPC again (OnNavFailed reaches the Troika TaskFail); only 0x10382d20 runs on a Hengeyokai"
+      ],
+      "unobservable": [
+        "Gargoyle TaskFail's COMBAT + interrupt-0x5c memory-bit clear (10379063): the Troika body the override calls in the same TaskFail masks m_afMemory to 0x0fffffff, so the bit is gone either way; the pre-step-4 direct-arm assertion has no whole-call equivalent",
+        "Werewolf TaskFail -> own CheckStuck: with the hull traces a seam, both CheckStuck bodies leave the same observable state; the call target is pinned by the source and the overlay"
+      ],
+      "unexercised": [
+        "Scurrying flee march: the blocked-trace deflection, the halving floor and the jitter arm sit behind the KernelHullTrace / NearestNavigatorNode / IsAreaClear seams",
+        "Werewolf CheckStuck: the solid-start escalation, the blocked re-probe and the teleport arm (the same hull-trace seam)"
+      ]
+    },
+    "delta_records": [
+      "WerewolfTeleport quiets the SheriffMan: the step-4 'TaskFail 0x15: Bad activity' line on sheriff(npc_VSheriffMan) came from its unquieted think, not from a TaskFail override",
+      "Species.Zombie: the SetZombieAIType type-2 order push went from 9 to 4 calls in step 4 because the fixture's ten extra factory spawns shift the seeded RNG the type-4 reroll draws from; no body changed"
+    ],
+    "port_unit_fix": "FElysiumNpcSheriffMan::NPCInit (0x103ae6c0) seeded SheriffLastTeleportPosition in Source units while the node pick that overwrites it and the clearance test 0x103b0c70 that reads it work in centimetres (as the Andrei's and Chang brothers' same word do); the seed is now centimetres. Found by the restored Positions.Seams assertion; pre-existing (the Lifecycle19_2 body), not a retail divergence but a port unit error."
+  }
 }

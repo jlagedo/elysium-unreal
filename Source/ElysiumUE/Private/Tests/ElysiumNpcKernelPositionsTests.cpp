@@ -704,7 +704,7 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc* Swarm = Fixture.Npc(TEXT("swarm"));
-	FElysiumNpcWorldFixture::Quiet({ Wolf, Swarm });
+	FElysiumNpcWorldFixture::Quiet({ Wolf, Swarm, Sheriff });
 	if (Wolf == nullptr || Swarm == nullptr)
 	{
 		AddError(TEXT("the fixture did not stand both NPCs"));
@@ -796,7 +796,9 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	FElysiumNpcAsianVampire* AsianNpc = Fixture.NpcAs<FElysiumNpcAsianVampire>(TEXT("asian"));
 	FElysiumNpcChangBros* ChangNpc = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
 	FElysiumNpcSabbatLeader* SabbatNpc = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("sabbat"));
-	if (SheriffNpc == nullptr || AsianNpc == nullptr || ChangNpc == nullptr || SabbatNpc == nullptr)
+	if (!TestNotNull(TEXT("the SheriffMan spawned"), SheriffNpc) || !TestNotNull(TEXT("the AsianVampire spawned"), AsianNpc)
+		|| !TestNotNull(TEXT("the ChangBros spawned"), ChangNpc) || !TestNotNull(TEXT("the SabbatLeader spawned"), SabbatNpc)
+		|| !TestNotNull(TEXT("the AndreiBlood spawned"), Npc))
 	{
 		return false;
 	}
@@ -804,7 +806,7 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Npc, Wolf, Tzim });
+	FElysiumNpcWorldFixture::Quiet({ Npc, Wolf, Tzim, SheriffNpc, AsianNpc, ChangNpc, SabbatNpc });
 	FElysiumPlayer* Player = Fixture.Player();
 	if (Npc == nullptr || Player == nullptr)
 	{
@@ -826,8 +828,13 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 		(int32)INDEX_NONE);
 	TestEqual(TEXT("SelectDiveInPoint answers null"), SabbatNpc->SelectDiveInPoint(), (int32)INDEX_NONE);
 	TestEqual(TEXT("SelectDiveOutPoint answers null"), SabbatNpc->SelectDiveOutPoint(), (int32)INDEX_NONE);
+	// Fresh bodies: the Sheriff's init seeds its cache with its own origin (a real SheriffMan, where
+	// the pre-step-4 case stood a generic NPC and saw zero), the Chang brothers' stamp is 0, and a
+	// null winner must leave both there.
 	const FVector SheriffCacheBefore = SheriffNpc->SheriffLastTeleportPosition;
 	const double ChangStampBefore = ChangNpc->ChangLastTeleportTime;
+	TestEqual(TEXT("the Sheriff's cache is seeded with its own origin"), SheriffCacheBefore, SheriffNpc->Origin);
+	TestEqual(TEXT("and the Chang brothers' stamp is 0"), ChangStampBefore, 0.0);
 	TestEqual(TEXT("SelectTeleportNodeSheriff answers null"), SheriffNpc->SelectTeleportNodeSheriff(),
 		(int32)INDEX_NONE);
 	TestEqual(TEXT("SelectTeleportNodeAndrei answers null"), Npc->SelectTeleportNodeAndrei(),

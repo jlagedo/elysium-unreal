@@ -5585,6 +5585,12 @@ lands on the werewolf's own `CNPC_VWerewolf::CheckStuck` (`0x103cb920`, `senses.
 `WerewolfCheckStuck`). The port had called `CNPC_VSabbatLeader::CheckStuck` (`0x103ab580`); moving
 each body onto its class exposed it.
 
+**CORRECTION (story 5 step 4r).** The call passes **0** (`103ce900 PUSH 0`: `CheckStuck`'s argument
+is a bool that gates its teleport arm), and the port ran the Troika base last where retail runs it
+at `103ce8fb`, before `CheckStuck` and the three word writes. The body the call reaches was also the
+old port's, not `0x103cb920`'s; both are now ported from the listing (`senses.md` §
+`WerewolfCheckStuck`).
+
 **`HasPath`**: 120 of its 138 bytes are the scope-trace frame that supplies the name; the body is ONE
 call, `0x102ee380(m_pNavigator (+0x5d34), &start, &end)`. **The two navigator-cache stamps the
 earlier walk attributes to this body are inside `0x102ee380`** — it writes `nav+8` from the NPC's own

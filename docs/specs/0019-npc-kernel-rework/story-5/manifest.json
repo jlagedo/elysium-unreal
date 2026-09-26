@@ -22,7 +22,7 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "c930f7adfd244176390c0bd126f49740aad7d438c945044e572a3f5554a9b472"
+      "sha256": "43840137d851907ecb5d111d22e7f407141b2d0e5d54712e41c7dfa074eb8d87"
     },
     "registry": {
       "root": "repo",
@@ -145,6 +145,16 @@
           "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
           "previous_sha256": "f662e5ca65a9043e94ff32a2c86cc2dfbe0a0d6d93e5f1919415eeb80a6c805f",
           "sha256": "c930f7adfd244176390c0bd126f49740aad7d438c945044e572a3f5554a9b472"
+        }
+      }
+    },
+    "step4r_pins": {
+      "note": "verdicts pin refreshed by the step-4 review follow-up (4r): three overlay targets name the current definitions (0x103871c0 and 0x103a6f70 -> FElysiumNpcHuman::ApplyStateWeaponVisibility, 0x1028e940 -> FElysiumNpc::OnDamageCommitted), 0x1027a700 -> ElysiumNpcKernelMaintain19.cpp:FElysiumNpc::OnScheduleChange (stale since before step 3, found by the new file-qualified target check); no verdict changed",
+      "refreshed": {
+        "verdicts": {
+          "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
+          "previous_sha256": "c930f7adfd244176390c0bd126f49740aad7d438c945044e572a3f5554a9b472",
+          "sha256": "43840137d851907ecb5d111d22e7f407141b2d0e5d54712e41c7dfa074eb8d87"
         }
       }
     }

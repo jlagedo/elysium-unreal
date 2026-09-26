@@ -175,6 +175,7 @@ struct FKernelHullTrace
 	FVector PlaneNormal = FVector::ZeroVector;  // trace_t +0x18 plane.normal
 	bool bAllSolid = false;                // trace_t +0x36 allsolid
 	bool bStartSolid = false;              // trace_t +0x37 startsolid
+	FVector EndPosUnits = FVector::ZeroVector;  // trace_t +0x0c endpos (the seam's clear answer: the end)
 };
 bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const FVector& HullMins,
 	const FVector& HullMaxs, int32 Mask, FKernelHullTrace& OutTrace) const;

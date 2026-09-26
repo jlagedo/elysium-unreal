@@ -456,14 +456,14 @@ void FElysiumNpcZombie::TraceAttack(void* InInfo, const FVector& DirUnits, void*
 	// surface"). Without that accessor the melee arm cannot open, so a non-head hit forces
 	// no ammo type, which is retail's own `goto LAB_103e04dc`.
 	const bool bMelee = AttackerChar != nullptr && false;
-	bool bShouldGib = false;
+	bool bHeadHit = false;
 	int32 Forced = 0;
 	if (ZombieTraceAttackPrologue(Trace->HitGroup, bMelee, ZombieGibAmmoTypeCvar(0),
-			ZombieGibAmmoTypeCvar(1), bShouldGib, Forced))
+			ZombieGibAmmoTypeCvar(1), bHeadHit, Forced))
 	{
 		Info->DamageBits = static_cast<uint32>(Forced);
 	}
-	bZombieShouldGib = bShouldGib;
+	bZombieHeadHit = bHeadHit;                                         // +0x66e1
 	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
 }
 
@@ -478,14 +478,14 @@ int32 FElysiumNpcZombie::ZombieGibAmmoTypeCvar(int32 Which) const
 }
 
 bool FElysiumNpcZombie::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttackerWeaponIsMelee,
-	int32 FirstCvarAmmoType, int32 SecondCvarAmmoType, bool& OutShouldGib, int32& OutAmmoType)
+	int32 FirstCvarAmmoType, int32 SecondCvarAmmoType, bool& OutHeadHit, int32& OutAmmoType)
 {
 	// 0x103e0430, verbatim. Both cvars are read FIRST, unconditionally, before either arm:
 	//     first  = DAT_10940404->IsCommand() ? 0 : DAT_10940404->m_nValue;
 	//     second = DAT_1094044c->IsCommand() ? 0 : DAT_1094044c->m_nValue;
 	// then
-	//     if (trace->hitgroup == 1) { shouldGib = 1; forced = second; }
-	//     else { shouldGib = 0;
+	//     if (trace->hitgroup == 1) { headHit(+0x66e1) = 1; forced = second; }
+	//     else { headHit(+0x66e1) = 0;
 	//            if (!attacker || !attacker->activeWeapon) return;      // no force at all
 	//            forced = first;                                        // the swap is in the test
 	//            if ((activeWeapon->GetCapabilities() & 0x18000) == 0) return; }
@@ -493,8 +493,8 @@ bool FElysiumNpcZombie::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttacker
 	// Note the ORDER of the else arm: `iStack_4 = iStack_8` (second := first) is executed as part of
 	// the capability test's own expression, so the FIRST cvar is what a qualifying melee hit forces
 	// and the SECOND is what a head hit forces.
-	OutShouldGib = (HitGroup == NpcKernelDamageShared::HitGroupHead);
-	if (OutShouldGib)
+	OutHeadHit = (HitGroup == NpcKernelDamageShared::HitGroupHead);
+	if (OutHeadHit)
 	{
 		OutAmmoType = SecondCvarAmmoType;
 		return true;

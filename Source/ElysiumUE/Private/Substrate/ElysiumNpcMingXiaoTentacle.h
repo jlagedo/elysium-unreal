@@ -35,7 +35,10 @@ public:
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// +0x6660 m_iTentacleID (`CNPC_VMingXiaoTentacle`): the tentacle's own index, which the head
-	// (`CNPC_VMingXiao::m_iTentacleID` +0x6674, -1 on the head) reads through the tentacle.
+	// (`CNPC_VMingXiao::m_iTentacleID` +0x6674, -1 on the head) reads through the tentacle. 0 is
+	// retail's default: entity memory is zero-allocated and no tentacle body writes the word (only
+	// the head's `Spawn` `0x103927a0` writes an `m_iTentacleID`, its own, to -1). The head's carrier
+	// this was split from defaulted to -1 (story 5 step 4r record).
 	int32 TentacleId = 0;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------

@@ -31,8 +31,9 @@ inline FVector ElysiumParseVec3(const FString& S)
 using FElysiumInputThunk = void(*)(FElysiumEntity& Self, const FElysiumInputArgs& Args);
 
 // What a registered field is *for*. VtMB's datamap flags carry the same two bits we need:
-// 0x8 (FTYPEDESC_KEY — writable from a keyvalue/Python) and 0x2 (FTYPEDESC_SAVE — walked by the
-// save/restore pass). Persistence is the field table's fifth consumer, beside I/O, the Python
+// 0x8 (FTYPEDESC_INPUT — writable at runtime from Python/an input; the generated bindings map
+// retail INPUT here, while KEY 0x4 alone adds nothing because map keyvalues apply regardless) and
+// 0x2 (FTYPEDESC_SAVE — walked by the save/restore pass). Persistence is the field table's fifth consumer, beside I/O, the Python
 // datamap walk, keyvalue application and the inspector, so it is a
 // flag on the registration rather than a second list somebody has to remember to edit.
 enum class EElysiumField : uint8
@@ -50,7 +51,7 @@ ENUM_CLASS_FLAGS(EElysiumField)
 inline constexpr EElysiumField ElysiumFieldDefault = EElysiumField::Key | EElysiumField::Save;
 
 // One typed accessor over a live entity field. Get/Set marshal through the variant;
-// `bKeyable` mirrors the VtMB datamap flags bit 0x8 (writable from a keyvalue/Python). The
+// `bKeyable` mirrors the VtMB datamap flags bit 0x8, FTYPEDESC_INPUT (writable from Python). The
 // spawn pass applies map keyvalues regardless; runtime writes (Python/I/O) honour
 // bKeyable. `bSave` is bit 0x2 — the save walk's enumeration. `Type` is the marshalling
 // category, surfaced by the inspector.

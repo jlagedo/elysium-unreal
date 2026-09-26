@@ -1,0 +1,265 @@
+{
+ "schema_version": 1,
+ "ordered_tests": [],
+ "changes": [
+  {
+   "id": "step4r-diag-MingXiaoProxyGate",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the proxy-gate case now stands two real npc_VMingXiaoTentacle entities and a witness NPC (the default npc_VHumanCombatant) so the corrected m_rhSeveredTentacles arm, the registered arm and the census run; each spawn logs the known 'no eye offset' line",
+   "packet": "4r"
+  },
+  {
+   "id": "step4r-diag-Navigator",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.Navigator",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 guard(npc_VHengeyokai) TaskFail 0x1b: Route Destination No Longer Valid",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 guard(CAI_BaseNPCTroika) TaskFail 0x1b: Route Destination No Longer Valid",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the Troika navigator bodies run on a bare Troika NPC again (the step-4 re-pin had moved the whole case onto a Hengeyokai, so OnNavFailed 0x102eeae0 reached the Hengeyokai's TaskFail override); the same TaskFail 0x1b line now names the Troika receiver, plus that NPC's spawn line",
+   "packet": "4r"
+  },
+  {
+   "id": "step4r-diag-WerewolfTeleport",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelPositions.WerewolfTeleport",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 sheriff(npc_VSheriffMan) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::IsViewable | 0x100a9800 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Unhide | 0x1009d380 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::IsViewable | 0x100a9800 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Unhide | 0x1009d380 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the SheriffMan is quieted with the other two NPCs; its 'TaskFail 0x15: Bad activity' line came from its own unquieted think during Advance(2.0), not from any body the case asserts",
+   "packet": "4r"
+  },
+  {
+   "id": "step4r-diag-MergedAndSplitCarriers",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.MergedAndSplitCarriers",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 xiao(npc_VMingXiao) TaskFail 0x0: No failure",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the merges are now exercised as corrections: two MingXiao TaskFail(0) calls (0x10394090 on modes 3 and 1) log the Troika failure line, and the AsianVampire's NPCInit 0x10360ce0 re-runs and logs its eye-offset line again",
+   "packet": "4r"
+  }
+ ]
+}

@@ -318,9 +318,9 @@ int32 FElysiumNpcBach::SelectScheduleRangedCombat(int32 Arg)
 {
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
-	// `103642f6`: arm 1 — Bach's own COND `0x7b`. It stamps `+0x6690` (a Bach-line word with no port
-	// member; `CNPC_VScurrying` owns the same offset in family Senses10) with
-	// `curtime + _DAT_10463584` (**15.0**) and answers 0x15a.
+	// `103642f6`: arm 1 — Bach's own COND `0x7b`. It stamps `m_flNextHolyLightTime` (`+0x6690`) with
+	// `curtime + _DAT_10463584` (**15.0**), which closes the teleport arm of `0x10363db0` for 15
+	// seconds, and answers 0x15a.
 	if (Conds.Has(GBachCondReposition))
 	{
 		BachNextHolyLightTime = (World != nullptr ? World->NowSeconds() : 0.0) + NpcKernelCombat10_2Shared::GTauntTimerAdvance;
@@ -602,12 +602,15 @@ void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 		// `10363de3`: `m_bCondTookDamage` (+0x5b80) is cleared FIRST, inside the block.
 		Cognition.bCondTookDamage = false;
 		const double Now = NpcKernelSpeciesMisc10_2Shared::SpeciesMisc10_2Now(*this);
-		// `10363df1`: the distance at or above `DAT_1062d200[m_iBachTeleportState]`
-		// (**768, 768, 384, 384**) OR `m_flNextHolyLightTime` already past takes the SHIELD arm;
-		// anything else is the teleport arm.
+		// `10363de3`/`10363df5`: the distance at or above `DAT_1062d200[m_iBachTeleportState]`
+		// (**768, 768, 384, 384**) takes the SHIELD arm (`TEST AH,0x5 / JP`). Otherwise
+		// `10363dfa FCOMP [ESI+0x6690] / AND 0x4100 / JNZ` also takes it while `curtime` is at or
+		// before `m_flNextHolyLightTime`: only a CLOSE Bach whose holy-light stamp has PASSED
+		// teleports. (Story 5 step 4r: the port had this compare inverted, so a Spawn-zeroed stamp
+		// always shielded and a fresh COND `0x7b` stamp opened the teleport instead of closing it.)
 		const int32 StateIndex = FMath::Clamp(BachTeleportState, 0, 3);
 		const bool bShieldArm = DistanceUnits >= BachTeleportDistanceUnits[StateIndex]
-			|| BachNextHolyLightTime <= Now;
+			|| Now <= BachNextHolyLightTime;
 		if (bShieldArm)
 		{
 			// `10363e1a`: the shield only fires when `m_flNextShieldTime` (+0x6688) is past.
@@ -631,7 +634,7 @@ void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 		}
 		else
 		{
-			// `10363f6c`: the cvar touch, then condition `0x7b` (teleport).
+			// `10363e09`: the cvar touch, then condition `0x7b` (teleport, `10363e14`).
 			Conds.Set(static_cast<EElysiumNpcCond>(0x7b));
 		}
 		// `10363f81`: `+0x66a6` is cleared on EITHER branch, and inside the damage gate.

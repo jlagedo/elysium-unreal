@@ -830,7 +830,25 @@ def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassMod
         model.saved.sort(key=lambda r: r.name)
         model.save_unbound.sort(key=lambda r: r.name)
         classes.append(model)
+    check_species_save_names(classes, species_map)
     return classes
+
+
+def check_species_save_names(classes: list[ClassModel], species_map: dict) -> None:
+    """A species SAVE row registers under its retail member name, and the registry's save walk keeps
+    one row per name, most-derived first. So a species row that reuses a Troika save name on a
+    DIFFERENT word would silently stop the Troika word being saved on that class (the step-4 review).
+    Only a shadow row -- the Troika word itself, re-declared -- may share a name."""
+    troika = {row.name for model in classes if model.name == "Npc" for row in model.saved}
+    for model in classes:
+        if model.tables[0] not in SPECIES_TABLES:
+            continue
+        for row in model.saved:
+            home = species_map.get((row.cls, row.offset), ("", "", ""))[0]
+            if row.name in troika and home != "shadow":
+                raise SystemExit(f"gen_kernel_bindings: {row.cls} +0x{row.offset:x} saves as '{row.name}', "
+                                 f"a Troika save name, on a different word; bind it as a shadow or "
+                                 f"rename its save row")
 
 
 @dataclass

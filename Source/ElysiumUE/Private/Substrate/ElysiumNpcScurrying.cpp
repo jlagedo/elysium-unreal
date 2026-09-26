@@ -34,7 +34,7 @@ namespace
 	constexpr float GFleeJitterMinor = 80.0f;
 	constexpr float GFleeJitterMajor = 60.0f;
 	constexpr int32 GFleeJitterAttempts = 5;
-	// `0x102edae0`'s search radius.
+	// `0x102edae0`'s fourth argument, the constant 30000.0 beside the flee distance.
 	constexpr float GFleeNodeSearchUnits = 30000.0f;
 }
 
@@ -131,9 +131,11 @@ bool FElysiumNpcScurrying::ScurryingShouldDetect(const FElysiumEntity* SeenTarge
 bool FElysiumNpcScurrying::ScurryingFindFleeDestination(const FVector& ThreatPosCm, float DistanceUnits,
 	FVector* OutDestinationCm)
 {
-	// `103acbb0`: the navigator is asked for the nearest node to the THREAT within 30000 units.
+	// `103acbb0`: `0x102edae0(navigator, threat, distance, 30000.0, &node)`, the navigator's node
+	// search around the THREAT with this call's flee distance (story 5 step 4r: the port dropped
+	// the distance and called it "the nearest node within 30000").
 	FVector NodeCm = FVector::ZeroVector;
-	if (NearestNavigatorNode(ThreatPosCm, GFleeNodeSearchUnits, NodeCm))
+	if (NearestNavigatorNode(ThreatPosCm, DistanceUnits, GFleeNodeSearchUnits, NodeCm))
 	{
 		// `103acc3c`: the JITTER. Whichever of the x or y deltas to the threat is LARGER picks the
 		// axis; the SIGN of that delta picks a `0..-60` or `0..60` band on it and the other axis

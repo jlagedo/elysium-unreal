@@ -40,17 +40,21 @@ public:
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
 	// From `ElysiumNpcKernelDamage.inl`.
-	// `CNPC_VZombie`'s gib latch. Retail writes the byte at `&m_bShouldGib + 1`, one past the datamap
-	// row — `0x103e0430` raises and clears `+0x66e1` and nothing in layers 0–9 reads `+0x66e0` itself.
-	// Carried as the one observable bit under the datamap's name, with the off-by-one recorded.
-	bool bZombieShouldGib = false;               // +0x66e1 (`&m_bShouldGib + 1`, walked)
-	/** `0x103e0430` — `CNPC_VZombie`'s prologue as a pure rule, so both arms are measurable. The gib
-	 *  latch is raised when the hitgroup is 1 (a head hit) and cleared otherwise; a non-head hit only
+	// `CNPC_VZombie`'s head-hit byte, `+0x66e1` (walked; no datamap row, unsaved as retail).
+	// `TraceAttack` `0x103e0430` raises it on a hitgroup-1 hit and clears it otherwise, and
+	// `OnTakeDamage` `0x103e06d0` reads it (`103e0883`) to choose `zombie_headshot_dmg_emitter` or
+	// `zombie_headshot_death_emitter`. It is NOT `m_bShouldGib` (`+0x66e0`), a separate word:
+	// `OnTakeDamage` sets that one on an over-threshold hit (`103e0801`) and `CreateCorpse`
+	// `0x103dfbb0` reads it. Both readers are story-8 residue (story 5 step 4r: this byte was
+	// misnamed as the gib latch).
+	bool bZombieHeadHit = false;                 // +0x66e1 (walked)
+	/** `0x103e0430` — `CNPC_VZombie`'s prologue as a pure rule, so both arms are measurable. The
+	 *  head-hit byte is raised when the hitgroup is 1 (a head hit) and cleared otherwise; a non-head hit only
 	 *  forces an ammo type when the attacker's active weapon's capability mask intersects `0x18000`
 	 *  (the melee-block capability), and the type forced is the SECOND cvar for a head hit and the
 	 *  FIRST for a qualifying melee one. Answers whether an ammo type is forced. */
 	static bool ZombieTraceAttackPrologue(int32 HitGroup, bool bAttackerWeaponIsMelee,
-		int32 FirstCvarAmmoType, int32 SecondCvarAmmoType, bool& OutShouldGib, int32& OutAmmoType);
+		int32 FirstCvarAmmoType, int32 SecondCvarAmmoType, bool& OutHeadHit, int32& OutAmmoType);
 	/** SEAM for `DAT_10940404` and `DAT_1094044c` — the two cvar-backed ammo-type cells
 	 *  `CNPC_VZombie::TraceAttack` reads. Both pointer cells live past `.data`'s raw size and no corpus
 	 *  function constructs them: **unrecovered**, and both answer 0, which is an unconstructed cvar's

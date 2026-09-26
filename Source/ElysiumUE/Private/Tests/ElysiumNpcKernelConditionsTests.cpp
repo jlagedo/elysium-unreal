@@ -456,6 +456,10 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 			TestEqual(TEXT("and writes it as the ideal state"), Cam->IdealStateRetail(), 3);
 		}
 	}
+	// Even a DEAD camera reports ALERT: the body writes before any test (restored from the pre-step-4
+	// case, story 5 step 4r).
+	Camera->SetState(7);
+	TestEqual(TEXT("even a dead camera reports ALERT"), Camera->SelectIdealStateRetail(), 3);
 
 	// `CNPC_VMingXiao::vfunc461` — the dead write is ALWAYS overwritten by the enemy test, which is
 	// retail's own dead code. So the answer depends on the enemy and on nothing else.
@@ -463,6 +467,12 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 	TestEqual(TEXT("MingXiao with an enemy is COMBAT (retail 2)"), Xiao->SelectIdealStateRetail(), 2);
 	Xiao->Senses.Memory.Enemy = FElysiumEntityHandle();
 	TestEqual(TEXT("MingXiao without one is IDLE (retail 1)"), Xiao->SelectIdealStateRetail(), 1);
+	// A DEAD MingXiao still answers from its enemy: the 7 write is unreachable (retail's own dead
+	// code, reproduced).
+	Xiao->SetState(7);
+	Xiao->Senses.Memory.Enemy = Foe->Handle;
+	TestEqual(TEXT("a dead MingXiao still answers from the enemy: the 7 write is unreachable"),
+		Xiao->SelectIdealStateRetail(), 2);
 
 	// `CNPC_VMingXiaoTentacle::vfunc461` — here the dead arm is REAL and short-circuits.
 	Tentacle->Senses.Memory.Enemy = Foe->Handle;
@@ -473,6 +483,10 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 	Tentacle->Senses.Memory.Enemy = Foe->Handle;
 	TestEqual(TEXT("a tentacle whose IDEAL state is dead stays dead, enemy or not"),
 		Tentacle->SelectIdealStateRetail(), 7);
+	// And one whose CURRENT state is dead stays dead too, with a live ideal state.
+	Tentacle->SetState(7);
+	Tentacle->WriteIdealStateRetail(1);
+	TestEqual(TEXT("a tentacle whose CURRENT state is dead stays dead"), Tentacle->SelectIdealStateRetail(), 7);
 	return true;
 }
 

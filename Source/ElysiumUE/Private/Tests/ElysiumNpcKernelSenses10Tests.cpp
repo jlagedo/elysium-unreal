@@ -1161,14 +1161,30 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 		Wolf->IsValidRandomMoveHint(RandomHint, 20.0));
 
 	// --- `0x103cb920` `CheckStuck` ----------------------------------------------------------------
-	// Every exit but the teleport ends in `SetHullSizeSmall(1)`, and with the probes reporting
-	// CLEAR the body takes the not-stuck arm.
+	// Story 5 step 4r: the listing's arms. With the hull traces answering CLEAR (the seam), a
+	// viewable Werewolf takes the clear-start arm, whose clear re-probe returns at `103cbefc` with NO
+	// hull change -- `SetHullSizeSmall(1)` runs only after a blocked re-probe or an escape.
+	if (Wolf->Model.IsEmpty())
+	{
+		Wolf->Model = TEXT("models/character/monster/werewolf/werewolf.mdl");
+	}
+	const FVector WolfOrigin = Wolf->Origin;
 	Wolf->bIsUsingSmallHull = false;
 	Wolf->WerewolfTeleportOutCalls = 0;
-	Wolf->WerewolfCheckStuck();
-	TestTrue(TEXT("0x103cbf1c every non-teleport exit ends in SetHullSizeSmall(1)"),
+	Wolf->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x77));
+	Wolf->WerewolfCheckStuck(FElysiumNpcWerewolf::EStuckEscape::MayTeleport);
+	TestFalse(TEXT("0x103cbefc a clear start and a clear re-probe leave the hull alone"),
 		Wolf->bIsUsingSmallHull);
-	TestEqual(TEXT("...and a clear probe does not teleport"), Wolf->WerewolfTeleportOutCalls, 0);
+	TestEqual(TEXT("...do not move the body"), Wolf->Origin, WolfOrigin);
+	TestEqual(TEXT("...and do not teleport"), Wolf->WerewolfTeleportOutCalls, 0);
+	// `103cb994`: slot 163 `IsViewable` closes the whole body on `m_fEffects & 0x40`.
+	Wolf->EffectsWord |= 0x40;
+	Wolf->WerewolfCheckStuck(FElysiumNpcWerewolf::EStuckEscape::MayTeleport);
+	TestFalse(TEXT("0x103cb99c a body with m_fEffects & 0x40 is not probed"), Wolf->bIsUsingSmallHull);
+	Wolf->EffectsWord &= ~0x40u;
+	Wolf->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x77));
+	// UNEXERCISED: the solid-start escalation (probes 2-4, "unstuck", the teleport arm) and the
+	// blocked re-probe need a hull trace, which this substrate does not stand (`KernelHullTrace`).
 	return true;
 }
 

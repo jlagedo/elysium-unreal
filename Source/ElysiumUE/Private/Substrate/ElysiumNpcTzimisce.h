@@ -94,7 +94,8 @@ public:
 	bool IsTzimisceHintUsable(int32 HintNode, const FElysiumEntity* Anchor) const;
 
 	// From `ElysiumNpcKernelLifecycle19.inl`.
-	/** `CNPC_VTzimisce` species words. `PickupTarget` / `PathMode` / `SpeciesShunnedFindCount` exist. */
+	/** `CNPC_VTzimisce` species words; `PickupTarget` (`+0x6670`), `PathMode` (`+0x668c`) and
+	 *  `TzimisceShunnedFindBody` (`+0x66b8`) are declared with the class's other words. */
 	bool bTzimisceFirstEnemy = false;            // +0x6689
 	bool bTzimisceJustFoundBody = false;         // +0x66bc
 	double TzimiscePounceCheckTimer = 0.0;       // +0x66ac

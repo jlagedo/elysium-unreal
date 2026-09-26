@@ -1924,12 +1924,20 @@ before falling through anyway.
 `CNPC_VWerewolf` (`0x103ccbf0`): `SetDamageType(info, 0)` and nothing else.
 
 `CNPC_VZombie` (`0x103e0430`): reads two cvar-backed ammo-type cells (`DAT_10940404`,
-`DAT_1094044c`) **unconditionally and first**, then raises `m_bShouldGib`'s adjacent byte
-(`&m_bShouldGib + 1`, `+0x66e1`) and forces the SECOND cvar's type when the hitgroup is 1; otherwise
-it clears that byte and forces the FIRST cvar's type only when the attacker's active weapon's
-capability mask intersects `0x18000` — the same melee-block capability the player's block resolver
-uses. The swap `iStack_4 = iStack_8` sits inside the capability test's own expression, which is what
-makes the head arm take the second cell and the melee arm the first.
+`DAT_1094044c`) **unconditionally and first**, then raises the head-hit byte `+0x66e1` (walked, no
+datamap row) and forces the SECOND cvar's type when the hitgroup is 1; otherwise it clears that byte
+and forces the FIRST cvar's type only when the attacker's active weapon's capability mask intersects
+`0x18000` — the same melee-block capability the player's block resolver uses. The swap
+`iStack_4 = iStack_8` sits inside the capability test's own expression, which is what makes the head
+arm take the second cell and the melee arm the first.
+
+The head-hit byte is not the gib latch. `CNPC_VZombie::OnTakeDamage` (`0x103e06d0`) reads `+0x66e1`
+(`103e0883`) to pick `zombie_headshot_dmg_emitter` (the NPC survived) or
+`zombie_headshot_death_emitter`, and separately sets `m_bShouldGib` (`+0x66e0`, SAVE) when the
+damage reaches a threshold built from stats `0xf` and `0x11` and a global's `+0x2c` (`103e07e8`,
+`103e0801`). `CreateCorpse` (`0x103dfbb0`) reads `m_bShouldGib`: set,
+or no sequence for activity `0x21`, gibs the body; otherwise it ragdolls or plays the death
+activity. Both readers are unported (story 8).
 
 **Unrecovered:** both zombie cvars' names and defaults, for the same reason as the hitgroup five.
 

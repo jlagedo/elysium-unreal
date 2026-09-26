@@ -518,8 +518,8 @@ void FElysiumNpcMingXiao::TaskFail(int32 Reason)
 {
 	// `CNPC_VMingXiao::TaskFail` (`0x10394090`), 88 bytes: a switch on `m_eThrowableObjectMode`
 	// (`+0x673c`).
-	if (SpeciesThrowableObjectMode == GCond10ThrowModeMotorA
-		|| SpeciesThrowableObjectMode == GCond10ThrowModeMotorB)
+	if (MingXiaoThrowableObjectMode == GCond10ThrowModeMotorA
+		|| MingXiaoThrowableObjectMode == GCond10ThrowModeMotorB)
 	{
 		// `103940a5`: `0x102e0a60(m_pMotor, 0x43340000)` — `m_pMotor->+0x1c = 180.0`, the same
 		// steering reset the Troika `TaskFail` body itself makes, which is why the port's
@@ -534,8 +534,10 @@ void FElysiumNpcMingXiao::TaskFail(int32 Reason)
 	{
 		// **CORRECTION.** `0x10398d90` is `m_eThrowableObjectMode = arg` and nothing else; the
 		// checklist's walk calls it "clear the throwable prop". The default arm therefore sets the
-		// MODE to 0 and then releases the handle.
-		SpeciesThrowableObjectMode = 0;                                  // 0x10398d90(this, 0)
+		// MODE to 0 (`103940c5`, through thunk `0x1000e45d`) and then releases the handle. The mode is
+		// the one word `+0x673c` every other MingXiao body reads (story 5 step 4r: the port had a
+		// second carrier here that nothing else wrote, so the motor arm was unreachable).
+		ThrowableObjectMode(0);                                          // 0x10398d90(this, 0)
 		MingXiaoThrowObject = FElysiumEntityHandle::Invalid();            // m_hThrowObject +0x6718
 	}
 	FElysiumNpc::TaskFail(Reason);
@@ -991,7 +993,7 @@ int32 FElysiumNpcMingXiao::FUN_10396dc0() const
 	return 0;
 }
 
-void FElysiumNpcMingXiao::FUN_10397a50(const FElysiumEntity* Tentacle,
+void FElysiumNpcMingXiao::FUN_10397a50(const FElysiumEntity* Proxy,
 	TFunctionRef<float(int32)> TuningField)
 {
 	// `0x10397a50`:
@@ -1003,7 +1005,7 @@ void FElysiumNpcMingXiao::FUN_10397a50(const FElysiumEntity* Tentacle,
 	//         SeverTentacle(param_1->m_iTentacleID);                   // 0x10397930
 	// The clamp is `<=`, so an exactly-zero blend also takes the floor — the same value either way,
 	// and reproduced as written.
-	if (Tentacle == nullptr)
+	if (Proxy == nullptr)
 	{
 		return;
 	}
@@ -1019,18 +1021,18 @@ void FElysiumNpcMingXiao::FUN_10397a50(const FElysiumEntity* Tentacle,
 	// Retail reads `param_1 + 0x6674`, `CNPC_VMingXiao::m_iTentacleID`: the argument is one of this
 	// head's `m_rhProxies`, a `CNPC_VMingXiao` of its own (the head's word is -1), so the id is read
 	// off it through its class. Anything else has no such word and is left alone.
-	const FElysiumNpc* ProxyNpc = const_cast<FElysiumEntity*>(Tentacle)->AsNpc();
-	const FElysiumNpcMingXiao* Proxy = ProxyNpc != nullptr ? ProxyNpc->AsSpecies<FElysiumNpcMingXiao>() : nullptr;
-	if (Proxy == nullptr || World == nullptr)
+	const FElysiumNpc* ProxyNpc = const_cast<FElysiumEntity*>(Proxy)->AsNpc();
+	const FElysiumNpcMingXiao* ProxyHead = ProxyNpc != nullptr ? ProxyNpc->AsSpecies<FElysiumNpcMingXiao>() : nullptr;
+	if (ProxyHead == nullptr || World == nullptr)
 	{
 		return;
 	}
-	const int32 Id = Proxy->MingXiaoTentacleId;
+	const int32 Id = ProxyHead->MingXiaoTentacleId;
 	if (Id < 0 || Id >= 6)
 	{
 		return;
 	}
-	if (World->Resolve(Proxies[Id]) == Tentacle)
+	if (World->Resolve(Proxies[Id]) == Proxy)
 	{
 		SeverTentacle(Id);
 	}
@@ -1807,8 +1809,9 @@ void FElysiumNpcMingXiao::FUN_103998d0(FElysiumEntity* Tentacle)
 	// `CoordinateTroops` (`0x10399610`) runs it on ONE tentacle per call, walking
 	// `m_iCoordinateTentacleID` (`+0x6740`) 0..5 and wrapping, so the whole set is coordinated over
 	// six calls rather than every call.
-	// The walk hands in the head's own proxies (`m_rhProxies`), which are tentacles; the tentacle's
-	// words are read through its class.
+	// The walk hands in `m_rhSeveredTentacles[m_iCoordinateTentacleID]` (`+0x66a8`), the severed
+	// tentacles; the tentacle's words are read through its class. (`m_rhProxies` holds
+	// `CNPC_VMingXiao` proxies, not tentacles.)
 	FElysiumNpc* AsNpc = Tentacle ? Tentacle->AsNpc() : nullptr;
 	FElysiumNpcMingXiaoTentacle* TentacleNpc =
 		AsNpc ? AsNpc->AsSpecies<FElysiumNpcMingXiaoTentacle>() : nullptr;

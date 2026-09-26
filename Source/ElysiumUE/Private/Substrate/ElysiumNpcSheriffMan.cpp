@@ -79,7 +79,11 @@ void FElysiumNpcSheriffMan::NPCInit()
 	bSheriffTeleporting = false;
 	bSheriffDead = false;
 	bSheriffActivated = false;
-	SheriffLastTeleportPosition = Origin / ElysiumMove::U;
+	// `m_vLastTeleportPosition = GetAbsOrigin()`. Carried in centimetres like the node pick that
+	// overwrites it (`SelectTeleportNodeSheriff`) and the clearance test that reads it (`0x103b0c70`),
+	// and like the Andrei's and the Chang brothers' same word (story 5 step 4r: this write alone was
+	// in Source units, so an init-seeded cache sat 2.54x too close to the origin).
+	SheriffLastTeleportPosition = Origin;
 	SheriffLastTeleportTime = NpcKernelLifecycle19_2Shared::Lifecycle19_2Now(*this);
 	bSheriffLedgeHeightStored = false;                                   // +0x66e7
 	VampireBossNPCInit();
