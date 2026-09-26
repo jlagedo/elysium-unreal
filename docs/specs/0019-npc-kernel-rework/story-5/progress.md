@@ -21,7 +21,7 @@ Map smoke (`sp_tutorial_1`, `ch_fishmarket_1`, `sp_giovanni_2b`, `hw_warrens_4`,
 shows no Elysium errors. It ran before the last two-word move; that move changed no behaviour, and
 the full gate reran afterwards. Combat was not driven in game.
 
-**Review follow-up 4r (uncommitted):** the step-4 review's defects are fixed. Bach holy-light compare,
+**Review follow-up 4r (committed `61aa2cd8`):** the step-4 review's defects are fixed. Bach holy-light compare,
 Werewolf `CheckStuck` body and `TaskFail` order, the MingXiao throw-mode merge and saved
 `m_rbProxyRegistered`, the zombie gib/head-hit finding, the Sheriff seed unit, four stale overlay
 targets, a stronger checker and the test gaps. Gate green (1,270 + 14 + 1), delta vs step 4 with 4
