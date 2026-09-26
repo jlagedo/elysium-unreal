@@ -1,0 +1,62 @@
+{
+  "scope": "Step 4 moves the introduced species' bodies, words and bindings onto their final class files in one commit. Deferred classes (steps 7-10) keep their bodies and words on FElysiumNpc in the listed transitional homes; Troika and base bodies do not move (steps 5-6).",
+  "owner_decisions": {
+    "2026-09-26 preflight commit": "Packet 4a (records and checker, no C++) lands as its own prerequisite commit, as 3a did. The atomic step-4 commit holds all C++, generated output, tests and oracle updates.",
+    "2026-09-26 class tables": "An introduced species' row in a class-keyed table becomes the body of its own override (the row is the body). A table is deleted once only deferred rows or non-dispatch readers remain; the survivors are listed here."
+  },
+  "rules": {
+    "move": "A member moves to the closest class over its users when every user is a species definition or another moving member (to a fixed point). A ported body retail places on an introduced species stands on that owner when every port user stands on it or beneath it; an unwired body (no port user) stands on its retail owner; an address-less unwired member follows the species state and bodies it names (data access). Users include free functions and header code, which keep a member on FElysiumNpc.",
+    "collapse": "A moving member whose only user is one override of its own class is inlined into that override (the forwarding override collapses); `collapse:table` removes a class table whose rows become override bodies; `collapse:split` replaces one port field standing for several retail words with one word per declaring class.",
+    "stay": "A virtual the species override (the surface), a Troika or base body (its address is below the V-species objects), Troika API the moved bodies still call, a helper two sibling lines share (a sibling cannot call a species member), a species word a Troika activity predicate reads (the activity alias tables live to step 11), and a class table a Troika body or free code reads (`stay:data-query table`).",
+    "deferred": "A member a deferred class's body owns or reads stays on FElysiumNpc until that class folds (`deferred:<step>`).",
+    "retail_owner": "The kernel ledger's direct-call owner of the member's addresses, proposed from GOverrides' introducing class and direct callers (graph.tsv). Only addresses inside the V-species objects (0x1035c000-0x103e2000, and CPayphone's 0x101aa000-0x101ac000) can be species bodies; an address past them is a cited global, not a body.",
+    "bindings": "fields-step4.tsv is every record of an introduced species' own datamap in the pinned replay (the empty terminator row of Camera/Human/Vampire/... names nothing and is skipped). A field binds on its declaring class's descriptor only; descendants inherit it through the descriptor chain. An input binds a ported body or an explicit pending seam; an output is a generated output-name row.",
+    "saves": "Retail saves a species word only through its datamap SAVE row (or a class's own Save/Restore body). Step 4 adds no blob persistence for species words without one; they take their constructor defaults on restore, as retail."
+  },
+  "packets": {
+    "4a": "preflight: records, checker, test inventory (separate commit)",
+    "4b": "generator and class-qualified species shape map; species bindings, inputs and outputs; duplicate-registration guard",
+    "4c": "header batch: species declarations and words leave the family .inl files for the class headers; base accessors for cross-readers",
+    "4d": "bodies: Animal line (Animal, Dog, Scurrying, Rat, Zombie), Camera line, Payphone, Placeholder, Newscaster, MingXiaoTentacle",
+    "4e": "bodies: BaseBoss line (BaseBoss, MingXiao, Tzimisce, TzimisceHeadClaw, TzimisceRunner, Werewolf)",
+    "4f": "bodies: Human line (Human, HumanCombatant and its leaves, Guard1, Pedestrian, TaxiDriver)",
+    "4g": "bodies: Vampire line (Vampire, its leaves, VampireBoss and its bosses, ChangBros Blade/Claw)",
+    "4h": "tests: fixtures re-pinned on typed instances; binding, inheritance, sibling, flag and save round-trip cases; the rat's keys",
+    "4i": "records, oracle, overlay retargets, full gate, regression comparison, map smoke, acceptance"
+  },
+  "test_inventory": {
+    "note": "Test files naming a member that moves or collapses (tests-inventory.json in the evidence root); each reference is re-pinned on a typed instance of the owner, never by casting a different class.",
+    "files": 35,
+    "references": 2134,
+    "heaviest": ["ElysiumNpcKernelSpeciesMisc10Tests.cpp", "ElysiumNpcKernelBossesTests.cpp", "ElysiumNpcKernelSpeciesTests.cpp", "ElysiumNpcKernelDamageTests.cpp", "ElysiumNpcKernelPositionsTests.cpp", "ElysiumNpcKernelHintsTests.cpp", "ElysiumNpcKernelSpeciesLifecycle10Tests.cpp"]
+  },
+  "findings": [
+    {
+      "id": "scurrying-detection-unreached",
+      "finding": "The tutorial rats' eight keys become effective in step 4, but nothing in the port reaches ScurryingShouldDetect 0x103acac0 or ScurryingFindFleeDestination 0x103acba0: their retail callers, CNPC_VScurrying GatherConditions 0x103ac500 (slot 433, COND 0x78) and StartTask 0x103ac740 (TASK 0x14a), are unported residue (overrides-step3.tsv). Step 4 moves both bodies onto FElysiumNpcScurrying, binds the keys and asserts the bodies on authored values, including 0x103acb1a. Played detection and fright need the residue ports (story 8) unless the owner widens step 4.",
+      "evidence": ["kernel_verdicts.tsv 103acac0, 103acba0, 103ac500", "overrides-step3.tsv CNPC_VScurrying 433 residue"]
+    },
+    {
+      "id": "maker-reads-species-words",
+      "finding": "CNPCMaker_Zombie and CNPCMaker_Fleshpile read or write species words (the zombie's m_iZombieAIType +0x6678, the Andrei's m_iActiveRunnerCount +0x66b8 and m_iKillCount +0x66bc). Their storage stays on FElysiumNpc (deferred:8) and the species descriptors bind to it until step 8 folds the makers.",
+      "evidence": ["FElysiumNpcMaker::FUN_1034c2d0", "FElysiumNpcMaker::FUN_1034c8e0", "ElysiumNpcMaker.h"]
+    },
+    {
+      "id": "shared-shun-counter",
+      "finding": "SpeciesShunnedFindCount stands for three retail words on three classes (CNPC_VGargoyle m_iShunnedFindPillar +0x6680, CNPC_VHengeyokai m_iShunnedFindFish +0x6678, CNPC_VTzimisce m_iShunnedFindBody +0x66b8). Step 4 splits it (collapse:split).",
+      "evidence": ["layout.tsv", "ElysiumNpcKernelConditions10.inl"]
+    },
+    {
+      "id": "shadow-rows",
+      "finding": "Some species datamaps re-declare an inherited Troika word (Hengeyokai and Tzimisce m_flIgnoreCollisionTimer +0x6458; SabbatLeader and VampireBoss m_bJumping +0x6498 and the jump vectors). Each binds explicitly on its class to the inherited storage (shadow) and keeps its own flags.",
+      "evidence": ["fields-step4.tsv rows with offset below 0x665c"]
+    }
+  ],
+  "open_for_packets": {
+    "moves_investigate": "17 row types (`F*Species`) follow their accessors' collapse or survival (4d-4g)",
+    "fields_investigate": "37 binding rows whose port member join is wrong or ambiguous (sibling offsets, generic names) or that shadow a Troika word (4b-4g)"
+  },
+  "surviving_tables": [],
+  "retail_corrections": [],
+  "step5_renames": ["BaseShouldPlayFloatSound", "BaseDrawDebugStatOverlays"]
+}

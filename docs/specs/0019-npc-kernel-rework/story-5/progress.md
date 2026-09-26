@@ -1,4 +1,18 @@
-# Story 5 — step 3 accepted
+# Story 5 — step 4 in progress (4a committed)
+
+**Step 4 (species bodies, words and bindings) started 2026-09-26.** Packet 4a (records and checker,
+no C++) lands as its own commit: [packets/4a-preflight.md](packets/4a-preflight.md),
+[moves-step4.tsv](moves-step4.tsv) (1,504 rows), [fields-step4.tsv](fields-step4.tsv) (248 datamap
+records), [decisions-step4.json](decisions-step4.json). `--check step4` is PENDING with both
+manifests matching; `--check step3` now reads the accepted step-3 tree `21bb56cf`. Evidence root:
+`$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/step4/` (draft tools, inventories).
+
+Next: 4b (generator, class-qualified species shape map, species bindings) through 4i, all in one
+commit. Open for the owner: the rats' detection/fright bodies have no port caller (Scurrying
+`GatherConditions` `0x103ac500` and `StartTask` `0x103ac740` are story-8 residue); step 4 binds the
+keys and asserts the bodies directly unless the step is widened.
+
+## Step 3 (accepted, `21bb56cf`)
 
 **Step 3 (replace introduced-species dispatch) passed its acceptance gate on 2026-09-26 on
 `0019-5-class-tree`.** Packet 3a is committed as `48c6ef29`; the C++ step (3b–3j) is committed as

@@ -127,6 +127,11 @@
     "step3_pins": {
       "note": "verdicts pin refreshed by step 3: 83 overlay targets retargeted to the moved species bodies (step3/retarget.tsv); no verdict changed",
       "previous_verdicts_sha256": "733fb9b5bd4e2326c55b0dbef786494452c827c806bfdc95f2745b25647f8cf5"
+    },
+    "step3": {
+      "commit": "21bb56cf1e58f61d0d8e13581474a766e3533006",
+      "acceptance": "acceptance-step3.json",
+      "note": "--check step3 reads this tree once it is recorded (step 4 started)"
     }
   },
   "step1_packets": {
@@ -159,5 +164,16 @@
     "3h": "accepted",
     "3i": "accepted",
     "3j": "accepted"
+  },
+  "step4_packets": {
+    "4a": "accepted",
+    "4b": "pending",
+    "4c": "pending",
+    "4d": "pending",
+    "4e": "pending",
+    "4f": "pending",
+    "4g": "pending",
+    "4h": "pending",
+    "4i": "pending"
   }
 }

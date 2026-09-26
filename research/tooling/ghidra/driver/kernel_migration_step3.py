@@ -271,7 +271,21 @@ def check_direct_calls(decisions: dict, root: Path) -> int:
 
 
 def check_step3(directory: Path | None = None) -> dict:
+    """While step 3 is the working phase the current tree is checked. Once its commit is recorded
+    (`manifest.json` `history.step3.commit`, written when step 4 starts), the accepted tree is:
+    step 4 moves the bodies and sites this receipt describes."""
     directory = directory or repo_root() / km.STORY
+    manifest, _, _ = km.load(directory)
+    accepted = manifest.get("history", {}).get("step3", {}).get("commit", "")
+    if not accepted:
+        if manifest["phase"] > 3:
+            raise km.InvalidManifest("a later phase needs history.step3.commit")
+        return _check_step3(directory, repo_root())
+    with tempfile.TemporaryDirectory(prefix="step3-accepted-") as scratch:
+        return _check_step3(directory, km.historical_source(accepted, Path(scratch), HISTORICAL_PATHS))
+
+
+def _check_step3(directory: Path, tree: Path) -> dict:
     manifest, classes, _ = km.load(directory)
     commit = manifest.get("history", {}).get("step2", {}).get("commit", "")
     if not commit:
@@ -287,10 +301,10 @@ def check_step3(directory: Path | None = None) -> dict:
                     "dispositions": dict(collections.Counter(r["disposition"].split(":")[0] for r in rows)),
                     "open_by_packet": dict(sorted(open_rows.items()))}
         from kernel_migration_step1 import check_overlay_targets
-        removed = check_overlay_targets(before, repo_root())
+        removed = check_overlay_targets(before, tree)
     from kernel_migration_step2 import check_step2
     step2 = check_step2(directory)
-    root = repo_root()
+    root = tree
     if any(r["disposition"] == "investigate" for r in rows):
         raise km.InvalidManifest("override matrix rows are still under investigation")
     counts = {
