@@ -7,6 +7,7 @@ is review-complete at this checkpoint. The whole step-0 gate refuses pending pac
     uv run elysium research kernel_migration --check step0
     uv run elysium research kernel_migration --check step1
     uv run elysium research kernel_migration --check step2
+    uv run elysium research kernel_migration --check step3
 
 Once a later phase is current, `--check step0` verifies the accepted receipt against the tree it
 accepted (`manifest.json` `history.step0.commit`), not against the edited working tree.
@@ -42,7 +43,7 @@ REQUIRED_PINS = {"module", "corpus", "listing", "datamaps", "census", "verdicts"
 
 
 # A phase is listed here only when its checker exists; no later phase is implicitly accepted.
-ACCEPTED_PHASES = (0, 1, 2)
+ACCEPTED_PHASES = (0, 1, 2, 3)
 
 
 class InvalidManifest(ValueError):
@@ -317,7 +318,7 @@ def _check_step0(directory: Path, manifest: dict, source_root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2"), required=True)
+    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2", "step3"), required=True)
     args = parser.parse_args(argv)
     try:
         manifest, classes, factories = load()
@@ -341,6 +342,16 @@ def main(argv: list[str] | None = None) -> int:
             counts = check_step2()
             print('PASS: step 2 acceptance; accepted step-1 receipt, factory census, class tree, '
                   'registry, fixture compatibility, regression comparison and runtime gate verified.')
+            print(json.dumps(counts, sort_keys=True))
+        if args.check == "step3":
+            from kernel_migration_step3 import check_step3
+            counts = check_step3()
+            if counts.get("pending"):
+                print('PENDING: step 3 in progress; the override matrix matches the accepted step-2 '
+                      'census. Source dispositions are not yet enforced.')
+            else:
+                print('PASS: step 3 acceptance; accepted step-2 receipt, override matrix, static '
+                      'dispatch gate, direct calls, regression comparison and runtime gate verified.')
             print(json.dumps(counts, sort_keys=True))
     except (InvalidManifest, ValueError, OSError) as exc:
         print(f"REFUSED: {exc}")

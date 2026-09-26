@@ -24,6 +24,7 @@ import collections
 import csv
 import json
 import re
+import tempfile
 from pathlib import Path
 
 import kernel_migration as km
@@ -201,14 +202,31 @@ def check_latches(decisions: dict, root: Path) -> int:
     return sum(found.values())
 
 
+# What `--check step2` materializes from the accepted step-2 tree once it is recorded.
+HISTORICAL_PATHS = ("Source/ElysiumUE",)
+
+
 def check_step2(directory: Path | None = None) -> dict:
+    """While step 2 is the working phase the current tree is checked. Once its commit is recorded
+    (`manifest.json` `history.step2.commit`, written when step 3 starts), the accepted tree is,
+    as `--check step1` does for step 1: step 3 edits the source this receipt describes."""
     directory = directory or repo_root() / km.STORY
     manifest, classes, factories = km.load(directory)
-    if manifest["phase"] != 2:
-        raise km.InvalidManifest("step 2 is checked only while phase 2 is current")
+    if manifest["phase"] < 2:
+        raise km.InvalidManifest("step 2 is not accepted at this phase")
+    commit = manifest.get("history", {}).get("step2", {}).get("commit", "")
+    if not commit:
+        if manifest["phase"] != 2:
+            raise km.InvalidManifest("a later phase needs history.step2.commit")
+        return _check_step2(directory, classes, factories, repo_root())
+    with tempfile.TemporaryDirectory(prefix="step2-accepted-") as scratch:
+        return _check_step2(directory, classes, factories,
+                            km.historical_source(commit, Path(scratch), HISTORICAL_PATHS))
+
+
+def _check_step2(directory: Path, classes: list[dict], factories: list[dict], root: Path) -> dict:
     from kernel_migration_step1 import check_step1
     step1 = check_step1(directory)
-    root = repo_root()
     decisions = json.loads((directory / "decisions-step2.json").read_text(encoding="utf-8"))
     counts = {
         "census_classnames": check_census(factories, root),

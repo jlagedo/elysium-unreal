@@ -1,7 +1,12 @@
-# Story 5 — step 2 accepted
+# Story 5 — step 3 in progress
 
-**Step 2 passed its acceptance gate on 2026-09-25. It is uncommitted on `0019-5-class-tree`
-(base `b2261eca`). Step 3 has not started.**
+**Step 3 (replace introduced-species dispatch) started 2026-09-26 on `0019-5-class-tree` at
+`870360e9` (step 2, committed and accepted), clean tree.** Packet 3a (preflight, override matrix,
+checker) is complete and uncommitted (the 3-pre prerequisite); see [Step 3](#step-3) below.
+
+## Step 2 (accepted, `870360e9`)
+
+Step 2 passed its acceptance gate on 2026-09-25 and is committed as `870360e9`.
 `uv run elysium research kernel_migration --check step2` exits 0. It re-verifies step 1 against
 `b2261eca` and step 0 against `aa1c3c86`. Evidence is pinned in
 [acceptance-step2.json](acceptance-step2.json); earlier receipts stay in
@@ -52,6 +57,17 @@ Carried forward (see [decisions-step2.json](decisions-step2.json)):
 - Step 1's carried items stand: CharTemplateModelName seam, slot 525 OverrideMove rows, and
   retained dead census tables.
 
-**Next:** commit step 2 when the owner asks, then step 3 (replace introduced-species dispatch).
-Read the plan's step 3, `decisions-step2.json` and the compatibility inventory first. Do not tick
-story 5 or tracker 06b until step 11.
+## Step 3
+
+Record: [overrides-step3.tsv](overrides-step3.tsv) (the override matrix: 611 introduced
+`(class, slot, body)` rows re-derived from the step-2 census by `kernel_migration --check step3`),
+[decisions-step3.json](decisions-step3.json). `manifest.json` `history.step2.commit` = `870360e9`;
+`--check step2` now reads that tree. `--check step3` reports PENDING until phase 3.
+
+- [3a](packets/3a-preflight-and-matrix.md) (complete): step-2 historical check,
+  `kernel_migration_step3.py` + tests, matrix draft (428 overrides + 8 own branch virtuals drafted
+  from address arms, 175 to investigate). Five generator checks and 108 Python tests pass.
+- 3b-3j: pending (virtual surface, the 510/482/606/593 corrections, Troika-helper rows,
+  member-pointer tables, arm families, vocalisation/footsteps, type tests, tests/docs, gate).
+
+Do not tick story 5 or tracker 06b until step 11.

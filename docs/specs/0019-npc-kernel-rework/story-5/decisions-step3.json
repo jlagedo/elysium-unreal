@@ -1,0 +1,30 @@
+{
+  "scope": "step 3: introduced-species dispatch becomes C++ overrides on the step-2 classes and exact qualified direct calls; bodies stay where they are (step 4 moves them)",
+  "rules": {
+    "override_home": "an override stands on the class that introduces the body: the topmost class of the census chain holding the same body at that slot (overrides-step3.tsv port_class); descendants inherit it",
+    "forwarding": "a forwarding override may call the existing FElysiumNpc body until step 4 moves it; the overlay target keeps naming the body's definition. A body converted in place is retargeted",
+    "direct_calls": "a species body's call to what it replaces is qualified to the recovered callee owner: Troika -> FElysiumNpc::X, an intermediate species -> FElysiumNpc<Parent>::X, CAI_BaseNPC -> the distinct existing base helper (renamed in step 5, step5_renames). Nested virtual calls stay virtual",
+    "guard": "SpeciesDispatchingSlot / FSpeciesDispatchScope emulate retail's non-virtual call into the replaced body; a qualified call replaces them and they go with their last introduced consumer",
+    "mixed_sites": "an address shared by introduced and deferred classes becomes the introduced override; the table/arm keeps only its deferred rows as a surviving site with its fold step",
+    "tables": "a slot-keyed species table is a set of retail override bodies and becomes overrides; a class-keyed data query stays with a named consumer; a test-only table is retired with its tests re-pinned on real factories, or kept as census with its consumer",
+    "type_tests": "a retail-class test on this that selects behaviour is dispatch (override); a retail type test on another entity keeps a typed check through Other->RetailClass() (answered by the C++ type) or a classname compare where retail compares names; no RTTI",
+    "residue": "a retail body with no port implementation stays a live unported rule; step 3 does not port new behaviour, except the one-byte vocal bodies the spec's vocalisation job names",
+    "registry_constants": "a registry: constant row (GOverrides.Default) has no production reader; it is not dispatch and moves as a body in step 4"
+  },
+  "direct_calls": [],
+  "direct_calls_planned": [
+    {"caller": "FElysiumNpcZombie::ShouldPlayFloatSound", "required": "BaseShouldPlayFloatSound()",
+     "retail": {"caller": "0x103e1080", "site": "0x103e11f9", "via": "0x10005f97", "callee": "0x1027a530", "owner": "CAI_BaseNPC"},
+     "step5_rename": "FElysiumNpcBase::ShouldPlayFloatSound()"},
+    {"caller": "FElysiumNpc::FUN_10364280", "required": "FElysiumNpc::Slot606(",
+     "retail": {"caller": "0x10364280", "site": "thunk 0x100026b7", "callee": "0x102b8320", "owner": "CAI_BaseNPCTroika"}},
+    {"caller": "FElysiumNpc::FUN_103b9180", "required": "FElysiumNpc::Slot593()",
+     "retail": {"caller": "0x103b9180", "site": "thunk 0x10002720", "callee": "0x1029a070", "owner": "CAI_BaseNPCTroika"}},
+    {"caller": "FElysiumNpcCop::Slot597", "required": "FElysiumNpc::Slot597(",
+     "retail": {"caller": "0x10372cc0", "site": "tail", "callee": "Troika slot 597", "owner": "CAI_BaseNPCTroika"}}
+  ],
+  "step5_renames": [],
+  "retail_corrections": {},
+  "residue": {},
+  "surviving_sites": []
+}

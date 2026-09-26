@@ -118,6 +118,11 @@
           "previous_sha256": "c3ea72dbc147738502af7b130d0f55044ee93ec12f398d92b4ce7ce76122b64f"
         }
       }
+    },
+    "step2": {
+      "commit": "870360e9fa7be759d71004553a93575006b9e71d",
+      "acceptance": "acceptance-step2.json",
+      "note": "--check step2 reads this tree once it is recorded (step 3 started)"
     }
   },
   "step1_packets": {
@@ -138,5 +143,17 @@
     "2f-comment-repins": "accepted",
     "2g-identity-audit": "accepted",
     "2h-smoke-and-gate": "accepted"
+  },
+  "step3_packets": {
+    "3a": "complete",
+    "3b": "pending",
+    "3c": "pending",
+    "3d": "pending",
+    "3e": "pending",
+    "3f": "pending",
+    "3g": "pending",
+    "3h": "pending",
+    "3i": "pending",
+    "3j": "pending"
   }
 }
