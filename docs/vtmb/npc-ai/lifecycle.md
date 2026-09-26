@@ -78,7 +78,18 @@ implementation. For a normal fresh map, the recovered order is:
 4. Only after creation/spawn finishes does `ServerActivate` (`0x1011aaf0`) iterate every surviving
    server entity and invoke virtual `Activate` (`+0x1c4`) before post-entity systems run. Spawn and
    activation are therefore distinct passes; BSP entity order is not permission to interleave one
-   actor's activation with the next actor's keyvalue load.
+   actor's activation with the next actor's keyvalue load. The walk is `NextEnt` (`0x100f7060`)
+   over the active list; it re-reads each node's next link, and `CBaseEntityList::AddEntityAtSlot`
+   (`0x100f9fc0`) appends at the tail, so an entity created by an earlier entity's `Activate` is
+   activated later in the same pass, after all entities already listed. The one skip is
+   `m_iEFlags (+0x268) & EFL_DORMANT (0x2)` (`0x100a8220`). Only `CBaseEntity::MakeDormant`
+   (`0x100a8060`) sets that bit: `DispatchSpawn` (`0x101d1280`) and the two restores
+   (`0x101a2e40`, `0x101a3c40`) for an entity whose `globalname` belongs to another map (no shipped
+   map authors one), and `camera_animated`'s `EndCamera` (`0x10071660`); ScriptHide/StartHidden
+   never do, so a hidden entity is activated. `EFL_KILLME` is not tested: the map's removals are
+   purged before the pass (it prints "ERROR: Entity delete queue not empty" otherwise), and an
+   entity `UTIL_Remove`d during the pass is still listed and still activated
+   (2026-09-25, 0019 story 5 step 2 review).
 5. The NPC initialization think at `0x10273aa0` first applies an authored relationship override
    when present, then invokes virtual `+0x698` followed by `+0x694`. The `CAI_BaseNPC` `+0x698`
    body (`0x10273ad0`) performs readiness work: clears initialization flags, repairs ground

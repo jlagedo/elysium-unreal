@@ -74,8 +74,8 @@ void ClearHasPlayedFlyBySound();
 // instead of a wav pool, and one pair of species answers silence.
 //
 // So it is ONE method plus a table, keyed on the retail class name and resolved through
-// `Substrate/ElysiumNpcKernelClassLookup.h` — never a subclass; `FElysiumNpc` is `final` and a
-// species is data in this runtime.
+// `Substrate/ElysiumNpcKernelClassLookup.h`, until story 5 step 3 makes each row an override on
+// its species class.
 //
 // The Troika-line bodies BEHIND these slots (`0x10293ec0`, `0x10293f80`, `0x10294280`, …) are
 // layer 14 and belong to story 29d, so their generated stubs still stand in

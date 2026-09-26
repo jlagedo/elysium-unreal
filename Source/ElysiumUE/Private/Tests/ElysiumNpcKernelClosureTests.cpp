@@ -33,9 +33,11 @@
 // order, what each refusal answers and which retail call it stands for.
 //
 // The brief's "two tables, and they disagree" applies here only lightly: no row in this family has a
-// per-species arm, so every case stands the default combatant leaf. `npc_VCop` is spawned once, for
-// the one assertion that wants a leaf whose `RetailClass()` is null, to show that these slots are
-// Troika-line bodies that answer identically with or without a census class.
+// per-species arm, so every case stands the default combatant leaf. A bare Troika NPC
+// (`AddTroikaNpc`) is stood once, for the one assertion that wants a body whose `RetailClass()` is
+// null, to show that these slots are Troika-line bodies that answer identically with or without a
+// census class. (Story 5 step 2: `npc_VCop` no longer stands for that; its factory 0x103704f0
+// builds `CNPC_VCop`, population.md.)
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelClosureFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -54,7 +56,7 @@ namespace
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumNpc* Victim = nullptr;
-		FElysiumNpc* Cop = nullptr;
+		FElysiumNpc* Troika = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
 		FElysiumClosureFixture()
@@ -63,7 +65,7 @@ namespace
 				FElysiumNpcWorldBuilder Builder(TEXT("closure_kernel"), 29141u);
 				Builder.AddNpc(TEXT("guard"), FVector(0.f, 0.f, 0.f));
 				Builder.AddNpc(TEXT("victim"), FVector(120.f, 0.f, 0.f));
-				Builder.AddNpc(TEXT("cop"), FVector(900.f, 0.f, 0.f), TEXT("npc_VCop"));
+				Builder.AddTroikaNpc(TEXT("troika"), FVector(900.f, 0.f, 0.f));
 				Builder.AddCounter(TEXT("fedupon"));
 				Builder.WireOutput(TEXT("victim"), TEXT("OnFedUponEnd"), TEXT("fedupon"));
 				return Builder;
@@ -71,9 +73,9 @@ namespace
 		{
 			Guard = World.Npc(TEXT("guard"));
 			Victim = World.Npc(TEXT("victim"));
-			Cop = World.Npc(TEXT("cop"));
+			Troika = World.Npc(TEXT("troika"));
 			Player = World.Player();
-			FElysiumNpcWorldFixture::Quiet({ Guard, Victim, Cop });
+			FElysiumNpcWorldFixture::Quiet({ Guard, Victim, Troika });
 		}
 	};
 
@@ -432,19 +434,20 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 	FElysiumClosureFixture F;
 	if (!TestNotNull(TEXT("the guard spawned"), F.Guard)
 		|| !TestNotNull(TEXT("the victim spawned"), F.Victim)
-		|| !TestNotNull(TEXT("npc_VCop is a registered spawn leaf"), F.Cop))
+		|| !TestNotNull(TEXT("the bare Troika NPC spawned"), F.Troika))
 	{
 		return false;
 	}
 
-	// The brief's first table trap, asserted rather than worked around: no census class claims
-	// `npc_VCop`, so a cop's `RetailClass()` is null and every per-species lookup falls to the
-	// Troika line. None of this family's 41 rows has a species arm, so a cop answers exactly what
-	// the combatant leaf answers — which is what makes standing one case per row legitimate.
-	TestNull(TEXT("npc_VCop's RetailClass() is null"), F.Cop->RetailClass());
-	TestEqual(TEXT("a cop's slot 49 is the Troika line's"), F.Cop->Slot49(), F.Guard->Slot49());
-	TestEqual(TEXT("a cop's slot 570 is the Troika line's"), F.Cop->GetReloadActivity(nullptr),
-		F.Guard->GetReloadActivity(nullptr));
+	// The bare Troika line has no species class, so its `RetailClass()` is null and every
+	// per-species lookup falls to the Troika line. None of this family's 41 rows has a species arm,
+	// so it answers exactly what the combatant leaf answers — which is what makes standing one case
+	// per row legitimate.
+	TestNull(TEXT("the bare Troika line has no species class"), F.Troika->RetailClass());
+	TestEqual(TEXT("a bare Troika NPC's slot 49 is the combatant's"), F.Troika->Slot49(),
+		F.Guard->Slot49());
+	TestEqual(TEXT("a bare Troika NPC's slot 570 is the combatant's"),
+		F.Troika->GetReloadActivity(nullptr), F.Guard->GetReloadActivity(nullptr));
 
 	for (const FElysiumClosureSlotRow& Row : Rows)
 	{

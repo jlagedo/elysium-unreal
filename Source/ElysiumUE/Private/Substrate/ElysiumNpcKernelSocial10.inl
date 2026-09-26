@@ -170,6 +170,16 @@ static constexpr int32 TweakParamPerceptionMax = 10;
 void RecomputePerceptionDistances();
 int32 PerceptionRecomputes = 0;
 
+/** `CAI_BaseNPCTroika::InputTweakParam` (`0x1029ea40`), the `TweakParam` datamap INPUT. The argument
+ *  string (at most 255 characters, `Q_strncpy(buf, arg, 0x100)`) is split by `strtok` on `", "`
+ *  (`0x105c7ed4`, the delimiter `InputWalkToNode`/`InputSetupPatrolType` share). With two tokens it
+ *  calls virtual slot 585 `ProcessTweakParam(first, second)`; otherwise it prints `DevMsg(1, "ERROR:
+ *  %s - Argument to ProcessTweakParam(%s) is in the wrong format...")` and does nothing. */
+void InputTweakParam(const FElysiumInputArgs& Args);
+
+/** How many times `InputTweakParam` refused a malformed argument (its `DevMsg(1, ...)` arm). */
+int32 TweakParamFormatErrors = 0;
+
 /** How many times the body reached `DevMsg(2, "ProcessTweakParam(%s, %s) ignored by base class.")`
  *  (`0x105d96f0`). `CAPABILITIES` and `GOALS` reach it too, which is the recovered fact this counter
  *  makes observable. */

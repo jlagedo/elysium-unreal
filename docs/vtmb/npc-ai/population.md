@@ -2736,9 +2736,14 @@ misses, and nine classnames resolve differently from the factories:
 | `npc_VWerewolf` | `0x103c8760` (ctor `0x103ca4b0`) | `CNPC_VWerewolf` | nothing |
 | `npc_VSheriffMan` | `0x103ada30` | `CNPC_VSheriffMan` | nothing |
 | `npc_VPlaceholder` | `0x103a3a20` | `CNPC_VPlaceholder` | nothing |
-| `npc_VVampireBoss` | `0x103c4fa0` (inline) | `CNPC_VVampireBoss` | nothing |
+| `npc_VVampireBoss` | `0x103c4fa0` (inline) | `CNPC_VVampireBoss` | `CNPC_VVampireBoss` (see below) |
 | `scripted_target` | `0x1034d370` (inline) | `CScriptedTarget` | nothing |
 | `npc_TestBaseHumanoid` | `0x102609e0` | `CAI_BaseHumanoid` line | `CAI_ExpressiveNPC` |
+
+Correction (2026-09-25, story 5 step 2 review): the census at `b2261eca` did list
+`npc_VVampireBoss` on `CNPC_VVampireBoss`, and no subclass claimed it, so the most-derived rule
+already answered it; only its registration was a stub. Six live classnames, not seven, resolved
+to nothing.
 
 The first seven are live. `npc_VCop` is authored 72 times and named by makers 33 times in
 `sm_hub_1` alone. `npc_VVampireBoss` is never authored: `CNPC_VVampireBoss::MakeNPC`
@@ -2921,3 +2926,23 @@ and full input hashes are under `docs/specs/0019-npc-kernel-rework/story-5/`. Ge
 and evidence reports stay under `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/`. The bounded
 reader rejects unsupported receiver/control-flow shapes; arbitrary constructor analysis and
 liveness inference are outside this evidence claim.
+
+### The census answers the factories (2026-09-25, 0019 story 5 step 2)
+
+The kernel census (`docs/vtmb/npc-kernel/classes.md`, `ElysiumNpcKernelShape.cpp`) now takes each
+class's classnames from the replayed factory map (`story-5/factories.tsv`) instead of the proximity
+scan. 74 classnames resolve, each to exactly one class, and no base class claims a descendant's name.
+The port registers the 45 ordinary-NPC classnames of the 44 step-2 classes as those classes.
+
+Counting over all 108 exported maps' entities units corrects two statements above:
+
+- **`npc_VVampireBoss` is authored.** `la_hub_1` places it once and `sm_warehouse_1` twice, besides
+  `CNPC_VVampireBoss::MakeNPC` (`0x103c75f0`) naming it. The census did resolve it (see the
+  correction under the factory table).
+- **`npc_VCop` counts.** It is placed 16 times and named by 119 `npc_maker` `NPCType` keys (33 in
+  `sm_hub_1`). The earlier "72 authored" does not reproduce from these units.
+
+`npc_VGuard1`, `npc_VPlaceholder` and `npc_VChangBros` have no placement, maker `NPCType` or
+deployed-script literal in the exported content. Their liveness verdicts rest on the evidence
+above, not on a content count. Per-name counts:
+`docs/specs/0019-npc-kernel-rework/story-5/registrations-step2.tsv`.

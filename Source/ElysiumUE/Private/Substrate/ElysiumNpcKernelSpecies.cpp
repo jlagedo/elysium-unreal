@@ -281,9 +281,8 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRowOf(const TCHAR* I
 
 const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRow(int32 Slot) const
 {
-	// `RetailClass()` is NULL for a classname no census class claims — `npc_VCop` is the recovered
-	// example, and the fall-through to "no species body, run the one you have" is that classname's
-	// correct answer rather than a hole to patch.
+	// `RetailClass()` is NULL only on the bare Troika line; the fall-through to "no species body,
+	// run the one you have" is its answer.
 	const FElysiumNpcClass* Cls = RetailClass();
 	return SpeciesSlotRowOf(Cls != nullptr ? Cls->Name : nullptr, Slot);
 }
@@ -315,11 +314,12 @@ FElysiumNpc::FSpeciesDispatchScope::~FSpeciesDispatchScope()
 #if WITH_DEV_AUTOMATION_TESTS
 void FElysiumNpc::SetRetailClassForTests(const TCHAR* RetailClassName)
 {
-	// The same two writes `RetailClass()` makes on its first call, with the classname resolution
-	// replaced by a direct census lookup. A null name stands an NPC the census claims nothing for,
-	// which is `npc_VCop`'s and `CNPC_VZombie`'s own answer.
-	bRetailClassResolved = true;
-	RetailClassRow = ElysiumNpcKernelClass::Find(RetailClassName);
+	// Story 5 step 2: every introduced class is spawned by its own factory, so this latch stands
+	// only a deferred class (steps 7-10) on a bare Troika-line instance -- never on a species class,
+	// whose C++ type already answers.
+	check(OwnRetailClass() == nullptr);
+	bRetailClassForTests = true;
+	RetailClassForTests = ElysiumNpcKernelClass::Find(RetailClassName);
 }
 #endif
 

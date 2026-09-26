@@ -41,13 +41,16 @@ namespace
 		FElysiumNpc* Other = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		FSenses10Fixture()
-			: World([]
+		// `GuardClass` is the retail class the guard is built as (`AddNpcOfClass`), so a species arm
+		// is reached from the C++ type its classname builds rather than by reclassing a live
+		// instance (story 5 step 2). `CAI_BaseNPCTroika` stands the bare Troika line.
+		explicit FSenses10Fixture(const TCHAR* GuardClass = TEXT("CNPC_VHumanCombatant"))
+			: World([GuardClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("senses10_kernel"), 909);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					FElysiumEntityDef& G = Builder.AddNpc(TEXT("guard"), FVector::ZeroVector,
-						TEXT("npc_VHumanCombatant"));
+					FElysiumEntityDef& G =
+						Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, GuardClass);
 					// `investigate_mode 6` (`Anything`) so `ShouldInvestigate` (`0x102b3270`) admits
 					// and slot 472's outer gate is reachable at all — the authored default is
 					// `Never`, which refuses the whole body.
@@ -69,6 +72,13 @@ namespace
 	};
 
 	float Senses10Cm(float Units) { return Units * ElysiumMove::U; }
+
+	// The species-arms case's sight setup, stated on each per-class guard it stands.
+	void Senses10SeeFar(FSenses10Fixture& F)
+	{
+		F.Guard->Senses.Perception.VisionDistanceCm = Senses10Cm(4000.f);
+		F.Guard->Senses.Perception.bResolved = true;
+	}
 }
 
 // =================================================================================================
@@ -759,15 +769,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10SpeciesArmsTest,
 	"Elysium.Substrate.NpcKernelSenses10.SpeciesArms", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 {
-	FSenses10Fixture F;
-	if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
-	{
-		AddError(TEXT("no fixture"));
-		return false;
-	}
-	F.Guard->Senses.Perception.VisionDistanceCm = Senses10Cm(4000.f);
-	F.Guard->Senses.Perception.bResolved = true;
-
+	// Each arm below stands a fresh guard of its own class (`FSenses10Fixture(Class)`), restating
+	// the sight setup and every field the arm read on the one reclassed guard this case used to
+	// share (story 5 step 2).
 	// The census IS the dispatcher: each arm is proved by the address the census says fills the slot
 	// for that retail class.
 	TestEqual(TEXT("the census puts 0x10369ff0 on CNPC_VCameraSecurity#201"),
@@ -803,87 +807,169 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 363)),
 		FString(TEXT("0x10369fb0")));
 
-	// A plain `npc_VCop` has a NULL census classname list, so `RetailClass()` is null and every
-	// species lookup correctly falls through to the Troika line. Story 29c-1's cleanup recorded it;
-	// this family relies on it at five dispatchers.
-	TestNull(TEXT("a spawned npc_VCop resolves to no retail class"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop")));
+	// A spawned `npc_VCop` is `CNPC_VCop` (factory `0x103704f0`, story 5 step 2), so this family's
+	// five dispatchers take the cop's own rows; until then the census gave the class no classname
+	// and a cop fell through to the Troika line.
+	TestTrue(TEXT("a spawned npc_VCop is CNPC_VCop"),
+		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
+			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
 
 	// --- `CNPC_VCameraSecurity#201` (`0x10369ff0`) and `#363` (`0x10369fb0`) ----------------------
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VCameraSecurity"));
-	TestFalse(TEXT("0x10369ff0 a security NPC with no camera link sees nothing"),
-		F.Guard->FVisible(F.Player, 0x2804091, nullptr, 0));
-	TestFalse(TEXT("...not even a plainly-visible NPC (its own eyes are never consulted)"),
-		F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
-	TestFalse(TEXT("0x10369fb0 and its cone answers the camera's, which is false with no link"),
-		F.Guard->CameraSecurityFInViewCone(F.Player));
+	{
+		FSenses10Fixture F(TEXT("CNPC_VCameraSecurity"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		TestFalse(TEXT("0x10369ff0 a security NPC with no camera link sees nothing"),
+			F.Guard->FVisible(F.Player, 0x2804091, nullptr, 0));
+		TestFalse(TEXT("...not even a plainly-visible NPC (its own eyes are never consulted)"),
+			F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
+		TestFalse(TEXT("0x10369fb0 and its cone answers the camera's, which is false with no link"),
+			F.Guard->CameraSecurityFInViewCone(F.Player));
+	}
 
 	// --- `CNPC_VTzimisce#201` (`0x103ba290`) ------------------------------------------------------
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VTzimisce"));
-	F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
-	TestTrue(TEXT("0x103ba290 forwards to the Troika base with the fourth argument clamped"),
-		F.Guard->FVisible(F.Other, 0x2804091, nullptr, 12345));
+	{
+		FSenses10Fixture F(TEXT("CNPC_VTzimisce"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
+		TestTrue(TEXT("0x103ba290 forwards to the Troika base with the fourth argument clamped"),
+			F.Guard->FVisible(F.Other, 0x2804091, nullptr, 12345));
+	}
 
 	// --- `CNPC_VZombie#201` (`0x103e0bc0`) --------------------------------------------------------
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VZombie"));
-	F.Guard->Senses.Memory.Enemy = F.Other->Handle;
-	TestTrue(TEXT("0x103e0bef the zombie's own enemy is answered by the obfuscate test, not sight"),
-		F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
-	// A DIFFERENT entity falls through to the base, which at 4000 units is out of range.
-	F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
-	TestFalse(TEXT("0x103e0c2e every other entity takes the Troika base"),
-		F.Guard->FVisible(F.Player, 0x2804091, nullptr, 0));
+	{
+		FSenses10Fixture F(TEXT("CNPC_VZombie"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		// The other NPC stands where the Tzimisce arm left it on the shared guard.
+		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
+		F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+		TestTrue(TEXT("0x103e0bef the zombie's own enemy is answered by the obfuscate test, not sight"),
+			F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
+		// A DIFFERENT entity falls through to the base, which at 4000 units is out of range.
+		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
+		TestFalse(TEXT("0x103e0c2e every other entity takes the Troika base"),
+			F.Guard->FVisible(F.Player, 0x2804091, nullptr, 0));
+	}
 
 	// --- `CNPC_VCop#472` (`0x10371ae0`) and `CNPC_VHunter#472` (`0x103887d0`) ---------------------
-	FElysiumNpc::ResetSpeciesSuspectGlobals();
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VCop"));
-	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
-	F.Guard->Senses.Memory.bPlayerInOuterBand = false;
-	F.Guard->OnSeeEntity(F.Player);
-	TestTrue(TEXT("0x10370560 the cop stamps DAT_1093ac3c with the hated player"),
-		FElysiumNpc::CopSuspectHandle() == F.Player->Handle);
-	TestTrue(TEXT("...and _DAT_1093aca8 is curtime + 30.0"),
-		FElysiumNpc::CopSuspectExpiry() > 0.0);
-	// The cop's stamp is guarded on the seen entity carrying a player record; the hunter's is NOT.
-	FElysiumNpc::ResetSpeciesSuspectGlobals();
-	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
-	F.Guard->OnSeeEntity(F.Other);
-	TestFalse(TEXT("0x10370560 the cop's stamp needs a +0xa8 player record"),
-		FElysiumNpc::CopSuspectHandle().IsSet());
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VHunter"));
-	F.Guard->OnSeeEntity(F.Other);
-	TestTrue(TEXT("0x10387fd0 the hunter's twin has NO such guard"),
-		FElysiumNpc::HunterSuspectHandle() == F.Other->Handle);
-	// `10371aea`: with the far byte SET neither stamps.
-	FElysiumNpc::ResetSpeciesSuspectGlobals();
-	F.Guard->Senses.Memory.bPlayerInOuterBand = true;
-	F.Guard->OnSeeEntity(F.Other);
-	TestFalse(TEXT("0x103887d4 the far byte set skips the stamp on both twins"),
-		FElysiumNpc::HunterSuspectHandle().IsSet());
-	F.Guard->Senses.Memory.bPlayerInOuterBand = false;
+	{
+		FSenses10Fixture F(TEXT("CNPC_VCop"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		// The positions and enemy the earlier arms left on the shared guard.
+		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
+		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
+		F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+		FElysiumNpc::ResetSpeciesSuspectGlobals();
+		F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
+		F.Guard->OnSeeEntity(F.Player);
+		TestTrue(TEXT("0x10370560 the cop stamps DAT_1093ac3c with the hated player"),
+			FElysiumNpc::CopSuspectHandle() == F.Player->Handle);
+		TestTrue(TEXT("...and _DAT_1093aca8 is curtime + 30.0"),
+			FElysiumNpc::CopSuspectExpiry() > 0.0);
+		// The cop's stamp is guarded on the seen entity carrying a player record; the hunter's is NOT.
+		FElysiumNpc::ResetSpeciesSuspectGlobals();
+		F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
+		F.Guard->OnSeeEntity(F.Other);
+		TestFalse(TEXT("0x10370560 the cop's stamp needs a +0xa8 player record"),
+			FElysiumNpc::CopSuspectHandle().IsSet());
+	}
+	{
+		FSenses10Fixture F(TEXT("CNPC_VHunter"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		// What the cop arm left standing: positions, enemy, both hates, the near band and the
+		// cleared suspect globals.
+		F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
+		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
+		F.Guard->Senses.Memory.Enemy = F.Other->Handle;
+		F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+		F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
+		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
+		FElysiumNpc::ResetSpeciesSuspectGlobals();
+		F.Guard->OnSeeEntity(F.Other);
+		TestTrue(TEXT("0x10387fd0 the hunter's twin has NO such guard"),
+			FElysiumNpc::HunterSuspectHandle() == F.Other->Handle);
+		// `10371aea`: with the far byte SET neither stamps.
+		FElysiumNpc::ResetSpeciesSuspectGlobals();
+		F.Guard->Senses.Memory.bPlayerInOuterBand = true;
+		F.Guard->OnSeeEntity(F.Other);
+		TestFalse(TEXT("0x103887d4 the far byte set skips the stamp on both twins"),
+			FElysiumNpc::HunterSuspectHandle().IsSet());
+		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
+	}
 
 	// --- `CNPC_VMingXiao#574` (`0x10395d00`) ------------------------------------------------------
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VMingXiao"));
-	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
-	F.Guard->ShootTargetOverride = F.Other->Handle;
-	F.Other->Origin = FVector(Senses10Cm(400.f), 0.0, 0.0);
-	const FVector MingXiao = F.Guard->GetShootEnemyDir(FVector::ZeroVector, 0, 0);
-	TestTrue(TEXT("0x10395d1c Ming Xiao's arm is still a unit direction"),
-		FMath::IsNearlyEqual(static_cast<float>(MingXiao.Size()), 1.f, 1.e-3f));
-	TestTrue(TEXT("...and _DAT_1044eb0c raises its Z above the base body's"), MingXiao.Z > 0.0);
-	F.Guard->SetRetailClassForTests(nullptr);
+	{
+		FSenses10Fixture F(TEXT("CNPC_VMingXiao"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
+		F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Guard->ShootTargetOverride = F.Other->Handle;
+		F.Other->Origin = FVector(Senses10Cm(400.f), 0.0, 0.0);
+		const FVector MingXiao = F.Guard->GetShootEnemyDir(FVector::ZeroVector, 0, 0);
+		TestTrue(TEXT("0x10395d1c Ming Xiao's arm is still a unit direction"),
+			FMath::IsNearlyEqual(static_cast<float>(MingXiao.Size()), 1.f, 1.e-3f));
+		TestTrue(TEXT("...and _DAT_1044eb0c raises its Z above the base body's"), MingXiao.Z > 0.0);
+	}
 
 	// --- `CNPC_VFrenzyShadow#478` (`0x103766d0`) --------------------------------------------------
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VFrenzyShadow"));
-	F.Guard->EnemyMemory.Update(*F.Guard, F.Other->Handle, 1.0);
-	F.Guard->FrenzyShadowHostileEnemyCount = 0;
-	F.Guard->bFrenzyShadowFailedGrapple = true;
-	FElysiumEntity* Chosen = F.Guard->BestEnemy();
-	TestEqual(TEXT("0x103766d0 the score rescan picks the one eligible candidate"),
-		Chosen, static_cast<FElysiumEntity*>(F.Other));
-	TestFalse(TEXT("0x103769d9 a winner that differs from GetEnemy clears m_bFailedGrapple"),
-		F.Guard->bFrenzyShadowFailedGrapple);
-	F.Guard->SetRetailClassForTests(nullptr);
+	// `CNPC_VFrenzyShadow` is a deferred class with no C++ class of its own yet, so it is still a
+	// bare Troika NPC reclassed by the test-only hook -- the one form that hook admits.
+	{
+		FSenses10Fixture F(TEXT("CAI_BaseNPCTroika"));
+		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		{
+			AddError(TEXT("no fixture"));
+			return false;
+		}
+		Senses10SeeFar(F);
+		// What the earlier arms left on the shared guard.
+		F.Player->Origin = FVector(Senses10Cm(9000.f), 0.0, 0.0);
+		F.Other->Origin = FVector(Senses10Cm(400.f), 0.0, 0.0);
+		F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+		F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
+		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
+		F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+		F.Guard->ShootTargetOverride = F.Other->Handle;
+		F.Guard->SetRetailClassForTests(TEXT("CNPC_VFrenzyShadow"));
+		F.Guard->EnemyMemory.Update(*F.Guard, F.Other->Handle, 1.0);
+		F.Guard->FrenzyShadowHostileEnemyCount = 0;
+		F.Guard->bFrenzyShadowFailedGrapple = true;
+		FElysiumEntity* Chosen = F.Guard->BestEnemy();
+		TestEqual(TEXT("0x103766d0 the score rescan picks the one eligible candidate"),
+			Chosen, static_cast<FElysiumEntity*>(F.Other));
+		TestFalse(TEXT("0x103769d9 a winner that differs from GetEnemy clears m_bFailedGrapple"),
+			F.Guard->bFrenzyShadowFailedGrapple);
+	}
 	return true;
 }
 
@@ -953,16 +1039,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10WerewolfTest,
 	"Elysium.Substrate.NpcKernelSenses10.Werewolf", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 {
-	FSenses10Fixture F;
+	// Slot 566 `FValidateHintType` is the first gate of both hint twins, so the fixture has to BE a
+	// werewolf for either body to reach its own type ladder: `CNPC_VWerewolf`'s row (`0x103d7ce0`)
+	// accepts 15000..15018 except 15007, which is where every type below lives. The guard is built
+	// as one, through `npc_VWerewolf`.
+	FSenses10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	// Slot 566 `FValidateHintType` is the first gate of both hint twins, so the fixture has to BE a
-	// werewolf for either body to reach its own type ladder: `CNPC_VWerewolf`'s row (`0x103d7ce0`)
-	// accepts 15000..15018 except 15007, which is where every type below lives.
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 
 	FElysiumNpc::FHintWords Hint;
 	Hint.bValid = true;
@@ -1072,7 +1158,6 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 	TestTrue(TEXT("0x103cbf1c every non-teleport exit ends in SetHullSizeSmall(1)"),
 		F.Guard->bIsUsingSmallHull);
 	TestEqual(TEXT("...and a clear probe does not teleport"), F.Guard->WerewolfTeleportOutCalls, 0);
-	F.Guard->SetRetailClassForTests(nullptr);
 	return true;
 }
 

@@ -535,10 +535,13 @@ bool FElysiumNpcKernelLifecyclePrecacheTest::RunTest(const FString&)
 	TestEqual(TEXT("an empty one falls back to models/null.mdl"),
 		FElysiumNpc::CameraPrecacheModel(FString()), FString(TEXT("models/null.mdl")));
 
-	// The census claims `npc_VCamera` even though no spawn leaf stands it, so the species row is
-	// reachable by retail class name and not by a fixture spawn.
-	TestNotNull(TEXT("CNPC_VCamera is a census class"),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera")));
+	// The species row is reachable by retail class name. story 5 step 2: `npc_VCamera`'s factory
+	// builds `CNPC_VCamera` (population.md), so the classname resolves to the same row.
+	const FElysiumNpcClass* Camera = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera"));
+	TestNotNull(TEXT("CNPC_VCamera is a census class"), Camera);
+	TestTrue(TEXT("npc_VCamera resolves to CNPC_VCamera"),
+		Camera != nullptr
+			&& ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCamera"))) == Camera);
 	return true;
 }
 
@@ -760,14 +763,32 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 	FElysiumNpc& N = *Fix.Npc;
 	TestEqual(TEXT("an ordinary combatant runs the base slot 434"),
 		N.PrescheduleSpecies(), FElysiumNpc::EPrescheduleSpecies::Base);
-	// `npc_VCamera` is claimed by the census but is NOT a registered spawn leaf, so its row is
-	// exercised by retail class name — which is what the census answers.
-	TestNotNull(TEXT("CNPC_VCamera is a census class even though nothing spawns it"),
+	// `CNPC_VCamera`'s row is exercised by retail class name — which is what the census answers.
+	// story 5 step 2: `npc_VCamera` is now a registered classname building it (population.md).
+	TestNotNull(TEXT("CNPC_VCamera is a census class"),
 		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera")));
-	// And `npc_VCop`'s census classname list is null, so a spawned cop has NO retail class and every
-	// species lookup correctly falls through to the Troika line. That is the recovered answer.
-	TestNull(TEXT("npc_VCop resolves to no census class"),
-		ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCop"))));
+	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md), so the
+	// classname resolves to that census class — a cop is not the Troika line.
+	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	TestNotNull(TEXT("CNPC_VCop is a census class"), CopClass);
+	TestTrue(TEXT("npc_VCop resolves to CNPC_VCop"),
+		CopClass != nullptr
+			&& ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCop"))) == CopClass);
+	// The bare Troika line has NO retail class, so every species lookup falls through to the
+	// Troika line's slot 434. That is the recovered answer.
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("lifecycle_troika"), 20260913);
+		Builder.AddTroikaNpc(TEXT("subject"), FVector(100.0, 0.0, 0.0));
+		FElysiumNpcWorldFixture TroikaWorld(MoveTemp(Builder));
+		FElysiumNpc* Troika = TroikaWorld.Npc(TEXT("subject"));
+		FElysiumNpcWorldFixture::Quiet({ Troika });
+		if (TestNotNull(TEXT("the bare Troika NPC stood"), Troika))
+		{
+			TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
+			TestEqual(TEXT("so it runs the base slot 434"),
+				Troika->PrescheduleSpecies(), FElysiumNpc::EPrescheduleSpecies::Base);
+		}
+	}
 
 	return true;
 }

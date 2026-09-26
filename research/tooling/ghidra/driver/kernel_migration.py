@@ -6,6 +6,7 @@ is review-complete at this checkpoint. The whole step-0 gate refuses pending pac
     uv run elysium research kernel_migration --check factories
     uv run elysium research kernel_migration --check step0
     uv run elysium research kernel_migration --check step1
+    uv run elysium research kernel_migration --check step2
 
 Once a later phase is current, `--check step0` verifies the accepted receipt against the tree it
 accepted (`manifest.json` `history.step0.commit`), not against the edited working tree.
@@ -41,7 +42,7 @@ REQUIRED_PINS = {"module", "corpus", "listing", "datamaps", "census", "verdicts"
 
 
 # A phase is listed here only when its checker exists; no later phase is implicitly accepted.
-ACCEPTED_PHASES = (0, 1)
+ACCEPTED_PHASES = (0, 1, 2)
 
 
 class InvalidManifest(ValueError):
@@ -205,15 +206,17 @@ def check_factories(manifest: dict, rows: list[dict]) -> None:
         corpus.listing.close()
 
 
-def historical_source(commit: str, destination: Path) -> Path:
-    """Materialize `Source/ElysiumUE` exactly as `commit` holds it, for an accepted phase's receipt.
+def historical_source(commit: str, destination: Path,
+                      paths: tuple[str, ...] = ("Source/ElysiumUE",)) -> Path:
+    """Materialize `paths` (default `Source/ElysiumUE`) exactly as `commit` holds them, for an
+    accepted phase's receipt.
 
     A later phase edits the source the step-0 inventory hashed; the receipt stays checkable against
     the tree it accepted instead of being refreshed to hide the edit."""
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise InvalidManifest(f"historical commit must be a full hash: {commit!r}")
     archive = subprocess.run(["git", "-C", str(repo_root()), "archive", "--format=tar", commit,
-                              "Source/ElysiumUE"], capture_output=True, check=False)
+                              *paths], capture_output=True, check=False)
     if archive.returncode != 0:
         raise InvalidManifest(f"cannot read accepted tree {commit}: {archive.stderr.decode(errors='replace').strip()}")
     with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
@@ -314,7 +317,7 @@ def _check_step0(directory: Path, manifest: dict, source_root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", choices=("factories", "step0", "step1"), required=True)
+    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2"), required=True)
     args = parser.parse_args(argv)
     try:
         manifest, classes, factories = load()
@@ -332,6 +335,12 @@ def main(argv: list[str] | None = None) -> int:
             counts = check_step1()
             print('PASS: step 1 acceptance; accepted step-0 receipt, deletion record, live-definition '
                   'guard, dead census, rule identity, regression comparison and runtime gate verified.')
+            print(json.dumps(counts, sort_keys=True))
+        if args.check == "step2":
+            from kernel_migration_step2 import check_step2
+            counts = check_step2()
+            print('PASS: step 2 acceptance; accepted step-1 receipt, factory census, class tree, '
+                  'registry, fixture compatibility, regression comparison and runtime gate verified.')
             print(json.dumps(counts, sort_keys=True))
     except (InvalidManifest, ValueError, OSError) as exc:
         print(f"REFUSED: {exc}")

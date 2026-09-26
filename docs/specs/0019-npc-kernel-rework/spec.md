@@ -621,7 +621,7 @@ green, and `coverage.md` shows the change.
     lists the unported `rule` overrides, a number that must only fall. `--residue` already names
     the unsettled layout and slot rows.
   **Execution: [story-5-execution-plan.md](story-5-execution-plan.md)** (reviewed 2026-09-24;
-  step 0 accepted; step 1 not started). The plan owns the detailed sequence, phase gates and session
+  steps 0-2 accepted; step 3 not started). The plan owns the detailed sequence, phase gates and session
   handoff contract so they do not need to be duplicated here.
   Twelve steps on `0019-5-class-tree`: evidence/manifest and rehearsal; dead species deletion;
   species tree and factories; dispatch conversion; the atomic bodies/words/bindings move; base

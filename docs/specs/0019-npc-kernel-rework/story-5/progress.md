@@ -1,44 +1,57 @@
-# Story 5 — step 1 accepted
+# Story 5 — step 2 accepted
 
-**Step 1 passed its acceptance gate on 2026-09-25. Step 2 has not started.**
-`uv run elysium research kernel_migration --check step1` exits 0 (it re-verifies the step-0
-receipt against the accepted tree `aa1c3c86`). Evidence is pinned in
-[acceptance-step1.json](acceptance-step1.json); step 0's stays in [acceptance.json](acceptance.json).
+**Step 2 passed its acceptance gate on 2026-09-25. It is uncommitted on `0019-5-class-tree`
+(base `b2261eca`). Step 3 has not started.**
+`uv run elysium research kernel_migration --check step2` exits 0. It re-verifies step 1 against
+`b2261eca` and step 0 against `aa1c3c86`. Evidence is pinned in
+[acceptance-step2.json](acceptance-step2.json); earlier receipts stay in
+[acceptance-step1.json](acceptance-step1.json) and [acceptance.json](acceptance.json).
 
-Checkout: `E:/dev/elysium-unreal`, branch `0019-5-class-tree`, base `aa1c3c86` (step 0 accepted).
-Manifest phase 1, revision `step-1-dead-species-deletion`; the verdicts pin is refreshed and the
-step-0 pin kept under `history.step0`.
+Manifest: phase 2, revision `step-2-species-shells-and-factories`. Pins refreshed under
+`history.step2_pins`: census `classes.md`, registry `ElysiumNpcClasses.cpp`, and corpus
+`corpus.sqlite`. The corpus was rebuilt on 2026-09-25 outside this step by a knowledge apply on
+`vampire.dll`: names and prototypes were re-applied, function rows are unchanged, and call edges and
+field accesses moved. It is taken as the new baseline (plan §3.1). The ledger and
+`ElysiumNpcKernelShape.cpp` metadata were regenerated against it, and the runtime gate was re-run.
 
 Completed:
 
 - [Step 0](packets/step-0-inventory-and-rehearsals.md): manifest, factory identities, inventory,
   rehearsals.
-- [Step 1, packet 1a](packets/1a-deletion-manifest.md): deletion record, step-1 decisions,
-  historical `--check step0`, `--check step1` with a live-definition guard.
-- [Step 1, packets 1b–1g](packets/1b-1g-deletion.md): the dead species subset deleted, overlay and
-  generated outputs regenerated, full gate. Record: [deletions-step1.tsv](deletions-step1.tsv).
+- [Step 1](packets/1b-1g-deletion.md): the dead species subset deleted
+  ([1a](packets/1a-deletion-manifest.md) is its record and checker).
+- [Step 2](packets/2-species-shells-and-factories.md): 44 species classes, 45 typed classname
+  factories, abstract refusal, factory census, fixture migration, map smoke; review follow-up 2r
+  (activation-pass port, `TweakParam` port, `SpawnTempParticle` seam, test and checker fixes).
 
-Validation: build green; **1,255 Substrate + 14 Content + 1 PlayerWorld**, zero failures;
-`test_delta` against step 0's final gate passes with the 29 reviewed expectations in
-[expectations/step-1.json](expectations/step-1.json); five generator checks and 104 Python tests
-pass. An independent review of `ecfa9d82` found no blocker; its follow-up (stricter checker, record
-and comment corrections) was re-gated green.
-Reports: `E:/elysium-work/research/npc-kernel/story-5/step1/gate/`.
+Validation: build green. **1,262 Substrate + 14 Content + 1 PlayerWorld**, zero failures.
+`test_delta` against step 1's final gate passes with the 244 reviewed expectations in
+[expectations/step-2.json](expectations/step-2.json). Five generator checks and the Python tests
+pass. All 45 classnames stood live in the running game. Reports: `E:/elysium-work/research/npc-kernel/story-5/step2/gate/`.
 
-Carried forward (see [decisions-step1.json](decisions-step1.json)):
+Carried forward (see [decisions-step2.json](decisions-step2.json)):
 
-- Generated activity-table and hull-table rows of dead classes are retained census until step 11.
-- Seven live dispatchers still lead-cite a removed dead address, so the inventory lists them as
-  step-1-scope candidates; they are live and not deletion candidates.
-- `CharTemplateModelName` is a retained seam: the port's `Spawn` does not yet make retail's
-  `FUN_10207e60` call from `CAI_BaseNPCTroika::Spawn` `0x10298d30` (a pre-existing unported rule).
-- Slot 525: `OverrideMove` dispatches neither live arm — ManBat `0x1038b120` (unported flight
-  step) nor the VampireBoss family's `0x103c5fe0` (`m_bJumping != 0`). The latter was mis-judged
-  `present` and is now a `rule` (8 contracts, the reviewed `rule_identity_delta`), so steps 3–4 and
-  story 8 carry both; the flag's writer is Troika `StartTask` `0x102a1910`'s jump arms (story 8).
-- For step 2: `ClassHolstersOnState` lists `npc_ProneDialog`, but retail's classnames are
-  `npc_VProneDialog` and `npc_VMercurio`.
+- Species dispatch still reads `RetailClass()` through census tables. **Step 3** turns those arms
+  into overrides. Classname-keyed tables stay until then: `ClassHolstersOnState`, footsteps, and
+  the activity aliases (until step 11).
+- `SetRetailClassForTests` survives at two deferred-class sites (FrenzyShadow, PlayerController,
+  WolfMorph; step 7). `FElysiumNpcMaker::SetZombieMakerForTests` is gone.
+- `EFL_DORMANT`'s `globalname` arms (`DispatchSpawn` `0x101d1280`, restores `0x101a2e40`,
+  `0x101a3c40`) are an empty seam: no shipped map authors a `globalname`.
+- Yukie slots 363 (`0x103ddaa0`) and 602 (`0x103dda10`) are not dispatched to the Yukie yet
+  (direct-body tests only); step 3.
+- Newly active classes now reach unported stubs, with smoke evidence:
+  - `Hide` `0x1009d2a0`
+  - `StudioFrameAdvance`
+  - `HasUsableRangedWeapon`
+  - Camera `task_wait_indefinite`
+  - Hengeyokai's unbound `StartTransformation` input (step 4)
+- Smoke limits: 11 names are placed only in unbaked maps (they stood through the script path);
+  `hw_warrens_1` does not activate from a bare load (no `info_player_start`); the VampireBoss
+  protean-swap creation (`MakeNPC` `0x103c75f0`) is unported.
+- Step 1's carried items stand: CharTemplateModelName seam, slot 525 OverrideMove rows, and
+  retained dead census tables.
 
-**Next:** step 2 (species shells and factory correction) when separately requested. Read the
-reviewed plan's step 2, `factories.tsv`, and the compatibility inventory in
-`step1/inventory-step1.json` first. Do not tick story 5 or tracker 06b until step 11.
+**Next:** commit step 2 when the owner asks, then step 3 (replace introduced-species dispatch).
+Read the plan's step 3, `decisions-step2.json` and the compatibility inventory first. Do not tick
+story 5 or tracker 06b until step 11.

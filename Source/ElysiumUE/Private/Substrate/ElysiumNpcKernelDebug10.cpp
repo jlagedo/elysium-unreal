@@ -403,10 +403,9 @@ int32 FElysiumNpc::DrawDebugTextOverlays()
 	// slot 124. Eight retail bodies fill it across the census; the two on classes no map stands
 	// (`CNPC_Crow` `0x10358f90`, `CScriptedTarget` `0x1034ddf0`) carry no port arm. This leaf
 	// resolves between the rest by the address the census says fills the slot for this NPC's retail
-	// class, exactly as story 29c-1's slot-76 dispatcher does. `CNPC_VCop` has a NULL classname
-	// list in the census, so a spawned `npc_VCop` answers a null `RetailClass()` and lands on the
-	// Troika-line body — which is the recovered answer, not a gap (see
-	// `docs/specs/0002-npc-ai/spec.md`, story 29c-1's cleanup).
+	// class, exactly as story 29c-1's slot-76 dispatcher does. A spawned `npc_VCop` is `CNPC_VCop`
+	// (story 5 step 2) and takes its own body; only the bare Troika line answers a null
+	// `RetailClass()`.
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 124);
 	if (SlotBody != nullptr)
 	{

@@ -732,9 +732,8 @@ bool FElysiumNpc::PrecacheSpecies()
 		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GPrecacheSlot);
 	if (Override == nullptr)
 	{
-		// `RetailClass()` is null for a classname the census claims nothing for — `npc_VCop`'s own
-		// recovered answer — and a class with no slot-104 row inherits the Troika body, which is
-		// exactly what returning false runs.
+		// `RetailClass()` is null only on the bare Troika line, and a class with no slot-104 row
+		// inherits the Troika body, which is exactly what returning false runs.
 		return false;
 	}
 	for (const FPrecache10Arm& Arm : Arms)

@@ -126,18 +126,22 @@ namespace
 		FElysiumNpc* Foe = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		static FElysiumNpcWorldBuilder BuildWorld()
+		// The fighter is spawned as retail class `FighterClass` through its own classname (story 5
+		// step 2: the C++ type is the class); null stands the bare Troika line. The world's
+		// catalogue is a process global, so two of these must never be alive at once — a case that
+		// needs a second class stands a second fixture in its own scope.
+		static FElysiumNpcWorldBuilder BuildWorld(const TCHAR* FighterClass)
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("__combat10_test__"), 0x434F4D42);
 			Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-			Builder.AddNpc(TEXT("fighter"));
+			Builder.AddNpcOfClass(TEXT("fighter"), FVector::ZeroVector, FighterClass);
 			Builder.AddNpc(TEXT("foe"), FVector(200.0, 0.0, 0.0));
 			return Builder;
 		}
 
-		FCombat10Fixture()
+		explicit FCombat10Fixture(const TCHAR* FighterClass = TEXT("CNPC_VHumanCombatant"))
 			: Items(MakeCombat10ItemTable())
-			, Fixture(BuildWorld(), [this](FElysiumRecordingServices&)
+			, Fixture(BuildWorld(FighterClass), [this](FElysiumRecordingServices&)
 				{
 					ElysiumItems::Install(Items);
 					bInstalled = true;
@@ -275,36 +279,48 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10MingXiaoHealthToPercen
 	"Elysium.Substrate.NpcKernelCombat10.MingXiaoHealthToPercent", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
-	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
+	// Each class is its own fighter in its own world, carrying the same quarter-wounded sheet.
+	auto Wound = [](FElysiumNpc& Fighter)
 	{
-		return false;
-	}
-	F.Fighter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 20);
-	F.Fighter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 5);
-	F.Fighter->RecomputeSheet();
-	F.Fighter->MaxHealth = 100;
+		Fighter.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 20);
+		Fighter.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 5);
+		Fighter.RecomputeSheet();
+		Fighter.MaxHealth = 100;
+	};
 
-	// The named case that proves the dispatch: a plain `npc_VCop` has NO retail class (its census
-	// classname list is null, story 29c-1's cleanup), so slot 348 takes the Troika-line body.
-	TestNull(TEXT("a spawned npc_VCop resolves to no retail class"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop")));
-	F.Fighter->SetRetailClassForTests(nullptr);
-	TestEqual(TEXT("0x1032fe60 the Troika body answers for a class with no override"),
-		F.Fighter->HealthToPercent(), 75);
+	// The Troika-line body of slot 348, asserted on the bare Troika line (no species class). Until
+	// story 5 step 2 a placed `npc_VCop` reached it too, the census giving `CNPC_VCop` no classname;
+	// retail's factory `0x103704f0` builds `CNPC_VCop`, and the census now says so.
+	TestTrue(TEXT("npc_VCop resolves to CNPC_VCop"),
+		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
+			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	{
+		FCombat10Fixture F(nullptr);
+		if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
+		{
+			return false;
+		}
+		Wound(*F.Fighter);
+		TestEqual(TEXT("0x1032fe60 the Troika body answers for a class with no override"),
+			F.Fighter->HealthToPercent(), 75);
+	}
 
 	// `CNPC_VMingXiao#348` is the one override at this slot.
 	TestNotNull(TEXT("CNPC_VMingXiao overrides slot 348"),
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 348));
-	F.Fighter->SetRetailClassForTests(TEXT("CNPC_VMingXiao"));
+	FCombat10Fixture F(TEXT("CNPC_VMingXiao"));
+	if (!TestNotNull(TEXT("the Ming Xiao fighter constructs"), F.Fighter))
+	{
+		return false;
+	}
+	Wound(*F.Fighter);
 	// `10397250`: the limb loop folds one extra contribution in per ATTACHED limb. This runtime
 	// stands no severable limbs (`0x10398000` answers false for all six), so the arm equals the base
 	// — retail's own answer for an intact boss.
 	TestEqual(TEXT("0x103970d0 with every limb absent the arm equals the base"),
 		F.Fighter->HealthToPercent(), 75);
 	TestFalse(TEXT("0x10398000 stands no limb"), F.Fighter->MingXiaoLimbPresent(0));
-	F.Fighter->SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -347,12 +363,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10GiveBaseFightingItemsT
 	"Elysium.Substrate.NpcKernelCombat10.GiveBaseFightingItems", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10GiveBaseFightingItemsTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(nullptr);   // the bare Troika line, whose slot-304 body this is
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
-	F.Fighter->SetRetailClassForTests(nullptr);
 	F.Fighter->MiscFlags = 0;
 
 	// `102b5b47`: with neither slot 307 nor slot 308 answering, `item_w_fists` is granted and misc
@@ -377,12 +392,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10RemoveBaseFightingItem
 	"Elysium.Substrate.NpcKernelCombat10.RemoveBaseFightingItems", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10RemoveBaseFightingItemsTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(nullptr);   // the bare Troika line, whose slot-305 body this is
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
-	F.Fighter->SetRetailClassForTests(nullptr);
 	F.Fighter->MiscFlags = 0;
 
 	// `102b5b75`: with the flag CLEAR the body does nothing at all — not even a lookup.
@@ -410,21 +424,22 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10WerewolfGiveBaseFighti
 	GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	// The fighter is a werewolf, spawned through the classname the class registry builds it from.
+	FCombat10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
-	// UNREACHABLE IN PLAY: `CNPC_VWerewolf` carries no entity classname in the census, so no spawned
-	// NPC's `RetailClass()` can be it. The arm is ported and is reached the only way it can be.
-	TestNull(TEXT("no classname resolves to CNPC_VWerewolf"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VWerewolf")));
-	TestNotNull(TEXT("...but the census carries the class and its slot-304 override"),
+	// The census's classname side: retail's factory `0x103c8760` builds `CNPC_VWerewolf` from
+	// `npc_VWerewolf` (story 5 step 2; the proximity census gave the class no classname).
+	TestTrue(TEXT("npc_VWerewolf resolves to CNPC_VWerewolf"),
+		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VWerewolf"))
+			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")));
+	TestNotNull(TEXT("...and the census carries its slot-304 override"),
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")), 304));
 
 	F.Fighter->MiscFlags = 0;
-	F.Fighter->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 	// `103cca32`: the arm consults NEITHER base gate. An ARMED werewolf still gets its claws, which
 	// is the whole difference from the base.
 	F.Arm(GCombat10Katana);
@@ -440,9 +455,7 @@ bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const F
 	const int32 Before = F.Fighter->Inventory.Num();
 	F.Fighter->GiveBaseFightingItems();
 	TestEqual(TEXT("...Inventory_Find refuses a second grant"), F.Fighter->Inventory.Num(), Before);
-
-	// The named Troika case: with no retail class the base body runs and grants fists instead.
-	F.Fighter->SetRetailClassForTests(nullptr);
+	// The Troika base body (fists) is `GiveBaseFightingItems`' own case, on the bare Troika line.
 	return true;
 }
 
@@ -451,13 +464,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10WerewolfRemoveBaseFigh
 	GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10WerewolfRemoveBaseFightingItemsTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
 	F.Fighter->MiscFlags = 0;
-	F.Fighter->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 	F.Fighter->GiveBaseFightingItems();
 	TestTrue(TEXT("the claws are carried"),
 		F.Fighter->InventoryFindByClassname(GCombat10WerewolfAttacks));
@@ -475,7 +487,6 @@ bool FElysiumNpcKernelCombat10WerewolfRemoveBaseFightingItemsTest::RunTest(const
 	F.Fighter->RemoveBaseFightingItems();
 	TestTrue(TEXT("...and with the flag clear nothing is removed"),
 		F.Fighter->InventoryFindByClassname(GCombat10WerewolfAttacks));
-	F.Fighter->SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -984,13 +995,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10TroikaRangedTest,
 	"Elysium.Substrate.NpcKernelCombat10.TroikaRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10TroikaRangedTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(nullptr);   // the bare Troika line, with no species override over slot 605
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Fighter;
-	N.SetRetailClassForTests(nullptr);   // the Troika line, and what a plain `npc_VCop` reaches
 	N.Cognition.Conditions.Reset();
 
 	// `102b7fc6`: arm 1 wins over everything, including the pre-pass.
@@ -1097,20 +1107,23 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10HumanRangedTest,
 	"Elysium.Substrate.NpcKernelCombat10.HumanRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10HumanRangedTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(TEXT("CNPC_VHuman"));   // spawned as `npc_VHuman`
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Fighter;
 
-	// The named dispatch case: `CNPC_VHuman` overrides slot 605 and a plain `npc_VCop` does not.
+	// The named dispatch case: `0x10386560` is `CNPC_VHuman`'s slot-605 body, shared by the ~38
+	// vtables of the human line. `CNPC_VCop` inherits it through `CNPC_VHumanCombatant` ->
+	// `CNPC_VHuman` (the census carries the inherited row on each of them); the bare Troika line
+	// takes none.
 	TestNotNull(TEXT("CNPC_VHuman overrides slot 605"),
 		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHuman")), 605));
-	TestNull(TEXT("a spawned npc_VCop resolves to no retail class, so it takes the Troika body"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop")));
+	TestEqual(TEXT("CNPC_VCop inherits CNPC_VHuman's slot-605 body through CNPC_VHumanCombatant"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")), 605)),
+		FString(TEXT("0x10386560")));
 
-	N.SetRetailClassForTests(TEXT("CNPC_VHuman"));
 	N.Cognition.Conditions.Reset();
 
 	// `10386566`: arm 1.
@@ -1164,7 +1177,6 @@ bool FElysiumNpcKernelCombat10HumanRangedTest::RunTest(const FString&)
 	N.Cognition.Conditions.Set(EElysiumNpcCond::WaitingAttackTime);
 	TestEqual(TEXT("10386720 COND 0x2f moves the tail to 0xb9"),
 		N.SelectScheduleRangedCombat(0), 0xb9);
-	N.SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -1176,26 +1188,48 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10AsianVampireRangedTest
 	"Elysium.Substrate.NpcKernelCombat10.AsianVampireRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	TestNotNull(TEXT("CNPC_VAsianVampire overrides slot 605"),
+		ElysiumNpcKernelClass::OverrideOf(
+			ElysiumNpcKernelClass::Find(TEXT("CNPC_VAsianVampire")), 605));
+
+	// Each half of the pair is its own unarmed fighter in a world of its own: the Asian vampire, then
+	// the bare Troika line. The fixture's item catalogue is a global, so each world is gone before
+	// the next stands.
+	{
+		FCombat10Fixture Asian(TEXT("CNPC_VAsianVampire"));
+		if (!TestNotNull(TEXT("the fighter leaf constructs"), Asian.Fighter))
+		{
+			return false;
+		}
+		FElysiumNpc& A = *Asian.Fighter;
+		A.Cognition.Conditions.Reset();
+
+		// `103621c2`: the ONE divergence from the Troika base — COND `0x3c` answers **0xf0**, not
+		// 0xb8.
+		A.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
+		TestEqual(TEXT("0x103620d0 COND 0x3c answers 0xf0 where the base answers 0xb8"),
+			A.SelectScheduleRangedCombat(0), 0xf0);
+	}
+	{
+		FCombat10Fixture Troika(nullptr);
+		if (!TestNotNull(TEXT("the Troika fighter constructs"), Troika.Fighter))
+		{
+			return false;
+		}
+		FElysiumNpc& T = *Troika.Fighter;
+		T.Cognition.Conditions.Reset();
+		T.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
+		TestEqual(TEXT("...and the Troika body under the same condition answers 0xb8"),
+			T.SelectScheduleRangedCombat(0), 0xb8);
+	}
+
+	// The rest of the arms, on a fresh Asian vampire.
+	FCombat10Fixture F(TEXT("CNPC_VAsianVampire"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Fighter;
-	TestNotNull(TEXT("CNPC_VAsianVampire overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VAsianVampire")), 605));
-	N.SetRetailClassForTests(TEXT("CNPC_VAsianVampire"));
-	N.Cognition.Conditions.Reset();
-
-	// `103621c2`: the ONE divergence from the Troika base — COND `0x3c` answers **0xf0**, not 0xb8.
-	N.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
-	TestEqual(TEXT("0x103620d0 COND 0x3c answers 0xf0 where the base answers 0xb8"),
-		N.SelectScheduleRangedCombat(0), 0xf0);
-	N.SetRetailClassForTests(nullptr);
-	TestEqual(TEXT("...and the Troika body under the same condition answers 0xb8"),
-		N.SelectScheduleRangedCombat(0), 0xb8);
-	N.SetRetailClassForTests(TEXT("CNPC_VAsianVampire"));
 	N.Cognition.Conditions.Reset();
 
 	// `10362210`: COND `0x5f` with neither `0x2f` nor `0x63` answers 0xf0 — and this body offers
@@ -1224,7 +1258,6 @@ bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyUnreachable);
 	TestEqual(TEXT("103622ce COND_ENEMY_UNREACHABLE takes GetJumpSchedule, a seam answering 0"),
 		N.SelectScheduleRangedCombat(0), 0);
-	N.SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -1236,7 +1269,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10BachRangedTest,
 	"Elysium.Substrate.NpcKernelCombat10.BachRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(TEXT("CNPC_VBach"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
@@ -1244,7 +1277,6 @@ bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Fighter;
 	TestNotNull(TEXT("CNPC_VBach overrides slot 605"),
 		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach")), 605));
-	N.SetRetailClassForTests(TEXT("CNPC_VBach"));
 	N.Cognition.Conditions.Reset();
 
 	// `103642f6`: COND `0x7b` — a Bach-line condition above the base registrar's `0x76`, carried by
@@ -1297,7 +1329,6 @@ bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 		TestTrue(TEXT("1036447a the matching rifle chains into CNPC_VHuman's body"),
 			Answer != 0x159);
 	}
-	N.SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -1309,38 +1340,66 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10MingXiaoRangedTest,
 	"Elysium.Substrate.NpcKernelCombat10.MingXiaoRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	TestNotNull(TEXT("CNPC_VMingXiao overrides slot 605"),
+		ElysiumNpcKernelClass::OverrideOf(
+			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 605));
+
+	// Every fighter below is its own, in a world of its own (the item catalogue is a global, so each
+	// world is gone before the next stands), armed with a LOADED rifle so the pre-pass declines.
+	auto ArmLoaded = [](FCombat10Fixture& Fx)
+	{
+		Fx.Fighter->Cognition.Conditions.Reset();
+		FElysiumItem* const Loaded = Fx.Arm(GCombat10BachRifle);
+		if (Loaded != nullptr)
+		{
+			Loaded->MagazineCount = 3;
+		}
+	};
+
+	{
+		FCombat10Fixture MingXiao(TEXT("CNPC_VMingXiao"));
+		if (!TestNotNull(TEXT("the fighter leaf constructs"), MingXiao.Fighter))
+		{
+			return false;
+		}
+		FElysiumNpc& M = *MingXiao.Fighter;
+		ArmLoaded(MingXiao);
+
+		// `103967d6`: arm 1 is the human's.
+		M.bInMelee = true;
+		TestEqual(TEXT("0x103967d0 m_bInMelee answers 0xe3"), M.SelectScheduleRangedCombat(0), 0xe3);
+		M.bInMelee = false;
+
+		// **There is NO `COND 0x3c` arm.** With the condition up and nothing else standing, this body
+		// falls through to the slot-606 branch and DECLINES, where the human answers 0xb8.
+		M.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
+		TestEqual(TEXT("103967d0 drops the COND 0x3c arm entirely"),
+			M.SelectScheduleRangedCombat(0), 0);
+	}
+	{
+		// The same standing state on a `CNPC_VHuman`, spawned as `npc_VHuman`.
+		FCombat10Fixture Human(TEXT("CNPC_VHuman"));
+		if (!TestNotNull(TEXT("the human fighter constructs"), Human.Fighter))
+		{
+			return false;
+		}
+		FElysiumNpc& H = *Human.Fighter;
+		ArmLoaded(Human);
+		H.bInMelee = false;
+		H.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
+		TestEqual(TEXT("...where the shared human arm answers 0xb8"),
+			H.SelectScheduleRangedCombat(0), 0xb8);
+	}
+
+	// The rest of the arms, on a fresh Ming Xiao standing the same loaded rifle.
+	FCombat10Fixture F(TEXT("CNPC_VMingXiao"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Fighter;
-	TestNotNull(TEXT("CNPC_VMingXiao overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 605));
-	N.SetRetailClassForTests(TEXT("CNPC_VMingXiao"));
-	N.Cognition.Conditions.Reset();
-	FElysiumItem* const Rifle = F.Arm(GCombat10BachRifle);
-	if (Rifle != nullptr)
-	{
-		Rifle->MagazineCount = 3;
-	}
-
-	// `103967d6`: arm 1 is the human's.
-	N.bInMelee = true;
-	TestEqual(TEXT("0x103967d0 m_bInMelee answers 0xe3"), N.SelectScheduleRangedCombat(0), 0xe3);
+	ArmLoaded(F);
 	N.bInMelee = false;
-
-	// **There is NO `COND 0x3c` arm.** With the condition up and nothing else standing, this body
-	// falls through to the slot-606 branch and DECLINES, where the human answers 0xb8.
-	N.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
-	TestEqual(TEXT("103967d0 drops the COND 0x3c arm entirely"),
-		N.SelectScheduleRangedCombat(0), 0);
-	N.SetRetailClassForTests(TEXT("CNPC_VHuman"));
-	TestEqual(TEXT("...where the shared human arm answers 0xb8"),
-		N.SelectScheduleRangedCombat(0), 0xb8);
-	N.SetRetailClassForTests(TEXT("CNPC_VMingXiao"));
-	N.Cognition.Conditions.Reset();
 
 	// `103968c3`: **there is NO discipline gate** either, so the slot-606 branch is entered on the
 	// two conditions alone and `COND_TOO_FAR_TO_ATTACK` answers 0xb1.
@@ -1357,7 +1416,6 @@ bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 	N.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
 	TestEqual(TEXT("10396920 the inlined dodge has only the roll arm, so COND 0x3c does not save it"),
 		N.SelectScheduleRangedCombat(0), 0xf0);
-	N.SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -1369,7 +1427,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10SheriffManRangedTest,
 	"Elysium.Substrate.NpcKernelCombat10.SheriffManRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(TEXT("CNPC_VSheriffMan"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
@@ -1378,7 +1436,6 @@ bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 	TestNotNull(TEXT("CNPC_VSheriffMan overrides slot 605"),
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VSheriffMan")), 605));
-	N.SetRetailClassForTests(TEXT("CNPC_VSheriffMan"));
 	N.Cognition.Conditions.Reset();
 	FElysiumItem* const Rifle = F.Arm(GCombat10BachRifle);
 	if (Rifle != nullptr)
@@ -1412,7 +1469,6 @@ bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 	N.Cognition.Conditions.Set(EElysiumNpcCond::StopBackup);
 	TestEqual(TEXT("103b0026 a refused dodge with no melee weapon answers 0xf0"),
 		N.SelectScheduleRangedCombat(0), 0xf0);
-	N.SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -1424,13 +1480,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10SelectorAgreementTest,
 	"Elysium.Substrate.NpcKernelCombat10.SelectorAgreement", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10SelectorAgreementTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(nullptr);   // the bare Troika line, whose slot-605 body is the selector's
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Fighter;
-	N.SetRetailClassForTests(nullptr);
 	N.Cognition.Conditions.Reset();
 	FElysiumItem* const Rifle = F.Arm(GCombat10BachRifle);
 	if (Rifle != nullptr)

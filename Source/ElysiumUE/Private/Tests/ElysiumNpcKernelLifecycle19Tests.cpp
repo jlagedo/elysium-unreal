@@ -22,28 +22,22 @@ static constexpr EAutomationTestFlags GLifecycle19Flags =
 
 namespace
 {
-	struct FLifecycle19Fixture
+	// The three classes story 5 step 2 defers: no classname builds a C++ class of theirs yet, so
+	// their NPC is the bare Troika line with the test-only class latch over it (removed at step 11).
+	bool Lifecycle19IsDeferredClass(const TCHAR* RetailClass)
 	{
-		FElysiumNpcWorldFixture World;
-		FElysiumNpc* Npc = nullptr;
+		return RetailClass != nullptr
+			&& (FCString::Strcmp(RetailClass, TEXT("CNPC_VPlayerController")) == 0
+				|| FCString::Strcmp(RetailClass, TEXT("CNPC_VFrenzyShadow")) == 0
+				|| FCString::Strcmp(RetailClass, TEXT("CNPC_VWolfMorph")) == 0);
+	}
 
-		FLifecycle19Fixture()
-			: World([]
-				{
-					FElysiumNpcWorldBuilder Builder(TEXT("lifecycle19_kernel"), 919);
-					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpc(TEXT("subject"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
-					return Builder;
-				}())
-		{
-			Npc = World.Npc(TEXT("subject"));
-			FElysiumNpcWorldFixture::Quiet({ Npc });
-		}
-	};
-
-	void Lifecycle19Stand(FElysiumNpc& Npc, const TCHAR* RetailClass)
+	// Clear the counters and latches a case reads, so what it asserts is its own call's effect and
+	// not the spawn's. The spawn already ran the class's own `NPCInit` (`Activate` -> slot 420), so
+	// the species WORDS it wrote are standing too; this does not reset them. A case asserting such a
+	// word first writes a value only the call under test replaces.
+	void Lifecycle19Stand(FElysiumNpc& Npc)
 	{
-		Npc.SetRetailClassForTests(RetailClass);
 		Npc.ThinkSetCalls = 0;
 		Npc.SpawnEquipRequests = 0;
 		Npc.FloorDropPerformed = 0;
@@ -52,20 +46,72 @@ namespace
 		Npc.NodeGraphHullIndex() = 0;
 		Npc.InNpcInit() = false;
 	}
+
+	// One NPC spawned as `RetailClass` through its factory classname (story 5 step 2), stood by
+	// `Lifecycle19Stand`. Null or `CAI_BaseNPCTroika` stands the bare Troika line; a deferred class
+	// stands the bare Troika line and latches the class.
+	struct FLifecycle19Fixture
+	{
+		FElysiumNpcWorldFixture World;
+		FElysiumNpc* Npc = nullptr;
+
+		explicit FLifecycle19Fixture(const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"))
+			: World([RetailClass]
+				{
+					FElysiumNpcWorldBuilder Builder(TEXT("lifecycle19_kernel"), 919);
+					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+					Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector,
+						Lifecycle19IsDeferredClass(RetailClass) ? nullptr : RetailClass);
+					return Builder;
+				}())
+		{
+			Npc = World.Npc(TEXT("subject"));
+			FElysiumNpcWorldFixture::Quiet({ Npc });
+			if (Npc != nullptr)
+			{
+				if (Lifecycle19IsDeferredClass(RetailClass))
+				{
+					Npc->SetRetailClassForTests(RetailClass);
+				}
+				Lifecycle19Stand(*Npc);
+			}
+		}
+	};
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaNpcInitTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TroikaNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaNpcInitTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	F.Npc->StatTemplate = TEXT("Human");
+	// The spawn already ran this very body, so every word asserted below takes a value only the
+	// call under test replaces.
+	F.Npc->DistTooFar = 0.f;
+	ElysiumSchedule::Start(F.Npc->Schedule, ElysiumSched::IDLE_STAND, *F.Npc);
+	F.Npc->Senses.Memory.bPlayerInPvs = false;
+	F.Npc->Senses.Memory.bPlayerLos = false;
+	F.Npc->WriteIdealStateRetail(3);
+	F.Npc->bIsBccTargetable = false;
+	F.Npc->bNpcIsAlive = false;
+	F.Npc->MaxHealth = 0;
+	F.Npc->CollisionMask = 0;
+	F.Npc->InNpcInit() = true;
+	F.Npc->WriteNpcStateRetail(3);
+	F.Npc->bHidden = true;
+	F.Npc->bCineScriptHidden = true;
+	F.Npc->DisciplineFlags = 1;
+	F.Npc->DisciplineFlags2 = 1;
+	F.Npc->DisciplinePreFlags = 1;
+	F.Npc->DisciplinePreFlags2 = 1;
+	F.Npc->HitBuildupCount = 1;
+	F.Npc->ScheduleHost.ForcedSchedule = 1;
+	F.Npc->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 5);
 	F.Npc->NPCInit();                                                    // 0x1029a0b0
 	TestEqual(TEXT("102733xx DistTooFar = 1024"), F.Npc->DistTooFar, 1024.f);
 	TestFalse(TEXT("10280d30 schedule cleared"), F.Npc->Schedule.IsRunning());
@@ -105,13 +151,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaNpcInitAbsenc
 	"Elysium.Substrate.NpcKernelLifecycle19.TroikaNPCInitAbsences", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	// `1029a43e`/`1029a444`/`1029a44a`/`1029a450` write `+0x6418`, `+0x623c`, `+0x60a4` and
 	// `+0x60a8` and then STOP: `+0x641c m_flNextFleeSoundTime` is not in this body at all. Only the
 	// four species bodies that clear it (Newscaster, PlayerController, Pedestrian, Werewolf) do.
@@ -136,13 +181,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TuningTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.OccludedTuning", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TuningTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
+	// The spawn already ran this very body, so the three words are dirtied first.
+	F.Npc->OccludedDelayNormal = 0.f;
+	F.Npc->OccludedDelayCover = 0.f;
+	F.Npc->OccludedDelay = 0.f;
 	F.Npc->NPCInit();
 	// `0x101e8c50` / `0x101e8c70` are field getters on the process-global `CVFeatList_t`
 	// (`0x10739d08`), loaded by `0x101e6310` from `Rules.txt` `Npc_Combat_Info` with the image
@@ -151,19 +199,37 @@ bool FElysiumNpcKernelLifecycle19TuningTest::RunTest(const FString&)
 	TestEqual(TEXT("101e8c70 OccludedDelayCover default 5.0"), F.Npc->OccludedDelayCover, 5.f);
 	TestEqual(TEXT("m_flOccludedDelay takes the normal one"), F.Npc->OccludedDelay, 0.5f);
 	// The camera keeps its own literals (`103696xx`: `0x4059999a`, `0x41200000`, `0x3f000000`).
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VCamera"));
-	F.Npc->bCameraEngineQueryAnswer = true;
-	F.Npc->NPCInit();
-	TestEqual(TEXT("103692c0 hard-codes 3.4"), F.Npc->OccludedDelayNormal, 3.4f);
-	TestEqual(TEXT("103692c0 hard-codes 10.0"), F.Npc->OccludedDelayCover, 10.f);
-	TestEqual(TEXT("103696f7 hard-codes the enemy-store interval"),
-		static_cast<float>(F.Npc->EnemyMemory.FreeKnowledgeDuration), 0.5f);
+	{
+		FLifecycle19Fixture Camera(TEXT("CNPC_VCamera"));
+		if (Camera.Npc == nullptr)
+		{
+			AddError(TEXT("no camera"));
+			return false;
+		}
+		Camera.Npc->bCameraEngineQueryAnswer = true;
+		// The spawn's own `NPCInit` already wrote all three, so each is dirtied first.
+		Camera.Npc->OccludedDelayNormal = 0.f;
+		Camera.Npc->OccludedDelayCover = 0.f;
+		Camera.Npc->EnemyMemory.FreeKnowledgeDuration = 0.0;
+		Camera.Npc->NPCInit();
+		TestEqual(TEXT("103692c0 hard-codes 3.4"), Camera.Npc->OccludedDelayNormal, 3.4f);
+		TestEqual(TEXT("103692c0 hard-codes 10.0"), Camera.Npc->OccludedDelayCover, 10.f);
+		TestEqual(TEXT("103696f7 hard-codes the enemy-store interval"),
+			static_cast<float>(Camera.Npc->EnemyMemory.FreeKnowledgeDuration), 0.5f);
+	}
 	// `10369302`: the refuse arm returns WITHOUT clearing `DAT_10937cf1`.
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VCamera"));
-	F.Npc->bCameraEngineQueryAnswer = false;
-	F.Npc->NPCInit();
-	TestTrue(TEXT("10369302 the refuse arm leaves DAT_10937cf1 SET"), F.Npc->InNpcInit());
-	F.Npc->InNpcInit() = false;
+	{
+		FLifecycle19Fixture Camera(TEXT("CNPC_VCamera"));
+		if (Camera.Npc == nullptr)
+		{
+			AddError(TEXT("no camera"));
+			return false;
+		}
+		Camera.Npc->bCameraEngineQueryAnswer = false;
+		Camera.Npc->NPCInit();
+		TestTrue(TEXT("10369302 the refuse arm leaves DAT_10937cf1 SET"), Camera.Npc->InNpcInit());
+		Camera.Npc->InNpcInit() = false;
+	}
 	return true;
 }
 
@@ -177,7 +243,6 @@ bool FElysiumNpcKernelLifecycle19WeaponHideTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VHumanCombatant"));
 	// `1038714a`: `GetActiveWeapon()` first — a null weapon is a no-op and nothing else happens.
 	const int32 Before = F.Npc->HideActiveWeaponCalls;
 	F.Npc->NPCInit();
@@ -206,13 +271,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19RestoreChecksumTest
 	"Elysium.Substrate.NpcKernelLifecycle19.OnRestoreChecksum", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19RestoreChecksumTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	FElysiumNpc& N = *F.Npc;
 
 	// A saved header that names a live schedule and carries ITS checksum is kept.
@@ -242,13 +306,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaRestoreTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TroikaOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaRestoreTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	FElysiumNpc& N = *F.Npc;
 	N.HuntPatrolPoints.Add(FVector::ZeroVector);
 	N.bSpawnCalled = false;
@@ -274,13 +337,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19WerewolfRearmTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.WerewolfRearm", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19WerewolfRearmTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VWerewolf"));
 	FElysiumNpc& N = *F.Npc;
 	// Every word `0x103cac20` clears, dirtied first so the clear is visible.
 	N.WerewolfMorphTimerA = 3.f;
@@ -325,36 +387,72 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SpeciesWordsTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.SpeciesWords", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SpeciesWordsTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
-	if (F.Npc == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
+	// One NPC per class, each in its own fixture.
 	// `103a6de9` is `CNPC_VSabbatLeader::m_nLastWaterLevel` (`+0x66c4`), the splash detector's edge
 	// latch — not the entity's own `m_nWaterLevel` (`+0x03e0`).
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VSabbatLeader"));
-	F.Npc->SabbatLastWaterLevel = 3;
-	F.Npc->WaterLevel = 2;
-	F.Npc->NPCInit();
-	TestEqual(TEXT("103a6de9 clears m_nLastWaterLevel"), F.Npc->SabbatLastWaterLevel, 0);
-	TestEqual(TEXT("...and leaves the entity's own water level alone"), F.Npc->WaterLevel, 2);
+	{
+		FLifecycle19Fixture F(TEXT("CNPC_VSabbatLeader"));
+		if (F.Npc == nullptr)
+		{
+			AddError(TEXT("no NPC"));
+			return false;
+		}
+		F.Npc->SabbatLastWaterLevel = 3;
+		F.Npc->WaterLevel = 2;
+		F.Npc->NPCInit();
+		TestEqual(TEXT("103a6de9 clears m_nLastWaterLevel"), F.Npc->SabbatLastWaterLevel, 0);
+		TestEqual(TEXT("...and leaves the entity's own water level alone"), F.Npc->WaterLevel, 2);
+	}
 
-	// `103a435x` writes `m_pInterestingPlace = NULL`, which this runtime spells INDEX_NONE.
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VPlaceholder"));
-	F.Npc->NPCInit();
-	TestEqual(TEXT("103a435x the placeholder holds NO interesting place"),
-		FElysiumNpcWorldFixture::Debug(F.Npc, TEXT("Ambient place")),
-		FString(TEXT("searching")));   // the debug row's word for INDEX_NONE
+	// `103a435x` writes `m_pInterestingPlace = NULL`, which this runtime spells INDEX_NONE. The
+	// spawn's own `NPCInit` already left it NULL, so the placeholder is first made to HOLD a place:
+	// a live `intersting_place` whose marker table names it, which `OnRestore`'s `0x102db5e0` scan
+	// writes into `+0x62ec` (the word has no other public writer).
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("lifecycle19_kernel"), 919);
+		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+		Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector, TEXT("CNPC_VPlaceholder"));
+		Builder.AddEntity(TEXT("intersting_place"), TEXT("spot"), FVector(200.0, 0.0, 0.0));
+		FElysiumNpcWorldFixture World(MoveTemp(Builder));
+		FElysiumNpc* Npc = World.Npc(TEXT("subject"));
+		FElysiumEntity* SpotEntity = World.World.FindByName(TEXT("spot"));
+		if (Npc == nullptr || SpotEntity == nullptr)
+		{
+			AddError(TEXT("no NPC or no place"));
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Npc });
+		FElysiumInterestingPlace* Spot = static_cast<FElysiumInterestingPlace*>(SpotEntity);
+		Spot->Markers.Add(FElysiumInterestingPlace::FMarker{ Npc->Handle });
+		Npc->OnRestore(true);                                                // 102db5e0 -> +0x62ec
+		if (!TestNotEqual(TEXT("the placeholder holds the place before the call"),
+			FElysiumNpcWorldFixture::Debug(Npc, TEXT("Ambient place")), FString(TEXT("searching"))))
+		{
+			return false;
+		}
+		Lifecycle19Stand(*Npc);
+		Npc->NPCInit();
+		TestEqual(TEXT("103a435x the placeholder holds NO interesting place"),
+			FElysiumNpcWorldFixture::Debug(Npc, TEXT("Ambient place")),
+			FString(TEXT("searching")));   // the debug row's word for INDEX_NONE
+	}
 
 	// `0x10376c10` walks a scratch list `NPCInit` never fills, so the recount's only observable
-	// effect is the count reset — it must NOT seed enemy memory for the whole map.
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VFrenzyShadow"));
-	F.Npc->FrenzyShadowHostileEnemyCount = 7;
-	F.Npc->NPCInit();
-	TestEqual(TEXT("10376c17 +0x6664 = 0"), F.Npc->FrenzyShadowHostileEnemyCount, 0);
-	TestEqual(TEXT("...and the empty scratch list touches no other NPC"),
-		F.Npc->EnemyMemory.Records().Num(), 0);
+	// effect is the count reset — it must NOT seed enemy memory for the whole map. (A deferred
+	// class: the fixture stands the bare Troika line and latches it.)
+	{
+		FLifecycle19Fixture F(TEXT("CNPC_VFrenzyShadow"));
+		if (F.Npc == nullptr)
+		{
+			AddError(TEXT("no NPC"));
+			return false;
+		}
+		F.Npc->FrenzyShadowHostileEnemyCount = 7;
+		F.Npc->NPCInit();
+		TestEqual(TEXT("10376c17 +0x6664 = 0"), F.Npc->FrenzyShadowHostileEnemyCount, 0);
+		TestEqual(TEXT("...and the empty scratch list touches no other NPC"),
+			F.Npc->EnemyMemory.Records().Num(), 0);
+	}
 	return true;
 }
 
@@ -362,13 +460,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19FarSightTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.FarSight", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19FarSightTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	F.Npc->SpawnFlags |= 0x100;
 	F.Npc->BaseNPCInit();                                                // 0x10273390 far-sight arm
 	TestEqual(TEXT("spawnflag 0x100 DistTooFar = 1e9"), F.Npc->DistTooFar, 1.0e9f);
@@ -379,13 +476,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TeleportTailTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TeleportTail", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TeleportTailTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	F.Npc->TeleportMoveTimer = 2.f;
 	F.Npc->NPCInit();
 	TestTrue(TEXT("1029a6xx timer above 0 becomes curtime+self+4"),
@@ -402,24 +498,34 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19CameraNpcInitTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.CameraNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19CameraNpcInitTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VCamera"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VCamera"));
 	F.Npc->bCameraEngineQueryAnswer = true;
+	// The spawn's own `NPCInit` already wrote every word read below, so each is dirtied first.
+	F.Npc->OccludedDelayNormal = 0.f;
+	F.Npc->OccludedDelayCover = 0.f;
+	F.Npc->bIsBccTargetable = true;
+	F.Npc->TakeDamageMode = 2;
 	F.Npc->NPCInit();                                                    // 0x103692c0
 	TestEqual(TEXT("hard-coded occluded delay 3.4"), F.Npc->OccludedDelayNormal, 3.4f);
 	TestEqual(TEXT("hard-coded cover delay 10"), F.Npc->OccludedDelayCover, 10.f);
 	TestFalse(TEXT("camera not BCC targetable"), F.Npc->bIsBccTargetable);
 	TestEqual(TEXT("takedamage 0"), F.Npc->TakeDamageMode, 0);
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VCamera"));
-	F.Npc->bCameraEngineQueryAnswer = false;
-	const int32 Before = F.Npc->CameraSelfRemovals;
-	F.Npc->NPCInit();
-	TestEqual(TEXT("engine refuse deletes the camera"), F.Npc->CameraSelfRemovals, Before + 1);
+	// The refuse arm on a second camera of its own.
+	FLifecycle19Fixture Refused(TEXT("CNPC_VCamera"));
+	if (Refused.Npc == nullptr)
+	{
+		AddError(TEXT("no second camera"));
+		return false;
+	}
+	Refused.Npc->bCameraEngineQueryAnswer = false;
+	const int32 Before = Refused.Npc->CameraSelfRemovals;
+	Refused.Npc->NPCInit();
+	TestEqual(TEXT("engine refuse deletes the camera"), Refused.Npc->CameraSelfRemovals, Before + 1);
 	return true;
 }
 
@@ -427,13 +533,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19PayphoneTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.PayphoneNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19PayphoneTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CPayphone"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CPayphone"));
+	// The spawn's own `NPCInit` already wrote all four, so each takes its opposite first.
+	F.Npc->bIsBccTargetable = false;
+	F.Npc->bInvincible = false;
+	F.Npc->bNpcIsAlive = true;
+	F.Npc->Senses.bCanPerformSenses = true;
 	F.Npc->NPCInit();                                                    // 0x101aab90
 	TestTrue(TEXT("+0x1480 targetable"), F.Npc->bIsBccTargetable);
 	TestTrue(TEXT("+0x63d8 invincible"), F.Npc->bInvincible);
@@ -446,15 +556,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SwarmDistTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.SwarmDistTooFar", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SwarmDistTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	// `CNPC_VBatSwarm` (`0x103673b0`) and `CNPC_VSheriffSwarm` (`0x103b2360`) write the same word,
+	// but neither class has an instance and neither carries a port arm (0019 story 5 step 1).
+	FLifecycle19Fixture F(TEXT("CNPC_VBach"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	// `CNPC_VBatSwarm` (`0x103673b0`) and `CNPC_VSheriffSwarm` (`0x103b2360`) write the same word,
-	// but neither class has an instance and neither carries a port arm (0019 story 5 step 1).
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VBach"));
+	// The spawn's own `NPCInit` already wrote the word; the base body's 1024 stands in first, so
+	// only the Bach tail's write lands 65535.
+	F.Npc->DistTooFar = 1024.f;
 	F.Npc->NPCInit();
 	TestEqual(TEXT("CNPC_VBach DistTooFar 65535"), F.Npc->DistTooFar, 65535.f);
 	return true;
@@ -464,18 +576,22 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19HullIndexTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.NodeGraphHull", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19HullIndexTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VGargoyle"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VGargoyle"));
 	F.Npc->NPCInit();                                                    // 0x103785f0
 	TestEqual(TEXT("Gargoyle hull 0xe"), F.Npc->NodeGraphHullIndex(), 0x0e);
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VManBat"));
-	F.Npc->NPCInit();                                                    // 0x1038b070 last writer wins
-	TestEqual(TEXT("ManBat hull 0x14 last-writer"), F.Npc->NodeGraphHullIndex(), 0x14);
+	FLifecycle19Fixture ManBat(TEXT("CNPC_VManBat"));
+	if (ManBat.Npc == nullptr)
+	{
+		AddError(TEXT("no ManBat"));
+		return false;
+	}
+	ManBat.Npc->NPCInit();                                           // 0x1038b070 last writer wins
+	TestEqual(TEXT("ManBat hull 0x14 last-writer"), ManBat.Npc->NodeGraphHullIndex(), 0x14);
 	return true;
 }
 
@@ -483,13 +599,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ManBatOrderTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.ManBatTimersFirst", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ManBatOrderTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VManBat"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VManBat"));
+	// The spawn's own `NPCInit` already armed both, so each is disarmed first.
+	F.Npc->ManBatFlapTimer = 0.0;
+	F.Npc->ManBatFlyTimer = 0.0;
 	F.Npc->NPCInit();
 	TestTrue(TEXT("flap timer armed before base (curtime+2.3)"), F.Npc->ManBatFlapTimer > 0.0);
 	TestTrue(TEXT("fly timer armed (curtime+0.1)"), F.Npc->ManBatFlyTimer > 0.0);
@@ -500,13 +618,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19PlaceholderTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.PlaceholderNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19PlaceholderTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VPlaceholder"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VPlaceholder"));
+	// The spawn's own `NPCInit` already wrote both; each takes a value only the call replaces. The
+	// think name is the base body's first-second one, which `ThinkSet(NULL)` must clear.
+	F.Npc->bIsBccTargetable = false;
+	F.Npc->ThinkFunctionName = FElysiumNpc::NpcInitThinkFunction();
 	F.Npc->NPCInit();                                                    // 0x103a4350
 	TestTrue(TEXT("targetable"), F.Npc->bIsBccTargetable);
 	TestTrue(TEXT("ThinkSet(NULL)"), F.Npc->ThinkFunctionName.IsEmpty());
@@ -517,13 +638,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19CopTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.CopNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19CopTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VCop"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VCop"));
 	F.Npc->bWasEverInCombat = true;
 	F.Npc->NPCInit();                                                    // 0x10372b00
 	TestFalse(TEXT("+0x6670 cleared AFTER HumanCombatant"), F.Npc->bWasEverInCombat);
@@ -534,13 +654,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19FrenzyShadowTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.FrenzyShadowNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19FrenzyShadowTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VFrenzyShadow"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VFrenzyShadow"));
 	F.Npc->NPCInit();                                                    // 0x10375c80
 	TestEqual(TEXT("state 0xb"), F.Npc->IdealStateRetail(), 0xb);
 	TestTrue(TEXT("frenzied flags 0x5ddf"), F.Npc->NpcFlags.HasFrenzied(0x5ddfu));
@@ -554,13 +673,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19WerewolfTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.WerewolfNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19WerewolfTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VWerewolf"));
+	// The spawn's own `NPCInit` already wrote all four; each takes a non-werewolf value first (the
+	// fixture's authored template, the member default, the base body's 1024, mode 0), so only the
+	// werewolf body's writes pass.
+	F.Npc->StatTemplate = TEXT("Thug");
+	F.Npc->FieldOfViewDot = 0.2f;
+	F.Npc->DistTooFar = 1024.f;
+	F.Npc->InvestigateMode = 0;
 	F.Npc->NPCInit();                                                    // 0x103caef0
 	TestEqual(TEXT("stat template Werewolf"), F.Npc->StatTemplate, FString(TEXT("Werewolf")));
 	TestTrue(TEXT("FOV cos(120)= -0.5"),
@@ -578,18 +703,27 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ChangTypeTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.ChangTypeBeforeChain", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ChangTypeTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VChangBrosBlade"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VChangBrosBlade"));
+	// The spawn's own `NPCInit` already wrote 0; the Claw's answer stands in first, so the Blade's
+	// write is visible as a change.
+	F.Npc->ChangType = 1;
 	F.Npc->NPCInit();                                                    // 0x1036f100
 	TestEqual(TEXT("Blade SetChangType(0) before chain"), F.Npc->ChangType, 0);
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VChangBrosClaw"));
-	F.Npc->NPCInit();                                                    // 0x1036f900
-	TestEqual(TEXT("Claw SetChangType(1) before chain"), F.Npc->ChangType, 1);
+	FLifecycle19Fixture Claw(TEXT("CNPC_VChangBrosClaw"));
+	if (Claw.Npc == nullptr)
+	{
+		AddError(TEXT("no Claw"));
+		return false;
+	}
+	// The Blade's answer, so the Claw's write is visible as a change.
+	Claw.Npc->ChangType = 0;
+	Claw.Npc->NPCInit();                                                 // 0x1036f900
+	TestEqual(TEXT("Claw SetChangType(1) before chain"), Claw.Npc->ChangType, 1);
 	return true;
 }
 
@@ -597,18 +731,22 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19StartNpcTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.StartNPC", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19StartNpcTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	F.Npc->StartNPC();                                                   // 0x1029a8b0
 	TestTrue(TEXT("10273ad0 ThinkSet on both first-second arms"), F.Npc->ThinkSetCalls >= 2);
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VTzimisce"));
-	F.Npc->StartNPC();                                                   // 0x103b9270
-	TestEqual(TEXT("Tzimisce redundant re-arm"), F.Npc->TzimisceStartNpcRearms, 1);
+	FLifecycle19Fixture Tzimisce(TEXT("CNPC_VTzimisce"));
+	if (Tzimisce.Npc == nullptr)
+	{
+		AddError(TEXT("no Tzimisce"));
+		return false;
+	}
+	Tzimisce.Npc->StartNPC();                                            // 0x103b9270
+	TestEqual(TEXT("Tzimisce redundant re-arm"), Tzimisce.Npc->TzimisceStartNpcRearms, 1);
 	return true;
 }
 
@@ -616,13 +754,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19OnRestoreGiveUpTest
 	"Elysium.Substrate.NpcKernelLifecycle19.OnRestoreGiveUp", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19OnRestoreGiveUpTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CAI_BaseNPCTroika"));
 	F.Npc->LastSavedExtendedHeader.Version = 0;
 	F.Npc->OnRestore(true);                                              // 0x102998c0 → give-up
 	TestFalse(TEXT("give-up clears refind latch"), F.Npc->ScheduleHost.bDoPostRestoreRefindPath);
@@ -634,13 +771,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19PedestrianRestoreTe
 	"Elysium.Substrate.NpcKernelLifecycle19.PedestrianOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19PedestrianRestoreTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VPedestrian"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VPedestrian"));
 	F.Npc->PedestrianLevelResetType = 2;
 	const int32 Before = F.Npc->InventoryDestroys;
 	F.Npc->OnRestore(true);                                              // gate m_eLevelResetType==2
@@ -657,13 +793,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ZombieCrawlTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.ZombieNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ZombieCrawlTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VZombie"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VZombie"));
+	// The spawn's own `NPCInit` already wrote both, so each is cleared first.
+	F.Npc->bZombieNeedsCrawlOutOfGround = false;
+	F.Npc->LastSetScheduleRetail = 0;
 	F.Npc->NPCInit();                                                    // 0x103defc0
 	TestTrue(TEXT("crawl-out latch first"), F.Npc->bZombieNeedsCrawlOutOfGround);
 	TestEqual(TEXT("SetSchedule(0x161) miss arm"), F.Npc->LastSetScheduleRetail, 0x161);
@@ -674,13 +812,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TaxiIdleTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TaxiDriverNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TaxiIdleTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VTaxiDriver"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VTaxiDriver"));
+	// The spawn's own `NPCInit` (and the first think's NONE -> IDLE) already left both, so the
+	// ideal state takes ALERT and the senses go off first.
+	F.Npc->WriteIdealStateRetail(3);
+	F.Npc->Senses.bCanPerformSenses = false;
 	F.Npc->NPCInit();                                                    // 0x103b35c0
 	TestEqual(TEXT("ideal IDLE written then SetState(1)"), F.Npc->IdealStateRetail(), 1);
 	TestTrue(TEXT("senses ON"), F.Npc->Senses.bCanPerformSenses);
@@ -725,13 +866,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19Guard1Test,
 	"Elysium.Substrate.NpcKernelLifecycle19.Guard1NPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19Guard1Test::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VGuard1"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VGuard1"));
 	// `+0x6660` on THIS class is `CNPC_VGuard1::m_fHatesPlayer` (`vtmb_fields CNPC_VGuard1 0x6660`),
 	// not `CNPC_VAnimal::m_bPlayerAttackedMe` at the same offset.
 	F.Npc->bGuard1HatesPlayer = true;
@@ -744,13 +884,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19CameraStartNpcTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.CameraStartNPC", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19CameraStartNpcTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VCamera"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VCamera"));
 	F.Npc->Model = TEXT("models/null.mdl");
 	F.Npc->StartNPC();                                                   // 0x10369930
 	TestTrue(TEXT("null.mdl drops to floor"), F.Npc->FloorDropPerformed > 0);
@@ -763,13 +902,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19MingXiaoRestoreTest
 	"Elysium.Substrate.NpcKernelLifecycle19.MingXiaoTentacleOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19MingXiaoRestoreTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VMingXiaoTentacle"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VMingXiaoTentacle"));
 	F.Npc->MingXiaoTentacleCache() = F.Npc->Handle;
 	F.Npc->OnRestore(true);                                              // 0x1039f000 after base
 	TestFalse(TEXT("DAT_1093bd34 invalidated after Troika"),
@@ -781,13 +919,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19RunnerRestoreTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TzimisceRunnerOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19RunnerRestoreTest::RunTest(const FString&)
 {
-	FLifecycle19Fixture F;
+	FLifecycle19Fixture F(TEXT("CNPC_VTzimisceRunner"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	Lifecycle19Stand(*F.Npc, TEXT("CNPC_VTzimisceRunner"));
 	const int32 Before = F.Npc->Flag2Removals;
 	F.Npc->OnRestore(true);                                              // 0x103c3c40
 	TestEqual(TEXT("RemoveFlag2(4)"), F.Npc->Flag2Removals, Before + 1);
@@ -798,13 +935,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SpeciesSmokeTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.SpeciesNPCInitSmoke", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 {
-	// One call per slot-420 species body. Distinguishing writes from the listing.
-	FLifecycle19Fixture F;
-	if (F.Npc == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
+	// One call per slot-420 species body, each on a fresh NPC spawned as the row's class (the three
+	// deferred classes — PlayerController, FrenzyShadow, WolfMorph — on the latched bare Troika
+	// line). Distinguishing writes from the listing.
 	struct FRow
 	{
 		const TCHAR* Cls;
@@ -845,7 +978,16 @@ bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 	};
 	for (const FRow& Row : Rows)
 	{
-		Lifecycle19Stand(*F.Npc, Row.Cls);
+		FLifecycle19Fixture F(Row.Cls);
+		if (F.Npc == nullptr)
+		{
+			AddError(FString::Printf(TEXT("%s: no NPC"), Row.Cls));
+			continue;
+		}
+		// The spawn's own `NPCInit` already left both words as asserted, so each takes its opposite
+		// first: every body raises `DAT_10937cf1` on entry and must drop it, and writes MaxHealth.
+		F.Npc->InNpcInit() = true;
+		F.Npc->MaxHealth = 0;
 		F.Npc->NPCInit();
 		TestFalse(FString::Printf(TEXT("%s %s left DAT_10937cf1 set"), Row.Cls, Row.Addr),
 			F.Npc->InNpcInit());

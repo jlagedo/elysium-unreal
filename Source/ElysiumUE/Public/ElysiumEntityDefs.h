@@ -44,6 +44,11 @@ struct FElysiumEntityDef
 	// makes a hint spawns as `ai_hint`, as retail's `CNodeEnt::Spawn` (`0x102d78d0`) does, and keeps
 	// its authored classname here as provenance. Empty otherwise.
 	FString SourceClassname;
+	// Retail's construction by code (story 5 step 2): an entity no classname factory builds --
+	// `CAI_TestHull`, or a bare `CAI_BaseNPCTroika` probe. Set, `FElysiumClassRegistry::Create`
+	// builds this type against the `Classname` descriptor even when that descriptor is abstract.
+	// Null on every map-authored and script-created row.
+	TUniquePtr<class FElysiumEntity> (*InternalFactory)() = nullptr;
 	FString TargetName;                     // may be empty; targetnames are non-unique
 	FVector Origin = FVector::ZeroVector;   // Unreal cm, read verbatim (UE_ exporter)
 

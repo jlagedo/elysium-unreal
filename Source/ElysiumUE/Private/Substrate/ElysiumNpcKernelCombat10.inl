@@ -119,9 +119,8 @@ float GetCurrHealthPercent() const;
  *  absent, gives that item and sets misc flag `0x10`. It never consults the two base gates and never
  *  grants fists.
  *
- *  **UNREACHABLE TODAY**: `CNPC_VWerewolf` carries no entity classname in the census, so no spawned
- *  NPC's `RetailClass()` can be it. The arm is ported and exercised through
- *  `SetRetailClassForTests`, which is the only way to reach it; see the suite. */
+ *  Reached by a spawned `npc_VWerewolf` since story 5 step 2 registered the classname as
+ *  `CNPC_VWerewolf` (factory `0x103c8760`); before, the census gave the class no classname. */
 void WerewolfGiveBaseFightingItems();
 void WerewolfRemoveBaseFightingItems();
 

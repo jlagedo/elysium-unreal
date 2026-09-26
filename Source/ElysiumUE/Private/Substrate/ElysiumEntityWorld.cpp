@@ -190,6 +190,13 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		const FElysiumEntityDef& D = Defs.Defs[i];
 		// The handle index IS the def-array index: stable, never recycled.
 		TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(D, FElysiumEntityHandle(i, Epoch));
+		if (!Ent)
+		{
+			// An abstract retail class (`Create` logged it). The slot stays empty so every later
+			// handle still indexes its own def, as a removed entity's does.
+			EntityList.Add(nullptr);
+			continue;
+		}
 		Ent->World = this;   // the seam an entity uses to fire outputs (set before Spawn)
 
 		if (!D.TargetName.IsEmpty())
@@ -330,17 +337,43 @@ void FElysiumEntityWorld::Activate(double Now)
 	{
 		PlayerEnt->SyncFromBody();
 	}
-	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	// `ServerActivate` (`0x1011aaf0`):
+	//   for (e = NextEnt(NULL); e; e = NextEnt(e)) if (!(e->m_iEFlags & EFL_DORMANT)) e->Activate();
+	//
+	// * By index, not a ranged-for, because retail's pass visits what it creates. `NextEnt`
+	//   (`0x100f7060`) re-reads each node's next link and `CBaseEntityList::AddEntityAtSlot`
+	//   (`0x100f9fc0`) links a new entity at the TAIL, so an entity an earlier `Activate` creates
+	//   (an NPC's init granting items; first met standing `npc_VWerewolf`, story 5 step 2) is
+	//   activated later in the same pass, after every entity already listed. Its creator spawned it
+	//   (`bActive` is still false, so not activated there); `ActivateListedEntity` is idempotent.
+	// * The only per-entity skip is `EFL_DORMANT` (`0x100a8220`: `m_iEFlags & 2`). A hidden entity
+	//   is activated: retail's ScriptHide/StartHidden never set that bit.
+	// * Retail never tests `EFL_KILLME`. It prints "ERROR: Entity delete queue not empty" when
+	//   anything is still queued, because the map's removals are purged before the pass, so an entity
+	//   killed before the pass is gone from the list. This port keeps killed slots, so it skips
+	//   exactly those dead at the start. One killed DURING the pass is still listed and activated,
+	//   as retail's is.
+	const int32 ListedBeforePass = EntityList.Num();
+	TBitArray<> DeadBeforePass(false, ListedBeforePass);
+	for (int32 Index = 0; Index < ListedBeforePass; ++Index)
 	{
-		if (Ent && !Ent->IsDead())
+		DeadBeforePass[Index] = EntityList[Index].IsValid() && EntityList[Index]->IsDead();
+	}
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
+	{
+		FElysiumEntity* Ent = EntityList[Index].Get();
+		if (Ent == nullptr || Ent->IsEflDormant()
+			|| (Index < ListedBeforePass && DeadBeforePass[Index]))
 		{
-			CallEntityActivate(*Ent);
+			continue;
 		}
+		ActivateListedEntity(*Ent);
 	}
 	// Maker-owned NPCs and their bodies can be admitted by Activate. Resolve physical parenting only
 	// after that complete barrier, while retaining logical parents for deliberately bodiless nodes.
-	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
 	{
+		FElysiumEntity* Ent = EntityList[Index].Get();
 		if (Ent && !Ent->IsDead())
 		{
 			Ent->ResolveParentAttachment(true);
@@ -483,6 +516,10 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 	// mid-delivery — the maker's Spawn input runs during ServiceEvents — never invalidates a live scan.)
 	const int32 Idx = EntityList.Num();
 	TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(Ref, FElysiumEntityHandle(Idx, Epoch));
+	if (!Ent)
+	{
+		return FElysiumEntityHandle::Invalid();   // an abstract retail class; `Create` logged it
+	}
 	Ent->World = this;
 
 	if (!Ref.TargetName.IsEmpty())
@@ -545,6 +582,16 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// its baseline is taken at the same point in its life as a def entity's.
 	CaptureBaseline(Ent.Handle.Index);
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Ent.DebugString());
+}
+
+void FElysiumEntityWorld::ActivateListedEntity(FElysiumEntity& Ent)
+{
+	if (Ent.bActivateCalled || !Ent.bSpawnCalled)
+	{
+		return;
+	}
+	Ent.bActivateCalled = true;
+	Ent.Activate();
 }
 
 void FElysiumEntityWorld::CallEntityActivate(FElysiumEntity& Ent)

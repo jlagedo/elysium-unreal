@@ -315,6 +315,48 @@ void FElysiumNpc::RecomputePerceptionDistances()
 	Senses.Perception.bResolved = false;
 }
 
+void FElysiumNpc::InputTweakParam(const FElysiumInputArgs& Args)
+{
+	// `1029ea4c`: the argument as a string (`FUN_100d0a00` converts a non-string variant), copied
+	// into a 256-byte buffer, so at most 255 characters take part.
+	const FString Argument = Args.Param.ToString().Left(255);
+	// `1029ea81`/`1029ea8c`: two `strtok` calls on the delimiter set `", "`. Like `strtok`, a run of
+	// delimiters separates and leading ones are skipped; anything after the second token is ignored.
+	auto IsDelimiter = [](TCHAR C) { return C == TEXT(',') || C == TEXT(' '); };
+	int32 At = 0;
+	auto NextToken = [&Argument, &At, &IsDelimiter]() -> FString
+	{
+		while (At < Argument.Len() && IsDelimiter(Argument[At]))
+		{
+			++At;
+		}
+		const int32 Start = At;
+		while (At < Argument.Len() && !IsDelimiter(Argument[At]))
+		{
+			++At;
+		}
+		const FString Token = Argument.Mid(Start, At - Start);
+		if (At < Argument.Len())
+		{
+			++At;   // `strtok` overwrites the delimiter that ended the token and resumes after it
+		}
+		return Token;
+	};
+	const FString Key = NextToken();
+	const FString Value = NextToken();
+	if (!Key.IsEmpty() && !Value.IsEmpty())
+	{
+		// `1029eaab`: `CALL [vtable + 0x924]`, slot 585, a virtual dispatch.
+		ProcessTweakParam(*Key, *Value);
+		return;
+	}
+	// `1029eae7`: `DevMsg(1, ...)` with the debug name and the unsplit argument.
+	++TweakParamFormatErrors;
+	UE_LOG(LogElysiumNpcEnt, Verbose,
+		TEXT("ERROR: %s - Argument to ProcessTweakParam(%s) is in the wrong format. Should be "
+			"'Param Value'"), *DebugString(), *Args.Param.ToString());
+}
+
 void FElysiumNpc::ProcessTweakParam(const TCHAR* Key, const TCHAR* Value)
 {
 	// Slot 585, the tweak-file key dispatch. `Value` is retail's `char*` and reaches `atoi`/`atof`

@@ -421,9 +421,8 @@ bool FElysiumNpc::SetModelSpecies(TCHAR* ModelName)
 		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GAnim10SlotSetModel);
 	if (Override == nullptr)
 	{
-		// `RetailClass()` is null for a classname the census claims nothing for — a spawned
-		// `npc_VCop`'s own recovered answer — and a class with no slot-105 row inherits the Troika
-		// body, which is exactly what returning false runs.
+		// `RetailClass()` is null only on the bare Troika line, and a class with no slot-105 row
+		// inherits the Troika body, which is exactly what returning false runs.
 		return false;
 	}
 	for (const FAnim10SetModelArm& Arm : Arms)

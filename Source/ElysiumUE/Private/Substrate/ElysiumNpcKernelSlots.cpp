@@ -2108,7 +2108,7 @@ bool FElysiumNpc::PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*)
 // melee_dice_roll_result*, CVDmg_t*)`
 //   takes `melee_dice_roll_result*`
 //   takes `CVDmg_t*`
-//   layer 5, story 29c
+//   layer 18, story 29d
 // verdict `rule`: the body is `FElysiumNpc::PlayerAttackerBlockedReaction`, written by hand in the
 // substrate. Declared here, defined there.
 
@@ -3363,7 +3363,7 @@ bool FElysiumNpc::MovementCost(int32, const FVector&, const FVector&, void*)
 // AIMoveResult_t*)`
 //   takes `AILocalMoveGoal_t*`
 //   takes `AIMoveResult_t*`
-//   layer 15, story 29d
+//   layer 20, story 29e
 // verdict `rule`: the body is `FElysiumNpc::OnObstructingDoor`, written by hand in the substrate.
 // Declared here, defined there.
 
@@ -3572,13 +3572,13 @@ int32 FElysiumNpc::GetHintActivity(int16)
 
 // slot 569 0x10297560 (walked) `Activity GetCoverActivity(CAI_Hint*)`
 //   takes `CAI_Hint*`
-//   layer 3, story 29c
+//   layer 8, story 29c
 // verdict `present`: the body is `FElysiumNpc::GetCoverActivity`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 570 0x102954b0 (walked) `Activity GetReloadActivity(CAI_Hint*)`
 //   takes `CAI_Hint*`
-//   layer 3, story 29c
+//   layer 8, story 29c
 // verdict `present`: the body is `FElysiumNpc::GetReloadActivity`, written by hand in the
 // substrate. Declared here, defined there.
 
@@ -3588,7 +3588,7 @@ int32 FElysiumNpc::GetHintActivity(int16)
 // here, defined there.
 
 // slot 572 0x10297640 (walked) `void SetTurnActivity()`
-//   layer 5, story 29c
+//   layer 18, story 29d
 // verdict `rule`: the body is `FElysiumNpc::SetTurnActivity`, written by hand in the substrate.
 // Declared here, defined there.
 
@@ -3673,7 +3673,7 @@ void FElysiumNpc::ReportOverThinkLimit(float)
 // substrate. Declared here, defined there.
 
 // slot 588 0x10293e50 (walked) `void vfunc588()`
-//   layer 6, story 29c
+//   layer 19, story 29e
 // verdict `rule`: the body is `FElysiumNpc::Slot588`, written by hand in the substrate. Declared
 // here, defined there.
 
@@ -3768,7 +3768,7 @@ float FElysiumNpc::Slot603(void*, void*)
 }
 
 // slot 604 0x102b6c30 (walked) `int SelectScheduleMeleeCombat(int)`
-//   layer 3, story 29c
+//   layer 4, story 29c
 // verdict `rule`: the body is `FElysiumNpc::SelectScheduleMeleeCombat`, written by hand in the
 // substrate. Declared here, defined there.
 

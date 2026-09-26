@@ -236,6 +236,13 @@ def test_a_constant_body_is_emitted_with_its_probe():
     assert "return TArrayView<const FElysiumNpcSlotDefault>();" in empty_text
 
 
+def test_a_default_matches_its_body_as_a_32_bit_word():
+    assert gks.same_word("-1", "0xffffffff")
+    assert gks.same_word("0x17", "23")
+    assert not gks.same_word("-1", "0xfffffffe")
+    assert not gks.same_word("0", "1")
+
+
 def test_constant_return_reads_only_a_one_statement_body():
     assert gks.constant_return("void f(void)\n{\n  return;\n}\n") == "void"
     assert gks.constant_return("int f(void)\n{\n  return 0x17;\n}\n") == "0x17"

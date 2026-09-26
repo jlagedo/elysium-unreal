@@ -25,11 +25,13 @@
 // this family carries a body for is asked for that slot's address through
 // `ElysiumNpcKernelClass::BodyOf`, so a row that drifts from `npc-kernel/slots.md` fails here.
 //
-// Two spawn facts this suite obeys (the brief's "Two tables, and they disagree"): `npc_VYukie`,
-// `npc_VWerewolf` and `npc_VCameraSecurity` are NOT registered spawn leaves, so those rows are
-// exercised by retail class NAME and the behaviour by calling the ported method on an ordinary
-// spawned NPC; `npc_payphone` IS both a census classname and a spawn leaf, so `CPayphone` gets a
-// real body.
+// Spawn facts this suite obeys: every classname builds the class retail's factory builds (story 5
+// step 2, `docs/vtmb/npc-ai/population.md`, "The classname → class map, read from the factories").
+// The `CNPC_VYukie`, `CNPC_VWerewolf` and `CNPC_VCameraSecurity` bodies are driven directly on an
+// ordinary spawned NPC (they read no word of their class) and, since those classnames build those
+// classes, reached through slots 201 and 468 on a spawned instance of each. Yukie's slot-363 and
+// slot-602 arms are not dispatched by the substrate yet, so those two stay direct-body only;
+// `npc_payphone` builds `CPayphone`, so it gets a real body.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelSensesFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -311,8 +313,8 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::OfClassname(TEXT("npc_payphone"))->Name),
 		FString(TEXT("CPayphone")));
 
-	// `0x103a4bb0` — the prone-dialog ray. `npc_VProneDialog` is a census classname but NOT a
-	// registered spawn leaf, so the body is driven on an ordinary NPC.
+	// `0x103a4bb0` — the prone-dialog ray, driven on an ordinary NPC. (`npc_VProneDialog` builds
+	// `CNPC_ProneDialog` since story 5 step 2, population.md; this case does not stand one.)
 	bool bRayValid = false;
 	TestTrue(TEXT("0x103a4bb0: a clear segment passes (the tr.m_pEnt == NULL arm)"),
 		Caller->ProneDialogPassesFindEntityFovTrace(FVector::ZeroVector, FVector(100.f, 0.f, 0.f),
@@ -400,8 +402,8 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 	TestFalse(TEXT("0x1036a030: and refuses every NPC, whatever the base body would say"),
 		F.Guard->CameraSecurityQuerySeeEntity(*F.Other));
 
-	// Every species row by name, against the census. None of these three classnames is a registered
-	// spawn leaf, which is exactly why the rows are checked by retail class name.
+	// Every species row by name, against the census, so the rows are checked independently of any
+	// spawn.
 	const FElysiumNpcClass* Werewolf = ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf"));
 	const FElysiumNpcClass* Yukie = ElysiumNpcKernelClass::Find(TEXT("CNPC_VYukie"));
 	const FElysiumNpcClass* Camera = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity"));
@@ -415,12 +417,79 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::BodyOf(Camera, 468)), FString(TEXT("0x1036a030")));
 	TestEqual(TEXT("CNPC_VYukie#602 is 0x103dda10"),
 		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 602)), FString(TEXT("0x103dda10")));
-	// The werewolf's census classname list is null, so a spawned one could not be found by
-	// classname even if the spawn registry stood it. Assert the fact rather than working around it.
-	TestEqual(TEXT("CNPC_VWerewolf claims no entity classname in the census"),
-		Werewolf->ClassnameCount, 0);
-	TestNull(TEXT("and npc_VYukie is not a registered spawn leaf, so nothing resolves it here"),
+	// story 5 step 2: npc_VWerewolf's factory 0x103c8760 builds CNPC_VWerewolf (population.md),
+	// so the census row claims exactly that one classname and the classname resolves to the row.
+	if (TestNotNull(TEXT("CNPC_VWerewolf is a census class"), Werewolf))
+	{
+		TestEqual(TEXT("CNPC_VWerewolf claims exactly one entity classname in the census"),
+			Werewolf->ClassnameCount, 1);
+		if (Werewolf->ClassnameCount == 1 && Werewolf->Classnames != nullptr)
+		{
+			TestEqual(TEXT("and it is npc_VWerewolf"), FString(Werewolf->Classnames[0]),
+				FString(TEXT("npc_VWerewolf")));
+		}
+		TestTrue(TEXT("npc_VWerewolf resolves to CNPC_VWerewolf"),
+			ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VWerewolf"))) == Werewolf);
+	}
+	// story 5 step 2: npc_VYukie builds CNPC_VYukie (population.md); this map stands none.
+	TestTrue(TEXT("npc_VYukie resolves to CNPC_VYukie"),
+		Yukie != nullptr
+			&& ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VYukie"))) == Yukie);
+	TestNull(TEXT("and this map stands no npc_VYukie, so nothing resolves it here"),
 		F.World.Npc(TEXT("npc_VYukie")));
+
+	// The dispatch, on the three classes themselves, with the inputs and answers the direct calls
+	// above use. Slot 201 (`FVisible`) reaches `0x103cb810` on a werewolf and `0x103ddaf0` on a
+	// Yukie; slot 468 (`QuerySeeEntity`) reaches `0x1036a030` on a security camera. **Not asked:**
+	// Yukie's `0x103ddaa0` (slot 363) and `0x103dda10` (slot 602) — `FInViewCone(CBaseEntity*)` and
+	// `Slot602` carry no species dispatch for them yet, so the substrate would answer the Troika
+	// bodies; the census rows above are all this suite can pin until those wires land.
+	// The Yukie stands where the guard does, relative to `other`, because slot 594's range test
+	// reads the geometry.
+	FElysiumNpcWorldBuilder Builder(TEXT("senses_kernel_species"), 29103u);
+	Builder.AddNpc(TEXT("yukie"), FVector(0.f, 0.f, 0.f), TEXT("npc_VYukie"));
+	Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f));
+	Builder.AddNpc(TEXT("werewolf"), FVector(0.f, 400.f, 0.f), TEXT("npc_VWerewolf"));
+	Builder.AddNpc(TEXT("camera"), FVector(0.f, -400.f, 0.f), TEXT("npc_VCameraSecurity"));
+	FElysiumNpcWorldFixture SpeciesWorld(MoveTemp(Builder));
+	FElysiumNpc* Wolf = SpeciesWorld.Npc(TEXT("werewolf"));
+	FElysiumNpc* YukieNpc = SpeciesWorld.Npc(TEXT("yukie"));
+	FElysiumNpc* CameraNpc = SpeciesWorld.Npc(TEXT("camera"));
+	FElysiumNpc* SpeciesOther = SpeciesWorld.Npc(TEXT("other"));
+	FElysiumPlayer* SpeciesPlayer = SpeciesWorld.Player();
+	if (!TestNotNull(TEXT("a werewolf spawned"), Wolf) || !TestNotNull(TEXT("a Yukie"), YukieNpc)
+		|| !TestNotNull(TEXT("a security camera"), CameraNpc)
+		|| !TestNotNull(TEXT("a second NPC"), SpeciesOther)
+		|| !TestNotNull(TEXT("and the player"), SpeciesPlayer))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Wolf, YukieNpc, CameraNpc, SpeciesOther });
+	TestTrue(TEXT("a spawned npc_VWerewolf is CNPC_VWerewolf"), Wolf->RetailClass() == Werewolf);
+	TestTrue(TEXT("a spawned npc_VYukie is CNPC_VYukie"), YukieNpc->RetailClass() == Yukie);
+	TestTrue(TEXT("a spawned npc_VCameraSecurity is CNPC_VCameraSecurity"),
+		CameraNpc->RetailClass() == Camera);
+
+	// `0x103cb810` through slot 201: true for any live candidate, false for null.
+	TestTrue(TEXT("slot 201 on a werewolf answers true unconditionally (0x103cb810)"),
+		Wolf->FVisible(SpeciesOther, 0x2804091, nullptr, 0));
+	TestFalse(TEXT("and refuses a null candidate"), Wolf->FVisible(nullptr, 0x2804091, nullptr, 0));
+
+	// `0x103ddaf0` through slot 201: the chain to slot 594, in range and out of it.
+	YukieNpc->Senses.Perception.VisionDistanceCm = 100000.f;
+	YukieNpc->Senses.Perception.bResolved = true;
+	TestTrue(TEXT("slot 201 on a Yukie chains slot 594, which answers (0x103ddaf0)"),
+		YukieNpc->FVisible(SpeciesOther, 0x2804091, nullptr, 0));
+	YukieNpc->Senses.Perception.VisionDistanceCm = 1.f;
+	TestFalse(TEXT("...and slot 594's range refusal comes back through the chain"),
+		YukieNpc->FVisible(SpeciesOther, 0x2804091, nullptr, 0));
+	TestFalse(TEXT("...and a null candidate refuses before the gate"),
+		YukieNpc->FVisible(nullptr, 0x2804091, nullptr, 0));
+
+	// `0x1036a030` through slot 468: the player and nothing else.
+	TestTrue(TEXT("slot 468 on a security camera admits the player (0x1036a030)"),
+		CameraNpc->QuerySeeEntity(SpeciesPlayer));
+	TestFalse(TEXT("and refuses every NPC"), CameraNpc->QuerySeeEntity(SpeciesOther));
 	return true;
 }
 

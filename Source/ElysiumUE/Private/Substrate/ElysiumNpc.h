@@ -30,10 +30,12 @@ struct FElysiumSaveArchive;
 struct FElysiumStatTable;
 class FElysiumPlayer;
 
-// The character leaf shared by every living `npc_*` classname. It stands a skeletal model at its
-// origin, follows named patrols or interesting-place routes, and owns dialogue gates.
+// `CAI_BaseNPCTroika` — still carrying `CAI_BaseNPC` until story 5 step 5 separates the two. Every
+// living `npc_*` classname builds one of its subclasses (`ElysiumNpc<Species>.h`, one per retail
+// class). It stands a skeletal model at its origin, follows named patrols or interesting-place
+// routes, and owns dialogue gates.
 
-class FElysiumNpc final : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
+class FElysiumNpc : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
 {
 public:
 	// The `WillTalk` latch (`FElysiumCombatCharacter::bWillTalk`, retail virtual `+0x49c`) SHIPS
@@ -293,12 +295,10 @@ public:
 	 * (`docs/vtmb/footsteps.md` §1.7). True means this NPC's own class handled the footfall and the
 	 * shared chain must not run.
 	 *
-	 * **The policy table IS the seam, not a virtual.** Retail's five species are distinct C++
-	 * classes each holding its own `HandleAnimEvent` slot; this port stands ONE leaf for every
-	 * `npc_V*` classname, so the overrides arrive as the classname-keyed data table in
-	 * `ElysiumFootsteps.h`. A `virtual` here would be unoverridable — `FElysiumNpc` is `final` — and
-	 * would read as an extension point that does not exist. The day a species genuinely needs a leaf
-	 * of its own, that leaf takes the `final` off and this becomes virtual in the same commit.
+	 * **The policy table is the seam for now.** Retail's five species are distinct C++ classes each
+	 * holding its own `HandleAnimEvent` slot. The port's species classes stand since story 5 step 2
+	 * (`ElysiumNpc<Species>.h`), but their overrides still arrive as the classname-keyed data table
+	 * in `ElysiumFootsteps.h` until step 3 turns species dispatch into `virtual` overrides.
 	 */
 	bool OverrideFootstep(int32 EventId, bool bHeavy);
 
@@ -1194,16 +1194,18 @@ public:
 
 	// --- Which retail class this NPC IS (story 29c-1) ---------------------------------------------
 	/**
-	 * The census row for the retail family class this NPC's authored classname resolves to
-	 * (`Substrate/ElysiumNpcKernelClassLookup.h`), or null for a classname retail stands no NPC class
-	 * for.
+	 * The census row for the retail class this NPC IS (`Substrate/ElysiumNpcKernelClassLookup.h`):
+	 * the C++ class's own answer (`OwnRetailClass`), which is the class retail's factory for the
+	 * authored classname builds (story 5 step 2). Null for a bare `FElysiumNpc`, the Troika line
+	 * itself, which no classname builds.
 	 *
-	 * This is the species dispatcher 29c declined to build and 29c-1 needs: 355 of the band's bodies
-	 * are one behaviour written once per species, and a leaf that is `final` answers them from the
-	 * class registry rather than from an override. Resolved once — `Def` is bound at `Construct` and
-	 * is immutable — so a body on the think path may ask freely.
+	 * The species dispatch still reads it (355 of the 29c-1 band's bodies are one behaviour written
+	 * once per species) until step 3 turns those arms into overrides.
 	 */
 	const FElysiumNpcClass* RetailClass() const;
+
+	// Each species class answers its own census row; the Troika line answers null.
+	virtual const FElysiumNpcClass* OwnRetailClass() const;
 
 	// `RetailClass()` is `CNPC_VVampireBoss` or below, `CNPC_VBaseBoss` or below, … The chain walk a
 	// species body's "am I one of these" arm performs, so no body compares classnames by hand.
@@ -1484,11 +1486,10 @@ private:
 	bool bAmbientArrived = false;
 	TSet<int32> FailedSpotIndices;
 
-	// `RetailClass()`'s latch. Mutable because the answer is a property of the immutable `Def`, not
-	// of this NPC's state: a const body on the think path asks it and must not have to be non-const
-	// to do so.
-	mutable const FElysiumNpcClass* RetailClassRow = nullptr;
-	mutable bool bRetailClassResolved = false;
+	// `SetRetailClassForTests`'s latch (test builds only write it). Kept only for the enumerated
+	// deferred-class cases of story 5 step 2; removed at step 11.
+	const FElysiumNpcClass* RetailClassForTests = nullptr;
+	bool bRetailClassForTests = false;
 };
 
 // npc_VPlayerController — the scene-owned duplicate of the player. It shares only the authored

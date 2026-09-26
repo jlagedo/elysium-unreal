@@ -1,0 +1,79 @@
+{
+  "scope": "step-2-species-shells-and-factories",
+  "identity": {
+    "retail_class": "FElysiumNpc::RetailClass() answers the C++ class (virtual OwnRetailClass, a function-local cached census row per species class); the base FElysiumNpc answers null, the bare CAI_BaseNPCTroika line, which no classname builds. It no longer reads Def->Classname.",
+    "census_classnames": "classes.md and ElysiumNpcKernelShape.cpp take each class's classnames from factories.tsv (kernel_ledger.factory_classnames), not from npc_translation_survey._constructor_aliases: 74 classnames, one claimant each. ElysiumNpcKernelClass::OfClassname asserts uniqueness; the most-derived claimant rule is deleted.",
+    "combined_base_projection": "CAI_BaseNPCTroika is one abstract descriptor on CBaseCombatCharacter carrying BuildNpcClass's rows until step 5 separates CAI_BaseNPC; the 44 step-2 retail classes are abstract descriptors chained by Appendix A; the 45 classname descriptors derive from their retail class."
+  },
+  "abstract_refusal": {
+    "rule": "FElysiumClassDesc::bAbstract; FElysiumClassRegistry::Create returns null and logs (LogElysiumClass Error) for an abstract descriptor unless the def carries FElysiumEntityDef::InternalFactory.",
+    "callers": {
+      "FElysiumEntityWorld::Load": "leaves the def's EntityList slot null and skips name/class indexing; every EntityList walk (load, activate, baseline, persistence, parenting, ticks) already skips a null slot",
+      "FElysiumEntityWorld::CreateRuntimeEntityNoSpawn": "returns FElysiumEntityHandle::Invalid(); every runtime creation path (SpawnRuntimeEntity, player, controller, persistence, cameras, inventory, makers) funnels through it and already handles Invalid",
+      "elysium.classes console probe": "returns after the logged refusal"
+    },
+    "unknown_classnames": "unchanged: an unregistered classname is an inert record on the base descriptor",
+    "internal_construction": "FElysiumEntityDef::InternalFactory stands a class no classname builds (the bare Troika-line test probe; CAI_TestHull at step 10). Null on every map-authored and script-created row."
+  },
+  "stubs": {
+    "superseded": [
+      "npc_VVampireBoss",
+      "npc_VCamera",
+      "npc_VProneDialog",
+      "npc_VLasombra"
+    ],
+    "policy": "rows stay in ElysiumStubClasses.cpp and are superseded by the real registration whatever the static order (the npc_payphone precedent).",
+    "inputs": {
+      "TransformModel": "CNPC_VVampireBoss datamap INPUT; pending input on the CNPC_VVampireBoss descriptor, so the five classes below it inherit it, as retail's datamap chain does",
+      "TweakParam": "CAI_BaseNPCTroika::InputTweakParam 0x1029ea40, now ported (FElysiumNpc::InputTweakParam): strtok on \", \" (0x105c7ed4) into two tokens -> virtual slot 585 ProcessTweakParam (already ported), else DevMsg(1, wrong format). Registered on the CAI_BaseNPCTroika descriptor, so every NPC classname has it; before step 2 only the npc_VCamera stub row answered the name (retail scripts hollywood.py, vamputil.py call it).",
+      "SpawnTempParticle": "CBaseAnimating::InputSpawnTempParticle 0x1008d8b0 forwards the string to FUN_100fce70 (the temp-particle spawn, unported). Registered on the CBaseAnimating descriptor as an addressed stub surface, so every animating entity resolves it and reports; before step 2 only the npc_VLasombra stub row answered it (vamputil.py calls it).",
+      "SetBodyAsCameraTarget": "CBaseCombatCharacter INPUT; reached through the combat-character descriptor",
+      "StartPlayerDialog, StartPlayerDialogRemote, ClearPatrolPath, FollowPatrolPath, SetupPatrolType, WillTalk": "implemented on the NPC/combat-character chain"
+    }
+  },
+  "retail_corrections": {
+    "npc_VCop": "factory 0x103704f0 builds CNPC_VCop: a placed or maker-made cop now takes CNPC_VCop's own and inherited rows (e.g. IRelationType 0x10372b70, slot 453 0x10387520 SEE_CORPSE_FRIEND, slot 597 prologue 0x10372cc0, slots 123/124 debug bodies, slot 605 via CNPC_VHumanCombatant 0x10386560) and CNPC_VCop's schedule id space instead of the Troika line's.",
+    "ClassHolstersOnState": "the list named npc_ProneDialog, which no factory registers; CNPC_ProneDialog's factories are npc_VProneDialog 0x103a4b30 and npc_VMercurio 0x103a4ab0 and its slot 463 is 0x103871c0 (CNPC_VHumanCombatant::OnStateChange, vtmb_slot 463), so both classnames now holster/draw.",
+    "footsteps": "ElysiumFootsteps' MingXiao, Hengeyokai and TzimisceHeadClaw rows are live now that their classnames are registered.",
+    "activate_pass": "FElysiumEntityWorld::Activate ports ServerActivate 0x1011aaf0: for (e = NextEnt(NULL); e; e = NextEnt(e)) if (!(e->m_iEFlags & EFL_DORMANT)) e->Activate(). NextEnt 0x100f7060 re-reads each node's next link and CBaseEntityList::AddEntityAtSlot 0x100f9fc0 appends at the tail, so an entity created by an earlier Activate is activated later in the same pass (the port walks EntityList by index). The only skip is EFL_DORMANT (0x100a8220, m_iEFlags & 2), now FElysiumEntity::bEflDormant, written by camera_animated EndCamera/StartCamera (MakeDormant 0x100a8060, &= ~0x42); the globalname-owned-by-another-map arms of DispatchSpawn 0x101d1280 and the restores 0x101a2e40 / 0x101a3c40 are an empty seam: none of the 108 exported maps authors a globalname or places an env_global. EFL_KILLME is never tested: an entity killed during the pass is still activated (ActivateListedEntity); one killed before the pass is skipped, standing for retail's pre-pass delete-queue purge (\"ERROR: Entity delete queue not empty\"). Previously the port skipped every dead entity and activated dormant ones. Test: Elysium.Substrate.EntityWorld.ActivatePass.",
+    "unresolved_live_names": "npc_VGhoulCroucher, npc_VZombie, npc_VWerewolf, npc_VSheriffMan and npc_VPlaceholder resolve to their factory's class (the census gave them no classname) and become registered NPCs. npc_VVampireBoss was already resolved by the census (CNPC_VVampireBoss listed it and no subclass claimed it); only its registration changes, from a stub to the class. factories.tsv prior_census_class for it is corrected from '-' to CNPC_VVampireBoss, so 6 identities are corrected, not the plan's 7."
+  },
+  "population_findings": {
+    "npc_VVampireBoss": "population.md says the classname is never authored; the 108 exported entities units place it 3 times (la_hub_1 1, sm_warehouse_1 2), besides CNPC_VVampireBoss::MakeNPC 0x103c75f0 naming it.",
+    "npc_VCop": "population.md counts 72 authored; the 108 exported maps give 16 placed rows and 119 npc_maker NPCType rows (sm_hub_1 33 maker rows, matching the recorded figure).",
+    "npc_VGuard1_npc_VPlaceholder": "no placed row, maker NPCType or deployed-script literal in the exported content; liveness stays as reviewed (population.md) and the smoke records them as unexercised."
+  },
+  "audits": {
+    "FindNpcClassByEntityClass": "the animation alias table (gen_action_tables, proximity aliases plus the canonical CNPC_ spelling fallback) answers the factory's class for all 45 step-2 classnames and the deferred npc_V names; it differs only for dead names, the directors and npc_maker, which are not NPC activity consumers. Retained unchanged; its alias source is a step-11 compatibility row.",
+    "classname_keyed_tables": "ClassHolstersOnState, ElysiumFootsteps::SpeciesFor and the test-hook ApplyResolvedTemplate still key on the classname; each classname builds exactly one class, so the answer equals the class's until step 3 turns them into overrides.",
+    "retail_class_keyed_tables": "FStateChangeSpecies, FIdealStateSpecies, FPickupSpecies, SpeciesRowOf, the hull table, the schedule id space and every OverrideOf/BodyOf dispatch now see CNPC_VCop and the six newly resolved classes; no body moved."
+  },
+  "compatibility": {
+    "set_retail_class_for_tests": [
+      {
+        "file": "Private/Tests/ElysiumNpcKernelLifecycle19Tests.cpp",
+        "argument": "RetailClass",
+        "classes": [
+          "CNPC_VFrenzyShadow",
+          "CNPC_VPlayerController",
+          "CNPC_VWolfMorph"
+        ],
+        "consumer": "FLifecycle19Fixture for the deferred rows of SpeciesNPCInitSmoke and SpeciesWords",
+        "removal_step": 7
+      },
+      {
+        "file": "Private/Tests/ElysiumNpcKernelSenses10Tests.cpp",
+        "argument": "TEXT(\"CNPC_VFrenzyShadow\")",
+        "classes": [
+          "CNPC_VFrenzyShadow"
+        ],
+        "consumer": "NpcKernelSenses10.SpeciesArms FrenzyShadow BestEnemy arm 0x103766d0",
+        "removal_step": 7
+      }
+    ],
+    "rule": "the latch check()s that the instance is a bare Troika-line NPC (OwnRetailClass null); a species instance answers its own class",
+    "OfClassname": "no production consumer; census and factory tests only",
+    "activity_aliases": "gen_action_tables NPC entity aliases stay proximity-derived until step 11"
+  },
+  "smoke_policy": "Every newly active or corrected classname must have stood in the running game (registrations-step2.tsv smoke 'stood'/'stood-unported'); names placed only in unbaked maps or with no content creation path are stood through the script creation path (CreateEntityNoSpawn) on a baked map."
+}

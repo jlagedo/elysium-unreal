@@ -266,8 +266,8 @@ enum class EMeleeSlotLine : uint8 { Troika, AndreiBlood, Species };
 
 /** The line `Slot` takes for this NPC, read off the CENSUS (`ElysiumNpcKernelClass::BodyOf`) rather
  *  than off a hand-typed class list, so the answer is checkable against
- *  `docs/vtmb/npc-kernel/slots.md` by construction. A classname no census class claims — `npc_VCop`
- *  is the recovered example — answers `Troika`, which is the correct fall-through and not a bug. */
+ *  `docs/vtmb/npc-kernel/slots.md` by construction. A class with no override (and the bare Troika
+ *  line) answers `Troika`. */
 EMeleeSlotLine MeleeSlotLine(int32 Slot) const;
 
 /** The two body addresses, so a test can name them. */

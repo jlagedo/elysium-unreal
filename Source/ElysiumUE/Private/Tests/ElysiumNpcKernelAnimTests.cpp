@@ -750,9 +750,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimSpeciesTest,
 	"Elysium.Substrate.NpcKernelAnim.Species", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 {
-	// Slot 259's EMPTY override. `npc_VCamera` is claimed by `CNPC_VCamera` in the CENSUS but is not
-	// a registered spawn leaf, so the row is exercised by RETAIL CLASS NAME through the census
-	// reader — the two tables disagree and this is the side that can answer.
+	// Slot 259's EMPTY override, exercised by RETAIL CLASS NAME through the census reader. (Since
+	// story 5 step 2 `npc_VCamera` and `npc_VCameraSecurity` are registered classnames building
+	// these classes, population.md; the rows are read by class name so no camera need be stood.)
 	const FElysiumNpcClass* const Camera = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera"));
 	TestNotNull(TEXT("CNPC_VCamera is a census class"), Camera);
 	if (Camera != nullptr)
@@ -772,7 +772,7 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 			FString(TEXT("0x10368ec0")));
 	}
 
-	// Slots 245/246's forwarding override, by retail class name for the same reason.
+	// Slots 245/246's forwarding override, by retail class name.
 	const TCHAR* const Forwarders[] =
 	{
 		TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VPlayerController"), TEXT("CNPC_VWolfMorph"),
@@ -790,25 +790,34 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 		}
 	}
 
-	// A spawnable body that is NOT one of them takes neither species arm. `npc_VCop`'s census class
-	// list is null — no census class claims it — so `RetailClass()` answers null and every
-	// per-species lookup correctly falls through to the Troika line. That is the recovered answer.
+	// A body that is NOT one of them takes neither species arm. The bare Troika line has no species
+	// class, so `RetailClass()` answers null and every per-species lookup falls through to the
+	// Troika line. A real cop is a species class that is not a camera: story 5 step 2,
+	// `npc_VCop`'s factory 0x103704f0 builds `CNPC_VCop` (population.md), and `CNPC_VCop` does not
+	// derive from either camera class, so it swallows nothing either.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_species"), 5109);
-	Builder.AddNpc(TEXT("cop"), FVector::ZeroVector, TEXT("npc_VCop"));
+	Builder.AddTroikaNpc(TEXT("troika"), FVector::ZeroVector);
+	Builder.AddNpc(TEXT("cop"), FVector(500.f, 0.f, 0.f), TEXT("npc_VCop"));
 	Builder.AddNpc(TEXT("guard"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
 	FElysiumNpc* Cop = Fixture.Npc(TEXT("cop"));
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	TestNotNull(TEXT("the bare Troika NPC spawned"), Troika);
 	TestNotNull(TEXT("the cop spawned"), Cop);
 	TestNotNull(TEXT("the guard spawned"), Guard);
-	if (Cop == nullptr || Guard == nullptr)
+	if (Troika == nullptr || Cop == nullptr || Guard == nullptr)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Cop, Guard });
+	FElysiumNpcWorldFixture::Quiet({ Troika, Cop, Guard });
 
-	TestNull(TEXT("no census class claims npc_VCop"), Cop->RetailClass());
-	TestFalse(TEXT("so it swallows no anim events"), Cop->SwallowsAnimEvents());
+	TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
+	TestFalse(TEXT("so it swallows no anim events"), Troika->SwallowsAnimEvents());
+	TestTrue(TEXT("npc_VCop builds CNPC_VCop"),
+		Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	TestFalse(TEXT("a cop is not a camera, so it swallows none either"),
+		Cop->SwallowsAnimEvents());
 	TestFalse(TEXT("and neither does the ordinary combatant"), Guard->SwallowsAnimEvents());
 
 	// The extra-model pair, whose forwarding arm is "the owner IS the player". A freshly spawned NPC

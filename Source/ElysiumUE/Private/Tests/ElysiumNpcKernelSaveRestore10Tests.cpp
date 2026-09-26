@@ -23,34 +23,38 @@
 // non-slot bodies — `RunAlternateAI` mode 4, the two maker helpers and the scripted sequence's
 // `Activate`.
 //
-// Every species case proves the species body for its retail class AND the Troika body for a plain
-// `npc_VCop`, whose `RetailClass()` is deliberately null.
+// Every species case proves the species body for its retail class AND the Troika body for a bare
+// `CAI_BaseNPCTroika` control, whose `RetailClass()` is null. Each species body is reached on a
+// fresh NPC built as that class (`AddNpcOfClass`), never by reclassing a live one. The control was a
+// plain `npc_VCop` until story 5 step 2 made that classname build `CNPC_VCop`; it is the bare
+// Troika line now (`AddTroikaNpc`), which is what the control always stood for.
 
 static constexpr EAutomationTestFlags GSaveRestore10TestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 namespace
 {
-	// One NPC that every arm is driven through, plus the `npc_VCop` control.
+	// One NPC of retail class `SpeciesClass` that a case's arm is driven through, plus the bare
+	// `CAI_BaseNPCTroika` control.
 	struct FSaveRestore10Fixture
 	{
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Species = nullptr;
 		FElysiumNpc* Troika = nullptr;
 
-		FSaveRestore10Fixture()
-			: World(Build())
+		explicit FSaveRestore10Fixture(const TCHAR* SpeciesClass = TEXT("CNPC_VHumanCombatant"))
+			: World(Build(SpeciesClass))
 		{
 			Species = World.Npc(TEXT("species"));
 			Troika = World.Npc(TEXT("troika"));
 			FElysiumNpcWorldFixture::Quiet({ Species, Troika });
 		}
 
-		static FElysiumNpcWorldBuilder Build()
+		static FElysiumNpcWorldBuilder Build(const TCHAR* SpeciesClass)
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("saverestore10"), 20260914);
-			Builder.AddNpc(TEXT("species"), FVector(100.0, 0.0, 0.0));
-			Builder.AddNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+			Builder.AddNpcOfClass(TEXT("species"), FVector(100.0, 0.0, 0.0), SpeciesClass);
+			Builder.AddTroikaNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0));
 			return Builder;
 		}
 	};
@@ -289,8 +293,8 @@ bool FElysiumNpcKernelSaveRestore10TroikaSaveTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *Fix.Troika;
-	TestNull(TEXT("npc_VCop's RetailClass() is null, which is its recovered answer"),
-		N.RetailClass());
+	// The control is the bare Troika line (`AddTroikaNpc`): no species class stands over it.
+	TestNull(TEXT("the bare Troika line's RetailClass() is null"), N.RetailClass());
 
 	// Every stamp at the value its OWN mode encodes, so one pass fires all eleven.
 	N.CanSeekCoverTimer = 0.0;                            // mode 3
@@ -397,11 +401,16 @@ bool FElysiumNpcKernelSaveRestore10EncodeOrderTest::RunTest(const FString&)
 
 namespace
 {
-	// Stand this NPC as `RetailClass`, clear the archive log, and run slot 126 or 127.
-	void SaveRestore10RunSpecies(FElysiumNpc& Npc, const TCHAR* RetailClass)
+	// Stand a fresh fixture whose subject is built as `RetailClass` and clear its archive log, so a
+	// case can run slot 126 or 127 on it.
+	TUniquePtr<FSaveRestore10Fixture> SaveRestore10StandSpecies(const TCHAR* RetailClass)
 	{
-		Npc.SetRetailClassForTests(RetailClass);
-		Npc.SaveArchiveLog.Reset();
+		TUniquePtr<FSaveRestore10Fixture> Fix = MakeUnique<FSaveRestore10Fixture>(RetailClass);
+		if (Fix->Species != nullptr)
+		{
+			Fix->Species->SaveArchiveLog.Reset();
+		}
+		return Fix;
 	}
 }
 
@@ -409,49 +418,71 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10SaveSpeciesTest,
 	"Elysium.Substrate.NpcKernelSaveRestore10.SaveSpecies", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
 {
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species)
-		|| !TestNotNull(TEXT("the control spawned"), Fix.Troika))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Species;
 	const double FloatMax = FElysiumNpc::SaveStampFloatMax();
 
 	// `CNPC_VMingXiao::Save` `0x10395f80` — the six `m_rflRegrowTimers` at mode 4, ascending.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VMingXiao"));
-	for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
 	{
-		N.MingXiaoRegrowTimers[Index] = Index == 3 ? FloatMax : 5.0;
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiao"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
+		{
+			N.MingXiaoRegrowTimers[Index] = Index == 3 ? FloatMax : 5.0;
+		}
+		TestEqual(TEXT("the MingXiao arm answers the Troika body's result"), N.Save(nullptr), 1);
+		TestEqual(TEXT("a FLT_MAX regrow timer round-trips through the sentinel"),
+			N.MingXiaoRegrowTimers[3], FloatMax);
+		TestEqual(TEXT("and an ordinary one is untouched"), N.MingXiaoRegrowTimers[0], 5.0);
+		TestTrue(TEXT("the MingXiao arm ran the Troika body, which writes the link bool"),
+			SaveRestore10LogText(N.SaveArchiveLog).Contains(TEXT("bool:m_pPedestrianLink:0")));
 	}
-	TestEqual(TEXT("the MingXiao arm answers the Troika body's result"), N.Save(nullptr), 1);
-	TestEqual(TEXT("a FLT_MAX regrow timer round-trips through the sentinel"),
-		N.MingXiaoRegrowTimers[3], FloatMax);
-	TestEqual(TEXT("and an ordinary one is untouched"), N.MingXiaoRegrowTimers[0], 5.0);
-	TestTrue(TEXT("the MingXiao arm ran the Troika body, which writes the link bool"),
-		SaveRestore10LogText(N.SaveArchiveLog).Contains(TEXT("bool:m_pPedestrianLink:0")));
 
 	// `CNPC_VMingXiaoTentacle::Save` `0x1039ed50` — `m_flPhaseExpireTimer` at mode 3.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VMingXiaoTentacle"));
-	N.MingXiaoTentaclePhaseExpireTimer = 0.0;
-	N.Save(nullptr);
-	TestEqual(TEXT("the tentacle's phase stamp round-trips at mode 3"),
-		N.MingXiaoTentaclePhaseExpireTimer, 0.0);
+	{
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiaoTentacle"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		N.MingXiaoTentaclePhaseExpireTimer = 0.0;
+		N.Save(nullptr);
+		TestEqual(TEXT("the tentacle's phase stamp round-trips at mode 3"),
+			N.MingXiaoTentaclePhaseExpireTimer, 0.0);
+	}
 
 	// `CNPC_VTzimisceHeadClaw::Save` `0x103c2810` — `m_flSlowedExpire` at mode 3.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VTzimisceHeadClaw"));
-	N.HeadClawSlowedExpire = 0.0;
-	N.Save(nullptr);
-	TestEqual(TEXT("the head claw's slow stamp round-trips at mode 3"), N.HeadClawSlowedExpire, 0.0);
+	{
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VTzimisceHeadClaw"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		N.HeadClawSlowedExpire = 0.0;
+		N.Save(nullptr);
+		TestEqual(TEXT("the head claw's slow stamp round-trips at mode 3"), N.HeadClawSlowedExpire, 0.0);
+	}
 
-	// The control: a plain `npc_VCop` takes no species arm and runs the Troika body.
-	Fix.Troika->SaveArchiveLog.Reset();
-	Fix.Troika->Save(nullptr);
-	TestEqual(TEXT("the npc_VCop control runs the Troika body"),
-		SaveRestore10LogText(Fix.Troika->SaveArchiveLog),
-		TArray<FString>({ TEXT("fields:AIExtendedSaveHeader_t:0"), TEXT("bool:m_pPedestrianLink:0") }));
-
-	N.SetRetailClassForTests(nullptr);
+	// The control: a bare Troika NPC takes no species arm and runs the Troika body.
+	{
+		FSaveRestore10Fixture Fix;
+		if (!TestNotNull(TEXT("the control spawned"), Fix.Troika))
+		{
+			return false;
+		}
+		Fix.Troika->SaveArchiveLog.Reset();
+		Fix.Troika->Save(nullptr);
+		TestEqual(TEXT("the bare Troika line runs the Troika body"),
+			SaveRestore10LogText(Fix.Troika->SaveArchiveLog),
+			TArray<FString>({ TEXT("fields:AIExtendedSaveHeader_t:0"), TEXT("bool:m_pPedestrianLink:0") }));
+	}
 	return true;
 }
 
@@ -497,60 +528,90 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10RestoreSpeciesTes
 	"Elysium.Substrate.NpcKernelSaveRestore10.RestoreSpecies", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 {
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species)
-		|| !TestNotNull(TEXT("the control spawned"), Fix.Troika))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Species;
 	const double Sentinel = FElysiumNpc::SaveStampSentinel;
 
 	// `CNPC_VMingXiao::vfunc127` `0x10396000` — the base first, then the six regrow timers at mode 4.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VMingXiao"));
-	for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
 	{
-		N.MingXiaoRegrowTimers[Index] = Sentinel;
-	}
-	TestEqual(TEXT("the MingXiao restore answers the base's result"), N.Restore(nullptr), 1);
-	for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
-	{
-		TestEqual(FString::Printf(TEXT("regrow timer %d decodes to FLT_MAX"), Index),
-			N.MingXiaoRegrowTimers[Index], FElysiumNpc::SaveStampFloatMax());
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiao"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
+		{
+			N.MingXiaoRegrowTimers[Index] = Sentinel;
+		}
+		TestEqual(TEXT("the MingXiao restore answers the base's result"), N.Restore(nullptr), 1);
+		for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
+		{
+			TestEqual(FString::Printf(TEXT("regrow timer %d decodes to FLT_MAX"), Index),
+				N.MingXiaoRegrowTimers[Index], FElysiumNpc::SaveStampFloatMax());
+		}
 	}
 
 	// `CNPC_VMingXiaoTentacle::vfunc127` `0x1039eda0` — mode 3 on one field.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VMingXiaoTentacle"));
-	N.MingXiaoTentaclePhaseExpireTimer = Sentinel;
-	N.Restore(nullptr);
-	TestEqual(TEXT("the tentacle's phase stamp decodes to 0.0"),
-		N.MingXiaoTentaclePhaseExpireTimer, 0.0);
+	{
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiaoTentacle"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		N.MingXiaoTentaclePhaseExpireTimer = Sentinel;
+		N.Restore(nullptr);
+		TestEqual(TEXT("the tentacle's phase stamp decodes to 0.0"),
+			N.MingXiaoTentaclePhaseExpireTimer, 0.0);
+	}
 
 	// `CNPC_VTzimisceHeadClaw::vfunc127` `0x103c2860`.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VTzimisceHeadClaw"));
-	N.HeadClawSlowedExpire = Sentinel;
-	N.Restore(nullptr);
-	TestEqual(TEXT("the head claw's slow stamp decodes to 0.0"), N.HeadClawSlowedExpire, 0.0);
+	{
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VTzimisceHeadClaw"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		N.HeadClawSlowedExpire = Sentinel;
+		N.Restore(nullptr);
+		TestEqual(TEXT("the head claw's slow stamp decodes to 0.0"), N.HeadClawSlowedExpire, 0.0);
+	}
 
 	// `CNPC_VVampireBoss::Restore` `0x103c5910` — a post-load RESET, not a restore.
-	SaveRestore10RunSpecies(N, TEXT("CNPC_VVampireBoss"));
-	N.VampireBossMonsterModelName = TEXT("models/monster.mdl");
-	N.VampireBossMonsterClassname = TEXT("npc_VSomethingElse");
-	N.BodyEmitterNames[0] = TEXT("blood_emitter");
-	TestEqual(TEXT("the boss restore answers the Troika body's result"), N.Restore(nullptr), 1);
-	TestTrue(TEXT("m_pMonsterModelName is nulled"), N.VampireBossMonsterModelName.IsEmpty());
-	TestTrue(TEXT("ClearBodyEmitterNames ran"), N.BodyEmitterNames[0].IsEmpty());
-	TestEqual(TEXT("and m_pszMonsterClassname is reset to the literal"),
-		N.VampireBossMonsterClassname, FString(TEXT("npc_VVampireBoss")));
+	{
+		const TUniquePtr<FSaveRestore10Fixture> Fix =
+			SaveRestore10StandSpecies(TEXT("CNPC_VVampireBoss"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix->Species;
+		N.VampireBossMonsterModelName = TEXT("models/monster.mdl");
+		N.VampireBossMonsterClassname = TEXT("npc_VSomethingElse");
+		N.BodyEmitterNames[0] = TEXT("blood_emitter");
+		TestEqual(TEXT("the boss restore answers the Troika body's result"), N.Restore(nullptr), 1);
+		TestTrue(TEXT("m_pMonsterModelName is nulled"), N.VampireBossMonsterModelName.IsEmpty());
+		TestTrue(TEXT("ClearBodyEmitterNames ran"), N.BodyEmitterNames[0].IsEmpty());
+		TestEqual(TEXT("and m_pszMonsterClassname is reset to the literal"),
+			N.VampireBossMonsterClassname, FString(TEXT("npc_VVampireBoss")));
+	}
 
 	// The control.
-	Fix.Troika->SaveArchiveLog.Reset();
-	Fix.Troika->CanSeekCoverTimer = Sentinel;
-	Fix.Troika->Restore(nullptr);
-	TestEqual(TEXT("the npc_VCop control runs the Troika body, which decodes its stamps"),
-		Fix.Troika->CanSeekCoverTimer, 0.0);
-
-	N.SetRetailClassForTests(nullptr);
+	{
+		FSaveRestore10Fixture Fix;
+		if (!TestNotNull(TEXT("the control spawned"), Fix.Troika))
+		{
+			return false;
+		}
+		Fix.Troika->SaveArchiveLog.Reset();
+		Fix.Troika->CanSeekCoverTimer = Sentinel;
+		Fix.Troika->Restore(nullptr);
+		TestEqual(TEXT("the bare Troika line runs the Troika body, which decodes its stamps"),
+			Fix.Troika->CanSeekCoverTimer, 0.0);
+	}
 	return true;
 }
 
@@ -604,65 +665,85 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10RemoveSpeciesTest
 	"Elysium.Substrate.NpcKernelSaveRestore10.RemoveSpecies", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10RemoveSpeciesTest::RunTest(const FString&)
 {
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species)
-		|| !TestNotNull(TEXT("the control spawned"), Fix.Troika))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Species;
-
 	// `CNPC_VCop::UpdateOnRemove` `0x10371a90` — both census decrements, read off the listing. The
-	// two counters are PROCESS-WIDE, so the case sets and reads them explicitly.
-	N.SetRetailClassForTests(TEXT("CNPC_VCop"));
-	FElysiumNpc::CopAliveCensus() = 3;
-	FElysiumNpc::CopSecondCensus() = 2;
-	N.bCopCountedAlive = true;
-	N.bCopCountedSecond = true;
-	N.UpdateOnRemove();
-	TestEqual(TEXT("a counted cop decrements the live census"), FElysiumNpc::CopAliveCensus(), 2);
-	TestEqual(TEXT("and the second census"), FElysiumNpc::CopSecondCensus(), 1);
-	TestFalse(TEXT("m_bCountedAlive is cleared"), N.bCopCountedAlive);
-	TestFalse(TEXT("and so is its twin at +0x6672"), N.bCopCountedSecond);
-	// The guard is what keeps a second removal from driving the census negative.
-	N.UpdateOnRemove();
-	TestEqual(TEXT("an uncounted cop decrements nothing"), FElysiumNpc::CopAliveCensus(), 2);
-	TestEqual(TEXT("nor the second census"), FElysiumNpc::CopSecondCensus(), 1);
-	// Only the first byte set: the two arms are independent.
-	N.bCopCountedAlive = true;
-	N.UpdateOnRemove();
-	TestEqual(TEXT("only the live census moves"), FElysiumNpc::CopAliveCensus(), 1);
-	TestEqual(TEXT("the second is untouched"), FElysiumNpc::CopSecondCensus(), 1);
+	// two counters are PROCESS-WIDE, so the case sets and reads them explicitly. The subject is a
+	// real `npc_VCop`, which is `CNPC_VCop`.
+	{
+		FSaveRestore10Fixture Fix(TEXT("CNPC_VCop"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix.Species;
+		FElysiumNpc::CopAliveCensus() = 3;
+		FElysiumNpc::CopSecondCensus() = 2;
+		N.bCopCountedAlive = true;
+		N.bCopCountedSecond = true;
+		N.UpdateOnRemove();
+		TestEqual(TEXT("a counted cop decrements the live census"), FElysiumNpc::CopAliveCensus(), 2);
+		TestEqual(TEXT("and the second census"), FElysiumNpc::CopSecondCensus(), 1);
+		TestFalse(TEXT("m_bCountedAlive is cleared"), N.bCopCountedAlive);
+		TestFalse(TEXT("and so is its twin at +0x6672"), N.bCopCountedSecond);
+		// The guard is what keeps a second removal from driving the census negative.
+		N.UpdateOnRemove();
+		TestEqual(TEXT("an uncounted cop decrements nothing"), FElysiumNpc::CopAliveCensus(), 2);
+		TestEqual(TEXT("nor the second census"), FElysiumNpc::CopSecondCensus(), 1);
+		// Only the first byte set: the two arms are independent.
+		N.bCopCountedAlive = true;
+		N.UpdateOnRemove();
+		TestEqual(TEXT("only the live census moves"), FElysiumNpc::CopAliveCensus(), 1);
+		TestEqual(TEXT("the second is untouched"), FElysiumNpc::CopSecondCensus(), 1);
+	}
+	// Zeroed after the cop's world is torn down, so nothing its teardown does survives the case.
 	FElysiumNpc::CopAliveCensus() = 0;
 	FElysiumNpc::CopSecondCensus() = 0;
 
 	// `CNPC_VMingXiao::UpdateOnRemove` `0x10391230` — the throwable drop, gated on the mode.
-	N.SetRetailClassForTests(TEXT("CNPC_VMingXiao"));
-	N.MingXiaoThrowableObjectMode = 2;
-	int32 ChainBefore = N.InterestingPlaceReleases;
-	N.UpdateOnRemove();
-	TestEqual(TEXT("the carried throwable is dropped, which zeroes the mode"),
-		N.MingXiaoThrowableObjectMode, 0);
-	TestEqual(TEXT("and the Troika body ran after it"),
-		N.InterestingPlaceReleases, ChainBefore + 1);
+	{
+		FSaveRestore10Fixture Fix(TEXT("CNPC_VMingXiao"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix.Species;
+		N.MingXiaoThrowableObjectMode = 2;
+		const int32 ChainBefore = N.InterestingPlaceReleases;
+		N.UpdateOnRemove();
+		TestEqual(TEXT("the carried throwable is dropped, which zeroes the mode"),
+			N.MingXiaoThrowableObjectMode, 0);
+		TestEqual(TEXT("and the Troika body ran after it"),
+			N.InterestingPlaceReleases, ChainBefore + 1);
+	}
 
 	// `CNPC_VNewscaster::UpdateOnRemove` `0x103a03a0` — the story-queue teardown, then the Troika
 	// body. The teardown's own assertions are family Species'; what this case states is the CHAIN.
-	N.SetRetailClassForTests(TEXT("CNPC_VNewscaster"));
-	ChainBefore = N.InterestingPlaceReleases;
-	N.UpdateOnRemove();
-	TestEqual(TEXT("the newscaster arm chains the Troika body"),
-		N.InterestingPlaceReleases, ChainBefore + 1);
+	{
+		FSaveRestore10Fixture Fix(TEXT("CNPC_VNewscaster"));
+		if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
+		{
+			return false;
+		}
+		FElysiumNpc& N = *Fix.Species;
+		const int32 ChainBefore = N.InterestingPlaceReleases;
+		N.UpdateOnRemove();
+		TestEqual(TEXT("the newscaster arm chains the Troika body"),
+			N.InterestingPlaceReleases, ChainBefore + 1);
+	}
 
-	// The control: an `npc_VCop` entity has a null `RetailClass()`, so it takes no species arm.
-	Fix.Troika->bCopCountedAlive = true;
-	FElysiumNpc::CopAliveCensus() = 5;
-	Fix.Troika->UpdateOnRemove();
-	TestEqual(TEXT("a spawned npc_VCop takes the Troika body, not the CNPC_VCop arm"),
-		FElysiumNpc::CopAliveCensus(), 5);
+	// The control: a bare Troika NPC has a null `RetailClass()`, so it takes no species arm.
+	{
+		FSaveRestore10Fixture Fix;
+		if (!TestNotNull(TEXT("the control spawned"), Fix.Troika))
+		{
+			return false;
+		}
+		Fix.Troika->bCopCountedAlive = true;
+		FElysiumNpc::CopAliveCensus() = 5;
+		Fix.Troika->UpdateOnRemove();
+		TestEqual(TEXT("the bare Troika line takes the Troika body, not the CNPC_VCop arm"),
+			FElysiumNpc::CopAliveCensus(), 5);
+	}
 	FElysiumNpc::CopAliveCensus() = 0;
-
-	N.SetRetailClassForTests(nullptr);
 	return true;
 }
 
@@ -933,7 +1014,7 @@ bool FElysiumNpcKernelSaveRestore10MakerTest::RunTest(const FString&)
 	TestNull(TEXT("a missing item definition answers null"), M.EquipZombieFists(/*bBypass=*/true));
 	TestEqual(TEXT("and hands nothing over"), M.ZombieFistsEquips, EquipsBefore);
 
-	// The SUCCESS arm, through the same latch `IsZombieMaker`'s spawn-leaf gap uses.
+	// The SUCCESS arm, through the same latch forced the other way.
 	M.SetZombieFistsItemForTests(true);
 	FElysiumNpc* Zombie = M.EquipZombieFists(/*bBypass=*/true);
 	if (TestNotNull(TEXT("the zombie maker spawned a child"), Zombie))

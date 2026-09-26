@@ -864,7 +864,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyIdealStateTest,
 bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("enemy_ideal_state"), 0x49444c45);
-	Builder.AddNpc(TEXT("guard"));
+	// The guard is the bare Troika line (story 5 step 2): the body under test is
+	// `CAI_BaseNPCTroika::SelectIdealState` with no species override in the way.
+	Builder.AddTroikaNpc(TEXT("guard"));
 	Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f));
 	FElysiumNpcWorldFixture World(MoveTemp(Builder));
 	FElysiumNpc* Guard = World.Npc(TEXT("guard"));
@@ -875,7 +877,6 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard, Other });
-	Guard->SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 	ElysiumNpcEnemy::SetEnemy(*Guard, Other->Handle);

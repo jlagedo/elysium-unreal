@@ -17,8 +17,8 @@
 //
 // The suite is in four parts: the two BASE bodies (`0x1027bb50`, `0x10298ad0`) and the dialogue
 // chop they share; the SPECIES arms, one named case each, every one of them proving the species
-// body for its retail class AND the Troika body for a plain `npc_VCop`; the two arms story 29c-1
-// left unwired; and the three `CNPCMaker*` arms on their own type.
+// body for an NPC spawned as its retail class AND the Troika body for a bare Troika NPC; the two
+// arms story 29c-1 left unwired; and the three `CNPCMaker*` arms on their own type.
 //
 // A case asserts the whole `PrecacheLog` elementwise — the channel, the name, the flag and the
 // ORDER — because the order is the recovered half. Formatting one op as `"<channel>:<name>:<flag>"`
@@ -66,14 +66,13 @@ namespace
 		return Out;
 	}
 
-	// Stand this NPC as `RetailClass`, clear everything the previous arm wrote, and run slot 104.
-	void Precache10RunArm(FElysiumNpc& Npc, const TCHAR* RetailClass)
+	// Run slot 104 on an NPC that was SPAWNED as the class under test (story 5 step 2: the class is
+	// the C++ type its classname built, never a reclass). The log and the model keyfield start
+	// clear: two arms WRITE the model keyfield (the Troika fallback and the tentacle's), so an arm
+	// must start from an unset keyfield or it would see a fallback as an authored model.
+	void Precache10RunArm(FElysiumNpc& Npc)
 	{
-		Npc.SetRetailClassForTests(RetailClass);
 		Npc.PrecacheLog.Reset();
-		// Two arms WRITE the model keyfield (the Troika fallback and the tentacle's), so the next
-		// arm must start from an unset keyfield or it would see the previous one's fallback as an
-		// authored model.
 		Npc.Model.Reset();
 		Npc.Precache();
 	}
@@ -92,61 +91,64 @@ namespace
 		return true;
 	}
 
-	// One NPC that every species arm is driven through, plus the `npc_VCop` control whose
-	// `RetailClass()` is null — story 29c-1's recovered fall-through, and so "a plain Troika NPC
-	// with no species class".
+	// One NPC spawned as the retail class under test (through its factory classname, story 5
+	// step 2), plus the bare Troika control: `AddTroikaNpc` stands the Troika line with no species
+	// class over it, so its `RetailClass()` is null and slot 104 falls through to the Troika body.
+	// (The control used to be an `npc_VCop`, back when that classname resolved to no class; it now
+	// builds `CNPC_VCop`, so it is no longer the Troika line.)
 	struct FPrecache10Fixture
 	{
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Species = nullptr;
 		FElysiumNpc* Troika = nullptr;
 
-		FPrecache10Fixture()
-			: World(Build())
+		explicit FPrecache10Fixture(const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"))
+			: World(Build(RetailClass))
 		{
 			Species = World.Npc(TEXT("species"));
 			Troika = World.Npc(TEXT("troika"));
 			FElysiumNpcWorldFixture::Quiet({ Species, Troika });
 		}
 
-		static FElysiumNpcWorldBuilder Build()
+		static FElysiumNpcWorldBuilder Build(const TCHAR* RetailClass)
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("precache10"), 29140u);
-			Builder.AddNpc(TEXT("species"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
-			Builder.AddNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+			Builder.AddNpcOfClass(TEXT("species"), FVector::ZeroVector, RetailClass);
+			Builder.AddTroikaNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0));
 			return Builder;
 		}
 	};
 
-	// The Troika control, asserted by every species case: an `npc_VCop` takes no species arm and its
-	// slot 104 is the Troika body alone.
+	// The Troika control, asserted by every species case: a bare Troika NPC takes no species arm
+	// and its slot 104 is the Troika body alone.
 	bool Precache10CheckTroikaControl(FAutomationTestBase& Test, FPrecache10Fixture& Fix)
 	{
 		if (Fix.Troika == nullptr)
 		{
-			Test.AddError(TEXT("the npc_VCop control did not spawn"));
+			Test.AddError(TEXT("the bare Troika control did not spawn"));
 			return false;
 		}
-		Test.TestNull(TEXT("npc_VCop's RetailClass() is null, which is its recovered answer"),
+		Test.TestNull(TEXT("the bare Troika NPC's RetailClass() is null"),
 			Fix.Troika->RetailClass());
 		Fix.Troika->PrecacheLog.Reset();
 		Fix.Troika->Model.Reset();
 		Fix.Troika->Precache();
-		return Precache10CheckLog(Test, TEXT("the npc_VCop control"), *Fix.Troika,
+		return Precache10CheckLog(Test, TEXT("the bare Troika control"), *Fix.Troika,
 			{ GTroikaOnly });
 	}
 
-	// The shape every species case is: run the arm, compare the whole log, and prove the control.
+	// The shape every species case is: spawn the class, run the arm, compare the whole log, and
+	// prove the control.
 	bool Precache10Case(FAutomationTestBase& Test, const TCHAR* RetailClass,
 		const TArray<FString>& Expected)
 	{
-		FPrecache10Fixture Fix;
+		FPrecache10Fixture Fix(RetailClass);
 		if (Fix.Species == nullptr)
 		{
-			Test.AddError(TEXT("the subject did not spawn"));
+			Test.AddError(FString::Printf(TEXT("the %s subject did not spawn"), RetailClass));
 			return false;
 		}
-		Precache10RunArm(*Fix.Species, RetailClass);
+		Precache10RunArm(*Fix.Species);
 		Precache10CheckLog(Test, RetailClass, *Fix.Species, Expected);
 		return Precache10CheckTroikaControl(Test, Fix);
 	}
@@ -242,14 +244,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10TroikaTest,
 	"Elysium.Substrate.NpcKernelPrecache10.TroikaPrecache", GPrecache10TestFlags)
 bool FElysiumNpcKernelPrecache10TroikaTest::RunTest(const FString&)
 {
-	// `CAI_BaseNPCTroika::Precache` `0x10298ad0`, slot 104.
+	// `CAI_BaseNPCTroika::Precache` `0x10298ad0`, slot 104, on the bare Troika NPC: no species
+	// class, so the Troika body is what slot 104 runs.
 	FPrecache10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
+	if (!TestNotNull(TEXT("the bare Troika NPC spawned"), Fix.Troika))
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
-	N.SetRetailClassForTests(nullptr);   // no species class: the Troika body is what slot 104 runs
+	FElysiumNpc& N = *Fix.Troika;
 
 	// Arm 1: an empty model keyfield falls back through slot 212 `SetModelName` to
 	// `"models/error/error.mdl"` and is then precached — so the fallback is OBSERVABLE on the
@@ -322,7 +324,8 @@ bool FElysiumNpcKernelPrecache10DialogueGlobTest::RunTest(const FString&)
 	// third argument SET (the `"*%s/%s"` name format) and its fourth CLEAR. The other two call
 	// sites of that function in this family pass different pairs, which is why the op carries both.
 	FElysiumNpcWorldBuilder Builder(TEXT("precache10_dialog"), 29141u);
-	FElysiumEntityDef& Def = Builder.AddNpc(TEXT("talker"));
+	// A bare Troika NPC: no species class, so slot 104 runs the Troika body the globs live in.
+	FElysiumEntityDef& Def = Builder.AddTroikaNpc(TEXT("talker"));
 	Def.Keys.Add(TEXT("dialogname"), TEXT("dlg/Downtown/Trip.dlg"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("talker"));
@@ -331,7 +334,6 @@ bool FElysiumNpcKernelPrecache10DialogueGlobTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Npc });
-	Npc->SetRetailClassForTests(nullptr);
 	Npc->PrecacheLog.Reset();
 	Npc->Model = TEXT("m.mdl");
 	Npc->Precache();
@@ -354,12 +356,8 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 {
 	// EVERY slot-104 override row the census carries must be claimed by an arm. A class the arm
 	// table does not know would silently take the Troika body, which is the one failure this
-	// dispatch shape can have — so the census is the test's input, not a list typed here.
-	FPrecache10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
-	{
-		return false;
-	}
+	// dispatch shape can have — so the census is the test's input, not a list typed here. Each row
+	// stands a fresh NPC spawned as its class (story 5 step 2), from the same seed.
 	int32 Rows = 0;
 	for (const FElysiumNpcClassSlot& Row : ElysiumNpcKernelShape::Overrides())
 	{
@@ -369,7 +367,19 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 			continue;
 		}
 		++Rows;
-		Fix.Species->SetRetailClassForTests(Row.Class);
+		// Counted but not driven here: the three `CNPCMaker*` rows. Their classnames build
+		// `FElysiumNpcMaker`, which is not an `FElysiumNpc`, so no NPC of the class exists to spawn;
+		// their arms claim the slot with no body (`PrecacheSpecies`'s table). `MakerArmCoverage`
+		// below stands a real maker of each row's classname and proves the row's own arm runs.
+		if (FCString::Strncmp(Row.Class, TEXT("CNPCMaker"), 9) == 0)
+		{
+			continue;
+		}
+		FPrecache10Fixture Fix(Row.Class);
+		if (!TestNotNull(*FString::Printf(TEXT("%s spawned"), Row.Class), Fix.Species))
+		{
+			continue;
+		}
 		Fix.Species->PrecacheLog.Reset();
 		Fix.Species->Model.Reset();
 		TestTrue(*FString::Printf(TEXT("%s's slot-104 override is claimed by an arm"), Row.Class),
@@ -384,11 +394,15 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 
 	// And a class with NO slot-104 row runs the Troika body: `CNPC_VHumanCombatant` is on the
 	// Troika line and carries no override.
-	Fix.Species->SetRetailClassForTests(TEXT("CNPC_VHumanCombatant"));
+	FPrecache10Fixture Plain(TEXT("CNPC_VHumanCombatant"));
+	if (!TestNotNull(TEXT("the npc_VHumanCombatant subject spawned"), Plain.Species))
+	{
+		return false;
+	}
 	TestNull(TEXT("CNPC_VHumanCombatant carries no slot-104 override"),
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), GPrecacheSlotIndex));
-	TestFalse(TEXT("so no species arm claims it"), Fix.Species->PrecacheSpecies());
+	TestFalse(TEXT("so no species arm claims it"), Plain.Species->PrecacheSpecies());
 	return true;
 }
 
@@ -482,18 +496,14 @@ bool FElysiumNpcKernelPrecache10ChangBrosTest::RunTest(const FString&)
 		TEXT("other:item_w_chang_energy_ball:0"),
 		TEXT("other:item_w_chang_ghost:0"),
 	};
-	FPrecache10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
-	{
-		return false;
-	}
+	// One NPC spawned per form, each in its own fixture.
+	bool bOk = true;
 	for (const TCHAR* Form : { TEXT("CNPC_VChangBros"), TEXT("CNPC_VChangBrosBlade"),
 		TEXT("CNPC_VChangBrosClaw") })
 	{
-		Precache10RunArm(*Fix.Species, Form);
-		Precache10CheckLog(*this, Form, *Fix.Species, Expected);
+		bOk &= Precache10Case(*this, Form, Expected);
 	}
-	return Precache10CheckTroikaControl(*this, Fix);
+	return bOk;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10GargoyleTest,
@@ -635,12 +645,12 @@ bool FElysiumNpcKernelPrecache10MingXiaoTentacleTest::RunTest(const FString&)
 	// stores model indices. The first two `PrecacheModel` calls push the SAME string
 	// (`0x1064a2f0`), so retail's two indices are equal and this port records that equality
 	// explicitly.
-	FPrecache10Fixture Fix;
+	FPrecache10Fixture Fix(TEXT("CNPC_VMingXiaoTentacle"));
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
 	{
 		return false;
 	}
-	Precache10RunArm(*Fix.Species, TEXT("CNPC_VMingXiaoTentacle"));
+	Precache10RunArm(*Fix.Species);
 	TestEqual(TEXT("the fallback model is written to the keyfield before the chain"),
 		Fix.Species->Model,
 		FString(TEXT("models/character/monster/mingxiao/mingxiao_tentacle/mingxiao_tentacle.mdl")));
@@ -813,12 +823,12 @@ bool FElysiumNpcKernelPrecache10WerewolfTest::RunTest(const FString&)
 	// pair — and the four-entry footstep table is the TZIMISCE FAT GUY's, which the listing
 	// annotates at `103cb385`. The werewolf's own steps come through the sound GROUP it binds three
 	// lines earlier; this table is a retail copy-paste and is reproduced, not corrected.
-	FPrecache10Fixture Fix;
+	FPrecache10Fixture Fix(TEXT("CNPC_VWerewolf"));
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
 	{
 		return false;
 	}
-	Precache10RunArm(*Fix.Species, TEXT("CNPC_VWerewolf"));
+	Precache10RunArm(*Fix.Species);
 	Precache10CheckLog(*this, TEXT("CNPC_VWerewolf"), *Fix.Species,
 		{
 			GTroikaOnly,
@@ -870,22 +880,25 @@ bool FElysiumNpcKernelPrecache10CameraTest::RunTest(const FString&)
 	// `CNPC_VCamera::Precache` `0x103689c0`, shared with `CNPC_VCameraSecurity`. The model fallback
 	// is family Lifecycle's `CameraPrecacheModel`; the slot-452 reject arm and the
 	// `m_iInterestingPlaceGroups = 0` write are the tail that family left for a later story.
-	FPrecache10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
-	{
-		return false;
-	}
+	// One camera spawned per form, each in its own fixture.
+	bool bOk = true;
 	for (const TCHAR* Form : { TEXT("CNPC_VCamera"), TEXT("CNPC_VCameraSecurity") })
 	{
+		FPrecache10Fixture Fix(Form);
+		if (!TestNotNull(*FString::Printf(TEXT("the %s subject spawned"), Form), Fix.Species))
+		{
+			return false;
+		}
 		Fix.Species->InterestingPlaceGroupMask = 0xffu;
-		Precache10RunArm(*Fix.Species, Form);
+		Precache10RunArm(*Fix.Species);
 		Precache10CheckLog(*this, Form, *Fix.Species, { TEXT("model:models/null.mdl:0") });
 		TestEqual(TEXT("the keyfield took the camera's null-model fallback"), Fix.Species->Model,
 			FString(TEXT("models/null.mdl")));
 		TestEqual(TEXT("m_iInterestingPlaceGroups is cleared at precache"),
 			Fix.Species->InterestingPlaceGroupMask, 0u);
+		bOk &= Precache10CheckTroikaControl(*this, Fix);
 	}
-	return Precache10CheckTroikaControl(*this, Fix);
+	return bOk;
 }
 
 // =================================================================================================
@@ -895,9 +908,9 @@ bool FElysiumNpcKernelPrecache10CameraTest::RunTest(const FString&)
 namespace
 {
 	// One maker of a given classname, with its two keyfields set. `Classname` must be one of the
-	// two `ElysiumNpcClasses.cpp` registers against `FElysiumNpcMaker` — `npc_maker` and
-	// `npc_maker_fleshpile` — because anything else stands a different leaf and the downcast below
-	// would be a lie. `npc_maker_zombie` is NOT one of them; see `MakerZombie`.
+	// three `ElysiumNpcClasses.cpp` registers against `FElysiumNpcMaker` — `npc_maker`,
+	// `npc_maker_fleshpile` and `npc_maker_zombie` — because anything else stands a different leaf
+	// and the downcast below would be a lie.
 	struct FPrecache10MakerFixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -912,7 +925,8 @@ namespace
 			: World(Build(Classname, ModelKey, NpcType))
 		{
 			check(FString(Classname) == TEXT("npc_maker")
-				|| FString(Classname) == TEXT("npc_maker_fleshpile"));
+				|| FString(Classname) == TEXT("npc_maker_fleshpile")
+				|| FString(Classname) == TEXT("npc_maker_zombie"));
 			// **STRENGTHENED, story 29d family SpeciesLifecycle10.** `CNPCMaker::Spawn`
 			// (`0x1034afe0`) dispatches slot 104 `Precache` through `vt+0x1a0`, and the port's
 			// `FElysiumNpcMaker::Spawn` now makes that dispatch. So by the time a case runs, slot 104
@@ -983,6 +997,72 @@ namespace
 		}
 		return true;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10MakerArmCoverageTest,
+	"Elysium.Substrate.NpcKernelPrecache10.MakerArmCoverage", GPrecache10TestFlags)
+bool FElysiumNpcKernelPrecache10MakerArmCoverageTest::RunTest(const FString&)
+{
+	// `ArmCoverage`'s other half: EVERY `CNPCMaker*` slot-104 override row the census carries runs
+	// its OWN arm on a real maker of the row's classname — not a sibling's, and not the Troika body.
+	// The census is the input: each row's classname comes from `ElysiumNpcKernelClass::Find`.
+	//
+	// Each maker stands with a model and NO child classname, the one input on which the three arms
+	// diverge (`0x1034b160` checks the classname and removes the maker; `0x1034c180` precaches it
+	// unchecked; `0x1034cde0` does the same and adds `item_w_zombie_fists`). What is read is
+	// `Spawn`'s own slot-104 dispatch (`1034b06f`), the precache retail runs at map load.
+	struct FMakerArm
+	{
+		const TCHAR* Class;
+		const TCHAR* Address;
+		TArray<FString> Expected;
+		bool bRemoved;
+	};
+	const FMakerArm Arms[] = {
+		{ TEXT("CNPCMaker"), TEXT("0x1034b160"),
+			{ TEXT("model:models/m.mdl:0") }, true },
+		{ TEXT("CNPCMaker_Fleshpile"), TEXT("0x1034c180"),
+			{ TEXT("model:models/m.mdl:0"), TEXT("other::0") }, false },
+		{ TEXT("CNPCMaker_Zombie"), TEXT("0x1034cde0"),
+			{ TEXT("model:models/m.mdl:0"), TEXT("other::0"), TEXT("other:item_w_zombie_fists:0") },
+			false },
+	};
+	int32 Rows = 0;
+	for (const FElysiumNpcClassSlot& Row : ElysiumNpcKernelShape::Overrides())
+	{
+		if (Row.Slot != GPrecacheSlotIndex || FCString::Strncmp(Row.Class, TEXT("CNPCMaker"), 9) != 0)
+		{
+			continue;
+		}
+		++Rows;
+		const FMakerArm* Arm = nullptr;
+		for (const FMakerArm& Candidate : Arms)
+		{
+			if (FCString::Strcmp(Candidate.Class, Row.Class) == 0)
+			{
+				Arm = &Candidate;
+				break;
+			}
+		}
+		if (!TestNotNull(*FString::Printf(TEXT("%s is a known maker arm"), Row.Class), Arm))
+		{
+			continue;
+		}
+		TestEqual(*FString::Printf(TEXT("%s's slot-104 body"), Row.Class), FString(Row.Address),
+			FString(Arm->Address));
+		const TCHAR* const Classname = FElysiumNpcWorldBuilder::ClassnameOf(Row.Class);
+		FPrecache10MakerFixture Fix(Classname, TEXT("models/m.mdl"), nullptr);
+		if (!TestNotNull(*FString::Printf(TEXT("a %s spawned"), Classname), Fix.Maker))
+		{
+			continue;
+		}
+		Precache10CheckMakerLog(*this, *FString::Printf(TEXT("%s runs %s"), Classname, Arm->Address),
+			Arm->Expected, Fix.SpawnPrecacheLog);
+		TestEqual(*FString::Printf(TEXT("%s's arm decides removal on an empty child classname"),
+			Classname), Fix.bDeadAfterSpawn, Arm->bRemoved);
+	}
+	TestEqual(TEXT("the census carries 3 CNPCMaker* slot-104 override rows"), Rows, 3);
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10MakerBaseTest,
@@ -1122,18 +1202,16 @@ bool FElysiumNpcKernelPrecache10MakerZombieTest::RunTest(const FString&)
 	// base's own `UTIL_PrecacheOther(m_spawnEquipment)` arm can never fire; and
 	// `item_w_zombie_fists` is precached AFTER the child classname.
 	//
-	// The fixture stands an `npc_maker` and TELLS it it is the zombie variant. That is not a
-	// shortcut around the spawn path, it is the only way in: `ElysiumNpcClasses.cpp` registers no
-	// `npc_maker_zombie`, so no map in this runtime can stand a `CNPCMaker_Zombie` — a
-	// spawn-registration gap the census contradicts (`CNPCMaker_Zombie_Classnames`) and the shipped
-	// maps use. Same instrument family Species used for the twelve unspawnable species slots.
+	// The fixture stands a real `npc_maker_zombie`, the census's classname for `CNPCMaker_Zombie`
+	// (`CNPCMaker_Zombie_Classnames`), which `ElysiumNpcClasses.cpp` registers against the maker
+	// leaf; its own classname is what selects the zombie arm.
 	{
-		FPrecache10MakerFixture Fix(TEXT("npc_maker"), TEXT("models/z.mdl"), TEXT("npc_VZombie"));
+		FPrecache10MakerFixture Fix(TEXT("npc_maker_zombie"), TEXT("models/z.mdl"),
+			TEXT("npc_VZombie"));
 		if (!TestNotNull(TEXT("the maker spawned"), Fix.Maker))
 		{
 			return false;
 		}
-		Fix.Maker->SetZombieMakerForTests();
 		TestTrue(TEXT("the zombie arm is selected"), Fix.Maker->IsZombieMaker());
 		// Set both words by hand: nothing in this port writes them (the maker class table registers
 		// no such keyfield), and the point of the arm is that it discards them.
@@ -1152,12 +1230,11 @@ bool FElysiumNpcKernelPrecache10MakerZombieTest::RunTest(const FString&)
 
 	// The missing-model arm, same as the fleshpile's: warn, remove, no overlay.
 	{
-		FPrecache10MakerFixture Empty(TEXT("npc_maker"), nullptr, TEXT("npc_VZombie"));
+		FPrecache10MakerFixture Empty(TEXT("npc_maker_zombie"), nullptr, TEXT("npc_VZombie"));
 		if (!TestNotNull(TEXT("the second maker spawned"), Empty.Maker))
 		{
 			return false;
 		}
-		Empty.Maker->SetZombieMakerForTests();
 		FElysiumNpcMaker::DeveloperCvarLevel = 1;
 		Empty.Maker->Precache();
 		TestEqual(TEXT("an empty model precaches nothing"), Empty.Maker->PrecacheLog.Num(), 0);

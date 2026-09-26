@@ -15,8 +15,8 @@
 // This file is included INSIDE `class FElysiumNpc` (`Substrate/ElysiumNpc.h`). It is not
 // a header: it has no include guard and declares nothing of its own. One `virtual` per
 // slot, in slot order, with the retail declaration in the comment and the port's lowered
-// signature in the code. `FElysiumNpc` is `final` and stays final — a virtual here
-// declares the surface retail dispatches through, not an extension point.
+// signature in the code. A virtual here declares the surface retail dispatches through;
+// species classes override it from story 5 step 3 on.
 //
 // A body lands on one of these in 29c/29d/29e. Until then the definition in
 // `ElysiumNpcKernelSlots.cpp` tallies `elysium.stubs` with the retail address — except
@@ -1072,7 +1072,7 @@
 	// melee_dice_roll_result*, CVDmg_t*)`
 	//   takes `melee_dice_roll_result*`
 	//   takes `CVDmg_t*`
-	//   layer 5, story 29c
+	//   layer 18, story 29d
 	virtual bool PlayerAttackerBlockedReaction(FElysiumEntity*, void*, void*);
 	// slot 320 0x102a01b0 (walked) `bool PlayerKnockbackReaction(CBaseCombatCharacter*, Activity)`
 	//   layer 20, story 29e
@@ -1725,7 +1725,7 @@
 	// AIMoveResult_t*)`
 	//   takes `AILocalMoveGoal_t*`
 	//   takes `AIMoveResult_t*`
-	//   layer 15, story 29d
+	//   layer 20, story 29e
 	virtual bool OnObstructingDoor(void*, FElysiumEntity*, float, void*);
 	// slot 532 0x10290570 (walked) `void vfunc532(int)`
 	//   layer 11, story 29d
@@ -1845,17 +1845,17 @@
 	virtual float GetHintDelay(int16);
 	// slot 569 0x10297560 (walked) `Activity GetCoverActivity(CAI_Hint*)`
 	//   takes `CAI_Hint*`
-	//   layer 3, story 29c
+	//   layer 8, story 29c
 	virtual int32 GetCoverActivity(void*);
 	// slot 570 0x102954b0 (walked) `Activity GetReloadActivity(CAI_Hint*)`
 	//   takes `CAI_Hint*`
-	//   layer 3, story 29c
+	//   layer 8, story 29c
 	virtual int32 GetReloadActivity(void*);
 	// slot 571 0x10289ce0 (walked) `Activity vfunc571(float)`
 	//   layer 0, story 29c
 	virtual int32 Slot571(float);
 	// slot 572 0x10297640 (walked) `void SetTurnActivity()`
-	//   layer 5, story 29c
+	//   layer 18, story 29d
 	virtual void SetTurnActivity();
 	// slot 573 0x1026fcf0 (walked) `bool InnateWeaponLOSCondition(const Vector&, const Vector&,
 	// bool)`
@@ -1905,7 +1905,7 @@
 	//   layer 13, story 29d
 	virtual bool CanWitnessSupernatural(int32);
 	// slot 588 0x10293e50 (walked) `void vfunc588()`
-	//   layer 6, story 29c
+	//   layer 19, story 29e
 	virtual void Slot588();
 	// slot 589 0x102c2ec0 (walked) `void SetScriptedDiscipline(int, int)`
 	//   layer 15, story 29d
@@ -1955,7 +1955,7 @@
 	//   layer 0, story 29c
 	virtual float Slot603(void*, void*);
 	// slot 604 0x102b6c30 (walked) `int SelectScheduleMeleeCombat(int)`
-	//   layer 3, story 29c
+	//   layer 4, story 29c
 	virtual int32 SelectScheduleMeleeCombat(int32);
 	// slot 605 0x102b7fc0 (walked) `int SelectScheduleRangedCombat(int)`
 	//   layer 15, story 29d

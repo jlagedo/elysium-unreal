@@ -90,6 +90,12 @@ struct FElysiumClassDesc
 	bool bStub = false;
 	FString StubOwner;
 
+	// An abstract retail class (story 5 step 2): `CAI_BaseNPCTroika`, `CNPC_VBaseBoss`, and each
+	// retail class a classname descriptor derives through. It carries the rows its subclasses
+	// inherit, but no classname factory builds it, so `Create` refuses it rather than standing an
+	// inert record -- an authored row naming one is a defect, not an unported class.
+	bool bAbstract = false;
+
 	TMap<FName, FElysiumInputThunk> Inputs;
 	TMap<FName, FElysiumFieldAccessor> Fields;
 
@@ -168,6 +174,10 @@ public:
 	// stub. Either way a stub can never shadow an implementation.
 	FElysiumClassDesc* RegisterStub(FName ClassName, FName BaseName);
 
+	// Insert an abstract descriptor (no factory; `Create` refuses it) for a retail class that only
+	// its subclasses' classnames build.
+	FElysiumClassDesc& RegisterAbstract(FName ClassName, FName BaseName);
+
 	// The descriptor for a classname, or null if unregistered (caller falls back to base).
 	const FElysiumClassDesc* Find(FName ClassName) const;
 
@@ -185,7 +195,9 @@ public:
 	// digest comparison. Derived shadows base, so a name appears once.
 	TArray<FName> SaveFields(const FElysiumClassDesc& Desc) const;
 
-	// Build a live entity for a def: its leaf class if registered, else an inert base record.
+	// Build a live entity for a def: its leaf class if registered, else an inert base record. Null
+	// (refused, logged) for an abstract class's descriptor, unless the def carries an internal
+	// factory -- retail's construction by code, which no classname reaches.
 	TUniquePtr<FElysiumEntity> Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle) const;
 
 	void ForEach(TFunctionRef<void(const FElysiumClassDesc&)> Fn) const;

@@ -23,19 +23,22 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelSounds10Flags =
 namespace
 {
 	// One NPC, quiet, so nothing competes with the pass a case drives. Prefixed because the module
-	// builds adaptive-unity and this anonymous namespace is merged with the other suites'.
+	// builds adaptive-unity and this anonymous namespace is merged with the other suites'. The NPC
+	// is spawned as `RetailClass` through its factory classname (story 5 step 2); null or
+	// `CAI_BaseNPCTroika` stands the bare Troika line.
 	struct FSounds10Fixture
 	{
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Npc = nullptr;
 
-		explicit FSounds10Fixture(const TCHAR* DialogName = nullptr)
-			: World([DialogName]
+		explicit FSounds10Fixture(const TCHAR* DialogName = nullptr,
+			const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"))
+			: World([DialogName, RetailClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("sounds10_kernel"), 4242);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					FElysiumEntityDef& Guard = Builder.AddNpc(TEXT("guard"),
-						FVector(200.f, 0.f, 0.f), TEXT("npc_VHumanCombatant"));
+					FElysiumEntityDef& Guard = Builder.AddNpcOfClass(TEXT("guard"),
+						FVector(200.f, 0.f, 0.f), RetailClass);
 					if (DialogName != nullptr)
 					{
 						Guard.Keys.Add(TEXT("dialogname"), DialogName);
@@ -264,22 +267,21 @@ bool FElysiumNpcKernelSounds10PainSoundWerewolfTest::RunTest(const FString&)
 	// `CNPC_VWerewolf::vfunc491` (`0x103d87a0`), 245 bytes: the SAME concept through its own guard
 	// and cache, and `0` as the play entry's fifth argument where the base passes `1.25`.
 	{
-		FSounds10Fixture F;
+		FSounds10Fixture F(nullptr, TEXT("CNPC_VWerewolf"));
 		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 		TestNotNull(TEXT("the census carries the class"),
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")));
 		F.Npc->PainSound();
 		CheckPlainHook(*this, *F.Npc, TEXT("CNPC_VWerewolf#491"), { TEXT("Pain"), 0.0f });
 	}
-	// A plain `npc_VCop` has no census classname at all, so every species lookup falls through to
-	// the Troika line.
+	// A bare Troika NPC has no species class at all, so every species lookup falls through to the
+	// Troika line.
 	{
-		FSounds10Fixture F;
+		FSounds10Fixture F(nullptr, TEXT("CAI_BaseNPCTroika"));
 		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->SetRetailClassForTests(nullptr);
 		F.Npc->PainSound();
-		CheckPlainHook(*this, *F.Npc, TEXT("a plain npc_VCop at slot 491"), { TEXT("Pain"), 1.25f });
+		CheckPlainHook(*this, *F.Npc, TEXT("a bare Troika NPC at slot 491"),
+			{ TEXT("Pain"), 1.25f });
 	}
 	return true;
 }
@@ -430,18 +432,16 @@ bool FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest::RunTest(const FString&)
 	// `CNPC_VWerewolf::vfunc500` (`0x103d8660`): the same concept through its own guard
 	// `DAT_1093f99c` and cache `DAT_1093fa30`, and `0` as the fifth argument.
 	{
-		FSounds10Fixture F;
+		FSounds10Fixture F(nullptr, TEXT("CNPC_VWerewolf"));
 		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 		F.Npc->ExertHvySound();
 		CheckPlainHook(*this, *F.Npc, TEXT("CNPC_VWerewolf#500"), { TEXT("Exert_Heavy"), 0.0f });
 	}
 	{
-		FSounds10Fixture F;
+		FSounds10Fixture F(nullptr, TEXT("CAI_BaseNPCTroika"));
 		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->SetRetailClassForTests(nullptr);
 		F.Npc->ExertHvySound();
-		CheckPlainHook(*this, *F.Npc, TEXT("a plain npc_VCop at slot 500"),
+		CheckPlainHook(*this, *F.Npc, TEXT("a bare Troika NPC at slot 500"),
 			{ TEXT("Exert_Heavy"), 1.25f });
 	}
 	return true;

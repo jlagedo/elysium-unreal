@@ -220,27 +220,18 @@ public:
 	//   `CNPCMaker_Zombie::Precache`    `0x1034cde0`  — the fleshpile shape, plus two zeroed
 	//                                                   equipment words and `item_w_zombie_fists`
 	//
-	// NOTHING IN THIS RUNTIME CALLS `Precache()` YET, for the reason `FElysiumNpc::Precache` states:
-	// this substrate acquires assets for the whole map epoch before an entity stands, so wiring a
-	// per-entity precache into `Spawn` would add an event retail's order does not have here.
+	// `Spawn` calls it at retail's position (`1034b06f`, slot 104 after `m_cLiveChildren = 0`). It
+	// RECORDS rather than acquires, for the reason `FElysiumNpc::Precache` states: this substrate
+	// acquires assets for the whole map epoch before an entity stands.
 
 	/** Is this maker the zombie variant? `npc_maker_zombie` here, `CNPCMaker_Zombie` in the census.
 	 *
 	 *  `ElysiumNpcClasses.cpp` registers `npc_maker_zombie` against this leaf (0018 story 2), so a
 	 *  shipped zombie maker stands with its own three keyfields and takes this arm. Its think body
 	 *  (`CNPCMaker_Zombie` think `0x1034d2d0`) is unported: `Think` refuses to run the base maker's
-	 *  spawn loop in its place (see there). The test latch below still stands a zombie maker without
-	 *  a classname. */
+	 *  spawn loop in its place (see there). */
 	bool IsZombieMaker() const;
 
-#if WITH_DEV_AUTOMATION_TESTS
-	/** Test-only: stand this maker as `npc_maker_zombie`, so the arm above can be driven although
-	 *  no classname resolves to it. The same instrument `FElysiumNpc::SetRetailClassForTests` is,
-	 *  and for the same reason — a body whose carrier no fixture can spawn is still a body.
-	 *  Nothing in the shipping build calls this. */
-	void SetZombieMakerForTests() { bZombieMakerForTests = true; }
-	bool bZombieMakerForTests = false;
-#endif
 
 	/** `DAT_1070af4c`, the `developer` cvar both `CNPCMaker::Precache` overlay arms gate on:
 	 *  `!cvar->IsCommand() && cvar->GetInt() >= 1`. This runtime stands no console variable for it,
@@ -392,9 +383,8 @@ public:
 	 *  definition is missing" arm: release the spawned zombie and answer null.
 	 *
 	 *  **GAP, named rather than patched:** the SUCCESS arm is therefore unreachable without an
-	 *  installed catalogue, exactly as `IsZombieMaker`'s spawn-leaf gap is. The latch below is the
-	 *  same instrument `SetZombieMakerForTests` is, for the same reason — a body whose carrier no
-	 *  fixture can stand is still a body. Nothing in the shipping build sets it. */
+	 *  installed catalogue. The latch below forces the answer so a fixture reaches that arm; nothing
+	 *  in the shipping build sets it. */
 	bool ZombieFistsItemExists() const;
 
 #if WITH_DEV_AUTOMATION_TESTS

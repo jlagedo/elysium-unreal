@@ -109,8 +109,8 @@ struct FDialogResponsePage
 // and is named from what `0x10369e70` does with it.
 
 /** `+0x6660 m_iszLinkedCamera` — the authored `targetname` of the `CSecCamera` this security-camera
- *  NPC watches through. A datamap keyfield in retail; `npc_VCameraSecurity` is NOT a registered
- *  spawn leaf in this runtime, so no keyfield is wired to it and it stands empty. */
+ *  NPC watches through. A datamap keyfield in retail. `npc_VCameraSecurity` stands its class
+ *  since story 5 step 2, but the class's keyfield binding lands with step 4, so it stands empty. */
 FString LinkedCameraName;   // +0x6660
 
 /** `+0x6664 m_hLinkedCamera` — the resolved handle, cached by `0x10369e70` and re-resolved whenever

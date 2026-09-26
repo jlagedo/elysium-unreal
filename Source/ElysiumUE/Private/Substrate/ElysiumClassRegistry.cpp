@@ -58,6 +58,13 @@ FElysiumClassDesc* FElysiumClassRegistry::RegisterStub(FName ClassName, FName Ba
 	return &Desc;
 }
 
+FElysiumClassDesc& FElysiumClassRegistry::RegisterAbstract(FName ClassName, FName BaseName)
+{
+	FElysiumClassDesc& Desc = Register(ClassName, BaseName, nullptr);
+	Desc.bAbstract = true;
+	return Desc;
+}
+
 const FElysiumClassDesc* FElysiumClassRegistry::Find(FName ClassName) const
 {
 	const TUniquePtr<FElysiumClassDesc>* Slot = Classes.Find(ClassName);
@@ -123,8 +130,15 @@ TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef
 		bRecord = true;
 	}
 	check(Desc != nullptr);   // the base always registers
+	if (Def.InternalFactory == nullptr && Desc->bAbstract)
+	{
+		UE_LOG(LogElysiumClass, Error, TEXT("%s: refused -- an abstract retail class no classname "
+			"factory builds"), *Def.Classname);
+		return nullptr;
+	}
 
-	TUniquePtr<FElysiumEntity> Ent = Desc->Factory ? Desc->Factory() : MakeUnique<FElysiumEntity>();
+	TUniquePtr<FElysiumEntity> Ent = Def.InternalFactory != nullptr ? Def.InternalFactory()
+		: Desc->Factory ? Desc->Factory() : MakeUnique<FElysiumEntity>();
 	// A stub descriptor names inputs but implements none, so its entities are inert records just
 	// as an unregistered classname's are — the debug surfaces must not report otherwise.
 	Ent->bRecordOnly = bRecord || Desc->bStub;
@@ -248,6 +262,10 @@ static void ElysiumDumpClass(const FElysiumClassRegistry& Reg, const FString& Ra
 	Probe.Keys.Add(TEXT("health"), TEXT("100"));
 
 	TUniquePtr<FElysiumEntity> Ent = Reg.Create(Probe, FElysiumEntityHandle(0, /*Epoch*/1));
+	if (!Ent)
+	{
+		return;   // an abstract class: `Create` logged the refusal
+	}
 	UE_LOG(LogElysiumClass, Display, TEXT("probe %s record-only=%s spawnflags=%d health=%d"),
 		*Ent->DebugString(), Ent->IsRecordOnly() ? TEXT("yes") : TEXT("no"), Ent->SpawnFlags, Ent->Health);
 

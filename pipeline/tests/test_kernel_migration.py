@@ -37,8 +37,9 @@ def test_shared_bodies_and_branch_slots_do_not_collapse_contracts():
 
 def test_authored_scope_separates_liveness_factories_and_deferred_classes():
     manifest, classes, factories = km.load()
-    assert manifest["phase"] == 1
+    assert manifest["phase"] == 2
     assert manifest["history"]["step0"]["commit"] == "aa1c3c86b8684c4760e1dd506d114a0a260fb225"
+    assert manifest["history"]["step1"]["commit"] == "b2261eca89d5f7dc242469e57f2ae1f21707c5f5"
     assert len(manifest["deferred_classes"]) == 10
     by_class = {r["retail_class"]: r for r in classes}
     assert by_class["CAI_TestHull"]["liveness"] == "live"
@@ -51,7 +52,9 @@ def test_authored_scope_separates_liveness_factories_and_deferred_classes():
     originals = [r for r in factories if r["classname"] not in kf.DIRECTORS
                  and not r["classname"].startswith("npc_maker")]
     assert len(originals) == 68
-    assert sum(r["retail_class"] != r["prior_census_class"] for r in originals) == 9
+    # Step 0 counted nine; npc_VVampireBoss was already CNPC_VVampireBoss in the old census
+    # (decisions-step2.json), so eight classnames actually changed identity.
+    assert sum(r["retail_class"] != r["prior_census_class"] for r in originals) == 8
     aliases = {r["classname"]: r["retail_class"] for r in factories}
     assert aliases["npc_VMercurio"] == aliases["npc_VProneDialog"] == "CNPC_ProneDialog"
     assert aliases["npc_VDialogPedestrian"] == aliases["npc_VPedestrian"] == "CNPC_VPedestrian"

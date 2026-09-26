@@ -476,6 +476,16 @@ def constant_return(code: str) -> str:
     return tail or "void"
 
 
+def same_word(read: str, literal: str) -> bool:
+    """Whether two integer literals are the same 32-bit return word.
+
+    The decompiler prints a return in the signedness of the prototype it holds, so re-applying
+    names and prototypes to the corpus can turn `return 0xffffffff;` into `return -1;` with no
+    change to the body. Both are the one word EAX carries.
+    """
+    return int(read, 0) & 0xFFFFFFFF == int(literal, 0) & 0xFFFFFFFF
+
+
 @dataclass
 class Model:
     words: list[Word]
@@ -641,7 +651,7 @@ def build(repo: Path, module: str, depth: int) -> Model:
                 # source, so a misread constant would be an invented behaviour that compiles.
                 body = ledger.functions.get(row.body)
                 read = constant_return(body.code or "") if body is not None else ""
-                if read and read != literal and int(read, 0) != int(literal, 0):
+                if read and read != literal and not same_word(read, literal):
                     raise SystemExit(
                         f"gen_kernel_shape: slot {row.slot} ({row.address}) records "
                         f"`default:{literal}` but the body returns `{read}`")
@@ -1014,8 +1024,8 @@ def render_slots_inl(model: Model, module: str) -> str:
         "// This file is included INSIDE `class FElysiumNpc` (`Substrate/ElysiumNpc.h`). It is not",
         "// a header: it has no include guard and declares nothing of its own. One `virtual` per",
         "// slot, in slot order, with the retail declaration in the comment and the port's lowered",
-        "// signature in the code. `FElysiumNpc` is `final` and stays final — a virtual here",
-        "// declares the surface retail dispatches through, not an extension point.",
+        "// signature in the code. A virtual here declares the surface retail dispatches through;",
+        "// species classes override it from story 5 step 3 on.",
         "//",
         "// A body lands on one of these in 29c/29d/29e. Until then the definition in",
         "// `ElysiumNpcKernelSlots.cpp` tallies `elysium.stubs` with the retail address — except",

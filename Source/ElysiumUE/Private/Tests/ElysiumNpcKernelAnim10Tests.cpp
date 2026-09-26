@@ -23,11 +23,12 @@
 // folded a constant or an FPU compare, off the listing. This family corrected nine of the
 // checklist's one-line walks and every one of those corrections is pinned by a case here.
 //
-// The suite's standing shape: a case sets the NPC's retail class through `SetRetailClassForTests`
-// (the census's own dispatcher instrument), drives ONE slot method, and reads the recorded effect
-// — the activity triple, the notice lists, the pose pair — rather than a screen. Every species case
-// also proves the TROIKA body for a plain `npc_VCop`, whose census classname list is deliberately
-// null.
+// The suite's standing shape: a case spawns its subject as an NPC of the retail class under test,
+// built through that class's own classname (story 5 step 2 — the C++ type is the class), drives ONE
+// slot method, and reads the recorded effect — the activity triple, the notice lists, the pose pair
+// — rather than a screen. A case that needs two classes stands two independent fixtures, one per
+// class. Every species case also proves the TROIKA body on a bare `CAI_BaseNPCTroika`, the line
+// with no species override over it.
 
 static constexpr EAutomationTestFlags GAnim10TestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -65,9 +66,10 @@ namespace
 	constexpr int32 GTActTzWalk2 = 0x1136;
 	constexpr int32 GTActTzRun2 = 0x1137;
 
-	// One world per case, with three NPCs: the leaf every case re-classes through
-	// `SetRetailClassForTests`, a plain `npc_VCop` (the census gives it a NULL classname list, so
-	// its `RetailClass()` is null and every species lookup correctly falls through), and a target.
+	// One world per case, with three NPCs: the subject, spawned as retail class `SubjectClass`
+	// through its own classname (the combatant leaf by default), a bare `CAI_BaseNPCTroika` — the
+	// Troika line with no species override, so every species lookup correctly falls through; it
+	// keeps the `Cop` name the suite has always called it by — and a target.
 	struct FAnim10Fixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -75,8 +77,9 @@ namespace
 		FElysiumNpc* Cop = nullptr;
 		FElysiumNpc* Other = nullptr;
 
-		explicit FAnim10Fixture(uint32 Seed = 29104)
-			: World(Build(Seed))
+		explicit FAnim10Fixture(const TCHAR* SubjectClass = TEXT("CNPC_VHumanCombatant"),
+			uint32 Seed = 29104)
+			: World(Build(SubjectClass, Seed))
 		{
 			Npc = World.Npc(TEXT("subject"));
 			Cop = World.Npc(TEXT("cop"));
@@ -87,11 +90,11 @@ namespace
 			ElysiumNpcTunables::ResetConVars();
 		}
 
-		static FElysiumNpcWorldBuilder Build(uint32 Seed)
+		static FElysiumNpcWorldBuilder Build(const TCHAR* SubjectClass, uint32 Seed)
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim10"), Seed);
-			Builder.AddNpc(TEXT("subject"));
-			Builder.AddNpc(TEXT("cop"), FVector(300.0, 0.0, 0.0), TEXT("npc_VCop"));
+			Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector, SubjectClass);
+			Builder.AddTroikaNpc(TEXT("cop"), FVector(300.0, 0.0, 0.0));
 			Builder.AddNpc(TEXT("other"), FVector(600.0, 0.0, 0.0));
 			return Builder;
 		}
@@ -158,16 +161,16 @@ bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 {
 	// `0x1037b1f0` (`CNPC_VGhoulCroucher`) and `0x103e0540` (`CNPC_VZombie`) — the same 119 bytes.
 	// The Troika base runs FIRST, so the model write happens BEFORE `IsMale` is ever asked.
-	FAnim10Fixture F;
-	if (!TestNotNull(TEXT("the subject spawned"), F.Npc) || !TestNotNull(TEXT("the cop"), F.Cop))
-	{
-		return false;
-	}
 	TCHAR ModelName[] = TEXT("models/character/npc/unique/zombie.mdl");
 
+	// One fresh world per class: each subject is spawned as the class it is.
 	for (const TCHAR* Cls : { TEXT("CNPC_VGhoulCroucher"), TEXT("CNPC_VZombie") })
 	{
-		F.Npc->SetRetailClassForTests(Cls);
+		FAnim10Fixture F(Cls);
+		if (!TestNotNull(*FString::Printf(TEXT("%s: the subject spawned"), Cls), F.Npc))
+		{
+			return false;
+		}
 		F.Npc->VSoundGroupName.Reset();
 		F.Npc->VSoundTableIndex = 0;
 		F.Npc->VSoundGroupRow = 0;
@@ -188,11 +191,16 @@ bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 				Cls), F.Npc->VSoundGroupRow, INDEX_NONE);
 	}
 
-	// The Troika body for a plain `npc_VCop`, whose `RetailClass()` is deliberately null.
+	// The Troika body for the bare Troika line, which no species override stands over.
+	FAnim10Fixture F;
+	if (!TestNotNull(TEXT("the cop"), F.Cop))
+	{
+		return false;
+	}
 	F.Cop->VSoundGroupName.Reset();
 	F.Cop->VSoundTableIndex = 0;
 	F.Cop->SetModel(ModelName);
-	TestTrue(TEXT("a plain npc_VCop takes the Troika body and writes no sound group"),
+	TestTrue(TEXT("the bare Troika line takes the Troika body and writes no sound group"),
 		F.Cop->VSoundGroupName.IsEmpty());
 	TestEqual(TEXT("...and no +0x00bc"), F.Cop->VSoundTableIndex, 0);
 	return true;
@@ -524,14 +532,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TzimisceHeadClawSetActivityTest,
 bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 {
 	// `0x103c1cd0` — one rewrite in front of the Troika body.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)
 		|| !TestNotNull(TEXT("the other"), F.Other) || !TestNotNull(TEXT("the cop"), F.Cop))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisceHeadClaw"));
 
 	Anim10Reset(N);
 	N.Senses.Memory.Enemy = FElysiumEntityHandle();
@@ -553,12 +560,12 @@ bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103c1cd0: every other request reaches the base unchanged"), N.ActivityNumber,
 		GTActRun);
 
-	// The Troika body for a plain `npc_VCop`.
+	// The Troika body for the bare Troika line.
 	Anim10Reset(*F.Cop);
 	F.Cop->Senses.Memory.Enemy = F.Other->Handle;
 	F.Cop->ActivityNumber = GTActIdle;
 	F.Cop->SetActivity(GTActWalk);
-	TestEqual(TEXT("a plain npc_VCop takes the Troika body, so ACT_WALK stays ACT_WALK"),
+	TestEqual(TEXT("the bare Troika line takes the Troika body, so ACT_WALK stays ACT_WALK"),
 		F.Cop->ActivityNumber, GTActWalk);
 	return true;
 }
@@ -568,13 +575,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TzimisceRunnerSetActivityTest,
 bool FAnim10TzimisceRunnerSetActivityTest::RunTest(const FString&)
 {
 	// `0x103c3d80` — a five-entry REQUEST remap in front of the Troika body, gated on `+0x6672`.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VTzimisceRunner"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisceRunner"));
 
 	N.bTzimisceRunnerForm = false;
 	Anim10Reset(N);
@@ -692,19 +698,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10DogEarlyTranslateTest,
 bool FAnim10DogEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x10374ad0`, 21 bytes — ONE early return the Troika base never sees.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VDog"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc) || !TestNotNull(TEXT("the cop"), F.Cop))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VDog"));
 
 	TestEqual(TEXT("0x10374ad0: the dog PRESERVES ACT_FIDGET"),
 		N.NPC_EarlyTranslateActivity(GTActFidget), GTActFidget);
 	TestEqual(TEXT("0x10374ad0: everything else forwards to 0x10295590"),
 		N.NPC_EarlyTranslateActivity(GTActWalk), GTActWalk);
-	TestEqual(TEXT("a plain npc_VCop takes the Troika body, where ACT_FIDGET becomes ACT_IDLE"),
+	TestEqual(TEXT("the bare Troika line takes the Troika body, where ACT_FIDGET becomes ACT_IDLE"),
 		F.Cop->NPC_EarlyTranslateActivity(GTActFidget), GTActIdle);
 	return true;
 }
@@ -715,13 +720,12 @@ bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x103854f0`, 565 bytes, 39 census classes. The polarity of the state ladder is the
 	// correction this case pins.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VHuman"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VHuman"));
 
 	// Step 2: no active weapon clears the flag and goes straight to the Troika body, skipping BOTH
 	// rewrite blocks. The fixture's NPC carries no weapon, so this is the default state.
@@ -767,13 +771,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10HengeyokaiEarlyTranslateTest,
 bool FAnim10HengeyokaiEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x10381b50` — and note the tail is the HUMAN body, not the Troika one.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VHengeyokai"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VHengeyokai"));
 
 	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
 	TestFalse(TEXT("0x10381c80: the carry-form probe is m_bfAINPCFlags bit 5"),
@@ -802,13 +805,12 @@ bool FAnim10TzimisceEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x103bde40`. **The polarity is the ZERO test**: `m_bHeavyBodyTarget` CLEAR takes the `_L`
 	// variants. The generated table's `BodySideLeft` comment read it the other way round.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VTzimisce"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisce"));
 
 	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
 	TestEqual(TEXT("0x103bde40: with the form bit clear everything falls to the Troika body"),
@@ -839,13 +841,12 @@ bool FAnim10TzimisceRunnerEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x103c3e10` — the Troika body FIRST, then a post-pass on the TRANSLATED activity. That is
 	// what makes it different from its slot-310 twin, which remaps the REQUEST.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VTzimisceRunner"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisceRunner"));
 
 	N.bTzimisceRunnerForm = false;
 	TestEqual(TEXT("0x103c3e10: with +0x6672 clear the chain's answer passes through"),
@@ -1157,23 +1158,42 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 	N.NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
 	TestTrue(TEXT("FormBit is the class's own form bit"), Ask(ENpcPredicate::FormBit));
 	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisceRunner"));
-	N.bTzimisceRunnerForm = true;
-	TestTrue(TEXT("...and for the runner it is the form BYTE +0x6672, not the flag word"),
-		Ask(ENpcPredicate::FormBit));
-	N.bTzimisceRunnerForm = false;
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisce"));
 
-	N.bHeavyBodyTarget = false;
+	// The runner and the Tzimisce are their own subjects, each in a fresh world.
+	{
+		FAnim10Fixture Runner(TEXT("CNPC_VTzimisceRunner"));
+		if (!TestNotNull(TEXT("the runner spawned"), Runner.Npc))
+		{
+			return false;
+		}
+		FElysiumNpc& R = *Runner.Npc;
+		R.bTzimisceRunnerForm = true;
+		TestTrue(TEXT("...and for the runner it is the form BYTE +0x6672, not the flag word"),
+			R.PreTranslatePredicate(static_cast<int32>(ENpcPredicate::FormBit), 0));
+		R.bTzimisceRunnerForm = false;
+	}
+
+	FAnim10Fixture Tzimisce(TEXT("CNPC_VTzimisce"));
+	if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzimisce.Npc))
+	{
+		return false;
+	}
+	FElysiumNpc& T = *Tzimisce.Npc;
+	auto AskTz = [&T](ENpcPredicate P, int32 Operand = 0)
+	{
+		return T.PreTranslatePredicate(static_cast<int32>(P), Operand);
+	};
+
+	T.bHeavyBodyTarget = false;
 	TestTrue(TEXT("BodySideLeft is the ZERO arm of +0x6688 — the correction this family made"),
-		Ask(ENpcPredicate::BodySideLeft));
-	N.bHeavyBodyTarget = true;
+		AskTz(ENpcPredicate::BodySideLeft));
+	T.bHeavyBodyTarget = true;
 	TestFalse(TEXT("...and is false once the heavy-body target is set"),
-		Ask(ENpcPredicate::BodySideLeft));
+		AskTz(ENpcPredicate::BodySideLeft));
 
-	N.NpcFlags.Set(EElysiumNpcFlag::COWER_PATH);
-	TestTrue(TEXT("ForcedLowCover is m_bfAINPCFlags 0x200"), Ask(ENpcPredicate::ForcedLowCover));
-	N.NpcFlags.Clear(EElysiumNpcFlag::COWER_PATH);
+	T.NpcFlags.Set(EElysiumNpcFlag::COWER_PATH);
+	TestTrue(TEXT("ForcedLowCover is m_bfAINPCFlags 0x200"), AskTz(ENpcPredicate::ForcedLowCover));
+	T.NpcFlags.Clear(EElysiumNpcFlag::COWER_PATH);
 	return true;
 }
 
@@ -1225,8 +1245,8 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 	};
 
 	// 1. The frenzy gait. `m_bfNPCFrenziedFlags & 0x40` rewrites all four to ACT_RUN_FRENZY on both
-	//    surfaces.
-	N.SetRetailClassForTests(TEXT("CNPC_VHumanCombatant"));
+	//    surfaces. The fixture's subject already is `CNPC_VHumanCombatant`, spawned as
+	//    `npc_VHumanCombatant`, the entity class whose table this walks.
 	N.NpcFlags.SetFrenziedWord(0x40);
 	for (const FCase& Case : Cases)
 	{
@@ -1276,36 +1296,43 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 		N.NPC_EarlyTranslateActivity(GTActCover), N.GetCoverActivity(nullptr));
 	N.CapabilityWord = 0;
 
-	// 5. The Tzimisce body-carry polarity, on both surfaces.
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisce"));
-	N.NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
-	N.bHeavyBodyTarget = false;
+	// 5. The Tzimisce body-carry polarity, on both surfaces — on a Tzimisce of its own, spawned as
+	//    `npc_VTzimisce` in a fresh world.
+	FAnim10Fixture Tzimisce(TEXT("CNPC_VTzimisce"));
+	if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzimisce.Npc))
+	{
+		return false;
+	}
+	FElysiumNpc& T = *Tzimisce.Npc;
+	T.NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
+	T.bHeavyBodyTarget = false;
 	const FNpcClass* Tz = FindNpcClassByEntityClass(FString(TEXT("npc_VTzimisce")));
 	if (Tz != nullptr && Tz->PreTranslate != INDEX_NONE)
 	{
 		const FNpcTranslation Walk = NpcTranslate(Tz->PreTranslate, FString(TEXT("ACT_IDLE")), 0,
-			[&N](ENpcPredicate Predicate, int32 Operand)
-			{ return N.PreTranslatePredicate(static_cast<int32>(Predicate), Operand); },
+			[&T](ENpcPredicate Predicate, int32 Operand)
+			{ return T.PreTranslatePredicate(static_cast<int32>(Predicate), Operand); },
 			[](const FString&) { return true; });
 		TestEqual(TEXT("a ZERO m_bHeavyBodyTarget takes the _L idle on the table walk"),
 			Walk.Activity, FString(TEXT("ACT_IDLE_BODY_L")));
 	}
 	TestEqual(TEXT("...and slot 375 answers the matching id 0xfd"),
-		N.NPC_EarlyTranslateActivity(GTActIdle), GTActIdleBodyL);
-	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
+		T.NPC_EarlyTranslateActivity(GTActIdle), GTActIdleBodyL);
+	T.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
 
-	// 6. And the binder is what a producer uses, so the two cannot be wired differently.
+	// 6. And the binder is what a producer uses, so the two cannot be wired differently. Driven on
+	//    the Tzimisce, the body that stood here when this step ran.
 	FElysiumAnimationIntent Intent;
 	TestFalse(TEXT("an unbound intent keeps the old two-answer fallback"),
 		static_cast<bool>(Intent.NpcLiveState));
-	N.BindPreTranslateState(Intent);
+	T.BindPreTranslateState(Intent);
 	if (TestTrue(TEXT("BindPreTranslateState binds the kernel's evaluator"),
 			static_cast<bool>(Intent.NpcLiveState)))
 	{
-		N.NpcFlags.SetFrenziedWord(0x40);
+		T.NpcFlags.SetFrenziedWord(0x40);
 		TestTrue(TEXT("...and the bound intent answers the kernel's own frenzy bit"),
 			Intent.NpcLiveState(static_cast<int32>(ENpcPredicate::MovementPolicyFrenzy), 0));
-		N.NpcFlags.SetFrenziedWord(0);
+		T.NpcFlags.SetFrenziedWord(0);
 	}
 	return true;
 }
@@ -1319,13 +1346,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10HumanMeleeSelectorTest,
 bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 {
 	// `0x10385e40`, slot 604 for 34 census classes. It REPLACES the Troika body and never chains it.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VHuman"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc) || !TestNotNull(TEXT("the cop"), F.Cop))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VHuman"));
 	TestEqual(TEXT("CNPC_VHuman fills slot 604 with 0x10385e40"),
 		FString(ElysiumNpcKernelClass::BodyOf(N.RetailClass(), 604)),
 		FString(TEXT("0x10385e40")));
@@ -1384,10 +1410,10 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10385e40: the distance is NOT strictly below the bare cvar, so the far pair "
 		"0xcb answers"), N.SelectScheduleMeleeCombat(0), 0xcb);
 
-	// A plain `npc_VCop` takes the Troika body, which answers 0xe4 out of melee.
+	// The bare Troika line takes the Troika body, which answers 0xe4 out of melee.
 	F.Cop->Cognition.Conditions.Reset();
 	F.Cop->bInMelee = false;
-	TestEqual(TEXT("a plain npc_VCop still takes the Troika body 0x102b6c30"),
+	TestEqual(TEXT("the bare Troika line still takes the Troika body 0x102b6c30"),
 		F.Cop->SelectScheduleMeleeCombat(0), 0xe4);
 	return true;
 }
@@ -1397,13 +1423,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10MingXiaoMeleeSelectorTest,
 bool FAnim10MingXiaoMeleeSelectorTest::RunTest(const FString&)
 {
 	// `0x10396050` — the same skeleton as the human's with FOUR stated differences.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VMingXiao"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VMingXiao"));
 
 	// DIFFERENCE 2: the distance is tested BEFORE anything else in the not-engaged arm, and the
 	// melee failure gate is not offered there at all — so an occluded enemy still answers 0xe7.
@@ -1450,13 +1475,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10BachMeleeSelectorTest,
 bool FAnim10BachMeleeSelectorTest::RunTest(const FString&)
 {
 	// `0x10364080` — the weapon-discipline prologue, then the HUMAN body.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VBach"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VBach"));
 	const double Now = F.World.World.NowSeconds();
 
 	N.Cognition.Conditions.Reset();
@@ -1501,15 +1525,14 @@ bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 {
 	// `0x103e0fa0`, slot 509's zombie arm. It REPLACES the Troika body wholesale — no dialog
 	// refusal, no state test, no `SF_NPC_GAG`.
-	FAnim10Fixture F;
+	FAnim10Fixture F(TEXT("CNPC_VZombie"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc) || !TestNotNull(TEXT("the cop"), F.Cop))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.SetRetailClassForTests(TEXT("CNPC_VZombie"));
 	TestTrue(TEXT("CNPC_VZombie's slot-509 arm is claimed"), N.ShouldPlayIdleSoundZombieArm());
-	TestFalse(TEXT("a plain npc_VCop's is not"), F.Cop->ShouldPlayIdleSoundZombieArm());
+	TestFalse(TEXT("the bare Troika line's is not"), F.Cop->ShouldPlayIdleSoundZombieArm());
 
 	// The state test the Troika/base body makes is ABSENT here: a COMBAT zombie still rolls, where
 	// a human body would have refused on `m_NPCState`.

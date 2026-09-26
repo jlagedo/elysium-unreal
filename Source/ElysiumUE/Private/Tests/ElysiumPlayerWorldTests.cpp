@@ -171,8 +171,15 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 	// The NPC inherits the same middle nodes — one MoneyAdd for every character in the game.
 	if (const FElysiumClassDesc* NpcDesc = Reg.Find(FName(TEXT("npc_VVampire"))))
 	{
-		TestEqual(TEXT("npc_* sits under CBaseCombatCharacter"),
-			NpcDesc->BaseName, ElysiumCombatCharacterClassName());
+		// Story 5 step 2: through its retail classes (`CNPC_VVampire` -> `CNPC_VHuman` ->
+		// `CAI_BaseNPCTroika`), the last of which sits under the combat character.
+		bool bUnderCombatCharacter = false;
+		for (const FElysiumClassDesc* D = NpcDesc; D != nullptr && !D->BaseName.IsNone();
+			D = Reg.Find(D->BaseName))
+		{
+			bUnderCombatCharacter |= D->BaseName == ElysiumCombatCharacterClassName();
+		}
+		TestTrue(TEXT("npc_* sits under CBaseCombatCharacter"), bUnderCombatCharacter);
 		TestNotNull(TEXT("an NPC resolves MoneyAdd through the same node"),
 			reinterpret_cast<const void*>(Reg.FindInput(*NpcDesc, FName(TEXT("MoneyAdd")))));
 	}

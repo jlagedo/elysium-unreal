@@ -211,10 +211,9 @@ int32 FElysiumNpc::IRelationType(FElysiumEntity* Candidate)
 	// between them by the address the census says fills the slot for this NPC's retail class, the
 	// same way story 29c-1's slot-76 dispatcher does.
 	//
-	// `CNPC_VCop` has a NULL classname list in the census, so a spawned `npc_VCop` answers a null
-	// `RetailClass()` and lands on the Troika-line body — the recovered answer, not a gap (story
-	// 29c-1's cleanup). `CopIRelationType` is therefore UNREACHABLE through this dispatcher today;
-	// it is ported and driven directly by its test.
+	// Story 5 step 2: a spawned `npc_VCop` is `CNPC_VCop` (factory `0x103704f0`), so
+	// `CopIRelationType` is reached through this dispatcher. Until then the census gave `CNPC_VCop`
+	// no classname and a placed cop took the Troika-line body.
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 404);
 	if (SlotBody != nullptr)
 	{

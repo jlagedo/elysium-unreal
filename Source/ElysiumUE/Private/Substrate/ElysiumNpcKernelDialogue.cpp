@@ -637,9 +637,8 @@ FElysiumEntity* FElysiumNpc::ResolveSecCameraLink()
 	//     camera removes ITSELF. A camera NPC that never linked simply keeps answering null.
 	//  3. Return the resolved handle, or 0.
 	//
-	// **SEAM**: `npc_VCameraSecurity` is a census classname but NOT a registered spawn leaf here
-	// (`Substrate/ElysiumNpcClasses.cpp`), and `CSecCamera` has no port class, so the RTTI cast has
-	// nothing to test. The name lookup goes through the world's own name index — the same set
+	// **SEAM**: `CSecCamera` has no port class, so the RTTI cast has nothing to test (the
+	// `npc_VCameraSecurity` classname stands its class since story 5 step 2). The name lookup goes through the world's own name index — the same set
 	// retail's `FindEntityByName` walks — and the class filter is stated as unrecovered rather than
 	// silently dropped.
 	if (World == nullptr)

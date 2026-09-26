@@ -32,6 +32,10 @@ namespace
 {
 	// Prefixed because the module builds adaptive-unity and this anonymous namespace is merged with
 	// the other suites'.
+	//
+	// `Guard` is the NPC under test, spawned as the retail class the case names (`GuardClass`, by
+	// its own classname) — a species case stands the class it asserts rather than re-labelling a
+	// combatant (0019 story 5 step 2). The combatant leaf is the default for the base-body cases.
 	struct FSpeciesMisc10Fixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -39,12 +43,12 @@ namespace
 		FElysiumNpc* Other = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		FSpeciesMisc10Fixture()
-			: World([]
+		explicit FSpeciesMisc10Fixture(const TCHAR* GuardClass = TEXT("CNPC_VHumanCombatant"))
+			: World([GuardClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("speciesmisc10_kernel"), 4141);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpc(TEXT("guard"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, GuardClass);
 					Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f),
 						TEXT("npc_VHumanCombatant"));
 					Builder.AddCounter(TEXT("grapple_ends"));
@@ -281,13 +285,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10ChangTeleportTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.ChangCheckForTeleport", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10ChangTeleportTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VChangBros"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VChangBros"));
 	F.Guard->TypedStatSet(0, 0x11, 10);
 	F.Guard->TypedStatSet(0, 0x0f, 0);
 	F.Guard->RecordHealthPercent();
@@ -378,15 +381,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10CopSlot597Test,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.CopSlot597", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10CopSlot597Test::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VCop"));
 	if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
 	{
 		AddError(TEXT("no NPCs"));
 		return false;
 	}
-	// `CNPC_VCop`'s census classname list is null, so a spawned `npc_VCop` answers a null
-	// `RetailClass()` and this arm is unreachable without the test instrument.
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VCop"));
+	// A spawned `npc_VCop` is `CNPC_VCop` — its factory `0x103704f0` builds that class
+	// (docs/vtmb/npc-ai/population.md, "The classname → class map, read from the factories") — so
+	// the arm is reached by the real classname.
 	F.Guard->Senses.Memory.ClosestPlayer = F.Player->Handle;
 	F.Guard->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true,
 		EElysiumNpcState::Combat);
@@ -426,13 +429,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10CroucherTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.GhoulCroucherBurn", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10CroucherTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VGhoulCroucher"));
 	if (F.Guard == nullptr || F.Player == nullptr || F.Other == nullptr)
 	{
 		AddError(TEXT("no NPCs"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VGhoulCroucher"));
 	// The slot-24 table now carries the croucher, which is what makes the arm reachable at all.
 	TestEqual(TEXT("`1037be80`: slot 24 dispatches to the croucher line"),
 		static_cast<int32>(F.Guard->VictimHitLine()),
@@ -497,13 +499,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10ManBatConeTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.ManBatScreechCone", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10ManBatConeTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VManBat"));
 	if (F.Guard == nullptr || F.Player == nullptr || F.Other == nullptr)
 	{
 		AddError(TEXT("no NPCs"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VManBat"));
 	F.Guard->Origin = FVector::ZeroVector;
 	F.Player->Origin = FVector(SpeciesMisc10Cm(50.f), 0.0, 0.0);
 
@@ -622,13 +623,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10NewscasterLoadTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.NewscasterLoad", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10NewscasterLoadTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VNewscaster"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VNewscaster"));
 	// `103a0abd`: the load tears BOTH queues down first, so a stale row never survives it. The two
 	// files are `vdata/system/Newscaster_Main.txt` and `…_Side.txt` — PATH CORRECTED, the retail
 	// strings are `%s`-prefixed formats and not `\s`-prefixed paths.
@@ -660,13 +660,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10NewscasterPlayTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.NewscasterPlay", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10NewscasterPlayTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VNewscaster"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VNewscaster"));
 	// Stand the two queues by hand so the selection, not the file, is what is asserted.
 	F.Guard->bNewscasterStoryActive = true;
 	FElysiumNpc::FNewscasterStory Main;
@@ -722,13 +721,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10PedestrianCorpseTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.PedestrianCreateCorpse", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10PedestrianCorpseTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VPedestrian"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VPedestrian"));
 	F.Guard->PedestrianCreateCorpse();
 	// The ORDER is the body: the OBB snapshot must happen before the base resizes the hull, and the
 	// think stop and the solid write after it.
@@ -752,13 +750,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SabbatSplashTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.SabbatBloodSplash", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SabbatSplashTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VSabbatLeader"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VSabbatLeader"));
 
 	// `103aa9ad`: diving does NOTHING — not even the level copy, which is what freezes the edge.
 	F.Guard->bSabbatDiving = true;
@@ -802,13 +799,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SabbatRoundTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.SabbatPlayerDamage", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SabbatRoundTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VSabbatLeader"));
 	if (F.Guard == nullptr || F.Player == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VSabbatLeader"));
 
 	// `103aabf9`: no live closest player answers false.
 	F.Guard->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
@@ -840,13 +836,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SabbatJumpTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.SabbatCheckForJump", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SabbatJumpTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VSabbatLeader"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VSabbatLeader"));
 	F.Guard->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
 	F.Guard->TypedStatSet(0, 0x11, 15);
 	F.Guard->TypedStatSet(0, 0x0f, 0);
@@ -878,13 +873,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10HeadClawSlot332Test,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.HeadClawSlot332", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10HeadClawSlot332Test::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
 	if (F.Guard == nullptr || F.Player == nullptr || F.Other == nullptr)
 	{
 		AddError(TEXT("no NPCs"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VTzimisceHeadClaw"));
 	F.Guard->Origin = FVector::ZeroVector;
 
 	// `103c1d8a`: slot 332 dispatches to the species body, whose base (`0x1014f890`) is `return;`.
@@ -1008,13 +1002,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10RunnerHullTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.TzimisceRunnerHull", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10RunnerHullTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VTzimisceRunner"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VTzimisceRunner"));
 	F.Guard->bTzimisceRunnerForm = false;
 	F.Guard->bWantsLargeHull = true;
 
@@ -1048,13 +1041,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10TransformTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.WaitForTransformation", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10TransformTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VVampireBoss"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VVampireBoss"));
 	F.Guard->TypedStatSet(0, 0x11, 10);
 	F.Guard->TypedStatSet(0, 0x0f, 7);
 
@@ -1077,13 +1069,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10BodyEmittersTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.VampireBossBodyEmitters", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10BodyEmittersTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VVampireBoss"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VVampireBoss"));
 	for (int32 Region = 0; Region < 4; ++Region)
 	{
 		F.Guard->SetBodyEmitterName(Region, FString::Printf(TEXT("boss_emitter_%d"), Region));
@@ -1117,13 +1108,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10WerewolfTaskFailTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfTaskFail", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10WerewolfTaskFailTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 	// OFFSETS CORRECTED: `+0x66b0` is `m_pTeleportHint` and `+0x66bc` is `m_pMoveHint`, which family
 	// Hints already bound the right way round and the checklist's walk has swapped.
 	F.Guard->TeleportHintNode = 11;
@@ -1185,13 +1175,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10WerewolfOverlayTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfDrawDebugStatOverlays", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10WerewolfOverlayTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 	// `103d51a1`: the clamp against `_DAT_104454c4` (0.0) the decompiler folded away — a last-seen
 	// stamp in the FUTURE must print 0.0, not a negative number.
 	F.Guard->WerewolfLastSeenTime = F.World.World.NowSeconds() + 100.0;
@@ -1252,13 +1241,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SnapTest,
 	"Elysium.Substrate.NpcKernelSpeciesMisc10.SnapToAnimationPoint", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SnapTest::RunTest(const FString&)
 {
-	FSpeciesMisc10Fixture F;
+	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Guard == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Guard->SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 	F.Guard->WerewolfFakeHullPosUnits = FVector(9.0, 9.0, 9.0);
 	F.Guard->WerewolfSnapWordA = 5;
 	F.Guard->WerewolfHintNodeCacheA = 7;

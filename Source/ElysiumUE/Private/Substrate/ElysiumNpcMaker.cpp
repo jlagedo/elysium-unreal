@@ -656,12 +656,6 @@ namespace
 
 bool FElysiumNpcMaker::IsZombieMaker() const
 {
-#if WITH_DEV_AUTOMATION_TESTS
-	if (bZombieMakerForTests)
-	{
-		return true;
-	}
-#endif
 	return Def != nullptr && Def->Classname.Equals(ZombieMakerClassname, ESearchCase::IgnoreCase);
 }
 

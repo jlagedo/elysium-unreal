@@ -20,6 +20,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
@@ -219,6 +220,19 @@ static FElysiumClassRegistrar GRegAnimating(
 		ElysiumAddClassField(D, TEXT("elysium_disposition_level"),
 			&FElysiumAnimating::DispositionLevel, EElysiumField::Save);
 
+		// `CBaseAnimating::InputSpawnTempParticle` (`0x1008d8b0`), a datamap INPUT every animating
+		// entity carries: the string argument goes to `FUN_100fce70`, the temp-particle spawn, which
+		// is unported. Registered so a wire or a script call resolves and reports instead of failing
+		// as an unknown input (only the `npc_VLasombra` stub row answered it before story 5 step 2).
+		D.Input(TEXT("SpawnTempParticle"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{
+				ElysiumStub::FSurface Surface;
+				Surface.Kind = TEXT("input");
+				Surface.Surface = TEXT("CBaseAnimating.SpawnTempParticle");
+				Surface.Address = TEXT("0x1008d8b0");
+				ElysiumStub::Fired(Surface, E.DebugString(), ElysiumStub::DescribeInput(A),
+					TEXT("the temp-particle spawn FUN_100fce70"));
+			});
 		D.Input(TEXT("SetAnimation"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{
 				// VtMB's SetAnimation sets the model's *current* sequence rather than firing a

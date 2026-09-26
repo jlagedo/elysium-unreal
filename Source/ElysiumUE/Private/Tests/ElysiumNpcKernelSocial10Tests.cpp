@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumClassRegistry.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMoveSolve.h"
@@ -308,6 +309,60 @@ bool FElysiumNpcKernelSocial10TweakParamTest::RunTest(const FString&)
 	TestTrue(TEXT("NOALERTSTATE is any non-zero"), N.bNoAlertState);
 	N.ProcessTweakParam(TEXT("NOALERTSTATE"), TEXT("nope"));
 	TestFalse(TEXT("and atoi of a non-number is 0"), N.bNoAlertState);
+	return true;
+}
+
+// =================================================================================================
+// `CAI_BaseNPCTroika::InputTweakParam` — `0x1029ea40`, the `TweakParam` datamap INPUT.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10InputTweakParamTest,
+	"Elysium.Substrate.NpcKernelSocial10.InputTweakParam", GSocial10TestFlags)
+bool FElysiumNpcKernelSocial10InputTweakParamTest::RunTest(const FString&)
+{
+	FSocial10Fixture F;
+	if (F.Npc == nullptr || F.Npc->Class == nullptr)
+	{
+		AddError(TEXT("no NPC"));
+		return false;
+	}
+	FElysiumNpc& N = *F.Npc;
+	// Through the registry, as a wire or a script call reaches it: the input is a
+	// `CAI_BaseNPCTroika` row every NPC classname inherits.
+	const FElysiumInputThunk Thunk =
+		FElysiumClassRegistry::Get().FindInput(*N.Class, FName(TEXT("TweakParam")));
+	if (!TestTrue(TEXT("TweakParam resolves on an NPC"), Thunk != nullptr))
+	{
+		return false;
+	}
+	auto Fire = [&N, Thunk](const TCHAR* Argument)
+	{
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(Argument);
+		Args.Input = FName(TEXT("TweakParam"));
+		Thunk(N, Args);
+	};
+
+	// `1029eaab`: two `strtok` tokens reach slot 585 as (key, value).
+	Fire(TEXT("NPCPERCEPTION 5"));
+	TestEqual(TEXT("'Param Value' reaches ProcessTweakParam"), N.AuthoredPerception, 5);
+	// The delimiter set is `", "` (`0x105c7ed4`): leading and repeated delimiters are skipped.
+	Fire(TEXT(", NPCPERCEPTION,,7"));
+	TestEqual(TEXT("commas and spaces both separate, leading ones skipped"), N.AuthoredPerception, 7);
+	// Only two `strtok` calls are made, so a third token is ignored.
+	Fire(TEXT("NPCPERCEPTION 3 9"));
+	TestEqual(TEXT("anything past the second token is ignored"), N.AuthoredPerception, 3);
+
+	// `1029eabd`: fewer than two tokens is the `DevMsg(1, ...)` arm, and slot 585 is not reached.
+	const int32 Errors = N.TweakParamFormatErrors;
+	Fire(TEXT("NPCPERCEPTION"));
+	TestEqual(TEXT("one token is the wrong format"), N.TweakParamFormatErrors, Errors + 1);
+	Fire(TEXT(""));
+	TestEqual(TEXT("and so is an empty argument"), N.TweakParamFormatErrors, Errors + 2);
+	// A tab is not in the delimiter set, so this is ONE token.
+	Fire(TEXT("NPCPERCEPTION\t4"));
+	TestEqual(TEXT("a tab does not separate"), N.TweakParamFormatErrors, Errors + 3);
+	TestEqual(TEXT("and none of the refused arguments wrote the field"), N.AuthoredPerception, 3);
 	return true;
 }
 

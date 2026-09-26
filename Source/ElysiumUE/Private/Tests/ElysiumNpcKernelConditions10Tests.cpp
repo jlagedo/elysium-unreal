@@ -44,6 +44,7 @@ namespace
 		FElysiumNpc* Hunter = nullptr;
 		FElysiumNpc* Cop = nullptr;
 		FElysiumNpc* Newscaster = nullptr;
+		FElysiumNpc* Troika = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
 		FCond10Fixture()
@@ -56,15 +57,19 @@ namespace
 						TEXT("npc_VHumanCombatant"));
 					Builder.AddNpc(TEXT("boss"), FVector(800.f, 0.f, 0.f),
 						TEXT("npc_VHumanCombatant"));
-					// The two species arms of slot 404 the census CAN reach.
+					// Two of the species arms of slot 404 the census reaches.
 					Builder.AddNpc(TEXT("ped"), FVector(1200.f, 0.f, 0.f), TEXT("npc_VPedestrian"));
 					Builder.AddNpc(TEXT("hunter"), FVector(1600.f, 0.f, 0.f), TEXT("npc_VHunter"));
-					// `CNPC_VCop`'s census classname list is null, so this one's `RetailClass()` is
-					// null and it takes the Troika line — the recovered answer, not a gap.
+					// Story 5 step 2: `npc_VCop`'s factory 0x103704f0 builds `CNPC_VCop`
+					// (population.md), so this one's `RetailClass()` is the cop row and slot 404
+					// dispatches the cop arm `0x10372b70`.
 					Builder.AddNpc(TEXT("cop"), FVector(2000.f, 0.f, 0.f), TEXT("npc_VCop"));
 					// `CNPC_VNewscaster#404` is `0x103a01b0`, one of the two slot-404 bodies this
 					// family dispatches without owning.
 					Builder.AddNpc(TEXT("news"), FVector(2400.f, 0.f, 0.f), TEXT("npc_VNewscaster"));
+					// The bare Troika line, with no species class over it: the body slot 404
+					// dispatches when no species arm is in the way.
+					Builder.AddTroikaNpc(TEXT("troika"), FVector(2800.f, 0.f, 0.f));
 					return Builder;
 				}())
 		{
@@ -75,9 +80,10 @@ namespace
 			Hunter = World.Npc(TEXT("hunter"));
 			Cop = World.Npc(TEXT("cop"));
 			Newscaster = World.Npc(TEXT("news"));
+			Troika = World.Npc(TEXT("troika"));
 			Player = World.Player();
 			FElysiumNpcWorldFixture::Quiet(
-				{ Guard, Other, Boss, Pedestrian, Hunter, Cop, Newscaster });
+				{ Guard, Other, Boss, Pedestrian, Hunter, Cop, Newscaster, Troika });
 			FElysiumNpc::ResetSpeciesSuspectGlobals();
 			FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 			ElysiumNpcTunables::ResetConVars();
@@ -244,7 +250,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 {
 	FCond10Fixture F;
 	if (F.Guard == nullptr || F.Other == nullptr || F.Pedestrian == nullptr || F.Hunter == nullptr
-		|| F.Cop == nullptr || F.Player == nullptr)
+		|| F.Cop == nullptr || F.Troika == nullptr || F.Player == nullptr)
 	{
 		AddError(TEXT("no NPCs"));
 		return false;
@@ -257,8 +263,15 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	TestEqual(TEXT("npc_VHunter's slot 404 is 0x10388bb0"),
 		FString(ElysiumNpcKernelClass::BodyOf(F.Hunter->RetailClass(), 404)),
 		FString(TEXT("0x10388bb0")));
-	// `CNPC_VCop`'s census classname list is null, so a spawned `npc_VCop` takes the TROIKA body.
-	TestNull(TEXT("a spawned npc_VCop has no retail class"), F.Cop->RetailClass());
+	// Story 5 step 2: `npc_VCop`'s factory 0x103704f0 builds `CNPC_VCop` (population.md), so a
+	// spawned cop dispatches the cop arm. The bare Troika line has no species class and takes the
+	// TROIKA body.
+	TestTrue(TEXT("a spawned npc_VCop is CNPC_VCop"),
+		F.Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	TestEqual(TEXT("npc_VCop's slot 404 is 0x10372b70"),
+		FString(ElysiumNpcKernelClass::BodyOf(F.Cop->RetailClass(), 404)),
+		FString(TEXT("0x10372b70")));
+	TestNull(TEXT("the bare Troika line has no species class"), F.Troika->RetailClass());
 
 	// --- `CNPC_VPedestrian::IRelationType` (`0x103a2930`) ----------------------------------------
 	TestEqual(TEXT("the pedestrian's null arm is D_ER (103a2936)"),
@@ -294,8 +307,8 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 		F.Hunter->IRelationType(F.Player), GCond10T_D_NU);
 
 	// --- `CNPC_VCop::IRelationType` (`0x10372b70`) ------------------------------------------------
-	// UNREACHABLE through the dispatcher (the null classname list above), so the arm is driven
-	// directly — which is also how a test would drive it once a cop census row exists.
+	// Reached through the dispatcher since story 5 step 2 (the census row above). The arms are
+	// driven directly, and the dispatcher is checked to land on the same answer.
 	TestEqual(TEXT("the cop's null arm is D_ER (10372b76)"),
 		F.Cop->CopIRelationType(nullptr), GCond10T_D_ER);
 	TestEqual(TEXT("with nothing set the cop defers (10372c0a)"),
@@ -307,15 +320,19 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	// `10372bc6`: the two player words, both of which stand on `FElysiumPlayer`.
 	TestEqual(TEXT("a heightened-alert player is D_HT to a cop (0x1017f8d0)"),
 		F.Cop->CopIRelationType(F.Player), GCond10T_D_HT);
+	TestEqual(TEXT("and slot 404 dispatched on a cop reaches the same arm"),
+		F.Cop->IRelationType(F.Player), GCond10T_D_HT);
 	F.Player->Police.HeightenedAlertExpiry = 0.0;
 	TestEqual(TEXT("a non-zero cops-in-pursuit count is D_HT (0x1017f770)"),
 		F.Cop->CopIRelationType(F.Player), GCond10T_D_HT);
 	F.Player->Police.CopsInPursuit = 0;
 	TestEqual(TEXT("with both player words clear the cop defers (10372c0a)"),
 		F.Cop->CopIRelationType(F.Player), GCond10T_D_NU);
-	// The Troika body for the same plain `npc_VCop`, which is what the dispatcher gives it today.
-	TestEqual(TEXT("a plain npc_VCop takes the Troika body"),
+	TestEqual(TEXT("dispatched on a cop with both words clear, the cop still defers"),
 		F.Cop->IRelationType(F.Player), GCond10T_D_NU);
+	// The Troika body, which is what the dispatcher gives the bare Troika line.
+	TestEqual(TEXT("a bare Troika NPC takes the Troika body"),
+		F.Troika->IRelationType(F.Player), GCond10T_D_NU);
 
 	// --- `CNPC_VNewscaster::IRelationType` (`0x103a01b0`) ------------------------------------------
 	// Eight bytes, `return 4;`. It never looks at the candidate and never reaches the Troika body,
@@ -340,6 +357,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	// --- `0x103a48b0`, story 29c-1's `SpeciesIRelationType` (family Squad) -------------------------
 	// Three census classes fill slot 404 with it; none of the three is a registered spawn leaf here,
 	// so the dispatcher's case is proved by the census row and the body by family Squad's own suite.
+	// Deferred: the three are story 5 step 7's controller-line folds and have no factory until then.
 	for (const TCHAR* Name : { TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VPlayerController"),
 			TEXT("CNPC_VWolfMorph") })
 	{
@@ -349,13 +367,48 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	}
 
 	// --- `CNPC_VYukie::IRelationType` (`0x103dd880`) ----------------------------------------------
-	// `npc_VYukie` is not a registered spawn leaf here, so this arm is unreachable too; the whole
-	// species override is the null guard, driven directly.
+	// The whole species override is the null guard, driven directly here on an ordinary combatant
+	// (the body reads no Yukie word) and below on a real Yukie.
 	TestEqual(TEXT("the Yukie null guard answers D_ER (103dd888)"),
 		F.Guard->YukieIRelationType(nullptr), GCond10T_D_ER);
 	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 10);
 	TestEqual(TEXT("anything else tail-jumps to the Troika body (103dd88f)"),
 		F.Guard->YukieIRelationType(F.Other), GCond10T_D_HT);
+
+	// Since story 5 step 2 `npc_VYukie` builds `CNPC_VYukie` (population.md), so the dispatcher
+	// reaches this arm on a spawned Yukie. Its answers are the Troika body's for these two inputs —
+	// the arm adds only the null guard ahead of the tail jump — so the census row is what shows the
+	// arm was chosen, and the answers that it chains correctly. Stood in its own world so the
+	// shared fixture's population is unchanged.
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("conditions10_yukie"), 404);
+		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+		Builder.AddNpc(TEXT("yukie"), FVector::ZeroVector, TEXT("npc_VYukie"));
+		Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f), TEXT("npc_VHumanCombatant"));
+		FElysiumNpcWorldFixture YukieWorld(MoveTemp(Builder));
+		FElysiumNpc* Yukie = YukieWorld.Npc(TEXT("yukie"));
+		FElysiumNpc* YukieOther = YukieWorld.Npc(TEXT("other"));
+		if (!TestNotNull(TEXT("a Yukie spawned"), Yukie)
+			|| !TestNotNull(TEXT("and a second NPC"), YukieOther))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Yukie, YukieOther });
+		TestTrue(TEXT("a spawned npc_VYukie is CNPC_VYukie"),
+			Yukie->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VYukie")));
+		TestEqual(TEXT("npc_VYukie's slot 404 is 0x103dd880"),
+			FString(ElysiumNpcKernelClass::BodyOf(Yukie->RetailClass(), 404)),
+			FString(TEXT("0x103dd880")));
+		TestEqual(TEXT("slot 404 on a Yukie: the null guard answers D_ER (103dd888)"),
+			Yukie->IRelationType(nullptr), GCond10T_D_ER);
+		TestEqual(TEXT("and the arm on the Yukie itself agrees"),
+			Yukie->YukieIRelationType(nullptr), GCond10T_D_ER);
+		Yukie->Relationships.SetEntity(YukieOther->Handle, EElysiumRelationship::Hate, 10);
+		TestEqual(TEXT("slot 404 on a Yukie tail-jumps to the Troika body (103dd88f)"),
+			Yukie->IRelationType(YukieOther), GCond10T_D_HT);
+		TestEqual(TEXT("and the arm on the Yukie itself agrees"),
+			Yukie->YukieIRelationType(YukieOther), GCond10T_D_HT);
+	}
 	return true;
 }
 
@@ -775,12 +828,12 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 		return false;
 	}
 
-	// **The census gap, named.** None of the seven retail classes that override slot 448 carries an
-	// entity classname this port registers, and `CNPC_VTzimisceRunner` — which does — descends from
-	// `CNPC_VBaseBoss` rather than `CNPC_VTzimisce`, so it does not inherit `0x103ba350` either.
-	// Every one of the seven arms is therefore unreachable through the dispatcher today and is
-	// driven directly below. What IS proved here is that the dispatcher adds nothing for a body
-	// whose class has no slot-448 override.
+	// Since story 5 step 2 every retail class that overrides slot 448 is built by its own
+	// registered classname (population.md); `CNPC_VTzimisceRunner` descends from `CNPC_VBaseBoss`
+	// rather than `CNPC_VTzimisce`, so it does not inherit `0x103ba350`. The arms are driven directly
+	// by the cases below and reached through `TaskFail` on the seven classes at the end of this one.
+	// What is proved first is that the dispatcher adds nothing for a body whose class has no
+	// slot-448 override — a cop (`CNPC_VCop`, under `CNPC_VHumanCombatant`) included.
 	for (const FElysiumNpc* Npc : { F.Guard, F.Pedestrian, F.Cop })
 	{
 		const TCHAR* const Body = ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 448);
@@ -797,6 +850,145 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 	// The Troika body did run: `COND_TASK_FAILED` and the reason word.
 	TestTrue(TEXT("the Troika body still raised TASK_FAILED (0x1029adb0)"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
+
+	// --- The seven arms through `TaskFail`, each on its own spawned class ------------------------
+	// Every input and every answer is the one the direct-body cases below assert on an ordinary
+	// combatant; here `SpeciesTaskFail`'s census lookup on the spawned class chooses the arm. The
+	// Troika body that follows (`0x1029adb0`) writes none of the words asserted: its
+	// `m_bfAINPCFlags` mask keeps `FINDING_BODY` and `CARRYING_BODY`.
+	FElysiumNpcWorldBuilder Builder(TEXT("conditions10_taskfail"), 404);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	Builder.AddNpc(TEXT("target"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+	const TPair<const TCHAR*, const TCHAR*> Arms[] = {
+		{ TEXT("npc_VAsianVampire"), TEXT("0x10362390") },
+		{ TEXT("npc_VChangBros"), TEXT("0x1036d1d0") },
+		{ TEXT("npc_VGargoyle"), TEXT("0x10379060") },
+		{ TEXT("npc_VHengeyokai"), TEXT("0x10380510") },
+		{ TEXT("npc_VMingXiao"), TEXT("0x10394090") },
+		{ TEXT("npc_VSheriffMan"), TEXT("0x103b0290") },
+		{ TEXT("npc_VTzimisce"), TEXT("0x103ba350") },
+	};
+	for (int32 Index = 0; Index < static_cast<int32>(UE_ARRAY_COUNT(Arms)); ++Index)
+	{
+		Builder.AddNpc(Arms[Index].Key, FVector(400.f * static_cast<float>(Index + 1), 0.f, 0.f),
+			Arms[Index].Key);
+	}
+	FElysiumNpcWorldFixture Species(MoveTemp(Builder));
+	FElysiumNpc* Target = Species.Npc(TEXT("target"));
+	if (!TestNotNull(TEXT("the target spawned"), Target))
+	{
+		return false;
+	}
+	TArray<FElysiumNpc*> Spawned;
+	for (const TPair<const TCHAR*, const TCHAR*>& Arm : Arms)
+	{
+		FElysiumNpc* Npc = Species.Npc(Arm.Key);
+		if (!TestNotNull(*FString::Printf(TEXT("%s spawned"), Arm.Key), Npc))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Npc });
+		TestEqual(*FString::Printf(TEXT("%s's slot 448 is %s"), Arm.Key, Arm.Value),
+			FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 448)), FString(Arm.Value));
+		Spawned.Add(Npc);
+	}
+	FElysiumNpcWorldFixture::Quiet({ Target });
+	FElysiumNpc* const Asian = Spawned[0];
+	FElysiumNpc* const Chang = Spawned[1];
+	FElysiumNpc* const Gargoyle = Spawned[2];
+	FElysiumNpc* const Hengeyokai = Spawned[3];
+	FElysiumNpc* const MingXiao = Spawned[4];
+	FElysiumNpc* const Sheriff = Spawned[5];
+	FElysiumNpc* const Tzimisce = Spawned[6];
+
+	// `0x10362390`: codes 12..15 set `m_bPathBlocked`, 11 does not.
+	Asian->bSpeciesPathBlocked = false;
+	Asian->TaskFail(11);
+	TestFalse(TEXT("TaskFail(11) on an AsianVampire sets nothing (103623c5)"),
+		Asian->bSpeciesPathBlocked);
+	Asian->TaskFail(12);
+	TestTrue(TEXT("TaskFail(12) on an AsianVampire sets m_bPathBlocked (+0x66d4)"),
+		Asian->bSpeciesPathBlocked);
+
+	// `0x1036d1d0`: the same window, writing `m_failSchedule`.
+	Chang->Schedule.FailScheduleOverride = ElysiumScheduleId::None;
+	Chang->TaskFail(11);
+	TestTrue(TEXT("TaskFail(11) on a ChangBros writes no fail schedule (1036d205)"),
+		Chang->Schedule.FailScheduleOverride == ElysiumScheduleId::None);
+	Chang->TaskFail(12);
+	TestTrue(TEXT("TaskFail(12) on a ChangBros writes m_failSchedule 0x15d (+0x5c54)"),
+		Chang->Schedule.FailScheduleOverride == 0x15d);
+
+	// `0x10379060`: the `FINDING_BODY` clear and `m_iShunnedFindPillar`.
+	Gargoyle->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
+	Gargoyle->SpeciesShunnedFindCount = 4;
+	Gargoyle->TaskFail(0);
+	TestFalse(TEXT("TaskFail on a Gargoyle clears FINDING_BODY (1037908e)"),
+		Gargoyle->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
+	TestEqual(TEXT("and zeroes m_iShunnedFindPillar (+0x6680)"),
+		Gargoyle->SpeciesShunnedFindCount, 0);
+
+	// `0x10380510`: blacklist, not release, while `CARRYING_BODY` stands.
+	Hengeyokai->SpeciesBlacklistedEntities.Reset();
+	Hengeyokai->SpeciesPickupTarget = Target->Handle;
+	Hengeyokai->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
+	Hengeyokai->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
+	Hengeyokai->SpeciesShunnedFindCount = 2;
+	Hengeyokai->TaskFail(0);
+	TestEqual(TEXT("TaskFail on a Hengeyokai blacklists the pickup target (0x10382970)"),
+		Hengeyokai->SpeciesBlacklistedEntities.Num(), 1);
+	if (Hengeyokai->SpeciesBlacklistedEntities.Num() == 1)
+	{
+		TestTrue(TEXT("the blacklisted entity is the pickup target"),
+			Hengeyokai->SpeciesBlacklistedEntities[0].Entity == Target->Handle);
+	}
+	TestFalse(TEXT("FINDING_BODY is cleared (0x10381ba0)"),
+		Hengeyokai->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
+	TestTrue(TEXT("a carrying body keeps m_hPickupTarget (10381c80)"),
+		Hengeyokai->SpeciesPickupTarget == Target->Handle);
+	TestEqual(TEXT("m_iShunnedFindFish is zeroed (+0x6678)"),
+		Hengeyokai->SpeciesShunnedFindCount, 0);
+
+	// `0x10394090`: modes 3 and 4 touch only the motor; every other mode is set to 0 and the throw
+	// handle released.
+	MingXiao->SpeciesThrowableObjectMode = 3;
+	MingXiao->SpeciesThrowObject = Target->Handle;
+	MingXiao->TaskFail(0);
+	TestEqual(TEXT("TaskFail on a MingXiao in mode 3 leaves the mode alone (103940a5)"),
+		MingXiao->SpeciesThrowableObjectMode, 3);
+	TestTrue(TEXT("and leaves m_hThrowObject alone"), MingXiao->SpeciesThrowObject.IsSet());
+	MingXiao->SpeciesThrowableObjectMode = 1;
+	MingXiao->TaskFail(0);
+	TestEqual(TEXT("TaskFail on a MingXiao in mode 1 sets the mode to 0 (0x10398d90)"),
+		MingXiao->SpeciesThrowableObjectMode, 0);
+	TestFalse(TEXT("and releases m_hThrowObject (+0x6718)"), MingXiao->SpeciesThrowObject.IsSet());
+
+	// `0x103b0290`: no arm at all.
+	Sheriff->bSpeciesPathBlocked = false;
+	Sheriff->SpeciesShunnedFindCount = 3;
+	Sheriff->SpeciesThrowableObjectMode = 6;
+	Sheriff->SpeciesPickupTarget = Target->Handle;
+	Sheriff->TaskFail(12);
+	TestFalse(TEXT("TaskFail on a SheriffMan sets no path-blocked flag (103b0290)"),
+		Sheriff->bSpeciesPathBlocked);
+	TestEqual(TEXT("zeroes no shunned count"), Sheriff->SpeciesShunnedFindCount, 3);
+	TestEqual(TEXT("touches no throwable mode"), Sheriff->SpeciesThrowableObjectMode, 6);
+	TestTrue(TEXT("and releases no pickup target"), Sheriff->SpeciesPickupTarget.IsSet());
+
+	// `0x103ba350`: blacklist, then release with `CARRYING_BODY` clear.
+	Tzimisce->SpeciesBlacklistedEntities.Reset();
+	Tzimisce->SpeciesPickupTarget = Target->Handle;
+	Tzimisce->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
+	Tzimisce->SpeciesShunnedFindCount = 5;
+	Tzimisce->TaskFail(0);
+	TestEqual(TEXT("TaskFail on a Tzimisce blacklists (0x103bf200)"),
+		Tzimisce->SpeciesBlacklistedEntities.Num(), 1);
+	TestFalse(TEXT("and clears FINDING_BODY (0x103be050)"),
+		Tzimisce->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
+	TestFalse(TEXT("and releases m_hPickupTarget (+0x6670)"),
+		Tzimisce->SpeciesPickupTarget.IsSet());
+	TestEqual(TEXT("and zeroes m_iShunnedFindBody (+0x66b8)"),
+		Tzimisce->SpeciesShunnedFindCount, 0);
 	return true;
 }
 

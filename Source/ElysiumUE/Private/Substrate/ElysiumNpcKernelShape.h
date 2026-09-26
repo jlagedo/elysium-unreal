@@ -138,8 +138,8 @@ struct FElysiumNpcClass
 	int32 ClassnameCount = 0;
 };
 
-// One species override: the class, the slot it replaces, and the body that replaces it. Rows, not
-// subclasses — this runtime stands one leaf for every `npc_V*` classname.
+// One species override: the class, the slot it replaces, and the body that replaces it. The census
+// row a species class's dispatch still reads until story 5 step 3 turns it into an override.
 struct FElysiumNpcClassSlot
 {
 	const TCHAR* Class = nullptr;

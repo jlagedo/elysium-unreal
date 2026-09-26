@@ -11,10 +11,10 @@
 // The species dispatcher story 29c-1 stands over 29b's census: classname -> retail class, class ->
 // base chain, (class, slot) -> the body that fills it. Every family's per-species table goes through
 // this reader, so the two facts that make the lookup non-trivial are asserted here once rather than
-// rediscovered per family — a classname is claimed by every class in its chain, and a class with no
-// body of its own at a slot inherits its base's.
+// rediscovered per family — a classname is claimed by exactly the one class retail's factory builds
+// for it, and a class with no body of its own at a slot inherits its base's.
 //
-// Content-free: the committed census is the whole input, plus one spawned NPC for the leaf's own
+// Content-free: the committed census is the whole input, plus spawned NPCs for the leaf's own
 // `RetailClass()`.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelClassFlags =
@@ -50,49 +50,84 @@ bool FElysiumNpcKernelClassLookupTest::RunTest(const FString&)
 			DerivesFrom(nullptr, TEXT("CAI_BaseNPC")));
 	}
 
-	// The classname resolution, and the reason it needs the most-derived rule: the census records
-	// `npc_VChangBros` on `CNPC_VChangBros` AND on its base `CNPC_VVampireBoss`, so a first-hit
-	// lookup could answer either.
+	// The classname resolution. The census classnames are read off retail's factories: every NPC
+	// classname has exactly one `LINK_ENTITY_TO_CLASS` factory, and the class it builds is the last
+	// primary-vtable write at `[this]` (`docs/vtmb/npc-ai/population.md`, "The classname → class
+	// map, read from the factories" and "Step 0 factory boundary replay": 74 factories replayed on
+	// the pinned `vampire.dll`). So a classname has one claimant and needs no tie-break; the old
+	// "most-derived claimant" rule only undid a proximity survey's over-claims and is gone.
 	{
-		const FElysiumNpcClass* Chang = OfClassname(TEXT("npc_VChangBros"));
-		TestNotNull(TEXT("npc_VChangBros resolves"), Chang);
-		if (Chang != nullptr)
+		struct FFactoryRow
 		{
-			TestEqual(TEXT("to the most derived claimant, not its base"), FString(Chang->Name),
-				FString(TEXT("CNPC_VChangBros")));
-			TestTrue(TEXT("which still derives from CNPC_VVampireBoss"),
-				DerivesFrom(Chang, TEXT("CNPC_VVampireBoss")));
+			const TCHAR* Classname;
+			const TCHAR* Builds;
+		};
+		static const FFactoryRow FactoryRows[] =
+		{
+			// Only `CNPC_VChangBros` claims it; its base `CNPC_VVampireBoss` does not.
+			{ TEXT("npc_VChangBros"), TEXT("CNPC_VChangBros") },
+			// Factory `0x103c4fa0` (inline); the proximity census resolved it to nothing.
+			{ TEXT("npc_VVampireBoss"), TEXT("CNPC_VVampireBoss") },
+			// Factory `0x103704f0` (ctor `0x103708e0`); the proximity census resolved it to nothing.
+			{ TEXT("npc_VCop"), TEXT("CNPC_VCop") },
+			// Factory `0x103ddd70`; the proximity census resolved it to nothing.
+			{ TEXT("npc_VZombie"), TEXT("CNPC_VZombie") },
+			// Aliases keep distinct factories over one class.
+			{ TEXT("npc_VMercurio"), TEXT("CNPC_ProneDialog") },
+			{ TEXT("npc_VProneDialog"), TEXT("CNPC_ProneDialog") },
+			{ TEXT("npc_VDialogPedestrian"), TEXT("CNPC_VPedestrian") },
+		};
+		for (const FFactoryRow& Row : FactoryRows)
+		{
+			const FElysiumNpcClass* Resolved = OfClassname(Row.Classname);
+			TestEqual(*FString::Printf(TEXT("%s resolves to its factory's class %s"), Row.Classname,
+					Row.Builds),
+				FString(Resolved != nullptr ? Resolved->Name : TEXT("")), FString(Row.Builds));
 		}
-		const FElysiumNpcClass* Boss = OfClassname(TEXT("npc_VVampireBoss"));
-		TestNotNull(TEXT("npc_VVampireBoss resolves"), Boss);
-		if (Boss != nullptr)
+		TestTrue(TEXT("CNPC_VChangBros still derives from CNPC_VVampireBoss"),
+			DerivesFrom(OfClassname(TEXT("npc_VChangBros")), TEXT("CNPC_VVampireBoss")));
+		const FElysiumNpcClass* BaseBoss = Find(TEXT("CNPC_VBaseBoss"));
+		TestNotNull(TEXT("CNPC_VBaseBoss is a census class"), BaseBoss);
+		if (BaseBoss != nullptr)
 		{
-			TestEqual(TEXT("to CNPC_VVampireBoss itself"), FString(Boss->Name),
-				FString(TEXT("CNPC_VVampireBoss")));
+			TestEqual(TEXT("but it is abstract: no factory builds it, so it claims no classname"),
+				BaseBoss->ClassnameCount, 0);
 		}
 		TestNull(TEXT("a classname no family class claims resolves to nothing"),
 			OfClassname(TEXT("npc_not_a_classname")));
 	}
 
-	// Every classname the census records resolves, and resolves to a class that claims it.
+	// Every classname the census records has exactly one claimant, and resolves to it.
 	{
 		int32 Claimed = 0;
+		TMap<FString, int32> Claimants;
 		bool bAllResolve = true;
 		for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
 		{
 			for (int32 Index = 0; Index < Row.ClassnameCount; ++Index)
 			{
 				++Claimed;
-				const FElysiumNpcClass* Resolved = OfClassname(FString(Row.Classnames[Index]));
-				if (Resolved == nullptr || !DerivesFrom(Resolved, Row.Name))
+				++Claimants.FindOrAdd(FString(Row.Classnames[Index]));
+				if (OfClassname(FString(Row.Classnames[Index])) != &Row)
 				{
 					bAllResolve = false;
 				}
 			}
 		}
-		TestTrue(TEXT("every census classname resolves to a class that derives from its claimant"),
-			bAllResolve);
-		TestTrue(TEXT("and the census claims at least the 77 recorded classnames"), Claimed >= 77);
+		bool bOneClaimantEach = true;
+		for (const TPair<FString, int32>& Pair : Claimants)
+		{
+			if (Pair.Value != 1)
+			{
+				bOneClaimantEach = false;
+				AddError(FString::Printf(TEXT("%s has %d claimants"), *Pair.Key, Pair.Value));
+			}
+		}
+		TestTrue(TEXT("every census classname has exactly one claimant"), bOneClaimantEach);
+		TestTrue(TEXT("and resolves to that claimant"), bAllResolve);
+		// The 74 retail NPC-vtable factories: 68 NPC classnames, the three makers and the three
+		// directors (`scripted_sequence`, `aiscripted_sequence`, `aiscripted_schedule`).
+		TestEqual(TEXT("the census claims the 74 factory classnames"), Claimed, 74);
 	}
 
 	// The slot resolution. Slot 546 `SquadSlotName` is the story's own worked example: the Troika
@@ -186,15 +221,18 @@ bool FElysiumNpcRetailClassTest::RunTest(const FString&)
 	Builder.AddNpc(TEXT("combatant"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
 	Builder.AddNpc(TEXT("leader"), FVector(200.0, 0.0, 0.0), TEXT("npc_VSabbatLeader"));
 	Builder.AddNpc(TEXT("rat"), FVector(400.0, 0.0, 0.0), TEXT("npc_VRat"));
+	Builder.AddNpc(TEXT("cop"), FVector(600.0, 0.0, 0.0), TEXT("npc_VCop"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 
 	FElysiumNpc* Combatant = Fixture.Npc(TEXT("combatant"));
 	FElysiumNpc* Leader = Fixture.Npc(TEXT("leader"));
 	FElysiumNpc* Rat = Fixture.Npc(TEXT("rat"));
+	FElysiumNpc* Cop = Fixture.Npc(TEXT("cop"));
 	TestNotNull(TEXT("the combatant spawned"), Combatant);
 	TestNotNull(TEXT("the Sabbat leader spawned"), Leader);
 	TestNotNull(TEXT("the rat spawned"), Rat);
-	if (Combatant == nullptr || Leader == nullptr || Rat == nullptr)
+	TestNotNull(TEXT("the cop spawned"), Cop);
+	if (Combatant == nullptr || Leader == nullptr || Rat == nullptr || Cop == nullptr)
 	{
 		return false;
 	}
@@ -208,13 +246,25 @@ bool FElysiumNpcRetailClassTest::RunTest(const FString&)
 	TestEqual(TEXT("npc_VRat IS CNPC_VRat"),
 		FString(Rat->RetailClass() != nullptr ? Rat->RetailClass()->Name : TEXT("")),
 		FString(TEXT("CNPC_VRat")));
+	// `npc_VCop`'s factory `0x103704f0` builds `CNPC_VCop` (population.md, "The classname → class
+	// map, read from the factories"); it used to resolve to no class and run as the bare Troika line.
+	TestEqual(TEXT("npc_VCop IS CNPC_VCop"),
+		FString(Cop->RetailClass() != nullptr ? Cop->RetailClass()->Name : TEXT("")),
+		FString(TEXT("CNPC_VCop")));
 
 	TestTrue(TEXT("the Sabbat leader is a vampire boss"),
 		Leader->IsRetailClass(TEXT("CNPC_VVampireBoss")));
 	TestTrue(TEXT("and a Troika NPC"), Leader->IsRetailClass(TEXT("CAI_BaseNPCTroika")));
 	TestFalse(TEXT("the rat is not a vampire boss"), Rat->IsRetailClass(TEXT("CNPC_VVampireBoss")));
+	TestTrue(TEXT("the cop is a human combatant"), Cop->IsRetailClass(TEXT("CNPC_VHumanCombatant")));
+	TestTrue(TEXT("and a Troika NPC"), Cop->IsRetailClass(TEXT("CAI_BaseNPCTroika")));
+	TestFalse(TEXT("but not a vampire boss"), Cop->IsRetailClass(TEXT("CNPC_VVampireBoss")));
 
-	// The answer is latched, and latching it does not change it.
+	// The answer is the C++ class's own (`OwnRetailClass`, story 5 step 2), not a latch: the census
+	// row of the class the classname built, the same row on every call.
+	TestEqual(TEXT("the C++ class answers its own census row"),
+		reinterpret_cast<UPTRINT>(Leader->RetailClass()),
+		reinterpret_cast<UPTRINT>(ElysiumNpcKernelClass::Find(TEXT("CNPC_VSabbatLeader"))));
 	TestEqual(TEXT("asking twice answers the same row"),
 		reinterpret_cast<UPTRINT>(Leader->RetailClass()),
 		reinterpret_cast<UPTRINT>(Leader->RetailClass()));

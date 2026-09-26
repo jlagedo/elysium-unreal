@@ -19,11 +19,12 @@
 // walk, which this family found wrong in four places (slots 599/600's draw bounds, slot 334's flag
 // polarity, slot 610's case 2, and `CAI_Motor#17`'s two "clamps", which are both floors).
 //
-// **The two tables disagree, and this suite honours both.** `npc_VCop` is a REGISTERED spawn leaf
-// whose census classname list is null, so `RetailClass()` answers null and every per-species lookup
-// falls through to the Troika line — asserted rather than worked around. A species row whose
-// classname no fixture can spawn is exercised through `ElysiumNpcKernelClass::Find` and the table's
-// own lookup.
+// Every classname builds the class retail's factory builds (story 5 step 2,
+// `docs/vtmb/npc-ai/population.md`, "The classname → class map, read from the factories"):
+// `npc_VCop`'s factory `0x103704f0` builds `CNPC_VCop`, so a spawned cop is NOT the Troika line. A
+// case asserting the Troika-line body with no species override in the way stands a bare
+// `CAI_BaseNPCTroika` (`AddTroikaNpc`), whose `RetailClass()` is null. A species row is also
+// exercised through `ElysiumNpcKernelClass::Find` and the table's own lookup.
 
 static constexpr EAutomationTestFlags GTroikaHelpersTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -81,14 +82,16 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 	Builder.AddNpc(TEXT("rat"), FVector(200.0, 0.0, 0.0), TEXT("npc_VRat"));
 	Builder.AddNpc(TEXT("cop"), FVector(400.0, 0.0, 0.0), TEXT("npc_VCop"));
 	Builder.AddNpc(TEXT("phone"), FVector(600.0, 0.0, 0.0), TEXT("npc_payphone"));
+	Builder.AddTroikaNpc(TEXT("troika"), FVector(800.0, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Vamp = Fixture.Npc(TEXT("vamp"));
 	FElysiumNpc* RatNpc = Fixture.Npc(TEXT("rat"));
 	FElysiumNpc* Cop = Fixture.Npc(TEXT("cop"));
-	FElysiumNpcWorldFixture::Quiet({ Vamp, RatNpc, Cop });
-	if (Vamp == nullptr || RatNpc == nullptr || Cop == nullptr)
+	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
+	FElysiumNpcWorldFixture::Quiet({ Vamp, RatNpc, Cop, Troika });
+	if (Vamp == nullptr || RatNpc == nullptr || Cop == nullptr || Troika == nullptr)
 	{
-		AddError(TEXT("fixture did not stand the three spawn leaves"));
+		AddError(TEXT("fixture did not stand the three spawn leaves and the bare Troika NPC"));
 		return false;
 	}
 
@@ -100,12 +103,25 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 		static_cast<int32>(RatNpc->MeleeSlotLine(602)),
 		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::Troika));
 
-	// The recovered two-table disagreement: no census class claims `npc_VCop`.
-	TestNull(TEXT("npc_VCop's RetailClass is null — the census claims no classname for it"),
-		Cop->RetailClass());
-	TestEqual(TEXT("so a cop falls through to the Troika line, which is the recovered answer"),
-		static_cast<int32>(Cop->MeleeSlotLine(602)),
+	// The bare Troika line: no species class, so the Troika-line body runs.
+	TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
+	TestEqual(TEXT("so a bare Troika NPC falls through to the Troika line, which is the recovered "
+		"answer"),
+		static_cast<int32>(Troika->MeleeSlotLine(602)),
 		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::Troika));
+
+	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md), and the
+	// census row puts CNPC_VCop on the `CNPC_VAndreiBlood` line at 599..602 (`0x10385d70` at 602,
+	// `docs/vtmb/npc-kernel/slots.md`).
+	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	TestTrue(TEXT("npc_VCop's RetailClass is CNPC_VCop — its factory builds it"),
+		CopClass != nullptr && Cop->RetailClass() == CopClass);
+	TestEqual(TEXT("CNPC_VCop's 602 body is the AndreiBlood line's"),
+		FString(ElysiumNpcKernelClass::BodyOf(CopClass, 602)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
+	TestEqual(TEXT("so a cop takes the AndreiBlood line at 602"),
+		static_cast<int32>(Cop->MeleeSlotLine(602)),
+		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::AndreiBlood));
 	return true;
 }
 

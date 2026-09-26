@@ -28,6 +28,7 @@
 #include "ElysiumSaveTypes.h"
 #include "Misc/AssertionMacros.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Templates/Function.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -79,6 +80,46 @@ struct FElysiumNpcWorldBuilder
 		// standing what the game stands.
 		Def.Keys.Add(TEXT("stattemplate"), TEXT("Thug"));
 		return Def;
+	}
+
+	// A bare `CAI_BaseNPCTroika`: the Troika line with no species class over it. No classname
+	// factory builds one (the descriptor is abstract), so it is stood by internal construction
+	// (`FElysiumEntityDef::InternalFactory`), the way retail builds a class by code. A case that
+	// asserts the Troika-line body with no species override in the way stands this, never a
+	// species classname standing in for it (story 5 step 2).
+	FElysiumEntityDef& AddTroikaNpc(const TCHAR* TargetName, const FVector& Origin = FVector::ZeroVector)
+	{
+		FElysiumEntityDef& Def = AddNpc(TargetName, Origin, TEXT("CAI_BaseNPCTroika"));
+		Def.InternalFactory = []() -> TUniquePtr<FElysiumEntity> { return MakeUnique<FElysiumNpc>(); };
+		return Def;
+	}
+
+	// The NPC of retail class `RetailClass` (`CNPC_VWerewolf`), built by the classname retail's
+	// factory builds it from (the census's classname for the class). `CAI_BaseNPCTroika`, or null,
+	// stands the bare Troika line. A class no classname builds (`CNPC_VBaseBoss`, a deferred fold)
+	// has no answer here and fails the case at the builder.
+	FElysiumEntityDef& AddNpcOfClass(const TCHAR* TargetName, const FVector& Origin,
+		const TCHAR* RetailClass)
+	{
+		if (RetailClass == nullptr || FCString::Strcmp(RetailClass, TEXT("CAI_BaseNPCTroika")) == 0)
+		{
+			return AddTroikaNpc(TargetName, Origin);
+		}
+		return AddNpc(TargetName, Origin, ClassnameOf(RetailClass));
+	}
+
+	// The classname retail's factory builds `RetailClass` from. A class no classname builds answers
+	// an empty classname: the row stands as an inert record, so the case fails on its own missing NPC
+	// (an `ensure`, not a `check`, so one bad row does not stop the whole automation run).
+	static const TCHAR* ClassnameOf(const TCHAR* RetailClass)
+	{
+		const FElysiumNpcClass* Row = ElysiumNpcKernelClass::Find(RetailClass);
+		if (!ensureMsgf(Row != nullptr && Row->ClassnameCount > 0, TEXT("%s: no classname builds it"),
+			RetailClass))
+		{
+			return TEXT("");
+		}
+		return Row->Classnames[0];
 	}
 
 	// A `math_counter`, the recording surface every I/O-wired case reads back as a number.

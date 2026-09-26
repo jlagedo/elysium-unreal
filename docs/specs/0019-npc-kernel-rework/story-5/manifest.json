@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "phase": 1,
-  "revision": "step-1-dead-species-deletion",
+  "phase": 2,
+  "revision": "step-2-species-shells-and-factories",
   "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
   "inputs": {
     "module": {
@@ -17,7 +17,7 @@
     "census": {
       "root": "repo",
       "path": "docs/vtmb/npc-kernel/classes.md",
-      "sha256": "178eced3770568df9e8b1bfeaad3331eb83885d1d97416350aba4736ae5c7ca3"
+      "sha256": "8b16909ef3de23cc432e18a1bb82ae7770a7babe6b5c5fd961edd9b1c01bdf0d"
     },
     "verdicts": {
       "root": "repo",
@@ -27,7 +27,7 @@
     "registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
-      "sha256": "a17b794207e2e79656044c8d5e33180f18bb04003c35dd4c115d360c3580b484"
+      "sha256": "3f9c4bcf7e385519edc5fb8813e7458af6071ebaa2de348eacb1fa43b52ae528"
     },
     "stub_registry": {
       "root": "repo",
@@ -47,7 +47,7 @@
     "corpus": {
       "root": "research",
       "path": "ghidra/corpus/corpus.sqlite",
-      "sha256": "c3ea72dbc147738502af7b130d0f55044ee93ec12f398d92b4ce7ce76122b64f"
+      "sha256": "727ebcd2c8b19cf5f30fd18d1769484e1ec36797233cc7d35f89b0c873cbf7a6"
     },
     "listing": {
       "root": "research",
@@ -81,7 +81,7 @@
     "Full controller/maker/director/hull participation and lifecycle folds remain steps 7-10."
   ],
   "factory_evidence": "docs/vtmb/npc-ai/population.md#step-0-factory-boundary-replay-2026-09-24",
-  "acceptance": "step-1-passed",
+  "acceptance": "step-2-passed",
   "history": {
     "step0": {
       "commit": "aa1c3c86b8684c4760e1dd506d114a0a260fb225",
@@ -96,6 +96,28 @@
     "step1_verdict_correction": {
       "note": "verdicts pin refreshed after 0x103c5fe0 was re-judged present -> rule (decisions-step1.json rule_identity_delta)",
       "previous_verdicts_sha256": "deecc38253e19db92d85f96b6e03bedd580c2191421b68dfb83b32890ee9bf12"
+    },
+    "step1": {
+      "commit": "b2261eca89d5f7dc242469e57f2ae1f21707c5f5",
+      "acceptance": "acceptance-step1.json",
+      "note": "--check step1 reads this tree once a later phase is current"
+    },
+    "step2_pins": {
+      "note": "pins refreshed by step 2: classes.md's classname column now comes from factories.tsv (kernel_ledger.factory_classnames); ElysiumNpcClasses.cpp registers the 45 typed classnames and 45 abstract retail descriptors; corpus.sqlite rebuilt 2026-09-25 by a knowledge apply on vampire.dll (1811 names, 1975 prototypes re-applied; function rows unchanged, edges +89/-3, accesses +909/-885): new baseline per plan 3.1, ledger regenerated against it",
+      "refreshed": {
+        "registry": {
+          "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
+          "previous_sha256": "a17b794207e2e79656044c8d5e33180f18bb04003c35dd4c115d360c3580b484"
+        },
+        "census": {
+          "path": "docs/vtmb/npc-kernel/classes.md",
+          "previous_sha256": "178eced3770568df9e8b1bfeaad3331eb83885d1d97416350aba4736ae5c7ca3"
+        },
+        "corpus": {
+          "path": "ghidra/corpus/corpus.sqlite",
+          "previous_sha256": "c3ea72dbc147738502af7b130d0f55044ee93ec12f398d92b4ce7ce76122b64f"
+        }
+      }
     }
   },
   "step1_packets": {
@@ -106,5 +128,15 @@
     "1e-dead-leaves": "accepted",
     "1f-overlay-regeneration": "accepted",
     "1g-gate-records": "accepted"
+  },
+  "step2_packets": {
+    "2a-checker-and-records": "accepted",
+    "2b-factory-census": "accepted",
+    "2c-class-tree": "accepted",
+    "2d-registry-and-refusal": "accepted",
+    "2e-fixtures": "accepted",
+    "2f-comment-repins": "accepted",
+    "2g-identity-audit": "accepted",
+    "2h-smoke-and-gate": "accepted"
   }
 }

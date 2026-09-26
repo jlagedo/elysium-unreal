@@ -301,11 +301,25 @@ def check_census(classes: list[dict], after: Path) -> int:
     return len(dead)
 
 
+# What a later phase's `--check step1` materializes from the accepted step-1 tree.
+HISTORICAL_PATHS = ("Source/ElysiumUE", "research/tooling/ghidra/driver/kernel_verdicts.tsv", "docs/vtmb",
+                    "docs/specs/0019-npc-kernel-rework/story-5/factories.tsv")
+
+
 def check_step1(directory: Path | None = None) -> dict:
+    """At phase 1 the current tree is checked; once a later phase is current, the accepted tree
+    (`manifest.json` `history.step1.commit`) is, as `--check step0` does for step 0."""
     directory = directory or repo_root() / km.STORY
     manifest, classes, _ = km.load(directory)
-    if manifest["phase"] != 1:
-        raise km.InvalidManifest("step 1 is checked only while phase 1 is current")
+    if manifest["phase"] == 1:
+        return _check_step1(directory, manifest, classes, repo_root())
+    commit = manifest.get("history", {}).get("step1", {}).get("commit", "")
+    with tempfile.TemporaryDirectory(prefix="step1-accepted-") as scratch:
+        after = km.historical_source(commit, Path(scratch), HISTORICAL_PATHS)
+        return _check_step1(directory, manifest, classes, after)
+
+
+def _check_step1(directory: Path, manifest: dict, classes: list[dict], after: Path) -> dict:
     step0 = km.check_step0(directory)
     record = json.loads((directory / "acceptance-step1.json").read_text(encoding="utf-8"))
     if record.get("scope") != "step-1-dead-species-deletion":
@@ -317,13 +331,13 @@ def check_step1(directory: Path | None = None) -> dict:
     commit = manifest["history"]["step0"]["commit"]
     with tempfile.TemporaryDirectory(prefix="step1-") as scratch:
         before = km.historical_source(commit, Path(scratch))
-        counts = check_rows(rows, before, repo_root())
-        completeness = check_complete(rows, before, repo_root())
-        check_overlay_targets(before, repo_root())
+        counts = check_rows(rows, before, after)
+        completeness = check_complete(rows, before, after)
+        check_overlay_targets(before, after)
     decisions = json.loads((directory / "decisions-step1.json").read_text(encoding="utf-8"))
-    guarded = check_live_definitions(inventory, repo_root(), decisions.get("guard_exemptions", {}),
-                                     overlay_verdicts(repo_root()), ledger_callers(repo_root()))
-    dead_classes = check_census(classes, repo_root())
+    guarded = check_live_definitions(inventory, after, decisions.get("guard_exemptions", {}),
+                                     overlay_verdicts(after), ledger_callers(after))
+    dead_classes = check_census(classes, after)
     artifacts = {}
     for name in ("inventory", "delta", "runtime", "cheap_checks"):
         ref = record["artifacts"][name]
@@ -334,7 +348,7 @@ def check_step1(directory: Path | None = None) -> dict:
     # The step-1 inventory is regenerated on the current tree; `check_inventory` holds its source
     # hashes to that tree, and its rule identity must equal the accepted step-0 identity: deleting
     # dead port code removes no live retail rule contract.
-    current = check_inventory(artifacts["inventory"], repo_root())
+    current = check_inventory(artifacts["inventory"], after)
     rule_delta = check_rule_delta(inventory, artifacts["inventory"], decisions.get("rule_identity_delta", {}))
     delta = artifacts["delta"]
     if not delta.get("comparison_passed") or delta.get("differences"):

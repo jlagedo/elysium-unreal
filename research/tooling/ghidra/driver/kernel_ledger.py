@@ -160,10 +160,23 @@ TUNABLE_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 # in the NPC substrate, is story 6's migration queue (`gen_kernel_tunables --report`).
 DATA_CELL_RE = re.compile(r"\b_?DAT_(10[0-9a-fA-F]{6})\b")
 JMP_RE = re.compile(r"\bJMP\s+0x([0-9a-fA-F]{8})\b")
-CLASSNAMES_RE = re.compile(
-    r"const TCHAR\* (\w+)_Classnames\[\] = \{([^}]*)\}", re.S)
 GCLASS_ROW_RE = re.compile(r'\{ TEXT\("(\w+)"\), TEXT\("(\w+)"\),')
-TEXT_RE = re.compile(r'TEXT\("([^"]+)"\)')
+# The reviewed classname -> class map, replayed from retail's 74 factories (story 5 step 0).
+FACTORIES_TSV = Path("docs/specs/0019-npc-kernel-rework/story-5/factories.tsv")
+
+
+def factory_classnames(repo: Path) -> dict[str, list[str]]:
+    """Retail class -> the classnames whose factory builds exactly that class.
+
+    Each classname answers one class (the last primary-vtable write on the allocated receiver);
+    a base class answers none of its descendants' names. `kernel_migration --check factories`
+    replays every row against the pinned module."""
+    import kernel_migration as km
+    rows = km.read_table(repo / FACTORIES_TSV, km.FACTORY_COLUMNS, "classname")
+    names: dict[str, list[str]] = collections.defaultdict(list)
+    for row in rows:
+        names[row["retail_class"]].append(row["classname"])
+    return {cls: sorted(found, key=str.casefold) for cls, found in names.items()}
 
 
 def _hex(addr: str) -> str:
@@ -564,7 +577,14 @@ class Ledger:
                 self.this_dispatch[self.resolve(row["caller"])].add(row["slot"])
 
     def _load_hierarchy(self) -> None:
-        """Direct bases from the pinned binary's RTTI, else from the committed class table."""
+        """Direct bases from the pinned binary's RTTI, else from the committed class table.
+
+        The classnames each class answers come from the reviewed factory map (story 5 step 2),
+        never from the proximity alias scan: one classname, one factory, one class."""
+        self._load_bases()
+        self.classnames = factory_classnames(self.repo)
+
+    def _load_bases(self) -> None:
         try:
             from probes import npc_translation_survey, weapon_activity_survey  # noqa: WPS433
             binary = Path(self.meta.get("binary") or "")
@@ -575,7 +595,6 @@ class Ledger:
                 classes = npc_translation_survey.decode_translation_slots(image, classes)
                 for row in classes:
                     self.bases[row["cpp_class"]] = row["direct_base"]
-                    self.classnames[row["cpp_class"]] = list(row.get("entity_classnames", []))
                 if self.bases:
                     return
         except Exception as error:  # noqa: BLE001 -- the committed table is the fallback
@@ -587,8 +606,6 @@ class Ledger:
         text = table.read_text(encoding="utf-8")
         for cls, base in GCLASS_ROW_RE.findall(text):
             self.bases[cls] = base
-        for cls, body in CLASSNAMES_RE.findall(text):
-            self.classnames[cls] = TEXT_RE.findall(body)
 
     # -- derivations ---------------------------------------------------------------------------
 

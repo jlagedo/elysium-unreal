@@ -165,6 +165,9 @@ bool FElysiumNpcKernelSquadSlotNameDispatchTest::RunTest(const FString&)
 		Builder.AddNpc(*FString::Printf(TEXT("n%d"), Index),
 			FVector(600.0 * Index, 0.0, 0.0), Classnames[Index]);
 	}
+	// The bare Troika line, stood by internal construction: no classname builds it.
+	Builder.AddTroikaNpc(TEXT("troika"),
+		FVector(600.0 * static_cast<double>(UE_ARRAY_COUNT(Classnames)), 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 
 	int32 Claimed = 0;
@@ -192,23 +195,34 @@ bool FElysiumNpcKernelSquadSlotNameDispatchTest::RunTest(const FString&)
 		}
 		else
 		{
-			// A classname retail stands no NPC class for — `CNPC_VCop` carries no entity classname
-			// in the census, so `npc_VCop` resolves to nothing. There is then no species override
-			// of slot 546 to find and the Troika line's own body answers: no translation at all,
-			// straight into the global namespace.
 			++Unclaimed;
-			TestEqual(*FString::Printf(TEXT("%s takes the Troika line and reads the namespace"),
-					Classnames[Index]),
-				FString(Npc->SquadSlotName(1000000000)), FString(TEXT("SQUAD_SLOT_ATTACK1")));
-			TestEqual(*FString::Printf(TEXT("%s still answers <<null>> for -1"), Classnames[Index]),
-				FString(Npc->SquadSlotName(INDEX_NONE)), FString(TEXT("<<null>>")));
-			TestNull(*FString::Printf(TEXT("%s answers nothing for an unregistered id"),
-					Classnames[Index]),
-				Npc->SquadSlotName(0));
 		}
 	}
 	TestTrue(TEXT("most of the spawned leaves are census species"), Claimed >= 10);
-	TestEqual(TEXT("and npc_VCop is the one the census claims for no class"), Unclaimed, 1);
+	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md), so every
+	// classname above builds a census class and none is left unclaimed.
+	TestEqual(TEXT("and no spawned classname is one the census claims for no class"), Unclaimed, 0);
+	TestEqual(TEXT("so every spawned leaf is a census species"), Claimed,
+		static_cast<int32>(UE_ARRAY_COUNT(Classnames)));
+	const FElysiumNpc* Cop = Fixture.Npc(TEXT("n3"));
+	TestTrue(TEXT("npc_VCop's RetailClass() is CNPC_VCop — its factory builds it"),
+		Cop != nullptr
+			&& Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+
+	// The bare Troika line: no species class, so there is no species override of slot 546 to
+	// find and the Troika line's own body answers: no translation at all, straight into the
+	// global namespace.
+	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
+	if (TestNotNull(TEXT("the bare Troika NPC stood"), Troika))
+	{
+		TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
+		TestEqual(TEXT("the bare Troika NPC takes the Troika line and reads the namespace"),
+			FString(Troika->SquadSlotName(1000000000)), FString(TEXT("SQUAD_SLOT_ATTACK1")));
+		TestEqual(TEXT("the bare Troika NPC still answers <<null>> for -1"),
+			FString(Troika->SquadSlotName(INDEX_NONE)), FString(TEXT("<<null>>")));
+		TestNull(TEXT("the bare Troika NPC answers nothing for an unregistered id"),
+			Troika->SquadSlotName(0));
+	}
 	return true;
 }
 
@@ -324,10 +338,11 @@ bool FElysiumNpcKernelSquadSeamTest::RunTest(const FString&)
 	Npc->VacateSquadSlot();
 	TestEqual(TEXT("and -1 means there is no slot to vacate"), Npc->MySquadSlot, INDEX_NONE);
 
-	// `0x1036e2f0 GetOtherBrother`: the disconnect gate comes FIRST, then the squad walk. No
-	// registered classname reaches `CNPC_VChangBros` (the census records no entity classname for
-	// it), so the identity half is asserted against the census by name and the body half on a
-	// spawned leaf — neither of which can find a brother without a squad object.
+	// `0x1036e2f0 GetOtherBrother`: the disconnect gate comes FIRST, then the squad walk. The
+	// identity half is asserted against the census by name and the body half on a spawned leaf —
+	// neither of which can find a brother without a squad object. (`npc_VChangBros` builds
+	// `CNPC_VChangBros` since story 5 step 2, population.md; the ChangBros case below repeats the
+	// body half on a spawned brother.)
 	TestNotNull(TEXT("CNPC_VChangBros is a census class"),
 		ElysiumNpcKernelClass::Find(TEXT("CNPC_VChangBros")));
 	TestTrue(TEXT("and derives from CNPC_VVampireBoss"),
@@ -469,7 +484,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadRelationsTest,
 	"Elysium.Substrate.NpcKernelSquad.Relations", GElysiumNpcKernelSquadFlags)
 bool FElysiumNpcKernelSquadRelationsTest::RunTest(const FString&)
 {
-	// The three classes `0x103a48b0` fills slot 404 for.
+	// The three classes `0x103a48b0` fills slot 404 for. The body below runs on an ordinary leaf:
+	// deferred, the three are story 5 step 7's controller-line folds and have no factory until then.
 	for (const TCHAR* Name : { TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VPlayerController"),
 			TEXT("CNPC_VWolfMorph") })
 	{
@@ -607,14 +623,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadChangBrosTest,
 	"Elysium.Substrate.NpcKernelSquad.ChangBros", GElysiumNpcKernelSquadFlags)
 bool FElysiumNpcKernelSquadChangBrosTest::RunTest(const FString&)
 {
-	// No registered `npc_*` classname reaches `CNPC_VChangBros` — the census records none for it —
-	// so the two bodies run on an ordinary leaf carrying the species words. Both are keyed on
-	// `m_ChangType` and the current schedule, not on the class.
+	// The two bodies are keyed on `m_ChangType` (`+0x66b8`, a `CNPC_VChangBros` word) and the
+	// current schedule. Since story 5 step 2 `npc_VChangBros` builds `CNPC_VChangBros`
+	// (population.md), so they run on a spawned brother, and slot 546 is asked on it too.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_squad_chang"), 66184);
-	Builder.AddNpc(TEXT("chang"));
+	Builder.AddNpc(TEXT("chang"), FVector::ZeroVector, TEXT("npc_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Chang = Fixture.Npc(TEXT("chang"));
-	TestNotNull(TEXT("the stand-in leaf spawned"), Chang);
+	TestNotNull(TEXT("the brother spawned"), Chang);
 	if (Chang == nullptr)
 	{
 		return false;
@@ -624,6 +640,22 @@ bool FElysiumNpcKernelSquadChangBrosTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::BodyOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VChangBros")), 546)),
 		FString(TEXT("0x1036a3f0")));
+	TestTrue(TEXT("a spawned npc_VChangBros is CNPC_VChangBros"),
+		Chang->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VChangBros")));
+	// Slot 546 through the spawned brother: `0x1036a3f0`'s id space is the 9999 empty sentinel, so
+	// every id answers `<<null>>`, the census-species answer `SquadSlotNameDispatch` pins.
+	for (const int32 SlotEn : { 0, 1, -1, 1000000000 })
+	{
+		TestEqual(*FString::Printf(TEXT("a spawned brother answers <<null>> for squad slot %d"),
+			SlotEn), FString(Chang->SquadSlotName(SlotEn)), FString(TEXT("<<null>>")));
+	}
+
+	// `0x1036e2f0 GetOtherBrother` on the brother itself: the disconnect gate first, then the squad
+	// walk, which finds nothing without a squad object.
+	TestNull(TEXT("a squadless brother finds no brother"), Chang->GetOtherBrother());
+	Chang->ScheduleHost.SquadDisconnected = 1;
+	TestNull(TEXT("and a disconnected one refuses before the walk"), Chang->GetOtherBrother());
+	Chang->ScheduleHost.SquadDisconnected = 0;
 
 	// `0x1036e820 ReadyForUnited`: `GetCurSchedule()`'s id against 0x15a or 0x15b, false with no
 	// schedule at all. The port's schedule set does not carry the two `UNITED` programs yet, so
@@ -654,19 +686,26 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadCoordinateTroopsTest,
 	"Elysium.Substrate.NpcKernelSquad.CoordinateTroops", GElysiumNpcKernelSquadFlags)
 bool FElysiumNpcKernelSquadCoordinateTroopsTest::RunTest(const FString&)
 {
+	// `m_iCoordinateTentacleID`, `m_rhSeveredTentacles` and `m_rhProxies` are `CNPC_VMingXiao`
+	// words, and since story 5 step 2 `npc_VMingXiao` and `npc_VMingXiaoTentacle` build their
+	// classes (population.md), so the body runs on a spawned MingXiao over a spawned tentacle.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_squad_mingxiao"), 67400);
-	Builder.AddNpc(TEXT("ming"));
-	Builder.AddNpc(TEXT("tentacle"), FVector(300.0, 0.0, 0.0));
+	Builder.AddNpc(TEXT("ming"), FVector::ZeroVector, TEXT("npc_VMingXiao"));
+	Builder.AddNpc(TEXT("tentacle"), FVector(300.0, 0.0, 0.0), TEXT("npc_VMingXiaoTentacle"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
 	FElysiumNpc* Tentacle = Fixture.Npc(TEXT("tentacle"));
-	TestNotNull(TEXT("MingXiao's stand-in spawned"), Ming);
+	TestNotNull(TEXT("MingXiao spawned"), Ming);
 	TestNotNull(TEXT("the tentacle spawned"), Tentacle);
 	if (Ming == nullptr || Tentacle == nullptr)
 	{
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Ming, Tentacle });
+	TestTrue(TEXT("a spawned npc_VMingXiao is CNPC_VMingXiao"),
+		Ming->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")));
+	TestTrue(TEXT("and a spawned npc_VMingXiaoTentacle is CNPC_VMingXiaoTentacle"),
+		Tentacle->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiaoTentacle")));
 
 	// `0x10399610`: one id per call, `m_iCoordinateTentacleID` advancing 0..5 and wrapping past 5.
 	// A live handle at the current index is resolved and the two per-troop arms (`0x103998d0`,

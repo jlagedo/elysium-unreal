@@ -117,9 +117,8 @@ namespace
 		TEXT("character/monster/TC_Runner/Breath4.wav"),
 	};
 
-	// The table. Four rows, one of them live: `npc_VTzimisceRunner` IS a registered classname in this
-	// port and `npc_VMingXiao` / `npc_VHengeyokai` / `npc_VTzimisceHeadClaw` are not, so three of
-	// these are recovered data waiting for a leaf and the fourth is in force.
+	// The table. Four rows, all live: story 5 step 2 registered `npc_VMingXiao`, `npc_VHengeyokai`
+	// and `npc_VTzimisceHeadClaw` beside `npc_VTzimisceRunner`.
 	//
 	// `CNPC_VSabbatLeader::FootstepSound 0x103aa5e0` is deliberately NOT a row: its step is not an
 	// animation event at all. It is driven by the schedule tasks

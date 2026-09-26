@@ -807,6 +807,10 @@ private:
 	// on the entity, and start it dormant when born hidden. Point/logic entities get no body.
 	void BuildBrushBody(FElysiumEntity& Ent);
 	void CallEntityActivate(FElysiumEntity& Ent);
+	// The map activation pass's call (retail `ServerActivate`): unlike `CallEntityActivate`, it
+	// activates an entity killed after the pass began, because retail's `UTIL_Remove` only marks it
+	// and it stays on the list the pass walks.
+	void ActivateListedEntity(FElysiumEntity& Ent);
 	// The by-name AcceptInput, carrying the wire the delivery came from. The public overload is this
 	// with no wire; DeliverEvent passes the queued record's, which is what attributes an outcome to
 	// the authored row rather than to "some input, somewhere". Nothing else about the dispatch

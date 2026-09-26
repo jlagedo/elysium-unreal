@@ -127,6 +127,8 @@ void FElysiumCameraAnimated::InputStartCamera()
 	//   FUN_10071770(this, m_sAnimName);
 	//   if (spawnflags & 1) SetImmobilized(player, true);
 	InputEndCamera();
+	// `m_iEFlags &= ~0x42`: EndCamera's `EFL_DORMANT` (and `0x40`) cleared.
+	bEflDormant = false;
 	if (!World)
 	{
 		return;
@@ -306,6 +308,8 @@ void FElysiumCameraAnimated::InputEndCamera()
 	bSequenceLoops = false;
 	NextThink = ELYSIUM_NEVER_THINK;
 	ScriptHide();
+	// `MakeDormant` (`0x100a8060`) also sets `EFL_DORMANT`, which the activation pass reads.
+	bEflDormant = true;
 }
 
 // --- Registration -------------------------------------------------------------------------------

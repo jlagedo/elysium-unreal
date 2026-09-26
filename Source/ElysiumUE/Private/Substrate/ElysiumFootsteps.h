@@ -47,9 +47,8 @@ enum class EElysiumFootstepPolicy : uint8
 // template or a cvar (`docs/vtmb/footsteps.md` §1.7, closing line).
 struct FElysiumFootstepSpecies
 {
-	// The MAP classname the row is keyed by. Retail keys on the C++ class; this port stands ONE leaf
-	// for every `npc_V*` name, so the registered classname is what distinguishes them — the same
-	// test `FElysiumNpc::BypassesKnockbackEligibility` makes for retail's slot-400 bypass.
+	// The MAP classname the row is keyed by. Retail keys on the C++ class; until story 5 step 3
+	// turns the row into an override, the classname (which builds exactly that class) stands in.
 	const TCHAR* Classname = nullptr;
 	// The retail class and the `HandleAnimEvent` the row was read out of, for the diagnostic.
 	const TCHAR* RetailClass = nullptr;
@@ -183,10 +182,9 @@ const FString* PickNpcWav(const FElysiumSurfaceSounds& Sounds, FRandomStream& St
 
 // --- Species overrides (`docs/vtmb/footsteps.md` §1.7) -------------------------------------------
 //
-// Retail's overrides, as DATA. Three of the classes have no leaf in this port at all
-// (`npc_VMingXiao`, `npc_VHengeyokai` and `npc_VTzimisceHeadClaw` are not registered classnames),
-// and `CNPC_VSabbatLeader`'s step is task-driven rather than event-driven so it is not a row here at
-// all; `npc_VTzimisceRunner` IS a registered classname and this table is live for it.
+// Retail's overrides, as DATA. All four classnames are registered since story 5 step 2, so every row
+// is live. `CNPC_VSabbatLeader`'s step is task-driven rather than event-driven, so it is not a row
+// here at all.
 
 // The volume and the sound level every species row emits at. Retail passes `EmitSound` the pair
 // (volume 1.0, attenuation 0.8) on both vfuncs (`0x103817f0`, `0x103c4160`). 0.8 is Source's

@@ -25,13 +25,11 @@
 //     non-virtual thunk back down to the base. The call sites are named in each base body's
 //     comment (TroikaHelpers, BaseHelpers, Anim, Sounds and Closure).
 //
-//   * **The two tables disagree, and both answers are used.** The census says which retail class a
-//     classname IS (`RetailClass()`); the spawn registry says which classnames a map may stand
-//     (`Substrate/ElysiumNpcClasses.cpp`). `CNPC_VCop`'s census classname list is NULL, so a spawned
-//     `npc_VCop`'s `RetailClass()` is null and every species lookup here correctly falls through to
-//     the Troika line — asserted in the suite rather than worked around. `npc_VCamera` is claimed by
-//     `CNPC_VCamera` in the census but is not a spawn leaf, so its rows are exercised by RETAIL
-//     CLASS NAME through the table's own lookup.
+//   * **The class answers.** Since story 5 step 2 every living classname builds its own C++ class
+//     (`Substrate/ElysiumNpcClasses.cpp`, from retail's factories) and `RetailClass()` is that
+//     class's census row, so a spawned `npc_VCop` is `CNPC_VCop` and a spawned `npc_VCamera` is
+//     `CNPC_VCamera`. Until then the census gave `CNPC_VCop` no classname and a cop fell through to
+//     the Troika line. Step 3 turns these dispatchers into overrides.
 //
 //   * **Two of this family's rows do not belong on an NPC at all.** `CNPCMaker_Fleshpile`'s
 //     `MakeNPC` (`0x1034c2d0`) and `DeathNotice` (`0x1034c8e0`) are the MAKER's bodies, and this
@@ -225,8 +223,8 @@ enum class EMoveDirectionCode : int32
 
 /** One row: the retail class whose vtable carries the body, the slot it fills, and the RETAIL
  *  ADDRESS of that body, so every row is checkable against `docs/vtmb/npc-kernel/slots.md`. This is
- *  the whole of this family's species dispatch — `FElysiumNpc` is `final` and species variation is
- *  data, never a subclass. */
+ *  the whole of this family's species dispatch until story 5 step 3 turns each row into an override
+ *  on its species class. */
 struct FSpeciesSlotRow
 {
 	const TCHAR* RetailClass = nullptr;
@@ -280,15 +278,12 @@ struct FSpeciesDispatchScope
 };
 
 #if WITH_DEV_AUTOMATION_TESTS
-/** Test-only: stand this NPC as `RetailClassName` for the species dispatch.
+/** Test-only: stand a bare Troika-line NPC as `RetailClassName` for the species dispatch.
  *
- *  The two tables disagree (standing fact two above) and the gap is wider than `npc_VCop`:
- *  `Substrate/ElysiumNpcClasses.cpp` registers fourteen spawnable `npc_*` classnames while the
- *  census carries 77 classes, and the census gives `CNPC_VZombie` and `CNPC_VCop` NO classname at
- *  all. Twelve of this family's eighteen wired slots are therefore carried by a class no fixture can
- *  spawn, so the suite sets the latch the spawn path would have set and then drives the REAL base
- *  slot through it — which is the only way to assert that the prologue picks the species arm.
- *  Nothing in the shipping build calls this; `RetailClass()` stays the runtime's only writer. */
+ *  Since story 5 step 2 every living species classname builds its own class, so this latch stands
+ *  only the three deferred controller-line classes (FrenzyShadow, PlayerController, WolfMorph) until
+ *  their fold (step 7), at the sites `story-5/decisions-step2.json` enumerates; it refuses a species
+ *  instance. Removed at step 11. Nothing in the shipping build calls it. */
 void SetRetailClassForTests(const TCHAR* RetailClassName);
 #endif
 

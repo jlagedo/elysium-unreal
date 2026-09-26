@@ -56,9 +56,9 @@ int32 TroikaIRelationType(FElysiumEntity* Candidate);
 /** `CNPC_VCop::IRelationType` (`0x10372b70`), 170 bytes — three arms in front of the Troika body:
  *  a null candidate answers `D_ER` outright, the cop class's shared timed grudge answers `D_HT`,
  *  and a player candidate answers `D_HT` on `m_flHeightenedAlertExpireTimer` or a non-zero
- *  `m_iCopsInPursuitCount`. **UNREACHABLE TODAY**: `CNPC_VCop`'s census classname list is null, so
- *  a spawned `npc_VCop` has a null `RetailClass()` and correctly takes the Troika line (story
- *  29c-1's cleanup). The arm is ported and driven directly by its test. */
+ *  `m_iCopsInPursuitCount`. Reached by every placed `npc_VCop` since story 5 step 2 registered
+ *  the classname as `CNPC_VCop` (factory `0x103704f0`); before, the census gave the class no
+ *  classname and a cop took the Troika line. */
 int32 CopIRelationType(FElysiumEntity* Candidate);
 
 /** `CNPC_VHunter::IRelationType` (`0x10388bb0`), 109 bytes — the cop arm minus both player-side
@@ -148,8 +148,8 @@ void TzimisceTaskFail(int32 Reason);
 // --- The species words those arms write ---------------------------------------------------------
 //
 // Every one of these is a SPECIES-ONLY datamap member with no row in this runtime's shape map,
-// because this port stands ONE leaf for every classname. Each is carried here as the one word its
-// species would have, named for the retail field, so the write is observable rather than dropped.
+// carried on the combined NPC until story 5 step 4 moves it to its species class. Each is the one
+// word its species would have, named for the retail field, so the write is observable.
 
 /** `CNPC_VAsianVampire::m_bPathBlocked` (`+0x66d4`). Written by `0x10362390` on failure codes
  *  12..15; its readers are the AsianVampire's own schedule selector, which this band does not own,

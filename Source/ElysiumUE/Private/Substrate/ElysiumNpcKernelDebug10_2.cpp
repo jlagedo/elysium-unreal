@@ -311,8 +311,8 @@ void FElysiumNpc::MakerDrawDebugGeometryOverlays()
 void FElysiumNpc::DrawDebugGeometryOverlays()
 {
 	// slot 123, dispatched on the census body for this NPC's retail class, as story 29c-1's slot-76
-	// dispatcher does. A spawned `npc_VCop` answers a NULL `RetailClass()` (the census gives
-	// `CNPC_VCop` no entity classname) and therefore takes the TROIKA body — the recovered answer.
+	// dispatcher does. A spawned `npc_VCop` is `CNPC_VCop` (story 5 step 2) and takes the cop body;
+	// only the bare Troika line answers a null `RetailClass()` and takes the TROIKA body.
 	// `CScriptedTarget#123` (`0x1034e070`) carries no arm: no map stands that class.
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 123);
 	if (SlotBody != nullptr)

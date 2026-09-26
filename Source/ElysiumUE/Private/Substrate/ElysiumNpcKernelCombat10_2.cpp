@@ -432,8 +432,8 @@ int32 FElysiumNpc::SelectScheduleRangedCombat(int32 Arg)
 			return SheriffManSelectScheduleRangedCombat(Arg);
 		}
 	}
-	// `CAI_BaseNPCTroika#605` and the 20 classes that share it, and the arm a plain `npc_VCop`
-	// reaches (its census classname list is null, so `RetailClass()` is null).
+	// `CAI_BaseNPCTroika#605` and the 20 classes that share it (`npc_VCop` among them: `CNPC_VCop`
+	// has no slot-605 row of its own).
 	return TroikaSelectScheduleRangedCombat(Arg);
 }
 

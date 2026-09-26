@@ -103,14 +103,15 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 			FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL))),
 		FString(TEXT("FAIL")));
 
-	// **No census class claims the entity classname `npc_VCop`.** `CNPC_VCop` is a census class with
-	// a slot-580 body of its own (`0x10370930` -> `DAT_1093ac60`, asserted by name above), but its
-	// classname list is empty, so a spawned `npc_VCop` has no retail class at all and every
-	// per-species lookup falls through to the Troika line. Recorded here so the next reader does not
-	// rediscover it; family Squad found the same thing.
-	TestNull(TEXT("no census class claims npc_VCop"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop")));
-	TestNotNull(TEXT("CNPC_VCop is nonetheless a census class"),
+	// **`npc_VCop` builds `CNPC_VCop`.** `CNPC_VCop` is a census class with a slot-580 body of its
+	// own (`0x10370930` -> `DAT_1093ac60`, asserted by name above), and retail's factory for the
+	// entity classname `npc_VCop` builds it (`docs/vtmb/npc-ai/population.md`, "The classname →
+	// class map, read from the factories"). The census used to carry an empty classname list for it,
+	// so a spawned cop resolved to no class; story 5 step 2 reads the classnames off the factories.
+	TestEqual(TEXT("npc_VCop is claimed by CNPC_VCop"),
+		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop")),
+		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	TestNotNull(TEXT("CNPC_VCop is a census class"),
 		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
 
 	// The leaf's own answer, through a spawned entity.
@@ -145,9 +146,15 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 	TestTrue(TEXT("...and reaches the Troika line's programs through the parent chain"),
 		(Combatant->ClassScheduleIdSpace()->LocalToGlobal(
 			ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
-	TestNull(TEXT("a spawned npc_VCop resolves to no retail class"), Cop->RetailClass());
-	TestEqual(TEXT("so it answers the Troika line too, which is what this runtime does with it"),
-		Cop->ClassScheduleIdSpace(), Troika);
+	TestEqual(TEXT("a spawned npc_VCop is CNPC_VCop"), Cop->RetailClass(),
+		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	// Story 5 step 2 (retail correction): a placed cop used to take the Troika line's space, the
+	// census giving `CNPC_VCop` no classname. Retail's cop runs in `CNPC_VCop`'s own space.
+	TestNotNull(TEXT("the corpus places CNPC_VCop"),
+		Corpus.SpaceFor(TEXT("CNPC_VCop"), EElysiumIdCategory::Schedule));
+	TestEqual(TEXT("so a spawned npc_VCop answers CNPC_VCop's space, not the line's"),
+		Cop->ClassScheduleIdSpace(), Corpus.SpaceFor(TEXT("CNPC_VCop"), EElysiumIdCategory::Schedule));
+	TestTrue(TEXT("which is not the Troika line's space"), Cop->ClassScheduleIdSpace() != Troika);
 
 	return true;
 }
@@ -598,7 +605,7 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 	}
 
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_melee"), 4106);
-	Builder.AddNpc(TEXT("troika"));
+	Builder.AddTroikaNpc(TEXT("troika"));
 	Builder.AddNpc(TEXT("leader"), FVector(200.0, 0.0, 0.0), TEXT("npc_VSabbatLeader"));
 	Builder.AddNpc(TEXT("runner"), FVector(400.0, 0.0, 0.0), TEXT("npc_VTzimisceRunner"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
@@ -628,14 +635,12 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 
 	// --- the Troika line, `0x102b6c30` ------------------------------------------------------------
 	//
-	// **STRENGTHENED by story 29d, family SpeciesAnim10.** The fixture stands this body as
-	// `npc_VHumanCombatant`, and `CNPC_VHumanCombatant` fills slot 604 with `0x10385e40` — the
-	// `CNPC_VHuman` selector 34 census classes share, which that story landed. So this NPC no
-	// longer reaches the Troika line at all, and the assertions below would be measuring the human
-	// arm. It is re-classed to `CAI_BaseNPCTroika`, which carries no slot-604 override row and is
-	// therefore the one class whose lookup answers "the Troika body", exactly as it did when slot
-	// 604's species arms were unwritten.
-	Troika->SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
+	// **STRENGTHENED by story 29d, family SpeciesAnim10.** `CNPC_VHumanCombatant` fills slot 604
+	// with `0x10385e40` — the `CNPC_VHuman` selector 34 census classes share — so a combatant leaf
+	// never reaches the Troika line. The fixture therefore stands this body as the bare Troika NPC
+	// (`AddTroikaNpc`, story 5 step 2), which carries no slot-604 override row and is the one class
+	// whose lookup answers "the Troika body", exactly as it did when slot 604's species arms were
+	// unwritten.
 	// Not in melee and slot 599 refusing is the first arm: the gate, then 0xe4.
 	Troika->Cognition.Conditions.Reset();
 	Troika->bInMelee = false;
@@ -856,9 +861,9 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 		}
 	}
 
-	// `CNPC_VCop` is in the 0x10387520 group above, but **no census class claims the entity
-	// classname `npc_VCop`** — so a spawned cop has no retail class and takes no species arm at all.
-	// `npc_VHunter` is the same slot-453 body reached through a classname the census DOES claim.
+	// `CNPC_VCop` is in the 0x10387520 group above, and `npc_VCop` now builds it (story 5 step 2,
+	// `docs/vtmb/npc-ai/population.md` "The classname → class map, read from the factories"); the
+	// census used to claim no class for that classname. `npc_VHunter` is the same slot-453 body.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_testbits"), 4108);
 	Builder.AddNpc(TEXT("hunter"), FVector::ZeroVector, TEXT("npc_VHunter"));
 	Builder.AddNpc(TEXT("ped"), FVector(200.0, 0.0, 0.0), TEXT("npc_VPedestrian"));
@@ -885,11 +890,14 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 			Mask.Has(EElysiumNpcCond::SeeCorpseFriend));
 	}
 	{
-		// The recorded census fact, so the next reader does not rediscover it.
 		FElysiumNpcConditions Mask;
-		TestNull(TEXT("a spawned npc_VCop resolves to no retail class"), Cop->RetailClass());
+		TestEqual(TEXT("a spawned npc_VCop is CNPC_VCop"), Cop->RetailClass(),
+			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
 		Cop->SpeciesBuildScheduleTestBits(Mask);
-		TestFalse(TEXT("so it takes no species arm, CNPC_VCop's own slot-453 body included"),
+		// Story 5 step 2 (retail correction): `CNPC_VCop` fills slot 453 with the combatant body
+		// `0x10387520`, which a placed cop now takes; alive and idle like the hunter above, it adds
+		// SEE_CORPSE_FRIEND.
+		TestTrue(TEXT("so an alive idle cop takes CNPC_VCop's slot-453 body, 0x10387520"),
 			Mask.Has(EElysiumNpcCond::SeeCorpseFriend));
 	}
 	{

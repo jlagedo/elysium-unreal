@@ -618,8 +618,8 @@ namespace
 			ElysiumNpcKernelClass::OverrideOf(Npc.RetailClass(), Slot);
 		if (Override == nullptr)
 		{
-			// `RetailClass()` is null for a classname the census claims nothing for — `npc_VCop`'s
-			// own recovered answer — and a class with no override row inherits the Troika body.
+			// `RetailClass()` is null only on the bare Troika line, and a class with no override row
+			// inherits the Troika body.
 			return false;
 		}
 		for (int32 Index = 0; Index < ArmCount; ++Index)

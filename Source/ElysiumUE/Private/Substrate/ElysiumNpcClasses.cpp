@@ -1,5 +1,5 @@
-// The `npc_*` family's registration site: one shared leaf per living-NPC classname, the
-// `intersting_place` node, and the two `npc_maker` classnames.
+// The `npc_*` family's registration site: the ordinary NPC classes, one per retail class, the
+// `intersting_place` node, and the three `npc_maker` classnames.
 //
 // The classes themselves live one to a file beside this one — `ElysiumInterestingPlace`,
 // `ElysiumScriptedCharacter`, `ElysiumNpc` (with the scene-owned player duplicate) and
@@ -15,6 +15,50 @@
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcAnimal.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcBach.h"
+#include "Substrate/ElysiumNpcBaseBoss.h"
+#include "Substrate/ElysiumNpcBrujah.h"
+#include "Substrate/ElysiumNpcCamera.h"
+#include "Substrate/ElysiumNpcCameraSecurity.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcChangBrosBlade.h"
+#include "Substrate/ElysiumNpcChangBrosClaw.h"
+#include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcDog.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcGuard1.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcHuman.h"
+#include "Substrate/ElysiumNpcHumanCombatPatrol.h"
+#include "Substrate/ElysiumNpcHumanCombatant.h"
+#include "Substrate/ElysiumNpcHunter.h"
+#include "Substrate/ElysiumNpcLasombra.h"
+#include "Substrate/ElysiumNpcManBat.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
+#include "Substrate/ElysiumNpcNewscaster.h"
+#include "Substrate/ElysiumNpcPayphone.h"
+#include "Substrate/ElysiumNpcPedestrian.h"
+#include "Substrate/ElysiumNpcPlaceholder.h"
+#include "Substrate/ElysiumNpcProneDialog.h"
+#include "Substrate/ElysiumNpcRat.h"
+#include "Substrate/ElysiumNpcSabbatGunman.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcScurrying.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcTaxiDriver.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcTzimisceHeadClaw.h"
+#include "Substrate/ElysiumNpcTzimisceRunner.h"
+#include "Substrate/ElysiumNpcVampire.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcYukie.h"
+#include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMaker.h"
@@ -40,7 +84,6 @@ bool ElysiumNpcTestHooks::ApplyResolvedTemplate(FElysiumEntity& Entity,
 
 // --- Registration -----------------------------------------------------------------------------
 
-static TUniquePtr<FElysiumEntity> MakeNpc()       { return MakeUnique<FElysiumNpc>(); }
 static TUniquePtr<FElysiumEntity> MakeController(){ return MakeUnique<FElysiumPlayerControllerNpc>(); }
 static TUniquePtr<FElysiumEntity> MakeNpcMaker()  { return MakeUnique<FElysiumNpcMaker>(); }
 static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FElysiumInterestingPlace>(); }
@@ -102,12 +145,16 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// SetRelationship's store/writer is live above. Enemy assignment, senses and combat schedules
 	// are intentionally absent from this talk/feed slice and remain visible in NPC diagnostics.
 	// `TeleportToEntity` is CAI_BaseNPCTroika's recovered FIELD_EHANDLE input. The current corpus
-	// carries 40 wires across three NPC families; all use the same shared leaf implementation here.
+	// carries 40 wires across three NPC families; all reach the one `CAI_BaseNPCTroika` input.
 	D.Input(TEXT("TeleportToEntity"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputTeleportToEntity(Args); });
 	// `CAI_BaseNPCTroika::InputDisableThink` `0x1029f2a0` -> `SetDisableAI` `0x1029f300`.
 	D.Input(TEXT("DisableThink"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputDisableThink(Args); });
+	// `CAI_BaseNPCTroika::InputTweakParam` (`0x1029ea40`) -> slot 585 `ProcessTweakParam`. Until
+	// story 5 step 2 only the `npc_VCamera` stub row answered this name.
+	D.Input(TEXT("TweakParam"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputTweakParam(Args); });
 
 	// The remaining map-fired gap is 8 `SetScriptedDiscipline` wires across the exported maps, all
 	// of them aimed at an `npc_*` receiver.
@@ -218,15 +265,139 @@ static void BuildNpcMakerClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("m_flGround"),        &FM::CachedGroundZ, EElysiumField::Save);
 }
 
-// One shared leaf per living-NPC classname (a class-for-class registration, so the registry's exact
-// case-folded Find resolves each). npc_VCamera is a camera control entity with no model — left as an
-// inert record for now. The two maker classnames share the maker leaf.
+// The ordinary NPC classes (story 5 step 2). Each classname registers the C++ class retail's
+// factory builds for it (`story-5/factories.tsv`, replayed from the 74 factories); two retail
+// classes carry two classnames each (`CNPC_VPedestrian`, `CNPC_ProneDialog`). Above the classnames
+// stand the retail classes as abstract descriptors, chained as retail derives them, so a row a
+// class declares is reached by exactly its descendants. `CAI_BaseNPCTroika` is the combined
+// `CAI_BaseNPC`/`CAI_BaseNPCTroika` projection until step 5 separates the two; the NPC surface
+// `BuildNpcClass` registers is written there once.
 //
-// This is the registration of the classnames a map may spawn. The other half of "species are data"
-// — which retail class each classname is, what it derives from, which vtable slots it overrides and
-// with which body — is the class registry in `Substrate/ElysiumNpcKernelShape.cpp`
-// (`ElysiumNpcKernelShape::Classes()` and `::Overrides()`, 77 classes and 2,344 override rows,
-// generated from the kernel ledger). Neither is a subclass and neither ever becomes one.
+// The census (`Substrate/ElysiumNpcKernelShape.cpp`) is the same tree read as data; each species
+// class answers its own row (`FElysiumNpc::OwnRetailClass`).
+template <typename T>
+static TUniquePtr<FElysiumEntity> MakeNpcOf()
+{
+	return MakeUnique<T>();
+}
+
+struct FElysiumNpcRetailClassRow
+{
+	const TCHAR* RetailClass;
+	const TCHAR* RetailBase;
+};
+
+static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
+{
+	{ TEXT("CNPC_ProneDialog"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VAndreiBlood"), TEXT("CNPC_VVampireBoss") },
+	{ TEXT("CNPC_VAnimal"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VAsianVampire"), TEXT("CNPC_VVampireBoss") },
+	{ TEXT("CNPC_VBach"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VBaseBoss"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VBrujah"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VCamera"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VCameraSecurity"), TEXT("CNPC_VCamera") },
+	{ TEXT("CNPC_VChangBros"), TEXT("CNPC_VVampireBoss") },
+	{ TEXT("CNPC_VChangBrosBlade"), TEXT("CNPC_VChangBros") },
+	{ TEXT("CNPC_VChangBrosClaw"), TEXT("CNPC_VChangBros") },
+	{ TEXT("CNPC_VCop"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VDog"), TEXT("CNPC_VAnimal") },
+	{ TEXT("CNPC_VGargoyle"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VGhoulCroucher"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VGuard1"), TEXT("CNPC_VHuman") },
+	{ TEXT("CNPC_VHengeyokai"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VHuman"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VHumanCombatant"), TEXT("CNPC_VHuman") },
+	{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VHunter"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VLasombra"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VManBat"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VMingXiao"), TEXT("CNPC_VBaseBoss") },
+	{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VNewscaster"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VPedestrian"), TEXT("CNPC_VHuman") },
+	{ TEXT("CNPC_VPlaceholder"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VRat"), TEXT("CNPC_VScurrying") },
+	{ TEXT("CNPC_VSabbatGunman"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VSabbatLeader"), TEXT("CNPC_VVampireBoss") },
+	{ TEXT("CNPC_VScurrying"), TEXT("CNPC_VAnimal") },
+	{ TEXT("CNPC_VSheriffMan"), TEXT("CNPC_VVampireBoss") },
+	{ TEXT("CNPC_VTaxiDriver"), TEXT("CNPC_VHuman") },
+	{ TEXT("CNPC_VTzimisce"), TEXT("CNPC_VBaseBoss") },
+	{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("CNPC_VBaseBoss") },
+	{ TEXT("CNPC_VTzimisceRunner"), TEXT("CNPC_VBaseBoss") },
+	{ TEXT("CNPC_VVampire"), TEXT("CNPC_VHuman") },
+	{ TEXT("CNPC_VVampireBoss"), TEXT("CNPC_VVampire") },
+	{ TEXT("CNPC_VWerewolf"), TEXT("CNPC_VBaseBoss") },
+	{ TEXT("CNPC_VYukie"), TEXT("CNPC_VHumanCombatant") },
+	{ TEXT("CNPC_VZombie"), TEXT("CNPC_VAnimal") },
+	{ TEXT("CPayphone"), TEXT("CAI_BaseNPCTroika") },
+};
+
+struct FElysiumNpcClassnameRow
+{
+	const TCHAR* Classname;
+	const TCHAR* RetailClass;
+	FElysiumEntityFactory Factory;
+};
+
+static const FElysiumNpcClassnameRow GNpcClassnames[] =
+{
+	{ TEXT("npc_payphone"), TEXT("CPayphone"), &MakeNpcOf<FElysiumNpcPayphone> },
+	{ TEXT("npc_VAndreiBlood"), TEXT("CNPC_VAndreiBlood"), &MakeNpcOf<FElysiumNpcAndreiBlood> },
+	{ TEXT("npc_VAnimal"), TEXT("CNPC_VAnimal"), &MakeNpcOf<FElysiumNpcAnimal> },
+	{ TEXT("npc_VAsianVampire"), TEXT("CNPC_VAsianVampire"), &MakeNpcOf<FElysiumNpcAsianVampire> },
+	{ TEXT("npc_VBach"), TEXT("CNPC_VBach"), &MakeNpcOf<FElysiumNpcBach> },
+	{ TEXT("npc_VBrujah"), TEXT("CNPC_VBrujah"), &MakeNpcOf<FElysiumNpcBrujah> },
+	{ TEXT("npc_VCamera"), TEXT("CNPC_VCamera"), &MakeNpcOf<FElysiumNpcCamera> },
+	{ TEXT("npc_VCameraSecurity"), TEXT("CNPC_VCameraSecurity"),
+		&MakeNpcOf<FElysiumNpcCameraSecurity> },
+	{ TEXT("npc_VChangBros"), TEXT("CNPC_VChangBros"), &MakeNpcOf<FElysiumNpcChangBros> },
+	{ TEXT("npc_VChangBrosBlade"), TEXT("CNPC_VChangBrosBlade"),
+		&MakeNpcOf<FElysiumNpcChangBrosBlade> },
+	{ TEXT("npc_VChangBrosClaw"), TEXT("CNPC_VChangBrosClaw"), &MakeNpcOf<FElysiumNpcChangBrosClaw> },
+	{ TEXT("npc_VCop"), TEXT("CNPC_VCop"), &MakeNpcOf<FElysiumNpcCop> },
+	{ TEXT("npc_VDialogPedestrian"), TEXT("CNPC_VPedestrian"), &MakeNpcOf<FElysiumNpcPedestrian> },
+	{ TEXT("npc_VDog"), TEXT("CNPC_VDog"), &MakeNpcOf<FElysiumNpcDog> },
+	{ TEXT("npc_VGargoyle"), TEXT("CNPC_VGargoyle"), &MakeNpcOf<FElysiumNpcGargoyle> },
+	{ TEXT("npc_VGhoulCroucher"), TEXT("CNPC_VGhoulCroucher"), &MakeNpcOf<FElysiumNpcGhoulCroucher> },
+	{ TEXT("npc_VGuard1"), TEXT("CNPC_VGuard1"), &MakeNpcOf<FElysiumNpcGuard1> },
+	{ TEXT("npc_VHengeyokai"), TEXT("CNPC_VHengeyokai"), &MakeNpcOf<FElysiumNpcHengeyokai> },
+	{ TEXT("npc_VHuman"), TEXT("CNPC_VHuman"), &MakeNpcOf<FElysiumNpcHuman> },
+	{ TEXT("npc_VHumanCombatant"), TEXT("CNPC_VHumanCombatant"),
+		&MakeNpcOf<FElysiumNpcHumanCombatant> },
+	{ TEXT("npc_VHumanCombatPatrol"), TEXT("CNPC_VHumanCombatPatrol"),
+		&MakeNpcOf<FElysiumNpcHumanCombatPatrol> },
+	{ TEXT("npc_VHunter"), TEXT("CNPC_VHunter"), &MakeNpcOf<FElysiumNpcHunter> },
+	{ TEXT("npc_VLasombra"), TEXT("CNPC_VLasombra"), &MakeNpcOf<FElysiumNpcLasombra> },
+	{ TEXT("npc_VManBat"), TEXT("CNPC_VManBat"), &MakeNpcOf<FElysiumNpcManBat> },
+	{ TEXT("npc_VMercurio"), TEXT("CNPC_ProneDialog"), &MakeNpcOf<FElysiumNpcProneDialog> },
+	{ TEXT("npc_VMingXiao"), TEXT("CNPC_VMingXiao"), &MakeNpcOf<FElysiumNpcMingXiao> },
+	{ TEXT("npc_VMingXiaoTentacle"), TEXT("CNPC_VMingXiaoTentacle"),
+		&MakeNpcOf<FElysiumNpcMingXiaoTentacle> },
+	{ TEXT("npc_VNewscaster"), TEXT("CNPC_VNewscaster"), &MakeNpcOf<FElysiumNpcNewscaster> },
+	{ TEXT("npc_VPedestrian"), TEXT("CNPC_VPedestrian"), &MakeNpcOf<FElysiumNpcPedestrian> },
+	{ TEXT("npc_VPlaceholder"), TEXT("CNPC_VPlaceholder"), &MakeNpcOf<FElysiumNpcPlaceholder> },
+	{ TEXT("npc_VProneDialog"), TEXT("CNPC_ProneDialog"), &MakeNpcOf<FElysiumNpcProneDialog> },
+	{ TEXT("npc_VRat"), TEXT("CNPC_VRat"), &MakeNpcOf<FElysiumNpcRat> },
+	{ TEXT("npc_VSabbatGunman"), TEXT("CNPC_VSabbatGunman"), &MakeNpcOf<FElysiumNpcSabbatGunman> },
+	{ TEXT("npc_VSabbatLeader"), TEXT("CNPC_VSabbatLeader"), &MakeNpcOf<FElysiumNpcSabbatLeader> },
+	{ TEXT("npc_VScurrying"), TEXT("CNPC_VScurrying"), &MakeNpcOf<FElysiumNpcScurrying> },
+	{ TEXT("npc_VSheriffMan"), TEXT("CNPC_VSheriffMan"), &MakeNpcOf<FElysiumNpcSheriffMan> },
+	{ TEXT("npc_VTaxiDriver"), TEXT("CNPC_VTaxiDriver"), &MakeNpcOf<FElysiumNpcTaxiDriver> },
+	{ TEXT("npc_VTzimisce"), TEXT("CNPC_VTzimisce"), &MakeNpcOf<FElysiumNpcTzimisce> },
+	{ TEXT("npc_VTzimisceHeadClaw"), TEXT("CNPC_VTzimisceHeadClaw"),
+		&MakeNpcOf<FElysiumNpcTzimisceHeadClaw> },
+	{ TEXT("npc_VTzimisceRunner"), TEXT("CNPC_VTzimisceRunner"),
+		&MakeNpcOf<FElysiumNpcTzimisceRunner> },
+	{ TEXT("npc_VVampire"), TEXT("CNPC_VVampire"), &MakeNpcOf<FElysiumNpcVampire> },
+	{ TEXT("npc_VVampireBoss"), TEXT("CNPC_VVampireBoss"), &MakeNpcOf<FElysiumNpcVampireBoss> },
+	{ TEXT("npc_VWerewolf"), TEXT("CNPC_VWerewolf"), &MakeNpcOf<FElysiumNpcWerewolf> },
+	{ TEXT("npc_VYukie"), TEXT("CNPC_VYukie"), &MakeNpcOf<FElysiumNpcYukie> },
+	{ TEXT("npc_VZombie"), TEXT("CNPC_VZombie"), &MakeNpcOf<FElysiumNpcZombie> },
+};
+
 struct FElysiumNpcRegistrar
 {
 	FElysiumNpcRegistrar()
@@ -235,29 +406,34 @@ struct FElysiumNpcRegistrar
 		BuildInterestingPlaceClass(Reg.Register(TEXT("intersting_place"),
 			ElysiumBaseClassName(), &MakeInterestingPlace));
 
-		static const TCHAR* const NpcClasses[] = {
-			TEXT("npc_VVampire"), TEXT("npc_VPedestrian"), TEXT("npc_VHumanCombatant"),
-			TEXT("npc_VRat"), TEXT("npc_VDialogPedestrian"), TEXT("npc_VCop"),
-			TEXT("npc_VTaxiDriver"), TEXT("npc_VHuman"), TEXT("npc_VHunter"),
-			TEXT("npc_VTzimisceRunner"), TEXT("npc_VNewscaster"), TEXT("npc_VAnimal"),
-			TEXT("npc_VSabbatLeader"), TEXT("npc_VAndreiBlood"),
-			// `CPayphone` (`.?AVCPayphone@@` `0x10587930`) is a `CAI_BaseNPCTroika` subclass — the
-			// class `CBasePlayer::StartPlayerDialog` `0x10178280` RTTI-casts its partner to before it
-			// decides whether to create a camera at all (SC9/RC6). It is an NPC leaf here for the same
-			// reason it is one in retail: the four shipped phones author `dialogname`,
-			// `default_camera` and `WillTalk`, the opener takes their dialogue body session, and the
-			// arm it runs instead of the camera is `StartGrappleAttack(this, npc, 5)`, whose state
-			// lives on the combat character. Registering it retires the `npc_payphone` stub row
-			// (`RegisterStub` answers null once an implementation owns the name). Its own
-			// `EnterGrappleState` override (`CPayphone::vfunc379` `0x101aade0`, the receiver
-			// animation) is not built.
-			TEXT("npc_payphone"),
-		};
-		for (const TCHAR* Name : NpcClasses)
+		// CAI_BaseNPC's place in VtMB's chain: under CBaseCombatCharacter, which is under
+		// CBaseAnimating. The sheet, the counters and the body all arrive through it.
+		BuildNpcClass(Reg.RegisterAbstract(TEXT("CAI_BaseNPCTroika"), ElysiumCombatCharacterClassName()));
+		for (const FElysiumNpcRetailClassRow& Row : GNpcRetailClasses)
 		{
-			// CAI_BaseNPC's place in VtMB's chain: under CBaseCombatCharacter, which is under
-			// CBaseAnimating. The sheet, the counters and the body all arrive through it.
-			BuildNpcClass(Reg.Register(FName(Name), ElysiumCombatCharacterClassName(), &MakeNpc));
+			FElysiumClassDesc& D = Reg.RegisterAbstract(FName(Row.RetailClass), FName(Row.RetailBase));
+			if (FCString::Strcmp(Row.RetailClass, TEXT("CNPC_VVampireBoss")) == 0)
+			{
+				// `CNPC_VVampireBoss::InputTransformModel` (datamap INPUT), the protean swap's
+				// trigger. Its only stand-in was the `npc_VVampireBoss` stub row this class
+				// supersedes; the body is unported, so a wire still reports as pending.
+				ELYSIUM_PENDING_INPUT_ON("CNPC_VVampireBoss", FElysiumNpc, TransformModel,
+					"0019 story 8 — the vampire boss's protean swap");
+			}
+		}
+		// `CPayphone` (`.?AVCPayphone@@` `0x10587930`) is a `CAI_BaseNPCTroika` subclass — the class
+		// `CBasePlayer::StartPlayerDialog` `0x10178280` RTTI-casts its partner to before it decides
+		// whether to create a camera at all (SC9/RC6). The four shipped phones author `dialogname`,
+		// `default_camera` and `WillTalk`, the opener takes their dialogue body session, and the arm
+		// it runs instead of the camera is `StartGrappleAttack(this, npc, 5)`, whose state lives on
+		// the combat character. Its own `EnterGrappleState` override (`CPayphone::vfunc379`
+		// `0x101aade0`, the receiver animation) is not built.
+		//
+		// A classname registered here supersedes its `ElysiumStubClasses.cpp` row, whichever
+		// registers first (`RegisterStub` answers null once an implementation owns the name).
+		for (const FElysiumNpcClassnameRow& Row : GNpcClassnames)
+		{
+			Reg.Register(FName(Row.Classname), FName(Row.RetailClass), Row.Factory);
 		}
 
 		// Created only at runtime by events_player.CreateControllerNPC. It intentionally does not

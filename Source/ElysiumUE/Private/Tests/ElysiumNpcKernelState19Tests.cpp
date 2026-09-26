@@ -21,6 +21,10 @@
 // (story 29e's banked reading). The central premise: Troika `SelectIdealState` answers nothing with
 // no program installed, because every arm but the four flee arms and case 0xe's damage uses
 // `HasInterruptCondition`.
+//
+// The guard is stood as the retail class a case exercises (`AddNpcOfClass`), so `RetailClass()`
+// answers from the C++ type its classname builds; nothing here reclasses a live instance (story 5
+// step 2). A per-class table stands one fresh fixture per row.
 
 static constexpr EAutomationTestFlags GState19Flags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -34,12 +38,14 @@ namespace
 		FElysiumNpc* Other = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		FState19Fixture()
-			: World([]
+		// `GuardClass` is the retail class the guard is built as; `CAI_BaseNPCTroika` stands the bare
+		// Troika line.
+		explicit FState19Fixture(const TCHAR* GuardClass = TEXT("CNPC_VHumanCombatant"))
+			: World([GuardClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("state19_kernel"), 919);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpc(TEXT("guard"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, GuardClass);
 					Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f), TEXT("npc_VHumanCombatant"));
 					return Builder;
 				}())
@@ -87,13 +93,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19TroikaSelectIdealStateT
 	"Elysium.Substrate.NpcKernelState19.TroikaSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19TroikaSelectIdealStateTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-		N.SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 
 	// `10269d30` opens `if (*(int *)(this + 0x5c38) == 0) return 0;` — no program, nothing.
 	N.Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
@@ -168,16 +173,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19FifteenByteTest,
 	"Elysium.Substrate.NpcKernelState19.FifteenByteSpecies", GState19Flags)
 bool FElysiumNpcKernelState19FifteenByteTest::RunTest(const FString&)
 {
-	FState19Fixture F;
-	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *F.Guard;
-	
 	// Retail's twelve fifteen-byte bodies, less `CNPC_VBatSwarm`, `CNPC_VCombatman`,
 	// `CNPC_VMoleman` and `CNPC_VSheriffSwarm`, which have no instance and no port arm (0019
-	// story 5 step 1).
+	// story 5 step 1). Each row stands a fresh guard of its own class.
 	struct FRow { const TCHAR* Cls; const TCHAR* Addr; int32 Tag; };
 	const FRow Rows[] = {
 		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361060"), 6 },
@@ -199,7 +197,12 @@ bool FElysiumNpcKernelState19FifteenByteTest::RunTest(const FString&)
 		}
 		TestEqual(FString::Printf(TEXT("%s's body is %s"), Row.Cls, Row.Addr),
 			FString(Slot->Address), FString(Row.Addr));
-		N.SetRetailClassForTests(Row.Cls);
+		FState19Fixture F(Row.Cls);
+		if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
+		{
+			continue;
+		}
+		FElysiumNpc& N = *F.Guard;
 		N.SelectIdealStateSelector = 0;
 		N.SelectIdealStateRetail();
 		TestTrue(FString::Printf(TEXT("%s wrote a selector (tag %d then the chain)"), Row.Cls, Row.Tag),
@@ -212,13 +215,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19BachOnStateChangeTest,
 	"Elysium.Substrate.NpcKernelState19.BachOnStateChange", GState19Flags)
 bool FElysiumNpcKernelState19BachOnStateChangeTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VBach"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-		N.SetRetailClassForTests(TEXT("CNPC_VBach"));
 	N.bCanFightYet = false;
 	N.SetState(2);
 	TestEqual(TEXT("103639b0 snaps COMBAT back to idle while m_bCanFightYet is 0"),
@@ -234,13 +236,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19SabbatLeaderTest,
 	"Elysium.Substrate.NpcKernelState19.SabbatLeaderSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19SabbatLeaderTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VSabbatLeader"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-		N.SetRetailClassForTests(TEXT("CNPC_VSabbatLeader"));
 	N.bSabbatLeaderActivated = false;
 	TestEqual(TEXT("103a7450 unactivated leader is IDLE"),
 		N.SelectIdealStateRetail(), 1);
@@ -257,13 +258,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19HumanHuntTest,
 	"Elysium.Substrate.NpcKernelState19.HumanHuntConVar", GState19Flags)
 bool FElysiumNpcKernelState19HumanHuntTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VHuman"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-		N.SetRetailClassForTests(TEXT("CNPC_VHuman"));
 	N.WriteNpcStateRetail(2);
 	N.HuntConVarIsCommand = false;
 	N.HuntConVarRawWord = 1.f;
@@ -279,13 +279,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19CameraPreSelectTest,
 	"Elysium.Substrate.NpcKernelState19.CameraPreSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19CameraPreSelectTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VCamera"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-		N.SetRetailClassForTests(TEXT("CNPC_VCamera"));
+	// The camera's own first think may already have run this body and left the tag at 9, so the
+	// tag is cleared first: the assertion below then sees this call's write and not the think's.
+	N.SelectIdealStateSelector = 0;
 	TestEqual(TEXT("10368f80 unconditionally writes ALERT"),
 		N.PreSelectIdealStateRetail(), 3);
 	TestEqual(TEXT("and the selector tag is 9"), N.SelectIdealStateSelector, 9);
@@ -296,13 +298,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19NoAlertWithScheduleTest
 	"Elysium.Substrate.NpcKernelState19.NoAlertStateBaseTail", GState19Flags)
 bool FElysiumNpcKernelState19NoAlertWithScheduleTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-		N.SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 	N.bNoAlertState = true;
 	{
 		FElysiumNpcConditions Mask;
@@ -340,14 +341,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19Guard1Test,
 	"Elysium.Substrate.NpcKernelState19.Guard1SelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19Guard1Test::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VGuard1"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard)
 		|| !TestNotNull(TEXT("the player constructs"), F.Player))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CNPC_VGuard1"));
 	N.Senses.Memory.ClosestPlayer = F.Player->Handle;
 
 	// `1037d2a4`: the arm needs the closest player to BE that channel's offender. With no offender
@@ -415,14 +415,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19CopTest,
 	"Elysium.Substrate.NpcKernelState19.CopSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19CopTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VCop"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard)
 		|| !TestNotNull(TEXT("the player constructs"), F.Player))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CNPC_VCop"));
 	N.Senses.Memory.ClosestPlayer = F.Player->Handle;
 
 	// `103723f0`: every test is the BARE form, so the pre-pass answers with no program installed.
@@ -484,13 +483,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19TzimisceTest,
 	"Elysium.Substrate.NpcKernelState19.TzimisceSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19TzimisceTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VTzimisce"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CNPC_VTzimisce"));
 
 	// `103bd6c4`: NEW_ENEMY alone from idle — the base pairs it with SEE_ENEMY, this body does not.
 	TestEqual(TEXT("103bd690 0xd42 idle NEW_ENEMY -> COMBAT"),
@@ -544,14 +542,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19PedestrianTest,
 	"Elysium.Substrate.NpcKernelState19.PedestrianSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19PedestrianTest::RunTest(const FString&)
 {
-	FState19Fixture F;
+	FState19Fixture F(TEXT("CNPC_VPedestrian"));
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard)
 		|| !TestNotNull(TEXT("the player constructs"), F.Player))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CNPC_VPedestrian"));
 	N.Senses.Memory.ClosestPlayer = F.Player->Handle;
 
 	// `103a3450`: the flee state re-states itself with no test at all.

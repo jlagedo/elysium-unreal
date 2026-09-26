@@ -209,6 +209,13 @@ public:
 	// = never); the queue services thinks.
 	bool  bHidden = false;
 	bool  bDead = false;
+	// `m_iEFlags` (`+0x268`) bit `EFL_DORMANT` (`0x2`), written only by `CBaseEntity::MakeDormant`
+	// (`0x100a8060`). Not the ScriptHide switch above: retail's ScriptHide never sets it, and the one
+	// thing that reads it here is `ServerActivate`'s skip (`0x100a8220`, `FElysiumEntityWorld::
+	// Activate`). Its writers are `camera_animated`'s `EndCamera` and the `globalname`-owned-by-
+	// another-map rule in `DispatchSpawn` (`0x101d1280`) and the two restores (`0x101a2e40`,
+	// `0x101a3c40`); no shipped map authors a `globalname`, so that rule is an unbuilt seam.
+	bool  bEflDormant = false;
 	// Spawn() has run. The world's spawn pass and the two-phase runtime create (CreateEntityNoSpawn
 	// → CallEntitySpawn) both gate on this so an entity is never Spawn()'d twice.
 	bool  bSpawnCalled = false;
@@ -235,6 +242,8 @@ public:
 
 	bool IsHidden() const { return bHidden; }
 	bool IsDead() const { return bDead; }
+	// Retail `IsDormant()`: `m_iEFlags & EFL_DORMANT`.
+	bool IsEflDormant() const { return bEflDormant; }
 	bool IsRecordOnly() const { return bRecordOnly; }
 	// Fully OFF for game purposes: cannot be touched, traced, used, or thought.
 	bool IsInert() const { return bDead || bHidden; }

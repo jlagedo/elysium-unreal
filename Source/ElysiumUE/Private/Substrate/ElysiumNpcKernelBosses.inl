@@ -286,9 +286,8 @@ const FPickupSpecies* PickupSpecies() const;
  *  of the decoded `m_SecurePickupParam`. */
 bool AttachPickupAnimlink(FElysiumEntity* Carried, int32 ElementKey);
 
-/** The same body with the species row handed in rather than resolved, so a row whose classname this
- *  runtime registers no leaf for (`npc_VHengeyokai` and `npc_VManBat` are both unregistered) is
- *  still exercised by name. A null row is "no body fills this for my class" and answers false. */
+/** The same body with the species row handed in rather than resolved, so a row can be exercised by
+ *  name. A null row is "no body fills this for my class" and answers false. */
 bool AttachPickupAnimlinkFor(const FPickupSpecies* Row, FElysiumEntity* Carried, int32 ElementKey);
 
 /** `0x10382400` (`CNPC_VHengeyokai`) and `0x1038f790` (`CNPC_VManBat`) — the release half, also one

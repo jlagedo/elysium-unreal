@@ -27,8 +27,9 @@
 //
 // The brief's "Two tables, and they disagree", obeyed: `npc_payphone` and `npc_VSabbatLeader` are
 // BOTH census classnames and registered spawn leaves, so they get real bodies. `npc_VCameraSecurity`
-// is a census classname and NOT a spawn leaf, so its rows are exercised by retail class name through
-// the census and its behaviour by calling the ported method on an ordinary NPC.
+// is, since story 5 step 2, a registered classname too (its factory builds `CNPC_VCameraSecurity`,
+// population.md), so its linked-camera body runs on a spawned security camera, directly and
+// through its slot-201 caller.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelDialogueFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -489,51 +490,91 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueSecCameraLinkTest,
 	"Elysium.Substrate.NpcKernelDialogue.SecCameraLink", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 {
-	FDialogueFixture F;
-	if (!TestNotNull(TEXT("guard spawned"), F.Guard)) { return false; }
-	if (!TestNotNull(TEXT("other spawned"), F.Other)) { return false; }
-
-	// The brief's second table fact: `npc_VCameraSecurity` IS claimed by the census but is NOT a
-	// registered spawn leaf, so the class row is exercised by NAME and the body on an ordinary NPC.
+	// Story 5 step 2: `npc_VCameraSecurity`'s factory builds `CNPC_VCameraSecurity`
+	// (population.md), so the classname resolves to the class AND the spawn registry registers it —
+	// a map may stand one. The body runs on a spawned security camera: `m_iszLinkedCamera`,
+	// `m_hLinkedCamera` and the `+0x6668` latch are that class's words.
 	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity"));
 	if (!TestNotNull(TEXT("the census carries CNPC_VCameraSecurity"), Cls)) { return false; }
-	TestNotNull(TEXT("the census claims the classname npc_VCameraSecurity"),
-		ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCameraSecurity"))));
-	TestNull(TEXT("...but the spawn registry does NOT register it, so no map may stand one"),
+	TestTrue(TEXT("the classname npc_VCameraSecurity resolves to CNPC_VCameraSecurity"),
+		ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCameraSecurity"))) == Cls);
+	TestNotNull(TEXT("...and the spawn registry registers it, so a map may stand one"),
 		FElysiumClassRegistry::Get().Find(FName(TEXT("npc_VCameraSecurity"))));
-	// The payphone is the counter-example both tables agree on.
+	// The payphone, which both tables have always agreed on.
 	TestNotNull(TEXT("npc_payphone is in both tables"),
 		FElysiumClassRegistry::Get().Find(FName(TEXT("npc_payphone"))));
+	// `0x10369e70`'s callers are the class's own slot 201 and slot 363 bodies.
+	TestEqual(TEXT("CNPC_VCameraSecurity fills slot 201 with 0x10369ff0, a caller of 0x10369e70"),
+		FString(ElysiumNpcKernelClass::BodyOf(Cls, 201)), FString(TEXT("0x10369ff0")));
+
+	// Two security cameras: `camera` has the body driven directly, `watcher` reaches it through
+	// slot 201. `other` is the entity both link to by name.
+	FElysiumNpcWorldFixture World([]
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("dialogue_seccamera"), 29104u);
+		Builder.AddNpc(TEXT("camera"), FVector(0.f, 0.f, 0.f), TEXT("npc_VCameraSecurity"));
+		Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f));
+		Builder.AddNpc(TEXT("watcher"), FVector(0.f, 400.f, 0.f), TEXT("npc_VCameraSecurity"));
+		return Builder;
+	}());
+	FElysiumNpc* Camera = World.Npc(TEXT("camera"));
+	FElysiumNpc* Other = World.Npc(TEXT("other"));
+	FElysiumNpc* Watcher = World.Npc(TEXT("watcher"));
+	FElysiumPlayer* Player = World.Player();
+	if (!TestNotNull(TEXT("camera spawned"), Camera)) { return false; }
+	if (!TestNotNull(TEXT("other spawned"), Other)) { return false; }
+	if (!TestNotNull(TEXT("watcher spawned"), Watcher)) { return false; }
+	if (!TestNotNull(TEXT("the player stood"), Player)) { return false; }
+	FElysiumNpcWorldFixture::Quiet({ Camera, Other, Watcher });
+	TestTrue(TEXT("a spawned npc_VCameraSecurity is CNPC_VCameraSecurity"),
+		Camera->RetailClass() == Cls && Watcher->RetailClass() == Cls);
 
 	// Block 1 with an EMPTY name: nothing to look up, so the handle stays clear.
-	F.Guard->LinkedCameraName.Empty();
+	Camera->LinkedCameraName.Empty();
 	TestNull(TEXT("0x10369e70: no m_iszLinkedCamera (+0x6660) resolves to nothing"),
-		F.Guard->ResolveSecCameraLink());
-	TestFalse(TEXT("...and the +0x6668 latch stays clear"), F.Guard->bLinkedCameraBound);
-	TestFalse(TEXT("...and an NPC that never linked is NOT removed"), F.Guard->IsDead());
+		Camera->ResolveSecCameraLink());
+	TestFalse(TEXT("...and the +0x6668 latch stays clear"), Camera->bLinkedCameraBound);
+	TestFalse(TEXT("...and an NPC that never linked is NOT removed"), Camera->IsDead());
 
 	// Block 1 with a name that resolves: the handle is cached at `+0x6664` and block 2 raises the
 	// `+0x6668` latch.
-	F.Guard->LinkedCameraName = TEXT("other");
+	Camera->LinkedCameraName = TEXT("other");
 	TestTrue(TEXT("0x10369e70: the name resolves and is cached at +0x6664"),
-		F.Guard->ResolveSecCameraLink() == static_cast<FElysiumEntity*>(F.Other));
+		Camera->ResolveSecCameraLink() == static_cast<FElysiumEntity*>(Other));
 	TestTrue(TEXT("...at m_hLinkedCamera (+0x6664)"),
-		F.Guard->LinkedCamera == F.Other->Handle);
-	TestTrue(TEXT("...and the +0x6668 latch is raised"), F.Guard->bLinkedCameraBound);
+		Camera->LinkedCamera == Other->Handle);
+	TestTrue(TEXT("...and the +0x6668 latch is raised"), Camera->bLinkedCameraBound);
 
 	// A second call with the handle still live skips block 1 entirely — the cached handle is what
 	// is returned, which is the whole point of the cache.
-	F.Guard->LinkedCameraName = TEXT("no-such-entity");
+	Camera->LinkedCameraName = TEXT("no-such-entity");
 	TestTrue(TEXT("0x10369e70: a live cache is not re-resolved"),
-		F.Guard->ResolveSecCameraLink() == static_cast<FElysiumEntity*>(F.Other));
+		Camera->ResolveSecCameraLink() == static_cast<FElysiumEntity*>(Other));
+
+	// The same blocks reached through slot 201 on the watcher. `0x10369ff0` answers false whatever
+	// the link — `CSecCamera::CanSee` is a seam — so what is observable is the link it resolved.
+	Watcher->LinkedCameraName.Empty();
+	TestFalse(TEXT("slot 201 on an unlinked security camera answers false (0x10369ff0)"),
+		Watcher->FVisible(Player, 0x2804091, nullptr, 0));
+	TestFalse(TEXT("...its latch stays clear"), Watcher->bLinkedCameraBound);
+	TestFalse(TEXT("...and it is NOT removed"), Watcher->IsDead());
+	Watcher->LinkedCameraName = TEXT("other");
+	Watcher->FVisible(Player, 0x2804091, nullptr, 0);
+	TestTrue(TEXT("slot 201 on a security camera resolves and caches the link (0x10369e70)"),
+		Watcher->LinkedCamera == Other->Handle);
+	TestTrue(TEXT("...and raises the +0x6668 latch"), Watcher->bLinkedCameraBound);
 
 	// Block 2's teardown: the cached camera is gone AND the latch was set, so the NPC removes
 	// ITSELF (`UTIL_Remove` `0x101cd940`). This is the one-way door.
-	F.Other->Kill();
-	F.World.World.Tick(F.World.World.NowSeconds());
+	Other->Kill();
+	World.World.Tick(World.World.NowSeconds());
 	TestNull(TEXT("0x10369e70: a dead camera with no replacement answers null"),
-		F.Guard->ResolveSecCameraLink());
-	TestTrue(TEXT("...and a PREVIOUSLY LINKED camera NPC removes itself"), F.Guard->IsDead());
+		Camera->ResolveSecCameraLink());
+	TestTrue(TEXT("...and a PREVIOUSLY LINKED camera NPC removes itself"), Camera->IsDead());
+	TestFalse(TEXT("slot 201 on the watcher, its camera gone, answers false"),
+		Watcher->FVisible(Player, 0x2804091, nullptr, 0));
+	TestTrue(TEXT("...and the previously linked watcher removes itself through slot 201"),
+		Watcher->IsDead());
 	return true;
 }
 

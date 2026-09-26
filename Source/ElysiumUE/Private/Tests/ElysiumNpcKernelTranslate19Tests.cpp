@@ -14,16 +14,18 @@ static constexpr EAutomationTestFlags GTranslate19Flags =
 
 namespace
 {
+	// One NPC spawned as `RetailClass` through its factory classname (story 5 step 2); null or
+	// `CAI_BaseNPCTroika` stands the bare Troika line. The default is the combatant leaf.
 	struct FTranslate19Fixture
 	{
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Guard = nullptr;
 
-		FTranslate19Fixture()
-			: World([]
+		explicit FTranslate19Fixture(const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"))
+			: World([RetailClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("translate19_kernel"), 440);
-					Builder.AddNpc(TEXT("guard"));
+					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, RetailClass);
 					return Builder;
 				}())
 		{
@@ -37,13 +39,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19TroikaTest,
 	"Elysium.Substrate.NpcKernelTranslate19.Troika", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19TroikaTest::RunTest(const FString&)
 {
-	FTranslate19Fixture F;
-	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
+	FTranslate19Fixture F(TEXT("CAI_BaseNPCTroika"));
+	if (!TestNotNull(TEXT("the bare Troika NPC constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 	// `102b1335`: `(-(uint)((m_bfAINPCFlags2 & 0x80000) != 0x80000) & 0xffffff39) + 0x132` — the
 	// flag CLEAR arm, exactly `0x6b`.
 	TestEqual(TEXT("102b12f0 1 -> 0x6b"), N.TranslateScheduleRetail(1), 0x6b);
@@ -85,13 +86,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19BaseCineTest,
 	"Elysium.Substrate.NpcKernelTranslate19.BaseCine", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19BaseCineTest::RunTest(const FString&)
 {
-	FTranslate19Fixture F;
-	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
+	FTranslate19Fixture F(TEXT("CAI_BaseNPCTroika"));
+	if (!TestNotNull(TEXT("the bare Troika NPC constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CAI_BaseNPCTroika"));
 	// `102cc091`: no live cine (`m_hCine` fails its serial check) — `DevWarning`, `CineCleanup`
 	// (`0x1027d170`), then slot 440 with the literal 1, which the Troika table maps to `0x6b`.
 	const int32 CleanupsBefore = N.TranslateCineCleanupCalls;
@@ -153,13 +153,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19WerewolfTest,
 	"Elysium.Substrate.NpcKernelTranslate19.Werewolf", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19WerewolfTest::RunTest(const FString&)
 {
-	FTranslate19Fixture F;
-	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
+	FTranslate19Fixture F(TEXT("CNPC_VWerewolf"));
+	if (!TestNotNull(TEXT("the werewolf constructs"), F.Guard))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	N.SetRetailClassForTests(TEXT("CNPC_VWerewolf"));
 	// `103d5e00`: all three of the werewolf's rows. `0x43 SCHED_FAIL` is one of them, so a
 	// werewolf never runs the base FAIL program.
 	TestEqual(TEXT("103d5e00 0x43 FAIL -> 0x15c"), N.TranslateScheduleRetail(0x43), 0x15c);
@@ -174,13 +173,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19SpeciesTest,
 	"Elysium.Substrate.NpcKernelTranslate19.Species", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19SpeciesTest::RunTest(const FString&)
 {
-	FTranslate19Fixture F;
-	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *F.Guard;
-
 	struct FCase { const TCHAR* Class; const TCHAR* Address; int32 From; int32 To; };
 	static const FCase Cases[] = {
 		// `10372150`: the cop's `0x6b` runs `& 0x29`, so a non-crazy cop answers `0x15b`.
@@ -212,17 +204,27 @@ bool FElysiumNpcKernelTranslate19SpeciesTest::RunTest(const FString&)
 		// `1037ffa0`: the hengeyokai's own rows.
 		{ TEXT("CNPC_VHengeyokai"),       TEXT("0x1037ffa0"), 0x5b,  0x15a },
 	};
+	// Every row stands a fresh NPC spawned as the row's class, from the same seed.
 	for (const FCase& Case : Cases)
 	{
-		N.SetRetailClassForTests(Case.Class);
+		FTranslate19Fixture F(Case.Class);
+		if (!TestNotNull(*FString::Printf(TEXT("the %s constructs"), Case.Class), F.Guard))
+		{
+			continue;
+		}
 		TestEqual(*FString::Printf(TEXT("%s %s 0x%x -> 0x%x"),
 				Case.Class, Case.Address, Case.From, Case.To),
-			N.TranslateScheduleRetail(Case.From), Case.To);
+			F.Guard->TranslateScheduleRetail(Case.From), Case.To);
 	}
 
 	// `1037ffa0` + `0x10383130`: merely TRANSLATING any id but `0x16e` with `m_nSkin == 1` thaws a
 	// hengeyokai. The side effect is the arm, not a consequence of the answer.
-	N.SetRetailClassForTests(TEXT("CNPC_VHengeyokai"));
+	FTranslate19Fixture F(TEXT("CNPC_VHengeyokai"));
+	if (!TestNotNull(TEXT("the hengeyokai constructs"), F.Guard))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Guard;
 	N.HengeyokaiSkin = 1;
 	const int32 ThawsBefore = N.HengeyokaiThawCalls;
 	N.TranslateScheduleRetail(0x5b);

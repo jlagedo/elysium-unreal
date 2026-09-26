@@ -31,11 +31,11 @@
 // ragdoll bone table, the hint node's entity, the `Float Sound Info` KeyValues block — the case says
 // so: that the seam is asked and that the refusal is the recovered one.
 //
-// **Both tables are checked before a species answer is asserted.** A classname the spawn registry
-// (`Substrate/ElysiumNpcClasses.cpp`) does not stand is exercised by RETAIL CLASS NAME through
-// `SpeciesSlotRowOf`; only `npc_VTzimisceRunner`, `npc_VAnimal`, `npc_VAndreiBlood` and
-// `npc_maker_fleshpile` are spawned. `npc_VCop`'s null `RetailClass()` is asserted, not worked
-// around.
+// **Both tables are checked before a species answer is asserted.** A class no registered classname
+// builds (`CNPC_VFrenzyShadow`, …) is exercised by RETAIL CLASS NAME through `SpeciesSlotRowOf`;
+// every other carrier is spawned by the classname its retail factory builds it from
+// (`Substrate/ElysiumNpcClasses.cpp`), and the Troika side of a wiring case is a bare
+// `CAI_BaseNPCTroika` (0019 story 5 step 2). `npc_VCop`'s factory answer, `CNPC_VCop`, is asserted.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelSpeciesFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -43,7 +43,7 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelSpeciesFlags =
 namespace
 {
 	// The one fixture shape this suite uses: a world with the four spawnable species that reach
-	// this family's rows, plus one cop for the null-census case.
+	// this family's rows, plus one cop for the census-factory case.
 	struct FSpeciesFixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -75,15 +75,16 @@ namespace
 
 	// The WIRING cases' fixture — the two sides of one vtable dispatch.
 	//
-	// `Species` is stood as a plain `npc_VHumanCombatant` and then TOLD which census class it is.
-	// That is not a shortcut around the spawn path, it is the only way in: twelve of the eighteen
-	// wired slots are carried by a class no registered classname resolves to, and the census gives
-	// `CNPC_VZombie` and `CNPC_VCop` no classname at all. The six slots whose carrier IS spawnable
-	// (`CNPC_VTzimisceRunner`'s 588/599/600/601/602 and `CNPC_VAnimal`'s 482) use `Runner` and
-	// `Animal`, which arrive through the real registry with no forcing.
+	// `Species` is spawned as the census class the case names, through the classname retail's
+	// factory builds it from (`CNPC_VZombie` from `npc_VZombie`, …), so its `RetailClass()` is its
+	// C++ type and nothing re-labels it. A case that names no class (`nullptr`) stands the plain
+	// `npc_VHumanCombatant` it always stood and drives only `Runner` / `Animal` — the carriers of
+	// `CNPC_VTzimisceRunner`'s 588/599/600/601/602 and `CNPC_VAnimal`'s 482.
 	//
-	// `Troika` is an `npc_VCop`: `RetailClass()` null, which is this family's recovered
-	// fall-through and is exactly "a plain Troika NPC with no species class".
+	// `Troika` is a bare `CAI_BaseNPCTroika` (`AddTroikaNpc`): the Troika line with no species
+	// class over it, exactly "a plain Troika NPC with no species class". It was an `npc_VCop` while
+	// the census gave that classname no class; the cop's factory builds `CNPC_VCop`, so a spawned
+	// cop is no longer the Troika line. The cases still call their local for it `Cop`.
 	struct FSpeciesWiringFixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -93,24 +94,27 @@ namespace
 		FElysiumNpc* Animal = nullptr;
 
 		explicit FSpeciesWiringFixture(const TCHAR* RetailClassName)
-			: World(Build())
+			: World(Build(RetailClassName))
 		{
 			Species = World.Npc(TEXT("species"));
 			Troika = World.Npc(TEXT("troika"));
 			Runner = World.Npc(TEXT("runner"));
 			Animal = World.Npc(TEXT("animal"));
 			FElysiumNpcWorldFixture::Quiet({ Species, Troika, Runner, Animal });
-			if (Species != nullptr && RetailClassName != nullptr)
-			{
-				Species->SetRetailClassForTests(RetailClassName);
-			}
 		}
 
-		static FElysiumNpcWorldBuilder Build()
+		static FElysiumNpcWorldBuilder Build(const TCHAR* RetailClassName)
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("species_wiring"), 29135u);
-			Builder.AddNpc(TEXT("species"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
-			Builder.AddNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+			if (RetailClassName != nullptr)
+			{
+				Builder.AddNpcOfClass(TEXT("species"), FVector::ZeroVector, RetailClassName);
+			}
+			else
+			{
+				Builder.AddNpc(TEXT("species"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+			}
+			Builder.AddTroikaNpc(TEXT("troika"), FVector(200.0, 0.0, 0.0));
 			Builder.AddNpc(TEXT("runner"), FVector(400.0, 0.0, 0.0), TEXT("npc_VTzimisceRunner"));
 			Builder.AddNpc(TEXT("animal"), FVector(600.0, 0.0, 0.0), TEXT("npc_VAnimal"));
 			return Builder;
@@ -214,12 +218,19 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// The two tables that disagree — the fact four landed families lost time to.
+// The classname -> class map, read from retail's factories.
 // -------------------------------------------------------------------------------------------------
+//
+// Every NPC classname has exactly one `LINK_ENTITY_TO_CLASS` factory in `vampire.dll`, and the class
+// it builds is the last primary-vtable write at `[this]` (docs/vtmb/npc-ai/population.md, "The
+// classname → class map, read from the factories"). One class per classname, no tie-break. This
+// case was `CensusFallThrough` while the port read the map off the ledger's proximity census, which
+// gave `npc_VCop` no class and made the runner a "most-derived claimant" of `CNPC_VBaseBoss`'s
+// over-claim; both were wrong, and the case now pins the factories' answers.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCensusFallThroughTest,
-	"Elysium.Substrate.NpcKernelSpecies.CensusFallThrough", GElysiumNpcKernelSpeciesFlags)
-bool FElysiumNpcKernelSpeciesCensusFallThroughTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCensusFactoriesTest,
+	"Elysium.Substrate.NpcKernelSpecies.CensusFactories", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
 	TestNotNull(TEXT("npc_VTzimisceRunner is a registered spawn leaf"), Fixture.Runner);
@@ -231,28 +242,60 @@ bool FElysiumNpcKernelSpeciesCensusFallThroughTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The census resolves a spawned runner to its MOST DERIVED claimant — `npc_VTzimisceRunner` is
-	// claimed by `CNPC_VBaseBoss` too.
+	// A spawned runner is the one class its factory builds. `CNPC_VBaseBoss` claims no classname —
+	// no factory builds it (population.md: "No factory builds `CAI_BaseNPC`, `CAI_BaseNPCTroika`,
+	// `CNPC_VBaseBoss` or `CAI_TestHull` by classname").
 	const FElysiumNpcClass* RunnerClass = Fixture.Runner->RetailClass();
 	TestNotNull(TEXT("a spawned runner has a census class"), RunnerClass);
 	if (RunnerClass != nullptr)
 	{
-		TestEqual(TEXT("and it is CNPC_VTzimisceRunner, not its CNPC_VBaseBoss claimant"),
+		TestEqual(TEXT("and it is CNPC_VTzimisceRunner, the class its factory builds"),
 			FString(RunnerClass->Name), FString(TEXT("CNPC_VTzimisceRunner")));
 	}
+	const FElysiumNpcClass* BaseBoss = ElysiumNpcKernelClass::Find(TEXT("CNPC_VBaseBoss"));
+	if (TestNotNull(TEXT("the census carries CNPC_VBaseBoss"), BaseBoss))
+	{
+		TestEqual(TEXT("and CNPC_VBaseBoss claims no classname"), BaseBoss->ClassnameCount, 0);
+	}
 
-	// **The recovered answer, not a bug**: no census class lists `npc_VCop`, so a spawned cop's
-	// `RetailClass()` is null and every per-species lookup falls through to the Troika line.
-	TestNull(TEXT("a spawned cop has NO census class"), Fixture.Cop->RetailClass());
+	// `npc_VCop`'s factory `0x103704f0` (ctor `0x103708e0`, size `0x6674`) builds `CNPC_VCop`, so a
+	// spawned cop answers `CNPC_VCop` and every per-species lookup is `CNPC_VCop`'s own — not the
+	// Troika line the proximity census used to leave it on.
+	const FElysiumNpcClass* CopClass = Fixture.Cop->RetailClass();
+	if (TestNotNull(TEXT("a spawned cop has a census class"), CopClass))
+	{
+		TestEqual(TEXT("and it is CNPC_VCop, the class factory 0x103704f0 builds"),
+			FString(CopClass->Name), FString(TEXT("CNPC_VCop")));
+	}
+	TestTrue(TEXT("the classname query agrees: npc_VCop is CNPC_VCop"),
+		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
+			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	// `CNPC_VCop`'s slot rows. The census DOES carry `{CNPC_VCop, 599, 0x10385ab0}` (the body its
+	// chain `CNPC_VCop` -> `CNPC_VHumanCombatant` -> `CNPC_VHuman` inherits); what answers null is
+	// this family's Species table (`SpeciesSlotRowOf`), which holds no row for that body. So the
+	// lookup a spawned cop makes answers exactly what the class's own Species row answers — none —
+	// and the species dispatcher refuses.
+	TestTrue(TEXT("a spawned cop's slot-599 row is CNPC_VCop's"),
+		Fixture.Cop->SpeciesSlotRow(599) == FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCop"), 599));
 	TestNull(TEXT("so it has no species row at slot 599"), Fixture.Cop->SpeciesSlotRow(599));
 	bool Answer = false;
 	TestFalse(TEXT("and the slot-599 dispatcher refuses to run a species body for it"),
 		Fixture.Cop->SpeciesSlot599(nullptr, Answer));
 
-	// `npc_VCamera` is claimed by the census but is NOT a spawn leaf — a case that spawned one would
-	// silently fail its own guard, so the camera rows are exercised by retail class name instead.
-	TestNull(TEXT("npc_VCamera is not a registered spawn leaf"), Fixture.World.Npc(TEXT("camera")));
-	TestNotNull(TEXT("but the census claims it"),
+	// `npc_VCamera` is a registered spawn leaf now, answering `CNPC_VCamera`; its own world, so the
+	// shared fixture's spawn order (and its RNG draws) stay what the other cases were written on.
+	FElysiumNpcWorldBuilder CameraBuilder(TEXT("species_camera"), 29131u);
+	CameraBuilder.AddNpc(TEXT("camera"), FVector::ZeroVector, TEXT("npc_VCamera"));
+	FElysiumNpcWorldFixture CameraWorld(MoveTemp(CameraBuilder));
+	FElysiumNpc* Camera = CameraWorld.Npc(TEXT("camera"));
+	FElysiumNpcWorldFixture::Quiet({ Camera });
+	if (TestNotNull(TEXT("npc_VCamera is a registered spawn leaf"), Camera))
+	{
+		TestEqual(TEXT("and a spawned camera is CNPC_VCamera"),
+			FString(Camera->RetailClass() != nullptr ? Camera->RetailClass()->Name : TEXT("")),
+			FString(TEXT("CNPC_VCamera")));
+	}
+	TestNotNull(TEXT("the census claims it"),
 		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCamera")));
 	TestNotNull(TEXT("and its slot-497 row is reachable by class name"),
 		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCamera"), 497));
@@ -1313,9 +1356,10 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 //
 // Every case below calls the slot the way the kernel calls it (`Slot21`, `CanPlaySequence`,
 // `DeathSound`, …), never the dispatcher, and asserts the species side effect on the class that
-// carries the override and the Troika side effect on an `npc_VCop`. What the prologue does is the
-// vtable's own resolution, so a case that could only assert the dispatcher's answer would be
-// asserting nothing about the wiring.
+// carries the override and the Troika side effect on a bare `CAI_BaseNPCTroika` (the local the
+// cases call `Cop`, for the `npc_VCop` that stood there before 0019 story 5 step 2 gave that
+// classname its factory's class). What the prologue does is the vtable's own resolution, so a case
+// that could only assert the dispatcher's answer would be asserting nothing about the wiring.
 //
 // Three slots have NO observable difference between their two arms in this substrate and say so in
 // place: 482 (the five species copies are byte-identical to the base and CALL it), 497 (both arms
@@ -1419,8 +1463,9 @@ bool FElysiumNpcKernelSpeciesWiredSlot25Test::RunTest(const FString&)
 	// `m_OnAttackedVictim` is what a mapper sees, so the counter is the read — the same wiring the
 	// `0x103e12c0` body case uses, driven through the SLOT this time.
 	FElysiumNpcWorldBuilder Builder(TEXT("species_wired25"), 29136u);
-	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
-	Builder.AddNpc(TEXT("cop"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VZombie"));
+	// The Troika side: a bare `CAI_BaseNPCTroika`, the line with no species class over it.
+	Builder.AddTroikaNpc(TEXT("cop"), FVector(200.0, 0.0, 0.0));
 	Builder.AddCounter(TEXT("victims"));
 	Builder.WireOutput(TEXT("zombie"), TEXT("OnAttackedVictim"), TEXT("victims"));
 	Builder.WireOutput(TEXT("cop"), TEXT("OnAttackedVictim"), TEXT("victims"));
@@ -1433,7 +1478,6 @@ bool FElysiumNpcKernelSpeciesWiredSlot25Test::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand both sides"));
 		return false;
 	}
-	Zombie->SetRetailClassForTests(TEXT("CNPC_VZombie"));
 
 	Zombie->Slot25(Cop);
 	World.World.Tick(World.World.NowSeconds() + 0.1);
@@ -1453,8 +1497,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot26Test,
 bool FElysiumNpcKernelSpeciesWiredSlot26Test::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("species_wired26"), 29137u);
-	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
-	Builder.AddNpc(TEXT("cop"), FVector(200.0, 0.0, 0.0), TEXT("npc_VCop"));
+	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VZombie"));
+	// The Troika side: a bare `CAI_BaseNPCTroika`, the line with no species class over it.
+	Builder.AddTroikaNpc(TEXT("cop"), FVector(200.0, 0.0, 0.0));
 	Builder.AddCounter(TEXT("victims"));
 	Builder.WireOutput(TEXT("zombie"), TEXT("OnAttackedVictim"), TEXT("victims"));
 	Builder.WireOutput(TEXT("cop"), TEXT("OnAttackedVictim"), TEXT("victims"));
@@ -1467,7 +1512,6 @@ bool FElysiumNpcKernelSpeciesWiredSlot26Test::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand both sides"));
 		return false;
 	}
-	Zombie->SetRetailClassForTests(TEXT("CNPC_VZombie"));
 
 	// `0x103e12f0` — the SAME output from a second vtable entry.
 	Zombie->Slot26(Cop);
@@ -1495,14 +1539,14 @@ bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
 		return false;
 	}
 
-	// The carrier arrives through the registry, not through the latch.
+	// The carrier arrives through the registry: its classname's factory builds its class.
 	TestEqual(TEXT("a spawned npc_VAnimal is CNPC_VAnimal"),
 		FString(Animal->RetailClass() != nullptr ? Animal->RetailClass()->Name : TEXT("")),
 		FString(TEXT("CNPC_VAnimal")));
 	int32 SpeciesAnswer = -1;
 	TestTrue(TEXT("so the slot-482 dispatcher claims it"),
 		Animal->SpeciesCanPlaySequence(true, 0, SpeciesAnswer));
-	TestFalse(TEXT("and refuses an npc_VCop, which has no census class"),
+	TestFalse(TEXT("and refuses the bare Troika line, which has no species class"),
 		Cop->SpeciesCanPlaySequence(true, 0, SpeciesAnswer));
 
 	// `0x1035fd40` is BYTE-IDENTICAL to the base `0x10278090` and CALLS it, so the two arms cannot
@@ -1513,7 +1557,8 @@ bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
 	Cop->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
 	TestEqual(TEXT("a combat animal refuses a sequence through the slot"),
 		Animal->CanPlaySequence(false, 0), 0);
-	TestEqual(TEXT("and so does a combat cop, on the Troika arm"), Cop->CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("and so does a bare Troika NPC in combat, on the Troika arm"),
+		Cop->CanPlaySequence(false, 0), 0);
 	TestEqual(TEXT("disregarding state admits it on the species arm"),
 		Animal->CanPlaySequence(true, 0), 1);
 	TestEqual(TEXT("and on the Troika arm"), Cop->CanPlaySequence(true, 0), 1);

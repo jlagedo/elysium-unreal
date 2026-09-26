@@ -31,14 +31,20 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelDebug10Flags =
 namespace
 {
 	// `npc_VHumanCombatant` is the plain Troika-line leaf: the census gives `CNPC_VHumanCombatant`
-	// no slot-123/124 override, so it takes the Troika bodies. `npc_VCop` is the CONTROL the story
-	// asks for — the census gives `CNPC_VCop` a NULL classname list, so a spawned cop's
-	// `RetailClass()` is null and every species lookup falls through to the Troika line, which is
-	// the recovered dispatch and not a gap (story 29c-1's cleanup). `npc_VNewscaster` is the ONE
-	// species arm in this family a registered classname reaches.
+	// no slot-123/124 override, so it takes the Troika bodies. The bare Troika line
+	// (`Debug10TroikaBuilder`) is the CONTROL the story asks for: it has no species class, so
+	// `RetailClass()` is null and every species lookup falls through to the Troika line. Story 5
+	// step 2: `npc_VCop`'s factory 0x103704f0 builds `CNPC_VCop` (population.md), so a spawned cop
+	// is the cop class and slot 123 reaches `0x10372f00`; it no longer stands for the Troika line.
+	// Every species arm of this family has a registered classname that builds its class, and each
+	// species case stands that class and asks the slot method as well as the arm itself.
 	const TCHAR* const GDebug10Combatant = TEXT("npc_VHumanCombatant");
 	const TCHAR* const GDebug10Cop = TEXT("npc_VCop");
 	const TCHAR* const GDebug10Newscaster = TEXT("npc_VNewscaster");
+	const TCHAR* const GDebug10Hengeyokai = TEXT("npc_VHengeyokai");
+	const TCHAR* const GDebug10Tzimisce = TEXT("npc_VTzimisce");
+	const TCHAR* const GDebug10Zombie = TEXT("npc_VZombie");
+	const TCHAR* const GDebug10MingXiao = TEXT("npc_VMingXiao");
 
 	FString Debug10RetailOrder(const TArray<FElysiumNpc::FDebugLine>& Lines)
 	{
@@ -67,6 +73,16 @@ namespace
 		FElysiumNpcWorldBuilder Builder(TEXT("debug10"), 29u);
 		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
 		Builder.AddNpc(TEXT("subject"), FVector::ZeroVector, Classname);
+		Builder.AddNpc(TEXT("other"), FVector(100.f, 0.f, 0.f), TEXT("npc_VHumanCombatant"));
+		return Builder;
+	}
+
+	// The same world with a bare `CAI_BaseNPCTroika` as the subject: no species class over it.
+	FElysiumNpcWorldBuilder Debug10TroikaBuilder()
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("debug10"), 29u);
+		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+		Builder.AddTroikaNpc(TEXT("subject"), FVector::ZeroVector);
 		Builder.AddNpc(TEXT("other"), FVector(100.f, 0.f, 0.f), TEXT("npc_VHumanCombatant"));
 		return Builder;
 	}
@@ -1045,41 +1061,86 @@ bool FElysiumNpcKernelDebug10SlotDispatchTest::RunTest(const FString&)
 			FString(ElysiumNpcKernelClass::BodyOf(Cls, 123)), FString(Row.Value));
 	}
 
-	// **The control the story asks for.** A plain `npc_VCop` takes the TROIKA bodies at both slots,
-	// because the census gives `CNPC_VCop` a NULL classname list — a spawned cop's `RetailClass()`
-	// is null and every species lookup falls through. That is the recovered dispatch (story 29c-1's
-	// cleanup), not a gap, and it is why `0x10372f00`'s arms are unreachable in this port.
+	// **The control the story asks for.** The bare Troika line takes the TROIKA bodies at both
+	// slots: it has no species class, so `RetailClass()` is null and every species lookup falls
+	// through.
+	Debug10ResetConVars();
+	{
+		FElysiumNpcWorldFixture Fixture(Debug10TroikaBuilder());
+		FElysiumNpc* Troika = Fixture.Npc(TEXT("subject"));
+		if (!TestNotNull(TEXT("the bare Troika NPC spawned"), Troika))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Troika });
+		Troika->Schedule.Clear();
+		TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
+
+		Troika->DebugOverlays = 0x20000000;
+		FElysiumNpc::BeginDebugCapture();
+		Troika->DrawDebugGeometryOverlays();
+		{
+			const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
+			TestEqual(TEXT("so slot 123 runs the TROIKA body: two weapon rings, no cop label"),
+				Debug10RetailOrder(Lines),
+				FString(TEXT("NDebugOverlay::Circle|NDebugOverlay::Circle")));
+		}
+
+		Troika->DebugOverlays = 0x1;
+		Troika->ActivityNumber = INDEX_NONE;
+		Troika->IdealActivityNumber = INDEX_NONE;
+		FElysiumNpc::BeginDebugCapture();
+		Troika->DrawDebugTextOverlays();
+		{
+			const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
+			TestTrue(TEXT("and slot 124 the Troika text body, which ends on the HG/HB line"),
+				Debug10RetailOrder(Lines).EndsWith(TEXT("HG - %d : HB - %d")));
+		}
+	}
+
+	// Story 5 step 2: `npc_VCop`'s factory 0x103704f0 builds `CNPC_VCop` (population.md), so a
+	// spawned cop is the cop class and its slot 123 is `0x10372f00`, the arm the VCopGeometry case
+	// below drives directly.
 	Debug10ResetConVars();
 	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Cop));
 	FElysiumNpc* Cop = Fixture.Npc(TEXT("subject"));
-	if (!TestNotNull(TEXT("the cop spawned"), Cop))
+	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the cop spawned"), Cop) || !TestNotNull(TEXT("and a second NPC"), Other))
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Cop });
+	FElysiumNpcWorldFixture::Quiet({ Cop, Other });
 	Cop->Schedule.Clear();
-	TestNull(TEXT("a spawned npc_VCop has no census class"), Cop->RetailClass());
+	TestTrue(TEXT("a spawned npc_VCop is CNPC_VCop"),
+		Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+	TestEqual(TEXT("so its slot 123 is the cop body 0x10372f00"),
+		FString(ElysiumNpcKernelClass::BodyOf(Cop->RetailClass(), 123)),
+		FString(TEXT("0x10372f00")));
 
-	Cop->DebugOverlays = 0x20000000;
+	// Slot 123 on the cop, through the slot method, with the VCopGeometry case's own inputs and
+	// answers. The observable output of `0x10372f00` equals the Troika body's while
+	// `CollisionObbExtentsUnits` refuses (the label gate never opens), so what separates the arms
+	// here is the census row above; the output is asserted equal to the arm's own, call for call.
+	Cop->DebugOverlays = 0;
 	FElysiumNpc::BeginDebugCapture();
 	Cop->DrawDebugGeometryOverlays();
-	{
-		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestEqual(TEXT("so slot 123 runs the TROIKA body: two weapon rings, no cop label"),
-			Debug10RetailOrder(Lines),
-			FString(TEXT("NDebugOverlay::Circle|NDebugOverlay::Circle")));
-	}
+	TestEqual(TEXT("slot 123 on a cop with bit 0 clear draws nothing, as 0x10372f00 does"),
+		FElysiumNpc::EndDebugCapture().Num(), 0);
 
-	Cop->DebugOverlays = 0x1;
-	Cop->ActivityNumber = INDEX_NONE;
-	Cop->IdealActivityNumber = INDEX_NONE;
+	Cop->DebugOverlays = 0x1 | 0x20000000;
+	Cop->Senses.Memory.ClosestPlayer = Other->Handle;
 	FElysiumNpc::BeginDebugCapture();
-	Cop->DrawDebugTextOverlays();
-	{
-		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
-		TestTrue(TEXT("and slot 124 the Troika text body, which ends on the HG/HB line"),
-			Debug10RetailOrder(Lines).EndsWith(TEXT("HG - %d : HB - %d")));
-	}
+	Cop->DrawDebugGeometryOverlays();
+	const TArray<FElysiumNpc::FDebugLine> ViaSlot = FElysiumNpc::EndDebugCapture();
+	FElysiumNpc::BeginDebugCapture();
+	Cop->VCopDrawDebugGeometryOverlays();
+	const TArray<FElysiumNpc::FDebugLine> Direct = FElysiumNpc::EndDebugCapture();
+	TestEqual(TEXT("slot 123 on a cop: no label, and the Troika tail's two weapon rings"),
+		Debug10RetailOrder(ViaSlot),
+		FString(TEXT("NDebugOverlay::Circle|NDebugOverlay::Circle")));
+	TestEqual(TEXT("line for line what 0x10372f00 draws when called directly"),
+		Debug10TextOrder(ViaSlot), Debug10TextOrder(Direct));
+	Cop->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
 	return true;
 }
 
@@ -1092,9 +1153,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10HengeyokaiTextTest,
 bool FElysiumNpcKernelDebug10HengeyokaiTextTest::RunTest(const FString&)
 {
 	Debug10ResetConVars();
-	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Combatant));
+	// Story 5 step 2: `npc_VHengeyokai` builds `CNPC_VHengeyokai` (population.md), so the arm is
+	// driven on the class itself and reached through the slot method as well.
+	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Hengeyokai));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
-	if (!TestNotNull(TEXT("the combatant spawned"), Npc))
+	if (!TestNotNull(TEXT("the hengeyokai spawned"), Npc))
 	{
 		return false;
 	}
@@ -1102,11 +1165,17 @@ bool FElysiumNpcKernelDebug10HengeyokaiTextTest::RunTest(const FString&)
 	Npc->Schedule.Clear();
 	Npc->ActivityNumber = INDEX_NONE;
 	Npc->IdealActivityNumber = INDEX_NONE;
+	TestTrue(TEXT("a spawned npc_VHengeyokai is CNPC_VHengeyokai"),
+		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VHengeyokai")));
+	TestEqual(TEXT("which fills slot 124 with 0x10383560"),
+		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(TEXT("0x10383560")));
 
 	// Bit 0 clear: the Troika body's answer, unchanged.
 	Npc->DebugOverlays = 0;
 	TestEqual(TEXT("with bit 0 clear the hengeyokai adds nothing"),
 		Npc->HengeyokaiDrawDebugTextOverlays(), 0);
+	TestEqual(TEXT("and neither does slot 124 on the hengeyokai"), Npc->DrawDebugTextOverlays(), 0);
 
 	// Bit 0 set: exactly ONE more line, and the `+1` is the contract every later overlay consumes.
 	Npc->DebugOverlays = 0x1;
@@ -1124,6 +1193,20 @@ bool FElysiumNpcKernelDebug10HengeyokaiTextTest::RunTest(const FString&)
 		TestEqual(TEXT("and slot 9's seam prints the empty string, retail's null arm"),
 			Lines.Last().Text, FString());
 	}
+
+	// The same through slot 124: the dispatcher reaches `0x10383560` on the hengeyokai.
+	FElysiumNpc::BeginDebugCapture();
+	const int32 ViaSlot = Npc->DrawDebugTextOverlays();
+	{
+		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
+		TestEqual(TEXT("slot 124 on the hengeyokai answers the arm's budget"), ViaSlot, WithLine);
+		if (TestTrue(TEXT("and draws lines"), Lines.Num() > 0))
+		{
+			TestEqual(TEXT("its last line is the species body's"), FString(Lines.Last().Retail),
+				FString(TEXT("0x10383560")));
+			TestEqual(TEXT("printing slot 9's empty string"), Lines.Last().Text, FString());
+		}
+	}
 	return true;
 }
 
@@ -1132,8 +1215,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10NewscasterTextTest,
 bool FElysiumNpcKernelDebug10NewscasterTextTest::RunTest(const FString&)
 {
 	Debug10ResetConVars();
-	// `npc_VNewscaster` is the ONE species arm of this family a registered classname reaches, so it
-	// is exercised through the slot method itself and not by name.
+	// `npc_VNewscaster` builds `CNPC_VNewscaster`, so this species arm is exercised through the slot
+	// method itself and not by name.
 	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Newscaster));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
 	if (!TestNotNull(TEXT("the newscaster spawned"), Npc))
@@ -1178,10 +1261,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10TzimisceTextTest,
 bool FElysiumNpcKernelDebug10TzimisceTextTest::RunTest(const FString&)
 {
 	Debug10ResetConVars();
-	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Combatant));
+	// Story 5 step 2: `npc_VTzimisce` builds `CNPC_VTzimisce` (population.md), so the arm is driven
+	// on the class itself and reached through the slot method as well.
+	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Tzimisce));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
 	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
-	if (!TestNotNull(TEXT("the combatant spawned"), Npc) || !TestNotNull(TEXT("and a second"), Other))
+	if (!TestNotNull(TEXT("the tzimisce spawned"), Npc) || !TestNotNull(TEXT("and a second"), Other))
 	{
 		return false;
 	}
@@ -1189,10 +1274,16 @@ bool FElysiumNpcKernelDebug10TzimisceTextTest::RunTest(const FString&)
 	Npc->Schedule.Clear();
 	Npc->ActivityNumber = INDEX_NONE;
 	Npc->IdealActivityNumber = INDEX_NONE;
+	TestTrue(TEXT("a spawned npc_VTzimisce is CNPC_VTzimisce"),
+		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")));
+	TestEqual(TEXT("which fills slot 124 with 0x103c08d0"),
+		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(TEXT("0x103c08d0")));
 
 	Npc->DebugOverlays = 0;
 	TestEqual(TEXT("with bit 0 clear the tzimisce adds nothing"),
 		Npc->TzimisceDrawDebugTextOverlays(), 0);
+	TestEqual(TEXT("and neither does slot 124 on the tzimisce"), Npc->DrawDebugTextOverlays(), 0);
 
 	// No pickup target: the distance starts at `_DAT_104454c4` = 0.0 and the two globals are the
 	// cross-NPC latch, which `0x103be130`'s seam never opens.
@@ -1205,6 +1296,20 @@ bool FElysiumNpcKernelDebug10TzimisceTextTest::RunTest(const FString&)
 			FString(TEXT("Body - %5.1f|%5.1f|%s")));
 		TestEqual(TEXT("all three fields at their unlatched values"), Lines.Last().Text,
 			FString(TEXT("Body -   0.0|  0.0|")));
+	}
+
+	// The same through slot 124: the dispatcher reaches `0x103c08d0` on the tzimisce.
+	FElysiumNpc::BeginDebugCapture();
+	Npc->DrawDebugTextOverlays();
+	{
+		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
+		if (TestTrue(TEXT("slot 124 on the tzimisce draws lines"), Lines.Num() > 0))
+		{
+			TestEqual(TEXT("and its last line is the body line"), FString(Lines.Last().Retail),
+				FString(TEXT("Body - %5.1f|%5.1f|%s")));
+			TestEqual(TEXT("at the same unlatched values"), Lines.Last().Text,
+				FString(TEXT("Body -   0.0|  0.0|")));
+		}
 	}
 
 	// A live pickup target makes the first field the full 3-D distance in SOURCE units. The second
@@ -1230,9 +1335,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10ZombieTextTest,
 bool FElysiumNpcKernelDebug10ZombieTextTest::RunTest(const FString&)
 {
 	Debug10ResetConVars();
-	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Combatant));
+	// Story 5 step 2: `npc_VZombie` builds `CNPC_VZombie` (population.md), so the arm is driven on
+	// the class itself and reached through the slot method as well.
+	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Zombie));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
-	if (!TestNotNull(TEXT("the combatant spawned"), Npc))
+	if (!TestNotNull(TEXT("the zombie spawned"), Npc))
 	{
 		return false;
 	}
@@ -1240,6 +1347,11 @@ bool FElysiumNpcKernelDebug10ZombieTextTest::RunTest(const FString&)
 	Npc->Schedule.Clear();
 	Npc->ActivityNumber = INDEX_NONE;
 	Npc->IdealActivityNumber = INDEX_NONE;
+	TestTrue(TEXT("a spawned npc_VZombie is CNPC_VZombie"),
+		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));
+	TestEqual(TEXT("which fills slot 124 with 0x103e0e80"),
+		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(TEXT("0x103e0e80")));
 
 	// The zombie's gate is `m_debugOverlays & 0x40000` and NOT bit 0, so the two are independent:
 	// bit 0 alone runs the Troika body and adds nothing.
@@ -1263,6 +1375,17 @@ bool FElysiumNpcKernelDebug10ZombieTextTest::RunTest(const FString&)
 		TestEqual(TEXT("the 0x40000 arm asks the bitfield seam and adds nothing"),
 			WithBit, TroikaOnly);
 		TestFalse(TEXT("no Cond line"),
+			Debug10RetailOrder(Lines).Contains(TEXT("Cond: %s")));
+	}
+
+	// The same through slot 124: the dispatcher reaches `0x103e0e80` on the zombie, and its answer
+	// is the arm's.
+	FElysiumNpc::BeginDebugCapture();
+	const int32 ViaSlot = Npc->DrawDebugTextOverlays();
+	{
+		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
+		TestEqual(TEXT("slot 124 on the zombie answers the arm's budget"), ViaSlot, WithBit);
+		TestFalse(TEXT("and prints no Cond line either"),
 			Debug10RetailOrder(Lines).Contains(TEXT("Cond: %s")));
 	}
 
@@ -1358,14 +1481,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebug10MingXiaoGeometryTest,
 bool FElysiumNpcKernelDebug10MingXiaoGeometryTest::RunTest(const FString&)
 {
 	Debug10ResetConVars();
-	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10Combatant));
+	// Story 5 step 2: `npc_VMingXiao` builds `CNPC_VMingXiao` (population.md), so the arm is driven
+	// on the class itself and reached through the slot method as well.
+	FElysiumNpcWorldFixture Fixture(Debug10Builder(GDebug10MingXiao));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));
-	if (!TestNotNull(TEXT("the combatant spawned"), Npc))
+	if (!TestNotNull(TEXT("MingXiao spawned"), Npc))
 	{
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 	Npc->Schedule.Clear();
+	TestTrue(TEXT("a spawned npc_VMingXiao is CNPC_VMingXiao"),
+		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")));
+	TestEqual(TEXT("which fills slot 123 with 0x10399d40"),
+		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 123)),
+		FString(TEXT("0x10399d40")));
 
 	// The gate is `0x20000000` — the WEAPON-RING bit, not bit 0 like its siblings — so MingXiao's
 	// bands and the Troika body's two weapon rings appear together.
@@ -1397,6 +1527,31 @@ bool FElysiumNpcKernelDebug10MingXiaoGeometryTest::RunTest(const FString&)
 				Lines[4].Text.Contains(TEXT("r=0.0 h=32.0")));
 		}
 	}
+
+	// The same through slot 123: the dispatcher reaches `0x10399d40` on MingXiao.
+	Npc->DebugOverlays = 0x1;
+	FElysiumNpc::BeginDebugCapture();
+	Npc->DrawDebugGeometryOverlays();
+	TestEqual(TEXT("slot 123 on MingXiao: bit 0 does not open the arm"),
+		FElysiumNpc::EndDebugCapture().Num(), 0);
+
+	Npc->DebugOverlays = 0x20000000;
+	FElysiumNpc::BeginDebugCapture();
+	Npc->DrawDebugGeometryOverlays();
+	const TArray<FElysiumNpc::FDebugLine> ViaSlot = FElysiumNpc::EndDebugCapture();
+	FElysiumNpc::BeginDebugCapture();
+	Npc->MingXiaoDrawDebugGeometryOverlays();
+	const TArray<FElysiumNpc::FDebugLine> Direct = FElysiumNpc::EndDebugCapture();
+	TestEqual(TEXT("slot 123 on MingXiao: four bands, then the Troika body's two rings"),
+		ViaSlot.Num(), 6);
+	if (ViaSlot.Num() == 6)
+	{
+		TestTrue(TEXT("the first band is the 100-unit one"),
+			ViaSlot[0].Text.Contains(TEXT("r=100.0"))
+				&& ViaSlot[0].Text.Contains(TEXT("h=8.0 rgba=(255 32 32 128)")));
+	}
+	TestEqual(TEXT("line for line what 0x10399d40 draws when called directly"),
+		Debug10TextOrder(ViaSlot), Debug10TextOrder(Direct));
 	return true;
 }
 

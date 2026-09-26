@@ -30,21 +30,22 @@
 // this family carries a row for is asked for that slot's address through
 // `ElysiumNpcKernelClass::BodyOf`, so a row that drifts from `npc-kernel/slots.md` fails here.
 //
-// The brief's "two tables, and they disagree" is obeyed throughout: `npc_payphone` IS both a census
-// classname and a registered spawn leaf so `CPayphone` gets a real body; `npc_VCop` is a registered
-// leaf that NO census class claims, so its `RetailClass()` is null and slot 337 falls to the Troika
-// line — asserted rather than worked around; and every other species row (`CNPC_VTzimisce`,
-// `CNPC_VWerewolf`, `CNPC_VCamera`, …) is exercised by retail class NAME through the table's own
-// lookup, because no registered classname reaches it.
+// Every classname builds the class retail's factory builds (story 5 step 2,
+// `docs/vtmb/npc-ai/population.md`, "The classname → class map, read from the factories"):
+// `npc_payphone` builds `CPayphone`, so it gets a real body; npc_VCop's factory 0x103704f0 builds
+// `CNPC_VCop`, which does not replace slot 337, so a cop answers the Troika line's body through its
+// own class — and the bare Troika line itself is stood by internal construction (`AddTroikaNpc`),
+// whose `RetailClass()` is null. The species rows (`CNPC_VTzimisce`, `CNPC_VWerewolf`,
+// `CNPC_VCamera`, …) are exercised by retail class NAME through the table's own lookup.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelGeometryFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 namespace
 {
-	// The NPCs every case below stands. `phone` is the one census class in this family that is also
-	// a spawn leaf; `rat` reaches `CNPC_VRat`, whose slot-337 row is an OR row; `cop` is the
-	// registered classname no census class claims.
+	// The NPCs every case below stands. `phone` reaches `CPayphone`; `rat` reaches `CNPC_VRat`,
+	// whose slot-337 row is an OR row; `cop` reaches `CNPC_VCop` (factory 0x103704f0, story 5
+	// step 2); `troika` is the bare `CAI_BaseNPCTroika` with no species class over it.
 	struct FGeometryFixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -53,6 +54,7 @@ namespace
 		FElysiumNpc* Phone = nullptr;
 		FElysiumNpc* Rat = nullptr;
 		FElysiumNpc* Cop = nullptr;
+		FElysiumNpc* Troika = nullptr;
 
 		FGeometryFixture()
 			: World([]
@@ -63,6 +65,7 @@ namespace
 				Builder.AddNpc(TEXT("phone"), FVector(600.f, 0.f, 0.f), TEXT("npc_payphone"));
 				Builder.AddNpc(TEXT("rat"), FVector(900.f, 0.f, 0.f), TEXT("npc_VRat"));
 				Builder.AddNpc(TEXT("cop"), FVector(1200.f, 0.f, 0.f), TEXT("npc_VCop"));
+				Builder.AddTroikaNpc(TEXT("troika"), FVector(1500.f, 0.f, 0.f));
 				return Builder;
 			}())
 		{
@@ -71,7 +74,8 @@ namespace
 			Phone = World.Npc(TEXT("phone"));
 			Rat = World.Npc(TEXT("rat"));
 			Cop = World.Npc(TEXT("cop"));
-			FElysiumNpcWorldFixture::Quiet({ Guard, Other, Phone, Rat, Cop });
+			Troika = World.Npc(TEXT("troika"));
+			FElysiumNpcWorldFixture::Quiet({ Guard, Other, Phone, Rat, Cop, Troika });
 		}
 	};
 }
@@ -254,7 +258,8 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 	FGeometryFixture F;
 	if (!TestNotNull(TEXT("the guard spawned"), F.Guard)
 		|| !TestNotNull(TEXT("npc_VRat is a registered spawn leaf"), F.Rat)
-		|| !TestNotNull(TEXT("npc_VCop is a registered spawn leaf"), F.Cop))
+		|| !TestNotNull(TEXT("npc_VCop is a registered spawn leaf"), F.Cop)
+		|| !TestNotNull(TEXT("the bare Troika NPC stood"), F.Troika))
 	{
 		return false;
 	}
@@ -263,9 +268,19 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 	// `CAI_BaseNPCTroika` ORs 0x1 again, so the Troika line's answer is 1 and both ORs are no-ops.
 	TestEqual(TEXT("the Troika line answers hull bit 0 alone"), F.Guard->GetUsedHullBits(), 1);
 
-	// The brief's recovered spawn/census disagreement: no census class claims `npc_VCop`, so a
-	// spawned cop's `RetailClass()` is null and slot 337 falls to the Troika line.
-	TestNull(TEXT("npc_VCop's census class is null"), F.Cop->RetailClass());
+	// The bare Troika line: no species class, so slot 337 is the Troika line's body.
+	TestNull(TEXT("the bare Troika line has no species class"), F.Troika->RetailClass());
+	TestEqual(TEXT("and a bare Troika NPC therefore answers the Troika line's 1"),
+		F.Troika->GetUsedHullBits(), 1);
+
+	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md). CNPC_VCop is
+	// not one of slot 337's fourteen species rows below and its base chain replaces nothing there
+	// (`docs/vtmb/npc-kernel/slots.md`), so a real cop runs the Troika line's body.
+	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	TestTrue(TEXT("npc_VCop's census class is CNPC_VCop — its factory builds it"),
+		CopClass != nullptr && F.Cop->RetailClass() == CopClass);
+	TestNull(TEXT("CNPC_VCop's chain does not override slot 337"),
+		ElysiumNpcKernelClass::OverrideOf(CopClass, 337));
 	TestEqual(TEXT("and a cop therefore answers the Troika line's 1"), F.Cop->GetUsedHullBits(), 1);
 
 	// `CNPC_VRat` shares `CNPC_VScurrying`'s body and ORs 0x80000 onto the base 1.

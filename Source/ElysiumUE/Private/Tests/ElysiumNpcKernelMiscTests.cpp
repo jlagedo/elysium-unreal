@@ -27,10 +27,10 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelMiscFlags =
 
 namespace
 {
-	// The two classnames every case here can actually spawn out of `ElysiumNpcClasses.cpp` and that
-	// the census also claims. `npc_VCop` is deliberately included in the census case below because
-	// its census classname list is NULL — a spawned cop's `RetailClass()` answers null and every
-	// per-species lookup correctly falls through to the Troika line.
+	// The two classnames the Troika-line/own-line cases here spawn out of `ElysiumNpcClasses.cpp`.
+	// story 5 step 2: every classname builds the class retail's factory builds (population.md),
+	// so `npc_VCop` (factory 0x103704f0) is `CNPC_VCop`, not the Troika line; a case that wants
+	// the bare Troika line stands `AddTroikaNpc`, whose `RetailClass()` answers null.
 	const TCHAR* const GMiscSpawnableCombatant = TEXT("npc_VHumanCombatant");
 	const TCHAR* const GMiscSpawnableSabbatLeader = TEXT("npc_VSabbatLeader");
 }
@@ -339,20 +339,23 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 	TestNotEqual(TEXT("but a different constructor"), FString(RatLocalNav->Constructor),
 		FString(BaseLocalNav->Constructor));
 
-	// The per-class resolve, and the `npc_VCop` fall-through the brief warns about.
+	// The per-class resolve, and the bare Troika line's fall-through.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_misc_components"), 0x1027cae0);
 	Builder.AddNpc(TEXT("rat"), FVector::ZeroVector, TEXT("npc_VRat"));
 	Builder.AddNpc(TEXT("cop"), FVector(400.0, 0.0, 0.0), TEXT("npc_VCop"));
+	Builder.AddTroikaNpc(TEXT("troika"), FVector(800.0, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Rat = Fixture.Npc(TEXT("rat"));
 	FElysiumNpc* Cop = Fixture.Npc(TEXT("cop"));
+	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
 	TestNotNull(TEXT("the rat spawned"), Rat);
 	TestNotNull(TEXT("the cop spawned"), Cop);
-	if (Rat == nullptr || Cop == nullptr)
+	TestNotNull(TEXT("the bare Troika NPC stood"), Troika);
+	if (Rat == nullptr || Cop == nullptr || Troika == nullptr)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Rat, Cop });
+	FElysiumNpcWorldFixture::Quiet({ Rat, Cop, Troika });
 
 	const FElysiumNpc::FComponentFactory* RatRow = Rat->ComponentFactoryFor(428);
 	TestNotNull(TEXT("the rat resolves a slot-428 row"), RatRow);
@@ -361,13 +364,26 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 		TestEqual(TEXT("and it is CNPC_VRat's own 0x103ad6a0"), FString(RatRow->Body),
 			FString(TEXT("0x103ad6a0")));
 	}
-	TestNull(TEXT("npc_VCop's census classname list is null, so RetailClass() answers null"),
-		Cop->RetailClass());
-	const FElysiumNpc::FComponentFactory* CopRow = Cop->ComponentFactoryFor(428);
-	TestNotNull(TEXT("and the cop still resolves a row"), CopRow);
-	if (CopRow != nullptr)
+	TestNull(TEXT("the bare Troika line has no species class, so RetailClass() answers null"),
+		Troika->RetailClass());
+	const FElysiumNpc::FComponentFactory* TroikaRow = Troika->ComponentFactoryFor(428);
+	TestNotNull(TEXT("and the bare Troika NPC still resolves a row"), TroikaRow);
+	if (TroikaRow != nullptr)
 	{
 		TestEqual(TEXT("the Troika line's, which is the correct fall-through"),
+			FString(TroikaRow->Body), FString(TEXT("0x1027cf60")));
+	}
+	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md). Slot 428's
+	// only species override is `CNPC_VRat`'s (`docs/vtmb/npc-kernel/slots.md`), so the cop's chain
+	// (CNPC_VCop -> CNPC_VHumanCombatant -> ...) inherits the base body.
+	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	TestTrue(TEXT("npc_VCop's RetailClass() is CNPC_VCop — its factory builds it"),
+		CopClass != nullptr && Cop->RetailClass() == CopClass);
+	const FElysiumNpc::FComponentFactory* CopRow = Cop->ComponentFactoryFor(428);
+	TestNotNull(TEXT("and the cop resolves a row"), CopRow);
+	if (CopRow != nullptr)
+	{
+		TestEqual(TEXT("the inherited base body, since CNPC_VCop's chain replaces nothing at 428"),
 			FString(CopRow->Body), FString(TEXT("0x1027cf60")));
 	}
 
@@ -539,9 +555,9 @@ bool FElysiumNpcKernelMiscCanSeekCoverTest::RunTest(const FString&)
 		Npc->CanSeekCover());
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::CanRangeAttack1);
 
-	// `CNPC_VLasombra` fills slot 592 with `0x103893c0`. `npc_VLasombra` is not a registered spawn
-	// leaf, so the species arm is exercised through the census by retail class name — which is also
-	// what proves the arm this runtime takes for a combatant is the Troika line.
+	// `CNPC_VLasombra` fills slot 592 with `0x103893c0`. The species arm is exercised through the
+	// census by retail class name (`npc_VLasombra` builds `CNPC_VLasombra` since story 5 step 2,
+	// population.md) — which is also what proves the arm a combatant takes is the Troika line.
 	const FElysiumNpcClass* Lasombra = ElysiumNpcKernelClass::Find(TEXT("CNPC_VLasombra"));
 	TestNotNull(TEXT("CNPC_VLasombra is a census class"), Lasombra);
 	TestEqual(TEXT("and fills slot 592 with 0x103893c0"),
@@ -655,9 +671,9 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	TestEqual(TEXT("the Sabbat leader never runs the base record clear"),
 		Leader->MeleeMoveRecordClears, 0);
 
-	// The Gargoyle and Zombie lines have no registered classname, so their ARM is exercised through
-	// the census (above) and their BODY through the line enum: nothing in this map can take them,
-	// which is itself the recovered answer.
+	// The Gargoyle and Zombie lines' ARM is exercised through the census (above) and their BODY
+	// through the line enum: nothing this map stands takes them. (`npc_VGargoyle`/`npc_VZombie` do
+	// build `CNPC_VGargoyle`/`CNPC_VZombie` since story 5 step 2, population.md; not stood here.)
 	TestNotEqual(TEXT("no spawnable classname here takes the Gargoyle line"),
 		static_cast<int32>(Troika->VictimHitLine()),
 		static_cast<int32>(FElysiumNpc::EVictimHitLine::Gargoyle));
@@ -780,8 +796,9 @@ bool FElysiumNpcKernelMiscSpeciesBodiesTest::RunTest(const FString&)
 	TestTrue(TEXT("a timer equal to curtime HAS expired (the compare is <=)"),
 		Npc->FormBitTimerExpired());
 
-	// `CNPC_VYukie`'s melee pair. `npc_VYukie` is not a registered spawn leaf, so the CENSUS proves
-	// which bodies fill the slots and the bodies themselves are called by name.
+	// `CNPC_VYukie`'s melee pair. The CENSUS proves which bodies fill the slots and the bodies
+	// themselves are called by name (`npc_VYukie` builds `CNPC_VYukie` since story 5 step 2,
+	// population.md; this case does not stand one).
 	const FElysiumNpcClass* Yukie = ElysiumNpcKernelClass::Find(TEXT("CNPC_VYukie"));
 	TestNotNull(TEXT("CNPC_VYukie is a census class"), Yukie);
 	TestEqual(TEXT("and fills slot 599 with 0x103dd8b0"),

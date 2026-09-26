@@ -279,10 +279,8 @@ FElysiumNpc::EMeleeSlotLine FElysiumNpc::MeleeSlotLine(int32 Slot) const
 	// Read off the CENSUS rather than a hand-typed class list, so the answer is checkable against
 	// `docs/vtmb/npc-kernel/slots.md` by construction and cannot drift from it.
 	//
-	// A classname NO census class claims answers `Troika`: `RetailClass()` is null and the
-	// Troika-line body is what a class with no override runs. `npc_VCop` is the recovered example
-	// — the census lists no classname for `CNPC_VCop`, so a spawned cop takes this arm. That is the
-	// recovered answer and not a bug.
+	// The bare Troika line answers `Troika`: `RetailClass()` is null and the Troika-line body is
+	// what a class with no override runs.
 	const FElysiumNpcClass* Cls = RetailClass();
 	if (Cls == nullptr)
 	{
@@ -452,8 +450,7 @@ bool FElysiumNpc::Slot599(int32)
 	// **The vtable dispatch first.** Four classes replace this slot outright — `CNPC_VFrenzyShadow`
 	// `0x10376b70`, `CNPC_VGargoyle` `0x10379ef0`, `CNPC_VTzimisceHeadClaw` `0x103c19e0` and
 	// `CNPC_VTzimisceRunner` `0x103c3960`, family **Species**' rows — and `MeleeSlotLine(599)` names
-	// them. A `RetailClass()` the census does not claim falls through to this body, which is
-	// `npc_VCop`'s recovered answer and not a hole.
+	// them. Every other class, and the bare Troika line, falls through to this body.
 	//
 	// The argument: `signatures.md` types slot 599 `bool vfunc599(int)` because THIS body reads it
 	// with no instruction, but the runner's copy casts it to a `CBaseEntity*` and caches

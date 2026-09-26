@@ -12,7 +12,7 @@ namespace
 	struct FElysiumNpcKernelClassIndex
 	{
 		TMap<FString, const FElysiumNpcClass*> ByName;
-		// classname -> the most derived class claiming it.
+		// classname -> the class its retail factory builds.
 		TMap<FString, const FElysiumNpcClass*> ByClassname;
 		// (class, slot) -> the override row.
 		TMap<TPair<FString, int32>, const FElysiumNpcClassSlot*> Overrides;
@@ -28,14 +28,12 @@ namespace
 			{
 				for (int32 Index = 0; Index < Row.ClassnameCount; ++Index)
 				{
+					// The census classnames are retail's factories (story 5 step 2): each names the
+					// one class it builds, so a second claimant is a generator defect.
 					const FString Classname(Row.Classnames[Index]);
-					const FElysiumNpcClass** Existing = ByClassname.Find(Classname);
-					// The most derived claimant wins: a claimant that descends from the one already
-					// recorded replaces it, and one the recorded class descends from is ignored.
-					if (Existing == nullptr || IsDescendant(&Row, *Existing))
-					{
-						ByClassname.Add(Classname, &Row);
-					}
+					checkf(!ByClassname.Contains(Classname), TEXT("census classname %s has two claimants"),
+						*Classname);
+					ByClassname.Add(Classname, &Row);
 				}
 			}
 			for (const FElysiumNpcClassSlot& Row : ElysiumNpcKernelShape::Overrides())
@@ -51,22 +49,6 @@ namespace
 					SlotRows.Add(Row.Slot, &Row);
 				}
 			}
-		}
-
-		// Whether `Candidate` derives from `Ancestor` (strictly or as the same class). Used during
-		// construction, so it walks `ByName` rather than the finished index.
-		bool IsDescendant(const FElysiumNpcClass* Candidate, const FElysiumNpcClass* Ancestor) const
-		{
-			for (const FElysiumNpcClass* Walk = Candidate; Walk != nullptr; )
-			{
-				if (Walk == Ancestor)
-				{
-					return true;
-				}
-				const FElysiumNpcClass* const* Base = ByName.Find(FString(Walk->Base));
-				Walk = Base != nullptr ? *Base : nullptr;
-			}
-			return false;
 		}
 	};
 
@@ -151,13 +133,14 @@ namespace ElysiumNpcKernelClass
 
 const FElysiumNpcClass* FElysiumNpc::RetailClass() const
 {
-	if (!bRetailClassResolved)
-	{
-		bRetailClassResolved = true;
-		RetailClassRow = Def != nullptr ? ElysiumNpcKernelClass::OfClassname(Def->Classname)
-			: nullptr;
-	}
-	return RetailClassRow;
+	// The C++ class is the answer: the classname's factory built it (story 5 step 2), so nothing
+	// here reads the classname. The test latch stands only for the enumerated deferred classes.
+	return bRetailClassForTests ? RetailClassForTests : OwnRetailClass();
+}
+
+const FElysiumNpcClass* FElysiumNpc::OwnRetailClass() const
+{
+	return nullptr;
 }
 
 bool FElysiumNpc::IsRetailClass(const TCHAR* RetailClassName) const

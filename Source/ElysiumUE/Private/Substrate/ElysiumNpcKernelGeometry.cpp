@@ -405,8 +405,8 @@ int32 FElysiumNpc::GetUsedHullBits()
 	const TCHAR* SlotBody = ElysiumNpcKernelClass::BodyOf(Cls, 337);
 	if (SlotBody == nullptr)
 	{
-		// No census class claims this classname — `npc_VCop` is the recovered example — so the
-		// dispatch lands on the Troika line, which is exactly what a null answer means.
+		// The bare Troika line (no species class): the dispatch lands on the Troika body, which is
+		// exactly what a null answer means.
 		return Bits;
 	}
 
