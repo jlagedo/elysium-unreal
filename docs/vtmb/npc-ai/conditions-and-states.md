@@ -2319,9 +2319,9 @@ and `0xd` is **`OBLIVIOUS`**; the full table is `schedule-kernel.md` § "The sch
 _Recovered 2026-09-14, story 29d._
 
 Story 29d, family **Hints10**: which hint an NPC is allowed to use, and where a hint's far end is.
-Seven rows. The port is `Substrate/ElysiumNpcKernelHints10.{inl,cpp}`, the suite is
+Seven rows. The port is `Substrate/ElysiumNpcHints10.{inl,cpp}`, the suite is
 `Elysium.Substrate.NpcKernelHints10.`, and every seam these bodies read through was built by story
-29c-1's family Hints (`ElysiumNpcKernelHints.inl` — there is no `CAI_Hint` on this substrate, and
+29c-1's family Hints (`ElysiumNpcHints.inl` — there is no `CAI_Hint` on this substrate, and
 `FHintWords` is the typed view of one hint's own datamap words).
 
 ### `CAI_BaseNPCTroika::FValidateHintType` `0x10295c20`
@@ -2499,7 +2499,7 @@ retail negates it, so nothing is silently refused.
 _Recovered 2026-09-14, story 29d._
 
 Read again against `0x10365780`, the address the port's `FElysiumNpc::FindHintNode`
-(`ElysiumNpcKernelHints.cpp`) cites. The two retail bodies are identical arm for arm:
+(`ElysiumNpcHints.cpp`) cites. The two retail bodies are identical arm for arm:
 `FindHintNear(hintType, flags, 5000.0, null, null)` through `0x102d1af0`, the result written to
 `m_pHintNode` (`+0x5ddc`) on **both** paths, a hit calling `0x10273e80(this, 0)`
 (`TaskComplete(false)`) and returning true, a miss writing an assert file string and line into

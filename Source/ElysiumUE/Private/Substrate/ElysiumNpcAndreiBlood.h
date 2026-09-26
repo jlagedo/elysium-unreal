@@ -26,7 +26,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VAndreiBlood`'s two emitter handles. Both are WALKED words past the datamap's last row
 	// (`m_iHitMax` +0x66dc): `0x1035e1a0` owns `+0x66e0` and `0x1035e3c0` owns `+0x66e4`, read off the
 	// listing (`MOV EAX, dword ptr [ESI + 0x66e0]`). 29b declared neither.
@@ -50,11 +50,11 @@ public:
 	/** The bone the summon emitter attaches at, `s_Bip01_R_Hand_1053ec20`. */
 	static const TCHAR* SummonEmitterBoneName();
 
-	// From `ElysiumNpcKernelFacing.inl`.
+	// From `ElysiumNpcFacing.inl`.
 	// `CNPC_VAndreiBlood::FacePlayerAdvance` `0x1035e5f0`.
 	void FacePlayerAdvance();
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	// `CNPC_VAndreiBlood`'s teleport position. There is NO time stamp beside it: `SelectTeleportNode`
 	// (`0x1035ddd0`) caches the position and stamps no clock, unlike the Sheriff's and the Changs'.
 	FVector AndreiLastTeleportPosition = FVector::ZeroVector;   // +0x66c0 m_vLastTeleportPosition
@@ -72,7 +72,7 @@ public:
 	 *  site in `AndreiBloodSelectSchedule` / `ManBatSelectSchedule`. */
 	bool AndreiBloodSelectGate() const;
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	int32 AndreiHitMax = 0;        // +0x66dc CNPC_VAndreiBlood::m_iHitMax (datamap)
 	/** `0x1035e920` — `CNPC_VAndreiBlood`: may another runner be made? */
 	bool FUN_1035e920() const;

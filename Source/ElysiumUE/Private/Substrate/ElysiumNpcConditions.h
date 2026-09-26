@@ -772,6 +772,6 @@ namespace ElysiumNpcCond
 	// (`FIdealStateInput`, `SelectIdealStateBase`, `SelectIdealState`) is GONE. Slot 461's retail
 	// bodies are `FElysiumNpc::BaseSelectIdealState` (`0x1026f660`) and
 	// `FElysiumNpc::TroikaSelectIdealState` (`0x102ad660`) in
-	// `Substrate/ElysiumNpcKernelState19.cpp`, with the species line beside them; a retail body
+	// `Substrate/ElysiumNpcState19.cpp`, with the species line beside them; a retail body
 	// never sits next to a port-only equivalent of itself.
 }

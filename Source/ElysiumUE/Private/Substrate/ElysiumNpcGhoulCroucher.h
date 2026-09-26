@@ -26,7 +26,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelConditions.inl`.
+	// From `ElysiumNpcConditionsBodies.inl`.
 	bool bWasDisturbed = false;    // +0x6666 CNPC_VGhoulCroucher::m_bWasDisturbed (datamap)
 	bool bUnawareExited = false;   // +0x6667 CNPC_VGhoulCroucher::m_bUnawareExited (datamap)
 	/** `CNPC_VGhoulCroucher::IsDisturbed` (`0x1037bb20`) — `return m_bWasDisturbed`, and nothing else.
@@ -38,11 +38,11 @@ public:
 	 *  the non-player arm. */
 	void OnDisturbed(FElysiumEntity* Disturber);
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VGhoulCroucher`'s authored `on_fire` keyfield, the one word its `CanBeSetOnFire` reads.
 	bool bGhoulSpawnBurning = false;             // +0x6665 m_bSpawnBurning (datamap, KEY on_fire)
 
-	// From `ElysiumNpcKernelLifecycle.inl`.
+	// From `ElysiumNpcLifecycle.inl`.
 	/** `+0x6670 CNPC_VGhoulCroucher::m_hBurningParticle` — the particle entity its `ScriptUnhide`
 	 *  (`0x1037c2f0`) kills on the way back up. */
 	FElysiumEntityHandle BurningParticle;
@@ -63,7 +63,7 @@ public:
 	 *  decoded, the row lands here and both readers come right. */
 	static int32 UnawareTableEntry(const TCHAR* RetailTable, int32 Index);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	/** `CNPC_VGhoulCroucher::m_bSpawnDisturbed` (`+0x6664`). `bGhoulSpawnBurning` is Damage's. */
 	bool bGhoulSpawnDisturbed = false;
 	int32 GhoulBurningParticleCreates = 0;
@@ -76,7 +76,7 @@ public:
 	 *  (`0x41200000`) this class's own `OnVictimHitByMe` (`0x1037be80`) passes to the same body. */
 	static constexpr float GhoulTouchBurnDamage = 5.0f;
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VGhoulCroucher::BurnPlayer` (`0x1037c090`). With a non-null target: walk every hitbox of
 	 *  its model calling `CBaseCombatCharacter::BurnHitbox(target, index, 5.0, 0.5)`, then build a
 	 *  `CTakeDamageInfo(inflictor = my active weapon, attacker = this, damage, bits = 8)` and

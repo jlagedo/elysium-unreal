@@ -17,7 +17,7 @@
 // is read off the decompiled C or the listing of the body it names and carries that address.
 //
 // Six of this family's ten rows are not `FElysiumNpc` bodies (`Substrate/
-// ElysiumNpcKernelSocial10.inl` says where each lives and why); they are exercised from here so the
+// ElysiumNpcSocial10.inl` says where each lives and why); they are exercised from here so the
 // family's suite covers the family's rows.
 
 static constexpr EAutomationTestFlags GSocial10TestFlags =

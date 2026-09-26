@@ -417,7 +417,7 @@ void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
 bool FElysiumNpcSenses::IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now)
 {
 	// Troika `FVisible` `0x102b4630` and the slot 594 range/concealment test under it are story
-	// 29d's family Senses10 (`ElysiumNpcKernelSenses10.cpp`); this dispatches the slot rather than
+	// 29d's family Senses10 (`ElysiumNpcSenses10.cpp`); this dispatches the slot rather than
 	// keeping a second copy of the chain. Retail's mask here is `0x2804091`, which is what every
 	// caller of `FVisible` in the kernel closure passes.
 	//

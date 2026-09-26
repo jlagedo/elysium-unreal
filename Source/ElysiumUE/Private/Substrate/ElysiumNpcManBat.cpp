@@ -19,14 +19,14 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelBossesShared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
-#include "Substrate/ElysiumNpcKernelScheduleShared.h"
+#include "Substrate/ElysiumNpcBossesShared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
+#include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSoundsShared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10Shared.h"
+#include "Substrate/ElysiumNpcSoundsShared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -273,7 +273,7 @@ const TCHAR* FElysiumNpcManBat::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelBosses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcManBat::ManBatFindMoveGoalHint(int32 HintType, float RadiusUnits)
 {
@@ -612,7 +612,7 @@ void FElysiumNpcManBat::PhysicsTraceEntityManBat(FElysiumEntity* Entity, const F
 		StartUnits, EndUnits, Mask });
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcManBat::ThrowModel(const FString& ModelName, const FString& ThrowParentName)
 {
@@ -642,7 +642,7 @@ bool FElysiumNpcManBat::ThrowModel(const FString& ModelName, const FString& Thro
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelHints10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints10.cpp` (story 5 step 4) ---
 
 uint32 FElysiumNpcManBat::ManBatHintMode(uint32 ScrambledWord)
 {
@@ -716,9 +716,9 @@ bool FElysiumNpcManBat::ManBatValidateHintType(const FHintWords& Hint) const
 	return Hint.Name.Equals(Name, ESearchCase::IgnoreCase);
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcManBat::SlowedExpire() const
 {
@@ -731,11 +731,11 @@ bool FElysiumNpcManBat::SlowedExpire() const
 	return static_cast<double>(ManBatSlowedExpire) > GMiscZeroDouble;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSounds.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSounds.cpp` (story 5 step 4) ---
 
 // `FUN_10390040` (`0x10390040`). Eight bytes: `*(bool*)(this + 0x66b8) = false`.
 //
@@ -747,7 +747,7 @@ void FElysiumNpcManBat::ClearHasPlayedFlyBySound()
 	bHasPlayedFlyBySound = false;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcManBat::ManBatStartScreechCone(FElysiumEntity* ConeTarget)
 {

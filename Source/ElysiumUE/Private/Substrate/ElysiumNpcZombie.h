@@ -39,7 +39,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VZombie`'s head-hit byte, `+0x66e1` (walked; no datamap row, unsaved as retail).
 	// `TraceAttack` `0x103e0430` raises it on a hitgroup-1 hit and clears it otherwise, and
 	// `OnTakeDamage` `0x103e06d0` reads it (`103e0883`) to choose `zombie_headshot_dmg_emitter` or
@@ -65,7 +65,7 @@ public:
 	 *  of the schedule block's six words with no port member of its own; answers false for every id. */
 	bool ZombieConditionBit(int32 ConditionId) const;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr int32 ZombieCrawlScheduleRetailId = 0x161;
 	/** `CNPC_VZombie`. */
 	bool bZombieNeedsCrawlOutOfGround = false;   // +0x667c

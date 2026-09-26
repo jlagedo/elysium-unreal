@@ -17,14 +17,14 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelCombat10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10_2Shared.h"
+#include "Substrate/ElysiumNpcCombat10_2Shared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelState19Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
+#include "Substrate/ElysiumNpcState19Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -65,7 +65,7 @@ namespace
 	constexpr EElysiumNpcCond GBachCondMelee = static_cast<EElysiumNpcCond>(0x7a);
 	constexpr EElysiumNpcCond GBachCondRanged = static_cast<EElysiumNpcCond>(0x79);
 	// Retail's `m_NPCState` id for this runtime's typed state — the same table
-	// `ElysiumNpcKernelConditions.cpp` keeps as a file static, restated because Bach's tail switches
+	// `ElysiumNpcConditionsBodies.cpp` keeps as a file static, restated because Bach's tail switches
 	// on the RAW id.
 	int32 Combat10RangedRetailStateId(EElysiumNpcState State)
 	{
@@ -467,11 +467,11 @@ void FElysiumNpcBach::GatherAttackConditions(FElysiumEntity* Enemy, float Distan
 
 // --- Moved from `ElysiumNpcKernelAnim10_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelCombat10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
 
 // --- `CNPC_VBach::SelectScheduleRangedCombat` `0x103642f0`, 413 bytes ----------------------------
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcBach::ThrowGrenade(const FString& GrenadeTargetName, float Force)
 {
@@ -514,9 +514,9 @@ void FElysiumNpcBach::ThrowGrenade(const FString& GrenadeTargetName, float Force
 	bBachCamperFlag = false;
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcBach::BachRangeAttack1Conditions(float Dot, float DistUnits) const
 {
@@ -548,9 +548,9 @@ int32 FElysiumNpcBach::BachRangeAttack2Conditions(float Dot, float DistUnits) co
 		? GMiscBachRange2Answer : GMiscBachRefusal;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // Slot 606 — `CNPC_VBach::FUN_10364280` `0x10364280`.
@@ -588,7 +588,7 @@ bool FElysiumNpcBach::FUN_103661f0(bool bArg)
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 {
@@ -650,7 +650,7 @@ void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 	// that, so nothing else happens here.
 }
 
-// --- Moved from `ElysiumNpcKernelState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcBach::BachOnStateChange(int32 OldRetail, int32 NewRetail)
 {
@@ -662,5 +662,5 @@ bool FElysiumNpcBach::BachOnStateChange(int32 OldRetail, int32 NewRetail)
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

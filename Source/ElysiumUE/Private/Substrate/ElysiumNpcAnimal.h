@@ -29,7 +29,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	/** Ledger `CNPC_VAnimal::m_bPlayerAttackedMe` at `+0x6660`. TaxiDriver's `bTaxiFirstThink` and
 	 *  Pedestrian's pre-death bounds are different classes at the same offset. */
 	bool bPlayerAttackedMe = false;

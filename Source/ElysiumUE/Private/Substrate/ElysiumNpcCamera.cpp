@@ -21,11 +21,11 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelState19Shared.h"
+#include "Substrate/ElysiumNpcState19Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -563,11 +563,11 @@ void FElysiumNpcCamera::SpeakSentence(int32 SentenceIndex)
 	SpeciesVocalize(TEXT("CNPC_VCamera"), 508);
 }
 
-// --- Moved from `ElysiumNpcKernelAnim.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 4) ---
 
 // --- Slot 259's camera body --------------------------------------------------------------------
 
-// --- Moved from `ElysiumNpcKernelLifecycle.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle.cpp` (story 5 step 4) ---
 
 FString FElysiumNpcCamera::CameraPrecacheModel(const FString& AuthoredModel)
 {
@@ -585,7 +585,7 @@ FString FElysiumNpcCamera::CameraPrecacheModel(const FString& AuthoredModel)
 	return AuthoredModel.IsEmpty() ? FString(GCameraNullModel) : AuthoredModel;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // The arm story 29c-1 ported and left unwired.

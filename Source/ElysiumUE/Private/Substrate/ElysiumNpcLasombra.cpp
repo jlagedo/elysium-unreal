@@ -48,5 +48,5 @@ const TCHAR* FElysiumNpcLasombra::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 

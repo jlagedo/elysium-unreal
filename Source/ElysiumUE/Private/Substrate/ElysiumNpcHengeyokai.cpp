@@ -18,13 +18,13 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10Shared.h"
-#include "Substrate/ElysiumNpcKernelBossesShared.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelDebug10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10Shared.h"
+#include "Substrate/ElysiumNpcBossesShared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcDebug10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -314,7 +314,7 @@ void FElysiumNpcHengeyokai::OnScheduleChange(int32 NewSchedule)
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelAnim10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcHengeyokai::HengeyokaiCarryFormBit() const
 {
@@ -322,7 +322,7 @@ bool FElysiumNpcHengeyokai::HengeyokaiCarryFormBit() const
 	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
 }
 
-// --- Moved from `ElysiumNpcKernelBosses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 void FElysiumNpcHengeyokai::SetCarriedRagdollHeld(const FElysiumEntityHandle& Carried, bool bHeld)
 {
@@ -519,9 +519,9 @@ bool FElysiumNpcHengeyokai::IsEntityBlacklisted(const FElysiumEntity* Entity)
 	return BlacklistTestAndExpire(HengeyokaiBlacklist, FindBlacklistedEntity(Entity), Now);
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDebug10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // The species arms of slot 124.
@@ -534,11 +534,11 @@ FString FElysiumNpcHengeyokai::HengeyokaiSlot9String() const
 	return FString();
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcHengeyokai::FormBitTimerExpired() const
 {
@@ -548,7 +548,7 @@ bool FElysiumNpcHengeyokai::FormBitTimerExpired() const
 	return static_cast<double>(HengeyokaiFishTimer) <= Now;
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 void FElysiumNpcHengeyokai::MotorCancelLinkFacing()
 {
@@ -564,7 +564,7 @@ void FElysiumNpcHengeyokai::ClearLinkActivity()
 	MotorCancelLinkFacing();
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

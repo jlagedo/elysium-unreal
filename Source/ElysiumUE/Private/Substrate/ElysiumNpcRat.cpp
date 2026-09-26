@@ -9,7 +9,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -60,7 +60,7 @@ void* FElysiumNpcRat::CreateLocalNavigator()
 	return nullptr;
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcRat::RatIgnoredGlobalEntity() const
 {

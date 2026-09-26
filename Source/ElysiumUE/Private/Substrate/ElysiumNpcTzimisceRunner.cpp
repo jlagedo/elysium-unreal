@@ -18,11 +18,11 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10_2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -297,13 +297,13 @@ bool FElysiumNpcTzimisceRunner::AllowsKnockbackBypass()
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelAnim10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisceRunner::FUN_103c3960(FElysiumEntity* Enemy)
 {
@@ -340,7 +340,7 @@ bool FElysiumNpcTzimisceRunner::FUN_103c3960(FElysiumEntity* Enemy)
 // Slot 588 — `CNPC_VTzimisceRunner::vfunc588` `0x103c3fd0`.
 // -------------------------------------------------------------------------------------------------
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 float FElysiumNpcTzimisceRunner::RunnerHullEngineToken() const
 {
@@ -378,5 +378,5 @@ void FElysiumNpcTzimisceRunner::TzimisceRunnerNotifyChangeSizeNormal()
 	bWantsLargeHull = true;
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

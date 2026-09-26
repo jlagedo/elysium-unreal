@@ -22,12 +22,12 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "43840137d851907ecb5d111d22e7f407141b2d0e5d54712e41c7dfa074eb8d87"
+      "sha256": "e2ca6834aa45ee25676d3cd3a231f055dff5a61c2bc8fb4702015a155298de8b"
     },
     "registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
-      "sha256": "b77bb0a8cecb31d7c909b7ddb27e054923b5c4e80ce8d0c140e83dcf38b17d22"
+      "sha256": "84d40d1b24bf91c443940491c89e2fcd473180f7e195e0b69a31a5624d3af066"
     },
     "stub_registry": {
       "root": "repo",
@@ -162,6 +162,21 @@
       "commit": "03c0d030181863cb6f5f96621c2cbe2e2ee2b9e5",
       "acceptance": "acceptance-step4.json",
       "note": "--check step4 reads this tree once it is recorded (step 5 started). The step-4 gate ran on bb690d7a, the 4r gate on 61aa2cd8 (acceptance-step4r.json); 03c0d030 renamed test locals and one moves-step4.tsv note."
+    },
+    "step5_pins": {
+      "note": "verdicts pin refreshed by packet 5b (pure rename): the file-qualified overlay targets, and one registry comment (ElysiumNpcClasses.cpp), and evidence text name the renamed Troika family files (ElysiumNpcKernel<Family> -> ElysiumNpc<Family>, collisions ElysiumNpc<Family>Bodies); no verdict or target symbol changed",
+      "refreshed": {
+        "verdicts": {
+          "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
+          "previous_sha256": "43840137d851907ecb5d111d22e7f407141b2d0e5d54712e41c7dfa074eb8d87",
+          "sha256": "e2ca6834aa45ee25676d3cd3a231f055dff5a61c2bc8fb4702015a155298de8b"
+        },
+        "registry": {
+          "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
+          "previous_sha256": "b77bb0a8cecb31d7c909b7ddb27e054923b5c4e80ce8d0c140e83dcf38b17d22",
+          "sha256": "84d40d1b24bf91c443940491c89e2fcd473180f7e195e0b69a31a5624d3af066"
+        }
+      }
     }
   },
   "step1_packets": {
@@ -207,8 +222,8 @@
     "4i": "accepted"
   },
   "step5_packets": {
-    "5a": "in-progress",
-    "5b": "pending",
+    "5a": "accepted",
+    "5b": "accepted",
     "5c": "pending",
     "5d": "pending",
     "5e": "pending",

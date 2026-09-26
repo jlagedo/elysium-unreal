@@ -26,14 +26,14 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelCombat10.inl`.
+	// From `ElysiumNpcCombat10.inl`.
 	/** `CNPC_VVampireBoss::GetCurrHealthPercent` (`0x103c6830`), 356 bytes, no slot. The COMPLEMENT of
 	 *  `HealthToPercent`: `stat0xf / stat0x11` as a float, guarded by `ABS(cap) > 1e-05`
 	 *  (`_DAT_104ce8c0`) on the DIVISOR — the decompiler's `(a < eps) == (a == eps)` idiom resolves to
 	 *  `a > eps` — and `_DAT_104454c4` = **0.0** otherwise. */
 	float GetCurrHealthPercent() const;
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VVampireBoss`'s gore words — the per-body-region emitter names and the four live emitters.
 	FString BodyEmitterNames[4];                 // +0x6684 m_pBodyEmitterNames[4] (datamap, string_t)
 	FElysiumEntityHandle ParticleEmitters[4];    // +0x66a0 m_hParticleEmitters[4] (datamap)
@@ -74,17 +74,17 @@ public:
 	 *  `+0x5d9c`; the body lands under the elapsed-form name instead and the report says so. */
 	bool LastAttackTimeElapsed(float ThresholdSeconds) const;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	void VampireBossNPCInit();          // `0x103c5840`
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	/** `thunk_FUN_102c4e80(this)` — the commit every `SetupJump`/`SetupSuperJump` ends on, which takes
 	 *  the three jump words this family has just written and starts the leap. **SEAM**: records that
 	 *  the commit was reached and starts nothing. */
 	void CommitSetupJump();
 	void SetupJumpRise(float Enabled, float Rise);
 
-	// From `ElysiumNpcKernelSaveRestore10.inl`.
+	// From `ElysiumNpcSaveRestore10.inl`.
 	/** `CNPC_VVampireBoss::Restore` (`0x103c5910`) — the Troika body, then a post-load reset of the
 	 *  monster-model override: `m_pMonsterModelName` (`+0x6680`) := null, `ClearBodyEmitterNames()`
 	 *  (family Damage's, `0x103c6eb0`), and `m_pszMonsterClassname` (`+0x6694`) := the literal
@@ -102,7 +102,7 @@ public:
 	FString VampireBossMonsterModelName;
 	FString VampireBossMonsterClassname;
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `0x103c67f0` — `curtime - m_flLastAttackTime > Seconds`, the boss line's shared idle test. */
 	bool AttackIdleLongerThan(float Seconds) const;
 	/** `CNPC_VVampireBoss::WaitForTransformation` (`0x103c63c0`), one gate then three writes: nothing

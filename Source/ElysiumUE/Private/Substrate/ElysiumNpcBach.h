@@ -34,7 +34,7 @@ public:
 	 *  recovered either; same treatment. */
 	int32 BachClearWord = 0;
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VBach`'s grenade cooldown and the byte its throw clears.
 	double BachLastGrenadeTime = 0.0;            // +0x6680 m_flLastGrenadeTime, an absolute stamp
 	bool bBachCamperFlag = false;                // +0x66a0 m_bCamperFlag (datamap)
@@ -48,16 +48,16 @@ public:
 	 *  `m_flNextThink` at `curtime + 3.0 (+0.01)` and clear `m_bCamperFlag` (+0x66a0). */
 	void ThrowGrenade(const FString& GrenadeTargetName, float Force);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr float SwarmDistTooFar = 65535.f;        // `0x477fff00`, Bach's
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	/** `CNPC_VBach::vfunc553` (`0x10364500`) and `::vfunc554` (`0x10364550`) — slots 553/554
 	 *  `RangeAttack1Conditions` / `RangeAttack2Conditions`. One shape, one differing answer. */
 	int32 BachRangeAttack1Conditions(float Dot, float DistUnits) const;
 	int32 BachRangeAttack2Conditions(float Dot, float DistUnits) const;
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VBach`'s fire gate — the one-shot arm slot 606 keeps around `COND_ENEMY_OCCLUDED`.
 	bool bBachFireOccluded = false;   // +0x66a3 CNPC_VBach::m_bFireOccluded (datamap)
 	/** `0x103661f0` — `CNPC_VBach`'s slot-609 gate. `CNPC_VBatSwarm` (`0x10367740`) and
@@ -65,7 +65,7 @@ public:
 	 *  instance. */
 	bool FUN_103661f0(bool bArg);
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VBach::GatherAttackConditions` (`0x10363db0`), slot 561's species arm. It ADDS the shield,
 	 *  teleport and weapon-switch block IN FRONT of the base and changes nothing the base gathers, so
 	 *  `FElysiumNpc::GatherAttackConditions` runs this first and then the base body unmodified. */
@@ -84,7 +84,7 @@ public:
 	bool bBachShieldActive = false;          // +0x66a5 `m_bShieldActive`
 	bool bBachShieldFlagB = false;           // +0x66a6, cleared on BOTH arms; retail name unrecovered
 
-	// From `ElysiumNpcKernelState19.inl`.
+	// From `ElysiumNpcState19.inl`.
 	/** `CNPC_VBach::m_bCanFightYet` (`+0x66a8`). Default 0, so Bach snaps ALERT/COMBAT back. */
 	bool bCanFightYet = false;
 	/** `CNPC_VBach::OnStateChange` (`0x103639b0`) and `CNPC_VCop::OnStateChange` (`0x10371c20`).

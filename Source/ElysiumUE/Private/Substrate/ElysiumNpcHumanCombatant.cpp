@@ -14,10 +14,10 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelState19Shared.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcState19Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
@@ -83,7 +83,7 @@ const TCHAR* FElysiumNpcHumanCombatant::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcHumanCombatant::HumanCombatantNPCInit()
 {
@@ -92,9 +92,9 @@ void FElysiumNpcHumanCombatant::HumanCombatantNPCInit()
 	HideActiveWeaponIfAny();                                             // 1038715f JMP [weapon+0x108]
 }
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
 
 // `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`), the shared tail BOTH of `0x10371c20`'s
 // arms chain with `(old, new)` — read from the listing (`10371db3 CMP EBP,0x1` then `PUSH EBP`),
@@ -123,7 +123,7 @@ void FElysiumNpcHumanCombatant::CopHumanCombatantOnStateChange(int32 NewRetail)
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcHumanCombatant::HumanCombatPatrolSelectIdealState()
 {

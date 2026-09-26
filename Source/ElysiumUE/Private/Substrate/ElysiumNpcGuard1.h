@@ -24,20 +24,20 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelSchedule.inl`.
+	// From `ElysiumNpcSchedule.inl`.
 	/** The species halves of slot 453 `BuildScheduleTestBits`, each the body of its class's override
 	 *  (story 5 step 3). `CNPC_VGuard1` (`0x1037cdf0`) REPLACES the Troika body (it calls the empty
 	 *  `CAI_BaseNPC` base); the other three call `0x102ad140` first and add their own bits. */
 	void Guard1BuildScheduleTestBits(FElysiumNpcConditions& InOutMask);
 
-	// From `ElysiumNpcKernelSpeciesLifecycle10.inl`.
+	// From `ElysiumNpcSpeciesLifecycle10.inl`.
 	/** `CNPC_VGuard1::OnStateChange` (`0x1037d020`)'s pre-step, UNCONDITIONALLY and with no reference
 	 *  to either state: `if (GetEnemy() && GetEnemy()->m_pPlayer) 0x1037e2d0(this)`. `GetEnemy()` is
 	 *  dispatched TWICE (`1037d026`, `1037d034`) and retail does not cache it; both calls are made here
 	 *  because a species override of slot 167 could answer differently between them. */
 	void Guard1StateChangePreStep();
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VGuard1`'s hate latch (`0x1037e2d0`), reached from `OnStateChange` (`0x1037d020`) and six
 	 *  times from `vfunc461` (`0x1037d290`): set `+0x6660` and call `InputSetRelationship` with the
 	 *  literal `"player D_HT 10"` at priority 0 — lower case `player`, unlike the cop's `"Player"`. */

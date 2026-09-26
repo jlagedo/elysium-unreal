@@ -19,11 +19,11 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10Shared.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
@@ -262,9 +262,9 @@ const TCHAR* FElysiumNpcGuard1::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
 // Slot 453: `0x1037cdf0`'s own bits, the body of its class's `BuildScheduleTestBits` override (story 5 step 3).
 void FElysiumNpcGuard1::Guard1BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
@@ -319,7 +319,7 @@ void FElysiumNpcGuard1::Guard1BuildScheduleTestBits(FElysiumNpcConditions& InOut
 	InOutMask.Clear(EElysiumNpcCond::HearPlayer);
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcGuard1::Guard1StateChangePreStep()
 {
@@ -339,7 +339,7 @@ void FElysiumNpcGuard1::Guard1StateChangePreStep()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcGuard1::Guard1HatePlayer()
 {
@@ -356,7 +356,7 @@ void FElysiumNpcGuard1::Guard1HatePlayer()
 	InputSetRelationship(Args);
 }
 
-// --- Moved from `ElysiumNpcKernelState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

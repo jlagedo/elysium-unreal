@@ -20,6 +20,6 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	float LasombraCoverDisableOverride = 0.f;  // +0x6664 CNPC_VLasombra::m_flCoverDisableOverride
 };

@@ -18,9 +18,17 @@ def file_sha(path: Path) -> str:
 
 
 def maker_shadows(root: Path) -> list[str]:
-    parent = (root / 'Source/ElysiumUE/Private/Substrate/ElysiumNpc.h').read_text(encoding='utf-8')
-    for path in sorted((root / 'Source/ElysiumUE/Private/Substrate').glob('ElysiumNpcKernel*.inl')):
-        parent += '\n' + path.read_text(encoding='utf-8')
+    # The NPC line's own declarations: its headers and the family `.inl` files they include (the
+    # family files were renamed in story 5 step 5, so they are followed, not globbed).
+    substrate = root / 'Source/ElysiumUE/Private/Substrate'
+    parent = ''
+    for header in ('ElysiumNpc.h', 'ElysiumNpcBase.h'):
+        if (substrate / header).is_file():
+            text = (substrate / header).read_text(encoding='utf-8')
+            parent += '\n' + text
+            for include in re.findall(r'#include "Substrate/(\w+\.inl)"', text):
+                if (substrate / include).is_file():
+                    parent += '\n' + (substrate / include).read_text(encoding='utf-8')
     child = (root / 'Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h').read_text(encoding='utf-8')
     fields = {'RetailSolidType', 'PlInvestigate', 'PlCriminalFlee', 'PlCriminalAttack',
               'PlSupernaturalFlee', 'PlSupernaturalAttack', 'bDisableAi'}

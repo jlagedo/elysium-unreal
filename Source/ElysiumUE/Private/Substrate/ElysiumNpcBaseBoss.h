@@ -20,23 +20,23 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelBosses.inl`.
+	// From `ElysiumNpcBosses.inl`.
 	/** SEAM for `0x10366400` — family **Species**' row over `CNPC_VBaseBoss::m_BlacklistedEntities`
 	 *  (+0x665c), the store MingXiao blacklists a thrown object in for 20 s. `0x10398b20` skips a
 	 *  pedestal that is still on it. There is no boss blacklist here; answers false, which admits every
 	 *  pedestal — the permissive arm, and stated as such. */
 	bool BossBlacklistHolds(const FElysiumEntity* Candidate) const;
 
-	// From `ElysiumNpcKernelDebug.inl`.
+	// From `ElysiumNpcDebug.inl`.
 	/** `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) — `"Dist to player: %.3f"` then
 	 *  `0x102775e0`. Thirty-six bytes, and the tail call is to the BASE and not to the Troika line. */
 	void BossDrawDebugStatOverlays();
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	static FEnemySightCandidates EnemySightCandidatesOf(const FVector& BoxMinCm, const FVector& BoxMaxCm,
 		const FVector& ExtentsCm, float RandomZCm);
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VBaseBoss::m_BlacklistedEntities`, `+0x665c` with its allocation count at `+0x6660`, grow
 	// size at `+0x6664`, element count at `+0x6668` and the `CUtlMemory` element mirror at `+0x666c`.
 	// Rows are the 8-byte `{EHANDLE, float expiry}` pair family **Bosses** already declared as

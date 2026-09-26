@@ -216,7 +216,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// selector is what validates it, the same way retail's reader does.
 	// `floatfreq` -> `m_iFloatSoundFrequency` (`CBaseCombatCharacter +0x10e8`, `fieldType 0`): the
 	// authored "the float sound plays 1 time in X" frequency both halves of slot 510 roll against
-	// (`Substrate/ElysiumNpcKernelSounds.cpp`). 0 and 8 disable the hook.
+	// (`Substrate/ElysiumNpcSounds.cpp`). 0 and 8 disable the hook.
 	ElysiumAddClassField(D, TEXT("floatfreq"), &FElysiumNpc::FloatSoundFrequency, EElysiumField::Save);
 
 	// --- Combat: the three authored loadout keyfields ---

@@ -27,7 +27,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	/** `CNPC_VYukie::vfunc599` (`0x103dd8b0`) — the species body at slot 599, `EnterMelee`. Unlike the
 	 *  Troika line (family **TroikaHelpers**' `Slot599`) it has NO gates at all: the global melee event
 	 *  fires, `m_bInMelee` goes true and `m_flMeleeMustLeaveTimer` takes
@@ -39,7 +39,7 @@ public:
 	 *  the same reason as above. */
 	void YukieLeaveMelee();
 
-	// From `ElysiumNpcKernelSenses.inl`.
+	// From `ElysiumNpcSensesBodies.inl`.
 	/** `0x103ddaa0`, `CNPC_VYukie#363` — `FInViewCone(CBaseEntity*)`. The gate and nothing else: Yukie
 	 *  has no view cone. */
 	bool YukieFInViewCone(const FElysiumEntity* Candidate) const;

@@ -782,7 +782,7 @@ answer is `m_nHintType == 0xd`).
 ## Story 29c-1, family Closure — the eye maintainer and the point view cone — `0x102bff20`, `0x10326a20` (2026-09-13)
 
 Two of family Closure's bodies read senses; the rest of the family is in `shape.md` and
-`lifecycle.md`. Ported in `Substrate/ElysiumNpcKernelClosure.cpp`, tested by
+`lifecycle.md`. Ported in `Substrate/ElysiumNpcClosure.cpp`, tested by
 `Elysium.Substrate.NpcKernelClosure.MaintainEyeDirection` and `.ViewCone`.
 
 ### Slot 333 `CAI_BaseNPCTroika::MaintainEyeDirection` — `0x102bff20`
@@ -1075,8 +1075,8 @@ The twenty-four `Senses10` rows and ten `SpeciesSenses10` rows of layers 10–18
 chain (slots 201 and 594), the two sense queries (467, 468), the look hook (469) with the
 `CAI_BaseNPC` base body beneath it, the see-unknown hook (472), enemy selection (478), the memory
 writer (544), the weapon-LOS pair (562, 573), the aim pair (538, 574), slots 223/402/445, and the
-species arms over them. Ported in `Substrate/ElysiumNpcKernelSenses10.cpp` (the Troika line) and
-`Substrate/ElysiumNpcKernelSenses10_2.cpp` (the species line).
+species arms over them. Ported in `Substrate/ElysiumNpcSenses10.cpp` (the Troika line) and
+`Substrate/ElysiumNpcSenses10_2.cpp` (the species line).
 
 Three facts hold across the family and are stated once here.
 

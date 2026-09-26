@@ -30,7 +30,7 @@ public:
 	 *  answers 0 until the two are wired, so the newscaster's return is the Troika body's unchanged. */
 	int32 NewscasterStoryOverlayLines(int32 FirstLine);
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// The two queues and their cursors. `CNPC_VNewscaster` has no datamap in the corpus, so every name
 	// here is WALKED off the bodies that touch it (`0x103a0270`, `0x103a0670`, `0x103a0ab0`,
 	// `0x103a0d50`, `0x103a0ff0`) and says so.
@@ -44,7 +44,7 @@ public:
 	void FUN_103a0d50();
 	int32 FUN_103a0ff0(int32 FirstLine, TArray<FString>& OutLines) const;
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VNewscaster::PlayNextNewscasterStory` (`0x103a0670`), 302 bytes, no slot.
 	 *
 	 *  **CLASS ATTRIBUTION CORRECTED** — its batch filed it under the Ming Xiao family; it is

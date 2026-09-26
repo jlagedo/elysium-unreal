@@ -40,18 +40,18 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelBosses.inl`. `+0x667c m_hMeleeWeapon`, a SAVE word no ported body reads
+	// From `ElysiumNpcBosses.inl`. `+0x667c m_hMeleeWeapon`, a SAVE word no ported body reads
 	// yet; it stands so its datamap row persists.
 	FElysiumEntityHandle MingXiaoMeleeWeapon;
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	/** `0x10397dd0` — `CNPC_VMingXiao`: reset `m_flSpitAttackTimer` (+0x66c0) to 0, **only when both
 	 *  parameters are non-null**. Retail's two parameters are never read for anything else, so the
 	 *  presence test is the whole of the condition and is reproduced as a pair of bools. */
 	void SpitAttackTimer(bool bFirstParamSet, bool bSecondParamSet);
 
 	// From `FElysiumNpcMingXiaoTentacle` (the move manifest's corrected owner).
-	// From `ElysiumNpcKernelLifecycle.inl`.
+	// From `ElysiumNpcLifecycle.inl`.
 	bool bProxyRegistered[MingXiaoProxySlots] = { false, false, false, false, false, false };
 	/** `CNPC_VMingXiao`'s `FUN_10397b40` — may `Proxy` take a proxy slot right now? Retail, arm by arm:
 	 *  a null argument answers false; `curtime < m_flProxyReadyTimer` answers false; the argument's own
@@ -65,7 +65,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelAnim.inl`.
+	// From `ElysiumNpcAnim.inl`.
 	// `CNPC_VMingXiao::BodyGroup` `0x10398800` — writes `m_nBody` (+0x067c) from the severed-tentacle
 	// mask or from its own cvar. Three arms, in retail's order.
 	void BodyGroup();
@@ -74,9 +74,9 @@ public:
 	bool BodyGroupCvarIsCommand() const;
 	int32 BodyGroupCvarValue() const;
 
-	// From `ElysiumNpcKernelBosses.inl`.
+	// From `ElysiumNpcBosses.inl`.
 	// `CNPC_VMingXiao`'s own words. `m_rhProxies` (+0x668c) and `m_rhSeveredTentacles` (+0x66a8) are
-	// family **Squad**'s (`ElysiumNpcKernelSquad.inl`) and `m_bBlockedByFriend` (+0x6750) is family
+	// family **Squad**'s (`ElysiumNpcSquad.inl`) and `m_bBlockedByFriend` (+0x6750) is family
 	// **Motor**'s; this family reads all three through their owners rather than standing copies.
 	int32 MingXiaoTentacleId = INDEX_NONE;       // +0x6674 m_iTentacleID, -1 on the head
 	double MingXiaoProxyReadyTimer = 0.0;        // +0x66a4 m_flProxyReadyTimer, an absolute deadline
@@ -167,12 +167,12 @@ public:
 	 *  leaves the arm equal to the base formula — retail's own answer for an intact boss. */
 	bool MingXiaoLimbPresent(int32 LimbIndex) const;
 
-	// From `ElysiumNpcKernelConditions10.inl`.
+	// From `ElysiumNpcConditions10.inl`.
 	/** `CNPC_VMingXiao::TaskFail` (`0x10394090`) — switches on `m_eThrowableObjectMode` (`+0x673c`):
 	 *  modes 3 and 4 reset the motor's steering to 180.0 and touch nothing else; every other mode sets
 	 *  the mode to 0 and releases `m_hThrowObject` (`+0x6718`). */
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VMingXiao`'s words this family touches and family Bosses did not declare.
 	bool bMingXiaoHasTransformed = false;        // +0x6678 m_bHasTransformed (datamap)
 	double MingXiaoSpitAttackTimer = 0.0;        // +0x66c0 m_flSpitAttackTimer (datamap)
@@ -250,7 +250,7 @@ public:
 	static FMingXiaoPlayback MingXiaoPlaybackScalar(int32 Activity, bool bDisciplineArm,
 		int32 TentacleCount, TFunctionRef<float(int32)> TuningField);
 
-	// From `ElysiumNpcKernelGeometry.inl`.
+	// From `ElysiumNpcGeometry.inl`.
 	/** `FUN_10397e00` — one severed tentacle moved; tell the owner's OTHER severed tentacles where it
 	 *  is. Walks `m_rhSeveredTentacles[6]` (`+0x66a8`, family **Squad**'s member), skips an unresolved
 	 *  handle and skips `Moved` itself, and hands each survivor `Moved`'s own `GetAbsOrigin()`. A null
@@ -275,7 +275,7 @@ public:
 	 *  `DeltaCm` is the tentacle's origin minus mine; `Forward` is `m_vecForward`. */
 	static bool ScatterTentacleGate(const FVector& DeltaCm, const FVector& Forward);
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	// +0x6750 `CNPC_VMingXiao::m_bBlockedByFriend` — the one-field state `0x1039aaf0` writes and
 	// `0x1039ab10` reads. Census name only; no other retail body in layers 0–9 touches it.
 	bool bBlockedByFriend = false;
@@ -292,7 +292,7 @@ public:
 	static constexpr int32 MingXiaoRegrowTimerCount = 6;
 	double MingXiaoRegrowTimers[MingXiaoRegrowTimerCount] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
-	// From `ElysiumNpcKernelSquad.inl`.
+	// From `ElysiumNpcSquad.inl`.
 	int32 CoordinateTentacleId = 0;  // +0x6740 CNPC_VMingXiao::m_iCoordinateTentacleID (datamap)
 	FElysiumEntityHandle Proxies[6];  // +0x668c CNPC_VMingXiao::m_rhProxies[6] (datamap)
 	FElysiumEntityHandle SeveredTentacles[6];  // +0x66a8 CNPC_VMingXiao::m_rhSeveredTentacles[6]
@@ -302,7 +302,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelBosses.inl`.
+	// From `ElysiumNpcBosses.inl`.
 	/** SEAM for `0x10397930`, the sever: `m_rhSeveredTentacles[id] = -1`, `m_rbProxyRegistered[id] = 0`,
 	 *  `m_rhProxies[id] = -1`, `m_rflHitPoints[id] = Tuning[4]`, `m_rflAttackTimers[id] = curtime +
 	 *  _DAT_1044e664`, `m_rflRegrowTimers[id] = curtime + 1.0` and a bodygroup set. `m_rhProxies` and

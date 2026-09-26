@@ -41,7 +41,7 @@ const TCHAR* FElysiumNpcSabbatGunman::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelFacing.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
 FElysiumNpc::FMotionTrailPick FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(float GroundSpeed,
 	float SpeedThreshold, int32 TrailId, float TrailScalar)

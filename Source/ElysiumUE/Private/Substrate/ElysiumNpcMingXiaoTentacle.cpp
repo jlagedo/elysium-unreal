@@ -23,9 +23,9 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -284,7 +284,7 @@ const TCHAR* FElysiumNpcMingXiaoTentacle::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelGeometry.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
 
 void FElysiumNpcMingXiaoTentacle::NotifyOwnerOfMyMove()
 {
@@ -299,14 +299,14 @@ void FElysiumNpcMingXiaoTentacle::NotifyOwnerOfMyMove()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
 
 FElysiumEntityHandle& FElysiumNpcMingXiaoTentacle::MingXiaoTentacleCache()
 {
 	return GLifecycle19MingXiaoTentacle;
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcMingXiaoTentacle::MingXiaoTentacleCompanion() const
 {
@@ -315,12 +315,12 @@ FElysiumEntity* FElysiumNpcMingXiaoTentacle::MingXiaoTentacleCompanion() const
 	return nullptr;
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcMingXiaoTentacle::MingXiaoTentacleHead() const
 {
 	// SEAM for `thunk_FUN_1039ede0(this)`. Family **Motor** stands the same retail call over the
-	// same absent proxy chain (`ElysiumNpcKernelMotor.cpp:543`). Answers null — retail's
+	// same absent proxy chain (`ElysiumNpcMotor.cpp:543`). Answers null — retail's
 	// "no companion" arm, which forwards nothing.
 	return nullptr;
 }

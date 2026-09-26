@@ -20,14 +20,14 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelConditionsShared.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycleShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcConditionsBodiesShared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycleShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -218,7 +218,7 @@ void FElysiumNpcGhoulCroucher::StartTouchSpecies(FElysiumEntity* Other)
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelConditions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditionsBodies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcGhoulCroucher::IsDisturbed() const
 {
@@ -278,9 +278,9 @@ void FElysiumNpcGhoulCroucher::OnDisturbed(FElysiumEntity* Disturber)
 		GCondDisturbedHatePriority);
 }
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle.cpp` (story 5 step 4) ---
 
 void FElysiumNpcGhoulCroucher::GhoulCroucherScriptUnhideTail()
 {
@@ -319,15 +319,15 @@ int32 FElysiumNpcGhoulCroucher::UnawareTableB() const
 	return UnawareTableEntry(TEXT("DAT_1063abdc"), UnawareType);
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcGhoulCroucher::BurnPlayer(FElysiumEntity* BurnTarget, float Damage)
 {

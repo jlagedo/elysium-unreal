@@ -12,9 +12,9 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelSensesShared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcSensesBodiesShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -196,11 +196,11 @@ const TCHAR* FElysiumNpcYukie::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcYukie::YukieEnterMelee()
 {
@@ -253,7 +253,7 @@ void FElysiumNpcYukie::YukieLeaveMelee()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelSenses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSensesBodies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcYukie::YukieFInViewCone(const FElysiumEntity* Candidate) const
 {
@@ -287,5 +287,5 @@ bool FElysiumNpcYukie::YukieFVisible(const FElysiumEntity* Candidate, FElysiumEn
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 

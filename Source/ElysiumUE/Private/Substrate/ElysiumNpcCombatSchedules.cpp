@@ -28,13 +28,13 @@
 int32 ElysiumNpcCombat::SelectMeleeSchedule(FElysiumNpc& Npc, double Now)
 {
 	(void)Now;
-	// Slot 604 `0x102b6c30` and its five species arms (`ElysiumNpcKernelSchedule.cpp`).
+	// Slot 604 `0x102b6c30` and its five species arms (`ElysiumNpcSchedule.cpp`).
 	return Npc.SelectScheduleMeleeCombat(0);
 }
 
 int32 ElysiumNpcCombat::SelectRangedSchedule(FElysiumNpc& Npc, double Now)
 {
 	(void)Now;
-	// Slot 605 `0x102b7fc0` and its five species arms (`ElysiumNpcKernelCombat10_2.cpp`).
+	// Slot 605 `0x102b7fc0` and its five species arms (`ElysiumNpcCombat10_2.cpp`).
 	return Npc.SelectScheduleRangedCombat(0);
 }

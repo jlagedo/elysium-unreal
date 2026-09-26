@@ -24,7 +24,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelEntityChain.inl`.
+	// From `ElysiumNpcEntityChain.inl`.
 	/** `CPayphone::vfunc286` (`0x101aad90`) — the payphone's override of slot 286 `AddSceneEvent`, whose
 	 *  whole body is `return;`. Species-only (only `CPayphone#286` fills it), so `default:void` does not
 	 *  formally apply and it lands as a body: a payphone swallows every choreo scene event. */
@@ -39,7 +39,7 @@ public:
 	 *  this is the payphone's, and it is the whole mask gated on one virtual. */
 	int32 PayphoneUseCaps(FElysiumEntity* Other);
 
-	// From `ElysiumNpcKernelSenses.inl`.
+	// From `ElysiumNpcSensesBodies.inl`.
 	/** `0x101aaf80`, `CPayphone#45` — the payphone's `PassesFindEntityFOVTrace`. **No cone and no
 	 *  trace**, whatever 29c's walk says: the MANHATTAN distance between the two `EyePosition()`s
 	 *  against `_DAT_1047a3b0` = **85.0** Source units, and under it a six-term AABB overlap of the two
@@ -47,7 +47,7 @@ public:
 	 *  ignored by the body. */
 	bool PayphonePassesFindEntityFovTrace(const FElysiumEntity& Other) const;
 
-	// From `ElysiumNpcKernelSpeciesLifecycle10.inl`.
+	// From `ElysiumNpcSpeciesLifecycle10.inl`.
 	/** `m_hDialogPartner` (`+0x0fe8`), as an ENTITY HANDLE.
 	 *
 	 *  **SEAM, and it answers nothing.** This runtime carries the dialogue partner as the open session

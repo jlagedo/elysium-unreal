@@ -847,7 +847,7 @@ void FElysiumNpc::LeaveGrappleState()
 {
 	// `CAI_BaseNPCTroika::LeaveGrappleState` `0x102b5d90` (slot 380) is exactly two statements: the
 	// base body `0x1026ce30`, then a tail jump into slot 614. Story 29d ported the base under its own
-	// name (`ElysiumNpcKernelSpeciesMisc10.cpp`) because it is a DISTINCT retail function, and its
+	// name (`ElysiumNpcSpeciesMisc10.cpp`) because it is a DISTINCT retail function, and its
 	// four steps are UNCONDITIONAL — this body used to gate the output fire and the
 	// oblivious-decrement pair on `Grapple.Type == StealthKill`, which retail does not, and omitted
 	// slot 416 `SetForceFrequentThink(false)` entirely.
@@ -2986,7 +2986,7 @@ void FElysiumNpc::ReconnectToSquad()
 	ScheduleHost.SquadDisconnected = FMath::Max(0, ScheduleHost.SquadDisconnected - 1);
 	if (bReachedZero)
 	{
-		// The squad seam (`ElysiumNpcKernelSquad.cpp`): no `CAI_Squad`, so nothing to rejoin.
+		// The squad seam (`ElysiumNpcSquad.cpp`): no `CAI_Squad`, so nothing to rejoin.
 		AddSelfToSquadMemory(const_cast<void*>(ConnectedSquad()));
 	}
 	NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);

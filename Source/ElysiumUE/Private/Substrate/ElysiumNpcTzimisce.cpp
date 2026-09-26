@@ -25,22 +25,22 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10Shared.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelConditionsShared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelDebug10Shared.h"
-#include "Substrate/ElysiumNpcKernelDebugShared.h"
-#include "Substrate/ElysiumNpcKernelHintsShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPositions2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcConditionsBodiesShared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcDebug10Shared.h"
+#include "Substrate/ElysiumNpcDebugShared.h"
+#include "Substrate/ElysiumNpcHintsShared.h"
+#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPositions2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSoundsShared.h"
-#include "Substrate/ElysiumNpcKernelSpecies2Shared.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcSoundsShared.h"
+#include "Substrate/ElysiumNpcSpecies2Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -756,7 +756,7 @@ void FElysiumNpcTzimisce::PainSound()
 	SpeciesVocalize(TEXT("CNPC_VTzimisce"), 491);
 }
 
-// --- Moved from `ElysiumNpcKernelAnim10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisce::TzimisceCarryFormBit() const
 {
@@ -764,7 +764,7 @@ bool FElysiumNpcTzimisce::TzimisceCarryFormBit() const
 	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
 }
 
-// --- Moved from `ElysiumNpcKernelConditions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditionsBodies.cpp` (story 5 step 4) ---
 
 const TCHAR* FElysiumNpcTzimisce::StateChangeExpressionName(EElysiumNpcState NewState)
 {
@@ -793,9 +793,9 @@ void FElysiumNpcTzimisce::SetDefaultExpression(const TCHAR* ExpressionName, floa
 	DefExpression = ExpressionName != nullptr ? FString(ExpressionName) : FString();
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcTzimisce::VGargoyleGibCleanup()
 {
@@ -815,7 +815,7 @@ void FElysiumNpcTzimisce::VGargoyleGibCleanup()
 	CallFormBit(false);
 }
 
-// --- Moved from `ElysiumNpcKernelDebug.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 4) ---
 
 const TCHAR* FElysiumNpcTzimisce::TzimisceEventName(int32 EventId)
 {
@@ -834,7 +834,7 @@ const TCHAR* FElysiumNpcTzimisce::TzimisceEventName(int32 EventId)
 	return nullptr;
 }
 
-// --- Moved from `ElysiumNpcKernelDebug10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisce::TzimisceIsCarryingBody() const
 {
@@ -851,7 +851,7 @@ bool FElysiumNpcTzimisce::TzimisceIsCarryingBody() const
 	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
 }
 
-// --- Moved from `ElysiumNpcKernelHints.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisce::IsTzimisceHintUsable(int32 HintNode, const FElysiumEntity* Anchor) const
 {
@@ -913,13 +913,13 @@ int32 FElysiumNpcTzimisce::SelectTzimisceHintNode(const FElysiumEntity* Anchor)
 	return 0;
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisce::TranslateNavGoalPositionTzimisce(const FVector& GoalUnits,
 	FVector& OutGoalUnits) const
@@ -958,7 +958,7 @@ bool FElysiumNpcTzimisce::TranslateNavGoalPositionTzimisce(const FVector& GoalUn
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelPositions2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---
 
 float FElysiumNpcTzimisce::TzimisceAimConVar(int32 Which)
 {
@@ -1014,15 +1014,15 @@ bool FElysiumNpcTzimisce::WeaponShootPositionTzimisce(const FVector& SrcCm, FVec
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSenses10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSenses10_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSounds.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSounds.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 void FElysiumNpcTzimisce::FUN_103bf200(const FElysiumEntityHandle& Entity)
 {
@@ -1082,7 +1082,7 @@ bool FElysiumNpcTzimisce::FUN_103bf330(const FElysiumEntity* Candidate)
 // Slot 593 — `CNPC_VTzimisce::vfunc593` `0x103b9180`.
 // -------------------------------------------------------------------------------------------------
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisce::TzimisceDeathScriptArgument(int32 SingletonIndex, int32& OutArgument) const
 {
@@ -1442,7 +1442,7 @@ void FElysiumNpcTzimisce::FUN_103bf560()
 // `CNPC_VTzimisce`'s slots 488 and the two `CNPC_VCamera` empties.
 // -------------------------------------------------------------------------------------------------
 
-// --- Moved from `ElysiumNpcKernelState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

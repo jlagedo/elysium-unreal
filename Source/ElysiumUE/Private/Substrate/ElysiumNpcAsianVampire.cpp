@@ -17,16 +17,16 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelCombat10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelGeometryShared.h"
-#include "Substrate/ElysiumNpcKernelHintsShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotor2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPositionsShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
-#include "Substrate/ElysiumNpcKernelScheduleShared.h"
+#include "Substrate/ElysiumNpcCombat10_2Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcGeometryShared.h"
+#include "Substrate/ElysiumNpcHintsShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPositionsShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
+#include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -283,13 +283,13 @@ int32 FElysiumNpcAsianVampire::Restore(void* Archive)
 	return VampireBossRestore(Archive);
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
 
 // --- `CNPC_VAsianVampire::SelectScheduleRangedCombat` `0x103620d0`, 546 bytes ---------------------
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelGeometry.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcAsianVampire::StandingOnPlayerOverlap(const FVector& MyOriginCm, const FVector& OtherOriginCm,
 	const FVector& MyMinsCm, const FVector& MyMaxsCm, const FVector& OtherMinsCm,
@@ -346,7 +346,7 @@ bool FElysiumNpcAsianVampire::StandingOnPlayer() const
 		PlayerMaxsUnits * ElysiumMove::U);
 }
 
-// --- Moved from `ElysiumNpcKernelHints.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---
 
 void FElysiumNpcAsianVampire::AddHintToStoredJumpPositions(const FHintWords& Hint)
 {
@@ -366,9 +366,9 @@ void FElysiumNpcAsianVampire::AddHintToStoredJumpPositions(const FHintWords& Hin
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcAsianVampire::PositionClearForTeleport(const FVector& PositionUnits, float RadiusUnits) const
 {
@@ -519,7 +519,7 @@ int32 FElysiumNpcAsianVampire::SelectJumpbaseNode()
 	return Best;
 }
 
-// --- Moved from `ElysiumNpcKernelPositions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcAsianVampire::SelectLedgeNodeAsianRule(TArrayView<const FHintWords> Nodes,
 	const FVector& SelfCm, TFunctionRef<bool(const FVector&, float)> Clear)
@@ -601,9 +601,9 @@ bool FElysiumNpcAsianVampire::PositionClearForTeleportAsian(const FVector& Posit
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcAsianVampire::GetJumpSchedule(FElysiumEntity* Enemy) const
 {
@@ -613,5 +613,5 @@ int32 FElysiumNpcAsianVampire::GetJumpSchedule(FElysiumEntity* Enemy) const
 	return 0;
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

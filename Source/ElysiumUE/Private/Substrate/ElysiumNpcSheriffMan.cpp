@@ -17,17 +17,17 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelCombat10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotor2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPositions2Shared.h"
-#include "Substrate/ElysiumNpcKernelPositionsShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
-#include "Substrate/ElysiumNpcKernelScheduleShared.h"
+#include "Substrate/ElysiumNpcCombat10_2Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPositions2Shared.h"
+#include "Substrate/ElysiumNpcPositionsShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
+#include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -332,13 +332,13 @@ int32 FElysiumNpcSheriffMan::Restore(void* Archive)
 	return VampireBossRestore(Archive);
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
 
 // --- `CNPC_VSheriffMan::SelectScheduleRangedCombat` `0x103afdb0`, 984 bytes ----------------------
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 void FElysiumNpcSheriffMan::HideAndUnsolidifyWeapon(const FElysiumEntityHandle& Weapon)
 {
@@ -351,7 +351,7 @@ void FElysiumNpcSheriffMan::HideAndUnsolidifyWeapon(const FElysiumEntityHandle& 
 	HideAndUnsolidifyCalls.Add(Call);
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcSheriffMan::KillSheriff()
 {
@@ -380,7 +380,7 @@ void FElysiumNpcSheriffMan::KillSheriff()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcKernelMotor2.cpp` (story 5 step 4) ---
 
@@ -390,7 +390,7 @@ void FElysiumNpcSheriffMan::SheriffManSetupJump(float Enabled)
 	SetupJumpRise(Enabled, GMotorTailSheriffJumpRise);
 }
 
-// --- Moved from `ElysiumNpcKernelPositions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcSheriffMan::SelectCenterNodeRule(TArrayView<const FHintWords> Nodes, const FVector& PlayerCm)
 {
@@ -644,7 +644,7 @@ void FElysiumNpcSheriffMan::CategorizeHeights(int32& OutPlayer, int32& OutSelf) 
 	CategorizeHeight(static_cast<float>(Origin.Z), OutSelf);
 }
 
-// --- Moved from `ElysiumNpcKernelPositions2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---
 
 // --- `CNPC_VSheriffMan::KillTeleportBats` `0x103b0560` ------------------------------------------
 
@@ -665,9 +665,9 @@ void FElysiumNpcSheriffMan::KillTeleportBats()
 	SheriffTeleportSwarm = FElysiumEntityHandle();
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

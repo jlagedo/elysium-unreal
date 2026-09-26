@@ -22,16 +22,16 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelDebug10Shared.h"
-#include "Substrate/ElysiumNpcKernelDebug10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelEntityChainShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelSenses10Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcDebug10Shared.h"
+#include "Substrate/ElysiumNpcDebug10_2Shared.h"
+#include "Substrate/ElysiumNpcEntityChainShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcSenses10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10Shared.h"
-#include "Substrate/ElysiumNpcKernelState19Shared.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
+#include "Substrate/ElysiumNpcState19Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -373,9 +373,9 @@ const TCHAR* FElysiumNpcCop::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDebug10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcCop::CopPursuitPlayer() const
 {
@@ -395,13 +395,13 @@ bool FElysiumNpcCop::CopSuspectIs(const FElysiumEntity* Candidate) const
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelDebug10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelEntityChain.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcEntityChain.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSaveRestore10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSaveRestore10.cpp` (story 5 step 4) ---
 
 int32& FElysiumNpcCop::CopAliveCensus()
 {
@@ -413,7 +413,7 @@ int32& FElysiumNpcCop::CopSecondCensus()
 	return GCopSecondCensus;
 }
 
-// --- Moved from `ElysiumNpcKernelSenses10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSenses10.cpp` (story 5 step 4) ---
 
 FElysiumEntityHandle FElysiumNpcCop::CopSuspectHandle() { return NpcKernelSenses10Shared::GCopSuspect; }
 
@@ -431,7 +431,7 @@ void FElysiumNpcCop::StampCopSuspect(FElysiumEntity* Seen)
 	NpcKernelSenses10Shared::GCopSuspect = Seen->Handle;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcCop::CopSlot597Prologue(FElysiumEntity* Other)
 {
@@ -465,7 +465,7 @@ void FElysiumNpcCop::CopSlot597Prologue(FElysiumEntity* Other)
 	InputSetRelationship(Args);
 }
 
-// --- Moved from `ElysiumNpcKernelState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
 
 void FElysiumNpcCop::CopOnStateChange(int32 OldRetail, int32 NewRetail)
 {
@@ -544,7 +544,7 @@ void FElysiumNpcCop::CopOnStateChange(int32 OldRetail, int32 NewRetail)
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

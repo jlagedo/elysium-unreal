@@ -2380,7 +2380,7 @@ public:
 	// `0x10175180` — blocks while the entity at `player+0x1db0` is in state 3. That word is
 	// `m_hControllerNPC` (`vtmb_fields CBasePlayer`), the `npc_VPlayerController` driving this body,
 	// NOT a dialogue partner; the predicate is ported as `FElysiumNpc::ControllerNpcBusy`
-	// (`Substrate/ElysiumNpcKernelDialogue.cpp`), over the `ControllerNpc` handle family EntityChain
+	// (`Substrate/ElysiumNpcDialogueBodies.cpp`), over the `ControllerNpc` handle family EntityChain
 	// declared on `FElysiumNpc`.
 	//
 	// SEAM, and a SHAPE gap rather than a missing rule: retail's `+0x1db0` is a `CBasePlayer` word

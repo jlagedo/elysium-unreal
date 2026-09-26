@@ -22,12 +22,12 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpecies2Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10_2Shared.h"
+#include "Substrate/ElysiumNpcSpecies2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -371,17 +371,17 @@ bool FElysiumNpcTzimisceHeadClaw::HandleAnimEvent(const FElysiumAnimEvent& Event
 	return SpeciesFootstepAnimEvent(TEXT("npc_VTzimisceHeadClaw"), Event);
 }
 
-// --- Moved from `ElysiumNpcKernelAnim10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSaveRestore10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSaveRestore10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisceHeadClaw::FUN_103c19e0(FElysiumEntity* Enemy)
 {
@@ -420,7 +420,7 @@ bool FElysiumNpcTzimisceHeadClaw::FUN_103c19e0(FElysiumEntity* Enemy)
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisceHeadClaw::FUN_103c24a0() const
 {
@@ -434,7 +434,7 @@ bool FElysiumNpcTzimisceHeadClaw::FUN_103c24a0() const
 	return NpcKernelSpecies2Shared::Species2Zero < static_cast<float>(HeadClawSlowedExpire);
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcTzimisceHeadClaw::HeadClawSlowRunning() const
 {
@@ -482,5 +482,5 @@ void FElysiumNpcTzimisceHeadClaw::TzimisceHeadClawEndSlow(bool bForce)
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

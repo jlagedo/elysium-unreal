@@ -22,7 +22,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	/** `thunk_FUN_101cda50()` — the fixed global entity `CNPC_VRat::ShouldIgnoreCollision` compares
 	 *  against. **SEAM**, and its retail identity is **unrecovered**: the body takes no argument and
 	 *  reads a global; answers null. */

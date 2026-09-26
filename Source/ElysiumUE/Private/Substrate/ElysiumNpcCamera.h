@@ -53,14 +53,14 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelLifecycle.inl`.
+	// From `ElysiumNpcLifecycle.inl`.
 	/** `CNPC_VCamera::Precache` (`0x103689c0`), shared with `CNPC_VCameraSecurity` — fall the model key
 	 *  back to `models/null.mdl` when it is unset or empty, precache it, then run the link-table
 	 *  integrity check. Answers the model that was precached; `OutLinkWarning` is retail's
 	 *  "spawned after links have been..." arm. */
 	static FString CameraPrecacheModel(const FString& AuthoredModel);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr float CameraOccludedDelayNormal = 3.4f;
 	static constexpr float CameraOccludedDelayCover = 10.f;
 	static constexpr float CameraEnemyStoreInterval = 0.5f;

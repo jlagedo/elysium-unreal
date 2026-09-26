@@ -36,7 +36,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr int32 HullIndexGargoyle = 0x0e;     // `0x103785f0`
 	/** `CNPC_VGargoyle` species words at `NPCInit`. */
 	FElysiumEntityHandle GargoylePillarTarget;   // +0x667c
@@ -48,12 +48,12 @@ public:
 	 *  and a trailing `*` is a prefix match — neither of these two carries one. */
 	static bool GargoyleHitsPillar(const FString& Classname);
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	/** `CNPC_VGargoyle::NavIgnoreCollision` `0x10379490`'s classname filter, as a pure function so the
 	 *  three names it matches are assertable without an entity. */
 	static bool GargoyleIgnoresClassname(const FString& Classname);
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	/** `0x10379ef0` / `0x10379f20` — `CNPC_VGargoyle`'s slots 599 and 600. */
 	bool FUN_10379ef0(FElysiumEntity* Enemy);
 

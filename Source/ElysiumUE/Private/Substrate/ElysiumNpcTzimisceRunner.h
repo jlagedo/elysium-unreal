@@ -35,24 +35,24 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelSpecies.inl`. `+0x6671 m_bDeathNoticeProcessed` (datamap): the once-only
+	// From `ElysiumNpcSpecies.inl`. `+0x6671 m_bDeathNoticeProcessed` (datamap): the once-only
 	// latch `CNPCMaker_Fleshpile::DeathNotice` (`0x1034c8e0`) sets on a runner it has counted.
 	bool bRunnerDeathNoticeProcessed = false;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr float RunnerAttackExtentX = 50.f;
 	static constexpr float RunnerAttackExtentY = 50.f;
 	static constexpr float RunnerAttackExtentZ = 82.f;
 	int32 Flag2Removals = 0;                 // `RemoveFlag2(4)`
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VTzimisceRunner`'s own two.
 	FElysiumEntityHandle RunnerPotentialEnemy;   // +0x6678 m_hPotentialEnemy (datamap)
 	/** `0x103c3960` / `0x103c39e0` / `0x103c3a70` / `0x103c3ab0` / `0x103c3fd0` —
 	 *  `CNPC_VTzimisceRunner`'s slots 599, 600, 601, 602 and 588. */
 	bool FUN_103c3960(FElysiumEntity* Enemy);
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VTzimisceRunner::NotifyChangeSizeSmall` (`0x103c3cd0`), four writes in order:
 	 *  `SetHullSizeSmall(force = 1)`; the form byte `+0x6672` (family Anim10's `bTzimisceRunnerForm`);
 	 *  `m_bWantsLargeHull` (`+0x5f2c`) = 0; and `+0x6674` = the engine token `DAT_1070b22c`

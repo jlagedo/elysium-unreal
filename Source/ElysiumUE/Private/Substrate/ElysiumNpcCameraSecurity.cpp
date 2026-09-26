@@ -51,7 +51,7 @@ bool FElysiumNpcCameraSecurity::QuerySeeEntity(FElysiumEntity* Candidate)
 	return Candidate != nullptr && World != nullptr && Candidate->Handle == World->PlayerHandle();
 }
 
-// --- Moved from `ElysiumNpcKernelDialogue.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDialogueBodies.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcCameraSecurity::ResolveSecCameraLink()
 {
@@ -114,7 +114,7 @@ FElysiumEntity* FElysiumNpcCameraSecurity::ResolveSecCameraLink()
 	return Camera;
 }
 
-// --- Moved from `ElysiumNpcKernelSenses10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSenses10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcCameraSecurity::CameraSecurityFInViewCone(FElysiumEntity* Candidate)
 {

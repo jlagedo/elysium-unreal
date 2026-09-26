@@ -12,7 +12,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -45,7 +45,7 @@ const TCHAR* FElysiumNpcVampire::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcVampire::DamageFlinchSuppressed(uint32 CombinedBits, float Magnitude, uint32 SuppressMask)
 {

@@ -924,7 +924,7 @@ bool FElysiumNpcKernelCombat10YawClearanceTest::RunTest(const FString&)
 		N.LastYawClearanceSweep.EndUnits.X, 40.0, 1e-3);
 
 	// At yaw 90 the cosine cancels the forward leg and `_DAT_10451acc` = **64** carries the right
-	// leg. `ElysiumNpcKernelSchedule.cpp` still reads the same cell as UNRECOVERED 0.0.
+	// leg. `ElysiumNpcSchedule.cpp` still reads the same cell as UNRECOVERED 0.0.
 	N.TraceMoveClearanceAtYaw(0, 90.f, 1.f);
 	TestEqual(TEXT("..._DAT_10451acc is 64.0, the right leg"),
 		N.LastYawClearanceSweep.EndUnits.Y, 64.0, 1e-3);

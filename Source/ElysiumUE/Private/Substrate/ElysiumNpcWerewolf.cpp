@@ -27,27 +27,27 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelCombat10Shared.h"
-#include "Substrate/ElysiumNpcKernelConditionsShared.h"
+#include "Substrate/ElysiumNpcCombat10Shared.h"
+#include "Substrate/ElysiumNpcConditionsBodiesShared.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelDebug2Shared.h"
-#include "Substrate/ElysiumNpcKernelDebugShared.h"
-#include "Substrate/ElysiumNpcKernelHintsShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycleShared.h"
-#include "Substrate/ElysiumNpcKernelMotor2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPositions2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
-#include "Substrate/ElysiumNpcKernelSensesShared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcDebug2Shared.h"
+#include "Substrate/ElysiumNpcDebugShared.h"
+#include "Substrate/ElysiumNpcHintsShared.h"
+#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycleShared.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPositions2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
+#include "Substrate/ElysiumNpcSensesBodiesShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSounds10Shared.h"
-#include "Substrate/ElysiumNpcKernelSpecies2Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcSounds10Shared.h"
+#include "Substrate/ElysiumNpcSpecies2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
@@ -680,9 +680,9 @@ void FElysiumNpcWerewolf::GatherAttackConditions(FElysiumEntity* Enemy, float Di
 	FElysiumNpc::GatherAttackConditions(Enemy, DistanceUnits);
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelConditions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditionsBodies.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::UpdateConditionDeathTriggered()
 {
@@ -713,9 +713,9 @@ void FElysiumNpcWerewolf::UpdateConditionDeathTriggered()
 	Cognition.Conditions.Set(CondOf(GCondWerewolfDeathTriggered));
 }
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDebug.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::EmitOverlayEntityBounds(const TCHAR* RetailCall, int32 R, int32 G, int32 B,
 	int32 A) const
@@ -724,7 +724,7 @@ void FElysiumNpcWerewolf::EmitOverlayEntityBounds(const TCHAR* RetailCall, int32
 		FString::Printf(TEXT("%s rgba=(%d %d %d %d)"), *DebugString(), R, G, B, A), INDEX_NONE);
 }
 
-// --- Moved from `ElysiumNpcKernelDebug2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::DrawDebugHullAtPoint(const FVector& PointUnits, float Duration) const
 {
@@ -758,9 +758,9 @@ void FElysiumNpcWerewolf::DrawDebugHullAtPoint(const FVector& PointUnits, float 
 	(void)Duration;
 }
 
-// --- Moved from `ElysiumNpcKernelFacing.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelGeometry.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcWerewolf::BoxesOverlap(const FVector& AMin, const FVector& AMax, const FVector& BMin,
 	const FVector& BMax)
@@ -940,7 +940,7 @@ void FElysiumNpcWerewolf::ApplyFakeHullPush(const FVector& BonePosUnits, double 
 	WerewolfFakeHullPushTime = Now;
 }
 
-// --- Moved from `ElysiumNpcKernelHints.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcWerewolf::WerewolfHintTrace(const FVector& PositionCm) const
 {
@@ -1275,7 +1275,7 @@ int32 FElysiumNpcWerewolf::FindHintEndEntity(const FHintWords& Hint) const
 	return First;
 }
 
-// --- Moved from `ElysiumNpcKernelHints10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints10.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcWerewolf::GetHintEndEntity(const FHintWords& Hint) const
 {
@@ -1459,7 +1459,7 @@ bool FElysiumNpcWerewolf::IsValidTeleportHint(const FHintWords* Hint, double Now
 	return !HintEndEntityScriptHidden(GetHintEndEntity(*Hint));
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::WerewolfScriptUnhideTail(double Now)
 {
@@ -1488,7 +1488,7 @@ bool FElysiumNpcWerewolf::ReportSearchTimer(bool bPassThrough)
 	return bPassThrough;
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::WerewolfRearm()
 {
@@ -1532,11 +1532,11 @@ void FElysiumNpcWerewolf::WerewolfRearm()
 		static_cast<float>(FMath::Sqrt(WerewolfTeleportFloorSquare));    // 103cad6d +0x66d0
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::TriggerWerewolfZone()
 {
@@ -1576,7 +1576,7 @@ void FElysiumNpcWerewolf::TriggerWerewolfZone()
 	WerewolfRotDoor2 = Door2 != nullptr ? Door2->Handle : FElysiumEntityHandle::Invalid();
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 uint32 FElysiumNpcWerewolf::RetailFlags2(const FElysiumEntity& Entity)
 {
@@ -1631,7 +1631,7 @@ FVector FElysiumNpcWerewolf::GetGroundpoint(const FVector& PointUnits) const
 	return FVector(GVecInvalid, GVecInvalid, GVecInvalid);
 }
 
-// --- Moved from `ElysiumNpcKernelPositions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcWerewolf::GetNearestNodeToPlayer()
 {
@@ -1686,7 +1686,7 @@ int32 FElysiumNpcWerewolf::GetNearestNodeToPlayer()
 	return NearestNodeToPlayer;
 }
 
-// --- Moved from `ElysiumNpcKernelPositions2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcWerewolf::WerewolfSightConVar()
 {
@@ -1897,9 +1897,9 @@ void FElysiumNpcWerewolf::UpdateConditionCanTeleport()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSenses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSensesBodies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcWerewolf::WerewolfFVisible(const FElysiumEntity* Candidate,
 	FElysiumEntityHandle* OutBlocker)
@@ -1991,7 +1991,7 @@ bool FElysiumNpcWerewolf::WerewolfShouldPursueEnemy() const
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelSenses10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSenses10_2.cpp` (story 5 step 4) ---
 
 FVector FElysiumNpcWerewolf::GetHintEndpointUnits(const FHintWords& Hint) const
 {
@@ -2413,9 +2413,9 @@ void FElysiumNpcWerewolf::WerewolfCheckStuck(EStuckEscape Escape)
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: 0x103cb920 Werewolf STUCK!!!"), *DebugString());
 }
 
-// --- Moved from `ElysiumNpcKernelSounds10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSounds10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcWerewolf::EngineFrameNumber() const
 {
@@ -2548,7 +2548,7 @@ void FElysiumNpcWerewolf::FUN_103d9c90(FVector& OutPositionUnits)
 	OutPositionUnits = WerewolfChasePosUnits;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::DestroyWerewolf()
 {
@@ -2577,7 +2577,7 @@ void FElysiumNpcWerewolf::DestroyWerewolf()
 	// nothing a program can observe, and `~CAI_BaseNPCTroika` is the world's reap here.
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcWerewolf::WerewolfHasPath(const FVector& StartUnits, const FVector& EndUnits) const
 {
@@ -2678,11 +2678,11 @@ void FElysiumNpcWerewolf::SnapToAnimationPoint()
 	RandomMoveHintNodeZone = INDEX_NONE;
 }
 
-// --- Moved from `ElysiumNpcKernelState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelGeometry.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
 
 FVector FElysiumNpcWerewolf::NearestPointOnEntity(const FElysiumEntity* /*Entity*/,
 	const FVector& PointCm) const
@@ -2704,7 +2704,7 @@ int32 FElysiumNpcWerewolf::PushedEntityDirectionClass(FElysiumEntity* Pushed, co
 	return 0;
 }
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::FireWerewolfZoneTrigger(FElysiumEntity& Zone)
 {

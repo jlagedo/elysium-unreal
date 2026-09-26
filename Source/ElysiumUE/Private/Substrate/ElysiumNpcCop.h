@@ -65,7 +65,7 @@ public:
 	 *  outlives a headless world and retail's own lifetime is the process too. */
 	void StampCopSuspect(FElysiumEntity* Seen);
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VCop::vfunc597` (`0x10372cc0`), slot 597's species arm: ADDS the `m_hPursuitPlayer` latch
 	 *  and the `"Player D_HT 10"` relationship write in front of the Troika base `0x102b4fb0`, which
 	 *  then runs unchanged. Called from `FElysiumNpc::Slot597`.
@@ -77,7 +77,7 @@ public:
 	 *  as a seam answering null; this is the word its writer needs, so that seam now resolves it. */
 	FElysiumEntityHandle CopPursuitHandle;
 
-	// From `ElysiumNpcKernelState19.inl`.
+	// From `ElysiumNpcState19.inl`.
 	/** `CNPC_VCop::m_bWasEverInCombat` (`+0x6670`). */
 	bool bWasEverInCombat = false;
 	void CopOnStateChange(int32 OldRetail, int32 NewRetail);

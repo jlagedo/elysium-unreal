@@ -29,7 +29,7 @@ public:
 	static double HunterSuspectExpiry();
 	void StampHunterSuspect(FElysiumEntity* Seen);
 
-	// From `ElysiumNpcKernelSpeciesLifecycle10.inl`.
+	// From `ElysiumNpcSpeciesLifecycle10.inl`.
 	/** `CNPC_VHunter::m_hPursuitPlayer` (`+0x6664`, datamap — `ElysiumNpcKernelShape.cpp`). Distinct
 	 *  from `CNPC_VCop`'s word at the same offset, which family Debug10 reaches through
 	 *  `CopPursuitPlayer()`; the same offset means a different thing per species, which is the rule 29b

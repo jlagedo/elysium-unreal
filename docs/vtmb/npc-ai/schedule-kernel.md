@@ -898,7 +898,7 @@ reset `0x1027a700` (no flag word): `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_Expre
 
 Family **Schedule** of story 29c-1: the 64 `rule` rows of `order.md` layers 0–9 whose behaviour is
 the schedule host, the task surface and the melee/cover selectors. The port is
-`Substrate/ElysiumNpcKernelSchedule.cpp`, `Substrate/ElysiumNpcScheduleHost.cpp` and the two arms
+`Substrate/ElysiumNpcSchedule.cpp`, `Substrate/ElysiumNpcScheduleHost.cpp` and the two arms
 added to `FElysiumNpc::BuildScheduleTestBits` / `SelectSchedule`; the tests are
 `Elysium.Substrate.NpcKernelSchedule.*`.
 

@@ -30,7 +30,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelAnim10.inl`.
+	// From `ElysiumNpcAnim10.inl`.
 	/** `CNPC_VHuman::NPC_EarlyTranslateActivity` (`0x103854f0`), 565 bytes and 39 census classes — the
 	 *  armed/alert decision tree, then the rewrites. See the definition for the arm-by-arm walk; the one
 	 *  thing to carry here is that `m_bAggressiveAnims` (`+0x6410`) is written on FOUR different paths
@@ -49,24 +49,24 @@ public:
 	 *  `RecordScheduleEvent`. */
 	int32 SelectScheduleMeleeCombatHuman();
 
-	// From `ElysiumNpcKernelBosses.inl`.
+	// From `ElysiumNpcBosses.inl`.
 	/** `0x10385cf0` — slot 601's `CNPC_VAndreiBlood`-line body (38 species). It differs from the
 	 *  Troika line's `0x102b5880` in two recovered ways, and both are ported: it fires the global
 	 *  melee-left event `DAT_10924edc+4` FIRST, and it forwards to the coordinator WITHOUT the
 	 *  `m_pAttackCoordinator != 0` guard the Troika body puts in front of it. */
 	void FUN_10385cf0();
 
-	// From `ElysiumNpcKernelCombat10.inl`.
+	// From `ElysiumNpcCombat10.inl`.
 	/** `CNPC_VHuman::SelectScheduleRangedCombat` (`0x10386560`), 802 bytes — the shared human arm that
 	 *  fills 36 species `#605` slots and no Troika slot. It REPLACES the Troika body wholesale and never
 	 *  chains it. */
 	int32 HumanSelectScheduleRangedCombat(int32 Arg);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	int32 HideActiveWeaponCalls = 0;         // slot 66 Hide on the ACTIVE WEAPON
 	void HideActiveWeaponIfAny();
 
-	// From `ElysiumNpcKernelSpeciesLifecycle10.inl`.
+	// From `ElysiumNpcSpeciesLifecycle10.inl`.
 	/** How many times either relationship write above was made FROM this family's slot-463 pre-step. */
 	int32 PlayerHateRelationshipSets = 0;
 

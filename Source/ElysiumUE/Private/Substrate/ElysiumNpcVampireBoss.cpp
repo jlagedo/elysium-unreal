@@ -16,14 +16,14 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelCombat10Shared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotor2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
+#include "Substrate/ElysiumNpcCombat10Shared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10_2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -84,7 +84,7 @@ const TCHAR* FElysiumNpcVampireBoss::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10.cpp` (story 5 step 4) ---
 
 float FElysiumNpcVampireBoss::GetCurrHealthPercent() const
 {
@@ -102,7 +102,7 @@ float FElysiumNpcVampireBoss::GetCurrHealthPercent() const
 	return GCombatZero;   // `_DAT_104454c4`
 }
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcVampireBoss::AoeTraceAttackResultCode(const FElysiumEntity* Victim) const
 {
@@ -121,7 +121,7 @@ bool FElysiumNpcVampireBoss::LastAttackTimeElapsed(float ThresholdSeconds) const
 	return static_cast<double>(ThresholdSeconds) < Elapsed;
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcVampireBoss::ClearBodyEmitterNames()
 {
@@ -230,7 +230,7 @@ void FElysiumNpcVampireBoss::CausePlayerAOEDamage(const FVector& CentreUnits, fl
 	AoeImpactSounds.Add(SoundId);
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcVampireBoss::VampireBossNPCInit()
 {
@@ -243,7 +243,7 @@ void FElysiumNpcVampireBoss::VampireBossNPCInit()
 	JumpGravity = 1.f;
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 void FElysiumNpcVampireBoss::CommitSetupJump()
 {
@@ -291,7 +291,7 @@ void FElysiumNpcVampireBoss::SetupJumpRise(float Enabled, float Rise)
 	CommitSetupJump();
 }
 
-// --- Moved from `ElysiumNpcKernelSaveRestore10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSaveRestore10.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcVampireBoss::VampireBossRestore(void* Archive)
 {
@@ -309,7 +309,7 @@ int32 FElysiumNpcVampireBoss::VampireBossRestore(void* Archive)
 	return Result;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcVampireBoss::AttackIdleLongerThan(float Seconds) const
 {

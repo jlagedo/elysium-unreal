@@ -25,15 +25,15 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelCombat10Shared.h"
-#include "Substrate/ElysiumNpcKernelCombat10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelDebug10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10_2Shared.h"
+#include "Substrate/ElysiumNpcCombat10Shared.h"
+#include "Substrate/ElysiumNpcCombat10_2Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcDebug10_2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -821,7 +821,7 @@ void FElysiumNpcMingXiao::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVe
 		SecondTolerance);
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcMingXiao::SpitAttackTimer(bool bFirstParamSet, bool bSecondParamSet)
 {
@@ -900,7 +900,7 @@ bool FElysiumNpcMingXiao::ProxyReadyTimer(const FElysiumEntity* Proxy, double No
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelAnim.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcMingXiao::BodyGroupCvarIsCommand() const
 {
@@ -935,7 +935,7 @@ void FElysiumNpcMingXiao::BodyGroup()
 
 // --- Moved from `ElysiumNpcKernelAnim10_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelBosses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcMingXiao::MingXiaoPedestalCvar() const
 {
@@ -1403,7 +1403,7 @@ FElysiumEntity* FElysiumNpcMingXiao::FUN_10398b20(int32& InOutTask, FVector& Out
 	return Winner;
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcMingXiao::MingXiaoLimbPresent(int32 /*LimbIndex*/) const
 {
@@ -1411,13 +1411,13 @@ bool FElysiumNpcMingXiao::MingXiaoLimbPresent(int32 /*LimbIndex*/) const
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
 
 // --- `CNPC_VMingXiao::SelectScheduleRangedCombat` `0x103967d0`, 794 bytes ------------------------
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcMingXiao::TestOneHitbox(int32 HitboxSetIndex, const FVector& RayStartUnits,
 	const FVector& RayEndUnits, uint32 Mask) const
@@ -1439,7 +1439,7 @@ float FElysiumNpcMingXiao::MingXiaoThrowCvar(int32 Which) const
 	return NpcKernelDamageShared::DamageZero;
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 float FElysiumNpcMingXiao::MingXiaoThrowSpeed(float DistanceSquared, float Quadratic, float Constant)
 {
@@ -1687,9 +1687,9 @@ bool FElysiumNpcMingXiao::TestHitboxesMingXiao(const FVector& RayStartUnits, con
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelDebug10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelFacing.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
 FElysiumNpc::FMingXiaoPlayback FElysiumNpcMingXiao::MingXiaoPlaybackScalar(int32 Activity,
 	bool bDisciplineArm, int32 TentacleCount, TFunctionRef<float(int32)> TuningField)
@@ -1746,7 +1746,7 @@ FElysiumNpc::FMingXiaoPlayback FElysiumNpcMingXiao::MingXiaoPlaybackScalar(int32
 	return Out;
 }
 
-// --- Moved from `ElysiumNpcKernelGeometry.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
 
 void FElysiumNpcMingXiao::NotifyOwnedCopiesOfOwnerMove(FElysiumEntity* Moved)
 {
@@ -1850,7 +1850,7 @@ void FElysiumNpcMingXiao::FUN_103998d0(FElysiumEntity* Tentacle)
 	NotifyScatterCenter(TentacleNpc, Origin);
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 float FElysiumNpcMingXiao::MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> TuningField)
 {
@@ -1875,15 +1875,15 @@ bool FElysiumNpcMingXiao::BlockedByFriend() const
 	return bBlockedByFriend;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSaveRestore10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSaveRestore10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSenses10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSenses10_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSquad.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSquad.cpp` (story 5 step 4) ---
 
 void FElysiumNpcMingXiao::CoordinateTroops()
 {
@@ -1921,7 +1921,7 @@ void FElysiumNpcMingXiao::CoordinateTroops()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcKernelBosses2.cpp` (story 5 step 4) ---
 

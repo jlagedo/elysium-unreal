@@ -204,7 +204,7 @@ bool FElysiumNpcKernelPrecache10BaseTest::RunTest(const FString&)
 	//
 	// That arm is UNREACHABLE in this runtime and this case says so rather than weakening: nothing
 	// here parses schedule text, so no class flag can be cleared and
-	// `ElysiumNpcKernelSchedule.cpp`'s body answers true for every class. What is asserted is the
+	// `ElysiumNpcSchedule.cpp`'s body answers true for every class. What is asserted is the
 	// gate itself and the arm it therefore takes — the body falls through and the NPC is still
 	// alive, which a reject would not leave behind.
 	TestTrue(TEXT("slot 452 answers true for every class in this runtime"), N.LoadedSchedules());
@@ -706,7 +706,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10SabbatLeaderTest,
 bool FElysiumNpcKernelPrecache10SabbatLeaderTest::RunTest(const FString&)
 {
 	// `0x103a6ab0`. The seven-entry step table and the three-entry exert table are the two
-	// `ElysiumNpcKernelSounds.cpp` already carries as vocalization data; the models, the seven
+	// `ElysiumNpcSounds.cpp` already carries as vocalization data; the models, the seven
 	// singles, the two emitters and the weapon are what had no body.
 	return Precache10Case(*this, TEXT("CNPC_VSabbatLeader"),
 		{

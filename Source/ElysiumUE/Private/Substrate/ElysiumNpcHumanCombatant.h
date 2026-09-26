@@ -24,10 +24,10 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	void HumanCombatantNPCInit();       // `0x10387140` — helper for Cop / Hunter / Yukie
 
-	// From `ElysiumNpcKernelSenses10.inl`.
+	// From `ElysiumNpcSenses10.inl`.
 	/** The four class-static cells the two arms write and three other bodies read: `DAT_1093ac3c` /
 	 *  `_DAT_1093aca8` (the cop's shared provoker handle and its expiry) and `DAT_1093b650` /
 	 *  `_DAT_1093b658` (the hunter's). They are STATIC IN RETAIL — every cop in the map shares one
@@ -36,7 +36,7 @@ public:
 	 *  arms are the readers; this family is the writer. The window is 30 seconds. */
 	static constexpr float SpeciesSuspectWindowSeconds = ElysiumNpcTunables::Thirty;
 
-	// From `ElysiumNpcKernelState19.inl`.
+	// From `ElysiumNpcState19.inl`.
 	/** Map name `gpGlobals->mapname` as the 12-byte compare in `0x10387380` reads it. Tests set
 	 *  `World->MapName()`; this override is for a fixture that has no world map name. */
 	FString SelectIdealStateMapNameOverride;

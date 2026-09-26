@@ -30,7 +30,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	TArray<FHideAndUnsolidifyCall> HideAndUnsolidifyCalls;
 	void HideAndUnsolidifyWeapon(const FElysiumEntityHandle& Weapon);
 	/** `0x103b10f0` — `CNPC_VSheriffMan::KillSheriff`. Two halves, in order. First: find the entities
@@ -41,7 +41,7 @@ public:
 	 *  before relinking it — the sword goes invisible and non-solid rather than being removed. */
 	void KillSheriff();
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr int32 HullIndexSheriffMan = 0x15;   // `0x103ae6c0`
 	static constexpr float SheriffManJumpGravity = 2.f;      // `_DAT_104c6148`
 	/** SheriffMan flags written before the VampireBoss chain. `SheriffLastTeleportPosition` exists. */
@@ -49,10 +49,10 @@ public:
 	bool bSheriffDead = false;                   // +0x66e5
 	bool bSheriffActivated = false;              // +0x66e6
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	void SheriffManSetupJump(float Enabled);
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	// `CNPC_VSheriffMan`'s teleport and arena-height words.
 	FVector SheriffLastTeleportPosition = FVector::ZeroVector;  // +0x66d4 m_vLastTeleportPosition
 	double SheriffLastTeleportTime = 0.0;                       // +0x66e0 m_fLastTeleportTime

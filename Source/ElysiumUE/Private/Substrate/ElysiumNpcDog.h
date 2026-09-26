@@ -25,7 +25,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelState19.inl`.
+	// From `ElysiumNpcState19.inl`.
 	/** `CNPC_VDog`'s snarl-arm pair, `0x103743c0` at `103746b5`: `+0x6680 = +0x667c` then
 	 *  `+0x6678 = gpGlobals->curtime`. SEAM: `CNPC_VDog` carries no datamap in the corpus and no
 	 *  reader of either offset is recovered, so the source word `+0x667c` answers 0 and the snapshot

@@ -44,7 +44,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelConditions.inl`.
+	// From `ElysiumNpcConditionsBodies.inl`.
 	/** `CNPC_VWerewolf::UpdateConditionDeathTriggered` (`0x103cc890`). 29c's row targets
 	 *  `FElysiumNpcConditions::UpdateConditionDeathTriggered`; that type is a bare 256-bit set with no
 	 *  NPC, no activity and no outputs, so the body lands here instead.
@@ -53,7 +53,7 @@ public:
 	 *  as the raw number. */
 	void UpdateConditionDeathTriggered();
 
-	// From `ElysiumNpcKernelDebug.inl`.
+	// From `ElysiumNpcDebug.inl`.
 	/** `NDebugOverlay::EntityBounds` (`0x10142e20`) — the whole-entity box `CBaseEntity::DrawBBoxOverlay`
 	 *  draws, which `CNPC_VWerewolf#620` recolours. */
 	void EmitOverlayEntityBounds(const TCHAR* RetailCall, int32 R, int32 G, int32 B, int32 A) const;
@@ -61,7 +61,7 @@ public:
 	 *  `RET 0x10`: a `Vector` by value and one more dword, the overlay duration. */
 	void DrawDebugHullAtPoint(const FVector& PointUnits, float Duration) const;
 
-	// From `ElysiumNpcKernelGeometry.inl`.
+	// From `ElysiumNpcGeometry.inl`.
 	/** `+0x66dc`/`+0x66e0`/`+0x66e4` — `CNPC_VWerewolf`'s cached fake-hull point, the world position of
 	 *  the `Bip01` bone as of the previous `UpdateFakeHull`. The retail NAME is **unrecovered**: the
 	 *  word is not in `CNPC_VWerewolf`'s datamap and no corpus body declares it. SOURCE units, because
@@ -111,7 +111,7 @@ public:
 	 *  `werewolf_show_debug`, shipped "0", which closes the draw. */
 	int32 FakeHullDebugCvar() const;
 
-	// From `ElysiumNpcKernelHints.inl`.
+	// From `ElysiumNpcHints.inl`.
 	int32 TeleportHintNode = INDEX_NONE;  // +0x66b0 CNPC_VWerewolf::m_pTeleportHint (walked)
 	int32 MoveHintNode = INDEX_NONE;      // +0x66bc CNPC_VWerewolf::m_pMoveHint (walked)
 	bool bRandomHint = false;             // +0x66c8 CNPC_VWerewolf::m_bRandomHint (walked)
@@ -162,7 +162,7 @@ public:
 	/** `CNPC_VWerewolf::SetTeleportHint` (`0x103d45c0`). */
 	void SetTeleportHint(int32 HintNode);
 
-	// From `ElysiumNpcKernelHints10.inl`.
+	// From `ElysiumNpcHints10.inl`.
 	/** `CNPC_VWerewolf::GetHintEndEntity` (`0x103d6390`), 306 bytes — the cache in front of
 	 *  `FindHintEndEntity` (`0x103d6520`, family Hints, already ported and CALLED here).
 	 *
@@ -199,7 +199,7 @@ public:
 	 *  teleport hint and nothing is silently refused. */
 	bool HintEndEntityScriptHidden(int32 EndEntityNode) const;
 
-	// From `ElysiumNpcKernelLifecycle.inl`.
+	// From `ElysiumNpcLifecycle.inl`.
 	/** `+0x66a4` / `+0x66d4` / `+0x66d8` / `+0x66ec` — `CNPC_VWerewolf`'s morph-timer block, which its
 	 *  own `ScriptUnhide` (`0x103d4a20`) zeroes and stamps. The first three are timers, the fourth an
 	 *  absolute curtime stamp (`DAT_1070b228+0xc`), carried as `double` like every other stamp here.
@@ -221,7 +221,7 @@ public:
 	static void StartSearchTimer();
 	static bool ReportSearchTimer(bool bPassThrough);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr double WerewolfTeleportFloorSquare = 512.0; // `_DAT_104704c0`
 	static constexpr float HullCentreHalf = ElysiumNpcTunables::Half;
 	static constexpr double WerewolfFieldOfViewRadians = 2.0943951023931953; // `_DAT_104d0080`
@@ -234,7 +234,7 @@ public:
 	int32 WerewolfWord66fc = 0;                // +0x66fc (retail name unrecovered)
 	void WerewolfRearm();
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	FElysiumEntityHandle WerewolfRotDoor1;   // +0x6684 CNPC_VWerewolf::m_hRotDoor1
 	FElysiumEntityHandle WerewolfRotDoor2;   // +0x6688 CNPC_VWerewolf::m_hRotDoor2
 	/** `0x103cade0` — `CNPC_VWerewolf`'s zone opener. Dispatches slot 251 on every entity whose
@@ -244,14 +244,14 @@ public:
 	void TriggerWerewolfZone();
 	int32 WerewolfZoneTriggerFires = 0;
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	/** `CBaseEntity::GetFlags2()` bit 3 — the second flag word `CNPC_VWerewolf`'s two collision-ignore
 	 *  overrides test. **SEAM**: `FElysiumEntity::Flags` is the first word only; answers 0. */
 	static uint32 RetailFlags2(const FElysiumEntity& Entity);
 	/** `CNPC_VWerewolf::GetGroundpoint` `0x103d6a40`. */
 	FVector GetGroundpoint(const FVector& PointUnits) const;
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	// `CNPC_VWerewolf`'s teleport words. The hint itself is family Hints' `TeleportHintNode` (+0x66b0)
 	// and the word `TeleportOut` clears at +0x66e8 is their `WerewolfHintFlags`.
 	double WerewolfLastSeenTime = 0.0;         // +0x66ec, stamped by TeleportIn and by the can-teleport pass
@@ -293,7 +293,7 @@ public:
 	 *  `_DAT_10450aa4` and `DevWarning`ing on a miss. */
 	int32 GetNearestNodeToPlayer();
 
-	// From `ElysiumNpcKernelSenses.inl`.
+	// From `ElysiumNpcSensesBodies.inl`.
 	/** `DAT_1093f8ec` and `DAT_1093d574` — the two ConVar objects `CNPC_VWerewolf::ShouldPursueEnemy`
 	 *  (`0x103cf5f0`) thresholds on, each read `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`:
 	 *  `werewolf_pursuit_unseen_time` "3.0" and `werewolf_pursuit_distance` "800". */
@@ -308,7 +308,7 @@ public:
 	 *  werewolf gives up the chase. */
 	bool WerewolfShouldPursueEnemy() const;
 
-	// From `ElysiumNpcKernelSenses10.inl`.
+	// From `ElysiumNpcSenses10.inl`.
 	/** `CNPC_VWerewolf::CheckStuck(bool)` (`0x103cb920`), 1,558 bytes, read off the listing (the
 	 *  decompiler aliases its stack). Gated on slot 163 `IsViewable`. Probe 1 is a full-hull trace
 	 *  from the origin 2.0 up. A clear START re-probes from `WorldSpaceCenter` to the origin through
@@ -343,7 +343,7 @@ public:
 	 *  store that does not exist yet, so it answers the hint's own origin and names what it stands for.
 	 *
 	 *  This family's companion seam for `GetForwardHintForHint` is GONE: story 29d, family **Hints10**
-	 *  landed `0x103d7090` itself (`ElysiumNpcKernelHints10.cpp`), so `GetForwardYawForHint` now calls
+	 *  landed `0x103d7090` itself (`ElysiumNpcHints10.cpp`), so `GetForwardYawForHint` now calls
 	 *  the real body — which answers null when no partner hint of type `0x3a9c` shares this hint's end
 	 *  entity, and the yaw is then measured from the hint's own origin, the same fallback this seam
 	 *  produced. */
@@ -388,7 +388,7 @@ public:
 	int32 RandomMoveHintNodeZone = 0;
 	bool CachedNearestNodeZone(int32& OutZone) const;
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VWerewolf`'s frame-memoised chase cache. `m_DoorState` (+0x6680) is family **Hints**'
 	// `WerewolfDoorState` and is read through it. No datamap names these; they are walked off
 	// `0x103d9c90`.
@@ -410,7 +410,7 @@ public:
 	/** `0x103d9c90` — `CNPC_VWerewolf`'s frame-memoised chase position. SOURCE units out. */
 	void FUN_103d9c90(FVector& OutPositionUnits);
 
-	// From `ElysiumNpcKernelSpeciesLifecycle10.inl`.
+	// From `ElysiumNpcSpeciesLifecycle10.inl`.
 	/** `CNPC_VWerewolf::~CNPC_VWerewolf` (`0x103ca7c0`). Retail, in order:
 	 *    1. The two vftable restores (not portable, not observable).
 	 *    2. Under the scope frame: `DAT_1093fac4 = 0`, then `werewolf_show_debug`'s ConVar slot 4
@@ -470,7 +470,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelGeometry.inl`.
+	// From `ElysiumNpcGeometry.inl`.
 	/** SEAM for `CollisionProperty::CalcNearestPoint` (`0x100dd000`) — the nearest point on an entity's
 	 *  OBB to a world point, which becomes the damage POSITION. No collision property here; answers the
 	 *  point unchanged, which is `CalcNearestPoint`'s own answer for a point already inside the box. */
@@ -481,7 +481,7 @@ public:
 	 *  called for real and when it is not they record and answer 0 / false. */
 	int32 PushedEntityDirectionClass(FElysiumEntity* Pushed, const FVector& DeltaCm) const;
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	/** **SEAM** for `zone->vtable[+0x3ec]` (slot 251) on a `trigger_werewolf_zone` entity. On the
 	 *  `CAI_BaseNPC` line slot 251 is `IsActivityFinished`, but a trigger is a different hierarchy
 	 *  sharing the index and the census does not carry its table — so what this fires is

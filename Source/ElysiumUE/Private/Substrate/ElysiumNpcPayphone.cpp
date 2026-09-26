@@ -16,7 +16,7 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -175,7 +175,7 @@ void FElysiumNpcPayphone::Think()
 	PayphoneThink();
 }
 
-// --- Moved from `ElysiumNpcKernelEntityChain.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcEntityChain.cpp` (story 5 step 4) ---
 
 void FElysiumNpcPayphone::PayphoneAddSceneEvent(const void* Scene, const void* Event)
 {
@@ -209,7 +209,7 @@ int32 FElysiumNpcPayphone::PayphoneUseCaps(FElysiumEntity* Other)
 	return CanTalk(Other) ? GChainPayphoneUseCaps : 0;
 }
 
-// --- Moved from `ElysiumNpcKernelSenses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSensesBodies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcPayphone::PayphonePassesFindEntityFovTrace(const FElysiumEntity& Other) const
 {
@@ -257,7 +257,7 @@ bool FElysiumNpcPayphone::PayphonePassesFindEntityFovTrace(const FElysiumEntity&
 		&& B1.Z >= A0.Z && B0.Z <= A1.Z;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcPayphone::ResolveDialogPartner() const
 {
@@ -348,7 +348,7 @@ bool FElysiumNpcPayphone::PayphoneThink()
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // `CPayphone::NPCThink` — slot 431, `0x101aabf0`.

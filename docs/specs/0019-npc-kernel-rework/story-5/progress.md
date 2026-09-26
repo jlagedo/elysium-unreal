@@ -1,15 +1,17 @@
-# Story 5 — step 5 in progress (packet 5a complete)
+# Story 5 — step 5 in progress (packets 5a, 5b complete)
 
-**Step 5 (separate `CAI_BaseNPC` from Troika), 2026-09-26.** Packet 5a (records and checker, no
-C++) is complete: [packets/5a-preflight.md](packets/5a-preflight.md),
-[moves-step5.tsv](moves-step5.tsv), [fields-step5.tsv](fields-step5.tsv),
-[consumers-step5.tsv](consumers-step5.tsv), [decisions-step5.json](decisions-step5.json).
-`kernel_migration --check step5` is PENDING (records match the accepted step-4 tree `03c0d030`);
-`--check step4` passes on that tree. Manifest phase 4.
+**Step 5 (separate `CAI_BaseNPC` from Troika), 2026-09-26.**
+- **5a** (records and checker, no C++), committed `571561aa`:
+  [packets/5a-preflight.md](packets/5a-preflight.md), [moves-step5.tsv](moves-step5.tsv),
+  [fields-step5.tsv](fields-step5.tsv), [consumers-step5.tsv](consumers-step5.tsv),
+  [decisions-step5.json](decisions-step5.json).
+- **5b** (pure rename of the Troika family files `ElysiumNpcKernel<Family>` -> `ElysiumNpc<Family>`,
+  collisions `…Bodies`): [packets/5b-troika-family-rename.md](packets/5b-troika-family-rename.md).
+  Gate green (1,270 + 14 + 1), `test_delta` vs step 4r empty, all checks pass; `--check step5`
+  PENDING. Manifest phase 4.
 
-Next: packet 5b, the pure rename of the Troika family files (`ElysiumNpcKernel<Family>` ->
-`ElysiumNpc<Family>`, collisions `…Bodies`), as its own commit with a full gate and an empty
-delta against step 4r's gate. Then 5c-5h as the one step-5 commit.
+Next: packets 5c-5h as the one step-5 commit, starting with 5c (`ElysiumNpcBase.h/.cpp`, the
+class shell, `AsNpcBase()`, the `CAI_BaseNPC` descriptor).
 
 ## Step 4 (accepted, `bb690d7a`; 4r `61aa2cd8`; closed `03c0d030`)
 

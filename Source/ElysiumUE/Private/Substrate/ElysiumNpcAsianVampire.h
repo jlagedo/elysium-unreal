@@ -29,7 +29,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelGeometry.inl`.
+	// From `ElysiumNpcGeometry.inl`.
 	/** The body: is the closest player's collision box overlapping mine in XY? Retail compares the 2-D
 	 *  distance between the two origins against `0.5 * |playerMaxs.xy - playerMins.xy|` plus
 	 *  `0.5 * |myMaxs.xy - myMins.xy|` — the two half-diagonals of the XY footprints, NOT their radii,
@@ -41,19 +41,19 @@ public:
 		const FVector& MyMinsCm, const FVector& MyMaxsCm, const FVector& OtherMinsCm,
 		const FVector& OtherMaxsCm);
 
-	// From `ElysiumNpcKernelHints.inl`.
+	// From `ElysiumNpcHints.inl`.
 	/** `CNPC_VAsianVampire::AddHintToStoredJumpPositions` (`0x10361990`) — push the hint's origin into
 	 *  the two-slot ring at `m_vLastJumpPosition`, then advance and wrap `m_iLastJumpPositionIdx`. */
 	void AddHintToStoredJumpPositions(const FHintWords& Hint);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr float AsianVampireJumpGravity = 2.f;    // `_DAT_104a9300`
 	/** `CNPC_VAsianVampire::m_bPathBlocked` (`+0x66d4`): cleared by `NPCInit` `0x10360ce0`, raised by
 	 *  `TaskFail` `0x10362390` on failure codes 12..15. (`m_bSuppressRanged` `+0x66e8` is family
 	 *  Schedule's `bSuppressRanged`.) */
 	bool bAsianVampirePathBlocked = false;
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	// +0x66b8 `CNPC_VAsianVampire::m_vLastJumpPosition[2]` (six floats) and +0x66d0
 	// `m_iLastJumpPositionIdx` — the two-entry ring `IsPosNearStoredJumpPositions` (`0x103618a0`) walks.
 	// SOURCE units, as every retail position word here is.
@@ -86,7 +86,7 @@ public:
 	bool StationaryForTooLong() const;
 	void UpdateMovedTimeStamp();
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	/** `CNPC_VAsianVampire::SelectLedgeNode` `0x103615c0` — type `0x4653`, gated on
 	 *  `PositionClearForTeleport(node, 150.0)` and scored by distance to the NPC's OWN origin (the only
 	 *  selector of the eight that never asks for a player), then remembered. */
@@ -96,7 +96,7 @@ public:
 	/** `CNPC_VAsianVampire::PositionClearForTeleport` `0x103629d0`. */
 	bool PositionClearForTeleportAsian(const FVector& PositionCm, float ClearanceCm) const;
 
-	// From `ElysiumNpcKernelSchedule.inl`.
+	// From `ElysiumNpcSchedule.inl`.
 	/** `CNPC_VAsianVampire::m_bSuppressRanged`, `+0x66e8` — the two extra terms that class's
 	 *  `SelectScheduleMeleeCombat` (`0x10361be0`) puts on its ranged arms. Its one writer is `NPCInit`
 	 *  `0x10360ce0`, which sets it to 1. (`CNPC_VManBat::m_iMoveGoalNodeID` `+0x6674`, which the ManBat

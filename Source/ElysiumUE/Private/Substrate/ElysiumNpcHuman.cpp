@@ -33,10 +33,10 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10Shared.h"
-#include "Substrate/ElysiumNpcKernelAnim10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelCombat10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcAnim10Shared.h"
+#include "Substrate/ElysiumNpcAnim10_2Shared.h"
+#include "Substrate/ElysiumNpcCombat10_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLoadout.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -207,7 +207,7 @@ void FElysiumNpcHuman::ApplyStateWeaponVisibility(EElysiumNpcState NewState)
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelAnim10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
 uint32 FElysiumNpcHuman::ActiveWeaponDrawFlags() const
 {
@@ -534,7 +534,7 @@ int32 FElysiumNpcHuman::SelectScheduleMeleeCombatHuman()
 	return 0xcb;
 }
 
-// --- Moved from `ElysiumNpcKernelBosses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // Slot 601's `CNPC_VAndreiBlood`-line body — `0x10385cf0`.
@@ -571,7 +571,7 @@ void FElysiumNpcHuman::FUN_10385cf0()
 	++MeleeCoordinatorReleases;
 }
 
-// --- Moved from `ElysiumNpcKernelCombat10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
 
 // --- `CNPC_VHuman::SelectScheduleRangedCombat` `0x10386560`, 802 bytes ---------------------------
 
@@ -708,7 +708,7 @@ int32 FElysiumNpcHuman::HumanSelectScheduleRangedCombat(int32 Arg)
 	return 0xb9;
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
 
 void FElysiumNpcHuman::HideActiveWeaponIfAny()
 {

@@ -22,20 +22,20 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelFacingShared.h"
-#include "Substrate/ElysiumNpcKernelHintsShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotor2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPositions2Shared.h"
-#include "Substrate/ElysiumNpcKernelPositionsShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
+#include "Substrate/ElysiumNpcHintsShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPositions2Shared.h"
+#include "Substrate/ElysiumNpcPositionsShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpecies2Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10Shared.h"
+#include "Substrate/ElysiumNpcSpecies2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -214,9 +214,9 @@ const TCHAR* FElysiumNpcChangBros::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcChangBros::KillCenterEmitter()
 {
@@ -248,7 +248,7 @@ FElysiumEntityHandle FElysiumNpcChangBros::SpawnEnergyBall()
 	return Ball;
 }
 
-// --- Moved from `ElysiumNpcKernelFacing.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
 float FElysiumNpcChangBros::GetFacingTimeToTeleport() const
 {
@@ -317,7 +317,7 @@ void FElysiumNpcChangBros::UpdateFacingTimer()
 	FacingTime = World != nullptr ? World->NowSeconds() : 0.0;
 }
 
-// --- Moved from `ElysiumNpcKernelHints.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcChangBros::JumpPathSector(const FVector& PositionCm) const
 {
@@ -426,7 +426,7 @@ bool FElysiumNpcChangBros::CheckJumpPathToHintNode(const FHintWords& Hint) const
 	return JumpPathSector(Hint.OriginCm) != 4;
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcChangBros::ChangBrosNPCInit()
 {
@@ -443,7 +443,7 @@ void FElysiumNpcChangBros::ChangBrosNPCInit()
 	SetBodyEmitterName(2, TEXT("chang_spine_emitter"));
 }
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 void FElysiumNpcChangBros::StoreArenaCenter()
 {
@@ -475,7 +475,7 @@ void FElysiumNpcChangBros::StoreArenaCenter()
 	bChangCenterStored = true;
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcChangBros::ChangBrosSector(const FVector& PositionUnits) const
 {
@@ -607,7 +607,7 @@ void FElysiumNpcChangBros::SetupSuperJump(float Enabled)
 	CommitSetupJump();
 }
 
-// --- Moved from `ElysiumNpcKernelPositions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcChangBros::SelectTeleportNodeChangRule(TArrayView<const FHintWords> Nodes,
 	const FVector& PlayerCm, TFunctionRef<bool(const FVector&, float)> Clear,
@@ -811,7 +811,7 @@ bool FElysiumNpcChangBros::GetTeleportPosition(FVector& OutPositionCm) const
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelPositions2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcChangBros::IsUnreachableChang(FElysiumEntity* Unreachable)
 {
@@ -847,9 +847,9 @@ bool FElysiumNpcChangBros::IsUnreachableChang(FElysiumEntity* Unreachable)
 	return IsUnreachable(Unreachable);
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // `CNPC_VChangBros` — `0x1036c7f0`.
@@ -870,7 +870,7 @@ void FElysiumNpcChangBros::FUN_1036c7f0(int32 InChangType)
 	ChangType = InChangType;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 const TCHAR* FElysiumNpcChangBros::ChangPowerupEmitterName()
 {
@@ -882,7 +882,7 @@ const TCHAR* FElysiumNpcChangBros::ChangSpineEmitterName()
 	return TEXT("chang_spine_emitter");     // `0x10630e3c`
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcChangBros::CheckForTeleport()
 {
@@ -987,7 +987,7 @@ int32 FElysiumNpcChangBros::ChangBrosSelectLedgeNode() const
 	return Pick == INDEX_NONE ? INDEX_NONE : AcceptedIds[Pick];
 }
 
-// --- Moved from `ElysiumNpcKernelSquad.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSquad.cpp` (story 5 step 4) ---
 
 FElysiumNpcChangBros* FElysiumNpcChangBros::GetOtherBrother() const
 {
@@ -1060,5 +1060,5 @@ FElysiumEntity* FElysiumNpcChangBros::SelectUnitedNode() const
 	return nullptr;
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

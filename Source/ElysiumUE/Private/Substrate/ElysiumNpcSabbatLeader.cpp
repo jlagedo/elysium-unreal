@@ -2,7 +2,7 @@
 
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityWorld.h"
-#include "Substrate/ElysiumNpcKernelMotor2Shared.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -24,17 +24,17 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelFacingShared.h"
-#include "Substrate/ElysiumNpcKernelHintsShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPositionsShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
-#include "Substrate/ElysiumNpcKernelScheduleShared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
+#include "Substrate/ElysiumNpcHintsShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPositionsShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
+#include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -62,7 +62,7 @@ namespace
 			-(FMath::Cos(Pitch) * FMath::Sin(Yaw)), -FMath::Sin(Pitch));
 	}
 	// `AngleVectors` (`0x10139550`), forward only — the same body family Facing already recovered
-	// (`ElysiumNpcKernelFacing.cpp` § `RetailForward`), repeated here rather than exported because
+	// (`ElysiumNpcFacing.cpp` § `RetailForward`), repeated here rather than exported because
 	// it is a four-line Source identity and a cross-family header would be the larger dependency.
 	FVector HintsRetailForward(const FVector& SourceAngles)
 	{
@@ -504,7 +504,7 @@ void FElysiumNpcSabbatLeader::CheckStuck()
 	Origin = NpcKernelMotor2Shared::PortOf(Out);
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcSabbatLeader::SpawnBloodPoolEmitter(const FString& Name, const FElysiumEntity* OrientTo)
 {
@@ -524,9 +524,9 @@ void FElysiumNpcSabbatLeader::SpawnBloodPoolEmitter(const FString& Name, const F
 	StartNamedEmitter(Index);
 }
 
-// --- Moved from `ElysiumNpcKernelDialogue.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDialogueBodies.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelFacing.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcSabbatLeader::PlayerIsFacingMe() const
 {
@@ -558,7 +558,7 @@ bool FElysiumNpcSabbatLeader::PlayerIsFacingMe() const
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelHints.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---
 
 float FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3(const FVector& LineStart, const FVector& LineDir,
 	const FVector& Point)
@@ -605,9 +605,9 @@ float FElysiumNpcSabbatLeader::DistToHintCenterLine2D(const FHintWords& Hint, co
 	return DistToHintCenterLine2D_3(Start, Forward, PointCm);
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcSabbatLeader::SabbatLeaderTaskFail(int32 Reason)
 {
@@ -635,9 +635,9 @@ bool FElysiumNpcSabbatLeader::SabbatLeaderTaskFail(int32 Reason)
 	return true; // 0x103a94bc / 0x103a94db
 }
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcSabbatLeader::SolveJumpArc(const FVector& FromUnits, const FVector& ToUnits,
 	FVector& OutVelocityUnits) const
@@ -749,7 +749,7 @@ bool FElysiumNpcSabbatLeader::PlayerInNoJumpZone() const
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelPositions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcSabbatLeader::SelectTeleportArchwayRule(TArrayView<const FHintWords> Nodes,
 	const FVector& PlayerCm, float PlayerYaw)
@@ -915,9 +915,9 @@ int32 FElysiumNpcSabbatLeader::SelectDiveInPoint() const
 	return Pick == INDEX_NONE ? INDEX_NONE : NodeIds[Pick];
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
 // 0x103a9d00 `CNPC_VSabbatLeader::FlipFailureType`
 void FElysiumNpcSabbatLeader::FlipFailureType()
@@ -927,7 +927,7 @@ void FElysiumNpcSabbatLeader::FlipFailureType()
 	FailureType = 1 - FailureType;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcSabbatLeader::CheckForJumpCondition()
 {
@@ -1010,7 +1010,7 @@ bool FElysiumNpcSabbatLeader::PlayerDamagedEnoughThisRound() const
 	return GSabbatRoundDamageThreshold <= Risen;
 }
 
-// --- Moved from `ElysiumNpcKernelState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

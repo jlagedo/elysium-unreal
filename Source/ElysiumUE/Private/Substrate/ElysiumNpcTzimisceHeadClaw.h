@@ -34,7 +34,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VTzimisceHeadClaw`'s slow stamp. `+0x6678` is `CNPC_VTzimisceRunner::m_hPotentialEnemy`,
 	// `CNPC_VZombie::m_iZombieAIType` and `CNPC_VManBat::m_flFlapTimer` on three other species.
 	double HeadClawSlowedExpire = 0.0;   // +0x6678 CNPC_VTzimisceHeadClaw::m_flSlowedExpire (datamap)

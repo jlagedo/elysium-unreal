@@ -21,7 +21,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDialogue.inl`.
+	// From `ElysiumNpcDialogueBodies.inl`.
 	/** `+0x6660 m_iszLinkedCamera` — the authored `targetname` of the `CSecCamera` this security-camera
 	 *  NPC watches through. A datamap keyfield in retail (`linked_camera`), bound on this class since
 	 *  story 5 step 4, so the authored name lands through `Construct`. */
@@ -37,7 +37,7 @@ public:
 	 *  name is inferred from the RTTI cast it performs (`CSecCamera`) and the census field names. */
 	FElysiumEntity* ResolveSecCameraLink();
 
-	// From `ElysiumNpcKernelSenses10.inl`.
+	// From `ElysiumNpcSenses10.inl`.
 	/** `CNPC_VCameraSecurity::FInViewCone` (`0x10369fb0`), slot 363's body: like slot 201 (`FVisible`)
 	 *  it REPLACES the body it overrides outright, and answers true only for a candidate carrying a
 	 *  player record when the link resolves and the camera's CONE test alone (`0x1020cc60`) passes. A

@@ -22,13 +22,13 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelAnim10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelDebug10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcAnim10_2Shared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcDebug10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelState19_2Shared.h"
+#include "Substrate/ElysiumNpcState19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -467,7 +467,7 @@ void FElysiumNpcZombie::TraceAttack(void* InInfo, const FVector& DirUnits, void*
 	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
 }
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcZombie::ZombieGibAmmoTypeCvar(int32 Which) const
 {
@@ -507,7 +507,7 @@ bool FElysiumNpcZombie::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttacker
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelDebug10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcZombie::ZombieConditionBit(int32 ConditionId) const
 {
@@ -517,7 +517,7 @@ bool FElysiumNpcZombie::ZombieConditionBit(int32 ConditionId) const
 	return false;
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcZombie::FUN_103e12c0(FElysiumEntity* Victim)
 {

@@ -41,7 +41,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	/** `0x103ab110` — `CNPC_VSabbatLeader::SpawnBloodPoolEmitter(string_t name, CBaseEntity* orient)`.
 	 *  Takes this NPC's own origin (slot 217, `+0x364`), replaces its Z either with `orient`'s origin Z
 	 *  when one is given or with `thunk_FUN_101d08e0(origin, z)`'s answer when it is not — retail's
@@ -49,11 +49,11 @@ public:
 	 *  failure arm dereferences a null pointer in retail; this port refuses instead and says so. */
 	void SpawnBloodPoolEmitter(const FString& Name, const FElysiumEntity* OrientTo);
 
-	// From `ElysiumNpcKernelFacing.inl`.
+	// From `ElysiumNpcFacing.inl`.
 	// `CNPC_VSabbatLeader::PlayerIsFacingMe` `0x103aaf50`.
 	bool PlayerIsFacingMe() const;
 
-	// From `ElysiumNpcKernelHints.inl`.
+	// From `ElysiumNpcHints.inl`.
 	/** `CNPC_VVampireBoss::DistToHintCenterLine2D_3` (`0x103c6680`) — the squared-then-rooted distance
 	 *  from `Point` to the line through `LineStart` along `LineDir`. */
 	static float DistToHintCenterLine2D_3(const FVector& LineStart, const FVector& LineDir,
@@ -62,7 +62,7 @@ public:
 	 *  the hint's own origin and facing, flattened to 2D. */
 	static float DistToHintCenterLine2D(const FHintWords& Hint, const FVector& PointCm);
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	/** SabbatLeader words Damage / Misc / Schedule already carry some of; these are the rest.
 	 *  `bSabbatLeaderActivated` (`+0x66b8`) is family State19's. */
 	int32 SabbatLeaderRouteFailCount = 0;        // +0x66bc — Schedule already has FailureType at +0x66c0
@@ -72,15 +72,15 @@ public:
 	bool bSabbatLeaderLastAttackWasNova = false;
 	bool bSabbatLeaderTrackPlayer = false;
 
-	// From `ElysiumNpcKernelMaintain19.inl`.
+	// From `ElysiumNpcMaintain19.inl`.
 	/** `CNPC_VSabbatLeader::TaskFail` (`0x103a9400`). True means its flip path returned without the
 	 *  Troika chain and the caller must stop. */
 	bool SabbatLeaderTaskFail(int32 Reason);
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	int32 SabbatLeaderRoarAttackCount = 0;   // +0x66e0 CNPC_VSabbatLeader::m_RoarAttackCount
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	/** `thunk_FUN_102c4cc0(this, out, from, to)` — retail's jump-arc solver, which
 	 *  `SetJumpVelocityTowardPlayer` (`0x103aad40`) feeds the lead position and then assigns straight to
 	 *  `SetAbsVelocity`. **SEAM**: no solver here; answers false and the velocity is left alone. */
@@ -94,7 +94,7 @@ public:
 	/** `CNPC_VSabbatLeader::PlayerInNoJumpZone` `0x103a9e70`. */
 	bool PlayerInNoJumpZone() const;
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	/** `CNPC_VSabbatLeader::SelectTeleportArchway` `0x103a9540` — the type-`0x3e82` node whose flat
 	 *  distance to the player clears `_DAT_104c3cbc` and whose yaw is closest to the player's own. */
 	static int32 SelectTeleportArchwayRule(TArrayView<const FHintWords> Nodes, const FVector& PlayerCm,
@@ -112,13 +112,13 @@ public:
 	int32 SelectDiveInPoint() const;
 	int32 SelectDiveOutPoint() const;
 
-	// From `ElysiumNpcKernelSchedule.inl`.
+	// From `ElysiumNpcSchedule.inl`.
 	/** `CNPC_VSabbatLeader::FlipFailureType` (`0x103a9d00`): `m_FailureType = 1 - m_FailureType`. */
 	void FlipFailureType();
 	/** `CNPC_VSabbatLeader::m_FailureType`, `+0x66c0`. */
 	int32 FailureType = 0;
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VSabbatLeader::CheckForJumpCondition` (`0x103a9d90`), three arms in retail's order:
 	 *  `0x103c67f0(this, DAT_104c3cc8)` — `curtime - m_flLastAttackTime (+0x5d9c)` STRICTLY greater than
 	 *  **8.0** — then a health loss since the mark of `_DAT_104c3cc4` = **0.0666667** or more, then
@@ -144,7 +144,7 @@ public:
 	 *  `0x4c3ce0` of the pinned image) `<= (float)(stat0x0f - m_LastPlayerHealth)`. */
 	bool PlayerDamagedEnoughThisRound() const;
 
-	// From `ElysiumNpcKernelState19.inl`.
+	// From `ElysiumNpcState19.inl`.
 	/** `CNPC_VSabbatLeader::m_bActivated` (`+0x66b8`). Default 0, so an unactivated leader is IDLE. */
 	bool bSabbatLeaderActivated = false;
 

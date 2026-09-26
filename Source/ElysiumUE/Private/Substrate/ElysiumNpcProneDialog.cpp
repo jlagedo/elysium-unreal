@@ -7,7 +7,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelSensesShared.h"
+#include "Substrate/ElysiumNpcSensesBodiesShared.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
@@ -26,7 +26,7 @@ const FElysiumNpcClass* FElysiumNpcProneDialog::OwnRetailClass() const
 	return Row;
 }
 
-// --- Moved from `ElysiumNpcKernelSenses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSensesBodies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcProneDialog::ProneDialogPassesFindEntityFovTrace(const FVector& FromCm, const FVector& ToCm,
 	int32 Mask, bool& bOutRayIsValid) const

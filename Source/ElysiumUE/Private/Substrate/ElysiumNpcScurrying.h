@@ -29,7 +29,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelSenses10.inl`.
+	// From `ElysiumNpcSenses10.inl`.
 	/** `CNPC_VScurrying::m_flDetectionDistance` (`+0x6690`), `m_fIgnoreNosferatu` (`+0x6694`) and
 	 *  `m_fMustDetect` (`+0x6695`) — shape rows with no port producer until now. They are this family's
 	 *  words because `ScurryingShouldDetect` is their only reader. SOURCE units on the distance, as the

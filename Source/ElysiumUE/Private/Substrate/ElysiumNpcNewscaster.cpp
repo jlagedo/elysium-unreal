@@ -19,9 +19,9 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelDebug10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcDebug10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -190,7 +190,7 @@ int32 FElysiumNpcNewscaster::DrawDebugTextOverlays()
 	return Base + NewscasterStoryOverlayLines(Base);
 }
 
-// --- Moved from `ElysiumNpcKernelDebug10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcNewscaster::NewscasterStoryOverlayLines(int32 FirstLine)
 {
@@ -200,7 +200,7 @@ int32 FElysiumNpcNewscaster::NewscasterStoryOverlayLines(int32 FirstLine)
 	return 0;
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcNewscaster::FUN_103a0d50()
 {
@@ -291,7 +291,7 @@ int32 FElysiumNpcNewscaster::FUN_103a0ff0(int32 FirstLine, TArray<FString>& OutL
 	return Line;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesMisc10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesMisc10.cpp` (story 5 step 4) ---
 
 void FElysiumNpcNewscaster::LoadNewscasterStories()
 {

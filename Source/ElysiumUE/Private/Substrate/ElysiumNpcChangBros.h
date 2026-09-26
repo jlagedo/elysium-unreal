@@ -27,7 +27,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VChangBros`'s single centre emitter.
 	FElysiumEntityHandle ChangCenterEmitter;     // +0x66f4 m_hCenterEmitter (datamap)
 	/** `0x1036e8c0` — `CNPC_VChangBros::KillCenterEmitter`: the same stop-then-0.1 s-fade pair on the
@@ -41,7 +41,7 @@ public:
 	 *  `+0x5d0` with speed `DAT_104ada30` = 800. */
 	FElysiumEntityHandle SpawnEnergyBall();
 
-	// From `ElysiumNpcKernelFacing.inl`.
+	// From `ElysiumNpcFacing.inl`.
 	// +0x66d0 m_fFacingTime (`CNPC_VChangBros`) — the curtime stamp `UpdateFacingTimer` resets, and the
 	// clock `GetFacingTimeToTeleport`'s answer is measured against. Carried as double like every other
 	// stamp in this runtime.
@@ -51,7 +51,7 @@ public:
 	// `CNPC_VChangBros::UpdateFacingTimer` `0x1036d600`.
 	void UpdateFacingTimer();
 
-	// From `ElysiumNpcKernelHints.inl`.
+	// From `ElysiumNpcHints.inl`.
 	/** `CNPC_VChangBros::CheckJumpPathToHintNode` (`0x1036df50`) — may this brother jump to the hint
 	 *  without crossing the closest player, or the other brother, or a sector-4 endpoint? */
 	bool CheckJumpPathToHintNode(const FHintWords& Hint) const;
@@ -64,16 +64,16 @@ public:
 	 *  sector 4" and so does not block a jump retail would have allowed. */
 	int32 JumpPathSector(const FVector& PositionCm) const;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	void ChangBrosNPCInit();            // `0x1036b050`
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	/** `CNPC_VChangBros::StoreArenaCenter` (`0x1036e400`) — walk the global `CAI_Hint` list for the
 	 *  first node of type `0x4651`, take its origin into `m_vArenaCenter` (`+0x66dc`, family
 	 *  **Positions**' `ChangArenaCenter`) and raise `m_bCenterStored` (`+0x66e8`). */
 	void StoreArenaCenter();
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	// +0x66cc `CNPC_VChangBros::m_fLastJumpTime` (`FIELD_TIME`) — the stamp `CheckForJumpAttack`
 	// (`0x1036c8d0`) measures both itself and every squad sibling against. An absolute curtime stamp,
 	// carried as double like every other stamp in this runtime.
@@ -87,7 +87,7 @@ public:
 	/** `CNPC_VChangBros::SetupSuperJump` `0x1036e160`. */
 	void SetupSuperJump(float Enabled);
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	// `CNPC_VChangBros`'s teleport words and its arena centre.
 	FVector ChangLastTeleportPosition = FVector::ZeroVector;    // +0x66bc m_vLastTeleportPosition
 	double ChangLastTeleportTime = 0.0;                         // +0x66c8 m_fLastTeleportTime
@@ -113,7 +113,7 @@ public:
 	// is the Chang brothers' override of it, which answers from the arena's sectors first.
 	bool IsUnreachableChang(FElysiumEntity* Unreachable);   // `0x1036e6f0`
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	/** `0x1036c7f0` — `CNPC_VChangBros::SetChangType`, a plain setter over family Squad's `ChangType`. */
 	void FUN_1036c7f0(int32 InChangType);
 
@@ -123,7 +123,7 @@ public:
 	static const TCHAR* ChangPowerupEmitterName();
 	static const TCHAR* ChangSpineEmitterName();
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VChangBros::CheckForTeleport` (`0x1036cab0`), three arms in retail's order: `m_ChangType`
 	 *  (`+0x66b8`, family Squad's `ChangType`) equal to 1 answers false outright; else a health loss of
 	 *  `_DAT_104ad9f8` = **0.1** or more since the mark answers true; else, only for type 0 and only
@@ -153,7 +153,7 @@ public:
 		const FVector& MeasureFromCm);
 	int32 ChangBrosSelectLedgeNode() const;
 
-	// From `ElysiumNpcKernelSquad.inl`.
+	// From `ElysiumNpcSquad.inl`.
 	int32 ChangType = 0;  // +0x66b8 CNPC_VChangBros::m_ChangType (datamap)
 	/** `CNPC_VChangBros::GetOtherBrother` (`0x1036e2f0`) — the paired brother, found by walking my
 	 *  squad for another `CNPC_VChangBros`. */

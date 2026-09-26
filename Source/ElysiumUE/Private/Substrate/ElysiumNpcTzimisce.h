@@ -49,7 +49,7 @@ public:
 	/** `thunk_FUN_103be130(this)` — `CNPC_VTzimisce`'s carry-body probe, the same `+0x14b8` bit 5. */
 	bool TzimisceCarryFormBit() const;
 
-	// From `ElysiumNpcKernelConditions.inl`.
+	// From `ElysiumNpcConditionsBodies.inl`.
 	/** `CNPC_VTzimisce::vfunc463`'s expression map (`0x103ba2c0` + `0x103b9f50`): the retail state to
 	 *  one of `PTR_s_normal_10653120`'s four names. Null for a state the switch does not name, which is
 	 *  the arm that writes nothing. Pure, so the map is drivable with no NPC at all. */
@@ -59,7 +59,7 @@ public:
 	 *  in `DefExpression` and blends nothing. `BlendSeconds` is retail's own `1.0`. */
 	void SetDefaultExpression(const TCHAR* ExpressionName, float BlendSeconds);
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	// `CNPC_VTzimisce`'s link handle. Family Motor owns `m_hPickupTarget` (+0x6670) and `m_ePathMode`
 	// (+0x668c); `+0x6684` is this family's, read and cleared by `0x103bf170`.
 	FElysiumEntityHandle TzimiscePhysicsAnimlink;   // +0x6684 m_hPhysicsAnimlink (datamap)
@@ -73,7 +73,7 @@ public:
 	 *  retail's own unguarded call; then clear the carrying-body flag. */
 	void VGargoyleGibCleanup();
 
-	// From `ElysiumNpcKernelDebug.inl`.
+	// From `ElysiumNpcDebug.inl`.
 	/** `CNPC_VTzimisce::GetEventName` (`0x103bdd10`) — slot 241's only species override. Answers the
 	 *  fixed name for anim-event ids 2..8 and null for everything else, which is the caller's signal to
 	 *  fall through to `CBaseAnimating::GetEventName`. */
@@ -84,7 +84,7 @@ public:
 	 *  and the two globals keep whatever the last Tzimisce put there. */
 	bool TzimisceIsCarryingBody() const;
 
-	// From `ElysiumNpcKernelHints.inl`.
+	// From `ElysiumNpcHints.inl`.
 	/** `0x103bfa50` — `CNPC_VTzimisce`'s two-group hint pick (14000 vs 14001 within 200 units, nearer
 	 *  wins, loser released with a 0.5 s reuse delay). NAMED for what it does: the generic
 	 *  `FindHintNode` above is a different behaviour that happens to share 29c's target name. */
@@ -93,7 +93,7 @@ public:
 	 *  choosing between the two schedule ids. Answers false. */
 	bool IsTzimisceHintUsable(int32 HintNode, const FElysiumEntity* Anchor) const;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	/** `CNPC_VTzimisce` species words; `PickupTarget` (`+0x6670`), `PathMode` (`+0x668c`) and
 	 *  `TzimisceShunnedFindBody` (`+0x66b8`) are declared with the class's other words. */
 	bool bTzimisceFirstEnemy = false;            // +0x6689
@@ -103,7 +103,7 @@ public:
 	int32 TzimisceStartNpcRearms = 0;
 	int32 ExpressionMapResets = 0;           // `0x103b9f50`
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	// `CNPC_VTzimisce`'s pickup triple, read by its slot 410 `TranslateNavGoalPosition` (`0x103bf580`):
 	// +0x6670 `m_hPickupTarget`, +0x6674 `m_vecPickupTargetPos` (SOURCE units) and +0x668c
 	// `m_ePathMode`. Note the offsets: `m_ePathMode` is the HIGHEST of the three, not the lowest — the
@@ -114,7 +114,7 @@ public:
 	 *  the base `0x101a6420` and remains the generator's. */
 	bool TranslateNavGoalPositionTzimisce(const FVector& GoalUnits, FVector& OutGoalUnits) const;
 
-	// From `ElysiumNpcKernelPositions.inl`.
+	// From `ElysiumNpcPositions.inl`.
 	/** `CNPC_VTzimisce::vfunc389` `0x103bfd80`. The generated `Weapon_ShootPosition` keeps the Troika
 	 *  line's body (`0x103338c0`, another family's row); this is the species branch beside it. False
 	 *  means the activity is neither `0x106` nor `0x107` and the base answer stands. */
@@ -129,7 +129,7 @@ public:
 	 *  `DAT_1093cc3c` (forward, `tzimisce_claw_left_x` "0"). */
 	static float TzimisceAimConVar(int32 Which);
 
-	// From `ElysiumNpcKernelSpecies.inl`.
+	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VTzimisce`'s own words. `m_hPickupTarget` (+0x6670) and `m_vecPickupTargetPos` (+0x6674)
 	// are family **Motor**'s `PickupTarget`/`PickupTargetPos`; `m_hPhysicsAnimlink` (+0x6684) is family
 	// **Damage**'s `TzimiscePhysicsAnimlink`. All three are read through their owners here.
@@ -165,6 +165,6 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	int32 PathMode = 0;
 };

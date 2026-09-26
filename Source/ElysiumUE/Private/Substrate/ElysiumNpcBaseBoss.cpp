@@ -11,8 +11,8 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelDebugShared.h"
-#include "Substrate/ElysiumNpcKernelPositions2Shared.h"
+#include "Substrate/ElysiumNpcDebugShared.h"
+#include "Substrate/ElysiumNpcPositions2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -39,7 +39,7 @@ void FElysiumNpcBaseBoss::DrawDebugStatOverlays()
 	BossDrawDebugStatOverlays();
 }
 
-// --- Moved from `ElysiumNpcKernelBosses.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcBaseBoss::BossBlacklistHolds(const FElysiumEntity* Candidate) const
 {
@@ -51,7 +51,7 @@ bool FElysiumNpcBaseBoss::BossBlacklistHolds(const FElysiumEntity* Candidate) co
 	return const_cast<FElysiumNpcBaseBoss*>(this)->FUN_10366400(Candidate);
 }
 
-// --- Moved from `ElysiumNpcKernelDebug.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 4) ---
 
 void FElysiumNpcBaseBoss::BossDrawDebugStatOverlays()
 {
@@ -71,7 +71,7 @@ void FElysiumNpcBaseBoss::BossDrawDebugStatOverlays()
 	BaseDrawDebugStatOverlays();
 }
 
-// --- Moved from `ElysiumNpcKernelPositions2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---
 
 FElysiumNpc::FEnemySightCandidates FElysiumNpcBaseBoss::EnemySightCandidatesOf(const FVector& BoxMinCm,
 	const FVector& BoxMaxCm, const FVector& ExtentsCm, float RandomZCm)
@@ -94,7 +94,7 @@ FElysiumNpc::FEnemySightCandidates FElysiumNpcBaseBoss::EnemySightCandidatesOf(c
 	return Out;
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 void FElysiumNpcBaseBoss::FUN_103662d0(const FElysiumEntityHandle& Entity, float Seconds)
 {

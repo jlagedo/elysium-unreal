@@ -15,12 +15,12 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelMotorShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -329,13 +329,13 @@ void FElysiumNpcGargoyle::TouchSpecies(FElysiumEntity* Other)
 	BaseEntityTouch(Other);
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelMisc.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcGargoyle::GargoyleHitsPillar(const FString& Classname)
 {
@@ -346,7 +346,7 @@ bool FElysiumNpcGargoyle::GargoyleHitsPillar(const FString& Classname)
 		|| Classname.Equals(TEXT("central_pillar"), ESearchCase::IgnoreCase);
 }
 
-// --- Moved from `ElysiumNpcKernelMotor.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcGargoyle::GargoyleIgnoresClassname(const FString& Classname)
 {
@@ -358,9 +358,9 @@ bool FElysiumNpcGargoyle::GargoyleIgnoresClassname(const FString& Classname)
 		|| Classname.Equals(TEXT("func_door_rotating"), ESearchCase::IgnoreCase);
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSpecies.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcGargoyle::FUN_10379ef0(FElysiumEntity* Enemy)
 {
@@ -370,7 +370,7 @@ bool FElysiumNpcGargoyle::FUN_10379ef0(FElysiumEntity* Enemy)
 	return FUN_10376b70(Enemy);
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

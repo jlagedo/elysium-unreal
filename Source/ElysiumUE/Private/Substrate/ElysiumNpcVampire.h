@@ -19,7 +19,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	/** The slot-292 gate `CNPC_VGargoyle` (`0x10378cb0`) and `CNPC_VHengeyokai` (`0x103802a0`) share
 	 *  byte for byte, so it can be measured without a world.
 	 *  `Magnitude` is `CVDmg_t::GetDmg()` when the packet carries a descriptor and `m_flDamage` when it

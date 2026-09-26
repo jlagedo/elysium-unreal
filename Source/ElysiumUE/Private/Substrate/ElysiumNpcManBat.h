@@ -24,7 +24,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelBosses.inl`.
+	// From `ElysiumNpcBosses.inl`.
 	// `CNPC_VManBat`'s own words.
 	bool bManBatReachedMoveGoal = false;   // +0x6664 m_bReachedMoveGoal
 	int32 ManBatMoveGoalNodeMode = 0;      // +0x6668 m_iMoveGoalNodeMode, DECODED
@@ -89,7 +89,7 @@ public:
 	 *  acceleration clamp (retail's inlined `ConVar::GetFloat`): `manbat_delta`, shipped "600.0". */
 	float ManBatAccelerationCvar() const;
 
-	// From `ElysiumNpcKernelDamage.inl`.
+	// From `ElysiumNpcDamage.inl`.
 	/** `0x1038f2c0` — `CNPC_VManBat::ThrowModel(const char* model, const char* parentName)`, named by
 	 *  its own `DevMsg` literal `"ManBat is throwing model %s"`. Creates a `prop_physics` at this NPC's
 	 *  origin without spawning it, sets its model, spawns it, looks a bone up by the SAME string, makes
@@ -120,21 +120,21 @@ public:
 	 *  POINTER against zero, so an unnamed hint matches and a named one does not. */
 	bool ManBatValidateHintType(const FHintWords& Hint) const;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr int32 HullIndexManBat = 0x14;       // `0x1038b070`
 	static constexpr double ManBatFlapDelaySeconds = 2.3;    // `_DAT_104bc690`
 	/** `CNPC_VManBat` species words. `ManBatFlapTimer` and `bHasPlayedFlyBySound` already exist. */
 	bool bManBatHasScaredMinions = false;        // +0x66b0
 	double ManBatFlyTimer = 0.0;                 // +0x667c
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	float ManBatSlowedExpire = 0.f;          // +0x6684 CNPC_VManBat::m_flSlowedExpire
 	/** `0x1038f290` — is `CNPC_VManBat`'s slow effect still running? `m_flSlowedExpire` (`+0x6684`)
 	 *  strictly above `_DAT_1044fab0`, the shared `0.0` DOUBLE (`docs/vtmb/footsteps.md:319`, the
 	 *  2-D speed gate). A flag test spelled as a float compare, not a deadline against curtime. */
 	bool SlowedExpire() const;
 
-	// From `ElysiumNpcKernelSounds.inl`.
+	// From `ElysiumNpcSounds.inl`.
 	// `CNPC_VManBat::m_bHasPlayedFlyBySound` (`+0x66b8`, `FIELD_BOOLEAN`). A SPECIES word: `+0x66b8` is
 	// claimed by four different classes in the census and this is CNPC_VManBat's reading of it.
 	bool bHasPlayedFlyBySound = false;
@@ -143,7 +143,7 @@ public:
 	// reset and nothing more.
 	void ClearHasPlayedFlyBySound();
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VManBat::StartScreechCone` (`0x1038e9c0`), 1283 bytes, no vtable slot; one direct caller,
 	 *  `StartTask` (`0x1038c390`), once with the resolved enemy and once with null. Retail name
 	 *  unrecovered; named for what it does. */

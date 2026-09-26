@@ -25,7 +25,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	/** `CNPC_VPedestrian::m_bFirstThink` (`+0x6678`) and `CNPC_VTaxiDriver::m_bFirstThink` (`+0x6660`).
 	 *  Different offsets, two members. */
 	bool bPedestrianFirstThink = false;
@@ -35,10 +35,10 @@ public:
 	 *  level reset runs after it resizes the hull. No spatial partition stands at this tier; counted. */
 	int32 RestoreRelinkCalls = 0;
 
-	// From `ElysiumNpcKernelSenses.inl`.
+	// From `ElysiumNpcSensesBodies.inl`.
 	static uint32 DecodeWitnessedLevel(uint32 Stored);
 
-	// From `ElysiumNpcKernelSpeciesMisc10.inl`.
+	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VPedestrian::CreateCorpse` (`0x103a38c0`), slot 301's species body. BEFORE the base it
 	 *  snapshots the collision OBB — `m_Collision` vtable `+4` into `m_vecPreDeathMins` (`+0x6660`) and
 	 *  `+8` into `m_vecPreDeathMaxs` (`+0x666c`) — because the base resizes the hull; then

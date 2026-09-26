@@ -925,7 +925,7 @@ _Recovered 2026-09-14, story 29d._
 
 Ten rows: whether an NPC will talk, what ends a line, what the tweak file may set, and what the
 dialogue packet carries. Four are `CAI_BaseNPCTroika` bodies and land in
-`Substrate/ElysiumNpcKernelSocial10.{inl,cpp}`; three are `CDialog`'s and land in
+`Substrate/ElysiumNpcSocial10.{inl,cpp}`; three are `CDialog`'s and land in
 `Public/ElysiumDlg.h` / `Private/Scripting/ElysiumDlg.cpp` under `namespace ElysiumDlgRetail`,
 because the overlay's target for all three is `FElysiumDlgConversation::EnterNpcLine`; two are
 `CBasePlayer`'s and land on `FElysiumPlayer`; and two were already `present`. The suite is

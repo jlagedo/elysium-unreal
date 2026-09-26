@@ -3571,7 +3571,7 @@ the `DAT_10924a1c` melee-range ConVar's default, `DAT_1093ca8c` and `DAT_1093ca4
 ## Story 29c-1, family Geometry — where a body sits and how big it is
 
 _Recovered 2026-09-13._ The six eye/anchor slots, the hull-bit query, `SetSize`, and the four bodies
-that push one body out of another. Ported in `Substrate/ElysiumNpcKernelGeometry.inl` /
+that push one body out of another. Ported in `Substrate/ElysiumNpcGeometry.inl` /
 `.cpp`, tested by `Elysium.Substrate.NpcKernelGeometry.*`.
 
 Ten of the family's cells were only ever named in the decompiled C and are settled here by reading
@@ -4194,7 +4194,7 @@ read from the `animevent_t`'s first word, not from the buffer pointer, which is 
 _Recovered 2026-09-13._ The 41 Troika-line slots of layers 0–9 whose 29c verdict is `present` (the
 port already runs the body somewhere) or `mechanism` (the engine supplies it). Each of them was a
 generated stub, so the slot the kernel dispatches through answered a tally rather than the port's own
-answer; the family is the wire. Ported in `Substrate/ElysiumNpcKernelClosure.inl` / `.cpp`, tested by
+answer; the family is the wire. Ported in `Substrate/ElysiumNpcClosure.inl` / `.cpp`, tested by
 `Elysium.Substrate.NpcKernelClosure.*`. The sections below are the bodies over 64 bytes that had no
 walked paragraph; the eye maintainer and the point view cone are in `senses.md` and the feed-end
 output is in `lifecycle.md`.

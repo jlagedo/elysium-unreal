@@ -1874,7 +1874,7 @@ schedule choice recorded in
 Story 29c-1's family **Damage** walked the layer 0–9 bodies of the `CAI_BaseNPC` family that carry
 damage, death and the effects the two spawn. What is above this section is the pipeline; what is
 below is each recovered body's own arms, thresholds and writes. The port is
-`Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelDamage.cpp`.
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp`.
 
 ### `CAI_BaseNPC::TraceAttack` — `0x10266780`
 

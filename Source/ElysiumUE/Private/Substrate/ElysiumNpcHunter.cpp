@@ -16,11 +16,11 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelSenses10Shared.h"
+#include "Substrate/ElysiumNpcConditions10Shared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcSenses10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -163,11 +163,11 @@ const TCHAR* FElysiumNpcHunter::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelConditions10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSenses10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSenses10.cpp` (story 5 step 4) ---
 
 FElysiumEntityHandle FElysiumNpcHunter::HunterSuspectHandle() { return NpcKernelSenses10Shared::GHunterSuspect; }
 
@@ -185,7 +185,7 @@ void FElysiumNpcHunter::StampHunterSuspect(FElysiumEntity* Seen)
 	NpcKernelSenses10Shared::GHunterSuspect = Seen->Handle;
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 const TCHAR* FElysiumNpcHunter::PlayerHateRelationshipSpec()
 {
@@ -211,5 +211,5 @@ void FElysiumNpcHunter::HunterHatePlayer()
 	++PlayerHateRelationshipSets;
 }
 
-// --- Moved from `ElysiumNpcKernelTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 

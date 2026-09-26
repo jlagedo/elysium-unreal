@@ -21,17 +21,17 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelDamage2Shared.h"
-#include "Substrate/ElysiumNpcKernelDamageShared.h"
-#include "Substrate/ElysiumNpcKernelFacingShared.h"
-#include "Substrate/ElysiumNpcKernelLifecycle19_2Shared.h"
-#include "Substrate/ElysiumNpcKernelPositionsShared.h"
-#include "Substrate/ElysiumNpcKernelPrecache10Shared.h"
-#include "Substrate/ElysiumNpcKernelScheduleShared.h"
+#include "Substrate/ElysiumNpcDamage2Shared.h"
+#include "Substrate/ElysiumNpcDamageShared.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
+#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcPositionsShared.h"
+#include "Substrate/ElysiumNpcPrecache10Shared.h"
+#include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcKernelSpecies2Shared.h"
-#include "Substrate/ElysiumNpcKernelSpeciesLifecycle10Shared.h"
-#include "Substrate/ElysiumNpcKernelState19Shared.h"
+#include "Substrate/ElysiumNpcSpecies2Shared.h"
+#include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
+#include "Substrate/ElysiumNpcState19Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -164,7 +164,7 @@ const TCHAR* FElysiumNpcAndreiBlood::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcKernelDamage.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 const TCHAR* FElysiumNpcAndreiBlood::SummonEmitterBoneName()
 {
@@ -181,7 +181,7 @@ EElysiumNpcState FElysiumNpcAndreiBlood::CNPC_VAndreiBlood_vfunc461()
 	return bAndreiActivated ? EElysiumNpcState::Alert : EElysiumNpcState::Idle;
 }
 
-// --- Moved from `ElysiumNpcKernelDamage2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcAndreiBlood::StartBloodEmitter(const FString& Name)
 {
@@ -221,7 +221,7 @@ void FElysiumNpcAndreiBlood::StartSummonEmitter(const FString& Name)
 	StartNamedEmitter(Index);
 }
 
-// --- Moved from `ElysiumNpcKernelFacing.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
 void FElysiumNpcAndreiBlood::FacePlayerAdvance()
 {
@@ -248,9 +248,9 @@ void FElysiumNpcAndreiBlood::FacePlayerAdvance()
 	}
 }
 
-// --- Moved from `ElysiumNpcKernelLifecycle19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelPositions.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPositions.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcAndreiBlood::SelectTeleportNodeAndreiRule(TArrayView<const FHintWords> Nodes,
 	const FVector& PlayerCm, bool bPickFarthest, TFunctionRef<bool(const FVector&, float)> Clear)
@@ -340,20 +340,20 @@ bool FElysiumNpcAndreiBlood::PositionClearForTeleportAndrei(const FVector& Posit
 	return true;
 }
 
-// --- Moved from `ElysiumNpcKernelPrecache10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcKernelSchedule.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcAndreiBlood::AndreiBloodSelectGate() const
 {
 	// NO LONGER A SEAM. `thunk_FUN_1035e920` reads `+0x66b8`, which family **Species** recovered as
 	// `CNPC_VAndreiBlood::m_iActiveRunnerCount` and declared, and landed the body as `FUN_1035e920`
-	// in `ElysiumNpcKernelSpecies2.cpp`. False is still the arm that answers `0x15c`; it is now
+	// in `ElysiumNpcSpecies2.cpp`. False is still the arm that answers `0x15c`; it is now
 	// false because the runner budget says so rather than because nothing answered.
 	return FUN_1035e920();
 }
 
-// --- Moved from `ElysiumNpcKernelSpecies2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcAndreiBlood::FUN_1035e920() const
 {
@@ -368,7 +368,7 @@ bool FElysiumNpcAndreiBlood::FUN_1035e920() const
 	// is the predicate its schedule selector asks.
 	//
 	// Family **Schedule** stands a seam for exactly this body — `AndreiBloodSelectGate`
-	// (`ElysiumNpcKernelSchedule.cpp:1354`) — which answers false because `+0x66b8` had no port
+	// (`ElysiumNpcSchedule.cpp:1354`) — which answers false because `+0x66b8` had no port
 	// member. It does now. The one-line forward is that family's file and is reported rather than
 	// edited here.
 	return ActiveRunnerCount < AndreiMaxActiveRunners;
@@ -389,7 +389,7 @@ void FElysiumNpcAndreiBlood::FUN_1035e950()
 		.RandRange(AndreiHitMaxMin, AndreiHitMaxMax);
 }
 
-// --- Moved from `ElysiumNpcKernelSpeciesLifecycle10.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
 // The two destructors.
@@ -427,5 +427,5 @@ void FElysiumNpcAndreiBlood::DestroyAndreiBlood()
 	// `1035ce51 JMP 0x100123af` — `~CAI_BaseNPCTroika`. This runtime's teardown is the world's reap.
 }
 
-// --- Moved from `ElysiumNpcKernelState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
 

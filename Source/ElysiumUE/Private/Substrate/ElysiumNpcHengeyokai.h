@@ -46,7 +46,7 @@ public:
 	 *  bit `0x20 CARRYING_BODY`. Not a seam: the port carries the word. */
 	bool HengeyokaiCarryFormBit() const;
 
-	// From `ElysiumNpcKernelBosses.inl`.
+	// From `ElysiumNpcBosses.inl`.
 	// `CNPC_VHengeyokai`'s pickup chain. `+0x6664`/`+0x6668`/`+0x6684`/`+0x6690` are its own datamap
 	// words; family Motor's `PickupTarget`/`PickupTargetPos` are `CNPC_VTzimisce`'s at +0x6670/+0x6674
 	// and are a different species' fact at a different offset.
@@ -103,20 +103,20 @@ public:
 	 *  generated stub owned by another story; answers the empty string, which is retail's null arm. */
 	FString HengeyokaiSlot9String() const;
 
-	// From `ElysiumNpcKernelLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle19.inl`.
 	static constexpr int32 HullIndexHengeyokai = 0x12;   // `0x1037fa70`
 	/** `CNPC_VHengeyokai` species words; `m_iShunnedFindFish` (`+0x6678`) is `HengeyokaiShunnedFindFish`. */
 	bool bHengeyokaiJustFoundFish = false;       // +0x667c
 	bool bHengeyokaiInSharkForm = false;         // +0x6694
 	double HengeyokaiShunnedFishTimer = 0.0;     // +0x6670
 
-	// From `ElysiumNpcKernelMisc.inl`.
+	// From `ElysiumNpcMisc.inl`.
 	/** `0x10381ca0` — the read half of the pair above: has `m_flFishTimer` (`+0x666c`) reached curtime?
 	 *  NAMED `FormBitTimerExpired`, not 29c's `FormBit`: that name is the setter's, and one method
 	 *  cannot be both a `void(bool)` and a `bool()`. */
 	bool FormBitTimerExpired() const;
 
-	// From `ElysiumNpcKernelMotor.inl`.
+	// From `ElysiumNpcMotor.inl`.
 	/** `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s cancel of the motor's queued facing/link
 	 *  state. **SEAM**: shares the Facing family's finding that this mover keeps no facing queue. */
 	void MotorCancelLinkFacing();

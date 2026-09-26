@@ -24,7 +24,7 @@
 // --- `CAI_BaseNPC::m_UnreachableEnts` (`+0x5d48`, count `+0x5d54`) --------------------------------
 //
 // NOT declared here. Family **Positions** already stands the list as `FUnreachableEntity` /
-// `UnreachableEnts` (`ElysiumNpcKernelPositions.inl`) for `IsUnreachable`'s sweep, which is the
+// `UnreachableEnts` (`ElysiumNpcPositions.inl`) for `IsUnreachable`'s sweep, which is the
 // READ side of this family's `RememberUnreachable` (`0x10274080`) — the write side. One list, two
 // bodies, and re-declaring it would have been the drift this story exists to end.
 
