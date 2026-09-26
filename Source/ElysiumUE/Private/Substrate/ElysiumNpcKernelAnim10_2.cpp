@@ -564,16 +564,6 @@ int32 FElysiumNpc::SelectScheduleMeleeCombatBach()
 // Family SpeciesAnim10 — slot 509's zombie arm.
 // =================================================================================================
 
-bool FElysiumNpc::ShouldPlayIdleSoundZombieArm() const
-{
-	// `CNPC_VZombie#509` is `0x103e0fa0` and is the ONLY override of slot 509 in the census; every
-	// other class inherits the Troika body `0x10294040`. Keyed on the row's retail ADDRESS, the
-	// convention family Precache10 set.
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 509);
-	return Override != nullptr
-		&& FCString::Strcmp(Override->Address, TEXT("0x103e0fa0")) == 0;
-}
-
 bool FElysiumNpc::ShouldPlayIdleSoundZombie()
 {
 	// `CNPC_VZombie::vfunc509` `0x103e0fa0`, 166 bytes, `CNPC_VZombie#509` only. It REPLACES the

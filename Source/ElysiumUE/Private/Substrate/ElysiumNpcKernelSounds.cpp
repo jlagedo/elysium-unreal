@@ -309,43 +309,31 @@ const FElysiumNpc::FVocalization* FElysiumNpc::Vocalizations(int32& OutCount)
 const FElysiumNpc::FVocalization* FElysiumNpc::VocalizationFor(const TCHAR* RetailClassName,
 	int32 Slot)
 {
-	// The vtable's own rule, which `ElysiumNpcKernelClass::OverrideOf` makes over the census: walk
-	// the base chain upward and stop at the FIRST class that fills the slot. A name with no census
-	// row still answers its own table rows, so a family class the census does not carry can be
-	// exercised by name.
+	// The class's OWN row. A subclass inherits its base's rows through the C++ override the row
+	// belongs to (story 5 step 3: `CNPC_VCameraSecurity` inherits `FElysiumNpcCamera`'s nineteen), so
+	// no base-chain walk is needed here.
 	if (RetailClassName == nullptr)
 	{
 		return nullptr;
 	}
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(RetailClassName);
-	const TCHAR* Walk = RetailClassName;
-	while (Walk != nullptr && *Walk != TEXT('\0'))
+	for (const FVocalization& Row : GSoundsVocalizations)
 	{
-		for (const FVocalization& Row : GSoundsVocalizations)
+		if (Row.Slot == Slot && FCString::Strcmp(Row.RetailClass, RetailClassName) == 0)
 		{
-			if (Row.Slot == Slot && FCString::Strcmp(Row.RetailClass, Walk) == 0)
-			{
-				return &Row;
-			}
+			return &Row;
 		}
-		Cls = ElysiumNpcKernelClass::Find(Walk);
-		Walk = Cls != nullptr ? Cls->Base : nullptr;
 	}
 	return nullptr;
 }
 
-const FElysiumNpc::FVocalization* FElysiumNpc::VocalizationFor(int32 Slot) const
+bool FElysiumNpc::SpeciesVocalize(const TCHAR* SpeciesClass, int32 Slot)
 {
-	const FElysiumNpcClass* Cls = RetailClass();
-	return Cls != nullptr ? VocalizationFor(Cls->Name, Slot) : nullptr;
-}
-
-bool FElysiumNpc::EmitVocalization(int32 Slot)
-{
-	const FVocalization* Row = VocalizationFor(Slot);
+	// The body of a species class's vocalization override (story 5 step 3): the class's own row of
+	// `GSoundsVocalizations`. Before step 3 no production path reached this table.
+	const FVocalization* Row = VocalizationFor(SpeciesClass, Slot);
 	if (Row == nullptr)
 	{
-		// No species override: the Troika-line body at this slot runs (story 29d).
+		// No row: nothing this class's override can say.
 		return false;
 	}
 
@@ -560,22 +548,23 @@ bool FElysiumNpc::BaseFOkToMakeSound() const
 // number, which is why the two clocks drift apart.
 //
 // `CNPC_VTzimisce::vfunc487` (`0x103b9f10`) is the one species override of this slot: the same
-// formula with a 0.5–0.75 draw and NO squad half at all. It is a row here rather than a table entry
-// because the species difference is two constants and one dropped arm, not a different behaviour.
+// formula with a 0.5–0.75 draw and NO squad half at all, `FElysiumNpcTzimisce`'s override (story 5
+// step 3).
+void FElysiumNpc::TzimisceJustMadeSound()
+{
+	// `CNPC_VTzimisce::vfunc487` `0x103b9f10`, the body of `FElysiumNpcTzimisce::JustMadeSound`: 41
+	// bytes that end at the write. No squad copy, and no call into the Troika body.
+	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	Senses.Memory.SoundWaitTime = SoundsCurTime(*this)
+		+ Stream.FRandRange(GSoundsTzimisceSoundWaitMin, GSoundsTzimisceSoundWaitMax);
+}
+
 void FElysiumNpc::JustMadeSound()
 {
-	const bool bTzimisce = IsRetailClass(TEXT("CNPC_VTzimisce"));
-	const float Min = bTzimisce ? GSoundsTzimisceSoundWaitMin : GSoundsTroikaSoundWaitMin;
-	const float Max = bTzimisce ? GSoundsTzimisceSoundWaitMax : GSoundsTroikaSoundWaitMax;
-
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = SoundsCurTime(*this) + Stream.FRandRange(Min, Max);
+	Senses.Memory.SoundWaitTime = SoundsCurTime(*this)
+		+ Stream.FRandRange(GSoundsTroikaSoundWaitMin, GSoundsTroikaSoundWaitMax);
 
-	if (bTzimisce)
-	{
-		// `0x103b9f10` is 41 bytes and ends at the write above. No squad copy.
-		return;
-	}
 	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
 	{
 		// SEAM: the squad object's own `m_flSoundWaitTime` (`+0x60`). Retail draws a second
@@ -612,27 +601,17 @@ void FElysiumNpc::BaseJustMadeSound()
 // slot 488 0x10293ec0 `void DeathSound()`
 void FElysiumNpc::DeathSound()
 {
-	// The vtable dispatch first: `CNPC_VTzimisce` `0x103b92a0` (family **Species**) fires `SPI_DIES`
-	// at the script host with three singleton-derived arguments and then TAIL-CALLS slot 487 — so a
-	// Tzimisce never reaches the base death sound at all, and the tail call is the only part of that
-	// body still unported (slot 487 is `JustMadeSound`, above, and is not this row).
-	if (SpeciesDeathSound())
-	{
-		return;
-	}
+	// `CNPC_VTzimisce` overrides this slot (`FElysiumNpcTzimisce`, `0x103b92a0`): it fires
+	// `SPI_DIES` at the script host and tail-calls slot 487, so a Tzimisce never reaches the base
+	// death sound; that tail call is the one part of its body still unported.
 	TroikaDeathSound();
 }
 
 // slot 506 0x10294e70 `void vfunc506()`
 void FElysiumNpc::Slot506()
 {
-	// The vtable dispatch first: `CNPC_VCamera` `0x103682f0` (and `CNPC_VCameraSecurity` under it) is
-	// an EMPTY body — the other end of the same pair of sound hooks slot 497 carries — so a camera
-	// makes none of whatever this hook plays and the Troika body below is not reached for one.
-	if (SpeciesSlot506())
-	{
-		return;
-	}
+	// `CNPC_VCamera` (and `CNPC_VCameraSecurity` under it) overrides this slot with an EMPTY body
+	// (`FElysiumNpcCamera`, `0x103682f0`), so a camera never reaches the Troika body below.
 	TroikaSlot506();
 }
 
@@ -647,12 +626,8 @@ bool FElysiumNpc::ShouldPlayIdleSound()
 {
 	// Story 29d, family **SpeciesAnim10**: `CNPC_VZombie#509` is `0x103e0fa0`, which REPLACES this
 	// body wholesale — no dialog refusal, no state test, no `SF_NPC_GAG` — and adds a 1-in-21 arm on
-	// `SCHED_TROIKA_COMFORT` that skips the float-sound gate. The body is in
-	// `ElysiumNpcKernelAnim10_2.cpp`; the dispatch is here so slot 509 stays one method.
-	if (ShouldPlayIdleSoundZombieArm())
-	{
-		return ShouldPlayIdleSoundZombie();
-	}
+	// `SCHED_TROIKA_COMFORT` that skips the float-sound gate. It is `FElysiumNpcZombie`'s override
+	// (story 5 step 3); the body is `ShouldPlayIdleSoundZombie` in `ElysiumNpcKernelAnim10_2.cpp`.
 	if (SoundsIsInDialog(*this))
 	{
 		return false;
@@ -765,16 +740,9 @@ bool FElysiumNpc::BaseShouldPlayIdleSound()
 // makes.
 bool FElysiumNpc::ShouldPlayFloatSound()
 {
-	// The vtable dispatch first: `CNPC_VZombie` `0x103e1080` (family **Species**) writes
-	// `m_iFloatSoundFrequency = 9` before any gate, runs a different eight and tails into THIS body
-	// on its accepting arm. The tail jump is direct, which `SpeciesShouldPlayFloatSound`'s dispatch
-	// scope reproduces.
-	bool bSpeciesAnswer = false;
-	if (SpeciesShouldPlayFloatSound(bSpeciesAnswer))
-	{
-		return bSpeciesAnswer;
-	}
-
+	// `CNPC_VZombie` overrides this slot (`FElysiumNpcZombie`, `0x103e1080`): it writes
+	// `m_iFloatSoundFrequency = 9` before any gate, runs its own gates with no IDLE test and tails
+	// DIRECTLY into the CAI_BaseNPC body `BaseShouldPlayFloatSound`, never this one.
 	if (SoundsIsInDialog(*this))
 	{
 		return false;

@@ -178,15 +178,10 @@ void GatherHintNodes(TArray<FHintWords>& OutNodes, TArray<int32>& OutNodeIds) co
 
 // --- `PositionClearForTeleport`, four species ---------------------------------------------------
 //
-// One retail name, four different rules, none of them a vtable slot. This is the door every
-// selector above gates its candidates through.
-//
-// NOTE, and it wants the coordinator's eye: family **Motor** declared
+// One retail name, four different rules, none of them a vtable slot: each class's selector calls
+// its own directly, so there is no dispatcher (story 5 step 3). Family **Motor** declared
 // `PositionClearForTeleport(const FVector&, float) const` as a SEAM answering false, for
-// `SelectJumpbaseNode`'s use. These are the real bodies; the dispatcher below is therefore named
-// `PositionClearForTeleportSpecies` rather than colliding with it, and Motor's seam should forward
-// here once the wave has landed.
-bool PositionClearForTeleportSpecies(const FVector& PositionCm, float ClearanceCm) const;
+// `SelectJumpbaseNode`'s use.
 
 /** `CNPC_VAndreiBlood::PositionClearForTeleport` `0x1035e030`. */
 bool PositionClearForTeleportAndrei(const FVector& PositionCm, float ClearanceCm) const;
@@ -297,11 +292,9 @@ static bool EnemySightPredicate(const FElysiumEntity& Enemy);
 // Eight bodies fill `TranslateEnemyChasePosition`. The generated slot carries the Troika line's
 // (`0x10295300`); the other seven are the base line's (`0x10289f20`, which differs by ONE write),
 // the empty camera one, the two identical species stubs, and the three that add a goal-tolerance
-// arm. `NavGetType()` (family Motor's `FUN_1027d990`) is the gate all eight share.
-void TranslateEnemyChasePositionSpecies(FElysiumEntity* Enemy, FVector& InOutChasePositionCm,
-	float& InOutTolerance, float& InOutSecondTolerance);
+// arm. `NavGetType()` (family Motor's `FUN_1027d990`) is the gate all eight share. The six species
+// bodies are their classes' overrides (story 5 step 3).
 
-/** Which of the six recovered shapes slot 563 answers with for the class this NPC is. */
 enum class EChaseTranslateShape : uint8
 {
 	/** `CAI_BaseNPC` `0x10289f20`: nav 2 offsets and writes the hull width; ELSE zeroes the
@@ -320,7 +313,12 @@ enum class EChaseTranslateShape : uint8
 	 *  only the FIRST lead helper. */
 	GoalToleranceWerewolfLead,
 };
-EChaseTranslateShape ChaseTranslateShape() const;
+/** Slot 563 in the shape `Shape` names — the body the species overrides share (story 5 step 3). */
+void TranslateEnemyChasePositionAs(EChaseTranslateShape Shape, FElysiumEntity* Enemy,
+	FVector& InOutChasePositionCm, float& InOutTolerance, float& InOutSecondTolerance);
+/** The same, over the generated slot's `void*` tolerance pair. */
+void TranslateEnemyChasePositionShaped(EChaseTranslateShape Shape, FElysiumEntity* Enemy,
+	FVector& InOutChasePositionCm, void* InTolerance, void* InSecondTolerance);
 
 /** `pEnemy->vtable[0x304]()` — slot 193 `EyePosition` on the ENEMY. The chase position is nudged by
  *  the delta between that and the enemy's own origin, so an NPC chases the enemy's EYE. */

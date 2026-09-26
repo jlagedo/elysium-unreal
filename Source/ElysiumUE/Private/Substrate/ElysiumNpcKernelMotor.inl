@@ -444,6 +444,8 @@ static float MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> Tuni
  *  same "turning" arm at `m_afMemory & 0x2000`; that arm is shared with the Troika body and lives in
  *  `MaxYawSpeedTurningArm` below. */
 float MaxYawSpeedDog();
+/** `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` on this NPC's own words: the body of its override. */
+float MingXiaoMaxYawSpeed();
 float MaxYawSpeedTzimisce();
 
 /** The arm all three of `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` take when
@@ -483,8 +485,10 @@ void SetJumpVelocityTowardPlayer();
 bool PlayerInNoJumpZone() const;
 
 /** `CNPC_VAsianVampire::SetupJump` `0x10361a70` (rise constant 100.0) and `CNPC_VSheriffMan::SetupJump`
- *  `0x103b1300` (400.0) — one behaviour, two species constants, so one method and a data table. */
-void SetupJump(float Enabled);
+ *  `0x103b1300` (400.0) — non-virtual per-class methods sharing one behaviour, `SetupJumpRise`. */
+void AsianVampireSetupJump(float Enabled);
+void SheriffManSetupJump(float Enabled);
+void SetupJumpRise(float Enabled, float Rise);
 
 /** `CNPC_VChangBros::SetupSuperJump` `0x1036e160`. */
 void SetupSuperJump(float Enabled);

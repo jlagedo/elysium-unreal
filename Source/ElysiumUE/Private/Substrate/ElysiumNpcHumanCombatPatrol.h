@@ -12,4 +12,5 @@ class FElysiumNpcHumanCombatPatrol : public FElysiumNpcHumanCombatant
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

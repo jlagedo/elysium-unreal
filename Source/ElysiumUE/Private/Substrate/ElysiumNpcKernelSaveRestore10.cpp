@@ -21,11 +21,6 @@
 
 namespace
 {
-	// The four slots this family fills, spelled once.
-	constexpr int32 GSaveSlot = 126;
-	constexpr int32 GRestoreSlot = 127;
-	constexpr int32 GUpdateOnRemoveSlot = 180;
-
 	// `1028d6e6 PUSH 0x40a00000` — `ClearHintNode(this, 5.0)`, the Troika `UpdateOnRemove`'s hint
 	// reuse delay. The BASE body `0x1027ca30` passes 0.0, and the difference is the point.
 	constexpr float GTroikaRemoveHintReuseSeconds = 5.0f;
@@ -546,106 +541,12 @@ int32 FElysiumNpc::TroikaSave(void* Archive)
 
 int32 FElysiumNpc::Save(void* Archive)
 {
-	// Slot 126. The vtable, spelled as a table lookup: an override replaces this body outright, and
-	// the arms that want the Troika body call back into this function under `FSpeciesDispatchScope`,
-	// which is retail's non-virtual thunk.
+	// Slot 126, the Troika body. A species class's override replaces it outright (story 5 step 3),
+	// and the bodies that want the Troika body call `TroikaSave` directly — retail's non-virtual
+	// thunk.
 	//
 	// NOTHING IN THIS RUNTIME CALLS `Save()` YET — see the `.inl`'s archive-seam note.
-	int32 Result = 0;
-	if (SaveSpecies(Archive, Result))
-	{
-		return Result;
-	}
 	return TroikaSave(Archive);
-}
-
-namespace
-{
-	// One slot-126 or slot-127 override row and the port body that carries it, keyed on the retail
-	// ADDRESS so one arm serves every class that shares a body.
-	struct FSaveRestore10Arm
-	{
-		const TCHAR* Address = nullptr;
-		const TCHAR* RetailClass = nullptr;
-		/** Null means "this override belongs to no port body that can run on an `FElysiumNpc`" —
-		 *  the arm is LISTED so the coverage case still passes over it, and the Troika body runs,
-		 *  which is what a class whose override this runtime cannot stand would do anyway. */
-		int32 (FElysiumNpc::*Body)(void*) = nullptr;
-	};
-
-	const FSaveRestore10Arm GSaveArms[] =
-	{
-		{ TEXT("0x10395f80"), TEXT("CNPC_VMingXiao"),         &FElysiumNpc::MingXiaoSave },
-		{ TEXT("0x1039ed50"), TEXT("CNPC_VMingXiaoTentacle"), &FElysiumNpc::MingXiaoTentacleSave },
-		{ TEXT("0x103c2810"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawSave },
-	};
-
-	const FSaveRestore10Arm GRestoreArms[] =
-	{
-		{ TEXT("0x10396000"), TEXT("CNPC_VMingXiao"),         &FElysiumNpc::MingXiaoRestore },
-		{ TEXT("0x1039eda0"), TEXT("CNPC_VMingXiaoTentacle"), &FElysiumNpc::MingXiaoTentacleRestore },
-		{ TEXT("0x103c2860"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawRestore },
-		{ TEXT("0x103c5910"), TEXT("CNPC_VVampireBoss"),      &FElysiumNpc::VampireBossRestore },
-
-		// The five slot-127 bodies of the OTHER bosses. Each one chains `CNPC_VVampireBoss::Restore`
-		// (`0x103c5910`) as its base, which this family recovered; a row whose own half is not yet
-		// walked is routed to that base, which ports the half that IS known and keeps the boss reset
-		// (`m_pMonsterModelName`, the emitter names, `m_pszMonsterClassname`) from being lost to a
-		// silent fall-through to the Troika body.
-		//
-		// **Two of the five have landed** — story 29d, family SpeciesLifecycle10 owns
-		// `CNPC_VAndreiBlood` `0x1035cf80` and the Chang brothers' shared `0x1036b170`, and their
-		// rows now name their own bodies. `CNPC_VAndreiBlood`'s IS the bare base call, which is a
-		// recovered fact rather than a placeholder (see `AndreiBloodRestore`). The remaining three
-		// still await their owning story, and the day it lands each row's `Body` moves to it.
-		{ TEXT("0x1035cf80"), TEXT("CNPC_VAndreiBlood"),      &FElysiumNpc::AndreiBloodRestore },
-		{ TEXT("0x10360e10"), TEXT("CNPC_VAsianVampire"),     &FElysiumNpc::VampireBossRestore },
-		{ TEXT("0x1036b170"), TEXT("CNPC_VChangBros"),        &FElysiumNpc::ChangBrosRestore },
-		{ TEXT("0x103a6e80"), TEXT("CNPC_VSabbatLeader"),     &FElysiumNpc::VampireBossRestore },
-		{ TEXT("0x103ae7f0"), TEXT("CNPC_VSheriffMan"),       &FElysiumNpc::VampireBossRestore },
-	};
-
-	bool SaveRestore10Dispatch(FElysiumNpc& Npc, int32 Slot, const FSaveRestore10Arm* Arms,
-		int32 ArmCount, void* Archive, int32& OutResult)
-	{
-		// Retail's non-virtual thunk: while this slot's species body runs, its dispatcher answers
-		// "no species body" so the arm's own chain call reaches the Troika body directly.
-		if (Npc.SpeciesDispatchingSlot == Slot)
-		{
-			return false;
-		}
-		const FElysiumNpcClassSlot* Override =
-			ElysiumNpcKernelClass::OverrideOf(Npc.RetailClass(), Slot);
-		if (Override == nullptr)
-		{
-			// `RetailClass()` is null only on the bare Troika line, and a class with no override row
-			// inherits the Troika body.
-			return false;
-		}
-		for (int32 Index = 0; Index < ArmCount; ++Index)
-		{
-			if (FCString::Strcmp(Arms[Index].Address, Override->Address) != 0)
-			{
-				continue;
-			}
-			if (Arms[Index].Body == nullptr)
-			{
-				return false;
-			}
-			const FElysiumNpc::FSpeciesDispatchScope Scope(Npc, Slot);
-			OutResult = (Npc.*(Arms[Index].Body))(Archive);
-			return true;
-		}
-		// Unreachable: `Elysium.Substrate.NpcKernelSaveRestore10.ArmCoverage` asserts both tables
-		// carry every override row the census holds for their slot.
-		return false;
-	}
-}
-
-bool FElysiumNpc::SaveSpecies(void* Archive, int32& OutResult)
-{
-	return SaveRestore10Dispatch(*this, GSaveSlot, GSaveArms, UE_ARRAY_COUNT(GSaveArms),
-		Archive, OutResult);
 }
 
 int32 FElysiumNpc::MingXiaoSave(void* Archive)
@@ -660,7 +561,7 @@ int32 FElysiumNpc::MingXiaoSave(void* Archive)
 	{
 		SaveStampEncode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
 	}
-	const int32 Result = Save(Archive);   // the Troika body, through the dispatch scope
+	const int32 Result = TroikaSave(Archive);   // the Troika body, directly
 	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
 	{
 		SaveStampDecode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
@@ -673,7 +574,7 @@ int32 FElysiumNpc::MingXiaoTentacleSave(void* Archive)
 	// `CNPC_VMingXiaoTentacle::Save` `0x1039ed50` — one field, `m_flPhaseExpireTimer` (`+0x6674`),
 	// at mode 3 around the Troika body.
 	SaveStampEncode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	const int32 Result = Save(Archive);
+	const int32 Result = TroikaSave(Archive);
 	SaveStampDecode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
 	return Result;
 }
@@ -684,7 +585,7 @@ int32 FElysiumNpc::TzimisceHeadClawSave(void* Archive)
 	// `HeadClawSlowedExpire`) at mode 3 around the Troika body. This is the same slow stamp
 	// `0x103c2230` gates its teardown on.
 	SaveStampEncode(HeadClawSlowedExpire, ESaveStampMode::Zero);
-	const int32 Result = Save(Archive);
+	const int32 Result = TroikaSave(Archive);
 	SaveStampDecode(HeadClawSlowedExpire, ESaveStampMode::Zero);
 	return Result;
 }
@@ -738,25 +639,14 @@ int32 FElysiumNpc::TroikaRestore(void* Archive)
 int32 FElysiumNpc::Restore(void* Archive)
 {
 	// Slot 127, the same prologue shape as slot 126.
-	int32 Result = 0;
-	if (RestoreSpecies(Archive, Result))
-	{
-		return Result;
-	}
 	return TroikaRestore(Archive);
-}
-
-bool FElysiumNpc::RestoreSpecies(void* Archive, int32& OutResult)
-{
-	return SaveRestore10Dispatch(*this, GRestoreSlot, GRestoreArms, UE_ARRAY_COUNT(GRestoreArms),
-		Archive, OutResult);
 }
 
 int32 FElysiumNpc::MingXiaoRestore(void* Archive)
 {
 	// `CNPC_VMingXiao::vfunc127` `0x10396000` — the base FIRST, then the six regrow timers decoded
 	// ascending at mode 4. The decode twin of `0x10395f80`.
-	const int32 Result = Restore(Archive);
+	const int32 Result = TroikaRestore(Archive);
 	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
 	{
 		SaveStampDecode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
@@ -767,7 +657,7 @@ int32 FElysiumNpc::MingXiaoRestore(void* Archive)
 int32 FElysiumNpc::MingXiaoTentacleRestore(void* Archive)
 {
 	// `CNPC_VMingXiaoTentacle::vfunc127` `0x1039eda0`.
-	const int32 Result = Restore(Archive);
+	const int32 Result = TroikaRestore(Archive);
 	SaveStampDecode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
 	return Result;
 }
@@ -775,7 +665,7 @@ int32 FElysiumNpc::MingXiaoTentacleRestore(void* Archive)
 int32 FElysiumNpc::TzimisceHeadClawRestore(void* Archive)
 {
 	// `CNPC_VTzimisceHeadClaw::vfunc127` `0x103c2860`.
-	const int32 Result = Restore(Archive);
+	const int32 Result = TroikaRestore(Archive);
 	SaveStampDecode(HeadClawSlowedExpire, ESaveStampMode::Zero);
 	return Result;
 }
@@ -789,7 +679,7 @@ int32 FElysiumNpc::VampireBossRestore(void* Archive)
 	//
 	// It is a post-load reset, not a restore: a boss that was saved mid-transformation comes back
 	// wearing its default model name and its default classname, whatever the archive held.
-	const int32 Result = Restore(Archive);
+	const int32 Result = TroikaRestore(Archive);
 	VampireBossMonsterModelName.Reset();   // m_pMonsterModelName +0x6680 := 0
 	ClearBodyEmitterNames();               // 0x103c6eb0, family Damage's
 	VampireBossMonsterClassname = GVampireBossDefaultClassname;   // +0x6694
@@ -872,65 +762,9 @@ void FElysiumNpc::TroikaUpdateOnRemove()
 
 void FElysiumNpc::UpdateOnRemove()
 {
-	// Slot 180. The species prologue, then the Troika body.
-	if (UpdateOnRemoveSpecies())
-	{
-		return;
-	}
+	// Slot 180. `CNPC_VCop`, `CNPC_VMingXiao` and `CNPC_VNewscaster` override it on their C++ classes
+	// (story 5 step 3); `CCineNPC`'s `0x101a7140` is `FElysiumScriptedSequence`'s.
 	TroikaUpdateOnRemove();
-}
-
-namespace
-{
-	struct FUpdateOnRemoveArm
-	{
-		const TCHAR* Address = nullptr;
-		const TCHAR* RetailClass = nullptr;
-		/** Null: see `FSaveRestore10Arm::Body`. */
-		void (FElysiumNpc::*Body)() = nullptr;
-	};
-
-	const FUpdateOnRemoveArm GUpdateOnRemoveArms[] =
-	{
-		{ TEXT("0x10371a90"), TEXT("CNPC_VCop"),         &FElysiumNpc::CopUpdateOnRemove },
-		{ TEXT("0x10391230"), TEXT("CNPC_VMingXiao"),    &FElysiumNpc::MingXiaoUpdateOnRemove },
-		{ TEXT("0x103a03a0"), TEXT("CNPC_VNewscaster"),  &FElysiumNpc::NewscasterUpdateOnRemove },
-
-		// `CCineAI`, `CCineAISchedule` and `CCineNPC` share `0x101a7140`. A cine actor is
-		// `FElysiumScriptedSequence` in this port and never an `FElysiumNpc`, so this arm can never
-		// be SELECTED at runtime — it is listed so the coverage case passes over it rather than
-		// leaving a census row nothing in this file knows about.
-		{ TEXT("0x101a7140"), TEXT("CCineNPC"),          nullptr },
-	};
-}
-
-bool FElysiumNpc::UpdateOnRemoveSpecies()
-{
-	if (SpeciesDispatchingSlot == GUpdateOnRemoveSlot)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GUpdateOnRemoveSlot);
-	if (Override == nullptr)
-	{
-		return false;
-	}
-	for (const FUpdateOnRemoveArm& Arm : GUpdateOnRemoveArms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		if (Arm.Body == nullptr)
-		{
-			return false;
-		}
-		const FSpeciesDispatchScope Scope(*this, GUpdateOnRemoveSlot);
-		(this->*Arm.Body)();
-		return true;
-	}
-	return false;
 }
 
 int32& FElysiumNpc::CopAliveCensus()
@@ -968,8 +802,7 @@ void FElysiumNpc::CopUpdateOnRemove()
 		--CopSecondCensus();
 	}
 	bCopCountedSecond = false;
-	// The tail jump is a CALL to the Troika body, not a re-dispatch: `Update` below runs it through
-	// the dispatch scope this arm is already inside.
+	// The tail jump is a CALL to the Troika body, not a re-dispatch.
 	TroikaUpdateOnRemove();
 }
 

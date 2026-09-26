@@ -11,4 +11,8 @@ class FElysiumNpcAnimal : public FElysiumNpc
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;
 };

@@ -12,8 +12,6 @@
 
 namespace
 {
-	constexpr int32 GMaintainSlotOnScheduleChange = 435;
-	constexpr int32 GMaintainSlotTaskFail = 448;
 	constexpr int32 GMaintainActIdle = 1;
 	constexpr int32 GMaintainSabbatFailureFirst = 0x0c;
 	constexpr int32 GMaintainSabbatFailureLast = 0x0f;
@@ -140,18 +138,10 @@ void FElysiumNpc::OnScheduleChange(int32 NewSchedule)
 		ScriptedScheduleOrder.Reset();
 		ReleaseScriptedScheduleBody(TEXT("directed schedule replaced"));
 	}
-	const FElysiumNpcClassSlot* Override = SpeciesDispatchingSlot != GMaintainSlotOnScheduleChange
-		? ElysiumNpcKernelClass::OverrideOf(RetailClass(), GMaintainSlotOnScheduleChange)
-		: nullptr;
-	if (Override == nullptr || Override->Address == nullptr)
-	{
-		TroikaOnScheduleChange(NewSchedule);
-		return;
-	}
-
-	const FSpeciesDispatchScope Scope(*this, GMaintainSlotOnScheduleChange);
-	TroikaOnScheduleChange(NewSchedule); // species direct thunk, first
-	SpeciesOnScheduleChange(NewSchedule, Override->Address);
+	// `CNPC_VGargoyle`, `CNPC_VHengeyokai`, `CNPC_VTzimisce` and `CNPC_VWerewolf` override this
+	// method on their C++ classes (story 5 step 3); each calls this body (the Troika `0x102a0940`)
+	// directly, first, then runs its own tail.
+	TroikaOnScheduleChange(NewSchedule);
 }
 
 void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
@@ -222,60 +212,61 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 	ScheduleHost.MemoryBits &= ~0x2000u; // 0x102a0aed
 }
 
-void FElysiumNpc::SpeciesOnScheduleChange(int32 NewSchedule, const TCHAR* RetailBody)
+void FElysiumNpc::GargoyleOnScheduleChange(int32 NewSchedule)
 {
-	if (FCString::Strcmp(RetailBody, TEXT("0x10378fc0")) == 0)
+	// `CNPC_VGargoyle::OnScheduleChange` `0x10378fc0`: the Troika body `0x102a0940` directly, first.
+	FElysiumNpc::OnScheduleChange(NewSchedule);
+	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)
+		&& SpeciesShunnedFindCount > 0) // 0x10378fd5, 0x10378fe0
 	{
-		if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)
-			&& SpeciesShunnedFindCount > 0) // 0x10378fd5, 0x10378fe0
-		{
-			--SpeciesShunnedFindCount; // 0x10378fe4
-		}
-		return;
+		--SpeciesShunnedFindCount; // 0x10378fe4
 	}
-	if (FCString::Strcmp(RetailBody, TEXT("0x10383090")) == 0)
+}
+
+void FElysiumNpc::HengeyokaiOnScheduleChange(int32 NewSchedule)
+{
+	// `CNPC_VHengeyokai::OnScheduleChange` `0x10383090`: the Troika body directly, first.
+	FElysiumNpc::OnScheduleChange(NewSchedule);
+	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x103830a5
 	{
-		if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x103830a5
+		PathMode = 0;					 // 0x103830b0, +0x6680
+		if (SpeciesShunnedFindCount > 0) // 0x103830ba
 		{
-			PathMode = 0;					 // 0x103830b0, +0x6680
-			if (SpeciesShunnedFindCount > 0) // 0x103830ba
-			{
-				--SpeciesShunnedFindCount; // 0x103830be
-			}
+			--SpeciesShunnedFindCount; // 0x103830be
 		}
-		return;
 	}
-	if (FCString::Strcmp(RetailBody, TEXT("0x103bf610")) == 0)
+}
+
+void FElysiumNpc::TzimisceOnScheduleChange(int32 NewSchedule)
+{
+	// `CNPC_VTzimisce::OnScheduleChange` `0x103bf610`: the Troika body directly, first.
+	FElysiumNpc::OnScheduleChange(NewSchedule);
+	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x103bf625
 	{
-		if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x103bf625
+		PathMode = 0;					 // 0x103bf630, +0x668c
+		if (SpeciesShunnedFindCount > 0) // 0x103bf63a
 		{
-			PathMode = 0;					 // 0x103bf630, +0x668c
-			if (SpeciesShunnedFindCount > 0) // 0x103bf63a
-			{
-				--SpeciesShunnedFindCount; // 0x103bf63e
-			}
+			--SpeciesShunnedFindCount; // 0x103bf63e
 		}
-		return;
 	}
-	if (FCString::Strcmp(RetailBody, TEXT("0x103ced10")) == 0)
+}
+
+void FElysiumNpc::WerewolfOnScheduleChange(int32 NewSchedule)
+{
+	// `CNPC_VWerewolf::OnScheduleChange` `0x103ced10`: the Troika body directly, first.
+	FElysiumNpc::OnScheduleChange(NewSchedule);
+	if (WerewolfScheduleStack.Num() > 0x32) // 0x103ced8a
 	{
-		if (WerewolfScheduleStack.Num() > 0x32) // 0x103ced8a
-		{
-			WerewolfScheduleStack.RemoveAt(0, 1, EAllowShrinking::No); // 0x103ceda3
-		}
-		WerewolfScheduleStack.Add(NewSchedule == ElysiumScheduleId::None
-				? FString()
-				: FString(ElysiumScheduleName(NewSchedule))); // 0x103cee0e
+		WerewolfScheduleStack.RemoveAt(0, 1, EAllowShrinking::No); // 0x103ceda3
 	}
+	WerewolfScheduleStack.Add(NewSchedule == ElysiumScheduleId::None
+			? FString()
+			: FString(ElysiumScheduleName(NewSchedule))); // 0x103cee0e
 }
 
 bool FElysiumNpc::SabbatLeaderTaskFail(int32 Reason)
 {
-	const TCHAR* RetailBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), GMaintainSlotTaskFail);
-	if (RetailBody == nullptr || FCString::Strcmp(RetailBody, TEXT("0x103a9400")) != 0)
-	{
-		return false;
-	}
+	// `CNPC_VSabbatLeader::TaskFail` `0x103a9400`, the body of `FElysiumNpcSabbatLeader::TaskFail`.
 	if (Reason < GMaintainSabbatFailureFirst || Reason > GMaintainSabbatFailureLast) // 0x103a9455
 	{
 		return false;

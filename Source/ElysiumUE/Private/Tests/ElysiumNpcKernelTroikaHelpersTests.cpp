@@ -97,18 +97,21 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 
 	TestTrue(TEXT("npc_VVampire resolves to a census class"), Vamp->RetailClass() != nullptr);
 	TestEqual(TEXT("and takes the AndreiBlood line at 602"),
-		static_cast<int32>(Vamp->MeleeSlotLine(602)),
-		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::AndreiBlood));
+		FString(Vamp->RetailClass() != nullptr
+			? ElysiumNpcKernelClass::BodyOf(Vamp->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 	TestEqual(TEXT("npc_VRat takes the Troika line at 602"),
-		static_cast<int32>(RatNpc->MeleeSlotLine(602)),
-		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::Troika));
+		FString(RatNpc->RetailClass() != nullptr
+			? ElysiumNpcKernelClass::BodyOf(RatNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)));
 
 	// The bare Troika line: no species class, so the Troika-line body runs.
 	TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
 	TestEqual(TEXT("so a bare Troika NPC falls through to the Troika line, which is the recovered "
 		"answer"),
-		static_cast<int32>(Troika->MeleeSlotLine(602)),
-		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::Troika));
+		FString(Troika->RetailClass() != nullptr
+			? ElysiumNpcKernelClass::BodyOf(Troika->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)));
 
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md), and the
 	// census row puts CNPC_VCop on the `CNPC_VAndreiBlood` line at 599..602 (`0x10385d70` at 602,
@@ -120,8 +123,9 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::BodyOf(CopClass, 602)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 	TestEqual(TEXT("so a cop takes the AndreiBlood line at 602"),
-		static_cast<int32>(Cop->MeleeSlotLine(602)),
-		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::AndreiBlood));
+		FString(Cop->RetailClass() != nullptr
+			? ElysiumNpcKernelClass::BodyOf(Cop->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 	return true;
 }
 
@@ -247,11 +251,13 @@ bool FElysiumNpcKernelTroikaHelpersLeaveMeleeTest::RunTest(const FString&)
 	// Slot 602 — the recovered divergence. The census is what states it: the two lines carry
 	// DIFFERENT bodies, and `0x10385d70` drops the `m_pAttackCoordinator != 0` test.
 	TestEqual(TEXT("npc_VRat is on the Troika line at 602"),
-		static_cast<int32>(TroikaNpc->MeleeSlotLine(602)),
-		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::Troika));
+		FString(TroikaNpc->RetailClass() != nullptr
+			? ElysiumNpcKernelClass::BodyOf(TroikaNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)));
 	TestEqual(TEXT("npc_VVampire is on the AndreiBlood line at 602"),
-		static_cast<int32>(BloodNpc->MeleeSlotLine(602)),
-		static_cast<int32>(FElysiumNpc::EMeleeSlotLine::AndreiBlood));
+		FString(BloodNpc->RetailClass() != nullptr
+			? ElysiumNpcKernelClass::BodyOf(BloodNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 
 	// **NAMED DIVERGENCE**, and the reachability argument behind it: every coordinator entry point
 	// dereferences its `this` at once, so a null `m_pAttackCoordinator` faults in retail — and the

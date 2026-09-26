@@ -402,7 +402,6 @@ FString ScriptCustomMoveSequenceName() const;
 // than respelt; what this adds is the reset arm and the translation.
 void SetIdealActivity(int32 Activity);
 
-// `CNPC_VCamera::HandleAnimEvent` `0x10368ec0` — slot 259's camera branch, an EMPTY body that
-// swallows every animation event. `FElysiumNpc::HandleAnimEvent` reads this before its footstep arm.
-// True for the two census classes that carry the empty override.
-bool SwallowsAnimEvents() const;
+// `CNPC_VCamera::HandleAnimEvent` `0x10368ec0` — slot 259's camera body, an EMPTY body that
+// swallows every animation event: the body of `FElysiumNpcCamera::HandleAnimEvent`.
+bool CameraHandleAnimEvent(const struct FElysiumAnimEvent& Event);

@@ -37,23 +37,8 @@ namespace
 	constexpr int32 GCond10_D_LI = 3;
 	constexpr int32 GCond10_D_NU = 4;
 
-	// --- The census addresses the slot methods dispatch on ---------------------------------------
-	constexpr TCHAR GCond10Body_CopRelation[] = TEXT("0x10372b70");
-	constexpr TCHAR GCond10Body_HunterRelation[] = TEXT("0x10388bb0");
-	constexpr TCHAR GCond10Body_PedestrianRelation[] = TEXT("0x103a2930");
-	constexpr TCHAR GCond10Body_YukieRelation[] = TEXT("0x103dd880");
-	// The two slot-404 species bodies that are NOT this family's rows but which this family's one
-	// slot method has to dispatch, because the census fills slot 404 with them for five classes.
-	constexpr TCHAR GCond10Body_NewscasterRelation[] = TEXT("0x103a01b0");
+	// The controller line's slot-404 body, dispatched by census until the controller fold (step 7).
 	constexpr TCHAR GCond10Body_FrenzyShadowRelation[] = TEXT("0x103a48b0");
-
-	constexpr TCHAR GCond10Body_AsianVampireTaskFail[] = TEXT("0x10362390");
-	constexpr TCHAR GCond10Body_ChangBrosTaskFail[] = TEXT("0x1036d1d0");
-	constexpr TCHAR GCond10Body_GargoyleTaskFail[] = TEXT("0x10379060");
-	constexpr TCHAR GCond10Body_HengeyokaiTaskFail[] = TEXT("0x10380510");
-	constexpr TCHAR GCond10Body_MingXiaoTaskFail[] = TEXT("0x10394090");
-	constexpr TCHAR GCond10Body_SheriffManTaskFail[] = TEXT("0x103b0290");
-	constexpr TCHAR GCond10Body_TzimisceTaskFail[] = TEXT("0x103ba350");
 
 	// --- `0x1028d990`'s `.rdata`, read out of the pinned image -----------------------------------
 	//
@@ -207,41 +192,13 @@ namespace
 
 int32 FElysiumNpc::IRelationType(FElysiumEntity* Candidate)
 {
-	// slot 404, `vtable +0x650`. Five retail bodies fill it across the census and this leaf resolves
-	// between them by the address the census says fills the slot for this NPC's retail class, the
-	// same way story 29c-1's slot-76 dispatcher does.
-	//
-	// Story 5 step 2: a spawned `npc_VCop` is `CNPC_VCop` (factory `0x103704f0`), so
-	// `CopIRelationType` is reached through this dispatcher. Until then the census gave `CNPC_VCop`
-	// no classname and a placed cop took the Troika-line body.
+	// slot 404, `vtable +0x650`. Cop `0x10372b70`, Hunter `0x10388bb0`, Pedestrian `0x103a2930`,
+	// Yukie `0x103dd880` and Newscaster `0x103a01b0` override it on their C++ classes (story 5 step 3).
+	// The controller line's `0x103a48b0` (FrenzyShadow, PlayerController, WolfMorph) stays a census
+	// arm until the controller fold (step 7): only a test-latched Troika-line instance reaches it.
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 404);
 	if (SlotBody != nullptr)
 	{
-		if (FCString::Strcmp(SlotBody, GCond10Body_CopRelation) == 0)
-		{
-			return CopIRelationType(Candidate);
-		}
-		if (FCString::Strcmp(SlotBody, GCond10Body_HunterRelation) == 0)
-		{
-			return HunterIRelationType(Candidate);
-		}
-		if (FCString::Strcmp(SlotBody, GCond10Body_PedestrianRelation) == 0)
-		{
-			return PedestrianIRelationType(Candidate);
-		}
-		if (FCString::Strcmp(SlotBody, GCond10Body_YukieRelation) == 0)
-		{
-			return YukieIRelationType(Candidate);
-		}
-		if (FCString::Strcmp(SlotBody, GCond10Body_NewscasterRelation) == 0)
-		{
-			// `CNPC_VNewscaster::IRelationType` (`0x103a01b0`) — eight bytes, `return 4;`. It never
-			// looks at the candidate, never reaches the table and never reaches the Troika body, so
-			// a newscaster is `D_NU` toward absolutely everything including itself and null. Not one
-			// of this family's rows; it is dispatched here because the census fills slot 404 with it
-			// and `npc_VNewscaster` IS a registered spawn leaf.
-			return GCond10_D_NU;
-		}
 		if (FCString::Strcmp(SlotBody, GCond10Body_FrenzyShadowRelation) == 0)
 		{
 			// `0x103a48b0`, story 29c-1's `SpeciesIRelationType` (family Squad) — slot 404's body
@@ -877,53 +834,6 @@ void FElysiumNpc::SetIgnoreCollisionExpiry(float DelaySeconds)
 	if (IgnoreCollisionUntil <= Now)
 	{
 		IgnoreCollisionUntil = static_cast<double>(TNumericLimits<float>::Max());
-	}
-}
-
-void FElysiumNpc::SpeciesTaskFail(int32 Reason)
-{
-	// slot 448's species prologue, called from the first line of `FElysiumNpc::TaskFail`. Every one
-	// of the seven retail bodies runs its arm and then chains `0x1029adb0` UNCONDITIONALLY, so the
-	// arms are a prologue and the Troika body follows — retail's order exactly.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 448);
-	if (SlotBody == nullptr)
-	{
-		return;
-	}
-	if (FCString::Strcmp(SlotBody, GCond10Body_AsianVampireTaskFail) == 0)
-	{
-		AsianVampireTaskFail(Reason);
-	}
-	else if (FCString::Strcmp(SlotBody, GCond10Body_ChangBrosTaskFail) == 0)
-	{
-		ChangBrosTaskFail(Reason);
-	}
-	else if (FCString::Strcmp(SlotBody, GCond10Body_GargoyleTaskFail) == 0)
-	{
-		GargoyleTaskFail(Reason);
-	}
-	else if (FCString::Strcmp(SlotBody, GCond10Body_HengeyokaiTaskFail) == 0)
-	{
-		HengeyokaiTaskFail(Reason);
-	}
-	else if (FCString::Strcmp(SlotBody, GCond10Body_MingXiaoTaskFail) == 0)
-	{
-		MingXiaoTaskFail(Reason);
-	}
-	else if (FCString::Strcmp(SlotBody, GCond10Body_SheriffManTaskFail) == 0)
-	{
-		SheriffManTaskFail(Reason);
-	}
-	else if (FCString::Strcmp(SlotBody, GCond10Body_TzimisceTaskFail) == 0)
-	{
-		TzimisceTaskFail(Reason);
-	}
-	// Story 29d, family **SpeciesMisc10**: `CNPC_VWerewolf#448` (`0x103ce750`) is the EIGHTH body at
-	// this slot and has the same shape — its own arm, then `0x1029adb0` unconditionally — so it joins
-	// the prologue here rather than standing a second dispatcher.
-	else if (FCString::Strcmp(SlotBody, TEXT("0x103ce750")) == 0)
-	{
-		WerewolfTaskFail(Reason);
 	}
 }
 

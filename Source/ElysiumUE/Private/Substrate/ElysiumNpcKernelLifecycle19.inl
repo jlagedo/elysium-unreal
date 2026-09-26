@@ -17,9 +17,9 @@
 //     `0x1029a0b0` (`NPCInit`, slot 420); `CAI_BaseNPC::StartNPC` `0x10273ad0` (`BaseStartNPC`)
 //     under Troika `0x1029a8b0` (`StartNPC`, slot 422); `CAI_BaseNPC::OnRestore` `0x1027bf50`
 //     (`BaseOnRestore`) under Troika `0x102998c0` (`OnRestore`, slot 130).
-//   * **Species `NPCInit` arms**, each a private helper the slot-420 dispatcher selects on the
-//     retail ADDRESS. Retail's species bodies call the body they replace through a direct
-//     non-virtual thunk, so every chain call here is made under `FSpeciesDispatchScope(*this, 420)`.
+//   * **Species `NPCInit` bodies**, each the body of its class's C++ override (story 5 step 3; the
+//     controller line's three stay slot-420 census arms until step 7). Retail's species bodies call
+//     the body they replace through a direct non-virtual thunk, spelled as a direct call here.
 //   * **Species `StartNPC` / `OnRestore` arms** on slots 422 and 130, the same shape.
 //
 // Slot 420 also has four census overrides this family's TSV does not list (`0x10387140`
@@ -418,7 +418,6 @@ void ZombieNPCInit();               // `0x103defc0`
 
 void BaseStartNPC();    // `0x10273ad0`
 void TroikaStartNPC();  // `0x1029a8b0`
-bool SpeciesStartNPC();
 void CameraStartNPC();     // `0x10369930`
 void TzimisceStartNPC();   // `0x103b9270`
 
@@ -428,7 +427,6 @@ void TzimisceStartNPC();   // `0x103b9270`
 
 void BaseOnRestore(bool bFromLoad);    // `0x1027bf50`
 void TroikaOnRestore(bool bFromLoad);  // `0x102998c0`
-bool SpeciesOnRestore(bool bFromLoad);
 void MingXiaoTentacleOnRestore(bool bFromLoad);  // `0x1039f000`
 void PedestrianOnRestore(bool bFromLoad);        // `0x103a25a0`
 void TzimisceRunnerOnRestore(bool bFromLoad);    // `0x103c3c40`

@@ -131,43 +131,6 @@ bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntit
 	// of `DAT_10923e2c`. This runtime keys a discipline by NAME, so the id resolution has no
 	// counterpart and the refusal arm below reads the name directly; the once-flag is unobservable.
 
-	// The species arms of slot 201. `CNPC_VCameraSecurity` REPLACES the body outright;
-	// `CNPC_VTzimisce` and `CNPC_VZombie` wrap it. `CNPC_VWerewolf` (`0x103cb810`) and `CNPC_VYukie`
-	// (`0x103ddaf0`) are story 29c-1's family Senses and answer through the same table.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 201);
-	if (SlotBody != nullptr && SpeciesDispatchingSlot != 201)
-	{
-		if (FCString::Strcmp(SlotBody, TEXT("0x10369ff0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 201);
-			return CameraSecurityFVisible(SeenTarget);
-		}
-		if (FCString::Strcmp(SlotBody, TEXT("0x103ba290")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 201);
-			return TzimisceFVisible(SeenTarget, Mask, Blocker, Arg4);
-		}
-		if (FCString::Strcmp(SlotBody, TEXT("0x103e0bc0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 201);
-			return ZombieFVisible(SeenTarget, Mask, Blocker, Arg4);
-		}
-		if (FCString::Strcmp(SlotBody, TEXT("0x103cb810")) == 0)
-		{
-			// `CNPC_VWerewolf#201`, story 29c-1's `WerewolfFVisible`. Dispatched, not re-ported.
-			FSpeciesDispatchScope Scope(*this, 201);
-			FElysiumEntityHandle Unused;
-			return WerewolfFVisible(SeenTarget, &Unused);
-		}
-		if (FCString::Strcmp(SlotBody, TEXT("0x103ddaf0")) == 0)
-		{
-			// `CNPC_VYukie#201`, story 29c-1's `YukieFVisible`, which chains slot 594 below.
-			FSpeciesDispatchScope Scope(*this, 201);
-			FElysiumEntityHandle Unused;
-			return YukieFVisible(SeenTarget, &Unused);
-		}
-	}
-
 	// `102b4655`: a null target answers false and does NOT write the blocker. Retail's asymmetry.
 	if (SeenTarget == nullptr)
 	{
@@ -444,17 +407,6 @@ bool FElysiumNpc::QueryHearSound(void* SoundPtr)
 
 bool FElysiumNpc::QuerySeeEntity(FElysiumEntity* Candidate)
 {
-	// The one species arm, `CNPC_VCameraSecurity#468` (`0x1036a030`), is story 29c-1's
-	// `CameraSecurityQuerySeeEntity` and REPLACES this body: the camera sees the player and nothing
-	// else.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 468);
-	if (SlotBody != nullptr && SpeciesDispatchingSlot != 468
-		&& FCString::Strcmp(SlotBody, TEXT("0x1036a030")) == 0)
-	{
-		FSpeciesDispatchScope Scope(*this, 468);
-		return Candidate != nullptr && CameraSecurityQuerySeeEntity(*Candidate);
-	}
-
 	// `102b38b0`: `npc_ignore_senses`, or `npc_ignore_player` with a non-null candidate carrying a
 	// player record. Note the null check sits INSIDE the second arm only.
 	if (ElysiumNpcSense::IgnoreSenses())
@@ -523,26 +475,6 @@ void FElysiumNpc::OnLooked(int32)
 
 void FElysiumNpc::OnSeeEntity(FElysiumEntity* Seen)
 {
-	// The two species arms, `CNPC_VCop` (`0x10371ae0`) and `CNPC_VHunter` (`0x103887d0`). Both run
-	// this body unconditionally after their own stamp, through a DIRECT call in retail — which is
-	// what `FSpeciesDispatchScope` is.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 472);
-	if (SlotBody != nullptr && SpeciesDispatchingSlot != 472)
-	{
-		if (FCString::Strcmp(SlotBody, TEXT("0x10371ae0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 472);
-			CopOnSeeEntity(Seen);
-			return;
-		}
-		if (FCString::Strcmp(SlotBody, TEXT("0x103887d0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 472);
-			HunterOnSeeEntity(Seen);
-			return;
-		}
-	}
-
 	FElysiumNpcMemory& Memory = Senses.Memory;
 	const double Now = NowOf(*this);
 
@@ -653,12 +585,12 @@ int32 FElysiumNpc::BestEnemyDistanceKey(const FElysiumEntity& Candidate) const
 
 FElysiumEntity* FElysiumNpc::BestEnemy()
 {
-	// The one species arm, `CNPC_VFrenzyShadow#478` (`0x103766d0`), REPLACES this body.
+	// The one species arm, `CNPC_VFrenzyShadow#478` (`0x103766d0`), REPLACES this body. It stays a
+	// census arm until the controller fold (step 7): only a test-latched Troika-line instance
+	// reaches it, and it never re-enters this slot.
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 478);
-	if (SlotBody != nullptr && SpeciesDispatchingSlot != 478
-		&& FCString::Strcmp(SlotBody, TEXT("0x103766d0")) == 0)
+	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x103766d0")) == 0)
 	{
-		FSpeciesDispatchScope Scope(*this, 478);
 		return FrenzyShadowBestEnemy();
 	}
 
@@ -1013,15 +945,6 @@ FVector FElysiumNpc::ShootEnemyAimPoint(const FVector& ShootPositionCm)
 
 FVector FElysiumNpc::GetShootEnemyDir(const FVector& ShootPositionCm, int32 A, int32 B)
 {
-	// The one species arm, `CNPC_VMingXiao#574` (`0x10395d00`).
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 574);
-	if (SlotBody != nullptr && SpeciesDispatchingSlot != 574
-		&& FCString::Strcmp(SlotBody, TEXT("0x10395d00")) == 0)
-	{
-		FSpeciesDispatchScope Scope(*this, 574);
-		return MingXiaoGetShootEnemyDir(ShootPositionCm, A, B);
-	}
-
 	// `10278918`: the aim point, then the caller's shoot position subtracted.
 	const FVector Delta = ShootEnemyAimPoint(ShootPositionCm) - ShootPositionCm;
 	// `10278959`: `VectorNormalize` IN PLACE, and the three floats stored out afterwards. The
@@ -1352,7 +1275,7 @@ void FElysiumNpc::CopOnSeeEntity(FElysiumEntity* Seen)
 	{
 		StampCopSuspect(Seen);
 	}
-	OnSeeEntity(Seen);
+	FElysiumNpc::OnSeeEntity(Seen);
 }
 
 void FElysiumNpc::HunterOnSeeEntity(FElysiumEntity* Seen)
@@ -1362,5 +1285,5 @@ void FElysiumNpc::HunterOnSeeEntity(FElysiumEntity* Seen)
 	{
 		StampHunterSuspect(Seen);
 	}
-	OnSeeEntity(Seen);
+	FElysiumNpc::OnSeeEntity(Seen);
 }

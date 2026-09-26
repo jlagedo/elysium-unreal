@@ -58,50 +58,9 @@ FElysiumNpc* CineIgnoredConditionsPartner() const;
 
 // --- `OnStateChange`, slot 463 --------------------------------------------------------------------
 //
-// `FElysiumNpc::ApplyStateWeaponVisibility` (public, `ElysiumNpc.h`) already carries the SEVEN
-// classes whose slot-463 body hides/unhides the weapon. What lands here is the rest of slot 463: the
-// species pre-step table those seven are one row of, the Troika-line body every class ends in
-// (`0x102ae140`) and the base body under it (`0x1026e3e0`, already `FElysiumNpcFlags::
-// NpcStateFlagsForRetailState`).
-
-enum class EStateChangeSpecies : uint8
-{
-	/** `CNPC_VGuard1::vfunc463` (0x1037d020), `CNPC_VHunter::vfunc463` (0x10388880) and
-	 *  `CNPC_VGhoulCroucher::FUN_103871c0` — hide on IDLE, unhide on ALERT/COMBAT/11, then chain. */
-	HolsterOnState,
-	/** `CNPC_VTzimisce::vfunc463` (0x103ba2c0) — map the new state to a facial expression name and
-	 *  blend to it over 1.0 s, then chain. */
-	FacialExpression,
-	/** `CNPC_VCamera::OnStateChange` (0x10368ea0) — an EMPTY body. It does not chain: a camera's
-	 *  state change writes nothing at all, not even the base state-flag byte. */
-	Suppressed,
-	/** `CNPC_VBach::OnStateChange` (`0x103639b0`) — while `m_bCanFightYet` is 0, ALERT/COMBAT
-	 *  snap back through `SetState(old)` and never reach the Troika body. */
-	BachSnapBack,
-	/** `CNPC_VCop::OnStateChange` (`0x10371c20`) — pursuit latch, census, holster/draw tails. */
-	Cop,
-};
-
-/** One row of retail's slot-463 species table: the census class, the retail address of the body that
- *  fills the slot for it, and which of the four shapes that body is. */
-struct FStateChangeSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	EStateChangeSpecies Shape = EStateChangeSpecies::HolsterOnState;
-};
-
-/** The table. A class with no row runs `CAI_BaseNPCTroika::OnStateChange` (`0x102ae140`) directly,
- *  which is what 40-odd of the cast do. */
-static const FStateChangeSpecies* StateChangeSpeciesRows(int32& OutCount);
-
-/** The row for a retail class name, walking no base chain — the census's own `OverrideOf` is what
- *  walks it, and `StateChangeSpeciesOf` is what a test drives by name. */
-static const FStateChangeSpecies* StateChangeSpeciesOf(const TCHAR* InRetailClass);
-
-/** This NPC's row, resolved through the census (`ElysiumNpcKernelClass::OfClassname` + the base
- *  chain), or null for a class the table does not carry. */
-const FStateChangeSpecies* StateChangeSpecies() const;
+// The species bodies are overrides on their C++ classes (story 5 step 3). What lands here is the
+// Troika-line body every chaining class ends in (`0x102ae140`) and the base body under it
+// (`0x1026e3e0`, already `FElysiumNpcFlags::NpcStateFlagsForRetailState`).
 
 /** `CNPC_VTzimisce::vfunc463`'s expression map (`0x103ba2c0` + `0x103b9f50`): the retail state to
  *  one of `PTR_s_normal_10653120`'s four names. Null for a state the switch does not name, which is
@@ -230,9 +189,8 @@ void RefreshOccludedCondition(EElysiumNpcCond Cond, double& InOutStamp, double N
 
 // --- `SelectIdealState`, slot 461: the species half -----------------------------------------------
 //
-// THE SLOT ITSELF IS NOT THIS STORY'S: slot 461's Troika-line body (`0x102ad660`, layer 22) is story
-// 29e's and the generator still emits its stub, so `FElysiumNpc::SelectIdealState()` is taken. What
-// 29c-1 owns is the three SPECIES overrides, which are complete replacements — none of them chains.
+// Three SPECIES bodies that are complete replacements — none of them chains. Each is the
+// `SelectIdealStateRetail` override on its class (story 5 step 3).
 
 enum class EIdealStateSpecies : uint8
 {
@@ -247,26 +205,15 @@ enum class EIdealStateSpecies : uint8
 	MingXiaoTentacle,
 };
 
-/** One row of retail's slot-461 species table. */
-struct FIdealStateSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	EIdealStateSpecies Rule = EIdealStateSpecies::AlwaysAlert;
-};
-
-static const FIdealStateSpecies* IdealStateSpeciesRows(int32& OutCount);
-static const FIdealStateSpecies* IdealStateSpeciesOf(const TCHAR* InRetailClass);
-
 /** The rule applied. Pure over the three inputs the three bodies read, so a test drives it with no
  *  NPC: `bAlive` is slot 158, `Current` is `m_NPCState`, `Ideal` is `m_IdealNPCState` and
  *  `bHasEnemy` is `GetEnemy() != NULL`. */
 static EElysiumNpcState SelectIdealStateSpecies(EIdealStateSpecies Rule, bool bAlive,
 	EElysiumNpcState Current, EElysiumNpcState Ideal, bool bHasEnemy);
 
-/** This NPC's species answer. False when no row carries this class, which is every registered
- *  classname today and is the arm that lets the two-layer rule run. */
-bool SelectIdealStateForSpecies(EElysiumNpcState& OutIdeal) const;
+/** The rule's answer for this NPC, written as `m_IdealNPCState` and answered in retail's ordinals:
+ *  the body of the camera's, MingXiao's and the tentacle's `SelectIdealStateRetail` overrides. */
+int32 SpeciesIdealStateRetail(EIdealStateSpecies Rule);
 
 // --- `RequestDesiredState`, the two flee arms -----------------------------------------------------
 

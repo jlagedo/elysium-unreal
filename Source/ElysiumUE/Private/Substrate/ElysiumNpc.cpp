@@ -115,13 +115,9 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 
 bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 {
-	// Story 29c-1, family Anim: `CNPC_VCamera::HandleAnimEvent` (`0x10368ec0`) is an EMPTY body —
-	// three bytes — and it fills slot 259 for `CNPC_VCamera` and `CNPC_VCameraSecurity`. A retail
-	// camera swallows every animation event, footsteps included, and this is that arm.
-	if (SwallowsAnimEvents())
-	{
-		return true;
-	}
+	// Slot 259's species bodies are their classes' own overrides (story 5 step 3): `CNPC_VCamera`'s
+	// empty `0x10368ec0`, and the four footstep bodies of `docs/vtmb/footsteps.md` §1.7, each of
+	// which calls this body directly for an id its own switch does not claim.
 	if (ElysiumFootsteps::IsFootstepEvent(Event.Event))
 	{
 		// 2050/2051 -> `0x1026d460(this, 0)` "normal"; 2052/2053 -> mode 1 "heavy". The left/right in
@@ -132,24 +128,18 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	return FElysiumScriptedCharacter::HandleAnimEvent(Event);
 }
 
-const FElysiumFootstepSpecies* FElysiumNpc::ResolveFootstepSpecies()
+bool FElysiumNpc::SpeciesFootstepAnimEvent(const TCHAR* SpeciesClassname,
+	const FElysiumAnimEvent& Event)
 {
-	if (!bFootstepSpeciesResolved)
-	{
-		bFootstepSpeciesResolved = true;
-		FootstepSpecies = Def != nullptr ? ElysiumFootsteps::SpeciesFor(Def->Classname) : nullptr;
-	}
-	return FootstepSpecies;
-}
-
-bool FElysiumNpc::OverrideFootstep(int32 EventId, bool bHeavy)
-{
-	const FElysiumFootstepSpecies* Row = ResolveFootstepSpecies();
+	// The body of a footstep species class's `HandleAnimEvent` override (`docs/vtmb/footsteps.md`
+	// §1.7): the class's row of `ElysiumFootsteps::SpeciesFor`, keyed by its own spawn classname.
+	const int32 EventId = Event.Event;
+	const FElysiumFootstepSpecies* Row = ElysiumFootsteps::SpeciesFor(SpeciesClassname);
 	if (Row == nullptr || !ElysiumFootsteps::SpeciesClaims(*Row, EventId))
 	{
-		// No override for this classname, or an id this species leaves to the base handler — which
-		// is `CNPC_VTzimisceRunner`'s `JMP 0x100146e1` for 2052/2053.
-		return false;
+		// An id this species' switch leaves to the base handler — which is `CNPC_VTzimisceRunner`'s
+		// `JMP 0x100146e1` for 2052/2053 — is a direct call into the base body.
+		return FElysiumNpc::HandleAnimEvent(Event);
 	}
 
 	// The shake, which retail raises BEFORE the wav vfunc on both `Shake` rows. Reported, not
@@ -192,11 +182,8 @@ bool FElysiumNpc::OverrideFootstep(int32 EventId, bool bHeavy)
 
 bool FElysiumNpc::NpcStep(int32 EventId, bool bHeavy)
 {
-	// (a) The species overrides replace the whole chain, so they run first and short-circuit it.
-	if (OverrideFootstep(EventId, bHeavy))
-	{
-		return true;
-	}
+	// (a) The species overrides replace the whole chain before it is reached: they are their classes'
+	// own `HandleAnimEvent` overrides (story 5 step 3, `SpeciesFootstepAnimEvent`).
 	if (World == nullptr)
 	{
 		return true;
@@ -877,15 +864,8 @@ void FElysiumNpc::Think()
 	{
 		return;
 	}
-	// Slot 431's species dispatch, story 29d family SpeciesLifecycle10. `CPayphone::vfunc431`
-	// (`0x101aabf0`) REPLACES this body outright — it never calls `CAI_BaseNPCTroika::NPCThink` — so
-	// the arm is a prologue that owns the whole pass. It sits under `IsInert()` rather than above it
-	// because retail expresses "this entity is gone" by having no think function at all, which is
-	// what `IsInert()` stands for here; every other statement of the Troika body is below.
-	if (PayphoneThink())
-	{
-		return;
-	}
+	// `CPayphone::vfunc431` (`0x101aabf0`) REPLACES this body outright — it never calls
+	// `CAI_BaseNPCTroika::NPCThink` — so it is `FElysiumNpcPayphone::Think` (story 5 step 3).
 	// Death owns the pass outright and is tested before the cadence, not inside it: retail's
 	// corpse carries no think function at all, so there is no clock a stamp could name for it.
 	// A running death program keeps its own poll; a terminal one ends the think.
@@ -1684,57 +1664,11 @@ int32 FElysiumNpc::SelectCombatSchedule()
 	return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
 }
 
-bool FElysiumNpc::ClassHolstersOnState() const
-{
-	// The classes that fill vtable slot 463 with the holster/draw body, mapped from the retail
-	// class names onto the classnames a map AUTHORS, less `CNPC_VStalker`, which has no instance
-	// (`population.md` § "NPC classes with no instance"). Keyed on the classname until story 5
-	// step 3 makes the holster body an override; each classname builds exactly its class.
-	//
-	// Story 29e, family State19: `CNPC_VCop` (`0x10371c20`) and `CNPC_VBach` (`0x103639b0`) now
-	// fill slot 463. `CNPC_VTzimisce` (`0x103ba2c0`) is the FacialExpression row. SabbatLeader's
-	// `0x103a6f70` is still unread.
-	static const TCHAR* const Holsterers[] = {
-		TEXT("npc_VGuard1"),            // CNPC_VGuard1            0x1037d020
-		TEXT("npc_VHunter"),            // CNPC_VHunter            0x10388880
-		TEXT("npc_VHumanCombatant"),    // CNPC_VHumanCombatant    0x103871c0
-		TEXT("npc_VHumanCombatPatrol"), // CNPC_VHumanCombatPatrol 0x103871c0
-		TEXT("npc_VSabbatGunman"),      // CNPC_VSabbatGunman      0x103871c0
-		TEXT("npc_VYukie"),             // CNPC_VYukie             0x103871c0
-		// `CNPC_ProneDialog`'s two factories (`0x103a4b30`, `0x103a4ab0`); this row read
-		// `npc_ProneDialog`, a classname no retail factory registers, until story 5 step 2.
-		TEXT("npc_VProneDialog"),       // CNPC_ProneDialog        0x103871c0
-		TEXT("npc_VMercurio"),          // CNPC_ProneDialog        0x103871c0
-		TEXT("npc_VGhoulCroucher"),     // CNPC_VGhoulCroucher     0x103871c0
-	};
-
-	// The classname a map authored, which is the key the recovered class bodies are joined to — the
-	// same read `FillActivityClipRequest` makes, and for the same reason.
-	// `Def` is the authored definition; a runtime-created NPC has none, and its registered
-	// descriptor's name is the classname it answers to. Same read `FillActivityClipRequest` makes.
-	const FString Authored = Def != nullptr ? Def->Classname
-		: (Class != nullptr ? Class->ClassName.ToString() : FString());
-	if (Authored.IsEmpty())
-	{
-		return false;
-	}
-	for (const TCHAR* Name : Holsterers)
-	{
-		if (Authored.Equals(Name, ESearchCase::IgnoreCase))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 void FElysiumNpc::ApplyStateWeaponVisibility(EElysiumNpcState NewState)
 {
-	if (!ClassHolstersOnState())
-	{
-		// `CAI_BaseNPCTroika::OnStateChange` (0x102ae140): the base body does not touch the weapon.
-		return;
-	}
+	// The holster/draw switch of `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`) and its copy
+	// in `CNPC_VGuard1`'s (`0x1037d020`). Only those classes' `OnStateChange` overrides call it
+	// (story 5 step 3); the Troika body `0x102ae140` does not touch the weapon.
 	FElysiumItem* Active = Inventory.Active(*this);
 	FElysiumWeapon* Weapon = Active != nullptr ? Active->AsWeapon() : nullptr;
 	if (Weapon == nullptr)
@@ -2803,8 +2737,8 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 			: static_cast<float>(Maxs.Y - Mins.Y) * ElysiumMove::U;
 	}
 	float UnusedTolerance = ToleranceCm;
-	TranslateEnemyChasePositionSpecies(World ? World->Resolve(ScriptedScheduleOrder.Goal) : nullptr,
-		Destination, ToleranceCm, UnusedTolerance);
+	TranslateEnemyChasePosition(World ? World->Resolve(ScriptedScheduleOrder.Goal) : nullptr,
+		Destination, &ToleranceCm, &UnusedTolerance);
 	ScheduleHost.GoalToleranceCm = ToleranceCm;
 	ScheduleHost.NavigationActivity = ScriptedScheduleOrder.bRun ? 0x13 : 9;
 	if (GetMoveType() == 5 || GetMoveType() == 6)
@@ -2979,16 +2913,9 @@ void FElysiumNpc::TaskFail(int32 Reason)
 	// Troika slot 448 (0x1029adb0), then CAI_BaseNPC 0x10273fc0. In particular,
 	// OnScheduleChange is not a substitute: its masks and oblivious refcount writes differ.
 	//
-	// Story 29e, Maintain19: SabbatLeader's ninth species body returns immediately on its route-flip
-	// arm, so it must run before the unconditional-prologue family below.
-	if (SabbatLeaderTaskFail(Reason))
-	{
-		return;                                                          // 0x103a94bc / 0x103a94db
-	}
-	// Story 29d, family Conditions10: the seven SPECIES bodies at slot 448 (0x10362390, 0x1036d1d0,
-	// 0x10379060, 0x10380510, 0x10394090, 0x103b0290, 0x103ba350) each run their own arm and then
-	// chain 0x1029adb0 unconditionally, so the arms are a prologue and this line is where they run.
-	SpeciesTaskFail(Reason);
+	// Nine species classes override slot 448 on their C++ classes (story 5 step 3): eight run their
+	// own arm and then call this body directly (`0x1029adb0`); SabbatLeader's returns first on its
+	// route-flip arm.
 	if (CurrentAmbientSpot()) FinishAmbientUse(bAmbientArrived, false);
 	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
 	if (Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
@@ -3508,23 +3435,10 @@ void FElysiumNpc::ClearConditions()
 
 void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 {
-	// Story 29c-1, family Schedule: the species half of slot 453, and the one class that does NOT
-	// compose with the Troika line. `CNPC_VGuard1` (`0x1037cdf0`) opens by calling the EMPTY base
-	// `CAI_BaseNPC::BuildScheduleTestBits` (`0x10280fb0`) rather than `0x102ad140`, so its state
-	// ladder REPLACES the overlay below instead of adding to it; the other three overrides
-	// (`0x10387520`, `0x103a2980`, `0x103c16f0`) call `0x102ad140` first and add, which is the tail
-	// call at the bottom of this body.
-	const FElysiumNpcClassSlot* SpeciesSlot = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 453);
-	const bool bSpeciesReplacesTroikaOverlay = SpeciesSlot != nullptr
-		&& FCString::Strcmp(SpeciesSlot->Address, TEXT("0x1037cdf0")) == 0;
-	if (bSpeciesReplacesTroikaOverlay)
-	{
-		SpeciesBuildScheduleTestBits(InOutMask);
-		// `CacheInterruptConditions` (`0x1026a0f0`) adds this one unconditionally after the virtual,
-		// whichever body filled it.
-		InOutMask.Set(EElysiumNpcCond::NpcFreeze);
-		return;
-	}
+	// Slot 453's species bodies are overrides on their C++ classes (story 5 step 3): `CNPC_VGuard1`
+	// (`0x1037cdf0`) calls the EMPTY base `CAI_BaseNPC::BuildScheduleTestBits` (`0x10280fb0`) and so
+	// REPLACES this body; `CNPC_VHumanCombatant` (`0x10387520`), `CNPC_VPedestrian` (`0x103a2980`)
+	// and `CNPC_VTzimisceHeadClaw` (`0x103c16f0`) call this body first and add.
 
 	// `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), transcribed. The base
 	// (`0x10280fb0`) is empty.
@@ -3562,9 +3476,6 @@ void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 	{
 		InOutMask.Clear(EElysiumNpcCond::SquadSeeEnemy);
 	}
-	// The three species overrides that COMPOSE with the body above, in the place their own bodies
-	// put them: after the `0x102ad140` call they open with (story 29c-1, family Schedule).
-	SpeciesBuildScheduleTestBits(InOutMask);
 	// `CacheInterruptConditions` (`0x1026a0f0`) adds this one unconditionally after the virtual.
 	InOutMask.Set(EElysiumNpcCond::NpcFreeze);
 }
@@ -4104,12 +4015,10 @@ void FElysiumNpc::ArmThinkAt(double Stamp)
 
 bool FElysiumNpc::BypassesKnockbackEligibility() const
 {
-	// `CNPC_VTzimisceRunner` is the one class whose slot-400 virtual returns 1; every other class in
-	// the image keeps the stub. The classname is the whole test.
-	// Case-folded, like every other classname test in this runtime: `.ents` content spells a
-	// classname however it likes and the registry folds on the way in.
-	return Def != nullptr
-		&& Def->Classname.Equals(TEXT("npc_VTzimisceRunner"), ESearchCase::IgnoreCase);
+	// Slot 400 `AllowsKnockbackBypass`, through the vtable: `CNPC_VTzimisceRunner` (`0x103c3060`) is
+	// the one class whose body returns 1, on its C++ class (story 5 step 3); every other class keeps
+	// `CAI_BaseNPC`'s `0x1014fa50`.
+	return const_cast<FElysiumNpc*>(this)->AllowsKnockbackBypass();
 }
 
 void FElysiumNpc::OnRuntimeModelChanged()

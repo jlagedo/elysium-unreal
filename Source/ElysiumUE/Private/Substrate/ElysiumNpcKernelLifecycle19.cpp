@@ -23,8 +23,6 @@
 namespace
 {
 	constexpr int32 GLifecycle19Slot420 = 420;
-	constexpr int32 GLifecycle19Slot422 = 422;
-	constexpr int32 GLifecycle19Slot130 = 130;
 	constexpr uint32 GFlOnGround = 1u;
 	constexpr float GFltMax = 3.402823466e+38f;
 
@@ -771,44 +769,17 @@ namespace
 
 bool FElysiumNpc::SpeciesNPCInit()
 {
+	// Story 5 step 3: every introduced class overrides slot 420 on its C++ class. The three rows left
+	// are the deferred controller line (FrenzyShadow, PlayerController, WolfMorph), reached only by a
+	// test-latched Troika-line instance until their fold (step 7).
 	static const FLifecycle19NpcInitArm Arms[] =
 	{
-		{ TEXT("0x101aab90"), &FElysiumNpc::PayphoneNPCInit },
-		{ TEXT("0x1035cec0"), &FElysiumNpc::AndreiBloodNPCInit },
-		{ TEXT("0x10360ce0"), &FElysiumNpc::AsianVampireNPCInit },
-		{ TEXT("0x10363940"), &FElysiumNpc::BachNPCInit },
-		{ TEXT("0x103692c0"), &FElysiumNpc::CameraNPCInit },
-		{ TEXT("0x1036b050"), &FElysiumNpc::ChangBrosNPCInit },
-		{ TEXT("0x1036f100"), &FElysiumNpc::ChangBrosBladeNPCInit },
-		{ TEXT("0x1036f900"), &FElysiumNpc::ChangBrosClawNPCInit },
-		{ TEXT("0x10372b00"), &FElysiumNpc::CopNPCInit },
 		{ TEXT("0x10375c80"), &FElysiumNpc::FrenzyShadowNPCInit },
-		{ TEXT("0x103785f0"), &FElysiumNpc::GargoyleNPCInit },
-		{ TEXT("0x1037b290"), &FElysiumNpc::GhoulCroucherNPCInit },
-		{ TEXT("0x1037e240"), &FElysiumNpc::Guard1NPCInit },
-		{ TEXT("0x1037fa70"), &FElysiumNpc::HengeyokaiNPCInit },
-		{ TEXT("0x10387140"), &FElysiumNpc::HumanCombatantNPCInit },
-		{ TEXT("0x10388b30"), &FElysiumNpc::HunterNPCInit },
-		{ TEXT("0x1038b070"), &FElysiumNpc::ManBatNPCInit },
-		{ TEXT("0x103a0420"), &FElysiumNpc::NewscasterNPCInit },
-		{ TEXT("0x103a2570"), &FElysiumNpc::PedestrianNPCInit },
-		{ TEXT("0x103a4350"), &FElysiumNpc::PlaceholderNPCInit },
 		{ TEXT("0x103a4580"), &FElysiumNpc::PlayerControllerNPCInit },
-		{ TEXT("0x103a6d40"), &FElysiumNpc::SabbatLeaderNPCInit },
-		{ TEXT("0x103ae6c0"), &FElysiumNpc::SheriffManNPCInit },
-		{ TEXT("0x103b35c0"), &FElysiumNpc::TaxiDriverNPCInit },
-		{ TEXT("0x103b91d0"), &FElysiumNpc::TzimisceNPCInit },
-		{ TEXT("0x103c1c80"), &FElysiumNpc::TzimisceHeadClawNPCInit },
-		{ TEXT("0x103c5840"), &FElysiumNpc::VampireBossNPCInit },
-		{ TEXT("0x103caef0"), &FElysiumNpc::WerewolfNPCInit },
 		{ TEXT("0x103dce00"), &FElysiumNpc::WolfMorphNPCInit },
-		{ TEXT("0x103dd800"), &FElysiumNpc::YukieNPCInit },
-		{ TEXT("0x103defc0"), &FElysiumNpc::ZombieNPCInit },
 	};
-	if (SpeciesDispatchingSlot == GLifecycle19Slot420)
-	{
-		return false;
-	}
+	// None of the three calls slot 420 again: each chains `PlayerControllerNPCInit` /
+	// `TroikaNPCInit` directly.
 	const FElysiumNpcClassSlot* Override =
 		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GLifecycle19Slot420);
 	if (Override == nullptr)
@@ -821,7 +792,6 @@ bool FElysiumNpc::SpeciesNPCInit()
 		{
 			continue;
 		}
-		const FSpeciesDispatchScope Scope(*this, GLifecycle19Slot420);
 		(this->*Arm.Body)();
 		return true;
 	}
@@ -919,51 +889,10 @@ void FElysiumNpc::TroikaStartNPC()
 	Senses.SetClosestPlayer(*this, Lifecycle19Now(*this));               // 10293a80
 }
 
-namespace
-{
-	struct FLifecycle19StartNpcArm
-	{
-		const TCHAR* Address = nullptr;
-		void (FElysiumNpc::*Body)() = nullptr;
-	};
-}
-
-bool FElysiumNpc::SpeciesStartNPC()
-{
-	static const FLifecycle19StartNpcArm Arms[] =
-	{
-		{ TEXT("0x10369930"), &FElysiumNpc::CameraStartNPC },
-		{ TEXT("0x103b9270"), &FElysiumNpc::TzimisceStartNPC },
-	};
-	if (SpeciesDispatchingSlot == GLifecycle19Slot422)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GLifecycle19Slot422);
-	if (Override == nullptr)
-	{
-		return false;
-	}
-	for (const FLifecycle19StartNpcArm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		const FSpeciesDispatchScope Scope(*this, GLifecycle19Slot422);
-		(this->*Arm.Body)();
-		return true;
-	}
-	return false;
-}
-
 void FElysiumNpc::StartNPC()
 {
-	if (SpeciesStartNPC())
-	{
-		return;
-	}
+	// `CNPC_VCamera` (`0x10369930`) and `CNPC_VTzimisce` (`0x103b9270`) override slot 422 on their
+	// C++ classes (story 5 step 3).
 	TroikaStartNPC();
 }
 
@@ -1179,53 +1108,10 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	Slot593();
 }
 
-namespace
-{
-	struct FLifecycle19OnRestoreArm
-	{
-		const TCHAR* Address = nullptr;
-		void (FElysiumNpc::*Body)(bool) = nullptr;
-	};
-}
-
-bool FElysiumNpc::SpeciesOnRestore(bool bFromLoad)
-{
-	static const FLifecycle19OnRestoreArm Arms[] =
-	{
-		{ TEXT("0x1039f000"), &FElysiumNpc::MingXiaoTentacleOnRestore },
-		{ TEXT("0x103a25a0"), &FElysiumNpc::PedestrianOnRestore },
-		{ TEXT("0x103c3c40"), &FElysiumNpc::TzimisceRunnerOnRestore },
-		{ TEXT("0x103cabf0"), &FElysiumNpc::WerewolfOnRestore },
-	};
-	if (SpeciesDispatchingSlot == GLifecycle19Slot130)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GLifecycle19Slot130);
-	if (Override == nullptr)
-	{
-		return false;
-	}
-	for (const FLifecycle19OnRestoreArm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		const FSpeciesDispatchScope Scope(*this, GLifecycle19Slot130);
-		(this->*Arm.Body)(bFromLoad);
-		return true;
-	}
-	return false;
-}
-
 void FElysiumNpc::OnRestore(bool bFromLoad)
 {
-	if (SpeciesOnRestore(bFromLoad))
-	{
-		return;
-	}
+	// Four classes override slot 130 on their C++ classes (story 5 step 3); each calls
+	// `TroikaOnRestore` first, the direct call retail makes.
 	TroikaOnRestore(bFromLoad);
 }
 

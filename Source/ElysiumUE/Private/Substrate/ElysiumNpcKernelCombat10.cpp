@@ -219,16 +219,6 @@ void FElysiumNpc::TypedStatIncBase(int32 ListType, int32 StatId)
 
 int32 FElysiumNpc::HealthToPercent()
 {
-	// The one species arm. `CNPC_VMingXiao#348` (`0x103970d0`) is slot 348's only override.
-	const FElysiumNpcClassSlot* const Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), 348);
-	if (Override != nullptr && SpeciesDispatchingSlot != 348
-		&& FCString::Strcmp(Override->Address, TEXT("0x103970d0")) == 0)
-	{
-		FSpeciesDispatchScope Scope(*this, 348);
-		return MingXiaoHealthToPercent();
-	}
-
 	// `1032ff24`: the type-0 list, then `GetValue(0x11)` — the CAP.
 	const int32 Cap = TypedStatValue(GStatListTypeSheet, GStatMaxHealth);
 	// `1032ff8f`: the same walk again, then `GetValue(0x0f)` — the accumulated WOUND counter.
@@ -347,19 +337,6 @@ bool FElysiumNpc::RemoveNamedFightingItem(const TCHAR* Classname)
 
 void FElysiumNpc::GiveBaseFightingItems()
 {
-	// Slot 304. The one species arm is `CNPC_VWerewolf#304` (`0x103cc9b0`); `CNPC_VBaseBoss`,
-	// `CNPC_VMingXiao` and the three Tzimisce classes share `0x10390fd0`, which is family Bosses'
-	// row and is dispatched rather than re-ported here.
-	const FElysiumNpcClassSlot* const Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), 304);
-	if (Override != nullptr && SpeciesDispatchingSlot != 304
-		&& FCString::Strcmp(Override->Address, TEXT("0x103cc9b0")) == 0)
-	{
-		FSpeciesDispatchScope Scope(*this, 304);
-		WerewolfGiveBaseFightingItems();
-		return;
-	}
-
 	// `CAI_BaseNPCTroika::GiveBaseFightingItems` `0x102b5b20`, 56 bytes and the whole body:
 	// `102b5b25`: slot 307 `HasUsableMeleeWeapon` (`vt+0x4cc`), then `102b5b34`: slot 308
 	// `HasUsableRangedWeapon` (`vt+0x4d0`). Both generated slots are stubs answering false, and the
@@ -377,17 +354,6 @@ void FElysiumNpc::GiveBaseFightingItems()
 
 void FElysiumNpc::RemoveBaseFightingItems()
 {
-	// Slot 305, the exact inverse of the grant above.
-	const FElysiumNpcClassSlot* const Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), 305);
-	if (Override != nullptr && SpeciesDispatchingSlot != 305
-		&& FCString::Strcmp(Override->Address, TEXT("0x103cca80")) == 0)
-	{
-		FSpeciesDispatchScope Scope(*this, 305);
-		WerewolfRemoveBaseFightingItems();
-		return;
-	}
-
 	// `CAI_BaseNPCTroika::RemoveBaseFightingItems` `0x102b5b70`, 37 bytes.
 	// `102b5b75`: `GetMiscFlags() & 0x10`.
 	if (!ElysiumMiscFlags::Has(MiscFlags, MiscFlagBaseFightingItems))
@@ -707,23 +673,9 @@ void FElysiumNpc::ClearForcedNpcState()
 
 int32 FElysiumNpc::PreSelectIdealStateRetail()
 {
-	if (SpeciesDispatchingSlot != 460)
-	{
-		const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 460);
-		if (SlotBody != nullptr)
-		{
-			if (FCString::Strcmp(SlotBody, TEXT("0x10368f80")) == 0)
-			{
-				const FSpeciesDispatchScope Scope(*this, 460);
-				return CameraPreSelectIdealState();
-			}
-			if (FCString::Strcmp(SlotBody, TEXT("0x10374d80")) == 0)
-			{
-				const FSpeciesDispatchScope Scope(*this, 460);
-				return DogPreSelectIdealState();
-			}
-		}
-	}
+	// `CAI_BaseNPCTroika::PreSelectIdealState` `0x102ad340`. `CNPC_VCamera` (`0x10368f80`) and
+	// `CNPC_VDog` (`0x10374d80`) override this method on their C++ classes (story 5 step 3); the dog's
+	// body calls this one directly.
 
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 

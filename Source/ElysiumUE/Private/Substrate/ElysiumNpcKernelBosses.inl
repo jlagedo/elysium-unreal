@@ -320,11 +320,13 @@ bool IsEntityBlacklisted(const FElysiumEntity* Entity);
  *  `Index` is what `FindBlacklistedEntity` answered. */
 static bool BlacklistTestAndExpire(TArray<FBlacklistedEntity>& Store, int32 Index, double Now);
 
-/** `0x103850a0` (`CNPC_VAndreiBlood`) and `0x10396e90` (`CNPC_VMingXiao`) — slot 482
- *  `CanPlaySequence(bool fDisregardState, int interruptLevel)`, written once per species and
- *  byte-identical to the base `0x10278090` and to `CNPC_VAnimal`'s `0x1035fd40` (family Species')
- *  and `CNPC_VTzimisce`'s `0x103bd270`. Answers retail's `CanPlaySequence_t`: 0 refuse, 1 yes,
- *  2 yes-and-a-cine-is-already-running. */
+/** `0x103850a0` (`CNPC_VHuman`, indexed under `CNPC_VAndreiBlood`) and `0x10396e90` (`CNPC_VMingXiao`)
+ *  — slot 482 `CanPlaySequence(bool fDisregardState, int interruptLevel)`, written once per species,
+ *  as are `CNPC_VAnimal`'s `0x1035fd40` and `CNPC_VTzimisce`'s `0x103bd270`. They are standalone
+ *  copies that NEVER call the base `0x10278090`, and they diverge from it in the SCRIPT state (4),
+ *  where they keep their answer (see `CanPlaySequenceStateArm`); story 5 step 3 made them their
+ *  classes' overrides. Answers retail's `CanPlaySequence_t`: 0 refuse, 1 yes, 2
+ *  yes-and-a-cine-is-already-running. */
 int32 CanPlaySequenceSpecies(bool bDisregardState, int32 InterruptLevel) const;
 
 /** The pure state half, which is every arm after the cine test: `Result` is 1 or 2 on the way in.
@@ -337,14 +339,6 @@ int32 CanPlaySequenceSpecies(bool bDisregardState, int32 InterruptLevel) const;
 static int32 CanPlaySequenceStateArm(int32 Result, bool bDisregardState, int32 InterruptLevel,
 	EElysiumNpcState State, EElysiumNpcState IdealState);
 
-/** One row of slot 482's species table: the census class and the body that fills the slot for it. */
-struct FCanPlaySequenceSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-};
-static const FCanPlaySequenceSpecies* CanPlaySequenceSpeciesRows(int32& OutCount);
-static const FCanPlaySequenceSpecies* CanPlaySequenceSpeciesOf(const TCHAR* InRetailClass);
 
 // `thunk_FUN_101a8ac0(m_hCine)` and the `m_hCine` resolve in front of it are family **Anim**'s
 // `CineAllowsDynamicInteraction()` and `ScriptOwnerIsLive()` (`ElysiumNpcKernelAnim.inl`), which

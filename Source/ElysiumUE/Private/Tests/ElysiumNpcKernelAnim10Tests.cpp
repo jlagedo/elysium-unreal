@@ -1531,8 +1531,11 @@ bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	TestTrue(TEXT("CNPC_VZombie's slot-509 arm is claimed"), N.ShouldPlayIdleSoundZombieArm());
-	TestFalse(TEXT("the bare Troika line's is not"), F.Cop->ShouldPlayIdleSoundZombieArm());
+	// Slot 509 is `FElysiumNpcZombie`'s own override (story 5 step 3).
+	TestTrue(TEXT("the subject is a CNPC_VZombie, whose slot 509 is 0x103e0fa0"),
+		N.RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));
+	TestTrue(TEXT("the cop is not"),
+		F.Cop->RetailClass() != ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));
 
 	// The state test the Troika/base body makes is ABSENT here: a COMBAT zombie still rolls, where
 	// a human body would have refused on `m_NPCState`.
@@ -1557,6 +1560,26 @@ bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 	}
 	TestFalse(TEXT("0x103e0fa0: a body busy with a discipline never rolls"), bAnyTrue);
 	N.CurFrenzyCount = 0;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10RunnerKnockbackBypassTest,
+	"Elysium.Substrate.NpcKernelAnim10.RunnerKnockbackBypass", GAnim10TestFlags)
+bool FAnim10RunnerKnockbackBypassTest::RunTest(const FString&)
+{
+	// Slot 400 `AllowsKnockbackBypass`: `CNPC_VTzimisceRunner::vfunc400` (`0x103c3060`) returns 1 and
+	// is the only override (`vtmb_slot 400`); every other class keeps `0x1014fa50`. Story 5 step 3
+	// made it the runner's C++ override, so both readers — the near-miss gate here and the combat
+	// character's eligibility hook — answer it through the vtable.
+	FAnim10Fixture F(TEXT("CNPC_VTzimisceRunner"));
+	if (!TestNotNull(TEXT("the runner spawned"), F.Npc) || !TestNotNull(TEXT("the cop"), F.Cop))
+	{
+		return false;
+	}
+	TestTrue(TEXT("CNPC_VTzimisceRunner's slot 400 answers 1"), F.Npc->AllowsKnockbackBypass());
+	TestTrue(TEXT("and the eligibility hook reads it"), F.Npc->BypassesKnockbackEligibility());
+	TestFalse(TEXT("a cop keeps the base 0"), F.Cop->AllowsKnockbackBypass());
+	TestFalse(TEXT("and does not bypass"), F.Cop->BypassesKnockbackEligibility());
 	return true;
 }
 

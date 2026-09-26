@@ -1,8 +1,14 @@
-# Story 5 — step 3 in progress
+# Story 5 — step 3 accepted
 
-**Step 3 (replace introduced-species dispatch) started 2026-09-26 on `0019-5-class-tree` at
-`870360e9` (step 2, committed and accepted), clean tree.** Packet 3a (preflight, override matrix,
-checker) is complete and uncommitted (the 3-pre prerequisite); see [Step 3](#step-3) below.
+**Step 3 (replace introduced-species dispatch) passed its acceptance gate on 2026-09-26 on
+`0019-5-class-tree`.** Packet 3a is committed as `48c6ef29`; the C++ step (3b–3j) is committed as
+"feat(npc-kernel): story 5 step 3 -- species dispatch as overrides". `uv run elysium research
+kernel_migration --check step3` exits 0; it re-verifies step 2 against `870360e9`. Evidence is pinned
+in [acceptance-step3.json](acceptance-step3.json); the packet record is
+[packets/3-species-dispatch.md](packets/3-species-dispatch.md).
+
+Manifest: phase 3, revision `step-3-species-dispatch`. The verdicts pin was refreshed after the 83
+overlay retargets (repo-internal, as in `b2261eca`).
 
 ## Step 2 (accepted, `870360e9`)
 
@@ -57,17 +63,43 @@ Carried forward (see [decisions-step2.json](decisions-step2.json)):
 - Step 1's carried items stand: CharTemplateModelName seam, slot 525 OverrideMove rows, and
   retained dead census tables.
 
-## Step 3
+## Step 3 (accepted)
 
-Record: [overrides-step3.tsv](overrides-step3.tsv) (the override matrix: 611 introduced
-`(class, slot, body)` rows re-derived from the step-2 census by `kernel_migration --check step3`),
-[decisions-step3.json](decisions-step3.json). `manifest.json` `history.step2.commit` = `870360e9`;
-`--check step2` now reads that tree. `--check step3` reports PENDING until phase 3.
+Record: [overrides-step3.tsv](overrides-step3.tsv), [decisions-step3.json](decisions-step3.json),
+[expectations/step-3.json](expectations/step-3.json), [acceptance-step3.json](acceptance-step3.json).
+Evidence root: `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/step3/` (gate, smoke, checkpoints,
+tools).
 
-- [3a](packets/3a-preflight-and-matrix.md) (complete): step-2 historical check,
-  `kernel_migration_step3.py` + tests, matrix draft (428 overrides + 8 own branch virtuals drafted
-  from address arms, 175 to investigate). Five generator checks and 108 Python tests pass.
-- 3b-3j: pending (virtual surface, the 510/482/606/593 corrections, Troika-helper rows,
-  member-pointer tables, arm families, vocalisation/footsteps, type tests, tests/docs, gate).
+- [3a](packets/3a-preflight-and-matrix.md): committed `48c6ef29`.
+- [3b–3j](packets/3-species-dispatch.md): accepted.
+
+Outcome:
+
+- **Override matrix:** 611 rows, every one resolved with a note: 373 `override`, 3 `own`,
+  72 `data-query`, 161 `residue` (story 8), 2 `step4`. Each override is declared `override` on
+  its introducing class and defined in its `.cpp`.
+- **Direct calls:** 187 qualified calls to the retail callee's owner (1 elided: an empty
+  `CAI_BaseNPC` body); 2 step-5 renames (`BaseShouldPlayFloatSound`, `BaseDrawDebugStatOverlays`).
+- **Surviving sites:** 49 rows, 56 gate tokens: 29 deferred arms (steps 7/8/9/10), 11 census
+  lookups, 5 retail RTDynamicCast type tests, 4 class-keyed data queries.
+- **Retail corrections (7):** Zombie 510; slot 482 SCRIPT state; Yukie 600/601/602 wired; slot
+  465 wired; vocalisation rows; slot 561 through the vtable (Bach's block runs); runner slot 400.
+  Each has a test and a `docs/vtmb/npc-ai` record.
+
+Validation: build green. **1,264 Substrate + 14 Content + 1 PlayerWorld**, zero failures.
+`test_delta` against step 2's final gate passes with 22 reviewed expectations (2 additions, 20
+diagnostics: factory-spawn "no eye offset" lines, the known zombie `Hide` stub, two facing stubs
+now reached through the vtable, and map-epoch shifts). Five generator checks, pytest (120) and
+`kernel_migration --check step0/1/2/factories/step3` pass. Map smoke over `sp_giovanni_2b`, `ch_fishmarket_1`,
+`hw_warrens_4`, `sm_pawnshop_1` (script path for Bach, Werewolf, CameraSecurity) and `sp_tutorial_1`:
+no Elysium errors, only step 2's known stubs. Combat was not driven in game.
+
+Carried forward:
+
+- Residue for story 8: 150 unported species bodies and 11 ported-but-unwired helpers (Yukie 363
+  among them: the substrate has no slot-363 dispatch point), plus the one-byte vocal bodies of
+  Tzimisce 489/492–495, Newscaster 488–497 and Camera 482/509/510.
+- Deferred arms stay listed in `decisions-step3.json` `surviving_sites` until steps 7–10.
+- Step 4 moves bodies, words and bindings onto the classes; step 5 renames the two `Base*` helpers.
 
 Do not tick story 5 or tracker 06b until step 11.

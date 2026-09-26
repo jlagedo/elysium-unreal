@@ -8,6 +8,7 @@
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
@@ -135,10 +136,10 @@ bool FElysiumNpcKernelSoundsTableTest::RunTest(const FString&)
 				Addresses[Index]), FString(Row->RetailAddress), FString(Addresses[Index]));
 			TestTrue(*FString::Printf(TEXT("CNPC_VCamera#%d is mute"), Mutes[Index]),
 				Row->Kind == EKind::Mute);
-			// The chain walk, not a name compare: `CNPC_VCameraSecurity`'s base is
-			// `CNPC_VCamera`, so it inherits every one of these rather than carrying a copy.
-			TestTrue(*FString::Printf(TEXT("CNPC_VCameraSecurity#%d inherits it"), Mutes[Index]),
-				SoundsRow(TEXT("CNPC_VCameraSecurity"), Mutes[Index]) == Row);
+			// `CNPC_VCameraSecurity` carries no copy: it inherits `FElysiumNpcCamera`'s overrides
+			// (story 5 step 3), which `Emit` asserts on a spawned one.
+			TestNull(*FString::Printf(TEXT("CNPC_VCameraSecurity#%d carries no row of its own"),
+				Mutes[Index]), SoundsRow(TEXT("CNPC_VCameraSecurity"), Mutes[Index]));
 		}
 		// 497 and 506 are unnamed slots in the band and the camera does not fill them.
 		TestNull(TEXT("CNPC_VCamera fills no slot 497"), SoundsRow(TEXT("CNPC_VCamera"), 497));
@@ -238,7 +239,7 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 	// Slot 620 `FootstepSound` (`0x103aa5e0`): one CHAN_BODY emit from the seven-wav step pool at
 	// volume 1.0, soundlevel 75 (the inverse of attenuation 0.8) and pitch 1.0 (retail's 100).
 	F.World.Services.BodySounds.Reset();
-	TestTrue(TEXT("the species claims slot 620"), F.Npc->EmitVocalization(620));
+	static_cast<FElysiumNpcSabbatLeader*>(F.Npc)->FootstepSound();   // the class's own slot 620
 	if (TestEqual(TEXT("...with exactly one emit"), F.World.Services.BodySounds.Num(), 1))
 	{
 		const FElysiumBodySound& Sound = F.World.Services.BodySounds[0];
@@ -253,7 +254,7 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 
 	// Slot 621 `AttackSound` (`0x103aa7a0`): the three-wav exert pool, same channel and level.
 	F.World.Services.BodySounds.Reset();
-	TestTrue(TEXT("the species claims slot 621"), F.Npc->EmitVocalization(621));
+	static_cast<FElysiumNpcSabbatLeader*>(F.Npc)->AttackSound();   // the class's own slot 621
 	if (TestEqual(TEXT("...with exactly one emit"), F.World.Services.BodySounds.Num(), 1))
 	{
 		TestTrue(TEXT("...from the exert_heavy pool"),
@@ -267,7 +268,7 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 	TSet<FString> Seen;
 	for (int32 Pass = 0; Pass < 64; ++Pass)
 	{
-		F.Npc->EmitVocalization(620);
+		static_cast<FElysiumNpcSabbatLeader*>(F.Npc)->FootstepSound();
 	}
 	for (const FElysiumBodySound& Sound : F.World.Services.BodySounds)
 	{
@@ -280,8 +281,27 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 	// A slot this species does not override: the Troika-line body (story 29d) runs instead, and
 	// nothing was emitted here.
 	F.World.Services.BodySounds.Reset();
-	TestFalse(TEXT("the Sabbat leader has no PainSound override"), F.Npc->EmitVocalization(491));
+	TestFalse(TEXT("the Sabbat leader has no PainSound row"),
+		F.Npc->SpeciesVocalize(TEXT("CNPC_VSabbatLeader"), 491));
 	TestEqual(TEXT("...and emitted nothing"), F.World.Services.BodySounds.Num(), 0);
+	F.Npc->VSoundSpeakCalls.Reset();
+	F.Npc->PainSound();
+	TestEqual(TEXT("...so its PainSound is the Troika body's concept speak"), F.Npc->VSoundSpeakCalls.Num(), 1);
+
+	// Story 5 step 3 correction: the camera's nineteen empty overrides take effect. A spawned
+	// `npc_VCameraSecurity` inherits `FElysiumNpcCamera`'s, so its pain and death say nothing where
+	// the Troika body would speak a concept.
+	{
+		FSoundsFixture Cam(TEXT("npc_VCameraSecurity"));
+		if (TestNotNull(TEXT("the security camera spawned"), Cam.Npc))
+		{
+			Cam.Npc->VSoundSpeakCalls.Reset();
+			Cam.Npc->PainSound();
+			Cam.Npc->DeathSound();
+			Cam.Npc->AlertSound();
+			TestEqual(TEXT("a camera's vocal hooks are silent"), Cam.Npc->VSoundSpeakCalls.Num(), 0);
+		}
+	}
 
 	// A body whose species answers a SENTENCE group cannot be spawned here (`npc_VTzimisce` is not
 	// a registered classname), so the refusal the seam makes is asserted where it can be: the row

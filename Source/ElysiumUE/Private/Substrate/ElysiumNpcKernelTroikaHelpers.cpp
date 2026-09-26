@@ -274,34 +274,6 @@ const TCHAR* FElysiumNpc::MeleeSlotBody(int32 Slot, EMeleeSlotLine Line)
 	}
 }
 
-FElysiumNpc::EMeleeSlotLine FElysiumNpc::MeleeSlotLine(int32 Slot) const
-{
-	// Read off the CENSUS rather than a hand-typed class list, so the answer is checkable against
-	// `docs/vtmb/npc-kernel/slots.md` by construction and cannot drift from it.
-	//
-	// The bare Troika line answers `Troika`: `RetailClass()` is null and the Troika-line body is
-	// what a class with no override runs.
-	const FElysiumNpcClass* Cls = RetailClass();
-	if (Cls == nullptr)
-	{
-		return EMeleeSlotLine::Troika;
-	}
-	const FString SlotBody(ElysiumNpcKernelClass::BodyOf(Cls, Slot));
-	if (SlotBody == MeleeSlotBody(Slot, EMeleeSlotLine::Troika))
-	{
-		return EMeleeSlotLine::Troika;
-	}
-	if (SlotBody == MeleeSlotBody(Slot, EMeleeSlotLine::AndreiBlood))
-	{
-		return EMeleeSlotLine::AndreiBlood;
-	}
-	// Six classes replace each of the four slots outright (`CNPC_VFrenzyShadow`, `CNPC_VGargoyle`,
-	// `CNPC_VHengeyokai`, `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle`, `CNPC_VTzimisceHeadClaw`,
-	// `CNPC_VTzimisceRunner`, `CNPC_VYukie`). Their bodies are other families' rows and are NOT
-	// guessed at here: this leaf runs the Troika line for them and the caller can see it did.
-	return EMeleeSlotLine::Species;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 54 — `CAI_BaseNPCTroika::FUN_102b50b0` `0x102b50b0`.
 // -------------------------------------------------------------------------------------------------
@@ -426,14 +398,8 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 	// `EElysiumRelationship::Hate`. It is the constant that makes this more than a bare forward:
 	// slot 597 is "hate this entity at the caller's priority" and nothing else.
 	//
-	// Story 29d, family **SpeciesMisc10**: `CNPC_VCop#597` (`0x10372cc0`) ADDS the `m_hPursuitPlayer`
-	// latch and the `"Player D_HT 10"` relationship write IN FRONT of this body, which then runs
-	// unchanged — so the prologue goes here and nothing below it moves.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 597);
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10372cc0")) == 0)
-	{
-		CopSlot597Prologue(Other);
-	}
+	// `CNPC_VCop#597` (`0x10372cc0`, `FElysiumNpcCop::Slot597`) adds the `m_hPursuitPlayer` latch and
+	// the `"Player D_HT 10"` relationship write IN FRONT of this body and then calls it directly.
 	if (Other == nullptr)
 	{
 		return;
@@ -447,10 +413,10 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 
 bool FElysiumNpc::Slot599(int32)
 {
-	// **The vtable dispatch first.** Four classes replace this slot outright — `CNPC_VFrenzyShadow`
-	// `0x10376b70`, `CNPC_VGargoyle` `0x10379ef0`, `CNPC_VTzimisceHeadClaw` `0x103c19e0` and
-	// `CNPC_VTzimisceRunner` `0x103c3960`, family **Species**' rows — and `MeleeSlotLine(599)` names
-	// them. Every other class, and the bare Troika line, falls through to this body.
+	// Four classes replace this slot outright — `CNPC_VGargoyle` `0x10379ef0`,
+	// `CNPC_VTzimisceHeadClaw` `0x103c19e0`, `CNPC_VTzimisceRunner` `0x103c3960` and `CNPC_VYukie`
+	// on their C++ classes (story 5 step 3); `CNPC_VFrenzyShadow` `0x10376b70` stays a census arm
+	// here until the controller fold (step 7).
 	//
 	// The argument: `signatures.md` types slot 599 `bool vfunc599(int)` because THIS body reads it
 	// with no instruction, but the runner's copy casts it to a `CBaseEntity*` and caches
@@ -467,8 +433,8 @@ bool FElysiumNpc::Slot599(int32)
 	}
 
 	// `0x102b5650`. The `CNPC_VAndreiBlood`-line copy `0x10385ab0` is BYTE-IDENTICAL (family Bosses
-	// read it and this family re-read it), so one arm carries both lines and `MeleeSlotLine(599)`
-	// is asserted rather than branched on. The argument is read by nothing in the body.
+	// read it and this family re-read it), so `FElysiumNpcHuman::Slot599` calls this body. The
+	// argument is read by nothing in the body.
 	//
 	//     if ((m_bfNPCFrenziedFlags & 2) == 2 || GetFollowerBoss()) { m_bInMelee = 1; return true; }
 	//     if (curtime < m_flMeleeCanEnterTimer) { m_bInMelee = 0; return false; }
@@ -593,14 +559,10 @@ bool FElysiumNpc::Slot600(FElysiumEntity* Enemy)
 
 void FElysiumNpc::Slot601(FElysiumEntity* Enemy)
 {
-	// The vtable dispatch first: `CNPC_VTzimisceHeadClaw` `0x103c1ad0` and `CNPC_VTzimisceRunner`
-	// `0x103c3a70` replace this slot (family **Species**), both dropping the ranged-weapon test and
-	// the release's null guard. Retail's argument at every recovered site is `GetEnemy()`
-	// (`0x102b6c30` pushes the same EDI into `+0x964` as into `+0x95c`); it arrives here already.
-	if (SpeciesSlot601(Enemy))
-	{
-		return;
-	}
+	// `CNPC_VTzimisceHeadClaw` `0x103c1ad0`, `CNPC_VTzimisceRunner` `0x103c3a70` and `CNPC_VYukie`
+	// `0x103dd9a0` override this slot on their C++ classes (story 5 step 3). Retail's argument at
+	// every recovered site is `GetEnemy()` (`0x102b6c30` pushes the same EDI into `+0x964` as into
+	// `+0x95c`); it arrives here already.
 
 	// `0x102b5880`, the Troika line, in retail's order and with the argument ignored:
 	//     (*DAT_10924edc)->vfunc1();                                   // the global melee event
@@ -612,13 +574,8 @@ void FElysiumNpc::Slot601(FElysiumEntity* Enemy)
 	// **The ONE difference from the `CNPC_VAndreiBlood` line (`0x10385cf0`) is the null guard on
 	// the last line.** Family Bosses' note that its copy "fires the event FIRST" is not a
 	// difference — the Troika body fires it first too; this family re-read both bodies and the
-	// guard is the whole of it. `FUN_10385cf0` is Bosses' method and is CALLED here rather than
-	// restated, so the two lines cannot drift.
-	if (MeleeSlotLine(601) == EMeleeSlotLine::AndreiBlood)
-	{
-		FUN_10385cf0();
-		return;
-	}
+	// guard is the whole of it. `FUN_10385cf0` is Bosses' method and `FElysiumNpcHuman::Slot601`'s
+	// body (story 5 step 3).
 	++MeleeEventFires;
 	bInMelee = false;
 	if (HasUsableRangedWeapon())
@@ -640,14 +597,8 @@ void FElysiumNpc::Slot601(FElysiumEntity* Enemy)
 
 bool FElysiumNpc::Slot602()
 {
-	// The vtable dispatch first: `CNPC_VTzimisceHeadClaw` `0x103c1b10` and `CNPC_VTzimisceRunner`
-	// `0x103c3ab0` (family **Species**) keep only the far arm of the body below.
-	bool SpeciesAnswer = false;
-	if (SpeciesSlot602(SpeciesAnswer))
-	{
-		return SpeciesAnswer;
-	}
-
+	// `CNPC_VTzimisceHeadClaw` `0x103c1b10`, `CNPC_VTzimisceRunner` `0x103c3ab0` (the far arm of
+	// the body below only) and `CNPC_VYukie` `0x103dda10` override this slot on their C++ classes.
 	// `0x102b5900`, the Troika line:
 	//     if ((m_bfNPCFrenziedFlags & 2) == 2) return false;
 	//     if (GetFollowerBoss()) return false;
@@ -663,9 +614,8 @@ bool FElysiumNpc::Slot602()
 	// else. Family Bosses flagged the divergence and left the slot undefined; this family read both
 	// bodies and confirms it: the two are otherwise instruction-for-instruction the same.
 	//
-	// ONE method carries both, per the story's species rule — this is one behaviour with a
-	// per-species arm, not two behaviours — and the arm is a CENSUS lookup (`MeleeSlotLine`) so it
-	// is checkable against `slots.md`.
+	// ONE method carries both: `FElysiumNpcHuman::Slot602` calls this body (story 5 step 3), because
+	// the one difference is applied to both lines (below).
 	//
 	// **The divergence is NOT observable in retail, and the reachability argument is why.** Every
 	// one of the coordinator's five entry points dereferences its `this` immediately —
@@ -683,7 +633,7 @@ bool FElysiumNpc::Slot602()
 	// **Squad**'s `SetFollowerBossName` took the same refusal for the same reason), and answering
 	// the seams' "an empty coordinator holds nobody" on a state retail cannot reach would hand
 	// family **Schedule**'s six melee arms a leave-melee decision that no shipped program ever saw.
-	// The recovered difference itself is recorded, and `MeleeSlotLine(602)` is what states it.
+	// The recovered difference itself is recorded here and in `MeleeSlotBody`.
 	//
 	// Retail's `(a < b) != (a == b)` on the distance is the FPU flag pair for `a <= b`.
 	if (NpcFlags.HasFrenzied(TroikaFrenziedBitForcesMelee))
@@ -697,7 +647,7 @@ bool FElysiumNpc::Slot602()
 	if (AttackCoordinator == 0)
 	{
 		// The Troika line's own third test; on the `CNPC_VAndreiBlood` line it is the named
-		// divergence above, and `MeleeSlotLine(602)` says which of the two this NPC took.
+		// divergence above (`MeleeSlotBody(602, ...)` names the two bodies).
 		return false;
 	}
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
@@ -721,15 +671,9 @@ bool FElysiumNpc::Slot602()
 
 int32 FElysiumNpc::Slot606(int32 Arg)
 {
-	// The vtable dispatch first: `CNPC_VBach` `0x10364280` (family **Species**) wraps this body in an
-	// arm-then-fire hysteresis around `COND_ENEMY_OCCLUDED` and DELEGATES here on its second pass —
-	// `thunk_FUN_102b8320`, a direct call, which `SpeciesSlot606`'s dispatch scope reproduces.
-	int32 SpeciesAnswer = 0;
-	if (SpeciesSlot606(Arg, SpeciesAnswer))
-	{
-		return SpeciesAnswer;
-	}
-
+	// `CNPC_VBach` `0x10364280` overrides this slot (`FElysiumNpcBach`): an arm-then-fire hysteresis
+	// around `COND_ENEMY_OCCLUDED` that DELEGATES here on its second pass by a direct call
+	// (`thunk_FUN_102b8320`), spelled `FElysiumNpc::Slot606`.
 	// `0x102b8320`, in retail's order. Each fail arm stamps the selector trace at
 	// `+0x1b30`/`+0x1b34`; the shape map calls that pair ABSENT and families Anim, Bosses and Damage
 	// all record the same, so the line numbers are named in the comments and not stored.
@@ -933,7 +877,7 @@ int32 FElysiumNpc::FindShootAtHintNode(bool bForce)
 	//
 	// The draw is taken BEFORE the search and on every call that gets past the wait, whether or not
 	// the search finds anything — so a miss still costs a full 2.0-2.5 s cooldown.
-	if (ScheduleHost.ShootAtHintNode != 0 && FValidateHintTypeForSpecies(ScheduleHost.ShootAtHintNode))
+	if (ScheduleHost.ShootAtHintNode != 0 && FValidateHintTypeNode(ScheduleHost.ShootAtHintNode))
 	{
 		return ScheduleHost.ShootAtHintNode;
 	}
@@ -959,18 +903,10 @@ int32 FElysiumNpc::FindShootAtHintNode(bool bForce)
 
 void* FElysiumNpc::Slot609(bool bForce)
 {
-	// The vtable dispatch first, and slot 609's species arm is a GATE rather than a replacement:
-	// `CNPC_VBach` `0x103661f0` (family **Species**; the dead swarms' `0x10367740` / `0x103b26f0`
-	// are byte-identical copies with no instance) admits only retail `m_NPCState` 4 or 0xc and
-	// otherwise ZEROES `m_pShootAtHintNode` and answers NULL. An admitted body tail-calls the base
-	// (`thunk_FUN_102b6b50`), which is the search below — so the dispatcher hands back "may the base
-	// run" and the refusal is the only arm that returns early.
-	bool bRunBase = false;
-	if (SpeciesSlot609(bForce, bRunBase) && !bRunBase)
-	{
-		return nullptr;
-	}
-
+	// `CNPC_VBach` `0x103661f0` overrides this slot (`FElysiumNpcBach`; the dead swarms' `0x10367740`
+	// / `0x103b26f0` are byte-identical copies with no instance): a GATE that admits only retail
+	// `m_NPCState` 4 or 0xc, otherwise ZEROES `m_pShootAtHintNode` and answers NULL, and on admission
+	// tail-calls this body directly (`thunk_FUN_102b6b50`, spelled `FElysiumNpc::Slot609`).
 	// Retail's `CAI_Hint* vfunc609(bool)`. Hints are BARE INDICES in this runtime (family Hints'
 	// standing fact), so there is no object to answer with: the body is `FindShootAtHintNode`,
 	// which answers the index, and the slot answers null. Nothing is lost — every recovered caller

@@ -398,42 +398,9 @@ int32 FElysiumNpc::SelectCombatReactionSchedule()
 
 int32 FElysiumNpc::SelectScheduleRangedCombat(int32 Arg)
 {
-	// The species dispatch, on `OverrideOf(RetailClass(), 605)` exactly as slot 604's is. `BodyOf`
-	// would answer the Troika address for a class with no override, which is the same body the tail
-	// runs, so `OverrideOf` is the reader.
-	const FElysiumNpcClassSlot* const Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), 605);
-	if (Override != nullptr && SpeciesDispatchingSlot != 605)
-	{
-		// `CNPC_VHuman` and the 35 species that inherit its body.
-		if (FCString::Strcmp(Override->Address, TEXT("0x10386560")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 605);
-			return HumanSelectScheduleRangedCombat(Arg);
-		}
-		if (FCString::Strcmp(Override->Address, TEXT("0x103620d0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 605);
-			return AsianVampireSelectScheduleRangedCombat(Arg);
-		}
-		if (FCString::Strcmp(Override->Address, TEXT("0x103642f0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 605);
-			return BachSelectScheduleRangedCombat(Arg);
-		}
-		if (FCString::Strcmp(Override->Address, TEXT("0x103967d0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 605);
-			return MingXiaoSelectScheduleRangedCombat(Arg);
-		}
-		if (FCString::Strcmp(Override->Address, TEXT("0x103afdb0")) == 0)
-		{
-			FSpeciesDispatchScope Scope(*this, 605);
-			return SheriffManSelectScheduleRangedCombat(Arg);
-		}
-	}
-	// `CAI_BaseNPCTroika#605` and the 20 classes that share it (`npc_VCop` among them: `CNPC_VCop`
-	// has no slot-605 row of its own).
+	// `CAI_BaseNPCTroika#605` and the classes that share it. The human line's `0x10386560` (which
+	// `CNPC_VCop` inherits) and AsianVampire, Bach, MingXiao and SheriffMan override slot 605 on
+	// their C++ classes (story 5 step 3).
 	return TroikaSelectScheduleRangedCombat(Arg);
 }
 
@@ -799,8 +766,8 @@ int32 FElysiumNpc::BachSelectScheduleRangedCombat(int32 Arg)
 		}
 	}
 
-	// `10364447`: `CNPC_VHuman::SelectScheduleRangedCombat` `0x10386560`, a DIRECT non-virtual call —
-	// the situation `FSpeciesDispatchScope` exists for, expressed here by naming the arm.
+	// `10364447`: `CNPC_VHuman::SelectScheduleRangedCombat` `0x10386560`, a DIRECT non-virtual call,
+	// expressed by naming the human line's body.
 	const int32 HumanAnswer = HumanSelectScheduleRangedCombat(Arg);
 
 	// `1036445a`: UNCONDITIONALLY — an `m_NPCState` (`+0x5cc0`) that is neither 4 nor 0xc clears the

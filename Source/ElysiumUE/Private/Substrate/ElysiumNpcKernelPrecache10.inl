@@ -35,9 +35,8 @@
 //   * **The chain is a chain, not a merge.** Most species bodies do their own work and then call
 //     `CAI_BaseNPCTroika::Precache` `0x10298ad0`, which itself calls `CAI_BaseNPC::Precache`
 //     `0x1027bb50`. Every one of those calls is a DIRECT `thunk_`, never a vtable dispatch, so it
-//     can never re-enter the species body. `FSpeciesDispatchScope` (story 29c-1's ported thunk:
-//     while slot N's species body runs, slot N's dispatcher answers "no species body") is what
-//     makes a species arm's own call to `Precache()` that direct call. Six arms chain the base
+//     can never re-enter the species body; the port spells it as a direct call to `TroikaPrecache`
+//     (story 5 step 3). Six arms chain the base
 //     LAST rather than first and one chains it FIRST and then hard-codes a model; the order is the
 //     recovered fact and is reproduced per arm.
 //   * **A precache is asset acquisition, which Unreal owns.** This substrate has no per-entity
@@ -163,8 +162,8 @@ void IssuePrecache(const FPrecacheOp& Op);
 void BasePrecache();
 
 /** `CAI_BaseNPCTroika::Precache` (`0x10298ad0`) — slot 104's own body, without the species
- *  prologue. `Precache()` is the slot; this is what it runs when no species arm claims it, and what
- *  a species arm's own chain call reaches through `FSpeciesDispatchScope`.
+ *  prologue. `Precache()` is the slot; this is what it runs on the Troika line, and what a species
+ *  class's override calls directly.
  *
  *  In retail's order: the model keyfield falls back to `"models/error/error.mdl"` when unset or
  *  empty; the keyfield is `PrecacheModel`d and the returned index handed to slot 10
@@ -174,16 +173,6 @@ void BasePrecache();
  *  glob-precaches that directory twice, `.wav` then `.mp3`; `+0x64e8` takes the disposition-table
  *  row index; and slot 608 is dispatched with `"Normal"`. */
 void TroikaPrecache();
-
-// --- Slot 104's species dispatch ------------------------------------------------------------------
-
-/** The species prologue at the top of `Precache()`. True means a species body ran and the Troika
- *  body must NOT — which is what a vtable dispatch to an override does.
- *
- *  Keyed on the override row's retail ADDRESS, so one arm serves every class that shares a body.
- *  A test asserts the arm table covers every slot-104 override row the census carries, which is
- *  what keeps an unlisted class from silently falling through to the Troika body. */
-bool PrecacheSpecies();
 
 /** `"sound/character/%s"` built from `m_iDialog`, chopped and lowercased — the directory
  *  `0x10298ad0` globs. Pure, so the chop is stated without standing a world.
@@ -234,9 +223,10 @@ FString CharTemplateModelName() const;
 // --- The species arms ----------------------------------------------------------------------------
 //
 // One per distinct retail body, named after the class the census names it on and carrying that
-// class's `0x10……` address at the definition. `PrecacheSpecies` is what selects one; a body that
-// wants the base calls `Precache()` (the Troika body, reached through `FSpeciesDispatchScope`) or
-// `BasePrecache()` (`CAI_BaseNPC`'s, which a `CAI_BaseNPC`-line class chains instead).
+// class's `0x10……` address at the definition. Each is the slot-104 override on its species' C++
+// class (story 5 step 3); a body that wants the base calls `TroikaPrecache()` (the Troika body,
+// the direct call retail makes into `0x10298ad0`) or `BasePrecache()` (`CAI_BaseNPC`'s, which a
+// `CAI_BaseNPC`-line class chains instead).
 //
 // WHERE EACH ONE CHAINS, because it is the fact that separates them: **first** for Andrei Blood,
 // the Asian Vampire, Bach, the Chang brothers, the Gargoyle, the Ghoul Croucher, the Hengeyokai,

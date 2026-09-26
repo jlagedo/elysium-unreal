@@ -338,11 +338,10 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 	N.GhoulCroucherScriptUnhideTail();   // the unset arm writes nothing and must not fault
 	TestFalse(TEXT("and an unset handle is an ordinary no-op"), N.BurningParticle.IsSet());
 
-	// The species dispatcher: an `npc_VHumanCombatant` is neither species, so only the Troika tail
-	// runs and the werewolf words stay put.
+	// The Troika tail alone touches none of the werewolf words: they are the werewolf tail's.
 	N.WerewolfUnhideStamp = -1.0;
-	N.ScriptUnhideSpecies(500.0);
-	TestEqual(TEXT("a non-werewolf keeps its +0x66ec"), N.WerewolfUnhideStamp, -1.0);
+	N.TroikaScriptUnhideTail();
+	TestEqual(TEXT("the Troika tail keeps +0x66ec"), N.WerewolfUnhideStamp, -1.0);
 	return true;
 }
 
@@ -750,9 +749,9 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 		FLifecycleFixture Sabbat(TEXT("npc_VSabbatLeader"));
 		if (TestNotNull(TEXT("the Sabbat leader spawned"), Sabbat.Npc))
 		{
-			TestEqual(TEXT("CNPC_VSabbatLeader forwards slot 434 to CNPC_VAndreiBlood"),
-				Sabbat.Npc->PrescheduleSpecies(),
-				FElysiumNpc::EPrescheduleSpecies::ForwardToAndreiBlood);
+			TestEqual(TEXT("CNPC_VSabbatLeader fills slot 434 with its forwarding 0x103a7650"),
+				FString(ElysiumNpcKernelClass::BodyOf(Sabbat.Npc->RetailClass(), 434)),
+				FString(TEXT("0x103a7650")));
 		}
 	}
 	FLifecycleFixture Fix;
@@ -761,8 +760,11 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *Fix.Npc;
-	TestEqual(TEXT("an ordinary combatant runs the base slot 434"),
-		N.PrescheduleSpecies(), FElysiumNpc::EPrescheduleSpecies::Base);
+	{
+		const FString CombatantBody(ElysiumNpcKernelClass::BodyOf(N.RetailClass(), 434));
+		TestTrue(TEXT("an ordinary combatant takes neither the camera's nor the Sabbat leader's body"),
+			CombatantBody != TEXT("0x10369100") && CombatantBody != TEXT("0x103a7650"));
+	}
 	// `CNPC_VCamera`'s row is exercised by retail class name — which is what the census answers.
 	// story 5 step 2: `npc_VCamera` is now a registered classname building it (population.md).
 	TestNotNull(TEXT("CNPC_VCamera is a census class"),
@@ -785,8 +787,7 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 		if (TestNotNull(TEXT("the bare Troika NPC stood"), Troika))
 		{
 			TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
-			TestEqual(TEXT("so it runs the base slot 434"),
-				Troika->PrescheduleSpecies(), FElysiumNpc::EPrescheduleSpecies::Base);
+			Troika->PrescheduleThink();   // the empty Troika-line body: nothing to observe, nothing faults
 		}
 	}
 

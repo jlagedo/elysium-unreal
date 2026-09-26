@@ -11,4 +11,10 @@ class FElysiumNpcManBat : public FElysiumNpcVampire
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 GetUsedHullBits() override;
+	virtual bool FValidateHintType(void* Hint) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

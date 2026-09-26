@@ -11,4 +11,16 @@ class FElysiumNpcBach : public FElysiumNpcVampire
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual int32 Slot606(int32 Arg) override;
+	virtual void* Slot609(bool bForce) override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual void OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState) override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
+	virtual int32 SelectScheduleRangedCombat(int32 Arg) override;
+	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
+	virtual bool FValidateHintType(void* Hint) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+	virtual void GatherAttackConditions(FElysiumEntity* Enemy, float DistanceUnits) override;
 };

@@ -163,6 +163,8 @@ static const FShortConditionSpecies* ShortConditionSpeciesRows(int32& OutCount);
 
 /** The row for a retail class name, or null when no row carries it. */
 static const FShortConditionSpecies* ShortConditionSpeciesOf(const TCHAR* InRetailClass);
+/** Slot 408's species body: `SpeciesClass`'s block of names, else the base body directly. */
+const TCHAR* SpeciesShortConditionName(const TCHAR* SpeciesClass, int32 ConditionId);
 
 // --- Slot 76 `DrawDebugStatOverlays`: three bodies, one slot ---------------------------------------
 //
@@ -182,6 +184,9 @@ void TroikaDrawDebugStatOverlays();
 /** `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) — `"Dist to player: %.3f"` then
  *  `0x102775e0`. Thirty-six bytes, and the tail call is to the BASE and not to the Troika line. */
 void BossDrawDebugStatOverlays();
+/** `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`) — the body of
+ *  `FElysiumNpcWerewolf::DrawDebugStatOverlays`, chaining the boss body directly. */
+void WerewolfDrawDebugStatOverlaysSlot();
 
 // --- The remaining bodies -------------------------------------------------------------------------
 
@@ -213,9 +218,9 @@ bool IsBaseNpcTroika() const;
 static int32 HintDrawDebugTextOverlays(int32 EntityTextLine, int32 DebugOverlayBits, int32 HintType,
 	double NextUseTime, double Now);
 
-/** `CNPC_VWerewolf::DrawBBoxOverlay` (`0x103d5050`) — slot 620, filled by `CNPC_VWerewolf` alone.
- *  Not a declared virtual (no Troika-line body holds slot 620), so it is declared here. */
-void DrawBBoxOverlay();
+/** `CNPC_VWerewolf::DrawBBoxOverlay` (`0x103d5050`) — slot 620, introduced by `CNPC_VWerewolf`
+ *  alone: the body of `FElysiumNpcWerewolf::DrawBBoxOverlay`, that class's own virtual. */
+void WerewolfDrawBBoxOverlay();
 
 /** `CNPC_VWerewolf::DrawDebugHullAtPoint` (`0x103d4820`) — the hull box plus one line, at a point.
  *  `RET 0x10`: a `Vector` by value and one more dword, the overlay duration. */

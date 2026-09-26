@@ -859,13 +859,15 @@ bool FElysiumNpcKernelMotorJumpChainTest::RunTest(const FString&)
 
 	// `SetupJump` and `SetupSuperJump` both take a float gate and do NOTHING at 0.0.
 	const int32 CommitsBefore = Guard->MotorSeams.SetupJumpCommits;
-	Guard->SetupJump(0.0f);
+	Guard->AsianVampireSetupJump(0.0f);
+	Guard->SheriffManSetupJump(0.0f);
 	Guard->SetupSuperJump(0.0f);
 	TestEqual(TEXT("neither setup ran at a zero gate"), Guard->MotorSeams.SetupJumpCommits,
 		CommitsBefore);
 	// With the gate open they still refuse: the hint store carries no origins, and retail would
 	// dereference a null `m_pHintNode` here rather than check it.
-	Guard->SetupJump(1.0f);
+	Guard->AsianVampireSetupJump(1.0f);
+	Guard->SheriffManSetupJump(1.0f);
 	Guard->SetupSuperJump(1.0f);
 	TestEqual(TEXT("and neither commits while the hint-origin seam refuses"),
 		Guard->MotorSeams.SetupJumpCommits, CommitsBefore);

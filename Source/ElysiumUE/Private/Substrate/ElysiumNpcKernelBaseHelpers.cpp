@@ -901,14 +901,8 @@ void FElysiumNpc::FUN_10297a20()
 // slot 21 0x1029f800 `void vfunc21(CBaseEntity*)`
 void FElysiumNpc::Slot21(FElysiumEntity* Attacker)
 {
-	// The vtable dispatch first. `CNPC_VMingXiaoTentacle` overrides slots 21, 22 and 23 AGAIN under
-	// the Troika line (`0x1039e800` / `0x1039e830` / `0x1039e860`, family **Species**) and forwards
-	// each to its head instead: a tentacle raises no condition of its own, which is what the base
-	// arm below would have done.
-	if (SpeciesSlot21(Attacker))
-	{
-		return;
-	}
+	// `CNPC_VMingXiaoTentacle` overrides slots 21, 22 and 23 again under the Troika line
+	// (`FElysiumNpcMingXiaoTentacle`, story 5 step 3) and forwards each to its head instead.
 	AlertNearbyAlly(Attacker);
 	// `m_iHitBuildupCount` (`+0x6064`) — the shape map binds it to the combat character, where the
 	// port already raises it on a landed hit (`FElysiumCombatCharacter::RaiseHitBuildup`).
@@ -919,11 +913,6 @@ void FElysiumNpc::Slot21(FElysiumEntity* Attacker)
 // slot 22 0x1029f850 `void vfunc22(CBaseEntity*)`
 void FElysiumNpc::Slot22(FElysiumEntity* Attacker)
 {
-	// The tentacle's own slot 22 first (`0x1039e830`, family **Species**).
-	if (SpeciesSlot22(Attacker))
-	{
-		return;
-	}
 	// Slot 21 without the hit-buildup increment. `CBasePlayer::Replenish` (`0x10168320`) dispatches
 	// this on a feed target with the player as the argument.
 	AlertNearbyAlly(Attacker);
@@ -933,11 +922,6 @@ void FElysiumNpc::Slot22(FElysiumEntity* Attacker)
 // slot 23 0x1029f890 `void vfunc23(CBaseEntity*)`
 void FElysiumNpc::Slot23(FElysiumEntity* Attacker)
 {
-	// The tentacle's own slot 23 first (`0x1039e860`, family **Species**).
-	if (SpeciesSlot23(Attacker))
-	{
-		return;
-	}
 	// Byte-identical to slot 22. `signatures.md`: no dispatch site exists in the decompiled corpus,
 	// so what distinguishes the three is UNRECOVERED — they are three slots carrying one body.
 	AlertNearbyAlly(Attacker);
@@ -947,14 +931,9 @@ void FElysiumNpc::Slot23(FElysiumEntity* Attacker)
 // slot 25 0x100265b0 `void vfunc25(CBaseEntity*)`
 void FElysiumNpc::Slot25(FElysiumEntity* Victim)
 {
-	// Here, and not in the generated file, because slots 25 and 26 need the same species prologue
-	// the four victim-side slots above need and are the same concern: `CNPC_VZombie` replaces both
-	// (`0x103e12c0` / `0x103e12f0`, family **Species**) with one `m_OnAttackedVictim` fire and NO
-	// base forward. The verdict overlay's row is `hand:FElysiumNpc::Slot25` for that reason alone.
-	if (SpeciesSlot25(Victim))
-	{
-		return;
-	}
+	// `CNPC_VZombie` replaces slots 25 and 26 (`FElysiumNpcZombie`, story 5 step 3) with one
+	// `m_OnAttackedVictim` fire and NO base forward.
+	(void)Victim;
 	// `0x100265b0`, the Troika line's own body: ONE byte, `ret`. The overlay's reading was
 	// `default:void` and the body is still exactly that — no member is written and nothing is
 	// tallied, because retail writes nothing either.
@@ -963,11 +942,7 @@ void FElysiumNpc::Slot25(FElysiumEntity* Victim)
 // slot 26 0x100265d0 `void vfunc26(CBaseEntity*)`
 void FElysiumNpc::Slot26(FElysiumEntity* Victim)
 {
-	// The zombie's second copy of the same output fire (`0x103e12f0`).
-	if (SpeciesSlot26(Victim))
-	{
-		return;
-	}
+	(void)Victim;
 	// `0x100265d0`, empty on the Troika line exactly as slot 25 is.
 }
 
@@ -1057,13 +1032,8 @@ int32 FElysiumNpc::Slot571(float Distance)
 // slot 588 0x10293e50 `void vfunc588()`
 void FElysiumNpc::Slot588()
 {
-	// The vtable dispatch first: `CNPC_VTzimisceRunner` `0x103c3fd0` (family **Species**) is this
-	// body with the `IsActivityFinished()` gate REMOVED, so a runner restarts mid-clip.
-	if (SpeciesSlot588())
-	{
-		return;
-	}
-
+	// `CNPC_VTzimisceRunner` overrides this slot (`FElysiumNpcTzimisceRunner`, `0x103c3fd0`): this
+	// body with the `IsActivityFinished()` gate removed, so a runner restarts mid-clip.
 	// `if (IsActivityFinished()) RestartIdealActivity(ACT_DISPOSITION);` — slot 251 (`+0x3ec`) and
 	// `0x10289ee0`. Dispatched three times from `CAI_BaseNPCTroika::RunTask` (`0x102aacf0`).
 	//
@@ -1078,13 +1048,9 @@ void FElysiumNpc::Slot588()
 // slot 497 0x102947e0 `void vfunc497()`
 void FElysiumNpc::Slot497()
 {
-	// The vtable dispatch first: `CNPC_VCamera` `0x103681d0` (and `CNPC_VCameraSecurity` under it)
-	// replaces this slot with ONE BYTE, a bare `ret` — family **Species**' row. The point of that row
-	// is precisely that the once-only concept cache below does not run for a camera.
-	if (SpeciesSlot497())
-	{
-		return;
-	}
+	// `CNPC_VCamera` (and `CNPC_VCameraSecurity` under it) overrides this slot with ONE BYTE, a
+	// bare `ret` (`FElysiumNpcCamera`, `0x103681d0`): the once-only concept cache below does not run
+	// for a camera.
 
 	// A ONCE-ONLY global cache, not per-NPC state: bit 0 of `DAT_109249c4` guards it, and the body
 	// linear-scans `DAT_1073dc40[0 .. DAT_1073dc3c)` comparing each entry's `+0x04` name

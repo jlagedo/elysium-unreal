@@ -19,8 +19,6 @@
 
 namespace
 {
-	constexpr int32 GState19Slot460 = 460;
-	constexpr int32 GState19Slot461 = 461;
 
 
 	int32 GState19CopCensus = 0;
@@ -80,14 +78,6 @@ namespace
 		(void)Npc;
 		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99);
 	}
-
-	struct FState19SelectArm
-	{
-		const TCHAR* Address = nullptr;
-		int32 (FElysiumNpc::*Body)() = nullptr;
-		int32 SelectorTag = -1;
-		int32 (FElysiumNpc::*Chain)() = nullptr;
-	};
 }
 
 int32 FElysiumNpc::CopCensusCount()
@@ -511,71 +501,20 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 // Slot 461 dispatcher.
 // =================================================================================================
 
+int32 FElysiumNpc::AndreiBloodSelectIdealStateRetail()
+{
+	// `CNPC_VAndreiBlood::vfunc461`'s typed answer (family Damage's `CNPC_VAndreiBlood_vfunc461`),
+	// written back as retail 2 or 1 and answered: the body of `FElysiumNpcAndreiBlood`'s override.
+	const EElysiumNpcState Andrei = CNPC_VAndreiBlood_vfunc461();
+	Mind.WriteIdealStateRetail(Andrei == EElysiumNpcState::Alert ? 2 : 1);
+	return IdealStateRetail();
+}
+
 int32 FElysiumNpc::SelectIdealStateRetail()
 {
-	if (SpeciesDispatchingSlot == GState19Slot461)
-	{
-		return TroikaSelectIdealState();
-	}
-
-		EElysiumNpcState SpeciesIdeal = Mind.State();
-		if (SelectIdealStateForSpecies(SpeciesIdeal))
-		{
-			Mind.WriteIdealStateRetail(
-				SpeciesIdeal == EElysiumNpcState::Alert ? 3
-				: SpeciesIdeal == EElysiumNpcState::Combat ? 2
-				: SpeciesIdeal == EElysiumNpcState::Dead ? 7
-				: 1);
-			return IdealStateRetail();
-		}
-
-		if (IsRetailClass(TEXT("CNPC_VAndreiBlood")))
-		{
-			const EElysiumNpcState Andrei = CNPC_VAndreiBlood_vfunc461();
-			Mind.WriteIdealStateRetail(Andrei == EElysiumNpcState::Alert ? 2 : 1);
-			return IdealStateRetail();
-		}
-
-		const FElysiumNpcClassSlot* Override =
-			ElysiumNpcKernelClass::OverrideOf(RetailClass(), GState19Slot461);
-		if (Override != nullptr && Override->Address != nullptr)
-		{
-			static const FState19SelectArm Arms[] = {
-				{ TEXT("0x1035fe80"), &FElysiumNpc::AnimalSelectIdealState },
-				{ TEXT("0x103851e0"), &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x103a7450"), &FElysiumNpc::SabbatLeaderSelectIdealState },
-				{ TEXT("0x103bd690"), &FElysiumNpc::TzimisceSelectIdealState },
-				{ TEXT("0x103743c0"), &FElysiumNpc::DogSelectIdealState },
-				{ TEXT("0x1037d290"), &FElysiumNpc::Guard1SelectIdealState },
-				{ TEXT("0x10387380"), &FElysiumNpc::HumanCombatPatrolSelectIdealState },
-				{ TEXT("0x103a2e30"), &FElysiumNpc::PedestrianSelectIdealState },
-				{ TEXT("0x103df5f0"), &FElysiumNpc::ZombieSelectIdealState },
-				{ TEXT("0x103726c0"), &FElysiumNpc::CopSelectIdealState },
-				{ TEXT("0x103d0820"), &FElysiumNpc::WerewolfSelectIdealState },
-				{ TEXT("0x10361060"), nullptr, 6,    &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x10363b40"), nullptr, 0xe,  &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x1036b500"), nullptr, 0xa,  &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x10378b60"), nullptr, 0x11, &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x10380100"), nullptr, 0x13, &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x103aeac0"), nullptr, 0x21, &FElysiumNpc::HumanSelectIdealState },
-				{ TEXT("0x10388ab0"), nullptr, 0x17, &FElysiumNpc::HumanCombatPatrolSelectIdealState },
-				{ TEXT("0x103dd780"), nullptr, 0x2a, &FElysiumNpc::HumanCombatPatrolSelectIdealState },
-			};
-			for (const FState19SelectArm& Arm : Arms)
-			{
-				if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-				{
-					continue;
-				}
-				const FSpeciesDispatchScope Scope(*this, GState19Slot461);
-				if (Arm.SelectorTag >= 0)
-				{
-					SelectIdealStateSelector = Arm.SelectorTag;
-					return (this->*Arm.Chain)();
-				}
-				return (this->*Arm.Body)();
-			}
-		}
+	// Slot 461 on the Troika line (`0x102ad660`). The species bodies are overrides of this method on
+	// their C++ classes (story 5 step 3); each that chains calls its recovered owner's body directly
+	// (`TroikaSelectIdealState`, `HumanSelectIdealState`, `AnimalSelectIdealState`, …).
 	return TroikaSelectIdealState();
 }
 
@@ -630,16 +569,14 @@ int32 FElysiumNpc::DogPreSelectIdealState()
 	if (State19HasCondition(*this, EElysiumNpcCond::DogAlertSound))
 	{
 		State19StampIdeal(*this, 3, 0x517);
-		const FSpeciesDispatchScope Scope(*this, GState19Slot460);
-		return PreSelectIdealStateRetail();
+		return FElysiumNpc::PreSelectIdealStateRetail();   // 0x102ad340, direct
 	}
 	if (State19HasCondition(*this, EElysiumNpcCond::DogIdleFromAlert)
 		&& IdealStateRetail() == 3)
 	{
 		State19StampIdeal(*this, 1, 0x51d);
 	}
-	const FSpeciesDispatchScope Scope(*this, GState19Slot460);
-	return PreSelectIdealStateRetail();
+	return FElysiumNpc::PreSelectIdealStateRetail();   // 0x102ad340, direct
 }
 
 bool FElysiumNpc::BachOnStateChange(int32 OldRetail, int32 NewRetail)
@@ -732,9 +669,8 @@ void FElysiumNpc::CopOnStateChange(int32 OldRetail, int32 NewRetail)
 // `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`), the shared tail BOTH of `0x10371c20`'s
 // arms chain with `(old, new)` — read from the listing (`10371db3 CMP EBP,0x1` then `PUSH EBP`),
 // because the C mis-renders the idle tail's argument as the literal 1. Its weapon half is
-// UNCONDITIONAL: no census class list, unlike `FElysiumNpc::ApplyStateWeaponVisibility`, which is
-// the same switch behind `ClassHolstersOnState()`. The Troika body under it is already run by
-// `FElysiumNpc::OnStateChange`'s own tail, so only the weapon half lands here.
+// UNCONDITIONAL, the same switch `FElysiumNpc::ApplyStateWeaponVisibility` carries. The Troika body
+// under it is run by `FElysiumNpcCop::OnStateChange`'s own tail, so only the weapon half lands here.
 void FElysiumNpc::CopHumanCombatantOnStateChange(int32 NewRetail)
 {
 	++CopHolsterDrawCalls;

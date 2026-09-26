@@ -97,43 +97,6 @@ namespace
 			-(FMath::Cos(Pitch) * FMath::Sin(Yaw)), -FMath::Sin(Pitch));
 	}
 
-	// Slots 370/371 that forward to 368/369 — the class answers its head aim with its BODY
-	// direction. One row per class in this family's rows, each carrying the retail address of its
-	// own 370 and 371 bodies so the table can be checked against `docs/vtmb/npc-kernel/slots.md`.
-	struct FElysiumFacingHeadIsBodyRow
-	{
-		const TCHAR* RetailClass;
-		const TCHAR* Body370;
-		const TCHAR* Body371;
-	};
-
-	constexpr FElysiumFacingHeadIsBodyRow GHeadIsBody[] =
-	{
-		{ TEXT("CCineNPC"),            TEXT("0x101a6d40"), TEXT("0x101a6d70") },
-		{ TEXT("CCineAI"),             TEXT("0x101a6d40"), TEXT("0x101a6d70") },
-		{ TEXT("CCineAISchedule"),     TEXT("0x101a6d40"), TEXT("0x101a6d70") },
-		{ TEXT("CPayphone"),           TEXT("0x101aa7f0"), TEXT("0x101aa820") },
-		{ TEXT("CNPCMaker"),           TEXT("0x1034adf0"), TEXT("0x1034ae20") },
-		{ TEXT("CNPCMaker_Fleshpile"), TEXT("0x1034be90"), TEXT("0x1034bec0") },
-		{ TEXT("CNPCMaker_Zombie"),    TEXT("0x1034cad0"), TEXT("0x1034cb00") },
-		{ TEXT("CNPC_VRat"),           TEXT("0x103ad7f0"), TEXT("0x103ad820") },
-	};
-
-	// Slot 465's species overrides. The Troika line's own body is `return;` (`0x10295a60`), which is
-	// why each arm below ends by chaining to it and why the shared algorithm is the chain alone.
-	struct FElysiumFacingActivityRow
-	{
-		const TCHAR* RetailClass;
-		const TCHAR* Body465;
-	};
-
-	constexpr FElysiumFacingActivityRow GOnChangeActivity[] =
-	{
-		{ TEXT("CNPC_VMingXiao"),     TEXT("0x103947b0") },
-		{ TEXT("CNPC_VSabbatGunman"), TEXT("0x103a56f0") },
-		{ TEXT("CNPC_VWerewolf"),     TEXT("0x103d5f60") },
-	};
-
 	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s own playback-tuning record, read by
 	// field offset. **SEAM**: this substrate holds no such table, so every field answers 0 and the
 	// non-discipline arm's blend lands on its floor.
@@ -398,42 +361,6 @@ FVector FElysiumNpc::EyeDirection3D()
 	return HeadDirection3D();
 }
 
-bool FElysiumNpc::HeadDirectionIsBodyDirection() const
-{
-	// The vtable's own rule, not a name compare: resolve slot 370's nearest override for the class
-	// this NPC IS and ask whether that body is one of the forwards.
-	const FElysiumNpcClassSlot* Row = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 370);
-	if (Row == nullptr || Row->Address == nullptr)
-	{
-		return false;
-	}
-	for (const FElysiumFacingHeadIsBodyRow& Known : GHeadIsBody)
-	{
-		if (FCString::Strcmp(Row->Address, Known.Body370) == 0)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-bool FElysiumNpc::RetailHeadDirection(bool b2D, FVector& OutDirection) const
-{
-	// What slots 370/371 answer for the class this NPC is. The slots THEMSELVES carry the Troika
-	// line's bodies (`0x10331cb0` / `0x10331a40`'s sibling `0x10331b30`) and are the generator's,
-	// not this family's; this is the species half standing beside them.
-	if (HeadDirectionIsBodyDirection())
-	{
-		// `CCineNPC` `0x101a6d40`/`0x101a6d70` and its six siblings: 370 forwards to 368 and 371 to
-		// 369. `CNPCMaker`'s trio reach the same place through a multiple-inheritance thunk on the
-		// adjusted subobject, which is why their listings show a self-referential +0x5c0.
-		OutDirection = b2D ? const_cast<FElysiumNpc*>(this)->BodyDirection2D()
-			: const_cast<FElysiumNpc*>(this)->BodyDirection3D();
-		return true;
-	}
-	return false;
-}
-
 // --- Slot 572 `SetTurnActivity` -----------------------------------------------------------------
 
 FElysiumNpc::FTurnActivityPick FElysiumNpc::TurnActivityBaseLadder(float YawDelta,
@@ -613,66 +540,44 @@ FElysiumNpc::FMingXiaoPlayback FElysiumNpc::MingXiaoPlaybackScalar(int32 Activit
 	return Out;
 }
 
-void FElysiumNpc::OnChangeActivitySpecies(int32 Activity)
+void FElysiumNpc::MingXiaoOnChangeActivity(int32 Activity)
 {
-	// Slot 465's species overrides, dispatched through the census rather than through a name
-	// compare. `CNPC_Crow#465` (`0x10357b30`) carries no arm: no map stands that class.
-	// `CAI_BaseNPCTroika::OnChangeActivity` `0x10295a60` — the body the generator emits on
-	// `FElysiumNpc::OnChangeActivity` — is `return;`, and every arm here ends by chaining to it, so
-	// the base's emptiness IS the shared algorithm.
-	const FElysiumNpcClassSlot* Row = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 465);
-	const TCHAR* BodyAddress = nullptr;
-	if (Row != nullptr && Row->Address != nullptr)
-	{
-		// The table is the gate as well as the record: an override this family did not recover is
-		// not one of these, and it takes the base chain rather than a guess.
-		for (const FElysiumFacingActivityRow& Known : GOnChangeActivity)
-		{
-			if (FCString::Strcmp(Row->Address, Known.Body465) == 0)
-			{
-				BodyAddress = Known.Body465;
-				break;
-			}
-		}
-	}
-	if (BodyAddress == nullptr)
-	{
-		OnChangeActivity(Activity);
-		return;
-	}
+	// `CNPC_VMingXiao::OnChangeActivity`, 303 bytes. **SEAM** on all three inputs: the gate
+	// `0x10398870`, the tuning record `0x101e8da0(0x10739d08)` and the tentacle count (+0x670c)
+	// have no port source, so the discipline arm is false, every field answers 0 and the blend
+	// lands on its 0.1 floor. The two tails `0x1039ab30` and `0x1039aca0` are MingXiao's own and
+	// are named here rather than invented.
+	const FMingXiaoPlayback Pick = MingXiaoPlaybackScalar(Activity, /*bDisciplineArm*/ false,
+		/*TentacleCount*/ 0, [](int32 Field) { return FacingMingXiaoTuningField(Field); });
+	(void)Pick;   // SetPlaybackAndSpeedScalar has no kernel-tier seam in this substrate
 
-	if (FCString::Strcmp(BodyAddress, TEXT("0x103947b0")) == 0)
-	{
-		// `CNPC_VMingXiao::OnChangeActivity`, 303 bytes. **SEAM** on all three inputs: the gate
-		// `0x10398870`, the tuning record `0x101e8da0(0x10739d08)` and the tentacle count (+0x670c)
-		// have no port source, so the discipline arm is false, every field answers 0 and the blend
-		// lands on its 0.1 floor. The two tails `0x1039ab30` and `0x1039aca0` are MingXiao's own and
-		// are named here rather than invented.
-		const FMingXiaoPlayback Pick = MingXiaoPlaybackScalar(Activity, /*bDisciplineArm*/ false,
-			/*TentacleCount*/ 0, [](int32 Field) { return FacingMingXiaoTuningField(Field); });
-		(void)Pick;   // SetPlaybackAndSpeedScalar has no kernel-tier seam in this substrate
-	}
-	else if (FCString::Strcmp(BodyAddress, TEXT("0x103a56f0")) == 0)
-	{
-		// `CNPC_VSabbatGunman::OnChangeActivity`, 160 bytes. The three convars are
-		// `sabbat_gunman_speed_threshold` ("0.1", `+0x28`), `sabbat_gunman_speed_trails` ("3",
-		// `+0x2c`) and `sabbat_gunman_speed_scalar` ("3.0", `+0x28`). **SEAM** on the fourth input,
-		// `m_flGroundSpeed` (+0x0654): no ground-speed word stands here, so it answers 0 and the
-		// stopped arm is the one taken.
-		const FMotionTrailPick Pick = SabbatGunmanMotionTrail(/*GroundSpeed*/ 0.f,
-			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedThreshold),
-			ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedTrails),
-			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedScalar));
-		MotionTrail = Pick.MotionTrail;   // +0x1484
-	}
-	else if (FCString::Strcmp(BodyAddress, TEXT("0x103d5f60")) == 0)
-	{
-		// `CNPC_VWerewolf::OnChangeActivity`, 126 bytes: the scope-trace push/pop and an
-		// unconditional forward. There is no species behaviour here at all, and recording that is
-		// the point — a reader looking for one stops at this line.
-	}
+	// The tail: `CAI_BaseNPCTroika::OnChangeActivity` (`0x10295a60`) directly.
+	FElysiumNpc::OnChangeActivity(Activity);
+}
 
-	OnChangeActivity(Activity);
+void FElysiumNpc::SabbatGunmanOnChangeActivity(int32 Activity)
+{
+	// `CNPC_VSabbatGunman::OnChangeActivity`, 160 bytes. The three convars are
+	// `sabbat_gunman_speed_threshold` ("0.1", `+0x28`), `sabbat_gunman_speed_trails` ("3",
+	// `+0x2c`) and `sabbat_gunman_speed_scalar` ("3.0", `+0x28`). **SEAM** on the fourth input,
+	// `m_flGroundSpeed` (+0x0654): no ground-speed word stands here, so it answers 0 and the
+	// stopped arm is the one taken.
+	const FMotionTrailPick Pick = SabbatGunmanMotionTrail(/*GroundSpeed*/ 0.f,
+		ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedThreshold),
+		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedTrails),
+		ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedScalar));
+	MotionTrail = Pick.MotionTrail;   // +0x1484
+
+	FElysiumNpc::OnChangeActivity(Activity);   // `0x10295a60`, direct
+}
+
+void FElysiumNpc::WerewolfOnChangeActivity(int32 Activity)
+{
+	// `CNPC_VWerewolf::OnChangeActivity`, 126 bytes: the scope-trace push/pop and an
+	// unconditional forward. There is no species behaviour here at all, and recording that is
+	// the point — a reader looking for one stops at this line.
+
+	FElysiumNpc::OnChangeActivity(Activity);   // `0x10295a60`, direct
 }
 
 // --- The facing readers and writers that fill no slot --------------------------------------------

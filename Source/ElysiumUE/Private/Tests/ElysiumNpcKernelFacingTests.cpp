@@ -440,20 +440,18 @@ bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 	TestEqual(TEXT("EyeDirection3D is HeadDirection3D"), Guard->EyeDirection3D(),
 		Guard->HeadDirection3D());
 
-	// The species half of 370/371: the rat forwards to its body direction, the humanoid combatant
-	// does not appear in the table at all.
-	TestTrue(TEXT("CNPC_VRat answers its head aim with its body direction"),
-		Rat->HeadDirectionIsBodyDirection());
-	TestFalse(TEXT("CNPC_VHumanCombatant does not"), Guard->HeadDirectionIsBodyDirection());
-
+	// The species half of 370/371 (story 5 step 3: overrides on `FElysiumNpcRat`): the rat answers
+	// its head aim with its body direction, through the vtable, on both slots.
 	Rat->Angles = FVector(0.0, 90.0, 0.0);
-	FVector RatHead2D = FVector::ZeroVector;
-	TestTrue(TEXT("so the rat has a recovered answer for slot 370"),
-		Rat->RetailHeadDirection(/*b2D*/ true, RatHead2D));
-	TestEqual(TEXT("and it is exactly BodyDirection2D"), RatHead2D, Rat->BodyDirection2D());
-	FVector GuardHead2D = FVector::ZeroVector;
-	TestFalse(TEXT("the combatant's own class has no recovered species answer"),
-		Guard->RetailHeadDirection(/*b2D*/ true, GuardHead2D));
+	TestEqual(TEXT("CNPC_VRat's slot 370 is exactly BodyDirection2D"), Rat->HeadDirection2D(),
+		Rat->BodyDirection2D());
+	TestEqual(TEXT("and its slot 371 is exactly BodyDirection3D"), Rat->HeadDirection3D(),
+		Rat->BodyDirection3D());
+	TestEqual(TEXT("so its eyes aim along its body"), Rat->EyeDirection2D(), Rat->BodyDirection2D());
+	// The humanoid combatant keeps the Troika-line body, which is not the body direction.
+	Guard->Angles = FVector(0.0, 90.0, 0.0);
+	TestNotEqual(TEXT("CNPC_VHumanCombatant does not forward to its body direction"),
+		Guard->HeadDirection2D(), Guard->BodyDirection2D());
 
 	return true;
 }
@@ -536,6 +534,25 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 			0.1f);
 	}
 
+	// Story 5 step 3 correction: the species bodies are the classes' own slot-465 overrides, so the
+	// activity change reaches them through the vtable. A spawned `npc_VSabbatGunman` standing still
+	// (the ground-speed seam answers 0) takes `0x103a56f0`'s stopped arm and clears its trail.
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_gunman"), 4218);
+		Builder.AddNpcOfClass(TEXT("gunman"), FVector::ZeroVector, TEXT("CNPC_VSabbatGunman"));
+		FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+		FElysiumNpc* Gunman = Fixture.Npc(TEXT("gunman"));
+		TestNotNull(TEXT("the gunman spawned"), Gunman);
+		if (Gunman != nullptr)
+		{
+			FElysiumNpcWorldFixture::Quiet({ Gunman });
+			Gunman->MotionTrail = 3;
+			Gunman->OnChangeActivity(9);
+			TestEqual(TEXT("CNPC_VSabbatGunman's own slot 465 clears the trail of a stopped gunman"),
+				Gunman->MotionTrail, 0);
+		}
+	}
+
 	// A spawned NPC whose class has no slot-465 override chains straight to the empty base, which
 	// is retail's whole answer for it.
 	{
@@ -550,7 +567,7 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 			TestNull(TEXT("CNPC_VHumanCombatant overrides no slot 465"),
 				ElysiumNpcKernelClass::OverrideOf(Guard->RetailClass(), 465));
 			Guard->MotionTrail = 3;
-			Guard->OnChangeActivitySpecies(9);
+			Guard->OnChangeActivity(9);
 			TestEqual(TEXT("so nothing species-specific runs"), Guard->MotionTrail, 3);
 		}
 	}

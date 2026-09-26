@@ -292,14 +292,14 @@ bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 	TestFalse(TEXT("and its squad seam refuses nothing, which is what an empty squad answers"),
 		Andrei->SquadPositionTaken(FVector(300.0, 0.0, 0.0), Clearance));
 
-	// The dispatcher picks by retail class and nothing else.
-	TestTrue(TEXT("npc_VAndreiBlood dispatches to the Andrei rule"),
-		Andrei->IsRetailClass(TEXT("CNPC_VAndreiBlood")));
+	// No dispatcher: the four are non-virtual per-class methods in retail (no vtable slot), each
+	// called by its own selector (story 5 step 3). The Andrei rule, as `npc_VAndreiBlood` builds it.
+	TestTrue(TEXT("npc_VAndreiBlood builds CNPC_VAndreiBlood"),
+		Andrei->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VAndreiBlood")));
 	Andrei->AndreiLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
-	TestTrue(TEXT("and PositionClearForTeleportSpecies answers what that rule answers"),
-		Andrei->PositionClearForTeleportSpecies(FVector(300.0, 0.0, 0.0), Clearance));
-	TestFalse(TEXT("a class retail stands no PositionClearForTeleport on refuses by name"),
-		Human->PositionClearForTeleportSpecies(FVector(300.0, 0.0, 0.0), Clearance));
+	TestTrue(TEXT("and the Andrei rule accepts a clear spot"),
+		Andrei->PositionClearForTeleportAndrei(FVector(300.0, 0.0, 0.0), Clearance));
+	(void)Human;
 
 	return true;
 }
@@ -599,15 +599,13 @@ bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 		return false;
 	}
 
-	// Every recovered species maps to its shape by the census address and never by a name compare.
+	// Every recovered species body is its class's own slot-563 override (story 5 step 3).
 	// `CNPC_VHuman`'s body (`0x10384760`) covers 42 classes and `CNPC_VAnimal`'s (`0x1035f5c0`) five;
 	// both are the offset-only shape.
-	TestEqual(TEXT("npc_VHuman answers slot 563 with the offset-only shape"),
-		static_cast<int32>(Human->ChaseTranslateShape()),
-		static_cast<int32>(FElysiumNpc::EChaseTranslateShape::OffsetOnly));
-	TestEqual(TEXT("npc_VRat does too, through CNPC_VAnimal's body"),
-		static_cast<int32>(Rat->ChaseTranslateShape()),
-		static_cast<int32>(FElysiumNpc::EChaseTranslateShape::OffsetOnly));
+	TestTrue(TEXT("npc_VHuman is CNPC_VHuman"),
+		Human->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VHuman")));
+	TestTrue(TEXT("npc_VRat derives from CNPC_VAnimal, whose body it inherits"),
+		ElysiumNpcKernelClass::DerivesFrom(Rat->RetailClass(), TEXT("CNPC_VAnimal")));
 
 	// The census is what says so, one row per recovered body. Every row is exercised by name.
 	struct FRow { const TCHAR* Class; const TCHAR* Body; };
@@ -645,9 +643,14 @@ bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 	TestEqual(TEXT("and leaves the tolerance alone, which is what separates it from the base body"),
 		Tolerance, 42.f);
 
-	// The base line's own body is the one that writes on the else arm.
-	Human->TranslateEnemyChasePositionSpecies(Enemy, Chase, Tolerance, Second);
+	// The base line's own body is the one that writes on the else arm; the offset-only shape does not.
+	Human->TranslateEnemyChasePositionAs(FElysiumNpc::EChaseTranslateShape::OffsetOnly, Enemy, Chase,
+		Tolerance, Second);
 	TestEqual(TEXT("the offset-only shape also leaves the tolerance alone"), Tolerance, 42.f);
+	Human->TranslateEnemyChasePositionAs(FElysiumNpc::EChaseTranslateShape::Base, Enemy, Chase,
+		Tolerance, Second);
+	TestEqual(TEXT("the base line's else arm zeroes it"), Tolerance, 0.f);
+	Tolerance = 42.f;
 
 	// The two lead helpers are seams and say so.
 	float LeadTolerance = 5.f;

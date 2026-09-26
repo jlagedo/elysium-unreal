@@ -68,6 +68,11 @@ static FString HintGroupBitList(uint32 Mask);
 /** The node-index form of slot 566, for the callers that carry a `ScheduleHost::HintNode`-shaped
  *  index rather than an `FHintWords`. An unresolvable node is retail's null hint: false. */
 bool FValidateHintTypeNode(int32 HintNode) const;
+/** Slot 566's species body for `SpeciesClass`'s table row (`HintTypeSpeciesRows`), with
+ *  `CNPC_VBach`'s direct fall-through into the Troika body. */
+bool SpeciesFValidateHintType(const TCHAR* SpeciesClass, void* Hint);
+/** `CNPC_VManBat::FValidateHintType` (`0x1038e480`) — the body of the class's override. */
+bool ManBatFValidateHintType(void* Hint);
 
 /** How many times the group gate refused and the debug arm was reached — the observable half of an
  *  arm whose only other effect is a `DevMsg` this runtime does not emit. */

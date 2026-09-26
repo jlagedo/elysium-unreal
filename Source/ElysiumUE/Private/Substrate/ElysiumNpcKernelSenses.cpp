@@ -678,9 +678,7 @@ bool FElysiumNpc::YukieShouldLeaveMelee()
 	// `m_bfNPCFrenziedFlags & 2` gate, the follower-boss gate, the attack-coordinator null test and
 	// the coordinator's own `holds-me` tail. Yukie leaves melee on distance or on the clock alone.
 	//
-	// **NOT WIRED**: `FElysiumNpc::Slot602` is family TroikaHelpers' file, and its `MeleeSlotLine`
-	// already records that `CNPC_VYukie`'s body "is other families' rows and is NOT guessed at
-	// here". The wire is one line in that body and is named in this family's report.
+	// Dispatched by `FElysiumNpcYukie::Slot602` since story 5 step 3.
 	if (!HasUsableRangedWeapon())
 	{
 		const float RangeUnits = 2.0f * MeleeRangeUnits() * GYukieMeleeRangeScale;

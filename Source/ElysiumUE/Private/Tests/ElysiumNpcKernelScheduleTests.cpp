@@ -473,13 +473,26 @@ bool FElysiumNpcKernelSchedulePreSelectTest::RunTest(const FString&)
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VPlaceholder")), 437)),
 		FString(TEXT("0x103a43f0")));
 
-	// The census claims `npc_VCamera` for `CNPC_VCamera`, but `ElysiumNpcClasses.cpp` registers no
-	// `npc_VCamera` LEAF, so no fixture can spawn one — the census claim and the registry are two
-	// different tables and only the first is asserted here.
-	TestNotNull(TEXT("the census claims npc_VCamera for CNPC_VCamera"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCamera")));
-	TestEqual(TEXT("a class with no slot-437 species body of this story's three has no opinion"),
-		Guard->SpeciesPreSelectSchedule(), 0);
+	// Through the slot: each class's `PreSelectSchedule` override is its body (story 5 step 3).
+	FElysiumNpcWorldBuilder SpeciesBuilder(TEXT("npc_kernel_schedule_pre_select_species"), 4106);
+	SpeciesBuilder.AddNpc(TEXT("camera"), FVector::ZeroVector, TEXT("npc_VCamera"));
+	SpeciesBuilder.AddNpc(TEXT("tentacle"), FVector(200.0, 0.0, 0.0), TEXT("npc_VMingXiaoTentacle"));
+	SpeciesBuilder.AddNpc(TEXT("placeholder"), FVector(400.0, 0.0, 0.0), TEXT("npc_VPlaceholder"));
+	FElysiumNpcWorldFixture Species(MoveTemp(SpeciesBuilder));
+	FElysiumNpcWorldFixture::Quiet({ Species.Npc(TEXT("camera")), Species.Npc(TEXT("tentacle")),
+		Species.Npc(TEXT("placeholder")) });
+	if (FElysiumNpc* Camera = Species.Npc(TEXT("camera")))
+	{
+		TestEqual(TEXT("a camera's slot 437 answers 0x156"), Camera->PreSelectSchedule(), 0x156);
+	}
+	if (FElysiumNpc* Tentacle = Species.Npc(TEXT("tentacle")))
+	{
+		TestEqual(TEXT("a tentacle's answers 0"), Tentacle->PreSelectSchedule(), 0);
+	}
+	if (FElysiumNpc* Placeholder = Species.Npc(TEXT("placeholder")))
+	{
+		TestEqual(TEXT("a placeholder's answers 0x157"), Placeholder->PreSelectSchedule(), 0x157);
+	}
 
 	return true;
 }
@@ -513,8 +526,8 @@ bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 		}
 	}
 
-	// `npc_VAndreiBlood` is the ONLY one of the five whose class this runtime registers a spawnable
-	// leaf for; the other four are exercised by retail class name above.
+	// `npc_VAndreiBlood` builds `CNPC_VAndreiBlood`, whose `SpeciesSelectSchedule` override is its
+	// replacement selector (story 5 step 3).
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_species_select"), 4105);
 	Builder.AddNpc(TEXT("andrei"), FVector::ZeroVector, TEXT("npc_VAndreiBlood"));
 	Builder.AddNpc(TEXT("guard"), FVector(400.0, 0.0, 0.0));
@@ -551,6 +564,14 @@ bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 	Andrei->ActiveRunnerCount = 0;
 	TestEqual(TEXT("a class with no slot-438 species body has no opinion"),
 		Guard->SpeciesSelectSchedule(), 0);
+	FElysiumNpcWorldBuilder CameraBuilder(TEXT("npc_kernel_schedule_select_camera"), 4107);
+	CameraBuilder.AddNpc(TEXT("camera"), FVector::ZeroVector, TEXT("npc_VCamera"));
+	FElysiumNpcWorldFixture CameraWorld(MoveTemp(CameraBuilder));
+	FElysiumNpcWorldFixture::Quiet({ CameraWorld.Npc(TEXT("camera")) });
+	if (FElysiumNpc* Camera = CameraWorld.Npc(TEXT("camera")))
+	{
+		TestEqual(TEXT("a camera's slot-438 body answers 0x156"), Camera->SpeciesSelectSchedule(), 0x156);
+	}
 
 	// The species numbers ARE programs now, and that is 0019/3's whole effect on this selector.
 	// `ScheduleFromRetailNumber` -- the old fold from a retail number to one of 29 typed identities,
@@ -885,7 +906,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 	// is open.
 	{
 		FElysiumNpcConditions Mask;
-		Hunter->SpeciesBuildScheduleTestBits(Mask);
+		Hunter->BuildScheduleTestBits(Mask);
 		TestTrue(TEXT("an alive idle CNPC_VHunter adds SEE_CORPSE_FRIEND (0x3e)"),
 			Mask.Has(EElysiumNpcCond::SeeCorpseFriend));
 	}
@@ -893,7 +914,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 		FElysiumNpcConditions Mask;
 		TestEqual(TEXT("a spawned npc_VCop is CNPC_VCop"), Cop->RetailClass(),
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
-		Cop->SpeciesBuildScheduleTestBits(Mask);
+		Cop->BuildScheduleTestBits(Mask);
 		// Story 5 step 2 (retail correction): `CNPC_VCop` fills slot 453 with the combatant body
 		// `0x10387520`, which a placed cop now takes; alive and idle like the hunter above, it adds
 		// SEE_CORPSE_FRIEND.
@@ -902,7 +923,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 	}
 	{
 		FElysiumNpcConditions Mask;
-		Ped->SpeciesBuildScheduleTestBits(Mask);
+		Ped->BuildScheduleTestBits(Mask);
 		TestTrue(TEXT("a pedestrian not busy with a discipline adds PASS_OUT (0x24)"),
 			Mask.Has(EElysiumNpcCond::PassOut));
 		TestFalse(TEXT("and adds nothing else"),
@@ -910,7 +931,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 	}
 	{
 		FElysiumNpcConditions Mask;
-		Guard->SpeciesBuildScheduleTestBits(Mask);
+		Guard->BuildScheduleTestBits(Mask);
 		// CNPC_VHumanCombatant IS one of the nine 0x10387520 classes, so the combatant leaf takes
 		// the same arm the cop does.
 		TestTrue(TEXT("CNPC_VHumanCombatant takes the same 0x10387520 arm"),

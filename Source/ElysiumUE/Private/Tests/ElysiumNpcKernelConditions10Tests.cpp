@@ -853,7 +853,7 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 
 	// --- The seven arms through `TaskFail`, each on its own spawned class ------------------------
 	// Every input and every answer is the one the direct-body cases below assert on an ordinary
-	// combatant; here `SpeciesTaskFail`'s census lookup on the spawned class chooses the arm. The
+	// combatant; here the spawned class's `TaskFail` override runs the arm. The
 	// Troika body that follows (`0x1029adb0`) writes none of the words asserted: its
 	// `m_bfAINPCFlags` mask keeps `FINDING_BODY` and `CARRYING_BODY`.
 	FElysiumNpcWorldBuilder Builder(TEXT("conditions10_taskfail"), 404);

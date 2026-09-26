@@ -568,6 +568,13 @@ bool FElysiumNpc::IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const
 // The species tables' readers.
 // -------------------------------------------------------------------------------------------------
 
+float FElysiumNpc::MingXiaoMaxYawSpeed()
+{
+	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` on this NPC's own activity and tuning words — the
+	// body of `FElysiumNpcMingXiao::MaxYawSpeed`.
+	return MaxYawSpeedMingXiao(ActivityNumber, MingXiaoTuningField);
+}
+
 const FElysiumNpc::FMaxYawSpeedSpecies* FElysiumNpc::MaxYawSpeedSpeciesRows(int32& OutCount)
 {
 	OutCount = UE_ARRAY_COUNT(GMaxYawSpeedSpecies);
@@ -805,24 +812,9 @@ float FElysiumNpc::MaxYawSpeedTzimisce()
 
 float FElysiumNpc::MaxYawSpeed()
 {
-	// slot 516. The species that replace the Troika ladder come first, in the order of
-	// `GMaxYawSpeedSpecies`; everything else takes `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`.
-	//
-	// `CNPC_VWerewolf::MaxYawSpeed` `0x103d0a30` is deliberately NOT an arm here: its whole body is
-	// a scope-trace push/pop around an unconditional forward to the Troika body, so the werewolf's
-	// retail answer IS the family default.
-	if (IsRetailClass(TEXT("CNPC_VDog")))
-	{
-		return MaxYawSpeedDog();
-	}
-	if (IsRetailClass(TEXT("CNPC_VTzimisce")))
-	{
-		return MaxYawSpeedTzimisce();
-	}
-	if (IsRetailClass(TEXT("CNPC_VMingXiao")))
-	{
-		return MaxYawSpeedMingXiao(ActivityNumber, MingXiaoTuningField);
-	}
+	// slot 516, `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`. `CNPC_VDog`, `CNPC_VMingXiao`,
+	// `CNPC_VTzimisce` and `CNPC_VWerewolf` override it on their C++ classes (story 5 step 3); the
+	// werewolf's body is a scope-trace push/pop around a direct call into this one.
 
 	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, arm for arm.
 	if ((ScheduleHost.MemoryBits & GMemoryTurning) != 0)
@@ -945,42 +937,9 @@ bool FElysiumNpc::IgnoreCollisionSharedHead(const FElysiumEntity* Other) const
 
 bool FElysiumNpc::ShouldIgnoreCollision(FElysiumEntity* Other)
 {
-	// slot 68. Species arms first, in the order of `GIgnoreCollisionSpecies`, then
-	// `CAI_BaseNPCTroika::ShouldIgnoreCollision` `0x1029afc0`.
-
-	// `CNPC_VMingXiaoTentacle::vfunc68` `0x1039eb50`: ignore unconditionally unless the candidate is
-	// non-null AND (it is not a `CBaseCombatCharacter` (other+0x9c) OR `m_bIgnoreCollision` is
-	// clear), in which case fall to the base.
-	if (IsRetailClass(TEXT("CNPC_VMingXiaoTentacle")))
-	{
-		const bool bFallToBase = Other != nullptr
-			&& (Other->AsCombatCharacter() == nullptr || !bIgnoreCollisionSpecies);
-		if (!bFallToBase)
-		{
-			return true;
-		}
-	}
-	// `CNPC_VRat::vfunc68` `0x103ad6d0`: a fixed global entity, else the base.
-	else if (IsRetailClass(TEXT("CNPC_VRat")))
-	{
-		if (Other != nullptr && Other == RatIgnoredGlobalEntity())
-		{
-			return true;
-		}
-	}
-	// `CNPC_VWerewolf::ShouldIgnoreCollision` `0x103d9ab0`: `m_edtDerivedType & 0x16`, then
-	// `GetFlags2() & 8`, else the base.
-	else if (IsRetailClass(TEXT("CNPC_VWerewolf")) && Other != nullptr)
-	{
-		if ((RetailDerivedType(*Other) & 0x16) != 0)
-		{
-			return true;
-		}
-		if ((RetailFlags2(*Other) & 8) != 0)
-		{
-			return true;
-		}
-	}
+	// slot 68, `CAI_BaseNPCTroika::ShouldIgnoreCollision` `0x1029afc0`. `CNPC_VMingXiaoTentacle`
+	// (`0x1039eb50`), `CNPC_VRat` (`0x103ad6d0`) and `CNPC_VWerewolf` (`0x103d9ab0`) override it on
+	// their C++ classes (story 5 step 3): each runs its own arm and then calls this body directly.
 
 	if (IgnoreCollisionSharedHead(Other))
 	{
@@ -1028,54 +987,10 @@ bool FElysiumNpc::GargoyleIgnoresClassname(const FString& Classname)
 
 bool FElysiumNpc::NavIgnoreCollision(FElysiumEntity* Other)
 {
-	// slot 69. Species arms first, then `CAI_BaseNPCTroika::NavIgnoreCollision` `0x1029b180`.
-
-	// `CNPC_VGargoyle` `0x10379490`: the `0x16` derived-type gate, then the three classnames.
-	if (IsRetailClass(TEXT("CNPC_VGargoyle")) && Other != nullptr)
-	{
-		if ((RetailDerivedType(*Other) & 0x16) != 0)
-		{
-			return true;
-		}
-		if (GargoyleIgnoresClassname(Other->Def != nullptr ? Other->Def->Classname : FString()))
-		{
-			return true;
-		}
-	}
-	// `CNPC_VHengeyokai` `0x10380f90`, `CNPC_VMingXiao` `0x10396fd0` and `CNPC_VTzimisce`
-	// `0x103bfa00` are byte-identical: the `0x16` gate alone.
-	else if (Other != nullptr
-		&& (IsRetailClass(TEXT("CNPC_VHengeyokai")) || IsRetailClass(TEXT("CNPC_VMingXiao"))
-			|| IsRetailClass(TEXT("CNPC_VTzimisce"))))
-	{
-		if ((RetailDerivedType(*Other) & 0x16) != 0)
-		{
-			return true;
-		}
-	}
-	// `CNPC_VWerewolf` `0x103d9ba0`: the `0x16` gate then `GetFlags2() & 8`.
-	else if (IsRetailClass(TEXT("CNPC_VWerewolf")) && Other != nullptr)
-	{
-		if ((RetailDerivedType(*Other) & 0x16) != 0)
-		{
-			return true;
-		}
-		if ((RetailFlags2(*Other) & 8) != 0)
-		{
-			return true;
-		}
-	}
-	// `CNPC_VMingXiaoTentacle` `0x1039eb90`: the same shape as its slot 68 but falling to the NAV
-	// base.
-	else if (IsRetailClass(TEXT("CNPC_VMingXiaoTentacle")))
-	{
-		const bool bFallToBase = Other != nullptr
-			&& (Other->AsCombatCharacter() == nullptr || !bIgnoreCollisionSpecies);
-		if (!bFallToBase)
-		{
-			return true;
-		}
-	}
+	// slot 69, `CAI_BaseNPCTroika::NavIgnoreCollision` `0x1029b180`. Gargoyle (`0x10379490`),
+	// Hengeyokai (`0x10380f90`), MingXiao (`0x10396fd0`), Tzimisce (`0x103bfa00`), Werewolf
+	// (`0x103d9ba0`) and the MingXiao tentacle (`0x1039eb90`) override it on their C++ classes (story 5
+	// step 3): each runs its own arm and then calls this body directly.
 
 	if (IgnoreCollisionSharedHead(Other))
 	{
@@ -1124,15 +1039,10 @@ bool FElysiumNpc::BaseEntityIsMoving(const FElysiumEntity& Entity)
 
 bool FElysiumNpc::CanStandOn(FElysiumEntity* Other)
 {
-	// slot 166. `CNPC_VMingXiaoTentacle::vfunc166` `0x1039ebd0` adds one arm in front of the base:
-	// the tentacle's own companion is never standable. Then `CAISound::FUN_10026f80` `0x10026f80`,
-	// which is the body slot 166 carries for the whole family:
+	// slot 166, `CAISound::FUN_10026f80` `0x10026f80`, the body slot 166 carries for the whole family
+	// (`CNPC_VMingXiaoTentacle::vfunc166` `0x1039ebd0` overrides it on its C++ class, story 5 step 3):
 	//     if (other && !other->IsStandable()) return false;
 	//     return true;
-	if (IsRetailClass(TEXT("CNPC_VMingXiaoTentacle")) && Other == MingXiaoTentacleCompanion())
-	{
-		return false;
-	}
 	if (Other != nullptr && !RetailIsStandable(*Other))
 	{
 		return false;

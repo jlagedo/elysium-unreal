@@ -12,4 +12,8 @@ class FElysiumNpcPlaceholder : public FElysiumNpc
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual int32 PreSelectSchedule() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

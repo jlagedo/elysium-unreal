@@ -291,16 +291,14 @@ public:
 	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
 
 	/**
-	 * The species seam: retail's five `HandleAnimEvent` overrides that replace `0x1026d460` outright
-	 * (`docs/vtmb/footsteps.md` §1.7). True means this NPC's own class handled the footfall and the
-	 * shared chain must not run.
-	 *
-	 * **The policy table is the seam for now.** Retail's five species are distinct C++ classes each
-	 * holding its own `HandleAnimEvent` slot. The port's species classes stand since story 5 step 2
-	 * (`ElysiumNpc<Species>.h`), but their overrides still arrive as the classname-keyed data table
-	 * in `ElysiumFootsteps.h` until step 3 turns species dispatch into `virtual` overrides.
+	 * The body of retail's four event-driven footstep `HandleAnimEvent` overrides, which replace
+	 * `0x1026d460` outright (`docs/vtmb/footsteps.md` §1.7): `CNPC_VMingXiao`, `CNPC_VHengeyokai`,
+	 * `CNPC_VTzimisceHeadClaw` and `CNPC_VTzimisceRunner` override `HandleAnimEvent` on their C++
+	 * classes (story 5 step 3) and hand their own spawn classname, which selects their row of the
+	 * `ElysiumFootsteps` data table. An id the row does not claim is a direct call into this class's
+	 * `HandleAnimEvent`.
 	 */
-	bool OverrideFootstep(int32 EventId, bool bHeavy);
+	bool SpeciesFootstepAnimEvent(const TCHAR* SpeciesClassname, const struct FElysiumAnimEvent& Event);
 
 	void InputUseInteresting(const FElysiumInputArgs& Args);
 
@@ -462,14 +460,10 @@ public:
 	// guard's weapon away. Public so a fixture can drive the edge without a whole think.
 	void PumpStateChange();
 
-	// Whether this NPC's authored classname is one of the seven that fill slot 463 with the
-	// holster/draw body. Spelled from the retail class names with the port's `npc_` prefix.
-	bool ClassHolstersOnState() const;
-
-	// The recovered override body itself, taking the NEW state exactly as retail's second argument
-	// does. Public because it IS the virtual — retail's callers reach it through the vtable, and a
-	// fixture asserting the arms has to be able to state a transition without also driving the whole
-	// decision pass that produces one.
+	// The holster/draw switch of the slot-463 bodies that carry one (`CNPC_VHumanCombatant`
+	// `0x103871c0` and `CNPC_VGuard1`'s copy `0x1037d020`), taking the NEW state exactly as retail's
+	// second argument does. Only those classes' `OnStateChange` overrides call it (story 5 step 3);
+	// public so a fixture can state a transition without driving the whole decision pass.
 	void ApplyStateWeaponVisibility(EElysiumNpcState NewState);
 
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
@@ -1407,20 +1401,14 @@ private:
 
 	// --- The footfall (`0x1026d460`), sequenced ---------------------------------------------------
 	/**
-	 * One footfall, in retail's own order: the species override, the global player gate, the
-	 * template/cvar source, this body's cached surface, the level, the coin flip, the emit.
+	 * One footfall (`0x1026d460`), in retail's own order: the global player gate, the template/cvar
+	 * source, this body's cached surface, the level, the coin flip, the emit.
 	 *
 	 * Always answers true. `EventId` is carried past the mode because the species overrides read the
 	 * foot the shared chain throws away.
 	 */
 	bool NpcStep(int32 EventId, bool bHeavy);
 
-	// The species row this NPC's classname selects, resolved ONCE. `bFootstepSpeciesResolved`
-	// distinguishes "no row" from "not looked up yet"; the row itself is a pointer into a static
-	// table, so it outlives every entity.
-	const struct FElysiumFootstepSpecies* FootstepSpecies = nullptr;
-	bool bFootstepSpeciesResolved = false;
-	const struct FElysiumFootstepSpecies* ResolveFootstepSpecies();
 
 	// This NPC's `stattemplate` record, RESOLVED through `ParentTemplateName` and latched at the one
 	// site that already resolves it (`ApplyResolvedTemplate`). Retail re-resolves per footfall

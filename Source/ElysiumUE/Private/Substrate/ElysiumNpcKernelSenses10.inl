@@ -486,11 +486,10 @@ FWerewolfHintGroundpoint InitializeHintDataRow(const FHintWords& Hint) const;
 static bool IsGroundpointExponentValid(const FVector& PointUnits);
 
 /** Slot 566 `FValidateHintType` applied to a hint whose WORDS are already in hand. Retail passes the
- *  `CAI_Hint*` itself (`vtable +0x8d8`), and both bodies below call it that way; family Hints'
- *  `FValidateHintTypeForSpecies` takes a NODE INDEX and re-resolves it through the hint-store seam,
- *  which resolves nothing — so these two bodies would refuse at the gate rather than reaching their
- *  own type ladders. This applies the same species table to the words the caller already has, and
- *  carries `CNPC_VBach`'s fall-through to the base body. */
+ *  `CAI_Hint*` itself (`vtable +0x8d8`), and both bodies below call it that way; the node-index entry
+ *  `FValidateHintTypeNode` re-resolves through the hint-store seam, which resolves nothing — so these
+ *  two bodies would refuse at the gate rather than reaching their own type ladders. This hands the
+ *  words the caller already has to the virtual slot. */
 bool ValidateHintTypeForWords(const FHintWords& Hint) const;
 
 /** `CNPC_VWerewolf::IsValidRandomMoveHint` (`0x103d7dc0`) and `::IsValidMoveHint` (`0x103d8060`) —

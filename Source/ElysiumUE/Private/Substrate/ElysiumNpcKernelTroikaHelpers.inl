@@ -21,9 +21,9 @@
 // THE STANDING FACT OF THIS FAMILY: **the melee quartet 599/600/601/602 is one behaviour written
 // twice.** Retail fills each of the four slots with a `CAI_BaseNPCTroika` body for 18 classes and a
 // `CNPC_VAndreiBlood`-line copy for 38-40 more. 599 and 600 are byte-identical between the two
-// lines; 601 and 602 are NOT, and both differences are recovered and ported (see `MeleeSlotLine`).
-// This runtime stands ONE leaf, so the line a body takes is a census lookup
-// (`ElysiumNpcKernelClass::BodyOf(Cls, slot)`) and never a second method.
+// lines; 601 and 602 are NOT, and both differences are recovered and ported (see `MeleeSlotBody`).
+// Since story 5 step 3 the human line's four are `FElysiumNpcHuman`'s overrides, which call these
+// bodies (and Bosses' `FUN_10385cf0` for 601) directly.
 //
 // THE SECOND STANDING FACT: **there is no attack coordinator here.** `m_pAttackCoordinator`
 // (`+0x65e8`) is an `int32` index of three globals with no object behind it (29b's shape map says
@@ -259,16 +259,11 @@ int32 TaskArgumentForwards = 0;
 
 // --- The melee quartet: which retail line this NPC's class takes ----------------------------------
 
-/** Slots 599/600/601/602 each have two bodies. `Troika` is `CAI_BaseNPCTroika`'s, `AndreiBlood` the
- *  `CNPC_VAndreiBlood`-line copy; `Species` is a class that replaces the slot outright and whose
- *  body is another family's row, which this leaf answers with the Troika line and says so. */
+/** Slots 599/600/601/602 each have two shared bodies. `Troika` is `CAI_BaseNPCTroika`'s, `AndreiBlood`
+ *  the `CNPC_VAndreiBlood`-line copy (the Human line's overrides since story 5 step 3); `Species` is
+ *  a class that replaces the slot outright with its own body. */
 enum class EMeleeSlotLine : uint8 { Troika, AndreiBlood, Species };
 
-/** The line `Slot` takes for this NPC, read off the CENSUS (`ElysiumNpcKernelClass::BodyOf`) rather
- *  than off a hand-typed class list, so the answer is checkable against
- *  `docs/vtmb/npc-kernel/slots.md` by construction. A class with no override (and the bare Troika
- *  line) answers `Troika`. */
-EMeleeSlotLine MeleeSlotLine(int32 Slot) const;
 
 /** The two body addresses, so a test can name them. */
 static const TCHAR* MeleeSlotBody(int32 Slot, EMeleeSlotLine Line);

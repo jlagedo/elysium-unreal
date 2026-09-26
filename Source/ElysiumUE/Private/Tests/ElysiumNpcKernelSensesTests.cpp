@@ -29,8 +29,9 @@
 // step 2, `docs/vtmb/npc-ai/population.md`, "The classname → class map, read from the factories").
 // The `CNPC_VYukie`, `CNPC_VWerewolf` and `CNPC_VCameraSecurity` bodies are driven directly on an
 // ordinary spawned NPC (they read no word of their class) and, since those classnames build those
-// classes, reached through slots 201 and 468 on a spawned instance of each. Yukie's slot-363 and
-// slot-602 arms are not dispatched by the substrate yet, so those two stay direct-body only;
+// classes, reached through slots 201 and 468 on a spawned instance of each. Yukie's slot-363 body
+// has no dispatch point in the substrate (story 8 residue), so it stays direct-body only; slot 602
+// is `FElysiumNpcYukie`'s override since story 5 step 3 (`NpcKernelSpecies.WiredYukieMelee`);
 // `npc_payphone` builds `CPayphone`, so it gets a real body.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelSensesFlags =

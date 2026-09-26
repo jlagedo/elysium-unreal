@@ -4526,10 +4526,9 @@ bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestTrue(TEXT("npc_VHumanCombatant is one of the seven classes that fill slot 463 with the "
-		"holster/draw body"), Combatant->ClassHolstersOnState());
-	TestFalse(TEXT("npc_VVampire takes the Troika base, which writes nothing"),
-		Vampire->ClassHolstersOnState());
+	// `npc_VHumanCombatant` builds `CNPC_VHumanCombatant`, whose slot 463 is the holster/draw body
+	// `0x103871c0` (`FElysiumNpcHumanCombatant::OnStateChange`, story 5 step 3); `npc_VVampire` takes
+	// the Troika base, which writes nothing to the weapon.
 
 	FElysiumWeapon* CombatantGun = GiveWeapon(*Combatant, GPistol);
 	FElysiumWeapon* VampireGun = GiveWeapon(*Vampire, GPistol);
@@ -4548,33 +4547,33 @@ bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
 	TestTrue(TEXT("an idle combatant has put its weapon away"), CombatantGun->IsHidden());
 	TestFalse(TEXT("an idle vampire has not"), VampireGun->IsHidden());
 
-	// The three arms of the recovered switch, stated as retail's callers state them: the new state,
-	// through the override body itself.
+	// The three arms of the recovered switch, driven through slot 463 itself: `OnStateChange(old, new)`
+	// dispatches to each class's own body.
 
 	// State 2 — `GetActiveWeapon()->Unhide()`.
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Alert);
-	Vampire->ApplyStateWeaponVisibility(EElysiumNpcState::Alert);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
+	Vampire->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 	TestFalse(TEXT("going alert draws the combatant's weapon"), CombatantGun->IsHidden());
 	TestFalse(TEXT("and the vampire's bit is still untouched"), VampireGun->IsHidden());
 
 	// State 3 keeps it drawn.
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Combat);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
 	TestFalse(TEXT("combat keeps it drawn"), CombatantGun->IsHidden());
 
 	// State 1 — `GetActiveWeapon()->Hide()`.
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Idle);
-	Vampire->ApplyStateWeaponVisibility(EElysiumNpcState::Idle);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Idle);
+	Vampire->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Idle);
 	TestTrue(TEXT("dropping back to idle puts it away again"), CombatantGun->IsHidden());
 	TestFalse(TEXT("the vampire never changes the bit on a state change"), VampireGun->IsHidden());
 
 	// Every other state falls through to the Troika base, which writes nothing — the weapon stays
 	// exactly as the last recovered arm left it.
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Scripted);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Scripted);
 	TestTrue(TEXT("a scripted state writes nothing"), CombatantGun->IsHidden());
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Alert);
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Dead);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Dead);
 	TestFalse(TEXT("and neither does death"), CombatantGun->IsHidden());
-	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Idle);
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Idle);
 
 	// The hidden weapon is still the active one, and it is the ACTIVITY request that sees nothing.
 	TestTrue(TEXT("the idle combatant still holds its weapon"),

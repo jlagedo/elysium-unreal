@@ -124,10 +124,14 @@ void SpeakVSound(const TCHAR* ConceptName, int32 ConceptId, int32 Channel, float
 void SpeakSoundConcept(const TCHAR* ConceptName, float Attenuation);
 
 /** `CAI_BaseNPCTroika::FUN_10293ec0` (`0x10293ec0`), slot 488's Troika-line body. Defined here and
- *  called from `FElysiumNpc::DeathSound` in family **Sounds**' file, which carries the slot's
- *  species prologue (`SpeciesDeathSound`, `CNPC_VTzimisce` `0x103b92a0`) that story 29c-1 put
- *  there. */
+ *  called from `FElysiumNpc::DeathSound` in family **Sounds**' file; `CNPC_VTzimisce` (`0x103b92a0`)
+ *  and `CNPC_VCamera` (`0x103680b0`) override that slot on their C++ classes (story 5 step 3). */
 void TroikaDeathSound();
+/** `CNPC_VWerewolf::vfunc491` (`0x103d87a0`) and `vfunc500` (`0x103d8660`) — the bodies of the
+ *  Werewolf's `PainSound` / `ExertHvySound` overrides: the same concept at the Werewolf's attenuation,
+ *  with no call into the Troika body. */
+void WerewolfPainSound();
+void WerewolfExertHvySound();
 
 /** `CAI_BaseNPCTroika::FUN_10294e70` (`0x10294e70`), slot 506's Troika-line body, for the same
  *  reason — `FElysiumNpc::Slot506` in family **Sounds**' file carries `CNPC_VCamera`'s empty

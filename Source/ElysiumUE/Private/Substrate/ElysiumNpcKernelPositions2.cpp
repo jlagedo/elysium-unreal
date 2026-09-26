@@ -471,42 +471,6 @@ void FElysiumNpc::ChaseLeadPosition(FElysiumEntity* Enemy, const FVector& Veloci
 	OutPositionCm = ChasePositionCm;
 }
 
-FElysiumNpc::EChaseTranslateShape FElysiumNpc::ChaseTranslateShape() const
-{
-	// Slot 563's census row for the class this NPC IS, mapped onto the six recovered shapes. The
-	// address is the gate as well as the record: an override this family did not recover is not one
-	// of these, and it takes the Troika body rather than a guess.
-	const FElysiumNpcClassSlot* Row = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 563);
-	const TCHAR* BodyAddress = Row != nullptr ? Row->Address : nullptr;
-	if (BodyAddress == nullptr)
-	{
-		return EChaseTranslateShape::Troika;   // `0x10295300`, the line every spawnable species is on
-	}
-	if (FCString::Strcmp(BodyAddress, TEXT("0x10289f20")) == 0)
-	{
-		return EChaseTranslateShape::Base;
-	}
-	if (FCString::Strcmp(BodyAddress, TEXT("0x1035f5c0")) == 0
-		|| FCString::Strcmp(BodyAddress, TEXT("0x10384760")) == 0)
-	{
-		return EChaseTranslateShape::OffsetOnly;
-	}
-	if (FCString::Strcmp(BodyAddress, TEXT("0x10368ee0")) == 0)
-	{
-		return EChaseTranslateShape::Empty;
-	}
-	if (FCString::Strcmp(BodyAddress, TEXT("0x10392c40")) == 0
-		|| FCString::Strcmp(BodyAddress, TEXT("0x103ba640")) == 0)
-	{
-		return EChaseTranslateShape::GoalToleranceLead;
-	}
-	if (FCString::Strcmp(BodyAddress, TEXT("0x103d9e00")) == 0)
-	{
-		return EChaseTranslateShape::GoalToleranceWerewolfLead;
-	}
-	return EChaseTranslateShape::Troika;
-}
-
 void FElysiumNpc::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm,
 	void* Tolerance, void* SecondTolerance)
 {
@@ -521,7 +485,8 @@ void FElysiumNpc::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& Ch
 	// Nav type 2 is FLY. A flying chaser aims at the enemy's eye and widens its tolerance to its own
 	// hull width; a walking one is left untouched. The BASE body (`0x10289f20`) is byte-identical
 	// but for an else arm that writes `tolerance = 0`, and the difference is observable — see
-	// `TranslateEnemyChasePositionSpecies`.
+	// `TranslateEnemyChasePositionAs`. Six species classes override this method on their C++
+	// classes (story 5 step 3).
 	float* ToleranceOut = static_cast<float*>(Tolerance);
 	(void)SecondTolerance;
 	if (NavGetType() != 2 || Enemy == nullptr)
@@ -539,13 +504,25 @@ void FElysiumNpc::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& Ch
 	}
 }
 
-void FElysiumNpc::TranslateEnemyChasePositionSpecies(FElysiumEntity* Enemy,
+void FElysiumNpc::TranslateEnemyChasePositionShaped(EChaseTranslateShape Shape,
+	FElysiumEntity* Enemy, FVector& ChasePositionCm, void* InTolerance, void* InSecondTolerance)
+{
+	// The body of a species class's slot-563 override (story 5 step 3), in the shape its retail
+	// body takes. The generated slot's `float&`/`float*` pair arrives as `void*`; a null one reads and
+	// writes a scratch, which no retail caller passes.
+	float ScratchTolerance = 0.f;
+	float ScratchSecond = 0.f;
+	float& Tolerance = InTolerance != nullptr ? *static_cast<float*>(InTolerance) : ScratchTolerance;
+	float& SecondTolerance =
+		InSecondTolerance != nullptr ? *static_cast<float*>(InSecondTolerance) : ScratchSecond;
+	TranslateEnemyChasePositionAs(Shape, Enemy, ChasePositionCm, Tolerance, SecondTolerance);
+}
+
+void FElysiumNpc::TranslateEnemyChasePositionAs(EChaseTranslateShape Shape, FElysiumEntity* Enemy,
 	FVector& ChasePositionCm, float& Tolerance, float& SecondTolerance)
 {
-	// The other seven fills of slot 563, dispatched through the census rather than by a name
-	// compare. All of them share the nav-type-2 gate and the eye-minus-origin offset; what differs
-	// is entirely what happens on the OTHER arm.
-	const EChaseTranslateShape Shape = ChaseTranslateShape();
+	// The seven non-Troika fills of slot 563. All of them share the nav-type-2 gate and the
+	// eye-minus-origin offset; what differs is entirely what happens on the OTHER arm.
 	if (Shape == EChaseTranslateShape::Empty)
 	{
 		// `CNPC_VCamera::TranslateEnemyChasePosition` `0x10368ee0` — three bytes, all four

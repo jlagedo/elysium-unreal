@@ -239,6 +239,24 @@ bool FElysiumSpeciesMisc10BachTest::RunTest(const FString&)
 	F.Guard->BachGatherAttackConditions(71.9f);
 	TestTrue(TEXT("`10363faf`: below 72.0 the near weapon condition 0x7a"),
 		C.Has(static_cast<EElysiumNpcCond>(0x7a)));
+
+	// Story 5 step 3 correction: `0x10363db0` is `FElysiumNpcBach`'s slot-561 override, which
+	// `CAI_BaseNPC::GatherEnemyConditions` (`0x10270b20`) dispatches through the vtable — so a spawned
+	// Bach runs the block ahead of the base gather when the slot is called, where the gather pass used
+	// to call the base body directly.
+	{
+		FSpeciesMisc10Fixture B(TEXT("CNPC_VBach"));
+		if (TestNotNull(TEXT("the Bach spawned"), B.Guard))
+		{
+			TestTrue(TEXT("npc_VBach builds CNPC_VBach"),
+				B.Guard->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach")));
+			B.Guard->Cognition.Conditions.Reset();
+			B.Guard->BachNextWeaponSwitchTime = -1.0;
+			B.Guard->GatherAttackConditions(B.Other, 72.f);
+			TestTrue(TEXT("slot 561 on a Bach runs 0x10363db0: the far weapon condition 0x79"),
+				B.Guard->Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x79)));
+		}
+	}
 	return true;
 }
 
@@ -435,10 +453,10 @@ bool FElysiumSpeciesMisc10CroucherTest::RunTest(const FString&)
 		AddError(TEXT("no NPCs"));
 		return false;
 	}
-	// The slot-24 table now carries the croucher, which is what makes the arm reachable at all.
-	TestEqual(TEXT("`1037be80`: slot 24 dispatches to the croucher line"),
-		static_cast<int32>(F.Guard->VictimHitLine()),
-		static_cast<int32>(FElysiumNpc::EVictimHitLine::GhoulCroucher));
+	// `1037be80` is `FElysiumNpcGhoulCroucher`'s own slot-24 override (story 5 step 3), which is what
+	// makes the arm reachable at all.
+	TestTrue(TEXT("`1037be80`: the NPC is a CNPC_VGhoulCroucher, whose slot 24 is the croucher body"),
+		F.Guard->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VGhoulCroucher")));
 
 	// `1037bf2b`: the burn needs BOTH `m_bSpawnBurning` and a victim that carries a player record.
 	F.Guard->bGhoulSpawnBurning = false;

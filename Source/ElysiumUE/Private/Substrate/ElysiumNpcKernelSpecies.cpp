@@ -196,51 +196,16 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRows(int32& OutCount
 	// class; every row is exercised by name in `Elysium.Substrate.NpcKernelSpecies.SlotTable`.
 	static constexpr FSpeciesSlotRow Rows[] =
 	{
-		// `CNPC_VMingXiaoTentacle` forwards three consecutive slots to its head.
-		{ TEXT("CNPC_VMingXiaoTentacle"), 21, TEXT("0x1039e800") },
-		{ TEXT("CNPC_VMingXiaoTentacle"), 22, TEXT("0x1039e830") },
-		{ TEXT("CNPC_VMingXiaoTentacle"), 23, TEXT("0x1039e860") },
-		// `CNPC_VZombie` fires `m_OnAttackedVictim` from two slots with no base forward.
-		{ TEXT("CNPC_VZombie"), 25, TEXT("0x103e12c0") },
-		{ TEXT("CNPC_VZombie"), 26, TEXT("0x103e12f0") },
-		// Slot 139 `DeathNotice` — `CNPCMaker_Fleshpile`'s, which lands on `FElysiumNpcMaker`.
+		// Story 5 step 3: every introduced class overrides its slots on its own C++ class
+		// (`story-5/overrides-step3.tsv`). What remains are the deferred classes' rows, reached by a
+		// test-latched Troika-line instance or read as census until their folds
+		// (`decisions-step3.json` `surviving_sites`).
+		// Slot 139 `DeathNotice` — `CNPCMaker_Fleshpile`'s, which lands on `FElysiumNpcMaker` (step 8).
 		{ TEXT("CNPCMaker_Fleshpile"), 139, TEXT("0x1034c8e0") },
-		// Slot 482 `CanPlaySequence`. Five classes, every body byte-identical to the base.
-		{ TEXT("CNPC_VAnimal"), 482, TEXT("0x1035fd40") },
-		{ TEXT("CNPC_VTzimisce"), 482, TEXT("0x103bd270") },
-		// Slot 488 `DeathSound` — `CNPC_VTzimisce` fires `SPI_DIES` then tails into slot 487.
-		{ TEXT("CNPC_VTzimisce"), 488, TEXT("0x103b92a0") },
-		// Slots 497 and 506 — `CNPC_VCamera`'s two empty sound hooks.
-		{ TEXT("CNPC_VCamera"), 497, TEXT("0x103681d0") },
-		{ TEXT("CNPC_VCamera"), 506, TEXT("0x103682f0") },
-		// Slot 510 `ShouldPlayFloatSound` — `CNPC_VZombie`'s moan gate.
-		{ TEXT("CNPC_VZombie"), 510, TEXT("0x103e1080") },
-		// Slot 588 — `CNPC_VTzimisceRunner` drops the base's `IsActivityFinished` gate.
-		{ TEXT("CNPC_VTzimisceRunner"), 588, TEXT("0x103c3fd0") },
-		// Slot 593 — `CNPC_VTzimisce`'s five target-lead literals.
-		{ TEXT("CNPC_VTzimisce"), 593, TEXT("0x103b9180") },
-		// The melee quartet, slots 599..602. These are the six classes `MeleeSlotLine` answers
-		// `EMeleeSlotLine::Species` for.
+		// Slots 599 / 600 — `CNPC_VFrenzyShadow`'s melee entry, until the controller fold (step 7).
 		{ TEXT("CNPC_VFrenzyShadow"), 599, TEXT("0x10376b70") },
-		{ TEXT("CNPC_VGargoyle"), 599, TEXT("0x10379ef0") },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), 599, TEXT("0x103c19e0") },
-		{ TEXT("CNPC_VTzimisceRunner"), 599, TEXT("0x103c3960") },
 		{ TEXT("CNPC_VFrenzyShadow"), 600, TEXT("0x10376ba0") },
-		{ TEXT("CNPC_VGargoyle"), 600, TEXT("0x10379f20") },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), 600, TEXT("0x103c1a60") },
-		{ TEXT("CNPC_VTzimisceRunner"), 600, TEXT("0x103c39e0") },
-		{ TEXT("CNPC_VYukie"), 600, TEXT("0x103dd900") },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), 601, TEXT("0x103c1ad0") },
-		{ TEXT("CNPC_VTzimisceRunner"), 601, TEXT("0x103c3a70") },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), 602, TEXT("0x103c1b10") },
-		{ TEXT("CNPC_VTzimisceRunner"), 602, TEXT("0x103c3ab0") },
-		// Slot 606 — `CNPC_VBach`'s arm-then-fire gate around `COND_ENEMY_OCCLUDED`.
-		{ TEXT("CNPC_VBach"), 606, TEXT("0x10364280") },
-		// Slot 609 — Bach's state gate in front of the base hint search. Its two byte-identical
-		// copies (`CNPC_VBatSwarm` `0x10367740`, `CNPC_VSheriffSwarm` `0x103b26f0`) are on classes
-		// with no instance and carry no port row.
-		{ TEXT("CNPC_VBach"), 609, TEXT("0x103661f0") },
-		// Slot 617 `MakeNPC` — `CNPCMaker_Fleshpile`'s, which lands on `FElysiumNpcMaker`.
+		// Slot 617 `MakeNPC` — `CNPCMaker_Fleshpile`'s, which lands on `FElysiumNpcMaker` (step 8).
 		{ TEXT("CNPCMaker_Fleshpile"), 617, TEXT("0x1034c2d0") },
 	};
 	OutCount = UE_ARRAY_COUNT(Rows);
@@ -256,22 +221,10 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRowOf(const TCHAR* I
 	}
 	int32 Count = 0;
 	const FSpeciesSlotRow* Rows = SpeciesSlotRows(Count);
-	// The exact class first, then the base chain — which is the vtable's own resolution, and the
-	// reason it is a walk rather than a name compare: a subclass with no body of its own at a slot
-	// runs its base's, and several of these classes have subclasses in the census
-	// (`CNPC_VCameraSecurity` under `CNPC_VCamera`, `CNPC_VDog`/`CNPC_VRat` under `CNPC_VAnimal`).
+	// The exact class: the deferred classes left here have no census subclass that inherits a row.
 	for (int32 i = 0; i < Count; ++i)
 	{
 		if (Rows[i].Slot == Slot && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[i];
-		}
-	}
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (Rows[i].Slot == Slot
-			&& ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
 		{
 			return &Rows[i];
 		}
@@ -285,30 +238,6 @@ const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesSlotRow(int32 Slot) cons
 	// run the one you have" is its answer.
 	const FElysiumNpcClass* Cls = RetailClass();
 	return SpeciesSlotRowOf(Cls != nullptr ? Cls->Name : nullptr, Slot);
-}
-
-const FElysiumNpc::FSpeciesSlotRow* FElysiumNpc::SpeciesDispatchRow(int32 Slot) const
-{
-	// Retail's non-virtual thunk, spelled once: a species body that calls the body it replaces is
-	// calling it DIRECTLY, so slot `Slot`'s dispatcher must answer "nothing to run" while slot
-	// `Slot`'s own species body is on the stack. See the note in `ElysiumNpcKernelSpecies.inl`.
-	if (SpeciesDispatchingSlot == Slot)
-	{
-		return nullptr;
-	}
-	return SpeciesSlotRow(Slot);
-}
-
-FElysiumNpc::FSpeciesDispatchScope::FSpeciesDispatchScope(FElysiumNpc& InNpc, int32 Slot)
-	: Npc(InNpc)
-	, Previous(InNpc.SpeciesDispatchingSlot)
-{
-	Npc.SpeciesDispatchingSlot = Slot;
-}
-
-FElysiumNpc::FSpeciesDispatchScope::~FSpeciesDispatchScope()
-{
-	Npc.SpeciesDispatchingSlot = Previous;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -568,33 +497,17 @@ bool FElysiumNpc::FUN_103c3960(FElysiumEntity* Enemy)
 
 bool FElysiumNpc::SpeciesSlot599(FElysiumEntity* Enemy, bool& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(599);
-	if (Row == nullptr)
+	// Story 5 step 3: the introduced classes (`CNPC_VGargoyle`, `CNPC_VTzimisceHeadClaw`,
+	// `CNPC_VTzimisceRunner`) override slot 599 on their C++ classes. What is left is the deferred
+	// `CNPC_VFrenzyShadow` row, reached only by a test-latched Troika-line instance until the
+	// controller line folds (step 7, `decisions-step3.json` `surviving_sites`).
+	const FSpeciesSlotRow* Row = SpeciesSlotRow(599);
+	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x10376b70")) != 0)
 	{
-		return false;   // no species body: run the Troika / `CNPC_VAndreiBlood` line you have
+		return false;   // no species body: run the Troika line
 	}
-	const FSpeciesDispatchScope Scope(*this, 599);
-	if (FCString::Strcmp(Row->Address, TEXT("0x10376b70")) == 0)
-	{
-		OutAnswer = FUN_10376b70(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x10379ef0")) == 0)
-	{
-		OutAnswer = FUN_10379ef0(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c19e0")) == 0)
-	{
-		OutAnswer = FUN_103c19e0(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c3960")) == 0)
-	{
-		OutAnswer = FUN_103c3960(Enemy);
-		return true;
-	}
-	return false;
+	OutAnswer = FUN_10376b70(Enemy);
+	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -736,38 +649,14 @@ bool FElysiumNpc::FUN_103dd900(FElysiumEntity* Enemy)
 
 bool FElysiumNpc::SpeciesSlot600(FElysiumEntity* Enemy, bool& OutAnswer)
 {
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(600);
-	if (Row == nullptr)
+	// The deferred `CNPC_VFrenzyShadow` row only, as slot 599 above.
+	const FSpeciesSlotRow* Row = SpeciesSlotRow(600);
+	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x10376ba0")) != 0)
 	{
 		return false;
 	}
-	const FSpeciesDispatchScope Scope(*this, 600);
-	if (FCString::Strcmp(Row->Address, TEXT("0x10376ba0")) == 0)
-	{
-		OutAnswer = FUN_10376ba0(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x10379f20")) == 0)
-	{
-		OutAnswer = FUN_10379f20(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c1a60")) == 0)
-	{
-		OutAnswer = FUN_103c1a60(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c39e0")) == 0)
-	{
-		OutAnswer = FUN_103c39e0(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103dd900")) == 0)
-	{
-		OutAnswer = FUN_103dd900(Enemy);
-		return true;
-	}
-	return false;
+	OutAnswer = FUN_10376ba0(Enemy);
+	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -809,27 +698,6 @@ void FElysiumNpc::FUN_103c3a70(FElysiumEntity* Enemy)
 	RunnerPotentialEnemy = FElysiumEntityHandle();
 	bInMelee = false;
 	++MeleeCoordinatorReleases;
-}
-
-bool FElysiumNpc::SpeciesSlot601(FElysiumEntity* Enemy)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(601);
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 601);
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c1ad0")) == 0)
-	{
-		FUN_103c1ad0(Enemy);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c3a70")) == 0)
-	{
-		FUN_103c3a70(Enemy);
-		return true;
-	}
-	return false;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -876,27 +744,6 @@ bool FElysiumNpc::FUN_103c3ab0()
 	return FUN_103c1b10();
 }
 
-bool FElysiumNpc::SpeciesSlot602(bool& OutAnswer)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(602);
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 602);
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c1b10")) == 0)
-	{
-		OutAnswer = FUN_103c1b10();
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103c3ab0")) == 0)
-	{
-		OutAnswer = FUN_103c3ab0();
-		return true;
-	}
-	return false;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 606 — `CNPC_VBach::FUN_10364280` `0x10364280`.
 // -------------------------------------------------------------------------------------------------
@@ -917,7 +764,8 @@ int32 FElysiumNpc::FUN_10364280(int32 Arg)
 	//
 	// The base `0x102b8320` is family **TroikaHelpers**' `Slot606`. It is CALLED, so Bach's gate
 	// wraps the real rule rather than replacing it. Retail's answers are the Troika body's numbers;
-	// `0` is its "no opinion".
+	// `0` is its "no opinion". The call is DIRECT (thunk `0x100026b7`), so it is qualified to the
+	// Troika owner and never re-enters `FElysiumNpcBach::Slot606`.
 	if (!Cognition.Conditions.Has(BachOccludeCondition))
 	{
 		bBachFireOccluded = false;
@@ -925,28 +773,10 @@ int32 FElysiumNpc::FUN_10364280(int32 Arg)
 	}
 	if (bBachFireOccluded)
 	{
-		return Slot606(Arg);
+		return FElysiumNpc::Slot606(Arg);
 	}
 	bBachFireOccluded = true;
 	return 0;
-}
-
-bool FElysiumNpc::SpeciesSlot606(int32 Arg, int32& OutAnswer)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(606);
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	// The scope is what makes `FUN_10364280`'s own `Slot606(Arg)` retail's `thunk_FUN_102b8320` —
-	// a direct call into the Troika body and not a second trip through this dispatcher.
-	const FSpeciesDispatchScope Scope(*this, 606);
-	if (FCString::Strcmp(Row->Address, TEXT("0x10364280")) == 0)
-	{
-		OutAnswer = FUN_10364280(Arg);
-		return true;
-	}
-	return false;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -981,69 +811,29 @@ bool FElysiumNpc::FUN_103661f0(bool bArg)
 	return true;
 }
 
-bool FElysiumNpc::SpeciesSlot609(bool bArg, bool& OutRunBase)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(609);
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 609);
-	if (FCString::Strcmp(Row->Address, TEXT("0x103661f0")) == 0)
-	{
-		OutRunBase = FUN_103661f0(bArg);
-		return true;
-	}
-	return false;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 482 — `CanPlaySequence`'s five species copies.
 // -------------------------------------------------------------------------------------------------
 
 int32 FElysiumNpc::FUN_1035fd40(bool bDisregardState, int32 InterruptLevel)
 {
-	// `0x1035fd40`, `CNPC_VAnimal`'s slot 482 (and `CNPC_VDog`'s, `CNPC_VRat`'s and two more, all
-	// on the one body). **Byte-identical to the base `CAI_BaseNPC::CanPlaySequence` `0x10278090`**,
-	// which family **Anim** has already ported as `FElysiumNpc::CanPlaySequence`: the cine-handle
-	// resolve through the global table, the `0x101a8ac0` interruptibility upgrade from 1 to 2, the
-	// `IsAlive()` gate at vtable `+0x278` and the four-term state refusal are the same instructions
-	// in the same order.
+	// `0x1035fd40`, `CNPC_VAnimal`'s slot 482 (inherited by `CNPC_VDog`, `CNPC_VScurrying`,
+	// `CNPC_VRat` and `CNPC_VZombie`). A standalone copy: it calls `0x101a8ac0` directly and slot 158
+	// `IsAlive` virtually, and **never** the base `CAI_BaseNPC::CanPlaySequence` `0x10278090`. Its head
+	// is the base's, but its state gate ends `SETNZ CL / DEC ECX / AND ECX,EDI` (`0x1035fdf9`), so a
+	// body in retail state 4 (SCRIPT) keeps its 1-or-2 where the base answers 0. That is family
+	// Bosses' `CanPlaySequenceSpecies`, the tail the four species copies share.
 	//
-	// So this is not a second behaviour and is not written twice. The base is CALLED, and the row
-	// exists to say — with the address — that five species carry their own copy of it and that the
-	// copy answers the same thing. The census check is in the suite.
-	return CanPlaySequence(bDisregardState, InterruptLevel);
+	// Story 5 step 3 corrected this body: it used to call the base and so refused in SCRIPT state
+	// (`decisions-step3.json` `retail_corrections`).
+	return CanPlaySequenceSpecies(bDisregardState, InterruptLevel);
 }
 
 int32 FElysiumNpc::FUN_103bd270(bool bDisregardState, int32 InterruptLevel)
 {
-	// `0x103bd270`, `CNPC_VTzimisce`'s slot 482 — the same byte-identical copy again.
-	return CanPlaySequence(bDisregardState, InterruptLevel);
-}
-
-bool FElysiumNpc::SpeciesCanPlaySequence(bool bDisregardState, int32 InterruptLevel,
-	int32& OutAnswer)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(482);
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	// Both bodies below CALL `CanPlaySequence`, which is the base they are byte-identical to; the
-	// scope is what stops that call coming back here, exactly as retail's direct `0x10278090` does.
-	const FSpeciesDispatchScope Scope(*this, 482);
-	if (FCString::Strcmp(Row->Address, TEXT("0x1035fd40")) == 0)
-	{
-		OutAnswer = FUN_1035fd40(bDisregardState, InterruptLevel);
-		return true;
-	}
-	if (FCString::Strcmp(Row->Address, TEXT("0x103bd270")) == 0)
-	{
-		OutAnswer = FUN_103bd270(bDisregardState, InterruptLevel);
-		return true;
-	}
-	return false;
+	// `0x103bd270`, `CNPC_VTzimisce`'s slot 482 — the same standalone copy (callees `0x101a8ac0`
+	// direct and slot 158 virtual; no base call), with the same SCRIPT-state tail.
+	return CanPlaySequenceSpecies(bDisregardState, InterruptLevel);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1063,18 +853,6 @@ void FElysiumNpc::FUN_103c3fd0()
 	// and carries no retail-id table, so the id is recorded and reaches nothing. The DECISION —
 	// that the restart is unconditional — is this body's and is what the suite asserts.
 	RestartIdealActivityId(1);
-}
-
-bool FElysiumNpc::SpeciesSlot588()
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(588);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103c3fd0")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 588);
-	FUN_103c3fd0();
-	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1101,9 +879,9 @@ void FElysiumNpc::FUN_103b9180()
 	// Tzimisce's lead point is computed from a min of 0.01, a max of 1.0, equal current and
 	// predicted weights of 50 and a weight scale of 0.01.
 	//
-	// `Slot593()` is the generated slot, whose body is still 29c's stub for `0x1029a070`. Calling it
-	// keeps the order — base first, overwrite second — so when the base lands nothing here moves.
-	Slot593();
+	// `FElysiumNpc::Slot593` is family Closure's port of `0x1029a070`, called DIRECTLY (thunk
+	// `0x10002720`) and so qualified to its Troika owner: base first, overwrite second.
+	FElysiumNpc::Slot593();
 	TargetLeadMin = 0.009999999776482582f;        // +0x655c, 0x3c23d70a
 	TargetLeadMax = 1.0f;                         // +0x6560, 0x3f800000
 	TargetLeadCurrentWeight = 50.0f;              // +0x6564, 0x42480000
@@ -1111,16 +889,3 @@ void FElysiumNpc::FUN_103b9180()
 	TargetLeadWeightScale = 0.009999999776482582f;// +0x656c, 0x3c23d70a
 }
 
-bool FElysiumNpc::SpeciesSlot593()
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(593);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103b9180")) != 0)
-	{
-		return false;
-	}
-	// `FUN_103b9180` runs the base FIRST (`thunk_FUN_1029a070`) and then overwrites all five words;
-	// the scope makes its `Slot593()` that direct call rather than a second dispatch.
-	const FSpeciesDispatchScope Scope(*this, 593);
-	FUN_103b9180();
-	return true;
-}

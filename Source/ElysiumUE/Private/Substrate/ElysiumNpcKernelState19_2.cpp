@@ -57,9 +57,11 @@ namespace
 		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99);
 	}
 
+	// The direct calls retail's species bodies make into the body they replace (story 5 step 3:
+	// `step3/direct-calls.tsv`) — the Troika line's `0x102ad660`, the human line's `0x103851e0` and
+	// the animal line's `0x1035fe80`.
 	int32 State19_2ChainTroika(FElysiumNpc& Npc)
 	{
-		const FElysiumNpc::FSpeciesDispatchScope Scope(Npc, GState19_2Slot461);
 		return Npc.TroikaSelectIdealState();
 	}
 

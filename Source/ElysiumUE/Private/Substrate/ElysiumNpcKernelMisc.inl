@@ -76,28 +76,15 @@ static bool StandoffVfunc28();
  *  that initialiser. */
 static bool StandoffSchedulesLoaded();
 
-// --- Slot 24 `OnVictimHitByMe` — one method, four retail lines ------------------------------------
+// --- Slot 24 `OnVictimHitByMe` — the Troika line and four species bodies ------------------------
 //
-// The Troika line (`0x1029f8d0`) plus three species bodies, resolved off the CENSUS rather than off
-// a hand-typed class list so the arm is checkable against `docs/vtmb/npc-kernel/slots.md` by
-// construction. A class with no override of its own (and the bare Troika line) answers `Troika`.
-// Story 29d, family **SpeciesMisc10** added `GhoulCroucher` (`0x1037be80`): the FOURTH species
-// override of slot 24, and the only one besides the Zombie that keeps the Troika body.
-enum class EVictimHitLine : uint8 { Troika, Gargoyle, SabbatLeader, Zombie, GhoulCroucher };
-
-/** One row of the slot-24 species table: the retail class and the body that fills the slot for it. */
-struct FVictimHitSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	EVictimHitLine Line = EVictimHitLine::Troika;
-};
-
-/** The table: the Troika line plus its three species overrides. */
-static const FVictimHitSpecies* VictimHitSpeciesRows(int32& OutCount);
-
-/** The line this NPC's class takes at slot 24, read through `ElysiumNpcKernelClass::BodyOf`. */
-EVictimHitLine VictimHitLine() const;
+// The Troika line (`0x1029f8d0`) is `OnVictimHitByMe` itself. `CNPC_VGargoyle`, `CNPC_VSabbatLeader`,
+// `CNPC_VZombie` and `CNPC_VGhoulCroucher` override it on their C++ classes (story 5 step 3) with these
+// bodies; only the Zombie and the GhoulCroucher call the Troika body (directly).
+void GargoyleOnVictimHitByMe(FElysiumEntity* Victim);        // `0x1037a450`
+void SabbatLeaderOnVictimHitByMe(FElysiumEntity* Victim);    // `0x103ab4a0`
+void ZombieOnVictimHitByMe(FElysiumEntity* Victim);          // `0x103e1280`
+void GhoulCroucherOnVictimHitByMe(FElysiumEntity* Victim);   // `0x1037be80`
 
 /** `CNPC_VGargoyle::OnVictimHitByMe` (`0x1037a450`)'s classname filter, as a pure function so the
  *  two names it matches are assertable without an entity. `FClassnameIs` semantics: case-insensitive
@@ -133,6 +120,10 @@ int32 VictimHitReactionDispatches = 0;
  *
  *  Retail name unrecovered; named for what the body answers. */
 bool OkToDisturb() const;
+/** `CNPC_VSabbatLeader::OkToInterruptForMelee` (`0x103ab400`) — the body of the class's override. */
+bool SabbatLeaderOkToInterruptForMelee();
+/** `CNPC_VLasombra::vfunc592` (`0x103893c0`) — the body of `FElysiumNpcLasombra::CanSeekCover`. */
+bool LasombraCanSeekCover();
 
 // --- The per-species threshold answers -----------------------------------------------------------
 
@@ -169,9 +160,10 @@ struct FComponentFactory
  *  (`CNPC_VRat`'s local navigator). */
 static const FComponentFactory* ComponentFactoryRows(int32& OutCount);
 
-/** The row this NPC's class takes at `Slot`, resolved through `ElysiumNpcKernelClass::BodyOf` so a
- *  species override is picked off the census. Null for a slot the table does not carry. */
-const FComponentFactory* ComponentFactoryFor(int32 Slot) const;
+/** `CNPC_VRat::vfunc428` (`0x103ad6a0`) — the body of `FElysiumNpcRat::CreateLocalNavigator`. */
+void* RatCreateLocalNavigator();
+/** The retail body of the factory asked last — the row of `ComponentFactoryRows` it names. */
+const TCHAR* LastComponentFactoryBody = nullptr;
 
 /** How many times each factory was asked and refused — the read side of the seam. */
 int32 ComponentFactoryRefusals = 0;

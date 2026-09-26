@@ -357,35 +357,39 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Rat, Cop, Troika });
 
-	const FElysiumNpc::FComponentFactory* RatRow = Rat->ComponentFactoryFor(428);
-	TestNotNull(TEXT("the rat resolves a slot-428 row"), RatRow);
-	if (RatRow != nullptr)
+	// Slot 428 through the vtable (story 5 step 3): the rat's own override answers `CNPC_VRat`'s
+	// `0x103ad6a0`, and every class whose chain replaces nothing at 428 answers the base body.
+	auto BodyAt428 = [](FElysiumNpc* Npc) -> FString
 	{
-		TestEqual(TEXT("and it is CNPC_VRat's own 0x103ad6a0"), FString(RatRow->Body),
-			FString(TEXT("0x103ad6a0")));
+		Npc->LastComponentFactoryBody = nullptr;
+		Npc->CreateLocalNavigator();
+		return Npc->LastComponentFactoryBody != nullptr ? FString(Npc->LastComponentFactoryBody)
+			: FString();
+	};
+	TestEqual(TEXT("the rat's slot 428 is CNPC_VRat's own 0x103ad6a0"), BodyAt428(Rat),
+		FString(TEXT("0x103ad6a0")));
+	int32 RowCount = 0;
+	const FElysiumNpc::FComponentFactory* FactoryRows = FElysiumNpc::ComponentFactoryRows(RowCount);
+	bool bRatRow = false;
+	for (int32 Index = 0; Index < RowCount; ++Index)
+	{
+		bRatRow |= FactoryRows[Index].Slot == 428
+			&& FCString::Strcmp(FactoryRows[Index].Body, TEXT("0x103ad6a0")) == 0
+			&& FactoryRows[Index].SizeBytes == 0x20;
 	}
+	TestTrue(TEXT("and the table carries its 0x20-byte row"), bRatRow);
 	TestNull(TEXT("the bare Troika line has no species class, so RetailClass() answers null"),
 		Troika->RetailClass());
-	const FElysiumNpc::FComponentFactory* TroikaRow = Troika->ComponentFactoryFor(428);
-	TestNotNull(TEXT("and the bare Troika NPC still resolves a row"), TroikaRow);
-	if (TroikaRow != nullptr)
-	{
-		TestEqual(TEXT("the Troika line's, which is the correct fall-through"),
-			FString(TroikaRow->Body), FString(TEXT("0x1027cf60")));
-	}
+	TestEqual(TEXT("the bare Troika NPC answers the Troika line's 0x1027cf60"), BodyAt428(Troika),
+		FString(TEXT("0x1027cf60")));
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md). Slot 428's
 	// only species override is `CNPC_VRat`'s (`docs/vtmb/npc-kernel/slots.md`), so the cop's chain
 	// (CNPC_VCop -> CNPC_VHumanCombatant -> ...) inherits the base body.
 	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
 	TestTrue(TEXT("npc_VCop's RetailClass() is CNPC_VCop — its factory builds it"),
 		CopClass != nullptr && Cop->RetailClass() == CopClass);
-	const FElysiumNpc::FComponentFactory* CopRow = Cop->ComponentFactoryFor(428);
-	TestNotNull(TEXT("and the cop resolves a row"), CopRow);
-	if (CopRow != nullptr)
-	{
-		TestEqual(TEXT("the inherited base body, since CNPC_VCop's chain replaces nothing at 428"),
-			FString(CopRow->Body), FString(TEXT("0x1027cf60")));
-	}
+	TestEqual(TEXT("the inherited base body, since CNPC_VCop's chain replaces nothing at 428"),
+		BodyAt428(Cop), FString(TEXT("0x1027cf60")));
 
 	// The six seams, each asked, each refusing, and `CreateComponents` running retail's chain over
 	// them. The ORDER is the fact the refusal records: slot 425 first, NOT the lowest slot number.
@@ -582,17 +586,24 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMiscVictimHitTest,
 	"Elysium.Substrate.NpcKernelMisc.OnVictimHitByMe", GElysiumNpcKernelMiscFlags)
 bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 {
-	// Every row of the slot-24 table by name, against the census.
-	int32 Count = 0;
-	const FElysiumNpc::FVictimHitSpecies* Rows = FElysiumNpc::VictimHitSpeciesRows(Count);
-	// Four species overrides since story 29d, family SpeciesMisc10 added `CNPC_VGhoulCroucher#24`
-	// (`0x1037be80`); the census carries that row (`ElysiumNpcKernelShape.cpp`) and the loop below
-	// checks it like every other. Count corrected by family SpeciesLifecycle10, whose own slot-174
-	// row meets the same class.
-	TestEqual(TEXT("the Troika line plus four species overrides"), Count, 5);
-	for (int32 Index = 0; Index < Count; ++Index)
+	// The four species bodies of slot 24 by name, against the census. Each is its class's own
+	// `OnVictimHitByMe` override (story 5 step 3); `CNPC_VGhoulCroucher#24` (`0x1037be80`) was added by
+	// story 29d, family SpeciesMisc10.
+	struct FRow
 	{
-		const FElysiumNpc::FVictimHitSpecies& Row = Rows[Index];
+		const TCHAR* RetailClass;
+		const TCHAR* Body;
+	};
+	const FRow Rows[] =
+	{
+		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x1029f8d0") },
+		{ TEXT("CNPC_VGargoyle"), TEXT("0x1037a450") },
+		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103ab4a0") },
+		{ TEXT("CNPC_VZombie"), TEXT("0x103e1280") },
+		{ TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037be80") },
+	};
+	for (const FRow& Row : Rows)
+	{
 		const FString Name(Row.RetailClass);
 		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
@@ -620,6 +631,7 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	Builder.AddNpc(TEXT("troika"), FVector::ZeroVector, GMiscSpawnableCombatant);
 	Builder.AddNpc(TEXT("leader"), FVector(500.0, 0.0, 0.0), GMiscSpawnableSabbatLeader);
 	Builder.AddNpc(TEXT("victim"), FVector(200.0, 0.0, 0.0), GMiscSpawnableCombatant);
+	Builder.AddNpc(TEXT("zombie"), FVector(-500.0, 0.0, 0.0), TEXT("npc_VZombie"));
 	Builder.AddCounter(TEXT("attacked"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
@@ -636,9 +648,6 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 
 	// The Troika line (`0x1029f8d0`): the whole body is the melee-record clear, and it does NOT read
 	// the victim — a null victim clears just the same.
-	TestEqual(TEXT("npc_VHumanCombatant takes the Troika line"),
-		static_cast<int32>(Troika->VictimHitLine()),
-		static_cast<int32>(FElysiumNpc::EVictimHitLine::Troika));
 	Troika->MeleeMoveRecordClears = 0;
 	Troika->OnVictimHitByMe(Victim);
 	TestEqual(TEXT("the Troika line clears the melee move records"), Troika->MeleeMoveRecordClears,
@@ -649,9 +658,6 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 
 	// `CNPC_VSabbatLeader::OnVictimHitByMe` (`0x103ab4a0`): the decrement is gated on the victim
 	// being the tracked closest player, the clamp is at zero, and the base body does NOT run.
-	TestEqual(TEXT("npc_VSabbatLeader takes its own line"),
-		static_cast<int32>(Leader->VictimHitLine()),
-		static_cast<int32>(FElysiumNpc::EVictimHitLine::SabbatLeader));
 	Leader->MeleeMoveRecordClears = 0;
 	Leader->SabbatLeaderRoarAttackCount = 2;
 	Leader->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
@@ -671,16 +677,17 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	TestEqual(TEXT("the Sabbat leader never runs the base record clear"),
 		Leader->MeleeMoveRecordClears, 0);
 
-	// The Gargoyle and Zombie lines' ARM is exercised through the census (above) and their BODY
-	// through the line enum: nothing this map stands takes them. (`npc_VGargoyle`/`npc_VZombie` do
-	// build `CNPC_VGargoyle`/`CNPC_VZombie` since story 5 step 2, population.md; not stood here.)
-	TestNotEqual(TEXT("no spawnable classname here takes the Gargoyle line"),
-		static_cast<int32>(Troika->VictimHitLine()),
-		static_cast<int32>(FElysiumNpc::EVictimHitLine::Gargoyle));
-	const FElysiumNpcClass* Zombie = ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie"));
-	TestNotNull(TEXT("CNPC_VZombie is a census class"), Zombie);
-	TestEqual(TEXT("and its slot-24 body is 0x103e1280, the only species arm that keeps the base"),
-		FString(ElysiumNpcKernelClass::BodyOf(Zombie, 24)), FString(TEXT("0x103e1280")));
+	// `CNPC_VZombie::OnVictimHitByMe` (`0x103e1280`), through a spawned `npc_VZombie`'s own override:
+	// the Troika body FIRST (the record clear), then `OnAttackedVictim`.
+	FElysiumNpc* Zombie = Fixture.Npc(TEXT("zombie"));
+	TestNotNull(TEXT("the zombie spawned"), Zombie);
+	if (Zombie != nullptr)
+	{
+		FElysiumNpcWorldFixture::Quiet({ Zombie });
+		Zombie->MeleeMoveRecordClears = 0;
+		Zombie->OnVictimHitByMe(Victim);
+		TestEqual(TEXT("the zombie keeps the Troika record clear"), Zombie->MeleeMoveRecordClears, 1);
+	}
 
 	// The slot-266 dispatch seam: an NPC victim takes the real slot, a non-NPC is counted only.
 	Troika->VictimHitReactionDispatches = 0;

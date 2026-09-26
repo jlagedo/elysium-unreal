@@ -58,9 +58,6 @@ namespace
 	// handed.
 	constexpr int32 GDirectorySoundPrefixLength = 6;
 
-	// Slot 104's index, spelled once.
-	constexpr int32 GPrecacheSlot = 104;
-
 	// --- `CNPC_VAndreiBlood` `0x1035cb90` ------------------------------------------------------
 	//
 	// The three emitters carry a HYPHEN before `Emitter`, not the underscore the checklist's walk
@@ -655,105 +652,16 @@ void FElysiumNpc::TroikaPrecache()
 
 void FElysiumNpc::Precache()
 {
-	// The vtable, spelled as a table lookup: an override of slot 104 replaces this body outright,
-	// and the arms that want the Troika body call back into this function under
-	// `FSpeciesDispatchScope`, which is retail's non-virtual thunk.
+	// Nineteen species classes override slot 104 on their C++ classes (story 5 step 3); each species
+	// body calls `TroikaPrecache` first, retail's direct call into `0x10298ad0`. The three maker
+	// bodies are `FElysiumNpcMaker::Precache`'s.
 	//
 	// NOTHING IN THIS RUNTIME CALLS `Precache()` YET, and that is deliberate rather than an
 	// oversight: this substrate acquires assets for the whole map epoch before any NPC stands
 	// (`FElysiumMapActor::PreparePropAndWieldModels`), so wiring a per-entity precache into
 	// `Spawn` would ADD an event retail's order does not have here. The body is ported whole and is
 	// driven by `Elysium.Substrate.NpcKernelPrecache10.*`; the caller lands with the asset path.
-	if (PrecacheSpecies())
-	{
-		return;
-	}
 	TroikaPrecache();
-}
-
-namespace
-{
-	// One slot-104 override row and the port body that carries it. Keyed on the RETAIL ADDRESS, so
-	// the three Chang forms and the two camera forms are one arm apiece.
-	struct FPrecache10Arm
-	{
-		const TCHAR* Address = nullptr;
-		// The retail class the body is named after, for the report and for the coverage test.
-		const TCHAR* RetailClass = nullptr;
-		// Null for the three `CNPCMaker*` bodies: they land on `FElysiumNpcMaker::Precache` and can
-		// never run on an `FElysiumNpc`, so the arm CLAIMS the slot (the Troika body must not run
-		// for a class whose body is not the Troika body) and does nothing.
-		void (FElysiumNpc::*Body)() = nullptr;
-	};
-}
-
-bool FElysiumNpc::PrecacheSpecies()
-{
-	static const FPrecache10Arm Arms[] =
-	{
-		// The species arms of story 29d, family Precache10.
-		{ TEXT("0x1035cb90"), TEXT("CNPC_VAndreiBlood"),    &FElysiumNpc::AndreiBloodPrecache },
-		{ TEXT("0x10360bc0"), TEXT("CNPC_VAsianVampire"),   &FElysiumNpc::AsianVampirePrecache },
-		{ TEXT("0x103637b0"), TEXT("CNPC_VBach"),           &FElysiumNpc::BachPrecache },
-		{ TEXT("0x1036ae60"), TEXT("CNPC_VChangBros"),      &FElysiumNpc::ChangBrosPrecache },
-		{ TEXT("0x10378470"), TEXT("CNPC_VGargoyle"),       &FElysiumNpc::GargoylePrecache },
-		{ TEXT("0x1037b1a0"), TEXT("CNPC_VGhoulCroucher"),  &FElysiumNpc::GhoulCroucherPrecache },
-		{ TEXT("0x1037f960"), TEXT("CNPC_VHengeyokai"),     &FElysiumNpc::HengeyokaiPrecache },
-		{ TEXT("0x1038aec0"), TEXT("CNPC_VManBat"),         &FElysiumNpc::ManBatPrecache },
-		{ TEXT("0x10392660"), TEXT("CNPC_VMingXiao"),       &FElysiumNpc::MingXiaoPrecache },
-		{ TEXT("0x1039c220"), TEXT("CNPC_VMingXiaoTentacle"), &FElysiumNpc::MingXiaoTentaclePrecache },
-		{ TEXT("0x103a03e0"), TEXT("CNPC_VNewscaster"),     &FElysiumNpc::NewscasterPrecache },
-		{ TEXT("0x103a6ab0"), TEXT("CNPC_VSabbatLeader"),   &FElysiumNpc::SabbatLeaderPrecache },
-		{ TEXT("0x103ae540"), TEXT("CNPC_VSheriffMan"),     &FElysiumNpc::SheriffManPrecache },
-		{ TEXT("0x103b8fa0"), TEXT("CNPC_VTzimisce"),       &FElysiumNpc::TzimiscePrecache },
-		{ TEXT("0x103c1400"), TEXT("CNPC_VTzimisceHeadClaw"), &FElysiumNpc::TzimisceHeadClawPrecache },
-		{ TEXT("0x103c31e0"), TEXT("CNPC_VTzimisceRunner"), &FElysiumNpc::TzimisceRunnerPrecache },
-		{ TEXT("0x103cb2a0"), TEXT("CNPC_VWerewolf"),       &FElysiumNpc::WerewolfPrecache },
-		{ TEXT("0x103df120"), TEXT("CNPC_VZombie"),         &FElysiumNpc::ZombiePrecache },
-
-		// The slot-104 override story 29c-1 already ported as a PURE body in family Lifecycle and
-		// left unwired, because slot 104 itself was a generated stub then. It is wired here — the
-		// arm is its and is cited, not re-recovered.
-		{ TEXT("0x103689c0"), TEXT("CNPC_VCamera"),         &FElysiumNpc::CameraPrecache },
-
-		// The three maker bodies. `FElysiumNpcMaker::Precache` carries them; see the struct.
-		{ TEXT("0x1034b160"), TEXT("CNPCMaker"),            nullptr },
-		{ TEXT("0x1034c180"), TEXT("CNPCMaker_Fleshpile"),  nullptr },
-		{ TEXT("0x1034cde0"), TEXT("CNPCMaker_Zombie"),     nullptr },
-	};
-
-	// Retail's non-virtual thunk: while slot 104's species body runs, slot 104's dispatcher answers
-	// "no species body" so the arm's own chain call reaches the Troika body directly.
-	if (SpeciesDispatchingSlot == GPrecacheSlot)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GPrecacheSlot);
-	if (Override == nullptr)
-	{
-		// `RetailClass()` is null only on the bare Troika line, and a class with no slot-104 row
-		// inherits the Troika body, which is exactly what returning false runs.
-		return false;
-	}
-	for (const FPrecache10Arm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		if (Arm.Body == nullptr)
-		{
-			return true;
-		}
-		const FSpeciesDispatchScope Scope(*this, GPrecacheSlot);
-		(this->*Arm.Body)();
-		return true;
-	}
-	// Unreachable: `Elysium.Substrate.NpcKernelPrecache10.ArmCoverage` asserts the table above
-	// carries every slot-104 override row the census holds, which is what stops a class this file
-	// does not know from silently taking the Troika body.
-	return false;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -764,7 +672,7 @@ void FElysiumNpc::AndreiBloodPrecache()
 {
 	// `CNPC_VAndreiBlood::Precache` `0x1035cb90` — the Troika body FIRST, then three sounds and
 	// three preload-1 emitters. The sound-before-emitter split and the preload flag are the data.
-	Precache();
+	TroikaPrecache();
 	Precache10Sound(*this, GAndreiTeleportOutSound);
 	Precache10Sound(*this, GAndreiTeleportInSound);
 	Precache10Sound(*this, GAndreiSummonSound);
@@ -782,7 +690,7 @@ void FElysiumNpc::AsianVampirePrecache()
 	// The scope-trace frame (`g_ScopeTraceStack`) is retail's VPROF-style profiling stack. It has no
 	// port and nothing the kernel reads depends on it; the four arms here that push one say so and
 	// carry no code for it.
-	Precache();
+	TroikaPrecache();
 	Precache10Other(*this, TEXT("item_w_avamp_blade"));
 }
 
@@ -790,7 +698,7 @@ void FElysiumNpc::BachPrecache()
 {
 	// `CNPC_VBach::Precache` `0x103637b0` — the Troika body, then THREE weapons and then FIVE
 	// sounds. The weapons-before-sounds order is this arm's fact.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* Weapon : GBachWeapons)
 	{
 		Precache10Other(*this, Weapon);
@@ -806,7 +714,7 @@ void FElysiumNpc::ChangBrosPrecache()
 	// `CNPC_VChangBros::Precache` `0x1036ae60` — one body filling `CNPC_VChangBros#104`,
 	// `CNPC_VChangBrosBlade#104` and `CNPC_VChangBrosClaw#104`, which the address key makes one arm.
 	// Scope-trace frame, the Troika body, seven preload-1 emitters, four weapons.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* Emitter : GChangEmitters)
 	{
 		Precache10Particle(*this, Emitter, /*Preload=*/1);
@@ -822,7 +730,7 @@ void FElysiumNpc::GargoylePrecache()
 	// `CNPC_VGargoyle::Precache` `0x10378470` — the Troika body, nine gib models with preload 1 in
 	// descending `.rdata` order, the 0x10-byte stomp table, the 0xc-byte exert table, one roar and
 	// the fist.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* GibModel : GGargoyleGibModels)
 	{
 		Precache10Model(*this, GibModel, /*Preload=*/1);
@@ -839,7 +747,7 @@ void FElysiumNpc::GhoulCroucherPrecache()
 	// Troika body, the claws, and the two Malkavian-mansion stalker models with preload 0. Those two
 	// models are what makes the male/female split in its `SetModel` sibling (`0x1037b1f0`)
 	// reachable.
-	Precache();
+	TroikaPrecache();
 	Precache10Other(*this, GGhoulCroucherWeapon);
 	for (const TCHAR* StalkerModel : GGhoulCroucherModels)
 	{
@@ -852,7 +760,7 @@ void FElysiumNpc::HengeyokaiPrecache()
 	// `CNPC_VHengeyokai::Precache` `0x1037f960` — the Troika body, the 0x10-byte stomp table, the
 	// 0xc-byte exert table, its model with preload 0, the freeze emitter with preload **0** rather
 	// than the 1 Andrei, Chang and the ManBat use, and the fist.
-	Precache();
+	TroikaPrecache();
 	Precache10SoundTable(*this, GHengeyokaiStomps, UE_ARRAY_COUNT(GHengeyokaiStomps));
 	Precache10SoundTable(*this, GHengeyokaiExerts, UE_ARRAY_COUNT(GHengeyokaiExerts));
 	Precache10Model(*this, GHengeyokaiModel, /*Preload=*/0);
@@ -866,7 +774,7 @@ void FElysiumNpc::ManBatPrecache()
 	// four-entry throw-object model table with preload 0, four preload-1 emitters (the exact four
 	// the screech-cone body `0x1038e9c0` spawns), three 0xc-byte sound tables, two singles,
 	// `sheriff_teleport_emitter` TWICE in a row — a retail duplicate that is kept — and the claw.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* ThrowModel : GManBatThrowModels)
 	{
 		Precache10Model(*this, ThrowModel, /*Preload=*/0);
@@ -889,7 +797,7 @@ void FElysiumNpc::MingXiaoPrecache()
 {
 	// `CNPC_VMingXiao::Precache` `0x10392660` — the Troika body, ELEVEN emitters all with preload
 	// **0**, one move sound, three weapons.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* Emitter : GMingXiaoEmitters)
 	{
 		Precache10Particle(*this, Emitter, /*Preload=*/0);
@@ -909,7 +817,7 @@ void FElysiumNpc::MingXiaoTentaclePrecache()
 	{
 		Model = GTentacleFallbackModel;   // slot 212, `0x1064a340`
 	}
-	Precache();
+	TroikaPrecache();
 
 	// The engine returns a model index from each call. This runtime has no model-index space, so the
 	// three words take the index of the request in `PrecacheLog` — a stable, distinct number per
@@ -940,7 +848,7 @@ void FElysiumNpc::NewscasterPrecache()
 	// directory globbed twice: `.mp3` FIRST and `.wav` second, the reverse of the Troika body's own
 	// pair. Both calls pass `bStarPrefix` CLEAR and the precache flag 0 (`PUSH 0x0 / PUSH 0x0`),
 	// where the Troika body passes 1 and 0 — three call sites of one function, three argument pairs.
-	Precache();
+	TroikaPrecache();
 	PrecacheDirectory(GNewscasterSoundDir, GExtMp3, /*bStarPrefix=*/false, /*Flag=*/0);
 	PrecacheDirectory(GNewscasterSoundDir, GExtWav, /*bStarPrefix=*/false, /*Flag=*/0);
 }
@@ -950,7 +858,7 @@ void FElysiumNpc::SabbatLeaderPrecache()
 	// `CNPC_VSabbatLeader::Precache` `0x103a6ab0` — scope-trace frame, the Troika body, two models
 	// with preload 1, the seven-entry step table, the three-entry exert table, seven singles, two
 	// preload-1 emitters, and the attack weapon.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* AndreiModel : GSabbatLeaderModels)
 	{
 		Precache10Model(*this, AndreiModel, /*Preload=*/1);
@@ -972,7 +880,7 @@ void FElysiumNpc::SheriffManPrecache()
 	// model with preload 1, the landblast emitter once and `sheriff_teleport_emitter` TWICE from the
 	// identical `.rdata` cell `0x10642adc` (the same retail duplicate the ManBat arm keeps), and the
 	// sword.
-	Precache();
+	TroikaPrecache();
 	Precache10Model(*this, GSheriffModel, /*Preload=*/1);
 	Precache10Particle(*this, GSheriffLandblastEmitter, /*Preload=*/1);
 	Precache10Particle(*this, GSheriffTeleportEmitter, /*Preload=*/1);
@@ -988,7 +896,7 @@ void FElysiumNpc::TzimiscePrecache()
 	Precache10SoundTable(*this, GSpiderchickFootsteps, UE_ARRAY_COUNT(GSpiderchickFootsteps));
 	Precache10SoundTable(*this, GSpiderchickSwishes, UE_ARRAY_COUNT(GSpiderchickSwishes));
 	Precache10Other(*this, GTzimisceWeapon);
-	Precache();
+	TroikaPrecache();
 }
 
 void FElysiumNpc::TzimisceHeadClawPrecache()
@@ -996,7 +904,7 @@ void FElysiumNpc::TzimisceHeadClawPrecache()
 	// `CNPC_VTzimisceHeadClaw::Precache` `0x103c1400` — the Troika body, the four preload-1 emitters
 	// the slot-332 grab body later spawns by name, the fat guy's footsteps as TWO tables of two,
 	// his three exerts, the two Sluge singles, and two weapons.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* Emitter : GTzim2Emitters)
 	{
 		Precache10Particle(*this, Emitter, /*Preload=*/1);
@@ -1016,7 +924,7 @@ void FElysiumNpc::TzimisceRunnerPrecache()
 {
 	// `CNPC_VTzimisceRunner::Precache` `0x103c31e0` — the Troika body, then four tables (2, 2, 4, 3)
 	// and the claw. No field writes.
-	Precache();
+	TroikaPrecache();
 	Precache10SoundTable(*this, GRunnerStepsA, UE_ARRAY_COUNT(GRunnerStepsA));
 	Precache10SoundTable(*this, GRunnerStepsB, UE_ARRAY_COUNT(GRunnerStepsB));
 	Precache10SoundTable(*this, GRunnerBreaths, UE_ARRAY_COUNT(GRunnerBreaths));
@@ -1029,7 +937,7 @@ void FElysiumNpc::WerewolfPrecache()
 	// `CNPC_VWerewolf::Precache` `0x103cb2a0` — a scope-trace frame carrying `m_iName` (`+0x26c`,
 	// `"NULL ENTITY"` when `this` is null, which C++ cannot reach), the Troika body, TWO directory
 	// globs, THREE state writes, the footstep table, the attacks weapon and two singles.
-	Precache();
+	TroikaPrecache();
 
 	// Both globs pass `.wav` only, `bStarPrefix` CLEAR and the precache flag **1** (`PUSH 0x1 /
 	// PUSH 0x0` — the reverse of the Troika body's pair). The observatory directory is precached by
@@ -1054,7 +962,7 @@ void FElysiumNpc::ZombiePrecache()
 	// `CNPC_VZombie::Precache` `0x103df120` — the Troika body, the two headshot emitters with
 	// preload **0**, and the fists. The two emitters are the assets the zombie head-damage arm
 	// (`CNPC_VZombie::OnTakeDamage` `0x103e06d0`) names.
-	Precache();
+	TroikaPrecache();
 	for (const TCHAR* Emitter : GZombieEmitters)
 	{
 		Precache10Particle(*this, Emitter, /*Preload=*/0);

@@ -254,52 +254,40 @@ bool FElysiumNpcKernelCondCanCheckAttacksTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// Slot 463 — the species table and the expression map
+// Slot 463 — the species bodies and the expression map
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondStateChangeSpeciesTest,
 	"Elysium.Substrate.NpcKernelConditions.OnStateChangeSpecies", GNpcKernelCondFlags)
 bool FElysiumNpcKernelCondStateChangeSpeciesTest::RunTest(const FString&)
 {
-	using ESpecies = FElysiumNpc::EStateChangeSpecies;
-
-	// Every row exercised BY NAME, with the shape 29c recovered for it.
-	struct FExpect { const TCHAR* Cls; const TCHAR* Body; ESpecies Shape; };
+	// Every species body BY NAME against the census. Since story 5 step 3 each is the
+	// `OnStateChange` override on the class that introduces it (`overrides-step3.tsv`); a subclass
+	// with no body of its own runs its base's through C++ inheritance, as the census says.
+	struct FExpect { const TCHAR* Cls; const TCHAR* Body; };
 	const FExpect Rows[] = {
-		{ TEXT("CNPC_VGuard1"),            TEXT("0x1037d020"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VHunter"),            TEXT("0x10388880"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VGhoulCroucher"),     TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VHumanCombatant"),    TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VSabbatGunman"),      TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VYukie"),             TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_ProneDialog"),        TEXT("0x103871c0"), ESpecies::HolsterOnState },
-		{ TEXT("CNPC_VTzimisce"),          TEXT("0x103ba2c0"), ESpecies::FacialExpression },
-		{ TEXT("CNPC_VCamera"),            TEXT("0x10368ea0"), ESpecies::Suppressed },
-		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10368ea0"), ESpecies::Suppressed },
-		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0"), ESpecies::BachSnapBack },
-		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20"), ESpecies::Cop },
+		{ TEXT("CNPC_VGuard1"),            TEXT("0x1037d020") },
+		{ TEXT("CNPC_VHunter"),            TEXT("0x10388880") },
+		{ TEXT("CNPC_VGhoulCroucher"),     TEXT("0x103871c0") },
+		{ TEXT("CNPC_VHumanCombatant"),    TEXT("0x103871c0") },
+		{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("0x103871c0") },
+		{ TEXT("CNPC_VSabbatGunman"),      TEXT("0x103871c0") },
+		{ TEXT("CNPC_VYukie"),             TEXT("0x103871c0") },
+		{ TEXT("CNPC_ProneDialog"),        TEXT("0x103871c0") },
+		{ TEXT("CNPC_VTzimisce"),          TEXT("0x103ba2c0") },
+		{ TEXT("CNPC_VCamera"),            TEXT("0x10368ea0") },
+		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10368ea0") },
+		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0") },
+		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20") },
 	};
-	int32 Count = 0;
-	FElysiumNpc::StateChangeSpeciesRows(Count);
-	TestEqual(TEXT("the table is thirteen rows"), Count, static_cast<int32>(UE_ARRAY_COUNT(Rows)));
 	for (const FExpect& E : Rows)
 	{
-		const FElysiumNpc::FStateChangeSpecies* Row = FElysiumNpc::StateChangeSpeciesOf(E.Cls);
-		if (!TestNotNull(FString::Printf(TEXT("%s has a slot-463 row"), E.Cls), Row))
-		{
-			continue;
-		}
-		TestEqual(FString::Printf(TEXT("%s's body is %s"), E.Cls, E.Body), FString(Row->Body),
+		TestEqual(FString::Printf(TEXT("%s's slot-463 body is %s"), E.Cls, E.Body),
+			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(E.Cls), 463)),
 			FString(E.Body));
-		TestEqual(FString::Printf(TEXT("%s's shape"), E.Cls), static_cast<int32>(Row->Shape),
-			static_cast<int32>(E.Shape));
 	}
 	TestNull(TEXT("a class with no override runs the Troika body"),
-		FElysiumNpc::StateChangeSpeciesOf(TEXT("CNPC_VPedestrian")));
-	// `CNPC_VStalker` shares `0x103871c0` in retail but has no instance (0019 story 5 step 1).
-	TestNull(TEXT("CNPC_VStalker, a class with no instance, carries no row"),
-		FElysiumNpc::StateChangeSpeciesOf(TEXT("CNPC_VStalker")));
+		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VPedestrian")), 463));
 
 	// `CNPC_VTzimisce`'s expression map, off `PTR_s_normal_10653120` — "normal", "angry", "scream",
 	// "dead". "scream" (index 2) is reached by no state.
@@ -396,17 +384,15 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 		static_cast<int32>(FElysiumNpcFlags::NpcStateFlagsForRetailState(8)), 0x85);
 
 	// --- `CNPC_VCamera`'s total suppression: the slot writes NOTHING, not even the tail ---
-	FNpcKernelCondFixture Cam;
+	FNpcKernelCondFixture Cam(TEXT("npc_VCamera"));
 	if (!TestNotNull(TEXT("the camera fixture subject spawned"), Cam.Npc)) { return false; }
 	Cam.Npc->bGoToIdleState = true;
 	Cam.Npc->Cognition.bCondTookDamage = true;
-	const FElysiumNpc::FStateChangeSpecies* CamRow =
-		FElysiumNpc::StateChangeSpeciesOf(TEXT("CNPC_VCamera"));
-	if (TestNotNull(TEXT("the camera row exists"), CamRow))
-	{
-		TestEqual(TEXT("and it is the Suppressed shape"), static_cast<int32>(CamRow->Shape),
-			static_cast<int32>(FElysiumNpc::EStateChangeSpecies::Suppressed));
-	}
+	// `FElysiumNpcCamera::OnStateChange` (`0x10368ea0`) is empty and does not chain, so the Troika
+	// tail's writes never happen.
+	Cam.Npc->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
+	TestTrue(TEXT("a camera's state change leaves m_bGoToIdleState alone"), Cam.Npc->bGoToIdleState);
+	TestTrue(TEXT("and the took-damage word"), Cam.Npc->Cognition.bCondTookDamage);
 	return true;
 }
 
@@ -427,23 +413,15 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 		{ TEXT("CNPC_VMingXiao"),         TEXT("0x103945a0"), ERule::MingXiao },
 		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039e310"), ERule::MingXiaoTentacle },
 	};
-	int32 Count = 0;
-	FElysiumNpc::IdealStateSpeciesRows(Count);
-	TestEqual(TEXT("the table is four rows"), Count, static_cast<int32>(UE_ARRAY_COUNT(Rows)));
+	// Each body is the `SelectIdealStateRetail` override on its class (story 5 step 3); the census
+	// says which classes hold it.
 	for (const FExpect& E : Rows)
 	{
-		const FElysiumNpc::FIdealStateSpecies* Row = FElysiumNpc::IdealStateSpeciesOf(E.Cls);
-		if (!TestNotNull(FString::Printf(TEXT("%s has a slot-461 row"), E.Cls), Row))
-		{
-			continue;
-		}
-		TestEqual(FString::Printf(TEXT("%s's body is %s"), E.Cls, E.Body), FString(Row->Body),
+		TestEqual(FString::Printf(TEXT("%s's slot-461 body is %s"), E.Cls, E.Body),
+			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(E.Cls), 461)),
 			FString(E.Body));
-		TestEqual(FString::Printf(TEXT("%s's rule"), E.Cls), static_cast<int32>(Row->Rule),
-			static_cast<int32>(E.Rule));
+		(void)E.Rule;
 	}
-	TestNull(TEXT("an ordinary class has no slot-461 override"),
-		FElysiumNpc::IdealStateSpeciesOf(TEXT("CNPC_VHumanCombatant")));
 
 	// `CNPC_VCamera::FUN_10369060` — retail 3 ALERT, with NO test at all.
 	for (const bool bEnemy : { false, true })
@@ -491,13 +469,12 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 			EElysiumNpcState::Alert, EElysiumNpcState::Alert, false)),
 		static_cast<int32>(EElysiumNpcState::Idle));
 
-	// No registered classname reaches any of the three, so the live dispatch declines — which is the
-	// arm that lets the two-layer rule run.
-	FNpcKernelCondFixture F;
-	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
-	EElysiumNpcState Ideal = EElysiumNpcState::Idle;
-	TestFalse(TEXT("npc_VHumanCombatant has no species ideal-state override"),
-		F.Npc->SelectIdealStateForSpecies(Ideal));
+	// Through the slot: a spawned camera's slot 461 is the hardcoded ALERT (retail 3) and writes it
+	// as `m_IdealNPCState`, whatever its state.
+	FNpcKernelCondFixture Cam(TEXT("npc_VCamera"));
+	if (!TestNotNull(TEXT("the camera spawned"), Cam.Npc)) { return false; }
+	TestEqual(TEXT("a camera's slot 461 answers retail ALERT"), Cam.Npc->SelectIdealStateRetail(), 3);
+	TestEqual(TEXT("and writes it as the ideal state"), Cam.Npc->IdealStateRetail(), 3);
 	return true;
 }
 

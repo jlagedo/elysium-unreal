@@ -10,6 +10,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
@@ -908,9 +909,10 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 
-	// A non-werewolf falls straight through to `CBaseEntity::DrawBBoxOverlay`, which is a seam.
+	// A non-werewolf has no slot 620 (story 5 step 3: `CNPC_VWerewolf` introduces it); its box is
+	// `CBaseEntity::DrawBBoxOverlay`, which is a seam.
 	FElysiumNpc::BeginDebugCapture();
-	Npc->DrawBBoxOverlay();
+	Npc->EntityDrawBBoxOverlay();
 	TestEqual(TEXT("a combatant draws no recoloured box"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
@@ -933,7 +935,7 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 			FString(Hull[1].Retail), FString(TEXT("0x1000566e")));
 	}
 
-	// The werewolf itself. Slot 620 dispatches on its own census row, so `0x103d5050`'s arm is
+	// The werewolf itself. Slot 620 is `FElysiumNpcWerewolf`'s own virtual, so `0x103d5050` is
 	// reached through `DrawBBoxOverlay`, gated on `0x103cf5f0`: a pursuing werewolf falls through to
 	// the `CBaseEntity` seam and draws nothing, exactly as the combatant above; one that has given up
 	// draws `NDebugOverlay::EntityBounds(this, 50, 255, 50, 0, 0)` (the listing `0x103d5050`). The
@@ -947,12 +949,13 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Werewolf });
 	TestTrue(TEXT("a spawned npc_VWerewolf is CNPC_VWerewolf"), Werewolf->RetailClass() == Wolf);
+	FElysiumNpcWerewolf* const WolfClass = static_cast<FElysiumNpcWerewolf*>(Werewolf);
 
 	// `+0x66e8` bit 2 skips the pursuit test: still pursuing, so the base seam and nothing drawn.
 	Werewolf->WerewolfHintFlags = 0x4u;
 	TestTrue(TEXT("0x103cf5f0: the werewolf is pursuing"), Werewolf->WerewolfShouldPursueEnemy());
 	FElysiumNpc::BeginDebugCapture();
-	Werewolf->DrawBBoxOverlay();
+	WolfClass->DrawBBoxOverlay();
 	TestEqual(TEXT("a pursuing werewolf falls through to the base seam and draws no box"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
@@ -963,7 +966,7 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 	Werewolf->Senses.Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
 	TestFalse(TEXT("0x103cf5f0: the werewolf has given up"), Werewolf->WerewolfShouldPursueEnemy());
 	FElysiumNpc::BeginDebugCapture();
-	Werewolf->DrawBBoxOverlay();
+	WolfClass->DrawBBoxOverlay();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("a werewolf that is not pursuing draws one recoloured box"), Lines.Num(), 1);

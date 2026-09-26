@@ -1109,6 +1109,48 @@ namespace
 	}
 }
 
+bool ElysiumNpcCond::WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiumNpcConditions& Out)
+{
+	const FElysiumEntityWorld* World = Npc.World;
+	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+	if (World == nullptr || !Memory.Enemy.IsSet())
+	{
+		return false;
+	}
+	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Memory.Enemy);
+	if (Enemy == nullptr || Enemy->IsInert())
+	{
+		return false;
+	}
+	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`, slot 561) — the ONE species override of
+	// the gather, and a SUPPRESSION rather than an addition. With the werewolf standing in a zone the
+	// two bits of `m_iZoneFlags` (`+0x66e8`) name — `0x4` or `0x100` — and a live enemy whose ORIGIN Z
+	// differs from the werewolf's by strictly more than `_DAT_10462950` = **40.0** Source units, it
+	// CLEARS `CAN_MELEE_ATTACK1` (0x51) and `CAN_MELEE_ATTACK2` (0x52) and RETURNS: the base gather
+	// (`CAI_BaseNPC::GatherAttackConditions` 0x1026dd10) never runs that pass. Otherwise it is a plain
+	// forward. Answers whether the suppression ran (the base gather must not).
+	//
+	// Story 29c's row read `thunk_FUN_10269b50` as "force"; it is `ClearCondition` — so the arm takes
+	// melee away from a werewolf on a different floor of a zoned room rather than granting it.
+	//
+	// The Z terms are read fresh from both origins, as retail reads them off `GetAbsOrigin` (`+0x364`)
+	// rather than off the cached `m_flEnemyHeightDiff`.
+	{
+		constexpr double WerewolfZoneHeightUnits = static_cast<double>(ElysiumNpcTunables::Forty);
+		constexpr uint32 WerewolfZoneMeleeSuppressBits = 0x4u | 0x100u;
+		const double HeightDeltaUnits =
+			FMath::Abs(Npc.Origin.Z - Enemy->Origin.Z) / ElysiumMove::U;
+		if ((Npc.WerewolfHintFlags & WerewolfZoneMeleeSuppressBits) != 0
+			&& HeightDeltaUnits > WerewolfZoneHeightUnits)
+		{
+			Out.Clear(EElysiumNpcCond::CanMeleeAttack1);
+			Out.Clear(EElysiumNpcCond::CanMeleeAttack2);
+			return true;
+		}
+	}
+	return false;
+}
+
 void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 	FElysiumNpcConditions& Out)
 {
@@ -1125,33 +1167,8 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 		return;
 	}
 
-	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`, slot 561) — the ONE species override of
-	// the gather, and a SUPPRESSION rather than an addition. With the werewolf standing in a zone the
-	// two bits of `m_iZoneFlags` (`+0x66e8`) name — `0x4` or `0x100` — and a live enemy whose ORIGIN Z
-	// differs from the werewolf's by strictly more than `_DAT_10462950` = **40.0** Source units, it
-	// CLEARS `CAN_MELEE_ATTACK1` (0x51) and `CAN_MELEE_ATTACK2` (0x52) and RETURNS: the base gather
-	// (`CAI_BaseNPC::GatherAttackConditions` 0x1026dd10) never runs that pass. Otherwise it is a plain
-	// forward.
-	//
-	// Story 29c's row read `thunk_FUN_10269b50` as "force"; it is `ClearCondition` — so the arm takes
-	// melee away from a werewolf on a different floor of a zoned room rather than granting it.
-	//
-	// The Z terms are read fresh from both origins, as retail reads them off `GetAbsOrigin` (`+0x364`)
-	// rather than off the cached `m_flEnemyHeightDiff`.
-	if (Npc.IsRetailClass(TEXT("CNPC_VWerewolf")))
-	{
-		constexpr double WerewolfZoneHeightUnits = static_cast<double>(ElysiumNpcTunables::Forty);
-		constexpr uint32 WerewolfZoneMeleeSuppressBits = 0x4u | 0x100u;
-		const double HeightDeltaUnits =
-			FMath::Abs(Npc.Origin.Z - Enemy->Origin.Z) / ElysiumMove::U;
-		if ((Npc.WerewolfHintFlags & WerewolfZoneMeleeSuppressBits) != 0
-			&& HeightDeltaUnits > WerewolfZoneHeightUnits)
-		{
-			Out.Clear(EElysiumNpcCond::CanMeleeAttack1);
-			Out.Clear(EElysiumNpcCond::CanMeleeAttack2);
-			return;
-		}
-	}
+	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`, slot 561) is `FElysiumNpcWerewolf`'s
+	// override (story 5 step 3): `WerewolfZoneSuppressesMelee` below, ahead of a direct call here.
 
 	// SEAM (plumbed, never set): `SHOULD_DODGE` (0x0c), `SHOULD_BLOCK` (0x0d), `SHOULD_STEPBACK`
 	// (0x0e) and `SHOULD_KICK` (0x0f). The NOTICE that would feed them is real and lands below

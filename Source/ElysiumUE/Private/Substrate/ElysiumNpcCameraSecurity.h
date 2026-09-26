@@ -12,4 +12,6 @@ class FElysiumNpcCameraSecurity : public FElysiumNpcCamera
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual bool FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4) override;
+	virtual bool QuerySeeEntity(FElysiumEntity* Candidate) override;
 };

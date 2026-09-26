@@ -122,52 +122,24 @@ namespace
 }
 
 // =================================================================================================
-// Slot 193 — `EyePosition`, `0x100b4b40` with `0x101aae60` in front of it
+// Slot 193 — `EyePosition`, `0x100b4b40`, and `CPayphone`'s `0x101aae60`
 // =================================================================================================
-
-const FElysiumNpc::FEyePositionSpecies* FElysiumNpc::EyePositionSpeciesRows(int32& OutCount)
-{
-	// Slot 193 is filled by 713 classes across both modules; this is the one live class whose body
-	// is not `CAISound::FUN_100b4b40` AND whose class is in the `CAI_BaseNPC` census this leaf
-	// dispatches over. `CAI_BaseHumanoid` (`0x1025e8e0`) is the other, and has no instance: its arm
-	// was deleted by 0019 story 5 step 1. `CBaseCineCam` (`0x1006d910`) and `CBasePlayer`
-	// (`0x100b7f70`) are not NPC classes and `CItemContainerLock` (`0x102243c0`) is an item; none
-	// of the three is reachable from here.
-	static const FEyePositionSpecies Rows[] =
-	{
-		{ TEXT("CPayphone"),        TEXT("0x101aae60") },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-const FElysiumNpc::FEyePositionSpecies* FElysiumNpc::EyePositionSpeciesOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	int32 Count = 0;
-	const FEyePositionSpecies* Rows = EyePositionSpeciesRows(Count);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (FCString::Strcmp(Rows[Index].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[Index];
-		}
-	}
-	return nullptr;
-}
 
 FVector FElysiumNpc::EyePosition() const
 {
-	// The dispatch, walking the census chain exactly as the vtable does: the nearest class at or
-	// above mine that replaces slot 193 wins, and a class that replaces nothing lands on the Troika
-	// line's `CAISound::FUN_100b4b40`.
-	const FElysiumNpcClass* Cls = RetailClass();
-	const TCHAR* SlotBody = ElysiumNpcKernelClass::BodyOf(Cls, 193);
+	// `CAISound::FUN_100b4b40` `0x100b4b40`, 85 bytes, the Troika line's own and the body 21 classes
+	// in this family and 24 call sites reach: `GetAbsOrigin()` (slot 217) plus `m_vecViewOffset`
+	// (`+0x0184`), component by component. `FElysiumCombatCharacter::EyePosition()` is that sum with
+	// the standing view offset as the port's `m_vecViewOffset`. `CPayphone` (`0x101aae60`) overrides
+	// this method on its C++ class (story 5 step 3). `CAI_BaseHumanoid` (`0x1025e8e0`) has no
+	// instance (its arm was deleted by story 5 step 1); `CBaseCineCam`, `CBasePlayer` and
+	// `CItemContainerLock` are not NPC classes.
+	return FElysiumCombatCharacter::EyePosition();
+}
 
-	// `CPayphone::vfunc193` `0x101aae60`, 95 bytes:
+FVector FElysiumNpc::PayphoneEyePosition() const
+{
+	// `CPayphone::vfunc193` `0x101aae60`, 95 bytes, the body of `FElysiumNpcPayphone::EyePosition`:
 	//
 	//     bone = LookupBone("Phone_bone_01");
 	//     if (bone == -1) { return CAISound::FUN_100b4b40(this, out); }
@@ -176,23 +148,14 @@ FVector FElysiumNpc::EyePosition() const
 	//
 	// The bone's own world position, with NO view offset added and the angles thrown away. The
 	// payphone's "eye" is its handset, which is what a dialogue camera and a `LookAtEntityEye` aim
-	// at. `npc_payphone` is both a census classname and a registered spawn leaf, so this arm is
+	// at. `npc_payphone` is both a census classname and a registered spawn leaf, so this body is
 	// reachable from a map.
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x101aae60")) == 0)
+	FVector BoneCm = FVector::ZeroVector;
+	if (BoneWorldPosition(GPayphoneBoneName, BoneCm))
 	{
-		FVector BoneCm = FVector::ZeroVector;
-		if (BoneWorldPosition(GPayphoneBoneName, BoneCm))
-		{
-			return BoneCm;
-		}
-		// `LookupBone` answered -1 — retail's own fall-through to the base body.
-		return FElysiumCombatCharacter::EyePosition();
+		return BoneCm;
 	}
-
-	// `CAISound::FUN_100b4b40` `0x100b4b40`, 85 bytes, the Troika line's own and the body 21 classes
-	// in this family and 24 call sites reach: `GetAbsOrigin()` (slot 217) plus `m_vecViewOffset`
-	// (`+0x0184`), component by component. `FElysiumCombatCharacter::EyePosition()` is that sum with
-	// the standing view offset as the port's `m_vecViewOffset`.
+	// `LookupBone` answered -1 — retail's own direct call into the base body `0x100b4b40`.
 	return FElysiumCombatCharacter::EyePosition();
 }
 
@@ -400,29 +363,28 @@ int32 FElysiumNpc::GetUsedHullBits()
 	// three deep and every rung adds the same bit.
 	int32 Bits = BaseCombatCharacterHullBits;
 
-	// The species dispatch, walking the census chain as the vtable does.
-	const FElysiumNpcClass* Cls = RetailClass();
-	const TCHAR* SlotBody = ElysiumNpcKernelClass::BodyOf(Cls, 337);
-	if (SlotBody == nullptr)
-	{
-		// The bare Troika line (no species class): the dispatch lands on the Troika body, which is
-		// exactly what a null answer means.
-		return Bits;
-	}
+	// Twelve species classes override this method on their C++ classes (story 5 step 3) through
+	// `SpeciesUsedHullBits`.
+	return Bits;
+}
 
+int32 FElysiumNpc::SpeciesUsedHullBits(const TCHAR* SpeciesBody)
+{
+	// The body of a species class's `GetUsedHullBits` override, read off its row of
+	// `UsedHullBitsSpeciesRows` by the retail body address. `bReplaces`: seven species answer a bare
+	// `return <imm>` and never call up, so bit 0 is absent from their answer. The other five call the
+	// Troika body `0x1029a050` directly and OR onto its 1.
 	int32 Count = 0;
 	const FUsedHullBitsSpecies* Rows = UsedHullBitsSpeciesRows(Count);
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
-		if (FCString::Strcmp(Rows[Index].Body, SlotBody) != 0)
+		if (FCString::Strcmp(Rows[Index].Body, SpeciesBody) == 0)
 		{
-			continue;
+			return Rows[Index].bReplaces ? Rows[Index].Bits
+				: (FElysiumNpc::GetUsedHullBits() | Rows[Index].Bits);
 		}
-		// `bReplaces`: seven species answer a bare `return <imm>` and never call up, so bit 0 is
-		// absent from their answer. The other six call the Troika body and OR onto its 1.
-		return Rows[Index].bReplaces ? Rows[Index].Bits : (Bits | Rows[Index].Bits);
 	}
-	return Bits;
+	return FElysiumNpc::GetUsedHullBits();
 }
 
 // =================================================================================================

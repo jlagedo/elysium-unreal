@@ -25,14 +25,6 @@ namespace
 {
 	// Unit-prefixed: the module builds adaptive-unity and anonymous namespaces are merged.
 
-	// --- The vtable slots this family fills and dispatches on -------------------------------------
-	constexpr int32 GAnim10SlotSetModel = 105;
-	constexpr int32 GAnim10SlotSetActivity = 310;
-	constexpr int32 GAnim10SlotUpdatePose = 314;
-	constexpr int32 GAnim10SlotEarlyTranslate = 375;
-	constexpr int32 GAnim10SlotMeleeCombat = 604;
-	constexpr int32 GAnim10SlotShouldPlayIdleSound = 509;
-
 	// --- The retail `Activity` numbers these bodies name ------------------------------------------
 	//
 	// Spelled once, as every other family in this band spells them: the port stands no retail
@@ -121,18 +113,6 @@ namespace
 	// The gait override's two live values.
 	constexpr int32 GAnim10GaitForceRun = 1;
 	constexpr int32 GAnim10GaitForceWalk = 2;
-
-	// --- The census addresses the slot methods dispatch on ----------------------------------------
-	constexpr TCHAR GAnim10Body_TroikaSetModel[] = TEXT("0x10298ce0");
-	constexpr TCHAR GAnim10Body_GhoulCroucherSetModel[] = TEXT("0x1037b1f0");
-	constexpr TCHAR GAnim10Body_ZombieSetModel[] = TEXT("0x103e0540");
-	constexpr TCHAR GAnim10Body_HeadClawSetActivity[] = TEXT("0x103c1cd0");
-	constexpr TCHAR GAnim10Body_RunnerSetActivity[] = TEXT("0x103c3d80");
-	constexpr TCHAR GAnim10Body_DogTranslate[] = TEXT("0x10374ad0");
-	constexpr TCHAR GAnim10Body_HengeyokaiTranslate[] = TEXT("0x10381b50");
-	constexpr TCHAR GAnim10Body_HumanTranslate[] = TEXT("0x103854f0");
-	constexpr TCHAR GAnim10Body_TzimisceTranslate[] = TEXT("0x103bde40");
-	constexpr TCHAR GAnim10Body_RunnerTranslate[] = TEXT("0x103c3e10");
 
 	// --- The two vocalization-group literals `0x1037b1f0` and `0x103e0540` write ------------------
 	//
@@ -382,64 +362,9 @@ bool FElysiumNpc::NearMissBands(const FElysiumEntity* Weapon, float& OutNearUnit
 
 void FElysiumNpc::SetModel(TCHAR* ModelName)
 {
-	// The vtable, spelled as a table lookup: an override of slot 105 replaces this body outright,
-	// and an arm that wants the Troika body calls `SetModel()` back under `FSpeciesDispatchScope`,
-	// which is retail's non-virtual thunk.
-	if (SetModelSpecies(ModelName))
-	{
-		return;
-	}
+	// `CNPC_VGhoulCroucher` and `CNPC_VZombie` override slot 105 on their C++ classes (story 5
+	// step 3); their shared body calls `TroikaSetModel` directly, as retail's `0x10298ce0` thunk does.
 	TroikaSetModel(ModelName);
-}
-
-namespace
-{
-	struct FAnim10SetModelArm
-	{
-		const TCHAR* Address = nullptr;
-		const TCHAR* RetailClass = nullptr;
-	};
-}
-
-bool FElysiumNpc::SetModelSpecies(TCHAR* ModelName)
-{
-	static const FAnim10SetModelArm Arms[] =
-	{
-		// The two vocalization-group arms share one 119-byte body, so they share one port method and
-		// are told apart by the address handed to it.
-		{ GAnim10Body_GhoulCroucherSetModel, TEXT("CNPC_VGhoulCroucher") },
-		{ GAnim10Body_ZombieSetModel, TEXT("CNPC_VZombie") },
-	};
-
-	// Retail's non-virtual thunk: while slot 105's species body runs, slot 105's dispatcher answers
-	// "no species body", so the arm's own `SetModel()` reaches the Troika body directly.
-	if (SpeciesDispatchingSlot == GAnim10SlotSetModel)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GAnim10SlotSetModel);
-	if (Override == nullptr)
-	{
-		// `RetailClass()` is null only on the bare Troika line, and a class with no slot-105 row
-		// inherits the Troika body, which is exactly what returning false runs.
-		return false;
-	}
-	for (const FAnim10SetModelArm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		const FSpeciesDispatchScope Scope(*this, GAnim10SlotSetModel);
-		ZombieLineSetModel(ModelName, Arm.Address);
-		return true;
-	}
-	// Unreachable for a live class: `Elysium.Substrate.NpcKernelAnim10.SetModelArmCoverage` asserts
-	// the table carries every slot-105 override row the census holds for one.
-	// `CAI_BaseHumanoid#105` (`0x1025e510`) is census-only since 0019 story 5 step 1: the class has
-	// no instance.
-	return false;
 }
 
 void FElysiumNpc::TroikaSetModel(TCHAR* ModelName)
@@ -470,9 +395,8 @@ void FElysiumNpc::ZombieLineSetModel(TCHAR* ModelName, const TCHAR* RetailBody)
 	(void)RetailBody;
 
 	// The Troika base runs FIRST, so the model write, the hull and the eye all happen BEFORE
-	// `IsMale` is ever asked. The call is direct in retail (`thunk_FUN_10298ce0`), which is what the
-	// dispatch scope around this arm reproduces.
-	SetModel(ModelName);
+	// `IsMale` is ever asked. The call is direct in retail (`thunk_FUN_10298ce0`), and so it is here.
+	TroikaSetModel(ModelName);
 
 	// `CBaseCombatCharacter::IsMale` — the character's own stat slot 11.
 	VSoundGroupName = Sheet.IsMale() ? FString(GAnim10ZombieMale) : FString(GAnim10ZombieFemale);
@@ -661,54 +585,8 @@ void FElysiumNpc::BaseMaintainActivity()
 
 void FElysiumNpc::SetActivity(int32 Activity)
 {
-	if (SetActivitySpecies(Activity))
-	{
-		return;
-	}
+	// `CNPC_VTzimisceHeadClaw` and `CNPC_VTzimisceRunner` override slot 310 (story 5 step 3).
 	TroikaSetActivity(Activity);
-}
-
-namespace
-{
-	struct FAnim10SetActivityArm
-	{
-		const TCHAR* Address = nullptr;
-		const TCHAR* RetailClass = nullptr;
-		void (FElysiumNpc::*Body)(int32) = nullptr;
-	};
-}
-
-bool FElysiumNpc::SetActivitySpecies(int32 Activity)
-{
-	static const FAnim10SetActivityArm Arms[] =
-	{
-		{ GAnim10Body_HeadClawSetActivity, TEXT("CNPC_VTzimisceHeadClaw"),
-			&FElysiumNpc::TzimisceHeadClawSetActivity },
-		{ GAnim10Body_RunnerSetActivity, TEXT("CNPC_VTzimisceRunner"),
-			&FElysiumNpc::TzimisceRunnerSetActivity },
-	};
-
-	if (SpeciesDispatchingSlot == GAnim10SlotSetActivity)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GAnim10SlotSetActivity);
-	if (Override == nullptr)
-	{
-		return false;
-	}
-	for (const FAnim10SetActivityArm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		const FSpeciesDispatchScope Scope(*this, GAnim10SlotSetActivity);
-		(this->*Arm.Body)(Activity);
-		return true;
-	}
-	return false;
 }
 
 void FElysiumNpc::TroikaSetActivity(int32 Activity)
@@ -829,10 +707,10 @@ void FElysiumNpc::TzimisceHeadClawSetActivity(int32 Activity)
 	// ACT_TZ_WALK2`. Request 9 WITHOUT an enemy, and every other request, forwards unchanged.
 	if (Activity == GAnim10ActWalk && GetEnemy() != nullptr)   // vtable +0x29c
 	{
-		SetActivity(GAnim10ActTzWalk2);   // the direct `thunk_FUN_10295750`, via the dispatch scope
+		TroikaSetActivity(GAnim10ActTzWalk2);   // the direct `thunk_FUN_10295750`
 		return;
 	}
-	SetActivity(Activity);
+	TroikaSetActivity(Activity);
 }
 
 void FElysiumNpc::TzimisceRunnerSetActivity(int32 Activity)
@@ -864,7 +742,7 @@ void FElysiumNpc::TzimisceRunnerSetActivity(int32 Activity)
 			Request = GAnim10ActTzIdle2;
 		}
 	}
-	SetActivity(Request);
+	TroikaSetActivity(Request);
 }
 
 // =================================================================================================
@@ -873,64 +751,9 @@ void FElysiumNpc::TzimisceRunnerSetActivity(int32 Activity)
 
 int32 FElysiumNpc::NPC_EarlyTranslateActivity(int32 Activity)
 {
-	int32 Answer = Activity;
-	if (NpcEarlyTranslateActivitySpecies(Activity, Answer))
-	{
-		return Answer;
-	}
+	// Five classes override slot 375 on their C++ classes (story 5 step 3): Dog, Hengeyokai, the
+	// human line (`0x103854f0`), Tzimisce and the Tzimisce runner.
 	return TroikaNpcEarlyTranslateActivity(Activity);
-}
-
-namespace
-{
-	struct FAnim10TranslateArm
-	{
-		const TCHAR* Address = nullptr;
-		const TCHAR* RetailClass = nullptr;
-		int32 (FElysiumNpc::*Body)(int32) = nullptr;
-	};
-}
-
-bool FElysiumNpc::NpcEarlyTranslateActivitySpecies(int32 Activity, int32& OutActivity)
-{
-	static const FAnim10TranslateArm Arms[] =
-	{
-		{ GAnim10Body_DogTranslate, TEXT("CNPC_VDog"),
-			&FElysiumNpc::DogNpcEarlyTranslateActivity },
-		{ GAnim10Body_HengeyokaiTranslate, TEXT("CNPC_VHengeyokai"),
-			&FElysiumNpc::HengeyokaiNpcEarlyTranslateActivity },
-		// 39 census classes share `0x103854f0`, `CNPC_VCop` among them — and `CNPC_VCop`'s classname
-		// list is deliberately null, so a SPAWNED cop's `RetailClass()` is null and correctly falls
-		// through to the Troika body instead.
-		{ GAnim10Body_HumanTranslate, TEXT("CNPC_VHuman"),
-			&FElysiumNpc::HumanNpcEarlyTranslateActivity },
-		{ GAnim10Body_TzimisceTranslate, TEXT("CNPC_VTzimisce"),
-			&FElysiumNpc::TzimisceNpcEarlyTranslateActivity },
-		{ GAnim10Body_RunnerTranslate, TEXT("CNPC_VTzimisceRunner"),
-			&FElysiumNpc::TzimisceRunnerNpcEarlyTranslateActivity },
-	};
-
-	if (SpeciesDispatchingSlot == GAnim10SlotEarlyTranslate)
-	{
-		return false;
-	}
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GAnim10SlotEarlyTranslate);
-	if (Override == nullptr)
-	{
-		return false;
-	}
-	for (const FAnim10TranslateArm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		const FSpeciesDispatchScope Scope(*this, GAnim10SlotEarlyTranslate);
-		OutActivity = (this->*Arm.Body)(Activity);
-		return true;
-	}
-	return false;
 }
 
 int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
@@ -1024,7 +847,7 @@ int32 FElysiumNpc::DogNpcEarlyTranslateActivity(int32 Activity)
 	{
 		return Activity;
 	}
-	return NPC_EarlyTranslateActivity(Activity);   // the direct thunk, via the dispatch scope
+	return TroikaNpcEarlyTranslateActivity(Activity);   // the direct thunk `0x10295590`
 }
 
 int32 FElysiumNpc::HengeyokaiNpcEarlyTranslateActivity(int32 Activity)
@@ -1206,7 +1029,7 @@ int32 FElysiumNpc::TzimisceNpcEarlyTranslateActivity(int32 Activity)
 			}
 		}
 	}
-	return NPC_EarlyTranslateActivity(Activity);   // the direct `thunk_FUN_10295590`
+	return TroikaNpcEarlyTranslateActivity(Activity);   // the direct `thunk_FUN_10295590`
 }
 
 int32 FElysiumNpc::TzimisceRunnerNpcEarlyTranslateActivity(int32 Activity)
@@ -1215,7 +1038,7 @@ int32 FElysiumNpc::TzimisceRunnerNpcEarlyTranslateActivity(int32 Activity)
 	// body FIRST and only then remaps the TRANSLATED activity, so it is a POST-PASS on the base's
 	// answer and not a replacement — which is exactly why its slot-310 twin `0x103c3d80` remaps the
 	// REQUEST instead and the two look alike but are not.
-	int32 Translated = NPC_EarlyTranslateActivity(Activity);
+	int32 Translated = TroikaNpcEarlyTranslateActivity(Activity);
 	if (bTzimisceRunnerForm)
 	{
 		switch (Translated)
@@ -1479,6 +1302,14 @@ void FElysiumNpc::BindPreTranslateState(FElysiumAnimationIntent& Intent) const
 	};
 }
 
+bool FElysiumNpc::AnimFormBit() const
+{
+	// `CNPC_VHengeyokai` and `CNPC_VTzimisce` read `m_bfAINPCFlags` bit 5 in their slot-375 bodies
+	// (`0x10381c80`, `0x103be130`). `CNPC_VTzimisceRunner` reads its own byte `+0x6672` instead, and
+	// overrides this on its C++ class.
+	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
+}
+
 bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 {
 	using ElysiumActionTables::ENpcPredicate;
@@ -1538,14 +1369,8 @@ bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 		// slot 359 reads as `D_MILDLY_CRAZY`.
 		return NpcFlags.Has(EElysiumNpcFlag2::D_MILDLY_CRAZY);
 	case ENpcPredicate::FormBit:
-		// The class's OWN form bit. `CNPC_VHengeyokai` and `CNPC_VTzimisce` read `m_bfAINPCFlags`
-		// bit 5 (`0x10381c80`, `0x103be130`); `CNPC_VTzimisceRunner` reads its own byte `+0x6672`.
-		// Which one is a property of the CLASS, which is why one predicate serves all three.
-		if (ElysiumNpcKernelClass::DerivesFrom(RetailClass(), TEXT("CNPC_VTzimisceRunner")))
-		{
-			return bTzimisceRunnerForm;
-		}
-		return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
+		// The class's OWN form bit, asked of the class (story 5 step 3): see `AnimFormBit`.
+		return AnimFormBit();
 	case ENpcPredicate::BodySideLeft:
 		// `CNPC_VTzimisce`'s `+0x6688`. **The `_L` variants are the ZERO arm** (`0x103bde40`:
 		// `if (m_bHeavyBodyTarget == '\0')` takes `0xfd` / `0xff`, which are `ACT_IDLE_BODY_L` and

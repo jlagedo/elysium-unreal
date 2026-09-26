@@ -12,4 +12,11 @@ class FElysiumNpcAndreiBlood : public FElysiumNpcVampireBoss
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual int32 Restore(void* Archive) override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual bool FValidateHintType(void* Hint) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

@@ -6,6 +6,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumRng.h"
 #include "ElysiumStub.h"
 #include "Misc/ScopeExit.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
@@ -167,9 +168,11 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FSpeciesSlotRow* Rows = FElysiumNpc::SpeciesSlotRows(Count);
-	// 34 before 0019 story 5 step 1 removed the rows of classes no map stands
-	// (`CScriptedTarget#103`, `CNPC_Crow#197`, `CNPC_VBatSwarm#609`, `CNPC_VSheriffSwarm#609`).
-	TestEqual(TEXT("the table carries this family's 30 (class, slot) rows"), Count, 30);
+	// 34 before 0019 story 5 step 1 removed the rows of classes no map stands, 30 until story 5
+	// step 3 turned every introduced class's row into an override on its C++ class: what is left are
+	// the deferred classes' rows (`CNPC_VFrenzyShadow` 599/600 until step 7, `CNPCMaker_Fleshpile`
+	// 139/617 until step 8).
+	TestEqual(TEXT("the table carries the four deferred (class, slot) rows"), Count, 4);
 
 	// Every row, BY NAME: the class is a census class, and the census agrees that the row's retail
 	// address is the body that fills that slot for it. A row that does not match `slots.md` fails
@@ -188,24 +191,22 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 			FString(ElysiumNpcKernelClass::BodyOf(Cls, Row.Slot)), FString(Row.Address));
 	}
 
-	// The base-chain walk is the vtable's, not a name compare: `CNPC_VCameraSecurity` has no body of
-	// its own at 497 or 506 and inherits `CNPC_VCamera`'s, and `CNPC_VDog` / `CNPC_VRat` inherit
-	// `CNPC_VAnimal`'s slot 482.
-	const FElysiumNpc::FSpeciesSlotRow* Security =
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCameraSecurity"), 497);
-	TestNotNull(TEXT("CNPC_VCameraSecurity inherits slot 497"), Security);
-	if (Security != nullptr)
+	// The census still says which body a class inherits: `CNPC_VCameraSecurity` has no body of its
+	// own at 497 and runs `CNPC_VCamera`'s, and `CNPC_VDog` runs `CNPC_VAnimal`'s slot 482 — which
+	// C++ inheritance now resolves (the overrides stand on `FElysiumNpcCamera` / `FElysiumNpcAnimal`).
+	TestEqual(TEXT("CNPC_VCameraSecurity inherits CNPC_VCamera's slot 497"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 497)),
+		FString(TEXT("0x103681d0")));
+	TestEqual(TEXT("CNPC_VDog inherits CNPC_VAnimal's slot 482"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VDog")), 482)),
+		FString(TEXT("0x1035fd40")));
+	// A deferred class keeps its row, and the walk is still the vtable's.
+	const FElysiumNpc::FSpeciesSlotRow* Frenzy =
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 599);
+	TestNotNull(TEXT("CNPC_VFrenzyShadow keeps its slot-599 row until the controller fold"), Frenzy);
+	if (Frenzy != nullptr)
 	{
-		TestEqual(TEXT("from CNPC_VCamera's 0x103681d0"), FString(Security->Address),
-			FString(TEXT("0x103681d0")));
-	}
-	const FElysiumNpc::FSpeciesSlotRow* Dog =
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VDog"), 482);
-	TestNotNull(TEXT("CNPC_VDog inherits slot 482"), Dog);
-	if (Dog != nullptr)
-	{
-		TestEqual(TEXT("from CNPC_VAnimal's 0x1035fd40"), FString(Dog->Address),
-			FString(TEXT("0x1035fd40")));
+		TestEqual(TEXT("0x10376b70"), FString(Frenzy->Address), FString(TEXT("0x10376b70")));
 	}
 
 	// And a class with no row at a slot answers null rather than the nearest row of another slot.
@@ -297,8 +298,9 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 	}
 	TestNotNull(TEXT("the census claims it"),
 		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCamera")));
-	TestNotNull(TEXT("and its slot-497 row is reachable by class name"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCamera"), 497));
+	TestEqual(TEXT("and its census slot-497 body is the camera's own 0x103681d0"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera")), 497)),
+		FString(TEXT("0x103681d0")));
 	return true;
 }
 
@@ -456,15 +458,14 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	}
 
 	// --- `CNPC_VFrenzyShadow` / `CNPC_VGargoyle`: every gate dropped, always true --------------
-	// Both classes are in the census and neither is a spawn leaf, so they are exercised by class
-	// name through the table and their BODIES are called directly.
-	for (const TCHAR* Name : { TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VGargoyle") })
-	{
-		const FElysiumNpc::FSpeciesSlotRow* Row599 = FElysiumNpc::SpeciesSlotRowOf(Name, 599);
-		const FElysiumNpc::FSpeciesSlotRow* Row600 = FElysiumNpc::SpeciesSlotRowOf(Name, 600);
-		TestNotNull(*FString::Printf(TEXT("%s has a slot-599 row"), Name), Row599);
-		TestNotNull(*FString::Printf(TEXT("%s has a slot-600 row"), Name), Row600);
-	}
+	// FrenzyShadow (deferred to step 7) keeps its table rows; Gargoyle's are overrides on
+	// `FElysiumNpcGargoyle` (story 5 step 3). The BODIES are called directly here.
+	TestNotNull(TEXT("CNPC_VFrenzyShadow has a slot-599 row"),
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 599));
+	TestNotNull(TEXT("and a slot-600 row"), FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 600));
+	TestEqual(TEXT("CNPC_VGargoyle's slot 599 is 0x10379ef0"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VGargoyle")), 599)),
+		FString(TEXT("0x10379ef0")));
 	Npc->bInMelee = false;
 	Npc->MeleeEventFires = 0;
 	TestTrue(TEXT("0x10376b70 (CNPC_VFrenzyShadow 599) always enters melee"),
@@ -572,18 +573,22 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	TestTrue(TEXT("and at zero distance it falls through to 'the coordinator does not hold me'"),
 		Npc->FUN_103c1b10());
 
-	// The dispatcher picks the runner's bodies for a spawned runner, and only those.
-	bool Answer = false;
+	// A spawned runner's slots ARE its bodies: `FElysiumNpcTzimisceRunner` overrides all four.
 	Npc->bInMelee = true;
-	TestTrue(TEXT("the slot-599 dispatcher runs a species body for a runner"),
-		Npc->SpeciesSlot599(Enemy, Answer));
-	TestFalse(TEXT("and it is the refusing coordinator arm"), Answer);
-	TestTrue(TEXT("the slot-601 dispatcher runs one too"), Npc->SpeciesSlot601(Enemy));
-	TestTrue(TEXT("and the slot-602 dispatcher"), Npc->SpeciesSlot602(Answer));
-	// The animal has no melee row at all.
+	Npc->RunnerPotentialEnemy = Enemy->Handle;
+	TestFalse(TEXT("a runner's slot 599 is the refusing coordinator arm"), Npc->Slot599(0));
+	TestFalse(TEXT("which cleared m_bInMelee"), Npc->bInMelee);
+	Npc->bInMelee = true;
+	Npc->RunnerPotentialEnemy = Enemy->Handle;
+	Npc->Slot601(Enemy);
+	TestFalse(TEXT("a runner's slot 601 forgets m_hPotentialEnemy"), Npc->RunnerPotentialEnemy.IsSet());
+	Npc->ScheduleHost.EnemyDistUnits = 0.f;
+	TestTrue(TEXT("and its slot 602 falls through to 'the coordinator does not hold me'"), Npc->Slot602());
+	// The animal has no melee body of its own and no deferred row either.
 	if (Fixture.Animal != nullptr)
 	{
-		TestFalse(TEXT("an animal has no species slot-599 body"),
+		bool Answer = false;
+		TestFalse(TEXT("an animal has no species slot-599 row"),
 			Fixture.Animal->SpeciesSlot599(Enemy, Answer));
 	}
 	return true;
@@ -604,16 +609,11 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 		return false;
 	}
 
-	// `CNPC_VBach` is a census class and not a spawn leaf, so the rows are reached by name and the
-	// bodies are called directly.
-	const FElysiumNpc::FSpeciesSlotRow* Row606 =
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VBach"), 606);
-	TestNotNull(TEXT("CNPC_VBach has a slot-606 row"), Row606);
-	if (Row606 != nullptr)
-	{
-		TestEqual(TEXT("and it is 0x10364280"), FString(Row606->Address),
-			FString(TEXT("0x10364280")));
-	}
+	// The bodies are called directly on a runner here; `WiredSlot606` / `WiredSlot609` drive them
+	// through `FElysiumNpcBach`'s overrides on a spawned `npc_VBach`.
+	const FElysiumNpcClass* BachClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach"));
+	TestEqual(TEXT("CNPC_VBach's slot 606 is 0x10364280"),
+		FString(ElysiumNpcKernelClass::BodyOf(BachClass, 606)), FString(TEXT("0x10364280")));
 
 	// --- `0x10364280`: without the condition the flag is CLEARED and 0 is answered ---------------
 	Npc->bBachFireOccluded = true;
@@ -627,8 +627,8 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 	TestTrue(TEXT("but arms m_bFireOccluded"), Npc->bBachFireOccluded);
 
 	// --- the SECOND pass delegates to the Troika body --------------------------------------------
-	// `Slot606` is family TroikaHelpers'; the gate's job is to reach it, which is what is asserted.
-	const int32 Base = Npc->Slot606(0);
+	// `FElysiumNpc::Slot606` is family TroikaHelpers'; the gate's job is to reach it.
+	const int32 Base = Npc->FElysiumNpc::Slot606(0);
 	TestEqual(TEXT("the second pass delegates to the base slot 606"), Npc->FUN_10364280(0), Base);
 	TestTrue(TEXT("and leaves the flag armed"), Npc->bBachFireOccluded);
 
@@ -642,8 +642,8 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 	// --- slot 609: the state gate ----------------------------------------------------------------
 	// Only retail states 4 (`NPC_STATE_SCRIPT`) and 0xc admit the base hint search; every other
 	// state ZEROES `m_pShootAtHintNode` as a side effect of asking.
-	TestNotNull(TEXT("CNPC_VBach has a slot-609 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VBach"), 609));
+	TestEqual(TEXT("CNPC_VBach's slot 609 is 0x103661f0"),
+		FString(ElysiumNpcKernelClass::BodyOf(BachClass, 609)), FString(TEXT("0x103661f0")));
 	// Retail's byte-identical `CNPC_VBatSwarm` / `CNPC_VSheriffSwarm` copies are on classes with no
 	// instance and carry no port row (0019 story 5 step 1).
 	for (const TCHAR* Name : { TEXT("CNPC_VBatSwarm"), TEXT("CNPC_VSheriffSwarm") })
@@ -664,7 +664,7 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 482 — five species, one byte-identical body.
+// Slot 482 — four standalone species copies, one SCRIPT-state tail the base does not have.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCanPlaySequenceTest,
@@ -678,8 +678,10 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The census agrees the five classes carry their own copy, and every copy is byte-identical to
-	// the base `CAI_BaseNPC::CanPlaySequence` `0x10278090` — so the species answer IS the base's.
+	// The census agrees the classes carry their own copy. Every copy is a STANDALONE body (callees:
+	// `0x101a8ac0` direct, slot 158 virtual — never the base `0x10278090`), with the base's head and
+	// a different tail: a body in retail state 4 (SCRIPT) keeps its 1-or-2 where the base answers 0
+	// (`0x1035fdf9` `SETNZ/DEC/AND`). Story 5 step 3 corrected the port, which called the base.
 	TestEqual(TEXT("CNPC_VAnimal's slot 482 is 0x1035fd40"),
 		FString(ElysiumNpcKernelClass::BodyOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VAnimal")), 482)),
@@ -695,7 +697,7 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
 	TestEqual(TEXT("a combat body refuses a sequence"), Animal->FUN_1035fd40(false, 0), 0);
 	TestEqual(TEXT("and the Tzimisce copy answers the same"), Animal->FUN_103bd270(false, 0), 0);
-	TestEqual(TEXT("and so does the base it is a copy of"), Animal->CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("and so does the base"), Animal->FElysiumNpc::CanPlaySequence(false, 0), 0);
 
 	TestEqual(TEXT("disregarding state admits it"), Animal->FUN_1035fd40(true, 0), 1);
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Idle);
@@ -704,12 +706,13 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 	TestEqual(TEXT("an alert body refuses at interrupt level 0"), Animal->FUN_1035fd40(false, 0), 0);
 	TestEqual(TEXT("but admits at level 1"), Animal->FUN_1035fd40(false, 1), 1);
 
-	// The dispatcher reaches it for a spawned `npc_VAnimal`, and not for the runner's class, whose
-	// slot-482 body is `CNPC_VTzimisce`'s and not `CNPC_VTzimisceRunner`'s own.
-	int32 Answer = -1;
-	TestTrue(TEXT("the dispatcher runs a species body for an animal"),
-		Animal->SpeciesCanPlaySequence(true, 0, Answer));
-	TestEqual(TEXT("answering the base's 1"), Answer, 1);
+	// **The one difference: retail state 4 (SCRIPT).** The species copies keep the answer; the base
+	// refuses. Through the slot, a spawned `npc_VAnimal` runs its own copy.
+	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
+	TestEqual(TEXT("a SCRIPT-state animal's copy admits a sequence"), Animal->FUN_1035fd40(false, 0), 1);
+	TestEqual(TEXT("and so does the Tzimisce copy"), Animal->FUN_103bd270(false, 0), 1);
+	TestEqual(TEXT("where the base refuses it"), Animal->FElysiumNpc::CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("and the slot answers the animal's own copy"), Animal->CanPlaySequence(false, 0), 1);
 	return true;
 }
 
@@ -946,19 +949,11 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 	}
 
 	// --- slots 25 and 26: the same output from two vtable entries, no base forward ---------------
-	const FElysiumNpc::FSpeciesSlotRow* Row25 =
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VZombie"), 25);
-	const FElysiumNpc::FSpeciesSlotRow* Row26 =
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VZombie"), 26);
-	TestNotNull(TEXT("CNPC_VZombie has a slot-25 row"), Row25);
-	TestNotNull(TEXT("and a slot-26 row"), Row26);
-	if (Row25 != nullptr && Row26 != nullptr)
-	{
-		TestEqual(TEXT("slot 25 is 0x103e12c0"), FString(Row25->Address),
-			FString(TEXT("0x103e12c0")));
-		TestEqual(TEXT("slot 26 is 0x103e12f0"), FString(Row26->Address),
-			FString(TEXT("0x103e12f0")));
-	}
+	const FElysiumNpcClass* ZombieClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie"));
+	TestEqual(TEXT("CNPC_VZombie's slot 25 is 0x103e12c0"),
+		FString(ElysiumNpcKernelClass::BodyOf(ZombieClass, 25)), FString(TEXT("0x103e12c0")));
+	TestEqual(TEXT("and slot 26 is 0x103e12f0"),
+		FString(ElysiumNpcKernelClass::BodyOf(ZombieClass, 26)), FString(TEXT("0x103e12f0")));
 	// Both fire `m_OnAttackedVictim`; the wiring is what a mapper sees, so the counter is the read.
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("zombie"), 29132u);
@@ -983,25 +978,24 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 	// --- slot 510: the frequency write happens FIRST and on every call ---------------------------
 	Npc->FloatSoundFrequency = 0;
 	ElysiumMiscFlags::Set(Npc->MiscFlags, 0x1u);   // unconscious — the second gate
-	TestFalse(TEXT("an unconscious zombie plays no float sound"), Npc->FUN_103e1080(false));
+	TestFalse(TEXT("an unconscious zombie plays no float sound"), Npc->FUN_103e1080());
 	TestEqual(TEXT("but m_iFloatSoundFrequency was set to 9 before any gate ran"),
 		Npc->FloatSoundFrequency, 9);
 
 	Npc->FloatSoundFrequency = 0;
 	ElysiumMiscFlags::Clear(Npc->MiscFlags, 0x1u);
 	Npc->NpcFlags.Set(EElysiumNpcFlag::SLEEPING);
-	TestFalse(TEXT("a SLEEPING zombie plays none either"), Npc->FUN_103e1080(false));
+	TestFalse(TEXT("a SLEEPING zombie plays none either"), Npc->FUN_103e1080());
 	TestEqual(TEXT("and the frequency is still written"), Npc->FloatSoundFrequency, 9);
 	Npc->NpcFlags.Clear(EElysiumNpcFlag::SLEEPING);
 
-	// With no closest player it refuses; with one it reaches the UNRECOVERED distance threshold,
-	// whose named decision (0.0) makes the body refuse for any positive player distance.
+	// With no closest player it refuses; with one, past `Float_Sound_Info` row 3 (250 Source units)
+	// it refuses too. The full gate order and the direct base tail are `WiredSlot510…`'s.
 	Npc->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
-	TestFalse(TEXT("with no closest player it refuses"), Npc->FUN_103e1080(false));
+	TestFalse(TEXT("with no closest player it refuses"), Npc->FUN_103e1080());
 	Npc->Senses.Memory.ClosestPlayer = Victim->Handle;
-	Npc->Senses.Memory.ClosestPlayerDistanceCm = 500.f;
-	TestFalse(TEXT("and with one it refuses on the unrecovered 'Float Sound Info' threshold"),
-		Npc->FUN_103e1080(false));
+	Npc->Senses.Memory.ClosestPlayerDistanceCm = 251.f * ElysiumMove::U;
+	TestFalse(TEXT("and with one it refuses beyond the row-3 distance, 250 units"), Npc->FUN_103e1080());
 	return true;
 }
 
@@ -1292,11 +1286,13 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("all three tentacle slots ask for the head"), Npc->TentacleHeadForwards, 3);
 	TestNull(TEXT("and the seam answers null, so nothing is forwarded"),
 		Npc->MingXiaoTentacleHead());
-	for (int32 Slot : { 21, 22, 23 })
-	{
-		TestNotNull(*FString::Printf(TEXT("CNPC_VMingXiaoTentacle has a slot-%d row"), Slot),
-			FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VMingXiaoTentacle"), Slot));
-	}
+	const FElysiumNpcClass* TentacleClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiaoTentacle"));
+	TestEqual(TEXT("CNPC_VMingXiaoTentacle's slot 21 is 0x1039e800"),
+		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 21)), FString(TEXT("0x1039e800")));
+	TestEqual(TEXT("its slot 22 is 0x1039e830"),
+		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 22)), FString(TEXT("0x1039e830")));
+	TestEqual(TEXT("and its slot 23 is 0x1039e860"),
+		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 23)), FString(TEXT("0x1039e860")));
 
 	// --- `0x103b9180`, slot 593: the base first, then five literals ------------------------------
 	Npc->TargetLeadMin = 999.f;
@@ -1318,21 +1314,19 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		FElysiumNpc::SpeciesSlotRowOf(TEXT("CScriptedTarget"), 103));
 
 	// --- `0x103681d0` / `0x103682f0`: two EMPTY bodies, and emptiness is the point ---------------
-	// The rows exist so the base sound hooks do NOT run for a camera. Nothing to assert but that
-	// the dispatcher reaches them for the right class and no other.
-	TestNotNull(TEXT("CNPC_VCamera has a slot-497 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCamera"), 497));
-	TestNotNull(TEXT("and a slot-506 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCamera"), 506));
-	TestFalse(TEXT("a runner does not take the camera's empty slot 497"), Npc->SpeciesSlot497());
-	TestFalse(TEXT("nor its empty slot 506"), Npc->SpeciesSlot506());
+	// The overrides exist so the base sound hooks do NOT run for a camera (`WiredSlot497` / `506`).
+	const FElysiumNpcClass* CameraClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera"));
+	TestEqual(TEXT("CNPC_VCamera's slot 497 is 0x103681d0"),
+		FString(ElysiumNpcKernelClass::BodyOf(CameraClass, 497)), FString(TEXT("0x103681d0")));
+	TestEqual(TEXT("and its slot 506 is 0x103682f0"),
+		FString(ElysiumNpcKernelClass::BodyOf(CameraClass, 506)), FString(TEXT("0x103682f0")));
 
 	// --- `0x103c3fd0`, slot 588: the base's IsActivityFinished gate is GONE ----------------------
 	// The restart is unconditional; `RestartIdealActivityId` is family Hints' seam and records it.
 	Npc->FUN_103c3fd0();
-	TestTrue(TEXT("a runner has a slot-588 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VTzimisceRunner"), 588) != nullptr);
-	TestTrue(TEXT("and the dispatcher runs it"), Npc->SpeciesSlot588());
+	TestEqual(TEXT("a runner's slot 588 is 0x103c3fd0"),
+		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 588)), FString(TEXT("0x103c3fd0")));
+	Npc->Slot588();   // `FElysiumNpcTzimisceRunner::Slot588`, the same body through the slot
 
 	// --- `0x103b92a0`, slot 488: the three voice ConVars, then the event -------------------------
 	int32 Argument = -1;
@@ -1361,13 +1355,13 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 // classname its factory's class). What the prologue does is the vtable's own resolution, so a case
 // that could only assert the dispatcher's answer would be asserting nothing about the wiring.
 //
-// Three slots have NO observable difference between their two arms in this substrate and say so in
-// place: 482 (the five species copies are byte-identical to the base and CALL it), 497 (both arms
-// are empty — retail's camera body is one `ret` and the base's only effect is a global concept
-// cache this runtime has no table for) and 588 (`RestartIdealActivityId` is family Hints' seam and
-// reaches nothing, so "gated on IsActivityFinished" and "unconditional" write the same nothing).
-// Those three assert the arm that was taken through the dispatcher and the fact that the base body
-// TERMINATES — which for 482 is the whole risk, because its species body calls the base.
+// Since story 5 step 3 the species side is an override on the class's own C++ type, so "which arm
+// ran" is the C++ dispatch; the cases assert the arm's own effect. Two slots have NO observable
+// difference between their arms in this substrate and say so in place: 497 (both arms are empty —
+// retail's camera body is one `ret` and the base's only effect is a global concept cache this
+// runtime has no table for) and 588 (`RestartIdealActivityId` is family Hints' seam and reaches
+// nothing, so "gated on IsActivityFinished" and "unconditional" write the same nothing). Those two
+// assert the census body and drive both arms to termination.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot21Test,
 	"Elysium.Substrate.NpcKernelSpecies.WiredSlot21", GElysiumNpcKernelSpeciesFlags)
@@ -1543,16 +1537,9 @@ bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
 	TestEqual(TEXT("a spawned npc_VAnimal is CNPC_VAnimal"),
 		FString(Animal->RetailClass() != nullptr ? Animal->RetailClass()->Name : TEXT("")),
 		FString(TEXT("CNPC_VAnimal")));
-	int32 SpeciesAnswer = -1;
-	TestTrue(TEXT("so the slot-482 dispatcher claims it"),
-		Animal->SpeciesCanPlaySequence(true, 0, SpeciesAnswer));
-	TestFalse(TEXT("and refuses the bare Troika line, which has no species class"),
-		Cop->SpeciesCanPlaySequence(true, 0, SpeciesAnswer));
 
-	// `0x1035fd40` is BYTE-IDENTICAL to the base `0x10278090` and CALLS it, so the two arms cannot
-	// answer differently — the observable of the wiring is that the call terminates on the base arm
-	// rather than dispatching back into the species body. Every state arm is driven through the
-	// REAL slot to prove it.
+	// `0x1035fd40` shares the base's head and every state arm but one: retail state 4 (SCRIPT),
+	// which the species copy admits and the base refuses. Every arm is driven through the REAL slot.
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
 	Cop->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
 	TestEqual(TEXT("a combat animal refuses a sequence through the slot"),
@@ -1567,6 +1554,46 @@ bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
 	TestEqual(TEXT("an alert animal refuses at interrupt level 0"),
 		Animal->CanPlaySequence(false, 0), 0);
 	TestEqual(TEXT("and admits at level 1"), Animal->CanPlaySequence(false, 1), 1);
+
+	// The discriminator: a SCRIPT-state body. Animal, Zombie (Animal's copy, inherited), a human-line
+	// class (`0x103850a0`) and Tzimisce (`0x103bd270`) keep the answer; a Tzimisce runner inherits
+	// the BASE (it has no copy of its own) and so does the bare Troika line.
+	FElysiumNpcWorldBuilder Builder(TEXT("species_wired482"), 29138u);
+	Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VZombie"));
+	Builder.AddNpc(TEXT("human"), FVector(200.0, 0.0, 0.0), TEXT("npc_VHuman"));
+	Builder.AddNpc(TEXT("tzimisce"), FVector(400.0, 0.0, 0.0), TEXT("npc_VTzimisce"));
+	Builder.AddNpc(TEXT("headclaw"), FVector(600.0, 0.0, 0.0), TEXT("npc_VTzimisceHeadClaw"));
+	FElysiumNpcWorldFixture Script(MoveTemp(Builder));
+	FElysiumNpcWorldFixture::Quiet({ Script.Npc(TEXT("zombie")), Script.Npc(TEXT("human")),
+		Script.Npc(TEXT("tzimisce")), Script.Npc(TEXT("headclaw")) });
+	for (FElysiumNpc* Npc : { Animal, Cop, Fixture.Runner, Script.Npc(TEXT("zombie")),
+			 Script.Npc(TEXT("human")), Script.Npc(TEXT("tzimisce")), Script.Npc(TEXT("headclaw")) })
+	{
+		if (Npc != nullptr)
+		{
+			Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
+		}
+	}
+	TestEqual(TEXT("a SCRIPT-state animal admits a sequence (0x1035fd40)"), Animal->CanPlaySequence(false, 0), 1);
+	for (const TCHAR* Name : { TEXT("zombie"), TEXT("human"), TEXT("tzimisce") })
+	{
+		FElysiumNpc* Npc = Script.Npc(Name);
+		TestTrue(*FString::Printf(TEXT("%s stood"), Name), Npc != nullptr);
+		if (Npc != nullptr)
+		{
+			TestEqual(*FString::Printf(TEXT("a SCRIPT-state %s admits it through its own copy"), Name),
+				Npc->CanPlaySequence(false, 0), 1);
+		}
+	}
+	if (FElysiumNpc* HeadClaw = Script.Npc(TEXT("headclaw")))
+	{
+		TestEqual(TEXT("a SCRIPT-state head claw runs the base and refuses"), HeadClaw->CanPlaySequence(false, 0), 0);
+	}
+	if (Fixture.Runner != nullptr)
+	{
+		TestEqual(TEXT("and so does a runner"), Fixture.Runner->CanPlaySequence(false, 0), 0);
+	}
+	TestEqual(TEXT("and the bare Troika line"), Cop->CanPlaySequence(false, 0), 0);
 	return true;
 }
 
@@ -1625,11 +1652,12 @@ bool FElysiumNpcKernelSpeciesWiredSlot497Test::RunTest(const FString&)
 	// **Both arms are observationally empty here and that is the row's own fact**: `0x103681d0` is
 	// one byte of `ret`, and the Troika body's only effect is a once-only scan of retail's global
 	// response-concept table, which this runtime has no table for (the seam writes -1 into a global
-	// this substrate does not carry). So the assertion is which arm the prologue takes.
-	TestTrue(TEXT("slot 497's dispatcher claims a camera"), Camera->SpeciesSlot497());
-	TestFalse(TEXT("and refuses a plain Troika NPC"), Cop->SpeciesSlot497());
-	TestNotNull(TEXT("and CNPC_VCameraSecurity inherits the same body"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCameraSecurity"), 497));
+	// this substrate does not carry). So the assertion is the census body and that both terminate.
+	TestEqual(TEXT("a camera's slot 497 is 0x103681d0"),
+		FString(ElysiumNpcKernelClass::BodyOf(Camera->RetailClass(), 497)), FString(TEXT("0x103681d0")));
+	TestEqual(TEXT("and CNPC_VCameraSecurity inherits the same body"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 497)),
+		FString(TEXT("0x103681d0")));
 	Camera->Slot497();   // the empty species arm
 	Cop->Slot497();      // the once-only base arm
 	return true;
@@ -1699,6 +1727,45 @@ bool FElysiumNpcKernelSpeciesWiredSlot510Test::RunTest(const FString&)
 		Cop->ShouldPlayFloatSound());
 	TestEqual(TEXT("and leaves m_iFloatSoundFrequency alone — the species write never happened"),
 		Cop->FloatSoundFrequency, 0);
+	Zombie->NpcFlags.Clear(EElysiumNpcFlag::SLEEPING);
+
+	// **The direct tail (story 5 step 3 correction).** `0x103e1080` has NO state gate and its
+	// accepting arm is a direct call (`0x103e11f9` -> `0x10005f97` -> `0x1027a530`) into the
+	// CAI_BaseNPC body, never the Troika override's two IDLE tests. An ALERT zombie inside row 3's
+	// 250 units therefore reaches the base roll — ONE draw of the schedule stream — where the
+	// Troika body refuses the same ALERT body without drawing.
+	FElysiumEntity* Player = Cop;   // any live entity stands for `m_hClosestPlayer`
+	Zombie->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Alert);
+	Zombie->Senses.Memory.ClosestPlayer = Player->Handle;
+	Zombie->NextFloatSoundTime = 0.0;
+	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+
+	Zombie->Senses.Memory.ClosestPlayerDistanceCm = 250.f * ElysiumMove::U;   // inclusive
+	int32 Seed = Rng.GetCurrentSeed();
+	Zombie->ShouldPlayFloatSound();
+	TestNotEqual(TEXT("an ALERT zombie at exactly 250 units reaches the base roll (one draw)"),
+		Rng.GetCurrentSeed(), Seed);
+	TestEqual(TEXT("with m_iFloatSoundFrequency 9, its own write"), Zombie->FloatSoundFrequency, 9);
+
+	Zombie->Senses.Memory.ClosestPlayerDistanceCm = 250.5f * ElysiumMove::U;
+	Seed = Rng.GetCurrentSeed();
+	TestFalse(TEXT("past 250 units it refuses"), Zombie->ShouldPlayFloatSound());
+	TestEqual(TEXT("without drawing"), Rng.GetCurrentSeed(), Seed);
+
+	// The gates run in retail's order and every refusal is draw-free: the dialog gate first.
+	Zombie->Senses.Memory.ClosestPlayerDistanceCm = 100.f * ElysiumMove::U;
+	Zombie->Dialogue.bInDialog = true;
+	Seed = Rng.GetCurrentSeed();
+	Zombie->FloatSoundFrequency = 0;
+	TestFalse(TEXT("a zombie in dialog refuses (IsInDialog 0x102c1170)"), Zombie->ShouldPlayFloatSound());
+	TestEqual(TEXT("after writing the frequency"), Zombie->FloatSoundFrequency, 9);
+	TestEqual(TEXT("and without drawing"), Rng.GetCurrentSeed(), Seed);
+	Zombie->Dialogue.bInDialog = false;
+
+	// The Troika body the zombie bypasses refuses the same ALERT body on its IDLE test.
+	Seed = Rng.GetCurrentSeed();
+	TestFalse(TEXT("the Troika override refuses an ALERT body"), Zombie->FElysiumNpc::ShouldPlayFloatSound());
+	TestEqual(TEXT("without drawing"), Rng.GetCurrentSeed(), Seed);
 	return true;
 }
 
@@ -1725,8 +1792,6 @@ bool FElysiumNpcKernelSpeciesWiredSlot588Test::RunTest(const FString&)
 	TestEqual(TEXT("and its slot-588 body is 0x103c3fd0, not the base's 0x10293e50"),
 		FString(ElysiumNpcKernelClass::BodyOf(Runner->RetailClass(), 588)),
 		FString(TEXT("0x103c3fd0")));
-	TestTrue(TEXT("so slot 588's dispatcher claims it"), Runner->SpeciesSlot588());
-	TestFalse(TEXT("and refuses a plain Troika NPC"), Cop->SpeciesSlot588());
 	Runner->Slot588();   // the species arm, through the slot
 	Cop->Slot588();      // the base arm
 	return true;
@@ -1759,6 +1824,17 @@ bool FElysiumNpcKernelSpeciesWiredSlot593Test::RunTest(const FString&)
 	Cop->Slot593();
 	TestEqual(TEXT("slot 593 on a plain Troika NPC writes the base's 0.1"), Cop->TargetLeadMin,
 		0.1f, 1.0e-06f);
+
+	// Destination and order: the Tzimisce body's direct call reaches `FElysiumNpc::Slot593` (the
+	// Troika `0x1029a070`) and the five overwrites come AFTER it. The qualified base alone writes
+	// the Troika 0.1; the Tzimisce's own slot, run after, leaves its 0.01 — and running the base
+	// again afterwards would leave 0.1, so the final 0.01 is only possible with base-then-overwrite.
+	Tzimisce->FElysiumNpc::Slot593();
+	TestEqual(TEXT("the qualified base on a Tzimisce writes the Troika 0.1"), Tzimisce->TargetLeadMin,
+		0.1f, 1.0e-06f);
+	Tzimisce->Slot593();
+	TestEqual(TEXT("and the Tzimisce's slot overwrites it after calling the base: 0.01"),
+		Tzimisce->TargetLeadMin, 0.01f, 1.0e-06f);
 	return true;
 }
 
@@ -1904,6 +1980,59 @@ bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
 	return true;
 }
 
+// Story 5 step 3 correction (`decisions-step3.json` `yukie-melee-wired`): a spawned `npc_VYukie`
+// reaches its own melee quartet through the vtable. Before the step the four bodies were ported but
+// no dispatch reached them, so a Yukie ran the Troika line's.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredYukieMeleeTest,
+	"Elysium.Substrate.NpcKernelSpecies.WiredYukieMelee", GElysiumNpcKernelSpeciesFlags)
+bool FElysiumNpcKernelSpeciesWiredYukieMeleeTest::RunTest(const FString&)
+{
+	FSpeciesWiringFixture Fixture(TEXT("CNPC_VYukie"));
+	FElysiumNpc* Yukie = Fixture.Species;
+	FElysiumNpc* Cop = Fixture.Troika;
+	if (Yukie == nullptr || Cop == nullptr)
+	{
+		AddError(TEXT("fixture did not stand both sides"));
+		return false;
+	}
+	const double Now = Fixture.World.World.NowSeconds();
+
+	// 599 `0x103dd8b0`: no gates, and a must-leave window of 22.5-45 s (the Troika line's is 7.5-15).
+	Yukie->bInMelee = false;
+	Yukie->MeleeEventFires = 0;
+	Yukie->AttackCoordinator = 0;
+	TestTrue(TEXT("a Yukie's slot 599 enters melee with no coordinator"), Yukie->Slot599(0));
+	TestTrue(TEXT("latching m_bInMelee"), Yukie->bInMelee);
+	TestEqual(TEXT("firing the melee event once"), Yukie->MeleeEventFires, 1);
+	TestTrue(TEXT("with a must-leave window of at least 22.5 s"),
+		Yukie->MeleeMustLeaveTimer >= Now + 22.5 && Yukie->MeleeMustLeaveTimer <= Now + 45.0);
+
+	// 600 `0x103dd900`: the weapon-capability seam answers 0, so the body refuses and writes nothing.
+	Yukie->bInMelee = false;
+	Yukie->MeleeMustLeaveTimer = 0.0;
+	Yukie->MeleeEventFires = 0;
+	TestFalse(TEXT("a Yukie's slot 600 refuses without the weapon capability bits"), Yukie->Slot600(Cop));
+	TestFalse(TEXT("writing no latch"), Yukie->bInMelee);
+	TestEqual(TEXT("and firing no event"), Yukie->MeleeEventFires, 0);
+
+	// 601 `0x103dd9a0`: the event and the clear, and no coordinator release.
+	Yukie->bInMelee = true;
+	Yukie->MeleeCoordinatorReleases = 0;
+	Yukie->Slot601(Cop);
+	TestFalse(TEXT("a Yukie's slot 601 leaves melee"), Yukie->bInMelee);
+	TestEqual(TEXT("firing the event"), Yukie->MeleeEventFires, 1);
+	TestEqual(TEXT("and releasing no coordinator slot"), Yukie->MeleeCoordinatorReleases, 0);
+
+	// 602 `0x103dda10`: distance alone without a ranged weapon; the Troika body refuses first on its
+	// null-coordinator test.
+	Yukie->ScheduleHost.EnemyDistUnits = 500.f;
+	Cop->AttackCoordinator = 0;
+	Cop->ScheduleHost.EnemyDistUnits = 500.f;
+	TestTrue(TEXT("a Yukie's slot 602 leaves melee on distance"), Yukie->Slot602());
+	TestFalse(TEXT("where a plain Troika NPC's refuses"), Cop->Slot602());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot606Test,
 	"Elysium.Substrate.NpcKernelSpecies.WiredSlot606", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
@@ -1934,6 +2063,31 @@ bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
 	TestEqual(TEXT("and Bach's SECOND pass delegates into that same base body"), Bach->Slot606(0),
 		0xaa);
 	TestTrue(TEXT("leaving the flag armed"), Bach->bBachFireOccluded);
+
+	// The base's own side effect proves the destination: the Troika body's `FORCED_OCCLUDE` arm
+	// CLEARS the flag. Bach's first pass (the HasCondition gate, then the flag write) returns before
+	// the base, so the flag survives it; the second pass reaches the base, which clears it.
+	for (FElysiumNpc* Npc : { Bach, Cop })
+	{
+		Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyUnreachable);
+		Npc->NpcFlags.Set(EElysiumNpcFlag::FORCED_OCCLUDE);
+	}
+	Bach->bBachFireOccluded = false;
+	Bach->Slot606(0);
+	TestTrue(TEXT("Bach's first pass arms m_bFireOccluded"), Bach->bBachFireOccluded);
+	TestTrue(TEXT("and never reaches the base, so FORCED_OCCLUDE stands"),
+		Bach->NpcFlags.Has(EElysiumNpcFlag::FORCED_OCCLUDE));
+	Bach->Slot606(0);
+	TestFalse(TEXT("its second pass reaches the Troika body, which clears FORCED_OCCLUDE"),
+		Bach->NpcFlags.Has(EElysiumNpcFlag::FORCED_OCCLUDE));
+	Cop->Slot606(0);
+	TestFalse(TEXT("as a plain Troika NPC's first pass does"), Cop->NpcFlags.Has(EElysiumNpcFlag::FORCED_OCCLUDE));
+	// Without the condition Bach answers 0 at once and disarms, and the base is not reached.
+	Bach->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
+	Bach->NpcFlags.Set(EElysiumNpcFlag::FORCED_OCCLUDE);
+	TestEqual(TEXT("with no COND_ENEMY_OCCLUDED Bach answers 0"), Bach->Slot606(0), 0);
+	TestFalse(TEXT("and disarms"), Bach->bBachFireOccluded);
+	TestTrue(TEXT("without reaching the base"), Bach->NpcFlags.Has(EElysiumNpcFlag::FORCED_OCCLUDE));
 	return true;
 }
 

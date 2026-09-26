@@ -1,6 +1,6 @@
 # 0019 story 5 — reviewed execution plan: the class tree
 
-Status: **reviewed plan; steps 0, 1 and 2 accepted; step 3 not started** (2026-09-25).
+Status: **reviewed plan; steps 0, 1, 2 and 3 accepted; step 4 not started** (2026-09-26).
 Execution checkpoint and evidence: [story-5/progress.md](story-5/progress.md).
 Scope: [spec.md, story 5](spec.md). Tracker: [06b](../TRACKER.md).
 This document defines execution order, intermediate states and acceptance. The spec defines the

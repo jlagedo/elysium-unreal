@@ -106,6 +106,12 @@ static const FSquadSlotSpecies* SquadSlotSpeciesRows(int32& OutCount);
 
 /** The row for a retail class name, or null when no row carries it. */
 static const FSquadSlotSpecies* SquadSlotSpeciesOf(const TCHAR* InRetailClass);
+/** `CNPC_VCamera::InitSquad` (`0x10369bd0`) — the body of `FElysiumNpcCamera::InitSquad`. */
+bool CameraInitSquad();
+/** The gates `0x10273d30` and `0x10369bd0` share, with the join arm each takes. */
+bool InitSquadLine(bool bCameraArm);
+/** Slot 546's species body: `SlotEn` mapped through `SpeciesClass`'s own id space, then named. */
+const TCHAR* SpeciesSquadSlotName(const TCHAR* SpeciesClass, int32 SlotEn);
 
 /** `CAI_ClassScheduleIdSpace::SquadSlotLocalToGlobal` (`0x102ea2d0`): walk the id-space chain from
  *  `Species` upward and translate, or -1. A null `Species` is the Troika line, which does not

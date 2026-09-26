@@ -346,81 +346,6 @@ bool FElysiumNpc::FCanCheckAttacks()
 // Slot 463 — `OnStateChange`
 // =================================================================================================
 
-namespace
-{
-	const FElysiumNpc::FStateChangeSpecies GCondStateChangeSpecies[] = {
-		// The holster/draw classes. `FElysiumNpc::ApplyStateWeaponVisibility` already carries the
-		// body; these rows are what says WHICH classes reach it, joined to the census.
-		// `CNPC_VStalker` shares `0x103871c0` but has no instance and no row.
-		{ TEXT("CNPC_VGuard1"),            TEXT("0x1037d020"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VHunter"),            TEXT("0x10388880"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VGhoulCroucher"),     TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VHumanCombatant"),    TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VSabbatGunman"),      TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_VYukie"),             TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		{ TEXT("CNPC_ProneDialog"),        TEXT("0x103871c0"),
-			FElysiumNpc::EStateChangeSpecies::HolsterOnState },
-		// The facial half.
-		{ TEXT("CNPC_VTzimisce"),          TEXT("0x103ba2c0"),
-			FElysiumNpc::EStateChangeSpecies::FacialExpression },
-		// The two cameras: an EMPTY slot-463 body.
-		{ TEXT("CNPC_VCamera"),            TEXT("0x10368ea0"),
-			FElysiumNpc::EStateChangeSpecies::Suppressed },
-		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10368ea0"),
-			FElysiumNpc::EStateChangeSpecies::Suppressed },
-		{ TEXT("CNPC_VBach"),              TEXT("0x103639b0"),
-			FElysiumNpc::EStateChangeSpecies::BachSnapBack },
-		{ TEXT("CNPC_VCop"),               TEXT("0x10371c20"),
-			FElysiumNpc::EStateChangeSpecies::Cop },
-	};
-}
-
-const FElysiumNpc::FStateChangeSpecies* FElysiumNpc::StateChangeSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GCondStateChangeSpecies);
-	return GCondStateChangeSpecies;
-}
-
-const FElysiumNpc::FStateChangeSpecies* FElysiumNpc::StateChangeSpeciesOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FStateChangeSpecies& Row : GCondStateChangeSpecies)
-	{
-		if (FCString::Stricmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
-}
-
-const FElysiumNpc::FStateChangeSpecies* FElysiumNpc::StateChangeSpecies() const
-{
-	// The vtable's own rule: walk the base chain upward and stop at the first class that fills the
-	// slot.
-	const FElysiumNpcClass* Cls = RetailClass();
-	while (Cls != nullptr)
-	{
-		if (const FStateChangeSpecies* Row = StateChangeSpeciesOf(Cls->Name))
-		{
-			return Row;
-		}
-		Cls = ElysiumNpcKernelClass::Find(Cls->Base);
-	}
-	return nullptr;
-}
-
 const TCHAR* FElysiumNpc::StateChangeExpressionName(EElysiumNpcState NewState)
 {
 	// `CNPC_VTzimisce::vfunc463` (`0x103ba2c0`) maps the NEW state to an index into
@@ -546,91 +471,15 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 
 void FElysiumNpc::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState)
 {
-	// Slot 463's dispatch: the species pre-step, then the Troika-line body every chaining override
-	// ends in.
-	if (const FStateChangeSpecies* Row = StateChangeSpecies())
-	{
-		switch (Row->Shape)
-		{
-		case EStateChangeSpecies::Suppressed:
-			// `CNPC_VCamera::OnStateChange` (`0x10368ea0`) — an empty body. It does not chain, so a
-			// camera's state change writes NOTHING: not `m_bReturnToInitialPos`, not the hint
-			// release, not even the base state-flag byte.
-			return;
-		case EStateChangeSpecies::HolsterOnState:
-			// Story 29d, family SpeciesLifecycle10: two of the eight classes carry a PRE-STEP ahead
-			// of the shared switch — `CNPC_VGuard1::OnStateChange` (`0x1037d020`) and
-			// `CNPC_VHunter::OnStateChange` (`0x10388880`), whose first halves run before the first
-			// `GetActiveWeapon` in both bodies. Every other class in this row reaches the switch
-			// directly, which is what the arm answers for them.
-			StateChangeSpeciesPreStep(OldState, NewState);
-			// The seven classes' own body: hide on IDLE, unhide on ALERT / COMBAT / 11, then chain.
-			ApplyStateWeaponVisibility(NewState);
-			break;
-		case EStateChangeSpecies::FacialExpression:
-			// `CNPC_VTzimisce::vfunc463`: the map runs only on a real transition; the chain into the
-			// Troika body runs either way.
-			if (OldState != NewState)
-			{
-				if (const TCHAR* Name = StateChangeExpressionName(NewState))
-				{
-					SetDefaultExpression(Name, 1.0f);
-				}
-			}
-			break;
-		case EStateChangeSpecies::BachSnapBack:
-			if (BachOnStateChange(LastOnStateChangeOldRetail, LastOnStateChangeNewRetail))
-			{
-				return;
-			}
-			break;
-		case EStateChangeSpecies::Cop:
-			CopOnStateChange(LastOnStateChangeOldRetail, LastOnStateChangeNewRetail);
-			break;
-		}
-	}
+	// Slot 463 on the Troika line. Seven species classes override it on their C++ classes (story 5
+	// step 3): the human-combatant holster/draw body `0x103871c0` and the Guard1 / Hunter / Cop /
+	// Bach / Tzimisce / Camera bodies, each ending in a direct call into this body or the combatant's.
 	OnStateChangeTroika(OldState, NewState);
 }
 
 // =================================================================================================
 // `SelectIdealState`, slot 461 — the three species overrides
 // =================================================================================================
-
-namespace
-{
-	const FElysiumNpc::FIdealStateSpecies GCondIdealStateSpecies[] = {
-		{ TEXT("CNPC_VCamera"),            TEXT("0x10369060"),
-			FElysiumNpc::EIdealStateSpecies::AlwaysAlert },
-		{ TEXT("CNPC_VCameraSecurity"),    TEXT("0x10369060"),
-			FElysiumNpc::EIdealStateSpecies::AlwaysAlert },
-		{ TEXT("CNPC_VMingXiao"),          TEXT("0x103945a0"),
-			FElysiumNpc::EIdealStateSpecies::MingXiao },
-		{ TEXT("CNPC_VMingXiaoTentacle"),  TEXT("0x1039e310"),
-			FElysiumNpc::EIdealStateSpecies::MingXiaoTentacle },
-	};
-}
-
-const FElysiumNpc::FIdealStateSpecies* FElysiumNpc::IdealStateSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GCondIdealStateSpecies);
-	return GCondIdealStateSpecies;
-}
-
-const FElysiumNpc::FIdealStateSpecies* FElysiumNpc::IdealStateSpeciesOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FIdealStateSpecies& Row : GCondIdealStateSpecies)
-	{
-		if (FCString::Stricmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
-}
 
 EElysiumNpcState FElysiumNpc::SelectIdealStateSpecies(EIdealStateSpecies Rule, bool bAlive,
 	EElysiumNpcState Current, EElysiumNpcState Ideal, bool bHasEnemy)
@@ -666,22 +515,18 @@ EElysiumNpcState FElysiumNpc::SelectIdealStateSpecies(EIdealStateSpecies Rule, b
 	return Current;
 }
 
-bool FElysiumNpc::SelectIdealStateForSpecies(EElysiumNpcState& OutIdeal) const
+int32 FElysiumNpc::SpeciesIdealStateRetail(EIdealStateSpecies Rule)
 {
-	const FElysiumNpcClass* Cls = RetailClass();
-	const FIdealStateSpecies* Row = nullptr;
-	while (Cls != nullptr && Row == nullptr)
-	{
-		Row = IdealStateSpeciesOf(Cls->Name);
-		Cls = ElysiumNpcKernelClass::Find(Cls->Base);
-	}
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	OutIdeal = SelectIdealStateSpecies(Row->Rule, !IsInert(), Mind.State(), Mind.IdealState(),
-		Senses.Memory.Enemy.IsSet());
-	return true;
+	// The three replacement bodies' shared tail: the rule's answer written as `m_IdealNPCState`, in
+	// retail's ordinals, and answered.
+	const EElysiumNpcState SpeciesIdeal = SelectIdealStateSpecies(Rule, !IsInert(), Mind.State(),
+		Mind.IdealState(), Senses.Memory.Enemy.IsSet());
+	Mind.WriteIdealStateRetail(
+		SpeciesIdeal == EElysiumNpcState::Alert ? 3
+		: SpeciesIdeal == EElysiumNpcState::Combat ? 2
+		: SpeciesIdeal == EElysiumNpcState::Dead ? 7
+		: 1);
+	return IdealStateRetail();
 }
 
 // =================================================================================================

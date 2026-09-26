@@ -236,6 +236,12 @@ because retail drives its step from the schedule tasks `TASK_VSABBATLEADER_PLAY_
 matters because the Troika-line body behind slot 490 (`0x10294280`) does a real idle-sound-modifier
 lookup and emit, which the camera suppresses.
 
+**Port (0019 story 5 step 3, 2026-09-26).** Before this step the rows for the camera, the Tzimisce
+490/491 and the Sabbat leader 620/621 sat in one class-keyed table that no production path read, so a
+camera spoke the Troika concepts. Each row is now its class's override of the hook (the camera's
+nineteen are empty, and `CNPC_VCameraSecurity` inherits them as in retail); 620/621 are the Sabbat
+leader's own virtuals, and the Tzimisce 491 body re-arms slot 487 as `103b9592` does.
+
 **`CNPC_VTzimisce`** answers a **sentence group** rather than a wav pool, through
 `SENTENCEG_PlayRndSz(edict(), group, volume, soundlevel, 0, pitch)` (`0x101aeb60`) with all three
 numbers read off ConVar objects (`0x1093cf94`, `0x1093cfdc`, `0x1093cebc`) shared by its whole
@@ -520,6 +526,13 @@ then the chain.
 **Unrecovered:** the three Sabbat-gunman convars' names and defaults, and what `0x10398870`,
 `0x1039ab30` and `0x1039aca0` do. The tuning record `0x10739d08`'s field names are also unsettled;
 only the offsets each arm reads are recovered here.
+
+**Port (0019 story 5 step 3, 2026-09-26).** The port kept the MingXiao, Sabbat-gunman and Werewolf
+bodies in a class-keyed table that `SetActivity`'s slot-465 call never reached, so every one of them
+ran the empty Troika body. They are now `FElysiumNpcMingXiao`/`FElysiumNpcSabbatGunman`/
+`FElysiumNpcWerewolf::OnChangeActivity`, and a stopped Sabbat gunman clears `m_nMotionTrail`
+(`+0x1484`) on an activity change as `0x103a56f0` does. `CNPC_Crow` has no port class (a
+dead class, story 5 step 1).
 
 ## The four player-relative facing bodies — `0x103aaf50`, `0x1036d600`, `0x1036dc60`, `0x1035e5f0`
 
@@ -3348,6 +3361,8 @@ argument is the same enemy.
   gate (`weapon->slot360() & 0x18000`) and the `m_bInMelee` latch, drops the coordinator, and arms
   `+0x6074` with `curtime + RandomFloat(22.5, 45.0)` — immediates `0x41b40000` and `0x42340000`;
   **22.5, not 22.0**. The latch is never cleared by this body, so it is one-shot.
+  Port (0019 story 5 step 3, 2026-09-26): the Yukie's 600/601/602 bodies were ported but not
+  dispatched, so a Yukie ran the Troika melee bodies; they are now `FElysiumNpcYukie`'s overrides.
 * **`CNPC_VTzimisceHeadClaw` `0x103c1ad0` / `CNPC_VTzimisceRunner` `0x103c3a70` (601)** — the event,
   `m_bInMelee = 0` and an **unguarded** `ReleaseMeleeSlot` (`0x1025ddd0`). The Troika line's
   `HasUsableRangedWeapon()` test and its `m_flMeleeCanEnterTimer` re-arm are gone, so either species
@@ -3370,19 +3385,18 @@ cover — hysteresis, not a one-shot.
 
 ### How a species body reaches the body it replaces
 
-Four of the species bodies in this section END in a call to the very slot they override:
+Several of the species bodies in this section END in a call to the very slot they override:
 `CNPC_VBach`'s 606 delegates to `thunk_FUN_102b8320`, `CNPC_VTzimisce`'s 593 runs
-`thunk_FUN_1029a070` first and then overwrites all five words it wrote, `CNPC_VZombie`'s 510 tail
-jumps into `CAI_BaseNPC::ShouldPlayFloatSound` (`thunk_FUN_1027a530`) and the five slot-482 copies
-are `CAI_BaseNPC::CanPlaySequence` (`0x10278090`) instruction for instruction.
+`thunk_FUN_1029a070` first and then overwrites all five words it wrote, and `CNPC_VZombie`'s 510 tail
+jumps into `CAI_BaseNPC::ShouldPlayFloatSound` (`thunk_FUN_1027a530`).
 
 **Every one of those is a DIRECT call, never a vtable dispatch** — a `thunk_` to the base class's
-own body — so it lands on the base and can never re-enter the species body. Retail gets that for
-free from having two functions per slot (the base's and the override's). A port that stands ONE
-function per slot, with the species resolution as a prologue at the top of the base body, has to say
-it: while slot N's species body is running, slot N's prologue must decline. That is what
-`FElysiumNpc::SpeciesDispatchingSlot` is, and it is per slot rather than a depth count because
-retail's thunks are per body too.
+own body — so it lands on the base and can never re-enter the species body. Since 0019 story 5
+step 3 the port has two functions per slot as retail does: the species body is its C++ class's
+override, and its call to what it replaces is spelled as a qualified call to the recovered callee
+owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpc::Slot593()`, `BaseShouldPlayFloatSound()`; the full
+list is `docs/specs/0019-npc-kernel-rework/story-5/decisions-step3.json` `direct_calls`). The per-slot
+guard that used to emulate the thunk (`SpeciesDispatchingSlot`) is gone.
 
 ### Slot 609 — the three state gates, `0x103661f0`, `0x10367740`, `0x103b26f0`
 
@@ -3390,12 +3404,15 @@ Byte-identical on `CNPC_VBach`, `CNPC_VBatSwarm` and `CNPC_VSheriffSwarm`, 44 by
 `m_NPCState` 4 (`NPC_STATE_SCRIPT`) or `0xc` reaches the Troika hint search (`0x102b6b50`); every
 other state **zeroes `m_pShootAtHintNode` (`+0x6444`) as a side effect of asking** and answers null.
 
-### Slot 482 — five species, one byte-identical copy — `0x1035fd40`, `0x103bd270`
+### Slot 482 — the species copies, `0x1035fd40`, `0x103bd270`
 
 `CNPC_VAnimal` (with `CNPC_VDog`, `CNPC_VRat` and two more) and `CNPC_VTzimisce` each carry their own
-`CanPlaySequence`, and every copy is instruction-for-instruction the base `0x10278090` above: the
-cine-handle resolve, the `0x101a8ac0` upgrade from 1 to 2, the `IsAlive()` gate at vtable `+0x278`
-and the four-term state refusal. Five vtable entries, one behaviour.
+`CanPlaySequence`, as the human line (`0x103850a0`) and `CNPC_VMingXiao` (`0x10396e90`) do. The copies
+share the cine-handle resolve, the `0x101a8ac0` upgrade from 1 to 2 and the `IsAlive()` gate at
+vtable `+0x278` with the base `0x10278090`, but they are **standalone** — none calls the base — and
+they are **not** the base: in `NPC_STATE_SCRIPT` (4) they keep their 1/2 answer where the base
+refuses (see "Slot 482 `CanPlaySequence`, the species half" above). Corrected 2026-09-26 (0019
+story 5 step 3): this paragraph used to call all five copies the base instruction for instruction.
 
 ### `CNPC_VTzimisce`'s carry chain — `0x103be0b0`, `0x103be150`, `0x103be3d0`, `0x103be8e0`, `0x103bea90`, `0x103bef20`
 
@@ -5011,6 +5028,12 @@ nothing happens at all.
 `AllowsKnockbackBypass` first, then the template byte `+0x9e Disallow_Knockbacks`, then
 `CVStatList_t::IsEqual(0x0f, 0x11)`.
 
+Slot 400 is `CAI_BaseNPC`'s three-byte `0x1014fa50` (answers false) on every class except
+`CNPC_VTzimisceRunner`, whose `0x103c3060` answers true (`vtmb_slot 400`): only a runner bypasses the
+eligibility rule. Corrected in the port 2026-09-26 (0019 story 5 step 3): one reader compared the
+classname to `npc_VTzimisceRunner` while the near-miss gate's reader answered false for the runner;
+both now dispatch the runner's override.
+
 **Unrecovered:** the `CVDmg_t` table, so the two distance bands have no values here.
 
 ### `CAI_BaseNPCTroika::vfunc359` — `0x1029e750`
@@ -5316,6 +5339,14 @@ body reads the same cvar and sets condition `0x79` at or above `_DAT_104704d0` a
 `_DAT_104704d0` is **72.0**, read at file offset `0x4704d0`.
 
 **Unrecovered:** what `+0x66a6` means; only its clear is in this body.
+
+**How it is reached.** `CAI_BaseNPC::GatherEnemyConditions` (`0x10270b20`) calls slot 561 through
+the vtable (`CALL [vtable+0x8c4]`) with `GetEnemy()` and the enemy distance. Four classes fill the
+slot with their own body (`vtmb_slot 561`): `CNPC_VBach` `0x10363db0`, `CNPC_VBatSwarm` `0x10367580`,
+`CNPC_VSheriffSwarm` `0x103b2530` and `CNPC_VWerewolf` `0x103d02b0`; everyone else runs the base
+`0x1026dd10`. Corrected in the port 2026-09-26 (0019 story 5 step 3): the gather pass called the
+base body directly, so this block never ran from it. The pass now dispatches, and the Bach block runs
+ahead of the base.
 
 ### `CNPC_VChangBros::CheckForTeleport` `0x1036cab0`, `::CheckForUnited` `0x1036cbd0` and `::SelectLedgeNode` `0x1036cfa0`
 

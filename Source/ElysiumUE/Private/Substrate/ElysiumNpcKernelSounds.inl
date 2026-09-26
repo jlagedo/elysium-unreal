@@ -73,15 +73,13 @@ void ClearHasPlayedFlyBySound();
 // channel, wav, volume, attenuation 0.8, flags 0, pitch 100)`. Two species answer a SENTENCE GROUP
 // instead of a wav pool, and one pair of species answers silence.
 //
-// So it is ONE method plus a table, keyed on the retail class name and resolved through
-// `Substrate/ElysiumNpcKernelClassLookup.h`, until story 5 step 3 makes each row an override on
-// its species class.
+// So it is ONE body plus a table, keyed on the retail class name: since story 5 step 3 each row is
+// the body of its class's override of the hook (`SpeciesVocalize`), which a subclass inherits.
 //
 // The Troika-line bodies BEHIND these slots (`0x10293ec0`, `0x10293f80`, `0x10294280`, …) are
 // layer 14 and belong to story 29d, so their generated stubs still stand in
-// `ElysiumNpcKernelSlots.cpp`. `EmitVocalization` is what 29d's bodies call first: a species row
-// REPLACES the Troika body (every override here returns without calling up), so a true answer
-// means "handled, do not run the base".
+// `ElysiumNpcKernelSlots.cpp`. A species row REPLACES the Troika body: every override here returns
+// without calling up.
 enum class EVocalization : uint8
 {
 	// The override's whole body is `return` — the species makes no sound at this hook.
@@ -122,14 +120,14 @@ struct FVocalization
 // The whole table, in (class, slot) order. Public so the suite can walk every row by name.
 static const FVocalization* Vocalizations(int32& OutCount);
 
-// The row a retail class answers at a slot: the class's own row, else the nearest ancestor's,
-// which is the vtable's own rule and what makes `CNPC_VCameraSecurity` inherit `CNPC_VCamera`'s
-// nineteen mute rows. Null when no class in the chain fills the slot.
+// The row a retail class answers at a slot: the class's OWN row (a subclass inherits its base's
+// through the C++ override — `CNPC_VCameraSecurity` takes `FElysiumNpcCamera`'s nineteen). Null
+// when the class fills no row at the slot.
 static const FVocalization* VocalizationFor(const TCHAR* RetailClass, int32 Slot);
 
-// The same for THIS NPC's species (`RetailClass()`). Null for a classname no family class claims.
-const FVocalization* VocalizationFor(int32 Slot) const;
+// The body of a species class's vocalization override: `SpeciesClass`'s row at `Slot`. True means
+// a row ran (including a `Mute` row and a row the sound gate refused); false that there was none.
+bool SpeciesVocalize(const TCHAR* SpeciesClass, int32 Slot);
 
-// Run the species override of `Slot`, if this species has one. True means the species body ran
-// (including a `Mute` row and a row the sound gate refused) and the Troika-line body must not.
-bool EmitVocalization(int32 Slot);
+// `CNPC_VTzimisce::vfunc487` (`0x103b9f10`) — the body of `FElysiumNpcTzimisce::JustMadeSound`.
+void TzimisceJustMadeSound();

@@ -37,7 +37,7 @@ def test_shared_bodies_and_branch_slots_do_not_collapse_contracts():
 
 def test_authored_scope_separates_liveness_factories_and_deferred_classes():
     manifest, classes, factories = km.load()
-    assert manifest["phase"] == 2
+    assert manifest["phase"] == 3
     assert manifest["history"]["step0"]["commit"] == "aa1c3c86b8684c4760e1dd506d114a0a260fb225"
     assert manifest["history"]["step1"]["commit"] == "b2261eca89d5f7dc242469e57f2ae1f21707c5f5"
     assert manifest["history"]["step2"]["commit"] == "870360e9fa7be759d71004553a93575006b9e71d"

@@ -134,10 +134,30 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	TestTrue(TEXT("VSheriffMan accepts anything"), Ask(TEXT("CNPC_VSheriffMan"), 700));
 	TestFalse(TEXT("VZombie accepts nothing"), Ask(TEXT("CNPC_VZombie"), 700));
 
-	// The blade and claw brothers reach `0x1036c6a0` by inheritance, not by a row of their own.
-	TestTrue(TEXT("CNPC_VChangBrosBlade inherits the ChangBros body"),
-		Ask(TEXT("CNPC_VChangBrosBlade"), 42));
-	TestTrue(TEXT("CNPC_VChangBrosClaw inherits it too"), Ask(TEXT("CNPC_VChangBrosClaw"), 42));
+	// The blade and claw brothers reach `0x1036c6a0` by inheriting `FElysiumNpcChangBros`'s override
+	// (story 5 step 3), not by a row of their own: asked through the vtable on spawned brothers.
+	TestNull(TEXT("CNPC_VChangBrosBlade carries no row of its own"),
+		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VChangBrosBlade")));
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_hints_brothers"), 566);
+		Builder.AddNpcOfClass(TEXT("blade"), FVector::ZeroVector, TEXT("CNPC_VChangBrosBlade"));
+		Builder.AddNpcOfClass(TEXT("claw"), FVector(300.0, 0.0, 0.0), TEXT("CNPC_VChangBrosClaw"));
+		FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+		FElysiumNpc* Blade = Fixture.Npc(TEXT("blade"));
+		FElysiumNpc* Claw = Fixture.Npc(TEXT("claw"));
+		TestNotNull(TEXT("the blade brother spawned"), Blade);
+		TestNotNull(TEXT("the claw brother spawned"), Claw);
+		if (Blade != nullptr && Claw != nullptr)
+		{
+			FElysiumNpcWorldFixture::Quiet({ Blade, Claw });
+			FElysiumNpc::FHintWords Words;
+			Words.bValid = true;
+			Words.HintType = 42;
+			TestTrue(TEXT("CNPC_VChangBrosBlade inherits the ChangBros body"),
+				Blade->FValidateHintType(&Words));
+			TestTrue(TEXT("CNPC_VChangBrosClaw inherits it too"), Claw->FValidateHintType(&Words));
+		}
+	}
 
 	// A class with no override and no ancestor carrying one runs the base body, which is 29d's.
 	TestNull(TEXT("CAI_BaseNPCTroika carries no species row"),
@@ -698,8 +718,8 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// refusal below is the seam's, not the table's.
 	TestNotNull(TEXT("CNPC_VSabbatLeader carries a slot-566 row"),
 		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VSabbatLeader")));
-	TestFalse(TEXT("but FValidateHintTypeForSpecies refuses, because the hint cannot be read"),
-		Npc->FValidateHintTypeForSpecies(0));
+	TestFalse(TEXT("but slot 566 on a hint node refuses, because the hint cannot be read"),
+		Npc->FValidateHintTypeNode(0));
 
 	// `FindHintNode` (`0x10365780`) — the miss arm: `m_pHintNode` is written on BOTH paths, then
 	// `TaskFail(4)`.

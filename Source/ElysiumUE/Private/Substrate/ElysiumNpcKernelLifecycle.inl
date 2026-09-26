@@ -186,9 +186,8 @@ void WerewolfScriptUnhideTail(double Now);
  *  (slot 78, the particle's own `ScriptUnhide`). Retail does NOT clear the handle. */
 void GhoulCroucherScriptUnhideTail();
 
-/** The species dispatcher over the three tails above: the Troika tail always, then the one row this
- *  NPC's retail class carries. Returns the cine record the Troika tail produced. */
-FCineUnhideRecord ScriptUnhideSpecies(double Now);
+// The three tails above are not yet reached from `FElysiumEntity::ScriptUnhide`: the NPC's slot-78
+// chain is unwired (story 5 step 3 records the species rows as residue), so there is no dispatcher.
 
 // --- Slot 103 `Spawn`: the species bodies ---------------------------------------------------------
 
@@ -342,15 +341,10 @@ void BaseNpcUpdateOnRemove();
 
 // --- Slot 434 `PrescheduleThink`: the species bodies ----------------------------------------------
 
-/** `CNPC_VCamera::PrescheduleThink` (`0x10369100`), shared with `CNPC_VCameraSecurity` — an EMPTY
- *  body. A camera does no preschedule work at all, which is a fact and not a gap.
- *  `CNPC_VSabbatLeader::PrescheduleThink` (`0x103a7650`) is the retail scope-trace wrapper and an
- *  unconditional forward to `CNPC_VAndreiBlood`'s (`0x10385a30`, family Bosses').
- *
- *  Answers what THIS NPC's species does with slot 434: `Empty` for the two camera classes, `Forward`
- *  for `CNPC_VSabbatLeader`, `Base` for everybody else. */
-enum class EPrescheduleSpecies : uint8 { Base, Empty, ForwardToAndreiBlood };
-EPrescheduleSpecies PrescheduleSpecies() const;
+// `CNPC_VCamera::PrescheduleThink` (`0x10369100`), shared with `CNPC_VCameraSecurity` — an EMPTY
+// body, `FElysiumNpcCamera`'s override. `CNPC_VSabbatLeader::PrescheduleThink` (`0x103a7650`) is the
+// retail scope-trace wrapper and an unconditional forward to `0x10385a30` (the body
+// `CNPC_VAndreiBlood` and 40-odd classes share), which has no port body: residue for story 8.
 
 // --- The free functions and the unnamed tables ------------------------------------------------------
 

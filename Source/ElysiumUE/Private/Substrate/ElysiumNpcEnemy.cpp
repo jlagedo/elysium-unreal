@@ -404,7 +404,22 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	//    kept two functions because the LOS half reads only the debounce latch while the attack half
 	//    reads the weapon, and a headless case wants to drive either alone.
 	ElysiumNpcCond::GatherCommittedEnemy(Npc, Cond);
-	ElysiumNpcCond::GatherAttackConditions(Npc, Now, Cond);
+	// Slot 561 THROUGH THE VTABLE, as `CAI_BaseNPC::GatherEnemyConditions` (`0x10270b20`) makes it:
+	// `(this->*vtable[0x8c4])(GetEnemy(), flDist)`. A species class's override (`CNPC_VBach`
+	// `0x10363db0`, `CNPC_VWerewolf` `0x103d02b0`) runs here; the base body is
+	// `ElysiumNpcCond::GatherAttackConditions` (story 5 step 3 — the pass used to call the base body
+	// directly, so Bach's block never ran from it).
+	{
+		FElysiumEntity* const EnemyEntity = Npc.World != nullptr && Npc.Senses.Memory.Enemy.IsSet()
+			? Npc.World->Resolve(Npc.Senses.Memory.Enemy)
+			: nullptr;
+		const float DistanceUnits = EnemyEntity != nullptr
+			? static_cast<float>(FVector::Dist(Npc.Origin, EnemyEntity->Origin) / ElysiumMove::U)
+			: 0.f;
+		Npc.GatherPassNow = Now;
+		Npc.GatherAttackConditions(EnemyEntity, DistanceUnits);
+		Npc.GatherPassNow = -1.0;
+	}
 
 	Npc.Cognition.GatheredAt = Now;
 }

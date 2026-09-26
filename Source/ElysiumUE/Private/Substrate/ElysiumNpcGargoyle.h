@@ -11,4 +11,18 @@ class FElysiumNpcGargoyle : public FElysiumNpcVampire
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual bool Slot599(int32 Arg) override;
+	virtual bool Slot600(FElysiumEntity* Enemy) override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual void TaskFail(int32 Reason) override;
+	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
+	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
+	virtual int32 GetUsedHullBits() override;
+	virtual void OnVictimHitByMe(FElysiumEntity* Victim) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+	virtual bool SuppressesDamageFlinch(const FElysiumDmg& Dmg) const override;
+	virtual void OnScheduleChange(int32 NewSchedule) override;
+	virtual void TouchSpecies(FElysiumEntity* Other) override;
 };

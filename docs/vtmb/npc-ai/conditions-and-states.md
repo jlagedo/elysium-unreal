@@ -1292,8 +1292,10 @@ carries an NPC-open point, whatever the yaw says.
 
 ## The Werewolf's two condition bodies — `0x103d02b0`, `0x103cc890` (2026-09-13)
 
-**`CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)** is the only species override of slot 561,
-and it is a **suppression**, not an addition — `thunk_FUN_10269b50` is `ClearCondition`. With
+**`CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)** is the only **suppressing** species
+override of slot 561 — `CNPC_VBach` (`0x10363db0`), `CNPC_VBatSwarm` (`0x10367580`) and
+`CNPC_VSheriffSwarm` (`0x103b2530`) also fill the slot (`vtmb_slot 561`; corrected 2026-09-26, this
+line used to call the Werewolf's the only override). It is a **suppression**, not an addition — `thunk_FUN_10269b50` is `ClearCondition`. With
 `m_iZoneFlags` (`+0x66e8`) carrying bit `0x4` **or** bit `0x100`, a live enemy (`GetEnemy()`
 `+0x29c`) and the absolute difference between the two origins' Z strictly greater than
 `_DAT_10462950` = **`40.0`** Source units, it clears `CAN_MELEE_ATTACK1` `0x51` and

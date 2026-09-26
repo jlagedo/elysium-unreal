@@ -228,9 +228,6 @@ static bool FValidateHintTypeSpecies(const FHintTypeSpecies* Row, int32 HintType
  *  "no"? True only for `EHintTypeRule::InRangeOrBase`. Story 29d, family Senses10. */
 static bool HintTypeSpeciesFallsThroughToBase(const FHintTypeSpecies* Row);
 
-/** This NPC's row applied to a hint node — the entry point the slot will call. False when the seam
- *  cannot resolve the node, and false when no row carries this species. */
-bool FValidateHintTypeForSpecies(int32 HintNode) const;
 
 // --- The bodies -----------------------------------------------------------------------------------
 

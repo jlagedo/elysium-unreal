@@ -410,12 +410,12 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 		return false;
 	}
 
-	// A plain NPC does not take the arm at all — the prologue answers false and the Troika body runs.
-	// The partner is that plain NPC: an `npc_VHumanCombatant`, the leaf the subject stood as before
-	// it was spawned as the payphone itself. The prologue is a pure class test, so asking writes
-	// nothing on the partner the arms below read.
-	TestFalse(TEXT("a non-payphone does not take slot 431's species arm"),
-		Partner->PayphoneThink());
+	// A plain NPC does not take the body at all: slot 431's payphone body is `FElysiumNpcPayphone`'s
+	// own `Think` override (story 5 step 3), and the partner is an `npc_VHumanCombatant`.
+	TestTrue(TEXT("the subject is a CPayphone"),
+		N.RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CPayphone")));
+	TestTrue(TEXT("a non-payphone does not take slot 431's species body"),
+		Partner->RetailClass() != ElysiumNpcKernelClass::Find(TEXT("CPayphone")));
 
 	const double Now = N.World->NowSeconds();
 	// A spawned payphone has already thought: its own slot 431 took the idle arm on the fixture's
@@ -476,8 +476,13 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 	TestEqual(TEXT("but the cycle is copied again"), N.SequenceCycle, 0.5f);
 
 	// The control: the bare Troika line, `CAI_BaseNPCTroika` with no species class over it.
-	TestFalse(TEXT("the bare Troika line control never takes the payphone arm"),
-		Fix.Troika->PayphoneThink());
+	// Its think is the Troika line's, not `FElysiumNpcPayphone::Think`: a pass leaves the payphone
+	// counters alone.
+	const int32 TroikaIdle = Fix.Troika->PayphoneIdlePasses;
+	const int32 TroikaMirror = Fix.Troika->PayphoneMirrorPasses;
+	Fix.Troika->Think();
+	TestTrue(TEXT("the bare Troika line control never takes the payphone arm"),
+		Fix.Troika->PayphoneIdlePasses == TroikaIdle && Fix.Troika->PayphoneMirrorPasses == TroikaMirror);
 	return true;
 }
 
@@ -697,18 +702,18 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 	N.Senses.Memory.Enemy = FElysiumEntityHandle();
 	N.PlayerHateRelationshipSets = 0;
 	N.bGuard1HatesPlayer = false;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("no enemy: nothing"), N.PlayerHateRelationshipSets, 0);
 
 	// An enemy that is not the player: still nothing — the second term is `enemy->m_pPlayer`.
 	N.Senses.Memory.Enemy = OtherNpc->Handle;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("an enemy that is not the player: nothing"), N.PlayerHateRelationshipSets, 0);
 
 	// The player as enemy: `0x1037e2d0` — the latch byte at `+0x6660` AND
 	// `InputSetRelationship("player D_HT 10")`.
 	N.Senses.Memory.Enemy = N.World->PlayerHandle();
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("my enemy is the player: the relationship is set"),
 		N.PlayerHateRelationshipSets, 1);
 	TestTrue(TEXT("and the +0x6660 latch is raised — Guard1's body writes it, the Hunter's does not"),
@@ -718,7 +723,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 
 	// The arm is UNCONDITIONAL on the states: retail tests neither `param_1` nor `param_2` for it.
 	N.PlayerHateRelationshipSets = 0;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Dead, EElysiumNpcState::Idle);
+	N.Guard1StateChangePreStep();
 	TestEqual(TEXT("the Guard1 arm does not look at either state"), N.PlayerHateRelationshipSets, 1);
 
 	// And it runs from slot 463's own dispatch, ahead of the shared holster switch.
@@ -775,17 +780,17 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 	N.Senses.Memory.Enemy = OtherNpc->Handle;
 	N.HunterPursuitStarts = 0;
 	N.PlayerHateRelationshipSets = 0;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.HunterStateChangePreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
 	TestEqual(TEXT("an enemy that is not the player does not start a pursuit"),
 		N.HunterPursuitStarts, 0);
 
 	N.Senses.Memory.Enemy = N.World->PlayerHandle();
 	N.bGuard1HatesPlayer = false;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
+	N.HunterStateChangePreStep(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 	TestEqual(TEXT("the player as enemy but NewState != COMBAT does not start a pursuit"),
 		N.HunterPursuitStarts, 0);
 
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.HunterStateChangePreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
 	TestEqual(TEXT("entering COMBAT on the player starts the pursuit"), N.HunterPursuitStarts, 1);
 	TestEqual(TEXT("and 0x10388c40 sets the relationship — WITHOUT the Guard1 latch byte"),
 		N.PlayerHateRelationshipSets, 1);
@@ -796,16 +801,16 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 
 	// Arm 2: leaving COMBAT releases it. The clear comes first, the release second.
 	N.HunterPursuitStops = 0;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Alert, EElysiumNpcState::Idle);
+	N.HunterStateChangePreStep(EElysiumNpcState::Alert, EElysiumNpcState::Idle);
 	TestEqual(TEXT("an OldState that is not COMBAT does not release"), N.HunterPursuitStops, 0);
 
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
+	N.HunterStateChangePreStep(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
 	TestEqual(TEXT("leaving COMBAT releases the pursuit"), N.HunterPursuitStops, 1);
 	TestFalse(TEXT("and m_hPursuitPlayer is cleared"), N.HunterPursuitPlayer.IsSet());
 	TestEqual(TEXT("the player-side refcount fell back"), Player->Police.HuntersInPursuit, 0);
 
 	// A second release with no cached player does nothing: the handle term gates it.
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
+	N.HunterStateChangePreStep(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
 	TestEqual(TEXT("a release with no cached pursuit does nothing"), N.HunterPursuitStops, 1);
 	TestEqual(TEXT("so the refcount does not go negative here"),
 		Player->Police.HuntersInPursuit, 0);
@@ -813,7 +818,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 	// Both arms can fire on one call — retail evaluates arm 2 against the handle arm 1 just wrote.
 	N.HunterPursuitStarts = 0;
 	N.HunterPursuitStops = 0;
-	N.StateChangeSpeciesPreStep(EElysiumNpcState::Combat, EElysiumNpcState::Combat);
+	N.HunterStateChangePreStep(EElysiumNpcState::Combat, EElysiumNpcState::Combat);
 	TestEqual(TEXT("COMBAT -> COMBAT acquires..."), N.HunterPursuitStarts, 1);
 	TestEqual(TEXT("...and releases on the same call, which is retail's own order"),
 		N.HunterPursuitStops, 1);

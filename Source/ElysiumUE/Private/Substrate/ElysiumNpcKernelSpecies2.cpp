@@ -3,6 +3,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -13,6 +14,8 @@
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 
 // Story 29c-1, family **Species**, the second half — `CNPC_VAndreiBlood`, `CNPC_VChangBros`,
 // `CNPC_VMingXiaoTentacle`, `CNPC_VNewscaster`, `CNPC_VTzimisce`'s carry chain,
@@ -83,6 +86,10 @@ namespace
 	// `Substrate/ElysiumNpcFlags.h` names.
 	constexpr int32 ZombieFloatSoundFrequency = 9;
 	constexpr EElysiumNpcFlag ZombieFloatSoundBlockingFlag = EElysiumNpcFlag::SLEEPING;
+	// `Float_Sound_Info` row 3, the zombie's own float-sound distance (`0x103e11b8` pushes 3), and the
+	// authored value it answers (`vdata/system/rules_tables.txt`), used when no rulebook is loaded.
+	constexpr int32 ZombieFloatSoundDistanceRow = 3;
+	constexpr float ZombieFloatSoundDistanceUnits = 250.0f;
 
 	// `CBaseCombatCharacter::IsUnconscious` (`0x10341aa0`) — `(m_iMiscFlags & 1) != 0`. Family
 	// **Sounds** keeps an identical private copy (`SoundsIsUnconscious`) for the same
@@ -305,42 +312,6 @@ void FElysiumNpc::FUN_1039e860(FElysiumEntity* Arg)
 {
 	// `0x1039e860`, slot 23 — the same body a third time.
 	FUN_1039e800(Arg);
-}
-
-bool FElysiumNpc::SpeciesSlot21(FElysiumEntity* Arg)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(21);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x1039e800")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 21);
-	FUN_1039e800(Arg);
-	return true;
-}
-
-bool FElysiumNpc::SpeciesSlot22(FElysiumEntity* Arg)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(22);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x1039e830")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 22);
-	FUN_1039e830(Arg);
-	return true;
-}
-
-bool FElysiumNpc::SpeciesSlot23(FElysiumEntity* Arg)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(23);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x1039e860")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 23);
-	FUN_1039e860(Arg);
-	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -836,42 +807,6 @@ void FElysiumNpc::FUN_103682f0()
 	// sound-hook cluster. `CNPC_VCameraSecurity` inherits both.
 }
 
-bool FElysiumNpc::SpeciesDeathSound()
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(488);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103b92a0")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 488);
-	FUN_103b92a0();
-	return true;
-}
-
-bool FElysiumNpc::SpeciesSlot497()
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(497);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103681d0")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 497);
-	FUN_103681d0();
-	return true;
-}
-
-bool FElysiumNpc::SpeciesSlot506()
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(506);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103682f0")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 506);
-	FUN_103682f0();
-	return true;
-}
-
 // -------------------------------------------------------------------------------------------------
 // `CNPC_VWerewolf` — `0x103d1e50` and `0x103d9c90`.
 // -------------------------------------------------------------------------------------------------
@@ -1045,37 +980,43 @@ void FElysiumNpc::FUN_103e0980(int32 InZombieAiType)
 	}
 }
 
-bool FElysiumNpc::FUN_103e1080(bool bArg)
+bool FElysiumNpc::FUN_103e1080()
 {
-	// `0x103e1080`, `CNPC_VZombie`'s slot 510 `ShouldPlayFloatSound`:
+	// `0x103e1080`, `CNPC_VZombie`'s slot 510 `ShouldPlayFloatSound` (zero stack words: the retail
+	// prototype is `bool vfunc510()`, story 5 step 0 `decisions.json` `body_resolutions`), in order:
 	//
-	//     m_iFloatSoundFrequency (+0x10e8) = 9;
-	//     if (IsMoaning(this)) return false;                            // thunk 0x102c1170
-	//     if (Resolve(+0x1538) && +0x153c != -1) return false;          // a live cached float sound
+	//     m_iFloatSoundFrequency (+0x10e8) = 9;                          // first, on every call
+	//     if (IsInDialog()) return false;                                // 0x102c1170
+	//     if (Resolve(+0x1538) && +0x153c != -1) return false;           // grapple partner and role
 	//     if (IsUnconscious()) return false;
-	//     if (m_bfAINPCFlags & 0x20000) return false;                   // SLEEPING
+	//     if (m_bfAINPCFlags & 0x20000) return false;                    // SLEEPING
 	//     player = Resolve(m_hClosestPlayer);  if (!player) return false;
-	//     if (Resolve(player->+0xfe8)) return false;                    // the player already has one
-	//     <lazily register the "Float Sound Info" keyvalues block, once>
-	//     <roll _DAT_10940490 once, from that block>
-	//     if (m_flPlayerDist <= _DAT_10940490) return CAI_BaseNPC::ShouldPlayFloatSound(param_1);
+	//     if (Resolve(player->+0xfe8)) return false;                     // the player's dialog partner
+	//     threshold = Float_Sound_Info row 3, read once (DAT_10940495 bits 1 and 2);
+	//     if (m_flPlayerDist <= threshold) return CAI_BaseNPC::ShouldPlayFloatSound();  // 0x1027a530
 	//     return false;
 	//
-	// **The frequency write happens FIRST and on every call**, before any gate — so even a zombie
-	// that refuses has set `m_iFloatSoundFrequency` to 9. That ordering is the row's main fact.
+	// **No IDLE-state gates.** The accepting arm is a direct call (`0x103e11f9` -> thunk
+	// `0x10005f97` -> `0x1027a530`) into the CAI_BaseNPC body, bypassing the Troika override
+	// `0x10294070` and its two IDLE tests: an ALERT zombie still moans. `BaseShouldPlayFloatSound`
+	// is that base body until story 5 step 5 names it `FElysiumNpcBase::ShouldPlayFloatSound`.
 	//
-	// The two `DAT_10940495` bits are a one-time lazy init of a KeyValues block named
-	// `"Float Sound Info"` and of the distance threshold `_DAT_10940490` read out of it. Both live
-	// in `.data` and are filled at RUNTIME, so the threshold is **UNRECOVERED** — it is not a
-	// `.rdata` constant that could be read out of the image.
-	//
-	// **NAMED DECISION**: the threshold is treated as 0.0, and `m_flPlayerDist <= 0.0` is false for
-	// any positive distance, so the body refuses. That is the conservative arm — it plays no sound
-	// this substrate cannot attribute to a recovered number — and it is stated rather than papered
-	// over. `ShouldPlayFloatSound` (family Sounds' base) is still the delegate the accepting arm
-	// takes, so the day the KeyValues block is read nothing else moves.
+	// Story 5 step 3 corrected this body (`decisions-step3.json` `retail_corrections`): it had lost
+	// the dialog, grapple and player-partner gates, read the distance as an unrecovered 0.0 and
+	// tailed into the Troika override. The row-3 distance is recovered (`Float_Sound_Info` row 3 =
+	// 250.0 Source units, `kernel_migration_audit.rulebook_fact`); retail caches it once per process,
+	// this port re-reads the authored table, which answers the same.
 	FloatSoundFrequency = ZombieFloatSoundFrequency;   // +0x10e8, unconditional and first
 
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	if (Dialogue.bInDialog || IsTalking(Now))   // `IsInDialog` 0x102c1170, as family Sounds reads it
+	{
+		return false;
+	}
+	if (IsGrappling())   // `+0x1538` live and `+0x153c != -1`
+	{
+		return false;
+	}
 	if (Species2IsUnconscious(*this))
 	{
 		return false;
@@ -1090,29 +1031,29 @@ bool FElysiumNpc::FUN_103e1080(bool bArg)
 	{
 		return false;
 	}
-	// `_DAT_10940490` — UNRECOVERED, a runtime KeyValues read. See the note above.
-	constexpr float ZombieFloatSoundMaxPlayerDistUnits = 0.0f;
-	if (Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U
-		<= ZombieFloatSoundMaxPlayerDistUnits)
-	{
-		return ShouldPlayFloatSound();
-	}
-	(void)bArg;
-	return false;
-}
-
-bool FElysiumNpc::SpeciesShouldPlayFloatSound(bool& OutAnswer)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(510);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103e1080")) != 0)
+	// The player's `+0xfe8` dialog partner. The port's stand-in is the open dialogue session, the
+	// same reading family Sounds' Troika body makes (a named limitation from story 5 step 0).
+	if (World->GetOpenDialogOwner().IsSet())
 	{
 		return false;
 	}
-	// `FUN_103e1080`'s accepting arm tails into `ShouldPlayFloatSound`, the base it replaces;
-	// the scope makes that the direct call retail's tail jump is.
-	const FSpeciesDispatchScope Scope(*this, 510);
-	OutAnswer = FUN_103e1080(/*bArg=*/false);
-	return true;
+	float ThresholdUnits = ZombieFloatSoundDistanceUnits;
+	if (UElysiumSessionSubsystem* GameState = World->GetGameState())
+	{
+		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+		{
+			if (const FElysiumRuleTable* Table = Rules->Rules().Table(TEXT("Float_Sound_Info")))
+			{
+				ThresholdUnits = Table->Lookup(ZombieFloatSoundDistanceRow, ZombieFloatSoundDistanceUnits);
+			}
+		}
+	}
+	// `m_flPlayerDist <= threshold` (equality passes), Source units.
+	if (Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U > ThresholdUnits)
+	{
+		return false;
+	}
+	return BaseShouldPlayFloatSound();
 }
 
 void FElysiumNpc::FUN_103e12c0(FElysiumEntity* Victim)
@@ -1138,26 +1079,3 @@ void FElysiumNpc::FUN_103e12f0(FElysiumEntity* Victim)
 	FUN_103e12c0(Victim);
 }
 
-bool FElysiumNpc::SpeciesSlot25(FElysiumEntity* Arg)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(25);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103e12c0")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 25);
-	FUN_103e12c0(Arg);
-	return true;
-}
-
-bool FElysiumNpc::SpeciesSlot26(FElysiumEntity* Arg)
-{
-	const FSpeciesSlotRow* Row = SpeciesDispatchRow(26);
-	if (Row == nullptr || FCString::Strcmp(Row->Address, TEXT("0x103e12f0")) != 0)
-	{
-		return false;
-	}
-	const FSpeciesDispatchScope Scope(*this, 26);
-	FUN_103e12f0(Arg);
-	return true;
-}

@@ -265,18 +265,13 @@ bool NavigatorGoalIsActive() const;
 int32 BaseSave(void* Archive);
 
 /** `CAI_BaseNPCTroika::Save` (`0x102993c0`) — slot 126's own body, without the species prologue.
- *  `Save()` is the slot; this is what it runs when no species arm claims it, and what a species
- *  arm's own chain call reaches through `FSpeciesDispatchScope`.
+ *  `Save()` is the slot; this is what it runs on the Troika line, and what a species
+ *  class's override calls directly.
  *
  *  Eleven stamps encoded in retail's order and modes, then nine `CSound` expiry stamps at mode 2,
  *  then `BaseSave`, then one `bool` and (when it is true) two `int`s through the archive, then the
  *  same eleven and the same nine decoded in the same order. The return is `BaseSave`'s. */
 int32 TroikaSave(void* Archive);
-
-/** Slot 126's species prologue. True means a species body ran and the Troika body must NOT — which
- *  is what a vtable dispatch to an override does. Keyed on the override row's retail ADDRESS
- *  through `Substrate/ElysiumNpcKernelClassLookup.h`, as family Precache10's slot-104 prologue is. */
-bool SaveSpecies(void* Archive, int32& OutResult);
 
 /** `CNPC_VMingXiao::Save` (`0x10395f80`) — the six `m_rflRegrowTimers` (`+0x66f4`) encoded at mode
  *  **4** ascending, the Troika body, then the same six decoded ascending. */
@@ -299,9 +294,6 @@ int32 TzimisceHeadClawSave(void* Archive);
  *  eleven stamps and nine sounds `TroikaSave` encodes, decoded in the same order with the same
  *  modes. */
 int32 TroikaRestore(void* Archive);
-
-/** Slot 127's species prologue, the mirror of `SaveSpecies`. */
-bool RestoreSpecies(void* Archive, int32& OutResult);
 
 /** `CNPC_VMingXiao::vfunc127` (`0x10396000`) — the Troika body, then the six `m_rflRegrowTimers`
  *  decoded at mode **4** ascending. */
@@ -344,9 +336,6 @@ int32 VampireBossRestore(void* Archive);
  *       order, through `0x1029f5d0`.
  *    6. tail-jump to `CAI_BaseNPC::UpdateOnRemove`. */
 void TroikaUpdateOnRemove();
-
-/** Slot 180's species prologue. */
-bool UpdateOnRemoveSpecies();
 
 /** `CNPC_VCop::UpdateOnRemove` (`0x10371a90`), read off the listing — the decompiled C mis-renders
  *  the two census bytes as `this+1`. Retail, instruction for instruction:

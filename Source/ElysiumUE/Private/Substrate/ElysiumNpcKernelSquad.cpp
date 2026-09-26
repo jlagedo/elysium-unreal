@@ -296,7 +296,11 @@ const TCHAR* FElysiumNpc::GlobalSquadSlotName(int32 GlobalId)
 	return nullptr;
 }
 
-// slot 546 0x101a6c00 `const char* SquadSlotName(int)` + the 56 species overrides
+// slot 546 0x101a6c00 `const char* SquadSlotName(int)`. Thirty-eight species classes override it
+// on their C++ classes (story 5 step 3) through `SpeciesSquadSlotName`; the rest inherit one of
+// those. The controller line (`CNPC_VFrenzyShadow` `0x10375440`, `CNPC_VWolfMorph` `0x103dc950`,
+// `CNPC_VPlayerController` sharing `CNPC_VVampire`'s `0x103c4a80`) stays a census arm until the
+// controller fold (step 7): only a test-latched Troika-line instance reaches it.
 const TCHAR* FElysiumNpc::SquadSlotName(int32 SlotEn)
 {
 	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546);
@@ -305,12 +309,32 @@ const TCHAR* FElysiumNpc::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(Species, SlotEn));
 }
 
+const TCHAR* FElysiumNpc::SpeciesSquadSlotName(const TCHAR* SpeciesClass, int32 SlotEn)
+{
+	// The body of a species class's `SquadSlotName` override: the id is mapped through the class's
+	// own `CAI_ClassScheduleIdSpace` (its row of `GNpcKernelSquadSlotSpecies`), then named.
+	return GlobalSquadSlotName(SquadSlotLocalToGlobal(SquadSlotSpeciesOf(SpeciesClass), SlotEn));
+}
+
 // -------------------------------------------------------------------------------------------------
 // The squad bodies.
 // -------------------------------------------------------------------------------------------------
 
-// slot 545 0x10273d30 `bool InitSquad()`, with CNPC_VCamera / CNPC_VCameraSecurity's 0x10369bd0
+// slot 545 0x10273d30 `bool InitSquad()`. `CNPC_VCamera` (`0x10369bd0`, inherited by
+// `CNPC_VCameraSecurity`) overrides it on its C++ class (story 5 step 3); the two bodies share every
+// gate and differ only in the join arm, so both run `InitSquadLine`.
 bool FElysiumNpc::InitSquad()
+{
+	return InitSquadLine(/*bCameraArm*/ false);
+}
+
+bool FElysiumNpc::CameraInitSquad()
+{
+	// `CNPC_VCamera::InitSquad` `0x10369bd0`, the body of `FElysiumNpcCamera::InitSquad`.
+	return InitSquadLine(/*bCameraArm*/ true);
+}
+
+bool FElysiumNpc::InitSquadLine(bool bCameraArm)
 {
 	if (ConnectedSquad() == nullptr)
 	{
@@ -326,12 +350,8 @@ bool FElysiumNpc::InitSquad()
 					*DebugString());
 				return ConnectedSquad() != nullptr;
 			}
-			// The species split, read off the census rather than off a name: `CNPC_VCamera` and
-			// `CNPC_VCameraSecurity` fill slot 545 with `0x10369bd0`, everything else inherits the
+			// The one difference between the two bodies: `CNPC_VCamera`'s `0x10369bd0` against the
 			// Troika line's `0x10273d30`.
-			const TCHAR* SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 545);
-			const bool bCameraArm =
-				SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10369bd0")) == 0;
 			if (bCameraArm)
 			{
 				// 0x10369bd0: join an EXISTING squad by name; on a miss create one and then

@@ -11,4 +11,11 @@ class FElysiumNpcDog : public FElysiumNpcAnimal
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual int32 NPC_EarlyTranslateActivity(int32 Activity) override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual int32 PreSelectIdealStateRetail() override;
+	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
+	virtual float MaxYawSpeed() override;
+	virtual bool FValidateHintType(void* Hint) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

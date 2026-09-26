@@ -229,7 +229,8 @@ FElysiumEntityHandle LastMeleeWeapon;   // +0x0ea8 m_hLastMeleeWeapon
  *  window). The generated virtual returns the typed enum, so the raw id is the deliverable and is
  *  what the suite reads; `FElysiumNpcMind::DesiredRetailState()` carries the same word for the two
  *  flee arms and is written by every arm of this body too. */
-int32 PreSelectIdealStateRetail();
+/** Slot 460 in retail's own ordinals — the method species classes override (story 5 step 3). */
+virtual int32 PreSelectIdealStateRetail();
 int32 LastPreSelectIdealStateRetail = 0;
 
 /** `m_eForcedState` (`+0x65cc`) — see standing fact three. Read and CLEARED by slot 460's first arm.
@@ -350,8 +351,8 @@ FYawClearanceSweep LastYawClearanceSweep;
 // The slot method is the dispatcher and lives in `ElysiumNpcKernelCombat10_2.cpp`; it selects on
 // `OverrideOf(RetailClass(), 605)` exactly as slot 604's does and runs one of the six bodies below.
 // They are declared rather than inlined for one recovered reason: `CNPC_VBach`'s arm ends by calling
-// `CNPC_VHuman`'s body `0x10386560` through a DIRECT, non-virtual call, which one function cannot
-// express — the same situation `FSpeciesDispatchScope` was ported for.
+// `CNPC_VHuman`'s body `0x10386560` through a DIRECT, non-virtual call, which a named body expresses
+// (story 5 step 3 made the six bodies their classes' overrides).
 //
 // A combat-schedule selector is an ORDERED body. Every arm below is in retail's order and the first
 // that answers wins; the order is the behaviour.

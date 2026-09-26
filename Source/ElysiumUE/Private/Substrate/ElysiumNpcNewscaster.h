@@ -12,4 +12,9 @@ class FElysiumNpcNewscaster : public FElysiumNpc
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual void UpdateOnRemove() override;
+	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
+	virtual int32 DrawDebugTextOverlays() override;
 };

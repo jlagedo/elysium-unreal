@@ -50,9 +50,6 @@ namespace
 	constexpr TCHAR GDebug10_2ViewCone[] = TEXT("0x1029c4a0");
 
 	// --- The census addresses slot 123 dispatches on -----------------------------------------------
-	constexpr TCHAR GDebug10_2Body_Troika[] = TEXT("0x1029ca50");
-	constexpr TCHAR GDebug10_2Body_VCop[] = TEXT("0x10372f00");
-	constexpr TCHAR GDebug10_2Body_MingXiao[] = TEXT("0x10399d40");
 	constexpr TCHAR GDebug10_2Body_Maker[] = TEXT("0x1034bd30");
 
 	// --- Every box extent `0x1029ca50` and `0x10292500` push, in SOURCE units ----------------------
@@ -310,23 +307,13 @@ void FElysiumNpc::MakerDrawDebugGeometryOverlays()
 
 void FElysiumNpc::DrawDebugGeometryOverlays()
 {
-	// slot 123, dispatched on the census body for this NPC's retail class, as story 29c-1's slot-76
-	// dispatcher does. A spawned `npc_VCop` is `CNPC_VCop` (story 5 step 2) and takes the cop body;
-	// only the bare Troika line answers a null `RetailClass()` and takes the TROIKA body.
-	// `CScriptedTarget#123` (`0x1034e070`) carries no arm: no map stands that class.
+	// slot 123, the Troika body `0x1029ca50`. `CNPC_VCop` (`0x10372f00`) and `CNPC_VMingXiao`
+	// (`0x10399d40`) override this method on their C++ classes (story 5 step 3).
+	// `CScriptedTarget#123` (`0x1034e070`) carries no arm: no map stands that class. The maker's
+	// `0x1034bd30` stays a census arm until the maker fold (step 8).
 	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 123);
 	if (SlotBody != nullptr)
 	{
-		if (FCString::Strcmp(SlotBody, GDebug10_2Body_VCop) == 0)
-		{
-			VCopDrawDebugGeometryOverlays();
-			return;
-		}
-		if (FCString::Strcmp(SlotBody, GDebug10_2Body_MingXiao) == 0)
-		{
-			MingXiaoDrawDebugGeometryOverlays();
-			return;
-		}
 		if (FCString::Strcmp(SlotBody, GDebug10_2Body_Maker) == 0)
 		{
 			MakerDrawDebugGeometryOverlays();

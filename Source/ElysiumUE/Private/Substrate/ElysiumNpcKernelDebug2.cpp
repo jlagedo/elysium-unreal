@@ -478,7 +478,7 @@ int32 FElysiumNpc::HintDrawDebugTextOverlays(int32 EntityTextLine, int32 DebugOv
 // `CNPC_VWerewolf` — slot 620 and the hull draw.
 // -------------------------------------------------------------------------------------------------
 
-void FElysiumNpc::DrawBBoxOverlay()
+void FElysiumNpc::WerewolfDrawBBoxOverlay()
 {
 	// `0x103d5050`, slot 620, filled by `CNPC_VWerewolf` alone:
 	//
@@ -493,14 +493,11 @@ void FElysiumNpc::DrawBBoxOverlay()
 	// falls through to the ordinary whole-entity box. `WerewolfShouldPursueEnemy` is family Senses'
 	// port of `0x103cf5f0`.
 	//
-	// Slot 620 has no Troika-line body, so this method is the whole slot and dispatches on the
-	// census: only `CNPC_VWerewolf` answers the recoloured arm.
+	// Slot 620 has no Troika-line body: `CNPC_VWerewolf` introduces it, so this is the body of
+	// `FElysiumNpcWerewolf::DrawBBoxOverlay`, that class's own virtual (story 5 step 3).
 	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::DrawBBoxOverlay %s"),
 		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 620);
-	const bool bWerewolf = Override != nullptr
-		&& FCString::Strcmp(Override->Address, TEXT("0x103d5050")) == 0;
-	if (bWerewolf && !WerewolfShouldPursueEnemy())
+	if (!WerewolfShouldPursueEnemy())
 	{
 		EmitOverlayEntityBounds(GNpcKernelDebug2EntityBounds, 50, 255, 50, 0);
 		return;

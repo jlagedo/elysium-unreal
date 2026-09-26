@@ -53,14 +53,6 @@ namespace
 	// The two trace bytes. Game-thread only, like the rest of the substrate.
 	TMap<FString, int32> GDebug10TraceBytes;
 
-	// --- The census addresses the two slot methods dispatch on -----------------------------------
-	constexpr TCHAR GDebug10Body_BaseText[] = TEXT("0x102767d0");
-	constexpr TCHAR GDebug10Body_TroikaText[] = TEXT("0x1029d4e0");
-	constexpr TCHAR GDebug10Body_HengeyokaiText[] = TEXT("0x10383560");
-	constexpr TCHAR GDebug10Body_NewscasterText[] = TEXT("0x103a1250");
-	constexpr TCHAR GDebug10Body_TzimisceText[] = TEXT("0x103c08d0");
-	constexpr TCHAR GDebug10Body_ZombieText[] = TEXT("0x103e0e80");
-
 	// --- Retail's `NDebugOverlay` entry points, by name, so a captured line names its call --------
 	constexpr TCHAR GDebug10Box[] = TEXT("NDebugOverlay::Box");
 	constexpr TCHAR GDebug10BoxAngles[] = TEXT("NDebugOverlay::BoxAngles");
@@ -400,32 +392,10 @@ void FElysiumNpc::TraceMessageBare(const TCHAR* Message)
 
 int32 FElysiumNpc::DrawDebugTextOverlays()
 {
-	// slot 124. Eight retail bodies fill it across the census; the two on classes no map stands
-	// (`CNPC_Crow` `0x10358f90`, `CScriptedTarget` `0x1034ddf0`) carry no port arm. This leaf
-	// resolves between the rest by the address the census says fills the slot for this NPC's retail
-	// class, exactly as story 29c-1's slot-76 dispatcher does. A spawned `npc_VCop` is `CNPC_VCop`
-	// (story 5 step 2) and takes its own body; only the bare Troika line answers a null
-	// `RetailClass()`.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 124);
-	if (SlotBody != nullptr)
-	{
-		if (FCString::Strcmp(SlotBody, GDebug10Body_HengeyokaiText) == 0)
-		{
-			return HengeyokaiDrawDebugTextOverlays();
-		}
-		if (FCString::Strcmp(SlotBody, GDebug10Body_NewscasterText) == 0)
-		{
-			return NewscasterDrawDebugTextOverlays();
-		}
-		if (FCString::Strcmp(SlotBody, GDebug10Body_TzimisceText) == 0)
-		{
-			return TzimisceDrawDebugTextOverlays();
-		}
-		if (FCString::Strcmp(SlotBody, GDebug10Body_ZombieText) == 0)
-		{
-			return ZombieDrawDebugTextOverlays();
-		}
-	}
+	// slot 124, the Troika body `0x1029d4e0`. `CNPC_VHengeyokai`, `CNPC_VNewscaster`, `CNPC_VTzimisce`
+	// and `CNPC_VZombie` override this method on their C++ classes (story 5 step 3), each chaining the
+	// Troika body directly. The two bodies on classes no map stands (`CNPC_Crow` `0x10358f90`,
+	// `CScriptedTarget` `0x1034ddf0`) carry no port arm.
 	return TroikaDrawDebugTextOverlays();
 }
 

@@ -313,14 +313,9 @@ void FElysiumNpc::EmitNamedWav(const FElysiumEntity* Emitter, int32 Channel, con
 void FElysiumNpc::Slot332(FElysiumEntity* SlowTarget)
 {
 	// `CAI_BaseNPC#332` / `CAI_BaseNPCTroika#332` (`0x1014f890`) — the whole Troika-line body is
-	// `return;`. It moved out of the generated file only so this dispatcher has a prologue, exactly
-	// as story 29c-1's cleanup moved slots 488 and 506 for the same reason; the base contributes
-	// nothing and the ONE species override is `CNPC_VTzimisceHeadClaw`'s `0x103c1d80`.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 332);
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x103c1d80")) == 0)
-	{
-		HeadClawSlot332(SlowTarget);
-	}
+	// `return;`. The ONE species override is `CNPC_VTzimisceHeadClaw`'s `0x103c1d80`, on its C++
+	// class (story 5 step 3).
+	(void)SlowTarget;
 }
 
 void FElysiumNpc::HeadClawSlot332(FElysiumEntity* SlowTarget)

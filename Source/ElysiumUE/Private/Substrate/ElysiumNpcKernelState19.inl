@@ -125,12 +125,14 @@ int32 PedestrianCrimeReports = 0;
 int32 BasePreSelectIdealState();
 /** `CAI_BaseNPC::SelectIdealState` (`0x1026f660`), slot 461's BASE body. */
 int32 BaseSelectIdealState();
-/** `CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`) without the species prologue. */
+/** `CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`). */
 int32 TroikaSelectIdealState();
-/** Slot 461's raw-id body, used by the typed virtual and by tests. */
-int32 SelectIdealStateRetail();
+/** Slot 461 in retail's own ordinals — the method species classes override (story 5 step 3); the
+ *  typed `SelectIdealState()` records its answer and converts it. */
+virtual int32 SelectIdealStateRetail();
 
-/** The species SelectIdealState helpers, keyed by retail address in the dispatcher. */
+/** The species SelectIdealState bodies, each the `SelectIdealStateRetail` override of its class. */
+int32 AndreiBloodSelectIdealStateRetail();
 int32 HumanSelectIdealState();
 int32 AnimalSelectIdealState();
 int32 HumanCombatPatrolSelectIdealState();

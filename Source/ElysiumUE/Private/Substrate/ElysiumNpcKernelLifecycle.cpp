@@ -502,22 +502,6 @@ void FElysiumNpc::GhoulCroucherScriptUnhideTail()
 	}
 }
 
-FElysiumNpc::FCineUnhideRecord FElysiumNpc::ScriptUnhideSpecies(double Now)
-{
-	// The Troika tail is slot 78 for 62 classes and runs first on every one of them, because both
-	// species overrides call it before their own tail.
-	const FCineUnhideRecord Record = TroikaScriptUnhideTail();
-	if (IsRetailClass(TEXT("CNPC_VWerewolf")))
-	{
-		WerewolfScriptUnhideTail(Now);
-	}
-	else if (IsRetailClass(TEXT("CNPC_VGhoulCroucher")))
-	{
-		GhoulCroucherScriptUnhideTail();
-	}
-	return Record;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 103 `Spawn` — the species bodies.
 // -------------------------------------------------------------------------------------------------
@@ -903,24 +887,9 @@ void FElysiumNpc::BaseNpcUpdateOnRemove()
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 434 `PrescheduleThink`.
+// Slot 434 `PrescheduleThink` — `CNPC_VCamera`'s empty `0x10369100` is its class's override (story 5
+// step 3). `CNPC_VSabbatLeader`'s `0x103a7650` forwards to `0x10385a30`, which has no port body yet.
 // -------------------------------------------------------------------------------------------------
-
-FElysiumNpc::EPrescheduleSpecies FElysiumNpc::PrescheduleSpecies() const
-{
-	// 0x10369100 (`CNPC_VCamera`, shared with `CNPC_VCameraSecurity`) is an EMPTY body — a camera
-	// does no preschedule work. 0x103a7650 (`CNPC_VSabbatLeader`) is the scope trace and an
-	// unconditional forward to `CNPC_VAndreiBlood::PrescheduleThink` (`0x10385a30`), family Bosses'.
-	if (IsRetailClass(TEXT("CNPC_VCamera")))
-	{
-		return EPrescheduleSpecies::Empty;
-	}
-	if (IsRetailClass(TEXT("CNPC_VSabbatLeader")))
-	{
-		return EPrescheduleSpecies::ForwardToAndreiBlood;
-	}
-	return EPrescheduleSpecies::Base;
-}
 
 // -------------------------------------------------------------------------------------------------
 // The free functions and the unnamed tables.

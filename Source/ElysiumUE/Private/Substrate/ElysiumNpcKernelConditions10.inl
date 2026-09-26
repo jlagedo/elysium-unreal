@@ -35,7 +35,7 @@
 // `SpeciesIRelationType` in family Squad and is dispatched to, and `0x103a01b0`
 // (`CNPC_VNewscaster`) is an eight-byte `return 4;` answered inline. Neither chains the Troika body.
 //
-// **No `FSpeciesDispatchScope` here, and that is the recovered shape.** All four species arms end
+// **Two kinds of chain, and that is the recovered shape.** All four species arms end
 // in a DIRECT non-virtual thunk to `CAI_BaseNPCTroika::IRelationType` (`thunk_FUN_10299da0`), which
 // `TroikaIRelationType` below is; but the Troika body's own three inner `vtable +0x650` calls are
 // VIRTUAL and therefore re-enter the species arm. A latch that suppressed the species body for the
@@ -104,13 +104,10 @@ bool IsUnconsciousMiscFlag() const;
 
 // --- Slot 448 `TaskFail` — the seven species arms in front of story 13's body -------------------
 //
-// `FElysiumNpc::TaskFail` (`ElysiumNpc.cpp`) is slot 448's one port method and already runs the
-// whole `CAI_BaseNPCTroika::TaskFail` (`0x1029adb0`) chain. Every species body in the census runs
-// its own arm and then chains `0x1029adb0` UNCONDITIONALLY, so the arms are a PROLOGUE: `TaskFail`
-// calls `SpeciesTaskFail` on its first line and the Troika body follows, which is retail's order.
-
-/** The slot-448 species dispatcher, called from the first line of `FElysiumNpc::TaskFail`. */
-void SpeciesTaskFail(int32 Reason);
+// `FElysiumNpc::TaskFail` (`ElysiumNpc.cpp`) runs the whole `CAI_BaseNPCTroika::TaskFail`
+// (`0x1029adb0`) chain. Every species body in the census runs its own arm and then calls
+// `0x1029adb0` directly and UNCONDITIONALLY: each is its class's `TaskFail` override (story 5
+// step 3), which runs the arm below and then `FElysiumNpc::TaskFail`.
 
 /** `CNPC_VAsianVampire::TaskFail` (`0x10362390`) — on failure codes 12..15 (`0xb < code && code <
  *  0x10`) it sets `m_bPathBlocked` (`+0x66d4`) and nothing else. */

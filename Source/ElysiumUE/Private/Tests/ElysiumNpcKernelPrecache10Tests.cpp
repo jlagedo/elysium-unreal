@@ -354,10 +354,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10ArmCoverageTest,
 	"Elysium.Substrate.NpcKernelPrecache10.ArmCoverage", GPrecache10TestFlags)
 bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 {
-	// EVERY slot-104 override row the census carries must be claimed by an arm. A class the arm
-	// table does not know would silently take the Troika body, which is the one failure this
-	// dispatch shape can have — so the census is the test's input, not a list typed here. Each row
-	// stands a fresh NPC spawned as its class (story 5 step 2), from the same seed.
+	// EVERY slot-104 override row the census carries must be dispatched to its species body: since
+	// story 5 step 3 that body is the override on the class's C++ type, so a class whose override
+	// was missing would silently take the Troika body. The census is the test's input, not a list
+	// typed here; each row stands a fresh NPC spawned as its class, from the same seed, and its slot
+	// must precache something the Troika body alone (`FElysiumNpc::Precache`) does not.
 	int32 Rows = 0;
 	for (const FElysiumNpcClassSlot& Row : ElysiumNpcKernelShape::Overrides())
 	{
@@ -369,8 +370,8 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 		++Rows;
 		// Counted but not driven here: the three `CNPCMaker*` rows. Their classnames build
 		// `FElysiumNpcMaker`, which is not an `FElysiumNpc`, so no NPC of the class exists to spawn;
-		// their arms claim the slot with no body (`PrecacheSpecies`'s table). `MakerArmCoverage`
-		// below stands a real maker of each row's classname and proves the row's own arm runs.
+		// their bodies are `FElysiumNpcMaker::Precache`'s. `MakerArmCoverage` below stands a real
+		// maker of each row's classname and proves the row's own body runs.
 		if (FCString::Strncmp(Row.Class, TEXT("CNPCMaker"), 9) == 0)
 		{
 			continue;
@@ -382,8 +383,13 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 		}
 		Fix.Species->PrecacheLog.Reset();
 		Fix.Species->Model.Reset();
-		TestTrue(*FString::Printf(TEXT("%s's slot-104 override is claimed by an arm"), Row.Class),
-			Fix.Species->PrecacheSpecies());
+		Fix.Species->Precache();
+		const TArray<FString> Species = Precache10LogText(Fix.Species->PrecacheLog);
+		Fix.Species->PrecacheLog.Reset();
+		Fix.Species->Model.Reset();
+		Fix.Species->FElysiumNpc::Precache();
+		TestTrue(*FString::Printf(TEXT("%s's slot 104 runs its own body, not the Troika one"), Row.Class),
+			Species != Precache10LogText(Fix.Species->PrecacheLog));
 	}
 	// 25 rows over 22 distinct bodies: the three Chang forms share `0x1036ae60` and the two camera
 	// forms share `0x103689c0`, which is why the table keys on the address. The census's other six
@@ -402,7 +408,12 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 	TestNull(TEXT("CNPC_VHumanCombatant carries no slot-104 override"),
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), GPrecacheSlotIndex));
-	TestFalse(TEXT("so no species arm claims it"), Plain.Species->PrecacheSpecies());
+	Plain.Species->PrecacheLog.Reset();
+	Plain.Species->Precache();
+	const TArray<FString> Slot = Precache10LogText(Plain.Species->PrecacheLog);
+	Plain.Species->PrecacheLog.Reset();
+	Plain.Species->FElysiumNpc::Precache();
+	TestTrue(TEXT("so its slot 104 is the Troika body"), Slot == Precache10LogText(Plain.Species->PrecacheLog));
 	return true;
 }
 
@@ -411,10 +422,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10ThunkTest,
 bool FElysiumNpcKernelPrecache10ThunkTest::RunTest(const FString&)
 {
 	// Retail's chain call is a DIRECT `thunk_`, never a vtable dispatch, so a species body's own
-	// `CAI_BaseNPCTroika::Precache` can never re-enter the species body. `FSpeciesDispatchScope` is
-	// what makes that true here: while slot 104's species body runs, slot 104's dispatcher answers
-	// "no species body". Without it `CNPC_VZombie`'s arm would recurse forever — so the fact that
-	// this case TERMINATES with exactly one Troika model op is the assertion.
+	// `CAI_BaseNPCTroika::Precache` can never re-enter the species body. Since story 5 step 3 the
+	// species body calls `TroikaPrecache()` by name — so the fact that `CNPC_VZombie`'s override
+	// TERMINATES with exactly one Troika model op is the assertion.
 	return Precache10Case(*this, TEXT("CNPC_VZombie"),
 		{
 			GTroikaOnly,

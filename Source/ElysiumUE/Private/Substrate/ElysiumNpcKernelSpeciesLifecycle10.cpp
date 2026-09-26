@@ -20,16 +20,6 @@
 
 namespace
 {
-	// The retail classes this family's arms key on, spelled once.
-	const TCHAR* const GClassPayphone = TEXT("CPayphone");
-	const TCHAR* const GClassGargoyle = TEXT("CNPC_VGargoyle");
-	const TCHAR* const GClassGhoulCroucher = TEXT("CNPC_VGhoulCroucher");
-	const TCHAR* const GClassGuard1 = TEXT("CNPC_VGuard1");
-	const TCHAR* const GClassHunter = TEXT("CNPC_VHunter");
-
-	// The two slots this family dispatches, spelled as retail's indices.
-	constexpr int32 GStartTouchSlot = 174;   // vtable +0x2b8
-	constexpr int32 GTouchSlot = 175;        // vtable +0x2bc, the `+ 700` of `CBaseEntity::Touch`
 	// `1037a3c1 CALL dword ptr [EDX + 0x238]` — slot 142, `OnTakeDamage`, dispatched on the PILLAR.
 	constexpr int32 GOnTakeDamageSlot = 142;
 
@@ -82,13 +72,21 @@ void FElysiumNpc::DialogUpkeepTick()
 	++DialogUpkeepTicks;
 }
 
+void FElysiumNpc::PayphoneThinkPass()
+{
+	// `FElysiumNpcPayphone::Think`'s body (story 5 step 3): the port's `Think` IS the Troika line's
+	// `NPCThink` (`0x10292de0`), and `CPayphone::vfunc431` REPLACES it outright. It sits under
+	// `IsInert()` because retail expresses "this entity is gone" by having no think function at all.
+	if (IsInert())
+	{
+		return;
+	}
+	PayphoneThink();
+}
+
 bool FElysiumNpc::PayphoneThink()
 {
 	// `CPayphone::vfunc431` `0x101aabf0`. The whole think for a payphone; the Troika body never runs.
-	if (!IsRetailClass(GClassPayphone))
-	{
-		return false;
-	}
 
 	// **What this body replaces is `NPCThink`, and NOT `NPCInit`.** Retail runs admission, the
 	// combat loadout and a director's parked order at SPAWN, inside `NPCInit`; this runtime cannot
@@ -211,26 +209,15 @@ void FElysiumNpc::BaseEntityTouch(FElysiumEntity* Other)
 
 void FElysiumNpc::StartTouchSpecies(FElysiumEntity* Other)
 {
-	// Slot 174's vtable dispatch, as a table lookup. `CNPC_VGhoulCroucher` is the census's only
-	// override of the slot on the NPC line.
-	if (IsRetailClass(GClassGhoulCroucher)
-		&& ElysiumNpcKernelClass::OverrideOf(RetailClass(), GStartTouchSlot) != nullptr)
-	{
-		GhoulCroucherStartTouch(Other);
-		return;
-	}
+	// Slot 174. `CNPC_VGhoulCroucher` (`0x1037bf60`), the census's only override of the slot on the
+	// NPC line, overrides this method on its C++ class (story 5 step 3).
 	BaseEntityStartTouch(Other);
 }
 
 void FElysiumNpc::TouchSpecies(FElysiumEntity* Other)
 {
-	// Slot 175's dispatch. `CNPC_VGargoyle` is the census's only override on the NPC line.
-	if (IsRetailClass(GClassGargoyle)
-		&& ElysiumNpcKernelClass::OverrideOf(RetailClass(), GTouchSlot) != nullptr)
-	{
-		GargoyleTouch(Other);
-		return;
-	}
+	// Slot 175. `CNPC_VGargoyle` (`0x1037a270`), the census's only override on the NPC line,
+	// overrides this method on its C++ class (story 5 step 3).
 	BaseEntityTouch(Other);
 }
 
@@ -364,65 +351,60 @@ void FElysiumNpc::HunterHatePlayer()
 	++PlayerHateRelationshipSets;
 }
 
-void FElysiumNpc::StateChangeSpeciesPreStep(EElysiumNpcState OldState, EElysiumNpcState NewState)
+void FElysiumNpc::Guard1StateChangePreStep()
 {
-	if (IsRetailClass(GClassGuard1))
+	// `CNPC_VGuard1::OnStateChange` `0x1037d020`, arm (1). Unconditional on the states: the only
+	// question is whether my enemy is the player. `GetEnemy()` is dispatched TWICE (`1037d026`,
+	// `1037d034`) and retail caches neither call, so both are made.
+	if (GetEnemyEntity() != nullptr)
 	{
-		// `CNPC_VGuard1::OnStateChange` `0x1037d020`, arm (1). Unconditional on the states: the only
-		// question is whether my enemy is the player. `GetEnemy()` is dispatched TWICE (`1037d026`,
-		// `1037d034`) and retail caches neither call, so both are made.
-		if (GetEnemyEntity() != nullptr)
+		const FElysiumEntity* Enemy = GetEnemyEntity();
+		if (SpeciesLifecycle10IsPlayer(*this, Enemy))
 		{
-			const FElysiumEntity* Enemy = GetEnemyEntity();
-			if (SpeciesLifecycle10IsPlayer(*this, Enemy))
-			{
-				// `0x1037e2d0` is family SpeciesMisc10's `Guard1HatePlayer()` — six other
-				// callers in `vfunc461` reach it too. Called, not restated.
-				Guard1HatePlayer();
-				++PlayerHateRelationshipSets;
-			}
+			// `0x1037e2d0` is family SpeciesMisc10's `Guard1HatePlayer()` — six other
+			// callers in `vfunc461` reach it too. Called, not restated.
+			Guard1HatePlayer();
+			++PlayerHateRelationshipSets;
 		}
-		return;
 	}
+}
 
-	if (IsRetailClass(GClassHunter))
+void FElysiumNpc::HunterStateChangePreStep(EElysiumNpcState OldState, EElysiumNpcState NewState)
+{
+	// `CNPC_VHunter::OnStateChange` `0x10388880`, two independent arms in retail's order.
+	// Retail's states are `m_NPCState` ids; 2 is COMBAT.
+	if (GetEnemyEntity() != nullptr && GetEnemyEntity() != nullptr)
 	{
-		// `CNPC_VHunter::OnStateChange` `0x10388880`, two independent arms in retail's order.
-		// Retail's states are `m_NPCState` ids; 2 is COMBAT.
-		if (GetEnemyEntity() != nullptr && GetEnemyEntity() != nullptr)
+		FElysiumEntity* Enemy = GetEnemyEntity();
+		if (SpeciesLifecycle10IsPlayer(*this, Enemy) && NewState == EElysiumNpcState::Combat)
 		{
-			FElysiumEntity* Enemy = GetEnemyEntity();
-			if (SpeciesLifecycle10IsPlayer(*this, Enemy) && NewState == EElysiumNpcState::Combat)
+			HunterHatePlayer();                                 // 0x10388c40
+			// `0x1017f7b0`, ported by family Conditions with its receiver correction: the
+			// refcount is the PLAYER's `+0x1d14`, this runtime's
+			// `FElysiumPoliceState::HuntersInPursuit`. Called, not restated.
+			if (FElysiumPlayer* PlayerRecord = World != nullptr ? World->FindPlayer() : nullptr)
 			{
-				HunterHatePlayer();                                 // 0x10388c40
-				// `0x1017f7b0`, ported by family Conditions with its receiver correction: the
-				// refcount is the PLAYER's `+0x1d14`, this runtime's
-				// `FElysiumPoliceState::HuntersInPursuit`. Called, not restated.
-				if (FElysiumPlayer* PlayerRecord = World != nullptr ? World->FindPlayer() : nullptr)
-				{
-					OnHunterPursuitStart(*PlayerRecord);
-				}
-				++HunterPursuitStarts;
-				// `1038890a MOV EAX,[EAX]` off the player's `GetRefEHandle()` — the player's own
-				// handle, cached on the hunter.
-				HunterPursuitPlayer = Enemy->Handle;
+				OnHunterPursuitStart(*PlayerRecord);
 			}
+			++HunterPursuitStarts;
+			// `1038890a MOV EAX,[EAX]` off the player's `GetRefEHandle()` — the player's own
+			// handle, cached on the hunter.
+			HunterPursuitPlayer = Enemy->Handle;
 		}
-		if (OldState == EElysiumNpcState::Combat && HunterPursuitPlayer.IsSet())
+	}
+	if (OldState == EElysiumNpcState::Combat && HunterPursuitPlayer.IsSet())
+	{
+		FElysiumEntity* Pursued = World != nullptr ? World->Resolve(HunterPursuitPlayer) : nullptr;
+		if (SpeciesLifecycle10IsPlayer(*this, Pursued))
 		{
-			FElysiumEntity* Pursued = World != nullptr ? World->Resolve(HunterPursuitPlayer) : nullptr;
-			if (SpeciesLifecycle10IsPlayer(*this, Pursued))
+			// The CLEAR comes first (`1038891e`), the release second.
+			HunterPursuitPlayer = FElysiumEntityHandle();
+			if (FElysiumPlayer* PlayerRecord = World != nullptr ? World->FindPlayer() : nullptr)
 			{
-				// The CLEAR comes first (`1038891e`), the release second.
-				HunterPursuitPlayer = FElysiumEntityHandle();
-				if (FElysiumPlayer* PlayerRecord = World != nullptr ? World->FindPlayer() : nullptr)
-				{
-					OnHunterPursuitStop(*PlayerRecord);             // 0x1017f830
-				}
-				++HunterPursuitStops;
+				OnHunterPursuitStop(*PlayerRecord);             // 0x1017f830
 			}
+			++HunterPursuitStops;
 		}
-		return;
 	}
 }
 

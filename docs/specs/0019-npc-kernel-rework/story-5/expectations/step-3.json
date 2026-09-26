@@ -1,0 +1,1054 @@
+{
+ "schema_version": 1,
+ "ordered_tests": [],
+ "changes": [
+  {
+   "id": "step3-diag-CameraAnchors",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.CameraAnchors",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1138",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1147",
+     1
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-DialogHolster",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogHolster",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1182",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1191",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-DialogueConditionTruthiness",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogueConditionTruthiness",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1184",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1193",
+     1
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-DlgAutomatic",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DlgAutomatic",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1186",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1195",
+     4
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-NpcKernelAnim-Species",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelAnim.Species",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: Player Controller NPC adding extra animations, but is not attached to a player. This is probably bad.",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: Player Controller NPC removing extra animations, but is not attached to a player. This is probably bad.",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: Player Controller NPC adding extra animations, but is not attached to a player. This is probably bad.",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: Player Controller NPC removing extra animations, but is not attached to a player. This is probably bad.",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (Camera 259 HandleAnimEvent override).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-add-RunnerKnockbackBypass",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelAnim10.RunnerKnockbackBypass",
+   "evidence": "retail correction slot-400-runner: vtmb_slot 400 has only CNPC_VTzimisceRunner 0x103c3060 (returns 1); both knockback readers now dispatch the runner's override.",
+   "packet": "3h"
+  },
+  {
+   "id": "step3-diag-NpcKernelConditions-OnStateChangeTroika",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions.OnStateChangeTroika",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (a camera instance for the 463 override; one combatant fewer, which the case no longer reclasses).",
+   "packet": "3e"
+  },
+  {
+   "id": "step3-diag-NpcKernelConditions-SelectIdealStateSpecies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions.SelectIdealStateSpecies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (a camera replaces a reclassed combatant for the 461 override).",
+   "packet": "3e"
+  },
+  {
+   "id": "step3-diag-NpcKernelFacing-Directions",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelFacing.Directions",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection2D | 0x10331cb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection3D | 0x10331b30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::BodyDirection3D | 0x10331a40 (29c) | on #1 rat(npc_VRat) | owner: the NPC kernel",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection2D | 0x10331cb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection3D | 0x10331b30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "evidence": "the case now calls slots 370/371 through the vtable instead of the retired HeadDirectionIsBodyDirection/RetailHeadDirection table: the rat's HeadDirection3D override forwards to BodyDirection3D 0x10331a40, and the added combatant check calls HeadDirection2D 0x10331cb0 once more; both are unported sdk stubs (story 29c), same receivers (rat, guard). The 3D equality therefore compares two stub answers; the forward itself is what the stub count evidences.",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-NpcKernelFacing-OnChangeActivity",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelFacing.OnChangeActivity",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatGunman has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (retail correction slot-465-wired: a spawned npc_VSabbatGunman clears its trail).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-NpcKernelHints-HintTypeSpecies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints.HintTypeSpecies",
+   "before": [],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosBlade has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosClaw has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (ChangBros Blade/Claw inherit the 566 override; HintTypeSpeciesOf now matches the exact class).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-NpcKernelMisc-OnVictimHitByMe",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMisc.OnVictimHitByMe",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #3 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (Zombie slot 24 override); a spawned npc_VZombie reaches the known unported Hide 0x1009d2a0 stub on spawn (carried from step 2, story 8).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-NpcKernelSchedule-PreSelectSchedule",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSchedule.PreSelectSchedule",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetGroundEntity | 0x100b1420 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPlaceholder has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetGroundEntity | 0x100b1420 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     3
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (Camera, MingXiaoTentacle and Placeholder overrides).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-NpcKernelSchedule-SpeciesSelectSchedule",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSchedule.SpeciesSelectSchedule",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (Camera override).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-NpcKernelSounds-Emit",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSounds.Emit",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (retail correction vocalisation-rows: a spawned npc_VCameraSecurity inherits the camera's silent hooks).",
+   "packet": "3g"
+  },
+  {
+   "id": "step3-diag-NpcKernelSpecies-WiredSlot482CanPlaySequence",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredSlot482CanPlaySequence",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (retail correction slot-482-script-state: Human, Tzimisce, TzimisceHeadClaw and Zombie instances answer through their own overrides); a spawned npc_VZombie reaches the known unported Hide 0x1009d2a0 stub on spawn (carried from step 2, story 8).",
+   "packet": "3c"
+  },
+  {
+   "id": "step3-add-WiredYukieMelee",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredYukieMelee",
+   "evidence": "retail correction yukie-melee-wired: a spawned npc_VYukie reaches CNPC_VYukie 0x103dd8b0/0x103dd900/0x103dd9a0/0x103dda10 (slots 599-602) through FElysiumNpcYukie's overrides.",
+   "packet": "3d"
+  },
+  {
+   "id": "step3-diag-NpcKernelSpeciesMisc10-BachGatherAttackConditions",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.BachGatherAttackConditions",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "evidence": "the case now stands its species subject through the retail factory (step 3 retired the class-keyed tables and self-tests it used to query), so the factory spawn adds the \"no eye offset\" line for that model (retail correction slot-561-through-vtable: an npc_VBach and one more combatant drive the gather pass through the vtable).",
+   "packet": "3f"
+  },
+  {
+   "id": "step3-diag-SceneJaw",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.SceneJaw",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1302 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1311 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-ScriptedSequenceBodyClaim",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.ScriptedSequenceBodyClaim",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1309",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1310",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1311",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1312",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1313",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1318",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1319",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1320",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1321",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1322",
+     1
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-Stance-CrossDispositionTransition",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.CrossDispositionTransition",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1020",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1029",
+     2
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  },
+  {
+   "id": "step3-diag-Stance-Driver",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.Driver",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1021",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1022",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1030",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1031",
+     1
+    ]
+   ],
+   "evidence": "map-epoch counter shift only: the run adds a spawned-factory fixture earlier in the suite (packets 3c-3h re-pin species cases on real factory instances), so later map epochs number higher; every other diagnostic is identical.",
+   "packet": "3j"
+  }
+ ]
+}

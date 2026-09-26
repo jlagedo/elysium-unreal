@@ -12,4 +12,15 @@ class FElysiumNpcSheriffMan : public FElysiumNpcVampireBoss
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
+	virtual void TaskFail(int32 Reason) override;
+	virtual int32 SelectScheduleRangedCombat(int32 Arg) override;
+	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
+	virtual int32 GetUsedHullBits() override;
+	virtual bool FValidateHintType(void* Hint) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+	virtual int32 Restore(void* Archive) override;
 };

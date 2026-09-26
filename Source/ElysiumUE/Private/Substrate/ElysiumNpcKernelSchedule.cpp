@@ -457,36 +457,9 @@ bool FElysiumNpc::IsUnusableNodeIndex(int32 NodeIndex) const
 // slot 418 0x102bf6e0 `float ResolveTaskDistance(float)`
 float FElysiumNpc::ResolveTaskDistance(float Distance)
 {
-	// The species overrides first, because both of them test their own sentinel and only then
-	// delegate to the Troika-line body below.
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 418);
-	const TCHAR* SlotBody = Override != nullptr ? Override->Address : nullptr;
+	// `CNPC_VMingXiao` (`0x10392a10`) and `CNPC_VTzimisce` (`0x103b9120`) override slot 418 on their
+	// C++ classes (story 5 step 3): each tests its own sentinel and only then calls this body.
 	const int32 Truncated = static_cast<int32>(Distance);   // retail's `__ftol`
-
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10392a10")) == 0)
-	{
-		// CNPC_VMingXiao: `if ((int)param != -1000004) return base(param); else return
-		// m_flIdealRange (+0x6748);`
-		if (Truncated == -1000004)
-		{
-			// SEAM: `m_flIdealRange` is a SPECIES word above `+0x665c` with no port member and no
-			// producer; family Squad declares the four species words its bodies read and this is
-			// not one of them.
-			ElysiumStub::Fired(TEXT("species"),
-				TEXT("CNPC_VMingXiao::ResolveTaskDistance m_flIdealRange +0x6748"), DebugString(),
-				TEXT("-1000004"), TEXT("0002/29c-1: no MingXiao ideal range"));
-			return 0.0f;
-		}
-	}
-	else if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x103b9120")) == 0)
-	{
-		// CNPC_VTzimisce: `if ((int)param != -1000001) return base(param); else return
-		// _DAT_10457f60;`
-		if (Truncated == -1000001)
-		{
-			return GScheduleTzimisceTaskDistance;
-		}
-	}
 
 	// 0x102bf6e0, the Troika line: a four-entry jump table on `(int)param + 1000008`.
 	switch (Truncated + 1000008)
@@ -511,6 +484,35 @@ float FElysiumNpc::ResolveTaskDistance(float Distance)
 			DebugString(), FString::FromInt(Truncated), TEXT("0002/29c: the base sentinel arms"));
 	}
 	return static_cast<float>(Truncated);
+}
+
+// `CNPC_VMingXiao::ResolveTaskDistance` `0x10392a10`: `if ((int)param != -1000004) return
+// base(param); else return m_flIdealRange (+0x6748);`. The base is a direct call into the Troika
+// body `0x102bf6e0`.
+float FElysiumNpc::MingXiaoResolveTaskDistance(float Distance)
+{
+	if (static_cast<int32>(Distance) == -1000004)
+	{
+		// SEAM: `m_flIdealRange` is a SPECIES word above `+0x665c` with no port member and no
+		// producer; family Squad declares the four species words its bodies read and this is not
+		// one of them.
+		ElysiumStub::Fired(TEXT("species"),
+			TEXT("CNPC_VMingXiao::ResolveTaskDistance m_flIdealRange +0x6748"), DebugString(),
+			TEXT("-1000004"), TEXT("0002/29c-1: no MingXiao ideal range"));
+		return 0.0f;
+	}
+	return FElysiumNpc::ResolveTaskDistance(Distance);
+}
+
+// `CNPC_VTzimisce::ResolveTaskDistance` `0x103b9120`: `if ((int)param != -1000001) return
+// base(param); else return _DAT_10457f60;`, the base a direct call into `0x102bf6e0`.
+float FElysiumNpc::TzimisceResolveTaskDistance(float Distance)
+{
+	if (static_cast<int32>(Distance) == -1000001)
+	{
+		return GScheduleTzimisceTaskDistance;
+	}
+	return FElysiumNpc::ResolveTaskDistance(Distance);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -567,36 +569,30 @@ int32 FElysiumNpc::BasePreSelectSchedule()
 	return 0;
 }
 
-// The three species overrides of slot 437 this story carries
-int32 FElysiumNpc::SpeciesPreSelectSchedule()
+// Slot 437: `0x10368f20`, the body of its class's `PreSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::CameraPreSelectSchedule()
 {
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 437);
-	if (Override == nullptr)
-	{
-		return 0;
-	}
-	if (FCString::Strcmp(Override->Address, TEXT("0x10368f20")) == 0)
-	{
-		// CNPC_VCamera / CNPC_VCameraSecurity: `field_0x1b2c = 9; return 0x156;`
-		RecordScheduleEvent(TEXT("PreSelectSchedule trace 9 (CNPC_VCamera 0x10368f20) -> 0x156"));
-		return 0x156;
-	}
-	if (FCString::Strcmp(Override->Address, TEXT("0x1039de00")) == 0)
-	{
-		// CNPC_VMingXiaoTentacle: `field_0x1b2c = 0x1a; return 0;`
-		RecordScheduleEvent(
-			TEXT("PreSelectSchedule trace 0x1a (CNPC_VMingXiaoTentacle 0x1039de00) -> 0"));
-		return 0;
-	}
-	if (FCString::Strcmp(Override->Address, TEXT("0x103a43f0")) == 0)
-	{
-		// CNPC_VPlaceholder: `field_0x1b2c = 0x1e; return 0x157;`
-		RecordScheduleEvent(
-			TEXT("PreSelectSchedule trace 0x1e (CNPC_VPlaceholder 0x103a43f0) -> 0x157"));
-		return 0x157;
-	}
-	// Every other slot-437 override is `CAI_BaseNPCTroika`'s `0x102ae920`, story 29e's.
+	// CNPC_VCamera / CNPC_VCameraSecurity: `field_0x1b2c = 9; return 0x156;`
+	RecordScheduleEvent(TEXT("PreSelectSchedule trace 9 (CNPC_VCamera 0x10368f20) -> 0x156"));
+	return 0x156;
+}
+
+// Slot 437: `0x1039de00`, the body of its class's `PreSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::MingXiaoTentaclePreSelectSchedule()
+{
+	// CNPC_VMingXiaoTentacle: `field_0x1b2c = 0x1a; return 0;`
+	RecordScheduleEvent(
+		TEXT("PreSelectSchedule trace 0x1a (CNPC_VMingXiaoTentacle 0x1039de00) -> 0"));
 	return 0;
+}
+
+// Slot 437: `0x103a43f0`, the body of its class's `PreSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::PlaceholderPreSelectSchedule()
+{
+	// CNPC_VPlaceholder: `field_0x1b2c = 0x1e; return 0x157;`
+	RecordScheduleEvent(
+		TEXT("PreSelectSchedule trace 0x1e (CNPC_VPlaceholder 0x103a43f0) -> 0x157"));
+	return 0x157;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -605,96 +601,101 @@ int32 FElysiumNpc::SpeciesPreSelectSchedule()
 
 int32 FElysiumNpc::SpeciesSelectSchedule()
 {
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 438);
-	if (Override == nullptr)
-	{
-		return 0;
-	}
-	const TCHAR* SlotBody = Override->Address;
-
-	if (FCString::Strcmp(SlotBody, TEXT("0x1035d010")) == 0)
-	{
-		// CNPC_VAndreiBlood, a strict priority ladder under `field_0x1b2c = 4`.
-		RecordScheduleEvent(TEXT("SelectSchedule trace 4 (CNPC_VAndreiBlood 0x1035d010)"));
-		// SEAM: `m_bActivated`, `m_bDead`, `m_bForceTeleport`, `m_iHitCounter` and `m_iHitMax` are
-		// SPECIES words above `+0x665c` with no port member. The ladder is written out and the first
-		// gate answers "activated" so the recovered order is visible; `AndreiBloodSelectGate`
-		// carries the `0x1035e920` split and refuses.
-		if (AndreiBloodSelectGate())
-		{
-			return 0x15d;
-		}
-		return 0x15c;
-	}
-	if (FCString::Strcmp(SlotBody, TEXT("0x10368f40")) == 0)
-	{
-		// CNPC_VCamera / CNPC_VCameraSecurity: `field_0x1b2c = 9; return 0x156;` — the same hardcode
-		// as its slot-437 body, so a camera never reaches the state switch at all.
-		RecordScheduleEvent(TEXT("SelectSchedule trace 9 (CNPC_VCamera 0x10368f40) -> 0x156"));
-		return 0x156;
-	}
-	if (FCString::Strcmp(SlotBody, TEXT("0x103a4410")) == 0)
-	{
-		// CNPC_VPlaceholder: `field_0x1b2c = 0x1e; return 0x157;`
-		RecordScheduleEvent(TEXT("SelectSchedule trace 0x1e (CNPC_VPlaceholder 0x103a4410) -> 0x157"));
-		return 0x157;
-	}
-	if (FCString::Strcmp(SlotBody, TEXT("0x1038e340")) == 0)
-	{
-		// CNPC_VManBat. `GetGoalType`-shaped navigator probe first; anything but 2 writes
-		// `m_iMoveGoalNodeID = 1` and answers 0x158.
-		if (NavigatorGoalType() != 2)
-		{
-			MoveGoalNodeId = 1;
-			return 0x158;
-		}
-		// The obfuscated equality: `Hash((f & 0x710935 ^ 0x148739) + 0x4094ab & 0x18ef6ca ^ f ^
-		// 0x412a96ec) == Hash(0xfa0b0694)`, where `f` is `field_0x6670`, a species word with no port
-		// member, and `Hash` is `0x1042fbf0`. Reproduced as the arithmetic it is, over a zero word;
-		// the comparison therefore fails, which is the `m_iMoveGoalNodeID = 1` / 0x159 arm.
-		constexpr uint32 ManBatWord = 0u;   // SEAM: `CNPC_VManBat +0x6670`
-		const uint32 Obfuscated =
-			(((((ManBatWord & 0x710935u) ^ 0x148739u) + 0x4094abu) & 0x18ef6cau) ^ ManBatWord)
-			^ 0x412a96ecu;
-		if (Obfuscated != 0xfa0b0694u)
-		{
-			MoveGoalNodeId = 1;
-			return 0x159;
-		}
-		if (ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
-			EElysiumNpcCond::HeavyDamage))
-		{
-			return 0x15f;
-		}
-		// `(*DAT_1093b814 + 4)()` and `DAT_1093b814[0xb]` — a CNPC_VManBat-owned global object and
-		// its eleventh word. UNRECOVERED; the false/non-zero arm is the one that answers 0x15d.
-		const int32 Roll = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(1, 10);
-		switch (Roll)
-		{
-		case 1:  return 0x15c;
-		case 2:  return 0x15d;
-		case 3:  return 0x161;
-		case 4:
-		case 5:
-		case 6:  return 0x163;
-		default: return 0x159;
-		}
-	}
-	if (FCString::Strcmp(SlotBody, TEXT("0x1039de20")) == 0)
-	{
-		// CNPC_VMingXiaoTentacle. A four-phase state machine on `m_ePhase`, all of whose words —
-		// `m_ePhase`, `m_flPhaseExpireTimer`, `m_flFailedEvadeTimer`, `m_flHideReadyTimer` — are
-		// SPECIES words above `+0x665c` with no port member and no producer.
-		RecordScheduleEvent(
-			TEXT("SelectSchedule trace 0x1a (CNPC_VMingXiaoTentacle 0x1039de20)"));
-		ElysiumStub::Fired(TEXT("species"), TEXT("CNPC_VMingXiaoTentacle::SelectSchedule 0x1039de20"),
-			DebugString(), TEXT(""),
-			TEXT("0002/29c-1: m_ePhase and the three phase timers have no port words"));
-		// Phase 0 with an unexpired timer is the arm a freshly spawned tentacle takes, and it is the
-		// only one reachable without the species words: `curtime < m_flPhaseExpireTimer` -> 0x156.
-		return 0x156;
-	}
+	// No species body on the Troika line: 0 lets the Troika selector run. Five classes override this
+	// hook with their replacement selectors (story 5 step 3).
 	return 0;
+}
+
+// Slot 438: `0x1035d010`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::AndreiBloodSelectSchedule()
+{
+	// CNPC_VAndreiBlood, a strict priority ladder under `field_0x1b2c = 4`.
+	RecordScheduleEvent(TEXT("SelectSchedule trace 4 (CNPC_VAndreiBlood 0x1035d010)"));
+	// SEAM: `m_bActivated`, `m_bDead`, `m_bForceTeleport`, `m_iHitCounter` and `m_iHitMax` are
+	// SPECIES words above `+0x665c` with no port member. The ladder is written out and the first
+	// gate answers "activated" so the recovered order is visible; `AndreiBloodSelectGate`
+	// carries the `0x1035e920` split and refuses.
+	if (AndreiBloodSelectGate())
+	{
+		return 0x15d;
+	}
+	return 0x15c;
+}
+
+// Slot 438: `0x10368f40`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::CameraSelectSchedule()
+{
+	// CNPC_VCamera / CNPC_VCameraSecurity: `field_0x1b2c = 9; return 0x156;` — the same hardcode
+	// as its slot-437 body, so a camera never reaches the state switch at all.
+	RecordScheduleEvent(TEXT("SelectSchedule trace 9 (CNPC_VCamera 0x10368f40) -> 0x156"));
+	return 0x156;
+}
+
+// Slot 438: `0x103a4410`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::PlaceholderSelectSchedule()
+{
+	// CNPC_VPlaceholder: `field_0x1b2c = 0x1e; return 0x157;`
+	RecordScheduleEvent(TEXT("SelectSchedule trace 0x1e (CNPC_VPlaceholder 0x103a4410) -> 0x157"));
+	return 0x157;
+}
+
+// Slot 438: `0x1038e340`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::ManBatSelectSchedule()
+{
+	// CNPC_VManBat. `GetGoalType`-shaped navigator probe first; anything but 2 writes
+	// `m_iMoveGoalNodeID = 1` and answers 0x158.
+	if (NavigatorGoalType() != 2)
+	{
+		MoveGoalNodeId = 1;
+		return 0x158;
+	}
+	// The obfuscated equality: `Hash((f & 0x710935 ^ 0x148739) + 0x4094ab & 0x18ef6ca ^ f ^
+	// 0x412a96ec) == Hash(0xfa0b0694)`, where `f` is `field_0x6670`, a species word with no port
+	// member, and `Hash` is `0x1042fbf0`. Reproduced as the arithmetic it is, over a zero word;
+	// the comparison therefore fails, which is the `m_iMoveGoalNodeID = 1` / 0x159 arm.
+	constexpr uint32 ManBatWord = 0u;   // SEAM: `CNPC_VManBat +0x6670`
+	const uint32 Obfuscated =
+		(((((ManBatWord & 0x710935u) ^ 0x148739u) + 0x4094abu) & 0x18ef6cau) ^ ManBatWord)
+		^ 0x412a96ecu;
+	if (Obfuscated != 0xfa0b0694u)
+	{
+		MoveGoalNodeId = 1;
+		return 0x159;
+	}
+	if (ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
+		EElysiumNpcCond::HeavyDamage))
+	{
+		return 0x15f;
+	}
+	// `(*DAT_1093b814 + 4)()` and `DAT_1093b814[0xb]` — a CNPC_VManBat-owned global object and
+	// its eleventh word. UNRECOVERED; the false/non-zero arm is the one that answers 0x15d.
+	const int32 Roll = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(1, 10);
+	switch (Roll)
+	{
+	case 1:  return 0x15c;
+	case 2:  return 0x15d;
+	case 3:  return 0x161;
+	case 4:
+	case 5:
+	case 6:  return 0x163;
+	default: return 0x159;
+	}
+}
+
+// Slot 438: `0x1039de20`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
+int32 FElysiumNpc::MingXiaoTentacleSelectSchedule()
+{
+	// CNPC_VMingXiaoTentacle. A four-phase state machine on `m_ePhase`, all of whose words —
+	// `m_ePhase`, `m_flPhaseExpireTimer`, `m_flFailedEvadeTimer`, `m_flHideReadyTimer` — are
+	// SPECIES words above `+0x665c` with no port member and no producer.
+	RecordScheduleEvent(
+		TEXT("SelectSchedule trace 0x1a (CNPC_VMingXiaoTentacle 0x1039de20)"));
+	ElysiumStub::Fired(TEXT("species"), TEXT("CNPC_VMingXiaoTentacle::SelectSchedule 0x1039de20"),
+		DebugString(), TEXT(""),
+		TEXT("0002/29c-1: m_ePhase and the three phase timers have no port words"));
+	// Phase 0 with an unexpired timer is the arm a freshly spawned tentacle takes, and it is the
+	// only one reachable without the species words: `curtime < m_flPhaseExpireTimer` -> 0x156.
+	return 0x156;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -760,215 +761,19 @@ namespace
 	}
 }
 
-// slot 604 0x102b6c30 `int SelectScheduleMeleeCombat(int)`, with the five species overrides
+// slot 604 0x102b6c30 `int SelectScheduleMeleeCombat(int)`, the Troika line
 int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 {
 	(void)Unused;   // retail's argument is read by no arm of any of the six bodies
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
 		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 604);
-	const TCHAR* SlotBody = Override != nullptr ? Override->Address : TEXT("0x102b6c30");
 	const FElysiumNpcConditions& Conds = Cognition.Conditions;
 
-	// --- Story 29d, family SpeciesAnim10: three further species bodies -----------------------------
-	// `CNPC_VHuman` `0x10385e40` (34 census classes), `CNPC_VMingXiao` `0x10396050` and `CNPC_VBach`
-	// `0x10364080`. All three REPLACE the Troika body wholesale; the bodies are in
-	// `ElysiumNpcKernelAnim10_2.cpp`.
-	if (FCString::Strcmp(SlotBody, TEXT("0x10385e40")) == 0)
-	{
-		return SelectScheduleMeleeCombatHuman();
-	}
-	if (FCString::Strcmp(SlotBody, TEXT("0x10396050")) == 0)
-	{
-		return SelectScheduleMeleeCombatMingXiao();
-	}
-	if (FCString::Strcmp(SlotBody, TEXT("0x10364080")) == 0)
-	{
-		return SelectScheduleMeleeCombatBach();
-	}
-
-	// --- CNPC_VChangBros 0x1036d800 and CNPC_VTzimisceRunner 0x103c4430 ---------------------------
-	// One shape, two schedule id sets. The `0x59` and `0x15a`/`0xe1` arms are where they differ.
-	if (FCString::Strcmp(SlotBody, TEXT("0x1036d800")) == 0
-		|| FCString::Strcmp(SlotBody, TEXT("0x103c4430")) == 0)
-	{
-		const bool bChang = FCString::Strcmp(SlotBody, TEXT("0x1036d800")) == 0;
-		if (!bInMelee && !Slot599(0))
-		{
-			// SEAM: slot 599 takes the enemy in retail (`GetEnemy()` then `vfunc599(enemy)`); the
-			// ledger types its parameter `int`, so the generated signature cannot carry a pointer
-			// and the port passes 0. Named rather than hidden.
-			const float Threshold = MeleeRangeUnits() + GScheduleChangMeleeMargin;
-			if (ScheduleHost.EnemyDistUnits <= Threshold)
-			{
-				return 0xe4;
-			}
-			return 0xe7;
-		}
-		if (Conds.Has(EElysiumNpcCond::EnemyOccluded))
-		{
-			return 0xcd;
-		}
-		if (ElysiumSchedule::HasInterruptCondition(Schedule, *this, Conds,
-			EElysiumNpcCond::ShouldDodge))
-		{
-			return 0xd5;
-		}
-		if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
-		{
-			return 0xdd;
-		}
-		const bool bHeightArmed = TickMeleeHeightDiffTimer(*this, Now);
-		if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
-		{
-			return bChang ? 0x15d : 0x17;
-		}
-		if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
-			&& !Conds.Has(EElysiumNpcCond::TooFarToAttack))
-		{
-			return 199;
-		}
-		// `GetEnemy()` twice, then the enemy's `WorldSpaceCenter` (slot 192) into a discarded
-		// stack vector, then `0x102a11d0`.
-		if (Enemy != nullptr && ScheduleMeleeReachGate())
-		{
-			return bChang ? 0x15a : 0xe1;
-		}
-		if (ScheduleHost.EnemyDistUnits <= MeleeRangeUnits() && !bHeightArmed)
-		{
-			return 0xd2;
-		}
-		return 0xcb;
-	}
-
-	// --- CNPC_VAsianVampire 0x10361be0 -------------------------------------------------------------
-	if (FCString::Strcmp(SlotBody, TEXT("0x10361be0")) == 0)
-	{
-		if (!bInMelee)
-		{
-			if (!Slot599(0))
-			{
-				return HasUsableRangedWeaponPort(*this) ? 0x15c : 0xe4;
-			}
-		}
-		else if (Slot602())   // vtable +0x968
-		{
-			Slot601(Enemy);
-			if (HasUsableRangedWeaponPort(*this))
-			{
-				return 0x15c;
-			}
-			// `if (range + range < dist != (range + range == dist))` — the decompiler's spelling of
-			// the FPU compare; it is `dist > 2 * range`.
-			return ScheduleHost.EnemyDistUnits > MeleeRangeUnits() * 2.0f ? 0xe7 : 0xe4;
-		}
-		if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
-		{
-			Slot601(Enemy);
-			return GetJumpSchedule(Enemy);
-		}
-		if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
-		{
-			return HasUsableRangedWeaponPort(*this) ? 0xdc : 0xdd;
-		}
-		const bool bHeightArmed = TickMeleeHeightDiffTimer(*this, Now);
-		if (HasUsableRangedWeaponPort(*this)
-			&& (Conds.Has(EElysiumNpcCond::TooFarForMelee)
-				|| Conds.Has(EElysiumNpcCond::InterruptTime) || bHeightArmed)
-			&& !bSuppressRanged)
-		{
-			Slot601(Enemy);
-			return 0x15c;
-		}
-		if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
-			&& !Conds.Has(EElysiumNpcCond::TooFarToAttack)
-			&& !Conds.Has(EElysiumNpcCond::EnemyOccluded))
-		{
-			return 199;
-		}
-		if (HasUsableRangedWeaponPort(*this) && !bSuppressRanged)
-		{
-			return 0xca;
-		}
-		return 0xcb;
-	}
-
-	// --- CNPC_VSheriffMan 0x103af960 ---------------------------------------------------------------
-	if (FCString::Strcmp(SlotBody, TEXT("0x103af960")) == 0)
-	{
-		if (!bInMelee)
-		{
-			if (!Slot599(0))
-			{
-				return HasUsableRangedWeaponPort(*this) ? 0xe9 : 0x15a;
-			}
-		}
-		else if (Slot602())
-		{
-			Slot601(Enemy);
-			return HasUsableRangedWeaponPort(*this) ? 0xe9 : 0xe7;
-		}
-		if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
-		{
-			Slot601(Enemy);
-			return 0x15a;
-		}
-		if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
-		{
-			return HasUsableRangedWeaponPort(*this) ? 0xdc : 0xdd;
-		}
-		const bool bHeightArmed = TickMeleeHeightDiffTimer(*this, Now);
-		if (HasUsableRangedWeaponPort(*this)
-			&& (Conds.Has(EElysiumNpcCond::TooFarForMelee)
-				|| Conds.Has(EElysiumNpcCond::InterruptTime) || bHeightArmed))
-		{
-			Slot601(Enemy);
-			return 0xe9;
-		}
-		if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
-			&& !Conds.Has(EElysiumNpcCond::TooFarToAttack)
-			&& !Conds.Has(EElysiumNpcCond::EnemyOccluded))
-		{
-			return 199;
-		}
-		return HasUsableRangedWeaponPort(*this) ? 0xca : 0xcb;
-	}
-
-	// --- CNPC_VSabbatLeader 0x103aa060 -------------------------------------------------------------
-	if (FCString::Strcmp(SlotBody, TEXT("0x103aa060")) == 0)
-	{
-		if (!bInMelee && !Slot599(0))
-		{
-			return ScheduleHost.EnemyDistUnits <= MeleeRangeUnits() * 2.0f ? 0x15f : 0xe7;
-		}
-		if (Conds.Has(EElysiumNpcCond::EnemyOccluded))
-		{
-			return 0xcd;
-		}
-		if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
-		{
-			return 0xdd;
-		}
-		// The leader runs the timer's first two arms only and never reads the answer.
-		(void)TickMeleeHeightDiffTimer(*this, Now);
-		if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
-		{
-			Slot601(Enemy);
-			return 0x15b;
-		}
-		if (Conds.Has(EElysiumNpcCond::TooFarToAttack)
-			&& ScheduleHost.EnemyDistUnits < GScheduleSabbatTooFarUnits)
-		{
-			return 0xdd;
-		}
-		if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
-			&& !Conds.Has(EElysiumNpcCond::TooFarToAttack))
-		{
-			return 199;
-		}
-		return 0xcb;
-	}
+	// Eight species classes override slot 604 on their C++ classes (story 5 step 3): the human line
+	// `0x10385e40`, MingXiao `0x10396050`, Bach `0x10364080`, the Chang brothers `0x1036d800`, the
+	// Tzimisce runner `0x103c4430`, AsianVampire `0x10361be0`, SheriffMan `0x103af960` and
+	// SabbatLeader `0x103aa060`. Each REPLACES this body wholesale.
 
 	// --- The Troika line 0x102b6c30 ----------------------------------------------------------------
 	if (!bInMelee)
@@ -1018,6 +823,206 @@ int32 FElysiumNpc::SelectScheduleMeleeCombat(int32 Unused)
 		return 199;
 	}
 	return HasUsableRangedWeaponPort(*this) ? 0xca : 0xcb;
+}
+// `CNPC_VChangBros::SelectScheduleMeleeCombat` `0x1036d800` and `CNPC_VTzimisceRunner`'s
+// `0x103c4430`: one shape, two schedule id sets (`bChang`). The `0x59` and `0x15a`/`0xe1` arms are
+// where they differ. Each class's slot-604 override calls it (story 5 step 3).
+int32 FElysiumNpc::SelectScheduleMeleeCombatChangLine(bool bChang)
+{
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+	const FElysiumNpcConditions& Conds = Cognition.Conditions;
+
+	if (!bInMelee && !Slot599(0))
+	{
+		// SEAM: slot 599 takes the enemy in retail (`GetEnemy()` then `vfunc599(enemy)`); the
+		// ledger types its parameter `int`, so the generated signature cannot carry a pointer
+		// and the port passes 0. Named rather than hidden.
+		const float Threshold = MeleeRangeUnits() + GScheduleChangMeleeMargin;
+		if (ScheduleHost.EnemyDistUnits <= Threshold)
+		{
+			return 0xe4;
+		}
+		return 0xe7;
+	}
+	if (Conds.Has(EElysiumNpcCond::EnemyOccluded))
+	{
+		return 0xcd;
+	}
+	if (ElysiumSchedule::HasInterruptCondition(Schedule, *this, Conds,
+		EElysiumNpcCond::ShouldDodge))
+	{
+		return 0xd5;
+	}
+	if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
+	{
+		return 0xdd;
+	}
+	const bool bHeightArmed = TickMeleeHeightDiffTimer(*this, Now);
+	if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
+	{
+		return bChang ? 0x15d : 0x17;
+	}
+	if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
+		&& !Conds.Has(EElysiumNpcCond::TooFarToAttack))
+	{
+		return 199;
+	}
+	// `GetEnemy()` twice, then the enemy's `WorldSpaceCenter` (slot 192) into a discarded
+	// stack vector, then `0x102a11d0`.
+	if (Enemy != nullptr && ScheduleMeleeReachGate())
+	{
+		return bChang ? 0x15a : 0xe1;
+	}
+	if (ScheduleHost.EnemyDistUnits <= MeleeRangeUnits() && !bHeightArmed)
+	{
+		return 0xd2;
+	}
+	return 0xcb;
+}
+
+// `CNPC_VAsianVampire::SelectScheduleMeleeCombat` `0x10361be0`, its slot-604 override's body.
+int32 FElysiumNpc::SelectScheduleMeleeCombatAsianVampire()
+{
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+	const FElysiumNpcConditions& Conds = Cognition.Conditions;
+
+	if (!bInMelee)
+	{
+		if (!Slot599(0))
+		{
+			return HasUsableRangedWeaponPort(*this) ? 0x15c : 0xe4;
+		}
+	}
+	else if (Slot602())   // vtable +0x968
+	{
+		Slot601(Enemy);
+		if (HasUsableRangedWeaponPort(*this))
+		{
+			return 0x15c;
+		}
+		// `if (range + range < dist != (range + range == dist))` — the decompiler's spelling of
+		// the FPU compare; it is `dist > 2 * range`.
+		return ScheduleHost.EnemyDistUnits > MeleeRangeUnits() * 2.0f ? 0xe7 : 0xe4;
+	}
+	if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
+	{
+		Slot601(Enemy);
+		return GetJumpSchedule(Enemy);
+	}
+	if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
+	{
+		return HasUsableRangedWeaponPort(*this) ? 0xdc : 0xdd;
+	}
+	const bool bHeightArmed = TickMeleeHeightDiffTimer(*this, Now);
+	if (HasUsableRangedWeaponPort(*this)
+		&& (Conds.Has(EElysiumNpcCond::TooFarForMelee)
+			|| Conds.Has(EElysiumNpcCond::InterruptTime) || bHeightArmed)
+		&& !bSuppressRanged)
+	{
+		Slot601(Enemy);
+		return 0x15c;
+	}
+	if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
+		&& !Conds.Has(EElysiumNpcCond::TooFarToAttack)
+		&& !Conds.Has(EElysiumNpcCond::EnemyOccluded))
+	{
+		return 199;
+	}
+	if (HasUsableRangedWeaponPort(*this) && !bSuppressRanged)
+	{
+		return 0xca;
+	}
+	return 0xcb;
+}
+
+// `CNPC_VSheriffMan::SelectScheduleMeleeCombat` `0x103af960`, its slot-604 override's body.
+int32 FElysiumNpc::SelectScheduleMeleeCombatSheriffMan()
+{
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+	const FElysiumNpcConditions& Conds = Cognition.Conditions;
+
+	if (!bInMelee)
+	{
+		if (!Slot599(0))
+		{
+			return HasUsableRangedWeaponPort(*this) ? 0xe9 : 0x15a;
+		}
+	}
+	else if (Slot602())
+	{
+		Slot601(Enemy);
+		return HasUsableRangedWeaponPort(*this) ? 0xe9 : 0xe7;
+	}
+	if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
+	{
+		Slot601(Enemy);
+		return 0x15a;
+	}
+	if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
+	{
+		return HasUsableRangedWeaponPort(*this) ? 0xdc : 0xdd;
+	}
+	const bool bHeightArmed = TickMeleeHeightDiffTimer(*this, Now);
+	if (HasUsableRangedWeaponPort(*this)
+		&& (Conds.Has(EElysiumNpcCond::TooFarForMelee)
+			|| Conds.Has(EElysiumNpcCond::InterruptTime) || bHeightArmed))
+	{
+		Slot601(Enemy);
+		return 0xe9;
+	}
+	if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
+		&& !Conds.Has(EElysiumNpcCond::TooFarToAttack)
+		&& !Conds.Has(EElysiumNpcCond::EnemyOccluded))
+	{
+		return 199;
+	}
+	return HasUsableRangedWeaponPort(*this) ? 0xca : 0xcb;
+}
+
+// `CNPC_VSabbatLeader::SelectScheduleMeleeCombat` `0x103aa060`, its slot-604 override's body.
+int32 FElysiumNpc::SelectScheduleMeleeCombatSabbatLeader()
+{
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	FElysiumEntity* Enemy = const_cast<FElysiumEntity*>(World != nullptr
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr);
+	const FElysiumNpcConditions& Conds = Cognition.Conditions;
+
+	if (!bInMelee && !Slot599(0))
+	{
+		return ScheduleHost.EnemyDistUnits <= MeleeRangeUnits() * 2.0f ? 0x15f : 0xe7;
+	}
+	if (Conds.Has(EElysiumNpcCond::EnemyOccluded))
+	{
+		return 0xcd;
+	}
+	if (Conds.Has(EElysiumNpcCond::CanMeleeAttack1))
+	{
+		return 0xdd;
+	}
+	// The leader runs the timer's first two arms only and never reads the answer.
+	(void)TickMeleeHeightDiffTimer(*this, Now);
+	if (Conds.Has(EElysiumNpcCond::EnemyUnreachable))
+	{
+		Slot601(Enemy);
+		return 0x15b;
+	}
+	if (Conds.Has(EElysiumNpcCond::TooFarToAttack)
+		&& ScheduleHost.EnemyDistUnits < GScheduleSabbatTooFarUnits)
+	{
+		return 0xdd;
+	}
+	if (!Conds.Has(EElysiumNpcCond::TooFarForMelee)
+		&& !Conds.Has(EElysiumNpcCond::TooFarToAttack))
+	{
+		return 199;
+	}
+	return 0xcb;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1186,110 +1191,90 @@ int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& R
 // The species half of slot 453 `BuildScheduleTestBits`.
 // -------------------------------------------------------------------------------------------------
 
-void FElysiumNpc::SpeciesBuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
+// Slot 453: `0x103c16f0`'s own bits, the body of its class's `BuildScheduleTestBits` override (story 5 step 3).
+void FElysiumNpc::TzimisceHeadClawBuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 {
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 453);
-	if (Override == nullptr)
-	{
-		return;
-	}
-	const TCHAR* SlotBody = Override->Address;
+	InOutMask.Set(EElysiumNpcCond::ShouldCharge);
+}
 
-	// CNPC_VTzimisceHeadClaw 0x103c16f0: base, then `SetScheduleTestBits(SHOULD_CHARGE 0x35)`,
-	// unconditionally.
-	if (FCString::Strcmp(SlotBody, TEXT("0x103c16f0")) == 0)
+// Slot 453: `0x103a2980`'s own bits, the body of its class's `BuildScheduleTestBits` override (story 5 step 3).
+void FElysiumNpc::PedestrianBuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
+{
+	if (!IsBusyWithDiscipline())
 	{
-		InOutMask.Set(EElysiumNpcCond::ShouldCharge);
-		return;
+		InOutMask.Set(EElysiumNpcCond::PassOut);
 	}
+}
 
-	// CNPC_VPedestrian 0x103a2980: base, then `if (!IsBusyWithDiscipline()) SetScheduleTestBits(
-	// PASS_OUT 0x24)`.
-	if (FCString::Strcmp(SlotBody, TEXT("0x103a2980")) == 0)
+// Slot 453: `0x10387520`'s own bits, the body of its class's `BuildScheduleTestBits` override (story 5 step 3).
+void FElysiumNpc::HumanCombatantBuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
+{
+	// Slot 158 `IsAlive` and slot 464 `GetState` (retail state 1 is idle). Both generated slots
+	// are stubs; the port carries both facts, so they are read from the entity and the mind.
+	if (!IsDead() && Mind.State() == EElysiumNpcState::Idle)
 	{
-		if (!IsBusyWithDiscipline())
+		// SEAM: `m_edtDerivedType` (`+0x004c`) is a chain word of `CBaseEntity` with no port
+		// member; the port asks it and reads bit 7 as clear, which is the arm that admits the
+		// condition regardless of `m_bCameFromSpawner`.
+		constexpr bool bDerivedTypeBit7 = false;
+		if (!bDerivedTypeBit7 || !bCameFromSpawner)
 		{
-			InOutMask.Set(EElysiumNpcCond::PassOut);
+			InOutMask.Set(EElysiumNpcCond::SeeCorpseFriend);
 		}
+	}
+}
+
+// Slot 453: `0x1037cdf0`'s own bits, the body of its class's `BuildScheduleTestBits` override (story 5 step 3).
+void FElysiumNpc::Guard1BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
+{
+	const EElysiumNpcState State = Mind.State();
+	if (State == EElysiumNpcState::Idle)
+	{
+		// Retail state 1: `SetScheduleTestBits(COMFORT 0x27)` and nothing else — and then it
+		// falls into the shared state-3 tail below, which is what the listing's fallthrough
+		// from `iVar5 == 1` does.
+		InOutMask.Set(EElysiumNpcCond::Comfort);
+	}
+	else if (State != EElysiumNpcState::Alert)
+	{
+		// Retail state 0xb is the HUNT state, which this runtime's `EElysiumNpcState` does not
+		// carry; every other state returns without touching the mask.
+		//
+		// SEAM: the hunt arm sets or clears `SEE_PLAYER` (0x5a) and `HEAR_PLAYER` (0x6f) on the
+		// same five-threshold test as the alert tail below, plus `m_fHatesPlayer`. It is
+		// unreachable here and is named rather than folded into another state.
 		return;
 	}
 
-	// CNPC_VHumanCombatant 0x10387520 (nine census classes): base, then `if (IsAlive() &&
-	// GetState() == 1 && !(bit7(m_edtDerivedType) && m_bCameFromSpawner)) SetScheduleTestBits(
-	// SEE_CORPSE_FRIEND 0x3e)`.
-	if (FCString::Strcmp(SlotBody, TEXT("0x10387520")) == 0)
+	// The state-3 (alert) tail, shared with the state-1 fallthrough: the five `pl_*` thresholds
+	// against the CLOSEST PLAYER's current levels.
+	bool bAnyThresholdPassed = false;
+	if (World != nullptr && Senses.Memory.ClosestPlayer.IsSet())
 	{
-		// Slot 158 `IsAlive` and slot 464 `GetState` (retail state 1 is idle). Both generated slots
-		// are stubs; the port carries both facts, so they are read from the entity and the mind.
-		if (!IsDead() && Mind.State() == EElysiumNpcState::Idle)
+		if (const FElysiumPlayer* Player = World->FindPlayer())
 		{
-			// SEAM: `m_edtDerivedType` (`+0x004c`) is a chain word of `CBaseEntity` with no port
-			// member; the port asks it and reads bit 7 as clear, which is the arm that admits the
-			// condition regardless of `m_bCameFromSpawner`.
-			constexpr bool bDerivedTypeBit7 = false;
-			if (!bDerivedTypeBit7 || !bCameFromSpawner)
+			if (Player->Handle == Senses.Memory.ClosestPlayer && !Player->IsInert())
 			{
-				InOutMask.Set(EElysiumNpcCond::SeeCorpseFriend);
+				bAnyThresholdPassed =
+					PlInvestigate <= Player->Law.Investigate
+					|| PlCriminalFlee <= Player->Law.Criminal
+					|| PlCriminalAttack <= Player->Law.Criminal
+					|| PlSupernaturalFlee <= Player->Law.Supernatural
+					|| PlSupernaturalAttack <= Player->Law.Supernatural;
 			}
 		}
+	}
+	if (bAnyThresholdPassed)
+	{
+		InOutMask.Set(EElysiumNpcCond::InvestigateLevel);
+		InOutMask.Set(EElysiumNpcCond::CriminalFleeLevel);
+		InOutMask.Set(EElysiumNpcCond::CriminalAttackLevel);
+		InOutMask.Set(EElysiumNpcCond::SupernaturalFleeLevel);
+		InOutMask.Set(EElysiumNpcCond::SupernaturalAttackLevel);
 		return;
 	}
-
-	// CNPC_VGuard1 0x1037cdf0. This one does NOT call the Troika-line body — it calls the empty
-	// BASE `CAI_BaseNPC::BuildScheduleTestBits` (`0x10280fb0`) — and then branches on `m_NPCState`.
-	// The port's `BuildScheduleTestBits` has already run the Troika overlay by the time this is
-	// reached, which is a DIVERGENCE and is named at the call site.
-	if (FCString::Strcmp(SlotBody, TEXT("0x1037cdf0")) == 0)
-	{
-		const EElysiumNpcState State = Mind.State();
-		if (State == EElysiumNpcState::Idle)
-		{
-			// Retail state 1: `SetScheduleTestBits(COMFORT 0x27)` and nothing else — and then it
-			// falls into the shared state-3 tail below, which is what the listing's fallthrough
-			// from `iVar5 == 1` does.
-			InOutMask.Set(EElysiumNpcCond::Comfort);
-		}
-		else if (State != EElysiumNpcState::Alert)
-		{
-			// Retail state 0xb is the HUNT state, which this runtime's `EElysiumNpcState` does not
-			// carry; every other state returns without touching the mask.
-			//
-			// SEAM: the hunt arm sets or clears `SEE_PLAYER` (0x5a) and `HEAR_PLAYER` (0x6f) on the
-			// same five-threshold test as the alert tail below, plus `m_fHatesPlayer`. It is
-			// unreachable here and is named rather than folded into another state.
-			return;
-		}
-
-		// The state-3 (alert) tail, shared with the state-1 fallthrough: the five `pl_*` thresholds
-		// against the CLOSEST PLAYER's current levels.
-		bool bAnyThresholdPassed = false;
-		if (World != nullptr && Senses.Memory.ClosestPlayer.IsSet())
-		{
-			if (const FElysiumPlayer* Player = World->FindPlayer())
-			{
-				if (Player->Handle == Senses.Memory.ClosestPlayer && !Player->IsInert())
-				{
-					bAnyThresholdPassed =
-						PlInvestigate <= Player->Law.Investigate
-						|| PlCriminalFlee <= Player->Law.Criminal
-						|| PlCriminalAttack <= Player->Law.Criminal
-						|| PlSupernaturalFlee <= Player->Law.Supernatural
-						|| PlSupernaturalAttack <= Player->Law.Supernatural;
-				}
-			}
-		}
-		if (bAnyThresholdPassed)
-		{
-			InOutMask.Set(EElysiumNpcCond::InvestigateLevel);
-			InOutMask.Set(EElysiumNpcCond::CriminalFleeLevel);
-			InOutMask.Set(EElysiumNpcCond::CriminalAttackLevel);
-			InOutMask.Set(EElysiumNpcCond::SupernaturalFleeLevel);
-			InOutMask.Set(EElysiumNpcCond::SupernaturalAttackLevel);
-			return;
-		}
-		// The miss arm clears ONE bit, `HEAR_PLAYER` (0x6f), and leaves the five alone.
-		InOutMask.Clear(EElysiumNpcCond::HearPlayer);
-	}
+	// The miss arm clears ONE bit, `HEAR_PLAYER` (0x6f), and leaves the five alone.
+	InOutMask.Clear(EElysiumNpcCond::HearPlayer);
 }
 
 // -------------------------------------------------------------------------------------------------

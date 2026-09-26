@@ -135,24 +135,20 @@ static FTurnActivityPick TurnActivityBaseLadder(float YawDelta,
 static FTurnActivityPick TurnActivityTroikaLadder(float YawDelta,
 	TFunctionRef<bool(int32)> HasSequence);
 
-// Whether the class this NPC actually is answers slots 370/371 with its BODY direction rather than
-// with a head of its own — `CCineNPC`/`CCineAI`/`CCineAISchedule`, `CPayphone`, the three
-// `CNPCMaker`s and `CNPC_VRat` all forward 370→368 and 371→369. The table carries the retail
-// address of each class's own 370 and 371 bodies so a reader can check it against `slots.md`.
-// Returns false for a class that keeps its own head aim (or for one the census does not hold).
-bool HeadDirectionIsBodyDirection() const;
-
-// What slots 370/371 answer for the class this NPC is, once the branch above is folded in.
-// Slot 370/371 THEMSELVES are the Troika-line bodies (`0x10331cb0`/`0x10331b30`) and remain the
-// generator's stubs; this is the recovered species half standing beside them.
-bool RetailHeadDirection(bool b2D, FVector& OutDirection) const;
+// Slots 370/371 that forward to 368/369 — `CNPC_VRat` (`0x103ad7f0`/`0x103ad820`) and `CPayphone`
+// (`0x101aa7f0`/`0x101aa820`) override `HeadDirection2D`/`HeadDirection3D` on their C++ classes
+// (story 5 step 3). `CCineNPC`/`CCineAI`/`CCineAISchedule` and the three `CNPCMaker`s forward the
+// same way; they fold in steps 9 and 8.
 
 // --- Slot 465's species half --------------------------------------------------------------------
 //
 // `CAI_BaseNPCTroika::OnChangeActivity` `0x10295a60` is `return;` — 29c's verdict, and the body the
-// generator emits for slot 465. Four species replace it, and this is their table. Every arm ends by
-// chaining to the base, which is why the base's emptiness is the whole of the shared algorithm.
-void OnChangeActivitySpecies(int32 Activity);
+// generator emits for slot 465. `CNPC_VMingXiao`, `CNPC_VSabbatGunman` and `CNPC_VWerewolf` override
+// it on their C++ classes (story 5 step 3) with these bodies, each ending in a direct call into the
+// Troika body. `CNPC_Crow#465` (`0x10357b30`) carries no port body: no map stands that class.
+void MingXiaoOnChangeActivity(int32 Activity);       // `0x103947b0`
+void SabbatGunmanOnChangeActivity(int32 Activity);   // `0x103a56f0`
+void WerewolfOnChangeActivity(int32 Activity);       // `0x103d5f60`
 
 // `CNPC_VSabbatGunman::OnChangeActivity` `0x103a56f0`'s pick, as a pure function of its three
 // species convars (`DAT_1093c104` speed threshold, `DAT_1093c14c` trail id, `DAT_1093c1f4`

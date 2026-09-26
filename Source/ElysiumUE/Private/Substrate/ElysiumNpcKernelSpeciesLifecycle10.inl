@@ -143,8 +143,10 @@ int32 PayphoneIdlePasses = 0;
  *  copied on every pass. That is what makes the mirror frame-accurate, and it is why the arm needs
  *  a 0.01 s clock.
  *
- *  Answers whether the payphone arm owned the pass, so `FElysiumNpc::Think`'s prologue can return. */
+ *  Always answers true: the payphone body owns the whole pass. */
 bool PayphoneThink();
+/** `FElysiumNpcPayphone::Think`'s body: the inert gate, then `PayphoneThink` (story 5 step 3). */
+void PayphoneThinkPass();
 
 /** `_DAT_10450aa4` — **0.01f**, read at file offset `0x450aa4` of the pinned `vampire.dll`. */
 static constexpr double PayphoneMirrorThinkSeconds = 0.009999999776482582;
@@ -193,12 +195,12 @@ void BaseEntityStartTouch(FElysiumEntity* Other);
  *  (`vtable + 700`). */
 void BaseEntityTouch(FElysiumEntity* Other);
 
-/** Slot 174's dispatch: the species override if the census carries one for this NPC's retail class,
- *  otherwise the `CBaseEntity` body. */
-void StartTouchSpecies(FElysiumEntity* Other);
+/** Slot 174 on the NPC line: the `CBaseEntity` body. `CNPC_VGhoulCroucher` overrides it
+ *  (story 5 step 3). */
+virtual void StartTouchSpecies(FElysiumEntity* Other);
 
-/** Slot 175's dispatch, the same shape. */
-void TouchSpecies(FElysiumEntity* Other);
+/** Slot 175, the same shape. `CNPC_VGargoyle` overrides it. */
+virtual void TouchSpecies(FElysiumEntity* Other);
 
 /** `FElysiumEntity::OnTouchStart` — this runtime's touch-begin notification, which IS retail's
  *  slot 174. Wired so `CNPC_VGhoulCroucher`'s burn arm is reachable by a real touch rather than only
@@ -287,11 +289,10 @@ static constexpr float GargoylePillarDamageScale = 1.0f;
 // Slot 463 `OnStateChange` — the `CNPC_VGuard1` and `CNPC_VHunter` pre-steps.
 // -------------------------------------------------------------------------------------------------
 //
-// Both classes already have a row in family Conditions' slot-463 table under
-// `EStateChangeSpecies::HolsterOnState`, because the SECOND half of both bodies is the shared
-// holster/draw switch `ApplyStateWeaponVisibility` carries. What neither had is its FIRST half, and
-// both first halves run BEFORE the switch. The arm below is called from
-// `FElysiumNpc::OnStateChange`'s `HolsterOnState` case, ahead of `ApplyStateWeaponVisibility`.
+// The FIRST halves of both bodies, which run BEFORE the holster/draw switch: Guard1's own copy of
+// the switch (`ApplyStateWeaponVisibility`) and then the Troika body, Hunter's a direct call into
+// `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`). Called from the classes' `OnStateChange`
+// overrides (story 5 step 3).
 
 /** `CNPC_VHunter::m_hPursuitPlayer` (`+0x6664`, datamap — `ElysiumNpcKernelShape.cpp`). Distinct
  *  from `CNPC_VCop`'s word at the same offset, which family Debug10 reaches through
@@ -326,14 +327,13 @@ int32 PlayerHateRelationshipSets = 0;
 /** `'player D_HT 10'` (`0x1063bc28`). */
 static const TCHAR* PlayerHateRelationshipSpec();
 
-/** The two classes' slot-463 pre-steps, dispatched on the retail class.
- *
- *  `CNPC_VGuard1::OnStateChange` (`0x1037d020`), UNCONDITIONALLY and with no reference to either
- *  state: `if (GetEnemy() && GetEnemy()->m_pPlayer) 0x1037e2d0(this)`. `GetEnemy()` is dispatched
- *  TWICE (`1037d026`, `1037d034`) and retail does not cache it; both calls are made here because a
- *  species override of slot 167 could answer differently between them.
- *
- *  `CNPC_VHunter::OnStateChange` (`0x10388880`), two independent arms in this order:
+/** `CNPC_VGuard1::OnStateChange` (`0x1037d020`)'s pre-step, UNCONDITIONALLY and with no reference
+ *  to either state: `if (GetEnemy() && GetEnemy()->m_pPlayer) 0x1037e2d0(this)`. `GetEnemy()` is
+ *  dispatched TWICE (`1037d026`, `1037d034`) and retail does not cache it; both calls are made here
+ *  because a species override of slot 167 could answer differently between them. */
+void Guard1StateChangePreStep();
+
+/** `CNPC_VHunter::OnStateChange` (`0x10388880`)'s pre-step, two independent arms in this order:
  *    1. `if (GetEnemy() && GetEnemy() && GetEnemy()->m_pPlayer && NewState == 2)` —
  *       `0x10388c40(this)` (the relationship, no latch), `OnHunterPursuitStart(player)`, then
  *       `m_hPursuitPlayer = player`'s own handle.
@@ -342,7 +342,7 @@ static const TCHAR* PlayerHateRelationshipSpec();
  *       is `1038891e`, the release after it).
  *  State 2 is `COMBAT`. Both arms can fire on the same call, and retail evaluates arm 2 against the
  *  handle arm 1 may just have written. */
-void StateChangeSpeciesPreStep(EElysiumNpcState OldState, EElysiumNpcState NewState);
+void HunterStateChangePreStep(EElysiumNpcState OldState, EElysiumNpcState NewState);
 
 /** `CAI_BaseNPC::FUN_101a67e0` (`0x101a67e0`), vtable `+0x29c` = slot **167** — `GetEnemy()`. The
  *  whole body resolves `m_hEnemy` through the global entity table and answers null when the handle

@@ -94,15 +94,8 @@ int32 TentaclePhase = 0;
  *  CENTIMETRES, because every caller of `EyePosition()` in this runtime is. */
 virtual FVector EyePosition() const override;
 
-/** One row of slot 193's species table: the census class and the retail body that fills 193 for it,
- *  checkable against `docs/vtmb/npc-kernel/slots.md`. */
-struct FEyePositionSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-};
-static const FEyePositionSpecies* EyePositionSpeciesRows(int32& OutCount);
-static const FEyePositionSpecies* EyePositionSpeciesOf(const TCHAR* InRetailClass);
+/** `CPayphone::vfunc193` (`0x101aae60`) — the body of `FElysiumNpcPayphone::EyePosition`. */
+FVector PayphoneEyePosition() const;
 
 /** SEAM for `CBaseAnimating::LookupBone(name)` + `CBaseAnimating::GetBonePosition02(bone, &pos,
  *  &ang)` — the pair `CPayphone::vfunc193` runs — and, with the local offset already folded in, for
@@ -171,6 +164,9 @@ struct FUsedHullBitsSpecies
 };
 static const FUsedHullBitsSpecies* UsedHullBitsSpeciesRows(int32& OutCount);
 static const FUsedHullBitsSpecies* UsedHullBitsSpeciesOf(const TCHAR* InRetailClass);
+/** Slot 337's species body: the row for retail body `SpeciesBody`, ORed onto the Troika body unless it
+ *  replaces it. */
+int32 SpeciesUsedHullBits(const TCHAR* SpeciesBody);
 
 /** `CBaseCombatCharacter::GetUsedHullBits` (`0x10341710`), the bottom of the chain: a scope-trace
  *  pair and `return 1`. `CAI_BaseNPC` (`0x10270820`) ORs `0x1` onto it and `CAI_BaseNPCTroika`

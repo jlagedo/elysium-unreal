@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "phase": 2,
-  "revision": "step-2-species-shells-and-factories",
+  "phase": 3,
+  "revision": "step-3-species-dispatch",
   "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
   "inputs": {
     "module": {
@@ -22,7 +22,7 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "733fb9b5bd4e2326c55b0dbef786494452c827c806bfdc95f2745b25647f8cf5"
+      "sha256": "f662e5ca65a9043e94ff32a2c86cc2dfbe0a0d6d93e5f1919415eeb80a6c805f"
     },
     "registry": {
       "root": "repo",
@@ -81,7 +81,7 @@
     "Full controller/maker/director/hull participation and lifecycle folds remain steps 7-10."
   ],
   "factory_evidence": "docs/vtmb/npc-ai/population.md#step-0-factory-boundary-replay-2026-09-24",
-  "acceptance": "step-2-passed",
+  "acceptance": "step-3-passed",
   "history": {
     "step0": {
       "commit": "aa1c3c86b8684c4760e1dd506d114a0a260fb225",
@@ -123,6 +123,10 @@
       "commit": "870360e9fa7be759d71004553a93575006b9e71d",
       "acceptance": "acceptance-step2.json",
       "note": "--check step2 reads this tree once it is recorded (step 3 started)"
+    },
+    "step3_pins": {
+      "note": "verdicts pin refreshed by step 3: 83 overlay targets retargeted to the moved species bodies (step3/retarget.tsv); no verdict changed",
+      "previous_verdicts_sha256": "733fb9b5bd4e2326c55b0dbef786494452c827c806bfdc95f2745b25647f8cf5"
     }
   },
   "step1_packets": {
@@ -145,15 +149,15 @@
     "2h-smoke-and-gate": "accepted"
   },
   "step3_packets": {
-    "3a": "complete",
-    "3b": "pending",
-    "3c": "pending",
-    "3d": "pending",
-    "3e": "pending",
-    "3f": "pending",
-    "3g": "pending",
-    "3h": "pending",
-    "3i": "pending",
-    "3j": "pending"
+    "3a": "accepted",
+    "3b": "accepted",
+    "3c": "accepted",
+    "3d": "accepted",
+    "3e": "accepted",
+    "3f": "accepted",
+    "3g": "accepted",
+    "3h": "accepted",
+    "3i": "accepted",
+    "3j": "accepted"
   }
 }

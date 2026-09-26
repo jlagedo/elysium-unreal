@@ -714,32 +714,10 @@ int32 FElysiumNpc::SelectLedgeNodeAsian()
 }
 
 // --- `PositionClearForTeleport`, four species ---------------------------------------------------
-
-bool FElysiumNpc::PositionClearForTeleportSpecies(const FVector& PositionCm, float ClearanceCm) const
-{
-	// The dispatcher. Retail stands NO base `PositionClearForTeleport` — the name exists on exactly
-	// these four classes and on nothing else — so a class the chain walk does not match has no body
-	// at all, and the honest answer is a refusal rather than a guess. Every recovered caller is one
-	// of the four's own selectors, so the refusal is unreachable in practice.
-	if (IsRetailClass(TEXT("CNPC_VAndreiBlood")))
-	{
-		return PositionClearForTeleportAndrei(PositionCm, ClearanceCm);
-	}
-	if (IsRetailClass(TEXT("CNPC_VAsianVampire")))
-	{
-		return PositionClearForTeleportAsian(PositionCm, ClearanceCm);
-	}
-	if (IsRetailClass(TEXT("CNPC_VChangBros")))
-	{
-		// The chain walk covers `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw`, which inherit it.
-		return PositionClearForTeleportChang(PositionCm, ClearanceCm);
-	}
-	if (IsRetailClass(TEXT("CNPC_VSheriffMan")))
-	{
-		return PositionClearForTeleportSheriff(PositionCm, ClearanceCm);
-	}
-	return false;
-}
+//
+// Retail stands NO base `PositionClearForTeleport` and no vtable slot for it: the name exists on
+// exactly these four classes as non-virtual methods, each called only by its own class's selector.
+// So there is no dispatcher (story 5 step 3 retired the port's test-only one).
 
 bool FElysiumNpc::PositionClearForTeleportAndrei(const FVector& PositionCm, float ClearanceCm) const
 {

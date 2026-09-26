@@ -515,33 +515,35 @@ const TCHAR* FElysiumNpc::GetShortConditionName(int32 ConditionId)
 {
 	// slot 408, `CAI_BaseNPC::GetShortConditionName` `0x1027ede0` — sixteen bytes:
 	//     thunk_FUN_1027e7f0(param_1); return;
-	// plus the three species overrides, which this leaf resolves as a table rather than a vtable.
-	//
-	// `OverrideOf` walks the class chain upward, so a subclass of `CNPC_VWerewolf` inherits its
-	// block exactly as the vtable would.
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 408);
-	if (Override != nullptr)
+	// `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle` and `CNPC_VWerewolf` override this method on their
+	// C++ classes (story 5 step 3); each answers its own block through `SpeciesShortConditionName`,
+	// whose miss is a direct call back into this body.
+	return ShortConditionNameTable(ConditionId);
+}
+
+const TCHAR* FElysiumNpc::SpeciesShortConditionName(const TCHAR* SpeciesClass, int32 ConditionId)
+{
+	// The body of `0x103951d0` / `0x1039ece0` / `0x103d0640`: the class's own block of names, then
+	// `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
+	const FShortConditionSpecies* Species = ShortConditionSpeciesOf(SpeciesClass);
+	if (Species != nullptr)
 	{
-		const FShortConditionSpecies* Species = ShortConditionSpeciesOf(Override->Class);
-		if (Species != nullptr)
+		// `CNPC_VWerewolf`'s scope-trace push, `g_ScopeTraceStack[depth] = { "CNPC_VWerewolf::
+		// GetShortConditionName", m_iName ? m_iName : "", "" }` then `++depth`, popped on every
+		// arm. The port has no scope-trace stack; the push is recorded so the arm is visible and
+		// the entity it names is the one retail names.
+		if (Species->bScopeTraced)
 		{
-			// `CNPC_VWerewolf`'s scope-trace push, `g_ScopeTraceStack[depth] = { "CNPC_VWerewolf::
-			// GetShortConditionName", m_iName ? m_iName : "", "" }` then `++depth`, popped on every
-			// arm. The port has no scope-trace stack; the push is recorded so the arm is visible and
-			// the entity it names is the one retail names.
-			if (Species->bScopeTraced)
-			{
-				UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("%s::GetShortConditionName %s"),
-					Species->RetailClass, TargetName.IsEmpty() ? TEXT("") : *TargetName);
-			}
-			const int32 Offset = ConditionId - Species->FirstId;
-			if (Offset >= 0 && Offset < Species->NameCount)
-			{
-				return Species->Names[Offset];
-			}
+			UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("%s::GetShortConditionName %s"),
+				Species->RetailClass, TargetName.IsEmpty() ? TEXT("") : *TargetName);
+		}
+		const int32 Offset = ConditionId - Species->FirstId;
+		if (Offset >= 0 && Offset < Species->NameCount)
+		{
+			return Species->Names[Offset];
 		}
 	}
-	return ShortConditionNameTable(ConditionId);
+	return FElysiumNpc::GetShortConditionName(ConditionId);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -930,44 +932,10 @@ void FElysiumNpc::BossDrawDebugStatOverlays()
 
 void FElysiumNpc::DrawDebugStatOverlays()
 {
-	// slot 76. Three retail bodies fill it across the census and this leaf dispatches between them
-	// by the address the census says fills the slot for this NPC's retail class:
+	// slot 76, `CAI_BaseNPCTroika::DrawDebugStatOverlays` `0x1029c010`. `CNPC_VBaseBoss`
+	// (`0x10366290`, inherited by its subclasses) and `CNPC_VWerewolf` (`0x103d5130`) override this
+	// method on their C++ classes (story 5 step 3).
 	//
-	//   `0x10366290`  `CNPC_VBaseBoss` and its four subclasses — the distance line, then the BASE.
-	//   `0x1029c010`  `CAI_BaseNPCTroika` and 55 more — the expression dump, but only when
-	//                 `m_iDialog` is set; otherwise it tail-calls the base.
-	//   `0x102775e0`  everything else — the base body itself.
-	const TCHAR* SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 76);
-	// Story 29d, family **SpeciesMisc10**: a FOURTH body, `CNPC_VWerewolf#76` (`0x103d5130`), which
-	// PREPENDS two lines, CHAINS `0x10366290` (the boss arm above), then APPENDS the zone word, the
-	// five conditions, the door state, the hint dump and the schedule stack.
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x103d5130")) == 0)
-	{
-		TArray<FString> Lines;
-		WerewolfDrawDebugStatOverlays(Lines);
-		// `103d51ee`: the two prepended lines come out FIRST, then the MingXiao arm runs, then the
-		// rest. `WerewolfDrawDebugStatOverlays` builds the whole list in retail's order; the chain
-		// point is here, between line 2 and line 3.
-		for (int32 Index = 0; Index < Lines.Num(); ++Index)
-		{
-			if (Index == 2)
-			{
-				BossDrawDebugStatOverlays();
-			}
-			EmitDebugMsg(TEXT("%s"), Lines[Index]);
-		}
-		if (Lines.Num() < 3)
-		{
-			BossDrawDebugStatOverlays();
-		}
-		return;
-	}
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x10366290")) == 0)
-	{
-		BossDrawDebugStatOverlays();
-		return;
-	}
-
 	// `0x1029c010`'s own first arm: `if (m_iDialog == 0) { CAI_BaseNPC::DrawDebugStatOverlays();
 	// return; }`. `m_iDialog` (+0x0128) is the dialogue file name, which `DialogName` answers.
 	if (DialogName.IsEmpty())
@@ -976,6 +944,31 @@ void FElysiumNpc::DrawDebugStatOverlays()
 		return;
 	}
 	TroikaDrawDebugStatOverlays();
+}
+
+void FElysiumNpc::WerewolfDrawDebugStatOverlaysSlot()
+{
+	// `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`), the body of
+	// `FElysiumNpcWerewolf::DrawDebugStatOverlays`: it PREPENDS two lines, CHAINS
+	// `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) directly, then APPENDS the zone word, the
+	// five conditions, the door state, the hint dump and the schedule stack.
+	TArray<FString> Lines;
+	WerewolfDrawDebugStatOverlays(Lines);
+	// `103d51ee`: the two prepended lines come out FIRST, then the boss body runs, then the rest.
+	// `WerewolfDrawDebugStatOverlays` builds the whole list in retail's order; the chain point is
+	// here, between line 2 and line 3.
+	for (int32 Index = 0; Index < Lines.Num(); ++Index)
+	{
+		if (Index == 2)
+		{
+			BossDrawDebugStatOverlays();
+		}
+		EmitDebugMsg(TEXT("%s"), Lines[Index]);
+	}
+	if (Lines.Num() < 3)
+	{
+		BossDrawDebugStatOverlays();
+	}
 }
 
 void FElysiumNpc::TroikaDrawDebugStatOverlays()

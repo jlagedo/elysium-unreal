@@ -12,4 +12,6 @@ class FElysiumNpcSabbatGunman : public FElysiumNpcHumanCombatant
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void OnChangeActivity(int32 Activity) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

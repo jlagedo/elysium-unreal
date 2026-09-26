@@ -44,19 +44,14 @@
 // `EnsureStanceResolved()`; this reads the same resolver, so the two cannot disagree.
 
 /** `CAI_BaseNPCTroika::SetModel` (`0x10298ce0`) — slot 105's own body, without the species
- *  prologue. `SetModel()` is the slot; this is what it runs when no species arm claims it, and what
- *  a species arm's own chain call reaches through `FSpeciesDispatchScope`.
+ *  prologue. `SetModel()` is the slot; this is what it runs on the Troika line, and what a species
+ *  class's override calls directly.
  *
  *  Fifty bytes and FOUR calls whose ORDER is the whole body, because each reads what the one before
  *  it wrote: `CBaseCombatCharacter::SetModel`, then `SetHullSizeNormal(force=1)` (`0x10273070`),
  *  then `SetDefaultEyeOffset` (`0x10274ca0`), then `+0x64e8` from `0x100ec640`. The model must be
  *  set before the hull and the hull before the eye. */
 void TroikaSetModel(TCHAR* ModelName);
-
-/** The species prologue at the top of `SetModel()`. True means a species body ran and the Troika
- *  body must NOT — which is what a vtable dispatch to an override does. Keyed on the slot-105
- *  override row's retail ADDRESS, the convention family **Precache10** set for slot 104. */
-bool SetModelSpecies(TCHAR* ModelName);
 
 /** `CNPC_VGhoulCroucher::SetModel` (`0x1037b1f0`) and `CNPC_VZombie::SetModel` (`0x103e0540`) — the
  *  SAME 119 bytes twice, one per class, and so one port body with the retail address of the arm it
@@ -153,10 +148,6 @@ void BaseMaintainActivity();
  *  prologue. 612 bytes, three top arms, and every request outside the `0x1093`-`0x1096` and
  *  `0x1115`-`0x1117` families forwards to `BaseSetActivity` unchanged. */
 void TroikaSetActivity(int32 Activity);
-
-/** The species prologue at the top of `SetActivity()`. Keyed on the slot-310 override row's retail
- *  ADDRESS. */
-bool SetActivitySpecies(int32 Activity);
 
 /** `CNPC_VTzimisceHeadClaw::SetActivity` (`0x103c1cd0`). ONE arm in front of the Troika body:
  *  request 9 `ACT_WALK` with a non-null slot 167 `GetEnemy` becomes `0x1136 ACT_TZ_WALK2`. */
@@ -256,10 +247,6 @@ int32 NavigatorActivityNotices = 0;
  *    5. otherwise `CBaseCombatCharacter::NPC_EarlyTranslateActivity`. */
 int32 TroikaNpcEarlyTranslateActivity(int32 Activity);
 
-/** The species prologue at the top of `NPC_EarlyTranslateActivity()`. True means a species body ran
- *  and its answer is in `OutActivity`. */
-bool NpcEarlyTranslateActivitySpecies(int32 Activity, int32& OutActivity);
-
 /** `CNPC_VDog::NPC_EarlyTranslateActivity` (`0x10374ad0`), 21 bytes. Retail preserves
  *  `3 ACT_FIDGET` by returning with `EAX` still holding the request — one early return the Troika
  *  base never sees — and forwards every other activity to `0x10295590`. */
@@ -316,6 +303,10 @@ int32 BaseCombatCharacterNpcEarlyTranslateActivity(int32 Activity) const;
  *  fallback, and an intent built for a live NPC binds that provider to this. Every predicate is
  *  answered from the SAME read the slot-375 body above makes. */
 bool PreTranslatePredicate(int32 Predicate, int32 Operand) const;
+/** `ENpcPredicate::FormBit`: the form bit the class's own slot-375 body reads — `m_bfAINPCFlags`
+ *  bit 5 here; `CNPC_VTzimisceRunner` overrides it with its own byte `+0x6672`. A port predicate the
+ *  generated tables ask on the class's behalf, not a retail slot (story 5 step 3). */
+virtual bool AnimFormBit() const;
 
 /** Bind the evaluator above into an animation intent, so a cast body's translation walk reads THIS
  *  NPC's live state instead of the two-answer fallback `ElysiumAnimResolve::TranslateActivity` used
@@ -451,7 +442,3 @@ int32 BachClearWord = 0;
  *  float-sound arm is SKIPPED. */
 bool ShouldPlayIdleSoundZombie();
 
-/** Whether slot 509's override for this NPC's retail class IS `0x103e0fa0`. A separate predicate
- *  because the arm's own answer is a `bool` and cannot double as "an arm ran", which is the shape
- *  the other four dispatchers in this family use. */
-bool ShouldPlayIdleSoundZombieArm() const;

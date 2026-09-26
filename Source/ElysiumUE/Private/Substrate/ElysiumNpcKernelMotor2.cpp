@@ -197,11 +197,24 @@ void FElysiumNpc::SetupSuperJump(float Enabled)
 // `CNPC_VAsianVampire` / `CNPC_VSheriffMan` — the ordinary jump setup and its bookkeeping.
 // -------------------------------------------------------------------------------------------------
 
-void FElysiumNpc::SetupJump(float Enabled)
+void FElysiumNpc::AsianVampireSetupJump(float Enabled)
+{
+	// `CNPC_VAsianVampire::SetupJump` `0x10361a70`, rise `_DAT_104a9310` = 100.0.
+	SetupJumpRise(Enabled, GMotorTailAsianJumpRise);
+}
+
+void FElysiumNpc::SheriffManSetupJump(float Enabled)
+{
+	// `CNPC_VSheriffMan::SetupJump` `0x103b1300`, rise `_DAT_104c614c` = 400.0.
+	const FSetupJumpSpecies* Row = SetupJumpSpeciesOf(TEXT("CNPC_VSheriffMan"));
+	SetupJumpRise(Enabled, Row != nullptr ? Row->Rise : GMotorTailSheriffJumpRise);
+}
+
+void FElysiumNpc::SetupJumpRise(float Enabled, float Rise)
 {
 	// `CNPC_VAsianVampire::SetupJump` `0x10361a70` and `CNPC_VSheriffMan::SetupJump` `0x103b1300`
-	// are the same 284 bytes apart from their rise constant (`_DAT_104a9310` = 100.0 and
-	// `_DAT_104c614c` = 400.0), so this is one body plus a two-row species table:
+	// are the same 284 bytes apart from their rise constant. Neither is a vtable slot: each class's
+	// own task code calls its own (story 5 step 3 split the port's class test into the two names):
 	//
 	//     if (param_1 == 0.0) return;
 	//     m_vJumpOrigin = GetAbsOrigin();
@@ -214,12 +227,6 @@ void FElysiumNpc::SetupJump(float Enabled)
 	if (Enabled == 0.0f)
 	{
 		return;
-	}
-	float Rise = GMotorTailAsianJumpRise;
-	if (IsRetailClass(TEXT("CNPC_VSheriffMan")))
-	{
-		const FSetupJumpSpecies* Row = SetupJumpSpeciesOf(TEXT("CNPC_VSheriffMan"));
-		Rise = Row != nullptr ? Row->Rise : GMotorTailSheriffJumpRise;
 	}
 	const FVector SelfUnits = MotorTailSourceOf(Origin);
 	FVector HintUnits = FVector::ZeroVector;

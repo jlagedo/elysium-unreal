@@ -12,4 +12,5 @@ class FElysiumNpcBaseBoss : public FElysiumNpc
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void DrawDebugStatOverlays() override;
 };

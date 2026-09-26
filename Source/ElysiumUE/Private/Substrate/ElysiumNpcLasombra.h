@@ -11,4 +11,6 @@ class FElysiumNpcLasombra : public FElysiumNpcVampire
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual bool CanSeekCover() override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

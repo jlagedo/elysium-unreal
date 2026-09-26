@@ -14,7 +14,6 @@
 namespace
 {
 	// The census addresses of the bodies that fill slot 295, as `slots.md` records them.
-	const TCHAR* const GSocial10Body_PayphoneCanTalk = TEXT("0x101aaee0");
 
 	// `m_bfNPCStateFlags` bit 2 (`102c222c MOV EAX,[ESI+0x5b64] / SHR EAX,2 / TEST AL,1`) — the
 	// per-state busy bit. `CPayphone::CanTalk` reads the same bit, and `ElysiumNpcKernelDialogue.cpp`
@@ -98,14 +97,8 @@ bool FElysiumNpc::CanTalk(FElysiumEntity* Activator)
 {
 	// Slot 295, `vtable +0x49c`. Retail fills it with two bodies: the Troika line's `0x102c21c0`
 	// (60 census classes) and `CPayphone::CanTalk` (`0x101aaee0`), which story 29c-1's family
-	// Dialogue already ported as `PayphoneCanTalk`. Dispatched here, not restated.
-	if (const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 295))
-	{
-		if (FCString::Strcmp(SlotBody, GSocial10Body_PayphoneCanTalk) == 0)
-		{
-			return PayphoneCanTalk(Activator);
-		}
-	}
+	// Dialogue ported as `PayphoneCanTalk` and `FElysiumNpcPayphone` overrides this method with
+	// (story 5 step 3).
 
 	// The Troika-line body: fourteen gates, every failure falling out to `XOR AL,AL` at `102c22ad`
 	// and only the innermost line reaching `MOV AL,1`. In the listing's order.

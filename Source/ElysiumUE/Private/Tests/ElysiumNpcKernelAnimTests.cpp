@@ -799,10 +799,12 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 	Builder.AddTroikaNpc(TEXT("troika"), FVector::ZeroVector);
 	Builder.AddNpc(TEXT("cop"), FVector(500.f, 0.f, 0.f), TEXT("npc_VCop"));
 	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpcOfClass(TEXT("camera"), FVector(-500.f, 0.f, 0.f), TEXT("CNPC_VCamera"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
 	FElysiumNpc* Cop = Fixture.Npc(TEXT("cop"));
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpc* CameraNpc = Fixture.Npc(TEXT("camera"));
 	TestNotNull(TEXT("the bare Troika NPC spawned"), Troika);
 	TestNotNull(TEXT("the cop spawned"), Cop);
 	TestNotNull(TEXT("the guard spawned"), Guard);
@@ -811,14 +813,27 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Troika, Cop, Guard });
+	if (CameraNpc != nullptr)
+	{
+		FElysiumNpcWorldFixture::Quiet({ CameraNpc });
+	}
 
+	// Slot 259 through the vtable (story 5 step 3): an id no footstep or ornament arm claims (2040)
+	// falls to the chain and is unclaimed everywhere but on a camera, whose own empty override
+	// `0x10368ec0` swallows it.
+	FElysiumAnimEvent Unclaimed;
+	Unclaimed.Event = 2040;
 	TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
-	TestFalse(TEXT("so it swallows no anim events"), Troika->SwallowsAnimEvents());
+	TestFalse(TEXT("so it swallows no anim events"), Troika->HandleAnimEvent(Unclaimed));
 	TestTrue(TEXT("npc_VCop builds CNPC_VCop"),
 		Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
 	TestFalse(TEXT("a cop is not a camera, so it swallows none either"),
-		Cop->SwallowsAnimEvents());
-	TestFalse(TEXT("and neither does the ordinary combatant"), Guard->SwallowsAnimEvents());
+		Cop->HandleAnimEvent(Unclaimed));
+	TestFalse(TEXT("and neither does the ordinary combatant"), Guard->HandleAnimEvent(Unclaimed));
+	if (TestNotNull(TEXT("the camera spawned"), CameraNpc))
+	{
+		TestTrue(TEXT("a CNPC_VCamera swallows it"), CameraNpc->HandleAnimEvent(Unclaimed));
+	}
 
 	// The extra-model pair, whose forwarding arm is "the owner IS the player". A freshly spawned NPC
 	// has no owner, which is the arm that warns.

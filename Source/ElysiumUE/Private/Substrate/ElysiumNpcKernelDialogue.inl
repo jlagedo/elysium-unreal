@@ -229,6 +229,8 @@ bool PayphoneCanTalk(const FElysiumEntity* Activator) const;
 /** `CNPC_VSabbatLeader::HandleInteraction` (`0x103a76d0`, 111 bytes) — slot 366's `CNPC_VSabbatLeader`
  *  override. */
 bool SabbatLeaderHandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other);
+/** `0x10385a70` — the human line's slot 366, `return 0;`: the body of `FElysiumNpcHuman::HandleInteraction`. */
+bool HumanHandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other);
 
 /** One row of the slot-366 species table: which body fills `HandleInteraction` for a class, and what
  *  that body answers. Both recovered bodies answer FALSE; the table exists because the two are

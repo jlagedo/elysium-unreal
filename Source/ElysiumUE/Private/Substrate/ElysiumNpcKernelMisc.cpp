@@ -383,34 +383,6 @@ const FElysiumNpc::FComponentFactory* FElysiumNpc::ComponentFactoryRows(int32& O
 	return Rows;
 }
 
-const FElysiumNpc::FComponentFactory* FElysiumNpc::ComponentFactoryFor(int32 Slot) const
-{
-	// The census picks the row, not a name compare: `BodyOf` walks this NPC's base chain upward and
-	// answers the nearest override's address, else the Troika line's own. A classname no census
-	// class claims answers null, whose `BodyOf` is the Troika line — the correct fall-through.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), Slot);
-	int32 Count = 0;
-	const FComponentFactory* const Rows = ComponentFactoryRows(Count);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (Rows[Index].Slot == Slot && FCString::Stricmp(Rows[Index].Body, SlotBody) == 0)
-		{
-			return &Rows[Index];
-		}
-	}
-	// The census had no body for the slot (or one this table does not carry): fall back to the
-	// Troika-line row so a caller still gets the allocation it would have made.
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (Rows[Index].Slot == Slot && FCString::Stricmp(Rows[Index].RetailClass,
-			TEXT("CAI_BaseNPC")) == 0)
-		{
-			return &Rows[Index];
-		}
-	}
-	return nullptr;
-}
-
 void* FElysiumNpc::CreateSenses()
 {
 	// `0x1027cc10`, slot 425. `operator new(0x88)`, then by hand:
@@ -430,6 +402,7 @@ void* FElysiumNpc::CreateSenses()
 	//
 	// SEAM: there is no `CAI_Senses` object. `+0x5cdc` is bound to `FElysiumNpc::Senses`, a struct
 	// the NPC already carries, so there is nothing to allocate and nothing to point at.
+	LastComponentFactoryBody = TEXT("0x1027cc10");
 	++ComponentFactoryRefusals;
 	return nullptr;
 }
@@ -441,6 +414,7 @@ void* FElysiumNpc::CreateMoveProbe()
 	// constructor call at all — the whole object is four stores.
 	//
 	// SEAM: `+0x5d40` is an `ELYSIUM_NPC_WORD_CHAIN` row on the motor; there is no move probe.
+	LastComponentFactoryBody = TEXT("0x1027cef0");
 	++ComponentFactoryRefusals;
 	return nullptr;
 }
@@ -452,7 +426,8 @@ void* FElysiumNpc::CreateMotor()
 	//
 	// SEAM: `+0x5d34` is an `ELYSIUM_NPC_WORD_CHAIN` row on `FElysiumScriptedCharacter::Motor`, the
 	// one `IElysiumNpcMotor` seam, which the services provide rather than the NPC allocating.
-	// `ComponentFactoryFor(427)` still says WHICH motor this class would have been given.
+	// `LastComponentFactoryBody` still says WHICH motor this class would have been given.
+	LastComponentFactoryBody = TEXT("0x1027cec0");
 	++ComponentFactoryRefusals;
 	return nullptr;
 }
@@ -460,11 +435,23 @@ void* FElysiumNpc::CreateMotor()
 void* FElysiumNpc::CreateLocalNavigator()
 {
 	// `0x1027cf60`, slot 428: `operator new(0x20)` then `thunk_FUN_102ddab0(p, this)`.
-	// `CNPC_VRat::vfunc428` (`0x103ad6a0`) is the species override and is the SAME SIZE — `0x20` —
-	// with a different constructor (`0x103ad540`). A rat's local navigator is a different type of
-	// the same shape, which is why the size alone does not identify the row.
+	// `CNPC_VRat::vfunc428` (`0x103ad6a0`) overrides it on `FElysiumNpcRat` (story 5 step 3).
 	//
 	// SEAM: `+0x5d38` is folded into the same motor seam.
+	LastComponentFactoryBody = TEXT("0x1027cf60");
+	++ComponentFactoryRefusals;
+	return nullptr;
+}
+
+void* FElysiumNpc::RatCreateLocalNavigator()
+{
+	// `CNPC_VRat::vfunc428` `0x103ad6a0`, the body of `FElysiumNpcRat::CreateLocalNavigator`: the
+	// SAME SIZE as the base's (`operator new(0x20)`) with a different constructor (`0x103ad540`). A
+	// rat's local navigator is a different type of the same shape, which is why the size alone does
+	// not identify the row.
+	//
+	// SEAM: `+0x5d38` is folded into the same motor seam as the base body's.
+	LastComponentFactoryBody = TEXT("0x103ad6a0");
 	++ComponentFactoryRefusals;
 	return nullptr;
 }
@@ -474,6 +461,7 @@ void* FElysiumNpc::CreateNavigator()
 	// `0x1027cf90`, slot 429: `operator new(0x68)` then `thunk_FUN_102eca50(p, this)`.
 	//
 	// SEAM: `+0x5d34`'s chain row already says the navigator is the motor seam's concern here.
+	LastComponentFactoryBody = TEXT("0x1027cf90");
 	++ComponentFactoryRefusals;
 	return nullptr;
 }
@@ -484,6 +472,7 @@ void* FElysiumNpc::CreatePathfinder()
 	// `p[0] = vftable_CAI_Pathfinder`. Like the move probe, no constructor call.
 	//
 	// SEAM: `+0x5d3c` is an `ELYSIUM_NPC_WORD_CHAIN` row — the motor owns path generation.
+	LastComponentFactoryBody = TEXT("0x1027cfc0");
 	++ComponentFactoryRefusals;
 	return nullptr;
 }
@@ -591,22 +580,25 @@ bool FElysiumNpc::OkToDisturb() const
 	return const_cast<FElysiumNpc*>(this)->IsAlive();
 }
 
-bool FElysiumNpc::OkToInterruptForMelee()
+bool FElysiumNpc::SabbatLeaderOkToInterruptForMelee()
 {
-	// `CNPC_VSabbatLeader::OkToInterruptForMelee` (`0x103ab400`) first — the census says whether
-	// this NPC takes it. The body, scope trace stripped:
+	// `CNPC_VSabbatLeader::OkToInterruptForMelee` (`0x103ab400`), the body of
+	// `FElysiumNpcSabbatLeader::OkToInterruptForMelee`. Scope trace stripped:
 	//     if (m_Activity (+0xfec) != 0x1141) return CAI_BaseNPCTroika::OkToInterruptForMelee();
 	//     return true;
 	// An exception, not a replacement: activity `0x1141` is always interruptible for the Sabbat
-	// leader and everything else falls straight through to the Troika line.
-	if (FCString::Stricmp(ElysiumNpcKernelClass::BodyOf(RetailClass(), 590),
-		TEXT("0x103ab400")) == 0
-		&& ActivityNumber == GMiscSabbatLeaderMeleeActivity)
+	// leader and everything else is a direct call into the Troika line.
+	if (ActivityNumber != GMiscSabbatLeaderMeleeActivity)
 	{
-		return true;
+		return FElysiumNpc::OkToInterruptForMelee();
 	}
+	return true;
+}
 
-	// `CAI_BaseNPCTroika::OkToInterruptForMelee` `0x1029f940`:
+bool FElysiumNpc::OkToInterruptForMelee()
+{
+	// `CAI_BaseNPCTroika::OkToInterruptForMelee` `0x1029f940` (`CNPC_VSabbatLeader` overrides it,
+	// story 5 step 3):
 	//     if (!OkToDisturb()) return false;                           // 0x1028a190
 	//     switch (m_Activity) { 1, 9, 0x13, 0x30, 0x4b, 0x4d, 0x51,
 	//                           0x73..0x8a, 0xcb5, 0xd25, 0x1121, 0x1157..0x1158: return true; }
@@ -641,11 +633,11 @@ bool FElysiumNpc::OkToInterruptForMelee()
 // Slot 592 `CanSeekCover` — `0x102953e0`, plus `CNPC_VLasombra`'s `0x103893c0`.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::CanSeekCover()
+bool FElysiumNpc::LasombraCanSeekCover()
 {
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 
-	// `CNPC_VLasombra::vfunc592` (`0x103893c0`) first:
+	// `CNPC_VLasombra::vfunc592` (`0x103893c0`), the body of `FElysiumNpcLasombra::CanSeekCover`:
 	//     if (curtime < m_flCoverDisableOverride (+0x6664)) return true;   // NOT false
 	//     return CAI_BaseNPCTroika::CanSeekCover();
 	//
@@ -655,14 +647,19 @@ bool FElysiumNpc::CanSeekCover()
 	// AL. The field name reads as a disable, but the arm it guards is the permissive one: while the
 	// override stands, a Lasombra may always seek cover without consulting the Troika rule.
 	// Corrected here and in the walked paragraph.
-	if (FCString::Stricmp(ElysiumNpcKernelClass::BodyOf(RetailClass(), 592),
-		TEXT("0x103893c0")) == 0
-		&& Now < static_cast<double>(LasombraCoverDisableOverride))
+	if (Now < static_cast<double>(LasombraCoverDisableOverride))
 	{
 		return true;
 	}
+	return FElysiumNpc::CanSeekCover();   // `0x102953e0`, direct
+}
 
-	// `CAI_BaseNPCTroika::FUN_102953e0` `0x102953e0`, three arms in order:
+bool FElysiumNpc::CanSeekCover()
+{
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+
+	// `CAI_BaseNPCTroika::FUN_102953e0` `0x102953e0` (`CNPC_VLasombra` overrides it, story 5
+	// step 3), three arms in order:
 	//     if (HasCondition(COND_ENEMY_OCCLUDED 0x48)) return true;
 	//     if (m_flCanSeekCoverTimer (+0x607c) <= curtime) return true;
 	//     if (m_flCanSeekCoverTimer - 1.0f <= curtime && !HasCondition(COND_CAN_RANGE_ATTACK1 0x4f))
@@ -693,39 +690,8 @@ bool FElysiumNpc::CanSeekCover()
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 24 `OnVictimHitByMe` — `0x1029f8d0` and its three species overrides.
+// Slot 24 `OnVictimHitByMe` — `0x1029f8d0` and its four species bodies.
 // -------------------------------------------------------------------------------------------------
-
-const FElysiumNpc::FVictimHitSpecies* FElysiumNpc::VictimHitSpeciesRows(int32& OutCount)
-{
-	static constexpr FVictimHitSpecies Rows[] =
-	{
-		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x1029f8d0"), EVictimHitLine::Troika },
-		{ TEXT("CNPC_VGargoyle"), TEXT("0x1037a450"), EVictimHitLine::Gargoyle },
-		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103ab4a0"), EVictimHitLine::SabbatLeader },
-		{ TEXT("CNPC_VZombie"), TEXT("0x103e1280"), EVictimHitLine::Zombie },
-		// Story 29d, family **SpeciesMisc10**: `CNPC_VGhoulCroucher#24` (`0x1037be80`). Without this
-		// row a burning croucher fell to the bare Troika arm and never burned the player.
-		{ TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037be80"), EVictimHitLine::GhoulCroucher },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-FElysiumNpc::EVictimHitLine FElysiumNpc::VictimHitLine() const
-{
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 24);
-	int32 Count = 0;
-	const FVictimHitSpecies* const Rows = VictimHitSpeciesRows(Count);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (FCString::Stricmp(Rows[Index].Body, SlotBody) == 0)
-		{
-			return Rows[Index].Line;
-		}
-	}
-	return EVictimHitLine::Troika;
-}
 
 bool FElysiumNpc::GargoyleHitsPillar(const FString& Classname)
 {
@@ -764,88 +730,87 @@ void FElysiumNpc::DispatchVictimHitReaction(FElysiumEntity* Victim)
 
 void FElysiumNpc::OnVictimHitByMe(FElysiumEntity* Victim)
 {
-	switch (VictimHitLine())
-	{
-	case EVictimHitLine::Gargoyle:
-	{
-		// `CNPC_VGargoyle::OnVictimHitByMe` `0x1037a450`. The control flow inverts twice, so read
-		// the listing's jump targets rather than the nesting: the two early `JZ 0x1037a547` on a
-		// pointer-identity hit and the two `SETZ` tails all land on the DISPATCH, and the only path
-		// that reaches `0x1037a552` (the return) is "neither name matched". So:
-		//
-		//     if (classname is "pillar" or "central_pillar") victim->vtable[+0x428](this);
-		//     // and NOTHING otherwise — not even the base body.
-		//
-		// **29c's walk has this inverted** ("skips the base hit reaction when the victim's classname
-		// is pillar ... otherwise calls it"). Corrected here and in the walked paragraph.
-		//
-		// Note what this override does NOT do: it never calls the Troika line, so a Gargoyle's melee
-		// move records are never cleared. That is retail's, not an omission here.
-		const FString Classname = Victim != nullptr && Victim->Def != nullptr
-			? Victim->Def->Classname : FString();
-		if (GargoyleHitsPillar(Classname))
-		{
-			DispatchVictimHitReaction(Victim);
-		}
-		return;
-	}
-	case EVictimHitLine::SabbatLeader:
-	{
-		// `CNPC_VSabbatLeader::OnVictimHitByMe` `0x103ab4a0`, scope trace stripped:
-		//     ent = resolve(m_hClosestPlayer);                 // +0x628c, index & 0x1fff,
-		//                                                      // generation >> 0xd
-		//     if (ent == param_1 && --m_RoarAttackCount < 0) m_RoarAttackCount = 0;
-		//
-		// The decrement is INSIDE the condition's second term, so it happens only when the victim is
-		// the tracked player; the clamp is a separate test on the decremented value. It also does
-		// NOT call the Troika line — the base's record clear does not run for a Sabbat leader.
-		const FElysiumEntity* Closest = World != nullptr && Senses.Memory.ClosestPlayer.IsSet()
-			? World->Resolve(Senses.Memory.ClosestPlayer)
-			: nullptr;
-		if (Closest != nullptr && Closest == Victim)
-		{
-			--SabbatLeaderRoarAttackCount;
-			if (SabbatLeaderRoarAttackCount < 0)
-			{
-				SabbatLeaderRoarAttackCount = 0;
-			}
-		}
-		return;
-	}
-	case EVictimHitLine::Zombie:
-		// `CNPC_VZombie::OnVictimHitByMe` `0x103e1280`, and the ORDER is the fact:
-		//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);          // base FIRST
-		//     FireOutput(&m_OnAttackedVictim (+0x66e8), param_1, this, 0);// output SECOND
-		// The only species arm that keeps the base body.
-		ClearMeleeMoveRecords();
-		if (Victim != nullptr)
-		{
-			FireOutput(FName(TEXT("OnAttackedVictim")), Victim->Handle);
-		}
-		return;
+	// `CAI_BaseNPCTroika::OnVictimHitByMe` `0x1029f8d0` — fourteen bytes whose whole body is
+	// `thunk_FUN_1028b160(&this->field_0x6028)`. The victim argument is READ BY NOTHING.
+	// `CNPC_VGargoyle`, `CNPC_VSabbatLeader`, `CNPC_VZombie` and `CNPC_VGhoulCroucher` override this
+	// method on their C++ classes (story 5 step 3).
+	(void)Victim;
+	ClearMeleeMoveRecords();
+}
 
-	case EVictimHitLine::GhoulCroucher:
-		// `CNPC_VGhoulCroucher::OnVictimHitByMe` `0x1037be80`, story 29d family SpeciesMisc10:
-		//     player = param_1 ? param_1->+0xa8 : 0;                  // the PLAYER downcast cache
-		//     if (m_bSpawnBurning (+0x6665) && player) BurnPlayer(player, 10.0);
-		//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);      // ALWAYS, unlike the Gargoyle
-		//                                                             // and SabbatLeader arms
-		// `1037bf3c` pushes `0x41200000` = **10.0** as the burn damage.
-		if (bGhoulSpawnBurning && Victim != nullptr && World != nullptr
-			&& Victim->Handle == World->PlayerHandle())
-		{
-			BurnPlayer(Victim, 10.f);
-		}
-		ClearMeleeMoveRecords();
-		return;
-
-	case EVictimHitLine::Troika:
-	default:
-		// `CAI_BaseNPCTroika::OnVictimHitByMe` `0x1029f8d0` — fourteen bytes whose whole body is
-		// `thunk_FUN_1028b160(&this->field_0x6028)`. The victim argument is READ BY NOTHING.
-		ClearMeleeMoveRecords();
-		return;
+void FElysiumNpc::GargoyleOnVictimHitByMe(FElysiumEntity* Victim)
+{
+	// `CNPC_VGargoyle::OnVictimHitByMe` `0x1037a450`. The control flow inverts twice, so read the
+	// listing's jump targets rather than the nesting: the two early `JZ 0x1037a547` on a
+	// pointer-identity hit and the two `SETZ` tails all land on the DISPATCH, and the only path that
+	// reaches `0x1037a552` (the return) is "neither name matched". So:
+	//
+	//     if (classname is "pillar" or "central_pillar") victim->vtable[+0x428](this);
+	//     // and NOTHING otherwise — not even the base body.
+	//
+	// **29c's walk has this inverted** ("skips the base hit reaction when the victim's classname is
+	// pillar ... otherwise calls it"). Corrected here and in the walked paragraph.
+	//
+	// Note what this override does NOT do: it never calls the Troika line, so a Gargoyle's melee move
+	// records are never cleared. That is retail's, not an omission here.
+	const FString Classname = Victim != nullptr && Victim->Def != nullptr
+		? Victim->Def->Classname : FString();
+	if (GargoyleHitsPillar(Classname))
+	{
+		DispatchVictimHitReaction(Victim);
 	}
+}
+
+void FElysiumNpc::SabbatLeaderOnVictimHitByMe(FElysiumEntity* Victim)
+{
+	// `CNPC_VSabbatLeader::OnVictimHitByMe` `0x103ab4a0`, scope trace stripped:
+	//     ent = resolve(m_hClosestPlayer);                 // +0x628c, index & 0x1fff,
+	//                                                      // generation >> 0xd
+	//     if (ent == param_1 && --m_RoarAttackCount < 0) m_RoarAttackCount = 0;
+	//
+	// The decrement is INSIDE the condition's second term, so it happens only when the victim is the
+	// tracked player; the clamp is a separate test on the decremented value. It also does NOT call
+	// the Troika line — the base's record clear does not run for a Sabbat leader.
+	const FElysiumEntity* Closest = World != nullptr && Senses.Memory.ClosestPlayer.IsSet()
+		? World->Resolve(Senses.Memory.ClosestPlayer)
+		: nullptr;
+	if (Closest != nullptr && Closest == Victim)
+	{
+		--SabbatLeaderRoarAttackCount;
+		if (SabbatLeaderRoarAttackCount < 0)
+		{
+			SabbatLeaderRoarAttackCount = 0;
+		}
+	}
+}
+
+void FElysiumNpc::ZombieOnVictimHitByMe(FElysiumEntity* Victim)
+{
+	// `CNPC_VZombie::OnVictimHitByMe` `0x103e1280`, and the ORDER is the fact:
+	//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);          // base FIRST
+	//     FireOutput(&m_OnAttackedVictim (+0x66e8), param_1, this, 0);// output SECOND
+	// The only species arm that keeps the base body.
+	FElysiumNpc::OnVictimHitByMe(Victim);   // `0x1029f8d0`, direct
+	if (Victim != nullptr)
+	{
+		FireOutput(FName(TEXT("OnAttackedVictim")), Victim->Handle);
+	}
+}
+
+void FElysiumNpc::GhoulCroucherOnVictimHitByMe(FElysiumEntity* Victim)
+{
+	// `CNPC_VGhoulCroucher::OnVictimHitByMe` `0x1037be80`, story 29d family SpeciesMisc10:
+	//     player = param_1 ? param_1->+0xa8 : 0;                  // the PLAYER downcast cache
+	//     if (m_bSpawnBurning (+0x6665) && player) BurnPlayer(player, 10.0);
+	//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);      // ALWAYS, unlike the Gargoyle
+	//                                                             // and SabbatLeader arms
+	// `1037bf3c` pushes `0x41200000` = **10.0** as the burn damage.
+	if (bGhoulSpawnBurning && Victim != nullptr && World != nullptr
+		&& Victim->Handle == World->PlayerHandle())
+	{
+		BurnPlayer(Victim, 10.f);
+	}
+	FElysiumNpc::OnVictimHitByMe(Victim);   // `0x1029f8d0`, direct
 }
 
 // -------------------------------------------------------------------------------------------------

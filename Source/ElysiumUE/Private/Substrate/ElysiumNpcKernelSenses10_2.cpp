@@ -114,7 +114,7 @@ bool FElysiumNpc::TzimisceFVisible(FElysiumEntity* Candidate, int32 Mask, FElysi
 	// `103ba290`, 30 bytes: the Troika base with the FOURTH argument FORCED to `0`. The whole
 	// override is that one clamp, and it is observable — every Tzimisce visibility test runs the
 	// base with that word zeroed.
-	return FVisible(Candidate, Mask, Blocker, 0);
+	return FElysiumNpc::FVisible(Candidate, Mask, Blocker, 0);
 }
 
 bool FElysiumNpc::ZombieFVisible(FElysiumEntity* Candidate, int32 Mask, FElysiumEntity* Blocker,
@@ -132,7 +132,7 @@ bool FElysiumNpc::ZombieFVisible(FElysiumEntity* Candidate, int32 Mask, FElysium
 		return !EnemyCharacter->IsObfuscatedForSenses();
 	}
 	// `103e0c2e`: arm two — the Troika base with the fourth argument forced to 0, as Tzimisce does.
-	return FVisible(Candidate, Mask, Blocker, 0);
+	return FElysiumNpc::FVisible(Candidate, Mask, Blocker, 0);
 }
 
 // =================================================================================================
@@ -646,19 +646,9 @@ bool FElysiumNpc::CachedNearestNodeZone(int32& OutZone) const
 bool FElysiumNpc::ValidateHintTypeForWords(const FHintWords& Hint) const
 {
 	// Slot 566 (`vtable +0x8d8`) over the words already in hand — see the declaration for why the
-	// node-index entry point cannot serve these two bodies.
-	const FElysiumNpcClass* Cls = RetailClass();
-	const FHintTypeSpecies* Row = HintTypeSpeciesOf(Cls != nullptr ? Cls->Name : nullptr);
-	if (FValidateHintTypeSpecies(Row, Hint.HintType))
-	{
-		return true;
-	}
-	if (HintTypeSpeciesFallsThroughToBase(Row))
-	{
-		// `CNPC_VBach` (`0x10365800`) alone; slot 566's Troika body is still a generated stub.
-		return const_cast<FElysiumNpc*>(this)->FValidateHintType(nullptr);
-	}
-	return false;
+	// node-index entry point cannot serve these two bodies. Through the vtable: the class's own
+	// override answers (story 5 step 3).
+	return const_cast<FElysiumNpc*>(this)->FValidateHintType(const_cast<FHintWords*>(&Hint));
 }
 
 bool FElysiumNpc::IsValidRandomMoveHint(const FHintWords& Hint, double Now)

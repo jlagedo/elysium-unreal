@@ -11,4 +11,8 @@ class FElysiumNpcRat : public FElysiumNpcScurrying
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	virtual FVector HeadDirection2D() override;
+	virtual FVector HeadDirection3D() override;
+	virtual void* CreateLocalNavigator() override;
 };

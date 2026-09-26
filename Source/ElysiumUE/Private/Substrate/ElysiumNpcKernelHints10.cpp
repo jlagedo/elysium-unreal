@@ -14,8 +14,6 @@ namespace
 	// The census addresses of the bodies that fill slot 566, as `slots.md` records them. Only the
 	// ManBat arm is this family's; the other eleven are story 29c-1's table
 	// (`FElysiumNpc::HintTypeSpeciesRows`) and the twelfth is the Troika line itself.
-	const TCHAR* const GHints10Body_ManBatValidate = TEXT("0x1038e480");
-	const TCHAR* const GHints10Body_TroikaValidate = TEXT("0x10295c20");
 
 	// `CNPC_VManBat`'s five name templates, at their `.rdata` addresses in the pinned image. Read out
 	// of `vampire.dll` at `address - 0x10000000` because the corpus's string table does not hold the
@@ -107,37 +105,10 @@ bool FElysiumNpc::FValidateHintType(void* Hint)
 	// caller holding a node index goes through `FValidateHintTypeNode` below.
 	const FHintWords* Words = static_cast<const FHintWords*>(Hint);
 
-	// Retail dispatches slot 566 by class before the body runs at all. Twelve census rows carry a
-	// species body; eleven of them are story 29c-1's constant/range table and one — `CNPC_VManBat` —
-	// is a whole replacement body, this family's row. `CNPC_VBach` is the one row that FALLS THROUGH
-	// to this body rather than refusing, which `HintTypeSpeciesFallsThroughToBase` states.
-	const FElysiumNpcClass* Cls = RetailClass();
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(Cls, 566);
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, GHints10Body_ManBatValidate) == 0)
-	{
-		// `1038e5b3` — the ManBat arm dereferences its hint unconditionally; a null one faults in
-		// retail. CRASH GUARD, named: a null hint answers false, which is the arm every other
-		// refusal in this body reaches.
-		return Words != nullptr && ManBatValidateHintType(*Words);
-	}
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, GHints10Body_TroikaValidate) != 0)
-	{
-		const FHintTypeSpecies* Row = HintTypeSpeciesOf(Cls != nullptr ? Cls->Name : nullptr);
-		// `CNPC_VTzimisce` (`0x103ba780`) is the ONE species body that null-checks the hint; the
-		// other ten dereference it. The type of a hint the seam could not resolve is 0, which no
-		// species row accepts, so the answer is the same either way.
-		const int32 SpeciesType = Words != nullptr ? Words->HintType : 0;
-		if (FValidateHintTypeSpecies(Row, SpeciesType))
-		{
-			return true;
-		}
-		if (!HintTypeSpeciesFallsThroughToBase(Row))
-		{
-			return false;
-		}
-		// `CNPC_VBach` (`0x10365800`) falls through into the body below rather than refusing.
-	}
-
+	// Twelve species classes override this method on their C++ classes (story 5 step 3): eleven
+	// through `SpeciesFValidateHintType` (story 29c-1's constant/range table) and `CNPC_VManBat`
+	// through `ManBatFValidateHintType`, a whole replacement body. `CNPC_VBach` is the one species
+	// body that FALLS THROUGH into this one rather than refusing.
 	// `10295c96 TEST EBP,EBP / JZ` — a null hint takes the `XOR AL,AL` tail.
 	if (Words == nullptr)
 	{
@@ -186,6 +157,38 @@ bool FElysiumNpc::FValidateHintType(void* Hint)
 	default:
 		return false;
 	}
+}
+
+bool FElysiumNpc::SpeciesFValidateHintType(const TCHAR* SpeciesClass, void* Hint)
+{
+	// The body of a species class's `FValidateHintType` override: its row of `HintTypeSpeciesRows`
+	// (story 29c-1's constant/range table) applied to the hint's type. `CNPC_VTzimisce`
+	// (`0x103ba780`) is the ONE species body that null-checks the hint; the other ten dereference it.
+	// The type of a hint the seam could not resolve is 0, which no species row accepts, so the answer
+	// is the same either way.
+	const FHintWords* Words = static_cast<const FHintWords*>(Hint);
+	const FHintTypeSpecies* Row = HintTypeSpeciesOf(SpeciesClass);
+	const int32 SpeciesType = Words != nullptr ? Words->HintType : 0;
+	if (FValidateHintTypeSpecies(Row, SpeciesType))
+	{
+		return true;
+	}
+	if (!HintTypeSpeciesFallsThroughToBase(Row))
+	{
+		return false;
+	}
+	// `CNPC_VBach` (`0x10365800`) falls through into the Troika body `0x10295c20` directly.
+	return FElysiumNpc::FValidateHintType(Hint);
+}
+
+bool FElysiumNpc::ManBatFValidateHintType(void* Hint)
+{
+	// `CNPC_VManBat::FValidateHintType` `0x1038e480`, the body of the class's override.
+	// `1038e5b3` — the ManBat body dereferences its hint unconditionally; a null one faults in
+	// retail. CRASH GUARD, named: a null hint answers false, which is the arm every other refusal in
+	// the body reaches.
+	const FHintWords* Words = static_cast<const FHintWords*>(Hint);
+	return Words != nullptr && ManBatValidateHintType(*Words);
 }
 
 bool FElysiumNpc::FValidateHintTypeNode(int32 HintNode) const

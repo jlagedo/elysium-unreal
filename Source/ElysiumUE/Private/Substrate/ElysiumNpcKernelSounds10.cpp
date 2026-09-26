@@ -340,12 +340,13 @@ void FElysiumNpc::IdleSound()
 // to the base.
 void FElysiumNpc::PainSound()
 {
-	if (IsRetailClass(TEXT("CNPC_VWerewolf")))
-	{
-		SpeakSoundConcept(GSounds10ConceptPain, GSounds10WerewolfAttenuation);
-		return;
-	}
 	SpeakSoundConcept(GSounds10ConceptPain, GSounds10Attenuation);
+}
+
+// The species arm above, `FElysiumNpcWerewolf::PainSound`'s body (story 5 step 3).
+void FElysiumNpc::WerewolfPainSound()
+{
+	SpeakSoundConcept(GSounds10ConceptPain, GSounds10WerewolfAttenuation);
 }
 
 // `CAI_BaseNPCTroika::FUN_10294400` (`0x10294400`), slot 492 `FearSound`. 138 bytes, concept
@@ -433,12 +434,13 @@ void FElysiumNpc::IdleAgitatedSound()
 // scope-trace frame, with `0` as the fifth argument. It does not chain to the base.
 void FElysiumNpc::ExertHvySound()
 {
-	if (IsRetailClass(TEXT("CNPC_VWerewolf")))
-	{
-		SpeakSoundConcept(GSounds10ConceptExertHeavy, GSounds10WerewolfAttenuation);
-		return;
-	}
 	SpeakSoundConcept(GSounds10ConceptExertHeavy, GSounds10Attenuation);
+}
+
+// The species arm above, `FElysiumNpcWerewolf::ExertHvySound`'s body (story 5 step 3).
+void FElysiumNpc::WerewolfExertHvySound()
+{
+	SpeakSoundConcept(GSounds10ConceptExertHeavy, GSounds10WerewolfAttenuation);
 }
 
 // `CAI_BaseNPCTroika::FUN_10294ab0` (`0x10294ab0`), slot 501 `ExertLightSound`. 138 bytes, concept

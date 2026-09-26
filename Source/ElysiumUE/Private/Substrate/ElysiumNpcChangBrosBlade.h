@@ -12,4 +12,6 @@ class FElysiumNpcChangBrosBlade : public FElysiumNpcChangBros
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

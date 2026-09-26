@@ -589,8 +589,10 @@ struct FTraceAttackSpecies
 };
 static const FTraceAttackSpecies* TraceAttackSpeciesRows(int32& OutCount);
 static const FTraceAttackSpecies* TraceAttackSpeciesOf(const TCHAR* InRetailClass);
-/** This NPC's row, walking the census chain, or null for the Troika line. */
-const FTraceAttackSpecies* TraceAttackSpecies() const;
+/** `CNPC_VWerewolf::TraceAttack` (`0x103ccbf0`) and `CNPC_VZombie::TraceAttack` (`0x103e0430`) — the
+ *  bodies of their classes' overrides: the prologue, then the base body directly. */
+void WerewolfTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace);
+void ZombieTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace);
 
 /** `0x103e0430` — `CNPC_VZombie`'s prologue as a pure rule, so both arms are measurable. The gib
  *  latch is raised when the hitgroup is 1 (a head hit) and cleared otherwise; a non-head hit only
@@ -638,10 +640,13 @@ static const FDamageFlinchSpecies* DamageFlinchSpeciesOf(const TCHAR* InRetailCl
  *  does not — retail's own two-armed read. */
 static bool DamageFlinchSuppressed(uint32 CombinedDamageBits, float Magnitude, uint32 SuppressMask);
 
-/** `FElysiumCombatCharacter::StartDamageFlinch`'s NPC hook: whether the species that stands this
- *  classname suppresses the generic flinch for this descriptor. The base character has no species,
- *  so its override answers false and every other body flinches exactly as before. */
+/** `FElysiumCombatCharacter::StartDamageFlinch`'s NPC hook: whether this class suppresses the generic
+ *  flinch for this descriptor. The Troika line answers false; the two species that do override it. */
 virtual bool SuppressesDamageFlinch(const FElysiumDmg& Dmg) const override;
+/** The Gargoyle/Hengeyokai slot-292 gate off `SpeciesClass`'s own row. */
+bool SpeciesSuppressesDamageFlinch(const TCHAR* SpeciesClass, const FElysiumDmg& Dmg) const;
+/** `CNPC_VGhoulCroucher::CanBeSetOnFire` (`0x1037c420`) — the body of the class's override. */
+bool GhoulCroucherCanBeSetOnFire();
 
 /** One row of slot 300's (`Event_TookLife`) species table — the three classes of the
  *  `CNPC_VPlayerController` line that share `0x103a4950`. */

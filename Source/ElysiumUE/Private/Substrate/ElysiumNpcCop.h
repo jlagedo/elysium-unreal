@@ -11,4 +11,14 @@ class FElysiumNpcCop : public FElysiumNpcHumanCombatant
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void Slot597(FElysiumEntity* Other, int32 Priority) override;
+	virtual void NPCInit() override;
+	virtual void UpdateOnRemove() override;
+	virtual void OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState) override;
+	virtual int32 SelectIdealStateRetail() override;
+	virtual void OnSeeEntity(FElysiumEntity* Seen) override;
+	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
+	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
+	virtual void DrawDebugGeometryOverlays() override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

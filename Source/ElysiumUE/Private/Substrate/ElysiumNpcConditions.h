@@ -724,6 +724,9 @@ namespace ElysiumNpcCond
 	 * record does not by itself say when an NPC should use it.
 	 */
 	void GatherAttackConditions(const FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
+	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)'s own arm: the zone melee suppression.
+	// True when it cleared the melee pair, in which case the base gather does not run that pass.
+	bool WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiumNpcConditions& Out);
 
 	// --- The incoming-attack notice ---------------------------------------------------------------
 	// Recovered (`docs/vtmb/combat-and-damage.md` -> "Target acquisition, sequence commit and

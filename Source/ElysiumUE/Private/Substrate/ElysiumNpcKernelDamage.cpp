@@ -450,10 +450,10 @@ const FElysiumNpc::FCanBeSetOnFireSpecies* FElysiumNpc::CanBeSetOnFireSpeciesOf(
 {
 	int32 Count = 0;
 	const FCanBeSetOnFireSpecies* Rows = CanBeSetOnFireSpeciesRows(Count);
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
+	// The class's own row (story 5 step 3: a subclass inherits its base's C++ override).
 	for (int32 i = 0; i < Count; ++i)
 	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
+		if (InRetailClass != nullptr && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
 		{
 			return &Rows[i];
 		}
@@ -461,19 +461,22 @@ const FElysiumNpc::FCanBeSetOnFireSpecies* FElysiumNpc::CanBeSetOnFireSpeciesOf(
 	return nullptr;
 }
 
-bool FElysiumNpc::CanBeSetOnFire()
+bool FElysiumNpc::GhoulCroucherCanBeSetOnFire()
 {
-	// `0x1037c420` first: the species arm runs BEFORE the base body and refuses outright while the
-	// authored `on_fire` keyfield (`m_bSpawnBurning`, +0x6665) is set — a croucher that spawned
-	// burning cannot be set on fire again. Anything else falls into `thunk_FUN_102ad0c0`.
-	const FCanBeSetOnFireSpecies* Row = CanBeSetOnFireSpeciesOf(
-		RetailClass() != nullptr ? RetailClass()->Name : nullptr);
-	if (Row != nullptr && Row->bRefusesWhileSpawnBurning && bGhoulSpawnBurning)
+	// `0x1037c420`, the body of `FElysiumNpcGhoulCroucher::CanBeSetOnFire`: it refuses outright while
+	// the authored `on_fire` keyfield (`m_bSpawnBurning`, +0x6665) is set — a croucher that spawned
+	// burning cannot be set on fire again. Anything else is a direct call into `thunk_FUN_102ad0c0`.
+	if (bGhoulSpawnBurning)
 	{
 		return false;
 	}
+	return FElysiumNpc::CanBeSetOnFire();
+}
 
-	// `0x102ad0c0`, the Troika line, two arms and nothing else:
+bool FElysiumNpc::CanBeSetOnFire()
+{
+	// `0x102ad0c0`, the Troika line, two arms and nothing else (`CNPC_VGhoulCroucher` overrides it,
+	// story 5 step 3):
 	//     if (HasCondition(0x30)) return false;                      // COND_ON_FIRE
 	//     return m_flNextBurnTime (+0x65bc) < gpGlobals->curtime;
 	// The condition arm returns `uVar1 & 0xffffff00`, i.e. AL = 0 — a body ALREADY on fire refuses.
@@ -506,21 +509,15 @@ const FElysiumNpc::FTraceAttackSpecies* FElysiumNpc::TraceAttackSpeciesOf(
 {
 	int32 Count = 0;
 	const FTraceAttackSpecies* Rows = TraceAttackSpeciesRows(Count);
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
+	// The class's own row (story 5 step 3: a subclass inherits its base's C++ override).
 	for (int32 i = 0; i < Count; ++i)
 	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
+		if (InRetailClass != nullptr && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
 		{
 			return &Rows[i];
 		}
 	}
 	return nullptr;
-}
-
-const FElysiumNpc::FTraceAttackSpecies* FElysiumNpc::TraceAttackSpecies() const
-{
-	const FElysiumNpcClass* Cls = RetailClass();
-	return Cls != nullptr ? TraceAttackSpeciesOf(Cls->Name) : nullptr;
 }
 
 bool FElysiumNpc::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttackerWeaponIsMelee,
@@ -553,6 +550,51 @@ bool FElysiumNpc::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttackerWeapon
 	return true;
 }
 
+void FElysiumNpc::WerewolfTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
+{
+	// `0x103ccbf0`, the body of `FElysiumNpcWerewolf::TraceAttack`: `thunk_FUN_101c2a50(info, 0)` —
+	// zero the packet's damage-type word — then the base body `0x10266780` directly. Nothing else.
+	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(InInfo);
+	if (Info == nullptr || InTrace == nullptr)
+	{
+		return;   // the port's one refusal: retail would have dereferenced both
+	}
+	Info->DamageBits = 0;
+	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
+}
+
+void FElysiumNpc::ZombieTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
+{
+	// `0x103e0430`, the body of `FElysiumNpcZombie::TraceAttack`: the gib prologue, then the base
+	// body `0x10266780` directly.
+	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(InInfo);
+	FElysiumTraceHit* Trace = static_cast<FElysiumTraceHit*>(InTrace);
+	if (Info == nullptr || Trace == nullptr)
+	{
+		return;   // the port's one refusal: retail would have dereferenced both
+	}
+	// 0x103e0430. `m_hAttacker`'s active weapon's capability mask is the melee test.
+	const FElysiumEntity* Attacker =
+		(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
+	const FElysiumCombatCharacter* AttackerChar =
+		Attacker != nullptr ? Attacker->AsCombatCharacter() : nullptr;
+	// SEAM: the weapon capability mask (`+0x5a0`) is story 29d's. Retail's test is
+	// `(weapon->GetCapabilities() & 0x18000) != 0` — the same melee-block capability the
+	// player block resolver uses (`docs/vtmb/combat-and-damage.md` -> "Weapon and input
+	// surface"). Without that accessor the melee arm cannot open, so a non-head hit forces
+	// no ammo type, which is retail's own `goto LAB_103e04dc`.
+	const bool bMelee = AttackerChar != nullptr && false;
+	bool bShouldGib = false;
+	int32 Forced = 0;
+	if (ZombieTraceAttackPrologue(Trace->HitGroup, bMelee, ZombieGibAmmoTypeCvar(0),
+			ZombieGibAmmoTypeCvar(1), bShouldGib, Forced))
+	{
+		Info->DamageBits = static_cast<uint32>(Forced);
+	}
+	bZombieShouldGib = bShouldGib;
+	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
+}
+
 void FElysiumNpc::TraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
 {
 	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(InInfo);
@@ -560,46 +602,6 @@ void FElysiumNpc::TraceAttack(void* InInfo, const FVector& DirUnits, void* InTra
 	if (Info == nullptr || Trace == nullptr)
 	{
 		return;   // the port's one refusal: retail would have dereferenced both
-	}
-
-	// --- The species prologues, ahead of the Troika body -----------------------------------------
-	const FTraceAttackSpecies* Species = TraceAttackSpecies();
-	if (Species != nullptr)
-	{
-		switch (Species->Prologue)
-		{
-		case ETraceAttackPrologue::ZeroAmmoType:
-			// 0x103ccbf0: `thunk_FUN_101c2a50(info, 0)` — zero the packet's damage-type word — then
-			// the base body. Nothing else at all.
-			Info->DamageBits = 0;
-			break;
-		case ETraceAttackPrologue::ZombieGib:
-		{
-			// 0x103e0430. `m_hAttacker`'s active weapon's capability mask is the melee test.
-			const FElysiumEntity* Attacker =
-				(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
-			const FElysiumCombatCharacter* AttackerChar =
-				Attacker != nullptr ? Attacker->AsCombatCharacter() : nullptr;
-			// SEAM: the weapon capability mask (`+0x5a0`) is story 29d's. Retail's test is
-			// `(weapon->GetCapabilities() & 0x18000) != 0` — the same melee-block capability the
-			// player block resolver uses (`docs/vtmb/combat-and-damage.md` -> "Weapon and input
-			// surface"). Without that accessor the melee arm cannot open, so a non-head hit forces
-			// no ammo type, which is retail's own `goto LAB_103e04dc`.
-			const bool bMelee = AttackerChar != nullptr && false;
-			bool bShouldGib = false;
-			int32 Forced = 0;
-			if (ZombieTraceAttackPrologue(Trace->HitGroup, bMelee, ZombieGibAmmoTypeCvar(0),
-					ZombieGibAmmoTypeCvar(1), bShouldGib, Forced))
-			{
-				Info->DamageBits = static_cast<uint32>(Forced);
-			}
-			bZombieShouldGib = bShouldGib;
-			break;
-		}
-		case ETraceAttackPrologue::None:
-		default:
-			break;
-		}
 	}
 
 	// --- `0x10266780`, arm by arm ----------------------------------------------------------------
@@ -989,10 +991,10 @@ const FElysiumNpc::FDamageFlinchSpecies* FElysiumNpc::DamageFlinchSpeciesOf(
 {
 	int32 Count = 0;
 	const FDamageFlinchSpecies* Rows = DamageFlinchSpeciesRows(Count);
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
+	// The class's own row (story 5 step 3: a subclass inherits its base's C++ override).
 	for (int32 i = 0; i < Count; ++i)
 	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
+		if (InRetailClass != nullptr && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
 		{
 			return &Rows[i];
 		}
@@ -1019,15 +1021,24 @@ bool FElysiumNpc::DamageFlinchSuppressed(uint32 CombinedBits, float Magnitude, u
 
 bool FElysiumNpc::SuppressesDamageFlinch(const FElysiumDmg& Dmg) const
 {
-	const FElysiumNpcClass* Cls = RetailClass();
-	const FDamageFlinchSpecies* Row = Cls != nullptr ? DamageFlinchSpeciesOf(Cls->Name) : nullptr;
+	// The Troika line flinches on every hit, as it always has. `CNPC_VGargoyle` (`0x10378cb0`) and
+	// `CNPC_VHengeyokai` (`0x103802a0`) override this hook on their C++ classes (story 5 step 3):
+	// it is the port's seam for their slot-292 `DamageFlinch` bodies.
+	(void)Dmg;
+	return false;
+}
+
+bool FElysiumNpc::SpeciesSuppressesDamageFlinch(const TCHAR* SpeciesClass, const FElysiumDmg& Dmg) const
+{
+	// The two species bodies' gate, off the class's own row. The port's commit path hands the flinch
+	// a resolved descriptor rather than a packet, so the combined bits are the descriptor's own and
+	// the magnitude is the committed damage — which is what `CVDmg_t::GetDmg` answers once `Apply`
+	// has run.
+	const FDamageFlinchSpecies* Row = DamageFlinchSpeciesOf(SpeciesClass);
 	if (Row == nullptr)
 	{
-		return false;   // the Troika line flinches on every hit, as it always has
+		return false;
 	}
-	// The port's commit path hands the flinch a resolved descriptor rather than a packet, so the
-	// combined bits are the descriptor's own and the magnitude is the committed damage — which is
-	// what `CVDmg_t::GetDmg` answers once `Apply` has run.
 	return DamageFlinchSuppressed(Dmg.DmgMask, static_cast<float>(Dmg.GetDmg()), Row->SuppressMask);
 }
 

@@ -7,6 +7,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
+#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
@@ -361,29 +362,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesCanPlaySequenceTest,
 	"Elysium.Substrate.NpcKernelBosses.CanPlaySequence", GBossesTestFlags)
 bool FElysiumNpcKernelBossesCanPlaySequenceTest::RunTest(const FString&)
 {
-	int32 Count = 0;
-	const FElysiumNpc::FCanPlaySequenceSpecies* Rows =
-		FElysiumNpc::CanPlaySequenceSpeciesRows(Count);
-	TestEqual(TEXT("this family owns two of slot 482's species bodies"), Count, 2);
-	TMap<FString, FString> ByClass;
-	for (int32 i = 0; i < Count; ++i)
-	{
-		ByClass.Add(FString(Rows[i].RetailClass), FString(Rows[i].Body));
-	}
-	TestEqual(TEXT("CNPC_VAndreiBlood's body"), ByClass.FindRef(TEXT("CNPC_VAndreiBlood")),
+	// The two human-line / MingXiao bodies are overrides on `FElysiumNpcHuman` / `FElysiumNpcMingXiao`
+	// since story 5 step 3; the census still says which body each class holds.
+	TestEqual(TEXT("CNPC_VAndreiBlood holds the human line's 0x103850a0"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VAndreiBlood")), 482)),
 		FString(TEXT("0x103850a0")));
-	TestEqual(TEXT("CNPC_VMingXiao's body"), ByClass.FindRef(TEXT("CNPC_VMingXiao")),
+	TestEqual(TEXT("which CNPC_VHuman introduces"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHuman")), 482)),
+		FString(TEXT("0x103850a0")));
+	TestEqual(TEXT("CNPC_VMingXiao's body"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 482)),
 		FString(TEXT("0x10396e90")));
-	const FElysiumNpc::FCanPlaySequenceSpecies* Andrei =
-		FElysiumNpc::CanPlaySequenceSpeciesOf(TEXT("CNPC_VAndreiBlood"));
-	TestTrue(TEXT("CNPC_VAndreiBlood resolves to its own row"),
-		Andrei != nullptr && FCString::Strcmp(Andrei->Body, TEXT("0x103850a0")) == 0);
-	const FElysiumNpc::FCanPlaySequenceSpecies* Ming =
-		FElysiumNpc::CanPlaySequenceSpeciesOf(TEXT("CNPC_VMingXiao"));
-	TestTrue(TEXT("CNPC_VMingXiao resolves to its own row"),
-		Ming != nullptr && FCString::Strcmp(Ming->Body, TEXT("0x10396e90")) == 0);
-	TestNull(TEXT("CNPC_VAnimal's body is family Species', not this family's"),
-		FElysiumNpc::CanPlaySequenceSpeciesOf(TEXT("CNPC_VAnimal")));
 
 	// The state arm, every branch of it. `Result` is 1 without a cine and 2 with one.
 	using ES = EElysiumNpcState;

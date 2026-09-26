@@ -74,21 +74,6 @@ namespace
 	// The schedule id `CAI_BaseNPCTroika::ShouldMaintainActivity` (`0x102bf510`) refuses for.
 	constexpr int32 GScheduleRefusingMaintain = 0xb9;
 
-	// Slot 259's EMPTY override — the two census classes whose `HandleAnimEvent` swallows every
-	// animation event. One row per class with the retail address of its own body, so the table can
-	// be checked against `docs/vtmb/npc-kernel/slots.md`.
-	struct FAnimSwallowRow
-	{
-		const TCHAR* RetailClass;
-		const TCHAR* Body259;
-	};
-
-	constexpr FAnimSwallowRow GSwallowAnimEvents[] =
-	{
-		{ TEXT("CNPC_VCamera"),         TEXT("0x10368ec0") },
-		{ TEXT("CNPC_VCameraSecurity"), TEXT("0x10368ec0") },
-	};
-
 	// Slots 245/246's species override — the three classes that forward their extra animation models
 	// to a possessing player's own model list. `CNPC_VPlayerController` carries the bodies and the
 	// other two share them.
@@ -234,25 +219,16 @@ bool FElysiumNpc::SceneEntityForcesCutsceneLod(const void* SceneEntity) const
 	return false;
 }
 
-// --- Slot 259's camera branch --------------------------------------------------------------------
+// --- Slot 259's camera body --------------------------------------------------------------------
 
-bool FElysiumNpc::SwallowsAnimEvents() const
+bool FElysiumNpc::CameraHandleAnimEvent(const FElysiumAnimEvent& Event)
 {
 	// `CNPC_VCamera::HandleAnimEvent` `0x10368ec0` — three bytes, an empty body that ignores its
-	// event id. Slot 259 for both camera classes.
-	const FElysiumNpcClass* const Cls = RetailClass();
-	if (Cls == nullptr)
-	{
-		return false;
-	}
-	for (const FAnimSwallowRow& Row : GSwallowAnimEvents)
-	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Row.RetailClass))
-		{
-			return true;
-		}
-	}
-	return false;
+	// event id: the body of `FElysiumNpcCamera::HandleAnimEvent` (inherited by
+	// `CNPC_VCameraSecurity`). A retail camera swallows every animation event, footsteps included;
+	// the port answers "claimed" so no later chain handles it.
+	(void)Event;
+	return true;
 }
 
 // --- Slots 245/246's species branch -------------------------------------------------------------
@@ -1321,17 +1297,11 @@ bool FElysiumNpc::ShouldMaintainActivity()
 
 int32 FElysiumNpc::CanPlaySequence(bool bDisregardState, int32 InterruptLevel)
 {
-	// The vtable dispatch first. Five classes carry their own slot-482 body (`CNPC_VAnimal`
-	// `0x1035fd40`, `CNPC_VTzimisce` `0x103bd270` and three inheritors, family **Species**) and every
-	// one of them is BYTE-IDENTICAL to the body below — so the species arm CALLS this one and the
-	// answers coincide. The row is wired anyway because the dispatch is the recovered fact: the day a
-	// sixth class' copy turns out to differ, the prologue is already where it has to be.
-	int32 SpeciesAnswer = 0;
-	if (SpeciesCanPlaySequence(bDisregardState, InterruptLevel, SpeciesAnswer))
-	{
-		return SpeciesAnswer;
-	}
-
+	// Four species classes carry their own standalone slot-482 copy (`CNPC_VAnimal` `0x1035fd40`,
+	// `CNPC_VHuman` `0x103850a0`, `CNPC_VMingXiao` `0x10396e90`, `CNPC_VTzimisce` `0x103bd270`),
+	// overridden on their C++ classes (story 5 step 3). None calls this body; each ends in family
+	// Bosses' `CanPlaySequenceStateArm`, which keeps a SCRIPT-state (4) body's answer where the
+	// state gate below refuses it. `CNPC_VCamera`'s `0x10368f60` (`XOR EAX,EAX`) is unported.
 	// `0x10278090`, slot 482. The return is retail's `CanPlaySequence_t`: 0 refuses, 1 is the plain
 	// yes, and **2 is the yes of a body that already holds a cine** — the two are not the same
 	// answer, which is why this returns an int rather than a bool.

@@ -12,4 +12,11 @@ class FElysiumNpcGhoulCroucher : public FElysiumNpcHumanCombatant
 {
 public:
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	virtual void NPCInit() override;
+	virtual void Precache() override;
+	virtual void SetModel(TCHAR* ModelName) override;
+	virtual void OnVictimHitByMe(FElysiumEntity* Victim) override;
+	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+	virtual bool CanBeSetOnFire() override;
+	virtual void StartTouchSpecies(FElysiumEntity* Other) override;
 };

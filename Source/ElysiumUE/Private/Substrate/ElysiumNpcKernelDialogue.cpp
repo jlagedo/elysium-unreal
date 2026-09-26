@@ -602,10 +602,18 @@ bool FElysiumNpc::SabbatLeaderHandleInteraction(int32 Interaction, void* Data, F
 	// story 29c's generated stub and is NOT this family's, so this lands beside it as a named method
 	// rather than as the slot's definition. It returns the table's answer rather than a literal so
 	// the row and the body cannot drift.
+	return HumanHandleInteraction(Interaction, Data, Other);   // `0x10385a70`, direct
+}
+
+bool FElysiumNpc::HumanHandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other)
+{
+	// `0x10385a70` — the human line's slot 366 (every human-line class holds it; the ledger indexes it
+	// under `CNPC_VAndreiBlood`), the body of `FElysiumNpcHuman::HandleInteraction`. The whole body is
+	// `return 0;`; the table's row carries that answer so the row and the body cannot drift.
 	(void)Interaction;
 	(void)Data;
 	(void)Other;
-	const FHandleInteractionSpecies* Row = HandleInteractionSpeciesOf(TEXT("CNPC_VSabbatLeader"));
+	const FHandleInteractionSpecies* Row = HandleInteractionSpeciesOf(TEXT("CNPC_VAndreiBlood"));
 	return Row != nullptr ? Row->bAnswer : false;
 }
 

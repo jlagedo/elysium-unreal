@@ -522,17 +522,8 @@ const FElysiumNpc::FPickupSpecies* FElysiumNpc::PickupSpeciesOf(const TCHAR* InR
 			return &Rows[i];
 		}
 	}
-	// A species with no body of its own inherits its base's, exactly as the vtable does. Neither
-	// boss has a subclass in the census, so this walk answers null today; it is the same resolution
-	// family Hints performs and is written the same way rather than special-cased.
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
-		{
-			return &Rows[i];
-		}
-	}
+	// The two bodies are non-virtual helpers each species calls directly, so the row is the class's
+	// own: neither boss has a subclass in the census (story 5 step 3 dropped the base-chain walk).
 	return nullptr;
 }
 
@@ -792,51 +783,6 @@ bool FElysiumNpc::IsEntityBlacklisted(const FElysiumEntity* Entity)
 // -------------------------------------------------------------------------------------------------
 // Slot 482 `CanPlaySequence`, the species half — `0x103850a0`, `0x10396e90`.
 // -------------------------------------------------------------------------------------------------
-
-const FElysiumNpc::FCanPlaySequenceSpecies* FElysiumNpc::CanPlaySequenceSpeciesRows(int32& OutCount)
-{
-	// The two rows this family owns. `CNPC_VAnimal`'s `0x1035fd40` (which also serves `CNPC_VDog`,
-	// `CNPC_VRat`, `CNPC_VScurrying` and `CNPC_VZombie`) and `CNPC_VTzimisce`'s `0x103bd270` are
-	// family **Species**' rows and are deliberately absent rather than claimed here; all four bodies
-	// are byte-identical to the base `0x10278090`, which is why one rule serves every one of them.
-	// `0x103850a0` fills the slot for `CNPC_VAndreiBlood` and 41 other classes of the same human
-	// line (`CNPC_ProneDialog`, `CNPC_VAsianVampire`, `CNPC_VBach`, …); the row names the class the
-	// ledger indexes the body under.
-	static constexpr FCanPlaySequenceSpecies Rows[] =
-	{
-		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x103850a0") },
-		{ TEXT("CNPC_VMingXiao"), TEXT("0x10396e90") },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-const FElysiumNpc::FCanPlaySequenceSpecies* FElysiumNpc::CanPlaySequenceSpeciesOf(
-	const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	int32 Count = 0;
-	const FCanPlaySequenceSpecies* Rows = CanPlaySequenceSpeciesRows(Count);
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[i];
-		}
-	}
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
-		{
-			return &Rows[i];
-		}
-	}
-	return nullptr;
-}
 
 int32 FElysiumNpc::CanPlaySequenceStateArm(int32 Result, bool bDisregardState, int32 InterruptLevel,
 	EElysiumNpcState State, EElysiumNpcState IdealState)

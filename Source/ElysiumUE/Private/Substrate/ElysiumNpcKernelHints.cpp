@@ -403,8 +403,8 @@ const FElysiumNpc::FHintTypeSpecies* FElysiumNpc::HintTypeSpeciesRows(int32& Out
 		// into the base body, so it is 29d's"); this is 29d putting it in.
 		{ TEXT("CNPC_VBach"), TEXT("0x10365800"), ERule::InRangeOrBase, 17000, 17005, 0, false },
 		// `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw` fill the slot with the SAME body as
-		// `CNPC_VChangBros` (`0x1036c6a0`) and reach it by inheritance, so the base-chain walk in
-		// `HintTypeSpeciesOf` is what serves them rather than two duplicate rows. Recorded here so a
+		// `CNPC_VChangBros` (`0x1036c6a0`) and reach it by inheriting `FElysiumNpcChangBros`'s
+		// override, rather than through two duplicate rows. Recorded here so a
 		// reader checking `slots.md` does not read their absence as a gap.
 	};
 	OutCount = UE_ARRAY_COUNT(Rows);
@@ -419,19 +419,11 @@ const FElysiumNpc::FHintTypeSpecies* FElysiumNpc::HintTypeSpeciesOf(const TCHAR*
 	}
 	int32 Count = 0;
 	const FHintTypeSpecies* Rows = HintTypeSpeciesRows(Count);
-	// The exact class first, then the base chain — a species with no body of its own at slot 566
-	// inherits its base's, exactly as the vtable does.
+	// The introducing class's own row. A species with no body of its own at slot 566 inherits its
+	// base's through the C++ override (story 5 step 3), so no base-chain walk is needed here.
 	for (int32 i = 0; i < Count; ++i)
 	{
 		if (FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[i];
-		}
-	}
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(InRetailClass);
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (ElysiumNpcKernelClass::DerivesFrom(Cls, Rows[i].RetailClass))
 		{
 			return &Rows[i];
 		}
@@ -469,33 +461,6 @@ bool FElysiumNpc::FValidateHintTypeSpecies(const FHintTypeSpecies* Row, int32 Hi
 bool FElysiumNpc::HintTypeSpeciesFallsThroughToBase(const FHintTypeSpecies* Row)
 {
 	return Row != nullptr && Row->Rule == EHintTypeRule::InRangeOrBase;
-}
-
-bool FElysiumNpc::FValidateHintTypeForSpecies(int32 HintNode) const
-{
-	const FElysiumNpcClass* Cls = RetailClass();
-	const FHintTypeSpecies* Row = HintTypeSpeciesOf(Cls ? Cls->Name : nullptr);
-	FHintWords Hint;
-	if (!HintWords(HintNode, Hint))
-	{
-		// Retail's four non-Tzimisce bodies would have dereferenced a null hint here; only
-		// `CNPC_VTzimisce` tests it and answers false. The seam cannot hand back a hint at all, so
-		// every species takes the refusal — reported, not papered over.
-		return false;
-	}
-	if (FValidateHintTypeSpecies(Row, Hint.HintType))
-	{
-		return true;
-	}
-	// `CNPC_VBach`'s row (`0x10365800`) falls through to the base body rather than refusing. Story
-	// 29d, family Senses10 wrote this against slot 566's generated stub and passed `nullptr`; family
-	// Hints10 landed the real body (`0x10295c20`), whose first act is a null-hint refusal, so the
-	// RESOLVED HINT is what retail's fall-through hands it. Named minimal fix, story 29d/Hints10.
-	if (HintTypeSpeciesFallsThroughToBase(Row))
-	{
-		return const_cast<FElysiumNpc*>(this)->FValidateHintType(&Hint);
-	}
-	return false;
 }
 
 // -------------------------------------------------------------------------------------------------

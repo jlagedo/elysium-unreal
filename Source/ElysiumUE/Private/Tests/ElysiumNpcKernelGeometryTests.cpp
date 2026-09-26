@@ -118,11 +118,13 @@ bool FElysiumNpcKernelGeometryEyePositionTest::RunTest(const FString&)
 	TestEqual(TEXT("a Troika-line NPC never asks the bone seam"),
 		F.Guard->BoneWorldPositionCalls, GuardBoneCalls);
 
-	// The species table, by name.
-	TestNotNull(TEXT("CPayphone has a slot 193 row"),
-		FElysiumNpc::EyePositionSpeciesOf(TEXT("CPayphone")));
+	// The census, by name: `CPayphone` replaces slot 193 (its C++ override since story 5 step 3) and
+	// the humanoid combatant does not.
+	TestEqual(TEXT("CPayphone fills slot 193 with 0x101aae60"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CPayphone")), 193)),
+		FString(TEXT("0x101aae60")));
 	TestNull(TEXT("CNPC_VHumanCombatant does not replace slot 193"),
-		FElysiumNpc::EyePositionSpeciesOf(TEXT("CNPC_VHumanCombatant")));
+		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 193));
 	return true;
 }
 
