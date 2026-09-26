@@ -1,7 +1,7 @@
-# Story 5 — step 4 accepted, awaiting its commit
+# Story 5 — step 4 accepted (`bb690d7a`)
 
 **Step 4 (species bodies, words and bindings), 2026-09-26.** 4a landed as its own commit
-(`9f087e42`). Packets 4b–4i form one uncommitted change on `0019-5-class-tree`, recorded in
+(`9f087e42`). Packets 4b–4i landed as one commit, `bb690d7a` on `0019-5-class-tree`, recorded in
 [packets/4-species-bodies-words-bindings.md](packets/4-species-bodies-words-bindings.md) (with the
 [4b](packets/4b-generator-and-bindings.md) and [4c](packets/4c-carriers-and-relocation.md) records),
 [moves-step4.tsv](moves-step4.tsv), [fields-step4.tsv](fields-step4.tsv),
