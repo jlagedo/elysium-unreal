@@ -346,35 +346,35 @@ bool FElysiumSpeciesMisc10ChangTeleportTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	FElysiumNpcChangBros* hangBros = ElysiumTestAsSpecies<FElysiumNpcChangBros>(F.Guard);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VChangBros"), hangBros))
+	FElysiumNpcChangBros* ChangNpc = ElysiumTestAsSpecies<FElysiumNpcChangBros>(F.Guard);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VChangBros"), ChangNpc))
 	{
 		return false;
 	}
-	hangBros->TypedStatSet(0, 0x11, 10);
-	hangBros->TypedStatSet(0, 0x0f, 0);
-	hangBros->RecordHealthPercent();
+	ChangNpc->TypedStatSet(0, 0x11, 10);
+	ChangNpc->TypedStatSet(0, 0x0f, 0);
+	ChangNpc->RecordHealthPercent();
 
 	// `1036cae5`: type 1 answers false outright, even with the health delta past the threshold.
-	hangBros->ChangType = 1;
-	hangBros->TypedStatSet(0, 0x0f, 9);
+	ChangNpc->ChangType = 1;
+	ChangNpc->TypedStatSet(0, 0x0f, 9);
 	TestFalse(TEXT("`1036cae5`: m_ChangType 1 refuses without reading anything else"),
-		hangBros->CheckForTeleport());
+		ChangNpc->CheckForTeleport());
 
 	// `1036caee`: `_DAT_104ad9f8` = **0.1**, recovered out of the pinned image at `0x4ad9f8`.
-	hangBros->ChangType = 0;
-	hangBros->TypedStatSet(0, 0x0f, 1);
-	TestTrue(TEXT("`1036caee`: a tenth of the bar lost answers true"), hangBros->CheckForTeleport());
-	hangBros->TypedStatSet(0, 0x0f, 0);
+	ChangNpc->ChangType = 0;
+	ChangNpc->TypedStatSet(0, 0x0f, 1);
+	TestTrue(TEXT("`1036caee`: a tenth of the bar lost answers true"), ChangNpc->CheckForTeleport());
+	ChangNpc->TypedStatSet(0, 0x0f, 0);
 	// `1036cb17`: with no other brother and no health delta, the third arm cannot be reached — the
 	// port's `GetOtherBrother` answers null with no squad, which is retail's own refusal.
 	TestFalse(TEXT("`1036cb17`: below the threshold and with no other brother, false"),
-		hangBros->CheckForTeleport());
+		ChangNpc->CheckForTeleport());
 
 	// `1036cbd0`: no other brother answers false at once, whatever the timer says.
-	hangBros->ChangLastUnitedAttackTime = -1.0e6;
+	ChangNpc->ChangLastUnitedAttackTime = -1.0e6;
 	TestFalse(TEXT("`1036cc05`: CheckForUnited refuses with no other brother"),
-		hangBros->CheckForUnited());
+		ChangNpc->CheckForUnited());
 	return true;
 }
 
@@ -452,41 +452,41 @@ bool FElysiumSpeciesMisc10CopSlot597Test::RunTest(const FString&)
 		AddError(TEXT("no NPCs"));
 		return false;
 	}
-	FElysiumNpcCop* op = ElysiumTestAsSpecies<FElysiumNpcCop>(F.Guard);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VCop"), op))
+	FElysiumNpcCop* CopNpc = ElysiumTestAsSpecies<FElysiumNpcCop>(F.Guard);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VCop"), CopNpc))
 	{
 		return false;
 	}
 	// A spawned `npc_VCop` is `CNPC_VCop` — its factory `0x103704f0` builds that class
 	// (docs/vtmb/npc-ai/population.md, "The classname → class map, read from the factories") — so
 	// the arm is reached by the real classname.
-	op->Senses.Memory.ClosestPlayer = F.Player->Handle;
-	op->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true,
+	CopNpc->Senses.Memory.ClosestPlayer = F.Player->Handle;
+	CopNpc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true,
 		EElysiumNpcState::Combat);
 
 	// `10372ce6`: an argument that is NOT `m_hClosestPlayer`'s entity does nothing at all.
-	op->CopPursuitHandle = FElysiumEntityHandle::Invalid();
-	op->CopSlot597Prologue(F.Other);
+	CopNpc->CopPursuitHandle = FElysiumEntityHandle::Invalid();
+	CopNpc->CopSlot597Prologue(F.Other);
 	TestFalse(TEXT("`10372ce6`: a non-closest-player argument latches nothing"),
-		op->CopPursuitHandle.IsSet());
+		CopNpc->CopPursuitHandle.IsSet());
 
 	// `10372d2b`: the player IS the closest player, so the latch takes the argument's own handle.
 	// CORRECTION: `+0xa8` is `m_pPlayer`, so what is latched is the PLAYER's handle.
-	op->CopSlot597Prologue(F.Player);
+	CopNpc->CopSlot597Prologue(F.Player);
 	TestTrue(TEXT("`10372d2b`: the pursuit latch takes the player's handle"),
-		op->CopPursuitHandle == F.Player->Handle);
+		CopNpc->CopPursuitHandle == F.Player->Handle);
 	// Family Debug10's reader is no longer a seam.
 	TestTrue(TEXT("family Debug10's CopPursuitPlayer now resolves the word this writes"),
-		op->CopPursuitPlayer() != nullptr);
+		CopNpc->CopPursuitPlayer() != nullptr);
 
 	// `10372d5b`: the relationship write is UNCONDITIONAL for that argument — it runs even on the
 	// pass where the latch is already live and the COMBAT gate is closed.
-	op->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true,
+	CopNpc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true,
 		EElysiumNpcState::Idle);
-	op->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Neutral, 0);
-	op->CopSlot597Prologue(F.Player);
+	CopNpc->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Neutral, 0);
+	CopNpc->CopSlot597Prologue(F.Player);
 	TestEqual(TEXT("`10372d5b`: 'Player D_HT 10' is written whatever the state"),
-		static_cast<int32>(op->Relationships.Resolve(F.Player->Handle, FString())),
+		static_cast<int32>(CopNpc->Relationships.Resolve(F.Player->Handle, FString())),
 		static_cast<int32>(EElysiumRelationship::Hate));
 	return true;
 }

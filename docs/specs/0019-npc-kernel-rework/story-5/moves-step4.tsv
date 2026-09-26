@@ -345,7 +345,7 @@ FUN_103c3fd0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FEly
 FUN_103d1e50	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
 FUN_103d9c90	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
 FUN_103dd900	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	collapse:Slot600	4f	-
-FUN_103e0980	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	-	CNPCMaker_Zombie	FElysiumNpc	deferred:8	-	CNPCMaker_Zombie body
+FUN_103e0980	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	-	CNPCMaker_Zombie	FElysiumNpc	deferred:8	-	CNPC_VZombie::SetZombieAIType 0x103e0980, a CNPC_VZombie body; retail_owner is the tool's direct-caller proposal (its one direct caller is the zombie maker 0x1034cf20, the input 0x103e0e30 being a pending seam). It stays on FElysiumNpc beside m_iZombieAIType, which the maker reads, until step 8 folds the maker
 FUN_103e1080	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcZombie	CNPC_VZombie	FElysiumNpcZombie	collapse:ShouldPlayFloatSound	4d	-
 FUN_103e12c0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcZombie	CNPC_VZombie	FElysiumNpcZombie	move	4d	-
 FUN_103e12f0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcZombie	CNPC_VZombie	FElysiumNpcZombie	collapse:Slot26	4d	-

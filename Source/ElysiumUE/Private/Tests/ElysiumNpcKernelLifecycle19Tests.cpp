@@ -532,22 +532,22 @@ bool FElysiumNpcKernelLifecycle19CameraNpcInitTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	FElysiumNpcCamera* amera = ElysiumTestAsSpecies<FElysiumNpcCamera>(F.Npc);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VCamera"), amera))
+	FElysiumNpcCamera* CameraNpc = ElysiumTestAsSpecies<FElysiumNpcCamera>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VCamera"), CameraNpc))
 	{
 		return false;
 	}
 	F.As<FElysiumNpcCamera>()->bCameraEngineQueryAnswer = true;
 	// The spawn's own `NPCInit` already wrote every word read below, so each is dirtied first.
-	amera->OccludedDelayNormal = 0.f;
-	amera->OccludedDelayCover = 0.f;
-	amera->bIsBccTargetable = true;
-	amera->TakeDamageMode = 2;
-	amera->NPCInit();                                                    // 0x103692c0
-	TestEqual(TEXT("hard-coded occluded delay 3.4"), amera->OccludedDelayNormal, 3.4f);
-	TestEqual(TEXT("hard-coded cover delay 10"), amera->OccludedDelayCover, 10.f);
-	TestFalse(TEXT("camera not BCC targetable"), amera->bIsBccTargetable);
-	TestEqual(TEXT("takedamage 0"), amera->TakeDamageMode, 0);
+	CameraNpc->OccludedDelayNormal = 0.f;
+	CameraNpc->OccludedDelayCover = 0.f;
+	CameraNpc->bIsBccTargetable = true;
+	CameraNpc->TakeDamageMode = 2;
+	CameraNpc->NPCInit();                                                    // 0x103692c0
+	TestEqual(TEXT("hard-coded occluded delay 3.4"), CameraNpc->OccludedDelayNormal, 3.4f);
+	TestEqual(TEXT("hard-coded cover delay 10"), CameraNpc->OccludedDelayCover, 10.f);
+	TestFalse(TEXT("camera not BCC targetable"), CameraNpc->bIsBccTargetable);
+	TestEqual(TEXT("takedamage 0"), CameraNpc->TakeDamageMode, 0);
 	// The refuse arm on a second camera of its own.
 	FLifecycle19Fixture Refused(TEXT("CNPC_VCamera"));
 	if (Refused.Npc == nullptr)
@@ -707,14 +707,14 @@ bool FElysiumNpcKernelLifecycle19CopTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	FElysiumNpcCop* op = ElysiumTestAsSpecies<FElysiumNpcCop>(F.Npc);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VCop"), op))
+	FElysiumNpcCop* CopNpc = ElysiumTestAsSpecies<FElysiumNpcCop>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VCop"), CopNpc))
 	{
 		return false;
 	}
-	op->bWasEverInCombat = true;
-	op->NPCInit();                                                    // 0x10372b00
-	TestFalse(TEXT("+0x6670 cleared AFTER HumanCombatant"), op->bWasEverInCombat);
+	CopNpc->bWasEverInCombat = true;
+	CopNpc->NPCInit();                                                    // 0x10372b00
+	TestFalse(TEXT("+0x6670 cleared AFTER HumanCombatant"), CopNpc->bWasEverInCombat);
 	return true;
 }
 
@@ -782,31 +782,31 @@ bool FElysiumNpcKernelLifecycle19ChangTypeTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	FElysiumNpcChangBrosBlade* hangBrosBlade = ElysiumTestAsSpecies<FElysiumNpcChangBrosBlade>(F.Npc);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VChangBrosBlade"), hangBrosBlade))
+	FElysiumNpcChangBrosBlade* BladeNpc = ElysiumTestAsSpecies<FElysiumNpcChangBrosBlade>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VChangBrosBlade"), BladeNpc))
 	{
 		return false;
 	}
 	// The spawn's own `NPCInit` already wrote 0; the Claw's answer stands in first, so the Blade's
 	// write is visible as a change.
-	hangBrosBlade->ChangType = 1;
-	hangBrosBlade->NPCInit();                                                    // 0x1036f100
-	TestEqual(TEXT("Blade SetChangType(0) before chain"), hangBrosBlade->ChangType, 0);
+	BladeNpc->ChangType = 1;
+	BladeNpc->NPCInit();                                                    // 0x1036f100
+	TestEqual(TEXT("Blade SetChangType(0) before chain"), BladeNpc->ChangType, 0);
 	FLifecycle19Fixture Claw(TEXT("CNPC_VChangBrosClaw"));
 	if (Claw.Npc == nullptr)
 	{
 		AddError(TEXT("no Claw"));
 		return false;
 	}
-	FElysiumNpcChangBrosClaw* hangBrosClaw = ElysiumTestAsSpecies<FElysiumNpcChangBrosClaw>(Claw.Npc);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VChangBrosClaw"), hangBrosClaw))
+	FElysiumNpcChangBrosClaw* ClawNpc = ElysiumTestAsSpecies<FElysiumNpcChangBrosClaw>(Claw.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VChangBrosClaw"), ClawNpc))
 	{
 		return false;
 	}
 	// The Blade's answer, so the Claw's write is visible as a change.
-	hangBrosClaw->ChangType = 0;
-	hangBrosClaw->NPCInit();                                                 // 0x1036f900
-	TestEqual(TEXT("Claw SetChangType(1) before chain"), hangBrosClaw->ChangType, 1);
+	ClawNpc->ChangType = 0;
+	ClawNpc->NPCInit();                                                 // 0x1036f900
+	TestEqual(TEXT("Claw SetChangType(1) before chain"), ClawNpc->ChangType, 1);
 	return true;
 }
 
@@ -993,16 +993,16 @@ bool FElysiumNpcKernelLifecycle19CameraStartNpcTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	FElysiumNpcCamera* amera = ElysiumTestAsSpecies<FElysiumNpcCamera>(F.Npc);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VCamera"), amera))
+	FElysiumNpcCamera* CameraNpc = ElysiumTestAsSpecies<FElysiumNpcCamera>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VCamera"), CameraNpc))
 	{
 		return false;
 	}
-	amera->Model = TEXT("models/null.mdl");
-	amera->StartNPC();                                                   // 0x10369930
-	TestTrue(TEXT("null.mdl drops to floor"), amera->FloorDropPerformed > 0);
+	CameraNpc->Model = TEXT("models/null.mdl");
+	CameraNpc->StartNPC();                                                   // 0x10369930
+	TestTrue(TEXT("null.mdl drops to floor"), CameraNpc->FloorDropPerformed > 0);
 	TestTrue(TEXT("final ThinkSet re-arm does not change stamp (delay 0)"),
-		amera->ThinkSetCalls >= 2);
+		CameraNpc->ThinkSetCalls >= 2);
 	return true;
 }
 
